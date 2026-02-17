@@ -8,35 +8,61 @@ Search Apple Developer Documentation, frameworks, APIs, and WWDC videos directly
 - Score-based search across all indexed sessions
 - Topic and year filtering with 20 categories
 
+## What is this?
+
+This is an **AI agent skill** that gives your AI assistant the ability to search Apple's developer documentation, explore APIs, and browse WWDC sessions without leaving the terminal.
+
+It works as a plugin for AI coding agents like [OpenClaw](https://openclaw.ai), [Codex CLI](https://github.com/openai/codex), and any tool that supports the AgentSkill format. You can also use it standalone as a regular CLI tool.
+
+## Requirements
+
+- **Node.js** v18 or later
+- That's it. No API keys, no accounts, no external packages.
+
 ## Installation
 
-### ClawHub
+### Option 1: ClawHub (Recommended for AI agent users)
+
+[ClawHub](https://clawhub.com) is a skill registry for AI agents. If you use OpenClaw or any compatible agent:
 
 ```bash
+npm install -g clawhub    # Install ClawHub CLI (one-time)
 clawhub install apple-dev-docs
 ```
 
-### GitHub
+The skill will be automatically available to your AI agent.
+
+### Option 2: GitHub (Manual download)
 
 ```bash
 git clone https://github.com/Abdullah4AI/apple-dev-docs.git
 ```
 
-### OpenClaw (Manual)
+Then copy the folder to your agent's skills directory:
+
+| Agent Tool | Skills Directory |
+|-----------|-----------------|
+| OpenClaw | `~/.openclaw/skills/` |
+| Codex CLI | `~/.codex/skills/` |
+| Custom | Wherever your agent loads skills from |
+
+Example for OpenClaw:
 
 ```bash
 cp -r apple-dev-docs ~/.openclaw/skills/
 ```
 
-### Codex CLI
+### Option 3: Standalone CLI
+
+You can use it directly without any AI agent:
 
 ```bash
-cp -r apple-dev-docs ~/.codex/skills/
+git clone https://github.com/Abdullah4AI/apple-dev-docs.git
+cd apple-dev-docs
+node cli.js search "SwiftUI animation"
 ```
 
 ## Quick Start
-
-No setup required. Works out of the box with Node.js.
 
 ```bash
 # Search documentation
@@ -45,9 +71,18 @@ node cli.js search "SwiftUI animation"
 # Search WWDC sessions
 node cli.js wwdc-search "swift concurrency"
 
-# Get video details
+# Get video details with transcript
 node cli.js wwdc-video 2024-10169
+
+# Explore a framework
+node cli.js overview "SwiftUI"
 ```
+
+If installed as a skill, just ask your AI agent naturally:
+
+> "Search Apple docs for SwiftUI animations"
+> "Find WWDC sessions about async/await"
+> "What's new in SwiftUI for iOS 26?"
 
 ## Commands
 
