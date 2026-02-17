@@ -21,11 +21,13 @@ It works as a plugin for AI coding agents like [OpenClaw](https://openclaw.ai), 
 
 ## Installation
 
+For AI agents (Codex, Claude Code, etc.):
+
 ```bash
 npx skills add Abdullah4AI/apple-dev-docs
 ```
 
-If you have [OpenClaw](https://openclaw.ai):
+For [ClawHub](https://clawhub.com):
 
 ```bash
 clawhub install apple-dev-docs
