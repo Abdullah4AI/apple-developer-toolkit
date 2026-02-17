@@ -21,44 +21,23 @@ It works as a plugin for AI coding agents like [OpenClaw](https://openclaw.ai), 
 
 ## Installation
 
-### Option 1: ClawHub (Recommended for AI agent users)
+### Option 1: ClawHub (Recommended)
 
-[ClawHub](https://clawhub.com) is a skill registry for AI agents. If you use OpenClaw or any compatible agent:
+[ClawHub](https://clawhub.com) is a skill registry for AI agents. One command installs the skill directly into your agent's skills folder:
 
 ```bash
-npm install -g clawhub    # Install ClawHub CLI (one-time)
-clawhub install apple-dev-docs
+npx clawhub install apple-dev-docs
 ```
 
 The skill will be automatically available to your AI agent.
 
-### Option 2: GitHub (Manual download)
-
-```bash
-git clone https://github.com/Abdullah4AI/apple-dev-docs.git
-```
-
-Then copy the folder to your agent's skills directory:
-
-| Agent Tool | Skills Directory |
-|-----------|-----------------|
-| OpenClaw | `~/.openclaw/skills/` |
-| Codex CLI | `~/.codex/skills/` |
-| Custom | Wherever your agent loads skills from |
-
-Example for OpenClaw:
-
-```bash
-cp -r apple-dev-docs ~/.openclaw/skills/
-```
-
-### Option 3: Standalone CLI
+### Option 2: Standalone CLI
 
 You can use it directly without any AI agent:
 
 ```bash
-git clone https://github.com/Abdullah4AI/apple-dev-docs.git
-cd apple-dev-docs
+npx clawhub install apple-dev-docs
+cd skills/apple-dev-docs
 node cli.js search "SwiftUI animation"
 ```
 
