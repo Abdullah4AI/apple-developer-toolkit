@@ -30,7 +30,7 @@ All-in-one Apple developer skill: documentation search, WWDC videos, and full Ap
 ## Requirements
 
 - **Node.js** v18+ (for documentation search)
-- **asc** CLI (`brew install asc`) for App Store Connect
+- **asc** CLI (auto-installed via `bash scripts/setup.sh`) for App Store Connect
 
 ## Installation
 
@@ -67,6 +67,9 @@ node cli.js overview "SwiftUI"
 ### App Store Connect
 
 ```bash
+# Auto-install asc CLI (first run only)
+bash scripts/setup.sh
+
 # Setup authentication
 asc auth login --name "MyApp" --key-id "KEY_ID" --issuer-id "ISSUER_ID" --private-key /path/to/AuthKey.p8
 

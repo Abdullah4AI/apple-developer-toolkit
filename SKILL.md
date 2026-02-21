@@ -1,7 +1,7 @@
 ---
 name: apple-dev-docs
 description: "Apple Developer Tools - documentation search, WWDC videos, and App Store Connect management (TestFlight, builds, submissions, signing, analytics, subscriptions, and more). USE WHEN: user asks about Apple APIs, needs documentation lookup, wants to manage App Store Connect (TestFlight, builds, certificates, profiles, analytics, subscriptions, IAP, screenshots), automate iOS/macOS app workflows, or search WWDC sessions. DON'T USE WHEN: user wants general coding help without Apple docs, is asking about non-Apple platforms, or wants to build an iOS app from scratch (use coding-agent). EDGE CASES: 'how do I use NavigationStack' -> this skill. 'upload my build to TestFlight' -> this skill. 'list my certificates' -> this skill. 'build me a SwiftUI app' -> coding-agent."
-metadata: {"clawdbot":{"emoji":"🍎","requires":{"bins":["node","asc"]}}}
+metadata: {"clawdbot":{"emoji":"🍎","requires":{"bins":["node"]}}}
 ---
 
 # Apple Developer Tools
@@ -11,8 +11,8 @@ Search Apple docs, frameworks, APIs, WWDC videos, and manage App Store Connect f
 ## Setup
 
 ```bash
-# Install asc CLI (App Store Connect)
-brew install asc
+# Auto-install App Store Connect CLI (first run only)
+bash scripts/setup.sh
 
 # Authenticate with App Store Connect API
 asc auth login --name "MyApp" --key-id "KEY_ID" --issuer-id "ISSUER_ID" --private-key /path/to/AuthKey.p8
