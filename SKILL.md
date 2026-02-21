@@ -11,9 +11,8 @@ Three tools in one skill: documentation search, App Store Connect management, an
 ## Setup
 
 ```bash
-# Build custom binaries (first run only, requires Go)
-bash scripts/setup.sh
-export PATH="$SKILL_DIR/bin:$PATH"
+brew tap Abdullah4AI/tap
+brew install appstore swiftship
 ```
 
 For App Store Connect, authenticate:

@@ -35,7 +35,7 @@ All-in-one Apple developer skill: documentation search, WWDC videos, App Store C
 
 - **Node.js** v18+ (for documentation search)
 - **Xcode** (for iOS app building)
-- **Go** 1.25+ (for building binaries via `bash scripts/setup.sh`)
+- `brew tap Abdullah4AI/tap && brew install appstore swiftship`
 
 ## Installation
 
@@ -65,6 +65,11 @@ node cli.js overview "SwiftUI"
 ### App Store Connect
 
 ```bash
+# Install
+brew tap Abdullah4AI/tap
+brew install appstore swiftship
+
+# Authenticate
 appstore auth login --name "MyApp" --key-id "KEY_ID" --issuer-id "ISSUER_ID" --private-key /path/to/AuthKey.p8
 appstore apps
 appstore publish testflight --app "APP_ID" --ipa "app.ipa" --group "Beta Testers" --wait
