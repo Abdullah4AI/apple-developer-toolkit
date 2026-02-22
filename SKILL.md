@@ -1,6 +1,6 @@
 ---
 name: apple-developer-toolkit
-description: "All-in-one Apple developer skill with three integrated tools. (1) Documentation search across Apple frameworks, symbols, and 1,267 WWDC sessions from 2014-2025. No credentials needed. (2) App Store Connect CLI with 80+ commands covering builds, TestFlight, submissions, signing, subscriptions, IAP, analytics, Xcode Cloud, and more. Requires App Store Connect API key. (3) iOS app builder that generates complete Swift/SwiftUI apps from natural language descriptions with auto-fix and simulator launch. Requires an LLM API key and Xcode. Includes 38 iOS development rules and 12 SwiftUI best practice guides for Liquid Glass, navigation, state management, and modern APIs. USE WHEN: Apple API docs, App Store Connect management, WWDC lookup, or building iOS apps from scratch. DON'T USE WHEN: non-Apple platforms or general coding."
+description: "All-in-one Apple developer skill with three integrated tools. (1) Documentation search across Apple frameworks, symbols, and 1,267 WWDC sessions from 2014-2025. No credentials needed. (2) App Store Connect CLI with 120+ commands covering builds, TestFlight, submissions, signing, subscriptions, IAP, analytics, Xcode Cloud, metadata workflows, release pipeline dashboard, insights, win-back offers, promoted purchases, product pages, nominations, accessibility declarations, pre-orders, pricing, diff, webhooks with local receiver, workflow automation, and more. Requires App Store Connect API key. (3) iOS app builder that generates complete Swift/SwiftUI apps from natural language descriptions with auto-fix and simulator launch. Requires an LLM API key and Xcode. Includes 38 iOS development rules and 12 SwiftUI best practice guides for Liquid Glass, navigation, state management, and modern APIs. USE WHEN: Apple API docs, App Store Connect management, WWDC lookup, or building iOS apps from scratch. DON'T USE WHEN: non-Apple platforms or general coding."
 metadata:
   {
     "openclaw":
@@ -153,6 +153,12 @@ Full reference: [references/app-store-connect.md](references/app-store-connect.m
 | Xcode Cloud | `appstore xcode-cloud run --app "APP_ID" --workflow "CI" --branch "main" --wait` |
 | Notarize | `appstore notarization submit --file ./MyApp.zip --wait` |
 | Validate | `appstore validate --app "APP_ID" --version-id "VERSION_ID" --strict` |
+| Status dashboard | `appstore status --app "APP_ID" --output table` |
+| Weekly insights | `appstore insights weekly --app "APP_ID" --source analytics` |
+| Metadata pull | `appstore metadata pull --app "APP_ID" --version "1.2.3" --dir ./metadata` |
+| Release notes | `appstore release-notes generate --since-tag "v1.2.2"` |
+| Diff localizations | `appstore diff localizations --app "APP_ID" --path ./metadata` |
+| Nominations | `appstore nominations create --app "APP_ID" --name "Launch"` |
 
 ### Environment Variables
 
@@ -171,7 +177,7 @@ All environment variables are optional. They override flags when set.
 | `APPSTORE_TIMEOUT` | Request timeout |
 | `APPSTORE_BYPASS_KEYCHAIN` | Skip system keychain |
 
-Covers: TestFlight, Builds, Signing, Subscriptions, IAP, Analytics, Finance, Xcode Cloud, Notarization, Game Center, Webhooks, App Clips, Screenshots, Workflow automation, Migrate (Fastlane).
+Covers: TestFlight, Builds, Signing, Subscriptions, IAP, Analytics, Finance, Xcode Cloud, Notarization, Game Center, Webhooks (with local receiver), App Clips, Screenshots (local capture/frame/review workflow), Workflow automation, Metadata (pull/push/validate), Diff, Status Dashboard, Insights, Release Notes, Pricing, Pre-orders, Accessibility, Nominations, Product Pages, Win-back Offers, Promoted Purchases, Marketplace, Android-iOS Mapping, Migrate (Fastlane).
 
 ## Part 3: iOS App Builder
 

@@ -66,6 +66,27 @@ appstore auth init --open
 | `ASC_DEFAULT_OUTPUT` | Default output format |
 | `ASC_DEBUG` | Debug logging (1 or api) |
 
+## Getting Started
+
+```bash
+# Initialize asc helper docs in current repo
+appstore init
+appstore init --path ./ASC.md
+appstore init --force --link=false
+
+# Access embedded documentation
+appstore docs list
+appstore docs show workflows
+appstore docs init
+appstore docs init --path ./ASC.md --force --link=false
+
+# Install the asc skill pack
+appstore install-skills
+
+# Diagnose auth issues
+appstore doctor
+```
+
 ## Global Flags
 
 | Flag | Purpose |
@@ -78,6 +99,11 @@ appstore auth init --open
 | `--pretty` | Pretty-print JSON |
 | `--profile "name"` | Use specific auth profile |
 | `--debug` | Debug output |
+| `--api-debug` | HTTP debug logging (redacts sensitive values) |
+| `--report` | Report format for CI (e.g., junit) |
+| `--report-file` | Path to write CI report file |
+| `--retry-log` | Enable retry logging (overrides ASC_RETRY_LOG) |
+| `--strict-auth` | Fail on multi-source credential resolution |
 
 ---
 
@@ -525,12 +551,16 @@ appstore performance download --app "APP_ID" --output "./metrics.json"
 ```bash
 appstore webhooks list --app "APP_ID"
 appstore webhooks get --webhook-id "ID"
-appstore webhooks create --app "APP_ID" --name "Build Notifications" --url "https://example.com/webhook" --secret "secret" --events "BUILD_CREATED,BUILD_UPDATED" --enabled true
-appstore webhooks update --webhook-id "ID" --enabled false
+appstore webhooks create --app "APP_ID" --name "Build Notifications" --url "https://example.com/webhook" --secret "secret" --events "SUBSCRIPTION.CREATED,SUBSCRIPTION.UPDATED" --enabled true
+appstore webhooks update --webhook-id "ID" --url "https://new-url.com/webhook" --enabled false
 appstore webhooks delete --webhook-id "ID" --confirm
 appstore webhooks deliveries --webhook-id "ID" --created-after "2025-01-01"
+appstore webhooks deliveries relationships --webhook-id "ID"
 appstore webhooks deliveries redeliver --delivery-id "ID"
 appstore webhooks ping --webhook-id "ID"
+
+# Local webhook receiver (testing/automation)
+appstore webhooks serve --port 8787 --dir ./webhook-events
 ```
 
 ## Publish (End-to-End)
@@ -611,16 +641,25 @@ appstore pre-release-versions get --id "PRERELEASE_ID"
 ## Screenshots & Video Previews
 
 ```bash
-# Screenshots
+# Screenshots - App Store workflow
 appstore screenshots list --version-localization "LOC_ID"
 appstore screenshots sizes
-appstore screenshots sizes --display-type "APP_IPHONE_65"
-appstore screenshots upload --version-localization "LOC_ID" --path "./screenshots/" --device-type IPHONE_65
+appstore screenshots sizes --display-type "APP_IPHONE_69"
+appstore screenshots upload --version-localization "LOC_ID" --path "./screenshots/" --device-type "IPHONE_69"
+appstore screenshots download --version-localization "LOC_ID" --output-dir "./screenshots/downloaded"
 appstore screenshots delete --id "SCREENSHOT_ID" --confirm
 
-# Local capture (experimental)
+# Screenshots - Local workflow (experimental)
+appstore screenshots run --plan .asc/screenshots.json
 appstore screenshots capture --bundle-id "com.example.app" --name home
 appstore screenshots frame --input "./screenshots/raw/home.png" --device iphone-air
+appstore screenshots list-frame-devices --output json
+appstore screenshots review-generate --framed-dir ./screenshots/framed
+appstore screenshots review-open --output-dir ./screenshots/review
+appstore screenshots review-approve --all-ready --output-dir ./screenshots/review
+
+# Screenshot sets
+appstore localizations screenshot-sets delete --set-id "SET_ID" --confirm
 
 # Video previews
 appstore video-previews list --version-localization "LOC_ID"
@@ -689,9 +728,19 @@ appstore categories set --app "APP_ID" --primary GAMES --secondary ENTERTAINMENT
 ## Validate (Pre-Submission)
 
 ```bash
+# App Store version validation
 appstore validate --app "APP_ID" --version-id "VERSION_ID"
 appstore validate --app "APP_ID" --version-id "VERSION_ID" --platform IOS --output table
 appstore validate --app "APP_ID" --version-id "VERSION_ID" --strict
+
+# TestFlight build validation
+appstore validate testflight --app "APP_ID" --build "BUILD_ID"
+
+# In-App Purchase validation
+appstore validate iap --app "APP_ID"
+
+# Subscription validation
+appstore validate subscriptions --app "APP_ID"
 ```
 
 ## Submit
@@ -717,4 +766,183 @@ appstore migrate export --app "APP_ID" --version-id "VERSION_ID" --output-dir ./
 ```bash
 appstore notify slack --webhook "WEBHOOK_URL" --message "Build deployed!"
 appstore notify slack --webhook "WEBHOOK_URL" --message "v1.0.0 live" --channel "#releases"
+
+# Thread replies and release payload
+appstore notify slack --webhook "WEBHOOK_URL" --message "Follow-up" --thread-ts "1234567890.123456"
+appstore notify slack --webhook "WEBHOOK_URL" --release-payload --app "APP_ID" --version "1.2.3"
+```
+
+## Account
+
+```bash
+appstore account status
+appstore account status --app "APP_ID"
+appstore account status --output table
+```
+
+## Insights
+
+```bash
+# Weekly insights (this week vs last week)
+appstore insights weekly --app "APP_ID" --source analytics --week "2026-02-16"
+appstore insights weekly --app "APP_ID" --source sales --week "2026-02-16" --vendor "12345678"
+
+# Daily insights (subscription renewal signals)
+appstore insights daily --app "APP_ID" --vendor "12345678" --date "2026-02-20"
+```
+
+## Status (Release Pipeline Dashboard)
+
+```bash
+appstore status --app "APP_ID"
+appstore status --app "APP_ID" --include builds,testflight,submission
+appstore status --app "APP_ID" --output table
+appstore status --app "APP_ID" --output markdown
+```
+
+## Release Notes
+
+```bash
+appstore release-notes generate --since-tag "v1.2.2"
+appstore release-notes generate --since-tag "v1.2.2" --until-ref "HEAD" --output markdown
+appstore release-notes generate --since-ref "origin/main" --until-ref "HEAD" --max-chars 4000
+```
+
+## Metadata (Deterministic File Workflows)
+
+```bash
+# Pull metadata from App Store Connect
+appstore metadata pull --app "APP_ID" --version "1.2.3" --dir "./metadata"
+appstore metadata pull --app "APP_ID" --version "1.2.3" --platform IOS --dir "./metadata"
+
+# Push metadata changes
+appstore metadata push --app "APP_ID" --version "1.2.3" --dir "./metadata"
+
+# Validate offline
+appstore metadata validate --dir "./metadata"
+```
+
+## Diff (Localization Comparison)
+
+```bash
+# Compare local files vs remote
+appstore diff localizations --app "APP_ID" --path "./metadata/localizations" --version "VERSION_ID"
+
+# Compare two remote versions
+appstore diff localizations --app "APP_ID" --from-version "VERSION_ID_A" --to-version "VERSION_ID_B"
+```
+
+## Pricing
+
+```bash
+# Territories
+appstore pricing territories list
+
+# Price points
+appstore pricing price-points --app "APP_ID"
+appstore pricing price-points --app "APP_ID" --territory "USA"
+appstore pricing price-points get --price-point "PRICE_POINT_ID"
+appstore pricing price-points equalizations --price-point "PRICE_POINT_ID"
+
+# Price schedule
+appstore pricing schedule get --app "APP_ID"
+appstore pricing schedule get --id "SCHEDULE_ID"
+appstore pricing schedule create --app "APP_ID" --price-point "PRICE_POINT_ID" --base-territory "USA" --start-date "2024-03-01"
+appstore pricing schedule manual-prices --schedule "SCHEDULE_ID"
+appstore pricing schedule automatic-prices --schedule "SCHEDULE_ID"
+
+# Availability
+appstore pricing availability get --app "APP_ID"
+appstore pricing availability get --id "AVAILABILITY_ID"
+appstore pricing availability set --app "APP_ID" --territory "USA,GBR,DEU" --available true
+appstore pricing availability territory-availabilities --availability "AVAILABILITY_ID"
+```
+
+## Pre-orders
+
+```bash
+appstore pre-orders get --app "APP_ID"
+appstore pre-orders list --availability "AVAILABILITY_ID"
+appstore pre-orders enable --app "APP_ID" --territory "USA,GBR" --release-date "2026-02-01"
+appstore pre-orders update --territory-availability "TERRITORY_AVAILABILITY_ID" --release-date "2026-03-01"
+appstore pre-orders disable --territory-availability "TERRITORY_AVAILABILITY_ID"
+appstore pre-orders end --territory-availability "TA_1,TA_2"
+```
+
+## Accessibility
+
+```bash
+appstore accessibility list --app "APP_ID"
+appstore accessibility get --id "DECLARATION_ID"
+appstore accessibility create --app "APP_ID" --device-family IPHONE --supports-voiceover true
+appstore accessibility update --id "DECLARATION_ID" --publish true
+appstore accessibility delete --id "DECLARATION_ID" --confirm
+```
+
+## Nominations (Featuring)
+
+```bash
+appstore nominations list --status DRAFT
+appstore nominations get --id "NOMINATION_ID"
+appstore nominations create --app "APP_ID" --name "Launch" --type APP_LAUNCH --description "New launch" --submitted=false --publish-start-date "2026-02-01T08:00:00Z"
+appstore nominations update --id "NOMINATION_ID" --notes "Updated notes"
+appstore nominations delete --id "NOMINATION_ID" --confirm
+```
+
+## Product Pages
+
+```bash
+# Custom product pages
+appstore product-pages custom-pages list --app "APP_ID"
+appstore product-pages custom-pages create --app "APP_ID" --name "Summer Campaign"
+
+# Product page experiments (A/B testing)
+appstore product-pages experiments list --version-id "VERSION_ID"
+appstore product-pages experiments create --version-id "VERSION_ID" --name "Icon Test" --traffic-proportion 25
+```
+
+## Win-back Offers
+
+```bash
+appstore win-back-offers list --subscription "SUB_ID"
+appstore win-back-offers get --id "OFFER_ID"
+appstore win-back-offers create --subscription "SUB_ID" --reference-name "spring-2026" --offer-id "OFFER-1" --duration ONE_MONTH --offer-mode PAY_AS_YOU_GO --period-count 1 --eligibility-paid-months 6 --eligibility-last-subscribed-min 3 --eligibility-last-subscribed-max 12 --start-date "2026-02-01" --priority HIGH --price "PRICE_ID"
+appstore win-back-offers update --id "OFFER_ID" --priority NORMAL
+appstore win-back-offers delete --id "OFFER_ID" --confirm
+appstore win-back-offers prices --id "OFFER_ID"
+appstore win-back-offers prices-relationships --id "OFFER_ID"
+```
+
+## Promoted Purchases
+
+```bash
+appstore promoted-purchases list --app "APP_ID"
+appstore promoted-purchases get --promoted-purchase-id "PROMO_ID"
+appstore promoted-purchases create --app "APP_ID" --product-id "PRODUCT_ID" --product-type SUBSCRIPTION --visible-for-all-users
+appstore promoted-purchases update --promoted-purchase-id "PROMO_ID" --enabled false
+appstore promoted-purchases delete --promoted-purchase-id "PROMO_ID" --confirm
+appstore promoted-purchases link --app "APP_ID" --promoted-purchase-id "PROMO_ID"
+```
+
+## Marketplace
+
+```bash
+appstore marketplace search-details get --app "APP_ID"
+appstore marketplace webhooks list
+```
+
+## Android-iOS Mapping
+
+```bash
+appstore android-ios-mapping list --app "APP_ID"
+appstore android-ios-mapping get --mapping-id "MAPPING_ID"
+appstore android-ios-mapping create --app "APP_ID" --android-package-name "com.example.android" --fingerprints "SHA1,SHA2"
+appstore android-ios-mapping update --mapping-id "MAPPING_ID" --android-package-name "com.example.android.new"
+appstore android-ios-mapping delete --mapping-id "MAPPING_ID" --confirm
+```
+
+## Agreements
+
+```bash
+appstore agreements territories list --id "EULA_ID"
 ```
