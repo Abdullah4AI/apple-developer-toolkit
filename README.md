@@ -122,7 +122,7 @@ appstore migrate from-fastlane --app "APP_ID"
 
 ### 3. iOS App Builder (`swiftship`)
 
-Build complete iOS apps from natural language descriptions. Powered by Claude Code.
+Build complete iOS apps from natural language descriptions. Powered by AI code generation.
 
 ```bash
 swiftship                        # Interactive mode - describe your app

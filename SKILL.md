@@ -1,6 +1,6 @@
 ---
 name: apple-developer-toolkit
-description: "All-in-one Apple developer skill with three integrated tools. (1) Documentation search across Apple frameworks, symbols, and 1,267 WWDC sessions from 2014-2025. No credentials needed. (2) App Store Connect CLI with 80+ commands covering builds, TestFlight, submissions, signing, subscriptions, IAP, analytics, Xcode Cloud, and more. Requires App Store Connect API key. (3) iOS app builder that generates complete Swift/SwiftUI apps from natural language descriptions with auto-fix and simulator launch. Requires Anthropic API key and Xcode. Includes 38 iOS development rules and 12 SwiftUI best practice guides for Liquid Glass, navigation, state management, and modern APIs. USE WHEN: Apple API docs, App Store Connect management, WWDC lookup, or building iOS apps from scratch. DON'T USE WHEN: non-Apple platforms or general coding."
+description: "All-in-one Apple developer skill with three integrated tools. (1) Documentation search across Apple frameworks, symbols, and 1,267 WWDC sessions from 2014-2025. No credentials needed. (2) App Store Connect CLI with 80+ commands covering builds, TestFlight, submissions, signing, subscriptions, IAP, analytics, Xcode Cloud, and more. Requires App Store Connect API key. (3) iOS app builder that generates complete Swift/SwiftUI apps from natural language descriptions with auto-fix and simulator launch. Requires an LLM API key and Xcode. Includes 38 iOS development rules and 12 SwiftUI best practice guides for Liquid Glass, navigation, state management, and modern APIs. USE WHEN: Apple API docs, App Store Connect management, WWDC lookup, or building iOS apps from scratch. DON'T USE WHEN: non-Apple platforms or general coding."
 metadata:
   {
     "openclaw":
@@ -47,8 +47,8 @@ metadata:
                   "description": "Path to App Store Connect API .p8 private key file. Required only for App Store Connect features (Part 2). Alternative: use APPSTORE_PRIVATE_KEY or APPSTORE_PRIVATE_KEY_B64.",
                 },
                 {
-                  "name": "ANTHROPIC_API_KEY",
-                  "description": "Anthropic API key for Claude models. Required only for iOS App Builder (Part 3). swiftship uses Claude Code as its AI backend.",
+                  "name": "LLM_API_KEY",
+                  "description": "LLM API key for code generation. Required only for iOS App Builder (Part 3). swiftship supports multiple AI backends.",
                 },
               ],
           },
@@ -66,7 +66,7 @@ Three tools in one skill. Each part works independently with different credentia
 |---------|-------------------|-------------------|
 | Documentation Search (Part 1) | None | Yes |
 | App Store Connect (Part 2) | App Store Connect API key (.p8) | No |
-| iOS App Builder (Part 3) | Anthropic API key + Xcode | No |
+| iOS App Builder (Part 3) | LLM API key + Xcode | No |
 
 ## Setup
 
@@ -110,7 +110,7 @@ Install via Homebrew:
 brew tap Abdullah4AI/tap && brew install swiftship
 ```
 
-Prerequisites: Xcode (with iOS Simulator), XcodeGen, and an Anthropic API key (for Claude Code backend).
+Prerequisites: Xcode (with iOS Simulator), XcodeGen, and an LLM API key for code generation.
 
 ```bash
 swiftship setup    # Checks and installs prerequisites
@@ -175,11 +175,11 @@ Covers: TestFlight, Builds, Signing, Subscriptions, IAP, Analytics, Finance, Xco
 
 ## Part 3: iOS App Builder
 
-Build complete iOS apps from natural language descriptions. Uses Claude Code (Anthropic) as the AI backend for code generation.
+Build complete iOS apps from natural language descriptions using AI-powered code generation.
 
 ```bash
 swiftship              # Interactive mode
-swiftship setup        # Install prerequisites (Xcode, XcodeGen, Claude Code)
+swiftship setup        # Install prerequisites (Xcode, XcodeGen, AI backend)
 swiftship fix          # Auto-fix build errors
 swiftship run          # Build and launch in simulator
 swiftship info         # Show project status
