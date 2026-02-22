@@ -539,7 +539,25 @@ async function cmdDoc(path) {
     process.exit(1);
   }
 
-  const url = path.startsWith('http') ? path : `https://developer.apple.com${path}`;
+  // Validate: only allow Apple developer documentation URLs (SSRF protection)
+  let url;
+  if (path.startsWith('http')) {
+    const parsed = new URL(path);
+    const allowedHosts = ['developer.apple.com', 'sosumi.ai'];
+    if (!allowedHosts.includes(parsed.hostname)) {
+      logError(`Only Apple documentation URLs are allowed (developer.apple.com, sosumi.ai). Got: ${parsed.hostname}`);
+      process.exit(1);
+    }
+    url = path;
+  } else {
+    // Path-only input: must start with / and contain no protocol markers
+    if (path.includes('://') || path.includes('..')) {
+      logError('Invalid documentation path. Use a path like "/documentation/swiftui/view"');
+      process.exit(1);
+    }
+    url = `https://developer.apple.com${path}`;
+  }
+
   log(`\nFetching documentation: ${url}`, 'bright');
   const content = await getAppleDocContent(url);
   log(`\n${content}`);

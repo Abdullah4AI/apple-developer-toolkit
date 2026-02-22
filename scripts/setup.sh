@@ -1,5 +1,22 @@
 #!/bin/bash
-# Apple Developer Toolkit - Auto-install binaries via Homebrew
+# Apple Developer Toolkit - Setup Script
+# Installs appstore and swiftship CLIs via Homebrew.
+#
+# What this script does:
+#   1. Checks that Homebrew is installed
+#   2. Adds the Abdullah4AI/tap Homebrew tap (public GitHub repo)
+#   3. Installs 'appstore' and 'swiftship' CLI binaries
+#
+# What this script does NOT do:
+#   - Does not configure API keys or credentials
+#   - Does not install Xcode or Xcode Command Line Tools
+#   - Does not modify system files or require sudo
+#
+# Source code:
+#   - appstore: https://github.com/Abdullah4AI/appstore
+#   - swiftship: https://github.com/Abdullah4AI/swiftship
+#   - Homebrew tap: https://github.com/Abdullah4AI/homebrew-tap
+
 set -e
 
 # Check if Homebrew is available
@@ -10,7 +27,7 @@ fi
 
 # Add tap if not already added
 if ! brew tap | grep -q "abdullah4ai/tap"; then
-  echo "Adding tap..."
+  echo "Adding tap (source: https://github.com/Abdullah4AI/homebrew-tap)..."
   brew tap Abdullah4AI/tap
 fi
 
@@ -31,4 +48,10 @@ else
 fi
 
 echo ""
-echo "Ready. Run 'appstore --help' or 'swiftship --help' to get started."
+echo "Setup complete."
+echo "  appstore --help    App Store Connect CLI"
+echo "  swiftship --help   iOS App Builder"
+echo ""
+echo "Next steps:"
+echo "  - For App Store Connect: run 'appstore auth login' with your API key"
+echo "  - For iOS App Builder: run 'swiftship setup' to check prerequisites"
