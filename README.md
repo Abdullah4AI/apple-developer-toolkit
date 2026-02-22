@@ -1,25 +1,54 @@
 # Apple Developer Toolkit
 
-All-in-one Apple developer skill: documentation search, WWDC videos, App Store Connect management, and autonomous iOS app builder.
+All-in-one Apple developer skill: documentation search, WWDC videos, App Store Connect management, and autonomous iOS app builder. Ships as a **single unified binary** (`appledev`) with multi-call support.
 
 ## Install
 
+### Single binary (recommended)
+
 ```bash
 brew tap Abdullah4AI/tap
-brew install appstore swiftship
+brew install appledev
 ```
 
-Or via npx:
+This installs one binary with symlinks for backward compatibility:
+- `appledev` - unified CLI
+- `appstore` - symlink to `appledev` (App Store Connect mode)
+- `swiftship` - symlink to `appledev` (iOS app builder mode)
+
+### Via ClawHub
+
+```bash
+clawhub install apple-developer-toolkit
+```
+
+### Via npx
 
 ```bash
 npx skills add Abdullah4AI/apple-developer-toolkit
 ```
 
-ClawHub:
+## Usage
+
+### Unified CLI
 
 ```bash
-clawhub install apple-developer-toolkit
+appledev build ...    # iOS app builder (SwiftShip)
+appledev store ...    # App Store Connect CLI
+appledev b ...        # Short alias for build
+appledev s ...        # Short alias for store
 ```
+
+### Direct mode (symlinks)
+
+Backward-compatible with existing scripts and workflows:
+
+```bash
+swiftship ...         # Runs SwiftShip directly
+appstore ...          # Runs App Store Connect directly
+```
+
+Both modes run the same binary. Zero overhead, zero duplication.
 
 ## What's Inside
 
@@ -38,71 +67,71 @@ node cli.js wwdc-year 2025
 node cli.js wwdc-topic "swiftui-ui-frameworks"
 ```
 
-### 2. App Store Connect (`appstore`)
+### 2. App Store Connect (`appledev store` / `appstore`)
 
-80+ commands covering the entire App Store Connect API.
+120+ commands covering the entire App Store Connect API.
 
 ```bash
-appstore auth login --name "MyApp" --key-id "KEY_ID" --issuer-id "ISSUER_ID" --private-key /path/to/AuthKey.p8
+appledev store auth login --name "MyApp" --key-id "KEY_ID" --issuer-id "ISSUER_ID" --private-key /path/to/AuthKey.p8
 ```
 
 #### Apps & Versions
 ```bash
-appstore apps                                    # List all apps
-appstore versions --app "APP_ID"                 # List versions
-appstore app-info --app "APP_ID"                 # App metadata
-appstore localizations --app "APP_ID"            # Localization metadata
-appstore screenshots upload --app "APP_ID" ...   # Upload screenshots
+appledev store apps                                    # List all apps
+appledev store versions --app "APP_ID"                 # List versions
+appledev store app-info --app "APP_ID"                 # App metadata
+appledev store localizations --app "APP_ID"            # Localization metadata
+appledev store screenshots upload --app "APP_ID" ...   # Upload screenshots
 ```
 
 #### TestFlight & Builds
 ```bash
-appstore builds upload --app "APP_ID" --ipa "app.ipa" --wait
-appstore publish testflight --app "APP_ID" --ipa "app.ipa" --group "Beta" --wait
-appstore testflight groups --app "APP_ID"
-appstore feedback --app "APP_ID"
-appstore crashes --app "APP_ID"
+appledev store builds upload --app "APP_ID" --ipa "app.ipa" --wait
+appledev store publish testflight --app "APP_ID" --ipa "app.ipa" --group "Beta" --wait
+appledev store testflight groups --app "APP_ID"
+appledev store feedback --app "APP_ID"
+appledev store crashes --app "APP_ID"
 ```
 
 #### App Store Submission
 ```bash
-appstore publish appstore --app "APP_ID" --ipa "app.ipa" --submit --confirm --wait
-appstore submit --app "APP_ID"
-appstore validate --app "APP_ID" --version-id "VER_ID" --strict
-appstore review --app "APP_ID"
+appledev store publish appstore --app "APP_ID" --ipa "app.ipa" --submit --confirm --wait
+appledev store submit --app "APP_ID"
+appledev store validate --app "APP_ID" --version-id "VER_ID" --strict
+appledev store review --app "APP_ID"
 ```
 
 #### Signing & Certificates
 ```bash
-appstore certificates list
-appstore profiles list
-appstore bundle-ids list
-appstore signing create --app "APP_ID"
+appledev store certificates list
+appledev store profiles list
+appledev store bundle-ids list
+appledev store signing create --app "APP_ID"
 ```
 
 #### Monetization
 ```bash
-appstore subscriptions list --app "APP_ID"
-appstore iap list --app "APP_ID"
-appstore offer-codes create --subscription "SUB_ID"
-appstore pricing schedule get --app "APP_ID"
+appledev store subscriptions list --app "APP_ID"
+appledev store iap list --app "APP_ID"
+appledev store offer-codes create --subscription "SUB_ID"
+appledev store pricing schedule get --app "APP_ID"
 ```
 
 #### Analytics & Finance
 ```bash
-appstore analytics sales --vendor "VENDOR" --type SALES --subtype SUMMARY --frequency DAILY --date "2024-01-20"
-appstore finance reports --vendor "VENDOR"
-appstore reviews --app "APP_ID" --output table
-appstore insights weekly --app "APP_ID"
+appledev store analytics sales --vendor "VENDOR" --type SALES --subtype SUMMARY --frequency DAILY --date "2024-01-20"
+appledev store finance reports --vendor "VENDOR"
+appledev store reviews --app "APP_ID" --output table
+appledev store insights weekly --app "APP_ID"
 ```
 
 #### Automation
 ```bash
-appstore xcode-cloud run --app "APP_ID" --workflow "CI" --branch "main" --wait
-appstore notarization submit --file ./MyApp.zip --wait
-appstore webhooks list
-appstore workflow run --file .appstore/workflow.json
-appstore migrate from-fastlane --app "APP_ID"
+appledev store xcode-cloud run --app "APP_ID" --workflow "CI" --branch "main" --wait
+appledev store notarization submit --file ./MyApp.zip --wait
+appledev store webhooks list
+appledev store workflow run --file .appstore/workflow.json
+appledev store migrate from-fastlane --app "APP_ID"
 ```
 
 #### Full Command List
@@ -120,26 +149,26 @@ appstore migrate from-fastlane --app "APP_ID"
 | Team | account, users, actors, devices |
 | Other | categories, age-rating, accessibility, encryption, eula, agreements, app-clips, game-center, background-assets, product-pages, routing-coverage, nominations, marketplace, alternative-distribution, android-ios-mapping |
 
-### 3. iOS App Builder (`swiftship`)
+### 3. iOS App Builder (`appledev build` / `swiftship`)
 
 Build complete iOS apps from natural language descriptions. Powered by AI code generation.
 
 ```bash
-swiftship                        # Interactive mode - describe your app
-swiftship chat                   # Chat mode for editing existing apps
-swiftship setup                  # Install prerequisites (Xcode, XcodeGen)
-swiftship fix                    # Auto-fix build errors
-swiftship run                    # Build and launch in simulator
-swiftship open                   # Open project in Xcode
-swiftship info                   # Show project status
-swiftship usage                  # Token usage and cost
-swiftship --model opus           # Use a specific model
+appledev build                     # Interactive mode - describe your app
+appledev build chat                # Chat mode for editing existing apps
+appledev build setup               # Install prerequisites (Xcode, XcodeGen)
+appledev build fix                 # Auto-fix build errors
+appledev build run                 # Build and launch in simulator
+appledev build open                # Open project in Xcode
+appledev build info                # Show project status
+appledev build usage               # Token usage and cost
+appledev build --model opus        # Use a specific model
 ```
 
 #### How It Works
 
 ```
-describe → analyze → plan → build → fix → run
+describe > analyze > plan > build > fix > run
 ```
 
 1. **Analyze** - Extracts app name, features, core flow from your description
@@ -182,7 +211,15 @@ animations, forms-and-input, layout, liquid-glass, list-patterns, media, modern-
 
 - **Node.js** v18+ (documentation search)
 - **Xcode** (iOS app building)
-- **Homebrew** (binary installation)
+- **Go** 1.25+ (building from source)
+
+## Building from Source
+
+```bash
+bash scripts/setup.sh
+```
+
+This builds the unified `appledev` binary and creates symlinks for `appstore` and `swiftship`.
 
 ## License
 

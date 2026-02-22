@@ -3,3 +3,8 @@ package-lock.json
 
 # Downloaded binaries
 bin/
+
+# Built binaries
+bin/appledev
+bin/swiftship
+bin/appstore

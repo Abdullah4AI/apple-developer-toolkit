@@ -1,6 +1,6 @@
 ---
 name: apple-developer-toolkit
-description: "All-in-one Apple developer skill with three integrated tools. (1) Documentation search across Apple frameworks, symbols, and 1,267 WWDC sessions from 2014-2025. No credentials needed. (2) App Store Connect CLI with 120+ commands covering builds, TestFlight, submissions, signing, subscriptions, IAP, analytics, Xcode Cloud, metadata workflows, release pipeline dashboard, insights, win-back offers, promoted purchases, product pages, nominations, accessibility declarations, pre-orders, pricing, diff, webhooks with local receiver, workflow automation, and more. Requires App Store Connect API key. (3) iOS app builder that generates complete Swift/SwiftUI apps from natural language descriptions with auto-fix and simulator launch. Requires an LLM API key and Xcode. Includes 38 iOS development rules and 12 SwiftUI best practice guides for Liquid Glass, navigation, state management, and modern APIs. USE WHEN: Apple API docs, App Store Connect management, WWDC lookup, or building iOS apps from scratch. DON'T USE WHEN: non-Apple platforms or general coding."
+description: "All-in-one Apple developer skill with three integrated tools shipped as a single unified binary. (1) Documentation search across Apple frameworks, symbols, and 1,267 WWDC sessions from 2014-2025. No credentials needed. (2) App Store Connect CLI with 120+ commands covering builds, TestFlight, submissions, signing, subscriptions, IAP, analytics, Xcode Cloud, metadata workflows, release pipeline dashboard, insights, win-back offers, promoted purchases, product pages, nominations, accessibility declarations, pre-orders, pricing, diff, webhooks with local receiver, workflow automation, and more. Requires App Store Connect API key. (3) iOS app builder that generates complete Swift/SwiftUI apps from natural language descriptions with auto-fix and simulator launch. Requires an LLM API key and Xcode. Includes 38 iOS development rules and 12 SwiftUI best practice guides for Liquid Glass, navigation, state management, and modern APIs. All three tools ship as one binary (appledev) with multi-call symlinks for backward compatibility (appstore, swiftship). USE WHEN: Apple API docs, App Store Connect management, WWDC lookup, or building iOS apps from scratch. DON'T USE WHEN: non-Apple platforms or general coding."
 metadata:
   {
     "openclaw":
@@ -9,25 +9,17 @@ metadata:
         "requires":
           {
             "bins": ["node"],
-            "anyBins": ["appstore", "swiftship"],
+            "anyBins": ["appledev", "appstore", "swiftship"],
           },
         "install":
           [
             {
-              "id": "appstore",
+              "id": "appledev",
               "kind": "brew",
               "tap": "Abdullah4AI/tap",
-              "formula": "appstore",
-              "bins": ["appstore"],
-              "label": "App Store Connect CLI (Homebrew)",
-            },
-            {
-              "id": "swiftship",
-              "kind": "brew",
-              "tap": "Abdullah4AI/tap",
-              "formula": "swiftship",
-              "bins": ["swiftship"],
-              "label": "iOS App Builder (Homebrew)",
+              "formula": "appledev",
+              "bins": ["appledev", "appstore", "swiftship"],
+              "label": "Apple Developer Toolkit - unified binary (Homebrew)",
             },
           ],
         "env":
@@ -36,19 +28,19 @@ metadata:
               [
                 {
                   "name": "APPSTORE_KEY_ID",
-                  "description": "App Store Connect API Key ID. Required only for App Store Connect features (Part 2). Get from https://appstoreconnect.apple.com/access/integrations/api",
+                  "description": "App Store Connect API Key ID. Required only for App Store Connect features. Get from https://appstoreconnect.apple.com/access/integrations/api",
                 },
                 {
                   "name": "APPSTORE_ISSUER_ID",
-                  "description": "App Store Connect API Issuer ID. Required only for App Store Connect features (Part 2).",
+                  "description": "App Store Connect API Issuer ID. Required only for App Store Connect features.",
                 },
                 {
                   "name": "APPSTORE_PRIVATE_KEY_PATH",
-                  "description": "Path to App Store Connect API .p8 private key file. Required only for App Store Connect features (Part 2). Alternative: use APPSTORE_PRIVATE_KEY or APPSTORE_PRIVATE_KEY_B64.",
+                  "description": "Path to App Store Connect API .p8 private key file. Required only for App Store Connect features. Alternative: use APPSTORE_PRIVATE_KEY or APPSTORE_PRIVATE_KEY_B64.",
                 },
                 {
                   "name": "LLM_API_KEY",
-                  "description": "LLM API key for code generation. Required only for iOS App Builder (Part 3). swiftship supports multiple AI backends.",
+                  "description": "LLM API key for code generation. Required only for iOS App Builder. swiftship supports multiple AI backends.",
                 },
               ],
           },
@@ -58,7 +50,20 @@ metadata:
 
 # Apple Developer Toolkit
 
-Three tools in one skill. Each part works independently with different credential requirements.
+Three tools in one binary. Each part works independently with different credential requirements.
+
+## Architecture
+
+Ships as a single unified binary `appledev` with multi-call support:
+
+```
+appledev build ...    # iOS app builder (SwiftShip)
+appledev store ...    # App Store Connect CLI
+appledev b ...        # Short alias
+appledev s ...        # Short alias
+```
+
+Symlinks `appstore` and `swiftship` provide backward compatibility. Same binary, zero duplication.
 
 ## Credential Requirements by Feature
 
@@ -83,13 +88,13 @@ node cli.js search "NavigationStack"
 Install via Homebrew:
 
 ```bash
-brew tap Abdullah4AI/tap && brew install appstore
+brew tap Abdullah4AI/tap && brew install appledev
 ```
 
 Authenticate with your App Store Connect API key:
 
 ```bash
-appstore auth login --name "MyApp" --key-id "KEY_ID" --issuer-id "ISSUER_ID" --private-key /path/to/AuthKey.p8
+appledev store auth login --name "MyApp" --key-id "KEY_ID" --issuer-id "ISSUER_ID" --private-key /path/to/AuthKey.p8
 ```
 
 Or set environment variables:
@@ -104,25 +109,17 @@ API keys are created at https://appstoreconnect.apple.com/access/integrations/ap
 
 ### Part 3: iOS App Builder
 
-Install via Homebrew:
-
-```bash
-brew tap Abdullah4AI/tap && brew install swiftship
-```
-
 Prerequisites: Xcode (with iOS Simulator), XcodeGen, and an LLM API key for code generation.
 
 ```bash
-swiftship setup    # Checks and installs prerequisites
+appledev build setup    # Checks and installs prerequisites
 ```
 
-### All-in-one setup script
+### Build from source
 
 ```bash
 bash scripts/setup.sh
 ```
-
-This script checks for Homebrew, adds the tap, and installs both `appstore` and `swiftship`. It does not install Xcode or configure API keys.
 
 ## Part 1: Documentation Search
 
@@ -143,22 +140,22 @@ Full reference: [references/app-store-connect.md](references/app-store-connect.m
 
 | Task | Command |
 |------|---------|
-| List apps | `appstore apps` |
-| Upload build | `appstore builds upload --app "APP_ID" --ipa "app.ipa" --wait` |
-| Publish TestFlight | `appstore publish testflight --app "APP_ID" --ipa "app.ipa" --group "Beta" --wait` |
-| Submit App Store | `appstore publish appstore --app "APP_ID" --ipa "app.ipa" --submit --confirm --wait` |
-| List certificates | `appstore certificates list` |
-| Reviews | `appstore reviews --app "APP_ID" --output table` |
-| Sales report | `appstore analytics sales --vendor "VENDOR" --type SALES --subtype SUMMARY --frequency DAILY --date "2024-01-20"` |
-| Xcode Cloud | `appstore xcode-cloud run --app "APP_ID" --workflow "CI" --branch "main" --wait` |
-| Notarize | `appstore notarization submit --file ./MyApp.zip --wait` |
-| Validate | `appstore validate --app "APP_ID" --version-id "VERSION_ID" --strict` |
-| Status dashboard | `appstore status --app "APP_ID" --output table` |
-| Weekly insights | `appstore insights weekly --app "APP_ID" --source analytics` |
-| Metadata pull | `appstore metadata pull --app "APP_ID" --version "1.2.3" --dir ./metadata` |
-| Release notes | `appstore release-notes generate --since-tag "v1.2.2"` |
-| Diff localizations | `appstore diff localizations --app "APP_ID" --path ./metadata` |
-| Nominations | `appstore nominations create --app "APP_ID" --name "Launch"` |
+| List apps | `appledev store apps` |
+| Upload build | `appledev store builds upload --app "APP_ID" --ipa "app.ipa" --wait` |
+| Publish TestFlight | `appledev store publish testflight --app "APP_ID" --ipa "app.ipa" --group "Beta" --wait` |
+| Submit App Store | `appledev store publish appstore --app "APP_ID" --ipa "app.ipa" --submit --confirm --wait` |
+| List certificates | `appledev store certificates list` |
+| Reviews | `appledev store reviews --app "APP_ID" --output table` |
+| Sales report | `appledev store analytics sales --vendor "VENDOR" --type SALES --subtype SUMMARY --frequency DAILY --date "2024-01-20"` |
+| Xcode Cloud | `appledev store xcode-cloud run --app "APP_ID" --workflow "CI" --branch "main" --wait` |
+| Notarize | `appledev store notarization submit --file ./MyApp.zip --wait` |
+| Validate | `appledev store validate --app "APP_ID" --version-id "VERSION_ID" --strict` |
+| Status dashboard | `appledev store status --app "APP_ID" --output table` |
+| Weekly insights | `appledev store insights weekly --app "APP_ID" --source analytics` |
+| Metadata pull | `appledev store metadata pull --app "APP_ID" --version "1.2.3" --dir ./metadata` |
+| Release notes | `appledev store release-notes generate --since-tag "v1.2.2"` |
+| Diff localizations | `appledev store diff localizations --app "APP_ID" --path ./metadata` |
+| Nominations | `appledev store nominations create --app "APP_ID" --name "Launch"` |
 
 ### Environment Variables
 
@@ -177,25 +174,21 @@ All environment variables are optional. They override flags when set.
 | `APPSTORE_TIMEOUT` | Request timeout |
 | `APPSTORE_BYPASS_KEYCHAIN` | Skip system keychain |
 
-Covers: TestFlight, Builds, Signing, Subscriptions, IAP, Analytics, Finance, Xcode Cloud, Notarization, Game Center, Webhooks (with local receiver), App Clips, Screenshots (local capture/frame/review workflow), Workflow automation, Metadata (pull/push/validate), Diff, Status Dashboard, Insights, Release Notes, Pricing, Pre-orders, Accessibility, Nominations, Product Pages, Win-back Offers, Promoted Purchases, Marketplace, Android-iOS Mapping, Migrate (Fastlane).
-
 ## Part 3: iOS App Builder
 
-Build complete iOS apps from natural language descriptions using AI-powered code generation.
-
 ```bash
-swiftship              # Interactive mode
-swiftship setup        # Install prerequisites (Xcode, XcodeGen, AI backend)
-swiftship fix          # Auto-fix build errors
-swiftship run          # Build and launch in simulator
-swiftship info         # Show project status
-swiftship usage        # Token usage and cost
+appledev build                     # Interactive mode
+appledev build setup               # Install prerequisites
+appledev build fix                 # Auto-fix build errors
+appledev build run                 # Build and launch in simulator
+appledev build info                # Show project status
+appledev build usage               # Token usage and cost
 ```
 
 ### How it works
 
 ```
-describe → analyze → plan → build → fix → run
+describe > analyze > plan > build > fix > run
 ```
 
 1. **Analyze** - Extracts app name, features, core flow from description
@@ -220,9 +213,9 @@ describe → analyze → plan → build → fix → run
 | Reference | Content |
 |-----------|---------|
 | [references/app-store-connect.md](references/app-store-connect.md) | Complete App Store Connect CLI commands |
-| [references/ios-rules/](references/ios-rules/) | 38 iOS development rules (accessibility, dark mode, localization, etc.) |
-| [references/swiftui-guides/](references/swiftui-guides/) | 12 SwiftUI best practice guides (animations, liquid glass, state, etc.) |
-| [references/ios-app-builder-prompts.md](references/ios-app-builder-prompts.md) | System prompts for app analysis, planning, and building |
+| [references/ios-rules/](references/ios-rules/) | 38 iOS development rules |
+| [references/swiftui-guides/](references/swiftui-guides/) | 12 SwiftUI best practice guides |
+| [references/ios-app-builder-prompts.md](references/ios-app-builder-prompts.md) | System prompts for app building |
 
 ### iOS Rules (38 files)
 
