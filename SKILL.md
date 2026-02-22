@@ -1,31 +1,128 @@
 ---
-name: apple-dev-docs
-description: "Complete Apple developer toolkit: documentation search, WWDC videos (2014-2025), App Store Connect management (TestFlight, builds, signing, analytics, subscriptions), and autonomous iOS app builder with 50 SwiftUI/iOS best practice guides. USE WHEN: user asks about Apple APIs, needs docs lookup, manages App Store Connect, builds iOS apps from description, or searches WWDC sessions. DON'T USE WHEN: non-Apple platforms or general coding without Apple context."
-metadata: {"clawdbot":{"emoji":"🍎"}}
+name: apple-developer-toolkit
+description: "All-in-one Apple developer skill with three integrated tools. (1) Documentation search across Apple frameworks, symbols, and 1,267 WWDC sessions from 2014-2025. No credentials needed. (2) App Store Connect CLI with 80+ commands covering builds, TestFlight, submissions, signing, subscriptions, IAP, analytics, Xcode Cloud, and more. Requires App Store Connect API key. (3) iOS app builder that generates complete Swift/SwiftUI apps from natural language descriptions with auto-fix and simulator launch. Requires Anthropic API key and Xcode. Includes 38 iOS development rules and 12 SwiftUI best practice guides for Liquid Glass, navigation, state management, and modern APIs. USE WHEN: Apple API docs, App Store Connect management, WWDC lookup, or building iOS apps from scratch. DON'T USE WHEN: non-Apple platforms or general coding."
+metadata:
+  {
+    "openclaw":
+      {
+        "emoji": "🍎",
+        "requires":
+          {
+            "bins": ["node"],
+            "anyBins": ["appstore", "swiftship"],
+          },
+        "install":
+          [
+            {
+              "id": "appstore",
+              "kind": "brew",
+              "tap": "Abdullah4AI/tap",
+              "formula": "appstore",
+              "bins": ["appstore"],
+              "label": "App Store Connect CLI (Homebrew)",
+            },
+            {
+              "id": "swiftship",
+              "kind": "brew",
+              "tap": "Abdullah4AI/tap",
+              "formula": "swiftship",
+              "bins": ["swiftship"],
+              "label": "iOS App Builder (Homebrew)",
+            },
+          ],
+        "env":
+          {
+            "optional":
+              [
+                {
+                  "name": "APPSTORE_KEY_ID",
+                  "description": "App Store Connect API Key ID. Required only for App Store Connect features (Part 2). Get from https://appstoreconnect.apple.com/access/integrations/api",
+                },
+                {
+                  "name": "APPSTORE_ISSUER_ID",
+                  "description": "App Store Connect API Issuer ID. Required only for App Store Connect features (Part 2).",
+                },
+                {
+                  "name": "APPSTORE_PRIVATE_KEY_PATH",
+                  "description": "Path to App Store Connect API .p8 private key file. Required only for App Store Connect features (Part 2). Alternative: use APPSTORE_PRIVATE_KEY or APPSTORE_PRIVATE_KEY_B64.",
+                },
+                {
+                  "name": "ANTHROPIC_API_KEY",
+                  "description": "Anthropic API key for Claude models. Required only for iOS App Builder (Part 3). swiftship uses Claude Code as its AI backend.",
+                },
+              ],
+          },
+      },
+  }
 ---
 
 # Apple Developer Toolkit
 
-Three tools in one skill: documentation search, App Store Connect management, and autonomous iOS app building.
+Three tools in one skill. Each part works independently with different credential requirements.
+
+## Credential Requirements by Feature
+
+| Feature | Credentials Needed | Works Without Setup |
+|---------|-------------------|-------------------|
+| Documentation Search (Part 1) | None | Yes |
+| App Store Connect (Part 2) | App Store Connect API key (.p8) | No |
+| iOS App Builder (Part 3) | Anthropic API key + Xcode | No |
 
 ## Setup
 
-Binaries auto-install on first use via Homebrew:
+### Part 1: Documentation Search (no setup needed)
+
+Works immediately with Node.js:
 
 ```bash
-brew tap Abdullah4AI/tap && brew install appstore swiftship
+node cli.js search "NavigationStack"
 ```
 
-Or run the setup script (included in skill):
+### Part 2: App Store Connect CLI
+
+Install via Homebrew:
+
+```bash
+brew tap Abdullah4AI/tap && brew install appstore
+```
+
+Authenticate with your App Store Connect API key:
+
+```bash
+appstore auth login --name "MyApp" --key-id "KEY_ID" --issuer-id "ISSUER_ID" --private-key /path/to/AuthKey.p8
+```
+
+Or set environment variables:
+
+```bash
+export APPSTORE_KEY_ID="your-key-id"
+export APPSTORE_ISSUER_ID="your-issuer-id"
+export APPSTORE_PRIVATE_KEY_PATH="/path/to/AuthKey.p8"
+```
+
+API keys are created at https://appstoreconnect.apple.com/access/integrations/api
+
+### Part 3: iOS App Builder
+
+Install via Homebrew:
+
+```bash
+brew tap Abdullah4AI/tap && brew install swiftship
+```
+
+Prerequisites: Xcode (with iOS Simulator), XcodeGen, and an Anthropic API key (for Claude Code backend).
+
+```bash
+swiftship setup    # Checks and installs prerequisites
+```
+
+### All-in-one setup script
 
 ```bash
 bash scripts/setup.sh
 ```
 
-For App Store Connect, authenticate:
-```bash
-appstore auth login --name "MyApp" --key-id "KEY_ID" --issuer-id "ISSUER_ID" --private-key /path/to/AuthKey.p8
-```
+This script checks for Homebrew, adds the tap, and installs both `appstore` and `swiftship`. It does not install Xcode or configure API keys.
 
 ## Part 1: Documentation Search
 
@@ -57,11 +154,28 @@ Full reference: [references/app-store-connect.md](references/app-store-connect.m
 | Notarize | `appstore notarization submit --file ./MyApp.zip --wait` |
 | Validate | `appstore validate --app "APP_ID" --version-id "VERSION_ID" --strict` |
 
+### Environment Variables
+
+All environment variables are optional. They override flags when set.
+
+| Variable | Description |
+|----------|-------------|
+| `APPSTORE_KEY_ID` | API Key ID |
+| `APPSTORE_ISSUER_ID` | API Issuer ID |
+| `APPSTORE_PRIVATE_KEY_PATH` | Path to .p8 key file |
+| `APPSTORE_PRIVATE_KEY` | Raw private key string |
+| `APPSTORE_PRIVATE_KEY_B64` | Base64-encoded private key |
+| `APPSTORE_APP_ID` | Default app ID |
+| `APPSTORE_PROFILE` | Default auth profile |
+| `APPSTORE_DEBUG` | Enable debug output |
+| `APPSTORE_TIMEOUT` | Request timeout |
+| `APPSTORE_BYPASS_KEYCHAIN` | Skip system keychain |
+
 Covers: TestFlight, Builds, Signing, Subscriptions, IAP, Analytics, Finance, Xcode Cloud, Notarization, Game Center, Webhooks, App Clips, Screenshots, Workflow automation, Migrate (Fastlane).
 
 ## Part 3: iOS App Builder
 
-Build complete iOS apps from natural language descriptions.
+Build complete iOS apps from natural language descriptions. Uses Claude Code (Anthropic) as the AI backend for code generation.
 
 ```bash
 swiftship              # Interactive mode
