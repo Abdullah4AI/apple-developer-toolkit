@@ -1,6 +1,6 @@
 ---
 name: apple-developer-toolkit
-description: "All-in-one Apple developer skill with three integrated tools shipped as a single unified binary. (1) Documentation search across Apple frameworks, symbols, and 1,267 WWDC sessions from 2014-2025. No credentials needed. (2) App Store Connect CLI with 120+ commands covering builds (find/wait/upload), TestFlight, pre-submission validate, submissions, signing, subscriptions (family-sharable), IAP, analytics, Xcode Cloud, metadata workflows, release pipeline dashboard, insights, win-back offers, promoted purchases, product pages, nominations, accessibility declarations, pre-orders, pricing filters, localizations update, diff, webhooks with local receiver, workflow automation, and more. Requires App Store Connect API key. (3) Multi-platform app builder (iOS/watchOS/tvOS/iPad) that generates complete Swift/SwiftUI apps from natural language with auto-fix, simulator launch, interactive chat mode, and open-in-Xcode. Requires an LLM API key and Xcode. Includes 38 iOS development rules and 12 SwiftUI best practice guides for Liquid Glass, navigation, state management, and modern APIs. All three tools ship as one binary (appledev) with multi-call symlinks for backward compatibility (appstore, swiftship). USE WHEN: Apple API docs, App Store Connect management, WWDC lookup, or building iOS/watchOS/tvOS apps from scratch. DON'T USE WHEN: non-Apple platforms or general coding."
+description: "All-in-one Apple developer skill with three integrated tools shipped as a single unified binary. (1) Documentation search across Apple frameworks, symbols, and 1,267 WWDC sessions from 2014-2025. No credentials needed. (2) App Store Connect CLI with 120+ commands covering builds (find/wait/upload), TestFlight, pre-submission validate, submissions, signing, subscriptions (family-sharable), IAP, analytics, Xcode Cloud, metadata workflows, release pipeline dashboard, insights, win-back offers, promoted purchases, product pages, nominations, accessibility declarations, pre-orders, pricing filters, localizations update, diff, webhooks with local receiver, workflow automation, and more. Requires App Store Connect API key. (3) Multi-platform app builder (iOS/watchOS/tvOS/iPad) that generates complete Swift/SwiftUI apps from natural language with auto-fix, simulator launch, interactive chat mode, and open-in-Xcode. Requires an LLM API key and Xcode. Includes 38 iOS development rules and 12 SwiftUI best practice guides for Liquid Glass, navigation, state management, and modern APIs. All three tools ship as one binary (appledev). USE WHEN: Apple API docs, App Store Connect management, WWDC lookup, or building iOS/watchOS/tvOS apps from scratch. DON'T USE WHEN: non-Apple platforms or general coding."
 metadata:
   {
     "openclaw":
@@ -9,7 +9,7 @@ metadata:
         "requires":
           {
             "bins": ["node"],
-            "anyBins": ["appledev", "appstore", "swiftship"],
+            "anyBins": ["appledev"],
           },
         "install":
           [
@@ -18,7 +18,7 @@ metadata:
               "kind": "brew",
               "tap": "Abdullah4AI/tap",
               "formula": "appledev",
-              "bins": ["appledev", "appstore", "swiftship"],
+              "bins": ["appledev"],
               "label": "Apple Developer Toolkit - unified binary (Homebrew)",
             },
           ],
@@ -40,7 +40,7 @@ metadata:
                 },
                 {
                   "name": "LLM_API_KEY",
-                  "description": "LLM API key for code generation. Required only for iOS App Builder. swiftship supports multiple AI backends.",
+                  "description": "LLM API key for code generation. Required only for iOS App Builder. Supports multiple AI backends.",
                 },
               ],
           },
@@ -63,7 +63,7 @@ appledev b ...        # Short alias
 appledev s ...        # Short alias
 ```
 
-Symlinks `appstore` and `swiftship` provide backward compatibility. Same binary, zero duplication.
+One binary, three tools, zero duplication.
 
 ## Credential Requirements by Feature
 
