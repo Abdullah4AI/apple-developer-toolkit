@@ -19,22 +19,22 @@ func GameCenterChallengesCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "challenges",
-		ShortUsage: "appstore game-center challenges <subcommand> [flags]",
+		ShortUsage: "asc game-center challenges <subcommand> [flags]",
 		ShortHelp:  "Manage Game Center challenges.",
 		LongHelp: `Manage Game Center challenges.
 
 Examples:
-  appstore game-center challenges list --app "APP_ID"
-  appstore game-center challenges get --id "CHALLENGE_ID"
-  appstore game-center challenges create --app "APP_ID" --reference-name "Weekly Challenge" --vendor-id "com.example.weekly" --leaderboard-id "LEADERBOARD_ID"
-  appstore game-center challenges update --id "CHALLENGE_ID" --archived true
-  appstore game-center challenges delete --id "CHALLENGE_ID" --confirm
-  appstore game-center challenges versions list --challenge-id "CHALLENGE_ID"
-  appstore game-center challenges localizations list --version-id "VERSION_ID"
-  appstore game-center challenges localizations image get --id "LOC_ID"
-  appstore game-center challenges versions default-image get --id "VERSION_ID"
-  appstore game-center challenges images upload --localization-id "LOCALIZATION_ID" --file path/to/image.png
-  appstore game-center challenges releases list --app "APP_ID"`,
+  asc game-center challenges list --app "APP_ID"
+  asc game-center challenges get --id "CHALLENGE_ID"
+  asc game-center challenges create --app "APP_ID" --reference-name "Weekly Challenge" --vendor-id "com.example.weekly" --leaderboard-id "LEADERBOARD_ID"
+  asc game-center challenges update --id "CHALLENGE_ID" --archived true
+  asc game-center challenges delete --id "CHALLENGE_ID" --confirm
+  asc game-center challenges versions list --challenge-id "CHALLENGE_ID"
+  asc game-center challenges localizations list --version-id "VERSION_ID"
+  asc game-center challenges localizations image get --id "LOC_ID"
+  asc game-center challenges versions default-image get --id "VERSION_ID"
+  asc game-center challenges images upload --localization-id "LOCALIZATION_ID" --file path/to/image.png
+  asc game-center challenges releases list --app "APP_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -58,7 +58,7 @@ Examples:
 func GameCenterChallengesListCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("list", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID env)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
 	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
 	next := fs.String("next", "", "Fetch next page using a links.next URL")
 	paginate := fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")
@@ -66,14 +66,14 @@ func GameCenterChallengesListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore game-center challenges list [flags]",
+		ShortUsage: "asc game-center challenges list [flags]",
 		ShortHelp:  "List Game Center challenges for an app.",
 		LongHelp: `List Game Center challenges for an app.
 
 Examples:
-  appstore game-center challenges list --app "APP_ID"
-  appstore game-center challenges list --app "APP_ID" --limit 50
-  appstore game-center challenges list --app "APP_ID" --paginate`,
+  asc game-center challenges list --app "APP_ID"
+  asc game-center challenges list --app "APP_ID" --limit 50
+  asc game-center challenges list --app "APP_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -87,7 +87,7 @@ Examples:
 			resolvedAppID := shared.ResolveAppID(*appID)
 			nextURL := strings.TrimSpace(*next)
 			if resolvedAppID == "" && nextURL == "" {
-				fmt.Fprintln(os.Stderr, "Error: --app is required (or set APPSTORE_APP_ID)")
+				fmt.Fprintln(os.Stderr, "Error: --app is required (or set ASC_APP_ID)")
 				return flag.ErrHelp
 			}
 
@@ -149,12 +149,12 @@ func GameCenterChallengesGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore game-center challenges get --id \"CHALLENGE_ID\"",
+		ShortUsage: "asc game-center challenges get --id \"CHALLENGE_ID\"",
 		ShortHelp:  "Get a Game Center challenge by ID.",
 		LongHelp: `Get a Game Center challenge by ID.
 
 Examples:
-  appstore game-center challenges get --id "CHALLENGE_ID"`,
+  asc game-center challenges get --id "CHALLENGE_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -186,7 +186,7 @@ Examples:
 func GameCenterChallengesCreateCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("create", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID env)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
 	referenceName := fs.String("reference-name", "", "Reference name for the challenge")
 	vendorID := fs.String("vendor-id", "", "Vendor identifier for the challenge")
 	repeatable := fs.String("repeatable", "", "Challenge can be earned multiple times (true/false)")
@@ -196,13 +196,13 @@ func GameCenterChallengesCreateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "create",
-		ShortUsage: "appstore game-center challenges create --app \"APP_ID\" --reference-name \"Weekly\" --vendor-id \"com.example.weekly\" --leaderboard-id \"LEADERBOARD_ID\"",
+		ShortUsage: "asc game-center challenges create --app \"APP_ID\" --reference-name \"Weekly\" --vendor-id \"com.example.weekly\" --leaderboard-id \"LEADERBOARD_ID\"",
 		ShortHelp:  "Create a Game Center challenge.",
 		LongHelp: `Create a Game Center challenge.
 
 Examples:
-  appstore game-center challenges create --app "APP_ID" --reference-name "Weekly" --vendor-id "com.example.weekly" --leaderboard-id "LEADERBOARD_ID"
-  appstore game-center challenges create --group-id "GROUP_ID" --reference-name "Weekly" --vendor-id "com.example.weekly" --leaderboard-id "LEADERBOARD_ID"`,
+  asc game-center challenges create --app "APP_ID" --reference-name "Weekly" --vendor-id "com.example.weekly" --leaderboard-id "LEADERBOARD_ID"
+  asc game-center challenges create --group-id "GROUP_ID" --reference-name "Weekly" --vendor-id "com.example.weekly" --leaderboard-id "LEADERBOARD_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -214,7 +214,7 @@ Examples:
 
 			resolvedAppID := shared.ResolveAppID(*appID)
 			if group == "" && resolvedAppID == "" {
-				fmt.Fprintln(os.Stderr, "Error: --app is required (or set APPSTORE_APP_ID)")
+				fmt.Fprintln(os.Stderr, "Error: --app is required (or set ASC_APP_ID)")
 				return flag.ErrHelp
 			}
 
@@ -289,13 +289,13 @@ func GameCenterChallengesUpdateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "update",
-		ShortUsage: "appstore game-center challenges update --id \"CHALLENGE_ID\" [flags]",
+		ShortUsage: "asc game-center challenges update --id \"CHALLENGE_ID\" [flags]",
 		ShortHelp:  "Update a Game Center challenge.",
 		LongHelp: `Update a Game Center challenge.
 
 Examples:
-  appstore game-center challenges update --id "CHALLENGE_ID" --reference-name "New Name"
-  appstore game-center challenges update --id "CHALLENGE_ID" --archived true`,
+  asc game-center challenges update --id "CHALLENGE_ID" --reference-name "New Name"
+  asc game-center challenges update --id "CHALLENGE_ID" --archived true`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -367,12 +367,12 @@ func GameCenterChallengesDeleteCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "delete",
-		ShortUsage: "appstore game-center challenges delete --id \"CHALLENGE_ID\" --confirm",
+		ShortUsage: "asc game-center challenges delete --id \"CHALLENGE_ID\" --confirm",
 		ShortHelp:  "Delete a Game Center challenge.",
 		LongHelp: `Delete a Game Center challenge.
 
 Examples:
-  appstore game-center challenges delete --id "CHALLENGE_ID" --confirm`,
+  asc game-center challenges delete --id "CHALLENGE_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -414,15 +414,15 @@ func GameCenterChallengeVersionsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "versions",
-		ShortUsage: "appstore game-center challenges versions <subcommand> [flags]",
+		ShortUsage: "asc game-center challenges versions <subcommand> [flags]",
 		ShortHelp:  "Manage Game Center challenge versions.",
 		LongHelp: `Manage Game Center challenge versions.
 
 Examples:
-  appstore game-center challenges versions list --challenge-id "CHALLENGE_ID"
-  appstore game-center challenges versions get --id "VERSION_ID"
-  appstore game-center challenges versions create --challenge-id "CHALLENGE_ID"
-  appstore game-center challenges versions default-image get --id "VERSION_ID"`,
+  asc game-center challenges versions list --challenge-id "CHALLENGE_ID"
+  asc game-center challenges versions get --id "VERSION_ID"
+  asc game-center challenges versions create --challenge-id "CHALLENGE_ID"
+  asc game-center challenges versions default-image get --id "VERSION_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -449,14 +449,14 @@ func GameCenterChallengeVersionsListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore game-center challenges versions list --challenge-id \"CHALLENGE_ID\"",
+		ShortUsage: "asc game-center challenges versions list --challenge-id \"CHALLENGE_ID\"",
 		ShortHelp:  "List versions for a Game Center challenge.",
 		LongHelp: `List versions for a Game Center challenge.
 
 Examples:
-  appstore game-center challenges versions list --challenge-id "CHALLENGE_ID"
-  appstore game-center challenges versions list --challenge-id "CHALLENGE_ID" --limit 50
-  appstore game-center challenges versions list --challenge-id "CHALLENGE_ID" --paginate`,
+  asc game-center challenges versions list --challenge-id "CHALLENGE_ID"
+  asc game-center challenges versions list --challenge-id "CHALLENGE_ID" --limit 50
+  asc game-center challenges versions list --challenge-id "CHALLENGE_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -522,12 +522,12 @@ func GameCenterChallengeVersionsGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore game-center challenges versions get --id \"VERSION_ID\"",
+		ShortUsage: "asc game-center challenges versions get --id \"VERSION_ID\"",
 		ShortHelp:  "Get a Game Center challenge version by ID.",
 		LongHelp: `Get a Game Center challenge version by ID.
 
 Examples:
-  appstore game-center challenges versions get --id "VERSION_ID"`,
+  asc game-center challenges versions get --id "VERSION_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -564,12 +564,12 @@ func GameCenterChallengeVersionsCreateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "create",
-		ShortUsage: "appstore game-center challenges versions create --challenge-id \"CHALLENGE_ID\"",
+		ShortUsage: "asc game-center challenges versions create --challenge-id \"CHALLENGE_ID\"",
 		ShortHelp:  "Create a Game Center challenge version.",
 		LongHelp: `Create a Game Center challenge version.
 
 Examples:
-  appstore game-center challenges versions create --challenge-id "CHALLENGE_ID"`,
+  asc game-center challenges versions create --challenge-id "CHALLENGE_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -603,16 +603,16 @@ func GameCenterChallengeLocalizationsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "localizations",
-		ShortUsage: "appstore game-center challenges localizations <subcommand> [flags]",
+		ShortUsage: "asc game-center challenges localizations <subcommand> [flags]",
 		ShortHelp:  "Manage Game Center challenge localizations.",
 		LongHelp: `Manage Game Center challenge localizations.
 
 Examples:
-  appstore game-center challenges localizations list --version-id "VERSION_ID"
-  appstore game-center challenges localizations create --version-id "VERSION_ID" --locale en-US --name "Weekly" --description "Win weekly"
-  appstore game-center challenges localizations update --id "LOC_ID" --name "New Name"
-  appstore game-center challenges localizations delete --id "LOC_ID" --confirm
-  appstore game-center challenges localizations image get --id "LOC_ID"`,
+  asc game-center challenges localizations list --version-id "VERSION_ID"
+  asc game-center challenges localizations create --version-id "VERSION_ID" --locale en-US --name "Weekly" --description "Win weekly"
+  asc game-center challenges localizations update --id "LOC_ID" --name "New Name"
+  asc game-center challenges localizations delete --id "LOC_ID" --confirm
+  asc game-center challenges localizations image get --id "LOC_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -641,14 +641,14 @@ func GameCenterChallengeLocalizationsListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore game-center challenges localizations list --version-id \"VERSION_ID\"",
+		ShortUsage: "asc game-center challenges localizations list --version-id \"VERSION_ID\"",
 		ShortHelp:  "List localizations for a challenge version.",
 		LongHelp: `List localizations for a challenge version.
 
 Examples:
-  appstore game-center challenges localizations list --version-id "VERSION_ID"
-  appstore game-center challenges localizations list --version-id "VERSION_ID" --limit 50
-  appstore game-center challenges localizations list --version-id "VERSION_ID" --paginate`,
+  asc game-center challenges localizations list --version-id "VERSION_ID"
+  asc game-center challenges localizations list --version-id "VERSION_ID" --limit 50
+  asc game-center challenges localizations list --version-id "VERSION_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -714,12 +714,12 @@ func GameCenterChallengeLocalizationsGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore game-center challenges localizations get --id \"LOCALIZATION_ID\"",
+		ShortUsage: "asc game-center challenges localizations get --id \"LOCALIZATION_ID\"",
 		ShortHelp:  "Get a challenge localization by ID.",
 		LongHelp: `Get a challenge localization by ID.
 
 Examples:
-  appstore game-center challenges localizations get --id "LOCALIZATION_ID"`,
+  asc game-center challenges localizations get --id "LOCALIZATION_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -759,12 +759,12 @@ func GameCenterChallengeLocalizationsCreateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "create",
-		ShortUsage: "appstore game-center challenges localizations create --version-id \"VERSION_ID\" --locale en-US --name \"Weekly\" --description \"Win weekly\"",
+		ShortUsage: "asc game-center challenges localizations create --version-id \"VERSION_ID\" --locale en-US --name \"Weekly\" --description \"Win weekly\"",
 		ShortHelp:  "Create a challenge localization.",
 		LongHelp: `Create a challenge localization.
 
 Examples:
-  appstore game-center challenges localizations create --version-id "VERSION_ID" --locale en-US --name "Weekly" --description "Win weekly"`,
+  asc game-center challenges localizations create --version-id "VERSION_ID" --locale en-US --name "Weekly" --description "Win weekly"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -824,12 +824,12 @@ func GameCenterChallengeLocalizationsUpdateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "update",
-		ShortUsage: "appstore game-center challenges localizations update --id \"LOCALIZATION_ID\" [flags]",
+		ShortUsage: "asc game-center challenges localizations update --id \"LOCALIZATION_ID\" [flags]",
 		ShortHelp:  "Update a challenge localization.",
 		LongHelp: `Update a challenge localization.
 
 Examples:
-  appstore game-center challenges localizations update --id "LOCALIZATION_ID" --name "New Name"`,
+  asc game-center challenges localizations update --id "LOCALIZATION_ID" --name "New Name"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -886,12 +886,12 @@ func GameCenterChallengeLocalizationsDeleteCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "delete",
-		ShortUsage: "appstore game-center challenges localizations delete --id \"LOCALIZATION_ID\" --confirm",
+		ShortUsage: "asc game-center challenges localizations delete --id \"LOCALIZATION_ID\" --confirm",
 		ShortHelp:  "Delete a challenge localization.",
 		LongHelp: `Delete a challenge localization.
 
 Examples:
-  appstore game-center challenges localizations delete --id "LOCALIZATION_ID" --confirm`,
+  asc game-center challenges localizations delete --id "LOCALIZATION_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -933,14 +933,14 @@ func GameCenterChallengeImagesCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "images",
-		ShortUsage: "appstore game-center challenges images <subcommand> [flags]",
+		ShortUsage: "asc game-center challenges images <subcommand> [flags]",
 		ShortHelp:  "Manage Game Center challenge images.",
 		LongHelp: `Manage Game Center challenge images. Images are attached to challenge localizations.
 
 Examples:
-  appstore game-center challenges images upload --localization-id "LOCALIZATION_ID" --file path/to/image.png
-  appstore game-center challenges images get --id "IMAGE_ID"
-  appstore game-center challenges images delete --id "IMAGE_ID" --confirm`,
+  asc game-center challenges images upload --localization-id "LOCALIZATION_ID" --file path/to/image.png
+  asc game-center challenges images get --id "IMAGE_ID"
+  asc game-center challenges images delete --id "IMAGE_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -964,14 +964,14 @@ func GameCenterChallengeImagesUploadCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "upload",
-		ShortUsage: "appstore game-center challenges images upload --localization-id \"LOCALIZATION_ID\" --file path/to/image.png",
+		ShortUsage: "asc game-center challenges images upload --localization-id \"LOCALIZATION_ID\" --file path/to/image.png",
 		ShortHelp:  "Upload an image for a challenge localization.",
 		LongHelp: `Upload an image for a challenge localization.
 
 The upload process reserves an upload slot, uploads the image file, and commits the upload.
 
 Examples:
-  appstore game-center challenges images upload --localization-id "LOCALIZATION_ID" --file path/to/image.png`,
+  asc game-center challenges images upload --localization-id "LOCALIZATION_ID" --file path/to/image.png`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -1014,12 +1014,12 @@ func GameCenterChallengeImagesGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore game-center challenges images get --id \"IMAGE_ID\"",
+		ShortUsage: "asc game-center challenges images get --id \"IMAGE_ID\"",
 		ShortHelp:  "Get a challenge image by ID.",
 		LongHelp: `Get a challenge image by ID.
 
 Examples:
-  appstore game-center challenges images get --id "IMAGE_ID"`,
+  asc game-center challenges images get --id "IMAGE_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -1057,12 +1057,12 @@ func GameCenterChallengeImagesDeleteCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "delete",
-		ShortUsage: "appstore game-center challenges images delete --id \"IMAGE_ID\" --confirm",
+		ShortUsage: "asc game-center challenges images delete --id \"IMAGE_ID\" --confirm",
 		ShortHelp:  "Delete a challenge image.",
 		LongHelp: `Delete a challenge image.
 
 Examples:
-  appstore game-center challenges images delete --id "IMAGE_ID" --confirm`,
+  asc game-center challenges images delete --id "IMAGE_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -1104,14 +1104,14 @@ func GameCenterChallengeReleasesCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "releases",
-		ShortUsage: "appstore game-center challenges releases <subcommand> [flags]",
+		ShortUsage: "asc game-center challenges releases <subcommand> [flags]",
 		ShortHelp:  "Manage Game Center challenge releases.",
 		LongHelp: `Manage Game Center challenge releases. Releases are used to publish challenge versions to live.
 
 Examples:
-  appstore game-center challenges releases list --app "APP_ID"
-  appstore game-center challenges releases create --version-id "VERSION_ID"
-  appstore game-center challenges releases delete --id "RELEASE_ID" --confirm`,
+  asc game-center challenges releases list --app "APP_ID"
+  asc game-center challenges releases create --version-id "VERSION_ID"
+  asc game-center challenges releases delete --id "RELEASE_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -1129,7 +1129,7 @@ Examples:
 func GameCenterChallengeReleasesListCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("list", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID env)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
 	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
 	next := fs.String("next", "", "Fetch next page using a links.next URL")
 	paginate := fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")
@@ -1137,14 +1137,14 @@ func GameCenterChallengeReleasesListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore game-center challenges releases list --app \"APP_ID\"",
+		ShortUsage: "asc game-center challenges releases list --app \"APP_ID\"",
 		ShortHelp:  "List releases for Game Center challenges.",
 		LongHelp: `List releases for Game Center challenges.
 
 Examples:
-  appstore game-center challenges releases list --app "APP_ID"
-  appstore game-center challenges releases list --app "APP_ID" --limit 50
-  appstore game-center challenges releases list --app "APP_ID" --paginate`,
+  asc game-center challenges releases list --app "APP_ID"
+  asc game-center challenges releases list --app "APP_ID" --limit 50
+  asc game-center challenges releases list --app "APP_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -1158,7 +1158,7 @@ Examples:
 			resolvedAppID := shared.ResolveAppID(*appID)
 			nextURL := strings.TrimSpace(*next)
 			if resolvedAppID == "" && nextURL == "" {
-				fmt.Fprintln(os.Stderr, "Error: --app is required (or set APPSTORE_APP_ID)")
+				fmt.Fprintln(os.Stderr, "Error: --app is required (or set ASC_APP_ID)")
 				return flag.ErrHelp
 			}
 
@@ -1220,12 +1220,12 @@ func GameCenterChallengeReleasesCreateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "create",
-		ShortUsage: "appstore game-center challenges releases create --version-id \"VERSION_ID\"",
+		ShortUsage: "asc game-center challenges releases create --version-id \"VERSION_ID\"",
 		ShortHelp:  "Create a Game Center challenge release.",
 		LongHelp: `Create a Game Center challenge release. This publishes the version to live.
 
 Examples:
-  appstore game-center challenges releases create --version-id "VERSION_ID"`,
+  asc game-center challenges releases create --version-id "VERSION_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -1263,12 +1263,12 @@ func GameCenterChallengeReleasesDeleteCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "delete",
-		ShortUsage: "appstore game-center challenges releases delete --id \"RELEASE_ID\" --confirm",
+		ShortUsage: "asc game-center challenges releases delete --id \"RELEASE_ID\" --confirm",
 		ShortHelp:  "Delete a Game Center challenge release.",
 		LongHelp: `Delete a Game Center challenge release.
 
 Examples:
-  appstore game-center challenges releases delete --id "RELEASE_ID" --confirm`,
+  asc game-center challenges releases delete --id "RELEASE_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -1310,12 +1310,12 @@ func GameCenterChallengeLocalizationImageCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "image",
-		ShortUsage: "appstore game-center challenges localizations image get --id \"LOC_ID\"",
+		ShortUsage: "asc game-center challenges localizations image get --id \"LOC_ID\"",
 		ShortHelp:  "Get the image for a challenge localization.",
 		LongHelp: `Get the image for a challenge localization.
 
 Examples:
-  appstore game-center challenges localizations image get --id "LOC_ID"`,
+  asc game-center challenges localizations image get --id "LOC_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -1336,12 +1336,12 @@ func GameCenterChallengeLocalizationImageGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore game-center challenges localizations image get --id \"LOC_ID\"",
+		ShortUsage: "asc game-center challenges localizations image get --id \"LOC_ID\"",
 		ShortHelp:  "Get a challenge localization image.",
 		LongHelp: `Get a challenge localization image.
 
 Examples:
-  appstore game-center challenges localizations image get --id "LOC_ID"`,
+  asc game-center challenges localizations image get --id "LOC_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -1375,12 +1375,12 @@ func GameCenterChallengeVersionDefaultImageCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "default-image",
-		ShortUsage: "appstore game-center challenges versions default-image get --id \"VERSION_ID\"",
+		ShortUsage: "asc game-center challenges versions default-image get --id \"VERSION_ID\"",
 		ShortHelp:  "Get the default image for a challenge version.",
 		LongHelp: `Get the default image for a challenge version.
 
 Examples:
-  appstore game-center challenges versions default-image get --id "VERSION_ID"`,
+  asc game-center challenges versions default-image get --id "VERSION_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -1401,12 +1401,12 @@ func GameCenterChallengeVersionDefaultImageGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore game-center challenges versions default-image get --id \"VERSION_ID\"",
+		ShortUsage: "asc game-center challenges versions default-image get --id \"VERSION_ID\"",
 		ShortHelp:  "Get a default image for a challenge version.",
 		LongHelp: `Get a default image for a challenge version.
 
 Examples:
-  appstore game-center challenges versions default-image get --id "VERSION_ID"`,
+  asc game-center challenges versions default-image get --id "VERSION_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

@@ -17,7 +17,7 @@ import (
 func ReviewSubmissionsListCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("submissions-list", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID)")
 	global := fs.Bool("global", false, "Use top-level /v1/reviewSubmissions endpoint")
 	platform := fs.String("platform", "", "Filter by platform: IOS, MAC_OS, TV_OS, VISION_OS (comma-separated)")
 	state := fs.String("state", "", "Filter by state (comma-separated)")
@@ -28,16 +28,16 @@ func ReviewSubmissionsListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "submissions-list",
-		ShortUsage: "appstore review submissions-list [flags]",
+		ShortUsage: "asc review submissions-list [flags]",
 		ShortHelp:  "List review submissions for an app or globally.",
 		LongHelp: `List review submissions for an app or globally.
 
 Examples:
-  appstore review submissions-list --app "123456789"
-  appstore review submissions-list --app "123456789" --platform IOS --state READY_FOR_REVIEW
-  appstore review submissions-list --app "123456789" --paginate
-  appstore review submissions-list --global --app "123456789"
-  appstore review submissions-list --global --app "123456789" --platform IOS --state READY_FOR_REVIEW`,
+  asc review submissions-list --app "123456789"
+  asc review submissions-list --app "123456789" --platform IOS --state READY_FOR_REVIEW
+  asc review submissions-list --app "123456789" --paginate
+  asc review submissions-list --global --app "123456789"
+  asc review submissions-list --global --app "123456789" --platform IOS --state READY_FOR_REVIEW`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -59,12 +59,12 @@ Examples:
 
 			// Require one of --app or --global (unless --next is provided)
 			if !*global && resolvedAppID == "" && nextURL == "" {
-				fmt.Fprintln(os.Stderr, "Error: --app or --global is required (or set APPSTORE_APP_ID)")
+				fmt.Fprintln(os.Stderr, "Error: --app or --global is required (or set ASC_APP_ID)")
 				return flag.ErrHelp
 			}
 			// Top-level /v1/reviewSubmissions requires filter[app].
 			if *global && resolvedAppID == "" && nextURL == "" {
-				fmt.Fprintln(os.Stderr, "Error: --app is required with --global (or set APPSTORE_APP_ID)")
+				fmt.Fprintln(os.Stderr, "Error: --app is required with --global (or set ASC_APP_ID)")
 				return flag.ErrHelp
 			}
 
@@ -148,12 +148,12 @@ func ReviewSubmissionsGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "submissions-get",
-		ShortUsage: "appstore review submissions-get [flags]",
+		ShortUsage: "asc review submissions-get [flags]",
 		ShortHelp:  "Get a review submission by ID.",
 		LongHelp: `Get a review submission by ID.
 
 Examples:
-  appstore review submissions-get --id "SUBMISSION_ID"`,
+  asc review submissions-get --id "SUBMISSION_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -184,24 +184,24 @@ Examples:
 func ReviewSubmissionsCreateCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("submissions-create", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID)")
 	platform := fs.String("platform", "IOS", "Platform: IOS, MAC_OS, TV_OS, VISION_OS")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "submissions-create",
-		ShortUsage: "appstore review submissions-create [flags]",
+		ShortUsage: "asc review submissions-create [flags]",
 		ShortHelp:  "Create a review submission.",
 		LongHelp: `Create a review submission for an app.
 
 Examples:
-  appstore review submissions-create --app "123456789" --platform IOS`,
+  asc review submissions-create --app "123456789" --platform IOS`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			resolvedAppID := shared.ResolveAppID(*appID)
 			if resolvedAppID == "" {
-				fmt.Fprintln(os.Stderr, "Error: --app is required (or set APPSTORE_APP_ID)")
+				fmt.Fprintln(os.Stderr, "Error: --app is required (or set ASC_APP_ID)")
 				return flag.ErrHelp
 			}
 
@@ -238,12 +238,12 @@ func ReviewSubmissionsUpdateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "submissions-update",
-		ShortUsage: "appstore review submissions-update --id \"SUBMISSION_ID\" --canceled true [flags]",
+		ShortUsage: "asc review submissions-update --id \"SUBMISSION_ID\" --canceled true [flags]",
 		ShortHelp:  "Update a review submission.",
 		LongHelp: `Update a review submission.
 
 Examples:
-  appstore review submissions-update --id "SUBMISSION_ID" --canceled true`,
+  asc review submissions-update --id "SUBMISSION_ID" --canceled true`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -294,12 +294,12 @@ func ReviewSubmissionsSubmitCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "submissions-submit",
-		ShortUsage: "appstore review submissions-submit [flags]",
+		ShortUsage: "asc review submissions-submit [flags]",
 		ShortHelp:  "Submit a review submission.",
 		LongHelp: `Submit a review submission for review.
 
 Examples:
-  appstore review submissions-submit --id "SUBMISSION_ID" --confirm`,
+  asc review submissions-submit --id "SUBMISSION_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -340,12 +340,12 @@ func ReviewSubmissionsCancelCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "submissions-cancel",
-		ShortUsage: "appstore review submissions-cancel [flags]",
+		ShortUsage: "asc review submissions-cancel [flags]",
 		ShortHelp:  "Cancel a review submission.",
 		LongHelp: `Cancel a review submission.
 
 Examples:
-  appstore review submissions-cancel --id "SUBMISSION_ID" --confirm`,
+  asc review submissions-cancel --id "SUBMISSION_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -388,13 +388,13 @@ func ReviewSubmissionsItemsIDsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "submissions-items-ids",
-		ShortUsage: "appstore review submissions-items-ids --id \"SUBMISSION_ID\" [flags]",
+		ShortUsage: "asc review submissions-items-ids --id \"SUBMISSION_ID\" [flags]",
 		ShortHelp:  "List review submission item IDs for a submission.",
 		LongHelp: `List review submission item IDs for a submission.
 
 Examples:
-  appstore review submissions-items-ids --id "SUBMISSION_ID"
-  appstore review submissions-items-ids --id "SUBMISSION_ID" --paginate`,
+  asc review submissions-items-ids --id "SUBMISSION_ID"
+  asc review submissions-items-ids --id "SUBMISSION_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

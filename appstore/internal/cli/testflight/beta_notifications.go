@@ -17,12 +17,12 @@ func BetaNotificationsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "beta-notifications",
-		ShortUsage: "appstore testflight beta-notifications <subcommand> [flags]",
+		ShortUsage: "asc testflight beta-notifications <subcommand> [flags]",
 		ShortHelp:  "Send TestFlight beta build notifications.",
 		LongHelp: `Send TestFlight beta build notifications.
 
 Examples:
-  appstore testflight beta-notifications create --build "BUILD_ID"`,
+  asc testflight beta-notifications create --build "BUILD_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -43,12 +43,12 @@ func BetaNotificationsCreateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "create",
-		ShortUsage: "appstore testflight beta-notifications create --build \"BUILD_ID\"",
+		ShortUsage: "asc testflight beta-notifications create --build \"BUILD_ID\"",
 		ShortHelp:  "Send a beta notification for a build.",
 		LongHelp: `Send a beta notification for a build.
 
 Examples:
-  appstore testflight beta-notifications create --build "BUILD_ID"`,
+  asc testflight beta-notifications create --build "BUILD_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

@@ -19,14 +19,14 @@ func BetaFeedbackCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "beta-feedback",
-		ShortUsage: "appstore testflight beta-feedback <subcommand> [flags]",
+		ShortUsage: "asc testflight beta-feedback <subcommand> [flags]",
 		ShortHelp:  "View TestFlight beta feedback submissions.",
 		LongHelp: `View TestFlight beta feedback submissions.
 
 Examples:
-  appstore testflight beta-feedback crash-submissions get --id "SUBMISSION_ID"
-  appstore testflight beta-feedback screenshot-submissions get --id "SUBMISSION_ID"
-  appstore testflight beta-feedback crash-log get --id "SUBMISSION_ID"`,
+  asc testflight beta-feedback crash-submissions get --id "SUBMISSION_ID"
+  asc testflight beta-feedback screenshot-submissions get --id "SUBMISSION_ID"
+  asc testflight beta-feedback crash-log get --id "SUBMISSION_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -46,13 +46,13 @@ func BetaFeedbackCrashSubmissionsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "crash-submissions",
-		ShortUsage: "appstore testflight beta-feedback crash-submissions <subcommand> [flags]",
+		ShortUsage: "asc testflight beta-feedback crash-submissions <subcommand> [flags]",
 		ShortHelp:  "Fetch beta feedback crash submission details.",
 		LongHelp: `Fetch beta feedback crash submission details.
 
 Examples:
-  appstore testflight beta-feedback crash-submissions get --id "SUBMISSION_ID"
-  appstore testflight beta-feedback crash-submissions delete --id "SUBMISSION_ID" --confirm`,
+  asc testflight beta-feedback crash-submissions get --id "SUBMISSION_ID"
+  asc testflight beta-feedback crash-submissions delete --id "SUBMISSION_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -74,12 +74,12 @@ func BetaFeedbackCrashSubmissionsGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore testflight beta-feedback crash-submissions get --id \"SUBMISSION_ID\"",
+		ShortUsage: "asc testflight beta-feedback crash-submissions get --id \"SUBMISSION_ID\"",
 		ShortHelp:  "Get a beta feedback crash submission by ID.",
 		LongHelp: `Get a beta feedback crash submission by ID.
 
 Examples:
-  appstore testflight beta-feedback crash-submissions get --id "SUBMISSION_ID"`,
+  asc testflight beta-feedback crash-submissions get --id "SUBMISSION_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -113,13 +113,13 @@ func BetaFeedbackScreenshotSubmissionsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "screenshot-submissions",
-		ShortUsage: "appstore testflight beta-feedback screenshot-submissions <subcommand> [flags]",
+		ShortUsage: "asc testflight beta-feedback screenshot-submissions <subcommand> [flags]",
 		ShortHelp:  "Fetch beta feedback screenshot submission details.",
 		LongHelp: `Fetch beta feedback screenshot submission details.
 
 Examples:
-  appstore testflight beta-feedback screenshot-submissions get --id "SUBMISSION_ID"
-  appstore testflight beta-feedback screenshot-submissions delete --id "SUBMISSION_ID" --confirm`,
+  asc testflight beta-feedback screenshot-submissions get --id "SUBMISSION_ID"
+  asc testflight beta-feedback screenshot-submissions delete --id "SUBMISSION_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -142,12 +142,12 @@ func BetaFeedbackCrashSubmissionsDeleteCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "delete",
-		ShortUsage: "appstore testflight beta-feedback crash-submissions delete --id \"SUBMISSION_ID\" --confirm",
+		ShortUsage: "asc testflight beta-feedback crash-submissions delete --id \"SUBMISSION_ID\" --confirm",
 		ShortHelp:  "Delete a beta feedback crash submission by ID.",
 		LongHelp: `Delete a beta feedback crash submission by ID.
 
 Examples:
-  appstore testflight beta-feedback crash-submissions delete --id "SUBMISSION_ID" --confirm`,
+  asc testflight beta-feedback crash-submissions delete --id "SUBMISSION_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -192,12 +192,12 @@ func BetaFeedbackScreenshotSubmissionsGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore testflight beta-feedback screenshot-submissions get --id \"SUBMISSION_ID\"",
+		ShortUsage: "asc testflight beta-feedback screenshot-submissions get --id \"SUBMISSION_ID\"",
 		ShortHelp:  "Get a beta feedback screenshot submission by ID.",
 		LongHelp: `Get a beta feedback screenshot submission by ID.
 
 Examples:
-  appstore testflight beta-feedback screenshot-submissions get --id "SUBMISSION_ID"`,
+  asc testflight beta-feedback screenshot-submissions get --id "SUBMISSION_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -235,12 +235,12 @@ func BetaFeedbackScreenshotSubmissionsDeleteCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "delete",
-		ShortUsage: "appstore testflight beta-feedback screenshot-submissions delete --id \"SUBMISSION_ID\" --confirm",
+		ShortUsage: "asc testflight beta-feedback screenshot-submissions delete --id \"SUBMISSION_ID\" --confirm",
 		ShortHelp:  "Delete a beta feedback screenshot submission by ID.",
 		LongHelp: `Delete a beta feedback screenshot submission by ID.
 
 Examples:
-  appstore testflight beta-feedback screenshot-submissions delete --id "SUBMISSION_ID" --confirm`,
+  asc testflight beta-feedback screenshot-submissions delete --id "SUBMISSION_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -282,12 +282,12 @@ func BetaFeedbackCrashLogCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "crash-log",
-		ShortUsage: "appstore testflight beta-feedback crash-log <subcommand> [flags]",
+		ShortUsage: "asc testflight beta-feedback crash-log <subcommand> [flags]",
 		ShortHelp:  "Fetch crash logs for beta feedback crash submissions.",
 		LongHelp: `Fetch crash logs for beta feedback crash submissions.
 
 Examples:
-  appstore testflight beta-feedback crash-log get --id "SUBMISSION_ID"`,
+  asc testflight beta-feedback crash-log get --id "SUBMISSION_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -308,12 +308,12 @@ func BetaFeedbackCrashLogGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore testflight beta-feedback crash-log get --id \"SUBMISSION_ID\"",
+		ShortUsage: "asc testflight beta-feedback crash-log get --id \"SUBMISSION_ID\"",
 		ShortHelp:  "Get the crash log for a beta feedback crash submission.",
 		LongHelp: `Get the crash log for a beta feedback crash submission.
 
 Examples:
-  appstore testflight beta-feedback crash-log get --id "SUBMISSION_ID"`,
+  asc testflight beta-feedback crash-log get --id "SUBMISSION_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

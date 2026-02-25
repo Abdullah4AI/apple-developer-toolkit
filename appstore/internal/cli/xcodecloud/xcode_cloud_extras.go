@@ -27,15 +27,15 @@ func XcodeCloudProductsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "products",
-		ShortUsage: "appstore xcode-cloud products [flags]",
+		ShortUsage: "asc xcode-cloud products [flags]",
 		ShortHelp:  "Manage Xcode Cloud products.",
 		LongHelp: `Manage Xcode Cloud products.
 
 Examples:
-  appstore xcode-cloud products --app "APP_ID"
-  appstore xcode-cloud products list --app "APP_ID"
-  appstore xcode-cloud products get --id "PRODUCT_ID"
-  appstore xcode-cloud products delete --id "PRODUCT_ID" --confirm`,
+  asc xcode-cloud products --app "APP_ID"
+  asc xcode-cloud products list --app "APP_ID"
+  asc xcode-cloud products get --id "PRODUCT_ID"
+  asc xcode-cloud products delete --id "PRODUCT_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -61,15 +61,15 @@ func XcodeCloudProductsListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore xcode-cloud products list [flags]",
+		ShortUsage: "asc xcode-cloud products list [flags]",
 		ShortHelp:  "List Xcode Cloud products.",
 		LongHelp: `List Xcode Cloud products.
 
 Examples:
-  appstore xcode-cloud products list
-  appstore xcode-cloud products list --app "APP_ID"
-  appstore xcode-cloud products list --limit 50
-  appstore xcode-cloud products list --paginate`,
+  asc xcode-cloud products list
+  asc xcode-cloud products list --app "APP_ID"
+  asc xcode-cloud products list --limit 50
+  asc xcode-cloud products list --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -86,13 +86,13 @@ func XcodeCloudProductsGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore xcode-cloud products get --id \"PRODUCT_ID\"",
+		ShortUsage: "asc xcode-cloud products get --id \"PRODUCT_ID\"",
 		ShortHelp:  "Get details for a product.",
 		LongHelp: `Get details for a product.
 
 Examples:
-  appstore xcode-cloud products get --id "PRODUCT_ID"
-  appstore xcode-cloud products get --id "PRODUCT_ID" --output table`,
+  asc xcode-cloud products get --id "PRODUCT_ID"
+  asc xcode-cloud products get --id "PRODUCT_ID" --output table`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -128,13 +128,13 @@ func XcodeCloudProductsAppCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "app",
-		ShortUsage: "appstore xcode-cloud products app --id \"PRODUCT_ID\"",
+		ShortUsage: "asc xcode-cloud products app --id \"PRODUCT_ID\"",
 		ShortHelp:  "Get the app for a product.",
 		LongHelp: `Get the app for a product.
 
 Examples:
-  appstore xcode-cloud products app --id "PRODUCT_ID"
-  appstore xcode-cloud products app --id "PRODUCT_ID" --output table`,
+  asc xcode-cloud products app --id "PRODUCT_ID"
+  asc xcode-cloud products app --id "PRODUCT_ID" --output table`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -173,14 +173,14 @@ func XcodeCloudProductsBuildRunsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "build-runs",
-		ShortUsage: "appstore xcode-cloud products build-runs [flags]",
+		ShortUsage: "asc xcode-cloud products build-runs [flags]",
 		ShortHelp:  "List build runs for a product.",
 		LongHelp: `List build runs for a product.
 
 Examples:
-  appstore xcode-cloud products build-runs --id "PRODUCT_ID"
-  appstore xcode-cloud products build-runs --id "PRODUCT_ID" --limit 50
-  appstore xcode-cloud products build-runs --id "PRODUCT_ID" --paginate`,
+  asc xcode-cloud products build-runs --id "PRODUCT_ID"
+  asc xcode-cloud products build-runs --id "PRODUCT_ID" --limit 50
+  asc xcode-cloud products build-runs --id "PRODUCT_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -248,14 +248,14 @@ func XcodeCloudProductsWorkflowsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "workflows",
-		ShortUsage: "appstore xcode-cloud products workflows [flags]",
+		ShortUsage: "asc xcode-cloud products workflows [flags]",
 		ShortHelp:  "List workflows for a product.",
 		LongHelp: `List workflows for a product.
 
 Examples:
-  appstore xcode-cloud products workflows --id "PRODUCT_ID"
-  appstore xcode-cloud products workflows --id "PRODUCT_ID" --limit 50
-  appstore xcode-cloud products workflows --id "PRODUCT_ID" --paginate`,
+  asc xcode-cloud products workflows --id "PRODUCT_ID"
+  asc xcode-cloud products workflows --id "PRODUCT_ID" --limit 50
+  asc xcode-cloud products workflows --id "PRODUCT_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -323,14 +323,14 @@ func XcodeCloudProductsPrimaryRepositoriesCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "primary-repositories",
-		ShortUsage: "appstore xcode-cloud products primary-repositories [flags]",
+		ShortUsage: "asc xcode-cloud products primary-repositories [flags]",
 		ShortHelp:  "List primary repositories for a product.",
 		LongHelp: `List primary repositories for a product.
 
 Examples:
-  appstore xcode-cloud products primary-repositories --id "PRODUCT_ID"
-  appstore xcode-cloud products primary-repositories --id "PRODUCT_ID" --limit 50
-  appstore xcode-cloud products primary-repositories --id "PRODUCT_ID" --paginate`,
+  asc xcode-cloud products primary-repositories --id "PRODUCT_ID"
+  asc xcode-cloud products primary-repositories --id "PRODUCT_ID" --limit 50
+  asc xcode-cloud products primary-repositories --id "PRODUCT_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -398,14 +398,14 @@ func XcodeCloudProductsAdditionalRepositoriesCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "additional-repositories",
-		ShortUsage: "appstore xcode-cloud products additional-repositories [flags]",
+		ShortUsage: "asc xcode-cloud products additional-repositories [flags]",
 		ShortHelp:  "List additional repositories for a product.",
 		LongHelp: `List additional repositories for a product.
 
 Examples:
-  appstore xcode-cloud products additional-repositories --id "PRODUCT_ID"
-  appstore xcode-cloud products additional-repositories --id "PRODUCT_ID" --limit 50
-  appstore xcode-cloud products additional-repositories --id "PRODUCT_ID" --paginate`,
+  asc xcode-cloud products additional-repositories --id "PRODUCT_ID"
+  asc xcode-cloud products additional-repositories --id "PRODUCT_ID" --limit 50
+  asc xcode-cloud products additional-repositories --id "PRODUCT_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -471,12 +471,12 @@ func XcodeCloudProductsDeleteCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "delete",
-		ShortUsage: "appstore xcode-cloud products delete --id \"PRODUCT_ID\" --confirm",
+		ShortUsage: "asc xcode-cloud products delete --id \"PRODUCT_ID\" --confirm",
 		ShortHelp:  "Delete a product.",
 		LongHelp: `Delete a product.
 
 Examples:
-  appstore xcode-cloud products delete --id "PRODUCT_ID" --confirm`,
+  asc xcode-cloud products delete --id "PRODUCT_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -576,15 +576,15 @@ func XcodeCloudMacOSVersionsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "macos-versions",
-		ShortUsage: "appstore xcode-cloud macos-versions [flags]",
+		ShortUsage: "asc xcode-cloud macos-versions [flags]",
 		ShortHelp:  "Manage Xcode Cloud macOS versions.",
 		LongHelp: `Manage Xcode Cloud macOS versions.
 
 Examples:
-  appstore xcode-cloud macos-versions
-  appstore xcode-cloud macos-versions list
-  appstore xcode-cloud macos-versions get --id "MACOS_VERSION_ID"
-  appstore xcode-cloud macos-versions xcode-versions --id "MACOS_VERSION_ID"`,
+  asc xcode-cloud macos-versions
+  asc xcode-cloud macos-versions list
+  asc xcode-cloud macos-versions get --id "MACOS_VERSION_ID"
+  asc xcode-cloud macos-versions xcode-versions --id "MACOS_VERSION_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -605,14 +605,14 @@ func XcodeCloudMacOSVersionsListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore xcode-cloud macos-versions list [flags]",
+		ShortUsage: "asc xcode-cloud macos-versions list [flags]",
 		ShortHelp:  "List Xcode Cloud macOS versions.",
 		LongHelp: `List Xcode Cloud macOS versions.
 
 Examples:
-  appstore xcode-cloud macos-versions list
-  appstore xcode-cloud macos-versions list --limit 50
-  appstore xcode-cloud macos-versions list --paginate`,
+  asc xcode-cloud macos-versions list
+  asc xcode-cloud macos-versions list --limit 50
+  asc xcode-cloud macos-versions list --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -629,13 +629,13 @@ func XcodeCloudMacOSVersionsGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore xcode-cloud macos-versions get --id \"MACOS_VERSION_ID\"",
+		ShortUsage: "asc xcode-cloud macos-versions get --id \"MACOS_VERSION_ID\"",
 		ShortHelp:  "Get details for a macOS version.",
 		LongHelp: `Get details for a macOS version.
 
 Examples:
-  appstore xcode-cloud macos-versions get --id "MACOS_VERSION_ID"
-  appstore xcode-cloud macos-versions get --id "MACOS_VERSION_ID" --output table`,
+  asc xcode-cloud macos-versions get --id "MACOS_VERSION_ID"
+  asc xcode-cloud macos-versions get --id "MACOS_VERSION_ID" --output table`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -674,14 +674,14 @@ func XcodeCloudMacOSVersionsXcodeVersionsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "xcode-versions",
-		ShortUsage: "appstore xcode-cloud macos-versions xcode-versions [flags]",
+		ShortUsage: "asc xcode-cloud macos-versions xcode-versions [flags]",
 		ShortHelp:  "List Xcode versions for a macOS version.",
 		LongHelp: `List Xcode versions for a macOS version.
 
 Examples:
-  appstore xcode-cloud macos-versions xcode-versions --id "MACOS_VERSION_ID"
-  appstore xcode-cloud macos-versions xcode-versions --id "MACOS_VERSION_ID" --limit 50
-  appstore xcode-cloud macos-versions xcode-versions --id "MACOS_VERSION_ID" --paginate`,
+  asc xcode-cloud macos-versions xcode-versions --id "MACOS_VERSION_ID"
+  asc xcode-cloud macos-versions xcode-versions --id "MACOS_VERSION_ID" --limit 50
+  asc xcode-cloud macos-versions xcode-versions --id "MACOS_VERSION_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -792,15 +792,15 @@ func XcodeCloudXcodeVersionsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "xcode-versions",
-		ShortUsage: "appstore xcode-cloud xcode-versions [flags]",
+		ShortUsage: "asc xcode-cloud xcode-versions [flags]",
 		ShortHelp:  "Manage Xcode Cloud Xcode versions.",
 		LongHelp: `Manage Xcode Cloud Xcode versions.
 
 Examples:
-  appstore xcode-cloud xcode-versions
-  appstore xcode-cloud xcode-versions list
-  appstore xcode-cloud xcode-versions get --id \"XCODE_VERSION_ID\"
-  appstore xcode-cloud xcode-versions macos-versions --id \"XCODE_VERSION_ID\"`,
+  asc xcode-cloud xcode-versions
+  asc xcode-cloud xcode-versions list
+  asc xcode-cloud xcode-versions get --id \"XCODE_VERSION_ID\"
+  asc xcode-cloud xcode-versions macos-versions --id \"XCODE_VERSION_ID\"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -821,14 +821,14 @@ func XcodeCloudXcodeVersionsListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore xcode-cloud xcode-versions list [flags]",
+		ShortUsage: "asc xcode-cloud xcode-versions list [flags]",
 		ShortHelp:  "List Xcode Cloud Xcode versions.",
 		LongHelp: `List Xcode Cloud Xcode versions.
 
 Examples:
-  appstore xcode-cloud xcode-versions list
-  appstore xcode-cloud xcode-versions list --limit 50
-  appstore xcode-cloud xcode-versions list --paginate`,
+  asc xcode-cloud xcode-versions list
+  asc xcode-cloud xcode-versions list --limit 50
+  asc xcode-cloud xcode-versions list --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -845,13 +845,13 @@ func XcodeCloudXcodeVersionsGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore xcode-cloud xcode-versions get --id \"XCODE_VERSION_ID\"",
+		ShortUsage: "asc xcode-cloud xcode-versions get --id \"XCODE_VERSION_ID\"",
 		ShortHelp:  "Get details for an Xcode version.",
 		LongHelp: `Get details for an Xcode version.
 
 Examples:
-  appstore xcode-cloud xcode-versions get --id "XCODE_VERSION_ID"
-  appstore xcode-cloud xcode-versions get --id "XCODE_VERSION_ID" --output table`,
+  asc xcode-cloud xcode-versions get --id "XCODE_VERSION_ID"
+  asc xcode-cloud xcode-versions get --id "XCODE_VERSION_ID" --output table`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -890,14 +890,14 @@ func XcodeCloudXcodeVersionsMacOSVersionsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "macos-versions",
-		ShortUsage: "appstore xcode-cloud xcode-versions macos-versions [flags]",
+		ShortUsage: "asc xcode-cloud xcode-versions macos-versions [flags]",
 		ShortHelp:  "List macOS versions for an Xcode version.",
 		LongHelp: `List macOS versions for an Xcode version.
 
 Examples:
-  appstore xcode-cloud xcode-versions macos-versions --id \"XCODE_VERSION_ID\"
-  appstore xcode-cloud xcode-versions macos-versions --id \"XCODE_VERSION_ID\" --limit 50
-  appstore xcode-cloud xcode-versions macos-versions --id \"XCODE_VERSION_ID\" --paginate`,
+  asc xcode-cloud xcode-versions macos-versions --id \"XCODE_VERSION_ID\"
+  asc xcode-cloud xcode-versions macos-versions --id \"XCODE_VERSION_ID\" --limit 50
+  asc xcode-cloud xcode-versions macos-versions --id \"XCODE_VERSION_ID\" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

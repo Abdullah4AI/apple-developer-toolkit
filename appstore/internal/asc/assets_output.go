@@ -50,6 +50,22 @@ type AppPreviewUploadResult struct {
 	Results               []AssetUploadResultItem `json:"results"`
 }
 
+// CustomProductPageScreenshotUploadResult represents custom product page screenshot upload output.
+type CustomProductPageScreenshotUploadResult struct {
+	CustomProductPageLocalizationID string                  `json:"customProductPageLocalizationId"`
+	SetID                           string                  `json:"setId"`
+	DisplayType                     string                  `json:"displayType"`
+	Results                         []AssetUploadResultItem `json:"results"`
+}
+
+// CustomProductPagePreviewUploadResult represents custom product page preview upload output.
+type CustomProductPagePreviewUploadResult struct {
+	CustomProductPageLocalizationID string                  `json:"customProductPageLocalizationId"`
+	SetID                           string                  `json:"setId"`
+	PreviewType                     string                  `json:"previewType"`
+	Results                         []AssetUploadResultItem `json:"results"`
+}
+
 // AssetDeleteResult represents deletion output for assets.
 type AssetDeleteResult struct {
 	ID      string `json:"id"`
@@ -173,6 +189,18 @@ func appScreenshotUploadResultMainRows(result *AppScreenshotUploadResult) ([]str
 func appPreviewUploadResultMainRows(result *AppPreviewUploadResult) ([]string, [][]string) {
 	headers := []string{"Localization ID", "Set ID", "Preview Type"}
 	rows := [][]string{{result.VersionLocalizationID, result.SetID, result.PreviewType}}
+	return headers, rows
+}
+
+func customProductPageScreenshotUploadResultMainRows(result *CustomProductPageScreenshotUploadResult) ([]string, [][]string) {
+	headers := []string{"Localization ID", "Set ID", "Display Type"}
+	rows := [][]string{{result.CustomProductPageLocalizationID, result.SetID, result.DisplayType}}
+	return headers, rows
+}
+
+func customProductPagePreviewUploadResultMainRows(result *CustomProductPagePreviewUploadResult) ([]string, [][]string) {
+	headers := []string{"Localization ID", "Set ID", "Preview Type"}
+	rows := [][]string{{result.CustomProductPageLocalizationID, result.SetID, result.PreviewType}}
 	return headers, rows
 }
 

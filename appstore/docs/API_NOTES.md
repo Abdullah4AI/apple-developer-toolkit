@@ -10,7 +10,7 @@ Quirks and tips for specific App Store Connect API endpoints.
   - YEARLY: `YYYY`
 - Vendor number comes from Sales and Trends → Reports URL (`vendorNumber=...`)
 - Use `--paginate` with `asc analytics get --date` to avoid missing instances on later pages
-- Long analytics runs may require raising `APPSTORE_TIMEOUT`
+- Long analytics runs may require raising `ASC_TIMEOUT`
 
 ## Finance Reports
 
@@ -53,7 +53,7 @@ Finance reports use Apple fiscal months (`YYYY-MM`), not calendar months.
 
 - JWTs issued for App Store Connect are valid for 10 minutes (handled internally).
 - Automatic retries apply only to GET/HEAD requests on 429/503 responses; POST/PATCH/DELETE are not retried.
-- Retry-After headers are honored when present; configure retry settings via `APPSTORE_MAX_RETRIES`, `APPSTORE_BASE_DELAY`, `APPSTORE_MAX_DELAY`, `APPSTORE_RETRY_LOG`.
+- Retry-After headers are honored when present; configure retry settings via `ASC_MAX_RETRIES`, `ASC_BASE_DELAY`, `ASC_MAX_DELAY`, `ASC_RETRY_LOG`.
 - Some endpoints return 403 when the API key role lacks permission (e.g., finance reports, reviews).
 
 ## Devices

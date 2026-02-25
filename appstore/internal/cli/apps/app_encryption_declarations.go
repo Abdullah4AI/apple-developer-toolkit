@@ -17,13 +17,13 @@ import (
 func AppEncryptionDeclarationsCommand() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "app-encryption-declarations",
-		ShortUsage: "appstore apps app-encryption-declarations <subcommand> [flags]",
+		ShortUsage: "asc apps app-encryption-declarations <subcommand> [flags]",
 		ShortHelp:  "List app encryption declarations for an app.",
 		LongHelp: `List app encryption declarations for an app.
 
 Examples:
-  appstore apps app-encryption-declarations list --id "APP_ID"
-  appstore apps app-encryption-declarations list --id "APP_ID" --include appEncryptionDeclarationDocument`,
+  asc apps app-encryption-declarations list --id "APP_ID"
+  asc apps app-encryption-declarations list --id "APP_ID" --include appEncryptionDeclarationDocument`,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
 			AppEncryptionDeclarationsListCommand(),
@@ -38,7 +38,7 @@ Examples:
 func AppEncryptionDeclarationsListCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("apps app-encryption-declarations list", flag.ExitOnError)
 
-	appID := fs.String("id", "", "App Store Connect app ID (or APPSTORE_APP_ID)")
+	appID := fs.String("id", "", "App Store Connect app ID (or ASC_APP_ID)")
 	builds := fs.String("build", "", "Filter by build IDs (comma-separated)")
 	fields := fs.String("fields", "", "Fields to include: "+strings.Join(appEncryptionDeclarationFieldsList(), ", "))
 	documentFields := fs.String("document-fields", "", "Document fields to include: "+strings.Join(appEncryptionDeclarationDocumentFieldsList(), ", "))
@@ -51,14 +51,14 @@ func AppEncryptionDeclarationsListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore apps app-encryption-declarations list --id \"APP_ID\" [flags]",
+		ShortUsage: "asc apps app-encryption-declarations list --id \"APP_ID\" [flags]",
 		ShortHelp:  "List encryption declarations for an app.",
 		LongHelp: `List encryption declarations for an app.
 
 Examples:
-  appstore apps app-encryption-declarations list --id "APP_ID"
-  appstore apps app-encryption-declarations list --id "APP_ID" --include appEncryptionDeclarationDocument --document-fields "fileName,fileSize"
-  appstore apps app-encryption-declarations list --id "APP_ID" --paginate`,
+  asc apps app-encryption-declarations list --id "APP_ID"
+  asc apps app-encryption-declarations list --id "APP_ID" --include appEncryptionDeclarationDocument --document-fields "fileName,fileSize"
+  asc apps app-encryption-declarations list --id "APP_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -87,7 +87,7 @@ Examples:
 
 			resolvedAppID := shared.ResolveAppID(*appID)
 			if resolvedAppID == "" && strings.TrimSpace(*next) == "" {
-				fmt.Fprintln(os.Stderr, "Error: --id is required (or set APPSTORE_APP_ID)")
+				fmt.Fprintln(os.Stderr, "Error: --id is required (or set ASC_APP_ID)")
 				return flag.ErrHelp
 			}
 

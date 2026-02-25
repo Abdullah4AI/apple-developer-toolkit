@@ -22,12 +22,12 @@ func CategoriesGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore categories get --category-id \"CATEGORY_ID\"",
+		ShortUsage: "asc categories get --category-id \"CATEGORY_ID\"",
 		ShortHelp:  "Get an App Store category by ID.",
 		LongHelp: `Get an App Store category by ID.
 
 Examples:
-  appstore categories get --category-id "GAMES"`,
+  asc categories get --category-id "GAMES"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -64,12 +64,12 @@ func CategoriesParentCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "parent",
-		ShortUsage: "appstore categories parent --category-id \"CATEGORY_ID\"",
+		ShortUsage: "asc categories parent --category-id \"CATEGORY_ID\"",
 		ShortHelp:  "Get the parent category for a category.",
 		LongHelp: `Get the parent category for a category.
 
 Examples:
-  appstore categories parent --category-id "GAMES"`,
+  asc categories parent --category-id "GAMES"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -109,13 +109,13 @@ func CategoriesSubcategoriesCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "subcategories",
-		ShortUsage: "appstore categories subcategories --category-id \"CATEGORY_ID\"",
+		ShortUsage: "asc categories subcategories --category-id \"CATEGORY_ID\"",
 		ShortHelp:  "List subcategories for a category.",
 		LongHelp: `List subcategories for a category.
 
 Examples:
-  appstore categories subcategories --category-id "GAMES"
-  appstore categories subcategories --category-id "GAMES" --paginate`,
+  asc categories subcategories --category-id "GAMES"
+  asc categories subcategories --category-id "GAMES" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

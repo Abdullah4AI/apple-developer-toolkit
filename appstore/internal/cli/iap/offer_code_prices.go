@@ -25,13 +25,13 @@ func IAPOfferCodesPricesCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "prices",
-		ShortUsage: "appstore iap offer-codes prices --offer-code-id \"OFFER_CODE_ID\" [flags]",
+		ShortUsage: "asc iap offer-codes prices --offer-code-id \"OFFER_CODE_ID\" [flags]",
 		ShortHelp:  "List prices for an offer code.",
 		LongHelp: `List prices for an offer code.
 
 Examples:
-  appstore iap offer-codes prices --offer-code-id "OFFER_CODE_ID"
-  appstore iap offer-codes prices --offer-code-id "OFFER_CODE_ID" --paginate`,
+  asc iap offer-codes prices --offer-code-id "OFFER_CODE_ID"
+  asc iap offer-codes prices --offer-code-id "OFFER_CODE_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

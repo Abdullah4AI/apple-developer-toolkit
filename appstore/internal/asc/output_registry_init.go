@@ -209,6 +209,24 @@ func init() {
 		}
 		return nil
 	})
+	registerDirect(func(v *CustomProductPageScreenshotUploadResult, render func([]string, [][]string)) error {
+		h, r := customProductPageScreenshotUploadResultMainRows(v)
+		render(h, r)
+		if len(v.Results) > 0 {
+			ih, ir := assetUploadResultItemRows(v.Results)
+			render(ih, ir)
+		}
+		return nil
+	})
+	registerDirect(func(v *CustomProductPagePreviewUploadResult, render func([]string, [][]string)) error {
+		h, r := customProductPagePreviewUploadResultMainRows(v)
+		render(h, r)
+		if len(v.Results) > 0 {
+			ih, ir := assetUploadResultItemRows(v.Results)
+			render(ih, ir)
+		}
+		return nil
+	})
 	registerRows(appClipAdvancedExperienceImageUploadResultRows)
 	registerRows(appClipHeaderImageUploadResultRows)
 	registerRows(assetDeleteResultRows)

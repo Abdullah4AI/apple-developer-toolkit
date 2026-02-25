@@ -12,7 +12,7 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
 )
 
-const spinnerDisabledEnvVar = "APPSTORE_SPINNER_DISABLED"
+const spinnerDisabledEnvVar = "ASC_SPINNER_DISABLED"
 
 var spinnerFrames = []string{"⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷"}
 
@@ -24,7 +24,7 @@ const spinnerTickRate = 120 * time.Millisecond
 // Requirements:
 //   - stderr-only (handled by WithSpinner)
 //   - TTY-gated (stdout + stderr)
-//   - opt-out via APPSTORE_SPINNER_DISABLED (invalid => disabled)
+//   - opt-out via ASC_SPINNER_DISABLED (invalid => disabled)
 //   - disabled when stderr is expected to be noisy (debug/retry logs)
 func SpinnerEnabled() bool {
 	// Reuse the existing “safe to emit progress” gate (stderr TTY + tests can suppress).
@@ -152,7 +152,7 @@ func PaginateWithSpinner(ctx context.Context, fetch FetchFunc, next asc.Paginate
 
 func debugOrRetryLogsEnabled() bool {
 	// Root-level flags should take effect immediately, even before shared.GetASCClient() applies
-	// overrides into the appstore package, so we need to resolve “effective” values here.
+	// overrides into the asc package, so we need to resolve “effective” values here.
 
 	debugEnabled := false
 	if debug.IsSet() {

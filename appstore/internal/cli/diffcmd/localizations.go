@@ -44,7 +44,7 @@ type localizationDiffPlan struct {
 func DiffLocalizationsCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("localizations", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (required, or APPSTORE_APP_ID env)")
+	appID := fs.String("app", "", "App Store Connect app ID (required, or ASC_APP_ID env)")
 	path := fs.String("path", "", "Local .strings directory or file (source)")
 	fromVersion := fs.String("from-version", "", "Remote source app store version ID")
 	version := fs.String("version", "", "Remote target app store version ID (when using --path)")
@@ -53,16 +53,16 @@ func DiffLocalizationsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "localizations",
-		ShortUsage: "appstore diff localizations [flags]",
+		ShortUsage: "asc diff localizations [flags]",
 		ShortHelp:  "Diff localization metadata from local files or remote versions.",
 		LongHelp: `Diff localization metadata from local files or remote versions.
 
 Modes:
   Local vs remote:
-    appstore diff localizations --app "APP_ID" --path "./metadata/localizations" --version "VERSION_ID"
+    asc diff localizations --app "APP_ID" --path "./metadata/localizations" --version "VERSION_ID"
 
   Remote vs remote:
-    appstore diff localizations --app "APP_ID" --from-version "VERSION_ID_A" --to-version "VERSION_ID_B"`,
+    asc diff localizations --app "APP_ID" --from-version "VERSION_ID_A" --to-version "VERSION_ID_B"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -72,7 +72,7 @@ Modes:
 
 			resolvedAppID := shared.ResolveAppID(*appID)
 			if resolvedAppID == "" {
-				return shared.UsageError("--app is required (or set APPSTORE_APP_ID)")
+				return shared.UsageError("--app is required (or set ASC_APP_ID)")
 			}
 
 			sourcePath := strings.TrimSpace(*path)

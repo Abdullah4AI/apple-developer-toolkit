@@ -17,7 +17,7 @@ import (
 func CrashesCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("crashes", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID env)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
 	output := shared.BindOutputFlags(fs)
 	deviceModel := fs.String("device-model", "", "Filter by device model(s), comma-separated")
 	osVersion := fs.String("os-version", "", "Filter by OS version(s), comma-separated")
@@ -33,7 +33,7 @@ func CrashesCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "crashes",
-		ShortUsage: "appstore crashes [flags]",
+		ShortUsage: "asc crashes [flags]",
 		ShortHelp:  "List and export TestFlight crash reports.",
 		LongHelp: `List and export TestFlight crash reports.
 
@@ -41,12 +41,12 @@ This command fetches crash reports submitted by TestFlight beta testers,
 helping you identify and fix issues in your app.
 
 Examples:
-  appstore crashes --app "123456789"
-  appstore crashes --app "123456789" > crashes.json
-  appstore crashes --app "123456789" --device-model "iPhone15,3" --os-version "17.2"
-  appstore crashes --app "123456789" --sort -createdDate --limit 5
-  appstore crashes --next "<links.next>"
-  appstore crashes --app "123456789" --paginate`,
+  asc crashes --app "123456789"
+  asc crashes --app "123456789" > crashes.json
+  asc crashes --app "123456789" --device-model "iPhone15,3" --os-version "17.2"
+  asc crashes --app "123456789" --sort -createdDate --limit 5
+  asc crashes --next "<links.next>"
+  asc crashes --app "123456789" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -62,7 +62,7 @@ Examples:
 
 			resolvedAppID := shared.ResolveAppID(*appID)
 			if resolvedAppID == "" && strings.TrimSpace(*next) == "" {
-				fmt.Fprintf(os.Stderr, "Error: --app is required (or set APPSTORE_APP_ID)\n\n")
+				fmt.Fprintf(os.Stderr, "Error: --app is required (or set ASC_APP_ID)\n\n")
 				return flag.ErrHelp
 			}
 

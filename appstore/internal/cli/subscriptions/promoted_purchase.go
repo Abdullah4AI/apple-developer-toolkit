@@ -17,12 +17,12 @@ func SubscriptionsPromotedPurchaseCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "promoted-purchase",
-		ShortUsage: "appstore subscriptions promoted-purchase <subcommand> [flags]",
+		ShortUsage: "asc subscriptions promoted-purchase <subcommand> [flags]",
 		ShortHelp:  "Inspect promoted purchase for a subscription.",
 		LongHelp: `Inspect promoted purchase for a subscription.
 
 Examples:
-  appstore subscriptions promoted-purchase get --id "SUBSCRIPTION_ID"`,
+  asc subscriptions promoted-purchase get --id "SUBSCRIPTION_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -43,12 +43,12 @@ func SubscriptionsPromotedPurchaseGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore subscriptions promoted-purchase get --id \"SUBSCRIPTION_ID\"",
+		ShortUsage: "asc subscriptions promoted-purchase get --id \"SUBSCRIPTION_ID\"",
 		ShortHelp:  "Get the promoted purchase for a subscription.",
 		LongHelp: `Get the promoted purchase for a subscription.
 
 Examples:
-  appstore subscriptions promoted-purchase get --id "SUBSCRIPTION_ID"`,
+  asc subscriptions promoted-purchase get --id "SUBSCRIPTION_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

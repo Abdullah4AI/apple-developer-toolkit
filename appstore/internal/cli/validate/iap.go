@@ -20,17 +20,17 @@ type validateIAPOptions struct {
 	Pretty bool
 }
 
-// ValidateIAPCommand returns the appstore validate iap subcommand.
+// ValidateIAPCommand returns the asc validate iap subcommand.
 func ValidateIAPCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("iap", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID)")
 	strict := fs.Bool("strict", false, "Treat warnings as errors (exit non-zero)")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "iap",
-		ShortUsage: "appstore validate iap --app \"APP_ID\" [flags]",
+		ShortUsage: "asc validate iap --app \"APP_ID\" [flags]",
 		ShortHelp:  "Validate IAP review readiness (warning-only by default).",
 		LongHelp: `Validate review readiness for in-app purchases.
 
@@ -38,15 +38,15 @@ This command is conservative: it emits warnings for IAPs that look unsubmitted o
 need action, but it does not block by default (use --strict for CI).
 
 Examples:
-  appstore validate iap --app "APP_ID"
-  appstore validate iap --app "APP_ID" --output table
-  appstore validate iap --app "APP_ID" --strict`,
+  asc validate iap --app "APP_ID"
+  asc validate iap --app "APP_ID" --output table
+  asc validate iap --app "APP_ID" --strict`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			resolvedAppID := shared.ResolveAppID(*appID)
 			if resolvedAppID == "" {
-				fmt.Fprintln(os.Stderr, "Error: --app is required (or set APPSTORE_APP_ID)")
+				fmt.Fprintln(os.Stderr, "Error: --app is required (or set ASC_APP_ID)")
 				return flag.ErrHelp
 			}
 

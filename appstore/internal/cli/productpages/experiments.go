@@ -20,15 +20,15 @@ func ExperimentsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "experiments",
-		ShortUsage: "appstore product-pages experiments <subcommand> [flags]",
+		ShortUsage: "asc product-pages experiments <subcommand> [flags]",
 		ShortHelp:  "Manage product page optimization experiments.",
 		LongHelp: `Manage product page optimization experiments.
 
 Examples:
-  appstore product-pages experiments list --version-id "VERSION_ID"
-  appstore product-pages experiments list --v2 --app "APP_ID"
-  appstore product-pages experiments create --version-id "VERSION_ID" --name "Icon Test" --traffic-proportion 25
-  appstore product-pages experiments create --v2 --app "APP_ID" --platform IOS --name "Icon Test" --traffic-proportion 25`,
+  asc product-pages experiments list --version-id "VERSION_ID"
+  asc product-pages experiments list --v2 --app "APP_ID"
+  asc product-pages experiments create --version-id "VERSION_ID" --name "Icon Test" --traffic-proportion 25
+  asc product-pages experiments create --v2 --app "APP_ID" --platform IOS --name "Icon Test" --traffic-proportion 25`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -60,15 +60,15 @@ func ExperimentsListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore product-pages experiments list [--version-id \"VERSION_ID\" | --v2 --app \"APP_ID\"] [flags]",
+		ShortUsage: "asc product-pages experiments list [--version-id \"VERSION_ID\" | --v2 --app \"APP_ID\"] [flags]",
 		ShortHelp:  "List product page optimization experiments.",
 		LongHelp: `List product page optimization experiments.
 
 Examples:
-  appstore product-pages experiments list --version-id "VERSION_ID"
-  appstore product-pages experiments list --v2 --app "APP_ID"
-  appstore product-pages experiments list --version-id "VERSION_ID" --state IN_REVIEW
-  appstore product-pages experiments list --v2 --app "APP_ID" --paginate`,
+  asc product-pages experiments list --version-id "VERSION_ID"
+  asc product-pages experiments list --v2 --app "APP_ID"
+  asc product-pages experiments list --version-id "VERSION_ID" --state IN_REVIEW
+  asc product-pages experiments list --v2 --app "APP_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -88,7 +88,7 @@ Examples:
 			if *v2 {
 				resolvedAppID := shared.ResolveAppID(*appID)
 				if resolvedAppID == "" {
-					fmt.Fprintln(os.Stderr, "Error: --app is required (or set APPSTORE_APP_ID)")
+					fmt.Fprintln(os.Stderr, "Error: --app is required (or set ASC_APP_ID)")
 					return flag.ErrHelp
 				}
 
@@ -188,13 +188,13 @@ func ExperimentsGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore product-pages experiments get --experiment-id \"EXPERIMENT_ID\" [--v2]",
+		ShortUsage: "asc product-pages experiments get --experiment-id \"EXPERIMENT_ID\" [--v2]",
 		ShortHelp:  "Get an experiment by ID.",
 		LongHelp: `Get an experiment by ID.
 
 Examples:
-  appstore product-pages experiments get --experiment-id "EXPERIMENT_ID"
-  appstore product-pages experiments get --experiment-id "EXPERIMENT_ID" --v2`,
+  asc product-pages experiments get --experiment-id "EXPERIMENT_ID"
+  asc product-pages experiments get --experiment-id "EXPERIMENT_ID" --v2`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -244,13 +244,13 @@ func ExperimentsCreateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "create",
-		ShortUsage: "appstore product-pages experiments create --name \"NAME\" --traffic-proportion 25 [--version-id \"VERSION_ID\" | --v2 --app \"APP_ID\" --platform IOS]",
+		ShortUsage: "asc product-pages experiments create --name \"NAME\" --traffic-proportion 25 [--version-id \"VERSION_ID\" | --v2 --app \"APP_ID\" --platform IOS]",
 		ShortHelp:  "Create an experiment.",
 		LongHelp: `Create an experiment.
 
 Examples:
-  appstore product-pages experiments create --version-id "VERSION_ID" --name "Icon Test" --traffic-proportion 25
-  appstore product-pages experiments create --v2 --app "APP_ID" --platform IOS --name "Icon Test" --traffic-proportion 25`,
+  asc product-pages experiments create --version-id "VERSION_ID" --name "Icon Test" --traffic-proportion 25
+  asc product-pages experiments create --v2 --app "APP_ID" --platform IOS --name "Icon Test" --traffic-proportion 25`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -269,7 +269,7 @@ Examples:
 			if *v2 {
 				resolvedAppID := shared.ResolveAppID(*appID)
 				if resolvedAppID == "" {
-					fmt.Fprintln(os.Stderr, "Error: --app is required (or set APPSTORE_APP_ID)")
+					fmt.Fprintln(os.Stderr, "Error: --app is required (or set ASC_APP_ID)")
 					return flag.ErrHelp
 				}
 
@@ -333,15 +333,15 @@ func ExperimentsUpdateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "update",
-		ShortUsage: "appstore product-pages experiments update --experiment-id \"EXPERIMENT_ID\" [--name \"NAME\"] [--traffic-proportion 25] [--started true|false] [--v2]",
+		ShortUsage: "asc product-pages experiments update --experiment-id \"EXPERIMENT_ID\" [--name \"NAME\"] [--traffic-proportion 25] [--started true|false] [--v2]",
 		ShortHelp:  "Update an experiment.",
 		LongHelp: `Update an experiment.
 
 Examples:
-  appstore product-pages experiments update --experiment-id "EXPERIMENT_ID" --name "Updated"
-  appstore product-pages experiments update --experiment-id "EXPERIMENT_ID" --traffic-proportion 50
-  appstore product-pages experiments update --experiment-id "EXPERIMENT_ID" --started true
-  appstore product-pages experiments update --experiment-id "EXPERIMENT_ID" --v2 --name "Updated"`,
+  asc product-pages experiments update --experiment-id "EXPERIMENT_ID" --name "Updated"
+  asc product-pages experiments update --experiment-id "EXPERIMENT_ID" --traffic-proportion 50
+  asc product-pages experiments update --experiment-id "EXPERIMENT_ID" --started true
+  asc product-pages experiments update --experiment-id "EXPERIMENT_ID" --v2 --name "Updated"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -429,13 +429,13 @@ func ExperimentsDeleteCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "delete",
-		ShortUsage: "appstore product-pages experiments delete --experiment-id \"EXPERIMENT_ID\" --confirm [--v2]",
+		ShortUsage: "asc product-pages experiments delete --experiment-id \"EXPERIMENT_ID\" --confirm [--v2]",
 		ShortHelp:  "Delete an experiment.",
 		LongHelp: `Delete an experiment.
 
 Examples:
-  appstore product-pages experiments delete --experiment-id "EXPERIMENT_ID" --confirm
-  appstore product-pages experiments delete --experiment-id "EXPERIMENT_ID" --confirm --v2`,
+  asc product-pages experiments delete --experiment-id "EXPERIMENT_ID" --confirm
+  asc product-pages experiments delete --experiment-id "EXPERIMENT_ID" --confirm --v2`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

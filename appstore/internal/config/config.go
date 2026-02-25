@@ -12,9 +12,9 @@ import (
 )
 
 const (
-	configDirName    = ".appstore"
+	configDirName    = ".asc"
 	configFileName   = "config.json"
-	configPathEnvVar = "APPSTORE_CONFIG_PATH"
+	configPathEnvVar = "ASC_CONFIG_PATH"
 	maxConfigRetries = 30
 )
 

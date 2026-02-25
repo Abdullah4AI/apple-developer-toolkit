@@ -24,7 +24,7 @@ type CategoriesSetCommandConfig struct {
 func NewCategoriesSetCommand(config CategoriesSetCommandConfig) *ffcli.Command {
 	fs := flag.NewFlagSet(config.FlagSetName, flag.ExitOnError)
 
-	appID := fs.String("app", os.Getenv("APPSTORE_APP_ID"), "App ID (required)")
+	appID := fs.String("app", os.Getenv("ASC_APP_ID"), "App ID (required)")
 	var appInfoID *string
 	if config.IncludeAppInfo {
 		appInfoID = fs.String("app-info", "", "App Info ID (optional override)")

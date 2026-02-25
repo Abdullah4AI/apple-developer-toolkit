@@ -19,16 +19,16 @@ func CustomPageLocalizationsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "localizations",
-		ShortUsage: "appstore product-pages custom-pages localizations <subcommand> [flags]",
+		ShortUsage: "asc product-pages custom-pages localizations <subcommand> [flags]",
 		ShortHelp:  "Manage custom product page localizations.",
 		LongHelp: `Manage custom product page localizations.
 
 Examples:
-  appstore product-pages custom-pages localizations list --custom-page-version-id "VERSION_ID"
-  appstore product-pages custom-pages localizations create --custom-page-version-id "VERSION_ID" --locale "en-US"
-  appstore product-pages custom-pages localizations delete --localization-id "LOCALIZATION_ID" --confirm
-  appstore product-pages custom-pages localizations search-keywords list --localization-id "LOCALIZATION_ID"
-  appstore product-pages custom-pages localizations preview-sets list --localization-id "LOCALIZATION_ID"`,
+  asc product-pages custom-pages localizations list --custom-page-version-id "VERSION_ID"
+  asc product-pages custom-pages localizations create --custom-page-version-id "VERSION_ID" --locale "en-US"
+  asc product-pages custom-pages localizations delete --localization-id "LOCALIZATION_ID" --confirm
+  asc product-pages custom-pages localizations search-keywords list --localization-id "LOCALIZATION_ID"
+  asc product-pages custom-pages localizations preview-sets list --localization-id "LOCALIZATION_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -59,13 +59,13 @@ func CustomPageLocalizationsListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore product-pages custom-pages localizations list --custom-page-version-id \"VERSION_ID\" [flags]",
+		ShortUsage: "asc product-pages custom-pages localizations list --custom-page-version-id \"VERSION_ID\" [flags]",
 		ShortHelp:  "List custom product page localizations.",
 		LongHelp: `List custom product page localizations.
 
 Examples:
-  appstore product-pages custom-pages localizations list --custom-page-version-id "VERSION_ID"
-  appstore product-pages custom-pages localizations list --custom-page-version-id "VERSION_ID" --paginate`,
+  asc product-pages custom-pages localizations list --custom-page-version-id "VERSION_ID"
+  asc product-pages custom-pages localizations list --custom-page-version-id "VERSION_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -131,12 +131,12 @@ func CustomPageLocalizationsGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore product-pages custom-pages localizations get --localization-id \"LOCALIZATION_ID\"",
+		ShortUsage: "asc product-pages custom-pages localizations get --localization-id \"LOCALIZATION_ID\"",
 		ShortHelp:  "Get a custom product page localization by ID.",
 		LongHelp: `Get a custom product page localization by ID.
 
 Examples:
-  appstore product-pages custom-pages localizations get --localization-id "LOCALIZATION_ID"`,
+  asc product-pages custom-pages localizations get --localization-id "LOCALIZATION_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -175,13 +175,13 @@ func CustomPageLocalizationsCreateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "create",
-		ShortUsage: "appstore product-pages custom-pages localizations create --custom-page-version-id \"VERSION_ID\" --locale \"en-US\"",
+		ShortUsage: "asc product-pages custom-pages localizations create --custom-page-version-id \"VERSION_ID\" --locale \"en-US\"",
 		ShortHelp:  "Create a custom product page localization.",
 		LongHelp: `Create a custom product page localization.
 
 Examples:
-  appstore product-pages custom-pages localizations create --custom-page-version-id "VERSION_ID" --locale "en-US"
-  appstore product-pages custom-pages localizations create --custom-page-version-id "VERSION_ID" --locale "en-US" --promotional-text "Promo copy"`,
+  asc product-pages custom-pages localizations create --custom-page-version-id "VERSION_ID" --locale "en-US"
+  asc product-pages custom-pages localizations create --custom-page-version-id "VERSION_ID" --locale "en-US" --promotional-text "Promo copy"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -225,12 +225,12 @@ func CustomPageLocalizationsUpdateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "update",
-		ShortUsage: "appstore product-pages custom-pages localizations update --localization-id \"LOCALIZATION_ID\" --promotional-text \"TEXT\"",
+		ShortUsage: "asc product-pages custom-pages localizations update --localization-id \"LOCALIZATION_ID\" --promotional-text \"TEXT\"",
 		ShortHelp:  "Update a custom product page localization.",
 		LongHelp: `Update a custom product page localization.
 
 Examples:
-  appstore product-pages custom-pages localizations update --localization-id "LOCALIZATION_ID" --promotional-text "Updated copy"`,
+  asc product-pages custom-pages localizations update --localization-id "LOCALIZATION_ID" --promotional-text "Updated copy"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -278,12 +278,12 @@ func CustomPageLocalizationsDeleteCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "delete",
-		ShortUsage: "appstore product-pages custom-pages localizations delete --localization-id \"LOCALIZATION_ID\" --confirm",
+		ShortUsage: "asc product-pages custom-pages localizations delete --localization-id \"LOCALIZATION_ID\" --confirm",
 		ShortHelp:  "Delete a custom product page localization.",
 		LongHelp: `Delete a custom product page localization.
 
 Examples:
-  appstore product-pages custom-pages localizations delete --localization-id "LOCALIZATION_ID" --confirm`,
+  asc product-pages custom-pages localizations delete --localization-id "LOCALIZATION_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

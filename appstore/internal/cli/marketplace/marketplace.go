@@ -14,13 +14,13 @@ func MarketplaceCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "marketplace",
-		ShortUsage: "appstore marketplace <subcommand> [flags]",
+		ShortUsage: "asc marketplace <subcommand> [flags]",
 		ShortHelp:  "Manage marketplace resources.",
 		LongHelp: `Manage marketplace resources.
 
 Examples:
-  appstore marketplace search-details get --app "APP_ID"
-  appstore marketplace webhooks list`,
+  asc marketplace search-details get --app "APP_ID"
+  asc marketplace webhooks list`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{

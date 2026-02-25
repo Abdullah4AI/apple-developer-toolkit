@@ -17,12 +17,12 @@ func IAPPromotedPurchaseCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "promoted-purchase",
-		ShortUsage: "appstore iap promoted-purchase <subcommand> [flags]",
+		ShortUsage: "asc iap promoted-purchase <subcommand> [flags]",
 		ShortHelp:  "Inspect promoted purchase for an in-app purchase.",
 		LongHelp: `Inspect promoted purchase for an in-app purchase.
 
 Examples:
-  appstore iap promoted-purchase get --id "IAP_ID"`,
+  asc iap promoted-purchase get --id "IAP_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -43,12 +43,12 @@ func IAPPromotedPurchaseGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore iap promoted-purchase get --id \"IAP_ID\"",
+		ShortUsage: "asc iap promoted-purchase get --id \"IAP_ID\"",
 		ShortHelp:  "Get the promoted purchase for an in-app purchase.",
 		LongHelp: `Get the promoted purchase for an in-app purchase.
 
 Examples:
-  appstore iap promoted-purchase get --id "IAP_ID"`,
+  asc iap promoted-purchase get --id "IAP_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

@@ -17,12 +17,12 @@ func IAPContentCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "content",
-		ShortUsage: "appstore iap content <subcommand> [flags]",
+		ShortUsage: "asc iap content <subcommand> [flags]",
 		ShortHelp:  "Fetch in-app purchase content metadata.",
 		LongHelp: `Fetch in-app purchase content metadata.
 
 Examples:
-  appstore iap content get --iap-id "IAP_ID"`,
+  asc iap content get --iap-id "IAP_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -44,12 +44,12 @@ func IAPContentGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore iap content get --iap-id \"IAP_ID\"",
+		ShortUsage: "asc iap content get --iap-id \"IAP_ID\"",
 		ShortHelp:  "Get in-app purchase content metadata.",
 		LongHelp: `Get in-app purchase content metadata.
 
 Examples:
-  appstore iap content get --iap-id "IAP_ID"`,
+  asc iap content get --iap-id "IAP_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

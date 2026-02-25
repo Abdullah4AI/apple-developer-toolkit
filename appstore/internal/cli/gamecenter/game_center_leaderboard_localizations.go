@@ -19,17 +19,17 @@ func GameCenterLeaderboardLocalizationsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "localizations",
-		ShortUsage: "appstore game-center leaderboards localizations <subcommand> [flags]",
+		ShortUsage: "asc game-center leaderboards localizations <subcommand> [flags]",
 		ShortHelp:  "Manage Game Center leaderboard localizations.",
 		LongHelp: `Manage Game Center leaderboard localizations.
 
 Examples:
-  appstore game-center leaderboards localizations list --leaderboard-id "LEADERBOARD_ID"
-  appstore game-center leaderboards localizations get --id "LOCALIZATION_ID"
-  appstore game-center leaderboards localizations create --leaderboard-id "LEADERBOARD_ID" --locale en-US --name "High Score"
-  appstore game-center leaderboards localizations update --id "LOCALIZATION_ID" --name "Top Score"
-  appstore game-center leaderboards localizations delete --id "LOCALIZATION_ID" --confirm
-  appstore game-center leaderboards localizations image get --id "LOCALIZATION_ID"`,
+  asc game-center leaderboards localizations list --leaderboard-id "LEADERBOARD_ID"
+  asc game-center leaderboards localizations get --id "LOCALIZATION_ID"
+  asc game-center leaderboards localizations create --leaderboard-id "LEADERBOARD_ID" --locale en-US --name "High Score"
+  asc game-center leaderboards localizations update --id "LOCALIZATION_ID" --name "Top Score"
+  asc game-center leaderboards localizations delete --id "LOCALIZATION_ID" --confirm
+  asc game-center leaderboards localizations image get --id "LOCALIZATION_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -58,14 +58,14 @@ func GameCenterLeaderboardLocalizationsListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore game-center leaderboards localizations list --leaderboard-id \"LEADERBOARD_ID\"",
+		ShortUsage: "asc game-center leaderboards localizations list --leaderboard-id \"LEADERBOARD_ID\"",
 		ShortHelp:  "List localizations for a Game Center leaderboard.",
 		LongHelp: `List localizations for a Game Center leaderboard.
 
 Examples:
-  appstore game-center leaderboards localizations list --leaderboard-id "LEADERBOARD_ID"
-  appstore game-center leaderboards localizations list --leaderboard-id "LEADERBOARD_ID" --limit 50
-  appstore game-center leaderboards localizations list --leaderboard-id "LEADERBOARD_ID" --paginate`,
+  asc game-center leaderboards localizations list --leaderboard-id "LEADERBOARD_ID"
+  asc game-center leaderboards localizations list --leaderboard-id "LEADERBOARD_ID" --limit 50
+  asc game-center leaderboards localizations list --leaderboard-id "LEADERBOARD_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -131,12 +131,12 @@ func GameCenterLeaderboardLocalizationsGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore game-center leaderboards localizations get --id \"LOCALIZATION_ID\"",
+		ShortUsage: "asc game-center leaderboards localizations get --id \"LOCALIZATION_ID\"",
 		ShortHelp:  "Get a Game Center leaderboard localization by ID.",
 		LongHelp: `Get a Game Center leaderboard localization by ID.
 
 Examples:
-  appstore game-center leaderboards localizations get --id "LOCALIZATION_ID"`,
+  asc game-center leaderboards localizations get --id "LOCALIZATION_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -179,13 +179,13 @@ func GameCenterLeaderboardLocalizationsCreateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "create",
-		ShortUsage: "appstore game-center leaderboards localizations create [flags]",
+		ShortUsage: "asc game-center leaderboards localizations create [flags]",
 		ShortHelp:  "Create a new Game Center leaderboard localization.",
 		LongHelp: `Create a new Game Center leaderboard localization.
 
 Examples:
-  appstore game-center leaderboards localizations create --leaderboard-id "LEADERBOARD_ID" --locale en-US --name "High Score"
-  appstore game-center leaderboards localizations create --leaderboard-id "LEADERBOARD_ID" --locale de-DE --name "Highscore" --formatter-suffix " Punkte"`,
+  asc game-center leaderboards localizations create --leaderboard-id "LEADERBOARD_ID" --locale en-US --name "High Score"
+  asc game-center leaderboards localizations create --leaderboard-id "LEADERBOARD_ID" --locale de-DE --name "Highscore" --formatter-suffix " Punkte"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -268,13 +268,13 @@ func GameCenterLeaderboardLocalizationsUpdateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "update",
-		ShortUsage: "appstore game-center leaderboards localizations update [flags]",
+		ShortUsage: "asc game-center leaderboards localizations update [flags]",
 		ShortHelp:  "Update a Game Center leaderboard localization.",
 		LongHelp: `Update a Game Center leaderboard localization.
 
 Examples:
-  appstore game-center leaderboards localizations update --id "LOCALIZATION_ID" --name "Top Score"
-  appstore game-center leaderboards localizations update --id "LOCALIZATION_ID" --formatter-suffix " pts"`,
+  asc game-center leaderboards localizations update --id "LOCALIZATION_ID" --name "Top Score"
+  asc game-center leaderboards localizations update --id "LOCALIZATION_ID" --formatter-suffix " pts"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -350,12 +350,12 @@ func GameCenterLeaderboardLocalizationsDeleteCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "delete",
-		ShortUsage: "appstore game-center leaderboards localizations delete --id \"LOCALIZATION_ID\" --confirm",
+		ShortUsage: "asc game-center leaderboards localizations delete --id \"LOCALIZATION_ID\" --confirm",
 		ShortHelp:  "Delete a Game Center leaderboard localization.",
 		LongHelp: `Delete a Game Center leaderboard localization.
 
 Examples:
-  appstore game-center leaderboards localizations delete --id "LOCALIZATION_ID" --confirm`,
+  asc game-center leaderboards localizations delete --id "LOCALIZATION_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -397,12 +397,12 @@ func GameCenterLeaderboardLocalizationImageCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "image",
-		ShortUsage: "appstore game-center leaderboards localizations image get --id \"LOCALIZATION_ID\"",
+		ShortUsage: "asc game-center leaderboards localizations image get --id \"LOCALIZATION_ID\"",
 		ShortHelp:  "Get the image for a leaderboard localization.",
 		LongHelp: `Get the image for a leaderboard localization.
 
 Examples:
-  appstore game-center leaderboards localizations image get --id "LOCALIZATION_ID"`,
+  asc game-center leaderboards localizations image get --id "LOCALIZATION_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -423,12 +423,12 @@ func GameCenterLeaderboardLocalizationImageGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore game-center leaderboards localizations image get --id \"LOCALIZATION_ID\"",
+		ShortUsage: "asc game-center leaderboards localizations image get --id \"LOCALIZATION_ID\"",
 		ShortHelp:  "Get a leaderboard localization image.",
 		LongHelp: `Get a leaderboard localization image.
 
 Examples:
-  appstore game-center leaderboards localizations image get --id "LOCALIZATION_ID"`,
+  asc game-center leaderboards localizations image get --id "LOCALIZATION_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

@@ -19,14 +19,14 @@ func ExperimentTreatmentsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "treatments",
-		ShortUsage: "appstore product-pages experiments treatments <subcommand> [flags]",
+		ShortUsage: "asc product-pages experiments treatments <subcommand> [flags]",
 		ShortHelp:  "Manage experiment treatments.",
 		LongHelp: `Manage experiment treatments.
 
 Examples:
-  appstore product-pages experiments treatments list --experiment-id "EXPERIMENT_ID"
-  appstore product-pages experiments treatments create --experiment-id "EXPERIMENT_ID" --name "Variant A"
-  appstore product-pages experiments treatments delete --treatment-id "TREATMENT_ID" --confirm`,
+  asc product-pages experiments treatments list --experiment-id "EXPERIMENT_ID"
+  asc product-pages experiments treatments create --experiment-id "EXPERIMENT_ID" --name "Variant A"
+  asc product-pages experiments treatments delete --treatment-id "TREATMENT_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -56,14 +56,14 @@ func ExperimentTreatmentsListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore product-pages experiments treatments list --experiment-id \"EXPERIMENT_ID\" [flags]",
+		ShortUsage: "asc product-pages experiments treatments list --experiment-id \"EXPERIMENT_ID\" [flags]",
 		ShortHelp:  "List experiment treatments.",
 		LongHelp: `List experiment treatments.
 
 Examples:
-  appstore product-pages experiments treatments list --experiment-id "EXPERIMENT_ID"
-  appstore product-pages experiments treatments list --experiment-id "EXPERIMENT_ID" --paginate
-  appstore product-pages experiments treatments list --experiment-id "EXPERIMENT_ID" --v2`,
+  asc product-pages experiments treatments list --experiment-id "EXPERIMENT_ID"
+  asc product-pages experiments treatments list --experiment-id "EXPERIMENT_ID" --paginate
+  asc product-pages experiments treatments list --experiment-id "EXPERIMENT_ID" --v2`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -142,12 +142,12 @@ func ExperimentTreatmentsGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore product-pages experiments treatments get --treatment-id \"TREATMENT_ID\"",
+		ShortUsage: "asc product-pages experiments treatments get --treatment-id \"TREATMENT_ID\"",
 		ShortHelp:  "Get a treatment by ID.",
 		LongHelp: `Get a treatment by ID.
 
 Examples:
-  appstore product-pages experiments treatments get --treatment-id "TREATMENT_ID"`,
+  asc product-pages experiments treatments get --treatment-id "TREATMENT_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -186,13 +186,13 @@ func ExperimentTreatmentsCreateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "create",
-		ShortUsage: "appstore product-pages experiments treatments create --experiment-id \"EXPERIMENT_ID\" --name \"NAME\"",
+		ShortUsage: "asc product-pages experiments treatments create --experiment-id \"EXPERIMENT_ID\" --name \"NAME\"",
 		ShortHelp:  "Create a treatment.",
 		LongHelp: `Create a treatment.
 
 Examples:
-  appstore product-pages experiments treatments create --experiment-id "EXPERIMENT_ID" --name "Variant A"
-  appstore product-pages experiments treatments create --experiment-id "EXPERIMENT_ID" --name "Variant A" --app-icon-name "Icon A"`,
+  asc product-pages experiments treatments create --experiment-id "EXPERIMENT_ID" --name "Variant A"
+  asc product-pages experiments treatments create --experiment-id "EXPERIMENT_ID" --name "Variant A" --app-icon-name "Icon A"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -237,13 +237,13 @@ func ExperimentTreatmentsUpdateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "update",
-		ShortUsage: "appstore product-pages experiments treatments update --treatment-id \"TREATMENT_ID\" [--name \"NAME\"] [--app-icon-name \"NAME\"]",
+		ShortUsage: "asc product-pages experiments treatments update --treatment-id \"TREATMENT_ID\" [--name \"NAME\"] [--app-icon-name \"NAME\"]",
 		ShortHelp:  "Update a treatment.",
 		LongHelp: `Update a treatment.
 
 Examples:
-  appstore product-pages experiments treatments update --treatment-id "TREATMENT_ID" --name "Updated"
-  appstore product-pages experiments treatments update --treatment-id "TREATMENT_ID" --app-icon-name "Icon B"`,
+  asc product-pages experiments treatments update --treatment-id "TREATMENT_ID" --name "Updated"
+  asc product-pages experiments treatments update --treatment-id "TREATMENT_ID" --app-icon-name "Icon B"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -296,12 +296,12 @@ func ExperimentTreatmentsDeleteCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "delete",
-		ShortUsage: "appstore product-pages experiments treatments delete --treatment-id \"TREATMENT_ID\" --confirm",
+		ShortUsage: "asc product-pages experiments treatments delete --treatment-id \"TREATMENT_ID\" --confirm",
 		ShortHelp:  "Delete a treatment.",
 		LongHelp: `Delete a treatment.
 
 Examples:
-  appstore product-pages experiments treatments delete --treatment-id "TREATMENT_ID" --confirm`,
+  asc product-pages experiments treatments delete --treatment-id "TREATMENT_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

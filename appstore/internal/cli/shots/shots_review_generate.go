@@ -29,7 +29,7 @@ func ShotsReviewGenerateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "review-generate",
-		ShortUsage: "appstore screenshots review-generate [flags]",
+		ShortUsage: "asc screenshots review-generate [flags]",
 		ShortHelp:  "Generate HTML side-by-side review and JSON manifest (experimental).",
 		LongHelp: `Generate review artifacts for screenshots (experimental):
 

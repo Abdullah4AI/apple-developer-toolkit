@@ -19,14 +19,14 @@ func BuildsIndividualTestersCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "individual-testers",
-		ShortUsage: "appstore builds individual-testers <subcommand> [flags]",
+		ShortUsage: "asc builds individual-testers <subcommand> [flags]",
 		ShortHelp:  "Manage individual testers for a build.",
 		LongHelp: `Manage individual testers for a build.
 
 Examples:
-  appstore builds individual-testers list --build "BUILD_ID"
-  appstore builds individual-testers add --build "BUILD_ID" --tester "TESTER_ID"
-  appstore builds individual-testers remove --build "BUILD_ID" --tester "TESTER_ID"`,
+  asc builds individual-testers list --build "BUILD_ID"
+  asc builds individual-testers add --build "BUILD_ID" --tester "TESTER_ID"
+  asc builds individual-testers remove --build "BUILD_ID" --tester "TESTER_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -52,13 +52,13 @@ func BuildsIndividualTestersListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore builds individual-testers list [flags]",
+		ShortUsage: "asc builds individual-testers list [flags]",
 		ShortHelp:  "List individual testers assigned to a build.",
 		LongHelp: `List individual testers assigned to a build.
 
 Examples:
-  appstore builds individual-testers list --build "BUILD_ID"
-  appstore builds individual-testers list --build "BUILD_ID" --paginate`,
+  asc builds individual-testers list --build "BUILD_ID"
+  asc builds individual-testers list --build "BUILD_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -130,13 +130,13 @@ func BuildsIndividualTestersAddCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "add",
-		ShortUsage: "appstore builds individual-testers add --build \"BUILD_ID\" --tester \"TESTER_ID[,TESTER_ID...]\"",
+		ShortUsage: "asc builds individual-testers add --build \"BUILD_ID\" --tester \"TESTER_ID[,TESTER_ID...]\"",
 		ShortHelp:  "Add individual testers to a build.",
 		LongHelp: `Add individual testers to a build.
 
 Examples:
-  appstore builds individual-testers add --build "BUILD_ID" --tester "TESTER_ID"
-  appstore builds individual-testers add --build "BUILD_ID" --tester "TESTER_ID1,TESTER_ID2"`,
+  asc builds individual-testers add --build "BUILD_ID" --tester "TESTER_ID"
+  asc builds individual-testers add --build "BUILD_ID" --tester "TESTER_ID1,TESTER_ID2"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -186,13 +186,13 @@ func BuildsIndividualTestersRemoveCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "remove",
-		ShortUsage: "appstore builds individual-testers remove --build \"BUILD_ID\" --tester \"TESTER_ID[,TESTER_ID...]\" --confirm",
+		ShortUsage: "asc builds individual-testers remove --build \"BUILD_ID\" --tester \"TESTER_ID[,TESTER_ID...]\" --confirm",
 		ShortHelp:  "Remove individual testers from a build.",
 		LongHelp: `Remove individual testers from a build.
 
 Examples:
-  appstore builds individual-testers remove --build "BUILD_ID" --tester "TESTER_ID" --confirm
-  appstore builds individual-testers remove --build "BUILD_ID" --tester "TESTER_ID1,TESTER_ID2" --confirm`,
+  asc builds individual-testers remove --build "BUILD_ID" --tester "TESTER_ID" --confirm
+  asc builds individual-testers remove --build "BUILD_ID" --tester "TESTER_ID1,TESTER_ID2" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

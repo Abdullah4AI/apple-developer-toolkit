@@ -15,7 +15,7 @@ func MetadataCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "metadata",
-		ShortUsage: "appstore metadata <subcommand> [flags]",
+		ShortUsage: "asc metadata <subcommand> [flags]",
 		ShortHelp:  "Manage app metadata with deterministic file workflows.",
 		LongHelp: `Manage app metadata with deterministic file workflows.
 
@@ -27,8 +27,8 @@ Not yet included in this group:
   - categories, copyright, review information, age ratings, screenshots
 
 Examples:
-  appstore metadata pull --app "APP_ID" --version "1.2.3" --dir "./metadata"
-  appstore metadata pull --app "APP_ID" --version "1.2.3" --platform IOS --dir "./metadata"`,
+  asc metadata pull --app "APP_ID" --version "1.2.3" --dir "./metadata"
+  asc metadata pull --app "APP_ID" --version "1.2.3" --platform IOS --dir "./metadata"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{

@@ -33,16 +33,16 @@ func DevicesCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "devices",
-		ShortUsage: "appstore devices <subcommand> [flags]",
+		ShortUsage: "asc devices <subcommand> [flags]",
 		ShortHelp:  "Manage devices in App Store Connect.",
 		LongHelp: `Manage devices in App Store Connect.
 
 Examples:
-  appstore devices list
-  appstore devices get --id "DEVICE_ID"
-  appstore devices local-udid
-  appstore devices register --name "iPhone 15" --udid "UDID" --platform IOS
-  appstore devices update --id "DEVICE_ID" --status DISABLED`,
+  asc devices list
+  asc devices get --id "DEVICE_ID"
+  asc devices local-udid
+  asc devices register --name "iPhone 15" --udid "UDID" --platform IOS
+  asc devices update --id "DEVICE_ID" --status DISABLED`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -76,18 +76,18 @@ func DevicesListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore devices list [flags]",
+		ShortUsage: "asc devices list [flags]",
 		ShortHelp:  "List devices in App Store Connect.",
 		LongHelp: `List devices in App Store Connect.
 
 Examples:
-  appstore devices list
-  appstore devices list --platform IOS
-  appstore devices list --status ENABLED
-  appstore devices list --udid "UDID1,UDID2"
-  appstore devices list --fields "name,udid,platform,status"
-  appstore devices list --limit 50
-  appstore devices list --paginate`,
+  asc devices list
+  asc devices list --platform IOS
+  asc devices list --status ENABLED
+  asc devices list --udid "UDID1,UDID2"
+  asc devices list --fields "name,udid,platform,status"
+  asc devices list --limit 50
+  asc devices list --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -181,13 +181,13 @@ func DevicesGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore devices get --id DEVICE_ID",
+		ShortUsage: "asc devices get --id DEVICE_ID",
 		ShortHelp:  "Get a device by ID.",
 		LongHelp: `Get a device by ID.
 
 Examples:
-  appstore devices get --id "DEVICE_ID"
-  appstore devices get --id "DEVICE_ID" --fields "name,udid,platform,status"`,
+  asc devices get --id "DEVICE_ID"
+  asc devices get --id "DEVICE_ID" --fields "name,udid,platform,status"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -228,13 +228,13 @@ func DevicesLocalUDIDCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "local-udid",
-		ShortUsage: "appstore devices local-udid [flags]",
+		ShortUsage: "asc devices local-udid [flags]",
 		ShortHelp:  "Get the local macOS hardware UDID.",
 		LongHelp: `Get the local macOS hardware UDID.
 
 Examples:
-  appstore devices local-udid
-  appstore devices local-udid --output table`,
+  asc devices local-udid
+  asc devices local-udid --output table`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -265,13 +265,13 @@ func DevicesRegisterCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "register",
-		ShortUsage: "appstore devices register --name NAME --udid UDID --platform " + strings.Join(devicePlatformList(), "|"),
+		ShortUsage: "asc devices register --name NAME --udid UDID --platform " + strings.Join(devicePlatformList(), "|"),
 		ShortHelp:  "Register a new device.",
 		LongHelp: `Register a new device.
 
 Examples:
-  appstore devices register --name "iPhone 15" --udid "UDID" --platform IOS
-  appstore devices register --name "My Mac" --udid-from-system --platform MAC_OS`,
+  asc devices register --name "iPhone 15" --udid "UDID" --platform IOS
+  asc devices register --name "My Mac" --udid-from-system --platform MAC_OS`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -351,13 +351,13 @@ func DevicesUpdateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "update",
-		ShortUsage: "appstore devices update --id DEVICE_ID [--name NAME] [--status ENABLED|DISABLED]",
+		ShortUsage: "asc devices update --id DEVICE_ID [--name NAME] [--status ENABLED|DISABLED]",
 		ShortHelp:  "Update a device.",
 		LongHelp: `Update a device by ID.
 
 Examples:
-  appstore devices update --id "DEVICE_ID" --name "My iPhone"
-  appstore devices update --id "DEVICE_ID" --status DISABLED`,
+  asc devices update --id "DEVICE_ID" --name "My iPhone"
+  asc devices update --id "DEVICE_ID" --status DISABLED`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

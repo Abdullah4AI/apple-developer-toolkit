@@ -17,12 +17,12 @@ func VersionsAppClipDefaultExperienceCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "app-clip-default-experience",
-		ShortUsage: "appstore versions app-clip-default-experience <subcommand> [flags]",
+		ShortUsage: "asc versions app-clip-default-experience <subcommand> [flags]",
 		ShortHelp:  "Manage App Clip default experience for a version.",
 		LongHelp: `Manage App Clip default experience for a version.
 
 Examples:
-  appstore versions app-clip-default-experience get --version-id "VERSION_ID"`,
+  asc versions app-clip-default-experience get --version-id "VERSION_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -43,12 +43,12 @@ func VersionsAppClipDefaultExperienceGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore versions app-clip-default-experience get --version-id \"VERSION_ID\"",
+		ShortUsage: "asc versions app-clip-default-experience get --version-id \"VERSION_ID\"",
 		ShortHelp:  "Get App Clip default experience for an app store version.",
 		LongHelp: `Get App Clip default experience for an app store version.
 
 Examples:
-  appstore versions app-clip-default-experience get --version-id "VERSION_ID"`,
+  asc versions app-clip-default-experience get --version-id "VERSION_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

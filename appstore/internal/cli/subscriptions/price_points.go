@@ -19,14 +19,14 @@ func SubscriptionsPricePointsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "price-points",
-		ShortUsage: "appstore subscriptions price-points <subcommand> [flags]",
+		ShortUsage: "asc subscriptions price-points <subcommand> [flags]",
 		ShortHelp:  "Manage subscription price points.",
 		LongHelp: `Manage subscription price points.
 
 Examples:
-  appstore subscriptions price-points list --subscription-id "SUB_ID"
-  appstore subscriptions price-points get --id "PRICE_POINT_ID"
-  appstore subscriptions price-points equalizations --id "PRICE_POINT_ID"`,
+  asc subscriptions price-points list --subscription-id "SUB_ID"
+  asc subscriptions price-points get --id "PRICE_POINT_ID"
+  asc subscriptions price-points equalizations --id "PRICE_POINT_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -46,6 +46,9 @@ func SubscriptionsPricePointsListCommand() *ffcli.Command {
 
 	subscriptionID := fs.String("subscription-id", "", "Subscription ID")
 	territory := fs.String("territory", "", "Filter by territory (e.g., USA) to reduce results")
+	price := fs.String("price", "", "Filter by exact customer price (e.g., 4.99)")
+	minPrice := fs.String("min-price", "", "Filter by minimum customer price")
+	maxPrice := fs.String("max-price", "", "Filter by maximum customer price")
 	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
 	next := fs.String("next", "", "Fetch next page using a links.next URL")
 	paginate := fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")
@@ -54,7 +57,7 @@ func SubscriptionsPricePointsListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore subscriptions price-points list [flags]",
+		ShortUsage: "asc subscriptions price-points list [flags]",
 		ShortHelp:  "List price points for a subscription.",
 		LongHelp: `List price points for a subscription.
 
@@ -62,15 +65,21 @@ Use --territory to filter by a specific territory. Without it, all territories
 are returned (140K+ results for subscriptions). Filtering by territory reduces
 results to ~800 and completes in seconds instead of 20+ minutes.
 
+Use --price to find a specific customer price, or --min-price/--max-price for
+a range. These filters are applied client-side after fetching. Combine with
+--territory and --paginate for best results.
+
 Use --stream with --paginate to emit each page as a separate JSON line (NDJSON)
 instead of buffering all pages in memory. This gives immediate feedback and
 reduces memory usage for very large result sets.
 
 Examples:
-  appstore subscriptions price-points list --subscription-id "SUB_ID"
-  appstore subscriptions price-points list --subscription-id "SUB_ID" --territory "USA"
-  appstore subscriptions price-points list --subscription-id "SUB_ID" --territory "USA" --paginate
-  appstore subscriptions price-points list --subscription-id "SUB_ID" --paginate --stream`,
+  asc subscriptions price-points list --subscription-id "SUB_ID"
+  asc subscriptions price-points list --subscription-id "SUB_ID" --territory "USA"
+  asc subscriptions price-points list --subscription-id "SUB_ID" --territory "USA" --paginate
+  asc subscriptions price-points list --subscription-id "SUB_ID" --territory "USA" --paginate --price "4.99"
+  asc subscriptions price-points list --subscription-id "SUB_ID" --territory "USA" --paginate --min-price "1.00" --max-price "9.99"
+  asc subscriptions price-points list --subscription-id "SUB_ID" --paginate --stream`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -82,6 +91,19 @@ Examples:
 			}
 			if *stream && !*paginate {
 				fmt.Fprintln(os.Stderr, "Error: --stream requires --paginate")
+				return flag.ErrHelp
+			}
+
+			priceFilter := shared.PriceFilter{
+				Price:    strings.TrimSpace(*price),
+				MinPrice: strings.TrimSpace(*minPrice),
+				MaxPrice: strings.TrimSpace(*maxPrice),
+			}
+			if err := priceFilter.Validate(); err != nil {
+				return shared.UsageError(err.Error())
+			}
+			if priceFilter.HasFilter() && *stream {
+				fmt.Fprintln(os.Stderr, "Error: price filtering is not supported with --stream")
 				return flag.ErrHelp
 			}
 
@@ -157,6 +179,13 @@ Examples:
 					return fmt.Errorf("subscriptions price-points list: %w", err)
 				}
 
+				if priceFilter.HasFilter() {
+					if typed, ok := resp.(*asc.SubscriptionPricePointsResponse); ok {
+						filterSubscriptionPricePoints(typed, priceFilter)
+						return shared.PrintOutput(typed, *output.Output, *output.Pretty)
+					}
+				}
+
 				return shared.PrintOutput(resp, *output.Output, *output.Pretty)
 			}
 
@@ -165,9 +194,24 @@ Examples:
 				return fmt.Errorf("subscriptions price-points list: failed to fetch: %w", err)
 			}
 
+			if priceFilter.HasFilter() {
+				filterSubscriptionPricePoints(resp, priceFilter)
+			}
+
 			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
 		},
 	}
+}
+
+// filterSubscriptionPricePoints removes data entries that don't match the price filter.
+func filterSubscriptionPricePoints(resp *asc.SubscriptionPricePointsResponse, pf shared.PriceFilter) {
+	filtered := resp.Data[:0]
+	for _, item := range resp.Data {
+		if pf.MatchesPrice(item.Attributes.CustomerPrice) {
+			filtered = append(filtered, item)
+		}
+	}
+	resp.Data = filtered
 }
 
 // SubscriptionsPricePointsGetCommand returns the price points get subcommand.
@@ -179,12 +223,12 @@ func SubscriptionsPricePointsGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore subscriptions price-points get --id \"PRICE_POINT_ID\"",
+		ShortUsage: "asc subscriptions price-points get --id \"PRICE_POINT_ID\"",
 		ShortHelp:  "Get a subscription price point by ID.",
 		LongHelp: `Get a subscription price point by ID.
 
 Examples:
-  appstore subscriptions price-points get --id "PRICE_POINT_ID"`,
+  asc subscriptions price-points get --id "PRICE_POINT_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -222,13 +266,13 @@ func SubscriptionsPricePointsEqualizationsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "equalizations",
-		ShortUsage: "appstore subscriptions price-points equalizations --id \"PRICE_POINT_ID\"",
+		ShortUsage: "asc subscriptions price-points equalizations --id \"PRICE_POINT_ID\"",
 		ShortHelp:  "List equalized price points for a subscription price point.",
 		LongHelp: `List equalized price points for a subscription price point.
 
 Examples:
-  appstore subscriptions price-points equalizations --id "PRICE_POINT_ID"
-  appstore subscriptions price-points equalizations --id "PRICE_POINT_ID" --paginate`,
+  asc subscriptions price-points equalizations --id "PRICE_POINT_ID"
+  asc subscriptions price-points equalizations --id "PRICE_POINT_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

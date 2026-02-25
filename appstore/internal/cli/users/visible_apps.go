@@ -20,13 +20,13 @@ func UsersVisibleAppsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "visible-apps",
-		ShortUsage: "appstore users visible-apps <subcommand> [flags]",
+		ShortUsage: "asc users visible-apps <subcommand> [flags]",
 		ShortHelp:  "View visible apps for a user.",
 		LongHelp: `View visible apps for a user.
 
 Examples:
-  appstore users visible-apps list --id "USER_ID"
-  appstore users visible-apps get --id "USER_ID"`,
+  asc users visible-apps list --id "USER_ID"
+  asc users visible-apps get --id "USER_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -51,13 +51,13 @@ func UsersVisibleAppsListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore users visible-apps list --id \"USER_ID\" [flags]",
+		ShortUsage: "asc users visible-apps list --id \"USER_ID\" [flags]",
 		ShortHelp:  "List visible apps for a user.",
 		LongHelp: `List visible apps for a user.
 
 Examples:
-  appstore users visible-apps list --id "USER_ID"
-  appstore users visible-apps list --id "USER_ID" --paginate`,
+  asc users visible-apps list --id "USER_ID"
+  asc users visible-apps list --id "USER_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -136,13 +136,13 @@ func UsersVisibleAppsGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore users visible-apps get --id \"USER_ID\" [flags]",
+		ShortUsage: "asc users visible-apps get --id \"USER_ID\" [flags]",
 		ShortHelp:  "Get visible app relationships for a user.",
 		LongHelp: `Get visible app relationships for a user.
 
 Examples:
-  appstore users visible-apps get --id "USER_ID"
-  appstore users visible-apps get --id "USER_ID" --paginate`,
+  asc users visible-apps get --id "USER_ID"
+  asc users visible-apps get --id "USER_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

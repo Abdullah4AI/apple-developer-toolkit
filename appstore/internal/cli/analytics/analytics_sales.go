@@ -17,7 +17,7 @@ import (
 func AnalyticsSalesCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("sales", flag.ExitOnError)
 
-	vendor := fs.String("vendor", "", "Vendor number (or APPSTORE_VENDOR_NUMBER/APPSTORE_ANALYTICS_VENDOR_NUMBER env)")
+	vendor := fs.String("vendor", "", "Vendor number (or ASC_VENDOR_NUMBER/ASC_ANALYTICS_VENDOR_NUMBER env)")
 	reportType := fs.String("type", "", "Report type: SALES, PRE_ORDER, NEWSSTAND, SUBSCRIPTION, SUBSCRIPTION_EVENT")
 	reportSubType := fs.String("subtype", "", "Report subtype: SUMMARY, DETAILED")
 	frequency := fs.String("frequency", "", "Frequency: DAILY, WEEKLY, MONTHLY, YEARLY")
@@ -29,22 +29,22 @@ func AnalyticsSalesCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "sales",
-		ShortUsage: "appstore analytics sales [flags]",
+		ShortUsage: "asc analytics sales [flags]",
 		ShortHelp:  "Download sales and trends reports.",
 		LongHelp: `Download sales and trends reports.
 
 Examples:
-  appstore analytics sales --vendor "12345678" --type SALES --subtype SUMMARY --frequency DAILY --date "2024-01-20"
-  appstore analytics sales --vendor "12345678" --type SALES --subtype SUMMARY --frequency WEEKLY --date "2024-01-15" # Monday start accepted
-  appstore analytics sales --vendor "12345678" --type SUBSCRIPTION --subtype DETAILED --frequency MONTHLY --date "2024-01"
-  appstore analytics sales --vendor "12345678" --type SALES --subtype SUMMARY --frequency DAILY --date "2024-01-20" --decompress
-  appstore analytics sales --vendor "12345678" --type SALES --subtype SUMMARY --frequency DAILY --date "2024-01-20" --output "reports/daily_sales.tsv.gz"`,
+  asc analytics sales --vendor "12345678" --type SALES --subtype SUMMARY --frequency DAILY --date "2024-01-20"
+  asc analytics sales --vendor "12345678" --type SALES --subtype SUMMARY --frequency WEEKLY --date "2024-01-15" # Monday start accepted
+  asc analytics sales --vendor "12345678" --type SUBSCRIPTION --subtype DETAILED --frequency MONTHLY --date "2024-01"
+  asc analytics sales --vendor "12345678" --type SALES --subtype SUMMARY --frequency DAILY --date "2024-01-20" --decompress
+  asc analytics sales --vendor "12345678" --type SALES --subtype SUMMARY --frequency DAILY --date "2024-01-20" --output "reports/daily_sales.tsv.gz"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			vendorNumber := shared.ResolveVendorNumber(*vendor)
 			if vendorNumber == "" {
-				fmt.Fprintln(os.Stderr, "Error: --vendor is required (or set APPSTORE_VENDOR_NUMBER/APPSTORE_ANALYTICS_VENDOR_NUMBER)")
+				fmt.Fprintln(os.Stderr, "Error: --vendor is required (or set ASC_VENDOR_NUMBER/ASC_ANALYTICS_VENDOR_NUMBER)")
 				return flag.ErrHelp
 			}
 			if strings.TrimSpace(*reportType) == "" {

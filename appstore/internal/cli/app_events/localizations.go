@@ -19,14 +19,14 @@ func AppEventLocalizationsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "localizations",
-		ShortUsage: "appstore app-events localizations <subcommand> [flags]",
+		ShortUsage: "asc app-events localizations <subcommand> [flags]",
 		ShortHelp:  "Manage in-app event localizations.",
 		LongHelp: `Manage in-app event localizations.
 
 Examples:
-  appstore app-events localizations list --event-id "EVENT_ID"
-  appstore app-events localizations get --localization-id "LOC_ID"
-  appstore app-events localizations screenshots list --localization-id "LOC_ID"`,
+  asc app-events localizations list --event-id "EVENT_ID"
+  asc app-events localizations get --localization-id "LOC_ID"
+  asc app-events localizations screenshots list --localization-id "LOC_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -58,13 +58,13 @@ func AppEventLocalizationsListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore app-events localizations list [flags]",
+		ShortUsage: "asc app-events localizations list [flags]",
 		ShortHelp:  "List localizations for an in-app event.",
 		LongHelp: `List localizations for an in-app event.
 
 Examples:
-  appstore app-events localizations list --event-id "EVENT_ID"
-  appstore app-events localizations list --event-id "EVENT_ID" --paginate`,
+  asc app-events localizations list --event-id "EVENT_ID"
+  asc app-events localizations list --event-id "EVENT_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -129,12 +129,12 @@ func AppEventLocalizationsGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore app-events localizations get --localization-id \"LOC_ID\"",
+		ShortUsage: "asc app-events localizations get --localization-id \"LOC_ID\"",
 		ShortHelp:  "Get an in-app event localization by ID.",
 		LongHelp: `Get an in-app event localization by ID.
 
 Examples:
-  appstore app-events localizations get --localization-id "LOC_ID"`,
+  asc app-events localizations get --localization-id "LOC_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -175,13 +175,13 @@ func AppEventLocalizationsCreateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "create",
-		ShortUsage: "appstore app-events localizations create [flags]",
+		ShortUsage: "asc app-events localizations create [flags]",
 		ShortHelp:  "Create an in-app event localization.",
 		LongHelp: `Create an in-app event localization.
 
 Examples:
-  appstore app-events localizations create --event-id "EVENT_ID" --locale "en-US" --name "Summer Challenge"
-  appstore app-events localizations create --event-id "EVENT_ID" --locale "ja-JP" --short-description "Short text"`,
+  asc app-events localizations create --event-id "EVENT_ID" --locale "en-US" --name "Summer Challenge"
+  asc app-events localizations create --event-id "EVENT_ID" --locale "ja-JP" --short-description "Short text"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -234,13 +234,13 @@ func AppEventLocalizationsUpdateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "update",
-		ShortUsage: "appstore app-events localizations update [flags]",
+		ShortUsage: "asc app-events localizations update [flags]",
 		ShortHelp:  "Update an in-app event localization.",
 		LongHelp: `Update an in-app event localization.
 
 Examples:
-  appstore app-events localizations update --localization-id "LOC_ID" --name "New Name"
-  appstore app-events localizations update --localization-id "LOC_ID" --short-description "Updated text"`,
+  asc app-events localizations update --localization-id "LOC_ID" --name "New Name"
+  asc app-events localizations update --localization-id "LOC_ID" --short-description "Updated text"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -304,12 +304,12 @@ func AppEventLocalizationsDeleteCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "delete",
-		ShortUsage: "appstore app-events localizations delete --localization-id \"LOC_ID\" --confirm",
+		ShortUsage: "asc app-events localizations delete --localization-id \"LOC_ID\" --confirm",
 		ShortHelp:  "Delete an in-app event localization.",
 		LongHelp: `Delete an in-app event localization.
 
 Examples:
-  appstore app-events localizations delete --localization-id "LOC_ID" --confirm`,
+  asc app-events localizations delete --localization-id "LOC_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

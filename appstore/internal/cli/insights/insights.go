@@ -31,14 +31,14 @@ func InsightsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "insights",
-		ShortUsage: "appstore insights <subcommand> [flags]",
+		ShortUsage: "asc insights <subcommand> [flags]",
 		ShortHelp:  "Generate weekly and daily insights from App Store data sources.",
 		LongHelp: `Generate weekly and daily insights from App Store data sources.
 
 Examples:
-  appstore insights weekly --app "123456789" --source analytics --week "2026-02-16"
-  appstore insights weekly --app "123456789" --source sales --week "2026-02-16" --vendor "12345678"
-  appstore insights daily --app "123456789" --vendor "12345678" --date "2026-02-20"`,
+  asc insights weekly --app "123456789" --source analytics --week "2026-02-16"
+  asc insights weekly --app "123456789" --source sales --week "2026-02-16" --vendor "12345678"
+  asc insights daily --app "123456789" --vendor "12345678" --date "2026-02-20"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -54,15 +54,15 @@ Examples:
 func insightsWeeklyCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("insights weekly", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (required, or APPSTORE_APP_ID env)")
+	appID := fs.String("app", "", "App Store Connect app ID (required, or ASC_APP_ID env)")
 	source := fs.String("source", "", "Insights source: analytics or sales")
 	week := fs.String("week", "", "Week start date (YYYY-MM-DD)")
-	vendor := fs.String("vendor", "", "Vendor number for sales source (or APPSTORE_VENDOR_NUMBER)")
+	vendor := fs.String("vendor", "", "Vendor number for sales source (or ASC_VENDOR_NUMBER)")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "weekly",
-		ShortUsage: "appstore insights weekly --app \"APP_ID\" --source analytics|sales --week \"YYYY-MM-DD\" [flags]",
+		ShortUsage: "asc insights weekly --app \"APP_ID\" --source analytics|sales --week \"YYYY-MM-DD\" [flags]",
 		ShortHelp:  "Summarize this week vs last week metrics.",
 		LongHelp: `Summarize this week vs last week metrics.
 
@@ -72,9 +72,9 @@ For --source sales, totals are scoped to the selected app and include linked in-
 and subscriptions by matching Parent Identifier against the app SKU.
 
 Examples:
-  appstore insights weekly --app "123456789" --source analytics --week "2026-02-16"
-  appstore insights weekly --app "123456789" --source sales --week "2026-02-16" --vendor "12345678"
-  appstore insights weekly --app "123456789" --source sales --week "2026-02-16" --output table`,
+  asc insights weekly --app "123456789" --source analytics --week "2026-02-16"
+  asc insights weekly --app "123456789" --source sales --week "2026-02-16" --vendor "12345678"
+  asc insights weekly --app "123456789" --source sales --week "2026-02-16" --output table`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -84,7 +84,7 @@ Examples:
 
 			resolvedAppID := shared.ResolveAppID(*appID)
 			if resolvedAppID == "" {
-				return shared.UsageError("--app is required (or set APPSTORE_APP_ID)")
+				return shared.UsageError("--app is required (or set ASC_APP_ID)")
 			}
 
 			sourceName := strings.ToLower(strings.TrimSpace(*source))
@@ -104,7 +104,7 @@ Examples:
 			if sourceName == sourceSales {
 				resolvedVendor = shared.ResolveVendorNumber(*vendor)
 				if resolvedVendor == "" {
-					return shared.UsageError("--vendor is required for --source sales (or set APPSTORE_VENDOR_NUMBER)")
+					return shared.UsageError("--vendor is required for --source sales (or set ASC_VENDOR_NUMBER)")
 				}
 			}
 
@@ -135,14 +135,14 @@ Examples:
 func insightsDailyCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("insights daily", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (required, or APPSTORE_APP_ID env)")
-	vendor := fs.String("vendor", "", "Vendor number for sales source (or APPSTORE_VENDOR_NUMBER)")
+	appID := fs.String("app", "", "App Store Connect app ID (required, or ASC_APP_ID env)")
+	vendor := fs.String("vendor", "", "Vendor number for sales source (or ASC_VENDOR_NUMBER)")
 	date := fs.String("date", "", "Report date (YYYY-MM-DD)")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "daily",
-		ShortUsage: "appstore insights daily --app \"APP_ID\" --vendor \"VENDOR\" --date \"YYYY-MM-DD\" [flags]",
+		ShortUsage: "asc insights daily --app \"APP_ID\" --vendor \"VENDOR\" --date \"YYYY-MM-DD\" [flags]",
 		ShortHelp:  "Summarize daily subscription renewal signals from sales exports.",
 		LongHelp: `Summarize daily subscription renewal signals from sales exports.
 
@@ -150,8 +150,8 @@ This command is sales-only and app-scoped. It compares the selected day to the p
 Renewal metrics are derived from rows where Subscription equals "Renewal" for products linked to the app.
 
 Examples:
-  appstore insights daily --app "123456789" --vendor "12345678" --date "2026-02-20"
-  appstore insights daily --app "123456789" --vendor "12345678" --date "2026-02-20" --output table`,
+  asc insights daily --app "123456789" --vendor "12345678" --date "2026-02-20"
+  asc insights daily --app "123456789" --vendor "12345678" --date "2026-02-20" --output table`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -161,12 +161,12 @@ Examples:
 
 			resolvedAppID := shared.ResolveAppID(*appID)
 			if resolvedAppID == "" {
-				return shared.UsageError("--app is required (or set APPSTORE_APP_ID)")
+				return shared.UsageError("--app is required (or set ASC_APP_ID)")
 			}
 
 			resolvedVendor := shared.ResolveVendorNumber(*vendor)
 			if resolvedVendor == "" {
-				return shared.UsageError("--vendor is required (or set APPSTORE_VENDOR_NUMBER)")
+				return shared.UsageError("--vendor is required (or set ASC_VENDOR_NUMBER)")
 			}
 
 			reportDate, err := normalizeInsightsDate(*date, "--date")

@@ -19,12 +19,12 @@ func VersionsCustomerReviewsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "customer-reviews",
-		ShortUsage: "appstore versions customer-reviews <subcommand> [flags]",
+		ShortUsage: "asc versions customer-reviews <subcommand> [flags]",
 		ShortHelp:  "Manage App Store version customer reviews.",
 		LongHelp: `Manage App Store version customer reviews.
 
 Examples:
-  appstore versions customer-reviews list --version-id "VERSION_ID"`,
+  asc versions customer-reviews list --version-id "VERSION_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -48,13 +48,13 @@ func VersionsCustomerReviewsListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore versions customer-reviews list --version-id \"VERSION_ID\" [flags]",
+		ShortUsage: "asc versions customer-reviews list --version-id \"VERSION_ID\" [flags]",
 		ShortHelp:  "List customer reviews for an app store version.",
 		LongHelp: `List customer reviews for an app store version.
 
 Examples:
-  appstore versions customer-reviews list --version-id "VERSION_ID"
-  appstore versions customer-reviews list --version-id "VERSION_ID" --paginate`,
+  asc versions customer-reviews list --version-id "VERSION_ID"
+  asc versions customer-reviews list --version-id "VERSION_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

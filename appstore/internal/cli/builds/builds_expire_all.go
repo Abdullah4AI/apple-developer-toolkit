@@ -26,7 +26,7 @@ type buildExpireCandidate struct {
 func BuildsExpireAllCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("builds expire-all", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (required, or APPSTORE_APP_ID env)")
+	appID := fs.String("app", "", "App Store Connect app ID (required, or ASC_APP_ID env)")
 	olderThan := fs.String("older-than", "", "Expire builds older than duration (e.g., 90d, 2w, 30d) or date (YYYY-MM-DD)")
 	keepLatest := fs.Int("keep-latest", 0, "Keep the N most recent builds")
 	dryRun := fs.Bool("dry-run", false, "Preview builds that would be expired without expiring")
@@ -35,7 +35,7 @@ func BuildsExpireAllCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "expire-all",
-		ShortUsage: "appstore builds expire-all [flags]",
+		ShortUsage: "asc builds expire-all [flags]",
 		ShortHelp:  "Expire multiple TestFlight builds for an app.",
 		LongHelp: `Expire multiple TestFlight builds for an app.
 
@@ -44,16 +44,16 @@ Use --older-than to expire builds older than a duration or date, and optionally
 expiring.
 
 Examples:
-  appstore builds expire-all --app "123456789" --older-than 90d --dry-run
-  appstore builds expire-all --app "123456789" --older-than 30d --confirm
-  appstore builds expire-all --app "123456789" --keep-latest 5 --confirm
-  appstore builds expire-all --app "123456789" --older-than "2025-01-01" --confirm`,
+  asc builds expire-all --app "123456789" --older-than 90d --dry-run
+  asc builds expire-all --app "123456789" --older-than 30d --confirm
+  asc builds expire-all --app "123456789" --keep-latest 5 --confirm
+  asc builds expire-all --app "123456789" --older-than "2025-01-01" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			resolvedAppID := shared.ResolveAppID(*appID)
 			if resolvedAppID == "" {
-				fmt.Fprintf(os.Stderr, "Error: --app is required (or set APPSTORE_APP_ID)\n\n")
+				fmt.Fprintf(os.Stderr, "Error: --app is required (or set ASC_APP_ID)\n\n")
 				return flag.ErrHelp
 			}
 

@@ -16,7 +16,7 @@ import (
 // ShotsRunCommand returns the screenshots run subcommand.
 func ShotsRunCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("run", flag.ExitOnError)
-	planPath := fs.String("plan", ".appstore/screenshots.json", "Path to screenshot run plan JSON")
+	planPath := fs.String("plan", ".asc/screenshots.json", "Path to screenshot run plan JSON")
 	bundleID := fs.String("bundle-id", "", "Override app bundle ID from plan")
 	udid := fs.String("udid", "", "Override simulator UDID from plan")
 	outputDir := fs.String("output-dir", "", "Override output directory from plan")
@@ -24,11 +24,11 @@ func ShotsRunCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "run",
-		ShortUsage: "appstore screenshots run [--plan .appstore/screenshots.json] [flags]",
+		ShortUsage: "asc screenshots run [--plan .asc/screenshots.json] [flags]",
 		ShortHelp:  "Run a deterministic screenshot sequence from JSON (experimental).",
 		LongHelp: `Run a deterministic screenshot automation sequence (experimental).
 
-By default it loads .appstore/screenshots.json from the current project root.
+By default it loads .asc/screenshots.json from the current project root.
 Supported actions: launch, tap, type, wait, wait_for (polling), screenshot.`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,

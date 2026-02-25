@@ -33,24 +33,24 @@ func AppsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "apps",
-		ShortUsage: "appstore apps <subcommand> [flags]",
+		ShortUsage: "asc apps <subcommand> [flags]",
 		ShortHelp:  "List and manage apps in App Store Connect.",
 		LongHelp: `List and manage apps in App Store Connect.
 
 Examples:
-  appstore apps
-  appstore apps list --bundle-id "com.example.app"
-  appstore apps wall
-  appstore apps get --id "APP_ID"
-  appstore apps ci-product get --id "APP_ID"
-  appstore apps update --id "APP_ID" --bundle-id "com.example.app"
-  appstore apps update --id "APP_ID" --primary-locale "en-US"
-  appstore apps subscription-grace-period get --app "APP_ID"
-  appstore apps --limit 10
-  appstore apps --sort name
-  appstore apps --output table
-  appstore apps --next "<links.next>"
-  appstore apps --paginate`,
+  asc apps
+  asc apps list --bundle-id "com.example.app"
+  asc apps wall
+  asc apps get --id "APP_ID"
+  asc apps ci-product get --id "APP_ID"
+  asc apps update --id "APP_ID" --bundle-id "com.example.app"
+  asc apps update --id "APP_ID" --primary-locale "en-US"
+  asc apps subscription-grace-period get --app "APP_ID"
+  asc apps --limit 10
+  asc apps --sort name
+  asc apps --output table
+  asc apps --next "<links.next>"
+  asc apps --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -82,19 +82,19 @@ func AppsListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore apps list [flags]",
+		ShortUsage: "asc apps list [flags]",
 		ShortHelp:  "List apps from App Store Connect.",
 		LongHelp: `List apps from App Store Connect.
 
 Examples:
-  appstore apps list
-  appstore apps list --bundle-id "com.example.app"
-  appstore apps list --name "My App"
-  appstore apps list --limit 10
-  appstore apps list --sort name
-  appstore apps list --output table
-  appstore apps list --next "<links.next>"
-  appstore apps list --paginate`,
+  asc apps list
+  asc apps list --bundle-id "com.example.app"
+  asc apps list --name "My App"
+  asc apps list --limit 10
+  asc apps list --sort name
+  asc apps list --output table
+  asc apps list --next "<links.next>"
+  asc apps list --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -112,13 +112,13 @@ func AppsGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore apps get --id APP_ID",
+		ShortUsage: "asc apps get --id APP_ID",
 		ShortHelp:  "Get app details by ID.",
 		LongHelp: `Get app details by ID.
 
 Examples:
-  appstore apps get --id "APP_ID"
-  appstore apps get --id "APP_ID" --output table`,
+  asc apps get --id "APP_ID"
+  asc apps get --id "APP_ID" --output table`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -158,14 +158,14 @@ func AppsUpdateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "update",
-		ShortUsage: "appstore apps update --id APP_ID [--bundle-id BUNDLE_ID] [--primary-locale LOCALE] [--content-rights DECLARATION]",
+		ShortUsage: "asc apps update --id APP_ID [--bundle-id BUNDLE_ID] [--primary-locale LOCALE] [--content-rights DECLARATION]",
 		ShortHelp:  "Update an app's bundle ID, primary locale, or content rights declaration.",
 		LongHelp: `Update an app's bundle ID, primary locale, or content rights declaration.
 
 Examples:
-  appstore apps update --id "APP_ID" --bundle-id "com.example.app"
-  appstore apps update --id "APP_ID" --primary-locale "en-US"
-  appstore apps update --id "APP_ID" --content-rights "DOES_NOT_USE_THIRD_PARTY_CONTENT"`,
+  asc apps update --id "APP_ID" --bundle-id "com.example.app"
+  asc apps update --id "APP_ID" --primary-locale "en-US"
+  asc apps update --id "APP_ID" --content-rights "DOES_NOT_USE_THIRD_PARTY_CONTENT"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

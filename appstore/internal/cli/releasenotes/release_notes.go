@@ -20,14 +20,14 @@ func ReleaseNotesCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "release-notes",
-		ShortUsage: "appstore release-notes <subcommand> [flags]",
+		ShortUsage: "asc release-notes <subcommand> [flags]",
 		ShortHelp:  "Generate and manage App Store release notes.",
 		LongHelp: `Generate release notes (What's New) text from git history.
 
 Examples:
-  appstore release-notes generate --since-tag "v1.2.2"
-  appstore release-notes generate --since-tag "v1.2.2" --until-ref "HEAD" --output markdown
-  appstore release-notes generate --since-ref "origin/main" --until-ref "HEAD" --max-chars 4000`,
+  asc release-notes generate --since-tag "v1.2.2"
+  asc release-notes generate --since-tag "v1.2.2" --until-ref "HEAD" --output markdown
+  asc release-notes generate --since-ref "origin/main" --until-ref "HEAD" --max-chars 4000`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -65,16 +65,16 @@ func ReleaseNotesGenerateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "generate",
-		ShortUsage: "appstore release-notes generate [flags]",
+		ShortUsage: "asc release-notes generate [flags]",
 		ShortHelp:  "Generate release notes from git history.",
 		LongHelp: `Generate release notes (What's New) from local git history.
 
 Exactly one of --since-tag or --since-ref is required.
 
 Examples:
-  appstore release-notes generate --since-tag "v1.2.2"
-  appstore release-notes generate --since-tag "v1.2.2" --output markdown
-  appstore release-notes generate --since-ref "origin/main" --until-ref "HEAD" --max-chars 4000`,
+  asc release-notes generate --since-tag "v1.2.2"
+  asc release-notes generate --since-tag "v1.2.2" --output markdown
+  asc release-notes generate --since-ref "origin/main" --until-ref "HEAD" --max-chars 4000`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

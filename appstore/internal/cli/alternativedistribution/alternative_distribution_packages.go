@@ -17,20 +17,20 @@ func AlternativeDistributionPackagesCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "packages",
-		ShortUsage: "appstore alternative-distribution packages <subcommand> [flags]",
+		ShortUsage: "asc alternative-distribution packages <subcommand> [flags]",
 		ShortHelp:  "Manage alternative distribution packages.",
 		LongHelp: `Manage alternative distribution packages.
 
 Examples:
-  appstore alternative-distribution packages get --package-id "PACKAGE_ID"
-  appstore alternative-distribution packages create --app-store-version-id "APP_STORE_VERSION_ID"
-  appstore alternative-distribution packages app-store-version --app-store-version-id "APP_STORE_VERSION_ID"
-  appstore alternative-distribution packages versions list --package-id "PACKAGE_ID"
-  appstore alternative-distribution packages versions get --version-id "VERSION_ID"
-  appstore alternative-distribution packages versions deltas --version-id "VERSION_ID"
-  appstore alternative-distribution packages versions variants --version-id "VERSION_ID"
-  appstore alternative-distribution packages variants --variant-id "VARIANT_ID"
-  appstore alternative-distribution packages deltas --delta-id "DELTA_ID"`,
+  asc alternative-distribution packages get --package-id "PACKAGE_ID"
+  asc alternative-distribution packages create --app-store-version-id "APP_STORE_VERSION_ID"
+  asc alternative-distribution packages app-store-version --app-store-version-id "APP_STORE_VERSION_ID"
+  asc alternative-distribution packages versions list --package-id "PACKAGE_ID"
+  asc alternative-distribution packages versions get --version-id "VERSION_ID"
+  asc alternative-distribution packages versions deltas --version-id "VERSION_ID"
+  asc alternative-distribution packages versions variants --version-id "VERSION_ID"
+  asc alternative-distribution packages variants --variant-id "VARIANT_ID"
+  asc alternative-distribution packages deltas --delta-id "DELTA_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -56,12 +56,12 @@ func AlternativeDistributionPackagesGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore alternative-distribution packages get --package-id \"PACKAGE_ID\"",
+		ShortUsage: "asc alternative-distribution packages get --package-id \"PACKAGE_ID\"",
 		ShortHelp:  "Get an alternative distribution package.",
 		LongHelp: `Get an alternative distribution package.
 
 Examples:
-  appstore alternative-distribution packages get --package-id "PACKAGE_ID"`,
+  asc alternative-distribution packages get --package-id "PACKAGE_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -98,12 +98,12 @@ func AlternativeDistributionPackagesCreateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "create",
-		ShortUsage: "appstore alternative-distribution packages create --app-store-version-id \"APP_STORE_VERSION_ID\"",
+		ShortUsage: "asc alternative-distribution packages create --app-store-version-id \"APP_STORE_VERSION_ID\"",
 		ShortHelp:  "Create an alternative distribution package.",
 		LongHelp: `Create an alternative distribution package.
 
 Examples:
-  appstore alternative-distribution packages create --app-store-version-id "APP_STORE_VERSION_ID"`,
+  asc alternative-distribution packages create --app-store-version-id "APP_STORE_VERSION_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -140,12 +140,12 @@ func AlternativeDistributionPackagesAppStoreVersionCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "app-store-version",
-		ShortUsage: "appstore alternative-distribution packages app-store-version --app-store-version-id \"APP_STORE_VERSION_ID\"",
+		ShortUsage: "asc alternative-distribution packages app-store-version --app-store-version-id \"APP_STORE_VERSION_ID\"",
 		ShortHelp:  "Get the package for an app store version.",
 		LongHelp: `Get the package for an app store version.
 
 Examples:
-  appstore alternative-distribution packages app-store-version --app-store-version-id "APP_STORE_VERSION_ID"`,
+  asc alternative-distribution packages app-store-version --app-store-version-id "APP_STORE_VERSION_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -182,12 +182,12 @@ func AlternativeDistributionPackageVariantsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "variants",
-		ShortUsage: "appstore alternative-distribution packages variants --variant-id \"VARIANT_ID\"",
+		ShortUsage: "asc alternative-distribution packages variants --variant-id \"VARIANT_ID\"",
 		ShortHelp:  "Get an alternative distribution package variant.",
 		LongHelp: `Get an alternative distribution package variant.
 
 Examples:
-  appstore alternative-distribution packages variants --variant-id "VARIANT_ID"`,
+  asc alternative-distribution packages variants --variant-id "VARIANT_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -224,12 +224,12 @@ func AlternativeDistributionPackageDeltasCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "deltas",
-		ShortUsage: "appstore alternative-distribution packages deltas --delta-id \"DELTA_ID\"",
+		ShortUsage: "asc alternative-distribution packages deltas --delta-id \"DELTA_ID\"",
 		ShortHelp:  "Get an alternative distribution package delta.",
 		LongHelp: `Get an alternative distribution package delta.
 
 Examples:
-  appstore alternative-distribution packages deltas --delta-id "DELTA_ID"`,
+  asc alternative-distribution packages deltas --delta-id "DELTA_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

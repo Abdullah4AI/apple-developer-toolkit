@@ -93,4 +93,4 @@ if !strings.Contains(err.Error(), "not found") {  // DON'T DO THIS
 - Use `t.TempDir()` for temporary files
 - Use `t.ArtifactDir()` for test artifacts you want to inspect with `go test -artifacts`
 - Use `t.Setenv()` to set environment variables (auto-cleaned up)
-- Isolate from user config by setting `APPSTORE_CONFIG_PATH` to a temp path
+- Isolate from user config by setting `ASC_CONFIG_PATH` to a temp path

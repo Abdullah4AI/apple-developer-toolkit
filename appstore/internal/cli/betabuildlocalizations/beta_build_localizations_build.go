@@ -17,12 +17,12 @@ func BetaBuildLocalizationsBuildCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "build",
-		ShortUsage: "appstore beta-build-localizations build <subcommand> [flags]",
+		ShortUsage: "asc beta-build-localizations build <subcommand> [flags]",
 		ShortHelp:  "View the build for a beta build localization.",
 		LongHelp: `View the build for a beta build localization.
 
 Examples:
-  appstore beta-build-localizations build get --id "LOCALIZATION_ID"`,
+  asc beta-build-localizations build get --id "LOCALIZATION_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -43,12 +43,12 @@ func BetaBuildLocalizationsBuildGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore beta-build-localizations build get --id \"LOCALIZATION_ID\"",
+		ShortUsage: "asc beta-build-localizations build get --id \"LOCALIZATION_ID\"",
 		ShortHelp:  "Get the build for a beta build localization.",
 		LongHelp: `Get the build for a beta build localization.
 
 Examples:
-  appstore beta-build-localizations build get --id "LOCALIZATION_ID"`,
+  asc beta-build-localizations build get --id "LOCALIZATION_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

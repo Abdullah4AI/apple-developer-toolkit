@@ -28,7 +28,7 @@ func SkipUnlessIntegration(t *testing.T) {
 // isIntegrationEnabled returns true when the ASC_INTEGRATION_TEST env var
 // is explicitly set to a truthy value.
 func isIntegrationEnabled() bool {
-	value := strings.TrimSpace(os.Getenv("APPSTORE_INTEGRATION_TEST"))
+	value := strings.TrimSpace(os.Getenv("ASC_INTEGRATION_TEST"))
 	switch strings.ToLower(value) {
 	case "true", "1", "yes":
 		return true

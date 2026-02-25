@@ -1,4 +1,4 @@
-// Package workflow is a standalone workflow runner for .appstore/workflow.json files.
+// Package workflow is a standalone workflow runner for .asc/workflow.json files.
 // It has zero imports from the rest of the codebase. Only depends on Go stdlib
 // plus tidwall/jsonc for JSONC comment support in load.go.
 package workflow
@@ -10,7 +10,7 @@ import (
 	"io"
 )
 
-// Definition is the top-level .appstore/workflow.json schema.
+// Definition is the top-level .asc/workflow.json schema.
 type Definition struct {
 	Env       map[string]string   `json:"env,omitempty"`
 	BeforeAll string              `json:"before_all,omitempty"`

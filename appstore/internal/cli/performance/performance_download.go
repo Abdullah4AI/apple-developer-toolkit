@@ -20,7 +20,7 @@ import (
 func PerformanceDownloadCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("download", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID)")
 	buildID := fs.String("build", "", "Build ID to download metrics for")
 	diagnosticID := fs.String("diagnostic-id", "", "Diagnostic signature ID to download logs for")
 	platform := fs.String("platform", "", "Platform filter (IOS)")
@@ -33,14 +33,14 @@ func PerformanceDownloadCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "download",
-		ShortUsage: "appstore performance download [flags]",
+		ShortUsage: "asc performance download [flags]",
 		ShortHelp:  "Download metrics or diagnostic logs.",
 		LongHelp: `Download metrics or diagnostic logs.
 
 Examples:
-  appstore performance download --app "APP_ID" --output ./metrics.json
-  appstore performance download --build "BUILD_ID" --output ./metrics.json
-  appstore performance download --diagnostic-id "SIGNATURE_ID" --output ./diagnostic.json --decompress`,
+  asc performance download --app "APP_ID" --output ./metrics.json
+  asc performance download --build "BUILD_ID" --output ./metrics.json
+  asc performance download --diagnostic-id "SIGNATURE_ID" --output ./diagnostic.json --decompress`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

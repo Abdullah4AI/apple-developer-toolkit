@@ -19,17 +19,17 @@ import (
 func PreOrdersCommand() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "pre-orders",
-		ShortUsage: "appstore pre-orders <subcommand> [flags]",
+		ShortUsage: "asc pre-orders <subcommand> [flags]",
 		ShortHelp:  "Manage app pre-orders.",
 		LongHelp: `Manage app pre-orders.
 
 Examples:
-  appstore pre-orders get --app "123456789"
-  appstore pre-orders list --availability "AVAILABILITY_ID"
-  appstore pre-orders enable --app "123456789" --territory "USA,GBR" --release-date "2026-02-01"
-  appstore pre-orders update --territory-availability "TERRITORY_AVAILABILITY_ID" --release-date "2026-03-01"
-  appstore pre-orders disable --territory-availability "TERRITORY_AVAILABILITY_ID"
-  appstore pre-orders end --territory-availability "TA_1,TA_2"`,
+  asc pre-orders get --app "123456789"
+  asc pre-orders list --availability "AVAILABILITY_ID"
+  asc pre-orders enable --app "123456789" --territory "USA,GBR" --release-date "2026-02-01"
+  asc pre-orders update --territory-availability "TERRITORY_AVAILABILITY_ID" --release-date "2026-03-01"
+  asc pre-orders disable --territory-availability "TERRITORY_AVAILABILITY_ID"
+  asc pre-orders end --territory-availability "TA_1,TA_2"`,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
 			PreOrdersGetCommand(),
@@ -49,23 +49,23 @@ Examples:
 func PreOrdersGetCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("pre-orders get", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID)")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore pre-orders get [flags]",
+		ShortUsage: "asc pre-orders get [flags]",
 		ShortHelp:  "Get app pre-order availability.",
 		LongHelp: `Get app pre-order availability.
 
 Examples:
-  appstore pre-orders get --app "123456789"`,
+  asc pre-orders get --app "123456789"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			resolvedAppID := shared.ResolveAppID(*appID)
 			if resolvedAppID == "" {
-				fmt.Fprintln(os.Stderr, "Error: --app is required (or set APPSTORE_APP_ID)")
+				fmt.Fprintln(os.Stderr, "Error: --app is required (or set ASC_APP_ID)")
 				return flag.ErrHelp
 			}
 
@@ -99,12 +99,12 @@ func PreOrdersListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore pre-orders list --availability AVAILABILITY_ID",
+		ShortUsage: "asc pre-orders list --availability AVAILABILITY_ID",
 		ShortHelp:  "List territory availabilities for pre-orders.",
 		LongHelp: `List territory availabilities for pre-orders.
 
 Examples:
-  appstore pre-orders list --availability "AVAILABILITY_ID"`,
+  asc pre-orders list --availability "AVAILABILITY_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -136,7 +136,7 @@ Examples:
 func PreOrdersEnableCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("pre-orders enable", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID)")
 	territory := fs.String("territory", "", "Territory IDs (comma-separated, e.g., USA,GBR)")
 	releaseDate := fs.String("release-date", "", "Release date (YYYY-MM-DD)")
 	var availableInNewTerritories shared.OptionalBool
@@ -145,18 +145,18 @@ func PreOrdersEnableCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "enable",
-		ShortUsage: "appstore pre-orders enable [flags]",
+		ShortUsage: "asc pre-orders enable [flags]",
 		ShortHelp:  "Enable pre-orders for territories.",
 		LongHelp: `Enable pre-orders for territories.
 
 Examples:
-  appstore pre-orders enable --app "123456789" --territory "USA,GBR" --release-date "2026-02-01"`,
+  asc pre-orders enable --app "123456789" --territory "USA,GBR" --release-date "2026-02-01"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			resolvedAppID := shared.ResolveAppID(*appID)
 			if resolvedAppID == "" {
-				fmt.Fprintln(os.Stderr, "Error: --app is required (or set APPSTORE_APP_ID)")
+				fmt.Fprintln(os.Stderr, "Error: --app is required (or set ASC_APP_ID)")
 				return flag.ErrHelp
 			}
 			if strings.TrimSpace(*territory) == "" {
@@ -278,12 +278,12 @@ func PreOrdersUpdateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "update",
-		ShortUsage: "appstore pre-orders update --territory-availability TERRITORY_AVAILABILITY_ID [flags]",
+		ShortUsage: "asc pre-orders update --territory-availability TERRITORY_AVAILABILITY_ID [flags]",
 		ShortHelp:  "Update pre-order release date for a territory availability.",
 		LongHelp: `Update pre-order release date for a territory availability.
 
 Examples:
-  appstore pre-orders update --territory-availability "TERRITORY_AVAILABILITY_ID" --release-date "2026-03-01"`,
+  asc pre-orders update --territory-availability "TERRITORY_AVAILABILITY_ID" --release-date "2026-03-01"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -331,12 +331,12 @@ func PreOrdersDisableCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "disable",
-		ShortUsage: "appstore pre-orders disable --territory-availability TERRITORY_AVAILABILITY_ID",
+		ShortUsage: "asc pre-orders disable --territory-availability TERRITORY_AVAILABILITY_ID",
 		ShortHelp:  "Disable pre-orders for a territory availability.",
 		LongHelp: `Disable pre-orders for a territory availability.
 
 Examples:
-  appstore pre-orders disable --territory-availability "TERRITORY_AVAILABILITY_ID"`,
+  asc pre-orders disable --territory-availability "TERRITORY_AVAILABILITY_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -376,12 +376,12 @@ func PreOrdersEndCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "end",
-		ShortUsage: "appstore pre-orders end --territory-availability TERRITORY_AVAILABILITY_ID[,ID...]",
+		ShortUsage: "asc pre-orders end --territory-availability TERRITORY_AVAILABILITY_ID[,ID...]",
 		ShortHelp:  "End pre-orders for territory availabilities.",
 		LongHelp: `End pre-orders for territory availabilities.
 
 Examples:
-  appstore pre-orders end --territory-availability "TA_1,TA_2"`,
+  asc pre-orders end --territory-availability "TA_1,TA_2"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

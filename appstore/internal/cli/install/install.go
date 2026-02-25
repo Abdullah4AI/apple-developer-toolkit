@@ -13,7 +13,7 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
-const defaultSkillsPackage = "Abdullah4AI/appstore-skills"
+const defaultSkillsPackage = "rudrankriyam/asc-skills"
 
 var (
 	lookupNpx      = exec.LookPath
@@ -27,12 +27,12 @@ func InstallSkillsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "install-skills",
-		ShortUsage: "appstore install-skills",
-		ShortHelp:  "Install the appstore skill pack for App Store Connect workflows.",
-		LongHelp: `Install the appstore skill pack for App Store Connect workflows.
+		ShortUsage: "asc install-skills",
+		ShortHelp:  "Install the asc skill pack for App Store Connect workflows.",
+		LongHelp: `Install the asc skill pack for App Store Connect workflows.
 
 Examples:
-  appstore install-skills`,
+  asc install-skills`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

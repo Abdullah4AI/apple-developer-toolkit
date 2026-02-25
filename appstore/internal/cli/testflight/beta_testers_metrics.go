@@ -26,7 +26,7 @@ func BetaTestersMetricsCommand() *ffcli.Command {
 
 	testerID := fs.String("tester-id", "", "Beta tester ID")
 	aliasID := fs.String("id", "", "Beta tester ID (alias of --tester-id)")
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID env)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
 	period := fs.String("period", "", "Reporting period: "+strings.Join(betaTesterUsagePeriodList(), ", "))
 	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
 	next := fs.String("next", "", "Fetch next page using a links.next URL")
@@ -34,13 +34,13 @@ func BetaTestersMetricsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "metrics",
-		ShortUsage: "appstore testflight beta-testers metrics --tester-id \"TESTER_ID\" --app \"APP_ID\" [flags]",
+		ShortUsage: "asc testflight beta-testers metrics --tester-id \"TESTER_ID\" --app \"APP_ID\" [flags]",
 		ShortHelp:  "Fetch beta tester usage metrics.",
 		LongHelp: `Fetch beta tester usage metrics.
 
 Examples:
-  appstore testflight beta-testers metrics --tester-id "TESTER_ID" --app "APP_ID"
-  appstore testflight beta-testers metrics --tester-id "TESTER_ID" --app "APP_ID" --period "P30D"`,
+  asc testflight beta-testers metrics --tester-id "TESTER_ID" --app "APP_ID"
+  asc testflight beta-testers metrics --tester-id "TESTER_ID" --app "APP_ID" --period "P30D"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -73,7 +73,7 @@ Examples:
 				return flag.ErrHelp
 			}
 			if nextValue == "" && resolvedAppID == "" {
-				fmt.Fprintf(os.Stderr, "Error: --app is required (or set APPSTORE_APP_ID)\n\n")
+				fmt.Fprintf(os.Stderr, "Error: --app is required (or set ASC_APP_ID)\n\n")
 				return flag.ErrHelp
 			}
 

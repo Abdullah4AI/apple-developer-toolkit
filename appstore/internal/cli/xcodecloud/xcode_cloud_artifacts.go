@@ -22,14 +22,14 @@ func XcodeCloudArtifactsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "artifacts",
-		ShortUsage: "appstore xcode-cloud artifacts <subcommand> [flags]",
+		ShortUsage: "asc xcode-cloud artifacts <subcommand> [flags]",
 		ShortHelp:  "Manage Xcode Cloud build artifacts.",
 		LongHelp: `Manage Xcode Cloud build artifacts.
 
 Examples:
-  appstore xcode-cloud artifacts list --action-id "ACTION_ID"
-  appstore xcode-cloud artifacts get --id "ARTIFACT_ID"
-  appstore xcode-cloud artifacts download --id "ARTIFACT_ID" --path ./artifact.zip`,
+  asc xcode-cloud artifacts list --action-id "ACTION_ID"
+  asc xcode-cloud artifacts get --id "ARTIFACT_ID"
+  asc xcode-cloud artifacts download --id "ARTIFACT_ID" --path ./artifact.zip`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -55,15 +55,15 @@ func XcodeCloudArtifactsListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore xcode-cloud artifacts list [flags]",
+		ShortUsage: "asc xcode-cloud artifacts list [flags]",
 		ShortHelp:  "List artifacts for a build action.",
 		LongHelp: `List artifacts for a build action.
 
 Examples:
-  appstore xcode-cloud artifacts list --action-id "ACTION_ID"
-  appstore xcode-cloud artifacts list --action-id "ACTION_ID" --output table
-  appstore xcode-cloud artifacts list --action-id "ACTION_ID" --limit 50
-  appstore xcode-cloud artifacts list --action-id "ACTION_ID" --paginate`,
+  asc xcode-cloud artifacts list --action-id "ACTION_ID"
+  asc xcode-cloud artifacts list --action-id "ACTION_ID" --output table
+  asc xcode-cloud artifacts list --action-id "ACTION_ID" --limit 50
+  asc xcode-cloud artifacts list --action-id "ACTION_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -129,13 +129,13 @@ func XcodeCloudArtifactsGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore xcode-cloud artifacts get --id \"ARTIFACT_ID\"",
+		ShortUsage: "asc xcode-cloud artifacts get --id \"ARTIFACT_ID\"",
 		ShortHelp:  "Get details for a build artifact.",
 		LongHelp: `Get details for a build artifact.
 
 Examples:
-  appstore xcode-cloud artifacts get --id "ARTIFACT_ID"
-  appstore xcode-cloud artifacts get --id "ARTIFACT_ID" --output table`,
+  asc xcode-cloud artifacts get --id "ARTIFACT_ID"
+  asc xcode-cloud artifacts get --id "ARTIFACT_ID" --output table`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -174,13 +174,13 @@ func XcodeCloudArtifactsDownloadCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "download",
-		ShortUsage: "appstore xcode-cloud artifacts download --id \"ARTIFACT_ID\" --path ./artifact.zip",
+		ShortUsage: "asc xcode-cloud artifacts download --id \"ARTIFACT_ID\" --path ./artifact.zip",
 		ShortHelp:  "Download a build artifact.",
 		LongHelp: `Download a build artifact.
 
 Examples:
-  appstore xcode-cloud artifacts download --id "ARTIFACT_ID" --path ./artifact.zip
-  appstore xcode-cloud artifacts download --id "ARTIFACT_ID" --path ./artifact.zip --overwrite`,
+  asc xcode-cloud artifacts download --id "ARTIFACT_ID" --path ./artifact.zip
+  asc xcode-cloud artifacts download --id "ARTIFACT_ID" --path ./artifact.zip --overwrite`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -277,7 +277,7 @@ func writeArtifactFile(path string, reader io.Reader, overwrite bool) (int64, er
 		return 0, err
 	}
 
-	tempFile, err := os.CreateTemp(filepath.Dir(path), ".appstore-artifact-*")
+	tempFile, err := os.CreateTemp(filepath.Dir(path), ".asc-artifact-*")
 	if err != nil {
 		return 0, err
 	}

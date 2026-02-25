@@ -19,7 +19,7 @@ var (
 )
 
 // DefaultPath is the default location for the workflow definition file.
-const DefaultPath = ".appstore/workflow.json"
+const DefaultPath = ".asc/workflow.json"
 
 // Load reads and validates a workflow definition file.
 func Load(path string) (*Definition, error) {

@@ -18,20 +18,20 @@ func AppEventsSubmitCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("submit", flag.ExitOnError)
 
 	eventID := fs.String("event-id", "", "App event ID")
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID env)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
 	platform := fs.String("platform", "IOS", "Platform: IOS, MAC_OS, TV_OS, VISION_OS")
 	confirm := fs.Bool("confirm", false, "Confirm submission (required)")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "submit",
-		ShortUsage: "appstore app-events submit [flags]",
+		ShortUsage: "asc app-events submit [flags]",
 		ShortHelp:  "Submit an in-app event for review.",
 		LongHelp: `Submit an in-app event for review.
 
 Examples:
-  appstore app-events submit --event-id "EVENT_ID" --app "APP_ID" --confirm
-  appstore app-events submit --event-id "EVENT_ID" --app "APP_ID" --platform IOS --confirm`,
+  asc app-events submit --event-id "EVENT_ID" --app "APP_ID" --confirm
+  asc app-events submit --event-id "EVENT_ID" --app "APP_ID" --platform IOS --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -48,7 +48,7 @@ Examples:
 
 			resolvedAppID := shared.ResolveAppID(*appID)
 			if resolvedAppID == "" {
-				fmt.Fprintln(os.Stderr, "Error: --app is required (or set APPSTORE_APP_ID)")
+				fmt.Fprintln(os.Stderr, "Error: --app is required (or set ASC_APP_ID)")
 				return flag.ErrHelp
 			}
 

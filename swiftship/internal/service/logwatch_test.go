@@ -7,7 +7,7 @@ import (
 
 func TestRunLogWatchDuration(t *testing.T) {
 	t.Run("default when unset", func(t *testing.T) {
-		t.Setenv("SWIFTSHIP_RUN_LOG_WATCH_SECONDS", "")
+		t.Setenv("NANOWAVE_RUN_LOG_WATCH_SECONDS", "")
 		got := runLogWatchDuration()
 		want := time.Duration(defaultRunLogWatchSeconds) * time.Second
 		if got != want {
@@ -16,7 +16,7 @@ func TestRunLogWatchDuration(t *testing.T) {
 	})
 
 	t.Run("zero disables log watch", func(t *testing.T) {
-		t.Setenv("SWIFTSHIP_RUN_LOG_WATCH_SECONDS", "0")
+		t.Setenv("NANOWAVE_RUN_LOG_WATCH_SECONDS", "0")
 		got := runLogWatchDuration()
 		if got != 0 {
 			t.Fatalf("runLogWatchDuration() = %v, want 0", got)
@@ -24,7 +24,7 @@ func TestRunLogWatchDuration(t *testing.T) {
 	})
 
 	t.Run("positive value", func(t *testing.T) {
-		t.Setenv("SWIFTSHIP_RUN_LOG_WATCH_SECONDS", "12")
+		t.Setenv("NANOWAVE_RUN_LOG_WATCH_SECONDS", "12")
 		got := runLogWatchDuration()
 		want := 12 * time.Second
 		if got != want {
@@ -33,7 +33,7 @@ func TestRunLogWatchDuration(t *testing.T) {
 	})
 
 	t.Run("follow keyword enables indefinite watch", func(t *testing.T) {
-		t.Setenv("SWIFTSHIP_RUN_LOG_WATCH_SECONDS", "follow")
+		t.Setenv("NANOWAVE_RUN_LOG_WATCH_SECONDS", "follow")
 		got := runLogWatchDuration()
 		if got != -1 {
 			t.Fatalf("runLogWatchDuration() = %v, want -1", got)
@@ -41,7 +41,7 @@ func TestRunLogWatchDuration(t *testing.T) {
 	})
 
 	t.Run("minus one enables indefinite watch", func(t *testing.T) {
-		t.Setenv("SWIFTSHIP_RUN_LOG_WATCH_SECONDS", "-1")
+		t.Setenv("NANOWAVE_RUN_LOG_WATCH_SECONDS", "-1")
 		got := runLogWatchDuration()
 		if got != -1 {
 			t.Fatalf("runLogWatchDuration() = %v, want -1", got)
@@ -49,7 +49,7 @@ func TestRunLogWatchDuration(t *testing.T) {
 	})
 
 	t.Run("invalid value falls back to default", func(t *testing.T) {
-		t.Setenv("SWIFTSHIP_RUN_LOG_WATCH_SECONDS", "invalid")
+		t.Setenv("NANOWAVE_RUN_LOG_WATCH_SECONDS", "invalid")
 		got := runLogWatchDuration()
 		want := time.Duration(defaultRunLogWatchSeconds) * time.Second
 		if got != want {
@@ -58,7 +58,7 @@ func TestRunLogWatchDuration(t *testing.T) {
 	})
 
 	t.Run("negative value less than -1 falls back to default", func(t *testing.T) {
-		t.Setenv("SWIFTSHIP_RUN_LOG_WATCH_SECONDS", "-2")
+		t.Setenv("NANOWAVE_RUN_LOG_WATCH_SECONDS", "-2")
 		got := runLogWatchDuration()
 		want := time.Duration(defaultRunLogWatchSeconds) * time.Second
 		if got != want {

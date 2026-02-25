@@ -19,17 +19,17 @@ func PassTypeIDsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "pass-type-ids",
-		ShortUsage: "appstore pass-type-ids <subcommand> [flags]",
+		ShortUsage: "asc pass-type-ids <subcommand> [flags]",
 		ShortHelp:  "Manage pass type IDs.",
 		LongHelp: `Manage pass type IDs.
 
 Examples:
-  appstore pass-type-ids list
-  appstore pass-type-ids get --pass-type-id "PASS_ID"
-  appstore pass-type-ids create --identifier "pass.com.example" --name "Example"
-  appstore pass-type-ids update --pass-type-id "PASS_ID" --name "New Name"
-  appstore pass-type-ids delete --pass-type-id "PASS_ID" --confirm
-  appstore pass-type-ids certificates list --pass-type-id "PASS_ID"`,
+  asc pass-type-ids list
+  asc pass-type-ids get --pass-type-id "PASS_ID"
+  asc pass-type-ids create --identifier "pass.com.example" --name "Example"
+  asc pass-type-ids update --pass-type-id "PASS_ID" --name "New Name"
+  asc pass-type-ids delete --pass-type-id "PASS_ID" --confirm
+  asc pass-type-ids certificates list --pass-type-id "PASS_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -65,16 +65,16 @@ func PassTypeIDsListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore pass-type-ids list [flags]",
+		ShortUsage: "asc pass-type-ids list [flags]",
 		ShortHelp:  "List pass type IDs.",
 		LongHelp: `List pass type IDs.
 
 Examples:
-  appstore pass-type-ids list
-  appstore pass-type-ids list --id "PASS_ID"
-  appstore pass-type-ids list --identifier "pass.com.example"
-  appstore pass-type-ids list --name "Example"
-  appstore pass-type-ids list --paginate`,
+  asc pass-type-ids list
+  asc pass-type-ids list --id "PASS_ID"
+  asc pass-type-ids list --identifier "pass.com.example"
+  asc pass-type-ids list --name "Example"
+  asc pass-type-ids list --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -182,12 +182,12 @@ func PassTypeIDsGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore pass-type-ids get --pass-type-id \"PASS_ID\"",
+		ShortUsage: "asc pass-type-ids get --pass-type-id \"PASS_ID\"",
 		ShortHelp:  "Get a pass type ID by ID.",
 		LongHelp: `Get a pass type ID by ID.
 
 Examples:
-  appstore pass-type-ids get --pass-type-id "PASS_ID"`,
+  asc pass-type-ids get --pass-type-id "PASS_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -255,12 +255,12 @@ func PassTypeIDsCreateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "create",
-		ShortUsage: "appstore pass-type-ids create --identifier \"pass.com.example\" --name \"Example\"",
+		ShortUsage: "asc pass-type-ids create --identifier \"pass.com.example\" --name \"Example\"",
 		ShortHelp:  "Create a pass type ID.",
 		LongHelp: `Create a pass type ID.
 
 Examples:
-  appstore pass-type-ids create --identifier "pass.com.example" --name "Example"`,
+  asc pass-type-ids create --identifier "pass.com.example" --name "Example"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -307,12 +307,12 @@ func PassTypeIDsUpdateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "update",
-		ShortUsage: "appstore pass-type-ids update --pass-type-id \"PASS_ID\" --name \"New Name\"",
+		ShortUsage: "asc pass-type-ids update --pass-type-id \"PASS_ID\" --name \"New Name\"",
 		ShortHelp:  "Update a pass type ID.",
 		LongHelp: `Update a pass type ID.
 
 Examples:
-  appstore pass-type-ids update --pass-type-id "PASS_ID" --name "New Name"`,
+  asc pass-type-ids update --pass-type-id "PASS_ID" --name "New Name"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -358,12 +358,12 @@ func PassTypeIDsDeleteCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "delete",
-		ShortUsage: "appstore pass-type-ids delete --pass-type-id \"PASS_ID\" --confirm",
+		ShortUsage: "asc pass-type-ids delete --pass-type-id \"PASS_ID\" --confirm",
 		ShortHelp:  "Delete a pass type ID.",
 		LongHelp: `Delete a pass type ID.
 
 Examples:
-  appstore pass-type-ids delete --pass-type-id "PASS_ID" --confirm`,
+  asc pass-type-ids delete --pass-type-id "PASS_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

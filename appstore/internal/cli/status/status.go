@@ -131,13 +131,13 @@ var allowedIncludes = []string{
 func StatusCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("status", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (required, or APPSTORE_APP_ID env)")
+	appID := fs.String("app", "", "App Store Connect app ID (required, or ASC_APP_ID env)")
 	include := fs.String("include", "", "Comma-separated sections: app,builds,testflight,appstore,submission,review,phased-release,links")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "status",
-		ShortUsage: "appstore status [flags]",
+		ShortUsage: "asc status [flags]",
 		ShortHelp:  "Show a release pipeline dashboard for an app.",
 		LongHelp: `Show a release pipeline dashboard for an app.
 
@@ -145,9 +145,9 @@ This command aggregates release signals into one deterministic payload for CI,
 agents, and human review.
 
 Examples:
-  appstore status --app "123456789"
-  appstore status --app "123456789" --include builds,testflight,submission
-  appstore status --app "123456789" --output table`,
+  asc status --app "123456789"
+  asc status --app "123456789" --include builds,testflight,submission
+  asc status --app "123456789" --output table`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -158,7 +158,7 @@ Examples:
 
 			resolvedAppID := shared.ResolveAppID(*appID)
 			if resolvedAppID == "" {
-				fmt.Fprintln(os.Stderr, "Error: --app is required (or set APPSTORE_APP_ID)")
+				fmt.Fprintln(os.Stderr, "Error: --app is required (or set ASC_APP_ID)")
 				return flag.ErrHelp
 			}
 

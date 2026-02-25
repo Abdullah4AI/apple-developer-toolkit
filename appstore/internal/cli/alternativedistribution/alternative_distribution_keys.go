@@ -19,16 +19,16 @@ func AlternativeDistributionKeysCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "keys",
-		ShortUsage: "appstore alternative-distribution keys <subcommand> [flags]",
+		ShortUsage: "asc alternative-distribution keys <subcommand> [flags]",
 		ShortHelp:  "Manage alternative distribution keys.",
 		LongHelp: `Manage alternative distribution keys.
 
 Examples:
-  appstore alternative-distribution keys list
-  appstore alternative-distribution keys get --key-id "KEY_ID"
-  appstore alternative-distribution keys create --app "APP_ID" --public-key-path "./key.pem"
-  appstore alternative-distribution keys delete --key-id "KEY_ID" --confirm
-  appstore alternative-distribution keys app --app "APP_ID"`,
+  asc alternative-distribution keys list
+  asc alternative-distribution keys get --key-id "KEY_ID"
+  asc alternative-distribution keys create --app "APP_ID" --public-key-path "./key.pem"
+  asc alternative-distribution keys delete --key-id "KEY_ID" --confirm
+  asc alternative-distribution keys app --app "APP_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -55,14 +55,14 @@ func AlternativeDistributionKeysListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore alternative-distribution keys list [flags]",
+		ShortUsage: "asc alternative-distribution keys list [flags]",
 		ShortHelp:  "List alternative distribution keys.",
 		LongHelp: `List alternative distribution keys.
 
 Examples:
-  appstore alternative-distribution keys list
-  appstore alternative-distribution keys list --limit 50
-  appstore alternative-distribution keys list --paginate`,
+  asc alternative-distribution keys list
+  asc alternative-distribution keys list --limit 50
+  asc alternative-distribution keys list --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -122,12 +122,12 @@ func AlternativeDistributionKeysGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore alternative-distribution keys get --key-id \"KEY_ID\"",
+		ShortUsage: "asc alternative-distribution keys get --key-id \"KEY_ID\"",
 		ShortHelp:  "Get an alternative distribution key.",
 		LongHelp: `Get an alternative distribution key.
 
 Examples:
-  appstore alternative-distribution keys get --key-id "KEY_ID"`,
+  asc alternative-distribution keys get --key-id "KEY_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -159,26 +159,26 @@ Examples:
 func AlternativeDistributionKeysCreateCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("create", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID)")
 	publicKey := fs.String("public-key", "", "Public key content")
 	publicKeyPath := fs.String("public-key-path", "", "Path to public key file")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "create",
-		ShortUsage: "appstore alternative-distribution keys create --app \"APP_ID\" --public-key-path \"./key.pem\"",
+		ShortUsage: "asc alternative-distribution keys create --app \"APP_ID\" --public-key-path \"./key.pem\"",
 		ShortHelp:  "Create an alternative distribution key.",
 		LongHelp: `Create an alternative distribution key.
 
 Examples:
-  appstore alternative-distribution keys create --app "APP_ID" --public-key "KEY_DATA"
-  appstore alternative-distribution keys create --app "APP_ID" --public-key-path "./key.pem"`,
+  asc alternative-distribution keys create --app "APP_ID" --public-key "KEY_DATA"
+  asc alternative-distribution keys create --app "APP_ID" --public-key-path "./key.pem"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			resolvedAppID := shared.ResolveAppID(*appID)
 			if resolvedAppID == "" {
-				fmt.Fprintln(os.Stderr, "Error: --app is required (or set APPSTORE_APP_ID)")
+				fmt.Fprintln(os.Stderr, "Error: --app is required (or set ASC_APP_ID)")
 				return flag.ErrHelp
 			}
 
@@ -227,12 +227,12 @@ func AlternativeDistributionKeysDeleteCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "delete",
-		ShortUsage: "appstore alternative-distribution keys delete --key-id \"KEY_ID\" --confirm",
+		ShortUsage: "asc alternative-distribution keys delete --key-id \"KEY_ID\" --confirm",
 		ShortHelp:  "Delete an alternative distribution key.",
 		LongHelp: `Delete an alternative distribution key.
 
 Examples:
-  appstore alternative-distribution keys delete --key-id "KEY_ID" --confirm`,
+  asc alternative-distribution keys delete --key-id "KEY_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -272,23 +272,23 @@ Examples:
 func AlternativeDistributionKeysAppCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("app", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID)")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "app",
-		ShortUsage: "appstore alternative-distribution keys app --app \"APP_ID\"",
+		ShortUsage: "asc alternative-distribution keys app --app \"APP_ID\"",
 		ShortHelp:  "Get an app's alternative distribution key.",
 		LongHelp: `Get an app's alternative distribution key.
 
 Examples:
-  appstore alternative-distribution keys app --app "APP_ID"`,
+  asc alternative-distribution keys app --app "APP_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			resolvedAppID := shared.ResolveAppID(*appID)
 			if resolvedAppID == "" {
-				fmt.Fprintln(os.Stderr, "Error: --app is required (or set APPSTORE_APP_ID)")
+				fmt.Fprintln(os.Stderr, "Error: --app is required (or set ASC_APP_ID)")
 				return flag.ErrHelp
 			}
 

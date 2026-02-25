@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"strings"
@@ -78,6 +79,32 @@ func buildImageContext(userMessage string, images []string) string {
 	return sb.String()
 }
 
+// streamNDJSONLines reads newline-delimited JSON from r and calls onLine for each line.
+// It does not impose bufio.Scanner token limits and also processes a final line without
+// a trailing newline.
+func streamNDJSONLines(r io.Reader, onLine func([]byte) error) error {
+	br := bufio.NewReader(r)
+
+	for {
+		line, err := br.ReadBytes('\n')
+		if len(line) > 0 {
+			line = bytes.TrimRight(line, "\r\n")
+			if len(bytes.TrimSpace(line)) > 0 {
+				if onErr := onLine(line); onErr != nil {
+					return onErr
+				}
+			}
+		}
+
+		if err != nil {
+			if err == io.EOF {
+				return nil
+			}
+			return err
+		}
+	}
+}
+
 // Generate sends a prompt to Claude Code and returns the response.
 func (c *Client) Generate(ctx context.Context, userMessage string, opts GenerateOpts) (*Response, error) {
 	userMessage = buildImageContext(userMessage, opts.Images)
@@ -148,14 +175,14 @@ func (c *Client) Generate(ctx context.Context, userMessage string, opts Generate
 
 // StreamEvent represents a parsed event from Claude Code's stream-json output.
 type StreamEvent struct {
-	Type    string // "assistant", "tool_use", "tool_result", "result", "system"
+	Type    string // "assistant", "tool_use", "tool_result", "result", "system", "content_block_delta"
 	Subtype string // e.g. "init"
 
 	// For tool_use events
 	ToolName  string
 	ToolInput json.RawMessage
 
-	// For assistant text events
+	// For assistant text events and content_block_delta events
 	Text string
 
 	// For result events
@@ -172,7 +199,7 @@ type StreamEvent struct {
 // Returns the final Response when complete.
 func (c *Client) GenerateStreaming(ctx context.Context, userMessage string, opts GenerateOpts, onEvent func(StreamEvent)) (*Response, error) {
 	userMessage = buildImageContext(userMessage, opts.Images)
-	args := []string{"-p", "--output-format", "stream-json", "--verbose"}
+	args := []string{"-p", "--output-format", "stream-json", "--verbose", "--include-partial-messages"}
 
 	maxTurns := opts.MaxTurns
 	if maxTurns == 0 {
@@ -229,42 +256,63 @@ func (c *Client) GenerateStreaming(ctx context.Context, userMessage string, opts
 
 	var lastResponse *Response
 	var sessionID string
+	var assistantText strings.Builder // accumulate text from assistant events
 
-	scanner := bufio.NewScanner(stdout)
-	scanner.Buffer(make([]byte, 1024*1024), 1024*1024) // 1MB buffer for large events
-
-	for scanner.Scan() {
-		line := scanner.Bytes()
-		if len(line) == 0 {
-			continue
+	streamErr := streamNDJSONLines(stdout, func(line []byte) error {
+		trimmed := bytes.TrimSpace(line)
+		if len(trimmed) == 0 {
+			return nil
+		}
+		if !json.Valid(trimmed) {
+			return fmt.Errorf("invalid JSON stream event (%d bytes)", len(trimmed))
 		}
 
-		ev := parseStreamEvent(line)
+		ev := parseStreamEvent(trimmed)
 		if ev == nil {
-			continue
+			return nil
 		}
 
 		if ev.Type == "system" && ev.Subtype == "init" && ev.SessionID != "" {
 			sessionID = ev.SessionID
 		}
 
+		// Accumulate assistant text from deltas and full messages
+		if ev.Type == "content_block_delta" && ev.Text != "" {
+			assistantText.WriteString(ev.Text)
+		} else if ev.Type == "assistant" && ev.Text != "" {
+			// Full message arrived — use it as authoritative text (replaces deltas)
+			assistantText.Reset()
+			assistantText.WriteString(ev.Text)
+		}
+
 		if ev.Type == "result" {
+			result := ev.Result
+			if result == "" {
+				result = assistantText.String()
+			}
 			lastResponse = &Response{
-				Result:       ev.Result,
+				Result:       result,
 				TotalCostUSD: ev.CostUSD,
 				SessionID:    ev.SessionID,
 				NumTurns:     ev.NumTurns,
 				Usage:        ev.Usage,
 			}
 			if ev.IsError {
-				cmd.Wait()
-				return nil, fmt.Errorf("claude returned error: %s", ev.Result)
+				return fmt.Errorf("claude returned error: %s", ev.Result)
 			}
 		}
 
 		if onEvent != nil {
 			onEvent(*ev)
 		}
+		return nil
+	})
+	if streamErr != nil {
+		_ = cmd.Wait()
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		return nil, fmt.Errorf("failed to read claude stream: %w", streamErr)
 	}
 
 	if err := cmd.Wait(); err != nil {
@@ -284,7 +332,9 @@ func (c *Client) GenerateStreaming(ctx context.Context, userMessage string, opts
 		return lastResponse, nil
 	}
 
-	return &Response{SessionID: sessionID}, nil
+	// No result event — still return accumulated text if any
+	result := assistantText.String()
+	return &Response{Result: result, SessionID: sessionID}, nil
 }
 
 // parseStreamEvent parses a single NDJSON line from stream-json output.
@@ -310,6 +360,15 @@ func parseStreamEvent(line []byte) *StreamEvent {
 				Input json.RawMessage `json:"input"`
 			} `json:"content"`
 		} `json:"message"`
+
+		// For stream_event (type: "stream_event", --include-partial-messages)
+		Event struct {
+			Type  string `json:"type"`
+			Delta struct {
+				Type string `json:"type"`
+				Text string `json:"text"`
+			} `json:"delta"`
+		} `json:"event"`
 	}
 
 	if err := json.Unmarshal(line, &raw); err != nil {
@@ -325,6 +384,13 @@ func parseStreamEvent(line []byte) *StreamEvent {
 		NumTurns:  raw.NumTurns,
 		IsError:   raw.IsError,
 		Usage:     raw.Usage,
+	}
+
+	// Handle stream_event with content_block_delta (token-by-token text)
+	if raw.Type == "stream_event" && raw.Event.Type == "content_block_delta" && raw.Event.Delta.Type == "text_delta" {
+		ev.Type = "content_block_delta"
+		ev.Text = raw.Event.Delta.Text
+		return ev
 	}
 
 	// Extract tool_use or text from assistant messages

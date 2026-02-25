@@ -19,15 +19,15 @@ func GameCenterAchievementsV2Command() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "v2",
-		ShortUsage: "appstore game-center achievements v2 <subcommand> [flags]",
+		ShortUsage: "asc game-center achievements v2 <subcommand> [flags]",
 		ShortHelp:  "Manage Game Center achievements v2 resources.",
 		LongHelp: `Manage Game Center achievements v2 resources.
 
 Examples:
-  appstore game-center achievements v2 list --app "APP_ID"
-  appstore game-center achievements v2 versions list --achievement-id "ACH_ID"
-  appstore game-center achievements v2 localizations list --version-id "VER_ID"
-  appstore game-center achievements v2 images upload --localization-id "LOC_ID" --file "path/to/image.png"`,
+  asc game-center achievements v2 list --app "APP_ID"
+  asc game-center achievements v2 versions list --achievement-id "ACH_ID"
+  asc game-center achievements v2 localizations list --version-id "VER_ID"
+  asc game-center achievements v2 images upload --localization-id "LOC_ID" --file "path/to/image.png"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -46,7 +46,7 @@ Examples:
 func GameCenterAchievementsV2ListCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("list", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID env)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
 	groupID := fs.String("group-id", "", "Game Center group ID")
 	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
 	next := fs.String("next", "", "Fetch next page using a links.next URL")
@@ -55,14 +55,14 @@ func GameCenterAchievementsV2ListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore game-center achievements v2 list [flags]",
+		ShortUsage: "asc game-center achievements v2 list [flags]",
 		ShortHelp:  "List Game Center achievements (v2) for an app or group.",
 		LongHelp: `List Game Center achievements (v2) for an app or group.
 
 Examples:
-  appstore game-center achievements v2 list --app "APP_ID"
-  appstore game-center achievements v2 list --group-id "GROUP_ID"
-  appstore game-center achievements v2 list --app "APP_ID" --paginate`,
+  asc game-center achievements v2 list --app "APP_ID"
+  asc game-center achievements v2 list --group-id "GROUP_ID"
+  asc game-center achievements v2 list --app "APP_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -82,7 +82,7 @@ Examples:
 			resolvedAppID := shared.ResolveAppID(*appID)
 			nextURL := strings.TrimSpace(*next)
 			if group == "" && resolvedAppID == "" && nextURL == "" {
-				fmt.Fprintln(os.Stderr, "Error: --app is required (or set APPSTORE_APP_ID)")
+				fmt.Fprintln(os.Stderr, "Error: --app is required (or set ASC_APP_ID)")
 				return flag.ErrHelp
 			}
 
@@ -141,14 +141,14 @@ func GameCenterAchievementVersionsV2Command() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "versions",
-		ShortUsage: "appstore game-center achievements v2 versions <subcommand> [flags]",
+		ShortUsage: "asc game-center achievements v2 versions <subcommand> [flags]",
 		ShortHelp:  "Manage Game Center achievement versions (v2).",
 		LongHelp: `Manage Game Center achievement versions (v2).
 
 Examples:
-  appstore game-center achievements v2 versions list --achievement-id "ACH_ID"
-  appstore game-center achievements v2 versions get --id "VERSION_ID"
-  appstore game-center achievements v2 versions create --achievement-id "ACH_ID"`,
+  asc game-center achievements v2 versions list --achievement-id "ACH_ID"
+  asc game-center achievements v2 versions get --id "VERSION_ID"
+  asc game-center achievements v2 versions create --achievement-id "ACH_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -174,13 +174,13 @@ func GameCenterAchievementVersionsV2ListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore game-center achievements v2 versions list --achievement-id \"ACH_ID\"",
+		ShortUsage: "asc game-center achievements v2 versions list --achievement-id \"ACH_ID\"",
 		ShortHelp:  "List versions for a Game Center achievement (v2).",
 		LongHelp: `List versions for a Game Center achievement (v2).
 
 Examples:
-  appstore game-center achievements v2 versions list --achievement-id "ACH_ID"
-  appstore game-center achievements v2 versions list --achievement-id "ACH_ID" --paginate`,
+  asc game-center achievements v2 versions list --achievement-id "ACH_ID"
+  asc game-center achievements v2 versions list --achievement-id "ACH_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -246,12 +246,12 @@ func GameCenterAchievementVersionsV2GetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore game-center achievements v2 versions get --id \"VERSION_ID\"",
+		ShortUsage: "asc game-center achievements v2 versions get --id \"VERSION_ID\"",
 		ShortHelp:  "Get a Game Center achievement version (v2) by ID.",
 		LongHelp: `Get a Game Center achievement version (v2) by ID.
 
 Examples:
-  appstore game-center achievements v2 versions get --id "VERSION_ID"`,
+  asc game-center achievements v2 versions get --id "VERSION_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -288,12 +288,12 @@ func GameCenterAchievementVersionsV2CreateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "create",
-		ShortUsage: "appstore game-center achievements v2 versions create --achievement-id \"ACH_ID\"",
+		ShortUsage: "asc game-center achievements v2 versions create --achievement-id \"ACH_ID\"",
 		ShortHelp:  "Create a new Game Center achievement version (v2).",
 		LongHelp: `Create a new Game Center achievement version (v2).
 
 Examples:
-  appstore game-center achievements v2 versions create --achievement-id "ACH_ID"`,
+  asc game-center achievements v2 versions create --achievement-id "ACH_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -327,13 +327,13 @@ func GameCenterAchievementLocalizationsV2Command() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "localizations",
-		ShortUsage: "appstore game-center achievements v2 localizations <subcommand> [flags]",
+		ShortUsage: "asc game-center achievements v2 localizations <subcommand> [flags]",
 		ShortHelp:  "Manage Game Center achievement localizations (v2).",
 		LongHelp: `Manage Game Center achievement localizations (v2).
 
 Examples:
-  appstore game-center achievements v2 localizations list --version-id "VER_ID"
-  appstore game-center achievements v2 localizations create --version-id "VER_ID" --locale en-US --name "First Win" --before-earned-description "Before" --after-earned-description "After"`,
+  asc game-center achievements v2 localizations list --version-id "VER_ID"
+  asc game-center achievements v2 localizations create --version-id "VER_ID" --locale en-US --name "First Win" --before-earned-description "Before" --after-earned-description "After"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -361,13 +361,13 @@ func GameCenterAchievementLocalizationsV2ListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore game-center achievements v2 localizations list --version-id \"VER_ID\"",
+		ShortUsage: "asc game-center achievements v2 localizations list --version-id \"VER_ID\"",
 		ShortHelp:  "List localizations for an achievement version (v2).",
 		LongHelp: `List localizations for an achievement version (v2).
 
 Examples:
-  appstore game-center achievements v2 localizations list --version-id "VER_ID"
-  appstore game-center achievements v2 localizations list --version-id "VER_ID" --paginate`,
+  asc game-center achievements v2 localizations list --version-id "VER_ID"
+  asc game-center achievements v2 localizations list --version-id "VER_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -433,12 +433,12 @@ func GameCenterAchievementLocalizationsV2GetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore game-center achievements v2 localizations get --id \"LOC_ID\"",
+		ShortUsage: "asc game-center achievements v2 localizations get --id \"LOC_ID\"",
 		ShortHelp:  "Get a Game Center achievement localization (v2) by ID.",
 		LongHelp: `Get a Game Center achievement localization (v2) by ID.
 
 Examples:
-  appstore game-center achievements v2 localizations get --id "LOC_ID"`,
+  asc game-center achievements v2 localizations get --id "LOC_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -479,12 +479,12 @@ func GameCenterAchievementLocalizationsV2CreateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "create",
-		ShortUsage: "appstore game-center achievements v2 localizations create --version-id \"VER_ID\" --locale \"LOCALE\" --name \"NAME\" --before-earned-description \"TEXT\" --after-earned-description \"TEXT\"",
+		ShortUsage: "asc game-center achievements v2 localizations create --version-id \"VER_ID\" --locale \"LOCALE\" --name \"NAME\" --before-earned-description \"TEXT\" --after-earned-description \"TEXT\"",
 		ShortHelp:  "Create a new Game Center achievement localization (v2).",
 		LongHelp: `Create a new Game Center achievement localization (v2).
 
 Examples:
-  appstore game-center achievements v2 localizations create --version-id "VER_ID" --locale en-US --name "First Win" --before-earned-description "Before" --after-earned-description "After"`,
+  asc game-center achievements v2 localizations create --version-id "VER_ID" --locale en-US --name "First Win" --before-earned-description "Before" --after-earned-description "After"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -555,12 +555,12 @@ func GameCenterAchievementLocalizationsV2UpdateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "update",
-		ShortUsage: "appstore game-center achievements v2 localizations update --id \"LOC_ID\" [flags]",
+		ShortUsage: "asc game-center achievements v2 localizations update --id \"LOC_ID\" [flags]",
 		ShortHelp:  "Update a Game Center achievement localization (v2).",
 		LongHelp: `Update a Game Center achievement localization (v2).
 
 Examples:
-  appstore game-center achievements v2 localizations update --id "LOC_ID" --name "New Name"`,
+  asc game-center achievements v2 localizations update --id "LOC_ID" --name "New Name"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -622,12 +622,12 @@ func GameCenterAchievementLocalizationsV2DeleteCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "delete",
-		ShortUsage: "appstore game-center achievements v2 localizations delete --id \"LOC_ID\" --confirm",
+		ShortUsage: "asc game-center achievements v2 localizations delete --id \"LOC_ID\" --confirm",
 		ShortHelp:  "Delete a Game Center achievement localization (v2).",
 		LongHelp: `Delete a Game Center achievement localization (v2).
 
 Examples:
-  appstore game-center achievements v2 localizations delete --id "LOC_ID" --confirm`,
+  asc game-center achievements v2 localizations delete --id "LOC_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -669,15 +669,15 @@ func GameCenterAchievementImagesV2Command() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "images",
-		ShortUsage: "appstore game-center achievements v2 images <subcommand> [flags]",
+		ShortUsage: "asc game-center achievements v2 images <subcommand> [flags]",
 		ShortHelp:  "Manage Game Center achievement images (v2).",
 		LongHelp: `Manage Game Center achievement images (v2). Images are attached to achievement localizations.
 
 Examples:
-  appstore game-center achievements v2 images upload --localization-id "LOC_ID" --file "path/to/image.png"
-  appstore game-center achievements v2 images get --id "IMAGE_ID"
-  appstore game-center achievements v2 images get --localization-id "LOC_ID"
-  appstore game-center achievements v2 images delete --id "IMAGE_ID" --confirm`,
+  asc game-center achievements v2 images upload --localization-id "LOC_ID" --file "path/to/image.png"
+  asc game-center achievements v2 images get --id "IMAGE_ID"
+  asc game-center achievements v2 images get --localization-id "LOC_ID"
+  asc game-center achievements v2 images delete --id "IMAGE_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -701,14 +701,14 @@ func GameCenterAchievementImagesV2UploadCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "upload",
-		ShortUsage: "appstore game-center achievements v2 images upload --localization-id \"LOC_ID\" --file \"path/to/image.png\"",
+		ShortUsage: "asc game-center achievements v2 images upload --localization-id \"LOC_ID\" --file \"path/to/image.png\"",
 		ShortHelp:  "Upload an image for a Game Center achievement localization (v2).",
 		LongHelp: `Upload an image for a Game Center achievement localization (v2).
 
 The image file will be validated, reserved, uploaded in chunks, and committed.
 
 Examples:
-  appstore game-center achievements v2 images upload --localization-id "LOC_ID" --file "path/to/image.png"`,
+  asc game-center achievements v2 images upload --localization-id "LOC_ID" --file "path/to/image.png"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -752,13 +752,13 @@ func GameCenterAchievementImagesV2GetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore game-center achievements v2 images get --id \"IMAGE_ID\" | --localization-id \"LOC_ID\"",
+		ShortUsage: "asc game-center achievements v2 images get --id \"IMAGE_ID\" | --localization-id \"LOC_ID\"",
 		ShortHelp:  "Get a Game Center achievement image (v2).",
 		LongHelp: `Get a Game Center achievement image (v2).
 
 Examples:
-  appstore game-center achievements v2 images get --id "IMAGE_ID"
-  appstore game-center achievements v2 images get --localization-id "LOC_ID"`,
+  asc game-center achievements v2 images get --id "IMAGE_ID"
+  asc game-center achievements v2 images get --localization-id "LOC_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -809,12 +809,12 @@ func GameCenterAchievementImagesV2DeleteCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "delete",
-		ShortUsage: "appstore game-center achievements v2 images delete --id \"IMAGE_ID\" --confirm",
+		ShortUsage: "asc game-center achievements v2 images delete --id \"IMAGE_ID\" --confirm",
 		ShortHelp:  "Delete a Game Center achievement image (v2).",
 		LongHelp: `Delete a Game Center achievement image (v2).
 
 Examples:
-  appstore game-center achievements v2 images delete --id "IMAGE_ID" --confirm`,
+  asc game-center achievements v2 images delete --id "IMAGE_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

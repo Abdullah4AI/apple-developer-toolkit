@@ -10,14 +10,14 @@ func InitCommand() *ffcli.Command {
 	return docs.NewInitReferenceCommand(
 		"init",
 		"init",
-		"appstore init [flags]",
-		"Initialize appstore helper docs in the current repo.",
-		`Initialize appstore helper docs in the current repo.
+		"asc init [flags]",
+		"Initialize asc helper docs in the current repo.",
+		`Initialize asc helper docs in the current repo.
 
 Examples:
-  appstore init
-  appstore init --path ./APPSTORE.md
-  appstore init --force --link=false`,
+  asc init
+  asc init --path ./ASC.md
+  asc init --force --link=false`,
 		"init",
 	)
 }

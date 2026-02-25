@@ -145,6 +145,186 @@ func TestNotifySlackWithChannel(t *testing.T) {
 	}
 }
 
+func TestNotifySlackWithThreadTS(t *testing.T) {
+	var receivedPayload map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		if err := json.Unmarshal(body, &receivedPayload); err != nil {
+			t.Errorf("unmarshal payload: %v", err)
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	t.Setenv(slackWebhookEnvVar, server.URL)
+	t.Setenv(slackWebhookAllowLocalEnv, "1")
+	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
+
+	root := SlackCommand()
+	root.FlagSet.SetOutput(io.Discard)
+
+	err := root.Parse([]string{"--message", "Threaded release update", "--thread-ts", "1733977745.12345"})
+	if err != nil {
+		t.Fatalf("parse error: %v", err)
+	}
+	runErr := root.Run(context.Background())
+	if runErr != nil {
+		t.Fatalf("unexpected error: %v", runErr)
+	}
+
+	if receivedPayload["thread_ts"] != "1733977745.12345" {
+		t.Errorf("expected thread_ts to be set, got %v", receivedPayload["thread_ts"])
+	}
+}
+
+func TestNotifySlackWithInvalidThreadTS(t *testing.T) {
+	t.Setenv(slackWebhookEnvVar, "https://hooks.slack.com/services/test")
+	t.Setenv(slackWebhookAllowLocalEnv, "")
+	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
+
+	root := SlackCommand()
+	root.FlagSet.SetOutput(io.Discard)
+
+	stderr := captureOutput(t, func() {
+		err := root.Parse([]string{"--message", "Threaded release update", "--thread-ts", "not-a-ts"})
+		if err != nil && !errors.Is(err, flag.ErrHelp) {
+			t.Fatalf("parse error: %v", err)
+		}
+		runErr := root.Run(context.Background())
+		if runErr == nil {
+			t.Fatal("expected error, got nil")
+		}
+		if !errors.Is(runErr, flag.ErrHelp) {
+			t.Fatalf("expected flag.ErrHelp, got %v", runErr)
+		}
+	})
+
+	if !strings.Contains(stderr, "--thread-ts must be in Slack ts format") {
+		t.Fatalf("expected thread-ts validation error, got %q", stderr)
+	}
+}
+
+func TestNotifySlackWithPayloadJSON(t *testing.T) {
+	var receivedPayload map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		if err := json.Unmarshal(body, &receivedPayload); err != nil {
+			t.Errorf("unmarshal payload: %v", err)
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	t.Setenv(slackWebhookEnvVar, server.URL)
+	t.Setenv(slackWebhookAllowLocalEnv, "1")
+	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
+
+	root := SlackCommand()
+	root.FlagSet.SetOutput(io.Discard)
+
+	payload := `{"app":"ExampleApp","version":"1.2.3","build":42,"release_id":123456789012345678901234567890}`
+	err := root.Parse([]string{"--message", "Release submitted", "--payload-json", payload})
+	if err != nil {
+		t.Fatalf("parse error: %v", err)
+	}
+	runErr := root.Run(context.Background())
+	if runErr != nil {
+		t.Fatalf("unexpected error: %v", runErr)
+	}
+
+	attachments, ok := receivedPayload["attachments"].([]any)
+	if !ok {
+		t.Fatalf("expected attachments array, got %T", receivedPayload["attachments"])
+	}
+	if len(attachments) != 1 {
+		t.Fatalf("expected 1 attachment, got %d", len(attachments))
+	}
+
+	attachment, ok := attachments[0].(map[string]any)
+	if !ok {
+		t.Fatalf("expected attachment object, got %T", attachments[0])
+	}
+	if attachment["color"] != "good" {
+		t.Fatalf("expected attachment color 'good', got %v", attachment["color"])
+	}
+	if receivedPayload["text"] != "Release submitted" {
+		t.Fatalf("expected top-level text 'Release submitted', got %v", receivedPayload["text"])
+	}
+	if attachment["fallback"] != "Release submitted" {
+		t.Fatalf("expected attachment fallback 'Release submitted', got %v", attachment["fallback"])
+	}
+	if _, exists := attachment["text"]; exists {
+		t.Fatalf("expected attachment text to be omitted when top-level text is set, got %v", attachment["text"])
+	}
+
+	fields, ok := attachment["fields"].([]any)
+	if !ok {
+		t.Fatalf("expected attachment fields array, got %T", attachment["fields"])
+	}
+
+	gotFields := make(map[string]string, len(fields))
+	for _, rawField := range fields {
+		field, ok := rawField.(map[string]any)
+		if !ok {
+			t.Fatalf("expected field object, got %T", rawField)
+		}
+		title, _ := field["title"].(string)
+		value, _ := field["value"].(string)
+		gotFields[title] = value
+	}
+
+	if gotFields["app"] != "ExampleApp" {
+		t.Fatalf("expected app field, got %q", gotFields["app"])
+	}
+	if gotFields["version"] != "1.2.3" {
+		t.Fatalf("expected version field, got %q", gotFields["version"])
+	}
+	if gotFields["build"] != "42" {
+		t.Fatalf("expected build field, got %q", gotFields["build"])
+	}
+	if gotFields["release_id"] != "123456789012345678901234567890" {
+		t.Fatalf("expected release_id field to preserve precision, got %q", gotFields["release_id"])
+	}
+}
+
+func TestNotifySlackWithPayloadFile(t *testing.T) {
+	var receivedPayload map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		if err := json.Unmarshal(body, &receivedPayload); err != nil {
+			t.Errorf("unmarshal payload: %v", err)
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	t.Setenv(slackWebhookEnvVar, server.URL)
+	t.Setenv(slackWebhookAllowLocalEnv, "1")
+	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
+
+	payloadPath := filepath.Join(t.TempDir(), "release-payload.json")
+	if err := os.WriteFile(payloadPath, []byte(`{"status":"submitted","platform":"iOS"}`), 0o600); err != nil {
+		t.Fatalf("write payload file: %v", err)
+	}
+
+	root := SlackCommand()
+	root.FlagSet.SetOutput(io.Discard)
+
+	err := root.Parse([]string{"--message", "Release submitted", "--payload-file", payloadPath})
+	if err != nil {
+		t.Fatalf("parse error: %v", err)
+	}
+	runErr := root.Run(context.Background())
+	if runErr != nil {
+		t.Fatalf("unexpected error: %v", runErr)
+	}
+
+	attachments, ok := receivedPayload["attachments"].([]any)
+	if !ok || len(attachments) != 1 {
+		t.Fatalf("expected single attachment, got %v", receivedPayload["attachments"])
+	}
+}
+
 func TestNotifySlackWithBlocksJSON(t *testing.T) {
 	var receivedPayload map[string]any
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -289,6 +469,93 @@ func TestNotifySlackBlocksValidationErrors(t *testing.T) {
 	}
 }
 
+func TestNotifySlackPayloadValidationErrors(t *testing.T) {
+	payloadPath := filepath.Join(t.TempDir(), "invalid-payload.json")
+	if err := os.WriteFile(payloadPath, []byte(`["not-an-object"]`), 0o600); err != nil {
+		t.Fatalf("write payload file: %v", err)
+	}
+
+	tests := []struct {
+		name       string
+		args       []string
+		wantErrMsg string
+	}{
+		{
+			name:       "payload json invalid",
+			args:       []string{"--message", "hello", "--payload-json", "{invalid"},
+			wantErrMsg: "--payload-json must contain a JSON object",
+		},
+		{
+			name:       "payload file invalid",
+			args:       []string{"--message", "hello", "--payload-file", payloadPath},
+			wantErrMsg: "--payload-file must contain a JSON object",
+		},
+		{
+			name:       "payload file missing",
+			args:       []string{"--message", "hello", "--payload-file", filepath.Join(t.TempDir(), "missing-payload.json")},
+			wantErrMsg: "--payload-file must be readable",
+		},
+		{
+			name:       "payload both set",
+			args:       []string{"--message", "hello", "--payload-json", "{}", "--payload-file", payloadPath},
+			wantErrMsg: "only one of --payload-json or --payload-file may be set",
+		},
+		{
+			name:       "pretext without payload",
+			args:       []string{"--message", "hello", "--pretext", "Release metadata"},
+			wantErrMsg: "--pretext and --success require --payload-json or --payload-file",
+		},
+		{
+			name:       "success without payload",
+			args:       []string{"--message", "hello", "--success=false"},
+			wantErrMsg: "--pretext and --success require --payload-json or --payload-file",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Setenv(slackWebhookEnvVar, "https://hooks.slack.com/services/test")
+			t.Setenv(slackWebhookAllowLocalEnv, "")
+			t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
+
+			root := SlackCommand()
+			root.FlagSet.SetOutput(io.Discard)
+
+			stderr := captureOutput(t, func() {
+				err := root.Parse(test.args)
+				if err != nil && !errors.Is(err, flag.ErrHelp) {
+					t.Fatalf("parse error: %v", err)
+				}
+				runErr := root.Run(context.Background())
+				if runErr == nil {
+					t.Fatal("expected error, got nil")
+				}
+				if !errors.Is(runErr, flag.ErrHelp) {
+					t.Fatalf("expected flag.ErrHelp, got %v", runErr)
+				}
+			})
+
+			if !strings.Contains(stderr, test.wantErrMsg) {
+				t.Fatalf("expected error %q, got %q", test.wantErrMsg, stderr)
+			}
+		})
+	}
+}
+
+func TestParseSlackPayloadUsesJSONNumber(t *testing.T) {
+	payload, err := parseSlackPayload(`{"release_id":123456789012345678901234567890}`, "")
+	if err != nil {
+		t.Fatalf("parseSlackPayload returned error: %v", err)
+	}
+	value, ok := payload["release_id"].(json.Number)
+	if !ok {
+		t.Fatalf("expected json.Number, got %T", payload["release_id"])
+	}
+	if value.String() != "123456789012345678901234567890" {
+		t.Fatalf("expected exact number lexeme, got %q", value.String())
+	}
+}
+
 func TestNotifySlackNonSuccessResponse(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -333,8 +600,15 @@ func TestNotifySlackRejectsInvalidWebhookHost(t *testing.T) {
 		}
 	})
 
-	if !strings.Contains(stderr, "hooks.slack.com") {
+	if !strings.Contains(stderr, "hooks.slack.com") || !strings.Contains(stderr, "hooks.slack-gov.com") {
 		t.Fatalf("expected host validation error, got %q", stderr)
+	}
+}
+
+func TestValidateSlackWebhookURLAllowsGovHost(t *testing.T) {
+	err := validateSlackWebhookURL("https://hooks.slack-gov.com/services/test")
+	if err != nil {
+		t.Fatalf("expected GovSlack host to be allowed, got %v", err)
 	}
 }
 

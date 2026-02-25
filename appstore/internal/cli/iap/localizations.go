@@ -25,13 +25,13 @@ func IAPLocalizationsCreateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "create",
-		ShortUsage: "appstore iap localizations create --iap-id \"IAP_ID\" --name \"Name\" --locale \"en-US\"",
+		ShortUsage: "asc iap localizations create --iap-id \"IAP_ID\" --name \"Name\" --locale \"en-US\"",
 		ShortHelp:  "Create an in-app purchase localization.",
 		LongHelp: `Create an in-app purchase localization.
 
 Examples:
-  appstore iap localizations create --iap-id "IAP_ID" --name "Title" --locale "en-US"
-  appstore iap localizations create --iap-id "IAP_ID" --name "Titre" --locale "fr-FR" --description "Detail"`,
+  asc iap localizations create --iap-id "IAP_ID" --name "Title" --locale "en-US"
+  asc iap localizations create --iap-id "IAP_ID" --name "Titre" --locale "fr-FR" --description "Detail"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -84,13 +84,13 @@ func IAPLocalizationsUpdateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "update",
-		ShortUsage: "appstore iap localizations update --localization-id \"LOC_ID\" [flags]",
+		ShortUsage: "asc iap localizations update --localization-id \"LOC_ID\" [flags]",
 		ShortHelp:  "Update an in-app purchase localization.",
 		LongHelp: `Update an in-app purchase localization.
 
 Examples:
-  appstore iap localizations update --localization-id "LOC_ID" --name "New Name"
-  appstore iap localizations update --localization-id "LOC_ID" --description "New Description"`,
+  asc iap localizations update --localization-id "LOC_ID" --name "New Name"
+  asc iap localizations update --localization-id "LOC_ID" --description "New Description"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -142,12 +142,12 @@ func IAPLocalizationsDeleteCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "delete",
-		ShortUsage: "appstore iap localizations delete --localization-id \"LOC_ID\" --confirm",
+		ShortUsage: "asc iap localizations delete --localization-id \"LOC_ID\" --confirm",
 		ShortHelp:  "Delete an in-app purchase localization.",
 		LongHelp: `Delete an in-app purchase localization.
 
 Examples:
-  appstore iap localizations delete --localization-id "LOC_ID" --confirm`,
+  asc iap localizations delete --localization-id "LOC_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

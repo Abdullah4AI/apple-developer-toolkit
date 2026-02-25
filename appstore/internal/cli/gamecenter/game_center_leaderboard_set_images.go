@@ -19,13 +19,13 @@ func GameCenterLeaderboardSetImagesCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "images",
-		ShortUsage: "appstore game-center leaderboard-sets images <subcommand> [flags]",
+		ShortUsage: "asc game-center leaderboard-sets images <subcommand> [flags]",
 		ShortHelp:  "Manage Game Center leaderboard set images.",
 		LongHelp: `Manage Game Center leaderboard set images. Images are attached to leaderboard set localizations.
 
 Examples:
-  appstore game-center leaderboard-sets images upload --localization-id "LOC_ID" --file path/to/image.png
-  appstore game-center leaderboard-sets images delete --id "IMAGE_ID" --confirm`,
+  asc game-center leaderboard-sets images upload --localization-id "LOC_ID" --file path/to/image.png
+  asc game-center leaderboard-sets images delete --id "IMAGE_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -48,14 +48,14 @@ func GameCenterLeaderboardSetImagesUploadCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "upload",
-		ShortUsage: "appstore game-center leaderboard-sets images upload --localization-id \"LOC_ID\" --file path/to/image.png",
+		ShortUsage: "asc game-center leaderboard-sets images upload --localization-id \"LOC_ID\" --file path/to/image.png",
 		ShortHelp:  "Upload an image for a leaderboard set localization.",
 		LongHelp: `Upload an image for a leaderboard set localization.
 
 The upload process reserves an upload slot, uploads the image file, and commits the upload.
 
 Examples:
-  appstore game-center leaderboard-sets images upload --localization-id "LOC_ID" --file path/to/image.png`,
+  asc game-center leaderboard-sets images upload --localization-id "LOC_ID" --file path/to/image.png`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -99,12 +99,12 @@ func GameCenterLeaderboardSetImagesDeleteCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "delete",
-		ShortUsage: "appstore game-center leaderboard-sets images delete --id \"IMAGE_ID\" --confirm",
+		ShortUsage: "asc game-center leaderboard-sets images delete --id \"IMAGE_ID\" --confirm",
 		ShortHelp:  "Delete a leaderboard set image.",
 		LongHelp: `Delete a leaderboard set image.
 
 Examples:
-  appstore game-center leaderboard-sets images delete --id "IMAGE_ID" --confirm`,
+  asc game-center leaderboard-sets images delete --id "IMAGE_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

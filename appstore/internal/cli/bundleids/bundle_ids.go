@@ -19,19 +19,19 @@ func BundleIDsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "bundle-ids",
-		ShortUsage: "appstore bundle-ids <subcommand> [flags]",
+		ShortUsage: "asc bundle-ids <subcommand> [flags]",
 		ShortHelp:  "Manage bundle IDs and capabilities.",
 		LongHelp: `Manage bundle IDs and capabilities.
 
 Examples:
-  appstore bundle-ids list
-  appstore bundle-ids get --id "BUNDLE_ID"
-  appstore bundle-ids app get --id "BUNDLE_ID"
-  appstore bundle-ids profiles list --id "BUNDLE_ID"
-  appstore bundle-ids create --identifier "com.example.app" --name "Example" --platform IOS
-  appstore bundle-ids update --id "BUNDLE_ID" --name "New Name"
-  appstore bundle-ids delete --id "BUNDLE_ID" --confirm
-  appstore bundle-ids capabilities list --bundle "BUNDLE_ID"`,
+  asc bundle-ids list
+  asc bundle-ids get --id "BUNDLE_ID"
+  asc bundle-ids app get --id "BUNDLE_ID"
+  asc bundle-ids profiles list --id "BUNDLE_ID"
+  asc bundle-ids create --identifier "com.example.app" --name "Example" --platform IOS
+  asc bundle-ids update --id "BUNDLE_ID" --name "New Name"
+  asc bundle-ids delete --id "BUNDLE_ID" --confirm
+  asc bundle-ids capabilities list --bundle "BUNDLE_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -61,14 +61,14 @@ func BundleIDsListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore bundle-ids list [flags]",
+		ShortUsage: "asc bundle-ids list [flags]",
 		ShortHelp:  "List bundle IDs.",
 		LongHelp: `List bundle IDs.
 
 Examples:
-  appstore bundle-ids list
-  appstore bundle-ids list --limit 10
-  appstore bundle-ids list --paginate`,
+  asc bundle-ids list
+  asc bundle-ids list --limit 10
+  asc bundle-ids list --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -128,12 +128,12 @@ func BundleIDsGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore bundle-ids get --id \"BUNDLE_ID\"",
+		ShortUsage: "asc bundle-ids get --id \"BUNDLE_ID\"",
 		ShortHelp:  "Get a bundle ID by ID.",
 		LongHelp: `Get a bundle ID by ID.
 
 Examples:
-  appstore bundle-ids get --id "BUNDLE_ID"`,
+  asc bundle-ids get --id "BUNDLE_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -171,12 +171,12 @@ func BundleIDsCreateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "create",
-		ShortUsage: "appstore bundle-ids create --identifier \"com.example.app\" --name \"Example\" [--platform IOS]",
+		ShortUsage: "asc bundle-ids create --identifier \"com.example.app\" --name \"Example\" [--platform IOS]",
 		ShortHelp:  "Create a bundle ID.",
 		LongHelp: `Create a bundle ID.
 
 Examples:
-  appstore bundle-ids create --identifier "com.example.app" --name "Example" --platform IOS`,
+  asc bundle-ids create --identifier "com.example.app" --name "Example" --platform IOS`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -228,12 +228,12 @@ func BundleIDsUpdateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "update",
-		ShortUsage: "appstore bundle-ids update --id \"BUNDLE_ID\" --name \"New Name\"",
+		ShortUsage: "asc bundle-ids update --id \"BUNDLE_ID\" --name \"New Name\"",
 		ShortHelp:  "Update a bundle ID.",
 		LongHelp: `Update a bundle ID.
 
 Examples:
-  appstore bundle-ids update --id "BUNDLE_ID" --name "New Name"`,
+  asc bundle-ids update --id "BUNDLE_ID" --name "New Name"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -277,12 +277,12 @@ func BundleIDsDeleteCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "delete",
-		ShortUsage: "appstore bundle-ids delete --id \"BUNDLE_ID\" --confirm",
+		ShortUsage: "asc bundle-ids delete --id \"BUNDLE_ID\" --confirm",
 		ShortHelp:  "Delete a bundle ID.",
 		LongHelp: `Delete a bundle ID.
 
 Examples:
-  appstore bundle-ids delete --id "BUNDLE_ID" --confirm`,
+  asc bundle-ids delete --id "BUNDLE_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

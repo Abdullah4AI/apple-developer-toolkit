@@ -22,14 +22,14 @@ func AccountCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "account",
-		ShortUsage: "appstore account <subcommand> [flags]",
+		ShortUsage: "asc account <subcommand> [flags]",
 		ShortHelp:  "Inspect account-level health and access signals.",
 		LongHelp: `Inspect account-level health and access signals.
 
 Examples:
-  appstore account status
-  appstore account status --app "123456789"
-  appstore account status --output table`,
+  asc account status
+  asc account status --app "123456789"
+  asc account status --output table`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -44,12 +44,12 @@ Examples:
 func accountStatusCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("account status", flag.ExitOnError)
 
-	appID := fs.String("app", "", "Optional app ID for access probe (or APPSTORE_APP_ID env)")
+	appID := fs.String("app", "", "Optional app ID for access probe (or ASC_APP_ID env)")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "status",
-		ShortUsage: "appstore account status [flags]",
+		ShortUsage: "asc account status [flags]",
 		ShortHelp:  "Show account/workspace health checks.",
 		LongHelp: `Show account/workspace health checks.
 
@@ -59,9 +59,9 @@ Checks currently include:
   - account agreements availability (public API capability note)
 
 Examples:
-  appstore account status
-  appstore account status --app "123456789"
-  appstore account status --output markdown`,
+  asc account status
+  asc account status --app "123456789"
+  asc account status --output markdown`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

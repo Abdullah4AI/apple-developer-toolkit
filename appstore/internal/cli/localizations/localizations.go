@@ -19,22 +19,23 @@ func LocalizationsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "localizations",
-		ShortUsage: "appstore localizations <subcommand> [flags]",
+		ShortUsage: "asc localizations <subcommand> [flags]",
 		ShortHelp:  "Manage App Store localization metadata.",
 		LongHelp: `Manage App Store localization metadata.
 
 Examples:
-  appstore localizations list --version "VERSION_ID"
-  appstore localizations search-keywords list --localization-id "LOCALIZATION_ID"
-  appstore localizations preview-sets list --localization-id "LOCALIZATION_ID"
-  appstore localizations preview-sets get --id "PREVIEW_SET_ID"
-  appstore localizations screenshot-sets get --id "SCREENSHOT_SET_ID"
-  appstore localizations download --version "VERSION_ID" --path "./localizations"
-  appstore localizations upload --version "VERSION_ID" --path "./localizations"`,
+  asc localizations list --version "VERSION_ID"
+  asc localizations search-keywords list --localization-id "LOCALIZATION_ID"
+  asc localizations preview-sets list --localization-id "LOCALIZATION_ID"
+  asc localizations preview-sets get --id "PREVIEW_SET_ID"
+  asc localizations screenshot-sets get --id "SCREENSHOT_SET_ID"
+  asc localizations download --version "VERSION_ID" --path "./localizations"
+  asc localizations upload --version "VERSION_ID" --path "./localizations"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
 			LocalizationsListCommand(),
+			LocalizationsUpdateCommand(),
 			LocalizationsSearchKeywordsCommand(),
 			LocalizationsPreviewSetsCommand(),
 			LocalizationsScreenshotSetsCommand(),
@@ -52,7 +53,7 @@ func LocalizationsListCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("list", flag.ExitOnError)
 
 	versionID := fs.String("version", "", "App Store version ID")
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID env)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
 	appInfoID := fs.String("app-info", "", "App Info ID (optional override)")
 	locType := fs.String("type", shared.LocalizationTypeVersion, "Localization type: version (default) or app-info")
 	locale := fs.String("locale", "", "Filter by locale(s), comma-separated")
@@ -63,15 +64,15 @@ func LocalizationsListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore localizations list [flags]",
+		ShortUsage: "asc localizations list [flags]",
 		ShortHelp:  "List localization metadata for an app or version.",
 		LongHelp: `List localization metadata for an app or version.
 
 Examples:
-  appstore localizations list --version "VERSION_ID"
-  appstore localizations list --app "APP_ID" --type app-info
-  appstore localizations list --version "VERSION_ID" --locale "en-US,ja"
-  appstore localizations list --version "VERSION_ID" --paginate`,
+  asc localizations list --version "VERSION_ID"
+  asc localizations list --app "APP_ID" --type app-info
+  asc localizations list --version "VERSION_ID" --locale "en-US,ja"
+  asc localizations list --version "VERSION_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -198,7 +199,7 @@ func LocalizationsDownloadCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("download", flag.ExitOnError)
 
 	versionID := fs.String("version", "", "App Store version ID")
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID env)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
 	appInfoID := fs.String("app-info", "", "App Info ID (optional override)")
 	locType := fs.String("type", shared.LocalizationTypeVersion, "Localization type: version (default) or app-info")
 	locale := fs.String("locale", "", "Filter by locale(s), comma-separated")
@@ -210,15 +211,15 @@ func LocalizationsDownloadCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "download",
-		ShortUsage: "appstore localizations download [flags]",
+		ShortUsage: "asc localizations download [flags]",
 		ShortHelp:  "Download localizations to .strings files.",
 		LongHelp: `Download localizations to .strings files.
 
 Examples:
-  appstore localizations download --version "VERSION_ID" --path "./localizations"
-  appstore localizations download --app "APP_ID" --type app-info --path "./localizations"
-  appstore localizations download --version "VERSION_ID" --locale "en-US" --path "en-US.strings"
-  appstore localizations download --version "VERSION_ID" --paginate --path "./localizations"`,
+  asc localizations download --version "VERSION_ID" --path "./localizations"
+  asc localizations download --app "APP_ID" --type app-info --path "./localizations"
+  asc localizations download --version "VERSION_ID" --locale "en-US" --path "en-US.strings"
+  asc localizations download --version "VERSION_ID" --paginate --path "./localizations"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -405,7 +406,7 @@ func LocalizationsUploadCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("upload", flag.ExitOnError)
 
 	versionID := fs.String("version", "", "App Store version ID")
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID env)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
 	appInfoID := fs.String("app-info", "", "App Info ID (optional override)")
 	locType := fs.String("type", shared.LocalizationTypeVersion, "Localization type: version (default) or app-info")
 	locale := fs.String("locale", "", "Filter by locale(s), comma-separated")
@@ -415,15 +416,15 @@ func LocalizationsUploadCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "upload",
-		ShortUsage: "appstore localizations upload [flags]",
+		ShortUsage: "asc localizations upload [flags]",
 		ShortHelp:  "Upload localizations from .strings files.",
 		LongHelp: `Upload localizations from .strings files.
 
 Examples:
-  appstore localizations upload --version "VERSION_ID" --path "./localizations"
-  appstore localizations upload --app "APP_ID" --type app-info --path "./localizations"
-  appstore localizations upload --version "VERSION_ID" --locale "en-US" --path "en-US.strings"
-  appstore localizations upload --version "VERSION_ID" --path "./localizations" --dry-run`,
+  asc localizations upload --version "VERSION_ID" --path "./localizations"
+  asc localizations upload --app "APP_ID" --type app-info --path "./localizations"
+  asc localizations upload --version "VERSION_ID" --locale "en-US" --path "en-US.strings"
+  asc localizations upload --version "VERSION_ID" --path "./localizations" --dry-run`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

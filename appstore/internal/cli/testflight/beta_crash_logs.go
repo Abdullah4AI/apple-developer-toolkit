@@ -17,12 +17,12 @@ func BetaCrashLogsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "beta-crash-logs",
-		ShortUsage: "appstore testflight beta-crash-logs <subcommand> [flags]",
+		ShortUsage: "asc testflight beta-crash-logs <subcommand> [flags]",
 		ShortHelp:  "Fetch TestFlight beta crash logs.",
 		LongHelp: `Fetch TestFlight beta crash logs.
 
 Examples:
-  appstore testflight beta-crash-logs get --id "CRASH_LOG_ID"`,
+  asc testflight beta-crash-logs get --id "CRASH_LOG_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -43,12 +43,12 @@ func BetaCrashLogsGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore testflight beta-crash-logs get --id \"CRASH_LOG_ID\"",
+		ShortUsage: "asc testflight beta-crash-logs get --id \"CRASH_LOG_ID\"",
 		ShortHelp:  "Get a beta crash log by ID.",
 		LongHelp: `Get a beta crash log by ID.
 
 Examples:
-  appstore testflight beta-crash-logs get --id "CRASH_LOG_ID"`,
+  asc testflight beta-crash-logs get --id "CRASH_LOG_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

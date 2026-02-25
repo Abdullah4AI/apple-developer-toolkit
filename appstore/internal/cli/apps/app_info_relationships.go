@@ -19,12 +19,12 @@ func AppInfoRelationshipsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "relationships",
-		ShortUsage: "appstore app-info relationships <subcommand> [flags]",
+		ShortUsage: "asc app-info relationships <subcommand> [flags]",
 		ShortHelp:  "Get App Info category relationships.",
 		LongHelp: `Get App Info category relationships.
 
 Examples:
-  appstore app-info relationships primary-category --id "APP_INFO_ID"`,
+  asc app-info relationships primary-category --id "APP_INFO_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -87,12 +87,12 @@ func appInfoCategoryRelationshipCommand(name, shortHelp string, fetch appInfoCat
 
 	return &ffcli.Command{
 		Name:       name,
-		ShortUsage: fmt.Sprintf("appstore app-info relationships %s --id \"APP_INFO_ID\"", name),
+		ShortUsage: fmt.Sprintf("asc app-info relationships %s --id \"APP_INFO_ID\"", name),
 		ShortHelp:  shortHelp,
 		LongHelp: fmt.Sprintf(`%s
 
 Examples:
-  appstore app-info relationships %s --id "APP_INFO_ID"`, shortHelp, name),
+  asc app-info relationships %s --id "APP_INFO_ID"`, shortHelp, name),
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

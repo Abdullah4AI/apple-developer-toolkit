@@ -1,15 +1,16 @@
 package terminal
 
 import (
-	"bytes"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
-	"unicode/utf8"
 
+	"github.com/reeflective/readline"
 	"golang.org/x/term"
 )
 
@@ -19,6 +20,7 @@ var SlashCommands = []CommandInfo{
 	{Name: "/simulator", Desc: "Select simulator device"},
 	{Name: "/model", Desc: "Show or switch model"},
 	{Name: "/fix", Desc: "Auto-fix build errors"},
+	{Name: "/ask", Desc: "Ask a question about your project"},
 	{Name: "/open", Desc: "Open project in Xcode"},
 	{Name: "/info", Desc: "Show project info"},
 	{Name: "/usage", Desc: "Show token usage and costs"},
@@ -109,591 +111,73 @@ func extractImages(input string) (string, []string) {
 	return strings.TrimSpace(strings.Join(textLines, "\n")), images
 }
 
-// runeLen returns the number of runes in a byte slice.
-func runeLen(b []byte) int {
-	return utf8.RuneCount(b)
-}
+// rl is the shared readline shell instance, initialized eagerly so the
+// first ReadInput call has no startup delay.
+var rl = newShell()
 
-// runeIndex returns the byte offset of the i-th rune in b.
-func runeIndex(b []byte, i int) int {
-	off := 0
-	for j := 0; j < i; j++ {
-		_, size := utf8.DecodeRune(b[off:])
-		off += size
+func newShell() *readline.Shell {
+	sh := readline.NewShell()
+
+	// Enable as-you-type autocomplete so slash commands appear
+	// immediately while typing (like the old custom implementation).
+	sh.Config.Set("autocomplete", true)
+
+	sh.Prompt.Primary(func() string {
+		return Bold + "> " + Reset
+	})
+	sh.Prompt.Secondary(func() string {
+		return Dim + "  " + Reset
+	})
+
+	// Enter always submits; Ctrl+J inserts a newline (standard readline).
+	sh.AcceptMultiline = func(line []rune) bool {
+		return true
 	}
-	return off
+
+	// Slash command completion: only activate for "/" prefix.
+	sh.Completer = func(line []rune, cursor int) readline.Completions {
+		text := string(line[:cursor])
+		if !strings.HasPrefix(text, "/") {
+			return readline.Completions{}
+		}
+		matches := filterCommands(text)
+		if len(matches) == 0 {
+			return readline.Completions{}
+		}
+		pairs := make([]string, 0, len(matches)*2)
+		for _, cmd := range matches {
+			pairs = append(pairs, cmd.Name, cmd.Desc)
+		}
+		return readline.CompleteValuesDescribed(pairs...).NoSpace()
+	}
+
+	return sh
 }
 
 // ReadInput reads input from the terminal with slash command completion.
-// Single Enter submits. Shift+Enter (or Esc then Enter) adds a newline.
+// Enter submits. Ctrl+J adds a newline. Pasted multiline text is kept intact.
 // Image file paths (dragged/pasted) are detected and returned separately.
 func ReadInput() InputResult {
-	fd := int(os.Stdin.Fd())
-
-	if !term.IsTerminal(fd) {
-		text := readLineFallback()
-		t, imgs := extractImages(text)
-		return InputResult{Text: t, Images: imgs}
-	}
-
-	oldState, err := term.MakeRaw(fd)
+	line, err := rl.Readline()
 	if err != nil {
-		text := readLineFallback()
-		t, imgs := extractImages(text)
-		return InputResult{Text: t, Images: imgs}
-	}
-
-	// Enable bracketed paste mode — terminals that support it will wrap
-	// pasted text in ESC[200~ … ESC[201~ markers so we can detect pastes.
-	os.Stdout.WriteString("\033[?2004h")
-
-	restore := func() {
-		os.Stdout.WriteString("\033[?2004l") // disable bracketed paste
-		term.Restore(fd, oldState)
-	}
-	defer restore()
-
-	var lines []string
-	var currentLine []byte
-	cursorPos := 0 // cursor position in runes
-	first := true
-	menuLines := 0
-	selectedIdx := -1
-	escPressed := false // track Esc key for Esc+Enter newline
-
-	// promptWidth returns the visible character width of the prompt.
-	promptWidth := func() int {
-		return 2 // "> " or "  "
-	}
-
-	printPrompt := func() {
-		if first {
-			rawWrite(Bold + "> " + Reset)
-		} else {
-			rawWrite(Dim + "  " + Reset)
-		}
-	}
-
-	redrawLine := func() {
-		rawWrite("\r\033[K")
-		printPrompt()
-		rawWrite(string(currentLine))
-		// Move cursor to correct position if not at end
-		totalRunes := runeLen(currentLine)
-		if cursorPos < totalRunes {
-			rawWrite(fmt.Sprintf("\033[%dD", totalRunes-cursorPos))
-		}
-	}
-
-	// setCursorCol positions the terminal cursor at the right column.
-	setCursorCol := func() {
-		col := promptWidth() + cursorPos
-		rawWrite(fmt.Sprintf("\r\033[%dC", col))
-	}
-
-	// clearMenuLines wipes all menu lines below the input line.
-	clearMenuLines := func() {
-		if menuLines == 0 {
-			return
-		}
-		for i := 0; i < menuLines; i++ {
-			rawWrite("\r\n\033[K")
-		}
-		rawWrite(fmt.Sprintf("\033[%dA", menuLines))
-		setCursorCol()
-		menuLines = 0
-		selectedIdx = -1
-	}
-
-	// drawMenuBelow draws the completion menu below the current input line.
-	drawMenuBelow := func() {
-		prefix := string(currentLine)
-		matches := filterCommands(prefix)
-		clearMenuLines()
-		if len(matches) == 0 {
-			return
-		}
-		for i, cmd := range matches {
-			rawWrite("\r\n\033[K")
-			if i == selectedIdx {
-				rawWrite(fmt.Sprintf("    %s%s▸ %-14s%s  %s%s%s", Bold, Cyan, cmd.Name, Reset, Dim, cmd.Desc, Reset))
-			} else {
-				rawWrite(fmt.Sprintf("      %s%-14s%s  %s%s%s", White, cmd.Name, Reset, Dim, cmd.Desc, Reset))
-			}
-		}
-		rawWrite(fmt.Sprintf("\033[%dA", len(matches)))
-		setCursorCol()
-		menuLines = len(matches)
-	}
-
-	isSlashMode := func() bool {
-		return first && len(currentLine) > 0 && currentLine[0] == '/'
-	}
-
-	submitResult := func() InputResult {
-		lineStr := strings.TrimSpace(string(currentLine))
-		if lineStr != "" {
-			lines = append(lines, lineStr)
-		}
-		combined := strings.TrimSpace(strings.Join(lines, "\n"))
-		text, imgs := extractImages(combined)
-		return InputResult{Text: text, Images: imgs}
-	}
-
-	// processPasteBytes handles raw bytes received during a bracketed paste.
-	// Newlines become new lines (with continuation prompt), tabs expand to
-	// spaces, printable characters are inserted at the cursor, and control
-	// characters are ignored.
-	processPasteBytes := func(data []byte) {
-		i := 0
-		for i < len(data) {
-			ch := data[i]
-
-			// CRLF → single newline
-			if ch == '\r' && i+1 < len(data) && data[i+1] == '\n' {
-				lineStr := string(currentLine)
-				lines = append(lines, lineStr)
-				currentLine = nil
-				cursorPos = 0
-				first = false
-				rawWrite("\r\n")
-				printPrompt()
-				i += 2
-				continue
-			}
-
-			// CR or LF → newline
-			if ch == '\r' || ch == '\n' {
-				lineStr := string(currentLine)
-				lines = append(lines, lineStr)
-				currentLine = nil
-				cursorPos = 0
-				first = false
-				rawWrite("\r\n")
-				printPrompt()
-				i++
-				continue
-			}
-
-			// Tab → 4 spaces
-			if ch == '\t' {
-				spaces := []byte("    ")
-				bytePos := runeIndex(currentLine, cursorPos)
-				tmp := make([]byte, len(currentLine)+len(spaces))
-				copy(tmp, currentLine[:bytePos])
-				copy(tmp[bytePos:], spaces)
-				copy(tmp[bytePos+len(spaces):], currentLine[bytePos:])
-				currentLine = tmp
-				cursorPos += 4
-				i++
-				continue
-			}
-
-			// Skip control characters (except those handled above)
-			if ch < 32 {
-				i++
-				continue
-			}
-
-			// Printable / UTF-8 character
-			_, size := utf8.DecodeRune(data[i:])
-			if size == 0 {
-				i++
-				continue
-			}
-			chunk := data[i : i+size]
-			bytePos := runeIndex(currentLine, cursorPos)
-			tmp := make([]byte, len(currentLine)+size)
-			copy(tmp, currentLine[:bytePos])
-			copy(tmp[bytePos:], chunk)
-			copy(tmp[bytePos+size:], currentLine[bytePos:])
-			currentLine = tmp
-			cursorPos++
-			i += size
-		}
-	}
-
-	printPrompt()
-
-	buf := make([]byte, 256)
-
-	for {
-		n, readErr := os.Stdin.Read(buf)
-		if readErr != nil || n == 0 {
-			break
-		}
-
-		b := buf[:n]
-
-		// Handle escape sequences (arrow keys etc.)
-		if b[0] == 0x1b {
-			if n == 1 {
-				// Could be standalone Esc or start of escape sequence.
-				// Set escPressed flag — if next byte is Enter, insert newline.
-				extra := make([]byte, 8)
-				en, _ := os.Stdin.Read(extra)
-				if en > 0 {
-					b = append(b, extra[:en]...)
-					n = len(b)
-				} else {
-					// Standalone Esc — set flag for Esc+Enter
-					escPressed = true
-					continue
-				}
-			}
-			if n >= 3 && b[1] == '[' {
-				seq := string(b[2:n])
-
-				// Shift+Enter: ESC[13;2u (kitty) or ESC[27;2;13~ (xterm)
-				if seq == "13;2u" || strings.HasPrefix(seq, "27;2;13") {
-					// Insert newline (same as Esc+Enter)
-					clearMenuLines()
-					lineStr := string(currentLine)
-					lines = append(lines, lineStr)
-					currentLine = nil
-					cursorPos = 0
-					first = false
-					rawWrite("\r\n")
-					printPrompt()
-					continue
-				}
-
-				// Bracketed paste start: ESC[200~
-				// The marker and pasted content may arrive in the same read,
-				// so use HasPrefix and process any trailing bytes as paste data.
-				if strings.HasPrefix(seq, "200~") {
-					clearMenuLines()
-
-					pasteEnd := []byte("\033[201~")
-					pasteBuf := make([]byte, 1024)
-					var trailer []byte // holds partial end-marker bytes across reads
-
-					// Process any bytes that arrived in the same read as the start marker
-					overflow := b[2+len("200~") : n]
-					if len(overflow) > 0 {
-						// Check if the end marker is already in this first chunk
-						if idx := bytes.Index(overflow, pasteEnd); idx >= 0 {
-							if idx > 0 {
-								processPasteBytes(overflow[:idx])
-							}
-							redrawLine()
-							continue
-						}
-						// Seed the trailer with overflow for the paste loop
-						trailer = make([]byte, len(overflow))
-						copy(trailer, overflow)
-					}
-
-				pasteLoop:
-					for {
-						pn, perr := os.Stdin.Read(pasteBuf)
-						if perr != nil || pn == 0 {
-							break
-						}
-
-						// Prepend any trailer from previous read
-						var chunk []byte
-						if len(trailer) > 0 {
-							chunk = append(trailer, pasteBuf[:pn]...)
-							trailer = nil
-						} else {
-							chunk = pasteBuf[:pn]
-						}
-
-						// Scan for end marker ESC[201~
-						if idx := bytes.Index(chunk, pasteEnd); idx >= 0 {
-							// Process everything before the end marker
-							if idx > 0 {
-								processPasteBytes(chunk[:idx])
-							}
-							break pasteLoop
-						}
-
-						// The end marker (6 bytes) might be split across reads.
-						// Keep up to 5 trailing bytes as a trailer for next read.
-						safeLen := len(chunk)
-						trailerSize := len(pasteEnd) - 1 // 5
-						if safeLen > trailerSize {
-							processPasteBytes(chunk[:safeLen-trailerSize])
-							trailer = make([]byte, trailerSize)
-							copy(trailer, chunk[safeLen-trailerSize:])
-						} else {
-							// Entire chunk is shorter than marker; hold it all
-							trailer = make([]byte, len(chunk))
-							copy(trailer, chunk)
-						}
-					}
-
-					// Process any remaining trailer that wasn't an end marker
-					if len(trailer) > 0 {
-						processPasteBytes(trailer)
-					}
-
-					redrawLine()
-					continue
-				}
-
-				// Bracketed paste end (defensive; normally consumed in paste loop)
-				if strings.HasPrefix(seq, "201~") {
-					continue
-				}
-
-				switch b[2] {
-				case 'A': // Up arrow
-					if menuLines > 0 {
-						matches := filterCommands(string(currentLine))
-						if len(matches) > 0 {
-							if selectedIdx <= 0 {
-								selectedIdx = len(matches) - 1
-							} else {
-								selectedIdx--
-							}
-							drawMenuBelow()
-						}
-					}
-				case 'B': // Down arrow
-					if menuLines > 0 {
-						matches := filterCommands(string(currentLine))
-						if len(matches) > 0 {
-							if selectedIdx >= len(matches)-1 {
-								selectedIdx = 0
-							} else {
-								selectedIdx++
-							}
-							drawMenuBelow()
-						}
-					}
-				case 'C': // Right arrow
-					if cursorPos < runeLen(currentLine) {
-						cursorPos++
-						rawWrite("\033[C")
-					}
-				case 'D': // Left arrow
-					if cursorPos > 0 {
-						cursorPos--
-						rawWrite("\033[D")
-					}
-				case 'H': // Home
-					cursorPos = 0
-					setCursorCol()
-				case 'F': // End
-					cursorPos = runeLen(currentLine)
-					setCursorCol()
-				case '3': // Delete key (ESC [ 3 ~)
-					if n >= 4 && b[3] == '~' {
-						totalRunes := runeLen(currentLine)
-						if cursorPos < totalRunes {
-							bytePos := runeIndex(currentLine, cursorPos)
-							_, size := utf8.DecodeRune(currentLine[bytePos:])
-							currentLine = append(currentLine[:bytePos], currentLine[bytePos+size:]...)
-							redrawLine()
-							if isSlashMode() {
-								drawMenuBelow()
-							} else {
-								clearMenuLines()
-							}
-						}
-					}
-				}
-			}
-			escPressed = false
-			continue
-		}
-
-		switch b[0] {
-		case 1: // Ctrl+A — move to beginning of line
-			escPressed = false
-			cursorPos = 0
-			setCursorCol()
-
-		case 3: // Ctrl+C
-			clearMenuLines()
-			rawWrite("\r\n")
-			restore()
+		if errors.Is(err, readline.ErrInterrupt) {
+			fmt.Println()
 			os.Exit(130)
-
-		case 4: // Ctrl+D
-			clearMenuLines()
-			rawWrite("\r\n")
-			return InputResult{}
-
-		case 5: // Ctrl+E — move to end of line
-			escPressed = false
-			cursorPos = runeLen(currentLine)
-			setCursorCol()
-
-		case 11: // Ctrl+K — kill from cursor to end of line
-			escPressed = false
-			if cursorPos < runeLen(currentLine) {
-				bytePos := runeIndex(currentLine, cursorPos)
-				currentLine = currentLine[:bytePos]
-				redrawLine()
-				if isSlashMode() {
-					drawMenuBelow()
-				} else {
-					clearMenuLines()
-				}
-			}
-
-		case 12: // Ctrl+L — clear screen
-			escPressed = false
-			clearMenuLines()
-			rawWrite("\033[2J\033[H") // clear screen and move to top
-			redrawLine()
-			if isSlashMode() {
-				drawMenuBelow()
-			}
-
-		case 21: // Ctrl+U — clear line
-			escPressed = false
-			clearMenuLines()
-			currentLine = nil
-			cursorPos = 0
-			redrawLine()
-
-		case 23: // Ctrl+W — delete word backward
-			escPressed = false
-			if cursorPos > 0 {
-				// Work backward from cursor: skip trailing spaces, then delete to next space
-				runes := []rune(string(currentLine))
-				newPos := cursorPos
-				// Skip spaces
-				for newPos > 0 && runes[newPos-1] == ' ' {
-					newPos--
-				}
-				// Skip non-spaces
-				for newPos > 0 && runes[newPos-1] != ' ' {
-					newPos--
-				}
-				// Remove runes from newPos to cursorPos
-				runes = append(runes[:newPos], runes[cursorPos:]...)
-				currentLine = []byte(string(runes))
-				cursorPos = newPos
-				redrawLine()
-				if isSlashMode() {
-					drawMenuBelow()
-				} else {
-					clearMenuLines()
-				}
-			}
-
-		case 9: // Tab — accept completion
-			escPressed = false
-			if menuLines > 0 {
-				matches := filterCommands(string(currentLine))
-				if len(matches) == 0 {
-					continue
-				}
-				idx := selectedIdx
-				if idx < 0 {
-					idx = 0
-				}
-				clearMenuLines()
-				currentLine = []byte(matches[idx].Name)
-				if matches[idx].Name == "/model" || matches[idx].Name == "/simulator" {
-					currentLine = append(currentLine, ' ')
-				}
-				cursorPos = runeLen(currentLine)
-				redrawLine()
-				if isSlashMode() {
-					drawMenuBelow()
-				}
-			}
-
-		case 13, 10: // Enter
-			// Esc+Enter → insert newline (multi-line mode)
-			if escPressed {
-				escPressed = false
-				clearMenuLines()
-				lineStr := string(currentLine)
-				lines = append(lines, lineStr)
-				currentLine = nil
-				cursorPos = 0
-				first = false
-				rawWrite("\r\n")
-				printPrompt()
-				continue
-			}
-
-			lineStr := strings.TrimSpace(string(currentLine))
-
-			// Slash commands: submit on single Enter
-			if strings.HasPrefix(lineStr, "/") && first {
-				if menuLines > 0 {
-					matches := filterCommands(string(currentLine))
-					if len(matches) > 0 {
-						idx := selectedIdx
-						if idx < 0 {
-							idx = 0 // auto-select first match
-						}
-						if idx < len(matches) {
-							lineStr = matches[idx].Name
-						}
-					}
-				}
-				clearMenuLines()
-				rawWrite("\r\n")
-				return InputResult{Text: lineStr}
-			}
-
-			clearMenuLines()
-
-			// Empty Enter with no accumulated text — just re-prompt
-			if lineStr == "" && len(lines) == 0 {
-				rawWrite("\r\n")
-				first = true
-				currentLine = nil
-				cursorPos = 0
-				printPrompt()
-				continue
-			}
-
-			// Submit on Enter (single Enter submits)
-			rawWrite("\r\n")
-			return submitResult()
-
-		case 127, 8: // Backspace
-			escPressed = false
-			if cursorPos > 0 {
-				bytePos := runeIndex(currentLine, cursorPos)
-				_, size := utf8.DecodeLastRune(currentLine[:bytePos])
-				currentLine = append(currentLine[:bytePos-size], currentLine[bytePos:]...)
-				cursorPos--
-				redrawLine()
-				if isSlashMode() {
-					drawMenuBelow()
-				} else {
-					clearMenuLines()
-				}
-			}
-
-		default:
-			escPressed = false
-			if b[0] >= 32 {
-				// Insert at cursor position, not just append
-				bytePos := runeIndex(currentLine, cursorPos)
-				insert := make([]byte, len(currentLine)+n)
-				copy(insert, currentLine[:bytePos])
-				copy(insert[bytePos:], b[:n])
-				copy(insert[bytePos+n:], currentLine[bytePos:])
-				currentLine = insert
-				cursorPos += utf8.RuneCount(b[:n])
-				redrawLine()
-
-				if isSlashMode() {
-					drawMenuBelow()
-				} else if menuLines > 0 {
-					clearMenuLines()
-				}
-			}
 		}
+		if errors.Is(err, io.EOF) {
+			fmt.Println()
+			return InputResult{}
+		}
+		// Other error — return empty.
+		return InputResult{}
 	}
 
-	if len(currentLine) > 0 {
-		lines = append(lines, strings.TrimSpace(string(currentLine)))
+	line = strings.TrimSpace(line)
+	if line == "" {
+		return InputResult{}
 	}
-	combined := strings.TrimSpace(strings.Join(lines, "\n"))
-	text, imgs := extractImages(combined)
+
+	text, imgs := extractImages(line)
 	return InputResult{Text: text, Images: imgs}
 }
 
@@ -738,21 +222,6 @@ func readWithTimeout(buf []byte, timeout time.Duration) int {
 		time.Sleep(5 * time.Millisecond)
 	}
 	return 0
-}
-
-// readLineFallback is a simple line reader for non-terminal input.
-func readLineFallback() string {
-	buf := make([]byte, 4096)
-	n, err := os.Stdin.Read(buf)
-	if err != nil || n == 0 {
-		return ""
-	}
-	return strings.TrimSpace(string(buf[:n]))
-}
-
-// ContinuationPrompt prints the continuation prompt for multi-line input.
-func ContinuationPrompt() {
-	fmt.Printf("%s  %s", Dim, Reset)
 }
 
 // PickerOption represents an option in the interactive picker.

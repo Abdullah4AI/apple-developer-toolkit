@@ -17,16 +17,16 @@ func DocsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "docs",
-		ShortUsage: "appstore docs <subcommand> [flags]",
+		ShortUsage: "asc docs <subcommand> [flags]",
 		ShortHelp:  "Access embedded documentation guides and reference helpers.",
 		LongHelp: `Access embedded documentation guides and reference helpers.
 
 Examples:
-  appstore docs list
-  appstore docs show workflows
-  appstore docs init
-  appstore docs init --path ./APPSTORE.md
-  appstore docs init --force --link=false`,
+  asc docs list
+  asc docs show workflows
+  asc docs init
+  asc docs init --path ./ASC.md
+  asc docs init --force --link=false`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{

@@ -21,17 +21,17 @@ type validateSubscriptionsOptions struct {
 	Pretty bool
 }
 
-// ValidateSubscriptionsCommand returns the appstore validate subscriptions subcommand.
+// ValidateSubscriptionsCommand returns the asc validate subscriptions subcommand.
 func ValidateSubscriptionsCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("subscriptions", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID)")
 	strict := fs.Bool("strict", false, "Treat warnings as errors (exit non-zero)")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "subscriptions",
-		ShortUsage: "appstore validate subscriptions --app \"APP_ID\" [flags]",
+		ShortUsage: "asc validate subscriptions --app \"APP_ID\" [flags]",
 		ShortHelp:  "Validate subscription review readiness (warning-only by default).",
 		LongHelp: `Validate review readiness for auto-renewable subscriptions.
 
@@ -39,15 +39,15 @@ This command is conservative: it emits warnings for subscriptions that look
 unsubmitted or need action, but it does not block by default (use --strict for CI).
 
 Examples:
-  appstore validate subscriptions --app "APP_ID"
-  appstore validate subscriptions --app "APP_ID" --output table
-  appstore validate subscriptions --app "APP_ID" --strict`,
+  asc validate subscriptions --app "APP_ID"
+  asc validate subscriptions --app "APP_ID" --output table
+  asc validate subscriptions --app "APP_ID" --strict`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			resolvedAppID := shared.ResolveAppID(*appID)
 			if resolvedAppID == "" {
-				fmt.Fprintln(os.Stderr, "Error: --app is required (or set APPSTORE_APP_ID)")
+				fmt.Fprintln(os.Stderr, "Error: --app is required (or set ASC_APP_ID)")
 				return flag.ErrHelp
 			}
 

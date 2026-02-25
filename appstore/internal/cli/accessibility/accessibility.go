@@ -20,16 +20,16 @@ func AccessibilityCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "accessibility",
-		ShortUsage: "appstore accessibility <subcommand> [flags]",
+		ShortUsage: "asc accessibility <subcommand> [flags]",
 		ShortHelp:  "Manage accessibility declarations.",
 		LongHelp: `Manage accessibility declarations for an app.
 
 Examples:
-  appstore accessibility list --app "APP_ID"
-  appstore accessibility get --id "DECLARATION_ID"
-  appstore accessibility create --app "APP_ID" --device-family IPHONE --supports-voiceover true
-  appstore accessibility update --id "DECLARATION_ID" --publish true
-  appstore accessibility delete --id "DECLARATION_ID" --confirm`,
+  asc accessibility list --app "APP_ID"
+  asc accessibility get --id "DECLARATION_ID"
+  asc accessibility create --app "APP_ID" --device-family IPHONE --supports-voiceover true
+  asc accessibility update --id "DECLARATION_ID" --publish true
+  asc accessibility delete --id "DECLARATION_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -49,7 +49,7 @@ Examples:
 func AccessibilityListCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("list", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID env)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
 	deviceFamily := fs.String("device-family", "", "Filter by device family(s), comma-separated: "+strings.Join(accessibilityDeviceFamilyList(), ", "))
 	state := fs.String("state", "", "Filter by state(s), comma-separated: "+strings.Join(accessibilityStateList(), ", "))
 	fields := fs.String("fields", "", "Fields to include: "+strings.Join(accessibilityDeclarationFieldList(), ", "))
@@ -60,15 +60,15 @@ func AccessibilityListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore accessibility list [flags]",
+		ShortUsage: "asc accessibility list [flags]",
 		ShortHelp:  "List accessibility declarations for an app.",
 		LongHelp: `List accessibility declarations for an app.
 
 Examples:
-  appstore accessibility list --app "APP_ID"
-  appstore accessibility list --app "APP_ID" --device-family IPHONE
-  appstore accessibility list --app "APP_ID" --state PUBLISHED --limit 50
-  appstore accessibility list --app "APP_ID" --paginate`,
+  asc accessibility list --app "APP_ID"
+  asc accessibility list --app "APP_ID" --device-family IPHONE
+  asc accessibility list --app "APP_ID" --state PUBLISHED --limit 50
+  asc accessibility list --app "APP_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -96,7 +96,7 @@ Examples:
 
 			resolvedAppID := shared.ResolveAppID(*appID)
 			if resolvedAppID == "" && strings.TrimSpace(*next) == "" {
-				fmt.Fprintln(os.Stderr, "Error: --app is required (or set APPSTORE_APP_ID)")
+				fmt.Fprintln(os.Stderr, "Error: --app is required (or set ASC_APP_ID)")
 				return flag.ErrHelp
 			}
 
@@ -153,13 +153,13 @@ func AccessibilityGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore accessibility get --id DECLARATION_ID",
+		ShortUsage: "asc accessibility get --id DECLARATION_ID",
 		ShortHelp:  "Get an accessibility declaration by ID.",
 		LongHelp: `Get an accessibility declaration by ID.
 
 Examples:
-  appstore accessibility get --id "DECLARATION_ID"
-  appstore accessibility get --id "DECLARATION_ID" --fields "deviceFamily,state"`,
+  asc accessibility get --id "DECLARATION_ID"
+  asc accessibility get --id "DECLARATION_ID" --fields "deviceFamily,state"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -196,7 +196,7 @@ Examples:
 func AccessibilityCreateCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("create", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID env)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
 	deviceFamily := fs.String("device-family", "", "Device family: "+strings.Join(accessibilityDeviceFamilyList(), ", "))
 	supportsAudioDescriptions := fs.String("supports-audio-descriptions", "", "Supports audio descriptions (true/false)")
 	supportsCaptions := fs.String("supports-captions", "", "Supports captions (true/false)")
@@ -211,19 +211,19 @@ func AccessibilityCreateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "create",
-		ShortUsage: "appstore accessibility create --app APP_ID --device-family DEVICE_FAMILY [flags]",
+		ShortUsage: "asc accessibility create --app APP_ID --device-family DEVICE_FAMILY [flags]",
 		ShortHelp:  "Create an accessibility declaration.",
 		LongHelp: `Create an accessibility declaration.
 
 Examples:
-  appstore accessibility create --app "APP_ID" --device-family IPHONE --supports-voiceover true
-  appstore accessibility create --app "APP_ID" --device-family IPAD --supports-captions true`,
+  asc accessibility create --app "APP_ID" --device-family IPHONE --supports-voiceover true
+  asc accessibility create --app "APP_ID" --device-family IPAD --supports-captions true`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			resolvedAppID := shared.ResolveAppID(*appID)
 			if resolvedAppID == "" {
-				fmt.Fprintln(os.Stderr, "Error: --app is required (or set APPSTORE_APP_ID)")
+				fmt.Fprintln(os.Stderr, "Error: --app is required (or set ASC_APP_ID)")
 				return flag.ErrHelp
 			}
 
@@ -290,13 +290,13 @@ func AccessibilityUpdateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "update",
-		ShortUsage: "appstore accessibility update --id DECLARATION_ID [flags]",
+		ShortUsage: "asc accessibility update --id DECLARATION_ID [flags]",
 		ShortHelp:  "Update an accessibility declaration.",
 		LongHelp: `Update an accessibility declaration.
 
 Examples:
-  appstore accessibility update --id "DECLARATION_ID" --supports-voiceover true
-  appstore accessibility update --id "DECLARATION_ID" --publish true`,
+  asc accessibility update --id "DECLARATION_ID" --supports-voiceover true
+  asc accessibility update --id "DECLARATION_ID" --publish true`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -354,12 +354,12 @@ func AccessibilityDeleteCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "delete",
-		ShortUsage: "appstore accessibility delete --id DECLARATION_ID --confirm",
+		ShortUsage: "asc accessibility delete --id DECLARATION_ID --confirm",
 		ShortHelp:  "Delete an accessibility declaration.",
 		LongHelp: `Delete an accessibility declaration.
 
 Examples:
-  appstore accessibility delete --id "DECLARATION_ID" --confirm`,
+  asc accessibility delete --id "DECLARATION_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

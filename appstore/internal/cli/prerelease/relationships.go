@@ -32,13 +32,13 @@ func PreReleaseVersionsRelationshipsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "relationships",
-		ShortUsage: "appstore pre-release-versions relationships <subcommand> [flags]",
+		ShortUsage: "asc pre-release-versions relationships <subcommand> [flags]",
 		ShortHelp:  "View pre-release version relationship linkages.",
 		LongHelp: `View pre-release version relationship linkages.
 
 Examples:
-  appstore pre-release-versions relationships get --id "PR_ID" --type "app"
-  appstore pre-release-versions relationships get --id "PR_ID" --type "builds" --paginate`,
+  asc pre-release-versions relationships get --id "PR_ID" --type "app"
+  asc pre-release-versions relationships get --id "PR_ID" --type "builds" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -63,13 +63,13 @@ func PreReleaseVersionsRelationshipsGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore pre-release-versions relationships get --id \"PR_ID\" --type \"RELATIONSHIP\" [flags]",
+		ShortUsage: "asc pre-release-versions relationships get --id \"PR_ID\" --type \"RELATIONSHIP\" [flags]",
 		ShortHelp:  "Get relationship linkages for a pre-release version.",
 		LongHelp: `Get relationship linkages for a pre-release version.
 
 Examples:
-  appstore pre-release-versions relationships get --id "PR_ID" --type "app"
-  appstore pre-release-versions relationships get --id "PR_ID" --type "builds" --paginate`,
+  asc pre-release-versions relationships get --id "PR_ID" --type "app"
+  asc pre-release-versions relationships get --id "PR_ID" --type "builds" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

@@ -27,7 +27,7 @@ func ShotsReviewApproveCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "review-approve",
-		ShortUsage: "appstore screenshots review-approve [--all-ready | --key key1,key2 | --id home] [flags]",
+		ShortUsage: "asc screenshots review-approve [--all-ready | --key key1,key2 | --id home] [flags]",
 		ShortHelp:  "Write/update approved.json from review manifest selectors (experimental).",
 		LongHelp: `Approve review entries and persist to approved.json (experimental).
 

@@ -346,8 +346,8 @@ func writeFileNoFollow(path string, data []byte) error {
 		path,
 		bytes.NewReader(data),
 		0o644,
-		".appstore-metadata-*.tmp",
-		".appstore-metadata-*.bak",
+		".asc-metadata-*.tmp",
+		".asc-metadata-*.bak",
 	)
 	return err
 }

@@ -25,13 +25,13 @@ func BetaTestersRelationshipsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "relationships",
-		ShortUsage: "appstore testflight beta-testers relationships <subcommand> [flags]",
+		ShortUsage: "asc testflight beta-testers relationships <subcommand> [flags]",
 		ShortHelp:  "View beta tester relationship linkages.",
 		LongHelp: `View beta tester relationship linkages.
 
 Examples:
-  appstore testflight beta-testers relationships get --tester-id "TESTER_ID" --type "apps"
-  appstore testflight beta-testers relationships get --tester-id "TESTER_ID" --type "betaGroups" --paginate`,
+  asc testflight beta-testers relationships get --tester-id "TESTER_ID" --type "apps"
+  asc testflight beta-testers relationships get --tester-id "TESTER_ID" --type "betaGroups" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -57,13 +57,13 @@ func BetaTestersRelationshipsGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore testflight beta-testers relationships get --tester-id \"TESTER_ID\" --type \"RELATIONSHIP\" [flags]",
+		ShortUsage: "asc testflight beta-testers relationships get --tester-id \"TESTER_ID\" --type \"RELATIONSHIP\" [flags]",
 		ShortHelp:  "Get beta tester relationship linkages.",
 		LongHelp: `Get beta tester relationship linkages.
 
 Examples:
-  appstore testflight beta-testers relationships get --tester-id "TESTER_ID" --type "apps"
-  appstore testflight beta-testers relationships get --tester-id "TESTER_ID" --type "builds" --paginate`,
+  asc testflight beta-testers relationships get --tester-id "TESTER_ID" --type "apps"
+  asc testflight beta-testers relationships get --tester-id "TESTER_ID" --type "builds" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

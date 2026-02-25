@@ -24,7 +24,7 @@ type betaTesterUsagesPage struct {
 func TestFlightMetricsBetaTesterUsagesCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("metrics beta-tester-usages", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID env)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
 	period := fs.String("period", "", "Reporting period: "+strings.Join(betaTesterUsagePeriodList(), ", "))
 	groupBy := fs.String("group-by", "betaTesters", "Group results by dimension (betaTesters)")
 	filterTester := fs.String("filter-tester", "", "Filter by beta tester ID")
@@ -35,16 +35,16 @@ func TestFlightMetricsBetaTesterUsagesCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "beta-tester-usages",
-		ShortUsage: "appstore testflight metrics beta-tester-usages --app \"APP_ID\" [flags]",
+		ShortUsage: "asc testflight metrics beta-tester-usages --app \"APP_ID\" [flags]",
 		ShortHelp:  "Fetch TestFlight beta tester usage metrics for an app.",
 		LongHelp: `Fetch TestFlight beta tester usage metrics for an app.
 
 Requires either --group-by or --filter-tester (or both).
 
 Examples:
-  appstore testflight metrics beta-tester-usages --app "APP_ID"
-  appstore testflight metrics beta-tester-usages --app "APP_ID" --period "P30D"
-  appstore testflight metrics beta-tester-usages --app "APP_ID" --filter-tester "TESTER_ID"`,
+  asc testflight metrics beta-tester-usages --app "APP_ID"
+  asc testflight metrics beta-tester-usages --app "APP_ID" --period "P30D"
+  asc testflight metrics beta-tester-usages --app "APP_ID" --filter-tester "TESTER_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -65,7 +65,7 @@ Examples:
 			resolvedAppID := shared.ResolveAppID(*appID)
 			nextValue := strings.TrimSpace(*next)
 			if nextValue == "" && resolvedAppID == "" {
-				fmt.Fprintf(os.Stderr, "Error: --app is required (or set APPSTORE_APP_ID)\n\n")
+				fmt.Fprintf(os.Stderr, "Error: --app is required (or set ASC_APP_ID)\n\n")
 				return flag.ErrHelp
 			}
 

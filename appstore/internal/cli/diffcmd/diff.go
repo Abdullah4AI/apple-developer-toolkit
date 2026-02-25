@@ -15,13 +15,13 @@ func DiffCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "diff",
-		ShortUsage: "appstore diff <subcommand> [flags]",
+		ShortUsage: "asc diff <subcommand> [flags]",
 		ShortHelp:  "Generate deterministic non-mutating diff plans.",
 		LongHelp: `Generate deterministic non-mutating diff plans.
 
 Examples:
-  appstore diff localizations --app "APP_ID" --path "./metadata/localizations" --version "VERSION_ID"
-  appstore diff localizations --app "APP_ID" --from-version "VERSION_ID_A" --to-version "VERSION_ID_B"`,
+  asc diff localizations --app "APP_ID" --path "./metadata/localizations" --version "VERSION_ID"
+  asc diff localizations --app "APP_ID" --from-version "VERSION_ID_A" --to-version "VERSION_ID_B"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{

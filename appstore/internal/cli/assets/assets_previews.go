@@ -22,15 +22,15 @@ func AssetsPreviewsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "previews",
-		ShortUsage: "appstore video-previews <subcommand> [flags]",
+		ShortUsage: "asc video-previews <subcommand> [flags]",
 		ShortHelp:  "Manage App Store app preview videos.",
 		LongHelp: `Manage App Store app preview videos.
 
 Examples:
-  appstore video-previews list --version-localization "LOC_ID"
-  appstore video-previews upload --version-localization "LOC_ID" --path "./previews" --device-type "IPHONE_65"
-  appstore video-previews download --version-localization "LOC_ID" --output-dir "./previews/downloaded"
-  appstore video-previews delete --id "PREVIEW_ID" --confirm`,
+  asc video-previews list --version-localization "LOC_ID"
+  asc video-previews upload --version-localization "LOC_ID" --path "./previews" --device-type "IPHONE_65"
+  asc video-previews download --version-localization "LOC_ID" --output-dir "./previews/downloaded"
+  asc video-previews delete --id "PREVIEW_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -54,12 +54,12 @@ func AssetsPreviewsListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore video-previews list --version-localization \"LOC_ID\"",
+		ShortUsage: "asc video-previews list --version-localization \"LOC_ID\"",
 		ShortHelp:  "List previews for a localization.",
 		LongHelp: `List previews for a localization.
 
 Examples:
-  appstore video-previews list --version-localization "LOC_ID"`,
+  asc video-previews list --version-localization "LOC_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -114,13 +114,13 @@ func AssetsPreviewsUploadCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "upload",
-		ShortUsage: "appstore video-previews upload --version-localization \"LOC_ID\" --path \"./previews\" --device-type \"IPHONE_65\"",
+		ShortUsage: "asc video-previews upload --version-localization \"LOC_ID\" --path \"./previews\" --device-type \"IPHONE_65\"",
 		ShortHelp:  "Upload previews for a localization.",
 		LongHelp: `Upload previews for a localization.
 
 Examples:
-  appstore video-previews upload --version-localization "LOC_ID" --path "./previews" --device-type "IPHONE_65"
-  appstore video-previews upload --version-localization "LOC_ID" --path "./previews/preview.mov" --device-type "IPHONE_65"`,
+  asc video-previews upload --version-localization "LOC_ID" --path "./previews" --device-type "IPHONE_65"
+  asc video-previews upload --version-localization "LOC_ID" --path "./previews/preview.mov" --device-type "IPHONE_65"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -229,14 +229,14 @@ func AssetsPreviewsDownloadCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "download",
-		ShortUsage: "appstore video-previews download (--id \"PREVIEW_ID\" --output \"./preview.mov\") | (--version-localization \"LOC_ID\" --output-dir \"./previews\")",
+		ShortUsage: "asc video-previews download (--id \"PREVIEW_ID\" --output \"./preview.mov\") | (--version-localization \"LOC_ID\" --output-dir \"./previews\")",
 		ShortHelp:  "Download App Store app preview videos to disk.",
 		LongHelp: `Download App Store app preview videos to disk.
 
 Examples:
-  appstore video-previews download --id "PREVIEW_ID" --output "./preview.mov"
-  appstore video-previews download --version-localization "LOC_ID" --output-dir "./previews"
-  appstore video-previews download --version-localization "LOC_ID" --output-dir "./previews" --overwrite`,
+  asc video-previews download --id "PREVIEW_ID" --output "./preview.mov"
+  asc video-previews download --version-localization "LOC_ID" --output-dir "./previews"
+  asc video-previews download --version-localization "LOC_ID" --output-dir "./previews" --overwrite`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -527,12 +527,12 @@ func AssetsPreviewsDeleteCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "delete",
-		ShortUsage: "appstore video-previews delete --id \"PREVIEW_ID\" --confirm",
+		ShortUsage: "asc video-previews delete --id \"PREVIEW_ID\" --confirm",
 		ShortHelp:  "Delete a preview by ID.",
 		LongHelp: `Delete a preview by ID.
 
 Examples:
-  appstore video-previews delete --id "PREVIEW_ID" --confirm`,
+  asc video-previews delete --id "PREVIEW_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -578,6 +578,11 @@ func normalizePreviewType(input string) (string, error) {
 		return "", fmt.Errorf("unsupported preview type %q", value)
 	}
 	return value, nil
+}
+
+// NormalizePreviewType normalizes and validates a preview type.
+func NormalizePreviewType(input string) (string, error) {
+	return normalizePreviewType(input)
 }
 
 func ensurePreviewSet(ctx context.Context, client *asc.Client, localizationID, previewType string) (asc.Resource[asc.AppPreviewSetAttributes], error) {
@@ -650,6 +655,11 @@ func uploadPreviewAsset(ctx context.Context, client *asc.Client, setID, filePath
 		AssetID:  created.Data.ID,
 		State:    state,
 	}, nil
+}
+
+// UploadPreviewAsset uploads a preview file to a set.
+func UploadPreviewAsset(ctx context.Context, client *asc.Client, setID, filePath string) (asc.AssetUploadResultItem, error) {
+	return uploadPreviewAsset(ctx, client, setID, filePath)
 }
 
 func detectPreviewMimeType(path string) (string, error) {

@@ -15,22 +15,48 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
+var focusedScreenshotDisplayTypes = []string{
+	"APP_IPHONE_65",
+	"APP_IPAD_PRO_3GEN_129",
+}
+
+func focusedScreenshotSizeCatalog() []asc.ScreenshotSizeEntry {
+	focused := make([]asc.ScreenshotSizeEntry, 0, len(focusedScreenshotDisplayTypes))
+	for _, displayType := range focusedScreenshotDisplayTypes {
+		entry, ok := asc.ScreenshotSizeEntryForDisplayType(displayType)
+		if !ok {
+			continue
+		}
+		focused = append(focused, entry)
+	}
+	if len(focused) == 0 {
+		return asc.ScreenshotSizeCatalog()
+	}
+	return focused
+}
+
 // AssetsScreenshotsCommand returns the screenshots subcommand group.
 func AssetsScreenshotsCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("screenshots", flag.ExitOnError)
 
 	return &ffcli.Command{
 		Name:       "screenshots",
-		ShortUsage: "appstore screenshots <subcommand> [flags]",
+		ShortUsage: "asc screenshots <subcommand> [flags]",
 		ShortHelp:  "Manage App Store screenshots.",
 		LongHelp: `Manage App Store screenshots.
 
 Examples:
-  appstore screenshots list --version-localization "LOC_ID"
-  appstore screenshots sizes --display-type "APP_IPHONE_65"
-  appstore screenshots upload --version-localization "LOC_ID" --path "./screenshots" --device-type "IPHONE_65"
-  appstore screenshots download --version-localization "LOC_ID" --output-dir "./screenshots/downloaded"
-  appstore screenshots delete --id "SCREENSHOT_ID" --confirm`,
+  asc screenshots list --version-localization "LOC_ID"
+  asc screenshots sizes
+  asc screenshots sizes --all
+  asc screenshots upload --version-localization "LOC_ID" --path "./screenshots/iphone" --device-type "IPHONE_65"
+  asc screenshots upload --version-localization "LOC_ID" --path "./screenshots/ipad" --device-type "IPAD_PRO_3GEN_129"
+  asc screenshots download --version-localization "LOC_ID" --output-dir "./screenshots/downloaded"
+  asc screenshots delete --id "SCREENSHOT_ID" --confirm
+
+By default, "asc screenshots sizes" focuses on one iPhone set (IPHONE_65)
+and one iPad set (IPAD_PRO_3GEN_129). Use --all to list every supported
+display type.`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -55,12 +81,12 @@ func AssetsScreenshotsListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore screenshots list --version-localization \"LOC_ID\"",
+		ShortUsage: "asc screenshots list --version-localization \"LOC_ID\"",
 		ShortHelp:  "List screenshots for a localization.",
 		LongHelp: `List screenshots for a localization.
 
 Examples:
-  appstore screenshots list --version-localization "LOC_ID"`,
+  asc screenshots list --version-localization "LOC_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -109,25 +135,32 @@ func AssetsScreenshotsSizesCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("sizes", flag.ExitOnError)
 
 	displayType := fs.String("display-type", "", "Filter by screenshot display type (e.g., APP_IPHONE_65)")
+	all := fs.Bool("all", false, "List all supported screenshot display types")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "sizes",
-		ShortUsage: "appstore screenshots sizes [--display-type \"APP_IPHONE_65\"]",
+		ShortUsage: "asc screenshots sizes [--display-type \"APP_IPHONE_65\" | --all]",
 		ShortHelp:  "List supported screenshot display sizes.",
 		LongHelp: `List supported screenshot display sizes.
 
+By default this command focuses on common iOS submission slots:
+APP_IPHONE_65 and APP_IPAD_PRO_3GEN_129.
+
 Examples:
-  appstore screenshots sizes
-  appstore screenshots sizes --display-type "APP_IPHONE_65"
-  appstore screenshots sizes --output table`,
+  asc screenshots sizes
+  asc screenshots sizes --all
+  asc screenshots sizes --display-type "APP_IPHONE_65"
+  asc screenshots sizes --output table`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			filter := strings.TrimSpace(*displayType)
-			result := asc.ScreenshotSizesResult{
-				Sizes: asc.ScreenshotSizeCatalog(),
+			if filter != "" && *all {
+				return shared.UsageError("--display-type and --all are mutually exclusive")
 			}
+
+			result := asc.ScreenshotSizesResult{}
 
 			if filter != "" {
 				normalized, err := normalizeScreenshotDisplayType(filter)
@@ -139,6 +172,10 @@ Examples:
 					return fmt.Errorf("screenshots sizes: unsupported screenshot display type %q", normalized)
 				}
 				result.Sizes = []asc.ScreenshotSizeEntry{entry}
+			} else if *all {
+				result.Sizes = asc.ScreenshotSizeCatalog()
+			} else {
+				result.Sizes = focusedScreenshotSizeCatalog()
 			}
 
 			return shared.PrintOutput(&result, *output.Output, *output.Pretty)
@@ -152,18 +189,19 @@ func AssetsScreenshotsUploadCommand() *ffcli.Command {
 
 	localizationID := fs.String("version-localization", "", "App Store version localization ID")
 	path := fs.String("path", "", "Path to screenshot file or directory")
-	deviceType := fs.String("device-type", "", "Device type (e.g., IPHONE_65)")
+	deviceType := fs.String("device-type", "", "Device type (e.g., IPHONE_65 or IPAD_PRO_3GEN_129)")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "upload",
-		ShortUsage: "appstore screenshots upload --version-localization \"LOC_ID\" --path \"./screenshots\" --device-type \"IPHONE_65\"",
+		ShortUsage: "asc screenshots upload --version-localization \"LOC_ID\" --path \"./screenshots\" --device-type \"IPHONE_65\"",
 		ShortHelp:  "Upload screenshots for a localization.",
 		LongHelp: `Upload screenshots for a localization.
 
 Examples:
-  appstore screenshots upload --version-localization "LOC_ID" --path "./screenshots" --device-type "IPHONE_65"
-  appstore screenshots upload --version-localization "LOC_ID" --path "./screenshots/en-US.png" --device-type "IPHONE_65"`,
+  asc screenshots upload --version-localization "LOC_ID" --path "./screenshots" --device-type "IPHONE_65"
+  asc screenshots upload --version-localization "LOC_ID" --path "./screenshots" --device-type "IPAD_PRO_3GEN_129"
+  asc screenshots upload --version-localization "LOC_ID" --path "./screenshots/en-US.png" --device-type "IPHONE_65"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -187,13 +225,14 @@ Examples:
 			if err != nil {
 				return fmt.Errorf("screenshots upload: %w", err)
 			}
+			apiDisplayType := asc.CanonicalScreenshotDisplayTypeForAPI(displayType)
 
 			files, err := collectAssetFiles(pathValue)
 			if err != nil {
 				return fmt.Errorf("screenshots upload: %w", err)
 			}
 
-			if err := validateScreenshotDimensions(files, displayType); err != nil {
+			if err := validateScreenshotDimensions(files, apiDisplayType); err != nil {
 				return fmt.Errorf("screenshots upload: %w", err)
 			}
 
@@ -205,7 +244,7 @@ Examples:
 			requestCtx, cancel := contextWithAssetUploadTimeout(ctx)
 			defer cancel()
 
-			set, err := ensureScreenshotSet(requestCtx, client, locID, displayType)
+			set, err := ensureScreenshotSet(requestCtx, client, locID, apiDisplayType)
 			if err != nil {
 				return fmt.Errorf("screenshots upload: %w", err)
 			}
@@ -276,14 +315,14 @@ func AssetsScreenshotsDownloadCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "download",
-		ShortUsage: "appstore screenshots download (--id \"SCREENSHOT_ID\" --output \"./screenshot.png\") | (--version-localization \"LOC_ID\" --output-dir \"./screenshots\")",
+		ShortUsage: "asc screenshots download (--id \"SCREENSHOT_ID\" --output \"./screenshot.png\") | (--version-localization \"LOC_ID\" --output-dir \"./screenshots\")",
 		ShortHelp:  "Download App Store screenshots to disk.",
 		LongHelp: `Download App Store screenshots to disk.
 
 Examples:
-  appstore screenshots download --id "SCREENSHOT_ID" --output "./screenshot.png"
-  appstore screenshots download --version-localization "LOC_ID" --output-dir "./screenshots"
-  appstore screenshots download --version-localization "LOC_ID" --output-dir "./screenshots" --overwrite`,
+  asc screenshots download --id "SCREENSHOT_ID" --output "./screenshot.png"
+  asc screenshots download --version-localization "LOC_ID" --output-dir "./screenshots"
+  asc screenshots download --version-localization "LOC_ID" --output-dir "./screenshots" --overwrite`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -575,12 +614,12 @@ func AssetsScreenshotsDeleteCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "delete",
-		ShortUsage: "appstore screenshots delete --id \"SCREENSHOT_ID\" --confirm",
+		ShortUsage: "asc screenshots delete --id \"SCREENSHOT_ID\" --confirm",
 		ShortHelp:  "Delete a screenshot by ID.",
 		LongHelp: `Delete a screenshot by ID.
 
 Examples:
-  appstore screenshots delete --id "SCREENSHOT_ID" --confirm`,
+  asc screenshots delete --id "SCREENSHOT_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -631,6 +670,11 @@ func normalizeScreenshotDisplayType(input string) (string, error) {
 	return value, nil
 }
 
+// NormalizeScreenshotDisplayType normalizes and validates a screenshot display type.
+func NormalizeScreenshotDisplayType(input string) (string, error) {
+	return normalizeScreenshotDisplayType(input)
+}
+
 func normalizeScreenshotDisplayTypeAlias(value string) string {
 	return value
 }
@@ -642,6 +686,11 @@ func validateScreenshotDimensions(files []string, displayType string) error {
 		}
 	}
 	return nil
+}
+
+// ValidateScreenshotDimensions validates screenshot dimensions for all files.
+func ValidateScreenshotDimensions(files []string, displayType string) error {
+	return validateScreenshotDimensions(files, displayType)
 }
 
 func ensureScreenshotSet(ctx context.Context, client *asc.Client, localizationID, displayType string) (asc.Resource[asc.AppScreenshotSetAttributes], error) {

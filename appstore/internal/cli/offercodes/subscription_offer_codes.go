@@ -105,12 +105,12 @@ func OfferCodesGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore offer-codes get --offer-code-id ID",
+		ShortUsage: "asc offer-codes get --offer-code-id ID",
 		ShortHelp:  "Get a subscription offer code by ID.",
 		LongHelp: `Get a subscription offer code by ID.
 
 Examples:
-  appstore offer-codes get --offer-code-id "OFFER_CODE_ID"`,
+  asc offer-codes get --offer-code-id "OFFER_CODE_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -157,12 +157,12 @@ func OfferCodesCreateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "create",
-		ShortUsage: "appstore offer-codes create [flags]",
+		ShortUsage: "asc offer-codes create [flags]",
 		ShortHelp:  "Create a subscription offer code.",
 		LongHelp: `Create a subscription offer code.
 
 Examples:
-  appstore offer-codes create --subscription-id "SUB_ID" --name "SPRING" --customer-eligibilities NEW --offer-eligibility STACK_WITH_INTRO_OFFERS --duration ONE_MONTH --offer-mode PAY_AS_YOU_GO --number-of-periods 1 --prices "USA:PRICE_POINT_ID"`,
+  asc offer-codes create --subscription-id "SUB_ID" --name "SPRING" --customer-eligibilities NEW --offer-eligibility STACK_WITH_INTRO_OFFERS --duration ONE_MONTH --offer-mode PAY_AS_YOU_GO --number-of-periods 1 --prices "USA:PRICE_POINT_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -278,12 +278,12 @@ func OfferCodesUpdateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "update",
-		ShortUsage: "appstore offer-codes update [flags]",
+		ShortUsage: "asc offer-codes update [flags]",
 		ShortHelp:  "Update a subscription offer code.",
 		LongHelp: `Update a subscription offer code.
 
 Examples:
-  appstore offer-codes update --offer-code-id "OFFER_CODE_ID" --active true`,
+  asc offer-codes update --offer-code-id "OFFER_CODE_ID" --active true`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

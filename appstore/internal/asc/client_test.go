@@ -1274,6 +1274,7 @@ func TestBuildBuildsQuery(t *testing.T) {
 		WithBuildsLimit(25),
 		WithBuildsNextURL("https://api.appstoreconnect.apple.com/v1/apps/123/builds?cursor=abc"),
 		WithBuildsSort("-uploadedDate"),
+		WithBuildsVersion("42"),
 	}
 	for _, opt := range opts {
 		opt(query)
@@ -1287,6 +1288,64 @@ func TestBuildBuildsQuery(t *testing.T) {
 	}
 	if query.sort != "-uploadedDate" {
 		t.Fatalf("expected sort=-uploadedDate, got %q", query.sort)
+	}
+	if query.version != "42" {
+		t.Fatalf("expected version=42, got %q", query.version)
+	}
+}
+
+func TestBuildBuildsQuery_WithExpiredFilter(t *testing.T) {
+	query := &buildsQuery{}
+	opts := []BuildsOption{
+		WithBuildsExpired(false),
+	}
+	for _, opt := range opts {
+		opt(query)
+	}
+
+	if query.expired == nil {
+		t.Fatal("expected expired filter to be set")
+	}
+	if *query.expired {
+		t.Fatalf("expected expired filter=false, got %v", *query.expired)
+	}
+}
+
+func TestBuildBuildsQuery_WithBuildNumberAlias(t *testing.T) {
+	query := &buildsQuery{}
+	WithBuildsBuildNumber("314")(query)
+	if query.version != "314" {
+		t.Fatalf("expected build number alias to set version=314, got %q", query.version)
+	}
+}
+
+func TestBuildBuildsQuery_WithProcessingStates(t *testing.T) {
+	query := &buildsQuery{}
+	WithBuildsProcessingStates([]string{" processing ", "failed", "", "INVALID"})(query)
+	if len(query.processingStates) != 3 {
+		t.Fatalf("expected 3 processing states, got %d (%v)", len(query.processingStates), query.processingStates)
+	}
+	if query.processingStates[0] != "PROCESSING" || query.processingStates[1] != "FAILED" || query.processingStates[2] != "INVALID" {
+		t.Fatalf("expected normalized processing states [PROCESSING FAILED INVALID], got %v", query.processingStates)
+	}
+}
+
+func TestBuildBuildsQuery_WithPreReleasePlatforms(t *testing.T) {
+	query := &buildsQuery{}
+	WithBuildsPreReleaseVersionPlatforms([]string{" ios ", "MAC_OS", ""})(query)
+	if len(query.preReleasePlatforms) != 2 {
+		t.Fatalf("expected 2 pre-release platforms, got %d (%v)", len(query.preReleasePlatforms), query.preReleasePlatforms)
+	}
+	if query.preReleasePlatforms[0] != "IOS" || query.preReleasePlatforms[1] != "MAC_OS" {
+		t.Fatalf("expected normalized pre-release platforms [IOS MAC_OS], got %v", query.preReleasePlatforms)
+	}
+}
+
+func TestBuildBuildsQuery_WithPreReleaseVersions(t *testing.T) {
+	query := &buildsQuery{}
+	WithBuildsPreReleaseVersions([]string{"prv-1", " ", "prv-2"})(query)
+	if len(query.preReleaseVersionIDs) != 2 || query.preReleaseVersionIDs[0] != "prv-1" || query.preReleaseVersionIDs[1] != "prv-2" {
+		t.Fatalf("expected normalized pre-release version ids [prv-1 prv-2], got %v", query.preReleaseVersionIDs)
 	}
 }
 
@@ -2210,6 +2269,61 @@ func TestAppScreenshotSetCreateRequest_JSON(t *testing.T) {
 	}
 }
 
+func TestAppScreenshotSetCreateRequest_JSON_CustomProductPageLocalization(t *testing.T) {
+	req := AppScreenshotSetCreateRequest{
+		Data: AppScreenshotSetCreateData{
+			Type:       ResourceTypeAppScreenshotSets,
+			Attributes: AppScreenshotSetAttributes{ScreenshotDisplayType: "APP_IPHONE_65"},
+			Relationships: &AppScreenshotSetRelationships{
+				AppCustomProductPageLocalization: &Relationship{
+					Data: ResourceData{
+						Type: ResourceTypeAppCustomProductPageLocalizations,
+						ID:   "CPP_LOC_ID_123",
+					},
+				},
+			},
+		},
+	}
+
+	body, err := BuildRequestBody(req)
+	if err != nil {
+		t.Fatalf("BuildRequestBody() error: %v", err)
+	}
+
+	buf := new(bytes.Buffer)
+	if _, err := buf.ReadFrom(body); err != nil {
+		t.Fatalf("read body error: %v", err)
+	}
+
+	var parsed struct {
+		Data struct {
+			Relationships map[string]struct {
+				Data struct {
+					Type string `json:"type"`
+					ID   string `json:"id"`
+				} `json:"data"`
+			} `json:"relationships"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(buf.Bytes(), &parsed); err != nil {
+		t.Fatalf("failed to unmarshal body: %v", err)
+	}
+
+	rel, ok := parsed.Data.Relationships["appCustomProductPageLocalization"]
+	if !ok {
+		t.Fatalf("expected appCustomProductPageLocalization relationship, got %+v", parsed.Data.Relationships)
+	}
+	if rel.Data.Type != "appCustomProductPageLocalizations" {
+		t.Fatalf("expected relationship type=appCustomProductPageLocalizations, got %q", rel.Data.Type)
+	}
+	if rel.Data.ID != "CPP_LOC_ID_123" {
+		t.Fatalf("expected relationship id=CPP_LOC_ID_123, got %q", rel.Data.ID)
+	}
+	if _, ok := parsed.Data.Relationships["appStoreVersionLocalization"]; ok {
+		t.Fatalf("expected appStoreVersionLocalization to be omitted when unset")
+	}
+}
+
 func TestAppScreenshotCreateRequest_JSON(t *testing.T) {
 	req := AppScreenshotCreateRequest{
 		Data: AppScreenshotCreateData{
@@ -2386,6 +2500,61 @@ func TestAppPreviewSetCreateRequest_JSON(t *testing.T) {
 	}
 	if parsed.Data.Relationships.AppStoreVersionLocalization.Data.ID != "LOC_ID_123" {
 		t.Fatalf("expected relationship id=LOC_ID_123, got %q", parsed.Data.Relationships.AppStoreVersionLocalization.Data.ID)
+	}
+}
+
+func TestAppPreviewSetCreateRequest_JSON_CustomProductPageLocalization(t *testing.T) {
+	req := AppPreviewSetCreateRequest{
+		Data: AppPreviewSetCreateData{
+			Type:       ResourceTypeAppPreviewSets,
+			Attributes: AppPreviewSetAttributes{PreviewType: "IPHONE_65"},
+			Relationships: &AppPreviewSetRelationships{
+				AppCustomProductPageLocalization: &Relationship{
+					Data: ResourceData{
+						Type: ResourceTypeAppCustomProductPageLocalizations,
+						ID:   "CPP_LOC_ID_123",
+					},
+				},
+			},
+		},
+	}
+
+	body, err := BuildRequestBody(req)
+	if err != nil {
+		t.Fatalf("BuildRequestBody() error: %v", err)
+	}
+
+	buf := new(bytes.Buffer)
+	if _, err := buf.ReadFrom(body); err != nil {
+		t.Fatalf("read body error: %v", err)
+	}
+
+	var parsed struct {
+		Data struct {
+			Relationships map[string]struct {
+				Data struct {
+					Type string `json:"type"`
+					ID   string `json:"id"`
+				} `json:"data"`
+			} `json:"relationships"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(buf.Bytes(), &parsed); err != nil {
+		t.Fatalf("failed to unmarshal body: %v", err)
+	}
+
+	rel, ok := parsed.Data.Relationships["appCustomProductPageLocalization"]
+	if !ok {
+		t.Fatalf("expected appCustomProductPageLocalization relationship, got %+v", parsed.Data.Relationships)
+	}
+	if rel.Data.Type != "appCustomProductPageLocalizations" {
+		t.Fatalf("expected relationship type=appCustomProductPageLocalizations, got %q", rel.Data.Type)
+	}
+	if rel.Data.ID != "CPP_LOC_ID_123" {
+		t.Fatalf("expected relationship id=CPP_LOC_ID_123, got %q", rel.Data.ID)
+	}
+	if _, ok := parsed.Data.Relationships["appStoreVersionLocalization"]; ok {
+		t.Fatalf("expected appStoreVersionLocalization to be omitted when unset")
 	}
 }
 

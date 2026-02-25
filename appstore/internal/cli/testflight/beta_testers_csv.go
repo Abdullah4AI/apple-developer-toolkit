@@ -60,7 +60,7 @@ type betaTestersImportSummary struct {
 func BetaTestersExportCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("export", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID env)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
 	outputPath := fs.String("output", "", "Output CSV file path (required)")
 	group := fs.String("group", "", "Beta group name or ID to filter (optional)")
 	buildID := fs.String("build", "", "Build ID to filter (optional)")
@@ -70,7 +70,7 @@ func BetaTestersExportCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "export",
-		ShortUsage: "appstore testflight beta-testers export --app \"APP_ID\" --output \"./testers.csv\" [flags]",
+		ShortUsage: "asc testflight beta-testers export --app \"APP_ID\" --output \"./testers.csv\" [flags]",
 		ShortHelp:  "Export TestFlight beta testers to a CSV file.",
 		LongHelp: `Export TestFlight beta testers to a CSV file.
 
@@ -79,17 +79,17 @@ CSV format:
   - groups are semicolon-delimited when present (for fastlane compatibility)
 
 Examples:
-  appstore testflight beta-testers export --app "APP_ID" --output "./testflight-testers.csv"
-  appstore testflight beta-testers export --app "APP_ID" --group "Beta" --output "./testers.csv"
-  appstore testflight beta-testers export --app "APP_ID" --build "BUILD_ID" --output "./testers.csv"
-  appstore testflight beta-testers export --app "APP_ID" --email "tester@example.com" --output "./testers.csv"
-  appstore testflight beta-testers export --app "APP_ID" --output "./testers.csv" --include-groups`,
+  asc testflight beta-testers export --app "APP_ID" --output "./testflight-testers.csv"
+  asc testflight beta-testers export --app "APP_ID" --group "Beta" --output "./testers.csv"
+  asc testflight beta-testers export --app "APP_ID" --build "BUILD_ID" --output "./testers.csv"
+  asc testflight beta-testers export --app "APP_ID" --email "tester@example.com" --output "./testers.csv"
+  asc testflight beta-testers export --app "APP_ID" --output "./testers.csv" --include-groups`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			resolvedAppID := shared.ResolveAppID(*appID)
 			if resolvedAppID == "" {
-				fmt.Fprintf(os.Stderr, "Error: --app is required (or set APPSTORE_APP_ID)\n\n")
+				fmt.Fprintf(os.Stderr, "Error: --app is required (or set ASC_APP_ID)\n\n")
 				return flag.ErrHelp
 			}
 
@@ -246,7 +246,7 @@ Examples:
 func BetaTestersImportCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("import", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID env)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
 	inputPath := fs.String("input", "", "Input CSV file path (required)")
 	dryRun := fs.Bool("dry-run", false, "Validate and print plan without mutating network state")
 	invite := fs.Bool("invite", false, "Invite newly created testers (default false)")
@@ -257,7 +257,7 @@ func BetaTestersImportCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "import",
-		ShortUsage: "appstore testflight beta-testers import --app \"APP_ID\" --input \"./testers.csv\" [flags]",
+		ShortUsage: "asc testflight beta-testers import --app \"APP_ID\" --input \"./testers.csv\" [flags]",
 		ShortHelp:  "Import TestFlight beta testers from a CSV file.",
 		LongHelp: `Import TestFlight beta testers from a CSV file.
 
@@ -273,16 +273,16 @@ Groups are semicolon-delimited in canonical import/export files.
 For compatibility, comma-delimited groups are also accepted when no semicolon is present.
 
 Examples:
-  appstore testflight beta-testers import --app "APP_ID" --input "./testflight-testers.csv" --dry-run
-  appstore testflight beta-testers import --app "APP_ID" --input "./testflight-testers.csv"
-  appstore testflight beta-testers import --app "APP_ID" --input "./testflight-testers.csv" --invite
-  appstore testflight beta-testers import --app "APP_ID" --input "./testflight-testers.csv" --group "Beta"`,
+  asc testflight beta-testers import --app "APP_ID" --input "./testflight-testers.csv" --dry-run
+  asc testflight beta-testers import --app "APP_ID" --input "./testflight-testers.csv"
+  asc testflight beta-testers import --app "APP_ID" --input "./testflight-testers.csv" --invite
+  asc testflight beta-testers import --app "APP_ID" --input "./testflight-testers.csv" --group "Beta"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			resolvedAppID := shared.ResolveAppID(*appID)
 			if resolvedAppID == "" {
-				fmt.Fprintf(os.Stderr, "Error: --app is required (or set APPSTORE_APP_ID)\n\n")
+				fmt.Fprintf(os.Stderr, "Error: --app is required (or set ASC_APP_ID)\n\n")
 				return flag.ErrHelp
 			}
 
@@ -1006,7 +1006,7 @@ func writeCSVFileAtomicNoSymlink(outputPath string, header []string, rows [][]st
 		return err
 	}
 
-	tempFile, err := os.CreateTemp(dir, ".appstore-beta-testers-*.csv")
+	tempFile, err := os.CreateTemp(dir, ".asc-beta-testers-*.csv")
 	if err != nil {
 		return err
 	}

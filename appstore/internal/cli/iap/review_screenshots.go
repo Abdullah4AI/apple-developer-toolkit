@@ -19,15 +19,15 @@ func IAPReviewScreenshotsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "review-screenshots",
-		ShortUsage: "appstore iap review-screenshots <subcommand> [flags]",
+		ShortUsage: "asc iap review-screenshots <subcommand> [flags]",
 		ShortHelp:  "Manage in-app purchase review screenshots.",
 		LongHelp: `Manage in-app purchase review screenshots.
 
 Examples:
-  appstore iap review-screenshots get --iap-id "IAP_ID"
-  appstore iap review-screenshots create --iap-id "IAP_ID" --file "./review.png"
-  appstore iap review-screenshots update --screenshot-id "SHOT_ID" --file "./review.png"
-  appstore iap review-screenshots delete --screenshot-id "SHOT_ID" --confirm`,
+  asc iap review-screenshots get --iap-id "IAP_ID"
+  asc iap review-screenshots create --iap-id "IAP_ID" --file "./review.png"
+  asc iap review-screenshots update --screenshot-id "SHOT_ID" --file "./review.png"
+  asc iap review-screenshots delete --screenshot-id "SHOT_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -52,13 +52,13 @@ func IAPReviewScreenshotsGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore iap review-screenshots get --iap-id \"IAP_ID\"",
+		ShortUsage: "asc iap review-screenshots get --iap-id \"IAP_ID\"",
 		ShortHelp:  "Get an in-app purchase review screenshot.",
 		LongHelp: `Get an in-app purchase review screenshot.
 
 Examples:
-  appstore iap review-screenshots get --iap-id "IAP_ID"
-  appstore iap review-screenshots get --screenshot-id "SHOT_ID"`,
+  asc iap review-screenshots get --iap-id "IAP_ID"
+  asc iap review-screenshots get --screenshot-id "SHOT_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -105,12 +105,12 @@ func IAPReviewScreenshotsCreateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "create",
-		ShortUsage: "appstore iap review-screenshots create --iap-id \"IAP_ID\" --file \"./review.png\"",
+		ShortUsage: "asc iap review-screenshots create --iap-id \"IAP_ID\" --file \"./review.png\"",
 		ShortHelp:  "Upload an in-app purchase review screenshot.",
 		LongHelp: `Upload an in-app purchase review screenshot.
 
 Examples:
-  appstore iap review-screenshots create --iap-id "IAP_ID" --file "./review.png"`,
+  asc iap review-screenshots create --iap-id "IAP_ID" --file "./review.png"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -184,12 +184,12 @@ func IAPReviewScreenshotsUpdateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "update",
-		ShortUsage: "appstore iap review-screenshots update --screenshot-id \"SHOT_ID\" --file \"./review.png\"",
+		ShortUsage: "asc iap review-screenshots update --screenshot-id \"SHOT_ID\" --file \"./review.png\"",
 		ShortHelp:  "Re-upload an in-app purchase review screenshot.",
 		LongHelp: `Re-upload an in-app purchase review screenshot.
 
 Examples:
-  appstore iap review-screenshots update --screenshot-id "SHOT_ID" --file "./review.png"`,
+  asc iap review-screenshots update --screenshot-id "SHOT_ID" --file "./review.png"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -287,12 +287,12 @@ func IAPReviewScreenshotsDeleteCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "delete",
-		ShortUsage: "appstore iap review-screenshots delete --screenshot-id \"SHOT_ID\" --confirm",
+		ShortUsage: "asc iap review-screenshots delete --screenshot-id \"SHOT_ID\" --confirm",
 		ShortHelp:  "Delete an in-app purchase review screenshot.",
 		LongHelp: `Delete an in-app purchase review screenshot.
 
 Examples:
-  appstore iap review-screenshots delete --screenshot-id "SHOT_ID" --confirm`,
+  asc iap review-screenshots delete --screenshot-id "SHOT_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

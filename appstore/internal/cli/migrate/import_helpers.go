@@ -40,7 +40,7 @@ func resolveAppID(ctx context.Context, client *asc.Client, appFlag string, confi
 	if appID := shared.ResolveAppID(""); appID != "" {
 		return appID, nil
 	}
-	return "", fmt.Errorf("--app is required (or set APPSTORE_APP_ID or provide Deliverfile app_identifier)")
+	return "", fmt.Errorf("--app is required (or set ASC_APP_ID or provide Deliverfile app_identifier)")
 }
 
 func resolveVersionID(ctx context.Context, client *asc.Client, versionFlag string, appID string, config DeliverfileConfig) (string, error) {
@@ -312,26 +312,27 @@ func uploadScreenshots(ctx context.Context, client *asc.Client, versionID string
 		}
 
 		for _, plan := range localePlans {
-			setID := setByType[plan.DisplayType]
+			canonicalDisplayType := asc.CanonicalScreenshotDisplayTypeForAPI(plan.DisplayType)
+			setID := setByType[canonicalDisplayType]
 			if setID == "" {
-				set, err := client.CreateAppScreenshotSet(uploadCtx, localizationID, plan.DisplayType)
+				set, err := client.CreateAppScreenshotSet(uploadCtx, localizationID, canonicalDisplayType)
 				if err != nil {
-					return nil, fmt.Errorf("migrate import: failed to create screenshot set %s: %w", plan.DisplayType, err)
+					return nil, fmt.Errorf("migrate import: failed to create screenshot set %s: %w", canonicalDisplayType, err)
 				}
 				setID = set.Data.ID
-				setByType[plan.DisplayType] = setID
-				existingFiles[plan.DisplayType] = make(map[string]bool)
+				setByType[canonicalDisplayType] = setID
+				existingFiles[canonicalDisplayType] = make(map[string]bool)
 			}
 
-			fileNames := existingFiles[plan.DisplayType]
+			fileNames := existingFiles[canonicalDisplayType]
 			if fileNames == nil {
 				fileNames = make(map[string]bool)
-				existingFiles[plan.DisplayType] = fileNames
+				existingFiles[canonicalDisplayType] = fileNames
 			}
 
 			result := ScreenshotUploadResult{
 				Locale:      plan.Locale,
-				DisplayType: plan.DisplayType,
+				DisplayType: canonicalDisplayType,
 			}
 
 			for _, filePath := range plan.Files {

@@ -19,15 +19,15 @@ func BetaLicenseAgreementsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "beta-license-agreements",
-		ShortUsage: "appstore testflight beta-license-agreements <subcommand> [flags]",
+		ShortUsage: "asc testflight beta-license-agreements <subcommand> [flags]",
 		ShortHelp:  "Manage TestFlight beta license agreements.",
 		LongHelp: `Manage TestFlight beta license agreements.
 
 Examples:
-  appstore testflight beta-license-agreements list --app "APP_ID"
-  appstore testflight beta-license-agreements get --id "AGREEMENT_ID"
-  appstore testflight beta-license-agreements get --app "APP_ID"
-  appstore testflight beta-license-agreements update --id "AGREEMENT_ID" --agreement-text "Updated terms"`,
+  asc testflight beta-license-agreements list --app "APP_ID"
+  asc testflight beta-license-agreements get --id "AGREEMENT_ID"
+  asc testflight beta-license-agreements get --app "APP_ID"
+  asc testflight beta-license-agreements update --id "AGREEMENT_ID" --agreement-text "Updated terms"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -56,15 +56,15 @@ func BetaLicenseAgreementsListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore testflight beta-license-agreements list [flags]",
+		ShortUsage: "asc testflight beta-license-agreements list [flags]",
 		ShortHelp:  "List beta license agreements.",
 		LongHelp: `List beta license agreements.
 
 Examples:
-  appstore testflight beta-license-agreements list
-  appstore testflight beta-license-agreements list --app "APP_ID"
-  appstore testflight beta-license-agreements list --limit 50
-  appstore testflight beta-license-agreements list --paginate`,
+  asc testflight beta-license-agreements list
+  asc testflight beta-license-agreements list --app "APP_ID"
+  asc testflight beta-license-agreements list --limit 50
+  asc testflight beta-license-agreements list --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -122,7 +122,7 @@ func BetaLicenseAgreementsGetCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("get", flag.ExitOnError)
 
 	id := fs.String("id", "", "Beta license agreement ID")
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID env)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
 	fields := fs.String("fields", "", "Fields to include (betaLicenseAgreements), comma-separated")
 	appFields := fs.String("app-fields", "", "App fields to include, comma-separated")
 	include := fs.String("include", "", "Include related resources (e.g., app), comma-separated")
@@ -130,13 +130,13 @@ func BetaLicenseAgreementsGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore testflight beta-license-agreements get --id \"AGREEMENT_ID\" | --app \"APP_ID\"",
+		ShortUsage: "asc testflight beta-license-agreements get --id \"AGREEMENT_ID\" | --app \"APP_ID\"",
 		ShortHelp:  "Get a beta license agreement by ID or app.",
 		LongHelp: `Get a beta license agreement by ID or app.
 
 Examples:
-  appstore testflight beta-license-agreements get --id "AGREEMENT_ID"
-  appstore testflight beta-license-agreements get --app "APP_ID"`,
+  asc testflight beta-license-agreements get --id "AGREEMENT_ID"
+  asc testflight beta-license-agreements get --app "APP_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -146,7 +146,7 @@ Examples:
 				appValue = shared.ResolveAppID(*appID)
 			}
 			if idValue == "" && appValue == "" {
-				fmt.Fprintln(os.Stderr, "Error: --id or --app is required (or set APPSTORE_APP_ID)")
+				fmt.Fprintln(os.Stderr, "Error: --id or --app is required (or set ASC_APP_ID)")
 				return flag.ErrHelp
 			}
 			if idValue != "" && strings.TrimSpace(*appID) != "" {
@@ -199,12 +199,12 @@ func BetaLicenseAgreementsUpdateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "update",
-		ShortUsage: "appstore testflight beta-license-agreements update --id \"AGREEMENT_ID\" --agreement-text \"Text\"",
+		ShortUsage: "asc testflight beta-license-agreements update --id \"AGREEMENT_ID\" --agreement-text \"Text\"",
 		ShortHelp:  "Update a beta license agreement.",
 		LongHelp: `Update a beta license agreement.
 
 Examples:
-  appstore testflight beta-license-agreements update --id "AGREEMENT_ID" --agreement-text "Updated terms"`,
+  asc testflight beta-license-agreements update --id "AGREEMENT_ID" --agreement-text "Updated terms"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

@@ -19,15 +19,15 @@ func MarketplaceSearchDetailsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "search-details",
-		ShortUsage: "appstore marketplace search-details <subcommand> [flags]",
+		ShortUsage: "asc marketplace search-details <subcommand> [flags]",
 		ShortHelp:  "Manage marketplace search details.",
 		LongHelp: `Manage marketplace search details.
 
 Examples:
-  appstore marketplace search-details get --app "APP_ID"
-  appstore marketplace search-details create --app "APP_ID" --catalog-url "https://example.com"
-  appstore marketplace search-details update --search-detail-id "DETAIL_ID" --catalog-url "https://example.com"
-  appstore marketplace search-details delete --search-detail-id "DETAIL_ID" --confirm`,
+  asc marketplace search-details get --app "APP_ID"
+  asc marketplace search-details create --app "APP_ID" --catalog-url "https://example.com"
+  asc marketplace search-details update --search-detail-id "DETAIL_ID" --catalog-url "https://example.com"
+  asc marketplace search-details delete --search-detail-id "DETAIL_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -46,24 +46,24 @@ Examples:
 func MarketplaceSearchDetailsGetCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("get", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID env)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
 	fields := fs.String("fields", "", "Fields to include: "+strings.Join(marketplaceSearchDetailFieldsList(), ", "))
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore marketplace search-details get --app \"APP_ID\" [flags]",
+		ShortUsage: "asc marketplace search-details get --app \"APP_ID\" [flags]",
 		ShortHelp:  "Get marketplace search details for an app.",
 		LongHelp: `Get marketplace search details for an app.
 
 Examples:
-  appstore marketplace search-details get --app "APP_ID"`,
+  asc marketplace search-details get --app "APP_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			resolvedAppID := shared.ResolveAppID(*appID)
 			if resolvedAppID == "" {
-				fmt.Fprintln(os.Stderr, "Error: --app is required (or set APPSTORE_APP_ID)")
+				fmt.Fprintln(os.Stderr, "Error: --app is required (or set ASC_APP_ID)")
 				return flag.ErrHelp
 			}
 
@@ -94,24 +94,24 @@ Examples:
 func MarketplaceSearchDetailsCreateCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("create", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID env)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
 	catalogURL := fs.String("catalog-url", "", "Marketplace catalog URL")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "create",
-		ShortUsage: "appstore marketplace search-details create --app \"APP_ID\" --catalog-url \"URL\" [flags]",
+		ShortUsage: "asc marketplace search-details create --app \"APP_ID\" --catalog-url \"URL\" [flags]",
 		ShortHelp:  "Create marketplace search details for an app.",
 		LongHelp: `Create marketplace search details for an app.
 
 Examples:
-  appstore marketplace search-details create --app "APP_ID" --catalog-url "https://example.com"`,
+  asc marketplace search-details create --app "APP_ID" --catalog-url "https://example.com"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			resolvedAppID := shared.ResolveAppID(*appID)
 			if resolvedAppID == "" {
-				fmt.Fprintln(os.Stderr, "Error: --app is required (or set APPSTORE_APP_ID)")
+				fmt.Fprintln(os.Stderr, "Error: --app is required (or set ASC_APP_ID)")
 				return flag.ErrHelp
 			}
 
@@ -149,12 +149,12 @@ func MarketplaceSearchDetailsUpdateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "update",
-		ShortUsage: "appstore marketplace search-details update --search-detail-id \"DETAIL_ID\" --catalog-url \"URL\" [flags]",
+		ShortUsage: "asc marketplace search-details update --search-detail-id \"DETAIL_ID\" --catalog-url \"URL\" [flags]",
 		ShortHelp:  "Update marketplace search details.",
 		LongHelp: `Update marketplace search details.
 
 Examples:
-  appstore marketplace search-details update --search-detail-id "DETAIL_ID" --catalog-url "https://example.com"`,
+  asc marketplace search-details update --search-detail-id "DETAIL_ID" --catalog-url "https://example.com"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -208,12 +208,12 @@ func MarketplaceSearchDetailsDeleteCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "delete",
-		ShortUsage: "appstore marketplace search-details delete --search-detail-id \"DETAIL_ID\" --confirm",
+		ShortUsage: "asc marketplace search-details delete --search-detail-id \"DETAIL_ID\" --confirm",
 		ShortHelp:  "Delete marketplace search details.",
 		LongHelp: `Delete marketplace search details.
 
 Examples:
-  appstore marketplace search-details delete --search-detail-id "DETAIL_ID" --confirm`,
+  asc marketplace search-details delete --search-detail-id "DETAIL_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

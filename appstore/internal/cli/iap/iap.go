@@ -20,21 +20,21 @@ func IAPCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "iap",
-		ShortUsage: "appstore iap <subcommand> [flags]",
+		ShortUsage: "asc iap <subcommand> [flags]",
 		ShortHelp:  "Manage in-app purchases in App Store Connect.",
 		LongHelp: `Manage in-app purchases in App Store Connect.
 
 Examples:
-  appstore iap list --app "APP_ID"
-  appstore iap prices --app "APP_ID"
-  appstore iap get --id "IAP_ID"
-  appstore iap create --app "APP_ID" --type CONSUMABLE --ref-name "Pro" --product-id "com.example.pro"
-  appstore iap update --id "IAP_ID" --ref-name "New Name"
-  appstore iap delete --id "IAP_ID" --confirm
-  appstore iap localizations list --iap-id "IAP_ID"
-  appstore iap images create --iap-id "IAP_ID" --file "./image.png"
-  appstore iap availability set --iap-id "IAP_ID" --territories "USA,CAN"
-  appstore iap offer-codes create --iap-id "IAP_ID" --name "SPRING" --prices "USA:PRICE_POINT_ID"`,
+  asc iap list --app "APP_ID"
+  asc iap prices --app "APP_ID"
+  asc iap get --id "IAP_ID"
+  asc iap create --app "APP_ID" --type CONSUMABLE --ref-name "Pro" --product-id "com.example.pro"
+  asc iap update --id "IAP_ID" --ref-name "New Name"
+  asc iap delete --id "IAP_ID" --confirm
+  asc iap localizations list --iap-id "IAP_ID"
+  asc iap images create --iap-id "IAP_ID" --file "./image.png"
+  asc iap availability set --iap-id "IAP_ID" --territories "USA,CAN"
+  asc iap offer-codes create --iap-id "IAP_ID" --name "SPRING" --prices "USA:PRICE_POINT_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -66,7 +66,7 @@ Examples:
 func IAPListCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("list", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID env)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
 	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
 	next := fs.String("next", "", "Fetch next page using a links.next URL")
 	paginate := fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")
@@ -75,15 +75,15 @@ func IAPListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore iap list [flags]",
+		ShortUsage: "asc iap list [flags]",
 		ShortHelp:  "List in-app purchases for an app.",
 		LongHelp: `List in-app purchases for an app.
 
 Examples:
-  appstore iap list --app "APP_ID"
-  appstore iap list --app "APP_ID" --limit 50
-  appstore iap list --app "APP_ID" --paginate
-  appstore iap list --app "APP_ID" --legacy`,
+  asc iap list --app "APP_ID"
+  asc iap list --app "APP_ID" --limit 50
+  asc iap list --app "APP_ID" --paginate
+  asc iap list --app "APP_ID" --legacy`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -96,7 +96,7 @@ Examples:
 
 			resolvedAppID := shared.ResolveAppID(*appID)
 			if resolvedAppID == "" && strings.TrimSpace(*next) == "" {
-				fmt.Fprintln(os.Stderr, "Error: --app is required (or set APPSTORE_APP_ID)")
+				fmt.Fprintln(os.Stderr, "Error: --app is required (or set ASC_APP_ID)")
 				return flag.ErrHelp
 			}
 
@@ -175,13 +175,13 @@ func IAPGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore iap get --id \"IAP_ID\"",
+		ShortUsage: "asc iap get --id \"IAP_ID\"",
 		ShortHelp:  "Get an in-app purchase by ID.",
 		LongHelp: `Get an in-app purchase by ID.
 
 Examples:
-  appstore iap get --id "IAP_ID"
-  appstore iap get --id "IAP_ID" --legacy`,
+  asc iap get --id "IAP_ID"
+  asc iap get --id "IAP_ID" --legacy`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -222,27 +222,28 @@ Examples:
 func IAPCreateCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("create", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID env)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
 	iapType := fs.String("type", "", "IAP type: CONSUMABLE, NON_CONSUMABLE, NON_RENEWING_SUBSCRIPTION")
 	refName := fs.String("ref-name", "", "Reference name")
 	productID := fs.String("product-id", "", "Product ID (e.g., com.example.product)")
+	familySharable := fs.Bool("family-sharable", false, "Enable Family Sharing (cannot be undone)")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "create",
-		ShortUsage: "appstore iap create [flags]",
+		ShortUsage: "asc iap create [flags]",
 		ShortHelp:  "Create a new in-app purchase.",
 		LongHelp: `Create a new in-app purchase.
 
 Examples:
-  appstore iap create --app "APP_ID" --type CONSUMABLE --ref-name "Pro" --product-id "com.example.pro"
-  appstore iap create --app "APP_ID" --type NON_CONSUMABLE --ref-name "Lifetime" --product-id "com.example.lifetime"`,
+  asc iap create --app "APP_ID" --type CONSUMABLE --ref-name "Pro" --product-id "com.example.pro"
+  asc iap create --app "APP_ID" --type NON_CONSUMABLE --ref-name "Lifetime" --product-id "com.example.lifetime" --family-sharable`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			resolvedAppID := shared.ResolveAppID(*appID)
 			if resolvedAppID == "" {
-				fmt.Fprintln(os.Stderr, "Error: --app is required (or set APPSTORE_APP_ID)")
+				fmt.Fprintln(os.Stderr, "Error: --app is required (or set ASC_APP_ID)")
 				return flag.ErrHelp
 			}
 
@@ -277,6 +278,9 @@ Examples:
 				ProductID:         product,
 				InAppPurchaseType: normalizedType,
 			}
+			if *familySharable {
+				attrs.FamilySharable = true
+			}
 
 			resp, err := client.CreateInAppPurchaseV2(requestCtx, resolvedAppID, attrs)
 			if err != nil {
@@ -294,16 +298,18 @@ func IAPUpdateCommand() *ffcli.Command {
 
 	iapID := fs.String("id", "", "In-app purchase ID")
 	refName := fs.String("ref-name", "", "Reference name")
+	familySharable := fs.Bool("family-sharable", false, "Enable Family Sharing (cannot be undone)")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "update",
-		ShortUsage: "appstore iap update [flags]",
+		ShortUsage: "asc iap update [flags]",
 		ShortHelp:  "Update an in-app purchase.",
 		LongHelp: `Update an in-app purchase.
 
 Examples:
-  appstore iap update --id "IAP_ID" --ref-name "New Name"`,
+  asc iap update --id "IAP_ID" --ref-name "New Name"
+  asc iap update --id "IAP_ID" --family-sharable`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -314,7 +320,7 @@ Examples:
 			}
 
 			name := strings.TrimSpace(*refName)
-			if name == "" {
+			if name == "" && !*familySharable {
 				fmt.Fprintln(os.Stderr, "Error: at least one update flag is required")
 				return flag.ErrHelp
 			}
@@ -327,8 +333,13 @@ Examples:
 			requestCtx, cancel := shared.ContextWithTimeout(ctx)
 			defer cancel()
 
-			attrs := asc.InAppPurchaseV2UpdateAttributes{
-				Name: &name,
+			attrs := asc.InAppPurchaseV2UpdateAttributes{}
+			if name != "" {
+				attrs.Name = &name
+			}
+			if *familySharable {
+				val := true
+				attrs.FamilySharable = &val
 			}
 
 			resp, err := client.UpdateInAppPurchaseV2(requestCtx, id, attrs)
@@ -351,12 +362,12 @@ func IAPDeleteCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "delete",
-		ShortUsage: "appstore iap delete --id \"IAP_ID\" --confirm",
+		ShortUsage: "asc iap delete --id \"IAP_ID\" --confirm",
 		ShortHelp:  "Delete an in-app purchase.",
 		LongHelp: `Delete an in-app purchase.
 
 Examples:
-  appstore iap delete --id "IAP_ID" --confirm`,
+  asc iap delete --id "IAP_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -398,12 +409,12 @@ func IAPLocalizationsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "localizations",
-		ShortUsage: "appstore iap localizations <subcommand> [flags]",
+		ShortUsage: "asc iap localizations <subcommand> [flags]",
 		ShortHelp:  "Manage in-app purchase localizations.",
 		LongHelp: `Manage in-app purchase localizations.
 
 Examples:
-  appstore iap localizations list --iap-id "IAP_ID"`,
+  asc iap localizations list --iap-id "IAP_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -431,13 +442,13 @@ func IAPLocalizationsListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore iap localizations list [flags]",
+		ShortUsage: "asc iap localizations list [flags]",
 		ShortHelp:  "List in-app purchase localizations.",
 		LongHelp: `List in-app purchase localizations.
 
 Examples:
-  appstore iap localizations list --iap-id "IAP_ID"
-  appstore iap localizations list --iap-id "IAP_ID" --paginate`,
+  asc iap localizations list --iap-id "IAP_ID"
+  asc iap localizations list --iap-id "IAP_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

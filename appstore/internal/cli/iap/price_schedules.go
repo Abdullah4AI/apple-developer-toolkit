@@ -19,14 +19,14 @@ func IAPPriceSchedulesCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "price-schedules",
-		ShortUsage: "appstore iap price-schedules <subcommand> [flags]",
+		ShortUsage: "asc iap price-schedules <subcommand> [flags]",
 		ShortHelp:  "Manage in-app purchase price schedules.",
 		LongHelp: `Manage in-app purchase price schedules.
 
 Examples:
-  appstore iap price-schedules get --iap-id "IAP_ID"
-  appstore iap price-schedules create --iap-id "IAP_ID" --base-territory "USA" --prices "PRICE_POINT_ID:2024-03-01"
-  appstore iap price-schedules manual-prices --schedule-id "SCHEDULE_ID"`,
+  asc iap price-schedules get --iap-id "IAP_ID"
+  asc iap price-schedules create --iap-id "IAP_ID" --base-territory "USA" --prices "PRICE_POINT_ID:2024-03-01"
+  asc iap price-schedules manual-prices --schedule-id "SCHEDULE_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -58,14 +58,14 @@ func IAPPriceSchedulesGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore iap price-schedules get --iap-id \"IAP_ID\"",
+		ShortUsage: "asc iap price-schedules get --iap-id \"IAP_ID\"",
 		ShortHelp:  "Get in-app purchase price schedule.",
 		LongHelp: `Get in-app purchase price schedule.
 
 Examples:
-  appstore iap price-schedules get --iap-id "IAP_ID"
-  appstore iap price-schedules get --schedule-id "SCHEDULE_ID"
-  appstore iap price-schedules get --iap-id "IAP_ID" --include "baseTerritory,manualPrices,automaticPrices" --price-fields "startDate,endDate,manual,inAppPurchasePricePoint,territory" --territory-fields "currency" --manual-prices-limit 50 --automatic-prices-limit 50`,
+  asc iap price-schedules get --iap-id "IAP_ID"
+  asc iap price-schedules get --schedule-id "SCHEDULE_ID"
+  asc iap price-schedules get --iap-id "IAP_ID" --include "baseTerritory,manualPrices,automaticPrices" --price-fields "startDate,endDate,manual,inAppPurchasePricePoint,territory" --territory-fields "currency" --manual-prices-limit 50 --automatic-prices-limit 50`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -177,12 +177,12 @@ func IAPPriceSchedulesBaseTerritoryCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "base-territory",
-		ShortUsage: "appstore iap price-schedules base-territory --schedule-id \"SCHEDULE_ID\"",
+		ShortUsage: "asc iap price-schedules base-territory --schedule-id \"SCHEDULE_ID\"",
 		ShortHelp:  "Get base territory for a price schedule.",
 		LongHelp: `Get base territory for a price schedule.
 
 Examples:
-  appstore iap price-schedules base-territory --schedule-id "SCHEDULE_ID"`,
+  asc iap price-schedules base-territory --schedule-id "SCHEDULE_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -221,12 +221,12 @@ func IAPPriceSchedulesCreateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "create",
-		ShortUsage: "appstore iap price-schedules create --iap-id \"IAP_ID\" --base-territory \"USA\" --prices \"PRICE_POINT_ID:2024-03-01\"",
+		ShortUsage: "asc iap price-schedules create --iap-id \"IAP_ID\" --base-territory \"USA\" --prices \"PRICE_POINT_ID:2024-03-01\"",
 		ShortHelp:  "Create an in-app purchase price schedule.",
 		LongHelp: `Create an in-app purchase price schedule.
 
 Examples:
-  appstore iap price-schedules create --iap-id "IAP_ID" --base-territory "USA" --prices "PRICE_POINT_ID:2024-03-01"`,
+  asc iap price-schedules create --iap-id "IAP_ID" --base-territory "USA" --prices "PRICE_POINT_ID:2024-03-01"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -284,13 +284,13 @@ func IAPPriceSchedulesManualPricesCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "manual-prices",
-		ShortUsage: "appstore iap price-schedules manual-prices --schedule-id \"SCHEDULE_ID\"",
+		ShortUsage: "asc iap price-schedules manual-prices --schedule-id \"SCHEDULE_ID\"",
 		ShortHelp:  "List manual prices for an in-app purchase price schedule.",
 		LongHelp: `List manual prices for an in-app purchase price schedule.
 
 Examples:
-  appstore iap price-schedules manual-prices --schedule-id "SCHEDULE_ID"
-  appstore iap price-schedules manual-prices --schedule-id "SCHEDULE_ID" --paginate`,
+  asc iap price-schedules manual-prices --schedule-id "SCHEDULE_ID"
+  asc iap price-schedules manual-prices --schedule-id "SCHEDULE_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -359,13 +359,13 @@ func IAPPriceSchedulesAutomaticPricesCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "automatic-prices",
-		ShortUsage: "appstore iap price-schedules automatic-prices --schedule-id \"SCHEDULE_ID\"",
+		ShortUsage: "asc iap price-schedules automatic-prices --schedule-id \"SCHEDULE_ID\"",
 		ShortHelp:  "List automatic prices for an in-app purchase price schedule.",
 		LongHelp: `List automatic prices for an in-app purchase price schedule.
 
 Examples:
-  appstore iap price-schedules automatic-prices --schedule-id "SCHEDULE_ID"
-  appstore iap price-schedules automatic-prices --schedule-id "SCHEDULE_ID" --paginate`,
+  asc iap price-schedules automatic-prices --schedule-id "SCHEDULE_ID"
+  asc iap price-schedules automatic-prices --schedule-id "SCHEDULE_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

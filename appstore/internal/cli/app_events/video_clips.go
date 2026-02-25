@@ -19,13 +19,13 @@ func AppEventVideoClipsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "video-clips",
-		ShortUsage: "appstore app-events video-clips <subcommand> [flags]",
+		ShortUsage: "asc app-events video-clips <subcommand> [flags]",
 		ShortHelp:  "Manage in-app event video clips.",
 		LongHelp: `Manage in-app event video clips.
 
 Examples:
-  appstore app-events video-clips list --event-id "EVENT_ID"
-  appstore app-events video-clips create --localization-id "LOC_ID" --path "./clip.mov" --asset-type EVENT_CARD`,
+  asc app-events video-clips list --event-id "EVENT_ID"
+  asc app-events video-clips create --localization-id "LOC_ID" --path "./clip.mov" --asset-type EVENT_CARD`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -55,14 +55,14 @@ func AppEventVideoClipsRelationshipsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "relationships",
-		ShortUsage: "appstore app-events video-clips relationships [flags]",
+		ShortUsage: "asc app-events video-clips relationships [flags]",
 		ShortHelp:  "List video clip relationships for an in-app event localization.",
 		LongHelp: `List video clip relationships for an in-app event localization.
 
 Examples:
-  appstore app-events video-clips relationships --localization-id "LOC_ID"
-  appstore app-events video-clips relationships --event-id "EVENT_ID" --locale "en-US"
-  appstore app-events video-clips relationships --event-id "EVENT_ID" --paginate`,
+  asc app-events video-clips relationships --localization-id "LOC_ID"
+  asc app-events video-clips relationships --event-id "EVENT_ID" --locale "en-US"
+  asc app-events video-clips relationships --event-id "EVENT_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -140,14 +140,14 @@ func AppEventVideoClipsListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore app-events video-clips list [flags]",
+		ShortUsage: "asc app-events video-clips list [flags]",
 		ShortHelp:  "List video clips for an in-app event localization.",
 		LongHelp: `List video clips for an in-app event localization.
 
 Examples:
-  appstore app-events video-clips list --localization-id "LOC_ID"
-  appstore app-events video-clips list --event-id "EVENT_ID" --locale "en-US"
-  appstore app-events video-clips list --event-id "EVENT_ID" --paginate`,
+  asc app-events video-clips list --localization-id "LOC_ID"
+  asc app-events video-clips list --event-id "EVENT_ID" --locale "en-US"
+  asc app-events video-clips list --event-id "EVENT_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -220,12 +220,12 @@ func AppEventVideoClipsGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore app-events video-clips get --clip-id \"CLIP_ID\"",
+		ShortUsage: "asc app-events video-clips get --clip-id \"CLIP_ID\"",
 		ShortHelp:  "Get an in-app event video clip by ID.",
 		LongHelp: `Get an in-app event video clip by ID.
 
 Examples:
-  appstore app-events video-clips get --clip-id "CLIP_ID"`,
+  asc app-events video-clips get --clip-id "CLIP_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -267,13 +267,13 @@ func AppEventVideoClipsCreateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "create",
-		ShortUsage: "appstore app-events video-clips create [flags]",
+		ShortUsage: "asc app-events video-clips create [flags]",
 		ShortHelp:  "Upload a video clip for an in-app event localization.",
 		LongHelp: `Upload a video clip for an in-app event localization.
 
 Examples:
-  appstore app-events video-clips create --localization-id "LOC_ID" --path "./clip.mov" --asset-type EVENT_CARD
-  appstore app-events video-clips create --event-id "EVENT_ID" --locale "en-US" --path "./clip.mov" --asset-type EVENT_DETAILS_PAGE --preview-frame-time-code "00:00:05.000"`,
+  asc app-events video-clips create --localization-id "LOC_ID" --path "./clip.mov" --asset-type EVENT_CARD
+  asc app-events video-clips create --event-id "EVENT_ID" --locale "en-US" --path "./clip.mov" --asset-type EVENT_DETAILS_PAGE --preview-frame-time-code "00:00:05.000"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -357,12 +357,12 @@ func AppEventVideoClipsDeleteCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "delete",
-		ShortUsage: "appstore app-events video-clips delete --clip-id \"CLIP_ID\" --confirm",
+		ShortUsage: "asc app-events video-clips delete --clip-id \"CLIP_ID\" --confirm",
 		ShortHelp:  "Delete an in-app event video clip.",
 		LongHelp: `Delete an in-app event video clip.
 
 Examples:
-  appstore app-events video-clips delete --clip-id "CLIP_ID" --confirm`,
+  asc app-events video-clips delete --clip-id "CLIP_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

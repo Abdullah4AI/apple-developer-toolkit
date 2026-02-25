@@ -72,14 +72,14 @@ func WebhooksServeCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "serve",
-		ShortUsage: "appstore webhooks serve [flags]",
+		ShortUsage: "asc webhooks serve [flags]",
 		ShortHelp:  "Run a local webhook receiver for testing and automation.",
 		LongHelp: `Run a local webhook receiver for testing and automation.
 
 Examples:
-  appstore webhooks serve --port 8787
-  appstore webhooks serve --port 8787 --dir ./webhook-events
-  appstore webhooks serve --port 8787 --exec "./scripts/on-webhook.sh"`,
+  asc webhooks serve --port 8787
+  asc webhooks serve --port 8787 --dir ./webhook-events
+  asc webhooks serve --port 8787 --exec "./scripts/on-webhook.sh"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

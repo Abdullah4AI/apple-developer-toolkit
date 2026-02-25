@@ -84,7 +84,7 @@ import (
 func VersionCommand(version string) *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "version",
-		ShortUsage: "appstore version",
+		ShortUsage: "asc version",
 		ShortHelp:  "Print version information and exit.",
 		UsageFunc:  shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

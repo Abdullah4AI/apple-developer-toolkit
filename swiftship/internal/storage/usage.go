@@ -32,7 +32,7 @@ type DailyUsage struct {
 // UsageStore accumulates session usage and persists it to disk.
 type UsageStore struct {
 	mu      sync.Mutex
-	dir     string // .swiftship/ directory
+	dir     string // .nanowave/ directory
 	current *SessionUsage
 }
 

@@ -20,20 +20,20 @@ func XcodeCloudCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "xcode-cloud",
-		ShortUsage: "appstore xcode-cloud <subcommand> [flags]",
+		ShortUsage: "asc xcode-cloud <subcommand> [flags]",
 		ShortHelp:  "Trigger and monitor Xcode Cloud workflows.",
 		LongHelp: `Trigger and monitor Xcode Cloud workflows.
 
 Examples:
-  appstore xcode-cloud workflows --app "APP_ID"
-  appstore xcode-cloud build-runs --workflow-id "WORKFLOW_ID"
-  appstore xcode-cloud actions --run-id "BUILD_RUN_ID"
-  appstore xcode-cloud scm providers list
-  appstore xcode-cloud run --app "APP_ID" --workflow "WorkflowName" --branch "main"
-  appstore xcode-cloud run --workflow-id "WORKFLOW_ID" --git-reference-id "REF_ID"
-  appstore xcode-cloud run --app "APP_ID" --workflow "Deploy" --branch "main" --wait
-  appstore xcode-cloud status --run-id "BUILD_RUN_ID"
-  appstore xcode-cloud status --run-id "BUILD_RUN_ID" --wait`,
+  asc xcode-cloud workflows --app "APP_ID"
+  asc xcode-cloud build-runs --workflow-id "WORKFLOW_ID"
+  asc xcode-cloud actions --run-id "BUILD_RUN_ID"
+  asc xcode-cloud scm providers list
+  asc xcode-cloud run --app "APP_ID" --workflow "WorkflowName" --branch "main"
+  asc xcode-cloud run --workflow-id "WORKFLOW_ID" --git-reference-id "REF_ID"
+  asc xcode-cloud run --app "APP_ID" --workflow "Deploy" --branch "main" --wait
+  asc xcode-cloud status --run-id "BUILD_RUN_ID"
+  asc xcode-cloud status --run-id "BUILD_RUN_ID" --wait`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -60,19 +60,19 @@ Examples:
 func XcodeCloudRunCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("run", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID env)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
 	workflowName := fs.String("workflow", "", "Workflow name to trigger")
 	workflowID := fs.String("workflow-id", "", "Workflow ID to trigger (alternative to --workflow)")
 	branch := fs.String("branch", "", "Branch or tag name to build")
 	gitReferenceID := fs.String("git-reference-id", "", "Git reference ID to build (alternative to --branch)")
 	wait := fs.Bool("wait", false, "Wait for build to complete")
 	pollInterval := fs.Duration("poll-interval", 10*time.Second, "Poll interval when waiting")
-	timeout := fs.Duration("timeout", 0, "Timeout for Xcode Cloud requests (0 = use APPSTORE_TIMEOUT or 30m default)")
+	timeout := fs.Duration("timeout", 0, "Timeout for Xcode Cloud requests (0 = use ASC_TIMEOUT or 30m default)")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "run",
-		ShortUsage: "appstore xcode-cloud run [flags]",
+		ShortUsage: "asc xcode-cloud run [flags]",
 		ShortHelp:  "Trigger an Xcode Cloud workflow build.",
 		LongHelp: `Trigger an Xcode Cloud workflow build.
 
@@ -80,10 +80,10 @@ You can specify the workflow by name (requires --app) or by ID (--workflow-id).
 You can specify the branch/tag by name (--branch) or by ID (--git-reference-id).
 
 Examples:
-  appstore xcode-cloud run --app "123456789" --workflow "CI" --branch "main"
-  appstore xcode-cloud run --workflow-id "WORKFLOW_ID" --git-reference-id "REF_ID"
-  appstore xcode-cloud run --app "123456789" --workflow "Deploy" --branch "release/1.0" --wait
-  appstore xcode-cloud run --app "123456789" --workflow "CI" --branch "main" --wait --poll-interval 30s --timeout 1h`,
+  asc xcode-cloud run --app "123456789" --workflow "CI" --branch "main"
+  asc xcode-cloud run --workflow-id "WORKFLOW_ID" --git-reference-id "REF_ID"
+  asc xcode-cloud run --app "123456789" --workflow "Deploy" --branch "release/1.0" --wait
+  asc xcode-cloud run --app "123456789" --workflow "CI" --branch "main" --wait --poll-interval 30s --timeout 1h`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -116,7 +116,7 @@ Examples:
 
 			resolvedAppID := shared.ResolveAppID(*appID)
 			if hasWorkflowName && resolvedAppID == "" {
-				fmt.Fprintln(os.Stderr, "Error: --app is required when using --workflow (or set APPSTORE_APP_ID)")
+				fmt.Fprintln(os.Stderr, "Error: --app is required when using --workflow (or set ASC_APP_ID)")
 				return flag.ErrHelp
 			}
 
@@ -219,20 +219,20 @@ func XcodeCloudStatusCommand() *ffcli.Command {
 	runID := fs.String("run-id", "", "Build run ID to check")
 	wait := fs.Bool("wait", false, "Wait for build to complete")
 	pollInterval := fs.Duration("poll-interval", 10*time.Second, "Poll interval when waiting")
-	timeout := fs.Duration("timeout", 0, "Timeout for Xcode Cloud requests (0 = use APPSTORE_TIMEOUT or 30m default)")
+	timeout := fs.Duration("timeout", 0, "Timeout for Xcode Cloud requests (0 = use ASC_TIMEOUT or 30m default)")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "status",
-		ShortUsage: "appstore xcode-cloud status [flags]",
+		ShortUsage: "asc xcode-cloud status [flags]",
 		ShortHelp:  "Check the status of an Xcode Cloud build run.",
 		LongHelp: `Check the status of an Xcode Cloud build run.
 
 Examples:
-  appstore xcode-cloud status --run-id "BUILD_RUN_ID"
-  appstore xcode-cloud status --run-id "BUILD_RUN_ID" --output table
-  appstore xcode-cloud status --run-id "BUILD_RUN_ID" --wait
-  appstore xcode-cloud status --run-id "BUILD_RUN_ID" --wait --poll-interval 30s --timeout 1h`,
+  asc xcode-cloud status --run-id "BUILD_RUN_ID"
+  asc xcode-cloud status --run-id "BUILD_RUN_ID" --output table
+  asc xcode-cloud status --run-id "BUILD_RUN_ID" --wait
+  asc xcode-cloud status --run-id "BUILD_RUN_ID" --wait --poll-interval 30s --timeout 1h`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

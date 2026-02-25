@@ -19,13 +19,13 @@ func PerformanceDiagnosticsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "diagnostics",
-		ShortUsage: "appstore performance diagnostics <subcommand> [flags]",
+		ShortUsage: "asc performance diagnostics <subcommand> [flags]",
 		ShortHelp:  "Work with diagnostic signatures and logs.",
 		LongHelp: `Work with diagnostic signatures and logs.
 
 Examples:
-  appstore performance diagnostics list --build "BUILD_ID"
-  appstore performance diagnostics get --id "SIGNATURE_ID"`,
+  asc performance diagnostics list --build "BUILD_ID"
+  asc performance diagnostics get --id "SIGNATURE_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -52,13 +52,13 @@ func PerformanceDiagnosticsListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore performance diagnostics list --build \"BUILD_ID\"",
+		ShortUsage: "asc performance diagnostics list --build \"BUILD_ID\"",
 		ShortHelp:  "List diagnostic signatures for a build.",
 		LongHelp: `List diagnostic signatures for a build.
 
 Examples:
-  appstore performance diagnostics list --build "BUILD_ID"
-  appstore performance diagnostics list --build "BUILD_ID" --diagnostic-type "HANGS" --limit 50`,
+  asc performance diagnostics list --build "BUILD_ID"
+  asc performance diagnostics list --build "BUILD_ID" --diagnostic-type "HANGS" --limit 50`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -132,13 +132,13 @@ func PerformanceDiagnosticsGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore performance diagnostics get --id \"SIGNATURE_ID\"",
+		ShortUsage: "asc performance diagnostics get --id \"SIGNATURE_ID\"",
 		ShortHelp:  "Get diagnostic logs for a signature.",
 		LongHelp: `Get diagnostic logs for a signature.
 
 Examples:
-  appstore performance diagnostics get --id "SIGNATURE_ID"
-  appstore performance diagnostics get --id "SIGNATURE_ID" --limit 50`,
+  asc performance diagnostics get --id "SIGNATURE_ID"
+  asc performance diagnostics get --id "SIGNATURE_ID" --limit 50`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

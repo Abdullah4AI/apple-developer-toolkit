@@ -19,16 +19,16 @@ func AndroidIosMappingCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "android-ios-mapping",
-		ShortUsage: "appstore android-ios-mapping <subcommand> [flags]",
+		ShortUsage: "asc android-ios-mapping <subcommand> [flags]",
 		ShortHelp:  "Manage Android-to-iOS app mapping details.",
 		LongHelp: `Manage Android-to-iOS app mapping details.
 
 Examples:
-  appstore android-ios-mapping list --app "APP_ID"
-  appstore android-ios-mapping get --mapping-id "MAPPING_ID"
-  appstore android-ios-mapping create --app "APP_ID" --android-package-name "com.example.android" --fingerprints "SHA1,SHA2"
-  appstore android-ios-mapping update --mapping-id "MAPPING_ID" --android-package-name "com.example.android.new"
-  appstore android-ios-mapping delete --mapping-id "MAPPING_ID" --confirm`,
+  asc android-ios-mapping list --app "APP_ID"
+  asc android-ios-mapping get --mapping-id "MAPPING_ID"
+  asc android-ios-mapping create --app "APP_ID" --android-package-name "com.example.android" --fingerprints "SHA1,SHA2"
+  asc android-ios-mapping update --mapping-id "MAPPING_ID" --android-package-name "com.example.android.new"
+  asc android-ios-mapping delete --mapping-id "MAPPING_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -48,7 +48,7 @@ Examples:
 func AndroidIosMappingListCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("list", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID)")
 	fields := fs.String("fields", "", "Fields to return (comma-separated: "+strings.Join(androidIosMappingFieldsList(), ", ")+")")
 	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
 	next := fs.String("next", "", "Fetch next page using a links.next URL")
@@ -57,19 +57,19 @@ func AndroidIosMappingListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore android-ios-mapping list --app \"APP_ID\"",
+		ShortUsage: "asc android-ios-mapping list --app \"APP_ID\"",
 		ShortHelp:  "List Android-to-iOS app mappings for an app.",
 		LongHelp: `List Android-to-iOS app mappings for an app.
 
 Examples:
-  appstore android-ios-mapping list --app "APP_ID"
-  appstore android-ios-mapping list --app "APP_ID" --limit 10`,
+  asc android-ios-mapping list --app "APP_ID"
+  asc android-ios-mapping list --app "APP_ID" --limit 10`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			resolvedAppID := shared.ResolveAppID(*appID)
 			if resolvedAppID == "" {
-				fmt.Fprintln(os.Stderr, "Error: --app is required (or set APPSTORE_APP_ID)")
+				fmt.Fprintln(os.Stderr, "Error: --app is required (or set ASC_APP_ID)")
 				return flag.ErrHelp
 			}
 			if *limit != 0 && (*limit < 1 || *limit > 200) {
@@ -134,12 +134,12 @@ func AndroidIosMappingGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore android-ios-mapping get --mapping-id \"MAPPING_ID\"",
+		ShortUsage: "asc android-ios-mapping get --mapping-id \"MAPPING_ID\"",
 		ShortHelp:  "Get an Android-to-iOS app mapping by ID.",
 		LongHelp: `Get an Android-to-iOS app mapping by ID.
 
 Examples:
-  appstore android-ios-mapping get --mapping-id "MAPPING_ID"`,
+  asc android-ios-mapping get --mapping-id "MAPPING_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -176,25 +176,25 @@ Examples:
 func AndroidIosMappingCreateCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("create", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID)")
 	packageName := fs.String("android-package-name", "", "Android package name (e.g., com.example.android)")
 	fingerprints := fs.String("fingerprints", "", "Signing key fingerprints (comma-separated)")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "create",
-		ShortUsage: "appstore android-ios-mapping create --app \"APP_ID\" --android-package-name \"com.example.android\" --fingerprints \"SHA1,SHA2\"",
+		ShortUsage: "asc android-ios-mapping create --app \"APP_ID\" --android-package-name \"com.example.android\" --fingerprints \"SHA1,SHA2\"",
 		ShortHelp:  "Create an Android-to-iOS app mapping.",
 		LongHelp: `Create an Android-to-iOS app mapping.
 
 Examples:
-  appstore android-ios-mapping create --app "APP_ID" --android-package-name "com.example.android" --fingerprints "SHA1,SHA2"`,
+  asc android-ios-mapping create --app "APP_ID" --android-package-name "com.example.android" --fingerprints "SHA1,SHA2"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			resolvedAppID := shared.ResolveAppID(*appID)
 			if resolvedAppID == "" {
-				fmt.Fprintln(os.Stderr, "Error: --app is required (or set APPSTORE_APP_ID)")
+				fmt.Fprintln(os.Stderr, "Error: --app is required (or set ASC_APP_ID)")
 				return flag.ErrHelp
 			}
 			packageValue := strings.TrimSpace(*packageName)
@@ -242,15 +242,15 @@ func AndroidIosMappingUpdateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "update",
-		ShortUsage: "appstore android-ios-mapping update --mapping-id \"MAPPING_ID\" [flags]",
+		ShortUsage: "asc android-ios-mapping update --mapping-id \"MAPPING_ID\" [flags]",
 		ShortHelp:  "Update an Android-to-iOS app mapping.",
 		LongHelp: `Update an Android-to-iOS app mapping.
 
 Examples:
-  appstore android-ios-mapping update --mapping-id "MAPPING_ID" --android-package-name "com.example.android.new"
-  appstore android-ios-mapping update --mapping-id "MAPPING_ID" --fingerprints "SHA1,SHA2"
-  appstore android-ios-mapping update --mapping-id "MAPPING_ID" --clear-android-package-name
-  appstore android-ios-mapping update --mapping-id "MAPPING_ID" --clear-fingerprints`,
+  asc android-ios-mapping update --mapping-id "MAPPING_ID" --android-package-name "com.example.android.new"
+  asc android-ios-mapping update --mapping-id "MAPPING_ID" --fingerprints "SHA1,SHA2"
+  asc android-ios-mapping update --mapping-id "MAPPING_ID" --clear-android-package-name
+  asc android-ios-mapping update --mapping-id "MAPPING_ID" --clear-fingerprints`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -324,12 +324,12 @@ func AndroidIosMappingDeleteCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "delete",
-		ShortUsage: "appstore android-ios-mapping delete --mapping-id \"MAPPING_ID\" --confirm",
+		ShortUsage: "asc android-ios-mapping delete --mapping-id \"MAPPING_ID\" --confirm",
 		ShortHelp:  "Delete an Android-to-iOS app mapping.",
 		LongHelp: `Delete an Android-to-iOS app mapping.
 
 Examples:
-  appstore android-ios-mapping delete --mapping-id "MAPPING_ID" --confirm`,
+  asc android-ios-mapping delete --mapping-id "MAPPING_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

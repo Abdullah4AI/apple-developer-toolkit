@@ -23,7 +23,7 @@ func ReviewsRespondCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "respond",
-		ShortUsage: "appstore reviews respond [flags]",
+		ShortUsage: "asc reviews respond [flags]",
 		ShortHelp:  "Create a response to a customer review.",
 		LongHelp: `Create a response to a customer review.
 
@@ -31,8 +31,8 @@ This command creates a developer response to a customer review on the App Store.
 Responses are visible to all App Store users.
 
 Examples:
-  appstore reviews respond --review-id "REVIEW_ID" --response "Thanks for your feedback!"
-  appstore reviews respond --review-id "REVIEW_ID" --response "We appreciate your review." --output table`,
+  asc reviews respond --review-id "REVIEW_ID" --response "Thanks for your feedback!"
+  asc reviews respond --review-id "REVIEW_ID" --response "We appreciate your review." --output table`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -69,14 +69,14 @@ func ReviewsResponseCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "response",
-		ShortUsage: "appstore reviews response <subcommand> [flags]",
+		ShortUsage: "asc reviews response <subcommand> [flags]",
 		ShortHelp:  "Manage customer review responses.",
 		LongHelp: `Manage customer review responses.
 
 Examples:
-  appstore reviews response get --id "RESPONSE_ID"
-  appstore reviews response delete --id "RESPONSE_ID" --confirm
-  appstore reviews response for-review --review-id "REVIEW_ID"`,
+  asc reviews response get --id "RESPONSE_ID"
+  asc reviews response delete --id "RESPONSE_ID" --confirm
+  asc reviews response for-review --review-id "REVIEW_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -99,13 +99,13 @@ func ReviewsResponseGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore reviews response get [flags]",
+		ShortUsage: "asc reviews response get [flags]",
 		ShortHelp:  "Get a customer review response by ID.",
 		LongHelp: `Get a customer review response by ID.
 
 Examples:
-  appstore reviews response get --id "RESPONSE_ID"
-  appstore reviews response get --id "RESPONSE_ID" --output table`,
+  asc reviews response get --id "RESPONSE_ID"
+  asc reviews response get --id "RESPONSE_ID" --output table`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -142,14 +142,14 @@ func ReviewsResponseDeleteCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "delete",
-		ShortUsage: "appstore reviews response delete [flags]",
+		ShortUsage: "asc reviews response delete [flags]",
 		ShortHelp:  "Delete a customer review response.",
 		LongHelp: `Delete a customer review response.
 
 This action removes your response from the review and cannot be undone.
 
 Examples:
-  appstore reviews response delete --id "RESPONSE_ID" --confirm`,
+  asc reviews response delete --id "RESPONSE_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -193,15 +193,15 @@ func ReviewsResponseForReviewCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "for-review",
-		ShortUsage: "appstore reviews response for-review [flags]",
+		ShortUsage: "asc reviews response for-review [flags]",
 		ShortHelp:  "Get the response for a specific review.",
 		LongHelp: `Get the developer response for a specific customer review.
 
 This command fetches the existing response (if any) for a given review ID.
 
 Examples:
-  appstore reviews response for-review --review-id "REVIEW_ID"
-  appstore reviews response for-review --review-id "REVIEW_ID" --output table`,
+  asc reviews response for-review --review-id "REVIEW_ID"
+  asc reviews response for-review --review-id "REVIEW_ID" --output table`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

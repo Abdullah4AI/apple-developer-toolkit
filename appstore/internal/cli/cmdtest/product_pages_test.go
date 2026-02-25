@@ -498,3 +498,131 @@ func TestProductPagesCustomPagesLocalizationsScreenshotSetsListRequiresLocalizat
 		t.Fatalf("expected missing localization-id error, got %q", stderr)
 	}
 }
+
+func TestProductPagesCustomPagesLocalizationMediaUploadAndSyncValidationErrors(t *testing.T) {
+	tests := []struct {
+		name    string
+		args    []string
+		wantErr string
+	}{
+		{
+			name: "preview sets upload missing localization id",
+			args: []string{
+				"product-pages", "custom-pages", "localizations", "preview-sets", "upload",
+				"--path", "./previews",
+				"--device-type", "IPHONE_65",
+			},
+			wantErr: "--localization-id is required",
+		},
+		{
+			name: "preview sets sync missing confirm",
+			args: []string{
+				"product-pages", "custom-pages", "localizations", "preview-sets", "sync",
+				"--localization-id", "loc-1",
+				"--path", "./previews",
+				"--device-type", "IPHONE_65",
+			},
+			wantErr: "--confirm is required to sync",
+		},
+		{
+			name: "screenshot sets upload missing localization id",
+			args: []string{
+				"product-pages", "custom-pages", "localizations", "screenshot-sets", "upload",
+				"--path", "./screenshots",
+				"--device-type", "IPHONE_65",
+			},
+			wantErr: "--localization-id is required",
+		},
+		{
+			name: "screenshot sets sync missing confirm",
+			args: []string{
+				"product-pages", "custom-pages", "localizations", "screenshot-sets", "sync",
+				"--localization-id", "loc-1",
+				"--path", "./screenshots",
+				"--device-type", "IPHONE_65",
+			},
+			wantErr: "--confirm is required to sync",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			root := RootCommand("1.2.3")
+
+			stdout, stderr := captureOutput(t, func() {
+				if err := root.Parse(test.args); err != nil {
+					t.Fatalf("parse error: %v", err)
+				}
+				err := root.Run(context.Background())
+				if !errors.Is(err, flag.ErrHelp) {
+					t.Fatalf("expected ErrHelp, got %v", err)
+				}
+			})
+
+			if stdout != "" {
+				t.Fatalf("expected empty stdout, got %q", stdout)
+			}
+			if !strings.Contains(stderr, test.wantErr) {
+				t.Fatalf("expected error %q, got %q", test.wantErr, stderr)
+			}
+		})
+	}
+}
+
+func TestProductPagesCustomPagesLocalizationsScreenshotSetsUploadRejectsInvalidDeviceType(t *testing.T) {
+	root := RootCommand("1.2.3")
+
+	stdout, stderr := captureOutput(t, func() {
+		if err := root.Parse([]string{
+			"product-pages", "custom-pages", "localizations", "screenshot-sets", "upload",
+			"--localization-id", "loc-1",
+			"--path", "./screenshots",
+			"--device-type", "not-a-device",
+		}); err != nil {
+			t.Fatalf("parse error: %v", err)
+		}
+		err := root.Run(context.Background())
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+		if errors.Is(err, flag.ErrHelp) {
+			t.Fatalf("unexpected ErrHelp, got %v", err)
+		}
+	})
+
+	if stdout != "" {
+		t.Fatalf("expected empty stdout, got %q", stdout)
+	}
+	if stderr != "" {
+		t.Fatalf("expected empty stderr, got %q", stderr)
+	}
+}
+
+func TestProductPagesCustomPagesLocalizationsPreviewSetsUploadRejectsInvalidDeviceType(t *testing.T) {
+	root := RootCommand("1.2.3")
+
+	stdout, stderr := captureOutput(t, func() {
+		if err := root.Parse([]string{
+			"product-pages", "custom-pages", "localizations", "preview-sets", "upload",
+			"--localization-id", "loc-1",
+			"--path", "./previews",
+			"--device-type", "not-a-device",
+		}); err != nil {
+			t.Fatalf("parse error: %v", err)
+		}
+		err := root.Run(context.Background())
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+		if errors.Is(err, flag.ErrHelp) {
+			t.Fatalf("unexpected ErrHelp, got %v", err)
+		}
+	})
+
+	if stdout != "" {
+		t.Fatalf("expected empty stdout, got %q", stdout)
+	}
+	if stderr != "" {
+		t.Fatalf("expected empty stderr, got %q", stderr)
+	}
+}

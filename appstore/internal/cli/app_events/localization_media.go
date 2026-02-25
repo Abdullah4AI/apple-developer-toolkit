@@ -19,12 +19,12 @@ func AppEventLocalizationScreenshotsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "screenshots",
-		ShortUsage: "appstore app-events localizations screenshots <subcommand> [flags]",
+		ShortUsage: "asc app-events localizations screenshots <subcommand> [flags]",
 		ShortHelp:  "Manage localization screenshots for in-app events.",
 		LongHelp: `Manage localization screenshots for in-app events.
 
 Examples:
-  appstore app-events localizations screenshots list --localization-id "LOC_ID"`,
+  asc app-events localizations screenshots list --localization-id "LOC_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -48,13 +48,13 @@ func AppEventLocalizationScreenshotsListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore app-events localizations screenshots list --localization-id \"LOC_ID\" [flags]",
+		ShortUsage: "asc app-events localizations screenshots list --localization-id \"LOC_ID\" [flags]",
 		ShortHelp:  "List screenshots for an in-app event localization.",
 		LongHelp: `List screenshots for an in-app event localization.
 
 Examples:
-  appstore app-events localizations screenshots list --localization-id "LOC_ID"
-  appstore app-events localizations screenshots list --localization-id "LOC_ID" --paginate`,
+  asc app-events localizations screenshots list --localization-id "LOC_ID"
+  asc app-events localizations screenshots list --localization-id "LOC_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -117,12 +117,12 @@ func AppEventLocalizationVideoClipsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "video-clips",
-		ShortUsage: "appstore app-events localizations video-clips <subcommand> [flags]",
+		ShortUsage: "asc app-events localizations video-clips <subcommand> [flags]",
 		ShortHelp:  "Manage localization video clips for in-app events.",
 		LongHelp: `Manage localization video clips for in-app events.
 
 Examples:
-  appstore app-events localizations video-clips list --localization-id "LOC_ID"`,
+  asc app-events localizations video-clips list --localization-id "LOC_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -146,13 +146,13 @@ func AppEventLocalizationVideoClipsListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore app-events localizations video-clips list --localization-id \"LOC_ID\" [flags]",
+		ShortUsage: "asc app-events localizations video-clips list --localization-id \"LOC_ID\" [flags]",
 		ShortHelp:  "List video clips for an in-app event localization.",
 		LongHelp: `List video clips for an in-app event localization.
 
 Examples:
-  appstore app-events localizations video-clips list --localization-id "LOC_ID"
-  appstore app-events localizations video-clips list --localization-id "LOC_ID" --paginate`,
+  asc app-events localizations video-clips list --localization-id "LOC_ID"
+  asc app-events localizations video-clips list --localization-id "LOC_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -221,13 +221,13 @@ func AppEventLocalizationScreenshotsRelationshipsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "screenshots-relationships",
-		ShortUsage: "appstore app-events localizations screenshots-relationships --localization-id \"LOC_ID\" [flags]",
+		ShortUsage: "asc app-events localizations screenshots-relationships --localization-id \"LOC_ID\" [flags]",
 		ShortHelp:  "List screenshot relationships for an in-app event localization.",
 		LongHelp: `List screenshot relationships for an in-app event localization.
 
 Examples:
-  appstore app-events localizations screenshots-relationships --localization-id "LOC_ID"
-  appstore app-events localizations screenshots-relationships --localization-id "LOC_ID" --paginate`,
+  asc app-events localizations screenshots-relationships --localization-id "LOC_ID"
+  asc app-events localizations screenshots-relationships --localization-id "LOC_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -296,13 +296,13 @@ func AppEventLocalizationVideoClipsRelationshipsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "video-clips-relationships",
-		ShortUsage: "appstore app-events localizations video-clips-relationships --localization-id \"LOC_ID\" [flags]",
+		ShortUsage: "asc app-events localizations video-clips-relationships --localization-id \"LOC_ID\" [flags]",
 		ShortHelp:  "List video clip relationships for an in-app event localization.",
 		LongHelp: `List video clip relationships for an in-app event localization.
 
 Examples:
-  appstore app-events localizations video-clips-relationships --localization-id "LOC_ID"
-  appstore app-events localizations video-clips-relationships --localization-id "LOC_ID" --paginate`,
+  asc app-events localizations video-clips-relationships --localization-id "LOC_ID"
+  asc app-events localizations video-clips-relationships --localization-id "LOC_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

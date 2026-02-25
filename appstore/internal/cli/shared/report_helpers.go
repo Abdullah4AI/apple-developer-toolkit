@@ -17,8 +17,8 @@ func ResolveVendorNumber(value string) string {
 	if strings.TrimSpace(value) != "" {
 		return strings.TrimSpace(value)
 	}
-	vendorEnv, vendorSet := os.LookupEnv("APPSTORE_VENDOR_NUMBER")
-	analyticsEnv, analyticsSet := os.LookupEnv("APPSTORE_ANALYTICS_VENDOR_NUMBER")
+	vendorEnv, vendorSet := os.LookupEnv("ASC_VENDOR_NUMBER")
+	analyticsEnv, analyticsSet := os.LookupEnv("ASC_ANALYTICS_VENDOR_NUMBER")
 	if vendorSet || analyticsSet {
 		if env := strings.TrimSpace(vendorEnv); env != "" {
 			return env

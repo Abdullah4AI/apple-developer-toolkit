@@ -17,12 +17,12 @@ func BackgroundAssetsAppStoreReleasesCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "app-store-releases",
-		ShortUsage: "appstore background-assets app-store-releases <subcommand> [flags]",
+		ShortUsage: "asc background-assets app-store-releases <subcommand> [flags]",
 		ShortHelp:  "Get App Store releases for background assets.",
 		LongHelp: `Get App Store releases for background assets.
 
 Examples:
-  appstore background-assets app-store-releases get --id "RELEASE_ID"`,
+  asc background-assets app-store-releases get --id "RELEASE_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -43,12 +43,12 @@ func BackgroundAssetsAppStoreReleasesGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore background-assets app-store-releases get --id \"RELEASE_ID\"",
+		ShortUsage: "asc background-assets app-store-releases get --id \"RELEASE_ID\"",
 		ShortHelp:  "Get a background asset App Store release.",
 		LongHelp: `Get a background asset App Store release.
 
 Examples:
-  appstore background-assets app-store-releases get --id "RELEASE_ID"`,
+  asc background-assets app-store-releases get --id "RELEASE_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -82,12 +82,12 @@ func BackgroundAssetsExternalBetaReleasesCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "external-beta-releases",
-		ShortUsage: "appstore background-assets external-beta-releases <subcommand> [flags]",
+		ShortUsage: "asc background-assets external-beta-releases <subcommand> [flags]",
 		ShortHelp:  "Get external beta releases for background assets.",
 		LongHelp: `Get external beta releases for background assets.
 
 Examples:
-  appstore background-assets external-beta-releases get --id "RELEASE_ID"`,
+  asc background-assets external-beta-releases get --id "RELEASE_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -108,12 +108,12 @@ func BackgroundAssetsExternalBetaReleasesGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore background-assets external-beta-releases get --id \"RELEASE_ID\"",
+		ShortUsage: "asc background-assets external-beta-releases get --id \"RELEASE_ID\"",
 		ShortHelp:  "Get a background asset external beta release.",
 		LongHelp: `Get a background asset external beta release.
 
 Examples:
-  appstore background-assets external-beta-releases get --id "RELEASE_ID"`,
+  asc background-assets external-beta-releases get --id "RELEASE_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -147,12 +147,12 @@ func BackgroundAssetsInternalBetaReleasesCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "internal-beta-releases",
-		ShortUsage: "appstore background-assets internal-beta-releases <subcommand> [flags]",
+		ShortUsage: "asc background-assets internal-beta-releases <subcommand> [flags]",
 		ShortHelp:  "Get internal beta releases for background assets.",
 		LongHelp: `Get internal beta releases for background assets.
 
 Examples:
-  appstore background-assets internal-beta-releases get --id "RELEASE_ID"`,
+  asc background-assets internal-beta-releases get --id "RELEASE_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -173,12 +173,12 @@ func BackgroundAssetsInternalBetaReleasesGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore background-assets internal-beta-releases get --id \"RELEASE_ID\"",
+		ShortUsage: "asc background-assets internal-beta-releases get --id \"RELEASE_ID\"",
 		ShortHelp:  "Get a background asset internal beta release.",
 		LongHelp: `Get a background asset internal beta release.
 
 Examples:
-  appstore background-assets internal-beta-releases get --id "RELEASE_ID"`,
+  asc background-assets internal-beta-releases get --id "RELEASE_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

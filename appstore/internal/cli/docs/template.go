@@ -2,5 +2,5 @@ package docs
 
 import _ "embed"
 
-//go:embed templates/APPSTORE.md
+//go:embed templates/ASC.md
 var ascTemplate string

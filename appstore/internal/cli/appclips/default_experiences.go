@@ -19,15 +19,15 @@ func AppClipDefaultExperiencesCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "default-experiences",
-		ShortUsage: "appstore app-clips default-experiences <subcommand> [flags]",
+		ShortUsage: "asc app-clips default-experiences <subcommand> [flags]",
 		ShortHelp:  "Manage App Clip default experiences.",
 		LongHelp: `Manage App Clip default experiences.
 
 Examples:
-  appstore app-clips default-experiences list --app-clip-id "CLIP_ID"
-  appstore app-clips default-experiences create --app-clip-id "CLIP_ID" --action OPEN
-  appstore app-clips default-experiences update --experience-id "EXP_ID" --action VIEW
-  appstore app-clips default-experiences delete --experience-id "EXP_ID" --confirm`,
+  asc app-clips default-experiences list --app-clip-id "CLIP_ID"
+  asc app-clips default-experiences create --app-clip-id "CLIP_ID" --action OPEN
+  asc app-clips default-experiences update --experience-id "EXP_ID" --action VIEW
+  asc app-clips default-experiences delete --experience-id "EXP_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -60,13 +60,13 @@ func AppClipDefaultExperiencesListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore app-clips default-experiences list --app-clip-id \"CLIP_ID\" [flags]",
+		ShortUsage: "asc app-clips default-experiences list --app-clip-id \"CLIP_ID\" [flags]",
 		ShortHelp:  "List default experiences for an App Clip.",
 		LongHelp: `List default experiences for an App Clip.
 
 Examples:
-  appstore app-clips default-experiences list --app-clip-id "CLIP_ID"
-  appstore app-clips default-experiences list --app-clip-id "CLIP_ID" --paginate`,
+  asc app-clips default-experiences list --app-clip-id "CLIP_ID"
+  asc app-clips default-experiences list --app-clip-id "CLIP_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -141,12 +141,12 @@ func AppClipDefaultExperiencesGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore app-clips default-experiences get --experience-id \"EXP_ID\"",
+		ShortUsage: "asc app-clips default-experiences get --experience-id \"EXP_ID\"",
 		ShortHelp:  "Get a default experience by ID.",
 		LongHelp: `Get a default experience by ID.
 
 Examples:
-  appstore app-clips default-experiences get --experience-id "EXP_ID"`,
+  asc app-clips default-experiences get --experience-id "EXP_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -190,13 +190,13 @@ func AppClipDefaultExperiencesCreateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "create",
-		ShortUsage: "appstore app-clips default-experiences create --app-clip-id \"CLIP_ID\" [flags]",
+		ShortUsage: "asc app-clips default-experiences create --app-clip-id \"CLIP_ID\" [flags]",
 		ShortHelp:  "Create a default experience.",
 		LongHelp: `Create a default experience.
 
 Examples:
-  appstore app-clips default-experiences create --app-clip-id "CLIP_ID" --action OPEN
-  appstore app-clips default-experiences create --app-clip-id "CLIP_ID" --release-version-id "VERSION_ID"`,
+  asc app-clips default-experiences create --app-clip-id "CLIP_ID" --action OPEN
+  asc app-clips default-experiences create --app-clip-id "CLIP_ID" --release-version-id "VERSION_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -246,13 +246,13 @@ func AppClipDefaultExperiencesUpdateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "update",
-		ShortUsage: "appstore app-clips default-experiences update --experience-id \"EXP_ID\" [flags]",
+		ShortUsage: "asc app-clips default-experiences update --experience-id \"EXP_ID\" [flags]",
 		ShortHelp:  "Update a default experience.",
 		LongHelp: `Update a default experience.
 
 Examples:
-  appstore app-clips default-experiences update --experience-id "EXP_ID" --action VIEW
-  appstore app-clips default-experiences update --experience-id "EXP_ID" --release-version-id "VERSION_ID"`,
+  asc app-clips default-experiences update --experience-id "EXP_ID" --action VIEW
+  asc app-clips default-experiences update --experience-id "EXP_ID" --release-version-id "VERSION_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -311,12 +311,12 @@ func AppClipDefaultExperiencesDeleteCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "delete",
-		ShortUsage: "appstore app-clips default-experiences delete --experience-id \"EXP_ID\" --confirm",
+		ShortUsage: "asc app-clips default-experiences delete --experience-id \"EXP_ID\" --confirm",
 		ShortHelp:  "Delete a default experience.",
 		LongHelp: `Delete a default experience.
 
 Examples:
-  appstore app-clips default-experiences delete --experience-id "EXP_ID" --confirm`,
+  asc app-clips default-experiences delete --experience-id "EXP_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -361,12 +361,12 @@ func AppClipDefaultExperienceReviewDetailCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "review-detail",
-		ShortUsage: "appstore app-clips default-experiences review-detail --experience-id \"EXP_ID\"",
+		ShortUsage: "asc app-clips default-experiences review-detail --experience-id \"EXP_ID\"",
 		ShortHelp:  "Get review detail for a default experience.",
 		LongHelp: `Get review detail for a default experience.
 
 Examples:
-  appstore app-clips default-experiences review-detail --experience-id "EXP_ID"`,
+  asc app-clips default-experiences review-detail --experience-id "EXP_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -403,12 +403,12 @@ func AppClipDefaultExperienceReleaseWithAppStoreVersionCommand() *ffcli.Command 
 
 	return &ffcli.Command{
 		Name:       "release-with-app-store-version",
-		ShortUsage: "appstore app-clips default-experiences release-with-app-store-version --experience-id \"EXP_ID\"",
+		ShortUsage: "asc app-clips default-experiences release-with-app-store-version --experience-id \"EXP_ID\"",
 		ShortHelp:  "Get release with App Store version for a default experience.",
 		LongHelp: `Get release with App Store version for a default experience.
 
 Examples:
-  appstore app-clips default-experiences release-with-app-store-version --experience-id "EXP_ID"`,
+  asc app-clips default-experiences release-with-app-store-version --experience-id "EXP_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

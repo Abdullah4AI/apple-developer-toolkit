@@ -20,13 +20,13 @@ func AppInfoTerritoryAgeRatingsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "territory-age-ratings",
-		ShortUsage: "appstore app-info territory-age-ratings <subcommand> [flags]",
+		ShortUsage: "asc app-info territory-age-ratings <subcommand> [flags]",
 		ShortHelp:  "List territory age ratings for an app info.",
 		LongHelp: `List territory age ratings for an app info.
 
 Examples:
-  appstore app-info territory-age-ratings list --id "APP_INFO_ID"
-  appstore app-info territory-age-ratings list --id "APP_INFO_ID" --include territory --territory-fields currency`,
+  asc app-info territory-age-ratings list --id "APP_INFO_ID"
+  asc app-info territory-age-ratings list --id "APP_INFO_ID" --include territory --territory-fields currency`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -53,14 +53,14 @@ func AppInfoTerritoryAgeRatingsListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore app-info territory-age-ratings list --id \"APP_INFO_ID\" [flags]",
+		ShortUsage: "asc app-info territory-age-ratings list --id \"APP_INFO_ID\" [flags]",
 		ShortHelp:  "List territory age ratings for an app info.",
 		LongHelp: `List territory age ratings for an app info.
 
 Examples:
-  appstore app-info territory-age-ratings list --id "APP_INFO_ID"
-  appstore app-info territory-age-ratings list --id "APP_INFO_ID" --include territory --territory-fields currency
-  appstore app-info territory-age-ratings list --id "APP_INFO_ID" --paginate`,
+  asc app-info territory-age-ratings list --id "APP_INFO_ID"
+  asc app-info territory-age-ratings list --id "APP_INFO_ID" --include territory --territory-fields currency
+  asc app-info territory-age-ratings list --id "APP_INFO_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

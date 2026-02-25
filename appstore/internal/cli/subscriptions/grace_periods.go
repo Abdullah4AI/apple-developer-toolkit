@@ -19,13 +19,13 @@ func SubscriptionsGracePeriodsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "grace-periods",
-		ShortUsage: "appstore subscriptions grace-periods <subcommand> [flags]",
+		ShortUsage: "asc subscriptions grace-periods <subcommand> [flags]",
 		ShortHelp:  "Inspect subscription grace periods.",
 		LongHelp: `Inspect subscription grace periods.
 
 Examples:
-  appstore subscriptions grace-periods get --id "GRACE_PERIOD_ID"
-  appstore subscriptions grace-periods update --id "GRACE_PERIOD_ID" --duration SIXTEEN_DAYS --opt-in true`,
+  asc subscriptions grace-periods get --id "GRACE_PERIOD_ID"
+  asc subscriptions grace-periods update --id "GRACE_PERIOD_ID" --duration SIXTEEN_DAYS --opt-in true`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -47,12 +47,12 @@ func SubscriptionsGracePeriodsGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore subscriptions grace-periods get --id \"GRACE_PERIOD_ID\"",
+		ShortUsage: "asc subscriptions grace-periods get --id \"GRACE_PERIOD_ID\"",
 		ShortHelp:  "Get a subscription grace period by ID.",
 		LongHelp: `Get a subscription grace period by ID.
 
 Examples:
-  appstore subscriptions grace-periods get --id "GRACE_PERIOD_ID"`,
+  asc subscriptions grace-periods get --id "GRACE_PERIOD_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -95,12 +95,12 @@ func SubscriptionsGracePeriodsUpdateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "update",
-		ShortUsage: "appstore subscriptions grace-periods update [flags]",
+		ShortUsage: "asc subscriptions grace-periods update [flags]",
 		ShortHelp:  "Update a subscription grace period.",
 		LongHelp: `Update a subscription grace period.
 
 Examples:
-  appstore subscriptions grace-periods update --id "GRACE_PERIOD_ID" --duration SIXTEEN_DAYS --opt-in true`,
+  asc subscriptions grace-periods update --id "GRACE_PERIOD_ID" --duration SIXTEEN_DAYS --opt-in true`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

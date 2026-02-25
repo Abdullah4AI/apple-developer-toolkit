@@ -17,7 +17,7 @@ func ScreenshotsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "screenshots",
-		ShortUsage: "appstore screenshots <subcommand> [flags]",
+		ShortUsage: "asc screenshots <subcommand> [flags]",
 		ShortHelp:  "Capture, frame, review (experimental local workflow), and upload App Store screenshots.",
 		LongHelp: `Manage the full screenshot workflow from local capture to App Store upload.
 
@@ -26,20 +26,26 @@ If you face issues, please file feedback at:
 https://github.com/Abdullah4AI/apple-developer-toolkit/appstore/issues/new/choose
 
 Local workflow (experimental):
-  appstore screenshots run --plan .appstore/screenshots.json
-  appstore screenshots capture --bundle-id "com.example.app" --name home
-  appstore screenshots frame --input ./screenshots/raw/home.png --device iphone-air
-  appstore screenshots review-generate --framed-dir ./screenshots/framed
-  appstore screenshots review-open --output-dir ./screenshots/review
-  appstore screenshots review-approve --all-ready --output-dir ./screenshots/review
-  appstore screenshots list-frame-devices --output json
+  asc screenshots run --plan .asc/screenshots.json
+  asc screenshots capture --bundle-id "com.example.app" --name home
+  asc screenshots frame --input ./screenshots/raw/home.png --device iphone-air
+  asc screenshots review-generate --framed-dir ./screenshots/framed
+  asc screenshots review-open --output-dir ./screenshots/review
+  asc screenshots review-approve --all-ready --output-dir ./screenshots/review
+  asc screenshots list-frame-devices --output json
 
 App Store workflow:
-  appstore screenshots list --version-localization "LOC_ID"
-  appstore screenshots sizes --display-type "APP_IPHONE_69"
-  appstore screenshots upload --version-localization "LOC_ID" --path "./screenshots" --device-type "IPHONE_69"
-  appstore screenshots download --version-localization "LOC_ID" --output-dir "./screenshots/downloaded"
-  appstore screenshots delete --id "SCREENSHOT_ID" --confirm`,
+  asc screenshots list --version-localization "LOC_ID"
+  asc screenshots sizes
+  asc screenshots sizes --all
+  asc screenshots upload --version-localization "LOC_ID" --path "./screenshots/iphone" --device-type "IPHONE_65"
+  asc screenshots upload --version-localization "LOC_ID" --path "./screenshots/ipad" --device-type "IPAD_PRO_3GEN_129"
+  asc screenshots download --version-localization "LOC_ID" --output-dir "./screenshots/downloaded"
+  asc screenshots delete --id "SCREENSHOT_ID" --confirm
+
+For most iOS submissions, one iPhone set (IPHONE_65) and one iPad set
+(IPAD_PRO_3GEN_129) are enough. "asc screenshots sizes" focuses on these by
+default; use --all only when you need the full matrix.`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{

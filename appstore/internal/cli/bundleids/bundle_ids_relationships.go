@@ -20,12 +20,12 @@ func BundleIDsAppCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "app",
-		ShortUsage: "appstore bundle-ids app <subcommand> [flags]",
+		ShortUsage: "asc bundle-ids app <subcommand> [flags]",
 		ShortHelp:  "View the app linked to a bundle ID.",
 		LongHelp: `View the app linked to a bundle ID.
 
 Examples:
-  appstore bundle-ids app get --id "BUNDLE_ID"`,
+  asc bundle-ids app get --id "BUNDLE_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -46,12 +46,12 @@ func BundleIDsAppGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore bundle-ids app get --id \"BUNDLE_ID\"",
+		ShortUsage: "asc bundle-ids app get --id \"BUNDLE_ID\"",
 		ShortHelp:  "Get the app linked to a bundle ID.",
 		LongHelp: `Get the app linked to a bundle ID.
 
 Examples:
-  appstore bundle-ids app get --id "BUNDLE_ID"`,
+  asc bundle-ids app get --id "BUNDLE_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -85,12 +85,12 @@ func BundleIDsProfilesCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "profiles",
-		ShortUsage: "appstore bundle-ids profiles <subcommand> [flags]",
+		ShortUsage: "asc bundle-ids profiles <subcommand> [flags]",
 		ShortHelp:  "List profiles linked to a bundle ID.",
 		LongHelp: `List profiles linked to a bundle ID.
 
 Examples:
-  appstore bundle-ids profiles list --id "BUNDLE_ID"`,
+  asc bundle-ids profiles list --id "BUNDLE_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -114,13 +114,13 @@ func BundleIDsProfilesListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore bundle-ids profiles list --id \"BUNDLE_ID\" [flags]",
+		ShortUsage: "asc bundle-ids profiles list --id \"BUNDLE_ID\" [flags]",
 		ShortHelp:  "List profiles linked to a bundle ID.",
 		LongHelp: `List profiles linked to a bundle ID.
 
 Examples:
-  appstore bundle-ids profiles list --id "BUNDLE_ID"
-  appstore bundle-ids profiles list --id "BUNDLE_ID" --paginate`,
+  asc bundle-ids profiles list --id "BUNDLE_ID"
+  asc bundle-ids profiles list --id "BUNDLE_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

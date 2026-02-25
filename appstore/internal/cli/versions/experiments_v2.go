@@ -19,12 +19,12 @@ func VersionsExperimentsV2Command() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "experiments-v2",
-		ShortUsage: "appstore versions experiments-v2 <subcommand> [flags]",
+		ShortUsage: "asc versions experiments-v2 <subcommand> [flags]",
 		ShortHelp:  "Manage App Store version experiments (v2).",
 		LongHelp: `Manage App Store version experiments (v2).
 
 Examples:
-  appstore versions experiments-v2 list --version-id "VERSION_ID"`,
+  asc versions experiments-v2 list --version-id "VERSION_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -48,13 +48,13 @@ func VersionsExperimentsV2ListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore versions experiments-v2 list --version-id \"VERSION_ID\" [flags]",
+		ShortUsage: "asc versions experiments-v2 list --version-id \"VERSION_ID\" [flags]",
 		ShortHelp:  "List v2 experiments for an app store version.",
 		LongHelp: `List v2 experiments for an app store version.
 
 Examples:
-  appstore versions experiments-v2 list --version-id "VERSION_ID"
-  appstore versions experiments-v2 list --version-id "VERSION_ID" --paginate`,
+  asc versions experiments-v2 list --version-id "VERSION_ID"
+  asc versions experiments-v2 list --version-id "VERSION_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

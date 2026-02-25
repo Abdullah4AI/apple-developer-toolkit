@@ -30,7 +30,7 @@ var guideRegistry = []guideEntry{
 	},
 	{
 		Slug:        "reference",
-		Description: "appstore CLI command reference (also available via 'appstore init')",
+		Description: "ASC CLI command reference (also available via 'asc init')",
 		Content:     ascTemplate,
 	},
 }

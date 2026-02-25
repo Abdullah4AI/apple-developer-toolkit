@@ -17,7 +17,7 @@ import (
 func FeedbackCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("feedback", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID env)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
 	output := shared.BindOutputFlags(fs)
 	includeScreenshots := fs.Bool("include-screenshots", false, "Include screenshot URLs in feedback output")
 	deviceModel := fs.String("device-model", "", "Filter by device model(s), comma-separated")
@@ -34,19 +34,19 @@ func FeedbackCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "feedback",
-		ShortUsage: "appstore feedback [flags]",
+		ShortUsage: "asc feedback [flags]",
 		ShortHelp:  "List TestFlight feedback from beta testers.",
 		LongHelp: `List TestFlight feedback from beta testers.
 
 This command fetches beta feedback screenshot submissions and comments.
 
 Examples:
-  appstore feedback --app "123456789"
-  appstore feedback --app "123456789" --include-screenshots
-  appstore feedback --app "123456789" --device-model "iPhone15,3" --os-version "17.2"
-  appstore feedback --app "123456789" --sort -createdDate --limit 5
-  appstore feedback --next "<links.next>"
-  appstore feedback --app "123456789" --paginate`,
+  asc feedback --app "123456789"
+  asc feedback --app "123456789" --include-screenshots
+  asc feedback --app "123456789" --device-model "iPhone15,3" --os-version "17.2"
+  asc feedback --app "123456789" --sort -createdDate --limit 5
+  asc feedback --next "<links.next>"
+  asc feedback --app "123456789" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -62,7 +62,7 @@ Examples:
 
 			resolvedAppID := shared.ResolveAppID(*appID)
 			if resolvedAppID == "" && strings.TrimSpace(*next) == "" {
-				fmt.Fprintf(os.Stderr, "Error: --app is required (or set APPSTORE_APP_ID)\n\n")
+				fmt.Fprintf(os.Stderr, "Error: --app is required (or set ASC_APP_ID)\n\n")
 				return flag.ErrHelp
 			}
 

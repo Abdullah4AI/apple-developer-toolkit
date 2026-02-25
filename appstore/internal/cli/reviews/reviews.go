@@ -17,7 +17,7 @@ import (
 func ReviewsCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("reviews", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID env)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
 	output := shared.BindOutputFlags(fs)
 	stars := fs.Int("stars", 0, "Filter by star rating (1-5)")
 	territory := fs.String("territory", "", "Filter by territory (e.g., US, GBR)")
@@ -28,7 +28,7 @@ func ReviewsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "reviews",
-		ShortUsage: "appstore reviews [flags] | appstore reviews <subcommand> [flags]",
+		ShortUsage: "asc reviews [flags] | asc reviews <subcommand> [flags]",
 		ShortHelp:  "List and manage App Store customer reviews.",
 		LongHelp: `List and manage App Store customer reviews.
 
@@ -38,19 +38,19 @@ helping you understand user feedback and sentiment.
 When invoked with --app, lists reviews. Subcommands allow responding to reviews.
 
 Examples:
-  appstore reviews --app "123456789"
-  appstore reviews --app "123456789" --stars 1 --territory US
-  appstore reviews --app "123456789" --sort -createdDate --limit 5
-  appstore reviews --next "<links.next>"
-  appstore reviews --app "123456789" --paginate
-  appstore reviews get --id "REVIEW_ID"
-  appstore reviews ratings --app "123456789"
-  appstore reviews ratings --app "123456789" --all
-  appstore reviews summarizations --app "123456789" --platform IOS --territory US
-  appstore reviews respond --review-id "REVIEW_ID" --response "Thanks!"
-  appstore reviews response get --id "RESPONSE_ID"
-  appstore reviews response delete --id "RESPONSE_ID" --confirm
-  appstore reviews response for-review --review-id "REVIEW_ID"`,
+  asc reviews --app "123456789"
+  asc reviews --app "123456789" --stars 1 --territory US
+  asc reviews --app "123456789" --sort -createdDate --limit 5
+  asc reviews --next "<links.next>"
+  asc reviews --app "123456789" --paginate
+  asc reviews get --id "REVIEW_ID"
+  asc reviews ratings --app "123456789"
+  asc reviews ratings --app "123456789" --all
+  asc reviews summarizations --app "123456789" --platform IOS --territory US
+  asc reviews respond --review-id "REVIEW_ID" --response "Thanks!"
+  asc reviews response get --id "RESPONSE_ID"
+  asc reviews response delete --id "RESPONSE_ID" --confirm
+  asc reviews response for-review --review-id "REVIEW_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -65,7 +65,7 @@ Examples:
 			// If no flags are set and no args, show help
 			resolvedAppID := shared.ResolveAppID(*appID)
 			if resolvedAppID == "" && strings.TrimSpace(*next) == "" {
-				fmt.Fprintf(os.Stderr, "Error: --app is required (or set APPSTORE_APP_ID)\n\n")
+				fmt.Fprintf(os.Stderr, "Error: --app is required (or set ASC_APP_ID)\n\n")
 				return flag.ErrHelp
 			}
 
@@ -79,7 +79,7 @@ Examples:
 func ReviewsListCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("list", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID env)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
 	output := shared.BindOutputFlags(fs)
 	stars := fs.Int("stars", 0, "Filter by star rating (1-5)")
 	territory := fs.String("territory", "", "Filter by territory (e.g., US, GBR)")
@@ -90,22 +90,22 @@ func ReviewsListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore reviews list [flags]",
+		ShortUsage: "asc reviews list [flags]",
 		ShortHelp:  "List App Store customer reviews.",
 		LongHelp: `List App Store customer reviews.
 
 Examples:
-  appstore reviews list --app "123456789"
-  appstore reviews list --app "123456789" --stars 5
-  appstore reviews list --app "123456789" --territory US --sort -createdDate
-  appstore reviews list --next "<links.next>"
-  appstore reviews list --app "123456789" --paginate`,
+  asc reviews list --app "123456789"
+  asc reviews list --app "123456789" --stars 5
+  asc reviews list --app "123456789" --territory US --sort -createdDate
+  asc reviews list --next "<links.next>"
+  asc reviews list --app "123456789" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			resolvedAppID := shared.ResolveAppID(*appID)
 			if resolvedAppID == "" && strings.TrimSpace(*next) == "" {
-				fmt.Fprintf(os.Stderr, "Error: --app is required (or set APPSTORE_APP_ID)\n\n")
+				fmt.Fprintf(os.Stderr, "Error: --app is required (or set ASC_APP_ID)\n\n")
 				return flag.ErrHelp
 			}
 

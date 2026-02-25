@@ -17,12 +17,12 @@ func BetaGroupsAppCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "app",
-		ShortUsage: "appstore testflight beta-groups app <subcommand> [flags]",
+		ShortUsage: "asc testflight beta-groups app <subcommand> [flags]",
 		ShortHelp:  "View the app related to a beta group.",
 		LongHelp: `View the app related to a beta group.
 
 Examples:
-  appstore testflight beta-groups app get --group-id "GROUP_ID"`,
+  asc testflight beta-groups app get --group-id "GROUP_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -44,12 +44,12 @@ func BetaGroupsAppGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore testflight beta-groups app get --group-id \"GROUP_ID\"",
+		ShortUsage: "asc testflight beta-groups app get --group-id \"GROUP_ID\"",
 		ShortHelp:  "Get the app for a beta group.",
 		LongHelp: `Get the app for a beta group.
 
 Examples:
-  appstore testflight beta-groups app get --group-id "GROUP_ID"`,
+  asc testflight beta-groups app get --group-id "GROUP_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -89,12 +89,12 @@ func BetaGroupsRecruitmentCriteriaCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "beta-recruitment-criteria",
-		ShortUsage: "appstore testflight beta-groups beta-recruitment-criteria <subcommand> [flags]",
+		ShortUsage: "asc testflight beta-groups beta-recruitment-criteria <subcommand> [flags]",
 		ShortHelp:  "View beta recruitment criteria for a beta group.",
 		LongHelp: `View beta recruitment criteria for a beta group.
 
 Examples:
-  appstore testflight beta-groups beta-recruitment-criteria get --group-id "GROUP_ID"`,
+  asc testflight beta-groups beta-recruitment-criteria get --group-id "GROUP_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -116,12 +116,12 @@ func BetaGroupsRecruitmentCriteriaGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore testflight beta-groups beta-recruitment-criteria get --group-id \"GROUP_ID\"",
+		ShortUsage: "asc testflight beta-groups beta-recruitment-criteria get --group-id \"GROUP_ID\"",
 		ShortHelp:  "Get beta recruitment criteria for a beta group.",
 		LongHelp: `Get beta recruitment criteria for a beta group.
 
 Examples:
-  appstore testflight beta-groups beta-recruitment-criteria get --group-id "GROUP_ID"`,
+  asc testflight beta-groups beta-recruitment-criteria get --group-id "GROUP_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -161,12 +161,12 @@ func BetaGroupsRecruitmentCriterionCompatibleBuildCheckCommand() *ffcli.Command 
 
 	return &ffcli.Command{
 		Name:       "beta-recruitment-criterion-compatible-build-check",
-		ShortUsage: "appstore testflight beta-groups beta-recruitment-criterion-compatible-build-check <subcommand> [flags]",
+		ShortUsage: "asc testflight beta-groups beta-recruitment-criterion-compatible-build-check <subcommand> [flags]",
 		ShortHelp:  "Check beta recruitment compatible build status for a group.",
 		LongHelp: `Check beta recruitment compatible build status for a group.
 
 Examples:
-  appstore testflight beta-groups beta-recruitment-criterion-compatible-build-check get --group-id "GROUP_ID"`,
+  asc testflight beta-groups beta-recruitment-criterion-compatible-build-check get --group-id "GROUP_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -188,12 +188,12 @@ func BetaGroupsRecruitmentCriterionCompatibleBuildCheckGetCommand() *ffcli.Comma
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore testflight beta-groups beta-recruitment-criterion-compatible-build-check get --group-id \"GROUP_ID\"",
+		ShortUsage: "asc testflight beta-groups beta-recruitment-criterion-compatible-build-check get --group-id \"GROUP_ID\"",
 		ShortHelp:  "Get compatible build status for beta recruitment criteria.",
 		LongHelp: `Get compatible build status for beta recruitment criteria.
 
 Examples:
-  appstore testflight beta-groups beta-recruitment-criterion-compatible-build-check get --group-id "GROUP_ID"`,
+  asc testflight beta-groups beta-recruitment-criterion-compatible-build-check get --group-id "GROUP_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

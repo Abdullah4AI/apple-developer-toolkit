@@ -16,7 +16,7 @@ import (
 func VersionsCommand() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "versions",
-		ShortUsage: "appstore versions <subcommand> [flags]",
+		ShortUsage: "asc versions <subcommand> [flags]",
 		ShortHelp:  "Manage App Store versions.",
 		LongHelp:   `Manage App Store versions.`,
 		UsageFunc:  shared.DefaultUsageFunc,
@@ -44,7 +44,7 @@ func VersionsCommand() *ffcli.Command {
 func VersionsListCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("versions list", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID)")
 	version := fs.String("version", "", "Filter by version string (comma-separated)")
 	platform := fs.String("platform", "", "Filter by platform: IOS, MAC_OS, TV_OS, VISION_OS (comma-separated)")
 	state := fs.String("state", "", "Filter by state (comma-separated)")
@@ -55,15 +55,15 @@ func VersionsListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore versions list [flags]",
+		ShortUsage: "asc versions list [flags]",
 		ShortHelp:  "List app store versions for an app.",
 		LongHelp: `List app store versions for an app.
 
 Examples:
-  appstore versions list --app "123456789"
-  appstore versions list --app "123456789" --version "1.0.0"
-  appstore versions list --app "123456789" --platform IOS --state READY_FOR_REVIEW
-  appstore versions list --app "123456789" --paginate`,
+  asc versions list --app "123456789"
+  asc versions list --app "123456789" --version "1.0.0"
+  asc versions list --app "123456789" --platform IOS --state READY_FOR_REVIEW
+  asc versions list --app "123456789" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -85,7 +85,7 @@ Examples:
 
 			resolvedAppID := shared.ResolveAppID(*appID)
 			if resolvedAppID == "" && strings.TrimSpace(*next) == "" {
-				fmt.Fprintln(os.Stderr, "Error: --app is required (or set APPSTORE_APP_ID)")
+				fmt.Fprintln(os.Stderr, "Error: --app is required (or set ASC_APP_ID)")
 				return flag.ErrHelp
 			}
 
@@ -145,14 +145,14 @@ func VersionsGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore versions get [flags]",
+		ShortUsage: "asc versions get [flags]",
 		ShortHelp:  "Get details for an app store version.",
 		LongHelp: `Get details for an app store version.
 
 Examples:
-  appstore versions get --version-id "VERSION_ID"
-  appstore versions get --version-id "VERSION_ID" --include-build --include-submission
-  appstore versions get --version-id "VERSION_ID" --include "ageRatingDeclaration,appStoreReviewDetail"`,
+  asc versions get --version-id "VERSION_ID"
+  asc versions get --version-id "VERSION_ID" --include-build --include-submission
+  asc versions get --version-id "VERSION_ID" --include "ageRatingDeclaration,appStoreReviewDetail"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -227,7 +227,7 @@ Examples:
 func VersionsCreateCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("versions create", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID)")
 	versionString := fs.String("version", "", "Version string (e.g., 1.0.0) (required)")
 	platform := fs.String("platform", "IOS", "Platform: IOS, MAC_OS, TV_OS, VISION_OS")
 	copyright := fs.String("copyright", "", "Copyright text (e.g., '2026 My Company')")
@@ -236,14 +236,14 @@ func VersionsCreateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "create",
-		ShortUsage: "appstore versions create [flags]",
+		ShortUsage: "asc versions create [flags]",
 		ShortHelp:  "Create a new app store version.",
 		LongHelp: `Create a new app store version.
 
 Examples:
-  appstore versions create --app "123456789" --version "2.0.0"
-  appstore versions create --app "123456789" --version "2.0.0" --platform IOS
-  appstore versions create --app "123456789" --version "2.0.0" --copyright "2026 My Company" --release-type MANUAL`,
+  asc versions create --app "123456789" --version "2.0.0"
+  asc versions create --app "123456789" --version "2.0.0" --platform IOS
+  asc versions create --app "123456789" --version "2.0.0" --copyright "2026 My Company" --release-type MANUAL`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -259,7 +259,7 @@ Examples:
 
 			resolvedAppID := shared.ResolveAppID(*appID)
 			if resolvedAppID == "" {
-				fmt.Fprintln(os.Stderr, "Error: --app is required (or set APPSTORE_APP_ID)")
+				fmt.Fprintln(os.Stderr, "Error: --app is required (or set ASC_APP_ID)")
 				return flag.ErrHelp
 			}
 
@@ -311,15 +311,15 @@ func VersionsUpdateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "update",
-		ShortUsage: "appstore versions update [flags]",
+		ShortUsage: "asc versions update [flags]",
 		ShortHelp:  "Update an app store version.",
 		LongHelp: `Update an app store version.
 
 Examples:
-  appstore versions update --version-id "VERSION_ID" --copyright "2026 My Company"
-  appstore versions update --version-id "VERSION_ID" --release-type MANUAL
-  appstore versions update --version-id "VERSION_ID" --release-type SCHEDULED --earliest-release-date "2026-02-01T08:00:00+00:00"
-  appstore versions update --version-id "VERSION_ID" --version "1.0.1"`,
+  asc versions update --version-id "VERSION_ID" --copyright "2026 My Company"
+  asc versions update --version-id "VERSION_ID" --release-type MANUAL
+  asc versions update --version-id "VERSION_ID" --release-type SCHEDULED --earliest-release-date "2026-02-01T08:00:00+00:00"
+  asc versions update --version-id "VERSION_ID" --version "1.0.1"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -383,14 +383,14 @@ func VersionsDeleteCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "delete",
-		ShortUsage: "appstore versions delete [flags]",
+		ShortUsage: "asc versions delete [flags]",
 		ShortHelp:  "Delete an app store version (only versions in PREPARE_FOR_SUBMISSION state).",
 		LongHelp: `Delete an app store version.
 
 Only versions in PREPARE_FOR_SUBMISSION state can be deleted.
 
 Examples:
-  appstore versions delete --version-id "VERSION_ID" --confirm`,
+  asc versions delete --version-id "VERSION_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -434,12 +434,12 @@ func VersionsAttachBuildCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "attach-build",
-		ShortUsage: "appstore versions attach-build [flags]",
+		ShortUsage: "asc versions attach-build [flags]",
 		ShortHelp:  "Attach a build to an app store version.",
 		LongHelp: `Attach a build to an app store version.
 
 Examples:
-  appstore versions attach-build --version-id "VERSION_ID" --build "BUILD_ID"`,
+  asc versions attach-build --version-id "VERSION_ID" --build "BUILD_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

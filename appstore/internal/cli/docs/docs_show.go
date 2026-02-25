@@ -18,14 +18,14 @@ func DocsShowCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "show",
-		ShortUsage: "appstore docs show <workflows|api-notes|reference>",
+		ShortUsage: "asc docs show <workflows|api-notes|reference>",
 		ShortHelp:  "Print an embedded documentation guide.",
 		LongHelp: `Print an embedded documentation guide.
 
 Examples:
-  appstore docs show workflows
-  appstore docs show api-notes
-  appstore docs show reference`,
+  asc docs show workflows
+  asc docs show api-notes
+  asc docs show reference`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

@@ -32,7 +32,7 @@ func XcodeCloudActionsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "actions",
-		ShortUsage: "appstore xcode-cloud actions [flags]",
+		ShortUsage: "asc xcode-cloud actions [flags]",
 		ShortHelp:  "Manage build actions for an Xcode Cloud build run.",
 		LongHelp: `Manage build actions for an Xcode Cloud build run.
 
@@ -40,13 +40,13 @@ Build actions show the individual steps of a build run (e.g., "Resolve Dependenc
 "Archive", "Upload") and their status, which helps diagnose why builds failed.
 
 Examples:
-  appstore xcode-cloud actions --run-id "BUILD_RUN_ID"
-  appstore xcode-cloud actions list --run-id "BUILD_RUN_ID"
-  appstore xcode-cloud actions get --id "ACTION_ID"
-  appstore xcode-cloud actions build-run --id "ACTION_ID"
-  appstore xcode-cloud actions --run-id "BUILD_RUN_ID" --output table
-  appstore xcode-cloud actions --run-id "BUILD_RUN_ID" --limit 50
-  appstore xcode-cloud actions --run-id "BUILD_RUN_ID" --paginate`,
+  asc xcode-cloud actions --run-id "BUILD_RUN_ID"
+  asc xcode-cloud actions list --run-id "BUILD_RUN_ID"
+  asc xcode-cloud actions get --id "ACTION_ID"
+  asc xcode-cloud actions build-run --id "ACTION_ID"
+  asc xcode-cloud actions --run-id "BUILD_RUN_ID" --output table
+  asc xcode-cloud actions --run-id "BUILD_RUN_ID" --limit 50
+  asc xcode-cloud actions --run-id "BUILD_RUN_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -67,15 +67,15 @@ func XcodeCloudActionsListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore xcode-cloud actions list [flags]",
+		ShortUsage: "asc xcode-cloud actions list [flags]",
 		ShortHelp:  "List build actions for an Xcode Cloud build run.",
 		LongHelp: `List build actions for an Xcode Cloud build run.
 
 Examples:
-  appstore xcode-cloud actions list --run-id "BUILD_RUN_ID"
-  appstore xcode-cloud actions list --run-id "BUILD_RUN_ID" --output table
-  appstore xcode-cloud actions list --run-id "BUILD_RUN_ID" --limit 50
-  appstore xcode-cloud actions list --run-id "BUILD_RUN_ID" --paginate`,
+  asc xcode-cloud actions list --run-id "BUILD_RUN_ID"
+  asc xcode-cloud actions list --run-id "BUILD_RUN_ID" --output table
+  asc xcode-cloud actions list --run-id "BUILD_RUN_ID" --limit 50
+  asc xcode-cloud actions list --run-id "BUILD_RUN_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -92,13 +92,13 @@ func XcodeCloudActionsGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore xcode-cloud actions get --id \"ACTION_ID\"",
+		ShortUsage: "asc xcode-cloud actions get --id \"ACTION_ID\"",
 		ShortHelp:  "Get details for a build action.",
 		LongHelp: `Get details for a build action.
 
 Examples:
-  appstore xcode-cloud actions get --id "ACTION_ID"
-  appstore xcode-cloud actions get --id "ACTION_ID" --output table`,
+  asc xcode-cloud actions get --id "ACTION_ID"
+  asc xcode-cloud actions get --id "ACTION_ID" --output table`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -134,13 +134,13 @@ func XcodeCloudActionsBuildRunCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "build-run",
-		ShortUsage: "appstore xcode-cloud actions build-run --id \"ACTION_ID\"",
+		ShortUsage: "asc xcode-cloud actions build-run --id \"ACTION_ID\"",
 		ShortHelp:  "Get the build run for a build action.",
 		LongHelp: `Get the build run for a build action.
 
 Examples:
-  appstore xcode-cloud actions build-run --id "ACTION_ID"
-  appstore xcode-cloud actions build-run --id "ACTION_ID" --output table`,
+  asc xcode-cloud actions build-run --id "ACTION_ID"
+  asc xcode-cloud actions build-run --id "ACTION_ID" --output table`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

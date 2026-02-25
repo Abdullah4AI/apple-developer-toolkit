@@ -19,13 +19,13 @@ func XcodeCloudIssuesCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "issues",
-		ShortUsage: "appstore xcode-cloud issues <subcommand> [flags]",
+		ShortUsage: "asc xcode-cloud issues <subcommand> [flags]",
 		ShortHelp:  "List Xcode Cloud build issues.",
 		LongHelp: `List Xcode Cloud build issues.
 
 Examples:
-  appstore xcode-cloud issues list --action-id "ACTION_ID"
-  appstore xcode-cloud issues get --id "ISSUE_ID"`,
+  asc xcode-cloud issues list --action-id "ACTION_ID"
+  asc xcode-cloud issues get --id "ISSUE_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -50,15 +50,15 @@ func XcodeCloudIssuesListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore xcode-cloud issues list [flags]",
+		ShortUsage: "asc xcode-cloud issues list [flags]",
 		ShortHelp:  "List issues for a build action.",
 		LongHelp: `List issues for a build action.
 
 Examples:
-  appstore xcode-cloud issues list --action-id "ACTION_ID"
-  appstore xcode-cloud issues list --action-id "ACTION_ID" --output table
-  appstore xcode-cloud issues list --action-id "ACTION_ID" --limit 50
-  appstore xcode-cloud issues list --action-id "ACTION_ID" --paginate`,
+  asc xcode-cloud issues list --action-id "ACTION_ID"
+  asc xcode-cloud issues list --action-id "ACTION_ID" --output table
+  asc xcode-cloud issues list --action-id "ACTION_ID" --limit 50
+  asc xcode-cloud issues list --action-id "ACTION_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -124,13 +124,13 @@ func XcodeCloudIssuesGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore xcode-cloud issues get --id \"ISSUE_ID\"",
+		ShortUsage: "asc xcode-cloud issues get --id \"ISSUE_ID\"",
 		ShortHelp:  "Get details for a build issue.",
 		LongHelp: `Get details for a build issue.
 
 Examples:
-  appstore xcode-cloud issues get --id "ISSUE_ID"
-  appstore xcode-cloud issues get --id "ISSUE_ID" --output table`,
+  asc xcode-cloud issues get --id "ISSUE_ID"
+  asc xcode-cloud issues get --id "ISSUE_ID" --output table`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

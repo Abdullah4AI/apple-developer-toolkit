@@ -19,13 +19,13 @@ func XcodeCloudTestResultsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "test-results",
-		ShortUsage: "appstore xcode-cloud test-results <subcommand> [flags]",
+		ShortUsage: "asc xcode-cloud test-results <subcommand> [flags]",
 		ShortHelp:  "List Xcode Cloud test results.",
 		LongHelp: `List Xcode Cloud test results.
 
 Examples:
-  appstore xcode-cloud test-results list --action-id "ACTION_ID"
-  appstore xcode-cloud test-results get --id "TEST_RESULT_ID"`,
+  asc xcode-cloud test-results list --action-id "ACTION_ID"
+  asc xcode-cloud test-results get --id "TEST_RESULT_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -50,15 +50,15 @@ func XcodeCloudTestResultsListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore xcode-cloud test-results list [flags]",
+		ShortUsage: "asc xcode-cloud test-results list [flags]",
 		ShortHelp:  "List test results for a build action.",
 		LongHelp: `List test results for a build action.
 
 Examples:
-  appstore xcode-cloud test-results list --action-id "ACTION_ID"
-  appstore xcode-cloud test-results list --action-id "ACTION_ID" --output table
-  appstore xcode-cloud test-results list --action-id "ACTION_ID" --limit 50
-  appstore xcode-cloud test-results list --action-id "ACTION_ID" --paginate`,
+  asc xcode-cloud test-results list --action-id "ACTION_ID"
+  asc xcode-cloud test-results list --action-id "ACTION_ID" --output table
+  asc xcode-cloud test-results list --action-id "ACTION_ID" --limit 50
+  asc xcode-cloud test-results list --action-id "ACTION_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -124,13 +124,13 @@ func XcodeCloudTestResultsGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore xcode-cloud test-results get --id \"TEST_RESULT_ID\"",
+		ShortUsage: "asc xcode-cloud test-results get --id \"TEST_RESULT_ID\"",
 		ShortHelp:  "Get details for a test result.",
 		LongHelp: `Get details for a test result.
 
 Examples:
-  appstore xcode-cloud test-results get --id "TEST_RESULT_ID"
-  appstore xcode-cloud test-results get --id "TEST_RESULT_ID" --output table`,
+  asc xcode-cloud test-results get --id "TEST_RESULT_ID"
+  asc xcode-cloud test-results get --id "TEST_RESULT_ID" --output table`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

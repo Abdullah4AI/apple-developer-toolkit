@@ -27,7 +27,7 @@ type AvailabilitySetCommandConfig struct {
 func NewAvailabilitySetCommand(config AvailabilitySetCommandConfig) *ffcli.Command {
 	fs := flag.NewFlagSet(config.FlagSetName, flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID)")
 	territory := fs.String("territory", "", "Territory IDs (comma-separated, e.g., USA,GBR)")
 	var available OptionalBool
 	fs.Var(&available, "available", "Set availability: true or false")
@@ -47,7 +47,7 @@ func NewAvailabilitySetCommand(config AvailabilitySetCommandConfig) *ffcli.Comma
 		Exec: func(ctx context.Context, args []string) error {
 			resolvedAppID := resolveAppID(*appID)
 			if resolvedAppID == "" {
-				fmt.Fprintln(os.Stderr, "Error: --app is required (or set APPSTORE_APP_ID)")
+				fmt.Fprintln(os.Stderr, "Error: --app is required (or set ASC_APP_ID)")
 				return flag.ErrHelp
 			}
 			if strings.TrimSpace(*territory) == "" {

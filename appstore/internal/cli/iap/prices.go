@@ -71,21 +71,21 @@ type iapPricePointValue struct {
 func IAPPricesCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("prices", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID env)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
 	iapID := fs.String("iap-id", "", "In-app purchase ID")
 	territory := fs.String("territory", "", "Territory filter (e.g., USA)")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "prices",
-		ShortUsage: "appstore iap prices [flags]",
+		ShortUsage: "asc iap prices [flags]",
 		ShortHelp:  "Show consolidated in-app purchase pricing summary.",
 		LongHelp: `Show consolidated in-app purchase pricing summary.
 
 Examples:
-  appstore iap prices --app "APP_ID"
-  appstore iap prices --iap-id "IAP_ID"
-  appstore iap prices --app "APP_ID" --territory "USA" --output table`,
+  asc iap prices --app "APP_ID"
+  asc iap prices --iap-id "IAP_ID"
+  asc iap prices --app "APP_ID" --territory "USA" --output table`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

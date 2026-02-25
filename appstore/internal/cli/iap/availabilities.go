@@ -19,13 +19,13 @@ func IAPAvailabilitiesCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "availabilities",
-		ShortUsage: "appstore iap availabilities <subcommand> [flags]",
+		ShortUsage: "asc iap availabilities <subcommand> [flags]",
 		ShortHelp:  "Inspect in-app purchase availability records.",
 		LongHelp: `Inspect in-app purchase availability records.
 
 Examples:
-  appstore iap availabilities get --id "AVAILABILITY_ID"
-  appstore iap availabilities available-territories --id "AVAILABILITY_ID" --paginate`,
+  asc iap availabilities get --id "AVAILABILITY_ID"
+  asc iap availabilities available-territories --id "AVAILABILITY_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -47,12 +47,12 @@ func IAPAvailabilitiesGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore iap availabilities get --id \"AVAILABILITY_ID\"",
+		ShortUsage: "asc iap availabilities get --id \"AVAILABILITY_ID\"",
 		ShortHelp:  "Get an in-app purchase availability by ID.",
 		LongHelp: `Get an in-app purchase availability by ID.
 
 Examples:
-  appstore iap availabilities get --id "AVAILABILITY_ID"`,
+  asc iap availabilities get --id "AVAILABILITY_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -92,13 +92,13 @@ func IAPAvailabilitiesAvailableTerritoriesCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "available-territories",
-		ShortUsage: "appstore iap availabilities available-territories --id \"AVAILABILITY_ID\"",
+		ShortUsage: "asc iap availabilities available-territories --id \"AVAILABILITY_ID\"",
 		ShortHelp:  "List available territories for an availability.",
 		LongHelp: `List available territories for an in-app purchase availability.
 
 Examples:
-  appstore iap availabilities available-territories --id "AVAILABILITY_ID"
-  appstore iap availabilities available-territories --id "AVAILABILITY_ID" --paginate`,
+  asc iap availabilities available-territories --id "AVAILABILITY_ID"
+  asc iap availabilities available-territories --id "AVAILABILITY_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

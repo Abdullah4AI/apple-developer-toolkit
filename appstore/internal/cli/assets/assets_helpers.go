@@ -30,6 +30,11 @@ func ContextWithAssetUploadTimeout(ctx context.Context) (context.Context, contex
 	return contextWithAssetUploadTimeout(ctx)
 }
 
+// CollectAssetFiles validates and collects files from a path.
+func CollectAssetFiles(path string) ([]string, error) {
+	return collectAssetFiles(path)
+}
+
 func collectAssetFiles(path string) ([]string, error) {
 	info, err := os.Lstat(path)
 	if err != nil {

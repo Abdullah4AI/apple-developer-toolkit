@@ -17,13 +17,13 @@ import (
 func PreReleaseVersionsCommand() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "pre-release-versions",
-		ShortUsage: "appstore pre-release-versions <subcommand> [flags]",
+		ShortUsage: "asc pre-release-versions <subcommand> [flags]",
 		ShortHelp:  "Manage TestFlight pre-release versions.",
 		LongHelp: `Manage TestFlight pre-release versions.
 
 Examples:
-  appstore pre-release-versions list --app "APP_ID"
-  appstore pre-release-versions relationships get --id "PR_ID" --type "app"`,
+  asc pre-release-versions list --app "APP_ID"
+  asc pre-release-versions relationships get --id "PR_ID" --type "app"`,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
 			PreReleaseVersionsListCommand(),
@@ -42,7 +42,7 @@ Examples:
 func PreReleaseVersionsListCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("pre-release-versions list", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID)")
 	platform := fs.String("platform", "", "Filter by platform: IOS, MAC_OS, TV_OS, VISION_OS")
 	version := fs.String("version", "", "Filter by version string")
 	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
@@ -52,15 +52,15 @@ func PreReleaseVersionsListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore pre-release-versions list [flags]",
+		ShortUsage: "asc pre-release-versions list [flags]",
 		ShortHelp:  "List TestFlight pre-release versions for an app.",
 		LongHelp: `List TestFlight pre-release versions for an app.
 
 Examples:
-  appstore pre-release-versions list --app "APP_ID"
-  appstore pre-release-versions list --app "APP_ID" --platform IOS
-  appstore pre-release-versions list --app "APP_ID" --version "1.0.0"
-  appstore pre-release-versions list --app "APP_ID" --paginate`,
+  asc pre-release-versions list --app "APP_ID"
+  asc pre-release-versions list --app "APP_ID" --platform IOS
+  asc pre-release-versions list --app "APP_ID" --version "1.0.0"
+  asc pre-release-versions list --app "APP_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -79,7 +79,7 @@ Examples:
 			resolvedAppID := strings.TrimSpace(shared.ResolveAppID(strings.TrimSpace(*appID)))
 			nextValue := strings.TrimSpace(*next)
 			if resolvedAppID == "" && nextValue == "" {
-				fmt.Fprintln(os.Stderr, "Error: --app is required (or set APPSTORE_APP_ID)")
+				fmt.Fprintln(os.Stderr, "Error: --app is required (or set ASC_APP_ID)")
 				return flag.ErrHelp
 			}
 
@@ -141,12 +141,12 @@ func PreReleaseVersionsGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore pre-release-versions get [flags]",
+		ShortUsage: "asc pre-release-versions get [flags]",
 		ShortHelp:  "Get a TestFlight pre-release version by ID.",
 		LongHelp: `Get a TestFlight pre-release version by ID.
 
 Examples:
-  appstore pre-release-versions get --id "PR_ID"`,
+  asc pre-release-versions get --id "PR_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

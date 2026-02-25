@@ -16,12 +16,12 @@ func AppsSubscriptionGracePeriodCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "subscription-grace-period",
-		ShortUsage: "appstore apps subscription-grace-period <subcommand> [flags]",
+		ShortUsage: "asc apps subscription-grace-period <subcommand> [flags]",
 		ShortHelp:  "Inspect an app's subscription grace period.",
 		LongHelp: `Inspect an app's subscription grace period.
 
 Examples:
-  appstore apps subscription-grace-period get --app "APP_ID"`,
+  asc apps subscription-grace-period get --app "APP_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -37,23 +37,23 @@ Examples:
 func AppsSubscriptionGracePeriodGetCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("subscription-grace-period get", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID env)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore apps subscription-grace-period get --app \"APP_ID\"",
+		ShortUsage: "asc apps subscription-grace-period get --app \"APP_ID\"",
 		ShortHelp:  "Get an app's subscription grace period.",
 		LongHelp: `Get an app's subscription grace period.
 
 Examples:
-  appstore apps subscription-grace-period get --app "APP_ID"`,
+  asc apps subscription-grace-period get --app "APP_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			resolvedAppID := shared.ResolveAppID(*appID)
 			if resolvedAppID == "" {
-				fmt.Fprintln(os.Stderr, "Error: --app is required (or set APPSTORE_APP_ID)")
+				fmt.Fprintln(os.Stderr, "Error: --app is required (or set ASC_APP_ID)")
 				return flag.ErrHelp
 			}
 

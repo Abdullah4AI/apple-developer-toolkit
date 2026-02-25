@@ -632,7 +632,7 @@ const reviewHTMLTemplate = `<!doctype html>
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>App Store Shots Review</title>
+  <title>ASC Shots Review</title>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 20px; color: #1f2937; }
     h1 { margin: 0 0 8px 0; }
@@ -655,7 +655,7 @@ const reviewHTMLTemplate = `<!doctype html>
   </style>
 </head>
 <body>
-  <h1>App Store Shots Review</h1>
+  <h1>ASC Shots Review</h1>
   <div class="meta">
     Generated at {{.Manifest.GeneratedAt}}<br />
     Framed: <code>{{.Manifest.FramedDir}}</code><br />

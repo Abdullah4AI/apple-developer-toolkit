@@ -22,7 +22,7 @@ func ShotsReviewOpenCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "review-open",
-		ShortUsage: "appstore screenshots review-open [flags]",
+		ShortUsage: "asc screenshots review-open [flags]",
 		ShortHelp:  "Open review HTML report in the default browser (experimental).",
 		FlagSet:    fs,
 		UsageFunc:  shared.DefaultUsageFunc,

@@ -7,11 +7,16 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 )
 
 var (
 	lookPathFn       = exec.LookPath
 	commandContextFn = exec.CommandContext
+
+	cachedShellMu    sync.RWMutex
+	cachedShellName  string
+	cachedShellFlags []string
 )
 
 // mergeEnv merges environment maps in order. Later values override earlier.
@@ -41,19 +46,39 @@ func isTruthy(value string) bool {
 // tracks env map onto os.Environ().
 func buildEnvSlice(env map[string]string) []string {
 	base := os.Environ()
-	for k, v := range env {
-		prefix := k + "="
-		found := false
-		for i, entry := range base {
-			if strings.HasPrefix(entry, prefix) {
-				base[i] = prefix + v
-				found = true
+	if len(env) == 0 {
+		return base
+	}
+
+	// Build an index once so each override is O(1) instead of scanning base.
+	// Only track keys that we may override to avoid indexing unrelated env vars.
+	indexByKey := make(map[string]int, len(env))
+	remaining := len(env)
+	for i, entry := range base {
+		key, _, ok := strings.Cut(entry, "=")
+		if !ok {
+			continue
+		}
+		if _, needsOverride := env[key]; !needsOverride {
+			continue
+		}
+		if _, exists := indexByKey[key]; !exists {
+			indexByKey[key] = i
+			remaining--
+			if remaining == 0 {
 				break
 			}
 		}
-		if !found {
-			base = append(base, prefix+v)
+	}
+
+	for k, v := range env {
+		entry := k + "=" + v
+		if i, ok := indexByKey[k]; ok {
+			base[i] = entry
+			continue
 		}
+		indexByKey[k] = len(base)
+		base = append(base, entry)
 	}
 	return base
 }
@@ -62,26 +87,47 @@ func buildEnvSlice(env map[string]string) []string {
 // is available. It falls back to sh -c when bash is unavailable.
 // Bash preserves pipeline failures (e.g., "false | cat") for CI correctness.
 func runShellCommand(ctx context.Context, command string, env map[string]string, stdout, stderr io.Writer) error {
-	var (
-		shell string
-		args  []string
-	)
-
-	if _, err := lookPathFn("bash"); err == nil {
-		shell = "bash"
-		args = []string{"-o", "pipefail", "-c", command}
-	} else if _, err := lookPathFn("sh"); err == nil {
-		shell = "sh"
-		args = []string{"-c", command}
-	} else {
-		return fmt.Errorf("workflow: no supported shell found (need bash or sh)")
+	shell, flags, err := resolveShell()
+	if err != nil {
+		return err
 	}
+	args := append(append([]string{}, flags...), command)
 
 	cmd := commandContextFn(ctx, shell, args...)
 	cmd.Env = buildEnvSlice(env)
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
 	return cmd.Run()
+}
+
+func resolveShell() (string, []string, error) {
+	cachedShellMu.RLock()
+	if cachedShellName != "" {
+		name := cachedShellName
+		flags := append([]string(nil), cachedShellFlags...)
+		cachedShellMu.RUnlock()
+		return name, flags, nil
+	}
+	cachedShellMu.RUnlock()
+
+	cachedShellMu.Lock()
+	defer cachedShellMu.Unlock()
+
+	if cachedShellName != "" {
+		return cachedShellName, append([]string(nil), cachedShellFlags...), nil
+	}
+
+	if _, err := lookPathFn("bash"); err == nil {
+		cachedShellName = "bash"
+		cachedShellFlags = []string{"-o", "pipefail", "-c"}
+		return cachedShellName, append([]string(nil), cachedShellFlags...), nil
+	}
+	if _, err := lookPathFn("sh"); err == nil {
+		cachedShellName = "sh"
+		cachedShellFlags = []string{"-c"}
+		return cachedShellName, append([]string(nil), cachedShellFlags...), nil
+	}
+	return "", nil, fmt.Errorf("workflow: no supported shell found (need bash or sh)")
 }
 
 // runHook executes a hook command. No-op if command is empty or whitespace-only.
@@ -95,6 +141,13 @@ func runHook(ctx context.Context, command string, env map[string]string, dryRun 
 		return nil
 	}
 	return runShellCommand(ctx, command, env, stdout, stderr)
+}
+
+func resetShellCacheForTest() {
+	cachedShellMu.Lock()
+	defer cachedShellMu.Unlock()
+	cachedShellName = ""
+	cachedShellFlags = nil
 }
 
 // ParseParams converts CLI arguments in KEY:VALUE or KEY=VALUE format to a map.

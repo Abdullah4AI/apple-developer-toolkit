@@ -17,16 +17,16 @@ func CategoriesCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "categories",
-		ShortUsage: "appstore categories <subcommand> [flags]",
+		ShortUsage: "asc categories <subcommand> [flags]",
 		ShortHelp:  "Manage App Store categories.",
 		LongHelp: `Manage App Store categories.
 
 Examples:
-  appstore categories list
-  appstore categories get --category-id "GAMES"
-  appstore categories parent --category-id "GAMES"
-  appstore categories subcategories --category-id "GAMES"
-  appstore categories set --app APP_ID --primary GAMES`,
+  asc categories list
+  asc categories get --category-id "GAMES"
+  asc categories parent --category-id "GAMES"
+  asc categories subcategories --category-id "GAMES"
+  asc categories set --app APP_ID --primary GAMES`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -51,7 +51,7 @@ func CategoriesListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore categories list [flags]",
+		ShortUsage: "asc categories list [flags]",
 		ShortHelp:  "List available App Store categories.",
 		LongHelp: `List available App Store categories.
 
@@ -59,8 +59,8 @@ Category IDs can be used when updating app information to set primary
 and secondary categories.
 
 Examples:
-  appstore categories list
-  appstore categories list --output table`,
+  asc categories list
+  asc categories list --output table`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -90,18 +90,18 @@ Examples:
 func CategoriesSetCommand() *ffcli.Command {
 	return shared.NewCategoriesSetCommand(shared.CategoriesSetCommandConfig{
 		FlagSetName: "categories set",
-		ShortUsage:  "appstore categories set --app APP_ID --primary CATEGORY_ID [--secondary CATEGORY_ID] [--app-info APP_INFO_ID]",
+		ShortUsage:  "asc categories set --app APP_ID --primary CATEGORY_ID [--secondary CATEGORY_ID] [--app-info APP_INFO_ID]",
 		ShortHelp:   "Set primary and secondary categories for an app.",
 		LongHelp: `Set the primary and secondary categories for an app.
 
-Use 'appstore categories list' to find valid category IDs.
+Use 'asc categories list' to find valid category IDs.
 
 Note: The app must have an editable version in PREPARE_FOR_SUBMISSION state.
 
 Examples:
-  appstore categories set --app 123456789 --primary GAMES
-  appstore categories set --app 123456789 --primary GAMES --secondary ENTERTAINMENT
-  appstore categories set --app 123456789 --primary PHOTO_AND_VIDEO`,
+  asc categories set --app 123456789 --primary GAMES
+  asc categories set --app 123456789 --primary GAMES --secondary ENTERTAINMENT
+  asc categories set --app 123456789 --primary PHOTO_AND_VIDEO`,
 		ErrorPrefix:    "categories set",
 		IncludeAppInfo: true,
 	})

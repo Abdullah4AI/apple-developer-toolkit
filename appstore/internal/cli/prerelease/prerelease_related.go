@@ -19,12 +19,12 @@ func PreReleaseVersionsAppCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "app",
-		ShortUsage: "appstore pre-release-versions app <subcommand> [flags]",
+		ShortUsage: "asc pre-release-versions app <subcommand> [flags]",
 		ShortHelp:  "View the app for a pre-release version.",
 		LongHelp: `View the app for a pre-release version.
 
 Examples:
-  appstore pre-release-versions app get --id "PR_ID"`,
+  asc pre-release-versions app get --id "PR_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -45,12 +45,12 @@ func PreReleaseVersionsAppGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore pre-release-versions app get --id \"PR_ID\"",
+		ShortUsage: "asc pre-release-versions app get --id \"PR_ID\"",
 		ShortHelp:  "Get the app for a pre-release version.",
 		LongHelp: `Get the app for a pre-release version.
 
 Examples:
-  appstore pre-release-versions app get --id "PR_ID"`,
+  asc pre-release-versions app get --id "PR_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -84,12 +84,12 @@ func PreReleaseVersionsBuildsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "builds",
-		ShortUsage: "appstore pre-release-versions builds <subcommand> [flags]",
+		ShortUsage: "asc pre-release-versions builds <subcommand> [flags]",
 		ShortHelp:  "List builds for a pre-release version.",
 		LongHelp: `List builds for a pre-release version.
 
 Examples:
-  appstore pre-release-versions builds list --id "PR_ID"`,
+  asc pre-release-versions builds list --id "PR_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -113,13 +113,13 @@ func PreReleaseVersionsBuildsListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore pre-release-versions builds list [flags]",
+		ShortUsage: "asc pre-release-versions builds list [flags]",
 		ShortHelp:  "List builds for a pre-release version.",
 		LongHelp: `List builds for a pre-release version.
 
 Examples:
-  appstore pre-release-versions builds list --id "PR_ID"
-  appstore pre-release-versions builds list --id "PR_ID" --paginate`,
+  asc pre-release-versions builds list --id "PR_ID"
+  asc pre-release-versions builds list --id "PR_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

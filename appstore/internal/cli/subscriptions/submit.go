@@ -21,12 +21,12 @@ func SubscriptionsSubmitCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "submit",
-		ShortUsage: "appstore subscriptions submit --subscription-id \"SUB_ID\" --confirm",
+		ShortUsage: "asc subscriptions submit --subscription-id \"SUB_ID\" --confirm",
 		ShortHelp:  "Submit a subscription for review.",
 		LongHelp: `Submit a subscription for review.
 
 Examples:
-  appstore subscriptions submit --subscription-id "SUB_ID" --confirm`,
+  asc subscriptions submit --subscription-id "SUB_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -68,12 +68,12 @@ func SubscriptionsGroupsSubmitCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "submit",
-		ShortUsage: "appstore subscriptions groups submit --group-id \"GROUP_ID\" --confirm",
+		ShortUsage: "asc subscriptions groups submit --group-id \"GROUP_ID\" --confirm",
 		ShortHelp:  "Submit a subscription group for review.",
 		LongHelp: `Submit a subscription group for review.
 
 Examples:
-  appstore subscriptions groups submit --group-id "GROUP_ID" --confirm`,
+  asc subscriptions groups submit --group-id "GROUP_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

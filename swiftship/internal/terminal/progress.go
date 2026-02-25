@@ -2,16 +2,21 @@ package terminal
 
 import (
 	"fmt"
+	"os"
 	"strings"
 	"sync"
 	"time"
+
+	"golang.org/x/term"
 )
 
 // Phase represents the current build phase.
 type Phase int
 
 const (
-	PhaseBuildingCode Phase = iota
+	PhaseAnalyzing Phase = iota
+	PhasePlanning
+	PhaseBuildingCode
 	PhaseGenerating
 	PhaseCompiling
 	PhaseFixing
@@ -20,6 +25,10 @@ const (
 
 func (p Phase) label() string {
 	switch p {
+	case PhaseAnalyzing:
+		return "Analyzing request"
+	case PhasePlanning:
+		return "Planning architecture"
 	case PhaseBuildingCode:
 		return "Building code"
 	case PhaseGenerating:
@@ -37,14 +46,18 @@ func (p Phase) label() string {
 
 func (p Phase) number() int {
 	switch p {
-	case PhaseBuildingCode:
+	case PhaseAnalyzing:
 		return 1
-	case PhaseGenerating:
+	case PhasePlanning:
 		return 2
-	case PhaseCompiling:
+	case PhaseBuildingCode:
 		return 3
-	case PhaseFixing:
+	case PhaseGenerating:
 		return 4
+	case PhaseCompiling:
+		return 5
+	case PhaseFixing:
+		return 6
 	case PhaseEditing:
 		return 1
 	default:
@@ -65,30 +78,50 @@ type ProgressDisplay struct {
 	totalFiles   int
 	filesWritten int
 	activities   []activity
-	statusText   string // dimmed assistant text
+	statusText   string          // dimmed assistant text
+	streamingBuf strings.Builder // accumulates streaming text tokens
 	running      bool
 	done         chan struct{}
-	mode         string // "build", "edit", "fix"
+	mode         string // "build", "edit", "fix", "analyze", "plan"
 	totalPhases  int
 	buildFailed  bool
 	fixAttempts  int
+	startedAt    time.Time
+	interactive  bool
+	lastRenderID string
 }
 
-const maxActivities = 4
+const (
+	maxActivities                = 4
+	maxStatusWidth               = 70
+	structuredStreamingTailRunes = 240
+)
 
 // NewProgressDisplay creates a progress display for the given mode.
 // totalFiles is used for the build progress bar (0 if unknown).
 func NewProgressDisplay(mode string, totalFiles int) *ProgressDisplay {
-	totalPhases := 3 // build: code → generate → compile
-	if mode == "edit" || mode == "fix" {
-		totalPhases = 0 // no numbered phases for edit/fix
-	}
-
+	totalPhases := 5 // build: analyze → plan → code → generate → compile
 	startPhase := PhaseBuildingCode
-	if mode == "edit" {
+
+	switch mode {
+	case "intent":
+		startPhase = PhaseAnalyzing
+		totalPhases = 5
+	case "analyze":
+		startPhase = PhaseAnalyzing
+		totalPhases = 5
+	case "plan":
+		startPhase = PhasePlanning
+		totalPhases = 5
+	case "build":
+		startPhase = PhaseBuildingCode
+		totalPhases = 5
+	case "edit":
 		startPhase = PhaseEditing
-	} else if mode == "fix" {
+		totalPhases = 0
+	case "fix":
 		startPhase = PhaseCompiling
+		totalPhases = 0
 	}
 
 	return &ProgressDisplay{
@@ -96,6 +129,8 @@ func NewProgressDisplay(mode string, totalFiles int) *ProgressDisplay {
 		totalFiles:  totalFiles,
 		mode:        mode,
 		totalPhases: totalPhases,
+		startedAt:   time.Now(),
+		interactive: term.IsTerminal(int(os.Stdout.Fd())),
 		done:        make(chan struct{}),
 	}
 }
@@ -124,7 +159,9 @@ func (pd *ProgressDisplay) Stop() {
 	pd.mu.Unlock()
 
 	close(pd.done)
-	pd.clearDisplay()
+	if pd.interactive {
+		pd.clearDisplay()
+	}
 }
 
 // StopWithSuccess stops and prints a success message.
@@ -210,6 +247,10 @@ func (pd *ProgressDisplay) OnToolUse(toolName string, inputGetter func(key strin
 	pd.mu.Lock()
 	defer pd.mu.Unlock()
 
+	// Clear stale status and streaming buffer once real tool activity begins.
+	pd.statusText = ""
+	pd.streamingBuf.Reset()
+
 	switch toolName {
 	case "Write":
 		path := inputGetter("file_path")
@@ -271,10 +312,29 @@ func (pd *ProgressDisplay) OnToolUse(toolName string, inputGetter func(key strin
 	}
 }
 
-// OnAssistantText processes assistant text content.
+// OnStreamingText processes a token-by-token text delta from content_block_delta events.
+// It accumulates text and updates the status display in real-time.
+func (pd *ProgressDisplay) OnStreamingText(text string) {
+	pd.mu.Lock()
+	defer pd.mu.Unlock()
+
+	pd.streamingBuf.WriteString(text)
+
+	// Extract a mode-aware preview from accumulated text for display.
+	accumulated := pd.streamingBuf.String()
+	status := extractStreamingPreview(accumulated, pd.mode)
+	if status != "" {
+		pd.statusText = status
+	}
+}
+
+// OnAssistantText processes assistant text content (full message, not deltas).
 func (pd *ProgressDisplay) OnAssistantText(text string) {
 	pd.mu.Lock()
 	defer pd.mu.Unlock()
+
+	// Reset streaming buffer since we got the full message
+	pd.streamingBuf.Reset()
 
 	// Detect build failure mentions to transition phase
 	lower := strings.ToLower(text)
@@ -286,6 +346,13 @@ func (pd *ProgressDisplay) OnAssistantText(text string) {
 		strings.Contains(lower, "let me") || strings.Contains(lower, "i'll")) {
 		pd.phase = PhaseFixing
 		pd.fixAttempts++
+	}
+
+	if isStructuredStreamingPreviewMode(pd.mode) {
+		if status := extractStreamingPreview(text, pd.mode); status != "" {
+			pd.statusText = status
+		}
+		return
 	}
 
 	// Extract a short meaningful status from assistant text
@@ -321,13 +388,20 @@ func (pd *ProgressDisplay) render(frame int) {
 	statusText := pd.statusText
 	totalPhases := pd.totalPhases
 	buildFailed := pd.buildFailed
+	elapsed := time.Since(pd.startedAt)
+	interactive := pd.interactive
 	pd.mu.Unlock()
+
+	if !interactive {
+		pd.renderNonInteractive(phase, totalPhases, totalFiles, filesWritten, activities, statusText, buildFailed)
+		return
+	}
 
 	spinChar := spinnerFrames[frame%len(spinnerFrames)]
 	var lines []string
 
-	// Phase header with progress bar
-	phaseHeader := pd.buildPhaseHeader(phase, totalPhases, totalFiles, filesWritten, buildFailed, spinChar)
+	// Phase header with progress bar and elapsed time
+	phaseHeader := pd.buildPhaseHeader(phase, totalPhases, totalFiles, filesWritten, buildFailed, spinChar, elapsed)
 	lines = append(lines, phaseHeader)
 
 	// Activity tree
@@ -366,8 +440,41 @@ func (pd *ProgressDisplay) render(frame int) {
 	}
 }
 
+func (pd *ProgressDisplay) renderNonInteractive(phase Phase, totalPhases, totalFiles, filesWritten int, activities []activity, statusText string, buildFailed bool) {
+	header := pd.buildPhaseHeader(phase, totalPhases, totalFiles, filesWritten, buildFailed, "•", 0)
+
+	latestActivity := ""
+	if len(activities) > 0 {
+		act := activities[len(activities)-1]
+		marker := "•"
+		if act.done {
+			marker = "✓"
+		}
+		latestActivity = fmt.Sprintf("  %s %s", marker, act.text)
+	}
+
+	parts := []string{header, latestActivity, statusText}
+	renderID := strings.Join(parts, "\n")
+
+	pd.mu.Lock()
+	if renderID == pd.lastRenderID {
+		pd.mu.Unlock()
+		return
+	}
+	pd.lastRenderID = renderID
+	pd.mu.Unlock()
+
+	fmt.Println(header)
+	if latestActivity != "" {
+		fmt.Println(latestActivity)
+	}
+	if statusText != "" {
+		fmt.Println("  " + statusText)
+	}
+}
+
 // buildPhaseHeader builds the header line with optional progress bar.
-func (pd *ProgressDisplay) buildPhaseHeader(phase Phase, totalPhases, totalFiles, filesWritten int, buildFailed bool, spinChar string) string {
+func (pd *ProgressDisplay) buildPhaseHeader(phase Phase, totalPhases, totalFiles, filesWritten int, buildFailed bool, spinChar string, elapsed time.Duration) string {
 	var sb strings.Builder
 	sb.WriteString("  ")
 
@@ -391,7 +498,21 @@ func (pd *ProgressDisplay) buildPhaseHeader(phase Phase, totalPhases, totalFiles
 		sb.WriteString(fmt.Sprintf(" %s%d/%d files%s", Dim, filesWritten, totalFiles, Reset))
 	}
 
+	// Elapsed time
+	sb.WriteString(fmt.Sprintf("  %s%s%s", Dim, formatElapsed(elapsed), Reset))
+
 	return sb.String()
+}
+
+// formatElapsed formats a duration as a compact time string.
+func formatElapsed(d time.Duration) string {
+	s := int(d.Seconds())
+	if s < 60 {
+		return fmt.Sprintf("%ds", s)
+	}
+	m := s / 60
+	s = s % 60
+	return fmt.Sprintf("%dm%02ds", m, s)
 }
 
 // clearDisplay clears the progress display area.
@@ -494,6 +615,56 @@ func truncateActivity(s string) string {
 	return s
 }
 
+// extractStreamingPreview returns a mode-aware live preview for streaming text.
+// Structured modes intentionally avoid raw JSON tails in the UI.
+func extractStreamingPreview(text, mode string) string {
+	if !isStructuredStreamingPreviewMode(mode) {
+		return extractLastLine(text)
+	}
+	if strings.TrimSpace(text) == "" {
+		return ""
+	}
+	switch mode {
+	case "intent":
+		return "Preparing routing decision..."
+	case "analyze":
+		return "Preparing analysis output..."
+	case "plan":
+		return "Preparing build plan..."
+	default:
+		return "Preparing structured output..."
+	}
+}
+
+func isStructuredStreamingPreviewMode(mode string) bool {
+	return mode == "intent" || mode == "analyze" || mode == "plan"
+}
+
+func tailRunes(s string, max int) string {
+	if max <= 0 || s == "" {
+		return ""
+	}
+	r := []rune(s)
+	if len(r) <= max {
+		return s
+	}
+	return string(r[len(r)-max:])
+}
+
+func truncateTailWithEllipsis(s string, max int) string {
+	if max <= 0 {
+		return ""
+	}
+	r := []rune(s)
+	if len(r) <= max {
+		return s
+	}
+	if max <= 3 {
+		return string(r[len(r)-max:])
+	}
+	return "..." + string(r[len(r)-(max-3):])
+}
+
 // extractStatus extracts a short, meaningful status from assistant text.
 func extractStatus(text string) string {
 	// Take the first sentence, truncated
@@ -511,10 +682,37 @@ func extractStatus(text string) string {
 	}
 
 	// Truncate to max width
-	const maxWidth = 70
-	if len(text) > maxWidth {
-		text = text[:maxWidth] + "..."
+	if len(text) > maxStatusWidth {
+		text = text[:maxStatusWidth] + "..."
 	}
 
 	return text
+}
+
+// extractLastLine returns the last non-empty line from streaming text,
+// skipping JSON content and code blocks. Used to show real-time status
+// from token-by-token streaming during generation.
+func extractLastLine(text string) string {
+	lines := strings.Split(text, "\n")
+
+	// Walk backwards to find the last meaningful line
+	for i := len(lines) - 1; i >= 0; i-- {
+		line := strings.TrimSpace(lines[i])
+		if line == "" {
+			continue
+		}
+		// Skip JSON and code block content
+		if strings.HasPrefix(line, "{") || strings.HasPrefix(line, "}") ||
+			strings.HasPrefix(line, "\"") || strings.HasPrefix(line, "[") ||
+			strings.HasPrefix(line, "]") || strings.HasPrefix(line, "```") {
+			continue
+		}
+		// Truncate
+		if len(line) > maxStatusWidth {
+			line = line[:maxStatusWidth] + "..."
+		}
+		return line
+	}
+
+	return ""
 }

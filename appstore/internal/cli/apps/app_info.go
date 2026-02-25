@@ -21,14 +21,14 @@ func AppInfoCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "app-info",
-		ShortUsage: "appstore app-info <subcommand> [flags]",
+		ShortUsage: "asc app-info <subcommand> [flags]",
 		ShortHelp:  "Manage App Store version metadata.",
 		LongHelp: `Manage App Store version metadata like description, keywords, and what's new.
 
 Examples:
-  appstore app-info get --app "APP_ID"
-  appstore app-info get --app "APP_ID" --version "1.2.3" --platform IOS
-  appstore app-info set --app "APP_ID" --locale "en-US" --whats-new "Bug fixes"`,
+  asc app-info get --app "APP_ID"
+  asc app-info get --app "APP_ID" --version "1.2.3" --platform IOS
+  asc app-info set --app "APP_ID" --locale "en-US" --whats-new "Bug fixes"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -47,7 +47,7 @@ Examples:
 func AppInfoGetCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("app-info get", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID env)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
 	appInfoID := fs.String("app-info", "", "App Info ID (optional override)")
 	versionID := fs.String("version-id", "", "App Store version ID (optional override)")
 	version := fs.String("version", "", "App Store version string (optional)")
@@ -62,7 +62,7 @@ func AppInfoGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore app-info get [flags]",
+		ShortUsage: "asc app-info get [flags]",
 		ShortHelp:  "Get app store version localization metadata.",
 		LongHelp: `Get App Store version localization metadata.
 
@@ -70,12 +70,12 @@ If multiple versions exist and no --version-id/--version is provided, the most
 recently created version is used.
 
 Examples:
-  appstore app-info get --app "APP_ID"
-  appstore app-info get --app "APP_ID" --version "1.2.3" --platform IOS
-  appstore app-info get --version-id "VERSION_ID"
-  appstore app-info get --app-info "APP_INFO_ID" --include "ageRatingDeclaration"
-  appstore app-info get --app "APP_ID" --include "ageRatingDeclaration,territoryAgeRatings"
-  appstore app-info get --app "APP_ID" --locale "en-US" --output table`,
+  asc app-info get --app "APP_ID"
+  asc app-info get --app "APP_ID" --version "1.2.3" --platform IOS
+  asc app-info get --version-id "VERSION_ID"
+  asc app-info get --app-info "APP_INFO_ID" --include "ageRatingDeclaration"
+  asc app-info get --app "APP_ID" --include "ageRatingDeclaration,territoryAgeRatings"
+  asc app-info get --app "APP_ID" --locale "en-US" --output table`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -91,7 +91,7 @@ Examples:
 
 			resolvedAppID := shared.ResolveAppID(*appID)
 			if strings.TrimSpace(*versionID) == "" && resolvedAppID == "" && strings.TrimSpace(*appInfoID) == "" {
-				fmt.Fprintln(os.Stderr, "Error: --app or --app-info is required (or set APPSTORE_APP_ID)")
+				fmt.Fprintln(os.Stderr, "Error: --app or --app-info is required (or set ASC_APP_ID)")
 				return flag.ErrHelp
 			}
 
@@ -205,7 +205,7 @@ Examples:
 func AppInfoSetCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("app-info set", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID env)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
 	versionID := fs.String("version-id", "", "App Store version ID (optional override)")
 	version := fs.String("version", "", "App Store version string (optional)")
 	platform := fs.String("platform", "", "Platform: IOS, MAC_OS, TV_OS, VISION_OS (required with --version)")
@@ -221,13 +221,13 @@ func AppInfoSetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "set",
-		ShortUsage: "appstore app-info set [flags]",
+		ShortUsage: "asc app-info set [flags]",
 		ShortHelp:  "Create or update app store version metadata.",
 		LongHelp: `Create or update App Store version metadata.
 
 Examples:
-  appstore app-info set --app "APP_ID" --locale "en-US" --whats-new "Bug fixes"
-  appstore app-info set --app "APP_ID" --version "1.2.3" --platform IOS --locale "en-US" --description "New release"`,
+  asc app-info set --app "APP_ID" --locale "en-US" --whats-new "Bug fixes"
+  asc app-info set --app "APP_ID" --version "1.2.3" --platform IOS --locale "en-US" --description "New release"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -237,7 +237,7 @@ Examples:
 
 			resolvedAppID := shared.ResolveAppID(*appID)
 			if strings.TrimSpace(*versionID) == "" && resolvedAppID == "" {
-				fmt.Fprintln(os.Stderr, "Error: --app is required (or set APPSTORE_APP_ID)")
+				fmt.Fprintln(os.Stderr, "Error: --app is required (or set ASC_APP_ID)")
 				return flag.ErrHelp
 			}
 

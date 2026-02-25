@@ -13,6 +13,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
 	"golang.org/x/mod/semver"
@@ -34,6 +35,13 @@ const (
 
 var koubouVersionPattern = regexp.MustCompile(`(?i)\bv?(\d+\.\d+\.\d+)\b`)
 
+var (
+	koubouVersionCacheMu      sync.Mutex
+	cachedKoubouBinaryPath    string
+	cachedKoubouResolvedPATH  string
+	cachedKoubouVersionIsGood bool
+)
+
 var supportedFrameDevices = []FrameDevice{
 	FrameDeviceIPhoneAir,
 	FrameDeviceIPhone17Pro,
@@ -48,7 +56,7 @@ type frameDeviceKoubouSpec struct {
 	DisplayType string
 }
 
-// Keeps the existing appstore device slugs while delegating rendering to Koubou frame names.
+// Keeps the existing asc device slugs while delegating rendering to Koubou frame names.
 var frameDeviceKoubouSpecs = map[FrameDevice]frameDeviceKoubouSpec{
 	FrameDeviceIPhoneAir: {
 		FrameName:   "iPhone Air - Light Gold - Portrait",
@@ -313,7 +321,7 @@ func createDefaultKoubouConfig(
 	absInputPath string,
 	spec frameDeviceKoubouSpec,
 ) (string, frameExecutionMetadata, string, error) {
-	workDir, err := os.MkdirTemp("", "appstore-shots-*")
+	workDir, err := os.MkdirTemp("", "asc-shots-kou-*")
 	if err != nil {
 		return "", frameExecutionMetadata{}, "", fmt.Errorf("create temp config directory: %w", err)
 	}
@@ -326,7 +334,7 @@ func createDefaultKoubouConfig(
 	configPath := filepath.Join(workDir, "frame.yaml")
 	config := koubouDefaultConfig{
 		Project: koubouProjectConfig{
-			Name:       "App Store Shots Frame",
+			Name:       "ASC Shots Frame",
 			OutputDir:  kouOutputDir,
 			Device:     spec.FrameName,
 			OutputSize: spec.OutputSize,
@@ -531,11 +539,12 @@ func toInt(value any) (int, bool) {
 }
 
 func runKoubouGenerate(ctx context.Context, configPath string) ([]koubouGenerateResult, error) {
-	if err := ensurePinnedKoubouVersion(ctx); err != nil {
+	kouBinaryPath, err := ensurePinnedKoubouVersion(ctx)
+	if err != nil {
 		return nil, err
 	}
 
-	cmd := exec.CommandContext(ctx, "kou", "generate", configPath, "--output", "json")
+	cmd := exec.CommandContext(ctx, kouBinaryPath, "generate", configPath, "--output", "json")
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	output, err := cmd.Output()
@@ -568,12 +577,34 @@ func runKoubouGenerate(ctx context.Context, configPath string) ([]koubouGenerate
 	return results, nil
 }
 
-func ensurePinnedKoubouVersion(ctx context.Context) error {
-	cmd := exec.CommandContext(ctx, "kou", "--version")
+func ensurePinnedKoubouVersion(ctx context.Context) (string, error) {
+	resolvedPATH := os.Getenv("PATH")
+	kouBinaryPath, err := exec.LookPath("kou")
+	if err != nil {
+		if errors.Is(err, exec.ErrNotFound) {
+			return "", fmt.Errorf(
+				"kou binary not found; install pinned Koubou %s first (%s)",
+				pinnedKoubouVersion,
+				pinnedKoubouInstallCommand(),
+			)
+		}
+		return "", fmt.Errorf("kou lookup failed: %w", err)
+	}
+
+	koubouVersionCacheMu.Lock()
+	if cachedKoubouVersionIsGood &&
+		cachedKoubouResolvedPATH == resolvedPATH &&
+		cachedKoubouBinaryPath == kouBinaryPath {
+		koubouVersionCacheMu.Unlock()
+		return kouBinaryPath, nil
+	}
+	koubouVersionCacheMu.Unlock()
+
+	cmd := exec.CommandContext(ctx, kouBinaryPath, "--version")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		if errors.Is(err, exec.ErrNotFound) {
-			return fmt.Errorf(
+			return "", fmt.Errorf(
 				"kou binary not found; install pinned Koubou %s first (%s)",
 				pinnedKoubouVersion,
 				pinnedKoubouInstallCommand(),
@@ -581,24 +612,30 @@ func ensurePinnedKoubouVersion(ctx context.Context) error {
 		}
 		trimmedOutput := strings.TrimSpace(string(output))
 		if trimmedOutput == "" {
-			return fmt.Errorf("kou --version: %w", err)
+			return "", fmt.Errorf("kou --version: %w", err)
 		}
-		return fmt.Errorf("kou --version: %w (output: %s)", err, trimmedOutput)
+		return "", fmt.Errorf("kou --version: %w (output: %s)", err, trimmedOutput)
 	}
 
 	detectedVersion, ok := parseKoubouVersion(output)
 	if !ok {
-		return fmt.Errorf("kou --version output does not include a semantic version: %q", strings.TrimSpace(string(output)))
+		return "", fmt.Errorf("kou --version output does not include a semantic version: %q", strings.TrimSpace(string(output)))
 	}
 	if detectedVersion != pinnedKoubouVersion {
-		return fmt.Errorf(
+		return "", fmt.Errorf(
 			"unsupported Koubou version %s; this ASC release is pinned to %s. Install with: %s",
 			detectedVersion,
 			pinnedKoubouVersion,
 			pinnedKoubouInstallCommand(),
 		)
 	}
-	return nil
+
+	koubouVersionCacheMu.Lock()
+	cachedKoubouBinaryPath = kouBinaryPath
+	cachedKoubouResolvedPATH = resolvedPATH
+	cachedKoubouVersionIsGood = true
+	koubouVersionCacheMu.Unlock()
+	return kouBinaryPath, nil
 }
 
 func parseKoubouVersion(output []byte) (string, bool) {
@@ -679,10 +716,20 @@ func copyFile(sourcePath, destinationPath string) error {
 	}
 	defer destinationFile.Close()
 
-	if _, err := io.Copy(destinationFile, sourceFile); err != nil {
+	buffer := make([]byte, 256*1024)
+	if _, err := io.CopyBuffer(destinationFile, sourceFile, buffer); err != nil {
 		return fmt.Errorf("copy generated screenshot: %w", err)
 	}
 	return nil
+}
+
+func resetKoubouVersionCacheForTest() {
+	koubouVersionCacheMu.Lock()
+	defer koubouVersionCacheMu.Unlock()
+
+	cachedKoubouBinaryPath = ""
+	cachedKoubouResolvedPATH = ""
+	cachedKoubouVersionIsGood = false
 }
 
 func normalizeFrameDevice(raw string) string {

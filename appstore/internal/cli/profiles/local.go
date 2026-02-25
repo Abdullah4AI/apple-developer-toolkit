@@ -89,7 +89,7 @@ func ProfilesLocalCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "local",
-		ShortUsage: "appstore profiles local <subcommand> [flags]",
+		ShortUsage: "asc profiles local <subcommand> [flags]",
 		ShortHelp:  "Manage locally installed provisioning profiles.",
 		LongHelp: `Manage locally installed provisioning profiles.
 
@@ -97,10 +97,10 @@ These commands operate on local disk state (Xcode's Provisioning Profiles direct
 not on App Store Connect API profile resources.
 
 Examples:
-  appstore profiles local install --path "./profile.mobileprovision"
-  appstore profiles local list
-  appstore profiles local clean --expired --dry-run
-  appstore profiles local clean --expired --confirm`,
+  asc profiles local install --path "./profile.mobileprovision"
+  asc profiles local list
+  asc profiles local clean --expired --dry-run
+  asc profiles local clean --expired --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -126,7 +126,7 @@ func ProfilesLocalInstallCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "install",
-		ShortUsage: "appstore profiles local install (--path \"./profile.mobileprovision\" | --id \"PROFILE_ID\") [flags]",
+		ShortUsage: "asc profiles local install (--path \"./profile.mobileprovision\" | --id \"PROFILE_ID\") [flags]",
 		ShortHelp:  "Install a provisioning profile locally.",
 		LongHelp: `Install a provisioning profile locally.
 
@@ -134,9 +134,9 @@ By default, this installs into:
   ~/Library/MobileDevice/Provisioning Profiles
 
 Examples:
-  appstore profiles local install --path "./profile.mobileprovision"
-  appstore profiles local install --id "PROFILE_ID"
-  appstore profiles local install --path "./profile.mobileprovision" --force`,
+  asc profiles local install --path "./profile.mobileprovision"
+  asc profiles local install --id "PROFILE_ID"
+  asc profiles local install --path "./profile.mobileprovision" --force`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -269,14 +269,14 @@ func ProfilesLocalListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore profiles local list [flags]",
+		ShortUsage: "asc profiles local list [flags]",
 		ShortHelp:  "List locally installed provisioning profiles.",
 		LongHelp: `List locally installed provisioning profiles.
 
 Examples:
-  appstore profiles local list
-  appstore profiles local list --expired
-  appstore profiles local list --bundle-id "com.example.app" --output table`,
+  asc profiles local list
+  asc profiles local list --expired
+  asc profiles local list --bundle-id "com.example.app" --output table`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -348,13 +348,13 @@ func ProfilesLocalCleanCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "clean",
-		ShortUsage: "appstore profiles local clean --expired --dry-run | appstore profiles local clean --expired --confirm",
+		ShortUsage: "asc profiles local clean --expired --dry-run | asc profiles local clean --expired --confirm",
 		ShortHelp:  "Clean up locally installed provisioning profiles.",
 		LongHelp: `Clean up locally installed provisioning profiles.
 
 Examples:
-  appstore profiles local clean --expired --dry-run
-  appstore profiles local clean --expired --confirm`,
+  asc profiles local clean --expired --dry-run
+  asc profiles local clean --expired --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

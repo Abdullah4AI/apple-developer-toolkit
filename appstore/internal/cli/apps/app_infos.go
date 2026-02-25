@@ -17,7 +17,7 @@ func AppInfosCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "app-infos",
-		ShortUsage: "appstore app-infos <subcommand> [flags]",
+		ShortUsage: "asc app-infos <subcommand> [flags]",
 		ShortHelp:  "List app info records for an app.",
 		LongHelp: `List app info records for an app.
 
@@ -26,8 +26,8 @@ helps you find the specific app info ID you need when commands report "multiple 
 infos found" errors.
 
 Examples:
-  appstore app-infos list --app "APP_ID"
-  appstore app-infos list --app "APP_ID" --output table`,
+  asc app-infos list --app "APP_ID"
+  asc app-infos list --app "APP_ID" --output table`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -43,12 +43,12 @@ Examples:
 func AppInfosListCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("app-infos list", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID env)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore app-infos list [flags]",
+		ShortUsage: "asc app-infos list [flags]",
 		ShortHelp:  "List all app info records for an app.",
 		LongHelp: `List all app info records for an app.
 
@@ -57,15 +57,15 @@ command to find the specific app info ID when you encounter "multiple app infos
 found" errors in other commands.
 
 Examples:
-  appstore app-infos list --app "APP_ID"
-  appstore app-infos list --app "APP_ID" --output table
-  appstore app-infos list --app "APP_ID" --output markdown`,
+  asc app-infos list --app "APP_ID"
+  asc app-infos list --app "APP_ID" --output table
+  asc app-infos list --app "APP_ID" --output markdown`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			resolvedAppID := shared.ResolveAppID(*appID)
 			if strings.TrimSpace(resolvedAppID) == "" {
-				fmt.Fprintln(os.Stderr, "Error: --app is required (or set APPSTORE_APP_ID)")
+				fmt.Fprintln(os.Stderr, "Error: --app is required (or set ASC_APP_ID)")
 				return flag.ErrHelp
 			}
 

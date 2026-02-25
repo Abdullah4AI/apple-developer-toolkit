@@ -47,13 +47,13 @@ func VersionsRelationshipsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "relationships",
-		ShortUsage: "appstore versions relationships --version-id \"VERSION_ID\" --type \"RELATIONSHIP\" [flags]",
+		ShortUsage: "asc versions relationships --version-id \"VERSION_ID\" --type \"RELATIONSHIP\" [flags]",
 		ShortHelp:  "List relationship linkages for an app store version.",
 		LongHelp: `List relationship linkages for an app store version.
 
 Examples:
-  appstore versions relationships --version-id "VERSION_ID" --type "appStoreReviewDetail"
-  appstore versions relationships --version-id "VERSION_ID" --type "appStoreVersionExperiments" --paginate`,
+  asc versions relationships --version-id "VERSION_ID" --type "appStoreReviewDetail"
+  asc versions relationships --version-id "VERSION_ID" --type "appStoreVersionExperiments" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

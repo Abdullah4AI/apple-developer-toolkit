@@ -7,7 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	swiftshipcmds "github.com/Abdullah4AI/apple-developer-toolkit/swiftship/pkg/commands"
+	swiftshipcmds "github.com/Abdullah4AI/apple-developer-toolkit/swiftship/commands"
 	appstorecmd "github.com/Abdullah4AI/apple-developer-toolkit/appstore/cmd"
 )
 

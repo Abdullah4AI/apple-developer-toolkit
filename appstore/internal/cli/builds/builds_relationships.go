@@ -38,13 +38,13 @@ func BuildsRelationshipsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "relationships",
-		ShortUsage: "appstore builds relationships <subcommand> [flags]",
+		ShortUsage: "asc builds relationships <subcommand> [flags]",
 		ShortHelp:  "View build relationship linkages.",
 		LongHelp: `View build relationship linkages.
 
 Examples:
-  appstore builds relationships get --build "BUILD_ID" --type "app"
-  appstore builds relationships get --build "BUILD_ID" --type "betaBuildLocalizations" --paginate`,
+  asc builds relationships get --build "BUILD_ID" --type "app"
+  asc builds relationships get --build "BUILD_ID" --type "betaBuildLocalizations" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -69,13 +69,13 @@ func BuildsRelationshipsGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore builds relationships get --build \"BUILD_ID\" --type \"RELATIONSHIP\" [flags]",
+		ShortUsage: "asc builds relationships get --build \"BUILD_ID\" --type \"RELATIONSHIP\" [flags]",
 		ShortHelp:  "Get relationship linkages for a build.",
 		LongHelp: `Get relationship linkages for a build.
 
 Examples:
-  appstore builds relationships get --build "BUILD_ID" --type "app"
-  appstore builds relationships get --build "BUILD_ID" --type "individualTesters" --paginate`,
+  asc builds relationships get --build "BUILD_ID" --type "app"
+  asc builds relationships get --build "BUILD_ID" --type "individualTesters" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

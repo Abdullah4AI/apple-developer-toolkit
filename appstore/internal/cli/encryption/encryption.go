@@ -18,17 +18,17 @@ import (
 func EncryptionCommand() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "encryption",
-		ShortUsage: "appstore encryption <subcommand> [flags]",
+		ShortUsage: "asc encryption <subcommand> [flags]",
 		ShortHelp:  "Manage app encryption declarations and documents.",
 		LongHelp: `Manage app encryption declarations and documents.
 
 Examples:
-  appstore encryption declarations list --app "APP_ID"
-  appstore encryption declarations get --id "DECL_ID"
-  appstore encryption declarations create --app "APP_ID" --app-description "Uses TLS" --contains-proprietary-cryptography=false --contains-third-party-cryptography=true --available-on-french-store=true
-  appstore encryption declarations assign-builds --id "DECL_ID" --build "BUILD_ID"
-  appstore encryption documents get --id "DOC_ID"
-  appstore encryption documents upload --declaration "DECL_ID" --file ./export.pdf`,
+  asc encryption declarations list --app "APP_ID"
+  asc encryption declarations get --id "DECL_ID"
+  asc encryption declarations create --app "APP_ID" --app-description "Uses TLS" --contains-proprietary-cryptography=false --contains-third-party-cryptography=true --available-on-french-store=true
+  asc encryption declarations assign-builds --id "DECL_ID" --build "BUILD_ID"
+  asc encryption documents get --id "DOC_ID"
+  asc encryption documents upload --declaration "DECL_ID" --file ./export.pdf`,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
 			EncryptionDeclarationsCommand(),
@@ -44,15 +44,15 @@ Examples:
 func EncryptionDeclarationsCommand() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "declarations",
-		ShortUsage: "appstore encryption declarations <subcommand> [flags]",
+		ShortUsage: "asc encryption declarations <subcommand> [flags]",
 		ShortHelp:  "Manage app encryption declarations.",
 		LongHelp: `Manage app encryption declarations.
 
 Examples:
-  appstore encryption declarations list --app "APP_ID"
-  appstore encryption declarations get --id "DECL_ID"
-  appstore encryption declarations create --app "APP_ID" --app-description "Uses TLS" --contains-proprietary-cryptography=false --contains-third-party-cryptography=true --available-on-french-store=true
-  appstore encryption declarations assign-builds --id "DECL_ID" --build "BUILD_ID"`,
+  asc encryption declarations list --app "APP_ID"
+  asc encryption declarations get --id "DECL_ID"
+  asc encryption declarations create --app "APP_ID" --app-description "Uses TLS" --contains-proprietary-cryptography=false --contains-third-party-cryptography=true --available-on-french-store=true
+  asc encryption declarations assign-builds --id "DECL_ID" --build "BUILD_ID"`,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
 			EncryptionDeclarationsListCommand(),
@@ -72,7 +72,7 @@ Examples:
 func EncryptionDeclarationsListCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("encryption declarations list", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID)")
 	builds := fs.String("build", "", "Filter by build IDs (comma-separated)")
 	fields := fs.String("fields", "", "Fields to include: "+strings.Join(encryptionDeclarationFieldList(), ", "))
 	documentFields := fs.String("document-fields", "", "Document fields to include: "+strings.Join(encryptionDocumentFieldList(), ", "))
@@ -85,14 +85,14 @@ func EncryptionDeclarationsListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore encryption declarations list --app \"APP_ID\" [flags]",
+		ShortUsage: "asc encryption declarations list --app \"APP_ID\" [flags]",
 		ShortHelp:  "List encryption declarations for an app.",
 		LongHelp: `List encryption declarations for an app.
 
 Examples:
-  appstore encryption declarations list --app "APP_ID"
-  appstore encryption declarations list --app "APP_ID" --include appEncryptionDeclarationDocument --document-fields "fileName,fileSize"
-  appstore encryption declarations list --app "APP_ID" --paginate`,
+  asc encryption declarations list --app "APP_ID"
+  asc encryption declarations list --app "APP_ID" --include appEncryptionDeclarationDocument --document-fields "fileName,fileSize"
+  asc encryption declarations list --app "APP_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -121,7 +121,7 @@ Examples:
 
 			resolvedAppID := shared.ResolveAppID(*appID)
 			if resolvedAppID == "" && strings.TrimSpace(*next) == "" {
-				fmt.Fprintln(os.Stderr, "Error: --app is required (or set APPSTORE_APP_ID)")
+				fmt.Fprintln(os.Stderr, "Error: --app is required (or set ASC_APP_ID)")
 				return flag.ErrHelp
 			}
 
@@ -185,13 +185,13 @@ func EncryptionDeclarationsGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore encryption declarations get --id \"DECL_ID\"",
+		ShortUsage: "asc encryption declarations get --id \"DECL_ID\"",
 		ShortHelp:  "Get an encryption declaration by ID.",
 		LongHelp: `Get an encryption declaration by ID.
 
 Examples:
-  appstore encryption declarations get --id "DECL_ID"
-  appstore encryption declarations get --id "DECL_ID" --include appEncryptionDeclarationDocument --document-fields "fileName,fileSize"`,
+  asc encryption declarations get --id "DECL_ID"
+  asc encryption declarations get --id "DECL_ID" --include appEncryptionDeclarationDocument --document-fields "fileName,fileSize"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -244,7 +244,7 @@ Examples:
 func EncryptionDeclarationsCreateCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("encryption declarations create", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID)")
 	appDescription := fs.String("app-description", "", "Description of encryption usage (required)")
 	containsProprietary := fs.Bool("contains-proprietary-cryptography", false, "App contains proprietary cryptography (required)")
 	containsThirdParty := fs.Bool("contains-third-party-cryptography", false, "App contains third-party cryptography (required)")
@@ -253,18 +253,18 @@ func EncryptionDeclarationsCreateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "create",
-		ShortUsage: "appstore encryption declarations create --app \"APP_ID\" [flags]",
+		ShortUsage: "asc encryption declarations create --app \"APP_ID\" [flags]",
 		ShortHelp:  "Create a new encryption declaration.",
 		LongHelp: `Create a new encryption declaration.
 
 Examples:
-  appstore encryption declarations create --app "APP_ID" --app-description "Uses TLS" --contains-proprietary-cryptography=false --contains-third-party-cryptography=true --available-on-french-store=true`,
+  asc encryption declarations create --app "APP_ID" --app-description "Uses TLS" --contains-proprietary-cryptography=false --contains-third-party-cryptography=true --available-on-french-store=true`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			resolvedAppID := shared.ResolveAppID(*appID)
 			if resolvedAppID == "" {
-				fmt.Fprintln(os.Stderr, "Error: --app is required (or set APPSTORE_APP_ID)")
+				fmt.Fprintln(os.Stderr, "Error: --app is required (or set ASC_APP_ID)")
 				return flag.ErrHelp
 			}
 
@@ -326,13 +326,13 @@ func EncryptionDeclarationsAssignBuildsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "assign-builds",
-		ShortUsage: "appstore encryption declarations assign-builds --id \"DECL_ID\" --build \"BUILD_ID[,BUILD_ID...]\"",
+		ShortUsage: "asc encryption declarations assign-builds --id \"DECL_ID\" --build \"BUILD_ID[,BUILD_ID...]\"",
 		ShortHelp:  "Assign builds to an encryption declaration.",
 		LongHelp: `Assign builds to an encryption declaration.
 
 Examples:
-  appstore encryption declarations assign-builds --id "DECL_ID" --build "BUILD_ID"
-  appstore encryption declarations assign-builds --id "DECL_ID" --build "BUILD_ID1,BUILD_ID2"`,
+  asc encryption declarations assign-builds --id "DECL_ID" --build "BUILD_ID"
+  asc encryption declarations assign-builds --id "DECL_ID" --build "BUILD_ID1,BUILD_ID2"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -376,13 +376,13 @@ Examples:
 func EncryptionDocumentsCommand() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "documents",
-		ShortUsage: "appstore encryption documents <subcommand> [flags]",
+		ShortUsage: "asc encryption documents <subcommand> [flags]",
 		ShortHelp:  "Manage encryption declaration documents.",
 		LongHelp: `Manage encryption declaration documents.
 
 Examples:
-  appstore encryption documents get --id "DOC_ID"
-  appstore encryption documents upload --declaration "DECL_ID" --file ./export.pdf`,
+  asc encryption documents get --id "DOC_ID"
+  asc encryption documents upload --declaration "DECL_ID" --file ./export.pdf`,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
 			EncryptionDocumentsGetCommand(),
@@ -404,12 +404,12 @@ func EncryptionDocumentsGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore encryption documents get --id \"DOC_ID\"",
+		ShortUsage: "asc encryption documents get --id \"DOC_ID\"",
 		ShortHelp:  "Get an encryption declaration document by ID.",
 		LongHelp: `Get an encryption declaration document by ID.
 
 Examples:
-  appstore encryption documents get --id "DOC_ID"`,
+  asc encryption documents get --id "DOC_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -452,12 +452,12 @@ func EncryptionDocumentsUploadCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "upload",
-		ShortUsage: "appstore encryption documents upload --declaration \"DECL_ID\" --file ./export.pdf",
+		ShortUsage: "asc encryption documents upload --declaration \"DECL_ID\" --file ./export.pdf",
 		ShortHelp:  "Upload an encryption declaration document.",
 		LongHelp: `Upload an encryption declaration document.
 
 Examples:
-  appstore encryption documents upload --declaration "DECL_ID" --file ./export.pdf`,
+  asc encryption documents upload --declaration "DECL_ID" --file ./export.pdf`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

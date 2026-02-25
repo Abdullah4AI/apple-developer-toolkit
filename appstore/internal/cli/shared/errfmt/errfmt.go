@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
@@ -22,14 +23,21 @@ func Classify(err error) ClassifiedError {
 	if errors.Is(err, shared.ErrMissingAuth) {
 		return ClassifiedError{
 			Message: err.Error(),
-			Hint:    "Run `appstore auth login` or `appstore auth init` (or set APPSTORE_KEY_ID/APPSTORE_ISSUER_ID/APPSTORE_PRIVATE_KEY_PATH). Try `appstore auth doctor` if you're unsure what's misconfigured.",
+			Hint:    "Run `asc auth login` or `asc auth init` (or set ASC_KEY_ID/ASC_ISSUER_ID/ASC_PRIVATE_KEY_PATH). Try `asc auth doctor` if you're unsure what's misconfigured.",
 		}
 	}
 
 	if errors.Is(err, context.DeadlineExceeded) {
 		return ClassifiedError{
 			Message: err.Error(),
-			Hint:    "Increase the request timeout (e.g. set `APPSTORE_TIMEOUT=90s`).",
+			Hint:    "Increase the request timeout (e.g. set `ASC_TIMEOUT=90s`).",
+		}
+	}
+
+	if containsPrivacyError(err) {
+		return ClassifiedError{
+			Message: err.Error(),
+			Hint:    "App privacy declarations (data usages) must be configured in the App Store Connect web UI — the API does not support this. Visit https://appstoreconnect.apple.com and complete the App Privacy section before submitting.",
 		}
 	}
 
@@ -43,7 +51,7 @@ func Classify(err error) ClassifiedError {
 	if errors.Is(err, asc.ErrUnauthorized) {
 		return ClassifiedError{
 			Message: err.Error(),
-			Hint:    "Your credentials may be invalid or expired. Try `appstore auth status` and re-login if needed.",
+			Hint:    "Your credentials may be invalid or expired. Try `asc auth status` and re-login if needed.",
 		}
 	}
 
@@ -51,6 +59,13 @@ func Classify(err error) ClassifiedError {
 		Message: err.Error(),
 		Hint:    "",
 	}
+}
+
+// containsPrivacyError checks whether the error references app data usage /
+// privacy declaration resources that are not manageable via the API.
+func containsPrivacyError(err error) bool {
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "appdatausages") || strings.Contains(msg, "appdatausagespublications")
 }
 
 func FormatStderr(err error) string {

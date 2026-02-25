@@ -43,7 +43,23 @@ func (c *Client) newRequest(ctx context.Context, method, path string, body io.Re
 
 // generateJWT generates a JWT for ASC API authentication
 func (c *Client) generateJWT() (string, error) {
-	return GenerateJWT(c.keyID, c.issuerID, c.privateKey)
+	now := time.Now()
+
+	c.jwtMu.Lock()
+	defer c.jwtMu.Unlock()
+
+	if c.cachedJWT != "" && now.Before(c.cachedJWTExpiresAt.Add(-jwtRefreshSkew)) {
+		return c.cachedJWT, nil
+	}
+
+	signedToken, err := GenerateJWT(c.keyID, c.issuerID, c.privateKey)
+	if err != nil {
+		return "", err
+	}
+
+	c.cachedJWT = signedToken
+	c.cachedJWTExpiresAt = now.Add(tokenLifetime)
+	return signedToken, nil
 }
 
 // GenerateJWT generates a JWT for ASC API authentication.

@@ -19,19 +19,19 @@ func TestFlightCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "testflight",
-		ShortUsage: "appstore testflight <subcommand> [flags]",
+		ShortUsage: "asc testflight <subcommand> [flags]",
 		ShortHelp:  "Manage TestFlight resources.",
 		LongHelp: `Manage TestFlight resources.
 
 Examples:
-  appstore testflight apps list
-  appstore testflight apps get --app "APP_ID"
-  appstore testflight beta-groups list --app "APP_ID"
-  appstore testflight beta-groups app get --group-id "GROUP_ID"
-  appstore testflight beta-testers list --app "APP_ID"
-  appstore testflight beta-feedback crash-submissions get --id "SUBMISSION_ID"
-  appstore testflight metrics beta-tester-usages --app "APP_ID"
-  appstore testflight beta-crash-logs get --id "CRASH_LOG_ID"`,
+  asc testflight apps list
+  asc testflight apps get --app "APP_ID"
+  asc testflight beta-groups list --app "APP_ID"
+  asc testflight beta-groups app get --group-id "GROUP_ID"
+  asc testflight beta-testers list --app "APP_ID"
+  asc testflight beta-feedback crash-submissions get --id "SUBMISSION_ID"
+  asc testflight metrics beta-tester-usages --app "APP_ID"
+  asc testflight beta-crash-logs get --id "CRASH_LOG_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -60,13 +60,13 @@ func TestFlightAppsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "apps",
-		ShortUsage: "appstore testflight apps <subcommand> [flags]",
+		ShortUsage: "asc testflight apps <subcommand> [flags]",
 		ShortHelp:  "List or fetch apps for TestFlight.",
 		LongHelp: `List or fetch apps for TestFlight.
 
 Examples:
-  appstore testflight apps list --sort name
-  appstore testflight apps get --app "APP_ID"`,
+  asc testflight apps list --sort name
+  asc testflight apps get --app "APP_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -94,19 +94,19 @@ func TestFlightAppsListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore testflight apps list [flags]",
+		ShortUsage: "asc testflight apps list [flags]",
 		ShortHelp:  "List apps for TestFlight.",
 		LongHelp: `List apps for TestFlight.
 
 Examples:
-  appstore testflight apps list
-  appstore testflight apps list --bundle-id "com.example.app"
-  appstore testflight apps list --name "Example App"
-  appstore testflight apps list --sku "SKU123"
-  appstore testflight apps list --sort name --limit 10
-  appstore testflight apps list --output table
-  appstore testflight apps list --next "<links.next>"
-  appstore testflight apps list --paginate`,
+  asc testflight apps list
+  asc testflight apps list --bundle-id "com.example.app"
+  asc testflight apps list --name "Example App"
+  asc testflight apps list --sku "SKU123"
+  asc testflight apps list --sort name --limit 10
+  asc testflight apps list --output table
+  asc testflight apps list --next "<links.next>"
+  asc testflight apps list --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -175,12 +175,12 @@ func TestFlightAppsGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore testflight apps get [flags]",
+		ShortUsage: "asc testflight apps get [flags]",
 		ShortHelp:  "Fetch an app by ID for TestFlight.",
 		LongHelp: `Fetch an app by ID for TestFlight.
 
 Examples:
-  appstore testflight apps get --app "APP_ID"`,
+  asc testflight apps get --app "APP_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

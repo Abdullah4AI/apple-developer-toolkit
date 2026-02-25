@@ -20,16 +20,16 @@ func AppTagsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "app-tags",
-		ShortUsage: "appstore app-tags <subcommand> [flags]",
+		ShortUsage: "asc app-tags <subcommand> [flags]",
 		ShortHelp:  "Manage app tags for App Store visibility.",
 		LongHelp: `Manage app tags for App Store visibility.
 
 Examples:
-  appstore app-tags list --app "APP_ID"
-  appstore app-tags get --app "APP_ID" --id "TAG_ID"
-  appstore app-tags update --id "TAG_ID" --visible-in-app-store=false --confirm
-  appstore app-tags territories --id "TAG_ID"
-  appstore app-tags relationships --app "APP_ID"`,
+  asc app-tags list --app "APP_ID"
+  asc app-tags get --app "APP_ID" --id "TAG_ID"
+  asc app-tags update --id "TAG_ID" --visible-in-app-store=false --confirm
+  asc app-tags territories --id "TAG_ID"
+  asc app-tags relationships --app "APP_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -50,7 +50,7 @@ Examples:
 func AppTagsListCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("app-tags list", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID env)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
 	visible := fs.String("visible-in-app-store", "", "Filter by visibility (true/false), comma-separated")
 	sort := fs.String("sort", "", "Sort by name or -name")
 	fields := fs.String("fields", "", "Fields to include: name, visibleInAppStore, territories")
@@ -64,17 +64,17 @@ func AppTagsListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore app-tags list [flags]",
+		ShortUsage: "asc app-tags list [flags]",
 		ShortHelp:  "List app tags for an app.",
 		LongHelp: `List app tags for an app.
 
 Examples:
-  appstore app-tags list --app "APP_ID"
-  appstore app-tags list --app "APP_ID" --visible-in-app-store true
-  appstore app-tags list --app "APP_ID" --include territories --territory-fields currency
-  appstore app-tags list --app "APP_ID" --sort -name --limit 10
-  appstore app-tags list --next "<links.next>"
-  appstore app-tags list --app "APP_ID" --paginate`,
+  asc app-tags list --app "APP_ID"
+  asc app-tags list --app "APP_ID" --visible-in-app-store true
+  asc app-tags list --app "APP_ID" --include territories --territory-fields currency
+  asc app-tags list --app "APP_ID" --sort -name --limit 10
+  asc app-tags list --next "<links.next>"
+  asc app-tags list --app "APP_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -122,7 +122,7 @@ Examples:
 
 			resolvedAppID := shared.ResolveAppID(*appID)
 			if resolvedAppID == "" && strings.TrimSpace(*next) == "" {
-				fmt.Fprintf(os.Stderr, "Error: --app is required (or set APPSTORE_APP_ID)\n\n")
+				fmt.Fprintf(os.Stderr, "Error: --app is required (or set ASC_APP_ID)\n\n")
 				return flag.ErrHelp
 			}
 
@@ -186,7 +186,7 @@ Examples:
 func AppTagsGetCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("app-tags get", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID env)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
 	tagID := fs.String("id", "", "App tag ID")
 	fields := fs.String("fields", "", "Fields to include: name, visibleInAppStore, territories")
 	include := fs.String("include", "", "Include related resources: territories")
@@ -196,14 +196,14 @@ func AppTagsGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore app-tags get [flags]",
+		ShortUsage: "asc app-tags get [flags]",
 		ShortHelp:  "Get an app tag by ID.",
 		LongHelp: `Get an app tag by ID.
 
 This command searches the app's tags for the specified ID.
 
 Examples:
-  appstore app-tags get --app "APP_ID" --id "TAG_ID"`,
+  asc app-tags get --app "APP_ID" --id "TAG_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -215,7 +215,7 @@ Examples:
 
 			resolvedAppID := shared.ResolveAppID(*appID)
 			if resolvedAppID == "" {
-				fmt.Fprintln(os.Stderr, "Error: --app is required (or set APPSTORE_APP_ID)")
+				fmt.Fprintln(os.Stderr, "Error: --app is required (or set ASC_APP_ID)")
 				return flag.ErrHelp
 			}
 
@@ -315,13 +315,13 @@ func AppTagsUpdateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "update",
-		ShortUsage: "appstore app-tags update --id TAG_ID --visible-in-app-store [true|false] --confirm",
+		ShortUsage: "asc app-tags update --id TAG_ID --visible-in-app-store [true|false] --confirm",
 		ShortHelp:  "Update an app tag.",
 		LongHelp: `Update an app tag.
 
 Examples:
-  appstore app-tags update --id "TAG_ID" --visible-in-app-store --confirm
-  appstore app-tags update --id "TAG_ID" --visible-in-app-store=false --confirm`,
+  asc app-tags update --id "TAG_ID" --visible-in-app-store --confirm
+  asc app-tags update --id "TAG_ID" --visible-in-app-store=false --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -380,14 +380,14 @@ func AppTagsTerritoriesCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "territories",
-		ShortUsage: "appstore app-tags territories --id TAG_ID [flags]",
+		ShortUsage: "asc app-tags territories --id TAG_ID [flags]",
 		ShortHelp:  "List territories for an app tag.",
 		LongHelp: `List territories for an app tag.
 
 Examples:
-  appstore app-tags territories --id "TAG_ID"
-  appstore app-tags territories --id "TAG_ID" --fields currency
-  appstore app-tags territories --id "TAG_ID" --paginate`,
+  asc app-tags territories --id "TAG_ID"
+  asc app-tags territories --id "TAG_ID" --fields currency
+  asc app-tags territories --id "TAG_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -463,13 +463,13 @@ func AppTagsTerritoriesRelationshipsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "territories-relationships",
-		ShortUsage: "appstore app-tags territories-relationships --id TAG_ID [flags]",
+		ShortUsage: "asc app-tags territories-relationships --id TAG_ID [flags]",
 		ShortHelp:  "List territory relationships for an app tag.",
 		LongHelp: `List territory relationships for an app tag.
 
 Examples:
-  appstore app-tags territories-relationships --id "TAG_ID"
-  appstore app-tags territories-relationships --id "TAG_ID" --paginate`,
+  asc app-tags territories-relationships --id "TAG_ID"
+  asc app-tags territories-relationships --id "TAG_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -529,7 +529,7 @@ Examples:
 func AppTagsRelationshipsCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("app-tags relationships", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID env)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
 	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
 	next := fs.String("next", "", "Fetch next page using a links.next URL")
 	paginate := fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")
@@ -537,13 +537,13 @@ func AppTagsRelationshipsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "relationships",
-		ShortUsage: "appstore app-tags relationships --app APP_ID [flags]",
+		ShortUsage: "asc app-tags relationships --app APP_ID [flags]",
 		ShortHelp:  "List app tag relationships for an app.",
 		LongHelp: `List app tag relationships for an app.
 
 Examples:
-  appstore app-tags relationships --app "APP_ID"
-  appstore app-tags relationships --app "APP_ID" --paginate`,
+  asc app-tags relationships --app "APP_ID"
+  asc app-tags relationships --app "APP_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -556,7 +556,7 @@ Examples:
 
 			resolvedAppID := shared.ResolveAppID(*appID)
 			if resolvedAppID == "" && strings.TrimSpace(*next) == "" {
-				fmt.Fprintf(os.Stderr, "Error: --app is required (or set APPSTORE_APP_ID)\n\n")
+				fmt.Fprintf(os.Stderr, "Error: --app is required (or set ASC_APP_ID)\n\n")
 				return flag.ErrHelp
 			}
 

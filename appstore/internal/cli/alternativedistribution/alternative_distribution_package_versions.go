@@ -19,15 +19,15 @@ func AlternativeDistributionPackageVersionsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "versions",
-		ShortUsage: "appstore alternative-distribution packages versions <subcommand> [flags]",
+		ShortUsage: "asc alternative-distribution packages versions <subcommand> [flags]",
 		ShortHelp:  "Manage alternative distribution package versions.",
 		LongHelp: `Manage alternative distribution package versions.
 
 Examples:
-  appstore alternative-distribution packages versions list --package-id "PACKAGE_ID"
-  appstore alternative-distribution packages versions get --version-id "VERSION_ID"
-  appstore alternative-distribution packages versions deltas --version-id "VERSION_ID"
-  appstore alternative-distribution packages versions variants --version-id "VERSION_ID"`,
+  asc alternative-distribution packages versions list --package-id "PACKAGE_ID"
+  asc alternative-distribution packages versions get --version-id "VERSION_ID"
+  asc alternative-distribution packages versions deltas --version-id "VERSION_ID"
+  asc alternative-distribution packages versions variants --version-id "VERSION_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -54,13 +54,13 @@ func AlternativeDistributionPackageVersionsListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore alternative-distribution packages versions list --package-id \"PACKAGE_ID\" [flags]",
+		ShortUsage: "asc alternative-distribution packages versions list --package-id \"PACKAGE_ID\" [flags]",
 		ShortHelp:  "List alternative distribution package versions.",
 		LongHelp: `List alternative distribution package versions.
 
 Examples:
-  appstore alternative-distribution packages versions list --package-id "PACKAGE_ID"
-  appstore alternative-distribution packages versions list --package-id "PACKAGE_ID" --paginate`,
+  asc alternative-distribution packages versions list --package-id "PACKAGE_ID"
+  asc alternative-distribution packages versions list --package-id "PACKAGE_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -125,12 +125,12 @@ func AlternativeDistributionPackageVersionsGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore alternative-distribution packages versions get --version-id \"VERSION_ID\"",
+		ShortUsage: "asc alternative-distribution packages versions get --version-id \"VERSION_ID\"",
 		ShortHelp:  "Get an alternative distribution package version.",
 		LongHelp: `Get an alternative distribution package version.
 
 Examples:
-  appstore alternative-distribution packages versions get --version-id "VERSION_ID"`,
+  asc alternative-distribution packages versions get --version-id "VERSION_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -170,13 +170,13 @@ func AlternativeDistributionPackageVersionsDeltasCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "deltas",
-		ShortUsage: "appstore alternative-distribution packages versions deltas --version-id \"VERSION_ID\" [flags]",
+		ShortUsage: "asc alternative-distribution packages versions deltas --version-id \"VERSION_ID\" [flags]",
 		ShortHelp:  "List alternative distribution package deltas.",
 		LongHelp: `List alternative distribution package deltas.
 
 Examples:
-  appstore alternative-distribution packages versions deltas --version-id "VERSION_ID"
-  appstore alternative-distribution packages versions deltas --version-id "VERSION_ID" --paginate`,
+  asc alternative-distribution packages versions deltas --version-id "VERSION_ID"
+  asc alternative-distribution packages versions deltas --version-id "VERSION_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -244,13 +244,13 @@ func AlternativeDistributionPackageVersionsVariantsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "variants",
-		ShortUsage: "appstore alternative-distribution packages versions variants --version-id \"VERSION_ID\" [flags]",
+		ShortUsage: "asc alternative-distribution packages versions variants --version-id \"VERSION_ID\" [flags]",
 		ShortHelp:  "List alternative distribution package variants.",
 		LongHelp: `List alternative distribution package variants.
 
 Examples:
-  appstore alternative-distribution packages versions variants --version-id "VERSION_ID"
-  appstore alternative-distribution packages versions variants --version-id "VERSION_ID" --paginate`,
+  asc alternative-distribution packages versions variants --version-id "VERSION_ID"
+  asc alternative-distribution packages versions variants --version-id "VERSION_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

@@ -28,11 +28,16 @@ const (
 	// tokenLifetime is the JWT token lifetime for App Store Connect API authentication.
 	// 10 minutes is a good balance between security (shorter-lived tokens) and usability.
 	tokenLifetime = 10 * time.Minute
+	// jwtRefreshSkew refreshes a token a bit early to avoid edge-of-expiry races.
+	jwtRefreshSkew = 30 * time.Second
 
 	// Retry defaults
 	DefaultMaxRetries = 3
 	DefaultBaseDelay  = 1 * time.Second
 	DefaultMaxDelay   = 30 * time.Second
+
+	defaultMaxIdleConns        = 128
+	defaultMaxIdleConnsPerHost = 32
 )
 
 var retryLogger = slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
@@ -111,7 +116,7 @@ func ResolveRetryLogEnabled() bool {
 	if override != nil {
 		return *override
 	}
-	if override, ok := envValue("APPSTORE_RETRY_LOG"); ok {
+	if override, ok := envValue("ASC_RETRY_LOG"); ok {
 		return override != ""
 	}
 	cfg := loadConfig()
@@ -129,7 +134,7 @@ func ResolveDebugEnabled() bool {
 
 func resolveDebugSettings() debugSettings {
 	settings := debugSettings{}
-	if value, ok := envValue("APPSTORE_DEBUG"); ok {
+	if value, ok := envValue("ASC_DEBUG"); ok {
 		settings = resolveDebugValue(value)
 	} else {
 		cfg := loadConfig()
@@ -272,7 +277,7 @@ func ResolveRetryOptions() RetryOptions {
 
 	cfg := loadConfig()
 
-	if override, ok := envValue("APPSTORE_MAX_RETRIES"); ok {
+	if override, ok := envValue("ASC_MAX_RETRIES"); ok {
 		if override != "" {
 			if parsed, err := strconv.Atoi(override); err == nil && parsed >= 0 {
 				opts.MaxRetries = parsed
@@ -286,7 +291,7 @@ func ResolveRetryOptions() RetryOptions {
 		}
 	}
 
-	if override, ok := envValue("APPSTORE_BASE_DELAY"); ok {
+	if override, ok := envValue("ASC_BASE_DELAY"); ok {
 		if override != "" {
 			if parsed, err := time.ParseDuration(override); err == nil && parsed > 0 {
 				opts.BaseDelay = parsed
@@ -300,7 +305,7 @@ func ResolveRetryOptions() RetryOptions {
 		}
 	}
 
-	if override, ok := envValue("APPSTORE_MAX_DELAY"); ok {
+	if override, ok := envValue("ASC_MAX_DELAY"); ok {
 		if override != "" {
 			if parsed, err := time.ParseDuration(override); err == nil && parsed > 0 {
 				opts.MaxDelay = parsed
@@ -417,11 +422,11 @@ func ResolveUploadTimeout() time.Duration {
 		uploadTimeout = cfg.UploadTimeout
 		uploadTimeoutSeconds = cfg.UploadTimeoutSeconds
 	}
-	return resolveTimeoutWithDefaultAndEnv(DefaultUploadTimeout, "APPSTORE_UPLOAD_TIMEOUT", "APPSTORE_UPLOAD_TIMEOUT_SECONDS", uploadTimeout, uploadTimeoutSeconds)
+	return resolveTimeoutWithDefaultAndEnv(DefaultUploadTimeout, "ASC_UPLOAD_TIMEOUT", "ASC_UPLOAD_TIMEOUT_SECONDS", uploadTimeout, uploadTimeoutSeconds)
 }
 
 // ResolveTimeoutWithDefault returns the request timeout using a custom default.
-// APPSTORE_TIMEOUT and APPSTORE_TIMEOUT_SECONDS override the default when set.
+// ASC_TIMEOUT and ASC_TIMEOUT_SECONDS override the default when set.
 func ResolveTimeoutWithDefault(defaultTimeout time.Duration) time.Duration {
 	cfg := loadConfig()
 	var timeout config.DurationValue
@@ -430,7 +435,7 @@ func ResolveTimeoutWithDefault(defaultTimeout time.Duration) time.Duration {
 		timeout = cfg.Timeout
 		timeoutSeconds = cfg.TimeoutSeconds
 	}
-	return resolveTimeoutWithDefaultAndEnv(defaultTimeout, "APPSTORE_TIMEOUT", "APPSTORE_TIMEOUT_SECONDS", timeout, timeoutSeconds)
+	return resolveTimeoutWithDefaultAndEnv(defaultTimeout, "ASC_TIMEOUT", "ASC_TIMEOUT_SECONDS", timeout, timeoutSeconds)
 }
 
 func resolveTimeoutWithDefaultAndEnv(defaultTimeout time.Duration, durationEnv, secondsEnv string, durationConfig, secondsConfig config.DurationValue) time.Duration {
@@ -466,22 +471,45 @@ type Client struct {
 	issuerID      string
 	privateKey    *ecdsa.PrivateKey
 	notaryBaseURL string // override for testing; empty uses NotaryBaseURL constant
+
+	jwtMu              sync.Mutex
+	cachedJWT          string
+	cachedJWTExpiresAt time.Time
 }
 
 // NewClient creates a new ASC client.
 func NewClient(keyID, issuerID, privateKeyPath string) (*Client, error) {
-	return newClientWithHTTPClient(keyID, issuerID, privateKeyPath, &http.Client{
-		Timeout: ResolveTimeout(),
-	})
+	return newClientWithHTTPClient(keyID, issuerID, privateKeyPath, newDefaultHTTPClient(ResolveTimeout()))
 }
 
 // NewClientWithHTTPClient creates a new ASC client using the provided HTTP client.
 // If httpClient is nil, a default client with ASC timeouts is used.
 func NewClientWithHTTPClient(keyID, issuerID, privateKeyPath string, httpClient *http.Client) (*Client, error) {
 	if httpClient == nil {
-		httpClient = &http.Client{Timeout: ResolveTimeout()}
+		httpClient = newDefaultHTTPClient(ResolveTimeout())
 	}
 	return newClientWithHTTPClient(keyID, issuerID, privateKeyPath, httpClient)
+}
+
+func newDefaultHTTPClient(timeout time.Duration) *http.Client {
+	transport, ok := http.DefaultTransport.(*http.Transport)
+	if !ok {
+		// Some tests replace http.DefaultTransport with a custom RoundTripper.
+		// Keep that behavior and skip transport tuning in that case.
+		return &http.Client{
+			Timeout:   timeout,
+			Transport: http.DefaultTransport,
+		}
+	}
+
+	clonedTransport := transport.Clone()
+	clonedTransport.MaxIdleConns = defaultMaxIdleConns
+	clonedTransport.MaxIdleConnsPerHost = defaultMaxIdleConnsPerHost
+
+	return &http.Client{
+		Timeout:   timeout,
+		Transport: clonedTransport,
+	}
 }
 
 func newClientWithHTTPClient(keyID, issuerID, privateKeyPath string, httpClient *http.Client) (*Client, error) {

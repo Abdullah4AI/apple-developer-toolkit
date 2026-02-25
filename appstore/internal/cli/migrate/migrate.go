@@ -22,16 +22,16 @@ func MigrateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "migrate",
-		ShortUsage: "appstore migrate <subcommand> [flags]",
+		ShortUsage: "asc migrate <subcommand> [flags]",
 		ShortHelp:  "Migrate metadata from/to fastlane format.",
 		LongHelp: `Migrate metadata from/to fastlane directory structure.
 
 This enables transitioning from fastlane's deliver tool to asc.
 
 Examples:
-  appstore migrate import --app "APP_ID" --version "VERSION_ID" --fastlane-dir ./fastlane
-  appstore migrate export --app "APP_ID" --version "VERSION_ID" --output-dir ./fastlane
-  appstore migrate metadata pull --app "APP_ID" --version "1.2.3" --dir "./metadata"`,
+  asc migrate import --app "APP_ID" --version "VERSION_ID" --fastlane-dir ./fastlane
+  asc migrate export --app "APP_ID" --version "VERSION_ID" --output-dir ./fastlane
+  asc migrate metadata pull --app "APP_ID" --version "1.2.3" --dir "./metadata"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -50,7 +50,7 @@ Examples:
 func MigrateImportCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("migrate import", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID)")
 	versionID := fs.String("version-id", "", "App Store version ID (required unless Deliverfile app_version + platform)")
 	fastlaneDir := fs.String("fastlane-dir", "", "Path to fastlane directory (optional)")
 	dryRun := fs.Bool("dry-run", false, "Preview changes without uploading")
@@ -58,7 +58,7 @@ func MigrateImportCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "import",
-		ShortUsage: "appstore migrate import [flags]",
+		ShortUsage: "asc migrate import [flags]",
 		ShortHelp:  "Import metadata from fastlane directory structure.",
 		LongHelp: `Import metadata from fastlane directory structure.
 
@@ -92,8 +92,8 @@ or conventional metadata/ and screenshots/ directories:
   │   │   └── ...
 
 Examples:
-  appstore migrate import --app "APP_ID" --version-id "VERSION_ID" --fastlane-dir ./fastlane
-  appstore migrate import --app "APP_ID" --version-id "VERSION_ID" --fastlane-dir ./fastlane --dry-run`,
+  asc migrate import --app "APP_ID" --version-id "VERSION_ID" --fastlane-dir ./fastlane
+  asc migrate import --app "APP_ID" --version-id "VERSION_ID" --fastlane-dir ./fastlane --dry-run`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -165,7 +165,7 @@ Examples:
 				return flag.ErrHelp
 			}
 			if strings.TrimSpace(*appID) == "" && strings.TrimSpace(inputs.DeliverfileConfig.AppIdentifier) == "" && shared.ResolveAppID("") == "" {
-				fmt.Fprintln(os.Stderr, "Error: --app is required (or set APPSTORE_APP_ID or Deliverfile app_identifier)")
+				fmt.Fprintln(os.Stderr, "Error: --app is required (or set ASC_APP_ID or Deliverfile app_identifier)")
 				return flag.ErrHelp
 			}
 
@@ -269,21 +269,21 @@ Examples:
 func MigrateExportCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("migrate export", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID)")
 	versionID := fs.String("version-id", "", "App Store version ID (required)")
 	outputDir := fs.String("output-dir", "", "Output directory for fastlane structure (required)")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "export",
-		ShortUsage: "appstore migrate export [flags]",
+		ShortUsage: "asc migrate export [flags]",
 		ShortHelp:  "Export metadata to fastlane directory structure.",
 		LongHelp: `Export current App Store metadata to fastlane directory structure.
 
 Creates the standard fastlane structure with all localizations.
 
 Examples:
-  appstore migrate export --app "APP_ID" --version-id "VERSION_ID" --output-dir ./fastlane`,
+  asc migrate export --app "APP_ID" --version-id "VERSION_ID" --output-dir ./fastlane`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -298,7 +298,7 @@ Examples:
 
 			resolvedAppID := shared.ResolveAppID(*appID)
 			if resolvedAppID == "" {
-				fmt.Fprintln(os.Stderr, "Error: --app is required (or set APPSTORE_APP_ID)")
+				fmt.Fprintln(os.Stderr, "Error: --app is required (or set ASC_APP_ID)")
 				return flag.ErrHelp
 			}
 
@@ -708,7 +708,7 @@ func MigrateValidateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "validate",
-		ShortUsage: "appstore migrate validate [flags]",
+		ShortUsage: "asc migrate validate [flags]",
 		ShortHelp:  "Validate fastlane metadata without uploading.",
 		LongHelp: `Validate fastlane metadata without making any API calls.
 
@@ -721,8 +721,8 @@ Checks character limits for App Store Connect metadata:
   - Subtitle: 30 characters
 
 Examples:
-  appstore migrate validate --fastlane-dir ./fastlane
-  appstore migrate validate --fastlane-dir ./fastlane --output table`,
+  asc migrate validate --fastlane-dir ./fastlane
+  asc migrate validate --fastlane-dir ./fastlane --output table`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

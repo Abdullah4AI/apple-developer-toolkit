@@ -19,14 +19,14 @@ func IAPOfferCodesCustomCodesCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "custom-codes",
-		ShortUsage: "appstore iap offer-codes custom-codes <subcommand> [flags]",
+		ShortUsage: "asc iap offer-codes custom-codes <subcommand> [flags]",
 		ShortHelp:  "Manage custom codes for in-app purchase offer codes.",
 		LongHelp: `Manage custom codes for in-app purchase offer codes.
 
 Examples:
-  appstore iap offer-codes custom-codes list --offer-code-id "OFFER_CODE_ID"
-  appstore iap offer-codes custom-codes get --custom-code-id "CUSTOM_CODE_ID"
-  appstore iap offer-codes custom-codes create --offer-code-id "OFFER_CODE_ID" --custom-code "SUMMER26" --quantity 100`,
+  asc iap offer-codes custom-codes list --offer-code-id "OFFER_CODE_ID"
+  asc iap offer-codes custom-codes get --custom-code-id "CUSTOM_CODE_ID"
+  asc iap offer-codes custom-codes create --offer-code-id "OFFER_CODE_ID" --custom-code "SUMMER26" --quantity 100`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -52,13 +52,13 @@ func IAPOfferCodesCustomCodesListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore iap offer-codes custom-codes list --offer-code-id \"OFFER_CODE_ID\" [flags]",
+		ShortUsage: "asc iap offer-codes custom-codes list --offer-code-id \"OFFER_CODE_ID\" [flags]",
 		ShortHelp:  "List custom codes for an offer code.",
 		LongHelp: `List custom codes for an offer code.
 
 Examples:
-  appstore iap offer-codes custom-codes list --offer-code-id "OFFER_CODE_ID"
-  appstore iap offer-codes custom-codes list --offer-code-id "OFFER_CODE_ID" --paginate`,
+  asc iap offer-codes custom-codes list --offer-code-id "OFFER_CODE_ID"
+  asc iap offer-codes custom-codes list --offer-code-id "OFFER_CODE_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -124,12 +124,12 @@ func IAPOfferCodesCustomCodesGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore iap offer-codes custom-codes get --custom-code-id \"CUSTOM_CODE_ID\"",
+		ShortUsage: "asc iap offer-codes custom-codes get --custom-code-id \"CUSTOM_CODE_ID\"",
 		ShortHelp:  "Get a custom code by ID.",
 		LongHelp: `Get a custom code by ID.
 
 Examples:
-  appstore iap offer-codes custom-codes get --custom-code-id "CUSTOM_CODE_ID"`,
+  asc iap offer-codes custom-codes get --custom-code-id "CUSTOM_CODE_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -169,13 +169,13 @@ func IAPOfferCodesCustomCodesCreateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "create",
-		ShortUsage: "appstore iap offer-codes custom-codes create --offer-code-id \"OFFER_CODE_ID\" --custom-code \"CODE\" --quantity N [flags]",
+		ShortUsage: "asc iap offer-codes custom-codes create --offer-code-id \"OFFER_CODE_ID\" --custom-code \"CODE\" --quantity N [flags]",
 		ShortHelp:  "Create custom codes for an in-app purchase offer code.",
 		LongHelp: `Create custom codes for an in-app purchase offer code.
 
 Examples:
-  appstore iap offer-codes custom-codes create --offer-code-id "OFFER_CODE_ID" --custom-code "SUMMER26" --quantity 100
-  appstore iap offer-codes custom-codes create --offer-code-id "OFFER_CODE_ID" --custom-code "HOLIDAY2026" --quantity 50 --expiration-date "2026-12-31"`,
+  asc iap offer-codes custom-codes create --offer-code-id "OFFER_CODE_ID" --custom-code "SUMMER26" --quantity 100
+  asc iap offer-codes custom-codes create --offer-code-id "OFFER_CODE_ID" --custom-code "HOLIDAY2026" --quantity 50 --expiration-date "2026-12-31"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -249,15 +249,15 @@ func IAPOfferCodesOneTimeCodesCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "one-time-codes",
-		ShortUsage: "appstore iap offer-codes one-time-codes <subcommand> [flags]",
+		ShortUsage: "asc iap offer-codes one-time-codes <subcommand> [flags]",
 		ShortHelp:  "Manage one-time use codes for in-app purchase offer codes.",
 		LongHelp: `Manage one-time use codes for in-app purchase offer codes.
 
 Examples:
-  appstore iap offer-codes one-time-codes list --offer-code-id "OFFER_CODE_ID"
-  appstore iap offer-codes one-time-codes get --one-time-code-id "ONE_TIME_USE_CODE_ID"
-  appstore iap offer-codes one-time-codes create --offer-code-id "OFFER_CODE_ID" --quantity 100 --expiration-date "2026-12-31"
-  appstore iap offer-codes one-time-codes values --one-time-code-id "ONE_TIME_USE_CODE_ID"`,
+  asc iap offer-codes one-time-codes list --offer-code-id "OFFER_CODE_ID"
+  asc iap offer-codes one-time-codes get --one-time-code-id "ONE_TIME_USE_CODE_ID"
+  asc iap offer-codes one-time-codes create --offer-code-id "OFFER_CODE_ID" --quantity 100 --expiration-date "2026-12-31"
+  asc iap offer-codes one-time-codes values --one-time-code-id "ONE_TIME_USE_CODE_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -284,13 +284,13 @@ func IAPOfferCodesOneTimeCodesListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore iap offer-codes one-time-codes list --offer-code-id \"OFFER_CODE_ID\" [flags]",
+		ShortUsage: "asc iap offer-codes one-time-codes list --offer-code-id \"OFFER_CODE_ID\" [flags]",
 		ShortHelp:  "List one-time use code batches for an offer code.",
 		LongHelp: `List one-time use code batches for an offer code.
 
 Examples:
-  appstore iap offer-codes one-time-codes list --offer-code-id "OFFER_CODE_ID"
-  appstore iap offer-codes one-time-codes list --offer-code-id "OFFER_CODE_ID" --paginate`,
+  asc iap offer-codes one-time-codes list --offer-code-id "OFFER_CODE_ID"
+  asc iap offer-codes one-time-codes list --offer-code-id "OFFER_CODE_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -356,12 +356,12 @@ func IAPOfferCodesOneTimeCodesGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore iap offer-codes one-time-codes get --one-time-code-id \"ONE_TIME_USE_CODE_ID\"",
+		ShortUsage: "asc iap offer-codes one-time-codes get --one-time-code-id \"ONE_TIME_USE_CODE_ID\"",
 		ShortHelp:  "Get a one-time use code batch by ID.",
 		LongHelp: `Get a one-time use code batch by ID.
 
 Examples:
-  appstore iap offer-codes one-time-codes get --one-time-code-id "ONE_TIME_USE_CODE_ID"`,
+  asc iap offer-codes one-time-codes get --one-time-code-id "ONE_TIME_USE_CODE_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -400,13 +400,13 @@ func IAPOfferCodesOneTimeCodesCreateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "create",
-		ShortUsage: "appstore iap offer-codes one-time-codes create --offer-code-id \"OFFER_CODE_ID\" --quantity N --expiration-date \"YYYY-MM-DD\" [flags]",
+		ShortUsage: "asc iap offer-codes one-time-codes create --offer-code-id \"OFFER_CODE_ID\" --quantity N --expiration-date \"YYYY-MM-DD\" [flags]",
 		ShortHelp:  "Generate one-time use codes for an in-app purchase offer code.",
 		LongHelp: `Generate one-time use codes for an in-app purchase offer code.
 
 Examples:
-  appstore iap offer-codes one-time-codes create --offer-code-id "OFFER_CODE_ID" --quantity 100 --expiration-date "2026-12-31"
-  appstore iap offer-codes one-time-codes create --offer-code-id "OFFER_CODE_ID" --quantity 500 --expiration-date "2026-09-30"`,
+  asc iap offer-codes one-time-codes create --offer-code-id "OFFER_CODE_ID" --quantity 100 --expiration-date "2026-12-31"
+  asc iap offer-codes one-time-codes create --offer-code-id "OFFER_CODE_ID" --quantity 500 --expiration-date "2026-09-30"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -472,12 +472,12 @@ func IAPOfferCodesOneTimeCodesValuesCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "values",
-		ShortUsage: "appstore iap offer-codes one-time-codes values --one-time-code-id \"ONE_TIME_USE_CODE_ID\"",
+		ShortUsage: "asc iap offer-codes one-time-codes values --one-time-code-id \"ONE_TIME_USE_CODE_ID\"",
 		ShortHelp:  "Fetch one-time use offer code values for a batch.",
 		LongHelp: `Fetch one-time use offer code values for a batch.
 
 Examples:
-  appstore iap offer-codes one-time-codes values --one-time-code-id "ONE_TIME_USE_CODE_ID"`,
+  asc iap offer-codes one-time-codes values --one-time-code-id "ONE_TIME_USE_CODE_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

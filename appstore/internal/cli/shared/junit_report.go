@@ -66,7 +66,7 @@ func (r *JUnitReport) WriteTo(w io.Writer) (int64, error) {
 func (r *JUnitReport) Marshal() ([]byte, error) {
 	name := r.Name
 	if name == "" {
-		name = "appstore"
+		name = "asc"
 	}
 
 	tests := len(r.Tests)

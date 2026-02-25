@@ -89,6 +89,10 @@ func ValidateAssetFile(path string) error {
 	if err != nil {
 		return err
 	}
+	return validateAssetFileInfo(path, info)
+}
+
+func validateAssetFileInfo(path string, info os.FileInfo) error {
 	if info.Mode()&os.ModeSymlink != 0 {
 		return fmt.Errorf("refusing to read symlink %q", path)
 	}
@@ -117,7 +121,11 @@ type ImageDimensions struct {
 
 // ReadImageDimensions validates and decodes image dimensions from disk.
 func ReadImageDimensions(path string) (ImageDimensions, error) {
-	if err := ValidateImageFile(path); err != nil {
+	info, err := os.Lstat(path)
+	if err != nil {
+		return ImageDimensions{}, err
+	}
+	if err := validateAssetFileInfo(path, info); err != nil {
 		return ImageDimensions{}, err
 	}
 	file, err := os.Open(path)

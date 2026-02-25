@@ -19,19 +19,19 @@ func BetaGroupsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "beta-groups",
-		ShortUsage: "appstore testflight beta-groups <subcommand> [flags]",
+		ShortUsage: "asc testflight beta-groups <subcommand> [flags]",
 		ShortHelp:  "Manage TestFlight beta groups.",
 		LongHelp: `Manage TestFlight beta groups.
 
 Examples:
-  appstore testflight beta-groups list --app "APP_ID"
-  appstore testflight beta-groups list --app "APP_ID" --internal
-  appstore testflight beta-groups list --global --internal
-  appstore testflight beta-groups create --app "APP_ID" --name "Beta Testers"
-  appstore testflight beta-groups create --app "APP_ID" --name "Internal Testers" --internal
-  appstore testflight beta-groups app get --group-id "GROUP_ID"
-  appstore testflight beta-groups beta-recruitment-criteria get --group-id "GROUP_ID"
-  appstore testflight beta-groups beta-recruitment-criterion-compatible-build-check get --group-id "GROUP_ID"`,
+  asc testflight beta-groups list --app "APP_ID"
+  asc testflight beta-groups list --app "APP_ID" --internal
+  asc testflight beta-groups list --global --internal
+  asc testflight beta-groups create --app "APP_ID" --name "Beta Testers"
+  asc testflight beta-groups create --app "APP_ID" --name "Internal Testers" --internal
+  asc testflight beta-groups app get --group-id "GROUP_ID"
+  asc testflight beta-groups beta-recruitment-criteria get --group-id "GROUP_ID"
+  asc testflight beta-groups beta-recruitment-criterion-compatible-build-check get --group-id "GROUP_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -57,7 +57,7 @@ Examples:
 func BetaGroupsListCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("list", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID env)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
 	global := fs.Bool("global", false, "List beta groups across all apps (top-level endpoint)")
 	internal := fs.Bool("internal", false, "Filter to internal groups only")
 	external := fs.Bool("external", false, "Filter to external groups only")
@@ -68,19 +68,19 @@ func BetaGroupsListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore testflight beta-groups list [flags]",
+		ShortUsage: "asc testflight beta-groups list [flags]",
 		ShortHelp:  "List TestFlight beta groups for an app or globally.",
 		LongHelp: `List TestFlight beta groups for an app or globally.
 
 Examples:
-  appstore testflight beta-groups list --app "APP_ID"
-  appstore testflight beta-groups list --app "APP_ID" --internal
-  appstore testflight beta-groups list --app "APP_ID" --external
-  appstore testflight beta-groups list --app "APP_ID" --limit 10
-  appstore testflight beta-groups list --app "APP_ID" --paginate
-  appstore testflight beta-groups list --global
-  appstore testflight beta-groups list --global --limit 50
-  appstore testflight beta-groups list --global --internal`,
+  asc testflight beta-groups list --app "APP_ID"
+  asc testflight beta-groups list --app "APP_ID" --internal
+  asc testflight beta-groups list --app "APP_ID" --external
+  asc testflight beta-groups list --app "APP_ID" --limit 10
+  asc testflight beta-groups list --app "APP_ID" --paginate
+  asc testflight beta-groups list --global
+  asc testflight beta-groups list --global --limit 50
+  asc testflight beta-groups list --global --internal`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -106,7 +106,7 @@ Examples:
 
 			// Require one of --app or --global (unless --next is provided)
 			if !*global && resolvedAppID == "" && strings.TrimSpace(*next) == "" {
-				fmt.Fprintf(os.Stderr, "Error: --app or --global is required (or set APPSTORE_APP_ID)\n\n")
+				fmt.Fprintf(os.Stderr, "Error: --app or --global is required (or set ASC_APP_ID)\n\n")
 				return flag.ErrHelp
 			}
 
@@ -250,26 +250,26 @@ Examples:
 func BetaGroupsCreateCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("create", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID env)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
 	name := fs.String("name", "", "Beta group name")
 	internal := fs.Bool("internal", false, "Create as internal group")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "create",
-		ShortUsage: "appstore testflight beta-groups create [flags]",
+		ShortUsage: "asc testflight beta-groups create [flags]",
 		ShortHelp:  "Create a TestFlight beta group.",
 		LongHelp: `Create a TestFlight beta group.
 
 Examples:
-  appstore testflight beta-groups create --app "APP_ID" --name "Beta Testers"
-  appstore testflight beta-groups create --app "APP_ID" --name "Internal Testers" --internal`,
+  asc testflight beta-groups create --app "APP_ID" --name "Beta Testers"
+  asc testflight beta-groups create --app "APP_ID" --name "Internal Testers" --internal`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			resolvedAppID := shared.ResolveAppID(*appID)
 			if resolvedAppID == "" {
-				fmt.Fprintf(os.Stderr, "Error: --app is required (or set APPSTORE_APP_ID)\n\n")
+				fmt.Fprintf(os.Stderr, "Error: --app is required (or set ASC_APP_ID)\n\n")
 				return flag.ErrHelp
 			}
 			if strings.TrimSpace(*name) == "" {
@@ -311,12 +311,12 @@ func BetaGroupsGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore testflight beta-groups get [flags]",
+		ShortUsage: "asc testflight beta-groups get [flags]",
 		ShortHelp:  "Get a TestFlight beta group by ID.",
 		LongHelp: `Get a TestFlight beta group by ID.
 
 Examples:
-  appstore testflight beta-groups get --id "GROUP_ID"`,
+  asc testflight beta-groups get --id "GROUP_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -357,14 +357,14 @@ func BetaGroupsUpdateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "update",
-		ShortUsage: "appstore testflight beta-groups update [flags]",
+		ShortUsage: "asc testflight beta-groups update [flags]",
 		ShortHelp:  "Update a TestFlight beta group.",
 		LongHelp: `Update a TestFlight beta group.
 
 Examples:
-  appstore testflight beta-groups update --id "GROUP_ID" --name "New Name"
-  appstore testflight beta-groups update --id "GROUP_ID" --public-link-enabled --public-link-limit 100
-  appstore testflight beta-groups update --id "GROUP_ID" --feedback-enabled`,
+  asc testflight beta-groups update --id "GROUP_ID" --name "New Name"
+  asc testflight beta-groups update --id "GROUP_ID" --public-link-enabled --public-link-limit 100
+  asc testflight beta-groups update --id "GROUP_ID" --feedback-enabled`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -454,12 +454,12 @@ func BetaGroupsDeleteCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "delete",
-		ShortUsage: "appstore testflight beta-groups delete --id \"GROUP_ID\" --confirm",
+		ShortUsage: "asc testflight beta-groups delete --id \"GROUP_ID\" --confirm",
 		ShortHelp:  "Delete a TestFlight beta group.",
 		LongHelp: `Delete a TestFlight beta group.
 
 Examples:
-  appstore testflight beta-groups delete --id "GROUP_ID" --confirm`,
+  asc testflight beta-groups delete --id "GROUP_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -496,16 +496,18 @@ func BetaGroupsAddTestersCommand() *ffcli.Command {
 
 	group := fs.String("group", "", "Beta group ID")
 	tester := fs.String("tester", "", "Beta tester ID(s), comma-separated")
+	email := fs.String("email", "", "Beta tester email(s), comma-separated")
 
 	return &ffcli.Command{
 		Name:       "add-testers",
-		ShortUsage: "appstore testflight beta-groups add-testers --group \"GROUP_ID\" --tester \"TESTER_ID[,TESTER_ID...]\"",
+		ShortUsage: "asc testflight beta-groups add-testers --group \"GROUP_ID\" [--tester \"TESTER_ID[,TESTER_ID...]\" | --email \"EMAIL[,EMAIL...]\"]",
 		ShortHelp:  "Add beta testers to a beta group.",
 		LongHelp: `Add beta testers to a beta group.
 
 Examples:
-  appstore testflight beta-groups add-testers --group "GROUP_ID" --tester "TESTER_ID"
-  appstore testflight beta-groups add-testers --group "GROUP_ID" --tester "TESTER_ID1,TESTER_ID2"`,
+  asc testflight beta-groups add-testers --group "GROUP_ID" --tester "TESTER_ID"
+  asc testflight beta-groups add-testers --group "GROUP_ID" --tester "TESTER_ID1,TESTER_ID2"
+  asc testflight beta-groups add-testers --group "GROUP_ID" --email "tester@example.com"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -516,8 +518,9 @@ Examples:
 			}
 
 			testerIDs := shared.SplitCSV(*tester)
-			if len(testerIDs) == 0 {
-				fmt.Fprintln(os.Stderr, "Error: --tester is required")
+			testerEmails := shared.SplitCSV(*email)
+			if len(testerIDs) == 0 && len(testerEmails) == 0 {
+				fmt.Fprintln(os.Stderr, "Error: --tester or --email is required")
 				return flag.ErrHelp
 			}
 
@@ -528,6 +531,54 @@ Examples:
 
 			requestCtx, cancel := shared.ContextWithTimeout(ctx)
 			defer cancel()
+
+			if len(testerEmails) > 0 {
+				groupApp, err := client.GetBetaGroupApp(requestCtx, groupID)
+				if err != nil {
+					return fmt.Errorf("beta-groups add-testers: failed to resolve app for group: %w", err)
+				}
+				appID := strings.TrimSpace(groupApp.Data.ID)
+				if appID == "" {
+					return fmt.Errorf("beta-groups add-testers: group %q has empty app ID", groupID)
+				}
+
+				for _, testerEmail := range testerEmails {
+					resp, err := client.GetBetaTesters(
+						requestCtx,
+						appID,
+						asc.WithBetaTestersEmail(testerEmail),
+						asc.WithBetaTestersLimit(2),
+					)
+					if err != nil {
+						return fmt.Errorf("beta-groups add-testers: failed to resolve tester email %q: %w", testerEmail, err)
+					}
+					if len(resp.Data) == 0 {
+						return fmt.Errorf("beta-groups add-testers: tester email %q not found for app %q", testerEmail, appID)
+					}
+					if len(resp.Data) > 1 {
+						return fmt.Errorf("beta-groups add-testers: multiple testers found for email %q; use --tester ID", testerEmail)
+					}
+					testerIDs = append(testerIDs, resp.Data[0].ID)
+				}
+			}
+
+			if len(testerIDs) == 0 {
+				return fmt.Errorf("beta-groups add-testers: no tester IDs resolved")
+			}
+			seen := make(map[string]struct{}, len(testerIDs))
+			deduped := make([]string, 0, len(testerIDs))
+			for _, testerID := range testerIDs {
+				trimmed := strings.TrimSpace(testerID)
+				if trimmed == "" {
+					continue
+				}
+				if _, ok := seen[trimmed]; ok {
+					continue
+				}
+				seen[trimmed] = struct{}{}
+				deduped = append(deduped, trimmed)
+			}
+			testerIDs = deduped
 
 			if err := client.AddBetaTestersToGroup(requestCtx, groupID, testerIDs); err != nil {
 				return fmt.Errorf("beta-groups add-testers: failed to add testers: %w", err)
@@ -549,13 +600,13 @@ func BetaGroupsRemoveTestersCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "remove-testers",
-		ShortUsage: "appstore testflight beta-groups remove-testers --group \"GROUP_ID\" --tester \"TESTER_ID[,TESTER_ID...]\" --confirm",
+		ShortUsage: "asc testflight beta-groups remove-testers --group \"GROUP_ID\" --tester \"TESTER_ID[,TESTER_ID...]\" --confirm",
 		ShortHelp:  "Remove beta testers from a beta group.",
 		LongHelp: `Remove beta testers from a beta group.
 
 Examples:
-  appstore testflight beta-groups remove-testers --group "GROUP_ID" --tester "TESTER_ID" --confirm
-  appstore testflight beta-groups remove-testers --group "GROUP_ID" --tester "TESTER_ID1,TESTER_ID2" --confirm`,
+  asc testflight beta-groups remove-testers --group "GROUP_ID" --tester "TESTER_ID" --confirm
+  asc testflight beta-groups remove-testers --group "GROUP_ID" --tester "TESTER_ID1,TESTER_ID2" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

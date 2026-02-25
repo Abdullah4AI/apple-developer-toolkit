@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/signal"
 	"strings"
 	"time"
 
@@ -18,8 +19,18 @@ import (
 // Run executes the CLI using the provided args (not including argv[0]) and version string.
 // It returns the intended process exit code.
 func Run(args []string, versionInfo string) int {
-	root := RootCommand(versionInfo)
 	defer shared.CleanupTempPrivateKeys()
+
+	// Fast path for the most common version check invocation. This avoids
+	// building/parsing the entire command tree just to print the version.
+	if isVersionOnlyInvocation(args) {
+		fmt.Fprintln(os.Stdout, versionInfo)
+		return ExitSuccess
+	}
+
+	root := RootCommand(versionInfo)
+	runCtx, stopSignals := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer stopSignals()
 
 	if err := root.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -36,7 +47,7 @@ func Run(args []string, versionInfo string) int {
 	}
 
 	if versionRequested {
-		if err := root.Run(context.Background()); err != nil {
+		if err := root.Run(runCtx); err != nil {
 			if errors.Is(err, flag.ErrHelp) {
 				return ExitUsage
 			}
@@ -54,7 +65,7 @@ func Run(args []string, versionInfo string) int {
 	}
 
 	start := time.Now()
-	runErr := root.Run(context.Background())
+	runErr := root.Run(runCtx)
 	elapsed := time.Since(start)
 
 	// Get command name (full subcommand path)
@@ -84,6 +95,18 @@ func Run(args []string, versionInfo string) int {
 	}
 
 	return ExitSuccess
+}
+
+func isVersionOnlyInvocation(args []string) bool {
+	if len(args) != 1 {
+		return false
+	}
+	switch strings.TrimSpace(args[0]) {
+	case "--version", "--version=true":
+		return true
+	default:
+		return false
+	}
 }
 
 // getCommandName extracts the full subcommand path from the parsed args.
@@ -221,7 +244,7 @@ func writeJUnitReport(commandName string, runErr error, elapsed time.Duration) e
 	report := shared.JUnitReport{
 		Tests:     []shared.JUnitTestCase{testCase},
 		Timestamp: time.Now(),
-		Name:      "appstore",
+		Name:      "asc",
 	}
 
 	return report.Write(reportFile)

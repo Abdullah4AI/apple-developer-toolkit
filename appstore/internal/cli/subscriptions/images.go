@@ -19,13 +19,13 @@ func SubscriptionsImagesCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "images",
-		ShortUsage: "appstore subscriptions images <subcommand> [flags]",
+		ShortUsage: "asc subscriptions images <subcommand> [flags]",
 		ShortHelp:  "Manage subscription images.",
 		LongHelp: `Manage subscription images.
 
 Examples:
-  appstore subscriptions images list --subscription-id "SUB_ID"
-  appstore subscriptions images create --subscription-id "SUB_ID" --file "./image.png"`,
+  asc subscriptions images list --subscription-id "SUB_ID"
+  asc subscriptions images create --subscription-id "SUB_ID" --file "./image.png"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -53,13 +53,13 @@ func SubscriptionsImagesListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore subscriptions images list [flags]",
+		ShortUsage: "asc subscriptions images list [flags]",
 		ShortHelp:  "List subscription images.",
 		LongHelp: `List subscription images.
 
 Examples:
-  appstore subscriptions images list --subscription-id "SUB_ID"
-  appstore subscriptions images list --subscription-id "SUB_ID" --paginate`,
+  asc subscriptions images list --subscription-id "SUB_ID"
+  asc subscriptions images list --subscription-id "SUB_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -125,12 +125,12 @@ func SubscriptionsImagesGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore subscriptions images get --id \"IMAGE_ID\"",
+		ShortUsage: "asc subscriptions images get --id \"IMAGE_ID\"",
 		ShortHelp:  "Get a subscription image by ID.",
 		LongHelp: `Get a subscription image by ID.
 
 Examples:
-  appstore subscriptions images get --id "IMAGE_ID"`,
+  asc subscriptions images get --id "IMAGE_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -168,12 +168,12 @@ func SubscriptionsImagesCreateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "create",
-		ShortUsage: "appstore subscriptions images create [flags]",
+		ShortUsage: "asc subscriptions images create [flags]",
 		ShortHelp:  "Upload a subscription image.",
 		LongHelp: `Upload a subscription image.
 
 Examples:
-  appstore subscriptions images create --subscription-id "SUB_ID" --file "./image.png"`,
+  asc subscriptions images create --subscription-id "SUB_ID" --file "./image.png"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -251,12 +251,12 @@ func SubscriptionsImagesUpdateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "update",
-		ShortUsage: "appstore subscriptions images update [flags]",
+		ShortUsage: "asc subscriptions images update [flags]",
 		ShortHelp:  "Update a subscription image.",
 		LongHelp: `Update a subscription image.
 
 Examples:
-  appstore subscriptions images update --id "IMAGE_ID" --uploaded true --checksum "HASH"`,
+  asc subscriptions images update --id "IMAGE_ID" --uploaded true --checksum "HASH"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -309,12 +309,12 @@ func SubscriptionsImagesDeleteCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "delete",
-		ShortUsage: "appstore subscriptions images delete --id \"IMAGE_ID\" --confirm",
+		ShortUsage: "asc subscriptions images delete --id \"IMAGE_ID\" --confirm",
 		ShortHelp:  "Delete a subscription image.",
 		LongHelp: `Delete a subscription image.
 
 Examples:
-  appstore subscriptions images delete --id "IMAGE_ID" --confirm`,
+  asc subscriptions images delete --id "IMAGE_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

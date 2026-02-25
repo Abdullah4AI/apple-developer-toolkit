@@ -19,16 +19,16 @@ func AppSetupCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "app-setup",
-		ShortUsage: "appstore app-setup <subcommand> [flags]",
+		ShortUsage: "asc app-setup <subcommand> [flags]",
 		ShortHelp:  "Post-create app setup automation.",
 		LongHelp: `Post-create app setup automation using public App Store Connect APIs.
 
 Examples:
-  appstore app-setup info set --app "APP_ID" --primary-locale "en-US" --bundle-id "com.example.app"
-  appstore app-setup categories set --app "APP_ID" --primary GAMES
-  appstore app-setup availability set --app "APP_ID" --territory "USA,GBR" --available true
-  appstore app-setup pricing set --app "APP_ID" --price-point "PRICE_POINT_ID" --base-territory "USA"
-  appstore app-setup localizations upload --version "VERSION_ID" --path "./localizations"`,
+  asc app-setup info set --app "APP_ID" --primary-locale "en-US" --bundle-id "com.example.app"
+  asc app-setup categories set --app "APP_ID" --primary GAMES
+  asc app-setup availability set --app "APP_ID" --territory "USA,GBR" --available true
+  asc app-setup pricing set --app "APP_ID" --price-point "PRICE_POINT_ID" --base-territory "USA"
+  asc app-setup localizations upload --version "VERSION_ID" --path "./localizations"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -48,15 +48,15 @@ Examples:
 func AppSetupInfoCommand() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "info",
-		ShortUsage: "appstore app-setup info <subcommand> [flags]",
+		ShortUsage: "asc app-setup info <subcommand> [flags]",
 		ShortHelp:  "Update app info and app info localizations.",
 		LongHelp: `Update app attributes and app info localizations.
 
 Examples:
-  appstore app-setup info set --app "APP_ID" --primary-locale "en-US" --bundle-id "com.example.app"
-  appstore app-setup info set --app "APP_ID" --locale "en-US" --name "My App" --subtitle "Great app"
-  appstore app-setup info set --app "APP_ID" --primary-locale "en-US" --privacy-policy-url "https://example.com/privacy"
-  appstore app-setup info set --app "APP_ID" --content-rights "DOES_NOT_USE_THIRD_PARTY_CONTENT"`,
+  asc app-setup info set --app "APP_ID" --primary-locale "en-US" --bundle-id "com.example.app"
+  asc app-setup info set --app "APP_ID" --locale "en-US" --name "My App" --subtitle "Great app"
+  asc app-setup info set --app "APP_ID" --primary-locale "en-US" --privacy-policy-url "https://example.com/privacy"
+  asc app-setup info set --app "APP_ID" --content-rights "DOES_NOT_USE_THIRD_PARTY_CONTENT"`,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
 			AppSetupInfoSetCommand(),
@@ -71,7 +71,7 @@ Examples:
 func AppSetupInfoSetCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("app-setup info set", flag.ExitOnError)
 
-	appID := fs.String("app", os.Getenv("APPSTORE_APP_ID"), "App Store Connect app ID (required)")
+	appID := fs.String("app", os.Getenv("ASC_APP_ID"), "App Store Connect app ID (required)")
 	bundleID := fs.String("bundle-id", "", "Bundle ID to set")
 	primaryLocale := fs.String("primary-locale", "", "Primary locale (e.g., en-US)")
 	locale := fs.String("locale", "", "Locale for app info localization (defaults to --primary-locale)")
@@ -86,15 +86,15 @@ func AppSetupInfoSetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "set",
-		ShortUsage: "appstore app-setup info set [flags]",
+		ShortUsage: "asc app-setup info set [flags]",
 		ShortHelp:  "Set app attributes and app info localizations.",
 		LongHelp: `Set app attributes (bundle ID, primary locale) and app info localizations.
 
 Examples:
-  appstore app-setup info set --app "APP_ID" --primary-locale "en-US" --bundle-id "com.example.app"
-  appstore app-setup info set --app "APP_ID" --locale "en-US" --name "My App" --subtitle "Great app"
-  appstore app-setup info set --app "APP_ID" --primary-locale "en-US" --privacy-policy-url "https://example.com/privacy"
-  appstore app-setup info set --app "APP_ID" --content-rights "DOES_NOT_USE_THIRD_PARTY_CONTENT"`,
+  asc app-setup info set --app "APP_ID" --primary-locale "en-US" --bundle-id "com.example.app"
+  asc app-setup info set --app "APP_ID" --locale "en-US" --name "My App" --subtitle "Great app"
+  asc app-setup info set --app "APP_ID" --primary-locale "en-US" --privacy-policy-url "https://example.com/privacy"
+  asc app-setup info set --app "APP_ID" --content-rights "DOES_NOT_USE_THIRD_PARTY_CONTENT"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -251,12 +251,12 @@ Examples:
 func AppSetupCategoriesCommand() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "categories",
-		ShortUsage: "appstore app-setup categories <subcommand> [flags]",
+		ShortUsage: "asc app-setup categories <subcommand> [flags]",
 		ShortHelp:  "Set categories for an app.",
 		LongHelp: `Set primary and secondary categories for an app.
 
 Examples:
-  appstore app-setup categories set --app "APP_ID" --primary GAMES --secondary ENTERTAINMENT`,
+  asc app-setup categories set --app "APP_ID" --primary GAMES --secondary ENTERTAINMENT`,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
 			AppSetupCategoriesSetCommand(),
@@ -271,15 +271,15 @@ Examples:
 func AppSetupCategoriesSetCommand() *ffcli.Command {
 	return shared.NewCategoriesSetCommand(shared.CategoriesSetCommandConfig{
 		FlagSetName: "app-setup categories set",
-		ShortUsage:  "appstore app-setup categories set --app APP_ID --primary CATEGORY_ID [--secondary CATEGORY_ID] [--app-info APP_INFO_ID]",
+		ShortUsage:  "asc app-setup categories set --app APP_ID --primary CATEGORY_ID [--secondary CATEGORY_ID] [--app-info APP_INFO_ID]",
 		ShortHelp:   "Set primary and secondary categories for an app.",
 		LongHelp: `Set the primary and secondary categories for an app.
 
-Use 'appstore categories list' to find valid category IDs.
+Use 'asc categories list' to find valid category IDs.
 
 Examples:
-  appstore app-setup categories set --app 123456789 --primary GAMES
-  appstore app-setup categories set --app 123456789 --primary GAMES --secondary ENTERTAINMENT`,
+  asc app-setup categories set --app 123456789 --primary GAMES
+  asc app-setup categories set --app 123456789 --primary GAMES --secondary ENTERTAINMENT`,
 		ErrorPrefix:    "app-setup categories set",
 		IncludeAppInfo: true,
 	})
@@ -289,12 +289,12 @@ Examples:
 func AppSetupAvailabilityCommand() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "availability",
-		ShortUsage: "appstore app-setup availability <subcommand> [flags]",
+		ShortUsage: "asc app-setup availability <subcommand> [flags]",
 		ShortHelp:  "Set app availability.",
 		LongHelp: `Set app availability for territories.
 
 Examples:
-  appstore app-setup availability set --app "APP_ID" --territory "USA,GBR" --available true`,
+  asc app-setup availability set --app "APP_ID" --territory "USA,GBR" --available true`,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
 			AppSetupAvailabilitySetCommand(),
@@ -310,12 +310,12 @@ func AppSetupAvailabilitySetCommand() *ffcli.Command {
 	return shared.NewAvailabilitySetCommand(shared.AvailabilitySetCommandConfig{
 		FlagSetName: "app-setup availability set",
 		CommandName: "set",
-		ShortUsage:  "appstore app-setup availability set [flags]",
+		ShortUsage:  "asc app-setup availability set [flags]",
 		ShortHelp:   "Set app availability for territories.",
 		LongHelp: `Set app availability for territories.
 
 Examples:
-  appstore app-setup availability set --app "123456789" --territory "USA,GBR" --available true --available-in-new-territories true`,
+  asc app-setup availability set --app "123456789" --territory "USA,GBR" --available true --available-in-new-territories true`,
 		ErrorPrefix:                      "app-setup availability set",
 		IncludeAvailableInNewTerritories: true,
 	})
@@ -325,12 +325,12 @@ Examples:
 func AppSetupPricingCommand() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "pricing",
-		ShortUsage: "appstore app-setup pricing <subcommand> [flags]",
+		ShortUsage: "asc app-setup pricing <subcommand> [flags]",
 		ShortHelp:  "Set app pricing.",
 		LongHelp: `Set app pricing using a price point.
 
 Examples:
-  appstore app-setup pricing set --app "APP_ID" --price-point "PRICE_POINT_ID"`,
+  asc app-setup pricing set --app "APP_ID" --price-point "PRICE_POINT_ID"`,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
 			AppSetupPricingSetCommand(),
@@ -346,13 +346,13 @@ func AppSetupPricingSetCommand() *ffcli.Command {
 	return shared.NewPricingSetCommand(shared.PricingSetCommandConfig{
 		FlagSetName: "app-setup pricing set",
 		CommandName: "set",
-		ShortUsage:  "appstore app-setup pricing set [flags]",
+		ShortUsage:  "asc app-setup pricing set [flags]",
 		ShortHelp:   "Set app pricing using a price point.",
 		LongHelp: `Set app pricing using a price point.
 
 Examples:
-  appstore app-setup pricing set --app "APP_ID" --price-point "PRICE_POINT_ID" --base-territory "USA"
-  appstore app-setup pricing set --app "APP_ID" --price-point "PRICE_POINT_ID" --base-territory "USA" --start-date "2024-03-01"`,
+  asc app-setup pricing set --app "APP_ID" --price-point "PRICE_POINT_ID" --base-territory "USA"
+  asc app-setup pricing set --app "APP_ID" --price-point "PRICE_POINT_ID" --base-territory "USA" --start-date "2024-03-01"`,
 		ErrorPrefix:           "app-setup pricing set",
 		StartDateHelp:         "Start date (YYYY-MM-DD, default: today)",
 		StartDateDefaultToday: true,
@@ -364,13 +364,13 @@ Examples:
 func AppSetupLocalizationsCommand() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "localizations",
-		ShortUsage: "appstore app-setup localizations <subcommand> [flags]",
+		ShortUsage: "asc app-setup localizations <subcommand> [flags]",
 		ShortHelp:  "Upload app store localizations.",
 		LongHelp: `Upload app store localizations (version or app-info).
 
 Examples:
-  appstore app-setup localizations upload --version "VERSION_ID" --path "./localizations"
-  appstore app-setup localizations upload --app "APP_ID" --type app-info --path "./localizations"`,
+  asc app-setup localizations upload --version "VERSION_ID" --path "./localizations"
+  asc app-setup localizations upload --app "APP_ID" --type app-info --path "./localizations"`,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
 			AppSetupLocalizationsUploadCommand(),
@@ -386,7 +386,7 @@ func AppSetupLocalizationsUploadCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("app-setup localizations upload", flag.ExitOnError)
 
 	versionID := fs.String("version", "", "App Store version ID")
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID env)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
 	appInfoID := fs.String("app-info", "", "App Info ID (optional override)")
 	locType := fs.String("type", shared.LocalizationTypeVersion, "Localization type: version (default) or app-info")
 	locale := fs.String("locale", "", "Filter by locale(s), comma-separated")
@@ -396,15 +396,15 @@ func AppSetupLocalizationsUploadCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "upload",
-		ShortUsage: "appstore app-setup localizations upload [flags]",
+		ShortUsage: "asc app-setup localizations upload [flags]",
 		ShortHelp:  "Upload localizations from .strings files.",
 		LongHelp: `Upload localizations from .strings files.
 
 Examples:
-  appstore app-setup localizations upload --version "VERSION_ID" --path "./localizations"
-  appstore app-setup localizations upload --app "APP_ID" --type app-info --path "./localizations"
-  appstore app-setup localizations upload --version "VERSION_ID" --locale "en-US" --path "en-US.strings"
-  appstore app-setup localizations upload --version "VERSION_ID" --path "./localizations" --dry-run`,
+  asc app-setup localizations upload --version "VERSION_ID" --path "./localizations"
+  asc app-setup localizations upload --app "APP_ID" --type app-info --path "./localizations"
+  asc app-setup localizations upload --version "VERSION_ID" --locale "en-US" --path "en-US.strings"
+  asc app-setup localizations upload --version "VERSION_ID" --path "./localizations" --dry-run`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

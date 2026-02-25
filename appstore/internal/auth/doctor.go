@@ -80,7 +80,7 @@ func inspectStorage(options DoctorOptions) DoctorSection {
 	if shouldBypassKeychain() {
 		checks = append(checks, DoctorCheck{
 			Status:  DoctorInfo,
-			Message: "Keychain is bypassed via APPSTORE_BYPASS_KEYCHAIN (truthy values: 1/true/yes/on)",
+			Message: "Keychain is bypassed via ASC_BYPASS_KEYCHAIN (truthy values: 1/true/yes/on)",
 		})
 	} else if _, err := keyringOpener(); err != nil {
 		status := DoctorFail
@@ -92,7 +92,7 @@ func inspectStorage(options DoctorOptions) DoctorSection {
 		checks = append(checks, DoctorCheck{
 			Status:         status,
 			Message:        message,
-			Recommendation: "Consider using --bypass-keychain or setting APPSTORE_BYPASS_KEYCHAIN to 1/true/yes/on",
+			Recommendation: "Consider using --bypass-keychain or setting ASC_BYPASS_KEYCHAIN to 1/true/yes/on",
 		})
 	} else {
 		checks = append(checks, DoctorCheck{
@@ -348,19 +348,19 @@ func inspectEnvironment() DoctorSection {
 	checks := []DoctorCheck{}
 
 	envVars := []string{
-		"APPSTORE_KEY_ID",
-		"APPSTORE_ISSUER_ID",
-		"APPSTORE_PRIVATE_KEY_PATH",
-		"APPSTORE_PRIVATE_KEY",
-		"APPSTORE_PRIVATE_KEY_B64",
-		"APPSTORE_PROFILE",
-		"APPSTORE_BYPASS_KEYCHAIN",
-		"APPSTORE_STRICT_AUTH",
+		"ASC_KEY_ID",
+		"ASC_ISSUER_ID",
+		"ASC_PRIVATE_KEY_PATH",
+		"ASC_PRIVATE_KEY",
+		"ASC_PRIVATE_KEY_B64",
+		"ASC_PROFILE",
+		"ASC_BYPASS_KEYCHAIN",
+		"ASC_STRICT_AUTH",
 	}
 	for _, name := range envVars {
 		if value := strings.TrimSpace(os.Getenv(name)); value != "" {
 			message := fmt.Sprintf("%s is set", name)
-			if name == "APPSTORE_PROFILE" {
+			if name == "ASC_PROFILE" {
 				message = fmt.Sprintf("%s is set (%s)", name, value)
 			}
 			checks = append(checks, DoctorCheck{
@@ -370,18 +370,18 @@ func inspectEnvironment() DoctorSection {
 		}
 	}
 
-	keyID := strings.TrimSpace(os.Getenv("APPSTORE_KEY_ID"))
-	issuerID := strings.TrimSpace(os.Getenv("APPSTORE_ISSUER_ID"))
-	hasKeyPath := strings.TrimSpace(os.Getenv("APPSTORE_PRIVATE_KEY_PATH")) != "" ||
-		strings.TrimSpace(os.Getenv("APPSTORE_PRIVATE_KEY")) != "" ||
-		strings.TrimSpace(os.Getenv("APPSTORE_PRIVATE_KEY_B64")) != ""
+	keyID := strings.TrimSpace(os.Getenv("ASC_KEY_ID"))
+	issuerID := strings.TrimSpace(os.Getenv("ASC_ISSUER_ID"))
+	hasKeyPath := strings.TrimSpace(os.Getenv("ASC_PRIVATE_KEY_PATH")) != "" ||
+		strings.TrimSpace(os.Getenv("ASC_PRIVATE_KEY")) != "" ||
+		strings.TrimSpace(os.Getenv("ASC_PRIVATE_KEY_B64")) != ""
 	envProvided := keyID != "" || issuerID != "" || hasKeyPath
 	envComplete := keyID != "" && issuerID != "" && hasKeyPath
 	if envProvided && !envComplete {
 		checks = append(checks, DoctorCheck{
 			Status:         DoctorWarn,
-			Message:        "Environment credentials are incomplete (set APPSTORE_KEY_ID, APPSTORE_ISSUER_ID, and a private key)",
-			Recommendation: "Set missing APPSTORE_* variables or clear partial values",
+			Message:        "Environment credentials are incomplete (set ASC_KEY_ID, ASC_ISSUER_ID, and a private key)",
+			Recommendation: "Set missing ASC_* variables or clear partial values",
 		})
 	}
 
@@ -391,14 +391,14 @@ func inspectEnvironment() DoctorSection {
 			if keyID != "" && defaultCreds.KeyID != "" && keyID != defaultCreds.KeyID {
 				checks = append(checks, DoctorCheck{
 					Status:         DoctorWarn,
-					Message:        "APPSTORE_KEY_ID differs from default stored credentials",
+					Message:        "ASC_KEY_ID differs from default stored credentials",
 					Recommendation: "Use --profile or clear conflicting env vars",
 				})
 			}
 			if issuerID != "" && defaultCreds.IssuerID != "" && issuerID != defaultCreds.IssuerID {
 				checks = append(checks, DoctorCheck{
 					Status:         DoctorWarn,
-					Message:        "APPSTORE_ISSUER_ID differs from default stored credentials",
+					Message:        "ASC_ISSUER_ID differs from default stored credentials",
 					Recommendation: "Use --profile or clear conflicting env vars",
 				})
 			}

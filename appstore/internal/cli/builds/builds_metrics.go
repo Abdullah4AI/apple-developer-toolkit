@@ -19,12 +19,12 @@ func BuildsMetricsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "metrics",
-		ShortUsage: "appstore builds metrics <subcommand> [flags]",
+		ShortUsage: "asc builds metrics <subcommand> [flags]",
 		ShortHelp:  "Fetch build metrics.",
 		LongHelp: `Fetch build metrics.
 
 Examples:
-  appstore builds metrics beta-usages --build "BUILD_ID"`,
+  asc builds metrics beta-usages --build "BUILD_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -47,13 +47,13 @@ func BuildsMetricsBetaUsagesCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "beta-usages",
-		ShortUsage: "appstore builds metrics beta-usages --build \"BUILD_ID\" [flags]",
+		ShortUsage: "asc builds metrics beta-usages --build \"BUILD_ID\" [flags]",
 		ShortHelp:  "Fetch beta build usage metrics for a build.",
 		LongHelp: `Fetch beta build usage metrics for a build.
 
 Examples:
-  appstore builds metrics beta-usages --build "BUILD_ID"
-  appstore builds metrics beta-usages --build "BUILD_ID" --limit 50`,
+  asc builds metrics beta-usages --build "BUILD_ID"
+  asc builds metrics beta-usages --build "BUILD_ID" --limit 50`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

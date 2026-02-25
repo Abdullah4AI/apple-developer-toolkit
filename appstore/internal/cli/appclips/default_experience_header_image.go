@@ -17,12 +17,12 @@ func AppClipDefaultExperienceHeaderImageCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "header-image",
-		ShortUsage: "appstore app-clips default-experiences header-image <subcommand> [flags]",
+		ShortUsage: "asc app-clips default-experiences header-image <subcommand> [flags]",
 		ShortHelp:  "Manage default experience header images.",
 		LongHelp: `Manage default experience header images.
 
 Examples:
-  appstore app-clips default-experiences header-image get --localization-id "LOCALIZATION_ID"`,
+  asc app-clips default-experiences header-image get --localization-id "LOCALIZATION_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -43,12 +43,12 @@ func AppClipDefaultExperienceHeaderImageGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore app-clips default-experiences header-image get --localization-id \"LOCALIZATION_ID\"",
+		ShortUsage: "asc app-clips default-experiences header-image get --localization-id \"LOCALIZATION_ID\"",
 		ShortHelp:  "Get the header image for a localization.",
 		LongHelp: `Get the header image for a localization.
 
 Examples:
-  appstore app-clips default-experiences header-image get --localization-id "LOCALIZATION_ID"`,
+  asc app-clips default-experiences header-image get --localization-id "LOCALIZATION_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

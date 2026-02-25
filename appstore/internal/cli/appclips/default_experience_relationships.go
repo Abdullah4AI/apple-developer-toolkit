@@ -17,13 +17,13 @@ func AppClipDefaultExperienceRelationshipsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "relationships",
-		ShortUsage: "appstore app-clips default-experiences relationships <subcommand> [flags]",
+		ShortUsage: "asc app-clips default-experiences relationships <subcommand> [flags]",
 		ShortHelp:  "Manage default experience relationships.",
 		LongHelp: `Manage default experience relationships.
 
 Examples:
-  appstore app-clips default-experiences relationships app-store-review-detail --experience-id "EXP_ID"
-  appstore app-clips default-experiences relationships release-with-app-store-version --experience-id "EXP_ID"`,
+  asc app-clips default-experiences relationships app-store-review-detail --experience-id "EXP_ID"
+  asc app-clips default-experiences relationships release-with-app-store-version --experience-id "EXP_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -45,12 +45,12 @@ func AppClipDefaultExperienceReviewDetailRelationshipCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "app-store-review-detail",
-		ShortUsage: "appstore app-clips default-experiences relationships app-store-review-detail --experience-id \"EXP_ID\"",
+		ShortUsage: "asc app-clips default-experiences relationships app-store-review-detail --experience-id \"EXP_ID\"",
 		ShortHelp:  "Get review detail relationship for a default experience.",
 		LongHelp: `Get review detail relationship for a default experience.
 
 Examples:
-  appstore app-clips default-experiences relationships app-store-review-detail --experience-id "EXP_ID"`,
+  asc app-clips default-experiences relationships app-store-review-detail --experience-id "EXP_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -87,12 +87,12 @@ func AppClipDefaultExperienceReleaseWithAppStoreVersionRelationshipCommand() *ff
 
 	return &ffcli.Command{
 		Name:       "release-with-app-store-version",
-		ShortUsage: "appstore app-clips default-experiences relationships release-with-app-store-version --experience-id \"EXP_ID\"",
+		ShortUsage: "asc app-clips default-experiences relationships release-with-app-store-version --experience-id \"EXP_ID\"",
 		ShortHelp:  "Get release with App Store version relationship for a default experience.",
 		LongHelp: `Get release with App Store version relationship for a default experience.
 
 Examples:
-  appstore app-clips default-experiences relationships release-with-app-store-version --experience-id "EXP_ID"`,
+  asc app-clips default-experiences relationships release-with-app-store-version --experience-id "EXP_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

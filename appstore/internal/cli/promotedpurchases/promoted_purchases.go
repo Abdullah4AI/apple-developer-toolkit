@@ -19,17 +19,17 @@ func PromotedPurchasesCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "promoted-purchases",
-		ShortUsage: "appstore promoted-purchases <subcommand> [flags]",
+		ShortUsage: "asc promoted-purchases <subcommand> [flags]",
 		ShortHelp:  "Manage promoted purchases for subscriptions and in-app purchases.",
 		LongHelp: `Manage promoted purchases for subscriptions and in-app purchases.
 
 Examples:
-  appstore promoted-purchases list --app "APP_ID"
-  appstore promoted-purchases get --promoted-purchase-id "PROMO_ID"
-  appstore promoted-purchases create --app "APP_ID" --product-id "PRODUCT_ID" --product-type SUBSCRIPTION --visible-for-all-users
-  appstore promoted-purchases update --promoted-purchase-id "PROMO_ID" --enabled false
-  appstore promoted-purchases delete --promoted-purchase-id "PROMO_ID" --confirm
-  appstore promoted-purchases link --app "APP_ID" --promoted-purchase-id "PROMO_ID"`,
+  asc promoted-purchases list --app "APP_ID"
+  asc promoted-purchases get --promoted-purchase-id "PROMO_ID"
+  asc promoted-purchases create --app "APP_ID" --product-id "PRODUCT_ID" --product-type SUBSCRIPTION --visible-for-all-users
+  asc promoted-purchases update --promoted-purchase-id "PROMO_ID" --enabled false
+  asc promoted-purchases delete --promoted-purchase-id "PROMO_ID" --confirm
+  asc promoted-purchases link --app "APP_ID" --promoted-purchase-id "PROMO_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -50,7 +50,7 @@ Examples:
 func PromotedPurchasesListCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("list", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID)")
 	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
 	next := fs.String("next", "", "Fetch next page using a links.next URL")
 	paginate := fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")
@@ -58,14 +58,14 @@ func PromotedPurchasesListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore promoted-purchases list --app APP_ID [flags]",
+		ShortUsage: "asc promoted-purchases list --app APP_ID [flags]",
 		ShortHelp:  "List promoted purchases for an app.",
 		LongHelp: `List promoted purchases for an app.
 
 Examples:
-  appstore promoted-purchases list --app "APP_ID"
-  appstore promoted-purchases list --app "APP_ID" --limit 10
-  appstore promoted-purchases list --app "APP_ID" --paginate`,
+  asc promoted-purchases list --app "APP_ID"
+  asc promoted-purchases list --app "APP_ID" --limit 10
+  asc promoted-purchases list --app "APP_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -79,7 +79,7 @@ Examples:
 
 			resolvedAppID := shared.ResolveAppID(*appID)
 			if resolvedAppID == "" && strings.TrimSpace(*next) == "" {
-				fmt.Fprintln(os.Stderr, "Error: --app is required (or set APPSTORE_APP_ID)")
+				fmt.Fprintln(os.Stderr, "Error: --app is required (or set ASC_APP_ID)")
 				return flag.ErrHelp
 			}
 
@@ -132,12 +132,12 @@ func PromotedPurchasesGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore promoted-purchases get --promoted-purchase-id PROMO_ID",
+		ShortUsage: "asc promoted-purchases get --promoted-purchase-id PROMO_ID",
 		ShortHelp:  "Get a promoted purchase by ID.",
 		LongHelp: `Get a promoted purchase by ID.
 
 Examples:
-  appstore promoted-purchases get --promoted-purchase-id "PROMO_ID"`,
+  asc promoted-purchases get --promoted-purchase-id "PROMO_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -169,7 +169,7 @@ Examples:
 func PromotedPurchasesCreateCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("create", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID)")
 	productID := fs.String("product-id", "", "Product ID (subscription or in-app purchase ID)")
 	productType := fs.String("product-type", "", "Product type: SUBSCRIPTION or IN_APP_PURCHASE")
 	var visibleForAllUsers shared.OptionalBool
@@ -180,19 +180,19 @@ func PromotedPurchasesCreateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "create",
-		ShortUsage: "appstore promoted-purchases create --app APP_ID --product-id PRODUCT_ID --product-type SUBSCRIPTION --visible-for-all-users",
+		ShortUsage: "asc promoted-purchases create --app APP_ID --product-id PRODUCT_ID --product-type SUBSCRIPTION --visible-for-all-users",
 		ShortHelp:  "Create a promoted purchase.",
 		LongHelp: `Create a promoted purchase for a subscription or in-app purchase.
 
 Examples:
-  appstore promoted-purchases create --app "APP_ID" --product-id "PRODUCT_ID" --product-type SUBSCRIPTION --visible-for-all-users
-  appstore promoted-purchases create --app "APP_ID" --product-id "PRODUCT_ID" --product-type IN_APP_PURCHASE --visible-for-all-users --enabled true`,
+  asc promoted-purchases create --app "APP_ID" --product-id "PRODUCT_ID" --product-type SUBSCRIPTION --visible-for-all-users
+  asc promoted-purchases create --app "APP_ID" --product-id "PRODUCT_ID" --product-type IN_APP_PURCHASE --visible-for-all-users --enabled true`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			resolvedAppID := shared.ResolveAppID(*appID)
 			if resolvedAppID == "" {
-				fmt.Fprintln(os.Stderr, "Error: --app is required (or set APPSTORE_APP_ID)")
+				fmt.Fprintln(os.Stderr, "Error: --app is required (or set ASC_APP_ID)")
 				return flag.ErrHelp
 			}
 
@@ -284,13 +284,13 @@ func PromotedPurchasesUpdateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "update",
-		ShortUsage: "appstore promoted-purchases update --promoted-purchase-id PROMO_ID [--visible-for-all-users true|false] [--enabled true|false]",
+		ShortUsage: "asc promoted-purchases update --promoted-purchase-id PROMO_ID [--visible-for-all-users true|false] [--enabled true|false]",
 		ShortHelp:  "Update a promoted purchase.",
 		LongHelp: `Update a promoted purchase.
 
 Examples:
-  appstore promoted-purchases update --promoted-purchase-id "PROMO_ID" --visible-for-all-users false
-  appstore promoted-purchases update --promoted-purchase-id "PROMO_ID" --enabled true`,
+  asc promoted-purchases update --promoted-purchase-id "PROMO_ID" --visible-for-all-users false
+  asc promoted-purchases update --promoted-purchase-id "PROMO_ID" --enabled true`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -342,12 +342,12 @@ func PromotedPurchasesDeleteCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "delete",
-		ShortUsage: "appstore promoted-purchases delete --promoted-purchase-id PROMO_ID --confirm",
+		ShortUsage: "asc promoted-purchases delete --promoted-purchase-id PROMO_ID --confirm",
 		ShortHelp:  "Delete a promoted purchase.",
 		LongHelp: `Delete a promoted purchase by ID.
 
 Examples:
-  appstore promoted-purchases delete --promoted-purchase-id "PROMO_ID" --confirm`,
+  asc promoted-purchases delete --promoted-purchase-id "PROMO_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -388,7 +388,7 @@ Examples:
 func PromotedPurchasesLinkCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("link", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID)")
 	promotedIDs := fs.String("promoted-purchase-id", "", "Comma-separated promoted purchase IDs")
 	clear := fs.Bool("clear", false, "Remove all promoted purchases from the app")
 	confirm := fs.Bool("confirm", false, "Confirm removal when using --clear")
@@ -396,20 +396,20 @@ func PromotedPurchasesLinkCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "link",
-		ShortUsage: "appstore promoted-purchases link --app APP_ID --promoted-purchase-id PROMO_ID[,PROMO_ID...]",
+		ShortUsage: "asc promoted-purchases link --app APP_ID --promoted-purchase-id PROMO_ID[,PROMO_ID...]",
 		ShortHelp:  "Link or clear promoted purchases for an app.",
 		LongHelp: `Link promoted purchases to an app.
 
 Examples:
-  appstore promoted-purchases link --app "APP_ID" --promoted-purchase-id "PROMO_ID"
-  appstore promoted-purchases link --app "APP_ID" --promoted-purchase-id "PROMO_1,PROMO_2"
-  appstore promoted-purchases link --app "APP_ID" --clear --confirm`,
+  asc promoted-purchases link --app "APP_ID" --promoted-purchase-id "PROMO_ID"
+  asc promoted-purchases link --app "APP_ID" --promoted-purchase-id "PROMO_1,PROMO_2"
+  asc promoted-purchases link --app "APP_ID" --clear --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			resolvedAppID := shared.ResolveAppID(*appID)
 			if resolvedAppID == "" {
-				fmt.Fprintln(os.Stderr, "Error: --app is required (or set APPSTORE_APP_ID)")
+				fmt.Fprintln(os.Stderr, "Error: --app is required (or set ASC_APP_ID)")
 				return flag.ErrHelp
 			}
 

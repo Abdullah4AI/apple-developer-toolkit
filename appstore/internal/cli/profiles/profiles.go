@@ -20,21 +20,21 @@ func ProfilesCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "profiles",
-		ShortUsage: "appstore profiles <subcommand> [flags]",
+		ShortUsage: "asc profiles <subcommand> [flags]",
 		ShortHelp:  "Manage provisioning profiles.",
 		LongHelp: `Manage provisioning profiles.
 
 Examples:
-  appstore profiles list
-  appstore profiles list --profile-type IOS_APP_DEVELOPMENT
-  appstore profiles get --id "PROFILE_ID"
-  appstore profiles get --id "PROFILE_ID" --include bundleId,certificates,devices
-  appstore profiles create --name "Profile" --profile-type IOS_APP_DEVELOPMENT --bundle "BUNDLE_ID" --certificate "CERT_ID"
-  appstore profiles delete --id "PROFILE_ID" --confirm
-  appstore profiles download --id "PROFILE_ID" --output "./profile.mobileprovision"
-  appstore profiles relationships bundle-id --id "PROFILE_ID"
-  appstore profiles relationships certificates --id "PROFILE_ID"
-  appstore profiles relationships devices --id "PROFILE_ID"`,
+  asc profiles list
+  asc profiles list --profile-type IOS_APP_DEVELOPMENT
+  asc profiles get --id "PROFILE_ID"
+  asc profiles get --id "PROFILE_ID" --include bundleId,certificates,devices
+  asc profiles create --name "Profile" --profile-type IOS_APP_DEVELOPMENT --bundle "BUNDLE_ID" --certificate "CERT_ID"
+  asc profiles delete --id "PROFILE_ID" --confirm
+  asc profiles download --id "PROFILE_ID" --output "./profile.mobileprovision"
+  asc profiles relationships bundle-id --id "PROFILE_ID"
+  asc profiles relationships certificates --id "PROFILE_ID"
+  asc profiles relationships devices --id "PROFILE_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -64,14 +64,14 @@ func ProfilesListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore profiles list [flags]",
+		ShortUsage: "asc profiles list [flags]",
 		ShortHelp:  "List provisioning profiles.",
 		LongHelp: `List provisioning profiles.
 
 Examples:
-  appstore profiles list
-  appstore profiles list --profile-type IOS_APP_DEVELOPMENT
-  appstore profiles list --paginate`,
+  asc profiles list
+  asc profiles list --profile-type IOS_APP_DEVELOPMENT
+  asc profiles list --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -137,13 +137,13 @@ func ProfilesGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore profiles get --id \"PROFILE_ID\"",
+		ShortUsage: "asc profiles get --id \"PROFILE_ID\"",
 		ShortHelp:  "Get a profile by ID.",
 		LongHelp: `Get a profile by ID.
 
 Examples:
-  appstore profiles get --id "PROFILE_ID"
-  appstore profiles get --id "PROFILE_ID" --include bundleId,certificates,devices`,
+  asc profiles get --id "PROFILE_ID"
+  asc profiles get --id "PROFILE_ID" --include bundleId,certificates,devices`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -194,13 +194,13 @@ func ProfilesCreateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "create",
-		ShortUsage: "appstore profiles create --name \"Profile\" --profile-type TYPE --bundle \"BUNDLE_ID\" --certificate \"CERT_ID[,CERT_ID...]\"",
+		ShortUsage: "asc profiles create --name \"Profile\" --profile-type TYPE --bundle \"BUNDLE_ID\" --certificate \"CERT_ID[,CERT_ID...]\"",
 		ShortHelp:  "Create a provisioning profile.",
 		LongHelp: `Create a provisioning profile.
 
 Examples:
-  appstore profiles create --name "Profile" --profile-type IOS_APP_DEVELOPMENT --bundle "BUNDLE_ID" --certificate "CERT_ID"
-  appstore profiles create --name "Profile" --profile-type IOS_APP_DEVELOPMENT --bundle "BUNDLE_ID" --certificate "CERT_ID" --device "DEVICE_ID"`,
+  asc profiles create --name "Profile" --profile-type IOS_APP_DEVELOPMENT --bundle "BUNDLE_ID" --certificate "CERT_ID"
+  asc profiles create --name "Profile" --profile-type IOS_APP_DEVELOPMENT --bundle "BUNDLE_ID" --certificate "CERT_ID" --device "DEVICE_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -258,12 +258,12 @@ func ProfilesDeleteCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "delete",
-		ShortUsage: "appstore profiles delete --id \"PROFILE_ID\" --confirm",
+		ShortUsage: "asc profiles delete --id \"PROFILE_ID\" --confirm",
 		ShortHelp:  "Delete a provisioning profile.",
 		LongHelp: `Delete a provisioning profile.
 
 Examples:
-  appstore profiles delete --id "PROFILE_ID" --confirm`,
+  asc profiles delete --id "PROFILE_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -309,12 +309,12 @@ func ProfilesDownloadCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "download",
-		ShortUsage: "appstore profiles download --id \"PROFILE_ID\" --output ./profile.mobileprovision",
+		ShortUsage: "asc profiles download --id \"PROFILE_ID\" --output ./profile.mobileprovision",
 		ShortHelp:  "Download a provisioning profile.",
 		LongHelp: `Download a provisioning profile.
 
 Examples:
-  appstore profiles download --id "PROFILE_ID" --output "./profile.mobileprovision"`,
+  asc profiles download --id "PROFILE_ID" --output "./profile.mobileprovision"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

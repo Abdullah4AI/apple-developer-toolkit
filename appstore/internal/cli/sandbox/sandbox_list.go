@@ -25,16 +25,16 @@ func SandboxListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore sandbox list [flags]",
+		ShortUsage: "asc sandbox list [flags]",
 		ShortHelp:  "List sandbox testers.",
 		LongHelp: `List sandbox testers for the App Store Connect team.
 
 Examples:
-  appstore sandbox list
-  appstore sandbox list --email "tester@example.com"
-  appstore sandbox list --territory "USA"
-  appstore sandbox list --limit 50
-  appstore sandbox list --paginate`,
+  asc sandbox list
+  asc sandbox list --email "tester@example.com"
+  asc sandbox list --territory "USA"
+  asc sandbox list --limit 50
+  asc sandbox list --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

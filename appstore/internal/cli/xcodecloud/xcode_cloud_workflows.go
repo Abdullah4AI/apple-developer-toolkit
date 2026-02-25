@@ -14,7 +14,7 @@ import (
 )
 
 func xcodeCloudWorkflowsListFlags(fs *flag.FlagSet) (appID *string, limit *int, next *string, paginate *bool, output *string, pretty *bool) {
-	appID = fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID env)")
+	appID = fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
 	limit = fs.Int("limit", 0, "Maximum results per page (1-200)")
 	next = fs.String("next", "", "Fetch next page using a links.next URL")
 	paginate = fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")
@@ -32,17 +32,17 @@ func XcodeCloudWorkflowsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "workflows",
-		ShortUsage: "appstore xcode-cloud workflows [flags]",
+		ShortUsage: "asc xcode-cloud workflows [flags]",
 		ShortHelp:  "Manage Xcode Cloud workflows.",
 		LongHelp: `Manage Xcode Cloud workflows.
 
 Examples:
-  appstore xcode-cloud workflows --app "APP_ID"
-  appstore xcode-cloud workflows list --app "APP_ID"
-  appstore xcode-cloud workflows get --id "WORKFLOW_ID"
-  appstore xcode-cloud workflows repository --id "WORKFLOW_ID"
-  appstore xcode-cloud workflows --app "APP_ID" --limit 50
-  appstore xcode-cloud workflows --app "APP_ID" --paginate`,
+  asc xcode-cloud workflows --app "APP_ID"
+  asc xcode-cloud workflows list --app "APP_ID"
+  asc xcode-cloud workflows get --id "WORKFLOW_ID"
+  asc xcode-cloud workflows repository --id "WORKFLOW_ID"
+  asc xcode-cloud workflows --app "APP_ID" --limit 50
+  asc xcode-cloud workflows --app "APP_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -66,14 +66,14 @@ func XcodeCloudWorkflowsListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore xcode-cloud workflows list [flags]",
+		ShortUsage: "asc xcode-cloud workflows list [flags]",
 		ShortHelp:  "List Xcode Cloud workflows for an app.",
 		LongHelp: `List Xcode Cloud workflows for an app.
 
 Examples:
-  appstore xcode-cloud workflows list --app "APP_ID"
-  appstore xcode-cloud workflows list --app "APP_ID" --limit 50
-  appstore xcode-cloud workflows list --app "APP_ID" --paginate`,
+  asc xcode-cloud workflows list --app "APP_ID"
+  asc xcode-cloud workflows list --app "APP_ID" --limit 50
+  asc xcode-cloud workflows list --app "APP_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -90,13 +90,13 @@ func XcodeCloudWorkflowsGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore xcode-cloud workflows get --id \"WORKFLOW_ID\"",
+		ShortUsage: "asc xcode-cloud workflows get --id \"WORKFLOW_ID\"",
 		ShortHelp:  "Get details for a workflow.",
 		LongHelp: `Get details for a workflow.
 
 Examples:
-  appstore xcode-cloud workflows get --id "WORKFLOW_ID"
-  appstore xcode-cloud workflows get --id "WORKFLOW_ID" --output table`,
+  asc xcode-cloud workflows get --id "WORKFLOW_ID"
+  asc xcode-cloud workflows get --id "WORKFLOW_ID" --output table`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -132,13 +132,13 @@ func XcodeCloudWorkflowsRepositoryCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "repository",
-		ShortUsage: "appstore xcode-cloud workflows repository --id \"WORKFLOW_ID\"",
+		ShortUsage: "asc xcode-cloud workflows repository --id \"WORKFLOW_ID\"",
 		ShortHelp:  "Get the repository for a workflow.",
 		LongHelp: `Get the repository for a workflow.
 
 Examples:
-  appstore xcode-cloud workflows repository --id "WORKFLOW_ID"
-  appstore xcode-cloud workflows repository --id "WORKFLOW_ID" --output table`,
+  asc xcode-cloud workflows repository --id "WORKFLOW_ID"
+  asc xcode-cloud workflows repository --id "WORKFLOW_ID" --output table`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -175,12 +175,12 @@ func XcodeCloudWorkflowsCreateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "create",
-		ShortUsage: "appstore xcode-cloud workflows create --file ./workflow.json",
+		ShortUsage: "asc xcode-cloud workflows create --file ./workflow.json",
 		ShortHelp:  "Create a workflow.",
 		LongHelp: `Create a workflow.
 
 Examples:
-  appstore xcode-cloud workflows create --file ./workflow.json`,
+  asc xcode-cloud workflows create --file ./workflow.json`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -222,12 +222,12 @@ func XcodeCloudWorkflowsUpdateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "update",
-		ShortUsage: "appstore xcode-cloud workflows update --id \"WORKFLOW_ID\" --file ./workflow.json",
+		ShortUsage: "asc xcode-cloud workflows update --id \"WORKFLOW_ID\" --file ./workflow.json",
 		ShortHelp:  "Update a workflow.",
 		LongHelp: `Update a workflow.
 
 Examples:
-  appstore xcode-cloud workflows update --id "WORKFLOW_ID" --file ./workflow.json`,
+  asc xcode-cloud workflows update --id "WORKFLOW_ID" --file ./workflow.json`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -274,12 +274,12 @@ func XcodeCloudWorkflowsDeleteCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "delete",
-		ShortUsage: "appstore xcode-cloud workflows delete --id \"WORKFLOW_ID\" --confirm",
+		ShortUsage: "asc xcode-cloud workflows delete --id \"WORKFLOW_ID\" --confirm",
 		ShortHelp:  "Delete a workflow.",
 		LongHelp: `Delete a workflow.
 
 Examples:
-  appstore xcode-cloud workflows delete --id "WORKFLOW_ID" --confirm`,
+  asc xcode-cloud workflows delete --id "WORKFLOW_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -322,7 +322,7 @@ func xcodeCloudWorkflowsList(ctx context.Context, appID string, limit int, next 
 
 	resolvedAppID := shared.ResolveAppID(appID)
 	if resolvedAppID == "" && nextURL == "" {
-		fmt.Fprintln(os.Stderr, "Error: --app is required (or set APPSTORE_APP_ID)")
+		fmt.Fprintln(os.Stderr, "Error: --app is required (or set ASC_APP_ID)")
 		return flag.ErrHelp
 	}
 

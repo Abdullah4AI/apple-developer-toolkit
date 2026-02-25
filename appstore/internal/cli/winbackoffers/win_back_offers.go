@@ -79,16 +79,16 @@ func WinBackOffersCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "win-back-offers",
-		ShortUsage: "appstore win-back-offers <subcommand> [flags]",
+		ShortUsage: "asc win-back-offers <subcommand> [flags]",
 		ShortHelp:  "Manage win-back offers for subscriptions.",
 		LongHelp: `Manage win-back offers for subscriptions.
 
 Examples:
-  appstore win-back-offers list --subscription "SUB_ID"
-  appstore win-back-offers get --id "OFFER_ID"
-  appstore win-back-offers create --subscription "SUB_ID" --reference-name "spring-2026" --offer-id "OFFER-1" --duration ONE_MONTH --offer-mode PAY_AS_YOU_GO --period-count 1 --eligibility-paid-months 6 --eligibility-last-subscribed-min 3 --eligibility-last-subscribed-max 12 --start-date "2026-02-01" --priority HIGH --price "PRICE_ID"
-  appstore win-back-offers update --id "OFFER_ID" --priority NORMAL
-  appstore win-back-offers prices --id "OFFER_ID"`,
+  asc win-back-offers list --subscription "SUB_ID"
+  asc win-back-offers get --id "OFFER_ID"
+  asc win-back-offers create --subscription "SUB_ID" --reference-name "spring-2026" --offer-id "OFFER-1" --duration ONE_MONTH --offer-mode PAY_AS_YOU_GO --period-count 1 --eligibility-paid-months 6 --eligibility-last-subscribed-min 3 --eligibility-last-subscribed-max 12 --start-date "2026-02-01" --priority HIGH --price "PRICE_ID"
+  asc win-back-offers update --id "OFFER_ID" --priority NORMAL
+  asc win-back-offers prices --id "OFFER_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -123,14 +123,14 @@ func WinBackOffersListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore win-back-offers list [flags]",
+		ShortUsage: "asc win-back-offers list [flags]",
 		ShortHelp:  "List win-back offers for a subscription.",
 		LongHelp: `List win-back offers for a subscription.
 
 Examples:
-  appstore win-back-offers list --subscription "SUB_ID"
-  appstore win-back-offers list --subscription "SUB_ID" --limit 50
-  appstore win-back-offers list --subscription "SUB_ID" --include prices --price-fields territory --prices-limit 10`,
+  asc win-back-offers list --subscription "SUB_ID"
+  asc win-back-offers list --subscription "SUB_ID" --limit 50
+  asc win-back-offers list --subscription "SUB_ID" --include prices --price-fields territory --prices-limit 10`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -224,12 +224,12 @@ func WinBackOffersGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore win-back-offers get --id OFFER_ID",
+		ShortUsage: "asc win-back-offers get --id OFFER_ID",
 		ShortHelp:  "Get a win-back offer by ID.",
 		LongHelp: `Get a win-back offer by ID.
 
 Examples:
-  appstore win-back-offers get --id "OFFER_ID"`,
+  asc win-back-offers get --id "OFFER_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -285,12 +285,12 @@ func WinBackOffersCreateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "create",
-		ShortUsage: "appstore win-back-offers create [flags]",
+		ShortUsage: "asc win-back-offers create [flags]",
 		ShortHelp:  "Create a win-back offer.",
 		LongHelp: `Create a win-back offer.
 
 Examples:
-  appstore win-back-offers create --subscription "SUB_ID" --reference-name "spring-2026" --offer-id "OFFER-1" --duration ONE_MONTH --offer-mode PAY_AS_YOU_GO --period-count 1 --eligibility-paid-months 6 --eligibility-last-subscribed-min 3 --eligibility-last-subscribed-max 12 --start-date "2026-02-01" --priority HIGH --price "PRICE_ID"`,
+  asc win-back-offers create --subscription "SUB_ID" --reference-name "spring-2026" --offer-id "OFFER-1" --duration ONE_MONTH --offer-mode PAY_AS_YOU_GO --period-count 1 --eligibility-paid-months 6 --eligibility-last-subscribed-min 3 --eligibility-last-subscribed-max 12 --start-date "2026-02-01" --priority HIGH --price "PRICE_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -499,13 +499,13 @@ func WinBackOffersUpdateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "update",
-		ShortUsage: "appstore win-back-offers update [flags]",
+		ShortUsage: "asc win-back-offers update [flags]",
 		ShortHelp:  "Update a win-back offer.",
 		LongHelp: `Update a win-back offer.
 
 Examples:
-  appstore win-back-offers update --id "OFFER_ID" --priority NORMAL
-  appstore win-back-offers update --id "OFFER_ID" --end-date "2026-04-01"`,
+  asc win-back-offers update --id "OFFER_ID" --priority NORMAL
+  asc win-back-offers update --id "OFFER_ID" --end-date "2026-04-01"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -624,12 +624,12 @@ func WinBackOffersDeleteCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "delete",
-		ShortUsage: "appstore win-back-offers delete --id OFFER_ID --confirm",
+		ShortUsage: "asc win-back-offers delete --id OFFER_ID --confirm",
 		ShortHelp:  "Delete a win-back offer.",
 		LongHelp: `Delete a win-back offer.
 
 Examples:
-  appstore win-back-offers delete --id "OFFER_ID" --confirm`,
+  asc win-back-offers delete --id "OFFER_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -682,13 +682,13 @@ func WinBackOffersPricesCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "prices",
-		ShortUsage: "appstore win-back-offers prices --id OFFER_ID [flags]",
+		ShortUsage: "asc win-back-offers prices --id OFFER_ID [flags]",
 		ShortHelp:  "List prices for a win-back offer.",
 		LongHelp: `List prices for a win-back offer.
 
 Examples:
-  appstore win-back-offers prices --id "OFFER_ID"
-  appstore win-back-offers prices --id "OFFER_ID" --include territory --territory-fields currency`,
+  asc win-back-offers prices --id "OFFER_ID"
+  asc win-back-offers prices --id "OFFER_ID" --include territory --territory-fields currency`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -787,13 +787,13 @@ func WinBackOffersPricesRelationshipsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "prices-relationships",
-		ShortUsage: "appstore win-back-offers prices-relationships --id OFFER_ID [flags]",
+		ShortUsage: "asc win-back-offers prices-relationships --id OFFER_ID [flags]",
 		ShortHelp:  "List price relationships for a win-back offer.",
 		LongHelp: `List price relationships for a win-back offer.
 
 Examples:
-  appstore win-back-offers prices-relationships --id "OFFER_ID"
-  appstore win-back-offers prices-relationships --id "OFFER_ID" --paginate`,
+  asc win-back-offers prices-relationships --id "OFFER_ID"
+  asc win-back-offers prices-relationships --id "OFFER_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -862,13 +862,13 @@ func WinBackOffersRelationshipsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "relationships",
-		ShortUsage: "appstore win-back-offers relationships --subscription SUB_ID [flags]",
+		ShortUsage: "asc win-back-offers relationships --subscription SUB_ID [flags]",
 		ShortHelp:  "List win-back offer relationships for a subscription.",
 		LongHelp: `List win-back offer relationships for a subscription.
 
 Examples:
-  appstore win-back-offers relationships --subscription "SUB_ID"
-  appstore win-back-offers relationships --subscription "SUB_ID" --paginate`,
+  asc win-back-offers relationships --subscription "SUB_ID"
+  asc win-back-offers relationships --subscription "SUB_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

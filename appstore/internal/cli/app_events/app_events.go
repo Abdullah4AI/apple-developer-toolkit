@@ -19,17 +19,17 @@ func AppEventsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "app-events",
-		ShortUsage: "appstore app-events <subcommand> [flags]",
+		ShortUsage: "asc app-events <subcommand> [flags]",
 		ShortHelp:  "Manage App Store in-app events.",
 		LongHelp: `Manage App Store in-app events.
 
 Examples:
-  appstore app-events list --app "APP_ID"
-  appstore app-events get --event-id "EVENT_ID"
-  appstore app-events create --app "APP_ID" --name "Summer Challenge" --event-type CHALLENGE --start "2026-06-01T00:00:00Z" --end "2026-06-30T23:59:59Z"
-  appstore app-events update --event-id "EVENT_ID" --priority HIGH
-  appstore app-events delete --event-id "EVENT_ID" --confirm
-  appstore app-events relationships --event-id "EVENT_ID"`,
+  asc app-events list --app "APP_ID"
+  asc app-events get --event-id "EVENT_ID"
+  asc app-events create --app "APP_ID" --name "Summer Challenge" --event-type CHALLENGE --start "2026-06-01T00:00:00Z" --end "2026-06-30T23:59:59Z"
+  asc app-events update --event-id "EVENT_ID" --priority HIGH
+  asc app-events delete --event-id "EVENT_ID" --confirm
+  asc app-events relationships --event-id "EVENT_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -54,7 +54,7 @@ Examples:
 func AppEventsListCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("list", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID env)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
 	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
 	next := fs.String("next", "", "Fetch next page using a links.next URL")
 	paginate := fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")
@@ -62,13 +62,13 @@ func AppEventsListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore app-events list [flags]",
+		ShortUsage: "asc app-events list [flags]",
 		ShortHelp:  "List in-app events for an app.",
 		LongHelp: `List in-app events for an app.
 
 Examples:
-  appstore app-events list --app "APP_ID"
-  appstore app-events list --app "APP_ID" --paginate`,
+  asc app-events list --app "APP_ID"
+  asc app-events list --app "APP_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -81,7 +81,7 @@ Examples:
 
 			resolvedAppID := shared.ResolveAppID(*appID)
 			if resolvedAppID == "" && strings.TrimSpace(*next) == "" {
-				fmt.Fprintln(os.Stderr, "Error: --app is required (or set APPSTORE_APP_ID)")
+				fmt.Fprintln(os.Stderr, "Error: --app is required (or set ASC_APP_ID)")
 				return flag.ErrHelp
 			}
 
@@ -133,12 +133,12 @@ func AppEventsGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore app-events get --event-id \"EVENT_ID\"",
+		ShortUsage: "asc app-events get --event-id \"EVENT_ID\"",
 		ShortHelp:  "Get an in-app event by ID.",
 		LongHelp: `Get an in-app event by ID.
 
 Examples:
-  appstore app-events get --event-id "EVENT_ID"`,
+  asc app-events get --event-id "EVENT_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -170,7 +170,7 @@ Examples:
 func AppEventsCreateCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("create", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID env)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
 	name := fs.String("name", "", "Reference name")
 	eventType := fs.String("event-type", "", "Event type: "+strings.Join(asc.ValidAppEventBadges, ", "))
 	start := fs.String("start", "", "Event start time (RFC3339)")
@@ -186,19 +186,19 @@ func AppEventsCreateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "create",
-		ShortUsage: "appstore app-events create [flags]",
+		ShortUsage: "asc app-events create [flags]",
 		ShortHelp:  "Create a new in-app event.",
 		LongHelp: `Create a new in-app event.
 
 Examples:
-  appstore app-events create --app "APP_ID" --name "Summer Challenge" --event-type CHALLENGE --start "2026-06-01T00:00:00Z" --end "2026-06-30T23:59:59Z"
-  appstore app-events create --app "APP_ID" --name "Launch Party" --event-type PREMIERE --priority HIGH --purpose ATTRACT_NEW_USERS`,
+  asc app-events create --app "APP_ID" --name "Summer Challenge" --event-type CHALLENGE --start "2026-06-01T00:00:00Z" --end "2026-06-30T23:59:59Z"
+  asc app-events create --app "APP_ID" --name "Launch Party" --event-type PREMIERE --priority HIGH --purpose ATTRACT_NEW_USERS`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			resolvedAppID := shared.ResolveAppID(*appID)
 			if resolvedAppID == "" {
-				fmt.Fprintln(os.Stderr, "Error: --app is required (or set APPSTORE_APP_ID)")
+				fmt.Fprintln(os.Stderr, "Error: --app is required (or set ASC_APP_ID)")
 				return flag.ErrHelp
 			}
 
@@ -302,13 +302,13 @@ func AppEventsUpdateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "update",
-		ShortUsage: "appstore app-events update [flags]",
+		ShortUsage: "asc app-events update [flags]",
 		ShortHelp:  "Update an in-app event.",
 		LongHelp: `Update an in-app event.
 
 Examples:
-  appstore app-events update --event-id "EVENT_ID" --priority HIGH
-  appstore app-events update --event-id "EVENT_ID" --name "New Name" --event-type SPECIAL_EVENT`,
+  asc app-events update --event-id "EVENT_ID" --priority HIGH
+  asc app-events update --event-id "EVENT_ID" --name "New Name" --event-type SPECIAL_EVENT`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -442,12 +442,12 @@ func AppEventsDeleteCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "delete",
-		ShortUsage: "appstore app-events delete --event-id \"EVENT_ID\" --confirm",
+		ShortUsage: "asc app-events delete --event-id \"EVENT_ID\" --confirm",
 		ShortHelp:  "Delete an in-app event.",
 		LongHelp: `Delete an in-app event.
 
 Examples:
-  appstore app-events delete --event-id "EVENT_ID" --confirm`,
+  asc app-events delete --event-id "EVENT_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

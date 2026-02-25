@@ -19,13 +19,13 @@ func GameCenterEnabledVersionsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "enabled-versions",
-		ShortUsage: "appstore game-center enabled-versions <subcommand> [flags]",
+		ShortUsage: "asc game-center enabled-versions <subcommand> [flags]",
 		ShortHelp:  "Manage Game Center enabled versions.",
 		LongHelp: `Manage Game Center enabled versions.
 
 Examples:
-  appstore game-center enabled-versions list --app "APP_ID"
-  appstore game-center enabled-versions compatible-versions --id "ENABLED_VERSION_ID"`,
+  asc game-center enabled-versions list --app "APP_ID"
+  asc game-center enabled-versions compatible-versions --id "ENABLED_VERSION_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -42,7 +42,7 @@ Examples:
 func GameCenterEnabledVersionsListCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("list", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID env)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
 	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
 	next := fs.String("next", "", "Fetch next page using a links.next URL")
 	paginate := fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")
@@ -50,14 +50,14 @@ func GameCenterEnabledVersionsListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore game-center enabled-versions list [flags]",
+		ShortUsage: "asc game-center enabled-versions list [flags]",
 		ShortHelp:  "List Game Center enabled versions for an app.",
 		LongHelp: `List Game Center enabled versions for an app.
 
 Examples:
-  appstore game-center enabled-versions list --app "APP_ID"
-  appstore game-center enabled-versions list --app "APP_ID" --limit 50
-  appstore game-center enabled-versions list --app "APP_ID" --paginate`,
+  asc game-center enabled-versions list --app "APP_ID"
+  asc game-center enabled-versions list --app "APP_ID" --limit 50
+  asc game-center enabled-versions list --app "APP_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -70,7 +70,7 @@ Examples:
 			resolvedAppID := shared.ResolveAppID(*appID)
 			nextURL := strings.TrimSpace(*next)
 			if resolvedAppID == "" && nextURL == "" {
-				fmt.Fprintln(os.Stderr, "Error: --app is required (or set APPSTORE_APP_ID)")
+				fmt.Fprintln(os.Stderr, "Error: --app is required (or set ASC_APP_ID)")
 				return flag.ErrHelp
 			}
 
@@ -129,14 +129,14 @@ func GameCenterEnabledVersionsCompatibleVersionsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "compatible-versions",
-		ShortUsage: "appstore game-center enabled-versions compatible-versions --id \"ENABLED_VERSION_ID\"",
+		ShortUsage: "asc game-center enabled-versions compatible-versions --id \"ENABLED_VERSION_ID\"",
 		ShortHelp:  "List compatible Game Center enabled versions.",
 		LongHelp: `List compatible Game Center enabled versions.
 
 Examples:
-  appstore game-center enabled-versions compatible-versions --id "ENABLED_VERSION_ID"
-  appstore game-center enabled-versions compatible-versions --id "ENABLED_VERSION_ID" --limit 50
-  appstore game-center enabled-versions compatible-versions --id "ENABLED_VERSION_ID" --paginate`,
+  asc game-center enabled-versions compatible-versions --id "ENABLED_VERSION_ID"
+  asc game-center enabled-versions compatible-versions --id "ENABLED_VERSION_ID" --limit 50
+  asc game-center enabled-versions compatible-versions --id "ENABLED_VERSION_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

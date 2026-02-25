@@ -21,7 +21,7 @@ const (
 	assetDownloadMaxAttempts  = 4
 	assetDownloadInitialDelay = 200 * time.Millisecond
 	assetDownloadMaxDelay     = 2 * time.Second
-	assetDownloadUserAgent    = "curl/8.7.1 appstore/asset-download"
+	assetDownloadUserAgent    = "curl/8.7.1 App-Store-Connect-CLI/asset-download"
 )
 
 type downloadHTTPStatusError struct {
@@ -226,8 +226,8 @@ func writeDownloadedFile(path string, reader io.Reader, overwrite bool) (int64, 
 		path,
 		0o600,
 		overwrite,
-		".appstore-download-*",
-		".appstore-download-backup-*",
+		".asc-download-*",
+		".asc-download-backup-*",
 		func(f *os.File) (int64, error) {
 			return io.Copy(f, reader)
 		},

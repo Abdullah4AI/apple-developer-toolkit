@@ -14,16 +14,16 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
-const ascReferenceFile = "APPSTORE.md"
+const ascReferenceFile = "ASC.md"
 
 var (
-	// ErrASCReferenceExists indicates APPSTORE.md already exists and --force was not set.
-	ErrASCReferenceExists = errors.New("APPSTORE.md already exists")
-	// ErrInvalidAppstoreReferencePath indicates --path does not target APPSTORE.md or a directory.
-	ErrInvalidAppstoreReferencePath = errors.New("path must target APPSTORE.md or a directory")
+	// ErrASCReferenceExists indicates ASC.md already exists and --force was not set.
+	ErrASCReferenceExists = errors.New("ASC.md already exists")
+	// ErrInvalidASCReferencePath indicates --path does not target ASC.md or a directory.
+	ErrInvalidASCReferencePath = errors.New("path must target ASC.md or a directory")
 )
 
-// InitOptions controls appstore reference generation.
+// InitOptions controls ASC reference generation.
 type InitOptions struct {
 	Path  string
 	Force bool
@@ -38,13 +38,13 @@ type InitResult struct {
 	Linked      []string `json:"linked,omitempty"`
 }
 
-// NewInitReferenceCommand builds an init-style command that writes APPSTORE.md references.
+// NewInitReferenceCommand builds an init-style command that writes ASC.md references.
 func NewInitReferenceCommand(flagSetName, commandName, shortUsage, shortHelp, longHelp, errorPrefix string) *ffcli.Command {
 	fs := flag.NewFlagSet(flagSetName, flag.ExitOnError)
 
-	path := fs.String("path", "", "Output path for APPSTORE.md (default: repo root or current directory)")
-	force := fs.Bool("force", false, "Overwrite existing APPSTORE.md")
-	link := fs.Bool("link", true, "Update AGENTS.md and CLAUDE.md to reference APPSTORE.md")
+	path := fs.String("path", "", "Output path for ASC.md (default: repo root or current directory)")
+	force := fs.Bool("force", false, "Overwrite existing ASC.md")
+	link := fs.Bool("link", true, "Update AGENTS.md and CLAUDE.md to reference ASC.md")
 
 	return &ffcli.Command{
 		Name:       commandName,
@@ -72,19 +72,19 @@ func DocsInitCommand() *ffcli.Command {
 	return NewInitReferenceCommand(
 		"docs init",
 		"init",
-		"appstore docs init [flags]",
-		"Create an APPSTORE.md command reference for the appstore cli in the current repo.",
-		`Create an APPSTORE.md command reference for the appstore cli in the current repo.
+		"asc docs init [flags]",
+		"Create an ASC.md command reference for the asc cli in the current repo.",
+		`Create an ASC.md command reference for the asc cli in the current repo.
 
 Examples:
-  appstore docs init
-  appstore docs init --path ./APPSTORE.md
-  appstore docs init --force --link=false`,
+  asc docs init
+  asc docs init --path ./ASC.md
+  asc docs init --force --link=false`,
 		"docs init",
 	)
 }
 
-// InitReference generates APPSTORE.md in the target repo and links agent files.
+// InitReference generates ASC.md in the target repo and links agent files.
 func InitReference(opts InitOptions) (InitResult, error) {
 	targetPath, linkRoot, err := resolveOutputPath(opts.Path)
 	if err != nil {
@@ -132,18 +132,18 @@ func resolveOutputPath(path string) (string, string, error) {
 				linkBase = abs
 			} else if looksLikeMarkdown(abs) {
 				if !isASCReferencePath(abs) {
-					return "", "", fmt.Errorf("%w: %s", ErrInvalidAppstoreReferencePath, abs)
+					return "", "", fmt.Errorf("%w: %s", ErrInvalidASCReferencePath, abs)
 				}
 				targetPath = abs
 				linkBase = filepath.Dir(abs)
 			} else {
-				return "", "", fmt.Errorf("%w: %s is not a directory or markdown file", ErrInvalidAppstoreReferencePath, abs)
+				return "", "", fmt.Errorf("%w: %s is not a directory or markdown file", ErrInvalidASCReferencePath, abs)
 			}
 		} else if !os.IsNotExist(err) {
 			return "", "", err
 		} else if looksLikeMarkdown(abs) || hasFileExtension(abs) {
 			if !isASCReferencePath(abs) {
-				return "", "", fmt.Errorf("%w: %s", ErrInvalidAppstoreReferencePath, abs)
+				return "", "", fmt.Errorf("%w: %s", ErrInvalidASCReferencePath, abs)
 			}
 			targetPath = abs
 			linkBase = filepath.Dir(abs)
@@ -322,7 +322,7 @@ func updateAgentsLink(path string, relRef string) (bool, error) {
 		return writeIfChanged(path, strings.Join(lines, "\n"))
 	}
 
-	section := fmt.Sprintf("## appstore cli reference\n\n%s", desiredLine)
+	section := fmt.Sprintf("## asc cli reference\n\n%s", desiredLine)
 	updated := appendSection(string(data), section)
 	return writeIfChanged(path, updated)
 }

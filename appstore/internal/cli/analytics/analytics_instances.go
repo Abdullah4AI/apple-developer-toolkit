@@ -19,14 +19,14 @@ func AnalyticsInstancesCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "instances",
-		ShortUsage: "appstore analytics instances <subcommand> [flags]",
+		ShortUsage: "asc analytics instances <subcommand> [flags]",
 		ShortHelp:  "Get analytics report instances or relationships.",
 		LongHelp: `Get analytics report instances or relationships.
 
 Examples:
-  appstore analytics instances get --instance-id "INSTANCE_ID"
-  appstore analytics instances relationships --instance-id "INSTANCE_ID"
-  appstore analytics instances relationships --instance-id "INSTANCE_ID" --paginate`,
+  asc analytics instances get --instance-id "INSTANCE_ID"
+  asc analytics instances relationships --instance-id "INSTANCE_ID"
+  asc analytics instances relationships --instance-id "INSTANCE_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -48,12 +48,12 @@ func AnalyticsInstancesGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore analytics instances get --instance-id \"INSTANCE_ID\" [flags]",
+		ShortUsage: "asc analytics instances get --instance-id \"INSTANCE_ID\" [flags]",
 		ShortHelp:  "Get an analytics report instance by ID.",
 		LongHelp: `Get an analytics report instance by ID.
 
 Examples:
-  appstore analytics instances get --instance-id "INSTANCE_ID"`,
+  asc analytics instances get --instance-id "INSTANCE_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -92,13 +92,13 @@ func AnalyticsInstancesRelationshipsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "relationships",
-		ShortUsage: "appstore analytics instances relationships --instance-id \"INSTANCE_ID\" [flags]",
+		ShortUsage: "asc analytics instances relationships --instance-id \"INSTANCE_ID\" [flags]",
 		ShortHelp:  "List analytics report segment relationships.",
 		LongHelp: `List analytics report segment relationships.
 
 Examples:
-  appstore analytics instances relationships --instance-id "INSTANCE_ID"
-  appstore analytics instances relationships --instance-id "INSTANCE_ID" --paginate`,
+  asc analytics instances relationships --instance-id "INSTANCE_ID"
+  asc analytics instances relationships --instance-id "INSTANCE_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

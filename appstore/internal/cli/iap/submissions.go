@@ -21,12 +21,12 @@ func IAPSubmitCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "submit",
-		ShortUsage: "appstore iap submit --iap-id \"IAP_ID\" --confirm",
+		ShortUsage: "asc iap submit --iap-id \"IAP_ID\" --confirm",
 		ShortHelp:  "Submit an in-app purchase for review.",
 		LongHelp: `Submit an in-app purchase for review.
 
 Examples:
-  appstore iap submit --iap-id "IAP_ID" --confirm`,
+  asc iap submit --iap-id "IAP_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

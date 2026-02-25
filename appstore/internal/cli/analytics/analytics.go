@@ -14,18 +14,18 @@ func AnalyticsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "analytics",
-		ShortUsage: "appstore analytics <subcommand> [flags]",
+		ShortUsage: "asc analytics <subcommand> [flags]",
 		ShortHelp:  "Request and download analytics and sales reports.",
 		LongHelp: `Request and download analytics and sales reports.
 
 Examples:
-  appstore analytics sales --vendor "12345678" --type SALES --subtype SUMMARY --frequency DAILY --date "2024-01-20"
-  appstore analytics request --app "APP_ID" --access-type ONGOING
-  appstore analytics requests --app "APP_ID"
-  appstore analytics get --request-id "REQUEST_ID"
-  appstore analytics reports get --report-id "REPORT_ID"
-  appstore analytics instances relationships --instance-id "INSTANCE_ID"
-  appstore analytics download --request-id "REQUEST_ID" --instance-id "INSTANCE_ID"`,
+  asc analytics sales --vendor "12345678" --type SALES --subtype SUMMARY --frequency DAILY --date "2024-01-20"
+  asc analytics request --app "APP_ID" --access-type ONGOING
+  asc analytics requests --app "APP_ID"
+  asc analytics get --request-id "REQUEST_ID"
+  asc analytics reports get --report-id "REPORT_ID"
+  asc analytics instances relationships --instance-id "INSTANCE_ID"
+  asc analytics download --request-id "REQUEST_ID" --instance-id "INSTANCE_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{

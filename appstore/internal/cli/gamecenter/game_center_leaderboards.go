@@ -19,23 +19,23 @@ func GameCenterLeaderboardsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "leaderboards",
-		ShortUsage: "appstore game-center leaderboards <subcommand> [flags]",
+		ShortUsage: "asc game-center leaderboards <subcommand> [flags]",
 		ShortHelp:  "Manage Game Center leaderboards.",
 		LongHelp: `Manage Game Center leaderboards.
 
 Examples:
-  appstore game-center leaderboards list --app "APP_ID"
-  appstore game-center leaderboards get --id "LEADERBOARD_ID"
-  appstore game-center leaderboards create --app "APP_ID" --reference-name "High Score" --vendor-id "com.example.highscore" --formatter INTEGER --sort DESC --submission-type BEST_SCORE
-  appstore game-center leaderboards update --id "LEADERBOARD_ID" --reference-name "New Name"
-  appstore game-center leaderboards delete --id "LEADERBOARD_ID" --confirm
-  appstore game-center leaderboards submit --vendor-id "com.example.leaderboard" --score "100" --bundle-id "com.example.app" --scoped-player-id "PLAYER_ID"
-  appstore game-center leaderboards group-leaderboard get --id "LEADERBOARD_ID"
-  appstore game-center leaderboards localizations list --leaderboard-id "LEADERBOARD_ID"
-  appstore game-center leaderboards localizations create --leaderboard-id "LEADERBOARD_ID" --locale en-US --name "High Score"
-  appstore game-center leaderboards releases list --leaderboard-id "LEADERBOARD_ID"
-  appstore game-center leaderboards releases create --app "APP_ID" --leaderboard-id "LEADERBOARD_ID"
-  appstore game-center leaderboards releases delete --id "RELEASE_ID" --confirm`,
+  asc game-center leaderboards list --app "APP_ID"
+  asc game-center leaderboards get --id "LEADERBOARD_ID"
+  asc game-center leaderboards create --app "APP_ID" --reference-name "High Score" --vendor-id "com.example.highscore" --formatter INTEGER --sort DESC --submission-type BEST_SCORE
+  asc game-center leaderboards update --id "LEADERBOARD_ID" --reference-name "New Name"
+  asc game-center leaderboards delete --id "LEADERBOARD_ID" --confirm
+  asc game-center leaderboards submit --vendor-id "com.example.leaderboard" --score "100" --bundle-id "com.example.app" --scoped-player-id "PLAYER_ID"
+  asc game-center leaderboards group-leaderboard get --id "LEADERBOARD_ID"
+  asc game-center leaderboards localizations list --leaderboard-id "LEADERBOARD_ID"
+  asc game-center leaderboards localizations create --leaderboard-id "LEADERBOARD_ID" --locale en-US --name "High Score"
+  asc game-center leaderboards releases list --leaderboard-id "LEADERBOARD_ID"
+  asc game-center leaderboards releases create --app "APP_ID" --leaderboard-id "LEADERBOARD_ID"
+  asc game-center leaderboards releases delete --id "RELEASE_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -63,15 +63,15 @@ func GameCenterLeaderboardImagesCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "images",
-		ShortUsage: "appstore game-center leaderboards images <subcommand> [flags]",
+		ShortUsage: "asc game-center leaderboards images <subcommand> [flags]",
 		ShortHelp:  "Manage Game Center leaderboard images.",
 		LongHelp: `Manage Game Center leaderboard images.
 
 Images are attached to leaderboard localizations. Use the localization ID when uploading.
 
 Examples:
-  appstore game-center leaderboards images upload --localization-id "LOC_ID" --file path/to/image.png
-  appstore game-center leaderboards images delete --id "IMAGE_ID" --confirm`,
+  asc game-center leaderboards images upload --localization-id "LOC_ID" --file path/to/image.png
+  asc game-center leaderboards images delete --id "IMAGE_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -94,14 +94,14 @@ func GameCenterLeaderboardImagesUploadCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "upload",
-		ShortUsage: "appstore game-center leaderboards images upload --localization-id \"LOC_ID\" --file path/to/image.png",
+		ShortUsage: "asc game-center leaderboards images upload --localization-id \"LOC_ID\" --file path/to/image.png",
 		ShortHelp:  "Upload an image for a Game Center leaderboard localization.",
 		LongHelp: `Upload an image for a Game Center leaderboard localization.
 
 This command performs the full upload flow: reserves the upload, uploads the file, and commits.
 
 Examples:
-  appstore game-center leaderboards images upload --localization-id "LOC_ID" --file leaderboard.png`,
+  asc game-center leaderboards images upload --localization-id "LOC_ID" --file leaderboard.png`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -145,12 +145,12 @@ func GameCenterLeaderboardImagesDeleteCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "delete",
-		ShortUsage: "appstore game-center leaderboards images delete --id \"IMAGE_ID\" --confirm",
+		ShortUsage: "asc game-center leaderboards images delete --id \"IMAGE_ID\" --confirm",
 		ShortHelp:  "Delete a Game Center leaderboard image.",
 		LongHelp: `Delete a Game Center leaderboard image.
 
 Examples:
-  appstore game-center leaderboards images delete --id "IMAGE_ID" --confirm`,
+  asc game-center leaderboards images delete --id "IMAGE_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -190,7 +190,7 @@ Examples:
 func GameCenterLeaderboardsListCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("list", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID env)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
 	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
 	next := fs.String("next", "", "Fetch next page using a links.next URL")
 	paginate := fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")
@@ -198,14 +198,14 @@ func GameCenterLeaderboardsListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore game-center leaderboards list [flags]",
+		ShortUsage: "asc game-center leaderboards list [flags]",
 		ShortHelp:  "List Game Center leaderboards for an app.",
 		LongHelp: `List Game Center leaderboards for an app.
 
 Examples:
-  appstore game-center leaderboards list --app "APP_ID"
-  appstore game-center leaderboards list --app "APP_ID" --limit 50
-  appstore game-center leaderboards list --app "APP_ID" --paginate`,
+  asc game-center leaderboards list --app "APP_ID"
+  asc game-center leaderboards list --app "APP_ID" --limit 50
+  asc game-center leaderboards list --app "APP_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -219,7 +219,7 @@ Examples:
 			resolvedAppID := shared.ResolveAppID(*appID)
 			nextURL := strings.TrimSpace(*next)
 			if resolvedAppID == "" && nextURL == "" {
-				fmt.Fprintln(os.Stderr, "Error: --app is required (or set APPSTORE_APP_ID)")
+				fmt.Fprintln(os.Stderr, "Error: --app is required (or set ASC_APP_ID)")
 				return flag.ErrHelp
 			}
 
@@ -283,13 +283,13 @@ func GameCenterLeaderboardsGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore game-center leaderboards get --id \"LEADERBOARD_ID\" [--v2]",
+		ShortUsage: "asc game-center leaderboards get --id \"LEADERBOARD_ID\" [--v2]",
 		ShortHelp:  "Get a Game Center leaderboard by ID.",
 		LongHelp: `Get a Game Center leaderboard by ID.
 
 Examples:
-  appstore game-center leaderboards get --id "LEADERBOARD_ID"
-  appstore game-center leaderboards get --id "LEADERBOARD_ID" --v2`,
+  asc game-center leaderboards get --id "LEADERBOARD_ID"
+  asc game-center leaderboards get --id "LEADERBOARD_ID" --v2`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -326,7 +326,7 @@ Examples:
 func GameCenterLeaderboardsCreateCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("create", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID env)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
 	referenceName := fs.String("reference-name", "", "Reference name for the leaderboard")
 	vendorID := fs.String("vendor-id", "", "Vendor identifier (e.g., com.example.leaderboard)")
 	formatter := fs.String("formatter", "", "Score formatter: INTEGER, DECIMAL_POINT_1_PLACE, DECIMAL_POINT_2_PLACE, DECIMAL_POINT_3_PLACE, ELAPSED_TIME_MILLISECOND, ELAPSED_TIME_SECOND, ELAPSED_TIME_MINUTE, MONEY_WHOLE, MONEY_POINT_2_PLACE")
@@ -340,14 +340,14 @@ func GameCenterLeaderboardsCreateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "create",
-		ShortUsage: "appstore game-center leaderboards create [flags]",
+		ShortUsage: "asc game-center leaderboards create [flags]",
 		ShortHelp:  "Create a new Game Center leaderboard.",
 		LongHelp: `Create a new Game Center leaderboard.
 
 Examples:
-  appstore game-center leaderboards create --app "APP_ID" --reference-name "High Score" --vendor-id "com.example.highscore" --formatter INTEGER --sort DESC --submission-type BEST_SCORE
-  appstore game-center leaderboards create --app "APP_ID" --reference-name "Time Trial" --vendor-id "com.example.timetrial" --formatter ELAPSED_TIME_MILLISECOND --sort ASC --submission-type BEST_SCORE
-  appstore game-center leaderboards create --group-id "GROUP_ID" --reference-name "Group Score" --vendor-id "grp.com.example.groupscore" --formatter INTEGER --sort DESC --submission-type BEST_SCORE --v2`,
+  asc game-center leaderboards create --app "APP_ID" --reference-name "High Score" --vendor-id "com.example.highscore" --formatter INTEGER --sort DESC --submission-type BEST_SCORE
+  asc game-center leaderboards create --app "APP_ID" --reference-name "Time Trial" --vendor-id "com.example.timetrial" --formatter ELAPSED_TIME_MILLISECOND --sort ASC --submission-type BEST_SCORE
+  asc game-center leaderboards create --group-id "GROUP_ID" --reference-name "Group Score" --vendor-id "grp.com.example.groupscore" --formatter INTEGER --sort DESC --submission-type BEST_SCORE --v2`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -359,7 +359,7 @@ Examples:
 
 			resolvedAppID := shared.ResolveAppID(*appID)
 			if group == "" && resolvedAppID == "" {
-				fmt.Fprintln(os.Stderr, "Error: --app is required (or set APPSTORE_APP_ID)")
+				fmt.Fprintln(os.Stderr, "Error: --app is required (or set ASC_APP_ID)")
 				return flag.ErrHelp
 			}
 
@@ -465,14 +465,14 @@ func GameCenterLeaderboardsUpdateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "update",
-		ShortUsage: "appstore game-center leaderboards update [flags]",
+		ShortUsage: "asc game-center leaderboards update [flags]",
 		ShortHelp:  "Update a Game Center leaderboard.",
 		LongHelp: `Update a Game Center leaderboard.
 
 Examples:
-  appstore game-center leaderboards update --id "LEADERBOARD_ID" --reference-name "New Name"
-  appstore game-center leaderboards update --id "LEADERBOARD_ID" --archived true
-  appstore game-center leaderboards update --id "LEADERBOARD_ID" --archived true --v2`,
+  asc game-center leaderboards update --id "LEADERBOARD_ID" --reference-name "New Name"
+  asc game-center leaderboards update --id "LEADERBOARD_ID" --archived true
+  asc game-center leaderboards update --id "LEADERBOARD_ID" --archived true --v2`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -540,13 +540,13 @@ func GameCenterLeaderboardsDeleteCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "delete",
-		ShortUsage: "appstore game-center leaderboards delete --id \"LEADERBOARD_ID\" --confirm [--v2]",
+		ShortUsage: "asc game-center leaderboards delete --id \"LEADERBOARD_ID\" --confirm [--v2]",
 		ShortHelp:  "Delete a Game Center leaderboard.",
 		LongHelp: `Delete a Game Center leaderboard.
 
 Examples:
-  appstore game-center leaderboards delete --id "LEADERBOARD_ID" --confirm
-  appstore game-center leaderboards delete --id "LEADERBOARD_ID" --confirm --v2`,
+  asc game-center leaderboards delete --id "LEADERBOARD_ID" --confirm
+  asc game-center leaderboards delete --id "LEADERBOARD_ID" --confirm --v2`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -603,14 +603,14 @@ func GameCenterLeaderboardsSubmitCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "submit",
-		ShortUsage: "appstore game-center leaderboards submit --vendor-id \"VENDOR_ID\" --score \"100\" --bundle-id \"BUNDLE_ID\" --scoped-player-id \"PLAYER_ID\"",
+		ShortUsage: "asc game-center leaderboards submit --vendor-id \"VENDOR_ID\" --score \"100\" --bundle-id \"BUNDLE_ID\" --scoped-player-id \"PLAYER_ID\"",
 		ShortHelp:  "Submit a leaderboard entry.",
 		LongHelp: `Submit a leaderboard entry.
 
 Examples:
-  appstore game-center leaderboards submit --vendor-id "com.example.leaderboard" --score "100" --bundle-id "com.example.app" --scoped-player-id "PLAYER_ID"
-  appstore game-center leaderboards submit --vendor-id "com.example.leaderboard" --score "100" --bundle-id "com.example.app" --scoped-player-id "PLAYER_ID" --challenge-ids "CHALLENGE_ID"
-  appstore game-center leaderboards submit --vendor-id "com.example.leaderboard" --score "100" --bundle-id "com.example.app" --scoped-player-id "PLAYER_ID" --submitted-date "2025-01-10T12:34:56Z"`,
+  asc game-center leaderboards submit --vendor-id "com.example.leaderboard" --score "100" --bundle-id "com.example.app" --scoped-player-id "PLAYER_ID"
+  asc game-center leaderboards submit --vendor-id "com.example.leaderboard" --score "100" --bundle-id "com.example.app" --scoped-player-id "PLAYER_ID" --challenge-ids "CHALLENGE_ID"
+  asc game-center leaderboards submit --vendor-id "com.example.leaderboard" --score "100" --bundle-id "com.example.app" --scoped-player-id "PLAYER_ID" --submitted-date "2025-01-10T12:34:56Z"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -673,12 +673,12 @@ func GameCenterLeaderboardGroupLeaderboardCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "group-leaderboard",
-		ShortUsage: "appstore game-center leaderboards group-leaderboard get --id \"LEADERBOARD_ID\"",
+		ShortUsage: "asc game-center leaderboards group-leaderboard get --id \"LEADERBOARD_ID\"",
 		ShortHelp:  "Get the group leaderboard for a leaderboard.",
 		LongHelp: `Get the group leaderboard for a Game Center leaderboard.
 
 Examples:
-  appstore game-center leaderboards group-leaderboard get --id "LEADERBOARD_ID"`,
+  asc game-center leaderboards group-leaderboard get --id "LEADERBOARD_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -699,12 +699,12 @@ func GameCenterLeaderboardGroupLeaderboardGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore game-center leaderboards group-leaderboard get --id \"LEADERBOARD_ID\"",
+		ShortUsage: "asc game-center leaderboards group-leaderboard get --id \"LEADERBOARD_ID\"",
 		ShortHelp:  "Get a group leaderboard by leaderboard ID.",
 		LongHelp: `Get a group leaderboard by leaderboard ID.
 
 Examples:
-  appstore game-center leaderboards group-leaderboard get --id "LEADERBOARD_ID"`,
+  asc game-center leaderboards group-leaderboard get --id "LEADERBOARD_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -738,14 +738,14 @@ func GameCenterLeaderboardReleasesCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "releases",
-		ShortUsage: "appstore game-center leaderboards releases <subcommand> [flags]",
+		ShortUsage: "asc game-center leaderboards releases <subcommand> [flags]",
 		ShortHelp:  "Manage Game Center leaderboard releases.",
 		LongHelp: `Manage Game Center leaderboard releases.
 
 Examples:
-  appstore game-center leaderboards releases list --leaderboard-id "LEADERBOARD_ID"
-  appstore game-center leaderboards releases create --app "APP_ID" --leaderboard-id "LEADERBOARD_ID"
-  appstore game-center leaderboards releases delete --id "RELEASE_ID" --confirm`,
+  asc game-center leaderboards releases list --leaderboard-id "LEADERBOARD_ID"
+  asc game-center leaderboards releases create --app "APP_ID" --leaderboard-id "LEADERBOARD_ID"
+  asc game-center leaderboards releases delete --id "RELEASE_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -771,14 +771,14 @@ func GameCenterLeaderboardReleasesListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore game-center leaderboards releases list --leaderboard-id \"LEADERBOARD_ID\"",
+		ShortUsage: "asc game-center leaderboards releases list --leaderboard-id \"LEADERBOARD_ID\"",
 		ShortHelp:  "List releases for a Game Center leaderboard.",
 		LongHelp: `List releases for a Game Center leaderboard.
 
 Examples:
-  appstore game-center leaderboards releases list --leaderboard-id "LEADERBOARD_ID"
-  appstore game-center leaderboards releases list --leaderboard-id "LEADERBOARD_ID" --limit 50
-  appstore game-center leaderboards releases list --leaderboard-id "LEADERBOARD_ID" --paginate`,
+  asc game-center leaderboards releases list --leaderboard-id "LEADERBOARD_ID"
+  asc game-center leaderboards releases list --leaderboard-id "LEADERBOARD_ID" --limit 50
+  asc game-center leaderboards releases list --leaderboard-id "LEADERBOARD_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -839,26 +839,26 @@ Examples:
 func GameCenterLeaderboardReleasesCreateCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("create", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID env)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
 	leaderboardID := fs.String("leaderboard-id", "", "Game Center leaderboard ID")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "create",
-		ShortUsage: "appstore game-center leaderboards releases create --app \"APP_ID\" --leaderboard-id \"LEADERBOARD_ID\"",
+		ShortUsage: "asc game-center leaderboards releases create --app \"APP_ID\" --leaderboard-id \"LEADERBOARD_ID\"",
 		ShortHelp:  "Create a release for a Game Center leaderboard.",
 		LongHelp: `Create a release for a Game Center leaderboard.
 
 A release associates a leaderboard with a Game Center detail, making it live.
 
 Examples:
-  appstore game-center leaderboards releases create --app "APP_ID" --leaderboard-id "LEADERBOARD_ID"`,
+  asc game-center leaderboards releases create --app "APP_ID" --leaderboard-id "LEADERBOARD_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			resolvedAppID := shared.ResolveAppID(*appID)
 			if resolvedAppID == "" {
-				fmt.Fprintln(os.Stderr, "Error: --app is required (or set APPSTORE_APP_ID)")
+				fmt.Fprintln(os.Stderr, "Error: --app is required (or set ASC_APP_ID)")
 				return flag.ErrHelp
 			}
 
@@ -902,12 +902,12 @@ func GameCenterLeaderboardReleasesDeleteCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "delete",
-		ShortUsage: "appstore game-center leaderboards releases delete --id \"RELEASE_ID\" --confirm",
+		ShortUsage: "asc game-center leaderboards releases delete --id \"RELEASE_ID\" --confirm",
 		ShortHelp:  "Delete a Game Center leaderboard release.",
 		LongHelp: `Delete a Game Center leaderboard release.
 
 Examples:
-  appstore game-center leaderboards releases delete --id "RELEASE_ID" --confirm`,
+  asc game-center leaderboards releases delete --id "RELEASE_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

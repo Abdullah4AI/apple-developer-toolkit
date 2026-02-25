@@ -19,13 +19,13 @@ func PassTypeIDCertificatesCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "certificates",
-		ShortUsage: "appstore pass-type-ids certificates <subcommand> [flags]",
+		ShortUsage: "asc pass-type-ids certificates <subcommand> [flags]",
 		ShortHelp:  "List pass type ID certificates.",
 		LongHelp: `List pass type ID certificates.
 
 Examples:
-  appstore pass-type-ids certificates list --pass-type-id "PASS_ID"
-  appstore pass-type-ids certificates get --pass-type-id "PASS_ID"`,
+  asc pass-type-ids certificates list --pass-type-id "PASS_ID"
+  asc pass-type-ids certificates get --pass-type-id "PASS_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -56,13 +56,13 @@ func PassTypeIDCertificatesListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore pass-type-ids certificates list --pass-type-id \"PASS_ID\" [flags]",
+		ShortUsage: "asc pass-type-ids certificates list --pass-type-id \"PASS_ID\" [flags]",
 		ShortHelp:  "List certificates for a pass type ID.",
 		LongHelp: `List certificates for a pass type ID.
 
 Examples:
-  appstore pass-type-ids certificates list --pass-type-id "PASS_ID"
-  appstore pass-type-ids certificates list --pass-type-id "PASS_ID" --paginate`,
+  asc pass-type-ids certificates list --pass-type-id "PASS_ID"
+  asc pass-type-ids certificates list --pass-type-id "PASS_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -160,13 +160,13 @@ func PassTypeIDCertificatesGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore pass-type-ids certificates get --pass-type-id \"PASS_ID\" [flags]",
+		ShortUsage: "asc pass-type-ids certificates get --pass-type-id \"PASS_ID\" [flags]",
 		ShortHelp:  "Get certificate relationships for a pass type ID.",
 		LongHelp: `Get certificate relationships for a pass type ID.
 
 Examples:
-  appstore pass-type-ids certificates get --pass-type-id "PASS_ID"
-  appstore pass-type-ids certificates get --pass-type-id "PASS_ID" --paginate`,
+  asc pass-type-ids certificates get --pass-type-id "PASS_ID"
+  asc pass-type-ids certificates get --pass-type-id "PASS_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

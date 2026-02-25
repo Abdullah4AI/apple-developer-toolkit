@@ -59,14 +59,14 @@ func AgeRatingCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "age-rating",
-		ShortUsage: "appstore age-rating <subcommand> [flags]",
+		ShortUsage: "asc age-rating <subcommand> [flags]",
 		ShortHelp:  "Manage App Store age rating declarations.",
 		LongHelp: `Manage App Store age rating declarations for an app, app info, or version.
 
 Examples:
-  appstore age-rating get --app APP_ID
-  appstore age-rating get --app-info-id APP_INFO_ID
-  appstore age-rating set --app APP_ID --kids-age-band FIVE_AND_UNDER --gambling false`,
+  asc age-rating get --app APP_ID
+  asc age-rating get --app-info-id APP_INFO_ID
+  asc age-rating set --app APP_ID --kids-age-band FIVE_AND_UNDER --gambling false`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -83,21 +83,21 @@ Examples:
 func AgeRatingGetCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("age-rating get", flag.ExitOnError)
 
-	appID := fs.String("app", os.Getenv("APPSTORE_APP_ID"), "App ID (required unless --app-info-id or --version-id is provided)")
+	appID := fs.String("app", os.Getenv("ASC_APP_ID"), "App ID (required unless --app-info-id or --version-id is provided)")
 	appInfoID := fs.String("app-info-id", "", "App info ID (optional)")
 	versionID := fs.String("version-id", "", "App Store version ID (optional)")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore age-rating get --app APP_ID [flags]",
+		ShortUsage: "asc age-rating get --app APP_ID [flags]",
 		ShortHelp:  "Get an age rating declaration.",
 		LongHelp: `Get the current age rating declaration.
 
 Examples:
-  appstore age-rating get --app APP_ID
-  appstore age-rating get --app-info-id APP_INFO_ID
-  appstore age-rating get --version-id VERSION_ID`,
+  asc age-rating get --app APP_ID
+  asc age-rating get --app-info-id APP_INFO_ID
+  asc age-rating get --version-id VERSION_ID`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -109,7 +109,7 @@ Examples:
 				return fmt.Errorf("age-rating get: only one of --app-info-id or --version-id is allowed")
 			}
 			if appInfoValue == "" && versionValue == "" && appValue == "" {
-				fmt.Fprintln(os.Stderr, "Error: --app is required (or set APPSTORE_APP_ID)")
+				fmt.Fprintln(os.Stderr, "Error: --app is required (or set ASC_APP_ID)")
 				return flag.ErrHelp
 			}
 
@@ -136,7 +136,7 @@ func AgeRatingSetCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("age-rating set", flag.ExitOnError)
 
 	id := fs.String("id", "", "Age rating declaration ID (optional)")
-	appID := fs.String("app", os.Getenv("APPSTORE_APP_ID"), "App ID (required unless --id, --app-info-id, or --version-id is provided)")
+	appID := fs.String("app", os.Getenv("ASC_APP_ID"), "App ID (required unless --id, --app-info-id, or --version-id is provided)")
 	appInfoID := fs.String("app-info-id", "", "App info ID (optional)")
 	versionID := fs.String("version-id", "", "App Store version ID (optional)")
 
@@ -177,13 +177,13 @@ func AgeRatingSetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "set",
-		ShortUsage: "appstore age-rating set --id DECLARATION_ID [flags]",
+		ShortUsage: "asc age-rating set --id DECLARATION_ID [flags]",
 		ShortHelp:  "Update an age rating declaration.",
 		LongHelp: `Update an age rating declaration.
 
 Examples:
-  appstore age-rating set --id DECLARATION_ID --gambling false --kids-age-band FIVE_AND_UNDER
-  appstore age-rating set --app APP_ID --violence-realistic FREQUENT_OR_INTENSE --unrestricted-web-access true`,
+  asc age-rating set --id DECLARATION_ID --gambling false --kids-age-band FIVE_AND_UNDER
+  asc age-rating set --app APP_ID --violence-realistic FREQUENT_OR_INTENSE --unrestricted-web-access true`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -197,7 +197,7 @@ Examples:
 					return fmt.Errorf("age-rating set: only one of --app-info-id or --version-id is allowed")
 				}
 				if appInfoValue == "" && versionValue == "" && appValue == "" {
-					fmt.Fprintln(os.Stderr, "Error: --id or --app is required (or set APPSTORE_APP_ID)")
+					fmt.Fprintln(os.Stderr, "Error: --id or --app is required (or set ASC_APP_ID)")
 					return flag.ErrHelp
 				}
 			}

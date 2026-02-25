@@ -29,11 +29,11 @@ var (
 )
 
 const (
-	privateKeyEnvVar       = "APPSTORE_PRIVATE_KEY"
-	privateKeyBase64EnvVar = "APPSTORE_PRIVATE_KEY_B64"
-	profileEnvVar          = "APPSTORE_PROFILE"
-	strictAuthEnvVar       = "APPSTORE_STRICT_AUTH"
-	defaultOutputEnvVar    = "APPSTORE_DEFAULT_OUTPUT"
+	privateKeyEnvVar       = "ASC_PRIVATE_KEY"
+	privateKeyBase64EnvVar = "ASC_PRIVATE_KEY_B64"
+	profileEnvVar          = "ASC_PROFILE"
+	strictAuthEnvVar       = "ASC_STRICT_AUTH"
+	defaultOutputEnvVar    = "ASC_DEFAULT_OUTPUT"
 )
 
 const (
@@ -83,7 +83,7 @@ func BindRootFlags(fs *flag.FlagSet) {
 
 	fs.StringVar(&selectedProfile, "profile", "", "Use named authentication profile")
 	fs.BoolVar(&strictAuth, "strict-auth", false, "Fail when credentials are resolved from multiple sources")
-	fs.Var(&retryLog, "retry-log", "Enable retry logging to stderr (overrides APPSTORE_RETRY_LOG/config when set)")
+	fs.Var(&retryLog, "retry-log", "Enable retry logging to stderr (overrides ASC_RETRY_LOG/config when set)")
 	fs.Var(&debug, "debug", "Enable debug logging to stderr")
 	fs.Var(&apiDebug, "api-debug", "Enable HTTP debug logging to stderr (redacts sensitive values)")
 	BindCIFlags(fs)
@@ -114,7 +114,7 @@ func SetSelectedProfile(value string) {
 }
 
 // ResetDefaultOutputFormat clears the cached default output format so that
-// DefaultOutputFormat() re-reads APPSTORE_DEFAULT_OUTPUT on its next call. Tests only.
+// DefaultOutputFormat() re-reads ASC_DEFAULT_OUTPUT on its next call. Tests only.
 func ResetDefaultOutputFormat() {
 	defaultOutputOnce = sync.Once{}
 	defaultOutputValue = ""
@@ -279,9 +279,9 @@ type credentialSource struct {
 }
 
 func resolveEnvCredentials() (envCredentials, error) {
-	keyID := strings.TrimSpace(os.Getenv("APPSTORE_KEY_ID"))
-	issuerID := strings.TrimSpace(os.Getenv("APPSTORE_ISSUER_ID"))
-	hasKeyPathEnv := strings.TrimSpace(os.Getenv("APPSTORE_PRIVATE_KEY_PATH")) != "" ||
+	keyID := strings.TrimSpace(os.Getenv("ASC_KEY_ID"))
+	issuerID := strings.TrimSpace(os.Getenv("ASC_ISSUER_ID"))
+	hasKeyPathEnv := strings.TrimSpace(os.Getenv("ASC_PRIVATE_KEY_PATH")) != "" ||
 		strings.TrimSpace(os.Getenv(privateKeyEnvVar)) != "" ||
 		strings.TrimSpace(os.Getenv(privateKeyBase64EnvVar)) != ""
 
@@ -338,7 +338,7 @@ func resolveCredentials() (resolvedCredentials, error) {
 		// If the user explicitly denied keychain access, fail fast instead of
 		// silently falling back to env/config credentials.
 		if errors.Is(err, auth.ErrKeychainAccessDenied) {
-			return resolvedCredentials{}, fmt.Errorf("keychain access denied; set APPSTORE_BYPASS_KEYCHAIN=1 to bypass: %w", err)
+			return resolvedCredentials{}, fmt.Errorf("keychain access denied; set ASC_BYPASS_KEYCHAIN=1 to bypass: %w", err)
 		}
 	} else if cfg != nil {
 		actualKeyID = cfg.KeyID
@@ -374,9 +374,9 @@ func resolveCredentials() (resolvedCredentials, error) {
 
 	if actualKeyID == "" || actualIssuerID == "" || actualKeyPath == "" {
 		if path, err := config.Path(); err == nil {
-			return resolvedCredentials{}, missingAuthError{msg: fmt.Sprintf("missing authentication. Run 'appstore auth login' or create %s (see 'appstore auth init')", path)}
+			return resolvedCredentials{}, missingAuthError{msg: fmt.Sprintf("missing authentication. Run 'asc auth login' or create %s (see 'asc auth init')", path)}
 		}
-		return resolvedCredentials{}, missingAuthError{msg: "missing authentication. Run 'appstore auth login' or 'appstore auth init'"}
+		return resolvedCredentials{}, missingAuthError{msg: "missing authentication. Run 'asc auth login' or 'asc auth init'"}
 	}
 	if err := checkMixedCredentialSources(sources); err != nil {
 		return resolvedCredentials{}, err
@@ -440,7 +440,7 @@ func checkMixedCredentialSources(sources credentialSource) error {
 }
 
 func resolvePrivateKeyPath() (string, error) {
-	if path := strings.TrimSpace(os.Getenv("APPSTORE_PRIVATE_KEY_PATH")); path != "" {
+	if path := strings.TrimSpace(os.Getenv("ASC_PRIVATE_KEY_PATH")); path != "" {
 		return path, nil
 	}
 	if privateKeyTempPath != "" {
@@ -693,7 +693,7 @@ var (
 )
 
 // DefaultOutputFormat returns the default output format for CLI commands.
-// It checks the APPSTORE_DEFAULT_OUTPUT environment variable first, falling back to "json".
+// It checks the ASC_DEFAULT_OUTPUT environment variable first, falling back to "json".
 // Valid values are "json", "table", "markdown", and "md".
 func DefaultOutputFormat() string {
 	defaultOutputOnce.Do(func() {
@@ -752,7 +752,7 @@ func resolveAppID(appID string) string {
 	if appID != "" {
 		return appID
 	}
-	if env, ok := os.LookupEnv("APPSTORE_APP_ID"); ok {
+	if env, ok := os.LookupEnv("ASC_APP_ID"); ok {
 		return strings.TrimSpace(env)
 	}
 	cfg, err := config.Load()

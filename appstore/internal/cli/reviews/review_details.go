@@ -22,12 +22,12 @@ func ReviewDetailsGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "details-get",
-		ShortUsage: "appstore review details-get --id \"DETAIL_ID\"",
+		ShortUsage: "asc review details-get --id \"DETAIL_ID\"",
 		ShortHelp:  "Get an App Store review detail by ID.",
 		LongHelp: `Get an App Store review detail by ID.
 
 Examples:
-  appstore review details-get --id "DETAIL_ID"`,
+  asc review details-get --id "DETAIL_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -64,12 +64,12 @@ func ReviewDetailsForVersionCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "details-for-version",
-		ShortUsage: "appstore review details-for-version --version-id \"VERSION_ID\"",
+		ShortUsage: "asc review details-for-version --version-id \"VERSION_ID\"",
 		ShortHelp:  "Get the review detail for a version.",
 		LongHelp: `Get the review detail for a specific App Store version.
 
 Examples:
-  appstore review details-for-version --version-id "VERSION_ID"`,
+  asc review details-for-version --version-id "VERSION_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -114,13 +114,13 @@ func ReviewDetailsCreateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "details-create",
-		ShortUsage: "appstore review details-create --version-id \"VERSION_ID\" [flags]",
+		ShortUsage: "asc review details-create --version-id \"VERSION_ID\" [flags]",
 		ShortHelp:  "Create App Store review details for a version.",
 		LongHelp: `Create App Store review details for a version.
 
 Examples:
-  appstore review details-create --version-id "VERSION_ID" --contact-email "dev@example.com"
-  appstore review details-create --version-id "VERSION_ID" --notes "Review notes"`,
+  asc review details-create --version-id "VERSION_ID" --contact-email "dev@example.com"
+  asc review details-create --version-id "VERSION_ID" --notes "Review notes"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -208,13 +208,13 @@ func ReviewDetailsUpdateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "details-update",
-		ShortUsage: "appstore review details-update --id \"DETAIL_ID\" [flags]",
+		ShortUsage: "asc review details-update --id \"DETAIL_ID\" [flags]",
 		ShortHelp:  "Update App Store review details.",
 		LongHelp: `Update App Store review details.
 
 Examples:
-  appstore review details-update --id "DETAIL_ID" --contact-email "dev@example.com"
-  appstore review details-update --id "DETAIL_ID" --notes "Updated review notes"`,
+  asc review details-update --id "DETAIL_ID" --contact-email "dev@example.com"
+  asc review details-update --id "DETAIL_ID" --notes "Updated review notes"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

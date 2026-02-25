@@ -23,10 +23,10 @@ func WorkflowCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "workflow",
-		ShortUsage: "appstore workflow <subcommand> [flags]",
+		ShortUsage: "asc workflow <subcommand> [flags]",
 		ShortHelp:  "Run multi-step automation workflows.",
-		LongHelp: `Define named, multi-step automation sequences in .appstore/workflow.json.
-Each workflow composes existing appstore commands and shell commands.
+		LongHelp: `Define named, multi-step automation sequences in .asc/workflow.json.
+Each workflow composes existing asc commands and shell commands.
 Hooks are supported at the definition level: before_all, after_all, and error.
 stdout is JSON-only; step/hook command output streams to stderr.
 Commands run via bash (with pipefail) when available, otherwise sh; at least one must be in PATH.
@@ -35,19 +35,19 @@ On failure, stdout remains JSON-only and includes a top-level error message plus
 Security note:
   Workflows intentionally execute arbitrary shell commands.
   Only run workflow files you trust (especially when using --file).
-  Treat .appstore/workflow.json like code: review it before running.
+  Treat .asc/workflow.json like code: review it before running.
   Steps inherit your process environment; be careful with secrets.
   In CI, avoid running workflows on untrusted PRs with secrets/tokens.
-  appstore workflow validate checks structure, not safety of commands.
+  asc workflow validate checks structure, not safety of commands.
 
-Example workflow file (.appstore/workflow.json):
+Example workflow file (.asc/workflow.json):
 
 {
   "env": {
     "APP_ID": "123456789",
     "VERSION": "1.0.0"
   },
-  "before_all": "appstore auth status",
+  "before_all": "asc auth status",
   "after_all": "echo workflow_done",
   "error": "echo workflow_failed",
   "workflows": {
@@ -59,16 +59,16 @@ Example workflow file (.appstore/workflow.json):
       "steps": [
         {
           "name": "list_builds",
-          "run": "appstore builds list --app $APP_ID --sort -uploadedDate --limit 5"
+          "run": "asc builds list --app $APP_ID --sort -uploadedDate --limit 5"
         },
         {
           "name": "list_groups",
-          "run": "appstore testflight beta-groups list --app $APP_ID --limit 20"
+          "run": "asc testflight beta-groups list --app $APP_ID --limit 20"
         },
         {
           "name": "add_build_to_group",
           "if": "BUILD_ID",
-          "run": "appstore builds add-groups --build $BUILD_ID --group $GROUP_ID"
+          "run": "asc builds add-groups --build $BUILD_ID --group $GROUP_ID"
         }
       ]
     },
@@ -83,7 +83,7 @@ Example workflow file (.appstore/workflow.json):
         },
         {
           "name": "submit",
-          "run": "appstore submit create --app $APP_ID --version $VERSION --build $BUILD_ID --confirm"
+          "run": "asc submit create --app $APP_ID --version $VERSION --build $BUILD_ID --confirm"
         }
       ]
     },
@@ -101,20 +101,20 @@ Example workflow file (.appstore/workflow.json):
 }
 
 Try it:
-  appstore workflow validate
-  appstore workflow list
-  appstore workflow run --dry-run beta
-  appstore workflow run beta BUILD_ID:123456789 GROUP_ID:abcdef
+  asc workflow validate
+  asc workflow list
+  asc workflow run --dry-run beta
+  asc workflow run beta BUILD_ID:123456789 GROUP_ID:abcdef
 
 More docs: https://github.com/Abdullah4AI/apple-developer-toolkit/appstore/blob/main/docs/WORKFLOWS.md
 
 Examples:
-  appstore workflow list
-  appstore workflow validate
-  appstore workflow run beta
-  appstore workflow run beta SUBMIT_BETA:true
-  appstore workflow run release VERSION:2.1.0
-  appstore workflow run --dry-run beta`,
+  asc workflow list
+  asc workflow validate
+  asc workflow run beta
+  asc workflow run beta SUBMIT_BETA:true
+  asc workflow run release VERSION:2.1.0
+  asc workflow run --dry-run beta`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -136,7 +136,7 @@ func workflowRunCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "run",
-		ShortUsage: "appstore workflow run [flags] <name> [KEY:VALUE ...]",
+		ShortUsage: "asc workflow run [flags] <name> [KEY:VALUE ...]",
 		ShortHelp:  "Run a named workflow.",
 		LongHelp: `Run a named workflow from workflow.json.
 
@@ -145,7 +145,7 @@ Security note:
   Only run workflow files you trust (especially when using --file).
   In CI, avoid running workflows on untrusted PRs with secrets/tokens.
 
-Tip: See "appstore workflow --help" for a complete workflow.json example.`,
+Tip: See "asc workflow --help" for a complete workflow.json example.`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -202,7 +202,7 @@ func workflowValidateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "validate",
-		ShortUsage: "appstore workflow validate [flags]",
+		ShortUsage: "asc workflow validate [flags]",
 		ShortHelp:  "Validate workflow.json for errors and cycles.",
 		FlagSet:    fs,
 		UsageFunc:  shared.DefaultUsageFunc,
@@ -254,7 +254,7 @@ func workflowListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore workflow list [flags]",
+		ShortUsage: "asc workflow list [flags]",
 		ShortHelp:  "List available workflows.",
 		FlagSet:    fs,
 		UsageFunc:  shared.DefaultUsageFunc,

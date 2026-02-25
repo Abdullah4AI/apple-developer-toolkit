@@ -9,7 +9,9 @@ import (
 
 // AppScreenshotSetRelationships describes relationships for screenshot sets.
 type AppScreenshotSetRelationships struct {
-	AppStoreVersionLocalization *Relationship `json:"appStoreVersionLocalization"`
+	AppStoreVersionLocalization                    *Relationship `json:"appStoreVersionLocalization,omitempty"`
+	AppCustomProductPageLocalization               *Relationship `json:"appCustomProductPageLocalization,omitempty"`
+	AppStoreVersionExperimentTreatmentLocalization *Relationship `json:"appStoreVersionExperimentTreatmentLocalization,omitempty"`
 }
 
 // AppScreenshotSetCreateData is the data portion of a screenshot set create request.
@@ -61,7 +63,9 @@ type AppScreenshotUpdateRequest struct {
 
 // AppPreviewSetRelationships describes relationships for preview sets.
 type AppPreviewSetRelationships struct {
-	AppStoreVersionLocalization *Relationship `json:"appStoreVersionLocalization"`
+	AppStoreVersionLocalization                    *Relationship `json:"appStoreVersionLocalization,omitempty"`
+	AppCustomProductPageLocalization               *Relationship `json:"appCustomProductPageLocalization,omitempty"`
+	AppStoreVersionExperimentTreatmentLocalization *Relationship `json:"appStoreVersionExperimentTreatmentLocalization,omitempty"`
 }
 
 // AppPreviewSetCreateData is the data portion of a preview set create request.
@@ -145,18 +149,34 @@ func (c *Client) GetAppScreenshotSet(ctx context.Context, setID string) (*AppScr
 
 // CreateAppScreenshotSet creates a screenshot set for a localization.
 func (c *Client) CreateAppScreenshotSet(ctx context.Context, localizationID string, displayType string) (*AppScreenshotSetResponse, error) {
+	return c.createAppScreenshotSet(ctx, displayType, &AppScreenshotSetRelationships{
+		AppStoreVersionLocalization: &Relationship{
+			Data: ResourceData{
+				Type: ResourceTypeAppStoreVersionLocalizations,
+				ID:   localizationID,
+			},
+		},
+	})
+}
+
+// CreateAppScreenshotSetForCustomProductPageLocalization creates a screenshot set for a custom product page localization.
+func (c *Client) CreateAppScreenshotSetForCustomProductPageLocalization(ctx context.Context, localizationID string, displayType string) (*AppScreenshotSetResponse, error) {
+	return c.createAppScreenshotSet(ctx, displayType, &AppScreenshotSetRelationships{
+		AppCustomProductPageLocalization: &Relationship{
+			Data: ResourceData{
+				Type: ResourceTypeAppCustomProductPageLocalizations,
+				ID:   localizationID,
+			},
+		},
+	})
+}
+
+func (c *Client) createAppScreenshotSet(ctx context.Context, displayType string, relationships *AppScreenshotSetRelationships) (*AppScreenshotSetResponse, error) {
 	payload := AppScreenshotSetCreateRequest{
 		Data: AppScreenshotSetCreateData{
-			Type:       ResourceTypeAppScreenshotSets,
-			Attributes: AppScreenshotSetAttributes{ScreenshotDisplayType: displayType},
-			Relationships: &AppScreenshotSetRelationships{
-				AppStoreVersionLocalization: &Relationship{
-					Data: ResourceData{
-						Type: ResourceTypeAppStoreVersionLocalizations,
-						ID:   localizationID,
-					},
-				},
-			},
+			Type:          ResourceTypeAppScreenshotSets,
+			Attributes:    AppScreenshotSetAttributes{ScreenshotDisplayType: displayType},
+			Relationships: relationships,
 		},
 	}
 
@@ -384,18 +404,34 @@ func (c *Client) GetAppPreviewSet(ctx context.Context, setID string) (*AppPrevie
 
 // CreateAppPreviewSet creates a preview set for a localization.
 func (c *Client) CreateAppPreviewSet(ctx context.Context, localizationID string, previewType string) (*AppPreviewSetResponse, error) {
+	return c.createAppPreviewSet(ctx, previewType, &AppPreviewSetRelationships{
+		AppStoreVersionLocalization: &Relationship{
+			Data: ResourceData{
+				Type: ResourceTypeAppStoreVersionLocalizations,
+				ID:   localizationID,
+			},
+		},
+	})
+}
+
+// CreateAppPreviewSetForCustomProductPageLocalization creates a preview set for a custom product page localization.
+func (c *Client) CreateAppPreviewSetForCustomProductPageLocalization(ctx context.Context, localizationID string, previewType string) (*AppPreviewSetResponse, error) {
+	return c.createAppPreviewSet(ctx, previewType, &AppPreviewSetRelationships{
+		AppCustomProductPageLocalization: &Relationship{
+			Data: ResourceData{
+				Type: ResourceTypeAppCustomProductPageLocalizations,
+				ID:   localizationID,
+			},
+		},
+	})
+}
+
+func (c *Client) createAppPreviewSet(ctx context.Context, previewType string, relationships *AppPreviewSetRelationships) (*AppPreviewSetResponse, error) {
 	payload := AppPreviewSetCreateRequest{
 		Data: AppPreviewSetCreateData{
-			Type:       ResourceTypeAppPreviewSets,
-			Attributes: AppPreviewSetAttributes{PreviewType: previewType},
-			Relationships: &AppPreviewSetRelationships{
-				AppStoreVersionLocalization: &Relationship{
-					Data: ResourceData{
-						Type: ResourceTypeAppStoreVersionLocalizations,
-						ID:   localizationID,
-					},
-				},
-			},
+			Type:          ResourceTypeAppPreviewSets,
+			Attributes:    AppPreviewSetAttributes{PreviewType: previewType},
+			Relationships: relationships,
 		},
 	}
 

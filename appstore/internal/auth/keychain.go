@@ -25,9 +25,10 @@ import (
 var ErrKeychainAccessDenied = errors.New("keychain access denied")
 
 const (
-	keyringService    = "appstore"
-	keyringItemPrefix = "appstore:credential:"
-	bypassKeychainEnv = "APPSTORE_BYPASS_KEYCHAIN"
+	keyringService    = "asc"
+	keyringItemPrefix = "asc:credential:"
+	legacyKeychain    = "asc"
+	bypassKeychainEnv = "ASC_BYPASS_KEYCHAIN"
 )
 
 // Credential represents stored API credentials
@@ -127,7 +128,9 @@ var keyringOpener = func() (keyring.Keyring, error) {
 	return keyring.Open(keyringConfig(""))
 }
 
-// Legacy keychain support removed
+var legacyKeyringOpener = func() (keyring.Keyring, error) {
+	return keyring.Open(keyringConfig(legacyKeychain))
+}
 
 // ValidateKeyFile validates that the private key file exists and is valid
 func ValidateKeyFile(path string) error {
@@ -631,7 +634,7 @@ func storeInKeychain(name string, payload credentialPayload) error {
 	return kr.Set(keyring.Item{
 		Key:   keyringKey(name),
 		Data:  data,
-		Label: fmt.Sprintf("App Store Connect Key (%s)", name),
+		Label: fmt.Sprintf("ASC API Key (%s)", name),
 	})
 }
 
@@ -674,7 +677,11 @@ func listFromKeychain() ([]Credential, error) {
 }
 
 func listFromLegacyKeychain() ([]Credential, error) {
-	return nil, nil
+	kr, err := legacyKeyringOpener()
+	if err != nil {
+		return nil, err
+	}
+	return listFromKeyring(kr)
 }
 
 func listFromKeyring(kr keyring.Keyring) ([]Credential, error) {
@@ -715,7 +722,17 @@ func listFromKeyring(kr keyring.Keyring) ([]Credential, error) {
 }
 
 func migrateLegacyCredentials(credentials []Credential) {
-	return
+	for _, cred := range credentials {
+		payload := credentialPayload{
+			KeyID:          cred.KeyID,
+			IssuerID:       cred.IssuerID,
+			PrivateKeyPath: cred.PrivateKeyPath,
+		}
+		if err := storeInKeychain(cred.Name, payload); err != nil {
+			continue
+		}
+		_ = removeFromLegacyKeychain(cred.Name)
+	}
 }
 
 func removeFromConfigIfPresent(name string) error {
@@ -758,7 +775,11 @@ func removeFromKeychain(name string) error {
 }
 
 func removeFromLegacyKeychain(name string) error {
-	return nil
+	kr, err := legacyKeyringOpener()
+	if err != nil {
+		return err
+	}
+	return kr.Remove(keyringKey(name))
 }
 
 func removeAllFromKeychain() error {
@@ -781,9 +802,23 @@ func removeAllFromKeychain() error {
 }
 
 func removeAllFromLegacyKeychain() error {
+	kr, err := legacyKeyringOpener()
+	if err != nil {
+		return err
+	}
+	keys, err := kr.Keys()
+	if err != nil {
+		return err
+	}
+	for _, key := range keys {
+		if strings.HasPrefix(key, keyringItemPrefix) {
+			if err := kr.Remove(key); err != nil {
+				return err
+			}
+		}
+	}
 	return nil
 }
-
 
 func storeInConfig(name string, payload credentialPayload) error {
 	path, err := config.Path()
@@ -861,8 +896,10 @@ func isCompleteConfigCredential(cred config.Credential) bool {
 }
 
 func hasLegacyCredentials(cfg *config.Config) bool {
-	return false
-
+	return cfg != nil &&
+		strings.TrimSpace(cfg.KeyID) != "" &&
+		strings.TrimSpace(cfg.IssuerID) != "" &&
+		strings.TrimSpace(cfg.PrivateKeyPath) != ""
 }
 
 func configCredentialList(cfg *config.Config) []config.Credential {
@@ -994,7 +1031,7 @@ func selectConfigCredential(cfg *config.Config, profile string) (*config.Config,
 }
 
 func loadGlobalConfigForCredentials() (*config.Config, string, error) {
-	if strings.TrimSpace(os.Getenv("APPSTORE_CONFIG_PATH")) != "" {
+	if strings.TrimSpace(os.Getenv("ASC_CONFIG_PATH")) != "" {
 		return nil, "", config.ErrNotFound
 	}
 	path, err := config.GlobalPath()

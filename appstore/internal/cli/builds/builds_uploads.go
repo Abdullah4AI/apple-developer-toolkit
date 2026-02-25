@@ -19,15 +19,15 @@ func BuildsUploadsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "uploads",
-		ShortUsage: "appstore builds uploads <subcommand> [flags]",
+		ShortUsage: "asc builds uploads <subcommand> [flags]",
 		ShortHelp:  "Manage build uploads.",
 		LongHelp: `Manage build uploads.
 
 Examples:
-  appstore builds uploads list --app "APP_ID"
-  appstore builds uploads get --id "UPLOAD_ID"
-  appstore builds uploads delete --id "UPLOAD_ID" --confirm
-  appstore builds uploads files list --upload "UPLOAD_ID"`,
+  asc builds uploads list --app "APP_ID"
+  asc builds uploads get --id "UPLOAD_ID"
+  asc builds uploads delete --id "UPLOAD_ID" --confirm
+  asc builds uploads files list --upload "UPLOAD_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -46,7 +46,7 @@ Examples:
 func BuildsUploadsListCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("uploads list", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID env)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
 	shortVersion := fs.String("cf-bundle-short-version", "", "Filter by CFBundleShortVersionString(s), comma-separated")
 	bundleVersion := fs.String("cf-bundle-version", "", "Filter by CFBundleVersion(s), comma-separated")
 	platform := fs.String("platform", "", "Filter by platform(s): IOS, MAC_OS, TV_OS, VISION_OS (comma-separated)")
@@ -59,15 +59,15 @@ func BuildsUploadsListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore builds uploads list [flags]",
+		ShortUsage: "asc builds uploads list [flags]",
 		ShortHelp:  "List build uploads for an app.",
 		LongHelp: `List build uploads for an app.
 
 Examples:
-  appstore builds uploads list --app "APP_ID"
-  appstore builds uploads list --app "APP_ID" --cf-bundle-short-version "1.0.0"
-  appstore builds uploads list --app "APP_ID" --platform "IOS" --sort "-uploadedDate"
-  appstore builds uploads list --app "APP_ID" --paginate`,
+  asc builds uploads list --app "APP_ID"
+  asc builds uploads list --app "APP_ID" --cf-bundle-short-version "1.0.0"
+  asc builds uploads list --app "APP_ID" --platform "IOS" --sort "-uploadedDate"
+  asc builds uploads list --app "APP_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -85,7 +85,7 @@ Examples:
 
 			resolvedAppID := shared.ResolveAppID(*appID)
 			if resolvedAppID == "" && strings.TrimSpace(*next) == "" {
-				fmt.Fprintf(os.Stderr, "Error: --app is required (or set APPSTORE_APP_ID)\n\n")
+				fmt.Fprintf(os.Stderr, "Error: --app is required (or set ASC_APP_ID)\n\n")
 				return flag.ErrHelp
 			}
 
@@ -149,12 +149,12 @@ func BuildsUploadsGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore builds uploads get --id \"UPLOAD_ID\"",
+		ShortUsage: "asc builds uploads get --id \"UPLOAD_ID\"",
 		ShortHelp:  "Get a build upload by ID.",
 		LongHelp: `Get a build upload by ID.
 
 Examples:
-  appstore builds uploads get --id "UPLOAD_ID"`,
+  asc builds uploads get --id "UPLOAD_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -192,12 +192,12 @@ func BuildsUploadsDeleteCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "delete",
-		ShortUsage: "appstore builds uploads delete --id \"UPLOAD_ID\" --confirm",
+		ShortUsage: "asc builds uploads delete --id \"UPLOAD_ID\" --confirm",
 		ShortHelp:  "Delete a build upload by ID.",
 		LongHelp: `Delete a build upload by ID.
 
 Examples:
-  appstore builds uploads delete --id "UPLOAD_ID" --confirm`,
+  asc builds uploads delete --id "UPLOAD_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -239,13 +239,13 @@ func BuildsUploadFilesCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "files",
-		ShortUsage: "appstore builds uploads files <subcommand> [flags]",
+		ShortUsage: "asc builds uploads files <subcommand> [flags]",
 		ShortHelp:  "Manage build upload files.",
 		LongHelp: `Manage build upload files.
 
 Examples:
-  appstore builds uploads files list --upload "UPLOAD_ID"
-  appstore builds uploads files get --id "FILE_ID"`,
+  asc builds uploads files list --upload "UPLOAD_ID"
+  asc builds uploads files get --id "FILE_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -270,13 +270,13 @@ func BuildsUploadFilesListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore builds uploads files list [flags]",
+		ShortUsage: "asc builds uploads files list [flags]",
 		ShortHelp:  "List build upload files for a build upload.",
 		LongHelp: `List build upload files for a build upload.
 
 Examples:
-  appstore builds uploads files list --upload "UPLOAD_ID"
-  appstore builds uploads files list --upload "UPLOAD_ID" --paginate`,
+  asc builds uploads files list --upload "UPLOAD_ID"
+  asc builds uploads files list --upload "UPLOAD_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -347,12 +347,12 @@ func BuildsUploadFilesGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore builds uploads files get --id \"FILE_ID\"",
+		ShortUsage: "asc builds uploads files get --id \"FILE_ID\"",
 		ShortHelp:  "Get a build upload file by ID.",
 		LongHelp: `Get a build upload file by ID.
 
 Examples:
-  appstore builds uploads files get --id "FILE_ID"`,
+  asc builds uploads files get --id "FILE_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

@@ -23,12 +23,12 @@ func VersionsReleaseCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "release",
-		ShortUsage: "appstore versions release [flags]",
+		ShortUsage: "asc versions release [flags]",
 		ShortHelp:  "Release an approved version pending developer release.",
 		LongHelp: `Release an approved version in the Pending Developer Release state.
 
 Examples:
-  appstore versions release --version-id "VERSION_ID" --confirm`,
+  asc versions release --version-id "VERSION_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

@@ -25,13 +25,13 @@ func AppClipDefaultExperiencesRelationshipsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "default-experiences-relationships",
-		ShortUsage: "appstore app-clips default-experiences-relationships --app-clip-id \"CLIP_ID\" [flags]",
+		ShortUsage: "asc app-clips default-experiences-relationships --app-clip-id \"CLIP_ID\" [flags]",
 		ShortHelp:  "List default experience relationships for an App Clip.",
 		LongHelp: `List default experience relationships for an App Clip.
 
 Examples:
-  appstore app-clips default-experiences-relationships --app-clip-id "CLIP_ID"
-  appstore app-clips default-experiences-relationships --app-clip-id "CLIP_ID" --paginate`,
+  asc app-clips default-experiences-relationships --app-clip-id "CLIP_ID"
+  asc app-clips default-experiences-relationships --app-clip-id "CLIP_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -100,13 +100,13 @@ func AppClipAdvancedExperiencesRelationshipsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "advanced-experiences-relationships",
-		ShortUsage: "appstore app-clips advanced-experiences-relationships --app-clip-id \"CLIP_ID\" [flags]",
+		ShortUsage: "asc app-clips advanced-experiences-relationships --app-clip-id \"CLIP_ID\" [flags]",
 		ShortHelp:  "List advanced experience relationships for an App Clip.",
 		LongHelp: `List advanced experience relationships for an App Clip.
 
 Examples:
-  appstore app-clips advanced-experiences-relationships --app-clip-id "CLIP_ID"
-  appstore app-clips advanced-experiences-relationships --app-clip-id "CLIP_ID" --paginate`,
+  asc app-clips advanced-experiences-relationships --app-clip-id "CLIP_ID"
+  asc app-clips advanced-experiences-relationships --app-clip-id "CLIP_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

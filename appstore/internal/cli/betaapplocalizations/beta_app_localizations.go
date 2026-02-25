@@ -19,13 +19,13 @@ func BetaAppLocalizationsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "beta-app-localizations",
-		ShortUsage: "appstore beta-app-localizations <subcommand> [flags]",
+		ShortUsage: "asc beta-app-localizations <subcommand> [flags]",
 		ShortHelp:  "Manage TestFlight beta app localizations.",
 		LongHelp: `Manage TestFlight beta app localizations.
 
 Examples:
-  appstore beta-app-localizations list --app "APP_ID"
-  appstore beta-app-localizations create --app "APP_ID" --locale "en-US" --description "Welcome testers"`,
+  asc beta-app-localizations list --app "APP_ID"
+  asc beta-app-localizations create --app "APP_ID" --locale "en-US" --description "Welcome testers"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -46,7 +46,7 @@ Examples:
 func BetaAppLocalizationsListCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("list", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID env)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
 	locale := fs.String("locale", "", "Filter by locale(s), comma-separated")
 	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
 	next := fs.String("next", "", "Fetch next page using a links.next URL")
@@ -55,14 +55,14 @@ func BetaAppLocalizationsListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore beta-app-localizations list [flags]",
+		ShortUsage: "asc beta-app-localizations list [flags]",
 		ShortHelp:  "List beta app localizations for an app.",
 		LongHelp: `List beta app localizations for an app.
 
 Examples:
-  appstore beta-app-localizations list --app "APP_ID"
-  appstore beta-app-localizations list --app "APP_ID" --locale "en-US,ja"
-  appstore beta-app-localizations list --app "APP_ID" --paginate`,
+  asc beta-app-localizations list --app "APP_ID"
+  asc beta-app-localizations list --app "APP_ID" --locale "en-US,ja"
+  asc beta-app-localizations list --app "APP_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -75,7 +75,7 @@ Examples:
 
 			resolvedAppID := shared.ResolveAppID(*appID)
 			if resolvedAppID == "" && strings.TrimSpace(*next) == "" {
-				fmt.Fprintf(os.Stderr, "Error: --app is required (or set APPSTORE_APP_ID)\n\n")
+				fmt.Fprintf(os.Stderr, "Error: --app is required (or set ASC_APP_ID)\n\n")
 				return flag.ErrHelp
 			}
 
@@ -138,12 +138,12 @@ func BetaAppLocalizationsGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore beta-app-localizations get --id \"LOCALIZATION_ID\"",
+		ShortUsage: "asc beta-app-localizations get --id \"LOCALIZATION_ID\"",
 		ShortHelp:  "Get a beta app localization by ID.",
 		LongHelp: `Get a beta app localization by ID.
 
 Examples:
-  appstore beta-app-localizations get --id "LOCALIZATION_ID"`,
+  asc beta-app-localizations get --id "LOCALIZATION_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -175,7 +175,7 @@ Examples:
 func BetaAppLocalizationsCreateCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("create", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID env)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
 	locale := fs.String("locale", "", "Locale (e.g., en-US)")
 	description := fs.String("description", "", "Beta app description")
 	feedbackEmail := fs.String("feedback-email", "", "Feedback email")
@@ -186,19 +186,19 @@ func BetaAppLocalizationsCreateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "create",
-		ShortUsage: "appstore beta-app-localizations create [flags]",
+		ShortUsage: "asc beta-app-localizations create [flags]",
 		ShortHelp:  "Create a beta app localization.",
 		LongHelp: `Create a beta app localization.
 
 Examples:
-  appstore beta-app-localizations create --app "APP_ID" --locale "en-US"
-  appstore beta-app-localizations create --app "APP_ID" --locale "en-US" --description "Welcome testers"`,
+  asc beta-app-localizations create --app "APP_ID" --locale "en-US"
+  asc beta-app-localizations create --app "APP_ID" --locale "en-US" --description "Welcome testers"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			resolvedAppID := shared.ResolveAppID(*appID)
 			if resolvedAppID == "" {
-				fmt.Fprintf(os.Stderr, "Error: --app is required (or set APPSTORE_APP_ID)\n\n")
+				fmt.Fprintf(os.Stderr, "Error: --app is required (or set ASC_APP_ID)\n\n")
 				return flag.ErrHelp
 			}
 
@@ -263,13 +263,13 @@ func BetaAppLocalizationsUpdateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "update",
-		ShortUsage: "appstore beta-app-localizations update [flags]",
+		ShortUsage: "asc beta-app-localizations update [flags]",
 		ShortHelp:  "Update a beta app localization.",
 		LongHelp: `Update a beta app localization.
 
 Examples:
-  appstore beta-app-localizations update --id "LOCALIZATION_ID" --description "Updated copy"
-  appstore beta-app-localizations update --id "LOCALIZATION_ID" --feedback-email "qa@example.com"`,
+  asc beta-app-localizations update --id "LOCALIZATION_ID" --description "Updated copy"
+  asc beta-app-localizations update --id "LOCALIZATION_ID" --feedback-email "qa@example.com"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -344,12 +344,12 @@ func BetaAppLocalizationsDeleteCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "delete",
-		ShortUsage: "appstore beta-app-localizations delete --id \"LOCALIZATION_ID\" --confirm",
+		ShortUsage: "asc beta-app-localizations delete --id \"LOCALIZATION_ID\" --confirm",
 		ShortHelp:  "Delete a beta app localization.",
 		LongHelp: `Delete a beta app localization.
 
 Examples:
-  appstore beta-app-localizations delete --id "LOCALIZATION_ID" --confirm`,
+  asc beta-app-localizations delete --id "LOCALIZATION_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

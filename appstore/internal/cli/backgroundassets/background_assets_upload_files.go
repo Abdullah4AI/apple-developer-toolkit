@@ -20,15 +20,15 @@ func BackgroundAssetsUploadFilesCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "upload-files",
-		ShortUsage: "appstore background-assets upload-files <subcommand> [flags]",
+		ShortUsage: "asc background-assets upload-files <subcommand> [flags]",
 		ShortHelp:  "Manage background asset upload files.",
 		LongHelp: `Manage background asset upload files.
 
 Examples:
-  appstore background-assets upload-files list --version-id "VERSION_ID"
-  appstore background-assets upload-files get --upload-file-id "UPLOAD_FILE_ID"
-  appstore background-assets upload-files create --version-id "VERSION_ID" --file "./asset.zip" --asset-type ASSET
-  appstore background-assets upload-files update --upload-file-id "UPLOAD_FILE_ID" --uploaded true --file "./asset.zip"`,
+  asc background-assets upload-files list --version-id "VERSION_ID"
+  asc background-assets upload-files get --upload-file-id "UPLOAD_FILE_ID"
+  asc background-assets upload-files create --version-id "VERSION_ID" --file "./asset.zip" --asset-type ASSET
+  asc background-assets upload-files update --upload-file-id "UPLOAD_FILE_ID" --uploaded true --file "./asset.zip"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -55,13 +55,13 @@ func BackgroundAssetsUploadFilesListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore background-assets upload-files list --version-id \"VERSION_ID\"",
+		ShortUsage: "asc background-assets upload-files list --version-id \"VERSION_ID\"",
 		ShortHelp:  "List upload files for a background asset version.",
 		LongHelp: `List upload files for a background asset version.
 
 Examples:
-  appstore background-assets upload-files list --version-id "VERSION_ID"
-  appstore background-assets upload-files list --version-id "VERSION_ID" --paginate`,
+  asc background-assets upload-files list --version-id "VERSION_ID"
+  asc background-assets upload-files list --version-id "VERSION_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -126,12 +126,12 @@ func BackgroundAssetsUploadFilesGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore background-assets upload-files get --upload-file-id \"UPLOAD_FILE_ID\"",
+		ShortUsage: "asc background-assets upload-files get --upload-file-id \"UPLOAD_FILE_ID\"",
 		ShortHelp:  "Get a background asset upload file by ID.",
 		LongHelp: `Get a background asset upload file by ID.
 
 Examples:
-  appstore background-assets upload-files get --upload-file-id "UPLOAD_FILE_ID"`,
+  asc background-assets upload-files get --upload-file-id "UPLOAD_FILE_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -171,13 +171,13 @@ func BackgroundAssetsUploadFilesCreateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "create",
-		ShortUsage: "appstore background-assets upload-files create --version-id \"VERSION_ID\" --file \"./asset.zip\" --asset-type ASSET",
+		ShortUsage: "asc background-assets upload-files create --version-id \"VERSION_ID\" --file \"./asset.zip\" --asset-type ASSET",
 		ShortHelp:  "Create and upload a background asset file.",
 		LongHelp: `Create and upload a background asset file.
 
 Examples:
-  appstore background-assets upload-files create --version-id "VERSION_ID" --file "./asset.zip" --asset-type ASSET
-  appstore background-assets upload-files create --version-id "VERSION_ID" --file "./manifest.json" --asset-type MANIFEST --checksum`,
+  asc background-assets upload-files create --version-id "VERSION_ID" --file "./asset.zip" --asset-type ASSET
+  asc background-assets upload-files create --version-id "VERSION_ID" --file "./manifest.json" --asset-type MANIFEST --checksum`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -286,13 +286,13 @@ func BackgroundAssetsUploadFilesUpdateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "update",
-		ShortUsage: "appstore background-assets upload-files update --upload-file-id \"UPLOAD_FILE_ID\" --uploaded true",
+		ShortUsage: "asc background-assets upload-files update --upload-file-id \"UPLOAD_FILE_ID\" --uploaded true",
 		ShortHelp:  "Update a background asset upload file.",
 		LongHelp: `Update a background asset upload file.
 
 Examples:
-  appstore background-assets upload-files update --upload-file-id "UPLOAD_FILE_ID" --uploaded true
-  appstore background-assets upload-files update --upload-file-id "UPLOAD_FILE_ID" --uploaded true --file "./asset.zip" --checksum`,
+  asc background-assets upload-files update --upload-file-id "UPLOAD_FILE_ID" --uploaded true
+  asc background-assets upload-files update --upload-file-id "UPLOAD_FILE_ID" --uploaded true --file "./asset.zip" --checksum`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

@@ -18,17 +18,17 @@ func MigrateMetadataCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "metadata",
-		ShortUsage: "appstore migrate metadata <pull|push|validate> [flags]",
-		ShortHelp:  "Compatibility aliases for appstore metadata commands.",
-		LongHelp: `Compatibility aliases for appstore metadata commands.
+		ShortUsage: "asc migrate metadata <pull|push|validate> [flags]",
+		ShortHelp:  "Compatibility aliases for asc metadata commands.",
+		LongHelp: `Compatibility aliases for asc metadata commands.
 
 These aliases help teams move from fastlane/deliver conventions while
-adopting native appstore metadata workflows.
+adopting native asc metadata workflows.
 
 Prefer direct commands for new scripts:
-  appstore metadata pull ...
-  appstore metadata push ...
-  appstore metadata validate ...`,
+  asc metadata pull ...
+  asc metadata push ...
+  asc metadata validate ...`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -37,7 +37,7 @@ Prefer direct commands for new scripts:
 			metadatacmd.MetadataValidateCommand(),
 		},
 		Exec: func(ctx context.Context, args []string) error {
-			fmt.Fprintln(os.Stderr, "Tip: use `appstore metadata ...`; `appstore migrate metadata ...` is a compatibility alias.")
+			fmt.Fprintln(os.Stderr, "Tip: use `asc metadata ...`; `asc migrate metadata ...` is a compatibility alias.")
 			return flag.ErrHelp
 		},
 	}

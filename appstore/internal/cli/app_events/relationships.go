@@ -25,13 +25,13 @@ func AppEventsRelationshipsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "relationships",
-		ShortUsage: "appstore app-events relationships --event-id \"EVENT_ID\" [flags]",
+		ShortUsage: "asc app-events relationships --event-id \"EVENT_ID\" [flags]",
 		ShortHelp:  "List localization relationships for an in-app event.",
 		LongHelp: `List localization relationships for an in-app event.
 
 Examples:
-  appstore app-events relationships --event-id "EVENT_ID"
-  appstore app-events relationships --event-id "EVENT_ID" --paginate`,
+  asc app-events relationships --event-id "EVENT_ID"
+  asc app-events relationships --event-id "EVENT_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

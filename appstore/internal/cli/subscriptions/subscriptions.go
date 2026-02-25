@@ -19,18 +19,18 @@ func SubscriptionsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "subscriptions",
-		ShortUsage: "appstore subscriptions <subcommand> [flags]",
+		ShortUsage: "asc subscriptions <subcommand> [flags]",
 		ShortHelp:  "Manage subscription groups and subscriptions.",
 		LongHelp: `Manage subscription groups and subscriptions.
 
 Examples:
-  appstore subscriptions groups list --app "APP_ID"
-  appstore subscriptions pricing --app "APP_ID"
-  appstore subscriptions pricing --app "APP_ID" --territory "USA" --output table
-  appstore subscriptions list --group "GROUP_ID"
-  appstore subscriptions create --group "GROUP_ID" --ref-name "Monthly" --product-id "com.example.sub.monthly"
-  appstore subscriptions prices add --id "SUB_ID" --price-point "PRICE_POINT_ID"
-  appstore subscriptions availability set --id "SUB_ID" --territory "USA,CAN"`,
+  asc subscriptions groups list --app "APP_ID"
+  asc subscriptions pricing --app "APP_ID"
+  asc subscriptions pricing --app "APP_ID" --territory "USA" --output table
+  asc subscriptions list --group "GROUP_ID"
+  asc subscriptions create --group "GROUP_ID" --ref-name "Monthly" --product-id "com.example.sub.monthly"
+  asc subscriptions prices add --id "SUB_ID" --price-point "PRICE_POINT_ID"
+  asc subscriptions availability set --id "SUB_ID" --territory "USA,CAN"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -67,15 +67,15 @@ func SubscriptionsGroupsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "groups",
-		ShortUsage: "appstore subscriptions groups <subcommand> [flags]",
+		ShortUsage: "asc subscriptions groups <subcommand> [flags]",
 		ShortHelp:  "Manage subscription groups.",
 		LongHelp: `Manage subscription groups.
 
 Examples:
-  appstore subscriptions groups list --app "APP_ID"
-  appstore subscriptions groups create --app "APP_ID" --reference-name "Premium"
-  appstore subscriptions groups get --id "GROUP_ID"
-  appstore subscriptions groups delete --id "GROUP_ID" --confirm`,
+  asc subscriptions groups list --app "APP_ID"
+  asc subscriptions groups create --app "APP_ID" --reference-name "Premium"
+  asc subscriptions groups get --id "GROUP_ID"
+  asc subscriptions groups delete --id "GROUP_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -97,7 +97,7 @@ Examples:
 func SubscriptionsGroupsListCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("groups list", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID env)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
 	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
 	next := fs.String("next", "", "Fetch next page using a links.next URL")
 	paginate := fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")
@@ -105,13 +105,13 @@ func SubscriptionsGroupsListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore subscriptions groups list [flags]",
+		ShortUsage: "asc subscriptions groups list [flags]",
 		ShortHelp:  "List subscription groups for an app.",
 		LongHelp: `List subscription groups for an app.
 
 Examples:
-  appstore subscriptions groups list --app "APP_ID"
-  appstore subscriptions groups list --app "APP_ID" --paginate`,
+  asc subscriptions groups list --app "APP_ID"
+  asc subscriptions groups list --app "APP_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -124,7 +124,7 @@ Examples:
 
 			resolvedAppID := shared.ResolveAppID(*appID)
 			if resolvedAppID == "" && strings.TrimSpace(*next) == "" {
-				fmt.Fprintln(os.Stderr, "Error: --app is required (or set APPSTORE_APP_ID)")
+				fmt.Fprintln(os.Stderr, "Error: --app is required (or set ASC_APP_ID)")
 				return flag.ErrHelp
 			}
 
@@ -172,24 +172,24 @@ Examples:
 func SubscriptionsGroupsCreateCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("groups create", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID env)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
 	referenceName := fs.String("reference-name", "", "Reference name")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "create",
-		ShortUsage: "appstore subscriptions groups create [flags]",
+		ShortUsage: "asc subscriptions groups create [flags]",
 		ShortHelp:  "Create a subscription group.",
 		LongHelp: `Create a subscription group.
 
 Examples:
-  appstore subscriptions groups create --app "APP_ID" --reference-name "Premium"`,
+  asc subscriptions groups create --app "APP_ID" --reference-name "Premium"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			resolvedAppID := shared.ResolveAppID(*appID)
 			if resolvedAppID == "" {
-				fmt.Fprintln(os.Stderr, "Error: --app is required (or set APPSTORE_APP_ID)")
+				fmt.Fprintln(os.Stderr, "Error: --app is required (or set ASC_APP_ID)")
 				return flag.ErrHelp
 			}
 
@@ -230,12 +230,12 @@ func SubscriptionsGroupsGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore subscriptions groups get --id \"GROUP_ID\"",
+		ShortUsage: "asc subscriptions groups get --id \"GROUP_ID\"",
 		ShortHelp:  "Get a subscription group by ID.",
 		LongHelp: `Get a subscription group by ID.
 
 Examples:
-  appstore subscriptions groups get --id "GROUP_ID"`,
+  asc subscriptions groups get --id "GROUP_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -273,12 +273,12 @@ func SubscriptionsGroupsUpdateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "update",
-		ShortUsage: "appstore subscriptions groups update [flags]",
+		ShortUsage: "asc subscriptions groups update [flags]",
 		ShortHelp:  "Update a subscription group.",
 		LongHelp: `Update a subscription group.
 
 Examples:
-  appstore subscriptions groups update --id "GROUP_ID" --reference-name "Premium"`,
+  asc subscriptions groups update --id "GROUP_ID" --reference-name "Premium"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -326,12 +326,12 @@ func SubscriptionsGroupsDeleteCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "delete",
-		ShortUsage: "appstore subscriptions groups delete --id \"GROUP_ID\" --confirm",
+		ShortUsage: "asc subscriptions groups delete --id \"GROUP_ID\" --confirm",
 		ShortHelp:  "Delete a subscription group.",
 		LongHelp: `Delete a subscription group.
 
 Examples:
-  appstore subscriptions groups delete --id "GROUP_ID" --confirm`,
+  asc subscriptions groups delete --id "GROUP_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -379,13 +379,13 @@ func SubscriptionsListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore subscriptions list [flags]",
+		ShortUsage: "asc subscriptions list [flags]",
 		ShortHelp:  "List subscriptions in a group.",
 		LongHelp: `List subscriptions in a group.
 
 Examples:
-  appstore subscriptions list --group "GROUP_ID"
-  appstore subscriptions list --group "GROUP_ID" --paginate`,
+  asc subscriptions list --group "GROUP_ID"
+  asc subscriptions list --group "GROUP_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -450,17 +450,19 @@ func SubscriptionsCreateCommand() *ffcli.Command {
 	refName := fs.String("ref-name", "", "Reference name")
 	productID := fs.String("product-id", "", "Product ID (e.g., com.example.sub)")
 	subscriptionPeriod := fs.String("subscription-period", "", "Subscription period: "+strings.Join(subscriptionPeriodValues, ", "))
+	familySharable := fs.Bool("family-sharable", false, "Enable Family Sharing (cannot be undone)")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "create",
-		ShortUsage: "appstore subscriptions create [flags]",
+		ShortUsage: "asc subscriptions create [flags]",
 		ShortHelp:  "Create a subscription.",
 		LongHelp: `Create a subscription.
 
 Examples:
-  appstore subscriptions create --group "GROUP_ID" --ref-name "Monthly" --product-id "com.example.sub.monthly"
-  appstore subscriptions create --group "GROUP_ID" --ref-name "Monthly" --product-id "com.example.sub.monthly" --subscription-period ONE_MONTH`,
+  asc subscriptions create --group "GROUP_ID" --ref-name "Monthly" --product-id "com.example.sub.monthly"
+  asc subscriptions create --group "GROUP_ID" --ref-name "Monthly" --product-id "com.example.sub.monthly" --subscription-period ONE_MONTH
+  asc subscriptions create --group "GROUP_ID" --ref-name "Family" --product-id "com.example.sub.family" --family-sharable`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -503,6 +505,10 @@ Examples:
 			if period != "" {
 				attrs.SubscriptionPeriod = string(period)
 			}
+			if *familySharable {
+				val := true
+				attrs.FamilySharable = &val
+			}
 
 			resp, err := client.CreateSubscription(requestCtx, group, attrs)
 			if err != nil {
@@ -523,12 +529,12 @@ func SubscriptionsGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore subscriptions get --id \"SUB_ID\"",
+		ShortUsage: "asc subscriptions get --id \"SUB_ID\"",
 		ShortHelp:  "Get a subscription by ID.",
 		LongHelp: `Get a subscription by ID.
 
 Examples:
-  appstore subscriptions get --id "SUB_ID"`,
+  asc subscriptions get --id "SUB_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -563,17 +569,19 @@ func SubscriptionsUpdateCommand() *ffcli.Command {
 	subID := fs.String("id", "", "Subscription ID")
 	refName := fs.String("ref-name", "", "Reference name")
 	subscriptionPeriod := fs.String("subscription-period", "", "Subscription period: "+strings.Join(subscriptionPeriodValues, ", "))
+	familySharable := fs.Bool("family-sharable", false, "Enable Family Sharing (cannot be undone)")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "update",
-		ShortUsage: "appstore subscriptions update [flags]",
+		ShortUsage: "asc subscriptions update [flags]",
 		ShortHelp:  "Update a subscription.",
 		LongHelp: `Update a subscription.
 
 Examples:
-  appstore subscriptions update --id "SUB_ID" --ref-name "New Name"
-  appstore subscriptions update --id "SUB_ID" --subscription-period ONE_YEAR`,
+  asc subscriptions update --id "SUB_ID" --ref-name "New Name"
+  asc subscriptions update --id "SUB_ID" --subscription-period ONE_YEAR
+  asc subscriptions update --id "SUB_ID" --family-sharable`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -589,7 +597,7 @@ Examples:
 				fmt.Fprintln(os.Stderr, "Error:", err.Error())
 				return flag.ErrHelp
 			}
-			if name == "" && period == "" {
+			if name == "" && period == "" && !*familySharable {
 				fmt.Fprintln(os.Stderr, "Error: at least one update flag is required")
 				return flag.ErrHelp
 			}
@@ -609,6 +617,10 @@ Examples:
 			if period != "" {
 				periodValue := string(period)
 				attrs.SubscriptionPeriod = &periodValue
+			}
+			if *familySharable {
+				val := true
+				attrs.FamilySharable = &val
 			}
 
 			resp, err := client.UpdateSubscription(requestCtx, id, attrs)
@@ -631,12 +643,12 @@ func SubscriptionsDeleteCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "delete",
-		ShortUsage: "appstore subscriptions delete --id \"SUB_ID\" --confirm",
+		ShortUsage: "asc subscriptions delete --id \"SUB_ID\" --confirm",
 		ShortHelp:  "Delete a subscription.",
 		LongHelp: `Delete a subscription.
 
 Examples:
-  appstore subscriptions delete --id "SUB_ID" --confirm`,
+  asc subscriptions delete --id "SUB_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -678,15 +690,15 @@ func SubscriptionsPricesCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "prices",
-		ShortUsage: "appstore subscriptions prices <subcommand> [flags]",
+		ShortUsage: "asc subscriptions prices <subcommand> [flags]",
 		ShortHelp:  "Manage subscription pricing.",
 		LongHelp: `Manage subscription pricing.
 
 Examples:
-  appstore subscriptions prices list --id "SUB_ID"
-  appstore subscriptions prices add --id "SUB_ID" --price-point "PRICE_POINT_ID"
-  appstore subscriptions prices import --id "SUB_ID" --input "./prices.csv"
-  appstore subscriptions prices delete --price-id "PRICE_ID" --confirm`,
+  asc subscriptions prices list --id "SUB_ID"
+  asc subscriptions prices add --id "SUB_ID" --price-point "PRICE_POINT_ID"
+  asc subscriptions prices import --id "SUB_ID" --input "./prices.csv"
+  asc subscriptions prices delete --price-id "PRICE_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -713,13 +725,13 @@ func SubscriptionsPricesListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore subscriptions prices list --id \"SUB_ID\"",
+		ShortUsage: "asc subscriptions prices list --id \"SUB_ID\"",
 		ShortHelp:  "List prices for a subscription.",
 		LongHelp: `List prices for a subscription.
 
 Examples:
-  appstore subscriptions prices list --id "SUB_ID"
-  appstore subscriptions prices list --id "SUB_ID" --paginate`,
+  asc subscriptions prices list --id "SUB_ID"
+  asc subscriptions prices list --id "SUB_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -789,13 +801,13 @@ func SubscriptionsPricesAddCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "add",
-		ShortUsage: "appstore subscriptions prices add [flags]",
+		ShortUsage: "asc subscriptions prices add [flags]",
 		ShortHelp:  "Add a subscription price.",
 		LongHelp: `Add a subscription price.
 
 Examples:
-  appstore subscriptions prices add --id "SUB_ID" --price-point "PRICE_POINT_ID"
-  appstore subscriptions prices add --id "SUB_ID" --price-point "PRICE_POINT_ID" --territory "USA"`,
+  asc subscriptions prices add --id "SUB_ID" --price-point "PRICE_POINT_ID"
+  asc subscriptions prices add --id "SUB_ID" --price-point "PRICE_POINT_ID" --territory "USA"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -847,12 +859,12 @@ func SubscriptionsPricesDeleteCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "delete",
-		ShortUsage: "appstore subscriptions prices delete --price-id \"PRICE_ID\" --confirm",
+		ShortUsage: "asc subscriptions prices delete --price-id \"PRICE_ID\" --confirm",
 		ShortHelp:  "Delete a subscription price.",
 		LongHelp: `Delete a subscription price.
 
 Examples:
-  appstore subscriptions prices delete --price-id "PRICE_ID" --confirm`,
+  asc subscriptions prices delete --price-id "PRICE_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -894,14 +906,14 @@ func SubscriptionsAvailabilityCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "availability",
-		ShortUsage: "appstore subscriptions availability <subcommand> [flags]",
+		ShortUsage: "asc subscriptions availability <subcommand> [flags]",
 		ShortHelp:  "Manage subscription availability.",
 		LongHelp: `Manage subscription availability.
 
 Examples:
-  appstore subscriptions availability get --id "AVAILABILITY_ID"
-  appstore subscriptions availability set --id "SUB_ID" --territory "USA,CAN"
-  appstore subscriptions availability available-territories --id "AVAILABILITY_ID"`,
+  asc subscriptions availability get --id "AVAILABILITY_ID"
+  asc subscriptions availability set --id "SUB_ID" --territory "USA,CAN"
+  asc subscriptions availability available-territories --id "AVAILABILITY_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -925,13 +937,13 @@ func SubscriptionsAvailabilityGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore subscriptions availability get --id \"AVAILABILITY_ID\"",
+		ShortUsage: "asc subscriptions availability get --id \"AVAILABILITY_ID\"",
 		ShortHelp:  "Get subscription availability by ID or subscription.",
 		LongHelp: `Get subscription availability by ID or subscription.
 
 Examples:
-  appstore subscriptions availability get --id "AVAILABILITY_ID"
-  appstore subscriptions availability get --subscription-id "SUB_ID"`,
+  asc subscriptions availability get --id "AVAILABILITY_ID"
+  asc subscriptions availability get --subscription-id "SUB_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -984,13 +996,13 @@ func SubscriptionsAvailabilityAvailableTerritoriesCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "available-territories",
-		ShortUsage: "appstore subscriptions availability available-territories --id \"AVAILABILITY_ID\"",
+		ShortUsage: "asc subscriptions availability available-territories --id \"AVAILABILITY_ID\"",
 		ShortHelp:  "List available territories for a subscription availability.",
 		LongHelp: `List available territories for a subscription availability.
 
 Examples:
-  appstore subscriptions availability available-territories --id "AVAILABILITY_ID"
-  appstore subscriptions availability available-territories --id "AVAILABILITY_ID" --paginate`,
+  asc subscriptions availability available-territories --id "AVAILABILITY_ID"
+  asc subscriptions availability available-territories --id "AVAILABILITY_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -1058,12 +1070,12 @@ func SubscriptionsAvailabilitySetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "set",
-		ShortUsage: "appstore subscriptions availability set [flags]",
+		ShortUsage: "asc subscriptions availability set [flags]",
 		ShortHelp:  "Set subscription availability in territories.",
 		LongHelp: `Set subscription availability in territories.
 
 Examples:
-  appstore subscriptions availability set --id "SUB_ID" --territory "USA,CAN"`,
+  asc subscriptions availability set --id "SUB_ID" --territory "USA,CAN"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

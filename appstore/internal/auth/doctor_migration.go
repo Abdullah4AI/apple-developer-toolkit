@@ -498,7 +498,7 @@ func buildMigrationChecks(signals migrationSignals, suggestions []string) []Doct
 		if len(signals.bundlerFiles) > 0 {
 			checks = append(checks, DoctorCheck{
 				Status:  DoctorInfo,
-				Message: "No appstore command suggestions matched detected Bundler files",
+				Message: "No asc command suggestions matched detected Bundler files",
 			})
 		}
 		return checks
@@ -564,22 +564,22 @@ func buildSuggestedCommands(signals migrationSignals, resolver MigrationSuggesti
 	values = fallbackMigrationCommandValues(values)
 
 	if hasAuthSignal {
-		add(`appstore auth login --name "MyKey" --key-id "KEY_ID" --issuer-id "ISSUER_ID" --private-key /path/to/AuthKey.p8`)
+		add(`asc auth login --name "MyKey" --key-id "KEY_ID" --issuer-id "ISSUER_ID" --private-key /path/to/AuthKey.p8`)
 	}
 	if hasMetadataSignal {
 		fastlaneDir := formatFastlaneDir(signals.fastlaneDir)
-		add(fmt.Sprintf("appstore migrate validate --fastlane-dir %s", fastlaneDir))
-		add(fmt.Sprintf(`appstore migrate import --app %q --version-id %q --fastlane-dir %s`, values.appID, values.versionID, fastlaneDir))
+		add(fmt.Sprintf("asc migrate validate --fastlane-dir %s", fastlaneDir))
+		add(fmt.Sprintf(`asc migrate import --app %q --version-id %q --fastlane-dir %s`, values.appID, values.versionID, fastlaneDir))
 	}
 	if hasBuildSignal {
-		add(fmt.Sprintf(`appstore builds latest --app %q`, values.appID))
+		add(fmt.Sprintf(`asc builds latest --app %q`, values.appID))
 	}
 	if hasTestflightSignal {
-		add(fmt.Sprintf(`appstore publish testflight --app %q --ipa app.ipa --group "GROUP_ID"`, values.appID))
+		add(fmt.Sprintf(`asc publish testflight --app %q --ipa app.ipa --group "GROUP_ID"`, values.appID))
 	}
 	if hasAppStoreSignal {
-		add(fmt.Sprintf(`appstore publish appstore --app %q --ipa app.ipa --version %q --submit --confirm`, values.appID, values.versionString))
-		add(fmt.Sprintf(`appstore submit create --app %q --version %q --build %q --confirm`, values.appID, values.versionString, values.buildID))
+		add(fmt.Sprintf(`asc publish appstore --app %q --ipa app.ipa --version %q --submit --confirm`, values.appID, values.versionString))
+		add(fmt.Sprintf(`asc submit create --app %q --version %q --build %q --confirm`, values.appID, values.versionString, values.buildID))
 	}
 
 	return commands
@@ -641,7 +641,7 @@ func fallbackMigrationCommandValues(values migrationCommandValues) migrationComm
 }
 
 func resolveLocalAppID() string {
-	if env := strings.TrimSpace(os.Getenv("APPSTORE_APP_ID")); env != "" {
+	if env := strings.TrimSpace(os.Getenv("ASC_APP_ID")); env != "" {
 		return env
 	}
 

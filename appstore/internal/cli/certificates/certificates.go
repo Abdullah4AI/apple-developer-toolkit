@@ -22,19 +22,19 @@ func CertificatesCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "certificates",
-		ShortUsage: "appstore certificates <subcommand> [flags]",
+		ShortUsage: "asc certificates <subcommand> [flags]",
 		ShortHelp:  "Manage signing certificates.",
 		LongHelp: `Manage signing certificates.
 
 Examples:
-  appstore certificates list
-  appstore certificates list --certificate-type IOS_DISTRIBUTION
-  appstore certificates get --id "CERT_ID" --include passTypeId
-  appstore certificates create --certificate-type IOS_DISTRIBUTION --csr "./cert.csr"
-  appstore certificates update --id "CERT_ID" --activated true
-  appstore certificates update --id "CERT_ID" --activated false
-  appstore certificates revoke --id "CERT_ID" --confirm
-  appstore certificates relationships pass-type-id --id "CERT_ID"`,
+  asc certificates list
+  asc certificates list --certificate-type IOS_DISTRIBUTION
+  asc certificates get --id "CERT_ID" --include passTypeId
+  asc certificates create --certificate-type IOS_DISTRIBUTION --csr "./cert.csr"
+  asc certificates update --id "CERT_ID" --activated true
+  asc certificates update --id "CERT_ID" --activated false
+  asc certificates revoke --id "CERT_ID" --confirm
+  asc certificates relationships pass-type-id --id "CERT_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -64,14 +64,14 @@ func CertificatesListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore certificates list [flags]",
+		ShortUsage: "asc certificates list [flags]",
 		ShortHelp:  "List signing certificates.",
 		LongHelp: `List signing certificates.
 
 Examples:
-  appstore certificates list
-  appstore certificates list --certificate-type IOS_DISTRIBUTION
-  appstore certificates list --paginate`,
+  asc certificates list
+  asc certificates list --certificate-type IOS_DISTRIBUTION
+  asc certificates list --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -137,13 +137,13 @@ func CertificatesGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore certificates get --id \"CERT_ID\" [flags]",
+		ShortUsage: "asc certificates get --id \"CERT_ID\" [flags]",
 		ShortHelp:  "Get a signing certificate by ID.",
 		LongHelp: `Get a signing certificate by ID.
 
 Examples:
-  appstore certificates get --id "CERT_ID"
-  appstore certificates get --id "CERT_ID" --include passTypeId`,
+  asc certificates get --id "CERT_ID"
+  asc certificates get --id "CERT_ID" --include passTypeId`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -191,12 +191,12 @@ func CertificatesCreateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "create",
-		ShortUsage: "appstore certificates create --certificate-type TYPE --csr ./cert.csr",
+		ShortUsage: "asc certificates create --certificate-type TYPE --csr ./cert.csr",
 		ShortHelp:  "Create a signing certificate.",
 		LongHelp: `Create a signing certificate.
 
 Examples:
-  appstore certificates create --certificate-type IOS_DISTRIBUTION --csr "./cert.csr"`,
+  asc certificates create --certificate-type IOS_DISTRIBUTION --csr "./cert.csr"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -244,13 +244,13 @@ func CertificatesUpdateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "update",
-		ShortUsage: "appstore certificates update --id \"CERT_ID\" --activated true",
+		ShortUsage: "asc certificates update --id \"CERT_ID\" --activated true",
 		ShortHelp:  "Update a signing certificate.",
 		LongHelp: `Update a signing certificate.
 
 Examples:
-  appstore certificates update --id "CERT_ID" --activated true
-  appstore certificates update --id "CERT_ID" --activated false`,
+  asc certificates update --id "CERT_ID" --activated true
+  asc certificates update --id "CERT_ID" --activated false`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -299,12 +299,12 @@ func CertificatesRevokeCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "revoke",
-		ShortUsage: "appstore certificates revoke --id \"CERT_ID\" --confirm",
+		ShortUsage: "asc certificates revoke --id \"CERT_ID\" --confirm",
 		ShortHelp:  "Revoke a signing certificate.",
 		LongHelp: `Revoke a signing certificate.
 
 Examples:
-  appstore certificates revoke --id "CERT_ID" --confirm`,
+  asc certificates revoke --id "CERT_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

@@ -32,16 +32,16 @@ func XcodeCloudBuildRunsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "build-runs",
-		ShortUsage: "appstore xcode-cloud build-runs [flags]",
+		ShortUsage: "asc xcode-cloud build-runs [flags]",
 		ShortHelp:  "Manage Xcode Cloud build runs.",
 		LongHelp: `Manage Xcode Cloud build runs.
 
 Examples:
-  appstore xcode-cloud build-runs --workflow-id "WORKFLOW_ID"
-  appstore xcode-cloud build-runs list --workflow-id "WORKFLOW_ID"
-  appstore xcode-cloud build-runs builds --run-id "BUILD_RUN_ID"
-  appstore xcode-cloud build-runs --workflow-id "WORKFLOW_ID" --limit 50
-  appstore xcode-cloud build-runs --workflow-id "WORKFLOW_ID" --paginate`,
+  asc xcode-cloud build-runs --workflow-id "WORKFLOW_ID"
+  asc xcode-cloud build-runs list --workflow-id "WORKFLOW_ID"
+  asc xcode-cloud build-runs builds --run-id "BUILD_RUN_ID"
+  asc xcode-cloud build-runs --workflow-id "WORKFLOW_ID" --limit 50
+  asc xcode-cloud build-runs --workflow-id "WORKFLOW_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -61,14 +61,14 @@ func XcodeCloudBuildRunsListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore xcode-cloud build-runs list [flags]",
+		ShortUsage: "asc xcode-cloud build-runs list [flags]",
 		ShortHelp:  "List Xcode Cloud build runs for a workflow.",
 		LongHelp: `List Xcode Cloud build runs for a workflow.
 
 Examples:
-  appstore xcode-cloud build-runs list --workflow-id "WORKFLOW_ID"
-  appstore xcode-cloud build-runs list --workflow-id "WORKFLOW_ID" --limit 50
-  appstore xcode-cloud build-runs list --workflow-id "WORKFLOW_ID" --paginate`,
+  asc xcode-cloud build-runs list --workflow-id "WORKFLOW_ID"
+  asc xcode-cloud build-runs list --workflow-id "WORKFLOW_ID" --limit 50
+  asc xcode-cloud build-runs list --workflow-id "WORKFLOW_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -88,15 +88,15 @@ func XcodeCloudBuildRunsBuildsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "builds",
-		ShortUsage: "appstore xcode-cloud build-runs builds [flags]",
+		ShortUsage: "asc xcode-cloud build-runs builds [flags]",
 		ShortHelp:  "List builds for a build run.",
 		LongHelp: `List builds for a build run.
 
 Examples:
-  appstore xcode-cloud build-runs builds --run-id "BUILD_RUN_ID"
-  appstore xcode-cloud build-runs builds --run-id "BUILD_RUN_ID" --output table
-  appstore xcode-cloud build-runs builds --run-id "BUILD_RUN_ID" --limit 50
-  appstore xcode-cloud build-runs builds --run-id "BUILD_RUN_ID" --paginate`,
+  asc xcode-cloud build-runs builds --run-id "BUILD_RUN_ID"
+  asc xcode-cloud build-runs builds --run-id "BUILD_RUN_ID" --output table
+  asc xcode-cloud build-runs builds --run-id "BUILD_RUN_ID" --limit 50
+  asc xcode-cloud build-runs builds --run-id "BUILD_RUN_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

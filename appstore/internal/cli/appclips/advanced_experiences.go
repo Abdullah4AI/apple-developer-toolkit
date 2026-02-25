@@ -19,13 +19,13 @@ func AppClipAdvancedExperiencesCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "advanced-experiences",
-		ShortUsage: "appstore app-clips advanced-experiences <subcommand> [flags]",
+		ShortUsage: "asc app-clips advanced-experiences <subcommand> [flags]",
 		ShortHelp:  "Manage App Clip advanced experiences.",
 		LongHelp: `Manage App Clip advanced experiences.
 
 Examples:
-  appstore app-clips advanced-experiences list --app-clip-id "CLIP_ID"
-  appstore app-clips advanced-experiences create --app-clip-id "CLIP_ID" --link "https://example.com" --default-language EN --is-powered-by`,
+  asc app-clips advanced-experiences list --app-clip-id "CLIP_ID"
+  asc app-clips advanced-experiences create --app-clip-id "CLIP_ID" --link "https://example.com" --default-language EN --is-powered-by`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -57,13 +57,13 @@ func AppClipAdvancedExperiencesListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore app-clips advanced-experiences list --app-clip-id \"CLIP_ID\" [flags]",
+		ShortUsage: "asc app-clips advanced-experiences list --app-clip-id \"CLIP_ID\" [flags]",
 		ShortHelp:  "List advanced experiences for an App Clip.",
 		LongHelp: `List advanced experiences for an App Clip.
 
 Examples:
-  appstore app-clips advanced-experiences list --app-clip-id "CLIP_ID"
-  appstore app-clips advanced-experiences list --app-clip-id "CLIP_ID" --action OPEN`,
+  asc app-clips advanced-experiences list --app-clip-id "CLIP_ID"
+  asc app-clips advanced-experiences list --app-clip-id "CLIP_ID" --action OPEN`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -145,12 +145,12 @@ func AppClipAdvancedExperiencesGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore app-clips advanced-experiences get --experience-id \"EXP_ID\"",
+		ShortUsage: "asc app-clips advanced-experiences get --experience-id \"EXP_ID\"",
 		ShortHelp:  "Get an advanced experience by ID.",
 		LongHelp: `Get an advanced experience by ID.
 
 Examples:
-  appstore app-clips advanced-experiences get --experience-id "EXP_ID"`,
+  asc app-clips advanced-experiences get --experience-id "EXP_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -182,7 +182,7 @@ Examples:
 func AppClipAdvancedExperiencesCreateCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("create", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID env)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
 	appClipID := fs.String("app-clip-id", "", "App Clip ID")
 	bundleID := fs.String("bundle-id", "", "App Clip bundle ID (requires --app)")
 	link := fs.String("link", "", "Invocation URL (required)")
@@ -196,13 +196,13 @@ func AppClipAdvancedExperiencesCreateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "create",
-		ShortUsage: "appstore app-clips advanced-experiences create --app-clip-id \"CLIP_ID\" --link \"https://example.com\" --default-language EN --is-powered-by [flags]",
+		ShortUsage: "asc app-clips advanced-experiences create --app-clip-id \"CLIP_ID\" --link \"https://example.com\" --default-language EN --is-powered-by [flags]",
 		ShortHelp:  "Create an advanced experience.",
 		LongHelp: `Create an advanced experience.
 
 Examples:
-  appstore app-clips advanced-experiences create --app-clip-id "CLIP_ID" --link "https://example.com" --default-language EN --is-powered-by
-  appstore app-clips advanced-experiences create --app "APP_ID" --bundle-id "com.example.clip" --link "https://example.com" --default-language EN --is-powered-by`,
+  asc app-clips advanced-experiences create --app-clip-id "CLIP_ID" --link "https://example.com" --default-language EN --is-powered-by
+  asc app-clips advanced-experiences create --app "APP_ID" --bundle-id "com.example.clip" --link "https://example.com" --default-language EN --is-powered-by`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -309,13 +309,13 @@ func AppClipAdvancedExperiencesUpdateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "update",
-		ShortUsage: "appstore app-clips advanced-experiences update --experience-id \"EXP_ID\" [flags]",
+		ShortUsage: "asc app-clips advanced-experiences update --experience-id \"EXP_ID\" [flags]",
 		ShortHelp:  "Update an advanced experience.",
 		LongHelp: `Update an advanced experience.
 
 Examples:
-  appstore app-clips advanced-experiences update --experience-id "EXP_ID" --action VIEW
-  appstore app-clips advanced-experiences update --experience-id "EXP_ID" --category FOOD_AND_DRINK`,
+  asc app-clips advanced-experiences update --experience-id "EXP_ID" --action VIEW
+  asc app-clips advanced-experiences update --experience-id "EXP_ID" --category FOOD_AND_DRINK`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -399,12 +399,12 @@ func AppClipAdvancedExperiencesDeleteCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "delete",
-		ShortUsage: "appstore app-clips advanced-experiences delete --experience-id \"EXP_ID\" --confirm",
+		ShortUsage: "asc app-clips advanced-experiences delete --experience-id \"EXP_ID\" --confirm",
 		ShortHelp:  "Delete an advanced experience.",
 		LongHelp: `Delete an advanced experience.
 
 Examples:
-  appstore app-clips advanced-experiences delete --experience-id "EXP_ID" --confirm`,
+  asc app-clips advanced-experiences delete --experience-id "EXP_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

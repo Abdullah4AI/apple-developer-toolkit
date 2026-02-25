@@ -19,14 +19,14 @@ func LocalizationsPreviewSetsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "preview-sets",
-		ShortUsage: "appstore localizations preview-sets <subcommand> [flags]",
+		ShortUsage: "asc localizations preview-sets <subcommand> [flags]",
 		ShortHelp:  "Manage preview sets for an App Store localization.",
 		LongHelp: `Manage preview sets for an App Store localization.
 
 Examples:
-  appstore localizations preview-sets list --localization-id "LOCALIZATION_ID"
-  appstore localizations preview-sets get --id "PREVIEW_SET_ID"
-  appstore localizations preview-sets relationships --localization-id "LOCALIZATION_ID"`,
+  asc localizations preview-sets list --localization-id "LOCALIZATION_ID"
+  asc localizations preview-sets get --id "PREVIEW_SET_ID"
+  asc localizations preview-sets relationships --localization-id "LOCALIZATION_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -52,12 +52,12 @@ func LocalizationsPreviewSetsListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore localizations preview-sets list --localization-id \"LOCALIZATION_ID\"",
+		ShortUsage: "asc localizations preview-sets list --localization-id \"LOCALIZATION_ID\"",
 		ShortHelp:  "List preview sets for an App Store localization.",
 		LongHelp: `List preview sets for an App Store localization.
 
 Examples:
-  appstore localizations preview-sets list --localization-id "LOCALIZATION_ID"`,
+  asc localizations preview-sets list --localization-id "LOCALIZATION_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -121,12 +121,12 @@ func LocalizationsPreviewSetsGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore localizations preview-sets get --id \"PREVIEW_SET_ID\"",
+		ShortUsage: "asc localizations preview-sets get --id \"PREVIEW_SET_ID\"",
 		ShortHelp:  "Get an app preview set by ID.",
 		LongHelp: `Get an app preview set by ID.
 
 Examples:
-  appstore localizations preview-sets get --id "PREVIEW_SET_ID"`,
+  asc localizations preview-sets get --id "PREVIEW_SET_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -166,12 +166,12 @@ func LocalizationsPreviewSetsRelationshipsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "relationships",
-		ShortUsage: "appstore localizations preview-sets relationships --localization-id \"LOCALIZATION_ID\"",
+		ShortUsage: "asc localizations preview-sets relationships --localization-id \"LOCALIZATION_ID\"",
 		ShortHelp:  "List preview set relationships for an App Store localization.",
 		LongHelp: `List preview set relationships for an App Store localization.
 
 Examples:
-  appstore localizations preview-sets relationships --localization-id "LOCALIZATION_ID"`,
+  asc localizations preview-sets relationships --localization-id "LOCALIZATION_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -232,15 +232,15 @@ func LocalizationsScreenshotSetsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "screenshot-sets",
-		ShortUsage: "appstore localizations screenshot-sets <subcommand> [flags]",
+		ShortUsage: "asc localizations screenshot-sets <subcommand> [flags]",
 		ShortHelp:  "Manage screenshot sets for an App Store localization.",
 		LongHelp: `Manage screenshot sets for an App Store localization.
 
 Examples:
-  appstore localizations screenshot-sets list --localization-id "LOCALIZATION_ID"
-  appstore localizations screenshot-sets get --id "SCREENSHOT_SET_ID"
-  appstore localizations screenshot-sets delete --id "SCREENSHOT_SET_ID" --confirm
-  appstore localizations screenshot-sets relationships --localization-id "LOCALIZATION_ID"`,
+  asc localizations screenshot-sets list --localization-id "LOCALIZATION_ID"
+  asc localizations screenshot-sets get --id "SCREENSHOT_SET_ID"
+  asc localizations screenshot-sets delete --id "SCREENSHOT_SET_ID" --confirm
+  asc localizations screenshot-sets relationships --localization-id "LOCALIZATION_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -264,12 +264,12 @@ func LocalizationsScreenshotSetsGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore localizations screenshot-sets get --id \"SCREENSHOT_SET_ID\"",
+		ShortUsage: "asc localizations screenshot-sets get --id \"SCREENSHOT_SET_ID\"",
 		ShortHelp:  "Get an app screenshot set by ID.",
 		LongHelp: `Get an app screenshot set by ID.
 
 Examples:
-  appstore localizations screenshot-sets get --id "SCREENSHOT_SET_ID"`,
+  asc localizations screenshot-sets get --id "SCREENSHOT_SET_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -307,12 +307,12 @@ func LocalizationsScreenshotSetsDeleteCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "delete",
-		ShortUsage: "appstore localizations screenshot-sets delete --id \"SCREENSHOT_SET_ID\" --confirm",
+		ShortUsage: "asc localizations screenshot-sets delete --id \"SCREENSHOT_SET_ID\" --confirm",
 		ShortHelp:  "Delete an empty screenshot set by ID.",
 		LongHelp: `Delete an empty screenshot set by ID.
 
 Examples:
-  appstore localizations screenshot-sets delete --id "SCREENSHOT_SET_ID" --confirm`,
+  asc localizations screenshot-sets delete --id "SCREENSHOT_SET_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -360,12 +360,12 @@ func LocalizationsScreenshotSetsListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore localizations screenshot-sets list --localization-id \"LOCALIZATION_ID\"",
+		ShortUsage: "asc localizations screenshot-sets list --localization-id \"LOCALIZATION_ID\"",
 		ShortHelp:  "List screenshot sets for an App Store localization.",
 		LongHelp: `List screenshot sets for an App Store localization.
 
 Examples:
-  appstore localizations screenshot-sets list --localization-id "LOCALIZATION_ID"`,
+  asc localizations screenshot-sets list --localization-id "LOCALIZATION_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -432,12 +432,12 @@ func LocalizationsScreenshotSetsRelationshipsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "relationships",
-		ShortUsage: "appstore localizations screenshot-sets relationships --localization-id \"LOCALIZATION_ID\"",
+		ShortUsage: "asc localizations screenshot-sets relationships --localization-id \"LOCALIZATION_ID\"",
 		ShortHelp:  "List screenshot set relationships for an App Store localization.",
 		LongHelp: `List screenshot set relationships for an App Store localization.
 
 Examples:
-  appstore localizations screenshot-sets relationships --localization-id "LOCALIZATION_ID"`,
+  asc localizations screenshot-sets relationships --localization-id "LOCALIZATION_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

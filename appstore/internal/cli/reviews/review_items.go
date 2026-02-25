@@ -22,12 +22,12 @@ func ReviewItemsGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "items-get",
-		ShortUsage: "appstore review items-get --id \"ITEM_ID\" [flags]",
+		ShortUsage: "asc review items-get --id \"ITEM_ID\" [flags]",
 		ShortHelp:  "Get a review submission item by ID.",
 		LongHelp: `Get a review submission item by ID.
 
 Examples:
-  appstore review items-get --id "ITEM_ID"`,
+  asc review items-get --id "ITEM_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -67,13 +67,13 @@ func ReviewItemsListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "items-list",
-		ShortUsage: "appstore review items-list [flags]",
+		ShortUsage: "asc review items-list [flags]",
 		ShortHelp:  "List items in a review submission.",
 		LongHelp: `List items in a review submission.
 
 Examples:
-  appstore review items-list --submission "SUBMISSION_ID"
-  appstore review items-list --submission "SUBMISSION_ID" --paginate`,
+  asc review items-list --submission "SUBMISSION_ID"
+  asc review items-list --submission "SUBMISSION_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -139,12 +139,12 @@ func ReviewItemsAddCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "items-add",
-		ShortUsage: "appstore review items-add [flags]",
+		ShortUsage: "asc review items-add [flags]",
 		ShortHelp:  "Add an item to a review submission.",
 		LongHelp: `Add an item to a review submission.
 
 Examples:
-  appstore review items-add --submission "SUBMISSION_ID" --item-type appStoreVersions --item-id "VERSION_ID"`,
+  asc review items-add --submission "SUBMISSION_ID" --item-type appStoreVersions --item-id "VERSION_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -194,12 +194,12 @@ func ReviewItemsUpdateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "items-update",
-		ShortUsage: "appstore review items-update --id \"ITEM_ID\" --state READY_FOR_REVIEW [flags]",
+		ShortUsage: "asc review items-update --id \"ITEM_ID\" --state READY_FOR_REVIEW [flags]",
 		ShortHelp:  "Update a review submission item.",
 		LongHelp: `Update a review submission item.
 
 Examples:
-  appstore review items-update --id "ITEM_ID" --state READY_FOR_REVIEW`,
+  asc review items-update --id "ITEM_ID" --state READY_FOR_REVIEW`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -249,12 +249,12 @@ func ReviewItemsRemoveCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "items-remove",
-		ShortUsage: "appstore review items-remove [flags]",
+		ShortUsage: "asc review items-remove [flags]",
 		ShortHelp:  "Remove an item from a review submission.",
 		LongHelp: `Remove an item from a review submission.
 
 Examples:
-  appstore review items-remove --id "ITEM_ID" --confirm`,
+  asc review items-remove --id "ITEM_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

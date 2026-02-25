@@ -19,13 +19,13 @@ func SubscriptionsOfferCodesCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "offer-codes",
-		ShortUsage: "appstore subscriptions offer-codes <subcommand> [flags]",
+		ShortUsage: "asc subscriptions offer-codes <subcommand> [flags]",
 		ShortHelp:  "Manage subscription offer codes.",
 		LongHelp: `Manage subscription offer codes.
 
 Examples:
-  appstore subscriptions offer-codes list --subscription-id "SUB_ID"
-  appstore subscriptions offer-codes create --subscription-id "SUB_ID" --name "SPRING" --offer-eligibility STACK_WITH_INTRO_OFFERS --customer-eligibilities NEW --offer-duration ONE_MONTH --offer-mode FREE_TRIAL --number-of-periods 1 --prices "PRICE_ID"`,
+  asc subscriptions offer-codes list --subscription-id "SUB_ID"
+  asc subscriptions offer-codes create --subscription-id "SUB_ID" --name "SPRING" --offer-eligibility STACK_WITH_INTRO_OFFERS --customer-eligibilities NEW --offer-duration ONE_MONTH --offer-mode FREE_TRIAL --number-of-periods 1 --prices "PRICE_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -55,13 +55,13 @@ func SubscriptionsOfferCodesListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore subscriptions offer-codes list [flags]",
+		ShortUsage: "asc subscriptions offer-codes list [flags]",
 		ShortHelp:  "List offer codes for a subscription.",
 		LongHelp: `List offer codes for a subscription.
 
 Examples:
-  appstore subscriptions offer-codes list --subscription-id "SUB_ID"
-  appstore subscriptions offer-codes list --subscription-id "SUB_ID" --paginate`,
+  asc subscriptions offer-codes list --subscription-id "SUB_ID"
+  asc subscriptions offer-codes list --subscription-id "SUB_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -127,12 +127,12 @@ func SubscriptionsOfferCodesGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore subscriptions offer-codes get --id \"OFFER_CODE_ID\"",
+		ShortUsage: "asc subscriptions offer-codes get --id \"OFFER_CODE_ID\"",
 		ShortHelp:  "Get an offer code by ID.",
 		LongHelp: `Get an offer code by ID.
 
 Examples:
-  appstore subscriptions offer-codes get --id "OFFER_CODE_ID"`,
+  asc subscriptions offer-codes get --id "OFFER_CODE_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -178,12 +178,12 @@ func SubscriptionsOfferCodesCreateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "create",
-		ShortUsage: "appstore subscriptions offer-codes create [flags]",
+		ShortUsage: "asc subscriptions offer-codes create [flags]",
 		ShortHelp:  "Create an offer code.",
 		LongHelp: `Create an offer code.
 
 Examples:
-  appstore subscriptions offer-codes create --subscription-id "SUB_ID" --name "SPRING" --offer-eligibility STACK_WITH_INTRO_OFFERS --customer-eligibilities NEW --offer-duration ONE_MONTH --offer-mode FREE_TRIAL --number-of-periods 1 --prices "USA:PRICE_POINT_ID"`,
+  asc subscriptions offer-codes create --subscription-id "SUB_ID" --name "SPRING" --offer-eligibility STACK_WITH_INTRO_OFFERS --customer-eligibilities NEW --offer-duration ONE_MONTH --offer-mode FREE_TRIAL --number-of-periods 1 --prices "USA:PRICE_POINT_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -280,12 +280,12 @@ func SubscriptionsOfferCodesUpdateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "update",
-		ShortUsage: "appstore subscriptions offer-codes update [flags]",
+		ShortUsage: "asc subscriptions offer-codes update [flags]",
 		ShortHelp:  "Update an offer code.",
 		LongHelp: `Update an offer code.
 
 Examples:
-  appstore subscriptions offer-codes update --id "OFFER_CODE_ID" --active false`,
+  asc subscriptions offer-codes update --id "OFFER_CODE_ID" --active false`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -334,12 +334,12 @@ func SubscriptionsOfferCodesCustomCodesCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "custom-codes",
-		ShortUsage: "appstore subscriptions offer-codes custom-codes --offer-code-id \"OFFER_CODE_ID\" [flags]",
+		ShortUsage: "asc subscriptions offer-codes custom-codes --offer-code-id \"OFFER_CODE_ID\" [flags]",
 		ShortHelp:  "List custom codes for an offer code.",
 		LongHelp: `List custom codes for an offer code.
 
 Examples:
-  appstore subscriptions offer-codes custom-codes --offer-code-id "OFFER_CODE_ID"`,
+  asc subscriptions offer-codes custom-codes --offer-code-id "OFFER_CODE_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -402,13 +402,13 @@ func SubscriptionsOfferCodesOneTimeCodesCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "one-time-codes",
-		ShortUsage: "appstore subscriptions offer-codes one-time-codes <subcommand> [flags]",
+		ShortUsage: "asc subscriptions offer-codes one-time-codes <subcommand> [flags]",
 		ShortHelp:  "Manage one-time use code batches for an offer code.",
 		LongHelp: `Manage one-time use code batches for an offer code.
 
 Examples:
-  appstore subscriptions offer-codes one-time-codes list --offer-code-id "OFFER_CODE_ID"
-  appstore subscriptions offer-codes one-time-codes get --id "ONE_TIME_USE_CODE_ID"`,
+  asc subscriptions offer-codes one-time-codes list --offer-code-id "OFFER_CODE_ID"
+  asc subscriptions offer-codes one-time-codes get --id "ONE_TIME_USE_CODE_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -433,13 +433,13 @@ func SubscriptionsOfferCodesOneTimeCodesListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore subscriptions offer-codes one-time-codes list --offer-code-id \"OFFER_CODE_ID\" [flags]",
+		ShortUsage: "asc subscriptions offer-codes one-time-codes list --offer-code-id \"OFFER_CODE_ID\" [flags]",
 		ShortHelp:  "List one-time use code batches for an offer code.",
 		LongHelp: `List one-time use code batches for an offer code.
 
 Examples:
-  appstore subscriptions offer-codes one-time-codes list --offer-code-id "OFFER_CODE_ID"
-  appstore subscriptions offer-codes one-time-codes list --offer-code-id "OFFER_CODE_ID" --paginate`,
+  asc subscriptions offer-codes one-time-codes list --offer-code-id "OFFER_CODE_ID"
+  asc subscriptions offer-codes one-time-codes list --offer-code-id "OFFER_CODE_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -505,12 +505,12 @@ func SubscriptionsOfferCodesOneTimeCodesGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore subscriptions offer-codes one-time-codes get --id \"ONE_TIME_USE_CODE_ID\"",
+		ShortUsage: "asc subscriptions offer-codes one-time-codes get --id \"ONE_TIME_USE_CODE_ID\"",
 		ShortHelp:  "Get a one-time use code batch by ID.",
 		LongHelp: `Get a one-time use code batch by ID.
 
 Examples:
-  appstore subscriptions offer-codes one-time-codes get --id "ONE_TIME_USE_CODE_ID"`,
+  asc subscriptions offer-codes one-time-codes get --id "ONE_TIME_USE_CODE_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -550,12 +550,12 @@ func SubscriptionsOfferCodesPricesCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "prices",
-		ShortUsage: "appstore subscriptions offer-codes prices --offer-code-id \"OFFER_CODE_ID\" [flags]",
+		ShortUsage: "asc subscriptions offer-codes prices --offer-code-id \"OFFER_CODE_ID\" [flags]",
 		ShortHelp:  "List prices for an offer code.",
 		LongHelp: `List prices for an offer code.
 
 Examples:
-  appstore subscriptions offer-codes prices --offer-code-id "OFFER_CODE_ID"`,
+  asc subscriptions offer-codes prices --offer-code-id "OFFER_CODE_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

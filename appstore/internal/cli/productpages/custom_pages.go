@@ -19,16 +19,16 @@ func CustomPagesCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "custom-pages",
-		ShortUsage: "appstore product-pages custom-pages <subcommand> [flags]",
+		ShortUsage: "asc product-pages custom-pages <subcommand> [flags]",
 		ShortHelp:  "Manage custom product pages.",
 		LongHelp: `Manage custom product pages.
 
 Examples:
-  appstore product-pages custom-pages list --app "APP_ID"
-  appstore product-pages custom-pages get --custom-page-id "PAGE_ID"
-  appstore product-pages custom-pages create --app "APP_ID" --name "Summer Campaign"
-  appstore product-pages custom-pages update --custom-page-id "PAGE_ID" --name "Updated"
-  appstore product-pages custom-pages delete --custom-page-id "PAGE_ID" --confirm`,
+  asc product-pages custom-pages list --app "APP_ID"
+  asc product-pages custom-pages get --custom-page-id "PAGE_ID"
+  asc product-pages custom-pages create --app "APP_ID" --name "Summer Campaign"
+  asc product-pages custom-pages update --custom-page-id "PAGE_ID" --name "Updated"
+  asc product-pages custom-pages delete --custom-page-id "PAGE_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -50,7 +50,7 @@ Examples:
 func CustomPagesListCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("custom-pages list", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID)")
 	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
 	next := fs.String("next", "", "Fetch next page using a links.next URL")
 	paginate := fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")
@@ -58,14 +58,14 @@ func CustomPagesListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore product-pages custom-pages list --app \"APP_ID\" [flags]",
+		ShortUsage: "asc product-pages custom-pages list --app \"APP_ID\" [flags]",
 		ShortHelp:  "List custom product pages.",
 		LongHelp: `List custom product pages.
 
 Examples:
-  appstore product-pages custom-pages list --app "APP_ID"
-  appstore product-pages custom-pages list --app "APP_ID" --limit 50
-  appstore product-pages custom-pages list --app "APP_ID" --paginate`,
+  asc product-pages custom-pages list --app "APP_ID"
+  asc product-pages custom-pages list --app "APP_ID" --limit 50
+  asc product-pages custom-pages list --app "APP_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -78,7 +78,7 @@ Examples:
 
 			resolvedAppID := shared.ResolveAppID(*appID)
 			if resolvedAppID == "" {
-				fmt.Fprintln(os.Stderr, "Error: --app is required (or set APPSTORE_APP_ID)")
+				fmt.Fprintln(os.Stderr, "Error: --app is required (or set ASC_APP_ID)")
 				return flag.ErrHelp
 			}
 
@@ -131,12 +131,12 @@ func CustomPagesGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore product-pages custom-pages get --custom-page-id \"PAGE_ID\"",
+		ShortUsage: "asc product-pages custom-pages get --custom-page-id \"PAGE_ID\"",
 		ShortHelp:  "Get a custom product page by ID.",
 		LongHelp: `Get a custom product page by ID.
 
 Examples:
-  appstore product-pages custom-pages get --custom-page-id "PAGE_ID"`,
+  asc product-pages custom-pages get --custom-page-id "PAGE_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -168,24 +168,24 @@ Examples:
 func CustomPagesCreateCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("custom-pages create", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID)")
 	name := fs.String("name", "", "Custom product page name")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "create",
-		ShortUsage: "appstore product-pages custom-pages create --app \"APP_ID\" --name \"NAME\"",
+		ShortUsage: "asc product-pages custom-pages create --app \"APP_ID\" --name \"NAME\"",
 		ShortHelp:  "Create a custom product page.",
 		LongHelp: `Create a custom product page.
 
 Examples:
-  appstore product-pages custom-pages create --app "APP_ID" --name "Summer Campaign"`,
+  asc product-pages custom-pages create --app "APP_ID" --name "Summer Campaign"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			resolvedAppID := shared.ResolveAppID(*appID)
 			if resolvedAppID == "" {
-				fmt.Fprintln(os.Stderr, "Error: --app is required (or set APPSTORE_APP_ID)")
+				fmt.Fprintln(os.Stderr, "Error: --app is required (or set ASC_APP_ID)")
 				return flag.ErrHelp
 			}
 
@@ -225,13 +225,13 @@ func CustomPagesUpdateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "update",
-		ShortUsage: "appstore product-pages custom-pages update --custom-page-id \"PAGE_ID\" [--name \"NAME\"] [--visible true|false]",
+		ShortUsage: "asc product-pages custom-pages update --custom-page-id \"PAGE_ID\" [--name \"NAME\"] [--visible true|false]",
 		ShortHelp:  "Update a custom product page.",
 		LongHelp: `Update a custom product page.
 
 Examples:
-  appstore product-pages custom-pages update --custom-page-id "PAGE_ID" --name "Updated"
-  appstore product-pages custom-pages update --custom-page-id "PAGE_ID" --visible true`,
+  asc product-pages custom-pages update --custom-page-id "PAGE_ID" --name "Updated"
+  asc product-pages custom-pages update --custom-page-id "PAGE_ID" --visible true`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -282,12 +282,12 @@ func CustomPagesDeleteCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "delete",
-		ShortUsage: "appstore product-pages custom-pages delete --custom-page-id \"PAGE_ID\" --confirm",
+		ShortUsage: "asc product-pages custom-pages delete --custom-page-id \"PAGE_ID\" --confirm",
 		ShortHelp:  "Delete a custom product page.",
 		LongHelp: `Delete a custom product page.
 
 Examples:
-  appstore product-pages custom-pages delete --custom-page-id "PAGE_ID" --confirm`,
+  asc product-pages custom-pages delete --custom-page-id "PAGE_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

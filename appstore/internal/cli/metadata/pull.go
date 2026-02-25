@@ -34,7 +34,7 @@ type PullResult struct {
 func MetadataPullCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("metadata pull", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID env)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
 	version := fs.String("version", "", "App version string (for example 1.2.3)")
 	platform := fs.String("platform", "", "Optional platform: IOS, MAC_OS, TV_OS, or VISION_OS")
 	dir := fs.String("dir", "", "Output root directory (required)")
@@ -44,16 +44,16 @@ func MetadataPullCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "pull",
-		ShortUsage: "appstore metadata pull --app \"APP_ID\" --version \"1.2.3\" --dir \"./metadata\" [flags]",
+		ShortUsage: "asc metadata pull --app \"APP_ID\" --version \"1.2.3\" --dir \"./metadata\" [flags]",
 		ShortHelp:  "Pull metadata from App Store Connect into canonical files.",
 		LongHelp: `Pull metadata from App Store Connect into canonical files.
 
 Phase 1 supports localization metadata for app-info and app-store versions.
 
 Examples:
-  appstore metadata pull --app "APP_ID" --version "1.2.3" --dir "./metadata"
-  appstore metadata pull --app "APP_ID" --version "1.2.3" --platform IOS --dir "./metadata"
-  appstore metadata pull --app "APP_ID" --version "1.2.3" --dir "./metadata" --force`,
+  asc metadata pull --app "APP_ID" --version "1.2.3" --dir "./metadata"
+  asc metadata pull --app "APP_ID" --version "1.2.3" --platform IOS --dir "./metadata"
+  asc metadata pull --app "APP_ID" --version "1.2.3" --dir "./metadata" --force`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -63,7 +63,7 @@ Examples:
 
 			resolvedAppID := shared.ResolveAppID(*appID)
 			if resolvedAppID == "" {
-				return shared.UsageError("--app is required (or set APPSTORE_APP_ID)")
+				return shared.UsageError("--app is required (or set ASC_APP_ID)")
 			}
 
 			versionValue := strings.TrimSpace(*version)

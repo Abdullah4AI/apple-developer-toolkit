@@ -20,15 +20,15 @@ func BundleIDsCapabilitiesCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "capabilities",
-		ShortUsage: "appstore bundle-ids capabilities <subcommand> [flags]",
+		ShortUsage: "asc bundle-ids capabilities <subcommand> [flags]",
 		ShortHelp:  "Manage bundle ID capabilities.",
 		LongHelp: `Manage bundle ID capabilities.
 
 Examples:
-  appstore bundle-ids capabilities list --bundle "BUNDLE_ID"
-  appstore bundle-ids capabilities add --bundle "BUNDLE_ID" --capability ICLOUD
-  appstore bundle-ids capabilities update --id "CAPABILITY_ID" --settings '[{"key":"ICLOUD_VERSION","options":[{"key":"XCODE_13","enabled":true}]}]'
-  appstore bundle-ids capabilities remove --id "CAPABILITY_ID" --confirm`,
+  asc bundle-ids capabilities list --bundle "BUNDLE_ID"
+  asc bundle-ids capabilities add --bundle "BUNDLE_ID" --capability ICLOUD
+  asc bundle-ids capabilities update --id "CAPABILITY_ID" --settings '[{"key":"ICLOUD_VERSION","options":[{"key":"XCODE_13","enabled":true}]}]'
+  asc bundle-ids capabilities remove --id "CAPABILITY_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -54,13 +54,13 @@ func BundleIDsCapabilitiesListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore bundle-ids capabilities list --bundle \"BUNDLE_ID\" [flags]",
+		ShortUsage: "asc bundle-ids capabilities list --bundle \"BUNDLE_ID\" [flags]",
 		ShortHelp:  "List bundle ID capabilities.",
 		LongHelp: `List bundle ID capabilities.
 
 Examples:
-  appstore bundle-ids capabilities list --bundle "BUNDLE_ID"
-  appstore bundle-ids capabilities list --bundle "BUNDLE_ID" --paginate`,
+  asc bundle-ids capabilities list --bundle "BUNDLE_ID"
+  asc bundle-ids capabilities list --bundle "BUNDLE_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -122,13 +122,13 @@ func BundleIDsCapabilitiesAddCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "add",
-		ShortUsage: "appstore bundle-ids capabilities add --bundle \"BUNDLE_ID\" --capability CAPABILITY_TYPE [flags]",
+		ShortUsage: "asc bundle-ids capabilities add --bundle \"BUNDLE_ID\" --capability CAPABILITY_TYPE [flags]",
 		ShortHelp:  "Add a capability to a bundle ID.",
 		LongHelp: `Add a capability to a bundle ID.
 
 Examples:
-  appstore bundle-ids capabilities add --bundle "BUNDLE_ID" --capability ICLOUD
-  appstore bundle-ids capabilities add --bundle "BUNDLE_ID" --capability ICLOUD --settings '[{"key":"ICLOUD_VERSION","options":[{"key":"XCODE_13","enabled":true}]}]'`,
+  asc bundle-ids capabilities add --bundle "BUNDLE_ID" --capability ICLOUD
+  asc bundle-ids capabilities add --bundle "BUNDLE_ID" --capability ICLOUD --settings '[{"key":"ICLOUD_VERSION","options":[{"key":"XCODE_13","enabled":true}]}]'`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -181,14 +181,14 @@ func BundleIDsCapabilitiesUpdateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "update",
-		ShortUsage: "appstore bundle-ids capabilities update --id \"CAPABILITY_ID\" [flags]",
+		ShortUsage: "asc bundle-ids capabilities update --id \"CAPABILITY_ID\" [flags]",
 		ShortHelp:  "Update a bundle ID capability.",
 		LongHelp: `Update a bundle ID capability.
 
 Examples:
-  appstore bundle-ids capabilities update --id "CAPABILITY_ID" --settings '[{"key":"ICLOUD_VERSION","options":[{"key":"XCODE_13","enabled":true}]}]'
-  appstore bundle-ids capabilities update --id "CAPABILITY_ID" --capability PUSH_NOTIFICATIONS
-  appstore bundle-ids capabilities update --id "CAPABILITY_ID" --output table`,
+  asc bundle-ids capabilities update --id "CAPABILITY_ID" --settings '[{"key":"ICLOUD_VERSION","options":[{"key":"XCODE_13","enabled":true}]}]'
+  asc bundle-ids capabilities update --id "CAPABILITY_ID" --capability PUSH_NOTIFICATIONS
+  asc bundle-ids capabilities update --id "CAPABILITY_ID" --output table`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -243,12 +243,12 @@ func BundleIDsCapabilitiesRemoveCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "remove",
-		ShortUsage: "appstore bundle-ids capabilities remove --id \"CAPABILITY_ID\" --confirm",
+		ShortUsage: "asc bundle-ids capabilities remove --id \"CAPABILITY_ID\" --confirm",
 		ShortHelp:  "Remove a capability from a bundle ID.",
 		LongHelp: `Remove a capability from a bundle ID.
 
 Examples:
-  appstore bundle-ids capabilities remove --id "CAPABILITY_ID" --confirm`,
+  asc bundle-ids capabilities remove --id "CAPABILITY_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

@@ -17,7 +17,7 @@ import (
 func ReviewsSummarizationsCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("summarizations", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID env)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
 	platforms := fs.String("platform", "", "Filter by platform(s), comma-separated: "+strings.Join(reviewSummarizationPlatformList(), ", "))
 	territories := fs.String("territory", "", "Filter by 3-letter territory code(s), comma-separated (e.g., USA, GBR)")
 	fields := fs.String("fields", "", "Fields to include: "+strings.Join(reviewSummarizationFieldsList(), ", "))
@@ -30,15 +30,15 @@ func ReviewsSummarizationsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "summarizations",
-		ShortUsage: "appstore reviews summarizations [flags]",
+		ShortUsage: "asc reviews summarizations [flags]",
 		ShortHelp:  "List App Store review summarizations.",
 		LongHelp: `List App Store review summarizations for an app.
 
 Examples:
-  appstore reviews summarizations --app "APP_ID"
-  appstore reviews summarizations --app "APP_ID" --platform IOS --territory USA
-  appstore reviews summarizations --app "APP_ID" --limit 50
-  appstore reviews summarizations --next "<links.next>"`,
+  asc reviews summarizations --app "APP_ID"
+  asc reviews summarizations --app "APP_ID" --platform IOS --territory USA
+  asc reviews summarizations --app "APP_ID" --limit 50
+  asc reviews summarizations --next "<links.next>"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -51,7 +51,7 @@ Examples:
 
 			resolvedAppID := shared.ResolveAppID(*appID)
 			if resolvedAppID == "" && strings.TrimSpace(*next) == "" {
-				fmt.Fprintln(os.Stderr, "Error: --app is required (or set APPSTORE_APP_ID)")
+				fmt.Fprintln(os.Stderr, "Error: --app is required (or set ASC_APP_ID)")
 				return flag.ErrHelp
 			}
 

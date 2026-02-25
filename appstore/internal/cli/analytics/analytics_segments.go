@@ -17,12 +17,12 @@ func AnalyticsSegmentsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "segments",
-		ShortUsage: "appstore analytics segments <subcommand> [flags]",
+		ShortUsage: "asc analytics segments <subcommand> [flags]",
 		ShortHelp:  "Get analytics report segments by ID.",
 		LongHelp: `Get analytics report segments by ID.
 
 Examples:
-  appstore analytics segments get --segment-id "SEGMENT_ID"`,
+  asc analytics segments get --segment-id "SEGMENT_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -43,12 +43,12 @@ func AnalyticsSegmentsGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore analytics segments get --segment-id \"SEGMENT_ID\" [flags]",
+		ShortUsage: "asc analytics segments get --segment-id \"SEGMENT_ID\" [flags]",
 		ShortHelp:  "Get an analytics report segment by ID.",
 		LongHelp: `Get an analytics report segment by ID.
 
 Examples:
-  appstore analytics segments get --segment-id "SEGMENT_ID"`,
+  asc analytics segments get --segment-id "SEGMENT_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

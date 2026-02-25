@@ -19,16 +19,16 @@ func IAPImagesCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "images",
-		ShortUsage: "appstore iap images <subcommand> [flags]",
+		ShortUsage: "asc iap images <subcommand> [flags]",
 		ShortHelp:  "Manage in-app purchase images.",
 		LongHelp: `Manage in-app purchase images.
 
 Examples:
-  appstore iap images list --iap-id "IAP_ID"
-  appstore iap images get --image-id "IMAGE_ID"
-  appstore iap images create --iap-id "IAP_ID" --file "./image.png"
-  appstore iap images update --image-id "IMAGE_ID" --file "./image.png"
-  appstore iap images delete --image-id "IMAGE_ID" --confirm`,
+  asc iap images list --iap-id "IAP_ID"
+  asc iap images get --image-id "IMAGE_ID"
+  asc iap images create --iap-id "IAP_ID" --file "./image.png"
+  asc iap images update --image-id "IMAGE_ID" --file "./image.png"
+  asc iap images delete --image-id "IMAGE_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -56,13 +56,13 @@ func IAPImagesListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore iap images list --iap-id \"IAP_ID\"",
+		ShortUsage: "asc iap images list --iap-id \"IAP_ID\"",
 		ShortHelp:  "List images for an in-app purchase.",
 		LongHelp: `List images for an in-app purchase.
 
 Examples:
-  appstore iap images list --iap-id "IAP_ID"
-  appstore iap images list --iap-id "IAP_ID" --paginate`,
+  asc iap images list --iap-id "IAP_ID"
+  asc iap images list --iap-id "IAP_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -128,12 +128,12 @@ func IAPImagesGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore iap images get --image-id \"IMAGE_ID\"",
+		ShortUsage: "asc iap images get --image-id \"IMAGE_ID\"",
 		ShortHelp:  "Get an in-app purchase image by ID.",
 		LongHelp: `Get an in-app purchase image by ID.
 
 Examples:
-  appstore iap images get --image-id "IMAGE_ID"`,
+  asc iap images get --image-id "IMAGE_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -171,12 +171,12 @@ func IAPImagesCreateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "create",
-		ShortUsage: "appstore iap images create --iap-id \"IAP_ID\" --file \"./image.png\"",
+		ShortUsage: "asc iap images create --iap-id \"IAP_ID\" --file \"./image.png\"",
 		ShortHelp:  "Upload an in-app purchase image.",
 		LongHelp: `Upload an in-app purchase image.
 
 Examples:
-  appstore iap images create --iap-id "IAP_ID" --file "./image.png"`,
+  asc iap images create --iap-id "IAP_ID" --file "./image.png"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -250,12 +250,12 @@ func IAPImagesUpdateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "update",
-		ShortUsage: "appstore iap images update --image-id \"IMAGE_ID\" --file \"./image.png\"",
+		ShortUsage: "asc iap images update --image-id \"IMAGE_ID\" --file \"./image.png\"",
 		ShortHelp:  "Re-upload an in-app purchase image.",
 		LongHelp: `Re-upload an in-app purchase image.
 
 Examples:
-  appstore iap images update --image-id "IMAGE_ID" --file "./image.png"`,
+  asc iap images update --image-id "IMAGE_ID" --file "./image.png"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -353,12 +353,12 @@ func IAPImagesDeleteCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "delete",
-		ShortUsage: "appstore iap images delete --image-id \"IMAGE_ID\" --confirm",
+		ShortUsage: "asc iap images delete --image-id \"IMAGE_ID\" --confirm",
 		ShortHelp:  "Delete an in-app purchase image.",
 		LongHelp: `Delete an in-app purchase image.
 
 Examples:
-  appstore iap images delete --image-id "IMAGE_ID" --confirm`,
+  asc iap images delete --image-id "IMAGE_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

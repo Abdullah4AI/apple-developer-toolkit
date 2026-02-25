@@ -19,13 +19,13 @@ func AppClipDefaultExperienceLocalizationsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "localizations",
-		ShortUsage: "appstore app-clips default-experiences localizations <subcommand> [flags]",
+		ShortUsage: "asc app-clips default-experiences localizations <subcommand> [flags]",
 		ShortHelp:  "Manage App Clip default experience localizations.",
 		LongHelp: `Manage App Clip default experience localizations.
 
 Examples:
-  appstore app-clips default-experiences localizations list --experience-id "EXP_ID"
-  appstore app-clips default-experiences localizations create --experience-id "EXP_ID" --locale "en-US" --subtitle "Try it"`,
+  asc app-clips default-experiences localizations list --experience-id "EXP_ID"
+  asc app-clips default-experiences localizations create --experience-id "EXP_ID" --locale "en-US" --subtitle "Try it"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -55,13 +55,13 @@ func AppClipDefaultExperienceLocalizationsListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore app-clips default-experiences localizations list --experience-id \"EXP_ID\" [flags]",
+		ShortUsage: "asc app-clips default-experiences localizations list --experience-id \"EXP_ID\" [flags]",
 		ShortHelp:  "List localizations for a default experience.",
 		LongHelp: `List localizations for a default experience.
 
 Examples:
-  appstore app-clips default-experiences localizations list --experience-id "EXP_ID"
-  appstore app-clips default-experiences localizations list --experience-id "EXP_ID" --locale "en-US"`,
+  asc app-clips default-experiences localizations list --experience-id "EXP_ID"
+  asc app-clips default-experiences localizations list --experience-id "EXP_ID" --locale "en-US"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -136,12 +136,12 @@ func AppClipDefaultExperienceLocalizationsGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore app-clips default-experiences localizations get --localization-id \"LOC_ID\"",
+		ShortUsage: "asc app-clips default-experiences localizations get --localization-id \"LOC_ID\"",
 		ShortHelp:  "Get a localization by ID.",
 		LongHelp: `Get a localization by ID.
 
 Examples:
-  appstore app-clips default-experiences localizations get --localization-id "LOC_ID"`,
+  asc app-clips default-experiences localizations get --localization-id "LOC_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -180,12 +180,12 @@ func AppClipDefaultExperienceLocalizationsCreateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "create",
-		ShortUsage: "appstore app-clips default-experiences localizations create --experience-id \"EXP_ID\" --locale \"en-US\" [flags]",
+		ShortUsage: "asc app-clips default-experiences localizations create --experience-id \"EXP_ID\" --locale \"en-US\" [flags]",
 		ShortHelp:  "Create a localization for a default experience.",
 		LongHelp: `Create a localization for a default experience.
 
 Examples:
-  appstore app-clips default-experiences localizations create --experience-id "EXP_ID" --locale "en-US" --subtitle "Try it"`,
+  asc app-clips default-experiences localizations create --experience-id "EXP_ID" --locale "en-US" --subtitle "Try it"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -240,12 +240,12 @@ func AppClipDefaultExperienceLocalizationsUpdateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "update",
-		ShortUsage: "appstore app-clips default-experiences localizations update --localization-id \"LOC_ID\" [flags]",
+		ShortUsage: "asc app-clips default-experiences localizations update --localization-id \"LOC_ID\" [flags]",
 		ShortHelp:  "Update a localization.",
 		LongHelp: `Update a localization.
 
 Examples:
-  appstore app-clips default-experiences localizations update --localization-id "LOC_ID" --subtitle "Try it"`,
+  asc app-clips default-experiences localizations update --localization-id "LOC_ID" --subtitle "Try it"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -301,12 +301,12 @@ func AppClipDefaultExperienceLocalizationsDeleteCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "delete",
-		ShortUsage: "appstore app-clips default-experiences localizations delete --localization-id \"LOC_ID\" --confirm",
+		ShortUsage: "asc app-clips default-experiences localizations delete --localization-id \"LOC_ID\" --confirm",
 		ShortHelp:  "Delete a localization.",
 		LongHelp: `Delete a localization.
 
 Examples:
-  appstore app-clips default-experiences localizations delete --localization-id "LOC_ID" --confirm`,
+  asc app-clips default-experiences localizations delete --localization-id "LOC_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -351,12 +351,12 @@ func AppClipDefaultExperienceLocalizationHeaderImageRelationshipCommand() *ffcli
 
 	return &ffcli.Command{
 		Name:       "header-image-relationship",
-		ShortUsage: "appstore app-clips default-experiences localizations header-image-relationship --localization-id \"LOC_ID\"",
+		ShortUsage: "asc app-clips default-experiences localizations header-image-relationship --localization-id \"LOC_ID\"",
 		ShortHelp:  "Get header image relationship for a localization.",
 		LongHelp: `Get header image relationship for a localization.
 
 Examples:
-  appstore app-clips default-experiences localizations header-image-relationship --localization-id "LOC_ID"`,
+  asc app-clips default-experiences localizations header-image-relationship --localization-id "LOC_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

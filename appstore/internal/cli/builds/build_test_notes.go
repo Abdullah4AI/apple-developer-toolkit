@@ -19,16 +19,16 @@ func BuildsTestNotesCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "test-notes",
-		ShortUsage: "appstore builds test-notes <subcommand> [flags]",
+		ShortUsage: "asc builds test-notes <subcommand> [flags]",
 		ShortHelp:  "Manage TestFlight What to Test notes.",
 		LongHelp: `Manage TestFlight "What to Test" notes for a build.
 
 Examples:
-  appstore builds test-notes list --build "BUILD_ID"
-  appstore builds test-notes get --id "LOCALIZATION_ID"
-  appstore builds test-notes create --build "BUILD_ID" --locale "en-US" --whats-new "Test instructions"
-  appstore builds test-notes update --id "LOCALIZATION_ID" --whats-new "Updated instructions"
-  appstore builds test-notes delete --id "LOCALIZATION_ID" --confirm`,
+  asc builds test-notes list --build "BUILD_ID"
+  asc builds test-notes get --id "LOCALIZATION_ID"
+  asc builds test-notes create --build "BUILD_ID" --locale "en-US" --whats-new "Test instructions"
+  asc builds test-notes update --id "LOCALIZATION_ID" --whats-new "Updated instructions"
+  asc builds test-notes delete --id "LOCALIZATION_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -57,14 +57,14 @@ func BuildsTestNotesListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore builds test-notes list [flags]",
+		ShortUsage: "asc builds test-notes list [flags]",
 		ShortHelp:  "List What to Test notes for a build.",
 		LongHelp: `List What to Test notes for a build.
 
 Examples:
-  appstore builds test-notes list --build "BUILD_ID"
-  appstore builds test-notes list --build "BUILD_ID" --locale "en-US,ja"
-  appstore builds test-notes list --build "BUILD_ID" --paginate`,
+  asc builds test-notes list --build "BUILD_ID"
+  asc builds test-notes list --build "BUILD_ID" --locale "en-US,ja"
+  asc builds test-notes list --build "BUILD_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -136,12 +136,12 @@ func BuildsTestNotesGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore builds test-notes get [flags]",
+		ShortUsage: "asc builds test-notes get [flags]",
 		ShortHelp:  "Get a What to Test note by ID.",
 		LongHelp: `Get a What to Test note by ID.
 
 Examples:
-  appstore builds test-notes get --id "LOCALIZATION_ID"`,
+  asc builds test-notes get --id "LOCALIZATION_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -180,12 +180,12 @@ func BuildsTestNotesCreateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "create",
-		ShortUsage: "appstore builds test-notes create [flags]",
+		ShortUsage: "asc builds test-notes create [flags]",
 		ShortHelp:  "Create What to Test notes for a build.",
 		LongHelp: `Create What to Test notes for a build.
 
 Examples:
-  appstore builds test-notes create --build "BUILD_ID" --locale "en-US" --whats-new "Test instructions"`,
+  asc builds test-notes create --build "BUILD_ID" --locale "en-US" --whats-new "Test instructions"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -238,24 +238,39 @@ func BuildsTestNotesUpdateCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("update", flag.ExitOnError)
 
 	localizationID := fs.String("id", "", "Localization ID")
+	buildID := fs.String("build", "", "Build ID (alternative to --id, requires --locale)")
+	locale := fs.String("locale", "", "Locale (e.g., en-US, required with --build)")
 	whatsNew := fs.String("whats-new", "", "What to Test notes")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "update",
-		ShortUsage: "appstore builds test-notes update [flags]",
-		ShortHelp:  "Update What to Test notes by ID.",
-		LongHelp: `Update What to Test notes by ID.
+		ShortUsage: "asc builds test-notes update [flags]",
+		ShortHelp:  "Update What to Test notes by ID or build+locale.",
+		LongHelp: `Update What to Test notes by ID or by build+locale.
 
 Examples:
-  appstore builds test-notes update --id "LOCALIZATION_ID" --whats-new "Updated notes"`,
+  asc builds test-notes update --id "LOCALIZATION_ID" --whats-new "Updated notes"
+  asc builds test-notes update --build "BUILD_ID" --locale "en-US" --whats-new "Updated notes"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			id := strings.TrimSpace(*localizationID)
-			if id == "" {
-				fmt.Fprintln(os.Stderr, "Error: --id is required")
+			buildValue := strings.TrimSpace(*buildID)
+			localeValue := strings.TrimSpace(*locale)
+
+			if id != "" && (buildValue != "" || localeValue != "") {
+				fmt.Fprintln(os.Stderr, "Error: --id cannot be combined with --build or --locale")
 				return flag.ErrHelp
+			}
+			if id == "" {
+				if buildValue == "" || localeValue == "" {
+					fmt.Fprintln(os.Stderr, "Error: either --id or (--build and --locale) is required")
+					return flag.ErrHelp
+				}
+				if err := shared.ValidateBuildLocalizationLocale(localeValue); err != nil {
+					return fmt.Errorf("builds test-notes update: %w", err)
+				}
 			}
 
 			whatsNewValue := strings.TrimSpace(*whatsNew)
@@ -271,6 +286,36 @@ Examples:
 
 			requestCtx, cancel := shared.ContextWithTimeout(ctx)
 			defer cancel()
+
+			if id == "" {
+				localizations, err := client.GetBetaBuildLocalizations(
+					requestCtx,
+					buildValue,
+					asc.WithBetaBuildLocalizationsLimit(200),
+				)
+				if err != nil {
+					return fmt.Errorf("builds test-notes update: failed to resolve localization: %w", err)
+				}
+				matches := make([]asc.Resource[asc.BetaBuildLocalizationAttributes], 0, 1)
+				if localizations != nil {
+					for _, localization := range localizations.Data {
+						if !strings.EqualFold(strings.TrimSpace(localization.Attributes.Locale), localeValue) {
+							continue
+						}
+						matches = append(matches, localization)
+					}
+				}
+				if len(matches) == 0 {
+					return fmt.Errorf("builds test-notes update: no localization found for build %q and locale %q", buildValue, localeValue)
+				}
+				if len(matches) > 1 {
+					return fmt.Errorf("builds test-notes update: multiple localizations found for build %q and locale %q; use --id", buildValue, localeValue)
+				}
+				id = strings.TrimSpace(matches[0].ID)
+				if id == "" {
+					return fmt.Errorf("builds test-notes update: resolved localization has empty ID")
+				}
+			}
 
 			attrs := asc.BetaBuildLocalizationAttributes{
 				WhatsNew: whatsNewValue,
@@ -296,12 +341,12 @@ func BuildsTestNotesDeleteCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "delete",
-		ShortUsage: "appstore builds test-notes delete [flags]",
+		ShortUsage: "asc builds test-notes delete [flags]",
 		ShortHelp:  "Delete What to Test notes by ID.",
 		LongHelp: `Delete What to Test notes by ID.
 
 Examples:
-  appstore builds test-notes delete --id "LOCALIZATION_ID" --confirm`,
+  asc builds test-notes delete --id "LOCALIZATION_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

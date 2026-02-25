@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/peterbourgon/ff/v3/ffcli"
 
@@ -20,11 +21,11 @@ var versionRequested bool
 func RootCommand(version string) *ffcli.Command {
 	versionRequested = false
 	root := &ffcli.Command{
-		Name:        "appstore",
-		ShortUsage:  "appstore <subcommand> [flags]",
-		ShortHelp:   "A fast, lightweight cli for App Store Connect. Built for developers and AI agents.",
+		Name:        "asc",
+		ShortUsage:  "asc <subcommand> [flags]",
+		ShortHelp:   "Unofficial. asc is a fast, lightweight cli for App Store Connect. Built by AI agents, for AI agents.",
 		LongHelp:    "",
-		FlagSet:     flag.NewFlagSet("appstore", flag.ExitOnError),
+		FlagSet:     flag.NewFlagSet("asc", flag.ExitOnError),
 		UsageFunc:   RootUsageFunc,
 		Subcommands: registry.Subcommands(version),
 	}
@@ -32,10 +33,10 @@ func RootCommand(version string) *ffcli.Command {
 	root.FlagSet.BoolVar(&versionRequested, "version", false, "Print version and exit")
 	shared.BindRootFlags(root.FlagSet)
 
-	rootSubcommandNames := make([]string, 0, len(root.Subcommands))
-	for _, sub := range root.Subcommands {
-		rootSubcommandNames = append(rootSubcommandNames, sub.Name)
-	}
+	var (
+		rootSubcommandNames     []string
+		rootSubcommandNamesOnce sync.Once
+	)
 
 	root.Exec = func(ctx context.Context, args []string) error {
 		if versionRequested {
@@ -43,6 +44,12 @@ func RootCommand(version string) *ffcli.Command {
 			return nil
 		}
 		if len(args) > 0 {
+			rootSubcommandNamesOnce.Do(func() {
+				rootSubcommandNames = make([]string, 0, len(root.Subcommands))
+				for _, sub := range root.Subcommands {
+					rootSubcommandNames = append(rootSubcommandNames, sub.Name)
+				}
+			})
 			unknown := shared.SanitizeTerminal(args[0])
 			fmt.Fprintf(os.Stderr, "Unknown command: %s\n\n", unknown)
 			if suggestions := suggest.Commands(args[0], rootSubcommandNames); len(suggestions) > 0 {

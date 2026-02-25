@@ -111,7 +111,7 @@ type versionLocalPatch struct {
 func MetadataPushCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("metadata push", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID env)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
 	version := fs.String("version", "", "App version string (for example 1.2.3)")
 	platform := fs.String("platform", "", "Optional platform: IOS, MAC_OS, TV_OS, or VISION_OS")
 	dir := fs.String("dir", "", "Metadata root directory (required)")
@@ -123,15 +123,15 @@ func MetadataPushCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "push",
-		ShortUsage: "appstore metadata push --app \"APP_ID\" --version \"1.2.3\" --dir \"./metadata\" [--dry-run]",
+		ShortUsage: "asc metadata push --app \"APP_ID\" --version \"1.2.3\" --dir \"./metadata\" [--dry-run]",
 		ShortHelp:  "Push metadata changes from canonical files.",
 		LongHelp: `Push metadata changes from canonical files.
 
 Examples:
-  appstore metadata push --app "APP_ID" --version "1.2.3" --dir "./metadata" --dry-run
-  appstore metadata push --app "APP_ID" --version "1.2.3" --platform IOS --dir "./metadata" --dry-run
-  appstore metadata push --app "APP_ID" --version "1.2.3" --dir "./metadata"
-  appstore metadata push --app "APP_ID" --version "1.2.3" --dir "./metadata" --allow-deletes --confirm
+  asc metadata push --app "APP_ID" --version "1.2.3" --dir "./metadata" --dry-run
+  asc metadata push --app "APP_ID" --version "1.2.3" --platform IOS --dir "./metadata" --dry-run
+  asc metadata push --app "APP_ID" --version "1.2.3" --dir "./metadata"
+  asc metadata push --app "APP_ID" --version "1.2.3" --dir "./metadata" --allow-deletes --confirm
 
 Notes:
   - default.json fallback is applied only when --allow-deletes is not set.
@@ -145,7 +145,7 @@ Notes:
 			}
 			resolvedAppID := shared.ResolveAppID(*appID)
 			if resolvedAppID == "" {
-				return shared.UsageError("--app is required (or set APPSTORE_APP_ID)")
+				return shared.UsageError("--app is required (or set ASC_APP_ID)")
 			}
 			versionValue := strings.TrimSpace(*version)
 			if versionValue == "" {
@@ -523,8 +523,8 @@ func decodeStringFieldPatch(field string, raw json.RawMessage) (string, error) {
 	}
 
 	trimmed := strings.TrimSpace(value)
-	if trimmed == "__APPSTORE_DELETE__" {
-		return "", fmt.Errorf("field %q uses unsupported clear token __APPSTORE_DELETE__; omit the key to keep the remote value", field)
+	if trimmed == "__ASC_DELETE__" {
+		return "", fmt.Errorf("field %q uses unsupported clear token __ASC_DELETE__; omit the key to keep the remote value", field)
 	}
 	if trimmed == "" {
 		return "", fmt.Errorf("field %q cannot be empty; omit the key to leave the remote value unchanged", field)

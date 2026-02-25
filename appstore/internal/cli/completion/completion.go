@@ -21,7 +21,7 @@ func CompletionCommand(rootSubcommands []*ffcli.Command) *ffcli.Command {
 
 	cmd := &ffcli.Command{
 		Name:       "completion",
-		ShortUsage: "appstore completion --shell <bash|zsh|fish>",
+		ShortUsage: "asc completion --shell <bash|zsh|fish>",
 		ShortHelp:  "Print shell completion scripts.",
 		FlagSet:    fs,
 		UsageFunc:  shared.DefaultUsageFunc,
@@ -114,6 +114,6 @@ _arguments \
 func fishScript(subcommands []string) string {
 	words := strings.Join(subcommands, " ")
 	return fmt.Sprintf(`# fish completion for asc
-complete -c appstore -f -a '%s'
+complete -c asc -f -a '%s'
 `, words)
 }

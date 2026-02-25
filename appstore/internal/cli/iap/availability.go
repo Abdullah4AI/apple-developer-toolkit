@@ -17,13 +17,13 @@ func IAPAvailabilityCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "availability",
-		ShortUsage: "appstore iap availability <subcommand> [flags]",
+		ShortUsage: "asc iap availability <subcommand> [flags]",
 		ShortHelp:  "Manage in-app purchase availability.",
 		LongHelp: `Manage in-app purchase availability.
 
 Examples:
-  appstore iap availability get --iap-id "IAP_ID"
-  appstore iap availability set --iap-id "IAP_ID" --territories "USA,CAN"`,
+  asc iap availability get --iap-id "IAP_ID"
+  asc iap availability set --iap-id "IAP_ID" --territories "USA,CAN"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -45,12 +45,12 @@ func IAPAvailabilityGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore iap availability get --iap-id \"IAP_ID\"",
+		ShortUsage: "asc iap availability get --iap-id \"IAP_ID\"",
 		ShortHelp:  "Get in-app purchase availability.",
 		LongHelp: `Get in-app purchase availability.
 
 Examples:
-  appstore iap availability get --iap-id "IAP_ID"`,
+  asc iap availability get --iap-id "IAP_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -89,12 +89,12 @@ func IAPAvailabilitySetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "set",
-		ShortUsage: "appstore iap availability set --iap-id \"IAP_ID\" --territories \"USA,CAN\"",
+		ShortUsage: "asc iap availability set --iap-id \"IAP_ID\" --territories \"USA,CAN\"",
 		ShortHelp:  "Set in-app purchase availability in territories.",
 		LongHelp: `Set in-app purchase availability in territories.
 
 Examples:
-  appstore iap availability set --iap-id "IAP_ID" --territories "USA,CAN"`,
+  asc iap availability set --iap-id "IAP_ID" --territories "USA,CAN"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

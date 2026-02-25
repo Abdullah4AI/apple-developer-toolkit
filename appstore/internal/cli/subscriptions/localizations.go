@@ -19,13 +19,13 @@ func SubscriptionsLocalizationsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "localizations",
-		ShortUsage: "appstore subscriptions localizations <subcommand> [flags]",
+		ShortUsage: "asc subscriptions localizations <subcommand> [flags]",
 		ShortHelp:  "Manage subscription localizations.",
 		LongHelp: `Manage subscription localizations.
 
 Examples:
-  appstore subscriptions localizations list --subscription-id "SUB_ID"
-  appstore subscriptions localizations create --subscription-id "SUB_ID" --locale "en-US" --name "Pro"`,
+  asc subscriptions localizations list --subscription-id "SUB_ID"
+  asc subscriptions localizations create --subscription-id "SUB_ID" --locale "en-US" --name "Pro"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -53,13 +53,13 @@ func SubscriptionsLocalizationsListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore subscriptions localizations list [flags]",
+		ShortUsage: "asc subscriptions localizations list [flags]",
 		ShortHelp:  "List subscription localizations.",
 		LongHelp: `List subscription localizations.
 
 Examples:
-  appstore subscriptions localizations list --subscription-id "SUB_ID"
-  appstore subscriptions localizations list --subscription-id "SUB_ID" --paginate`,
+  asc subscriptions localizations list --subscription-id "SUB_ID"
+  asc subscriptions localizations list --subscription-id "SUB_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -125,12 +125,12 @@ func SubscriptionsLocalizationsGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore subscriptions localizations get --id \"LOC_ID\"",
+		ShortUsage: "asc subscriptions localizations get --id \"LOC_ID\"",
 		ShortHelp:  "Get a subscription localization by ID.",
 		LongHelp: `Get a subscription localization by ID.
 
 Examples:
-  appstore subscriptions localizations get --id "LOC_ID"`,
+  asc subscriptions localizations get --id "LOC_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -170,12 +170,12 @@ func SubscriptionsLocalizationsCreateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "create",
-		ShortUsage: "appstore subscriptions localizations create [flags]",
+		ShortUsage: "asc subscriptions localizations create [flags]",
 		ShortHelp:  "Create a subscription localization.",
 		LongHelp: `Create a subscription localization.
 
 Examples:
-  appstore subscriptions localizations create --subscription-id "SUB_ID" --locale "en-US" --name "Pro"`,
+  asc subscriptions localizations create --subscription-id "SUB_ID" --locale "en-US" --name "Pro"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -234,12 +234,12 @@ func SubscriptionsLocalizationsUpdateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "update",
-		ShortUsage: "appstore subscriptions localizations update [flags]",
+		ShortUsage: "asc subscriptions localizations update [flags]",
 		ShortHelp:  "Update a subscription localization.",
 		LongHelp: `Update a subscription localization.
 
 Examples:
-  appstore subscriptions localizations update --id "LOC_ID" --name "Pro+"`,
+  asc subscriptions localizations update --id "LOC_ID" --name "Pro+"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -292,12 +292,12 @@ func SubscriptionsLocalizationsDeleteCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "delete",
-		ShortUsage: "appstore subscriptions localizations delete --id \"LOC_ID\" --confirm",
+		ShortUsage: "asc subscriptions localizations delete --id \"LOC_ID\" --confirm",
 		ShortHelp:  "Delete a subscription localization.",
 		LongHelp: `Delete a subscription localization.
 
 Examples:
-  appstore subscriptions localizations delete --id "LOC_ID" --confirm`,
+  asc subscriptions localizations delete --id "LOC_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

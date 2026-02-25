@@ -19,13 +19,13 @@ func MerchantIDsCertificatesCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "certificates",
-		ShortUsage: "appstore merchant-ids certificates <subcommand> [flags]",
+		ShortUsage: "asc merchant-ids certificates <subcommand> [flags]",
 		ShortHelp:  "List merchant ID certificates.",
 		LongHelp: `List merchant ID certificates.
 
 Examples:
-  appstore merchant-ids certificates list --merchant-id "MERCHANT_ID"
-  appstore merchant-ids certificates get --merchant-id "MERCHANT_ID"`,
+  asc merchant-ids certificates list --merchant-id "MERCHANT_ID"
+  asc merchant-ids certificates get --merchant-id "MERCHANT_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -58,13 +58,13 @@ func MerchantIDsCertificatesListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore merchant-ids certificates list --merchant-id \"MERCHANT_ID\" [flags]",
+		ShortUsage: "asc merchant-ids certificates list --merchant-id \"MERCHANT_ID\" [flags]",
 		ShortHelp:  "List certificates for a merchant ID.",
 		LongHelp: `List certificates for a merchant ID.
 
 Examples:
-  appstore merchant-ids certificates list --merchant-id "MERCHANT_ID"
-  appstore merchant-ids certificates list --merchant-id "MERCHANT_ID" --paginate`,
+  asc merchant-ids certificates list --merchant-id "MERCHANT_ID"
+  asc merchant-ids certificates list --merchant-id "MERCHANT_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -160,13 +160,13 @@ func MerchantIDsCertificatesGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore merchant-ids certificates get --merchant-id \"MERCHANT_ID\" [flags]",
+		ShortUsage: "asc merchant-ids certificates get --merchant-id \"MERCHANT_ID\" [flags]",
 		ShortHelp:  "Get certificate relationships for a merchant ID.",
 		LongHelp: `Get certificate relationships for a merchant ID.
 
 Examples:
-  appstore merchant-ids certificates get --merchant-id "MERCHANT_ID"
-  appstore merchant-ids certificates get --merchant-id "MERCHANT_ID" --paginate`,
+  asc merchant-ids certificates get --merchant-id "MERCHANT_ID"
+  asc merchant-ids certificates get --merchant-id "MERCHANT_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

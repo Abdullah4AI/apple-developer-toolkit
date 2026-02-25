@@ -30,7 +30,7 @@ func AuthCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "auth",
-		ShortUsage: "appstore auth <subcommand> [flags]",
+		ShortUsage: "asc auth <subcommand> [flags]",
 		ShortHelp:  "Manage authentication for the App Store Connect API.",
 		LongHelp: `Manage authentication for the App Store Connect API.
 
@@ -38,14 +38,14 @@ Authentication is handled via App Store Connect API keys. Generate keys at:
 https://appstoreconnect.apple.com/access/integrations/api
 
 Credentials are stored in the system keychain when available, with a config fallback.
-A repo-local ./.appstore/config.json (if present) takes precedence.
+A repo-local ./.asc/config.json (if present) takes precedence.
 
 Credential resolution order:
   1) Selected profile (keychain/config)
   2) Environment variables (fallback for missing fields)
 
-Use --strict-auth or APPSTORE_STRICT_AUTH=true (also: 1, yes, y, on) to fail when sources are mixed.
-Set APPSTORE_BYPASS_KEYCHAIN to 1/true/yes/on to bypass keychain.`,
+Use --strict-auth or ASC_STRICT_AUTH=true (also: 1, yes, y, on) to fail when sources are mixed.
+Set ASC_BYPASS_KEYCHAIN to 1/true/yes/on to bypass keychain.`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -76,18 +76,18 @@ func AuthInitCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "init",
-		ShortUsage: "appstore auth init [flags]",
+		ShortUsage: "asc auth init [flags]",
 		ShortHelp:  "Create a template config.json for authentication.",
 		LongHelp: `Create a template config.json for authentication.
 
-This writes ~/.appstore/config.json with empty fields and secure permissions.
-Use --local to write ./.appstore/config.json in the current repo instead.
+This writes ~/.asc/config.json with empty fields and secure permissions.
+Use --local to write ./.asc/config.json in the current repo instead.
 
 Examples:
-  appstore auth init
-  appstore auth init --local
-  appstore auth init --force
-  appstore auth init --open`,
+  asc auth init
+  asc auth init --local
+  asc auth init --force
+  asc auth init --open`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -145,7 +145,7 @@ func AuthDoctorCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "doctor",
-		ShortUsage: "appstore auth doctor [flags]",
+		ShortUsage: "asc auth doctor [flags]",
 		ShortHelp:  "Diagnose authentication configuration issues.",
 		LongHelp: `Diagnose authentication configuration issues.
 
@@ -153,9 +153,9 @@ Runs a comprehensive health check across keychain availability, config files,
 stored profiles, private key files, and environment variables.
 
 Examples:
-  appstore auth doctor
-  appstore auth doctor --output json
-  appstore auth doctor --fix --confirm`,
+  asc auth doctor
+  asc auth doctor --output json
+  asc auth doctor --fix --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -403,26 +403,26 @@ func AuthLoginCommand() *ffcli.Command {
 	issuerID := fs.String("issuer-id", "", "App Store Connect Issuer ID")
 	keyPath := fs.String("private-key", "", "Path to private key (.p8) file")
 	bypassKeychain := fs.Bool("bypass-keychain", false, "Store credentials in config.json instead of keychain")
-	local := fs.Bool("local", false, "When bypassing keychain, write to ./.appstore/config.json")
+	local := fs.Bool("local", false, "When bypassing keychain, write to ./.asc/config.json")
 	network := fs.Bool("network", false, "Validate credentials with a lightweight API request")
 	skipValidation := fs.Bool("skip-validation", false, "Skip JWT and network validation checks")
 
 	return &ffcli.Command{
 		Name:       "login",
-		ShortUsage: "appstore auth login [flags]",
+		ShortUsage: "asc auth login [flags]",
 		ShortHelp:  "Register and store App Store Connect API key credentials.",
 		LongHelp: `Register and store App Store Connect API key credentials.
 
 This command stores your API credentials in the system keychain when available,
 with a local config fallback (restricted permissions). Use --bypass-keychain to
-explicitly bypass keychain and write credentials to ~/.appstore/config.json instead.
-Add --local to write ./.appstore/config.json for the current repo.
+explicitly bypass keychain and write credentials to ~/.asc/config.json instead.
+Add --local to write ./.asc/config.json for the current repo.
 
 Examples:
-  appstore auth login --name "MyKey" --key-id "ABC123" --issuer-id "DEF456" --private-key /path/to/AuthKey.p8
-  appstore auth login --bypass-keychain --local --name "MyKey" --key-id "ABC123" --issuer-id "DEF456" --private-key /path/to/AuthKey.p8
-  appstore auth login --network --name "MyKey" --key-id "ABC123" --issuer-id "DEF456" --private-key /path/to/AuthKey.p8
-  appstore auth login --skip-validation --name "MyKey" --key-id "ABC123" --issuer-id "DEF456" --private-key /path/to/AuthKey.p8
+  asc auth login --name "MyKey" --key-id "ABC123" --issuer-id "DEF456" --private-key /path/to/AuthKey.p8
+  asc auth login --bypass-keychain --local --name "MyKey" --key-id "ABC123" --issuer-id "DEF456" --private-key /path/to/AuthKey.p8
+  asc auth login --network --name "MyKey" --key-id "ABC123" --issuer-id "DEF456" --private-key /path/to/AuthKey.p8
+  asc auth login --skip-validation --name "MyKey" --key-id "ABC123" --issuer-id "DEF456" --private-key /path/to/AuthKey.p8
 
 The private key file path is stored securely. The key content is never saved.`,
 		FlagSet:   fs,
@@ -430,7 +430,7 @@ The private key file path is stored securely. The key content is never saved.`,
 		Exec: func(ctx context.Context, args []string) error {
 			bypassKeychainEnabled := *bypassKeychain || authsvc.ShouldBypassKeychain()
 			if *local && !bypassKeychainEnabled {
-				return shared.UsageError("--local requires --bypass-keychain or APPSTORE_BYPASS_KEYCHAIN set to 1/true/yes/on")
+				return shared.UsageError("--local requires --bypass-keychain or ASC_BYPASS_KEYCHAIN set to 1/true/yes/on")
 			}
 			if *name == "" {
 				fmt.Fprintln(os.Stderr, "Error: --name is required")
@@ -504,15 +504,15 @@ func AuthSwitchCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "switch",
-		ShortUsage: "appstore auth switch --name <profile>",
+		ShortUsage: "asc auth switch --name <profile>",
 		ShortHelp:  "Switch the default authentication profile.",
 		LongHelp: `Switch the default authentication profile.
 
 This updates the default profile used for keychain or config credentials.
 
 Examples:
-  appstore auth switch --name "Personal"
-  appstore auth switch --name "Client"`,
+  asc auth switch --name "Personal"
+  asc auth switch --name "Client"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -563,14 +563,14 @@ func AuthLogoutCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "logout",
-		ShortUsage: "appstore auth logout [flags]",
+		ShortUsage: "asc auth logout [flags]",
 		ShortHelp:  "Remove stored API credentials.",
 		LongHelp: `Remove stored API credentials.
 
 Examples:
-  appstore auth logout
-  appstore auth logout --all
-  appstore auth logout --name "MyKey"`,
+  asc auth logout
+  asc auth logout --all
+  asc auth logout --name "MyKey"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -608,7 +608,7 @@ func AuthStatusCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "status",
-		ShortUsage: "appstore auth status",
+		ShortUsage: "asc auth status",
 		ShortHelp:  "Show current authentication status.",
 		LongHelp: `Show current authentication status.
 
@@ -616,9 +616,9 @@ Displays information about stored API keys and which one is currently active.
 Add --validate to perform a network validation for each stored credential.
 
 Examples:
-  appstore auth status
-  appstore auth status --verbose
-  appstore auth status --validate`,
+  asc auth status
+  asc auth status --verbose
+  asc auth status --validate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -648,7 +648,7 @@ Examples:
 				if configErr == nil {
 					storageLocation = configPath
 				}
-				warnings = append(warnings, "Keychain bypassed via APPSTORE_BYPASS_KEYCHAIN (truthy values: 1/true/yes/on).")
+				warnings = append(warnings, "Keychain bypassed via ASC_BYPASS_KEYCHAIN (truthy values: 1/true/yes/on).")
 			} else if !keychainAvailable {
 				storageBackend = "Config File"
 				storageLocation = "unknown"
@@ -691,7 +691,7 @@ Examples:
 
 			validationFailures := 0
 			if len(credentials) == 0 {
-				fmt.Println("No credentials stored. Run 'appstore auth login' to get started.")
+				fmt.Println("No credentials stored. Run 'asc auth login' to get started.")
 			} else {
 				fmt.Println("Stored credentials:")
 				for _, cred := range credentials {
@@ -716,9 +716,9 @@ Examples:
 			}
 
 			profile := shared.ResolveProfileName()
-			envKeyID := strings.TrimSpace(os.Getenv("APPSTORE_KEY_ID"))
-			envIssuerID := strings.TrimSpace(os.Getenv("APPSTORE_ISSUER_ID"))
-			hasKeyEnv := strings.TrimSpace(os.Getenv("APPSTORE_PRIVATE_KEY_PATH")) != "" ||
+			envKeyID := strings.TrimSpace(os.Getenv("ASC_KEY_ID"))
+			envIssuerID := strings.TrimSpace(os.Getenv("ASC_ISSUER_ID"))
+			hasKeyEnv := strings.TrimSpace(os.Getenv("ASC_PRIVATE_KEY_PATH")) != "" ||
 				strings.TrimSpace(os.Getenv(shared.PrivateKeyEnvVar)) != "" ||
 				strings.TrimSpace(os.Getenv(shared.PrivateKeyBase64EnvVar)) != ""
 			envProvided := envKeyID != "" || envIssuerID != "" || hasKeyEnv
@@ -727,9 +727,9 @@ Examples:
 			if profile != "" && envProvided {
 				fmt.Printf("Profile %q selected; environment credentials will be ignored.\n", profile)
 			} else if bypassKeychain && envComplete {
-				fmt.Println("Environment credentials detected (APPSTORE_KEY_ID present). With APPSTORE_BYPASS_KEYCHAIN set to 1/true/yes/on, they will be used when no profile is selected.")
+				fmt.Println("Environment credentials detected (ASC_KEY_ID present). With ASC_BYPASS_KEYCHAIN set to 1/true/yes/on, they will be used when no profile is selected.")
 			} else if bypassKeychain && envProvided && !envComplete {
-				fmt.Println("Environment credentials are incomplete. Set APPSTORE_KEY_ID, APPSTORE_ISSUER_ID, and one of APPSTORE_PRIVATE_KEY_PATH/APPSTORE_PRIVATE_KEY/APPSTORE_PRIVATE_KEY_B64.")
+				fmt.Println("Environment credentials are incomplete. Set ASC_KEY_ID, ASC_ISSUER_ID, and one of ASC_PRIVATE_KEY_PATH/ASC_PRIVATE_KEY/ASC_PRIVATE_KEY_B64.")
 			}
 			if *validate && validationFailures > 0 {
 				return shared.NewReportedError(fmt.Errorf("auth status: validation failed for %d credential(s)", validationFailures))

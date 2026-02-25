@@ -19,21 +19,21 @@ func UsersCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "users",
-		ShortUsage: "appstore users <subcommand> [flags]",
+		ShortUsage: "asc users <subcommand> [flags]",
 		ShortHelp:  "Manage users and invitations in App Store Connect.",
 		LongHelp: `Manage users and invitations in App Store Connect.
 
 Examples:
-  appstore users list
-  appstore users get --id "USER_ID"
-  appstore users get --id "USER_ID" --include visibleApps
-  appstore users update --id "USER_ID" --roles "ADMIN"
-  appstore users delete --id "USER_ID" --confirm
-  appstore users invite --email "user@example.com" --roles "ADMIN" --all-apps
-  appstore users invites list
-  appstore users invites visible-apps list --id "INVITE_ID"
-  appstore users visible-apps list --id "USER_ID"
-  appstore users visible-apps get --id "USER_ID"`,
+  asc users list
+  asc users get --id "USER_ID"
+  asc users get --id "USER_ID" --include visibleApps
+  asc users update --id "USER_ID" --roles "ADMIN"
+  asc users delete --id "USER_ID" --confirm
+  asc users invite --email "user@example.com" --roles "ADMIN" --all-apps
+  asc users invites list
+  asc users invites visible-apps list --id "INVITE_ID"
+  asc users visible-apps list --id "USER_ID"
+  asc users visible-apps get --id "USER_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -64,17 +64,17 @@ func UsersListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore users list [flags]",
+		ShortUsage: "asc users list [flags]",
 		ShortHelp:  "List users in App Store Connect.",
 		LongHelp: `List users in App Store Connect.
 
 Examples:
-  appstore users list
-  appstore users list --email "user@example.com"
-  appstore users list --role "ADMIN"
-  appstore users list --role "DEVELOPER,APP_MANAGER"
-  appstore users list --limit 50
-  appstore users list --paginate`,
+  asc users list
+  asc users list --email "user@example.com"
+  asc users list --role "ADMIN"
+  asc users list --role "DEVELOPER,APP_MANAGER"
+  asc users list --limit 50
+  asc users list --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -137,13 +137,13 @@ func UsersGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore users get --id USER_ID",
+		ShortUsage: "asc users get --id USER_ID",
 		ShortHelp:  "Get a user by ID.",
 		LongHelp: `Get a user by ID.
 
 Examples:
-  appstore users get --id "USER_ID"
-  appstore users get --id "USER_ID" --include visibleApps`,
+  asc users get --id "USER_ID"
+  asc users get --id "USER_ID" --include visibleApps`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -192,13 +192,13 @@ func UsersUpdateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "update",
-		ShortUsage: "appstore users update --id USER_ID --roles ROLE_ID[,ROLE_ID...] [--visible-app APP_ID[,APP_ID...]]",
+		ShortUsage: "asc users update --id USER_ID --roles ROLE_ID[,ROLE_ID...] [--visible-app APP_ID[,APP_ID...]]",
 		ShortHelp:  "Update a user.",
 		LongHelp: `Update a user by ID.
 
 Examples:
-  appstore users update --id "USER_ID" --roles "ADMIN"
-  appstore users update --id "USER_ID" --roles "ADMIN" --visible-app "APP_ID"`,
+  asc users update --id "USER_ID" --roles "ADMIN"
+  asc users update --id "USER_ID" --roles "ADMIN" --visible-app "APP_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -258,12 +258,12 @@ func UsersDeleteCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "delete",
-		ShortUsage: "appstore users delete --id USER_ID --confirm",
+		ShortUsage: "asc users delete --id USER_ID --confirm",
 		ShortHelp:  "Delete a user.",
 		LongHelp: `Delete a user by ID.
 
 Examples:
-  appstore users delete --id "USER_ID" --confirm`,
+  asc users delete --id "USER_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -314,13 +314,13 @@ func UsersInviteCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "invite",
-		ShortUsage: "appstore users invite --email EMAIL --first-name NAME --last-name NAME --roles ROLE[,ROLE...] [--all-apps | --visible-app APP_ID[,APP_ID...]]",
+		ShortUsage: "asc users invite --email EMAIL --first-name NAME --last-name NAME --roles ROLE[,ROLE...] [--all-apps | --visible-app APP_ID[,APP_ID...]]",
 		ShortHelp:  "Invite a user.",
 		LongHelp: `Invite a new user to App Store Connect.
 
 Examples:
-  appstore users invite --email "user@example.com" --first-name "Jane" --last-name "Doe" --roles "ADMIN" --all-apps
-  appstore users invite --email "user@example.com" --first-name "John" --last-name "Smith" --roles "DEVELOPER" --visible-app "APP_ID"`,
+  asc users invite --email "user@example.com" --first-name "Jane" --last-name "Doe" --roles "ADMIN" --all-apps
+  asc users invite --email "user@example.com" --first-name "John" --last-name "Smith" --roles "DEVELOPER" --visible-app "APP_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -398,15 +398,15 @@ func UsersInvitesCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "invites",
-		ShortUsage: "appstore users invites <subcommand> [flags]",
+		ShortUsage: "asc users invites <subcommand> [flags]",
 		ShortHelp:  "Manage user invitations.",
 		LongHelp: `Manage user invitations.
 
 Examples:
-  appstore users invites list
-  appstore users invites get --id "INVITE_ID"
-  appstore users invites revoke --id "INVITE_ID" --confirm
-  appstore users invites visible-apps list --id "INVITE_ID"`,
+  asc users invites list
+  asc users invites get --id "INVITE_ID"
+  asc users invites revoke --id "INVITE_ID" --confirm
+  asc users invites visible-apps list --id "INVITE_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -432,14 +432,14 @@ func UsersInvitesListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore users invites list [flags]",
+		ShortUsage: "asc users invites list [flags]",
 		ShortHelp:  "List user invitations.",
 		LongHelp: `List user invitations.
 
 Examples:
-  appstore users invites list
-  appstore users invites list --limit 50
-  appstore users invites list --paginate`,
+  asc users invites list
+  asc users invites list --limit 50
+  asc users invites list --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -499,12 +499,12 @@ func UsersInvitesGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore users invites get --id INVITE_ID",
+		ShortUsage: "asc users invites get --id INVITE_ID",
 		ShortHelp:  "Get a user invitation by ID.",
 		LongHelp: `Get a user invitation by ID.
 
 Examples:
-  appstore users invites get --id "INVITE_ID"`,
+  asc users invites get --id "INVITE_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -542,12 +542,12 @@ func UsersInvitesRevokeCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "revoke",
-		ShortUsage: "appstore users invites revoke --id INVITE_ID --confirm",
+		ShortUsage: "asc users invites revoke --id INVITE_ID --confirm",
 		ShortHelp:  "Revoke a user invitation.",
 		LongHelp: `Revoke a user invitation by ID.
 
 Examples:
-  appstore users invites revoke --id "INVITE_ID" --confirm`,
+  asc users invites revoke --id "INVITE_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

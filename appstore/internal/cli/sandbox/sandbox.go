@@ -14,16 +14,16 @@ func SandboxCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "sandbox",
-		ShortUsage: "appstore sandbox <subcommand> [flags]",
+		ShortUsage: "asc sandbox <subcommand> [flags]",
 		ShortHelp:  "Manage sandbox testers in App Store Connect.",
 		LongHelp: `Manage sandbox testers for in-app purchase testing.
 
 Examples:
-  appstore sandbox list
-  appstore sandbox list --email "tester@example.com"
-  appstore sandbox get --id "SANDBOX_TESTER_ID"
-  appstore sandbox update --id "SANDBOX_TESTER_ID" --territory "USA"
-  appstore sandbox clear-history --id "SANDBOX_TESTER_ID" --confirm
+  asc sandbox list
+  asc sandbox list --email "tester@example.com"
+  asc sandbox get --id "SANDBOX_TESTER_ID"
+  asc sandbox update --id "SANDBOX_TESTER_ID" --territory "USA"
+  asc sandbox clear-history --id "SANDBOX_TESTER_ID" --confirm
 `,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,

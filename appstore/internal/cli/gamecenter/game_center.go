@@ -19,26 +19,26 @@ func GameCenterCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "game-center",
-		ShortUsage: "appstore game-center <subcommand> [flags]",
+		ShortUsage: "asc game-center <subcommand> [flags]",
 		ShortHelp:  "Manage Game Center resources in App Store Connect.",
 		LongHelp: `Manage Game Center resources in App Store Connect.
 
 Examples:
-  appstore game-center achievements list --app "APP_ID"
-  appstore game-center achievements create --app "APP_ID" --reference-name "First Win" --vendor-id "com.example.firstwin" --points 10
-  appstore game-center leaderboards list --app "APP_ID"
-  appstore game-center leaderboards create --app "APP_ID" --reference-name "High Score" --vendor-id "com.example.highscore" --formatter INTEGER --sort DESC --submission-type BEST_SCORE
-  appstore game-center leaderboard-sets list --app "APP_ID"
-  appstore game-center leaderboard-sets create --app "APP_ID" --reference-name "Season 1" --vendor-id "com.example.season1"
-  appstore game-center challenges list --app "APP_ID"
-  appstore game-center activities list --app "APP_ID"
-  appstore game-center groups list --app "APP_ID"
-  appstore game-center app-versions list --app "APP_ID"
-  appstore game-center enabled-versions list --app "APP_ID"
-  appstore game-center enabled-versions compatible-versions --id "ENABLED_VERSION_ID"
-  appstore game-center details list --app "APP_ID"
-  appstore game-center details achievements-v2 list --id "DETAILS_ID"
-  appstore game-center matchmaking queues list`,
+  asc game-center achievements list --app "APP_ID"
+  asc game-center achievements create --app "APP_ID" --reference-name "First Win" --vendor-id "com.example.firstwin" --points 10
+  asc game-center leaderboards list --app "APP_ID"
+  asc game-center leaderboards create --app "APP_ID" --reference-name "High Score" --vendor-id "com.example.highscore" --formatter INTEGER --sort DESC --submission-type BEST_SCORE
+  asc game-center leaderboard-sets list --app "APP_ID"
+  asc game-center leaderboard-sets create --app "APP_ID" --reference-name "Season 1" --vendor-id "com.example.season1"
+  asc game-center challenges list --app "APP_ID"
+  asc game-center activities list --app "APP_ID"
+  asc game-center groups list --app "APP_ID"
+  asc game-center app-versions list --app "APP_ID"
+  asc game-center enabled-versions list --app "APP_ID"
+  asc game-center enabled-versions compatible-versions --id "ENABLED_VERSION_ID"
+  asc game-center details list --app "APP_ID"
+  asc game-center details achievements-v2 list --id "DETAILS_ID"
+  asc game-center matchmaking queues list`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{

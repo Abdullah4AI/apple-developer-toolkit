@@ -19,14 +19,14 @@ func AnalyticsReportsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "reports",
-		ShortUsage: "appstore analytics reports <subcommand> [flags]",
+		ShortUsage: "asc analytics reports <subcommand> [flags]",
 		ShortHelp:  "Get analytics reports by ID or relationships.",
 		LongHelp: `Get analytics reports by ID or relationships.
 
 Examples:
-  appstore analytics reports get --report-id "REPORT_ID"
-  appstore analytics reports relationships --report-id "REPORT_ID"
-  appstore analytics reports relationships --report-id "REPORT_ID" --paginate`,
+  asc analytics reports get --report-id "REPORT_ID"
+  asc analytics reports relationships --report-id "REPORT_ID"
+  asc analytics reports relationships --report-id "REPORT_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -48,12 +48,12 @@ func AnalyticsReportsGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore analytics reports get --report-id \"REPORT_ID\" [flags]",
+		ShortUsage: "asc analytics reports get --report-id \"REPORT_ID\" [flags]",
 		ShortHelp:  "Get an analytics report by ID.",
 		LongHelp: `Get an analytics report by ID.
 
 Examples:
-  appstore analytics reports get --report-id "REPORT_ID"`,
+  asc analytics reports get --report-id "REPORT_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -92,13 +92,13 @@ func AnalyticsReportsRelationshipsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "relationships",
-		ShortUsage: "appstore analytics reports relationships --report-id \"REPORT_ID\" [flags]",
+		ShortUsage: "asc analytics reports relationships --report-id \"REPORT_ID\" [flags]",
 		ShortHelp:  "List analytics report instance relationships.",
 		LongHelp: `List analytics report instance relationships.
 
 Examples:
-  appstore analytics reports relationships --report-id "REPORT_ID"
-  appstore analytics reports relationships --report-id "REPORT_ID" --paginate`,
+  asc analytics reports relationships --report-id "REPORT_ID"
+  asc analytics reports relationships --report-id "REPORT_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

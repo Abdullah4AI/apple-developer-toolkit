@@ -1974,8 +1974,11 @@ func TestPrintTable_Builds(t *testing.T) {
 		return PrintTable(resp)
 	})
 
-	if !strings.Contains(output, "Processing") {
+	if !strings.Contains(output, "ID") || !strings.Contains(output, "Processing") {
 		t.Fatalf("expected builds header in output, got: %s", output)
+	}
+	if !strings.Contains(output, "1") {
+		t.Fatalf("expected build id in output, got: %s", output)
 	}
 	if !strings.Contains(output, "1.2.3") {
 		t.Fatalf("expected build version in output, got: %s", output)
@@ -2001,11 +2004,35 @@ func TestPrintMarkdown_Builds(t *testing.T) {
 		return PrintMarkdown(resp)
 	})
 
-	if !strings.Contains(output, "Version") || !strings.Contains(output, "Uploaded") || !strings.Contains(output, "Processing") {
+	if !strings.Contains(output, "ID") || !strings.Contains(output, "Version") || !strings.Contains(output, "Uploaded") || !strings.Contains(output, "Processing") {
 		t.Fatalf("expected markdown header, got: %s", output)
 	}
 	if !strings.Contains(output, "1.2.3") {
 		t.Fatalf("expected build version in output, got: %s", output)
+	}
+}
+
+func TestPrintTable_Builds_EmptyStillShowsHeaders(t *testing.T) {
+	resp := &BuildsResponse{Data: []Resource[BuildAttributes]{}}
+
+	output := captureStdout(t, func() error {
+		return PrintTable(resp)
+	})
+
+	if !strings.Contains(output, "ID") || !strings.Contains(output, "Version") || !strings.Contains(output, "Processing") {
+		t.Fatalf("expected builds headers in output for empty data, got: %s", output)
+	}
+}
+
+func TestPrintMarkdown_Builds_EmptyStillShowsHeaders(t *testing.T) {
+	resp := &BuildsResponse{Data: []Resource[BuildAttributes]{}}
+
+	output := captureStdout(t, func() error {
+		return PrintMarkdown(resp)
+	})
+
+	if !strings.Contains(output, "ID") || !strings.Contains(output, "Version") || !strings.Contains(output, "Processing") {
+		t.Fatalf("expected markdown builds headers in output for empty data, got: %s", output)
 	}
 }
 
@@ -2623,6 +2650,58 @@ func TestPrintMarkdown_AppPreviewUploadResult(t *testing.T) {
 	}
 	if !strings.Contains(output, "PREVIEW_123") {
 		t.Fatalf("expected preview ID in output, got: %s", output)
+	}
+}
+
+func TestPrintJSON_CustomProductPageScreenshotUploadResult(t *testing.T) {
+	result := &CustomProductPageScreenshotUploadResult{
+		CustomProductPageLocalizationID: "CPP_LOC_123",
+		SetID:                           "SET_123",
+		DisplayType:                     "APP_IPHONE_65",
+		Results: []AssetUploadResultItem{
+			{FileName: "shot.png", AssetID: "SHOT_123", State: "COMPLETE"},
+		},
+	}
+
+	output := captureStdout(t, func() error {
+		return PrintJSON(result)
+	})
+
+	var parsed map[string]any
+	if err := json.Unmarshal([]byte(output), &parsed); err != nil {
+		t.Fatalf("failed to parse output JSON: %v", err)
+	}
+	if got := parsed["customProductPageLocalizationId"]; got != "CPP_LOC_123" {
+		t.Fatalf("expected customProductPageLocalizationId to be CPP_LOC_123, got: %#v", got)
+	}
+	if _, exists := parsed["versionLocalizationId"]; exists {
+		t.Fatalf("did not expect versionLocalizationId in output JSON: %s", output)
+	}
+}
+
+func TestPrintJSON_CustomProductPagePreviewUploadResult(t *testing.T) {
+	result := &CustomProductPagePreviewUploadResult{
+		CustomProductPageLocalizationID: "CPP_LOC_123",
+		SetID:                           "SET_123",
+		PreviewType:                     "IPHONE_65",
+		Results: []AssetUploadResultItem{
+			{FileName: "preview.mov", AssetID: "PREVIEW_123", State: "COMPLETE"},
+		},
+	}
+
+	output := captureStdout(t, func() error {
+		return PrintJSON(result)
+	})
+
+	var parsed map[string]any
+	if err := json.Unmarshal([]byte(output), &parsed); err != nil {
+		t.Fatalf("failed to parse output JSON: %v", err)
+	}
+	if got := parsed["customProductPageLocalizationId"]; got != "CPP_LOC_123" {
+		t.Fatalf("expected customProductPageLocalizationId to be CPP_LOC_123, got: %#v", got)
+	}
+	if _, exists := parsed["versionLocalizationId"]; exists {
+		t.Fatalf("did not expect versionLocalizationId in output JSON: %s", output)
 	}
 }
 

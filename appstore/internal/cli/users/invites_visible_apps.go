@@ -20,12 +20,12 @@ func UsersInvitesVisibleAppsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "visible-apps",
-		ShortUsage: "appstore users invites visible-apps <subcommand> [flags]",
+		ShortUsage: "asc users invites visible-apps <subcommand> [flags]",
 		ShortHelp:  "List visible apps for a user invitation.",
 		LongHelp: `List visible apps for a user invitation.
 
 Examples:
-  appstore users invites visible-apps list --id "INVITE_ID"`,
+  asc users invites visible-apps list --id "INVITE_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -49,13 +49,13 @@ func UsersInvitesVisibleAppsListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore users invites visible-apps list --id \"INVITE_ID\" [flags]",
+		ShortUsage: "asc users invites visible-apps list --id \"INVITE_ID\" [flags]",
 		ShortHelp:  "List visible apps for a user invitation.",
 		LongHelp: `List visible apps for a user invitation.
 
 Examples:
-  appstore users invites visible-apps list --id "INVITE_ID"
-  appstore users invites visible-apps list --id "INVITE_ID" --paginate`,
+  asc users invites visible-apps list --id "INVITE_ID"
+  asc users invites visible-apps list --id "INVITE_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

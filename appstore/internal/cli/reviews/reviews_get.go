@@ -20,12 +20,12 @@ func ReviewsGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore reviews get --id \"REVIEW_ID\"",
+		ShortUsage: "asc reviews get --id \"REVIEW_ID\"",
 		ShortHelp:  "Get a customer review by ID.",
 		LongHelp: `Get a customer review by ID.
 
 Examples:
-  appstore reviews get --id "REVIEW_ID"`,
+  asc reviews get --id "REVIEW_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

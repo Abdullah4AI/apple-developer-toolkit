@@ -25,7 +25,7 @@ func ShotsCaptureCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "capture",
-		ShortUsage: "appstore screenshots capture --bundle-id BUNDLE_ID --name NAME [flags]",
+		ShortUsage: "asc screenshots capture --bundle-id BUNDLE_ID --name NAME [flags]",
 		ShortHelp:  "Capture a single screenshot from the simulator (experimental).",
 		LongHelp: `Capture one screenshot from the running app on the simulator (experimental).
 App must already be installed; simulator must be booted or --udid set.`,

@@ -29,14 +29,14 @@ func ReviewDetailsAttachmentsListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "attachments-list",
-		ShortUsage: "appstore review attachments-list --review-detail \"REVIEW_DETAIL_ID\"",
+		ShortUsage: "asc review attachments-list --review-detail \"REVIEW_DETAIL_ID\"",
 		ShortHelp:  "List review attachments for a review detail.",
 		LongHelp: `List review attachments for a review detail.
 
 Examples:
-  appstore review attachments-list --review-detail "REVIEW_DETAIL_ID"
-  appstore review attachments-list --review-detail "REVIEW_DETAIL_ID" --fields "fileName,fileSize" --limit 50
-  appstore review attachments-list --review-detail "REVIEW_DETAIL_ID" --paginate`,
+  asc review attachments-list --review-detail "REVIEW_DETAIL_ID"
+  asc review attachments-list --review-detail "REVIEW_DETAIL_ID" --fields "fileName,fileSize" --limit 50
+  asc review attachments-list --review-detail "REVIEW_DETAIL_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -121,13 +121,13 @@ func ReviewDetailsAttachmentsGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "attachments-get",
-		ShortUsage: "appstore review attachments-get --id \"ATTACHMENT_ID\"",
+		ShortUsage: "asc review attachments-get --id \"ATTACHMENT_ID\"",
 		ShortHelp:  "Get a review attachment by ID.",
 		LongHelp: `Get a review attachment by ID.
 
 Examples:
-  appstore review attachments-get --id "ATTACHMENT_ID"
-  appstore review attachments-get --id "ATTACHMENT_ID" --fields "fileName,fileSize"`,
+  asc review attachments-get --id "ATTACHMENT_ID"
+  asc review attachments-get --id "ATTACHMENT_ID" --fields "fileName,fileSize"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -182,12 +182,12 @@ func ReviewDetailsAttachmentsUploadCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "attachments-upload",
-		ShortUsage: "appstore review attachments-upload --review-detail \"REVIEW_DETAIL_ID\" --file ./attachment.pdf",
+		ShortUsage: "asc review attachments-upload --review-detail \"REVIEW_DETAIL_ID\" --file ./attachment.pdf",
 		ShortHelp:  "Upload a review attachment.",
 		LongHelp: `Upload a review attachment.
 
 Examples:
-  appstore review attachments-upload --review-detail "REVIEW_DETAIL_ID" --file ./review-doc.pdf`,
+  asc review attachments-upload --review-detail "REVIEW_DETAIL_ID" --file ./review-doc.pdf`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -273,12 +273,12 @@ func ReviewDetailsAttachmentsDeleteCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "attachments-delete",
-		ShortUsage: "appstore review attachments-delete --id \"ATTACHMENT_ID\" --confirm",
+		ShortUsage: "asc review attachments-delete --id \"ATTACHMENT_ID\" --confirm",
 		ShortHelp:  "Delete a review attachment.",
 		LongHelp: `Delete a review attachment.
 
 Examples:
-  appstore review attachments-delete --id "ATTACHMENT_ID" --confirm`,
+  asc review attachments-delete --id "ATTACHMENT_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

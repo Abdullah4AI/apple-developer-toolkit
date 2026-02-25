@@ -19,14 +19,14 @@ func ExperimentTreatmentLocalizationsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "localizations",
-		ShortUsage: "appstore product-pages experiments treatments localizations <subcommand> [flags]",
+		ShortUsage: "asc product-pages experiments treatments localizations <subcommand> [flags]",
 		ShortHelp:  "Manage treatment localizations.",
 		LongHelp: `Manage treatment localizations.
 
 Examples:
-  appstore product-pages experiments treatments localizations list --treatment-id "TREATMENT_ID"
-  appstore product-pages experiments treatments localizations create --treatment-id "TREATMENT_ID" --locale "en-US"
-  appstore product-pages experiments treatments localizations delete --localization-id "LOCALIZATION_ID" --confirm`,
+  asc product-pages experiments treatments localizations list --treatment-id "TREATMENT_ID"
+  asc product-pages experiments treatments localizations create --treatment-id "TREATMENT_ID" --locale "en-US"
+  asc product-pages experiments treatments localizations delete --localization-id "LOCALIZATION_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -55,13 +55,13 @@ func ExperimentTreatmentLocalizationsListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore product-pages experiments treatments localizations list --treatment-id \"TREATMENT_ID\" [flags]",
+		ShortUsage: "asc product-pages experiments treatments localizations list --treatment-id \"TREATMENT_ID\" [flags]",
 		ShortHelp:  "List treatment localizations.",
 		LongHelp: `List treatment localizations.
 
 Examples:
-  appstore product-pages experiments treatments localizations list --treatment-id "TREATMENT_ID"
-  appstore product-pages experiments treatments localizations list --treatment-id "TREATMENT_ID" --paginate`,
+  asc product-pages experiments treatments localizations list --treatment-id "TREATMENT_ID"
+  asc product-pages experiments treatments localizations list --treatment-id "TREATMENT_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -127,12 +127,12 @@ func ExperimentTreatmentLocalizationsGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore product-pages experiments treatments localizations get --localization-id \"LOCALIZATION_ID\"",
+		ShortUsage: "asc product-pages experiments treatments localizations get --localization-id \"LOCALIZATION_ID\"",
 		ShortHelp:  "Get a treatment localization by ID.",
 		LongHelp: `Get a treatment localization by ID.
 
 Examples:
-  appstore product-pages experiments treatments localizations get --localization-id "LOCALIZATION_ID"`,
+  asc product-pages experiments treatments localizations get --localization-id "LOCALIZATION_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -170,12 +170,12 @@ func ExperimentTreatmentLocalizationsCreateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "create",
-		ShortUsage: "appstore product-pages experiments treatments localizations create --treatment-id \"TREATMENT_ID\" --locale \"en-US\"",
+		ShortUsage: "asc product-pages experiments treatments localizations create --treatment-id \"TREATMENT_ID\" --locale \"en-US\"",
 		ShortHelp:  "Create a treatment localization.",
 		LongHelp: `Create a treatment localization.
 
 Examples:
-  appstore product-pages experiments treatments localizations create --treatment-id "TREATMENT_ID" --locale "en-US"`,
+  asc product-pages experiments treatments localizations create --treatment-id "TREATMENT_ID" --locale "en-US"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -219,12 +219,12 @@ func ExperimentTreatmentLocalizationsDeleteCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "delete",
-		ShortUsage: "appstore product-pages experiments treatments localizations delete --localization-id \"LOCALIZATION_ID\" --confirm",
+		ShortUsage: "asc product-pages experiments treatments localizations delete --localization-id \"LOCALIZATION_ID\" --confirm",
 		ShortHelp:  "Delete a treatment localization.",
 		LongHelp: `Delete a treatment localization.
 
 Examples:
-  appstore product-pages experiments treatments localizations delete --localization-id "LOCALIZATION_ID" --confirm`,
+  asc product-pages experiments treatments localizations delete --localization-id "LOCALIZATION_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

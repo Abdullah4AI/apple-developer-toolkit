@@ -19,8 +19,8 @@ import (
 )
 
 const (
-	communityWallSourceEnv     = "APPSTORE_WALL_SOURCE"
-	communityWallRemoteURL     = "https://raw.githubusercontent.com/Abdullah4AI/apple-developer-toolkit/main/docs/wall-of-apps.json"
+	communityWallSourceEnv     = "ASC_WALL_SOURCE"
+	communityWallRemoteURL     = "https://raw.githubusercontent.com/rudrankriyam/App-Store-Connect-CLI/main/docs/wall-of-apps.json"
 	communityWallSourcePath    = "docs/wall-of-apps.json"
 	defaultCommunityWallSort   = "name"
 	defaultCommunityWallOutput = "table"
@@ -56,15 +56,15 @@ func AppsWallCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "wall",
-		ShortUsage: "appstore apps wall [flags]",
+		ShortUsage: "asc apps wall [flags]",
 		ShortHelp:  "Show the community Wall of Apps from project metadata.",
 		LongHelp: `Show the community Wall of Apps from project metadata.
 
 Examples:
-  appstore apps wall
-  appstore apps wall --output markdown
-  appstore apps wall --include-platforms iOS,macOS --limit 20
-  appstore apps wall --sort -name`,
+  asc apps wall
+  asc apps wall --output markdown
+  asc apps wall --include-platforms iOS,macOS --limit 20
+  asc apps wall --sort -name`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

@@ -219,9 +219,11 @@ func TestParseParams_ColonAtStart(t *testing.T) {
 }
 
 func TestRunShellCommand_UsesBashWithPipefailWhenAvailable(t *testing.T) {
+	resetShellCacheForTest()
 	originalLookPathFn := lookPathFn
 	originalCommandContextFn := commandContextFn
 	t.Cleanup(func() {
+		resetShellCacheForTest()
 		lookPathFn = originalLookPathFn
 		commandContextFn = originalCommandContextFn
 	})
@@ -255,9 +257,11 @@ func TestRunShellCommand_UsesBashWithPipefailWhenAvailable(t *testing.T) {
 }
 
 func TestRunShellCommand_FallsBackToShWhenBashUnavailable(t *testing.T) {
+	resetShellCacheForTest()
 	originalLookPathFn := lookPathFn
 	originalCommandContextFn := commandContextFn
 	t.Cleanup(func() {
+		resetShellCacheForTest()
 		lookPathFn = originalLookPathFn
 		commandContextFn = originalCommandContextFn
 	})
@@ -295,9 +299,11 @@ func TestRunShellCommand_FallsBackToShWhenBashUnavailable(t *testing.T) {
 }
 
 func TestRunShellCommand_NoSupportedShellFound(t *testing.T) {
+	resetShellCacheForTest()
 	originalLookPathFn := lookPathFn
 	originalCommandContextFn := commandContextFn
 	t.Cleanup(func() {
+		resetShellCacheForTest()
 		lookPathFn = originalLookPathFn
 		commandContextFn = originalCommandContextFn
 	})

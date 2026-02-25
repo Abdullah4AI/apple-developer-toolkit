@@ -21,21 +21,21 @@ func WebhooksCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "webhooks",
-		ShortUsage: "appstore webhooks <subcommand> [flags]",
+		ShortUsage: "asc webhooks <subcommand> [flags]",
 		ShortHelp:  "Manage webhooks in App Store Connect.",
 		LongHelp: `Manage webhooks in App Store Connect.
 
 Examples:
-  appstore webhooks list --app "APP_ID"
-  appstore webhooks get --webhook-id "WEBHOOK_ID"
-  appstore webhooks create --app "APP_ID" --name "Build Updates" --url "https://example.com/webhook" --secret "secret123" --events "SUBSCRIPTION.CREATED,SUBSCRIPTION.UPDATED" --enabled true
-  appstore webhooks update --webhook-id "WEBHOOK_ID" --url "https://new-url.com/webhook" --enabled false
-  appstore webhooks delete --webhook-id "WEBHOOK_ID" --confirm
-  appstore webhooks serve --port 8787 --dir ./webhook-events
-  appstore webhooks deliveries --webhook-id "WEBHOOK_ID"
-  appstore webhooks deliveries relationships --webhook-id "WEBHOOK_ID"
-  appstore webhooks deliveries redeliver --delivery-id "DELIVERY_ID"
-  appstore webhooks ping --webhook-id "WEBHOOK_ID"`,
+  asc webhooks list --app "APP_ID"
+  asc webhooks get --webhook-id "WEBHOOK_ID"
+  asc webhooks create --app "APP_ID" --name "Build Updates" --url "https://example.com/webhook" --secret "secret123" --events "SUBSCRIPTION.CREATED,SUBSCRIPTION.UPDATED" --enabled true
+  asc webhooks update --webhook-id "WEBHOOK_ID" --url "https://new-url.com/webhook" --enabled false
+  asc webhooks delete --webhook-id "WEBHOOK_ID" --confirm
+  asc webhooks serve --port 8787 --dir ./webhook-events
+  asc webhooks deliveries --webhook-id "WEBHOOK_ID"
+  asc webhooks deliveries relationships --webhook-id "WEBHOOK_ID"
+  asc webhooks deliveries redeliver --delivery-id "DELIVERY_ID"
+  asc webhooks ping --webhook-id "WEBHOOK_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -58,7 +58,7 @@ Examples:
 func WebhooksListCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("list", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID)")
 	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
 	next := fs.String("next", "", "Fetch next page using a links.next URL")
 	paginate := fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")
@@ -66,20 +66,20 @@ func WebhooksListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore webhooks list [flags]",
+		ShortUsage: "asc webhooks list [flags]",
 		ShortHelp:  "List webhooks for an app.",
 		LongHelp: `List webhooks for an app.
 
 Examples:
-  appstore webhooks list --app "APP_ID"
-  appstore webhooks list --app "APP_ID" --limit 10
-  appstore webhooks list --app "APP_ID" --paginate`,
+  asc webhooks list --app "APP_ID"
+  asc webhooks list --app "APP_ID" --limit 10
+  asc webhooks list --app "APP_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			resolvedAppID := shared.ResolveAppID(*appID)
 			if resolvedAppID == "" && strings.TrimSpace(*next) == "" {
-				fmt.Fprintln(os.Stderr, "Error: --app is required (or set APPSTORE_APP_ID)")
+				fmt.Fprintln(os.Stderr, "Error: --app is required (or set ASC_APP_ID)")
 				return flag.ErrHelp
 			}
 			if *limit != 0 && (*limit < 1 || *limit > webhooksMaxLimit) {
@@ -104,7 +104,7 @@ Examples:
 
 			if *paginate {
 				if resolvedAppID == "" {
-					fmt.Fprintln(os.Stderr, "Error: --app is required (or set APPSTORE_APP_ID)")
+					fmt.Fprintln(os.Stderr, "Error: --app is required (or set ASC_APP_ID)")
 					return flag.ErrHelp
 				}
 				paginateOpts := append(opts, asc.WithWebhooksLimit(webhooksMaxLimit))
@@ -140,12 +140,12 @@ func WebhooksGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore webhooks get --webhook-id \"WEBHOOK_ID\" [flags]",
+		ShortUsage: "asc webhooks get --webhook-id \"WEBHOOK_ID\" [flags]",
 		ShortHelp:  "Get a webhook by ID.",
 		LongHelp: `Get a webhook by ID.
 
 Examples:
-  appstore webhooks get --webhook-id "WEBHOOK_ID"`,
+  asc webhooks get --webhook-id "WEBHOOK_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -177,7 +177,7 @@ Examples:
 func WebhooksCreateCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("create", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID)")
 	name := fs.String("name", "", "Webhook name")
 	url := fs.String("url", "", "Webhook endpoint URL")
 	secret := fs.String("secret", "", "Webhook secret")
@@ -188,18 +188,18 @@ func WebhooksCreateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "create",
-		ShortUsage: "appstore webhooks create --app APP_ID --name NAME --url URL --secret SECRET --events EVENTS --enabled [true|false] [flags]",
+		ShortUsage: "asc webhooks create --app APP_ID --name NAME --url URL --secret SECRET --events EVENTS --enabled [true|false] [flags]",
 		ShortHelp:  "Create a webhook.",
 		LongHelp: `Create a webhook.
 
 Examples:
-  appstore webhooks create --app "APP_ID" --name "Build Updates" --url "https://example.com/webhook" --secret "secret123" --events "SUBSCRIPTION.CREATED,SUBSCRIPTION.UPDATED" --enabled true`,
+  asc webhooks create --app "APP_ID" --name "Build Updates" --url "https://example.com/webhook" --secret "secret123" --events "SUBSCRIPTION.CREATED,SUBSCRIPTION.UPDATED" --enabled true`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			resolvedAppID := shared.ResolveAppID(*appID)
 			if resolvedAppID == "" {
-				fmt.Fprintln(os.Stderr, "Error: --app is required (or set APPSTORE_APP_ID)")
+				fmt.Fprintln(os.Stderr, "Error: --app is required (or set ASC_APP_ID)")
 				return flag.ErrHelp
 			}
 			if strings.TrimSpace(*name) == "" {
@@ -269,13 +269,13 @@ func WebhooksUpdateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "update",
-		ShortUsage: "appstore webhooks update --webhook-id WEBHOOK_ID [flags]",
+		ShortUsage: "asc webhooks update --webhook-id WEBHOOK_ID [flags]",
 		ShortHelp:  "Update a webhook.",
 		LongHelp: `Update a webhook.
 
 Examples:
-  appstore webhooks update --webhook-id "WEBHOOK_ID" --url "https://new-url.com/webhook"
-  appstore webhooks update --webhook-id "WEBHOOK_ID" --enabled false`,
+  asc webhooks update --webhook-id "WEBHOOK_ID" --url "https://new-url.com/webhook"
+  asc webhooks update --webhook-id "WEBHOOK_ID" --enabled false`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -350,12 +350,12 @@ func WebhooksDeleteCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "delete",
-		ShortUsage: "appstore webhooks delete --webhook-id WEBHOOK_ID --confirm [flags]",
+		ShortUsage: "asc webhooks delete --webhook-id WEBHOOK_ID --confirm [flags]",
 		ShortHelp:  "Delete a webhook.",
 		LongHelp: `Delete a webhook.
 
 Examples:
-  appstore webhooks delete --webhook-id "WEBHOOK_ID" --confirm`,
+  asc webhooks delete --webhook-id "WEBHOOK_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -401,14 +401,14 @@ func WebhookDeliveriesCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "deliveries",
-		ShortUsage: "appstore webhooks deliveries --webhook-id WEBHOOK_ID [flags]",
+		ShortUsage: "asc webhooks deliveries --webhook-id WEBHOOK_ID [flags]",
 		ShortHelp:  "List webhook deliveries.",
 		LongHelp: `List webhook deliveries.
 
 Examples:
-  appstore webhooks deliveries --webhook-id "WEBHOOK_ID" --created-after "2026-01-01T00:00:00Z"
-  appstore webhooks deliveries --webhook-id "WEBHOOK_ID" --limit 10
-  appstore webhooks deliveries --webhook-id "WEBHOOK_ID" --paginate`,
+  asc webhooks deliveries --webhook-id "WEBHOOK_ID" --created-after "2026-01-01T00:00:00Z"
+  asc webhooks deliveries --webhook-id "WEBHOOK_ID" --limit 10
+  asc webhooks deliveries --webhook-id "WEBHOOK_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -516,13 +516,13 @@ func WebhookDeliveriesRelationshipsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "relationships",
-		ShortUsage: "appstore webhooks deliveries relationships --webhook-id WEBHOOK_ID [flags]",
+		ShortUsage: "asc webhooks deliveries relationships --webhook-id WEBHOOK_ID [flags]",
 		ShortHelp:  "List webhook delivery relationships.",
 		LongHelp: `List webhook delivery relationships.
 
 Examples:
-  appstore webhooks deliveries relationships --webhook-id "WEBHOOK_ID"
-  appstore webhooks deliveries relationships --webhook-id "WEBHOOK_ID" --paginate`,
+  asc webhooks deliveries relationships --webhook-id "WEBHOOK_ID"
+  asc webhooks deliveries relationships --webhook-id "WEBHOOK_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -597,12 +597,12 @@ func WebhookDeliveriesRedeliverCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "redeliver",
-		ShortUsage: "appstore webhooks deliveries redeliver --delivery-id DELIVERY_ID [flags]",
+		ShortUsage: "asc webhooks deliveries redeliver --delivery-id DELIVERY_ID [flags]",
 		ShortHelp:  "Redeliver a webhook delivery.",
 		LongHelp: `Redeliver a webhook delivery.
 
 Examples:
-  appstore webhooks deliveries redeliver --delivery-id "DELIVERY_ID"`,
+  asc webhooks deliveries redeliver --delivery-id "DELIVERY_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -639,12 +639,12 @@ func WebhookPingCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "ping",
-		ShortUsage: "appstore webhooks ping --webhook-id WEBHOOK_ID [flags]",
+		ShortUsage: "asc webhooks ping --webhook-id WEBHOOK_ID [flags]",
 		ShortHelp:  "Create a webhook ping.",
 		LongHelp: `Create a webhook ping.
 
 Examples:
-  appstore webhooks ping --webhook-id "WEBHOOK_ID"`,
+  asc webhooks ping --webhook-id "WEBHOOK_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

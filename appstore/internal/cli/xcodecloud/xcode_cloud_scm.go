@@ -41,14 +41,14 @@ func XcodeCloudScmCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "scm",
-		ShortUsage: "appstore xcode-cloud scm <subcommand> [flags]",
+		ShortUsage: "asc xcode-cloud scm <subcommand> [flags]",
 		ShortHelp:  "Manage Xcode Cloud SCM providers and repositories.",
 		LongHelp: `Manage Xcode Cloud SCM providers and repositories.
 
 Examples:
-  appstore xcode-cloud scm providers list
-  appstore xcode-cloud scm repositories list
-  appstore xcode-cloud scm repositories git-references --repo-id "REPO_ID"`,
+  asc xcode-cloud scm providers list
+  asc xcode-cloud scm repositories list
+  asc xcode-cloud scm repositories git-references --repo-id "REPO_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -71,14 +71,14 @@ func XcodeCloudScmProvidersCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "providers",
-		ShortUsage: "appstore xcode-cloud scm providers [flags]",
+		ShortUsage: "asc xcode-cloud scm providers [flags]",
 		ShortHelp:  "Manage SCM providers.",
 		LongHelp: `Manage SCM providers.
 
 Examples:
-  appstore xcode-cloud scm providers list
-  appstore xcode-cloud scm providers get --provider-id "PROVIDER_ID"
-  appstore xcode-cloud scm providers repositories --provider-id "PROVIDER_ID"`,
+  asc xcode-cloud scm providers list
+  asc xcode-cloud scm providers get --provider-id "PROVIDER_ID"
+  asc xcode-cloud scm providers repositories --provider-id "PROVIDER_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -99,13 +99,13 @@ func XcodeCloudScmProvidersListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore xcode-cloud scm providers list [flags]",
+		ShortUsage: "asc xcode-cloud scm providers list [flags]",
 		ShortHelp:  "List SCM providers.",
 		LongHelp: `List SCM providers.
 
 Examples:
-  appstore xcode-cloud scm providers list
-  appstore xcode-cloud scm providers list --paginate`,
+  asc xcode-cloud scm providers list
+  asc xcode-cloud scm providers list --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -122,12 +122,12 @@ func XcodeCloudScmProvidersGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore xcode-cloud scm providers get --provider-id \"PROVIDER_ID\"",
+		ShortUsage: "asc xcode-cloud scm providers get --provider-id \"PROVIDER_ID\"",
 		ShortHelp:  "Get an SCM provider by ID.",
 		LongHelp: `Get an SCM provider by ID.
 
 Examples:
-  appstore xcode-cloud scm providers get --provider-id "PROVIDER_ID"`,
+  asc xcode-cloud scm providers get --provider-id "PROVIDER_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -162,13 +162,13 @@ func XcodeCloudScmProvidersRepositoriesCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "repositories",
-		ShortUsage: "appstore xcode-cloud scm providers repositories --provider-id \"PROVIDER_ID\" [flags]",
+		ShortUsage: "asc xcode-cloud scm providers repositories --provider-id \"PROVIDER_ID\" [flags]",
 		ShortHelp:  "List repositories for an SCM provider.",
 		LongHelp: `List repositories for an SCM provider.
 
 Examples:
-  appstore xcode-cloud scm providers repositories --provider-id "PROVIDER_ID"
-  appstore xcode-cloud scm providers repositories --provider-id "PROVIDER_ID" --paginate`,
+  asc xcode-cloud scm providers repositories --provider-id "PROVIDER_ID"
+  asc xcode-cloud scm providers repositories --provider-id "PROVIDER_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -234,14 +234,14 @@ func XcodeCloudScmRepositoriesCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "repositories",
-		ShortUsage: "appstore xcode-cloud scm repositories [flags]",
+		ShortUsage: "asc xcode-cloud scm repositories [flags]",
 		ShortHelp:  "Manage SCM repositories.",
 		LongHelp: `Manage SCM repositories.
 
 Examples:
-  appstore xcode-cloud scm repositories list
-  appstore xcode-cloud scm repositories get --id "REPO_ID"
-  appstore xcode-cloud scm repositories git-references --repo-id "REPO_ID"`,
+  asc xcode-cloud scm repositories list
+  asc xcode-cloud scm repositories get --id "REPO_ID"
+  asc xcode-cloud scm repositories git-references --repo-id "REPO_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -264,13 +264,13 @@ func XcodeCloudScmRepositoriesListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore xcode-cloud scm repositories list [flags]",
+		ShortUsage: "asc xcode-cloud scm repositories list [flags]",
 		ShortHelp:  "List SCM repositories.",
 		LongHelp: `List SCM repositories.
 
 Examples:
-  appstore xcode-cloud scm repositories list
-  appstore xcode-cloud scm repositories list --paginate`,
+  asc xcode-cloud scm repositories list
+  asc xcode-cloud scm repositories list --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -287,12 +287,12 @@ func XcodeCloudScmRepositoriesGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore xcode-cloud scm repositories get --id \"REPO_ID\"",
+		ShortUsage: "asc xcode-cloud scm repositories get --id \"REPO_ID\"",
 		ShortHelp:  "Get an SCM repository by ID.",
 		LongHelp: `Get an SCM repository by ID.
 
 Examples:
-  appstore xcode-cloud scm repositories get --id "REPO_ID"`,
+  asc xcode-cloud scm repositories get --id "REPO_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -328,13 +328,13 @@ func XcodeCloudScmRepositoriesGitReferencesCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "git-references",
-		ShortUsage: "appstore xcode-cloud scm repositories git-references --repo-id \"REPO_ID\" [flags]",
+		ShortUsage: "asc xcode-cloud scm repositories git-references --repo-id \"REPO_ID\" [flags]",
 		ShortHelp:  "List git references for a repository.",
 		LongHelp: `List git references for a repository.
 
 Examples:
-  appstore xcode-cloud scm repositories git-references --repo-id "REPO_ID"
-  appstore xcode-cloud scm repositories git-references --repo-id "REPO_ID" --paginate`,
+  asc xcode-cloud scm repositories git-references --repo-id "REPO_ID"
+  asc xcode-cloud scm repositories git-references --repo-id "REPO_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -399,13 +399,13 @@ func XcodeCloudScmRepositoriesPullRequestsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "pull-requests",
-		ShortUsage: "appstore xcode-cloud scm repositories pull-requests --repo-id \"REPO_ID\" [flags]",
+		ShortUsage: "asc xcode-cloud scm repositories pull-requests --repo-id \"REPO_ID\" [flags]",
 		ShortHelp:  "List pull requests for a repository.",
 		LongHelp: `List pull requests for a repository.
 
 Examples:
-  appstore xcode-cloud scm repositories pull-requests --repo-id "REPO_ID"
-  appstore xcode-cloud scm repositories pull-requests --repo-id "REPO_ID" --paginate`,
+  asc xcode-cloud scm repositories pull-requests --repo-id "REPO_ID"
+  asc xcode-cloud scm repositories pull-requests --repo-id "REPO_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -468,13 +468,13 @@ func XcodeCloudScmRepositoriesRelationshipsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "relationships",
-		ShortUsage: "appstore xcode-cloud scm repositories relationships <git-references|pull-requests> [flags]",
+		ShortUsage: "asc xcode-cloud scm repositories relationships <git-references|pull-requests> [flags]",
 		ShortHelp:  "List SCM repository relationship linkages.",
 		LongHelp: `List SCM repository relationship linkages.
 
 Examples:
-  appstore xcode-cloud scm repositories relationships git-references --repo-id "REPO_ID"
-  appstore xcode-cloud scm repositories relationships pull-requests --repo-id "REPO_ID"`,
+  asc xcode-cloud scm repositories relationships git-references --repo-id "REPO_ID"
+  asc xcode-cloud scm repositories relationships pull-requests --repo-id "REPO_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -494,13 +494,13 @@ func XcodeCloudScmRepositoriesRelationshipsGitReferencesCommand() *ffcli.Command
 
 	return &ffcli.Command{
 		Name:       "git-references",
-		ShortUsage: "appstore xcode-cloud scm repositories relationships git-references --repo-id \"REPO_ID\" [flags]",
+		ShortUsage: "asc xcode-cloud scm repositories relationships git-references --repo-id \"REPO_ID\" [flags]",
 		ShortHelp:  "List git reference relationship linkages for a repository.",
 		LongHelp: `List git reference relationship linkages for a repository.
 
 Examples:
-  appstore xcode-cloud scm repositories relationships git-references --repo-id "REPO_ID"
-  appstore xcode-cloud scm repositories relationships git-references --repo-id "REPO_ID" --paginate`,
+  asc xcode-cloud scm repositories relationships git-references --repo-id "REPO_ID"
+  asc xcode-cloud scm repositories relationships git-references --repo-id "REPO_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -565,13 +565,13 @@ func XcodeCloudScmRepositoriesRelationshipsPullRequestsCommand() *ffcli.Command 
 
 	return &ffcli.Command{
 		Name:       "pull-requests",
-		ShortUsage: "appstore xcode-cloud scm repositories relationships pull-requests --repo-id \"REPO_ID\" [flags]",
+		ShortUsage: "asc xcode-cloud scm repositories relationships pull-requests --repo-id \"REPO_ID\" [flags]",
 		ShortHelp:  "List pull request relationship linkages for a repository.",
 		LongHelp: `List pull request relationship linkages for a repository.
 
 Examples:
-  appstore xcode-cloud scm repositories relationships pull-requests --repo-id "REPO_ID"
-  appstore xcode-cloud scm repositories relationships pull-requests --repo-id "REPO_ID" --paginate`,
+  asc xcode-cloud scm repositories relationships pull-requests --repo-id "REPO_ID"
+  asc xcode-cloud scm repositories relationships pull-requests --repo-id "REPO_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -635,12 +635,12 @@ func XcodeCloudScmGitReferencesCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "git-references",
-		ShortUsage: "appstore xcode-cloud scm git-references <subcommand> [flags]",
+		ShortUsage: "asc xcode-cloud scm git-references <subcommand> [flags]",
 		ShortHelp:  "Manage SCM git references.",
 		LongHelp: `Manage SCM git references.
 
 Examples:
-  appstore xcode-cloud scm git-references get --id "REF_ID"`,
+  asc xcode-cloud scm git-references get --id "REF_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -660,12 +660,12 @@ func XcodeCloudScmGitReferencesGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore xcode-cloud scm git-references get --id \"REF_ID\"",
+		ShortUsage: "asc xcode-cloud scm git-references get --id \"REF_ID\"",
 		ShortHelp:  "Get an SCM git reference by ID.",
 		LongHelp: `Get an SCM git reference by ID.
 
 Examples:
-  appstore xcode-cloud scm git-references get --id "REF_ID"`,
+  asc xcode-cloud scm git-references get --id "REF_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -699,12 +699,12 @@ func XcodeCloudScmPullRequestsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "pull-requests",
-		ShortUsage: "appstore xcode-cloud scm pull-requests <subcommand> [flags]",
+		ShortUsage: "asc xcode-cloud scm pull-requests <subcommand> [flags]",
 		ShortHelp:  "Manage SCM pull requests.",
 		LongHelp: `Manage SCM pull requests.
 
 Examples:
-  appstore xcode-cloud scm pull-requests get --id "PR_ID"`,
+  asc xcode-cloud scm pull-requests get --id "PR_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -724,12 +724,12 @@ func XcodeCloudScmPullRequestsGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore xcode-cloud scm pull-requests get --id \"PR_ID\"",
+		ShortUsage: "asc xcode-cloud scm pull-requests get --id \"PR_ID\"",
 		ShortHelp:  "Get an SCM pull request by ID.",
 		LongHelp: `Get an SCM pull request by ID.
 
 Examples:
-  appstore xcode-cloud scm pull-requests get --id "PR_ID"`,
+  asc xcode-cloud scm pull-requests get --id "PR_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

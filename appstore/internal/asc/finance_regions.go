@@ -2,7 +2,7 @@ package asc
 
 // FinanceRegion describes a finance report region code and currency.
 //
-// Region codes are used with the --region flag for 'appstore finance reports'.
+// Region codes are used with the --region flag for 'asc finance reports'.
 // Special region codes:
 //   - ZZ: Consolidated Financial Reports (all regions, use with FINANCIAL)
 //   - Z1: Financial Detail Reports (all regions, required for FINANCE_DETAIL)

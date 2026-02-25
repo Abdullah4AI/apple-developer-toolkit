@@ -19,14 +19,14 @@ func AppsSearchKeywordsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "search-keywords",
-		ShortUsage: "appstore apps search-keywords <subcommand> [flags]",
+		ShortUsage: "asc apps search-keywords <subcommand> [flags]",
 		ShortHelp:  "Manage search keywords for an app.",
 		LongHelp: `Manage search keywords for an app.
 
 Examples:
-  appstore apps search-keywords list --app "APP_ID"
-  appstore apps search-keywords list --app "APP_ID" --platform IOS --locale "en-US"
-  appstore apps search-keywords set --app "APP_ID" --keywords "kw1,kw2" --confirm`,
+  asc apps search-keywords list --app "APP_ID"
+  asc apps search-keywords list --app "APP_ID" --platform IOS --locale "en-US"
+  asc apps search-keywords set --app "APP_ID" --keywords "kw1,kw2" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -43,7 +43,7 @@ Examples:
 func AppsSearchKeywordsListCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("apps search-keywords list", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID env)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
 	platform := fs.String("platform", "", "Filter by platform: IOS, MAC_OS, TV_OS, VISION_OS (comma-separated)")
 	locale := fs.String("locale", "", "Filter by locale(s), comma-separated")
 	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
@@ -53,13 +53,13 @@ func AppsSearchKeywordsListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore apps search-keywords list --app \"APP_ID\"",
+		ShortUsage: "asc apps search-keywords list --app \"APP_ID\"",
 		ShortHelp:  "List search keywords for an app.",
 		LongHelp: `List search keywords for an app.
 
 Examples:
-  appstore apps search-keywords list --app "APP_ID"
-  appstore apps search-keywords list --app "APP_ID" --platform IOS --locale "en-US"`,
+  asc apps search-keywords list --app "APP_ID"
+  asc apps search-keywords list --app "APP_ID" --platform IOS --locale "en-US"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -72,7 +72,7 @@ Examples:
 
 			resolvedAppID := shared.ResolveAppID(*appID)
 			if resolvedAppID == "" && strings.TrimSpace(*next) == "" {
-				fmt.Fprintln(os.Stderr, "Error: --app is required (or set APPSTORE_APP_ID)")
+				fmt.Fprintln(os.Stderr, "Error: --app is required (or set ASC_APP_ID)")
 				return flag.ErrHelp
 			}
 
@@ -135,25 +135,25 @@ Examples:
 func AppsSearchKeywordsSetCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("apps search-keywords set", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID env)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
 	keywords := fs.String("keywords", "", "Keywords (comma-separated)")
 	confirm := fs.Bool("confirm", false, "Confirm replacing all keywords")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "set",
-		ShortUsage: "appstore apps search-keywords set --app \"APP_ID\" --keywords \"kw1,kw2\" --confirm",
+		ShortUsage: "asc apps search-keywords set --app \"APP_ID\" --keywords \"kw1,kw2\" --confirm",
 		ShortHelp:  "Replace search keywords for an app.",
 		LongHelp: `Replace search keywords for an app.
 
 Examples:
-  appstore apps search-keywords set --app "APP_ID" --keywords "kw1,kw2" --confirm`,
+  asc apps search-keywords set --app "APP_ID" --keywords "kw1,kw2" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			resolvedAppID := shared.ResolveAppID(*appID)
 			if resolvedAppID == "" {
-				fmt.Fprintln(os.Stderr, "Error: --app is required (or set APPSTORE_APP_ID)")
+				fmt.Fprintln(os.Stderr, "Error: --app is required (or set ASC_APP_ID)")
 				return flag.ErrHelp
 			}
 			if !*confirm {

@@ -19,16 +19,16 @@ func BuildLocalizationsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "build-localizations",
-		ShortUsage: "appstore build-localizations <subcommand> [flags]",
+		ShortUsage: "asc build-localizations <subcommand> [flags]",
 		ShortHelp:  "Manage build release notes localizations.",
 		LongHelp: `Manage localized release notes by build.
 
 Examples:
-  appstore build-localizations list --build "BUILD_ID"
-  appstore build-localizations get --id "LOCALIZATION_ID"
-  appstore build-localizations create --build "BUILD_ID" --locale "en-US" --whats-new "Bug fixes"
-  appstore build-localizations update --id "LOCALIZATION_ID" --whats-new "New features"
-  appstore build-localizations delete --id "LOCALIZATION_ID" --confirm`,
+  asc build-localizations list --build "BUILD_ID"
+  asc build-localizations get --id "LOCALIZATION_ID"
+  asc build-localizations create --build "BUILD_ID" --locale "en-US" --whats-new "Bug fixes"
+  asc build-localizations update --id "LOCALIZATION_ID" --whats-new "New features"
+  asc build-localizations delete --id "LOCALIZATION_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -57,14 +57,14 @@ func BuildLocalizationsListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore build-localizations list [flags]",
+		ShortUsage: "asc build-localizations list [flags]",
 		ShortHelp:  "List release note localizations for a build.",
 		LongHelp: `List release note localizations for a build.
 
 Examples:
-  appstore build-localizations list --build "BUILD_ID"
-  appstore build-localizations list --build "BUILD_ID" --locale "en-US,ja"
-  appstore build-localizations list --build "BUILD_ID" --paginate`,
+  asc build-localizations list --build "BUILD_ID"
+  asc build-localizations list --build "BUILD_ID" --locale "en-US,ja"
+  asc build-localizations list --build "BUILD_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -141,12 +141,12 @@ func BuildLocalizationsGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore build-localizations get [flags]",
+		ShortUsage: "asc build-localizations get [flags]",
 		ShortHelp:  "Get a localization by ID.",
 		LongHelp: `Get a localization by ID.
 
 Examples:
-  appstore build-localizations get --id "LOCALIZATION_ID"`,
+  asc build-localizations get --id "LOCALIZATION_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -185,13 +185,13 @@ func BuildLocalizationsCreateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "create",
-		ShortUsage: "appstore build-localizations create [flags]",
+		ShortUsage: "asc build-localizations create [flags]",
 		ShortHelp:  "Create a localization for a build.",
 		LongHelp: `Create a localization for a build.
 
 Examples:
-  appstore build-localizations create --build "BUILD_ID" --locale "en-US"
-  appstore build-localizations create --build "BUILD_ID" --locale "en-US" --whats-new "Bug fixes"`,
+  asc build-localizations create --build "BUILD_ID" --locale "en-US"
+  asc build-localizations create --build "BUILD_ID" --locale "en-US" --whats-new "Bug fixes"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -252,12 +252,12 @@ func BuildLocalizationsUpdateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "update",
-		ShortUsage: "appstore build-localizations update [flags]",
+		ShortUsage: "asc build-localizations update [flags]",
 		ShortHelp:  "Update a localization by ID.",
 		LongHelp: `Update a localization by ID.
 
 Examples:
-  appstore build-localizations update --id "LOCALIZATION_ID" --whats-new "New features"`,
+  asc build-localizations update --id "LOCALIZATION_ID" --whats-new "New features"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -305,12 +305,12 @@ func BuildLocalizationsDeleteCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "delete",
-		ShortUsage: "appstore build-localizations delete [flags]",
+		ShortUsage: "asc build-localizations delete [flags]",
 		ShortHelp:  "Delete a localization by ID.",
 		LongHelp: `Delete a localization by ID.
 
 Examples:
-  appstore build-localizations delete --id "LOCALIZATION_ID" --confirm`,
+  asc build-localizations delete --id "LOCALIZATION_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

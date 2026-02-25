@@ -19,13 +19,13 @@ func CustomPageVersionsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "versions",
-		ShortUsage: "appstore product-pages custom-pages versions <subcommand> [flags]",
+		ShortUsage: "asc product-pages custom-pages versions <subcommand> [flags]",
 		ShortHelp:  "Manage custom product page versions.",
 		LongHelp: `Manage custom product page versions.
 
 Examples:
-  appstore product-pages custom-pages versions list --custom-page-id "PAGE_ID"
-  appstore product-pages custom-pages versions create --custom-page-id "PAGE_ID" --deep-link "https://example.com"`,
+  asc product-pages custom-pages versions list --custom-page-id "PAGE_ID"
+  asc product-pages custom-pages versions create --custom-page-id "PAGE_ID" --deep-link "https://example.com"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -52,13 +52,13 @@ func CustomPageVersionsListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore product-pages custom-pages versions list --custom-page-id \"PAGE_ID\" [flags]",
+		ShortUsage: "asc product-pages custom-pages versions list --custom-page-id \"PAGE_ID\" [flags]",
 		ShortHelp:  "List custom product page versions.",
 		LongHelp: `List custom product page versions.
 
 Examples:
-  appstore product-pages custom-pages versions list --custom-page-id "PAGE_ID"
-  appstore product-pages custom-pages versions list --custom-page-id "PAGE_ID" --paginate`,
+  asc product-pages custom-pages versions list --custom-page-id "PAGE_ID"
+  asc product-pages custom-pages versions list --custom-page-id "PAGE_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -124,12 +124,12 @@ func CustomPageVersionsGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore product-pages custom-pages versions get --custom-page-version-id \"VERSION_ID\"",
+		ShortUsage: "asc product-pages custom-pages versions get --custom-page-version-id \"VERSION_ID\"",
 		ShortHelp:  "Get a custom product page version by ID.",
 		LongHelp: `Get a custom product page version by ID.
 
 Examples:
-  appstore product-pages custom-pages versions get --custom-page-version-id "VERSION_ID"`,
+  asc product-pages custom-pages versions get --custom-page-version-id "VERSION_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -167,13 +167,13 @@ func CustomPageVersionsCreateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "create",
-		ShortUsage: "appstore product-pages custom-pages versions create --custom-page-id \"PAGE_ID\" [--deep-link \"URL\"]",
+		ShortUsage: "asc product-pages custom-pages versions create --custom-page-id \"PAGE_ID\" [--deep-link \"URL\"]",
 		ShortHelp:  "Create a custom product page version.",
 		LongHelp: `Create a custom product page version.
 
 Examples:
-  appstore product-pages custom-pages versions create --custom-page-id "PAGE_ID"
-  appstore product-pages custom-pages versions create --custom-page-id "PAGE_ID" --deep-link "https://example.com"`,
+  asc product-pages custom-pages versions create --custom-page-id "PAGE_ID"
+  asc product-pages custom-pages versions create --custom-page-id "PAGE_ID" --deep-link "https://example.com"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -211,12 +211,12 @@ func CustomPageVersionsUpdateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "update",
-		ShortUsage: "appstore product-pages custom-pages versions update --custom-page-version-id \"VERSION_ID\" --deep-link \"URL\"",
+		ShortUsage: "asc product-pages custom-pages versions update --custom-page-version-id \"VERSION_ID\" --deep-link \"URL\"",
 		ShortHelp:  "Update a custom product page version.",
 		LongHelp: `Update a custom product page version.
 
 Examples:
-  appstore product-pages custom-pages versions update --custom-page-version-id "VERSION_ID" --deep-link "https://example.com"`,
+  asc product-pages custom-pages versions update --custom-page-version-id "VERSION_ID" --deep-link "https://example.com"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

@@ -16,26 +16,26 @@ import (
 func AppsRemoveBetaTestersCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("remove-beta-testers", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID env)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
 	testers := fs.String("tester", "", "Comma-separated beta tester IDs")
 	confirm := fs.Bool("confirm", false, "Confirm removal")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "remove-beta-testers",
-		ShortUsage: "appstore apps remove-beta-testers --app \"APP_ID\" --tester \"TESTER_ID[,TESTER_ID...]\" --confirm",
+		ShortUsage: "asc apps remove-beta-testers --app \"APP_ID\" --tester \"TESTER_ID[,TESTER_ID...]\" --confirm",
 		ShortHelp:  "Remove beta testers from an app.",
 		LongHelp: `Remove beta testers from an app.
 
 Examples:
-  appstore apps remove-beta-testers --app "APP_ID" --tester "TESTER_ID" --confirm
-  appstore apps remove-beta-testers --app "APP_ID" --tester "TESTER_ID1,TESTER_ID2" --confirm`,
+  asc apps remove-beta-testers --app "APP_ID" --tester "TESTER_ID" --confirm
+  asc apps remove-beta-testers --app "APP_ID" --tester "TESTER_ID1,TESTER_ID2" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			resolvedAppID := shared.ResolveAppID(*appID)
 			if resolvedAppID == "" {
-				fmt.Fprintf(os.Stderr, "Error: --app is required (or set APPSTORE_APP_ID)\n\n")
+				fmt.Fprintf(os.Stderr, "Error: --app is required (or set ASC_APP_ID)\n\n")
 				return flag.ErrHelp
 			}
 

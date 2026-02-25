@@ -27,7 +27,7 @@ func ReviewsRatingsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "ratings",
-		ShortUsage: "appstore reviews ratings [flags]",
+		ShortUsage: "asc reviews ratings [flags]",
 		ShortHelp:  "Show App Store rating statistics.",
 		LongHelp: `Show App Store rating statistics using the public iTunes API.
 
@@ -37,11 +37,11 @@ histogram) that is not available through the App Store Connect API.
 No authentication is required.
 
 Examples:
-  appstore reviews ratings --app "1479784361"
-  appstore reviews ratings --app "1479784361" --country de
-  appstore reviews ratings --app "1479784361" --output table
-  appstore reviews ratings --app "1479784361" --all
-  appstore reviews ratings --app "1479784361" --all --workers 20`,
+  asc reviews ratings --app "1479784361"
+  asc reviews ratings --app "1479784361" --country de
+  asc reviews ratings --app "1479784361" --output table
+  asc reviews ratings --app "1479784361" --all
+  asc reviews ratings --app "1479784361" --all --workers 20`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

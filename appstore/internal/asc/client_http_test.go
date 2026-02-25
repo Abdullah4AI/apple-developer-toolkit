@@ -901,6 +901,73 @@ func TestGetBuilds_WithSortAndLimit(t *testing.T) {
 	}
 }
 
+func TestGetBuilds_WithVersionFilter(t *testing.T) {
+	response := jsonResponse(http.StatusOK, `{"data":[{"type":"builds","id":"build-42","attributes":{"version":"42","uploadedDate":"2026-01-20T00:00:00Z"}}]}`)
+	client := newTestClient(t, func(req *http.Request) {
+		if req.Method != http.MethodGet {
+			t.Fatalf("expected GET, got %s", req.Method)
+		}
+		// Version filtering requires /v1/builds endpoint.
+		if req.URL.Path != "/v1/builds" {
+			t.Fatalf("expected path /v1/builds, got %s", req.URL.Path)
+		}
+		values := req.URL.Query()
+		if values.Get("filter[app]") != "123" {
+			t.Fatalf("expected filter[app]=123, got %q", values.Get("filter[app]"))
+		}
+		if values.Get("filter[version]") != "42" {
+			t.Fatalf("expected filter[version]=42, got %q", values.Get("filter[version]"))
+		}
+		if values.Get("limit") != "1" {
+			t.Fatalf("expected limit=1, got %q", values.Get("limit"))
+		}
+		assertAuthorized(t, req)
+	}, response)
+
+	builds, err := client.GetBuilds(context.Background(), "123", WithBuildsVersion("42"), WithBuildsLimit(1))
+	if err != nil {
+		t.Fatalf("GetBuilds() error: %v", err)
+	}
+	if len(builds.Data) != 1 {
+		t.Fatalf("expected 1 build, got %d", len(builds.Data))
+	}
+	if builds.Data[0].ID != "build-42" {
+		t.Fatalf("expected build ID build-42, got %s", builds.Data[0].ID)
+	}
+}
+
+func TestGetBuilds_WithProcessingStateFilter(t *testing.T) {
+	response := jsonResponse(http.StatusOK, `{"data":[{"type":"builds","id":"build-processing","attributes":{"version":"42","processingState":"PROCESSING","uploadedDate":"2026-01-20T00:00:00Z"}}]}`)
+	client := newTestClient(t, func(req *http.Request) {
+		if req.Method != http.MethodGet {
+			t.Fatalf("expected GET, got %s", req.Method)
+		}
+		// Processing-state filtering requires /v1/builds endpoint.
+		if req.URL.Path != "/v1/builds" {
+			t.Fatalf("expected path /v1/builds, got %s", req.URL.Path)
+		}
+		values := req.URL.Query()
+		if values.Get("filter[app]") != "123" {
+			t.Fatalf("expected filter[app]=123, got %q", values.Get("filter[app]"))
+		}
+		if values.Get("filter[processingState]") != "PROCESSING,FAILED" {
+			t.Fatalf("expected filter[processingState]=PROCESSING,FAILED, got %q", values.Get("filter[processingState]"))
+		}
+		assertAuthorized(t, req)
+	}, response)
+
+	builds, err := client.GetBuilds(context.Background(), "123", WithBuildsProcessingStates([]string{"processing", "FAILED"}))
+	if err != nil {
+		t.Fatalf("GetBuilds() error: %v", err)
+	}
+	if len(builds.Data) != 1 {
+		t.Fatalf("expected 1 build, got %d", len(builds.Data))
+	}
+	if builds.Data[0].ID != "build-processing" {
+		t.Fatalf("expected build ID build-processing, got %s", builds.Data[0].ID)
+	}
+}
+
 func TestGetBuilds_UsesNextURL(t *testing.T) {
 	next := "https://api.appstoreconnect.apple.com/v1/builds?cursor=abc"
 	response := jsonResponse(http.StatusOK, `{"data":[]}`)
@@ -947,6 +1014,103 @@ func TestGetBuilds_WithPreReleaseVersion(t *testing.T) {
 		WithBuildsSort("-uploadedDate"),
 		WithBuildsPreReleaseVersion("prv-456"),
 	)
+	if err != nil {
+		t.Fatalf("GetBuilds() error: %v", err)
+	}
+	if len(builds.Data) != 1 {
+		t.Fatalf("expected 1 build, got %d", len(builds.Data))
+	}
+	if builds.Data[0].ID != "build-1" {
+		t.Fatalf("expected build ID build-1, got %s", builds.Data[0].ID)
+	}
+}
+
+func TestGetBuilds_WithMultiplePreReleaseVersions(t *testing.T) {
+	response := jsonResponse(http.StatusOK, `{"data":[{"type":"builds","id":"build-2","attributes":{"version":"2.0","uploadedDate":"2026-01-21T00:00:00Z"}}]}`)
+	client := newTestClient(t, func(req *http.Request) {
+		if req.Method != http.MethodGet {
+			t.Fatalf("expected GET, got %s", req.Method)
+		}
+		if req.URL.Path != "/v1/builds" {
+			t.Fatalf("expected path /v1/builds, got %s", req.URL.Path)
+		}
+		values := req.URL.Query()
+		if values.Get("filter[app]") != "123" {
+			t.Fatalf("expected filter[app]=123, got %q", values.Get("filter[app]"))
+		}
+		if values.Get("filter[preReleaseVersion]") != "prv-1,prv-2" {
+			t.Fatalf("expected filter[preReleaseVersion]=prv-1,prv-2, got %q", values.Get("filter[preReleaseVersion]"))
+		}
+		assertAuthorized(t, req)
+	}, response)
+
+	builds, err := client.GetBuilds(context.Background(), "123", WithBuildsPreReleaseVersions([]string{"prv-1", "prv-2"}))
+	if err != nil {
+		t.Fatalf("GetBuilds() error: %v", err)
+	}
+	if len(builds.Data) != 1 {
+		t.Fatalf("expected 1 build, got %d", len(builds.Data))
+	}
+	if builds.Data[0].ID != "build-2" {
+		t.Fatalf("expected build ID build-2, got %s", builds.Data[0].ID)
+	}
+}
+
+func TestGetBuilds_WithPreReleasePlatforms(t *testing.T) {
+	response := jsonResponse(http.StatusOK, `{"data":[{"type":"builds","id":"build-ios"}]}`)
+	client := newTestClient(t, func(req *http.Request) {
+		if req.Method != http.MethodGet {
+			t.Fatalf("expected GET, got %s", req.Method)
+		}
+		if req.URL.Path != "/v1/builds" {
+			t.Fatalf("expected path /v1/builds, got %s", req.URL.Path)
+		}
+		values := req.URL.Query()
+		if values.Get("filter[app]") != "123" {
+			t.Fatalf("expected filter[app]=123, got %q", values.Get("filter[app]"))
+		}
+		if values.Get("filter[preReleaseVersion.platform]") != "IOS,MAC_OS" {
+			t.Fatalf(
+				"expected filter[preReleaseVersion.platform]=IOS,MAC_OS, got %q",
+				values.Get("filter[preReleaseVersion.platform]"),
+			)
+		}
+		assertAuthorized(t, req)
+	}, response)
+
+	builds, err := client.GetBuilds(context.Background(), "123", WithBuildsPreReleaseVersionPlatforms([]string{"ios", "MAC_OS"}))
+	if err != nil {
+		t.Fatalf("GetBuilds() error: %v", err)
+	}
+	if len(builds.Data) != 1 {
+		t.Fatalf("expected 1 build, got %d", len(builds.Data))
+	}
+	if builds.Data[0].ID != "build-ios" {
+		t.Fatalf("expected build ID build-ios, got %s", builds.Data[0].ID)
+	}
+}
+
+func TestGetBuilds_WithExpiredFilter(t *testing.T) {
+	response := jsonResponse(http.StatusOK, `{"data":[{"type":"builds","id":"build-1","attributes":{"version":"1.0","uploadedDate":"2026-01-20T00:00:00Z","expired":false}}]}`)
+	client := newTestClient(t, func(req *http.Request) {
+		if req.Method != http.MethodGet {
+			t.Fatalf("expected GET, got %s", req.Method)
+		}
+		// Expired filtering requires /v1/builds endpoint.
+		if req.URL.Path != "/v1/builds" {
+			t.Fatalf("expected path /v1/builds, got %s", req.URL.Path)
+		}
+		values := req.URL.Query()
+		if values.Get("filter[app]") != "123" {
+			t.Fatalf("expected filter[app]=123, got %q", values.Get("filter[app]"))
+		}
+		if values.Get("filter[expired]") != "false" {
+			t.Fatalf("expected filter[expired]=false, got %q", values.Get("filter[expired]"))
+		}
+		assertAuthorized(t, req)
+	}, response)
+
+	builds, err := client.GetBuilds(context.Background(), "123", WithBuildsExpired(false))
 	if err != nil {
 		t.Fatalf("GetBuilds() error: %v", err)
 	}
@@ -3624,6 +3788,62 @@ func TestCreateAppScreenshotSet(t *testing.T) {
 	}
 }
 
+func TestCreateAppScreenshotSetForCustomProductPageLocalization(t *testing.T) {
+	response := jsonResponse(http.StatusCreated, `{"data":{"type":"appScreenshotSets","id":"SET_CPP_123","attributes":{"screenshotDisplayType":"APP_IPHONE_65"}}}`)
+	client := newTestClient(t, func(req *http.Request) {
+		if req.Method != http.MethodPost {
+			t.Fatalf("expected POST, got %s", req.Method)
+		}
+		if req.URL.Path != "/v1/appScreenshotSets" {
+			t.Fatalf("expected path /v1/appScreenshotSets, got %s", req.URL.Path)
+		}
+		assertAuthorized(t, req)
+
+		body, err := io.ReadAll(req.Body)
+		if err != nil {
+			t.Fatalf("read body error: %v", err)
+		}
+		var payload map[string]any
+		if err := json.Unmarshal(body, &payload); err != nil {
+			t.Fatalf("decode body error: %v", err)
+		}
+
+		data, ok := payload["data"].(map[string]any)
+		if !ok {
+			t.Fatalf("expected object data payload, got %T", payload["data"])
+		}
+		relationships, ok := data["relationships"].(map[string]any)
+		if !ok {
+			t.Fatalf("expected relationships payload, got %T", data["relationships"])
+		}
+		customRel, ok := relationships["appCustomProductPageLocalization"].(map[string]any)
+		if !ok {
+			t.Fatalf("expected appCustomProductPageLocalization relationship, got %+v", relationships)
+		}
+		customData, ok := customRel["data"].(map[string]any)
+		if !ok {
+			t.Fatalf("expected appCustomProductPageLocalization.data object, got %T", customRel["data"])
+		}
+		if customData["type"] != "appCustomProductPageLocalizations" {
+			t.Fatalf("expected relationship type appCustomProductPageLocalizations, got %#v", customData["type"])
+		}
+		if customData["id"] != "CPP_LOC_123" {
+			t.Fatalf("expected relationship id CPP_LOC_123, got %#v", customData["id"])
+		}
+		if _, exists := relationships["appStoreVersionLocalization"]; exists {
+			t.Fatalf("expected appStoreVersionLocalization to be omitted for custom page localization")
+		}
+	}, response)
+
+	result, err := client.CreateAppScreenshotSetForCustomProductPageLocalization(context.Background(), "CPP_LOC_123", "APP_IPHONE_65")
+	if err != nil {
+		t.Fatalf("CreateAppScreenshotSetForCustomProductPageLocalization() error: %v", err)
+	}
+	if result.Data.ID != "SET_CPP_123" {
+		t.Fatalf("expected set ID SET_CPP_123, got %s", result.Data.ID)
+	}
+}
+
 func TestDeleteAppScreenshotSet(t *testing.T) {
 	response := jsonResponse(http.StatusNoContent, "")
 	client := newTestClient(t, func(req *http.Request) {
@@ -3803,6 +4023,62 @@ func TestCreateAppPreviewSet(t *testing.T) {
 	}
 	if result.Data.ID != "SET_123" {
 		t.Fatalf("expected set ID SET_123, got %s", result.Data.ID)
+	}
+}
+
+func TestCreateAppPreviewSetForCustomProductPageLocalization(t *testing.T) {
+	response := jsonResponse(http.StatusCreated, `{"data":{"type":"appPreviewSets","id":"SET_CPP_123","attributes":{"previewType":"IPHONE_65"}}}`)
+	client := newTestClient(t, func(req *http.Request) {
+		if req.Method != http.MethodPost {
+			t.Fatalf("expected POST, got %s", req.Method)
+		}
+		if req.URL.Path != "/v1/appPreviewSets" {
+			t.Fatalf("expected path /v1/appPreviewSets, got %s", req.URL.Path)
+		}
+		assertAuthorized(t, req)
+
+		body, err := io.ReadAll(req.Body)
+		if err != nil {
+			t.Fatalf("read body error: %v", err)
+		}
+		var payload map[string]any
+		if err := json.Unmarshal(body, &payload); err != nil {
+			t.Fatalf("decode body error: %v", err)
+		}
+
+		data, ok := payload["data"].(map[string]any)
+		if !ok {
+			t.Fatalf("expected object data payload, got %T", payload["data"])
+		}
+		relationships, ok := data["relationships"].(map[string]any)
+		if !ok {
+			t.Fatalf("expected relationships payload, got %T", data["relationships"])
+		}
+		customRel, ok := relationships["appCustomProductPageLocalization"].(map[string]any)
+		if !ok {
+			t.Fatalf("expected appCustomProductPageLocalization relationship, got %+v", relationships)
+		}
+		customData, ok := customRel["data"].(map[string]any)
+		if !ok {
+			t.Fatalf("expected appCustomProductPageLocalization.data object, got %T", customRel["data"])
+		}
+		if customData["type"] != "appCustomProductPageLocalizations" {
+			t.Fatalf("expected relationship type appCustomProductPageLocalizations, got %#v", customData["type"])
+		}
+		if customData["id"] != "CPP_LOC_123" {
+			t.Fatalf("expected relationship id CPP_LOC_123, got %#v", customData["id"])
+		}
+		if _, exists := relationships["appStoreVersionLocalization"]; exists {
+			t.Fatalf("expected appStoreVersionLocalization to be omitted for custom page localization")
+		}
+	}, response)
+
+	result, err := client.CreateAppPreviewSetForCustomProductPageLocalization(context.Background(), "CPP_LOC_123", "IPHONE_65")
+	if err != nil {
+		t.Fatalf("CreateAppPreviewSetForCustomProductPageLocalization() error: %v", err)
+	}
+	if result.Data.ID != "SET_CPP_123" {
+		t.Fatalf("expected set ID SET_CPP_123, got %s", result.Data.ID)
 	}
 }
 

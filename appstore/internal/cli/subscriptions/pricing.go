@@ -51,14 +51,14 @@ type subMoney struct {
 func SubscriptionsPricingCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("pricing", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID env)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
 	subscriptionID := fs.String("subscription-id", "", "Subscription ID")
 	territory := fs.String("territory", "USA", "Territory for pricing (e.g., USA)")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "pricing",
-		ShortUsage: "appstore subscriptions pricing [flags]",
+		ShortUsage: "asc subscriptions pricing [flags]",
 		ShortHelp:  "Show consolidated subscription pricing summary.",
 		LongHelp: `Show consolidated subscription pricing summary.
 
@@ -67,9 +67,9 @@ in the specified territory. Much faster than paginating through all 140K+
 price points.
 
 Examples:
-  appstore subscriptions pricing --app "APP_ID"
-  appstore subscriptions pricing --subscription-id "SUB_ID"
-  appstore subscriptions pricing --app "APP_ID" --territory "USA" --output table`,
+  asc subscriptions pricing --app "APP_ID"
+  asc subscriptions pricing --subscription-id "SUB_ID"
+  asc subscriptions pricing --app "APP_ID" --territory "USA" --output table`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

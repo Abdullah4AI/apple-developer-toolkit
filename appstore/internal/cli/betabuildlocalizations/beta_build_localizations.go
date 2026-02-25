@@ -19,15 +19,18 @@ func BetaBuildLocalizationsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "beta-build-localizations",
-		ShortUsage: "appstore beta-build-localizations <subcommand> [flags]",
+		ShortUsage: "asc beta-build-localizations <subcommand> [flags]",
 		ShortHelp:  "Manage TestFlight beta build localizations.",
 		LongHelp: `Manage TestFlight beta build localizations ("What to Test" notes).
 
+Deprecated: prefer "asc builds test-notes ..." for the same What to Test functionality.
+This command group remains available for compatibility.
+
 Examples:
-  appstore beta-build-localizations list --build "BUILD_ID"
-  appstore beta-build-localizations list --global
-  appstore beta-build-localizations list --global --paginate
-  appstore beta-build-localizations create --build "BUILD_ID" --locale "en-US" --whats-new "Test instructions"`,
+  asc beta-build-localizations list --build "BUILD_ID"
+  asc beta-build-localizations list --global
+  asc beta-build-localizations list --global --paginate
+  asc beta-build-localizations create --build "BUILD_ID" --locale "en-US" --whats-new "Test instructions"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -58,16 +61,16 @@ func BetaBuildLocalizationsListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore beta-build-localizations list [flags]",
+		ShortUsage: "asc beta-build-localizations list [flags]",
 		ShortHelp:  "List beta build localizations for a build or globally.",
 		LongHelp: `List beta build localizations for a build or globally.
 
 Examples:
-  appstore beta-build-localizations list --build "BUILD_ID"
-  appstore beta-build-localizations list --build "BUILD_ID" --locale "en-US,ja"
-  appstore beta-build-localizations list --build "BUILD_ID" --paginate
-  appstore beta-build-localizations list --global
-  appstore beta-build-localizations list --global --paginate`,
+  asc beta-build-localizations list --build "BUILD_ID"
+  asc beta-build-localizations list --build "BUILD_ID" --locale "en-US,ja"
+  asc beta-build-localizations list --build "BUILD_ID" --paginate
+  asc beta-build-localizations list --global
+  asc beta-build-localizations list --global --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -173,12 +176,12 @@ func BetaBuildLocalizationsGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore beta-build-localizations get --id \"LOCALIZATION_ID\"",
+		ShortUsage: "asc beta-build-localizations get --id \"LOCALIZATION_ID\"",
 		ShortHelp:  "Get a beta build localization by ID.",
 		LongHelp: `Get a beta build localization by ID.
 
 Examples:
-  appstore beta-build-localizations get --id "LOCALIZATION_ID"`,
+  asc beta-build-localizations get --id "LOCALIZATION_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -213,16 +216,18 @@ func BetaBuildLocalizationsCreateCommand() *ffcli.Command {
 	buildID := fs.String("build", "", "Build ID")
 	locale := fs.String("locale", "", "Locale (e.g., en-US)")
 	whatsNew := fs.String("whats-new", "", "What to Test notes")
+	upsert := fs.Bool("upsert", false, "Create-or-update by locale (idempotent)")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "create",
-		ShortUsage: "appstore beta-build-localizations create [flags]",
+		ShortUsage: "asc beta-build-localizations create [flags]",
 		ShortHelp:  "Create a beta build localization.",
 		LongHelp: `Create a beta build localization.
 
 Examples:
-  appstore beta-build-localizations create --build "BUILD_ID" --locale "en-US" --whats-new "Test instructions"`,
+  asc beta-build-localizations create --build "BUILD_ID" --locale "en-US" --whats-new "Test instructions"
+  asc beta-build-localizations create --build "BUILD_ID" --locale "en-US" --whats-new "Test instructions" --upsert`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -260,9 +265,17 @@ Examples:
 				WhatsNew: whatsNewValue,
 			}
 
-			resp, err := client.CreateBetaBuildLocalization(requestCtx, buildValue, attrs)
-			if err != nil {
-				return fmt.Errorf("beta-build-localizations create: failed to create: %w", err)
+			var resp *asc.BetaBuildLocalizationResponse
+			if *upsert {
+				resp, err = shared.UpsertBetaBuildLocalization(requestCtx, client, buildValue, localeValue, whatsNewValue)
+				if err != nil {
+					return fmt.Errorf("beta-build-localizations create: failed to upsert: %w", err)
+				}
+			} else {
+				resp, err = client.CreateBetaBuildLocalization(requestCtx, buildValue, attrs)
+				if err != nil {
+					return fmt.Errorf("beta-build-localizations create: failed to create: %w", err)
+				}
 			}
 
 			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
@@ -280,12 +293,12 @@ func BetaBuildLocalizationsUpdateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "update",
-		ShortUsage: "appstore beta-build-localizations update [flags]",
+		ShortUsage: "asc beta-build-localizations update [flags]",
 		ShortHelp:  "Update a beta build localization.",
 		LongHelp: `Update a beta build localization.
 
 Examples:
-  appstore beta-build-localizations update --id "LOCALIZATION_ID" --whats-new "Updated notes"`,
+  asc beta-build-localizations update --id "LOCALIZATION_ID" --whats-new "Updated notes"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -333,12 +346,12 @@ func BetaBuildLocalizationsDeleteCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "delete",
-		ShortUsage: "appstore beta-build-localizations delete --id \"LOCALIZATION_ID\" --confirm",
+		ShortUsage: "asc beta-build-localizations delete --id \"LOCALIZATION_ID\" --confirm",
 		ShortHelp:  "Delete a beta build localization.",
 		LongHelp: `Delete a beta build localization.
 
 Examples:
-  appstore beta-build-localizations delete --id "LOCALIZATION_ID" --confirm`,
+  asc beta-build-localizations delete --id "LOCALIZATION_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

@@ -23,19 +23,19 @@ func OfferCodesCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "offer-codes",
-		ShortUsage: "appstore offer-codes <subcommand> [flags]",
+		ShortUsage: "asc offer-codes <subcommand> [flags]",
 		ShortHelp:  "Manage subscription offer codes.",
 		LongHelp: `Manage subscription offer codes and related custom or one-time use codes.
 
 Examples:
-  appstore offer-codes get --offer-code-id "OFFER_CODE_ID"
-  appstore offer-codes create --subscription-id "SUB_ID" --name "SPRING" --customer-eligibilities NEW --offer-eligibility STACK_WITH_INTRO_OFFERS --duration ONE_MONTH --offer-mode PAY_AS_YOU_GO --number-of-periods 1 --prices "USA:PRICE_POINT_ID"
-  appstore offer-codes update --offer-code-id "OFFER_CODE_ID" --active true
-  appstore offer-codes custom-codes list --offer-code-id "OFFER_CODE_ID"
-  appstore offer-codes prices list --offer-code-id "OFFER_CODE_ID"
-  appstore offer-codes list --offer-code "OFFER_CODE_ID"
-  appstore offer-codes generate --offer-code "OFFER_CODE_ID" --quantity 10 --expiration-date "2026-02-01"
-  appstore offer-codes values --id "ONE_TIME_USE_CODE_ID" --output "./offer-codes.txt"`,
+  asc offer-codes get --offer-code-id "OFFER_CODE_ID"
+  asc offer-codes create --subscription-id "SUB_ID" --name "SPRING" --customer-eligibilities NEW --offer-eligibility STACK_WITH_INTRO_OFFERS --duration ONE_MONTH --offer-mode PAY_AS_YOU_GO --number-of-periods 1 --prices "USA:PRICE_POINT_ID"
+  asc offer-codes update --offer-code-id "OFFER_CODE_ID" --active true
+  asc offer-codes custom-codes list --offer-code-id "OFFER_CODE_ID"
+  asc offer-codes prices list --offer-code-id "OFFER_CODE_ID"
+  asc offer-codes list --offer-code "OFFER_CODE_ID"
+  asc offer-codes generate --offer-code "OFFER_CODE_ID" --quantity 10 --expiration-date "2026-02-01"
+  asc offer-codes values --id "ONE_TIME_USE_CODE_ID" --output "./offer-codes.txt"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -66,14 +66,14 @@ func OfferCodesListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore offer-codes list [flags]",
+		ShortUsage: "asc offer-codes list [flags]",
 		ShortHelp:  "List one-time use offer code batches for a subscription offer.",
 		LongHelp: `List one-time use offer code batches for a subscription offer.
 
 Examples:
-  appstore offer-codes list --offer-code "OFFER_CODE_ID"
-  appstore offer-codes list --offer-code "OFFER_CODE_ID" --limit 10
-  appstore offer-codes list --offer-code "OFFER_CODE_ID" --paginate`,
+  asc offer-codes list --offer-code "OFFER_CODE_ID"
+  asc offer-codes list --offer-code "OFFER_CODE_ID" --limit 10
+  asc offer-codes list --offer-code "OFFER_CODE_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -142,13 +142,13 @@ func OfferCodesGenerateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "generate",
-		ShortUsage: "appstore offer-codes generate [flags]",
+		ShortUsage: "asc offer-codes generate [flags]",
 		ShortHelp:  "Generate one-time use offer codes for a subscription offer.",
 		LongHelp: `Generate one-time use offer codes for a subscription offer.
 
 Examples:
-  appstore offer-codes generate --offer-code "OFFER_CODE_ID" --quantity 10 --expiration-date "2026-02-01"
-  appstore offer-codes generate --offer-code "OFFER_CODE_ID" --quantity 10 --expiration-date "2026-02-01" --output "./offer-codes.txt"`,
+  asc offer-codes generate --offer-code "OFFER_CODE_ID" --quantity 10 --expiration-date "2026-02-01"
+  asc offer-codes generate --offer-code "OFFER_CODE_ID" --quantity 10 --expiration-date "2026-02-01" --output "./offer-codes.txt"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -235,13 +235,13 @@ func OfferCodesValuesCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "values",
-		ShortUsage: "appstore offer-codes values [flags]",
+		ShortUsage: "asc offer-codes values [flags]",
 		ShortHelp:  "Fetch one-time use offer code values for a batch.",
 		LongHelp: `Fetch one-time use offer code values for a batch.
 
 Examples:
-  appstore offer-codes values --id "ONE_TIME_USE_CODE_ID"
-  appstore offer-codes values --id "ONE_TIME_USE_CODE_ID" --output "./offer-codes.txt"`,
+  asc offer-codes values --id "ONE_TIME_USE_CODE_ID"
+  asc offer-codes values --id "ONE_TIME_USE_CODE_ID" --output "./offer-codes.txt"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

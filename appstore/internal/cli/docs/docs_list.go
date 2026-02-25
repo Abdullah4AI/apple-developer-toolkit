@@ -19,13 +19,13 @@ func DocsListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore docs list [flags]",
+		ShortUsage: "asc docs list [flags]",
 		ShortHelp:  "List available embedded documentation guides.",
 		LongHelp: `List available embedded documentation guides.
 
 Examples:
-  appstore docs list
-  appstore docs list --output table`,
+  asc docs list
+  asc docs list --output table`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

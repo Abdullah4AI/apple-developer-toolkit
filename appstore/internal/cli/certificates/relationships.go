@@ -17,12 +17,12 @@ func CertificatesRelationshipsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "relationships",
-		ShortUsage: "appstore certificates relationships <subcommand> [flags]",
+		ShortUsage: "asc certificates relationships <subcommand> [flags]",
 		ShortHelp:  "View certificate relationship linkages.",
 		LongHelp: `View certificate relationship linkages.
 
 Examples:
-  appstore certificates relationships pass-type-id --id "CERT_ID"`,
+  asc certificates relationships pass-type-id --id "CERT_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -43,12 +43,12 @@ func CertificatesRelationshipsPassTypeIDCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "pass-type-id",
-		ShortUsage: "appstore certificates relationships pass-type-id --id \"CERT_ID\"",
+		ShortUsage: "asc certificates relationships pass-type-id --id \"CERT_ID\"",
 		ShortHelp:  "Get pass type ID relationship for a certificate.",
 		LongHelp: `Get pass type ID relationship for a certificate.
 
 Examples:
-  appstore certificates relationships pass-type-id --id "CERT_ID"`,
+  asc certificates relationships pass-type-id --id "CERT_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

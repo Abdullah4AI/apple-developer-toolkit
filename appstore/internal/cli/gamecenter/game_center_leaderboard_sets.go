@@ -19,28 +19,28 @@ func GameCenterLeaderboardSetsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "leaderboard-sets",
-		ShortUsage: "appstore game-center leaderboard-sets <subcommand> [flags]",
+		ShortUsage: "asc game-center leaderboard-sets <subcommand> [flags]",
 		ShortHelp:  "Manage Game Center leaderboard sets.",
 		LongHelp: `Manage Game Center leaderboard sets.
 
 Examples:
-  appstore game-center leaderboard-sets list --app "APP_ID"
-  appstore game-center leaderboard-sets get --id "SET_ID"
-  appstore game-center leaderboard-sets group-leaderboard-set get --id "SET_ID"
-  appstore game-center leaderboard-sets create --app "APP_ID" --reference-name "Season 1" --vendor-id "com.example.season1"
-  appstore game-center leaderboard-sets update --id "SET_ID" --reference-name "Season 1 - Updated"
-  appstore game-center leaderboard-sets delete --id "SET_ID" --confirm
-  appstore game-center leaderboard-sets members list --set-id "SET_ID"
-  appstore game-center leaderboard-sets members set --set-id "SET_ID" --leaderboard-ids "id1,id2,id3"
-  appstore game-center leaderboard-sets member-localizations list --set-id "SET_ID" --leaderboard-id "LEADERBOARD_ID"
-  appstore game-center leaderboard-sets releases list --set-id "SET_ID"
-  appstore game-center leaderboard-sets releases create --app "APP_ID" --set-id "SET_ID"
-  appstore game-center leaderboard-sets releases delete --id "RELEASE_ID" --confirm
-  appstore game-center leaderboard-sets localizations list --set-id "SET_ID"
-  appstore game-center leaderboard-sets localizations create --set-id "SET_ID" --locale en-US --name "Season 1"
-  appstore game-center leaderboard-sets localizations image get --id "LOC_ID"
-  appstore game-center leaderboard-sets images upload --localization-id "LOC_ID" --file path/to/image.png
-  appstore game-center leaderboard-sets images delete --id "IMAGE_ID" --confirm`,
+  asc game-center leaderboard-sets list --app "APP_ID"
+  asc game-center leaderboard-sets get --id "SET_ID"
+  asc game-center leaderboard-sets group-leaderboard-set get --id "SET_ID"
+  asc game-center leaderboard-sets create --app "APP_ID" --reference-name "Season 1" --vendor-id "com.example.season1"
+  asc game-center leaderboard-sets update --id "SET_ID" --reference-name "Season 1 - Updated"
+  asc game-center leaderboard-sets delete --id "SET_ID" --confirm
+  asc game-center leaderboard-sets members list --set-id "SET_ID"
+  asc game-center leaderboard-sets members set --set-id "SET_ID" --leaderboard-ids "id1,id2,id3"
+  asc game-center leaderboard-sets member-localizations list --set-id "SET_ID" --leaderboard-id "LEADERBOARD_ID"
+  asc game-center leaderboard-sets releases list --set-id "SET_ID"
+  asc game-center leaderboard-sets releases create --app "APP_ID" --set-id "SET_ID"
+  asc game-center leaderboard-sets releases delete --id "RELEASE_ID" --confirm
+  asc game-center leaderboard-sets localizations list --set-id "SET_ID"
+  asc game-center leaderboard-sets localizations create --set-id "SET_ID" --locale en-US --name "Season 1"
+  asc game-center leaderboard-sets localizations image get --id "LOC_ID"
+  asc game-center leaderboard-sets images upload --localization-id "LOC_ID" --file path/to/image.png
+  asc game-center leaderboard-sets images delete --id "IMAGE_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -69,17 +69,17 @@ func GameCenterLeaderboardSetLocalizationsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "localizations",
-		ShortUsage: "appstore game-center leaderboard-sets localizations <subcommand> [flags]",
+		ShortUsage: "asc game-center leaderboard-sets localizations <subcommand> [flags]",
 		ShortHelp:  "Manage Game Center leaderboard set localizations.",
 		LongHelp: `Manage Game Center leaderboard set localizations.
 
 Examples:
-  appstore game-center leaderboard-sets localizations list --set-id "SET_ID"
-  appstore game-center leaderboard-sets localizations get --id "LOC_ID"
-  appstore game-center leaderboard-sets localizations create --set-id "SET_ID" --locale en-US --name "Season 1"
-  appstore game-center leaderboard-sets localizations update --id "LOC_ID" --name "New Name"
-  appstore game-center leaderboard-sets localizations delete --id "LOC_ID" --confirm
-  appstore game-center leaderboard-sets localizations image get --id "LOC_ID"`,
+  asc game-center leaderboard-sets localizations list --set-id "SET_ID"
+  asc game-center leaderboard-sets localizations get --id "LOC_ID"
+  asc game-center leaderboard-sets localizations create --set-id "SET_ID" --locale en-US --name "Season 1"
+  asc game-center leaderboard-sets localizations update --id "LOC_ID" --name "New Name"
+  asc game-center leaderboard-sets localizations delete --id "LOC_ID" --confirm
+  asc game-center leaderboard-sets localizations image get --id "LOC_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -108,14 +108,14 @@ func GameCenterLeaderboardSetLocalizationsListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore game-center leaderboard-sets localizations list --set-id \"SET_ID\"",
+		ShortUsage: "asc game-center leaderboard-sets localizations list --set-id \"SET_ID\"",
 		ShortHelp:  "List localizations for a Game Center leaderboard set.",
 		LongHelp: `List localizations for a Game Center leaderboard set.
 
 Examples:
-  appstore game-center leaderboard-sets localizations list --set-id "SET_ID"
-  appstore game-center leaderboard-sets localizations list --set-id "SET_ID" --limit 50
-  appstore game-center leaderboard-sets localizations list --set-id "SET_ID" --paginate`,
+  asc game-center leaderboard-sets localizations list --set-id "SET_ID"
+  asc game-center leaderboard-sets localizations list --set-id "SET_ID" --limit 50
+  asc game-center leaderboard-sets localizations list --set-id "SET_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -181,12 +181,12 @@ func GameCenterLeaderboardSetLocalizationsGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore game-center leaderboard-sets localizations get --id \"LOC_ID\"",
+		ShortUsage: "asc game-center leaderboard-sets localizations get --id \"LOC_ID\"",
 		ShortHelp:  "Get a Game Center leaderboard set localization by ID.",
 		LongHelp: `Get a Game Center leaderboard set localization by ID.
 
 Examples:
-  appstore game-center leaderboard-sets localizations get --id "LOC_ID"`,
+  asc game-center leaderboard-sets localizations get --id "LOC_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -225,13 +225,13 @@ func GameCenterLeaderboardSetLocalizationsCreateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "create",
-		ShortUsage: "appstore game-center leaderboard-sets localizations create --set-id \"SET_ID\" --locale \"LOCALE\" --name \"NAME\"",
+		ShortUsage: "asc game-center leaderboard-sets localizations create --set-id \"SET_ID\" --locale \"LOCALE\" --name \"NAME\"",
 		ShortHelp:  "Create a localization for a Game Center leaderboard set.",
 		LongHelp: `Create a localization for a Game Center leaderboard set.
 
 Examples:
-  appstore game-center leaderboard-sets localizations create --set-id "SET_ID" --locale en-US --name "Season 1"
-  appstore game-center leaderboard-sets localizations create --set-id "SET_ID" --locale de-DE --name "Staffel 1"`,
+  asc game-center leaderboard-sets localizations create --set-id "SET_ID" --locale en-US --name "Season 1"
+  asc game-center leaderboard-sets localizations create --set-id "SET_ID" --locale de-DE --name "Staffel 1"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -286,12 +286,12 @@ func GameCenterLeaderboardSetLocalizationsUpdateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "update",
-		ShortUsage: "appstore game-center leaderboard-sets localizations update --id \"LOC_ID\" --name \"NAME\"",
+		ShortUsage: "asc game-center leaderboard-sets localizations update --id \"LOC_ID\" --name \"NAME\"",
 		ShortHelp:  "Update a Game Center leaderboard set localization.",
 		LongHelp: `Update a Game Center leaderboard set localization.
 
 Examples:
-  appstore game-center leaderboard-sets localizations update --id "LOC_ID" --name "New Name"`,
+  asc game-center leaderboard-sets localizations update --id "LOC_ID" --name "New Name"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -343,12 +343,12 @@ func GameCenterLeaderboardSetLocalizationsDeleteCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "delete",
-		ShortUsage: "appstore game-center leaderboard-sets localizations delete --id \"LOC_ID\" --confirm",
+		ShortUsage: "asc game-center leaderboard-sets localizations delete --id \"LOC_ID\" --confirm",
 		ShortHelp:  "Delete a Game Center leaderboard set localization.",
 		LongHelp: `Delete a Game Center leaderboard set localization.
 
 Examples:
-  appstore game-center leaderboard-sets localizations delete --id "LOC_ID" --confirm`,
+  asc game-center leaderboard-sets localizations delete --id "LOC_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -388,7 +388,7 @@ Examples:
 func GameCenterLeaderboardSetsListCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("list", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID env)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
 	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
 	next := fs.String("next", "", "Fetch next page using a links.next URL")
 	paginate := fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")
@@ -396,14 +396,14 @@ func GameCenterLeaderboardSetsListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore game-center leaderboard-sets list [flags]",
+		ShortUsage: "asc game-center leaderboard-sets list [flags]",
 		ShortHelp:  "List Game Center leaderboard sets for an app.",
 		LongHelp: `List Game Center leaderboard sets for an app.
 
 Examples:
-  appstore game-center leaderboard-sets list --app "APP_ID"
-  appstore game-center leaderboard-sets list --app "APP_ID" --limit 50
-  appstore game-center leaderboard-sets list --app "APP_ID" --paginate`,
+  asc game-center leaderboard-sets list --app "APP_ID"
+  asc game-center leaderboard-sets list --app "APP_ID" --limit 50
+  asc game-center leaderboard-sets list --app "APP_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -417,7 +417,7 @@ Examples:
 			resolvedAppID := shared.ResolveAppID(*appID)
 			nextURL := strings.TrimSpace(*next)
 			if resolvedAppID == "" && nextURL == "" {
-				fmt.Fprintln(os.Stderr, "Error: --app is required (or set APPSTORE_APP_ID)")
+				fmt.Fprintln(os.Stderr, "Error: --app is required (or set ASC_APP_ID)")
 				return flag.ErrHelp
 			}
 
@@ -480,12 +480,12 @@ func GameCenterLeaderboardSetsGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore game-center leaderboard-sets get --id \"SET_ID\"",
+		ShortUsage: "asc game-center leaderboard-sets get --id \"SET_ID\"",
 		ShortHelp:  "Get a Game Center leaderboard set by ID.",
 		LongHelp: `Get a Game Center leaderboard set by ID.
 
 Examples:
-  appstore game-center leaderboard-sets get --id "SET_ID"`,
+  asc game-center leaderboard-sets get --id "SET_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -517,26 +517,26 @@ Examples:
 func GameCenterLeaderboardSetsCreateCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("create", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID env)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
 	referenceName := fs.String("reference-name", "", "Reference name for the leaderboard set")
 	vendorID := fs.String("vendor-id", "", "Vendor identifier (e.g., com.example.set)")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "create",
-		ShortUsage: "appstore game-center leaderboard-sets create [flags]",
+		ShortUsage: "asc game-center leaderboard-sets create [flags]",
 		ShortHelp:  "Create a new Game Center leaderboard set.",
 		LongHelp: `Create a new Game Center leaderboard set.
 
 Examples:
-  appstore game-center leaderboard-sets create --app "APP_ID" --reference-name "Season 1" --vendor-id "com.example.season1"
-  appstore game-center leaderboard-sets create --app "APP_ID" --reference-name "Weekly Challenge" --vendor-id "com.example.weekly"`,
+  asc game-center leaderboard-sets create --app "APP_ID" --reference-name "Season 1" --vendor-id "com.example.season1"
+  asc game-center leaderboard-sets create --app "APP_ID" --reference-name "Weekly Challenge" --vendor-id "com.example.weekly"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			resolvedAppID := shared.ResolveAppID(*appID)
 			if resolvedAppID == "" {
-				fmt.Fprintln(os.Stderr, "Error: --app is required (or set APPSTORE_APP_ID)")
+				fmt.Fprintln(os.Stderr, "Error: --app is required (or set ASC_APP_ID)")
 				return flag.ErrHelp
 			}
 
@@ -591,12 +591,12 @@ func GameCenterLeaderboardSetsUpdateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "update",
-		ShortUsage: "appstore game-center leaderboard-sets update [flags]",
+		ShortUsage: "asc game-center leaderboard-sets update [flags]",
 		ShortHelp:  "Update a Game Center leaderboard set.",
 		LongHelp: `Update a Game Center leaderboard set.
 
 Examples:
-  appstore game-center leaderboard-sets update --id "SET_ID" --reference-name "Season 1 - Updated"`,
+  asc game-center leaderboard-sets update --id "SET_ID" --reference-name "Season 1 - Updated"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -648,12 +648,12 @@ func GameCenterLeaderboardSetsDeleteCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "delete",
-		ShortUsage: "appstore game-center leaderboard-sets delete --id \"SET_ID\" --confirm",
+		ShortUsage: "asc game-center leaderboard-sets delete --id \"SET_ID\" --confirm",
 		ShortHelp:  "Delete a Game Center leaderboard set.",
 		LongHelp: `Delete a Game Center leaderboard set.
 
 Examples:
-  appstore game-center leaderboard-sets delete --id "SET_ID" --confirm`,
+  asc game-center leaderboard-sets delete --id "SET_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -695,16 +695,16 @@ func GameCenterLeaderboardSetReleasesCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "releases",
-		ShortUsage: "appstore game-center leaderboard-sets releases <subcommand> [flags]",
+		ShortUsage: "asc game-center leaderboard-sets releases <subcommand> [flags]",
 		ShortHelp:  "Manage Game Center leaderboard set releases.",
 		LongHelp: `Manage Game Center leaderboard set releases.
 
 Releases control which Game Center details (apps) a leaderboard set is associated with.
 
 Examples:
-  appstore game-center leaderboard-sets releases list --set-id "SET_ID"
-  appstore game-center leaderboard-sets releases create --app "APP_ID" --set-id "SET_ID"
-  appstore game-center leaderboard-sets releases delete --id "RELEASE_ID" --confirm`,
+  asc game-center leaderboard-sets releases list --set-id "SET_ID"
+  asc game-center leaderboard-sets releases create --app "APP_ID" --set-id "SET_ID"
+  asc game-center leaderboard-sets releases delete --id "RELEASE_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -730,14 +730,14 @@ func GameCenterLeaderboardSetReleasesListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore game-center leaderboard-sets releases list --set-id \"SET_ID\"",
+		ShortUsage: "asc game-center leaderboard-sets releases list --set-id \"SET_ID\"",
 		ShortHelp:  "List releases for a Game Center leaderboard set.",
 		LongHelp: `List releases for a Game Center leaderboard set.
 
 Examples:
-  appstore game-center leaderboard-sets releases list --set-id "SET_ID"
-  appstore game-center leaderboard-sets releases list --set-id "SET_ID" --limit 50
-  appstore game-center leaderboard-sets releases list --set-id "SET_ID" --paginate`,
+  asc game-center leaderboard-sets releases list --set-id "SET_ID"
+  asc game-center leaderboard-sets releases list --set-id "SET_ID" --limit 50
+  asc game-center leaderboard-sets releases list --set-id "SET_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -798,26 +798,26 @@ Examples:
 func GameCenterLeaderboardSetReleasesCreateCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("create", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID env)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
 	setID := fs.String("set-id", "", "Game Center leaderboard set ID")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "create",
-		ShortUsage: "appstore game-center leaderboard-sets releases create --app \"APP_ID\" --set-id \"SET_ID\"",
+		ShortUsage: "asc game-center leaderboard-sets releases create --app \"APP_ID\" --set-id \"SET_ID\"",
 		ShortHelp:  "Create a release for a Game Center leaderboard set.",
 		LongHelp: `Create a release for a Game Center leaderboard set.
 
 This associates the leaderboard set with the app's Game Center detail.
 
 Examples:
-  appstore game-center leaderboard-sets releases create --app "APP_ID" --set-id "SET_ID"`,
+  asc game-center leaderboard-sets releases create --app "APP_ID" --set-id "SET_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			resolvedAppID := shared.ResolveAppID(*appID)
 			if resolvedAppID == "" {
-				fmt.Fprintln(os.Stderr, "Error: --app is required (or set APPSTORE_APP_ID)")
+				fmt.Fprintln(os.Stderr, "Error: --app is required (or set ASC_APP_ID)")
 				return flag.ErrHelp
 			}
 
@@ -861,12 +861,12 @@ func GameCenterLeaderboardSetReleasesDeleteCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "delete",
-		ShortUsage: "appstore game-center leaderboard-sets releases delete --id \"RELEASE_ID\" --confirm",
+		ShortUsage: "asc game-center leaderboard-sets releases delete --id \"RELEASE_ID\" --confirm",
 		ShortHelp:  "Delete a Game Center leaderboard set release.",
 		LongHelp: `Delete a Game Center leaderboard set release.
 
 Examples:
-  appstore game-center leaderboard-sets releases delete --id "RELEASE_ID" --confirm`,
+  asc game-center leaderboard-sets releases delete --id "RELEASE_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -908,12 +908,12 @@ func GameCenterLeaderboardSetGroupLeaderboardSetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "group-leaderboard-set",
-		ShortUsage: "appstore game-center leaderboard-sets group-leaderboard-set get --id \"SET_ID\"",
+		ShortUsage: "asc game-center leaderboard-sets group-leaderboard-set get --id \"SET_ID\"",
 		ShortHelp:  "Get the group leaderboard set for a leaderboard set.",
 		LongHelp: `Get the group leaderboard set for a Game Center leaderboard set.
 
 Examples:
-  appstore game-center leaderboard-sets group-leaderboard-set get --id "SET_ID"`,
+  asc game-center leaderboard-sets group-leaderboard-set get --id "SET_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -934,12 +934,12 @@ func GameCenterLeaderboardSetGroupLeaderboardSetGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore game-center leaderboard-sets group-leaderboard-set get --id \"SET_ID\"",
+		ShortUsage: "asc game-center leaderboard-sets group-leaderboard-set get --id \"SET_ID\"",
 		ShortHelp:  "Get a group leaderboard set by leaderboard set ID.",
 		LongHelp: `Get a group leaderboard set by leaderboard set ID.
 
 Examples:
-  appstore game-center leaderboard-sets group-leaderboard-set get --id "SET_ID"`,
+  asc game-center leaderboard-sets group-leaderboard-set get --id "SET_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -973,12 +973,12 @@ func GameCenterLeaderboardSetLocalizationImageCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "image",
-		ShortUsage: "appstore game-center leaderboard-sets localizations image get --id \"LOC_ID\"",
+		ShortUsage: "asc game-center leaderboard-sets localizations image get --id \"LOC_ID\"",
 		ShortHelp:  "Get the image for a leaderboard set localization.",
 		LongHelp: `Get the image for a leaderboard set localization.
 
 Examples:
-  appstore game-center leaderboard-sets localizations image get --id "LOC_ID"`,
+  asc game-center leaderboard-sets localizations image get --id "LOC_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -999,12 +999,12 @@ func GameCenterLeaderboardSetLocalizationImageGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore game-center leaderboard-sets localizations image get --id \"LOC_ID\"",
+		ShortUsage: "asc game-center leaderboard-sets localizations image get --id \"LOC_ID\"",
 		ShortHelp:  "Get a leaderboard set localization image.",
 		LongHelp: `Get a leaderboard set localization image.
 
 Examples:
-  appstore game-center leaderboard-sets localizations image get --id "LOC_ID"`,
+  asc game-center leaderboard-sets localizations image get --id "LOC_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -1038,18 +1038,18 @@ func GameCenterLeaderboardSetMemberLocalizationsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "member-localizations",
-		ShortUsage: "appstore game-center leaderboard-sets member-localizations <subcommand> [flags]",
+		ShortUsage: "asc game-center leaderboard-sets member-localizations <subcommand> [flags]",
 		ShortHelp:  "Manage leaderboard set member localizations.",
 		LongHelp: `Manage leaderboard set member localizations.
 
 Examples:
-  appstore game-center leaderboard-sets member-localizations list --set-id "SET_ID" --leaderboard-id "LEADERBOARD_ID"
-  appstore game-center leaderboard-sets member-localizations get --id "LOCALIZATION_ID"
-  appstore game-center leaderboard-sets member-localizations create --leaderboard-set-id "SET_ID" --leaderboard-id "LEADERBOARD_ID" --locale "en-US" --name "Top Score"
-  appstore game-center leaderboard-sets member-localizations update --id "LOCALIZATION_ID" --name "New Name"
-  appstore game-center leaderboard-sets member-localizations delete --id "LOCALIZATION_ID" --confirm
-  appstore game-center leaderboard-sets member-localizations leaderboard get --id "LOCALIZATION_ID"
-  appstore game-center leaderboard-sets member-localizations leaderboard-set get --id "LOCALIZATION_ID"`,
+  asc game-center leaderboard-sets member-localizations list --set-id "SET_ID" --leaderboard-id "LEADERBOARD_ID"
+  asc game-center leaderboard-sets member-localizations get --id "LOCALIZATION_ID"
+  asc game-center leaderboard-sets member-localizations create --leaderboard-set-id "SET_ID" --leaderboard-id "LEADERBOARD_ID" --locale "en-US" --name "Top Score"
+  asc game-center leaderboard-sets member-localizations update --id "LOCALIZATION_ID" --name "New Name"
+  asc game-center leaderboard-sets member-localizations delete --id "LOCALIZATION_ID" --confirm
+  asc game-center leaderboard-sets member-localizations leaderboard get --id "LOCALIZATION_ID"
+  asc game-center leaderboard-sets member-localizations leaderboard-set get --id "LOCALIZATION_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -1080,14 +1080,14 @@ func GameCenterLeaderboardSetMemberLocalizationsListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore game-center leaderboard-sets member-localizations list --set-id \"SET_ID\" --leaderboard-id \"LEADERBOARD_ID\"",
+		ShortUsage: "asc game-center leaderboard-sets member-localizations list --set-id \"SET_ID\" --leaderboard-id \"LEADERBOARD_ID\"",
 		ShortHelp:  "List leaderboard set member localizations.",
 		LongHelp: `List leaderboard set member localizations.
 
 Examples:
-  appstore game-center leaderboard-sets member-localizations list --set-id "SET_ID" --leaderboard-id "LEADERBOARD_ID"
-  appstore game-center leaderboard-sets member-localizations list --set-id "SET_ID" --leaderboard-id "LEADERBOARD_ID" --limit 50
-  appstore game-center leaderboard-sets member-localizations list --set-id "SET_ID" --leaderboard-id "LEADERBOARD_ID" --paginate`,
+  asc game-center leaderboard-sets member-localizations list --set-id "SET_ID" --leaderboard-id "LEADERBOARD_ID"
+  asc game-center leaderboard-sets member-localizations list --set-id "SET_ID" --leaderboard-id "LEADERBOARD_ID" --limit 50
+  asc game-center leaderboard-sets member-localizations list --set-id "SET_ID" --leaderboard-id "LEADERBOARD_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -1166,12 +1166,12 @@ func GameCenterLeaderboardSetMemberLocalizationsGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore game-center leaderboard-sets member-localizations get --id \"LOCALIZATION_ID\"",
+		ShortUsage: "asc game-center leaderboard-sets member-localizations get --id \"LOCALIZATION_ID\"",
 		ShortHelp:  "Get a leaderboard set member localization by ID.",
 		LongHelp: `Get a leaderboard set member localization by ID.
 
 Examples:
-  appstore game-center leaderboard-sets member-localizations get --id "LOCALIZATION_ID"`,
+  asc game-center leaderboard-sets member-localizations get --id "LOCALIZATION_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -1211,13 +1211,13 @@ func GameCenterLeaderboardSetMemberLocalizationsCreateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "create",
-		ShortUsage: "appstore game-center leaderboard-sets member-localizations create --leaderboard-set-id \"SET_ID\" --leaderboard-id \"LEADERBOARD_ID\" --locale \"LOCALE\" --name \"NAME\"",
+		ShortUsage: "asc game-center leaderboard-sets member-localizations create --leaderboard-set-id \"SET_ID\" --leaderboard-id \"LEADERBOARD_ID\" --locale \"LOCALE\" --name \"NAME\"",
 		ShortHelp:  "Create a leaderboard set member localization.",
 		LongHelp: `Create a leaderboard set member localization.
 
 Examples:
-  appstore game-center leaderboard-sets member-localizations create --leaderboard-set-id "SET_ID" --leaderboard-id "LEADERBOARD_ID" --locale en-US --name "Top Score"
-  appstore game-center leaderboard-sets member-localizations create --leaderboard-set-id "SET_ID" --leaderboard-id "LEADERBOARD_ID" --locale de-DE --name "Beste Punktzahl"`,
+  asc game-center leaderboard-sets member-localizations create --leaderboard-set-id "SET_ID" --leaderboard-id "LEADERBOARD_ID" --locale en-US --name "Top Score"
+  asc game-center leaderboard-sets member-localizations create --leaderboard-set-id "SET_ID" --leaderboard-id "LEADERBOARD_ID" --locale de-DE --name "Beste Punktzahl"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -1278,12 +1278,12 @@ func GameCenterLeaderboardSetMemberLocalizationsUpdateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "update",
-		ShortUsage: "appstore game-center leaderboard-sets member-localizations update --id \"LOCALIZATION_ID\" --name \"NAME\"",
+		ShortUsage: "asc game-center leaderboard-sets member-localizations update --id \"LOCALIZATION_ID\" --name \"NAME\"",
 		ShortHelp:  "Update a leaderboard set member localization.",
 		LongHelp: `Update a leaderboard set member localization.
 
 Examples:
-  appstore game-center leaderboard-sets member-localizations update --id "LOCALIZATION_ID" --name "New Name"`,
+  asc game-center leaderboard-sets member-localizations update --id "LOCALIZATION_ID" --name "New Name"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -1335,12 +1335,12 @@ func GameCenterLeaderboardSetMemberLocalizationsDeleteCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "delete",
-		ShortUsage: "appstore game-center leaderboard-sets member-localizations delete --id \"LOCALIZATION_ID\" --confirm",
+		ShortUsage: "asc game-center leaderboard-sets member-localizations delete --id \"LOCALIZATION_ID\" --confirm",
 		ShortHelp:  "Delete a leaderboard set member localization.",
 		LongHelp: `Delete a leaderboard set member localization.
 
 Examples:
-  appstore game-center leaderboard-sets member-localizations delete --id "LOCALIZATION_ID" --confirm`,
+  asc game-center leaderboard-sets member-localizations delete --id "LOCALIZATION_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -1382,12 +1382,12 @@ func GameCenterLeaderboardSetMemberLocalizationsLeaderboardCommand() *ffcli.Comm
 
 	return &ffcli.Command{
 		Name:       "leaderboard",
-		ShortUsage: "appstore game-center leaderboard-sets member-localizations leaderboard get --id \"LOCALIZATION_ID\"",
+		ShortUsage: "asc game-center leaderboard-sets member-localizations leaderboard get --id \"LOCALIZATION_ID\"",
 		ShortHelp:  "Get the leaderboard for a member localization.",
 		LongHelp: `Get the leaderboard for a member localization.
 
 Examples:
-  appstore game-center leaderboard-sets member-localizations leaderboard get --id "LOCALIZATION_ID"`,
+  asc game-center leaderboard-sets member-localizations leaderboard get --id "LOCALIZATION_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -1408,12 +1408,12 @@ func GameCenterLeaderboardSetMemberLocalizationsLeaderboardGetCommand() *ffcli.C
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore game-center leaderboard-sets member-localizations leaderboard get --id \"LOCALIZATION_ID\"",
+		ShortUsage: "asc game-center leaderboard-sets member-localizations leaderboard get --id \"LOCALIZATION_ID\"",
 		ShortHelp:  "Get a leaderboard for a member localization.",
 		LongHelp: `Get a leaderboard for a member localization.
 
 Examples:
-  appstore game-center leaderboard-sets member-localizations leaderboard get --id "LOCALIZATION_ID"`,
+  asc game-center leaderboard-sets member-localizations leaderboard get --id "LOCALIZATION_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -1447,12 +1447,12 @@ func GameCenterLeaderboardSetMemberLocalizationsLeaderboardSetCommand() *ffcli.C
 
 	return &ffcli.Command{
 		Name:       "leaderboard-set",
-		ShortUsage: "appstore game-center leaderboard-sets member-localizations leaderboard-set get --id \"LOCALIZATION_ID\"",
+		ShortUsage: "asc game-center leaderboard-sets member-localizations leaderboard-set get --id \"LOCALIZATION_ID\"",
 		ShortHelp:  "Get the leaderboard set for a member localization.",
 		LongHelp: `Get the leaderboard set for a member localization.
 
 Examples:
-  appstore game-center leaderboard-sets member-localizations leaderboard-set get --id "LOCALIZATION_ID"`,
+  asc game-center leaderboard-sets member-localizations leaderboard-set get --id "LOCALIZATION_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -1473,12 +1473,12 @@ func GameCenterLeaderboardSetMemberLocalizationsLeaderboardSetGetCommand() *ffcl
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore game-center leaderboard-sets member-localizations leaderboard-set get --id \"LOCALIZATION_ID\"",
+		ShortUsage: "asc game-center leaderboard-sets member-localizations leaderboard-set get --id \"LOCALIZATION_ID\"",
 		ShortHelp:  "Get a leaderboard set for a member localization.",
 		LongHelp: `Get a leaderboard set for a member localization.
 
 Examples:
-  appstore game-center leaderboard-sets member-localizations leaderboard-set get --id "LOCALIZATION_ID"`,
+  asc game-center leaderboard-sets member-localizations leaderboard-set get --id "LOCALIZATION_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

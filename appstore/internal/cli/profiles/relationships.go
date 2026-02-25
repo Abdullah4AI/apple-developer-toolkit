@@ -20,14 +20,14 @@ func ProfilesRelationshipsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "relationships",
-		ShortUsage: "appstore profiles relationships <bundle-id|certificates|devices> [flags]",
+		ShortUsage: "asc profiles relationships <bundle-id|certificates|devices> [flags]",
 		ShortHelp:  "View profile relationship linkages.",
 		LongHelp: `View profile relationship linkages.
 
 Examples:
-  appstore profiles relationships bundle-id --id "PROFILE_ID"
-  appstore profiles relationships certificates --id "PROFILE_ID"
-  appstore profiles relationships devices --id "PROFILE_ID"`,
+  asc profiles relationships bundle-id --id "PROFILE_ID"
+  asc profiles relationships certificates --id "PROFILE_ID"
+  asc profiles relationships devices --id "PROFILE_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -50,12 +50,12 @@ func ProfilesRelationshipsBundleIDCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "bundle-id",
-		ShortUsage: "appstore profiles relationships bundle-id --id \"PROFILE_ID\"",
+		ShortUsage: "asc profiles relationships bundle-id --id \"PROFILE_ID\"",
 		ShortHelp:  "Get bundle ID relationship for a profile.",
 		LongHelp: `Get bundle ID relationship for a profile.
 
 Examples:
-  appstore profiles relationships bundle-id --id "PROFILE_ID"`,
+  asc profiles relationships bundle-id --id "PROFILE_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -95,13 +95,13 @@ func ProfilesRelationshipsCertificatesCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "certificates",
-		ShortUsage: "appstore profiles relationships certificates --id \"PROFILE_ID\" [flags]",
+		ShortUsage: "asc profiles relationships certificates --id \"PROFILE_ID\" [flags]",
 		ShortHelp:  "Get certificate relationship linkages for a profile.",
 		LongHelp: `Get certificate relationship linkages for a profile.
 
 Examples:
-  appstore profiles relationships certificates --id "PROFILE_ID"
-  appstore profiles relationships certificates --id "PROFILE_ID" --paginate`,
+  asc profiles relationships certificates --id "PROFILE_ID"
+  asc profiles relationships certificates --id "PROFILE_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -180,13 +180,13 @@ func ProfilesRelationshipsDevicesCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "devices",
-		ShortUsage: "appstore profiles relationships devices --id \"PROFILE_ID\" [flags]",
+		ShortUsage: "asc profiles relationships devices --id \"PROFILE_ID\" [flags]",
 		ShortHelp:  "Get device relationship linkages for a profile.",
 		LongHelp: `Get device relationship linkages for a profile.
 
 Examples:
-  appstore profiles relationships devices --id "PROFILE_ID"
-  appstore profiles relationships devices --id "PROFILE_ID" --paginate`,
+  asc profiles relationships devices --id "PROFILE_ID"
+  asc profiles relationships devices --id "PROFILE_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

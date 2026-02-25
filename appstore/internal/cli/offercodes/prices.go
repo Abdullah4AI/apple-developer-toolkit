@@ -19,12 +19,12 @@ func OfferCodePricesCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "prices",
-		ShortUsage: "appstore offer-codes prices <subcommand> [flags]",
+		ShortUsage: "asc offer-codes prices <subcommand> [flags]",
 		ShortHelp:  "Manage offer code prices.",
 		LongHelp: `Manage offer code prices.
 
 Examples:
-  appstore offer-codes prices list --offer-code-id "OFFER_CODE_ID"`,
+  asc offer-codes prices list --offer-code-id "OFFER_CODE_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -48,14 +48,14 @@ func OfferCodePricesListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore offer-codes prices list [flags]",
+		ShortUsage: "asc offer-codes prices list [flags]",
 		ShortHelp:  "List prices for a subscription offer code.",
 		LongHelp: `List prices for a subscription offer code.
 
 Examples:
-  appstore offer-codes prices list --offer-code-id "OFFER_CODE_ID"
-  appstore offer-codes prices list --offer-code-id "OFFER_CODE_ID" --limit 50
-  appstore offer-codes prices list --offer-code-id "OFFER_CODE_ID" --paginate`,
+  asc offer-codes prices list --offer-code-id "OFFER_CODE_ID"
+  asc offer-codes prices list --offer-code-id "OFFER_CODE_ID" --limit 50
+  asc offer-codes prices list --offer-code-id "OFFER_CODE_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

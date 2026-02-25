@@ -19,14 +19,14 @@ func LocalizationsSearchKeywordsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "search-keywords",
-		ShortUsage: "appstore localizations search-keywords <subcommand> [flags]",
+		ShortUsage: "asc localizations search-keywords <subcommand> [flags]",
 		ShortHelp:  "Manage search keywords for an App Store localization.",
 		LongHelp: `Manage search keywords for an App Store localization.
 
 Examples:
-  appstore localizations search-keywords list --localization-id "LOCALIZATION_ID"
-  appstore localizations search-keywords add --localization-id "LOCALIZATION_ID" --keywords "kw1,kw2"
-  appstore localizations search-keywords delete --localization-id "LOCALIZATION_ID" --keywords "kw1,kw2" --confirm`,
+  asc localizations search-keywords list --localization-id "LOCALIZATION_ID"
+  asc localizations search-keywords add --localization-id "LOCALIZATION_ID" --keywords "kw1,kw2"
+  asc localizations search-keywords delete --localization-id "LOCALIZATION_ID" --keywords "kw1,kw2" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -49,12 +49,12 @@ func LocalizationsSearchKeywordsListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore localizations search-keywords list --localization-id \"LOCALIZATION_ID\"",
+		ShortUsage: "asc localizations search-keywords list --localization-id \"LOCALIZATION_ID\"",
 		ShortHelp:  "List search keywords for an App Store localization.",
 		LongHelp: `List search keywords for an App Store localization.
 
 Examples:
-  appstore localizations search-keywords list --localization-id "LOCALIZATION_ID"`,
+  asc localizations search-keywords list --localization-id "LOCALIZATION_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -92,12 +92,12 @@ func LocalizationsSearchKeywordsAddCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "add",
-		ShortUsage: "appstore localizations search-keywords add --localization-id \"LOCALIZATION_ID\" --keywords \"kw1,kw2\"",
+		ShortUsage: "asc localizations search-keywords add --localization-id \"LOCALIZATION_ID\" --keywords \"kw1,kw2\"",
 		ShortHelp:  "Add search keywords to an App Store localization.",
 		LongHelp: `Add search keywords to an App Store localization.
 
 Examples:
-  appstore localizations search-keywords add --localization-id "LOCALIZATION_ID" --keywords "kw1,kw2"`,
+  asc localizations search-keywords add --localization-id "LOCALIZATION_ID" --keywords "kw1,kw2"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -141,12 +141,12 @@ func LocalizationsSearchKeywordsDeleteCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "delete",
-		ShortUsage: "appstore localizations search-keywords delete --localization-id \"LOCALIZATION_ID\" --keywords \"kw1,kw2\" --confirm",
+		ShortUsage: "asc localizations search-keywords delete --localization-id \"LOCALIZATION_ID\" --keywords \"kw1,kw2\" --confirm",
 		ShortHelp:  "Delete search keywords from an App Store localization.",
 		LongHelp: `Delete search keywords from an App Store localization.
 
 Examples:
-  appstore localizations search-keywords delete --localization-id "LOCALIZATION_ID" --keywords "kw1,kw2" --confirm`,
+  asc localizations search-keywords delete --localization-id "LOCALIZATION_ID" --keywords "kw1,kw2" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

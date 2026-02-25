@@ -25,15 +25,15 @@ func IAPOfferCodesCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "offer-codes",
-		ShortUsage: "appstore iap offer-codes <subcommand> [flags]",
+		ShortUsage: "asc iap offer-codes <subcommand> [flags]",
 		ShortHelp:  "Manage in-app purchase offer codes.",
 		LongHelp: `Manage in-app purchase offer codes.
 
 Examples:
-  appstore iap offer-codes list --iap-id "IAP_ID"
-  appstore iap offer-codes get --offer-code-id "CODE_ID"
-  appstore iap offer-codes create --iap-id "IAP_ID" --name "SPRING" --prices "USA:PRICE_POINT_ID"
-  appstore iap offer-codes update --offer-code-id "CODE_ID" --active true`,
+  asc iap offer-codes list --iap-id "IAP_ID"
+  asc iap offer-codes get --offer-code-id "CODE_ID"
+  asc iap offer-codes create --iap-id "IAP_ID" --name "SPRING" --prices "USA:PRICE_POINT_ID"
+  asc iap offer-codes update --offer-code-id "CODE_ID" --active true`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -63,13 +63,13 @@ func IAPOfferCodesListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore iap offer-codes list --iap-id \"IAP_ID\"",
+		ShortUsage: "asc iap offer-codes list --iap-id \"IAP_ID\"",
 		ShortHelp:  "List offer codes for an in-app purchase.",
 		LongHelp: `List offer codes for an in-app purchase.
 
 Examples:
-  appstore iap offer-codes list --iap-id "IAP_ID"
-  appstore iap offer-codes list --iap-id "IAP_ID" --paginate`,
+  asc iap offer-codes list --iap-id "IAP_ID"
+  asc iap offer-codes list --iap-id "IAP_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -135,12 +135,12 @@ func IAPOfferCodesGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore iap offer-codes get --offer-code-id \"CODE_ID\"",
+		ShortUsage: "asc iap offer-codes get --offer-code-id \"CODE_ID\"",
 		ShortHelp:  "Get an offer code by ID.",
 		LongHelp: `Get an offer code by ID.
 
 Examples:
-  appstore iap offer-codes get --offer-code-id "CODE_ID"`,
+  asc iap offer-codes get --offer-code-id "CODE_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -180,13 +180,13 @@ func IAPOfferCodesCreateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "create",
-		ShortUsage: "appstore iap offer-codes create --iap-id \"IAP_ID\" --name \"SPRING\" --prices \"USA:PRICE_POINT_ID\"",
+		ShortUsage: "asc iap offer-codes create --iap-id \"IAP_ID\" --name \"SPRING\" --prices \"USA:PRICE_POINT_ID\"",
 		ShortHelp:  "Create an offer code.",
 		LongHelp: `Create an offer code.
 
 Examples:
-  appstore iap offer-codes create --iap-id "IAP_ID" --name "SPRING" --prices "USA:PRICE_POINT_ID"
-  appstore iap offer-codes create --iap-id "IAP_ID" --name "SPRING" --eligibilities "NON_SPENDER" --prices "USA:PRICE_POINT_ID"`,
+  asc iap offer-codes create --iap-id "IAP_ID" --name "SPRING" --prices "USA:PRICE_POINT_ID"
+  asc iap offer-codes create --iap-id "IAP_ID" --name "SPRING" --eligibilities "NON_SPENDER" --prices "USA:PRICE_POINT_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -254,12 +254,12 @@ func IAPOfferCodesUpdateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "update",
-		ShortUsage: "appstore iap offer-codes update --offer-code-id \"CODE_ID\" --active true",
+		ShortUsage: "asc iap offer-codes update --offer-code-id \"CODE_ID\" --active true",
 		ShortHelp:  "Update an offer code.",
 		LongHelp: `Update an offer code.
 
 Examples:
-  appstore iap offer-codes update --offer-code-id "CODE_ID" --active true`,
+  asc iap offer-codes update --offer-code-id "CODE_ID" --active true`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

@@ -17,12 +17,12 @@ func SubscriptionsAppStoreReviewScreenshotCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "app-store-review-screenshot",
-		ShortUsage: "appstore subscriptions app-store-review-screenshot <subcommand> [flags]",
+		ShortUsage: "asc subscriptions app-store-review-screenshot <subcommand> [flags]",
 		ShortHelp:  "Inspect the App Store review screenshot for a subscription.",
 		LongHelp: `Inspect the App Store review screenshot for a subscription.
 
 Examples:
-  appstore subscriptions app-store-review-screenshot get --id "SUBSCRIPTION_ID"`,
+  asc subscriptions app-store-review-screenshot get --id "SUBSCRIPTION_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -43,12 +43,12 @@ func SubscriptionsAppStoreReviewScreenshotGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore subscriptions app-store-review-screenshot get --id \"SUBSCRIPTION_ID\"",
+		ShortUsage: "asc subscriptions app-store-review-screenshot get --id \"SUBSCRIPTION_ID\"",
 		ShortHelp:  "Get the App Store review screenshot for a subscription.",
 		LongHelp: `Get the App Store review screenshot for a subscription.
 
 Examples:
-  appstore subscriptions app-store-review-screenshot get --id "SUBSCRIPTION_ID"`,
+  asc subscriptions app-store-review-screenshot get --id "SUBSCRIPTION_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

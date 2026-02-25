@@ -53,7 +53,7 @@ func MetadataValidateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "validate",
-		ShortUsage: "appstore metadata validate --dir \"./metadata\"",
+		ShortUsage: "asc metadata validate --dir \"./metadata\"",
 		ShortHelp:  "Validate canonical metadata files offline.",
 		LongHelp: `Validate canonical metadata files offline.
 
@@ -63,8 +63,8 @@ Checks:
   - metadata character limits
 
 Examples:
-  appstore metadata validate --dir "./metadata"
-  appstore metadata validate --dir "./metadata" --output table`,
+  asc metadata validate --dir "./metadata"
+  asc metadata validate --dir "./metadata" --output table`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

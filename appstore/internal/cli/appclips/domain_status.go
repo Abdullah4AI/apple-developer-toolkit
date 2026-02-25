@@ -19,13 +19,13 @@ func AppClipDomainStatusCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "domain-status",
-		ShortUsage: "appstore app-clips domain-status <subcommand> [flags]",
+		ShortUsage: "asc app-clips domain-status <subcommand> [flags]",
 		ShortHelp:  "Fetch App Clip domain status for a build bundle.",
 		LongHelp: `Fetch App Clip domain status for a build bundle.
 
 Examples:
-  appstore app-clips domain-status cache --build-bundle-id "BUILD_BUNDLE_ID"
-  appstore app-clips domain-status debug --build-bundle-id "BUILD_BUNDLE_ID"`,
+  asc app-clips domain-status cache --build-bundle-id "BUILD_BUNDLE_ID"
+  asc app-clips domain-status debug --build-bundle-id "BUILD_BUNDLE_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -47,12 +47,12 @@ func AppClipDomainStatusCacheCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "cache",
-		ShortUsage: "appstore app-clips domain-status cache --build-bundle-id \"BUILD_BUNDLE_ID\"",
+		ShortUsage: "asc app-clips domain-status cache --build-bundle-id \"BUILD_BUNDLE_ID\"",
 		ShortHelp:  "Get App Clip domain cache status for a build bundle.",
 		LongHelp: `Get App Clip domain cache status for a build bundle.
 
 Examples:
-  appstore app-clips domain-status cache --build-bundle-id "BUILD_BUNDLE_ID"`,
+  asc app-clips domain-status cache --build-bundle-id "BUILD_BUNDLE_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -94,12 +94,12 @@ func AppClipDomainStatusDebugCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "debug",
-		ShortUsage: "appstore app-clips domain-status debug --build-bundle-id \"BUILD_BUNDLE_ID\"",
+		ShortUsage: "asc app-clips domain-status debug --build-bundle-id \"BUILD_BUNDLE_ID\"",
 		ShortHelp:  "Get App Clip domain debug status for a build bundle.",
 		LongHelp: `Get App Clip domain debug status for a build bundle.
 
 Examples:
-  appstore app-clips domain-status debug --build-bundle-id "BUILD_BUNDLE_ID"`,
+  asc app-clips domain-status debug --build-bundle-id "BUILD_BUNDLE_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

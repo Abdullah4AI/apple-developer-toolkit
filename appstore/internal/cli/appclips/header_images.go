@@ -19,14 +19,14 @@ func AppClipHeaderImagesCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "header-images",
-		ShortUsage: "appstore app-clips header-images <subcommand> [flags]",
+		ShortUsage: "asc app-clips header-images <subcommand> [flags]",
 		ShortHelp:  "Manage App Clip header images.",
 		LongHelp: `Manage App Clip header images.
 
 Examples:
-  appstore app-clips header-images get --id "IMAGE_ID"
-  appstore app-clips header-images create --localization-id "LOC_ID" --file path/to/image.png
-  appstore app-clips header-images delete --id "IMAGE_ID" --confirm`,
+  asc app-clips header-images get --id "IMAGE_ID"
+  asc app-clips header-images create --localization-id "LOC_ID" --file path/to/image.png
+  asc app-clips header-images delete --id "IMAGE_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -49,12 +49,12 @@ func AppClipHeaderImagesGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore app-clips header-images get --id \"IMAGE_ID\"",
+		ShortUsage: "asc app-clips header-images get --id \"IMAGE_ID\"",
 		ShortHelp:  "Get a header image by ID.",
 		LongHelp: `Get a header image by ID.
 
 Examples:
-  appstore app-clips header-images get --id "IMAGE_ID"`,
+  asc app-clips header-images get --id "IMAGE_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -92,14 +92,14 @@ func AppClipHeaderImagesCreateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "create",
-		ShortUsage: "appstore app-clips header-images create --localization-id \"LOC_ID\" --file path/to/image.png",
+		ShortUsage: "asc app-clips header-images create --localization-id \"LOC_ID\" --file path/to/image.png",
 		ShortHelp:  "Upload a header image for a localization.",
 		LongHelp: `Upload a header image for a localization.
 
 The upload process reserves an upload slot, uploads the image, and commits the upload.
 
 Examples:
-  appstore app-clips header-images create --localization-id "LOC_ID" --file path/to/image.png`,
+  asc app-clips header-images create --localization-id "LOC_ID" --file path/to/image.png`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -143,12 +143,12 @@ func AppClipHeaderImagesDeleteCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "delete",
-		ShortUsage: "appstore app-clips header-images delete --id \"IMAGE_ID\" --confirm",
+		ShortUsage: "asc app-clips header-images delete --id \"IMAGE_ID\" --confirm",
 		ShortHelp:  "Delete a header image.",
 		LongHelp: `Delete a header image.
 
 Examples:
-  appstore app-clips header-images delete --id "IMAGE_ID" --confirm`,
+  asc app-clips header-images delete --id "IMAGE_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

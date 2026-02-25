@@ -19,13 +19,13 @@ func AppEventScreenshotsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "screenshots",
-		ShortUsage: "appstore app-events screenshots <subcommand> [flags]",
+		ShortUsage: "asc app-events screenshots <subcommand> [flags]",
 		ShortHelp:  "Manage in-app event screenshots.",
 		LongHelp: `Manage in-app event screenshots.
 
 Examples:
-  appstore app-events screenshots list --event-id "EVENT_ID"
-  appstore app-events screenshots create --localization-id "LOC_ID" --path "./event.png" --asset-type EVENT_CARD`,
+  asc app-events screenshots list --event-id "EVENT_ID"
+  asc app-events screenshots create --localization-id "LOC_ID" --path "./event.png" --asset-type EVENT_CARD`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -55,14 +55,14 @@ func AppEventScreenshotsRelationshipsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "relationships",
-		ShortUsage: "appstore app-events screenshots relationships [flags]",
+		ShortUsage: "asc app-events screenshots relationships [flags]",
 		ShortHelp:  "List screenshot relationships for an in-app event localization.",
 		LongHelp: `List screenshot relationships for an in-app event localization.
 
 Examples:
-  appstore app-events screenshots relationships --localization-id "LOC_ID"
-  appstore app-events screenshots relationships --event-id "EVENT_ID" --locale "en-US"
-  appstore app-events screenshots relationships --event-id "EVENT_ID" --paginate`,
+  asc app-events screenshots relationships --localization-id "LOC_ID"
+  asc app-events screenshots relationships --event-id "EVENT_ID" --locale "en-US"
+  asc app-events screenshots relationships --event-id "EVENT_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -140,14 +140,14 @@ func AppEventScreenshotsListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore app-events screenshots list [flags]",
+		ShortUsage: "asc app-events screenshots list [flags]",
 		ShortHelp:  "List screenshots for an in-app event localization.",
 		LongHelp: `List screenshots for an in-app event localization.
 
 Examples:
-  appstore app-events screenshots list --localization-id "LOC_ID"
-  appstore app-events screenshots list --event-id "EVENT_ID" --locale "en-US"
-  appstore app-events screenshots list --event-id "EVENT_ID" --paginate`,
+  asc app-events screenshots list --localization-id "LOC_ID"
+  asc app-events screenshots list --event-id "EVENT_ID" --locale "en-US"
+  asc app-events screenshots list --event-id "EVENT_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -220,12 +220,12 @@ func AppEventScreenshotsGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore app-events screenshots get --screenshot-id \"SHOT_ID\"",
+		ShortUsage: "asc app-events screenshots get --screenshot-id \"SHOT_ID\"",
 		ShortHelp:  "Get an in-app event screenshot by ID.",
 		LongHelp: `Get an in-app event screenshot by ID.
 
 Examples:
-  appstore app-events screenshots get --screenshot-id "SHOT_ID"`,
+  asc app-events screenshots get --screenshot-id "SHOT_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -266,13 +266,13 @@ func AppEventScreenshotsCreateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "create",
-		ShortUsage: "appstore app-events screenshots create [flags]",
+		ShortUsage: "asc app-events screenshots create [flags]",
 		ShortHelp:  "Upload a screenshot for an in-app event localization.",
 		LongHelp: `Upload a screenshot for an in-app event localization.
 
 Examples:
-  appstore app-events screenshots create --localization-id "LOC_ID" --path "./event.png" --asset-type EVENT_CARD
-  appstore app-events screenshots create --event-id "EVENT_ID" --locale "en-US" --path "./event.png" --asset-type EVENT_DETAILS_PAGE`,
+  asc app-events screenshots create --localization-id "LOC_ID" --path "./event.png" --asset-type EVENT_CARD
+  asc app-events screenshots create --event-id "EVENT_ID" --locale "en-US" --path "./event.png" --asset-type EVENT_DETAILS_PAGE`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -352,12 +352,12 @@ func AppEventScreenshotsDeleteCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "delete",
-		ShortUsage: "appstore app-events screenshots delete --screenshot-id \"SHOT_ID\" --confirm",
+		ShortUsage: "asc app-events screenshots delete --screenshot-id \"SHOT_ID\" --confirm",
 		ShortHelp:  "Delete an in-app event screenshot.",
 		LongHelp: `Delete an in-app event screenshot.
 
 Examples:
-  appstore app-events screenshots delete --screenshot-id "SHOT_ID" --confirm`,
+  asc app-events screenshots delete --screenshot-id "SHOT_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

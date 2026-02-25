@@ -16,7 +16,7 @@ import (
 func SubmitCommand() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "submit",
-		ShortUsage: "appstore submit <subcommand> [flags]",
+		ShortUsage: "asc submit <subcommand> [flags]",
 		ShortHelp:  "Submit builds for App Store review.",
 		LongHelp:   `Submit builds for App Store review.`,
 		UsageFunc:  shared.DefaultUsageFunc,
@@ -34,7 +34,7 @@ func SubmitCommand() *ffcli.Command {
 func SubmitCreateCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("submit create", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID)")
 	version := fs.String("version", "", "App Store version string")
 	versionID := fs.String("version-id", "", "App Store version ID")
 	buildID := fs.String("build", "", "Build ID to attach")
@@ -44,13 +44,13 @@ func SubmitCreateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "create",
-		ShortUsage: "appstore submit create [flags]",
+		ShortUsage: "asc submit create [flags]",
 		ShortHelp:  "Submit a build for App Store review.",
 		LongHelp: `Submit a build for App Store review.
 
 Examples:
-  appstore submit create --app "123456789" --version "1.0.0" --build "BUILD_ID" --confirm
-  appstore submit create --app "123456789" --version-id "VERSION_ID" --build "BUILD_ID" --confirm`,
+  asc submit create --app "123456789" --version "1.0.0" --build "BUILD_ID" --confirm
+  asc submit create --app "123456789" --version-id "VERSION_ID" --build "BUILD_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -72,7 +72,7 @@ Examples:
 
 			resolvedAppID := shared.ResolveAppID(*appID)
 			if resolvedAppID == "" {
-				fmt.Fprintln(os.Stderr, "Error: --app is required (or set APPSTORE_APP_ID)")
+				fmt.Fprintln(os.Stderr, "Error: --app is required (or set ASC_APP_ID)")
 				return flag.ErrHelp
 			}
 
@@ -101,6 +101,9 @@ Examples:
 			if err := client.AttachBuildToVersion(requestCtx, resolvedVersionID, strings.TrimSpace(*buildID)); err != nil {
 				return fmt.Errorf("submit create: failed to attach build: %w", err)
 			}
+
+			// Cancel stale READY_FOR_REVIEW submissions to avoid orphans from prior failed attempts.
+			cancelStaleReviewSubmissions(requestCtx, client, resolvedAppID, normalizedPlatform)
 
 			// Use the new reviewSubmissions API (the old appStoreVersionSubmissions is deprecated)
 			// Step 1: Create review submission for the app
@@ -147,13 +150,13 @@ func SubmitStatusCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "status",
-		ShortUsage: "appstore submit status [flags]",
+		ShortUsage: "asc submit status [flags]",
 		ShortHelp:  "Check submission status.",
 		LongHelp: `Check submission status.
 
 Examples:
-  appstore submit status --id "SUBMISSION_ID"
-  appstore submit status --version-id "VERSION_ID"`,
+  asc submit status --id "SUBMISSION_ID"
+  asc submit status --version-id "VERSION_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -226,13 +229,13 @@ func SubmitCancelCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "cancel",
-		ShortUsage: "appstore submit cancel [flags]",
+		ShortUsage: "asc submit cancel [flags]",
 		ShortHelp:  "Cancel a submission.",
 		LongHelp: `Cancel a submission.
 
 Examples:
-  appstore submit cancel --id "SUBMISSION_ID" --confirm
-  appstore submit cancel --version-id "VERSION_ID" --confirm`,
+  asc submit cancel --id "SUBMISSION_ID" --confirm
+  asc submit cancel --version-id "VERSION_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -310,5 +313,39 @@ Examples:
 
 			return shared.PrintOutput(result, *output.Output, *output.Pretty)
 		},
+	}
+}
+
+// cancelStaleReviewSubmissions cancels any READY_FOR_REVIEW submissions for the
+// given app and platform. These are orphans from prior failed submit attempts.
+// Errors are logged to stderr but do not block the new submission.
+func cancelStaleReviewSubmissions(ctx context.Context, client *asc.Client, appID, platform string) {
+	existing, err := client.GetReviewSubmissions(ctx, appID,
+		asc.WithReviewSubmissionsStates([]string{string(asc.ReviewSubmissionStateReadyForReview)}),
+		asc.WithReviewSubmissionsPlatforms([]string{platform}),
+	)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to query stale review submissions: %v\n", err)
+		return
+	}
+	if len(existing.Data) == 0 {
+		return
+	}
+
+	normalizedPlatform := strings.ToUpper(strings.TrimSpace(platform))
+	for _, sub := range existing.Data {
+		// Defensively re-check state/platform before canceling.
+		if sub.Attributes.SubmissionState != asc.ReviewSubmissionStateReadyForReview {
+			continue
+		}
+		if normalizedPlatform != "" && !strings.EqualFold(string(sub.Attributes.Platform), normalizedPlatform) {
+			continue
+		}
+
+		if _, cancelErr := client.CancelReviewSubmission(ctx, sub.ID); cancelErr != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to cancel stale submission %s: %v\n", sub.ID, cancelErr)
+			continue
+		}
+		fmt.Fprintf(os.Stderr, "Canceled stale review submission %s\n", sub.ID)
 	}
 }

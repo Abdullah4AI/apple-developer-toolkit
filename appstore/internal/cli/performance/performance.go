@@ -14,16 +14,16 @@ func PerformanceCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "performance",
-		ShortUsage: "appstore performance <subcommand> [flags]",
+		ShortUsage: "asc performance <subcommand> [flags]",
 		ShortHelp:  "Access performance metrics and diagnostic logs.",
 		LongHelp: `Access performance metrics and diagnostic logs.
 
 Examples:
-  appstore performance metrics list --app "APP_ID"
-  appstore performance metrics get --build "BUILD_ID"
-  appstore performance diagnostics list --build "BUILD_ID"
-  appstore performance diagnostics get --id "SIGNATURE_ID"
-  appstore performance download --build "BUILD_ID" --output ./metrics.json`,
+  asc performance metrics list --app "APP_ID"
+  asc performance metrics get --build "BUILD_ID"
+  asc performance diagnostics list --build "BUILD_ID"
+  asc performance diagnostics get --id "SIGNATURE_ID"
+  asc performance download --build "BUILD_ID" --output ./metrics.json`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{

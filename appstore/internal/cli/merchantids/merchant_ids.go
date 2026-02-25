@@ -19,17 +19,17 @@ func MerchantIDsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "merchant-ids",
-		ShortUsage: "appstore merchant-ids <subcommand> [flags]",
+		ShortUsage: "asc merchant-ids <subcommand> [flags]",
 		ShortHelp:  "Manage merchant IDs and certificates.",
 		LongHelp: `Manage merchant IDs and certificates.
 
 Examples:
-  appstore merchant-ids list
-  appstore merchant-ids get --merchant-id "MERCHANT_ID"
-  appstore merchant-ids create --identifier "merchant.com.example" --name "Example"
-  appstore merchant-ids update --merchant-id "MERCHANT_ID" --name "New Name"
-  appstore merchant-ids delete --merchant-id "MERCHANT_ID" --confirm
-  appstore merchant-ids certificates list --merchant-id "MERCHANT_ID"`,
+  asc merchant-ids list
+  asc merchant-ids get --merchant-id "MERCHANT_ID"
+  asc merchant-ids create --identifier "merchant.com.example" --name "Example"
+  asc merchant-ids update --merchant-id "MERCHANT_ID" --name "New Name"
+  asc merchant-ids delete --merchant-id "MERCHANT_ID" --confirm
+  asc merchant-ids certificates list --merchant-id "MERCHANT_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -64,15 +64,15 @@ func MerchantIDsListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore merchant-ids list [flags]",
+		ShortUsage: "asc merchant-ids list [flags]",
 		ShortHelp:  "List merchant IDs.",
 		LongHelp: `List merchant IDs.
 
 Examples:
-  appstore merchant-ids list
-  appstore merchant-ids list --identifier "merchant.com.example"
-  appstore merchant-ids list --name "Example"
-  appstore merchant-ids list --paginate`,
+  asc merchant-ids list
+  asc merchant-ids list --identifier "merchant.com.example"
+  asc merchant-ids list --name "Example"
+  asc merchant-ids list --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -174,12 +174,12 @@ func MerchantIDsGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore merchant-ids get --merchant-id \"MERCHANT_ID\"",
+		ShortUsage: "asc merchant-ids get --merchant-id \"MERCHANT_ID\"",
 		ShortHelp:  "Get a merchant ID by ID.",
 		LongHelp: `Get a merchant ID by ID.
 
 Examples:
-  appstore merchant-ids get --merchant-id "MERCHANT_ID"`,
+  asc merchant-ids get --merchant-id "MERCHANT_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -248,12 +248,12 @@ func MerchantIDsCreateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "create",
-		ShortUsage: "appstore merchant-ids create --identifier \"merchant.com.example\" --name \"Example\"",
+		ShortUsage: "asc merchant-ids create --identifier \"merchant.com.example\" --name \"Example\"",
 		ShortHelp:  "Create a merchant ID.",
 		LongHelp: `Create a merchant ID.
 
 Examples:
-  appstore merchant-ids create --identifier "merchant.com.example" --name "Example"`,
+  asc merchant-ids create --identifier "merchant.com.example" --name "Example"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -301,12 +301,12 @@ func MerchantIDsUpdateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "update",
-		ShortUsage: "appstore merchant-ids update --merchant-id \"MERCHANT_ID\" --name \"New Name\"",
+		ShortUsage: "asc merchant-ids update --merchant-id \"MERCHANT_ID\" --name \"New Name\"",
 		ShortHelp:  "Update a merchant ID.",
 		LongHelp: `Update a merchant ID.
 
 Examples:
-  appstore merchant-ids update --merchant-id "MERCHANT_ID" --name "New Name"`,
+  asc merchant-ids update --merchant-id "MERCHANT_ID" --name "New Name"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -358,12 +358,12 @@ func MerchantIDsDeleteCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "delete",
-		ShortUsage: "appstore merchant-ids delete --merchant-id \"MERCHANT_ID\" --confirm",
+		ShortUsage: "asc merchant-ids delete --merchant-id \"MERCHANT_ID\" --confirm",
 		ShortHelp:  "Delete a merchant ID.",
 		LongHelp: `Delete a merchant ID.
 
 Examples:
-  appstore merchant-ids delete --merchant-id "MERCHANT_ID" --confirm`,
+  asc merchant-ids delete --merchant-id "MERCHANT_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

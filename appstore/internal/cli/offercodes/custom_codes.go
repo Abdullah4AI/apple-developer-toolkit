@@ -19,15 +19,15 @@ func OfferCodeCustomCodesCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "custom-codes",
-		ShortUsage: "appstore offer-codes custom-codes <subcommand> [flags]",
+		ShortUsage: "asc offer-codes custom-codes <subcommand> [flags]",
 		ShortHelp:  "Manage custom offer codes.",
 		LongHelp: `Manage custom offer codes.
 
 Examples:
-  appstore offer-codes custom-codes list --offer-code-id "OFFER_CODE_ID"
-  appstore offer-codes custom-codes get --custom-code-id "CUSTOM_CODE_ID"
-  appstore offer-codes custom-codes create --offer-code-id "OFFER_CODE_ID" --code "SPRING2026" --quantity 10
-  appstore offer-codes custom-codes update --custom-code-id "CUSTOM_CODE_ID" --active false`,
+  asc offer-codes custom-codes list --offer-code-id "OFFER_CODE_ID"
+  asc offer-codes custom-codes get --custom-code-id "CUSTOM_CODE_ID"
+  asc offer-codes custom-codes create --offer-code-id "OFFER_CODE_ID" --code "SPRING2026" --quantity 10
+  asc offer-codes custom-codes update --custom-code-id "CUSTOM_CODE_ID" --active false`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -54,14 +54,14 @@ func OfferCodeCustomCodesListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore offer-codes custom-codes list [flags]",
+		ShortUsage: "asc offer-codes custom-codes list [flags]",
 		ShortHelp:  "List custom codes for a subscription offer.",
 		LongHelp: `List custom codes for a subscription offer.
 
 Examples:
-  appstore offer-codes custom-codes list --offer-code-id "OFFER_CODE_ID"
-  appstore offer-codes custom-codes list --offer-code-id "OFFER_CODE_ID" --limit 50
-  appstore offer-codes custom-codes list --offer-code-id "OFFER_CODE_ID" --paginate`,
+  asc offer-codes custom-codes list --offer-code-id "OFFER_CODE_ID"
+  asc offer-codes custom-codes list --offer-code-id "OFFER_CODE_ID" --limit 50
+  asc offer-codes custom-codes list --offer-code-id "OFFER_CODE_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -127,12 +127,12 @@ func OfferCodeCustomCodesGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore offer-codes custom-codes get --custom-code-id ID",
+		ShortUsage: "asc offer-codes custom-codes get --custom-code-id ID",
 		ShortHelp:  "Get a custom code by ID.",
 		LongHelp: `Get a custom code by ID.
 
 Examples:
-  appstore offer-codes custom-codes get --custom-code-id "CUSTOM_CODE_ID"`,
+  asc offer-codes custom-codes get --custom-code-id "CUSTOM_CODE_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -172,13 +172,13 @@ func OfferCodeCustomCodesCreateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "create",
-		ShortUsage: "appstore offer-codes custom-codes create [flags]",
+		ShortUsage: "asc offer-codes custom-codes create [flags]",
 		ShortHelp:  "Create custom codes for a subscription offer.",
 		LongHelp: `Create custom codes for a subscription offer.
 
 Examples:
-  appstore offer-codes custom-codes create --offer-code-id "OFFER_CODE_ID" --code "SPRING2026" --quantity 10
-  appstore offer-codes custom-codes create --offer-code-id "OFFER_CODE_ID" --code "SPRING2026" --quantity 10 --expiration-date "2026-02-01"`,
+  asc offer-codes custom-codes create --offer-code-id "OFFER_CODE_ID" --code "SPRING2026" --quantity 10
+  asc offer-codes custom-codes create --offer-code-id "OFFER_CODE_ID" --code "SPRING2026" --quantity 10 --expiration-date "2026-02-01"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -256,12 +256,12 @@ func OfferCodeCustomCodesUpdateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "update",
-		ShortUsage: "appstore offer-codes custom-codes update [flags]",
+		ShortUsage: "asc offer-codes custom-codes update [flags]",
 		ShortHelp:  "Update a custom code.",
 		LongHelp: `Update a custom code.
 
 Examples:
-  appstore offer-codes custom-codes update --custom-code-id "CUSTOM_CODE_ID" --active false`,
+  asc offer-codes custom-codes update --custom-code-id "CUSTOM_CODE_ID" --active false`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

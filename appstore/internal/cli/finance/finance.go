@@ -19,7 +19,7 @@ func FinanceCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "finance",
-		ShortUsage: "appstore finance <subcommand> [flags]",
+		ShortUsage: "asc finance <subcommand> [flags]",
 		ShortHelp:  "Download payments and financial reports.",
 		LongHelp: `Download payments and financial reports.
 
@@ -27,8 +27,8 @@ Finance reports are monthly and available through the App Store Connect API.
 Requires Account Holder, Admin, or Finance role.
 
 Examples:
-  appstore finance reports --vendor "12345678" --report-type FINANCIAL --region "US" --date "2025-12"
-  appstore finance regions --output table`,
+  asc finance reports --vendor "12345678" --report-type FINANCIAL --region "US" --date "2025-12"
+  asc finance regions --output table`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -45,9 +45,9 @@ Examples:
 func FinanceReportsCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("reports", flag.ExitOnError)
 
-	vendor := fs.String("vendor", "", "Vendor number (or APPSTORE_VENDOR_NUMBER env)")
+	vendor := fs.String("vendor", "", "Vendor number (or ASC_VENDOR_NUMBER env)")
 	reportType := fs.String("report-type", "", "Report type: FINANCIAL or FINANCE_DETAIL (see help for UI mapping)")
-	region := fs.String("region", "", "Region code (e.g., US, ZZ, Z1; see 'appstore finance regions')")
+	region := fs.String("region", "", "Region code (e.g., US, ZZ, Z1; see 'asc finance regions')")
 	date := fs.String("date", "", "Report date (YYYY-MM, Apple fiscal month)")
 	output := fs.String("output", "", "Output file path (default: finance_report_{date}_{type}_{region}.tsv.gz)")
 	decompress := fs.Bool("decompress", false, "Decompress gzip output to .tsv")
@@ -55,7 +55,7 @@ func FinanceReportsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "reports",
-		ShortUsage: "appstore finance reports [flags]",
+		ShortUsage: "asc finance reports [flags]",
 		ShortHelp:  "Download financial reports from App Store Connect.",
 		LongHelp: `Download financial reports from App Store Connect.
 
@@ -86,26 +86,26 @@ REGION CODES:
   Consolidated (all):   ZZ (for FINANCIAL)
   Financial Detail:     Z1 (required for FINANCE_DETAIL)
 
-  Run 'appstore finance regions' for the complete list.
+  Run 'asc finance regions' for the complete list.
 
 Examples:
   # Download single consolidated report (all regions)
-  appstore finance reports --vendor "12345678" --report-type FINANCIAL --region "ZZ" --date "2025-12"
+  asc finance reports --vendor "12345678" --report-type FINANCIAL --region "ZZ" --date "2025-12"
 
   # Download US-only report
-  appstore finance reports --vendor "12345678" --report-type FINANCIAL --region "US" --date "2025-12"
+  asc finance reports --vendor "12345678" --report-type FINANCIAL --region "US" --date "2025-12"
 
   # Download detailed report (transaction-level data)
-  appstore finance reports --vendor "12345678" --report-type FINANCE_DETAIL --region "Z1" --date "2025-12" --decompress
+  asc finance reports --vendor "12345678" --report-type FINANCE_DETAIL --region "Z1" --date "2025-12" --decompress
 
   # Save to custom path
-  appstore finance reports --vendor "12345678" --report-type FINANCIAL --region "US" --date "2025-12" --output "reports/finance.tsv.gz"`,
+  asc finance reports --vendor "12345678" --report-type FINANCIAL --region "US" --date "2025-12" --output "reports/finance.tsv.gz"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			vendorNumber := shared.ResolveVendorNumber(*vendor)
 			if vendorNumber == "" {
-				fmt.Fprintln(os.Stderr, "Error: --vendor is required (or set APPSTORE_VENDOR_NUMBER)")
+				fmt.Fprintln(os.Stderr, "Error: --vendor is required (or set ASC_VENDOR_NUMBER)")
 				return flag.ErrHelp
 			}
 			if strings.TrimSpace(*reportType) == "" {
@@ -193,11 +193,11 @@ func FinanceRegionsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "regions",
-		ShortUsage: "appstore finance regions [flags]",
+		ShortUsage: "asc finance regions [flags]",
 		ShortHelp:  "List finance report region codes and currencies.",
 		LongHelp: `List finance report region codes and currencies.
 
-Use these codes with 'appstore finance reports --region <code>':
+Use these codes with 'asc finance reports --region <code>':
 
   - Individual countries: US, AU, CA, JP, GB, etc. (with FINANCIAL)
   - Regional aggregates:  EU, LL, AP, WW (with FINANCIAL)
@@ -207,8 +207,8 @@ Use these codes with 'appstore finance reports --region <code>':
 Source: https://developer.apple.com/help/app-store-connect/reference/financial-report-regions-and-currencies/
 
 Examples:
-  appstore finance regions
-  appstore finance regions --output table`,
+  asc finance regions
+  asc finance regions --output table`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

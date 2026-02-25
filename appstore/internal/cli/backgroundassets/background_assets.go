@@ -20,18 +20,18 @@ func BackgroundAssetsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "background-assets",
-		ShortUsage: "appstore background-assets <subcommand> [flags]",
+		ShortUsage: "asc background-assets <subcommand> [flags]",
 		ShortHelp:  "Manage background assets.",
 		LongHelp: `Manage background assets.
 
 Examples:
-  appstore background-assets list --app "APP_ID"
-  appstore background-assets get --id "ASSET_ID"
-  appstore background-assets create --app "APP_ID" --asset-pack-identifier "com.example.assetpack"
-  appstore background-assets update --id "ASSET_ID" --archived true
-  appstore background-assets versions list --background-asset-id "ASSET_ID"
-  appstore background-assets app-store-releases get --id "RELEASE_ID"
-  appstore background-assets upload-files create --version-id "VERSION_ID" --file "./asset.zip" --asset-type ASSET`,
+  asc background-assets list --app "APP_ID"
+  asc background-assets get --id "ASSET_ID"
+  asc background-assets create --app "APP_ID" --asset-pack-identifier "com.example.assetpack"
+  asc background-assets update --id "ASSET_ID" --archived true
+  asc background-assets versions list --background-asset-id "ASSET_ID"
+  asc background-assets app-store-releases get --id "RELEASE_ID"
+  asc background-assets upload-files create --version-id "VERSION_ID" --file "./asset.zip" --asset-type ASSET`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -55,7 +55,7 @@ Examples:
 func BackgroundAssetsListCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("list", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID)")
 	archived := fs.String("archived", "", "Filter by archived state (true/false)")
 	assetPackIdentifier := fs.String("asset-pack-identifier", "", "Filter by asset pack identifier(s), comma-separated")
 	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
@@ -65,20 +65,20 @@ func BackgroundAssetsListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore background-assets list --app \"APP_ID\" [flags]",
+		ShortUsage: "asc background-assets list --app \"APP_ID\" [flags]",
 		ShortHelp:  "List background assets for an app.",
 		LongHelp: `List background assets for an app.
 
 Examples:
-  appstore background-assets list --app "APP_ID"
-  appstore background-assets list --app "APP_ID" --archived false
-  appstore background-assets list --app "APP_ID" --paginate`,
+  asc background-assets list --app "APP_ID"
+  asc background-assets list --app "APP_ID" --archived false
+  asc background-assets list --app "APP_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			resolvedAppID := shared.ResolveAppID(*appID)
 			if resolvedAppID == "" && strings.TrimSpace(*next) == "" {
-				fmt.Fprintln(os.Stderr, "Error: --app is required (or set APPSTORE_APP_ID)")
+				fmt.Fprintln(os.Stderr, "Error: --app is required (or set ASC_APP_ID)")
 				return flag.ErrHelp
 			}
 			if *limit != 0 && (*limit < 1 || *limit > backgroundAssetsMaxLimit) {
@@ -154,12 +154,12 @@ func BackgroundAssetsGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore background-assets get --id \"ASSET_ID\"",
+		ShortUsage: "asc background-assets get --id \"ASSET_ID\"",
 		ShortHelp:  "Get a background asset by ID.",
 		LongHelp: `Get a background asset by ID.
 
 Examples:
-  appstore background-assets get --id "ASSET_ID"`,
+  asc background-assets get --id "ASSET_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -191,24 +191,24 @@ Examples:
 func BackgroundAssetsCreateCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("create", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID)")
 	assetPackIdentifier := fs.String("asset-pack-identifier", "", "Asset pack identifier")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "create",
-		ShortUsage: "appstore background-assets create --app \"APP_ID\" --asset-pack-identifier \"ASSET_PACK_ID\"",
+		ShortUsage: "asc background-assets create --app \"APP_ID\" --asset-pack-identifier \"ASSET_PACK_ID\"",
 		ShortHelp:  "Create a background asset.",
 		LongHelp: `Create a background asset.
 
 Examples:
-  appstore background-assets create --app "APP_ID" --asset-pack-identifier "com.example.assetpack"`,
+  asc background-assets create --app "APP_ID" --asset-pack-identifier "com.example.assetpack"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			resolvedAppID := shared.ResolveAppID(*appID)
 			if resolvedAppID == "" {
-				fmt.Fprintln(os.Stderr, "Error: --app is required (or set APPSTORE_APP_ID)")
+				fmt.Fprintln(os.Stderr, "Error: --app is required (or set ASC_APP_ID)")
 				return flag.ErrHelp
 			}
 
@@ -246,12 +246,12 @@ func BackgroundAssetsUpdateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "update",
-		ShortUsage: "appstore background-assets update --id \"ASSET_ID\" --archived true",
+		ShortUsage: "asc background-assets update --id \"ASSET_ID\" --archived true",
 		ShortHelp:  "Update a background asset.",
 		LongHelp: `Update a background asset.
 
 Examples:
-  appstore background-assets update --id "ASSET_ID" --archived true`,
+  asc background-assets update --id "ASSET_ID" --archived true`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

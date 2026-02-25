@@ -17,25 +17,25 @@ import (
 func AnalyticsRequestCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("request", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID env)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
 	accessType := fs.String("access-type", "", "Access type: ONGOING or ONE_TIME_SNAPSHOT")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "request",
-		ShortUsage: "appstore analytics request [flags]",
+		ShortUsage: "asc analytics request [flags]",
 		ShortHelp:  "Create an analytics report request.",
 		LongHelp: `Create an analytics report request.
 
 Examples:
-  appstore analytics request --app "123456789" --access-type ONGOING
-  appstore analytics request --app "123456789" --access-type ONE_TIME_SNAPSHOT`,
+  asc analytics request --app "123456789" --access-type ONGOING
+  asc analytics request --app "123456789" --access-type ONE_TIME_SNAPSHOT`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			resolvedAppID := shared.ResolveAppID(*appID)
 			if resolvedAppID == "" {
-				fmt.Fprintln(os.Stderr, "Error: --app is required (or set APPSTORE_APP_ID)")
+				fmt.Fprintln(os.Stderr, "Error: --app is required (or set ASC_APP_ID)")
 				return flag.ErrHelp
 			}
 			if strings.TrimSpace(*accessType) == "" {
@@ -77,7 +77,7 @@ Examples:
 func AnalyticsRequestsCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("requests", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID env)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
 	requestID := fs.String("request-id", "", "Filter by request ID")
 	state := fs.String("state", "", "Filter by state: PROCESSING, COMPLETED, FAILED")
 	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
@@ -87,17 +87,17 @@ func AnalyticsRequestsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "requests",
-		ShortUsage: "appstore analytics requests [flags]",
+		ShortUsage: "asc analytics requests [flags]",
 		ShortHelp:  "List and manage analytics report requests.",
 		LongHelp: `List analytics report requests.
 
 Examples:
-  appstore analytics requests --app "123456789"
-  appstore analytics requests --app "123456789" --state COMPLETED
-  appstore analytics requests --app "123456789" --request-id "REQUEST_ID"
-  appstore analytics requests --next "<links.next>"
-  appstore analytics requests --app "123456789" --paginate
-  appstore analytics requests delete --request-id "REQUEST_ID" --confirm`,
+  asc analytics requests --app "123456789"
+  asc analytics requests --app "123456789" --state COMPLETED
+  asc analytics requests --app "123456789" --request-id "REQUEST_ID"
+  asc analytics requests --next "<links.next>"
+  asc analytics requests --app "123456789" --paginate
+  asc analytics requests delete --request-id "REQUEST_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -130,7 +130,7 @@ Examples:
 
 			resolvedAppID := shared.ResolveAppID(*appID)
 			if resolvedAppID == "" && strings.TrimSpace(*next) == "" && strings.TrimSpace(*requestID) == "" {
-				fmt.Fprintln(os.Stderr, "Error: --app is required (or set APPSTORE_APP_ID)")
+				fmt.Fprintln(os.Stderr, "Error: --app is required (or set ASC_APP_ID)")
 				return flag.ErrHelp
 			}
 
@@ -199,12 +199,12 @@ func AnalyticsRequestsDeleteCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "delete",
-		ShortUsage: "appstore analytics requests delete --request-id \"REQUEST_ID\" --confirm",
+		ShortUsage: "asc analytics requests delete --request-id \"REQUEST_ID\" --confirm",
 		ShortHelp:  "Delete an analytics report request.",
 		LongHelp: `Delete an analytics report request by ID.
 
 Examples:
-  appstore analytics requests delete --request-id "REQUEST_ID" --confirm`,
+  asc analytics requests delete --request-id "REQUEST_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -258,15 +258,15 @@ func AnalyticsGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore analytics get [flags]",
+		ShortUsage: "asc analytics get [flags]",
 		ShortHelp:  "Get analytics reports for a request.",
 		LongHelp: `Get analytics reports for a request.
 
 Examples:
-  appstore analytics get --request-id "REQUEST_ID"
-  appstore analytics get --request-id "REQUEST_ID" --include-segments
-  appstore analytics get --request-id "REQUEST_ID" --instance-id "INSTANCE_ID"
-  appstore analytics get --request-id "REQUEST_ID" --date "2024-01-20" --paginate`,
+  asc analytics get --request-id "REQUEST_ID"
+  asc analytics get --request-id "REQUEST_ID" --include-segments
+  asc analytics get --request-id "REQUEST_ID" --instance-id "INSTANCE_ID"
+  asc analytics get --request-id "REQUEST_ID" --date "2024-01-20" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -408,14 +408,14 @@ func AnalyticsDownloadCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "download",
-		ShortUsage: "appstore analytics download [flags]",
+		ShortUsage: "asc analytics download [flags]",
 		ShortHelp:  "Download analytics report data.",
 		LongHelp: `Download analytics report data.
 
 Examples:
-  appstore analytics download --request-id "REQUEST_ID" --instance-id "INSTANCE_ID"
-  appstore analytics download --request-id "REQUEST_ID" --instance-id "INSTANCE_ID" --decompress
-  appstore analytics download --request-id "REQUEST_ID" --instance-id "INSTANCE_ID" --segment-id "SEGMENT_ID"`,
+  asc analytics download --request-id "REQUEST_ID" --instance-id "INSTANCE_ID"
+  asc analytics download --request-id "REQUEST_ID" --instance-id "INSTANCE_ID" --decompress
+  asc analytics download --request-id "REQUEST_ID" --instance-id "INSTANCE_ID" --segment-id "SEGMENT_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

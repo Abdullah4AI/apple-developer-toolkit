@@ -20,12 +20,12 @@ func AgreementsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "agreements",
-		ShortUsage: "appstore agreements <subcommand> [flags]",
+		ShortUsage: "asc agreements <subcommand> [flags]",
 		ShortHelp:  "Manage agreements in App Store Connect.",
 		LongHelp: `Manage agreements in App Store Connect.
 
 Examples:
-  appstore agreements territories list --id "EULA_ID"`,
+  asc agreements territories list --id "EULA_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -43,12 +43,12 @@ func AgreementsTerritoriesCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "territories",
-		ShortUsage: "appstore agreements territories <subcommand> [flags]",
+		ShortUsage: "asc agreements territories <subcommand> [flags]",
 		ShortHelp:  "List EULA territories.",
 		LongHelp: `List EULA territories.
 
 Examples:
-  appstore agreements territories list --id "EULA_ID"`,
+  asc agreements territories list --id "EULA_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -72,13 +72,13 @@ func AgreementsTerritoriesListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore agreements territories list --id \"EULA_ID\" [flags]",
+		ShortUsage: "asc agreements territories list --id \"EULA_ID\" [flags]",
 		ShortHelp:  "List territories for an EULA.",
 		LongHelp: `List territories for an EULA.
 
 Examples:
-  appstore agreements territories list --id "EULA_ID"
-  appstore agreements territories list --id "EULA_ID" --paginate`,
+  asc agreements territories list --id "EULA_ID"
+  asc agreements territories list --id "EULA_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

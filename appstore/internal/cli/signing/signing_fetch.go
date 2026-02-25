@@ -21,7 +21,7 @@ import (
 func SigningFetchCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("fetch", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (optional, or APPSTORE_APP_ID env)")
+	appID := fs.String("app", "", "App Store Connect app ID (optional, or ASC_APP_ID env)")
 	bundleID := fs.String("bundle-id", "", "Bundle identifier (e.g., com.example.app) - required")
 	profileType := fs.String("profile-type", "", "Profile type: IOS_APP_STORE, IOS_APP_DEVELOPMENT, MAC_APP_STORE, etc. (required)")
 	deviceIDs := fs.String("device", "", "Device ID(s), comma-separated (required for development profiles)")
@@ -32,7 +32,7 @@ func SigningFetchCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "fetch",
-		ShortUsage: "appstore signing fetch [flags]",
+		ShortUsage: "asc signing fetch [flags]",
 		ShortHelp:  "Fetch signing files (certificates + profiles) for an app.",
 		LongHelp: `Fetch signing certificates and provisioning profiles for an app.
 
@@ -43,9 +43,9 @@ With --create-missing, it will create a new profile if none exist for the
 specified configuration.
 
 Examples:
-  appstore signing fetch --bundle-id com.example.app --profile-type IOS_APP_STORE --output ./signing
-  appstore signing fetch --bundle-id com.example.app --profile-type IOS_APP_DEVELOPMENT --device "DEVICE1,DEVICE2"
-  appstore signing fetch --bundle-id com.example.app --profile-type IOS_APP_STORE --create-missing`,
+  asc signing fetch --bundle-id com.example.app --profile-type IOS_APP_STORE --output ./signing
+  asc signing fetch --bundle-id com.example.app --profile-type IOS_APP_DEVELOPMENT --device "DEVICE1,DEVICE2"
+  asc signing fetch --bundle-id com.example.app --profile-type IOS_APP_STORE --create-missing`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

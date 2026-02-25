@@ -19,6 +19,9 @@ func (r *PreReleaseVersionsResponse) GetData() any {
 // PaginateFunc is a function that fetches a page of results
 type PaginateFunc func(ctx context.Context, nextURL string) (PaginatedResponse, error)
 
+// PageConsumer handles one pagination page.
+type PageConsumer func(page PaginatedResponse) error
+
 // PaginateAll fetches all pages and aggregates results.
 // It uses reflection to create an empty result container of the same type as
 // firstPage, eliminating the need for a type switch per response type.
@@ -74,6 +77,52 @@ func PaginateAll(ctx context.Context, firstPage PaginatedResponse, fetchNext Pag
 	}
 
 	return result, nil
+}
+
+// PaginateEach iterates pages and invokes consume for each page without
+// aggregating all page data in memory.
+func PaginateEach(ctx context.Context, firstPage PaginatedResponse, fetchNext PaginateFunc, consume PageConsumer) error {
+	if firstPage == nil {
+		return nil
+	}
+	if consume == nil {
+		return fmt.Errorf("page consumer is required")
+	}
+
+	// Handle typed nil (non-nil interface containing nil pointer).
+	if reflect.ValueOf(firstPage).IsNil() {
+		return nil
+	}
+
+	page := 1
+	current := firstPage
+	seenNext := make(map[string]struct{})
+
+	for {
+		if err := consume(current); err != nil {
+			return fmt.Errorf("page %d: %w", page, err)
+		}
+
+		links := current.GetLinks()
+		if links == nil || links.Next == "" {
+			return nil
+		}
+		if _, ok := seenNext[links.Next]; ok {
+			return fmt.Errorf("page %d: %w", page+1, ErrRepeatedPaginationURL)
+		}
+		seenNext[links.Next] = struct{}{}
+
+		nextPage, err := fetchNext(ctx, links.Next)
+		if err != nil {
+			return fmt.Errorf("page %d: %w", page+1, err)
+		}
+		if reflect.TypeOf(nextPage) != reflect.TypeOf(current) {
+			return fmt.Errorf("page %d: unexpected response type (expected %T, got %T)", page+1, current, nextPage)
+		}
+
+		current = nextPage
+		page++
+	}
 }
 
 // newEmptyPaginatedResponse creates a new zero-valued instance of the same

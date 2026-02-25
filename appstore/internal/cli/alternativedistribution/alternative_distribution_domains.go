@@ -19,15 +19,15 @@ func AlternativeDistributionDomainsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "domains",
-		ShortUsage: "appstore alternative-distribution domains <subcommand> [flags]",
+		ShortUsage: "asc alternative-distribution domains <subcommand> [flags]",
 		ShortHelp:  "Manage alternative distribution domains.",
 		LongHelp: `Manage alternative distribution domains.
 
 Examples:
-  appstore alternative-distribution domains list
-  appstore alternative-distribution domains get --domain-id "DOMAIN_ID"
-  appstore alternative-distribution domains create --domain "example.com" --reference-name "Example"
-  appstore alternative-distribution domains delete --domain-id "DOMAIN_ID" --confirm`,
+  asc alternative-distribution domains list
+  asc alternative-distribution domains get --domain-id "DOMAIN_ID"
+  asc alternative-distribution domains create --domain "example.com" --reference-name "Example"
+  asc alternative-distribution domains delete --domain-id "DOMAIN_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -53,14 +53,14 @@ func AlternativeDistributionDomainsListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore alternative-distribution domains list [flags]",
+		ShortUsage: "asc alternative-distribution domains list [flags]",
 		ShortHelp:  "List alternative distribution domains.",
 		LongHelp: `List alternative distribution domains.
 
 Examples:
-  appstore alternative-distribution domains list
-  appstore alternative-distribution domains list --limit 50
-  appstore alternative-distribution domains list --paginate`,
+  asc alternative-distribution domains list
+  asc alternative-distribution domains list --limit 50
+  asc alternative-distribution domains list --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -120,12 +120,12 @@ func AlternativeDistributionDomainsGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore alternative-distribution domains get --domain-id \"DOMAIN_ID\"",
+		ShortUsage: "asc alternative-distribution domains get --domain-id \"DOMAIN_ID\"",
 		ShortHelp:  "Get an alternative distribution domain.",
 		LongHelp: `Get an alternative distribution domain.
 
 Examples:
-  appstore alternative-distribution domains get --domain-id "DOMAIN_ID"`,
+  asc alternative-distribution domains get --domain-id "DOMAIN_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -163,12 +163,12 @@ func AlternativeDistributionDomainsCreateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "create",
-		ShortUsage: "appstore alternative-distribution domains create --domain \"example.com\" --reference-name \"Example\"",
+		ShortUsage: "asc alternative-distribution domains create --domain \"example.com\" --reference-name \"Example\"",
 		ShortHelp:  "Create an alternative distribution domain.",
 		LongHelp: `Create an alternative distribution domain.
 
 Examples:
-  appstore alternative-distribution domains create --domain "example.com" --reference-name "Example"`,
+  asc alternative-distribution domains create --domain "example.com" --reference-name "Example"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -212,12 +212,12 @@ func AlternativeDistributionDomainsDeleteCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "delete",
-		ShortUsage: "appstore alternative-distribution domains delete --domain-id \"DOMAIN_ID\" --confirm",
+		ShortUsage: "asc alternative-distribution domains delete --domain-id \"DOMAIN_ID\" --confirm",
 		ShortHelp:  "Delete an alternative distribution domain.",
 		LongHelp: `Delete an alternative distribution domain.
 
 Examples:
-  appstore alternative-distribution domains delete --domain-id "DOMAIN_ID" --confirm`,
+  asc alternative-distribution domains delete --domain-id "DOMAIN_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

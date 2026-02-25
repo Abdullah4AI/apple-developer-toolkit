@@ -19,18 +19,18 @@ func EULACommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "eula",
-		ShortUsage: "appstore eula <subcommand> [flags]",
+		ShortUsage: "asc eula <subcommand> [flags]",
 		ShortHelp:  "Manage End User License Agreements (EULA).",
 		LongHelp: `Manage End User License Agreements (EULA).
 
 Examples:
-  appstore eula get --id "EULA_ID"
-  appstore eula get --app "APP_ID"
-  appstore eula list --app "APP_ID"
-  appstore eula create --app "APP_ID" --agreement-text "Terms..." --territory "USA,CAN"
-  appstore eula update --id "EULA_ID" --agreement-text "Updated terms"
-  appstore eula update --id "EULA_ID" --territory "USA,CAN"
-  appstore eula delete --id "EULA_ID" --confirm`,
+  asc eula get --id "EULA_ID"
+  asc eula get --app "APP_ID"
+  asc eula list --app "APP_ID"
+  asc eula create --app "APP_ID" --agreement-text "Terms..." --territory "USA,CAN"
+  asc eula update --id "EULA_ID" --agreement-text "Updated terms"
+  asc eula update --id "EULA_ID" --territory "USA,CAN"
+  asc eula delete --id "EULA_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -51,18 +51,18 @@ func EULAGetCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("get", flag.ExitOnError)
 
 	id := fs.String("id", "", "EULA ID")
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID env)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore eula get --id \"EULA_ID\" | appstore eula get --app \"APP_ID\"",
+		ShortUsage: "asc eula get --id \"EULA_ID\" | asc eula get --app \"APP_ID\"",
 		ShortHelp:  "Get an EULA by ID or app.",
 		LongHelp: `Get an End User License Agreement (EULA).
 
 Examples:
-  appstore eula get --id "EULA_ID"
-  appstore eula get --app "APP_ID"`,
+  asc eula get --id "EULA_ID"
+  asc eula get --app "APP_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -72,7 +72,7 @@ Examples:
 				appValue = shared.ResolveAppID(*appID)
 			}
 			if idValue == "" && appValue == "" {
-				fmt.Fprintln(os.Stderr, "Error: --id or --app is required (or set APPSTORE_APP_ID)")
+				fmt.Fprintln(os.Stderr, "Error: --id or --app is required (or set ASC_APP_ID)")
 				return flag.ErrHelp
 			}
 			if idValue != "" && strings.TrimSpace(*appID) != "" {
@@ -107,23 +107,23 @@ Examples:
 func EULAListCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("list", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID env)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore eula list --app \"APP_ID\"",
+		ShortUsage: "asc eula list --app \"APP_ID\"",
 		ShortHelp:  "List the EULA for an app.",
 		LongHelp: `List the End User License Agreement (EULA) for an app.
 
 Examples:
-  appstore eula list --app "APP_ID"`,
+  asc eula list --app "APP_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			appValue := shared.ResolveAppID(*appID)
 			if appValue == "" {
-				fmt.Fprintln(os.Stderr, "Error: --app is required (or set APPSTORE_APP_ID)")
+				fmt.Fprintln(os.Stderr, "Error: --app is required (or set ASC_APP_ID)")
 				return flag.ErrHelp
 			}
 
@@ -149,25 +149,25 @@ Examples:
 func EULACreateCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("create", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID env)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
 	agreementText := fs.String("agreement-text", "", "Agreement text")
 	territories := fs.String("territory", "", "Territory IDs, comma-separated")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "create",
-		ShortUsage: "appstore eula create --app \"APP_ID\" --agreement-text \"Terms\" --territory \"USA,CAN\"",
+		ShortUsage: "asc eula create --app \"APP_ID\" --agreement-text \"Terms\" --territory \"USA,CAN\"",
 		ShortHelp:  "Create an EULA for an app.",
 		LongHelp: `Create an End User License Agreement (EULA).
 
 Examples:
-  appstore eula create --app "APP_ID" --agreement-text "Terms..." --territory "USA,CAN"`,
+  asc eula create --app "APP_ID" --agreement-text "Terms..." --territory "USA,CAN"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			appValue := shared.ResolveAppID(*appID)
 			if appValue == "" {
-				fmt.Fprintln(os.Stderr, "Error: --app is required (or set APPSTORE_APP_ID)")
+				fmt.Fprintln(os.Stderr, "Error: --app is required (or set ASC_APP_ID)")
 				return flag.ErrHelp
 			}
 			agreementValue := strings.TrimSpace(*agreementText)
@@ -211,13 +211,13 @@ func EULAUpdateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "update",
-		ShortUsage: "appstore eula update --id \"EULA_ID\" [--agreement-text \"Terms\"] [--territory \"USA,CAN\"]",
+		ShortUsage: "asc eula update --id \"EULA_ID\" [--agreement-text \"Terms\"] [--territory \"USA,CAN\"]",
 		ShortHelp:  "Update an EULA.",
 		LongHelp: `Update an End User License Agreement (EULA).
 
 Examples:
-  appstore eula update --id "EULA_ID" --agreement-text "Updated terms"
-  appstore eula update --id "EULA_ID" --territory "USA,CAN"`,
+  asc eula update --id "EULA_ID" --agreement-text "Updated terms"
+  asc eula update --id "EULA_ID" --territory "USA,CAN"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -267,12 +267,12 @@ func EULADeleteCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "delete",
-		ShortUsage: "appstore eula delete --id \"EULA_ID\" --confirm",
+		ShortUsage: "asc eula delete --id \"EULA_ID\" --confirm",
 		ShortHelp:  "Delete an EULA.",
 		LongHelp: `Delete an End User License Agreement (EULA).
 
 Examples:
-  appstore eula delete --id "EULA_ID" --confirm`,
+  asc eula delete --id "EULA_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

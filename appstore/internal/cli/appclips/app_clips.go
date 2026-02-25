@@ -19,16 +19,16 @@ func AppClipsCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "app-clips",
-		ShortUsage: "appstore app-clips <subcommand> [flags]",
+		ShortUsage: "asc app-clips <subcommand> [flags]",
 		ShortHelp:  "Manage App Clip experiences and invocations.",
 		LongHelp: `Manage App Clip experiences and invocations.
 
 Examples:
-  appstore app-clips list --app "APP_ID"
-  appstore app-clips get --id "CLIP_ID"
-  appstore app-clips default-experiences list --app-clip-id "CLIP_ID"
-  appstore app-clips advanced-experiences create --app "APP_ID" --bundle-id "com.example.clip" --link "https://example.com" --default-language EN --is-powered-by
-  appstore app-clips invocations list --build-bundle-id "BUILD_BUNDLE_ID"`,
+  asc app-clips list --app "APP_ID"
+  asc app-clips get --id "CLIP_ID"
+  asc app-clips default-experiences list --app-clip-id "CLIP_ID"
+  asc app-clips advanced-experiences create --app "APP_ID" --bundle-id "com.example.clip" --link "https://example.com" --default-language EN --is-powered-by
+  asc app-clips invocations list --build-bundle-id "BUILD_BUNDLE_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -53,7 +53,7 @@ Examples:
 func AppClipsListCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("list", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (or APPSTORE_APP_ID env)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
 	bundleID := fs.String("bundle-id", "", "Filter by bundle ID(s), comma-separated")
 	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
 	next := fs.String("next", "", "Fetch next page using a links.next URL")
@@ -62,15 +62,15 @@ func AppClipsListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "appstore app-clips list --app \"APP_ID\" [flags]",
+		ShortUsage: "asc app-clips list --app \"APP_ID\" [flags]",
 		ShortHelp:  "List App Clips for an app.",
 		LongHelp: `List App Clips for an app.
 
 Examples:
-  appstore app-clips list --app "APP_ID"
-  appstore app-clips list --app "APP_ID" --bundle-id "com.example.clip"
-  appstore app-clips list --app "APP_ID" --limit 50
-  appstore app-clips list --app "APP_ID" --paginate`,
+  asc app-clips list --app "APP_ID"
+  asc app-clips list --app "APP_ID" --bundle-id "com.example.clip"
+  asc app-clips list --app "APP_ID" --limit 50
+  asc app-clips list --app "APP_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -145,12 +145,12 @@ func AppClipsGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "appstore app-clips get --id \"CLIP_ID\"",
+		ShortUsage: "asc app-clips get --id \"CLIP_ID\"",
 		ShortHelp:  "Get App Clip details by ID.",
 		LongHelp: `Get App Clip details by ID.
 
 Examples:
-  appstore app-clips get --id "CLIP_ID"`,
+  asc app-clips get --id "CLIP_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
