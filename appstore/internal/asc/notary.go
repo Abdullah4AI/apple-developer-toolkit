@@ -675,7 +675,7 @@ func escapePathSegment(value string) string {
 			builder.WriteByte(b)
 			continue
 		}
-		builder.WriteString(fmt.Sprintf("%%%02X", b))
+		fmt.Fprintf(&builder, "%%%02X", b)
 	}
 	return builder.String()
 }

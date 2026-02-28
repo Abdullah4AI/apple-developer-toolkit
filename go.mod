@@ -3,7 +3,9 @@ module github.com/Abdullah4AI/apple-developer-toolkit
 go 1.26.0
 
 require (
+	github.com/1Password/srp v0.2.0
 	github.com/99designs/keyring v1.2.2
+	github.com/AlecAivazis/survey/v2 v2.3.7
 	github.com/fsnotify/fsnotify v1.9.0
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/modelcontextprotocol/go-sdk v1.3.1
@@ -12,7 +14,9 @@ require (
 	github.com/reeflective/readline v1.1.4
 	github.com/spf13/cobra v1.8.1
 	github.com/tidwall/jsonc v0.3.2
+	github.com/zalando/go-keyring v0.2.6
 	go.mozilla.org/pkcs7 v0.9.0
+	golang.org/x/crypto v0.48.0
 	golang.org/x/mod v0.32.0
 	golang.org/x/sys v0.41.0
 	golang.org/x/term v0.40.0
@@ -22,6 +26,7 @@ require (
 )
 
 require (
+	al.essio.dev/pkg/shellescape v1.5.1 // indirect
 	github.com/99designs/go-keychain v0.0.0-20191008050251-8e49817e8af4 // indirect
 	github.com/clipperhouse/displaywidth v0.6.2 // indirect
 	github.com/clipperhouse/stringish v0.1.1 // indirect
@@ -30,12 +35,15 @@ require (
 	github.com/dvsekhvalnov/jose2go v1.8.0 // indirect
 	github.com/fatih/color v1.18.0 // indirect
 	github.com/godbus/dbus v0.0.0-20190726142602-4481cbc300e2 // indirect
+	github.com/godbus/dbus/v5 v5.1.0 // indirect
 	github.com/google/jsonschema-go v0.4.2 // indirect
 	github.com/gsterjov/go-libsecret v0.0.0-20161001094733-a6f4afe4910c // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
+	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mattn/go-runewidth v0.0.19 // indirect
+	github.com/mgutz/ansi v0.0.0-20170206155736-9520e82c474b // indirect
 	github.com/mtibben/percent v0.2.1 // indirect
 	github.com/olekukonko/cat v0.0.0-20250911104152-50322a0618f6 // indirect
 	github.com/olekukonko/errors v1.1.0 // indirect

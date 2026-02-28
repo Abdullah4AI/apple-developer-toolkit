@@ -2,6 +2,7 @@ package orchestration
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -24,11 +25,49 @@ func deviceFamilyBuildSettings(b *strings.Builder, family string) {
 	}
 }
 
+// parseHexColor parses a hex color string (with or without leading "#") and
+// returns the R, G, B components as 0–255 values. Returns (0,0,0, false) for
+// invalid input.
+func parseHexColor(hex string) (r, g, b uint8, ok bool) {
+	hex = strings.TrimPrefix(hex, "#")
+	if len(hex) != 6 {
+		return 0, 0, 0, false
+	}
+	rv, err := strconv.ParseUint(hex[0:2], 16, 8)
+	if err != nil {
+		return 0, 0, 0, false
+	}
+	gv, err := strconv.ParseUint(hex[2:4], 16, 8)
+	if err != nil {
+		return 0, 0, 0, false
+	}
+	bv, err := strconv.ParseUint(hex[4:6], 16, 8)
+	if err != nil {
+		return 0, 0, 0, false
+	}
+	return uint8(rv), uint8(gv), uint8(bv), true
+}
+
+// isDarkPalette returns true if the palette's background color is perceived as
+// dark using the NTSC brightness formula: (R*299 + G*587 + B*114) / 1000.
+// Brightness < 128 is considered dark. Returns false for empty/invalid hex.
+func isDarkPalette(palette Palette) bool {
+	r, g, b, ok := parseHexColor(palette.Background)
+	if !ok {
+		return false
+	}
+	brightness := (uint32(r)*299 + uint32(g)*587 + uint32(b)*114) / 1000
+	return brightness < 128
+}
+
 // appearanceBuildSettings writes Info.plist keys to lock the app to a single
 // appearance mode when dark mode is not supported. Only iOS and tvOS get locked
 // via INFOPLIST_KEY_UIUserInterfaceStyle. macOS and visionOS are excluded:
 // macOS apps should always follow system appearance, and visionOS has no
 // light/dark concept (glass auto-adapts).
+//
+// When the palette background is dark, locks to Dark instead of Light so that
+// system chrome (status bar, alerts, sheets) renders correctly.
 func appearanceBuildSettings(b *strings.Builder, plan *PlannerResult, platform string) {
 	if plan != nil && plan.HasRuleKey("dark-mode") {
 		return // app supports both modes — don't lock
@@ -41,8 +80,12 @@ func appearanceBuildSettings(b *strings.Builder, plan *PlannerResult, platform s
 		// visionOS: no light/dark concept — glass material auto-adapts to environment
 		return
 	default:
-		// iOS, tvOS: lock to Light via INFOPLIST_KEY
-		b.WriteString("        INFOPLIST_KEY_UIUserInterfaceStyle: Light\n")
+		// iOS, tvOS: lock based on palette brightness
+		mode := "Light"
+		if plan != nil && isDarkPalette(plan.Design.Palette) {
+			mode = "Dark"
+		}
+		fmt.Fprintf(b, "        INFOPLIST_KEY_UIUserInterfaceStyle: %s\n", mode)
 	}
 }
 
@@ -75,9 +118,72 @@ func writeIOSDestinationSettings(b *strings.Builder, family string) {
 	}
 }
 
-func generateProjectYAML(appName string, plan *PlannerResult) string {
+// resolvePackages looks up each PackagePlan in the registry and returns resolved packages.
+// Unresolved packages (not in the registry) are skipped silently — the LLM will handle them.
+func resolvePackages(packages []PackagePlan) []*CuratedPackage {
+	if len(packages) == 0 {
+		return nil
+	}
+	var resolved []*CuratedPackage
+	seen := make(map[string]bool)
+	for _, pp := range packages {
+		pkg := LookupPackageByName(pp.Name)
+		if pkg == nil {
+			continue
+		}
+		if seen[pkg.Key] {
+			continue
+		}
+		seen[pkg.Key] = true
+		resolved = append(resolved, pkg)
+	}
+	return resolved
+}
+
+// writePackagesSection writes the top-level packages: section for XcodeGen.
+// Must be called between name: and options: lines.
+func writePackagesSection(b *strings.Builder, packages []*CuratedPackage) {
+	if len(packages) == 0 {
+		return
+	}
+	b.WriteString("packages:\n")
+	for _, pkg := range packages {
+		fmt.Fprintf(b, "  %s:\n", pkg.RepoName)
+		fmt.Fprintf(b, "    url: %s\n", pkg.RepoURL)
+		fmt.Fprintf(b, "    from: \"%s\"\n", pkg.MinVersion)
+	}
+}
+
+// writePackageDependencies writes package dependency entries for a target's dependencies: section.
+func writePackageDependencies(b *strings.Builder, packages []*CuratedPackage) {
+	for _, pkg := range packages {
+		if len(pkg.Products) == 1 && pkg.Products[0] == pkg.RepoName {
+			// Single product matching repo name — simple form
+			fmt.Fprintf(b, "      - package: %s\n", pkg.RepoName)
+		} else {
+			// Explicit product name(s)
+			for _, product := range pkg.Products {
+				fmt.Fprintf(b, "      - package: %s\n", pkg.RepoName)
+				fmt.Fprintf(b, "        product: %s\n", product)
+			}
+		}
+	}
+}
+
+// writeEntitlementProperties writes the entitlements properties section for a target.
+// If entitlements is nil/empty, writes `properties: {}`. Otherwise writes each entry.
+func writeEntitlementProperties(b *strings.Builder, entitlements map[string]any) {
+	if len(entitlements) == 0 {
+		b.WriteString("      properties: {}\n")
+		return
+	}
+	b.WriteString("      properties:\n")
+	writeXcodeYAMLMap(b, entitlements, 8)
+}
+
+func generateProjectYAML(appName string, plan *PlannerResult, entitlements map[string]any) string {
 	if plan != nil && plan.IsMultiPlatform() {
-		return generateMultiPlatformProjectYAML(appName, plan)
+		return generateMultiPlatformProjectYAML(appName, plan, entitlements)
 	}
 
 	platform := PlatformIOS
@@ -91,28 +197,28 @@ func generateProjectYAML(appName string, plan *PlannerResult) string {
 			shape = plan.GetWatchProjectShape()
 		}
 		if shape == WatchShapePaired {
-			return generatePairedYAML(appName, plan)
+			return generatePairedYAML(appName, plan, entitlements)
 		}
-		return generateWatchOnlyYAML(appName, plan)
+		return generateWatchOnlyYAML(appName, plan, entitlements)
 	}
 
 	if IsTvOS(platform) {
-		return generateTvOSProjectYAML(appName, plan)
+		return generateTvOSProjectYAML(appName, plan, entitlements)
 	}
 
 	if IsVisionOS(platform) {
-		return generateVisionOSProjectYAML(appName, plan)
+		return generateVisionOSProjectYAML(appName, plan, entitlements)
 	}
 
 	if IsMacOS(platform) {
-		return generateMacOSProjectYAML(appName, plan)
+		return generateMacOSProjectYAML(appName, plan, entitlements)
 	}
 
-	return generateIOSProjectYAML(appName, plan)
+	return generateIOSProjectYAML(appName, plan, entitlements)
 }
 
 // generateMultiPlatformProjectYAML produces a project.yml with targets for all platforms.
-func generateMultiPlatformProjectYAML(appName string, plan *PlannerResult) string {
+func generateMultiPlatformProjectYAML(appName string, plan *PlannerResult, entitlements map[string]any) string {
 	var b strings.Builder
 
 	bundleID := fmt.Sprintf("%s.%s", bundleIDPrefix(), strings.ToLower(appName))
@@ -122,9 +228,12 @@ func generateMultiPlatformProjectYAML(appName string, plan *PlannerResult) strin
 	hasVisionOS := HasPlatform(platforms, PlatformVisionOS)
 	hasMacOS := HasPlatform(platforms, PlatformMacOS)
 	hasExtensions := plan != nil && len(plan.Extensions) > 0
+	resolvedPkgs := resolvePackages(plan.Packages)
+	hasPackages := len(resolvedPkgs) > 0
 
 	// Header
 	fmt.Fprintf(&b, "name: %s\n", appName)
+	writePackagesSection(&b, resolvedPkgs)
 	b.WriteString("options:\n")
 	fmt.Fprintf(&b, "  bundleIdPrefix: %s\n", bundleIDPrefix())
 	b.WriteString("  deploymentTarget:\n")
@@ -198,10 +307,10 @@ func generateMultiPlatformProjectYAML(appName string, plan *PlannerResult) strin
 
 	b.WriteString("    entitlements:\n")
 	fmt.Fprintf(&b, "      path: %s/%s.entitlements\n", appName, appName)
-	b.WriteString("      properties: {}\n")
+	writeEntitlementProperties(&b, entitlements)
 
-	// iOS dependencies: embed watch target and iOS extensions
-	hasIOSDeps := hasWatchOS
+	// iOS dependencies: SPM packages + watch target + iOS extensions
+	hasIOSDeps := hasWatchOS || hasPackages
 	if !hasIOSDeps && hasExtensions {
 		for _, ext := range plan.Extensions {
 			if ext.Platform == "" || ext.Platform == PlatformIOS {
@@ -212,6 +321,7 @@ func generateMultiPlatformProjectYAML(appName string, plan *PlannerResult) strin
 	}
 	if hasIOSDeps {
 		b.WriteString("    dependencies:\n")
+		writePackageDependencies(&b, resolvedPkgs)
 		if hasWatchOS {
 			watchAppName := watchAppTargetName(appName)
 			fmt.Fprintf(&b, "      - target: %s\n", watchAppName)
@@ -309,17 +419,20 @@ func generateMultiPlatformProjectYAML(appName string, plan *PlannerResult) strin
 		fmt.Fprintf(&b, "      path: %sTV/%s.entitlements\n", appName, tvTargetName)
 		b.WriteString("      properties: {}\n")
 
-		// tvOS extensions
-		if hasExtensions {
-			hasTvExtensions := false
+		// tvOS dependencies: SPM packages + tvOS extensions
+		hasTvDeps := hasPackages
+		if !hasTvDeps && hasExtensions {
 			for _, ext := range plan.Extensions {
 				if ext.Platform == PlatformTvOS {
-					hasTvExtensions = true
+					hasTvDeps = true
 					break
 				}
 			}
-			if hasTvExtensions {
-				b.WriteString("    dependencies:\n")
+		}
+		if hasTvDeps {
+			b.WriteString("    dependencies:\n")
+			writePackageDependencies(&b, resolvedPkgs)
+			if hasExtensions {
 				for _, ext := range plan.Extensions {
 					if ext.Platform != PlatformTvOS {
 						continue
@@ -374,17 +487,20 @@ func generateMultiPlatformProjectYAML(appName string, plan *PlannerResult) strin
 		fmt.Fprintf(&b, "      path: %sVision/%s.entitlements\n", appName, visionTargetName)
 		b.WriteString("      properties: {}\n")
 
-		// visionOS extensions
-		if hasExtensions {
-			hasVisionExtensions := false
+		// visionOS dependencies: SPM packages + visionOS extensions
+		hasVisionDeps := hasPackages
+		if !hasVisionDeps && hasExtensions {
 			for _, ext := range plan.Extensions {
 				if ext.Platform == PlatformVisionOS {
-					hasVisionExtensions = true
+					hasVisionDeps = true
 					break
 				}
 			}
-			if hasVisionExtensions {
-				b.WriteString("    dependencies:\n")
+		}
+		if hasVisionDeps {
+			b.WriteString("    dependencies:\n")
+			writePackageDependencies(&b, resolvedPkgs)
+			if hasExtensions {
 				for _, ext := range plan.Extensions {
 					if ext.Platform != PlatformVisionOS {
 						continue
@@ -440,17 +556,20 @@ func generateMultiPlatformProjectYAML(appName string, plan *PlannerResult) strin
 		fmt.Fprintf(&b, "      path: %sMac/%s.entitlements\n", appName, macTargetName)
 		b.WriteString("      properties: {}\n")
 
-		// macOS extensions
-		if hasExtensions {
-			hasMacExtensions := false
+		// macOS dependencies: SPM packages + macOS extensions
+		hasMacDeps := hasPackages
+		if !hasMacDeps && hasExtensions {
 			for _, ext := range plan.Extensions {
 				if ext.Platform == PlatformMacOS {
-					hasMacExtensions = true
+					hasMacDeps = true
 					break
 				}
 			}
-			if hasMacExtensions {
-				b.WriteString("    dependencies:\n")
+		}
+		if hasMacDeps {
+			b.WriteString("    dependencies:\n")
+			writePackageDependencies(&b, resolvedPkgs)
+			if hasExtensions {
 				for _, ext := range plan.Extensions {
 					if ext.Platform != PlatformMacOS {
 						continue
@@ -613,13 +732,19 @@ func generateMultiPlatformProjectYAML(appName string, plan *PlannerResult) strin
 }
 
 // generateMacOSProjectYAML produces a native macOS project.yml.
-func generateMacOSProjectYAML(appName string, plan *PlannerResult) string {
+func generateMacOSProjectYAML(appName string, plan *PlannerResult, entitlements map[string]any) string {
 	var b strings.Builder
 
 	bundleID := fmt.Sprintf("%s.%s", bundleIDPrefix(), strings.ToLower(appName))
 	hasExtensions := plan != nil && len(plan.Extensions) > 0
+	var resolvedPkgs []*CuratedPackage
+	if plan != nil {
+		resolvedPkgs = resolvePackages(plan.Packages)
+	}
+	hasPackages := len(resolvedPkgs) > 0
 
 	fmt.Fprintf(&b, "name: %s\n", appName)
+	writePackagesSection(&b, resolvedPkgs)
 	b.WriteString("options:\n")
 	fmt.Fprintf(&b, "  bundleIdPrefix: %s\n", bundleIDPrefix())
 	b.WriteString("  deploymentTarget:\n")
@@ -685,15 +810,18 @@ func generateMacOSProjectYAML(appName string, plan *PlannerResult) string {
 	// Entitlements
 	b.WriteString("    entitlements:\n")
 	fmt.Fprintf(&b, "      path: %s/%s.entitlements\n", appName, appName)
-	b.WriteString("      properties: {}\n")
+	writeEntitlementProperties(&b, entitlements)
 
-	// Dependencies: embed extension targets
-	if hasExtensions {
+	// Dependencies: SPM packages + extension targets
+	if hasExtensions || hasPackages {
 		b.WriteString("    dependencies:\n")
-		for _, ext := range plan.Extensions {
-			name := extensionTargetName(ext, appName)
-			fmt.Fprintf(&b, "      - target: %s\n", name)
-			b.WriteString("        embed: true\n")
+		writePackageDependencies(&b, resolvedPkgs)
+		if hasExtensions {
+			for _, ext := range plan.Extensions {
+				name := extensionTargetName(ext, appName)
+				fmt.Fprintf(&b, "      - target: %s\n", name)
+				b.WriteString("        embed: true\n")
+			}
 		}
 	}
 
@@ -773,11 +901,16 @@ func generateMacOSProjectYAML(appName string, plan *PlannerResult) string {
 }
 
 // generateIOSProjectYAML produces the iOS project.yml (existing behavior).
-func generateIOSProjectYAML(appName string, plan *PlannerResult) string {
+func generateIOSProjectYAML(appName string, plan *PlannerResult, entitlements map[string]any) string {
 	var b strings.Builder
 
 	bundleID := fmt.Sprintf("%s.%s", bundleIDPrefix(), strings.ToLower(appName))
 	hasExtensions := plan != nil && len(plan.Extensions) > 0
+	var resolvedPkgs []*CuratedPackage
+	if plan != nil {
+		resolvedPkgs = resolvePackages(plan.Packages)
+	}
+	hasPackages := len(resolvedPkgs) > 0
 	// Check if any extension needs data sharing (app groups)
 	needsAppGroups := false
 	if hasExtensions {
@@ -793,6 +926,7 @@ func generateIOSProjectYAML(appName string, plan *PlannerResult) string {
 	}
 
 	fmt.Fprintf(&b, "name: %s\n", appName)
+	writePackagesSection(&b, resolvedPkgs)
 	b.WriteString("options:\n")
 	fmt.Fprintf(&b, "  bundleIdPrefix: %s\n", bundleIDPrefix())
 	b.WriteString("  deploymentTarget:\n")
@@ -859,16 +993,17 @@ func generateIOSProjectYAML(appName string, plan *PlannerResult) string {
 		}
 	}
 
-	// Main app entitlements
+	// Main app entitlements — merge auto-injected entitlements with app-group entitlements
+	mergedEntitlements := make(map[string]any)
+	for k, v := range entitlements {
+		mergedEntitlements[k] = v
+	}
+	if needsAppGroups {
+		mergedEntitlements["com.apple.security.application-groups"] = []any{"group." + bundleID}
+	}
 	b.WriteString("    entitlements:\n")
 	fmt.Fprintf(&b, "      path: %s/%s.entitlements\n", appName, appName)
-	if needsAppGroups {
-		b.WriteString("      properties:\n")
-		fmt.Fprintf(&b, "        com.apple.security.application-groups:\n")
-		fmt.Fprintf(&b, "          - group.%s\n", bundleID)
-	} else {
-		b.WriteString("      properties: {}\n")
-	}
+	writeEntitlementProperties(&b, mergedEntitlements)
 
 	// Main app Info.plist — for keys that can't be expressed as INFOPLIST_KEY_* build settings
 	mainInfoPlist := make(map[string]any)
@@ -887,13 +1022,16 @@ func generateIOSProjectYAML(appName string, plan *PlannerResult) string {
 		writeXcodeYAMLMap(&b, mainInfoPlist, 8)
 	}
 
-	// Dependencies: embed extension targets
-	if hasExtensions {
+	// Dependencies: SPM packages + extension targets
+	if hasExtensions || hasPackages {
 		b.WriteString("    dependencies:\n")
-		for _, ext := range plan.Extensions {
-			name := extensionTargetName(ext, appName)
-			fmt.Fprintf(&b, "      - target: %s\n", name)
-			b.WriteString("        embed: true\n")
+		writePackageDependencies(&b, resolvedPkgs)
+		if hasExtensions {
+			for _, ext := range plan.Extensions {
+				name := extensionTargetName(ext, appName)
+				fmt.Fprintf(&b, "      - target: %s\n", name)
+				b.WriteString("        embed: true\n")
+			}
 		}
 	}
 
@@ -981,13 +1119,19 @@ func generateIOSProjectYAML(appName string, plan *PlannerResult) string {
 // generateTvOSProjectYAML produces the tvOS project.yml for XcodeGen.
 // tvOS apps use TARGETED_DEVICE_FAMILY "3", no orientation settings,
 // no launch screen, and focus-based navigation.
-func generateTvOSProjectYAML(appName string, plan *PlannerResult) string {
+func generateTvOSProjectYAML(appName string, plan *PlannerResult, entitlements map[string]any) string {
 	var b strings.Builder
 
 	bundleID := fmt.Sprintf("%s.%s", bundleIDPrefix(), strings.ToLower(appName))
 	hasExtensions := plan != nil && len(plan.Extensions) > 0
+	var resolvedPkgs []*CuratedPackage
+	if plan != nil {
+		resolvedPkgs = resolvePackages(plan.Packages)
+	}
+	hasPackages := len(resolvedPkgs) > 0
 
 	fmt.Fprintf(&b, "name: %s\n", appName)
+	writePackagesSection(&b, resolvedPkgs)
 	b.WriteString("options:\n")
 	fmt.Fprintf(&b, "  bundleIdPrefix: %s\n", bundleIDPrefix())
 	b.WriteString("  deploymentTarget:\n")
@@ -1052,15 +1196,18 @@ func generateTvOSProjectYAML(appName string, plan *PlannerResult) string {
 	// Entitlements
 	b.WriteString("    entitlements:\n")
 	fmt.Fprintf(&b, "      path: %s/%s.entitlements\n", appName, appName)
-	b.WriteString("      properties: {}\n")
+	writeEntitlementProperties(&b, entitlements)
 
-	// Dependencies: embed extension targets
-	if hasExtensions {
+	// Dependencies: SPM packages + extension targets
+	if hasExtensions || hasPackages {
 		b.WriteString("    dependencies:\n")
-		for _, ext := range plan.Extensions {
-			name := extensionTargetName(ext, appName)
-			fmt.Fprintf(&b, "      - target: %s\n", name)
-			b.WriteString("        embed: true\n")
+		writePackageDependencies(&b, resolvedPkgs)
+		if hasExtensions {
+			for _, ext := range plan.Extensions {
+				name := extensionTargetName(ext, appName)
+				fmt.Fprintf(&b, "      - target: %s\n", name)
+				b.WriteString("        embed: true\n")
+			}
 		}
 	}
 
@@ -1140,13 +1287,19 @@ func generateTvOSProjectYAML(appName string, plan *PlannerResult) string {
 }
 
 // generateVisionOSProjectYAML produces the visionOS project.yml.
-func generateVisionOSProjectYAML(appName string, plan *PlannerResult) string {
+func generateVisionOSProjectYAML(appName string, plan *PlannerResult, entitlements map[string]any) string {
 	var b strings.Builder
 
 	bundleID := fmt.Sprintf("%s.%s", bundleIDPrefix(), strings.ToLower(appName))
 	hasExtensions := plan != nil && len(plan.Extensions) > 0
+	var resolvedPkgs []*CuratedPackage
+	if plan != nil {
+		resolvedPkgs = resolvePackages(plan.Packages)
+	}
+	hasPackages := len(resolvedPkgs) > 0
 
 	fmt.Fprintf(&b, "name: %s\n", appName)
+	writePackagesSection(&b, resolvedPkgs)
 	b.WriteString("options:\n")
 	fmt.Fprintf(&b, "  bundleIdPrefix: %s\n", bundleIDPrefix())
 	b.WriteString("  deploymentTarget:\n")
@@ -1211,15 +1364,18 @@ func generateVisionOSProjectYAML(appName string, plan *PlannerResult) string {
 	// Entitlements
 	b.WriteString("    entitlements:\n")
 	fmt.Fprintf(&b, "      path: %s/%s.entitlements\n", appName, appName)
-	b.WriteString("      properties: {}\n")
+	writeEntitlementProperties(&b, entitlements)
 
-	// Dependencies: embed extension targets
-	if hasExtensions {
+	// Dependencies: SPM packages + extension targets
+	if hasExtensions || hasPackages {
 		b.WriteString("    dependencies:\n")
-		for _, ext := range plan.Extensions {
-			name := extensionTargetName(ext, appName)
-			fmt.Fprintf(&b, "      - target: %s\n", name)
-			b.WriteString("        embed: true\n")
+		writePackageDependencies(&b, resolvedPkgs)
+		if hasExtensions {
+			for _, ext := range plan.Extensions {
+				name := extensionTargetName(ext, appName)
+				fmt.Fprintf(&b, "      - target: %s\n", name)
+				b.WriteString("        embed: true\n")
+			}
 		}
 	}
 
@@ -1368,7 +1524,7 @@ func writeIntrinsicWatchExtensionTargetYAML(b *strings.Builder, targetName, sour
 }
 
 // generateWatchOnlyYAML produces project.yml for a standalone watchOS app.
-func generateWatchOnlyYAML(appName string, plan *PlannerResult) string {
+func generateWatchOnlyYAML(appName string, plan *PlannerResult, entitlements map[string]any) string {
 	var b strings.Builder
 
 	bundleID := fmt.Sprintf("%s.%s", bundleIDPrefix(), strings.ToLower(appName))
@@ -1377,8 +1533,13 @@ func generateWatchOnlyYAML(appName string, plan *PlannerResult) string {
 	watchExtName := watchExtensionTargetName(appName)
 	watchExtBundleID := watchBundleID + ".watchkitextension"
 	hasExtensions := plan != nil && len(plan.Extensions) > 0
+	var resolvedPkgs []*CuratedPackage
+	if plan != nil {
+		resolvedPkgs = resolvePackages(plan.Packages)
+	}
 
 	fmt.Fprintf(&b, "name: %s\n", appName)
+	writePackagesSection(&b, resolvedPkgs)
 	b.WriteString("options:\n")
 	fmt.Fprintf(&b, "  bundleIdPrefix: %s\n", bundleIDPrefix())
 	b.WriteString("  deploymentTarget:\n")
@@ -1423,10 +1584,11 @@ func generateWatchOnlyYAML(appName string, plan *PlannerResult) string {
 	// Entitlements
 	b.WriteString("    entitlements:\n")
 	fmt.Fprintf(&b, "      path: %s/%s.entitlements\n", appName, appName)
-	b.WriteString("      properties: {}\n")
+	writeEntitlementProperties(&b, entitlements)
 
-	// Dependencies: embed watch app (and any optional extension targets)
+	// Dependencies: SPM packages + watch app + optional extension targets
 	b.WriteString("    dependencies:\n")
+	writePackageDependencies(&b, resolvedPkgs)
 	fmt.Fprintf(&b, "      - target: %s\n", watchAppName)
 	b.WriteString("        embed: true\n")
 	if hasExtensions {
@@ -1545,7 +1707,7 @@ func generateWatchOnlyYAML(appName string, plan *PlannerResult) string {
 }
 
 // generatePairedYAML produces project.yml for a paired iOS+watchOS app.
-func generatePairedYAML(appName string, plan *PlannerResult) string {
+func generatePairedYAML(appName string, plan *PlannerResult, entitlements map[string]any) string {
 	var b strings.Builder
 
 	bundleID := fmt.Sprintf("%s.%s", bundleIDPrefix(), strings.ToLower(appName))
@@ -1554,8 +1716,13 @@ func generatePairedYAML(appName string, plan *PlannerResult) string {
 	watchExtName := watchExtensionTargetName(appName)
 	watchExtBundleID := watchBundleID + ".watchkitextension"
 	hasExtensions := plan != nil && len(plan.Extensions) > 0
+	var resolvedPkgs []*CuratedPackage
+	if plan != nil {
+		resolvedPkgs = resolvePackages(plan.Packages)
+	}
 
 	fmt.Fprintf(&b, "name: %s\n", appName)
+	writePackagesSection(&b, resolvedPkgs)
 	b.WriteString("options:\n")
 	fmt.Fprintf(&b, "  bundleIdPrefix: %s\n", bundleIDPrefix())
 	b.WriteString("  deploymentTarget:\n")
@@ -1622,10 +1789,11 @@ func generatePairedYAML(appName string, plan *PlannerResult) string {
 
 	b.WriteString("    entitlements:\n")
 	fmt.Fprintf(&b, "      path: %s/%s.entitlements\n", appName, appName)
-	b.WriteString("      properties: {}\n")
+	writeEntitlementProperties(&b, entitlements)
 
-	// iOS target depends on watch target
+	// iOS target depends on SPM packages + watch target + extensions
 	b.WriteString("    dependencies:\n")
+	writePackageDependencies(&b, resolvedPkgs)
 	fmt.Fprintf(&b, "      - target: %s\n", watchAppName)
 	b.WriteString("        embed: true\n")
 	if hasExtensions {

@@ -7,7 +7,7 @@ import (
 )
 
 // Version is set at build time.
-var Version = "0.1.12"
+var Version = "0.2.0"
 
 var rootCmd = &cobra.Command{
 	Use:     "nanowave",
@@ -47,6 +47,7 @@ func init() {
 	rootCmd.AddCommand(openCmd)
 	rootCmd.AddCommand(mcpCmd)
 	rootCmd.AddCommand(usageCmd)
+	rootCmd.AddCommand(integrationsCmd)
 }
 
 // modelFlag holds the --model flag value.

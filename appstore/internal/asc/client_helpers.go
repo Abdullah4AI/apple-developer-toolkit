@@ -21,6 +21,36 @@ func normalizeList(values []string) []string {
 	return normalized
 }
 
+func normalizeUniqueList(values []string) []string {
+	values = normalizeList(values)
+	if len(values) == 0 {
+		return nil
+	}
+
+	seen := make(map[string]struct{}, len(values))
+	unique := make([]string, 0, len(values))
+	for _, value := range values {
+		if _, exists := seen[value]; exists {
+			continue
+		}
+		seen[value] = struct{}{}
+		unique = append(unique, value)
+	}
+	return unique
+}
+
+func sameOrderedList(left, right []string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for i := range left {
+		if left[i] != right[i] {
+			return false
+		}
+	}
+	return true
+}
+
 func normalizeUpperList(values []string) []string {
 	if len(values) == 0 {
 		return nil

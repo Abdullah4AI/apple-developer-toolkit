@@ -1083,6 +1083,16 @@ func (c *Client) UpdateGameCenterLeaderboardSetMembersV2(ctx context.Context, se
 	return err
 }
 
+// SetGameCenterLeaderboardSetMembersV2 sets leaderboard members for a v2 leaderboard set.
+func (c *Client) SetGameCenterLeaderboardSetMembersV2(ctx context.Context, setID string, leaderboardIDs []string) error {
+	return setGameCenterLeaderboardSetMembers(ctx, setID, leaderboardIDs, leaderboardSetMembersOperations{
+		list:    c.GetGameCenterLeaderboardSetMembersV2,
+		add:     c.AddGameCenterLeaderboardSetMembersV2,
+		remove:  c.RemoveGameCenterLeaderboardSetMembersV2,
+		replace: c.UpdateGameCenterLeaderboardSetMembersV2,
+	})
+}
+
 // GetGameCenterLeaderboardSetVersions retrieves versions for a v2 leaderboard set.
 func (c *Client) GetGameCenterLeaderboardSetVersions(ctx context.Context, setID string, opts ...GCLeaderboardSetVersionsOption) (*GameCenterLeaderboardSetVersionsResponse, error) {
 	query := &gcLeaderboardSetVersionsQuery{}

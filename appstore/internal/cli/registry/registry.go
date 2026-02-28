@@ -74,6 +74,7 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/validate"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/versions"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/videopreviews"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/web"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/webhooks"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/winbackoffers"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/workflow"
@@ -99,6 +100,7 @@ func Subcommands(version string) []*ffcli.Command {
 	subs := []*ffcli.Command{
 		auth.AuthCommand(),
 		auth.AuthDoctorCommand(),
+		web.WebCommand(),
 		account.AccountCommand(),
 		install.InstallSkillsCommand(),
 		initcmd.InitCommand(),

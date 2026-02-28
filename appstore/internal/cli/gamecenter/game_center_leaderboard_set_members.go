@@ -143,16 +143,7 @@ Examples:
 				return flag.ErrHelp
 			}
 
-			// Parse leaderboard IDs from comma-separated string
-			var ids []string
-			if strings.TrimSpace(*leaderboardIDs) != "" {
-				for leaderboardID := range strings.SplitSeq(*leaderboardIDs, ",") {
-					trimmed := strings.TrimSpace(leaderboardID)
-					if trimmed != "" {
-						ids = append(ids, trimmed)
-					}
-				}
-			}
+			ids := shared.SplitUniqueCSV(*leaderboardIDs)
 
 			client, err := shared.GetASCClient()
 			if err != nil {
@@ -162,7 +153,7 @@ Examples:
 			requestCtx, cancel := shared.ContextWithTimeout(ctx)
 			defer cancel()
 
-			if err := client.UpdateGameCenterLeaderboardSetMembers(requestCtx, id, ids); err != nil {
+			if err := client.SetGameCenterLeaderboardSetMembers(requestCtx, id, ids); err != nil {
 				return fmt.Errorf("game-center leaderboard-sets members set: failed to update: %w", err)
 			}
 

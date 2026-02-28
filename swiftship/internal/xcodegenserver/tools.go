@@ -343,10 +343,61 @@ func handleGetProjectConfig(ctx context.Context, req *mcp.CallToolRequest, input
 		}
 	}
 
+	if len(cfg.Packages) > 0 {
+		summary.WriteString(fmt.Sprintf("Packages: %d\n", len(cfg.Packages)))
+		for _, p := range cfg.Packages {
+			summary.WriteString(fmt.Sprintf("  - %s (%s)\n", p.Name, p.URL))
+		}
+	}
+
 	summary.WriteString("\nFull config:\n")
 	summary.Write(data)
 
 	return nil, textOutput{Message: summary.String()}, nil
+}
+
+// addPackageInput is the input for the add_package tool.
+type addPackageInput struct {
+	Name       string   `json:"name" jsonschema:"description=Package name e.g. Lottie or SDWebImageSwiftUI"`
+	URL        string   `json:"url" jsonschema:"description=Git repository URL e.g. https://github.com/airbnb/lottie-ios"`
+	MinVersion string   `json:"min_version" jsonschema:"description=Minimum version e.g. 4.0.0"`
+	Products   []string `json:"products" jsonschema:"description=Product names to import. If omitted defaults to package name."`
+}
+
+func handleAddPackage(ctx context.Context, req *mcp.CallToolRequest, input addPackageInput) (*mcp.CallToolResult, textOutput, error) {
+	workDir, err := os.Getwd()
+	if err != nil {
+		return nil, textOutput{}, fmt.Errorf("failed to get working directory: %w", err)
+	}
+
+	if !strings.HasPrefix(input.URL, "https://") {
+		return nil, textOutput{}, fmt.Errorf("package URL must start with https://")
+	}
+
+	cfg, err := loadConfig(workDir)
+	if err != nil {
+		return nil, textOutput{}, err
+	}
+
+	// Check for duplicate
+	for _, p := range cfg.Packages {
+		if p.Name == input.Name {
+			return nil, textOutput{Message: fmt.Sprintf("Package %s already exists", input.Name)}, nil
+		}
+	}
+
+	cfg.Packages = append(cfg.Packages, PackageDep{
+		Name:       input.Name,
+		URL:        input.URL,
+		MinVersion: input.MinVersion,
+		Products:   input.Products,
+	})
+
+	if err := applyAndRegenerate(workDir, cfg); err != nil {
+		return nil, textOutput{}, err
+	}
+
+	return nil, textOutput{Message: fmt.Sprintf("Added SPM package %s (%s). project.yml updated and xcodegen regenerated. Import the package in your Swift files.", input.Name, input.URL)}, nil
 }
 
 // regenerateProjectInput is the input for the regenerate_project tool (no inputs needed).
@@ -358,11 +409,23 @@ func handleRegenerateProject(ctx context.Context, req *mcp.CallToolRequest, inpu
 		return nil, textOutput{}, fmt.Errorf("failed to get working directory: %w", err)
 	}
 
+	// Regenerate project.yml from project_config.json (preserving entitlements, packages, etc.)
+	// before running xcodegen, matching what applyAndRegenerate does.
+	cfg, err := loadConfig(workDir)
+	if err != nil {
+		return nil, textOutput{}, err
+	}
+
+	yml := generateProjectYAML(cfg)
+	if err := os.WriteFile(filepath.Join(workDir, "project.yml"), []byte(yml), 0o644); err != nil {
+		return nil, textOutput{}, fmt.Errorf("failed to write project.yml: %w", err)
+	}
+
 	if err := runXcodeGen(workDir); err != nil {
 		return nil, textOutput{}, err
 	}
 
-	return nil, textOutput{Message: "xcodegen generate completed successfully. .xcodeproj regenerated."}, nil
+	return nil, textOutput{Message: "project.yml regenerated from project_config.json and xcodegen completed successfully. .xcodeproj regenerated."}, nil
 }
 
 // applyAndRegenerate saves the config, generates project.yml, and runs xcodegen.

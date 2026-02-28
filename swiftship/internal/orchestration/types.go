@@ -42,13 +42,28 @@ type IntentDecision struct {
 	UsedLLM               bool     `json:"used_llm"`
 }
 
+// BackendNeeds indicates which backend capabilities an app requires.
+type BackendNeeds struct {
+	Auth        bool     `json:"auth"`
+	AuthMethods []string `json:"auth_methods,omitempty"` // "email", "apple", "google", "anonymous"
+	DB          bool     `json:"db"`
+	Storage     bool     `json:"storage"`
+	Realtime    bool     `json:"realtime,omitempty"` // enable Supabase Realtime on tables
+}
+
+// NeedsBackend returns true if any backend capability is required.
+func (b *BackendNeeds) NeedsBackend() bool {
+	return b != nil && (b.Auth || b.DB || b.Storage)
+}
+
 // AnalysisResult is the parsed output from the analyzer phase.
 type AnalysisResult struct {
-	AppName     string    `json:"app_name"`
-	Description string    `json:"description"`
-	Features    []Feature `json:"features"`
-	CoreFlow    string    `json:"core_flow"`
-	Deferred    []string  `json:"deferred"`
+	AppName      string        `json:"app_name"`
+	Description  string        `json:"description"`
+	Features     []Feature     `json:"features"`
+	CoreFlow     string        `json:"core_flow"`
+	Deferred     []string      `json:"deferred"`
+	BackendNeeds *BackendNeeds `json:"backend_needs,omitempty"`
 }
 
 // Feature is a single app feature from the analyzer.
@@ -70,6 +85,8 @@ type PlannerResult struct {
 	Extensions        []ExtensionPlan `json:"extensions"`
 	Localizations     []string        `json:"localizations"`
 	RuleKeys          []string        `json:"rule_keys"`
+	Packages          []PackagePlan   `json:"packages"`
+	Integrations      []string        `json:"integrations,omitempty"`
 	BuildOrder        []string        `json:"build_order"`
 }
 
@@ -337,4 +354,10 @@ type Permission struct {
 	Key         string `json:"key"`
 	Description string `json:"description"`
 	Framework   string `json:"framework"`
+}
+
+// PackagePlan describes an SPM package suggested by the planner.
+type PackagePlan struct {
+	Name   string `json:"name"`
+	Reason string `json:"reason"`
 }
