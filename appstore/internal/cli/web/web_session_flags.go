@@ -11,14 +11,12 @@ import (
 
 type webSessionFlags struct {
 	appleID       *string
-	passwordStdin *bool
 	twoFactorCode *string
 }
 
 func bindWebSessionFlags(fs *flag.FlagSet) webSessionFlags {
 	return webSessionFlags{
-		appleID:       fs.String("apple-id", "", "Apple ID email used to scope a user-owned session cache"),
-		passwordStdin: fs.Bool("password-stdin", false, "Read Apple ID password from stdin"),
+		appleID:       fs.String("apple-id", "", "Apple ID email used to scope a user-owned session cache (optional when a cached session exists)"),
 		twoFactorCode: fs.String("two-factor-code", "", "2FA code if your account requires verification"),
 	}
 }
@@ -29,7 +27,6 @@ func resolveWebSessionForCommand(ctx context.Context, flags webSessionFlags) (*w
 		*flags.appleID,
 		"",
 		*flags.twoFactorCode,
-		*flags.passwordStdin,
 	)
 	if err != nil {
 		return nil, err

@@ -123,8 +123,8 @@ func TestWebReviewShowRequiresAppleIDWhenNoMatchingCache(t *testing.T) {
 	if !errors.Is(runErr, flag.ErrHelp) {
 		t.Fatalf("expected ErrHelp, got %v", runErr)
 	}
-	if !strings.Contains(stderr, "--apple-id is required") {
-		t.Fatalf("expected missing apple-id message, got %q", stderr)
+	if !strings.Contains(stderr, "no cached web session is available") {
+		t.Fatalf("expected missing cached-session message, got %q", stderr)
 	}
 }
 

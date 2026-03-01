@@ -195,7 +195,6 @@ func WebAppsCreateCommand() *ffcli.Command {
 	companyName := fs.String("company-name", "", "Company name (optional)")
 
 	appleID := fs.String("apple-id", "", "Apple ID email (required when no cache is available)")
-	passwordStdin := fs.Bool("password-stdin", false, "Read Apple ID password from stdin")
 	twoFactorCode := fs.String("two-factor-code", "", "2FA code if your account requires verification")
 	autoRename := fs.Bool("auto-rename", true, "Retry with unique name suffix if app name is already taken")
 	output := shared.BindOutputFlags(fs)
@@ -215,14 +214,13 @@ Required:
 Authentication:
   --apple-id with one of:
     - secure interactive prompt (default and recommended for local use)
-    - --password-stdin (automation/CI)
     - ASC_WEB_PASSWORD environment variable
-  Cached web sessions may be reused only for the matching --apple-id.
+  If you already have a cached web session, --apple-id can be omitted.
 
 ` + webWarningText + `
 
 Examples:
-  asc web apps create --name "My App" --bundle-id "com.example.app" --sku "MYAPP123" --apple-id "user@example.com" --password-stdin
+  asc web apps create --name "My App" --bundle-id "com.example.app" --sku "MYAPP123" --apple-id "user@example.com"
   ASC_WEB_PASSWORD="..." asc web apps create --name "My App" --bundle-id "com.example.app" --sku "MYAPP123" --apple-id "user@example.com"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
@@ -243,7 +241,7 @@ Examples:
 				return flag.ErrHelp
 			}
 
-			session, source, err := resolveSessionFn(ctx, *appleID, "", *twoFactorCode, *passwordStdin)
+			session, source, err := resolveSessionFn(ctx, *appleID, "", *twoFactorCode)
 			if err != nil {
 				return err
 			}

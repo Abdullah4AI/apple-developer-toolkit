@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -28,6 +29,9 @@ const (
 	webhooksServeDefaultHost         = "127.0.0.1"
 	webhooksServeDefaultPort         = 8787
 	webhooksServeDefaultMaxBodyBytes = 1 << 20 // 1 MiB
+	webhooksServeDefaultQueueSize    = 64
+	webhooksServeDefaultWorkerCount  = 4
+	webhooksServeDefaultExecTimeout  = 30 * time.Second
 )
 
 var errWebhookPayloadTooLarge = errors.New("payload exceeds max body size")
@@ -56,6 +60,11 @@ type webhookServeRuntime struct {
 	dir          string
 	execCommand  string
 	maxBodyBytes int64
+	eventQueue   chan webhookServeEvent
+	workerCount  int
+	execTimeout  time.Duration
+	queueMu      sync.RWMutex
+	workersWG    sync.WaitGroup
 	fileCounter  uint64
 }
 
@@ -140,9 +149,13 @@ Examples:
 				dir:          eventsDir,
 				execCommand:  strings.TrimSpace(*execCommand),
 				maxBodyBytes: *maxBodyBytes,
+				eventQueue:   make(chan webhookServeEvent, webhooksServeDefaultQueueSize),
+				workerCount:  webhooksServeDefaultWorkerCount,
+				execTimeout:  webhooksServeDefaultExecTimeout,
 			}
+			runtime.startWorkers(ctx)
 			server := &http.Server{
-				Handler:           runtime.newHandler(ctx),
+				Handler:           runtime.newHandler(),
 				ReadHeaderTimeout: 5 * time.Second,
 				ReadTimeout:       15 * time.Second,
 				WriteTimeout:      15 * time.Second,
@@ -169,6 +182,7 @@ Examples:
 
 			select {
 			case err := <-serveErrCh:
+				runtime.stopWorkers()
 				if err != nil {
 					return fmt.Errorf("webhooks serve: %w", err)
 				}
@@ -178,15 +192,17 @@ Examples:
 				defer cancel()
 				_ = server.Shutdown(shutdownCtx)
 				if err := <-serveErrCh; err != nil {
+					runtime.stopWorkers()
 					return fmt.Errorf("webhooks serve: %w", err)
 				}
+				runtime.stopWorkers()
 				return nil
 			}
 		},
 	}
 }
 
-func (r *webhookServeRuntime) newHandler(ctx context.Context) http.Handler {
+func (r *webhookServeRuntime) newHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		if req.Method != http.MethodPost {
 			writeWebhookServeJSON(w, http.StatusMethodNotAllowed, map[string]any{
@@ -225,7 +241,12 @@ func (r *webhookServeRuntime) newHandler(ctx context.Context) http.Handler {
 			len(payload),
 		)
 
-		go r.processEvent(ctx, event)
+		if !r.enqueueEvent(event) {
+			writeWebhookServeJSON(w, http.StatusServiceUnavailable, map[string]any{
+				"error": "event queue full",
+			})
+			return
+		}
 
 		writeWebhookServeJSON(w, http.StatusAccepted, map[string]any{
 			"accepted": true,
@@ -233,7 +254,51 @@ func (r *webhookServeRuntime) newHandler(ctx context.Context) http.Handler {
 	})
 }
 
-func (r *webhookServeRuntime) processEvent(ctx context.Context, event webhookServeEvent) {
+func (r *webhookServeRuntime) startWorkers(_ context.Context) {
+	if r.eventQueue == nil {
+		return
+	}
+
+	workerCount := r.workerCount
+	if workerCount < 1 {
+		workerCount = 1
+	}
+	r.workersWG.Add(workerCount)
+	for i := 0; i < workerCount; i++ {
+		go func() {
+			defer r.workersWG.Done()
+			for event := range r.eventQueue {
+				r.processEvent(event)
+			}
+		}()
+	}
+}
+
+func (r *webhookServeRuntime) stopWorkers() {
+	r.queueMu.Lock()
+	if r.eventQueue != nil {
+		close(r.eventQueue)
+		r.eventQueue = nil
+	}
+	r.queueMu.Unlock()
+	r.workersWG.Wait()
+}
+
+func (r *webhookServeRuntime) enqueueEvent(event webhookServeEvent) bool {
+	r.queueMu.RLock()
+	defer r.queueMu.RUnlock()
+	if r.eventQueue == nil {
+		return false
+	}
+	select {
+	case r.eventQueue <- event:
+		return true
+	default:
+		return false
+	}
+}
+
+func (r *webhookServeRuntime) processEvent(event webhookServeEvent) {
 	if r.dir != "" {
 		path, err := r.writeEventFile(event)
 		if err != nil {
@@ -244,7 +309,14 @@ func (r *webhookServeRuntime) processEvent(ctx context.Context, event webhookSer
 	}
 
 	if r.execCommand != "" {
-		if err := runWebhookExecCommand(ctx, r.execCommand, event.Payload); err != nil {
+		execCtx := context.Background()
+		cancel := func() {}
+		if r.execTimeout > 0 {
+			execCtx, cancel = context.WithTimeout(context.Background(), r.execTimeout)
+		}
+		err := runWebhookExecCommand(execCtx, r.execCommand, event.Payload)
+		cancel()
+		if err != nil {
 			fmt.Fprintf(os.Stderr, "webhooks serve: exec failed for event id=%s: %v\n", firstNonEmpty(event.EventID, "unknown"), err)
 		}
 	}

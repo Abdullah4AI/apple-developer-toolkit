@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"flag"
-	"os"
 	"strings"
 	"testing"
 
@@ -14,56 +13,18 @@ import (
 
 func TestReadPasswordFromInput(t *testing.T) {
 	origPromptPassword := promptPasswordFn
-	origIsTerminal := termIsTerminalFn
 	t.Cleanup(func() {
 		promptPasswordFn = origPromptPassword
-		termIsTerminalFn = origIsTerminal
-	})
-
-	t.Run("reads from stdin when requested", func(t *testing.T) {
-		t.Setenv(webPasswordEnv, "")
-		termIsTerminalFn = func(fd int) bool { return false }
-
-		readEnd, writeEnd, err := os.Pipe()
-		if err != nil {
-			t.Fatalf("os.Pipe returned error: %v", err)
-		}
-		defer func() { _ = readEnd.Close() }()
-
-		if _, err := writeEnd.WriteString(" stdin-password \n"); err != nil {
-			t.Fatalf("write to stdin pipe failed: %v", err)
-		}
-		_ = writeEnd.Close()
-
-		origStdin := os.Stdin
-		os.Stdin = readEnd
-		t.Cleanup(func() {
-			os.Stdin = origStdin
-		})
-
-		promptPasswordFn = func() (string, error) {
-			t.Fatal("did not expect prompt fallback for --password-stdin")
-			return "", nil
-		}
-
-		password, err := readPasswordFromInput(true)
-		if err != nil {
-			t.Fatalf("readPasswordFromInput returned error: %v", err)
-		}
-		if password != "stdin-password" {
-			t.Fatalf("expected stdin password %q, got %q", "stdin-password", password)
-		}
 	})
 
 	t.Run("uses environment variable before prompt fallback", func(t *testing.T) {
 		t.Setenv(webPasswordEnv, " env-password ")
-		termIsTerminalFn = func(fd int) bool { return false }
 		promptPasswordFn = func() (string, error) {
 			t.Fatal("did not expect prompt fallback when env password is set")
 			return "", nil
 		}
 
-		password, err := readPasswordFromInput(false)
+		password, err := readPasswordFromInput()
 		if err != nil {
 			t.Fatalf("readPasswordFromInput returned error: %v", err)
 		}
@@ -72,16 +33,15 @@ func TestReadPasswordFromInput(t *testing.T) {
 		}
 	})
 
-	t.Run("falls back to interactive prompt when stdin/env are not provided", func(t *testing.T) {
+	t.Run("falls back to interactive prompt when env is not provided", func(t *testing.T) {
 		t.Setenv(webPasswordEnv, "")
-		termIsTerminalFn = func(fd int) bool { return false }
 		called := false
 		promptPasswordFn = func() (string, error) {
 			called = true
 			return " prompted-password ", nil
 		}
 
-		password, err := readPasswordFromInput(false)
+		password, err := readPasswordFromInput()
 		if err != nil {
 			t.Fatalf("readPasswordFromInput returned error: %v", err)
 		}
@@ -90,23 +50,6 @@ func TestReadPasswordFromInput(t *testing.T) {
 		}
 		if password != "prompted-password" {
 			t.Fatalf("expected prompted password %q, got %q", "prompted-password", password)
-		}
-	})
-
-	t.Run("rejects password-stdin when stdin is an interactive terminal", func(t *testing.T) {
-		t.Setenv(webPasswordEnv, "")
-		termIsTerminalFn = func(fd int) bool { return true }
-		promptPasswordFn = func() (string, error) {
-			t.Fatal("did not expect prompt fallback for --password-stdin")
-			return "", nil
-		}
-
-		password, err := readPasswordFromInput(true)
-		if !errors.Is(err, flag.ErrHelp) {
-			t.Fatalf("expected ErrHelp, got %v", err)
-		}
-		if password != "" {
-			t.Fatalf("expected empty password, got %q", password)
 		}
 	})
 }
@@ -301,5 +244,56 @@ func TestLoginWithOptionalTwoFactorReturnsPromptError(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "re-run with --two-factor-code") {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestResolveSessionUsesLastCachedSessionWhenAppleIDMissing(t *testing.T) {
+	origTryResume := tryResumeSessionFn
+	origTryResumeLast := tryResumeLastFn
+	origPromptPassword := promptPasswordFn
+	t.Cleanup(func() {
+		tryResumeSessionFn = origTryResume
+		tryResumeLastFn = origTryResumeLast
+		promptPasswordFn = origPromptPassword
+	})
+
+	expected := &webcore.AuthSession{UserEmail: "cached@example.com"}
+	tryResumeSessionFn = func(ctx context.Context, username string) (*webcore.AuthSession, bool, error) {
+		t.Fatal("did not expect user-scoped cache lookup when apple-id is omitted")
+		return nil, false, nil
+	}
+	tryResumeLastFn = func(ctx context.Context) (*webcore.AuthSession, bool, error) {
+		return expected, true, nil
+	}
+	promptPasswordFn = func() (string, error) {
+		t.Fatal("did not expect password prompt when cache hit")
+		return "", nil
+	}
+
+	session, source, err := resolveSession(context.Background(), "", "", "")
+	if err != nil {
+		t.Fatalf("resolveSession returned error: %v", err)
+	}
+	if source != "cache" {
+		t.Fatalf("expected source %q, got %q", "cache", source)
+	}
+	if session != expected {
+		t.Fatalf("expected cached session pointer to be returned")
+	}
+}
+
+func TestResolveSessionRequiresAppleIDWhenNoCachedSessionExists(t *testing.T) {
+	origTryResumeLast := tryResumeLastFn
+	t.Cleanup(func() {
+		tryResumeLastFn = origTryResumeLast
+	})
+
+	tryResumeLastFn = func(ctx context.Context) (*webcore.AuthSession, bool, error) {
+		return nil, false, nil
+	}
+
+	_, _, err := resolveSession(context.Background(), "", "", "")
+	if !errors.Is(err, flag.ErrHelp) {
+		t.Fatalf("expected ErrHelp, got %v", err)
 	}
 }

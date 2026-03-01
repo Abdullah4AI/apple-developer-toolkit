@@ -121,7 +121,7 @@ func TestReadWebhookServeJSONPayloadRejectsOneByteOverLimit(t *testing.T) {
 
 func TestWebhooksServeHandlerRejectsNonPOST(t *testing.T) {
 	runtime := &webhookServeRuntime{maxBodyBytes: webhooksServeDefaultMaxBodyBytes}
-	handler := runtime.newHandler(context.Background())
+	handler := runtime.newHandler()
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
@@ -142,7 +142,7 @@ func TestWebhooksServeHandlerRejectsNonPOST(t *testing.T) {
 
 func TestWebhooksServeHandlerRejectsInvalidJSON(t *testing.T) {
 	runtime := &webhookServeRuntime{maxBodyBytes: webhooksServeDefaultMaxBodyBytes}
-	handler := runtime.newHandler(context.Background())
+	handler := runtime.newHandler()
 
 	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader("{invalid"))
 	rec := httptest.NewRecorder()
@@ -163,7 +163,7 @@ func TestWebhooksServeHandlerRejectsInvalidJSON(t *testing.T) {
 
 func TestWebhooksServeHandlerRejectsLargePayload(t *testing.T) {
 	runtime := &webhookServeRuntime{maxBodyBytes: 8}
-	handler := runtime.newHandler(context.Background())
+	handler := runtime.newHandler()
 
 	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"id":"evt-oversized"}`))
 	rec := httptest.NewRecorder()

@@ -30,7 +30,7 @@ func TestWebAppsCreateDefersPasswordResolutionToResolveSession(t *testing.T) {
 		receivedID    string
 		receivedPass  string
 	)
-	resolveSessionFn = func(ctx context.Context, appleID, password, twoFactorCode string, usePasswordStdin bool) (*webcore.AuthSession, string, error) {
+	resolveSessionFn = func(ctx context.Context, appleID, password, twoFactorCode string) (*webcore.AuthSession, string, error) {
 		calledResolve = true
 		receivedID = appleID
 		receivedPass = password
@@ -70,7 +70,7 @@ func TestWebAppsCreateResolvesSessionBeforeTimeoutContext(t *testing.T) {
 
 	resolveErr := errors.New("stop before network call")
 	hadDeadline := false
-	resolveSessionFn = func(ctx context.Context, appleID, password, twoFactorCode string, usePasswordStdin bool) (*webcore.AuthSession, string, error) {
+	resolveSessionFn = func(ctx context.Context, appleID, password, twoFactorCode string) (*webcore.AuthSession, string, error) {
 		_, hadDeadline = ctx.Deadline()
 		return nil, "", resolveErr
 	}
@@ -106,7 +106,7 @@ func TestWebAppsCreateEnsuresBundleIDBeforeCreateApp(t *testing.T) {
 		createWebAppFn = origCreateWebApp
 	})
 
-	resolveSessionFn = func(ctx context.Context, appleID, password, twoFactorCode string, usePasswordStdin bool) (*webcore.AuthSession, string, error) {
+	resolveSessionFn = func(ctx context.Context, appleID, password, twoFactorCode string) (*webcore.AuthSession, string, error) {
 		return &webcore.AuthSession{}, "cache", nil
 	}
 	newWebClientFn = func(session *webcore.AuthSession) *webcore.Client {
@@ -167,7 +167,7 @@ func TestWebAppsCreateFailsWhenBundleIDPreflightFails(t *testing.T) {
 		createWebAppFn = origCreateWebApp
 	})
 
-	resolveSessionFn = func(ctx context.Context, appleID, password, twoFactorCode string, usePasswordStdin bool) (*webcore.AuthSession, string, error) {
+	resolveSessionFn = func(ctx context.Context, appleID, password, twoFactorCode string) (*webcore.AuthSession, string, error) {
 		return &webcore.AuthSession{}, "cache", nil
 	}
 	newWebClientFn = func(session *webcore.AuthSession) *webcore.Client {

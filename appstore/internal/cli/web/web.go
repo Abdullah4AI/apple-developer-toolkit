@@ -31,7 +31,7 @@ These commands can break without notice and are intentionally detached from offi
 
 Examples:
   asc web auth status
-  asc web auth login --apple-id "user@example.com" --password-stdin
+  asc web auth login --apple-id "user@example.com"
   asc web privacy plan --app "123456789" --file "./privacy.json"
   asc web review list --app "123456789" --apple-id "user@example.com"
   asc web review show --app "123456789" --apple-id "user@example.com"`,
@@ -42,6 +42,7 @@ Examples:
 			WebAppsCommand(),
 			WebPrivacyCommand(),
 			WebReviewCommand(),
+			WebXcodeCloudCommand(),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			if len(args) == 0 {

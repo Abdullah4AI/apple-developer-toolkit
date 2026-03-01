@@ -83,10 +83,11 @@ var webAuthSensitiveQueryKeys = urlsanitize.MergeKeySets(
 
 // AuthSession holds authenticated web-session state for internal API calls.
 type AuthSession struct {
-	Client     *http.Client
-	ProviderID int64
-	TeamID     string
-	UserEmail  string
+	Client           *http.Client
+	ProviderID       int64
+	PublicProviderID string
+	TeamID           string
+	UserEmail        string
 
 	// Continuation state needed after a 409 SRP completion response.
 	ServiceKey       string
@@ -209,8 +210,9 @@ type signinInitResponse struct {
 
 type sessionInfo struct {
 	Provider struct {
-		ProviderID int64  `json:"providerId"`
-		Name       string `json:"name"`
+		ProviderID       int64  `json:"providerId"`
+		PublicProviderID string `json:"publicProviderId"`
+		Name             string `json:"name"`
 	} `json:"provider"`
 	User struct {
 		EmailAddress string `json:"emailAddress"`
@@ -412,11 +414,12 @@ func Login(ctx context.Context, creds LoginCredentials) (*AuthSession, error) {
 	}
 
 	return &AuthSession{
-		Client:     client,
-		ProviderID: info.Provider.ProviderID,
-		TeamID:     fmt.Sprintf("%d", info.Provider.ProviderID),
-		UserEmail:  strings.TrimSpace(info.User.EmailAddress),
-		ServiceKey: serviceKey,
+		Client:           client,
+		ProviderID:       info.Provider.ProviderID,
+		PublicProviderID: strings.TrimSpace(info.Provider.PublicProviderID),
+		TeamID:           fmt.Sprintf("%d", info.Provider.ProviderID),
+		UserEmail:        strings.TrimSpace(info.User.EmailAddress),
+		ServiceKey:       serviceKey,
 	}, nil
 }
 
@@ -1072,6 +1075,7 @@ func finalizeTwoFactor(ctx context.Context, session *AuthSession) error {
 		return err
 	}
 	session.ProviderID = info.Provider.ProviderID
+	session.PublicProviderID = strings.TrimSpace(info.Provider.PublicProviderID)
 	session.TeamID = fmt.Sprintf("%d", info.Provider.ProviderID)
 	session.UserEmail = strings.TrimSpace(info.User.EmailAddress)
 	return nil

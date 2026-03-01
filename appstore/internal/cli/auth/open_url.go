@@ -34,7 +34,7 @@ func openURL(target string) error {
 		cmd = exec.Command("xdg-open", target)
 	}
 
-	if err := cmd.Start(); err != nil {
+	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("open URL: %w", err)
 	}
 	return nil

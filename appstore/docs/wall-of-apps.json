@@ -166,6 +166,13 @@
     "platform": ["iOS", "macOS"]
   },
   {
+    "app": "Popcorn Stack: Track Watchlist",
+    "link": "https://apps.apple.com/app/id6759187614",
+    "creator": "maail",
+    "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/4f/b6/ed/4fb6edea-943d-13e3-3753-b99ee1920c7b/AppIcon-0-0-1x_U007emarketing-0-11-0-85-220.png/512x512bb.jpg",
+    "platform": ["iOS"]
+  },
+  {
     "app": "Positive",
     "link": "https://apps.apple.com/us/app/positive/id653287635",
     "creator": "DanielStormApps",
@@ -243,6 +250,20 @@
     "platform": ["macOS"]
   },
   {
+    "app": "Tamloot",
+    "link": "https://apps.apple.com/il/app/tamloot/id6758220887",
+    "creator": "shalomma",
+    "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/26/a3/f7/26a3f7f9-3cb6-dc8e-fcbd-0fc93630dd4c/AppIcon-0-0-1x_U007ephone-0-1-85-220.png/512x512bb.jpg",
+    "platform": ["iOS"]
+  },
+  {
+    "app": "TickerPad",
+    "link": "https://apps.apple.com/app/id1578860989",
+    "creator": "daimajia",
+    "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/3f/a0/10/3fa0108a-9671-6045-d0bb-a546a27645f5/AppIcon-0-0-85-220-0-0-5-0-2x-0-0-0.png/512x512bb.jpg",
+    "platform": ["macOS"]
+  },
+  {
     "app": "Timefall",
     "link": "https://apps.apple.com/app/id6757712804",
     "creator": "vatrueshka",
@@ -255,6 +276,13 @@
     "creator": "framara",
     "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/fe/ad/91/fead91ef-1204-d746-c0ba-fee77a3fbcb8/ToMe_Liquid-0-0-1x_U007epad-0-1-sRGB-85-220.png/512x512bb.jpg",
     "platform": ["iOS", "macOS"]
+  },
+  {
+    "app": "Torqs",
+    "link": "https://apps.apple.com/us/app/torqs/id6754500631",
+    "creator": "jathadon",
+    "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/bd/14/24/bd1424c2-2e5d-3607-e4dc-50b293d196d0/AppIcon-0-0-1x_U007epad-0-1-85-220.png/512x512bb.jpg",
+    "platform": ["iOS"]
   },
   {
     "app": "TV Show Tracker",

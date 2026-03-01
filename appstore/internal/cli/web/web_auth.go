@@ -26,6 +26,8 @@ var (
 	submitTwoFactorCodeFn = webcore.SubmitTwoFactorCode
 	termReadPasswordFn    = term.ReadPassword
 	termIsTerminalFn      = term.IsTerminal
+	tryResumeSessionFn    = webcore.TryResumeSession
+	tryResumeLastFn       = webcore.TryResumeLastSession
 	resolveSessionFn      = resolveSession
 )
 
@@ -37,17 +39,7 @@ type webAuthStatus struct {
 	ProviderID    int64  `json:"providerId,omitempty"`
 }
 
-func readPasswordFromInput(useStdin bool) (string, error) {
-	if useStdin {
-		if termIsTerminalFn(int(os.Stdin.Fd())) {
-			return "", shared.UsageError("--password-stdin requires piped input; omit it to use the interactive password prompt")
-		}
-		data, err := io.ReadAll(os.Stdin)
-		if err != nil {
-			return "", fmt.Errorf("failed to read stdin: %w", err)
-		}
-		return strings.TrimSpace(string(data)), nil
-	}
+func readPasswordFromInput() (string, error) {
 	password := strings.TrimSpace(os.Getenv(webPasswordEnv))
 	if password != "" {
 		return password, nil
@@ -160,32 +152,36 @@ func loginWithOptionalTwoFactor(ctx context.Context, appleID, password, twoFacto
 	return nil, err
 }
 
-func resolveSession(ctx context.Context, appleID, password, twoFactorCode string, usePasswordStdin bool) (*webcore.AuthSession, string, error) {
+func resolveSession(ctx context.Context, appleID, password, twoFactorCode string) (*webcore.AuthSession, string, error) {
 	shared.ApplyRootLoggingOverrides()
 
 	appleID = strings.TrimSpace(appleID)
 	twoFactorCode = strings.TrimSpace(twoFactorCode)
 
 	if appleID != "" {
-		if resumed, ok, err := webcore.TryResumeSession(ctx, appleID); err == nil && ok {
+		if resumed, ok, err := tryResumeSessionFn(ctx, appleID); err == nil && ok {
+			return resumed, "cache", nil
+		}
+	} else {
+		if resumed, ok, err := tryResumeLastFn(ctx); err == nil && ok {
 			return resumed, "cache", nil
 		}
 	}
 
 	if appleID == "" {
-		return nil, "", shared.UsageError("--apple-id is required")
+		return nil, "", shared.UsageError("--apple-id is required when no cached web session is available")
 	}
 
 	password = strings.TrimSpace(password)
 	if password == "" {
 		var err error
-		password, err = readPasswordFromInput(usePasswordStdin)
+		password, err = readPasswordFromInput()
 		if err != nil {
 			return nil, "", err
 		}
 	}
 	if password == "" {
-		return nil, "", shared.UsageError("password is required: run in a terminal for an interactive prompt, provide --password-stdin, or set ASC_WEB_PASSWORD")
+		return nil, "", shared.UsageError("password is required: run in a terminal for an interactive prompt or set ASC_WEB_PASSWORD")
 	}
 
 	session, err := loginWithOptionalTwoFactor(ctx, appleID, password, twoFactorCode)
@@ -230,13 +226,12 @@ func WebAuthLoginCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("web auth login", flag.ExitOnError)
 
 	appleID := fs.String("apple-id", "", "Apple ID email")
-	passwordStdin := fs.Bool("password-stdin", false, "Read Apple ID password from stdin")
 	twoFactorCode := fs.String("two-factor-code", "", "2FA code for accounts requiring verification")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "login",
-		ShortUsage: "asc web auth login --apple-id EMAIL [--password-stdin] [--two-factor-code CODE]",
+		ShortUsage: "asc web auth login --apple-id EMAIL [--two-factor-code CODE]",
 		ShortHelp:  "EXPERIMENTAL: Authenticate unofficial Apple web session.",
 		LongHelp: `EXPERIMENTAL / UNOFFICIAL / DISCOURAGED
 
@@ -244,23 +239,21 @@ Authenticate using Apple web-session behavior for detached "asc web" workflows.
 
 Password input options:
   - secure interactive prompt (default and recommended for local use)
-  - --password-stdin (automation/CI)
   - ASC_WEB_PASSWORD environment variable
 
 ` + webWarningText + `
 
 Examples:
   asc web auth login --apple-id "user@example.com"
-  asc web auth login --apple-id "user@example.com" --password-stdin
   ASC_WEB_PASSWORD="..." asc web auth login --apple-id "user@example.com"
-  asc web auth login --apple-id "user@example.com" --password-stdin --two-factor-code 123456`,
+  asc web auth login --apple-id "user@example.com" --two-factor-code 123456`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			requestCtx, cancel := shared.ContextWithTimeout(ctx)
 			defer cancel()
 
-			session, source, err := resolveSessionFn(requestCtx, *appleID, "", *twoFactorCode, *passwordStdin)
+			session, source, err := resolveSessionFn(requestCtx, *appleID, "", *twoFactorCode)
 			if err != nil {
 				return err
 			}
