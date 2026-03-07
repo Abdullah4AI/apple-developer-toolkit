@@ -37,6 +37,7 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/feedback"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/finance"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/gamecenter"
+	hookscli "github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/hooks"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/iap"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/initcmd"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/insights"
@@ -177,6 +178,7 @@ func Subcommands(version string) []*ffcli.Command {
 		promotedpurchases.PromotedPurchasesCommand(),
 		migrate.MigrateCommand(),
 		notify.NotifyCommand(),
+		hookscli.HooksCommand(),
 		gamecenter.GameCenterCommand(),
 		schema.SchemaCommand(),
 		VersionCommand(version),

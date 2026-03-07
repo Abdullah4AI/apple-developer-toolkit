@@ -84,6 +84,40 @@ func main() {
 	}
 	rootCmd.AddCommand(storeCmd)
 
+	// Add hooks command (passthrough to store's hooks subcommand)
+	hooksCmd := &cobra.Command{
+		Use:                "hooks",
+		Short:              "Manage lifecycle hooks",
+		Aliases:            []string{"h"},
+		DisableFlagParsing: true,
+		RunE: func(c *cobra.Command, args []string) error {
+			storeArgs := append([]string{"hooks"}, args...)
+			exitCode := appstorecmd.Run(storeArgs, versionString())
+			if exitCode != 0 {
+				os.Exit(exitCode)
+			}
+			return nil
+		},
+	}
+	rootCmd.AddCommand(hooksCmd)
+
+	// Add notify command (passthrough to store's notify subcommand)
+	notifyCmd := &cobra.Command{
+		Use:                "notify",
+		Short:              "Send notifications to external services",
+		Aliases:            []string{"n"},
+		DisableFlagParsing: true,
+		RunE: func(c *cobra.Command, args []string) error {
+			storeArgs := append([]string{"notify"}, args...)
+			exitCode := appstorecmd.Run(storeArgs, versionString())
+			if exitCode != 0 {
+				os.Exit(exitCode)
+			}
+			return nil
+		},
+	}
+	rootCmd.AddCommand(notifyCmd)
+
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
 	}

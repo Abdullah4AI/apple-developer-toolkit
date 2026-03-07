@@ -13,6 +13,7 @@ import (
 
 	"os/user"
 
+	"github.com/Abdullah4AI/apple-developer-toolkit/internal/hooks"
 	"github.com/Abdullah4AI/apple-developer-toolkit/swiftship/internal/claude"
 	"github.com/Abdullah4AI/apple-developer-toolkit/swiftship/internal/config"
 	"github.com/Abdullah4AI/apple-developer-toolkit/swiftship/internal/integrations"
@@ -176,10 +177,20 @@ func platformBundleIDSuffix(platform string) string {
 func (s *Service) build(ctx context.Context, prompt string, images []string) error {
 	terminal.Header("Nanowave Build")
 
+	hooks.FireSafe(ctx, hooks.EventBuildStart, map[string]string{
+		"APP_NAME": truncateStr(prompt, 50),
+		"PLATFORM": "ios",
+	})
+
 	pipeline := orchestration.NewPipeline(s.claude, s.config, s.model)
 	pipeline.SetManager(s.manager)
 	result, err := pipeline.Build(ctx, prompt, images)
 	if err != nil {
+		hooks.FireSafe(ctx, hooks.EventBuildCompileFailure, map[string]string{
+			"APP_NAME": truncateStr(prompt, 50),
+			"STATUS":   "failure",
+			"ERROR":    err.Error(),
+		})
 		terminal.Error(fmt.Sprintf("Build failed: %v", err))
 		return err
 	}
@@ -218,6 +229,13 @@ func (s *Service) build(ctx context.Context, prompt string, images []string) err
 			Content: buildSummary,
 		})
 	}
+
+	hooks.FireSafe(ctx, hooks.EventBuildDone, map[string]string{
+		"APP_NAME":        result.AppName,
+		"STATUS":          "success",
+		"PLATFORM":        result.Platform,
+		"FILES_GENERATED": fmt.Sprintf("%d", result.CompletedFiles),
+	})
 
 	// Print results
 	fmt.Println()
@@ -303,10 +321,19 @@ func (s *Service) Fix(ctx context.Context) error {
 	terminal.Header("Nanowave Fix")
 	terminal.Detail("Project", projectName(project))
 
+	hooks.FireSafe(ctx, hooks.EventBuildFixStart, map[string]string{
+		"APP_NAME": projectName(project),
+	})
+
 	pipeline := orchestration.NewPipeline(s.claude, s.config, s.model)
 	pipeline.SetManager(s.manager)
 	result, err := pipeline.Fix(ctx, project.ProjectPath, project.SessionID)
 	if err != nil {
+		hooks.FireSafe(ctx, hooks.EventBuildCompileFailure, map[string]string{
+			"APP_NAME": projectName(project),
+			"STATUS":   "failure",
+			"ERROR":    err.Error(),
+		})
 		terminal.Error(fmt.Sprintf("Fix failed: %v", err))
 		return err
 	}
@@ -319,6 +346,11 @@ func (s *Service) Fix(ctx context.Context) error {
 		project.SessionID = result.SessionID
 		s.projectStore.Save(project)
 	}
+
+	hooks.FireSafe(ctx, hooks.EventBuildFixDone, map[string]string{
+		"APP_NAME": projectName(project),
+		"STATUS":   "success",
+	})
 
 	return nil
 }
@@ -483,6 +515,11 @@ func (s *Service) Run(ctx context.Context) error {
 		terminal.Success("Build succeeded")
 	}
 
+	hooks.FireSafe(ctx, hooks.EventBuildRunStart, map[string]string{
+		"APP_NAME": appName,
+		"PLATFORM": platform,
+	})
+
 	bundleID := project.BundleID
 	if bundleID == "" {
 		bundleID = fmt.Sprintf("com.%s.%s", sanitizeBundleID(currentUsername()), strings.ToLower(appName))
@@ -510,6 +547,10 @@ func (s *Service) Run(ctx context.Context) error {
 
 		spinner.Stop()
 		terminal.Success("Launched macOS app")
+		hooks.FireSafe(ctx, hooks.EventBuildRunSuccess, map[string]string{
+			"APP_NAME": appName,
+			"PLATFORM": platform,
+		})
 
 		// Stream native macOS logs
 		watchDuration := runLogWatchDuration()
@@ -564,6 +605,10 @@ func (s *Service) Run(ctx context.Context) error {
 
 		spinner.Stop()
 		terminal.Success(fmt.Sprintf("Launched on %s", simulator))
+		hooks.FireSafe(ctx, hooks.EventBuildRunSuccess, map[string]string{
+			"APP_NAME": appName,
+			"PLATFORM": platform,
+		})
 
 		watchDuration := runLogWatchDuration()
 		if watchDuration > 0 {
