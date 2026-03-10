@@ -44,7 +44,7 @@ asc <subcommand> [flags]
 
 ### Experimental Commands
 
-- `web` - EXPERIMENTAL: Unofficial web-session workflows (discouraged).
+- `web` - [experimental] Unofficial web-session workflows (discouraged).
 
 ### Analytics and Finance
 
@@ -52,8 +52,6 @@ asc <subcommand> [flags]
 - `insights` - Generate weekly and daily insights from App Store data sources.
 - `finance` - Download payments and financial reports.
 - `performance` - Access performance metrics and diagnostic logs.
-- `feedback` - List TestFlight feedback from beta testers.
-- `crashes` - List and export TestFlight crash reports.
 
 ### App Management
 
@@ -64,7 +62,7 @@ asc <subcommand> [flags]
 - `app-infos` - List app info records for an app.
 - `versions` - Manage App Store versions.
 - `localizations` - Manage App Store localization metadata.
-- `screenshots` - Capture, frame, review (experimental local workflow), and upload App Store screenshots.
+- `screenshots` - Upload and manage App Store screenshots; local capture/frame workflow is [experimental].
 - `video-previews` - Manage App Store app preview videos.
 - `background-assets` - Manage background assets.
 - `product-pages` - Manage custom product pages and product page experiments.
@@ -86,7 +84,7 @@ asc <subcommand> [flags]
 
 ### TestFlight and Builds
 
-- `testflight` - Manage TestFlight resources.
+- `testflight` - Manage TestFlight workflows.
 - `builds` - Manage builds in App Store Connect.
 - `build-bundles` - Manage build bundles and App Clip data.
 - `pre-release-versions` - Manage TestFlight pre-release versions.
@@ -109,9 +107,6 @@ asc <subcommand> [flags]
 - `iap` - Manage in-app purchases in App Store Connect.
 - `app-events` - Manage App Store in-app events.
 - `subscriptions` - Manage subscription groups and subscriptions.
-- `offer-codes` - Manage subscription offer codes.
-- `win-back-offers` - Manage win-back offers for subscriptions.
-- `promoted-purchases` - Manage promoted purchases for subscriptions and in-app purchases.
 
 ### Signing
 

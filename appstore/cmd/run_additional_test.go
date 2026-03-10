@@ -226,6 +226,14 @@ func TestRootCommand_UsageGroupsSubcommands(t *testing.T) {
 		t.Fatalf("expected grouped analytics/finance commands, got %q", usage)
 	}
 
+	if strings.Contains(usage, "  offer-codes:") || strings.Contains(usage, "  win-back-offers:") || strings.Contains(usage, "  promoted-purchases:") {
+		t.Fatalf("expected deprecated monetization shims to be hidden from primary root usage, got %q", usage)
+	}
+
+	if !strings.Contains(usage, "  subscriptions:") {
+		t.Fatalf("expected subscriptions command to remain visible in root usage, got %q", usage)
+	}
+
 	if !strings.Contains(usage, "  screenshots:") || !strings.Contains(usage, "  video-previews:") {
 		t.Fatalf("expected screenshots and video-previews commands in root usage, got %q", usage)
 	}

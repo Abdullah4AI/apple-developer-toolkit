@@ -224,15 +224,12 @@ func DefaultUsageFunc(c *ffcli.Command) string {
 
 	// FLAGS
 	if c.FlagSet != nil {
-		hasFlags := false
-		c.FlagSet.VisitAll(func(*flag.Flag) {
-			hasFlags = true
-		})
-		if hasFlags {
+		visibleFlags := VisibleHelpFlags(c.FlagSet)
+		if len(visibleFlags) > 0 {
 			b.WriteString(Bold("FLAGS"))
 			b.WriteString("\n")
 			tw := tabwriter.NewWriter(&b, 0, 2, 2, ' ', 0)
-			c.FlagSet.VisitAll(func(f *flag.Flag) {
+			for _, f := range visibleFlags {
 				def := f.DefValue
 				usage := f.Usage
 				if f.Name == "output" {
@@ -240,12 +237,58 @@ func DefaultUsageFunc(c *ffcli.Command) string {
 				}
 				if def != "" {
 					fmt.Fprintf(tw, "  --%-12s %s (default: %s)\n", f.Name, usage, def)
-					return
+					continue
 				}
 				fmt.Fprintf(tw, "  --%-12s %s\n", f.Name, usage)
-			})
+			}
 			tw.Flush()
 			b.WriteString("\n")
+		}
+	}
+
+	return b.String()
+}
+
+// DeprecatedUsageFunc returns a compact usage string for compatibility aliases.
+// It intentionally omits flags and subcommands so help output only points
+// callers to the canonical command path.
+func DeprecatedUsageFunc(c *ffcli.Command) string {
+	var b strings.Builder
+
+	shortHelp := strings.TrimSpace(c.ShortHelp)
+	longHelp := strings.TrimSpace(c.LongHelp)
+	if shortHelp == "" && longHelp != "" {
+		shortHelp = longHelp
+		longHelp = ""
+	}
+
+	if shortHelp != "" {
+		b.WriteString(Bold("DESCRIPTION"))
+		b.WriteString("\n")
+		b.WriteString("  ")
+		b.WriteString(shortHelp)
+		b.WriteString("\n\n")
+	}
+
+	usage := strings.TrimSpace(c.ShortUsage)
+	if usage == "" {
+		usage = strings.TrimSpace(c.Name)
+	}
+	if usage != "" {
+		b.WriteString(Bold("USAGE"))
+		b.WriteString("\n")
+		b.WriteString("  ")
+		b.WriteString(usage)
+		b.WriteString("\n\n")
+	}
+
+	if longHelp != "" {
+		if shortHelp != "" && strings.HasPrefix(longHelp, shortHelp) {
+			longHelp = strings.TrimSpace(strings.TrimPrefix(longHelp, shortHelp))
+		}
+		if longHelp != "" {
+			b.WriteString(longHelp)
+			b.WriteString("\n\n")
 		}
 	}
 

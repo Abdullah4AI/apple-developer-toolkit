@@ -7,8 +7,6 @@ import (
 	"os"
 	"strings"
 	"time"
-
-	"github.com/Abdullah4AI/apple-developer-toolkit/internal/hooks"
 )
 
 // MaxCallDepth is the maximum nesting depth for sub-workflow calls.
@@ -95,11 +93,6 @@ func Run(ctx context.Context, def *Definition, opts RunOptions) (*RunResult, err
 
 	env := mergeEnv(def.Env, wf.Env, opts.Params)
 
-	hooks.FireSafe(ctx, hooks.EventPipelineStart, map[string]string{
-		"PIPELINE_NAME": opts.WorkflowName,
-		"STEPS_COUNT":   fmt.Sprintf("%d", len(wf.Steps)),
-	})
-
 	result := &RunResult{
 		Workflow: opts.WorkflowName,
 		Steps:    make([]StepResult, 0),
@@ -128,12 +121,6 @@ func Run(ctx context.Context, def *Definition, opts RunOptions) (*RunResult, err
 		result.Status = "error"
 		result.Error = err.Error()
 
-		hooks.FireSafe(ctx, hooks.EventPipelineFailure, map[string]string{
-			"PIPELINE_NAME": opts.WorkflowName,
-			"ERROR":         err.Error(),
-			"STATUS":        "error",
-		})
-
 		recordErrorHook(ctx, def.Error, env, opts, result)
 		return result, err
 	}
@@ -152,13 +139,6 @@ func Run(ctx context.Context, def *Definition, opts RunOptions) (*RunResult, err
 	}
 
 	result.Status = "ok"
-
-	hooks.FireSafe(ctx, hooks.EventPipelineDone, map[string]string{
-		"PIPELINE_NAME": opts.WorkflowName,
-		"STATUS":        "ok",
-		"DURATION_SEC":  fmt.Sprintf("%d", int(time.Since(start).Seconds())),
-	})
-
 	return result, nil
 }
 
@@ -278,12 +258,6 @@ func executeSteps(ctx context.Context, def *Definition, workflowName string, ste
 		sr.Status = "ok"
 		sr.DurationMS = time.Since(stepStart).Milliseconds()
 		result.Steps = append(result.Steps, sr)
-
-		hooks.FireSafe(ctx, hooks.EventPipelineStepDone, map[string]string{
-			"PIPELINE_NAME": opts.WorkflowName,
-			"STEP_NAME":     step.Name,
-			"STATUS":        "ok",
-		})
 	}
 	return nil
 }

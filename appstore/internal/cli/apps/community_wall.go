@@ -42,6 +42,7 @@ type communityWallEntry struct {
 	App      string   `json:"app"`
 	Link     string   `json:"link"`
 	Creator  string   `json:"creator"`
+	Icon     string   `json:"icon,omitempty"`
 	Platform []string `json:"platform"`
 }
 
@@ -49,28 +50,41 @@ type communityWallEntry struct {
 func AppsWallCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("apps wall", flag.ExitOnError)
 
-	output := shared.BindOutputFlagsWith(fs, "output", defaultCommunityWallOutput, "Output format: table (default), json, markdown")
-	sortBy := fs.String("sort", defaultCommunityWallSort, "Sort by name or -name")
-	limit := fs.Int("limit", 0, "Maximum number of apps to include (1-200)")
-	includePlatforms := fs.String("include-platforms", "", "Filter by platform label(s), comma-separated")
+	output, sortBy, limit, includePlatforms := appsWallFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "wall",
 		ShortUsage: "asc apps wall [flags]",
-		ShortHelp:  "Show the community Wall of Apps from project metadata.",
+		ShortHelp:  "Show or contribute to the community Wall of Apps.",
 		LongHelp: `Show the community Wall of Apps from project metadata.
 
 Examples:
   asc apps wall
   asc apps wall --output markdown
   asc apps wall --include-platforms iOS,macOS --limit 20
-  asc apps wall --sort -name`,
+  asc apps wall --sort -name
+  asc apps wall submit --app "1234567890" --platform "iOS,macOS" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
+		Subcommands: []*ffcli.Command{
+			AppsWallSubmitCommand(fs),
+		},
 		Exec: func(ctx context.Context, args []string) error {
+			if len(args) > 0 {
+				fmt.Fprintf(os.Stderr, "Error: unknown subcommand %q\n", strings.TrimSpace(args[0]))
+				return flag.ErrHelp
+			}
 			return appsCommunityWall(ctx, *output.Output, *output.Pretty, *sortBy, *limit, *includePlatforms)
 		},
 	}
+}
+
+func appsWallFlags(fs *flag.FlagSet) (output shared.OutputFlags, sortBy *string, limit *int, includePlatforms *string) {
+	output = shared.BindOutputFlagsWith(fs, "output", defaultCommunityWallOutput, "Output format: table (default), json, markdown")
+	sortBy = fs.String("sort", defaultCommunityWallSort, "Sort by name or -name")
+	limit = fs.Int("limit", 0, "Maximum number of apps to include (1-200)")
+	includePlatforms = fs.String("include-platforms", "", "Filter by platform label(s), comma-separated")
+	return
 }
 
 func appsCommunityWall(ctx context.Context, output string, pretty bool, sortBy string, limit int, includePlatforms string) error {
@@ -241,7 +255,7 @@ func normalizeCommunityPlatforms(platforms []string) []string {
 		if value == "" {
 			continue
 		}
-		if !containsCommunityPlatformFold(normalized, value) {
+		if !containsCommunityValueFold(normalized, value) {
 			normalized = append(normalized, value)
 		}
 	}
@@ -249,18 +263,7 @@ func normalizeCommunityPlatforms(platforms []string) []string {
 }
 
 func normalizeCommunityPlatform(value string) string {
-	trimmed := strings.TrimSpace(value)
-	if trimmed == "" {
-		return ""
-	}
-
-	key := strings.ToLower(trimmed)
-	key = strings.ReplaceAll(key, "-", "_")
-	key = strings.ReplaceAll(key, " ", "")
-	if normalized, ok := communityWallPlatformAliases[key]; ok {
-		return normalized
-	}
-	return trimmed
+	return normalizeCommunityLabelWithAliases(value, communityWallPlatformAliases)
 }
 
 func normalizeCommunityPlatformFilters(values []string) map[string]struct{} {
@@ -305,7 +308,22 @@ func hasCommunityPlatform(platforms []string, allowed map[string]struct{}) bool 
 	return false
 }
 
-func containsCommunityPlatformFold(values []string, needle string) bool {
+func normalizeCommunityLabelWithAliases(value string, aliases map[string]string) string {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return ""
+	}
+
+	key := strings.ToLower(trimmed)
+	key = strings.ReplaceAll(key, "-", "_")
+	key = strings.ReplaceAll(key, " ", "")
+	if normalized, ok := aliases[key]; ok {
+		return normalized
+	}
+	return trimmed
+}
+
+func containsCommunityValueFold(values []string, needle string) bool {
 	for _, value := range values {
 		if strings.EqualFold(value, needle) {
 			return true

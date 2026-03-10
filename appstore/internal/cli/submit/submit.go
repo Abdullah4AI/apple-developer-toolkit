@@ -11,7 +11,6 @@ import (
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
-	"github.com/Abdullah4AI/apple-developer-toolkit/internal/hooks"
 )
 
 func SubmitCommand() *ffcli.Command {
@@ -107,12 +106,6 @@ Examples:
 				return fmt.Errorf("submit create: failed to attach build: %w", err)
 			}
 
-			hooks.FireSafe(requestCtx, hooks.EventStoreSubmitStart, map[string]string{
-				"APP_ID":     resolvedAppID,
-				"VERSION_ID": resolvedVersionID,
-				"BUILD_ID":   strings.TrimSpace(*buildID),
-			})
-
 			// Cancel stale READY_FOR_REVIEW submissions to avoid orphans from prior failed attempts.
 			cancelStaleReviewSubmissions(requestCtx, client, resolvedAppID, normalizedPlatform)
 
@@ -132,20 +125,8 @@ Examples:
 			// Step 3: Submit for review
 			submitResp, err := client.SubmitReviewSubmission(requestCtx, reviewSubmission.Data.ID)
 			if err != nil {
-				hooks.FireSafe(requestCtx, hooks.EventStoreSubmitFailure, map[string]string{
-					"APP_ID": resolvedAppID,
-					"STATUS": "failure",
-					"ERROR":  err.Error(),
-				})
 				return fmt.Errorf("submit create: failed to submit for review: %w", err)
 			}
-
-			hooks.FireSafe(requestCtx, hooks.EventStoreSubmitDone, map[string]string{
-				"APP_ID":        resolvedAppID,
-				"VERSION_ID":    resolvedVersionID,
-				"SUBMISSION_ID": submitResp.Data.ID,
-				"STATUS":        "success",
-			})
 
 			submittedDate := submitResp.Data.Attributes.SubmittedDate
 			var createdDatePtr *string

@@ -84,9 +84,9 @@ func WinBackOffersCommand() *ffcli.Command {
 		LongHelp: `Manage win-back offers for subscriptions.
 
 Examples:
-  asc win-back-offers list --subscription "SUB_ID"
+  asc win-back-offers list --subscription-id "SUB_ID"
   asc win-back-offers get --id "OFFER_ID"
-  asc win-back-offers create --subscription "SUB_ID" --reference-name "spring-2026" --offer-id "OFFER-1" --duration ONE_MONTH --offer-mode PAY_AS_YOU_GO --period-count 1 --eligibility-paid-months 6 --eligibility-last-subscribed-min 3 --eligibility-last-subscribed-max 12 --start-date "2026-02-01" --priority HIGH --price "PRICE_ID"
+  asc win-back-offers create --subscription-id "SUB_ID" --reference-name "spring-2026" --offer-id "OFFER-1" --duration ONE_MONTH --offer-mode PAY_AS_YOU_GO --period-count 1 --eligibility-paid-months 6 --eligibility-last-subscribed-min 3 --eligibility-last-subscribed-max 12 --start-date "2026-02-01" --priority HIGH --price "PRICE_ID"
   asc win-back-offers update --id "OFFER_ID" --priority NORMAL
   asc win-back-offers prices --id "OFFER_ID"`,
 		FlagSet:   fs,
@@ -111,7 +111,7 @@ Examples:
 func WinBackOffersListCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("list", flag.ExitOnError)
 
-	subscriptionID := fs.String("subscription", "", "Subscription ID")
+	subscriptionID := fs.String("subscription-id", "", "Subscription ID")
 	fields := fs.String("fields", "", "Fields to include: "+strings.Join(winBackOfferFieldsList(), ", "))
 	priceFields := fs.String("price-fields", "", "Price fields to include: "+strings.Join(winBackOfferPriceFieldsList(), ", "))
 	include := fs.String("include", "", "Include related resources: "+strings.Join(winBackOfferIncludeList(), ", "))
@@ -128,9 +128,9 @@ func WinBackOffersListCommand() *ffcli.Command {
 		LongHelp: `List win-back offers for a subscription.
 
 Examples:
-  asc win-back-offers list --subscription "SUB_ID"
-  asc win-back-offers list --subscription "SUB_ID" --limit 50
-  asc win-back-offers list --subscription "SUB_ID" --include prices --price-fields territory --prices-limit 10`,
+  asc win-back-offers list --subscription-id "SUB_ID"
+  asc win-back-offers list --subscription-id "SUB_ID" --limit 50
+  asc win-back-offers list --subscription-id "SUB_ID" --include prices --price-fields territory --prices-limit 10`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -167,7 +167,7 @@ Examples:
 
 			id := strings.TrimSpace(*subscriptionID)
 			if id == "" && strings.TrimSpace(*next) == "" {
-				fmt.Fprintln(os.Stderr, "Error: --subscription is required")
+				fmt.Fprintln(os.Stderr, "Error: --subscription-id is required")
 				return flag.ErrHelp
 			}
 
@@ -239,7 +239,7 @@ Examples:
 func WinBackOffersCreateCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("create", flag.ExitOnError)
 
-	subscriptionID := fs.String("subscription", "", "Subscription ID")
+	subscriptionID := fs.String("subscription-id", "", "Subscription ID")
 	referenceName := fs.String("reference-name", "", "Reference name")
 	offerID := fs.String("offer-id", "", "Offer ID")
 	duration := fs.String("duration", "", "Offer duration: "+strings.Join(winBackOfferDurationValues, ", "))
@@ -268,13 +268,13 @@ func WinBackOffersCreateCommand() *ffcli.Command {
 		LongHelp: `Create a win-back offer.
 
 Examples:
-  asc win-back-offers create --subscription "SUB_ID" --reference-name "spring-2026" --offer-id "OFFER-1" --duration ONE_MONTH --offer-mode PAY_AS_YOU_GO --period-count 1 --eligibility-paid-months 6 --eligibility-last-subscribed-min 3 --eligibility-last-subscribed-max 12 --start-date "2026-02-01" --priority HIGH --price "PRICE_ID"`,
+  asc win-back-offers create --subscription-id "SUB_ID" --reference-name "spring-2026" --offer-id "OFFER-1" --duration ONE_MONTH --offer-mode PAY_AS_YOU_GO --period-count 1 --eligibility-paid-months 6 --eligibility-last-subscribed-min 3 --eligibility-last-subscribed-max 12 --start-date "2026-02-01" --priority HIGH --price "PRICE_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			subscription := strings.TrimSpace(*subscriptionID)
 			if subscription == "" {
-				fmt.Fprintln(os.Stderr, "Error: --subscription is required")
+				fmt.Fprintln(os.Stderr, "Error: --subscription-id is required")
 				return flag.ErrHelp
 			}
 
@@ -784,14 +784,14 @@ func WinBackOffersRelationshipsCommand() *ffcli.Command {
 	return shared.BuildPaginatedListCommand(shared.PaginatedListCommandConfig{
 		FlagSetName: "relationships",
 		Name:        "relationships",
-		ShortUsage:  "asc win-back-offers relationships --subscription SUB_ID [flags]",
+		ShortUsage:  "asc win-back-offers relationships --subscription-id SUB_ID [flags]",
 		ShortHelp:   "List win-back offer relationships for a subscription.",
 		LongHelp: `List win-back offer relationships for a subscription.
 
 Examples:
-  asc win-back-offers relationships --subscription "SUB_ID"
-  asc win-back-offers relationships --subscription "SUB_ID" --paginate`,
-		ParentFlag:  "subscription",
+  asc win-back-offers relationships --subscription-id "SUB_ID"
+  asc win-back-offers relationships --subscription-id "SUB_ID" --paginate`,
+		ParentFlag:  "subscription-id",
 		ParentUsage: "Subscription ID",
 		LimitMax:    winBackOffersMaxLimit,
 		ErrorPrefix: "win-back-offers relationships",

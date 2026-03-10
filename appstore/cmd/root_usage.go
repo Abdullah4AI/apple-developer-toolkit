@@ -27,7 +27,7 @@ var rootUsageGroups = []rootCommandGroup{
 	},
 	{
 		title:    "ANALYTICS & FINANCE COMMANDS",
-		commands: []string{"analytics", "insights", "finance", "performance", "feedback", "crashes"},
+		commands: []string{"analytics", "insights", "finance", "performance"},
 	},
 	{
 		title: "APP MANAGEMENT COMMANDS",
@@ -43,7 +43,7 @@ var rootUsageGroups = []rootCommandGroup{
 	{
 		title: "TESTFLIGHT & BUILD COMMANDS",
 		commands: []string{
-			"testflight", "builds", "build-bundles", "pre-release-versions",
+			"testflight", "feedback", "crashes", "builds", "build-bundles", "pre-release-versions",
 			"build-localizations", "beta-app-localizations", "beta-build-localizations",
 			"sandbox",
 		},
@@ -54,7 +54,7 @@ var rootUsageGroups = []rootCommandGroup{
 	},
 	{
 		title:    "MONETIZATION COMMANDS",
-		commands: []string{"iap", "app-events", "subscriptions", "offer-codes", "win-back-offers", "promoted-purchases"},
+		commands: []string{"iap", "app-events", "subscriptions"},
 	},
 	{
 		title:    "SIGNING COMMANDS",
@@ -127,6 +127,9 @@ func writeRootGroupedSubcommands(b *strings.Builder, subcommands []*ffcli.Comman
 
 	byName := make(map[string]*ffcli.Command, len(subcommands))
 	for _, sub := range subcommands {
+		if shouldHideRootCommand(sub) {
+			continue
+		}
 		byName[sub.Name] = sub
 	}
 
@@ -157,6 +160,9 @@ func writeRootGroupedSubcommands(b *strings.Builder, subcommands []*ffcli.Comman
 
 	additional := make([]*ffcli.Command, 0)
 	for _, sub := range subcommands {
+		if shouldHideRootCommand(sub) {
+			continue
+		}
 		if !rendered[sub.Name] {
 			additional = append(additional, sub)
 		}
@@ -173,6 +179,13 @@ func writeRootGroupedSubcommands(b *strings.Builder, subcommands []*ffcli.Comman
 	}
 	_ = tw.Flush()
 	b.WriteString("\n")
+}
+
+func shouldHideRootCommand(sub *ffcli.Command) bool {
+	if sub == nil {
+		return false
+	}
+	return strings.HasPrefix(strings.TrimSpace(sub.ShortHelp), "DEPRECATED:")
 }
 
 func writeRootFlags(b *strings.Builder, fs *flag.FlagSet) {

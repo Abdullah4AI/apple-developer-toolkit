@@ -43,9 +43,8 @@ Do not memorize flags. Always use `--help` for the current interface.
 | Generate ASC.md | `asc init` |
 | List apps | `asc apps` |
 | List builds | `asc builds list --app "APP_ID"` |
-| List TestFlight apps | `asc testflight apps list` |
-| List beta groups | `asc testflight beta-groups list --app "APP_ID"` |
-| List internal beta groups | `asc testflight beta-groups list --app "APP_ID" --internal` |
+| List TestFlight groups | `asc testflight groups list --app "APP_ID"` |
+| List internal TestFlight groups | `asc testflight groups list --app "APP_ID" --internal` |
 | Release (full pipeline) | `asc release run --app "APP_ID" --version "VERSION" --build "BUILD_ID" --metadata-dir "./metadata/version/VERSION" --dry-run` |
 | Submit for review (low-level) | `asc submit create --app "APP_ID" --version "VERSION" --build "BUILD_ID" --confirm` |
 | Weekly insights summary | `asc insights weekly --app "APP_ID" --source analytics --week "YYYY-MM-DD"` |
@@ -85,8 +84,8 @@ asc submit create --app "APP_ID" --version "1.0.0" --build "BUILD_ID" --confirm
 ### Distribute to TestFlight Group
 
 ```bash
-asc testflight beta-groups list --app "APP_ID"
-asc testflight beta-groups list --app "APP_ID" --internal
+asc testflight groups list --app "APP_ID"
+asc testflight groups list --app "APP_ID" --internal
 asc builds add-groups --build "BUILD_ID" --group "GROUP_ID"
 ```
 
@@ -104,7 +103,7 @@ Use `asc <command> --help` for subcommands and flags.
 
 - `auth` - Manage authentication for the App Store Connect API.
 - `doctor` - Diagnose authentication configuration issues.
-- `web` - Experimental/unofficial Apple web-session `/iris` workflows (discouraged; detached from official API-key flows). Uses low-rate calls, user-owned Apple ID session scoping, and signed-URL redaction by default.
+- `web` - `[experimental]` Unofficial Apple web-session `/iris` workflows (discouraged; not part of the official API). Uses low-rate calls, user-owned Apple ID sessions, and signed-URL redaction by default.
 - `account` - Inspect account-level health and access signals.
 - `install-skills` - Install the asc skill pack for App Store Connect workflows.
 - `init` - Initialize asc helper docs in the current repo.
@@ -113,8 +112,6 @@ Use `asc <command> --help` for subcommands and flags.
 - `status` - Show a release pipeline dashboard for an app.
 - `insights` - Generate weekly insights from App Store data sources.
 - `release-notes` - Generate and manage App Store release notes.
-- `feedback` - List TestFlight feedback from beta testers.
-- `crashes` - List and export TestFlight crash reports.
 - `reviews` - List and manage App Store customer reviews.
 - `review` - Manage App Store review details, attachments, and submissions.
 - `analytics` - Request and download analytics and sales reports.
@@ -134,12 +131,10 @@ Use `asc <command> --help` for subcommands and flags.
 - `certificates` - Manage signing certificates.
 - `pass-type-ids` - Manage pass type IDs.
 - `profiles` - Manage provisioning profiles.
-- `offer-codes` - Manage subscription offer codes.
-- `win-back-offers` - Manage win-back offers for subscriptions.
 - `users` - Manage users and invitations in App Store Connect.
 - `actors` - Lookup actors (users, API keys) by ID.
 - `devices` - Manage devices in App Store Connect.
-- `testflight` - Manage TestFlight resources.
+- `testflight` - Manage TestFlight workflows.
 - `builds` - Manage builds (TestFlight/App Store).
 - `build-bundles` - Manage build bundles and App Clip data.
 - `publish` - End-to-end publish workflows for TestFlight and App Store.
@@ -157,7 +152,7 @@ Use `asc <command> --help` for subcommands and flags.
 - `pre-release-versions` - Manage TestFlight pre-release versions.
 - `localizations` - Manage App Store localization metadata.
 - `metadata` - Pull, validate, and push canonical metadata workflows.
-- `screenshots` - Capture, frame, review, and upload App Store screenshots (local automation is experimental).
+- `screenshots` - Upload and manage App Store screenshots; local capture/frame workflow is `[experimental]`.
 - `background-assets` - Manage background assets.
 - `build-localizations` - Manage build release notes localizations.
 - `beta-app-localizations` - Manage TestFlight beta app localizations.
@@ -175,7 +170,6 @@ Use `asc <command> --help` for subcommands and flags.
 - `age-rating` - Manage App Store age rating declarations.
 - `accessibility` - Manage accessibility declarations.
 - `encryption` - Manage app encryption declarations and documents.
-- `promoted-purchases` - Manage promoted purchases for subscriptions and in-app purchases.
 - `migrate` - Migrate metadata from/to fastlane format.
 - `validate` - Run pre-submission metadata and asset validation checks.
 - `notify` - Send notifications to external services.

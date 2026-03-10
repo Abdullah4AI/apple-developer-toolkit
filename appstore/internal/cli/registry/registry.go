@@ -37,7 +37,6 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/feedback"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/finance"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/gamecenter"
-	hookscli "github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/hooks"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/iap"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/initcmd"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/insights"
@@ -50,7 +49,6 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/nominations"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/notarization"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/notify"
-	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/offercodes"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/passtypeids"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/performance"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/preorders"
@@ -58,7 +56,6 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/pricing"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/productpages"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/profiles"
-	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/promotedpurchases"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/publish"
 	releasecmd "github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/release"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/releasenotes"
@@ -80,7 +77,6 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/videopreviews"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/web"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/webhooks"
-	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/winbackoffers"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/workflow"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/xcodecloud"
 )
@@ -134,8 +130,6 @@ func Subcommands(version string) []*ffcli.Command {
 		certificates.CertificatesCommand(),
 		passtypeids.PassTypeIDsCommand(),
 		profiles.ProfilesCommand(),
-		offercodes.OfferCodesCommand(),
-		winbackoffers.WinBackOffersCommand(),
 		users.UsersCommand(),
 		actors.ActorsCommand(),
 		devices.DevicesCommand(),
@@ -176,10 +170,8 @@ func Subcommands(version string) []*ffcli.Command {
 		agerating.AgeRatingCommand(),
 		accessibility.AccessibilityCommand(),
 		encryption.EncryptionCommand(),
-		promotedpurchases.PromotedPurchasesCommand(),
 		migrate.MigrateCommand(),
 		notify.NotifyCommand(),
-		hookscli.HooksCommand(),
 		gamecenter.GameCenterCommand(),
 		schema.SchemaCommand(),
 		snitch.SnitchCommand(version),

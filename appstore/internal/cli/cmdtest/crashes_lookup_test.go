@@ -68,9 +68,7 @@ func TestCrashesResolvesAppByBundleID(t *testing.T) {
 		}
 	})
 
-	if stderr != "" {
-		t.Fatalf("expected empty stderr, got %q", stderr)
-	}
+	requireStderrContainsWarning(t, stderr, crashesRootDeprecationWarning)
 	if !strings.Contains(stdout, `"id":"crash-1"`) {
 		t.Fatalf("expected crash output, got %q", stdout)
 	}
@@ -126,9 +124,7 @@ func TestCrashesNextURLSkipsAppLookupForNonNumericApp(t *testing.T) {
 		}
 	})
 
-	if stderr != "" {
-		t.Fatalf("expected empty stderr, got %q", stderr)
-	}
+	requireStderrContainsWarning(t, stderr, crashesRootDeprecationWarning)
 	if !strings.Contains(stdout, `"id":"crash-next"`) {
 		t.Fatalf("expected next-page crash output, got %q", stdout)
 	}

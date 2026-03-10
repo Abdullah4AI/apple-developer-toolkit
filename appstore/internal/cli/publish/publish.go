@@ -12,7 +12,6 @@ import (
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
-	"github.com/Abdullah4AI/apple-developer-toolkit/internal/hooks"
 )
 
 const (
@@ -183,10 +182,6 @@ Examples:
 
 			var buildResp *asc.BuildResponse
 			if uploadMode {
-				hooks.FireSafe(requestCtx, hooks.EventStoreUploadStart, map[string]string{
-					"APP_ID": resolvedAppID,
-				})
-
 				uploadResult, err := uploadBuildAndWaitForID(
 					requestCtx,
 					client,
@@ -201,11 +196,6 @@ Examples:
 					timeoutOverride,
 				)
 				if err != nil {
-					hooks.FireSafe(requestCtx, hooks.EventStoreUploadFailure, map[string]string{
-						"APP_ID": resolvedAppID,
-						"STATUS": "failure",
-						"ERROR":  err.Error(),
-					})
 					return fmt.Errorf("publish testflight: %w", err)
 				}
 
@@ -213,13 +203,6 @@ Examples:
 				uploaded = true
 				resolvedVersionValue = uploadResult.Version
 				resolvedBuildNumberValue = uploadResult.BuildNumber
-
-				hooks.FireSafe(requestCtx, hooks.EventStoreUploadDone, map[string]string{
-					"APP_ID":       resolvedAppID,
-					"BUILD_ID":     buildResp.Data.ID,
-					"BUILD_NUMBER": resolvedBuildNumberValue,
-					"STATUS":       "success",
-				})
 			} else if buildIDValue != "" {
 				buildResp, err = client.GetBuild(requestCtx, buildIDValue)
 				if err != nil {
@@ -250,13 +233,6 @@ Examples:
 			if err := client.AddBetaGroupsToBuildWithNotify(requestCtx, buildResp.Data.ID, resolvedGroupIDs, *notify); err != nil {
 				return fmt.Errorf("publish testflight: failed to add groups: %w", err)
 			}
-
-			hooks.FireSafe(requestCtx, hooks.EventStoreTestflightDist, map[string]string{
-				"APP_ID":       resolvedAppID,
-				"BUILD_ID":     buildResp.Data.ID,
-				"BUILD_NUMBER": resolvedBuildNumberValue,
-				"STATUS":       "success",
-			})
 
 			result := &asc.TestFlightPublishResult{
 				BuildID:         buildResp.Data.ID,
@@ -355,27 +331,10 @@ Examples:
 
 			platformValue := asc.Platform(normalizedPlatform)
 			timeoutOverride := *timeout > 0
-
-			hooks.FireSafe(requestCtx, hooks.EventStoreUploadStart, map[string]string{
-				"APP_ID": resolvedAppID,
-			})
-
 			uploadResult, err := uploadBuildAndWaitForID(requestCtx, client, resolvedAppID, *ipaPath, fileInfo, versionValue, buildNumberValue, platformValue, *pollInterval, timeoutValue, timeoutOverride)
 			if err != nil {
-				hooks.FireSafe(requestCtx, hooks.EventStoreUploadFailure, map[string]string{
-					"APP_ID": resolvedAppID,
-					"STATUS": "failure",
-					"ERROR":  err.Error(),
-				})
 				return fmt.Errorf("publish appstore: %w", err)
 			}
-
-			hooks.FireSafe(requestCtx, hooks.EventStoreUploadDone, map[string]string{
-				"APP_ID":       resolvedAppID,
-				"BUILD_ID":     uploadResult.Build.Data.ID,
-				"BUILD_NUMBER": uploadResult.BuildNumber,
-				"STATUS":       "success",
-			})
 
 			buildResp := uploadResult.Build
 			if *wait {
@@ -403,11 +362,6 @@ Examples:
 			}
 
 			if *submit {
-				hooks.FireSafe(requestCtx, hooks.EventStoreSubmitStart, map[string]string{
-					"APP_ID":     resolvedAppID,
-					"VERSION_ID": versionResp.Data.ID,
-				})
-
 				submitReq := asc.AppStoreVersionSubmissionCreateRequest{
 					Data: asc.AppStoreVersionSubmissionCreateData{
 						Type: asc.ResourceTypeAppStoreVersionSubmissions,
@@ -420,21 +374,10 @@ Examples:
 				}
 				submitResp, err := client.CreateAppStoreVersionSubmission(requestCtx, submitReq)
 				if err != nil {
-					hooks.FireSafe(requestCtx, hooks.EventStoreSubmitFailure, map[string]string{
-						"APP_ID": resolvedAppID,
-						"STATUS": "failure",
-						"ERROR":  err.Error(),
-					})
 					return fmt.Errorf("publish appstore: failed to submit: %w", err)
 				}
 				result.SubmissionID = submitResp.Data.ID
 				result.Submitted = true
-
-				hooks.FireSafe(requestCtx, hooks.EventStoreSubmitDone, map[string]string{
-					"APP_ID":  resolvedAppID,
-					"VERSION": uploadResult.Version,
-					"STATUS":  "success",
-				})
 			}
 
 			return shared.PrintOutput(result, *output.Output, *output.Pretty)

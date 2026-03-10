@@ -52,6 +52,9 @@ func RootCommand(version string) *ffcli.Command {
 			rootSubcommandNamesOnce.Do(func() {
 				rootSubcommandNames = make([]string, 0, len(root.Subcommands))
 				for _, sub := range root.Subcommands {
+					if shouldHideRootCommand(sub) {
+						continue
+					}
 					rootSubcommandNames = append(rootSubcommandNames, sub.Name)
 				}
 			})

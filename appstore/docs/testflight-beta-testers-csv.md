@@ -2,8 +2,8 @@
 
 This document defines the CSV contract for:
 
-- `asc testflight beta-testers export`
-- `asc testflight beta-testers import`
+- `asc testflight testers export`
+- `asc testflight testers import`
 
 ## Canonical Schema
 

@@ -22,7 +22,7 @@ func WebAppsCommand() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "apps",
 		ShortUsage: "asc web apps <subcommand> [flags]",
-		ShortHelp:  "EXPERIMENTAL: Unofficial app management via web sessions.",
+		ShortHelp:  "[experimental] Unofficial app management via web sessions.",
 		LongHelp: `EXPERIMENTAL / UNOFFICIAL / DISCOURAGED
 
 Manage app operations using Apple web sessions and internal APIs.
@@ -202,7 +202,7 @@ func WebAppsCreateCommand() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "create",
 		ShortUsage: "asc web apps create --name NAME --bundle-id BUNDLE_ID --sku SKU [flags]",
-		ShortHelp:  "EXPERIMENTAL: Create app via unofficial web API.",
+		ShortHelp:  "[experimental] Create app via unofficial web API.",
 		LongHelp: `EXPERIMENTAL / UNOFFICIAL / DISCOURAGED
 
 Create an app through Apple's internal web API using a web-session login.

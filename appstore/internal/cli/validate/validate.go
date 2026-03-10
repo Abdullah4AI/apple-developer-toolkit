@@ -12,7 +12,6 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/validation"
-	"github.com/Abdullah4AI/apple-developer-toolkit/internal/hooks"
 )
 
 type validateOptions struct {
@@ -136,18 +135,8 @@ func runValidate(ctx context.Context, opts validateOptions) error {
 	}
 
 	if report.Summary.Blocking > 0 {
-		hooks.FireSafe(ctx, hooks.EventStoreValidateFail, map[string]string{
-			"APP_ID":   opts.AppID,
-			"STATUS":   "fail",
-			"BLOCKING": fmt.Sprintf("%d", report.Summary.Blocking),
-		})
 		return shared.NewReportedError(fmt.Errorf("validate: found %d blocking issue(s)", report.Summary.Blocking))
 	}
-
-	hooks.FireSafe(ctx, hooks.EventStoreValidatePass, map[string]string{
-		"APP_ID": opts.AppID,
-		"STATUS": "pass",
-	})
 
 	return nil
 }

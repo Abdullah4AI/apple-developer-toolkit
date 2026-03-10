@@ -42,7 +42,7 @@ func TestScreenshotsDownload_ByID_WritesFile(t *testing.T) {
 			if req.URL.Path != "/assets/1242x2688bb.png" {
 				t.Fatalf("unexpected asset path: %s", req.URL.Path)
 			}
-			if got := strings.TrimSpace(req.Header.Get("User-Agent")); got != "curl/8.7.1 apple-developer-toolkit/asset-download" {
+			if got := strings.TrimSpace(req.Header.Get("User-Agent")); got != "curl/8.7.1 App-Store-Connect-CLI/asset-download" {
 				t.Fatalf("unexpected user agent: %q", got)
 			}
 			return &http.Response{

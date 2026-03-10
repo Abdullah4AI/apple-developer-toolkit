@@ -284,7 +284,7 @@ func TestTestFlightMetricsBetaTesterUsagesPaginateRejectsRepeatedNextURL(t *test
 	if !strings.Contains(runErr.Error(), "detected repeated pagination URL") {
 		t.Fatalf("expected repeated pagination URL error, got %v", runErr)
 	}
-	if !strings.Contains(runErr.Error(), "testflight metrics beta-tester-usages:") {
+	if !strings.Contains(runErr.Error(), "testflight metrics app-testers:") {
 		t.Fatalf("expected command context, got %v", runErr)
 	}
 	if stdout != "" {

@@ -212,13 +212,9 @@ Examples:
 				return fmt.Errorf("screenshots upload: %w", err)
 			}
 
-			results := make([]asc.AssetUploadResultItem, 0, len(files))
-			for _, filePath := range files {
-				item, err := uploadScreenshotAsset(requestCtx, client, set.ID, filePath)
-				if err != nil {
-					return fmt.Errorf("screenshots upload: %w", err)
-				}
-				results = append(results, item)
+			results, err := UploadScreenshotsToSet(requestCtx, client, set.ID, files, true)
+			if err != nil {
+				return fmt.Errorf("screenshots upload: %w", err)
 			}
 
 			result := asc.AppScreenshotUploadResult{

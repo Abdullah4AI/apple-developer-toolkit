@@ -21,7 +21,7 @@ const (
 	assetDownloadMaxAttempts  = 4
 	assetDownloadInitialDelay = 200 * time.Millisecond
 	assetDownloadMaxDelay     = 2 * time.Second
-	assetDownloadUserAgent    = "curl/8.7.1 apple-developer-toolkit/asset-download"
+	assetDownloadUserAgent    = "curl/8.7.1 App-Store-Connect-CLI/asset-download"
 )
 
 type downloadHTTPStatusError struct {

@@ -56,6 +56,82 @@ func TestAppsWallFlagDefaults(t *testing.T) {
 	}
 }
 
+func TestAppsWallSubmitCommandExists(t *testing.T) {
+	root := RootCommand("1.2.3")
+	cmd := findSubcommand(root, "apps", "wall", "submit")
+	if cmd == nil {
+		t.Fatal("expected apps wall submit command")
+	}
+
+	outputFlag := cmd.FlagSet.Lookup("output")
+	if outputFlag == nil {
+		t.Fatal("expected --output flag")
+	}
+	if got := outputFlag.DefValue; got != "json" {
+		t.Fatalf("expected --output default json, got %q", got)
+	}
+}
+
+func TestAppsWallSubmitRequiresConfirmUnlessDryRun(t *testing.T) {
+	root := RootCommand("1.2.3")
+	root.FlagSet.SetOutput(io.Discard)
+
+	var runErr error
+	stdout, stderr := captureOutput(t, func() {
+		if err := root.Parse([]string{
+			"apps", "wall", "submit",
+			"--app", "1234567890",
+			"--platform", "iOS,macOS",
+		}); err != nil {
+			t.Fatalf("parse error: %v", err)
+		}
+		runErr = root.Run(context.Background())
+	})
+
+	if !errors.Is(runErr, flag.ErrHelp) {
+		t.Fatalf("expected ErrHelp, got %v", runErr)
+	}
+	if stdout != "" {
+		t.Fatalf("expected empty stdout, got %q", stdout)
+	}
+	if !strings.Contains(stderr, "--confirm is required unless --dry-run is set") {
+		t.Fatalf("expected confirm guidance in stderr, got %q", stderr)
+	}
+}
+
+func TestAppsWallSubmitRejectsParentWallFlags(t *testing.T) {
+	root := RootCommand("1.2.3")
+	root.FlagSet.SetOutput(io.Discard)
+
+	var runErr error
+	stdout, stderr := captureOutput(t, func() {
+		if err := root.Parse([]string{
+			"apps", "wall",
+			"--output", "markdown",
+			"submit",
+			"--app", "1234567890",
+			"--platform", "iOS",
+			"--dry-run",
+		}); err != nil {
+			t.Fatalf("parse error: %v", err)
+		}
+		runErr = root.Run(context.Background())
+	})
+
+	if !errors.Is(runErr, flag.ErrHelp) {
+		t.Fatalf("expected ErrHelp, got %v", runErr)
+	}
+	if stdout != "" {
+		t.Fatalf("expected empty stdout, got %q", stdout)
+	}
+	if !strings.Contains(stderr, "apps wall submit does not accept parent wall flags") {
+		t.Fatalf("expected parent flag guidance in stderr, got %q", stderr)
+	}
+	if !strings.Contains(stderr, "--output") {
+		t.Fatalf("expected offending flag in stderr, got %q", stderr)
+	}
+}
+
 func TestAppsShowcaseRemoved(t *testing.T) {
 	root := RootCommand("1.2.3")
 	root.FlagSet.SetOutput(io.Discard)
