@@ -2111,13 +2111,25 @@ func TestAgeRatingValidationErrors(t *testing.T) {
 		wantHelp bool
 	}{
 		{
-			name:     "age-rating get missing app",
+			name:     "age-rating view missing app",
+			args:     []string{"age-rating", "view"},
+			wantErr:  "--app is required",
+			wantHelp: true,
+		},
+		{
+			name:     "age-rating view conflicting targets",
+			args:     []string{"age-rating", "view", "--app-info-id", "INFO_ID", "--version-id", "VERSION_ID"},
+			wantErr:  "only one of --app-info-id or --version-id is allowed",
+			wantHelp: false,
+		},
+		{
+			name:     "age-rating get alias missing app",
 			args:     []string{"age-rating", "get"},
 			wantErr:  "--app is required",
 			wantHelp: true,
 		},
 		{
-			name:     "age-rating get conflicting targets",
+			name:     "age-rating get alias conflicting targets",
 			args:     []string{"age-rating", "get", "--app-info-id", "INFO_ID", "--version-id", "VERSION_ID"},
 			wantErr:  "only one of --app-info-id or --version-id is allowed",
 			wantHelp: false,
@@ -3889,49 +3901,49 @@ func TestAppInfoValidationErrors(t *testing.T) {
 		wantErr string
 	}{
 		{
-			name:    "app-info get missing app",
-			args:    []string{"app-info", "get"},
-			wantErr: "--app or --app-info is required",
+			name:    "apps info view missing app",
+			args:    []string{"apps", "info", "view"},
+			wantErr: "--app or --info-id is required",
 		},
 		{
-			name:    "app-info get version missing platform",
-			args:    []string{"app-info", "get", "--app", "APP_ID", "--version", "1.0.0"},
+			name:    "apps info view version missing platform",
+			args:    []string{"apps", "info", "view", "--app", "APP_ID", "--version", "1.0.0"},
 			wantErr: "--platform is required with --version",
 		},
 		{
-			name:    "app-info get invalid limit",
-			args:    []string{"app-info", "get", "--app", "APP_ID", "--limit", "201"},
+			name:    "apps info view invalid limit",
+			args:    []string{"apps", "info", "view", "--app", "APP_ID", "--limit", "201"},
 			wantErr: "--limit must be between 1 and 200",
 		},
 		{
-			name:    "app-info set missing locale",
-			args:    []string{"app-info", "set", "--app", "APP_ID", "--whats-new", "Fixes"},
+			name:    "apps info edit missing locale",
+			args:    []string{"apps", "info", "edit", "--app", "APP_ID", "--whats-new", "Fixes"},
 			wantErr: "--locale is required",
 		},
 		{
-			name:    "app-info set missing update fields",
-			args:    []string{"app-info", "set", "--app", "APP_ID", "--locale", "en-US"},
+			name:    "apps info edit missing update fields",
+			args:    []string{"apps", "info", "edit", "--app", "APP_ID", "--locale", "en-US"},
 			wantErr: "at least one update flag is required",
 		},
 		{
-			name:    "app-info set missing app",
-			args:    []string{"app-info", "set", "--locale", "en-US", "--whats-new", "Fixes"},
+			name:    "apps info edit missing app",
+			args:    []string{"apps", "info", "edit", "--locale", "en-US", "--whats-new", "Fixes"},
 			wantErr: "--app is required",
 		},
 		{
-			name:    "app-info set version missing platform",
-			args:    []string{"app-info", "set", "--app", "APP_ID", "--version", "1.0.0", "--locale", "en-US", "--whats-new", "Fixes"},
+			name:    "apps info edit version missing platform",
+			args:    []string{"apps", "info", "edit", "--app", "APP_ID", "--version", "1.0.0", "--locale", "en-US", "--whats-new", "Fixes"},
 			wantErr: "--platform is required with --version",
 		},
 		{
-			name:    "app-info relationships primary-category missing id",
-			args:    []string{"app-info", "relationships", "primary-category"},
-			wantErr: "--id is required",
+			name:    "apps info relationships primary-category missing selector",
+			args:    []string{"apps", "info", "relationships", "primary-category"},
+			wantErr: "--app or --info-id is required",
 		},
 		{
-			name:    "app-info territory-age-ratings list missing id",
-			args:    []string{"app-info", "territory-age-ratings", "list"},
-			wantErr: "--id is required",
+			name:    "apps info territory-age-ratings list missing selector",
+			args:    []string{"apps", "info", "territory-age-ratings", "list"},
+			wantErr: "--app or --info-id is required",
 		},
 	}
 
@@ -3969,8 +3981,8 @@ func TestAppInfosValidationErrors(t *testing.T) {
 		wantErr string
 	}{
 		{
-			name:    "app-infos list missing app",
-			args:    []string{"app-infos", "list"},
+			name:    "apps info list missing app",
+			args:    []string{"apps", "info", "list"},
 			wantErr: "Error: --app is required",
 		},
 	}
@@ -4145,13 +4157,13 @@ func TestAppInfoMutualExclusiveFlags(t *testing.T) {
 		wantErr string
 	}{
 		{
-			name:    "app-info get version and version-id are mutually exclusive",
-			args:    []string{"app-info", "get", "--app", "APP_ID", "--version", "1.0.0", "--version-id", "VERSION_ID"},
+			name:    "apps info view version and version-id are mutually exclusive",
+			args:    []string{"apps", "info", "view", "--app", "APP_ID", "--version", "1.0.0", "--version-id", "VERSION_ID"},
 			wantErr: "--version and --version-id are mutually exclusive",
 		},
 		{
-			name:    "app-info set version and version-id are mutually exclusive",
-			args:    []string{"app-info", "set", "--app", "APP_ID", "--version", "1.0.0", "--version-id", "VERSION_ID", "--locale", "en-US", "--whats-new", "Fixes"},
+			name:    "apps info edit version and version-id are mutually exclusive",
+			args:    []string{"apps", "info", "edit", "--app", "APP_ID", "--version", "1.0.0", "--version-id", "VERSION_ID", "--locale", "en-US", "--whats-new", "Fixes"},
 			wantErr: "--version and --version-id are mutually exclusive",
 		},
 	}
@@ -4221,13 +4233,13 @@ func TestAppTagsValidationErrors(t *testing.T) {
 			wantErr: "Error: --id is required",
 		},
 		{
-			name:    "app-tags territories-relationships missing id",
-			args:    []string{"app-tags", "territories-relationships"},
+			name:    "app-tags territories-links missing id",
+			args:    []string{"app-tags", "territories-links"},
 			wantErr: "Error: --id is required",
 		},
 		{
-			name:    "app-tags relationships missing app",
-			args:    []string{"app-tags", "relationships"},
+			name:    "app-tags links missing app",
+			args:    []string{"app-tags", "links"},
 			wantErr: "Error: --app is required",
 		},
 	}
@@ -4312,12 +4324,12 @@ func TestAppClipsValidationErrors(t *testing.T) {
 		},
 		{
 			name:    "default experiences relationships review detail missing experience-id",
-			args:    []string{"app-clips", "default-experiences", "relationships", "app-store-review-detail"},
+			args:    []string{"app-clips", "default-experiences", "links", "app-store-review-detail"},
 			wantErr: "Error: --experience-id is required",
 		},
 		{
 			name:    "default experiences relationships release version missing experience-id",
-			args:    []string{"app-clips", "default-experiences", "relationships", "release-with-app-store-version"},
+			args:    []string{"app-clips", "default-experiences", "links", "release-with-app-store-version"},
 			wantErr: "Error: --experience-id is required",
 		},
 		{
@@ -4337,12 +4349,12 @@ func TestAppClipsValidationErrors(t *testing.T) {
 		},
 		{
 			name:    "default experiences relationships missing app clip",
-			args:    []string{"app-clips", "default-experiences-relationships"},
+			args:    []string{"app-clips", "default-experiences-links"},
 			wantErr: "Error: --app-clip-id is required",
 		},
 		{
 			name:    "advanced experiences relationships missing app clip",
-			args:    []string{"app-clips", "advanced-experiences-relationships"},
+			args:    []string{"app-clips", "advanced-experiences-links"},
 			wantErr: "Error: --app-clip-id is required",
 		},
 		{
@@ -4431,13 +4443,13 @@ func TestPreReleaseVersionsValidationErrors(t *testing.T) {
 		wantErr string
 	}{
 		{
-			name:    "pre-release-versions list missing app",
-			args:    []string{"pre-release-versions", "list"},
+			name:    "pre-release list missing app",
+			args:    []string{"testflight", "pre-release", "list"},
 			wantErr: "Error: --app is required",
 		},
 		{
-			name:    "pre-release-versions get missing id",
-			args:    []string{"pre-release-versions", "get"},
+			name:    "pre-release view missing id",
+			args:    []string{"testflight", "pre-release", "view"},
 			wantErr: "Error: --id is required",
 		},
 	}

@@ -308,9 +308,10 @@ func resolveMetadataPushAppInfoID(
 	}
 	exampleCommand := buildMetadataPushAppInfoExample(appID, version, platform, dir, exampleAppInfoID)
 	return "", shared.UsageErrorf(
-		"multiple app infos found for app %q (%s). Re-run with --app-info. Example: %s",
+		"multiple app infos found for app %q (%s). Run `asc apps info list --app %q` to inspect candidates, then re-run with --app-info. Example: %s",
 		appID,
 		formatAppInfoCandidates(candidates),
+		appID,
 		exampleCommand,
 	)
 }

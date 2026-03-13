@@ -18,12 +18,12 @@ func TestTestFlightBetaGroupsRelationshipsGetRejectsInvalidNextURL(t *testing.T)
 		{
 			name:    "invalid scheme",
 			next:    "http://api.appstoreconnect.apple.com/v1/betaGroups/group-1/relationships/betaTesters?cursor=AQ",
-			wantErr: "testflight groups relationships view: --next must be an App Store Connect URL",
+			wantErr: "testflight groups links view: --next must be an App Store Connect URL",
 		},
 		{
 			name:    "malformed URL",
 			next:    "https://api.appstoreconnect.apple.com/%zz",
-			wantErr: "testflight groups relationships view: --next must be a valid URL:",
+			wantErr: "testflight groups links view: --next must be a valid URL:",
 		},
 	}
 
@@ -136,12 +136,12 @@ func TestTestFlightBetaTestersRelationshipsGetRejectsInvalidNextURL(t *testing.T
 		{
 			name:    "invalid scheme",
 			next:    "http://api.appstoreconnect.apple.com/v1/betaTesters/tester-1/relationships/apps?cursor=AQ",
-			wantErr: "testflight testers relationships view: --next must be an App Store Connect URL",
+			wantErr: "testflight testers links view: --next must be an App Store Connect URL",
 		},
 		{
 			name:    "malformed URL",
 			next:    "https://api.appstoreconnect.apple.com/%zz",
-			wantErr: "testflight testers relationships view: --next must be a valid URL:",
+			wantErr: "testflight testers links view: --next must be a valid URL:",
 		},
 	}
 

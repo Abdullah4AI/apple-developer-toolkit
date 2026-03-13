@@ -78,6 +78,7 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/web"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/webhooks"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/workflow"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/xcode"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/xcodecloud"
 )
 
@@ -139,23 +140,24 @@ func Subcommands(version string) []*ffcli.Command {
 		publish.PublishCommand(),
 		releasecmd.ReleaseCommand(),
 		workflow.WorkflowCommand(),
+		xcode.XcodeCommand(),
 		versions.VersionsCommand(),
 		productpages.ProductPagesCommand(),
 		routingcoverage.RoutingCoverageCommand(),
-		apps.AppInfoCommand(),
-		apps.AppInfosCommand(),
+		apps.RemovedAppInfoCommand(),
+		apps.RemovedAppInfosCommand(),
 		eula.EULACommand(),
 		agreements.AgreementsCommand(),
 		pricing.PricingCommand(),
 		preorders.PreOrdersCommand(),
-		prerelease.PreReleaseVersionsCommand(),
+		prerelease.RemovedPreReleaseVersionsCommand(),
 		localizations.LocalizationsCommand(),
 		metadata.MetadataCommand(),
 		screenshots.ScreenshotsCommand(),
 		videopreviews.VideoPreviewsCommand(),
 		backgroundassets.BackgroundAssetsCommand(),
 		buildlocalizations.BuildLocalizationsCommand(),
-		betaapplocalizations.BetaAppLocalizationsCommand(),
+		betaapplocalizations.DeprecatedBetaAppLocalizationsCommand(),
 		betabuildlocalizations.BetaBuildLocalizationsCommand(),
 		sandbox.SandboxCommand(),
 		signing.SigningCommand(),

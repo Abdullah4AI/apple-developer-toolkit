@@ -24,7 +24,8 @@ Examples:
   asc subscriptions pricing prices list --subscription-id "SUB_ID"
   asc subscriptions pricing prices set --subscription-id "SUB_ID" --price-point "PRICE_POINT_ID"
   asc subscriptions pricing price-points list --subscription-id "SUB_ID" --territory "USA"
-  asc subscriptions pricing availability get --subscription-id "SUB_ID"`,
+  asc subscriptions pricing availability get --subscription-id "SUB_ID"
+  asc subscriptions pricing equalize --subscription-id "SUB_ID" --base-price "3.49"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -32,6 +33,7 @@ Examples:
 			SubscriptionsPricingPricesCommand(),
 			SubscriptionsPricingPricePointsCommand(),
 			SubscriptionsPricingAvailabilityCommand(),
+			SubscriptionsPricingEqualizeCommand(),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp

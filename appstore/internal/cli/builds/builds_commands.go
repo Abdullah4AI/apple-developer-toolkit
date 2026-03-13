@@ -282,6 +282,7 @@ Examples:
 				uploadOpts := []asc.UploadOption{
 					asc.WithUploadConcurrency(*concurrency),
 				}
+				fmt.Fprintf(os.Stderr, "Uploading %s (%d bytes) to App Store Connect...\n", fileInfo.Name(), fileInfo.Size())
 				uploadCtx, uploadCancel := shared.ContextWithUploadTimeout(ctx)
 				err = asc.ExecuteUploadOperations(uploadCtx, filePath, fileResp.Data.Attributes.UploadOperations, uploadOpts...)
 				uploadCancel()
@@ -330,12 +331,14 @@ Examples:
 				} else {
 					result.Uploaded = &uploaded
 				}
+				fmt.Fprintln(os.Stderr, "Upload committed in App Store Connect.")
 				result.ChecksumVerified = checksumVerified
 				result.SourceFileChecksums = verifiedChecksums
 				result.Operations = nil
 
 				if *wait || testNotesValue != "" {
-					buildResp, err := shared.WaitForBuildByNumber(requestCtx, client, resolvedAppID, versionValue, buildNumberValue, string(platformValue), *pollInterval)
+					fmt.Fprintf(os.Stderr, "Waiting for build %s (%s) to appear in App Store Connect...\n", buildNumberValue, versionValue)
+					buildResp, err := shared.WaitForBuildByNumberOrUploadFailure(requestCtx, client, resolvedAppID, uploadResp.Data.ID, versionValue, buildNumberValue, string(platformValue), *pollInterval)
 					if err != nil {
 						return fmt.Errorf("builds upload: %w", err)
 					}
@@ -343,6 +346,7 @@ Examples:
 						return fmt.Errorf("builds upload: failed to resolve build for version %q build %q", versionValue, buildNumberValue)
 					}
 
+					fmt.Fprintf(os.Stderr, "Build %s discovered; waiting for processing...\n", buildResp.Data.ID)
 					buildResp, err = client.WaitForBuildProcessing(requestCtx, buildResp.Data.ID, *pollInterval)
 					if err != nil {
 						return fmt.Errorf("builds upload: %w", err)
@@ -397,10 +401,10 @@ Examples:
   asc builds icons list --build "BUILD_ID"
   asc builds beta-app-review-submission get --build "BUILD_ID"
   asc builds build-beta-detail get --build "BUILD_ID"
-  asc builds relationships get --build "BUILD_ID" --type "app"
+  asc builds links view --build "BUILD_ID" --type "app"
   asc builds metrics beta-usages --build "BUILD_ID"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: shared.VisibleUsageFunc,
 		Subcommands: []*ffcli.Command{
 			listCmd,
 			BuildsLatestCommand(),
@@ -422,6 +426,7 @@ Examples:
 			BuildsBetaAppReviewSubmissionCommand(),
 			BuildsBuildBetaDetailCommand(),
 			BuildsRelationshipsCommand(),
+			deprecatedBuildsRelationshipsAliasCommand(),
 			BuildsMetricsCommand(),
 		},
 		Exec: func(ctx context.Context, args []string) error {

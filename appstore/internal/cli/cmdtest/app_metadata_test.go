@@ -125,7 +125,7 @@ func TestLocalizationsMediaSetsValidationErrors(t *testing.T) {
 		},
 		{
 			name:    "preview sets relationships missing localization",
-			args:    []string{"localizations", "preview-sets", "relationships"},
+			args:    []string{"localizations", "preview-sets", "links"},
 			wantErr: "--localization-id is required",
 		},
 		{
@@ -140,7 +140,7 @@ func TestLocalizationsMediaSetsValidationErrors(t *testing.T) {
 		},
 		{
 			name:    "screenshot sets relationships missing localization",
-			args:    []string{"localizations", "screenshot-sets", "relationships"},
+			args:    []string{"localizations", "screenshot-sets", "links"},
 			wantErr: "--localization-id is required",
 		},
 		{
@@ -235,23 +235,23 @@ func TestVersionsRelationshipsValidationErrors(t *testing.T) {
 		wantErr string
 	}{
 		{
-			name:    "versions relationships missing type",
-			args:    []string{"versions", "relationships", "--version-id", "id-1"},
+			name:    "versions links missing type",
+			args:    []string{"versions", "links", "--version-id", "id-1"},
 			wantErr: "--type is required",
 		},
 		{
-			name:    "versions relationships missing version id",
-			args:    []string{"versions", "relationships", "--type", "appStoreReviewDetail"},
+			name:    "versions links missing version id",
+			args:    []string{"versions", "links", "--type", "appStoreReviewDetail"},
 			wantErr: "--version-id is required",
 		},
 		{
-			name:    "versions relationships invalid type",
-			args:    []string{"versions", "relationships", "--version-id", "id-1", "--type", "nope"},
+			name:    "versions links invalid type",
+			args:    []string{"versions", "links", "--version-id", "id-1", "--type", "nope"},
 			wantErr: "--type must be one of",
 		},
 		{
-			name:    "versions relationships invalid limit for single",
-			args:    []string{"versions", "relationships", "--version-id", "id-1", "--type", "appStoreReviewDetail", "--limit", "10"},
+			name:    "versions links invalid limit for single",
+			args:    []string{"versions", "links", "--version-id", "id-1", "--type", "appStoreReviewDetail", "--limit", "10"},
 			wantErr: "--limit, --next, and --paginate are only valid for to-many relationships",
 		},
 	}
@@ -388,17 +388,17 @@ func TestAppInfoIncludeValidationErrors(t *testing.T) {
 	}{
 		{
 			name:    "app-info id without include",
-			args:    []string{"app-info", "get", "--app-info", "info-1"},
-			wantErr: "--app-info requires --include",
+			args:    []string{"apps", "info", "view", "--info-id", "info-1"},
+			wantErr: "--info-id requires --include",
 		},
 		{
 			name:    "app-info include missing app",
-			args:    []string{"app-info", "get", "--include", "ageRatingDeclaration"},
-			wantErr: "--app or --app-info is required",
+			args:    []string{"apps", "info", "view", "--include", "ageRatingDeclaration"},
+			wantErr: "--app or --info-id is required",
 		},
 		{
 			name:    "app-info include with version flags",
-			args:    []string{"app-info", "get", "--include", "ageRatingDeclaration", "--app", "123", "--version", "1.2.3", "--platform", "IOS"},
+			args:    []string{"apps", "info", "view", "--include", "ageRatingDeclaration", "--app", "123", "--version", "1.2.3", "--platform", "IOS"},
 			wantErr: "--include cannot be used with version localization flags",
 		},
 	}

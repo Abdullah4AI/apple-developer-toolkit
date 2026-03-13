@@ -39,6 +39,9 @@ func ResolveAppInfoID(ctx context.Context, client *asc.Client, appID, appInfoID 
 	if strings.TrimSpace(appInfoID) != "" {
 		return strings.TrimSpace(appInfoID), nil
 	}
+	if strings.TrimSpace(appID) == "" {
+		return "", fmt.Errorf("app id is required")
+	}
 
 	resp, err := client.GetAppInfos(ctx, appID)
 	if err != nil {
@@ -48,7 +51,7 @@ func ResolveAppInfoID(ctx context.Context, client *asc.Client, appID, appInfoID 
 		return "", fmt.Errorf("no app info found for app %q", appID)
 	}
 	if len(resp.Data) > 1 {
-		return "", fmt.Errorf("multiple app infos found for app %q; use --app-info", appID)
+		return "", fmt.Errorf("multiple app infos found for app %q; run `asc apps info list --app %q` to inspect candidates, then pass the explicit app info ID", appID, appID)
 	}
 	return resp.Data[0].ID, nil
 }

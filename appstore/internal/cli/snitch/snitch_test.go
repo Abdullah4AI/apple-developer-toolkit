@@ -265,6 +265,7 @@ func TestSnitchCommandPreviewWithoutConfirmDoesNotCreateIssue(t *testing.T) {
 func TestSnitchCommandConfirmCreatesIssue(t *testing.T) {
 	searchCalls := 0
 	createCalls := 0
+	labelCalls := 0
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
@@ -285,6 +286,12 @@ func TestSnitchCommandConfirmCreatesIssue(t *testing.T) {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusCreated)
 			if err := json.NewEncoder(w).Encode(resp); err != nil {
+				t.Fatalf("json.NewEncoder().Encode() error: %v", err)
+			}
+		case "/repos/rudrankriyam/App-Store-Connect-CLI/issues/77/labels":
+			labelCalls++
+			w.Header().Set("Content-Type", "application/json")
+			if err := json.NewEncoder(w).Encode(map[string]any{"labels": []string{"asc-snitch", "bug"}}); err != nil {
 				t.Fatalf("json.NewEncoder().Encode() error: %v", err)
 			}
 		default:
@@ -315,6 +322,91 @@ func TestSnitchCommandConfirmCreatesIssue(t *testing.T) {
 	}
 	if createCalls != 1 {
 		t.Fatalf("expected 1 create call, got %d", createCalls)
+	}
+	if labelCalls != 1 {
+		t.Fatalf("expected 1 label call, got %d", labelCalls)
+	}
+}
+
+func TestSnitchCommandConfirmCreatesIssueWhenLabelsCannotBeApplied(t *testing.T) {
+	searchCalls := 0
+	createCalls := 0
+	labelCalls := 0
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/search/issues":
+			searchCalls++
+			resp := map[string]any{"items": []map[string]any{}}
+			w.Header().Set("Content-Type", "application/json")
+			if err := json.NewEncoder(w).Encode(resp); err != nil {
+				t.Fatalf("json.NewEncoder().Encode() error: %v", err)
+			}
+		case "/repos/rudrankriyam/App-Store-Connect-CLI/issues":
+			createCalls++
+
+			var payload map[string]any
+			if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+				t.Fatalf("json.NewDecoder().Decode() error: %v", err)
+			}
+			if _, ok := payload["labels"]; ok {
+				w.WriteHeader(http.StatusForbidden)
+				if _, err := w.Write([]byte(`{"message":"Resource not accessible by integration"}`)); err != nil {
+					t.Fatalf("w.Write() error: %v", err)
+				}
+				return
+			}
+
+			resp := map[string]any{
+				"number":   77,
+				"title":    "confirmed issue",
+				"html_url": "https://github.com/Abdullah4AI/apple-developer-toolkit/appstore/issues/77",
+			}
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusCreated)
+			if err := json.NewEncoder(w).Encode(resp); err != nil {
+				t.Fatalf("json.NewEncoder().Encode() error: %v", err)
+			}
+		case "/repos/rudrankriyam/App-Store-Connect-CLI/issues/77/labels":
+			labelCalls++
+			w.WriteHeader(http.StatusForbidden)
+			if _, err := w.Write([]byte(`{"message":"Resource not accessible by integration"}`)); err != nil {
+				t.Fatalf("w.Write() error: %v", err)
+			}
+		default:
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	origBase := githubAPIBase
+	defer func() { setGitHubAPIBase(origBase) }()
+	setGitHubAPIBase(server.URL)
+
+	t.Setenv("GITHUB_TOKEN", "test-token")
+	t.Setenv("GH_TOKEN", "")
+
+	stdout, stderr, err := runSnitchCommand(t, "1.2.3", "--confirm", "confirmed", "issue")
+	if err != nil {
+		t.Fatalf("runSnitchCommand() error: %v", err)
+	}
+	if !strings.Contains(stderr, "Issue created: #77") {
+		t.Fatalf("expected issue creation message, got %q", stderr)
+	}
+	if !strings.Contains(stderr, "labels could not be applied") {
+		t.Fatalf("expected label warning, got %q", stderr)
+	}
+	if !strings.Contains(stdout, `"number":77`) {
+		t.Fatalf("expected JSON stdout with issue number, got %q", stdout)
+	}
+	if searchCalls != 1 {
+		t.Fatalf("expected 1 search call, got %d", searchCalls)
+	}
+	if createCalls != 1 {
+		t.Fatalf("expected 1 create call, got %d", createCalls)
+	}
+	if labelCalls != 1 {
+		t.Fatalf("expected 1 label call, got %d", labelCalls)
 	}
 }
 
@@ -366,19 +458,47 @@ func TestCreateIssue(t *testing.T) {
 		t.Errorf("expected issue #99, got #%d", issue.Number)
 	}
 
-	// Verify labels were sent.
+	if _, ok := receivedPayload["labels"]; ok {
+		t.Fatal("did not expect labels in createIssue payload")
+	}
+}
+
+func TestAddIssueLabels(t *testing.T) {
+	var receivedPayload map[string]any
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" {
+			t.Errorf("expected POST, got %s", r.Method)
+		}
+		if r.URL.Path != "/repos/rudrankriyam/App-Store-Connect-CLI/issues/99/labels" {
+			t.Errorf("unexpected path: %s", r.URL.Path)
+		}
+
+		if err := json.NewDecoder(r.Body).Decode(&receivedPayload); err != nil {
+			t.Fatalf("json.NewDecoder().Decode() error: %v", err)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(map[string]any{"labels": []string{"asc-snitch", "bug"}}); err != nil {
+			t.Fatalf("json.NewEncoder().Encode() error: %v", err)
+		}
+	}))
+	defer server.Close()
+
+	origBase := githubAPIBase
+	defer func() { setGitHubAPIBase(origBase) }()
+	setGitHubAPIBase(server.URL)
+
+	if err := addIssueLabels(t.Context(), "test-token", 99, []string{"asc-snitch", "bug"}); err != nil {
+		t.Fatalf("addIssueLabels() error: %v", err)
+	}
+
 	labels, ok := receivedPayload["labels"].([]any)
 	if !ok {
 		t.Fatal("expected labels array")
 	}
-	foundSnitch := false
-	for _, l := range labels {
-		if l == "asc-snitch" {
-			foundSnitch = true
-		}
-	}
-	if !foundSnitch {
-		t.Error("expected asc-snitch label")
+	if len(labels) != 2 {
+		t.Fatalf("expected 2 labels, got %d", len(labels))
 	}
 }
 

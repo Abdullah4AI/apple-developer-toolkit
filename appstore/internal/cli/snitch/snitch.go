@@ -140,6 +140,11 @@ Examples:
 			if err != nil {
 				return fmt.Errorf("snitch: failed to create issue: %w", err)
 			}
+			if labels := issueLabels(entry); len(labels) > 0 {
+				if err := addIssueLabels(requestCtx, token, issue.Number, labels); err != nil {
+					fmt.Fprintf(os.Stderr, "Warning: issue created, but labels could not be applied: %v\n", err)
+				}
+			}
 
 			fmt.Fprintf(os.Stderr, "Issue created: #%d %s\n", issue.Number, issue.HTMLURL)
 			result := map[string]any{
@@ -341,6 +346,17 @@ func issueBody(e LogEntry) string {
 	return b.String()
 }
 
+func issueLabels(e LogEntry) []string {
+	labels := []string{"asc-snitch"}
+	switch e.Severity {
+	case "bug":
+		labels = append(labels, "bug")
+	case "feature-request":
+		labels = append(labels, "enhancement")
+	}
+	return labels
+}
+
 func printPotentialDuplicates(duplicates []GitHubIssue) {
 	if len(duplicates) == 0 {
 		return
@@ -464,18 +480,9 @@ func searchIssues(ctx context.Context, token string, query string) ([]GitHubIssu
 func createIssue(ctx context.Context, token string, entry LogEntry) (*GitHubIssue, error) {
 	issueURL := fmt.Sprintf("%s/repos/%s/%s/issues", githubAPIBase, defaultOwner, defaultRepo)
 
-	labels := []string{"asc-snitch"}
-	switch entry.Severity {
-	case "bug":
-		labels = append(labels, "bug")
-	case "feature-request":
-		labels = append(labels, "enhancement")
-	}
-
 	payload := map[string]any{
-		"title":  issueTitle(entry),
-		"body":   issueBody(entry),
-		"labels": labels,
+		"title": issueTitle(entry),
+		"body":  issueBody(entry),
 	}
 
 	body, err := json.Marshal(payload)
@@ -499,9 +506,7 @@ func createIssue(ctx context.Context, token string, entry LogEntry) (*GitHubIssu
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusCreated {
-		limited := io.LimitReader(resp.Body, maxResponseBodyBytes)
-		respBody, _ := io.ReadAll(limited)
-		return nil, fmt.Errorf("GitHub returned %d: %s", resp.StatusCode, strings.TrimSpace(string(respBody)))
+		return nil, readGitHubAPIError(resp)
 	}
 
 	var issue GitHubIssue
@@ -510,6 +515,56 @@ func createIssue(ctx context.Context, token string, entry LogEntry) (*GitHubIssu
 	}
 
 	return &issue, nil
+}
+
+func addIssueLabels(ctx context.Context, token string, issueNumber int, labels []string) error {
+	if len(labels) == 0 {
+		return nil
+	}
+
+	labelsURL := fmt.Sprintf(
+		"%s/repos/%s/%s/issues/%d/labels",
+		githubAPIBase,
+		defaultOwner,
+		defaultRepo,
+		issueNumber,
+	)
+
+	payload := map[string]any{
+		"labels": labels,
+	}
+
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", labelsURL, bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	client := githubHTTPClient()
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		return readGitHubAPIError(resp)
+	}
+
+	return nil
+}
+
+func readGitHubAPIError(resp *http.Response) error {
+	limited := io.LimitReader(resp.Body, maxResponseBodyBytes)
+	respBody, _ := io.ReadAll(limited)
+	return fmt.Errorf("GitHub returned %d: %s", resp.StatusCode, strings.TrimSpace(string(respBody)))
 }
 
 func writeLocalLog(entry LogEntry) error {

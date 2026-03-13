@@ -162,7 +162,7 @@ func TestAppInfoGetRejectsInvalidNextURLPhase63(t *testing.T) {
 			root.FlagSet.SetOutput(io.Discard)
 
 			stdout, stderr := captureOutput(t, func() {
-				if err := root.Parse([]string{"app-info", "get", "--next", test.next}); err != nil {
+				if err := root.Parse([]string{"apps", "info", "view", "--next", test.next}); err != nil {
 					t.Fatalf("parse error: %v", err)
 				}
 				err := root.Run(context.Background())
@@ -650,8 +650,8 @@ func TestWinBackOffersPricesPaginateFromNextWithoutIDPhase63(t *testing.T) {
 func TestWinBackOffersPricesRelationshipsRejectsInvalidNextURLPhase63(t *testing.T) {
 	runGameCenterAchievementsInvalidNextURLCases(
 		t,
-		[]string{"subscriptions", "offers", "win-back", "prices-relationships"},
-		"subscriptions offers win-back prices-relationships: --next",
+		[]string{"subscriptions", "offers", "win-back", "prices-links"},
+		"subscriptions offers win-back prices-links: --next",
 	)
 }
 
@@ -664,7 +664,7 @@ func TestWinBackOffersPricesRelationshipsPaginateFromNextWithoutIDPhase63(t *tes
 
 	runGameCenterAchievementsPaginateFromNext(
 		t,
-		[]string{"subscriptions", "offers", "win-back", "prices-relationships"},
+		[]string{"subscriptions", "offers", "win-back", "prices-links"},
 		firstURL,
 		secondURL,
 		firstBody,
@@ -677,8 +677,8 @@ func TestWinBackOffersPricesRelationshipsPaginateFromNextWithoutIDPhase63(t *tes
 func TestWinBackOffersRelationshipsRejectsInvalidNextURLPhase63(t *testing.T) {
 	runGameCenterAchievementsInvalidNextURLCases(
 		t,
-		[]string{"subscriptions", "offers", "win-back", "relationships"},
-		"subscriptions offers win-back relationships: --next",
+		[]string{"subscriptions", "offers", "win-back", "links"},
+		"subscriptions offers win-back links: --next",
 	)
 }
 
@@ -691,7 +691,7 @@ func TestWinBackOffersRelationshipsPaginateFromNextWithoutSubscriptionPhase63(t 
 
 	runGameCenterAchievementsPaginateFromNext(
 		t,
-		[]string{"subscriptions", "offers", "win-back", "relationships"},
+		[]string{"subscriptions", "offers", "win-back", "links"},
 		firstURL,
 		secondURL,
 		firstBody,

@@ -318,10 +318,11 @@ func TestResolvePublishBetaGroupIDs_SinglePage(t *testing.T) {
 		t.Fatalf("shared.GetASCClient: %v", err)
 	}
 
-	got, err := resolvePublishBetaGroupIDs(context.Background(), client, "APP1", []string{"Alpha", "G2"})
+	resolvedGroups, err := resolvePublishBetaGroups(context.Background(), client, "APP1", []string{"Alpha", "G2"})
 	if err != nil {
-		t.Fatalf("resolvePublishBetaGroupIDs() error = %v", err)
+		t.Fatalf("resolvePublishBetaGroups() error = %v", err)
 	}
+	got := resolvedPublishBetaGroupIDs(resolvedGroups)
 
 	want := []string{"G1", "G2"}
 	if len(got) != len(want) {
@@ -347,7 +348,7 @@ func TestResolvePublishBetaGroupIDs_APIError(t *testing.T) {
 		t.Fatalf("shared.GetASCClient: %v", err)
 	}
 
-	_, err = resolvePublishBetaGroupIDs(context.Background(), client, "APP1", []string{"Alpha"})
+	_, err = resolvePublishBetaGroups(context.Background(), client, "APP1", []string{"Alpha"})
 	if err == nil {
 		t.Fatal("expected error from API failure")
 	}
@@ -373,7 +374,7 @@ func TestResolvePublishBetaGroupIDs_NameNotFound(t *testing.T) {
 		t.Fatalf("shared.GetASCClient: %v", err)
 	}
 
-	_, err = resolvePublishBetaGroupIDs(context.Background(), client, "APP1", []string{"NonExistent"})
+	_, err = resolvePublishBetaGroups(context.Background(), client, "APP1", []string{"NonExistent"})
 	if err == nil {
 		t.Fatal("expected error for non-existent group name")
 	}
@@ -542,10 +543,11 @@ func TestResolvePublishBetaGroupIDs_PaginatedNameResolution(t *testing.T) {
 	}
 
 	// Resolve a name that only exists on page 2.
-	got, err := resolvePublishBetaGroupIDs(context.Background(), client, "APP1", []string{"External Testers"})
+	resolvedGroups, err := resolvePublishBetaGroups(context.Background(), client, "APP1", []string{"External Testers"})
 	if err != nil {
-		t.Fatalf("resolvePublishBetaGroupIDs() error = %v", err)
+		t.Fatalf("resolvePublishBetaGroups() error = %v", err)
 	}
+	got := resolvedPublishBetaGroupIDs(resolvedGroups)
 	if len(got) != 1 || got[0] != "G2" {
 		t.Fatalf("expected [G2], got %v", got)
 	}

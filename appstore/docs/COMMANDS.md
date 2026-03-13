@@ -58,8 +58,6 @@ asc <subcommand> [flags]
 - `apps` - List and manage apps in App Store Connect.
 - `app-setup` - Post-create app setup automation.
 - `app-tags` - Manage app tags for App Store visibility.
-- `app-info` - Manage App Store version metadata.
-- `app-infos` - List app info records for an app.
 - `versions` - Manage App Store versions.
 - `localizations` - Manage App Store localization metadata.
 - `screenshots` - Upload and manage App Store screenshots; local capture/frame workflow is [experimental].
@@ -87,10 +85,7 @@ asc <subcommand> [flags]
 - `testflight` - Manage TestFlight workflows.
 - `builds` - Manage builds in App Store Connect.
 - `build-bundles` - Manage build bundles and App Clip data.
-- `pre-release-versions` - Manage TestFlight pre-release versions.
 - `build-localizations` - Manage build release notes localizations.
-- `beta-app-localizations` - Manage TestFlight beta app localizations.
-- `beta-build-localizations` - Manage TestFlight beta build localizations.
 - `sandbox` - Manage sandbox testers in App Store Connect.
 
 ### Review and Release
@@ -144,6 +139,7 @@ asc <subcommand> [flags]
 - `status` - Show a release pipeline dashboard for an app.
 - `release-notes` - Generate and manage App Store release notes.
 - `workflow` - Run multi-step automation workflows.
+- `xcode` - Local Xcode archive/export helpers (macOS only).
 - `metadata` - Manage app metadata with deterministic file workflows.
 - `snitch` - Report CLI friction as a GitHub issue.
 

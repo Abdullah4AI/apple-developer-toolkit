@@ -62,7 +62,7 @@ make test
 
 # 2. Audit help output for all parent commands
 for cmd in auth analytics finance apps app-tags testflight builds versions \
-           feedback crashes pre-release-versions localizations \
+           feedback crashes localizations \
            build-localizations sandbox submit xcode-cloud reviews; do
   echo "=== $cmd ===" && ./asc $cmd --help 2>&1
 done

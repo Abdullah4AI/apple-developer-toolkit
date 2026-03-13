@@ -33,6 +33,7 @@ This command group is detached from official App Store Connect API flows.
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
 			WebAppsCreateCommand(),
+			WebAppsAvailabilityCommand(),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp

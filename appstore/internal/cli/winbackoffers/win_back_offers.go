@@ -90,7 +90,7 @@ Examples:
   asc win-back-offers update --id "OFFER_ID" --priority NORMAL
   asc win-back-offers prices --id "OFFER_ID"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: shared.VisibleUsageFunc,
 		Subcommands: []*ffcli.Command{
 			WinBackOffersListCommand(),
 			WinBackOffersGetCommand(),
@@ -99,7 +99,21 @@ Examples:
 			WinBackOffersDeleteCommand(),
 			WinBackOffersPricesCommand(),
 			WinBackOffersPricesRelationshipsCommand(),
+			shared.DeprecatedAliasLeafCommand(
+				WinBackOffersPricesRelationshipsCommand(),
+				"prices-relationships",
+				"asc win-back-offers prices-links --id OFFER_ID [flags]",
+				"asc win-back-offers prices-links",
+				"Warning: `asc win-back-offers prices-relationships` is deprecated. Use `asc win-back-offers prices-links`.",
+			),
 			WinBackOffersRelationshipsCommand(),
+			shared.DeprecatedAliasLeafCommand(
+				WinBackOffersRelationshipsCommand(),
+				"relationships",
+				"asc win-back-offers links --subscription-id SUB_ID [flags]",
+				"asc win-back-offers links",
+				"Warning: `asc win-back-offers relationships` is deprecated. Use `asc win-back-offers links`.",
+			),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp
@@ -753,22 +767,22 @@ Examples:
 	}
 }
 
-// WinBackOffersPricesRelationshipsCommand returns the price relationships subcommand.
+// WinBackOffersPricesRelationshipsCommand returns the price links subcommand.
 func WinBackOffersPricesRelationshipsCommand() *ffcli.Command {
 	return shared.BuildPaginatedListCommand(shared.PaginatedListCommandConfig{
-		FlagSetName: "prices-relationships",
-		Name:        "prices-relationships",
-		ShortUsage:  "asc win-back-offers prices-relationships --id OFFER_ID [flags]",
+		FlagSetName: "prices-links",
+		Name:        "prices-links",
+		ShortUsage:  "asc win-back-offers prices-links --id OFFER_ID [flags]",
 		ShortHelp:   "List price relationships for a win-back offer.",
 		LongHelp: `List price relationships for a win-back offer.
 
 Examples:
-  asc win-back-offers prices-relationships --id "OFFER_ID"
-  asc win-back-offers prices-relationships --id "OFFER_ID" --paginate`,
+  asc win-back-offers prices-links --id "OFFER_ID"
+  asc win-back-offers prices-links --id "OFFER_ID" --paginate`,
 		ParentFlag:  "id",
 		ParentUsage: "Win-back offer ID",
 		LimitMax:    winBackOffersMaxLimit,
-		ErrorPrefix: "win-back-offers prices-relationships",
+		ErrorPrefix: "win-back-offers prices-links",
 		FetchPage: func(ctx context.Context, client *asc.Client, offerID string, limit int, next string) (asc.PaginatedResponse, error) {
 			opts := []asc.LinkagesOption{
 				asc.WithLinkagesLimit(limit),
@@ -779,22 +793,22 @@ Examples:
 	})
 }
 
-// WinBackOffersRelationshipsCommand returns the win-back offer relationships subcommand.
+// WinBackOffersRelationshipsCommand returns the win-back offer links subcommand.
 func WinBackOffersRelationshipsCommand() *ffcli.Command {
 	return shared.BuildPaginatedListCommand(shared.PaginatedListCommandConfig{
-		FlagSetName: "relationships",
-		Name:        "relationships",
-		ShortUsage:  "asc win-back-offers relationships --subscription-id SUB_ID [flags]",
+		FlagSetName: "links",
+		Name:        "links",
+		ShortUsage:  "asc win-back-offers links --subscription-id SUB_ID [flags]",
 		ShortHelp:   "List win-back offer relationships for a subscription.",
 		LongHelp: `List win-back offer relationships for a subscription.
 
 Examples:
-  asc win-back-offers relationships --subscription-id "SUB_ID"
-  asc win-back-offers relationships --subscription-id "SUB_ID" --paginate`,
+  asc win-back-offers links --subscription-id "SUB_ID"
+  asc win-back-offers links --subscription-id "SUB_ID" --paginate`,
 		ParentFlag:  "subscription-id",
 		ParentUsage: "Subscription ID",
 		LimitMax:    winBackOffersMaxLimit,
-		ErrorPrefix: "win-back-offers relationships",
+		ErrorPrefix: "win-back-offers links",
 		FetchPage: func(ctx context.Context, client *asc.Client, subscriptionID string, limit int, next string) (asc.PaginatedResponse, error) {
 			opts := []asc.LinkagesOption{
 				asc.WithLinkagesLimit(limit),

@@ -2,8 +2,10 @@ package submit
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
+	"net"
 	"os"
 	"strings"
 
@@ -86,20 +88,27 @@ Examples:
 				return fmt.Errorf("submit create: %w", err)
 			}
 
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
-			defer cancel()
-
 			resolvedVersionID := strings.TrimSpace(*versionID)
 			if resolvedVersionID == "" {
-				resolvedVersionID, err = shared.ResolveAppStoreVersionID(requestCtx, client, resolvedAppID, strings.TrimSpace(*version), normalizedPlatform)
+				resolveCtx, resolveCancel := shared.ContextWithTimeout(ctx)
+				resolvedVersionID, err = shared.ResolveAppStoreVersionID(resolveCtx, client, resolvedAppID, strings.TrimSpace(*version), normalizedPlatform)
+				resolveCancel()
 				if err != nil {
 					return fmt.Errorf("submit create: %w", err)
 				}
 			}
 
-			if err := runSubmitCreateLocalizationPreflight(requestCtx, client, resolvedVersionID); err != nil {
+			localizationCtx, localizationCancel := shared.ContextWithTimeout(ctx)
+			if err := runSubmitCreateLocalizationPreflight(localizationCtx, client, resolvedVersionID); err != nil {
+				localizationCancel()
 				return err
 			}
+			localizationCancel()
+
+			runSubmitCreateSubscriptionPreflight(ctx, client, resolvedAppID)
+
+			requestCtx, cancel := shared.ContextWithTimeout(ctx)
+			defer cancel()
 
 			// Attach build to version
 			if err := client.AttachBuildToVersion(requestCtx, resolvedVersionID, strings.TrimSpace(*buildID)); err != nil {
@@ -164,7 +173,7 @@ func runSubmitCreateLocalizationPreflight(ctx context.Context, client *asc.Clien
 	for _, issue := range issues {
 		fmt.Fprintf(os.Stderr, "  - %s: %s\n", issue.Locale, strings.Join(issue.MissingFields, ", "))
 	}
-	fmt.Fprintln(os.Stderr, "Fix these with `asc app-info set` (optionally using --copy-from-locale) before retrying submit create.")
+	fmt.Fprintln(os.Stderr, "Fix these with `asc apps info edit` (optionally using --copy-from-locale) before retrying submit create.")
 	return fmt.Errorf("submit create: submit preflight failed")
 }
 
@@ -341,6 +350,169 @@ Examples:
 			return shared.PrintOutput(result, *output.Output, *output.Pretty)
 		},
 	}
+}
+
+// runSubmitCreateSubscriptionPreflight checks whether the app has subscriptions
+// that need attention before submission. This is advisory (warnings only) because
+// the submit flow cannot include subscriptions in the review submission — they
+// use a separate submission path.
+func runSubmitCreateSubscriptionPreflight(ctx context.Context, client *asc.Client, appID string) {
+	groups, warning := fetchSubscriptionPreflightGroups(ctx, client, appID)
+	if warning != "" {
+		fmt.Fprintln(os.Stderr, "")
+		fmt.Fprintf(os.Stderr, "Warning: subscription preflight could not check subscriptions: %s.\n", warning)
+		return
+	}
+	if len(groups) == 0 {
+		return
+	}
+
+	var readyToSubmit []string
+	var missingMetadata []string
+	var skippedGroups []string
+
+	for _, group := range groups {
+		groupID := strings.TrimSpace(group.ID)
+		if groupID == "" {
+			continue
+		}
+		groupLabel := subscriptionPreflightGroupLabel(group)
+
+		subs, warning := fetchSubscriptionPreflightSubscriptions(ctx, client, groupID)
+		if warning != "" {
+			skippedGroups = append(skippedGroups, fmt.Sprintf("%s: %s", groupLabel, warning))
+			continue
+		}
+
+		for _, sub := range subs {
+			state := strings.ToUpper(strings.TrimSpace(sub.Attributes.State))
+			label := strings.TrimSpace(sub.Attributes.Name)
+			if label == "" {
+				label = strings.TrimSpace(sub.Attributes.ProductID)
+			}
+			if label == "" {
+				label = sub.ID
+			}
+
+			switch state {
+			case "READY_TO_SUBMIT":
+				readyToSubmit = append(readyToSubmit, label)
+			case "MISSING_METADATA":
+				missingMetadata = append(missingMetadata, label)
+			}
+		}
+	}
+
+	if len(missingMetadata) > 0 {
+		fmt.Fprintln(os.Stderr, "")
+		fmt.Fprintln(os.Stderr, "Warning: the following subscriptions are MISSING_METADATA and will not be included in review:")
+		for _, name := range missingMetadata {
+			fmt.Fprintf(os.Stderr, "  - %s\n", name)
+		}
+		fmt.Fprintln(os.Stderr, "Run `asc validate subscriptions` for details on what's missing.")
+	}
+
+	if len(readyToSubmit) > 0 {
+		fmt.Fprintln(os.Stderr, "")
+		fmt.Fprintln(os.Stderr, "Warning: the following subscriptions are READY_TO_SUBMIT but are not automatically included in this submission:")
+		for _, name := range readyToSubmit {
+			fmt.Fprintf(os.Stderr, "  - %s\n", name)
+		}
+		fmt.Fprintln(os.Stderr, "If this is their first review, you must submit them via the app version page in App Store Connect.")
+		fmt.Fprintln(os.Stderr, "For subsequent reviews, use `asc subscriptions review submit --subscription-id \"SUB_ID\" --confirm`.")
+	}
+
+	if len(skippedGroups) > 0 {
+		fmt.Fprintln(os.Stderr, "")
+		fmt.Fprintln(os.Stderr, "Warning: some subscription groups could not be fully checked during preflight:")
+		for _, skipped := range skippedGroups {
+			fmt.Fprintf(os.Stderr, "  - %s\n", skipped)
+		}
+		fmt.Fprintln(os.Stderr, "The warnings above only cover the groups that could be checked.")
+	}
+}
+
+func fetchSubscriptionPreflightGroups(ctx context.Context, client *asc.Client, appID string) ([]asc.Resource[asc.SubscriptionGroupAttributes], string) {
+	firstCtx, firstCancel := shared.ContextWithTimeout(ctx)
+	resp, err := client.GetSubscriptionGroups(firstCtx, appID, asc.WithSubscriptionGroupsLimit(200))
+	firstCancel()
+	if err != nil {
+		return nil, subscriptionPreflightSkipReason(err, "subscription groups")
+	}
+
+	paginated, err := asc.PaginateAll(ctx, resp, func(_ context.Context, nextURL string) (asc.PaginatedResponse, error) {
+		pageCtx, pageCancel := shared.ContextWithTimeout(ctx)
+		defer pageCancel()
+		return client.GetSubscriptionGroups(pageCtx, appID, asc.WithSubscriptionGroupsNextURL(nextURL))
+	})
+	if err != nil {
+		return nil, subscriptionPreflightSkipReason(err, "subscription groups")
+	}
+
+	typed, ok := paginated.(*asc.SubscriptionGroupsResponse)
+	if !ok {
+		return nil, fmt.Sprintf("received unexpected subscription groups response type %T", paginated)
+	}
+	return typed.Data, ""
+}
+
+func fetchSubscriptionPreflightSubscriptions(ctx context.Context, client *asc.Client, groupID string) ([]asc.Resource[asc.SubscriptionAttributes], string) {
+	firstCtx, firstCancel := shared.ContextWithTimeout(ctx)
+	resp, err := client.GetSubscriptions(firstCtx, groupID, asc.WithSubscriptionsLimit(200))
+	firstCancel()
+	if err != nil {
+		return nil, subscriptionPreflightSkipReason(err, "subscriptions for this group")
+	}
+
+	paginated, err := asc.PaginateAll(ctx, resp, func(_ context.Context, nextURL string) (asc.PaginatedResponse, error) {
+		pageCtx, pageCancel := shared.ContextWithTimeout(ctx)
+		defer pageCancel()
+		return client.GetSubscriptions(pageCtx, groupID, asc.WithSubscriptionsNextURL(nextURL))
+	})
+	if err != nil {
+		return nil, subscriptionPreflightSkipReason(err, "subscriptions for this group")
+	}
+
+	typed, ok := paginated.(*asc.SubscriptionsResponse)
+	if !ok {
+		return nil, fmt.Sprintf("received unexpected subscriptions response type %T", paginated)
+	}
+	return typed.Data, ""
+}
+
+func subscriptionPreflightGroupLabel(group asc.Resource[asc.SubscriptionGroupAttributes]) string {
+	name := strings.TrimSpace(group.Attributes.ReferenceName)
+	id := strings.TrimSpace(group.ID)
+	switch {
+	case name != "" && id != "":
+		return fmt.Sprintf("%s (%s)", name, id)
+	case name != "":
+		return name
+	case id != "":
+		return id
+	default:
+		return "(unknown group)"
+	}
+}
+
+func subscriptionPreflightSkipReason(err error, resourceLabel string) string {
+	if errors.Is(err, context.DeadlineExceeded) {
+		return fmt.Sprintf("App Store Connect timed out while loading %s", resourceLabel)
+	}
+	if errors.Is(err, asc.ErrForbidden) || asc.IsUnauthorized(err) {
+		return fmt.Sprintf("this App Store Connect account cannot read %s", resourceLabel)
+	}
+	if asc.IsRetryable(err) {
+		return fmt.Sprintf("App Store Connect was temporarily unavailable while loading %s", resourceLabel)
+	}
+	if asc.IsNotFound(err) {
+		return fmt.Sprintf("App Store Connect reported %s as not found", resourceLabel)
+	}
+	var netErr net.Error
+	if errors.As(err, &netErr) {
+		return fmt.Sprintf("App Store Connect could not be reached while loading %s", resourceLabel)
+	}
+	return fmt.Sprintf("failed to load %s: %v", resourceLabel, err)
 }
 
 // cancelStaleReviewSubmissions cancels any READY_FOR_REVIEW submissions for the
