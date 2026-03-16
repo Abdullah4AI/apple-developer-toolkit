@@ -16,9 +16,10 @@ import (
 )
 
 var (
-	runtimeGOOS      = runtime.GOOS
-	lookPathFn       = exec.LookPath
-	commandContextFn = exec.CommandContext
+	runtimeGOOS          = runtime.GOOS
+	lookPathFn           = exec.LookPath
+	commandContextFn     = exec.CommandContext
+	activeDeveloperDirFn = activeDeveloperDir
 )
 
 const xcodebuildErrorTailLimit = 64 * 1024
@@ -116,6 +117,7 @@ func Export(ctx context.Context, opts ExportOptions) (*ExportResult, error) {
 	if err := prepareIPAPath(opts.IPAPath, opts.Overwrite); err != nil {
 		return nil, err
 	}
+	maybeWarnAboutBetaXcodeForAppStoreExport(ctx, opts.ExportOptions, opts.LogWriter)
 
 	tempExportDir, err := os.MkdirTemp(filepath.Dir(opts.IPAPath), ".asc-xcode-export-*")
 	if err != nil {
@@ -287,6 +289,69 @@ func ensureXcodeAvailable(ctx context.Context) error {
 		return fmt.Errorf("xcodebuild not usable: %w", err)
 	}
 	return nil
+}
+
+func maybeWarnAboutBetaXcodeForAppStoreExport(ctx context.Context, exportOptionsPath string, logWriter io.Writer) {
+	if logWriter == nil || !isAppStoreExport(exportOptionsPath) {
+		return
+	}
+	developerDir, err := activeDeveloperDirFn(ctx)
+	if err != nil || !isBetaXcodePath(developerDir) {
+		return
+	}
+	fmt.Fprintf(
+		logWriter,
+		"Warning: active Xcode developer directory %q appears to be a beta build. App Store Connect may accept uploads from beta Xcode, but App Store review can later reject builds for unsupported SDK/Xcode. Prefer a stable Xcode via DEVELOPER_DIR or xcode-select for App Store submission exports.\n",
+		developerDir,
+	)
+}
+
+func isAppStoreExport(exportOptionsPath string) bool {
+	data, err := os.ReadFile(strings.TrimSpace(exportOptionsPath))
+	if err != nil {
+		return false
+	}
+	var payload map[string]any
+	if _, err := plist.Unmarshal(data, &payload); err != nil {
+		return false
+	}
+
+	method, _ := payload["method"].(string)
+	switch strings.ToLower(strings.TrimSpace(method)) {
+	case "app-store", "app-store-connect":
+		return true
+	}
+
+	destination, _ := payload["destination"].(string)
+	return strings.EqualFold(strings.TrimSpace(destination), "upload")
+}
+
+func activeDeveloperDir(ctx context.Context) (string, error) {
+	if developerDir := strings.TrimSpace(os.Getenv("DEVELOPER_DIR")); developerDir != "" {
+		return filepath.Clean(developerDir), nil
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	cmd := exec.CommandContext(ctx, "xcode-select", "-p")
+	output, err := cmd.Output()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Clean(strings.TrimSpace(string(output))), nil
+}
+
+func isBetaXcodePath(pathValue string) bool {
+	if strings.TrimSpace(pathValue) == "" {
+		return false
+	}
+	for _, segment := range strings.Split(filepath.Clean(pathValue), string(os.PathSeparator)) {
+		normalized := strings.ToLower(strings.TrimSpace(segment))
+		if strings.Contains(normalized, "xcode") && strings.Contains(normalized, "beta") {
+			return true
+		}
+	}
+	return false
 }
 
 func buildArchiveCommand(opts ArchiveOptions) []string {

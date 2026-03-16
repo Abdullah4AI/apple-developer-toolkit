@@ -165,7 +165,7 @@ func inspectStorage(options DoctorOptions) DoctorSection {
 func inspectProfiles() DoctorSection {
 	checks := []DoctorCheck{}
 
-	credentials, err := ListCredentials()
+	credentials, err := ListCredentialSummaries()
 	if err != nil {
 		if warning, ok := errors.AsType[*CredentialsWarning](err); ok {
 			checks = append(checks, DoctorCheck{

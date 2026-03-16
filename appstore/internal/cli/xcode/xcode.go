@@ -55,12 +55,16 @@ be passed directly into asc upload and publish commands.
 
 Examples:
   asc xcode archive --workspace App.xcworkspace --scheme App --archive-path .asc/artifacts/App.xcarchive --output json
-  asc xcode export --archive-path .asc/artifacts/App.xcarchive --export-options ExportOptions.plist --ipa-path .asc/artifacts/App.ipa --output json`,
+  asc xcode export --archive-path .asc/artifacts/App.xcarchive --export-options ExportOptions.plist --ipa-path .asc/artifacts/App.ipa --output json
+  asc xcode version view
+  asc xcode version bump --type patch
+  asc xcode version edit --version "1.3.0" --build-number "42"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
 			XcodeArchiveCommand(),
 			XcodeExportCommand(),
+			XcodeVersionCommand(),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp

@@ -28,6 +28,7 @@ func XcodeCloudArtifactsCommand() *ffcli.Command {
 
 Examples:
   asc xcode-cloud artifacts list --action-id "ACTION_ID"
+  asc xcode-cloud artifacts list --run-id "BUILD_RUN_ID"
   asc xcode-cloud artifacts get --id "ARTIFACT_ID"
   asc xcode-cloud artifacts download --id "ARTIFACT_ID" --path ./artifact.zip`,
 		FlagSet:   fs,
@@ -45,33 +46,51 @@ Examples:
 
 // XcodeCloudArtifactsListCommand returns the xcode-cloud artifacts list subcommand.
 func XcodeCloudArtifactsListCommand() *ffcli.Command {
-	return shared.BuildPaginatedListCommand(shared.PaginatedListCommandConfig{
-		FlagSetName: "list",
-		Name:        "list",
-		ShortUsage:  "asc xcode-cloud artifacts list [flags]",
-		ShortHelp:   "List artifacts for a build action.",
+	fs := flag.NewFlagSet("list", flag.ExitOnError)
+
+	actionID := fs.String("action-id", "", "Build action ID to list artifacts for")
+	runID := fs.String("run-id", "", "Build run ID to resolve a single action from")
+	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
+	next := fs.String("next", "", "Fetch next page using a links.next URL")
+	paginate := fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")
+	output := shared.BindOutputFlags(fs)
+
+	return &ffcli.Command{
+		Name:       "list",
+		ShortUsage: "asc xcode-cloud artifacts list [flags]",
+		ShortHelp:  "List artifacts for a build action.",
 		LongHelp: `List artifacts for a build action.
 
 Examples:
   asc xcode-cloud artifacts list --action-id "ACTION_ID"
+  asc xcode-cloud artifacts list --run-id "BUILD_RUN_ID"
   asc xcode-cloud artifacts list --action-id "ACTION_ID" --output table
   asc xcode-cloud artifacts list --action-id "ACTION_ID" --limit 50
   asc xcode-cloud artifacts list --action-id "ACTION_ID" --paginate`,
-		ParentFlag:  "action-id",
-		ParentUsage: "Build action ID to list artifacts for",
-		LimitMax:    200,
-		ErrorPrefix: "xcode-cloud artifacts list",
-		ContextTimeout: func(ctx context.Context) (context.Context, context.CancelFunc) {
-			return contextWithXcodeCloudTimeout(ctx, 0)
+		FlagSet:   fs,
+		UsageFunc: shared.DefaultUsageFunc,
+		Exec: func(ctx context.Context, args []string) error {
+			return runXcodeCloudActionResourceList(
+				ctx,
+				*actionID,
+				*runID,
+				*limit,
+				*next,
+				*paginate,
+				*output.Output,
+				*output.Pretty,
+				"xcode-cloud artifacts list",
+				func(ctx context.Context, client *asc.Client, resolvedActionID string, limit int, next string) (asc.PaginatedResponse, error) {
+					opts := []asc.CiArtifactsOption{
+						asc.WithCiArtifactsLimit(limit),
+						asc.WithCiArtifactsNextURL(next),
+					}
+					return client.GetCiBuildActionArtifacts(ctx, resolvedActionID, opts...)
+				},
+				aggregateXcodeCloudArtifactsFromRun,
+			)
 		},
-		FetchPage: func(ctx context.Context, client *asc.Client, actionID string, limit int, next string) (asc.PaginatedResponse, error) {
-			opts := []asc.CiArtifactsOption{
-				asc.WithCiArtifactsLimit(limit),
-				asc.WithCiArtifactsNextURL(next),
-			}
-			return client.GetCiBuildActionArtifacts(ctx, actionID, opts...)
-		},
-	})
+	}
 }
 
 // XcodeCloudArtifactsGetCommand returns the xcode-cloud artifacts get subcommand.

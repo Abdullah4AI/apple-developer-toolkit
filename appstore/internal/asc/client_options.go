@@ -1493,6 +1493,17 @@ func WithBuildsExpired(expired bool) BuildsOption {
 	}
 }
 
+// WithBuildsInclude specifies related resources to include in the response
+// (e.g., "preReleaseVersion" to get the marketing version string).
+func WithBuildsInclude(include []string) BuildsOption {
+	return func(q *buildsQuery) {
+		normalized := normalizeList(include)
+		if len(normalized) > 0 {
+			q.include = normalized
+		}
+	}
+}
+
 // WithBuildBundlesLimit sets the max number of included build bundles to return.
 func WithBuildBundlesLimit(limit int) BuildBundlesOption {
 	return func(q *buildBundlesQuery) {

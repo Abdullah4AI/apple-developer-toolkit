@@ -14,6 +14,17 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
+const xcodeCloudAppFlagUsage = "App Store Connect app ID, bundle ID, or exact app name (or ASC_APP_ID env)"
+
+func resolveXcodeCloudAppID(ctx context.Context, client *asc.Client, appID string) (string, error) {
+	resolvedAppID := shared.ResolveAppID(appID)
+	if resolvedAppID == "" {
+		return "", nil
+	}
+
+	return shared.ResolveAppIDWithExactLookup(ctx, client, resolvedAppID)
+}
+
 // XcodeCloudCommand returns the xcode-cloud command with subcommands.
 func XcodeCloudCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("xcode-cloud", flag.ExitOnError)
@@ -62,7 +73,7 @@ Examples:
 func XcodeCloudRunCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("run", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
+	appID := fs.String("app", "", xcodeCloudAppFlagUsage)
 	workflowName := fs.String("workflow", "", "Workflow name to trigger")
 	workflowID := fs.String("workflow-id", "", "Workflow ID to trigger (alternative to --workflow)")
 	branch := fs.String("branch", "", "Branch or tag name to build")
@@ -164,6 +175,11 @@ Examples:
 			if !hasSourceRunID {
 				// Resolve workflow ID if needed.
 				if resolvedWorkflowID == "" {
+					resolvedAppID, err = resolveXcodeCloudAppID(requestCtx, client, resolvedAppID)
+					if err != nil {
+						return fmt.Errorf("xcode-cloud run: %w", err)
+					}
+
 					product, err := client.ResolveCiProductForApp(requestCtx, resolvedAppID)
 					if err != nil {
 						return fmt.Errorf("xcode-cloud run: %w", err)

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -12,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 	"time"
 
@@ -28,6 +30,8 @@ const (
 	defaultRepo          = "App-Store-Connect-CLI"
 	maxSearchResults     = 5
 	maxResponseBodyBytes = 8192
+	maxLabelPages        = 10
+	labelsPerPage        = 100
 )
 
 // githubAPIBase is a variable so tests can override it with httptest servers.
@@ -45,6 +49,24 @@ var githubHTTPClient = func() *http.Client {
 	return &http.Client{Timeout: asc.ResolveTimeout()}
 }
 
+type stringListFlag []string
+
+func (f *stringListFlag) String() string {
+	if f == nil {
+		return ""
+	}
+	return strings.Join(*f, ",")
+}
+
+func (f *stringListFlag) Set(value string) error {
+	label := strings.TrimSpace(value)
+	if label == "" {
+		return fmt.Errorf("label must not be empty")
+	}
+	*f = append(*f, label)
+	return nil
+}
+
 // SnitchCommand returns the top-level snitch command.
 func SnitchCommand(version string) *ffcli.Command {
 	fs := flag.NewFlagSet("snitch", flag.ExitOnError)
@@ -56,6 +78,8 @@ func SnitchCommand(version string) *ffcli.Command {
 	dryRun := fs.Bool("dry-run", false, "Search for duplicates and preview without filing")
 	local := fs.Bool("local", false, "Log to .asc/snitch.log instead of filing on GitHub")
 	confirm := fs.Bool("confirm", false, "Create the GitHub issue after duplicate search")
+	var labels stringListFlag
+	fs.Var(&labels, "label", "Existing repo label to attach (repeatable)")
 
 	return &ffcli.Command{
 		Name:       "snitch",
@@ -71,6 +95,7 @@ that looks like a flag (for example, "--app"), wrap the full description in quot
 
 Examples:
   asc snitch --repro 'asc crashes --app "com.example"' --expected "Should resolve bundle ID" --actual "Error: AppId is invalid" --confirm "crashes --app doesn't support bundle ID"
+  asc snitch --label enhancement --label p3 "support extra snitch labels"
   asc snitch --dry-run "group name ambiguity"
   asc snitch --local "status command needs bundle ID support"
   asc snitch flush
@@ -100,17 +125,34 @@ Examples:
 				Repro:       strings.TrimSpace(*repro),
 				Expected:    strings.TrimSpace(*expected),
 				Actual:      strings.TrimSpace(*actual),
+				Labels:      append([]string(nil), labels...),
 				Severity:    sev,
 				Timestamp:   time.Now().UTC(),
 				ASCVersion:  version,
 				OS:          fmt.Sprintf("%s/%s", runtime.GOOS, runtime.GOARCH),
 			}
 
+			token := resolveGitHubToken()
+
+			if len(entry.Labels) > 0 && !(*local && !*dryRun) {
+				validationCtx, validationCancel := shared.ContextWithTimeout(ctx)
+				validatedLabels, err := validateRequestedLabels(validationCtx, token, entry.Labels)
+				validationCancel()
+				if err != nil {
+					if errors.Is(err, flag.ErrHelp) {
+						return err
+					}
+					fmt.Fprintf(os.Stderr, "Warning: %v; continuing without preflight label validation.\n", err)
+					entry.Labels = dedupeLabels(entry.Labels)
+				} else {
+					entry.Labels = validatedLabels
+				}
+			}
+
 			if *local && !*dryRun {
 				return writeLocalLog(entry)
 			}
 
-			token := resolveGitHubToken()
 			requestCtx, cancel := shared.ContextWithTimeout(ctx)
 			defer cancel()
 
@@ -269,6 +311,7 @@ type LogEntry struct {
 	Repro       string    `json:"repro,omitempty"`
 	Expected    string    `json:"expected,omitempty"`
 	Actual      string    `json:"actual,omitempty"`
+	Labels      []string  `json:"labels,omitempty"`
 	Severity    string    `json:"severity"`
 	Timestamp   time.Time `json:"timestamp"`
 	ASCVersion  string    `json:"asc_version"`
@@ -354,7 +397,8 @@ func issueLabels(e LogEntry) []string {
 	case "feature-request":
 		labels = append(labels, "enhancement")
 	}
-	return labels
+	labels = append(labels, e.Labels...)
+	return dedupeLabels(labels)
 }
 
 func printPotentialDuplicates(duplicates []GitHubIssue) {
@@ -376,7 +420,131 @@ func printPreview(entry LogEntry, dryRun bool) {
 		fmt.Fprintln(os.Stderr, "--- Preview only: rerun with --confirm to create issue ---")
 	}
 	fmt.Fprintf(os.Stderr, "Title: %s\n", issueTitle(entry))
+	if labels := issueLabels(entry); len(labels) > 0 {
+		fmt.Fprintf(os.Stderr, "Labels: %s\n", strings.Join(labels, ", "))
+	}
 	fmt.Fprintf(os.Stderr, "Body:\n%s\n", issueBody(entry))
+}
+
+func dedupeLabels(labels []string) []string {
+	if len(labels) == 0 {
+		return nil
+	}
+
+	seen := make(map[string]struct{}, len(labels))
+	deduped := make([]string, 0, len(labels))
+	for _, raw := range labels {
+		label := strings.TrimSpace(raw)
+		if label == "" {
+			continue
+		}
+		key := strings.ToLower(label)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		deduped = append(deduped, label)
+	}
+
+	return deduped
+}
+
+func listRepoLabels(ctx context.Context, token string) ([]string, error) {
+	seen := make(map[string]struct{})
+	labels := make([]string, 0, labelsPerPage)
+
+	for page := 1; page <= maxLabelPages; page++ {
+		labelsURL := fmt.Sprintf(
+			"%s/repos/%s/%s/labels?per_page=%d&page=%d",
+			githubAPIBase,
+			defaultOwner,
+			defaultRepo,
+			labelsPerPage,
+			page,
+		)
+
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, labelsURL, nil)
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Accept", "application/vnd.github+json")
+		if token != "" {
+			req.Header.Set("Authorization", "Bearer "+token)
+		}
+
+		resp, err := githubHTTPClient().Do(req)
+		if err != nil {
+			return nil, err
+		}
+
+		var pageLabels []struct {
+			Name string `json:"name"`
+		}
+		if resp.StatusCode == http.StatusOK {
+			err = json.NewDecoder(resp.Body).Decode(&pageLabels)
+		} else {
+			err = readGitHubAPIError(resp)
+		}
+		resp.Body.Close()
+		if err != nil {
+			return nil, err
+		}
+
+		for _, label := range pageLabels {
+			name := strings.TrimSpace(label.Name)
+			if name == "" {
+				continue
+			}
+			key := strings.ToLower(name)
+			if _, ok := seen[key]; ok {
+				continue
+			}
+			seen[key] = struct{}{}
+			labels = append(labels, name)
+		}
+
+		if len(pageLabels) < labelsPerPage {
+			break
+		}
+	}
+
+	sort.Strings(labels)
+	return labels, nil
+}
+
+func validateRequestedLabels(ctx context.Context, token string, requested []string) ([]string, error) {
+	requested = dedupeLabels(requested)
+	if len(requested) == 0 {
+		return nil, nil
+	}
+
+	repoLabels, err := listRepoLabels(ctx, token)
+	if err != nil {
+		return nil, fmt.Errorf("failed to validate --label values: %w", err)
+	}
+
+	labelIndex := make(map[string]string, len(repoLabels))
+	for _, label := range repoLabels {
+		labelIndex[strings.ToLower(label)] = label
+	}
+
+	validated := make([]string, 0, len(requested))
+	unknown := make([]string, 0, len(requested))
+	for _, label := range requested {
+		canonical, ok := labelIndex[strings.ToLower(label)]
+		if !ok {
+			unknown = append(unknown, label)
+			continue
+		}
+		validated = append(validated, canonical)
+	}
+
+	if len(unknown) > 0 {
+		sort.Strings(unknown)
+		return nil, shared.UsageErrorf("--label must reference existing repo labels; unknown label(s): %s", strings.Join(unknown, ", "))
+	}
+
+	return validated, nil
 }
 
 func readLocalLog(path string) ([]LogEntry, error) {
@@ -430,6 +598,9 @@ func formatLocalEntries(entries []LogEntry) string {
 		}
 		if entry.Actual != "" {
 			fmt.Fprintf(&b, "Actual:\n%s\n", entry.Actual)
+		}
+		if len(entry.Labels) > 0 {
+			fmt.Fprintf(&b, "Labels: %s\n", strings.Join(entry.Labels, ", "))
 		}
 		if i < len(entries)-1 {
 			b.WriteString("\n")

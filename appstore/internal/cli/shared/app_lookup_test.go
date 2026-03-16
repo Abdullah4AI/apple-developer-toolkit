@@ -205,3 +205,65 @@ func TestResolveAppIDWithLookup_FallsBackToUniqueFuzzyMatchWhenNoExact(t *testin
 		t.Fatalf("expected legacy fuzzy fallback app id app-fuzzy, got %q", got)
 	}
 }
+
+func TestResolveAppIDWithExactLookup_RejectsUniqueFuzzyMatch(t *testing.T) {
+	t.Setenv("ASC_APP_ID", "")
+	stub := &sequenceAppLookupStub{
+		responses: []*asc.AppsResponse{
+			appsResponseFromApps(nil),
+			appsResponseFromApps([]appFixture{
+				{id: "app-fuzzy", name: "Relax: Sleep + Focus"},
+			}),
+			appsResponseFromApps([]appFixture{
+				{id: "app-fuzzy", name: "Relax: Sleep + Focus"},
+			}),
+		},
+	}
+
+	_, err := ResolveAppIDWithExactLookup(context.Background(), stub, "Relax")
+	if err == nil {
+		t.Fatal("expected not found error")
+	}
+	if !strings.Contains(err.Error(), "not found") {
+		t.Fatalf("expected not found error, got %v", err)
+	}
+}
+
+func TestResolveAppIDWithExactLookup_NumericPassthroughTakesPriorityOverExactName(t *testing.T) {
+	t.Setenv("ASC_APP_ID", "")
+	stub := &sequenceAppLookupStub{
+		responses: []*asc.AppsResponse{
+			appsResponseFromApps(nil),
+			appsResponseFromApps([]appFixture{
+				{id: "app-name", name: "2048"},
+			}),
+		},
+	}
+
+	got, err := ResolveAppIDWithExactLookup(context.Background(), stub, "2048")
+	if err != nil {
+		t.Fatalf("ResolveAppIDWithExactLookup() error: %v", err)
+	}
+	if got != "2048" {
+		t.Fatalf("expected numeric passthrough app id 2048, got %q", got)
+	}
+	if stub.calls != 0 {
+		t.Fatalf("expected numeric passthrough without lookup calls, got %d", stub.calls)
+	}
+}
+
+func TestResolveAppIDWithExactLookup_NumericPassthroughWhenNoExactMatch(t *testing.T) {
+	t.Setenv("ASC_APP_ID", "")
+	stub := &sequenceAppLookupStub{}
+
+	got, err := ResolveAppIDWithExactLookup(context.Background(), stub, "123456789")
+	if err != nil {
+		t.Fatalf("ResolveAppIDWithExactLookup() error: %v", err)
+	}
+	if got != "123456789" {
+		t.Fatalf("expected numeric passthrough app id 123456789, got %q", got)
+	}
+	if stub.calls != 0 {
+		t.Fatalf("expected numeric passthrough without lookup calls, got %d", stub.calls)
+	}
+}

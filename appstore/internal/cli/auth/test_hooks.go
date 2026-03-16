@@ -22,6 +22,34 @@ func SetStatusValidateCredential(fn func(context.Context, authsvc.Credential) er
 	}
 }
 
+// SetListStoredCredentials replaces the full credential listing hook for tests.
+// It returns a restore function to reset the previous handler.
+func SetListStoredCredentials(fn func() ([]authsvc.Credential, error)) func() {
+	previous := listStoredCredentials
+	if fn == nil {
+		listStoredCredentials = authsvc.ListCredentials
+	} else {
+		listStoredCredentials = fn
+	}
+	return func() {
+		listStoredCredentials = previous
+	}
+}
+
+// SetListCredentialSummaries replaces the metadata-only credential listing hook
+// for tests. It returns a restore function to reset the previous handler.
+func SetListCredentialSummaries(fn func() ([]authsvc.Credential, error)) func() {
+	previous := listCredentialSummaries
+	if fn == nil {
+		listCredentialSummaries = authsvc.ListCredentialSummaries
+	} else {
+		listCredentialSummaries = fn
+	}
+	return func() {
+		listCredentialSummaries = previous
+	}
+}
+
 // NewPermissionWarning builds a permission warning error for tests.
 func NewPermissionWarning(err error) error {
 	if err == nil {

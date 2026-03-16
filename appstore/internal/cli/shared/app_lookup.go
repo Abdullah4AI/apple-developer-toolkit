@@ -13,6 +13,59 @@ type appLookupClient interface {
 	GetApps(ctx context.Context, opts ...asc.AppsOption) (*asc.AppsResponse, error)
 }
 
+// ResolveAppIDWithExactLookup takes an already-resolved app identifier and
+// looks it up by exact bundle ID and exact app name only. If no exact match
+// exists and the value is numeric, it falls back to treating it as an App
+// Store Connect app ID.
+func ResolveAppIDWithExactLookup(ctx context.Context, client appLookupClient, appID string) (string, error) {
+	resolved := strings.TrimSpace(appID)
+	if resolved == "" {
+		return "", nil
+	}
+	if isNumericAppID(resolved) {
+		return resolved, nil
+	}
+	if client == nil {
+		return "", fmt.Errorf("app lookup client is required for non-numeric --app values")
+	}
+
+	byBundle, err := client.GetApps(ctx, asc.WithAppsBundleIDs([]string{resolved}), asc.WithAppsLimit(2))
+	if err != nil {
+		return "", fmt.Errorf("resolve app by bundle ID: %w", err)
+	}
+	if len(byBundle.Data) == 1 {
+		return strings.TrimSpace(byBundle.Data[0].ID), nil
+	}
+	if len(byBundle.Data) > 1 {
+		return "", fmt.Errorf("multiple apps found for bundle ID %q; use --app with App Store Connect app ID", resolved)
+	}
+
+	nameMatchIDs, err := findExactAppNameMatches(ctx, client, resolved, true)
+	if err != nil {
+		return "", fmt.Errorf("resolve app by name: %w", err)
+	}
+	if len(nameMatchIDs) == 1 {
+		return nameMatchIDs[0], nil
+	}
+	if len(nameMatchIDs) > 1 {
+		return "", fmt.Errorf("multiple apps found for name %q (%s); use --app with App Store Connect app ID", resolved, strings.Join(nameMatchIDs, ", "))
+	}
+
+	// ASC name filtering is fuzzy in practice; full-scan fallback preserves exact-name semantics.
+	nameMatchIDs, err = findExactAppNameMatches(ctx, client, resolved, false)
+	if err != nil {
+		return "", fmt.Errorf("resolve app by name: %w", err)
+	}
+	if len(nameMatchIDs) == 1 {
+		return nameMatchIDs[0], nil
+	}
+	if len(nameMatchIDs) > 1 {
+		return "", fmt.Errorf("multiple apps found for name %q (%s); use --app with App Store Connect app ID", resolved, strings.Join(nameMatchIDs, ", "))
+	}
+
+	return "", fmt.Errorf("app %q not found (expected app ID, exact bundle ID, or exact app name)", resolved)
+}
+
 // ResolveAppIDWithLookup takes an already-resolved app identifier and, when
 // non-numeric, looks it up by exact bundle ID, exact app name, then legacy
 // fuzzy-name matching when unique.

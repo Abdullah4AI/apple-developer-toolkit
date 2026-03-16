@@ -2,6 +2,7 @@ package pricing
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -579,44 +580,53 @@ Examples:
 
 // PricingAvailabilityTerritoryAvailabilitiesCommand returns the availability territory-availabilities subcommand.
 func PricingAvailabilityTerritoryAvailabilitiesCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("pricing availability territory-availabilities", flag.ExitOnError)
-
-	availabilityID := fs.String("availability", "", "App availability ID")
-	output := shared.BindOutputFlags(fs)
-
-	return &ffcli.Command{
-		Name:       "territory-availabilities",
-		ShortUsage: "asc pricing availability territory-availabilities --availability AVAILABILITY_ID",
-		ShortHelp:  "List territory availabilities for an app availability.",
+	cmd := shared.BuildPaginatedListCommand(shared.PaginatedListCommandConfig{
+		FlagSetName: "pricing availability territory-availabilities",
+		Name:        "territory-availabilities",
+		ShortUsage:  "asc pricing availability territory-availabilities --availability AVAILABILITY_ID [--limit N] [--next URL] [--paginate]",
+		ShortHelp:   "List territory availabilities for an app availability.",
 		LongHelp: `List territory availabilities for an app availability.
 
 Examples:
-  asc pricing availability territory-availabilities --availability "AVAILABILITY_ID"`,
-		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
-		Exec: func(ctx context.Context, args []string) error {
-			trimmedAvailabilityID := strings.TrimSpace(*availabilityID)
-			if trimmedAvailabilityID == "" {
-				fmt.Fprintln(os.Stderr, "Error: --availability is required")
-				return flag.ErrHelp
+  asc pricing availability territory-availabilities --availability "AVAILABILITY_ID"
+  asc pricing availability territory-availabilities --availability "AVAILABILITY_ID" --limit 175
+  asc pricing availability territory-availabilities --availability "AVAILABILITY_ID" --paginate
+  asc pricing availability territory-availabilities --next "NEXT_URL"`,
+		ParentFlag:  "availability",
+		ParentUsage: "App availability ID",
+		LimitMax:    200,
+		ErrorPrefix: "pricing availability territory-availabilities",
+		FetchPage: func(ctx context.Context, client *asc.Client, availabilityID string, limit int, next string) (asc.PaginatedResponse, error) {
+			opts := make([]asc.TerritoryAvailabilitiesOption, 0, 2)
+			if limit > 0 {
+				opts = append(opts, asc.WithTerritoryAvailabilitiesLimit(limit))
 			}
-
-			client, err := shared.GetASCClient()
-			if err != nil {
-				return fmt.Errorf("pricing availability territory-availabilities: %w", err)
+			if strings.TrimSpace(next) != "" {
+				opts = append(opts, asc.WithTerritoryAvailabilitiesNextURL(next))
 			}
-
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
-			defer cancel()
-
-			resp, err := client.GetTerritoryAvailabilities(requestCtx, trimmedAvailabilityID)
-			if err != nil {
-				return fmt.Errorf("pricing availability territory-availabilities: %w", err)
-			}
-
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+			return client.GetTerritoryAvailabilities(ctx, availabilityID, opts...)
 		},
+	})
+
+	originalExec := cmd.Exec
+	cmd.Exec = func(ctx context.Context, args []string) error {
+		err := originalExec(ctx, args)
+		if err == nil || errors.Is(err, flag.ErrHelp) {
+			return err
+		}
+		if isPricingAvailabilityTerritoryAvailabilitiesUsageError(err) {
+			return shared.UsageError(err.Error())
+		}
+		return err
 	}
+
+	return cmd
+}
+
+func isPricingAvailabilityTerritoryAvailabilitiesUsageError(err error) bool {
+	message := err.Error()
+	return strings.HasPrefix(message, "pricing availability territory-availabilities: --limit must be between 1 and ") ||
+		strings.HasPrefix(message, "pricing availability territory-availabilities: --next ")
 }
 
 // PricingAvailabilitySetCommand returns the availability set subcommand.

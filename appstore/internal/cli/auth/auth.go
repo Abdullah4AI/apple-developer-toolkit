@@ -23,6 +23,8 @@ var (
 	loginJWTGenerator        = asc.GenerateJWT
 	loginNetworkValidate     = validateLoginNetwork
 	statusValidateCredential = validateStoredCredential
+	listStoredCredentials    = authsvc.ListCredentials
+	listCredentialSummaries  = authsvc.ListCredentialSummaries
 )
 
 // Auth command factory
@@ -56,6 +58,8 @@ Set ASC_BYPASS_KEYCHAIN to 1/true/yes/on to bypass keychain.`,
 			AuthLogoutCommand(),
 			AuthDoctorCommand(),
 			AuthStatusCommand(),
+			AuthIssuerIDCommand(),
+			AuthTokenCommand(),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			if len(args) == 0 {
@@ -540,7 +544,7 @@ Examples:
 				return flag.ErrHelp
 			}
 
-			credentials, err := authsvc.ListCredentials()
+			credentials, err := listCredentialSummaries()
 			if err != nil {
 				if warning, ok := errors.AsType[*authsvc.CredentialsWarning](err); ok {
 					fmt.Fprintf(os.Stderr, "Warning: %s\n", warning)
@@ -647,7 +651,11 @@ Examples:
 				return shared.UsageError(err.Error())
 			}
 
-			credentials, err := authsvc.ListCredentials()
+			credentialLister := listCredentialSummaries
+			if *validate || *verbose {
+				credentialLister = listStoredCredentials
+			}
+			credentials, err := credentialLister()
 			var listWarning *authsvc.CredentialsWarning
 			if err != nil {
 				warning, ok := errors.AsType[*authsvc.CredentialsWarning](err)
@@ -887,4 +895,145 @@ func authStatusEnvironmentNote(profile string, bypassKeychain, envProvided, envC
 func boolPointer(value bool) *bool {
 	result := value
 	return &result
+}
+
+// AuthIssuerIDCommand prints the active App Store Connect issuer ID.
+func AuthIssuerIDCommand() *ffcli.Command {
+	fs := flag.NewFlagSet("auth issuer-id", flag.ExitOnError)
+
+	name := fs.String("name", "", "Profile name (uses default profile if omitted)")
+	output := shared.BindOutputFlagsWithAllowed(fs, "output", "text", "Output format: text (raw issuer ID), json", "text", "json")
+
+	return &ffcli.Command{
+		Name:       "issuer-id",
+		ShortUsage: "asc auth issuer-id [flags]",
+		ShortHelp:  "Print the active App Store Connect issuer ID.",
+		LongHelp: `Print the active App Store Connect issuer ID.
+
+This reads the issuer ID from the currently resolved authentication credentials
+without making a network request.
+
+Examples:
+  asc auth issuer-id
+  asc auth issuer-id --name "MyKey"
+  asc auth issuer-id --output json`,
+		FlagSet:   fs,
+		UsageFunc: shared.DefaultUsageFunc,
+		Exec: func(ctx context.Context, args []string) error {
+			if len(args) > 0 {
+				return shared.UsageErrorf("unexpected argument(s): %s", strings.Join(args, " "))
+			}
+			trimmedName := strings.TrimSpace(*name)
+			if trimmedName == "" && *name != "" {
+				return shared.UsageError("--name cannot be blank")
+			}
+			normalizedOutput, err := shared.ValidateOutputFormatAllowed(*output.Output, *output.Pretty, "text", "json")
+			if err != nil {
+				return shared.UsageError(err.Error())
+			}
+
+			cred, err := shared.ResolveAuthCredentials(trimmedName)
+			if err != nil {
+				return fmt.Errorf("auth issuer-id: %w", err)
+			}
+
+			if normalizedOutput == "json" {
+				return shared.PrintOutput(struct {
+					IssuerID string `json:"issuerId"`
+					Profile  string `json:"profile,omitempty"`
+				}{
+					IssuerID: cred.IssuerID,
+					Profile:  cred.Profile,
+				}, "json", *output.Pretty)
+			}
+
+			fmt.Print(cred.IssuerID)
+			return nil
+		},
+	}
+}
+
+// AuthTokenCommand prints a signed JWT for direct API calls.
+func AuthTokenCommand() *ffcli.Command {
+	fs := flag.NewFlagSet("auth token", flag.ExitOnError)
+
+	name := fs.String("name", "", "Profile name (uses default profile if omitted)")
+	confirm := fs.Bool("confirm", false, "Confirm printing a live JWT to stdout")
+	output := shared.BindOutputFlagsWithAllowed(fs, "output", "text", "Output format: text (raw token), json", "text", "json")
+
+	return &ffcli.Command{
+		Name:       "token",
+		ShortUsage: "asc auth token --confirm [flags]",
+		ShortHelp:  "Print a signed JWT for direct App Store Connect API calls.",
+		LongHelp: `Print a signed JWT for direct App Store Connect API calls.
+
+The token is valid for 10 minutes and printed to stdout so it can be used
+in shell pipelines.
+
+Requires --confirm because this prints a live bearer token to stdout.
+
+Examples:
+  asc auth token --confirm
+  asc auth token --name "MyKey" --confirm
+  asc auth token --confirm --output json
+  curl -H "Authorization: Bearer $(asc auth token --confirm)" https://api.appstoreconnect.apple.com/v1/apps`,
+		FlagSet:   fs,
+		UsageFunc: shared.DefaultUsageFunc,
+		Exec: func(ctx context.Context, args []string) error {
+			if len(args) > 0 {
+				return shared.UsageErrorf("unexpected argument(s): %s", strings.Join(args, " "))
+			}
+			trimmedName := strings.TrimSpace(*name)
+			if trimmedName == "" && *name != "" {
+				return shared.UsageError("--name cannot be blank")
+			}
+			normalizedOutput, err := shared.ValidateOutputFormatAllowed(*output.Output, *output.Pretty, "text", "json")
+			if err != nil {
+				return shared.UsageError(err.Error())
+			}
+			if !*confirm {
+				return shared.UsageError("--confirm is required")
+			}
+
+			cred, err := shared.ResolveAuthCredentials(trimmedName)
+			if err != nil {
+				return fmt.Errorf("auth token: %w", err)
+			}
+
+			privateKey, err := loadCredentialKey(cred)
+			if err != nil {
+				return fmt.Errorf("auth token: %w", err)
+			}
+
+			token, err := asc.GenerateJWT(cred.KeyID, cred.IssuerID, privateKey)
+			if err != nil {
+				return fmt.Errorf("auth token: failed to generate JWT: %w", err)
+			}
+
+			if normalizedOutput == "json" {
+				return shared.PrintOutput(struct {
+					Token   string `json:"token"`
+					KeyID   string `json:"keyId"`
+					Profile string `json:"profile,omitempty"`
+				}{
+					Token:   token,
+					KeyID:   cred.KeyID,
+					Profile: cred.Profile,
+				}, "json", *output.Pretty)
+			}
+
+			fmt.Print(token)
+			return nil
+		},
+	}
+}
+
+func loadCredentialKey(cred shared.ResolvedAuthCredentials) (*ecdsa.PrivateKey, error) {
+	if pemValue := strings.TrimSpace(cred.KeyPEM); pemValue != "" {
+		return authsvc.LoadPrivateKeyFromPEM([]byte(pemValue))
+	}
+	if err := authsvc.ValidateKeyFile(cred.KeyPath); err != nil {
+		return nil, fmt.Errorf("invalid private key: %w", err)
+	}
+	return authsvc.LoadPrivateKey(cred.KeyPath)
 }

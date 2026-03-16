@@ -3307,6 +3307,11 @@ func TestScreenshotsAndVideoPreviewsValidationErrors(t *testing.T) {
 			wantErr: "--device-type is required",
 		},
 		{
+			name:    "screenshots upload skip existing replace mutually exclusive",
+			args:    []string{"screenshots", "upload", "--version-localization", "LOC_ID", "--path", "./screenshots", "--device-type", "IPHONE_65", "--skip-existing", "--replace"},
+			wantErr: "--skip-existing and --replace are mutually exclusive",
+		},
+		{
 			name:    "screenshots delete missing id",
 			args:    []string{"screenshots", "delete"},
 			wantErr: "--id is required",
@@ -5145,9 +5150,9 @@ func TestXcodeCloudValidationErrors(t *testing.T) {
 			wantErr: "--id is required",
 		},
 		{
-			name:    "xcode-cloud artifacts list missing action-id",
+			name:    "xcode-cloud artifacts list missing selector",
 			args:    []string{"xcode-cloud", "artifacts", "list"},
-			wantErr: "--action-id is required",
+			wantErr: "--action-id or --run-id is required",
 		},
 		{
 			name:    "xcode-cloud artifacts get missing id",
@@ -5165,9 +5170,9 @@ func TestXcodeCloudValidationErrors(t *testing.T) {
 			wantErr: "--path is required",
 		},
 		{
-			name:    "xcode-cloud test-results list missing action-id",
+			name:    "xcode-cloud test-results list missing selector",
 			args:    []string{"xcode-cloud", "test-results", "list"},
-			wantErr: "--action-id is required",
+			wantErr: "--action-id or --run-id is required",
 		},
 		{
 			name:    "xcode-cloud test-results get missing id",
@@ -5175,9 +5180,9 @@ func TestXcodeCloudValidationErrors(t *testing.T) {
 			wantErr: "--id is required",
 		},
 		{
-			name:    "xcode-cloud issues list missing action-id",
+			name:    "xcode-cloud issues list missing selector",
 			args:    []string{"xcode-cloud", "issues", "list"},
-			wantErr: "--action-id is required",
+			wantErr: "--action-id or --run-id is required",
 		},
 		{
 			name:    "xcode-cloud issues get missing id",

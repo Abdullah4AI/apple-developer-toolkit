@@ -14,7 +14,7 @@ import (
 )
 
 func xcodeCloudWorkflowsListFlags(fs *flag.FlagSet) (appID *string, limit *int, next *string, paginate *bool, output *string, pretty *bool) {
-	appID = fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
+	appID = fs.String("app", "", xcodeCloudAppFlagUsage)
 	limit = fs.Int("limit", 0, "Maximum results per page (1-200)")
 	next = fs.String("next", "", "Fetch next page using a links.next URL")
 	paginate = fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")
@@ -283,6 +283,11 @@ func xcodeCloudWorkflowsList(ctx context.Context, appID string, limit int, next 
 
 	productID := ""
 	if nextURL == "" && resolvedAppID != "" {
+		resolvedAppID, err = resolveXcodeCloudAppID(requestCtx, client, resolvedAppID)
+		if err != nil {
+			return fmt.Errorf("xcode-cloud workflows: %w", err)
+		}
+
 		product, err := client.ResolveCiProductForApp(requestCtx, resolvedAppID)
 		if err != nil {
 			return fmt.Errorf("xcode-cloud workflows: %w", err)

@@ -17,6 +17,9 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
 )
 
 func TestSubmitCommandShape(t *testing.T) {
@@ -297,4 +300,331 @@ func TestSubmitCancelCommand_ByVersionIDNotFoundReportsLegacySubmissionError(t *
 	if !strings.Contains(err.Error(), `no legacy submission found for version "missing-version"`) {
 		t.Fatalf("unexpected error: %v", err)
 	}
+}
+
+func TestIsAppUpdate_IncludesReleasedAndRemovedStatesFilters(t *testing.T) {
+	client := newSubmitTestClient(t, submitRoundTripFunc(func(req *http.Request) (*http.Response, error) {
+		if req.Method != http.MethodGet {
+			return nil, fmt.Errorf("unexpected method: %s", req.Method)
+		}
+		if req.URL.Path != "/v1/apps/app-123/appStoreVersions" {
+			return nil, fmt.Errorf("unexpected path: %s", req.URL.Path)
+		}
+
+		query := req.URL.Query()
+		if got := query.Get("filter[platform]"); got != "IOS" {
+			return nil, fmt.Errorf("unexpected filter[platform]: got %q want %q", got, "IOS")
+		}
+		if got := query.Get("filter[appStoreState]"); got != "READY_FOR_SALE,DEVELOPER_REMOVED_FROM_SALE,REMOVED_FROM_SALE" {
+			return nil, fmt.Errorf("unexpected filter[appStoreState]: %q", got)
+		}
+		if got := query.Get("limit"); got != "1" {
+			return nil, fmt.Errorf("unexpected limit: got %q want %q", got, "1")
+		}
+
+		return submitJSONResponse(http.StatusOK, `{
+			"data": [
+				{
+					"type": "appStoreVersions",
+					"id": "version-1",
+					"attributes": {}
+				}
+			]
+		}`)
+	}))
+
+	isUpdate, err := isAppUpdate(context.Background(), client, "app-123", "IOS")
+	if err != nil {
+		t.Fatalf("isAppUpdate() error = %v", err)
+	}
+	if !isUpdate {
+		t.Fatal("isAppUpdate() = false, want true when released/removed versions exist")
+	}
+}
+
+func TestIsAppUpdate_EmptyPlatformSkipsPlatformFilter(t *testing.T) {
+	client := newSubmitTestClient(t, submitRoundTripFunc(func(req *http.Request) (*http.Response, error) {
+		if req.Method != http.MethodGet {
+			return nil, fmt.Errorf("unexpected method: %s", req.Method)
+		}
+		if req.URL.Path != "/v1/apps/app-123/appStoreVersions" {
+			return nil, fmt.Errorf("unexpected path: %s", req.URL.Path)
+		}
+
+		query := req.URL.Query()
+		if got := query.Get("filter[platform]"); got != "" {
+			return nil, fmt.Errorf("did not expect filter[platform], got %q", got)
+		}
+		if got := query.Get("filter[appStoreState]"); got != "READY_FOR_SALE,DEVELOPER_REMOVED_FROM_SALE,REMOVED_FROM_SALE" {
+			return nil, fmt.Errorf("unexpected filter[appStoreState]: %q", got)
+		}
+		if got := query.Get("limit"); got != "1" {
+			return nil, fmt.Errorf("unexpected limit: got %q want %q", got, "1")
+		}
+
+		return submitJSONResponse(http.StatusOK, `{"data":[]}`)
+	}))
+
+	isUpdate, err := isAppUpdate(context.Background(), client, "app-123", "   ")
+	if err != nil {
+		t.Fatalf("isAppUpdate() error = %v", err)
+	}
+	if isUpdate {
+		t.Fatal("isAppUpdate() = true, want false when no versions are returned")
+	}
+}
+
+func TestIsAppUpdate_PropagatesClientErrors(t *testing.T) {
+	client := newSubmitTestClient(t, submitRoundTripFunc(func(req *http.Request) (*http.Response, error) {
+		if req.Method != http.MethodGet {
+			return nil, fmt.Errorf("unexpected method: %s", req.Method)
+		}
+		if req.URL.Path != "/v1/apps/app-123/appStoreVersions" {
+			return nil, fmt.Errorf("unexpected path: %s", req.URL.Path)
+		}
+		return submitJSONResponse(http.StatusInternalServerError, `{
+			"errors": [{
+				"status": "500",
+				"code": "INTERNAL_ERROR",
+				"title": "Internal Server Error"
+			}]
+		}`)
+	}))
+
+	_, err := isAppUpdate(context.Background(), client, "app-123", "IOS")
+	if err == nil {
+		t.Fatal("isAppUpdate() error = nil, want non-nil")
+	}
+}
+
+func TestExtractExistingSubmissionID(t *testing.T) {
+	t.Run("returns submission ID from associated error", func(t *testing.T) {
+		err := &asc.APIError{
+			Code:   "ENTITY_ERROR",
+			Title:  "The request entity is not valid.",
+			Detail: "An attribute value is not valid.",
+			AssociatedErrors: map[string][]asc.APIAssociatedError{
+				"/v1/reviewSubmissionItems": {
+					{
+						Code:   "ENTITY_ERROR.RELATIONSHIP.INVALID",
+						Detail: "appStoreVersions with id 883340862 was already added to another reviewSubmission with id fb5dad8e-bd5f-4d96-bc2f-561cf74a7e7a",
+					},
+				},
+			},
+		}
+		got := extractExistingSubmissionID(err)
+		want := "fb5dad8e-bd5f-4d96-bc2f-561cf74a7e7a"
+		if got != want {
+			t.Fatalf("got %q, want %q", got, want)
+		}
+	})
+
+	t.Run("returns empty for non-APIError", func(t *testing.T) {
+		err := fmt.Errorf("some random error")
+		if got := extractExistingSubmissionID(err); got != "" {
+			t.Fatalf("expected empty, got %q", got)
+		}
+	})
+
+	t.Run("returns empty for APIError without matching detail", func(t *testing.T) {
+		err := &asc.APIError{
+			Code:   "ENTITY_ERROR",
+			Title:  "Something else went wrong.",
+			Detail: "Unrelated problem.",
+			AssociatedErrors: map[string][]asc.APIAssociatedError{
+				"/v1/reviewSubmissionItems": {
+					{Code: "OTHER_ERROR", Detail: "something unrelated"},
+				},
+			},
+		}
+		if got := extractExistingSubmissionID(err); got != "" {
+			t.Fatalf("expected empty, got %q", got)
+		}
+	})
+
+	t.Run("returns empty for APIError with no associated errors", func(t *testing.T) {
+		err := &asc.APIError{
+			Code:  "ENTITY_ERROR",
+			Title: "Something went wrong.",
+		}
+		if got := extractExistingSubmissionID(err); got != "" {
+			t.Fatalf("expected empty, got %q", got)
+		}
+	})
+
+	t.Run("works with wrapped APIError", func(t *testing.T) {
+		apiErr := &asc.APIError{
+			Code: "ENTITY_ERROR",
+			AssociatedErrors: map[string][]asc.APIAssociatedError{
+				"/v1/reviewSubmissionItems": {
+					{
+						Code:   "ENTITY_ERROR.RELATIONSHIP.INVALID",
+						Detail: "appStoreVersions with id 999 was already added to another reviewSubmission with id aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+					},
+				},
+			},
+		}
+		wrapped := fmt.Errorf("add item failed: %w", apiErr)
+		got := extractExistingSubmissionID(wrapped)
+		want := "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+		if got != want {
+			t.Fatalf("got %q, want %q", got, want)
+		}
+	})
+
+	t.Run("handles uppercase UUID", func(t *testing.T) {
+		err := &asc.APIError{
+			Code: "ENTITY_ERROR",
+			AssociatedErrors: map[string][]asc.APIAssociatedError{
+				"/v1/reviewSubmissionItems": {
+					{
+						Code:   "ENTITY_ERROR.RELATIONSHIP.INVALID",
+						Detail: "appStoreVersions with id 123 was Already Added to another reviewSubmission with id FB5DAD8E-BD5F-4D96-BC2F-561CF74A7E7A",
+					},
+				},
+			},
+		}
+		got := extractExistingSubmissionID(err)
+		want := "FB5DAD8E-BD5F-4D96-BC2F-561CF74A7E7A"
+		if got != want {
+			t.Fatalf("got %q, want %q", got, want)
+		}
+	})
+
+	t.Run("handles non-UUID identifier", func(t *testing.T) {
+		err := &asc.APIError{
+			Code: "ENTITY_ERROR",
+			AssociatedErrors: map[string][]asc.APIAssociatedError{
+				"/v1/reviewSubmissionItems": {
+					{
+						Code:   "ENTITY_ERROR.RELATIONSHIP.INVALID",
+						Detail: "appStoreVersions with id 123 was already added to another reviewSubmission with id some-opaque-id-12345",
+					},
+				},
+			},
+		}
+		got := extractExistingSubmissionID(err)
+		want := "some-opaque-id-12345"
+		if got != want {
+			t.Fatalf("got %q, want %q", got, want)
+		}
+	})
+}
+
+func TestAddVersionToSubmissionOrRecover_ExhaustsRetriesForRecentlyCanceledSubmission(t *testing.T) {
+	const staleSubmissionID = "stale-1"
+
+	attempts := 0
+	client := newSubmitTestClient(t, submitRoundTripFunc(func(req *http.Request) (*http.Response, error) {
+		if req.Method != http.MethodPost || req.URL.Path != "/v1/reviewSubmissionItems" {
+			return nil, fmt.Errorf("unexpected request: %s %s", req.Method, req.URL.Path)
+		}
+		attempts++
+		return submitJSONResponse(http.StatusConflict, submitAlreadyAddedConflictBody(staleSubmissionID))
+	}))
+
+	originalDelays := submitCreateRecentlyCanceledRetryDelays
+	submitCreateRecentlyCanceledRetryDelays = []time.Duration{time.Millisecond, time.Millisecond}
+	t.Cleanup(func() {
+		submitCreateRecentlyCanceledRetryDelays = originalDelays
+	})
+
+	resolvedID, err := addVersionToSubmissionOrRecover(
+		context.Background(),
+		client,
+		"new-sub-1",
+		"version-1",
+		map[string]struct{}{staleSubmissionID: {}},
+	)
+	if err == nil {
+		t.Fatal("expected retry exhaustion error")
+	}
+	if resolvedID != "" {
+		t.Fatalf("expected empty resolved submission ID on failure, got %q", resolvedID)
+	}
+	if !strings.Contains(err.Error(), "still attached to recently canceled review submission stale-1 after 2 retries") {
+		t.Fatalf("expected retry exhaustion message, got: %v", err)
+	}
+	if attempts != 3 {
+		t.Fatalf("expected 3 add-item attempts (initial + 2 retries), got %d", attempts)
+	}
+}
+
+func TestAddVersionToSubmissionOrRecover_ReturnsContextErrorWhileWaitingForDetach(t *testing.T) {
+	const staleSubmissionID = "stale-1"
+
+	attempts := 0
+	client := newSubmitTestClient(t, submitRoundTripFunc(func(req *http.Request) (*http.Response, error) {
+		if req.Method != http.MethodPost || req.URL.Path != "/v1/reviewSubmissionItems" {
+			return nil, fmt.Errorf("unexpected request: %s %s", req.Method, req.URL.Path)
+		}
+		attempts++
+		return submitJSONResponse(http.StatusConflict, submitAlreadyAddedConflictBody(staleSubmissionID))
+	}))
+
+	originalDelays := submitCreateRecentlyCanceledRetryDelays
+	submitCreateRecentlyCanceledRetryDelays = []time.Duration{100 * time.Millisecond}
+	t.Cleanup(func() {
+		submitCreateRecentlyCanceledRetryDelays = originalDelays
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	defer cancel()
+
+	resolvedID, err := addVersionToSubmissionOrRecover(
+		ctx,
+		client,
+		"new-sub-1",
+		"version-1",
+		map[string]struct{}{staleSubmissionID: {}},
+	)
+	if err == nil {
+		t.Fatal("expected context cancellation while waiting to retry")
+	}
+	if resolvedID != "" {
+		t.Fatalf("expected empty resolved submission ID on failure, got %q", resolvedID)
+	}
+	if !strings.Contains(err.Error(), "waiting for recently canceled review submission stale-1 to clear") {
+		t.Fatalf("expected wait/cancellation error message, got: %v", err)
+	}
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("expected wrapped context deadline exceeded error, got: %v", err)
+	}
+	if attempts != 1 {
+		t.Fatalf("expected one add-item attempt before context cancellation, got %d", attempts)
+	}
+}
+
+func newSubmitTestClient(t *testing.T, transport http.RoundTripper) *asc.Client {
+	t.Helper()
+
+	keyPath := filepath.Join(t.TempDir(), "AuthKey.p8")
+	writeSubmitECDSAPEM(t, keyPath)
+
+	client, err := asc.NewClientWithHTTPClient("TEST_KEY", "TEST_ISSUER", keyPath, &http.Client{
+		Transport: transport,
+	})
+	if err != nil {
+		t.Fatalf("NewClientWithHTTPClient() error: %v", err)
+	}
+	return client
+}
+
+func submitAlreadyAddedConflictBody(existingSubmissionID string) string {
+	return fmt.Sprintf(`{
+		"errors": [{
+			"status": "409",
+			"code": "ENTITY_ERROR",
+			"title": "The request entity is not valid.",
+			"detail": "An attribute value is not valid.",
+			"meta": {
+				"associatedErrors": {
+					"/v1/reviewSubmissionItems": [{
+						"code": "ENTITY_ERROR.RELATIONSHIP.INVALID",
+						"detail": "appStoreVersions with id version-1 was already added to another reviewSubmission with id %s"
+					}]
+				}
+			}
+		}]
+	}`, existingSubmissionID)
 }

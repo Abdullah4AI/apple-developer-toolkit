@@ -219,6 +219,31 @@ func TestRun_UsageValidationErrorsReturnExitUsage(t *testing.T) {
 			wantErr: "--source-run-id is mutually exclusive with --workflow and --workflow-id",
 		},
 		{
+			name:    "xcode-cloud issues list conflicting selectors",
+			args:    []string{"xcode-cloud", "issues", "list", "--action-id", "ACT_123", "--run-id", "RUN_123"},
+			wantErr: "--action-id and --run-id are mutually exclusive",
+		},
+		{
+			name:    "xcode-cloud issues list next with run-id",
+			args:    []string{"xcode-cloud", "issues", "list", "--run-id", "RUN_123", "--next", "https://api.appstoreconnect.apple.com/v1/ciBuildActions/ACT_123/issues?cursor=abc"},
+			wantErr: "--next is not supported with --run-id",
+		},
+		{
+			name:    "xcode-cloud build-runs invalid sort",
+			args:    []string{"xcode-cloud", "build-runs", "--workflow-id", "WF_ID", "--sort", "nope"},
+			wantErr: "--sort must be one of",
+		},
+		{
+			name:    "xcode-cloud build-runs invalid limit",
+			args:    []string{"xcode-cloud", "build-runs", "--workflow-id", "WF_ID", "--limit", "201"},
+			wantErr: "--limit must be between 1 and 200",
+		},
+		{
+			name:    "xcode-cloud build-runs invalid next",
+			args:    []string{"xcode-cloud", "build-runs", "--next", "http://example.com/not-asc"},
+			wantErr: "--next must be an App Store Connect URL",
+		},
+		{
 			name:    "publish appstore invalid timeout",
 			args:    []string{"publish", "appstore", "--app", "APP_123", "--ipa", "app.ipa", "--version", "1.0.0", "--timeout", "-1s"},
 			wantErr: "--timeout must be greater than 0",
@@ -227,6 +252,11 @@ func TestRun_UsageValidationErrorsReturnExitUsage(t *testing.T) {
 			name:    "builds list invalid processing-state",
 			args:    []string{"builds", "list", "--app", "APP_123", "--processing-state", "WRONG"},
 			wantErr: "--processing-state must be one of",
+		},
+		{
+			name:    "builds list invalid platform",
+			args:    []string{"builds", "list", "--app", "APP_123", "--platform", "ANDROID"},
+			wantErr: "--platform must be one of",
 		},
 		{
 			name:    "builds wait missing selector",

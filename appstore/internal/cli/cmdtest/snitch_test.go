@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -46,6 +47,230 @@ func TestSnitchInvalidSeverity(t *testing.T) {
 
 	if !strings.Contains(stderr, "--severity must be one of") {
 		t.Fatalf("expected severity validation error, got %q", stderr)
+	}
+}
+
+func TestSnitchDryRunWithValidLabels(t *testing.T) {
+	t.Setenv("GITHUB_TOKEN", "test-token")
+	t.Setenv("GH_TOKEN", "")
+
+	originalTransport := http.DefaultTransport
+	t.Cleanup(func() {
+		http.DefaultTransport = originalTransport
+	})
+
+	callCount := 0
+	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		callCount++
+		switch callCount {
+		case 1:
+			if req.Method != http.MethodGet || req.URL.Host != "api.github.com" || req.URL.Path != "/repos/rudrankriyam/App-Store-Connect-CLI/labels" {
+				t.Fatalf("unexpected first request: %s %s", req.Method, req.URL.String())
+			}
+			if req.Header.Get("Authorization") != "Bearer test-token" {
+				t.Fatalf("unexpected auth header: %q", req.Header.Get("Authorization"))
+			}
+			body := `[{"name":"enhancement"},{"name":"p3"},{"name":"easy"},{"name":"asc-snitch"}]`
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(strings.NewReader(body)),
+				Header:     http.Header{"Content-Type": []string{"application/json"}},
+			}, nil
+		case 2:
+			if req.Method != http.MethodGet || req.URL.Host != "api.github.com" || req.URL.Path != "/search/issues" {
+				t.Fatalf("unexpected second request: %s %s", req.Method, req.URL.String())
+			}
+			body := `{"items":[]}`
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(strings.NewReader(body)),
+				Header:     http.Header{"Content-Type": []string{"application/json"}},
+			}, nil
+		default:
+			t.Fatalf("unexpected request count %d", callCount)
+			return nil, nil
+		}
+	})
+
+	root := RootCommand("1.2.3")
+	root.FlagSet.SetOutput(io.Discard)
+
+	_, stderr := captureOutput(t, func() {
+		if err := root.Parse([]string{"snitch", "--dry-run", "--label", "enhancement", "--label", "p3", "valid label request"}); err != nil {
+			t.Fatalf("parse error: %v", err)
+		}
+		if err := root.Run(context.Background()); err != nil {
+			t.Fatalf("expected no error for valid labels, got %v", err)
+		}
+	})
+
+	if !strings.Contains(stderr, "Dry run: would create issue") {
+		t.Fatalf("expected dry-run output, got %q", stderr)
+	}
+	if !strings.Contains(stderr, "valid label request") {
+		t.Fatalf("expected issue preview, got %q", stderr)
+	}
+}
+
+func TestSnitchDryRunContinuesWhenLabelValidationLookupFails(t *testing.T) {
+	t.Setenv("GITHUB_TOKEN", "test-token")
+	t.Setenv("GH_TOKEN", "")
+
+	originalTransport := http.DefaultTransport
+	t.Cleanup(func() {
+		http.DefaultTransport = originalTransport
+	})
+
+	callCount := 0
+	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		callCount++
+		switch callCount {
+		case 1:
+			if req.Method != http.MethodGet || req.URL.Host != "api.github.com" || req.URL.Path != "/repos/rudrankriyam/App-Store-Connect-CLI/labels" {
+				t.Fatalf("unexpected first request: %s %s", req.Method, req.URL.String())
+			}
+			return &http.Response{
+				StatusCode: http.StatusServiceUnavailable,
+				Body:       io.NopCloser(strings.NewReader(`{"message":"try later"}`)),
+				Header:     http.Header{"Content-Type": []string{"application/json"}},
+			}, nil
+		case 2:
+			if req.Method != http.MethodGet || req.URL.Host != "api.github.com" || req.URL.Path != "/search/issues" {
+				t.Fatalf("unexpected second request: %s %s", req.Method, req.URL.String())
+			}
+			body := `{"items":[]}`
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(strings.NewReader(body)),
+				Header:     http.Header{"Content-Type": []string{"application/json"}},
+			}, nil
+		default:
+			t.Fatalf("unexpected request count %d", callCount)
+			return nil, nil
+		}
+	})
+
+	root := RootCommand("1.2.3")
+	root.FlagSet.SetOutput(io.Discard)
+
+	_, stderr := captureOutput(t, func() {
+		if err := root.Parse([]string{"snitch", "--dry-run", "--label", "enhancement", "label lookup degraded"}); err != nil {
+			t.Fatalf("parse error: %v", err)
+		}
+		if err := root.Run(context.Background()); err != nil {
+			t.Fatalf("expected lookup failures to warn and continue, got %v", err)
+		}
+	})
+
+	if !strings.Contains(stderr, "continuing without preflight label validation") {
+		t.Fatalf("expected label validation warning, got %q", stderr)
+	}
+	if !strings.Contains(stderr, "Dry run: would create issue") {
+		t.Fatalf("expected dry-run output, got %q", stderr)
+	}
+	if !strings.Contains(stderr, "Labels: asc-snitch, bug, enhancement") {
+		t.Fatalf("expected preview labels, got %q", stderr)
+	}
+}
+
+func TestSnitchDryRunContinuesAfterLabelValidationTimeout(t *testing.T) {
+	t.Setenv("GITHUB_TOKEN", "test-token")
+	t.Setenv("GH_TOKEN", "")
+	t.Setenv("ASC_TIMEOUT", "1ms")
+
+	originalTransport := http.DefaultTransport
+	t.Cleanup(func() {
+		http.DefaultTransport = originalTransport
+	})
+
+	callCount := 0
+	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		callCount++
+		switch callCount {
+		case 1:
+			if req.Method != http.MethodGet || req.URL.Host != "api.github.com" || req.URL.Path != "/repos/rudrankriyam/App-Store-Connect-CLI/labels" {
+				t.Fatalf("unexpected first request: %s %s", req.Method, req.URL.String())
+			}
+			<-req.Context().Done()
+			return nil, req.Context().Err()
+		case 2:
+			if req.Method != http.MethodGet || req.URL.Host != "api.github.com" || req.URL.Path != "/search/issues" {
+				t.Fatalf("unexpected second request: %s %s", req.Method, req.URL.String())
+			}
+			body := `{"items":[]}`
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(strings.NewReader(body)),
+				Header:     http.Header{"Content-Type": []string{"application/json"}},
+			}, nil
+		default:
+			t.Fatalf("unexpected request count %d", callCount)
+			return nil, nil
+		}
+	})
+
+	root := RootCommand("1.2.3")
+	root.FlagSet.SetOutput(io.Discard)
+
+	_, stderr := captureOutput(t, func() {
+		if err := root.Parse([]string{"snitch", "--dry-run", "--label", "enhancement", "label timeout degraded"}); err != nil {
+			t.Fatalf("parse error: %v", err)
+		}
+		if err := root.Run(context.Background()); err != nil {
+			t.Fatalf("expected timeout failures to warn and continue, got %v", err)
+		}
+	})
+
+	if !strings.Contains(stderr, "continuing without preflight label validation") {
+		t.Fatalf("expected label validation warning, got %q", stderr)
+	}
+	if !strings.Contains(stderr, "Dry run: would create issue") {
+		t.Fatalf("expected dry-run output, got %q", stderr)
+	}
+	if callCount != 2 {
+		t.Fatalf("expected validation + duplicate-search requests, got %d", callCount)
+	}
+}
+
+func TestSnitchInvalidLabelReturnsUsage(t *testing.T) {
+	t.Setenv("GITHUB_TOKEN", "test-token")
+	t.Setenv("GH_TOKEN", "")
+
+	originalTransport := http.DefaultTransport
+	t.Cleanup(func() {
+		http.DefaultTransport = originalTransport
+	})
+
+	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		if req.Method != http.MethodGet || req.URL.Host != "api.github.com" || req.URL.Path != "/repos/rudrankriyam/App-Store-Connect-CLI/labels" {
+			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.String())
+		}
+		body := `[{"name":"enhancement"},{"name":"p3"},{"name":"easy"},{"name":"asc-snitch"}]`
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(strings.NewReader(body)),
+			Header:     http.Header{"Content-Type": []string{"application/json"}},
+		}, nil
+	})
+
+	root := RootCommand("1.2.3")
+	root.FlagSet.SetOutput(io.Discard)
+
+	_, stderr := captureOutput(t, func() {
+		if err := root.Parse([]string{"snitch", "--dry-run", "--label", "not-a-real-label", "invalid label request"}); err != nil {
+			t.Fatalf("parse error: %v", err)
+		}
+		err := root.Run(context.Background())
+		if !errors.Is(err, flag.ErrHelp) {
+			t.Fatalf("expected ErrHelp, got %v", err)
+		}
+	})
+
+	if !strings.Contains(stderr, "--label must reference existing repo labels") {
+		t.Fatalf("expected invalid label validation error, got %q", stderr)
+	}
+	if !strings.Contains(stderr, "not-a-real-label") {
+		t.Fatalf("expected invalid label name in error, got %q", stderr)
 	}
 }
 

@@ -10,8 +10,9 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
-func xcodeCloudBuildRunsListFlags(fs *flag.FlagSet) (workflowID *string, limit *int, next *string, paginate *bool, output *string, pretty *bool) {
+func xcodeCloudBuildRunsListFlags(fs *flag.FlagSet) (workflowID *string, sort *string, limit *int, next *string, paginate *bool, output *string, pretty *bool) {
 	workflowID = fs.String("workflow-id", "", "Workflow ID to list build runs for")
+	sort = fs.String("sort", "", "Sort by number or -number")
 	limit = fs.Int("limit", 0, "Maximum results per page (1-200)")
 	next = fs.String("next", "", "Fetch next page using a links.next URL")
 	paginate = fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")
@@ -25,7 +26,7 @@ func xcodeCloudBuildRunsListFlags(fs *flag.FlagSet) (workflowID *string, limit *
 func XcodeCloudBuildRunsCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("build-runs", flag.ExitOnError)
 
-	workflowID, limit, next, paginate, output, pretty := xcodeCloudBuildRunsListFlags(fs)
+	workflowID, sort, limit, next, paginate, output, pretty := xcodeCloudBuildRunsListFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "build-runs",
@@ -35,6 +36,7 @@ func XcodeCloudBuildRunsCommand() *ffcli.Command {
 
 Examples:
   asc xcode-cloud build-runs --workflow-id "WORKFLOW_ID"
+  asc xcode-cloud build-runs --workflow-id "WORKFLOW_ID" --sort "-number"
   asc xcode-cloud build-runs list --workflow-id "WORKFLOW_ID"
   asc xcode-cloud build-runs get --id "BUILD_RUN_ID"
   asc xcode-cloud build-runs builds --run-id "BUILD_RUN_ID"
@@ -48,7 +50,7 @@ Examples:
 			XcodeCloudBuildRunsBuildsCommand(),
 		},
 		Exec: func(ctx context.Context, args []string) error {
-			return xcodeCloudBuildRunsList(ctx, *workflowID, *limit, *next, *paginate, *output, *pretty)
+			return xcodeCloudBuildRunsList(ctx, *workflowID, *sort, *limit, *next, *paginate, *output, *pretty)
 		},
 	}
 }
@@ -56,7 +58,7 @@ Examples:
 func XcodeCloudBuildRunsListCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("list", flag.ExitOnError)
 
-	workflowID, limit, next, paginate, output, pretty := xcodeCloudBuildRunsListFlags(fs)
+	workflowID, sort, limit, next, paginate, output, pretty := xcodeCloudBuildRunsListFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "list",
@@ -66,12 +68,13 @@ func XcodeCloudBuildRunsListCommand() *ffcli.Command {
 
 Examples:
   asc xcode-cloud build-runs list --workflow-id "WORKFLOW_ID"
+  asc xcode-cloud build-runs list --workflow-id "WORKFLOW_ID" --sort "-number"
   asc xcode-cloud build-runs list --workflow-id "WORKFLOW_ID" --limit 50
   asc xcode-cloud build-runs list --workflow-id "WORKFLOW_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
-			return xcodeCloudBuildRunsList(ctx, *workflowID, *limit, *next, *paginate, *output, *pretty)
+			return xcodeCloudBuildRunsList(ctx, *workflowID, *sort, *limit, *next, *paginate, *output, *pretty)
 		},
 	}
 }
@@ -148,7 +151,11 @@ Examples:
 	}
 }
 
-func xcodeCloudBuildRunsList(ctx context.Context, workflowID string, limit int, next string, paginate bool, output string, pretty bool) error {
+func xcodeCloudBuildRunsList(ctx context.Context, workflowID string, sort string, limit int, next string, paginate bool, output string, pretty bool) error {
+	if err := shared.ValidateSort(sort, "number", "-number"); err != nil {
+		return shared.UsageError(err.Error())
+	}
+
 	return runXcodeCloudPaginatedParentList(
 		ctx,
 		workflowID,
@@ -163,6 +170,7 @@ func xcodeCloudBuildRunsList(ctx context.Context, workflowID string, limit int, 
 			return client.GetCiBuildRuns(
 				ctx,
 				workflowID,
+				asc.WithCiBuildRunsSort(sort),
 				asc.WithCiBuildRunsLimit(limit),
 				asc.WithCiBuildRunsNextURL(next),
 			)

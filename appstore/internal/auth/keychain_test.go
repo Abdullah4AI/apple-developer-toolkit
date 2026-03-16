@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/99designs/keyring"
 
@@ -921,6 +922,9 @@ func TestGetCredentialsWithSource_BackfillsLegacyKeychainPayload(t *testing.T) {
 	if strings.TrimSpace(payload.PrivateKeyPEM) == "" {
 		t.Fatal("expected legacy payload to be backfilled with private key PEM")
 	}
+	if item.Description != testCredentialMetadataDescription {
+		t.Fatalf("expected metadata description %q, got %q", testCredentialMetadataDescription, item.Description)
+	}
 
 	if err := os.Remove(keyPath); err != nil {
 		t.Fatalf("os.Remove(%q) error: %v", keyPath, err)
@@ -937,6 +941,122 @@ func TestGetCredentialsWithSource_BackfillsLegacyKeychainPayload(t *testing.T) {
 	}
 	if strings.TrimSpace(second.PrivateKeyPEM) == "" {
 		t.Fatal("expected private key PEM after deleting original file")
+	}
+}
+
+func TestGetCredentialsWithSource_BackfillsMetadataForExistingPEM(t *testing.T) {
+	modifiedAt := time.Date(2026, 3, 15, 4, 30, 0, 0, time.UTC)
+	kr := &metadataKeyring{
+		metadata: map[string]keyring.Metadata{
+			keyringKey("legacy"): {
+				Item: &keyring.Item{
+					Key:   keyringKey("legacy"),
+					Label: "ASC API Key (legacy)",
+				},
+				ModificationTime: modifiedAt,
+			},
+		},
+		items: map[string]keyring.Item{},
+	}
+	withMetadataKeyring(t, kr)
+
+	keyPath := filepath.Join(t.TempDir(), "AuthKey.p8")
+	writeECDSAPEM(t, keyPath, 0o600, true)
+
+	privateKeyPEM, err := os.ReadFile(keyPath)
+	if err != nil {
+		t.Fatalf("os.ReadFile(%q) error: %v", keyPath, err)
+	}
+	payload := credentialPayload{
+		KeyID:          "KEY123",
+		IssuerID:       "ISS456",
+		PrivateKeyPath: keyPath,
+		PrivateKeyPEM:  string(privateKeyPEM),
+	}
+	data, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("json.Marshal() error: %v", err)
+	}
+	kr.items[keyringKey("legacy")] = keyring.Item{
+		Key:   keyringKey("legacy"),
+		Data:  data,
+		Label: "ASC API Key (legacy)",
+	}
+
+	creds, source, err := GetCredentialsWithSource("legacy")
+	if err != nil {
+		t.Fatalf("GetCredentialsWithSource() error: %v", err)
+	}
+	if source != "keychain" {
+		t.Fatalf("expected source keychain, got %q", source)
+	}
+	if strings.TrimSpace(creds.PrivateKeyPEM) == "" {
+		t.Fatal("expected private key PEM from existing keychain payload")
+	}
+
+	summaries, err := ListCredentialSummaries()
+	if err != nil {
+		t.Fatalf("ListCredentialSummaries() error: %v", err)
+	}
+	if len(summaries) != 1 {
+		t.Fatalf("expected one summary, got %d", len(summaries))
+	}
+	if summaries[0].KeyID != "KEY123" || summaries[0].IssuerID != "ISS456" {
+		t.Fatalf("expected summary metadata from config fallback, got %#v", summaries[0])
+	}
+
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatalf("config.Load() error: %v", err)
+	}
+	if len(cfg.KeychainMetadata) != 1 {
+		t.Fatalf("expected one keychain metadata record, got %#v", cfg.KeychainMetadata)
+	}
+	if cfg.KeychainMetadata[0].Name != "legacy" || cfg.KeychainMetadata[0].KeyID != "KEY123" || cfg.KeychainMetadata[0].IssuerID != "ISS456" || cfg.KeychainMetadata[0].ModifiedAt != metadataModifiedAtString(modifiedAt) {
+		t.Fatalf("unexpected keychain metadata record: %#v", cfg.KeychainMetadata[0])
+	}
+
+	item, err := kr.Get(keyringKey("legacy"))
+	if err != nil {
+		t.Fatalf("Get(keyring item) error: %v", err)
+	}
+	if item.Description != "" {
+		t.Fatalf("expected keychain description to remain unchanged, got %q", item.Description)
+	}
+}
+
+func TestGetCredentialsWithSource_BackfillsLegacyPEMOnlyOnce(t *testing.T) {
+	t.Setenv("ASC_BYPASS_KEYCHAIN", "0")
+	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "config.json"))
+
+	previousKeyringOpener := keyringOpener
+	previousLegacyKeyringOpener := legacyKeyringOpener
+	kr := &countingKeyring{inner: keyring.NewArrayKeyring(nil)}
+	keyringOpener = func() (keyring.Keyring, error) {
+		return kr, nil
+	}
+	legacyKeyringOpener = func() (keyring.Keyring, error) {
+		return nil, keyring.ErrNoAvailImpl
+	}
+	t.Cleanup(func() {
+		keyringOpener = previousKeyringOpener
+		legacyKeyringOpener = previousLegacyKeyringOpener
+	})
+
+	keyPath := filepath.Join(t.TempDir(), "AuthKey.p8")
+	writeECDSAPEM(t, keyPath, 0o600, true)
+	storeCredentialInKeyring(t, kr.inner, "legacy", "KEY123", "ISS456", keyPath)
+
+	kr.setCalls = 0
+	_, source, err := GetCredentialsWithSource("legacy")
+	if err != nil {
+		t.Fatalf("GetCredentialsWithSource() error: %v", err)
+	}
+	if source != "keychain" {
+		t.Fatalf("expected source keychain, got %q", source)
+	}
+	if kr.setCalls != 1 {
+		t.Fatalf("expected a single keychain rewrite for PEM backfill, got %d", kr.setCalls)
 	}
 }
 
@@ -957,6 +1077,36 @@ func TestRemoveAllCredentials(t *testing.T) {
 	}
 	if len(creds) != 0 {
 		t.Fatalf("expected no credentials after removal, got %d", len(creds))
+	}
+}
+
+func TestRemoveAllCredentials_ClearsStoredKeychainMetadata(t *testing.T) {
+	withArrayKeyring(t)
+
+	path, err := config.Path()
+	if err != nil {
+		t.Fatalf("config.Path() error: %v", err)
+	}
+	if err := config.SaveAt(path, &config.Config{
+		KeychainMetadata: []config.KeychainMetadata{{
+			Name:     "legacy",
+			KeyID:    "KEY123",
+			IssuerID: "ISS456",
+		}},
+	}); err != nil {
+		t.Fatalf("config.SaveAt() error: %v", err)
+	}
+
+	if err := RemoveAllCredentials(); err != nil {
+		t.Fatalf("RemoveAllCredentials() error: %v", err)
+	}
+
+	cfg, err := config.LoadAt(path)
+	if err != nil {
+		t.Fatalf("config.LoadAt() error: %v", err)
+	}
+	if len(cfg.KeychainMetadata) != 0 {
+		t.Fatalf("expected keychain metadata to be cleared, got %#v", cfg.KeychainMetadata)
 	}
 }
 
@@ -1241,6 +1391,41 @@ func TestRemoveCredentials_TrimsName(t *testing.T) {
 	}
 }
 
+func TestRemoveCredentials_ClearsStoredKeychainMetadata(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	newKr, _ := withSeparateKeyrings(t)
+
+	storeCredentialInKeyring(t, newKr, "trim-key", "KEY123", "ISS456", "/tmp/AuthKey.p8")
+
+	path, err := config.Path()
+	if err != nil {
+		t.Fatalf("config.Path() error: %v", err)
+	}
+	if err := config.SaveAt(path, &config.Config{
+		KeychainMetadata: []config.KeychainMetadata{
+			{Name: "trim-key", KeyID: "KEY123", IssuerID: "ISS456"},
+			{Name: "keep", KeyID: "KEY999", IssuerID: "ISS999"},
+		},
+	}); err != nil {
+		t.Fatalf("config.SaveAt() error: %v", err)
+	}
+
+	if err := RemoveCredentials("trim-key"); err != nil {
+		t.Fatalf("RemoveCredentials() error: %v", err)
+	}
+
+	cfg, err := config.LoadAt(path)
+	if err != nil {
+		t.Fatalf("config.LoadAt() error: %v", err)
+	}
+	if len(cfg.KeychainMetadata) != 1 {
+		t.Fatalf("expected one remaining keychain metadata record, got %#v", cfg.KeychainMetadata)
+	}
+	if cfg.KeychainMetadata[0].Name != "keep" {
+		t.Fatalf("expected keep metadata to remain, got %#v", cfg.KeychainMetadata)
+	}
+}
+
 func TestRemoveCredentials_MissingReturnsErr(t *testing.T) {
 	tempDir := t.TempDir()
 	configPath := filepath.Join(tempDir, "config.json")
@@ -1379,6 +1564,23 @@ func (k failingKeyring) GetMetadata(string) (keyring.Metadata, error) {
 func (k failingKeyring) Set(keyring.Item) error  { return k.err }
 func (k failingKeyring) Remove(string) error     { return k.err }
 func (k failingKeyring) Keys() ([]string, error) { return nil, k.err }
+
+type countingKeyring struct {
+	inner    *keyring.ArrayKeyring
+	setCalls int
+}
+
+func (k *countingKeyring) Get(key string) (keyring.Item, error) { return k.inner.Get(key) }
+func (k *countingKeyring) GetMetadata(key string) (keyring.Metadata, error) {
+	return k.inner.GetMetadata(key)
+}
+
+func (k *countingKeyring) Set(item keyring.Item) error {
+	k.setCalls++
+	return k.inner.Set(item)
+}
+func (k *countingKeyring) Remove(key string) error { return k.inner.Remove(key) }
+func (k *countingKeyring) Keys() ([]string, error) { return k.inner.Keys() }
 
 func TestGetCredentialsWithSource_KeychainAccessDeniedReturnsSentinel(t *testing.T) {
 	t.Setenv("ASC_BYPASS_KEYCHAIN", "")

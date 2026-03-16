@@ -290,9 +290,21 @@ func xcodeCloudProductsList(ctx context.Context, appID string, limit int, next s
 	requestCtx, cancel := contextWithXcodeCloudTimeout(ctx, 0)
 	defer cancel()
 
+	if strings.TrimSpace(next) == "" && resolvedAppID != "" {
+		resolvedAppID, err = resolveXcodeCloudAppID(requestCtx, client, resolvedAppID)
+		if err != nil {
+			return fmt.Errorf("xcode-cloud products: %w", err)
+		}
+		opts = []asc.CiProductsOption{
+			asc.WithCiProductsLimit(limit),
+			asc.WithCiProductsNextURL(next),
+			asc.WithCiProductsAppID(resolvedAppID),
+		}
+	}
+
 	if paginate {
 		paginateOpts := append(opts, asc.WithCiProductsLimit(200))
-		resp, err := shared.PaginateWithSpinner(requestCtx,
+		paginatedResp, err := shared.PaginateWithSpinner(requestCtx,
 			func(ctx context.Context) (asc.PaginatedResponse, error) {
 				return client.GetCiProducts(ctx, paginateOpts...)
 			},
@@ -304,6 +316,16 @@ func xcodeCloudProductsList(ctx context.Context, appID string, limit int, next s
 			return fmt.Errorf("xcode-cloud products: %w", err)
 		}
 
+		resp, ok := paginatedResp.(*asc.CiProductsResponse)
+		if !ok {
+			return fmt.Errorf("xcode-cloud products: unexpected response type %T", paginatedResp)
+		}
+		if shouldHydrateCiProductBundleIDs(output) {
+			if err := hydrateCiProductBundleIDs(requestCtx, client, resp); err != nil {
+				return fmt.Errorf("xcode-cloud products: %w", err)
+			}
+		}
+
 		return shared.PrintOutput(resp, output, pretty)
 	}
 
@@ -311,8 +333,48 @@ func xcodeCloudProductsList(ctx context.Context, appID string, limit int, next s
 	if err != nil {
 		return fmt.Errorf("xcode-cloud products: %w", err)
 	}
+	if shouldHydrateCiProductBundleIDs(output) {
+		if err := hydrateCiProductBundleIDs(requestCtx, client, resp); err != nil {
+			return fmt.Errorf("xcode-cloud products: %w", err)
+		}
+	}
 
 	return shared.PrintOutput(resp, output, pretty)
+}
+
+func shouldHydrateCiProductBundleIDs(output string) bool {
+	switch shared.NormalizeOutputFormat(output) {
+	case "table", "markdown", "md":
+		return true
+	default:
+		return false
+	}
+}
+
+func hydrateCiProductBundleIDs(ctx context.Context, client *asc.Client, resp *asc.CiProductsResponse) error {
+	if client == nil || resp == nil {
+		return nil
+	}
+
+	for i := range resp.Data {
+		if strings.TrimSpace(resp.Data[i].Attributes.BundleID) != "" {
+			continue
+		}
+
+		productID := strings.TrimSpace(resp.Data[i].ID)
+		if productID == "" {
+			continue
+		}
+
+		appResp, err := client.GetCiProductApp(ctx, productID)
+		if err != nil {
+			return fmt.Errorf("resolve app for product %q: %w", productID, err)
+		}
+
+		resp.Data[i].Attributes.BundleID = strings.TrimSpace(appResp.Data.Attributes.BundleID)
+	}
+
+	return nil
 }
 
 func xcodeCloudVersionListFlags(fs *flag.FlagSet) (limit *int, next *string, paginate *bool, output *string, pretty *bool) {

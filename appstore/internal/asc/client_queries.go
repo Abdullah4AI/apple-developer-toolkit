@@ -116,6 +116,7 @@ type buildsQuery struct {
 	preReleasePlatforms  []string
 	preReleaseVersionIDs []string
 	expired              *bool
+	include              []string
 }
 
 type buildUploadsQuery struct {

@@ -3,11 +3,13 @@ package snitch
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -87,6 +89,23 @@ func TestIssueTitle(t *testing.T) {
 				t.Errorf("issueTitle() = %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestIssueLabelsIncludesCustomLabelsWithoutDuplicates(t *testing.T) {
+	labels := issueLabels(LogEntry{
+		Severity: "feature-request",
+		Labels:   []string{"enhancement", "p3", "easy", "P3"},
+	})
+
+	want := []string{"asc-snitch", "enhancement", "p3", "easy"}
+	if len(labels) != len(want) {
+		t.Fatalf("issueLabels() length = %d, want %d (%v)", len(labels), len(want), labels)
+	}
+	for i, label := range want {
+		if labels[i] != label {
+			t.Fatalf("issueLabels()[%d] = %q, want %q (full=%v)", i, labels[i], label, labels)
+		}
 	}
 }
 
@@ -500,6 +519,85 @@ func TestAddIssueLabels(t *testing.T) {
 	if len(labels) != 2 {
 		t.Fatalf("expected 2 labels, got %d", len(labels))
 	}
+}
+
+func TestListRepoLabelsPaginatesAndDedupes(t *testing.T) {
+	pageCalls := 0
+	origBase := githubAPIBase
+	defer func() { setGitHubAPIBase(origBase) }()
+	setGitHubAPIBase("https://example.test")
+
+	origClient := githubHTTPClient
+	defer func() { githubHTTPClient = origClient }()
+	githubHTTPClient = func() *http.Client {
+		return &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			pageCalls++
+			if r.URL.Path != "/repos/rudrankriyam/App-Store-Connect-CLI/labels" {
+				t.Fatalf("unexpected path: %s", r.URL.Path)
+			}
+
+			page := r.URL.Query().Get("page")
+			var payload any
+			switch page {
+			case "1":
+				labels := make([]map[string]any, 0, labelsPerPage)
+				for i := 0; i < labelsPerPage; i++ {
+					name := fmt.Sprintf("label-%03d", i)
+					if i == 0 {
+						name = "enhancement"
+					}
+					labels = append(labels, map[string]any{"name": name})
+				}
+				payload = labels
+			case "2":
+				payload = []map[string]any{
+					{"name": "enhancement"},
+					{"name": "p3"},
+				}
+			default:
+				t.Fatalf("unexpected page query: %q", page)
+			}
+
+			body, err := json.Marshal(payload)
+			if err != nil {
+				t.Fatalf("json.Marshal() error: %v", err)
+			}
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(strings.NewReader(string(body))),
+				Header:     http.Header{"Content-Type": []string{"application/json"}},
+			}, nil
+		})}
+	}
+
+	labels, err := listRepoLabels(t.Context(), "test-token")
+	if err != nil {
+		t.Fatalf("listRepoLabels() error: %v", err)
+	}
+	if pageCalls != 2 {
+		t.Fatalf("expected 2 page calls, got %d", pageCalls)
+	}
+	if !slices.Contains(labels, "enhancement") {
+		t.Fatalf("expected enhancement in labels, got %v", labels)
+	}
+	if !slices.Contains(labels, "p3") {
+		t.Fatalf("expected p3 in labels, got %v", labels)
+	}
+	enhancementCount := 0
+	for _, label := range labels {
+		if label == "enhancement" {
+			enhancementCount++
+		}
+	}
+	if enhancementCount != 1 {
+		t.Fatalf("expected enhancement once, got %d in %v", enhancementCount, labels)
+	}
+}
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) {
+	return f(r)
 }
 
 func TestWriteLocalLog(t *testing.T) {

@@ -359,3 +359,49 @@ func TestResolveSessionPrintsExpiredNoticeBeforePrompt(t *testing.T) {
 		t.Fatalf("expected expired notice output, got %q", got)
 	}
 }
+
+func TestWebAuthLoginReportsInvalidCredentialMessage(t *testing.T) {
+	origTryResume := tryResumeSessionFn
+	origTryResumeLast := tryResumeLastFn
+	origWebLogin := webLoginFn
+	t.Cleanup(func() {
+		tryResumeSessionFn = origTryResume
+		tryResumeLastFn = origTryResumeLast
+		webLoginFn = origWebLogin
+	})
+
+	t.Setenv(webPasswordEnv, "secret")
+
+	tryResumeSessionFn = func(ctx context.Context, username string) (*webcore.AuthSession, bool, error) {
+		if username != "user@example.com" {
+			t.Fatalf("expected username user@example.com, got %q", username)
+		}
+		return nil, false, nil
+	}
+	tryResumeLastFn = func(ctx context.Context) (*webcore.AuthSession, bool, error) {
+		t.Fatal("did not expect last-session cache lookup when apple-id is provided")
+		return nil, false, nil
+	}
+	webLoginFn = func(ctx context.Context, creds webcore.LoginCredentials) (*webcore.AuthSession, error) {
+		if creds.Username != "user@example.com" {
+			t.Fatalf("expected login username user@example.com, got %q", creds.Username)
+		}
+		if creds.Password != "secret" {
+			t.Fatalf("expected password from env to be used, got %q", creds.Password)
+		}
+		return nil, errors.New("srp login failed: signin complete failed: incorrect Apple Account email or password")
+	}
+
+	cmd := WebAuthLoginCommand()
+	if err := cmd.FlagSet.Parse([]string{"--apple-id", "user@example.com"}); err != nil {
+		t.Fatalf("parse error: %v", err)
+	}
+
+	err := cmd.Exec(context.Background(), nil)
+	if err == nil {
+		t.Fatal("expected login error")
+	}
+	if got, want := err.Error(), "web auth login failed: srp login failed: signin complete failed: incorrect Apple Account email or password"; got != want {
+		t.Fatalf("expected error %q, got %q", want, got)
+	}
+}

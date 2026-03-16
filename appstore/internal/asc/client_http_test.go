@@ -4883,6 +4883,27 @@ func TestGetCiBuildRuns_WithLimit(t *testing.T) {
 	}
 }
 
+func TestGetCiBuildRuns_WithSort(t *testing.T) {
+	response := jsonResponse(http.StatusOK, `{"data":[{"type":"ciBuildRuns","id":"run-1","attributes":{"number":1}}]}`)
+	client := newTestClient(t, func(req *http.Request) {
+		if req.Method != http.MethodGet {
+			t.Fatalf("expected GET, got %s", req.Method)
+		}
+		if req.URL.Path != "/v1/ciWorkflows/wf-1/buildRuns" {
+			t.Fatalf("expected path /v1/ciWorkflows/wf-1/buildRuns, got %s", req.URL.Path)
+		}
+		values := req.URL.Query()
+		if values.Get("sort") != "-number" {
+			t.Fatalf("expected sort=-number, got %q", values.Get("sort"))
+		}
+		assertAuthorized(t, req)
+	}, response)
+
+	if _, err := client.GetCiBuildRuns(context.Background(), "wf-1", WithCiBuildRunsSort("-number")); err != nil {
+		t.Fatalf("GetCiBuildRuns() error: %v", err)
+	}
+}
+
 func TestGetCiBuildRun(t *testing.T) {
 	response := jsonResponse(http.StatusOK, `{"data":{"type":"ciBuildRuns","id":"run-1","attributes":{"number":1}}}`)
 	client := newTestClient(t, func(req *http.Request) {

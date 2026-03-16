@@ -3,6 +3,7 @@ package shared
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
@@ -25,7 +26,7 @@ func ResolveAppStoreVersionIDAndState(ctx context.Context, client *asc.Client, a
 	if len(resp.Data) > 1 {
 		return "", "", fmt.Errorf("multiple app store versions found for version %q and platform %q (use --version-id)", version, platform)
 	}
-	return resp.Data[0].ID, strings.TrimSpace(resp.Data[0].Attributes.AppStoreState), nil
+	return resp.Data[0].ID, asc.ResolveAppStoreVersionState(resp.Data[0].Attributes), nil
 }
 
 // ResolveAppStoreVersionID finds a version ID by version string and platform.
@@ -51,7 +52,39 @@ func ResolveAppInfoID(ctx context.Context, client *asc.Client, appID, appInfoID 
 		return "", fmt.Errorf("no app info found for app %q", appID)
 	}
 	if len(resp.Data) > 1 {
-		return "", fmt.Errorf("multiple app infos found for app %q; run `asc apps info list --app %q` to inspect candidates, then pass the explicit app info ID", appID, appID)
+		selected, reason := autoSelectEditableAppInfoID(resp)
+		if selected == "" {
+			candidates := asc.FormatAppInfoCandidates(asc.AppInfoCandidates(resp.Data))
+			return "", fmt.Errorf("multiple app infos found for app %q (%s); run `asc apps info list --app %q` to inspect candidates, then pass the explicit app info ID", appID, candidates, appID)
+		}
+		fmt.Fprintf(os.Stderr, "Multiple app infos found for app %s, auto-selected %s (%s).\n", appID, selected, reason)
+		return selected, nil
 	}
 	return resp.Data[0].ID, nil
+}
+
+func autoSelectEditableAppInfoID(appInfos *asc.AppInfosResponse) (string, string) {
+	if appInfos == nil {
+		return "", ""
+	}
+
+	const targetState = "PREPARE_FOR_SUBMISSION"
+
+	matches := make([]string, 0, 1)
+	for _, info := range appInfos.Data {
+		state := strings.ToUpper(appInfoAttrString(info.Attributes, "state"))
+		appStoreState := strings.ToUpper(appInfoAttrString(info.Attributes, "appStoreState"))
+		if state != targetState && appStoreState != targetState {
+			continue
+		}
+		if trimmedID := strings.TrimSpace(info.ID); trimmedID != "" {
+			matches = append(matches, trimmedID)
+		}
+	}
+
+	if len(matches) != 1 {
+		return "", ""
+	}
+
+	return matches[0], targetState
 }

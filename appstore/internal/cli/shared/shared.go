@@ -349,11 +349,21 @@ type MetadataOutputFlags struct {
 	Pretty       *bool
 }
 
+// ResolvedAuthCredentials contains the concrete auth inputs selected for a command.
+type ResolvedAuthCredentials struct {
+	KeyID    string
+	IssuerID string
+	KeyPath  string
+	KeyPEM   string
+	Profile  string
+}
+
 type resolvedCredentials struct {
 	keyID    string
 	issuerID string
 	keyPath  string
 	keyPEM   string
+	profile  string
 }
 
 type credentialSource struct {
@@ -388,8 +398,16 @@ func resolveEnvCredentials() (envCredentials, error) {
 }
 
 func resolveCredentials() (resolvedCredentials, error) {
+	return resolveCredentialsForProfile("")
+}
+
+func resolveCredentialsForProfile(profileOverride string) (resolvedCredentials, error) {
 	var actualKeyID, actualIssuerID, actualKeyPath, actualKeyPEM string
-	profile := resolveProfileName()
+	actualProfile := ""
+	profile := strings.TrimSpace(profileOverride)
+	if profile == "" {
+		profile = resolveProfileName()
+	}
 	var envCreds envCredentials
 	sources := credentialSource{}
 
@@ -412,6 +430,7 @@ func resolveCredentials() (resolvedCredentials, error) {
 		actualIssuerID = cfg.IssuerID
 		actualKeyPath = cfg.PrivateKeyPath
 		actualKeyPEM = strings.TrimSpace(cfg.PrivateKeyPEM)
+		actualProfile = strings.TrimSpace(cfg.DefaultKeyName)
 		sources.keyID = storedSource
 		sources.issuerID = storedSource
 		if actualKeyPath != "" || actualKeyPEM != "" {
@@ -455,6 +474,7 @@ func resolveCredentials() (resolvedCredentials, error) {
 		issuerID: actualIssuerID,
 		keyPath:  actualKeyPath,
 		keyPEM:   actualKeyPEM,
+		profile:  actualProfile,
 	}, nil
 }
 
@@ -1080,6 +1100,28 @@ func GetASCClient() (*asc.Client, error) {
 		return innerErr
 	})
 	return client, err
+}
+
+// ResolveAuthCredentials resolves the signing credentials for a command.
+// A non-empty profile override takes precedence over root-level profile selection.
+func ResolveAuthCredentials(profile string) (ResolvedAuthCredentials, error) {
+	const authSpinnerDelay = 200 * time.Millisecond
+	var resolved resolvedCredentials
+	err := WithSpinnerDelayed("", authSpinnerDelay, func() error {
+		var innerErr error
+		resolved, innerErr = resolveCredentialsForProfile(profile)
+		return innerErr
+	})
+	if err != nil {
+		return ResolvedAuthCredentials{}, err
+	}
+	return ResolvedAuthCredentials{
+		KeyID:    resolved.keyID,
+		IssuerID: resolved.issuerID,
+		KeyPath:  resolved.keyPath,
+		KeyPEM:   resolved.keyPEM,
+		Profile:  resolved.profile,
+	}, nil
 }
 
 func ResolveProfileName() string {

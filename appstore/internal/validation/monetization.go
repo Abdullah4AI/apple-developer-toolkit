@@ -16,6 +16,15 @@ func hasActiveMonetization(subs []Subscription, iaps []IAP) bool {
 	return false
 }
 
+func hasReviewRelevantSubscriptions(subs []Subscription) bool {
+	for _, sub := range subs {
+		if isActiveMonetizationState(sub.State) {
+			return true
+		}
+	}
+	return false
+}
+
 func isActiveMonetizationState(state string) bool {
 	normalized := normalizeMonetizationState(state)
 	return normalized != "" && !isRemovedMonetizationState(normalized)

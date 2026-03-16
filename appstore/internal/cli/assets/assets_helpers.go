@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
-	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
 const (
@@ -20,7 +19,10 @@ const (
 )
 
 func contextWithAssetUploadTimeout(ctx context.Context) (context.Context, context.CancelFunc) {
-	return shared.ContextWithResolvedTimeout(ctx, assetUploadDefaultTimeout)
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return context.WithTimeout(ctx, asc.ResolveUploadTimeoutWithDefault(assetUploadDefaultTimeout))
 }
 
 // ContextWithAssetUploadTimeout returns a context with the asset upload timeout.

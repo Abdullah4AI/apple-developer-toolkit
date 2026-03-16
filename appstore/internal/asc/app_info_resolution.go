@@ -12,9 +12,10 @@ type appStoreVersionRelationships struct {
 	App *Relationship `json:"app"`
 }
 
-type appInfoCandidate struct {
-	id    string
-	state string
+// AppInfoCandidate describes an app info resource considered for auto-resolution.
+type AppInfoCandidate struct {
+	ID    string
+	State string
 }
 
 // ResolveAppInfoIDForAppStoreVersion resolves the app info backing a version-scoped workflow.
@@ -55,37 +56,45 @@ func (c *Client) ResolveAppInfoIDForAppStoreVersion(ctx context.Context, version
 		return strings.TrimSpace(appInfos.Data[0].ID), nil
 	}
 
-	candidates := make([]appInfoCandidate, 0, len(appInfos.Data))
-	for _, item := range appInfos.Data {
-		candidates = append(candidates, appInfoCandidate{
-			id:    strings.TrimSpace(item.ID),
-			state: appInfoState(item.Attributes),
-		})
-	}
-	sort.Slice(candidates, func(i, j int) bool {
-		return candidates[i].id < candidates[j].id
-	})
+	candidates := AppInfoCandidates(appInfos.Data)
 
-	if resolvedID, ok := autoResolveAppInfoIDByVersionState(candidates, resolveAppStoreVersionState(versionResp.Data.Attributes)); ok {
+	if resolvedID, ok := AutoResolveAppInfoIDByVersionState(candidates, ResolveAppStoreVersionState(versionResp.Data.Attributes)); ok {
 		return resolvedID, nil
 	}
 
 	return "", fmt.Errorf(
 		"multiple app infos found for app %q (%s); run `asc apps info list --app %q` to inspect candidates and use the app-info based age-rating flow explicitly",
 		appID,
-		formatAppInfoCandidates(candidates),
+		FormatAppInfoCandidates(candidates),
 		appID,
 	)
 }
 
-func resolveAppStoreVersionState(attrs AppStoreVersionAttributes) string {
+// ResolveAppStoreVersionState prefers AppVersionState and falls back to AppStoreState.
+func ResolveAppStoreVersionState(attrs AppStoreVersionAttributes) string {
 	if trimmed := strings.TrimSpace(attrs.AppVersionState); trimmed != "" {
 		return trimmed
 	}
 	return strings.TrimSpace(attrs.AppStoreState)
 }
 
-func autoResolveAppInfoIDByVersionState(candidates []appInfoCandidate, versionState string) (string, bool) {
+// AppInfoCandidates returns sorted app info resolution candidates for a response payload.
+func AppInfoCandidates(appInfos []Resource[AppInfoAttributes]) []AppInfoCandidate {
+	candidates := make([]AppInfoCandidate, 0, len(appInfos))
+	for _, item := range appInfos {
+		candidates = append(candidates, AppInfoCandidate{
+			ID:    strings.TrimSpace(item.ID),
+			State: appInfoState(item.Attributes),
+		})
+	}
+	sort.Slice(candidates, func(i, j int) bool {
+		return candidates[i].ID < candidates[j].ID
+	})
+	return candidates
+}
+
+// AutoResolveAppInfoIDByVersionState resolves a single app info candidate matching a version state.
+func AutoResolveAppInfoIDByVersionState(candidates []AppInfoCandidate, versionState string) (string, bool) {
 	resolvedVersionState := strings.TrimSpace(versionState)
 	if resolvedVersionState == "" {
 		return "", false
@@ -94,10 +103,10 @@ func autoResolveAppInfoIDByVersionState(candidates []appInfoCandidate, versionSt
 	acceptableStates := acceptableAppInfoStatesForVersionState(resolvedVersionState)
 	matches := make([]string, 0, len(candidates))
 	for _, candidate := range candidates {
-		if candidate.id == "" || !matchesAppInfoState(candidate.state, acceptableStates) {
+		if candidate.ID == "" || !matchesAppInfoState(candidate.State, acceptableStates) {
 			continue
 		}
-		matches = append(matches, candidate.id)
+		matches = append(matches, candidate.ID)
 	}
 	if len(matches) != 1 {
 		return "", false
@@ -116,7 +125,7 @@ func acceptableAppInfoStatesForVersionState(versionState string) []string {
 		return []string{resolvedVersionState, "PENDING_RELEASE"}
 	case "REPLACED_WITH_NEW_VERSION":
 		return []string{resolvedVersionState, "REPLACED_WITH_NEW_INFO"}
-	case "READY_FOR_SALE":
+	case "READY_FOR_SALE", "PREORDER_READY_FOR_SALE":
 		return []string{resolvedVersionState, "READY_FOR_DISTRIBUTION"}
 	default:
 		return []string{resolvedVersionState}
@@ -154,18 +163,19 @@ func appInfoState(attributes AppInfoAttributes) string {
 	return ""
 }
 
-func formatAppInfoCandidates(candidates []appInfoCandidate) string {
+// FormatAppInfoCandidates formats app info candidates for error messages.
+func FormatAppInfoCandidates(candidates []AppInfoCandidate) string {
 	if len(candidates) == 0 {
 		return "none"
 	}
 
 	parts := make([]string, 0, len(candidates))
 	for _, candidate := range candidates {
-		state := candidate.state
+		state := candidate.State
 		if state == "" {
 			state = "unknown"
 		}
-		parts = append(parts, fmt.Sprintf("%s[state=%s]", candidate.id, state))
+		parts = append(parts, fmt.Sprintf("%s[state=%s]", candidate.ID, state))
 	}
 	return strings.Join(parts, ", ")
 }

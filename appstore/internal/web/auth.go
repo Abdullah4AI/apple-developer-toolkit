@@ -49,7 +49,10 @@ const (
 	minimumWebMinRequestInterval = 200 * time.Millisecond
 )
 
-var errTwoFactorRequired = errors.New("two-factor authentication required")
+var (
+	errTwoFactorRequired              = errors.New("two-factor authentication required")
+	errInvalidAppleAccountCredentials = errors.New("incorrect Apple Account email or password")
+)
 
 var webTLSRootBundlePaths = []string{
 	"/etc/ssl/cert.pem",
@@ -892,6 +895,9 @@ func signinComplete(ctx context.Context, client *http.Client, username, m1, m2 s
 			SCNT:             strings.TrimSpace(resp.Header.Get("scnt")),
 		}
 	}
+	if isInvalidAppleAccountCredentialsSigninComplete(resp.StatusCode, respBody) {
+		return errInvalidAppleAccountCredentials
+	}
 	return fmt.Errorf("signin complete failed with status %d", resp.StatusCode)
 }
 
@@ -1161,6 +1167,19 @@ func extractServiceErrorCodes(respBody []byte) []string {
 		}
 	}
 	return codes
+}
+
+// Apple currently returns -20101 when signin/complete rejects SRP credentials.
+func isInvalidAppleAccountCredentialsSigninComplete(status int, respBody []byte) bool {
+	if status != http.StatusUnauthorized {
+		return false
+	}
+	for _, code := range extractServiceErrorCodes(respBody) {
+		if code == "-20101" {
+			return true
+		}
+	}
+	return false
 }
 
 func (c *Client) waitForRateLimit(ctx context.Context) error {

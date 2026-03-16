@@ -58,7 +58,7 @@ func TestSubmitCreateCancelsStaleSubmissions(t *testing.T) {
 
 		// Localization preflight
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/appStoreVersions/version-1/appStoreVersionLocalizations":
-			return submitCreateJSONResponse(http.StatusOK, `{"data":[{"type":"appStoreVersionLocalizations","id":"loc-en","attributes":{"locale":"en-US","description":"Description","keywords":"keyword","supportUrl":"https://example.com/support"}}]}`)
+			return submitCreateJSONResponse(http.StatusOK, `{"data":[{"type":"appStoreVersionLocalizations","id":"loc-en","attributes":{"locale":"en-US","description":"Description","keywords":"keyword","supportUrl":"https://example.com/support","whatsNew":"Bug fixes"}}]}`)
 
 		// Stale submissions query — returns one stale submission
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/apps/app-1/reviewSubmissions":
@@ -161,7 +161,7 @@ func TestSubmitCreateNoStaleSubmissions(t *testing.T) {
 			return submitCreateJSONResponse(http.StatusOK, `{"data":[{"type":"appStoreVersions","id":"version-1","attributes":{"versionString":"1.0","platform":"IOS"}}]}`)
 
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/appStoreVersions/version-1/appStoreVersionLocalizations":
-			return submitCreateJSONResponse(http.StatusOK, `{"data":[{"type":"appStoreVersionLocalizations","id":"loc-en","attributes":{"locale":"en-US","description":"Description","keywords":"keyword","supportUrl":"https://example.com/support"}}]}`)
+			return submitCreateJSONResponse(http.StatusOK, `{"data":[{"type":"appStoreVersionLocalizations","id":"loc-en","attributes":{"locale":"en-US","description":"Description","keywords":"keyword","supportUrl":"https://example.com/support","whatsNew":"Bug fixes"}}]}`)
 
 		// No stale submissions
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/apps/app-1/reviewSubmissions":
@@ -234,7 +234,7 @@ func TestSubmitCreateSkipsNonStaleSubmissionsFromCleanupResults(t *testing.T) {
 			return submitCreateJSONResponse(http.StatusOK, `{"data":[{"type":"appStoreVersions","id":"version-1","attributes":{"versionString":"1.0","platform":"IOS"}}]}`)
 
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/appStoreVersions/version-1/appStoreVersionLocalizations":
-			return submitCreateJSONResponse(http.StatusOK, `{"data":[{"type":"appStoreVersionLocalizations","id":"loc-en","attributes":{"locale":"en-US","description":"Description","keywords":"keyword","supportUrl":"https://example.com/support"}}]}`)
+			return submitCreateJSONResponse(http.StatusOK, `{"data":[{"type":"appStoreVersionLocalizations","id":"loc-en","attributes":{"locale":"en-US","description":"Description","keywords":"keyword","supportUrl":"https://example.com/support","whatsNew":"Bug fixes"}}]}`)
 
 		// Return mixed records defensively; cleanup should only cancel READY_FOR_REVIEW + IOS.
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/apps/app-1/reviewSubmissions":
@@ -310,7 +310,7 @@ func TestSubmitCreateWarnsWhenStaleSubmissionQueryFails(t *testing.T) {
 			return submitCreateJSONResponse(http.StatusOK, `{"data":[{"type":"appStoreVersions","id":"version-1","attributes":{"versionString":"1.0","platform":"IOS"}}]}`)
 
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/appStoreVersions/version-1/appStoreVersionLocalizations":
-			return submitCreateJSONResponse(http.StatusOK, `{"data":[{"type":"appStoreVersionLocalizations","id":"loc-en","attributes":{"locale":"en-US","description":"Description","keywords":"keyword","supportUrl":"https://example.com/support"}}]}`)
+			return submitCreateJSONResponse(http.StatusOK, `{"data":[{"type":"appStoreVersionLocalizations","id":"loc-en","attributes":{"locale":"en-US","description":"Description","keywords":"keyword","supportUrl":"https://example.com/support","whatsNew":"Bug fixes"}}]}`)
 
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/apps/app-1/reviewSubmissions":
 			if req.URL.Query().Get("filter[state]") != "READY_FOR_REVIEW" || req.URL.Query().Get("filter[platform]") != "IOS" {
@@ -380,7 +380,7 @@ func TestSubmitCreateWarnsWhenStaleSubmissionCancelFails(t *testing.T) {
 			return submitCreateJSONResponse(http.StatusOK, `{"data":[{"type":"appStoreVersions","id":"version-1","attributes":{"versionString":"1.0","platform":"IOS"}}]}`)
 
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/appStoreVersions/version-1/appStoreVersionLocalizations":
-			return submitCreateJSONResponse(http.StatusOK, `{"data":[{"type":"appStoreVersionLocalizations","id":"loc-en","attributes":{"locale":"en-US","description":"Description","keywords":"keyword","supportUrl":"https://example.com/support"}}]}`)
+			return submitCreateJSONResponse(http.StatusOK, `{"data":[{"type":"appStoreVersionLocalizations","id":"loc-en","attributes":{"locale":"en-US","description":"Description","keywords":"keyword","supportUrl":"https://example.com/support","whatsNew":"Bug fixes"}}]}`)
 
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/apps/app-1/reviewSubmissions":
 			if req.URL.Query().Get("filter[state]") != "READY_FOR_REVIEW" || req.URL.Query().Get("filter[platform]") != "IOS" {
@@ -452,6 +452,77 @@ func TestSubmitCreateWarnsWhenStaleSubmissionCancelFails(t *testing.T) {
 		t.Fatalf("stale cancel attempt (idx=%d) should happen before new create (idx=%d)", cancelIdx, createIdx)
 	}
 
+	if stdout == "" {
+		t.Fatal("expected JSON output on stdout")
+	}
+}
+
+func TestSubmitCreateSilentlySkipsConflictOnStaleSubmissionCancel(t *testing.T) {
+	setupSubmitCreateAuth(t)
+
+	originalTransport := http.DefaultTransport
+	t.Cleanup(func() {
+		http.DefaultTransport = originalTransport
+	})
+
+	http.DefaultTransport = submitCreateRoundTripFunc(func(req *http.Request) (*http.Response, error) {
+		switch {
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/apps/app-1/appStoreVersions":
+			return submitCreateJSONResponse(http.StatusOK, `{"data":[{"type":"appStoreVersions","id":"version-1","attributes":{"versionString":"1.0","platform":"IOS"}}]}`)
+
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/appStoreVersions/version-1/appStoreVersionLocalizations":
+			return submitCreateJSONResponse(http.StatusOK, `{"data":[{"type":"appStoreVersionLocalizations","id":"loc-en","attributes":{"locale":"en-US","description":"Description","keywords":"keyword","supportUrl":"https://example.com/support","whatsNew":"Bug fixes"}}]}`)
+
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/apps/app-1/reviewSubmissions":
+			return submitCreateJSONResponse(http.StatusOK, `{"data":[{"type":"reviewSubmissions","id":"stale-1","attributes":{"state":"READY_FOR_REVIEW","platform":"IOS"}}],"links":{}}`)
+
+		// Cancel returns 409 Conflict (submission already transitioned to non-cancellable state)
+		case req.Method == http.MethodPatch && req.URL.Path == "/v1/reviewSubmissions/stale-1":
+			return submitCreateJSONResponse(http.StatusConflict, `{"errors":[{"status":"409","code":"CONFLICT","title":"Resource state is invalid.","detail":"Resource is not in cancellable state"}]}`)
+
+		case req.Method == http.MethodPatch && req.URL.Path == "/v1/appStoreVersions/version-1/relationships/build":
+			return submitCreateJSONResponse(http.StatusNoContent, "")
+
+		case req.Method == http.MethodPost && req.URL.Path == "/v1/reviewSubmissions":
+			return submitCreateJSONResponse(http.StatusCreated, `{"data":{"type":"reviewSubmissions","id":"new-sub-1","attributes":{"state":"READY_FOR_REVIEW","platform":"IOS"}}}`)
+
+		case req.Method == http.MethodPost && req.URL.Path == "/v1/reviewSubmissionItems":
+			return submitCreateJSONResponse(http.StatusCreated, `{"data":{"type":"reviewSubmissionItems","id":"item-1"}}`)
+
+		case req.Method == http.MethodPatch && req.URL.Path == "/v1/reviewSubmissions/new-sub-1":
+			return submitCreateJSONResponse(http.StatusOK, `{"data":{"type":"reviewSubmissions","id":"new-sub-1","attributes":{"state":"WAITING_FOR_REVIEW","submittedDate":"2026-02-22T00:00:00Z"}}}`)
+
+		default:
+			return nil, fmt.Errorf("unexpected request: %s %s", req.Method, req.URL.Path)
+		}
+	})
+
+	root := RootCommand("1.2.3")
+	root.FlagSet.SetOutput(io.Discard)
+
+	stdout, stderr := captureOutput(t, func() {
+		if err := root.Parse([]string{
+			"submit", "create",
+			"--app", "app-1",
+			"--version", "1.0",
+			"--build", "build-1",
+			"--platform", "IOS",
+			"--confirm",
+		}); err != nil {
+			t.Fatalf("parse error: %v", err)
+		}
+		if err := root.Run(context.Background()); err != nil {
+			t.Fatalf("run error: %v", err)
+		}
+	})
+
+	// 409 Conflict should produce a clear info message, not the scary "Warning: failed to cancel" dump
+	if strings.Contains(stderr, "Warning: failed to cancel stale submission") {
+		t.Fatalf("expected no warning for 409 conflict on stale cancel, got: %q", stderr)
+	}
+	if !strings.Contains(stderr, "Skipped stale submission stale-1: already transitioned to a non-cancellable state") {
+		t.Fatalf("expected info message about skipped stale submission, got: %q", stderr)
+	}
 	if stdout == "" {
 		t.Fatal("expected JSON output on stdout")
 	}
@@ -533,7 +604,7 @@ func TestSubmitCreateWarnsForSubscriptionPreflightStates(t *testing.T) {
 			return submitCreateJSONResponse(http.StatusOK, `{"data":[{"type":"appStoreVersions","id":"version-1","attributes":{"versionString":"1.0","platform":"IOS"}}]}`)
 
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/appStoreVersions/version-1/appStoreVersionLocalizations":
-			return submitCreateJSONResponse(http.StatusOK, `{"data":[{"type":"appStoreVersionLocalizations","id":"loc-en","attributes":{"locale":"en-US","description":"Description","keywords":"keyword","supportUrl":"https://example.com/support"}}]}`)
+			return submitCreateJSONResponse(http.StatusOK, `{"data":[{"type":"appStoreVersionLocalizations","id":"loc-en","attributes":{"locale":"en-US","description":"Description","keywords":"keyword","supportUrl":"https://example.com/support","whatsNew":"Bug fixes"}}]}`)
 
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/apps/app-1/subscriptionGroups":
 			return submitCreateJSONResponse(http.StatusOK, `{"data":[{"type":"subscriptionGroups","id":"group-1","attributes":{"referenceName":"Premium"}}],"links":{}}`)
@@ -617,7 +688,7 @@ func TestSubmitCreateSubscriptionPreflightPaginatesAndReportsSkippedGroups(t *te
 			return submitCreateJSONResponse(http.StatusOK, `{"data":[{"type":"appStoreVersions","id":"version-1","attributes":{"versionString":"1.0","platform":"IOS"}}]}`)
 
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/appStoreVersions/version-1/appStoreVersionLocalizations":
-			return submitCreateJSONResponse(http.StatusOK, `{"data":[{"type":"appStoreVersionLocalizations","id":"loc-en","attributes":{"locale":"en-US","description":"Description","keywords":"keyword","supportUrl":"https://example.com/support"}}]}`)
+			return submitCreateJSONResponse(http.StatusOK, `{"data":[{"type":"appStoreVersionLocalizations","id":"loc-en","attributes":{"locale":"en-US","description":"Description","keywords":"keyword","supportUrl":"https://example.com/support","whatsNew":"Bug fixes"}}]}`)
 
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/apps/app-1/subscriptionGroups" && req.URL.RawQuery == "limit=200":
 			return submitCreateJSONResponse(http.StatusOK, `{"data":[{"type":"subscriptionGroups","id":"group-1","attributes":{"referenceName":"Premium"}}],"links":{"next":"https://api.appstoreconnect.apple.com/v1/apps/app-1/subscriptionGroups?cursor=groups-2&limit=200"}}`)
@@ -699,16 +770,16 @@ func TestSubmitCreateSubscriptionPreflightDoesNotConsumeSubmitTimeoutBudget(t *t
 			return submitCreateJSONResponse(http.StatusOK, `{"data":[{"type":"appStoreVersions","id":"version-1","attributes":{"versionString":"1.0","platform":"IOS"}}]}`)
 
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/appStoreVersions/version-1/appStoreVersionLocalizations":
-			return submitCreateJSONResponse(http.StatusOK, `{"data":[{"type":"appStoreVersionLocalizations","id":"loc-en","attributes":{"locale":"en-US","description":"Description","keywords":"keyword","supportUrl":"https://example.com/support"}}]}`)
+			return submitCreateJSONResponse(http.StatusOK, `{"data":[{"type":"appStoreVersionLocalizations","id":"loc-en","attributes":{"locale":"en-US","description":"Description","keywords":"keyword","supportUrl":"https://example.com/support","whatsNew":"Bug fixes"}}]}`)
 
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/apps/app-1/subscriptionGroups":
-			if err := sleepWithContext(req.Context(), 70*time.Millisecond); err != nil {
+			if err := sleepWithContext(req.Context()); err != nil {
 				return nil, err
 			}
 			return submitCreateJSONResponse(http.StatusOK, `{"data":[{"type":"subscriptionGroups","id":"group-1","attributes":{"referenceName":"Premium"}}],"links":{}}`)
 
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/subscriptionGroups/group-1/subscriptions":
-			if err := sleepWithContext(req.Context(), 70*time.Millisecond); err != nil {
+			if err := sleepWithContext(req.Context()); err != nil {
 				return nil, err
 			}
 			return submitCreateJSONResponse(http.StatusOK, `{"data":[],"links":{}}`)
@@ -751,8 +822,327 @@ func TestSubmitCreateSubscriptionPreflightDoesNotConsumeSubmitTimeoutBudget(t *t
 	}
 }
 
-func sleepWithContext(ctx context.Context, d time.Duration) error {
-	timer := time.NewTimer(d)
+func TestSubmitCreateLocalizationPreflightDoesNotConsumeSubmitTimeoutBudget(t *testing.T) {
+	setupSubmitCreateAuth(t)
+	t.Setenv("ASC_TIMEOUT", "100ms")
+
+	originalTransport := http.DefaultTransport
+	t.Cleanup(func() {
+		http.DefaultTransport = originalTransport
+	})
+
+	http.DefaultTransport = submitCreateRoundTripFunc(func(req *http.Request) (*http.Response, error) {
+		switch {
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/apps/app-1/appStoreVersions":
+			query := req.URL.Query()
+			if strings.Contains(query.Get("filter[appStoreState]"), "READY_FOR_SALE") {
+				if err := sleepWithContext(req.Context()); err != nil {
+					return nil, err
+				}
+				return submitCreateJSONResponse(http.StatusOK, `{"data":[]}`)
+			}
+			return submitCreateJSONResponse(http.StatusOK, `{"data":[{"type":"appStoreVersions","id":"version-1","attributes":{"versionString":"1.0","platform":"IOS"}}]}`)
+
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/appStoreVersions/version-1/appStoreVersionLocalizations":
+			if err := sleepWithContext(req.Context()); err != nil {
+				return nil, err
+			}
+			return submitCreateJSONResponse(http.StatusOK, `{"data":[{"type":"appStoreVersionLocalizations","id":"loc-en","attributes":{"locale":"en-US","description":"Description","keywords":"keyword","supportUrl":"https://example.com/support","whatsNew":""}}]}`)
+
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/apps/app-1/subscriptionGroups":
+			return submitCreateJSONResponse(http.StatusOK, `{"data":[],"links":{}}`)
+
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/apps/app-1/reviewSubmissions":
+			return submitCreateJSONResponse(http.StatusOK, `{"data":[],"links":{}}`)
+
+		case req.Method == http.MethodPatch && req.URL.Path == "/v1/appStoreVersions/version-1/relationships/build":
+			return submitCreateJSONResponse(http.StatusNoContent, "")
+
+		case req.Method == http.MethodPost && req.URL.Path == "/v1/reviewSubmissions":
+			return submitCreateJSONResponse(http.StatusCreated, `{"data":{"type":"reviewSubmissions","id":"new-sub-1","attributes":{"state":"READY_FOR_REVIEW","platform":"IOS"}}}`)
+
+		case req.Method == http.MethodPost && req.URL.Path == "/v1/reviewSubmissionItems":
+			return submitCreateJSONResponse(http.StatusCreated, `{"data":{"type":"reviewSubmissionItems","id":"item-1"}}`)
+
+		case req.Method == http.MethodPatch && req.URL.Path == "/v1/reviewSubmissions/new-sub-1":
+			return submitCreateJSONResponse(http.StatusOK, `{"data":{"type":"reviewSubmissions","id":"new-sub-1","attributes":{"state":"WAITING_FOR_REVIEW","submittedDate":"2026-02-22T00:00:00Z"}}}`)
+
+		default:
+			return nil, fmt.Errorf("unexpected request: %s %s", req.Method, req.URL.Path)
+		}
+	})
+
+	root := RootCommand("1.2.3")
+	root.FlagSet.SetOutput(io.Discard)
+
+	if err := root.Parse([]string{
+		"submit", "create",
+		"--app", "app-1",
+		"--version", "1.0",
+		"--build", "build-1",
+		"--platform", "IOS",
+		"--confirm",
+	}); err != nil {
+		t.Fatalf("parse error: %v", err)
+	}
+	if err := root.Run(context.Background()); err != nil {
+		t.Fatalf("expected submit create to succeed with fresh localization timeout budget, got %v", err)
+	}
+}
+
+func TestSubmitCreateRecoversFromAlreadyAddedError(t *testing.T) {
+	setupSubmitCreateAuth(t)
+
+	originalTransport := http.DefaultTransport
+	t.Cleanup(func() {
+		http.DefaultTransport = originalTransport
+	})
+
+	requests := make([]string, 0, 10)
+	http.DefaultTransport = submitCreateRoundTripFunc(func(req *http.Request) (*http.Response, error) {
+		key := req.Method + " " + req.URL.Path
+		requests = append(requests, key)
+
+		switch {
+		// Version resolution + isAppUpdate check
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/apps/app-1/appStoreVersions":
+			query := req.URL.Query()
+			if strings.Contains(query.Get("filter[appStoreState]"), "READY_FOR_SALE") {
+				return submitCreateJSONResponse(http.StatusOK, `{"data":[]}`)
+			}
+			return submitCreateJSONResponse(http.StatusOK, `{"data":[{"type":"appStoreVersions","id":"version-1","attributes":{"versionString":"1.0","platform":"IOS"}}]}`)
+
+		// Localization preflight
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/appStoreVersions/version-1/appStoreVersionLocalizations":
+			return submitCreateJSONResponse(http.StatusOK, `{"data":[{"type":"appStoreVersionLocalizations","id":"loc-en","attributes":{"locale":"en-US","description":"Desc","keywords":"kw","supportUrl":"https://example.com","whatsNew":"Bug fixes"}}]}`)
+
+		// Subscription preflight
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/apps/app-1/subscriptionGroups":
+			return submitCreateJSONResponse(http.StatusOK, `{"data":[],"links":{}}`)
+
+		// No stale submissions
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/apps/app-1/reviewSubmissions":
+			return submitCreateJSONResponse(http.StatusOK, `{"data":[],"links":{}}`)
+
+		// Attach build to version
+		case req.Method == http.MethodPatch && req.URL.Path == "/v1/appStoreVersions/version-1/relationships/build":
+			return submitCreateJSONResponse(http.StatusNoContent, "")
+
+		// Create new review submission
+		case req.Method == http.MethodPost && req.URL.Path == "/v1/reviewSubmissions":
+			return submitCreateJSONResponse(http.StatusCreated, `{"data":{"type":"reviewSubmissions","id":"new-sub-1","attributes":{"state":"READY_FOR_REVIEW","platform":"IOS"}}}`)
+
+		// Add version fails with "already added" error
+		case req.Method == http.MethodPost && req.URL.Path == "/v1/reviewSubmissionItems":
+			return submitCreateJSONResponse(http.StatusConflict, `{
+				"errors": [{
+					"status": "409",
+					"code": "ENTITY_ERROR",
+					"title": "The request entity is not valid.",
+					"detail": "An attribute value is not valid.",
+					"meta": {
+						"associatedErrors": {
+							"/v1/reviewSubmissionItems": [{
+								"code": "ENTITY_ERROR.RELATIONSHIP.INVALID",
+								"detail": "appStoreVersions with id 883340862 was already added to another reviewSubmission with id fb5dad8e-bd5f-4d96-bc2f-561cf74a7e7a"
+							}]
+						}
+					}
+				}]
+			}`)
+
+		// Cancel the empty new submission we created
+		case req.Method == http.MethodPatch && req.URL.Path == "/v1/reviewSubmissions/new-sub-1":
+			return submitCreateJSONResponse(http.StatusOK, `{"data":{"type":"reviewSubmissions","id":"new-sub-1","attributes":{"state":"CANCELING"}}}`)
+
+		// Submit the existing submission for review
+		case req.Method == http.MethodPatch && req.URL.Path == "/v1/reviewSubmissions/fb5dad8e-bd5f-4d96-bc2f-561cf74a7e7a":
+			return submitCreateJSONResponse(http.StatusOK, `{"data":{"type":"reviewSubmissions","id":"fb5dad8e-bd5f-4d96-bc2f-561cf74a7e7a","attributes":{"state":"WAITING_FOR_REVIEW","submittedDate":"2026-03-13T00:00:00Z"}}}`)
+
+		default:
+			return nil, fmt.Errorf("unexpected request: %s %s", req.Method, req.URL.Path)
+		}
+	})
+
+	root := RootCommand("1.2.3")
+	root.FlagSet.SetOutput(io.Discard)
+
+	stdout, stderr := captureOutput(t, func() {
+		if err := root.Parse([]string{
+			"submit", "create",
+			"--app", "app-1",
+			"--version", "1.0",
+			"--build", "build-1",
+			"--platform", "IOS",
+			"--confirm",
+		}); err != nil {
+			t.Fatalf("parse error: %v", err)
+		}
+		if err := root.Run(context.Background()); err != nil {
+			t.Fatalf("run error: %v", err)
+		}
+	})
+
+	// Verify recovery message was logged
+	if !strings.Contains(stderr, "Version already in review submission") {
+		t.Errorf("expected recovery message in stderr, got: %q", stderr)
+	}
+
+	// Verify the existing submission was submitted (not the new one)
+	foundExistingSubmit := false
+	for _, req := range requests {
+		if req == "PATCH /v1/reviewSubmissions/fb5dad8e-bd5f-4d96-bc2f-561cf74a7e7a" {
+			foundExistingSubmit = true
+		}
+	}
+	if !foundExistingSubmit {
+		t.Fatal("expected existing submission to be submitted for review")
+	}
+
+	// Verify stdout has valid JSON result
+	if stdout == "" {
+		t.Fatal("expected JSON output on stdout")
+	}
+	if !strings.Contains(stdout, "fb5dad8e-bd5f-4d96-bc2f-561cf74a7e7a") {
+		t.Errorf("expected output to reference existing submission ID, got: %q", stdout)
+	}
+}
+
+func TestSubmitCreateRetriesWhenConflictPointsToRecentlyCanceledStaleSubmission(t *testing.T) {
+	setupSubmitCreateAuth(t)
+
+	originalTransport := http.DefaultTransport
+	t.Cleanup(func() {
+		http.DefaultTransport = originalTransport
+	})
+
+	requests := make([]string, 0, 12)
+	addItemAttempts := 0
+	http.DefaultTransport = submitCreateRoundTripFunc(func(req *http.Request) (*http.Response, error) {
+		key := req.Method + " " + req.URL.Path
+		requests = append(requests, key)
+
+		switch {
+		// Version resolution + isAppUpdate check
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/apps/app-1/appStoreVersions":
+			query := req.URL.Query()
+			if strings.Contains(query.Get("filter[appStoreState]"), "READY_FOR_SALE") {
+				return submitCreateJSONResponse(http.StatusOK, `{"data":[]}`)
+			}
+			return submitCreateJSONResponse(http.StatusOK, `{"data":[{"type":"appStoreVersions","id":"version-1","attributes":{"versionString":"1.0","platform":"IOS"}}]}`)
+
+		// Localization preflight
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/appStoreVersions/version-1/appStoreVersionLocalizations":
+			return submitCreateJSONResponse(http.StatusOK, `{"data":[{"type":"appStoreVersionLocalizations","id":"loc-en","attributes":{"locale":"en-US","description":"Desc","keywords":"kw","supportUrl":"https://example.com","whatsNew":"Bug fixes"}}]}`)
+
+		// Subscription preflight
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/apps/app-1/subscriptionGroups":
+			return submitCreateJSONResponse(http.StatusOK, `{"data":[],"links":{}}`)
+
+		// One stale submission gets canceled before the new submission is created.
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/apps/app-1/reviewSubmissions":
+			return submitCreateJSONResponse(http.StatusOK, `{"data":[{"type":"reviewSubmissions","id":"stale-1","attributes":{"state":"READY_FOR_REVIEW","platform":"IOS"}}],"links":{}}`)
+
+		case req.Method == http.MethodPatch && req.URL.Path == "/v1/reviewSubmissions/stale-1":
+			return submitCreateJSONResponse(http.StatusOK, `{"data":{"type":"reviewSubmissions","id":"stale-1","attributes":{"state":"CANCELING"}}}`)
+
+		// Attach build to version
+		case req.Method == http.MethodPatch && req.URL.Path == "/v1/appStoreVersions/version-1/relationships/build":
+			return submitCreateJSONResponse(http.StatusNoContent, "")
+
+		// Create new review submission
+		case req.Method == http.MethodPost && req.URL.Path == "/v1/reviewSubmissions":
+			return submitCreateJSONResponse(http.StatusCreated, `{"data":{"type":"reviewSubmissions","id":"new-sub-1","attributes":{"state":"READY_FOR_REVIEW","platform":"IOS"}}}`)
+
+		// The first add still points at the stale submission we just canceled.
+		// The retry succeeds once App Store Connect catches up.
+		case req.Method == http.MethodPost && req.URL.Path == "/v1/reviewSubmissionItems":
+			addItemAttempts++
+			if addItemAttempts == 1 {
+				return submitCreateJSONResponse(http.StatusConflict, `{
+					"errors": [{
+						"status": "409",
+						"code": "ENTITY_ERROR",
+						"title": "The request entity is not valid.",
+						"detail": "An attribute value is not valid.",
+						"meta": {
+							"associatedErrors": {
+								"/v1/reviewSubmissionItems": [{
+									"code": "ENTITY_ERROR.RELATIONSHIP.INVALID",
+									"detail": "appStoreVersions with id version-1 was already added to another reviewSubmission with id stale-1"
+								}]
+							}
+						}
+					}]
+				}`)
+			}
+			return submitCreateJSONResponse(http.StatusCreated, `{"data":{"type":"reviewSubmissionItems","id":"item-1"}}`)
+
+		// The newly created submission is the one that gets submitted.
+		case req.Method == http.MethodPatch && req.URL.Path == "/v1/reviewSubmissions/new-sub-1":
+			return submitCreateJSONResponse(http.StatusOK, `{"data":{"type":"reviewSubmissions","id":"new-sub-1","attributes":{"state":"WAITING_FOR_REVIEW","submittedDate":"2026-03-14T00:00:00Z"}}}`)
+
+		default:
+			return nil, fmt.Errorf("unexpected request: %s %s", req.Method, req.URL.Path)
+		}
+	})
+
+	root := RootCommand("1.2.3")
+	root.FlagSet.SetOutput(io.Discard)
+
+	stdout, stderr := captureOutput(t, func() {
+		if err := root.Parse([]string{
+			"submit", "create",
+			"--app", "app-1",
+			"--version", "1.0",
+			"--build", "build-1",
+			"--platform", "IOS",
+			"--confirm",
+		}); err != nil {
+			t.Fatalf("parse error: %v", err)
+		}
+		if err := root.Run(context.Background()); err != nil {
+			t.Fatalf("run error: %v", err)
+		}
+	})
+
+	if addItemAttempts != 2 {
+		t.Fatalf("expected 2 add-item attempts, got %d", addItemAttempts)
+	}
+	if !strings.Contains(stderr, "Version is still detaching from recently canceled review submission stale-1") {
+		t.Fatalf("expected stale-detaching retry message in stderr, got: %q", stderr)
+	}
+
+	stalePatchCount := 0
+	newSubmissionPatchCount := 0
+	addItemCount := 0
+	for _, req := range requests {
+		switch req {
+		case "PATCH /v1/reviewSubmissions/stale-1":
+			stalePatchCount++
+		case "PATCH /v1/reviewSubmissions/new-sub-1":
+			newSubmissionPatchCount++
+		case "POST /v1/reviewSubmissionItems":
+			addItemCount++
+		}
+	}
+	if stalePatchCount != 1 {
+		t.Fatalf("expected exactly one PATCH to stale submission for cancel, got %d in %v", stalePatchCount, requests)
+	}
+	if newSubmissionPatchCount != 1 {
+		t.Fatalf("expected exactly one PATCH to new submission for submit, got %d in %v", newSubmissionPatchCount, requests)
+	}
+	if addItemCount != 2 {
+		t.Fatalf("expected exactly two add-item requests, got %d in %v", addItemCount, requests)
+	}
+
+	if !strings.Contains(stdout, "new-sub-1") {
+		t.Fatalf("expected output to reference new submission ID, got: %q", stdout)
+	}
+}
+
+func sleepWithContext(ctx context.Context) error {
+	timer := time.NewTimer(70 * time.Millisecond)
 	defer timer.Stop()
 
 	select {

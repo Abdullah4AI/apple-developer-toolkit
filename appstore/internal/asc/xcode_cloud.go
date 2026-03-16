@@ -718,6 +718,7 @@ func buildScmPullRequestsQuery(query *scmPullRequestsQuery) string {
 
 type ciBuildRunsQuery struct {
 	listQuery
+	sort string
 }
 
 // CiBuildRunsOption is a functional option for GetCiBuildRuns.
@@ -763,9 +764,21 @@ func WithCiBuildRunsNextURL(next string) CiBuildRunsOption {
 	}
 }
 
+// WithCiBuildRunsSort sets the sort order for build runs.
+func WithCiBuildRunsSort(sort string) CiBuildRunsOption {
+	return func(q *ciBuildRunsQuery) {
+		if strings.TrimSpace(sort) != "" {
+			q.sort = strings.TrimSpace(sort)
+		}
+	}
+}
+
 func buildCiBuildRunsQuery(query *ciBuildRunsQuery) string {
 	values := url.Values{}
 	addLimit(values, query.limit)
+	if query.sort != "" {
+		values.Set("sort", query.sort)
+	}
 	return values.Encode()
 }
 

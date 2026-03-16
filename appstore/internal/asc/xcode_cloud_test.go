@@ -994,6 +994,7 @@ func TestBuildScmGitReferencesQuery(t *testing.T) {
 func TestBuildCiBuildRunsQuery(t *testing.T) {
 	query := &ciBuildRunsQuery{}
 	WithCiBuildRunsLimit(10)(query)
+	WithCiBuildRunsSort("-number")(query)
 
 	values, err := url.ParseQuery(buildCiBuildRunsQuery(query))
 	if err != nil {
@@ -1001,6 +1002,9 @@ func TestBuildCiBuildRunsQuery(t *testing.T) {
 	}
 	if got := values.Get("limit"); got != "10" {
 		t.Fatalf("expected limit=10, got %q", got)
+	}
+	if got := values.Get("sort"); got != "-number" {
+		t.Fatalf("expected sort=-number, got %q", got)
 	}
 }
 

@@ -3,12 +3,20 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/x509"
+	"encoding/json"
+	"encoding/pem"
 	"encoding/xml"
 	"errors"
 	"flag"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -16,6 +24,7 @@ import (
 	"github.com/peterbourgon/ff/v3/ffcli"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/config"
 )
 
 func TestRun_VersionFlag(t *testing.T) {
@@ -173,6 +182,98 @@ func TestRun_SkipsSkillsUpdateCheckForRootInvocation(t *testing.T) {
 
 	if called {
 		t.Fatal("expected skills update check to be skipped for root invocation")
+	}
+}
+
+func TestRun_HelpSkipsAuthResolution(t *testing.T) {
+	resetReportFlags(t)
+
+	tempDir := t.TempDir()
+
+	tests := []struct {
+		name          string
+		args          []string
+		wantHelpText  string
+		avoidMessages []string
+	}{
+		{
+			name:          "apps list help",
+			args:          []string{"apps", "list", "--help"},
+			wantHelpText:  "List apps from App Store Connect.",
+			avoidMessages: []string{"missing authentication", "keychain access denied"},
+		},
+		{
+			name:          "auth token help",
+			args:          []string{"auth", "token", "--help"},
+			wantHelpText:  "Print a signed JWT for direct App Store Connect API calls.",
+			avoidMessages: []string{"missing authentication", "--confirm is required", "keychain access denied"},
+		},
+		{
+			name:          "auth issuer-id help",
+			args:          []string{"auth", "issuer-id", "--help"},
+			wantHelpText:  "Print the active App Store Connect issuer ID.",
+			avoidMessages: []string{"missing authentication", "keychain access denied"},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			stdout, stderr, exitCode := runHelpSubprocess(t, tempDir, test.args...)
+			combined := stdout + stderr
+
+			if exitCode != 0 {
+				t.Fatalf("help exit code = %d, want 0; stdout=%q stderr=%q", exitCode, stdout, stderr)
+			}
+			if !strings.Contains(combined, test.wantHelpText) {
+				t.Fatalf("expected help text %q in output, got stdout=%q stderr=%q", test.wantHelpText, stdout, stderr)
+			}
+			for _, avoid := range test.avoidMessages {
+				if strings.Contains(combined, avoid) {
+					t.Fatalf("expected help path to avoid %q, got stdout=%q stderr=%q", avoid, stdout, stderr)
+				}
+			}
+		})
+	}
+}
+
+func TestMergeEnvOverridesReplacesExistingKeys(t *testing.T) {
+	env := mergeEnvOverrides(
+		[]string{
+			"ASC_BYPASS_KEYCHAIN=1",
+			"ASC_KEY_ID=PARENT",
+			"UNCHANGED=keep",
+		},
+		map[string]string{
+			"ASC_BYPASS_KEYCHAIN":  "",
+			"ASC_KEY_ID":           "",
+			"GO_WANT_HELP_PROCESS": "1",
+		},
+	)
+
+	values := map[string]string{}
+	counts := map[string]int{}
+	for _, entry := range env {
+		parts := strings.SplitN(entry, "=", 2)
+		key := parts[0]
+		value := ""
+		if len(parts) == 2 {
+			value = parts[1]
+		}
+		values[key] = value
+		counts[key]++
+	}
+
+	if counts["ASC_BYPASS_KEYCHAIN"] != 1 || values["ASC_BYPASS_KEYCHAIN"] != "" {
+		t.Fatalf("expected ASC_BYPASS_KEYCHAIN override, got counts=%v values=%v", counts, values)
+	}
+	if counts["ASC_KEY_ID"] != 1 || values["ASC_KEY_ID"] != "" {
+		t.Fatalf("expected ASC_KEY_ID override, got counts=%v values=%v", counts, values)
+	}
+	if counts["GO_WANT_HELP_PROCESS"] != 1 || values["GO_WANT_HELP_PROCESS"] != "1" {
+		t.Fatalf("expected GO_WANT_HELP_PROCESS override, got counts=%v values=%v", counts, values)
+	}
+	if values["UNCHANGED"] != "keep" {
+		t.Fatalf("expected unrelated env to be preserved, got values=%v", values)
 	}
 }
 
@@ -443,6 +544,271 @@ func TestRun_InvalidParentPrettyReturnsUsageBeforeLeafExec(t *testing.T) {
 	}
 }
 
+func TestRun_AuthTokenRequiresConfirm(t *testing.T) {
+	resetReportFlags(t)
+
+	tempDir := t.TempDir()
+	configPath := filepath.Join(tempDir, "config.json")
+	keyPath := filepath.Join(tempDir, "AuthKey.p8")
+	writeRunTestECDSAPEM(t, keyPath)
+
+	cfg := &config.Config{
+		DefaultKeyName: "default",
+		Keys: []config.Credential{
+			{
+				Name:           "default",
+				KeyID:          "KEY123",
+				IssuerID:       "ISS456",
+				PrivateKeyPath: keyPath,
+			},
+		},
+	}
+	if err := config.SaveAt(configPath, cfg); err != nil {
+		t.Fatalf("SaveAt() error: %v", err)
+	}
+
+	t.Setenv("ASC_CONFIG_PATH", configPath)
+	t.Setenv("ASC_BYPASS_KEYCHAIN", "1")
+	t.Setenv("ASC_PROFILE", "")
+	t.Setenv("ASC_KEY_ID", "")
+	t.Setenv("ASC_ISSUER_ID", "")
+	t.Setenv("ASC_PRIVATE_KEY_PATH", "")
+	t.Setenv("ASC_PRIVATE_KEY", "")
+	t.Setenv("ASC_PRIVATE_KEY_B64", "")
+	resetSelectedProfile(t)
+
+	_, stderr := captureCommandOutput(t, func() {
+		code := Run([]string{"auth", "token"}, "1.0.0")
+		if code != ExitUsage {
+			t.Fatalf("Run() exit code = %d, want %d", code, ExitUsage)
+		}
+	})
+
+	if !strings.Contains(stderr, "--confirm is required") {
+		t.Fatalf("expected confirm required error, got %q", stderr)
+	}
+}
+
+func TestRun_AuthTokenEnvOnlyCredentials(t *testing.T) {
+	resetReportFlags(t)
+
+	tempDir := t.TempDir()
+	keyPath := filepath.Join(tempDir, "AuthKey.p8")
+	writeRunTestECDSAPEM(t, keyPath)
+
+	t.Setenv("ASC_BYPASS_KEYCHAIN", "1")
+	t.Setenv("ASC_CONFIG_PATH", filepath.Join(tempDir, "missing.json"))
+	t.Setenv("ASC_PROFILE", "")
+	t.Setenv("ASC_KEY_ID", "ENVKEY")
+	t.Setenv("ASC_ISSUER_ID", "ENVISS")
+	t.Setenv("ASC_PRIVATE_KEY_PATH", keyPath)
+	t.Setenv("ASC_PRIVATE_KEY", "")
+	t.Setenv("ASC_PRIVATE_KEY_B64", "")
+	resetSelectedProfile(t)
+
+	stdout, stderr := captureCommandOutput(t, func() {
+		code := Run([]string{"auth", "token", "--confirm", "--output", "json"}, "1.0.0")
+		if code != ExitSuccess {
+			t.Fatalf("Run() exit code = %d, want %d", code, ExitSuccess)
+		}
+	})
+
+	if stderr != "" {
+		t.Fatalf("expected empty stderr, got %q", stderr)
+	}
+
+	var payload struct {
+		Token   string `json:"token"`
+		KeyID   string `json:"keyId"`
+		Profile string `json:"profile"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
+		t.Fatalf("json.Unmarshal() error: %v; stdout=%q", err, stdout)
+	}
+	if payload.KeyID != "ENVKEY" {
+		t.Fatalf("expected keyId ENVKEY, got %q", payload.KeyID)
+	}
+	if payload.Profile != "" {
+		t.Fatalf("expected empty profile for env credentials, got %q", payload.Profile)
+	}
+	if parts := strings.Split(payload.Token, "."); len(parts) != 3 {
+		t.Fatalf("expected JWT token, got %q", payload.Token)
+	}
+}
+
+func TestRun_AuthTokenHonorsRootProfileFlag(t *testing.T) {
+	resetReportFlags(t)
+
+	configPath := writeAuthTokenProfilesConfig(t)
+	t.Setenv("ASC_CONFIG_PATH", configPath)
+	t.Setenv("ASC_BYPASS_KEYCHAIN", "1")
+	t.Setenv("ASC_PROFILE", "")
+	t.Setenv("ASC_KEY_ID", "")
+	t.Setenv("ASC_ISSUER_ID", "")
+	t.Setenv("ASC_PRIVATE_KEY_PATH", "")
+	t.Setenv("ASC_PRIVATE_KEY", "")
+	t.Setenv("ASC_PRIVATE_KEY_B64", "")
+	resetSelectedProfile(t)
+
+	stdout, stderr := captureCommandOutput(t, func() {
+		code := Run([]string{"--profile", "second", "auth", "token", "--confirm", "--output", "json"}, "1.0.0")
+		if code != ExitSuccess {
+			t.Fatalf("Run() exit code = %d, want %d", code, ExitSuccess)
+		}
+	})
+
+	if stderr != "" {
+		t.Fatalf("expected empty stderr, got %q", stderr)
+	}
+
+	var payload struct {
+		KeyID   string `json:"keyId"`
+		Profile string `json:"profile"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
+		t.Fatalf("json.Unmarshal() error: %v; stdout=%q", err, stdout)
+	}
+	if payload.KeyID != "KEY_B" || payload.Profile != "second" {
+		t.Fatalf("expected second profile payload, got %+v", payload)
+	}
+}
+
+func TestRun_AuthTokenHonorsASCProfileEnv(t *testing.T) {
+	resetReportFlags(t)
+
+	configPath := writeAuthTokenProfilesConfig(t)
+	t.Setenv("ASC_CONFIG_PATH", configPath)
+	t.Setenv("ASC_BYPASS_KEYCHAIN", "1")
+	t.Setenv("ASC_PROFILE", "second")
+	t.Setenv("ASC_KEY_ID", "")
+	t.Setenv("ASC_ISSUER_ID", "")
+	t.Setenv("ASC_PRIVATE_KEY_PATH", "")
+	t.Setenv("ASC_PRIVATE_KEY", "")
+	t.Setenv("ASC_PRIVATE_KEY_B64", "")
+	resetSelectedProfile(t)
+
+	stdout, stderr := captureCommandOutput(t, func() {
+		code := Run([]string{"auth", "token", "--confirm", "--output", "json"}, "1.0.0")
+		if code != ExitSuccess {
+			t.Fatalf("Run() exit code = %d, want %d", code, ExitSuccess)
+		}
+	})
+
+	if stderr != "" {
+		t.Fatalf("expected empty stderr, got %q", stderr)
+	}
+
+	var payload struct {
+		KeyID   string `json:"keyId"`
+		Profile string `json:"profile"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
+		t.Fatalf("json.Unmarshal() error: %v; stdout=%q", err, stdout)
+	}
+	if payload.KeyID != "KEY_B" || payload.Profile != "second" {
+		t.Fatalf("expected second profile payload, got %+v", payload)
+	}
+}
+
+func TestRun_AuthTokenAmbiguousProfilesReturnAuthExit(t *testing.T) {
+	resetReportFlags(t)
+
+	tempDir := t.TempDir()
+	configPath := filepath.Join(tempDir, "config.json")
+	keyPath := filepath.Join(tempDir, "AuthKey.p8")
+	writeRunTestECDSAPEM(t, keyPath)
+
+	cfg := &config.Config{
+		DefaultKeyName: "",
+		Keys: []config.Credential{
+			{
+				Name:           "first",
+				KeyID:          "KEY_A",
+				IssuerID:       "ISS_A",
+				PrivateKeyPath: keyPath,
+			},
+			{
+				Name:           "second",
+				KeyID:          "KEY_B",
+				IssuerID:       "ISS_B",
+				PrivateKeyPath: keyPath,
+			},
+		},
+	}
+	if err := config.SaveAt(configPath, cfg); err != nil {
+		t.Fatalf("SaveAt() error: %v", err)
+	}
+
+	t.Setenv("ASC_CONFIG_PATH", configPath)
+	t.Setenv("ASC_BYPASS_KEYCHAIN", "1")
+	t.Setenv("ASC_PROFILE", "")
+	t.Setenv("ASC_KEY_ID", "")
+	t.Setenv("ASC_ISSUER_ID", "")
+	t.Setenv("ASC_PRIVATE_KEY_PATH", "")
+	t.Setenv("ASC_PRIVATE_KEY", "")
+	t.Setenv("ASC_PRIVATE_KEY_B64", "")
+	resetSelectedProfile(t)
+
+	_, stderr := captureCommandOutput(t, func() {
+		code := Run([]string{"auth", "token", "--confirm"}, "1.0.0")
+		if code != ExitAuth {
+			t.Fatalf("Run() exit code = %d, want %d", code, ExitAuth)
+		}
+	})
+
+	if !strings.Contains(stderr, "missing authentication") {
+		t.Fatalf("expected missing authentication error, got %q", stderr)
+	}
+}
+
+func TestRun_AuthTokenRejectsPermissiveKeyFile(t *testing.T) {
+	resetReportFlags(t)
+
+	tempDir := t.TempDir()
+	configPath := filepath.Join(tempDir, "config.json")
+	keyPath := filepath.Join(tempDir, "AuthKey.p8")
+	writeRunTestECDSAPEM(t, keyPath)
+	if err := os.Chmod(keyPath, 0o644); err != nil {
+		t.Fatalf("Chmod() error: %v", err)
+	}
+
+	cfg := &config.Config{
+		DefaultKeyName: "default",
+		Keys: []config.Credential{
+			{
+				Name:           "default",
+				KeyID:          "KEY123",
+				IssuerID:       "ISS456",
+				PrivateKeyPath: keyPath,
+			},
+		},
+	}
+	if err := config.SaveAt(configPath, cfg); err != nil {
+		t.Fatalf("SaveAt() error: %v", err)
+	}
+
+	t.Setenv("ASC_CONFIG_PATH", configPath)
+	t.Setenv("ASC_BYPASS_KEYCHAIN", "1")
+	t.Setenv("ASC_PROFILE", "")
+	t.Setenv("ASC_KEY_ID", "")
+	t.Setenv("ASC_ISSUER_ID", "")
+	t.Setenv("ASC_PRIVATE_KEY_PATH", "")
+	t.Setenv("ASC_PRIVATE_KEY", "")
+	t.Setenv("ASC_PRIVATE_KEY_B64", "")
+	resetSelectedProfile(t)
+
+	_, stderr := captureCommandOutput(t, func() {
+		code := Run([]string{"auth", "token", "--confirm"}, "1.0.0")
+		if code != ExitError {
+			t.Fatalf("Run() exit code = %d, want %d", code, ExitError)
+		}
+	})
+
+	if !strings.Contains(stderr, "private key file is too permissive") {
+		t.Fatalf("expected permissive key file error, got %q", stderr)
+	}
+}
+
 func TestWriteJUnitReport(t *testing.T) {
 	resetReportFlags(t)
 
@@ -490,6 +856,63 @@ func resetReportFlags(t *testing.T) {
 	t.Helper()
 	shared.SetReportFormat("")
 	shared.SetReportFile("")
+}
+
+func resetSelectedProfile(t *testing.T) {
+	t.Helper()
+	previousProfile := shared.SelectedProfile()
+	shared.SetSelectedProfile("")
+	t.Cleanup(func() {
+		shared.SetSelectedProfile(previousProfile)
+	})
+}
+
+func writeAuthTokenProfilesConfig(t *testing.T) string {
+	t.Helper()
+
+	tempDir := t.TempDir()
+	configPath := filepath.Join(tempDir, "config.json")
+	keyPath := filepath.Join(tempDir, "AuthKey.p8")
+	writeRunTestECDSAPEM(t, keyPath)
+
+	cfg := &config.Config{
+		DefaultKeyName: "first",
+		Keys: []config.Credential{
+			{
+				Name:           "first",
+				KeyID:          "KEY_A",
+				IssuerID:       "ISS_A",
+				PrivateKeyPath: keyPath,
+			},
+			{
+				Name:           "second",
+				KeyID:          "KEY_B",
+				IssuerID:       "ISS_B",
+				PrivateKeyPath: keyPath,
+			},
+		},
+	}
+	if err := config.SaveAt(configPath, cfg); err != nil {
+		t.Fatalf("SaveAt() error: %v", err)
+	}
+	return configPath
+}
+
+func writeRunTestECDSAPEM(t *testing.T, path string) {
+	t.Helper()
+
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatalf("ecdsa.GenerateKey() error: %v", err)
+	}
+	der, err := x509.MarshalPKCS8PrivateKey(key)
+	if err != nil {
+		t.Fatalf("x509.MarshalPKCS8PrivateKey() error: %v", err)
+	}
+	data := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der})
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatalf("WriteFile() error: %v", err)
+	}
 }
 
 func captureCommandOutput(t *testing.T, fn func()) (string, string) {
@@ -540,4 +963,85 @@ func captureCommandOutput(t *testing.T, fn func()) (string, string) {
 	_ = stderrW.Close()
 
 	return <-outC, <-errC
+}
+
+func runHelpSubprocess(t *testing.T, tempDir string, args ...string) (string, string, int) {
+	t.Helper()
+
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatalf("os.Executable() error: %v", err)
+	}
+
+	cmdArgs := []string{"-test.run=TestRunHelpHelperProcess", "--"}
+	cmdArgs = append(cmdArgs, args...)
+	cmd := exec.Command(exe, cmdArgs...)
+	cmd.Env = mergeEnvOverrides(os.Environ(), map[string]string{
+		"GO_WANT_HELP_PROCESS": "1",
+		"ASC_BYPASS_KEYCHAIN":  "",
+		"ASC_CONFIG_PATH":      filepath.Join(tempDir, "missing.json"),
+		"ASC_PROFILE":          "",
+		"ASC_KEY_ID":           "",
+		"ASC_ISSUER_ID":        "",
+		"ASC_PRIVATE_KEY_PATH": "",
+		"ASC_PRIVATE_KEY":      "",
+		"ASC_PRIVATE_KEY_B64":  "",
+		"ASC_STRICT_AUTH":      "",
+	})
+
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	err = cmd.Run()
+	if err == nil {
+		return stdout.String(), stderr.String(), 0
+	}
+	var exitErr *exec.ExitError
+	if !errors.As(err, &exitErr) {
+		t.Fatalf("help subprocess error: %v", err)
+	}
+	return stdout.String(), stderr.String(), exitErr.ExitCode()
+}
+
+func mergeEnvOverrides(base []string, overrides map[string]string) []string {
+	filtered := make([]string, 0, len(base)+len(overrides))
+	for _, entry := range base {
+		parts := strings.SplitN(entry, "=", 2)
+		key := parts[0]
+		if _, ok := overrides[key]; ok {
+			continue
+		}
+		filtered = append(filtered, entry)
+	}
+
+	keys := make([]string, 0, len(overrides))
+	for key := range overrides {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		filtered = append(filtered, key+"="+overrides[key])
+	}
+	return filtered
+}
+
+func TestRunHelpHelperProcess(t *testing.T) {
+	if os.Getenv("GO_WANT_HELP_PROCESS") != "1" {
+		return
+	}
+
+	sep := -1
+	for i, arg := range os.Args {
+		if arg == "--" {
+			sep = i
+			break
+		}
+	}
+	if sep == -1 || sep+1 >= len(os.Args) {
+		os.Exit(2)
+	}
+
+	code := Run(os.Args[sep+1:], "1.0.0")
+	os.Exit(code)
 }

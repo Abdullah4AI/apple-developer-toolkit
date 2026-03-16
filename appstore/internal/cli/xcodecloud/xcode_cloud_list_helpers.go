@@ -23,12 +23,12 @@ func runXcodeCloudPaginatedList(
 	fetchNextPage func(context.Context, *asc.Client, string) (asc.PaginatedResponse, error),
 ) error {
 	if limit != 0 && (limit < 1 || limit > 200) {
-		return fmt.Errorf("%s: --limit must be between 1 and 200", errorPrefix)
+		return shared.UsageError(fmt.Sprintf("%s: --limit must be between 1 and 200", errorPrefix))
 	}
 
 	nextURL := strings.TrimSpace(next)
 	if err := shared.ValidateNextURL(nextURL); err != nil {
-		return fmt.Errorf("%s: %w", errorPrefix, err)
+		return shared.UsageError(fmt.Sprintf("%s: %s", errorPrefix, err.Error()))
 	}
 
 	client, err := shared.GetASCClient()

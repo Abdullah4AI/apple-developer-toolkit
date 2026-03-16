@@ -117,15 +117,24 @@ type Credential struct {
 	PrivateKeyPath string `json:"private_key_path"`
 }
 
+// KeychainMetadata stores non-secret metadata for keychain-backed credentials.
+type KeychainMetadata struct {
+	Name       string `json:"name"`
+	KeyID      string `json:"key_id"`
+	IssuerID   string `json:"issuer_id"`
+	ModifiedAt string `json:"modified_at,omitempty"`
+}
+
 // Config holds the application configuration
 type Config struct {
-	KeyID          string       `json:"key_id"`
-	IssuerID       string       `json:"issuer_id"`
-	PrivateKeyPath string       `json:"private_key_path"`
-	PrivateKeyPEM  string       `json:"-"`
-	DefaultKeyName string       `json:"default_key_name"`
-	Keys           []Credential `json:"keys,omitempty"`
-	AppID          string       `json:"app_id"`
+	KeyID            string             `json:"key_id"`
+	IssuerID         string             `json:"issuer_id"`
+	PrivateKeyPath   string             `json:"private_key_path"`
+	PrivateKeyPEM    string             `json:"-"`
+	DefaultKeyName   string             `json:"default_key_name"`
+	Keys             []Credential       `json:"keys,omitempty"`
+	KeychainMetadata []KeychainMetadata `json:"keychain_metadata,omitempty"`
+	AppID            string             `json:"app_id"`
 
 	VendorNumber          string `json:"vendor_number"`
 	AnalyticsVendorNumber string `json:"analytics_vendor_number"`
