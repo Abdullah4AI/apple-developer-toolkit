@@ -171,6 +171,7 @@ func AgeRatingSetCommand() *ffcli.Command {
 	appID := fs.String("app", os.Getenv("ASC_APP_ID"), "App ID (required unless --id, --app-info-id, or --version-id is provided)")
 	appInfoID := fs.String("app-info-id", "", "App info ID (optional)")
 	versionID := fs.String("version-id", "", "App Store version ID (optional)")
+	allNone := fs.Bool("all-none", false, "Set all ratings to NONE/false (safe default for apps with no objectionable content)")
 
 	// Boolean content descriptors
 	advertising := fs.String("advertising", "", "Contains advertising (true/false)")
@@ -213,12 +214,21 @@ func AgeRatingSetCommand() *ffcli.Command {
 		ShortHelp:  "Update an age rating declaration.",
 		LongHelp: `Update an age rating declaration.
 
+Use --all-none to set all ratings to their safe defaults (NONE/false) in one
+command, then override individual fields as needed.
+
 Examples:
+  asc age-rating set --app APP_ID --all-none
+  asc age-rating set --app APP_ID --all-none --unrestricted-web-access true
   asc age-rating set --id DECLARATION_ID --gambling false --kids-age-band FIVE_AND_UNDER
   asc age-rating set --app APP_ID --violence-realistic FREQUENT_OR_INTENSE --unrestricted-web-access true`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
+			if len(args) > 0 {
+				return shared.UsageErrorf("unexpected argument(s): %s", strings.Join(args, " "))
+			}
+
 			idValue := strings.TrimSpace(*id)
 			appInfoValue := strings.TrimSpace(*appInfoID)
 			versionValue := strings.TrimSpace(*versionID)
@@ -234,7 +244,7 @@ Examples:
 				}
 			}
 
-			attributes, err := buildAgeRatingAttributes(map[string]string{
+			values := map[string]string{
 				// Boolean content descriptors
 				"advertising":               *advertising,
 				"gambling":                  *gambling,
@@ -265,7 +275,13 @@ Examples:
 				"age-rating-override-v2":        *ageRatingOverrideV2,
 				"korea-age-rating-override":     *koreaAgeRatingOverride,
 				"developer-age-rating-info-url": *developerAgeRatingInfoURL,
-			})
+			}
+
+			if *allNone {
+				applyAllNoneDefaults(values)
+			}
+
+			attributes, err := buildAgeRatingAttributes(values)
 			if err != nil {
 				return err
 			}
@@ -429,6 +445,54 @@ func hasAgeRatingUpdates(attrs asc.AgeRatingDeclarationAttributes) bool {
 		attrs.AgeRatingOverrideV2 != nil ||
 		attrs.KoreaAgeRatingOverride != nil ||
 		attrs.DeveloperAgeRatingInfoURL != nil
+}
+
+// allNoneBoolFlags lists the boolean content descriptor flag names that
+// --all-none should default to "false".
+var allNoneBoolFlags = []string{
+	"advertising",
+	"gambling",
+	"health-or-wellness-topics",
+	"loot-box",
+	"messaging-and-chat",
+	"parental-controls",
+	"age-assurance",
+	"unrestricted-web-access",
+	"user-generated-content",
+}
+
+// allNoneEnumFlags lists the enum content descriptor flag names that
+// --all-none should default to "NONE".
+var allNoneEnumFlags = []string{
+	"alcohol-tobacco-drug-use",
+	"contests",
+	"gambling-simulated",
+	"guns-or-other-weapons",
+	"medical-treatment",
+	"profanity-humor",
+	"sexual-content-nudity",
+	"sexual-content-graphic-nudity",
+	"horror-fear",
+	"mature-suggestive",
+	"violence-cartoon",
+	"violence-realistic",
+	"violence-realistic-graphic",
+}
+
+// applyAllNoneDefaults fills in safe defaults (NONE/false) for any content
+// descriptor that was not explicitly provided by the user. Individual flags
+// that are already set take priority over the --all-none shortcut.
+func applyAllNoneDefaults(values map[string]string) {
+	for _, key := range allNoneBoolFlags {
+		if strings.TrimSpace(values[key]) == "" {
+			values[key] = "false"
+		}
+	}
+	for _, key := range allNoneEnumFlags {
+		if strings.TrimSpace(values[key]) == "" {
+			values[key] = "NONE"
+		}
+	}
 }
 
 func parseOptionalEnumFlag(name, raw string, allowed []string) (*string, error) {

@@ -21,7 +21,7 @@ func TestWebAppsCreateDefersPasswordResolutionToResolveSession(t *testing.T) {
 	promptErr := errors.New("prompt should not run before session resolution")
 	resolveErr := errors.New("stop before network call")
 
-	promptPasswordFn = func() (string, error) {
+	promptPasswordFn = func(ctx context.Context) (string, error) {
 		return "", promptErr
 	}
 

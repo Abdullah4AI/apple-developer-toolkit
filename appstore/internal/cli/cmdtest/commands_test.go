@@ -1552,18 +1552,18 @@ func TestSubscriptionsValidationErrors(t *testing.T) {
 			wantErr: "--confirm is required",
 		},
 		{
-			name:    "subscriptions pricing availability set missing id",
-			args:    []string{"subscriptions", "pricing", "availability", "set", "--territories", "USA"},
+			name:    "subscriptions pricing availability edit missing id",
+			args:    []string{"subscriptions", "pricing", "availability", "edit", "--territories", "USA"},
 			wantErr: "--subscription-id is required",
 		},
 		{
-			name:    "subscriptions pricing availability set missing territory",
-			args:    []string{"subscriptions", "pricing", "availability", "set", "--subscription-id", "SUB_ID"},
+			name:    "subscriptions pricing availability edit missing territory",
+			args:    []string{"subscriptions", "pricing", "availability", "edit", "--subscription-id", "SUB_ID"},
 			wantErr: "--territories is required",
 		},
 		{
-			name:    "subscriptions pricing availability get missing id",
-			args:    []string{"subscriptions", "pricing", "availability", "get"},
+			name:    "subscriptions pricing availability view missing id",
+			args:    []string{"subscriptions", "pricing", "availability", "view"},
 			wantErr: "--availability-id or --subscription-id is required",
 		},
 		{

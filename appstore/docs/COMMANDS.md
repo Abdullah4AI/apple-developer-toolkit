@@ -161,6 +161,9 @@ asc apps list --output table
 # Upload a build
 asc builds upload --app "123456789" --ipa "/path/to/MyApp.ipa"
 
+# Stage an App Store version before submission
+asc release stage --app "123456789" --version "1.2.3" --build "BUILD_ID" --copy-metadata-from "1.2.2" --dry-run
+
 # Release an App Store version (high-level)
 asc release run --app "123456789" --version "1.2.3" --build "BUILD_ID" --metadata-dir "./metadata/version/1.2.3" --dry-run
 asc release run --app "123456789" --version "1.2.3" --build "BUILD_ID" --metadata-dir "./metadata/version/1.2.3" --confirm

@@ -162,8 +162,8 @@ Examples:
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
-			if len(args) > 0 {
-				return shared.UsageError("subscriptions setup does not accept positional arguments")
+			if err := shared.RecoverBoolFlagTailArgs(fs, args, availableInNewTerritories); err != nil {
+				return err
 			}
 
 			groupReferenceNameValue, err := resolveSubscriptionsSetupAlias(*groupReferenceName, *groupRefNameAlias, "--group-reference-name", "--group-ref-name")

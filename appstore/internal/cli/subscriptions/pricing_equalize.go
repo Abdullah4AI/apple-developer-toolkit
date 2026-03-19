@@ -86,6 +86,14 @@ Examples:
 				return fmt.Errorf("equalize: %w", err)
 			}
 
+			// Step 0: Fail fast if sale availability does not already cover all pricing territories.
+			fmt.Fprintln(os.Stderr, "Checking subscription availability coverage...")
+			coveredTerritories, err := validateEqualizeAvailability(ctx, client, subID)
+			if err != nil {
+				return fmt.Errorf("equalize: %w", err)
+			}
+			fmt.Fprintf(os.Stderr, "Availability covers %d pricing territories\n", coveredTerritories)
+
 			// Step 1: Find the base price point
 			fmt.Fprintf(os.Stderr, "Finding %s price point for %s...\n", territory, price)
 			pricePointID, err := findPricePoint(ctx, client, subID, territory, price)
@@ -119,10 +127,6 @@ Examples:
 					Territories:    allTerritories,
 					Total:          len(allTerritories),
 				}, *output.Output, *output.Pretty)
-			}
-
-			if err := validateEqualizeAvailability(ctx, client, subID, allTerritories); err != nil {
-				return fmt.Errorf("equalize: %w", err)
 			}
 
 			// Step 3: Set prices for all territories concurrently
@@ -362,54 +366,140 @@ func fetchEqualizations(ctx context.Context, client *asc.Client, pricePointID, b
 	return result, nil
 }
 
-func validateEqualizeAvailability(ctx context.Context, client *asc.Client, subID string, territories []equalization) error {
-	if len(territories) == 0 {
-		return nil
-	}
-
+func validateEqualizeAvailability(ctx context.Context, client *asc.Client, subID string) (int, error) {
 	getCtx, getCancel := shared.ContextWithTimeout(ctx)
 	availability, err := client.GetSubscriptionAvailabilityForSubscription(getCtx, subID)
 	getCancel()
 	if err != nil {
 		if errors.Is(err, asc.ErrNotFound) {
-			return fmt.Errorf("subscription availability is not configured; equalize only updates prices and will not change sale availability. Configure territories first with `asc subscriptions pricing availability set`")
+			exists, verifyErr := subscriptionExists(ctx, client, subID)
+			if verifyErr != nil {
+				return 0, verifyErr
+			}
+			if !exists {
+				return 0, fmt.Errorf("subscription %q was not found", subID)
+			}
+			return 0, fmt.Errorf("subscription availability is not configured; equalize only updates prices and will not change sale availability. Configure territories first with `asc subscriptions pricing availability edit`")
 		}
-		return fmt.Errorf("failed to fetch availability: %w", err)
+		return 0, fmt.Errorf("failed to fetch availability: %w", err)
 	}
 
 	availabilityID := strings.TrimSpace(availability.Data.ID)
 	if availabilityID == "" {
-		return fmt.Errorf("availability readback returned empty id")
+		return 0, fmt.Errorf("availability readback returned empty id")
 	}
 
+	requiredTerritories, err := fetchPricingTerritories(ctx, client)
+	if err != nil {
+		return 0, err
+	}
+	if len(requiredTerritories) == 0 {
+		return 0, nil
+	}
+
+	available, err := fetchSubscriptionAvailabilityTerritories(ctx, client, availabilityID)
+	if err != nil {
+		return 0, err
+	}
+
+	missing := make([]string, 0)
+	for _, territoryID := range requiredTerritories {
+		if _, ok := available[territoryID]; !ok {
+			missing = append(missing, territoryID)
+		}
+	}
+	if len(missing) == 0 {
+		return len(requiredTerritories), nil
+	}
+
+	sort.Strings(missing)
+	return 0, fmt.Errorf("subscription availability is missing %d equalized territor%s (%s); equalize only updates prices and will not change sale availability. Configure territories first with `asc subscriptions pricing availability edit`", len(missing), pluralizeEqualizeTerritories(len(missing)), summarizeEqualizeTerritories(missing, 8))
+}
+
+func subscriptionExists(ctx context.Context, client *asc.Client, subID string) (bool, error) {
+	getCtx, getCancel := shared.ContextWithTimeout(ctx)
+	defer getCancel()
+
+	_, err := client.GetSubscription(getCtx, subID)
+	if err == nil {
+		return true, nil
+	}
+	if errors.Is(err, asc.ErrNotFound) {
+		return false, nil
+	}
+	return false, fmt.Errorf("failed to verify subscription: %w", err)
+}
+
+func fetchPricingTerritories(ctx context.Context, client *asc.Client) ([]string, error) {
+	firstCtx, firstCancel := shared.ContextWithTimeout(ctx)
+	firstPage, err := client.GetTerritories(firstCtx, asc.WithTerritoriesLimit(200))
+	firstCancel()
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch pricing territories: %w", err)
+	}
+
+	allPages, err := asc.PaginateAll(ctx, firstPage, func(_ context.Context, nextURL string) (asc.PaginatedResponse, error) {
+		pageCtx, pageCancel := shared.ContextWithTimeout(ctx)
+		defer pageCancel()
+		return client.GetTerritories(pageCtx, asc.WithTerritoriesNextURL(nextURL))
+	})
+	if err != nil {
+		return nil, fmt.Errorf("paginate pricing territories: %w", err)
+	}
+
+	typed, ok := allPages.(*asc.TerritoriesResponse)
+	if !ok {
+		return nil, fmt.Errorf("unexpected pricing territories response type %T", allPages)
+	}
+
+	territories := make([]string, 0, len(typed.Data))
+	seen := make(map[string]struct{}, len(typed.Data))
+	for _, territory := range typed.Data {
+		id := strings.ToUpper(strings.TrimSpace(territory.ID))
+		if id == "" {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		territories = append(territories, id)
+	}
+	sort.Strings(territories)
+	return territories, nil
+}
+
+func fetchSubscriptionAvailabilityTerritories(ctx context.Context, client *asc.Client, availabilityID string) (map[string]struct{}, error) {
 	territoriesCtx, territoriesCancel := shared.ContextWithTimeout(ctx)
-	territoriesResp, err := client.GetSubscriptionAvailabilityAvailableTerritories(territoriesCtx, availabilityID, asc.WithSubscriptionAvailabilityTerritoriesLimit(200))
+	firstPage, err := client.GetSubscriptionAvailabilityAvailableTerritories(territoriesCtx, availabilityID, asc.WithSubscriptionAvailabilityTerritoriesLimit(200))
 	territoriesCancel()
 	if err != nil {
-		return fmt.Errorf("failed to fetch availability territories: %w", err)
+		return nil, fmt.Errorf("failed to fetch availability territories: %w", err)
 	}
 
-	available := make(map[string]struct{}, len(territoriesResp.Data))
-	for _, territory := range territoriesResp.Data {
+	allPages, err := asc.PaginateAll(ctx, firstPage, func(_ context.Context, nextURL string) (asc.PaginatedResponse, error) {
+		pageCtx, pageCancel := shared.ContextWithTimeout(ctx)
+		defer pageCancel()
+		return client.GetSubscriptionAvailabilityAvailableTerritories(pageCtx, availabilityID, asc.WithSubscriptionAvailabilityTerritoriesNextURL(nextURL))
+	})
+	if err != nil {
+		return nil, fmt.Errorf("paginate availability territories: %w", err)
+	}
+
+	typed, ok := allPages.(*asc.TerritoriesResponse)
+	if !ok {
+		return nil, fmt.Errorf("unexpected availability territories response type %T", allPages)
+	}
+
+	available := make(map[string]struct{}, len(typed.Data))
+	for _, territory := range typed.Data {
 		id := strings.ToUpper(strings.TrimSpace(territory.ID))
 		if id == "" {
 			continue
 		}
 		available[id] = struct{}{}
 	}
-
-	missing := make([]string, 0)
-	for _, territory := range territories {
-		if _, ok := available[territory.Territory]; !ok {
-			missing = append(missing, territory.Territory)
-		}
-	}
-	if len(missing) == 0 {
-		return nil
-	}
-
-	sort.Strings(missing)
-	return fmt.Errorf("subscription availability is missing %d equalized territor%s (%s); equalize only updates prices and will not change sale availability. Configure territories first with `asc subscriptions pricing availability set`", len(missing), pluralizeEqualizeTerritories(len(missing)), summarizeEqualizeTerritories(missing, 8))
+	return available, nil
 }
 
 func pluralizeEqualizeTerritories(n int) string {

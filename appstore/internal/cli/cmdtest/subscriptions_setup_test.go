@@ -528,6 +528,7 @@ func TestSubscriptionsSetupCreateLocalizationPricingAndAvailabilitySuccess(t *te
 			"--product-id", "com.example.pro.monthly",
 			"--subscription-period", "ONE_MONTH",
 			"--family-sharable",
+			"--available-in-new-territories", "false",
 			"--locale", "en-US",
 			"--display-name", "Pro Monthly",
 			"--description", "All premium features.",

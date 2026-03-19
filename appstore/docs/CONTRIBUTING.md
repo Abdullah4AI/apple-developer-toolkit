@@ -19,7 +19,8 @@ This file covers patterns for AI agents working on the codebase.
 ```bash
 make format     # Format code
 make lint       # Check for issues
-make test       # Run all tests
+make check-command-docs  # Verify command docs stay in sync
+ASC_BYPASS_KEYCHAIN=1 make test  # Run all tests without keychain prompts
 git diff        # Review changes before staging
 ```
 
@@ -58,7 +59,7 @@ Before tagging a release, verify:
 
 ```bash
 # 1. All tests pass
-make test
+ASC_BYPASS_KEYCHAIN=1 make test
 
 # 2. Audit help output for all parent commands
 for cmd in auth analytics finance apps app-tags testflight builds versions \

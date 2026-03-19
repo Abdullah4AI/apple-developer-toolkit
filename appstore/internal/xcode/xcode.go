@@ -62,10 +62,23 @@ type ExportResult struct {
 	BuildNumber string `json:"build_number,omitempty"`
 }
 
+type ValidateOptions struct {
+	IPAPath   string
+	APIKey    string
+	APIIssuer string
+	LogWriter io.Writer
+}
+
+type ValidateResult struct {
+	IPAPath   string `json:"ipa_path"`
+	Validated bool   `json:"validated"`
+}
+
 type bundleInfo struct {
 	BundleID    string
 	Version     string
 	BuildNumber string
+	Platform    string
 }
 
 func Archive(ctx context.Context, opts ArchiveOptions) (*ArchiveResult, error) {
@@ -114,8 +127,23 @@ func Export(ctx context.Context, opts ExportOptions) (*ExportResult, error) {
 	if err := validateExportInputPaths(opts); err != nil {
 		return nil, err
 	}
-	if err := prepareIPAPath(opts.IPAPath, opts.Overwrite); err != nil {
-		return nil, err
+
+	// Always ensure parent dir exists (needed for temp dir creation below).
+	if err := os.MkdirAll(filepath.Dir(opts.IPAPath), 0o755); err != nil {
+		return nil, fmt.Errorf("create output directory: %w", err)
+	}
+
+	// When the ExportOptions plist has destination=upload, xcodebuild uploads
+	// directly to App Store Connect and does not produce a local .ipa file.
+	// This is the normal path for tvOS and some macOS exports. Detect this
+	// mode before prepareIPAPath to avoid deleting an existing IPA that will
+	// never be replaced.
+	uploadMode := isDirectUploadMode(opts.ExportOptions)
+
+	if !uploadMode {
+		if err := prepareIPAPath(opts.IPAPath, opts.Overwrite); err != nil {
+			return nil, err
+		}
 	}
 	maybeWarnAboutBetaXcodeForAppStoreExport(ctx, opts.ExportOptions, opts.LogWriter)
 
@@ -128,6 +156,21 @@ func Export(ctx context.Context, opts ExportOptions) (*ExportResult, error) {
 	args := buildExportCommand(opts, tempExportDir)
 	if err := runXcodebuild(ctx, args, opts.LogWriter); err != nil {
 		return nil, err
+	}
+
+	if uploadMode {
+		// xcodebuild uploaded directly — no local IPA produced.
+		info, err := readArchiveBundleInfo(opts.ArchivePath)
+		if err != nil {
+			return nil, fmt.Errorf("read archive bundle info after direct upload: %w", err)
+		}
+		return &ExportResult{
+			ArchivePath: opts.ArchivePath,
+			IPAPath:     "",
+			BundleID:    info.BundleID,
+			Version:     info.Version,
+			BuildNumber: info.BuildNumber,
+		}, nil
 	}
 
 	exportedIPAPath, err := findExportedIPA(tempExportDir)
@@ -150,6 +193,51 @@ func Export(ctx context.Context, opts ExportOptions) (*ExportResult, error) {
 		Version:     info.Version,
 		BuildNumber: info.BuildNumber,
 	}, nil
+}
+
+func Validate(ctx context.Context, opts ValidateOptions) (*ValidateResult, error) {
+	opts = normalizeValidateOptions(opts)
+	if err := validateValidateOptions(opts); err != nil {
+		return nil, err
+	}
+	if err := ensureXcodeAvailable(ctx); err != nil {
+		return nil, err
+	}
+	if _, err := lookPathFn("xcrun"); err != nil {
+		if errors.Is(err, exec.ErrNotFound) {
+			return nil, fmt.Errorf("xcrun not available; install Xcode and ensure the active developer directory is configured")
+		}
+		return nil, fmt.Errorf("locate xcrun: %w", err)
+	}
+	if err := validateExistingFile(opts.IPAPath, "--ipa"); err != nil {
+		return nil, err
+	}
+	if err := runAltoolValidate(ctx, buildValidateCommand(opts, inferValidatePlatform(opts.IPAPath)), opts.LogWriter); err != nil {
+		return nil, err
+	}
+	return &ValidateResult{
+		IPAPath:   opts.IPAPath,
+		Validated: true,
+	}, nil
+}
+
+// IsDirectUploadMode reports whether ExportOptions.plist uploads directly to
+// App Store Connect instead of producing a local IPA artifact.
+func IsDirectUploadMode(exportOptionsPlistPath string) bool {
+	return isDirectUploadMode(exportOptionsPlistPath)
+}
+
+// InferArchivePlatform returns the App Store platform for the archived app by
+// reading the embedded app Info.plist inside the .xcarchive.
+func InferArchivePlatform(archivePath string) (string, error) {
+	info, err := readArchiveBundleInfo(archivePath)
+	if err != nil {
+		return "", err
+	}
+	if strings.TrimSpace(info.Platform) == "" {
+		return "", fmt.Errorf("could not infer App Store platform from archive")
+	}
+	return info.Platform, nil
 }
 
 func validateArchiveOptions(opts ArchiveOptions) error {
@@ -208,6 +296,19 @@ func validateExportInputPaths(opts ExportOptions) error {
 	return nil
 }
 
+func validateValidateOptions(opts ValidateOptions) error {
+	if opts.IPAPath == "" {
+		return fmt.Errorf("--ipa is required")
+	}
+	if !strings.EqualFold(filepath.Ext(opts.IPAPath), ".ipa") {
+		return fmt.Errorf("--ipa must end with .ipa")
+	}
+	if (opts.APIKey == "") != (opts.APIIssuer == "") {
+		return fmt.Errorf("--api-key and --api-issuer must be provided together")
+	}
+	return nil
+}
+
 func validateWorkspaceProjectPair(workspacePath, projectPath string) error {
 	hasWorkspace := workspacePath != ""
 	hasProject := projectPath != ""
@@ -230,6 +331,13 @@ func normalizeExportOptions(opts ExportOptions) ExportOptions {
 	opts.ArchivePath = normalizeDirectoryPath(opts.ArchivePath)
 	opts.ExportOptions = strings.TrimSpace(opts.ExportOptions)
 	opts.IPAPath = strings.TrimSpace(opts.IPAPath)
+	return opts
+}
+
+func normalizeValidateOptions(opts ValidateOptions) ValidateOptions {
+	opts.IPAPath = strings.TrimSpace(opts.IPAPath)
+	opts.APIKey = strings.TrimSpace(opts.APIKey)
+	opts.APIIssuer = strings.TrimSpace(opts.APIIssuer)
 	return opts
 }
 
@@ -385,6 +493,51 @@ func buildExportCommand(opts ExportOptions, exportDir string) []string {
 	return args
 }
 
+func inferValidatePlatform(ipaPath string) string {
+	info, err := readIPABundleInfo(ipaPath)
+	if err != nil {
+		return "ios"
+	}
+	if platform := mapAppStorePlatformToAltoolType(info.Platform); platform != "" {
+		return platform
+	}
+	return "ios"
+}
+
+func buildValidateCommand(opts ValidateOptions, platform string) []string {
+	if strings.TrimSpace(platform) == "" {
+		platform = "ios"
+	}
+	args := []string{
+		"altool",
+		"--validate-app",
+		"--file", opts.IPAPath,
+		"--type", platform,
+	}
+	if opts.APIKey != "" {
+		args = append(args, "--apiKey", opts.APIKey)
+	}
+	if opts.APIIssuer != "" {
+		args = append(args, "--apiIssuer", opts.APIIssuer)
+	}
+	return args
+}
+
+func mapAppStorePlatformToAltoolType(value string) string {
+	switch strings.ToUpper(strings.TrimSpace(value)) {
+	case "IOS":
+		return "ios"
+	case "TV_OS":
+		return "appletvos"
+	case "VISION_OS":
+		return "visionos"
+	case "MAC_OS":
+		return "macos"
+	default:
+		return ""
+	}
+}
+
 func cloneStrings(values []string) []string {
 	if len(values) == 0 {
 		return nil
@@ -401,10 +554,18 @@ func cloneStrings(values []string) []string {
 }
 
 func runXcodebuild(ctx context.Context, args []string, logWriter io.Writer) error {
+	return runCommandWithTail(ctx, "xcodebuild", args, logWriter, summarizeAction(args), "xcodebuild")
+}
+
+func runAltoolValidate(ctx context.Context, args []string, logWriter io.Writer) error {
+	return runCommandWithTail(ctx, "xcrun", args, logWriter, "validate", "xcrun altool")
+}
+
+func runCommandWithTail(ctx context.Context, name string, args []string, logWriter io.Writer, action string, commandLabel string) error {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	cmd := commandContextFn(ctx, "xcodebuild", args...)
+	cmd := commandContextFn(ctx, name, args...)
 	outputTail := newTailBuffer(xcodebuildErrorTailLimit)
 	writer := io.Writer(outputTail)
 	if logWriter != nil {
@@ -417,15 +578,16 @@ func runXcodebuild(ctx context.Context, args []string, logWriter io.Writer) erro
 		if detail != "" {
 			if outputTail.Truncated() {
 				return fmt.Errorf(
-					"xcodebuild %s failed (showing last %d bytes): %s",
-					summarizeAction(args),
+					"%s %s failed (showing last %d bytes): %s",
+					commandLabel,
+					action,
 					xcodebuildErrorTailLimit,
 					detail,
 				)
 			}
-			return fmt.Errorf("xcodebuild %s failed: %s", summarizeAction(args), detail)
+			return fmt.Errorf("%s %s failed: %s", commandLabel, action, detail)
 		}
-		return fmt.Errorf("xcodebuild %s failed: %w", summarizeAction(args), err)
+		return fmt.Errorf("%s %s failed: %w", commandLabel, action, err)
 	}
 	return nil
 }
@@ -545,6 +707,22 @@ func findExportedIPA(exportDir string) (string, error) {
 	return matches[0], nil
 }
 
+// isDirectUploadMode reads the ExportOptions plist and returns true when
+// destination is set to "upload". In this mode xcodebuild uploads the build
+// directly to App Store Connect and does not produce a local .ipa file.
+func isDirectUploadMode(exportOptionsPlistPath string) bool {
+	data, err := os.ReadFile(exportOptionsPlistPath)
+	if err != nil {
+		return false
+	}
+	var payload map[string]any
+	if _, err := plist.Unmarshal(data, &payload); err != nil {
+		return false
+	}
+	dest, _ := payload["destination"].(string)
+	return strings.EqualFold(dest, "upload")
+}
+
 func moveExportedIPA(sourcePath, destinationPath string, overwrite bool) error {
 	if overwrite {
 		if err := os.Remove(destinationPath); err != nil && !errors.Is(err, os.ErrNotExist) {
@@ -567,11 +745,15 @@ func readArchiveBundleInfo(archivePath string) (bundleInfo, error) {
 		return bundleInfo{}, fmt.Errorf("decode archive Info.plist: %w", err)
 	}
 	appProps, _ := payload["ApplicationProperties"].(map[string]any)
-	return bundleInfo{
+	info := bundleInfo{
 		BundleID:    coercePlistValueToString(appProps["CFBundleIdentifier"]),
 		Version:     coercePlistValueToString(appProps["CFBundleShortVersionString"]),
 		BuildNumber: coercePlistValueToString(appProps["CFBundleVersion"]),
-	}, nil
+	}
+	if platform, err := inferArchivePlatformFromAppBundle(archivePath, appProps); err == nil {
+		info.Platform = platform
+	}
+	return info, nil
 }
 
 func readIPABundleInfo(ipaPath string) (bundleInfo, error) {
@@ -624,7 +806,92 @@ func readBundleInfoFromZip(file *zip.File) (bundleInfo, error) {
 		BundleID:    coercePlistValueToString(payload["CFBundleIdentifier"]),
 		Version:     coercePlistValueToString(payload["CFBundleShortVersionString"]),
 		BuildNumber: coercePlistValueToString(payload["CFBundleVersion"]),
+		Platform:    inferAppStorePlatformFromPlist(payload),
 	}, nil
+}
+
+func inferArchivePlatformFromAppBundle(archivePath string, appProps map[string]any) (string, error) {
+	applicationPath := coercePlistValueToString(appProps["ApplicationPath"])
+	if strings.TrimSpace(applicationPath) == "" {
+		return "", fmt.Errorf("archive Info.plist missing ApplicationPath")
+	}
+
+	appBundlePath := filepath.Join(archivePath, "Products", filepath.FromSlash(applicationPath))
+	candidatePaths := []string{filepath.Join(appBundlePath, "Info.plist")}
+	if strings.HasSuffix(strings.ToLower(strings.TrimSpace(appBundlePath)), ".app") {
+		candidatePaths = append(candidatePaths, filepath.Join(appBundlePath, "Contents", "Info.plist"))
+	}
+
+	var (
+		data    []byte
+		lastErr error
+	)
+	for _, candidatePath := range candidatePaths {
+		data, lastErr = os.ReadFile(candidatePath)
+		if lastErr == nil {
+			break
+		}
+	}
+	if lastErr != nil {
+		return "", fmt.Errorf("read archived app Info.plist: %w", lastErr)
+	}
+	var payload map[string]any
+	if _, err := plist.Unmarshal(data, &payload); err != nil {
+		return "", fmt.Errorf("decode archived app Info.plist: %w", err)
+	}
+	platform := inferAppStorePlatformFromPlist(payload)
+	if platform == "" {
+		return "", fmt.Errorf("archived app Info.plist did not contain a supported platform marker")
+	}
+	return platform, nil
+}
+
+func inferAppStorePlatformFromPlist(payload map[string]any) string {
+	if payload == nil {
+		return ""
+	}
+	if platform := mapXcodePlatformToAppStorePlatform(coercePlistValueToString(payload["DTPlatformName"])); platform != "" {
+		return platform
+	}
+	if platform := mapXcodePlatformToAppStorePlatform(firstPlistString(payload["CFBundleSupportedPlatforms"])); platform != "" {
+		return platform
+	}
+	return ""
+}
+
+func firstPlistString(value any) string {
+	switch v := value.(type) {
+	case []any:
+		for _, item := range v {
+			if text := coercePlistValueToString(item); text != "" {
+				return text
+			}
+		}
+	case []string:
+		for _, item := range v {
+			if text := strings.TrimSpace(item); text != "" {
+				return text
+			}
+		}
+	}
+	return ""
+}
+
+func mapXcodePlatformToAppStorePlatform(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "iphoneos", "iphonesimulator":
+		return "IOS"
+	case "watchos", "watchsimulator":
+		return "IOS"
+	case "appletvos", "appletvsimulator":
+		return "TV_OS"
+	case "xros", "xrsimulator":
+		return "VISION_OS"
+	case "macosx":
+		return "MAC_OS"
+	default:
+		return ""
+	}
 }
 
 func coercePlistValueToString(value any) string {

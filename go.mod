@@ -6,6 +6,7 @@ require (
 	github.com/1Password/srp v0.2.0
 	github.com/99designs/keyring v1.2.2
 	github.com/AlecAivazis/survey/v2 v2.3.7
+	github.com/creack/pty v1.1.17
 	github.com/fsnotify/fsnotify v1.9.0
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/modelcontextprotocol/go-sdk v1.3.1

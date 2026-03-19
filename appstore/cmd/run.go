@@ -73,7 +73,11 @@ func Run(args []string, versionInfo string) int {
 	runErr := root.Run(runCtx)
 	elapsed := time.Since(start)
 
-	if commandName != "asc" && commandName != "asc install-skills" {
+	if shouldCancelRunContextAfterError(runErr) {
+		stopSignals()
+	}
+
+	if shouldRunSkillsUpdateCheck(commandName, runCtx) {
 		maybeCheckForSkillUpdates(runCtx)
 	}
 
@@ -101,6 +105,20 @@ func Run(args []string, versionInfo string) int {
 	}
 
 	return ExitSuccess
+}
+
+func shouldCancelRunContextAfterError(err error) bool {
+	return errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)
+}
+
+func shouldRunSkillsUpdateCheck(commandName string, runCtx context.Context) bool {
+	if commandName == "asc" || commandName == "asc install-skills" {
+		return false
+	}
+	if runCtx != nil && runCtx.Err() != nil {
+		return false
+	}
+	return true
 }
 
 func isVersionOnlyInvocation(args []string) bool {

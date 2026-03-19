@@ -110,6 +110,9 @@ func runInitCreatesReferenceAndLinks(t *testing.T, args []string) {
 	if !strings.Contains(string(ascData), "Release (full pipeline)") || !strings.Contains(string(ascData), "asc release run") {
 		t.Fatalf("expected ASC.md to contain release-first guidance, got %q", string(ascData))
 	}
+	if !strings.Contains(string(ascData), "Stage a release (pre-submit)") || !strings.Contains(string(ascData), "asc release stage") {
+		t.Fatalf("expected ASC.md to contain release staging guidance, got %q", string(ascData))
+	}
 	if !strings.Contains(string(ascData), `asc status --app "APP_ID"`) {
 		t.Fatalf("expected ASC.md to mention release status monitoring, got %q", string(ascData))
 	}

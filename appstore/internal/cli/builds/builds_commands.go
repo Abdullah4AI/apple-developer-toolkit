@@ -383,6 +383,7 @@ func BuildsCommand() *ffcli.Command {
 
 Examples:
   asc builds list --app "123456789"
+  asc builds count --app "123456789"
   asc builds latest --app "123456789"
   asc builds find --app "123456789" --build-number "42"
   asc builds wait --build "BUILD_ID"
@@ -409,6 +410,7 @@ Examples:
 		UsageFunc: shared.VisibleUsageFunc,
 		Subcommands: []*ffcli.Command{
 			listCmd,
+			BuildsCountCommand(),
 			BuildsLatestCommand(),
 			BuildsFindCommand(),
 			BuildsWaitCommand(),
@@ -599,6 +601,8 @@ func findPreReleaseVersionIDsForBuildsList(
 	appID string,
 	version string,
 ) ([]string, error) {
+	version = strings.TrimSpace(version)
+
 	firstPage, err := client.GetPreReleaseVersions(
 		ctx,
 		appID,
@@ -613,6 +617,14 @@ func findPreReleaseVersionIDsForBuildsList(
 	seen := make(map[string]struct{}, len(firstPage.Data))
 	appendIDs := func(page *asc.PreReleaseVersionsResponse) {
 		for _, preReleaseVersion := range page.Data {
+			// ASC's version filter can return dotted-version near-matches like
+			// 1.1 and 1.1.0 together, so enforce exact matching client-side
+			// when the response includes attributes.version. If ASC omits the
+			// attribute entirely, trust the server-side filter instead.
+			versionAttr := strings.TrimSpace(preReleaseVersion.Attributes.Version)
+			if versionAttr != "" && versionAttr != version {
+				continue
+			}
 			id := strings.TrimSpace(preReleaseVersion.ID)
 			if id == "" {
 				continue

@@ -24,7 +24,7 @@ Examples:
   asc subscriptions pricing prices list --subscription-id "SUB_ID"
   asc subscriptions pricing prices set --subscription-id "SUB_ID" --price-point "PRICE_POINT_ID"
   asc subscriptions pricing price-points list --subscription-id "SUB_ID" --territory "USA"
-  asc subscriptions pricing availability get --subscription-id "SUB_ID"
+  asc subscriptions pricing availability view --subscription-id "SUB_ID"
   asc subscriptions pricing equalize --subscription-id "SUB_ID" --base-price "3.49"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
@@ -107,11 +107,30 @@ func SubscriptionsPricingPricePointsCommand() *ffcli.Command {
 
 // SubscriptionsPricingAvailabilityCommand returns the canonical availability subgroup.
 func SubscriptionsPricingAvailabilityCommand() *ffcli.Command {
-	return wrapSubscriptionsCommand(
+	cmd := wrapSubscriptionsCommand(
 		SubscriptionsAvailabilityCommand(),
 		"asc subscriptions availability",
 		"asc subscriptions pricing availability",
 		"availability",
 		"Manage subscription availability.",
 	)
+	if viewCmd := findSubscriptionsSubcommand(cmd, "view"); viewCmd != nil {
+		cmd.Subcommands = append(cmd.Subcommands, shared.DeprecatedAliasLeafCommand(
+			viewCmd,
+			"get",
+			"asc subscriptions pricing availability get [flags]",
+			"asc subscriptions pricing availability view",
+			"Warning: `asc subscriptions pricing availability get` is deprecated. Use `asc subscriptions pricing availability view`.",
+		))
+	}
+	if editCmd := findSubscriptionsSubcommand(cmd, "edit"); editCmd != nil {
+		cmd.Subcommands = append(cmd.Subcommands, shared.DeprecatedAliasLeafCommand(
+			editCmd,
+			"set",
+			"asc subscriptions pricing availability set [flags]",
+			"asc subscriptions pricing availability edit",
+			"Warning: `asc subscriptions pricing availability set` is deprecated. Use `asc subscriptions pricing availability edit`.",
+		))
+	}
+	return cmd
 }

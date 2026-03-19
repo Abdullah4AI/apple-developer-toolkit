@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"encoding/xml"
 	"errors"
 	"flag"
@@ -9,8 +10,11 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
+	"github.com/creack/pty"
 	"github.com/peterbourgon/ff/v3/ffcli"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
@@ -456,6 +460,228 @@ func TestAuthTokenConfirmInvalidBooleanExitCode(t *testing.T) {
 	if !strings.Contains(stderr, "confirm") {
 		t.Fatalf("expected stderr to mention confirm flag, got %q", stderr)
 	}
+}
+
+func TestWebAuthLoginPromptInterruptDoesNotFallBackToUsageError(t *testing.T) {
+	tmpDir := t.TempDir()
+	binaryPath := filepath.Join(tmpDir, "asc-test")
+
+	buildCmd := exec.Command("go", "build", "-o", binaryPath, ".")
+	buildCmd.Dir = ".."
+	if out, err := buildCmd.CombinedOutput(); err != nil {
+		t.Fatalf("failed to build binary: %v\n%s", err, out)
+	}
+
+	runCmd := exec.Command(binaryPath, "web", "auth", "login", "--apple-id", "user@example.com")
+	runCmd.Env = append(
+		isolatedCLITestEnv(filepath.Join(tmpDir, "config.json")),
+		"ASC_WEB_SESSION_CACHE=1",
+		"ASC_WEB_SESSION_CACHE_BACKEND=file",
+		"ASC_WEB_SESSION_CACHE_DIR="+filepath.Join(tmpDir, "web-session-cache"),
+		"ASC_IRIS_SESSION_CACHE=0",
+	)
+
+	ptmx, err := pty.Start(runCmd)
+	if err != nil {
+		t.Fatalf("failed to start PTY command: %v", err)
+	}
+	defer func() { _ = ptmx.Close() }()
+
+	output, promptSeen, readDone := startPTYCapture(ptmx, "Apple Account password:")
+
+	select {
+	case <-promptSeen:
+	case readErr := <-readDone:
+		t.Fatalf("process exited before password prompt: %v\noutput:\n%s", readErr, output.String())
+	case <-time.After(10 * time.Second):
+		t.Fatalf("timed out waiting for password prompt\noutput:\n%s", output.String())
+	}
+
+	if _, err := ptmx.Write([]byte{3}); err != nil {
+		t.Fatalf("failed to send Ctrl+C to PTY: %v", err)
+	}
+
+	waitDone := make(chan error, 1)
+	go func() {
+		waitDone <- runCmd.Wait()
+	}()
+
+	var runErr error
+	select {
+	case runErr = <-waitDone:
+	case <-time.After(5 * time.Second):
+		t.Fatalf("process did not exit promptly after interrupt\noutput:\n%s", output.String())
+	}
+
+	_ = ptmx.Close()
+
+	select {
+	case <-readDone:
+	case <-time.After(2 * time.Second):
+		t.Fatalf("PTY reader did not exit after process completion\noutput:\n%s", output.String())
+	}
+
+	if runErr == nil {
+		t.Fatalf("expected non-zero exit after interrupt\noutput:\n%s", output.String())
+	}
+
+	var exitErr *exec.ExitError
+	if !errors.As(runErr, &exitErr) {
+		t.Fatalf("expected *exec.ExitError, got %T (%v)", runErr, runErr)
+	}
+	if exitErr.ExitCode() == ExitUsage {
+		t.Fatalf("expected non-usage exit code after interrupt, got %d\noutput:\n%s", exitErr.ExitCode(), output.String())
+	}
+
+	stderr := output.String()
+	if strings.Contains(stderr, "password is required") {
+		t.Fatalf("expected no password-required fallback after interrupt, got %q", stderr)
+	}
+	if !strings.Contains(stderr, "password prompt interrupted") {
+		t.Fatalf("expected interrupt-specific stderr, got %q", stderr)
+	}
+}
+
+func TestWebAuthLoginPromptInterruptSkipsSkillsAutoCheck(t *testing.T) {
+	tmpDir := t.TempDir()
+	binaryPath := filepath.Join(tmpDir, "asc-test")
+
+	buildCmd := exec.Command("go", "build", "-o", binaryPath, ".")
+	buildCmd.Dir = ".."
+	if out, err := buildCmd.CombinedOutput(); err != nil {
+		t.Fatalf("failed to build binary: %v\n%s", err, out)
+	}
+
+	configPath := filepath.Join(tmpDir, "config.json")
+	if err := os.WriteFile(configPath, []byte(`{"skills_checked_at":"2000-01-01T00:00:00Z"}`), 0o600); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	scriptDir := filepath.Join(tmpDir, "bin")
+	if err := os.MkdirAll(scriptDir, 0o755); err != nil {
+		t.Fatalf("failed to create fake skills dir: %v", err)
+	}
+
+	markerPath := filepath.Join(tmpDir, "skills-check-ran")
+	scriptPath := filepath.Join(scriptDir, "skills")
+	script := "#!/bin/sh\n" +
+		"printf 'ran' > \"$SKILLS_MARKER\"\n" +
+		"sleep 2\n" +
+		"printf 'update available\\n'\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o755); err != nil {
+		t.Fatalf("failed to write fake skills command: %v", err)
+	}
+
+	runCmd := exec.Command(binaryPath, "web", "auth", "login", "--apple-id", "user@example.com")
+	env := append(
+		isolatedCLITestEnv(configPath),
+		"ASC_WEB_SESSION_CACHE=1",
+		"ASC_WEB_SESSION_CACHE_BACKEND=file",
+		"ASC_WEB_SESSION_CACHE_DIR="+filepath.Join(tmpDir, "web-session-cache"),
+		"ASC_IRIS_SESSION_CACHE=0",
+		"ASC_SKILLS_AUTO_CHECK=1",
+		"CI=",
+		"SKILLS_MARKER="+markerPath,
+		"PATH="+scriptDir+string(os.PathListSeparator)+os.Getenv("PATH"),
+	)
+	runCmd.Env = env
+
+	ptmx, err := pty.Start(runCmd)
+	if err != nil {
+		t.Fatalf("failed to start PTY command: %v", err)
+	}
+	defer func() { _ = ptmx.Close() }()
+
+	output, promptSeen, readDone := startPTYCapture(ptmx, "Apple Account password:")
+
+	select {
+	case <-promptSeen:
+	case readErr := <-readDone:
+		t.Fatalf("process exited before password prompt: %v\noutput:\n%s", readErr, output.String())
+	case <-time.After(10 * time.Second):
+		t.Fatalf("timed out waiting for password prompt\noutput:\n%s", output.String())
+	}
+
+	if _, err := ptmx.Write([]byte{3}); err != nil {
+		t.Fatalf("failed to send Ctrl+C to PTY: %v", err)
+	}
+
+	waitDone := make(chan error, 1)
+	go func() {
+		waitDone <- runCmd.Wait()
+	}()
+
+	select {
+	case err = <-waitDone:
+	case <-time.After(5 * time.Second):
+		t.Fatalf("process did not exit promptly after interrupt\noutput:\n%s", output.String())
+	}
+
+	if err == nil {
+		t.Fatalf("expected non-zero exit after interrupt\noutput:\n%s", output.String())
+	}
+
+	select {
+	case <-readDone:
+	case <-time.After(2 * time.Second):
+		t.Fatalf("PTY reader did not exit after process completion\noutput:\n%s", output.String())
+	}
+
+	if _, statErr := os.Stat(markerPath); !os.IsNotExist(statErr) {
+		if statErr == nil {
+			t.Fatalf("expected skills auto-check to be skipped after interrupt\noutput:\n%s", output.String())
+		}
+		t.Fatalf("failed to stat skills marker: %v", statErr)
+	}
+
+	if strings.Contains(output.String(), "skills updates may be available") {
+		t.Fatalf("expected no skills update notice after interrupt, got %q", output.String())
+	}
+}
+
+type ptyOutput struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (o *ptyOutput) Write(p []byte) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	_, _ = o.buf.Write(p)
+}
+
+func (o *ptyOutput) String() string {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	return o.buf.String()
+}
+
+func startPTYCapture(ptmx *os.File, prompt string) (*ptyOutput, <-chan struct{}, <-chan error) {
+	output := &ptyOutput{}
+	promptSeen := make(chan struct{})
+	readDone := make(chan error, 1)
+	var promptOnce sync.Once
+
+	go func() {
+		buf := make([]byte, 256)
+		for {
+			n, err := ptmx.Read(buf)
+			if n > 0 {
+				output.Write(buf[:n])
+				if prompt != "" && strings.Contains(output.String(), prompt) {
+					promptOnce.Do(func() {
+						close(promptSeen)
+					})
+				}
+			}
+			if err != nil {
+				readDone <- err
+				return
+			}
+		}
+	}()
+
+	return output, promptSeen, readDone
 }
 
 func isolatedCLITestEnv(configPath string) []string {

@@ -25,26 +25,35 @@ const (
 	stepAttachBuild       = "attach_build"
 	stepValidateReadiness = "validate_readiness"
 	stepSubmitReview      = "submit_review"
+	releaseModeRun        = "run"
+	releaseModeStage      = "stage"
 	releaseRunTimeout     = 30 * time.Minute
 )
 
 var (
 	releaseClientFactory   = shared.GetASCClient
 	metadataPushExecutor   = metadata.ExecutePush
+	metadataCopyExecutor   = shared.CopyVersionMetadataFromSource
 	readinessReportBuilder = validatecli.BuildReadinessReport
 )
 
+type metadataCopyOptions = shared.VersionMetadataCopyOptions
+
 type runOptions struct {
-	AppID          string
-	Version        string
-	BuildID        string
-	MetadataDir    string
-	Platform       string
-	Timeout        time.Duration
-	DryRun         bool
-	Confirm        bool
-	StrictValidate bool
-	CheckpointFile string
+	AppID              string
+	Version            string
+	BuildID            string
+	MetadataDir        string
+	CopyMetadataFrom   string
+	SelectedCopyFields []string
+	Platform           string
+	Timeout            time.Duration
+	DryRun             bool
+	Confirm            bool
+	StrictValidate     bool
+	CheckpointFile     string
+	Mode               string
+	SubmitForReview    bool
 }
 
 type stepResult struct {
@@ -57,33 +66,37 @@ type stepResult struct {
 }
 
 type runResult struct {
-	AppID          string       `json:"appId"`
-	Version        string       `json:"version"`
-	VersionID      string       `json:"versionId,omitempty"`
-	BuildID        string       `json:"buildId"`
-	SubmissionID   string       `json:"submissionId,omitempty"`
-	MetadataDir    string       `json:"metadataDir"`
-	Platform       string       `json:"platform"`
-	DryRun         bool         `json:"dryRun"`
-	StrictValidate bool         `json:"strictValidate,omitempty"`
-	CheckpointFile string       `json:"checkpointFile,omitempty"`
-	Resumed        bool         `json:"resumed,omitempty"`
-	Status         string       `json:"status"`
-	FailedStep     string       `json:"failedStep,omitempty"`
-	Error          string       `json:"error,omitempty"`
-	Steps          []stepResult `json:"steps"`
+	AppID            string       `json:"appId"`
+	Version          string       `json:"version"`
+	VersionID        string       `json:"versionId,omitempty"`
+	BuildID          string       `json:"buildId"`
+	SubmissionID     string       `json:"submissionId,omitempty"`
+	MetadataDir      string       `json:"metadataDir,omitempty"`
+	CopyMetadataFrom string       `json:"copyMetadataFrom,omitempty"`
+	Platform         string       `json:"platform"`
+	DryRun           bool         `json:"dryRun"`
+	StrictValidate   bool         `json:"strictValidate,omitempty"`
+	CheckpointFile   string       `json:"checkpointFile,omitempty"`
+	Resumed          bool         `json:"resumed,omitempty"`
+	Status           string       `json:"status"`
+	FailedStep       string       `json:"failedStep,omitempty"`
+	Error            string       `json:"error,omitempty"`
+	Steps            []stepResult `json:"steps"`
 }
 
 type runCheckpoint struct {
-	AppID        string          `json:"appId"`
-	Version      string          `json:"version"`
-	BuildID      string          `json:"buildId"`
-	MetadataDir  string          `json:"metadataDir"`
-	Platform     string          `json:"platform"`
-	VersionID    string          `json:"versionId,omitempty"`
-	SubmissionID string          `json:"submissionId,omitempty"`
-	Completed    map[string]bool `json:"completed"`
-	UpdatedAt    string          `json:"updatedAt,omitempty"`
+	AppID              string          `json:"appId"`
+	Version            string          `json:"version"`
+	BuildID            string          `json:"buildId"`
+	MetadataDir        string          `json:"metadataDir,omitempty"`
+	CopyMetadataFrom   string          `json:"copyMetadataFrom,omitempty"`
+	SelectedCopyFields []string        `json:"selectedCopyFields,omitempty"`
+	Platform           string          `json:"platform"`
+	VersionID          string          `json:"versionId,omitempty"`
+	SubmissionID       string          `json:"submissionId,omitempty"`
+	Mode               string          `json:"mode,omitempty"`
+	Completed          map[string]bool `json:"completed"`
+	UpdatedAt          string          `json:"updatedAt,omitempty"`
 }
 
 type stepOutcome struct {
@@ -196,29 +209,49 @@ Examples:
 }
 
 func executeRun(ctx context.Context, opts runOptions) (runResult, error) {
+	opts.Mode = releaseModeRun
+	opts.SubmitForReview = true
+	return executePipeline(ctx, opts)
+}
+
+func executeStage(ctx context.Context, opts runOptions) (runResult, error) {
+	opts.Mode = releaseModeStage
+	opts.SubmitForReview = false
+	return executePipeline(ctx, opts)
+}
+
+func executePipeline(ctx context.Context, opts runOptions) (runResult, error) {
+	stepCapacity := 4
+	if opts.SubmitForReview {
+		stepCapacity = 5
+	}
 	result := runResult{
-		AppID:          opts.AppID,
-		Version:        opts.Version,
-		BuildID:        opts.BuildID,
-		MetadataDir:    opts.MetadataDir,
-		Platform:       opts.Platform,
-		DryRun:         opts.DryRun,
-		StrictValidate: opts.StrictValidate,
-		CheckpointFile: opts.CheckpointFile,
-		Status:         "ok",
-		Steps:          make([]stepResult, 0, 5),
+		AppID:            opts.AppID,
+		Version:          opts.Version,
+		BuildID:          opts.BuildID,
+		MetadataDir:      opts.MetadataDir,
+		CopyMetadataFrom: opts.CopyMetadataFrom,
+		Platform:         opts.Platform,
+		DryRun:           opts.DryRun,
+		StrictValidate:   opts.StrictValidate,
+		CheckpointFile:   opts.CheckpointFile,
+		Status:           "ok",
+		Steps:            make([]stepResult, 0, stepCapacity),
 	}
 	if opts.DryRun {
 		result.Status = "dry-run"
 	}
 
 	checkpoint := runCheckpoint{
-		AppID:       opts.AppID,
-		Version:     opts.Version,
-		BuildID:     opts.BuildID,
-		MetadataDir: opts.MetadataDir,
-		Platform:    opts.Platform,
-		Completed:   map[string]bool{},
+		AppID:              opts.AppID,
+		Version:            opts.Version,
+		BuildID:            opts.BuildID,
+		MetadataDir:        opts.MetadataDir,
+		CopyMetadataFrom:   opts.CopyMetadataFrom,
+		SelectedCopyFields: append([]string(nil), opts.SelectedCopyFields...),
+		Platform:           opts.Platform,
+		Mode:               opts.Mode,
+		Completed:          map[string]bool{},
 	}
 
 	if !opts.DryRun {
@@ -233,7 +266,10 @@ func executeRun(ctx context.Context, opts runOptions) (runResult, error) {
 				existing.Version != opts.Version ||
 				existing.BuildID != opts.BuildID ||
 				existing.Platform != opts.Platform ||
-				existing.MetadataDir != opts.MetadataDir {
+				existing.MetadataDir != opts.MetadataDir ||
+				existing.CopyMetadataFrom != opts.CopyMetadataFrom ||
+				!equalStringSlices(existing.SelectedCopyFields, opts.SelectedCopyFields) ||
+				!checkpointModeMatches(existing.Mode, opts.Mode) {
 				err := fmt.Errorf("checkpoint does not match current run arguments")
 				result.Status = "error"
 				result.Error = err.Error()
@@ -386,40 +422,84 @@ func executeRun(ctx context.Context, opts runOptions) (runResult, error) {
 
 	if err := runStep(stepApplyMetadata, "Fix metadata files (try `asc metadata validate --dir <path>`) and rerun.", func() (stepOutcome, error) {
 		if opts.DryRun && versionPlannedCreate && strings.TrimSpace(versionID) == "" {
+			message := "metadata plan deferred until version exists"
+			if strings.TrimSpace(opts.CopyMetadataFrom) != "" {
+				message = "metadata copy plan deferred until version exists"
+			}
 			return stepOutcome{
 				Status:  "dry-run",
-				Message: "metadata plan deferred until version exists",
+				Message: message,
 				Details: map[string]any{"deferred": true, "reason": "version would be created during real run"},
 				Persist: false,
 			}, nil
 		}
 
-		pushResult, pushErr := metadataPushExecutor(requestCtx, metadata.PushExecutionOptions{
-			AppID:        opts.AppID,
-			Version:      opts.Version,
-			Platform:     opts.Platform,
-			Dir:          opts.MetadataDir,
-			Include:      "localizations",
-			DryRun:       opts.DryRun,
-			AllowDeletes: false,
-			Confirm:      false,
-		})
-		if pushErr != nil {
-			return stepOutcome{}, fmt.Errorf("apply metadata: %w", pushErr)
+		if strings.TrimSpace(opts.MetadataDir) != "" {
+			pushResult, pushErr := metadataPushExecutor(requestCtx, metadata.PushExecutionOptions{
+				AppID:        opts.AppID,
+				Version:      opts.Version,
+				Platform:     opts.Platform,
+				Dir:          opts.MetadataDir,
+				Include:      "localizations",
+				DryRun:       opts.DryRun,
+				AllowDeletes: false,
+				Confirm:      false,
+			})
+			if pushErr != nil {
+				return stepOutcome{}, fmt.Errorf("apply metadata: %w", pushErr)
+			}
+
+			changeCount := len(pushResult.Adds) + len(pushResult.Updates) + len(pushResult.Deletes)
+			status := "ok"
+			message := "applied metadata changes"
+			if opts.DryRun {
+				status = "dry-run"
+				message = "computed metadata dry-run plan"
+			}
+			if changeCount == 0 {
+				if opts.DryRun {
+					message = "metadata already in sync (no planned changes)"
+				} else {
+					message = "metadata already in sync (no changes applied)"
+				}
+			}
+
+			return stepOutcome{
+				Status:  status,
+				Message: message,
+				Details: map[string]any{
+					"adds":     len(pushResult.Adds),
+					"updates":  len(pushResult.Updates),
+					"deletes":  len(pushResult.Deletes),
+					"apiCalls": pushResult.APICalls,
+				},
+				Persist: !opts.DryRun,
+			}, nil
 		}
 
-		changeCount := len(pushResult.Adds) + len(pushResult.Updates) + len(pushResult.Deletes)
+		copySummary, copyErr := metadataCopyExecutor(requestCtx, client, metadataCopyOptions{
+			AppID:                opts.AppID,
+			Platform:             opts.Platform,
+			SourceVersion:        opts.CopyMetadataFrom,
+			DestinationVersionID: versionID,
+			SelectedFields:       append([]string(nil), opts.SelectedCopyFields...),
+			DryRun:               opts.DryRun,
+		})
+		if copyErr != nil {
+			return stepOutcome{}, fmt.Errorf("apply metadata: %w", copyErr)
+		}
+
 		status := "ok"
-		message := "applied metadata changes"
+		message := "copied metadata from source version"
 		if opts.DryRun {
 			status = "dry-run"
-			message = "computed metadata dry-run plan"
+			message = "computed metadata copy dry-run plan"
 		}
-		if changeCount == 0 {
+		if copySummary.CopiedLocales == 0 && copySummary.CopiedFieldUpdates == 0 {
 			if opts.DryRun {
-				message = "metadata already in sync (no planned changes)"
+				message = "metadata copy already in sync (no planned changes)"
 			} else {
-				message = "metadata already in sync (no changes applied)"
+				message = "metadata copy already in sync (no changes applied)"
 			}
 		}
 
@@ -427,10 +507,7 @@ func executeRun(ctx context.Context, opts runOptions) (runResult, error) {
 			Status:  status,
 			Message: message,
 			Details: map[string]any{
-				"adds":     len(pushResult.Adds),
-				"updates":  len(pushResult.Updates),
-				"deletes":  len(pushResult.Deletes),
-				"apiCalls": pushResult.APICalls,
+				"summary": copySummary,
 			},
 			Persist: !opts.DryRun,
 		}, nil
@@ -543,72 +620,74 @@ func executeRun(ctx context.Context, opts runOptions) (runResult, error) {
 		return result, err
 	}
 
-	if err := runStep(stepSubmitReview, "Check review submission prerequisites and rerun with --confirm.", func() (stepOutcome, error) {
-		if strings.TrimSpace(versionID) == "" {
+	if opts.SubmitForReview {
+		if err := runStep(stepSubmitReview, "Check review submission prerequisites and rerun with --confirm.", func() (stepOutcome, error) {
+			if strings.TrimSpace(versionID) == "" {
+				if opts.DryRun {
+					return stepOutcome{
+						Status:  "dry-run",
+						Message: "submission deferred until version exists",
+						Details: map[string]any{"deferred": true},
+						Persist: false,
+					}, nil
+				}
+				return stepOutcome{}, fmt.Errorf("submit review: resolved version ID is empty")
+			}
+
+			legacySubmission, subErr := client.GetAppStoreVersionSubmissionForVersion(requestCtx, versionID)
+			if subErr != nil && !asc.IsNotFound(subErr) {
+				return stepOutcome{}, fmt.Errorf("submit review: failed to lookup existing submission: %w", subErr)
+			}
+			if subErr == nil && strings.TrimSpace(legacySubmission.Data.ID) != "" {
+				existingID := strings.TrimSpace(legacySubmission.Data.ID)
+				status := "skipped"
+				message := "submission already exists for version"
+				if opts.DryRun {
+					status = "dry-run"
+					message = "submission already exists for version (no action needed)"
+				}
+				return stepOutcome{
+					Status:       status,
+					Message:      message,
+					Details:      map[string]any{"submissionId": existingID, "alreadySubmitted": true},
+					Persist:      !opts.DryRun,
+					SubmissionID: existingID,
+				}, nil
+			}
+
 			if opts.DryRun {
 				return stepOutcome{
 					Status:  "dry-run",
-					Message: "submission deferred until version exists",
-					Details: map[string]any{"deferred": true},
+					Message: "would create and submit review submission",
+					Details: map[string]any{"versionId": versionID, "buildId": opts.BuildID},
 					Persist: false,
 				}, nil
 			}
-			return stepOutcome{}, fmt.Errorf("submit review: resolved version ID is empty")
-		}
 
-		legacySubmission, subErr := client.GetAppStoreVersionSubmissionForVersion(requestCtx, versionID)
-		if subErr != nil && !asc.IsNotFound(subErr) {
-			return stepOutcome{}, fmt.Errorf("submit review: failed to lookup existing submission: %w", subErr)
-		}
-		if subErr == nil && strings.TrimSpace(legacySubmission.Data.ID) != "" {
-			existingID := strings.TrimSpace(legacySubmission.Data.ID)
-			status := "skipped"
-			message := "submission already exists for version"
-			if opts.DryRun {
-				status = "dry-run"
-				message = "submission already exists for version (no action needed)"
+			warnings := cancelStaleReviewSubmissions(requestCtx, client, opts.AppID, opts.Platform)
+
+			reviewSubmission, createErr := client.CreateReviewSubmission(requestCtx, opts.AppID, asc.Platform(opts.Platform))
+			if createErr != nil {
+				return stepOutcome{}, fmt.Errorf("submit review: create review submission: %w", createErr)
 			}
+			if _, addErr := client.AddReviewSubmissionItem(requestCtx, reviewSubmission.Data.ID, versionID); addErr != nil {
+				return stepOutcome{}, fmt.Errorf("submit review: add version to submission: %w", addErr)
+			}
+			submitResp, submitErr := client.SubmitReviewSubmission(requestCtx, reviewSubmission.Data.ID)
+			if submitErr != nil {
+				return stepOutcome{}, fmt.Errorf("submit review: submit for review: %w", submitErr)
+			}
+
 			return stepOutcome{
-				Status:       status,
-				Message:      message,
-				Details:      map[string]any{"submissionId": existingID, "alreadySubmitted": true},
-				Persist:      !opts.DryRun,
-				SubmissionID: existingID,
+				Status:       "ok",
+				Message:      "submitted version for review",
+				Details:      map[string]any{"submissionId": submitResp.Data.ID, "warnings": warnings},
+				Persist:      true,
+				SubmissionID: submitResp.Data.ID,
 			}, nil
+		}); err != nil {
+			return result, err
 		}
-
-		if opts.DryRun {
-			return stepOutcome{
-				Status:  "dry-run",
-				Message: "would create and submit review submission",
-				Details: map[string]any{"versionId": versionID, "buildId": opts.BuildID},
-				Persist: false,
-			}, nil
-		}
-
-		warnings := cancelStaleReviewSubmissions(requestCtx, client, opts.AppID, opts.Platform)
-
-		reviewSubmission, createErr := client.CreateReviewSubmission(requestCtx, opts.AppID, asc.Platform(opts.Platform))
-		if createErr != nil {
-			return stepOutcome{}, fmt.Errorf("submit review: create review submission: %w", createErr)
-		}
-		if _, addErr := client.AddReviewSubmissionItem(requestCtx, reviewSubmission.Data.ID, versionID); addErr != nil {
-			return stepOutcome{}, fmt.Errorf("submit review: add version to submission: %w", addErr)
-		}
-		submitResp, submitErr := client.SubmitReviewSubmission(requestCtx, reviewSubmission.Data.ID)
-		if submitErr != nil {
-			return stepOutcome{}, fmt.Errorf("submit review: submit for review: %w", submitErr)
-		}
-
-		return stepOutcome{
-			Status:       "ok",
-			Message:      "submitted version for review",
-			Details:      map[string]any{"submissionId": submitResp.Data.ID, "warnings": warnings},
-			Persist:      true,
-			SubmissionID: submitResp.Data.ID,
-		}, nil
-	}); err != nil {
-		return result, err
 	}
 
 	if strings.TrimSpace(result.SubmissionID) == "" {
@@ -656,6 +735,39 @@ func defaultCheckpointPath(appID, version, buildID, platform string) string {
 		sanitizeCheckpointToken(platform),
 	)
 	return filepath.Join(".asc", "release", "checkpoints", fileName)
+}
+
+func defaultStageCheckpointPath(appID, version, buildID, platform string) string {
+	fileName := fmt.Sprintf(
+		"stage_%s_%s_%s_%s.json",
+		sanitizeCheckpointToken(appID),
+		sanitizeCheckpointToken(version),
+		sanitizeCheckpointToken(buildID),
+		sanitizeCheckpointToken(platform),
+	)
+	return filepath.Join(".asc", "release", "checkpoints", fileName)
+}
+
+func checkpointModeMatches(existingMode, desiredMode string) bool {
+	normalizedExistingMode := strings.TrimSpace(existingMode)
+	switch normalizedExistingMode {
+	case "":
+		return desiredMode == releaseModeRun
+	default:
+		return normalizedExistingMode == desiredMode
+	}
+}
+
+func equalStringSlices(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
 
 func sanitizeCheckpointToken(value string) string {

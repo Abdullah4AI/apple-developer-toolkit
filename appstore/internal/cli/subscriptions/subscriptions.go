@@ -30,7 +30,7 @@ Examples:
   asc subscriptions setup --app "APP_ID" --group-reference-name "Pro" --reference-name "Pro Monthly" --product-id "com.example.pro.monthly" --subscription-period ONE_MONTH --locale "en-US" --display-name "Pro Monthly" --price "3.99" --price-territory "USA" --territories "USA"
   asc subscriptions pricing summary --app "APP_ID"
   asc subscriptions pricing prices set --subscription-id "SUB_ID" --price-point "PRICE_POINT_ID"
-  asc subscriptions pricing availability set --subscription-id "SUB_ID" --territories "USA,CAN"
+  asc subscriptions pricing availability edit --subscription-id "SUB_ID" --territories "USA,CAN"
   asc subscriptions offers offer-codes generate --offer-code-id "OFFER_CODE_ID" --quantity 10 --expiration-date "2026-02-01"
   asc subscriptions offers win-back list --subscription-id "SUB_ID"
   asc subscriptions review screenshots create --subscription-id "SUB_ID" --file "./review.png"
@@ -973,15 +973,15 @@ func SubscriptionsAvailabilityCommand() *ffcli.Command {
 		LongHelp: `Manage subscription availability.
 
 Examples:
-  asc subscriptions availability get --availability-id "AVAILABILITY_ID"
-  asc subscriptions availability set --subscription-id "SUB_ID" --territories "USA,CAN"
+  asc subscriptions availability view --availability-id "AVAILABILITY_ID"
+  asc subscriptions availability edit --subscription-id "SUB_ID" --territories "USA,CAN"
   asc subscriptions availability available-territories --availability-id "AVAILABILITY_ID"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: shared.VisibleUsageFunc,
 		Subcommands: []*ffcli.Command{
-			SubscriptionsAvailabilityGetCommand(),
+			SubscriptionsAvailabilityViewCommand(),
 			SubscriptionsAvailabilityAvailableTerritoriesCommand(),
-			SubscriptionsAvailabilitySetCommand(),
+			SubscriptionsAvailabilityEditCommand(),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp
@@ -989,23 +989,23 @@ Examples:
 	}
 }
 
-// SubscriptionsAvailabilityGetCommand returns the availability get subcommand.
-func SubscriptionsAvailabilityGetCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("availability get", flag.ExitOnError)
+// SubscriptionsAvailabilityViewCommand returns the availability view subcommand.
+func SubscriptionsAvailabilityViewCommand() *ffcli.Command {
+	fs := flag.NewFlagSet("availability view", flag.ExitOnError)
 
 	availabilityID := fs.String("availability-id", "", "Subscription availability ID")
 	subscriptionID := fs.String("subscription-id", "", "Subscription ID")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
-		Name:       "get",
-		ShortUsage: "asc subscriptions availability get --availability-id \"AVAILABILITY_ID\"",
-		ShortHelp:  "Get subscription availability by ID or subscription.",
-		LongHelp: `Get subscription availability by ID or subscription.
+		Name:       "view",
+		ShortUsage: "asc subscriptions availability view --availability-id \"AVAILABILITY_ID\"",
+		ShortHelp:  "View subscription availability by ID or subscription.",
+		LongHelp: `View subscription availability by ID or subscription.
 
 Examples:
-  asc subscriptions availability get --availability-id "AVAILABILITY_ID"
-  asc subscriptions availability get --subscription-id "SUB_ID"`,
+  asc subscriptions availability view --availability-id "AVAILABILITY_ID"
+  asc subscriptions availability view --subscription-id "SUB_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -1022,7 +1022,7 @@ Examples:
 
 			client, err := shared.GetASCClient()
 			if err != nil {
-				return fmt.Errorf("subscriptions availability get: %w", err)
+				return fmt.Errorf("subscriptions availability view: %w", err)
 			}
 
 			requestCtx, cancel := shared.ContextWithTimeout(ctx)
@@ -1031,14 +1031,14 @@ Examples:
 			if availabilityValue != "" {
 				resp, err := client.GetSubscriptionAvailability(requestCtx, availabilityValue)
 				if err != nil {
-					return fmt.Errorf("subscriptions availability get: failed to fetch: %w", err)
+					return fmt.Errorf("subscriptions availability view: failed to fetch: %w", err)
 				}
 				return shared.PrintOutput(resp, *output.Output, *output.Pretty)
 			}
 
 			resp, err := client.GetSubscriptionAvailabilityForSubscription(requestCtx, subscriptionValue)
 			if err != nil {
-				return fmt.Errorf("subscriptions availability get: failed to fetch: %w", err)
+				return fmt.Errorf("subscriptions availability view: failed to fetch: %w", err)
 			}
 
 			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
@@ -1121,9 +1121,9 @@ Examples:
 	}
 }
 
-// SubscriptionsAvailabilitySetCommand returns the availability set subcommand.
-func SubscriptionsAvailabilitySetCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("availability set", flag.ExitOnError)
+// SubscriptionsAvailabilityEditCommand returns the availability edit subcommand.
+func SubscriptionsAvailabilityEditCommand() *ffcli.Command {
+	fs := flag.NewFlagSet("availability edit", flag.ExitOnError)
 
 	subID := fs.String("subscription-id", "", "Subscription ID")
 	territories := fs.String("territories", "", "Territory IDs, comma-separated")
@@ -1131,16 +1131,20 @@ func SubscriptionsAvailabilitySetCommand() *ffcli.Command {
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
-		Name:       "set",
-		ShortUsage: "asc subscriptions availability set [flags]",
-		ShortHelp:  "Set subscription availability in territories.",
-		LongHelp: `Set subscription availability in territories.
+		Name:       "edit",
+		ShortUsage: "asc subscriptions availability edit [flags]",
+		ShortHelp:  "Edit subscription availability in territories.",
+		LongHelp: `Edit subscription availability in territories.
 
 Examples:
-  asc subscriptions availability set --subscription-id "SUB_ID" --territories "USA,CAN"`,
+  asc subscriptions availability edit --subscription-id "SUB_ID" --territories "USA,CAN"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
+			if err := shared.RecoverBoolFlagTailArgs(fs, args, availableInNew); err != nil {
+				return err
+			}
+
 			id := strings.TrimSpace(*subID)
 			if id == "" {
 				fmt.Fprintln(os.Stderr, "Error: --subscription-id is required")
@@ -1155,7 +1159,7 @@ Examples:
 
 			client, err := shared.GetASCClient()
 			if err != nil {
-				return fmt.Errorf("subscriptions availability set: %w", err)
+				return fmt.Errorf("subscriptions availability edit: %w", err)
 			}
 
 			requestCtx, cancel := shared.ContextWithTimeout(ctx)
@@ -1167,7 +1171,7 @@ Examples:
 
 			resp, err := client.CreateSubscriptionAvailability(requestCtx, id, territoryIDs, attrs)
 			if err != nil {
-				return fmt.Errorf("subscriptions availability set: failed to set: %w", err)
+				return fmt.Errorf("subscriptions availability edit: failed to set: %w", err)
 			}
 
 			return shared.PrintOutput(resp, *output.Output, *output.Pretty)

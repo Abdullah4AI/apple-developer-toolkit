@@ -7,7 +7,9 @@ import (
 	"flag"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/creack/pty"
 	webcore "github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/web"
 )
 
@@ -19,12 +21,12 @@ func TestReadPasswordFromInput(t *testing.T) {
 
 	t.Run("uses environment variable before prompt fallback", func(t *testing.T) {
 		t.Setenv(webPasswordEnv, " env-password ")
-		promptPasswordFn = func() (string, error) {
+		promptPasswordFn = func(ctx context.Context) (string, error) {
 			t.Fatal("did not expect prompt fallback when env password is set")
 			return "", nil
 		}
 
-		password, err := readPasswordFromInput()
+		password, err := readPasswordFromInput(context.Background())
 		if err != nil {
 			t.Fatalf("readPasswordFromInput returned error: %v", err)
 		}
@@ -36,12 +38,12 @@ func TestReadPasswordFromInput(t *testing.T) {
 	t.Run("falls back to interactive prompt when env is not provided", func(t *testing.T) {
 		t.Setenv(webPasswordEnv, "")
 		called := false
-		promptPasswordFn = func() (string, error) {
+		promptPasswordFn = func(ctx context.Context) (string, error) {
 			called = true
 			return " prompted-password ", nil
 		}
 
-		password, err := readPasswordFromInput()
+		password, err := readPasswordFromInput(context.Background())
 		if err != nil {
 			t.Fatalf("readPasswordFromInput returned error: %v", err)
 		}
@@ -66,7 +68,7 @@ func TestReadPasswordFromTerminalFD(t *testing.T) {
 		}
 		var prompt bytes.Buffer
 
-		password, err := readPasswordFromTerminalFD(0, &prompt)
+		password, err := readPasswordFromTerminalFD(context.Background(), &prompt)
 		if err != nil {
 			t.Fatalf("readPasswordFromTerminalFD returned error: %v", err)
 		}
@@ -83,7 +85,7 @@ func TestReadPasswordFromTerminalFD(t *testing.T) {
 			return nil, errors.New("terminal read failed")
 		}
 
-		_, err := readPasswordFromTerminalFD(0, &bytes.Buffer{})
+		_, err := readPasswordFromTerminalFD(context.Background(), &bytes.Buffer{})
 		if err == nil {
 			t.Fatal("expected read failure")
 		}
@@ -91,6 +93,103 @@ func TestReadPasswordFromTerminalFD(t *testing.T) {
 			t.Fatalf("unexpected error: %v", err)
 		}
 	})
+
+	t.Run("preserves prompt cancellation", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		termReadPasswordFn = func(fd int) ([]byte, error) {
+			return nil, errors.New("read aborted")
+		}
+
+		_, err := readPasswordFromTerminalFD(ctx, &bytes.Buffer{})
+		if err == nil {
+			t.Fatal("expected cancellation error")
+		}
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("expected context cancellation, got %v", err)
+		}
+	})
+}
+
+func TestReadPasswordFromTerminalPropagatesCtrlCAsInterrupt(t *testing.T) {
+	origSignalProcessInterrupt := signalProcessInterruptFn
+	t.Cleanup(func() {
+		signalProcessInterruptFn = origSignalProcessInterrupt
+	})
+
+	ptmx, tty, err := pty.Open()
+	if err != nil {
+		t.Fatalf("pty.Open() error: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = ptmx.Close()
+		_ = tty.Close()
+	})
+
+	interrupts := make(chan struct{}, 1)
+	signalProcessInterruptFn = func() error {
+		select {
+		case interrupts <- struct{}{}:
+		default:
+		}
+		return nil
+	}
+
+	promptSeen := make(chan struct{})
+	readPromptDone := make(chan error, 1)
+	go func() {
+		buf := make([]byte, 128)
+		for {
+			n, err := ptmx.Read(buf)
+			if n > 0 && strings.Contains(string(buf[:n]), "Apple Account password:") {
+				close(promptSeen)
+				readPromptDone <- nil
+				return
+			}
+			if err != nil {
+				readPromptDone <- err
+				return
+			}
+		}
+	}()
+
+	errCh := make(chan error, 1)
+	go func() {
+		_, err := readPasswordFromTerminal(context.Background(), tty, tty, false)
+		errCh <- err
+	}()
+
+	select {
+	case <-promptSeen:
+	case err := <-readPromptDone:
+		t.Fatalf("failed waiting for password prompt: %v", err)
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for password prompt")
+	}
+
+	time.Sleep(50 * time.Millisecond)
+
+	if _, err := ptmx.Write([]byte{3}); err != nil {
+		t.Fatalf("ptmx.Write() error: %v", err)
+	}
+
+	select {
+	case <-interrupts:
+	case <-time.After(2 * time.Second):
+		t.Fatal("expected Ctrl+C to be re-emitted as a process interrupt")
+	}
+
+	select {
+	case err := <-errCh:
+		if err == nil {
+			t.Fatal("expected cancellation error")
+		}
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("expected context cancellation, got %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for password prompt to return")
+	}
 }
 
 func TestReadTwoFactorCodeFrom(t *testing.T) {
@@ -265,7 +364,7 @@ func TestResolveSessionUsesLastCachedSessionWhenAppleIDMissing(t *testing.T) {
 	tryResumeLastFn = func(ctx context.Context) (*webcore.AuthSession, bool, error) {
 		return expected, true, nil
 	}
-	promptPasswordFn = func() (string, error) {
+	promptPasswordFn = func(ctx context.Context) (string, error) {
 		t.Fatal("did not expect password prompt when cache hit")
 		return "", nil
 	}
@@ -329,7 +428,7 @@ func TestResolveSessionPrintsExpiredNoticeBeforePrompt(t *testing.T) {
 		t.Fatal("did not expect last-session cache lookup when apple-id is provided")
 		return nil, false, nil
 	}
-	promptPasswordFn = func() (string, error) {
+	promptPasswordFn = func(ctx context.Context) (string, error) {
 		if got := notice.String(); got != "Session expired.\n" {
 			t.Fatalf("expected expired notice before password prompt, got %q", got)
 		}
@@ -357,6 +456,52 @@ func TestResolveSessionPrintsExpiredNoticeBeforePrompt(t *testing.T) {
 	}
 	if got := notice.String(); got != "Session expired.\n" {
 		t.Fatalf("expected expired notice output, got %q", got)
+	}
+}
+
+func TestResolveSessionReturnsPromptCancellationWithoutUsageFallback(t *testing.T) {
+	origTryResume := tryResumeSessionFn
+	origTryResumeLast := tryResumeLastFn
+	origPromptPassword := promptPasswordFn
+	origReadPassword := termReadPasswordFn
+	t.Cleanup(func() {
+		tryResumeSessionFn = origTryResume
+		tryResumeLastFn = origTryResumeLast
+		promptPasswordFn = origPromptPassword
+		termReadPasswordFn = origReadPassword
+	})
+
+	t.Setenv(webPasswordEnv, "")
+
+	tryResumeSessionFn = func(ctx context.Context, username string) (*webcore.AuthSession, bool, error) {
+		return nil, false, nil
+	}
+	tryResumeLastFn = func(ctx context.Context) (*webcore.AuthSession, bool, error) {
+		t.Fatal("did not expect last-session cache lookup when apple-id is provided")
+		return nil, false, nil
+	}
+	termReadPasswordFn = func(fd int) ([]byte, error) {
+		return nil, errors.New("tty closed")
+	}
+	promptPasswordFn = func(ctx context.Context) (string, error) {
+		return readPasswordFromTerminalFD(ctx, &bytes.Buffer{})
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, _, err := resolveSession(ctx, "user@example.com", "", "")
+	if err == nil {
+		t.Fatal("expected prompt cancellation error")
+	}
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected context cancellation, got %v", err)
+	}
+	if errors.Is(err, flag.ErrHelp) {
+		t.Fatalf("did not expect usage error for prompt cancellation: %v", err)
+	}
+	if strings.Contains(err.Error(), "password is required") {
+		t.Fatalf("did not expect password-required fallback, got %v", err)
 	}
 }
 

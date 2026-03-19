@@ -54,7 +54,7 @@ func TestResolveSessionUsesProgressLabels(t *testing.T) {
 		t.Fatal("did not expect last-session cache lookup")
 		return nil, false, nil
 	}
-	promptPasswordFn = func() (string, error) {
+	promptPasswordFn = func(ctx context.Context) (string, error) {
 		return "secret", nil
 	}
 	webLoginFn = func(ctx context.Context, creds webcore.LoginCredentials) (*webcore.AuthSession, error) {

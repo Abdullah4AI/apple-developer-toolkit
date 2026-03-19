@@ -2,6 +2,7 @@ package shared
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -35,13 +36,6 @@ func WaitForBuildByNumberOrUploadFailure(ctx context.Context, client *asc.Client
 	uploadID = strings.TrimSpace(uploadID)
 
 	return asc.PollUntil(ctx, pollInterval, func(ctx context.Context) (*asc.BuildResponse, bool, error) {
-		build, err := findBuildByNumber(ctx, client, appID, version, buildNumber, platform)
-		if err != nil {
-			return nil, false, err
-		}
-		if build != nil {
-			return build, true, nil
-		}
 		if uploadID != "" {
 			upload, err := client.GetBuildUpload(ctx, uploadID)
 			if err != nil {
@@ -50,12 +44,30 @@ func WaitForBuildByNumberOrUploadFailure(ctx context.Context, client *asc.Client
 			if err := buildUploadFailureError(upload); err != nil {
 				return nil, false, err
 			}
+			buildID, err := buildIDForUpload(upload)
+			if err != nil {
+				return nil, false, err
+			}
+			if buildID != "" {
+				build, err := client.GetBuild(ctx, buildID)
+				if err != nil {
+					return nil, false, err
+				}
+				return build, true, nil
+			}
+		}
+		build, err := findBuildByNumber(ctx, client, appID, version, buildNumber, platform, uploadID)
+		if err != nil {
+			return nil, false, err
+		}
+		if build != nil {
+			return build, true, nil
 		}
 		return nil, false, nil
 	})
 }
 
-func findBuildByNumber(ctx context.Context, client *asc.Client, appID, version, buildNumber, platform string) (*asc.BuildResponse, error) {
+func findBuildByNumber(ctx context.Context, client *asc.Client, appID, version, buildNumber, platform, uploadID string) (*asc.BuildResponse, error) {
 	preReleaseResp, err := client.GetPreReleaseVersions(ctx, appID,
 		asc.WithPreReleaseVersionsVersion(version),
 		asc.WithPreReleaseVersionsPlatform(platform),
@@ -72,20 +84,72 @@ func findBuildByNumber(ctx context.Context, client *asc.Client, appID, version, 
 	}
 
 	preReleaseID := preReleaseResp.Data[0].ID
-	buildsResp, err := client.GetBuilds(ctx, appID,
+	buildOpts := []asc.BuildsOption{
 		asc.WithBuildsPreReleaseVersion(preReleaseID),
 		asc.WithBuildsSort("-uploadedDate"),
 		asc.WithBuildsLimit(200),
-	)
+	}
+	if uploadID != "" {
+		buildOpts = append(buildOpts, asc.WithBuildsInclude([]string{"buildUpload"}))
+	}
+	buildsResp, err := client.GetBuilds(ctx, appID, buildOpts...)
 	if err != nil {
 		return nil, err
 	}
 	for _, build := range buildsResp.Data {
-		if strings.TrimSpace(build.Attributes.Version) == buildNumber {
-			return &asc.BuildResponse{Data: build}, nil
+		if strings.TrimSpace(build.Attributes.Version) != buildNumber {
+			continue
 		}
+		if uploadID != "" {
+			buildUploadID, err := buildUploadIDForBuild(build)
+			if err != nil {
+				return nil, err
+			}
+			if buildUploadID != uploadID {
+				continue
+			}
+		}
+		return &asc.BuildResponse{Data: build}, nil
 	}
 	return nil, nil
+}
+
+type buildRelationships struct {
+	BuildUpload *asc.Relationship `json:"buildUpload,omitempty"`
+}
+
+func buildUploadIDForBuild(build asc.Resource[asc.BuildAttributes]) (string, error) {
+	if len(build.Relationships) == 0 {
+		return "", nil
+	}
+
+	var relationships buildRelationships
+	if err := json.Unmarshal(build.Relationships, &relationships); err != nil {
+		return "", fmt.Errorf("parse build %q relationships: %w", strings.TrimSpace(build.ID), err)
+	}
+	if relationships.BuildUpload == nil {
+		return "", nil
+	}
+	return strings.TrimSpace(relationships.BuildUpload.Data.ID), nil
+}
+
+type buildUploadRelationships struct {
+	Build *asc.Relationship `json:"build,omitempty"`
+}
+
+func buildIDForUpload(upload *asc.BuildUploadResponse) (string, error) {
+	if upload == nil || len(upload.Data.Relationships) == 0 {
+		return "", nil
+	}
+
+	var relationships buildUploadRelationships
+	if err := json.Unmarshal(upload.Data.Relationships, &relationships); err != nil {
+		return "", fmt.Errorf("parse build upload %q relationships: %w", strings.TrimSpace(upload.Data.ID), err)
+	}
+	if relationships.Build == nil {
+		return "", nil
+	}
+	return strings.TrimSpace(relationships.Build.Data.ID), nil
 }
 
 func buildUploadFailureError(upload *asc.BuildUploadResponse) error {

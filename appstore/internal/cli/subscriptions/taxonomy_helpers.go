@@ -27,3 +27,15 @@ func wrapSubscriptionsCommand(
 	}
 	return cmd
 }
+
+func findSubscriptionsSubcommand(cmd *ffcli.Command, name string) *ffcli.Command {
+	if cmd == nil {
+		return nil
+	}
+	for _, sub := range cmd.Subcommands {
+		if sub != nil && strings.EqualFold(sub.Name, name) {
+			return sub
+		}
+	}
+	return nil
+}

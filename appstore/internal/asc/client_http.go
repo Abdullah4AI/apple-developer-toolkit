@@ -101,20 +101,81 @@ func (c *Client) do(ctx context.Context, method, path string, body io.Reader) ([
 		}
 	}
 
-	request := func() ([]byte, error) {
+	request := func(requestCtx context.Context) ([]byte, error) {
 		var reader io.Reader
 		if bodyBytes != nil {
 			reader = bytes.NewReader(bodyBytes)
 		}
-		return c.doOnce(ctx, method, path, reader)
+		return c.doOnce(requestCtx, method, path, reader)
 	}
 
 	if shouldRetryMethod(method) {
 		retryOpts := ResolveRetryOptions()
-		return WithRetry(ctx, request, retryOpts)
+		return WithRetry(ctx, func() ([]byte, error) {
+			return request(ctx)
+		}, retryOpts)
+	}
+	if shouldLimitMutatingMethod(method) {
+		return c.doWithMutatingRequestLimiter(ctx, request)
 	}
 
-	return request()
+	return request(ctx)
+}
+
+func (c *Client) doWithMutatingRequestLimiter(ctx context.Context, request func(context.Context) ([]byte, error)) ([]byte, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("wait for mutating request slot: %w", err)
+	}
+
+	requestTimeout, hasDeadline := requestTimeoutBudget(ctx)
+	limiter := c.getMutatingRequestLimiter()
+
+	select {
+	case limiter <- struct{}{}:
+		defer func() { <-limiter }()
+		if err := ctx.Err(); err != nil {
+			return nil, fmt.Errorf("wait for mutating request slot: %w", err)
+		}
+	case <-ctx.Done():
+		return nil, fmt.Errorf("wait for mutating request slot: %w", ctx.Err())
+	}
+
+	requestCtx, cancel := deriveMutatingRequestContext(ctx, requestTimeout, hasDeadline)
+	defer cancel()
+	return request(requestCtx)
+}
+
+func requestTimeoutBudget(ctx context.Context) (time.Duration, bool) {
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		return 0, false
+	}
+	return time.Until(deadline), true
+}
+
+func deriveMutatingRequestContext(ctx context.Context, requestTimeout time.Duration, hasDeadline bool) (context.Context, context.CancelFunc) {
+	// Preserve context values, but give queued writes a fresh timeout budget once they acquire a slot.
+	base := context.WithoutCancel(ctx)
+
+	var (
+		requestCtx context.Context
+		cancel     context.CancelFunc
+	)
+	if hasDeadline {
+		requestCtx, cancel = context.WithTimeout(base, requestTimeout)
+	} else {
+		requestCtx, cancel = context.WithCancel(base)
+	}
+
+	stop := context.AfterFunc(ctx, func() {
+		if errors.Is(ctx.Err(), context.Canceled) {
+			cancel()
+		}
+	})
+	return requestCtx, func() {
+		stop()
+		cancel()
+	}
 }
 
 func (c *Client) doOnce(ctx context.Context, method, path string, body io.Reader) ([]byte, error) {
@@ -197,6 +258,15 @@ func sanitizeURLForLog(rawURL string) string {
 func shouldRetryMethod(method string) bool {
 	switch strings.ToUpper(method) {
 	case http.MethodGet, http.MethodHead:
+		return true
+	default:
+		return false
+	}
+}
+
+func shouldLimitMutatingMethod(method string) bool {
+	switch strings.ToUpper(method) {
+	case http.MethodPost, http.MethodPatch, http.MethodPut, http.MethodDelete:
 		return true
 	default:
 		return false

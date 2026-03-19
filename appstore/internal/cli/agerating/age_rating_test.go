@@ -164,3 +164,67 @@ func TestAgeRatingHelpers(t *testing.T) {
 		t.Fatal("expected updates when override attribute is set")
 	}
 }
+
+func TestApplyAllNoneDefaultsSetsAllContentDescriptors(t *testing.T) {
+	values := map[string]string{}
+	applyAllNoneDefaults(values)
+
+	attrs, err := buildAgeRatingAttributes(values)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	boolChecks := map[string]*bool{
+		"advertising":               attrs.Advertising,
+		"gambling":                  attrs.Gambling,
+		"health-or-wellness-topics": attrs.HealthOrWellnessTopics,
+		"loot-box":                  attrs.LootBox,
+		"messaging-and-chat":        attrs.MessagingAndChat,
+		"parental-controls":         attrs.ParentalControls,
+		"age-assurance":             attrs.AgeAssurance,
+		"unrestricted-web-access":   attrs.UnrestrictedWebAccess,
+		"user-generated-content":    attrs.UserGeneratedContent,
+	}
+	for name, value := range boolChecks {
+		if value == nil || *value {
+			t.Fatalf("expected %s=false, got %#v", name, value)
+		}
+	}
+
+	enumChecks := map[string]*string{
+		"alcohol-tobacco-drug-use":      attrs.AlcoholTobaccoOrDrugUseOrReferences,
+		"contests":                      attrs.Contests,
+		"gambling-simulated":            attrs.GamblingSimulated,
+		"guns-or-other-weapons":         attrs.GunsOrOtherWeapons,
+		"medical-treatment":             attrs.MedicalOrTreatmentInformation,
+		"profanity-humor":               attrs.ProfanityOrCrudeHumor,
+		"sexual-content-nudity":         attrs.SexualContentOrNudity,
+		"sexual-content-graphic-nudity": attrs.SexualContentGraphicAndNudity,
+		"horror-fear":                   attrs.HorrorOrFearThemes,
+		"mature-suggestive":             attrs.MatureOrSuggestiveThemes,
+		"violence-cartoon":              attrs.ViolenceCartoonOrFantasy,
+		"violence-realistic":            attrs.ViolenceRealistic,
+		"violence-realistic-graphic":    attrs.ViolenceRealisticProlongedGraphicOrSadistic,
+	}
+	for name, value := range enumChecks {
+		if value == nil || *value != "NONE" {
+			t.Fatalf("expected %s=NONE, got %#v", name, value)
+		}
+	}
+
+	if attrs.KidsAgeBand != nil {
+		t.Fatalf("expected kids age band to remain unset, got %#v", attrs.KidsAgeBand)
+	}
+	if attrs.AgeRatingOverride != nil {
+		t.Fatalf("expected age rating override to remain unset, got %#v", attrs.AgeRatingOverride)
+	}
+	if attrs.AgeRatingOverrideV2 != nil {
+		t.Fatalf("expected age rating override v2 to remain unset, got %#v", attrs.AgeRatingOverrideV2)
+	}
+	if attrs.KoreaAgeRatingOverride != nil {
+		t.Fatalf("expected korea age rating override to remain unset, got %#v", attrs.KoreaAgeRatingOverride)
+	}
+	if attrs.DeveloperAgeRatingInfoURL != nil {
+		t.Fatalf("expected developer age rating info url to remain unset, got %#v", attrs.DeveloperAgeRatingInfoURL)
+	}
+}

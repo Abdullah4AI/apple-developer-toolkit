@@ -20,16 +20,17 @@ import (
 const webPasswordEnv = "ASC_WEB_PASSWORD"
 
 var (
-	promptTwoFactorCodeFn           = promptTwoFactorCodeInteractive
-	promptPasswordFn                = promptPasswordInteractive
-	webLoginFn                      = webcore.Login
-	submitTwoFactorCodeFn           = webcore.SubmitTwoFactorCode
-	termReadPasswordFn              = term.ReadPassword
-	termIsTerminalFn                = term.IsTerminal
-	tryResumeSessionFn              = webcore.TryResumeSession
-	tryResumeLastFn                 = webcore.TryResumeLastSession
-	resolveSessionFn                = resolveSession
-	sessionExpiredWriter  io.Writer = os.Stderr
+	promptTwoFactorCodeFn              = promptTwoFactorCodeInteractive
+	promptPasswordFn                   = promptPasswordInteractive
+	webLoginFn                         = webcore.Login
+	submitTwoFactorCodeFn              = webcore.SubmitTwoFactorCode
+	signalProcessInterruptFn           = signalProcessInterrupt
+	termReadPasswordFn                 = term.ReadPassword
+	termIsTerminalFn                   = term.IsTerminal
+	tryResumeSessionFn                 = webcore.TryResumeSession
+	tryResumeLastFn                    = webcore.TryResumeLastSession
+	resolveSessionFn                   = resolveSession
+	sessionExpiredWriter     io.Writer = os.Stderr
 )
 
 type webAuthStatus struct {
@@ -40,40 +41,115 @@ type webAuthStatus struct {
 	ProviderID    int64  `json:"providerId,omitempty"`
 }
 
-func readPasswordFromInput() (string, error) {
+func signalProcessInterrupt() error {
+	process, err := os.FindProcess(os.Getpid())
+	if err != nil {
+		return err
+	}
+	return process.Signal(os.Interrupt)
+}
+
+func readPasswordFromInput(ctx context.Context) (string, error) {
 	password := strings.TrimSpace(os.Getenv(webPasswordEnv))
 	if password != "" {
 		return password, nil
 	}
-	password, err := promptPasswordFn()
+	password, err := promptPasswordFn(ctx)
 	if err != nil {
 		return "", err
 	}
 	return strings.TrimSpace(password), nil
 }
 
-func readPasswordFromTerminalFD(fd int, writer io.Writer) (string, error) {
+func readPasswordFromTerminalFD(ctx context.Context, writer io.Writer) (string, error) {
 	if writer == nil {
 		return "", fmt.Errorf("password prompt unavailable")
 	}
 	if _, err := fmt.Fprint(writer, "Apple Account password: "); err != nil {
 		return "", fmt.Errorf("password prompt unavailable")
 	}
-	passwordBytes, err := termReadPasswordFn(fd)
+	passwordBytes, err := termReadPasswordFn(0)
 	_, _ = fmt.Fprintln(writer)
 	if err != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return "", fmt.Errorf("password prompt interrupted: %w", ctxErr)
+		}
 		return "", fmt.Errorf("failed to read password")
 	}
 	return strings.TrimSpace(string(passwordBytes)), nil
 }
 
-func promptPasswordInteractive() (string, error) {
+func readPasswordFromTerminal(ctx context.Context, terminal *os.File, writer io.Writer, closeTerminal bool) (string, error) {
+	if terminal == nil {
+		return "", fmt.Errorf("password prompt unavailable")
+	}
+	if closeTerminal {
+		defer func() { _ = terminal.Close() }()
+	}
+	if writer == nil {
+		return "", fmt.Errorf("password prompt unavailable")
+	}
+	if _, err := fmt.Fprint(writer, "Apple Account password: "); err != nil {
+		return "", fmt.Errorf("password prompt unavailable")
+	}
+
+	oldState, err := term.MakeRaw(int(terminal.Fd()))
+	if err != nil {
+		_, _ = fmt.Fprintln(writer)
+		return "", fmt.Errorf("failed to read password")
+	}
+	defer func() {
+		_ = term.Restore(int(terminal.Fd()), oldState)
+		_, _ = fmt.Fprintln(writer)
+	}()
+
+	passwordBytes := make([]byte, 0, 64)
+	readBuf := make([]byte, 1)
+	for {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return "", fmt.Errorf("password prompt interrupted: %w", ctxErr)
+		}
+
+		n, err := terminal.Read(readBuf)
+		if err != nil {
+			if ctxErr := ctx.Err(); ctxErr != nil {
+				return "", fmt.Errorf("password prompt interrupted: %w", ctxErr)
+			}
+			return "", fmt.Errorf("failed to read password")
+		}
+		if n == 0 {
+			continue
+		}
+
+		switch readBuf[0] {
+		case '\r', '\n':
+			return strings.TrimSpace(string(passwordBytes)), nil
+		case 3:
+			// Raw mode consumes VINTR as a byte, so re-emit SIGINT to preserve
+			// top-level cancellation behavior for the rest of the CLI lifecycle.
+			_ = signalProcessInterruptFn()
+			return "", fmt.Errorf("password prompt interrupted: %w", context.Canceled)
+		case 4:
+			if len(passwordBytes) == 0 {
+				return "", fmt.Errorf("password prompt interrupted: %w", context.Canceled)
+			}
+			return strings.TrimSpace(string(passwordBytes)), nil
+		case 8, 127:
+			if len(passwordBytes) > 0 {
+				passwordBytes = passwordBytes[:len(passwordBytes)-1]
+			}
+		default:
+			passwordBytes = append(passwordBytes, readBuf[0])
+		}
+	}
+}
+
+func promptPasswordInteractive(ctx context.Context) (string, error) {
 	if tty, err := os.OpenFile("/dev/tty", os.O_RDWR, 0); err == nil {
-		defer func() { _ = tty.Close() }()
-		return readPasswordFromTerminalFD(int(tty.Fd()), tty)
+		return readPasswordFromTerminal(ctx, tty, tty, true)
 	}
 	if termIsTerminalFn(int(os.Stdin.Fd())) {
-		return readPasswordFromTerminalFD(int(os.Stdin.Fd()), os.Stderr)
+		return readPasswordFromTerminal(ctx, os.Stdin, os.Stderr, false)
 	}
 	return "", nil
 }
@@ -221,7 +297,7 @@ func resolveSession(ctx context.Context, appleID, password, twoFactorCode string
 	password = strings.TrimSpace(password)
 	if password == "" {
 		var err error
-		password, err = readPasswordFromInput()
+		password, err = readPasswordFromInput(ctx)
 		if err != nil {
 			return nil, "", err
 		}
@@ -259,6 +335,7 @@ This is not the official App Store Connect API-key auth flow.
 		Subcommands: []*ffcli.Command{
 			WebAuthLoginCommand(),
 			WebAuthStatusCommand(),
+			WebAuthCapabilitiesCommand(),
 			WebAuthLogoutCommand(),
 		},
 		Exec: func(ctx context.Context, args []string) error {

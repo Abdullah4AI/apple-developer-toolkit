@@ -53,6 +53,7 @@ Examples:
   asc apps update --id "APP_ID" --bundle-id "com.example.app"
   asc apps update --id "APP_ID" --primary-locale "en-US"
   asc apps subscription-grace-period get --app "APP_ID"
+  asc apps content-rights edit --app "APP_ID" --uses-third-party-content=false
   asc apps --limit 10
   asc apps --sort name
   asc apps --output table
@@ -72,6 +73,7 @@ Examples:
 			AppsSubscriptionGracePeriodCommand(),
 			AppsSearchKeywordsCommand(),
 			AppEncryptionDeclarationsCommand(),
+			AppsContentRightsCommand(),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			if len(args) > 0 {

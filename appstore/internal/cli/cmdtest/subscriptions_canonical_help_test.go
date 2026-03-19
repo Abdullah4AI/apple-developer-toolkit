@@ -78,14 +78,17 @@ func TestSubscriptionsHelpShowsCanonicalCommerceSubcommands(t *testing.T) {
 		t.Fatal("expected subscriptions pricing availability command")
 	}
 	availabilityUsage := availabilityCmd.UsageFunc(availabilityCmd)
-	if !strings.Contains(availabilityUsage, `asc subscriptions pricing availability get --availability-id "AVAILABILITY_ID"`) {
+	if !strings.Contains(availabilityUsage, `asc subscriptions pricing availability view --availability-id "AVAILABILITY_ID"`) {
 		t.Fatalf("expected subscriptions pricing availability help to show canonical availability selector, got %q", availabilityUsage)
 	}
-	if !strings.Contains(availabilityUsage, `asc subscriptions pricing availability set --subscription-id "SUB_ID" --territories "USA,CAN"`) {
+	if !strings.Contains(availabilityUsage, `asc subscriptions pricing availability edit --subscription-id "SUB_ID" --territories "USA,CAN"`) {
 		t.Fatalf("expected subscriptions pricing availability help to show canonical territory flags, got %q", availabilityUsage)
 	}
-	if strings.Contains(availabilityUsage, `asc subscriptions pricing availability set --id "SUB_ID" --territory "USA,CAN"`) {
-		t.Fatalf("expected subscriptions pricing availability help to drop legacy set example, got %q", availabilityUsage)
+	if strings.Contains(availabilityUsage, `asc subscriptions pricing availability get --availability-id "AVAILABILITY_ID"`) {
+		t.Fatalf("expected subscriptions pricing availability help to hide deprecated get alias, got %q", availabilityUsage)
+	}
+	if strings.Contains(availabilityUsage, `asc subscriptions pricing availability set --subscription-id "SUB_ID" --territories "USA,CAN"`) {
+		t.Fatalf("expected subscriptions pricing availability help to hide deprecated set alias, got %q", availabilityUsage)
 	}
 
 	pricePointsCmd := findSubcommand(root, "subscriptions", "pricing", "price-points")

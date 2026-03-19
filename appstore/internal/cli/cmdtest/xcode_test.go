@@ -25,6 +25,9 @@ func TestXcodeCommandExists(t *testing.T) {
 	if findSubcommand(root, "xcode", "export") == nil {
 		t.Fatal("expected xcode export command")
 	}
+	if findSubcommand(root, "xcode", "validate") == nil {
+		t.Fatal("expected xcode validate command")
+	}
 	if findSubcommand(root, "xcode", "version") == nil {
 		t.Fatal("expected xcode version command")
 	}
@@ -89,6 +92,48 @@ func TestXcodeVersionHelpShowsCanonicalSubcommands(t *testing.T) {
 		if strings.Contains(stderr, hidden) {
 			t.Fatalf("expected help to hide %q, got %q", hidden, stderr)
 		}
+	}
+}
+
+func TestXcodeExportHelpMentionsDirectUploadMode(t *testing.T) {
+	root := RootCommand("1.2.3")
+
+	exportCmd := findSubcommand(root, "xcode", "export")
+	if exportCmd == nil {
+		t.Fatal("expected xcode export command")
+	}
+	if !strings.Contains(exportCmd.ShortHelp, "direct upload") {
+		t.Fatalf("expected short help to mention direct upload, got %q", exportCmd.ShortHelp)
+	}
+	if !strings.Contains(exportCmd.LongHelp, "destination=upload") {
+		t.Fatalf("expected long help to mention destination=upload, got %q", exportCmd.LongHelp)
+	}
+	if !strings.Contains(exportCmd.LongHelp, "without writing a local") {
+		t.Fatalf("expected long help to explain no local IPA is written, got %q", exportCmd.LongHelp)
+	}
+	if got := exportCmd.FlagSet.Lookup("ipa-path").Usage; !strings.Contains(got, "when one is produced") {
+		t.Fatalf("expected ipa-path usage to mention produced IPA behavior, got %q", got)
+	}
+}
+
+func TestXcodeValidateHelpMentionsAltool(t *testing.T) {
+	root := RootCommand("1.2.3")
+
+	validateCmd := findSubcommand(root, "xcode", "validate")
+	if validateCmd == nil {
+		t.Fatal("expected xcode validate command")
+	}
+	if !strings.Contains(validateCmd.LongHelp, "xcrun altool --validate-app") {
+		t.Fatalf("expected long help to mention altool validation, got %q", validateCmd.LongHelp)
+	}
+	if validateCmd.FlagSet.Lookup("ipa") == nil {
+		t.Fatal("expected xcode validate to expose --ipa")
+	}
+	if validateCmd.FlagSet.Lookup("api-key") == nil {
+		t.Fatal("expected xcode validate to expose --api-key")
+	}
+	if validateCmd.FlagSet.Lookup("api-issuer") == nil {
+		t.Fatal("expected xcode validate to expose --api-issuer")
 	}
 }
 
@@ -227,6 +272,28 @@ func TestXcodeExportRequiresExportOptions(t *testing.T) {
 	}
 	if !strings.Contains(stderr, "Error: --export-options is required") {
 		t.Fatalf("expected export-options error, got %q", stderr)
+	}
+}
+
+func TestXcodeValidateRequiresIPA(t *testing.T) {
+	root := RootCommand("1.2.3")
+	root.FlagSet.SetOutput(io.Discard)
+
+	stdout, stderr := captureOutput(t, func() {
+		if err := root.Parse([]string{"xcode", "validate"}); err != nil {
+			t.Fatalf("parse error: %v", err)
+		}
+		err := root.Run(context.Background())
+		if !errors.Is(err, flag.ErrHelp) {
+			t.Fatalf("expected ErrHelp, got %v", err)
+		}
+	})
+
+	if stdout != "" {
+		t.Fatalf("expected empty stdout, got %q", stdout)
+	}
+	if !strings.Contains(stderr, "Error: --ipa is required") {
+		t.Fatalf("expected ipa error, got %q", stderr)
 	}
 }
 
