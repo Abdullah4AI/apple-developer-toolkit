@@ -1,0 +1,51 @@
+# Apple Developer Toolkit - Hooks Config (Indie Dev)
+# Solo developer: Telegram notifications + auto TestFlight
+# Config: ~/.appledev/hooks.yaml
+
+version: 1
+
+notifiers:
+  telegram:
+    enabled: true
+
+hooks:
+  build.done:
+    - name: "notify-build-result"
+      notify: telegram
+      template: "{{.STATUS}} Build {{.STATUS}} - {{.APP_NAME}} ({{.DURATION_SEC}}s)"
+      when: always
+
+  build.compile.failure:
+    - name: "log-errors"
+      run: "echo '[{{.TIMESTAMP}}] {{.APP_NAME}}: {{.ERROR_COUNT}} errors' >> ~/.appledev/hook-logs/build-errors.log"
+      when: always
+
+  store.upload.done:
+    - name: "notify-upload"
+      notify: telegram
+      template: "Build {{.BUILD_NUMBER}} uploaded for app {{.APP_ID}}"
+      when: success
+
+  store.processing.done:
+    - name: "notify-processed"
+      notify: telegram
+      template: "Build {{.BUILD_ID}} processed and ready"
+      when: success
+
+  store.review.approved:
+    - name: "notify-approved"
+      notify: telegram
+      template: "{{.APP_NAME}} v{{.VERSION}} approved"
+      when: success
+
+  store.review.rejected:
+    - name: "notify-rejected"
+      notify: telegram
+      template: "{{.APP_NAME}} v{{.VERSION}} rejected: {{.REJECTION_REASONS}}"
+      when: always
+
+  store.crash.new:
+    - name: "notify-crash"
+      notify: telegram
+      template: "New crash in {{.APP_NAME}}: {{.CRASH_SUMMARY}}"
+      when: always

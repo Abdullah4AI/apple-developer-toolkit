@@ -1,0 +1,45 @@
+# Apple Developer Toolkit - Hooks Config (CI/CD)
+# Automated CI: logging, test running, no interactive notifications
+# Config: ~/.appledev/hooks.yaml
+
+version: 1
+
+defaults:
+  log_dir: "./ci-hook-logs/"
+  continue_on_error: true
+
+hooks:
+  build.compile.success:
+    - name: "run-tests"
+      run: "~/.appledev/hooks/run-swift-tests.sh"
+      when: success
+
+  build.compile.failure:
+    - name: "log-failure"
+      run: "echo '[{{.TIMESTAMP}}] {{.APP_NAME}}: {{.ERROR_COUNT}} errors - {{.ERRORS}}' >> ~/.appledev/hook-logs/build-failures.log"
+      when: always
+
+  build.done:
+    - name: "log-build"
+      run: "echo '[{{.TIMESTAMP}}] Build {{.STATUS}} - {{.APP_NAME}} ({{.DURATION_SEC}}s)' >> ~/.appledev/hook-logs/builds.log"
+      when: always
+
+  store.validate.fail:
+    - name: "block-submission"
+      run: "echo 'Validation failed: {{.ISSUES}}' >&2 && exit 1"
+      when: always
+
+  store.upload.done:
+    - name: "log-upload"
+      run: "echo '[{{.TIMESTAMP}}] Upload done: app={{.APP_ID}} build={{.BUILD_NUMBER}}' >> ~/.appledev/hook-logs/uploads.log"
+      when: always
+
+  pipeline.done:
+    - name: "ci-report"
+      run: "echo '{\"pipeline\":\"{{.PIPELINE_NAME}}\",\"status\":\"{{.STATUS}}\",\"duration\":\"{{.DURATION_SEC}}\"}' >> ~/.appledev/hook-logs/pipeline-results.jsonl"
+      when: always
+
+  pipeline.failure:
+    - name: "ci-failure-log"
+      run: "echo '[{{.TIMESTAMP}}] PIPELINE FAILED: {{.PIPELINE_NAME}} at {{.FAILED_STEP}} - {{.ERROR}}' >> ~/.appledev/hook-logs/pipeline-failures.log"
+      when: always

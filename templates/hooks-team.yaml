@@ -1,0 +1,70 @@
+# Apple Developer Toolkit - Hooks Config (Team)
+# Team workflow: Slack + Telegram, git tagging, changelog
+# Config: ~/.appledev/hooks.yaml
+
+version: 1
+
+notifiers:
+  telegram:
+    enabled: true
+  slack:
+    enabled: true
+    webhook_url_env: "SLACK_WEBHOOK_URL"
+
+hooks:
+  build.done:
+    - name: "notify-build"
+      notify: telegram
+      template: "{{.STATUS}} Build {{.STATUS}} - {{.APP_NAME}} ({{.DURATION_SEC}}s)"
+      when: always
+
+  build.compile.failure:
+    - name: "notify-team-failure"
+      notify: telegram
+      template: "Build failed: {{.ERROR_COUNT}} errors in {{.APP_NAME}}"
+      when: always
+    - name: "log-errors"
+      run: "echo '[{{.TIMESTAMP}}] {{.APP_NAME}}: {{.ERROR_COUNT}} errors - {{.ERRORS}}' >> ~/.appledev/hook-logs/build-errors.log"
+      when: always
+
+  store.upload.done:
+    - name: "notify-upload"
+      notify: telegram
+      template: "Build {{.BUILD_NUMBER}} uploaded for app {{.APP_ID}}"
+      when: success
+
+  store.processing.done:
+    - name: "notify-processed"
+      notify: telegram
+      template: "Build {{.BUILD_ID}} processed and ready"
+      when: success
+
+  store.review.approved:
+    - name: "tag-release"
+      run: "~/.appledev/hooks/git-tag-release.sh {{.VERSION}}"
+      when: success
+    - name: "changelog"
+      run: "~/.appledev/hooks/generate-changelog.sh"
+      when: success
+    - name: "notify-approved"
+      notify: telegram
+      template: "v{{.VERSION}} approved and tagged"
+      when: success
+
+  store.review.rejected:
+    - name: "notify-rejected"
+      notify: telegram
+      template: "{{.APP_NAME}} v{{.VERSION}} rejected: {{.REJECTION_REASONS}}"
+      when: always
+
+  store.crash.new:
+    - name: "notify-crash"
+      notify: telegram
+      template: "New crash in {{.APP_NAME}}: {{.CRASH_SUMMARY}}"
+      when: always
+
+  pipeline.failure:
+    - name: "notify-pipeline-failure"
+      notify: telegram
+      template: "Pipeline '{{.PIPELINE_NAME}}' failed at '{{.FAILED_STEP}}': {{.ERROR}}"
+      when: always
