@@ -159,6 +159,7 @@ Mention authentication, a database, or a paid feature, and the toolkit wires up 
 <td align="center"><a href="https://supabase.com"><img src="https://cdn.simpleicons.org/supabase/3FCF8E" width="40"><br><b>Supabase</b></a><br><sub>Auth, database, storage</sub></td>
 <td align="center"><img src="https://cdn.simpleicons.org/telegram/26A5E4" width="40"><br><b>Telegram</b><br><sub>Build & review notifications</sub></td>
 <td align="center"><img src="https://upload.wikimedia.org/wikipedia/commons/d/d5/Slack_icon_2019.svg" width="40" alt="Slack"><br><b>Slack</b><br><sub>Team notifications</sub></td>
+<td align="center"><img src="https://cdn.simpleicons.org/lark/3370FF" width="40"><br><b>Feishu / Lark</b><br><sub>Team notifications</sub></td>
 <td align="center"><img src="https://cdn.simpleicons.org/git/F05032" width="40"><br><b>Git</b><br><sub>Auto-tagging releases</sub></td>
 </tr>
 </table>
@@ -297,12 +298,14 @@ bash scripts/hook-runner.sh --dry-run build.done STATUS=success
 | `indie` | Solo dev — Telegram notifications, auto TestFlight |
 | `team` | Team — Slack + Telegram, git tagging, changelog |
 | `ci` | CI/CD — Logging, test running, no interactive notifications |
+| `feishu` | Feishu/Lark — Webhook notifications for Chinese dev teams |
 
 ### Built-in Scripts
 
 | Script | Purpose |
 |---|---|
 | `notify-telegram.sh` | Send Telegram notification |
+| `notify-feishu.sh` | Send Feishu/Lark notification |
 | `git-tag-release.sh` | Create and push git tag |
 | `run-swift-tests.sh` | Run Swift tests |
 | `generate-changelog.sh` | Generate changelog from git history |
@@ -317,11 +320,17 @@ notifiers:
     enabled: true
     bot_token_keychain: "my-bot-token"
     chat_id: "123456"
+  feishu:
+    enabled: true
+    webhook_url_env: "FEISHU_WEBHOOK_URL"
 
 hooks:
   build.done:
     - name: notify-build
       notify: telegram
+      template: "{{if eq .STATUS \"success\"}}✅{{else}}❌{{end}} {{.APP_NAME}} build"
+    - name: notify-build-feishu
+      notify: feishu
       template: "{{if eq .STATUS \"success\"}}✅{{else}}❌{{end}} {{.APP_NAME}} build"
 
   store.review.approved:

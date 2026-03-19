@@ -101,7 +101,51 @@ func ResolveBotToken(envVar, keychainService string) (string, error) {
 	return "", fmt.Errorf("bot token not found: set %s env var or add to keychain as %s", envVar, keychainService)
 }
 
-// ResolveWebhookURL resolves a Slack webhook URL from an environment variable.
+// NotifyFeishu sends a message via a Feishu (飞书) incoming webhook.
+func NotifyFeishu(ctx context.Context, webhookURL, message string) error {
+	payload := map[string]any{
+		"msg_type": "text",
+		"content": map[string]string{
+			"text": message,
+		},
+	}
+
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("feishu: marshal payload: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", webhookURL, bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("feishu: create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("feishu: send: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("feishu: unexpected status %d: %s", resp.StatusCode, strings.TrimSpace(string(respBody)))
+	}
+
+	// Feishu returns {"code":0} on success; non-zero code means error
+	var result struct {
+		Code int    `json:"code"`
+		Msg  string `json:"msg"`
+	}
+	if json.Unmarshal(respBody, &result) == nil && result.Code != 0 {
+		return fmt.Errorf("feishu: API error code %d: %s", result.Code, result.Msg)
+	}
+
+	return nil
+}
+
+// ResolveWebhookURL resolves a webhook URL from an environment variable.
 func ResolveWebhookURL(envVar string) (string, error) {
 	if envVar != "" {
 		if val := os.Getenv(envVar); val != "" {

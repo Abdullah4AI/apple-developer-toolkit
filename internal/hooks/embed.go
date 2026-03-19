@@ -7,9 +7,10 @@ var TemplateFS embed.FS
 
 // TemplateNames maps template identifiers to their embedded file paths.
 var TemplateNames = map[string]string{
-	"indie": "templates/indie.yaml",
-	"team":  "templates/team.yaml",
-	"ci":    "templates/ci.yaml",
+	"indie":  "templates/indie.yaml",
+	"team":   "templates/team.yaml",
+	"ci":     "templates/ci.yaml",
+	"feishu": "templates/feishu.yaml",
 }
 
 // GetTemplate returns the content of an embedded template by name.
@@ -27,5 +28,5 @@ type TemplateNotFoundError struct {
 }
 
 func (e *TemplateNotFoundError) Error() string {
-	return "unknown template: " + e.Name + " (available: indie, team, ci)"
+	return "unknown template: " + e.Name + " (available: indie, team, ci, feishu)"
 }

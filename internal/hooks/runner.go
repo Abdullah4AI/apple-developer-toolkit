@@ -151,6 +151,17 @@ func executeNotifyHook(ctx context.Context, cfg *Config, hook HookDefinition, va
 		}
 		return NotifySlack(ctx, webhookURL, message)
 
+	case "feishu":
+		nc, ok := cfg.Notifiers["feishu"]
+		if !ok || !nc.Enabled {
+			return fmt.Errorf("hook %q: feishu notifier not configured or disabled", hook.Name)
+		}
+		webhookURL, err := ResolveWebhookURL(nc.WebhookURLEnv)
+		if err != nil {
+			return fmt.Errorf("hook %q: %w", hook.Name, err)
+		}
+		return NotifyFeishu(ctx, webhookURL, message)
+
 	default:
 		return fmt.Errorf("hook %q: unknown notifier %q", hook.Name, hook.Notify)
 	}

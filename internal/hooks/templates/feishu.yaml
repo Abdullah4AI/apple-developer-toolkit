@@ -1,0 +1,39 @@
+# Apple Developer Toolkit - Hooks Configuration (Feishu / 飞书)
+# See: appledev hooks --help
+
+version: 1
+
+notifiers:
+  feishu:
+    enabled: true
+    webhook_url_env: "FEISHU_WEBHOOK_URL"
+
+defaults:
+  timeout: "30s"
+  continue_on_error: false
+  log_dir: "~/.appledev/hook-logs/"
+
+hooks:
+  build.done:
+    - name: "notify-build"
+      notify: feishu
+      template: "{{.STATUS}} Build completed for {{.APP_NAME}} in {{.DURATION_SEC}}s"
+      when: always
+
+  store.upload.done:
+    - name: "notify-upload"
+      notify: feishu
+      template: "Upload complete: {{.APP_NAME}} build {{.BUILD_NUMBER}}"
+      when: success
+
+  store.submit.done:
+    - name: "notify-submit"
+      notify: feishu
+      template: "Submitted for review: {{.APP_NAME}} v{{.VERSION}}"
+      when: success
+
+  store.release:
+    - name: "notify-release"
+      notify: feishu
+      template: "Released: {{.APP_NAME}} v{{.VERSION}}"
+      when: success
