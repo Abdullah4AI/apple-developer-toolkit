@@ -13,6 +13,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shots"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/screenshots"
 )
 
 func TestShotsFrame_RequiresInput(t *testing.T) {
@@ -97,16 +100,36 @@ func TestShotsFrame_DefaultDeviceIsIPhoneAir(t *testing.T) {
 
 	rawPath := filepath.Join(t.TempDir(), "raw.png")
 	writeFramePNG(t, rawPath, makeRawImage(100, 220))
-	kouFixturePath := filepath.Join(t.TempDir(), "kou-fixture.png")
-	writeFramePNG(t, kouFixturePath, makeRawImage(1260, 2736))
-	installValidatingMockKou(
-		t,
-		kouFixturePath,
-		filepath.Join(t.TempDir(), "kou-out", "framed.png"),
-		"iPhone Air - Light Gold - Portrait",
-	)
-
 	outputDir := filepath.Join(t.TempDir(), "framed")
+	installMockFrame(t, func(_ context.Context, req screenshots.FrameRequest) (*screenshots.FrameResult, error) {
+		if req.InputPath != rawPath {
+			t.Fatalf("req.InputPath = %q, want %q", req.InputPath, rawPath)
+		}
+		if req.ConfigPath != "" {
+			t.Fatalf("req.ConfigPath = %q, want empty", req.ConfigPath)
+		}
+		if req.Device != "iphone-air" {
+			t.Fatalf("req.Device = %q, want %q", req.Device, "iphone-air")
+		}
+		wantOutputPath := filepath.Join(outputDir, "raw-iphone-air.png")
+		if req.OutputPath != wantOutputPath {
+			t.Fatalf("req.OutputPath = %q, want %q", req.OutputPath, wantOutputPath)
+		}
+		if req.Canvas != nil {
+			t.Fatalf("req.Canvas = %+v, want nil", req.Canvas)
+		}
+		return frameResultWithWrittenPNG(t, req.OutputPath, screenshots.FrameResult{
+			FramePath:    "iPhone Air - Light Gold - Portrait",
+			Device:       "iphone-air",
+			DisplayType:  "APP_IPHONE_69",
+			UploadWidth:  1260,
+			UploadHeight: 2736,
+			Normalized:   true,
+			Width:        1260,
+			Height:       2736,
+		}), nil
+	})
+
 	root := RootCommand("1.2.3")
 	if err := root.Parse([]string{
 		"screenshots", "frame",
@@ -171,20 +194,37 @@ func TestShotsFrame_ExplicitDeviceIPhone17Pro(t *testing.T) {
 
 	rawPath := filepath.Join(t.TempDir(), "raw.png")
 	writeFramePNG(t, rawPath, makeRawImage(120, 240))
-	kouFixturePath := filepath.Join(t.TempDir(), "kou-fixture.png")
-	writeFramePNG(t, kouFixturePath, makeRawImage(1206, 2622))
-	installValidatingMockKou(
-		t,
-		kouFixturePath,
-		filepath.Join(t.TempDir(), "kou-out", "framed.png"),
-		"iPhone 17 Pro - Silver - Portrait",
-	)
+	outputDir := filepath.Join(t.TempDir(), "framed")
+	installMockFrame(t, func(_ context.Context, req screenshots.FrameRequest) (*screenshots.FrameResult, error) {
+		if req.InputPath != rawPath {
+			t.Fatalf("req.InputPath = %q, want %q", req.InputPath, rawPath)
+		}
+		if req.Device != "iphone-17-pro" {
+			t.Fatalf("req.Device = %q, want %q", req.Device, "iphone-17-pro")
+		}
+		wantOutputPath := filepath.Join(outputDir, "raw-iphone-17-pro.png")
+		if req.OutputPath != wantOutputPath {
+			t.Fatalf("req.OutputPath = %q, want %q", req.OutputPath, wantOutputPath)
+		}
+		if req.Canvas != nil {
+			t.Fatalf("req.Canvas = %+v, want nil", req.Canvas)
+		}
+		return frameResultWithWrittenPNG(t, req.OutputPath, screenshots.FrameResult{
+			FramePath:    "iPhone 17 Pro - Silver - Portrait",
+			Device:       "iphone-17-pro",
+			DisplayType:  "APP_IPHONE_61",
+			UploadWidth:  1206,
+			UploadHeight: 2622,
+			Width:        1206,
+			Height:       2622,
+		}), nil
+	})
 
 	root := RootCommand("1.2.3")
 	if err := root.Parse([]string{
 		"screenshots", "frame",
 		"--input", rawPath,
-		"--output-dir", filepath.Join(t.TempDir(), "framed"),
+		"--output-dir", outputDir,
 		"--device", "iphone-17-pro",
 		"--output", "json",
 	}); err != nil {
@@ -234,10 +274,6 @@ func TestShotsFrame_ConfigOnlyPath(t *testing.T) {
 	t.Setenv("ASC_APP_ID", "")
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "config.json"))
 
-	kouFixturePath := filepath.Join(t.TempDir(), "kou-fixture.png")
-	writeFramePNG(t, kouFixturePath, makeRawImage(1260, 2736))
-	installMockKou(t, kouFixturePath, filepath.Join(t.TempDir(), "kou-out", "framed.png"))
-
 	configPath := filepath.Join(t.TempDir(), "frame.yaml")
 	writeFile(t, configPath, `project:
   name: "Demo"
@@ -252,11 +288,33 @@ screenshots:
         frame: true
 `)
 
+	outputDir := filepath.Join(t.TempDir(), "framed")
+	installMockFrame(t, func(_ context.Context, req screenshots.FrameRequest) (*screenshots.FrameResult, error) {
+		if req.InputPath != "" {
+			t.Fatalf("req.InputPath = %q, want empty", req.InputPath)
+		}
+		if req.ConfigPath != configPath {
+			t.Fatalf("req.ConfigPath = %q, want %q", req.ConfigPath, configPath)
+		}
+		if req.Device != "iphone-air" {
+			t.Fatalf("req.Device = %q, want %q", req.Device, "iphone-air")
+		}
+		wantOutputPath := filepath.Join(outputDir, "screenshot-iphone-air.png")
+		if req.OutputPath != wantOutputPath {
+			t.Fatalf("req.OutputPath = %q, want %q", req.OutputPath, wantOutputPath)
+		}
+		return frameResultWithWrittenPNG(t, req.OutputPath, screenshots.FrameResult{
+			Device: "iphone-air",
+			Width:  1260,
+			Height: 2736,
+		}), nil
+	})
+
 	root := RootCommand("1.2.3")
 	if err := root.Parse([]string{
 		"screenshots", "frame",
 		"--config", configPath,
-		"--output-dir", filepath.Join(t.TempDir(), "framed"),
+		"--output-dir", outputDir,
 		"--output", "json",
 	}); err != nil {
 		t.Fatalf("parse error: %v", err)
@@ -291,10 +349,6 @@ func TestShotsFrame_ConfigDefaultOutputUsesConfigDeviceInFilename(t *testing.T) 
 	t.Setenv("ASC_APP_ID", "")
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "config.json"))
 
-	kouFixturePath := filepath.Join(t.TempDir(), "kou-fixture.png")
-	writeFramePNG(t, kouFixturePath, makeRawImage(1206, 2622))
-	installMockKou(t, kouFixturePath, filepath.Join(t.TempDir(), "kou-out", "framed.png"))
-
 	configPath := filepath.Join(t.TempDir(), "frame.yaml")
 	writeFile(t, configPath, `project:
   name: "Demo"
@@ -310,6 +364,21 @@ screenshots:
 `)
 
 	outputDir := filepath.Join(t.TempDir(), "framed")
+	installMockFrame(t, func(_ context.Context, req screenshots.FrameRequest) (*screenshots.FrameResult, error) {
+		if req.ConfigPath != configPath {
+			t.Fatalf("req.ConfigPath = %q, want %q", req.ConfigPath, configPath)
+		}
+		wantPath := filepath.Join(outputDir, "screenshot-iphone-17-pro.png")
+		if req.OutputPath != wantPath {
+			t.Fatalf("req.OutputPath = %q, want %q", req.OutputPath, wantPath)
+		}
+		return frameResultWithWrittenPNG(t, req.OutputPath, screenshots.FrameResult{
+			Device: "iphone-17-pro",
+			Width:  1206,
+			Height: 2622,
+		}), nil
+	})
+
 	root := RootCommand("1.2.3")
 	if err := root.Parse([]string{
 		"screenshots", "frame",
@@ -352,15 +421,39 @@ func TestShotsFrame_MacDevice(t *testing.T) {
 
 	rawPath := filepath.Join(t.TempDir(), "raw.png")
 	writeFramePNG(t, rawPath, makeRawImage(2560, 1600))
-	kouFixturePath := filepath.Join(t.TempDir(), "kou-fixture.png")
-	writeFramePNG(t, kouFixturePath, makeRawImage(2880, 1800))
-	installMockKou(t, kouFixturePath, filepath.Join(t.TempDir(), "kou-out", "framed.png"))
+	outputDir := filepath.Join(t.TempDir(), "framed")
+	installMockFrame(t, func(_ context.Context, req screenshots.FrameRequest) (*screenshots.FrameResult, error) {
+		if req.InputPath != rawPath {
+			t.Fatalf("req.InputPath = %q, want %q", req.InputPath, rawPath)
+		}
+		if req.Device != "mac" {
+			t.Fatalf("req.Device = %q, want %q", req.Device, "mac")
+		}
+		wantOutputPath := filepath.Join(outputDir, "raw-mac.png")
+		if req.OutputPath != wantOutputPath {
+			t.Fatalf("req.OutputPath = %q, want %q", req.OutputPath, wantOutputPath)
+		}
+		if req.Canvas == nil {
+			t.Fatal("expected canvas options for mac device")
+		}
+		if req.Canvas.Title != "My App" || req.Canvas.Subtitle != "Your tagline" {
+			t.Fatalf("req.Canvas = %+v, want title/subtitle set", req.Canvas)
+		}
+		return frameResultWithWrittenPNG(t, req.OutputPath, screenshots.FrameResult{
+			Device:       "mac",
+			DisplayType:  "APP_DESKTOP",
+			UploadWidth:  2880,
+			UploadHeight: 1800,
+			Width:        2880,
+			Height:       1800,
+		}), nil
+	})
 
 	root := RootCommand("1.2.3")
 	if err := root.Parse([]string{
 		"screenshots", "frame",
 		"--input", rawPath,
-		"--output-dir", filepath.Join(t.TempDir(), "framed"),
+		"--output-dir", outputDir,
 		"--device", "mac",
 		"--title", "My App",
 		"--subtitle", "Your tagline",
@@ -409,15 +502,34 @@ func TestShotsFrame_MacDeviceNoText(t *testing.T) {
 
 	rawPath := filepath.Join(t.TempDir(), "raw.png")
 	writeFramePNG(t, rawPath, makeRawImage(2560, 1600))
-	kouFixturePath := filepath.Join(t.TempDir(), "kou-fixture.png")
-	writeFramePNG(t, kouFixturePath, makeRawImage(2880, 1800))
-	installMockKou(t, kouFixturePath, filepath.Join(t.TempDir(), "kou-out", "framed.png"))
+	outputDir := filepath.Join(t.TempDir(), "framed")
+	installMockFrame(t, func(_ context.Context, req screenshots.FrameRequest) (*screenshots.FrameResult, error) {
+		if req.InputPath != rawPath {
+			t.Fatalf("req.InputPath = %q, want %q", req.InputPath, rawPath)
+		}
+		if req.Device != "mac" {
+			t.Fatalf("req.Device = %q, want %q", req.Device, "mac")
+		}
+		wantOutputPath := filepath.Join(outputDir, "raw-mac.png")
+		if req.OutputPath != wantOutputPath {
+			t.Fatalf("req.OutputPath = %q, want %q", req.OutputPath, wantOutputPath)
+		}
+		if req.Canvas != nil {
+			t.Fatalf("req.Canvas = %+v, want nil", req.Canvas)
+		}
+		return frameResultWithWrittenPNG(t, req.OutputPath, screenshots.FrameResult{
+			Device:       "mac",
+			DisplayType:  "APP_DESKTOP",
+			UploadWidth:  2880,
+			UploadHeight: 1800,
+		}), nil
+	})
 
 	root := RootCommand("1.2.3")
 	if err := root.Parse([]string{
 		"screenshots", "frame",
 		"--input", rawPath,
-		"--output-dir", filepath.Join(t.TempDir(), "framed"),
+		"--output-dir", outputDir,
 		"--device", "mac",
 		"--output", "json",
 	}); err != nil {
@@ -459,15 +571,38 @@ func TestShotsFrame_MacDeviceSubtitleOnly(t *testing.T) {
 
 	rawPath := filepath.Join(t.TempDir(), "raw.png")
 	writeFramePNG(t, rawPath, makeRawImage(2560, 1600))
-	kouFixturePath := filepath.Join(t.TempDir(), "kou-fixture.png")
-	writeFramePNG(t, kouFixturePath, makeRawImage(2880, 1800))
-	installMockKou(t, kouFixturePath, filepath.Join(t.TempDir(), "kou-out", "framed.png"))
+	outputDir := filepath.Join(t.TempDir(), "framed")
+	installMockFrame(t, func(_ context.Context, req screenshots.FrameRequest) (*screenshots.FrameResult, error) {
+		if req.InputPath != rawPath {
+			t.Fatalf("req.InputPath = %q, want %q", req.InputPath, rawPath)
+		}
+		if req.Device != "mac" {
+			t.Fatalf("req.Device = %q, want %q", req.Device, "mac")
+		}
+		wantOutputPath := filepath.Join(outputDir, "raw-mac.png")
+		if req.OutputPath != wantOutputPath {
+			t.Fatalf("req.OutputPath = %q, want %q", req.OutputPath, wantOutputPath)
+		}
+		if req.Canvas == nil {
+			t.Fatal("expected canvas options for subtitle-only mac frame")
+		}
+		if req.Canvas.Title != "" {
+			t.Fatalf("req.Canvas.Title = %q, want empty", req.Canvas.Title)
+		}
+		if req.Canvas.Subtitle != "Just a tagline" {
+			t.Fatalf("req.Canvas.Subtitle = %q, want %q", req.Canvas.Subtitle, "Just a tagline")
+		}
+		return frameResultWithWrittenPNG(t, req.OutputPath, screenshots.FrameResult{
+			Device:      "mac",
+			DisplayType: "APP_DESKTOP",
+		}), nil
+	})
 
 	root := RootCommand("1.2.3")
 	if err := root.Parse([]string{
 		"screenshots", "frame",
 		"--input", rawPath,
-		"--output-dir", filepath.Join(t.TempDir(), "framed"),
+		"--output-dir", outputDir,
 		"--device", "mac",
 		"--subtitle", "Just a tagline",
 		"--output", "json",
@@ -633,71 +768,50 @@ func TestShotsFrame_WatchWithoutInputOrConfig(t *testing.T) {
 	}
 }
 
-func installMockKou(t *testing.T, fixturePath, outputPath string) {
+func installMockFrame(t *testing.T, fn func(context.Context, screenshots.FrameRequest) (*screenshots.FrameResult, error)) {
 	t.Helper()
 
-	binDir := t.TempDir()
-	kouPath := filepath.Join(binDir, "kou")
-	script := `#!/bin/sh
-if [ "$1" = "--version" ]; then
-  echo "kou 0.18.0"
-  exit 0
-fi
-if [ "$1" = "setup-frames" ]; then
-  exit 0
-fi
-if [ "$1" = "generate" ]; then
-  mkdir -p "$(dirname "$MOCK_KOU_OUTPUT")"
-  cp "$MOCK_KOU_FIXTURE" "$MOCK_KOU_OUTPUT"
-  printf '[{"name":"framed","path":"%s","success":true}]' "$MOCK_KOU_OUTPUT"
-  exit 0
-fi
-echo "unsupported args" >&2
-exit 1
-`
-	if err := os.WriteFile(kouPath, []byte(script), 0o755); err != nil {
-		t.Fatalf("write kou mock script: %v", err)
-	}
-
-	t.Setenv("MOCK_KOU_FIXTURE", fixturePath)
-	t.Setenv("MOCK_KOU_OUTPUT", outputPath)
-	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	restore := shots.SetFrameFunc(fn)
+	t.Cleanup(restore)
 }
 
-func installValidatingMockKou(t *testing.T, fixturePath, outputPath, expectedDevice string) {
+func frameResultWithWrittenPNG(t *testing.T, outputPath string, result screenshots.FrameResult) *screenshots.FrameResult {
 	t.Helper()
 
-	binDir := t.TempDir()
-	kouPath := filepath.Join(binDir, "kou")
-	script := `#!/bin/sh
-if [ "$1" = "--version" ]; then
-  echo "kou 0.18.0"
-  exit 0
-fi
-if [ "$1" = "setup-frames" ]; then
-  exit 0
-fi
-if [ "$1" = "generate" ]; then
-  if ! grep -F "$MOCK_KOU_EXPECTED_DEVICE" "$2" >/dev/null 2>&1; then
-    echo "Unexpected error: unsupported device frame" >&2
-    exit 1
-  fi
-  mkdir -p "$(dirname "$MOCK_KOU_OUTPUT")"
-  cp "$MOCK_KOU_FIXTURE" "$MOCK_KOU_OUTPUT"
-  printf '[{"name":"framed","path":"%s","success":true}]' "$MOCK_KOU_OUTPUT"
-  exit 0
-fi
-echo "unsupported args" >&2
-exit 1
-`
-	if err := os.WriteFile(kouPath, []byte(script), 0o755); err != nil {
-		t.Fatalf("write kou mock script: %v", err)
+	path := strings.TrimSpace(result.Path)
+	if path == "" {
+		path = strings.TrimSpace(outputPath)
+	}
+	if path == "" {
+		t.Fatal("expected frame result path")
 	}
 
-	t.Setenv("MOCK_KOU_EXPECTED_DEVICE", expectedDevice)
-	t.Setenv("MOCK_KOU_FIXTURE", fixturePath)
-	t.Setenv("MOCK_KOU_OUTPUT", outputPath)
-	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	width := result.Width
+	if width <= 0 {
+		width = result.UploadWidth
+	}
+	if width <= 0 {
+		width = 1
+	}
+
+	height := result.Height
+	if height <= 0 {
+		height = result.UploadHeight
+	}
+	if height <= 0 {
+		height = 1
+	}
+
+	writeFramePNG(t, path, makeRawImage(width, height))
+
+	result.Path = path
+	if result.Width == 0 {
+		result.Width = width
+	}
+	if result.Height == 0 {
+		result.Height = height
+	}
+	return &result
 }
 
 func writeFramePNG(t *testing.T, path string, img image.Image) {

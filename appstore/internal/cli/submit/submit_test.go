@@ -2900,7 +2900,7 @@ func TestPrintSubmissionErrorHintsUsesExistingRunnableCommands(t *testing.T) {
 
 	for _, want := range []string{
 		"Hint: Review current age rating: asc age-rating view --app app-1",
-		"Hint: Review age-rating update flags: asc age-rating set --help",
+		"Hint: Review age-rating update flags: asc age-rating edit --help",
 		"Hint: If your app does not use third-party content: asc apps update --id app-1 --content-rights DOES_NOT_USE_THIRD_PARTY_CONTENT",
 		"Hint: If your app uses third-party content: asc apps update --id app-1 --content-rights USES_THIRD_PARTY_CONTENT",
 		"Hint: Set Uses Non-Exempt Encryption for the attached build in App Store Connect, then retry submission.",

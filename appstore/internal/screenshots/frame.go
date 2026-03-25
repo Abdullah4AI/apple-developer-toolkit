@@ -31,7 +31,7 @@ const (
 	FrameDeviceIPhone17    FrameDevice = "iphone-17"
 	FrameDeviceMac         FrameDevice = "mac"
 
-	pinnedKoubouVersion = "0.18.0"
+	pinnedKoubouVersion = "0.18.1"
 )
 
 const (
@@ -81,7 +81,7 @@ type frameDeviceKoubouSpec struct {
 }
 
 // Keeps the existing asc device slugs while delegating rendering to pinned
-// Koubou v0.18.0 frame names.
+// Koubou v0.18.1 frame names.
 var frameDeviceKoubouSpecs = map[FrameDevice]frameDeviceKoubouSpec{
 	FrameDeviceIPhoneAir: {
 		FrameName:   "iPhone Air - Light Gold - Portrait",

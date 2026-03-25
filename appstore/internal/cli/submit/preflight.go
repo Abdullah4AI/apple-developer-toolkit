@@ -421,7 +421,7 @@ func checkAgeRating(ctx context.Context, client *asc.Client, appInfoID, appID st
 				Name:    "Age rating",
 				Passed:  false,
 				Message: "Age rating declaration not found",
-				Hint:    fmt.Sprintf("asc age-rating set --app %s --gambling false --violence-realistic NONE ...", appID),
+				Hint:    fmt.Sprintf("asc age-rating edit --app %s --gambling false --violence-realistic NONE ...", appID),
 			}
 		}
 		return checkResult{
@@ -438,7 +438,7 @@ func checkAgeRating(ctx context.Context, client *asc.Client, appInfoID, appID st
 			Name:    "Age rating",
 			Passed:  false,
 			Message: fmt.Sprintf("Age rating incomplete (missing: %s)", strings.Join(missing, ", ")),
-			Hint:    fmt.Sprintf("asc age-rating set --app %s --gambling false --violence-realistic NONE ...", appID),
+			Hint:    fmt.Sprintf("asc age-rating edit --app %s --gambling false --violence-realistic NONE ...", appID),
 		}
 	}
 

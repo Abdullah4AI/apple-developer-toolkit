@@ -556,3 +556,36 @@ func TestFetchCommunityWallAppDetailsPreservesZeroPaddedRequestKey(t *testing.T)
 		t.Fatalf("expected app details for zero-padded requested ID, got %+v", details)
 	}
 }
+
+func TestCommunityWallIconForLinkUsesStorefrontCountry(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.URL.Path; got != "/lookup" {
+			t.Fatalf("expected /lookup path, got %q", got)
+		}
+		if got := r.URL.Query().Get("id"); got != "6758220887" {
+			t.Fatalf("expected id query, got %q", got)
+		}
+		if got := r.URL.Query().Get("country"); got != "il" {
+			t.Fatalf("expected country=il, got %q", got)
+		}
+		if got := r.URL.Query().Get("entity"); got != "software" {
+			t.Fatalf("expected entity=software, got %q", got)
+		}
+		_, _ = w.Write([]byte(`{"results":[{"trackId":6758220887,"trackName":"Tamloot","trackViewUrl":"https://apps.apple.com/il/app/tamloot/id6758220887","artworkUrl100":"https://example.com/tamloot.png"}]}`))
+	}))
+	defer server.Close()
+
+	previousLookupURL := communityWallAppStoreLookupURL
+	communityWallAppStoreLookupURL = server.URL
+	t.Cleanup(func() {
+		communityWallAppStoreLookupURL = previousLookupURL
+	})
+
+	iconURL, err := communityWallIconForLink(context.Background(), "https://apps.apple.com/il/app/tamloot/id6758220887")
+	if err != nil {
+		t.Fatalf("refresh icon: %v", err)
+	}
+	if iconURL != "https://example.com/tamloot.png" {
+		t.Fatalf("icon URL = %q, want storefront lookup result", iconURL)
+	}
+}

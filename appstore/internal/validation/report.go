@@ -5,8 +5,10 @@ func Validate(input Input, strict bool) Report {
 	activeMonetization := hasActiveMonetization(input.Subscriptions, input.IAPs)
 	reviewRelevantSubscriptions := hasReviewRelevantSubscriptions(input.Subscriptions)
 	availableTerritories := input.AvailableTerritories
+	appAvailableTerritories := input.AppAvailableTerritories
 	if input.PricingCoverageSkipReason != "" {
 		availableTerritories = 0
+		appAvailableTerritories = nil
 	}
 
 	checks := make([]CheckResult, 0)
@@ -25,7 +27,7 @@ func Validate(input Input, strict bool) Report {
 	checks = append(checks, subscriptionPricingVerificationChecks(input.Subscriptions)...)
 	checks = append(checks, subscriptionMetadataDiagnostics(input.Subscriptions)...)
 	checks = append(checks, subscriptionPricingCoverageSkipChecks(input.AppID, input.PricingCoverageSkipReason)...)
-	checks = append(checks, subscriptionPricingCoverageChecks(input.Subscriptions, availableTerritories)...)
+	checks = append(checks, subscriptionPricingCoverageChecks(input.Subscriptions, availableTerritories, appAvailableTerritories)...)
 	checks = append(checks, iapFetchChecks(input.IAPFetchSkipReason)...)
 	checks = append(checks, iapReviewReadinessChecks(input.IAPs)...)
 	checks = append(checks, ageRatingChecks(input.AgeRatingDeclaration)...)

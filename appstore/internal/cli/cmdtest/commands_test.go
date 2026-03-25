@@ -26,6 +26,9 @@ import (
 func captureOutput(t *testing.T, fn func()) (string, string) {
 	t.Helper()
 
+	resetCmdtestState()
+	t.Cleanup(resetCmdtestState)
+
 	oldStdout := os.Stdout
 	oldStderr := os.Stderr
 

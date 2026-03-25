@@ -1607,7 +1607,7 @@ func printSubmissionErrorHints(err error, ctx submissionErrorHintContext) {
 	if signals.ageRating && strings.TrimSpace(ctx.AppID) != "" {
 		hints = append(hints,
 			fmt.Sprintf("Review current age rating: asc age-rating view --app %s", ctx.AppID),
-			"Review age-rating update flags: asc age-rating set --help",
+			"Review age-rating update flags: asc age-rating edit --help",
 		)
 	}
 	if signals.contentRights && strings.TrimSpace(ctx.AppID) != "" {

@@ -55,9 +55,10 @@ var (
 )
 
 var (
-	errCommunityWallUsage          = errors.New("community wall usage")
-	communityWallAppStoreIDPattern = regexp.MustCompile(`/id(\d+)`)
-	communityWallNumericIDPattern  = regexp.MustCompile(`^\d+$`)
+	errCommunityWallUsage               = errors.New("community wall usage")
+	communityWallAppStoreIDPattern      = regexp.MustCompile(`/id(\d+)`)
+	communityWallAppStoreCountryPattern = regexp.MustCompile(`^https?://apps\.apple\.com/([a-zA-Z]{2})/app(?:/|$)`)
+	communityWallNumericIDPattern       = regexp.MustCompile(`^\d+$`)
 )
 
 type communityWallSubmitInput struct {
@@ -765,7 +766,10 @@ func communityWallIconForLink(ctx context.Context, link string) (string, error) 
 		return "", nil
 	}
 
-	detailsByID, err := communityWallLookupAppDetails(ctx, []string{appStoreID})
+	detailsByID, err := fetchCommunityWallAppDetailsWithOptions(ctx, []string{appStoreID}, itunes.LookupOptions{
+		Country:               extractCommunityWallAppStoreCountry(link),
+		IncludeSoftwareEntity: true,
+	})
 	if err != nil {
 		return "", err
 	}
@@ -813,14 +817,32 @@ func extractCommunityWallAppStoreID(link string) string {
 	return matches[1]
 }
 
+func extractCommunityWallAppStoreCountry(link string) string {
+	matches := communityWallAppStoreCountryPattern.FindStringSubmatch(strings.TrimSpace(link))
+	if len(matches) != 2 {
+		return ""
+	}
+
+	country, err := itunes.NormalizeCountryCode(matches[1])
+	if err != nil {
+		return ""
+	}
+	return country
+}
+
 func fetchCommunityWallAppDetails(ctx context.Context, ids []string) (map[string]communityWallAppDetails, error) {
+	return fetchCommunityWallAppDetailsWithOptions(ctx, ids, itunes.LookupOptions{
+		IncludeSoftwareEntity: true,
+	})
+}
+
+func fetchCommunityWallAppDetailsWithOptions(ctx context.Context, ids []string, opts itunes.LookupOptions) (map[string]communityWallAppDetails, error) {
 	client := itunes.NewClient()
 	client.HTTPClient = &http.Client{Timeout: asc.ResolveTimeout()}
 	client.BaseURL = communityWallAppStoreLookupURL
 
-	apps, err := client.LookupApps(ctx, ids, itunes.LookupOptions{
-		IncludeSoftwareEntity: true,
-	})
+	opts.IncludeSoftwareEntity = true
+	apps, err := client.LookupApps(ctx, ids, opts)
 	if err != nil {
 		return nil, fmt.Errorf("app store lookup request failed: %w", err)
 	}

@@ -823,6 +823,12 @@ func TestSubmitPreflightCommand_TextOutput(t *testing.T) {
 	if !strings.Contains(stdout, "Preflight check for app 123 v1.0 (IOS)") {
 		t.Fatalf("expected text output header, got %q", stdout)
 	}
+	if !strings.Contains(stdout, "asc age-rating edit --app 123 --gambling false --violence-realistic NONE ...") {
+		t.Fatalf("expected text output to suggest age-rating edit, got %q", stdout)
+	}
+	if strings.Contains(stdout, "asc age-rating set --app 123") {
+		t.Fatalf("expected text output to avoid stale age-rating set hint, got %q", stdout)
+	}
 }
 
 // --- Helpers ---
