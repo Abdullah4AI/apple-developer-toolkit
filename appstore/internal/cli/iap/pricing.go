@@ -26,9 +26,9 @@ Examples:
   asc iap pricing summary --app "APP_ID"
   asc iap pricing summary --iap-id "IAP_ID"
   asc iap pricing price-points list --iap-id "IAP_ID"
-  asc iap pricing schedules get --iap-id "IAP_ID"
-  asc iap pricing availability get --iap-id "IAP_ID"
-  asc iap pricing availabilities get --id "AVAILABILITY_ID"`,
+  asc iap pricing schedules view --iap-id "IAP_ID"
+  asc iap pricing availability view --iap-id "IAP_ID"
+  asc iap pricing availabilities view --id "AVAILABILITY_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.VisibleUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -105,8 +105,8 @@ func DeprecatedIAPPriceSchedulesAliasCommand() *ffcli.Command {
 				IAPPriceSchedulesGetCommand(),
 				"get",
 				iapPricingCanonicalRoot+" schedules get --iap-id \"IAP_ID\"",
-				iapPricingCanonicalRoot+" schedules get",
-				"Warning: `asc iap price-schedules get` is deprecated. Use `asc iap pricing schedules get`.",
+				iapPricingCanonicalRoot+" schedules view",
+				"Warning: `asc iap price-schedules get` is deprecated. Use `asc iap pricing schedules view`.",
 			),
 			shared.DeprecatedAliasLeafCommand(
 				IAPPriceSchedulesBaseTerritoryCommand(),
@@ -150,8 +150,8 @@ func DeprecatedIAPAvailabilityAliasCommand() *ffcli.Command {
 				IAPAvailabilityGetCommand(),
 				"get",
 				iapPricingCanonicalRoot+" availability get --iap-id \"IAP_ID\"",
-				iapPricingCanonicalRoot+" availability get",
-				"Warning: `asc iap availability get` is deprecated. Use `asc iap pricing availability get`.",
+				iapPricingCanonicalRoot+" availability view",
+				"Warning: `asc iap availability get` is deprecated. Use `asc iap pricing availability view`.",
 			),
 			shared.DeprecatedAliasLeafCommand(
 				IAPAvailabilitySetCommand(),
@@ -174,8 +174,8 @@ func DeprecatedIAPAvailabilitiesAliasCommand() *ffcli.Command {
 				IAPAvailabilitiesGetCommand(),
 				"get",
 				iapPricingCanonicalRoot+" availabilities get --id \"AVAILABILITY_ID\"",
-				iapPricingCanonicalRoot+" availabilities get",
-				"Warning: `asc iap availabilities get` is deprecated. Use `asc iap pricing availabilities get`.",
+				iapPricingCanonicalRoot+" availabilities view",
+				"Warning: `asc iap availabilities get` is deprecated. Use `asc iap pricing availabilities view`.",
 			),
 			shared.DeprecatedAliasLeafCommand(
 				IAPAvailabilitiesAvailableTerritoriesCommand(),

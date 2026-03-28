@@ -69,7 +69,7 @@ func TestBuildsAddGroupsInternalGroupAddsGroup(t *testing.T) {
 	root.FlagSet.SetOutput(io.Discard)
 
 	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"builds", "add-groups", "--build", "build-1", "--group", "group-internal"}); err != nil {
+		if err := root.Parse([]string{"builds", "add-groups", "--build-id", "build-1", "--group", "group-internal"}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
 		if err := root.Run(context.Background()); err != nil {
@@ -150,7 +150,7 @@ func TestBuildsAddGroupsAddsMixedInternalAndExternalGroups(t *testing.T) {
 	stdout, stderr := captureOutput(t, func() {
 		if err := root.Parse([]string{
 			"builds", "add-groups",
-			"--build", "build-1",
+			"--build-id", "build-1",
 			"--group", "group-internal,group-external",
 		}); err != nil {
 			t.Fatalf("parse error: %v", err)
@@ -230,7 +230,7 @@ func TestBuildsAddGroupsSkipInternalAddsOnlyExternalGroups(t *testing.T) {
 	stdout, stderr := captureOutput(t, func() {
 		if err := root.Parse([]string{
 			"builds", "add-groups",
-			"--build", "build-1",
+			"--build-id", "build-1",
 			"--group", "group-internal,group-external",
 			"--skip-internal",
 		}); err != nil {
@@ -294,7 +294,7 @@ func TestBuildsAddGroupsSkipInternalWithOnlyInternalGroupsIsNoOp(t *testing.T) {
 	stdout, stderr := captureOutput(t, func() {
 		if err := root.Parse([]string{
 			"builds", "add-groups",
-			"--build", "build-1",
+			"--build-id", "build-1",
 			"--group", "group-internal",
 			"--skip-internal",
 		}); err != nil {

@@ -187,7 +187,7 @@ func TestDeprecatedHelpShowsCanonicalPathsOnly(t *testing.T) {
 		{
 			name:        "beta notifications alias help",
 			args:        []string{"testflight", "beta-notifications"},
-			wantUsage:   "asc testflight notifications send --build \"BUILD_ID\"",
+			wantUsage:   "asc testflight notifications send --build-id \"BUILD_ID\"",
 			wantWarning: "",
 			wantNotShown: []string{
 				"asc testflight beta-notifications <subcommand> [flags]",
@@ -546,7 +546,7 @@ func TestCanonicalTestFlightValidationPaths(t *testing.T) {
 		{
 			name:    "distribution view missing build",
 			args:    []string{"testflight", "distribution", "view"},
-			wantErr: "--build is required",
+			wantErr: "--build-id is required",
 		},
 		{
 			name:    "agreements view missing selector",
@@ -556,7 +556,7 @@ func TestCanonicalTestFlightValidationPaths(t *testing.T) {
 		{
 			name:    "notifications send missing build",
 			args:    []string{"testflight", "notifications", "send"},
-			wantErr: "--build is required",
+			wantErr: "--build-id is required",
 		},
 		{
 			name:    "metrics app-testers missing app",
@@ -922,7 +922,7 @@ func TestTestFlightDistributionViewOutput(t *testing.T) {
 	root.FlagSet.SetOutput(io.Discard)
 
 	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"testflight", "distribution", "view", "--build", "build-1"}); err != nil {
+		if err := root.Parse([]string{"testflight", "distribution", "view", "--build-id", "build-1"}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
 		if err := root.Run(context.Background()); err != nil {
@@ -1245,7 +1245,7 @@ func TestDeprecatedTestFlightRootsAcceptCanonicalChildCommands(t *testing.T) {
 		{
 			name:    "beta details root accepts view",
 			args:    []string{"testflight", "beta-details", "view"},
-			wantErr: "--build is required",
+			wantErr: "--build-id is required",
 		},
 		{
 			name:    "beta details nested build accepts view",
@@ -1265,7 +1265,7 @@ func TestDeprecatedTestFlightRootsAcceptCanonicalChildCommands(t *testing.T) {
 		{
 			name:    "beta notifications root accepts send",
 			args:    []string{"testflight", "beta-notifications", "send"},
-			wantErr: "--build is required",
+			wantErr: "--build-id is required",
 		},
 		{
 			name:    "sync root accepts export",

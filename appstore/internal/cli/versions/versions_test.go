@@ -4,10 +4,46 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
+
+	"github.com/peterbourgon/ff/v3/ffcli"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
 )
+
+func TestVersionsCommand_PrefersViewAndKeepsDeprecatedGetAlias(t *testing.T) {
+	cmd := VersionsCommand()
+
+	var viewCmd, getCmd *ffcli.Command
+	for _, sub := range cmd.Subcommands {
+		switch sub.Name {
+		case "view":
+			viewCmd = sub
+		case "get":
+			getCmd = sub
+		}
+	}
+
+	if viewCmd == nil {
+		t.Fatal("expected canonical view subcommand")
+	}
+	if getCmd == nil {
+		t.Fatal("expected deprecated get compatibility alias")
+	}
+
+	if shortHelp := strings.ToLower(strings.TrimSpace(getCmd.ShortHelp)); !strings.HasPrefix(shortHelp, "deprecated:") {
+		t.Fatalf("expected get alias to be deprecated, got short help %q", getCmd.ShortHelp)
+	}
+
+	usage := cmd.UsageFunc(cmd)
+	if !strings.Contains(usage, "view") {
+		t.Fatalf("expected help to list view subcommand, got %q", usage)
+	}
+	if strings.Contains(usage, " get ") {
+		t.Fatalf("expected help to hide deprecated get alias, got %q", usage)
+	}
+}
 
 func TestFetchOptionalBuild_NotFound(t *testing.T) {
 	resp, err := fetchOptionalBuild(context.Background(), "VERSION_ID", func(ctx context.Context, versionID string) (*asc.BuildResponse, error) {

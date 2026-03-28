@@ -38,7 +38,7 @@ func TestBuildsDsymsRejectsMissingSelectorBeforeAuth(t *testing.T) {
 	if stdout != "" {
 		t.Fatalf("expected empty stdout, got %q", stdout)
 	}
-	if !strings.Contains(stderr, "Error: --build or --app is required (or set ASC_APP_ID)") {
+	if !strings.Contains(stderr, "Error: --build-id or --app is required (or set ASC_APP_ID)") {
 		t.Fatalf("expected missing selector usage error, got %q", stderr)
 	}
 	if strings.Contains(stderr, "missing authentication") {
@@ -91,7 +91,7 @@ func TestBuildsDsymsBuildSelectorIgnoresDefaultAppID(t *testing.T) {
 	root.FlagSet.SetOutput(io.Discard)
 
 	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"builds", "dsyms", "--build", "build-1", "--output-dir", outputDir}); err != nil {
+		if err := root.Parse([]string{"builds", "dsyms", "--build-id", "build-1", "--output-dir", outputDir}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
 		if err := root.Run(context.Background()); err != nil {
@@ -99,8 +99,8 @@ func TestBuildsDsymsBuildSelectorIgnoresDefaultAppID(t *testing.T) {
 		}
 	})
 
-	if strings.Contains(stderr, "--build cannot be combined") {
-		t.Fatalf("expected default ASC_APP_ID to be ignored for --build, got %q", stderr)
+	if strings.Contains(stderr, "--build-id cannot be combined") {
+		t.Fatalf("expected default ASC_APP_ID to be ignored for --build-id, got %q", stderr)
 	}
 	if !strings.Contains(stderr, "Resolved build build-1") {
 		t.Fatalf("expected resolved build message, got %q", stderr)

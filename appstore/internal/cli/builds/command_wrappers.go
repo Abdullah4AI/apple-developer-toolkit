@@ -23,7 +23,7 @@ func deprecatedBuildsRelationshipsAliasCommand() *ffcli.Command {
 			shared.DeprecatedAliasLeafCommand(
 				BuildsRelationshipsGetCommand(),
 				"get",
-				"asc builds links view --build \"BUILD_ID\" --type \"RELATIONSHIP\" [flags]",
+				"asc builds links view --build-id \"BUILD_ID\" --type \"RELATIONSHIP\" [flags]",
 				"asc builds links view",
 				"Warning: `asc builds relationships get` is deprecated. Use `asc builds links view`.",
 			),

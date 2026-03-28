@@ -390,7 +390,7 @@ For uploaded builds in App Store Connect, verify encryption state with:
   asc submit preflight --app "APP_ID" --version "1.0"
 
 If a build still reports non-exempt encryption incorrectly, update the build:
-  asc builds update --build "BUILD_ID" --uses-non-exempt-encryption=false
+  asc builds update --build-id "BUILD_ID" --uses-non-exempt-encryption=false
 
 For details, see:
   https://developer.apple.com/documentation/bundleresources/information-property-list/itsappusesnonexemptencryption`)

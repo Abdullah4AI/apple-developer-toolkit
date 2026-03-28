@@ -147,7 +147,7 @@ func TestTestFlightReviewSubmitOutput(t *testing.T) {
 	root.FlagSet.SetOutput(io.Discard)
 
 	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"testflight", "review", "submit", "--build", "build-1", "--confirm"}); err != nil {
+		if err := root.Parse([]string{"testflight", "review", "submit", "--build-id", "build-1", "--confirm"}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
 		if err := root.Run(context.Background()); err != nil {

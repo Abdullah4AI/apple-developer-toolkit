@@ -13,8 +13,8 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
-// BetaBuildLocalizationsCommand returns the beta-build-localizations command group.
-func BetaBuildLocalizationsCommand() *ffcli.Command {
+// legacyBetaBuildLocalizationsCommand returns the former beta-build-localizations command group.
+func legacyBetaBuildLocalizationsCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("beta-build-localizations", flag.ExitOnError)
 
 	return &ffcli.Command{
@@ -27,14 +27,12 @@ Canonical build-scoped workflows now live under ` + "`asc builds test-notes ...`
 
 Legacy-only behaviors still remain here during the transition:
 - ` + "`beta-build-localizations list --global`" + `
-- ` + "`beta-build-localizations get --app ... --latest`" + `
-- ` + "`beta-build-localizations create --app ... --latest`" + `
 - ` + "`beta-build-localizations build get`" + `
 
 Examples:
-  asc builds test-notes list --build "BUILD_ID"
-  asc builds test-notes view --id "LOCALIZATION_ID"
-  asc builds test-notes create --build "BUILD_ID" --locale "en-US" --whats-new "Test instructions"`,
+  asc builds test-notes list --build-id "BUILD_ID"
+  asc builds test-notes view --build-id "BUILD_ID" --locale "en-US"
+  asc builds test-notes create --build-id "BUILD_ID" --locale "en-US" --whats-new "Test instructions"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DeprecatedUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -46,13 +44,13 @@ Examples:
 			deprecatedBetaBuildLocalizationsLeafCommand(
 				BetaBuildLocalizationsGetCommand(),
 				"asc builds test-notes view",
-				"Warning: `asc beta-build-localizations get` is deprecated. Use `asc builds test-notes view` for ID-based lookups. `--latest` remains legacy-only during transition.",
+				"Warning: `asc beta-build-localizations get` is deprecated. Use `asc builds test-notes view`.",
 			),
 			BetaBuildLocalizationsBuildCommand(),
 			deprecatedBetaBuildLocalizationsLeafCommand(
 				BetaBuildLocalizationsCreateCommand(),
 				"asc builds test-notes create",
-				"Warning: `asc beta-build-localizations create` is deprecated. Use `asc builds test-notes create` for build-scoped workflows. `--latest` remains legacy-only during transition.",
+				"Warning: `asc beta-build-localizations create` is deprecated. Use `asc builds test-notes create` for build-scoped workflows.",
 			),
 			deprecatedBetaBuildLocalizationsLeafCommand(
 				BetaBuildLocalizationsUpdateCommand(),

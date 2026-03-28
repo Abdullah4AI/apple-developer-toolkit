@@ -24,7 +24,7 @@ func IAPAvailabilitiesCommand() *ffcli.Command {
 		LongHelp: `Inspect in-app purchase availability records.
 
 Examples:
-  asc iap pricing availabilities get --id "AVAILABILITY_ID"
+  asc iap pricing availabilities view --id "AVAILABILITY_ID"
   asc iap pricing availabilities available-territories --id "AVAILABILITY_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
@@ -47,12 +47,12 @@ func IAPAvailabilitiesGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "asc iap pricing availabilities get --id \"AVAILABILITY_ID\"",
+		ShortUsage: "asc iap pricing availabilities view --id \"AVAILABILITY_ID\"",
 		ShortHelp:  "Get an in-app purchase availability by ID.",
 		LongHelp: `Get an in-app purchase availability by ID.
 
 Examples:
-  asc iap pricing availabilities get --id "AVAILABILITY_ID"`,
+  asc iap pricing availabilities view --id "AVAILABILITY_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

@@ -590,9 +590,9 @@ func TestFlightReviewSurfaceCommand() *ffcli.Command {
 Examples:
   asc testflight review view --app "APP_ID"
   asc testflight review edit --id "DETAIL_ID" --contact-email "dev@example.com"
-  asc testflight review submit --build "BUILD_ID" --confirm
+  asc testflight review submit --build-id "BUILD_ID" --confirm
   asc testflight review app view --id "DETAIL_ID"
-  asc testflight review submissions list --build "BUILD_ID"
+  asc testflight review submissions list --build-id "BUILD_ID"
   asc testflight review submissions view --id "SUBMISSION_ID"`
 	setUsageFuncRecursively(cmd, testflightVisibleUsageFunc)
 
@@ -665,7 +665,7 @@ func TestFlightDistributionCommand() *ffcli.Command {
 	cmd.LongHelp = `Manage TestFlight distribution settings.
 
 Examples:
-  asc testflight distribution view --build "BUILD_ID"
+  asc testflight distribution view --build-id "BUILD_ID"
   asc testflight distribution edit --id "DETAIL_ID" --auto-notify
   asc testflight distribution build view --id "DETAIL_ID"`
 	setUsageFuncRecursively(cmd, testflightVisibleUsageFunc)
@@ -915,16 +915,16 @@ func DeprecatedBetaNotificationsAliasCommand() *ffcli.Command {
 				"create":             "send",
 			},
 		),
-		"asc testflight notifications send --build \"BUILD_ID\"",
+		"asc testflight notifications send --build-id \"BUILD_ID\"",
 		"Compatibility alias: use `asc testflight notifications send`.",
-		"Compatibility alias: use `asc testflight notifications send --build BUILD_ID`.",
+		"Compatibility alias: use `asc testflight notifications send --build-id BUILD_ID`.",
 	)
 	setUsageFuncRecursively(cmd, shared.DeprecatedUsageFunc)
 	markDeprecatedSubcommands(cmd)
 	if sendCmd := shared.DeprecatedAliasLeafCommand(
 		findSubcommand(cmd, "create"),
 		"send",
-		"asc testflight notifications send --build \"BUILD_ID\"",
+		"asc testflight notifications send --build-id \"BUILD_ID\"",
 		"asc testflight notifications send",
 		"Warning: `asc testflight beta-notifications send` is deprecated. Use `asc testflight notifications send`.",
 	); sendCmd != nil {
@@ -1009,8 +1009,8 @@ func TestFlightAppLocalizationsCommand() *ffcli.Command {
 
 Examples:
   asc testflight app-localizations list --app "APP_ID"
-  asc testflight app-localizations get --id "LOCALIZATION_ID"
-  asc testflight app-localizations app get --id "LOCALIZATION_ID"
+  asc testflight app-localizations view --id "LOCALIZATION_ID"
+  asc testflight app-localizations app view --id "LOCALIZATION_ID"
   asc testflight app-localizations create --app "APP_ID" --locale "en-US" --description "Welcome testers"`
 	setUsageFuncRecursively(cmd, testflightVisibleUsageFunc)
 	return cmd

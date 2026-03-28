@@ -72,7 +72,7 @@ func TestBuildsInfoTableShowsMarketingVersionAndPlatform(t *testing.T) {
 	root.FlagSet.SetOutput(io.Discard)
 
 	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"builds", "info", "--build", "build-1", "--output", "table"}); err != nil {
+		if err := root.Parse([]string{"builds", "info", "--build-id", "build-1", "--output", "table"}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
 		if err := root.Run(context.Background()); err != nil {
@@ -141,7 +141,7 @@ func TestBuildsInfoJSONPreservesExistingRelationships(t *testing.T) {
 	root.FlagSet.SetOutput(io.Discard)
 
 	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"builds", "info", "--build", "build-1", "--output", "json"}); err != nil {
+		if err := root.Parse([]string{"builds", "info", "--build-id", "build-1", "--output", "json"}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
 		if err := root.Run(context.Background()); err != nil {
@@ -171,5 +171,81 @@ func TestBuildsInfoJSONPreservesExistingRelationships(t *testing.T) {
 	}
 	if _, ok := relationships["preReleaseVersion"]; !ok {
 		t.Fatalf("expected preReleaseVersion relationship to be attached, got %#v", relationships)
+	}
+}
+
+func TestBuildsInfoBuildNumberRequiresUniqueMatch(t *testing.T) {
+	setupAuth(t)
+	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
+	t.Setenv("ASC_APP_ID", "")
+
+	originalTransport := http.DefaultTransport
+	t.Cleanup(func() {
+		http.DefaultTransport = originalTransport
+	})
+
+	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		if req.Method != http.MethodGet {
+			t.Fatalf("expected GET, got %s", req.Method)
+		}
+		if req.URL.Path != "/v1/builds" {
+			t.Fatalf("expected builds list path, got %s", req.URL.Path)
+		}
+
+		query := req.URL.Query()
+		if query.Get("filter[app]") != "123456789" {
+			t.Fatalf("expected filter[app]=123456789, got %q", query.Get("filter[app]"))
+		}
+		if query.Get("filter[version]") != "42" {
+			t.Fatalf("expected filter[version]=42, got %q", query.Get("filter[version]"))
+		}
+		if query.Get("filter[preReleaseVersion.platform]") != "IOS" {
+			t.Fatalf("expected implicit IOS platform filter, got %q", query.Get("filter[preReleaseVersion.platform]"))
+		}
+		if query.Get("sort") != "-uploadedDate" {
+			t.Fatalf("expected sort=-uploadedDate, got %q", query.Get("sort"))
+		}
+		if query.Get("limit") != "200" {
+			t.Fatalf("expected limit=200 for uniqueness check, got %q", query.Get("limit"))
+		}
+
+		body := `{
+			"data":[
+				{"type":"builds","id":"build-ios","attributes":{"version":"42","uploadedDate":"2026-03-13T00:00:00Z","processingState":"VALID","expired":false}},
+				{"type":"builds","id":"build-macos","attributes":{"version":"42","uploadedDate":"2026-03-12T00:00:00Z","processingState":"VALID","expired":false}}
+			]
+		}`
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(strings.NewReader(body)),
+			Header:     http.Header{"Content-Type": []string{"application/json"}},
+		}, nil
+	})
+
+	root := RootCommand("1.2.3")
+	root.FlagSet.SetOutput(io.Discard)
+
+	var runErr error
+	stdout, stderr := captureOutput(t, func() {
+		if err := root.Parse([]string{"builds", "info", "--app", "123456789", "--build-number", "42", "--output", "json"}); err != nil {
+			t.Fatalf("parse error: %v", err)
+		}
+		runErr = root.Run(context.Background())
+	})
+
+	if runErr == nil {
+		t.Fatal("expected unique build-number lookup error")
+	}
+	if got := strings.TrimSpace(stderr); got != deprecatedImplicitIOSBuildNumberPlatformWarning {
+		t.Fatalf("expected only the implicit IOS deprecation warning on stderr, got %q", stderr)
+	}
+	if !strings.Contains(runErr.Error(), `multiple builds found for app 123456789 with build number "42"`) {
+		t.Fatalf("expected ambiguity error, got %v", runErr)
+	}
+	if !strings.Contains(runErr.Error(), "add --version, or use --build-id") {
+		t.Fatalf("expected actionable ambiguity hint, got %v", runErr)
+	}
+	if stdout != "" {
+		t.Fatalf("expected empty stdout on ambiguity error, got %q", stdout)
 	}
 }

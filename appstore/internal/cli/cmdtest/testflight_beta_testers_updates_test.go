@@ -43,7 +43,7 @@ func TestTestFlightBetaTestersAddBuildsOutput(t *testing.T) {
 	root.FlagSet.SetOutput(io.Discard)
 
 	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"testflight", "beta-testers", "add-builds", "--id", "tester-1", "--build", "build-1,build-2"}); err != nil {
+		if err := root.Parse([]string{"testflight", "beta-testers", "add-builds", "--id", "tester-1", "--build-id", "build-1,build-2"}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
 		if err := root.Run(context.Background()); err != nil {
@@ -99,7 +99,7 @@ func TestTestFlightBetaTestersRemoveBuildsOutput(t *testing.T) {
 	root.FlagSet.SetOutput(io.Discard)
 
 	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"testflight", "beta-testers", "remove-builds", "--id", "tester-2", "--build", "build-3,build-4", "--confirm"}); err != nil {
+		if err := root.Parse([]string{"testflight", "beta-testers", "remove-builds", "--id", "tester-2", "--build-id", "build-3,build-4", "--confirm"}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
 		if err := root.Run(context.Background()); err != nil {

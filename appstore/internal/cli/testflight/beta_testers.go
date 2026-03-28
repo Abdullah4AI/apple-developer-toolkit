@@ -33,8 +33,8 @@ Examples:
   asc testflight beta-testers remove --app "APP_ID" --email "tester@example.com"
   asc testflight beta-testers add-groups --id "TESTER_ID" --group "GROUP_ID"
   asc testflight beta-testers remove-groups --id "TESTER_ID" --group "GROUP_ID"
-  asc testflight beta-testers add-builds --id "TESTER_ID" --build "BUILD_ID"
-  asc testflight beta-testers remove-builds --id "TESTER_ID" --build "BUILD_ID" --confirm
+  asc testflight beta-testers add-builds --id "TESTER_ID" --build-id "BUILD_ID"
+  asc testflight beta-testers remove-builds --id "TESTER_ID" --build-id "BUILD_ID" --confirm
   asc testflight beta-testers remove-apps --id "TESTER_ID" --app "APP_ID" --confirm
   asc testflight beta-testers invite --app "APP_ID" --email "tester@example.com"
   asc testflight beta-testers invite --app "APP_ID" --email "tester@example.com" --group "Beta"`,
@@ -70,7 +70,7 @@ func BetaTestersListCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("list", flag.ExitOnError)
 
 	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
-	buildID := fs.String("build", "", "Build ID to filter")
+	buildID, legacyBuildID := bindBuildIDFlag(fs, "Build ID to filter")
 	group := fs.String("group", "", "Beta group name or ID to filter")
 	email := fs.String("email", "", "Filter by tester email")
 	output := shared.BindOutputFlags(fs)
@@ -86,13 +86,16 @@ func BetaTestersListCommand() *ffcli.Command {
 
 Examples:
   asc testflight beta-testers list --app "APP_ID"
-  asc testflight beta-testers list --app "APP_ID" --build "BUILD_ID"
+  asc testflight beta-testers list --app "APP_ID" --build-id "BUILD_ID"
   asc testflight beta-testers list --app "APP_ID" --group "Beta"
   asc testflight beta-testers list --app "APP_ID" --limit 25
   asc testflight beta-testers list --app "APP_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
+			if err := applyLegacyBuildIDAlias(buildID, legacyBuildID); err != nil {
+				return err
+			}
 			if *limit != 0 && (*limit < 1 || *limit > 200) {
 				return fmt.Errorf("beta-testers list: --limit must be between 1 and 200")
 			}
@@ -453,30 +456,33 @@ func BetaTestersAddBuildsCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("add-builds", flag.ExitOnError)
 
 	id := fs.String("id", "", "Beta tester ID")
-	builds := fs.String("build", "", "Comma-separated build IDs")
+	buildIDs, legacyBuildIDs := bindBuildIDFlag(fs, "Comma-separated build IDs")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "add-builds",
-		ShortUsage: "asc testflight beta-testers add-builds --id TESTER_ID --build BUILD_ID[,BUILD_ID...]",
+		ShortUsage: "asc testflight beta-testers add-builds --id TESTER_ID --build-id BUILD_ID[,BUILD_ID...]",
 		ShortHelp:  "Add builds to a beta tester.",
 		LongHelp: `Add builds to a beta tester.
 
 Examples:
-  asc testflight beta-testers add-builds --id "TESTER_ID" --build "BUILD_ID"
-  asc testflight beta-testers add-builds --id "TESTER_ID" --build "BUILD_ID1,BUILD_ID2"`,
+  asc testflight beta-testers add-builds --id "TESTER_ID" --build-id "BUILD_ID"
+  asc testflight beta-testers add-builds --id "TESTER_ID" --build-id "BUILD_ID1,BUILD_ID2"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
+			if err := applyLegacyBuildIDAlias(buildIDs, legacyBuildIDs); err != nil {
+				return err
+			}
 			testerID := strings.TrimSpace(*id)
 			if testerID == "" {
 				fmt.Fprintln(os.Stderr, "Error: --id is required")
 				return flag.ErrHelp
 			}
 
-			buildIDs := shared.SplitCSV(*builds)
-			if len(buildIDs) == 0 {
-				fmt.Fprintln(os.Stderr, "Error: --build is required")
+			parsedBuildIDs := shared.SplitCSV(*buildIDs)
+			if len(parsedBuildIDs) == 0 {
+				fmt.Fprintln(os.Stderr, "Error: --build-id is required")
 				return flag.ErrHelp
 			}
 
@@ -488,13 +494,13 @@ Examples:
 			requestCtx, cancel := shared.ContextWithTimeout(ctx)
 			defer cancel()
 
-			if err := client.AddBuildsToBetaTester(requestCtx, testerID, buildIDs); err != nil {
+			if err := client.AddBuildsToBetaTester(requestCtx, testerID, parsedBuildIDs); err != nil {
 				return fmt.Errorf("beta-testers add-builds: failed to add builds: %w", err)
 			}
 
 			result := &asc.BetaTesterBuildsUpdateResult{
 				TesterID: testerID,
-				BuildIDs: buildIDs,
+				BuildIDs: parsedBuildIDs,
 				Action:   "added",
 			}
 
@@ -502,7 +508,7 @@ Examples:
 				return err
 			}
 
-			fmt.Fprintf(os.Stderr, "Successfully added tester %s to %d build(s)\n", testerID, len(buildIDs))
+			fmt.Fprintf(os.Stderr, "Successfully added tester %s to %d build(s)\n", testerID, len(parsedBuildIDs))
 			return nil
 		},
 	}
@@ -513,31 +519,34 @@ func BetaTestersRemoveBuildsCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("remove-builds", flag.ExitOnError)
 
 	id := fs.String("id", "", "Beta tester ID")
-	builds := fs.String("build", "", "Comma-separated build IDs")
+	buildIDs, legacyBuildIDs := bindBuildIDFlag(fs, "Comma-separated build IDs")
 	confirm := fs.Bool("confirm", false, "Confirm removal")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "remove-builds",
-		ShortUsage: "asc testflight beta-testers remove-builds --id TESTER_ID --build BUILD_ID[,BUILD_ID...] --confirm",
+		ShortUsage: "asc testflight beta-testers remove-builds --id TESTER_ID --build-id BUILD_ID[,BUILD_ID...] --confirm",
 		ShortHelp:  "Remove builds from a beta tester.",
 		LongHelp: `Remove builds from a beta tester.
 
 Examples:
-  asc testflight beta-testers remove-builds --id "TESTER_ID" --build "BUILD_ID" --confirm
-  asc testflight beta-testers remove-builds --id "TESTER_ID" --build "BUILD_ID1,BUILD_ID2" --confirm`,
+  asc testflight beta-testers remove-builds --id "TESTER_ID" --build-id "BUILD_ID" --confirm
+  asc testflight beta-testers remove-builds --id "TESTER_ID" --build-id "BUILD_ID1,BUILD_ID2" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
+			if err := applyLegacyBuildIDAlias(buildIDs, legacyBuildIDs); err != nil {
+				return err
+			}
 			testerID := strings.TrimSpace(*id)
 			if testerID == "" {
 				fmt.Fprintln(os.Stderr, "Error: --id is required")
 				return flag.ErrHelp
 			}
 
-			buildIDs := shared.SplitCSV(*builds)
-			if len(buildIDs) == 0 {
-				fmt.Fprintln(os.Stderr, "Error: --build is required")
+			parsedBuildIDs := shared.SplitCSV(*buildIDs)
+			if len(parsedBuildIDs) == 0 {
+				fmt.Fprintln(os.Stderr, "Error: --build-id is required")
 				return flag.ErrHelp
 			}
 			if !*confirm {
@@ -553,13 +562,13 @@ Examples:
 			requestCtx, cancel := shared.ContextWithTimeout(ctx)
 			defer cancel()
 
-			if err := client.RemoveBuildsFromBetaTester(requestCtx, testerID, buildIDs); err != nil {
+			if err := client.RemoveBuildsFromBetaTester(requestCtx, testerID, parsedBuildIDs); err != nil {
 				return fmt.Errorf("beta-testers remove-builds: failed to remove builds: %w", err)
 			}
 
 			result := &asc.BetaTesterBuildsUpdateResult{
 				TesterID: testerID,
-				BuildIDs: buildIDs,
+				BuildIDs: parsedBuildIDs,
 				Action:   "removed",
 			}
 
@@ -567,7 +576,7 @@ Examples:
 				return err
 			}
 
-			fmt.Fprintf(os.Stderr, "Successfully removed tester %s from %d build(s)\n", testerID, len(buildIDs))
+			fmt.Fprintf(os.Stderr, "Successfully removed tester %s from %d build(s)\n", testerID, len(parsedBuildIDs))
 			return nil
 		},
 	}

@@ -22,7 +22,7 @@ func AppsCIProductCommand() *ffcli.Command {
 		LongHelp: `View the CI product for an app.
 
 Examples:
-  asc apps ci-product get --id "APP_ID"`,
+  asc apps ci-product view --id "APP_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -43,12 +43,12 @@ func AppsCIProductGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "asc apps ci-product get --id \"APP_ID\"",
-		ShortHelp:  "Get the CI product for an app.",
-		LongHelp: `Get the CI product for an app.
+		ShortUsage: "asc apps ci-product view --id \"APP_ID\"",
+		ShortHelp:  "View the CI product for an app.",
+		LongHelp: `View the CI product for an app.
 
 Examples:
-  asc apps ci-product get --id "APP_ID"`,
+  asc apps ci-product view --id "APP_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

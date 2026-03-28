@@ -16,6 +16,7 @@ import (
 // BuildsUploadsCommand returns the builds uploads command group.
 func BuildsUploadsCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("uploads", flag.ExitOnError)
+	viewCmd := BuildsUploadsViewCommand()
 
 	return &ffcli.Command{
 		Name:       "uploads",
@@ -25,14 +26,15 @@ func BuildsUploadsCommand() *ffcli.Command {
 
 Examples:
   asc builds uploads list --app "APP_ID"
-  asc builds uploads get --id "UPLOAD_ID"
+  asc builds uploads view --id "UPLOAD_ID"
   asc builds uploads delete --id "UPLOAD_ID" --confirm
   asc builds uploads files list --upload "UPLOAD_ID"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: shared.VisibleUsageFunc,
 		Subcommands: []*ffcli.Command{
 			BuildsUploadsListCommand(),
-			BuildsUploadsGetCommand(),
+			viewCmd,
+			deprecatedBuildsGetAlias(viewCmd, "asc builds uploads view"),
 			BuildsUploadsDeleteCommand(),
 			BuildsUploadFilesCommand(),
 		},
@@ -140,21 +142,21 @@ Examples:
 	}
 }
 
-// BuildsUploadsGetCommand returns the builds uploads get subcommand.
-func BuildsUploadsGetCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("uploads get", flag.ExitOnError)
+// BuildsUploadsViewCommand returns the builds uploads view subcommand.
+func BuildsUploadsViewCommand() *ffcli.Command {
+	fs := flag.NewFlagSet("uploads view", flag.ExitOnError)
 
 	id := fs.String("id", "", "Build upload ID")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
-		Name:       "get",
-		ShortUsage: "asc builds uploads get --id \"UPLOAD_ID\"",
-		ShortHelp:  "Get a build upload by ID.",
-		LongHelp: `Get a build upload by ID.
+		Name:       "view",
+		ShortUsage: "asc builds uploads view --id \"UPLOAD_ID\"",
+		ShortHelp:  "View a build upload by ID.",
+		LongHelp: `View a build upload by ID.
 
 Examples:
-  asc builds uploads get --id "UPLOAD_ID"`,
+  asc builds uploads view --id "UPLOAD_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -166,7 +168,7 @@ Examples:
 
 			client, err := shared.GetASCClient()
 			if err != nil {
-				return fmt.Errorf("builds uploads get: %w", err)
+				return fmt.Errorf("builds uploads view: %w", err)
 			}
 
 			requestCtx, cancel := shared.ContextWithTimeout(ctx)
@@ -174,7 +176,7 @@ Examples:
 
 			resp, err := client.GetBuildUpload(requestCtx, uploadID)
 			if err != nil {
-				return fmt.Errorf("builds uploads get: failed to fetch: %w", err)
+				return fmt.Errorf("builds uploads view: failed to fetch: %w", err)
 			}
 
 			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
@@ -236,6 +238,7 @@ Examples:
 // BuildsUploadFilesCommand returns the builds upload files command group.
 func BuildsUploadFilesCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("files", flag.ExitOnError)
+	viewCmd := BuildsUploadFilesViewCommand()
 
 	return &ffcli.Command{
 		Name:       "files",
@@ -245,12 +248,13 @@ func BuildsUploadFilesCommand() *ffcli.Command {
 
 Examples:
   asc builds uploads files list --upload "UPLOAD_ID"
-  asc builds uploads files get --id "FILE_ID"`,
+  asc builds uploads files view --id "FILE_ID"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: shared.VisibleUsageFunc,
 		Subcommands: []*ffcli.Command{
 			BuildsUploadFilesListCommand(),
-			BuildsUploadFilesGetCommand(),
+			viewCmd,
+			deprecatedBuildsGetAlias(viewCmd, "asc builds uploads files view"),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp
@@ -338,21 +342,21 @@ Examples:
 	}
 }
 
-// BuildsUploadFilesGetCommand returns the build upload files get subcommand.
-func BuildsUploadFilesGetCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("files get", flag.ExitOnError)
+// BuildsUploadFilesViewCommand returns the build upload files view subcommand.
+func BuildsUploadFilesViewCommand() *ffcli.Command {
+	fs := flag.NewFlagSet("files view", flag.ExitOnError)
 
 	id := fs.String("id", "", "Build upload file ID")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
-		Name:       "get",
-		ShortUsage: "asc builds uploads files get --id \"FILE_ID\"",
-		ShortHelp:  "Get a build upload file by ID.",
-		LongHelp: `Get a build upload file by ID.
+		Name:       "view",
+		ShortUsage: "asc builds uploads files view --id \"FILE_ID\"",
+		ShortHelp:  "View a build upload file by ID.",
+		LongHelp: `View a build upload file by ID.
 
 Examples:
-  asc builds uploads files get --id "FILE_ID"`,
+  asc builds uploads files view --id "FILE_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -364,7 +368,7 @@ Examples:
 
 			client, err := shared.GetASCClient()
 			if err != nil {
-				return fmt.Errorf("builds uploads files get: %w", err)
+				return fmt.Errorf("builds uploads files view: %w", err)
 			}
 
 			requestCtx, cancel := shared.ContextWithTimeout(ctx)
@@ -372,7 +376,7 @@ Examples:
 
 			resp, err := client.GetBuildUploadFile(requestCtx, fileID)
 			if err != nil {
-				return fmt.Errorf("builds uploads files get: failed to fetch: %w", err)
+				return fmt.Errorf("builds uploads files view: failed to fetch: %w", err)
 			}
 
 			return shared.PrintOutput(resp, *output.Output, *output.Pretty)

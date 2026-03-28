@@ -45,7 +45,7 @@ func TestEncryptionDeclarationsExemptDeclare_ShowsLocalWorkflowGuidance(t *testi
 	if !strings.Contains(stderr, `asc submit preflight --app "APP_ID" --version "1.0"`) {
 		t.Fatalf("expected submit preflight guidance, got %q", stderr)
 	}
-	if !strings.Contains(stderr, `asc builds update --build "BUILD_ID" --uses-non-exempt-encryption=false`) {
+	if !strings.Contains(stderr, `asc builds update --build-id "BUILD_ID" --uses-non-exempt-encryption=false`) {
 		t.Fatalf("expected build update guidance, got %q", stderr)
 	}
 }

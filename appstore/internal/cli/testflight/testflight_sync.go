@@ -124,7 +124,7 @@ func TestFlightSyncPullCommand() *ffcli.Command {
 	includeBuilds := fs.Bool("include-builds", false, "Include builds and group assignments")
 	includeTesters := fs.Bool("include-testers", false, "Include testers and group memberships")
 	groupFilter := fs.String("group", "", "Filter to a specific beta group (name or ID)")
-	buildFilter := fs.String("build", "", "Filter to build ID(s), comma-separated")
+	buildFilter, legacyBuildFilter := bindBuildIDFlag(fs, "Filter to build ID(s), comma-separated")
 	testerFilter := fs.String("tester", "", "Filter to tester ID(s) or emails, comma-separated")
 	pretty := shared.BindPrettyJSONFlag(fs)
 
@@ -141,6 +141,9 @@ Examples:
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
+			if err := applyLegacyBuildIDAlias(buildFilter, legacyBuildFilter); err != nil {
+				return err
+			}
 			resolvedAppID := shared.ResolveAppID(*appID)
 			if resolvedAppID == "" {
 				fmt.Fprintf(os.Stderr, "Error: --app is required (or set ASC_APP_ID)\n\n")
@@ -156,7 +159,7 @@ Examples:
 			buildFilters := shared.SplitCSV(*buildFilter)
 			testerFilters := shared.SplitCSV(*testerFilter)
 			if len(buildFilters) > 0 && !*includeBuilds {
-				fmt.Fprintf(os.Stderr, "Error: --build requires --include-builds\n\n")
+				fmt.Fprintf(os.Stderr, "Error: --build-id requires --include-builds\n\n")
 				return flag.ErrHelp
 			}
 			if len(testerFilters) > 0 && !*includeTesters {

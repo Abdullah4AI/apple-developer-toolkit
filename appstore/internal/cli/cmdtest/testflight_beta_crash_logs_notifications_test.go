@@ -101,7 +101,7 @@ func TestTestFlightBetaNotificationsCreateOutput(t *testing.T) {
 	root.FlagSet.SetOutput(io.Discard)
 
 	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"testflight", "beta-notifications", "create", "--build", "build-1"}); err != nil {
+		if err := root.Parse([]string{"testflight", "beta-notifications", "create", "--build-id", "build-1"}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
 		if err := root.Run(context.Background()); err != nil {
@@ -145,7 +145,7 @@ func TestTestFlightBetaNotificationsCreateExplainsAutoNotifyAlreadyEnabled(t *te
 
 	var runErr error
 	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"testflight", "beta-notifications", "create", "--build", "build-1"}); err != nil {
+		if err := root.Parse([]string{"testflight", "beta-notifications", "create", "--build-id", "build-1"}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
 		runErr = root.Run(context.Background())

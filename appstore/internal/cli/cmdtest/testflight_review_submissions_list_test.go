@@ -28,8 +28,8 @@ func TestTestFlightReviewSubmissionsListMissingBuild(t *testing.T) {
 	if stdout != "" {
 		t.Fatalf("expected empty stdout, got %q", stdout)
 	}
-	if !strings.Contains(stderr, "Error: --build is required") {
-		t.Fatalf("expected error %q, got %q", "Error: --build is required", stderr)
+	if !strings.Contains(stderr, "Error: --build-id is required") {
+		t.Fatalf("expected error %q, got %q", "Error: --build-id is required", stderr)
 	}
 }
 
@@ -69,7 +69,7 @@ func TestTestFlightReviewSubmissionsListOutputTable(t *testing.T) {
 	root.FlagSet.SetOutput(io.Discard)
 
 	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"testflight", "review", "submissions", "list", "--build", "build-1", "--limit", "2", "--output", "table"}); err != nil {
+		if err := root.Parse([]string{"testflight", "review", "submissions", "list", "--build-id", "build-1", "--limit", "2", "--output", "table"}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
 		if err := root.Run(context.Background()); err != nil {

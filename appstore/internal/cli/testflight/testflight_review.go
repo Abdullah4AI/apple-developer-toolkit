@@ -27,9 +27,9 @@ func TestFlightReviewCommand() *ffcli.Command {
 Examples:
   asc testflight review get --app "APP_ID"
   asc testflight review update --id "DETAIL_ID" --contact-email "dev@example.com"
-  asc testflight review submit --build "BUILD_ID" --confirm
+  asc testflight review submit --build-id "BUILD_ID" --confirm
   asc testflight review app get --id "DETAIL_ID"
-  asc testflight review submissions list --build "BUILD_ID"
+  asc testflight review submissions list --build-id "BUILD_ID"
   asc testflight review submissions get --id "SUBMISSION_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
@@ -209,23 +209,26 @@ Examples:
 func TestFlightReviewSubmitCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("submit", flag.ExitOnError)
 
-	buildID := fs.String("build", "", "Build ID")
+	buildID, legacyBuildID := bindBuildIDFlag(fs, "Build ID")
 	confirm := fs.Bool("confirm", false, "Confirm submission")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "submit",
-		ShortUsage: "asc testflight review submit --build BUILD_ID --confirm",
+		ShortUsage: "asc testflight review submit --build-id BUILD_ID --confirm",
 		ShortHelp:  "Submit a build for beta app review.",
 		LongHelp: `Submit a build for beta app review.
 
 Examples:
-  asc testflight review submit --build "BUILD_ID" --confirm`,
+  asc testflight review submit --build-id "BUILD_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
+			if err := applyLegacyBuildIDAlias(buildID, legacyBuildID); err != nil {
+				return err
+			}
 			if strings.TrimSpace(*buildID) == "" {
-				fmt.Fprintln(os.Stderr, "Error: --build is required")
+				fmt.Fprintln(os.Stderr, "Error: --build-id is required")
 				return flag.ErrHelp
 			}
 			if !*confirm {
@@ -329,7 +332,7 @@ func TestFlightReviewSubmissionsCommand() *ffcli.Command {
 Examples:
   asc testflight review submissions get --id "SUBMISSION_ID"
   asc testflight review submissions build --id "SUBMISSION_ID"
-  asc testflight review submissions list --build "BUILD_ID"`,
+  asc testflight review submissions list --build-id "BUILD_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -347,7 +350,7 @@ Examples:
 func TestFlightReviewSubmissionsListCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("submissions list", flag.ExitOnError)
 
-	buildID := fs.String("build", "", "Build ID to filter")
+	buildID, legacyBuildID := bindBuildIDFlag(fs, "Build ID to filter")
 	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
 	next := fs.String("next", "", "Fetch next page using a links.next URL")
 	paginate := fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")
@@ -355,19 +358,22 @@ func TestFlightReviewSubmissionsListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "asc testflight review submissions list --build \"BUILD_ID\" [flags]",
+		ShortUsage: "asc testflight review submissions list --build-id \"BUILD_ID\" [flags]",
 		ShortHelp:  "List beta app review submissions.",
 		LongHelp: `List beta app review submissions.
 
 Examples:
-  asc testflight review submissions list --build "BUILD_ID"
-  asc testflight review submissions list --build "BUILD_ID" --paginate`,
+  asc testflight review submissions list --build-id "BUILD_ID"
+  asc testflight review submissions list --build-id "BUILD_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
+			if err := applyLegacyBuildIDAlias(buildID, legacyBuildID); err != nil {
+				return err
+			}
 			buildValue := strings.TrimSpace(*buildID)
 			if buildValue == "" {
-				fmt.Fprintln(os.Stderr, "Error: --build is required")
+				fmt.Fprintln(os.Stderr, "Error: --build-id is required")
 				return flag.ErrHelp
 			}
 			if *limit != 0 && (*limit < 1 || *limit > 200) {
@@ -514,7 +520,7 @@ func TestFlightBetaDetailsCommand() *ffcli.Command {
 		LongHelp: `Manage TestFlight build beta details.
 
 Examples:
-  asc testflight beta-details get --build "BUILD_ID"
+  asc testflight beta-details get --build-id "BUILD_ID"
   asc testflight beta-details update --id "DETAIL_ID" --auto-notify`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
@@ -533,7 +539,7 @@ Examples:
 func TestFlightBetaDetailsGetCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("get", flag.ExitOnError)
 
-	buildID := fs.String("build", "", "Build ID")
+	buildID, legacyBuildID := bindBuildIDFlag(fs, "Build ID")
 	output := shared.BindOutputFlags(fs)
 	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
 	next := fs.String("next", "", "Fetch next page using a links.next URL")
@@ -545,10 +551,13 @@ func TestFlightBetaDetailsGetCommand() *ffcli.Command {
 		LongHelp: `Fetch build beta details for a build.
 
 Examples:
-  asc testflight beta-details get --build "BUILD_ID"`,
+  asc testflight beta-details get --build-id "BUILD_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
+			if err := applyLegacyBuildIDAlias(buildID, legacyBuildID); err != nil {
+				return err
+			}
 			if *limit != 0 && (*limit < 1 || *limit > 200) {
 				return fmt.Errorf("testflight beta-details get: --limit must be between 1 and 200")
 			}
@@ -558,7 +567,7 @@ Examples:
 
 			trimmedBuildID := strings.TrimSpace(*buildID)
 			if trimmedBuildID == "" && strings.TrimSpace(*next) == "" {
-				fmt.Fprintln(os.Stderr, "Error: --build is required")
+				fmt.Fprintln(os.Stderr, "Error: --build-id is required")
 				return flag.ErrHelp
 			}
 

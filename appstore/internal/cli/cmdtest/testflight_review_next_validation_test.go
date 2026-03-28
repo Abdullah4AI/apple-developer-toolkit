@@ -314,7 +314,7 @@ func TestTestFlightReviewSubmissionsListRejectsInvalidNextURL(t *testing.T) {
 
 			var runErr error
 			stdout, stderr := captureOutput(t, func() {
-				if err := root.Parse([]string{"testflight", "review", "submissions", "list", "--build", "build-1", "--next", test.next}); err != nil {
+				if err := root.Parse([]string{"testflight", "review", "submissions", "list", "--build-id", "build-1", "--next", test.next}); err != nil {
 					t.Fatalf("parse error: %v", err)
 				}
 				runErr = root.Run(context.Background())
@@ -384,7 +384,7 @@ func TestTestFlightReviewSubmissionsListPaginateFromNext(t *testing.T) {
 	stdout, stderr := captureOutput(t, func() {
 		if err := root.Parse([]string{
 			"testflight", "review", "submissions", "list",
-			"--build", "build-1",
+			"--build-id", "build-1",
 			"--paginate",
 			"--next", firstURL,
 		}); err != nil {

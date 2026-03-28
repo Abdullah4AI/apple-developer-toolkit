@@ -15,7 +15,7 @@ func TestDsymsCommandShape(t *testing.T) {
 		t.Errorf("expected name dsyms, got %s", cmd.Name)
 	}
 
-	flagNames := []string{"build", "app", "version", "build-number", "platform", "latest", "output-dir", "output"}
+	flagNames := []string{"build-id", "app", "version", "build-number", "platform", "latest", "output-dir", "output"}
 	for _, name := range flagNames {
 		if cmd.FlagSet.Lookup(name) == nil {
 			t.Errorf("expected flag --%s to be registered", name)
@@ -180,6 +180,6 @@ func TestValidateResolveBuildOptions_BuildIgnoresDefaultAppID(t *testing.T) {
 		BuildID: "build-1",
 	})
 	if err != nil {
-		t.Fatalf("expected direct --build selection to ignore ASC_APP_ID fallback, got %v", err)
+		t.Fatalf("expected direct --build-id selection to ignore ASC_APP_ID fallback, got %v", err)
 	}
 }

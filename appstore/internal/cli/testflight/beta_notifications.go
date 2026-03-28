@@ -22,7 +22,7 @@ func BetaNotificationsCommand() *ffcli.Command {
 		LongHelp: `Send TestFlight beta build notifications.
 
 Examples:
-  asc testflight beta-notifications create --build "BUILD_ID"`,
+  asc testflight beta-notifications create --build-id "BUILD_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -38,23 +38,26 @@ Examples:
 func BetaNotificationsCreateCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("create", flag.ExitOnError)
 
-	buildID := fs.String("build", "", "Build ID")
+	buildID, legacyBuildID := bindBuildIDFlag(fs, "Build ID")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "create",
-		ShortUsage: "asc testflight beta-notifications create --build \"BUILD_ID\"",
+		ShortUsage: "asc testflight beta-notifications create --build-id \"BUILD_ID\"",
 		ShortHelp:  "Send a beta notification for a build.",
 		LongHelp: `Send a beta notification for a build.
 
 Examples:
-  asc testflight beta-notifications create --build "BUILD_ID"`,
+  asc testflight beta-notifications create --build-id "BUILD_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
+			if err := applyLegacyBuildIDAlias(buildID, legacyBuildID); err != nil {
+				return err
+			}
 			trimmedBuildID := strings.TrimSpace(*buildID)
 			if trimmedBuildID == "" {
-				fmt.Fprintln(os.Stderr, "Error: --build is required")
+				fmt.Fprintln(os.Stderr, "Error: --build-id is required")
 				return flag.ErrHelp
 			}
 

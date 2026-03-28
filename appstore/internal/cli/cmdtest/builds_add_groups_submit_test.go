@@ -74,7 +74,7 @@ func TestBuildsAddGroupsSubmitCreatesBetaReviewSubmissionForExternalGroups(t *te
 	stdout, stderr := captureOutput(t, func() {
 		if err := root.Parse([]string{
 			"builds", "add-groups",
-			"--build", "build-1",
+			"--build-id", "build-1",
 			"--group", "group-external",
 			"--submit",
 			"--confirm",
@@ -147,7 +147,7 @@ func TestBuildsAddGroupsSubmitSkipsBetaReviewSubmissionForInternalGroups(t *test
 	stdout, stderr := captureOutput(t, func() {
 		if err := root.Parse([]string{
 			"builds", "add-groups",
-			"--build", "build-1",
+			"--build-id", "build-1",
 			"--group", "group-internal",
 			"--submit",
 			"--confirm",
@@ -218,7 +218,7 @@ func TestBuildsAddGroupsSubmitTreatsExistingSubmissionAsAlreadyDone(t *testing.T
 	stdout, stderr := captureOutput(t, func() {
 		if err := root.Parse([]string{
 			"builds", "add-groups",
-			"--build", "build-1",
+			"--build-id", "build-1",
 			"--group", "group-external",
 			"--submit",
 			"--confirm",
@@ -292,7 +292,7 @@ func TestBuildsAddGroupsSubmitPreservesPartialSuccessWhenSubmissionFails(t *test
 	stdout, stderr := captureOutput(t, func() {
 		if err := root.Parse([]string{
 			"builds", "add-groups",
-			"--build", "build-1",
+			"--build-id", "build-1",
 			"--group", "group-external",
 			"--submit",
 			"--confirm",

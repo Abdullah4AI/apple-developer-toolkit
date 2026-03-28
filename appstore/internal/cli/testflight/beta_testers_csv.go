@@ -63,7 +63,7 @@ func BetaTestersExportCommand() *ffcli.Command {
 	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
 	outputPath := fs.String("output", "", "Output CSV file path (required)")
 	group := fs.String("group", "", "Beta group name or ID to filter (optional)")
-	buildID := fs.String("build", "", "Build ID to filter (optional)")
+	buildID, legacyBuildID := bindBuildIDFlag(fs, "Build ID to filter (optional)")
 	email := fs.String("email", "", "Filter by tester email (optional)")
 	includeGroups := fs.Bool("include-groups", false, "Include a groups column (requires additional API calls)")
 	format := shared.BindOutputFlagsWith(fs, "format", "json", "Summary output format: json (default), table, markdown")
@@ -81,12 +81,15 @@ CSV format:
 Examples:
   asc testflight beta-testers export --app "APP_ID" --output "./testflight-testers.csv"
   asc testflight beta-testers export --app "APP_ID" --group "Beta" --output "./testers.csv"
-  asc testflight beta-testers export --app "APP_ID" --build "BUILD_ID" --output "./testers.csv"
+  asc testflight beta-testers export --app "APP_ID" --build-id "BUILD_ID" --output "./testers.csv"
   asc testflight beta-testers export --app "APP_ID" --email "tester@example.com" --output "./testers.csv"
   asc testflight beta-testers export --app "APP_ID" --output "./testers.csv" --include-groups`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
+			if err := applyLegacyBuildIDAlias(buildID, legacyBuildID); err != nil {
+				return err
+			}
 			resolvedAppID := shared.ResolveAppID(*appID)
 			if resolvedAppID == "" {
 				fmt.Fprintf(os.Stderr, "Error: --app is required (or set ASC_APP_ID)\n\n")

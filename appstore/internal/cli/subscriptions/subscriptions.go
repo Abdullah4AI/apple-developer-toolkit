@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/peterbourgon/ff/v3/ffcli"
@@ -567,6 +568,8 @@ func SubscriptionsUpdateCommand() *ffcli.Command {
 	subID := fs.String("id", "", "Subscription ID")
 	referenceName := fs.String("reference-name", "", "Reference name")
 	subscriptionPeriod := fs.String("subscription-period", "", "Subscription period: "+strings.Join(subscriptionPeriodValues, ", "))
+	var groupLevel optionalInt
+	fs.Var(&groupLevel, "group-level", "Subscription ordering level (positive integer)")
 	familySharable := fs.Bool("family-sharable", false, "Enable Family Sharing (cannot be undone)")
 	output := shared.BindOutputFlags(fs)
 
@@ -579,6 +582,7 @@ func SubscriptionsUpdateCommand() *ffcli.Command {
 Examples:
   asc subscriptions update --id "SUB_ID" --reference-name "New Name"
   asc subscriptions update --id "SUB_ID" --subscription-period ONE_YEAR
+  asc subscriptions update --id "SUB_ID" --group-level 3
   asc subscriptions update --id "SUB_ID" --family-sharable`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
@@ -595,7 +599,12 @@ Examples:
 				fmt.Fprintln(os.Stderr, "Error:", err.Error())
 				return flag.ErrHelp
 			}
-			if name == "" && period == "" && !*familySharable {
+			if groupLevel.IsSet() && groupLevel.Value() <= 0 {
+				fmt.Fprintln(os.Stderr, "Error: --group-level must be a positive integer")
+				return flag.ErrHelp
+			}
+
+			if name == "" && period == "" && !*familySharable && !groupLevel.IsSet() {
 				fmt.Fprintln(os.Stderr, "Error: at least one update flag is required")
 				return flag.ErrHelp
 			}
@@ -620,6 +629,10 @@ Examples:
 				val := true
 				attrs.FamilySharable = &val
 			}
+			if groupLevel.IsSet() {
+				level := groupLevel.Value()
+				attrs.GroupLevel = &level
+			}
 
 			resp, err := client.UpdateSubscription(requestCtx, id, attrs)
 			if err != nil {
@@ -629,6 +642,36 @@ Examples:
 			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
 		},
 	}
+}
+
+type optionalInt struct {
+	set   bool
+	value int
+}
+
+func (i *optionalInt) Set(value string) error {
+	parsed, err := strconv.Atoi(strings.TrimSpace(value))
+	if err != nil {
+		return fmt.Errorf("must be an integer")
+	}
+	i.value = parsed
+	i.set = true
+	return nil
+}
+
+func (i *optionalInt) String() string {
+	if !i.set {
+		return ""
+	}
+	return strconv.Itoa(i.value)
+}
+
+func (i optionalInt) IsSet() bool {
+	return i.set
+}
+
+func (i optionalInt) Value() int {
+	return i.value
 }
 
 // SubscriptionsDeleteCommand returns the subscriptions delete subcommand.

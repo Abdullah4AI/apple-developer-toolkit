@@ -15,7 +15,9 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
-const buildWaitDefaultTimeout = 30 * time.Minute
+const (
+	buildWaitDefaultTimeout = 30 * time.Minute
+)
 
 // BuildsUploadCommand returns a command to upload a build
 func BuildsUploadCommand() *ffcli.Command {
@@ -399,39 +401,42 @@ func BuildsCommand() *ffcli.Command {
 Examples:
   asc builds list --app "123456789"
   asc builds count --app "123456789"
-  asc builds latest --app "123456789"
-  asc builds find --app "123456789" --build-number "42"
-  asc builds wait --build "BUILD_ID"
-  asc builds wait --app "123456789" --newest
-  asc builds info --build "BUILD_ID"
-  asc builds expire --build "BUILD_ID"
+  asc builds wait --build-id "BUILD_ID"
+  asc builds wait --app "123456789" --latest
+  asc builds info --build-id "BUILD_ID"
+  asc builds info --app "123456789" --latest
+  asc builds info --app "123456789" --latest --version "1.2.3" --platform IOS
+  asc builds info --app "123456789" --build-number "42"
+  asc builds next-build-number --app "123456789" --version "1.2.3" --platform IOS
+  asc builds expire --app "123456789" --latest --confirm
   asc builds expire-all --app "123456789" --older-than 90d --dry-run
   asc builds upload --app "123456789" --ipa "app.ipa"
   asc builds upload --app "123456789" --pkg "app.pkg" --version "1.0.0" --build-number "1"
   asc builds uploads list --app "123456789"
-  asc builds test-notes list --build "BUILD_ID"
-  asc builds individual-testers list --build "BUILD_ID"
-  asc builds update --build "BUILD_ID" --uses-non-exempt-encryption=false
-  asc builds add-groups --build "BUILD_ID" --group "GROUP_ID"
-  asc builds add-groups --build "BUILD_ID" --group "GROUP_ID" --submit --confirm
-  asc builds remove-groups --build "BUILD_ID" --group "GROUP_ID"
-  asc builds app get --build "BUILD_ID"
-  asc builds pre-release-version get --build "BUILD_ID"
-  asc builds icons list --build "BUILD_ID"
-  asc builds beta-app-review-submission get --build "BUILD_ID"
-  asc builds build-beta-detail get --build "BUILD_ID"
-  asc builds links view --build "BUILD_ID" --type "app"
-  asc builds metrics beta-usages --build "BUILD_ID"
-  asc builds dsyms --build "BUILD_ID" --output-dir "./dsyms"`,
+  asc builds test-notes list --build-id "BUILD_ID"
+  asc builds individual-testers list --app "123456789" --latest
+  asc builds update --app "123456789" --latest --uses-non-exempt-encryption=false
+  asc builds add-groups --app "123456789" --latest --group "GROUP_ID"
+  asc builds add-groups --app "123456789" --latest --group "GROUP_ID" --submit --confirm
+  asc builds remove-groups --app "123456789" --latest --group "GROUP_ID" --confirm
+  asc builds app view --app "123456789" --latest
+  asc builds pre-release-version view --app "123456789" --latest
+  asc builds icons list --app "123456789" --latest
+  asc builds beta-app-review-submission view --app "123456789" --latest
+  asc builds build-beta-detail view --app "123456789" --latest
+  asc builds links view --app "123456789" --latest --type "app"
+  asc builds metrics beta-usages --app "123456789" --latest
+  asc builds dsyms --build-id "BUILD_ID" --output-dir "./dsyms"`,
 		FlagSet:   fs,
 		UsageFunc: shared.VisibleUsageFunc,
 		Subcommands: []*ffcli.Command{
 			listCmd,
 			BuildsCountCommand(),
+			BuildsNextBuildNumberCommand(),
 			BuildsLatestCommand(),
-			BuildsFindCommand(),
 			BuildsWaitCommand(),
 			BuildsInfoCommand(),
+			BuildsFindCommand(),
 			BuildsExpireCommand(),
 			BuildsExpireAllCommand(),
 			BuildsUploadCommand(),
@@ -739,23 +744,62 @@ func mergeBuildRelationship(relationships json.RawMessage, key string, value map
 func BuildsInfoCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("builds info", flag.ExitOnError)
 
-	buildID := fs.String("build", "", "Build ID")
+	buildID := fs.String("build-id", "", "Build ID")
+	legacyBuildID := bindHiddenStringFlag(fs, "build")
+	appID := fs.String("app", "", "App Store Connect app ID, bundle ID, or exact app name (required when --build-id is not provided)")
+	latest := fs.Bool("latest", false, "Show details for the latest build in --app context")
+	version := fs.String("version", "", "Optional marketing version filter (CFBundleShortVersionString) for --app selectors")
+	buildNumber := fs.String("build-number", "", "Build number (CFBundleVersion) for --app unique lookup")
+	platform := fs.String("platform", "", "Optional platform filter for app-scoped selectors: IOS, MAC_OS, TV_OS, VISION_OS")
+	processingState := fs.String("processing-state", "", "Optional processing state filter for --latest: VALID, PROCESSING, FAILED, INVALID, or all")
+	excludeExpired := fs.Bool("exclude-expired", false, "Exclude expired builds when resolving --latest")
+	notExpired := fs.Bool("not-expired", false, "Alias for --exclude-expired")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "info",
-		ShortUsage: "asc builds info --build BUILD_ID",
+		ShortUsage: "asc builds info [--build-id BUILD_ID | --app APP --latest | --app APP --build-number BUILD_NUMBER] [flags]",
 		ShortHelp:  "Show details for a specific build.",
 		LongHelp: `Show details for a specific build.
 
+Selector modes:
+  --build-id BUILD_ID
+  --app APP --latest [--version VERSION] [--platform PLATFORM]
+                     [--processing-state STATES]
+                     [--exclude-expired | --not-expired]
+  --app APP --build-number BUILD_NUMBER [--version VERSION] [--platform PLATFORM]
+
 Examples:
-  asc builds info --build "BUILD_ID"`,
+  asc builds info --build-id "BUILD_ID"
+  asc builds info --app "123456789" --latest
+  asc builds info --app "123456789" --latest --version "1.2.3" --platform IOS
+  asc builds info --app "123456789" --latest --processing-state "PROCESSING,VALID"
+  asc builds info --app "123456789" --build-number "42"
+  asc builds info --app "123456789" --build-number "42" --version "1.2.3" --platform IOS`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
-			if strings.TrimSpace(*buildID) == "" {
-				fmt.Fprintln(os.Stderr, "Error: --build is required")
-				return flag.ErrHelp
+			if err := applyLegacyBuildIDAlias(buildID, legacyBuildID); err != nil {
+				return err
+			}
+			excludeExpiredValue := *excludeExpired || *notExpired
+			processingStateValues, err := normalizeBuildProcessingStateFilter(*processingState)
+			if err != nil {
+				return err
+			}
+
+			resolveOpts := ResolveBuildOptions{
+				BuildID:               strings.TrimSpace(*buildID),
+				AppID:                 strings.TrimSpace(*appID),
+				Version:               strings.TrimSpace(*version),
+				BuildNumber:           strings.TrimSpace(*buildNumber),
+				Platform:              strings.TrimSpace(*platform),
+				Latest:                *latest,
+				ProcessingStateValues: processingStateValues,
+				ExcludeExpired:        excludeExpiredValue,
+			}
+			if err := validateResolveBuildOptions(resolveOpts); err != nil {
+				return err
 			}
 
 			client, err := shared.GetASCClient()
@@ -766,9 +810,9 @@ Examples:
 			requestCtx, cancel := shared.ContextWithTimeout(ctx)
 			defer cancel()
 
-			build, err := client.GetBuild(requestCtx, strings.TrimSpace(*buildID))
+			build, err := ResolveBuild(requestCtx, client, resolveOpts)
 			if err != nil {
-				return fmt.Errorf("builds info: failed to fetch: %w", err)
+				return fmt.Errorf("builds info: %w", err)
 			}
 			if err := attachBuildInfoPreReleaseVersion(requestCtx, client, build); err != nil {
 				return fmt.Errorf("builds info: %w", err)
@@ -785,26 +829,29 @@ Examples:
 func BuildsExpireCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("builds expire", flag.ExitOnError)
 
-	buildID := fs.String("build", "", "Build ID")
+	selectors := bindBuildSelectorFlags(fs, buildSelectorFlagOptions{})
 	confirm := fs.Bool("confirm", false, "Confirm expiration")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "expire",
-		ShortUsage: "asc builds expire --build BUILD_ID --confirm [flags]",
+		ShortUsage: "asc builds expire (--build-id BUILD_ID | --app APP --latest | --app APP --build-number BUILD_NUMBER [--version VERSION] [--platform PLATFORM]) --confirm [flags]",
 		ShortHelp:  "Expire a build for TestFlight.",
 		LongHelp: `Expire a build for TestFlight.
 
 This action is irreversible for the specified build.
 
 Examples:
-  asc builds expire --build "BUILD_ID" --confirm`,
+  asc builds expire --build-id "BUILD_ID" --confirm
+  asc builds expire --app "123456789" --latest --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
-			if strings.TrimSpace(*buildID) == "" {
-				fmt.Fprintln(os.Stderr, "Error: --build is required")
-				return flag.ErrHelp
+			if err := selectors.applyLegacyAliases(); err != nil {
+				return err
+			}
+			if err := selectors.validate(); err != nil {
+				return err
 			}
 			if !*confirm {
 				fmt.Fprintln(os.Stderr, "Error: --confirm is required to expire build")
@@ -819,7 +866,12 @@ Examples:
 			requestCtx, cancel := shared.ContextWithTimeout(ctx)
 			defer cancel()
 
-			build, err := client.ExpireBuild(requestCtx, strings.TrimSpace(*buildID))
+			buildID, err := selectors.resolveBuildID(requestCtx, client)
+			if err != nil {
+				return fmt.Errorf("builds expire: %w", err)
+			}
+
+			build, err := client.ExpireBuild(requestCtx, buildID)
 			if err != nil {
 				return fmt.Errorf("builds expire: failed to expire: %w", err)
 			}

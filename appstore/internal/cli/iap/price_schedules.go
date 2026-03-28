@@ -24,7 +24,7 @@ func IAPPriceSchedulesCommand() *ffcli.Command {
 		LongHelp: `Manage in-app purchase price schedules.
 
 Examples:
-  asc iap pricing schedules get --iap-id "IAP_ID"
+  asc iap pricing schedules view --iap-id "IAP_ID"
   asc iap pricing schedules create --iap-id "IAP_ID" --base-territory "USA" --prices "PRICE_POINT_ID:2024-03-01"
   asc iap pricing schedules manual-prices --schedule-id "SCHEDULE_ID"`,
 		FlagSet:   fs,
@@ -58,14 +58,14 @@ func IAPPriceSchedulesGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "asc iap pricing schedules get --iap-id \"IAP_ID\"",
+		ShortUsage: "asc iap pricing schedules view --iap-id \"IAP_ID\"",
 		ShortHelp:  "Get in-app purchase price schedule.",
 		LongHelp: `Get in-app purchase price schedule.
 
 Examples:
-  asc iap pricing schedules get --iap-id "IAP_ID"
-  asc iap pricing schedules get --schedule-id "SCHEDULE_ID"
-  asc iap pricing schedules get --iap-id "IAP_ID" --include "baseTerritory,manualPrices,automaticPrices" --price-fields "startDate,endDate,manual,inAppPurchasePricePoint,territory" --territory-fields "currency" --manual-prices-limit 50 --automatic-prices-limit 50`,
+  asc iap pricing schedules view --iap-id "IAP_ID"
+  asc iap pricing schedules view --schedule-id "SCHEDULE_ID"
+  asc iap pricing schedules view --iap-id "IAP_ID" --include "baseTerritory,manualPrices,automaticPrices" --price-fields "startDate,endDate,manual,inAppPurchasePricePoint,territory" --territory-fields "currency" --manual-prices-limit 50 --automatic-prices-limit 50`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

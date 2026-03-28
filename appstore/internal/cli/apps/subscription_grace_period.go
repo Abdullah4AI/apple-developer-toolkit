@@ -21,7 +21,7 @@ func AppsSubscriptionGracePeriodCommand() *ffcli.Command {
 		LongHelp: `Inspect an app's subscription grace period.
 
 Examples:
-  asc apps subscription-grace-period get --app "APP_ID"`,
+  asc apps subscription-grace-period view --app "APP_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -42,12 +42,12 @@ func AppsSubscriptionGracePeriodGetCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "get",
-		ShortUsage: "asc apps subscription-grace-period get --app \"APP_ID\"",
-		ShortHelp:  "Get an app's subscription grace period.",
-		LongHelp: `Get an app's subscription grace period.
+		ShortUsage: "asc apps subscription-grace-period view --app \"APP_ID\"",
+		ShortHelp:  "View an app's subscription grace period.",
+		LongHelp: `View an app's subscription grace period.
 
 Examples:
-  asc apps subscription-grace-period get --app "APP_ID"`,
+  asc apps subscription-grace-period view --app "APP_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

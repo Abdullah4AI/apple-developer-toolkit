@@ -52,57 +52,57 @@ func TestBuildsParityValidationErrors(t *testing.T) {
 	}{
 		{
 			name:    "builds links missing type",
-			args:    []string{"builds", "links", "view", "--build", "BUILD_ID"},
+			args:    []string{"builds", "links", "view", "--build-id", "BUILD_ID"},
 			wantErr: "--type is required",
 		},
 		{
 			name:    "builds links missing build",
 			args:    []string{"builds", "links", "view", "--type", "app"},
-			wantErr: "--build is required",
+			wantErr: "--build-id or --app is required",
 		},
 		{
 			name:    "builds links invalid type",
-			args:    []string{"builds", "links", "view", "--build", "BUILD_ID", "--type", "nope"},
+			args:    []string{"builds", "links", "view", "--build-id", "BUILD_ID", "--type", "nope"},
 			wantErr: "--type must be one of",
 		},
 		{
 			name:    "builds links invalid limit for single",
-			args:    []string{"builds", "links", "view", "--build", "BUILD_ID", "--type", "app", "--limit", "10"},
+			args:    []string{"builds", "links", "view", "--build-id", "BUILD_ID", "--type", "app", "--limit", "10"},
 			wantErr: "only valid for to-many relationships",
 		},
 		{
-			name:    "builds metrics beta-usages missing build",
+			name:    "builds metrics beta-usages missing build id",
 			args:    []string{"builds", "metrics", "beta-usages"},
-			wantErr: "--build is required",
+			wantErr: "--build-id or --app is required",
 		},
 		{
 			name:    "builds metrics beta-usages invalid limit",
-			args:    []string{"builds", "metrics", "beta-usages", "--build", "BUILD_ID", "--limit", "300"},
+			args:    []string{"builds", "metrics", "beta-usages", "--build-id", "BUILD_ID", "--limit", "300"},
 			wantErr: "--limit must be between 1 and 200",
 		},
 		{
-			name:    "builds individual-testers list missing build",
+			name:    "builds individual-testers list missing build id",
 			args:    []string{"builds", "individual-testers", "list"},
-			wantErr: "--build is required",
+			wantErr: "--build-id or --app is required",
 		},
 		{
-			name:    "builds individual-testers add missing build",
+			name:    "builds individual-testers add missing build id",
 			args:    []string{"builds", "individual-testers", "add", "--tester", "TESTER_ID"},
-			wantErr: "--build is required",
+			wantErr: "--build-id or --app is required",
 		},
 		{
 			name:    "builds individual-testers add missing tester",
-			args:    []string{"builds", "individual-testers", "add", "--build", "BUILD_ID"},
+			args:    []string{"builds", "individual-testers", "add", "--build-id", "BUILD_ID"},
 			wantErr: "--tester is required",
 		},
 		{
-			name:    "builds individual-testers remove missing build",
+			name:    "builds individual-testers remove missing build id",
 			args:    []string{"builds", "individual-testers", "remove", "--tester", "TESTER_ID"},
-			wantErr: "--build is required",
+			wantErr: "--build-id or --app is required",
 		},
 		{
 			name:    "builds individual-testers remove missing tester",
-			args:    []string{"builds", "individual-testers", "remove", "--build", "BUILD_ID"},
+			args:    []string{"builds", "individual-testers", "remove", "--build-id", "BUILD_ID"},
 			wantErr: "--tester is required",
 		},
 		{
@@ -121,8 +121,8 @@ func TestBuildsParityValidationErrors(t *testing.T) {
 			wantErr: "--sort must be one of",
 		},
 		{
-			name:    "builds uploads get missing id",
-			args:    []string{"builds", "uploads", "get"},
+			name:    "builds uploads view missing id",
+			args:    []string{"builds", "uploads", "view"},
 			wantErr: "--id is required",
 		},
 		{
@@ -141,14 +141,14 @@ func TestBuildsParityValidationErrors(t *testing.T) {
 			wantErr: "--upload is required",
 		},
 		{
-			name:    "builds uploads files get missing id",
-			args:    []string{"builds", "uploads", "files", "get"},
+			name:    "builds uploads files view missing id",
+			args:    []string{"builds", "uploads", "files", "view"},
 			wantErr: "--id is required",
 		},
 		{
-			name:    "builds app-encryption-declaration get missing id",
-			args:    []string{"builds", "app-encryption-declaration", "get"},
-			wantErr: "--id is required",
+			name:    "builds app-encryption-declaration view missing build id",
+			args:    []string{"builds", "app-encryption-declaration", "view"},
+			wantErr: "--build-id or --app is required",
 		},
 	}
 
@@ -196,46 +196,6 @@ func TestBetaLocalizationsValidationErrors(t *testing.T) {
 		{
 			name:    "beta-app-localizations delete missing confirm",
 			args:    []string{"beta-app-localizations", "delete", "--id", "LOC_ID"},
-			wantErr: "--confirm is required",
-		},
-		{
-			name:    "beta-build-localizations list missing build or global",
-			args:    []string{"beta-build-localizations", "list"},
-			wantErr: "--build or --global is required",
-		},
-		{
-			name:    "beta-build-localizations create missing build",
-			args:    []string{"beta-build-localizations", "create", "--locale", "en-US", "--whats-new", "Notes"},
-			wantErr: "--build is required",
-		},
-		{
-			name:    "beta-build-localizations create missing locale",
-			args:    []string{"beta-build-localizations", "create", "--build", "BUILD_ID", "--whats-new", "Notes"},
-			wantErr: "--locale is required",
-		},
-		{
-			name:    "beta-build-localizations create missing whats-new",
-			args:    []string{"beta-build-localizations", "create", "--build", "BUILD_ID", "--locale", "en-US"},
-			wantErr: "--whats-new is required",
-		},
-		{
-			name:    "beta-build-localizations update missing id",
-			args:    []string{"beta-build-localizations", "update"},
-			wantErr: "--id is required",
-		},
-		{
-			name:    "beta-build-localizations update missing whats-new",
-			args:    []string{"beta-build-localizations", "update", "--id", "LOC_ID"},
-			wantErr: "at least one update flag is required",
-		},
-		{
-			name:    "beta-build-localizations delete missing id",
-			args:    []string{"beta-build-localizations", "delete"},
-			wantErr: "--id is required",
-		},
-		{
-			name:    "beta-build-localizations delete missing confirm",
-			args:    []string{"beta-build-localizations", "delete", "--id", "LOC_ID"},
 			wantErr: "--confirm is required",
 		},
 	}
@@ -358,29 +318,29 @@ func TestParityRelatedCommandsValidationErrors(t *testing.T) {
 		wantErr string
 	}{
 		{
-			name:    "builds app get missing build",
-			args:    []string{"builds", "app", "get"},
-			wantErr: "--build is required",
+			name:    "builds app view missing build id",
+			args:    []string{"builds", "app", "view"},
+			wantErr: "--build-id or --app is required",
 		},
 		{
-			name:    "builds pre-release-version get missing build",
-			args:    []string{"builds", "pre-release-version", "get"},
-			wantErr: "--build is required",
+			name:    "builds pre-release-version view missing build id",
+			args:    []string{"builds", "pre-release-version", "view"},
+			wantErr: "--build-id or --app is required",
 		},
 		{
-			name:    "builds icons list missing build",
+			name:    "builds icons list missing build id",
 			args:    []string{"builds", "icons", "list"},
-			wantErr: "--build is required",
+			wantErr: "--build-id or --app is required",
 		},
 		{
-			name:    "builds beta-app-review-submission get missing build",
-			args:    []string{"builds", "beta-app-review-submission", "get"},
-			wantErr: "--build is required",
+			name:    "builds beta-app-review-submission view missing build id",
+			args:    []string{"builds", "beta-app-review-submission", "view"},
+			wantErr: "--build-id or --app is required",
 		},
 		{
-			name:    "builds build-beta-detail get missing build",
-			args:    []string{"builds", "build-beta-detail", "get"},
-			wantErr: "--build is required",
+			name:    "builds build-beta-detail view missing build id",
+			args:    []string{"builds", "build-beta-detail", "view"},
+			wantErr: "--build-id or --app is required",
 		},
 		{
 			name:    "beta-groups app get missing group-id",
@@ -453,9 +413,9 @@ func TestParityRelatedCommandsValidationErrors(t *testing.T) {
 			wantErr: "--id is required",
 		},
 		{
-			name:    "beta-build-localizations build get missing id",
+			name:    "beta-build-localizations build get removed",
 			args:    []string{"beta-build-localizations", "build", "get"},
-			wantErr: "--id is required",
+			wantErr: "No canonical replacement exists yet",
 		},
 		{
 			name:    "pre-release app view missing id",
@@ -470,4 +430,110 @@ func TestParityRelatedCommandsValidationErrors(t *testing.T) {
 	}
 
 	runValidationTests(t, tests)
+}
+
+func TestBuildsDeprecatedGetAliasesMatchViewValidation(t *testing.T) {
+	t.Setenv("ASC_APP_ID", "")
+
+	tests := []struct {
+		name     string
+		viewArgs []string
+		getArgs  []string
+		warning  string
+		wantErr  string
+	}{
+		{
+			name:     "builds app get alias",
+			viewArgs: []string{"builds", "app", "view"},
+			getArgs:  []string{"builds", "app", "get"},
+			warning:  "Warning: `asc builds app get` is deprecated. Use `asc builds app view`.",
+			wantErr:  "--build-id or --app is required",
+		},
+		{
+			name:     "builds pre-release-version get alias",
+			viewArgs: []string{"builds", "pre-release-version", "view"},
+			getArgs:  []string{"builds", "pre-release-version", "get"},
+			warning:  "Warning: `asc builds pre-release-version get` is deprecated. Use `asc builds pre-release-version view`.",
+			wantErr:  "--build-id or --app is required",
+		},
+		{
+			name:     "builds beta-app-review-submission get alias",
+			viewArgs: []string{"builds", "beta-app-review-submission", "view"},
+			getArgs:  []string{"builds", "beta-app-review-submission", "get"},
+			warning:  "Warning: `asc builds beta-app-review-submission get` is deprecated. Use `asc builds beta-app-review-submission view`.",
+			wantErr:  "--build-id or --app is required",
+		},
+		{
+			name:     "builds build-beta-detail get alias",
+			viewArgs: []string{"builds", "build-beta-detail", "view"},
+			getArgs:  []string{"builds", "build-beta-detail", "get"},
+			warning:  "Warning: `asc builds build-beta-detail get` is deprecated. Use `asc builds build-beta-detail view`.",
+			wantErr:  "--build-id or --app is required",
+		},
+		{
+			name:     "builds app-encryption-declaration get alias",
+			viewArgs: []string{"builds", "app-encryption-declaration", "view"},
+			getArgs:  []string{"builds", "app-encryption-declaration", "get"},
+			warning:  "Warning: `asc builds app-encryption-declaration get` is deprecated. Use `asc builds app-encryption-declaration view`.",
+			wantErr:  "--build-id or --app is required",
+		},
+		{
+			name:     "builds uploads get alias",
+			viewArgs: []string{"builds", "uploads", "view"},
+			getArgs:  []string{"builds", "uploads", "get"},
+			warning:  "Warning: `asc builds uploads get` is deprecated. Use `asc builds uploads view`.",
+			wantErr:  "--id is required",
+		},
+		{
+			name:     "builds uploads files get alias",
+			viewArgs: []string{"builds", "uploads", "files", "view"},
+			getArgs:  []string{"builds", "uploads", "files", "get"},
+			warning:  "Warning: `asc builds uploads files get` is deprecated. Use `asc builds uploads files view`.",
+			wantErr:  "--id is required",
+		},
+	}
+
+	run := func(t *testing.T, args []string) (string, string) {
+		t.Helper()
+
+		root := RootCommand("1.2.3")
+		root.FlagSet.SetOutput(io.Discard)
+
+		stdout, stderr := captureOutput(t, func() {
+			if err := root.Parse(args); err != nil {
+				t.Fatalf("parse error: %v", err)
+			}
+			err := root.Run(context.Background())
+			if !errors.Is(err, flag.ErrHelp) {
+				t.Fatalf("expected ErrHelp, got %v", err)
+			}
+		})
+
+		return stdout, stderr
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			viewStdout, viewStderr := run(t, test.viewArgs)
+			getStdout, getStderr := run(t, test.getArgs)
+
+			if viewStdout != "" {
+				t.Fatalf("expected empty canonical stdout, got %q", viewStdout)
+			}
+			if !strings.Contains(viewStderr, test.wantErr) {
+				t.Fatalf("expected canonical stderr to contain %q, got %q", test.wantErr, viewStderr)
+			}
+			if strings.Contains(viewStderr, "deprecated") {
+				t.Fatalf("expected canonical command to avoid deprecation warnings, got %q", viewStderr)
+			}
+
+			if getStdout != "" {
+				t.Fatalf("expected empty alias stdout, got %q", getStdout)
+			}
+			requireStderrContainsWarning(t, getStderr, test.warning)
+			if !strings.Contains(getStderr, test.wantErr) {
+				t.Fatalf("expected alias stderr to contain %q, got %q", test.wantErr, getStderr)
+			}
+		})
+	}
 }

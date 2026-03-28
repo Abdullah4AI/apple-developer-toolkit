@@ -19,9 +19,15 @@ This file covers patterns for AI agents working on the codebase.
 ```bash
 make format     # Format code
 make lint       # Check for issues
-make check-command-docs  # Verify command docs stay in sync
+make check-docs  # Verify repo docs, website docs, and command docs stay in sync
 ASC_BYPASS_KEYCHAIN=1 make test  # Run all tests without keychain prompts
 git diff        # Review changes before staging
+```
+
+If `docs/wall-of-apps.json` is the only staged change, the local hook skips the full Go pipeline and only runs:
+
+```bash
+make check-wall-of-apps
 ```
 
 ## CLI Structure
@@ -58,18 +64,26 @@ Tag releases with plain semver like `0.1.0` (no `v` prefix).
 Before tagging a release, verify:
 
 ```bash
-# 1. All tests pass
+# 1. Update release-facing docs
+#    - refresh website/resources/changelog.mdx for the new version
+#    - update any website pages affected by the release
+
+# 2. Verify documentation
+make check-docs
+make check-release-docs VERSION=0.1.0
+
+# 3. All tests pass
 ASC_BYPASS_KEYCHAIN=1 make test
 
-# 2. Audit help output for all parent commands
+# 4. Audit help output for all parent commands
 for cmd in auth analytics finance apps app-tags testflight builds versions \
            feedback crashes localizations \
            build-localizations sandbox submit xcode-cloud reviews; do
   echo "=== $cmd ===" && ./asc $cmd --help 2>&1
 done
 
-# 3. Check for duplicate sections (should see SUBCOMMANDS only once per command)
-# 4. Verify bold formatting renders correctly
+# 5. Check for duplicate sections (should see SUBCOMMANDS only once per command)
+# 6. Verify bold formatting renders correctly
 ```
 
 **Common issues to check:**

@@ -15,6 +15,8 @@ import (
 )
 
 func VersionsCommand() *ffcli.Command {
+	viewCmd := VersionsViewCommand()
+
 	return &ffcli.Command{
 		Name:       "versions",
 		ShortUsage: "asc versions <subcommand> [flags]",
@@ -23,7 +25,8 @@ func VersionsCommand() *ffcli.Command {
 		UsageFunc:  shared.VisibleUsageFunc,
 		Subcommands: []*ffcli.Command{
 			VersionsListCommand(),
-			VersionsGetCommand(),
+			viewCmd,
+			deprecatedVersionsGetAlias(viewCmd),
 			VersionsRelationshipsCommand(),
 			shared.DeprecatedAliasLeafCommand(
 				VersionsRelationshipsCommand(),
@@ -47,6 +50,25 @@ func VersionsCommand() *ffcli.Command {
 			return flag.ErrHelp
 		},
 	}
+}
+
+func deprecatedVersionsGetAlias(viewCmd *ffcli.Command) *ffcli.Command {
+	canonicalPath := "asc versions view"
+	legacyPath := "asc versions get"
+
+	legacyShortUsage := strings.TrimSpace(viewCmd.ShortUsage)
+	if legacyShortUsage == "" {
+		legacyShortUsage = canonicalPath + " [flags]"
+	}
+	legacyShortUsage = strings.Replace(legacyShortUsage, canonicalPath, legacyPath, 1)
+
+	return shared.DeprecatedAliasLeafCommand(
+		viewCmd,
+		"get",
+		legacyShortUsage,
+		canonicalPath,
+		fmt.Sprintf("Warning: `%s` is deprecated. Use `%s`.", legacyPath, canonicalPath),
+	)
 }
 
 func VersionsListCommand() *ffcli.Command {
@@ -142,8 +164,8 @@ Examples:
 	}
 }
 
-func VersionsGetCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("versions get", flag.ExitOnError)
+func VersionsViewCommand() *ffcli.Command {
+	fs := flag.NewFlagSet("versions view", flag.ExitOnError)
 
 	versionID := fs.String("version-id", "", "App Store version ID (required)")
 	includeBuild := fs.Bool("include-build", false, "Include attached build information")
@@ -152,15 +174,15 @@ func VersionsGetCommand() *ffcli.Command {
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
-		Name:       "get",
-		ShortUsage: "asc versions get [flags]",
-		ShortHelp:  "Get details for an app store version.",
-		LongHelp: `Get details for an app store version.
+		Name:       "view",
+		ShortUsage: "asc versions view [flags]",
+		ShortHelp:  "View details for an app store version.",
+		LongHelp: `View details for an app store version.
 
 Examples:
-  asc versions get --version-id "VERSION_ID"
-  asc versions get --version-id "VERSION_ID" --include-build --include-submission
-  asc versions get --version-id "VERSION_ID" --include "ageRatingDeclaration,appStoreReviewDetail"`,
+  asc versions view --version-id "VERSION_ID"
+  asc versions view --version-id "VERSION_ID" --include-build --include-submission
+  asc versions view --version-id "VERSION_ID" --include "ageRatingDeclaration,appStoreReviewDetail"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -172,7 +194,7 @@ Examples:
 
 			client, err := shared.GetASCClient()
 			if err != nil {
-				return fmt.Errorf("versions get: %w", err)
+				return fmt.Errorf("versions view: %w", err)
 			}
 
 			requestCtx, cancel := shared.ContextWithTimeout(ctx)
@@ -180,7 +202,7 @@ Examples:
 
 			includeValues, err := normalizeAppStoreVersionInclude(*include)
 			if err != nil {
-				return fmt.Errorf("versions get: %w", err)
+				return fmt.Errorf("versions view: %w", err)
 			}
 			if len(includeValues) > 0 {
 				if *includeBuild || *includeSubmission {
@@ -196,16 +218,16 @@ Examples:
 					versionResp, err = client.GetAppStoreVersion(requestCtx, trimmedID)
 				}
 				if err != nil {
-					return fmt.Errorf("versions get: %w", err)
+					return fmt.Errorf("versions view: %w", err)
 				}
 
 				if includeAgeRating {
 					ageRatingResp, err := client.GetAgeRatingDeclarationForAppStoreVersion(requestCtx, trimmedID)
 					if err != nil {
-						return fmt.Errorf("versions get: %w", err)
+						return fmt.Errorf("versions view: %w", err)
 					}
 					if err := appendAgeRatingDeclarationInclude(versionResp, ageRatingResp); err != nil {
-						return fmt.Errorf("versions get: %w", err)
+						return fmt.Errorf("versions view: %w", err)
 					}
 				}
 
@@ -214,7 +236,7 @@ Examples:
 
 			versionResp, err := client.GetAppStoreVersion(requestCtx, trimmedID)
 			if err != nil {
-				return fmt.Errorf("versions get: %w", err)
+				return fmt.Errorf("versions view: %w", err)
 			}
 
 			result := &asc.AppStoreVersionDetailResult{
@@ -227,7 +249,7 @@ Examples:
 			if *includeBuild {
 				buildResp, err := fetchOptionalBuild(requestCtx, trimmedID, client.GetAppStoreVersionBuild)
 				if err != nil {
-					return fmt.Errorf("versions get: %w", err)
+					return fmt.Errorf("versions view: %w", err)
 				}
 				if buildResp != nil {
 					result.BuildID = buildResp.Data.ID
@@ -238,7 +260,7 @@ Examples:
 			if *includeSubmission {
 				submissionResp, err := fetchOptionalSubmission(requestCtx, trimmedID, client.GetAppStoreVersionSubmissionForVersion)
 				if err != nil {
-					return fmt.Errorf("versions get: %w", err)
+					return fmt.Errorf("versions view: %w", err)
 				}
 				if submissionResp != nil {
 					result.SubmissionID = submissionResp.Data.ID

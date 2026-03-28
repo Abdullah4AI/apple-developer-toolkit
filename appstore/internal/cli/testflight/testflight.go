@@ -24,11 +24,11 @@ Examples:
   asc testflight crashes view --submission-id "SUBMISSION_ID"
   asc testflight crashes log --submission-id "SUBMISSION_ID"
   asc testflight review view --app "APP_ID"
-  asc testflight distribution view --build "BUILD_ID"
+  asc testflight distribution view --build-id "BUILD_ID"
   asc testflight metrics group-testers --group "GROUP_ID"
   asc testflight metrics app-testers --app "APP_ID"
   asc testflight agreements view --app "APP_ID"
-  asc testflight notifications send --build "BUILD_ID"
+  asc testflight notifications send --build-id "BUILD_ID"
   asc testflight config export --app "APP_ID" --output "./testflight.yaml"
   asc testflight app-localizations list --app "APP_ID"
   asc testflight pre-release list --app "APP_ID"`,
