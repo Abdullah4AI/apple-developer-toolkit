@@ -15,6 +15,17 @@ import { fileURLToPath } from 'url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const WWDC_DATA_DIR = join(__dirname, 'data', 'wwdc');
 
+/** Strip HTML tags iteratively to handle nested/malformed markup. */
+function stripHtmlTags(str) {
+  let prev;
+  let result = str;
+  do {
+    prev = result;
+    result = result.replace(/<[^>]*>/g, '');
+  } while (result !== prev);
+  return result;
+}
+
 // ============ APPLE API CONSTANTS ============
 
 const APPLE_URLS = {
@@ -100,7 +111,7 @@ function parseSearchResults(html, limit) {
   let match;
   while ((match = docRegex.exec(html)) !== null && results.length < limit) {
     const url = match[1];
-    const title = match[2].trim().replace(/<[^>]*>/g, '');
+    const title = stripHtmlTags(match[2].trim());
     if (seen.has(url)) continue;
     seen.add(url);
     if (url.includes('/design/human-interface-guidelines/')) continue;
@@ -378,7 +389,7 @@ async function getWwdcVideoDetails(videoId, includeTranscript = true) {
       const transcriptMatch = html.match(/<section[^>]+class="[^"]*transcript[^"]*"[^>]*>([\s\S]*?)<\/section>/i);
       if (transcriptMatch) {
         const transcript = transcriptMatch[1]
-          .replace(/<[^>]*>/g, ' ')
+          
           .replace(/\s+/g, ' ')
           .trim();
         if (transcript) {

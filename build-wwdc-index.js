@@ -13,6 +13,17 @@ import { mkdirSync, writeFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
+/** Strip HTML tags iteratively to handle nested/malformed markup. */
+function stripHtmlTags(str) {
+  let prev;
+  let result = str;
+  do {
+    prev = result;
+    result = result.replace(/<[^>]*>/g, '');
+  } while (result !== prev);
+  return result;
+}
+
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = join(__dirname, 'data', 'wwdc');
 
@@ -165,7 +176,7 @@ async function fetchYearVideos(year) {
     let title = null;
     const h5Match = cardHtml.match(/<h[345][^>]*class="[^"]*vc-card__title[^"]*"[^>]*>\s*([\s\S]*?)\s*<\/h[345]>/i);
     if (h5Match) {
-      title = h5Match[1].replace(/<[^>]*>/g, '').trim();
+      title = stripHtmlTags(h5Match[1]).trim();
     }
     if (!title) {
       const altMatch = cardHtml.match(/alt="([^"]+)"/i);
@@ -174,7 +185,7 @@ async function fetchYearVideos(year) {
     if (!title) {
       // Fallback: any heading inside the card
       const hMatch = cardHtml.match(/<h[1-6][^>]*>([\s\S]*?)<\/h[1-6]>/i);
-      if (hMatch) title = hMatch[1].replace(/<[^>]*>/g, '').trim();
+      if (hMatch) title = stripHtmlTags(hMatch[1]).trim();
     }
     if (!title) title = `Session ${id}`;
 
@@ -264,7 +275,7 @@ async function enrichMissingTitles(videos) {
                          html.match(/<title>\s*([^<|]+)/i);
 
       if (titleMatch) {
-        const title = titleMatch[1].replace(/<[^>]*>/g, '').trim();
+        const title = stripHtmlTags(titleMatch[1]).trim();
         if (title && !title.includes('Apple Developer') && title.length > 3) {
           video.title = title;
           enriched++;

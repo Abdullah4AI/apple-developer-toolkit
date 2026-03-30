@@ -83,7 +83,14 @@ func RunUploadServer(ctx context.Context, screenshotDir string, reqs ScreenshotR
 				continue
 			}
 
-			destPath := filepath.Join(screenshotDir, fh.Filename)
+			// Sanitize filename to prevent path traversal
+			safeFilename := filepath.Base(fh.Filename)
+			if safeFilename == "" || safeFilename == "." || safeFilename == ".." {
+				log.Printf("[screenshots] rejected unsafe filename: %s", fh.Filename)
+				src.Close()
+				continue
+			}
+			destPath := filepath.Join(screenshotDir, safeFilename)
 			out, err := os.Create(destPath)
 			if err != nil {
 				src.Close()
@@ -157,12 +164,34 @@ func RunUploadServer(ctx context.Context, screenshotDir string, reqs ScreenshotR
 
 	mux.HandleFunc("/screenshots/", func(w http.ResponseWriter, r *http.Request) {
 		filename := filepath.Base(r.URL.Path)
+		// Sanitize: reject path traversal attempts and hidden files
+		if filename == "" || filename == "." || filename == ".." ||
+			strings.Contains(filename, "/") || strings.Contains(filename, "\\") ||
+			strings.HasPrefix(filename, ".") {
+			http.Error(w, "invalid filename", 400)
+			return
+		}
 		filePath := filepath.Join(screenshotDir, filename)
-		if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		// Ensure resolved path stays within screenshotDir
+		absPath, err := filepath.Abs(filePath)
+		if err != nil {
+			http.Error(w, "invalid path", 400)
+			return
+		}
+		absDir, err := filepath.Abs(screenshotDir)
+		if err != nil {
+			http.Error(w, "server error", 500)
+			return
+		}
+		if !strings.HasPrefix(absPath, absDir+string(filepath.Separator)) {
+			http.Error(w, "access denied", 403)
+			return
+		}
+		if _, err := os.Stat(absPath); os.IsNotExist(err) {
 			http.Error(w, "not found", 404)
 			return
 		}
-		http.ServeFile(w, r, filePath)
+		http.ServeFile(w, r, absPath)
 	})
 
 	// Find a free port
