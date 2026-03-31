@@ -650,10 +650,7 @@ func parseFixedWidthInt(value string, width int, max int) bool {
 		result = result*10 + int(c-'0')
 	}
 
-	if result > max {
-		return false
-	}
-	return true
+	return result <= max
 }
 
 // NormalizePreviewType normalizes and validates a preview type.

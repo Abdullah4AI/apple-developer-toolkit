@@ -7,6 +7,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/peterbourgon/ff/v3/ffcli"
 
@@ -762,6 +763,7 @@ func SubscriptionsPricesListCommand() *ffcli.Command {
 	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
 	next := fs.String("next", "", "Fetch next page using a links.next URL")
 	paginate := fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")
+	resolved := fs.Bool("resolved", false, "Return the current effective price per territory")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
@@ -772,7 +774,8 @@ func SubscriptionsPricesListCommand() *ffcli.Command {
 
 Examples:
   asc subscriptions prices list --subscription-id "SUB_ID"
-  asc subscriptions prices list --subscription-id "SUB_ID" --paginate`,
+  asc subscriptions prices list --subscription-id "SUB_ID" --paginate
+  asc subscriptions prices list --subscription-id "SUB_ID" --resolved`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -781,6 +784,10 @@ Examples:
 			}
 			if err := shared.ValidateNextURL(*next); err != nil {
 				return fmt.Errorf("subscriptions prices list: %w", err)
+			}
+			if *resolved && strings.TrimSpace(*next) != "" {
+				fmt.Fprintln(os.Stderr, "Error: --resolved cannot be combined with --next")
+				return flag.ErrHelp
 			}
 
 			id := strings.TrimSpace(*subID)
@@ -796,6 +803,14 @@ Examples:
 
 			requestCtx, cancel := shared.ContextWithTimeout(ctx)
 			defer cancel()
+
+			if *resolved {
+				resp, err := fetchResolvedSubscriptionPrices(requestCtx, client, id, *limit, *next, time.Now().UTC())
+				if err != nil {
+					return fmt.Errorf("subscriptions prices list: failed to resolve: %w", err)
+				}
+				return shared.PrintResolvedPrices(resp, *output.Output, *output.Pretty)
+			}
 
 			opts := []asc.SubscriptionPricesOption{
 				asc.WithSubscriptionPricesLimit(*limit),

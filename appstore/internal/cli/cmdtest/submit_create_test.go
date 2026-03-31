@@ -2,6 +2,7 @@ package cmdtest
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -65,7 +66,7 @@ func submitCreateDefaultReadinessResponse(req *http.Request) (*http.Response, bo
 		if buildID == "" {
 			buildID = "build-1"
 		}
-		return mustSubmitCreateOKJSONResponse(fmt.Sprintf(`{"data":{"type":"builds","id":"%s","attributes":{"version":"1.0","processingState":"VALID","expired":false}}}`, buildID)), true
+		return mustSubmitCreateOKJSONResponse(fmt.Sprintf(`{"data":{"type":"builds","id":"%s","attributes":{"version":"1.0","processingState":"VALID","expired":false,"usesNonExemptEncryption":false}}}`, buildID)), true
 
 	case req.Method == http.MethodGet && strings.HasPrefix(path, "/v1/apps/") && strings.HasSuffix(path, "/appInfos"):
 		return mustSubmitCreateOKJSONResponse(`{"data":[{"type":"appInfos","id":"info-1","attributes":{"state":"PREPARE_FOR_SUBMISSION"}}]}`), true
@@ -83,7 +84,7 @@ func submitCreateDefaultReadinessResponse(req *http.Request) (*http.Response, bo
 		return mustSubmitCreateOKJSONResponse(`{"data":[],"links":{}}`), true
 
 	case req.Method == http.MethodGet && strings.HasPrefix(path, "/v1/apps/") && !strings.Contains(strings.TrimPrefix(path, "/v1/apps/"), "/"):
-		return mustSubmitCreateOKJSONResponse(`{"data":{"type":"apps","id":"app-1","attributes":{"primaryLocale":"en-US"}}}`), true
+		return mustSubmitCreateOKJSONResponse(`{"data":{"type":"apps","id":"app-1","attributes":{"primaryLocale":"en-US","contentRightsDeclaration":"DOES_NOT_USE_THIRD_PARTY_CONTENT"}}}`), true
 
 	case req.Method == http.MethodGet && strings.HasPrefix(path, "/v1/appInfos/") && strings.HasSuffix(path, "/appInfoLocalizations"):
 		return mustSubmitCreateOKJSONResponse(`{"data":[{"type":"appInfoLocalizations","id":"info-loc-1","attributes":{"locale":"en-US","name":"My App","subtitle":"Subtitle","privacyPolicyUrl":"https://example.com/privacy"}}]}`), true
@@ -98,7 +99,7 @@ func submitCreateDefaultReadinessResponse(req *http.Request) (*http.Response, bo
 		return mustSubmitCreateOKJSONResponse(`{"data":{"type":"appStoreReviewDetails","id":"review-detail-1","attributes":{"contactFirstName":"A","contactLastName":"B","contactEmail":"a@example.com","contactPhone":"123","demoAccountName":"","demoAccountPassword":"","demoAccountRequired":false,"notes":"Review notes"}}}`), true
 
 	case req.Method == http.MethodGet && strings.HasPrefix(path, "/v1/appStoreVersions/") && strings.HasSuffix(path, "/build"):
-		return mustSubmitCreateOKJSONResponse(`{"data":{"type":"builds","id":"build-1","attributes":{"version":"1.0","processingState":"VALID","expired":false}}}`), true
+		return mustSubmitCreateOKJSONResponse(`{"data":{"type":"builds","id":"build-1","attributes":{"version":"1.0","processingState":"VALID","expired":false,"usesNonExemptEncryption":false}}}`), true
 
 	case req.Method == http.MethodGet && strings.HasPrefix(path, "/v1/appStoreVersions/") && !strings.Contains(strings.TrimPrefix(path, "/v1/appStoreVersions/"), "/"):
 		return mustSubmitCreateOKJSONResponse(`{"data":{"type":"appStoreVersions","id":"version-1","attributes":{"platform":"IOS","versionString":"1.0","appVersionState":"PREPARE_FOR_SUBMISSION","copyright":"2026 Test Company"},"relationships":{"app":{"data":{"type":"apps","id":"app-1"}}}}}`), true
@@ -936,7 +937,11 @@ func TestSubmitCreateSubscriptionPreflightPaginatesAndReportsSkippedGroups(t *te
 
 func TestSubmitCreateSubscriptionPreflightDoesNotConsumeSubmitTimeoutBudget(t *testing.T) {
 	setupSubmitCreateAuth(t)
-	t.Setenv("ASC_TIMEOUT", "100ms")
+	t.Setenv("ASC_TIMEOUT", "200ms")
+
+	const longDelay = 120 * time.Millisecond
+	stopErr := errors.New("stop after submit timeout budget capture")
+	var reviewSubmissionBudget time.Duration
 
 	originalTransport := http.DefaultTransport
 	t.Cleanup(func() {
@@ -952,13 +957,13 @@ func TestSubmitCreateSubscriptionPreflightDoesNotConsumeSubmitTimeoutBudget(t *t
 			return submitCreateJSONResponse(http.StatusOK, `{"data":[{"type":"appStoreVersionLocalizations","id":"loc-en","attributes":{"locale":"en-US","description":"Description","keywords":"keyword","supportUrl":"https://example.com/support","whatsNew":"Bug fixes"}}]}`)
 
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/apps/app-1/subscriptionGroups":
-			if err := sleepWithContext(req.Context()); err != nil {
+			if err := sleepWithContextDuration(req.Context(), longDelay); err != nil {
 				return nil, err
 			}
 			return submitCreateJSONResponse(http.StatusOK, `{"data":[{"type":"subscriptionGroups","id":"group-1","attributes":{"referenceName":"Premium"}}],"links":{}}`)
 
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/subscriptionGroups/group-1/subscriptions":
-			if err := sleepWithContext(req.Context()); err != nil {
+			if err := sleepWithContextDuration(req.Context(), longDelay); err != nil {
 				return nil, err
 			}
 			return submitCreateJSONResponse(http.StatusOK, `{"data":[],"links":{}}`)
@@ -970,7 +975,12 @@ func TestSubmitCreateSubscriptionPreflightDoesNotConsumeSubmitTimeoutBudget(t *t
 			return submitCreateJSONResponse(http.StatusNoContent, "")
 
 		case req.Method == http.MethodPost && req.URL.Path == "/v1/reviewSubmissions":
-			return submitCreateJSONResponse(http.StatusCreated, `{"data":{"type":"reviewSubmissions","id":"new-sub-1","attributes":{"state":"READY_FOR_REVIEW","platform":"IOS"}}}`)
+			deadline, ok := req.Context().Deadline()
+			if !ok {
+				t.Fatal("expected review submission request to have a deadline")
+			}
+			reviewSubmissionBudget = time.Until(deadline)
+			return nil, stopErr
 
 		case req.Method == http.MethodPost && req.URL.Path == "/v1/reviewSubmissionItems":
 			return submitCreateJSONResponse(http.StatusCreated, `{"data":{"type":"reviewSubmissionItems","id":"item-1"}}`)
@@ -996,14 +1006,22 @@ func TestSubmitCreateSubscriptionPreflightDoesNotConsumeSubmitTimeoutBudget(t *t
 	}); err != nil {
 		t.Fatalf("parse error: %v", err)
 	}
-	if err := root.Run(context.Background()); err != nil {
-		t.Fatalf("expected submit create to succeed with fresh timeout budget, got %v", err)
+	err := root.Run(context.Background())
+	if err == nil || !strings.Contains(err.Error(), stopErr.Error()) {
+		t.Fatalf("expected submit create to stop after capturing fresh timeout budget, got %v", err)
+	}
+	if reviewSubmissionBudget < 100*time.Millisecond {
+		t.Fatalf("expected fresh submit timeout budget after subscription preflight, got %v", reviewSubmissionBudget)
 	}
 }
 
 func TestSubmitCreateLocalizationPreflightDoesNotConsumeSubmitTimeoutBudget(t *testing.T) {
 	setupSubmitCreateAuth(t)
-	t.Setenv("ASC_TIMEOUT", "100ms")
+	t.Setenv("ASC_TIMEOUT", "200ms")
+
+	const longDelay = 120 * time.Millisecond
+	stopErr := errors.New("stop after localization timeout budget capture")
+	var reviewSubmissionBudget time.Duration
 
 	originalTransport := http.DefaultTransport
 	t.Cleanup(func() {
@@ -1015,7 +1033,7 @@ func TestSubmitCreateLocalizationPreflightDoesNotConsumeSubmitTimeoutBudget(t *t
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/apps/app-1/appStoreVersions":
 			query := req.URL.Query()
 			if strings.Contains(query.Get("filter[appStoreState]"), "READY_FOR_SALE") {
-				if err := sleepWithContext(req.Context()); err != nil {
+				if err := sleepWithContextDuration(req.Context(), longDelay); err != nil {
 					return nil, err
 				}
 				return submitCreateJSONResponse(http.StatusOK, `{"data":[]}`)
@@ -1023,7 +1041,7 @@ func TestSubmitCreateLocalizationPreflightDoesNotConsumeSubmitTimeoutBudget(t *t
 			return submitCreateJSONResponse(http.StatusOK, `{"data":[{"type":"appStoreVersions","id":"version-1","attributes":{"versionString":"1.0","platform":"IOS"}}]}`)
 
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/appStoreVersions/version-1/appStoreVersionLocalizations":
-			if err := sleepWithContext(req.Context()); err != nil {
+			if err := sleepWithContextDuration(req.Context(), longDelay); err != nil {
 				return nil, err
 			}
 			return submitCreateJSONResponse(http.StatusOK, `{"data":[{"type":"appStoreVersionLocalizations","id":"loc-en","attributes":{"locale":"en-US","description":"Description","keywords":"keyword","supportUrl":"https://example.com/support","whatsNew":""}}]}`)
@@ -1038,7 +1056,12 @@ func TestSubmitCreateLocalizationPreflightDoesNotConsumeSubmitTimeoutBudget(t *t
 			return submitCreateJSONResponse(http.StatusNoContent, "")
 
 		case req.Method == http.MethodPost && req.URL.Path == "/v1/reviewSubmissions":
-			return submitCreateJSONResponse(http.StatusCreated, `{"data":{"type":"reviewSubmissions","id":"new-sub-1","attributes":{"state":"READY_FOR_REVIEW","platform":"IOS"}}}`)
+			deadline, ok := req.Context().Deadline()
+			if !ok {
+				t.Fatal("expected review submission request to have a deadline")
+			}
+			reviewSubmissionBudget = time.Until(deadline)
+			return nil, stopErr
 
 		case req.Method == http.MethodPost && req.URL.Path == "/v1/reviewSubmissionItems":
 			return submitCreateJSONResponse(http.StatusCreated, `{"data":{"type":"reviewSubmissionItems","id":"item-1"}}`)
@@ -1064,14 +1087,22 @@ func TestSubmitCreateLocalizationPreflightDoesNotConsumeSubmitTimeoutBudget(t *t
 	}); err != nil {
 		t.Fatalf("parse error: %v", err)
 	}
-	if err := root.Run(context.Background()); err != nil {
-		t.Fatalf("expected submit create to succeed with fresh localization timeout budget, got %v", err)
+	err := root.Run(context.Background())
+	if err == nil || !strings.Contains(err.Error(), stopErr.Error()) {
+		t.Fatalf("expected submit create to stop after capturing fresh localization timeout budget, got %v", err)
+	}
+	if reviewSubmissionBudget < 100*time.Millisecond {
+		t.Fatalf("expected fresh submit timeout budget after localization preflight, got %v", reviewSubmissionBudget)
 	}
 }
 
 func TestSubmitCreatePreparationDoesNotConsumeSubmitTimeoutBudget(t *testing.T) {
 	setupSubmitCreateAuth(t)
-	t.Setenv("ASC_TIMEOUT", "100ms")
+	t.Setenv("ASC_TIMEOUT", "200ms")
+
+	const longDelay = 120 * time.Millisecond
+	stopErr := errors.New("stop after preparation timeout budget capture")
+	var reviewSubmissionBudget time.Duration
 
 	originalTransport := http.DefaultTransport
 	t.Cleanup(func() {
@@ -1094,7 +1125,7 @@ func TestSubmitCreatePreparationDoesNotConsumeSubmitTimeoutBudget(t *testing.T) 
 			return submitCreateJSONResponse(http.StatusOK, `{"data":[],"links":{}}`)
 
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/apps/app-1/reviewSubmissions":
-			if err := sleepWithContext(req.Context()); err != nil {
+			if err := sleepWithContextDuration(req.Context(), longDelay); err != nil {
 				return nil, err
 			}
 			return submitCreateJSONResponse(http.StatusOK, `{"data":[],"links":{}}`)
@@ -1103,7 +1134,12 @@ func TestSubmitCreatePreparationDoesNotConsumeSubmitTimeoutBudget(t *testing.T) 
 			return submitCreateJSONResponse(http.StatusNoContent, "")
 
 		case req.Method == http.MethodPost && req.URL.Path == "/v1/reviewSubmissions":
-			return submitCreateJSONResponse(http.StatusCreated, `{"data":{"type":"reviewSubmissions","id":"new-sub-1","attributes":{"state":"READY_FOR_REVIEW","platform":"IOS"}}}`)
+			deadline, ok := req.Context().Deadline()
+			if !ok {
+				t.Fatal("expected review submission request to have a deadline")
+			}
+			reviewSubmissionBudget = time.Until(deadline)
+			return nil, stopErr
 
 		case req.Method == http.MethodPost && req.URL.Path == "/v1/reviewSubmissionItems":
 			return submitCreateJSONResponse(http.StatusCreated, `{"data":{"type":"reviewSubmissionItems","id":"item-1"}}`)
@@ -1132,8 +1168,12 @@ func TestSubmitCreatePreparationDoesNotConsumeSubmitTimeoutBudget(t *testing.T) 
 	}); err != nil {
 		t.Fatalf("parse error: %v", err)
 	}
-	if err := root.Run(context.Background()); err != nil {
-		t.Fatalf("expected submit create to succeed with fresh submission-preparation timeout budget, got %v", err)
+	err := root.Run(context.Background())
+	if err == nil || !strings.Contains(err.Error(), stopErr.Error()) {
+		t.Fatalf("expected submit create to stop after capturing fresh preparation timeout budget, got %v", err)
+	}
+	if reviewSubmissionBudget < 100*time.Millisecond {
+		t.Fatalf("expected fresh submit timeout budget after preparation checks, got %v", reviewSubmissionBudget)
 	}
 }
 
@@ -1448,11 +1488,13 @@ func TestSubmitCreatePrintsHintsWhenAnotherSubmissionIsStillInProgress(t *testin
 		"Hint: Check the active submission: asc submit status --id active-submission-1",
 		"Hint: Inspect the active submission payload: asc review submissions-get --id active-submission-1",
 		"Hint: Re-run readiness validation: asc validate --app app-1 --version-id version-1",
-		"Hint: Re-run submit preflight: asc submit preflight --app app-1 --version 1.0 --platform IOS",
 	} {
 		if !strings.Contains(stderr, want) {
 			t.Fatalf("expected stderr to contain %q, got %q", want, stderr)
 		}
+	}
+	if strings.Contains(stderr, "Hint: Re-run readiness validation: asc validate --app app-1 --version 1.0 --platform IOS") {
+		t.Fatalf("did not expect duplicate version-string readiness hint, got %q", stderr)
 	}
 	foundCleanup := false
 	for _, req := range requests {
@@ -1834,8 +1876,83 @@ func TestSubmitCreateRetriesWhenConflictPointsToRecentlyCanceledStaleSubmission(
 	}
 }
 
+func TestSubmitCreateAcceptsApprovedEncryptionDeclaration(t *testing.T) {
+	setupSubmitCreateAuth(t)
+
+	originalTransport := http.DefaultTransport
+	t.Cleanup(func() {
+		http.DefaultTransport = originalTransport
+	})
+
+	http.DefaultTransport = submitCreateRoundTripFunc(func(req *http.Request) (*http.Response, error) {
+		switch {
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/apps/app-1/appStoreVersions":
+			return submitCreateJSONResponse(http.StatusOK, `{"data":[{"type":"appStoreVersions","id":"version-1","attributes":{"versionString":"1.0","platform":"IOS"}}]}`)
+
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/appStoreVersions/version-1/appStoreVersionLocalizations":
+			return submitCreateJSONResponse(http.StatusOK, `{"data":[{"type":"appStoreVersionLocalizations","id":"loc-en","attributes":{"locale":"en-US","description":"Description","keywords":"keyword","supportUrl":"https://example.com/support","whatsNew":"Bug fixes"}}]}`)
+
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/builds/build-1":
+			return submitCreateJSONResponse(http.StatusOK, `{"data":{"type":"builds","id":"build-1","attributes":{"version":"1.0","processingState":"VALID","expired":false,"usesNonExemptEncryption":true}}}`)
+
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/builds/build-1/appEncryptionDeclaration":
+			return submitCreateJSONResponse(http.StatusOK, `{"data":{"type":"appEncryptionDeclarations","id":"decl-1","attributes":{"appEncryptionDeclarationState":"APPROVED"}}}`)
+
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/apps/app-1/reviewSubmissions":
+			return submitCreateJSONResponse(http.StatusOK, `{"data":[],"links":{}}`)
+
+		case req.Method == http.MethodPatch && req.URL.Path == "/v1/appStoreVersions/version-1/relationships/build":
+			return submitCreateJSONResponse(http.StatusNoContent, "")
+
+		case req.Method == http.MethodPost && req.URL.Path == "/v1/reviewSubmissions":
+			return submitCreateJSONResponse(http.StatusCreated, `{"data":{"type":"reviewSubmissions","id":"new-sub-1","attributes":{"state":"READY_FOR_REVIEW","platform":"IOS"}}}`)
+
+		case req.Method == http.MethodPost && req.URL.Path == "/v1/reviewSubmissionItems":
+			return submitCreateJSONResponse(http.StatusCreated, `{"data":{"type":"reviewSubmissionItems","id":"item-1"}}`)
+
+		case req.Method == http.MethodPatch && req.URL.Path == "/v1/reviewSubmissions/new-sub-1":
+			return submitCreateJSONResponse(http.StatusOK, `{"data":{"type":"reviewSubmissions","id":"new-sub-1","attributes":{"state":"WAITING_FOR_REVIEW","submittedDate":"2026-02-22T00:00:00Z"}}}`)
+
+		default:
+			return nil, fmt.Errorf("unexpected request: %s %s", req.Method, req.URL.Path)
+		}
+	})
+
+	root := RootCommand("1.2.3")
+	root.FlagSet.SetOutput(io.Discard)
+
+	var runErr error
+	stdout, stderr := captureOutput(t, func() {
+		if err := root.Parse([]string{
+			"submit", "create",
+			"--app", "app-1",
+			"--version", "1.0",
+			"--build", "build-1",
+			"--platform", "IOS",
+			"--confirm",
+		}); err != nil {
+			t.Fatalf("parse error: %v", err)
+		}
+		runErr = root.Run(context.Background())
+	})
+
+	if runErr != nil {
+		t.Fatalf("expected approved encryption declaration to pass readiness preflight, got %v (stderr: %q)", runErr, stderr)
+	}
+	if stdout == "" {
+		t.Fatal("expected submit create JSON output")
+	}
+	if strings.Contains(stderr, "Attached build: build uses non-exempt encryption but has no linked encryption declaration") {
+		t.Fatalf("did not expect false missing declaration error, got %q", stderr)
+	}
+}
+
 func sleepWithContext(ctx context.Context) error {
-	timer := time.NewTimer(70 * time.Millisecond)
+	return sleepWithContextDuration(ctx, 70*time.Millisecond)
+}
+
+func sleepWithContextDuration(ctx context.Context, delay time.Duration) error {
+	timer := time.NewTimer(delay)
 	defer timer.Stop()
 
 	select {

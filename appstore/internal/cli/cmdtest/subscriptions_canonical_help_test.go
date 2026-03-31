@@ -72,6 +72,14 @@ func TestSubscriptionsHelpShowsCanonicalCommerceSubcommands(t *testing.T) {
 	if strings.Contains(pricesUsage, `asc subscriptions pricing prices list --id "SUB_ID"`) {
 		t.Fatalf("expected subscriptions pricing prices help to drop legacy --id example, got %q", pricesUsage)
 	}
+	pricesListCmd := findSubcommand(root, "subscriptions", "pricing", "prices", "list")
+	if pricesListCmd == nil {
+		t.Fatal("expected subscriptions pricing prices list command")
+	}
+	pricesListUsage := pricesListCmd.UsageFunc(pricesListCmd)
+	if !strings.Contains(pricesListUsage, "--resolved") {
+		t.Fatalf("expected subscriptions pricing prices list help to mention --resolved, got %q", pricesListUsage)
+	}
 
 	availabilityCmd := findSubcommand(root, "subscriptions", "pricing", "availability")
 	if availabilityCmd == nil {

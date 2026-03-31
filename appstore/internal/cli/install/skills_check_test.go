@@ -662,7 +662,7 @@ func TestDefaultPersistSkillsCheckedAt_PreservesTopLevelKeyOrder(t *testing.T) {
 	if zIndex == -1 || skillsIndex == -1 || aIndex == -1 {
 		t.Fatalf("expected keys in output, got %q", content)
 	}
-	if !(zIndex < skillsIndex && skillsIndex < aIndex) {
+	if zIndex >= skillsIndex || skillsIndex >= aIndex {
 		t.Fatalf("expected top-level key order to be preserved, got %q", content)
 	}
 }

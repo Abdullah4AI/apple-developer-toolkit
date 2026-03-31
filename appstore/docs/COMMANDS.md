@@ -87,15 +87,18 @@ asc <subcommand> [flags]
 - `builds` - Manage builds in App Store Connect.
 - `build-bundles` - Manage build bundles and App Clip data.
 - `build-localizations` - Manage build release notes localizations.
+- `xcode` - Local Xcode archive/export helpers (macOS only).
 - `sandbox` - Manage sandbox testers in App Store Connect.
 
 ### Review and Release
 
 - `release` - Run high-level App Store release workflows.
+- `status` - Show a release pipeline dashboard for an app.
+- `release-notes` - Generate and manage App Store release notes.
 - `review` - Manage App Store review details, attachments, and submissions.
 - `reviews` - List and manage App Store customer reviews.
 - `submit` - Submit builds for App Store review.
-- `validate` - Validate App Store version readiness before submission.
+- `validate` - Canonical App Store submission readiness report.
 - `publish` - End-to-end publish workflows for TestFlight and App Store.
 
 ### Monetization
@@ -123,6 +126,7 @@ asc <subcommand> [flags]
 
 ### Automation
 
+- `workflow` - Run multi-step automation workflows.
 - `webhooks` - Manage webhooks in App Store Connect.
 - `xcode-cloud` - Trigger and monitor Xcode Cloud workflows.
 - `notify` - Send notifications to external services.
@@ -130,18 +134,11 @@ asc <subcommand> [flags]
 
 ### Utility
 
+- `diff` - Generate deterministic non-mutating diff plans.
+- `snitch` - Report CLI friction as a GitHub issue.
 - `version` - Print version information and exit.
 - `completion` - Print shell completion scripts.
 - `schema` - Inspect App Store Connect API endpoint schemas at runtime.
-
-### Additional
-
-- `diff` - Generate deterministic non-mutating diff plans.
-- `status` - Show a release pipeline dashboard for an app.
-- `release-notes` - Generate and manage App Store release notes.
-- `workflow` - Run multi-step automation workflows.
-- `xcode` - Local Xcode archive/export helpers (macOS only).
-- `snitch` - Report CLI friction as a GitHub issue.
 
 ## Scripting Tips
 

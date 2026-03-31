@@ -13,6 +13,7 @@ import (
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
+	submitcli "github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/submit"
 )
 
 const (
@@ -343,12 +344,12 @@ Examples:
 				return fmt.Errorf("publish appstore: %w", err)
 			}
 
-			client, err := shared.GetASCClient()
+			timeoutValue := resolvePublishTimeout(*timeout)
+			client, err := shared.GetASCClientWithTimeout(timeoutValue)
 			if err != nil {
 				return fmt.Errorf("publish appstore: %w", err)
 			}
 
-			timeoutValue := resolvePublishTimeout(*timeout)
 			requestCtx, cancel := shared.ContextWithTimeoutDuration(ctx, timeoutValue)
 			defer cancel()
 
@@ -372,35 +373,61 @@ Examples:
 				return fmt.Errorf("publish appstore: %w", err)
 			}
 
-			if err := client.AttachBuildToVersion(requestCtx, versionResp.Data.ID, buildResp.Data.ID); err != nil {
-				return fmt.Errorf("publish appstore: failed to attach build: %w", err)
+			attachResult, err := submitcli.EnsureBuildAttached(requestCtx, client, versionResp.Data.ID, buildResp.Data.ID, false)
+			if err != nil {
+				return fmt.Errorf("publish appstore: %w", err)
 			}
 
 			result := &asc.AppStorePublishResult{
 				BuildID:   buildResp.Data.ID,
 				VersionID: versionResp.Data.ID,
 				Uploaded:  true,
-				Attached:  true,
+				Attached:  attachResult.Attached || attachResult.AlreadyAttached,
 				Submitted: false,
 			}
 
 			if *submit {
-				submitReq := asc.AppStoreVersionSubmissionCreateRequest{
-					Data: asc.AppStoreVersionSubmissionCreateData{
-						Type: asc.ResourceTypeAppStoreVersionSubmissions,
-						Relationships: &asc.AppStoreVersionSubmissionRelationships{
-							AppStoreVersion: &asc.Relationship{
-								Data: asc.ResourceData{Type: asc.ResourceTypeAppStoreVersions, ID: versionResp.Data.ID},
-							},
-						},
+				submitCtx := requestCtx
+				submitRequestTimeout := time.Duration(0)
+				if *timeout > 0 {
+					submitCtx = ctx
+					submitRequestTimeout = timeoutValue
+				}
+
+				localizationPreflight := func() error {
+					if submitRequestTimeout > 0 {
+						return submitcli.SubmissionLocalizationPreflightWithTimeout(submitCtx, client, resolvedAppID, versionResp.Data.ID, normalizedPlatform, submitRequestTimeout)
+					}
+					return submitcli.SubmissionLocalizationPreflight(submitCtx, client, resolvedAppID, versionResp.Data.ID, normalizedPlatform)
+				}
+				if err := localizationPreflight(); err != nil {
+					return fmt.Errorf("publish appstore: %w", err)
+				}
+
+				if submitRequestTimeout > 0 {
+					submitcli.SubmissionSubscriptionPreflightWithTimeout(submitCtx, client, resolvedAppID, submitRequestTimeout)
+				} else {
+					submitcli.SubmissionSubscriptionPreflight(submitCtx, client, resolvedAppID)
+				}
+
+				submitResult, err := submitcli.SubmitResolvedVersion(submitCtx, client, submitcli.SubmitResolvedVersionOptions{
+					AppID:                    resolvedAppID,
+					VersionID:                versionResp.Data.ID,
+					BuildID:                  buildResp.Data.ID,
+					Platform:                 normalizedPlatform,
+					RequestTimeout:           submitRequestTimeout,
+					EnsureBuildAttached:      false,
+					LookupExistingSubmission: true,
+					DryRun:                   false,
+					Emit: func(message string) {
+						fmt.Fprintln(os.Stderr, message)
 					},
-				}
-				submitResp, err := client.CreateAppStoreVersionSubmission(requestCtx, submitReq)
+				})
 				if err != nil {
-					return fmt.Errorf("publish appstore: failed to submit: %w", err)
+					return fmt.Errorf("publish appstore: %w", err)
 				}
-				result.SubmissionID = submitResp.Data.ID
-				result.Submitted = true
+				result.SubmissionID = submitResult.SubmissionID
+				result.Submitted = submitResult.SubmissionID != ""
 			}
 
 			return shared.PrintOutput(result, *output.Output, *output.Pretty)

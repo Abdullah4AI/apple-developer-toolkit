@@ -77,7 +77,7 @@ func Run(args []string, versionInfo string) int {
 		stopSignals()
 	}
 
-	if shouldRunSkillsUpdateCheck(commandName, runCtx) {
+	if shouldRunSkillsUpdateCheck(commandName, runCtx, runErr) {
 		maybeCheckForSkillUpdates(runCtx)
 	}
 
@@ -111,11 +111,14 @@ func shouldCancelRunContextAfterError(err error) bool {
 	return errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)
 }
 
-func shouldRunSkillsUpdateCheck(commandName string, runCtx context.Context) bool {
+func shouldRunSkillsUpdateCheck(commandName string, runCtx context.Context, runErr error) bool {
 	if commandName == "asc" || commandName == "asc install-skills" {
 		return false
 	}
 	if runCtx != nil && runCtx.Err() != nil {
+		return false
+	}
+	if shouldCancelRunContextAfterError(runErr) {
 		return false
 	}
 	return true

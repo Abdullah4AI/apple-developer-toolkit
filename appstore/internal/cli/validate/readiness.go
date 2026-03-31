@@ -62,6 +62,12 @@ func BuildReadinessReport(ctx context.Context, opts ReadinessOptions) (validatio
 		return validation.Report{}, fmt.Errorf("failed to fetch app: %w", err)
 	}
 
+	var contentRightsDeclaration *string
+	if appResp.Data.Attributes.ContentRightsDeclaration != nil {
+		value := strings.TrimSpace(string(*appResp.Data.Attributes.ContentRightsDeclaration))
+		contentRightsDeclaration = &value
+	}
+
 	versionLocsResp, err := client.GetAppStoreVersionLocalizations(requestCtx, resolvedVersionID)
 	if err != nil {
 		return validation.Report{}, fmt.Errorf("failed to fetch version localizations: %w", err)
@@ -126,10 +132,13 @@ func BuildReadinessReport(ctx context.Context, opts ReadinessOptions) (validatio
 	var attachedBuild *validation.Build
 	if opts.Build != nil {
 		attachedBuild = &validation.Build{
-			ID:              strings.TrimSpace(opts.Build.ID),
-			Version:         opts.Build.Version,
-			ProcessingState: opts.Build.ProcessingState,
-			Expired:         opts.Build.Expired,
+			ID:                            strings.TrimSpace(opts.Build.ID),
+			Version:                       opts.Build.Version,
+			ProcessingState:               opts.Build.ProcessingState,
+			Expired:                       opts.Build.Expired,
+			UsesNonExemptEncryption:       opts.Build.UsesNonExemptEncryption,
+			AppEncryptionDeclarationID:    strings.TrimSpace(opts.Build.AppEncryptionDeclarationID),
+			AppEncryptionDeclarationState: strings.TrimSpace(opts.Build.AppEncryptionDeclarationState),
 		}
 	} else {
 		buildResp, err := client.GetAppStoreVersionBuild(requestCtx, resolvedVersionID)
@@ -140,12 +149,16 @@ func BuildReadinessReport(ctx context.Context, opts ReadinessOptions) (validatio
 		} else if strings.TrimSpace(buildResp.Data.ID) != "" {
 			attrs := buildResp.Data.Attributes
 			attachedBuild = &validation.Build{
-				ID:              buildResp.Data.ID,
-				Version:         attrs.Version,
-				ProcessingState: attrs.ProcessingState,
-				Expired:         attrs.Expired,
+				ID:                      buildResp.Data.ID,
+				Version:                 attrs.Version,
+				ProcessingState:         attrs.ProcessingState,
+				Expired:                 attrs.Expired,
+				UsesNonExemptEncryption: attrs.UsesNonExemptEncryption,
 			}
 		}
+	}
+	if err := populateBuildEncryptionDeclaration(requestCtx, client, attachedBuild); err != nil {
+		return validation.Report{}, err
 	}
 
 	priceScheduleID := ""
@@ -271,6 +284,7 @@ func BuildReadinessReport(ctx context.Context, opts ReadinessOptions) (validatio
 		AppInfoLocalizations:        appInfoLocalizations,
 		ReviewDetails:               reviewDetails,
 		PrimaryCategoryID:           primaryCategoryID,
+		ContentRightsDeclaration:    contentRightsDeclaration,
 		Build:                       attachedBuild,
 		PriceScheduleID:             priceScheduleID,
 		PricingFetchSkipReason:      pricingFetchSkipReason,
@@ -291,6 +305,30 @@ func BuildReadinessReport(ctx context.Context, opts ReadinessOptions) (validatio
 	}, opts.Strict)
 
 	return report, nil
+}
+
+func populateBuildEncryptionDeclaration(ctx context.Context, client *asc.Client, build *validation.Build) error {
+	if build == nil || client == nil {
+		return nil
+	}
+	if build.UsesNonExemptEncryption == nil || !*build.UsesNonExemptEncryption {
+		return nil
+	}
+	if strings.TrimSpace(build.AppEncryptionDeclarationID) != "" || strings.TrimSpace(build.AppEncryptionDeclarationState) != "" {
+		return nil
+	}
+
+	declarationResp, err := client.GetBuildAppEncryptionDeclaration(ctx, strings.TrimSpace(build.ID))
+	if err != nil {
+		if asc.IsNotFound(err) {
+			return nil
+		}
+		return fmt.Errorf("failed to fetch build encryption declaration: %w", err)
+	}
+
+	build.AppEncryptionDeclarationID = strings.TrimSpace(declarationResp.Data.ID)
+	build.AppEncryptionDeclarationState = strings.TrimSpace(string(declarationResp.Data.Attributes.AppEncryptionDeclarationState))
+	return nil
 }
 
 func readinessPricingSkipReason(err error) (string, bool) {

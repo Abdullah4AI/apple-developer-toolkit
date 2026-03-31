@@ -345,7 +345,7 @@ entry for you to add manually.
 
 This command only updates local project metadata. It does not create or attach
 an App Store Connect encryption declaration. For uploaded builds, use
-"asc submit preflight" to verify ASC-side encryption state.
+"asc validate" to verify ASC-side readiness, including encryption state.
 
 Examples:
   asc encryption declarations exempt-declare
@@ -386,8 +386,8 @@ App Store submission. Most apps that only use HTTPS/TLS qualify as exempt.
 This command only updates local project metadata. It does not create or attach
 an App Store Connect encryption declaration.
 
-For uploaded builds in App Store Connect, verify encryption state with:
-  asc submit preflight --app "APP_ID" --version "1.0"
+For uploaded builds in App Store Connect, verify readiness with:
+  asc validate --app "APP_ID" --version "1.0"
 
 If a build still reports non-exempt encryption incorrectly, update the build:
   asc builds update --build-id "BUILD_ID" --uses-non-exempt-encryption=false

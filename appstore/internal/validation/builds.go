@@ -47,3 +47,7 @@ func buildChecks(build *Build) []CheckResult {
 
 	return checks
 }
+
+func buildSubmissionChecks(build *Build) []CheckResult {
+	return buildEncryptionChecks(build)
+}

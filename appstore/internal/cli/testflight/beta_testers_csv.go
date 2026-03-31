@@ -90,6 +90,9 @@ Examples:
 			if err := applyLegacyBuildIDAlias(buildID, legacyBuildID); err != nil {
 				return err
 			}
+			if strings.TrimSpace(*group) != "" && strings.TrimSpace(*buildID) != "" {
+				return shared.UsageError("--group cannot be combined with --build-id")
+			}
 			resolvedAppID := shared.ResolveAppID(*appID)
 			if resolvedAppID == "" {
 				fmt.Fprintf(os.Stderr, "Error: --app is required (or set ASC_APP_ID)\n\n")

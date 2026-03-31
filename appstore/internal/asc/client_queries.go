@@ -556,6 +556,17 @@ type pricePointsQuery struct {
 	territory string
 }
 
+type appPriceSchedulePricesQuery struct {
+	listQuery
+	startDate        string
+	endDate          string
+	territory        string
+	include          []string
+	priceFields      []string
+	pricePointFields []string
+	territoryFields  []string
+}
+
 type accessibilityDeclarationsQuery struct {
 	listQuery
 	deviceFamilies []string
@@ -799,20 +810,27 @@ func buildBetaGroupTestersQuery(query *betaGroupTestersQuery) string {
 	return values.Encode()
 }
 
-func buildBetaTestersQuery(appID string, query *betaTestersQuery) string {
+func buildBetaTestersQuery(appID string, query *betaTestersQuery) (string, error) {
+	// The API allows only one relationship filter at a time. Reject conflicting
+	// combinations up front so every call site gets a consistent error instead of
+	// silently dropping a filter.
+	if strings.TrimSpace(query.filterBuilds) != "" && len(query.groupIDs) > 0 {
+		return "", fmt.Errorf("--group cannot be combined with --build-id (API supports only one relationship filter)")
+	}
+
 	values := url.Values{}
-	// API allows only one relationship filter, so prefer builds over apps if provided
 	if strings.TrimSpace(query.filterBuilds) != "" {
 		values.Set("filter[builds]", strings.TrimSpace(query.filterBuilds))
+	} else if len(query.groupIDs) > 0 {
+		addCSV(values, "filter[betaGroups]", query.groupIDs)
 	} else if strings.TrimSpace(appID) != "" {
 		values.Set("filter[apps]", strings.TrimSpace(appID))
 	}
 	if strings.TrimSpace(query.email) != "" {
 		values.Set("filter[email]", strings.TrimSpace(query.email))
 	}
-	addCSV(values, "filter[betaGroups]", query.groupIDs)
 	addLimit(values, query.limit)
-	return values.Encode()
+	return values.Encode(), nil
 }
 
 func buildBundleIDsQuery(query *bundleIDsQuery) string {
@@ -1547,6 +1565,25 @@ func buildPricePointsQuery(query *pricePointsQuery) string {
 	if strings.TrimSpace(query.territory) != "" {
 		values.Set("filter[territory]", strings.TrimSpace(query.territory))
 	}
+	addLimit(values, query.limit)
+	return values.Encode()
+}
+
+func buildAppPriceSchedulePricesQuery(query *appPriceSchedulePricesQuery) string {
+	values := url.Values{}
+	if strings.TrimSpace(query.startDate) != "" {
+		values.Set("filter[startDate]", strings.TrimSpace(query.startDate))
+	}
+	if strings.TrimSpace(query.endDate) != "" {
+		values.Set("filter[endDate]", strings.TrimSpace(query.endDate))
+	}
+	if strings.TrimSpace(query.territory) != "" {
+		values.Set("filter[territory]", strings.TrimSpace(query.territory))
+	}
+	addCSV(values, "include", query.include)
+	addCSV(values, "fields[appPrices]", query.priceFields)
+	addCSV(values, "fields[appPricePoints]", query.pricePointFields)
+	addCSV(values, "fields[territories]", query.territoryFields)
 	addLimit(values, query.limit)
 	return values.Encode()
 }

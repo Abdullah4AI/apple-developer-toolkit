@@ -1717,6 +1717,16 @@ func TestSubscriptionsValidationErrors(t *testing.T) {
 			wantErr: "--offer-duration is required",
 		},
 		{
+			name:    "subscriptions introductory-offers import missing subscription-id",
+			args:    []string{"subscriptions", "offers", "introductory", "import", "--input", "offers.csv"},
+			wantErr: "--subscription-id is required",
+		},
+		{
+			name:    "subscriptions introductory-offers import missing input",
+			args:    []string{"subscriptions", "offers", "introductory", "import", "--subscription-id", "SUB_ID"},
+			wantErr: "--input is required",
+		},
+		{
 			name:    "subscriptions introductory-offers update missing update flags",
 			args:    []string{"subscriptions", "offers", "introductory", "update", "--id", "OFFER_ID"},
 			wantErr: "at least one update flag is required",

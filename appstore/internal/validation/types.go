@@ -53,6 +53,7 @@ type Input struct {
 	AppInfoLocalizations        []AppInfoLocalization
 	ReviewDetails               *ReviewDetails
 	PrimaryCategoryID           string
+	ContentRightsDeclaration    *string
 	Build                       *Build
 	PriceScheduleID             string
 	PricingFetchSkipReason      string
@@ -126,10 +127,13 @@ type ReviewDetails struct {
 
 // Build represents an attached build for a version.
 type Build struct {
-	ID              string
-	Version         string
-	ProcessingState string
-	Expired         bool
+	ID                            string
+	Version                       string
+	ProcessingState               string
+	Expired                       bool
+	UsesNonExemptEncryption       *bool
+	AppEncryptionDeclarationID    string
+	AppEncryptionDeclarationState string
 }
 
 // AgeRatingDeclaration represents age rating attributes for validation.

@@ -25,13 +25,15 @@ func SubscriptionsIntroductoryOffersCommand() *ffcli.Command {
 
 Examples:
   asc subscriptions introductory-offers list --subscription-id "SUB_ID"
-  asc subscriptions introductory-offers create --subscription-id "SUB_ID" --offer-duration ONE_MONTH --offer-mode FREE_TRIAL --number-of-periods 1`,
+  asc subscriptions introductory-offers create --subscription-id "SUB_ID" --offer-duration ONE_MONTH --offer-mode FREE_TRIAL --number-of-periods 1
+  asc subscriptions introductory-offers import --subscription-id "SUB_ID" --input "./offers.csv" --offer-duration ONE_WEEK --offer-mode FREE_TRIAL --number-of-periods 1`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
 			SubscriptionsIntroductoryOffersListCommand(),
 			SubscriptionsIntroductoryOffersGetCommand(),
 			SubscriptionsIntroductoryOffersCreateCommand(),
+			SubscriptionsIntroductoryOffersImportCommand(),
 			SubscriptionsIntroductoryOffersUpdateCommand(),
 			SubscriptionsIntroductoryOffersDeleteCommand(),
 		},

@@ -814,8 +814,14 @@ func (c *Client) GetBetaTesters(ctx context.Context, appID string, opts ...BetaT
 			return nil, fmt.Errorf("betaTesters: %w", err)
 		}
 		path = query.nextURL
-	} else if queryString := buildBetaTestersQuery(appID, query); queryString != "" {
-		path += "?" + queryString
+	} else {
+		queryString, err := buildBetaTestersQuery(appID, query)
+		if err != nil {
+			return nil, fmt.Errorf("betaTesters: %w", err)
+		}
+		if queryString != "" {
+			path += "?" + queryString
+		}
 	}
 
 	data, err := c.do(ctx, "GET", path, nil)

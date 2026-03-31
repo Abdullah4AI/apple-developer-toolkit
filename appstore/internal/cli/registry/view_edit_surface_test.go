@@ -227,11 +227,11 @@ func usageListsSubcommand(usage, name string) bool {
 	lines := strings.Split(usage, "\n")
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
-		switch {
-		case trimmed == "SUBCOMMANDS":
+		switch trimmed {
+		case "SUBCOMMANDS":
 			inSubcommands = true
 			continue
-		case trimmed == "FLAGS" || trimmed == "":
+		case "FLAGS", "":
 			if inSubcommands {
 				return false
 			}

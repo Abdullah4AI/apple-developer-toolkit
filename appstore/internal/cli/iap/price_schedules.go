@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/peterbourgon/ff/v3/ffcli"
 
@@ -352,6 +353,7 @@ func IAPPriceSchedulesManualPricesCommand() *ffcli.Command {
 	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
 	next := fs.String("next", "", "Fetch next page using a links.next URL")
 	paginate := fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")
+	resolved := fs.Bool("resolved", false, "Return the current effective price per territory")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
@@ -362,7 +364,8 @@ func IAPPriceSchedulesManualPricesCommand() *ffcli.Command {
 
 Examples:
   asc iap pricing schedules manual-prices --schedule-id "SCHEDULE_ID"
-  asc iap pricing schedules manual-prices --schedule-id "SCHEDULE_ID" --paginate`,
+  asc iap pricing schedules manual-prices --schedule-id "SCHEDULE_ID" --paginate
+  asc iap pricing schedules manual-prices --schedule-id "SCHEDULE_ID" --resolved`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -371,6 +374,10 @@ Examples:
 			}
 			if err := shared.ValidateNextURL(*next); err != nil {
 				return fmt.Errorf("iap pricing schedules manual-prices: %w", err)
+			}
+			if *resolved && strings.TrimSpace(*next) != "" {
+				fmt.Fprintln(os.Stderr, "Error: --resolved cannot be combined with --next")
+				return flag.ErrHelp
 			}
 
 			id := strings.TrimSpace(*scheduleID)
@@ -386,6 +393,14 @@ Examples:
 
 			requestCtx, cancel := shared.ContextWithTimeout(ctx)
 			defer cancel()
+
+			if *resolved {
+				resp, err := fetchResolvedIAPSchedulePrices(requestCtx, client, id, "manual", *limit, *next, time.Now().UTC())
+				if err != nil {
+					return fmt.Errorf("iap pricing schedules manual-prices: failed to resolve: %w", err)
+				}
+				return shared.PrintResolvedPrices(resp, *output.Output, *output.Pretty)
+			}
 
 			opts := []asc.IAPPriceSchedulePricesOption{
 				asc.WithIAPPriceSchedulePricesLimit(*limit),
@@ -427,6 +442,7 @@ func IAPPriceSchedulesAutomaticPricesCommand() *ffcli.Command {
 	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
 	next := fs.String("next", "", "Fetch next page using a links.next URL")
 	paginate := fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")
+	resolved := fs.Bool("resolved", false, "Return the current effective price per territory")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
@@ -437,7 +453,8 @@ func IAPPriceSchedulesAutomaticPricesCommand() *ffcli.Command {
 
 Examples:
   asc iap pricing schedules automatic-prices --schedule-id "SCHEDULE_ID"
-  asc iap pricing schedules automatic-prices --schedule-id "SCHEDULE_ID" --paginate`,
+  asc iap pricing schedules automatic-prices --schedule-id "SCHEDULE_ID" --paginate
+  asc iap pricing schedules automatic-prices --schedule-id "SCHEDULE_ID" --resolved`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -446,6 +463,10 @@ Examples:
 			}
 			if err := shared.ValidateNextURL(*next); err != nil {
 				return fmt.Errorf("iap pricing schedules automatic-prices: %w", err)
+			}
+			if *resolved && strings.TrimSpace(*next) != "" {
+				fmt.Fprintln(os.Stderr, "Error: --resolved cannot be combined with --next")
+				return flag.ErrHelp
 			}
 
 			id := strings.TrimSpace(*scheduleID)
@@ -461,6 +482,14 @@ Examples:
 
 			requestCtx, cancel := shared.ContextWithTimeout(ctx)
 			defer cancel()
+
+			if *resolved {
+				resp, err := fetchResolvedIAPSchedulePrices(requestCtx, client, id, "automatic", *limit, *next, time.Now().UTC())
+				if err != nil {
+					return fmt.Errorf("iap pricing schedules automatic-prices: failed to resolve: %w", err)
+				}
+				return shared.PrintResolvedPrices(resp, *output.Output, *output.Pretty)
+			}
 
 			opts := []asc.IAPPriceSchedulePricesOption{
 				asc.WithIAPPriceSchedulePricesLimit(*limit),

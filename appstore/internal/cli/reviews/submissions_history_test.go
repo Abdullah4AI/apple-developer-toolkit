@@ -214,8 +214,8 @@ func makeSubmissionVersionContexts(entries ...struct {
 func TestEnrichSubmissions_HappyPath(t *testing.T) {
 	transport := testRoundTripper(func(req *http.Request) (*http.Response, error) {
 		path := req.URL.Path
-		switch {
-		case path == "/v1/reviewSubmissions/sub-1/items":
+		switch path {
+		case "/v1/reviewSubmissions/sub-1/items":
 			return testJSONResponse(200, `{
 				"data": [{
 					"type": "reviewSubmissionItems",
@@ -227,7 +227,7 @@ func TestEnrichSubmissions_HappyPath(t *testing.T) {
 				}],
 				"links": {"self": "/v1/reviewSubmissions/sub-1/items"}
 			}`), nil
-		case path == "/v1/reviewSubmissions/sub-2/items":
+		case "/v1/reviewSubmissions/sub-2/items":
 			return testJSONResponse(200, `{
 				"data": [{
 					"type": "reviewSubmissionItems",
@@ -461,14 +461,14 @@ func TestFetchReviewSubmissions_PaginateAnnotatesIncludedParseErrorWithPage(t *t
 func TestEnrichSubmissions_VersionFilter(t *testing.T) {
 	transport := testRoundTripper(func(req *http.Request) (*http.Response, error) {
 		path := req.URL.Path
-		switch {
-		case path == "/v1/reviewSubmissions/sub-1/items":
+		switch path {
+		case "/v1/reviewSubmissions/sub-1/items":
 			return testJSONResponse(200, `{
 				"data": [{"type": "reviewSubmissionItems", "id": "item-1", "attributes": {"state": "APPROVED"},
 					"relationships": {"appStoreVersion": {"data": {"type": "appStoreVersions", "id": "ver-1"}}}}],
 				"links": {"self": "/v1/reviewSubmissions/sub-1/items"}
 			}`), nil
-		case path == "/v1/reviewSubmissions/sub-2/items":
+		case "/v1/reviewSubmissions/sub-2/items":
 			return testJSONResponse(200, `{
 				"data": [{"type": "reviewSubmissionItems", "id": "item-2", "attributes": {"state": "APPROVED"},
 					"relationships": {"appStoreVersion": {"data": {"type": "appStoreVersions", "id": "ver-2"}}}}],

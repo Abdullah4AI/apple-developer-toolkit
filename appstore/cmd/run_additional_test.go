@@ -230,19 +230,19 @@ func TestShouldCancelRunContextAfterError(t *testing.T) {
 
 func TestShouldRunSkillsUpdateCheck(t *testing.T) {
 	t.Run("runs for successful subcommand context", func(t *testing.T) {
-		if !shouldRunSkillsUpdateCheck("asc completion", context.Background()) {
+		if !shouldRunSkillsUpdateCheck("asc completion", context.Background(), nil) {
 			t.Fatal("expected skills update check to run for successful subcommand")
 		}
 	})
 
 	t.Run("skips for root command", func(t *testing.T) {
-		if shouldRunSkillsUpdateCheck("asc", context.Background()) {
+		if shouldRunSkillsUpdateCheck("asc", context.Background(), nil) {
 			t.Fatal("expected skills update check to be skipped for root command")
 		}
 	})
 
 	t.Run("skips for install-skills command", func(t *testing.T) {
-		if shouldRunSkillsUpdateCheck("asc install-skills", context.Background()) {
+		if shouldRunSkillsUpdateCheck("asc install-skills", context.Background(), nil) {
 			t.Fatal("expected skills update check to be skipped for install-skills command")
 		}
 	})
@@ -251,8 +251,14 @@ func TestShouldRunSkillsUpdateCheck(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
 
-		if shouldRunSkillsUpdateCheck("asc web auth login", ctx) {
+		if shouldRunSkillsUpdateCheck("asc web auth login", ctx, nil) {
 			t.Fatal("expected skills update check to be skipped for canceled run context")
+		}
+	})
+
+	t.Run("skips when run error indicates cancellation before context observes it", func(t *testing.T) {
+		if shouldRunSkillsUpdateCheck("asc web auth login", context.Background(), fmt.Errorf("prompt interrupted: %w", context.Canceled)) {
+			t.Fatal("expected skills update check to be skipped for canceled run error")
 		}
 	})
 }
@@ -401,6 +407,9 @@ func TestRootCommand_UsageGroupsSubcommands(t *testing.T) {
 
 	if strings.Contains(usage, "  offer-codes:") || strings.Contains(usage, "  win-back-offers:") || strings.Contains(usage, "  promoted-purchases:") {
 		t.Fatalf("expected deprecated monetization shims to be hidden from primary root usage, got %q", usage)
+	}
+	if strings.Contains(usage, "  beta-build-localizations:") {
+		t.Fatalf("expected beta-build-localizations to remain hidden from primary root usage, got %q", usage)
 	}
 
 	if !strings.Contains(usage, "  subscriptions:") {

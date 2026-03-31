@@ -998,7 +998,7 @@ func listCredentialSummariesFromKeyring(kr keyring.Keyring) ([]Credential, error
 			return listFromKeyring(kr)
 		}
 		name := strings.TrimPrefix(key, keyringItemPrefix)
-		summary := parseCredentialMetadataDescription(metadata.Item.Description)
+		summary := parseCredentialMetadataDescription(metadata.Description)
 		if !hasCredentialMetadata(summary) {
 			if stored, ok := storedMetadata[name]; ok && storedKeychainMetadataMatches(stored, metadata.ModificationTime) {
 				summary = storedKeychainMetadataSummary(stored)

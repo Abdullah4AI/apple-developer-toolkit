@@ -134,7 +134,7 @@ Examples:
 
 			token := resolveGitHubToken()
 
-			if len(entry.Labels) > 0 && !(*local && !*dryRun) {
+			if len(entry.Labels) > 0 && (!*local || *dryRun) {
 				validationCtx, validationCancel := shared.ContextWithTimeout(ctx)
 				validatedLabels, err := validateRequestedLabels(validationCtx, token, entry.Labels)
 				validationCancel()
@@ -382,9 +382,9 @@ func issueBody(e LogEntry) string {
 	}
 
 	b.WriteString("\n## Environment\n\n")
-	b.WriteString(fmt.Sprintf("- **asc version:** %s\n", e.ASCVersion))
-	b.WriteString(fmt.Sprintf("- **OS:** %s\n", e.OS))
-	b.WriteString(fmt.Sprintf("- **Filed via:** `asc snitch`\n"))
+	fmt.Fprintf(&b, "- **asc version:** %s\n", e.ASCVersion)
+	fmt.Fprintf(&b, "- **OS:** %s\n", e.OS)
+	b.WriteString("- **Filed via:** `asc snitch`\n")
 
 	return b.String()
 }

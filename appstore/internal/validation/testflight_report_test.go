@@ -67,7 +67,7 @@ func TestValidateTestFlight_Pass(t *testing.T) {
 		AppID:            "app-1",
 		AppPrimaryLocale: "en-US",
 		BuildID:          "build-1",
-		Build:            &Build{ID: "build-1", ProcessingState: "VALID"},
+		Build:            &Build{ID: "build-1", ProcessingState: "VALID", UsesNonExemptEncryption: boolPtr(false)},
 		BuildAppID:       "app-1",
 		BetaReviewDetails: &BetaReviewDetails{
 			ID:               "beta-detail-1",
@@ -84,4 +84,8 @@ func TestValidateTestFlight_Pass(t *testing.T) {
 	if len(report.Checks) != 0 {
 		t.Fatalf("expected no checks, got %d (%v)", len(report.Checks), report.Checks)
 	}
+}
+
+func boolPtr(v bool) *bool {
+	return &v
 }

@@ -113,6 +113,15 @@ Examples:
 				if err != nil {
 					return fmt.Errorf("game-center achievements list: failed to get Game Center detail: %w", err)
 				}
+				gcDetailID = strings.TrimSpace(gcDetailID)
+				if gcDetailID == "" {
+					fmt.Fprintln(os.Stderr, noGameCenterDetailWarning)
+					resp := &asc.GameCenterAchievementsResponse{
+						Data:  []asc.Resource[asc.GameCenterAchievementAttributes]{},
+						Links: asc.Links{},
+					}
+					return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+				}
 			}
 
 			opts := []asc.GCAchievementsOption{

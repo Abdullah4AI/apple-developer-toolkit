@@ -3,6 +3,7 @@ package status
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -133,6 +134,9 @@ func StatusCommand() *ffcli.Command {
 
 	appID := fs.String("app", "", "App Store Connect app ID, bundle ID, or exact app name (required, or ASC_APP_ID env)")
 	include := fs.String("include", "", "Comma-separated sections: app,builds,testflight,appstore,submission,review,phased-release,links")
+	watch := fs.Bool("watch", false, "Poll and emit snapshots when status changes")
+	pollInterval := fs.Duration("poll-interval", 30*time.Second, "Polling interval for --watch")
+	maxPolls := fs.Int("max-polls", 0, "Maximum polls for --watch (0 = unlimited)")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
@@ -149,6 +153,7 @@ Examples:
   asc status --app "com.example.app"
   asc status --app "My App"
   asc status --app "123456789" --include builds,testflight,submission
+  asc status --app "123456789" --watch --poll-interval 15s
   asc status --app "123456789" --output table`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
@@ -168,21 +173,36 @@ Examples:
 			if err != nil {
 				return shared.UsageError(err.Error())
 			}
+			if *pollInterval <= 0 {
+				return shared.UsageError("--poll-interval must be greater than 0")
+			}
+			if *maxPolls < 0 {
+				return shared.UsageError("--max-polls must be greater than or equal to 0")
+			}
+			if *maxPolls > 0 && !*watch {
+				return shared.UsageError("--max-polls requires --watch")
+			}
 
 			client, err := shared.GetASCClient()
 			if err != nil {
 				return fmt.Errorf("status: %w", err)
 			}
 
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
-			defer cancel()
-
-			resolvedAppID, err = shared.ResolveAppIDWithLookup(requestCtx, client, resolvedAppID)
+			lookupCtx, cancel := shared.ContextWithTimeout(ctx)
+			resolvedAppID, err = shared.ResolveAppIDWithLookup(lookupCtx, client, resolvedAppID)
+			cancel()
 			if err != nil {
 				return fmt.Errorf("status: %w", err)
 			}
 
-			resp, err := collectDashboard(requestCtx, client, resolvedAppID, includes)
+			if *watch {
+				return watchDashboard(ctx, client, resolvedAppID, includes, *output.Output, *output.Pretty, *pollInterval, *maxPolls)
+			}
+
+			requestCtx, cancel := shared.ContextWithTimeout(ctx)
+			defer cancel()
+
+			resp, err := collectDashboard(requestCtx, client, resolvedAppID, includes, false)
 			if err != nil {
 				return fmt.Errorf("status: %w", err)
 			}
@@ -195,6 +215,139 @@ Examples:
 				func() error { renderMarkdown(resp); return nil },
 			)
 		},
+	}
+}
+
+func watchDashboard(ctx context.Context, client *asc.Client, appID string, includes includeSet, output string, pretty bool, pollInterval time.Duration, maxPolls int) error {
+	seen := ""
+
+	for poll := 1; maxPolls == 0 || poll <= maxPolls; poll++ {
+		requestCtx, cancel := shared.ContextWithTimeout(ctx)
+		resp, err := collectDashboard(requestCtx, client, appID, includes, true)
+		cancel()
+		if err != nil {
+			if watchContextDone(ctx) {
+				return nil
+			}
+			return fmt.Errorf("status: %w", err)
+		}
+
+		current, err := buildDashboardSnapshotSignature(resp)
+		if err != nil {
+			return fmt.Errorf("status: encode watch snapshot: %w", err)
+		}
+		if poll == 1 || current != seen {
+			if err := printWatchSnapshot(resp, output, pretty, poll > 1); err != nil {
+				return err
+			}
+			seen = current
+		}
+
+		if maxPolls > 0 && poll >= maxPolls {
+			return nil
+		}
+		if err := waitForNextPoll(ctx, pollInterval); err != nil {
+			if watchContextDone(ctx) {
+				return nil
+			}
+			return err
+		}
+	}
+
+	return nil
+}
+
+func watchContextDone(ctx context.Context) bool {
+	if ctx == nil {
+		return false
+	}
+	return errors.Is(ctx.Err(), context.Canceled) || errors.Is(ctx.Err(), context.DeadlineExceeded)
+}
+
+func buildDashboardSnapshotSignature(resp *dashboardResponse) (string, error) {
+	data, err := json.Marshal(normalizeDashboardSnapshot(resp))
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
+}
+
+func normalizeDashboardSnapshot(resp *dashboardResponse) *dashboardResponse {
+	if resp == nil {
+		return nil
+	}
+
+	normalized := *resp
+	normalized.Summary = resp.Summary
+	normalized.Summary.Blockers = normalizeStringSlice(resp.Summary.Blockers)
+	if resp.Submission != nil {
+		submission := *resp.Submission
+		submission.BlockingIssues = normalizeStringSlice(resp.Submission.BlockingIssues)
+		normalized.Submission = &submission
+	}
+	return &normalized
+}
+
+func normalizeStringSlice(values []string) []string {
+	if len(values) == 0 {
+		return []string{}
+	}
+	return append([]string(nil), values...)
+}
+
+func printWatchSnapshot(resp *dashboardResponse, output string, pretty bool, separator bool) error {
+	format := strings.ToLower(strings.TrimSpace(output))
+	if format == "" {
+		format = shared.DefaultOutputFormat()
+	}
+	switch format {
+	case "json":
+		var (
+			data []byte
+			err  error
+		)
+		if pretty {
+			data, err = json.MarshalIndent(resp, "", "  ")
+		} else {
+			data, err = json.Marshal(resp)
+		}
+		if err != nil {
+			return fmt.Errorf("status: encode watch snapshot: %w", err)
+		}
+		_, err = fmt.Fprintln(os.Stdout, string(data))
+		return err
+	case "table":
+		if separator {
+			fmt.Fprintln(os.Stdout)
+		}
+		renderTable(resp)
+		return nil
+	case "markdown", "md":
+		if separator {
+			fmt.Fprintln(os.Stdout, "\n---")
+		}
+		renderMarkdown(resp)
+		return nil
+	default:
+		return shared.PrintOutputWithRenderers(
+			resp,
+			output,
+			pretty,
+			func() error { renderTable(resp); return nil },
+			func() error { renderMarkdown(resp); return nil },
+		)
+	}
+}
+
+func waitForNextPoll(ctx context.Context, pollInterval time.Duration) error {
+	timer := time.NewTimer(pollInterval)
+	defer timer.Stop()
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
 	}
 }
 
@@ -240,7 +393,7 @@ func parseInclude(value string) (includeSet, error) {
 	return includes, nil
 }
 
-func collectDashboard(ctx context.Context, client *asc.Client, appID string, includes includeSet) (*dashboardResponse, error) {
+func collectDashboard(ctx context.Context, client *asc.Client, appID string, includes includeSet, watchMode bool) (*dashboardResponse, error) {
 	resp := &dashboardResponse{}
 	if includes.app {
 		appResp, err := client.GetApp(ctx, appID)
@@ -284,7 +437,7 @@ func collectDashboard(ctx context.Context, client *asc.Client, appID string, inc
 		tasks = append(tasks, sectionTask{
 			name: "submission/review",
 			run: func() error {
-				return fillSubmissionAndReview(ctx, client, appID, includes, resp)
+				return fillSubmissionAndReview(ctx, client, appID, includes, resp, watchMode)
 			},
 		})
 	}
@@ -468,12 +621,12 @@ func optionalRelationshipResourceID(relationships json.RawMessage, key string) (
 }
 
 func fillAppStoreAndPhasedRelease(ctx context.Context, client *asc.Client, appID string, includes includeSet, resp *dashboardResponse) error {
-	versions, err := client.GetAppStoreVersions(ctx, appID, asc.WithAppStoreVersionsLimit(200))
+	versions, err := shared.FetchAllAppStoreVersions(ctx, client, appID, asc.WithAppStoreVersionsLimit(200))
 	if err != nil {
 		return err
 	}
 
-	latestVersion := selectLatestAppStoreVersion(versions.Data)
+	latestVersion := selectLatestAppStoreVersion(versions)
 	if includes.appstore {
 		section := &appStoreSection{}
 		if latestVersion != nil {
@@ -511,18 +664,20 @@ func fillAppStoreAndPhasedRelease(ctx context.Context, client *asc.Client, appID
 	return nil
 }
 
-func fillSubmissionAndReview(ctx context.Context, client *asc.Client, appID string, includes includeSet, resp *dashboardResponse) error {
-	submissions, err := client.GetReviewSubmissions(ctx, appID, asc.WithReviewSubmissionsLimit(200))
+func fillSubmissionAndReview(ctx context.Context, client *asc.Client, appID string, includes includeSet, resp *dashboardResponse, watchMode bool) error {
+	submissions, err := fetchStatusReviewSubmissions(ctx, client, appID, watchMode)
 	if err != nil {
 		return err
 	}
+	latest := selectLatestReviewSubmission(submissions)
+	latestByPlatform := selectLatestReviewSubmissionsByPlatform(submissions)
 
 	if includes.submission {
 		section := &submissionSection{
 			InFlight:       false,
 			BlockingIssues: []string{},
 		}
-		for _, submission := range submissions.Data {
+		for _, submission := range latestByPlatform {
 			state := string(submission.Attributes.SubmissionState)
 			if isInFlightSubmissionState(state) {
 				section.InFlight = true
@@ -537,7 +692,6 @@ func fillSubmissionAndReview(ctx context.Context, client *asc.Client, appID stri
 
 	if includes.review {
 		section := &reviewSection{}
-		latest := selectLatestReviewSubmission(submissions.Data)
 		if latest != nil {
 			section.LatestSubmissionID = latest.ID
 			section.State = string(latest.Attributes.SubmissionState)
@@ -550,6 +704,22 @@ func fillSubmissionAndReview(ctx context.Context, client *asc.Client, appID stri
 	return nil
 }
 
+func fetchStatusReviewSubmissions(ctx context.Context, client *asc.Client, appID string, watchMode bool) ([]asc.ReviewSubmissionResource, error) {
+	if !watchMode {
+		return shared.FetchAllReviewSubmissions(ctx, client, appID, asc.WithReviewSubmissionsLimit(200))
+	}
+
+	// Watch mode uses a bounded recent snapshot instead of walking submission history on every poll.
+	resp, err := client.GetReviewSubmissions(ctx, appID, asc.WithReviewSubmissionsLimit(200))
+	if err != nil {
+		return nil, err
+	}
+	if resp == nil || resp.Data == nil {
+		return []asc.ReviewSubmissionResource{}, nil
+	}
+	return resp.Data, nil
+}
+
 func selectLatestAppStoreVersion(versions []asc.Resource[asc.AppStoreVersionAttributes]) *asc.Resource[asc.AppStoreVersionAttributes] {
 	if len(versions) == 0 {
 		return nil
@@ -557,7 +727,7 @@ func selectLatestAppStoreVersion(versions []asc.Resource[asc.AppStoreVersionAttr
 
 	best := versions[0]
 	for _, current := range versions[1:] {
-		dateOrder := compareRFC3339DateStrings(current.Attributes.CreatedDate, best.Attributes.CreatedDate)
+		dateOrder := shared.CompareRFC3339DateStrings(current.Attributes.CreatedDate, best.Attributes.CreatedDate)
 		if dateOrder > 0 {
 			best = current
 			continue
@@ -576,16 +746,39 @@ func selectLatestReviewSubmission(submissions []asc.ReviewSubmissionResource) *a
 
 	best := submissions[0]
 	for _, current := range submissions[1:] {
-		dateOrder := compareRFC3339DateStrings(current.Attributes.SubmittedDate, best.Attributes.SubmittedDate)
-		if dateOrder > 0 {
-			best = current
-			continue
-		}
-		if dateOrder == 0 && current.ID > best.ID {
+		if shared.ShouldPreferLatestReviewSubmission(current, best) {
 			best = current
 		}
 	}
 	return &best
+}
+
+func selectLatestReviewSubmissionsByPlatform(submissions []asc.ReviewSubmissionResource) []asc.ReviewSubmissionResource {
+	if len(submissions) == 0 {
+		return nil
+	}
+
+	latest := make(map[string]asc.ReviewSubmissionResource)
+	for _, current := range submissions {
+		platformKey := strings.ToUpper(strings.TrimSpace(string(current.Attributes.Platform)))
+		if platformKey == "" {
+			platformKey = "__UNKNOWN__"
+		}
+		best, ok := latest[platformKey]
+		if !ok || shared.ShouldPreferLatestReviewSubmission(current, best) {
+			latest[platformKey] = current
+		}
+	}
+
+	selected := make([]asc.ReviewSubmissionResource, 0, len(latest))
+	for _, submission := range latest {
+		selected = append(selected, submission)
+	}
+
+	slices.SortFunc(selected, func(a, b asc.ReviewSubmissionResource) int {
+		return strings.Compare(a.ID, b.ID)
+	})
+	return selected
 }
 
 func selectLatestBetaReviewSubmission(submissions []asc.Resource[asc.BetaAppReviewSubmissionAttributes]) *asc.Resource[asc.BetaAppReviewSubmissionAttributes] {
@@ -595,7 +788,7 @@ func selectLatestBetaReviewSubmission(submissions []asc.Resource[asc.BetaAppRevi
 
 	best := submissions[0]
 	for _, current := range submissions[1:] {
-		dateOrder := compareRFC3339DateStrings(current.Attributes.SubmittedDate, best.Attributes.SubmittedDate)
+		dateOrder := shared.CompareRFC3339DateStrings(current.Attributes.SubmittedDate, best.Attributes.SubmittedDate)
 		if dateOrder > 0 {
 			best = current
 			continue
@@ -605,50 +798,6 @@ func selectLatestBetaReviewSubmission(submissions []asc.Resource[asc.BetaAppRevi
 		}
 	}
 	return &best
-}
-
-func compareRFC3339DateStrings(current, best string) int {
-	currentTime, currentValid := parseRFC3339Date(current)
-	bestTime, bestValid := parseRFC3339Date(best)
-
-	switch {
-	case currentValid && bestValid:
-		if currentTime.After(bestTime) {
-			return 1
-		}
-		if currentTime.Before(bestTime) {
-			return -1
-		}
-		return 0
-	case currentValid:
-		return 1
-	case bestValid:
-		return -1
-	default:
-		current = strings.TrimSpace(current)
-		best = strings.TrimSpace(best)
-		if current > best {
-			return 1
-		}
-		if current < best {
-			return -1
-		}
-		return 0
-	}
-}
-
-func parseRFC3339Date(value string) (time.Time, bool) {
-	trimmed := strings.TrimSpace(value)
-	if trimmed == "" {
-		return time.Time{}, false
-	}
-	if parsed, err := time.Parse(time.RFC3339, trimmed); err == nil {
-		return parsed, true
-	}
-	if parsed, err := time.Parse(time.RFC3339Nano, trimmed); err == nil {
-		return parsed, true
-	}
-	return time.Time{}, false
 }
 
 func isDistributedState(state string) bool {
@@ -988,7 +1137,7 @@ func formatDateWithRelative(value string) string {
 }
 
 func parseRelativeDate(value string) (time.Time, bool) {
-	if parsed, ok := parseRFC3339Date(value); ok {
+	if parsed, ok := shared.ParseRFC3339Date(value); ok {
 		return parsed.UTC(), true
 	}
 	if parsed, err := time.Parse("2006-01-02", value); err == nil {

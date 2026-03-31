@@ -583,13 +583,13 @@ func communityWallChangeTitle(appName string) string {
 func communityWallPullRequestBody(input communityWallSubmitInput, candidate communityWallEntry) string {
 	var builder strings.Builder
 	builder.WriteString("## Summary\n\n")
-	builder.WriteString(fmt.Sprintf("- add `%s` to the Wall of Apps\n", strings.TrimSpace(candidate.App)))
+	fmt.Fprintf(&builder, "- add `%s` to the Wall of Apps\n", strings.TrimSpace(candidate.App))
 	builder.WriteString("\n## Entry\n\n")
 	if strings.TrimSpace(input.AppID) != "" {
-		builder.WriteString(fmt.Sprintf("- App ID: %s\n", strings.TrimSpace(input.AppID)))
+		fmt.Fprintf(&builder, "- App ID: %s\n", strings.TrimSpace(input.AppID))
 	}
-	builder.WriteString(fmt.Sprintf("- App: %s\n", strings.TrimSpace(candidate.App)))
-	builder.WriteString(fmt.Sprintf("- Link: %s\n", strings.TrimSpace(candidate.Link)))
+	fmt.Fprintf(&builder, "- App: %s\n", strings.TrimSpace(candidate.App))
+	fmt.Fprintf(&builder, "- Link: %s\n", strings.TrimSpace(candidate.Link))
 	builder.WriteString("\n## Notes\n\n")
 	builder.WriteString("- Submitted via `asc apps wall submit`\n")
 	return builder.String()
@@ -985,7 +985,7 @@ func (client communityWallGitHubClientAPI) refSHA(ctx context.Context, owner, re
 		return "", fmt.Errorf("decode Git ref response: %w", err)
 	}
 	if strings.TrimSpace(payload.Object.SHA) == "" {
-		return "", fmt.Errorf("Git ref %s for %s/%s returned an empty SHA", ref, owner, repo)
+		return "", fmt.Errorf("git ref %s for %s/%s returned an empty SHA", ref, owner, repo)
 	}
 	return strings.TrimSpace(payload.Object.SHA), nil
 }

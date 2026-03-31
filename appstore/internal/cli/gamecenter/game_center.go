@@ -11,6 +11,8 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
+const noGameCenterDetailWarning = `Warning: no Game Center detail exists for this app. Run "asc game-center details create --app <APP_ID>" to create one.`
+
 // GameCenterCommand returns the game-center command group.
 func GameCenterCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("game-center", flag.ExitOnError)

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/peterbourgon/ff/v3/ffcli"
 
@@ -23,6 +24,7 @@ func PricingCommand() *ffcli.Command {
 		LongHelp: `Manage app pricing and availability.
 
 Examples:
+  asc pricing current --app "123456789"
   asc pricing territories list
   asc pricing price-points --app "123456789"
   asc pricing price-points --app "123456789" --territory "USA"
@@ -42,6 +44,7 @@ Examples:
   asc pricing availability territory-availabilities --availability "AVAILABILITY_ID"`,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
+			PricingCurrentCommand(),
 			PricingTerritoriesCommand(),
 			PricingPricePointsCommand(),
 			PricingTiersCommand(),
@@ -418,6 +421,10 @@ func PricingScheduleManualPricesCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("pricing schedule manual-prices", flag.ExitOnError)
 
 	scheduleID := fs.String("schedule", "", "App price schedule ID")
+	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
+	next := fs.String("next", "", "Fetch next page using a links.next URL")
+	paginate := fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")
+	resolved := fs.Bool("resolved", false, "Return the current effective price per territory")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
@@ -427,12 +434,26 @@ func PricingScheduleManualPricesCommand() *ffcli.Command {
 		LongHelp: `List manual prices for a schedule.
 
 Examples:
-  asc pricing schedule manual-prices --schedule "SCHEDULE_ID"`,
+  asc pricing schedule manual-prices --schedule "SCHEDULE_ID"
+  asc pricing schedule manual-prices --schedule "SCHEDULE_ID" --paginate
+  asc pricing schedule manual-prices --schedule "SCHEDULE_ID" --resolved`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
+			if *limit != 0 && (*limit < 1 || *limit > 200) {
+				fmt.Fprintln(os.Stderr, "Error: pricing schedule manual-prices: --limit must be between 1 and 200")
+				return flag.ErrHelp
+			}
+			if err := shared.ValidateNextURL(*next); err != nil {
+				return fmt.Errorf("pricing schedule manual-prices: %w", err)
+			}
+			if *resolved && strings.TrimSpace(*next) != "" {
+				fmt.Fprintln(os.Stderr, "Error: --resolved cannot be combined with --next")
+				return flag.ErrHelp
+			}
+
 			trimmedScheduleID := strings.TrimSpace(*scheduleID)
-			if trimmedScheduleID == "" {
+			if trimmedScheduleID == "" && strings.TrimSpace(*next) == "" {
 				fmt.Fprintln(os.Stderr, "Error: --schedule is required")
 				return flag.ErrHelp
 			}
@@ -445,7 +466,37 @@ Examples:
 			requestCtx, cancel := shared.ContextWithTimeout(ctx)
 			defer cancel()
 
-			resp, err := client.GetAppPriceScheduleManualPrices(requestCtx, trimmedScheduleID)
+			if *resolved {
+				resp, err := fetchResolvedAppSchedulePrices(requestCtx, client, trimmedScheduleID, "manual", *limit, *next, time.Now().UTC())
+				if err != nil {
+					return fmt.Errorf("pricing schedule manual-prices: failed to resolve: %w", err)
+				}
+				return shared.PrintResolvedPrices(resp, *output.Output, *output.Pretty)
+			}
+
+			opts := []asc.AppPriceSchedulePricesOption{
+				asc.WithAppPriceSchedulePricesLimit(*limit),
+				asc.WithAppPriceSchedulePricesNextURL(*next),
+			}
+
+			if *paginate {
+				paginateOpts := append(opts, asc.WithAppPriceSchedulePricesLimit(200))
+				firstPage, err := client.GetAppPriceScheduleManualPrices(requestCtx, trimmedScheduleID, paginateOpts...)
+				if err != nil {
+					return fmt.Errorf("pricing schedule manual-prices: %w", err)
+				}
+
+				resp, err := asc.PaginateAll(requestCtx, firstPage, func(ctx context.Context, nextURL string) (asc.PaginatedResponse, error) {
+					return client.GetAppPriceScheduleManualPrices(ctx, trimmedScheduleID, asc.WithAppPriceSchedulePricesNextURL(nextURL))
+				})
+				if err != nil {
+					return fmt.Errorf("pricing schedule manual-prices: %w", err)
+				}
+
+				return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+			}
+
+			resp, err := client.GetAppPriceScheduleManualPrices(requestCtx, trimmedScheduleID, opts...)
 			if err != nil {
 				return fmt.Errorf("pricing schedule manual-prices: %w", err)
 			}
@@ -460,6 +511,10 @@ func PricingScheduleAutomaticPricesCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("pricing schedule automatic-prices", flag.ExitOnError)
 
 	scheduleID := fs.String("schedule", "", "App price schedule ID")
+	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
+	next := fs.String("next", "", "Fetch next page using a links.next URL")
+	paginate := fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")
+	resolved := fs.Bool("resolved", false, "Return the current effective price per territory")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
@@ -469,12 +524,26 @@ func PricingScheduleAutomaticPricesCommand() *ffcli.Command {
 		LongHelp: `List automatic prices for a schedule.
 
 Examples:
-  asc pricing schedule automatic-prices --schedule "SCHEDULE_ID"`,
+  asc pricing schedule automatic-prices --schedule "SCHEDULE_ID"
+  asc pricing schedule automatic-prices --schedule "SCHEDULE_ID" --paginate
+  asc pricing schedule automatic-prices --schedule "SCHEDULE_ID" --resolved`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
+			if *limit != 0 && (*limit < 1 || *limit > 200) {
+				fmt.Fprintln(os.Stderr, "Error: pricing schedule automatic-prices: --limit must be between 1 and 200")
+				return flag.ErrHelp
+			}
+			if err := shared.ValidateNextURL(*next); err != nil {
+				return fmt.Errorf("pricing schedule automatic-prices: %w", err)
+			}
+			if *resolved && strings.TrimSpace(*next) != "" {
+				fmt.Fprintln(os.Stderr, "Error: --resolved cannot be combined with --next")
+				return flag.ErrHelp
+			}
+
 			trimmedScheduleID := strings.TrimSpace(*scheduleID)
-			if trimmedScheduleID == "" {
+			if trimmedScheduleID == "" && strings.TrimSpace(*next) == "" {
 				fmt.Fprintln(os.Stderr, "Error: --schedule is required")
 				return flag.ErrHelp
 			}
@@ -487,7 +556,37 @@ Examples:
 			requestCtx, cancel := shared.ContextWithTimeout(ctx)
 			defer cancel()
 
-			resp, err := client.GetAppPriceScheduleAutomaticPrices(requestCtx, trimmedScheduleID)
+			if *resolved {
+				resp, err := fetchResolvedAppSchedulePrices(requestCtx, client, trimmedScheduleID, "automatic", *limit, *next, time.Now().UTC())
+				if err != nil {
+					return fmt.Errorf("pricing schedule automatic-prices: failed to resolve: %w", err)
+				}
+				return shared.PrintResolvedPrices(resp, *output.Output, *output.Pretty)
+			}
+
+			opts := []asc.AppPriceSchedulePricesOption{
+				asc.WithAppPriceSchedulePricesLimit(*limit),
+				asc.WithAppPriceSchedulePricesNextURL(*next),
+			}
+
+			if *paginate {
+				paginateOpts := append(opts, asc.WithAppPriceSchedulePricesLimit(200))
+				firstPage, err := client.GetAppPriceScheduleAutomaticPrices(requestCtx, trimmedScheduleID, paginateOpts...)
+				if err != nil {
+					return fmt.Errorf("pricing schedule automatic-prices: %w", err)
+				}
+
+				resp, err := asc.PaginateAll(requestCtx, firstPage, func(ctx context.Context, nextURL string) (asc.PaginatedResponse, error) {
+					return client.GetAppPriceScheduleAutomaticPrices(ctx, trimmedScheduleID, asc.WithAppPriceSchedulePricesNextURL(nextURL))
+				})
+				if err != nil {
+					return fmt.Errorf("pricing schedule automatic-prices: %w", err)
+				}
+
+				return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+			}
+
+			resp, err := client.GetAppPriceScheduleAutomaticPrices(requestCtx, trimmedScheduleID, opts...)
 			if err != nil {
 				return fmt.Errorf("pricing schedule automatic-prices: %w", err)
 			}

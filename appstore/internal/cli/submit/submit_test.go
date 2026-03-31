@@ -2287,6 +2287,57 @@ func TestExtractSubmissionConflict(t *testing.T) {
 	})
 }
 
+func TestCollectSubmissionErrorSignalsPrefersStructuredAPIDetailsOverWrappedErrorText(t *testing.T) {
+	err := fmt.Errorf(
+		"wrapper already added to another reviewSubmission with id wrapper-submission: %w",
+		&asc.APIError{
+			Code:   "ENTITY_ERROR",
+			Title:  "The request entity is not valid.",
+			Detail: "An attribute value is not valid.",
+			AssociatedErrors: map[string][]asc.APIAssociatedError{
+				"/v1/reviewSubmissionItems": {
+					{
+						Code:   "ENTITY_ERROR.RELATIONSHIP.INVALID",
+						Detail: "appStoreVersions with id version-1 was already added to another reviewSubmission with id canonical-submission",
+					},
+				},
+			},
+		},
+	)
+
+	signals := collectSubmissionErrorSignals(err)
+	if signals.existingSubmissionID != "canonical-submission" {
+		t.Fatalf("expected structured API detail to win, got %q", signals.existingSubmissionID)
+	}
+}
+
+func TestCollectSubmissionErrorSignalsTraversesJoinedErrorTree(t *testing.T) {
+	err := errors.Join(
+		errors.New("unrelated validation failure"),
+		fmt.Errorf(
+			"wrapper already added to another reviewSubmission with id wrapper-submission: %w",
+			&asc.APIError{
+				Code:   "ENTITY_ERROR",
+				Title:  "The request entity is not valid.",
+				Detail: "An attribute value is not valid.",
+				AssociatedErrors: map[string][]asc.APIAssociatedError{
+					"/v1/reviewSubmissionItems": {
+						{
+							Code:   "ENTITY_ERROR.RELATIONSHIP.INVALID",
+							Detail: "appStoreVersions with id version-1 was already added to another reviewSubmission with id canonical-submission",
+						},
+					},
+				},
+			},
+		),
+	)
+
+	signals := collectSubmissionErrorSignals(err)
+	if signals.existingSubmissionID != "canonical-submission" {
+		t.Fatalf("expected joined error tree to preserve structured API detail, got %q", signals.existingSubmissionID)
+	}
+}
+
 func TestAddVersionToSubmissionOrRecover_ExhaustsRetriesForRecentlyCanceledSubmission(t *testing.T) {
 	const staleSubmissionID = "stale-1"
 
@@ -2311,6 +2362,7 @@ func TestAddVersionToSubmissionOrRecover_ExhaustsRetriesForRecentlyCanceledSubmi
 		"new-sub-1",
 		"version-1",
 		map[string]struct{}{staleSubmissionID: {}},
+		nil,
 	)
 	if err == nil {
 		t.Fatal("expected retry exhaustion error")
@@ -2361,6 +2413,7 @@ func TestAddVersionToSubmissionOrRecover_RetriesStillInProgressConflictForRecent
 		"new-sub-1",
 		"version-1",
 		map[string]struct{}{staleSubmissionID: {}},
+		nil,
 	)
 	if err != nil {
 		t.Fatalf("expected retry recovery, got %v", err)
@@ -2400,6 +2453,7 @@ func TestAddVersionToSubmissionOrRecover_ReturnsContextErrorWhileWaitingForDetac
 		"new-sub-1",
 		"version-1",
 		map[string]struct{}{staleSubmissionID: {}},
+		nil,
 	)
 	if err == nil {
 		t.Fatal("expected context cancellation while waiting to retry")
@@ -2433,7 +2487,7 @@ func TestCleanupEmptyReviewSubmissionWarnsOnUnexpectedCancelError(t *testing.T) 
 	}))
 
 	stderr := captureSubmitStderr(t, func() {
-		cleanupEmptyReviewSubmission(context.Background(), client, "empty-sub-1")
+		cleanupEmptyReviewSubmission(context.Background(), client, "empty-sub-1", nil)
 	})
 	if !strings.Contains(stderr, "Warning: failed to cancel empty submission empty-sub-1:") {
 		t.Fatalf("expected cleanup warning, got %q", stderr)
@@ -2456,7 +2510,7 @@ func TestCleanupEmptyReviewSubmissionIgnoresExpectedNonCancellableState(t *testi
 	}))
 
 	stderr := captureSubmitStderr(t, func() {
-		cleanupEmptyReviewSubmission(context.Background(), client, "empty-sub-1")
+		cleanupEmptyReviewSubmission(context.Background(), client, "empty-sub-1", nil)
 	})
 	if stderr != "" {
 		t.Fatalf("expected no cleanup warning for expected non-cancellable state, got %q", stderr)
@@ -2479,7 +2533,7 @@ func TestCleanupEmptyReviewSubmissionWarnsOnGenericConflict(t *testing.T) {
 	}))
 
 	stderr := captureSubmitStderr(t, func() {
-		cleanupEmptyReviewSubmission(context.Background(), client, "empty-sub-1")
+		cleanupEmptyReviewSubmission(context.Background(), client, "empty-sub-1", nil)
 	})
 	if !strings.Contains(stderr, "Warning: failed to cancel empty submission empty-sub-1:") {
 		t.Fatalf("expected cleanup warning for generic conflict, got %q", stderr)
@@ -2515,7 +2569,7 @@ func TestPrepareReviewSubmissionForCreateWarnsOnGenericConflict(t *testing.T) {
 	}))
 
 	stderr := captureSubmitStderr(t, func() {
-		got := prepareReviewSubmissionForCreate(context.Background(), client, "app-1", "IOS", "version-1")
+		got := prepareReviewSubmissionForCreate(context.Background(), client, "app-1", "IOS", "version-1", nil)
 		if got.reuseSubmissionID != "" {
 			t.Fatalf("expected no reusable submission, got %#v", got)
 		}
@@ -2582,7 +2636,7 @@ func TestPrepareReviewSubmissionForCreateDoesNotReuseSubmissionThatBecameCanceli
 	}))
 
 	stderr := captureSubmitStderr(t, func() {
-		got := prepareReviewSubmissionForCreate(context.Background(), client, "app-1", "IOS", "version-1")
+		got := prepareReviewSubmissionForCreate(context.Background(), client, "app-1", "IOS", "version-1", nil)
 		if got.reuseSubmissionID != "" {
 			t.Fatalf("expected no reusable submission after refreshed CANCELING state, got %#v", got)
 		}
@@ -2658,7 +2712,7 @@ func TestPrepareReviewSubmissionForCreateCancelsMixedTargetVersionSubmission(t *
 	}))
 
 	stderr := captureSubmitStderr(t, func() {
-		got := prepareReviewSubmissionForCreate(context.Background(), client, "app-1", "IOS", "version-1")
+		got := prepareReviewSubmissionForCreate(context.Background(), client, "app-1", "IOS", "version-1", nil)
 		if got.reuseSubmissionID != "" {
 			t.Fatalf("expected mixed-item submission not to be reused, got %#v", got)
 		}
@@ -2716,7 +2770,7 @@ func TestPrepareReviewSubmissionForCreateTreatsEmptyItemsAsMissingVersion(t *tes
 	}))
 
 	stderr := captureSubmitStderr(t, func() {
-		got := prepareReviewSubmissionForCreate(context.Background(), client, "app-1", "IOS", "version-1")
+		got := prepareReviewSubmissionForCreate(context.Background(), client, "app-1", "IOS", "version-1", nil)
 		if got.reuseSubmissionID != "empty-items-submission" {
 			t.Fatalf("expected empty-items submission to be reused, got %#v", got)
 		}
@@ -2793,7 +2847,7 @@ func TestPrepareReviewSubmissionForCreatePreservesCanceledIDsWhenReusingAfterCon
 	}))
 
 	stderr := captureSubmitStderr(t, func() {
-		got := prepareReviewSubmissionForCreate(context.Background(), client, "app-1", "IOS", "version-1")
+		got := prepareReviewSubmissionForCreate(context.Background(), client, "app-1", "IOS", "version-1", nil)
 		if got.reuseSubmissionID != "reusable-empty-sub" {
 			t.Fatalf("expected reusable submission after cancel conflict, got %#v", got)
 		}
@@ -2871,7 +2925,7 @@ func TestPrepareReviewSubmissionForCreatePaginatesReadyForReviewLookups(t *testi
 	}))
 
 	stderr := captureSubmitStderr(t, func() {
-		got := prepareReviewSubmissionForCreate(context.Background(), client, "app-1", "IOS", "version-1")
+		got := prepareReviewSubmissionForCreate(context.Background(), client, "app-1", "IOS", "version-1", nil)
 		if got.reuseSubmissionID != "existing-submission" {
 			t.Fatalf("expected paginated submission to be reused, got %#v", got)
 		}
@@ -2888,6 +2942,43 @@ func TestPrepareReviewSubmissionForCreatePaginatesReadyForReviewLookups(t *testi
 	}
 	if !strings.Contains(stderr, "Reusing existing review submission existing-submission") {
 		t.Fatalf("expected reuse message for paginated submission, got %q", stderr)
+	}
+}
+
+func TestSubmitPreflightRequestContextUsesDefaultTimeoutWithoutCallerDeadline(t *testing.T) {
+	t.Setenv("ASC_TIMEOUT", "100ms")
+
+	ctx, cancel := submitPreflightRequestContext(context.Background(), 0)
+	defer cancel()
+
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		t.Fatal("expected default preflight context to have a deadline")
+	}
+	if budget := time.Until(deadline); budget <= 0 || budget > 500*time.Millisecond {
+		t.Fatalf("expected default preflight budget near ASC_TIMEOUT, got %v", budget)
+	}
+}
+
+func TestSubmitPreflightRequestContextPreservesCallerDeadlineWithoutOverride(t *testing.T) {
+	t.Setenv("ASC_TIMEOUT", "100ms")
+
+	parentDeadline := time.Now().Add(2 * time.Minute)
+	parentCtx, parentCancel := context.WithDeadline(context.Background(), parentDeadline)
+	defer parentCancel()
+
+	ctx, cancel := submitPreflightRequestContext(parentCtx, 0)
+	defer cancel()
+
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		t.Fatal("expected inherited preflight context to keep caller deadline")
+	}
+	if deadline.Before(parentDeadline.Add(-time.Second)) || deadline.After(parentDeadline.Add(time.Second)) {
+		t.Fatalf("expected inherited deadline near %v, got %v", parentDeadline, deadline)
+	}
+	if budget := time.Until(deadline); budget < time.Minute {
+		t.Fatalf("expected inherited budget to remain on caller timeout, got %v", budget)
 	}
 }
 
@@ -2928,6 +3019,78 @@ func TestPrintSubmissionErrorHintsUsesExistingRunnableCommands(t *testing.T) {
 	}
 }
 
+type silentSubmissionHintWrapper struct {
+	err error
+}
+
+func (w silentSubmissionHintWrapper) Error() string {
+	return "outer wrapper"
+}
+
+func (w silentSubmissionHintWrapper) Unwrap() error {
+	return w.err
+}
+
+type silentSubmissionHintJoinWrapper struct {
+	errs []error
+}
+
+func (w silentSubmissionHintJoinWrapper) Error() string {
+	return "outer join wrapper"
+}
+
+func (w silentSubmissionHintJoinWrapper) Unwrap() []error {
+	return w.errs
+}
+
+func TestPrintSubmissionErrorHintsTraversesWrappedErrors(t *testing.T) {
+	wrapped := silentSubmissionHintWrapper{
+		err: silentSubmissionHintWrapper{
+			err: errors.New("ageRatingDeclaration appDataUsage"),
+		},
+	}
+
+	stderr := captureSubmitStderr(t, func() {
+		printSubmissionErrorHints(wrapped, submissionErrorHintContext{
+			AppID: "app-1",
+		})
+	})
+
+	for _, want := range []string{
+		"Hint: Review current age rating: asc age-rating view --app app-1",
+		"Hint: Review age-rating update flags: asc age-rating edit --help",
+		"Hint: Complete App Privacy at: https://appstoreconnect.apple.com/apps/app-1/appPrivacy",
+	} {
+		if !strings.Contains(stderr, want) {
+			t.Fatalf("expected wrapped-error hint %q in stderr, got %q", want, stderr)
+		}
+	}
+}
+
+func TestPrintSubmissionErrorHintsTraversesJoinedErrors(t *testing.T) {
+	joined := silentSubmissionHintJoinWrapper{
+		errs: []error{
+			errors.New("unrelated"),
+			errors.New("primaryCategory"),
+		},
+	}
+
+	stderr := captureSubmitStderr(t, func() {
+		printSubmissionErrorHints(joined, submissionErrorHintContext{
+			AppID: "app-1",
+		})
+	})
+
+	for _, want := range []string{
+		"Hint: List available categories: asc categories list",
+		"Hint: Review category update flags: asc app-setup categories set --help",
+	} {
+		if !strings.Contains(stderr, want) {
+			t.Fatalf("expected joined-error hint %q in stderr, got %q", want, stderr)
+		}
+	}
+}
+
 func TestPrintSubmissionErrorHintsUsesAssociatedErrorsForSubmissionStateConflicts(t *testing.T) {
 	err := &asc.APIError{
 		Code:   "ENTITY_ERROR",
@@ -2962,12 +3125,14 @@ func TestPrintSubmissionErrorHintsUsesAssociatedErrorsForSubmissionStateConflict
 		"Hint: Check the active submission: asc submit status --id active-submission-1",
 		"Hint: Inspect the active submission payload: asc review submissions-get --id active-submission-1",
 		"Hint: Re-run readiness validation: asc validate --app app-1 --version-id version-1",
-		"Hint: Re-run submit preflight: asc submit preflight --app app-1 --version 1.0 --platform MAC_OS",
 		"Hint: Review the release dashboard: asc status --app app-1 --include submission,appstore,review",
 	} {
 		if !strings.Contains(stderr, want) {
 			t.Fatalf("expected hint %q in stderr, got %q", want, stderr)
 		}
+	}
+	if strings.Contains(stderr, "Hint: Re-run readiness validation: asc validate --app app-1 --version 1.0 --platform MAC_OS") {
+		t.Fatalf("did not expect duplicate version-string readiness hint, got %q", stderr)
 	}
 }
 

@@ -181,7 +181,7 @@ func TestSubmitCreatePreflightSkipsWhatsNewForFirstVersionOnDifferentPlatform(t 
 			}, nil
 
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/builds/build-tv":
-			body := `{"data":{"type":"builds","id":"build-tv","attributes":{"version":"1.0.0","processingState":"VALID","expired":false}}}`
+			body := `{"data":{"type":"builds","id":"build-tv","attributes":{"version":"1.0.0","processingState":"VALID","expired":false,"usesNonExemptEncryption":false}}}`
 			return &http.Response{
 				StatusCode: http.StatusOK,
 				Body:       io.NopCloser(strings.NewReader(body)),

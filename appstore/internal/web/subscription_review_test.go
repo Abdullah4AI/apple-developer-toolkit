@@ -96,7 +96,7 @@ func TestListReviewSubscriptionsAggregatesPagination(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.RawQuery {
 		case "fields%5Bsubscriptions%5D=productId%2Cname%2Cstate%2CisAppStoreReviewInProgress%2CsubmitWithNextAppStoreVersion&include=subscriptions&limit=300&limit%5Bsubscriptions%5D=1000&sort=referenceName":
-			_, _ = w.Write([]byte(fmt.Sprintf(`{
+			fmt.Fprintf(w, `{
 				"data": [{
 					"id": "group-1",
 					"type": "subscriptionGroups",
@@ -113,7 +113,7 @@ func TestListReviewSubscriptionsAggregatesPagination(t *testing.T) {
 				"links": {
 					"next": "%s/apps/app-123/subscriptionGroups?cursor=page-2"
 				}
-			}`, server.URL)))
+			}`, server.URL)
 		case "cursor=page-2":
 			_, _ = w.Write([]byte(`{
 				"data": [{

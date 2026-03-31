@@ -87,3 +87,33 @@ func TestResolveSubscriptionPriceImportTerritoryID_MapsCommonNames(t *testing.T)
 		t.Fatalf("expected AFG, got %q", got)
 	}
 }
+
+func TestResolveSubscriptionPriceImportTerritoryID_RejectsUnknownThreeLetterCode(t *testing.T) {
+	_, err := resolveSubscriptionPriceImportTerritoryID("ZZZ")
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+func TestResolveSubscriptionPriceImportTerritoryID_AcceptsSupportedThreeLetterCodeWithoutDisplayName(t *testing.T) {
+	got, err := resolveSubscriptionPriceImportTerritoryID("ANT")
+	if err != nil {
+		t.Fatalf("resolveSubscriptionPriceImportTerritoryID() error: %v", err)
+	}
+	if got != "ANT" {
+		t.Fatalf("expected ANT, got %q", got)
+	}
+}
+
+func TestResolveSubscriptionPriceImportTerritoryID_RejectsTerritoriesOutsideASCSet(t *testing.T) {
+	tests := []string{"ATA", "AQ", "Antarctica"}
+
+	for _, input := range tests {
+		t.Run(input, func(t *testing.T) {
+			_, err := resolveSubscriptionPriceImportTerritoryID(input)
+			if err == nil {
+				t.Fatalf("expected error for %q, got nil", input)
+			}
+		})
+	}
+}

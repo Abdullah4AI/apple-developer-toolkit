@@ -43,8 +43,11 @@ func ValidateCommand() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "validate",
 		ShortUsage: "asc validate --app \"APP_ID\" (--version-id \"VERSION_ID\" | --version \"VERSION\") [flags]",
-		ShortHelp:  "Validate App Store version readiness before submission.",
+		ShortHelp:  "Canonical App Store submission readiness report.",
 		LongHelp: `Validate pre-submission readiness for an App Store version.
+
+This is the canonical command for App Store submission readiness.
+Use it instead of ` + "`asc submit preflight`" + `.
 
 Checks:
   - Metadata length limits
@@ -52,6 +55,8 @@ Checks:
   - App Store review details completeness
   - Primary category configured
   - Build attached and processed
+  - Build encryption declaration readiness
+  - App content rights declaration
   - Pricing schedule and territory availability
   - Screenshot presence and size compatibility
   - Subscription review readiness and promotional image guidance

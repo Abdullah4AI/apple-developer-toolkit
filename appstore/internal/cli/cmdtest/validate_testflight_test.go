@@ -75,7 +75,7 @@ func newValidateTestFlightClient(t *testing.T, fixture validateTestFlightFixture
 func validValidateTestFlightFixture() validateTestFlightFixture {
 	return validateTestFlightFixture{
 		app:              `{"data":{"type":"apps","id":"app-1","attributes":{"primaryLocale":"en-US"}}}`,
-		build:            `{"data":{"type":"builds","id":"build-1","attributes":{"version":"1.0","processingState":"VALID","expired":false}}}`,
+		build:            `{"data":{"type":"builds","id":"build-1","attributes":{"version":"1.0","processingState":"VALID","expired":false,"usesNonExemptEncryption":false}}}`,
 		buildApp:         `{"data":{"type":"apps","id":"app-1","attributes":{"primaryLocale":"en-US"}}}`,
 		betaReviewDetail: `{"data":{"type":"betaAppReviewDetails","id":"beta-detail-1","attributes":{"contactFirstName":"A","contactLastName":"B","contactEmail":"a@example.com","contactPhone":"123","demoAccountRequired":false}}}`,
 		buildLocs:        `{"data":[{"type":"betaBuildLocalizations","id":"bbl-1","attributes":{"locale":"en-US","whatsNew":"Test this build"}}]}`,

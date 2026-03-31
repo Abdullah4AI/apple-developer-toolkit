@@ -275,6 +275,9 @@ type LinkagesOption func(*linkagesQuery)
 // PricePointsOption is a functional option for GetAppPricePoints.
 type PricePointsOption func(*pricePointsQuery)
 
+// AppPriceSchedulePricesOption is a functional option for app price schedule price endpoints.
+type AppPriceSchedulePricesOption func(*appPriceSchedulePricesQuery)
+
 // AccessibilityDeclarationsOption is a functional option for accessibility declarations.
 type AccessibilityDeclarationsOption func(*accessibilityDeclarationsQuery)
 
@@ -3212,6 +3215,79 @@ func WithPricePointsTerritory(territory string) PricePointsOption {
 		if strings.TrimSpace(territory) != "" {
 			q.territory = strings.ToUpper(strings.TrimSpace(territory))
 		}
+	}
+}
+
+// WithAppPriceSchedulePricesLimit sets the max number of schedule prices to return.
+func WithAppPriceSchedulePricesLimit(limit int) AppPriceSchedulePricesOption {
+	return func(q *appPriceSchedulePricesQuery) {
+		if limit > 0 {
+			q.limit = limit
+		}
+	}
+}
+
+// WithAppPriceSchedulePricesNextURL uses a next page URL directly.
+func WithAppPriceSchedulePricesNextURL(next string) AppPriceSchedulePricesOption {
+	return func(q *appPriceSchedulePricesQuery) {
+		if strings.TrimSpace(next) != "" {
+			q.nextURL = strings.TrimSpace(next)
+		}
+	}
+}
+
+// WithAppPriceSchedulePricesStartDate filters schedule prices by inclusive start date.
+func WithAppPriceSchedulePricesStartDate(startDate string) AppPriceSchedulePricesOption {
+	return func(q *appPriceSchedulePricesQuery) {
+		if strings.TrimSpace(startDate) != "" {
+			q.startDate = strings.TrimSpace(startDate)
+		}
+	}
+}
+
+// WithAppPriceSchedulePricesEndDate filters schedule prices by inclusive end date.
+func WithAppPriceSchedulePricesEndDate(endDate string) AppPriceSchedulePricesOption {
+	return func(q *appPriceSchedulePricesQuery) {
+		if strings.TrimSpace(endDate) != "" {
+			q.endDate = strings.TrimSpace(endDate)
+		}
+	}
+}
+
+// WithAppPriceSchedulePricesTerritory filters schedule prices by territory code.
+func WithAppPriceSchedulePricesTerritory(territory string) AppPriceSchedulePricesOption {
+	return func(q *appPriceSchedulePricesQuery) {
+		if strings.TrimSpace(territory) != "" {
+			q.territory = strings.ToUpper(strings.TrimSpace(territory))
+		}
+	}
+}
+
+// WithAppPriceSchedulePricesInclude sets include values for app schedule price responses.
+func WithAppPriceSchedulePricesInclude(include []string) AppPriceSchedulePricesOption {
+	return func(q *appPriceSchedulePricesQuery) {
+		q.include = normalizeList(include)
+	}
+}
+
+// WithAppPriceSchedulePricesFields sets fields[appPrices] for app schedule price responses.
+func WithAppPriceSchedulePricesFields(fields []string) AppPriceSchedulePricesOption {
+	return func(q *appPriceSchedulePricesQuery) {
+		q.priceFields = normalizeList(fields)
+	}
+}
+
+// WithAppPriceSchedulePricesPricePointFields sets fields[appPricePoints] for included app price points.
+func WithAppPriceSchedulePricesPricePointFields(fields []string) AppPriceSchedulePricesOption {
+	return func(q *appPriceSchedulePricesQuery) {
+		q.pricePointFields = normalizeList(fields)
+	}
+}
+
+// WithAppPriceSchedulePricesTerritoryFields sets fields[territories] for included territories.
+func WithAppPriceSchedulePricesTerritoryFields(fields []string) AppPriceSchedulePricesOption {
+	return func(q *appPriceSchedulePricesQuery) {
+		q.territoryFields = normalizeList(fields)
 	}
 }
 

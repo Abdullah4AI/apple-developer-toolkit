@@ -599,9 +599,7 @@ func buildAnalyticsInAppEventsRows(result *webcore.AnalyticsInAppEventsPage) [][
 		rows = append(rows, []string{"Event", event.Name, event.Status, fmt.Sprintf("published=%s start=%s end=%s", event.Published, event.Start, event.End)})
 	}
 	if result.SelectedMetrics != nil {
-		for _, row := range buildAnalyticsMeasureRows("Selected Event Metrics", result.SelectedMetrics.Results) {
-			rows = append(rows, row)
-		}
+		rows = append(rows, buildAnalyticsMeasureRows("Selected Event Metrics", result.SelectedMetrics.Results)...)
 	}
 	return rows
 }

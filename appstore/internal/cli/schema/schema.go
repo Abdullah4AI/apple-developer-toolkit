@@ -54,10 +54,7 @@ func matchEndpoint(e Endpoint, query string) bool {
 		return true
 	}
 	dotNotation := pathToDotNotation(e.Method, e.Path)
-	if strings.Contains(strings.ToLower(dotNotation), q) {
-		return true
-	}
-	return false
+	return strings.Contains(strings.ToLower(dotNotation), q)
 }
 
 func pathToDotNotation(method, path string) string {

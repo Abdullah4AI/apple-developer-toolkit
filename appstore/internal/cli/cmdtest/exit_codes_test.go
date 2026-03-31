@@ -2,6 +2,10 @@ package cmdtest
 
 import (
 	"flag"
+	"io"
+	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -31,6 +35,99 @@ func TestExitCodeConstantsMatch(t *testing.T) {
 				t.Errorf("%s = %d, want %d", tt.name, got, tt.expected)
 			}
 		})
+	}
+}
+
+func TestRun_IntroductoryOffersImportInvalidStartDateReturnsExitUsage(t *testing.T) {
+	t.Setenv("ASC_BYPASS_KEYCHAIN", "1")
+	t.Setenv("ASC_KEY_ID", "")
+	t.Setenv("ASC_ISSUER_ID", "")
+	t.Setenv("ASC_PRIVATE_KEY_PATH", "")
+	t.Setenv("ASC_CONFIG_PATH", t.TempDir()+"/config.json")
+
+	csvPath := filepath.Join(t.TempDir(), "offers.csv")
+	if err := os.WriteFile(csvPath, []byte("territory\nUSA\n"), 0o600); err != nil {
+		t.Fatalf("WriteFile() error: %v", err)
+	}
+
+	_, stderr := captureOutput(t, func() {
+		code := cmd.Run([]string{
+			"subscriptions", "offers", "introductory", "import",
+			"--subscription-id", "SUB_ID",
+			"--input", csvPath,
+			"--start-date", "2026-99-99",
+		}, "1.0.0")
+		if code != cmd.ExitUsage {
+			t.Fatalf("expected exit code %d, got %d", cmd.ExitUsage, code)
+		}
+	})
+
+	if !strings.Contains(stderr, "--start-date must be in YYYY-MM-DD format") {
+		t.Fatalf("expected start-date validation in stderr, got %q", stderr)
+	}
+}
+
+func TestRun_IntroductoryOffersImportPartialFailureReturnsExitError(t *testing.T) {
+	setupAuth(t)
+	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
+
+	originalTransport := http.DefaultTransport
+	t.Cleanup(func() {
+		http.DefaultTransport = originalTransport
+	})
+
+	requestCount := 0
+	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		requestCount++
+		if req.Method != http.MethodPost || req.URL.Path != "/v1/subscriptionIntroductoryOffers" {
+			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.Path)
+		}
+
+		switch requestCount {
+		case 1:
+			body := `{"data":{"type":"subscriptionIntroductoryOffers","id":"offer-1"}}`
+			return &http.Response{
+				StatusCode: http.StatusCreated,
+				Body:       io.NopCloser(strings.NewReader(body)),
+				Header:     http.Header{"Content-Type": []string{"application/json"}},
+			}, nil
+		case 2:
+			body := `{"errors":[{"status":"422","title":"Unprocessable Entity","detail":"invalid intro offer"}]}`
+			return &http.Response{
+				StatusCode: http.StatusUnprocessableEntity,
+				Body:       io.NopCloser(strings.NewReader(body)),
+				Header:     http.Header{"Content-Type": []string{"application/json"}},
+			}, nil
+		default:
+			t.Fatalf("unexpected request count %d", requestCount)
+			return nil, nil
+		}
+	})
+
+	csvPath := filepath.Join(t.TempDir(), "offers.csv")
+	if err := os.WriteFile(csvPath, []byte("territory\nUSA\nAFG\n"), 0o600); err != nil {
+		t.Fatalf("WriteFile() error: %v", err)
+	}
+
+	stdout, stderr := captureOutput(t, func() {
+		code := cmd.Run([]string{
+			"subscriptions", "offers", "introductory", "import",
+			"--subscription-id", "SUB_ID",
+			"--input", csvPath,
+			"--offer-duration", "ONE_WEEK",
+			"--offer-mode", "FREE_TRIAL",
+			"--number-of-periods", "1",
+		}, "1.0.0")
+		if code != cmd.ExitError {
+			t.Fatalf("expected exit code %d, got %d", cmd.ExitError, code)
+		}
+	})
+
+	if stderr != "" {
+		t.Fatalf("expected empty stderr, got %q", stderr)
+	}
+	if !strings.Contains(stdout, `"failed":1`) {
+		t.Fatalf("expected failure summary in stdout, got %q", stdout)
 	}
 }
 

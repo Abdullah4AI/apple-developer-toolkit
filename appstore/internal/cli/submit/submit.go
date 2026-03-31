@@ -120,7 +120,7 @@ Examples:
 				}
 			}
 
-			if err := runSubmitCreateLocalizationPreflight(ctx, client, resolvedAppID, resolvedVersionID, effectivePlatform); err != nil {
+			if err := runSubmitCreateLocalizationPreflight(ctx, client, resolvedAppID, resolvedVersionID, effectivePlatform, 0); err != nil {
 				return err
 			}
 
@@ -138,10 +138,10 @@ Examples:
 			}
 			attachCancel()
 
-			runSubmitCreateSubscriptionPreflight(ctx, client, resolvedAppID)
+			runSubmitCreateSubscriptionPreflight(ctx, client, resolvedAppID, 0)
 
 			preparationCtx, preparationCancel := shared.ContextWithTimeout(ctx)
-			preparedSubmission := prepareReviewSubmissionForCreate(preparationCtx, client, resolvedAppID, effectivePlatform, resolvedVersionID)
+			preparedSubmission := prepareReviewSubmissionForCreate(preparationCtx, client, resolvedAppID, effectivePlatform, resolvedVersionID, nil)
 			preparationCancel()
 
 			requestCtx, cancel := shared.ContextWithTimeout(ctx)
@@ -177,10 +177,13 @@ Examples:
 					submissionIDToSubmit,
 					resolvedVersionID,
 					preparedSubmission.canceledSubmissionIDs,
+					func(message string) {
+						fmt.Fprintln(os.Stderr, message)
+					},
 				)
 				if err != nil {
 					if createdSubmissionID != "" {
-						cleanupEmptyReviewSubmission(requestCtx, client, createdSubmissionID)
+						cleanupEmptyReviewSubmission(requestCtx, client, createdSubmissionID, nil)
 					}
 					printSubmissionErrorHints(err, submissionErrorHintContext{
 						AppID:         resolvedAppID,
@@ -192,7 +195,7 @@ Examples:
 				}
 			}
 			if createdSubmissionID != "" && submissionIDToSubmit != createdSubmissionID {
-				cleanupEmptyReviewSubmission(requestCtx, client, createdSubmissionID)
+				cleanupEmptyReviewSubmission(requestCtx, client, createdSubmissionID, nil)
 			}
 
 			// Step 3: Submit for review
@@ -215,7 +218,7 @@ Examples:
 			result := &asc.AppStoreVersionSubmissionCreateResult{
 				SubmissionID: submitResp.Data.ID,
 				VersionID:    resolvedVersionID,
-				BuildID:      strings.TrimSpace(*buildID),
+				BuildID:      resolvedBuildID,
 				CreatedDate:  createdDatePtr,
 			}
 
@@ -224,8 +227,8 @@ Examples:
 	}
 }
 
-func runSubmitCreateLocalizationPreflight(ctx context.Context, client *asc.Client, appID, versionID, platform string) error {
-	localizationsCtx, localizationsCancel := shared.ContextWithTimeout(ctx)
+func runSubmitCreateLocalizationPreflight(ctx context.Context, client *asc.Client, appID, versionID, platform string, requestTimeout time.Duration) error {
+	localizationsCtx, localizationsCancel := submitPreflightRequestContext(ctx, requestTimeout)
 	localizations, err := client.GetAppStoreVersionLocalizations(localizationsCtx, versionID, asc.WithAppStoreVersionLocalizationsLimit(200))
 	localizationsCancel()
 	if err != nil {
@@ -236,7 +239,7 @@ func runSubmitCreateLocalizationPreflight(ctx context.Context, client *asc.Clien
 		return fmt.Errorf("submit create: submit preflight failed")
 	}
 
-	updateCtx, updateCancel := shared.ContextWithTimeout(ctx)
+	updateCtx, updateCancel := submitPreflightRequestContext(ctx, requestTimeout)
 	requireWhatsNew, err := isAppUpdate(updateCtx, client, appID, platform)
 	updateCancel()
 	if err != nil {
@@ -312,10 +315,11 @@ func submitCreateReadinessBuild(ctx context.Context, client *asc.Client, buildID
 
 	attrs := buildResp.Data.Attributes
 	return &validation.Build{
-		ID:              strings.TrimSpace(buildResp.Data.ID),
-		Version:         attrs.Version,
-		ProcessingState: attrs.ProcessingState,
-		Expired:         attrs.Expired,
+		ID:                      strings.TrimSpace(buildResp.Data.ID),
+		Version:                 attrs.Version,
+		ProcessingState:         attrs.ProcessingState,
+		Expired:                 attrs.Expired,
+		UsesNonExemptEncryption: attrs.UsesNonExemptEncryption,
 	}, nil
 }
 
@@ -967,8 +971,8 @@ Examples:
 // that need attention before submission. This is advisory (warnings only) because
 // the submit flow cannot include subscriptions in the review submission — they
 // use a separate submission path.
-func runSubmitCreateSubscriptionPreflight(ctx context.Context, client *asc.Client, appID string) {
-	groups, warning := fetchSubscriptionPreflightGroups(ctx, client, appID)
+func runSubmitCreateSubscriptionPreflight(ctx context.Context, client *asc.Client, appID string, requestTimeout time.Duration) {
+	groups, warning := fetchSubscriptionPreflightGroups(ctx, client, appID, requestTimeout)
 	if warning != "" {
 		fmt.Fprintln(os.Stderr, "")
 		fmt.Fprintf(os.Stderr, "Warning: subscription preflight could not check subscriptions: %s.\n", warning)
@@ -989,7 +993,7 @@ func runSubmitCreateSubscriptionPreflight(ctx context.Context, client *asc.Clien
 		}
 		groupLabel := subscriptionPreflightGroupLabel(group)
 
-		subs, warning := fetchSubscriptionPreflightSubscriptions(ctx, client, groupID)
+		subs, warning := fetchSubscriptionPreflightSubscriptions(ctx, client, groupID, requestTimeout)
 		if warning != "" {
 			skippedGroups = append(skippedGroups, fmt.Sprintf("%s: %s", groupLabel, warning))
 			continue
@@ -1043,8 +1047,8 @@ func runSubmitCreateSubscriptionPreflight(ctx context.Context, client *asc.Clien
 	}
 }
 
-func fetchSubscriptionPreflightGroups(ctx context.Context, client *asc.Client, appID string) ([]asc.Resource[asc.SubscriptionGroupAttributes], string) {
-	firstCtx, firstCancel := shared.ContextWithTimeout(ctx)
+func fetchSubscriptionPreflightGroups(ctx context.Context, client *asc.Client, appID string, requestTimeout time.Duration) ([]asc.Resource[asc.SubscriptionGroupAttributes], string) {
+	firstCtx, firstCancel := submitPreflightRequestContext(ctx, requestTimeout)
 	resp, err := client.GetSubscriptionGroups(firstCtx, appID, asc.WithSubscriptionGroupsLimit(200))
 	firstCancel()
 	if err != nil {
@@ -1052,7 +1056,7 @@ func fetchSubscriptionPreflightGroups(ctx context.Context, client *asc.Client, a
 	}
 
 	paginated, err := asc.PaginateAll(ctx, resp, func(_ context.Context, nextURL string) (asc.PaginatedResponse, error) {
-		pageCtx, pageCancel := shared.ContextWithTimeout(ctx)
+		pageCtx, pageCancel := submitPreflightRequestContext(ctx, requestTimeout)
 		defer pageCancel()
 		return client.GetSubscriptionGroups(pageCtx, appID, asc.WithSubscriptionGroupsNextURL(nextURL))
 	})
@@ -1067,8 +1071,8 @@ func fetchSubscriptionPreflightGroups(ctx context.Context, client *asc.Client, a
 	return typed.Data, ""
 }
 
-func fetchSubscriptionPreflightSubscriptions(ctx context.Context, client *asc.Client, groupID string) ([]asc.Resource[asc.SubscriptionAttributes], string) {
-	firstCtx, firstCancel := shared.ContextWithTimeout(ctx)
+func fetchSubscriptionPreflightSubscriptions(ctx context.Context, client *asc.Client, groupID string, requestTimeout time.Duration) ([]asc.Resource[asc.SubscriptionAttributes], string) {
+	firstCtx, firstCancel := submitPreflightRequestContext(ctx, requestTimeout)
 	resp, err := client.GetSubscriptions(firstCtx, groupID, asc.WithSubscriptionsLimit(200))
 	firstCancel()
 	if err != nil {
@@ -1076,7 +1080,7 @@ func fetchSubscriptionPreflightSubscriptions(ctx context.Context, client *asc.Cl
 	}
 
 	paginated, err := asc.PaginateAll(ctx, resp, func(_ context.Context, nextURL string) (asc.PaginatedResponse, error) {
-		pageCtx, pageCancel := shared.ContextWithTimeout(ctx)
+		pageCtx, pageCancel := submitPreflightRequestContext(ctx, requestTimeout)
 		defer pageCancel()
 		return client.GetSubscriptions(pageCtx, groupID, asc.WithSubscriptionsNextURL(nextURL))
 	})
@@ -1089,6 +1093,18 @@ func fetchSubscriptionPreflightSubscriptions(ctx context.Context, client *asc.Cl
 		return nil, fmt.Sprintf("received unexpected subscriptions response type %T", paginated)
 	}
 	return typed.Data, ""
+}
+
+func submitPreflightRequestContext(ctx context.Context, requestTimeout time.Duration) (context.Context, context.CancelFunc) {
+	if requestTimeout > 0 {
+		return shared.ContextWithTimeoutDuration(shared.ContextWithoutTimeout(ctx), requestTimeout)
+	}
+	if ctx != nil {
+		if _, ok := ctx.Deadline(); ok {
+			return ctx, func() {}
+		}
+	}
+	return shared.ContextWithTimeout(ctx)
 }
 
 func subscriptionPreflightGroupLabel(group asc.Resource[asc.SubscriptionGroupAttributes]) string {
@@ -1182,18 +1198,53 @@ func collectSubmissionErrorSignals(err error) submissionErrorSignals {
 		return signals
 	}
 
-	var apiErr *asc.APIError
-	if errors.As(err, &apiErr) {
-		signals.ingest("", apiErr.Code, apiErr.Detail)
-		for path, entries := range apiErr.AssociatedErrors {
-			signals.ingest(path, "", "")
-			for _, entry := range entries {
-				signals.ingest(path, entry.Code, entry.Detail)
+	type errorFrame struct {
+		err      error
+		expanded bool
+	}
+
+	stack := []errorFrame{{err: err}}
+	for len(stack) > 0 {
+		frame := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+		current := frame.err
+		if current == nil {
+			continue
+		}
+
+		if frame.expanded {
+			signals.ingest("", "", current.Error())
+			continue
+		}
+
+		if apiErr, ok := any(current).(*asc.APIError); ok {
+			signals.ingest("", apiErr.Code, apiErr.Detail)
+			for path, entries := range apiErr.AssociatedErrors {
+				signals.ingest(path, "", "")
+				for _, entry := range entries {
+					signals.ingest(path, entry.Code, entry.Detail)
+				}
 			}
+		}
+
+		// Process descendants before the wrapper text so structured API detail wins.
+		stack = append(stack, errorFrame{err: current, expanded: true})
+
+		type unwrapMany interface {
+			Unwrap() []error
+		}
+		if multi, ok := current.(unwrapMany); ok {
+			children := multi.Unwrap()
+			for i := len(children) - 1; i >= 0; i-- {
+				stack = append(stack, errorFrame{err: children[i]})
+			}
+			continue
+		}
+		if next := errors.Unwrap(current); next != nil {
+			stack = append(stack, errorFrame{err: next})
 		}
 	}
 
-	signals.ingest("", "", err.Error())
 	return signals
 }
 
@@ -1266,6 +1317,7 @@ func addVersionToSubmissionOrRecover(
 	client *asc.Client,
 	submissionID, versionID string,
 	recentlyCanceledSubmissionIDs map[string]struct{},
+	emit func(string),
 ) (string, error) {
 	for attempt := 0; ; attempt++ {
 		_, err := client.AddReviewSubmissionItem(ctx, submissionID, versionID)
@@ -1282,7 +1334,12 @@ func addVersionToSubmissionOrRecover(
 		switch conflict.Kind {
 		case submissionConflictAlreadyAttached:
 			if _, ok := recentlyCanceledSubmissionIDs[conflictSubmissionID]; !ok {
-				fmt.Fprintf(os.Stderr, "Version already in review submission %s, reusing it.\n", conflictSubmissionID)
+				message := fmt.Sprintf("Version already in review submission %s, reusing it.", conflictSubmissionID)
+				if emit != nil {
+					emit(message)
+				} else {
+					fmt.Fprintln(os.Stderr, message)
+				}
 				return conflictSubmissionID, nil
 			}
 		case submissionConflictStillInProgress:
@@ -1302,12 +1359,16 @@ func addVersionToSubmissionOrRecover(
 		}
 
 		delay := submitCreateRecentlyCanceledRetryDelays[attempt]
-		fmt.Fprintf(
-			os.Stderr,
-			"Version is still detaching from recently canceled review submission %s, retrying add in %s.\n",
+		message := fmt.Sprintf(
+			"Version is still detaching from recently canceled review submission %s, retrying add in %s.",
 			conflictSubmissionID,
 			delay,
 		)
+		if emit != nil {
+			emit(message)
+		} else {
+			fmt.Fprintln(os.Stderr, message)
+		}
 		if err := sleepWithContext(ctx, delay); err != nil {
 			return "", fmt.Errorf("waiting for recently canceled review submission %s to clear: %w", conflictSubmissionID, err)
 		}
@@ -1324,7 +1385,17 @@ func prepareReviewSubmissionForCreate(
 	ctx context.Context,
 	client *asc.Client,
 	appID, platform, versionID string,
+	emit func(string),
 ) submitCreateReviewSubmissionPreparation {
+	emitMessage := func(format string, args ...any) {
+		message := fmt.Sprintf(format, args...)
+		if emit != nil {
+			emit(message)
+			return
+		}
+		fmt.Fprintln(os.Stderr, message)
+	}
+
 	existing, err := client.GetReviewSubmissions(
 		ctx,
 		appID,
@@ -1334,7 +1405,7 @@ func prepareReviewSubmissionForCreate(
 		asc.WithReviewSubmissionsLimit(200),
 	)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: failed to query stale review submissions: %v\n", err)
+		emitMessage("Warning: failed to query stale review submissions: %v", err)
 		return submitCreateReviewSubmissionPreparation{}
 	}
 
@@ -1347,7 +1418,7 @@ func prepareReviewSubmissionForCreate(
 		}
 		existing, err = client.GetReviewSubmissions(ctx, appID, asc.WithReviewSubmissionsNextURL(nextURL))
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to query stale review submissions: %v\n", err)
+			emitMessage("Warning: failed to query stale review submissions: %v", err)
 			return submitCreateReviewSubmissionPreparation{}
 		}
 	}
@@ -1373,11 +1444,11 @@ func prepareReviewSubmissionForCreate(
 		if currentVersionID := reviewSubmissionAppStoreVersionID(&sub); targetVersionID != "" && currentVersionID == targetVersionID {
 			reusable, hasVersion, reuseErr := reviewSubmissionCanBeReusedForCreate(ctx, client, &sub, targetVersionID)
 			if reuseErr != nil {
-				fmt.Fprintf(os.Stderr, "Warning: failed to inspect review submission %s before reuse: %v\n", sub.ID, reuseErr)
+				emitMessage("Warning: failed to inspect review submission %s before reuse: %v", sub.ID, reuseErr)
 				continue
 			}
 			if reusable {
-				fmt.Fprintf(os.Stderr, "Reusing existing review submission %s because the target version is already attached.\n", sub.ID)
+				emitMessage("Reusing existing review submission %s because the target version is already attached.", sub.ID)
 				result.reuseSubmissionID = strings.TrimSpace(sub.ID)
 				result.reuseSubmissionHasVersion = hasVersion
 				result.canceledSubmissionIDs = nil
@@ -1400,9 +1471,9 @@ func prepareReviewSubmissionForCreate(
 				reuseSubmission, reuseHasVersion, reuseErr := reusableReviewSubmissionForCreate(ctx, client, &sub, targetVersionID)
 				if reuseErr == nil && reuseSubmission != "" {
 					if reuseHasVersion {
-						fmt.Fprintf(os.Stderr, "Reusing existing review submission %s because the target version is already attached and App Store Connect would not cancel it.\n", reuseSubmission)
+						emitMessage("Reusing existing review submission %s because the target version is already attached and App Store Connect would not cancel it.", reuseSubmission)
 					} else {
-						fmt.Fprintf(os.Stderr, "Reusing existing empty review submission %s because App Store Connect would not cancel it.\n", reuseSubmission)
+						emitMessage("Reusing existing empty review submission %s because App Store Connect would not cancel it.", reuseSubmission)
 					}
 					result.reuseSubmissionID = reuseSubmission
 					result.reuseSubmissionHasVersion = reuseHasVersion
@@ -1412,16 +1483,16 @@ func prepareReviewSubmissionForCreate(
 					return result
 				}
 				if reuseErr != nil {
-					fmt.Fprintf(os.Stderr, "Warning: failed to inspect stale submission %s after cancel conflict: %v\n", sub.ID, reuseErr)
+					emitMessage("Warning: failed to inspect stale submission %s after cancel conflict: %v", sub.ID, reuseErr)
 				}
-				fmt.Fprintf(os.Stderr, "Skipped stale submission %s: already transitioned to a non-cancellable state\n", sub.ID)
+				emitMessage("Skipped stale submission %s: already transitioned to a non-cancellable state", sub.ID)
 			} else {
-				fmt.Fprintf(os.Stderr, "Warning: failed to cancel stale submission %s: %v\n", sub.ID, cancelErr)
+				emitMessage("Warning: failed to cancel stale submission %s: %v", sub.ID, cancelErr)
 			}
 			continue
 		}
 		result.canceledSubmissionIDs[sub.ID] = struct{}{}
-		fmt.Fprintf(os.Stderr, "Canceled stale review submission %s\n", sub.ID)
+		emitMessage("Canceled stale review submission %s", sub.ID)
 	}
 
 	if len(result.canceledSubmissionIDs) == 0 {
@@ -1586,12 +1657,17 @@ func reviewSubmissionIsState(ctx context.Context, client *asc.Client, submission
 	return refreshed.Attributes.SubmissionState == wantState, nil
 }
 
-func cleanupEmptyReviewSubmission(ctx context.Context, client *asc.Client, submissionID string) {
+func cleanupEmptyReviewSubmission(ctx context.Context, client *asc.Client, submissionID string, emit func(string)) {
 	if strings.TrimSpace(submissionID) == "" {
 		return
 	}
 	if _, cancelErr := client.CancelReviewSubmission(ctx, submissionID); cancelErr != nil && !isExpectedNonCancellableReviewSubmissionError(cancelErr) {
-		fmt.Fprintf(os.Stderr, "Warning: failed to cancel empty submission %s: %v\n", submissionID, cancelErr)
+		message := fmt.Sprintf("Warning: failed to cancel empty submission %s: %v", submissionID, cancelErr)
+		if emit != nil {
+			emit(message)
+		} else {
+			fmt.Fprintln(os.Stderr, message)
+		}
 	}
 }
 
@@ -1645,9 +1721,8 @@ func printSubmissionErrorHints(err error, ctx submissionErrorHintContext) {
 	if signals.versionNotReady {
 		if strings.TrimSpace(ctx.AppID) != "" && strings.TrimSpace(ctx.VersionID) != "" {
 			hints = appendUniqueHints(hints, fmt.Sprintf("Re-run readiness validation: asc validate --app %s --version-id %s", ctx.AppID, ctx.VersionID))
-		}
-		if strings.TrimSpace(ctx.AppID) != "" && strings.TrimSpace(ctx.VersionString) != "" {
-			preflightHint := fmt.Sprintf("Re-run submit preflight: asc submit preflight --app %s --version %s", ctx.AppID, ctx.VersionString)
+		} else if strings.TrimSpace(ctx.AppID) != "" && strings.TrimSpace(ctx.VersionString) != "" {
+			preflightHint := fmt.Sprintf("Re-run readiness validation: asc validate --app %s --version %s", ctx.AppID, ctx.VersionString)
 			if strings.TrimSpace(ctx.Platform) != "" {
 				preflightHint = fmt.Sprintf("%s --platform %s", preflightHint, strings.TrimSpace(ctx.Platform))
 			}
