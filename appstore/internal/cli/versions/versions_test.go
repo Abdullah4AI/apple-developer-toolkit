@@ -12,30 +12,20 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
 )
 
-func TestVersionsCommand_PrefersViewAndKeepsDeprecatedGetAlias(t *testing.T) {
+func TestVersionsCommand_PrefersViewAndRemovesLegacyGet(t *testing.T) {
 	cmd := VersionsCommand()
 
-	var viewCmd, getCmd *ffcli.Command
+	var viewCmd *ffcli.Command
 	for _, sub := range cmd.Subcommands {
 		switch sub.Name {
 		case "view":
 			viewCmd = sub
-		case "get":
-			getCmd = sub
 		}
 	}
 
 	if viewCmd == nil {
 		t.Fatal("expected canonical view subcommand")
 	}
-	if getCmd == nil {
-		t.Fatal("expected deprecated get compatibility alias")
-	}
-
-	if shortHelp := strings.ToLower(strings.TrimSpace(getCmd.ShortHelp)); !strings.HasPrefix(shortHelp, "deprecated:") {
-		t.Fatalf("expected get alias to be deprecated, got short help %q", getCmd.ShortHelp)
-	}
-
 	usage := cmd.UsageFunc(cmd)
 	if !strings.Contains(usage, "view") {
 		t.Fatalf("expected help to list view subcommand, got %q", usage)

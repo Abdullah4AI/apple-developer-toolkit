@@ -52,15 +52,15 @@ func TestReviewsRespondValidationErrors(t *testing.T) {
 	}
 }
 
-func TestReviewsResponseGetValidationErrors(t *testing.T) {
+func TestReviewsResponseViewValidationErrors(t *testing.T) {
 	tests := []struct {
 		name    string
 		args    []string
 		wantErr string
 	}{
 		{
-			name:    "reviews response get missing id",
-			args:    []string{"reviews", "response", "get"},
+			name:    "reviews response view missing id",
+			args:    []string{"reviews", "response", "view"},
 			wantErr: "--id is required",
 		},
 	}

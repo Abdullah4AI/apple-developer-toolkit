@@ -32,13 +32,6 @@ Examples:
 		Subcommands: []*ffcli.Command{
 			AnalyticsInstancesGetCommand(),
 			AnalyticsInstancesRelationshipsCommand(),
-			shared.DeprecatedAliasLeafCommand(
-				AnalyticsInstancesRelationshipsCommand(),
-				"relationships",
-				"asc analytics instances links --instance-id \"INSTANCE_ID\" [flags]",
-				"asc analytics instances links",
-				"Warning: `asc analytics instances relationships` is deprecated. Use `asc analytics instances links`.",
-			),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp

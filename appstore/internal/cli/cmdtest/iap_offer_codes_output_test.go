@@ -58,8 +58,8 @@ func TestIAPOfferCodesCreateUsesDefaultEligibilitiesAndParsedPrices(t *testing.T
 
 		relationships := data["relationships"].(map[string]any)
 		iapRelationship := relationships["inAppPurchase"].(map[string]any)["data"].(map[string]any)
-		if iapRelationship["id"] != "iap-1" {
-			t.Fatalf("expected inAppPurchase id iap-1, got %#v", iapRelationship["id"])
+		if iapRelationship["id"] != "9000000001" {
+			t.Fatalf("expected inAppPurchase id 9000000001, got %#v", iapRelationship["id"])
 		}
 
 		included := payload["included"].([]any)
@@ -91,7 +91,7 @@ func TestIAPOfferCodesCreateUsesDefaultEligibilitiesAndParsedPrices(t *testing.T
 	stdout, stderr := captureOutput(t, func() {
 		if err := root.Parse([]string{
 			"iap", "offer-codes", "create",
-			"--iap-id", "iap-1",
+			"--iap-id", "9000000001",
 			"--name", "SPRING",
 			"--prices", "usa:pp-us,jpn:pp-jp",
 		}); err != nil {
@@ -150,7 +150,7 @@ func TestIAPOfferCodesCreateReturnsCreateFailure(t *testing.T) {
 	stdout, _ := captureOutput(t, func() {
 		if err := root.Parse([]string{
 			"iap", "offer-codes", "create",
-			"--iap-id", "iap-1",
+			"--iap-id", "9000000001",
 			"--name", "SPRING",
 			"--prices", "usa:pp-us",
 		}); err != nil {
@@ -170,6 +170,145 @@ func TestIAPOfferCodesCreateReturnsCreateFailure(t *testing.T) {
 	}
 }
 
+func TestIAPOfferCodesListFallsBackToNumericIDAfterLookupTimeout(t *testing.T) {
+	setupAuth(t)
+	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
+	t.Setenv("ASC_APP_ID", "")
+	t.Setenv("ASC_TIMEOUT", "10ms")
+	t.Setenv("ASC_TIMEOUT_SECONDS", "")
+
+	originalTransport := http.DefaultTransport
+	t.Cleanup(func() {
+		http.DefaultTransport = originalTransport
+	})
+
+	requests := 0
+	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		requests++
+		switch req.URL.Path {
+		case "/v1/apps/app-123/inAppPurchasesV2":
+			<-req.Context().Done()
+			return nil, req.Context().Err()
+		case "/v2/inAppPurchases/2024/offerCodes":
+			if err := req.Context().Err(); err != nil {
+				t.Fatalf("expected fresh list context after lookup timeout, got %v", err)
+			}
+			body := `{"data":[{"type":"inAppPurchaseOfferCodes","id":"offer-timeout-1"}],"links":{"next":""}}`
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(strings.NewReader(body)),
+				Header:     http.Header{"Content-Type": []string{"application/json"}},
+			}, nil
+		default:
+			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.String())
+			return nil, nil
+		}
+	})
+
+	root := RootCommand("1.2.3")
+	root.FlagSet.SetOutput(io.Discard)
+
+	stdout, stderr := captureOutput(t, func() {
+		if err := root.Parse([]string{
+			"iap", "offer-codes", "list",
+			"--app", "app-123",
+			"--iap-id", "2024",
+		}); err != nil {
+			t.Fatalf("parse error: %v", err)
+		}
+		if err := root.Run(context.Background()); err != nil {
+			t.Fatalf("run error: %v", err)
+		}
+	})
+
+	if stderr != "" {
+		t.Fatalf("expected empty stderr, got %q", stderr)
+	}
+	if requests != 2 {
+		t.Fatalf("expected lookup timeout followed by offer-code list fetch, got %d requests", requests)
+	}
+	if !strings.Contains(stdout, `"id":"offer-timeout-1"`) {
+		t.Fatalf("expected fallback list output, got %q", stdout)
+	}
+}
+
+func TestIAPOfferCodesCreateFallsBackToNumericIDAfterLookupTimeout(t *testing.T) {
+	setupAuth(t)
+	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
+	t.Setenv("ASC_APP_ID", "")
+	t.Setenv("ASC_TIMEOUT", "10ms")
+	t.Setenv("ASC_TIMEOUT_SECONDS", "")
+
+	originalTransport := http.DefaultTransport
+	t.Cleanup(func() {
+		http.DefaultTransport = originalTransport
+	})
+
+	requests := 0
+	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		requests++
+		switch req.URL.Path {
+		case "/v1/apps/app-123/inAppPurchasesV2":
+			<-req.Context().Done()
+			return nil, req.Context().Err()
+		case "/v1/inAppPurchaseOfferCodes":
+			if err := req.Context().Err(); err != nil {
+				t.Fatalf("expected fresh create context after lookup timeout, got %v", err)
+			}
+			rawBody, err := io.ReadAll(req.Body)
+			if err != nil {
+				t.Fatalf("read body error: %v", err)
+			}
+			var payload map[string]any
+			if err := json.Unmarshal(rawBody, &payload); err != nil {
+				t.Fatalf("decode request body: %v\nbody=%s", err, string(rawBody))
+			}
+			relationships := payload["data"].(map[string]any)["relationships"].(map[string]any)
+			iapRelationship := relationships["inAppPurchase"].(map[string]any)["data"].(map[string]any)
+			if iapRelationship["id"] != "2024" {
+				t.Fatalf("expected numeric fallback IAP id 2024, got %#v", iapRelationship["id"])
+			}
+			body := `{"data":{"type":"inAppPurchaseOfferCodes","id":"offer-timeout-create","attributes":{"name":"SPRING","active":true}}}`
+			return &http.Response{
+				StatusCode: http.StatusCreated,
+				Body:       io.NopCloser(strings.NewReader(body)),
+				Header:     http.Header{"Content-Type": []string{"application/json"}},
+			}, nil
+		default:
+			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.String())
+			return nil, nil
+		}
+	})
+
+	root := RootCommand("1.2.3")
+	root.FlagSet.SetOutput(io.Discard)
+
+	stdout, stderr := captureOutput(t, func() {
+		if err := root.Parse([]string{
+			"iap", "offer-codes", "create",
+			"--app", "app-123",
+			"--iap-id", "2024",
+			"--name", "SPRING",
+			"--prices", "usa:pp-us",
+		}); err != nil {
+			t.Fatalf("parse error: %v", err)
+		}
+		if err := root.Run(context.Background()); err != nil {
+			t.Fatalf("run error: %v", err)
+		}
+	})
+
+	if stderr != "" {
+		t.Fatalf("expected empty stderr, got %q", stderr)
+	}
+	if requests != 2 {
+		t.Fatalf("expected lookup timeout followed by create fetch, got %d requests", requests)
+	}
+	if !strings.Contains(stdout, `"id":"offer-timeout-create"`) {
+		t.Fatalf("expected created offer code output, got %q", stdout)
+	}
+}
+
 func TestIAPOfferCodesListRejectsInvalidNextURL(t *testing.T) {
 	root := RootCommand("1.2.3")
 	root.FlagSet.SetOutput(io.Discard)
@@ -178,7 +317,7 @@ func TestIAPOfferCodesListRejectsInvalidNextURL(t *testing.T) {
 	stdout, stderr := captureOutput(t, func() {
 		if err := root.Parse([]string{
 			"iap", "offer-codes", "list",
-			"--next", "https://example.com/v2/inAppPurchases/iap-1/offerCodes?cursor=AQ",
+			"--next", "https://example.com/v2/inAppPurchases/9000000001/offerCodes?cursor=AQ",
 		}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
@@ -207,7 +346,7 @@ func TestIAPOfferCodesListRejectsMalformedNextURL(t *testing.T) {
 	}{
 		{
 			name:    "invalid scheme",
-			next:    "http://api.appstoreconnect.apple.com/v2/inAppPurchases/iap-1/offerCodes?cursor=AQ",
+			next:    "http://api.appstoreconnect.apple.com/v2/inAppPurchases/9000000001/offerCodes?cursor=AQ",
 			wantErr: "iap offer-codes list: --next must be an App Store Connect URL",
 		},
 		{
@@ -262,8 +401,8 @@ func TestIAPOfferCodesListOutputErrors(t *testing.T) {
 		if req.Method != http.MethodGet {
 			t.Fatalf("expected GET, got %s", req.Method)
 		}
-		if req.URL.Path != "/v2/inAppPurchases/iap-1/offerCodes" {
-			t.Fatalf("expected path /v2/inAppPurchases/iap-1/offerCodes, got %s", req.URL.Path)
+		if req.URL.Path != "/v2/inAppPurchases/9000000001/offerCodes" {
+			t.Fatalf("expected path /v2/inAppPurchases/9000000001/offerCodes, got %s", req.URL.Path)
 		}
 		body := `{"data":[{"type":"inAppPurchaseOfferCodes","id":"offer-1"}],"links":{"next":""}}`
 		return &http.Response{
@@ -280,12 +419,12 @@ func TestIAPOfferCodesListOutputErrors(t *testing.T) {
 	}{
 		{
 			name:    "unsupported output",
-			args:    []string{"iap", "offer-codes", "list", "--iap-id", "iap-1", "--output", "yaml"},
+			args:    []string{"iap", "offer-codes", "list", "--iap-id", "9000000001", "--output", "yaml"},
 			wantErr: "unsupported format: yaml",
 		},
 		{
 			name:    "pretty with table",
-			args:    []string{"iap", "offer-codes", "list", "--iap-id", "iap-1", "--output", "table", "--pretty"},
+			args:    []string{"iap", "offer-codes", "list", "--iap-id", "9000000001", "--output", "table", "--pretty"},
 			wantErr: "--pretty is only valid with JSON output",
 		},
 	}
@@ -320,8 +459,8 @@ func TestIAPOfferCodesListPaginateFromNextWithoutIAP(t *testing.T) {
 	setupAuth(t)
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 
-	const firstURL = "https://api.appstoreconnect.apple.com/v2/inAppPurchases/iap-1/offerCodes?cursor=AQ&limit=200"
-	const secondURL = "https://api.appstoreconnect.apple.com/v2/inAppPurchases/iap-1/offerCodes?cursor=BQ&limit=200"
+	const firstURL = "https://api.appstoreconnect.apple.com/v2/inAppPurchases/9000000001/offerCodes?cursor=AQ&limit=200"
+	const secondURL = "https://api.appstoreconnect.apple.com/v2/inAppPurchases/9000000001/offerCodes?cursor=BQ&limit=200"
 
 	originalTransport := http.DefaultTransport
 	t.Cleanup(func() {
@@ -397,8 +536,8 @@ func TestIAPOfferCodesListTableOutput(t *testing.T) {
 		if req.Method != http.MethodGet {
 			t.Fatalf("expected GET, got %s", req.Method)
 		}
-		if req.URL.Path != "/v2/inAppPurchases/iap-1/offerCodes" {
-			t.Fatalf("expected path /v2/inAppPurchases/iap-1/offerCodes, got %s", req.URL.Path)
+		if req.URL.Path != "/v2/inAppPurchases/9000000001/offerCodes" {
+			t.Fatalf("expected path /v2/inAppPurchases/9000000001/offerCodes, got %s", req.URL.Path)
 		}
 		body := `{
 			"data":[{"type":"inAppPurchaseOfferCodes","id":"offer-table-1","attributes":{"name":"Spring","active":true}}],
@@ -415,7 +554,7 @@ func TestIAPOfferCodesListTableOutput(t *testing.T) {
 	root.FlagSet.SetOutput(io.Discard)
 
 	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"iap", "offer-codes", "list", "--iap-id", "iap-1", "--output", "table"}); err != nil {
+		if err := root.Parse([]string{"iap", "offer-codes", "list", "--iap-id", "9000000001", "--output", "table"}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
 		if err := root.Run(context.Background()); err != nil {

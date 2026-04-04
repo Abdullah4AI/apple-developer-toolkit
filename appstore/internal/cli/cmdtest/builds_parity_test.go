@@ -164,38 +164,38 @@ func TestBetaLocalizationsValidationErrors(t *testing.T) {
 		wantErr string
 	}{
 		{
-			name:    "beta-app-localizations list missing app",
-			args:    []string{"beta-app-localizations", "list"},
+			name:    "testflight app-localizations list missing app",
+			args:    []string{"testflight", "app-localizations", "list"},
 			wantErr: "--app is required",
 		},
 		{
-			name:    "beta-app-localizations create missing app",
-			args:    []string{"beta-app-localizations", "create", "--locale", "en-US"},
+			name:    "testflight app-localizations create missing app",
+			args:    []string{"testflight", "app-localizations", "create", "--locale", "en-US"},
 			wantErr: "--app is required",
 		},
 		{
-			name:    "beta-app-localizations create missing locale",
-			args:    []string{"beta-app-localizations", "create", "--app", "APP_ID"},
+			name:    "testflight app-localizations create missing locale",
+			args:    []string{"testflight", "app-localizations", "create", "--app", "APP_ID"},
 			wantErr: "--locale is required",
 		},
 		{
-			name:    "beta-app-localizations update missing id",
-			args:    []string{"beta-app-localizations", "update"},
+			name:    "testflight app-localizations update missing id",
+			args:    []string{"testflight", "app-localizations", "update"},
 			wantErr: "--id is required",
 		},
 		{
-			name:    "beta-app-localizations update missing updates",
-			args:    []string{"beta-app-localizations", "update", "--id", "LOC_ID"},
+			name:    "testflight app-localizations update missing updates",
+			args:    []string{"testflight", "app-localizations", "update", "--id", "LOC_ID"},
 			wantErr: "at least one update flag is required",
 		},
 		{
-			name:    "beta-app-localizations delete missing id",
-			args:    []string{"beta-app-localizations", "delete"},
+			name:    "testflight app-localizations delete missing id",
+			args:    []string{"testflight", "app-localizations", "delete"},
 			wantErr: "--id is required",
 		},
 		{
-			name:    "beta-app-localizations delete missing confirm",
-			args:    []string{"beta-app-localizations", "delete", "--id", "LOC_ID"},
+			name:    "testflight app-localizations delete missing confirm",
+			args:    []string{"testflight", "app-localizations", "delete", "--id", "LOC_ID"},
 			wantErr: "--confirm is required",
 		},
 	}
@@ -227,11 +227,6 @@ func TestTestFlightRelationshipsValidationErrors(t *testing.T) {
 			wantErr: "--type must be one of",
 		},
 		{
-			name:    "beta-groups deprecated root links missing type",
-			args:    []string{"testflight", "beta-groups", "links", "view", "--group-id", "GROUP_ID"},
-			wantErr: "--type is required",
-		},
-		{
 			name:    "beta-testers relationships missing type",
 			args:    []string{"testflight", "testers", "links", "view", "--tester-id", "TESTER_ID"},
 			wantErr: "--type is required",
@@ -247,28 +242,23 @@ func TestTestFlightRelationshipsValidationErrors(t *testing.T) {
 			wantErr: "--type must be one of",
 		},
 		{
-			name:    "beta-testers deprecated root links missing type",
-			args:    []string{"testflight", "beta-testers", "links", "view", "--tester-id", "TESTER_ID"},
-			wantErr: "--type is required",
-		},
-		{
-			name:    "beta-testers metrics missing tester-id",
-			args:    []string{"testflight", "beta-testers", "metrics", "--app", "APP_ID"},
+			name:    "testers metrics missing tester-id",
+			args:    []string{"testflight", "testers", "metrics", "--app", "APP_ID"},
 			wantErr: "--tester-id is required",
 		},
 		{
-			name:    "beta-testers metrics missing app",
-			args:    []string{"testflight", "beta-testers", "metrics", "--tester-id", "TESTER_ID"},
+			name:    "testers metrics missing app",
+			args:    []string{"testflight", "testers", "metrics", "--tester-id", "TESTER_ID"},
 			wantErr: "--app is required",
 		},
 		{
-			name:    "beta-testers metrics invalid period",
-			args:    []string{"testflight", "beta-testers", "metrics", "--tester-id", "TESTER_ID", "--app", "APP_ID", "--period", "P1D"},
+			name:    "testers metrics invalid period",
+			args:    []string{"testflight", "testers", "metrics", "--tester-id", "TESTER_ID", "--app", "APP_ID", "--period", "P1D"},
 			wantErr: "--period must be one of",
 		},
 		{
-			name:    "beta-testers metrics invalid limit",
-			args:    []string{"testflight", "beta-testers", "metrics", "--tester-id", "TESTER_ID", "--app", "APP_ID", "--limit", "500"},
+			name:    "testers metrics invalid limit",
+			args:    []string{"testflight", "testers", "metrics", "--tester-id", "TESTER_ID", "--app", "APP_ID", "--limit", "500"},
 			wantErr: "--limit must be between 1 and 200",
 		},
 	}
@@ -343,73 +333,48 @@ func TestParityRelatedCommandsValidationErrors(t *testing.T) {
 			wantErr: "--build-id or --app is required",
 		},
 		{
-			name:    "beta-groups app get missing group-id",
-			args:    []string{"testflight", "beta-groups", "app", "get"},
+			name:    "groups app view missing group-id",
+			args:    []string{"testflight", "groups", "app", "view"},
 			wantErr: "--group-id is required",
 		},
 		{
-			name:    "beta-groups recruitment-criteria get missing group-id",
-			args:    []string{"testflight", "beta-groups", "beta-recruitment-criteria", "get"},
+			name:    "groups recruitment view missing group-id",
+			args:    []string{"testflight", "groups", "recruitment", "view"},
 			wantErr: "--group-id is required",
 		},
 		{
-			name:    "beta-groups compatible-build-check get missing group-id",
-			args:    []string{"testflight", "beta-groups", "beta-recruitment-criterion-compatible-build-check", "get"},
+			name:    "groups compatibility view missing group-id",
+			args:    []string{"testflight", "groups", "compatibility", "view"},
 			wantErr: "--group-id is required",
 		},
 		{
-			name:    "beta-testers apps list missing tester-id",
-			args:    []string{"testflight", "beta-testers", "apps", "list"},
+			name:    "testers apps list missing tester-id",
+			args:    []string{"testflight", "testers", "apps", "list"},
 			wantErr: "--tester-id is required",
 		},
 		{
-			name:    "beta-testers beta-groups list missing tester-id",
-			args:    []string{"testflight", "beta-testers", "beta-groups", "list"},
+			name:    "testers groups list missing tester-id",
+			args:    []string{"testflight", "testers", "groups", "list"},
 			wantErr: "--tester-id is required",
 		},
 		{
-			name:    "beta-testers builds list missing tester-id",
-			args:    []string{"testflight", "beta-testers", "builds", "list"},
+			name:    "testers builds list missing tester-id",
+			args:    []string{"testflight", "testers", "builds", "list"},
 			wantErr: "--tester-id is required",
 		},
 		{
-			name:    "beta-feedback crash-submissions get missing id",
-			args:    []string{"testflight", "beta-feedback", "crash-submissions", "get"},
+			name:    "feedback crashes view missing id",
+			args:    []string{"testflight", "crashes", "view"},
 			wantErr: "--submission-id is required",
 		},
 		{
-			name:    "beta-feedback screenshot-submissions get missing id",
-			args:    []string{"testflight", "beta-feedback", "screenshot-submissions", "get"},
-			wantErr: "--submission-id is required",
+			name:    "feedback log view missing id",
+			args:    []string{"testflight", "crashes", "log", "view"},
+			wantErr: "exactly one of --submission-id or --crash-log-id is required",
 		},
 		{
-			name:    "beta-feedback crash-log get missing id",
-			args:    []string{"testflight", "beta-feedback", "crash-log", "get"},
-			wantErr: "--submission-id is required",
-		},
-		{
-			name:    "beta-feedback crash-submissions delete missing id",
-			args:    []string{"testflight", "beta-feedback", "crash-submissions", "delete", "--confirm"},
-			wantErr: "--submission-id is required",
-		},
-		{
-			name:    "beta-feedback crash-submissions delete missing confirm",
-			args:    []string{"testflight", "beta-feedback", "crash-submissions", "delete", "--id", "SUBMISSION_ID"},
-			wantErr: "--confirm is required",
-		},
-		{
-			name:    "beta-feedback screenshot-submissions delete missing id",
-			args:    []string{"testflight", "beta-feedback", "screenshot-submissions", "delete", "--confirm"},
-			wantErr: "--submission-id is required",
-		},
-		{
-			name:    "beta-feedback screenshot-submissions delete missing confirm",
-			args:    []string{"testflight", "beta-feedback", "screenshot-submissions", "delete", "--id", "SUBMISSION_ID"},
-			wantErr: "--confirm is required",
-		},
-		{
-			name:    "beta-app-localizations app get missing id",
-			args:    []string{"beta-app-localizations", "app", "get"},
+			name:    "app-localizations app view missing id",
+			args:    []string{"testflight", "app-localizations", "app", "view"},
 			wantErr: "--id is required",
 		},
 		{
@@ -432,107 +397,71 @@ func TestParityRelatedCommandsValidationErrors(t *testing.T) {
 	runValidationTests(t, tests)
 }
 
-func TestBuildsDeprecatedGetAliasesMatchViewValidation(t *testing.T) {
+func TestBuildsRemovedGetCommandsPointToCanonicalView(t *testing.T) {
 	t.Setenv("ASC_APP_ID", "")
 
 	tests := []struct {
-		name     string
-		viewArgs []string
-		getArgs  []string
-		warning  string
-		wantErr  string
+		name    string
+		args    []string
+		wantErr string
 	}{
 		{
-			name:     "builds app get alias",
-			viewArgs: []string{"builds", "app", "view"},
-			getArgs:  []string{"builds", "app", "get"},
-			warning:  "Warning: `asc builds app get` is deprecated. Use `asc builds app view`.",
-			wantErr:  "--build-id or --app is required",
+			name:    "builds app get",
+			args:    []string{"builds", "app", "get"},
+			wantErr: "Error: `asc builds app get` was removed. Use `asc builds app view` instead.",
 		},
 		{
-			name:     "builds pre-release-version get alias",
-			viewArgs: []string{"builds", "pre-release-version", "view"},
-			getArgs:  []string{"builds", "pre-release-version", "get"},
-			warning:  "Warning: `asc builds pre-release-version get` is deprecated. Use `asc builds pre-release-version view`.",
-			wantErr:  "--build-id or --app is required",
+			name:    "builds pre-release-version get",
+			args:    []string{"builds", "pre-release-version", "get"},
+			wantErr: "Error: `asc builds pre-release-version get` was removed. Use `asc builds pre-release-version view` instead.",
 		},
 		{
-			name:     "builds beta-app-review-submission get alias",
-			viewArgs: []string{"builds", "beta-app-review-submission", "view"},
-			getArgs:  []string{"builds", "beta-app-review-submission", "get"},
-			warning:  "Warning: `asc builds beta-app-review-submission get` is deprecated. Use `asc builds beta-app-review-submission view`.",
-			wantErr:  "--build-id or --app is required",
+			name:    "builds beta-app-review-submission get",
+			args:    []string{"builds", "beta-app-review-submission", "get"},
+			wantErr: "Error: `asc builds beta-app-review-submission get` was removed. Use `asc builds beta-app-review-submission view` instead.",
 		},
 		{
-			name:     "builds build-beta-detail get alias",
-			viewArgs: []string{"builds", "build-beta-detail", "view"},
-			getArgs:  []string{"builds", "build-beta-detail", "get"},
-			warning:  "Warning: `asc builds build-beta-detail get` is deprecated. Use `asc builds build-beta-detail view`.",
-			wantErr:  "--build-id or --app is required",
+			name:    "builds build-beta-detail get",
+			args:    []string{"builds", "build-beta-detail", "get"},
+			wantErr: "Error: `asc builds build-beta-detail get` was removed. Use `asc builds build-beta-detail view` instead.",
 		},
 		{
-			name:     "builds app-encryption-declaration get alias",
-			viewArgs: []string{"builds", "app-encryption-declaration", "view"},
-			getArgs:  []string{"builds", "app-encryption-declaration", "get"},
-			warning:  "Warning: `asc builds app-encryption-declaration get` is deprecated. Use `asc builds app-encryption-declaration view`.",
-			wantErr:  "--build-id or --app is required",
+			name:    "builds app-encryption-declaration get",
+			args:    []string{"builds", "app-encryption-declaration", "get"},
+			wantErr: "Error: `asc builds app-encryption-declaration get` was removed. Use `asc builds app-encryption-declaration view` instead.",
 		},
 		{
-			name:     "builds uploads get alias",
-			viewArgs: []string{"builds", "uploads", "view"},
-			getArgs:  []string{"builds", "uploads", "get"},
-			warning:  "Warning: `asc builds uploads get` is deprecated. Use `asc builds uploads view`.",
-			wantErr:  "--id is required",
+			name:    "builds uploads get",
+			args:    []string{"builds", "uploads", "get"},
+			wantErr: "Error: `asc builds uploads get` was removed. Use `asc builds uploads view` instead.",
 		},
 		{
-			name:     "builds uploads files get alias",
-			viewArgs: []string{"builds", "uploads", "files", "view"},
-			getArgs:  []string{"builds", "uploads", "files", "get"},
-			warning:  "Warning: `asc builds uploads files get` is deprecated. Use `asc builds uploads files view`.",
-			wantErr:  "--id is required",
+			name:    "builds uploads files get",
+			args:    []string{"builds", "uploads", "files", "get"},
+			wantErr: "Error: `asc builds uploads files get` was removed. Use `asc builds uploads files view` instead.",
 		},
-	}
-
-	run := func(t *testing.T, args []string) (string, string) {
-		t.Helper()
-
-		root := RootCommand("1.2.3")
-		root.FlagSet.SetOutput(io.Discard)
-
-		stdout, stderr := captureOutput(t, func() {
-			if err := root.Parse(args); err != nil {
-				t.Fatalf("parse error: %v", err)
-			}
-			err := root.Run(context.Background())
-			if !errors.Is(err, flag.ErrHelp) {
-				t.Fatalf("expected ErrHelp, got %v", err)
-			}
-		})
-
-		return stdout, stderr
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			viewStdout, viewStderr := run(t, test.viewArgs)
-			getStdout, getStderr := run(t, test.getArgs)
+			root := RootCommand("1.2.3")
+			root.FlagSet.SetOutput(io.Discard)
 
-			if viewStdout != "" {
-				t.Fatalf("expected empty canonical stdout, got %q", viewStdout)
-			}
-			if !strings.Contains(viewStderr, test.wantErr) {
-				t.Fatalf("expected canonical stderr to contain %q, got %q", test.wantErr, viewStderr)
-			}
-			if strings.Contains(viewStderr, "deprecated") {
-				t.Fatalf("expected canonical command to avoid deprecation warnings, got %q", viewStderr)
-			}
+			stdout, stderr := captureOutput(t, func() {
+				if err := root.Parse(test.args); err != nil {
+					t.Fatalf("parse error: %v", err)
+				}
+				err := root.Run(context.Background())
+				if !errors.Is(err, flag.ErrHelp) {
+					t.Fatalf("expected ErrHelp, got %v", err)
+				}
+			})
 
-			if getStdout != "" {
-				t.Fatalf("expected empty alias stdout, got %q", getStdout)
+			if stdout != "" {
+				t.Fatalf("expected empty stdout, got %q", stdout)
 			}
-			requireStderrContainsWarning(t, getStderr, test.warning)
-			if !strings.Contains(getStderr, test.wantErr) {
-				t.Fatalf("expected alias stderr to contain %q, got %q", test.wantErr, getStderr)
+			if !strings.Contains(stderr, test.wantErr) {
+				t.Fatalf("expected stderr to contain %q, got %q", test.wantErr, stderr)
 			}
 		})
 	}

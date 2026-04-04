@@ -34,7 +34,7 @@ func TestTestFlightBetaLicenseAgreementsListRejectsInvalidNextURL(t *testing.T) 
 
 			var runErr error
 			stdout, stderr := captureOutput(t, func() {
-				if err := root.Parse([]string{"testflight", "beta-license-agreements", "list", "--next", test.next}); err != nil {
+				if err := root.Parse([]string{"testflight", "agreements", "list", "--next", test.next}); err != nil {
 					t.Fatalf("parse error: %v", err)
 				}
 				runErr = root.Run(context.Background())
@@ -102,7 +102,7 @@ func TestTestFlightBetaLicenseAgreementsListPaginateFromNext(t *testing.T) {
 	root.FlagSet.SetOutput(io.Discard)
 
 	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"testflight", "beta-license-agreements", "list", "--paginate", "--next", firstURL}); err != nil {
+		if err := root.Parse([]string{"testflight", "agreements", "list", "--paginate", "--next", firstURL}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
 		if err := root.Run(context.Background()); err != nil {
@@ -143,7 +143,7 @@ func TestTestFlightBetaTestersMetricsRejectsInvalidNextURL(t *testing.T) {
 
 			var runErr error
 			stdout, stderr := captureOutput(t, func() {
-				if err := root.Parse([]string{"testflight", "beta-testers", "metrics", "--next", test.next}); err != nil {
+				if err := root.Parse([]string{"testflight", "testers", "metrics", "--next", test.next}); err != nil {
 					t.Fatalf("parse error: %v", err)
 				}
 				runErr = root.Run(context.Background())
@@ -196,7 +196,7 @@ func TestTestFlightBetaTestersMetricsFromNextWithoutTesterOrApp(t *testing.T) {
 	root.FlagSet.SetOutput(io.Discard)
 
 	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"testflight", "beta-testers", "metrics", "--next", nextURL}); err != nil {
+		if err := root.Parse([]string{"testflight", "testers", "metrics", "--next", nextURL}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
 		if err := root.Run(context.Background()); err != nil {

@@ -121,6 +121,8 @@ type IAPLocalizationsOption func(*iapLocalizationsQuery)
 
 type inAppPurchasesQuery struct {
 	listQuery
+	productIDs []string
+	names      []string
 }
 
 type iapLocalizationsQuery struct {
@@ -145,6 +147,20 @@ func WithIAPNextURL(next string) IAPOption {
 	}
 }
 
+// WithIAPProductIDs filters in-app purchases by product ID.
+func WithIAPProductIDs(productIDs []string) IAPOption {
+	return func(q *inAppPurchasesQuery) {
+		q.productIDs = normalizeUniqueList(productIDs)
+	}
+}
+
+// WithIAPNames filters in-app purchases by current name.
+func WithIAPNames(names []string) IAPOption {
+	return func(q *inAppPurchasesQuery) {
+		q.names = normalizeUniqueList(names)
+	}
+}
+
 // WithIAPLocalizationsLimit sets the max number of localizations to return.
 func WithIAPLocalizationsLimit(limit int) IAPLocalizationsOption {
 	return func(q *iapLocalizationsQuery) {
@@ -166,6 +182,8 @@ func WithIAPLocalizationsNextURL(next string) IAPLocalizationsOption {
 func buildInAppPurchasesQuery(query *inAppPurchasesQuery) string {
 	values := url.Values{}
 	addLimit(values, query.limit)
+	addCSV(values, "filter[productId]", query.productIDs)
+	addCSV(values, "filter[name]", query.names)
 	return values.Encode()
 }
 

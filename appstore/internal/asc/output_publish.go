@@ -25,9 +25,11 @@ func testFlightPublishResultRows(result *TestFlightPublishResult) ([]string, [][
 }
 
 func appStorePublishResultRows(result *AppStorePublishResult) ([]string, [][]string) {
-	headers := []string{"Build ID", "Version ID", "Submission ID", "Uploaded", "Attached", "Submitted"}
+	headers := []string{"Build ID", "Version", "Build Number", "Version ID", "Submission ID", "Uploaded", "Attached", "Submitted"}
 	rows := [][]string{{
 		result.BuildID,
+		result.BuildVersion,
+		result.BuildNumber,
 		result.VersionID,
 		result.SubmissionID,
 		fmt.Sprintf("%t", result.Uploaded),
@@ -35,4 +37,41 @@ func appStorePublishResultRows(result *AppStorePublishResult) ([]string, [][]str
 		fmt.Sprintf("%t", result.Submitted),
 	}}
 	return headers, rows
+}
+
+func publishArchiveStageRows(stage *PublishArchiveStageResult) ([]string, [][]string) {
+	if stage == nil {
+		return []string{"Field", "Value"}, nil
+	}
+	rows := [][]string{
+		{"archive_path", stage.ArchivePath},
+		{"bundle_id", stage.BundleID},
+		{"version", stage.Version},
+		{"build_number", stage.BuildNumber},
+		{"scheme", stage.Scheme},
+	}
+	if strings.TrimSpace(stage.Configuration) != "" {
+		rows = append(rows, []string{"configuration", stage.Configuration})
+	}
+	return []string{"Field", "Value"}, rows
+}
+
+func publishExportStageRows(stage *PublishExportStageResult) ([]string, [][]string) {
+	if stage == nil {
+		return []string{"Field", "Value"}, nil
+	}
+	ipaPath := stage.IPAPath
+	if strings.TrimSpace(ipaPath) == "" {
+		ipaPath = "(direct upload - no local artifact)"
+	}
+	rows := [][]string{
+		{"archive_path", stage.ArchivePath},
+		{"ipa_path", ipaPath},
+		{"bundle_id", stage.BundleID},
+		{"version", stage.Version},
+		{"build_number", stage.BuildNumber},
+		{"export_options_path", stage.ExportOptionsPath},
+		{"direct_upload", fmt.Sprintf("%t", stage.DirectUpload)},
+	}
+	return []string{"Field", "Value"}, rows
 }

@@ -9,12 +9,12 @@ import (
 	"testing"
 )
 
-func TestTestFlightBetaCrashLogsGetValidationErrors(t *testing.T) {
+func TestTestFlightCrashesLogValidationErrors(t *testing.T) {
 	root := RootCommand("1.2.3")
 	root.FlagSet.SetOutput(io.Discard)
 
 	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"testflight", "beta-crash-logs", "get"}); err != nil {
+		if err := root.Parse([]string{"testflight", "crashes", "log"}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
 		err := root.Run(context.Background())
@@ -26,7 +26,7 @@ func TestTestFlightBetaCrashLogsGetValidationErrors(t *testing.T) {
 	if stdout != "" {
 		t.Fatalf("expected empty stdout, got %q", stdout)
 	}
-	if !strings.Contains(stderr, "Error: --crash-log-id is required") {
-		t.Fatalf("expected missing crash-log-id error, got %q", stderr)
+	if !strings.Contains(stderr, "Error: exactly one of --submission-id or --crash-log-id is required") {
+		t.Fatalf("expected missing selector error, got %q", stderr)
 	}
 }

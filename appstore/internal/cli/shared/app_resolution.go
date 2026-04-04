@@ -35,6 +35,27 @@ func ResolveAppStoreVersionID(ctx context.Context, client *asc.Client, appID, ve
 	return versionID, err
 }
 
+// ResolveOwnedAppStoreVersionByID fetches a version by ID and validates its app ownership and optional platform.
+func ResolveOwnedAppStoreVersionByID(ctx context.Context, client *asc.Client, appID, versionID, platform string) (asc.Resource[asc.AppStoreVersionAttributes], error) {
+	trimmedVersionID := strings.TrimSpace(versionID)
+	resp, err := client.GetAppStoreVersion(ctx, trimmedVersionID, asc.WithAppStoreVersionInclude([]string{"app"}))
+	if err != nil {
+		return asc.Resource[asc.AppStoreVersionAttributes]{}, err
+	}
+	relatedAppID, err := asc.AppStoreVersionAppID(resp)
+	if err != nil {
+		return asc.Resource[asc.AppStoreVersionAttributes]{}, err
+	}
+	if !strings.EqualFold(strings.TrimSpace(relatedAppID), strings.TrimSpace(appID)) {
+		return asc.Resource[asc.AppStoreVersionAttributes]{}, fmt.Errorf("version %q belongs to app %q, not %q", trimmedVersionID, relatedAppID, appID)
+	}
+	resolvedPlatform := strings.TrimSpace(string(resp.Data.Attributes.Platform))
+	if strings.TrimSpace(platform) != "" && !strings.EqualFold(resolvedPlatform, strings.TrimSpace(platform)) {
+		return asc.Resource[asc.AppStoreVersionAttributes]{}, fmt.Errorf("version %q is on platform %q, not %q", strings.TrimSpace(resp.Data.ID), resolvedPlatform, strings.TrimSpace(platform))
+	}
+	return resp.Data, nil
+}
+
 // ResolveAppInfoID resolves the app info ID, optionally using a provided override.
 func ResolveAppInfoID(ctx context.Context, client *asc.Client, appID, appInfoID string) (string, error) {
 	if strings.TrimSpace(appInfoID) != "" {

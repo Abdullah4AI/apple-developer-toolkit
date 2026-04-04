@@ -109,19 +109,3 @@ func flagHiddenFromHelp(f *flag.Flag) bool {
 	_, hidden := hiddenCommandHelpRegistry.flags[f]
 	return hidden
 }
-
-func rewriteDeprecatedAliasLeafWarnings(cmd *ffcli.Command, rewrite func(string) string) {
-	if cmd == nil || rewrite == nil {
-		return
-	}
-
-	if raw, ok := deprecatedAliasLeafRegistry.Load(cmd); ok {
-		if meta, ok := raw.(*deprecatedAliasLeafMetadata); ok && meta != nil {
-			meta.warning = rewrite(meta.warning)
-		}
-	}
-
-	for _, sub := range cmd.Subcommands {
-		rewriteDeprecatedAliasLeafWarnings(sub, rewrite)
-	}
-}

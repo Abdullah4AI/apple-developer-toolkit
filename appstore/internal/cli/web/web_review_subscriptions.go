@@ -236,15 +236,62 @@ func renderReviewSubscriptionMutationMarkdown(payload reviewSubscriptionMutation
 	return nil
 }
 
-func findReviewSubscription(subscriptions []webcore.ReviewSubscription, subscriptionID string) (*webcore.ReviewSubscription, bool) {
-	subscriptionID = strings.TrimSpace(subscriptionID)
-	for i := range subscriptions {
-		if strings.TrimSpace(subscriptions[i].ID) == subscriptionID {
-			match := subscriptions[i]
-			return &match, true
+func findReviewSubscription(subscriptions []webcore.ReviewSubscription, selector string) (*webcore.ReviewSubscription, error) {
+	selector = strings.TrimSpace(selector)
+	if selector == "" {
+		return nil, fmt.Errorf("subscription selector is required")
+	}
+
+	var idMatches []webcore.ReviewSubscription
+	for _, subscription := range subscriptions {
+		if strings.TrimSpace(subscription.ID) == selector {
+			idMatches = append(idMatches, subscription)
 		}
 	}
-	return nil, false
+	switch len(idMatches) {
+	case 1:
+		match := idMatches[0]
+		return &match, nil
+	case 0:
+	default:
+		candidates := make([]shared.ExactSelectorCandidate, 0, len(idMatches))
+		for _, match := range idMatches {
+			candidates = append(candidates, shared.ExactSelectorCandidate{
+				ID:        strings.TrimSpace(match.ID),
+				ProductID: strings.TrimSpace(match.ProductID),
+				Name:      strings.TrimSpace(match.Name),
+			})
+		}
+		return nil, fmt.Errorf("%q matches %d subscriptions by id:\n  %s\nUse the explicit ASC ID to disambiguate", selector, len(idMatches), strings.Join(func() []string {
+			lines := make([]string, 0, len(candidates))
+			for _, candidate := range candidates {
+				lines = append(lines, fmt.Sprintf("%s, productId=%s, name=%s", candidate.ID, candidate.ProductID, candidate.Name))
+			}
+			return lines
+		}(), "\n  "))
+	}
+
+	candidates := make([]shared.ExactSelectorCandidate, 0, len(subscriptions))
+	for _, subscription := range subscriptions {
+		candidates = append(candidates, shared.ExactSelectorCandidate{
+			ID:        strings.TrimSpace(subscription.ID),
+			ProductID: strings.TrimSpace(subscription.ProductID),
+			Name:      strings.TrimSpace(subscription.Name),
+		})
+	}
+
+	candidate, err := shared.ResolveExactSelectorCandidate(selector, "subscription", candidates)
+	if err != nil {
+		return nil, err
+	}
+
+	for i := range subscriptions {
+		if strings.TrimSpace(subscriptions[i].ID) == strings.TrimSpace(candidate.ID) {
+			match := subscriptions[i]
+			return &match, nil
+		}
+	}
+	return nil, fmt.Errorf("subscription %q resolved to %q but was not present in review results", selector, candidate.ID)
 }
 
 func findReviewSubscriptionsByGroup(subscriptions []webcore.ReviewSubscription, groupID string) []webcore.ReviewSubscription {
@@ -300,8 +347,8 @@ func collectReviewSubscriptionGroupChanges(
 	changed := make([]webcore.ReviewSubscription, 0, len(subscriptionIDs))
 	skipped := make([]reviewSubscriptionMutationSkip, 0)
 	for _, subscriptionID := range subscriptionIDs {
-		refreshed, ok := findReviewSubscription(refreshedGroup, subscriptionID)
-		if !ok {
+		refreshed, err := findReviewSubscription(refreshedGroup, subscriptionID)
+		if err != nil {
 			skipped = append(skipped, reviewSubscriptionMutationSkip{
 				Subscription: webcore.ReviewSubscription{ID: strings.TrimSpace(subscriptionID)},
 				Reason:       "subscription was not found after refresh",
@@ -455,7 +502,7 @@ func WebReviewSubscriptionsAttachCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("web review subscriptions attach", flag.ExitOnError)
 
 	appID := fs.String("app", "", "App ID")
-	subscriptionID := fs.String("subscription-id", "", "Subscription ID")
+	subscriptionID := fs.String("subscription-id", "", "Subscription ID, product ID, or exact current name")
 	confirm := fs.Bool("confirm", false, "Confirm the attach operation")
 	authFlags := bindWebSessionFlags(fs)
 	output := shared.BindOutputFlags(fs)
@@ -491,10 +538,11 @@ func WebReviewSubscriptionsAttachCommand() *ffcli.Command {
 			if err != nil {
 				return withWebAuthHint(err, "web review subscriptions attach")
 			}
-			selected, ok := findReviewSubscription(subscriptions, trimmedSubscriptionID)
-			if !ok {
-				return fmt.Errorf("subscription %q was not found for app %q", trimmedSubscriptionID, trimmedAppID)
+			selected, err := findReviewSubscription(subscriptions, trimmedSubscriptionID)
+			if err != nil {
+				return fmt.Errorf("subscription lookup for app %q failed: %w", trimmedAppID, err)
 			}
+			trimmedSubscriptionID = strings.TrimSpace(selected.ID)
 
 			payload := reviewSubscriptionMutationOutput{
 				AppID:        trimmedAppID,
@@ -518,9 +566,9 @@ func WebReviewSubscriptionsAttachCommand() *ffcli.Command {
 				if err != nil {
 					return withWebAuthHint(err, "web review subscriptions attach")
 				}
-				refreshed, ok := findReviewSubscription(refreshedSubscriptions, trimmedSubscriptionID)
-				if !ok {
-					return fmt.Errorf("subscription %q was not found for app %q after attach", trimmedSubscriptionID, trimmedAppID)
+				refreshed, err := findReviewSubscription(refreshedSubscriptions, trimmedSubscriptionID)
+				if err != nil {
+					return fmt.Errorf("subscription %q was not found for app %q after attach: %w", trimmedSubscriptionID, trimmedAppID, err)
 				}
 				payload.SubmissionID = strings.TrimSpace(submission.ID)
 				payload.Changed = refreshed.SubmitWithNextAppStoreVersion
@@ -655,7 +703,7 @@ func WebReviewSubscriptionsRemoveCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("web review subscriptions remove", flag.ExitOnError)
 
 	appID := fs.String("app", "", "App ID")
-	subscriptionID := fs.String("subscription-id", "", "Subscription ID")
+	subscriptionID := fs.String("subscription-id", "", "Subscription ID, product ID, or exact current name")
 	confirm := fs.Bool("confirm", false, "Confirm the remove operation")
 	authFlags := bindWebSessionFlags(fs)
 	output := shared.BindOutputFlags(fs)
@@ -691,10 +739,11 @@ func WebReviewSubscriptionsRemoveCommand() *ffcli.Command {
 			if err != nil {
 				return withWebAuthHint(err, "web review subscriptions remove")
 			}
-			selected, ok := findReviewSubscription(subscriptions, trimmedSubscriptionID)
-			if !ok {
-				return fmt.Errorf("subscription %q was not found for app %q", trimmedSubscriptionID, trimmedAppID)
+			selected, err := findReviewSubscription(subscriptions, trimmedSubscriptionID)
+			if err != nil {
+				return fmt.Errorf("subscription lookup for app %q failed: %w", trimmedAppID, err)
 			}
+			trimmedSubscriptionID = strings.TrimSpace(selected.ID)
 
 			payload := reviewSubscriptionMutationOutput{
 				AppID:        trimmedAppID,
@@ -714,9 +763,9 @@ func WebReviewSubscriptionsRemoveCommand() *ffcli.Command {
 				if err != nil {
 					return withWebAuthHint(err, "web review subscriptions remove")
 				}
-				refreshed, ok := findReviewSubscription(refreshedSubscriptions, trimmedSubscriptionID)
-				if !ok {
-					return fmt.Errorf("subscription %q was not found for app %q after remove", trimmedSubscriptionID, trimmedAppID)
+				refreshed, err := findReviewSubscription(refreshedSubscriptions, trimmedSubscriptionID)
+				if err != nil {
+					return fmt.Errorf("subscription %q was not found for app %q after remove: %w", trimmedSubscriptionID, trimmedAppID, err)
 				}
 				payload.Changed = !refreshed.SubmitWithNextAppStoreVersion
 				payload.Subscription = *refreshed

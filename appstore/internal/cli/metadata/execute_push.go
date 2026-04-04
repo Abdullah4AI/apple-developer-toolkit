@@ -12,6 +12,7 @@ import (
 
 // PushExecutionOptions controls metadata push planning and apply behavior.
 type PushExecutionOptions struct {
+	CommandName  string
 	AppID        string
 	AppInfoID    string
 	Version      string
@@ -28,6 +29,7 @@ type PushExecutionOptions struct {
 // This is the command-agnostic execution path used by metadata push and
 // release orchestration.
 func ExecutePush(ctx context.Context, opts PushExecutionOptions) (PushPlanResult, error) {
+	errorPrefix := metadataMutationErrorPrefix(opts.CommandName)
 	resolvedAppID := shared.ResolveAppID(opts.AppID)
 	if resolvedAppID == "" {
 		return PushPlanResult{}, shared.UsageError("--app is required (or set ASC_APP_ID)")
@@ -63,12 +65,12 @@ func ExecutePush(ctx context.Context, opts PushExecutionOptions) (PushPlanResult
 
 	localBundle, err := loadLocalMetadata(dirValue, versionValue)
 	if err != nil {
-		return PushPlanResult{}, err
+		return PushPlanResult{}, fmt.Errorf("%s: %w", errorPrefix, err)
 	}
 
 	client, err := shared.GetASCClient()
 	if err != nil {
-		return PushPlanResult{}, fmt.Errorf("metadata push: %w", err)
+		return PushPlanResult{}, fmt.Errorf("%s: %w", errorPrefix, err)
 	}
 
 	requestCtx, cancel := shared.ContextWithTimeout(ctx)
@@ -79,11 +81,12 @@ func ExecutePush(ctx context.Context, opts PushExecutionOptions) (PushPlanResult
 		if errors.Is(err, flag.ErrHelp) {
 			return PushPlanResult{}, err
 		}
-		return PushPlanResult{}, fmt.Errorf("metadata push: %w", err)
+		return PushPlanResult{}, fmt.Errorf("%s: %w", errorPrefix, err)
 	}
 	appInfoIDValue, err := resolveMetadataPushAppInfoID(
 		requestCtx,
 		client,
+		opts.CommandName,
 		resolvedAppID,
 		strings.TrimSpace(opts.AppInfoID),
 		versionValue,
@@ -95,16 +98,16 @@ func ExecutePush(ctx context.Context, opts PushExecutionOptions) (PushPlanResult
 		if errors.Is(err, flag.ErrHelp) {
 			return PushPlanResult{}, err
 		}
-		return PushPlanResult{}, fmt.Errorf("metadata push: %w", err)
+		return PushPlanResult{}, fmt.Errorf("%s: %w", errorPrefix, err)
 	}
 
 	remoteAppInfoItems, err := fetchAppInfoLocalizations(requestCtx, client, appInfoIDValue)
 	if err != nil {
-		return PushPlanResult{}, fmt.Errorf("metadata push: %w", err)
+		return PushPlanResult{}, fmt.Errorf("%s: %w", errorPrefix, err)
 	}
 	remoteVersionItems, err := fetchVersionLocalizations(requestCtx, client, versionIDValue)
 	if err != nil {
-		return PushPlanResult{}, fmt.Errorf("metadata push: %w", err)
+		return PushPlanResult{}, fmt.Errorf("%s: %w", errorPrefix, err)
 	}
 
 	remoteAppInfo := make(map[string]AppInfoLocalization, len(remoteAppInfoItems))
@@ -191,10 +194,18 @@ func ExecutePush(ctx context.Context, opts PushExecutionOptions) (PushPlanResult
 		opts.AllowDeletes,
 	)
 	if applyErr != nil {
-		return PushPlanResult{}, fmt.Errorf("metadata push: %w", applyErr)
+		return PushPlanResult{}, fmt.Errorf("%s: %w", errorPrefix, applyErr)
 	}
 	result.Applied = true
 	result.Actions = actions
 
 	return result, nil
+}
+
+func metadataMutationErrorPrefix(commandName string) string {
+	name := strings.TrimSpace(commandName)
+	if name == "" {
+		name = "push"
+	}
+	return "metadata " + name
 }

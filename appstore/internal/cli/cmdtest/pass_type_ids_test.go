@@ -25,13 +25,13 @@ func TestPassTypeIDsValidationErrors(t *testing.T) {
 			wantErr: "--pass-type-id is required",
 		},
 		{
-			name:    "pass-type-ids certificates get missing pass type id",
-			args:    []string{"pass-type-ids", "certificates", "get"},
+			name:    "pass-type-ids certificates view missing pass type id",
+			args:    []string{"pass-type-ids", "certificates", "view"},
 			wantErr: "--pass-type-id is required",
 		},
 		{
-			name:    "pass-type-ids get missing pass type id",
-			args:    []string{"pass-type-ids", "get"},
+			name:    "pass-type-ids view missing pass type id",
+			args:    []string{"pass-type-ids", "view"},
 			wantErr: "--pass-type-id is required",
 		},
 		{

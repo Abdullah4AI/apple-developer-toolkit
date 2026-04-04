@@ -413,13 +413,6 @@ Examples:
 		UsageFunc: shared.VisibleUsageFunc,
 		Subcommands: []*ffcli.Command{
 			WebhookDeliveriesRelationshipsCommand(),
-			shared.DeprecatedAliasLeafCommand(
-				WebhookDeliveriesRelationshipsCommand(),
-				"relationships",
-				"asc webhooks deliveries links --webhook-id WEBHOOK_ID [flags]",
-				"asc webhooks deliveries links",
-				"Warning: `asc webhooks deliveries relationships` is deprecated. Use `asc webhooks deliveries links`.",
-			),
 			WebhookDeliveriesRedeliverCommand(),
 		},
 		Exec: func(ctx context.Context, args []string) error {

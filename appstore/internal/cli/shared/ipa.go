@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"os"
 	"path"
 	"strings"
 
@@ -14,6 +15,22 @@ import (
 type IPABundleInfo struct {
 	Version     string
 	BuildNumber string
+}
+
+// ValidateIPAPath ensures an IPA path points to a regular file and rejects
+// symlinks so upload commands don't accidentally dereference unexpected files.
+func ValidateIPAPath(ipaPath string) (os.FileInfo, error) {
+	fileInfo, err := os.Lstat(ipaPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to stat IPA: %w", err)
+	}
+	if fileInfo.Mode()&os.ModeSymlink != 0 {
+		return nil, fmt.Errorf("refusing to read symlink %q", ipaPath)
+	}
+	if fileInfo.IsDir() {
+		return nil, fmt.Errorf("--ipa must be a file")
+	}
+	return fileInfo, nil
 }
 
 // ExtractBundleInfoFromIPA reads CFBundleVersion info from an IPA.
@@ -72,6 +89,46 @@ func readBundleInfoFromInfoPlist(file *zip.File) (IPABundleInfo, error) {
 		Version:     coercePlistValueToString(info["CFBundleShortVersionString"]),
 		BuildNumber: coercePlistValueToString(info["CFBundleVersion"]),
 	}, nil
+}
+
+// ResolveBundleInfoForIPA fills missing version/build-number values from the IPA
+// and preserves the existing CLI-facing error messages.
+func ResolveBundleInfoForIPA(ipaPath, version, buildNumber string) (string, string, error) {
+	versionValue := strings.TrimSpace(version)
+	buildNumberValue := strings.TrimSpace(buildNumber)
+	if versionValue == "" || buildNumberValue == "" {
+		info, err := ExtractBundleInfoFromIPA(ipaPath)
+		if err != nil {
+			missingFlags := make([]string, 0, 2)
+			if versionValue == "" {
+				missingFlags = append(missingFlags, "--version")
+			}
+			if buildNumberValue == "" {
+				missingFlags = append(missingFlags, "--build-number")
+			}
+			return "", "", fmt.Errorf("%s required (failed to extract from IPA: %w)", strings.Join(missingFlags, " and "), err)
+		}
+		if versionValue == "" {
+			versionValue = info.Version
+		}
+		if buildNumberValue == "" {
+			buildNumberValue = info.BuildNumber
+		}
+	}
+	if versionValue == "" || buildNumberValue == "" {
+		missingFields := make([]string, 0, 2)
+		missingFlags := make([]string, 0, 2)
+		if versionValue == "" {
+			missingFields = append(missingFields, "CFBundleShortVersionString")
+			missingFlags = append(missingFlags, "--version")
+		}
+		if buildNumberValue == "" {
+			missingFields = append(missingFields, "CFBundleVersion")
+			missingFlags = append(missingFlags, "--build-number")
+		}
+		return "", "", fmt.Errorf("missing Info.plist keys %s; provide %s", strings.Join(missingFields, " and "), strings.Join(missingFlags, " and "))
+	}
+	return versionValue, buildNumberValue, nil
 }
 
 func coercePlistValueToString(value any) string {

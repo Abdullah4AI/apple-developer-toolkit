@@ -57,7 +57,7 @@ asc <subcommand> [flags]
 
 - `apps` - List and manage apps in App Store Connect.
 - `app-setup` - Post-create app setup automation.
-- `app-tags` - Manage app tags for App Store visibility.
+- `app-tags` - Inspect Apple-generated App Store discoverability tags.
 - `versions` - Manage App Store versions.
 - `localizations` - Manage App Store localization metadata.
 - `metadata` - Manage app metadata with deterministic workflows and keyword tooling.
@@ -97,9 +97,9 @@ asc <subcommand> [flags]
 - `release-notes` - Generate and manage App Store release notes.
 - `review` - Manage App Store review details, attachments, and submissions.
 - `reviews` - List and manage App Store customer reviews.
-- `submit` - Submit builds for App Store review.
+- `submit` - Submission lifecycle tools; use `publish appstore --submit` to ship.
 - `validate` - Canonical App Store submission readiness report.
-- `publish` - End-to-end publish workflows for TestFlight and App Store.
+- `publish` - High-level publish workflows for TestFlight and App Store.
 
 ### Monetization
 
@@ -161,14 +161,15 @@ asc builds upload --app "123456789" --ipa "/path/to/MyApp.ipa"
 # Stage an App Store version before submission
 asc release stage --app "123456789" --version "1.2.3" --build "BUILD_ID" --copy-metadata-from "1.2.2" --dry-run
 
-# Release an App Store version (high-level)
-asc release run --app "123456789" --version "1.2.3" --build "BUILD_ID" --metadata-dir "./metadata/version/1.2.3" --dry-run
-asc release run --app "123456789" --version "1.2.3" --build "BUILD_ID" --metadata-dir "./metadata/version/1.2.3" --confirm
+# Publish an App Store version (high-level)
+asc publish appstore --app "123456789" --ipa "/path/to/MyApp.ipa" --version "1.2.3"
+asc publish appstore --app "123456789" --ipa "/path/to/MyApp.ipa" --version "1.2.3" --submit --confirm
 asc status --app "123456789"
 
-# Lower-level review/submit flow
+# Canonical readiness and lower-level submission lifecycle flow
 asc validate --app "123456789" --version "1.2.3"
-asc submit create --app "123456789" --version "1.2.3" --build "BUILD_ID" --confirm
+asc submit status --version-id "VERSION_ID"
+asc submit cancel --version-id "VERSION_ID" --confirm
 
 # Run a local automation workflow
 asc workflow run release

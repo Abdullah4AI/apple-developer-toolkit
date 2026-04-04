@@ -48,7 +48,8 @@ Examples:
 func IAPImagesListCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("images list", flag.ExitOnError)
 
-	iapID := fs.String("iap-id", "", "In-app purchase ID")
+	iapID := fs.String("iap-id", "", "In-app purchase ID, product ID, or exact current name")
+	appID := addIAPLookupAppFlag(fs)
 	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
 	next := fs.String("next", "", "Fetch next page using a links.next URL")
 	paginate := fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")
@@ -82,6 +83,13 @@ Examples:
 			client, err := shared.GetASCClient()
 			if err != nil {
 				return fmt.Errorf("iap images list: %w", err)
+			}
+
+			if strings.TrimSpace(*next) == "" {
+				iapValue, err = resolveIAPLookupIDWithTimeout(ctx, client, *appID, iapValue)
+				if err != nil {
+					return err
+				}
 			}
 
 			requestCtx, cancel := shared.ContextWithTimeout(ctx)
@@ -165,7 +173,8 @@ Examples:
 func IAPImagesCreateCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("images create", flag.ExitOnError)
 
-	iapID := fs.String("iap-id", "", "In-app purchase ID")
+	iapID := fs.String("iap-id", "", "In-app purchase ID, product ID, or exact current name")
+	appID := addIAPLookupAppFlag(fs)
 	filePath := fs.String("file", "", "Path to image file")
 	output := shared.BindOutputFlags(fs)
 
@@ -205,6 +214,11 @@ Examples:
 			client, err := shared.GetASCClient()
 			if err != nil {
 				return fmt.Errorf("iap images create: %w", err)
+			}
+
+			iapValue, err = resolveIAPLookupIDWithTimeout(ctx, client, *appID, iapValue)
+			if err != nil {
+				return err
 			}
 
 			requestCtx, cancel := contextWithAssetUploadTimeout(ctx)

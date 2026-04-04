@@ -182,6 +182,9 @@ func TestAuthDoctorJSONPrefillsVersionFromXcodeProject(t *testing.T) {
 		if err := os.MkdirAll(fastlaneDir, 0o755); err != nil {
 			t.Fatalf("mkdir fastlane error: %v", err)
 		}
+		if err := os.WriteFile(filepath.Join(fastlaneDir, "Appfile"), []byte(`app_identifier "com.example.app"`), 0o644); err != nil {
+			t.Fatalf("write Appfile error: %v", err)
+		}
 		if err := os.WriteFile(filepath.Join(fastlaneDir, "Fastfile"), []byte("upload_to_app_store\napp_store_build_number\n"), 0o644); err != nil {
 			t.Fatalf("write Fastfile error: %v", err)
 		}
@@ -219,11 +222,38 @@ func TestAuthDoctorJSONPrefillsVersionFromXcodeProject(t *testing.T) {
 		if err := json.Unmarshal([]byte(stdout), &report); err != nil {
 			t.Fatalf("unmarshal error: %v", err)
 		}
-		if !sliceContains(report.Migration.SuggestedCommands, `asc publish appstore --app "123456789" --ipa app.ipa --version "3.2.1" --submit --confirm`) {
-			t.Fatalf("expected publish command with prefilled app/version, got %#v", report.Migration.SuggestedCommands)
+		if sliceContains(report.Migration.SuggestedCommands, `asc release run --app "123456789" --version "3.2.1" --build "BUILD_ID" --metadata-dir "./metadata/version/3.2.1" --confirm`) {
+			t.Fatalf("expected upload-only migration hints to avoid deprecated release run guidance without metadata, got %#v", report.Migration.SuggestedCommands)
 		}
-		if !sliceContains(report.Migration.SuggestedCommands, `asc submit create --app "123456789" --version "3.2.1" --build "BUILD_ID" --confirm`) {
-			t.Fatalf("expected submit command with prefilled app/version, got %#v", report.Migration.SuggestedCommands)
+		if !sliceContains(report.Migration.SuggestedCommands, `asc validate --app "123456789" --version-id "VERSION_ID"`) {
+			t.Fatalf("expected canonical validate guidance with prefilled app/version, got %#v", report.Migration.SuggestedCommands)
+		}
+		if !sliceContains(report.Migration.SuggestedCommands, `asc builds upload --app "123456789" --ipa app.ipa --version "3.2.1" --build-number "BUILD_NUMBER" --wait`) {
+			t.Fatalf("expected upload guidance for upload-only lanes, got %#v", report.Migration.SuggestedCommands)
+		}
+		if !sliceContains(report.Migration.SuggestedCommands, `asc builds info --app "123456789" --build-number "BUILD_NUMBER" --version "3.2.1"`) {
+			t.Fatalf("expected build lookup guidance for upload-only lanes, got %#v", report.Migration.SuggestedCommands)
+		}
+		if !sliceContains(report.Migration.SuggestedCommands, `asc versions create --app "123456789" --version "3.2.1"`) {
+			t.Fatalf("expected version create guidance for upload-only lanes, got %#v", report.Migration.SuggestedCommands)
+		}
+		if !sliceContains(report.Migration.SuggestedCommands, `asc versions attach-build --version-id "VERSION_ID" --build "UPLOADED_BUILD_ID"`) {
+			t.Fatalf("expected attach-build guidance for upload-only lanes, got %#v", report.Migration.SuggestedCommands)
+		}
+		if !sliceContains(report.Migration.SuggestedCommands, `asc review submissions-create --app "123456789" --platform "PLATFORM"`) {
+			t.Fatalf("expected review submission create guidance for upload-only lanes, got %#v", report.Migration.SuggestedCommands)
+		}
+		if !sliceContains(report.Migration.SuggestedCommands, `asc review items-add --submission "REVIEW_SUBMISSION_ID" --item-type appStoreVersions --item-id "VERSION_ID"`) {
+			t.Fatalf("expected review submission item guidance for upload-only lanes, got %#v", report.Migration.SuggestedCommands)
+		}
+		if !sliceContains(report.Migration.SuggestedCommands, `asc review submissions-submit --id "REVIEW_SUBMISSION_ID" --confirm`) {
+			t.Fatalf("expected review submission submit guidance for upload-only lanes, got %#v", report.Migration.SuggestedCommands)
+		}
+		if sliceContains(report.Migration.SuggestedCommands, `asc submit create --app "123456789" --version "3.2.1" --build "BUILD_ID" --confirm`) {
+			t.Fatalf("expected upload-only migration hints to avoid deprecated submit create guidance, got %#v", report.Migration.SuggestedCommands)
+		}
+		if sliceContains(report.Migration.SuggestedCommands, `asc submit preflight --app "123456789" --version "3.2.1"`) {
+			t.Fatalf("expected upload-only migration hints to avoid deprecated submit preflight guidance, got %#v", report.Migration.SuggestedCommands)
 		}
 	})
 }

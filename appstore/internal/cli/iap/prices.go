@@ -71,8 +71,8 @@ type iapPricePointValue struct {
 func IAPPricesCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("summary", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
-	iapID := fs.String("iap-id", "", "In-app purchase ID")
+	appID := fs.String("app", "", iapLookupAppUsage)
+	iapID := fs.String("iap-id", "", "In-app purchase ID, product ID, or exact current name")
 	territory := fs.String("territory", "", "Territory filter (e.g., USA)")
 	output := shared.BindOutputFlags(fs)
 
@@ -91,12 +91,9 @@ Examples:
 		Exec: func(ctx context.Context, args []string) error {
 			requestedIAPID := strings.TrimSpace(*iapID)
 			requestedAppID := strings.TrimSpace(*appID)
-			if requestedIAPID == "" && shared.ResolveAppID(requestedAppID) == "" {
+			resolvedAppID := shared.ResolveAppID(requestedAppID)
+			if requestedIAPID == "" && resolvedAppID == "" {
 				fmt.Fprintln(os.Stderr, "Error: --app or --iap-id is required")
-				return flag.ErrHelp
-			}
-			if requestedIAPID != "" && requestedAppID != "" {
-				fmt.Fprintln(os.Stderr, "Error: --app and --iap-id are mutually exclusive")
 				return flag.ErrHelp
 			}
 
@@ -105,10 +102,17 @@ Examples:
 				return fmt.Errorf("iap prices: %w", err)
 			}
 
+			var iaps []asc.Resource[asc.InAppPurchaseV2Attributes]
+			if requestedIAPID != "" {
+				requestedIAPID, err = resolveIAPLookupIDWithTimeout(ctx, client, requestedAppID, requestedIAPID)
+				if err != nil {
+					return err
+				}
+			}
+
 			requestCtx, cancel := shared.ContextWithTimeout(ctx)
 			defer cancel()
 
-			var iaps []asc.Resource[asc.InAppPurchaseV2Attributes]
 			if requestedIAPID != "" {
 				resp, err := client.GetInAppPurchaseV2(requestCtx, requestedIAPID)
 				if err != nil {
@@ -116,7 +120,6 @@ Examples:
 				}
 				iaps = []asc.Resource[asc.InAppPurchaseV2Attributes]{resp.Data}
 			} else {
-				resolvedAppID := shared.ResolveAppID(requestedAppID)
 				firstPage, err := client.GetInAppPurchasesV2(requestCtx, resolvedAppID, asc.WithIAPLimit(200))
 				if err != nil {
 					return fmt.Errorf("iap prices: failed to fetch IAP list: %w", err)

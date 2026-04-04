@@ -10,8 +10,11 @@ import (
 	"github.com/peterbourgon/ff/v3/ffcli"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/assets"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
+
+var experimentTreatmentLocalizationMediaClientFactory = shared.GetASCClient
 
 // ExperimentTreatmentLocalizationPreviewSetsCommand returns the preview sets command group.
 func ExperimentTreatmentLocalizationPreviewSetsCommand() *ffcli.Command {
@@ -121,11 +124,15 @@ func ExperimentTreatmentLocalizationScreenshotSetsCommand() *ffcli.Command {
 		LongHelp: `Manage screenshot sets for a treatment localization.
 
 Examples:
-  asc product-pages experiments treatments localizations screenshot-sets list --localization-id "LOCALIZATION_ID"`,
+  asc product-pages experiments treatments localizations screenshot-sets list --localization-id "LOCALIZATION_ID"
+  asc product-pages experiments treatments localizations screenshot-sets upload --localization-id "LOCALIZATION_ID" --path "./screenshots" --device-type "IPHONE_65"
+  asc product-pages experiments treatments localizations screenshot-sets sync --localization-id "LOCALIZATION_ID" --path "./screenshots" --device-type "IPHONE_65" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
 			ExperimentTreatmentLocalizationScreenshotSetsListCommand(),
+			ExperimentTreatmentLocalizationScreenshotSetsUploadCommand(),
+			ExperimentTreatmentLocalizationScreenshotSetsSyncCommand(),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp
@@ -205,4 +212,104 @@ Examples:
 			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
 		},
 	}
+}
+
+// ExperimentTreatmentLocalizationScreenshotSetsUploadCommand returns the screenshot sets upload subcommand.
+func ExperimentTreatmentLocalizationScreenshotSetsUploadCommand() *ffcli.Command {
+	fs := flag.NewFlagSet("treatment-localizations screenshot-sets upload", flag.ExitOnError)
+
+	localizationID := fs.String("localization-id", "", "Treatment localization ID")
+	path := fs.String("path", "", "Path to screenshot file or directory")
+	deviceType := fs.String("device-type", "", "Device type (e.g., IPHONE_65)")
+	output := shared.BindOutputFlags(fs)
+
+	return &ffcli.Command{
+		Name:       "upload",
+		ShortUsage: "asc product-pages experiments treatments localizations screenshot-sets upload --localization-id \"LOCALIZATION_ID\" --path \"./screenshots\" --device-type \"IPHONE_65\"",
+		ShortHelp:  "Upload screenshots for a treatment localization.",
+		LongHelp: `Upload screenshots for a treatment localization.
+
+Examples:
+  asc product-pages experiments treatments localizations screenshot-sets upload --localization-id "LOCALIZATION_ID" --path "./screenshots" --device-type "IPHONE_65"
+  asc product-pages experiments treatments localizations screenshot-sets upload --localization-id "LOCALIZATION_ID" --path "./screenshots/en-US.png" --device-type "IPHONE_65"`,
+		FlagSet:   fs,
+		UsageFunc: shared.DefaultUsageFunc,
+		Exec: func(ctx context.Context, args []string) error {
+			result, err := executeExperimentTreatmentLocalizationScreenshotUpload(ctx, *localizationID, *path, *deviceType, false)
+			if err != nil {
+				return fmt.Errorf("experiments treatments localizations screenshot-sets upload: %w", err)
+			}
+			return shared.PrintOutput(result, *output.Output, *output.Pretty)
+		},
+	}
+}
+
+// ExperimentTreatmentLocalizationScreenshotSetsSyncCommand returns the screenshot sets sync subcommand.
+func ExperimentTreatmentLocalizationScreenshotSetsSyncCommand() *ffcli.Command {
+	fs := flag.NewFlagSet("treatment-localizations screenshot-sets sync", flag.ExitOnError)
+
+	localizationID := fs.String("localization-id", "", "Treatment localization ID")
+	path := fs.String("path", "", "Path to screenshot file or directory")
+	deviceType := fs.String("device-type", "", "Device type (e.g., IPHONE_65)")
+	confirm := fs.Bool("confirm", false, "Confirm sync (deletes existing media in the matching set before upload)")
+	output := shared.BindOutputFlags(fs)
+
+	return &ffcli.Command{
+		Name:       "sync",
+		ShortUsage: "asc product-pages experiments treatments localizations screenshot-sets sync --localization-id \"LOCALIZATION_ID\" --path \"./screenshots\" --device-type \"IPHONE_65\" --confirm",
+		ShortHelp:  "Sync screenshots for a treatment localization.",
+		LongHelp: `Sync screenshots for a treatment localization.
+
+This replaces existing screenshots in the matching display-type set with files from --path.
+
+Examples:
+  asc product-pages experiments treatments localizations screenshot-sets sync --localization-id "LOCALIZATION_ID" --path "./screenshots" --device-type "IPHONE_65" --confirm`,
+		FlagSet:   fs,
+		UsageFunc: shared.DefaultUsageFunc,
+		Exec: func(ctx context.Context, args []string) error {
+			if !*confirm {
+				fmt.Fprintln(os.Stderr, "Error: --confirm is required to sync")
+				return flag.ErrHelp
+			}
+
+			result, err := executeExperimentTreatmentLocalizationScreenshotUpload(ctx, *localizationID, *path, *deviceType, true)
+			if err != nil {
+				return fmt.Errorf("experiments treatments localizations screenshot-sets sync: %w", err)
+			}
+			return shared.PrintOutput(result, *output.Output, *output.Pretty)
+		},
+	}
+}
+
+func executeExperimentTreatmentLocalizationScreenshotUpload(
+	ctx context.Context,
+	localizationID, path, deviceType string,
+	sync bool,
+) (*asc.ExperimentTreatmentLocalizationScreenshotUploadResult, error) {
+	return assets.ExecuteScreenshotSetUpload(ctx, assets.ScreenshotSetUploadOptions[*asc.ExperimentTreatmentLocalizationScreenshotUploadResult]{
+		LocalizationID:           localizationID,
+		Path:                     path,
+		DeviceType:               deviceType,
+		Replace:                  sync,
+		InvalidDeviceTypeIsUsage: true,
+		ClientFactory:            experimentTreatmentLocalizationMediaClientFactory,
+		RequestContext:           shared.ContextWithTimeout,
+		UploadContext:            assets.ContextWithAssetUploadTimeout,
+		Access: assets.ScreenshotSetAccess{
+			List: func(ctx context.Context, client *asc.Client, localizationID string) (*asc.AppScreenshotSetsResponse, error) {
+				return client.GetAppStoreVersionExperimentTreatmentLocalizationScreenshotSets(ctx, localizationID)
+			},
+			Create: func(ctx context.Context, client *asc.Client, localizationID, displayType string) (*asc.AppScreenshotSetResponse, error) {
+				return client.CreateAppScreenshotSetForExperimentTreatmentLocalization(ctx, localizationID, displayType)
+			},
+		},
+		BuildResult: func(localizationID string, set asc.Resource[asc.AppScreenshotSetAttributes], results []asc.AssetUploadResultItem) *asc.ExperimentTreatmentLocalizationScreenshotUploadResult {
+			return &asc.ExperimentTreatmentLocalizationScreenshotUploadResult{
+				ExperimentTreatmentLocalizationID: localizationID,
+				SetID:                             set.ID,
+				DisplayType:                       set.Attributes.ScreenshotDisplayType,
+				Results:                           results,
+			}
+		},
+	})
 }

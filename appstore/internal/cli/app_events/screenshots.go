@@ -31,13 +31,6 @@ Examples:
 		Subcommands: []*ffcli.Command{
 			AppEventScreenshotsListCommand(),
 			AppEventScreenshotsRelationshipsCommand(),
-			shared.DeprecatedAliasLeafCommand(
-				AppEventScreenshotsRelationshipsCommand(),
-				"relationships",
-				"asc app-events screenshots links [flags]",
-				"asc app-events screenshots links",
-				"Warning: `asc app-events screenshots relationships` is deprecated. Use `asc app-events screenshots links`.",
-			),
 			AppEventScreenshotsGetCommand(),
 			AppEventScreenshotsCreateCommand(),
 			AppEventScreenshotsDeleteCommand(),

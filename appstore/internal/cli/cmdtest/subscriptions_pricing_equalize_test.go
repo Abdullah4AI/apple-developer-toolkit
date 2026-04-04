@@ -25,7 +25,7 @@ func TestSubscriptionsPricingEqualizeValidationErrors(t *testing.T) {
 		},
 		{
 			name:    "missing base price",
-			args:    []string{"subscriptions", "pricing", "equalize", "--subscription-id", "sub-1"},
+			args:    []string{"subscriptions", "pricing", "equalize", "--subscription-id", "8000000001"},
 			wantErr: "Error: --base-price is required",
 		},
 	}
@@ -73,7 +73,7 @@ func TestSubscriptionsPricingEqualize_RequiresConfirmUnlessDryRun(t *testing.T) 
 	stdout, stderr := captureOutput(t, func() {
 		if err := root.Parse([]string{
 			"subscriptions", "pricing", "equalize",
-			"--subscription-id", "sub-1",
+			"--subscription-id", "8000000001",
 			"--base-price", "0.99",
 		}); err != nil {
 			t.Fatalf("parse error: %v", err)
@@ -110,7 +110,7 @@ func TestSubscriptionsPricingEqualize_RejectsOutOfRangeWorkers(t *testing.T) {
 	stdout, _ := captureOutput(t, func() {
 		if err := root.Parse([]string{
 			"subscriptions", "pricing", "equalize",
-			"--subscription-id", "sub-1",
+			"--subscription-id", "8000000001",
 			"--base-price", "0.99",
 			"--dry-run",
 			"--workers", "0",
@@ -143,11 +143,11 @@ func TestSubscriptionsPricingEqualize_DryRunMatchesBasePriceNumerically(t *testi
 		switch {
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/territories":
 			return jsonHTTPResponse(http.StatusOK, `{"data":[{"type":"territories","id":"USA"},{"type":"territories","id":"CAN"}],"links":{}}`), nil
-		case req.Method == http.MethodGet && req.URL.Path == "/v1/subscriptions/sub-1/subscriptionAvailability":
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/subscriptions/8000000001/subscriptionAvailability":
 			return jsonHTTPResponse(http.StatusOK, `{"data":{"type":"subscriptionAvailabilities","id":"avail-1","attributes":{"availableInNewTerritories":true}}}`), nil
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/subscriptionAvailabilities/avail-1/availableTerritories":
 			return jsonHTTPResponse(http.StatusOK, `{"data":[{"type":"territories","id":"USA"},{"type":"territories","id":"CAN"}],"links":{}}`), nil
-		case req.Method == http.MethodGet && req.URL.Path == "/v1/subscriptions/sub-1/pricePoints":
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/subscriptions/8000000001/pricePoints":
 			if got := req.URL.Query().Get("filter[territory]"); got != "USA" {
 				t.Fatalf("expected filter[territory]=USA, got %q", got)
 			}
@@ -174,7 +174,7 @@ func TestSubscriptionsPricingEqualize_DryRunMatchesBasePriceNumerically(t *testi
 	stdout, _ := captureOutput(t, func() {
 		if err := root.Parse([]string{
 			"subscriptions", "pricing", "equalize",
-			"--subscription-id", "sub-1",
+			"--subscription-id", "8000000001",
 			"--base-price", "3.5",
 			"--dry-run",
 		}); err != nil {
@@ -223,11 +223,11 @@ func TestSubscriptionsPricingEqualize_DryRunUsesTerritoryRelationshipForOpaquePr
 		switch {
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/territories":
 			return jsonHTTPResponse(http.StatusOK, `{"data":[{"type":"territories","id":"USA"},{"type":"territories","id":"CAN"}],"links":{}}`), nil
-		case req.Method == http.MethodGet && req.URL.Path == "/v1/subscriptions/sub-1/subscriptionAvailability":
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/subscriptions/8000000001/subscriptionAvailability":
 			return jsonHTTPResponse(http.StatusOK, `{"data":{"type":"subscriptionAvailabilities","id":"avail-1","attributes":{"availableInNewTerritories":true}}}`), nil
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/subscriptionAvailabilities/avail-1/availableTerritories":
 			return jsonHTTPResponse(http.StatusOK, `{"data":[{"type":"territories","id":"USA"},{"type":"territories","id":"CAN"}],"links":{}}`), nil
-		case req.Method == http.MethodGet && req.URL.Path == "/v1/subscriptions/sub-1/pricePoints":
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/subscriptions/8000000001/pricePoints":
 			body := `{"data":[{"type":"subscriptionPricePoints","id":"` + basePricePointID + `","attributes":{"customerPrice":"3.50"}}],"links":{}}`
 			return jsonHTTPResponse(http.StatusOK, body), nil
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/subscriptionPricePoints/"+basePricePointID+"/equalizations":
@@ -245,7 +245,7 @@ func TestSubscriptionsPricingEqualize_DryRunUsesTerritoryRelationshipForOpaquePr
 	stdout, _ := captureOutput(t, func() {
 		if err := root.Parse([]string{
 			"subscriptions", "pricing", "equalize",
-			"--subscription-id", "sub-1",
+			"--subscription-id", "8000000001",
 			"--base-price", "3.5",
 			"--dry-run",
 		}); err != nil {
@@ -285,13 +285,13 @@ func TestSubscriptionsPricingEqualize_DryRunFailsFastWhenAvailabilityDoesNotCove
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/territories":
 			steps = append(steps, "pricing-territories")
 			return jsonHTTPResponse(http.StatusOK, `{"data":[{"type":"territories","id":"USA"},{"type":"territories","id":"CAN"}],"links":{}}`), nil
-		case req.Method == http.MethodGet && req.URL.Path == "/v1/subscriptions/sub-1/subscriptionAvailability":
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/subscriptions/8000000001/subscriptionAvailability":
 			steps = append(steps, "availability")
 			return jsonHTTPResponse(http.StatusOK, `{"data":{"type":"subscriptionAvailabilities","id":"avail-1","attributes":{"availableInNewTerritories":false}}}`), nil
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/subscriptionAvailabilities/avail-1/availableTerritories":
 			steps = append(steps, "available-territories")
 			return jsonHTTPResponse(http.StatusOK, `{"data":[{"type":"territories","id":"USA"}],"links":{}}`), nil
-		case req.Method == http.MethodGet && req.URL.Path == "/v1/subscriptions/sub-1/pricePoints":
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/subscriptions/8000000001/pricePoints":
 			t.Fatalf("unexpected price point fetch before availability preflight")
 			return nil, nil
 		case req.Method == http.MethodGet && strings.Contains(req.URL.Path, "/equalizations"):
@@ -310,7 +310,7 @@ func TestSubscriptionsPricingEqualize_DryRunFailsFastWhenAvailabilityDoesNotCove
 	stdout, _ := captureOutput(t, func() {
 		if err := root.Parse([]string{
 			"subscriptions", "pricing", "equalize",
-			"--subscription-id", "sub-1",
+			"--subscription-id", "8000000001",
 			"--base-price", "0.99",
 			"--dry-run",
 		}); err != nil {
@@ -345,13 +345,13 @@ func TestSubscriptionsPricingEqualize_ApplyFailsWhenAvailabilityIsMissing(t *tes
 
 	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		switch {
-		case req.Method == http.MethodGet && req.URL.Path == "/v1/subscriptions/sub-1/subscriptionAvailability":
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/subscriptions/8000000001/subscriptionAvailability":
 			steps = append(steps, "availability")
 			return jsonHTTPResponse(http.StatusNotFound, `{"errors":[{"status":"404","code":"NOT_FOUND","title":"not found","detail":"missing"}]}`), nil
-		case req.Method == http.MethodGet && req.URL.Path == "/v1/subscriptions/sub-1":
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/subscriptions/8000000001":
 			steps = append(steps, "subscription")
-			return jsonHTTPResponse(http.StatusOK, `{"data":{"type":"subscriptions","id":"sub-1","attributes":{}}}`), nil
-		case req.Method == http.MethodGet && req.URL.Path == "/v1/subscriptions/sub-1/pricePoints":
+			return jsonHTTPResponse(http.StatusOK, `{"data":{"type":"subscriptions","id":"8000000001","attributes":{}}}`), nil
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/subscriptions/8000000001/pricePoints":
 			t.Fatalf("unexpected price point fetch before availability preflight")
 			return nil, nil
 		case req.Method == http.MethodGet && strings.Contains(req.URL.Path, "/equalizations"):
@@ -370,7 +370,7 @@ func TestSubscriptionsPricingEqualize_ApplyFailsWhenAvailabilityIsMissing(t *tes
 	stdout, _ := captureOutput(t, func() {
 		if err := root.Parse([]string{
 			"subscriptions", "pricing", "equalize",
-			"--subscription-id", "sub-1",
+			"--subscription-id", "8000000001",
 			"--base-price", "0.99",
 			"--confirm",
 		}); err != nil {
@@ -405,13 +405,13 @@ func TestSubscriptionsPricingEqualize_DryRunFailsWhenSubscriptionDoesNotExist(t 
 
 	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		switch {
-		case req.Method == http.MethodGet && req.URL.Path == "/v1/subscriptions/sub-missing/subscriptionAvailability":
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/subscriptions/8000000002/subscriptionAvailability":
 			steps = append(steps, "availability")
 			return jsonHTTPResponse(http.StatusNotFound, `{"errors":[{"status":"404","code":"NOT_FOUND","title":"not found","detail":"missing"}]}`), nil
-		case req.Method == http.MethodGet && req.URL.Path == "/v1/subscriptions/sub-missing":
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/subscriptions/8000000002":
 			steps = append(steps, "subscription")
 			return jsonHTTPResponse(http.StatusNotFound, `{"errors":[{"status":"404","code":"NOT_FOUND","title":"not found","detail":"missing"}]}`), nil
-		case req.Method == http.MethodGet && req.URL.Path == "/v1/subscriptions/sub-missing/pricePoints":
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/subscriptions/8000000002/pricePoints":
 			t.Fatalf("unexpected price point fetch before missing subscription failure")
 			return nil, nil
 		case req.Method == http.MethodGet && strings.Contains(req.URL.Path, "/equalizations"):
@@ -430,7 +430,7 @@ func TestSubscriptionsPricingEqualize_DryRunFailsWhenSubscriptionDoesNotExist(t 
 	stdout, _ := captureOutput(t, func() {
 		if err := root.Parse([]string{
 			"subscriptions", "pricing", "equalize",
-			"--subscription-id", "sub-missing",
+			"--subscription-id", "8000000002",
 			"--base-price", "0.99",
 			"--dry-run",
 		}); err != nil {
@@ -445,7 +445,7 @@ func TestSubscriptionsPricingEqualize_DryRunFailsWhenSubscriptionDoesNotExist(t 
 	if stdout != "" {
 		t.Fatalf("expected no stdout on missing subscription failure, got %q", stdout)
 	}
-	if !strings.Contains(runErr.Error(), `subscription "sub-missing" was not found`) {
+	if !strings.Contains(runErr.Error(), `subscription "8000000002" was not found`) {
 		t.Fatalf("expected missing subscription error, got %v", runErr)
 	}
 	if strings.Contains(runErr.Error(), "availability is not configured") {
@@ -471,13 +471,13 @@ func TestSubscriptionsPricingEqualize_ApplyFailsWhenAvailabilityDoesNotCoverAllT
 		switch {
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/territories":
 			return jsonHTTPResponse(http.StatusOK, `{"data":[{"type":"territories","id":"USA"},{"type":"territories","id":"CAN"}],"links":{}}`), nil
-		case req.Method == http.MethodGet && req.URL.Path == "/v1/subscriptions/sub-1/pricePoints":
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/subscriptions/8000000001/pricePoints":
 			body := `{"data":[{"type":"subscriptionPricePoints","id":"` + basePricePointID + `","attributes":{"customerPrice":"0.99"}}],"links":{}}`
 			return jsonHTTPResponse(http.StatusOK, body), nil
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/subscriptionPricePoints/"+basePricePointID+"/equalizations":
 			body := `{"data":[{"type":"subscriptionPricePoints","id":"` + canPricePointID + `","attributes":{"customerPrice":"1.29"},"relationships":{"territory":{"data":{"type":"territories","id":"CAN"}}}}],"links":{}}`
 			return jsonHTTPResponse(http.StatusOK, body), nil
-		case req.Method == http.MethodGet && req.URL.Path == "/v1/subscriptions/sub-1/subscriptionAvailability":
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/subscriptions/8000000001/subscriptionAvailability":
 			return jsonHTTPResponse(http.StatusOK, `{"data":{"type":"subscriptionAvailabilities","id":"avail-1","attributes":{"availableInNewTerritories":false}}}`), nil
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/subscriptionAvailabilities/avail-1/availableTerritories":
 			return jsonHTTPResponse(http.StatusOK, `{"data":[{"type":"territories","id":"USA"}],"links":{}}`), nil
@@ -494,7 +494,7 @@ func TestSubscriptionsPricingEqualize_ApplyFailsWhenAvailabilityDoesNotCoverAllT
 	stdout, _ := captureOutput(t, func() {
 		if err := root.Parse([]string{
 			"subscriptions", "pricing", "equalize",
-			"--subscription-id", "sub-1",
+			"--subscription-id", "8000000001",
 			"--base-price", "0.99",
 			"--confirm",
 		}); err != nil {
@@ -534,24 +534,24 @@ func TestSubscriptionsPricingEqualize_InitialPriceUsesPatchThenCreatesRemainingT
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/territories":
 			steps = append(steps, "pricing-territories")
 			return jsonHTTPResponse(http.StatusOK, `{"data":[{"type":"territories","id":"USA"},{"type":"territories","id":"CAN"}],"links":{}}`), nil
-		case req.Method == http.MethodGet && req.URL.Path == "/v1/subscriptions/sub-1/pricePoints":
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/subscriptions/8000000001/pricePoints":
 			body := `{"data":[{"type":"subscriptionPricePoints","id":"` + basePricePointID + `","attributes":{"customerPrice":"0.99"}}],"links":{}}`
 			return jsonHTTPResponse(http.StatusOK, body), nil
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/subscriptionPricePoints/"+basePricePointID+"/equalizations":
 			body := `{"data":[{"type":"subscriptionPricePoints","id":"` + canPricePointID + `","attributes":{"customerPrice":"1.29"},"relationships":{"territory":{"data":{"type":"territories","id":"CAN"}}}}],"links":{}}`
 			return jsonHTTPResponse(http.StatusOK, body), nil
-		case req.Method == http.MethodGet && req.URL.Path == "/v1/subscriptions/sub-1/subscriptionAvailability":
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/subscriptions/8000000001/subscriptionAvailability":
 			steps = append(steps, "availability")
 			return jsonHTTPResponse(http.StatusOK, `{"data":{"type":"subscriptionAvailabilities","id":"avail-1","attributes":{"availableInNewTerritories":false}}}`), nil
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/subscriptionAvailabilities/avail-1/availableTerritories":
 			steps = append(steps, "territories")
 			return jsonHTTPResponse(http.StatusOK, `{"data":[{"type":"territories","id":"USA"},{"type":"territories","id":"CAN"}],"links":{}}`), nil
-		case req.Method == http.MethodGet && req.URL.Path == "/v1/subscriptions/sub-1/relationships/prices":
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/subscriptions/8000000001/relationships/prices":
 			return jsonHTTPResponse(http.StatusOK, `{"data":[],"links":{}}`), nil
-		case req.Method == http.MethodPatch && req.URL.Path == "/v1/subscriptions/sub-1":
+		case req.Method == http.MethodPatch && req.URL.Path == "/v1/subscriptions/8000000001":
 			steps = append(steps, "patch")
 			patchCount++
-			return jsonHTTPResponse(http.StatusOK, `{"data":{"type":"subscriptions","id":"sub-1"}}`), nil
+			return jsonHTTPResponse(http.StatusOK, `{"data":{"type":"subscriptions","id":"8000000001"}}`), nil
 		case req.Method == http.MethodPost && req.URL.Path == "/v1/subscriptionPrices":
 			steps = append(steps, "price")
 			postCount++
@@ -575,7 +575,7 @@ func TestSubscriptionsPricingEqualize_InitialPriceUsesPatchThenCreatesRemainingT
 	stdout, _ := captureOutput(t, func() {
 		if err := root.Parse([]string{
 			"subscriptions", "pricing", "equalize",
-			"--subscription-id", "sub-1",
+			"--subscription-id", "8000000001",
 			"--base-price", "0.99",
 			"--confirm",
 		}); err != nil {
@@ -627,19 +627,19 @@ func TestSubscriptionsPricingEqualize_FailedInitialPriceStopsBeforePostingRemain
 		switch {
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/territories":
 			return jsonHTTPResponse(http.StatusOK, `{"data":[{"type":"territories","id":"USA"},{"type":"territories","id":"CAN"}],"links":{}}`), nil
-		case req.Method == http.MethodGet && req.URL.Path == "/v1/subscriptions/sub-1/pricePoints":
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/subscriptions/8000000001/pricePoints":
 			body := `{"data":[{"type":"subscriptionPricePoints","id":"` + basePricePointID + `","attributes":{"customerPrice":"0.99"}}],"links":{}}`
 			return jsonHTTPResponse(http.StatusOK, body), nil
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/subscriptionPricePoints/"+basePricePointID+"/equalizations":
 			body := `{"data":[{"type":"subscriptionPricePoints","id":"` + canPricePointID + `","attributes":{"customerPrice":"1.29"},"relationships":{"territory":{"data":{"type":"territories","id":"CAN"}}}}],"links":{}}`
 			return jsonHTTPResponse(http.StatusOK, body), nil
-		case req.Method == http.MethodGet && req.URL.Path == "/v1/subscriptions/sub-1/subscriptionAvailability":
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/subscriptions/8000000001/subscriptionAvailability":
 			return jsonHTTPResponse(http.StatusOK, `{"data":{"type":"subscriptionAvailabilities","id":"avail-1","attributes":{"availableInNewTerritories":false}}}`), nil
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/subscriptionAvailabilities/avail-1/availableTerritories":
 			return jsonHTTPResponse(http.StatusOK, `{"data":[{"type":"territories","id":"USA"},{"type":"territories","id":"CAN"}],"links":{}}`), nil
-		case req.Method == http.MethodGet && req.URL.Path == "/v1/subscriptions/sub-1/relationships/prices":
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/subscriptions/8000000001/relationships/prices":
 			return jsonHTTPResponse(http.StatusOK, `{"data":[],"links":{}}`), nil
-		case req.Method == http.MethodPatch && req.URL.Path == "/v1/subscriptions/sub-1":
+		case req.Method == http.MethodPatch && req.URL.Path == "/v1/subscriptions/8000000001":
 			patchCount++
 			return jsonHTTPResponse(http.StatusUnprocessableEntity, `{"errors":[{"status":"422","title":"unprocessable","detail":"failed initial price"}]}`), nil
 		case req.Method == http.MethodPost && req.URL.Path == "/v1/subscriptionPrices":
@@ -659,7 +659,7 @@ func TestSubscriptionsPricingEqualize_FailedInitialPriceStopsBeforePostingRemain
 	stdout, _ := captureOutput(t, func() {
 		if err := root.Parse([]string{
 			"subscriptions", "pricing", "equalize",
-			"--subscription-id", "sub-1",
+			"--subscription-id", "8000000001",
 			"--base-price", "0.99",
 			"--confirm",
 		}); err != nil {
@@ -715,17 +715,17 @@ func TestSubscriptionsPricingEqualize_ReturnsReportedErrorWhenAnyTerritoryFails(
 		switch {
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/territories":
 			return jsonHTTPResponse(http.StatusOK, `{"data":[{"type":"territories","id":"USA"},{"type":"territories","id":"CAN"}],"links":{}}`), nil
-		case req.Method == http.MethodGet && req.URL.Path == "/v1/subscriptions/sub-1/pricePoints":
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/subscriptions/8000000001/pricePoints":
 			body := `{"data":[{"type":"subscriptionPricePoints","id":"` + basePricePointID + `","attributes":{"customerPrice":"0.99"}}],"links":{}}`
 			return jsonHTTPResponse(http.StatusOK, body), nil
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/subscriptionPricePoints/"+basePricePointID+"/equalizations":
 			body := `{"data":[{"type":"subscriptionPricePoints","id":"` + canPricePointID + `","attributes":{"customerPrice":"1.29"},"relationships":{"territory":{"data":{"type":"territories","id":"CAN"}}}}],"links":{}}`
 			return jsonHTTPResponse(http.StatusOK, body), nil
-		case req.Method == http.MethodGet && req.URL.Path == "/v1/subscriptions/sub-1/subscriptionAvailability":
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/subscriptions/8000000001/subscriptionAvailability":
 			return jsonHTTPResponse(http.StatusOK, `{"data":{"type":"subscriptionAvailabilities","id":"avail-1","attributes":{"availableInNewTerritories":true}}}`), nil
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/subscriptionAvailabilities/avail-1/availableTerritories":
 			return jsonHTTPResponse(http.StatusOK, `{"data":[{"type":"territories","id":"USA"},{"type":"territories","id":"CAN"}],"links":{}}`), nil
-		case req.Method == http.MethodGet && req.URL.Path == "/v1/subscriptions/sub-1/relationships/prices":
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/subscriptions/8000000001/relationships/prices":
 			return jsonHTTPResponse(http.StatusOK, `{"data":[{"type":"subscriptionPrices","id":"price-existing"}],"links":{}}`), nil
 		case req.Method == http.MethodPost && req.URL.Path == "/v1/subscriptionPrices":
 			body, err := io.ReadAll(req.Body)
@@ -749,7 +749,7 @@ func TestSubscriptionsPricingEqualize_ReturnsReportedErrorWhenAnyTerritoryFails(
 	stdout, _ := captureOutput(t, func() {
 		if err := root.Parse([]string{
 			"subscriptions", "pricing", "equalize",
-			"--subscription-id", "sub-1",
+			"--subscription-id", "8000000001",
 			"--base-price", "0.99",
 			"--confirm",
 		}); err != nil {
@@ -801,7 +801,7 @@ func TestSubscriptionsPricingEqualize_ApplyPaginatesAvailabilityTerritories(t *t
 		switch {
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/territories":
 			return jsonHTTPResponse(http.StatusOK, `{"data":[{"type":"territories","id":"USA"},{"type":"territories","id":"CAN"}],"links":{}}`), nil
-		case req.Method == http.MethodGet && req.URL.Path == "/v1/subscriptions/sub-1/subscriptionAvailability":
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/subscriptions/8000000001/subscriptionAvailability":
 			return jsonHTTPResponse(http.StatusOK, `{"data":{"type":"subscriptionAvailabilities","id":"avail-1","attributes":{"availableInNewTerritories":false}}}`), nil
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/subscriptionAvailabilities/avail-1/availableTerritories" && req.URL.Query().Get("cursor") == "":
 			firstPageSeen = true
@@ -809,13 +809,13 @@ func TestSubscriptionsPricingEqualize_ApplyPaginatesAvailabilityTerritories(t *t
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/subscriptionAvailabilities/avail-1/availableTerritories" && req.URL.Query().Get("cursor") == "page-2":
 			secondPageSeen = true
 			return jsonHTTPResponse(http.StatusOK, `{"data":[{"type":"territories","id":"CAN"}],"links":{}}`), nil
-		case req.Method == http.MethodGet && req.URL.Path == "/v1/subscriptions/sub-1/pricePoints":
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/subscriptions/8000000001/pricePoints":
 			body := `{"data":[{"type":"subscriptionPricePoints","id":"` + basePricePointID + `","attributes":{"customerPrice":"0.99"}}],"links":{}}`
 			return jsonHTTPResponse(http.StatusOK, body), nil
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/subscriptionPricePoints/"+basePricePointID+"/equalizations":
 			body := `{"data":[{"type":"subscriptionPricePoints","id":"` + canPricePointID + `","attributes":{"customerPrice":"1.29"},"relationships":{"territory":{"data":{"type":"territories","id":"CAN"}}}}],"links":{}}`
 			return jsonHTTPResponse(http.StatusOK, body), nil
-		case req.Method == http.MethodGet && req.URL.Path == "/v1/subscriptions/sub-1/relationships/prices":
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/subscriptions/8000000001/relationships/prices":
 			return jsonHTTPResponse(http.StatusOK, `{"data":[{"type":"subscriptionPrices","id":"existing-price"}],"links":{}}`), nil
 		case req.Method == http.MethodPost && req.URL.Path == "/v1/subscriptionPrices":
 			return jsonHTTPResponse(http.StatusCreated, `{"data":{"type":"subscriptionPrices","id":"price-created"}}`), nil
@@ -831,7 +831,7 @@ func TestSubscriptionsPricingEqualize_ApplyPaginatesAvailabilityTerritories(t *t
 	stdout, _ := captureOutput(t, func() {
 		if err := root.Parse([]string{
 			"subscriptions", "pricing", "equalize",
-			"--subscription-id", "sub-1",
+			"--subscription-id", "8000000001",
 			"--base-price", "0.99",
 			"--confirm",
 			"--workers", "1",
@@ -862,7 +862,7 @@ func TestSubscriptionsPricingEqualize_ApplyPaginatesAvailabilityTerritories(t *t
 
 func testSubscriptionPricePointID(territory string) string {
 	payload, err := json.Marshal(map[string]string{
-		"s": "sub-1",
+		"s": "8000000001",
 		"t": territory,
 		"p": "100010",
 	})

@@ -41,6 +41,7 @@ Examples:
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
 			MetadataPullCommand(),
+			MetadataApplyCommand(),
 			MetadataKeywordsCommand(),
 			MetadataPushCommand(),
 			MetadataValidateCommand(),

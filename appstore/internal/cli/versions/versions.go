@@ -26,15 +26,7 @@ func VersionsCommand() *ffcli.Command {
 		Subcommands: []*ffcli.Command{
 			VersionsListCommand(),
 			viewCmd,
-			deprecatedVersionsGetAlias(viewCmd),
 			VersionsRelationshipsCommand(),
-			shared.DeprecatedAliasLeafCommand(
-				VersionsRelationshipsCommand(),
-				"relationships",
-				"asc versions links --version-id \"VERSION_ID\" --type \"RELATIONSHIP\" [flags]",
-				"asc versions links",
-				"Warning: `asc versions relationships` is deprecated. Use `asc versions links`.",
-			),
 			VersionsExperimentsV2Command(),
 			VersionsCustomerReviewsCommand(),
 			VersionsAppClipDefaultExperienceCommand(),
@@ -50,25 +42,6 @@ func VersionsCommand() *ffcli.Command {
 			return flag.ErrHelp
 		},
 	}
-}
-
-func deprecatedVersionsGetAlias(viewCmd *ffcli.Command) *ffcli.Command {
-	canonicalPath := "asc versions view"
-	legacyPath := "asc versions get"
-
-	legacyShortUsage := strings.TrimSpace(viewCmd.ShortUsage)
-	if legacyShortUsage == "" {
-		legacyShortUsage = canonicalPath + " [flags]"
-	}
-	legacyShortUsage = strings.Replace(legacyShortUsage, canonicalPath, legacyPath, 1)
-
-	return shared.DeprecatedAliasLeafCommand(
-		viewCmd,
-		"get",
-		legacyShortUsage,
-		canonicalPath,
-		fmt.Sprintf("Warning: `%s` is deprecated. Use `%s`.", legacyPath, canonicalPath),
-	)
 }
 
 func VersionsListCommand() *ffcli.Command {

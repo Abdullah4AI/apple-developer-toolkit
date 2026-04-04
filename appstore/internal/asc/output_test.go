@@ -330,6 +330,44 @@ func TestPrintJSON_CustomProductPageUploadResultUsesCustomLocalizationID(t *test
 	}
 }
 
+func TestPrintJSON_ExperimentTreatmentLocalizationUploadResultUsesExperimentLocalizationID(t *testing.T) {
+	output := captureStdout(t, func() error {
+		return PrintJSON(&ExperimentTreatmentLocalizationScreenshotUploadResult{
+			ExperimentTreatmentLocalizationID: "TLOC_123",
+			SetID:                             "SET_123",
+			DisplayType:                       "APP_IPHONE_65",
+			Results: []AssetUploadResultItem{
+				{FileName: "shot.png", AssetID: "SHOT_123", State: "COMPLETE"},
+			},
+		})
+	})
+
+	var parsed map[string]any
+	if err := json.Unmarshal([]byte(output), &parsed); err != nil {
+		t.Fatalf("failed to parse output JSON: %v", err)
+	}
+	if got := parsed["experimentTreatmentLocalizationId"]; got != "TLOC_123" {
+		t.Fatalf("expected experimentTreatmentLocalizationId=TLOC_123, got %#v", got)
+	}
+	if _, exists := parsed["versionLocalizationId"]; exists {
+		t.Fatalf("did not expect versionLocalizationId in output JSON: %s", output)
+	}
+	if _, exists := parsed["customProductPageLocalizationId"]; exists {
+		t.Fatalf("did not expect customProductPageLocalizationId in output JSON: %s", output)
+	}
+}
+
+func TestPrintTable_ExperimentTreatmentLocalizationUploadResultUsesExperimentLocalizationID(t *testing.T) {
+	assertRenderedNonJSONContains(t, PrintTable, &ExperimentTreatmentLocalizationScreenshotUploadResult{
+		ExperimentTreatmentLocalizationID: "TLOC_123",
+		SetID:                             "SET_123",
+		DisplayType:                       "APP_IPHONE_65",
+		Results: []AssetUploadResultItem{
+			{FileName: "shot.png", AssetID: "SHOT_123", State: "COMPLETE"},
+		},
+	}, "Localization ID", "TLOC_123", "SET_123", "APP_IPHONE_65", "shot.png", "SHOT_123")
+}
+
 func TestPrintTable_SkippedAssetUploadResultShowsSkippedState(t *testing.T) {
 	resp := &AppScreenshotUploadResult{
 		VersionLocalizationID: "LOC_123",

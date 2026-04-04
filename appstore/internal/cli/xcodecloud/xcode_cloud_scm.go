@@ -178,7 +178,6 @@ Examples:
 			XcodeCloudScmRepositoriesGitReferencesCommand(),
 			XcodeCloudScmRepositoriesPullRequestsCommand(),
 			XcodeCloudScmRepositoriesRelationshipsCommand(),
-			DeprecatedXcodeCloudScmRepositoriesRelationshipsAliasCommand(),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return xcodeCloudScmRepositoriesList(ctx, *limit, *next, *paginate, *output, *pretty)

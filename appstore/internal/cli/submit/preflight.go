@@ -43,6 +43,18 @@ func defaultSubmitPreflightOutputFormat() string {
 
 const submitPreflightDeprecationWarning = "Warning: `asc submit preflight` is deprecated. Use `asc validate`."
 
+func RemovedSubmitPreflightCommand() *ffcli.Command {
+	cmd := SubmitPreflightCommand()
+	cmd.ShortHelp = "DEPRECATED: removed; use `asc validate`."
+	cmd.LongHelp = "Removed legacy command. Use `asc validate` instead."
+	cmd.UsageFunc = shared.DeprecatedUsageFunc
+	cmd.Exec = func(ctx context.Context, args []string) error {
+		fmt.Fprintln(os.Stderr, "Error: `asc submit preflight` was removed. Use `asc validate` instead.")
+		return flag.ErrHelp
+	}
+	return cmd
+}
+
 // SubmitPreflightCommand returns the "submit preflight" subcommand.
 func SubmitPreflightCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("submit preflight", flag.ExitOnError)

@@ -12,7 +12,7 @@ import (
 	cliweb "github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/web"
 )
 
-func captureAppsCreateOutput(t *testing.T, fn func()) (string, string) {
+func captureAppsCreateOutput(t *testing.T, fn func()) string {
 	t.Helper()
 
 	origStdout := os.Stdout
@@ -30,12 +30,11 @@ func captureAppsCreateOutput(t *testing.T, fn func()) (string, string) {
 	os.Stdout = stdoutWriter
 	os.Stderr = stderrWriter
 
-	stdoutCh := make(chan string, 1)
+	stdoutCh := make(chan struct{}, 1)
 	stderrCh := make(chan string, 1)
 	go func() {
-		var buf bytes.Buffer
-		_, _ = io.Copy(&buf, stdoutReader)
-		stdoutCh <- buf.String()
+		_, _ = io.Copy(io.Discard, stdoutReader)
+		stdoutCh <- struct{}{}
 	}()
 	go func() {
 		var buf bytes.Buffer
@@ -66,7 +65,8 @@ func captureAppsCreateOutput(t *testing.T, fn func()) (string, string) {
 	os.Stdout = origStdout
 	os.Stderr = origStderr
 
-	return <-stdoutCh, <-stderrCh
+	<-stdoutCh
+	return <-stderrCh
 }
 
 func TestAppsCreateCommandHelpMentionsDeprecationAndCanonicalPath(t *testing.T) {
@@ -132,7 +132,7 @@ func TestAppsCreateCommandPrintsWarningAndForwardsToWebRunner(t *testing.T) {
 	}
 
 	var runErr error
-	_, stderr := captureAppsCreateOutput(t, func() {
+	stderr := captureAppsCreateOutput(t, func() {
 		runErr = cmd.Exec(context.Background(), nil)
 	})
 

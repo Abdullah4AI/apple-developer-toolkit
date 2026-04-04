@@ -17,7 +17,7 @@ func TestXcodeCloudScmValidationErrors(t *testing.T) {
 	}{
 		{
 			name:    "providers get missing provider id",
-			args:    []string{"xcode-cloud", "scm", "providers", "get"},
+			args:    []string{"xcode-cloud", "scm", "providers", "view"},
 			wantErr: "--provider-id is required",
 		},
 		{
@@ -27,7 +27,7 @@ func TestXcodeCloudScmValidationErrors(t *testing.T) {
 		},
 		{
 			name:    "repositories get missing id",
-			args:    []string{"xcode-cloud", "scm", "repositories", "get"},
+			args:    []string{"xcode-cloud", "scm", "repositories", "view"},
 			wantErr: "--id is required",
 		},
 		{
@@ -52,12 +52,12 @@ func TestXcodeCloudScmValidationErrors(t *testing.T) {
 		},
 		{
 			name:    "git references get missing id",
-			args:    []string{"xcode-cloud", "scm", "git-references", "get"},
+			args:    []string{"xcode-cloud", "scm", "git-references", "view"},
 			wantErr: "--id is required",
 		},
 		{
 			name:    "pull requests get missing id",
-			args:    []string{"xcode-cloud", "scm", "pull-requests", "get"},
+			args:    []string{"xcode-cloud", "scm", "pull-requests", "view"},
 			wantErr: "--id is required",
 		},
 	}

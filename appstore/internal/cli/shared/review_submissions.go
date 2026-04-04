@@ -181,7 +181,8 @@ func reviewSubmissionPriority(state asc.ReviewSubmissionState) int {
 		asc.ReviewSubmissionStateWaitingForReview,
 		asc.ReviewSubmissionStateInReview,
 		asc.ReviewSubmissionStateUnresolvedIssues,
-		asc.ReviewSubmissionStateCanceling:
+		asc.ReviewSubmissionStateCanceling,
+		asc.ReviewSubmissionStateCompleting:
 		return 2
 	default:
 		return 1

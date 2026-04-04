@@ -20,8 +20,8 @@ func TestOfferCodesValidationErrors(t *testing.T) {
 		wantErr string
 	}{
 		{
-			name:    "offer codes get missing offer code id",
-			args:    []string{"subscriptions", "offers", "offer-codes", "get"},
+			name:    "offer codes view missing offer code id",
+			args:    []string{"subscriptions", "offers", "offer-codes", "view"},
 			wantErr: "Error: --offer-code-id is required",
 		},
 		{
@@ -50,8 +50,8 @@ func TestOfferCodesValidationErrors(t *testing.T) {
 			wantErr: "Error: --offer-code-id is required",
 		},
 		{
-			name:    "custom codes get missing custom code id",
-			args:    []string{"subscriptions", "offers", "offer-codes", "custom-codes", "get"},
+			name:    "custom codes view missing custom code id",
+			args:    []string{"subscriptions", "offers", "offer-codes", "custom-codes", "view"},
 			wantErr: "Error: --custom-code-id is required",
 		},
 		{

@@ -267,15 +267,14 @@ func executeIAPSetup(ctx context.Context, opts iapSetupOptions) (iapSetupResult,
 		return result, fmt.Errorf("iap setup: %w", err)
 	}
 
-	requestCtx, cancel := shared.ContextWithTimeout(ctx)
-	defer cancel()
-
-	iapResp, err := client.CreateInAppPurchaseV2(requestCtx, opts.AppID, asc.InAppPurchaseV2CreateAttributes{
+	createCtx, createCancel := shared.ContextWithTimeout(ctx)
+	iapResp, err := client.CreateInAppPurchaseV2(createCtx, opts.AppID, asc.InAppPurchaseV2CreateAttributes{
 		Name:              opts.ReferenceName,
 		ProductID:         opts.ProductID,
 		InAppPurchaseType: opts.Type,
 		FamilySharable:    opts.FamilySharable,
 	})
+	createCancel()
 	if err != nil {
 		result.Status = "error"
 		result.Error = err.Error()
@@ -302,11 +301,13 @@ func executeIAPSetup(ctx context.Context, opts iapSetupOptions) (iapSetupResult,
 			Message: "no localization flags provided",
 		})
 	} else {
-		localizationResp, err := client.CreateInAppPurchaseLocalization(requestCtx, result.IAPID, asc.InAppPurchaseLocalizationCreateAttributes{
+		locCtx, locCancel := shared.ContextWithTimeout(ctx)
+		localizationResp, err := client.CreateInAppPurchaseLocalization(locCtx, result.IAPID, asc.InAppPurchaseLocalizationCreateAttributes{
 			Name:        opts.DisplayName,
 			Locale:      opts.Locale,
 			Description: opts.Description,
 		})
+		locCancel()
 		if err != nil {
 			result.Status = "error"
 			result.Error = err.Error()
@@ -351,7 +352,9 @@ func executeIAPSetup(ctx context.Context, opts iapSetupOptions) (iapSetupResult,
 				Message: "used explicit price point id",
 			})
 		} else {
-			tiers, err := shared.ResolveIAPTiers(requestCtx, client, result.IAPID, opts.BaseTerritory, opts.RefreshTierCache)
+			pricePointCtx, pricePointCancel := shared.ContextWithTimeout(ctx)
+			tiers, err := shared.ResolveIAPTiers(pricePointCtx, client, result.IAPID, opts.BaseTerritory, opts.RefreshTierCache)
+			pricePointCancel()
 			if err != nil {
 				result.Status = "error"
 				result.Error = err.Error()
@@ -387,7 +390,8 @@ func executeIAPSetup(ctx context.Context, opts iapSetupOptions) (iapSetupResult,
 		}
 		result.ResolvedPricePointID = strings.TrimSpace(resolvedPricePointID)
 
-		priceScheduleResp, err := client.CreateInAppPurchasePriceSchedule(requestCtx, result.IAPID, asc.InAppPurchasePriceScheduleCreateAttributes{
+		priceScheduleCtx, priceScheduleCancel := shared.ContextWithTimeout(ctx)
+		priceScheduleResp, err := client.CreateInAppPurchasePriceSchedule(priceScheduleCtx, result.IAPID, asc.InAppPurchasePriceScheduleCreateAttributes{
 			BaseTerritoryID: opts.BaseTerritory,
 			Prices: []asc.InAppPurchasePriceSchedulePrice{
 				{
@@ -396,6 +400,7 @@ func executeIAPSetup(ctx context.Context, opts iapSetupOptions) (iapSetupResult,
 				},
 			},
 		})
+		priceScheduleCancel()
 		if err != nil {
 			result.Status = "error"
 			result.Error = err.Error()
@@ -426,7 +431,7 @@ func executeIAPSetup(ctx context.Context, opts iapSetupOptions) (iapSetupResult,
 		return result, nil
 	}
 
-	verification, verifyStep, err := verifyIAPSetupState(requestCtx, client, result, opts)
+	verification, verifyStep, err := verifyIAPSetupState(ctx, client, result, opts)
 	if err != nil {
 		result.Status = "error"
 		result.Error = err.Error()
@@ -447,7 +452,9 @@ func verifyIAPSetupState(ctx context.Context, client *asc.Client, result iapSetu
 	}
 	now := time.Now().UTC()
 
-	iapResp, err := client.GetInAppPurchaseV2(ctx, result.IAPID)
+	iapCtx, iapCancel := shared.ContextWithTimeout(ctx)
+	iapResp, err := client.GetInAppPurchaseV2(iapCtx, result.IAPID)
+	iapCancel()
 	if err != nil {
 		verification.Status = "failed"
 		return verification, iapSetupStepResult{
@@ -493,7 +500,9 @@ func verifyIAPSetupState(ctx context.Context, client *asc.Client, result iapSetu
 
 	hasLocalization := opts.Locale != "" || opts.DisplayName != "" || opts.Description != ""
 	if hasLocalization {
-		locResp, err := client.GetInAppPurchaseLocalizations(ctx, result.IAPID, asc.WithIAPLocalizationsLimit(200))
+		locCtx, locCancel := shared.ContextWithTimeout(ctx)
+		locResp, err := client.GetInAppPurchaseLocalizations(locCtx, result.IAPID, asc.WithIAPLocalizationsLimit(200))
+		locCancel()
 		if err != nil {
 			verification.Status = "failed"
 			return verification, iapSetupStepResult{
@@ -527,7 +536,9 @@ func verifyIAPSetupState(ctx context.Context, client *asc.Client, result iapSetu
 
 	hasPricing := opts.hasPricing(opts.StartDate)
 	if hasPricing {
-		expectedVerificationPrice, err := resolveExpectedIAPSetupVerificationPrice(ctx, client, result.IAPID, opts)
+		pricePointCtx, pricePointCancel := shared.ContextWithTimeout(ctx)
+		expectedVerificationPrice, err := resolveExpectedIAPSetupVerificationPrice(pricePointCtx, client, result.IAPID, opts)
+		pricePointCancel()
 		if err != nil {
 			verification.Status = "failed"
 			return verification, iapSetupStepResult{
@@ -537,7 +548,9 @@ func verifyIAPSetupState(ctx context.Context, client *asc.Client, result iapSetu
 			}, err
 		}
 
-		summary, err := resolveIAPPriceSummary(ctx, client, iapResp.Data, opts.BaseTerritory, now)
+		summaryCtx, summaryCancel := shared.ContextWithTimeout(ctx)
+		summary, err := resolveIAPPriceSummary(summaryCtx, client, iapResp.Data, opts.BaseTerritory, now)
+		summaryCancel()
 		if err != nil {
 			verification.Status = "failed"
 			return verification, iapSetupStepResult{
@@ -558,7 +571,9 @@ func verifyIAPSetupState(ctx context.Context, client *asc.Client, result iapSetu
 			}, fmt.Errorf("base territory mismatch: got %q want %q", summary.BaseTerritory, opts.BaseTerritory)
 		}
 		if isFutureSetupStartDate(opts.StartDate, now) {
-			scheduledPrice, scheduledStartDate, err := verifyScheduledIAPSetupPrice(ctx, client, result.IAPID, opts.BaseTerritory, opts.StartDate, expectedVerificationPrice)
+			scheduledPriceCtx, scheduledPriceCancel := shared.ContextWithTimeout(ctx)
+			scheduledPrice, scheduledStartDate, err := verifyScheduledIAPSetupPrice(scheduledPriceCtx, client, result.IAPID, opts.BaseTerritory, opts.StartDate, expectedVerificationPrice)
+			scheduledPriceCancel()
 			if err != nil {
 				verification.Status = "failed"
 				return verification, iapSetupStepResult{

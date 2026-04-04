@@ -542,6 +542,8 @@ type migrationCommandValues struct {
 func buildSuggestedCommands(signals migrationSignals, resolver MigrationSuggestionResolver) []string {
 	var commands []string
 	seen := map[string]struct{}{}
+	const uploadedBuildIDPlaceholder = "UPLOADED_BUILD_ID"
+	const reviewSubmissionPlatformPlaceholder = "PLATFORM"
 	add := func(cmd string) {
 		if _, ok := seen[cmd]; ok {
 			return
@@ -551,16 +553,19 @@ func buildSuggestedCommands(signals migrationSignals, resolver MigrationSuggesti
 	}
 
 	hasAuthSignal := containsAction(signals.detectedActions, "app_store_connect_api_key")
-	hasMetadataSignal := len(signals.appfiles) > 0 || len(signals.deliverfiles) > 0 || containsAction(signals.detectedActions, "deliver")
+	hasMetadataSignal := len(signals.deliverfiles) > 0 || containsAction(signals.detectedActions, "deliver")
 	hasBuildSignal := containsAction(signals.detectedActions, "app_store_build_number") ||
 		containsAction(signals.detectedActions, "latest_testflight_build_number")
 	hasTestflightSignal := containsAction(signals.detectedActions, "upload_to_testflight") || containsAction(signals.detectedActions, "pilot")
 	hasAppStoreSignal := containsAction(signals.detectedActions, "upload_to_app_store") || containsAction(signals.detectedActions, "precheck")
 	needsAppID := hasMetadataSignal || hasBuildSignal || hasTestflightSignal || hasAppStoreSignal
 	needsVersionString := hasAppStoreSignal
+	// Upload-only App Store hints do not have enough platform context to resolve
+	// a safe version ID, so keep that path on an explicit placeholder instead.
 	needsVersionID := hasMetadataSignal
-	needsBuildID := hasAppStoreSignal
+	needsBuildID := false
 	values := resolveMigrationCommandValues(signals, resolver, needsAppID, needsVersionString, needsVersionID, needsBuildID)
+	hasResolvedVersionID := strings.TrimSpace(values.versionID) != ""
 	values = fallbackMigrationCommandValues(values)
 
 	if hasAuthSignal {
@@ -578,8 +583,20 @@ func buildSuggestedCommands(signals migrationSignals, resolver MigrationSuggesti
 		add(fmt.Sprintf(`asc publish testflight --app %q --ipa app.ipa --group "GROUP_ID"`, values.appID))
 	}
 	if hasAppStoreSignal {
-		add(fmt.Sprintf(`asc publish appstore --app %q --ipa app.ipa --version %q --submit --confirm`, values.appID, values.versionString))
-		add(fmt.Sprintf(`asc submit create --app %q --version %q --build %q --confirm`, values.appID, values.versionString, values.buildID))
+		if hasMetadataSignal {
+			add(fmt.Sprintf(`asc publish appstore --app %q --ipa app.ipa --version %q --submit --confirm`, values.appID, values.versionString))
+		} else {
+			add(fmt.Sprintf(`asc builds upload --app %q --ipa app.ipa --version %q --build-number "BUILD_NUMBER" --wait`, values.appID, values.versionString))
+			add(fmt.Sprintf(`asc builds info --app %q --build-number "BUILD_NUMBER" --version %q`, values.appID, values.versionString))
+			if !hasResolvedVersionID {
+				add(fmt.Sprintf(`asc versions create --app %q --version %q`, values.appID, values.versionString))
+			}
+			add(fmt.Sprintf(`asc versions attach-build --version-id %q --build %q`, values.versionID, uploadedBuildIDPlaceholder))
+			add(fmt.Sprintf(`asc validate --app %q --version-id %q`, values.appID, values.versionID))
+			add(fmt.Sprintf(`asc review submissions-create --app %q --platform %q`, values.appID, reviewSubmissionPlatformPlaceholder))
+			add(fmt.Sprintf(`asc review items-add --submission "REVIEW_SUBMISSION_ID" --item-type appStoreVersions --item-id %q`, values.versionID))
+			add(`asc review submissions-submit --id "REVIEW_SUBMISSION_ID" --confirm`)
+		}
 	}
 
 	return commands
@@ -613,11 +630,15 @@ func resolveMigrationCommandValues(
 		if appID := strings.TrimSpace(result.AppID); appID != "" {
 			values.appID = appID
 		}
-		if versionID := strings.TrimSpace(result.VersionID); versionID != "" {
-			values.versionID = versionID
+		if needsVersionID {
+			if versionID := strings.TrimSpace(result.VersionID); versionID != "" {
+				values.versionID = versionID
+			}
 		}
-		if buildID := strings.TrimSpace(result.BuildID); buildID != "" {
-			values.buildID = buildID
+		if needsBuildID {
+			if buildID := strings.TrimSpace(result.BuildID); buildID != "" {
+				values.buildID = buildID
+			}
 		}
 	}
 

@@ -1,6 +1,7 @@
 package metadata
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"os"
@@ -8,6 +9,33 @@ import (
 	"strings"
 	"testing"
 )
+
+func TestExecutePushPrefixesLocalMetadataReadErrors(t *testing.T) {
+	for _, commandName := range []string{"push", "apply"} {
+		t.Run(commandName, func(t *testing.T) {
+			dir := t.TempDir()
+			appInfoPath := filepath.Join(dir, appInfoDirName)
+			if err := os.WriteFile(appInfoPath, []byte("not a directory"), 0o644); err != nil {
+				t.Fatalf("write app-info file: %v", err)
+			}
+
+			_, err := ExecutePush(context.Background(), PushExecutionOptions{
+				CommandName: commandName,
+				AppID:       "123456789",
+				Version:     "1.2.3",
+				Dir:         dir,
+			})
+			if err == nil {
+				t.Fatal("expected local metadata read failure")
+			}
+
+			want := "metadata " + commandName + ": failed to read " + appInfoPath
+			if !strings.Contains(err.Error(), want) {
+				t.Fatalf("expected %q in error, got %v", want, err)
+			}
+		})
+	}
+}
 
 func TestLoadLocalMetadataTreatsDefaultLocaleCaseInsensitively(t *testing.T) {
 	dir := t.TempDir()

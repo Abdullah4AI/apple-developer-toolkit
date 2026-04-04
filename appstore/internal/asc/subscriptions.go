@@ -225,6 +225,8 @@ type subscriptionGroupsQuery struct {
 
 type subscriptionsQuery struct {
 	listQuery
+	productIDs []string
+	names      []string
 }
 
 type subscriptionAvailabilityTerritoriesQuery struct {
@@ -267,6 +269,20 @@ func WithSubscriptionsNextURL(next string) SubscriptionsOption {
 	}
 }
 
+// WithSubscriptionsProductIDs filters subscriptions by product ID.
+func WithSubscriptionsProductIDs(productIDs []string) SubscriptionsOption {
+	return func(q *subscriptionsQuery) {
+		q.productIDs = normalizeUniqueList(productIDs)
+	}
+}
+
+// WithSubscriptionsNames filters subscriptions by current name.
+func WithSubscriptionsNames(names []string) SubscriptionsOption {
+	return func(q *subscriptionsQuery) {
+		q.names = normalizeUniqueList(names)
+	}
+}
+
 // WithSubscriptionAvailabilityTerritoriesLimit sets the max number of territories to return.
 func WithSubscriptionAvailabilityTerritoriesLimit(limit int) SubscriptionAvailabilityTerritoriesOption {
 	return func(q *subscriptionAvailabilityTerritoriesQuery) {
@@ -294,6 +310,8 @@ func buildSubscriptionGroupsQuery(query *subscriptionGroupsQuery) string {
 func buildSubscriptionsQuery(query *subscriptionsQuery) string {
 	values := url.Values{}
 	addLimit(values, query.limit)
+	addCSV(values, "filter[productId]", query.productIDs)
+	addCSV(values, "filter[name]", query.names)
 	return values.Encode()
 }
 

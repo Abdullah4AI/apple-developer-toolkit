@@ -34,7 +34,6 @@ Examples:
 		Subcommands: []*ffcli.Command{
 			BuildsUploadsListCommand(),
 			viewCmd,
-			deprecatedBuildsGetAlias(viewCmd, "asc builds uploads view"),
 			BuildsUploadsDeleteCommand(),
 			BuildsUploadFilesCommand(),
 		},
@@ -254,7 +253,6 @@ Examples:
 		Subcommands: []*ffcli.Command{
 			BuildsUploadFilesListCommand(),
 			viewCmd,
-			deprecatedBuildsGetAlias(viewCmd, "asc builds uploads files view"),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp

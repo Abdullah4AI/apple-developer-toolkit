@@ -114,23 +114,5 @@ func SubscriptionsPricingAvailabilityCommand() *ffcli.Command {
 		"availability",
 		"Manage subscription availability.",
 	)
-	if viewCmd := findSubscriptionsSubcommand(cmd, "view"); viewCmd != nil {
-		cmd.Subcommands = append(cmd.Subcommands, shared.DeprecatedAliasLeafCommand(
-			viewCmd,
-			"get",
-			"asc subscriptions pricing availability get [flags]",
-			"asc subscriptions pricing availability view",
-			"Warning: `asc subscriptions pricing availability get` is deprecated. Use `asc subscriptions pricing availability view`.",
-		))
-	}
-	if editCmd := findSubscriptionsSubcommand(cmd, "edit"); editCmd != nil {
-		cmd.Subcommands = append(cmd.Subcommands, shared.DeprecatedAliasLeafCommand(
-			editCmd,
-			"set",
-			"asc subscriptions pricing availability set [flags]",
-			"asc subscriptions pricing availability edit",
-			"Warning: `asc subscriptions pricing availability set` is deprecated. Use `asc subscriptions pricing availability edit`.",
-		))
-	}
 	return cmd
 }

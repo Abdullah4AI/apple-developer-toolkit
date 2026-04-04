@@ -85,7 +85,7 @@ func TestSubscriptionsIntroductoryOffersImport_CreateSuccessSummary(t *testing.T
 	stdout, stderr := captureOutput(t, func() {
 		if err := root.Parse([]string{
 			"subscriptions", "offers", "introductory", "import",
-			"--subscription-id", "SUB_ID",
+			"--subscription-id", "8000000003",
 			"--input", csvPath,
 			"--offer-duration", "ONE_WEEK",
 			"--offer-mode", "FREE_TRIAL",
@@ -145,7 +145,7 @@ func TestSubscriptionsIntroductoryOffersImport_DryRunAcceptsSupportedThreeLetter
 	stdout, stderr := captureOutput(t, func() {
 		if err := root.Parse([]string{
 			"subscriptions", "offers", "introductory", "import",
-			"--subscription-id", "SUB_ID",
+			"--subscription-id", "8000000003",
 			"--input", csvPath,
 			"--offer-duration", "ONE_WEEK",
 			"--offer-mode", "FREE_TRIAL",
@@ -230,7 +230,7 @@ func TestSubscriptionsIntroductoryOffersImport_PartialFailureReturnsReportedErro
 	stdout, stderr := captureOutput(t, func() {
 		if err := root.Parse([]string{
 			"subscriptions", "offers", "introductory", "import",
-			"--subscription-id", "SUB_ID",
+			"--subscription-id", "8000000003",
 			"--input", csvPath,
 			"--offer-duration", "ONE_WEEK",
 			"--offer-mode", "FREE_TRIAL",
@@ -317,7 +317,7 @@ func TestSubscriptionsIntroductoryOffersImport_StopOnFirstFailureWhenRequested(t
 	stdout, stderr := captureOutput(t, func() {
 		if err := root.Parse([]string{
 			"subscriptions", "offers", "introductory", "import",
-			"--subscription-id", "SUB_ID",
+			"--subscription-id", "8000000003",
 			"--input", csvPath,
 			"--offer-duration", "ONE_WEEK",
 			"--offer-mode", "FREE_TRIAL",
@@ -413,7 +413,7 @@ func TestSubscriptionsIntroductoryOffersImport_RowValuesOverrideDefaults(t *test
 	stdout, stderr := captureOutput(t, func() {
 		if err := root.Parse([]string{
 			"subscriptions", "offers", "introductory", "import",
-			"--subscription-id", "SUB_ID",
+			"--subscription-id", "8000000003",
 			"--input", csvPath,
 			"--offer-duration", "ONE_WEEK",
 			"--offer-mode", "FREE_TRIAL",
@@ -480,7 +480,7 @@ func TestSubscriptionsIntroductoryOffersImport_NormalizesInheritedDefaultEnums(t
 	stdout, stderr := captureOutput(t, func() {
 		if err := root.Parse([]string{
 			"subscriptions", "offers", "introductory", "import",
-			"--subscription-id", "SUB_ID",
+			"--subscription-id", "8000000003",
 			"--input", csvPath,
 			"--offer-duration", "one_week",
 			"--offer-mode", "free_trial",

@@ -14,14 +14,14 @@ import (
 func TestSubscriptionsPricingPricesListResolvedJSON(t *testing.T) {
 	setupAuth(t)
 
-	const secondURL = "https://api.appstoreconnect.apple.com/v1/subscriptions/sub-1/prices?cursor=Mg"
+	const secondURL = "https://api.appstoreconnect.apple.com/v1/subscriptions/8000000001/prices?cursor=Mg"
 
 	requestCount := 0
 	installDefaultTransport(t, roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		requestCount++
 		switch requestCount {
 		case 1:
-			if req.Method != http.MethodGet || req.URL.Path != "/v1/subscriptions/sub-1/prices" {
+			if req.Method != http.MethodGet || req.URL.Path != "/v1/subscriptions/8000000001/prices" {
 				t.Fatalf("unexpected first request: %s %s", req.Method, req.URL.String())
 			}
 			query := req.URL.Query()
@@ -72,7 +72,7 @@ func TestSubscriptionsPricingPricesListResolvedJSON(t *testing.T) {
 				Header:     http.Header{"Content-Type": []string{"application/json"}},
 			}, nil
 		case 2:
-			if req.Method != http.MethodGet || req.URL.Path != "/v1/subscriptions/sub-1/prices" {
+			if req.Method != http.MethodGet || req.URL.Path != "/v1/subscriptions/8000000001/prices" {
 				t.Fatalf("unexpected second request: %s %s", req.Method, req.URL.String())
 			}
 			query := req.URL.Query()
@@ -135,7 +135,7 @@ func TestSubscriptionsPricingPricesListResolvedJSON(t *testing.T) {
 	stdout, stderr := captureOutput(t, func() {
 		if err := root.Parse([]string{
 			"subscriptions", "pricing", "prices", "list",
-			"--subscription-id", "sub-1",
+			"--subscription-id", "8000000001",
 			"--resolved",
 		}); err != nil {
 			t.Fatalf("parse error: %v", err)
@@ -168,7 +168,7 @@ func TestSubscriptionsPricingPricesListResolvedTable(t *testing.T) {
 	setupAuth(t)
 
 	installDefaultTransport(t, roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		if req.Method != http.MethodGet || req.URL.Path != "/v1/subscriptions/sub-1/prices" {
+		if req.Method != http.MethodGet || req.URL.Path != "/v1/subscriptions/8000000001/prices" {
 			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.String())
 		}
 
@@ -203,7 +203,7 @@ func TestSubscriptionsPricingPricesListResolvedTable(t *testing.T) {
 	stdout, stderr := captureOutput(t, func() {
 		if err := root.Parse([]string{
 			"subscriptions", "pricing", "prices", "list",
-			"--subscription-id", "sub-1",
+			"--subscription-id", "8000000001",
 			"--resolved",
 			"--output", "table",
 		}); err != nil {
@@ -229,7 +229,7 @@ func TestSubscriptionsPricingPricesListResolvedRejectsNext(t *testing.T) {
 	root := RootCommand("1.2.3")
 	root.FlagSet.SetOutput(io.Discard)
 
-	const nextURL = "https://api.appstoreconnect.apple.com/v1/subscriptions/sub-1/prices?cursor=Mg"
+	const nextURL = "https://api.appstoreconnect.apple.com/v1/subscriptions/8000000001/prices?cursor=Mg"
 
 	var runErr error
 	stdout, stderr := captureOutput(t, func() {
@@ -258,7 +258,7 @@ func TestSubscriptionsPricingPricesListRawOutputUnchanged(t *testing.T) {
 	setupAuth(t)
 
 	installDefaultTransport(t, roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		if req.Method != http.MethodGet || req.URL.Path != "/v1/subscriptions/sub-1/prices" {
+		if req.Method != http.MethodGet || req.URL.Path != "/v1/subscriptions/8000000001/prices" {
 			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.String())
 		}
 		if req.URL.RawQuery != "" {
@@ -279,7 +279,7 @@ func TestSubscriptionsPricingPricesListRawOutputUnchanged(t *testing.T) {
 	stdout, stderr := captureOutput(t, func() {
 		if err := root.Parse([]string{
 			"subscriptions", "pricing", "prices", "list",
-			"--subscription-id", "sub-1",
+			"--subscription-id", "8000000001",
 		}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}

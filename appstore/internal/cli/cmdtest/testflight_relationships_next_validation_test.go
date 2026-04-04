@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-func TestTestFlightBetaGroupsRelationshipsGetRejectsInvalidNextURL(t *testing.T) {
+func TestTestFlightBetaGroupsLinksViewRejectsInvalidNextURL(t *testing.T) {
 	tests := []struct {
 		name    string
 		next    string
@@ -35,7 +35,8 @@ func TestTestFlightBetaGroupsRelationshipsGetRejectsInvalidNextURL(t *testing.T)
 			var runErr error
 			stdout, stderr := captureOutput(t, func() {
 				if err := root.Parse([]string{
-					"testflight", "beta-groups", "relationships", "get",
+					"testflight", "groups", "links", "view",
+					"--group-id", "group-1",
 					"--type", "betaTesters",
 					"--next", test.next,
 				}); err != nil {
@@ -60,7 +61,7 @@ func TestTestFlightBetaGroupsRelationshipsGetRejectsInvalidNextURL(t *testing.T)
 	}
 }
 
-func TestTestFlightBetaGroupsRelationshipsGetPaginateFromNextWithoutGroupID(t *testing.T) {
+func TestTestFlightBetaGroupsLinksViewPaginateFromNextWithoutGroupID(t *testing.T) {
 	setupAuth(t)
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 
@@ -107,7 +108,8 @@ func TestTestFlightBetaGroupsRelationshipsGetPaginateFromNextWithoutGroupID(t *t
 
 	stdout, stderr := captureOutput(t, func() {
 		if err := root.Parse([]string{
-			"testflight", "beta-groups", "relationships", "get",
+			"testflight", "groups", "links", "view",
+			"--group-id", "group-1",
 			"--type", "betaTesters",
 			"--paginate",
 			"--next", firstURL,
@@ -127,7 +129,7 @@ func TestTestFlightBetaGroupsRelationshipsGetPaginateFromNextWithoutGroupID(t *t
 	}
 }
 
-func TestTestFlightBetaTestersRelationshipsGetRejectsInvalidNextURL(t *testing.T) {
+func TestTestFlightBetaTestersLinksViewRejectsInvalidNextURL(t *testing.T) {
 	tests := []struct {
 		name    string
 		next    string
@@ -153,7 +155,8 @@ func TestTestFlightBetaTestersRelationshipsGetRejectsInvalidNextURL(t *testing.T
 			var runErr error
 			stdout, stderr := captureOutput(t, func() {
 				if err := root.Parse([]string{
-					"testflight", "beta-testers", "relationships", "get",
+					"testflight", "testers", "links", "view",
+					"--tester-id", "tester-1",
 					"--type", "apps",
 					"--next", test.next,
 				}); err != nil {
@@ -178,7 +181,7 @@ func TestTestFlightBetaTestersRelationshipsGetRejectsInvalidNextURL(t *testing.T
 	}
 }
 
-func TestTestFlightBetaTestersRelationshipsGetPaginateFromNextWithoutTesterID(t *testing.T) {
+func TestTestFlightBetaTestersLinksViewPaginateFromNextWithoutTesterID(t *testing.T) {
 	setupAuth(t)
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 
@@ -225,7 +228,8 @@ func TestTestFlightBetaTestersRelationshipsGetPaginateFromNextWithoutTesterID(t 
 
 	stdout, stderr := captureOutput(t, func() {
 		if err := root.Parse([]string{
-			"testflight", "beta-testers", "relationships", "get",
+			"testflight", "testers", "links", "view",
+			"--tester-id", "tester-1",
 			"--type", "apps",
 			"--paginate",
 			"--next", firstURL,

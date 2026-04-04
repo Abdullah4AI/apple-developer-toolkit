@@ -46,7 +46,7 @@ func TestTestFlightBetaLicenseAgreementsListOutput(t *testing.T) {
 	root.FlagSet.SetOutput(io.Discard)
 
 	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"testflight", "beta-license-agreements", "list", "--app", "app-1", "--limit", "2"}); err != nil {
+		if err := root.Parse([]string{"testflight", "agreements", "list", "--app", "app-1", "--limit", "2"}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
 		if err := root.Run(context.Background()); err != nil {
@@ -93,7 +93,7 @@ func TestTestFlightBetaLicenseAgreementsGetByIDOutput(t *testing.T) {
 	root.FlagSet.SetOutput(io.Discard)
 
 	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"testflight", "beta-license-agreements", "get", "--id", "agree-1", "--fields", "agreementText"}); err != nil {
+		if err := root.Parse([]string{"testflight", "agreements", "view", "--id", "agree-1", "--fields", "agreementText"}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
 		if err := root.Run(context.Background()); err != nil {
@@ -140,7 +140,7 @@ func TestTestFlightBetaLicenseAgreementsGetByAppOutput(t *testing.T) {
 	root.FlagSet.SetOutput(io.Discard)
 
 	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"testflight", "beta-license-agreements", "get", "--app", "app-1", "--fields", "agreementText"}); err != nil {
+		if err := root.Parse([]string{"testflight", "agreements", "view", "--app", "app-1", "--fields", "agreementText"}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
 		if err := root.Run(context.Background()); err != nil {
@@ -191,7 +191,7 @@ func TestTestFlightBetaLicenseAgreementsUpdateOutput(t *testing.T) {
 	root.FlagSet.SetOutput(io.Discard)
 
 	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"testflight", "beta-license-agreements", "update", "--id", "agree-1", "--agreement-text", "Updated terms"}); err != nil {
+		if err := root.Parse([]string{"testflight", "agreements", "edit", "--id", "agree-1", "--agreement-text", "Updated terms"}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
 		if err := root.Run(context.Background()); err != nil {
@@ -216,15 +216,15 @@ func TestTestFlightBetaLicenseAgreementsGetValidationErrors(t *testing.T) {
 	}{
 		{
 			name: "missing id and app",
-			args: []string{"testflight", "beta-license-agreements", "get"},
+			args: []string{"testflight", "agreements", "view"},
 		},
 		{
 			name: "id and app both set",
-			args: []string{"testflight", "beta-license-agreements", "get", "--id", "AGREEMENT_ID", "--app", "APP_ID"},
+			args: []string{"testflight", "agreements", "view", "--id", "AGREEMENT_ID", "--app", "APP_ID"},
 		},
 		{
 			name: "app with include",
-			args: []string{"testflight", "beta-license-agreements", "get", "--app", "APP_ID", "--include", "app"},
+			args: []string{"testflight", "agreements", "view", "--app", "APP_ID", "--include", "app"},
 		},
 	}
 
@@ -257,11 +257,11 @@ func TestTestFlightBetaLicenseAgreementsUpdateValidationErrors(t *testing.T) {
 	}{
 		{
 			name: "missing id",
-			args: []string{"testflight", "beta-license-agreements", "update", "--agreement-text", "Updated"},
+			args: []string{"testflight", "agreements", "edit", "--agreement-text", "Updated"},
 		},
 		{
 			name: "missing agreement text",
-			args: []string{"testflight", "beta-license-agreements", "update", "--id", "AGREEMENT_ID"},
+			args: []string{"testflight", "agreements", "edit", "--id", "AGREEMENT_ID"},
 		},
 	}
 
@@ -292,7 +292,7 @@ func TestTestFlightBetaLicenseAgreementsListLimitValidation(t *testing.T) {
 	root.FlagSet.SetOutput(io.Discard)
 
 	stdout, _ := captureOutput(t, func() {
-		if err := root.Parse([]string{"testflight", "beta-license-agreements", "list", "--limit", "500"}); err != nil {
+		if err := root.Parse([]string{"testflight", "agreements", "list", "--limit", "500"}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
 		err := root.Run(context.Background())

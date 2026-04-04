@@ -27,7 +27,6 @@ Examples:
 		UsageFunc: shared.VisibleUsageFunc,
 		Subcommands: []*ffcli.Command{
 			viewCmd,
-			deprecatedBuildsGetAlias(viewCmd, "asc builds app-encryption-declaration view"),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp

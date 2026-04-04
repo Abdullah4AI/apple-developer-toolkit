@@ -43,7 +43,6 @@ Examples:
 		UsageFunc: shared.VisibleUsageFunc,
 		Subcommands: []*ffcli.Command{
 			viewCmd,
-			deprecatedBuildsGetAlias(viewCmd, "asc builds app view"),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp
@@ -118,7 +117,6 @@ Examples:
 		UsageFunc: shared.VisibleUsageFunc,
 		Subcommands: []*ffcli.Command{
 			viewCmd,
-			deprecatedBuildsGetAlias(viewCmd, "asc builds pre-release-version view"),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp
@@ -304,7 +302,6 @@ Examples:
 		UsageFunc: shared.VisibleUsageFunc,
 		Subcommands: []*ffcli.Command{
 			viewCmd,
-			deprecatedBuildsGetAlias(viewCmd, "asc builds beta-app-review-submission view"),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp
@@ -383,7 +380,6 @@ Examples:
 		UsageFunc: shared.VisibleUsageFunc,
 		Subcommands: []*ffcli.Command{
 			viewCmd,
-			deprecatedBuildsGetAlias(viewCmd, "asc builds build-beta-detail view"),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp

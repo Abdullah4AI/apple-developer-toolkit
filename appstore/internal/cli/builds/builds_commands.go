@@ -100,18 +100,23 @@ Examples:
 			}
 
 			// Validate file exists
-			fileInfo, err := os.Stat(filePath)
-			if err != nil {
-				if hasIPA {
-					return fmt.Errorf("builds upload: failed to stat IPA: %w", err)
+			var (
+				fileInfo os.FileInfo
+				err      error
+			)
+			if hasIPA {
+				fileInfo, err = shared.ValidateIPAPath(filePath)
+				if err != nil {
+					return fmt.Errorf("builds upload: %w", err)
 				}
-				return fmt.Errorf("builds upload: failed to stat PKG: %w", err)
-			}
-			if fileInfo.IsDir() {
-				if hasIPA {
-					return fmt.Errorf("builds upload: --ipa must be a file")
+			} else {
+				fileInfo, err = os.Stat(filePath)
+				if err != nil {
+					return fmt.Errorf("builds upload: failed to stat PKG: %w", err)
 				}
-				return fmt.Errorf("builds upload: --pkg must be a file")
+				if fileInfo.IsDir() {
+					return fmt.Errorf("builds upload: --pkg must be a file")
+				}
 			}
 
 			// Determine platform
@@ -178,22 +183,9 @@ Examples:
 			if versionValue == "" || buildNumberValue == "" {
 				// Auto-extraction only works for IPA files
 				if hasIPA {
-					info, err := shared.ExtractBundleInfoFromIPA(filePath)
+					versionValue, buildNumberValue, err = shared.ResolveBundleInfoForIPA(filePath, versionValue, buildNumberValue)
 					if err != nil {
-						missingFlags := make([]string, 0, 2)
-						if versionValue == "" {
-							missingFlags = append(missingFlags, "--version")
-						}
-						if buildNumberValue == "" {
-							missingFlags = append(missingFlags, "--build-number")
-						}
-						return fmt.Errorf("builds upload: %s required (failed to extract from IPA: %w)", strings.Join(missingFlags, " and "), err)
-					}
-					if versionValue == "" {
-						versionValue = info.Version
-					}
-					if buildNumberValue == "" {
-						buildNumberValue = info.BuildNumber
+						return fmt.Errorf("builds upload: %w", err)
 					}
 				} else {
 					// PKG files require explicit version and build number
@@ -233,49 +225,9 @@ Examples:
 			requestCtx, cancel := shared.ContextWithTimeoutDuration(ctx, timeoutValue)
 			defer cancel()
 
-			// Step 1: Create build upload record
-			uploadReq := asc.BuildUploadCreateRequest{
-				Data: asc.BuildUploadCreateData{
-					Type: asc.ResourceTypeBuildUploads,
-					Attributes: asc.BuildUploadAttributes{
-						CFBundleShortVersionString: versionValue,
-						CFBundleVersion:            buildNumberValue,
-						Platform:                   platformValue,
-					},
-					Relationships: &asc.BuildUploadRelationships{
-						App: &asc.Relationship{
-							Data: asc.ResourceData{Type: asc.ResourceTypeApps, ID: resolvedAppID},
-						},
-					},
-				},
-			}
-
-			uploadResp, err := client.CreateBuildUpload(requestCtx, uploadReq)
+			uploadResp, fileResp, err := shared.PrepareBuildUpload(requestCtx, client, resolvedAppID, fileInfo, versionValue, buildNumberValue, platformValue, fileUTI)
 			if err != nil {
-				return fmt.Errorf("builds upload: failed to create upload record: %w", err)
-			}
-
-			// Step 2: Create build upload file reservation
-			fileReq := asc.BuildUploadFileCreateRequest{
-				Data: asc.BuildUploadFileCreateData{
-					Type: asc.ResourceTypeBuildUploadFiles,
-					Attributes: asc.BuildUploadFileAttributes{
-						FileName:  fileInfo.Name(),
-						FileSize:  fileInfo.Size(),
-						UTI:       fileUTI,
-						AssetType: asc.AssetTypeAsset,
-					},
-					Relationships: &asc.BuildUploadFileRelationships{
-						BuildUpload: &asc.Relationship{
-							Data: asc.ResourceData{Type: asc.ResourceTypeBuildUploads, ID: uploadResp.Data.ID},
-						},
-					},
-				},
-			}
-
-			fileResp, err := client.CreateBuildUploadFile(requestCtx, fileReq)
-			if err != nil {
-				return fmt.Errorf("builds upload: failed to create file reservation: %w", err)
+				return fmt.Errorf("builds upload: %w", err)
 			}
 
 			// Return upload info including presigned URL operations
@@ -320,28 +272,17 @@ Examples:
 					}
 				}
 
-				uploaded := true
-				updateReq := asc.BuildUploadFileUpdateRequest{
-					Data: asc.BuildUploadFileUpdateData{
-						Type: asc.ResourceTypeBuildUploadFiles,
-						ID:   fileResp.Data.ID,
-						Attributes: &asc.BuildUploadFileUpdateAttributes{
-							Uploaded:            &uploaded,
-							SourceFileChecksums: verifiedChecksums,
-						},
-					},
-				}
-
 				commitCtx, commitCancel := shared.ContextWithUploadTimeout(ctx)
-				commitResp, err := client.UpdateBuildUploadFile(commitCtx, fileResp.Data.ID, updateReq)
+				commitResp, err := shared.CommitBuildUploadFile(commitCtx, client, fileResp.Data.ID, verifiedChecksums)
 				commitCancel()
 				if err != nil {
-					return fmt.Errorf("builds upload: failed to commit upload: %w", err)
+					return fmt.Errorf("builds upload: %w", err)
 				}
 
 				if commitResp != nil && commitResp.Data.Attributes.Uploaded != nil {
 					result.Uploaded = commitResp.Data.Attributes.Uploaded
 				} else {
+					uploaded := true
 					result.Uploaded = &uploaded
 				}
 				fmt.Fprintln(os.Stderr, "Upload committed in App Store Connect.")
@@ -435,8 +376,8 @@ Examples:
 			BuildsNextBuildNumberCommand(),
 			BuildsLatestCommand(),
 			BuildsWaitCommand(),
+			RemovedBuildsFindCommand(),
 			BuildsInfoCommand(),
-			BuildsFindCommand(),
 			BuildsExpireCommand(),
 			BuildsExpireAllCommand(),
 			BuildsUploadCommand(),
@@ -453,7 +394,6 @@ Examples:
 			BuildsBetaAppReviewSubmissionCommand(),
 			BuildsBuildBetaDetailCommand(),
 			BuildsRelationshipsCommand(),
-			deprecatedBuildsRelationshipsAliasCommand(),
 			BuildsMetricsCommand(),
 			BuildsDsymsCommand(),
 		},
@@ -823,6 +763,20 @@ Examples:
 			return shared.PrintOutput(build, format, *output.Pretty)
 		},
 	}
+}
+
+func RemovedBuildsFindCommand() *ffcli.Command {
+	cmd := BuildsInfoCommand()
+	cmd.Name = "find"
+	cmd.ShortUsage = "asc builds find [--build-id BUILD_ID | --app APP --latest | --app APP --build-number BUILD_NUMBER] [flags]"
+	cmd.ShortHelp = "DEPRECATED: removed; use `asc builds info`."
+	cmd.LongHelp = "Removed legacy command. Use `asc builds info` instead."
+	cmd.UsageFunc = shared.DeprecatedUsageFunc
+	cmd.Exec = func(ctx context.Context, args []string) error {
+		fmt.Fprintln(os.Stderr, "Error: `asc builds find` was removed. Use `asc builds info` instead.")
+		return flag.ErrHelp
+	}
+	return cmd
 }
 
 // BuildsExpireCommand returns a build expiration subcommand.

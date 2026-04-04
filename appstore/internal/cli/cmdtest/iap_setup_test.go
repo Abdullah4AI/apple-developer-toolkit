@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
 )
@@ -606,6 +607,297 @@ func TestIAPSetupCreateLocalizationAndPricingSuccess(t *testing.T) {
 	}
 	if result.Verification.CurrentPrice == nil || result.Verification.CurrentPrice.Amount != "3.99" || result.Verification.CurrentPrice.Currency != "USD" {
 		t.Fatalf("expected verified current price 3.99 USD, got %+v", result.Verification.CurrentPrice)
+	}
+}
+
+func TestIAPSetupRefreshesContextsAcrossPricingAndVerification(t *testing.T) {
+	setupAuth(t)
+	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("ASC_TIMEOUT", "80ms")
+	t.Setenv("ASC_TIMEOUT_SECONDS", "")
+
+	originalTransport := http.DefaultTransport
+	t.Cleanup(func() {
+		http.DefaultTransport = originalTransport
+	})
+
+	var priceScheduleDeadlineRemaining time.Duration
+	var verifyDeadlineRemaining time.Duration
+	requestCount := 0
+	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		requestCount++
+		switch requestCount {
+		case 1:
+			if req.Method != http.MethodPost || req.URL.Path != "/v2/inAppPurchases" {
+				t.Fatalf("unexpected create request: %s %s", req.Method, req.URL.Path)
+			}
+			body := `{"data":{"type":"inAppPurchases","id":"iap-1","attributes":{"name":"Budget Lifetime","productId":"budget.lifetime","inAppPurchaseType":"NON_CONSUMABLE"}}}`
+			return &http.Response{
+				StatusCode: http.StatusCreated,
+				Body:       io.NopCloser(strings.NewReader(body)),
+				Header:     http.Header{"Content-Type": []string{"application/json"}},
+			}, nil
+		case 2:
+			if req.Method != http.MethodGet || req.URL.Path != "/v2/inAppPurchases/iap-1/pricePoints" {
+				t.Fatalf("unexpected price-point lookup request: %s %s", req.Method, req.URL.String())
+			}
+			time.Sleep(60 * time.Millisecond)
+			body := `{"data":[{"type":"inAppPurchasePricePoints","id":"pp-399","attributes":{"customerPrice":"3.99","proceeds":"2.79"}}],"links":{"next":""}}`
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(strings.NewReader(body)),
+				Header:     http.Header{"Content-Type": []string{"application/json"}},
+			}, nil
+		case 3:
+			if req.Method != http.MethodPost || req.URL.Path != "/v1/inAppPurchasePriceSchedules" {
+				t.Fatalf("unexpected price schedule request: %s %s", req.Method, req.URL.Path)
+			}
+			deadline, ok := req.Context().Deadline()
+			if !ok {
+				t.Fatal("expected price schedule request to carry a timeout deadline")
+			}
+			priceScheduleDeadlineRemaining = time.Until(deadline)
+			if priceScheduleDeadlineRemaining < 35*time.Millisecond {
+				t.Fatalf("expected fresh price schedule context after tier resolution, got only %v remaining", priceScheduleDeadlineRemaining)
+			}
+			body := `{"data":{"type":"inAppPurchasePriceSchedules","id":"sched-1","attributes":{}}}`
+			return &http.Response{
+				StatusCode: http.StatusCreated,
+				Body:       io.NopCloser(strings.NewReader(body)),
+				Header:     http.Header{"Content-Type": []string{"application/json"}},
+			}, nil
+		case 4:
+			if req.Method != http.MethodGet || req.URL.Path != "/v2/inAppPurchases/iap-1" {
+				t.Fatalf("unexpected verify iap request: %s %s", req.Method, req.URL.Path)
+			}
+			deadline, ok := req.Context().Deadline()
+			if !ok {
+				t.Fatal("expected verify request to carry a timeout deadline")
+			}
+			verifyDeadlineRemaining = time.Until(deadline)
+			if verifyDeadlineRemaining < 35*time.Millisecond {
+				t.Fatalf("expected fresh verify context after pricing setup, got only %v remaining", verifyDeadlineRemaining)
+			}
+			body := `{"data":{"type":"inAppPurchases","id":"iap-1","attributes":{"name":"Budget Lifetime","productId":"budget.lifetime","inAppPurchaseType":"NON_CONSUMABLE"}}}`
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(strings.NewReader(body)),
+				Header:     http.Header{"Content-Type": []string{"application/json"}},
+			}, nil
+		case 5:
+			if req.Method != http.MethodGet || req.URL.Path != "/v2/inAppPurchases/iap-1/iapPriceSchedule" {
+				t.Fatalf("unexpected verify schedule request: %s %s", req.Method, req.URL.String())
+			}
+			body := `{
+				"data":{
+					"type":"inAppPurchasePriceSchedules",
+					"id":"sched-1",
+					"relationships":{"baseTerritory":{"data":{"type":"territories","id":"USA"}}}
+				},
+				"included":[
+					{
+						"type":"inAppPurchasePrices",
+						"id":"price-1",
+						"attributes":{"startDate":"2026-03-01","manual":true},
+						"relationships":{
+							"territory":{"data":{"type":"territories","id":"USA"}},
+							"inAppPurchasePricePoint":{"data":{"type":"inAppPurchasePricePoints","id":"pp-399"}}
+						}
+					},
+					{"type":"territories","id":"USA","attributes":{"currency":"USD"}}
+				]
+			}`
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(strings.NewReader(body)),
+				Header:     http.Header{"Content-Type": []string{"application/json"}},
+			}, nil
+		case 6:
+			if req.Method != http.MethodGet || req.URL.Path != "/v2/inAppPurchases/iap-1/pricePoints" {
+				t.Fatalf("unexpected verify price-points request: %s %s", req.Method, req.URL.String())
+			}
+			body := `{"data":[{"type":"inAppPurchasePricePoints","id":"pp-399","attributes":{"customerPrice":"3.99","proceeds":"2.79"}}],"included":[{"type":"territories","id":"USA","attributes":{"currency":"USD"}}],"links":{"next":""}}`
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(strings.NewReader(body)),
+				Header:     http.Header{"Content-Type": []string{"application/json"}},
+			}, nil
+		default:
+			t.Fatalf("unexpected extra request: %s %s", req.Method, req.URL.String())
+			return nil, nil
+		}
+	})
+
+	root := RootCommand("1.2.3")
+	root.FlagSet.SetOutput(io.Discard)
+
+	var result iapSetupOutput
+	stdout, stderr := captureOutput(t, func() {
+		if err := root.Parse([]string{
+			"iap", "setup",
+			"--app", "app-1",
+			"--type", "NON_CONSUMABLE",
+			"--reference-name", "Budget Lifetime",
+			"--product-id", "budget.lifetime",
+			"--price", "3.99",
+			"--base-territory", "USA",
+			"--start-date", "2026-03-01",
+			"--refresh",
+			"--output", "json",
+		}); err != nil {
+			t.Fatalf("parse error: %v", err)
+		}
+		if err := root.Run(context.Background()); err != nil {
+			t.Fatalf("run error: %v", err)
+		}
+	})
+
+	if stderr != "" {
+		t.Fatalf("expected empty stderr, got %q", stderr)
+	}
+	if priceScheduleDeadlineRemaining == 0 {
+		t.Fatal("expected price schedule request to run")
+	}
+	if verifyDeadlineRemaining == 0 {
+		t.Fatal("expected verify request to run")
+	}
+	if requestCount != 6 {
+		t.Fatalf("expected create, lookup, schedule, and verify reads, got %d requests", requestCount)
+	}
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Fatalf("parse setup result: %v\nstdout=%q", err, stdout)
+	}
+	if result.Status != "ok" || result.Verification.Status != "verified" {
+		t.Fatalf("expected verified setup result, got %+v", result)
+	}
+}
+
+func TestIAPSetupRefreshesContextsAcrossLocalizationCreationAndVerification(t *testing.T) {
+	setupAuth(t)
+	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
+	t.Setenv("ASC_TIMEOUT", "80ms")
+	t.Setenv("ASC_TIMEOUT_SECONDS", "")
+
+	originalTransport := http.DefaultTransport
+	t.Cleanup(func() {
+		http.DefaultTransport = originalTransport
+	})
+
+	var localizationCreateDeadlineRemaining time.Duration
+	var localizationVerifyDeadlineRemaining time.Duration
+	requestCount := 0
+	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		requestCount++
+		switch requestCount {
+		case 1:
+			if req.Method != http.MethodPost || req.URL.Path != "/v2/inAppPurchases" {
+				t.Fatalf("unexpected create request: %s %s", req.Method, req.URL.Path)
+			}
+			// Consume most of the create-step timeout so follow-up requests only
+			// succeed when setup refreshes request contexts between steps.
+			time.Sleep(60 * time.Millisecond)
+			body := `{"data":{"type":"inAppPurchases","id":"iap-1","attributes":{"name":"Localized Lifetime","productId":"localized.lifetime","inAppPurchaseType":"NON_CONSUMABLE"}}}`
+			return &http.Response{
+				StatusCode: http.StatusCreated,
+				Body:       io.NopCloser(strings.NewReader(body)),
+				Header:     http.Header{"Content-Type": []string{"application/json"}},
+			}, nil
+		case 2:
+			if req.Method != http.MethodPost || req.URL.Path != "/v1/inAppPurchaseLocalizations" {
+				t.Fatalf("unexpected localization create request: %s %s", req.Method, req.URL.Path)
+			}
+			deadline, ok := req.Context().Deadline()
+			if !ok {
+				t.Fatal("expected localization create request to carry a timeout deadline")
+			}
+			localizationCreateDeadlineRemaining = time.Until(deadline)
+			if localizationCreateDeadlineRemaining < 35*time.Millisecond {
+				t.Fatalf("expected fresh localization create context, got only %v remaining", localizationCreateDeadlineRemaining)
+			}
+			body := `{"data":{"type":"inAppPurchaseLocalizations","id":"loc-1","attributes":{"name":"Localized Pro","locale":"en-US","description":"Localized description"}}}`
+			return &http.Response{
+				StatusCode: http.StatusCreated,
+				Body:       io.NopCloser(strings.NewReader(body)),
+				Header:     http.Header{"Content-Type": []string{"application/json"}},
+			}, nil
+		case 3:
+			if req.Method != http.MethodGet || req.URL.Path != "/v2/inAppPurchases/iap-1" {
+				t.Fatalf("unexpected verify iap request: %s %s", req.Method, req.URL.Path)
+			}
+			body := `{"data":{"type":"inAppPurchases","id":"iap-1","attributes":{"name":"Localized Lifetime","productId":"localized.lifetime","inAppPurchaseType":"NON_CONSUMABLE"}}}`
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(strings.NewReader(body)),
+				Header:     http.Header{"Content-Type": []string{"application/json"}},
+			}, nil
+		case 4:
+			if req.Method != http.MethodGet || req.URL.Path != "/v2/inAppPurchases/iap-1/inAppPurchaseLocalizations" {
+				t.Fatalf("unexpected localization verify request: %s %s", req.Method, req.URL.Path)
+			}
+			deadline, ok := req.Context().Deadline()
+			if !ok {
+				t.Fatal("expected localization verify request to carry a timeout deadline")
+			}
+			localizationVerifyDeadlineRemaining = time.Until(deadline)
+			if localizationVerifyDeadlineRemaining < 35*time.Millisecond {
+				t.Fatalf("expected fresh localization verify context, got only %v remaining", localizationVerifyDeadlineRemaining)
+			}
+			body := `{"data":[{"type":"inAppPurchaseLocalizations","id":"loc-1","attributes":{"name":"Localized Pro","locale":"en-US","description":"Localized description"}}],"links":{"next":""}}`
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(strings.NewReader(body)),
+				Header:     http.Header{"Content-Type": []string{"application/json"}},
+			}, nil
+		default:
+			t.Fatalf("unexpected extra request: %s %s", req.Method, req.URL.String())
+			return nil, nil
+		}
+	})
+
+	root := RootCommand("1.2.3")
+	root.FlagSet.SetOutput(io.Discard)
+
+	var result iapSetupOutput
+	stdout, stderr := captureOutput(t, func() {
+		if err := root.Parse([]string{
+			"iap", "setup",
+			"--app", "app-1",
+			"--type", "NON_CONSUMABLE",
+			"--reference-name", "Localized Lifetime",
+			"--product-id", "localized.lifetime",
+			"--locale", "en-US",
+			"--display-name", "Localized Pro",
+			"--description", "Localized description",
+			"--output", "json",
+		}); err != nil {
+			t.Fatalf("parse error: %v", err)
+		}
+		if err := root.Run(context.Background()); err != nil {
+			t.Fatalf("run error: %v", err)
+		}
+	})
+
+	if stderr != "" {
+		t.Fatalf("expected empty stderr, got %q", stderr)
+	}
+	if requestCount != 4 {
+		t.Fatalf("expected create, localization create, and verify reads, got %d requests", requestCount)
+	}
+	if localizationCreateDeadlineRemaining == 0 {
+		t.Fatal("expected localization create request to run")
+	}
+	if localizationVerifyDeadlineRemaining == 0 {
+		t.Fatal("expected localization verify request to run")
+	}
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Fatalf("parse setup result: %v\nstdout=%q", err, stdout)
+	}
+	if result.Status != "ok" || result.Verification.Status != "verified" {
+		t.Fatalf("expected verified setup result, got %+v", result)
+	}
+	if result.Verification.LocalizationExists == nil || !*result.Verification.LocalizationExists {
+		t.Fatalf("expected localization verification success, got %+v", result.Verification)
 	}
 }
 

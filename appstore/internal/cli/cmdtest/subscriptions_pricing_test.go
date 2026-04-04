@@ -23,11 +23,6 @@ func TestSubscriptionsPricingValidationErrors(t *testing.T) {
 			args:    []string{"subscriptions", "pricing", "summary"},
 			wantErr: "Error: --app or --subscription-id is required",
 		},
-		{
-			name:    "app and subscription-id both set",
-			args:    []string{"subscriptions", "pricing", "summary", "--app", "APP_ID", "--subscription-id", "SUB_ID"},
-			wantErr: "Error: --app and --subscription-id are mutually exclusive",
-		},
 	}
 
 	for _, test := range tests {
@@ -65,15 +60,15 @@ func TestSubscriptionsPricingByIDSuccess(t *testing.T) {
 
 	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		switch {
-		case req.URL.Path == "/v1/subscriptions/sub-1" && req.Method == http.MethodGet:
-			body := `{"data":{"type":"subscriptions","id":"sub-1","attributes":{"name":"Monthly","productId":"com.example.monthly","subscriptionPeriod":"ONE_MONTH","state":"APPROVED"}}}`
+		case req.URL.Path == "/v1/subscriptions/8000000001" && req.Method == http.MethodGet:
+			body := `{"data":{"type":"subscriptions","id":"8000000001","attributes":{"name":"Monthly","productId":"com.example.monthly","subscriptionPeriod":"ONE_MONTH","state":"APPROVED"}}}`
 			return &http.Response{
 				StatusCode: http.StatusOK,
 				Body:       io.NopCloser(strings.NewReader(body)),
 				Header:     http.Header{"Content-Type": []string{"application/json"}},
 			}, nil
 
-		case req.URL.Path == "/v1/subscriptions/sub-1/prices":
+		case req.URL.Path == "/v1/subscriptions/8000000001/prices":
 			query := req.URL.Query()
 			if query.Get("filter[territory]") != "USA" {
 				t.Fatalf("expected filter[territory]=USA, got %q", query.Get("filter[territory]"))
@@ -114,7 +109,7 @@ func TestSubscriptionsPricingByIDSuccess(t *testing.T) {
 	root.FlagSet.SetOutput(io.Discard)
 
 	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"subscriptions", "pricing", "summary", "--subscription-id", "sub-1"}); err != nil {
+		if err := root.Parse([]string{"subscriptions", "pricing", "summary", "--subscription-id", "8000000001"}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
 		if err := root.Run(context.Background()); err != nil {
@@ -125,7 +120,7 @@ func TestSubscriptionsPricingByIDSuccess(t *testing.T) {
 	if stderr != "" {
 		t.Fatalf("expected empty stderr, got %q", stderr)
 	}
-	if !strings.Contains(stdout, `"id":"sub-1"`) {
+	if !strings.Contains(stdout, `"id":"8000000001"`) {
 		t.Fatalf("expected sub id in output, got %q", stdout)
 	}
 	if !strings.Contains(stdout, `"currentPrice":{"amount":"9.99","currency":"USD"}`) {
@@ -149,15 +144,15 @@ func TestSubscriptionsPricingTableOutput(t *testing.T) {
 
 	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		switch {
-		case req.URL.Path == "/v1/subscriptions/sub-1" && req.Method == http.MethodGet:
-			body := `{"data":{"type":"subscriptions","id":"sub-1","attributes":{"name":"Monthly","productId":"com.example.monthly","subscriptionPeriod":"ONE_MONTH","state":"APPROVED"}}}`
+		case req.URL.Path == "/v1/subscriptions/8000000001" && req.Method == http.MethodGet:
+			body := `{"data":{"type":"subscriptions","id":"8000000001","attributes":{"name":"Monthly","productId":"com.example.monthly","subscriptionPeriod":"ONE_MONTH","state":"APPROVED"}}}`
 			return &http.Response{
 				StatusCode: http.StatusOK,
 				Body:       io.NopCloser(strings.NewReader(body)),
 				Header:     http.Header{"Content-Type": []string{"application/json"}},
 			}, nil
 
-		case req.URL.Path == "/v1/subscriptions/sub-1/prices":
+		case req.URL.Path == "/v1/subscriptions/8000000001/prices":
 			body := `{
 				"data":[{
 					"type":"subscriptionPrices","id":"price-1",
@@ -189,7 +184,7 @@ func TestSubscriptionsPricingTableOutput(t *testing.T) {
 	root.FlagSet.SetOutput(io.Discard)
 
 	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"subscriptions", "pricing", "summary", "--subscription-id", "sub-1", "--output", "table"}); err != nil {
+		if err := root.Parse([]string{"subscriptions", "pricing", "summary", "--subscription-id", "8000000001", "--output", "table"}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
 		if err := root.Run(context.Background()); err != nil {
@@ -218,15 +213,15 @@ func TestSubscriptionsPricingUsesLatestEffectivePriceAsCurrent(t *testing.T) {
 
 	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		switch {
-		case req.URL.Path == "/v1/subscriptions/sub-1" && req.Method == http.MethodGet:
-			body := `{"data":{"type":"subscriptions","id":"sub-1","attributes":{"name":"Monthly","productId":"com.example.monthly","subscriptionPeriod":"ONE_MONTH","state":"APPROVED"}}}`
+		case req.URL.Path == "/v1/subscriptions/8000000001" && req.Method == http.MethodGet:
+			body := `{"data":{"type":"subscriptions","id":"8000000001","attributes":{"name":"Monthly","productId":"com.example.monthly","subscriptionPeriod":"ONE_MONTH","state":"APPROVED"}}}`
 			return &http.Response{
 				StatusCode: http.StatusOK,
 				Body:       io.NopCloser(strings.NewReader(body)),
 				Header:     http.Header{"Content-Type": []string{"application/json"}},
 			}, nil
 
-		case req.URL.Path == "/v1/subscriptions/sub-1/prices":
+		case req.URL.Path == "/v1/subscriptions/8000000001/prices":
 			body := `{
 				"data":[
 					{
@@ -269,7 +264,7 @@ func TestSubscriptionsPricingUsesLatestEffectivePriceAsCurrent(t *testing.T) {
 	root.FlagSet.SetOutput(io.Discard)
 
 	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"subscriptions", "pricing", "summary", "--subscription-id", "sub-1"}); err != nil {
+		if err := root.Parse([]string{"subscriptions", "pricing", "summary", "--subscription-id", "8000000001"}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
 		if err := root.Run(context.Background()); err != nil {

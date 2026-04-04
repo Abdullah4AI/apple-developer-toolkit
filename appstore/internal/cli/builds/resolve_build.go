@@ -63,7 +63,7 @@ func ResolveBuild(ctx context.Context, client *asc.Client, opts ResolveBuildOpti
 			}
 			platform = normalized
 		}
-		selection, err := resolveLatestBuildSelection(ctx, client, latestBuildSelectionOptions{
+		buildResp, err := shared.ResolveLatestBuild(ctx, client, shared.LatestBuildSelectionOptions{
 			AppID:                 strings.TrimSpace(opts.AppID),
 			Version:               strings.TrimSpace(opts.Version),
 			Platform:              platform,
@@ -73,7 +73,7 @@ func ResolveBuild(ctx context.Context, client *asc.Client, opts ResolveBuildOpti
 		if err != nil {
 			return nil, fmt.Errorf("failed to fetch latest build: %w", err)
 		}
-		return selection.LatestBuild, nil
+		return buildResp, nil
 	}
 
 	return resolveBuildByNumberSelection(ctx, client, buildNumberSelectionOptions{
@@ -163,7 +163,7 @@ func resolveBuildByNumberSelection(
 		buildOpts = append(buildOpts, asc.WithBuildsProcessingStates(opts.ProcessingStateValues))
 	}
 	if version != "" {
-		preReleaseVersionIDs, err := findPreReleaseVersionIDs(ctx, client, resolvedAppID, version, platform)
+		preReleaseVersionIDs, err := shared.FindPreReleaseVersionIDs(ctx, client, resolvedAppID, version, platform)
 		if err != nil {
 			return nil, err
 		}

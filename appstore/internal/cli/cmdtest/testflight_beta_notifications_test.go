@@ -13,7 +13,7 @@ func TestTestFlightBetaNotificationsCreateValidationErrors(t *testing.T) {
 	root.FlagSet.SetOutput(io.Discard)
 
 	stdout, _ := captureOutput(t, func() {
-		if err := root.Parse([]string{"testflight", "beta-notifications", "create"}); err != nil {
+		if err := root.Parse([]string{"testflight", "notifications", "send"}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
 		err := root.Run(context.Background())

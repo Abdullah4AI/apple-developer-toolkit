@@ -243,6 +243,13 @@ func TestNormalizeScreenshotDisplayTypeAliasIPhone69Variants(t *testing.T) {
 	}
 }
 
+func TestFocusedScreenshotDisplayTypesForPlatformUnknownPlatformReturnsEmpty(t *testing.T) {
+	got := focusedScreenshotDisplayTypesForPlatform("CARPLAY_OS")
+	if len(got) != 0 {
+		t.Fatalf("expected no focused display types for unknown platform, got %#v", got)
+	}
+}
+
 func captureOutput(t *testing.T, fn func()) (string, string) {
 	t.Helper()
 

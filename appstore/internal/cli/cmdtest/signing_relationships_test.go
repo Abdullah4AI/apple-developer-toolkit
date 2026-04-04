@@ -43,8 +43,8 @@ func TestSigningRelationshipsValidationErrors(t *testing.T) {
 			wantErr: "Error: --id is required",
 		},
 		{
-			name:    "users visible-apps get missing id",
-			args:    []string{"users", "visible-apps", "get"},
+			name:    "users visible-apps view missing id",
+			args:    []string{"users", "visible-apps", "view"},
 			wantErr: "Error: --id is required",
 		},
 	}

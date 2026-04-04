@@ -12,6 +12,29 @@ type appStoreVersionRelationships struct {
 	App *Relationship `json:"app"`
 }
 
+// AppStoreVersionAppID extracts the related app ID from an app store version response.
+func AppStoreVersionAppID(resp *AppStoreVersionResponse) (string, error) {
+	if resp == nil {
+		return "", fmt.Errorf("app store version response is required")
+	}
+
+	var relationships appStoreVersionRelationships
+	if len(resp.Data.Relationships) > 0 {
+		if err := json.Unmarshal(resp.Data.Relationships, &relationships); err != nil {
+			return "", fmt.Errorf("failed to parse app store version relationships: %w", err)
+		}
+	}
+
+	if relationships.App == nil {
+		return "", fmt.Errorf("app relationship missing for app store version %q", strings.TrimSpace(resp.Data.ID))
+	}
+	appID := strings.TrimSpace(relationships.App.Data.ID)
+	if appID == "" {
+		return "", fmt.Errorf("app relationship missing for app store version %q", strings.TrimSpace(resp.Data.ID))
+	}
+	return appID, nil
+}
+
 // AppInfoCandidate describes an app info resource considered for auto-resolution.
 type AppInfoCandidate struct {
 	ID    string
@@ -30,19 +53,9 @@ func (c *Client) ResolveAppInfoIDForAppStoreVersion(ctx context.Context, version
 		return "", err
 	}
 
-	var relationships appStoreVersionRelationships
-	if len(versionResp.Data.Relationships) > 0 {
-		if err := json.Unmarshal(versionResp.Data.Relationships, &relationships); err != nil {
-			return "", fmt.Errorf("failed to parse app store version relationships: %w", err)
-		}
-	}
-
-	appID := ""
-	if relationships.App != nil {
-		appID = strings.TrimSpace(relationships.App.Data.ID)
-	}
-	if appID == "" {
-		return "", fmt.Errorf("app relationship missing for app store version %q", versionID)
+	appID, err := AppStoreVersionAppID(versionResp)
+	if err != nil {
+		return "", err
 	}
 
 	appInfos, err := c.GetAppInfos(ctx, appID)

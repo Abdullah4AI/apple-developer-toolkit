@@ -20,6 +20,8 @@ func TestReviewsCommandConstructors(t *testing.T) {
 
 	constructors := []func() any{
 		func() any { return ReviewCommand() },
+		func() any { return ReviewStatusCommand() },
+		func() any { return ReviewDoctorCommand() },
 		func() any { return ReviewsGetCommand() },
 		func() any { return ReviewsRatingsCommand() },
 		func() any { return ReviewsResponseCommand() },

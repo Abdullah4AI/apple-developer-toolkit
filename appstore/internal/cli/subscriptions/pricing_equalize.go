@@ -26,7 +26,8 @@ var errEqualizePricePointFound = errors.New("equalize price point found")
 func SubscriptionsPricingEqualizeCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("equalize", flag.ExitOnError)
 
-	subscriptionID := fs.String("subscription-id", "", "Subscription ID (required)")
+	subscriptionID := fs.String("subscription-id", "", "Subscription ID, product ID, or exact current name (required)")
+	appID := addSubscriptionLookupAppFlag(fs)
 	baseTerritory := fs.String("base-territory", "USA", "Territory to use as the pricing base")
 	basePrice := fs.String("base-price", "", "Customer price in the base territory (required)")
 	dryRun := fs.Bool("dry-run", false, "Show equalized prices without applying them")
@@ -84,6 +85,13 @@ Examples:
 			client, err := shared.GetASCClient()
 			if err != nil {
 				return fmt.Errorf("equalize: %w", err)
+			}
+
+			resolveCtx, resolveCancel := shared.ContextWithTimeout(ctx)
+			subID, err = resolveSubscriptionLookupID(resolveCtx, client, *appID, subID)
+			resolveCancel()
+			if err != nil {
+				return err
 			}
 
 			// Step 0: Fail fast if sale availability does not already cover all pricing territories.

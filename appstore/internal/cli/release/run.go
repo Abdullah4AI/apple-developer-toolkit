@@ -22,14 +22,15 @@ import (
 )
 
 const (
-	stepEnsureVersion     = "ensure_version"
-	stepApplyMetadata     = "apply_metadata"
-	stepAttachBuild       = "attach_build"
-	stepValidateReadiness = "validate_readiness"
-	stepSubmitReview      = "submit_review"
-	releaseModeRun        = "run"
-	releaseModeStage      = "stage"
-	releaseRunTimeout     = 30 * time.Minute
+	stepEnsureVersion            = "ensure_version"
+	stepApplyMetadata            = "apply_metadata"
+	stepAttachBuild              = "attach_build"
+	stepValidateReadiness        = "validate_readiness"
+	stepSubmitReview             = "submit_review"
+	releaseModeRun               = "run"
+	releaseModeStage             = "stage"
+	releaseRunTimeout            = 30 * time.Minute
+	releaseRunDeprecationWarning = "Warning: `asc release run` is deprecated. Use `asc release stage`, then `asc review submissions-create` / `asc review items-add` / `asc review submissions-submit` for metadata workflows, or `asc publish appstore --submit` when local metadata is already synced."
 )
 
 var (
@@ -129,13 +130,20 @@ func ReleaseRunCommand() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "run",
 		ShortUsage: "asc release run --app \"APP_ID\" --version \"2.4.0\" --build \"BUILD_ID\" --metadata-dir \"./metadata/version/2.4.0\" [flags]",
-		ShortHelp:  "Run version + metadata + attach + validate + submit.",
-		LongHelp: `Run a deterministic App Store release pipeline:
+		ShortHelp:  "DEPRECATED: use `asc release stage` + `asc review submissions-*`, or `asc publish appstore --submit`.",
+		LongHelp: `DEPRECATED: use ` + "`asc release stage`" + ` + ` + "`asc review submissions-*`" + ` when you need the metadata workflow, or ` + "`asc publish appstore --submit`" + ` when local metadata is already synced.
+
+Deprecated compatibility pipeline that still runs the old single-command
+release flow:
 1. Ensure/create version
 2. Apply metadata/localizations
 3. Attach selected build
 4. Run readiness checks
 5. Submit for review
+
+	Prefer:
+	  - ` + "`asc release stage`" + ` + ` + "`asc review submissions-create`" + ` / ` + "`asc review items-add`" + ` / ` + "`asc review submissions-submit`" + ` when you need the old metadata-dir staging + submit workflow
+	  - ` + "`asc publish appstore --submit`" + ` for the canonical high-level App Store upload + submit flow when local metadata is already applied
 
 Supports dry-run planning, step-level structured output, and checkpointed resume.
 
@@ -145,6 +153,7 @@ Examples:
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
+			fmt.Fprintln(os.Stderr, releaseRunDeprecationWarning)
 			if len(args) > 0 {
 				return shared.UsageError("release run does not accept positional arguments")
 			}
@@ -208,6 +217,18 @@ Examples:
 			return nil
 		},
 	}
+}
+
+func RemovedReleaseRunCommand() *ffcli.Command {
+	cmd := ReleaseRunCommand()
+	cmd.ShortHelp = "DEPRECATED: removed; use `asc release stage`."
+	cmd.LongHelp = "Removed legacy command. Use `asc release stage` instead."
+	cmd.UsageFunc = shared.DeprecatedUsageFunc
+	cmd.Exec = func(ctx context.Context, args []string) error {
+		fmt.Fprintln(os.Stderr, "Error: `asc release run` was removed. Use `asc release stage` instead.")
+		return flag.ErrHelp
+	}
+	return cmd
 }
 
 func executeRun(ctx context.Context, opts runOptions) (runResult, error) {

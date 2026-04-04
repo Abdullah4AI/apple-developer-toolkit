@@ -33,12 +33,12 @@ func TestGameCenterAppVersionsListValidationErrors(t *testing.T) {
 	}
 }
 
-func TestGameCenterAppVersionsGetValidationErrors(t *testing.T) {
+func TestGameCenterAppVersionsViewValidationErrors(t *testing.T) {
 	root := RootCommand("1.2.3")
 	root.FlagSet.SetOutput(io.Discard)
 
 	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"game-center", "app-versions", "get"}); err != nil {
+		if err := root.Parse([]string{"game-center", "app-versions", "view"}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
 		err := root.Run(context.Background())
@@ -77,12 +77,12 @@ func TestGameCenterAppVersionsCompatibilityListValidationErrors(t *testing.T) {
 	}
 }
 
-func TestGameCenterAppVersionsAppStoreVersionGetValidationErrors(t *testing.T) {
+func TestGameCenterAppVersionsAppStoreVersionViewValidationErrors(t *testing.T) {
 	root := RootCommand("1.2.3")
 	root.FlagSet.SetOutput(io.Discard)
 
 	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"game-center", "app-versions", "app-store-version", "get"}); err != nil {
+		if err := root.Parse([]string{"game-center", "app-versions", "app-store-version", "view"}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
 		err := root.Run(context.Background())

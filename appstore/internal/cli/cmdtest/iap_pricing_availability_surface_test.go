@@ -31,8 +31,8 @@ func TestIAPPricingAvailabilitySetAcceptsSpacedBoolValue(t *testing.T) {
 		if err := json.NewDecoder(req.Body).Decode(&payload); err != nil {
 			t.Fatalf("decode payload: %v", err)
 		}
-		if payload.Data.Relationships.InAppPurchase.Data.ID != "iap-1" {
-			t.Fatalf("expected iap relationship iap-1, got %q", payload.Data.Relationships.InAppPurchase.Data.ID)
+		if payload.Data.Relationships.InAppPurchase.Data.ID != "9000000001" {
+			t.Fatalf("expected iap relationship 9000000001, got %q", payload.Data.Relationships.InAppPurchase.Data.ID)
 		}
 		if payload.Data.Attributes.AvailableInNewTerritories {
 			t.Fatalf("expected availableInNewTerritories false")
@@ -48,7 +48,7 @@ func TestIAPPricingAvailabilitySetAcceptsSpacedBoolValue(t *testing.T) {
 	root.FlagSet.SetOutput(io.Discard)
 
 	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"iap", "pricing", "availability", "set", "--iap-id", "iap-1", "--available-in-new-territories", "false", "--territories", "USA,CAN", "--output", "json"}); err != nil {
+		if err := root.Parse([]string{"iap", "pricing", "availability", "set", "--iap-id", "9000000001", "--available-in-new-territories", "false", "--territories", "USA,CAN", "--output", "json"}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
 		if err := root.Run(context.Background()); err != nil {

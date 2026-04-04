@@ -66,13 +66,12 @@ func AgeRatingCommand() *ffcli.Command {
 Examples:
   asc age-rating view --app APP_ID
   asc age-rating view --app-info-id APP_INFO_ID
-  asc age-rating set --app APP_ID --kids-age-band FIVE_AND_UNDER --gambling false`,
+  asc age-rating edit --app APP_ID --kids-age-band FIVE_AND_UNDER --gambling false`,
 		FlagSet:   fs,
-		UsageFunc: ageRatingUsageFunc,
+		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
 			AgeRatingViewCommand(),
-			AgeRatingSetCommand(),
-			compatAgeRatingGetAliasCommand(),
+			AgeRatingEditCommand(),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp
@@ -132,40 +131,9 @@ Examples:
 	}
 }
 
-func compatAgeRatingGetAliasCommand() *ffcli.Command {
-	cmd := AgeRatingViewCommand()
-	clone := *cmd
-	clone.Name = "get"
-	clone.ShortUsage = "asc age-rating get --app APP_ID [flags]"
-	clone.ShortHelp = "Compatibility alias for `asc age-rating view`."
-	clone.LongHelp = "Compatibility alias for the renamed `asc age-rating view` command."
-	clone.UsageFunc = shared.DefaultUsageFunc
-	origExec := cmd.Exec
-	clone.Exec = func(ctx context.Context, args []string) error {
-		fmt.Fprintln(os.Stderr, "Warning: `asc age-rating get` has been renamed to `asc age-rating view`.")
-		return origExec(ctx, args)
-	}
-	return &clone
-}
-
-func ageRatingUsageFunc(c *ffcli.Command) string {
-	if c == nil {
-		return ""
-	}
-	clone := *c
-	clone.Subcommands = make([]*ffcli.Command, 0, len(c.Subcommands))
-	for _, sub := range c.Subcommands {
-		if sub == nil || strings.TrimSpace(sub.Name) == "get" {
-			continue
-		}
-		clone.Subcommands = append(clone.Subcommands, sub)
-	}
-	return shared.DefaultUsageFunc(&clone)
-}
-
-// AgeRatingSetCommand returns the age-rating set subcommand.
-func AgeRatingSetCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("age-rating set", flag.ExitOnError)
+// AgeRatingEditCommand returns the age-rating edit subcommand.
+func AgeRatingEditCommand() *ffcli.Command {
+	fs := flag.NewFlagSet("age-rating edit", flag.ExitOnError)
 
 	id := fs.String("id", "", "Age rating declaration ID (optional)")
 	appID := fs.String("app", os.Getenv("ASC_APP_ID"), "App ID (required unless --id, --app-info-id, or --version-id is provided)")
@@ -209,8 +177,8 @@ func AgeRatingSetCommand() *ffcli.Command {
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
-		Name:       "set",
-		ShortUsage: "asc age-rating set --id DECLARATION_ID [flags]",
+		Name:       "edit",
+		ShortUsage: "asc age-rating edit --id DECLARATION_ID [flags]",
 		ShortHelp:  "Update an age rating declaration.",
 		LongHelp: `Update an age rating declaration.
 
@@ -218,10 +186,10 @@ Use --all-none to set all ratings to their safe defaults (NONE/false) in one
 command, then override individual fields as needed.
 
 Examples:
-  asc age-rating set --app APP_ID --all-none
-  asc age-rating set --app APP_ID --all-none --unrestricted-web-access true
-  asc age-rating set --id DECLARATION_ID --gambling false --kids-age-band FIVE_AND_UNDER
-  asc age-rating set --app APP_ID --violence-realistic FREQUENT_OR_INTENSE --unrestricted-web-access true`,
+  asc age-rating edit --app APP_ID --all-none
+  asc age-rating edit --app APP_ID --all-none --unrestricted-web-access true
+  asc age-rating edit --id DECLARATION_ID --gambling false --kids-age-band FIVE_AND_UNDER
+  asc age-rating edit --app APP_ID --violence-realistic FREQUENT_OR_INTENSE --unrestricted-web-access true`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -236,7 +204,7 @@ Examples:
 
 			if idValue == "" {
 				if appInfoValue != "" && versionValue != "" {
-					return fmt.Errorf("age-rating set: only one of --app-info-id or --version-id is allowed")
+					return fmt.Errorf("age-rating edit: only one of --app-info-id or --version-id is allowed")
 				}
 				if appInfoValue == "" && versionValue == "" && appValue == "" {
 					fmt.Fprintln(os.Stderr, "Error: --id or --app is required (or set ASC_APP_ID)")
@@ -287,12 +255,12 @@ Examples:
 			}
 
 			if !hasAgeRatingUpdates(attributes) {
-				return fmt.Errorf("age-rating set: at least one update flag is required")
+				return fmt.Errorf("age-rating edit: at least one update flag is required")
 			}
 
 			client, err := shared.GetASCClient()
 			if err != nil {
-				return fmt.Errorf("age-rating set: %w", err)
+				return fmt.Errorf("age-rating edit: %w", err)
 			}
 
 			requestCtx, cancel := shared.ContextWithTimeout(ctx)
@@ -301,13 +269,13 @@ Examples:
 			if idValue == "" {
 				idValue, err = resolveAgeRatingDeclarationID(requestCtx, client, appValue, appInfoValue, versionValue)
 				if err != nil {
-					return fmt.Errorf("age-rating set: %w", err)
+					return fmt.Errorf("age-rating edit: %w", err)
 				}
 			}
 
 			resp, err := client.UpdateAgeRatingDeclaration(requestCtx, idValue, attributes)
 			if err != nil {
-				return fmt.Errorf("age-rating set: %w", err)
+				return fmt.Errorf("age-rating edit: %w", err)
 			}
 
 			return shared.PrintOutput(resp, *output.Output, *output.Pretty)

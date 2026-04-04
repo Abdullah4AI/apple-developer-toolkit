@@ -17,7 +17,7 @@ func TestAnalyticsValidationErrors(t *testing.T) {
 	}{
 		{
 			name:    "reports get missing report id",
-			args:    []string{"analytics", "reports", "get"},
+			args:    []string{"analytics", "reports", "view"},
 			wantErr: "--report-id is required",
 		},
 		{
@@ -27,7 +27,7 @@ func TestAnalyticsValidationErrors(t *testing.T) {
 		},
 		{
 			name:    "instances get missing instance id",
-			args:    []string{"analytics", "instances", "get"},
+			args:    []string{"analytics", "instances", "view"},
 			wantErr: "--instance-id is required",
 		},
 		{
@@ -37,7 +37,7 @@ func TestAnalyticsValidationErrors(t *testing.T) {
 		},
 		{
 			name:    "segments get missing segment id",
-			args:    []string{"analytics", "segments", "get"},
+			args:    []string{"analytics", "segments", "view"},
 			wantErr: "--segment-id is required",
 		},
 		{

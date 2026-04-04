@@ -23,7 +23,7 @@ func TestWebhooksValidationErrors(t *testing.T) {
 		},
 		{
 			name:    "get missing webhook id",
-			args:    []string{"webhooks", "get"},
+			args:    []string{"webhooks", "view"},
 			wantErr: "--webhook-id is required",
 		},
 		{

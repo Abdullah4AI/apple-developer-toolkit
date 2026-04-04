@@ -40,7 +40,8 @@ Examples:
 func IAPAvailabilityGetCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("pricing availability get", flag.ExitOnError)
 
-	iapID := fs.String("iap-id", "", "In-app purchase ID")
+	appID := addIAPLookupAppFlag(fs)
+	iapID := fs.String("iap-id", "", "In-app purchase ID, product ID, or exact current name")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
@@ -65,6 +66,11 @@ Examples:
 				return fmt.Errorf("iap availability get: %w", err)
 			}
 
+			iapValue, err = resolveIAPLookupIDWithTimeout(ctx, client, *appID, iapValue)
+			if err != nil {
+				return err
+			}
+
 			requestCtx, cancel := shared.ContextWithTimeout(ctx)
 			defer cancel()
 
@@ -82,7 +88,8 @@ Examples:
 func IAPAvailabilitySetCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("pricing availability set", flag.ExitOnError)
 
-	iapID := fs.String("iap-id", "", "In-app purchase ID")
+	appID := addIAPLookupAppFlag(fs)
+	iapID := fs.String("iap-id", "", "In-app purchase ID, product ID, or exact current name")
 	territories := fs.String("territories", "", "Territory IDs (comma-separated)")
 	availableInNew := fs.Bool("available-in-new-territories", false, "Include new territories automatically")
 	output := shared.BindOutputFlags(fs)
@@ -117,6 +124,11 @@ Examples:
 			client, err := shared.GetASCClient()
 			if err != nil {
 				return fmt.Errorf("iap availability set: %w", err)
+			}
+
+			iapValue, err = resolveIAPLookupIDWithTimeout(ctx, client, *appID, iapValue)
+			if err != nil {
+				return err
 			}
 
 			requestCtx, cancel := shared.ContextWithTimeout(ctx)

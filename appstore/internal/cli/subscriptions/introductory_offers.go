@@ -47,7 +47,8 @@ Examples:
 func SubscriptionsIntroductoryOffersListCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("introductory-offers list", flag.ExitOnError)
 
-	subscriptionID := fs.String("subscription-id", "", "Subscription ID")
+	subscriptionID := fs.String("subscription-id", "", "Subscription ID, product ID, or exact current name")
+	appID := addSubscriptionLookupAppFlag(fs)
 	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
 	next := fs.String("next", "", "Fetch next page using a links.next URL")
 	paginate := fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")
@@ -81,6 +82,13 @@ Examples:
 			client, err := shared.GetASCClient()
 			if err != nil {
 				return fmt.Errorf("subscriptions introductory-offers list: %w", err)
+			}
+
+			if strings.TrimSpace(*next) == "" {
+				id, err = resolveSubscriptionLookupIDWithTimeout(ctx, client, *appID, id)
+				if err != nil {
+					return err
+				}
 			}
 
 			requestCtx, cancel := shared.ContextWithTimeout(ctx)
@@ -164,7 +172,8 @@ Examples:
 func SubscriptionsIntroductoryOffersCreateCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("introductory-offers create", flag.ExitOnError)
 
-	subscriptionID := fs.String("subscription-id", "", "Subscription ID")
+	subscriptionID := fs.String("subscription-id", "", "Subscription ID, product ID, or exact current name")
+	appID := addSubscriptionLookupAppFlag(fs)
 	offerDuration := fs.String("offer-duration", "", "Offer duration: "+strings.Join(subscriptionOfferDurationValues, ", "))
 	offerMode := fs.String("offer-mode", "", "Offer mode: "+strings.Join(subscriptionOfferModeValues, ", "))
 	numberOfPeriods := fs.Int("number-of-periods", 0, "Number of periods (required)")
@@ -229,6 +238,11 @@ Examples:
 			client, err := shared.GetASCClient()
 			if err != nil {
 				return fmt.Errorf("subscriptions introductory-offers create: %w", err)
+			}
+
+			id, err = resolveSubscriptionLookupIDWithTimeout(ctx, client, *appID, id)
+			if err != nil {
+				return err
 			}
 
 			requestCtx, cancel := shared.ContextWithTimeout(ctx)

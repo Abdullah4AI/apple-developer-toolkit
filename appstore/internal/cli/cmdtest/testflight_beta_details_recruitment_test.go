@@ -11,7 +11,7 @@ import (
 	"testing"
 )
 
-func TestTestFlightBetaDetailsGetOutput(t *testing.T) {
+func TestTestFlightDistributionViewOutputWithLimit(t *testing.T) {
 	setupAuth(t)
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 
@@ -46,7 +46,7 @@ func TestTestFlightBetaDetailsGetOutput(t *testing.T) {
 	root.FlagSet.SetOutput(io.Discard)
 
 	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"testflight", "beta-details", "get", "--build-id", "build-1", "--limit", "1"}); err != nil {
+		if err := root.Parse([]string{"testflight", "distribution", "view", "--build-id", "build-1", "--limit", "1"}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
 		if err := root.Run(context.Background()); err != nil {
@@ -62,7 +62,7 @@ func TestTestFlightBetaDetailsGetOutput(t *testing.T) {
 	}
 }
 
-func TestTestFlightBetaDetailsBuildGetOutput(t *testing.T) {
+func TestTestFlightDistributionBuildViewOutput(t *testing.T) {
 	setupAuth(t)
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 
@@ -90,7 +90,7 @@ func TestTestFlightBetaDetailsBuildGetOutput(t *testing.T) {
 	root.FlagSet.SetOutput(io.Discard)
 
 	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"testflight", "beta-details", "build", "get", "--id", "detail-1"}); err != nil {
+		if err := root.Parse([]string{"testflight", "distribution", "build", "view", "--id", "detail-1"}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
 		if err := root.Run(context.Background()); err != nil {
@@ -106,7 +106,7 @@ func TestTestFlightBetaDetailsBuildGetOutput(t *testing.T) {
 	}
 }
 
-func TestTestFlightBetaDetailsUpdateOutput(t *testing.T) {
+func TestTestFlightDistributionEditOutput(t *testing.T) {
 	setupAuth(t)
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 
@@ -141,7 +141,7 @@ func TestTestFlightBetaDetailsUpdateOutput(t *testing.T) {
 	root.FlagSet.SetOutput(io.Discard)
 
 	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"testflight", "beta-details", "update", "--id", "detail-1", "--auto-notify"}); err != nil {
+		if err := root.Parse([]string{"testflight", "distribution", "edit", "--id", "detail-1", "--auto-notify"}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
 		if err := root.Run(context.Background()); err != nil {

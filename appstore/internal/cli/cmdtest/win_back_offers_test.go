@@ -25,7 +25,7 @@ func TestWinBackOffersValidationErrors(t *testing.T) {
 		},
 		{
 			name:    "get missing id",
-			args:    []string{"subscriptions", "offers", "win-back", "get"},
+			args:    []string{"subscriptions", "offers", "win-back", "view"},
 			wantErr: "Error: --id is required",
 		},
 		{

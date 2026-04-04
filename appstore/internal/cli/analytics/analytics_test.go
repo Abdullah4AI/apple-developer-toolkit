@@ -226,7 +226,7 @@ func TestAnalyticsReportsGetValidationErrors(t *testing.T) {
 }
 
 func TestAnalyticsReportsRelationshipsValidationErrors(t *testing.T) {
-	stdout, stderr, err := runAnalyticsCommand(t, []string{"analytics", "reports", "relationships"})
+	stdout, stderr, err := runAnalyticsCommand(t, []string{"analytics", "reports", "links"})
 	if !errors.Is(err, flag.ErrHelp) {
 		t.Fatalf("expected ErrHelp, got %v", err)
 	}
@@ -254,7 +254,7 @@ func TestAnalyticsInstancesGetValidationErrors(t *testing.T) {
 }
 
 func TestAnalyticsInstancesRelationshipsValidationErrors(t *testing.T) {
-	stdout, stderr, err := runAnalyticsCommand(t, []string{"analytics", "instances", "relationships"})
+	stdout, stderr, err := runAnalyticsCommand(t, []string{"analytics", "instances", "links"})
 	if !errors.Is(err, flag.ErrHelp) {
 		t.Fatalf("expected ErrHelp, got %v", err)
 	}

@@ -172,6 +172,18 @@ func (c *Client) CreateAppScreenshotSetForCustomProductPageLocalization(ctx cont
 	})
 }
 
+// CreateAppScreenshotSetForExperimentTreatmentLocalization creates a screenshot set for a treatment localization.
+func (c *Client) CreateAppScreenshotSetForExperimentTreatmentLocalization(ctx context.Context, localizationID string, displayType string) (*AppScreenshotSetResponse, error) {
+	return c.createAppScreenshotSet(ctx, displayType, &AppScreenshotSetRelationships{
+		AppStoreVersionExperimentTreatmentLocalization: &Relationship{
+			Data: ResourceData{
+				Type: ResourceTypeAppStoreVersionExperimentTreatmentLocalizations,
+				ID:   localizationID,
+			},
+		},
+	})
+}
+
 func (c *Client) createAppScreenshotSet(ctx context.Context, displayType string, relationships *AppScreenshotSetRelationships) (*AppScreenshotSetResponse, error) {
 	payload := AppScreenshotSetCreateRequest{
 		Data: AppScreenshotSetCreateData{

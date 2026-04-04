@@ -252,7 +252,7 @@ func resolveBuildForAppWait(
 	selector appBuildWaitSelector,
 ) (*asc.BuildResponse, error) {
 	if selector.Latest {
-		selection, err := resolveLatestBuildSelection(ctx, client, latestBuildSelectionOptions{
+		buildResp, err := shared.ResolveLatestBuild(ctx, client, shared.LatestBuildSelectionOptions{
 			AppID:                 selector.AppID,
 			Version:               selector.Version,
 			Platform:              selector.Platform,
@@ -261,7 +261,7 @@ func resolveBuildForAppWait(
 		if err != nil {
 			return nil, err
 		}
-		return applyWaitSinceConstraint(selection.LatestBuild, selector.Since)
+		return applyWaitSinceConstraint(buildResp, selector.Since)
 	}
 
 	buildResp, err := resolveBuildByNumberSelection(ctx, client, buildNumberSelectionOptions{

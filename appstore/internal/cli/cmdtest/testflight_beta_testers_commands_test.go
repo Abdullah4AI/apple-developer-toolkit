@@ -74,7 +74,7 @@ func TestTestFlightBetaTestersAddOutput(t *testing.T) {
 	root.FlagSet.SetOutput(io.Discard)
 
 	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"testflight", "beta-testers", "add", "--app", "app-1", "--email", "tester@example.com", "--group", "Beta"}); err != nil {
+		if err := root.Parse([]string{"testflight", "testers", "add", "--app", "app-1", "--email", "tester@example.com", "--group", "Beta"}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
 		if err := root.Run(context.Background()); err != nil {
@@ -146,7 +146,7 @@ func TestTestFlightBetaTestersRemoveOutput(t *testing.T) {
 	root.FlagSet.SetOutput(io.Discard)
 
 	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"testflight", "beta-testers", "remove", "--app", "app-1", "--email", "tester@example.com"}); err != nil {
+		if err := root.Parse([]string{"testflight", "testers", "remove", "--app", "app-1", "--email", "tester@example.com"}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
 		if err := root.Run(context.Background()); err != nil {
@@ -318,7 +318,7 @@ func TestTestFlightBetaTestersAddGroupsOutput(t *testing.T) {
 	root.FlagSet.SetOutput(io.Discard)
 
 	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"testflight", "beta-testers", "add-groups", "--id", "tester-1", "--group", "group-1,group-2"}); err != nil {
+		if err := root.Parse([]string{"testflight", "testers", "add-groups", "--id", "tester-1", "--group", "group-1,group-2"}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
 		if err := root.Run(context.Background()); err != nil {
@@ -368,7 +368,7 @@ func TestTestFlightBetaTestersRemoveGroupsOutput(t *testing.T) {
 	root.FlagSet.SetOutput(io.Discard)
 
 	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"testflight", "beta-testers", "remove-groups", "--id", "tester-2", "--group", "group-3", "--confirm"}); err != nil {
+		if err := root.Parse([]string{"testflight", "testers", "remove-groups", "--id", "tester-2", "--group", "group-3", "--confirm"}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
 		if err := root.Run(context.Background()); err != nil {
@@ -467,7 +467,7 @@ func TestTestFlightBetaTestersInviteOutput(t *testing.T) {
 	root.FlagSet.SetOutput(io.Discard)
 
 	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"testflight", "beta-testers", "invite", "--app", "app-1", "--email", "tester@example.com", "--group", "Beta"}); err != nil {
+		if err := root.Parse([]string{"testflight", "testers", "invite", "--app", "app-1", "--email", "tester@example.com", "--group", "Beta"}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
 		if err := root.Run(context.Background()); err != nil {

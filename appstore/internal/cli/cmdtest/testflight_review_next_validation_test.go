@@ -18,12 +18,12 @@ func TestTestFlightReviewGetRejectsInvalidNextURL(t *testing.T) {
 		{
 			name:    "invalid scheme",
 			next:    "http://api.appstoreconnect.apple.com/v1/betaAppReviewDetails?cursor=AQ",
-			wantErr: "testflight review get: --next must be an App Store Connect URL",
+			wantErr: "testflight review view: --next must be an App Store Connect URL",
 		},
 		{
 			name:    "malformed URL",
 			next:    "https://api.appstoreconnect.apple.com/%zz",
-			wantErr: "testflight review get: --next must be a valid URL:",
+			wantErr: "testflight review view: --next must be a valid URL:",
 		},
 	}
 
@@ -34,7 +34,7 @@ func TestTestFlightReviewGetRejectsInvalidNextURL(t *testing.T) {
 
 			var runErr error
 			stdout, stderr := captureOutput(t, func() {
-				if err := root.Parse([]string{"testflight", "review", "get", "--next", test.next}); err != nil {
+				if err := root.Parse([]string{"testflight", "review", "view", "--next", test.next}); err != nil {
 					t.Fatalf("parse error: %v", err)
 				}
 				runErr = root.Run(context.Background())
@@ -87,7 +87,7 @@ func TestTestFlightReviewGetFromNextWithoutApp(t *testing.T) {
 	root.FlagSet.SetOutput(io.Discard)
 
 	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"testflight", "review", "get", "--next", nextURL}); err != nil {
+		if err := root.Parse([]string{"testflight", "review", "view", "--next", nextURL}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
 		if err := root.Run(context.Background()); err != nil {
@@ -103,7 +103,7 @@ func TestTestFlightReviewGetFromNextWithoutApp(t *testing.T) {
 	}
 }
 
-func TestTestFlightBetaDetailsGetRejectsInvalidNextURL(t *testing.T) {
+func TestTestFlightReviewViewRejectsInvalidNextURL(t *testing.T) {
 	tests := []struct {
 		name    string
 		next    string
@@ -112,12 +112,12 @@ func TestTestFlightBetaDetailsGetRejectsInvalidNextURL(t *testing.T) {
 		{
 			name:    "invalid scheme",
 			next:    "http://api.appstoreconnect.apple.com/v1/buildBetaDetails?cursor=AQ",
-			wantErr: "testflight beta-details get: --next must be an App Store Connect URL",
+			wantErr: "testflight review view: --next must be an App Store Connect URL",
 		},
 		{
 			name:    "malformed URL",
 			next:    "https://api.appstoreconnect.apple.com/%zz",
-			wantErr: "testflight beta-details get: --next must be a valid URL:",
+			wantErr: "testflight review view: --next must be a valid URL:",
 		},
 	}
 
@@ -128,7 +128,7 @@ func TestTestFlightBetaDetailsGetRejectsInvalidNextURL(t *testing.T) {
 
 			var runErr error
 			stdout, stderr := captureOutput(t, func() {
-				if err := root.Parse([]string{"testflight", "beta-details", "get", "--next", test.next}); err != nil {
+				if err := root.Parse([]string{"testflight", "review", "view", "--next", test.next}); err != nil {
 					t.Fatalf("parse error: %v", err)
 				}
 				runErr = root.Run(context.Background())
@@ -150,7 +150,7 @@ func TestTestFlightBetaDetailsGetRejectsInvalidNextURL(t *testing.T) {
 	}
 }
 
-func TestTestFlightBetaDetailsGetFromNextWithoutBuild(t *testing.T) {
+func TestTestFlightReviewViewFromNextWithoutBuild(t *testing.T) {
 	setupAuth(t)
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 
@@ -180,7 +180,7 @@ func TestTestFlightBetaDetailsGetFromNextWithoutBuild(t *testing.T) {
 	root.FlagSet.SetOutput(io.Discard)
 
 	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"testflight", "beta-details", "get", "--next", nextURL}); err != nil {
+		if err := root.Parse([]string{"testflight", "review", "view", "--next", nextURL}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
 		if err := root.Run(context.Background()); err != nil {

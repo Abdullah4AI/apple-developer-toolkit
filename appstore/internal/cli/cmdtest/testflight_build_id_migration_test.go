@@ -41,11 +41,11 @@ func TestTestFlightBuildIDAliasConflictErrors(t *testing.T) {
 		},
 		{
 			name: "beta testers add-builds conflicting build values",
-			args: []string{"testflight", "beta-testers", "add-builds", "--id", "TESTER_ID", "--build-id", "BUILD_CANON", "--build", "BUILD_LEGACY"},
+			args: []string{"testflight", "testers", "add-builds", "--id", "TESTER_ID", "--build-id", "BUILD_CANON", "--build", "BUILD_LEGACY"},
 		},
 		{
-			name: "sync pull conflicting build values",
-			args: []string{"testflight", "sync", "pull", "--app", "APP_ID", "--output", "./testflight.yaml", "--include-builds", "--build-id", "BUILD_CANON", "--build", "BUILD_LEGACY"},
+			name: "config export conflicting build values",
+			args: []string{"testflight", "config", "export", "--app", "APP_ID", "--output", "./testflight.yaml", "--include-builds", "--build-id", "BUILD_CANON", "--build", "BUILD_LEGACY"},
 		},
 	}
 
@@ -160,7 +160,7 @@ func TestTestFlightBetaTestersAddBuildsAliasWarnsAndMatchesCanonical(t *testing.
 	})
 
 	canonicalStdout, canonicalStderr, canonicalErr := runTestFlightBuildIDCommand(t, []string{
-		"testflight", "beta-testers", "add-builds", "--id", "tester-1", "--build-id", "build-1,build-2", "--output", "json",
+		"testflight", "testers", "add-builds", "--id", "tester-1", "--build-id", "build-1,build-2", "--output", "json",
 	})
 	if canonicalErr != nil {
 		t.Fatalf("canonical run error: %v", canonicalErr)
@@ -170,7 +170,7 @@ func TestTestFlightBetaTestersAddBuildsAliasWarnsAndMatchesCanonical(t *testing.
 	}
 
 	aliasStdout, aliasStderr, aliasErr := runTestFlightBuildIDCommand(t, []string{
-		"testflight", "beta-testers", "add-builds", "--id", "tester-1", "--build", "build-1,build-2", "--output", "json",
+		"testflight", "testers", "add-builds", "--id", "tester-1", "--build", "build-1,build-2", "--output", "json",
 	})
 	if aliasErr != nil {
 		t.Fatalf("alias run error: %v", aliasErr)

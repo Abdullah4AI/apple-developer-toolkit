@@ -31,13 +31,6 @@ Examples:
 		Subcommands: []*ffcli.Command{
 			AppEventVideoClipsListCommand(),
 			AppEventVideoClipsRelationshipsCommand(),
-			shared.DeprecatedAliasLeafCommand(
-				AppEventVideoClipsRelationshipsCommand(),
-				"relationships",
-				"asc app-events video-clips links [flags]",
-				"asc app-events video-clips links",
-				"Warning: `asc app-events video-clips relationships` is deprecated. Use `asc app-events video-clips links`.",
-			),
 			AppEventVideoClipsGetCommand(),
 			AppEventVideoClipsCreateCommand(),
 			AppEventVideoClipsDeleteCommand(),

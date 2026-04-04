@@ -130,7 +130,7 @@ func TestLocalizationsMediaSetsValidationErrors(t *testing.T) {
 		},
 		{
 			name:    "preview sets get missing id",
-			args:    []string{"localizations", "preview-sets", "get"},
+			args:    []string{"localizations", "preview-sets", "view"},
 			wantErr: "--id is required",
 		},
 		{
@@ -145,7 +145,7 @@ func TestLocalizationsMediaSetsValidationErrors(t *testing.T) {
 		},
 		{
 			name:    "screenshot sets get missing id",
-			args:    []string{"localizations", "screenshot-sets", "get"},
+			args:    []string{"localizations", "screenshot-sets", "view"},
 			wantErr: "--id is required",
 		},
 	}
@@ -183,22 +183,22 @@ func TestLocalizationsMediaSetsOutputErrors(t *testing.T) {
 	}{
 		{
 			name:    "preview sets get unsupported output",
-			args:    []string{"localizations", "preview-sets", "get", "--id", "SET_ID", "--output", "yaml"},
+			args:    []string{"localizations", "preview-sets", "view", "--id", "SET_ID", "--output", "yaml"},
 			wantErr: "unsupported format: yaml",
 		},
 		{
 			name:    "preview sets get pretty with table",
-			args:    []string{"localizations", "preview-sets", "get", "--id", "SET_ID", "--output", "table", "--pretty"},
+			args:    []string{"localizations", "preview-sets", "view", "--id", "SET_ID", "--output", "table", "--pretty"},
 			wantErr: "--pretty is only valid with JSON output",
 		},
 		{
 			name:    "screenshot sets get unsupported output",
-			args:    []string{"localizations", "screenshot-sets", "get", "--id", "SET_ID", "--output", "yaml"},
+			args:    []string{"localizations", "screenshot-sets", "view", "--id", "SET_ID", "--output", "yaml"},
 			wantErr: "unsupported format: yaml",
 		},
 		{
 			name:    "screenshot sets get pretty with markdown",
-			args:    []string{"localizations", "screenshot-sets", "get", "--id", "SET_ID", "--output", "markdown", "--pretty"},
+			args:    []string{"localizations", "screenshot-sets", "view", "--id", "SET_ID", "--output", "markdown", "--pretty"},
 			wantErr: "--pretty is only valid with JSON output",
 		},
 	}
@@ -296,7 +296,7 @@ func TestVersionsRelatedCommandsValidationErrors(t *testing.T) {
 		},
 		{
 			name: "versions app clip default experience get missing version id",
-			args: []string{"versions", "app-clip-default-experience", "get"},
+			args: []string{"versions", "app-clip-default-experience", "view"},
 		},
 	}
 
@@ -333,7 +333,7 @@ func TestCategoriesValidationErrors(t *testing.T) {
 	}{
 		{
 			name:    "categories get missing id",
-			args:    []string{"categories", "get"},
+			args:    []string{"categories", "view"},
 			wantErr: "--category-id is required",
 		},
 		{

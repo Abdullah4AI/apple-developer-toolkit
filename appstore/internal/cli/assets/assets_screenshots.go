@@ -20,7 +20,66 @@ var focusedScreenshotDisplayTypes = []string{
 	"APP_IPAD_PRO_3GEN_129",
 }
 
+var focusedScreenshotDisplayTypesByPlatform = map[string][]string{
+	"IOS":       focusedScreenshotDisplayTypes,
+	"MAC_OS":    {"APP_DESKTOP"},
+	"TV_OS":     {"APP_APPLE_TV"},
+	"VISION_OS": {"APP_APPLE_VISION_PRO"},
+}
+
 var screenshotFileChecksumFunc = computeFileChecksum
+
+// ScreenshotSetListFunc fetches screenshot sets for a localization kind.
+type ScreenshotSetListFunc func(context.Context, *asc.Client, string) (*asc.AppScreenshotSetsResponse, error)
+
+// ScreenshotSetCreateFunc creates a screenshot set for a localization kind.
+type ScreenshotSetCreateFunc func(context.Context, *asc.Client, string, string) (*asc.AppScreenshotSetResponse, error)
+
+// ScreenshotSetAccess contains the list/create hooks for a screenshot-set owner.
+type ScreenshotSetAccess struct {
+	List   ScreenshotSetListFunc
+	Create ScreenshotSetCreateFunc
+}
+
+// ScreenshotSetUploadOptions configures the shared screenshot upload path for
+// custom product pages and PPO treatment localizations.
+type ScreenshotSetUploadOptions[T any] struct {
+	LocalizationID           string
+	Path                     string
+	DeviceType               string
+	Replace                  bool
+	InvalidDeviceTypeIsUsage bool
+
+	ClientFactory  func() (*asc.Client, error)
+	RequestContext func(context.Context) (context.Context, context.CancelFunc)
+	UploadContext  func(context.Context) (context.Context, context.CancelFunc)
+
+	Access      ScreenshotSetAccess
+	BuildResult func(string, asc.Resource[asc.AppScreenshotSetAttributes], []asc.AssetUploadResultItem) T
+}
+
+type screenshotUploadConfig[T any] struct {
+	Client         *asc.Client
+	LocalizationID string
+	DisplayType    string
+	Files          []string
+	SkipExisting   bool
+	Replace        bool
+	DryRun         bool
+	RequestContext func(context.Context) (context.Context, context.CancelFunc)
+	UploadContext  func(context.Context) (context.Context, context.CancelFunc)
+	Access         ScreenshotSetAccess
+	BuildResult    func(string, asc.Resource[asc.AppScreenshotSetAttributes], bool, []asc.AssetUploadResultItem) T
+}
+
+var appStoreVersionScreenshotSetAccess = ScreenshotSetAccess{
+	List: func(ctx context.Context, client *asc.Client, localizationID string) (*asc.AppScreenshotSetsResponse, error) {
+		return client.GetAppScreenshotSets(ctx, localizationID)
+	},
+	Create: func(ctx context.Context, client *asc.Client, localizationID, displayType string) (*asc.AppScreenshotSetResponse, error) {
+		return client.CreateAppScreenshotSet(ctx, localizationID, displayType)
+	},
+}
 
 func focusedScreenshotSizeCatalog() []asc.ScreenshotSizeEntry {
 	focused := make([]asc.ScreenshotSizeEntry, 0, len(focusedScreenshotDisplayTypes))
@@ -35,6 +94,77 @@ func focusedScreenshotSizeCatalog() []asc.ScreenshotSizeEntry {
 		return asc.ScreenshotSizeCatalog()
 	}
 	return focused
+}
+
+func focusedScreenshotDisplayTypesForPlatform(platform string) []string {
+	normalized := strings.ToUpper(strings.TrimSpace(platform))
+	if focused, ok := focusedScreenshotDisplayTypesByPlatform[normalized]; ok {
+		return append([]string(nil), focused...)
+	}
+	return nil
+}
+
+// ExecuteScreenshotSetUpload validates flags/files and runs the shared
+// screenshot upload/sync flow for a localization-backed screenshot set.
+func ExecuteScreenshotSetUpload[T any](ctx context.Context, opts ScreenshotSetUploadOptions[T]) (T, error) {
+	var zero T
+
+	trimmedLocalizationID := strings.TrimSpace(opts.LocalizationID)
+	if trimmedLocalizationID == "" {
+		fmt.Fprintln(os.Stderr, "Error: --localization-id is required")
+		return zero, flag.ErrHelp
+	}
+	trimmedPath := strings.TrimSpace(opts.Path)
+	if trimmedPath == "" {
+		fmt.Fprintln(os.Stderr, "Error: --path is required")
+		return zero, flag.ErrHelp
+	}
+	trimmedDeviceType := strings.TrimSpace(opts.DeviceType)
+	if trimmedDeviceType == "" {
+		fmt.Fprintln(os.Stderr, "Error: --device-type is required")
+		return zero, flag.ErrHelp
+	}
+	if opts.ClientFactory == nil {
+		return zero, fmt.Errorf("client factory is required")
+	}
+	if opts.BuildResult == nil {
+		return zero, fmt.Errorf("build result function is required")
+	}
+
+	displayType, err := normalizeScreenshotDisplayType(trimmedDeviceType)
+	if err != nil {
+		if opts.InvalidDeviceTypeIsUsage {
+			return zero, shared.UsageError(err.Error())
+		}
+		return zero, err
+	}
+	apiDisplayType := asc.CanonicalScreenshotDisplayTypeForAPI(displayType)
+	files, err := CollectAssetFiles(trimmedPath)
+	if err != nil {
+		return zero, err
+	}
+	if err := ValidateScreenshotDimensions(files, apiDisplayType); err != nil {
+		return zero, err
+	}
+
+	client, err := opts.ClientFactory()
+	if err != nil {
+		return zero, err
+	}
+
+	return uploadScreenshotsWithConfig(ctx, screenshotUploadConfig[T]{
+		Client:         client,
+		LocalizationID: trimmedLocalizationID,
+		DisplayType:    apiDisplayType,
+		Files:          files,
+		Replace:        opts.Replace,
+		RequestContext: opts.RequestContext,
+		UploadContext:  opts.UploadContext,
+		Access:         opts.Access,
+		BuildResult: func(localizationID string, set asc.Resource[asc.AppScreenshotSetAttributes], _ bool, results []asc.AssetUploadResultItem) T {
+			return opts.BuildResult(localizationID, set, results)
+		},
+	})
 }
 
 // AssetsScreenshotsListCommand returns the screenshots list subcommand.
@@ -648,8 +778,36 @@ func ValidateScreenshotDimensions(files []string, displayType string) error {
 	return validateScreenshotDimensions(files, displayType)
 }
 
-func findScreenshotSet(ctx context.Context, client *asc.Client, localizationID, displayType string) (asc.Resource[asc.AppScreenshotSetAttributes], error) {
-	resp, err := client.GetAppScreenshotSets(ctx, localizationID)
+func uploadScreenshots(ctx context.Context, client *asc.Client, localizationID, displayType string, files []string, skipExisting, replace, dryRun bool) (asc.AppScreenshotUploadResult, error) {
+	return uploadScreenshotsWithConfig(ctx, screenshotUploadConfig[asc.AppScreenshotUploadResult]{
+		Client:         client,
+		LocalizationID: localizationID,
+		DisplayType:    displayType,
+		Files:          files,
+		SkipExisting:   skipExisting,
+		Replace:        replace,
+		DryRun:         dryRun,
+		RequestContext: shared.ContextWithTimeout,
+		UploadContext:  contextWithAssetUploadTimeout,
+		Access:         appStoreVersionScreenshotSetAccess,
+		BuildResult: func(localizationID string, set asc.Resource[asc.AppScreenshotSetAttributes], dryRun bool, results []asc.AssetUploadResultItem) asc.AppScreenshotUploadResult {
+			return asc.AppScreenshotUploadResult{
+				VersionLocalizationID: localizationID,
+				SetID:                 set.ID,
+				DisplayType:           set.Attributes.ScreenshotDisplayType,
+				DryRun:                dryRun,
+				Results:               results,
+			}
+		},
+	})
+}
+
+func findScreenshotSetWithAccess(ctx context.Context, client *asc.Client, localizationID, displayType string, access ScreenshotSetAccess) (asc.Resource[asc.AppScreenshotSetAttributes], error) {
+	if access.List == nil {
+		return asc.Resource[asc.AppScreenshotSetAttributes]{}, fmt.Errorf("screenshot set list function is required")
+	}
+
+	resp, err := access.List(ctx, client, localizationID)
 	if err != nil {
 		return asc.Resource[asc.AppScreenshotSetAttributes]{}, err
 	}
@@ -663,67 +821,85 @@ func findScreenshotSet(ctx context.Context, client *asc.Client, localizationID, 
 	}, nil
 }
 
-func ensureScreenshotSet(ctx context.Context, client *asc.Client, localizationID, displayType string) (asc.Resource[asc.AppScreenshotSetAttributes], error) {
-	resp, err := client.GetAppScreenshotSets(ctx, localizationID)
+func ensureScreenshotSetWithAccess(ctx context.Context, client *asc.Client, localizationID, displayType string, access ScreenshotSetAccess) (asc.Resource[asc.AppScreenshotSetAttributes], error) {
+	if access.Create == nil {
+		return asc.Resource[asc.AppScreenshotSetAttributes]{}, fmt.Errorf("screenshot set create function is required")
+	}
+
+	set, err := findScreenshotSetWithAccess(ctx, client, localizationID, displayType, access)
 	if err != nil {
 		return asc.Resource[asc.AppScreenshotSetAttributes]{}, err
 	}
-	for _, set := range resp.Data {
-		if strings.EqualFold(set.Attributes.ScreenshotDisplayType, displayType) {
-			return set, nil
-		}
+	if set.ID != "" {
+		return set, nil
 	}
-	created, err := client.CreateAppScreenshotSet(ctx, localizationID, displayType)
+
+	created, err := access.Create(ctx, client, localizationID, displayType)
 	if err != nil {
 		return asc.Resource[asc.AppScreenshotSetAttributes]{}, err
 	}
 	return created.Data, nil
 }
 
-func uploadScreenshots(ctx context.Context, client *asc.Client, localizationID, displayType string, files []string, skipExisting, replace, dryRun bool) (asc.AppScreenshotUploadResult, error) {
-	if client == nil {
-		return asc.AppScreenshotUploadResult{}, fmt.Errorf("client is required")
+func uploadScreenshotsWithConfig[T any](ctx context.Context, cfg screenshotUploadConfig[T]) (T, error) {
+	var zero T
+
+	if cfg.Client == nil {
+		return zero, fmt.Errorf("client is required")
+	}
+	if cfg.BuildResult == nil {
+		return zero, fmt.Errorf("build result function is required")
+	}
+	if cfg.RequestContext == nil {
+		cfg.RequestContext = shared.ContextWithTimeout
+	}
+	if cfg.UploadContext == nil {
+		cfg.UploadContext = contextWithAssetUploadTimeout
 	}
 
-	requestCtx, reqCancel := shared.ContextWithTimeout(ctx)
-	var set asc.Resource[asc.AppScreenshotSetAttributes]
-	var err error
-	if dryRun {
-		set, err = findScreenshotSet(requestCtx, client, localizationID, displayType)
+	requestCtx, reqCancel := cfg.RequestContext(ctx)
+	var (
+		set asc.Resource[asc.AppScreenshotSetAttributes]
+		err error
+	)
+	if cfg.DryRun {
+		set, err = findScreenshotSetWithAccess(requestCtx, cfg.Client, cfg.LocalizationID, cfg.DisplayType, cfg.Access)
 	} else {
-		set, err = ensureScreenshotSet(requestCtx, client, localizationID, displayType)
+		set, err = ensureScreenshotSetWithAccess(requestCtx, cfg.Client, cfg.LocalizationID, cfg.DisplayType, cfg.Access)
 	}
 	reqCancel()
 	if err != nil {
-		return asc.AppScreenshotUploadResult{}, err
+		return zero, err
 	}
 
 	existingScreenshots := make([]asc.Resource[asc.AppScreenshotAttributes], 0)
-	if (skipExisting || replace) && set.ID != "" {
-		fetchCtx, fetchCancel := shared.ContextWithTimeout(ctx)
-		existingResp, err := client.GetAppScreenshots(fetchCtx, set.ID)
+	if (cfg.SkipExisting || cfg.Replace) && set.ID != "" {
+		fetchCtx, fetchCancel := cfg.RequestContext(ctx)
+		existingResp, err := cfg.Client.GetAppScreenshots(fetchCtx, set.ID)
 		fetchCancel()
 		if err != nil {
-			return asc.AppScreenshotUploadResult{}, err
+			return zero, err
 		}
 		existingScreenshots = existingResp.Data
 	}
 
 	skippedResults := make([]asc.AssetUploadResultItem, 0)
-	if skipExisting {
-		files, skippedResults, err = filterExistingScreenshotFiles(files, existingScreenshots)
-		if err != nil {
-			return asc.AppScreenshotUploadResult{}, err
+	files := cfg.Files
+	if cfg.SkipExisting {
+		var filterErr error
+		files, skippedResults, filterErr = filterExistingScreenshotFiles(cfg.Files, existingScreenshots)
+		if filterErr != nil {
+			return zero, filterErr
 		}
 	}
 
-	if dryRun {
+	if cfg.DryRun {
 		results := make([]asc.AssetUploadResultItem, 0, len(skippedResults)+len(files)+len(existingScreenshots))
-		if replace {
-			for _, s := range existingScreenshots {
+		if cfg.Replace {
+			for _, screenshot := range existingScreenshots {
 				results = append(results, asc.AssetUploadResultItem{
-					FileName: s.Attributes.FileName,
-					AssetID:  s.ID,
+					FileName: screenshot.Attributes.FileName,
+					AssetID:  screenshot.ID,
 					State:    "would-delete",
 				})
 			}
@@ -736,41 +912,29 @@ func uploadScreenshots(ctx context.Context, client *asc.Client, localizationID, 
 			})
 		}
 		results = append(results, skippedResults...)
-
-		return asc.AppScreenshotUploadResult{
-			VersionLocalizationID: localizationID,
-			SetID:                 set.ID,
-			DisplayType:           set.Attributes.ScreenshotDisplayType,
-			DryRun:                true,
-			Results:               results,
-		}, nil
+		return cfg.BuildResult(cfg.LocalizationID, set, true, results), nil
 	}
 
-	uploadCtx, cancel := contextWithAssetUploadTimeout(ctx)
+	uploadCtx, cancel := cfg.UploadContext(ctx)
 	defer cancel()
 
-	if replace {
-		if err := deleteExistingScreenshots(uploadCtx, client, existingScreenshots); err != nil {
-			return asc.AppScreenshotUploadResult{}, err
+	if cfg.Replace {
+		if err := deleteExistingScreenshots(uploadCtx, cfg.Client, existingScreenshots); err != nil {
+			return zero, err
 		}
 	}
 
 	results := make([]asc.AssetUploadResultItem, 0, len(skippedResults)+len(files))
 	if len(files) > 0 {
-		uploadedResults, err := UploadScreenshotsToSet(uploadCtx, client, set.ID, files, !replace)
+		uploadedResults, err := UploadScreenshotsToSet(uploadCtx, cfg.Client, set.ID, files, !cfg.Replace)
 		if err != nil {
-			return asc.AppScreenshotUploadResult{}, err
+			return zero, err
 		}
 		results = append(results, uploadedResults...)
 	}
 	results = append(skippedResults, results...)
 
-	return asc.AppScreenshotUploadResult{
-		VersionLocalizationID: localizationID,
-		SetID:                 set.ID,
-		DisplayType:           set.Attributes.ScreenshotDisplayType,
-		Results:               results,
-	}, nil
+	return cfg.BuildResult(cfg.LocalizationID, set, false, results), nil
 }
 
 func deleteExistingScreenshots(ctx context.Context, client *asc.Client, screenshots []asc.Resource[asc.AppScreenshotAttributes]) error {

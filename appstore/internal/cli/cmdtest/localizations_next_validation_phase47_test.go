@@ -154,8 +154,8 @@ func runLocalizationsPaginateFromNext(
 func TestBetaAppLocalizationsListRejectsInvalidNextURL(t *testing.T) {
 	runLocalizationsInvalidNextURLCases(
 		t,
-		[]string{"beta-app-localizations", "list"},
-		"beta-app-localizations list: --next",
+		[]string{"testflight", "app-localizations", "list"},
+		"testflight app-localizations list: --next",
 	)
 }
 
@@ -168,7 +168,7 @@ func TestBetaAppLocalizationsListPaginateFromNextWithoutApp(t *testing.T) {
 
 	runLocalizationsPaginateFromNext(
 		t,
-		[]string{"beta-app-localizations", "list"},
+		[]string{"testflight", "app-localizations", "list"},
 		firstURL,
 		secondURL,
 		firstBody,

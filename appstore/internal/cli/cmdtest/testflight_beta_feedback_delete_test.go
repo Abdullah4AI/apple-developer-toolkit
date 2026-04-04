@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-func TestTestFlightBetaFeedbackCrashSubmissionsDeleteOutput(t *testing.T) {
+func TestTestFlightCrashesDeleteOutput(t *testing.T) {
 	setupAuth(t)
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 
@@ -36,7 +36,7 @@ func TestTestFlightBetaFeedbackCrashSubmissionsDeleteOutput(t *testing.T) {
 	root.FlagSet.SetOutput(io.Discard)
 
 	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"testflight", "beta-feedback", "crash-submissions", "delete", "--id", "sub-1", "--confirm"}); err != nil {
+		if err := root.Parse([]string{"testflight", "crashes", "delete", "--submission-id", "sub-1", "--confirm"}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
 		if err := root.Run(context.Background()); err != nil {
@@ -48,52 +48,6 @@ func TestTestFlightBetaFeedbackCrashSubmissionsDeleteOutput(t *testing.T) {
 		t.Fatalf("expected empty stderr, got %q", stderr)
 	}
 	if !strings.Contains(stdout, `"id":"sub-1"`) {
-		t.Fatalf("expected submission id in output, got %q", stdout)
-	}
-	if !strings.Contains(stdout, `"deleted":true`) {
-		t.Fatalf("expected deleted true in output, got %q", stdout)
-	}
-}
-
-func TestTestFlightBetaFeedbackScreenshotSubmissionsDeleteOutput(t *testing.T) {
-	setupAuth(t)
-	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
-
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() {
-		http.DefaultTransport = originalTransport
-	})
-
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		if req.Method != http.MethodDelete {
-			t.Fatalf("expected DELETE, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/betaFeedbackScreenshotSubmissions/sub-2" {
-			t.Fatalf("expected path /v1/betaFeedbackScreenshotSubmissions/sub-2, got %s", req.URL.Path)
-		}
-		return &http.Response{
-			StatusCode: http.StatusNoContent,
-			Body:       io.NopCloser(strings.NewReader("")),
-			Header:     http.Header{"Content-Type": []string{"application/json"}},
-		}, nil
-	})
-
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"testflight", "beta-feedback", "screenshot-submissions", "delete", "--id", "sub-2", "--confirm"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatalf("run error: %v", err)
-		}
-	})
-
-	if stderr != "" {
-		t.Fatalf("expected empty stderr, got %q", stderr)
-	}
-	if !strings.Contains(stdout, `"id":"sub-2"`) {
 		t.Fatalf("expected submission id in output, got %q", stdout)
 	}
 	if !strings.Contains(stdout, `"deleted":true`) {

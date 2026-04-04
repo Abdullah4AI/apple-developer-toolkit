@@ -373,6 +373,9 @@ func TestDoctorMigrationHintsPrefillsVersionFromXcodeAndAppID(t *testing.T) {
 	if err := os.MkdirAll(fastlaneDir, 0o755); err != nil {
 		t.Fatalf("mkdir fastlane error: %v", err)
 	}
+	if err := os.WriteFile(filepath.Join(fastlaneDir, "Appfile"), []byte(`app_identifier "com.example.app"`), 0o644); err != nil {
+		t.Fatalf("write Appfile error: %v", err)
+	}
 	if err := os.WriteFile(filepath.Join(fastlaneDir, "Fastfile"), []byte("upload_to_app_store\napp_store_build_number\n"), 0o644); err != nil {
 		t.Fatalf("write Fastfile error: %v", err)
 	}
@@ -418,11 +421,38 @@ func TestDoctorMigrationHintsPrefillsVersionFromXcodeAndAppID(t *testing.T) {
 	if !sliceContains(report.Migration.SuggestedCommands, `asc builds info --app "123456789" --latest`) {
 		t.Fatalf("expected personalized app id in builds info latest suggestion, got %#v", report.Migration.SuggestedCommands)
 	}
-	if !sliceContains(report.Migration.SuggestedCommands, `asc publish appstore --app "123456789" --ipa app.ipa --version "2.3.4" --submit --confirm`) {
-		t.Fatalf("expected personalized publish command, got %#v", report.Migration.SuggestedCommands)
+	if sliceContains(report.Migration.SuggestedCommands, `asc release run --app "123456789" --version "2.3.4" --build "BUILD_ID" --metadata-dir "./metadata/version/2.3.4" --confirm`) {
+		t.Fatalf("expected upload-only migration hints to avoid non-actionable release run guidance, got %#v", report.Migration.SuggestedCommands)
 	}
-	if !sliceContains(report.Migration.SuggestedCommands, `asc submit create --app "123456789" --version "2.3.4" --build "BUILD_ID" --confirm`) {
-		t.Fatalf("expected personalized submit command, got %#v", report.Migration.SuggestedCommands)
+	if !sliceContains(report.Migration.SuggestedCommands, `asc validate --app "123456789" --version-id "VERSION_ID"`) {
+		t.Fatalf("expected personalized validate command, got %#v", report.Migration.SuggestedCommands)
+	}
+	if !sliceContains(report.Migration.SuggestedCommands, `asc builds upload --app "123456789" --ipa app.ipa --version "2.3.4" --build-number "BUILD_NUMBER" --wait`) {
+		t.Fatalf("expected upload step for upload-only migration hints, got %#v", report.Migration.SuggestedCommands)
+	}
+	if !sliceContains(report.Migration.SuggestedCommands, `asc builds info --app "123456789" --build-number "BUILD_NUMBER" --version "2.3.4"`) {
+		t.Fatalf("expected build lookup step for upload-only migration hints, got %#v", report.Migration.SuggestedCommands)
+	}
+	if !sliceContains(report.Migration.SuggestedCommands, `asc versions create --app "123456789" --version "2.3.4"`) {
+		t.Fatalf("expected personalized version create command, got %#v", report.Migration.SuggestedCommands)
+	}
+	if !sliceContains(report.Migration.SuggestedCommands, `asc versions attach-build --version-id "VERSION_ID" --build "UPLOADED_BUILD_ID"`) {
+		t.Fatalf("expected personalized attach-build command, got %#v", report.Migration.SuggestedCommands)
+	}
+	if !sliceContains(report.Migration.SuggestedCommands, `asc review submissions-create --app "123456789" --platform "PLATFORM"`) {
+		t.Fatalf("expected review submission create step for upload-only migration hints, got %#v", report.Migration.SuggestedCommands)
+	}
+	if !sliceContains(report.Migration.SuggestedCommands, `asc review items-add --submission "REVIEW_SUBMISSION_ID" --item-type appStoreVersions --item-id "VERSION_ID"`) {
+		t.Fatalf("expected review submission item step for upload-only migration hints, got %#v", report.Migration.SuggestedCommands)
+	}
+	if !sliceContains(report.Migration.SuggestedCommands, `asc review submissions-submit --id "REVIEW_SUBMISSION_ID" --confirm`) {
+		t.Fatalf("expected review submission submit step for upload-only migration hints, got %#v", report.Migration.SuggestedCommands)
+	}
+	if sliceContains(report.Migration.SuggestedCommands, `asc submit create --app "123456789" --version "2.3.4" --build "BUILD_ID" --confirm`) {
+		t.Fatalf("expected upload-only migration hints to avoid deprecated submit create guidance, got %#v", report.Migration.SuggestedCommands)
+	}
+	if sliceContains(report.Migration.SuggestedCommands, `asc submit preflight --app "123456789" --version "2.3.4"`) {
+		t.Fatalf("expected upload-only migration hints to avoid deprecated submit preflight guidance, got %#v", report.Migration.SuggestedCommands)
 	}
 }
 
@@ -490,8 +520,69 @@ func TestDoctorMigrationHintsUsesResolvedIDsWhenLookupSucceeds(t *testing.T) {
 	if !sliceContains(report.Migration.SuggestedCommands, `asc migrate import --app "987654321" --version-id "version-id-123" --fastlane-dir ./fastlane`) {
 		t.Fatalf("expected personalized migrate import command, got %#v", report.Migration.SuggestedCommands)
 	}
-	if !sliceContains(report.Migration.SuggestedCommands, `asc submit create --app "987654321" --version "4.5.6" --build "build-id-456" --confirm`) {
-		t.Fatalf("expected personalized submit command with resolved build ID, got %#v", report.Migration.SuggestedCommands)
+	if !sliceContains(report.Migration.SuggestedCommands, `asc publish appstore --app "987654321" --ipa app.ipa --version "4.5.6" --submit --confirm`) {
+		t.Fatalf("expected personalized canonical publish command, got %#v", report.Migration.SuggestedCommands)
+	}
+}
+
+func TestBuildSuggestedCommandsUploadOnlyUsesUploadedBuildPlaceholder(t *testing.T) {
+	t.Setenv("ASC_APP_ID", "")
+	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "config.json"))
+
+	commands := buildSuggestedCommands(migrationSignals{
+		detectedActions:  []string{"upload_to_app_store"},
+		marketingVersion: "1.2.3",
+	}, func(MigrationSuggestionResolverInput) MigrationSuggestionResolverOutput {
+		return MigrationSuggestionResolverOutput{
+			AppID:     "123456789",
+			VersionID: "version-id-123",
+			BuildID:   "build-id-456",
+		}
+	})
+
+	if !sliceContains(commands, `asc versions attach-build --version-id "VERSION_ID" --build "UPLOADED_BUILD_ID"`) {
+		t.Fatalf("expected attach-build guidance to use uploaded build placeholder, got %#v", commands)
+	}
+	if sliceContains(commands, `asc versions attach-build --version-id "version-id-123" --build "UPLOADED_BUILD_ID"`) {
+		t.Fatalf("expected upload-only guidance to avoid a platform-agnostic resolved version ID, got %#v", commands)
+	}
+	if !sliceContains(commands, `asc versions create --app "123456789" --version "1.2.3"`) {
+		t.Fatalf("expected upload-only guidance to keep version creation when no platform-aware version ID is available, got %#v", commands)
+	}
+}
+
+func TestBuildSuggestedCommandsUploadOnlyDoesNotRequestResolvedBuildID(t *testing.T) {
+	t.Setenv("ASC_APP_ID", "123456789")
+	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "config.json"))
+
+	var resolverInput MigrationSuggestionResolverInput
+	buildSuggestedCommands(migrationSignals{
+		detectedActions:  []string{"upload_to_app_store"},
+		marketingVersion: "1.2.3",
+	}, func(input MigrationSuggestionResolverInput) MigrationSuggestionResolverOutput {
+		resolverInput = input
+		return MigrationSuggestionResolverOutput{VersionID: "version-id-123"}
+	})
+
+	if resolverInput.NeedVersionID {
+		t.Fatalf("expected upload-only migration hints to avoid requesting a platform-agnostic version ID, got %+v", resolverInput)
+	}
+	if resolverInput.NeedBuildID {
+		t.Fatalf("expected upload-only migration hints to avoid requesting a resolved build ID, got %+v", resolverInput)
+	}
+}
+
+func TestBuildSuggestedCommandsQuotesDerivedPublishVersion(t *testing.T) {
+	t.Setenv("ASC_APP_ID", "")
+	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "config.json"))
+
+	commands := buildSuggestedCommands(migrationSignals{
+		detectedActions:  []string{"deliver", "upload_to_app_store"},
+		marketingVersion: `1.2.3 beta "1"`,
+	}, nil)
+
+	if !sliceContains(commands, `asc publish appstore --app "APP_ID" --ipa app.ipa --version "1.2.3 beta \"1\"" --submit --confirm`) {
+		t.Fatalf("expected quoted canonical publish command derived from version string, got %#v", commands)
 	}
 }
 

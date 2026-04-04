@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 
@@ -37,7 +38,7 @@ func (e *textRewrittenCommandError) Unwrap() error {
 
 // NormalizeViewEditCommandTree rewrites canonical leaf verbs so user-facing read
 // commands prefer `view` over `get`, and a small allowlist of update-only
-// commands prefer `edit` over `set`. Legacy verbs remain as deprecated aliases.
+// commands prefer `edit` over `set`.
 func NormalizeViewEditCommandTree(root *ffcli.Command, editPaths map[string]struct{}) *ffcli.Command {
 	if root == nil || isDeprecatedCompatibilityAliasCommand(root) {
 		return root
@@ -48,13 +49,8 @@ func NormalizeViewEditCommandTree(root *ffcli.Command, editPaths map[string]stru
 		return root
 	}
 
-	type pendingAlias struct {
-		parent *ffcli.Command
-		alias  *ffcli.Command
-	}
-
 	replacements := make([]commandTextReplacement, 0)
-	aliases := make([]pendingAlias, 0)
+	removedChildren := make(map[string]map[string]string)
 	changed := false
 
 	var walk func(parent, current *ffcli.Command, path string)
@@ -78,6 +74,16 @@ func NormalizeViewEditCommandTree(root *ffcli.Command, editPaths map[string]stru
 			return
 		}
 
+		if legacyName, ok := legacyVerbForCanonicalLeaf(path, current.Name, editPaths); ok && parent != nil {
+			parentPath := strings.TrimSpace(strings.TrimSuffix(path, " "+strings.TrimSpace(current.Name)))
+			if parentPath != "" && findSubcommandByName(parent, legacyName) == nil {
+				if removedChildren[parentPath] == nil {
+					removedChildren[parentPath] = make(map[string]string)
+				}
+				removedChildren[parentPath][legacyName] = path
+			}
+		}
+
 		newName := ""
 		switch strings.TrimSpace(current.Name) {
 		case "get":
@@ -91,52 +97,117 @@ func NormalizeViewEditCommandTree(root *ffcli.Command, editPaths map[string]stru
 			return
 		}
 
-		alias, pathReplacements := renameLeafVerb(current, path, newName)
-		if alias == nil {
+		oldName := strings.TrimSpace(current.Name)
+		pathReplacements := renameLeafVerb(current, path, newName)
+		if len(pathReplacements) == 0 {
 			return
+		}
+		parentPath := strings.TrimSpace(strings.TrimSuffix(path, " "+oldName))
+		if parentPath != "" {
+			if removedChildren[parentPath] == nil {
+				removedChildren[parentPath] = make(map[string]string)
+			}
+			removedChildren[parentPath][oldName] = replaceLastPathSegment(path, newName)
 		}
 
 		replacements = append(replacements, pathReplacements...)
-		aliases = append(aliases, pendingAlias{parent: parent, alias: alias})
 		changed = true
 	}
 
 	walk(nil, root, "asc "+rootName)
-	if !changed {
+	if !changed && len(removedChildren) == 0 {
 		return root
 	}
 
-	sortCommandTextReplacements(replacements)
-	rewriteCommandStrings(root, replacements)
-	rewriteCommandErrors(root, replacements)
-	rewriteDeprecatedAliasLeafWarnings(root, func(input string) string {
-		return applyCommandTextReplacements(input, replacements)
-	})
-
-	for _, pending := range aliases {
-		pending.parent.Subcommands = append(pending.parent.Subcommands, pending.alias)
+	if changed {
+		sortCommandTextReplacements(replacements)
+		rewriteCommandStrings(root, replacements)
+		rewriteCommandErrors(root, replacements)
 	}
-
+	wrapRemovedViewEditCommandExecs(root, "asc "+rootName, removedChildren)
 	wrapUsageFuncsToHideDeprecatedAliases(root)
 	return root
 }
 
-func renameLeafVerb(cmd *ffcli.Command, oldPath, newName string) (*ffcli.Command, []commandTextReplacement) {
+func wrapRemovedViewEditCommandExecs(cmd *ffcli.Command, path string, removedChildren map[string]map[string]string) {
 	if cmd == nil {
-		return nil, nil
+		return
+	}
+
+	if replacements := removedChildren[path]; len(replacements) > 0 {
+		originalExec := cmd.Exec
+		if originalExec == nil {
+			originalExec = func(ctx context.Context, args []string) error {
+				return flag.ErrHelp
+			}
+		}
+
+		cmd.Exec = func(ctx context.Context, args []string) error {
+			if len(args) > 0 {
+				if replacement, ok := replacements[strings.TrimSpace(args[0])]; ok {
+					fmt.Fprintf(os.Stderr, "Error: `%s %s` was removed. Use `%s` instead.\n", path, strings.TrimSpace(args[0]), replacement)
+					return flag.ErrHelp
+				}
+			}
+			return originalExec(ctx, args)
+		}
+	}
+
+	for _, sub := range cmd.Subcommands {
+		if sub == nil || isDeprecatedCompatibilityAliasCommand(sub) {
+			continue
+		}
+		childName := strings.TrimSpace(sub.Name)
+		if childName == "" {
+			continue
+		}
+		wrapRemovedViewEditCommandExecs(sub, strings.TrimSpace(path+" "+childName), removedChildren)
+	}
+}
+
+func legacyVerbForCanonicalLeaf(path, currentName string, editPaths map[string]struct{}) (string, bool) {
+	switch strings.TrimSpace(currentName) {
+	case "view":
+		return "get", true
+	case "edit":
+		if _, ok := editPaths[replaceLastPathSegment(path, "set")]; ok {
+			return "set", true
+		}
+	}
+
+	return "", false
+}
+
+func findSubcommandByName(cmd *ffcli.Command, name string) *ffcli.Command {
+	if cmd == nil {
+		return nil
+	}
+
+	trimmed := strings.TrimSpace(name)
+	for _, sub := range cmd.Subcommands {
+		if sub != nil && strings.TrimSpace(sub.Name) == trimmed {
+			return sub
+		}
+	}
+
+	return nil
+}
+
+func renameLeafVerb(cmd *ffcli.Command, oldPath, newName string) []commandTextReplacement {
+	if cmd == nil {
+		return nil
 	}
 
 	oldName := strings.TrimSpace(cmd.Name)
 	if oldName == "" || oldName == newName {
-		return nil, nil
+		return nil
 	}
 
 	newPath := replaceLastPathSegment(oldPath, newName)
 	if newPath == oldPath {
-		return nil, nil
+		return nil
 	}
 
-	oldShortUsage := strings.TrimSpace(cmd.ShortUsage)
 	oldCommandPath := strings.TrimSpace(strings.TrimPrefix(oldPath, "asc "))
 	newCommandPath := strings.TrimSpace(strings.TrimPrefix(newPath, "asc "))
 
@@ -144,20 +215,7 @@ func renameLeafVerb(cmd *ffcli.Command, oldPath, newName string) (*ffcli.Command
 	renameFlagSetLastToken(cmd.FlagSet, oldName, newName)
 	rewriteLeadingVerbDescriptions(cmd, oldName, newName)
 
-	shortUsage := oldShortUsage
-	if shortUsage == "" {
-		shortUsage = oldPath
-	}
-
-	alias := DeprecatedAliasLeafCommand(
-		cmd,
-		oldName,
-		shortUsage,
-		newPath,
-		fmt.Sprintf("Warning: `%s` is deprecated. Use `%s`.", oldPath, newPath),
-	)
-
-	return alias, []commandTextReplacement{
+	return []commandTextReplacement{
 		{old: oldPath, new: newPath},
 		{old: oldCommandPath, new: newCommandPath},
 	}

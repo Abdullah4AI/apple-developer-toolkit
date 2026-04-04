@@ -60,7 +60,7 @@ func TestCrashesResolvesAppByBundleID(t *testing.T) {
 	root.FlagSet.SetOutput(io.Discard)
 
 	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"crashes", "--app", "com.example.crashes"}); err != nil {
+		if err := root.Parse([]string{"testflight", "crashes", "list", "--app", "com.example.crashes"}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
 		if err := root.Run(context.Background()); err != nil {
@@ -68,7 +68,9 @@ func TestCrashesResolvesAppByBundleID(t *testing.T) {
 		}
 	})
 
-	requireStderrContainsWarning(t, stderr, crashesRootDeprecationWarning)
+	if stderr != "" {
+		t.Fatalf("expected empty stderr, got %q", stderr)
+	}
 	if !strings.Contains(stdout, `"id":"crash-1"`) {
 		t.Fatalf("expected crash output, got %q", stdout)
 	}
@@ -111,7 +113,7 @@ func TestCrashesNextURLSkipsAppLookupForNonNumericApp(t *testing.T) {
 
 	stdout, stderr := captureOutput(t, func() {
 		if err := root.Parse([]string{
-			"crashes",
+			"testflight", "crashes", "list",
 			"--next", nextURL,
 			"--app", "com.example.crashes",
 			"--sort", "-createdDate",
@@ -124,7 +126,9 @@ func TestCrashesNextURLSkipsAppLookupForNonNumericApp(t *testing.T) {
 		}
 	})
 
-	requireStderrContainsWarning(t, stderr, crashesRootDeprecationWarning)
+	if stderr != "" {
+		t.Fatalf("expected empty stderr, got %q", stderr)
+	}
 	if !strings.Contains(stdout, `"id":"crash-next"`) {
 		t.Fatalf("expected next-page crash output, got %q", stdout)
 	}

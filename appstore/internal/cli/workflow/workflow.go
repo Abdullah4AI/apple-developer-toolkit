@@ -81,7 +81,7 @@ Example workflow file (.asc/workflow.json):
       ]
     },
     "release": {
-      "description": "Run the full App Store release pipeline (validate, attach, submit)",
+      "description": "Run the canonical App Store publish flow",
       "steps": [
         {
           "workflow": "preflight",
@@ -90,8 +90,8 @@ Example workflow file (.asc/workflow.json):
           }
         },
         {
-          "name": "release",
-          "run": "asc release run --app $APP_ID --version $VERSION --build $BUILD_ID --metadata-dir ./metadata/version/$VERSION --confirm"
+          "name": "publish",
+          "run": "asc publish appstore --app $APP_ID --ipa ./build/MyApp.ipa --version $VERSION --submit --confirm"
         }
       ]
     },

@@ -130,7 +130,7 @@ func TestBetaGroupsAddTestersRejectsNoTesterOrEmail(t *testing.T) {
 	var runErr error
 	_, stderr := captureOutput(t, func() {
 		if err := root.Parse([]string{
-			"testflight", "beta-groups", "add-testers",
+			"testflight", "groups", "add-testers",
 			"--group", "group-1",
 		}); err != nil {
 			t.Fatalf("parse error: %v", err)

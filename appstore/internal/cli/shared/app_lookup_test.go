@@ -57,6 +57,27 @@ func TestResolveAppIDWithLookup_NumericPassthrough(t *testing.T) {
 	}
 }
 
+func TestResolveAppIDWithLookup_NumericPassthroughSkipsClientLookup(t *testing.T) {
+	t.Setenv("ASC_APP_ID", "")
+
+	stub := &sequenceAppLookupStub{
+		responses: []*asc.AppsResponse{
+			appsResponseFromApps([]appFixture{{id: "unexpected", name: "Unexpected"}}),
+		},
+	}
+
+	got, err := ResolveAppIDWithLookup(context.Background(), stub, "123456789")
+	if err != nil {
+		t.Fatalf("ResolveAppIDWithLookup() error: %v", err)
+	}
+	if got != "123456789" {
+		t.Fatalf("expected numeric app id passthrough, got %q", got)
+	}
+	if stub.calls != 0 {
+		t.Fatalf("expected numeric app id passthrough to skip client lookup, got %d calls", stub.calls)
+	}
+}
+
 func TestResolveAppIDWithLookup_DoesNotReResolveFromEnv(t *testing.T) {
 	t.Setenv("ASC_APP_ID", "999888777")
 	got, err := ResolveAppIDWithLookup(context.Background(), nil, "")

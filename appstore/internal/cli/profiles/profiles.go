@@ -41,7 +41,6 @@ Examples:
 			ProfilesListCommand(),
 			ProfilesGetCommand(),
 			ProfilesRelationshipsCommand(),
-			DeprecatedProfilesRelationshipsAliasCommand(),
 			ProfilesCreateCommand(),
 			ProfilesDeleteCommand(),
 			ProfilesDownloadCommand(),

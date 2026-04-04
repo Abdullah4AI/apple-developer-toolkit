@@ -130,7 +130,7 @@ func TestIAPPriceSchedulesGetUsesCanonicalErrorPrefix(t *testing.T) {
 
 	if err := root.Parse([]string{
 		"iap", "pricing", "schedules", "view",
-		"--iap-id", "iap-1",
+		"--iap-id", "9000000001",
 	}); err != nil {
 		t.Fatalf("parse error: %v", err)
 	}

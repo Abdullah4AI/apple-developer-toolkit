@@ -72,8 +72,8 @@ func TestSubscriptionsOfferCodesCreateNormalizesValuesAndBuildsPayload(t *testin
 		}
 
 		subscriptionRelationship := data["relationships"].(map[string]any)["subscription"].(map[string]any)["data"].(map[string]any)
-		if subscriptionRelationship["id"] != "sub-1" {
-			t.Fatalf("expected subscription id sub-1, got %#v", subscriptionRelationship["id"])
+		if subscriptionRelationship["id"] != "8000000001" {
+			t.Fatalf("expected subscription id 8000000001, got %#v", subscriptionRelationship["id"])
 		}
 
 		included := payload["included"].([]any)
@@ -99,7 +99,7 @@ func TestSubscriptionsOfferCodesCreateNormalizesValuesAndBuildsPayload(t *testin
 	stdout, stderr := captureOutput(t, func() {
 		if err := root.Parse([]string{
 			"subscriptions", "offers", "offer-codes", "create",
-			"--subscription-id", "sub-1",
+			"--subscription-id", "8000000001",
 			"--name", "Spring Promo",
 			"--offer-eligibility", "replace_intro_offers",
 			"--customer-eligibilities", "new,existing",
@@ -164,7 +164,7 @@ func TestSubscriptionsOfferCodesCreateReturnsCreateFailure(t *testing.T) {
 	stdout, _ := captureOutput(t, func() {
 		if err := root.Parse([]string{
 			"subscriptions", "offers", "offer-codes", "create",
-			"--subscription-id", "sub-1",
+			"--subscription-id", "8000000001",
 			"--name", "Spring Promo",
 			"--offer-eligibility", "replace_intro_offers",
 			"--customer-eligibilities", "new",
@@ -193,7 +193,7 @@ func TestSubscriptionsOfferCodesListPaginateReturnsSecondPageFailure(t *testing.
 	setupAuth(t)
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 
-	const nextURL = "https://api.appstoreconnect.apple.com/v1/subscriptions/sub-1/offerCodes?cursor=AQ&limit=200"
+	const nextURL = "https://api.appstoreconnect.apple.com/v1/subscriptions/8000000001/offerCodes?cursor=AQ&limit=200"
 
 	originalTransport := http.DefaultTransport
 	t.Cleanup(func() {
@@ -205,7 +205,7 @@ func TestSubscriptionsOfferCodesListPaginateReturnsSecondPageFailure(t *testing.
 		requestCount++
 		switch requestCount {
 		case 1:
-			if req.Method != http.MethodGet || req.URL.Path != "/v1/subscriptions/sub-1/offerCodes" {
+			if req.Method != http.MethodGet || req.URL.Path != "/v1/subscriptions/8000000001/offerCodes" {
 				t.Fatalf("unexpected first request: %s %s", req.Method, req.URL.String())
 			}
 			if req.URL.Query().Get("limit") != "200" {
@@ -243,7 +243,7 @@ func TestSubscriptionsOfferCodesListPaginateReturnsSecondPageFailure(t *testing.
 	stdout, _ := captureOutput(t, func() {
 		if err := root.Parse([]string{
 			"subscriptions", "offers", "offer-codes", "list",
-			"--subscription-id", "sub-1",
+			"--subscription-id", "8000000001",
 			"--paginate",
 		}); err != nil {
 			t.Fatalf("parse error: %v", err)
@@ -270,7 +270,7 @@ func TestSubscriptionsOfferCodesListRejectsInvalidNextURL(t *testing.T) {
 	}{
 		{
 			name:    "invalid host",
-			next:    "https://example.com/v1/subscriptions/sub-1/offerCodes?cursor=AQ",
+			next:    "https://example.com/v1/subscriptions/8000000001/offerCodes?cursor=AQ",
 			wantErr: "subscriptions offers offer-codes list: --next must be an App Store Connect URL",
 		},
 		{
@@ -325,8 +325,8 @@ func TestSubscriptionsOfferCodesListOutputErrors(t *testing.T) {
 		if req.Method != http.MethodGet {
 			t.Fatalf("expected GET, got %s", req.Method)
 		}
-		if req.URL.Path != "/v1/subscriptions/sub-1/offerCodes" {
-			t.Fatalf("expected path /v1/subscriptions/sub-1/offerCodes, got %s", req.URL.Path)
+		if req.URL.Path != "/v1/subscriptions/8000000001/offerCodes" {
+			t.Fatalf("expected path /v1/subscriptions/8000000001/offerCodes, got %s", req.URL.Path)
 		}
 		body := `{"data":[{"type":"subscriptionOfferCodes","id":"code-1"}],"links":{"next":""}}`
 		return &http.Response{
@@ -343,12 +343,12 @@ func TestSubscriptionsOfferCodesListOutputErrors(t *testing.T) {
 	}{
 		{
 			name:    "unsupported output",
-			args:    []string{"subscriptions", "offers", "offer-codes", "list", "--subscription-id", "sub-1", "--output", "yaml"},
+			args:    []string{"subscriptions", "offers", "offer-codes", "list", "--subscription-id", "8000000001", "--output", "yaml"},
 			wantErr: "unsupported format: yaml",
 		},
 		{
 			name:    "pretty with markdown",
-			args:    []string{"subscriptions", "offers", "offer-codes", "list", "--subscription-id", "sub-1", "--output", "markdown", "--pretty"},
+			args:    []string{"subscriptions", "offers", "offer-codes", "list", "--subscription-id", "8000000001", "--output", "markdown", "--pretty"},
 			wantErr: "--pretty is only valid with JSON output",
 		},
 	}
@@ -383,8 +383,8 @@ func TestSubscriptionsOfferCodesListPaginateFromNextWithoutSubscription(t *testi
 	setupAuth(t)
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 
-	const firstURL = "https://api.appstoreconnect.apple.com/v1/subscriptions/sub-1/offerCodes?cursor=AQ&limit=200"
-	const secondURL = "https://api.appstoreconnect.apple.com/v1/subscriptions/sub-1/offerCodes?cursor=BQ&limit=200"
+	const firstURL = "https://api.appstoreconnect.apple.com/v1/subscriptions/8000000001/offerCodes?cursor=AQ&limit=200"
+	const secondURL = "https://api.appstoreconnect.apple.com/v1/subscriptions/8000000001/offerCodes?cursor=BQ&limit=200"
 
 	originalTransport := http.DefaultTransport
 	t.Cleanup(func() {
@@ -460,8 +460,8 @@ func TestSubscriptionsOfferCodesListMarkdownOutput(t *testing.T) {
 		if req.Method != http.MethodGet {
 			t.Fatalf("expected GET, got %s", req.Method)
 		}
-		if req.URL.Path != "/v1/subscriptions/sub-1/offerCodes" {
-			t.Fatalf("expected path /v1/subscriptions/sub-1/offerCodes, got %s", req.URL.Path)
+		if req.URL.Path != "/v1/subscriptions/8000000001/offerCodes" {
+			t.Fatalf("expected path /v1/subscriptions/8000000001/offerCodes, got %s", req.URL.Path)
 		}
 		body := `{
 			"data":[{"type":"subscriptionOfferCodes","id":"sub-code-md-1","attributes":{"name":"Spring","active":true}}],
@@ -480,7 +480,7 @@ func TestSubscriptionsOfferCodesListMarkdownOutput(t *testing.T) {
 	stdout, stderr := captureOutput(t, func() {
 		if err := root.Parse([]string{
 			"subscriptions", "offers", "offer-codes", "list",
-			"--subscription-id", "sub-1",
+			"--subscription-id", "8000000001",
 			"--output", "markdown",
 		}); err != nil {
 			t.Fatalf("parse error: %v", err)

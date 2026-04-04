@@ -10,7 +10,7 @@ import (
 	"testing"
 )
 
-func TestTestFlightSyncPullResolvesAppByBundleID(t *testing.T) {
+func TestTestFlightConfigExportResolvesAppByBundleID(t *testing.T) {
 	setupAuth(t)
 	t.Setenv("ASC_APP_ID", "")
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
@@ -85,7 +85,7 @@ func TestTestFlightSyncPullResolvesAppByBundleID(t *testing.T) {
 	root.FlagSet.SetOutput(io.Discard)
 
 	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"testflight", "sync", "pull", "--app", "com.example.sync", "--output", outputPath}); err != nil {
+		if err := root.Parse([]string{"testflight", "config", "export", "--app", "com.example.sync", "--output", outputPath}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
 		if err := root.Run(context.Background()); err != nil {
@@ -108,7 +108,7 @@ func TestTestFlightSyncPullResolvesAppByBundleID(t *testing.T) {
 	}
 }
 
-func TestTestFlightSyncPullLookupNotFoundByName(t *testing.T) {
+func TestTestFlightConfigExportLookupNotFoundByName(t *testing.T) {
 	setupAuth(t)
 	t.Setenv("ASC_APP_ID", "")
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
@@ -167,7 +167,7 @@ func TestTestFlightSyncPullLookupNotFoundByName(t *testing.T) {
 
 	var runErr error
 	stdout, _ := captureOutput(t, func() {
-		if err := root.Parse([]string{"testflight", "sync", "pull", "--app", "Missing App", "--output", outputPath}); err != nil {
+		if err := root.Parse([]string{"testflight", "config", "export", "--app", "Missing App", "--output", outputPath}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
 		runErr = root.Run(context.Background())
@@ -187,7 +187,7 @@ func TestTestFlightSyncPullLookupNotFoundByName(t *testing.T) {
 	}
 }
 
-func TestTestFlightSyncPullLookupAmbiguousName(t *testing.T) {
+func TestTestFlightConfigExportLookupAmbiguousName(t *testing.T) {
 	setupAuth(t)
 	t.Setenv("ASC_APP_ID", "")
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
@@ -235,7 +235,7 @@ func TestTestFlightSyncPullLookupAmbiguousName(t *testing.T) {
 
 	var runErr error
 	stdout, _ := captureOutput(t, func() {
-		if err := root.Parse([]string{"testflight", "sync", "pull", "--app", "Ambiguous App", "--output", outputPath}); err != nil {
+		if err := root.Parse([]string{"testflight", "config", "export", "--app", "Ambiguous App", "--output", outputPath}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
 		runErr = root.Run(context.Background())

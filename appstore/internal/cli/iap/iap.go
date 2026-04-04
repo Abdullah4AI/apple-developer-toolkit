@@ -54,11 +54,6 @@ Examples:
 			IAPContentCommand(),
 			IAPOfferCodesCommand(),
 			IAPSubmitCommand(),
-			DeprecatedIAPPricesAliasCommand(),
-			DeprecatedIAPPricePointsAliasCommand(),
-			DeprecatedIAPPriceSchedulesAliasCommand(),
-			DeprecatedIAPAvailabilityAliasCommand(),
-			DeprecatedIAPAvailabilitiesAliasCommand(),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp
@@ -437,8 +432,9 @@ Examples:
 func IAPLocalizationsListCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("localizations list", flag.ExitOnError)
 
-	iapID := fs.String("iap-id", "", "In-app purchase ID")
-	legacyID := fs.String("id", "", "In-app purchase ID (deprecated)")
+	iapID := fs.String("iap-id", "", "In-app purchase ID, product ID, or exact current name")
+	legacyID := fs.String("id", "", "In-app purchase ID, product ID, or exact current name (deprecated)")
+	appID := addIAPLookupAppFlag(fs)
 	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
 	next := fs.String("next", "", "Fetch next page using a links.next URL")
 	paginate := fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")
@@ -474,6 +470,13 @@ Examples:
 			client, err := shared.GetASCClient()
 			if err != nil {
 				return fmt.Errorf("iap localizations list: %w", err)
+			}
+
+			if strings.TrimSpace(*next) == "" {
+				resolvedID, err = resolveIAPLookupIDWithTimeout(ctx, client, *appID, resolvedID)
+				if err != nil {
+					return err
+				}
 			}
 
 			requestCtx, cancel := shared.ContextWithTimeout(ctx)

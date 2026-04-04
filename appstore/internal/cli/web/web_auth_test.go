@@ -234,6 +234,69 @@ func TestReadPasswordFromTerminalPropagatesCtrlCAsInterrupt(t *testing.T) {
 	}
 }
 
+func TestReadPasswordFromTerminalReturnsPromptInterruptAfterContextCancel(t *testing.T) {
+	ptmx, tty, err := pty.Open()
+	if err != nil {
+		t.Fatalf("pty.Open() error: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = ptmx.Close()
+		_ = tty.Close()
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	promptSeen := make(chan struct{})
+	readPromptDone := make(chan error, 1)
+	go func() {
+		buf := make([]byte, 128)
+		for {
+			n, err := ptmx.Read(buf)
+			if n > 0 && strings.Contains(string(buf[:n]), "Apple Account password:") {
+				close(promptSeen)
+				readPromptDone <- nil
+				return
+			}
+			if err != nil {
+				readPromptDone <- err
+				return
+			}
+		}
+	}()
+
+	errCh := make(chan error, 1)
+	go func() {
+		_, err := readPasswordFromTerminal(ctx, tty, tty, false)
+		errCh <- err
+	}()
+
+	select {
+	case <-promptSeen:
+	case err := <-readPromptDone:
+		t.Fatalf("failed waiting for password prompt: %v", err)
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for password prompt")
+	}
+
+	time.Sleep(50 * time.Millisecond)
+
+	cancel()
+
+	select {
+	case err := <-errCh:
+		if err == nil {
+			t.Fatal("expected cancellation error")
+		}
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("expected context cancellation, got %v", err)
+		}
+		if !strings.Contains(err.Error(), "password prompt interrupted") {
+			t.Fatalf("expected interrupt-specific error, got %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for password prompt to return after context cancellation")
+	}
+}
+
 func TestReadTwoFactorCodeFrom(t *testing.T) {
 	t.Run("trims input", func(t *testing.T) {
 		input := strings.NewReader(" 123456 \n")

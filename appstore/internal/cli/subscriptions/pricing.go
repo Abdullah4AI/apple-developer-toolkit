@@ -74,8 +74,8 @@ func buildSubscriptionsPricingSummaryCommand(
 ) *ffcli.Command {
 	fs := flag.NewFlagSet(name, flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
-	subscriptionID := fs.String("subscription-id", "", "Subscription ID")
+	appID := fs.String("app", "", subscriptionLookupAppUsage)
+	subscriptionID := fs.String("subscription-id", "", "Subscription ID, product ID, or exact current name")
 	territory := fs.String("territory", "USA", "Territory for pricing (e.g., USA)")
 	output := shared.BindOutputFlags(fs)
 
@@ -89,12 +89,9 @@ func buildSubscriptionsPricingSummaryCommand(
 		Exec: func(ctx context.Context, args []string) error {
 			requestedSubID := strings.TrimSpace(*subscriptionID)
 			requestedAppID := strings.TrimSpace(*appID)
-			if requestedSubID == "" && shared.ResolveAppID(requestedAppID) == "" {
+			resolvedAppID := shared.ResolveAppID(requestedAppID)
+			if requestedSubID == "" && resolvedAppID == "" {
 				fmt.Fprintln(os.Stderr, "Error: --app or --subscription-id is required")
-				return flag.ErrHelp
-			}
-			if requestedSubID != "" && requestedAppID != "" {
-				fmt.Fprintln(os.Stderr, "Error: --app and --subscription-id are mutually exclusive")
 				return flag.ErrHelp
 			}
 
@@ -111,6 +108,13 @@ func buildSubscriptionsPricingSummaryCommand(
 			var subs []subWithGroup
 
 			if requestedSubID != "" {
+				resolveCtx, resolveCancel := shared.ContextWithTimeout(ctx)
+				requestedSubID, err = resolveSubscriptionLookupID(resolveCtx, client, requestedAppID, requestedSubID)
+				resolveCancel()
+				if err != nil {
+					return err
+				}
+
 				subCtx, subCancel := shared.ContextWithTimeout(ctx)
 				resp, err := client.GetSubscription(subCtx, requestedSubID)
 				subCancel()
@@ -119,8 +123,6 @@ func buildSubscriptionsPricingSummaryCommand(
 				}
 				subs = []subWithGroup{{Sub: resp.Data, GroupName: ""}}
 			} else {
-				resolvedAppID := shared.ResolveAppID(requestedAppID)
-
 				groupsCtx, groupsCancel := shared.ContextWithTimeout(ctx)
 				groupsResp, err := client.GetSubscriptionGroups(groupsCtx, resolvedAppID, asc.WithSubscriptionGroupsLimit(200))
 				groupsCancel()

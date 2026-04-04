@@ -21,14 +21,25 @@ func AppTagsCommand() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "app-tags",
 		ShortUsage: "asc app-tags <subcommand> [flags]",
-		ShortHelp:  "Manage app tags for App Store visibility.",
-		LongHelp: `Manage app tags for App Store visibility.
+		ShortHelp:  "Inspect Apple-generated App Store discoverability tags.",
+		LongHelp: `Inspect Apple-generated App Store discoverability tags linked to an app.
+
+Each app tag resource currently exposes:
+  - name
+  - visibleInAppStore
+  - territory relationships
+
+Apple uses app tags as glanceable discoverability labels that can appear in
+search results and on an app's product page. Use these commands to audit which
+tags are attached to an app, inspect one tag, toggle whether it is visible in
+the App Store, and inspect territory coverage.
 
 Examples:
   asc app-tags list --app "APP_ID"
-  asc app-tags get --app "APP_ID" --id "TAG_ID"
+  asc app-tags view --app "APP_ID" --id "TAG_ID"
   asc app-tags update --id "TAG_ID" --visible-in-app-store=false --confirm
   asc app-tags territories --id "TAG_ID"
+  asc app-tags territories-links --id "TAG_ID"
   asc app-tags links --app "APP_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.VisibleUsageFunc,
@@ -38,9 +49,7 @@ Examples:
 			AppTagsUpdateCommand(),
 			AppTagsTerritoriesCommand(),
 			AppTagsTerritoriesRelationshipsCommand(),
-			DeprecatedAppTagsTerritoriesRelationshipsAliasCommand(),
 			AppTagsRelationshipsCommand(),
-			DeprecatedAppTagsRelationshipsAliasCommand(),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp
@@ -199,13 +208,13 @@ func AppTagsGetCommand() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "get",
 		ShortUsage: "asc app-tags get [flags]",
-		ShortHelp:  "Get an app tag by ID.",
-		LongHelp: `Get an app tag by ID.
+		ShortHelp:  "View an app tag by ID.",
+		LongHelp: `View an app tag by ID.
 
 This command searches the app's tags for the specified ID.
 
 Examples:
-  asc app-tags get --app "APP_ID" --id "TAG_ID"`,
+  asc app-tags view --app "APP_ID" --id "TAG_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -542,6 +551,9 @@ func AppTagsRelationshipsCommand() *ffcli.Command {
 		ShortUsage: "asc app-tags links --app APP_ID [flags]",
 		ShortHelp:  "List app tag relationships for an app.",
 		LongHelp: `List app tag relationships for an app.
+
+This returns relationship IDs only. Use ` + "`asc app-tags list`" + ` or ` + "`asc app-tags view`" + `
+when you need full tag attributes such as name or visibleInAppStore.
 
 Examples:
   asc app-tags links --app "APP_ID"

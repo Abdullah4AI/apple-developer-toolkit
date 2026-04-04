@@ -657,77 +657,29 @@ func TestBuildsInfoByLatestVersionAndPlatformPaginatesPastNearMatches(t *testing
 	}
 }
 
-func TestBuildsFindAliasWarnsAndMatchesCanonicalInfoOutput(t *testing.T) {
-	setupAuth(t)
-	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
-	t.Setenv("ASC_APP_ID", "")
+func TestBuildsFindAliasIsRemoved(t *testing.T) {
+	root := RootCommand("1.2.3")
+	root.FlagSet.SetOutput(io.Discard)
 
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() {
-		http.DefaultTransport = originalTransport
-	})
-
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		switch req.URL.Path {
-		case "/v1/builds":
-			query := req.URL.Query()
-			if query.Get("filter[app]") != "123456789" {
-				t.Fatalf("expected filter[app]=123456789, got %q", query.Get("filter[app]"))
-			}
-			if query.Get("filter[version]") != "42" {
-				t.Fatalf("expected filter[version]=42, got %q", query.Get("filter[version]"))
-			}
-			if query.Get("filter[preReleaseVersion.platform]") != "IOS" {
-				t.Fatalf("expected implicit IOS platform filter, got %q", query.Get("filter[preReleaseVersion.platform]"))
-			}
-			if query.Get("limit") != "200" {
-				t.Fatalf("expected limit=200, got %q", query.Get("limit"))
-			}
-			body := `{"data":[{"type":"builds","id":"build-42","attributes":{"version":"42","processingState":"VALID"}}]}`
-			return &http.Response{
-				StatusCode: http.StatusOK,
-				Body:       io.NopCloser(strings.NewReader(body)),
-				Header:     http.Header{"Content-Type": []string{"application/json"}},
-			}, nil
-		case "/v1/builds/build-42/preReleaseVersion":
-			body := `{"data":{"type":"preReleaseVersions","id":"prv-1","attributes":{"version":"1.2.3","platform":"IOS"}}}`
-			return &http.Response{
-				StatusCode: http.StatusOK,
-				Body:       io.NopCloser(strings.NewReader(body)),
-				Header:     http.Header{"Content-Type": []string{"application/json"}},
-			}, nil
-		default:
-			t.Fatalf("unexpected request path %s", req.URL.Path)
-			return nil, nil
+	var runErr error
+	stdout, stderr := captureOutput(t, func() {
+		if err := root.Parse([]string{"builds", "find", "--app", "123456789", "--build-number", "42", "--output", "json"}); err != nil {
+			t.Fatalf("parse error: %v", err)
 		}
+		runErr = root.Run(context.Background())
 	})
 
-	run := func(args []string) (string, string) {
-		root := RootCommand("1.2.3")
-		root.FlagSet.SetOutput(io.Discard)
-
-		return captureOutput(t, func() {
-			if err := root.Parse(args); err != nil {
-				t.Fatalf("parse error: %v", err)
-			}
-			if err := root.Run(context.Background()); err != nil {
-				t.Fatalf("run error: %v", err)
-			}
-		})
+	if !errors.Is(runErr, flag.ErrHelp) {
+		t.Fatalf("expected ErrHelp, got %v", runErr)
 	}
-
-	canonicalStdout, canonicalStderr := run([]string{"builds", "info", "--app", "123456789", "--build-number", "42", "--output", "json"})
-	aliasStdout, aliasStderr := run([]string{"builds", "find", "--app", "123456789", "--build-number", "42", "--output", "json"})
-
-	if !strings.Contains(canonicalStderr, deprecatedImplicitIOSBuildNumberPlatformWarning) {
-		t.Fatalf("expected canonical command to warn about implicit IOS fallback, got %q", canonicalStderr)
+	if stdout != "" {
+		t.Fatalf("expected empty stdout, got %q", stdout)
 	}
-	requireStderrContainsWarning(t, aliasStderr, "Warning: `asc builds find` is deprecated. Use `asc builds info`.")
-	if stripDeprecatedCommandWarnings(aliasStderr) != strings.TrimSpace(canonicalStderr) {
-		t.Fatalf("expected alias stderr to match canonical stderr apart from deprecation warning, canonical=%q alias=%q", canonicalStderr, aliasStderr)
+	if !strings.Contains(stderr, "Error: `asc builds find` was removed. Use `asc builds info` instead.") {
+		t.Fatalf("expected removed builds find path to point to builds info, got %q", stderr)
 	}
-	if canonicalStdout != aliasStdout {
-		t.Fatalf("expected canonical and alias output to match, canonical=%q alias=%q", canonicalStdout, aliasStdout)
+	if strings.Contains(stderr, "\n  find\t") || strings.Contains(stderr, "\n  find ") {
+		t.Fatalf("expected removed builds find alias to stay hidden, got %q", stderr)
 	}
 }
 

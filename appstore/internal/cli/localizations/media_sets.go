@@ -33,13 +33,6 @@ Examples:
 			LocalizationsPreviewSetsListCommand(),
 			LocalizationsPreviewSetsGetCommand(),
 			LocalizationsPreviewSetsRelationshipsCommand(),
-			shared.DeprecatedAliasLeafCommand(
-				LocalizationsPreviewSetsRelationshipsCommand(),
-				"relationships",
-				"asc localizations preview-sets links --localization-id \"LOCALIZATION_ID\"",
-				"asc localizations preview-sets links",
-				"Warning: `asc localizations preview-sets relationships` is deprecated. Use `asc localizations preview-sets links`.",
-			),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp
@@ -147,13 +140,6 @@ Examples:
 			LocalizationsScreenshotSetsGetCommand(),
 			LocalizationsScreenshotSetsDeleteCommand(),
 			LocalizationsScreenshotSetsRelationshipsCommand(),
-			shared.DeprecatedAliasLeafCommand(
-				LocalizationsScreenshotSetsRelationshipsCommand(),
-				"relationships",
-				"asc localizations screenshot-sets links --localization-id \"LOCALIZATION_ID\"",
-				"asc localizations screenshot-sets links",
-				"Warning: `asc localizations screenshot-sets relationships` is deprecated. Use `asc localizations screenshot-sets links`.",
-			),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp

@@ -41,7 +41,7 @@ func TestBetaGroupsListGlobalSuccess(t *testing.T) {
 	root.FlagSet.SetOutput(io.Discard)
 
 	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"testflight", "beta-groups", "list", "--global"}); err != nil {
+		if err := root.Parse([]string{"testflight", "groups", "list", "--global"}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
 		if err := root.Run(context.Background()); err != nil {
@@ -86,7 +86,7 @@ func TestBetaGroupsListGlobalWithASCAppIDSet(t *testing.T) {
 	root.FlagSet.SetOutput(io.Discard)
 
 	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"testflight", "beta-groups", "list", "--global"}); err != nil {
+		if err := root.Parse([]string{"testflight", "groups", "list", "--global"}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
 		if err := root.Run(context.Background()); err != nil {
@@ -131,7 +131,7 @@ func TestBetaGroupsListGlobalWithLimit(t *testing.T) {
 	root.FlagSet.SetOutput(io.Discard)
 
 	stdout, _ := captureOutput(t, func() {
-		if err := root.Parse([]string{"testflight", "beta-groups", "list", "--global", "--limit", "50"}); err != nil {
+		if err := root.Parse([]string{"testflight", "groups", "list", "--global", "--limit", "50"}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
 		if err := root.Run(context.Background()); err != nil {
@@ -151,7 +151,7 @@ func TestBetaGroupsListGlobalAndAppMutuallyExclusive(t *testing.T) {
 	root.FlagSet.SetOutput(io.Discard)
 
 	_, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"testflight", "beta-groups", "list", "--global", "--app", "app-1"}); err != nil {
+		if err := root.Parse([]string{"testflight", "groups", "list", "--global", "--app", "app-1"}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
 		err := root.Run(context.Background())
@@ -172,7 +172,7 @@ func TestBetaGroupsListMissingSelectorError(t *testing.T) {
 	root.FlagSet.SetOutput(io.Discard)
 
 	_, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"testflight", "beta-groups", "list"}); err != nil {
+		if err := root.Parse([]string{"testflight", "groups", "list"}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
 		err := root.Run(context.Background())
@@ -212,7 +212,7 @@ func TestBetaGroupsListScopedStillWorks(t *testing.T) {
 	root.FlagSet.SetOutput(io.Discard)
 
 	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"testflight", "beta-groups", "list", "--app", "app-1"}); err != nil {
+		if err := root.Parse([]string{"testflight", "groups", "list", "--app", "app-1"}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
 		if err := root.Run(context.Background()); err != nil {
@@ -255,7 +255,7 @@ func TestBetaGroupsListNextSkipsSelector(t *testing.T) {
 	root.FlagSet.SetOutput(io.Discard)
 
 	_, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"testflight", "beta-groups", "list", "--next", nextURL}); err != nil {
+		if err := root.Parse([]string{"testflight", "groups", "list", "--next", nextURL}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
 		if err := root.Run(context.Background()); err != nil {
@@ -300,7 +300,7 @@ func TestBetaGroupsListGlobalWithInternalFilter(t *testing.T) {
 	root.FlagSet.SetOutput(io.Discard)
 
 	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"testflight", "beta-groups", "list", "--global", "--internal"}); err != nil {
+		if err := root.Parse([]string{"testflight", "groups", "list", "--global", "--internal"}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
 		if err := root.Run(context.Background()); err != nil {
@@ -355,7 +355,7 @@ func TestBetaGroupsListScopedWithExternalFilter(t *testing.T) {
 	root.FlagSet.SetOutput(io.Discard)
 
 	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"testflight", "beta-groups", "list", "--app", "app-1", "--external"}); err != nil {
+		if err := root.Parse([]string{"testflight", "groups", "list", "--app", "app-1", "--external"}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
 		if err := root.Run(context.Background()); err != nil {
@@ -396,7 +396,7 @@ func TestBetaGroupsListInternalAndExternalMutuallyExclusive(t *testing.T) {
 	root.FlagSet.SetOutput(io.Discard)
 
 	_, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"testflight", "beta-groups", "list", "--global", "--internal", "--external"}); err != nil {
+		if err := root.Parse([]string{"testflight", "groups", "list", "--global", "--internal", "--external"}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
 		err := root.Run(context.Background())

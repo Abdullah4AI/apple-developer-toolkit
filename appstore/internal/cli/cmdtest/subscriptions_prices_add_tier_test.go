@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestSubscriptionsPricesAdd_TierAndPricePointMutualExclusion(t *testing.T) {
@@ -18,7 +19,7 @@ func TestSubscriptionsPricesAdd_TierAndPricePointMutualExclusion(t *testing.T) {
 	_, stderr := captureOutput(t, func() {
 		if err := root.Parse([]string{
 			"subscriptions", "pricing", "prices", "set",
-			"--subscription-id", "SUB_ID",
+			"--subscription-id", "8000000003",
 			"--price-point", "PP",
 			"--tier", "5",
 			"--territory", "USA",
@@ -51,7 +52,7 @@ func TestSubscriptionsPricesAdd_TierUsesSubscriptionPricePoints(t *testing.T) {
 				Body:       io.NopCloser(strings.NewReader(body)),
 				Header:     http.Header{"Content-Type": []string{"application/json"}},
 			}, nil
-		case req.Method == http.MethodGet && strings.Contains(req.URL.Path, "/subscriptions/SUB_ID/pricePoints"):
+		case req.Method == http.MethodGet && strings.Contains(req.URL.Path, "/subscriptions/8000000003/pricePoints"):
 			body := `{
 				"data":[
 					{"type":"subscriptionPricePoints","id":"sub-pp-1","attributes":{"customerPrice":"0.99","proceeds":"0.70"}},
@@ -93,7 +94,7 @@ func TestSubscriptionsPricesAdd_TierUsesSubscriptionPricePoints(t *testing.T) {
 	stdout, stderr := captureOutput(t, func() {
 		if err := root.Parse([]string{
 			"subscriptions", "pricing", "prices", "set",
-			"--subscription-id", "SUB_ID",
+			"--subscription-id", "8000000003",
 			"--tier", "2",
 			"--territory", "USA",
 			"--refresh",
@@ -149,7 +150,7 @@ func TestSubscriptionsPricesAdd_ProbeErrorReturnsWithoutWrite(t *testing.T) {
 	_, stderr := captureOutput(t, func() {
 		if err := root.Parse([]string{
 			"subscriptions", "pricing", "prices", "set",
-			"--subscription-id", "SUB_ID",
+			"--subscription-id", "8000000003",
 			"--price-point", "PP_ID",
 		}); err != nil {
 			t.Fatalf("parse error: %v", err)
@@ -183,7 +184,7 @@ func TestSubscriptionsPricesAdd_InitialPriceForwardsAttributes(t *testing.T) {
 				Body:       io.NopCloser(strings.NewReader(body)),
 				Header:     http.Header{"Content-Type": []string{"application/json"}},
 			}, nil
-		case req.Method == http.MethodPatch && strings.Contains(req.URL.Path, "/v1/subscriptions/SUB_ID"):
+		case req.Method == http.MethodPatch && strings.Contains(req.URL.Path, "/v1/subscriptions/8000000003"):
 			var payload map[string]any
 			if err := json.NewDecoder(req.Body).Decode(&payload); err != nil {
 				t.Fatalf("failed to decode patch payload: %v", err)
@@ -225,7 +226,7 @@ func TestSubscriptionsPricesAdd_InitialPriceForwardsAttributes(t *testing.T) {
 				t.Fatalf("expected territory id USA, got %#v", territoryData["id"])
 			}
 
-			resp := `{"data":{"type":"subscriptions","id":"SUB_ID","attributes":{"name":"Monthly","productId":"com.example.sub.monthly"}}}`
+			resp := `{"data":{"type":"subscriptions","id":"8000000003","attributes":{"name":"Monthly","productId":"com.example.sub.monthly"}}}`
 			return &http.Response{
 				StatusCode: http.StatusOK,
 				Body:       io.NopCloser(strings.NewReader(resp)),
@@ -247,7 +248,7 @@ func TestSubscriptionsPricesAdd_InitialPriceForwardsAttributes(t *testing.T) {
 	stdout, stderr := captureOutput(t, func() {
 		if err := root.Parse([]string{
 			"subscriptions", "pricing", "prices", "set",
-			"--subscription-id", "SUB_ID",
+			"--subscription-id", "8000000003",
 			"--price-point", "PP_ID",
 			"--territory", "USA",
 			"--start-date", "2026-05-01",
@@ -263,7 +264,7 @@ func TestSubscriptionsPricesAdd_InitialPriceForwardsAttributes(t *testing.T) {
 	if stderr != "" {
 		t.Fatalf("expected empty stderr, got %q", stderr)
 	}
-	if !strings.Contains(stdout, `"id":"SUB_ID"`) {
+	if !strings.Contains(stdout, `"id":"8000000003"`) {
 		t.Fatalf("expected subscription response in stdout, got %q", stdout)
 	}
 }
@@ -275,7 +276,7 @@ func TestSubscriptionsPricesAdd_TierRequiresTerritory(t *testing.T) {
 	_, stderr := captureOutput(t, func() {
 		if err := root.Parse([]string{
 			"subscriptions", "pricing", "prices", "set",
-			"--subscription-id", "SUB_ID",
+			"--subscription-id", "8000000003",
 			"--tier", "5",
 		}); err != nil {
 			t.Fatalf("parse error: %v", err)
@@ -298,7 +299,7 @@ func TestSubscriptionsPricesAdd_InvalidPriceValue(t *testing.T) {
 	_, stderr := captureOutput(t, func() {
 		if err := root.Parse([]string{
 			"subscriptions", "pricing", "prices", "set",
-			"--subscription-id", "SUB_ID",
+			"--subscription-id", "8000000003",
 			"--price", "abc",
 			"--territory", "USA",
 		}); err != nil {
@@ -322,7 +323,7 @@ func TestSubscriptionsPricesAdd_NegativeTier(t *testing.T) {
 	_, stderr := captureOutput(t, func() {
 		if err := root.Parse([]string{
 			"subscriptions", "pricing", "prices", "set",
-			"--subscription-id", "SUB_ID",
+			"--subscription-id", "8000000003",
 			"--tier", "-1",
 			"--territory", "USA",
 		}); err != nil {
@@ -336,5 +337,89 @@ func TestSubscriptionsPricesAdd_NegativeTier(t *testing.T) {
 
 	if !strings.Contains(stderr, "--tier must be a positive integer") {
 		t.Fatalf("expected invalid --tier error, got %q", stderr)
+	}
+}
+
+func TestSubscriptionsPricesAddRefreshesContextAfterTierResolution(t *testing.T) {
+	setupAuth(t)
+	t.Setenv("ASC_TIMEOUT", "80ms")
+	t.Setenv("ASC_TIMEOUT_SECONDS", "")
+
+	originalTransport := http.DefaultTransport
+	t.Cleanup(func() { http.DefaultTransport = originalTransport })
+
+	var relationshipDeadlineRemaining time.Duration
+	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		switch {
+		case req.Method == http.MethodGet && strings.Contains(req.URL.Path, "/subscriptions/8000000003/pricePoints"):
+			time.Sleep(60 * time.Millisecond)
+			body := `{
+				"data":[
+					{"type":"subscriptionPricePoints","id":"sub-pp-1","attributes":{"customerPrice":"0.99","proceeds":"0.70"}},
+					{"type":"subscriptionPricePoints","id":"sub-pp-2","attributes":{"customerPrice":"1.99","proceeds":"1.40"}}
+				],
+				"links":{"next":""}
+			}`
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(strings.NewReader(body)),
+				Header:     http.Header{"Content-Type": []string{"application/json"}},
+			}, nil
+		case req.Method == http.MethodGet && strings.HasSuffix(req.URL.Path, "/relationships/prices"):
+			deadline, ok := req.Context().Deadline()
+			if !ok {
+				t.Fatal("expected prices relationship request to carry a timeout deadline")
+			}
+			relationshipDeadlineRemaining = time.Until(deadline)
+			if relationshipDeadlineRemaining < 35*time.Millisecond {
+				t.Fatalf("expected fresh prices context after tier resolution, got only %v remaining", relationshipDeadlineRemaining)
+			}
+
+			body := `{"data":[{"type":"subscriptionPrices","id":"existing-price-1"}],"links":{}}`
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(strings.NewReader(body)),
+				Header:     http.Header{"Content-Type": []string{"application/json"}},
+			}, nil
+		case req.Method == http.MethodPost && strings.Contains(req.URL.Path, "/subscriptionPrices"):
+			resp := `{"data":{"type":"subscriptionPrices","id":"sub-price-1","attributes":{}}}`
+			return &http.Response{
+				StatusCode: http.StatusCreated,
+				Body:       io.NopCloser(strings.NewReader(resp)),
+				Header:     http.Header{"Content-Type": []string{"application/json"}},
+			}, nil
+		default:
+			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.Path)
+			return nil, nil
+		}
+	})
+
+	t.Setenv("HOME", t.TempDir())
+	root := RootCommand("1.2.3")
+	root.FlagSet.SetOutput(io.Discard)
+
+	stdout, stderr := captureOutput(t, func() {
+		if err := root.Parse([]string{
+			"subscriptions", "pricing", "prices", "set",
+			"--subscription-id", "8000000003",
+			"--tier", "2",
+			"--territory", "USA",
+			"--refresh",
+		}); err != nil {
+			t.Fatalf("parse error: %v", err)
+		}
+		if err := root.Run(context.Background()); err != nil {
+			t.Fatalf("run error: %v", err)
+		}
+	})
+
+	if stderr != "" {
+		t.Fatalf("expected empty stderr, got %q", stderr)
+	}
+	if relationshipDeadlineRemaining == 0 {
+		t.Fatal("expected relationship request to run")
+	}
+	if !strings.Contains(stdout, `"id":"sub-price-1"`) {
+		t.Fatalf("expected create output, got %q", stdout)
 	}
 }

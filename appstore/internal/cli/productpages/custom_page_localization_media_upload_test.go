@@ -19,6 +19,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
 )
@@ -31,8 +32,8 @@ func (fn customPageUploadRoundTripFunc) RoundTrip(req *http.Request) (*http.Resp
 
 func TestExecuteCustomPageScreenshotUpload_SyncDeletesExistingScreenshotsAndReordersUploads(t *testing.T) {
 	dir := t.TempDir()
-	fileA := writeCustomPageTestPNG(t, dir, "01-home.png", 1242, 2688)
-	fileB := writeCustomPageTestPNG(t, dir, "02-settings.png", 1242, 2688)
+	fileA := writeCustomPageTestPNG(t, dir, "01-home.png")
+	fileB := writeCustomPageTestPNG(t, dir, "02-settings.png")
 	sizes := map[string]int64{
 		"new-1": customPageFileSize(t, fileA),
 		"new-2": customPageFileSize(t, fileB),
@@ -122,6 +123,10 @@ func TestExecuteCustomPageScreenshotUpload_SyncDeletesExistingScreenshotsAndReor
 }
 
 func newCustomPageTestClient(t *testing.T) *asc.Client {
+	return newCustomPageTestClientWithTimeout(t, asc.ResolveTimeout())
+}
+
+func newCustomPageTestClientWithTimeout(t *testing.T, timeout time.Duration) *asc.Client {
 	t.Helper()
 
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -137,7 +142,7 @@ func newCustomPageTestClient(t *testing.T) *asc.Client {
 		t.Fatal("encode pem: nil")
 	}
 
-	client, err := asc.NewClientFromPEM("KEY_ID", "ISSUER_ID", string(pemBytes))
+	client, err := asc.NewClientFromPEMWithTimeout("KEY_ID", "ISSUER_ID", string(pemBytes), timeout)
 	if err != nil {
 		t.Fatalf("new client: %v", err)
 	}
@@ -153,7 +158,45 @@ func customPageJSONResponse(status int, body string) (*http.Response, error) {
 	}, nil
 }
 
-func writeCustomPageTestPNG(t *testing.T, dir, name string, width, height int) string {
+func writeCustomPageTestPNG(t *testing.T, dir, name string) string {
+	t.Helper()
+
+	path := filepath.Join(dir, name)
+	file, err := os.Create(path)
+	if err != nil {
+		t.Fatalf("create png: %v", err)
+	}
+	defer file.Close()
+
+	const (
+		width  = 1242
+		height = 2688
+	)
+
+	img := image.NewRGBA(image.Rect(0, 0, width, height))
+	for y := 0; y < height; y++ {
+		for x := 0; x < width; x++ {
+			img.Set(x, y, color.RGBA{R: 10, G: 20, B: 30, A: 255})
+		}
+	}
+	if err := png.Encode(file, img); err != nil {
+		t.Fatalf("encode png: %v", err)
+	}
+	return path
+}
+
+func writeDisplayTypeTestPNG(t *testing.T, dir, name, displayType string) string {
+	t.Helper()
+
+	dimensions, ok := asc.ScreenshotDimensions(displayType)
+	if !ok || len(dimensions) == 0 {
+		t.Fatalf("dimensions unavailable for display type %q", displayType)
+	}
+
+	return writePNGWithDimensions(t, dir, name, dimensions[0].Width, dimensions[0].Height)
+}
+
+func writePNGWithDimensions(t *testing.T, dir, name string, width, height int) string {
 	t.Helper()
 
 	path := filepath.Join(dir, name)

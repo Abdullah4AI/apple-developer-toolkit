@@ -40,13 +40,6 @@ Examples:
 			AppEventsDeleteCommand(),
 			AppEventLocalizationsCommand(),
 			AppEventsRelationshipsCommand(),
-			shared.DeprecatedAliasLeafCommand(
-				AppEventsRelationshipsCommand(),
-				"relationships",
-				"asc app-events links --event-id \"EVENT_ID\" [flags]",
-				"asc app-events links",
-				"Warning: `asc app-events relationships` is deprecated. Use `asc app-events links`.",
-			),
 			AppEventScreenshotsCommand(),
 			AppEventVideoClipsCommand(),
 			AppEventsSubmitCommand(),

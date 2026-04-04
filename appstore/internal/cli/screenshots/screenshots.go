@@ -32,6 +32,8 @@ Local workflow (experimental):
   asc screenshots review-generate --framed-dir ./screenshots/framed
   asc screenshots review-open --output-dir ./screenshots/review
   asc screenshots review-approve --all-ready --output-dir ./screenshots/review
+  asc screenshots plan --app "123456789" --version "1.2.3"
+  asc screenshots apply --app "123456789" --version "1.2.3" --confirm
   asc screenshots list-frame-devices --output json
 
 App Store workflow:
@@ -56,6 +58,8 @@ default; use --all only when you need the full matrix.`,
 			shots.ShotsReviewGenerateCommand(),
 			shots.ShotsReviewOpenCommand(),
 			shots.ShotsReviewApproveCommand(),
+			assets.AssetsScreenshotsPlanCommand(),
+			assets.AssetsScreenshotsApplyCommand(),
 			assets.AssetsScreenshotsListCommand(),
 			assets.AssetsScreenshotsSizesCommand(),
 			assets.AssetsScreenshotsUploadCommand(),

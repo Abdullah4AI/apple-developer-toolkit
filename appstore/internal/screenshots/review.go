@@ -552,6 +552,11 @@ func loadApprovals(path string) (map[string]bool, error) {
 	return nil, fmt.Errorf("parse approvals file %q: expected map[string]bool, []string, or {\"approved\":[]}", path)
 }
 
+// LoadApprovals reads approved review keys from disk.
+func LoadApprovals(path string) (map[string]bool, error) {
+	return loadApprovals(path)
+}
+
 // SaveApprovals writes approved keys to disk in a stable JSON format.
 func SaveApprovals(path string, approvals map[string]bool) error {
 	keys := make([]string, 0, len(approvals))

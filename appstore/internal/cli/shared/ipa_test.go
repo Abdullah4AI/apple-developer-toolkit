@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"howett.net/plist"
@@ -95,6 +96,84 @@ func TestExtractBundleInfoFromIPA_BinaryPlist(t *testing.T) {
 	}
 	if info.BuildNumber != "7" {
 		t.Fatalf("expected build number 7, got %q", info.BuildNumber)
+	}
+}
+
+func TestValidateIPAPathRejectsSymlink(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "target.ipa")
+	if err := os.WriteFile(target, []byte("payload"), 0o600); err != nil {
+		t.Fatalf("write target file: %v", err)
+	}
+
+	link := filepath.Join(dir, "app.ipa")
+	if err := os.Symlink(target, link); err != nil {
+		t.Skipf("symlink not supported: %v", err)
+	}
+
+	_, err := ValidateIPAPath(link)
+	if err == nil {
+		t.Fatal("expected symlink rejection error")
+	}
+	if !strings.Contains(err.Error(), "refusing to read symlink") {
+		t.Fatalf("expected symlink rejection message, got %v", err)
+	}
+}
+
+func TestValidateIPAPathAllowsRegularFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "app.ipa")
+	content := []byte("payload")
+	if err := os.WriteFile(path, content, 0o600); err != nil {
+		t.Fatalf("write IPA file: %v", err)
+	}
+
+	info, err := ValidateIPAPath(path)
+	if err != nil {
+		t.Fatalf("ValidateIPAPath() error: %v", err)
+	}
+	if info.Size() != int64(len(content)) {
+		t.Fatalf("expected size %d, got %d", len(content), info.Size())
+	}
+}
+
+func TestResolveBundleInfoForIPAUsesProvidedValues(t *testing.T) {
+	version, buildNumber, err := ResolveBundleInfoForIPA("ignored.ipa", "1.2.3", "42")
+	if err != nil {
+		t.Fatalf("ResolveBundleInfoForIPA() error: %v", err)
+	}
+	if version != "1.2.3" || buildNumber != "42" {
+		t.Fatalf("unexpected resolved values: version=%q build=%q", version, buildNumber)
+	}
+}
+
+func TestResolveBundleInfoForIPAFillsMissingBuildNumber(t *testing.T) {
+	plistData := buildInfoPlist(t, "1.2.3", "45")
+	ipaPath := writeTestIPA(t, map[string][]byte{
+		"Payload/Demo.app/Info.plist": plistData,
+	})
+
+	version, buildNumber, err := ResolveBundleInfoForIPA(ipaPath, "1.2.3", "")
+	if err != nil {
+		t.Fatalf("ResolveBundleInfoForIPA() error: %v", err)
+	}
+	if version != "1.2.3" || buildNumber != "45" {
+		t.Fatalf("unexpected resolved values: version=%q build=%q", version, buildNumber)
+	}
+}
+
+func TestResolveBundleInfoForIPAReportsMissingKeys(t *testing.T) {
+	plistData := buildInfoPlistWithValues(t, "", "", plist.XMLFormat)
+	ipaPath := writeTestIPA(t, map[string][]byte{
+		"Payload/Demo.app/Info.plist": plistData,
+	})
+
+	_, _, err := ResolveBundleInfoForIPA(ipaPath, "", "")
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "missing Info.plist keys") {
+		t.Fatalf("expected missing keys error, got %v", err)
 	}
 }
 

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestIAPPriceSchedulesCreate_TierAndPricesMutualExclusion(t *testing.T) {
@@ -17,7 +18,7 @@ func TestIAPPriceSchedulesCreate_TierAndPricesMutualExclusion(t *testing.T) {
 	_, stderr := captureOutput(t, func() {
 		if err := root.Parse([]string{
 			"iap", "pricing", "schedules", "create",
-			"--iap-id", "IAP_ID",
+			"--iap-id", "9000000003",
 			"--base-territory", "USA",
 			"--tier", "5",
 			"--prices", "PP:2026-03-01",
@@ -42,7 +43,7 @@ func TestIAPPriceSchedulesCreate_TierAndPriceMutualExclusion(t *testing.T) {
 	_, stderr := captureOutput(t, func() {
 		if err := root.Parse([]string{
 			"iap", "pricing", "schedules", "create",
-			"--iap-id", "IAP_ID",
+			"--iap-id", "9000000003",
 			"--base-territory", "USA",
 			"--tier", "5",
 			"--price", "4.99",
@@ -68,7 +69,7 @@ func TestIAPPriceSchedulesCreate_TierUsesIAPPricePoints(t *testing.T) {
 	var resolvedPricePointID string
 	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		switch {
-		case req.Method == http.MethodGet && strings.Contains(req.URL.Path, "/inAppPurchases/IAP_ID/pricePoints"):
+		case req.Method == http.MethodGet && strings.Contains(req.URL.Path, "/inAppPurchases/9000000003/pricePoints"):
 			body := `{
 				"data":[
 					{"type":"inAppPurchasePricePoints","id":"iap-pp-1","attributes":{"customerPrice":"0.99","proceeds":"0.70"}},
@@ -110,7 +111,7 @@ func TestIAPPriceSchedulesCreate_TierUsesIAPPricePoints(t *testing.T) {
 	stdout, stderr := captureOutput(t, func() {
 		if err := root.Parse([]string{
 			"iap", "pricing", "schedules", "create",
-			"--iap-id", "IAP_ID",
+			"--iap-id", "9000000003",
 			"--base-territory", "USA",
 			"--tier", "2",
 			"--start-date", "2026-03-01",
@@ -141,7 +142,7 @@ func TestIAPPriceSchedulesCreate_InvalidPriceValue(t *testing.T) {
 	_, stderr := captureOutput(t, func() {
 		if err := root.Parse([]string{
 			"iap", "pricing", "schedules", "create",
-			"--iap-id", "IAP_ID",
+			"--iap-id", "9000000003",
 			"--base-territory", "USA",
 			"--price", "abc",
 		}); err != nil {
@@ -165,7 +166,7 @@ func TestIAPPriceSchedulesCreate_InvalidTierStartDate(t *testing.T) {
 	_, stderr := captureOutput(t, func() {
 		if err := root.Parse([]string{
 			"iap", "pricing", "schedules", "create",
-			"--iap-id", "IAP_ID",
+			"--iap-id", "9000000003",
 			"--base-territory", "USA",
 			"--tier", "1",
 			"--start-date", "invalid",
@@ -205,7 +206,7 @@ func TestIAPPriceSchedulesCreateUsesCanonicalErrorPrefix(t *testing.T) {
 
 	if err := root.Parse([]string{
 		"iap", "pricing", "schedules", "create",
-		"--iap-id", "IAP_ID",
+		"--iap-id", "9000000003",
 		"--base-territory", "USA",
 		"--prices", "PP1",
 	}); err != nil {
@@ -221,5 +222,83 @@ func TestIAPPriceSchedulesCreateUsesCanonicalErrorPrefix(t *testing.T) {
 	}
 	if strings.Contains(err.Error(), "iap price-schedules create:") {
 		t.Fatalf("expected legacy error prefix to be removed, got %q", err.Error())
+	}
+}
+
+func TestIAPPriceSchedulesCreateRefreshesContextAfterTierResolution(t *testing.T) {
+	setupAuth(t)
+	t.Setenv("ASC_TIMEOUT", "80ms")
+	t.Setenv("ASC_TIMEOUT_SECONDS", "")
+
+	originalTransport := http.DefaultTransport
+	t.Cleanup(func() { http.DefaultTransport = originalTransport })
+
+	var createDeadlineRemaining time.Duration
+	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		switch {
+		case req.Method == http.MethodGet && strings.Contains(req.URL.Path, "/inAppPurchases/9000000003/pricePoints"):
+			time.Sleep(60 * time.Millisecond)
+			body := `{
+				"data":[
+					{"type":"inAppPurchasePricePoints","id":"iap-pp-1","attributes":{"customerPrice":"0.99","proceeds":"0.70"}},
+					{"type":"inAppPurchasePricePoints","id":"iap-pp-2","attributes":{"customerPrice":"1.99","proceeds":"1.40"}}
+				],
+				"links":{"next":""}
+			}`
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(strings.NewReader(body)),
+				Header:     http.Header{"Content-Type": []string{"application/json"}},
+			}, nil
+		case req.Method == http.MethodPost && strings.Contains(req.URL.Path, "/inAppPurchasePriceSchedules"):
+			deadline, ok := req.Context().Deadline()
+			if !ok {
+				t.Fatal("expected create request to carry a timeout deadline")
+			}
+			createDeadlineRemaining = time.Until(deadline)
+			if createDeadlineRemaining < 35*time.Millisecond {
+				t.Fatalf("expected fresh create context after tier resolution, got only %v remaining", createDeadlineRemaining)
+			}
+
+			resp := `{"data":{"type":"inAppPurchasePriceSchedules","id":"sched-1","attributes":{}}}`
+			return &http.Response{
+				StatusCode: http.StatusCreated,
+				Body:       io.NopCloser(strings.NewReader(resp)),
+				Header:     http.Header{"Content-Type": []string{"application/json"}},
+			}, nil
+		default:
+			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.Path)
+			return nil, nil
+		}
+	})
+
+	t.Setenv("HOME", t.TempDir())
+	root := RootCommand("1.2.3")
+	root.FlagSet.SetOutput(io.Discard)
+
+	stdout, stderr := captureOutput(t, func() {
+		if err := root.Parse([]string{
+			"iap", "pricing", "schedules", "create",
+			"--iap-id", "9000000003",
+			"--base-territory", "USA",
+			"--tier", "2",
+			"--start-date", "2026-03-01",
+			"--refresh",
+		}); err != nil {
+			t.Fatalf("parse error: %v", err)
+		}
+		if err := root.Run(context.Background()); err != nil {
+			t.Fatalf("run error: %v", err)
+		}
+	})
+
+	if stderr != "" {
+		t.Fatalf("expected empty stderr, got %q", stderr)
+	}
+	if createDeadlineRemaining == 0 {
+		t.Fatal("expected create request to run")
+	}
+	if !strings.Contains(stdout, `"id":"sched-1"`) {
+		t.Fatalf("expected schedule output, got %q", stdout)
 	}
 }

@@ -219,8 +219,8 @@ func TestAndroidIosMappingListPaginateFromNext(t *testing.T) {
 func TestFeedbackRejectsInvalidNextURL(t *testing.T) {
 	runPhase38InvalidNextURLCases(
 		t,
-		[]string{"feedback"},
-		"feedback: --next",
+		[]string{"testflight", "feedback", "list"},
+		"testflight feedback list: --next",
 	)
 }
 
@@ -233,7 +233,7 @@ func TestFeedbackPaginateFromNextWithoutApp(t *testing.T) {
 
 	runPhase38PaginateFromNext(
 		t,
-		[]string{"feedback"},
+		[]string{"testflight", "feedback", "list"},
 		firstURL,
 		secondURL,
 		firstBody,
@@ -246,8 +246,8 @@ func TestFeedbackPaginateFromNextWithoutApp(t *testing.T) {
 func TestCrashesRejectsInvalidNextURL(t *testing.T) {
 	runPhase38InvalidNextURLCases(
 		t,
-		[]string{"crashes"},
-		"crashes: --next",
+		[]string{"testflight", "crashes", "list"},
+		"testflight crashes list: --next",
 	)
 }
 
@@ -260,7 +260,7 @@ func TestCrashesPaginateFromNextWithoutApp(t *testing.T) {
 
 	runPhase38PaginateFromNext(
 		t,
-		[]string{"crashes"},
+		[]string{"testflight", "crashes", "list"},
 		firstURL,
 		secondURL,
 		firstBody,

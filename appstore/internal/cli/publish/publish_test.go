@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
 func TestValidateIPAPathRejectsSymlink(t *testing.T) {
@@ -19,7 +21,7 @@ func TestValidateIPAPathRejectsSymlink(t *testing.T) {
 		t.Skipf("symlink not supported: %v", err)
 	}
 
-	_, err := validateIPAPath(link)
+	_, err := shared.ValidateIPAPath(link)
 	if err == nil {
 		t.Fatal("expected symlink rejection error")
 	}
@@ -36,9 +38,9 @@ func TestValidateIPAPathAllowsRegularFile(t *testing.T) {
 		t.Fatalf("write IPA file: %v", err)
 	}
 
-	info, err := validateIPAPath(path)
+	info, err := shared.ValidateIPAPath(path)
 	if err != nil {
-		t.Fatalf("validateIPAPath returned error: %v", err)
+		t.Fatalf("ValidateIPAPath returned error: %v", err)
 	}
 	if info.Size() != int64(len(content)) {
 		t.Fatalf("expected size %d, got %d", len(content), info.Size())

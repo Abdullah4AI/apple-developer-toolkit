@@ -11,7 +11,7 @@ import (
 	"testing"
 )
 
-func TestTestFlightMetricsBetaTesterUsagesValidationErrors(t *testing.T) {
+func TestTestFlightMetricsAppTestersValidationErrors(t *testing.T) {
 	t.Setenv("ASC_APP_ID", "")
 
 	tests := []struct {
@@ -21,17 +21,17 @@ func TestTestFlightMetricsBetaTesterUsagesValidationErrors(t *testing.T) {
 	}{
 		{
 			name:    "missing app",
-			args:    []string{"testflight", "metrics", "beta-tester-usages"},
+			args:    []string{"testflight", "metrics", "app-testers"},
 			wantErr: "Error: --app is required (or set ASC_APP_ID)",
 		},
 		{
 			name:    "invalid period",
-			args:    []string{"testflight", "metrics", "beta-tester-usages", "--app", "APP_ID", "--period", "P1D"},
+			args:    []string{"testflight", "metrics", "app-testers", "--app", "APP_ID", "--period", "P1D"},
 			wantErr: "--period must be one of: P7D, P30D, P90D, P365D",
 		},
 		{
 			name:    "limit out of range",
-			args:    []string{"testflight", "metrics", "beta-tester-usages", "--app", "APP_ID", "--limit", "500"},
+			args:    []string{"testflight", "metrics", "app-testers", "--app", "APP_ID", "--limit", "500"},
 			wantErr: "Error: --limit must be between 1 and 200",
 		},
 	}
@@ -61,7 +61,7 @@ func TestTestFlightMetricsBetaTesterUsagesValidationErrors(t *testing.T) {
 	}
 }
 
-func TestTestFlightMetricsBetaTesterUsagesNextWithoutApp(t *testing.T) {
+func TestTestFlightMetricsAppTestersNextWithoutApp(t *testing.T) {
 	t.Setenv("ASC_APP_ID", "")
 
 	tempDir := t.TempDir()
@@ -96,7 +96,7 @@ func TestTestFlightMetricsBetaTesterUsagesNextWithoutApp(t *testing.T) {
 	root.FlagSet.SetOutput(io.Discard)
 
 	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"testflight", "metrics", "beta-tester-usages", "--next", nextURL}); err != nil {
+		if err := root.Parse([]string{"testflight", "metrics", "app-testers", "--next", nextURL}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
 		if err := root.Run(context.Background()); err != nil {
@@ -112,7 +112,7 @@ func TestTestFlightMetricsBetaTesterUsagesNextWithoutApp(t *testing.T) {
 	}
 }
 
-func TestTestFlightMetricsBetaTesterUsagesPaginate(t *testing.T) {
+func TestTestFlightMetricsAppTestersPaginate(t *testing.T) {
 	t.Setenv("ASC_APP_ID", "")
 
 	tempDir := t.TempDir()
@@ -164,7 +164,7 @@ func TestTestFlightMetricsBetaTesterUsagesPaginate(t *testing.T) {
 	root.FlagSet.SetOutput(io.Discard)
 
 	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"testflight", "metrics", "beta-tester-usages", "--paginate", "--next", firstURL}); err != nil {
+		if err := root.Parse([]string{"testflight", "metrics", "app-testers", "--paginate", "--next", firstURL}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
 		if err := root.Run(context.Background()); err != nil {
@@ -180,7 +180,7 @@ func TestTestFlightMetricsBetaTesterUsagesPaginate(t *testing.T) {
 	}
 }
 
-func TestTestFlightMetricsBetaTesterUsagesRejectsInvalidNextURL(t *testing.T) {
+func TestTestFlightMetricsAppTestersRejectsInvalidNextURL(t *testing.T) {
 	tests := []struct {
 		name    string
 		next    string
@@ -206,7 +206,7 @@ func TestTestFlightMetricsBetaTesterUsagesRejectsInvalidNextURL(t *testing.T) {
 			var runErr error
 			stdout, stderr := captureOutput(t, func() {
 				if err := root.Parse([]string{
-					"testflight", "metrics", "beta-tester-usages",
+					"testflight", "metrics", "app-testers",
 					"--next", test.next,
 				}); err != nil {
 					t.Fatalf("parse error: %v", err)

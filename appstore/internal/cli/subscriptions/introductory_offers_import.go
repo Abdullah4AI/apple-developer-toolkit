@@ -18,7 +18,8 @@ import (
 func SubscriptionsIntroductoryOffersImportCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("introductory-offers import", flag.ExitOnError)
 
-	subscriptionID := fs.String("subscription-id", "", "Subscription ID")
+	subscriptionID := fs.String("subscription-id", "", "Subscription ID, product ID, or exact current name")
+	appID := addSubscriptionLookupAppFlag(fs)
 	inputPath := fs.String("input", "", "Input CSV file path (required)")
 	offerDuration := fs.String("offer-duration", "", "Default offer duration")
 	offerMode := fs.String("offer-mode", "", "Default offer mode")
@@ -147,6 +148,13 @@ Examples:
 			client, err := shared.GetASCClient()
 			if err != nil {
 				return fmt.Errorf("subscriptions introductory-offers import: %w", err)
+			}
+
+			lookupCtx, lookupCancel := shared.ContextWithTimeout(ctx)
+			summary.SubscriptionID, err = resolveSubscriptionLookupID(lookupCtx, client, *appID, summary.SubscriptionID)
+			lookupCancel()
+			if err != nil {
+				return err
 			}
 
 			for _, row := range resolvedRows {

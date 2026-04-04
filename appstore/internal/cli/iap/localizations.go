@@ -17,7 +17,8 @@ import (
 func IAPLocalizationsCreateCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("localizations create", flag.ExitOnError)
 
-	iapID := fs.String("iap-id", "", "In-app purchase ID")
+	appID := addIAPLookupAppFlag(fs)
+	iapID := fs.String("iap-id", "", "In-app purchase ID, product ID, or exact current name")
 	name := fs.String("name", "", "Localization name")
 	locale := fs.String("locale", "", "Locale (e.g., en-US)")
 	description := fs.String("description", "", "Description")
@@ -54,6 +55,11 @@ Examples:
 			client, err := shared.GetASCClient()
 			if err != nil {
 				return fmt.Errorf("iap localizations create: %w", err)
+			}
+
+			iapValue, err = resolveIAPLookupIDWithTimeout(ctx, client, *appID, iapValue)
+			if err != nil {
+				return err
 			}
 
 			requestCtx, cancel := shared.ContextWithTimeout(ctx)

@@ -113,7 +113,7 @@ Examples:
 					skippedExpired++
 					continue
 				}
-				uploadedAt, err := parseBuildTimestamp(item.Attributes.UploadedDate)
+				uploadedAt, err := shared.ParseBuildTimestamp(item.Attributes.UploadedDate)
 				if err != nil {
 					skippedInvalid++
 					fmt.Fprintf(os.Stderr, "Warning: build %s has invalid uploadedDate %q: %v\n", item.ID, item.Attributes.UploadedDate, err)
@@ -230,20 +230,6 @@ func buildExpireAllItem(candidate buildExpireCandidate) asc.BuildExpireAllItem {
 		UploadedDate: candidate.resource.Attributes.UploadedDate,
 		AgeDays:      candidate.ageDays,
 	}
-}
-
-func parseBuildTimestamp(value string) (time.Time, error) {
-	trimmed := strings.TrimSpace(value)
-	if trimmed == "" {
-		return time.Time{}, fmt.Errorf("uploadedDate is empty")
-	}
-	if parsed, err := time.Parse(time.RFC3339, trimmed); err == nil {
-		return parsed, nil
-	}
-	if parsed, err := time.Parse(time.RFC3339Nano, trimmed); err == nil {
-		return parsed, nil
-	}
-	return time.Time{}, fmt.Errorf("invalid time %q", trimmed)
 }
 
 func parseOlderThanThreshold(value string, now time.Time) (time.Time, error) {

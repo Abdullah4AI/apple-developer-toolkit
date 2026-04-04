@@ -60,7 +60,7 @@ func TestBetaGroupsCreateInternalSetsAttributeOnCreate(t *testing.T) {
 	root.FlagSet.SetOutput(io.Discard)
 
 	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"testflight", "beta-groups", "create", "--app", "app-1", "--name", "Internal Testers", "--internal"}); err != nil {
+		if err := root.Parse([]string{"testflight", "groups", "create", "--app", "app-1", "--name", "Internal Testers", "--internal"}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
 		if err := root.Run(context.Background()); err != nil {
@@ -113,7 +113,7 @@ func TestBetaGroupsCreateWithoutInternalMakesOneCall(t *testing.T) {
 	root.FlagSet.SetOutput(io.Discard)
 
 	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"testflight", "beta-groups", "create", "--app", "app-1", "--name", "Beta"}); err != nil {
+		if err := root.Parse([]string{"testflight", "groups", "create", "--app", "app-1", "--name", "Beta"}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
 		if err := root.Run(context.Background()); err != nil {

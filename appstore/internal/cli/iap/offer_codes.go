@@ -55,7 +55,8 @@ Examples:
 func IAPOfferCodesListCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("offer-codes list", flag.ExitOnError)
 
-	iapID := fs.String("iap-id", "", "In-app purchase ID")
+	appID := addIAPLookupAppFlag(fs)
+	iapID := fs.String("iap-id", "", "In-app purchase ID, product ID, or exact current name")
 	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
 	next := fs.String("next", "", "Fetch next page using a links.next URL")
 	paginate := fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")
@@ -89,6 +90,13 @@ Examples:
 			client, err := shared.GetASCClient()
 			if err != nil {
 				return fmt.Errorf("iap offer-codes list: %w", err)
+			}
+
+			if iapValue != "" && strings.TrimSpace(*next) == "" {
+				iapValue, err = resolveIAPLookupIDWithTimeout(ctx, client, *appID, iapValue)
+				if err != nil {
+					return err
+				}
 			}
 
 			requestCtx, cancel := shared.ContextWithTimeout(ctx)
@@ -172,7 +180,8 @@ Examples:
 func IAPOfferCodesCreateCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("offer-codes create", flag.ExitOnError)
 
-	iapID := fs.String("iap-id", "", "In-app purchase ID")
+	appID := addIAPLookupAppFlag(fs)
+	iapID := fs.String("iap-id", "", "In-app purchase ID, product ID, or exact current name")
 	name := fs.String("name", "", "Offer code name")
 	eligibilities := fs.String("eligibilities", "", "Customer eligibilities (comma-separated)")
 	prices := fs.String("prices", "", "Prices: TERRITORY:PRICE_POINT_ID entries")
@@ -224,6 +233,11 @@ Examples:
 			client, err := shared.GetASCClient()
 			if err != nil {
 				return fmt.Errorf("iap offer-codes create: %w", err)
+			}
+
+			iapValue, err = resolveIAPLookupIDWithTimeout(ctx, client, *appID, iapValue)
+			if err != nil {
+				return err
 			}
 
 			requestCtx, cancel := shared.ContextWithTimeout(ctx)

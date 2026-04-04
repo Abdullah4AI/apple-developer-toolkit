@@ -108,9 +108,13 @@ type versionLocalPatch struct {
 	setFields          map[string]string
 }
 
-// MetadataPushCommand returns the metadata push subcommand.
-func MetadataPushCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("metadata push", flag.ExitOnError)
+type metadataMutationCommandConfig struct {
+	name      string
+	verbTitle string
+}
+
+func newMetadataMutationCommand(cfg metadataMutationCommandConfig) *ffcli.Command {
+	fs := flag.NewFlagSet("metadata "+cfg.name, flag.ExitOnError)
 
 	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
 	appInfoID := fs.String("app-info", "", "App Info ID (optional override)")
@@ -124,29 +128,37 @@ func MetadataPushCommand() *ffcli.Command {
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
-		Name:       "push",
-		ShortUsage: "asc metadata push --app \"APP_ID\" --version \"1.2.3\" --dir \"./metadata\" [--app-info \"APP_INFO_ID\"] [--dry-run]",
-		ShortHelp:  "Push metadata changes from canonical files.",
-		LongHelp: `Push metadata changes from canonical files.
+		Name:       cfg.name,
+		ShortUsage: fmt.Sprintf(`asc metadata %s --app "APP_ID" --version "1.2.3" --dir "./metadata" [--app-info "APP_INFO_ID"] [--dry-run]`, cfg.name),
+		ShortHelp:  fmt.Sprintf("%s metadata changes from canonical files.", cfg.verbTitle),
+		LongHelp: fmt.Sprintf(`%s metadata changes from canonical files.
 
 Examples:
-  asc metadata push --app "APP_ID" --version "1.2.3" --dir "./metadata" --dry-run
-  asc metadata push --app "APP_ID" --version "1.2.3" --platform IOS --dir "./metadata" --dry-run
-  asc metadata push --app "APP_ID" --app-info "APP_INFO_ID" --version "1.2.3" --platform IOS --dir "./metadata" --dry-run
-  asc metadata push --app "APP_ID" --version "1.2.3" --dir "./metadata"
-  asc metadata push --app "APP_ID" --version "1.2.3" --dir "./metadata" --allow-deletes --confirm
+  asc metadata %s --app "APP_ID" --version "1.2.3" --dir "./metadata" --dry-run
+  asc metadata %s --app "APP_ID" --version "1.2.3" --platform IOS --dir "./metadata" --dry-run
+  asc metadata %s --app "APP_ID" --app-info "APP_INFO_ID" --version "1.2.3" --platform IOS --dir "./metadata" --dry-run
+  asc metadata %s --app "APP_ID" --version "1.2.3" --dir "./metadata"
+  asc metadata %s --app "APP_ID" --version "1.2.3" --dir "./metadata" --allow-deletes --confirm
 
 Notes:
   - default.json fallback is applied only when --allow-deletes is not set.
   - with --allow-deletes, remote locales missing locally are planned as deletes.
   - omitted fields are treated as no-op; they do not imply deletion.`,
+			cfg.verbTitle,
+			cfg.name,
+			cfg.name,
+			cfg.name,
+			cfg.name,
+			cfg.name,
+		),
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			if len(args) > 0 {
-				return shared.UsageError("metadata push does not accept positional arguments")
+				return shared.UsageError(fmt.Sprintf("metadata %s does not accept positional arguments", cfg.name))
 			}
 			result, err := ExecutePush(ctx, PushExecutionOptions{
+				CommandName:  cfg.name,
 				AppID:        *appID,
 				AppInfoID:    *appInfoID,
 				Version:      *version,
@@ -171,6 +183,14 @@ Notes:
 	}
 }
 
+// MetadataPushCommand returns the metadata push subcommand.
+func MetadataPushCommand() *ffcli.Command {
+	return newMetadataMutationCommand(metadataMutationCommandConfig{
+		name:      "push",
+		verbTitle: "Push",
+	})
+}
+
 func loadLocalMetadata(dir, version string) (localMetadataBundle, error) {
 	localAppInfo := make(map[string]appInfoLocalPatch)
 	localVersion := make(map[string]versionLocalPatch)
@@ -181,7 +201,7 @@ func loadLocalMetadata(dir, version string) (localMetadataBundle, error) {
 	appInfoDir := filepath.Join(dir, appInfoDirName)
 	appInfoEntries, err := os.ReadDir(appInfoDir)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return localMetadataBundle{}, fmt.Errorf("metadata push: failed to read %s: %w", appInfoDir, err)
+		return localMetadataBundle{}, fmt.Errorf("failed to read %s: %w", appInfoDir, err)
 	}
 	if err == nil {
 		seenAppInfoLocales := make(map[string]string)
@@ -220,7 +240,7 @@ func loadLocalMetadata(dir, version string) (localMetadataBundle, error) {
 	versionDir := filepath.Join(dir, versionDirName, resolvedVersion)
 	versionEntries, err := os.ReadDir(versionDir)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return localMetadataBundle{}, fmt.Errorf("metadata push: failed to read %s: %w", versionDir, err)
+		return localMetadataBundle{}, fmt.Errorf("failed to read %s: %w", versionDir, err)
 	}
 	if err == nil {
 		seenVersionLocales := make(map[string]string)
@@ -268,6 +288,7 @@ type exampleBuilderFunc func(appID, version, platform, dir, appInfoID string) st
 func resolveMetadataPushAppInfoID(
 	ctx context.Context,
 	client *asc.Client,
+	commandName string,
 	appID string,
 	appInfoID string,
 	version string,
@@ -276,7 +297,7 @@ func resolveMetadataPushAppInfoID(
 	versionState string,
 ) (string, error) {
 	return resolveMetadataAppInfoID(ctx, client, appID, appInfoID, version, platform, dir, versionState, func(aid, v, p, d, infoID string) string {
-		return buildMetadataAppInfoExample("push", aid, v, p, d, infoID) + " --dry-run"
+		return buildMetadataAppInfoExample(commandName, aid, v, p, d, infoID) + " --dry-run"
 	})
 }
 

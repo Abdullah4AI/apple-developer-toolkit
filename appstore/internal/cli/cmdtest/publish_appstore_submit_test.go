@@ -12,6 +12,24 @@ import (
 	"time"
 )
 
+func respondToPublishAppLookup(t *testing.T, req *http.Request) (*http.Response, error, bool) {
+	t.Helper()
+
+	const app = "app-1"
+
+	if req.Method != http.MethodGet || req.URL.Path != "/v1/apps" {
+		return nil, nil, false
+	}
+	if req.URL.Query().Get("filter[bundleId]") != app {
+		t.Fatalf("expected filter[bundleId]=%s, got %q", app, req.URL.Query().Get("filter[bundleId]"))
+	}
+	if limit := req.URL.Query().Get("limit"); limit != "2" {
+		t.Fatalf("expected lookup limit=2, got %q", limit)
+	}
+	resp, err := jsonResponse(http.StatusOK, `{"data":[{"type":"apps","id":"`+app+`","attributes":{"bundleId":"`+app+`","name":"`+app+`"}}]}`)
+	return resp, err, true
+}
+
 func TestPublishAppStoreSubmitUsesModernReviewSubmissionFlow(t *testing.T) {
 	setupAuth(t)
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
@@ -25,6 +43,9 @@ func TestPublishAppStoreSubmitUsesModernReviewSubmissionFlow(t *testing.T) {
 	requests := newRequestLog(20)
 	installDefaultTransport(t, roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		requests.Add(req.Method + " " + req.URL.Path)
+		if resp, err, ok := respondToPublishAppLookup(t, req); ok {
+			return resp, err
+		}
 
 		switch {
 		case req.Method == http.MethodPost && req.URL.Path == "/v1/buildUploads":
@@ -165,6 +186,10 @@ func TestPublishAppStoreSubmitUsesFreshTimeoutBudgetsForPreflightAndSubmission(t
 	var reviewSubmissionBudget time.Duration
 
 	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		if resp, err, ok := respondToPublishAppLookup(t, req); ok {
+			return resp, err
+		}
+
 		switch {
 		case req.Method == http.MethodPost && req.URL.Path == "/v1/buildUploads":
 			return jsonResponse(http.StatusCreated, `{"data":{"type":"buildUploads","id":"upload-1","attributes":{"cfBundleShortVersionString":"1.2.3","cfBundleVersion":"42","platform":"IOS"}}}`)
@@ -294,6 +319,10 @@ func TestPublishAppStoreSubmitPreflightUsesPublishTimeoutOverride(t *testing.T) 
 	var subscriptionBudget time.Duration
 
 	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		if resp, err, ok := respondToPublishAppLookup(t, req); ok {
+			return resp, err
+		}
+
 		switch {
 		case req.Method == http.MethodPost && req.URL.Path == "/v1/buildUploads":
 			return jsonResponse(http.StatusCreated, `{"data":{"type":"buildUploads","id":"upload-1","attributes":{"cfBundleShortVersionString":"1.2.3","cfBundleVersion":"42","platform":"IOS"}}}`)
@@ -413,6 +442,10 @@ func TestPublishAppStoreSubmitDefaultPathHonorsASCTimeout(t *testing.T) {
 	var subscriptionBudget time.Duration
 
 	installDefaultTransport(t, roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		if resp, err, ok := respondToPublishAppLookup(t, req); ok {
+			return resp, err
+		}
+
 		switch {
 		case req.Method == http.MethodPost && req.URL.Path == "/v1/buildUploads":
 			return jsonResponse(http.StatusCreated, `{"data":{"type":"buildUploads","id":"upload-1","attributes":{"cfBundleShortVersionString":"1.2.3","cfBundleVersion":"42","platform":"IOS"}}}`)
@@ -533,6 +566,10 @@ func TestPublishAppStoreSubmitDefaultTimeoutUsesSharedPipelineBudget(t *testing.
 	var reviewSubmissionBudget time.Duration
 
 	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		if resp, err, ok := respondToPublishAppLookup(t, req); ok {
+			return resp, err
+		}
+
 		switch {
 		case req.Method == http.MethodPost && req.URL.Path == "/v1/buildUploads":
 			return jsonResponse(http.StatusCreated, `{"data":{"type":"buildUploads","id":"upload-1","attributes":{"cfBundleShortVersionString":"1.2.3","cfBundleVersion":"42","platform":"IOS"}}}`)

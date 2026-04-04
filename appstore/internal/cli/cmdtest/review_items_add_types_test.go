@@ -20,7 +20,7 @@ func TestRunReviewItemsAddSupportsGameCenterChallengeVersions(t *testing.T) {
 		http.DefaultTransport = originalTransport
 	})
 
-	http.DefaultTransport = submitCreateRoundTripFunc(func(req *http.Request) (*http.Response, error) {
+	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		if req.Method != http.MethodPost || req.URL.Path != "/v1/reviewSubmissionItems" {
 			return nil, fmt.Errorf("unexpected request: %s %s", req.Method, req.URL.Path)
 		}

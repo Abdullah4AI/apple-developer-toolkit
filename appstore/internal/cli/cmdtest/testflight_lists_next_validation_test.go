@@ -34,7 +34,7 @@ func TestTestFlightBetaGroupsListRejectsInvalidNextURL(t *testing.T) {
 
 			var runErr error
 			stdout, stderr := captureOutput(t, func() {
-				if err := root.Parse([]string{"testflight", "beta-groups", "list", "--next", test.next}); err != nil {
+				if err := root.Parse([]string{"testflight", "groups", "list", "--next", test.next}); err != nil {
 					t.Fatalf("parse error: %v", err)
 				}
 				runErr = root.Run(context.Background())
@@ -103,7 +103,7 @@ func TestTestFlightBetaGroupsListPaginateFromNextWithoutApp(t *testing.T) {
 	root.FlagSet.SetOutput(io.Discard)
 
 	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"testflight", "beta-groups", "list", "--paginate", "--next", firstURL}); err != nil {
+		if err := root.Parse([]string{"testflight", "groups", "list", "--paginate", "--next", firstURL}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
 		if err := root.Run(context.Background()); err != nil {
@@ -144,7 +144,7 @@ func TestTestFlightBetaTestersListRejectsInvalidNextURL(t *testing.T) {
 
 			var runErr error
 			stdout, stderr := captureOutput(t, func() {
-				if err := root.Parse([]string{"testflight", "beta-testers", "list", "--next", test.next}); err != nil {
+				if err := root.Parse([]string{"testflight", "testers", "list", "--next", test.next}); err != nil {
 					t.Fatalf("parse error: %v", err)
 				}
 				runErr = root.Run(context.Background())
@@ -213,7 +213,7 @@ func TestTestFlightBetaTestersListPaginateFromNextWithoutApp(t *testing.T) {
 	root.FlagSet.SetOutput(io.Discard)
 
 	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"testflight", "beta-testers", "list", "--paginate", "--next", firstURL}); err != nil {
+		if err := root.Parse([]string{"testflight", "testers", "list", "--paginate", "--next", firstURL}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
 		if err := root.Run(context.Background()); err != nil {

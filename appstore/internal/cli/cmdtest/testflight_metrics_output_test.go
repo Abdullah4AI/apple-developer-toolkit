@@ -96,7 +96,7 @@ func TestTestFlightMetricsTestersOutput(t *testing.T) {
 	root.FlagSet.SetOutput(io.Discard)
 
 	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"testflight", "metrics", "testers", "--group", "group-1"}); err != nil {
+		if err := root.Parse([]string{"testflight", "metrics", "group-testers", "--group", "group-1"}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
 		if err := root.Run(context.Background()); err != nil {
@@ -152,7 +152,7 @@ func TestTestFlightMetricsTestersTableOutput(t *testing.T) {
 	root.FlagSet.SetOutput(io.Discard)
 
 	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"testflight", "metrics", "testers", "--group", "group-1", "--output", "table"}); err != nil {
+		if err := root.Parse([]string{"testflight", "metrics", "group-testers", "--group", "group-1", "--output", "table"}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
 		if err := root.Run(context.Background()); err != nil {
@@ -214,7 +214,7 @@ func TestTestFlightMetricsPublicLinkReturnsFetchFailure(t *testing.T) {
 	}
 }
 
-func TestTestFlightMetricsBetaTesterUsagesPaginateRejectsRepeatedNextURL(t *testing.T) {
+func TestTestFlightMetricsAppTestersPaginateRejectsRepeatedNextURL(t *testing.T) {
 	setupAuth(t)
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 	t.Setenv("ASC_APP_ID", "")
@@ -269,7 +269,7 @@ func TestTestFlightMetricsBetaTesterUsagesPaginateRejectsRepeatedNextURL(t *test
 	var runErr error
 	stdout, _ := captureOutput(t, func() {
 		if err := root.Parse([]string{
-			"testflight", "metrics", "beta-tester-usages",
+			"testflight", "metrics", "app-testers",
 			"--paginate",
 			"--next", firstURL,
 		}); err != nil {

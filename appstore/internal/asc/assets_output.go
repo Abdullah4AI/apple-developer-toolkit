@@ -61,6 +61,14 @@ type CustomProductPageScreenshotUploadResult struct {
 	Results                         []AssetUploadResultItem `json:"results"`
 }
 
+// ExperimentTreatmentLocalizationScreenshotUploadResult represents PPO treatment localization screenshot upload output.
+type ExperimentTreatmentLocalizationScreenshotUploadResult struct {
+	ExperimentTreatmentLocalizationID string                  `json:"experimentTreatmentLocalizationId"`
+	SetID                             string                  `json:"setId"`
+	DisplayType                       string                  `json:"displayType"`
+	Results                           []AssetUploadResultItem `json:"results"`
+}
+
 // CustomProductPagePreviewUploadResult represents custom product page preview upload output.
 type CustomProductPagePreviewUploadResult struct {
 	CustomProductPageLocalizationID string                  `json:"customProductPageLocalizationId"`
@@ -200,6 +208,12 @@ func appPreviewUploadResultMainRows(result *AppPreviewUploadResult) ([]string, [
 func customProductPageScreenshotUploadResultMainRows(result *CustomProductPageScreenshotUploadResult) ([]string, [][]string) {
 	headers := []string{"Localization ID", "Set ID", "Display Type"}
 	rows := [][]string{{result.CustomProductPageLocalizationID, result.SetID, result.DisplayType}}
+	return headers, rows
+}
+
+func experimentTreatmentLocalizationScreenshotUploadResultMainRows(result *ExperimentTreatmentLocalizationScreenshotUploadResult) ([]string, [][]string) {
+	headers := []string{"Localization ID", "Set ID", "Display Type"}
+	rows := [][]string{{result.ExperimentTreatmentLocalizationID, result.SetID, result.DisplayType}}
 	return headers, rows
 }
 

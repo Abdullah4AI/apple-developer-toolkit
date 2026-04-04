@@ -9,7 +9,7 @@ func TestRun_AgeRatingSetInvalidAllNoneReturnsUsage(t *testing.T) {
 	resetReportFlags(t)
 
 	stdout, stderr, exitCode := runHelpSubprocess(t, t.TempDir(),
-		"age-rating", "set",
+		"age-rating", "edit",
 		"--id", "age-1",
 		"--all-none=maybe",
 	)
@@ -28,7 +28,7 @@ func TestRun_AgeRatingSetAllNoneFalseReturnsUsage(t *testing.T) {
 	resetReportFlags(t)
 
 	stdout, stderr, exitCode := runHelpSubprocess(t, t.TempDir(),
-		"age-rating", "set",
+		"age-rating", "edit",
 		"--id", "age-1",
 		"--all-none", "false",
 	)

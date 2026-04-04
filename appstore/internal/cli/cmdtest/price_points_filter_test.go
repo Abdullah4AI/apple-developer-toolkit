@@ -85,17 +85,17 @@ func TestIAPPricePointsFilterValidation(t *testing.T) {
 	}{
 		{
 			name:    "price and min-price mutually exclusive",
-			args:    []string{"iap", "price-points", "list", "--iap-id", "iap-1", "--price", "4.99", "--min-price", "1.00"},
+			args:    []string{"iap", "pricing", "price-points", "list", "--iap-id", "iap-1", "--price", "4.99", "--min-price", "1.00"},
 			wantErr: "--price and --min-price/--max-price are mutually exclusive",
 		},
 		{
 			name:    "invalid price value",
-			args:    []string{"iap", "price-points", "list", "--iap-id", "iap-1", "--price", "abc"},
+			args:    []string{"iap", "pricing", "price-points", "list", "--iap-id", "iap-1", "--price", "abc"},
 			wantErr: "--price must be a number",
 		},
 		{
 			name:    "non-finite price value",
-			args:    []string{"iap", "price-points", "list", "--iap-id", "iap-1", "--price", "NaN"},
+			args:    []string{"iap", "pricing", "price-points", "list", "--iap-id", "iap-1", "--price", "NaN"},
 			wantErr: "--price must be a finite number",
 		},
 	}

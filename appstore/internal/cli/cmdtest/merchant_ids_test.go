@@ -16,8 +16,8 @@ func TestMerchantIDsValidationErrors(t *testing.T) {
 		wantErr string
 	}{
 		{
-			name:    "get missing merchant id",
-			args:    []string{"merchant-ids", "get"},
+			name:    "view missing merchant id",
+			args:    []string{"merchant-ids", "view"},
 			wantErr: "--merchant-id is required",
 		},
 		{
@@ -56,8 +56,8 @@ func TestMerchantIDsValidationErrors(t *testing.T) {
 			wantErr: "--merchant-id is required",
 		},
 		{
-			name:    "certificates get missing merchant id",
-			args:    []string{"merchant-ids", "certificates", "get"},
+			name:    "certificates view missing merchant id",
+			args:    []string{"merchant-ids", "certificates", "view"},
 			wantErr: "--merchant-id is required",
 		},
 	}

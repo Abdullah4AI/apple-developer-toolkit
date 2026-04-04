@@ -41,7 +41,7 @@ func TestVisibleLeafCommandsPreferViewOverGet(t *testing.T) {
 	}
 }
 
-func TestDeprecatedAliasesRetainLegacyPaths(t *testing.T) {
+func TestLegacyVerbPathsAreRemoved(t *testing.T) {
 	subs := Subcommands("dev")
 
 	legacyPaths := []string{
@@ -52,11 +52,8 @@ func TestDeprecatedAliasesRetainLegacyPaths(t *testing.T) {
 	}
 	for _, legacyPath := range legacyPaths {
 		cmd := findCommandByPath(subs, legacyPath)
-		if cmd == nil {
-			t.Fatalf("expected legacy path %q to still exist as an alias", legacyPath)
-		}
-		if !isDeprecatedCompatibilityAlias(cmd) {
-			t.Fatalf("expected legacy path %q to be deprecated compatibility alias, got short help %q", legacyPath, cmd.ShortHelp)
+		if cmd != nil {
+			t.Fatalf("expected legacy path %q to be removed", legacyPath)
 		}
 	}
 }

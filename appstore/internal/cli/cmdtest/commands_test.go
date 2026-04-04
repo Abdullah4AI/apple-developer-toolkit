@@ -741,12 +741,12 @@ func TestBuildBundlesValidationErrors(t *testing.T) {
 		},
 		{
 			name:    "build-bundles app-clip cache-status get missing id",
-			args:    []string{"build-bundles", "app-clip", "cache-status", "get"},
+			args:    []string{"build-bundles", "app-clip", "cache-status", "view"},
 			wantErr: "Error: --id is required",
 		},
 		{
 			name:    "build-bundles app-clip debug-status get missing id",
-			args:    []string{"build-bundles", "app-clip", "debug-status", "get"},
+			args:    []string{"build-bundles", "app-clip", "debug-status", "view"},
 			wantErr: "Error: --id is required",
 		},
 		{
@@ -791,182 +791,182 @@ func TestBetaManagementValidationErrors(t *testing.T) {
 	}{
 		{
 			name:    "beta-groups list missing app or global",
-			args:    []string{"testflight", "beta-groups", "list"},
+			args:    []string{"testflight", "groups", "list"},
 			wantErr: "--app or --global is required",
 		},
 		{
 			name:    "beta-groups create missing app",
-			args:    []string{"testflight", "beta-groups", "create", "--name", "Beta"},
+			args:    []string{"testflight", "groups", "create", "--name", "Beta"},
 			wantErr: "--app is required",
 		},
 		{
 			name:    "beta-groups create missing name",
-			args:    []string{"testflight", "beta-groups", "create", "--app", "APP_ID"},
+			args:    []string{"testflight", "groups", "create", "--app", "APP_ID"},
 			wantErr: "--name is required",
 		},
 		{
 			name:    "beta-testers list missing app",
-			args:    []string{"testflight", "beta-testers", "list"},
+			args:    []string{"testflight", "testers", "list"},
 			wantErr: "--app is required",
 		},
 		{
 			name:    "beta-testers add missing app",
-			args:    []string{"testflight", "beta-testers", "add", "--email", "tester@example.com", "--group", "Beta"},
+			args:    []string{"testflight", "testers", "add", "--email", "tester@example.com", "--group", "Beta"},
 			wantErr: "--app is required",
 		},
 		{
 			name:    "beta-testers add missing email",
-			args:    []string{"testflight", "beta-testers", "add", "--app", "APP_ID", "--group", "Beta"},
+			args:    []string{"testflight", "testers", "add", "--app", "APP_ID", "--group", "Beta"},
 			wantErr: "--email is required",
 		},
 		{
 			name:    "beta-testers add missing group",
-			args:    []string{"testflight", "beta-testers", "add", "--app", "APP_ID", "--email", "tester@example.com"},
+			args:    []string{"testflight", "testers", "add", "--app", "APP_ID", "--email", "tester@example.com"},
 			wantErr: "--group is required",
 		},
 		{
 			name:    "beta-testers remove missing app",
-			args:    []string{"testflight", "beta-testers", "remove", "--email", "tester@example.com"},
+			args:    []string{"testflight", "testers", "remove", "--email", "tester@example.com"},
 			wantErr: "--app is required",
 		},
 		{
 			name:    "beta-testers remove missing email",
-			args:    []string{"testflight", "beta-testers", "remove", "--app", "APP_ID"},
+			args:    []string{"testflight", "testers", "remove", "--app", "APP_ID"},
 			wantErr: "--email is required",
 		},
 		{
 			name:    "beta-testers add-groups missing id",
-			args:    []string{"testflight", "beta-testers", "add-groups", "--group", "GROUP_ID"},
+			args:    []string{"testflight", "testers", "add-groups", "--group", "GROUP_ID"},
 			wantErr: "--id is required",
 		},
 		{
 			name:    "beta-testers add-groups missing group",
-			args:    []string{"testflight", "beta-testers", "add-groups", "--id", "TESTER_ID"},
+			args:    []string{"testflight", "testers", "add-groups", "--id", "TESTER_ID"},
 			wantErr: "--group is required",
 		},
 		{
 			name:    "beta-testers remove-groups missing id",
-			args:    []string{"testflight", "beta-testers", "remove-groups", "--group", "GROUP_ID"},
+			args:    []string{"testflight", "testers", "remove-groups", "--group", "GROUP_ID"},
 			wantErr: "--id is required",
 		},
 		{
 			name:    "beta-testers remove-groups missing group",
-			args:    []string{"testflight", "beta-testers", "remove-groups", "--id", "TESTER_ID"},
+			args:    []string{"testflight", "testers", "remove-groups", "--id", "TESTER_ID"},
 			wantErr: "--group is required",
 		},
 		{
 			name:    "beta-testers remove-groups missing confirm",
-			args:    []string{"testflight", "beta-testers", "remove-groups", "--id", "TESTER_ID", "--group", "GROUP_ID"},
+			args:    []string{"testflight", "testers", "remove-groups", "--id", "TESTER_ID", "--group", "GROUP_ID"},
 			wantErr: "Error: --confirm is required",
 		},
 		{
 			name:    "beta-testers add-builds missing id",
-			args:    []string{"testflight", "beta-testers", "add-builds", "--build-id", "BUILD_ID"},
+			args:    []string{"testflight", "testers", "add-builds", "--build-id", "BUILD_ID"},
 			wantErr: "--id is required",
 		},
 		{
 			name:    "beta-testers add-builds missing build",
-			args:    []string{"testflight", "beta-testers", "add-builds", "--id", "TESTER_ID"},
+			args:    []string{"testflight", "testers", "add-builds", "--id", "TESTER_ID"},
 			wantErr: "--build-id is required",
 		},
 		{
 			name:    "beta-testers remove-builds missing id",
-			args:    []string{"testflight", "beta-testers", "remove-builds", "--build-id", "BUILD_ID", "--confirm"},
+			args:    []string{"testflight", "testers", "remove-builds", "--build-id", "BUILD_ID", "--confirm"},
 			wantErr: "--id is required",
 		},
 		{
 			name:    "beta-testers remove-builds missing build",
-			args:    []string{"testflight", "beta-testers", "remove-builds", "--id", "TESTER_ID", "--confirm"},
+			args:    []string{"testflight", "testers", "remove-builds", "--id", "TESTER_ID", "--confirm"},
 			wantErr: "--build-id is required",
 		},
 		{
 			name:    "beta-testers remove-builds missing confirm",
-			args:    []string{"testflight", "beta-testers", "remove-builds", "--id", "TESTER_ID", "--build-id", "BUILD_ID"},
+			args:    []string{"testflight", "testers", "remove-builds", "--id", "TESTER_ID", "--build-id", "BUILD_ID"},
 			wantErr: "Error: --confirm is required",
 		},
 		{
 			name:    "beta-testers remove-apps missing id",
-			args:    []string{"testflight", "beta-testers", "remove-apps", "--app", "APP_ID", "--confirm"},
+			args:    []string{"testflight", "testers", "remove-apps", "--app", "APP_ID", "--confirm"},
 			wantErr: "--id is required",
 		},
 		{
 			name:    "beta-testers remove-apps missing app",
-			args:    []string{"testflight", "beta-testers", "remove-apps", "--id", "TESTER_ID", "--confirm"},
+			args:    []string{"testflight", "testers", "remove-apps", "--id", "TESTER_ID", "--confirm"},
 			wantErr: "--app is required",
 		},
 		{
 			name:    "beta-testers remove-apps missing confirm",
-			args:    []string{"testflight", "beta-testers", "remove-apps", "--id", "TESTER_ID", "--app", "APP_ID"},
+			args:    []string{"testflight", "testers", "remove-apps", "--id", "TESTER_ID", "--app", "APP_ID"},
 			wantErr: "Error: --confirm is required",
 		},
 		{
 			name:    "beta-testers invite missing app",
-			args:    []string{"testflight", "beta-testers", "invite", "--email", "tester@example.com"},
+			args:    []string{"testflight", "testers", "invite", "--email", "tester@example.com"},
 			wantErr: "--app is required",
 		},
 		{
 			name:    "beta-testers invite missing email",
-			args:    []string{"testflight", "beta-testers", "invite", "--app", "APP_ID"},
+			args:    []string{"testflight", "testers", "invite", "--app", "APP_ID"},
 			wantErr: "--email is required",
 		},
 		{
 			name:    "beta-testers get missing id",
-			args:    []string{"testflight", "beta-testers", "get"},
+			args:    []string{"testflight", "testers", "view"},
 			wantErr: "--id is required",
 		},
 		{
 			name:    "beta-groups get missing id",
-			args:    []string{"testflight", "beta-groups", "get"},
+			args:    []string{"testflight", "groups", "view"},
 			wantErr: "--id is required",
 		},
 		{
 			name:    "beta-groups update missing id",
-			args:    []string{"testflight", "beta-groups", "update"},
+			args:    []string{"testflight", "groups", "edit"},
 			wantErr: "--id is required",
 		},
 		{
 			name:    "beta-groups update missing update flags",
-			args:    []string{"testflight", "beta-groups", "update", "--id", "GROUP_ID"},
+			args:    []string{"testflight", "groups", "edit", "--id", "GROUP_ID"},
 			wantErr: "at least one update flag is required",
 		},
 		{
 			name:    "beta-groups update public-link-limit out of range",
-			args:    []string{"testflight", "beta-groups", "update", "--id", "GROUP_ID", "--public-link-limit", "50000"},
+			args:    []string{"testflight", "groups", "edit", "--id", "GROUP_ID", "--public-link-limit", "50000"},
 			wantErr: "--public-link-limit must be between 1 and 10000",
 		},
 		{
 			name:    "beta-groups add-testers missing group",
-			args:    []string{"testflight", "beta-groups", "add-testers"},
+			args:    []string{"testflight", "groups", "add-testers"},
 			wantErr: "--group is required",
 		},
 		{
 			name:    "beta-groups add-testers missing tester",
-			args:    []string{"testflight", "beta-groups", "add-testers", "--group", "GROUP_ID"},
+			args:    []string{"testflight", "groups", "add-testers", "--group", "GROUP_ID"},
 			wantErr: "--tester or --email is required",
 		},
 		{
 			name:    "beta-groups remove-testers missing group",
-			args:    []string{"testflight", "beta-groups", "remove-testers"},
+			args:    []string{"testflight", "groups", "remove-testers"},
 			wantErr: "--group is required",
 		},
 		{
 			name:    "beta-groups remove-testers missing tester",
-			args:    []string{"testflight", "beta-groups", "remove-testers", "--group", "GROUP_ID"},
+			args:    []string{"testflight", "groups", "remove-testers", "--group", "GROUP_ID"},
 			wantErr: "--tester is required",
 		},
 		{
 			name:    "beta-groups remove-testers missing confirm",
-			args:    []string{"testflight", "beta-groups", "remove-testers", "--group", "GROUP_ID", "--tester", "TESTER_ID"},
+			args:    []string{"testflight", "groups", "remove-testers", "--group", "GROUP_ID", "--tester", "TESTER_ID"},
 			wantErr: "Error: --confirm is required",
 		},
 		{
 			name:    "beta-groups delete missing id",
-			args:    []string{"testflight", "beta-groups", "delete"},
+			args:    []string{"testflight", "groups", "delete"},
 			wantErr: "--id is required",
 		},
 		{
 			name:    "beta-groups delete missing confirm",
-			args:    []string{"testflight", "beta-groups", "delete", "--id", "GROUP_ID"},
+			args:    []string{"testflight", "groups", "delete", "--id", "GROUP_ID"},
 			wantErr: "--confirm is required to delete",
 		},
 	}
@@ -1011,7 +1011,7 @@ func TestIAPValidationErrors(t *testing.T) {
 		},
 		{
 			name:    "iap get missing id",
-			args:    []string{"iap", "get"},
+			args:    []string{"iap", "view"},
 			wantErr: "--id is required",
 		},
 		{
@@ -1086,7 +1086,7 @@ func TestIAPValidationErrors(t *testing.T) {
 		},
 		{
 			name:    "iap images get missing image-id",
-			args:    []string{"iap", "images", "get"},
+			args:    []string{"iap", "images", "view"},
 			wantErr: "--image-id is required",
 		},
 		{
@@ -1106,7 +1106,7 @@ func TestIAPValidationErrors(t *testing.T) {
 		},
 		{
 			name:    "iap review-screenshots get missing ids",
-			args:    []string{"iap", "review-screenshots", "get"},
+			args:    []string{"iap", "review-screenshots", "view"},
 			wantErr: "--iap-id or --screenshot-id is required",
 		},
 		{
@@ -1126,62 +1126,62 @@ func TestIAPValidationErrors(t *testing.T) {
 		},
 		{
 			name:    "iap availability get missing iap-id",
-			args:    []string{"iap", "availability", "get"},
+			args:    []string{"iap", "pricing", "availability", "view"},
 			wantErr: "--iap-id is required",
 		},
 		{
 			name:    "iap availabilities get missing id",
-			args:    []string{"iap", "availabilities", "get"},
+			args:    []string{"iap", "pricing", "availabilities", "view"},
 			wantErr: "--id is required",
 		},
 		{
 			name:    "iap availabilities available-territories missing id",
-			args:    []string{"iap", "availabilities", "available-territories"},
+			args:    []string{"iap", "pricing", "availabilities", "available-territories"},
 			wantErr: "--id is required",
 		},
 		{
 			name:    "iap availability set missing territories",
-			args:    []string{"iap", "availability", "set", "--iap-id", "IAP_ID"},
+			args:    []string{"iap", "pricing", "availability", "set", "--iap-id", "IAP_ID"},
 			wantErr: "--territories is required",
 		},
 		{
 			name:    "iap content get missing iap-id",
-			args:    []string{"iap", "content", "get"},
+			args:    []string{"iap", "content", "view"},
 			wantErr: "--iap-id or --content-id is required",
 		},
 		{
 			name:    "iap price-points list missing iap-id",
-			args:    []string{"iap", "price-points", "list"},
+			args:    []string{"iap", "pricing", "price-points", "list"},
 			wantErr: "--iap-id is required",
 		},
 		{
 			name:    "iap price-points equalizations missing id",
-			args:    []string{"iap", "price-points", "equalizations"},
+			args:    []string{"iap", "pricing", "price-points", "equalizations"},
 			wantErr: "--id is required",
 		},
 		{
 			name:    "iap price-schedules get missing iap-id",
-			args:    []string{"iap", "price-schedules", "get"},
+			args:    []string{"iap", "pricing", "schedules", "view"},
 			wantErr: "--iap-id or --schedule-id is required",
 		},
 		{
 			name:    "iap price-schedules base-territory missing schedule-id",
-			args:    []string{"iap", "price-schedules", "base-territory"},
+			args:    []string{"iap", "pricing", "schedules", "base-territory"},
 			wantErr: "--schedule-id is required",
 		},
 		{
 			name:    "iap price-schedules create missing prices",
-			args:    []string{"iap", "price-schedules", "create", "--iap-id", "IAP_ID", "--base-territory", "USA"},
+			args:    []string{"iap", "pricing", "schedules", "create", "--iap-id", "IAP_ID", "--base-territory", "USA"},
 			wantErr: "--prices (or --tier/--price) is required",
 		},
 		{
 			name:    "iap price-schedules manual-prices missing schedule-id",
-			args:    []string{"iap", "price-schedules", "manual-prices"},
+			args:    []string{"iap", "pricing", "schedules", "manual-prices"},
 			wantErr: "--schedule-id is required",
 		},
 		{
 			name:    "iap price-schedules automatic-prices missing schedule-id",
-			args:    []string{"iap", "price-schedules", "automatic-prices"},
+			args:    []string{"iap", "pricing", "schedules", "automatic-prices"},
 			wantErr: "--schedule-id is required",
 		},
 		{
@@ -1191,7 +1191,7 @@ func TestIAPValidationErrors(t *testing.T) {
 		},
 		{
 			name:    "iap offer-codes get missing id",
-			args:    []string{"iap", "offer-codes", "get"},
+			args:    []string{"iap", "offer-codes", "view"},
 			wantErr: "--offer-code-id is required",
 		},
 		{
@@ -1211,7 +1211,7 @@ func TestIAPValidationErrors(t *testing.T) {
 		},
 		{
 			name:    "iap offer-codes custom-codes get missing custom-code-id",
-			args:    []string{"iap", "offer-codes", "custom-codes", "get"},
+			args:    []string{"iap", "offer-codes", "custom-codes", "view"},
 			wantErr: "--custom-code-id is required",
 		},
 		{
@@ -1221,7 +1221,7 @@ func TestIAPValidationErrors(t *testing.T) {
 		},
 		{
 			name:    "iap offer-codes one-time-codes get missing one-time-code-id",
-			args:    []string{"iap", "offer-codes", "one-time-codes", "get"},
+			args:    []string{"iap", "offer-codes", "one-time-codes", "view"},
 			wantErr: "--one-time-code-id is required",
 		},
 		{
@@ -1308,7 +1308,7 @@ func TestUsersValidationErrors(t *testing.T) {
 	}{
 		{
 			name:    "users get missing id",
-			args:    []string{"users", "get"},
+			args:    []string{"users", "view"},
 			wantErr: "--id is required",
 		},
 		{
@@ -1363,7 +1363,7 @@ func TestUsersValidationErrors(t *testing.T) {
 		},
 		{
 			name:    "users invites get missing id",
-			args:    []string{"users", "invites", "get"},
+			args:    []string{"users", "invites", "view"},
 			wantErr: "--id is required",
 		},
 		{
@@ -1413,27 +1413,27 @@ func TestPricingValidationErrors(t *testing.T) {
 	}{
 		{
 			name:    "pricing schedule get missing app and id",
-			args:    []string{"pricing", "schedule", "get"},
+			args:    []string{"pricing", "schedule", "view"},
 			wantErr: "Error: --app or --id is required",
 		},
 		{
 			name:    "pricing schedule get mutually exclusive",
-			args:    []string{"pricing", "schedule", "get", "--app", "APP_ID", "--id", "SCHEDULE_ID"},
+			args:    []string{"pricing", "schedule", "view", "--app", "APP_ID", "--id", "SCHEDULE_ID"},
 			wantErr: "Error: --id and --app are mutually exclusive",
 		},
 		{
 			name:    "pricing availability get missing app and id",
-			args:    []string{"pricing", "availability", "get"},
+			args:    []string{"pricing", "availability", "view"},
 			wantErr: "Error: --app or --id is required",
 		},
 		{
 			name:    "pricing availability get mutually exclusive",
-			args:    []string{"pricing", "availability", "get", "--app", "APP_ID", "--id", "AVAILABILITY_ID"},
+			args:    []string{"pricing", "availability", "view", "--app", "APP_ID", "--id", "AVAILABILITY_ID"},
 			wantErr: "Error: --id and --app are mutually exclusive",
 		},
 		{
 			name:    "pricing availability set missing available in new territories",
-			args:    []string{"pricing", "availability", "set", "--app", "APP_ID", "--territory", "USA", "--available", "true"},
+			args:    []string{"pricing", "availability", "edit", "--app", "APP_ID", "--territory", "USA", "--available", "true"},
 			wantErr: "Error: --available-in-new-territories is required",
 		},
 		{
@@ -1493,7 +1493,7 @@ func TestSubscriptionsValidationErrors(t *testing.T) {
 		},
 		{
 			name:    "subscriptions groups get missing id",
-			args:    []string{"subscriptions", "groups", "get"},
+			args:    []string{"subscriptions", "groups", "view"},
 			wantErr: "--id is required",
 		},
 		{
@@ -1538,7 +1538,7 @@ func TestSubscriptionsValidationErrors(t *testing.T) {
 		},
 		{
 			name:    "subscriptions get missing id",
-			args:    []string{"subscriptions", "get"},
+			args:    []string{"subscriptions", "view"},
 			wantErr: "--id is required",
 		},
 		{
@@ -1628,7 +1628,7 @@ func TestSubscriptionsValidationErrors(t *testing.T) {
 		},
 		{
 			name:    "subscriptions review app-store-screenshot get missing id",
-			args:    []string{"subscriptions", "review", "app-store-screenshot", "get"},
+			args:    []string{"subscriptions", "review", "app-store-screenshot", "view"},
 			wantErr: "--subscription-id is required",
 		},
 		{
@@ -1643,7 +1643,7 @@ func TestSubscriptionsValidationErrors(t *testing.T) {
 		},
 		{
 			name:    "subscriptions grace-periods get missing id",
-			args:    []string{"subscriptions", "grace-periods", "get"},
+			args:    []string{"subscriptions", "grace-periods", "view"},
 			wantErr: "--id is required",
 		},
 		{
@@ -1793,7 +1793,7 @@ func TestSubscriptionsValidationErrors(t *testing.T) {
 		},
 		{
 			name:    "subscriptions offer-codes one-time-codes get missing id",
-			args:    []string{"subscriptions", "offers", "offer-codes", "one-time-codes", "get"},
+			args:    []string{"subscriptions", "offers", "offer-codes", "one-time-codes", "view"},
 			wantErr: "--batch-id is required",
 		},
 		{
@@ -1858,7 +1858,7 @@ func TestSubscriptionsValidationErrors(t *testing.T) {
 		},
 		{
 			name:    "subscriptions review screenshots get missing screenshot-id",
-			args:    []string{"subscriptions", "review", "screenshots", "get"},
+			args:    []string{"subscriptions", "review", "screenshots", "view"},
 			wantErr: "--screenshot-id is required",
 		},
 		{
@@ -1888,7 +1888,7 @@ func TestSubscriptionsValidationErrors(t *testing.T) {
 		},
 		{
 			name:    "apps subscription-grace-period get missing app",
-			args:    []string{"apps", "subscription-grace-period", "get"},
+			args:    []string{"apps", "subscription-grace-period", "view"},
 			wantErr: "--app is required",
 		},
 	}
@@ -1926,7 +1926,7 @@ func TestDevicesValidationErrors(t *testing.T) {
 	}{
 		{
 			name:    "devices get missing id",
-			args:    []string{"devices", "get"},
+			args:    []string{"devices", "view"},
 			wantErr: "--id is required",
 		},
 		{
@@ -2058,8 +2058,8 @@ func TestTestFlightAppsValidationErrors(t *testing.T) {
 			wantHelp: false,
 		},
 		{
-			name:     "apps get missing id",
-			args:     []string{"apps", "get"},
+			name:     "apps view missing id",
+			args:     []string{"apps", "view"},
 			wantErr:  "--id is required",
 			wantHelp: true,
 		},
@@ -2111,17 +2111,17 @@ func TestTestFlightReviewValidationErrors(t *testing.T) {
 	}{
 		{
 			name:    "review get missing app",
-			args:    []string{"testflight", "review", "get"},
+			args:    []string{"testflight", "review", "view"},
 			wantErr: "--app is required",
 		},
 		{
 			name:    "review update missing id",
-			args:    []string{"testflight", "review", "update"},
+			args:    []string{"testflight", "review", "edit"},
 			wantErr: "--id is required",
 		},
 		{
 			name:    "review update missing updates",
-			args:    []string{"testflight", "review", "update", "--id", "DETAIL_ID"},
+			args:    []string{"testflight", "review", "edit", "--id", "DETAIL_ID"},
 			wantErr: "at least one update flag is required",
 		},
 		{
@@ -2188,34 +2188,46 @@ func TestAgeRatingValidationErrors(t *testing.T) {
 			wantHelp: false,
 		},
 		{
-			name:     "age-rating get alias missing app",
+			name:     "age-rating get removed",
 			args:     []string{"age-rating", "get"},
-			wantErr:  "--app is required",
+			wantErr:  "Error: `asc age-rating get` was removed. Use `asc age-rating view` instead.",
 			wantHelp: true,
 		},
 		{
-			name:     "age-rating get alias conflicting targets",
-			args:     []string{"age-rating", "get", "--app-info-id", "INFO_ID", "--version-id", "VERSION_ID"},
+			name:     "age-rating set removed",
+			args:     []string{"age-rating", "set", "--id", "AGE_ID"},
+			wantErr:  "Error: `asc age-rating set` was removed. Use `asc age-rating edit` instead.",
+			wantHelp: true,
+		},
+		{
+			name:     "age-rating edit conflicting targets",
+			args:     []string{"age-rating", "edit", "--app-info-id", "INFO_ID", "--version-id", "VERSION_ID"},
 			wantErr:  "only one of --app-info-id or --version-id is allowed",
 			wantHelp: false,
 		},
 		{
-			name:     "age-rating set missing target",
-			args:     []string{"age-rating", "set", "--gambling", "true"},
+			name:     "age-rating edit missing target",
+			args:     []string{"age-rating", "edit", "--gambling", "true"},
 			wantErr:  "--id or --app is required",
 			wantHelp: true,
 		},
 		{
-			name:     "age-rating set missing updates",
-			args:     []string{"age-rating", "set", "--id", "AGE_ID"},
+			name:     "age-rating edit missing updates",
+			args:     []string{"age-rating", "edit", "--id", "AGE_ID"},
 			wantErr:  "at least one update flag is required",
 			wantHelp: false,
 		},
 		{
-			name:     "age-rating set invalid enum",
-			args:     []string{"age-rating", "set", "--id", "AGE_ID", "--gambling-simulated", "BAD"},
+			name:     "age-rating edit invalid enum",
+			args:     []string{"age-rating", "edit", "--id", "AGE_ID", "--gambling-simulated", "BAD"},
 			wantErr:  "--gambling-simulated must be one of",
 			wantHelp: false,
+		},
+		{
+			name:     "age-rating get removed with conflicting targets",
+			args:     []string{"age-rating", "get", "--app-info-id", "INFO_ID", "--version-id", "VERSION_ID"},
+			wantErr:  "Error: `asc age-rating get` was removed. Use `asc age-rating view` instead.",
+			wantHelp: true,
 		},
 	}
 
@@ -2276,8 +2288,8 @@ func TestAccessibilityValidationErrors(t *testing.T) {
 			wantHelp: true,
 		},
 		{
-			name:     "accessibility get missing id",
-			args:     []string{"accessibility", "get"},
+			name:     "accessibility view missing id",
+			args:     []string{"accessibility", "view"},
 			wantErr:  "--id is required",
 			wantHelp: true,
 		},
@@ -2594,8 +2606,8 @@ func TestRoutingCoverageValidationErrors(t *testing.T) {
 		wantHelp bool
 	}{
 		{
-			name:     "routing-coverage get missing version id",
-			args:     []string{"routing-coverage", "get"},
+			name:     "routing-coverage view missing version id",
+			args:     []string{"routing-coverage", "view"},
 			wantErr:  "--version-id is required",
 			wantHelp: true,
 		},
@@ -2688,20 +2700,20 @@ func TestEncryptionValidationErrors(t *testing.T) {
 			wantHelp: true,
 		},
 		{
-			name:     "encryption declarations get missing id",
-			args:     []string{"encryption", "declarations", "get"},
+			name:     "encryption declarations view missing id",
+			args:     []string{"encryption", "declarations", "view"},
 			wantErr:  "--id is required",
 			wantHelp: true,
 		},
 		{
-			name:     "encryption declarations app get missing id",
-			args:     []string{"encryption", "declarations", "app", "get"},
+			name:     "encryption declarations app view missing id",
+			args:     []string{"encryption", "declarations", "app", "view"},
 			wantErr:  "--id is required",
 			wantHelp: true,
 		},
 		{
-			name:     "encryption declarations document get missing id",
-			args:     []string{"encryption", "declarations", "app-encryption-declaration-document", "get"},
+			name:     "encryption declarations document view missing id",
+			args:     []string{"encryption", "declarations", "app-encryption-declaration-document", "view"},
 			wantErr:  "--id is required",
 			wantHelp: true,
 		},
@@ -2760,8 +2772,8 @@ func TestEncryptionValidationErrors(t *testing.T) {
 			wantHelp: true,
 		},
 		{
-			name:     "encryption documents get missing id",
-			args:     []string{"encryption", "documents", "get"},
+			name:     "encryption documents view missing id",
+			args:     []string{"encryption", "documents", "view"},
 			wantErr:  "--id is required",
 			wantHelp: true,
 		},
@@ -2836,8 +2848,8 @@ func TestAndroidIosMappingValidationErrors(t *testing.T) {
 			wantHelp: true,
 		},
 		{
-			name:     "android-ios-mapping get missing id",
-			args:     []string{"android-ios-mapping", "get"},
+			name:     "android-ios-mapping view missing id",
+			args:     []string{"android-ios-mapping", "view"},
 			wantErr:  "--mapping-id is required",
 			wantHelp: true,
 		},
@@ -2941,8 +2953,8 @@ func TestPerformanceValidationErrors(t *testing.T) {
 			wantHelp: true,
 		},
 		{
-			name:     "performance metrics get missing build",
-			args:     []string{"performance", "metrics", "get"},
+			name:     "performance metrics view missing build",
+			args:     []string{"performance", "metrics", "view"},
 			wantErr:  "--build is required",
 			wantHelp: true,
 		},
@@ -2953,8 +2965,8 @@ func TestPerformanceValidationErrors(t *testing.T) {
 			wantHelp: true,
 		},
 		{
-			name:     "performance diagnostics get missing id",
-			args:     []string{"performance", "diagnostics", "get"},
+			name:     "performance diagnostics view missing id",
+			args:     []string{"performance", "diagnostics", "view"},
 			wantErr:  "--id is required",
 			wantHelp: true,
 		},
@@ -3033,18 +3045,18 @@ func TestTestFlightBetaDetailsValidationErrors(t *testing.T) {
 		wantErr string
 	}{
 		{
-			name:    "beta-details get missing build",
-			args:    []string{"testflight", "beta-details", "get"},
+			name:    "review submit missing build",
+			args:    []string{"testflight", "review", "submit", "--confirm"},
 			wantErr: "--build-id is required",
 		},
 		{
 			name:    "beta-details update missing id",
-			args:    []string{"testflight", "beta-details", "update"},
+			args:    []string{"testflight", "review", "edit"},
 			wantErr: "--id is required",
 		},
 		{
 			name:    "beta-details update missing updates",
-			args:    []string{"testflight", "beta-details", "update", "--id", "DETAIL_ID"},
+			args:    []string{"testflight", "review", "edit", "--id", "DETAIL_ID"},
 			wantErr: "at least one update flag is required",
 		},
 	}
@@ -3139,8 +3151,8 @@ func TestTestFlightMetricsValidationErrors(t *testing.T) {
 			wantErr: "--group is required",
 		},
 		{
-			name:    "metrics testers missing group",
-			args:    []string{"testflight", "metrics", "testers"},
+			name:    "metrics group-testers missing group",
+			args:    []string{"testflight", "metrics", "group-testers"},
 			wantErr: "--group is required",
 		},
 	}
@@ -3179,23 +3191,23 @@ func TestTestFlightSyncValidationErrors(t *testing.T) {
 		wantErr string
 	}{
 		{
-			name:    "testflight sync pull missing app",
-			args:    []string{"testflight", "sync", "pull", "--output", "./testflight.yaml"},
+			name:    "testflight config export missing app",
+			args:    []string{"testflight", "config", "export", "--output", "./testflight.yaml"},
 			wantErr: "--app is required",
 		},
 		{
-			name:    "testflight sync pull missing output",
-			args:    []string{"testflight", "sync", "pull", "--app", "APP_ID"},
+			name:    "testflight config export missing output",
+			args:    []string{"testflight", "config", "export", "--app", "APP_ID"},
 			wantErr: "--output is required",
 		},
 		{
-			name:    "testflight sync pull build filter without include",
-			args:    []string{"testflight", "sync", "pull", "--app", "APP_ID", "--output", "./testflight.yaml", "--build-id", "BUILD_ID"},
+			name:    "testflight config export build filter without include",
+			args:    []string{"testflight", "config", "export", "--app", "APP_ID", "--output", "./testflight.yaml", "--build-id", "BUILD_ID"},
 			wantErr: "--build-id requires --include-builds",
 		},
 		{
-			name:    "testflight sync pull tester filter without include",
-			args:    []string{"testflight", "sync", "pull", "--app", "APP_ID", "--output", "./testflight.yaml", "--tester", "tester@example.com"},
+			name:    "testflight config export tester filter without include",
+			args:    []string{"testflight", "config", "export", "--app", "APP_ID", "--output", "./testflight.yaml", "--tester", "tester@example.com"},
 			wantErr: "--tester requires --include-testers",
 		},
 	}
@@ -3272,7 +3284,7 @@ func TestBetaTestersListAcceptsBuildFilter(t *testing.T) {
 	root := RootCommand("1.2.3")
 	root.FlagSet.SetOutput(io.Discard)
 
-	if err := root.Parse([]string{"testflight", "beta-testers", "list", "--app", "X", "--build-id", "Y"}); err != nil {
+	if err := root.Parse([]string{"testflight", "testers", "list", "--app", "X", "--build-id", "Y"}); err != nil {
 		t.Fatalf("parse error: %v", err)
 	}
 }
@@ -3752,6 +3764,36 @@ func TestPublishValidationErrors(t *testing.T) {
 			wantErr: "--version is only supported when --ipa is provided",
 		},
 		{
+			name:    "publish testflight local build requires exactly one selector",
+			args:    []string{"publish", "testflight", "--app", "APP_123", "--workspace", "App.xcworkspace", "--project", "App.xcodeproj", "--scheme", "App", "--version", "1.2.3", "--group", "GROUP_ID"},
+			wantErr: "exactly one of --workspace or --project is required",
+		},
+		{
+			name:    "publish testflight local build missing scheme",
+			args:    []string{"publish", "testflight", "--app", "APP_123", "--workspace", "App.xcworkspace", "--version", "1.2.3", "--group", "GROUP_ID"},
+			wantErr: "--scheme is required",
+		},
+		{
+			name:    "publish testflight local build missing version",
+			args:    []string{"publish", "testflight", "--app", "APP_123", "--workspace", "App.xcworkspace", "--scheme", "App", "--group", "GROUP_ID"},
+			wantErr: "--version is required",
+		},
+		{
+			name:    "publish testflight local build rejects ipa",
+			args:    []string{"publish", "testflight", "--app", "APP_123", "--workspace", "App.xcworkspace", "--scheme", "App", "--version", "1.2.3", "--ipa", "app.ipa", "--group", "GROUP_ID"},
+			wantErr: "--ipa cannot be combined with --workspace or --project",
+		},
+		{
+			name:    "publish testflight local build rejects build",
+			args:    []string{"publish", "testflight", "--app", "APP_123", "--workspace", "App.xcworkspace", "--scheme", "App", "--version", "1.2.3", "--build", "BUILD_123", "--group", "GROUP_ID"},
+			wantErr: "--build cannot be combined with --workspace or --project",
+		},
+		{
+			name:    "publish testflight local build only flag without selector",
+			args:    []string{"publish", "testflight", "--app", "APP_123", "--ipa", "app.ipa", "--group", "GROUP_ID", "--archive-path", ".asc/artifacts/App.xcarchive"},
+			wantErr: "--archive-path requires --workspace or --project",
+		},
+		{
 			name:    "publish appstore invalid poll interval",
 			args:    []string{"publish", "appstore", "--app", "APP_123", "--ipa", "app.ipa", "--version", "1.0.0", "--poll-interval", "0s"},
 			wantErr: "--poll-interval must be greater than 0",
@@ -3760,6 +3802,31 @@ func TestPublishValidationErrors(t *testing.T) {
 			name:    "publish appstore invalid timeout",
 			args:    []string{"publish", "appstore", "--app", "APP_123", "--ipa", "app.ipa", "--version", "1.0.0", "--timeout", "-1s"},
 			wantErr: "--timeout must be greater than 0",
+		},
+		{
+			name:    "publish appstore local build requires exactly one selector",
+			args:    []string{"publish", "appstore", "--app", "APP_123", "--workspace", "App.xcworkspace", "--project", "App.xcodeproj", "--scheme", "App", "--version", "1.2.3"},
+			wantErr: "exactly one of --workspace or --project is required",
+		},
+		{
+			name:    "publish appstore local build missing scheme",
+			args:    []string{"publish", "appstore", "--app", "APP_123", "--workspace", "App.xcworkspace", "--version", "1.2.3"},
+			wantErr: "--scheme is required",
+		},
+		{
+			name:    "publish appstore local build missing version",
+			args:    []string{"publish", "appstore", "--app", "APP_123", "--workspace", "App.xcworkspace", "--scheme", "App"},
+			wantErr: "--version is required",
+		},
+		{
+			name:    "publish appstore local build rejects ipa",
+			args:    []string{"publish", "appstore", "--app", "APP_123", "--workspace", "App.xcworkspace", "--scheme", "App", "--version", "1.2.3", "--ipa", "app.ipa"},
+			wantErr: "--ipa cannot be combined with --workspace or --project",
+		},
+		{
+			name:    "publish appstore local build only flag without selector",
+			args:    []string{"publish", "appstore", "--app", "APP_123", "--ipa", "app.ipa", "--version", "1.2.3", "--export-options", "ExportOptions.plist"},
+			wantErr: "--export-options requires --workspace or --project",
 		},
 	}
 
@@ -3788,7 +3855,7 @@ func TestPublishValidationErrors(t *testing.T) {
 	}
 }
 
-func TestPublishRejectsSymlinkIPAPath(t *testing.T) {
+func TestCommandsRejectSymlinkIPAPath(t *testing.T) {
 	dir := t.TempDir()
 	target := filepath.Join(dir, "target.ipa")
 	if err := os.WriteFile(target, []byte("dummy"), 0o600); err != nil {
@@ -3818,6 +3885,14 @@ func TestPublishRejectsSymlinkIPAPath(t *testing.T) {
 			args: []string{"publish", "appstore", "--app", "APP_123", "--ipa", link, "--version", "1.0.0"},
 			wantErr: fmt.Sprintf(
 				`publish appstore: refusing to read symlink %q`,
+				link,
+			),
+		},
+		{
+			name: "builds upload rejects symlink",
+			args: []string{"builds", "upload", "--app", "APP_123", "--ipa", link, "--version", "1.0.0", "--build-number", "42"},
+			wantErr: fmt.Sprintf(
+				`builds upload: refusing to read symlink %q`,
 				link,
 			),
 		},
@@ -3861,26 +3936,6 @@ func TestSubmitValidationErrors(t *testing.T) {
 		wantErr string
 	}{
 		{
-			name:    "create missing confirm",
-			args:    []string{"submit", "create", "--app", "APP_123", "--version", "1.0.0", "--build", "BUILD_123"},
-			wantErr: "Error: --confirm is required",
-		},
-		{
-			name:    "create missing build",
-			args:    []string{"submit", "create", "--app", "APP_123", "--version", "1.0.0", "--confirm"},
-			wantErr: "Error: --build is required",
-		},
-		{
-			name:    "create missing version",
-			args:    []string{"submit", "create", "--app", "APP_123", "--build", "BUILD_123", "--confirm"},
-			wantErr: "Error: --version or --version-id is required",
-		},
-		{
-			name:    "create version and version-id mutually exclusive",
-			args:    []string{"submit", "create", "--app", "APP_123", "--version", "1.0.0", "--version-id", "VERSION_123", "--build", "BUILD_123", "--confirm"},
-			wantErr: "--version and --version-id are mutually exclusive",
-		},
-		{
 			name:    "status missing id",
 			args:    []string{"submit", "status"},
 			wantErr: "Error: --id or --version-id is required",
@@ -3904,6 +3959,16 @@ func TestSubmitValidationErrors(t *testing.T) {
 			name:    "cancel id and version-id mutually exclusive",
 			args:    []string{"submit", "cancel", "--confirm", "--id", "SUBMIT_123", "--version-id", "VERSION_123"},
 			wantErr: "--id and --version-id are mutually exclusive",
+		},
+		{
+			name:    "create removed",
+			args:    []string{"submit", "create", "--confirm"},
+			wantErr: "Error: `asc submit create` was removed. Use `asc publish appstore --submit` or `asc versions attach-build` + `asc review submissions-*` instead.",
+		},
+		{
+			name:    "preflight removed",
+			args:    []string{"submit", "preflight"},
+			wantErr: "Error: `asc submit preflight` was removed. Use `asc validate` instead.",
 		},
 	}
 
@@ -3932,25 +3997,6 @@ func TestSubmitValidationErrors(t *testing.T) {
 	}
 }
 
-func TestSubmitValidationConflicts(t *testing.T) {
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	_, stderr := captureOutput(t, func() {
-		err := root.Parse([]string{"submit", "create", "--app", "APP_123", "--version", "1.0.0", "--version-id", "VERSION_123", "--build", "BUILD_123", "--confirm"})
-		if err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		err = root.Run(context.Background())
-		if !errors.Is(err, flag.ErrHelp) {
-			t.Fatalf("expected ErrHelp for conflicting flags, got %v", err)
-		}
-	})
-	if !strings.Contains(stderr, "--version and --version-id are mutually exclusive") {
-		t.Fatalf("expected mutual exclusion message in stderr, got %q", stderr)
-	}
-}
-
 func TestVersionsValidationErrors(t *testing.T) {
 	t.Setenv("ASC_APP_ID", "")
 
@@ -3965,8 +4011,8 @@ func TestVersionsValidationErrors(t *testing.T) {
 			wantErr: "Error: --app is required",
 		},
 		{
-			name:    "get missing version id",
-			args:    []string{"versions", "get"},
+			name:    "view missing version id",
+			args:    []string{"versions", "view"},
 			wantErr: "Error: --version-id is required",
 		},
 		{
@@ -4153,6 +4199,11 @@ func TestAppsUpdateValidationErrors(t *testing.T) {
 		wantErr string
 	}{
 		{
+			name:    "apps create removed",
+			args:    []string{"apps", "create"},
+			wantErr: "Error: `asc apps create` was removed. Use `asc web apps create` instead.",
+		},
+		{
 			name:    "apps update missing id",
 			args:    []string{"apps", "update"},
 			wantErr: "Error: --id is required",
@@ -4337,13 +4388,13 @@ func TestAppTagsValidationErrors(t *testing.T) {
 			wantErr: "Error: --app is required",
 		},
 		{
-			name:    "app-tags get missing id",
-			args:    []string{"app-tags", "get", "--app", "APP_ID"},
+			name:    "app-tags view missing id",
+			args:    []string{"app-tags", "view", "--app", "APP_ID"},
 			wantErr: "Error: --id is required",
 		},
 		{
-			name:    "app-tags get missing app",
-			args:    []string{"app-tags", "get", "--id", "TAG_ID"},
+			name:    "app-tags view missing app",
+			args:    []string{"app-tags", "view", "--id", "TAG_ID"},
 			wantErr: "Error: --app is required",
 		},
 		{
@@ -4417,8 +4468,8 @@ func TestAppClipsValidationErrors(t *testing.T) {
 			wantErr: "Error: --app is required",
 		},
 		{
-			name:    "app-clips get missing id",
-			args:    []string{"app-clips", "get"},
+			name:    "app-clips view missing id",
+			args:    []string{"app-clips", "view"},
 			wantErr: "Error: --id is required",
 		},
 		{
@@ -4467,8 +4518,8 @@ func TestAppClipsValidationErrors(t *testing.T) {
 			wantErr: "Error: --experience-id is required",
 		},
 		{
-			name:    "default experiences header image get missing localization",
-			args:    []string{"app-clips", "default-experiences", "header-image", "get"},
+			name:    "default experiences header image view missing localization",
+			args:    []string{"app-clips", "default-experiences", "header-image", "view"},
 			wantErr: "Error: --localization-id is required",
 		},
 		{
@@ -5214,8 +5265,8 @@ func TestXcodeCloudValidationErrors(t *testing.T) {
 			wantErr: "--app is required",
 		},
 		{
-			name:    "xcode-cloud workflows get missing id",
-			args:    []string{"xcode-cloud", "workflows", "get"},
+			name:    "xcode-cloud workflows view missing id",
+			args:    []string{"xcode-cloud", "workflows", "view"},
 			wantErr: "--id is required",
 		},
 		{
@@ -5254,8 +5305,8 @@ func TestXcodeCloudValidationErrors(t *testing.T) {
 			wantErr: "--workflow-id is required",
 		},
 		{
-			name:    "xcode-cloud build-runs get missing id",
-			args:    []string{"xcode-cloud", "build-runs", "get"},
+			name:    "xcode-cloud build-runs view missing id",
+			args:    []string{"xcode-cloud", "build-runs", "view"},
 			wantErr: "--id is required",
 		},
 		{
@@ -5269,8 +5320,8 @@ func TestXcodeCloudValidationErrors(t *testing.T) {
 			wantErr: "--run-id is required",
 		},
 		{
-			name:    "xcode-cloud actions get missing id",
-			args:    []string{"xcode-cloud", "actions", "get"},
+			name:    "xcode-cloud actions view missing id",
+			args:    []string{"xcode-cloud", "actions", "view"},
 			wantErr: "--id is required",
 		},
 		{
@@ -5284,8 +5335,8 @@ func TestXcodeCloudValidationErrors(t *testing.T) {
 			wantErr: "--action-id or --run-id is required",
 		},
 		{
-			name:    "xcode-cloud artifacts get missing id",
-			args:    []string{"xcode-cloud", "artifacts", "get"},
+			name:    "xcode-cloud artifacts view missing id",
+			args:    []string{"xcode-cloud", "artifacts", "view"},
 			wantErr: "--id is required",
 		},
 		{
@@ -5304,8 +5355,8 @@ func TestXcodeCloudValidationErrors(t *testing.T) {
 			wantErr: "--action-id or --run-id is required",
 		},
 		{
-			name:    "xcode-cloud test-results get missing id",
-			args:    []string{"xcode-cloud", "test-results", "get"},
+			name:    "xcode-cloud test-results view missing id",
+			args:    []string{"xcode-cloud", "test-results", "view"},
 			wantErr: "--id is required",
 		},
 		{
@@ -5314,13 +5365,13 @@ func TestXcodeCloudValidationErrors(t *testing.T) {
 			wantErr: "--action-id or --run-id is required",
 		},
 		{
-			name:    "xcode-cloud issues get missing id",
-			args:    []string{"xcode-cloud", "issues", "get"},
+			name:    "xcode-cloud issues view missing id",
+			args:    []string{"xcode-cloud", "issues", "view"},
 			wantErr: "--id is required",
 		},
 		{
-			name:    "xcode-cloud products get missing id",
-			args:    []string{"xcode-cloud", "products", "get"},
+			name:    "xcode-cloud products view missing id",
+			args:    []string{"xcode-cloud", "products", "view"},
 			wantErr: "--id is required",
 		},
 		{
@@ -5359,8 +5410,8 @@ func TestXcodeCloudValidationErrors(t *testing.T) {
 			wantErr: "--confirm is required",
 		},
 		{
-			name:    "xcode-cloud macos-versions get missing id",
-			args:    []string{"xcode-cloud", "macos-versions", "get"},
+			name:    "xcode-cloud macos-versions view missing id",
+			args:    []string{"xcode-cloud", "macos-versions", "view"},
 			wantErr: "--id is required",
 		},
 		{
@@ -5369,8 +5420,8 @@ func TestXcodeCloudValidationErrors(t *testing.T) {
 			wantErr: "--id is required",
 		},
 		{
-			name:    "xcode-cloud xcode-versions get missing id",
-			args:    []string{"xcode-cloud", "xcode-versions", "get"},
+			name:    "xcode-cloud xcode-versions view missing id",
+			args:    []string{"xcode-cloud", "xcode-versions", "view"},
 			wantErr: "--id is required",
 		},
 		{

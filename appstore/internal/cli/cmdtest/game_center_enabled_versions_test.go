@@ -26,6 +26,11 @@ func setupAuth(t *testing.T) {
 	t.Setenv("ASC_KEY_ID", "TEST_KEY")
 	t.Setenv("ASC_ISSUER_ID", "TEST_ISSUER")
 	t.Setenv("ASC_PRIVATE_KEY_PATH", keyPath)
+	t.Setenv("ASC_APP_ID", "")
+	t.Setenv("ASC_PROFILE", "")
+	t.Setenv("ASC_PRIVATE_KEY", "")
+	t.Setenv("ASC_PRIVATE_KEY_B64", "")
+	t.Setenv("ASC_STRICT_AUTH", "")
 }
 
 func TestGameCenterEnabledVersionsListValidationErrors(t *testing.T) {

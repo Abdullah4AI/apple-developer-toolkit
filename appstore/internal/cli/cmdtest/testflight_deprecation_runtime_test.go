@@ -7,56 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/cmd"
 )
-
-func TestRootFeedbackAndCrashesWarnBeforeAuthFailure(t *testing.T) {
-	tests := []struct {
-		name    string
-		args    []string
-		warning string
-	}{
-		{
-			name:    "feedback",
-			args:    []string{"feedback", "--app", "123"},
-			warning: feedbackRootDeprecationWarning,
-		},
-		{
-			name:    "crashes",
-			args:    []string{"crashes", "--app", "123"},
-			warning: crashesRootDeprecationWarning,
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			t.Setenv("ASC_BYPASS_KEYCHAIN", "1")
-			t.Setenv("ASC_PROFILE", "")
-			t.Setenv("ASC_KEY_ID", "")
-			t.Setenv("ASC_ISSUER_ID", "")
-			t.Setenv("ASC_PRIVATE_KEY_PATH", "")
-			t.Setenv("ASC_PRIVATE_KEY", "")
-			t.Setenv("ASC_PRIVATE_KEY_B64", "")
-			t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
-
-			stdout, stderr := captureOutput(t, func() {
-				code := cmd.Run(test.args, "1.2.3")
-				if code != cmd.ExitAuth {
-					t.Fatalf("expected exit code %d, got %d", cmd.ExitAuth, code)
-				}
-			})
-
-			if stdout != "" {
-				t.Fatalf("expected empty stdout, got %q", stdout)
-			}
-			requireStderrContainsWarning(t, stderr, test.warning)
-			if !strings.Contains(stderr, "missing authentication") {
-				t.Fatalf("expected missing auth error, got %q", stderr)
-			}
-		})
-	}
-}
 
 func TestTestFlightGroupsDeleteUsesCanonicalSuccessMessage(t *testing.T) {
 	setupAuth(t)

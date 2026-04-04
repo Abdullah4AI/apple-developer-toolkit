@@ -99,7 +99,8 @@ var subscriptionPricesImportKnownColumns = map[string]string{
 func SubscriptionsPricesImportCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("prices import", flag.ExitOnError)
 
-	subID := fs.String("subscription-id", "", "Subscription ID")
+	subID := fs.String("subscription-id", "", "Subscription ID, product ID, or exact current name")
+	appID := addSubscriptionLookupAppFlag(fs)
 	inputPath := fs.String("input", "", "Input CSV file path (required)")
 	startDate := fs.String("start-date", "", "Default start date (YYYY-MM-DD) for rows without start_date")
 	preserved := fs.Bool("preserved", false, "Set preserveCurrentPrice=true for rows without preserved columns")
@@ -174,6 +175,13 @@ Examples:
 				Total:           len(rows),
 			}
 
+			resolveCtx, resolveCancel := shared.ContextWithTimeout(ctx)
+			summary.SubscriptionID, err = resolveSubscriptionLookupID(resolveCtx, client, *appID, summary.SubscriptionID)
+			resolveCancel()
+			if err != nil {
+				return err
+			}
+
 			lookupCache := &subscriptionPricePointLookupCache{
 				byTerritory: make(map[string]map[string][]string),
 			}
@@ -190,7 +198,7 @@ Examples:
 
 				pricePointID := resolvedRow.pricePointID
 				if pricePointID == "" {
-					pricePointID, rowErr = lookupCache.lookupPricePointID(ctx, client, id, resolvedRow.territoryID, resolvedRow.priceKey, resolvedRow.price)
+					pricePointID, rowErr = lookupCache.lookupPricePointID(ctx, client, summary.SubscriptionID, resolvedRow.territoryID, resolvedRow.priceKey, resolvedRow.price)
 					if rowErr != nil {
 						appendSubscriptionPriceImportFailure(summary, resolvedRow, rowErr)
 						if !*continueOnError {
@@ -213,7 +221,7 @@ Examples:
 				}
 
 				createCtx, createCancel := shared.ContextWithTimeout(ctx)
-				_, rowErr = client.CreateSubscriptionPrice(createCtx, id, pricePointID, resolvedRow.territoryID, attrs)
+				_, rowErr = client.CreateSubscriptionPrice(createCtx, summary.SubscriptionID, pricePointID, resolvedRow.territoryID, attrs)
 				createCancel()
 				if rowErr != nil {
 					appendSubscriptionPriceImportFailure(summary, resolvedRow, rowErr)

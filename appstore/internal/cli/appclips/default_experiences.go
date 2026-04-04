@@ -36,7 +36,6 @@ Examples:
 			AppClipDefaultExperienceReviewDetailCommand(),
 			AppClipDefaultExperienceReleaseWithAppStoreVersionCommand(),
 			AppClipDefaultExperienceRelationshipsCommand(),
-			DeprecatedAppClipDefaultExperienceRelationshipsAliasCommand(),
 			AppClipDefaultExperienceHeaderImageCommand(),
 			AppClipDefaultExperiencesCreateCommand(),
 			AppClipDefaultExperiencesUpdateCommand(),

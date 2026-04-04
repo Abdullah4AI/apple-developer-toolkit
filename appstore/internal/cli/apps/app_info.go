@@ -832,7 +832,7 @@ func warnAppInfoSetSubmitIncompleteLocale(locale string, attrs asc.AppStoreVersi
 
 	fmt.Fprintf(
 		os.Stderr,
-		"Warning: locale %s is missing submit-required fields: %s. This may block `asc submit create`.\n",
+		"Warning: locale %s is missing submit-required fields: %s. This may block `asc publish appstore --submit`.\n",
 		locale,
 		strings.Join(missing, ", "),
 	)

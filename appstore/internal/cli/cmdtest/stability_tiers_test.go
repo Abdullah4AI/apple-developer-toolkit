@@ -30,6 +30,8 @@ func TestExperimentalCommandsHaveStabilityLabel(t *testing.T) {
 		{[]string{"screenshots", "review-generate"}},
 		{[]string{"screenshots", "review-open"}},
 		{[]string{"screenshots", "review-approve"}},
+		{[]string{"screenshots", "plan"}},
+		{[]string{"screenshots", "apply"}},
 	}
 
 	for _, tc := range cases {

@@ -49,14 +49,6 @@ Examples:
 			TestFlightConfigCommand(),
 			TestFlightAppLocalizationsCommand(),
 			TestFlightPreReleaseCommand(),
-			DeprecatedBetaGroupsAliasCommand(),
-			DeprecatedBetaTestersAliasCommand(),
-			DeprecatedBetaFeedbackAliasCommand(),
-			DeprecatedBetaCrashLogsAliasCommand(),
-			DeprecatedBetaDetailsAliasCommand(),
-			DeprecatedBetaLicenseAgreementsAliasCommand(),
-			DeprecatedBetaNotificationsAliasCommand(),
-			DeprecatedTestFlightSyncAliasCommand(),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp

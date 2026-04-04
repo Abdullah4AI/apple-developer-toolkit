@@ -33,12 +33,12 @@ func TestGameCenterGroupsListValidationErrors(t *testing.T) {
 	}
 }
 
-func TestGameCenterGroupsGetValidationErrors(t *testing.T) {
+func TestGameCenterGroupsViewValidationErrors(t *testing.T) {
 	root := RootCommand("1.2.3")
 	root.FlagSet.SetOutput(io.Discard)
 
 	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"game-center", "groups", "get"}); err != nil {
+		if err := root.Parse([]string{"game-center", "groups", "view"}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
 		err := root.Run(context.Background())

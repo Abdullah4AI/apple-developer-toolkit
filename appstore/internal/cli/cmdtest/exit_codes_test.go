@@ -53,7 +53,7 @@ func TestRun_IntroductoryOffersImportInvalidStartDateReturnsExitUsage(t *testing
 	_, stderr := captureOutput(t, func() {
 		code := cmd.Run([]string{
 			"subscriptions", "offers", "introductory", "import",
-			"--subscription-id", "SUB_ID",
+			"--subscription-id", "8000000003",
 			"--input", csvPath,
 			"--start-date", "2026-99-99",
 		}, "1.0.0")
@@ -112,7 +112,7 @@ func TestRun_IntroductoryOffersImportPartialFailureReturnsExitError(t *testing.T
 	stdout, stderr := captureOutput(t, func() {
 		code := cmd.Run([]string{
 			"subscriptions", "offers", "introductory", "import",
-			"--subscription-id", "SUB_ID",
+			"--subscription-id", "8000000003",
 			"--input", csvPath,
 			"--offer-duration", "ONE_WEEK",
 			"--offer-mode", "FREE_TRIAL",
@@ -278,9 +278,9 @@ func TestRun_UsageValidationErrorsReturnExitUsage(t *testing.T) {
 		wantErr string
 	}{
 		{
-			name:    "submit create conflicting version flags",
-			args:    []string{"submit", "create", "--version", "1.0", "--version-id", "V123", "--build", "B1", "--confirm"},
-			wantErr: "--version and --version-id are mutually exclusive",
+			name:    "submit status conflicting selectors",
+			args:    []string{"submit", "status", "--id", "SUB_123", "--version-id", "V123"},
+			wantErr: "--id and --version-id are mutually exclusive",
 		},
 		{
 			name: "auth login mutually exclusive validation flags",

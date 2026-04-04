@@ -19,7 +19,6 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/apps"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/auth"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/backgroundassets"
-	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/betaapplocalizations"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/betabuildlocalizations"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/buildbundles"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/buildlocalizations"
@@ -28,13 +27,11 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/categories"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/certificates"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/completion"
-	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/crashes"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/devices"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/diffcmd"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/docs"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/encryption"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/eula"
-	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/feedback"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/finance"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/gamecenter"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/iap"
@@ -52,12 +49,11 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/passtypeids"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/performance"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/preorders"
-	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/prerelease"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/pricing"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/productpages"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/profiles"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/publish"
-	releasecmd "github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/release"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/release"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/releasenotes"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/reviews"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/routingcoverage"
@@ -116,8 +112,6 @@ func Subcommands(version string) []*ffcli.Command {
 		status.StatusCommand(),
 		insights.InsightsCommand(),
 		releasenotes.ReleaseNotesCommand(),
-		feedback.FeedbackCommand(),
-		crashes.CrashesCommand(),
 		reviews.ReviewsCommand(),
 		reviews.ReviewCommand(),
 		analytics.AnalyticsCommand(),
@@ -144,26 +138,22 @@ func Subcommands(version string) []*ffcli.Command {
 		builds.BuildsCommand(),
 		buildbundles.BuildBundlesCommand(),
 		publish.PublishCommand(),
-		releasecmd.ReleaseCommand(),
+		release.ReleaseCommand(),
 		workflow.WorkflowCommand(),
 		xcode.XcodeCommand(),
 		versions.VersionsCommand(),
 		productpages.ProductPagesCommand(),
 		routingcoverage.RoutingCoverageCommand(),
-		apps.RemovedAppInfoCommand(),
-		apps.RemovedAppInfosCommand(),
 		eula.EULACommand(),
 		agreements.AgreementsCommand(),
 		pricing.PricingCommand(),
 		preorders.PreOrdersCommand(),
-		prerelease.RemovedPreReleaseVersionsCommand(),
 		localizations.LocalizationsCommand(),
 		metadata.MetadataCommand(),
 		screenshots.ScreenshotsCommand(),
 		videopreviews.VideoPreviewsCommand(),
 		backgroundassets.BackgroundAssetsCommand(),
 		buildlocalizations.BuildLocalizationsCommand(),
-		betaapplocalizations.DeprecatedBetaAppLocalizationsCommand(),
 		betabuildlocalizations.BetaBuildLocalizationsCommand(),
 		sandbox.SandboxCommand(),
 		signing.SigningCommand(),

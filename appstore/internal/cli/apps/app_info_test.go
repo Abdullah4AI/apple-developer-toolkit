@@ -1,6 +1,7 @@
 package apps
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
@@ -47,5 +48,18 @@ func TestSelectLatestAppStoreVersionFallsBackToFirst(t *testing.T) {
 	selected := selectLatestAppStoreVersion(versions)
 	if selected.ID != "first" {
 		t.Fatalf("expected fallback to the first version, got %q", selected.ID)
+	}
+}
+
+func TestWarnAppInfoSetSubmitIncompleteLocaleMentionsCanonicalPublishFlow(t *testing.T) {
+	stderr := captureAppsCreateOutput(t, func() {
+		warnAppInfoSetSubmitIncompleteLocale("en-US", asc.AppStoreVersionLocalizationAttributes{})
+	})
+
+	if !strings.Contains(stderr, "`asc publish appstore --submit`") {
+		t.Fatalf("expected canonical publish guidance in warning, got %q", stderr)
+	}
+	if strings.Contains(stderr, "release run") {
+		t.Fatalf("expected warning to avoid removed compatibility guidance, got %q", stderr)
 	}
 }

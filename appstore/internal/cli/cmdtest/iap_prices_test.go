@@ -24,11 +24,6 @@ func TestIAPPricesValidationErrors(t *testing.T) {
 			args:    []string{"iap", "pricing", "summary"},
 			wantErr: "Error: --app or --iap-id is required",
 		},
-		{
-			name:    "app and iap-id both set",
-			args:    []string{"iap", "pricing", "summary", "--app", "APP_ID", "--iap-id", "IAP_ID"},
-			wantErr: "Error: --app and --iap-id are mutually exclusive",
-		},
 	}
 
 	for _, test := range tests {
@@ -66,14 +61,14 @@ func TestIAPPricesByIDSuccess(t *testing.T) {
 
 	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		switch req.URL.Path {
-		case "/v2/inAppPurchases/iap-1":
-			body := `{"data":{"type":"inAppPurchases","id":"iap-1","attributes":{"name":"Lifetime Unlock","productId":"com.example.lifetime","inAppPurchaseType":"NON_CONSUMABLE"}}}`
+		case "/v2/inAppPurchases/9000000001":
+			body := `{"data":{"type":"inAppPurchases","id":"9000000001","attributes":{"name":"Lifetime Unlock","productId":"com.example.lifetime","inAppPurchaseType":"NON_CONSUMABLE"}}}`
 			return &http.Response{
 				StatusCode: http.StatusOK,
 				Body:       io.NopCloser(strings.NewReader(body)),
 				Header:     http.Header{"Content-Type": []string{"application/json"}},
 			}, nil
-		case "/v2/inAppPurchases/iap-1/iapPriceSchedule":
+		case "/v2/inAppPurchases/9000000001/iapPriceSchedule":
 			query := req.URL.Query()
 			if query.Get("include") != "baseTerritory,manualPrices,automaticPrices" {
 				t.Fatalf("unexpected include query: %q", query.Get("include"))
@@ -130,7 +125,7 @@ func TestIAPPricesByIDSuccess(t *testing.T) {
 				Body:       io.NopCloser(strings.NewReader(body)),
 				Header:     http.Header{"Content-Type": []string{"application/json"}},
 			}, nil
-		case "/v2/inAppPurchases/iap-1/pricePoints":
+		case "/v2/inAppPurchases/9000000001/pricePoints":
 			query := req.URL.Query()
 			if query.Get("filter[territory]") != "USA" {
 				t.Fatalf("unexpected territory filter: %q", query.Get("filter[territory]"))
@@ -164,7 +159,7 @@ func TestIAPPricesByIDSuccess(t *testing.T) {
 	root.FlagSet.SetOutput(io.Discard)
 
 	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"iap", "pricing", "summary", "--iap-id", "iap-1"}); err != nil {
+		if err := root.Parse([]string{"iap", "pricing", "summary", "--iap-id", "9000000001"}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
 		if err := root.Run(context.Background()); err != nil {
@@ -175,7 +170,7 @@ func TestIAPPricesByIDSuccess(t *testing.T) {
 	if stderr != "" {
 		t.Fatalf("expected empty stderr, got %q", stderr)
 	}
-	if !strings.Contains(stdout, `"id":"iap-1"`) {
+	if !strings.Contains(stdout, `"id":"9000000001"`) {
 		t.Fatalf("expected iap id in output, got %q", stdout)
 	}
 	if !strings.Contains(stdout, `"currentPrice":{"amount":"9.99","currency":"USD"}`) {
@@ -196,14 +191,14 @@ func TestIAPPricesTableOutput(t *testing.T) {
 
 	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		switch req.URL.Path {
-		case "/v2/inAppPurchases/iap-1":
-			body := `{"data":{"type":"inAppPurchases","id":"iap-1","attributes":{"name":"Lifetime Unlock","productId":"com.example.lifetime","inAppPurchaseType":"NON_CONSUMABLE"}}}`
+		case "/v2/inAppPurchases/9000000001":
+			body := `{"data":{"type":"inAppPurchases","id":"9000000001","attributes":{"name":"Lifetime Unlock","productId":"com.example.lifetime","inAppPurchaseType":"NON_CONSUMABLE"}}}`
 			return &http.Response{
 				StatusCode: http.StatusOK,
 				Body:       io.NopCloser(strings.NewReader(body)),
 				Header:     http.Header{"Content-Type": []string{"application/json"}},
 			}, nil
-		case "/v2/inAppPurchases/iap-1/iapPriceSchedule":
+		case "/v2/inAppPurchases/9000000001/iapPriceSchedule":
 			body := `{
 				"data":{
 					"type":"inAppPurchasePriceSchedules",
@@ -232,7 +227,7 @@ func TestIAPPricesTableOutput(t *testing.T) {
 				Body:       io.NopCloser(strings.NewReader(body)),
 				Header:     http.Header{"Content-Type": []string{"application/json"}},
 			}, nil
-		case "/v2/inAppPurchases/iap-1/pricePoints":
+		case "/v2/inAppPurchases/9000000001/pricePoints":
 			body := `{
 				"data":[{"type":"inAppPurchasePricePoints","id":"pp-1","attributes":{"customerPrice":"9.99","proceeds":"8.49"}}],
 				"included":[{"type":"territories","id":"USA","attributes":{"currency":"USD"}}],
@@ -253,7 +248,7 @@ func TestIAPPricesTableOutput(t *testing.T) {
 	root.FlagSet.SetOutput(io.Discard)
 
 	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"iap", "pricing", "summary", "--iap-id", "iap-1", "--output", "table"}); err != nil {
+		if err := root.Parse([]string{"iap", "pricing", "summary", "--iap-id", "9000000001", "--output", "table"}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
 		if err := root.Run(context.Background()); err != nil {
@@ -286,14 +281,14 @@ func TestIAPPricesFetchesAllScheduleEntriesWhenIncludedHitsLimit(t *testing.T) {
 
 	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		switch req.URL.Path {
-		case "/v2/inAppPurchases/iap-1":
-			body := `{"data":{"type":"inAppPurchases","id":"iap-1","attributes":{"name":"Lifetime Unlock","productId":"com.example.lifetime","inAppPurchaseType":"NON_CONSUMABLE"}}}`
+		case "/v2/inAppPurchases/9000000001":
+			body := `{"data":{"type":"inAppPurchases","id":"9000000001","attributes":{"name":"Lifetime Unlock","productId":"com.example.lifetime","inAppPurchaseType":"NON_CONSUMABLE"}}}`
 			return &http.Response{
 				StatusCode: http.StatusOK,
 				Body:       io.NopCloser(strings.NewReader(body)),
 				Header:     http.Header{"Content-Type": []string{"application/json"}},
 			}, nil
-		case "/v2/inAppPurchases/iap-1/iapPriceSchedule":
+		case "/v2/inAppPurchases/9000000001/iapPriceSchedule":
 			return &http.Response{
 				StatusCode: http.StatusOK,
 				Body:       io.NopCloser(strings.NewReader(scheduleBody)),
@@ -350,7 +345,7 @@ func TestIAPPricesFetchesAllScheduleEntriesWhenIncludedHitsLimit(t *testing.T) {
 				Body:       io.NopCloser(strings.NewReader(body)),
 				Header:     http.Header{"Content-Type": []string{"application/json"}},
 			}, nil
-		case "/v2/inAppPurchases/iap-1/pricePoints":
+		case "/v2/inAppPurchases/9000000001/pricePoints":
 			body := `{
 				"data":[
 					{"type":"inAppPurchasePricePoints","id":"pp-current","attributes":{"customerPrice":"9.99","proceeds":"8.49"}}
@@ -373,7 +368,7 @@ func TestIAPPricesFetchesAllScheduleEntriesWhenIncludedHitsLimit(t *testing.T) {
 	root.FlagSet.SetOutput(io.Discard)
 
 	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"iap", "pricing", "summary", "--iap-id", "iap-1"}); err != nil {
+		if err := root.Parse([]string{"iap", "pricing", "summary", "--iap-id", "9000000001"}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
 		if err := root.Run(context.Background()); err != nil {
@@ -411,14 +406,14 @@ func TestIAPPricesResolvesLegacyManualPricePointValues(t *testing.T) {
 
 	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		switch req.URL.Path {
-		case "/v2/inAppPurchases/iap-legacy":
-			body := `{"data":{"type":"inAppPurchases","id":"iap-legacy","attributes":{"name":"Legacy Tip","productId":"com.example.legacy.tip","inAppPurchaseType":"CONSUMABLE"}}}`
+		case "/v2/inAppPurchases/9000000002":
+			body := `{"data":{"type":"inAppPurchases","id":"9000000002","attributes":{"name":"Legacy Tip","productId":"com.example.legacy.tip","inAppPurchaseType":"CONSUMABLE"}}}`
 			return &http.Response{
 				StatusCode: http.StatusOK,
 				Body:       io.NopCloser(strings.NewReader(body)),
 				Header:     http.Header{"Content-Type": []string{"application/json"}},
 			}, nil
-		case "/v2/inAppPurchases/iap-legacy/iapPriceSchedule":
+		case "/v2/inAppPurchases/9000000002/iapPriceSchedule":
 			body := `{
 				"data":{
 					"type":"inAppPurchasePriceSchedules",
@@ -443,7 +438,7 @@ func TestIAPPricesResolvesLegacyManualPricePointValues(t *testing.T) {
 				Body:       io.NopCloser(strings.NewReader(body)),
 				Header:     http.Header{"Content-Type": []string{"application/json"}},
 			}, nil
-		case "/v2/inAppPurchases/iap-legacy/pricePoints":
+		case "/v2/inAppPurchases/9000000002/pricePoints":
 			body := `{
 				"data":[
 					{
@@ -516,7 +511,7 @@ func TestIAPPricesResolvesLegacyManualPricePointValues(t *testing.T) {
 	root.FlagSet.SetOutput(io.Discard)
 
 	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"iap", "pricing", "summary", "--iap-id", "iap-legacy"}); err != nil {
+		if err := root.Parse([]string{"iap", "pricing", "summary", "--iap-id", "9000000002"}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
 		if err := root.Run(context.Background()); err != nil {

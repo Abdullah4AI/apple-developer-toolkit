@@ -29,27 +29,27 @@ func TestSubscriptionsPricePointsListPaginateUsesPerPageTimeout(t *testing.T) {
 
 		switch req.URL.RawQuery {
 		case "limit=200":
-			if req.URL.Path != "/v1/subscriptions/sub-1/pricePoints" {
+			if req.URL.Path != "/v1/subscriptions/8000000001/pricePoints" {
 				t.Fatalf("unexpected first page path: %s", req.URL.Path)
 			}
-			body := `{"data":[{"type":"subscriptionPricePoints","id":"pp-1"}],"links":{"next":"https://api.appstoreconnect.apple.com/v1/subscriptions/sub-1/pricePoints?cursor=AQ&limit=200"}}`
+			body := `{"data":[{"type":"subscriptionPricePoints","id":"pp-1"}],"links":{"next":"https://api.appstoreconnect.apple.com/v1/subscriptions/8000000001/pricePoints?cursor=AQ&limit=200"}}`
 			return &http.Response{
 				StatusCode: http.StatusOK,
 				Body:       io.NopCloser(strings.NewReader(body)),
 				Header:     http.Header{"Content-Type": []string{"application/json"}},
 			}, nil
 		case "cursor=AQ&limit=200":
-			if req.URL.Path != "/v1/subscriptions/sub-1/pricePoints" {
+			if req.URL.Path != "/v1/subscriptions/8000000001/pricePoints" {
 				t.Fatalf("unexpected second page path: %s", req.URL.Path)
 			}
-			body := `{"data":[{"type":"subscriptionPricePoints","id":"pp-2"}],"links":{"next":"https://api.appstoreconnect.apple.com/v1/subscriptions/sub-1/pricePoints?cursor=BQ&limit=200"}}`
+			body := `{"data":[{"type":"subscriptionPricePoints","id":"pp-2"}],"links":{"next":"https://api.appstoreconnect.apple.com/v1/subscriptions/8000000001/pricePoints?cursor=BQ&limit=200"}}`
 			return &http.Response{
 				StatusCode: http.StatusOK,
 				Body:       io.NopCloser(strings.NewReader(body)),
 				Header:     http.Header{"Content-Type": []string{"application/json"}},
 			}, nil
 		case "cursor=BQ&limit=200":
-			if req.URL.Path != "/v1/subscriptions/sub-1/pricePoints" {
+			if req.URL.Path != "/v1/subscriptions/8000000001/pricePoints" {
 				t.Fatalf("unexpected third page path: %s", req.URL.Path)
 			}
 			body := `{"data":[{"type":"subscriptionPricePoints","id":"pp-3"}],"links":{}}`
@@ -70,7 +70,7 @@ func TestSubscriptionsPricePointsListPaginateUsesPerPageTimeout(t *testing.T) {
 	stdout, stderr := captureOutput(t, func() {
 		if err := root.Parse([]string{
 			"subscriptions", "pricing", "price-points", "list",
-			"--subscription-id", "sub-1",
+			"--subscription-id", "8000000001",
 			"--paginate",
 			"--output", "json",
 		}); err != nil {
@@ -99,7 +99,7 @@ func TestSubscriptionsPricePointsListStreamRequiresPaginate(t *testing.T) {
 	stdout, stderr := captureOutput(t, func() {
 		if err := root.Parse([]string{
 			"subscriptions", "pricing", "price-points", "list",
-			"--subscription-id", "sub-1",
+			"--subscription-id", "8000000001",
 			"--stream",
 			"--output", "json",
 		}); err != nil {
@@ -128,14 +128,14 @@ func TestSubscriptionsPricePointsListStreamOutput(t *testing.T) {
 	})
 
 	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		if req.URL.Path != "/v1/subscriptions/sub-1/pricePoints" {
+		if req.URL.Path != "/v1/subscriptions/8000000001/pricePoints" {
 			t.Fatalf("unexpected path: %s", req.URL.Path)
 		}
 
 		query := req.URL.RawQuery
 		switch {
 		case strings.Contains(query, "limit=200") && !strings.Contains(query, "cursor="):
-			body := `{"data":[{"type":"subscriptionPricePoints","id":"pp-1","attributes":{"customerPrice":"1.99"}}],"links":{"next":"https://api.appstoreconnect.apple.com/v1/subscriptions/sub-1/pricePoints?cursor=AQ&limit=200"}}`
+			body := `{"data":[{"type":"subscriptionPricePoints","id":"pp-1","attributes":{"customerPrice":"1.99"}}],"links":{"next":"https://api.appstoreconnect.apple.com/v1/subscriptions/8000000001/pricePoints?cursor=AQ&limit=200"}}`
 			return &http.Response{
 				StatusCode: http.StatusOK,
 				Body:       io.NopCloser(strings.NewReader(body)),
@@ -160,7 +160,7 @@ func TestSubscriptionsPricePointsListStreamOutput(t *testing.T) {
 	stdout, stderr := captureOutput(t, func() {
 		if err := root.Parse([]string{
 			"subscriptions", "pricing", "price-points", "list",
-			"--subscription-id", "sub-1",
+			"--subscription-id", "8000000001",
 			"--paginate",
 			"--stream",
 		}); err != nil {
@@ -191,7 +191,7 @@ func TestSubscriptionsPricePointsListStreamOutput(t *testing.T) {
 func TestSubscriptionsPricePointsListStreamRejectsRepeatedNextURL(t *testing.T) {
 	setupAuth(t)
 
-	const repeatedNextURL = "https://api.appstoreconnect.apple.com/v1/subscriptions/sub-1/pricePoints?cursor=AQ&limit=200"
+	const repeatedNextURL = "https://api.appstoreconnect.apple.com/v1/subscriptions/8000000001/pricePoints?cursor=AQ&limit=200"
 
 	originalTransport := http.DefaultTransport
 	t.Cleanup(func() {
@@ -203,7 +203,7 @@ func TestSubscriptionsPricePointsListStreamRejectsRepeatedNextURL(t *testing.T) 
 		requestCount++
 		switch requestCount {
 		case 1:
-			if req.Method != http.MethodGet || req.URL.Path != "/v1/subscriptions/sub-1/pricePoints" {
+			if req.Method != http.MethodGet || req.URL.Path != "/v1/subscriptions/8000000001/pricePoints" {
 				t.Fatalf("unexpected first request: %s %s", req.Method, req.URL.String())
 			}
 			body := `{"data":[{"type":"subscriptionPricePoints","id":"pp-1"}],"links":{"next":"` + repeatedNextURL + `"}}`
@@ -235,7 +235,7 @@ func TestSubscriptionsPricePointsListStreamRejectsRepeatedNextURL(t *testing.T) 
 	stdout, _ := captureOutput(t, func() {
 		if err := root.Parse([]string{
 			"subscriptions", "pricing", "price-points", "list",
-			"--subscription-id", "sub-1",
+			"--subscription-id", "8000000001",
 			"--paginate",
 			"--stream",
 		}); err != nil {
@@ -265,7 +265,7 @@ func TestSubscriptionsPricePointsListStreamRejectsRepeatedNextURL(t *testing.T) 
 func TestSubscriptionsPricePointsListStreamReturnsSecondPageFailure(t *testing.T) {
 	setupAuth(t)
 
-	const nextURL = "https://api.appstoreconnect.apple.com/v1/subscriptions/sub-1/pricePoints?cursor=AQ&limit=200"
+	const nextURL = "https://api.appstoreconnect.apple.com/v1/subscriptions/8000000001/pricePoints?cursor=AQ&limit=200"
 
 	originalTransport := http.DefaultTransport
 	t.Cleanup(func() {
@@ -277,7 +277,7 @@ func TestSubscriptionsPricePointsListStreamReturnsSecondPageFailure(t *testing.T
 		requestCount++
 		switch requestCount {
 		case 1:
-			if req.Method != http.MethodGet || req.URL.Path != "/v1/subscriptions/sub-1/pricePoints" {
+			if req.Method != http.MethodGet || req.URL.Path != "/v1/subscriptions/8000000001/pricePoints" {
 				t.Fatalf("unexpected first request: %s %s", req.Method, req.URL.String())
 			}
 			body := `{"data":[{"type":"subscriptionPricePoints","id":"pp-1"}],"links":{"next":"` + nextURL + `"}}`
@@ -309,7 +309,7 @@ func TestSubscriptionsPricePointsListStreamReturnsSecondPageFailure(t *testing.T
 	stdout, _ := captureOutput(t, func() {
 		if err := root.Parse([]string{
 			"subscriptions", "pricing", "price-points", "list",
-			"--subscription-id", "sub-1",
+			"--subscription-id", "8000000001",
 			"--paginate",
 			"--stream",
 		}); err != nil {
@@ -344,7 +344,7 @@ func TestSubscriptionsPricePointsListRejectsInvalidNextURL(t *testing.T) {
 	}{
 		{
 			name:    "invalid scheme",
-			next:    "http://api.appstoreconnect.apple.com/v1/subscriptions/sub-1/pricePoints?cursor=AQ",
+			next:    "http://api.appstoreconnect.apple.com/v1/subscriptions/8000000001/pricePoints?cursor=AQ",
 			wantErr: "subscriptions pricing price-points list: --next must be an App Store Connect URL",
 		},
 		{
@@ -389,8 +389,8 @@ func TestSubscriptionsPricePointsListRejectsInvalidNextURL(t *testing.T) {
 func TestSubscriptionsPricePointsListPaginateFromNextWithoutSubscription(t *testing.T) {
 	setupAuth(t)
 
-	const firstURL = "https://api.appstoreconnect.apple.com/v1/subscriptions/sub-1/pricePoints?cursor=AQ&limit=200"
-	const secondURL = "https://api.appstoreconnect.apple.com/v1/subscriptions/sub-1/pricePoints?cursor=BQ&limit=200"
+	const firstURL = "https://api.appstoreconnect.apple.com/v1/subscriptions/8000000001/pricePoints?cursor=AQ&limit=200"
+	const secondURL = "https://api.appstoreconnect.apple.com/v1/subscriptions/8000000001/pricePoints?cursor=BQ&limit=200"
 
 	originalTransport := http.DefaultTransport
 	t.Cleanup(func() {
@@ -460,7 +460,7 @@ func TestSubscriptionsPricePointsListTerritoryFilter(t *testing.T) {
 	})
 
 	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		if req.URL.Path != "/v1/subscriptions/sub-1/pricePoints" {
+		if req.URL.Path != "/v1/subscriptions/8000000001/pricePoints" {
 			t.Fatalf("unexpected path: %s", req.URL.Path)
 		}
 		query := req.URL.Query()
@@ -482,7 +482,7 @@ func TestSubscriptionsPricePointsListTerritoryFilter(t *testing.T) {
 	stdout, stderr := captureOutput(t, func() {
 		if err := root.Parse([]string{
 			"subscriptions", "pricing", "price-points", "list",
-			"--subscription-id", "sub-1",
+			"--subscription-id", "8000000001",
 			"--territory", "USA",
 			"--output", "json",
 		}); err != nil {

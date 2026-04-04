@@ -34,7 +34,7 @@ func TestTestFlightBetaTestersAppsListRejectsInvalidNextURL(t *testing.T) {
 
 			var runErr error
 			stdout, stderr := captureOutput(t, func() {
-				if err := root.Parse([]string{"testflight", "beta-testers", "apps", "list", "--next", test.next}); err != nil {
+				if err := root.Parse([]string{"testflight", "testers", "apps", "list", "--next", test.next}); err != nil {
 					t.Fatalf("parse error: %v", err)
 				}
 				runErr = root.Run(context.Background())
@@ -103,7 +103,7 @@ func TestTestFlightBetaTestersAppsListPaginateFromNext(t *testing.T) {
 
 	stdout, stderr := captureOutput(t, func() {
 		if err := root.Parse([]string{
-			"testflight", "beta-testers", "apps", "list",
+			"testflight", "testers", "apps", "list",
 			"--tester-id", "tester-1",
 			"--paginate",
 			"--next", firstURL,
@@ -123,7 +123,7 @@ func TestTestFlightBetaTestersAppsListPaginateFromNext(t *testing.T) {
 	}
 }
 
-func TestTestFlightBetaTestersBetaGroupsListRejectsInvalidNextURL(t *testing.T) {
+func TestTestFlightBetaTestersGroupsListRejectsInvalidNextURL(t *testing.T) {
 	tests := []struct {
 		name    string
 		next    string
@@ -148,7 +148,7 @@ func TestTestFlightBetaTestersBetaGroupsListRejectsInvalidNextURL(t *testing.T) 
 
 			var runErr error
 			stdout, stderr := captureOutput(t, func() {
-				if err := root.Parse([]string{"testflight", "beta-testers", "beta-groups", "list", "--next", test.next}); err != nil {
+				if err := root.Parse([]string{"testflight", "testers", "groups", "list", "--next", test.next}); err != nil {
 					t.Fatalf("parse error: %v", err)
 				}
 				runErr = root.Run(context.Background())
@@ -170,7 +170,7 @@ func TestTestFlightBetaTestersBetaGroupsListRejectsInvalidNextURL(t *testing.T) 
 	}
 }
 
-func TestTestFlightBetaTestersBetaGroupsListPaginateFromNext(t *testing.T) {
+func TestTestFlightBetaTestersGroupsListPaginateFromNext(t *testing.T) {
 	setupAuth(t)
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 
@@ -217,7 +217,7 @@ func TestTestFlightBetaTestersBetaGroupsListPaginateFromNext(t *testing.T) {
 
 	stdout, stderr := captureOutput(t, func() {
 		if err := root.Parse([]string{
-			"testflight", "beta-testers", "beta-groups", "list",
+			"testflight", "testers", "groups", "list",
 			"--tester-id", "tester-1",
 			"--paginate",
 			"--next", firstURL,
@@ -262,7 +262,7 @@ func TestTestFlightBetaTestersBuildsListRejectsInvalidNextURL(t *testing.T) {
 
 			var runErr error
 			stdout, stderr := captureOutput(t, func() {
-				if err := root.Parse([]string{"testflight", "beta-testers", "builds", "list", "--next", test.next}); err != nil {
+				if err := root.Parse([]string{"testflight", "testers", "builds", "list", "--next", test.next}); err != nil {
 					t.Fatalf("parse error: %v", err)
 				}
 				runErr = root.Run(context.Background())
@@ -331,7 +331,7 @@ func TestTestFlightBetaTestersBuildsListPaginateFromNext(t *testing.T) {
 
 	stdout, stderr := captureOutput(t, func() {
 		if err := root.Parse([]string{
-			"testflight", "beta-testers", "builds", "list",
+			"testflight", "testers", "builds", "list",
 			"--tester-id", "tester-1",
 			"--paginate",
 			"--next", firstURL,

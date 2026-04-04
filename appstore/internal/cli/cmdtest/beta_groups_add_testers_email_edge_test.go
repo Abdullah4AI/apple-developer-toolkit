@@ -85,7 +85,7 @@ func TestBetaGroupsAddTestersMergesTesterAndEmailWithoutDuplicates(t *testing.T)
 
 	stdout, stderr := captureOutput(t, func() {
 		if err := root.Parse([]string{
-			"testflight", "beta-groups", "add-testers",
+			"testflight", "groups", "add-testers",
 			"--group", "group-1",
 			"--tester", "tester-1",
 			"--email", "tester@example.com",
@@ -183,7 +183,7 @@ func TestBetaGroupsAddTestersEmailPartialLookupFailureDoesNotMutate(t *testing.T
 	var runErr error
 	stdout, _ := captureOutput(t, func() {
 		if err := root.Parse([]string{
-			"testflight", "beta-groups", "add-testers",
+			"testflight", "groups", "add-testers",
 			"--group", "group-1",
 			"--email", "valid@example.com,missing@example.com",
 		}); err != nil {

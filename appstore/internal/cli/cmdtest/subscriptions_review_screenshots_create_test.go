@@ -58,7 +58,7 @@ func TestSubscriptionsReviewScreenshotsCreatePrintsVerifiedScreenshot(t *testing
 	stdout, stderr := captureOutput(t, func() {
 		if err := root.Parse([]string{
 			"subscriptions", "review", "screenshots", "create",
-			"--subscription-id", "sub-1",
+			"--subscription-id", "8000000001",
 			"--file", imagePath,
 			"--output", "json",
 		}); err != nil {

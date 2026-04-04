@@ -2379,6 +2379,64 @@ func TestAppScreenshotSetCreateRequest_JSON_CustomProductPageLocalization(t *tes
 	}
 }
 
+func TestAppScreenshotSetCreateRequest_JSON_ExperimentTreatmentLocalization(t *testing.T) {
+	req := AppScreenshotSetCreateRequest{
+		Data: AppScreenshotSetCreateData{
+			Type:       ResourceTypeAppScreenshotSets,
+			Attributes: AppScreenshotSetAttributes{ScreenshotDisplayType: "APP_IPHONE_65"},
+			Relationships: &AppScreenshotSetRelationships{
+				AppStoreVersionExperimentTreatmentLocalization: &Relationship{
+					Data: ResourceData{
+						Type: ResourceTypeAppStoreVersionExperimentTreatmentLocalizations,
+						ID:   "TREATMENT_LOC_ID_123",
+					},
+				},
+			},
+		},
+	}
+
+	body, err := BuildRequestBody(req)
+	if err != nil {
+		t.Fatalf("BuildRequestBody() error: %v", err)
+	}
+
+	buf := new(bytes.Buffer)
+	if _, err := buf.ReadFrom(body); err != nil {
+		t.Fatalf("read body error: %v", err)
+	}
+
+	var parsed struct {
+		Data struct {
+			Relationships map[string]struct {
+				Data struct {
+					Type string `json:"type"`
+					ID   string `json:"id"`
+				} `json:"data"`
+			} `json:"relationships"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(buf.Bytes(), &parsed); err != nil {
+		t.Fatalf("failed to unmarshal body: %v", err)
+	}
+
+	rel, ok := parsed.Data.Relationships["appStoreVersionExperimentTreatmentLocalization"]
+	if !ok {
+		t.Fatalf("expected appStoreVersionExperimentTreatmentLocalization relationship, got %+v", parsed.Data.Relationships)
+	}
+	if rel.Data.Type != "appStoreVersionExperimentTreatmentLocalizations" {
+		t.Fatalf("expected relationship type=appStoreVersionExperimentTreatmentLocalizations, got %q", rel.Data.Type)
+	}
+	if rel.Data.ID != "TREATMENT_LOC_ID_123" {
+		t.Fatalf("expected relationship id=TREATMENT_LOC_ID_123, got %q", rel.Data.ID)
+	}
+	if _, ok := parsed.Data.Relationships["appStoreVersionLocalization"]; ok {
+		t.Fatalf("expected appStoreVersionLocalization to be omitted when unset")
+	}
+	if _, ok := parsed.Data.Relationships["appCustomProductPageLocalization"]; ok {
+		t.Fatalf("expected appCustomProductPageLocalization to be omitted when unset")
+	}
+}
+
 func TestAppScreenshotCreateRequest_JSON(t *testing.T) {
 	req := AppScreenshotCreateRequest{
 		Data: AppScreenshotCreateData{

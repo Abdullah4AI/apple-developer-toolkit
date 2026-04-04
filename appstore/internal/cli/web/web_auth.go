@@ -25,6 +25,7 @@ const (
 	webPasswordEnv             = "ASC_WEB_PASSWORD"
 	webTwoFactorCodeCommandEnv = "ASC_WEB_2FA_CODE_COMMAND"
 	webTwoFactorCommandTimeout = 60 * time.Second
+	passwordReadPollInterval   = 100 * time.Millisecond
 )
 
 func webPasswordEnvDisplay() string {
@@ -173,14 +174,10 @@ func readPasswordFromTerminal(ctx context.Context, terminal *os.File, writer io.
 	passwordBytes := make([]byte, 0, 64)
 	readBuf := make([]byte, 1)
 	for {
-		if ctxErr := ctx.Err(); ctxErr != nil {
-			return "", fmt.Errorf("password prompt interrupted: %w", ctxErr)
-		}
-
-		n, err := terminal.Read(readBuf)
+		n, err := readTerminalByteWithContext(ctx, terminal, readBuf)
 		if err != nil {
-			if ctxErr := ctx.Err(); ctxErr != nil {
-				return "", fmt.Errorf("password prompt interrupted: %w", ctxErr)
+			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+				return "", fmt.Errorf("password prompt interrupted: %w", err)
 			}
 			return "", fmt.Errorf("failed to read password")
 		}

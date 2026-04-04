@@ -37,7 +37,7 @@ func TestSubscriptionsPricesImport_InvalidBooleanReturnsUsageError(t *testing.T)
 	root.FlagSet.SetOutput(io.Discard)
 
 	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"subscriptions", "pricing", "prices", "import", "--subscription-id", "sub-1", "--input", csvPath, "--dry-run"}); err != nil {
+		if err := root.Parse([]string{"subscriptions", "pricing", "prices", "import", "--subscription-id", "8000000001", "--input", csvPath, "--dry-run"}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
 		err := root.Run(context.Background())
@@ -67,7 +67,7 @@ func TestSubscriptionsPricesImport_DryRunResolvesASCExportAliasWithoutMutations(
 		if req.Method != http.MethodGet {
 			t.Fatalf("expected only GET in dry-run, got %s %s", req.Method, req.URL.Path)
 		}
-		if req.URL.Path != "/v1/subscriptions/sub-1/pricePoints" {
+		if req.URL.Path != "/v1/subscriptions/8000000001/pricePoints" {
 			t.Fatalf("unexpected path: %s", req.URL.Path)
 		}
 		territory := req.URL.Query().Get("filter[territory]")
@@ -114,7 +114,7 @@ func TestSubscriptionsPricesImport_DryRunResolvesASCExportAliasWithoutMutations(
 	}
 
 	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"subscriptions", "pricing", "prices", "import", "--subscription-id", "sub-1", "--input", csvPath, "--dry-run"}); err != nil {
+		if err := root.Parse([]string{"subscriptions", "pricing", "prices", "import", "--subscription-id", "8000000001", "--input", csvPath, "--dry-run"}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
 		if err := root.Run(context.Background()); err != nil {
@@ -152,7 +152,7 @@ func TestSubscriptionsPricesImport_PartialFailureReturnsReportedErrorAndSummary(
 	createCount := 0
 	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		switch {
-		case req.Method == http.MethodGet && req.URL.Path == "/v1/subscriptions/sub-1/pricePoints":
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/subscriptions/8000000001/pricePoints":
 			if req.URL.Query().Get("filter[territory]") != "USA" {
 				t.Fatalf("expected filter[territory]=USA, got %q", req.URL.Query().Get("filter[territory]"))
 			}
@@ -207,7 +207,7 @@ func TestSubscriptionsPricesImport_PartialFailureReturnsReportedErrorAndSummary(
 
 	var runErr error
 	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"subscriptions", "pricing", "prices", "import", "--subscription-id", "sub-1", "--input", csvPath}); err != nil {
+		if err := root.Parse([]string{"subscriptions", "pricing", "prices", "import", "--subscription-id", "8000000001", "--input", csvPath}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
 		runErr = root.Run(context.Background())

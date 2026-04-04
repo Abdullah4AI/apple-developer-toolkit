@@ -2,23 +2,13 @@ package cmdtest
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"flag"
 	"io"
-	"net/http"
 	"strings"
 	"testing"
 
 	"github.com/peterbourgon/ff/v3/ffcli"
-)
-
-const (
-	iapPricesDeprecationWarning         = "Warning: `asc iap prices` is deprecated. Use `asc iap pricing summary`."
-	iapPricePointsDeprecationWarning    = "Warning: `asc iap price-points list` is deprecated. Use `asc iap pricing price-points list`."
-	iapPriceSchedulesDeprecationWarning = "Warning: `asc iap price-schedules get` is deprecated. Use `asc iap pricing schedules view`."
-	iapAvailabilityDeprecationWarning   = "Warning: `asc iap availability get` is deprecated. Use `asc iap pricing availability view`."
-	iapAvailabilitiesDeprecationWarning = "Warning: `asc iap availabilities get` is deprecated. Use `asc iap pricing availabilities view`."
 )
 
 func findCommandByPath(t *testing.T, path ...string) *ffcli.Command {
@@ -192,65 +182,52 @@ func TestIAPSchedulePriceLeafHelpMentionsResolved(t *testing.T) {
 	}
 }
 
-func TestDeprecatedIAPPricingAliasHelpPointsToCanonicalPaths(t *testing.T) {
+func TestRemovedIAPPricingAliasPathsFallBackToCanonicalIAPHelp(t *testing.T) {
 	tests := []struct {
-		name         string
-		path         []string
-		wantUsage    string
-		wantContains []string
-		wantNotShown []string
+		name string
+		args []string
 	}{
 		{
-			name:         "prices alias",
-			path:         []string{"iap", "prices"},
-			wantUsage:    "asc iap pricing summary [flags]",
-			wantContains: []string{"DEPRECATED: use `asc iap pricing summary`."},
-			wantNotShown: []string{"asc iap prices [flags]"},
+			name: "prices alias",
+			args: []string{"iap", "prices"},
 		},
 		{
-			name:         "price points alias",
-			path:         []string{"iap", "price-points"},
-			wantUsage:    "asc iap pricing price-points <subcommand> [flags]",
-			wantContains: []string{"Compatibility alias: use `asc iap pricing price-points ...`."},
-			wantNotShown: []string{"asc iap price-points <subcommand> [flags]"},
+			name: "price points alias",
+			args: []string{"iap", "price-points", "list"},
 		},
 		{
-			name:         "schedules alias",
-			path:         []string{"iap", "price-schedules"},
-			wantUsage:    "asc iap pricing schedules <subcommand> [flags]",
-			wantContains: []string{"Compatibility alias: use `asc iap pricing schedules ...`."},
-			wantNotShown: []string{"asc iap price-schedules <subcommand> [flags]"},
+			name: "schedules alias",
+			args: []string{"iap", "price-schedules", "get"},
 		},
 		{
-			name:         "availability alias",
-			path:         []string{"iap", "availability"},
-			wantUsage:    "asc iap pricing availability <subcommand> [flags]",
-			wantContains: []string{"Compatibility alias: use `asc iap pricing availability ...`."},
-			wantNotShown: []string{"asc iap availability <subcommand> [flags]"},
+			name: "availability alias",
+			args: []string{"iap", "availability", "get"},
 		},
 		{
-			name:         "availabilities alias",
-			path:         []string{"iap", "availabilities"},
-			wantUsage:    "asc iap pricing availabilities <subcommand> [flags]",
-			wantContains: []string{"Compatibility alias: use `asc iap pricing availabilities ...`."},
-			wantNotShown: []string{"asc iap availabilities <subcommand> [flags]"},
+			name: "availabilities alias",
+			args: []string{"iap", "availabilities", "get"},
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			usage := usageForCommand(t, test.path...)
-			if !strings.Contains(usage, test.wantUsage) {
-				t.Fatalf("expected usage to contain %q, got %q", test.wantUsage, usage)
+			stdout, stderr, runErr := runRootCommand(t, test.args)
+
+			if !errors.Is(runErr, flag.ErrHelp) {
+				t.Fatalf("expected ErrHelp, got %v", runErr)
 			}
-			for _, want := range test.wantContains {
-				if !strings.Contains(usage, want) {
-					t.Fatalf("expected usage to contain %q, got %q", want, usage)
-				}
+			if stdout != "" {
+				t.Fatalf("expected empty stdout, got %q", stdout)
 			}
-			for _, hidden := range test.wantNotShown {
-				if strings.Contains(usage, hidden) {
-					t.Fatalf("expected usage to hide %q, got %q", hidden, usage)
+			if !strings.Contains(stderr, "asc iap <subcommand> [flags]") {
+				t.Fatalf("expected removed alias path to fall back to iap help, got %q", stderr)
+			}
+			if !strings.Contains(stderr, "asc iap pricing summary --app \"APP_ID\"") {
+				t.Fatalf("expected removed alias path to point at canonical pricing help, got %q", stderr)
+			}
+			for _, hidden := range []string{"\n  prices", "\n  price-points", "\n  price-schedules", "\n  availability", "\n  availabilities"} {
+				if strings.Contains(stderr, hidden) {
+					t.Fatalf("expected removed alias help to keep %q hidden, got %q", strings.TrimSpace(hidden), stderr)
 				}
 			}
 		})
@@ -306,160 +283,5 @@ func TestCanonicalIAPPricingValidationPaths(t *testing.T) {
 				t.Fatalf("expected stderr to contain %q, got %q", test.wantErr, stderr)
 			}
 		})
-	}
-}
-
-func TestLegacyIAPPricingAliasesWarnAndDelegateOnValidationPaths(t *testing.T) {
-	t.Setenv("ASC_APP_ID", "")
-
-	tests := []struct {
-		name        string
-		args        []string
-		wantErr     string
-		wantWarning string
-	}{
-		{
-			name:        "prices alias",
-			args:        []string{"iap", "prices"},
-			wantErr:     "--app or --iap-id is required",
-			wantWarning: iapPricesDeprecationWarning,
-		},
-		{
-			name:        "price points alias",
-			args:        []string{"iap", "price-points", "list"},
-			wantErr:     "--iap-id is required",
-			wantWarning: iapPricePointsDeprecationWarning,
-		},
-		{
-			name:        "schedules alias",
-			args:        []string{"iap", "price-schedules", "get"},
-			wantErr:     "--iap-id or --schedule-id is required",
-			wantWarning: iapPriceSchedulesDeprecationWarning,
-		},
-		{
-			name:        "availability alias",
-			args:        []string{"iap", "availability", "get"},
-			wantErr:     "--iap-id is required",
-			wantWarning: iapAvailabilityDeprecationWarning,
-		},
-		{
-			name:        "availabilities alias",
-			args:        []string{"iap", "availabilities", "get"},
-			wantErr:     "--id is required",
-			wantWarning: iapAvailabilitiesDeprecationWarning,
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			stdout, stderr, runErr := runRootCommand(t, test.args)
-
-			if !errors.Is(runErr, flag.ErrHelp) {
-				t.Fatalf("expected ErrHelp, got %v", runErr)
-			}
-			if stdout != "" {
-				t.Fatalf("expected empty stdout, got %q", stdout)
-			}
-			requireStderrContainsWarning(t, stderr, test.wantWarning)
-			if strings.Contains(stderr, `unknown subcommand "`) {
-				t.Fatalf("expected alias to delegate to canonical leaf, got %q", stderr)
-			}
-			if !strings.Contains(stderr, test.wantErr) {
-				t.Fatalf("expected stderr to contain %q, got %q", test.wantErr, stderr)
-			}
-		})
-	}
-}
-
-func TestLegacyIAPSummaryAliasWarnsAndMatchesCanonicalOutput(t *testing.T) {
-	setupAuth(t)
-
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() {
-		http.DefaultTransport = originalTransport
-	})
-
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		switch req.URL.Path {
-		case "/v2/inAppPurchases/iap-1":
-			return &http.Response{
-				StatusCode: http.StatusOK,
-				Body: io.NopCloser(strings.NewReader(`{
-					"data":{"type":"inAppPurchases","id":"iap-1","attributes":{"name":"Lifetime Unlock","productId":"com.example.lifetime","inAppPurchaseType":"NON_CONSUMABLE"}}
-				}`)),
-				Header: http.Header{"Content-Type": []string{"application/json"}},
-			}, nil
-		case "/v2/inAppPurchases/iap-1/iapPriceSchedule":
-			return &http.Response{
-				StatusCode: http.StatusOK,
-				Body: io.NopCloser(strings.NewReader(`{
-					"data":{
-						"type":"inAppPurchasePriceSchedules",
-						"id":"schedule-1",
-						"relationships":{"baseTerritory":{"data":{"type":"territories","id":"USA"}}}
-					},
-					"included":[
-						{
-							"type":"inAppPurchasePrices",
-							"id":"iap-price-1",
-							"attributes":{"startDate":"2024-01-01","manual":true},
-							"relationships":{
-								"territory":{"data":{"type":"territories","id":"USA"}},
-								"inAppPurchasePricePoint":{"data":{"type":"inAppPurchasePricePoints","id":"pp-1"}}
-							}
-						},
-						{"type":"territories","id":"USA","attributes":{"currency":"USD"}}
-					]
-				}`)),
-				Header: http.Header{"Content-Type": []string{"application/json"}},
-			}, nil
-		case "/v2/inAppPurchases/iap-1/pricePoints":
-			return &http.Response{
-				StatusCode: http.StatusOK,
-				Body: io.NopCloser(strings.NewReader(`{
-					"data":[{"type":"inAppPurchasePricePoints","id":"pp-1","attributes":{"customerPrice":"9.99","proceeds":"8.49"}}],
-					"included":[{"type":"territories","id":"USA","attributes":{"currency":"USD"}}],
-					"links":{"next":""}
-				}`)),
-				Header: http.Header{"Content-Type": []string{"application/json"}},
-			}, nil
-		default:
-			t.Fatalf("unexpected path: %s", req.URL.Path)
-			return nil, nil
-		}
-	})
-
-	run := func(args []string) (string, string) {
-		root := RootCommand("1.2.3")
-		root.FlagSet.SetOutput(io.Discard)
-
-		return captureOutput(t, func() {
-			if err := root.Parse(args); err != nil {
-				t.Fatalf("parse error: %v", err)
-			}
-			if err := root.Run(context.Background()); err != nil {
-				t.Fatalf("run error: %v", err)
-			}
-		})
-	}
-
-	canonicalStdout, canonicalStderr := run([]string{"iap", "pricing", "summary", "--iap-id", "iap-1", "--output", "json"})
-	aliasStdout, aliasStderr := run([]string{"iap", "prices", "--iap-id", "iap-1", "--output", "json"})
-
-	if canonicalStderr != "" {
-		t.Fatalf("expected canonical command to avoid warnings, got %q", canonicalStderr)
-	}
-	requireStderrContainsWarning(t, aliasStderr, iapPricesDeprecationWarning)
-
-	var canonicalPayload map[string]any
-	if err := json.Unmarshal([]byte(canonicalStdout), &canonicalPayload); err != nil {
-		t.Fatalf("parse canonical stdout: %v", err)
-	}
-	var aliasPayload map[string]any
-	if err := json.Unmarshal([]byte(aliasStdout), &aliasPayload); err != nil {
-		t.Fatalf("parse alias stdout: %v", err)
-	}
-	if canonicalStdout != aliasStdout {
-		t.Fatalf("expected canonical and alias output to match, canonical=%q alias=%q", canonicalStdout, aliasStdout)
 	}
 }

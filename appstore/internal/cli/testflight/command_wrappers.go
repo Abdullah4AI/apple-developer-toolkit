@@ -354,7 +354,6 @@ func TestFlightGroupsCommand() *ffcli.Command {
 		},
 	)
 	setUsageFuncRecursively(cmd, testflightVisibleUsageFunc)
-	cmd.Subcommands = append(cmd.Subcommands, deprecatedTestFlightGroupsRelationshipsAliasCommand())
 	if compatibilityCmd := findSubcommand(cmd, "compatibility"); compatibilityCmd != nil {
 		compatibilityCmd.ShortHelp = "Check recruitment compatibility for a group."
 		compatibilityCmd.LongHelp = `Check recruitment compatibility for a group.
@@ -400,68 +399,7 @@ func TestFlightTestersCommand() *ffcli.Command {
 		},
 	)
 	setUsageFuncRecursively(cmd, testflightVisibleUsageFunc)
-	cmd.Subcommands = append(cmd.Subcommands, deprecatedTestFlightTestersRelationshipsAliasCommand())
 	return cmd
-}
-
-func deprecatedTestFlightGroupsRelationshipsAliasCommand() *ffcli.Command {
-	cmd := BetaGroupsRelationshipsCommand()
-	if cmd == nil {
-		return nil
-	}
-
-	cmd.ShortUsage = "asc testflight groups links <subcommand> [flags]"
-	cmd.ShortHelp = "DEPRECATED: use `asc testflight groups links ...`."
-	cmd.LongHelp = "Deprecated compatibility alias for `asc testflight groups links ...`."
-	cmd.UsageFunc = shared.DeprecatedUsageFunc
-
-	if viewCmd := shared.DeprecatedAliasLeafCommand(
-		rewriteCommandTree(
-			BetaGroupsRelationshipsGetCommand(),
-			"asc testflight beta-groups relationships get",
-			"asc testflight groups links view",
-			map[string]string{"get": "view"},
-			nil,
-		),
-		"view",
-		"asc testflight groups links view --group-id \"GROUP_ID\" --type \"RELATIONSHIP\" [flags]",
-		"asc testflight groups links view",
-		"Warning: `asc testflight groups relationships view` is deprecated. Use `asc testflight groups links view`.",
-	); viewCmd != nil {
-		cmd.Subcommands = []*ffcli.Command{viewCmd}
-	}
-
-	return hideTestFlightCommand(cmd)
-}
-
-func deprecatedTestFlightTestersRelationshipsAliasCommand() *ffcli.Command {
-	cmd := BetaTestersRelationshipsCommand()
-	if cmd == nil {
-		return nil
-	}
-
-	cmd.ShortUsage = "asc testflight testers links <subcommand> [flags]"
-	cmd.ShortHelp = "DEPRECATED: use `asc testflight testers links ...`."
-	cmd.LongHelp = "Deprecated compatibility alias for `asc testflight testers links ...`."
-	cmd.UsageFunc = shared.DeprecatedUsageFunc
-
-	if viewCmd := shared.DeprecatedAliasLeafCommand(
-		rewriteCommandTree(
-			BetaTestersRelationshipsGetCommand(),
-			"asc testflight beta-testers relationships get",
-			"asc testflight testers links view",
-			map[string]string{"get": "view"},
-			nil,
-		),
-		"view",
-		"asc testflight testers links view --tester-id \"TESTER_ID\" --type \"RELATIONSHIP\" [flags]",
-		"asc testflight testers links view",
-		"Warning: `asc testflight testers relationships view` is deprecated. Use `asc testflight testers links view`.",
-	); viewCmd != nil {
-		cmd.Subcommands = []*ffcli.Command{viewCmd}
-	}
-
-	return hideTestFlightCommand(cmd)
 }
 
 func TestFlightAgreementsCommand() *ffcli.Command {
@@ -735,8 +673,6 @@ Examples:
 		TestFlightMetricsPublicLinkCommand(),
 		TestFlightMetricsGroupTestersCommand(),
 		TestFlightMetricsAppTestersCommand(),
-		DeprecatedMetricsTestersAliasCommand(),
-		DeprecatedMetricsBetaTesterUsagesAliasCommand(),
 	}
 	return cmd
 }
@@ -933,53 +869,6 @@ func DeprecatedBetaNotificationsAliasCommand() *ffcli.Command {
 	return cmd
 }
 
-const preReleaseLinksCanonicalRoot = "asc testflight pre-release links"
-
-func testFlightPreReleaseLinksCommand() *ffcli.Command {
-	return rewriteCommandTree(
-		prerelease.PreReleaseVersionsRelationshipsCommand(),
-		"asc pre-release-versions relationships",
-		preReleaseLinksCanonicalRoot,
-		map[string]string{
-			"relationships": "links",
-			"get":           "view",
-		},
-		[]textReplacement{
-			{old: "pre-release-versions relationships get", new: "testflight pre-release links view"},
-			{old: "Get ", new: "View "},
-			{old: "get: ", new: "view: "},
-			{old: "get ", new: "view "},
-		},
-	)
-}
-
-func deprecatedPreReleaseRelationshipsAliasCommand() *ffcli.Command {
-	cmd := testFlightPreReleaseLinksCommand()
-	if cmd == nil {
-		return nil
-	}
-
-	cmd.Name = "relationships"
-	cmd.ShortUsage = preReleaseLinksCanonicalRoot + " <subcommand> [flags]"
-	cmd.ShortHelp = "DEPRECATED: use `asc testflight pre-release links ...`."
-	cmd.LongHelp = "Deprecated compatibility alias for `asc testflight pre-release links ...`."
-	cmd.UsageFunc = shared.DeprecatedUsageFunc
-
-	if viewCmd := findSubcommand(cmd, "view"); viewCmd != nil {
-		viewCmd.ShortUsage = preReleaseLinksCanonicalRoot + " view --id \"PR_ID\" --type \"RELATIONSHIP\" [flags]"
-		viewCmd.ShortHelp = "Compatibility alias: use `asc testflight pre-release links view`."
-		viewCmd.LongHelp = "Compatibility alias: use `asc testflight pre-release links view --id \"PR_ID\" --type \"RELATIONSHIP\" [flags]`."
-		viewCmd.UsageFunc = shared.DeprecatedUsageFunc
-		origExec := viewCmd.Exec
-		viewCmd.Exec = func(ctx context.Context, args []string) error {
-			fmt.Fprintln(os.Stderr, "Warning: `asc testflight pre-release relationships view` is deprecated. Use `asc testflight pre-release links view`.")
-			return origExec(ctx, args)
-		}
-	}
-
-	return hideTestFlightCommand(cmd)
-}
-
 func TestFlightAppLocalizationsCommand() *ffcli.Command {
 	cmd := rewriteCommandTree(
 		betaapplocalizations.BetaAppLocalizationsCommand(),
@@ -1049,7 +938,6 @@ Examples:
   asc testflight pre-release builds list --id "PR_ID"
   asc testflight pre-release links view --id "PR_ID" --type "app"`
 	setUsageFuncRecursively(cmd, testflightVisibleUsageFunc)
-	cmd.Subcommands = append(cmd.Subcommands, deprecatedPreReleaseRelationshipsAliasCommand())
 	return cmd
 }
 

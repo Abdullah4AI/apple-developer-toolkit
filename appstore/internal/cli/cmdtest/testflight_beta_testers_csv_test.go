@@ -77,7 +77,7 @@ func TestTestFlightBetaTestersExport_WritesDeterministicCSV(t *testing.T) {
 	}
 
 	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"testflight", "beta-testers", "export", "--app", "app-1", "--output", outPath}); err != nil {
+		if err := root.Parse([]string{"testflight", "testers", "export", "--app", "app-1", "--output", outPath}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
 		if err := root.Run(context.Background()); err != nil {
@@ -187,7 +187,7 @@ func TestTestFlightBetaTestersExport_IncludeGroupsAddsColumn(t *testing.T) {
 	root.FlagSet.SetOutput(io.Discard)
 
 	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"testflight", "beta-testers", "export", "--app", "app-1", "--output", outPath, "--include-groups"}); err != nil {
+		if err := root.Parse([]string{"testflight", "testers", "export", "--app", "app-1", "--output", outPath, "--include-groups"}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
 		if err := root.Run(context.Background()); err != nil {
@@ -234,7 +234,7 @@ func TestTestFlightBetaTestersImport_InvalidSchemaReturnsUsageError(t *testing.T
 	root.FlagSet.SetOutput(io.Discard)
 
 	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"testflight", "beta-testers", "import", "--app", "app-1", "--input", csvPath, "--dry-run"}); err != nil {
+		if err := root.Parse([]string{"testflight", "testers", "import", "--app", "app-1", "--input", csvPath, "--dry-run"}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
 		err := root.Run(context.Background())
@@ -314,7 +314,7 @@ func TestTestFlightBetaTestersImport_DryRun_NoMutations(t *testing.T) {
 	}
 
 	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"testflight", "beta-testers", "import", "--app", "app-1", "--input", csvPath, "--dry-run"}); err != nil {
+		if err := root.Parse([]string{"testflight", "testers", "import", "--app", "app-1", "--input", csvPath, "--dry-run"}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
 		if err := root.Run(context.Background()); err != nil {
@@ -418,7 +418,7 @@ func TestTestFlightBetaTestersImport_CreateAssignAndInvite(t *testing.T) {
 	root.FlagSet.SetOutput(io.Discard)
 
 	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"testflight", "beta-testers", "import", "--app", "app-1", "--input", csvPath, "--invite"}); err != nil {
+		if err := root.Parse([]string{"testflight", "testers", "import", "--app", "app-1", "--input", csvPath, "--invite"}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
 		if err := root.Run(context.Background()); err != nil {
@@ -491,7 +491,7 @@ func TestTestFlightBetaTestersImport_CreateFailureDoesNotIncrementCreated(t *tes
 
 	var runErr error
 	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"testflight", "beta-testers", "import", "--app", "app-1", "--input", csvPath}); err != nil {
+		if err := root.Parse([]string{"testflight", "testers", "import", "--app", "app-1", "--input", csvPath}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
 		runErr = root.Run(context.Background())
@@ -584,7 +584,7 @@ func TestTestFlightBetaTestersImport_InviteFailureDoesNotIncrementInvited(t *tes
 
 	var runErr error
 	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"testflight", "beta-testers", "import", "--app", "app-1", "--input", csvPath, "--invite"}); err != nil {
+		if err := root.Parse([]string{"testflight", "testers", "import", "--app", "app-1", "--input", csvPath, "--invite"}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
 		runErr = root.Run(context.Background())
@@ -677,7 +677,7 @@ func TestTestFlightBetaTestersImport_UpdateFailureDoesNotIncrementUpdated(t *tes
 
 	var runErr error
 	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"testflight", "beta-testers", "import", "--app", "app-1", "--input", csvPath}); err != nil {
+		if err := root.Parse([]string{"testflight", "testers", "import", "--app", "app-1", "--input", csvPath}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
 		runErr = root.Run(context.Background())
@@ -764,7 +764,7 @@ func TestTestFlightBetaTestersImport_RowFailureReturnsReportedErrorAndSummary(t 
 
 	var runErr error
 	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"testflight", "beta-testers", "import", "--app", "app-1", "--input", csvPath}); err != nil {
+		if err := root.Parse([]string{"testflight", "testers", "import", "--app", "app-1", "--input", csvPath}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
 		runErr = root.Run(context.Background())
@@ -856,7 +856,7 @@ func TestTestFlightBetaTestersImport_FastlaneHeaderAndSemicolonGroups(t *testing
 	root.FlagSet.SetOutput(io.Discard)
 
 	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"testflight", "beta-testers", "import", "--app", "app-1", "--input", csvPath}); err != nil {
+		if err := root.Parse([]string{"testflight", "testers", "import", "--app", "app-1", "--input", csvPath}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
 		if err := root.Run(context.Background()); err != nil {
@@ -926,7 +926,7 @@ func TestTestFlightBetaTestersImport_HeaderlessFastlaneFormat(t *testing.T) {
 	root.FlagSet.SetOutput(io.Discard)
 
 	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"testflight", "beta-testers", "import", "--app", "app-1", "--input", csvPath}); err != nil {
+		if err := root.Parse([]string{"testflight", "testers", "import", "--app", "app-1", "--input", csvPath}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
 		if err := root.Run(context.Background()); err != nil {
@@ -979,7 +979,7 @@ func TestTestFlightBetaTestersImport_InvalidEmailFailsRow(t *testing.T) {
 
 	var runErr error
 	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"testflight", "beta-testers", "import", "--app", "app-1", "--input", csvPath}); err != nil {
+		if err := root.Parse([]string{"testflight", "testers", "import", "--app", "app-1", "--input", csvPath}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
 		runErr = root.Run(context.Background())
