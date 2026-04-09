@@ -593,9 +593,7 @@ func buildSuggestedCommands(signals migrationSignals, resolver MigrationSuggesti
 			}
 			add(fmt.Sprintf(`asc versions attach-build --version-id %q --build %q`, values.versionID, uploadedBuildIDPlaceholder))
 			add(fmt.Sprintf(`asc validate --app %q --version-id %q`, values.appID, values.versionID))
-			add(fmt.Sprintf(`asc review submissions-create --app %q --platform %q`, values.appID, reviewSubmissionPlatformPlaceholder))
-			add(fmt.Sprintf(`asc review items-add --submission "REVIEW_SUBMISSION_ID" --item-type appStoreVersions --item-id %q`, values.versionID))
-			add(`asc review submissions-submit --id "REVIEW_SUBMISSION_ID" --confirm`)
+			add(fmt.Sprintf(`asc review submit --app %q --version-id %q --build %q --platform %q --confirm`, values.appID, values.versionID, uploadedBuildIDPlaceholder, reviewSubmissionPlatformPlaceholder))
 		}
 	}
 

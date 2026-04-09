@@ -49,11 +49,11 @@ Use:
 
 func RemovedSubmitCreateCommand() *ffcli.Command {
 	cmd := SubmitCreateCommand()
-	cmd.ShortHelp = "DEPRECATED: removed; use `asc publish appstore --submit` or review submission commands."
-	cmd.LongHelp = "Removed legacy command. Use `asc publish appstore --submit` for the canonical high-level flow, or `asc versions attach-build` + `asc review submissions-*` when the build is already uploaded and the version is already prepared."
+	cmd.ShortHelp = "DEPRECATED: removed; use `asc publish appstore --submit` or `asc review submit`."
+	cmd.LongHelp = "Removed legacy command. Use `asc publish appstore --submit` for the canonical high-level flow, or `asc review submit` when the build is already uploaded and the version is already prepared."
 	cmd.UsageFunc = shared.DeprecatedUsageFunc
 	cmd.Exec = func(ctx context.Context, args []string) error {
-		fmt.Fprintln(os.Stderr, "Error: `asc submit create` was removed. Use `asc publish appstore --submit` or `asc versions attach-build` + `asc review submissions-*` instead.")
+		fmt.Fprintln(os.Stderr, "Error: `asc submit create` was removed. Use `asc publish appstore --submit` or `asc review submit` instead.")
 		return flag.ErrHelp
 	}
 	return cmd
@@ -73,14 +73,11 @@ func SubmitCreateCommand() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "create",
 		ShortUsage: "asc submit create [flags]",
-		ShortHelp:  "DEPRECATED: use `asc versions attach-build` + `asc review submissions-*`.",
+		ShortHelp:  "DEPRECATED: use `asc review submit`.",
 		LongHelp: `Deprecated compatibility path for lower-level direct submission.
 
 For already-uploaded builds, use:
-  - ` + "`asc versions attach-build --version-id \"VERSION_ID\" --build \"BUILD_ID\"`" + `
-  - ` + "`asc review submissions-create --app \"APP_ID\" --platform \"PLATFORM\"`" + `
-  - ` + "`asc review items-add --submission \"SUBMISSION_ID\" --item-type appStoreVersions --item-id \"VERSION_ID\"`" + `
-  - ` + "`asc review submissions-submit --id \"SUBMISSION_ID\" --confirm`" + `
+  - ` + "`asc review submit --app \"APP_ID\" --version-id \"VERSION_ID\" --build \"BUILD_ID\" --confirm`" + `
 
 Use ` + "`asc publish appstore --submit`" + ` only when you are starting from
 an IPA upload or local build.
@@ -88,11 +85,11 @@ an IPA upload or local build.
 Keep ` + "`asc submit create`" + ` only for older automation that already prepared
 the version and just needs the final review-submission step. For newly scripted
 direct submission on an already-prepared version, prefer the
-nondeprecated commands above instead of extending this alias.`,
+nondeprecated command above instead of extending this alias.`,
 		FlagSet:   fs,
 		UsageFunc: shared.DeprecatedUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
-			fmt.Fprintln(os.Stderr, "Warning: `asc submit create` is deprecated. Use `asc versions attach-build` + `asc review submissions-*` for already-uploaded builds, or `asc publish appstore --submit` when starting from an IPA.")
+			fmt.Fprintln(os.Stderr, "Warning: `asc submit create` is deprecated. Use `asc review submit` for already-uploaded builds, or `asc publish appstore --submit` when starting from an IPA.")
 			if !*confirm {
 				fmt.Fprintln(os.Stderr, "Error: --confirm is required to submit for review")
 				return flag.ErrHelp
@@ -256,22 +253,32 @@ nondeprecated commands above instead of extending this alias.`,
 }
 
 func runSubmitCreateLocalizationPreflight(ctx context.Context, client *asc.Client, appID, versionID, platform string, requestTimeout time.Duration) error {
+	return runSubmissionLocalizationPreflight(ctx, client, appID, versionID, platform, requestTimeout, "submit create", "asc review submit")
+}
+
+func runSubmissionLocalizationPreflight(
+	ctx context.Context,
+	client *asc.Client,
+	appID, versionID, platform string,
+	requestTimeout time.Duration,
+	errorPrefix, retryCommand string,
+) error {
 	localizationsCtx, localizationsCancel := submitPreflightRequestContext(ctx, requestTimeout)
 	localizations, err := client.GetAppStoreVersionLocalizations(localizationsCtx, versionID, asc.WithAppStoreVersionLocalizationsLimit(200))
 	localizationsCancel()
 	if err != nil {
-		return fmt.Errorf("submit create: failed to fetch version localizations for preflight: %w", err)
+		return submissionPreflightWrap(errorPrefix, fmt.Errorf("failed to fetch version localizations for preflight: %w", err))
 	}
 	if len(localizations.Data) == 0 {
 		fmt.Fprintln(os.Stderr, "Submit preflight failed: no app store version localizations found for this version.")
-		return fmt.Errorf("submit create: submit preflight failed")
+		return submissionPreflightWrap(errorPrefix, errors.New("submit preflight failed"))
 	}
 
 	updateCtx, updateCancel := submitPreflightRequestContext(ctx, requestTimeout)
 	requireWhatsNew, err := isAppUpdate(updateCtx, client, appID, platform)
 	updateCancel()
 	if err != nil {
-		return fmt.Errorf("submit create: failed to determine whether version is an app update for preflight: %w", err)
+		return submissionPreflightWrap(errorPrefix, fmt.Errorf("failed to determine whether version is an app update for preflight: %w", err))
 	}
 
 	opts := shared.SubmitReadinessOptions{
@@ -287,8 +294,8 @@ func runSubmitCreateLocalizationPreflight(ctx context.Context, client *asc.Clien
 	for _, issue := range issues {
 		fmt.Fprintf(os.Stderr, "  - %s: %s\n", issue.Locale, strings.Join(issue.MissingFields, ", "))
 	}
-	fmt.Fprintln(os.Stderr, "Fix these with `asc metadata push` or `asc apps info edit` before retrying submit create.")
-	return fmt.Errorf("submit create: submit preflight failed")
+	fmt.Fprintf(os.Stderr, "Fix these with `asc metadata push` or `asc apps info edit` before retrying `%s`.\n", normalizeSubmissionRetryCommand(retryCommand))
+	return submissionPreflightWrap(errorPrefix, errors.New("submit preflight failed"))
 }
 
 func runSubmitCreateReadinessPreflight(ctx context.Context, client *asc.Client, appID, versionID, platform, buildID string) error {
@@ -984,6 +991,10 @@ Examples:
 // the submit flow cannot include subscriptions in the review submission — they
 // use a separate submission path.
 func runSubmitCreateSubscriptionPreflight(ctx context.Context, client *asc.Client, appID string, requestTimeout time.Duration) {
+	runSubmissionSubscriptionPreflight(ctx, client, appID, requestTimeout, "asc review submit")
+}
+
+func runSubmissionSubscriptionPreflight(ctx context.Context, client *asc.Client, appID string, requestTimeout time.Duration, retryCommand string) {
 	groups, warning := fetchSubscriptionPreflightGroups(ctx, client, appID, requestTimeout)
 	if warning != "" {
 		fmt.Fprintln(os.Stderr, "")
@@ -1045,7 +1056,11 @@ func runSubmitCreateSubscriptionPreflight(ctx context.Context, client *asc.Clien
 		for _, name := range readyToSubmit {
 			fmt.Fprintf(os.Stderr, "  - %s\n", name)
 		}
-		fmt.Fprintln(os.Stderr, "If this is their first review, run `asc web review subscriptions list --app \"APP_ID\"` to find the relevant IDs, then attach the group with `asc web review subscriptions attach-group --app \"APP_ID\" --group-id \"GROUP_ID\" --confirm` (or use `attach --subscription-id \"SUB_ID\"` for one subscription) before retrying `asc submit create`.")
+		fmt.Fprintf(
+			os.Stderr,
+			"If this is their first review, run `asc web review subscriptions list --app \"APP_ID\"` to find the relevant IDs, then attach the group with `asc web review subscriptions attach-group --app \"APP_ID\" --group-id \"GROUP_ID\" --confirm` (or use `attach --subscription-id \"SUB_ID\"` for one subscription) before retrying `%s`.\n",
+			normalizeSubmissionRetryCommand(retryCommand),
+		)
 		fmt.Fprintln(os.Stderr, "For subsequent reviews, use `asc subscriptions review submit --subscription-id \"SUB_ID\" --confirm`.")
 	}
 
@@ -1057,6 +1072,24 @@ func runSubmitCreateSubscriptionPreflight(ctx context.Context, client *asc.Clien
 		}
 		fmt.Fprintln(os.Stderr, "The warnings above only cover the groups that could be checked.")
 	}
+}
+
+func submissionPreflightWrap(prefix string, err error) error {
+	if err == nil {
+		return nil
+	}
+	if strings.TrimSpace(prefix) == "" {
+		return err
+	}
+	return fmt.Errorf("%s: %w", prefix, err)
+}
+
+func normalizeSubmissionRetryCommand(retryCommand string) string {
+	trimmed := strings.TrimSpace(retryCommand)
+	if trimmed == "" {
+		return "asc review submit"
+	}
+	return trimmed
 }
 
 func fetchSubscriptionPreflightGroups(ctx context.Context, client *asc.Client, appID string, requestTimeout time.Duration) ([]asc.Resource[asc.SubscriptionGroupAttributes], string) {

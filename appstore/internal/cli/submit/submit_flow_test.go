@@ -118,6 +118,56 @@ func TestSubmitResolvedVersionReusesReadySubmissionWithTargetVersion(t *testing.
 	}
 }
 
+func TestSubmitResolvedVersionSkipsBuildAttachmentWhenAlreadySubmitted(t *testing.T) {
+	var (
+		buildLookup bool
+		buildAttach bool
+	)
+
+	client := newSubmitTestClient(t, submitRoundTripFunc(func(req *http.Request) (*http.Response, error) {
+		switch {
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/appStoreVersions/version-1/build":
+			buildLookup = true
+			return submitJSONResponse(http.StatusOK, `{"data":{"type":"builds","id":"build-current"}}`)
+		case req.Method == http.MethodPatch && req.URL.Path == "/v1/appStoreVersions/version-1/relationships/build":
+			buildAttach = true
+			return submitJSONResponse(http.StatusNoContent, "")
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/appStoreVersions/version-1/appStoreVersionSubmission":
+			return submitJSONResponse(http.StatusOK, `{"data":{"type":"appStoreVersionSubmissions","id":"legacy-sub-1"}}`)
+		default:
+			return nil, fmt.Errorf("unexpected request: %s %s", req.Method, req.URL.RequestURI())
+		}
+	}))
+
+	got, err := SubmitResolvedVersion(context.Background(), client, SubmitResolvedVersionOptions{
+		AppID:                    "app-1",
+		VersionID:                "version-1",
+		BuildID:                  "build-target",
+		Platform:                 "IOS",
+		EnsureBuildAttached:      true,
+		LookupExistingSubmission: true,
+	})
+	if err != nil {
+		t.Fatalf("SubmitResolvedVersion() error: %v", err)
+	}
+
+	if !got.AlreadySubmitted {
+		t.Fatalf("expected already submitted result, got %#v", got)
+	}
+	if got.SubmissionID != "legacy-sub-1" {
+		t.Fatalf("expected submission ID legacy-sub-1, got %#v", got)
+	}
+	if buildLookup {
+		t.Fatal("did not expect build lookup before existing-submission short-circuit")
+	}
+	if buildAttach {
+		t.Fatal("did not expect build attachment before existing-submission short-circuit")
+	}
+	if got.BuildAttachment != nil {
+		t.Fatalf("expected build attachment result to be omitted, got %#v", got.BuildAttachment)
+	}
+}
+
 func TestSubmitResolvedVersionResultJSONOmitsBuildAttachmentWhenUnused(t *testing.T) {
 	data, err := json.Marshal(SubmitResolvedVersionResult{
 		SubmissionID: "review-sub-1",

@@ -3996,7 +3996,7 @@ func TestSubmitValidationErrors(t *testing.T) {
 		{
 			name:    "create removed",
 			args:    []string{"submit", "create", "--confirm"},
-			wantErr: "Error: `asc submit create` was removed. Use `asc publish appstore --submit` or `asc versions attach-build` + `asc review submissions-*` instead.",
+			wantErr: "Error: `asc submit create` was removed. Use `asc publish appstore --submit` or `asc review submit` instead.",
 		},
 		{
 			name:    "preflight removed",

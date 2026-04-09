@@ -166,6 +166,255 @@ func TestPublishAppStoreSubmitUsesModernReviewSubmissionFlow(t *testing.T) {
 	if !strings.Contains(joined, "POST /v1/reviewSubmissions") {
 		t.Fatalf("expected modern review submission create request, requests: %v", recordedRequests)
 	}
+	if got := strings.Count(joined, "GET /v1/appStoreVersions/version-1/appStoreVersionSubmission"); got != 1 {
+		t.Fatalf("expected exactly one existing submission lookup, got %d requests: %v", got, recordedRequests)
+	}
+}
+
+func TestPublishAppStoreSubmitAlreadySubmittedSkipsPreflightAndBuildAttachment(t *testing.T) {
+	setupAuth(t)
+	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
+	t.Setenv("ASC_APP_ID", "")
+
+	ipaPath := filepath.Join(t.TempDir(), "app.ipa")
+	if err := os.WriteFile(ipaPath, []byte("test"), 0o600); err != nil {
+		t.Fatalf("write ipa fixture: %v", err)
+	}
+
+	requests := newRequestLog(30)
+	installDefaultTransport(t, roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		requests.Add(req.Method + " " + req.URL.Path)
+		if resp, err, ok := respondToPublishAppLookup(t, req); ok {
+			return resp, err
+		}
+
+		switch {
+		case req.Method == http.MethodPost && req.URL.Path == "/v1/buildUploads":
+			return jsonResponse(http.StatusCreated, `{"data":{"type":"buildUploads","id":"upload-1","attributes":{"cfBundleShortVersionString":"1.2.3","cfBundleVersion":"42","platform":"IOS"}}}`)
+		case req.Method == http.MethodPost && req.URL.Path == "/v1/buildUploadFiles":
+			return jsonResponse(http.StatusCreated, `{"data":{"type":"buildUploadFiles","id":"file-1","attributes":{"fileName":"app.ipa","fileSize":4,"uti":"com.apple.itunes.ipa","assetType":"ASSET","uploadOperations":[{"method":"PUT","url":"https://upload.example.com/part-1","length":4,"offset":0,"requestHeaders":[{"name":"Content-Type","value":"application/octet-stream"}]}]}}}`)
+		case req.Method == http.MethodPut && req.URL.Host == "upload.example.com":
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(strings.NewReader("")),
+				Header:     http.Header{},
+			}, nil
+		case req.Method == http.MethodPatch && req.URL.Path == "/v1/buildUploadFiles/file-1":
+			return jsonResponse(http.StatusOK, `{"data":{"type":"buildUploadFiles","id":"file-1","attributes":{"uploaded":true}}}`)
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/buildUploads/upload-1":
+			return jsonResponse(http.StatusOK, `{"data":{"type":"buildUploads","id":"upload-1","attributes":{"cfBundleShortVersionString":"1.2.3","cfBundleVersion":"42","platform":"IOS"},"relationships":{"build":{"data":{"type":"builds","id":"build-42"}}}}}`)
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/builds/build-42":
+			return jsonResponse(http.StatusOK, `{"data":{"type":"builds","id":"build-42","attributes":{"version":"42","processingState":"VALID"}}}`)
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/preReleaseVersions":
+			return jsonResponse(http.StatusOK, `{"data":[{"type":"preReleaseVersions","id":"prv-1","attributes":{"version":"1.2.3","platform":"IOS"}}]}`)
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/builds":
+			return jsonResponse(http.StatusOK, `{"data":[{"type":"builds","id":"build-42","attributes":{"version":"42","processingState":"VALID"}}],"links":{"next":""}}`)
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/apps/app-1/appStoreVersions":
+			query := req.URL.Query()
+			switch {
+			case query.Get("filter[versionString]") == "1.2.3":
+				return jsonResponse(http.StatusOK, `{"data":[{"type":"appStoreVersions","id":"version-1","attributes":{"versionString":"1.2.3","platform":"IOS"}}]}`)
+			case strings.Contains(query.Get("filter[appStoreState]"), "READY_FOR_SALE"):
+				t.Fatalf("did not expect publish-state preflight when version is already submitted")
+				return nil, nil
+			default:
+				t.Fatalf("unexpected app store versions query: %s", req.URL.RawQuery)
+				return nil, nil
+			}
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/appStoreVersions/version-1/appStoreVersionSubmission":
+			return jsonResponse(http.StatusOK, `{"data":{"type":"appStoreVersionSubmissions","id":"legacy-sub-1"}}`)
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/appStoreVersions/version-1/build":
+			t.Fatalf("did not expect build lookup when version is already submitted")
+			return nil, nil
+		case req.Method == http.MethodPatch && req.URL.Path == "/v1/appStoreVersions/version-1/relationships/build":
+			t.Fatalf("did not expect build attachment mutation when version is already submitted")
+			return nil, nil
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/appStoreVersions/version-1/appStoreVersionLocalizations":
+			t.Fatalf("did not expect localization preflight when version is already submitted")
+			return nil, nil
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/apps/app-1/subscriptionGroups":
+			t.Fatalf("did not expect subscription preflight when version is already submitted")
+			return nil, nil
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/apps/app-1/reviewSubmissions":
+			t.Fatalf("did not expect review submission reuse lookup when version is already submitted")
+			return nil, nil
+		case req.Method == http.MethodPost && req.URL.Path == "/v1/reviewSubmissions":
+			t.Fatalf("did not expect new review submission creation when version is already submitted")
+			return nil, nil
+		case req.Method == http.MethodPost && req.URL.Path == "/v1/reviewSubmissionItems":
+			t.Fatalf("did not expect review submission item creation when version is already submitted")
+			return nil, nil
+		case req.Method == http.MethodPatch && strings.HasPrefix(req.URL.Path, "/v1/reviewSubmissions/"):
+			t.Fatalf("did not expect review submission submission when version is already submitted")
+			return nil, nil
+		default:
+			t.Fatalf("unexpected request: %s %s?%s", req.Method, req.URL.Path, req.URL.RawQuery)
+			return nil, nil
+		}
+	}))
+
+	root := RootCommand("1.2.3")
+	root.FlagSet.SetOutput(io.Discard)
+
+	stdout, stderr := captureOutput(t, func() {
+		if err := root.Parse([]string{
+			"publish", "appstore",
+			"--app", "app-1",
+			"--ipa", ipaPath,
+			"--version", "1.2.3",
+			"--build-number", "42",
+			"--submit",
+			"--confirm",
+			"--output", "json",
+			"--poll-interval", "1ms",
+		}); err != nil {
+			t.Fatalf("parse error: %v", err)
+		}
+		if err := root.Run(context.Background()); err != nil {
+			t.Fatalf("run error: %v", err)
+		}
+	})
+
+	if stderr == "" {
+		t.Fatalf("expected upload progress output on stderr, got empty string")
+	}
+
+	var payload struct {
+		BuildID      string `json:"buildId"`
+		VersionID    string `json:"versionId"`
+		SubmissionID string `json:"submissionId"`
+		Uploaded     bool   `json:"uploaded"`
+		Attached     bool   `json:"attached"`
+		Submitted    bool   `json:"submitted"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
+		t.Fatalf("json.Unmarshal() error: %v\nstdout=%s", err, stdout)
+	}
+
+	if payload.BuildID != "build-42" {
+		t.Fatalf("expected buildId build-42, got %q", payload.BuildID)
+	}
+	if payload.VersionID != "version-1" {
+		t.Fatalf("expected versionId version-1, got %q", payload.VersionID)
+	}
+	if payload.SubmissionID != "legacy-sub-1" {
+		t.Fatalf("expected submissionId legacy-sub-1, got %q", payload.SubmissionID)
+	}
+	if !payload.Uploaded {
+		t.Fatal("expected uploaded=true")
+	}
+	if payload.Attached {
+		t.Fatalf("expected attached=false when rerun short-circuits before build attachment, got %s", stdout)
+	}
+	if !payload.Submitted {
+		t.Fatalf("expected submitted=true when existing submission is found, got %s", stdout)
+	}
+
+	recordedRequests := strings.Join(requests.Snapshot(), "\n")
+	if !strings.Contains(recordedRequests, "GET /v1/appStoreVersions/version-1/appStoreVersionSubmission") {
+		t.Fatalf("expected existing submission lookup, got requests: %s", recordedRequests)
+	}
+	if strings.Contains(recordedRequests, "/relationships/build") {
+		t.Fatalf("did not expect build mutation requests, got requests: %s", recordedRequests)
+	}
+}
+
+func TestPublishAppStoreSubmitLocalizationPreflightUsesCanonicalGuidance(t *testing.T) {
+	setupAuth(t)
+	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
+	t.Setenv("ASC_APP_ID", "")
+
+	ipaPath := filepath.Join(t.TempDir(), "app.ipa")
+	if err := os.WriteFile(ipaPath, []byte("test"), 0o600); err != nil {
+		t.Fatalf("write ipa fixture: %v", err)
+	}
+
+	installDefaultTransport(t, roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		if resp, err, ok := respondToPublishAppLookup(t, req); ok {
+			return resp, err
+		}
+
+		switch {
+		case req.Method == http.MethodPost && req.URL.Path == "/v1/buildUploads":
+			return jsonResponse(http.StatusCreated, `{"data":{"type":"buildUploads","id":"upload-1","attributes":{"cfBundleShortVersionString":"1.2.3","cfBundleVersion":"42","platform":"IOS"}}}`)
+		case req.Method == http.MethodPost && req.URL.Path == "/v1/buildUploadFiles":
+			return jsonResponse(http.StatusCreated, `{"data":{"type":"buildUploadFiles","id":"file-1","attributes":{"fileName":"app.ipa","fileSize":4,"uti":"com.apple.itunes.ipa","assetType":"ASSET","uploadOperations":[{"method":"PUT","url":"https://upload.example.com/part-1","length":4,"offset":0,"requestHeaders":[{"name":"Content-Type","value":"application/octet-stream"}]}]}}}`)
+		case req.Method == http.MethodPut && req.URL.Host == "upload.example.com":
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(strings.NewReader("")),
+				Header:     http.Header{},
+			}, nil
+		case req.Method == http.MethodPatch && req.URL.Path == "/v1/buildUploadFiles/file-1":
+			return jsonResponse(http.StatusOK, `{"data":{"type":"buildUploadFiles","id":"file-1","attributes":{"uploaded":true}}}`)
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/buildUploads/upload-1":
+			return jsonResponse(http.StatusOK, `{"data":{"type":"buildUploads","id":"upload-1","attributes":{"cfBundleShortVersionString":"1.2.3","cfBundleVersion":"42","platform":"IOS"},"relationships":{"build":{"data":{"type":"builds","id":"build-42"}}}}}`)
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/builds/build-42":
+			return jsonResponse(http.StatusOK, `{"data":{"type":"builds","id":"build-42","attributes":{"version":"42","processingState":"VALID"}}}`)
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/preReleaseVersions":
+			return jsonResponse(http.StatusOK, `{"data":[{"type":"preReleaseVersions","id":"prv-1","attributes":{"version":"1.2.3","platform":"IOS"}}]}`)
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/builds":
+			return jsonResponse(http.StatusOK, `{"data":[{"type":"builds","id":"build-42","attributes":{"version":"42","processingState":"VALID"}}],"links":{"next":""}}`)
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/apps/app-1/appStoreVersions":
+			query := req.URL.Query()
+			switch {
+			case query.Get("filter[versionString]") == "1.2.3":
+				return jsonResponse(http.StatusOK, `{"data":[{"type":"appStoreVersions","id":"version-1","attributes":{"versionString":"1.2.3","platform":"IOS"}}]}`)
+			case strings.Contains(query.Get("filter[appStoreState]"), "READY_FOR_SALE"):
+				return jsonResponse(http.StatusOK, `{"data":[]}`)
+			default:
+				t.Fatalf("unexpected app store versions query: %s", req.URL.RawQuery)
+				return nil, nil
+			}
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/appStoreVersions/version-1/build":
+			return jsonResponse(http.StatusNotFound, `{"errors":[{"status":"404","code":"NOT_FOUND","title":"Not Found"}]}`)
+		case req.Method == http.MethodPatch && req.URL.Path == "/v1/appStoreVersions/version-1/relationships/build":
+			return jsonResponse(http.StatusNoContent, "")
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/appStoreVersions/version-1/appStoreVersionSubmission":
+			return jsonResponse(http.StatusNotFound, `{"errors":[{"status":"404","code":"NOT_FOUND","title":"Not Found"}]}`)
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/appStoreVersions/version-1/appStoreVersionLocalizations":
+			return jsonResponse(http.StatusOK, `{"data":[{"type":"appStoreVersionLocalizations","id":"loc-en","attributes":{"locale":"en-US"}}]}`)
+		default:
+			t.Fatalf("unexpected request during localization preflight failure: %s %s?%s", req.Method, req.URL.Path, req.URL.RawQuery)
+			return nil, nil
+		}
+	}))
+
+	root := RootCommand("1.2.3")
+	root.FlagSet.SetOutput(io.Discard)
+
+	var runErr error
+	_, stderr := captureOutput(t, func() {
+		if err := root.Parse([]string{
+			"publish", "appstore",
+			"--app", "app-1",
+			"--ipa", ipaPath,
+			"--version", "1.2.3",
+			"--build-number", "42",
+			"--submit",
+			"--confirm",
+			"--timeout", "1s",
+			"--poll-interval", "1ms",
+		}); err != nil {
+			t.Fatalf("parse error: %v", err)
+		}
+		runErr = root.Run(context.Background())
+	})
+	if runErr == nil {
+		t.Fatal("expected localization preflight error, got nil")
+	}
+	if !strings.Contains(runErr.Error(), "publish appstore: submit preflight failed") {
+		t.Fatalf("expected publish appstore preflight error, got %v", runErr)
+	}
+	if strings.Contains(runErr.Error(), "submit create:") {
+		t.Fatalf("did not expect removed submit create prefix, got %v", runErr)
+	}
+	if !strings.Contains(stderr, "before retrying `asc publish appstore --submit`") {
+		t.Fatalf("expected canonical retry guidance, got %q", stderr)
+	}
+	if strings.Contains(stderr, "submit create") {
+		t.Fatalf("did not expect removed submit create guidance, got %q", stderr)
+	}
 }
 
 func TestPublishAppStoreSubmitDryRunPrintsPlanWithoutMutations(t *testing.T) {

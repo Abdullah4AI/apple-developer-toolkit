@@ -21,6 +21,7 @@ func ReviewCommand() *ffcli.Command {
 Examples:
   asc review status --app "123456789"
   asc review doctor --app "123456789"
+  asc review submit --app "123456789" --version "1.2.3" --build "BUILD_ID" --confirm
   asc review details-get --id "DETAIL_ID"
   asc review details-for-version --version-id "VERSION_ID"
   asc review details-create --version-id "VERSION_ID" --contact-email "dev@example.com"
@@ -40,6 +41,7 @@ Examples:
 		Subcommands: []*ffcli.Command{
 			ReviewStatusCommand(),
 			ReviewDoctorCommand(),
+			ReviewSubmitCommand(),
 			ReviewDetailsGetCommand(),
 			ReviewDetailsForVersionCommand(),
 			ReviewDetailsCreateCommand(),

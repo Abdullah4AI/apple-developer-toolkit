@@ -638,6 +638,11 @@
     "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/5c/6c/21/5c6c21ac-7b19-3556-a639-55a63601163a/AppIcon-0-0-1x_U007emarketing-0-6-0-85-220.png/512x512bb.jpg"
   },
   {
+    "app": "Nitra",
+    "link": "https://apps.apple.com/us/app/nitra/id6749408802?uo=4",
+    "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/18/b2/20/18b2200d-64cb-13a9-d567-60fcb8304625/nitra_app_icon-0-0-1x_U007ephone-0-1-0-sRGB-85-220.png/512x512bb.jpg"
+  },
+  {
     "app": "Notch: Target Scoring Tracker",
     "link": "https://apps.apple.com/us/app/notch-target-scoring-tracker/id6747980153?uo=4",
     "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/d7/83/48/d783480d-74fa-4033-44ce-f4154c3ab7de/AppIcon-0-0-1x_U007epad-0-1-85-220.png/512x512bb.jpg"
@@ -957,6 +962,11 @@
     "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/90/bc/20/90bc2003-d998-ba7a-ce45-66d846d7685f/AppIcon-0-0-1x_U007emarketing-0-8-0-85-220.png/512x512bb.jpg"
   },
   {
+    "app": "SquishPic: Image Compressor",
+    "link": "https://apps.apple.com/us/app/squishpic-image-compressor/id6757522104?mt=12&uo=4",
+    "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/65/d1/ae/65d1ae1f-5f97-acb6-5458-79560afb84ab/AppIcon-0-0-85-220-0-0-5-0-2x.png/512x512bb.png"
+  },
+  {
     "app": "Step Counter: Steps App",
     "link": "https://apps.apple.com/us/app/step-counter-steps-app/id6753876664?uo=4",
     "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/6e/08/ae/6e08ae21-ae96-34fb-44fc-62d0b99a802c/AppIcon-0-0-1x_U007ephone-0-1-85-220.png/512x512bb.jpg"
@@ -1044,6 +1054,11 @@
     "app": "Tilt: Shop Live Fashion Deals",
     "link": "https://apps.apple.com/us/app/tilt-shop-live-fashion-deals/id1588409720?uo=4",
     "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/3a/1f/f2/3a1ff2df-b4f5-d67d-ba51-2f30d281b871/AppIcon-1x_U007ephone-0-1-85-220-0.png/512x512bb.jpg"
+  },
+  {
+    "app": "Time Blocking Planner: Align",
+    "link": "https://apps.apple.com/us/app/time-blocking-planner-align/id6740183716?uo=4",
+    "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/cf/17/ad/cf17adb8-589d-0239-b33f-85adee7c3e26/Align_icon_26-0-0-1x_U007ephone-0-1-sRGB-85-220.png/512x512bb.jpg"
   },
   {
     "app": "Timefall",

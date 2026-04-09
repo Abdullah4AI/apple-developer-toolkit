@@ -2,6 +2,10 @@ package shared
 
 import (
 	"bytes"
+	"context"
+	"io"
+	"net/http"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -321,4 +325,134 @@ func TestPrintSubmitReadinessCreateWarnings_NormalizesBeforePrinting(t *testing.
 	if !strings.Contains(lines[1], "fr-FR") || !strings.Contains(lines[1], "description, supportUrl") {
 		t.Fatalf("expected merged fr-FR warning second, got %q", lines[1])
 	}
+}
+
+func TestResolveSubmitReadinessOptionsForVersion_UsesProvidedAppAndPlatform(t *testing.T) {
+	versionRequests := 0
+	versionsRequests := 0
+	client := newSubmitReadinessTestClient(t, func(req *http.Request) (*http.Response, error) {
+		switch {
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/apps/app-123/appStoreVersions":
+			versionsRequests++
+			query := req.URL.Query()
+			if query.Get("filter[platform]") != "IOS" {
+				t.Fatalf("expected filter[platform]=IOS, got %q", query.Get("filter[platform]"))
+			}
+			if query.Get("filter[appStoreState]") != "READY_FOR_SALE,DEVELOPER_REMOVED_FROM_SALE,REMOVED_FROM_SALE" {
+				t.Fatalf("unexpected state filter %q", query.Get("filter[appStoreState]"))
+			}
+			if query.Get("limit") != "1" {
+				t.Fatalf("expected limit=1, got %q", query.Get("limit"))
+			}
+			return submitReadinessJSONResponse(http.StatusOK, `{"data":[{"type":"appStoreVersions","id":"live-1","attributes":{"platform":"IOS"}}],"links":{}}`)
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/appStoreVersions/version-1":
+			versionRequests++
+			t.Fatalf("did not expect GetAppStoreVersion request when app and platform are provided")
+			return nil, nil
+		default:
+			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.String())
+			return nil, nil
+		}
+	})
+
+	opts, err := ResolveSubmitReadinessOptionsForVersion(context.Background(), client, "version-1", "app-123", "IOS")
+	if err != nil {
+		t.Fatalf("ResolveSubmitReadinessOptionsForVersion() error: %v", err)
+	}
+	if !opts.RequireWhatsNew {
+		t.Fatalf("expected RequireWhatsNew=true when released versions exist, got %+v", opts)
+	}
+	if versionRequests != 0 {
+		t.Fatalf("expected zero version detail requests, got %d", versionRequests)
+	}
+	if versionsRequests != 1 {
+		t.Fatalf("expected one app versions request, got %d", versionsRequests)
+	}
+}
+
+func TestResolveSubmitReadinessOptionsForVersion_ResolvesMissingContextFromVersion(t *testing.T) {
+	client := newSubmitReadinessTestClient(t, func(req *http.Request) (*http.Response, error) {
+		switch {
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/appStoreVersions/version-2":
+			if req.URL.Query().Get("include") != "app" {
+				t.Fatalf("expected include=app, got %q", req.URL.Query().Get("include"))
+			}
+			return submitReadinessJSONResponse(http.StatusOK, `{"data":{"type":"appStoreVersions","id":"version-2","attributes":{"platform":"MAC_OS"},"relationships":{"app":{"data":{"type":"apps","id":"app-999"}}}}}`)
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/apps/app-999/appStoreVersions":
+			query := req.URL.Query()
+			if query.Get("filter[platform]") != "MAC_OS" {
+				t.Fatalf("expected filter[platform]=MAC_OS, got %q", query.Get("filter[platform]"))
+			}
+			return submitReadinessJSONResponse(http.StatusOK, `{"data":[],"links":{}}`)
+		default:
+			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.String())
+			return nil, nil
+		}
+	})
+
+	opts, err := ResolveSubmitReadinessOptionsForVersion(context.Background(), client, "version-2", "", "")
+	if err != nil {
+		t.Fatalf("ResolveSubmitReadinessOptionsForVersion() error: %v", err)
+	}
+	if opts.RequireWhatsNew {
+		t.Fatalf("expected RequireWhatsNew=false when no released versions exist, got %+v", opts)
+	}
+}
+
+func TestResolveSubmitReadinessOptionsForVersion_RequiresVersionIDWhenContextUnknown(t *testing.T) {
+	client := newSubmitReadinessTestClient(t, func(req *http.Request) (*http.Response, error) {
+		t.Fatalf("did not expect request for validation failure, got %s %s", req.Method, req.URL.String())
+		return nil, nil
+	})
+
+	_, err := ResolveSubmitReadinessOptionsForVersion(context.Background(), client, "", "", "")
+	if err == nil {
+		t.Fatal("expected validation error for missing version id")
+	}
+	if !strings.Contains(err.Error(), "version id is required when app or platform is unknown") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestResolveSubmitReadinessOptionsForVersionBestEffort_SwallowsResolutionError(t *testing.T) {
+	client := newSubmitReadinessTestClient(t, func(req *http.Request) (*http.Response, error) {
+		if req.Method != http.MethodGet || req.URL.Path != "/v1/appStoreVersions/version-3" {
+			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.String())
+		}
+		return submitReadinessJSONResponse(http.StatusInternalServerError, `{"errors":[{"status":"500","code":"INTERNAL_ERROR","detail":"temporary failure"}]}`)
+	})
+
+	opts := ResolveSubmitReadinessOptionsForVersionBestEffort(context.Background(), client, "version-3", "", "")
+	if opts.RequireWhatsNew {
+		t.Fatalf("expected best-effort fallback to return zero options on error, got %+v", opts)
+	}
+}
+
+type submitReadinessRoundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f submitReadinessRoundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
+}
+
+func newSubmitReadinessTestClient(t *testing.T, transport submitReadinessRoundTripFunc) *asc.Client {
+	t.Helper()
+
+	keyPath := filepath.Join(t.TempDir(), "key.p8")
+	writeECDSAPEM(t, keyPath)
+
+	httpClient := &http.Client{Transport: transport}
+	client, err := asc.NewClientWithHTTPClient("KEY123", "ISS456", keyPath, httpClient)
+	if err != nil {
+		t.Fatalf("NewClientWithHTTPClient() error: %v", err)
+	}
+	return client
+}
+
+func submitReadinessJSONResponse(status int, body string) (*http.Response, error) {
+	return &http.Response{
+		StatusCode: status,
+		Status:     http.StatusText(status),
+		Header:     http.Header{"Content-Type": []string{"application/json"}},
+		Body:       io.NopCloser(strings.NewReader(body)),
+	}, nil
 }

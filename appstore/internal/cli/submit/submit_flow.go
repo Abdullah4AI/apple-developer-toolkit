@@ -48,26 +48,59 @@ type SubmitResolvedVersionResult struct {
 
 // SubmissionLocalizationPreflight runs the submission-blocking localization
 // preflight used by submit-style App Store review flows.
-func SubmissionLocalizationPreflight(ctx context.Context, client *asc.Client, appID, versionID, platform string) error {
-	return SubmissionLocalizationPreflightWithTimeout(ctx, client, appID, versionID, platform, 0)
+func SubmissionLocalizationPreflight(ctx context.Context, client *asc.Client, appID, versionID, platform, retryCommand string) error {
+	return SubmissionLocalizationPreflightWithTimeout(ctx, client, appID, versionID, platform, 0, retryCommand)
 }
 
 // SubmissionLocalizationPreflightWithTimeout runs localization preflight with
 // an explicit request budget when the caller needs a per-phase timeout.
-func SubmissionLocalizationPreflightWithTimeout(ctx context.Context, client *asc.Client, appID, versionID, platform string, requestTimeout time.Duration) error {
-	return runSubmitCreateLocalizationPreflight(ctx, client, appID, versionID, platform, requestTimeout)
+func SubmissionLocalizationPreflightWithTimeout(
+	ctx context.Context,
+	client *asc.Client,
+	appID, versionID, platform string,
+	requestTimeout time.Duration,
+	retryCommand string,
+) error {
+	return runSubmissionLocalizationPreflight(ctx, client, appID, versionID, platform, requestTimeout, "", retryCommand)
 }
 
 // SubmissionSubscriptionPreflight runs the advisory subscription preflight used
 // by submit-style App Store review flows.
-func SubmissionSubscriptionPreflight(ctx context.Context, client *asc.Client, appID string) {
-	SubmissionSubscriptionPreflightWithTimeout(ctx, client, appID, 0)
+func SubmissionSubscriptionPreflight(ctx context.Context, client *asc.Client, appID, retryCommand string) {
+	SubmissionSubscriptionPreflightWithTimeout(ctx, client, appID, 0, retryCommand)
 }
 
 // SubmissionSubscriptionPreflightWithTimeout runs subscription preflight with
 // an explicit request budget when the caller needs a per-phase timeout.
-func SubmissionSubscriptionPreflightWithTimeout(ctx context.Context, client *asc.Client, appID string, requestTimeout time.Duration) {
-	runSubmitCreateSubscriptionPreflight(ctx, client, appID, requestTimeout)
+func SubmissionSubscriptionPreflightWithTimeout(
+	ctx context.Context,
+	client *asc.Client,
+	appID string,
+	requestTimeout time.Duration,
+	retryCommand string,
+) {
+	runSubmissionSubscriptionPreflight(ctx, client, appID, requestTimeout, retryCommand)
+}
+
+// LookupExistingSubmissionForVersion returns the existing legacy submission ID
+// for an App Store version, if one already exists.
+func LookupExistingSubmissionForVersion(ctx context.Context, client *asc.Client, versionID string, requestTimeout time.Duration) (string, error) {
+	resolvedVersionID := strings.TrimSpace(versionID)
+	if resolvedVersionID == "" {
+		return "", fmt.Errorf("resolved version ID is empty")
+	}
+
+	lookupCtx, lookupCancel := submitResolvedVersionPhaseContext(ctx, requestTimeout)
+	legacySubmission, err := client.GetAppStoreVersionSubmissionForVersion(lookupCtx, resolvedVersionID)
+	lookupCancel()
+	if err != nil {
+		if asc.IsNotFound(err) {
+			return "", nil
+		}
+		return "", err
+	}
+
+	return strings.TrimSpace(legacySubmission.Data.ID), nil
 }
 
 // EnsureBuildAttached ensures the target build is attached to the resolved App
@@ -141,6 +174,18 @@ func SubmitResolvedVersion(ctx context.Context, client *asc.Client, opts SubmitR
 		return result, fmt.Errorf("submit review: platform is required")
 	}
 
+	if opts.LookupExistingSubmission {
+		existingSubmissionID, err := LookupExistingSubmissionForVersion(ctx, client, versionID, opts.RequestTimeout)
+		if err != nil {
+			return result, fmt.Errorf("submit review: failed to lookup existing submission: %w", err)
+		}
+		if existingSubmissionID != "" {
+			result.AlreadySubmitted = true
+			result.SubmissionID = existingSubmissionID
+			return result, nil
+		}
+	}
+
 	if opts.EnsureBuildAttached {
 		attachmentCtx, attachmentCancel := submitResolvedVersionPhaseContext(ctx, opts.RequestTimeout)
 		attachment, err := EnsureBuildAttached(attachmentCtx, client, versionID, opts.BuildID, opts.DryRun)
@@ -148,20 +193,6 @@ func SubmitResolvedVersion(ctx context.Context, client *asc.Client, opts SubmitR
 		result.BuildAttachment = &attachment
 		if err != nil {
 			return result, err
-		}
-	}
-
-	if opts.LookupExistingSubmission {
-		lookupCtx, lookupCancel := submitResolvedVersionPhaseContext(ctx, opts.RequestTimeout)
-		legacySubmission, err := client.GetAppStoreVersionSubmissionForVersion(lookupCtx, versionID)
-		lookupCancel()
-		if err != nil && !asc.IsNotFound(err) {
-			return result, fmt.Errorf("submit review: failed to lookup existing submission: %w", err)
-		}
-		if err == nil && strings.TrimSpace(legacySubmission.Data.ID) != "" {
-			result.AlreadySubmitted = true
-			result.SubmissionID = strings.TrimSpace(legacySubmission.Data.ID)
-			return result, nil
 		}
 	}
 

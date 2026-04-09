@@ -564,11 +564,6 @@ Examples:
 				return fmt.Errorf("publish appstore: %w", err)
 			}
 
-			attachResult, err := submitcli.EnsureBuildAttached(requestCtx, client, versionResp.Data.ID, buildResp.Data.ID, false)
-			if err != nil {
-				return fmt.Errorf("publish appstore: %w", err)
-			}
-
 			resolvedBuildNumberValue := firstNonEmpty(strings.TrimSpace(buildResp.Data.Attributes.Version), buildNumberValue)
 
 			result := &asc.AppStorePublishResult{
@@ -578,54 +573,14 @@ Examples:
 				BuildID:      buildResp.Data.ID,
 				VersionID:    versionResp.Data.ID,
 				Uploaded:     uploaded,
-				Attached:     attachResult.Attached || attachResult.AlreadyAttached,
+				Attached:     false,
 				Submitted:    false,
 			}
 
-			if *submit {
-				submitCtx := requestCtx
-				submitRequestTimeout := time.Duration(0)
-				if *timeout > 0 {
-					submitCtx = ctx
-					submitRequestTimeout = timeoutValue
+			attachLocalPublishResult := func() {
+				if localBuildResult == nil {
+					return
 				}
-
-				localizationPreflight := func() error {
-					if submitRequestTimeout > 0 {
-						return submitcli.SubmissionLocalizationPreflightWithTimeout(submitCtx, client, resolvedPublishAppID, versionResp.Data.ID, normalizedPlatform, submitRequestTimeout)
-					}
-					return submitcli.SubmissionLocalizationPreflight(submitCtx, client, resolvedPublishAppID, versionResp.Data.ID, normalizedPlatform)
-				}
-				if err := localizationPreflight(); err != nil {
-					return fmt.Errorf("publish appstore: %w", err)
-				}
-
-				if submitRequestTimeout > 0 {
-					submitcli.SubmissionSubscriptionPreflightWithTimeout(submitCtx, client, resolvedPublishAppID, submitRequestTimeout)
-				} else {
-					submitcli.SubmissionSubscriptionPreflight(submitCtx, client, resolvedPublishAppID)
-				}
-
-				submitResult, err := submitcli.SubmitResolvedVersion(submitCtx, client, submitcli.SubmitResolvedVersionOptions{
-					AppID:                    resolvedPublishAppID,
-					VersionID:                versionResp.Data.ID,
-					BuildID:                  buildResp.Data.ID,
-					Platform:                 normalizedPlatform,
-					RequestTimeout:           submitRequestTimeout,
-					EnsureBuildAttached:      false,
-					LookupExistingSubmission: true,
-					DryRun:                   false,
-					Emit: func(message string) {
-						fmt.Fprintln(os.Stderr, message)
-					},
-				})
-				if err != nil {
-					return fmt.Errorf("publish appstore: %w", err)
-				}
-				result.SubmissionID = submitResult.SubmissionID
-				result.Submitted = submitResult.SubmissionID != ""
-			}
-			if localBuildResult != nil {
 				result.Archive = localBuildResult.Archive
 				result.Export = localBuildResult.Export
 				result.Publish = &asc.AppStorePublishStageResult{
@@ -639,6 +594,97 @@ Examples:
 					Submitted:    result.Submitted,
 				}
 			}
+
+			submitCtx := requestCtx
+			submitRequestTimeout := time.Duration(0)
+			if *submit && *timeout > 0 {
+				submitCtx = ctx
+				submitRequestTimeout = timeoutValue
+			}
+
+			if *submit {
+				existingSubmissionID, err := submitcli.LookupExistingSubmissionForVersion(
+					submitCtx,
+					client,
+					versionResp.Data.ID,
+					submitRequestTimeout,
+				)
+				if err != nil {
+					return fmt.Errorf("publish appstore: failed to lookup existing submission: %w", err)
+				}
+				if existingSubmissionID != "" {
+					result.SubmissionID = existingSubmissionID
+					result.Submitted = true
+					attachLocalPublishResult()
+					return shared.PrintOutput(result, *output.Output, *output.Pretty)
+				}
+			}
+
+			attachResult, err := submitcli.EnsureBuildAttached(requestCtx, client, versionResp.Data.ID, buildResp.Data.ID, false)
+			if err != nil {
+				return fmt.Errorf("publish appstore: %w", err)
+			}
+			result.Attached = attachResult.Attached || attachResult.AlreadyAttached
+
+			if *submit {
+
+				localizationPreflight := func() error {
+					if submitRequestTimeout > 0 {
+						return submitcli.SubmissionLocalizationPreflightWithTimeout(
+							submitCtx,
+							client,
+							resolvedPublishAppID,
+							versionResp.Data.ID,
+							normalizedPlatform,
+							submitRequestTimeout,
+							"asc publish appstore --submit",
+						)
+					}
+					return submitcli.SubmissionLocalizationPreflight(
+						submitCtx,
+						client,
+						resolvedPublishAppID,
+						versionResp.Data.ID,
+						normalizedPlatform,
+						"asc publish appstore --submit",
+					)
+				}
+				if err := localizationPreflight(); err != nil {
+					return fmt.Errorf("publish appstore: %w", err)
+				}
+
+				if submitRequestTimeout > 0 {
+					submitcli.SubmissionSubscriptionPreflightWithTimeout(
+						submitCtx,
+						client,
+						resolvedPublishAppID,
+						submitRequestTimeout,
+						"asc publish appstore --submit",
+					)
+				} else {
+					submitcli.SubmissionSubscriptionPreflight(submitCtx, client, resolvedPublishAppID, "asc publish appstore --submit")
+				}
+
+				submitResult, err := submitcli.SubmitResolvedVersion(submitCtx, client, submitcli.SubmitResolvedVersionOptions{
+					AppID:                    resolvedPublishAppID,
+					VersionID:                versionResp.Data.ID,
+					BuildID:                  buildResp.Data.ID,
+					Platform:                 normalizedPlatform,
+					RequestTimeout:           submitRequestTimeout,
+					EnsureBuildAttached:      false,
+					LookupExistingSubmission: false,
+					DryRun:                   false,
+					Emit: func(message string) {
+						fmt.Fprintln(os.Stderr, message)
+					},
+				})
+				if err != nil {
+					return fmt.Errorf("publish appstore: %w", err)
+				}
+				result.SubmissionID = submitResult.SubmissionID
+				result.Submitted = submitResult.SubmissionID != ""
+			}
+			attachLocalPublishResult()
 
 			return shared.PrintOutput(result, *output.Output, *output.Pretty)
 		},

@@ -35,6 +35,45 @@ func TestRunScreenshotsUploadResumeRejectsSelectorFlags(t *testing.T) {
 	}
 }
 
+func TestRunScreenshotsUploadResumeRejectsExecutionModeFlags(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+	}{
+		{
+			name: "skip-existing",
+			args: []string{"--skip-existing"},
+		},
+		{
+			name: "replace",
+			args: []string{"--replace"},
+		},
+		{
+			name: "dry-run",
+			args: []string{"--dry-run"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, stderr := captureOutput(t, func() {
+				runArgs := append([]string{
+					"screenshots", "upload",
+					"--resume", "artifact.json",
+				}, tt.args...)
+				code := cmd.Run(runArgs, "1.2.3")
+				if code != cmd.ExitUsage {
+					t.Fatalf("expected exit code %d, got %d", cmd.ExitUsage, code)
+				}
+			})
+
+			if !strings.Contains(stderr, "--resume cannot be combined with --skip-existing, --replace, or --dry-run") {
+				t.Fatalf("expected resume execution-mode conflict message, got %q", stderr)
+			}
+		})
+	}
+}
+
 func TestRunScreenshotsUploadWritesFailureArtifactAndResumeCompletes(t *testing.T) {
 	setupAuth(t)
 	t.Setenv("ASC_BYPASS_KEYCHAIN", "1")
