@@ -1501,6 +1501,9 @@ func writeECDSAPEM(t *testing.T, path string, mode os.FileMode, pkcs8 bool) {
 	if err := os.WriteFile(path, buf.Bytes(), mode); err != nil {
 		t.Fatalf("write key file error: %v", err)
 	}
+	if err := os.Chmod(path, mode); err != nil {
+		t.Fatalf("chmod key file error: %v", err)
+	}
 }
 
 func withArrayKeyring(t *testing.T) {
