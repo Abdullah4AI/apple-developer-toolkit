@@ -371,3 +371,7 @@ MIT
 <div align="center">
 <sub>Built by <a href="https://abdullah4.ai">Abdullah AlRashoudi</a></sub>
 </div>
+
+## Download History
+
+[![Download History](https://skill-history.com/chart/abdullah4ai/apple-developer-toolkit.svg)](https://skill-history.com/abdullah4ai/apple-developer-toolkit)
