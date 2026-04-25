@@ -73,7 +73,7 @@ func Validate(def *Definition) []*ValidationError {
 		}
 	}
 
-	outputProducerWorkflows := map[string]string{}
+	outputProducerConflicts := collectOutputProducerConflicts(def)
 
 	for _, name := range names {
 		wf := def.Workflows[name]
@@ -147,15 +147,13 @@ func Validate(def *Definition) []*ValidationError {
 						Message:  fmt.Sprintf("workflow %q step %d must use a reference-safe 'name' when declaring outputs", name, idx),
 					})
 				} else {
-					if prevWorkflow, exists := outputProducerWorkflows[trimmedName]; exists {
+					if prevWorkflow, exists := outputProducerConflicts[name][idx]; exists {
 						errs = append(errs, &ValidationError{
 							Code:     ErrDuplicateOutputProducerName,
 							Workflow: name,
 							Step:     idx,
 							Message:  fmt.Sprintf("workflow %q step %d reuses output-producing step name %q already declared in workflow %q", name, idx, trimmedName, prevWorkflow),
 						})
-					} else {
-						outputProducerWorkflows[trimmedName] = name
 					}
 				}
 
@@ -198,6 +196,75 @@ func Validate(def *Definition) []*ValidationError {
 	}
 
 	return errs
+}
+
+func collectOutputProducerConflicts(def *Definition) map[string]map[int]string {
+	conflicts := map[string]map[int]string{}
+	reachabilityCache := map[string]map[string]struct{}{}
+
+	for _, root := range slices.Sorted(maps.Keys(def.Workflows)) {
+		reachable := workflowsReachableFrom(def, root, reachabilityCache, map[string]bool{})
+		seen := map[string]string{}
+
+		reachableNames := slices.Sorted(maps.Keys(reachable))
+		for _, workflowName := range reachableNames {
+			wf := def.Workflows[workflowName]
+			for i, step := range wf.Steps {
+				if len(step.Outputs) == 0 {
+					continue
+				}
+
+				trimmedName := strings.TrimSpace(step.Name)
+				if trimmedName == "" || !validWorkflowName.MatchString(trimmedName) {
+					continue
+				}
+
+				if prevWorkflow, exists := seen[trimmedName]; exists {
+					if conflicts[workflowName] == nil {
+						conflicts[workflowName] = map[int]string{}
+					}
+					if _, recorded := conflicts[workflowName][i+1]; !recorded {
+						conflicts[workflowName][i+1] = prevWorkflow
+					}
+					continue
+				}
+
+				seen[trimmedName] = workflowName
+			}
+		}
+	}
+
+	return conflicts
+}
+
+func workflowsReachableFrom(def *Definition, root string, cache map[string]map[string]struct{}, visiting map[string]bool) map[string]struct{} {
+	if reachable, ok := cache[root]; ok {
+		return reachable
+	}
+	if visiting[root] {
+		return map[string]struct{}{root: {}}
+	}
+
+	visiting[root] = true
+	reachable := map[string]struct{}{root: {}}
+
+	if wf, ok := def.Workflows[root]; ok {
+		for _, step := range wf.Steps {
+			ref := strings.TrimSpace(step.Workflow)
+			if ref == "" {
+				continue
+			}
+			for name := range workflowsReachableFrom(def, ref, cache, visiting) {
+				reachable[name] = struct{}{}
+			}
+		}
+	}
+
+	delete(visiting, root)
+	if len(visiting) == 0 {
+		cache[root] = reachable
+	}
+	return reachable
 }
 
 // detectCycles performs DFS across all workflows to find circular references.

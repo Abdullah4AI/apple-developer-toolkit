@@ -13,10 +13,12 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	rootcmd "github.com/Abdullah4AI/apple-developer-toolkit/appstore/cmd"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/auth"
 	authcli "github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/auth"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
@@ -3727,9 +3729,10 @@ func TestPublishValidationErrors(t *testing.T) {
 	t.Setenv("ASC_APP_ID", "")
 
 	tests := []struct {
-		name    string
-		args    []string
-		wantErr string
+		name     string
+		args     []string
+		wantErr  string
+		wantExit int
 	}{
 		{
 			name:    "publish testflight missing app",
@@ -3755,6 +3758,28 @@ func TestPublishValidationErrors(t *testing.T) {
 			name:    "publish testflight locale missing test-notes",
 			args:    []string{"publish", "testflight", "--app", "APP_123", "--ipa", "app.ipa", "--group", "GROUP_ID", "--locale", "en-US"},
 			wantErr: "Error: --test-notes is required with --locale",
+		},
+		{
+			name:    "publish testflight submit missing confirm",
+			args:    []string{"publish", "testflight", "--app", "APP_123", "--build", "BUILD_123", "--group", "GROUP_ID", "--submit"},
+			wantErr: "Error: --confirm is required with --submit",
+		},
+		{
+			name:     "publish testflight submit invalid value",
+			args:     []string{"publish", "testflight", "--app", "APP_123", "--build", "BUILD_123", "--group", "GROUP_ID", "--submit=maybe"},
+			wantErr:  `invalid boolean value "maybe" for -submit`,
+			wantExit: rootcmd.ExitUsage,
+		},
+		{
+			name:    "publish testflight confirm requires submit",
+			args:    []string{"publish", "testflight", "--app", "APP_123", "--build", "BUILD_123", "--group", "GROUP_ID", "--confirm"},
+			wantErr: "Error: --confirm requires --submit",
+		},
+		{
+			name:     "publish testflight confirm invalid value",
+			args:     []string{"publish", "testflight", "--app", "APP_123", "--build", "BUILD_123", "--group", "GROUP_ID", "--confirm=maybe"},
+			wantErr:  `invalid boolean value "maybe" for -confirm`,
+			wantExit: rootcmd.ExitUsage,
 		},
 		{
 			name:    "publish appstore missing app",
@@ -3863,8 +3888,40 @@ func TestPublishValidationErrors(t *testing.T) {
 		},
 	}
 
+	parentT := t
+	var binaryPath string
+
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			if test.wantExit != 0 {
+				if binaryPath == "" {
+					binaryPath = buildASCBlackBoxBinary(parentT)
+				}
+				command := exec.Command(binaryPath, test.args...)
+
+				var stdout strings.Builder
+				var stderr strings.Builder
+				command.Stdout = &stdout
+				command.Stderr = &stderr
+
+				err := command.Run()
+				var exitErr *exec.ExitError
+				if !errors.As(err, &exitErr) {
+					t.Fatalf("expected process exit error, got %v", err)
+				}
+				if exitErr.ExitCode() != test.wantExit {
+					t.Fatalf("expected exit code %d, got %d", test.wantExit, exitErr.ExitCode())
+				}
+
+				if stdout.String() != "" {
+					t.Fatalf("expected empty stdout, got %q", stdout.String())
+				}
+				if !strings.Contains(stderr.String(), test.wantErr) {
+					t.Fatalf("expected error %q, got %q", test.wantErr, stderr.String())
+				}
+				return
+			}
+
 			root := RootCommand("1.2.3")
 			root.FlagSet.SetOutput(io.Discard)
 

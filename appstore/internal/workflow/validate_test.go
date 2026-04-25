@@ -302,24 +302,102 @@ func TestValidate_StepOutputsRejectWorkflowStep(t *testing.T) {
 	assertValidationCode(t, errs, ErrStepOutputsOnWorkflow)
 }
 
-func TestValidate_StepOutputsRequireUniqueProducerNames(t *testing.T) {
+func TestValidate_StepOutputsAllowDuplicateProducerNamesAcrossIndependentWorkflows(t *testing.T) {
 	def := &Definition{
 		Workflows: map[string]Workflow{
-			"main": {
+			"beta": {
 				Steps: []Step{
 					{
-						Name:    "upload",
+						Name:    "archive",
 						Run:     `printf '{"buildId":"one"}'`,
 						Outputs: map[string]string{"BUILD_ID": "$.buildId"},
 					},
 				},
 			},
-			"helper": {
+			"release": {
 				Steps: []Step{
 					{
-						Name:    "upload",
+						Name:    "archive",
 						Run:     `printf '{"buildId":"two"}'`,
 						Outputs: map[string]string{"BUILD_ID": "$.buildId"},
+					},
+				},
+			},
+		},
+	}
+
+	errs := Validate(def)
+	for _, err := range errs {
+		if err.Code == ErrDuplicateOutputProducerName {
+			t.Fatalf("expected duplicate output producer names to be allowed across independent workflows, got %v", errs)
+		}
+	}
+}
+
+func TestValidate_StepOutputsRejectDuplicateProducerNamesInSameExecutionGraph(t *testing.T) {
+	def := &Definition{
+		Workflows: map[string]Workflow{
+			"ship": {
+				Steps: []Step{
+					{Workflow: "beta"},
+					{Workflow: "release"},
+				},
+			},
+			"beta": {
+				Steps: []Step{
+					{
+						Name:    "archive",
+						Run:     `printf '{"buildId":"one"}'`,
+						Outputs: map[string]string{"BUILD_ID": "$.buildId"},
+					},
+				},
+			},
+			"release": {
+				Steps: []Step{
+					{
+						Name:    "archive",
+						Run:     `printf '{"buildId":"two"}'`,
+						Outputs: map[string]string{"BUILD_ID": "$.buildId"},
+					},
+				},
+			},
+		},
+	}
+
+	errs := Validate(def)
+	assertValidationCode(t, errs, ErrDuplicateOutputProducerName)
+}
+
+func TestValidate_StepOutputsRejectDuplicateProducerNamesAcrossCycle(t *testing.T) {
+	def := &Definition{
+		Workflows: map[string]Workflow{
+			"a": {
+				Steps: []Step{
+					{Workflow: "b"},
+					{Workflow: "x"},
+				},
+			},
+			"b": {
+				Steps: []Step{
+					{Workflow: "a"},
+				},
+			},
+			"x": {
+				Steps: []Step{
+					{
+						Name:    "common",
+						Run:     `printf '{"id":"x"}'`,
+						Outputs: map[string]string{"ID": "$.id"},
+					},
+				},
+			},
+			"d": {
+				Steps: []Step{
+					{Workflow: "b"},
+					{
+						Name:    "common",
+						Run:     `printf '{"id":"d"}'`,
+						Outputs: map[string]string{"ID": "$.id"},
 					},
 				},
 			},
