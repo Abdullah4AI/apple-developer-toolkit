@@ -2,6 +2,8 @@ package subscriptions
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
@@ -181,7 +183,10 @@ func SubscriptionsIntroductoryOffersCreateCommand() *ffcli.Command {
 	startDate := fs.String("start-date", "", "Start date (YYYY-MM-DD)")
 	endDate := fs.String("end-date", "", "End date (YYYY-MM-DD)")
 	territory := fs.String("territory", "", "Territory input for price override (accepts alpha-2, alpha-3, or exact English country name)")
+	allTerritories := fs.Bool("all-territories", false, "Create introductory offers for all current subscription availability territories")
 	pricePoint := fs.String("price-point", "", "Subscription price point ID")
+	dryRun := fs.Bool("dry-run", false, "Resolve territories and print summary without creating offers")
+	continueOnError := fs.Bool("continue-on-error", true, "Continue creating offers after a territory fails")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
@@ -191,7 +196,9 @@ func SubscriptionsIntroductoryOffersCreateCommand() *ffcli.Command {
 		LongHelp: `Create an introductory offer.
 
 Examples:
-  asc subscriptions introductory-offers create --subscription-id "SUB_ID" --offer-duration ONE_MONTH --offer-mode FREE_TRIAL --number-of-periods 1`,
+  asc subscriptions introductory-offers create --subscription-id "SUB_ID" --offer-duration ONE_MONTH --offer-mode FREE_TRIAL --number-of-periods 1
+  asc subscriptions introductory-offers create --subscription-id "SUB_ID" --all-territories --offer-duration ONE_MONTH --offer-mode FREE_TRIAL --number-of-periods 1
+  asc subscriptions introductory-offers create --subscription-id "SUB_ID" --territory ALL --dry-run --offer-duration ONE_MONTH --offer-mode FREE_TRIAL --number-of-periods 1`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -237,10 +244,23 @@ Examples:
 			}
 
 			territoryID := strings.TrimSpace(*territory)
+			useAllTerritories := *allTerritories || strings.EqualFold(territoryID, "ALL")
+			if *allTerritories && territoryID != "" && !strings.EqualFold(territoryID, "ALL") {
+				fmt.Fprintln(os.Stderr, "Error: --territory and --all-territories are mutually exclusive")
+				return flag.ErrHelp
+			}
+			if useAllTerritories && strings.TrimSpace(*pricePoint) != "" {
+				fmt.Fprintln(os.Stderr, "Error: --price-point cannot be used with --all-territories or --territory ALL")
+				return flag.ErrHelp
+			}
 			if territoryID != "" {
-				territoryID, err = ascterritory.Normalize(territoryID)
-				if err != nil {
-					return shared.UsageError(err.Error())
+				if useAllTerritories {
+					territoryID = ""
+				} else {
+					territoryID, err = ascterritory.Normalize(territoryID)
+					if err != nil {
+						return shared.UsageError(err.Error())
+					}
 				}
 			}
 
@@ -254,9 +274,6 @@ Examples:
 				return err
 			}
 
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
-			defer cancel()
-
 			attrs := asc.SubscriptionIntroductoryOfferCreateAttributes{
 				Duration:        duration,
 				OfferMode:       mode,
@@ -268,6 +285,22 @@ Examples:
 			if normalizedEndDate != "" {
 				attrs.EndDate = normalizedEndDate
 			}
+
+			if useAllTerritories {
+				return createSubscriptionIntroductoryOffersForAllTerritories(
+					ctx,
+					client,
+					id,
+					attrs,
+					*dryRun,
+					*continueOnError,
+					*output.Output,
+					*output.Pretty,
+				)
+			}
+
+			requestCtx, cancel := shared.ContextWithTimeout(ctx)
+			defer cancel()
 
 			resp, err := client.CreateSubscriptionIntroductoryOffer(
 				requestCtx,
@@ -283,6 +316,301 @@ Examples:
 			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
 		},
 	}
+}
+
+type subscriptionIntroductoryOfferCreateBulkSummary struct {
+	SubscriptionID  string                                                  `json:"subscriptionId"`
+	AvailabilityID  string                                                  `json:"availabilityId,omitempty"`
+	AllTerritories  bool                                                    `json:"allTerritories"`
+	DryRun          bool                                                    `json:"dryRun"`
+	ContinueOnError bool                                                    `json:"continueOnError"`
+	Total           int                                                     `json:"total"`
+	Created         int                                                     `json:"created"`
+	Skipped         int                                                     `json:"skipped"`
+	Failed          int                                                     `json:"failed"`
+	Skips           []subscriptionIntroductoryOfferCreateBulkSummarySkip    `json:"skips,omitempty"`
+	Failures        []subscriptionIntroductoryOfferCreateBulkSummaryFailure `json:"failures,omitempty"`
+}
+
+type subscriptionIntroductoryOfferCreateBulkSummarySkip struct {
+	Territory string `json:"territory"`
+	Reason    string `json:"reason"`
+}
+
+type subscriptionIntroductoryOfferCreateBulkSummaryFailure struct {
+	Territory string `json:"territory"`
+	Error     string `json:"error"`
+}
+
+func createSubscriptionIntroductoryOffersForAllTerritories(
+	ctx context.Context,
+	client *asc.Client,
+	subscriptionID string,
+	attrs asc.SubscriptionIntroductoryOfferCreateAttributes,
+	dryRun bool,
+	continueOnError bool,
+	output string,
+	pretty bool,
+) error {
+	availabilityID, territories, err := fetchIntroductoryOfferAvailabilityTerritories(ctx, client, subscriptionID)
+	if err != nil {
+		return fmt.Errorf("subscriptions introductory-offers create: %w", err)
+	}
+
+	existing, err := fetchIntroductoryOfferTerritories(ctx, client, subscriptionID)
+	if err != nil {
+		return fmt.Errorf("subscriptions introductory-offers create: %w", err)
+	}
+
+	summary := &subscriptionIntroductoryOfferCreateBulkSummary{
+		SubscriptionID:  subscriptionID,
+		AvailabilityID:  availabilityID,
+		AllTerritories:  true,
+		DryRun:          dryRun,
+		ContinueOnError: continueOnError,
+		Total:           len(territories),
+	}
+
+	for _, territoryID := range territories {
+		if _, ok := existing[territoryID]; ok {
+			appendSubscriptionIntroductoryOfferCreateBulkSkip(summary, territoryID, "introductory offer already exists for territory")
+			continue
+		}
+
+		if dryRun {
+			summary.Created++
+			continue
+		}
+
+		createCtx, createCancel := shared.ContextWithTimeout(ctx)
+		_, err := client.CreateSubscriptionIntroductoryOffer(createCtx, subscriptionID, attrs, territoryID, "")
+		createCancel()
+		if err != nil {
+			appendSubscriptionIntroductoryOfferCreateBulkFailure(summary, territoryID, err)
+			if !continueOnError {
+				break
+			}
+			continue
+		}
+
+		summary.Created++
+	}
+
+	if err := shared.PrintOutputWithRenderers(
+		summary,
+		output,
+		pretty,
+		func() error { return renderSubscriptionIntroductoryOfferCreateBulkSummary(summary, false) },
+		func() error { return renderSubscriptionIntroductoryOfferCreateBulkSummary(summary, true) },
+	); err != nil {
+		return err
+	}
+	if summary.Failed > 0 {
+		return shared.NewReportedError(fmt.Errorf("subscriptions introductory-offers create: %d territor%s failed", summary.Failed, pluralizeIntroductoryOfferCreateTerritories(summary.Failed)))
+	}
+	return nil
+}
+
+func fetchIntroductoryOfferAvailabilityTerritories(ctx context.Context, client *asc.Client, subscriptionID string) (string, []string, error) {
+	availabilityCtx, availabilityCancel := shared.ContextWithTimeout(ctx)
+	availability, err := client.GetSubscriptionAvailabilityForSubscription(availabilityCtx, subscriptionID)
+	availabilityCancel()
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to fetch subscription availability: %w", err)
+	}
+
+	availabilityID := strings.TrimSpace(availability.Data.ID)
+	if availabilityID == "" {
+		return "", nil, fmt.Errorf("subscription availability readback returned empty id")
+	}
+
+	territoriesCtx, territoriesCancel := shared.ContextWithTimeout(ctx)
+	firstPage, err := client.GetSubscriptionAvailabilityAvailableTerritories(territoriesCtx, availabilityID, asc.WithSubscriptionAvailabilityTerritoriesLimit(200))
+	territoriesCancel()
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to fetch subscription availability territories: %w", err)
+	}
+
+	allPages, err := asc.PaginateAll(ctx, firstPage, func(_ context.Context, nextURL string) (asc.PaginatedResponse, error) {
+		pageCtx, pageCancel := shared.ContextWithTimeout(ctx)
+		defer pageCancel()
+		return client.GetSubscriptionAvailabilityAvailableTerritories(pageCtx, availabilityID, asc.WithSubscriptionAvailabilityTerritoriesNextURL(nextURL))
+	})
+	if err != nil {
+		return "", nil, fmt.Errorf("paginate subscription availability territories: %w", err)
+	}
+
+	typed, ok := allPages.(*asc.TerritoriesResponse)
+	if !ok {
+		return "", nil, fmt.Errorf("unexpected subscription availability territories response type %T", allPages)
+	}
+
+	territories := make([]string, 0, len(typed.Data))
+	seen := make(map[string]struct{}, len(typed.Data))
+	for _, territory := range typed.Data {
+		id := strings.ToUpper(strings.TrimSpace(territory.ID))
+		if id == "" {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		territories = append(territories, id)
+	}
+	return availabilityID, territories, nil
+}
+
+func fetchIntroductoryOfferTerritories(ctx context.Context, client *asc.Client, subscriptionID string) (map[string]struct{}, error) {
+	offersCtx, offersCancel := shared.ContextWithTimeout(ctx)
+	firstPage, err := client.GetSubscriptionIntroductoryOffers(offersCtx, subscriptionID, asc.WithSubscriptionIntroductoryOffersLimit(200))
+	offersCancel()
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch existing introductory offers: %w", err)
+	}
+
+	allPages, err := asc.PaginateAll(ctx, firstPage, func(_ context.Context, nextURL string) (asc.PaginatedResponse, error) {
+		pageCtx, pageCancel := shared.ContextWithTimeout(ctx)
+		defer pageCancel()
+		return client.GetSubscriptionIntroductoryOffers(pageCtx, subscriptionID, asc.WithSubscriptionIntroductoryOffersNextURL(nextURL))
+	})
+	if err != nil {
+		return nil, fmt.Errorf("paginate existing introductory offers: %w", err)
+	}
+
+	typed, ok := allPages.(*asc.SubscriptionIntroductoryOffersResponse)
+	if !ok {
+		return nil, fmt.Errorf("unexpected introductory offers response type %T", allPages)
+	}
+
+	existing := make(map[string]struct{}, len(typed.Data))
+	for _, offer := range typed.Data {
+		territoryID := introductoryOfferTerritoryID(offer)
+		if territoryID == "" {
+			continue
+		}
+		existing[territoryID] = struct{}{}
+	}
+	return existing, nil
+}
+
+func introductoryOfferTerritoryID(offer asc.Resource[asc.SubscriptionIntroductoryOfferAttributes]) string {
+	if len(offer.Relationships) != 0 {
+		var relationships struct {
+			Territory *struct {
+				Data struct {
+					ID string `json:"id"`
+				} `json:"data"`
+			} `json:"territory"`
+		}
+		if err := json.Unmarshal(offer.Relationships, &relationships); err == nil && relationships.Territory != nil {
+			if territoryID := strings.ToUpper(strings.TrimSpace(relationships.Territory.Data.ID)); territoryID != "" {
+				return territoryID
+			}
+		}
+	}
+	return introductoryOfferTerritoryIDFromEncodedID(offer.ID)
+}
+
+func introductoryOfferTerritoryIDFromEncodedID(id string) string {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return ""
+	}
+
+	decoded, err := base64.RawURLEncoding.DecodeString(id)
+	if err != nil {
+		decoded, err = base64.StdEncoding.DecodeString(id)
+		if err != nil {
+			return ""
+		}
+	}
+
+	// ASC currently omits territory relationships from introductory offer lists,
+	// but the opaque offer ID contains the App Store territory code under "i".
+	var payload struct {
+		Territory string `json:"i"`
+	}
+	if err := json.Unmarshal(decoded, &payload); err != nil {
+		return ""
+	}
+
+	territoryID, err := ascterritory.Normalize(payload.Territory)
+	if err != nil {
+		return strings.ToUpper(strings.TrimSpace(payload.Territory))
+	}
+	return territoryID
+}
+
+func appendSubscriptionIntroductoryOfferCreateBulkSkip(summary *subscriptionIntroductoryOfferCreateBulkSummary, territoryID, reason string) {
+	if summary == nil {
+		return
+	}
+	summary.Skipped++
+	summary.Skips = append(summary.Skips, subscriptionIntroductoryOfferCreateBulkSummarySkip{
+		Territory: territoryID,
+		Reason:    reason,
+	})
+}
+
+func appendSubscriptionIntroductoryOfferCreateBulkFailure(summary *subscriptionIntroductoryOfferCreateBulkSummary, territoryID string, err error) {
+	if summary == nil || err == nil {
+		return
+	}
+	summary.Failed++
+	summary.Failures = append(summary.Failures, subscriptionIntroductoryOfferCreateBulkSummaryFailure{
+		Territory: territoryID,
+		Error:     err.Error(),
+	})
+}
+
+func renderSubscriptionIntroductoryOfferCreateBulkSummary(summary *subscriptionIntroductoryOfferCreateBulkSummary, markdown bool) error {
+	if summary == nil {
+		return fmt.Errorf("summary is nil")
+	}
+
+	render := asc.RenderTable
+	if markdown {
+		render = asc.RenderMarkdown
+	}
+
+	render(
+		[]string{"Subscription ID", "Availability ID", "Dry Run", "Total", "Created", "Skipped", "Failed"},
+		[][]string{{
+			summary.SubscriptionID,
+			summary.AvailabilityID,
+			fmt.Sprintf("%t", summary.DryRun),
+			fmt.Sprintf("%d", summary.Total),
+			fmt.Sprintf("%d", summary.Created),
+			fmt.Sprintf("%d", summary.Skipped),
+			fmt.Sprintf("%d", summary.Failed),
+		}},
+	)
+
+	if len(summary.Skips) > 0 {
+		rows := make([][]string, 0, len(summary.Skips))
+		for _, skip := range summary.Skips {
+			rows = append(rows, []string{skip.Territory, skip.Reason})
+		}
+		render([]string{"Skipped Territory", "Reason"}, rows)
+	}
+
+	if len(summary.Failures) > 0 {
+		rows := make([][]string, 0, len(summary.Failures))
+		for _, failure := range summary.Failures {
+			rows = append(rows, []string{failure.Territory, failure.Error})
+		}
+		render([]string{"Failed Territory", "Error"}, rows)
+	}
+
+	return nil
+}
+
+func pluralizeIntroductoryOfferCreateTerritories(n int) string {
+	if n == 1 {
+		return "y"
+	}
+	return "ies"
 }
 
 // SubscriptionsIntroductoryOffersUpdateCommand returns the introductory offers update subcommand.
