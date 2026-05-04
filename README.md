@@ -364,10 +364,6 @@ Config locations:
 | App Builder | Xcode + LLM API key |
 | Hooks | Nothing |
 
-## License
-
-MIT
-
 <div align="center">
 <sub>Built by <a href="https://abdullah4.ai">Abdullah AlRashoudi</a></sub>
 </div>
