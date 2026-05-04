@@ -150,6 +150,11 @@
     "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/fe/da/29/feda29cd-84dc-ad22-66f4-a276004811fc/appicon-0-0-1x_U007ephone-0-1-85-220.png/512x512bb.jpg"
   },
   {
+    "app": "Clean Links: URL Privacy",
+    "link": "https://apps.apple.com/us/app/clean-links-url-privacy/id6747395062?uo=4",
+    "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/06/bd/0d/06bd0de6-4342-ed6d-357d-6178b1ebce6c/AppIcon-0-0-1x_U007epad-0-1-0-85-220.png/512x512bb.jpg"
+  },
+  {
     "app": "Clip Jar",
     "link": "https://apps.apple.com/us/app/clip-jar/id1628120600?uo=4",
     "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/51/13/d7/5113d707-1dce-2010-2488-db621e84ae42/AppIcon-0-0-1x_U007epad-0-1-0-sRGB-85-220.png/512x512bb.jpg"
@@ -334,6 +339,11 @@
     "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/79/71/89/797189ca-6bde-e2e0-9e24-99bd6593b928/AppIcon-0-0-85-220-0-5-0-2x-P3-0-0-0.png/512x512bb.png"
   },
   {
+    "app": "Fasting Works: IF & Meal Log",
+    "link": "https://apps.apple.com/us/app/fasting-works-if-meal-log/id6757606218?uo=4",
+    "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/56/72/22/567222b9-40dd-cca2-1a58-01a46cfaa2d9/AppIcon-0-0-1x_U007ephone-0-1-85-220.png/512x512bb.jpg"
+  },
+  {
     "app": "Fermento Fermentation Journal",
     "link": "https://apps.apple.com/us/app/fermento-fermentation-journal/id6470132496?uo=4",
     "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/e4/e3/59/e4e3593b-0e71-922d-2313-b31c35cde061/AppIcon-0-0-1x_U007epad-0-1-85-220.jpeg/512x512bb.jpg"
@@ -456,6 +466,11 @@
     "app": "Hands Time - Minimalist Widget",
     "link": "https://apps.apple.com/us/app/hands-time-minimalist-widget/id6462440720?uo=4",
     "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/ea/cd/e9/eacde9d6-4e33-e631-55fc-05aa961523a5/AppIcon-0-0-1x_U007ephone-0-0-0-1-0-0-85-220.png/512x512bb.jpg"
+  },
+  {
+    "app": "Harvest - One-Tap Summary",
+    "link": "https://apps.apple.com/us/app/harvest-one-tap-summary/id6738302076?uo=4",
+    "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/0c/16/4e/0c164e6e-0b93-c0b3-314e-4b6b9742f282/AppIcon-0-0-1x_U007epad-0-1-85-220.png/512x512bb.jpg"
   },
   {
     "app": "Haven: Setup Codes",
@@ -817,6 +832,11 @@
     "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/87/1d/91/871d9134-d427-2469-ce00-dd1f5929519b/PillcaseIcon-0-0-1x_U007ephone-0-1-sRGB-85-220.png/512x512bb.jpg"
   },
   {
+    "app": "PixShrink - HEIF Conv.",
+    "link": "https://apps.apple.com/us/app/pixshrink-heif-conv/id6744530166?uo=4",
+    "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/a9/b8/c7/a9b8c739-32a1-a66d-9b5c-208089c2a66b/AppIcon-0-0-1x_U007emarketing-0-8-0-85-220.png/512x512bb.jpg"
+  },
+  {
     "app": "Placify - Map & Trip Planner",
     "link": "https://apps.apple.com/us/app/placify-map-trip-planner/id6739698007?uo=4",
     "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/80/48/f5/8048f5c8-8ba9-c684-e574-8f8dfa91544f/AppIcon-0-0-1x_U007ephone-0-0-0-1-0-0-sRGB-85-220-0.png/512x512bb.jpg"
@@ -1030,6 +1050,11 @@
     "app": "SiteCalc: Trades Calculator",
     "link": "https://apps.apple.com/us/app/sitecalc-trades-calculator/id6761667513?uo=4",
     "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/98/db/d6/98dbd62d-1923-b384-c9fe-7233fcf3e8e7/AppIcon-0-0-1x_U007ephone-0-1-sRGB-85-220.png/512x512bb.jpg"
+  },
+  {
+    "app": "Slop Or Not - AI Fake Detector",
+    "link": "https://apps.apple.com/us/app/slop-or-not-ai-fake-detector/id6744578596?uo=4",
+    "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/fb/f9/05/fbf9052f-756b-1660-e575-62e7a85d73b7/AppIcon-0-0-1x_U007ephone-0-1-0-85-220.png/512x512bb.jpg"
   },
   {
     "app": "Smart Music Stations: Wavyy",
