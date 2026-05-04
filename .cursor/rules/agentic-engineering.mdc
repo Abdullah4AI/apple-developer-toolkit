@@ -1,0 +1,44 @@
+---
+description: Keep Apple Developer Toolkit compatible with agentic-engineering safety rules.
+alwaysApply: true
+---
+
+# Apple Developer Toolkit Agentic Engineering Rules
+
+Apply these rules whenever Cursor works in this repository.
+
+## Route Tools Explicitly
+
+- Apple docs and WWDC lookup: use `node cli.js` from the repo.
+- App Store Connect work: use `appledev store`.
+- App scaffolding and fix loops: use `appledev build`.
+- Design/platform rules: read only the relevant `references/`, `skills/ios-rules/`, or `skills/swiftui-guides/` files.
+
+## Side Effects Need Approval
+
+Read-only commands are safe by default: docs search, symbols, doc, overview, samples, WWDC lookup, status, validate, diff, docs, doctor, and reference reads.
+
+Ask before any mutation: App Store Connect writes, uploads, TestFlight/App Store publish, pricing, IAP, subscriptions, signing, devices, webhooks, notarization, Xcode Cloud runs, local project writes, simulator launches, hook installation, commits, pushes, PRs, merges, releases, or tags.
+
+Never post to X/Twitter from this repository or skill.
+
+## Memory and Observability
+
+- Do not persist raw task logs, App Store state, generated code, build errors, credentials, or temporary decisions to long-term memory.
+- Keep run artifacts in repo-local files when needed.
+- Summarize what was checked, what changed, what did not change, and remaining risks.
+
+## Upstream Sync
+
+After upstream sync commits, run:
+
+```bash
+bash scripts/apply-agentic-engineering.sh
+```
+
+Then check:
+
+```bash
+git diff --check -- README.md SKILL.md skills/apple-developer-toolkit/README.md
+npx skills add . --list --full-depth
+```
