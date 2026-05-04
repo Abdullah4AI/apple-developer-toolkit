@@ -72,6 +72,21 @@ Before asking the user for defaults, read `config.json` in this skill directory.
 - Keep durable agent-side notes or run logs in `${CLAUDE_PLUGIN_DATA}/apple-developer-toolkit/`
 - Keep secrets out of repo files. Use env vars or Keychain-backed flows instead
 
+## Agent Skills Installation
+
+Use the current Agent Skills CLI syntax when installing this repository into coding agents:
+
+```bash
+# Install both skills
+npx skills add Abdullah4AI/apple-developer-toolkit
+
+# Install a specific skill
+npx skills add Abdullah4AI/apple-developer-toolkit --skill ios-rules
+npx skills add Abdullah4AI/apple-developer-toolkit --skill swiftui-guides
+```
+
+Supported agents include Claude Code, Codex, Cursor, Windsurf, Gemini CLI, and any agent that supports the Agent Skills format. For Codex or Cursor, install the same skills with `npx skills add ...` from the project where the agent should use the Apple rules, then let the agent load the generated skill instructions from that workspace.
+
 ## Agent Safety, Permissions, and Observability
 
 Use this skill with strict agent-operating rules so Apple workflows do not poison future context or create unintended side effects.
