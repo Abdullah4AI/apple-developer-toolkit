@@ -1,6 +1,6 @@
 ---
 name: apple-developer-toolkit
-description: "All-in-one Apple developer skill with three integrated tools shipped as a single unified binary. (1) Documentation search across Apple frameworks, symbols, and 1,267 WWDC sessions from 2014-2025. No credentials needed. (2) App Store Connect CLI with 120+ commands covering builds (find/wait/upload), TestFlight, pre-submission validate, submissions, signing, subscriptions (family-sharable), IAP, analytics, Xcode Cloud, metadata workflows, release pipeline dashboard, insights, win-back offers, promoted purchases, product pages, nominations, accessibility declarations, pre-orders, pricing filters, localizations update, diff, webhooks with local receiver, workflow automation, and more. Requires App Store Connect API key. (3) Multi-platform app builder (iOS/watchOS/tvOS/iPad/macOS/visionOS) that generates complete Swift/SwiftUI apps from natural language with auto-fix, simulator launch, interactive chat mode, and open-in-Xcode. Requires an LLM API key and Xcode. Includes 38 iOS development rules and 12 SwiftUI best practice guides for Liquid Glass, navigation, state management, and modern APIs. All three tools ship as one binary (appledev). USE WHEN: Apple API docs, App Store Connect management, WWDC lookup, or building iOS/watchOS/tvOS/macOS/visionOS apps from scratch. DON'T USE WHEN: non-Apple platforms or general coding."
+description: "Apple platform skill for docs, WWDC lookup, App Store Connect work, and SwiftUI app generation. Use repo-local `node cli.js` for Apple docs and WWDC search, `appledev store` for App Store Connect workflows, and `appledev build` for app scaffolding or fix loops on macOS. USE WHEN: Apple APIs, WWDC sessions, TestFlight/App Store tasks, or building/fixing Apple-platform apps. DON'T USE WHEN: non-Apple platforms, generic backend work, or general web research. EDGE CASES: docs-only queries use `node cli.js` in this repo, not `appledev`; release workflows use `appledev store`; app scaffolding uses `appledev build`; rules-only requests can read `references/ios-rules/` or `references/swiftui-guides/` progressively without invoking binaries."
 metadata:
   {
     "openclaw":
@@ -50,20 +50,77 @@ metadata:
 
 # Apple Developer Toolkit
 
-Three tools in one binary. Each part works independently with different credential requirements.
+This skill has two execution surfaces plus a local Apple docs corpus. Each part works independently with different requirements.
 
 ## Architecture
 
-Ships as a single unified binary `appledev` with multi-call support:
+Use the right entry point for the job:
 
 ```
-appledev build ...    # iOS app builder (SwiftShip)
-appledev store ...    # App Store Connect CLI
-appledev b ...        # Short alias
-appledev s ...        # Short alias
+node cli.js search ...    # Apple docs + WWDC lookup from this repo
+appledev build ...        # SwiftShip app builder
+appledev store ...        # App Store Connect CLI
 ```
 
-One binary, three tools, zero duplication.
+Important: `appledev --help` currently exposes `build` and `store`, but not the docs search commands. Docs lookup is repo-local through `node cli.js`.
+
+## Agent Setup
+
+Before asking the user for defaults, read `config.json` in this skill directory.
+
+- Keep non-secret setup defaults in `config.json`
+- Keep durable agent-side notes or run logs in `${CLAUDE_PLUGIN_DATA}/apple-developer-toolkit/`
+- Keep secrets out of repo files. Use env vars or Keychain-backed flows instead
+
+## Agent Skills Installation
+
+Use the current Agent Skills CLI syntax when installing this repository into coding agents:
+
+```bash
+# Install both skills
+npx skills add Abdullah4AI/apple-developer-toolkit
+
+# Install a specific skill
+npx skills add Abdullah4AI/apple-developer-toolkit --skill ios-rules
+npx skills add Abdullah4AI/apple-developer-toolkit --skill swiftui-guides
+```
+
+Supported agents include Claude Code, Codex, Cursor, Windsurf, Gemini CLI, and any agent that supports the Agent Skills format. For Codex or Cursor, install the same skills with `npx skills add ...` from the project where the agent should use the Apple rules, then let the agent load the generated skill instructions from that workspace.
+
+## Agent Safety, Permissions, and Observability
+
+Use this skill with strict agent-operating rules so Apple workflows do not poison future context or create unintended side effects.
+
+### Memory Discipline
+
+- Do not save task logs, raw Apple docs output, generated code snippets, App Store state, build errors, credentials, or temporary decisions to persistent memory
+- Save only stable reusable facts: user preferences, environment conventions, tool quirks, or confirmed setup details that will matter in future sessions
+- Prefer skill references, local artifacts, run summaries, and status files over memory for workflow state
+
+### Tool Permission Design
+
+- Read-only by default: `node cli.js search`, `symbols`, `doc`, `overview`, `samples`, `wwdc-*`, `appledev store ... list/status/validate/diff/docs/doctor`, and reading reference files
+- Requires explicit user approval before side effects: App Store Connect creates/updates/deletes, TestFlight publish, App Store submit, metadata/localization updates, pricing/IAP/subscription changes, certificate/profile/device changes, webhooks, notarization, uploads, Xcode Cloud runs, `appledev build` project writes, simulator launches, or hook installation
+- Never use publishing or external-posting tools outside their stated surface. In particular, this skill must not post to X/Twitter or invoke any X publishing command
+- If a command can mutate App Store Connect or a local project, state the target app/project, expected change, and whether credentials will be used before running it
+- Prefer dry-run, diff, status, validate, or docs commands before mutating commands when available
+
+### Observability Requirements
+
+For non-trivial runs, create or preserve enough artifacts to audit what happened:
+
+- Logs: keep command output or tool output relevant to the decision
+- Traces: note the command path used, for example `node cli.js` vs `appledev store` vs `appledev build`
+- Artifacts: write generated plans, diffs, reports, metadata exports, or build summaries to project-local files when appropriate
+- Status files: for long app-builder or release workflows, keep a small status/summary file with current step, target app/project, next safe action, and blockers
+- Run summaries: finish with what was checked, what changed, what did not change, and remaining risks
+
+### Workflow Orchestration
+
+- Route tasks explicitly: docs lookup → `node cli.js`; App Store Connect → `appledev store`; app scaffolding/fix loops → `appledev build`; platform/design rules → relevant `references/` files
+- Break multi-step release or build work into inspect → plan → dry-run/validate → execute with approval → verify → summarize
+- Use specialized references progressively. Load only the relevant `references/apple-*.md`, `references/ios-rules/`, or `references/swiftui-guides/` material needed for the task
+- Stop and ask when ambiguity changes side effects, such as which app ID, bundle ID, release version, TestFlight group, pricing, certificate, or project path to mutate
 
 ## Credential Requirements by Feature
 
@@ -74,6 +131,8 @@ One binary, three tools, zero duplication.
 | iOS App Builder (Part 3) | LLM API key + Xcode | No |
 
 ## Setup
+
+Check `config.json` first for local defaults and paths.
 
 ### Part 1: Documentation Search (no setup needed)
 
@@ -120,6 +179,17 @@ appledev build setup    # Checks and installs prerequisites
 ```bash
 bash scripts/setup.sh
 ```
+
+The setup script builds `appledev`, copies it to `/opt/homebrew/bin/appledev`, and symlinks `swiftship` plus `appstore` to the same binary.
+
+## Gotchas
+
+- Apple docs and WWDC lookup are not exposed through `appledev --help` right now. Use `node cli.js ...` from this repo for those tasks
+- Help text inside `cli.js` mentions `apple-docs ...`, but a separate `apple-docs` binary may not be installed. In this skill, `node cli.js ...` is the safe path
+- `appledev store ...` needs App Store Connect credentials. If they are missing, authenticate with `appledev store auth login` or env vars before trying release actions
+- `appledev build ...` is macOS-only in practice and depends on Xcode, Simulator support, and an LLM API key. Do not assume it will work in a generic sandbox
+- Hook config lives outside the repo at `~/.appledev/hooks.yaml` and optionally inside projects at `.appledev/hooks.yaml`. Use `templates/hooks-*.yaml` as starting points instead of writing YAML from scratch
+- Do not write secrets into `config.json`, templates, or repo files
 
 ## Part 1: Documentation Search
 
@@ -246,3 +316,13 @@ accessibility, app_clips, app_review, apple_translation, biometrics, camera, cha
 ### SwiftUI Guides (12 files)
 
 animations, forms-and-input, layout, liquid-glass, list-patterns, media, modern-apis, navigation, performance, scroll-patterns, state-management, text-formatting
+
+## Consolidated Apple/Swiftship references
+
+This umbrella absorbed the former one-feature/one-phase Apple skills. Load the targeted reference instead of relying on narrow active sibling skills:
+
+- `references/apple-features-skills.md` — App Store Connect, framework features, monetization, assets, and app services.
+- `references/apple-ui-skills.md` — accessibility, layout, typography, animations, glass, gestures, and view composition.
+- `references/apple-extensions-skills.md` — widgets, App Clips, Live Activities, Safari/share/notification extensions.
+- `references/apple-phases-skills.md` — Swiftship analyzer/planner/builder/editor/fixer/recovery routing.
+- `references/apple-always-skills.md` and platform variants — shared SwiftUI, design-system, layout, components, navigation, review guidance.

@@ -55,11 +55,11 @@ Add iOS and SwiftUI knowledge to any AI coding agent — Claude Code, Codex, Cur
 
 ```bash
 # Install both skills (recommended)
-npx add-skill Abdullah4AI/apple-developer-toolkit
+npx skills add Abdullah4AI/apple-developer-toolkit
 
 # Install a specific skill
-npx add-skill Abdullah4AI/apple-developer-toolkit --skill ios-rules
-npx add-skill Abdullah4AI/apple-developer-toolkit --skill swiftui-guides
+npx skills add Abdullah4AI/apple-developer-toolkit --skill ios-rules
+npx skills add Abdullah4AI/apple-developer-toolkit --skill swiftui-guides
 ```
 
 | Skill | What it adds | Token cost |
@@ -67,7 +67,7 @@ npx add-skill Abdullah4AI/apple-developer-toolkit --skill swiftui-guides
 | `ios-rules` | 38 iOS rules: accessibility, navigation, architecture, dark mode, localization, App Review | ~20K tokens |
 | `swiftui-guides` | 12 SwiftUI guides: Liquid Glass, state management, animations, layout, performance | ~20K tokens |
 
-Skills work out of the box with any agent that supports the [Agent Skills](https://agentskills.io) format.
+Skills work out of the box with any agent that supports the [Agent Skills](https://agentskills.io) format, including Claude Code, Codex, Cursor, Windsurf, Gemini CLI, and other compatible coding agents.
 
 ## What's Inside
 
