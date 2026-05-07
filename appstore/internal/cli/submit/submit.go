@@ -1726,19 +1726,22 @@ func printSubmissionErrorHints(err error, ctx submissionErrorHintContext) {
 	signals := collectSubmissionErrorSignals(err)
 	var hints []string
 	if signals.ageRating && strings.TrimSpace(ctx.AppID) != "" {
-		hints = append(hints,
+		hints = append(
+			hints,
 			fmt.Sprintf("Review current age rating: asc age-rating view --app %s", ctx.AppID),
 			"Review age-rating update flags: asc age-rating edit --help",
 		)
 	}
 	if signals.contentRights && strings.TrimSpace(ctx.AppID) != "" {
-		hints = append(hints,
+		hints = append(
+			hints,
 			fmt.Sprintf("If your app does not use third-party content: asc apps update --id %s --content-rights DOES_NOT_USE_THIRD_PARTY_CONTENT", ctx.AppID),
 			fmt.Sprintf("If your app uses third-party content: asc apps update --id %s --content-rights USES_THIRD_PARTY_CONTENT", ctx.AppID),
 		)
 	}
 	if signals.usesNonExempt {
-		hints = append(hints,
+		hints = append(
+			hints,
 			"Set Uses Non-Exempt Encryption for the attached build in App Store Connect, then retry submission.",
 		)
 	}
@@ -1746,19 +1749,22 @@ func printSubmissionErrorHints(err error, ctx submissionErrorHintContext) {
 		hints = append(hints, fmt.Sprintf("Complete App Privacy at: https://appstoreconnect.apple.com/apps/%s/appPrivacy", ctx.AppID))
 	}
 	if signals.primaryCategory {
-		hints = append(hints,
+		hints = append(
+			hints,
 			"List available categories: asc categories list",
 			"Review category update flags: asc app-setup categories set --help",
 		)
 	}
 	if activeID := strings.TrimSpace(signals.activeSubmissionID); activeID != "" {
-		hints = appendUniqueHints(hints,
+		hints = appendUniqueHints(
+			hints,
 			fmt.Sprintf("Check the active submission: asc submit status --id %s", activeID),
 			fmt.Sprintf("Inspect the active submission payload: asc review submissions-get --id %s", activeID),
 		)
 	}
 	if strings.TrimSpace(signals.existingSubmissionID) != "" && strings.TrimSpace(signals.activeSubmissionID) == "" {
-		hints = appendUniqueHints(hints,
+		hints = appendUniqueHints(
+			hints,
 			fmt.Sprintf("Inspect the existing submission: asc submit status --id %s", signals.existingSubmissionID),
 			fmt.Sprintf("Inspect the existing submission payload: asc review submissions-get --id %s", signals.existingSubmissionID),
 		)

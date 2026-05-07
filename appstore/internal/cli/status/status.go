@@ -536,7 +536,8 @@ func fillBuildsAndTestFlight(ctx context.Context, client *asc.Client, appID stri
 		buildIDs = append(buildIDs, build.ID)
 	}
 
-	betaDetails, err := client.GetBuildBetaDetails(ctx,
+	betaDetails, err := client.GetBuildBetaDetails(
+		ctx,
 		asc.WithBuildBetaDetailsBuildIDs(buildIDs),
 		asc.WithBuildBetaDetailsLimit(200),
 	)
@@ -554,7 +555,8 @@ func fillBuildsAndTestFlight(ctx context.Context, client *asc.Client, appID stri
 		}
 	}
 
-	reviewSubmissions, err := client.GetBetaAppReviewSubmissions(ctx,
+	reviewSubmissions, err := client.GetBetaAppReviewSubmissions(
+		ctx,
 		asc.WithBetaAppReviewSubmissionsBuildIDs(buildIDs),
 		asc.WithBetaAppReviewSubmissionsLimit(200),
 	)
@@ -993,7 +995,8 @@ func renderDashboard(resp *dashboardResponse, markdown bool) {
 		if resp.Builds.Latest == nil {
 			rows = append(rows, []string{"latest", "[-] none"})
 		} else {
-			rows = append(rows,
+			rows = append(
+				rows,
 				[]string{"latest.id", resp.Builds.Latest.ID},
 				[]string{"latest.version", shared.OrNA(resp.Builds.Latest.Version)},
 				[]string{"latest.buildNumber", shared.OrNA(resp.Builds.Latest.BuildNumber)},

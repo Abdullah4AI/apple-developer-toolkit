@@ -1097,7 +1097,8 @@ func helperCommandContext(t *testing.T, logPath string) func(context.Context, st
 		commandArgs := []string{"-test.run=TestXcodeHelperProcess", "--", name}
 		commandArgs = append(commandArgs, args...)
 		cmd := exec.CommandContext(ctx, os.Args[0], commandArgs...)
-		cmd.Env = append(os.Environ(),
+		cmd.Env = append(
+			os.Environ(),
 			"GO_WANT_XCODE_HELPER_PROCESS=1",
 			"ASC_XCODE_HELPER_LOG="+logPath,
 		)

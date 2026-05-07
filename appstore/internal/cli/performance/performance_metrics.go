@@ -83,7 +83,8 @@ Examples:
 			requestCtx, cancel := shared.ContextWithTimeout(ctx)
 			defer cancel()
 
-			resp, err := client.GetPerfPowerMetricsForApp(requestCtx, resolvedAppID,
+			resp, err := client.GetPerfPowerMetricsForApp(
+				requestCtx, resolvedAppID,
 				asc.WithPerfPowerMetricsPlatforms(platforms),
 				asc.WithPerfPowerMetricsMetricTypes(metricTypes),
 				asc.WithPerfPowerMetricsDeviceTypes(shared.SplitCSV(*deviceType)),
@@ -142,7 +143,8 @@ Examples:
 			requestCtx, cancel := shared.ContextWithTimeout(ctx)
 			defer cancel()
 
-			resp, err := client.GetPerfPowerMetricsForBuild(requestCtx, trimmedBuildID,
+			resp, err := client.GetPerfPowerMetricsForBuild(
+				requestCtx, trimmedBuildID,
 				asc.WithPerfPowerMetricsPlatforms(platforms),
 				asc.WithPerfPowerMetricsMetricTypes(metricTypes),
 				asc.WithPerfPowerMetricsDeviceTypes(shared.SplitCSV(*deviceType)),

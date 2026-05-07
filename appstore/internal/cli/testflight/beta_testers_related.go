@@ -97,7 +97,8 @@ Examples:
 					return flag.ErrHelp
 				}
 				paginateOpts := append(opts, asc.WithBetaTesterAppsLimit(200))
-				resp, err := shared.PaginateWithSpinner(requestCtx,
+				resp, err := shared.PaginateWithSpinner(
+					requestCtx,
 					func(ctx context.Context) (asc.PaginatedResponse, error) {
 						return client.GetBetaTesterApps(ctx, testerValue, paginateOpts...)
 					},
@@ -205,7 +206,8 @@ Examples:
 					return flag.ErrHelp
 				}
 				paginateOpts := append(opts, asc.WithBetaTesterBetaGroupsLimit(200))
-				resp, err := shared.PaginateWithSpinner(requestCtx,
+				resp, err := shared.PaginateWithSpinner(
+					requestCtx,
 					func(ctx context.Context) (asc.PaginatedResponse, error) {
 						return client.GetBetaTesterBetaGroups(ctx, testerValue, paginateOpts...)
 					},
@@ -313,7 +315,8 @@ Examples:
 					return flag.ErrHelp
 				}
 				paginateOpts := append(opts, asc.WithBetaTesterBuildsLimit(200))
-				resp, err := shared.PaginateWithSpinner(requestCtx,
+				resp, err := shared.PaginateWithSpinner(
+					requestCtx,
 					func(ctx context.Context) (asc.PaginatedResponse, error) {
 						return client.GetBetaTesterBuilds(ctx, testerValue, paginateOpts...)
 					},

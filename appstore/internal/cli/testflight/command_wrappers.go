@@ -534,7 +534,8 @@ Examples:
   asc testflight review submissions view --id "SUBMISSION_ID"`
 	setUsageFuncRecursively(cmd, testflightVisibleUsageFunc)
 
-	cmd.Subcommands = append(cmd.Subcommands,
+	cmd.Subcommands = append(
+		cmd.Subcommands,
 		deprecatedAliasCommand(
 			TestFlightReviewGetCommand(),
 			"asc testflight review view [flags]",
@@ -550,7 +551,8 @@ Examples:
 	)
 
 	if appCmd := findSubcommand(cmd, "app"); appCmd != nil {
-		appCmd.Subcommands = append(appCmd.Subcommands,
+		appCmd.Subcommands = append(
+			appCmd.Subcommands,
 			deprecatedAliasCommand(
 				TestFlightReviewAppGetCommand(),
 				"asc testflight review app view --id \"DETAIL_ID\"",
@@ -561,7 +563,8 @@ Examples:
 	}
 
 	if submissionsCmd := findSubcommand(cmd, "submissions"); submissionsCmd != nil {
-		submissionsCmd.Subcommands = append(submissionsCmd.Subcommands,
+		submissionsCmd.Subcommands = append(
+			submissionsCmd.Subcommands,
 			deprecatedAliasCommand(
 				TestFlightReviewSubmissionsGetCommand(),
 				"asc testflight review submissions view --id \"SUBMISSION_ID\"",

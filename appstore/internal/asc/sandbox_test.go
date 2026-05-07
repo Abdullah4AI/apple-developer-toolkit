@@ -44,7 +44,8 @@ func TestGetSandboxTesters_WithFilters(t *testing.T) {
 		assertAuthorized(t, req)
 	}, response)
 
-	resp, err := client.GetSandboxTesters(context.Background(),
+	resp, err := client.GetSandboxTesters(
+		context.Background(),
 		WithSandboxTestersEmail("tester@example.com"),
 		WithSandboxTestersTerritory("usa"),
 		WithSandboxTestersLimit(10),

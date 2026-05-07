@@ -191,7 +191,8 @@ func findCertificates(ctx context.Context, client *asc.Client, profileType, cert
 		next  string
 	)
 	for {
-		resp, err := client.GetCertificates(ctx,
+		resp, err := client.GetCertificates(
+			ctx,
 			asc.WithCertificatesFilterType(certType),
 			asc.WithCertificatesNextURL(next),
 		)
@@ -214,7 +215,8 @@ func findCertificates(ctx context.Context, client *asc.Client, profileType, cert
 func findOrCreateProfile(ctx context.Context, client *asc.Client, bundleIDResourceID, bundleIdentifier, profileType string, certIDs, deviceIDs []string, createMissing bool) (*asc.ProfileResponse, bool, error) {
 	next := ""
 	for {
-		profiles, err := client.GetProfiles(ctx,
+		profiles, err := client.GetProfiles(
+			ctx,
 			asc.WithProfilesFilterType(profileType),
 			asc.WithProfilesNextURL(next),
 		)

@@ -99,7 +99,8 @@ func TestIntegrationAuthConfig(t *testing.T) {
 		tempDir := t.TempDir()
 
 		// Login with bypass-keychain --local writes to .asc/config.json in cwd
-		cmd := exec.Command(ascBinary, "auth", "login",
+		cmd := exec.Command(
+			ascBinary, "auth", "login",
 			"--bypass-keychain",
 			"--local",
 			"--name", "TestKey",
@@ -156,7 +157,8 @@ func TestIntegrationAuthConfig(t *testing.T) {
 
 		// Check auth status
 		cmd := exec.Command(ascBinary, "auth", "status")
-		cmd.Env = append(os.Environ(),
+		cmd.Env = append(
+			os.Environ(),
 			"ASC_CONFIG_PATH="+configPath,
 			"ASC_BYPASS_KEYCHAIN=1",
 		)
@@ -199,7 +201,8 @@ func TestIntegrationAuthConfig(t *testing.T) {
 		}
 
 		cmd := exec.Command(ascBinary, "auth", "switch", "--name", "client")
-		cmd.Env = append(filterEnv(os.Environ(), "ASC_CONFIG_PATH", "ASC_BYPASS_KEYCHAIN"),
+		cmd.Env = append(
+			filterEnv(os.Environ(), "ASC_CONFIG_PATH", "ASC_BYPASS_KEYCHAIN"),
 			"ASC_CONFIG_PATH="+configPath,
 			"ASC_BYPASS_KEYCHAIN=1",
 		)
@@ -217,10 +220,12 @@ func TestIntegrationAuthConfig(t *testing.T) {
 		}
 
 		cmd = exec.Command(ascBinary, "--profile", "client", "apps", "list", "--limit", "1")
-		cmd.Env = append(filterEnv(os.Environ(),
-			"ASC_KEY_ID", "ASC_ISSUER_ID", "ASC_PRIVATE_KEY_PATH",
-			"ASC_CONFIG_PATH", "ASC_BYPASS_KEYCHAIN",
-		),
+		cmd.Env = append(
+			filterEnv(
+				os.Environ(),
+				"ASC_KEY_ID", "ASC_ISSUER_ID", "ASC_PRIVATE_KEY_PATH",
+				"ASC_CONFIG_PATH", "ASC_BYPASS_KEYCHAIN",
+			),
 			"ASC_CONFIG_PATH="+configPath,
 			"ASC_BYPASS_KEYCHAIN=1",
 		)
@@ -250,7 +255,8 @@ func TestIntegrationAuthConfig(t *testing.T) {
 
 		// Try to list apps using config credentials
 		cmd := exec.Command(ascBinary, "apps", "list")
-		cmd.Env = filterEnv(os.Environ(),
+		cmd.Env = filterEnv(
+			os.Environ(),
 			"ASC_KEY_ID", "ASC_ISSUER_ID", "ASC_PRIVATE_KEY_PATH",
 		)
 		cmd.Env = append(cmd.Env, "ASC_CONFIG_PATH="+configPath)
@@ -287,7 +293,8 @@ func TestIntegrationAuthConfig(t *testing.T) {
 
 		// Try to list builds without --app flag (should use config app_id)
 		cmd := exec.Command(ascBinary, "builds", "list", "--limit", "1")
-		cmd.Env = filterEnv(os.Environ(),
+		cmd.Env = filterEnv(
+			os.Environ(),
 			"ASC_KEY_ID", "ASC_ISSUER_ID", "ASC_PRIVATE_KEY_PATH", "ASC_APP_ID",
 		)
 		cmd.Env = append(cmd.Env, "ASC_CONFIG_PATH="+configPath)

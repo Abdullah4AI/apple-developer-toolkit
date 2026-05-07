@@ -139,7 +139,8 @@ Examples:
 
 				if *paginate {
 					paginateOpts := append(opts, asc.WithBetaGroupsLimit(200))
-					groups, err := shared.PaginateWithSpinner(requestCtx,
+					groups, err := shared.PaginateWithSpinner(
+						requestCtx,
 						func(ctx context.Context) (asc.PaginatedResponse, error) {
 							return client.ListBetaGroups(ctx, paginateOpts...)
 						},
@@ -169,7 +170,8 @@ Examples:
 
 				if *paginate {
 					paginateOpts := append(opts, asc.WithBetaGroupsLimit(200))
-					resp, err := shared.PaginateWithSpinner(requestCtx,
+					resp, err := shared.PaginateWithSpinner(
+						requestCtx,
 						func(ctx context.Context) (asc.PaginatedResponse, error) {
 							return client.GetBetaGroups(ctx, resolvedAppID, paginateOpts...)
 						},
@@ -221,7 +223,8 @@ Examples:
 
 			if *paginate {
 				paginateOpts := append(opts, asc.WithBetaGroupsLimit(200))
-				groups, err := shared.PaginateWithSpinner(requestCtx,
+				groups, err := shared.PaginateWithSpinner(
+					requestCtx,
 					func(ctx context.Context) (asc.PaginatedResponse, error) {
 						return client.GetBetaGroups(ctx, resolvedAppID, paginateOpts...)
 					},

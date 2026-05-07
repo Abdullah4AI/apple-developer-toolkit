@@ -758,7 +758,8 @@ func plannedAppStorePublishResult(mode asc.PublishMode, version, buildNumber str
 func plannedAppStorePublishSteps(localBuildMode, wait, submit bool) []asc.PublishPlanStep {
 	steps := make([]asc.PublishPlanStep, 0, 5)
 	if localBuildMode {
-		steps = append(steps,
+		steps = append(
+			steps,
 			newPublishPlanStep(publishPlanStepArchiveLocalBuild, "Archive the selected Xcode workspace or project to a local .xcarchive."),
 			newPublishPlanStep(publishPlanStepExportLocalBuild, "Export the archive to a local App Store IPA artifact."),
 		)
@@ -768,7 +769,8 @@ func plannedAppStorePublishSteps(localBuildMode, wait, submit bool) []asc.Publis
 	if wait {
 		steps = append(steps, newPublishPlanStep(publishPlanStepWaitForBuildProcessing, "Wait for App Store Connect build processing to reach a terminal state."))
 	}
-	steps = append(steps,
+	steps = append(
+		steps,
 		newPublishPlanStep(publishPlanStepEnsureVersion, "Find the requested App Store version or create it if missing."),
 		newPublishPlanStep(publishPlanStepAttachBuild, "Attach the resolved build to the App Store version."),
 	)

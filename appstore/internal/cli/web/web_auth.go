@@ -679,7 +679,8 @@ func WebAuthLoginCommand() *ffcli.Command {
 		Name:       "login",
 		ShortUsage: "asc web auth login --apple-id EMAIL [--two-factor-code-command CMD]",
 		ShortHelp:  "[experimental] Authenticate unofficial Apple web session.",
-		LongHelp: fmt.Sprintf(`EXPERIMENTAL / UNOFFICIAL / DISCOURAGED
+		LongHelp: fmt.Sprintf(
+			`EXPERIMENTAL / UNOFFICIAL / DISCOURAGED
 
 Authenticate using Apple web-session behavior for detached "asc web" workflows.
 

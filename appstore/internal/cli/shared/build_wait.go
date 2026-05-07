@@ -177,7 +177,8 @@ func isTemporaryNetError(err net.Error) bool {
 }
 
 func findBuildByNumber(ctx context.Context, client *asc.Client, appID, version, buildNumber, platform, uploadID string) (*asc.BuildResponse, error) {
-	preReleaseResp, err := client.GetPreReleaseVersions(ctx, appID,
+	preReleaseResp, err := client.GetPreReleaseVersions(
+		ctx, appID,
 		asc.WithPreReleaseVersionsVersion(version),
 		asc.WithPreReleaseVersionsPlatform(platform),
 		asc.WithPreReleaseVersionsLimit(10),

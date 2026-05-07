@@ -463,7 +463,8 @@ func findPricePoint(ctx context.Context, client *asc.Client, subID, territory, t
 	priceFilter := shared.PriceFilter{Price: targetPrice}
 
 	firstCtx, firstCancel := shared.ContextWithTimeout(ctx)
-	firstPage, err := client.GetSubscriptionPricePoints(firstCtx, subID,
+	firstPage, err := client.GetSubscriptionPricePoints(
+		firstCtx, subID,
 		asc.WithSubscriptionPricePointsTerritory(territory),
 		asc.WithSubscriptionPricePointsLimit(200),
 	)
@@ -481,11 +482,13 @@ func findPricePoint(ctx context.Context, client *asc.Client, subID, territory, t
 	}
 
 	// Paginate through remaining pages
-	err = asc.PaginateEach(ctx, firstPage,
+	err = asc.PaginateEach(
+		ctx, firstPage,
 		func(_ context.Context, nextURL string) (asc.PaginatedResponse, error) {
 			pageCtx, pageCancel := shared.ContextWithTimeout(ctx)
 			defer pageCancel()
-			return client.GetSubscriptionPricePoints(pageCtx, subID,
+			return client.GetSubscriptionPricePoints(
+				pageCtx, subID,
 				asc.WithSubscriptionPricePointsNextURL(nextURL),
 			)
 		},
@@ -520,7 +523,8 @@ func fetchEqualizations(ctx context.Context, client *asc.Client, pricePointID, b
 	// relationships with the territory reference, avoiding reliance on
 	// opaque price point ID structure.
 	firstCtx, firstCancel := shared.ContextWithTimeout(ctx)
-	resp, err := client.GetSubscriptionPricePointEqualizations(firstCtx, pricePointID,
+	resp, err := client.GetSubscriptionPricePointEqualizations(
+		firstCtx, pricePointID,
 		asc.WithSubscriptionPricePointsInclude([]string{"territory"}),
 		asc.WithSubscriptionPricePointsFields([]string{"customerPrice", "territory"}),
 		asc.WithSubscriptionPricePointsLimit(200),
@@ -533,7 +537,8 @@ func fetchEqualizations(ctx context.Context, client *asc.Client, pricePointID, b
 	allPages, err := asc.PaginateAll(ctx, resp, func(_ context.Context, nextURL string) (asc.PaginatedResponse, error) {
 		pageCtx, pageCancel := shared.ContextWithTimeout(ctx)
 		defer pageCancel()
-		return client.GetSubscriptionPricePointEqualizations(pageCtx, pricePointID,
+		return client.GetSubscriptionPricePointEqualizations(
+			pageCtx, pricePointID,
 			asc.WithSubscriptionPricePointsNextURL(nextURL),
 		)
 	})

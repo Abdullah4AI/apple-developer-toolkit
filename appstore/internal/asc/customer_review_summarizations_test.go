@@ -37,7 +37,8 @@ func TestGetCustomerReviewSummarizations(t *testing.T) {
 		assertAuthorized(t, req)
 	}, response)
 
-	_, err := client.GetCustomerReviewSummarizations(context.Background(), "app-1",
+	_, err := client.GetCustomerReviewSummarizations(
+		context.Background(), "app-1",
 		WithCustomerReviewSummarizationsPlatforms([]string{"IOS"}),
 		WithCustomerReviewSummarizationsTerritories([]string{"US"}),
 		WithCustomerReviewSummarizationsFields([]string{"locale", "text"}),

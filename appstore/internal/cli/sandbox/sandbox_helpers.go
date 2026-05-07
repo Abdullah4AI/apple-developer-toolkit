@@ -82,7 +82,8 @@ func sandboxRenewalRateValues() []string {
 func findSandboxTesterByEmail(ctx context.Context, client *asc.Client, email string) (*asc.SandboxTesterResponse, error) {
 	next := ""
 	for {
-		resp, err := client.GetSandboxTesters(ctx,
+		resp, err := client.GetSandboxTesters(
+			ctx,
 			asc.WithSandboxTestersEmail(email),
 			asc.WithSandboxTestersLimit(200),
 			asc.WithSandboxTestersNextURL(next),

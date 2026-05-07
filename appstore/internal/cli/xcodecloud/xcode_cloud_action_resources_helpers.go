@@ -197,7 +197,8 @@ Examples:
 	ListRunUsage:    "Build run ID to resolve a single issue action from",
 	ListErrorPrefix: "xcode-cloud issues list",
 	ListFetchPage: func(ctx context.Context, client *asc.Client, actionID string, limit int, next string) (asc.PaginatedResponse, error) {
-		return client.GetCiBuildActionIssues(ctx, actionID,
+		return client.GetCiBuildActionIssues(
+			ctx, actionID,
 			asc.WithCiIssuesLimit(limit),
 			asc.WithCiIssuesNextURL(next),
 		)
@@ -241,7 +242,8 @@ Examples:
 	ListRunUsage:    "Build run ID to resolve a single test-result action from",
 	ListErrorPrefix: "xcode-cloud test-results list",
 	ListFetchPage: func(ctx context.Context, client *asc.Client, actionID string, limit int, next string) (asc.PaginatedResponse, error) {
-		return client.GetCiBuildActionTestResults(ctx, actionID,
+		return client.GetCiBuildActionTestResults(
+			ctx, actionID,
 			asc.WithCiTestResultsLimit(limit),
 			asc.WithCiTestResultsNextURL(next),
 		)
@@ -322,7 +324,8 @@ func runXcodeCloudActionResourceList(
 	}
 
 	if paginate {
-		resp, err := shared.PaginateWithSpinner(requestCtx,
+		resp, err := shared.PaginateWithSpinner(
+			requestCtx,
 			func(ctx context.Context) (asc.PaginatedResponse, error) {
 				return fetchPage(ctx, client, resolvedActionID, 200, nextURL)
 			},

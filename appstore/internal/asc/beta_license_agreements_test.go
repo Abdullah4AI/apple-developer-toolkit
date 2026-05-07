@@ -35,7 +35,8 @@ func TestGetBetaLicenseAgreements(t *testing.T) {
 		assertAuthorized(t, req)
 	}, response)
 
-	_, err := client.GetBetaLicenseAgreements(context.Background(),
+	_, err := client.GetBetaLicenseAgreements(
+		context.Background(),
 		WithBetaLicenseAgreementsAppIDs([]string{"app-1", "app-2"}),
 		WithBetaLicenseAgreementsFields([]string{"agreementText"}),
 		WithBetaLicenseAgreementsAppFields([]string{"name"}),
@@ -84,7 +85,8 @@ func TestGetBetaLicenseAgreement(t *testing.T) {
 		assertAuthorized(t, req)
 	}, response)
 
-	if _, err := client.GetBetaLicenseAgreement(context.Background(), "bla-1",
+	if _, err := client.GetBetaLicenseAgreement(
+		context.Background(), "bla-1",
 		WithBetaLicenseAgreementFields([]string{"agreementText"}),
 		WithBetaLicenseAgreementInclude([]string{"app"}),
 	); err != nil {

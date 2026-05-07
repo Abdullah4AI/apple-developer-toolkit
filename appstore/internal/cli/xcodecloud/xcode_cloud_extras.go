@@ -304,7 +304,8 @@ func xcodeCloudProductsList(ctx context.Context, appID string, limit int, next s
 
 	if paginate {
 		paginateOpts := append(opts, asc.WithCiProductsLimit(200))
-		paginatedResp, err := shared.PaginateWithSpinner(requestCtx,
+		paginatedResp, err := shared.PaginateWithSpinner(
+			requestCtx,
 			func(ctx context.Context) (asc.PaginatedResponse, error) {
 				return client.GetCiProducts(ctx, paginateOpts...)
 			},

@@ -207,7 +207,8 @@ func (c *Client) GetSandboxTesters(ctx context.Context, opts ...SandboxTestersOp
 func (c *Client) GetSandboxTester(ctx context.Context, testerID string) (*SandboxTesterResponse, error) {
 	next := ""
 	for {
-		resp, err := c.GetSandboxTesters(ctx,
+		resp, err := c.GetSandboxTesters(
+			ctx,
 			WithSandboxTestersLimit(200),
 			WithSandboxTestersNextURL(next),
 		)

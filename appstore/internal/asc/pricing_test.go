@@ -64,7 +64,8 @@ func TestGetAppPricePoints_WithTerritory(t *testing.T) {
 		}
 	}, jsonResponse(http.StatusOK, string(body)))
 
-	result, err := client.GetAppPricePoints(context.Background(), "app-1",
+	result, err := client.GetAppPricePoints(
+		context.Background(), "app-1",
 		WithPricePointsTerritory("usa"),
 		WithPricePointsLimit(10),
 	)

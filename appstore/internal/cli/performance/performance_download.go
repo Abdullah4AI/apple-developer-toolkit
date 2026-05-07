@@ -140,7 +140,8 @@ Examples:
 			case trimmedBuildID != "":
 				defaultOutput := fmt.Sprintf("perf_power_metrics_%s.json", trimmedBuildID)
 
-				download, err := client.DownloadPerfPowerMetricsForBuild(requestCtx, trimmedBuildID,
+				download, err := client.DownloadPerfPowerMetricsForBuild(
+					requestCtx, trimmedBuildID,
 					asc.WithPerfPowerMetricsPlatforms(platforms),
 					asc.WithPerfPowerMetricsMetricTypes(metricTypes),
 					asc.WithPerfPowerMetricsDeviceTypes(shared.SplitCSV(*deviceType)),
@@ -184,7 +185,8 @@ Examples:
 			default:
 				defaultOutput := fmt.Sprintf("perf_power_metrics_%s.json", appFlag)
 
-				download, err := client.DownloadPerfPowerMetricsForApp(requestCtx, appFlag,
+				download, err := client.DownloadPerfPowerMetricsForApp(
+					requestCtx, appFlag,
 					asc.WithPerfPowerMetricsPlatforms(platforms),
 					asc.WithPerfPowerMetricsMetricTypes(metricTypes),
 					asc.WithPerfPowerMetricsDeviceTypes(shared.SplitCSV(*deviceType)),

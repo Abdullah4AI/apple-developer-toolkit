@@ -425,7 +425,8 @@ func executeSubscriptionsSetup(ctx context.Context, opts subscriptionsSetupOptio
 	}
 
 	if !opts.hasPricing(opts.StartDate) {
-		result.Steps = append(result.Steps,
+		result.Steps = append(
+			result.Steps,
 			subscriptionsSetupStepResult{
 				Name:    subscriptionsSetupStepResolvePricePoint,
 				Status:  "skipped",

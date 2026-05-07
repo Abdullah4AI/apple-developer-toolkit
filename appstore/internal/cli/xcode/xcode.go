@@ -412,7 +412,8 @@ func exportResultRows(result xcodeExportCommandResult) [][]string {
 	} else {
 		rows = append(rows, []string{"ipa_path", "(direct upload — no local artifact)"})
 	}
-	rows = append(rows,
+	rows = append(
+		rows,
 		[]string{"bundle_id", result.BundleID},
 		[]string{"version", result.Version},
 		[]string{"build_number", result.BuildNumber},

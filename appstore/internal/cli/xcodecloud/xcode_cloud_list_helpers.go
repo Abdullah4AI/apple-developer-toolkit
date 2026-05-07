@@ -40,7 +40,8 @@ func runXcodeCloudPaginatedList(
 	defer cancel()
 
 	if paginate {
-		resp, err := shared.PaginateWithSpinner(requestCtx,
+		resp, err := shared.PaginateWithSpinner(
+			requestCtx,
 			func(ctx context.Context) (asc.PaginatedResponse, error) {
 				return fetchPage(ctx, client, 200, nextURL)
 			},

@@ -84,7 +84,8 @@ func TestGetPassTypeIDs_WithFieldsIncludeSort(t *testing.T) {
 		assertAuthorized(t, req)
 	}, response)
 
-	_, err := client.GetPassTypeIDs(context.Background(),
+	_, err := client.GetPassTypeIDs(
+		context.Background(),
 		WithPassTypeIDsFilterIDs([]string{"p1", "p2"}),
 		WithPassTypeIDsSort("-name"),
 		WithPassTypeIDsFields([]string{"name", "identifier"}),
@@ -151,7 +152,8 @@ func TestGetPassTypeID_WithFieldsIncludeLimit(t *testing.T) {
 		assertAuthorized(t, req)
 	}, response)
 
-	_, err := client.GetPassTypeID(context.Background(), "p1",
+	_, err := client.GetPassTypeID(
+		context.Background(), "p1",
 		WithPassTypeIDFields([]string{"name", "identifier"}),
 		WithPassTypeIDCertificateFields([]string{"serialNumber"}),
 		WithPassTypeIDInclude([]string{"certificates"}),

@@ -70,7 +70,8 @@ Examples:
 				return fmt.Errorf("pricing tiers: %w", err)
 			}
 
-			return shared.PrintOutputWithRenderers(tiers, *output.Output, *output.Pretty,
+			return shared.PrintOutputWithRenderers(
+				tiers, *output.Output, *output.Pretty,
 				func() error {
 					return printTiersTable(tiers)
 				},

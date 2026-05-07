@@ -92,7 +92,8 @@ Examples:
 			if *global {
 				if *paginate {
 					paginateOpts := append(opts, asc.WithReviewSubmissionsLimit(200))
-					resp, err := shared.PaginateWithSpinner(requestCtx,
+					resp, err := shared.PaginateWithSpinner(
+						requestCtx,
 						func(ctx context.Context) (asc.PaginatedResponse, error) {
 							return client.ListReviewSubmissions(ctx, paginateOpts...)
 						},
@@ -117,7 +118,8 @@ Examples:
 
 			if *paginate {
 				paginateOpts := append(opts, asc.WithReviewSubmissionsLimit(200))
-				resp, err := shared.PaginateWithSpinner(requestCtx,
+				resp, err := shared.PaginateWithSpinner(
+					requestCtx,
 					func(ctx context.Context) (asc.PaginatedResponse, error) {
 						return client.GetReviewSubmissions(ctx, resolvedAppID, paginateOpts...)
 					},
@@ -428,7 +430,8 @@ Examples:
 
 			if *paginate {
 				paginateOpts := append(opts, asc.WithLinkagesLimit(200))
-				resp, err := shared.PaginateWithSpinner(requestCtx,
+				resp, err := shared.PaginateWithSpinner(
+					requestCtx,
 					func(ctx context.Context) (asc.PaginatedResponse, error) {
 						return client.GetReviewSubmissionItemsRelationships(ctx, trimmedID, paginateOpts...)
 					},

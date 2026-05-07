@@ -146,7 +146,8 @@ func TestGetAppClipDefaultExperienceLocalizations_WithFilters(t *testing.T) {
 		assertAuthorized(t, req)
 	}, response)
 
-	if _, err := client.GetAppClipDefaultExperienceLocalizations(context.Background(), "exp-1",
+	if _, err := client.GetAppClipDefaultExperienceLocalizations(
+		context.Background(), "exp-1",
 		WithAppClipDefaultExperienceLocalizationsLocales([]string{"en-US", "fr-FR"}),
 		WithAppClipDefaultExperienceLocalizationsLimit(20),
 	); err != nil {
@@ -241,7 +242,8 @@ func TestGetAppClipDefaultExperience_WithInclude(t *testing.T) {
 		assertAuthorized(t, req)
 	}, response)
 
-	if _, err := client.GetAppClipDefaultExperience(context.Background(), "exp-1",
+	if _, err := client.GetAppClipDefaultExperience(
+		context.Background(), "exp-1",
 		WithAppClipDefaultExperienceInclude([]string{"releaseWithAppStoreVersion", "appClipAppStoreReviewDetail"}),
 	); err != nil {
 		t.Fatalf("GetAppClipDefaultExperience() error: %v", err)
@@ -414,7 +416,8 @@ func TestGetAppClipAdvancedExperiences_WithFilters(t *testing.T) {
 		assertAuthorized(t, req)
 	}, response)
 
-	if _, err := client.GetAppClipAdvancedExperiences(context.Background(), "clip-1",
+	if _, err := client.GetAppClipAdvancedExperiences(
+		context.Background(), "clip-1",
 		WithAppClipAdvancedExperiencesActions([]string{"OPEN", "VIEW"}),
 		WithAppClipAdvancedExperiencesStatuses([]string{"ACTIVE"}),
 		WithAppClipAdvancedExperiencesPlaceStatuses([]string{"ACTIVE"}),

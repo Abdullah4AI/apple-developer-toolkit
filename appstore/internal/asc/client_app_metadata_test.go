@@ -853,7 +853,8 @@ func TestGetAppInfoTerritoryAgeRatings_SendsRequest(t *testing.T) {
 		assertAuthorized(t, req)
 	}, response)
 
-	_, err := client.GetAppInfoTerritoryAgeRatings(context.Background(), "info-1",
+	_, err := client.GetAppInfoTerritoryAgeRatings(
+		context.Background(), "info-1",
 		WithTerritoryAgeRatingsFields([]string{"appStoreAgeRating", "territory"}),
 		WithTerritoryAgeRatingsTerritoryFields([]string{"currency"}),
 		WithTerritoryAgeRatingsInclude([]string{"territory"}),

@@ -196,7 +196,8 @@ func logWebAuthHTTP(stage string, req *http.Request, resp *http.Response, body [
 		"stage", strings.TrimSpace(stage),
 	}
 	if req != nil {
-		fields = append(fields,
+		fields = append(
+			fields,
 			"method", req.Method,
 			"url", sanitizeWebAuthURLForLog(req.URL.String()),
 		)

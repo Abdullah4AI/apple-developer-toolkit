@@ -301,6 +301,7 @@ func init() {
 	registerRows(financeReportResultRows)
 	registerRows(financeRegionsRows)
 	registerRows(analyticsReportRequestResultRows)
+	registerRows(analyticsReportRequestReuseResultRows)
 	registerRows(analyticsReportRequestDeleteResultRows)
 	registerRowsWithSingleToListAdapter[AnalyticsReportRequestResponse, AnalyticsReportRequestsResponse](analyticsReportRequestsRows)
 	registerRows(analyticsReportDownloadResultRows)

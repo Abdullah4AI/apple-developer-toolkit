@@ -66,7 +66,8 @@ func TestExecuteUploadOperations_UploadsSlices(t *testing.T) {
 		},
 	}
 
-	err := ExecuteUploadOperations(context.Background(), filePath, ops,
+	err := ExecuteUploadOperations(
+		context.Background(), filePath, ops,
 		WithUploadConcurrency(2),
 		WithUploadHTTPClient(server.Client()),
 	)
@@ -233,7 +234,8 @@ func TestExecuteUploadOperations_CancelsDuringDispatch(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		done <- ExecuteUploadOperations(ctx, filePath, ops,
+		done <- ExecuteUploadOperations(
+			ctx, filePath, ops,
 			WithUploadConcurrency(1),
 			WithUploadHTTPClient(client),
 		)

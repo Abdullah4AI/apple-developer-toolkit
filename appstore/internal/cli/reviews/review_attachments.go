@@ -84,7 +84,8 @@ Examples:
 
 			if *paginate {
 				paginateOpts := append(opts, asc.WithAppStoreReviewAttachmentsLimit(200))
-				pages, err := shared.PaginateWithSpinner(requestCtx,
+				pages, err := shared.PaginateWithSpinner(
+					requestCtx,
 					func(ctx context.Context) (asc.PaginatedResponse, error) {
 						return client.GetAppStoreReviewAttachmentsForReviewDetail(ctx, reviewDetailValue, paginateOpts...)
 					},
@@ -158,7 +159,8 @@ Examples:
 			requestCtx, cancel := shared.ContextWithTimeout(ctx)
 			defer cancel()
 
-			resp, err := client.GetAppStoreReviewAttachment(requestCtx, attachmentValue,
+			resp, err := client.GetAppStoreReviewAttachment(
+				requestCtx, attachmentValue,
 				asc.WithAppStoreReviewAttachmentsFields(fieldsValue),
 				asc.WithAppStoreReviewAttachmentReviewDetailFields(detailFieldsValue),
 				asc.WithAppStoreReviewAttachmentsInclude(includeValue),

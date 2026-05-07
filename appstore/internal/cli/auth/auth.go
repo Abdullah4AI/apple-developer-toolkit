@@ -267,7 +267,8 @@ func doctorMigrationSuggestionResolver() authsvc.MigrationSuggestionResolver {
 
 		if needsAppLookup {
 			appIdentifier := strings.TrimSpace(input.AppIdentifier)
-			appsResp, err := client.GetApps(requestCtx,
+			appsResp, err := client.GetApps(
+				requestCtx,
 				asc.WithAppsBundleIDs([]string{appIdentifier}),
 				asc.WithAppsLimit(1),
 			)
@@ -282,7 +283,8 @@ func doctorMigrationSuggestionResolver() authsvc.MigrationSuggestionResolver {
 
 		versionString := strings.TrimSpace(input.MarketingVersion)
 		if needsVersionLookup && versionString != "" {
-			versionsResp, err := client.GetAppStoreVersions(requestCtx, appID,
+			versionsResp, err := client.GetAppStoreVersions(
+				requestCtx, appID,
 				asc.WithAppStoreVersionsVersionStrings([]string{versionString}),
 				asc.WithAppStoreVersionsLimit(1),
 			)
@@ -297,7 +299,8 @@ func doctorMigrationSuggestionResolver() authsvc.MigrationSuggestionResolver {
 				asc.WithBuildsLimit(1),
 			}
 			if versionString != "" {
-				preReleaseResp, err := client.GetPreReleaseVersions(requestCtx, appID,
+				preReleaseResp, err := client.GetPreReleaseVersions(
+					requestCtx, appID,
 					asc.WithPreReleaseVersionsVersion(versionString),
 					asc.WithPreReleaseVersionsLimit(1),
 				)

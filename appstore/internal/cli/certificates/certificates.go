@@ -102,7 +102,8 @@ Examples:
 
 			if *paginate {
 				paginateOpts := append(opts, asc.WithCertificatesLimit(200))
-				paginated, err := shared.PaginateWithSpinner(requestCtx,
+				paginated, err := shared.PaginateWithSpinner(
+					requestCtx,
 					func(ctx context.Context) (asc.PaginatedResponse, error) {
 						return client.GetCertificates(ctx, paginateOpts...)
 					},

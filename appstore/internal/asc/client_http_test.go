@@ -1235,7 +1235,8 @@ func TestGetBuilds_WithPreReleaseVersion(t *testing.T) {
 		assertAuthorized(t, req)
 	}, response)
 
-	builds, err := client.GetBuilds(context.Background(), "123",
+	builds, err := client.GetBuilds(
+		context.Background(), "123",
 		WithBuildsLimit(1),
 		WithBuildsSort("-uploadedDate"),
 		WithBuildsPreReleaseVersion("prv-456"),
@@ -2230,29 +2231,30 @@ func TestUpdateBuild_EmptyBuildIDReturnsError(t *testing.T) {
 
 func TestUpdateBuild_RefetchesCurrentStateAfterPatchError(t *testing.T) {
 	requestCount := 0
-	client := newTestClientWithResponses(t, func(req *http.Request) {
-		requestCount++
-		switch requestCount {
-		case 1:
-			if req.Method != http.MethodPatch {
-				t.Fatalf("expected PATCH, got %s", req.Method)
+	client := newTestClientWithResponses(
+		t, func(req *http.Request) {
+			requestCount++
+			switch requestCount {
+			case 1:
+				if req.Method != http.MethodPatch {
+					t.Fatalf("expected PATCH, got %s", req.Method)
+				}
+				if req.URL.Path != "/v1/builds/build-99" {
+					t.Fatalf("expected path /v1/builds/build-99, got %s", req.URL.Path)
+				}
+				assertAuthorized(t, req)
+			case 2:
+				if req.Method != http.MethodGet {
+					t.Fatalf("expected GET, got %s", req.Method)
+				}
+				if req.URL.Path != "/v1/builds/build-99" {
+					t.Fatalf("expected path /v1/builds/build-99, got %s", req.URL.Path)
+				}
+				assertAuthorized(t, req)
+			default:
+				t.Fatalf("unexpected request count %d", requestCount)
 			}
-			if req.URL.Path != "/v1/builds/build-99" {
-				t.Fatalf("expected path /v1/builds/build-99, got %s", req.URL.Path)
-			}
-			assertAuthorized(t, req)
-		case 2:
-			if req.Method != http.MethodGet {
-				t.Fatalf("expected GET, got %s", req.Method)
-			}
-			if req.URL.Path != "/v1/builds/build-99" {
-				t.Fatalf("expected path /v1/builds/build-99, got %s", req.URL.Path)
-			}
-			assertAuthorized(t, req)
-		default:
-			t.Fatalf("unexpected request count %d", requestCount)
-		}
-	},
+		},
 		jsonResponse(http.StatusConflict, `{"errors":[{"status":"409","code":"ENTITY_ERROR.ATTRIBUTE.INVALID","title":"Build update conflict","detail":"The request could not be completed."}]}`),
 		jsonResponse(http.StatusOK, `{"data":{"type":"builds","id":"build-99","attributes":{"version":"2.0","uploadedDate":"2026-03-18T00:00:00Z","usesNonExemptEncryption":false}}}`),
 	)
@@ -2275,29 +2277,30 @@ func TestUpdateBuild_RefetchesCurrentStateAfterPatchError(t *testing.T) {
 
 func TestUpdateBuild_ReturnsOriginalErrorWhenCurrentStateDoesNotMatch(t *testing.T) {
 	requestCount := 0
-	client := newTestClientWithResponses(t, func(req *http.Request) {
-		requestCount++
-		switch requestCount {
-		case 1:
-			if req.Method != http.MethodPatch {
-				t.Fatalf("expected PATCH, got %s", req.Method)
+	client := newTestClientWithResponses(
+		t, func(req *http.Request) {
+			requestCount++
+			switch requestCount {
+			case 1:
+				if req.Method != http.MethodPatch {
+					t.Fatalf("expected PATCH, got %s", req.Method)
+				}
+				if req.URL.Path != "/v1/builds/build-99" {
+					t.Fatalf("expected path /v1/builds/build-99, got %s", req.URL.Path)
+				}
+				assertAuthorized(t, req)
+			case 2:
+				if req.Method != http.MethodGet {
+					t.Fatalf("expected GET, got %s", req.Method)
+				}
+				if req.URL.Path != "/v1/builds/build-99" {
+					t.Fatalf("expected path /v1/builds/build-99, got %s", req.URL.Path)
+				}
+				assertAuthorized(t, req)
+			default:
+				t.Fatalf("unexpected request count %d", requestCount)
 			}
-			if req.URL.Path != "/v1/builds/build-99" {
-				t.Fatalf("expected path /v1/builds/build-99, got %s", req.URL.Path)
-			}
-			assertAuthorized(t, req)
-		case 2:
-			if req.Method != http.MethodGet {
-				t.Fatalf("expected GET, got %s", req.Method)
-			}
-			if req.URL.Path != "/v1/builds/build-99" {
-				t.Fatalf("expected path /v1/builds/build-99, got %s", req.URL.Path)
-			}
-			assertAuthorized(t, req)
-		default:
-			t.Fatalf("unexpected request count %d", requestCount)
-		}
-	},
+		},
 		jsonResponse(http.StatusConflict, `{"errors":[{"status":"409","code":"ENTITY_ERROR.ATTRIBUTE.INVALID","title":"Build update conflict","detail":"The request could not be completed."}]}`),
 		jsonResponse(http.StatusOK, `{"data":{"type":"builds","id":"build-99","attributes":{"version":"2.0","uploadedDate":"2026-03-18T00:00:00Z","usesNonExemptEncryption":true}}}`),
 	)
@@ -2320,29 +2323,30 @@ func TestUpdateBuild_ReturnsOriginalErrorWhenCurrentStateDoesNotMatch(t *testing
 
 func TestUpdateBuild_DoesNotTreatNonConflictErrorAsNoOp(t *testing.T) {
 	requestCount := 0
-	client := newTestClientWithResponses(t, func(req *http.Request) {
-		requestCount++
-		switch requestCount {
-		case 1:
-			if req.Method != http.MethodPatch {
-				t.Fatalf("expected PATCH, got %s", req.Method)
+	client := newTestClientWithResponses(
+		t, func(req *http.Request) {
+			requestCount++
+			switch requestCount {
+			case 1:
+				if req.Method != http.MethodPatch {
+					t.Fatalf("expected PATCH, got %s", req.Method)
+				}
+				if req.URL.Path != "/v1/builds/build-99" {
+					t.Fatalf("expected path /v1/builds/build-99, got %s", req.URL.Path)
+				}
+				assertAuthorized(t, req)
+			case 2:
+				if req.Method != http.MethodGet {
+					t.Fatalf("expected GET, got %s", req.Method)
+				}
+				if req.URL.Path != "/v1/builds/build-99" {
+					t.Fatalf("expected path /v1/builds/build-99, got %s", req.URL.Path)
+				}
+				assertAuthorized(t, req)
+			default:
+				t.Fatalf("unexpected request count %d", requestCount)
 			}
-			if req.URL.Path != "/v1/builds/build-99" {
-				t.Fatalf("expected path /v1/builds/build-99, got %s", req.URL.Path)
-			}
-			assertAuthorized(t, req)
-		case 2:
-			if req.Method != http.MethodGet {
-				t.Fatalf("expected GET, got %s", req.Method)
-			}
-			if req.URL.Path != "/v1/builds/build-99" {
-				t.Fatalf("expected path /v1/builds/build-99, got %s", req.URL.Path)
-			}
-			assertAuthorized(t, req)
-		default:
-			t.Fatalf("unexpected request count %d", requestCount)
-		}
-	},
+		},
 		jsonResponse(http.StatusForbidden, `{"errors":[{"status":"403","code":"FORBIDDEN","title":"Forbidden","detail":"not allowed"}]}`),
 		jsonResponse(http.StatusOK, `{"data":{"type":"builds","id":"build-99","attributes":{"version":"2.0","uploadedDate":"2026-03-18T00:00:00Z","usesNonExemptEncryption":false}}}`),
 	)
@@ -4001,7 +4005,8 @@ func TestGetBuildUploads_WithFilters(t *testing.T) {
 		assertAuthorized(t, req)
 	}, response)
 
-	_, err := client.GetBuildUploads(context.Background(), "app-1",
+	_, err := client.GetBuildUploads(
+		context.Background(), "app-1",
 		WithBuildUploadsCFBundleShortVersionStrings([]string{"1.0.0", "1.0.1"}),
 		WithBuildUploadsCFBundleVersions([]string{"100"}),
 		WithBuildUploadsPlatforms([]string{"ios", "mac_os"}),
@@ -4193,7 +4198,8 @@ func TestGetBetaTesterUsagesMetrics_WithFilters(t *testing.T) {
 		assertAuthorized(t, req)
 	}, response)
 
-	resp, err := client.GetBetaTesterUsagesMetrics(context.Background(), "tester-1",
+	resp, err := client.GetBetaTesterUsagesMetrics(
+		context.Background(), "tester-1",
 		WithBetaTesterUsagesPeriod("P30D"),
 		WithBetaTesterUsagesAppID("app-1"),
 		WithBetaTesterUsagesLimit(20),
@@ -4228,7 +4234,8 @@ func TestGetAppBetaTesterUsagesMetrics_WithPeriodAndLimit(t *testing.T) {
 		assertAuthorized(t, req)
 	}, response)
 
-	resp, err := client.GetAppBetaTesterUsagesMetrics(context.Background(), "app-1",
+	resp, err := client.GetAppBetaTesterUsagesMetrics(
+		context.Background(), "app-1",
 		WithBetaTesterUsagesPeriod("P90D"),
 		WithBetaTesterUsagesLimit(12),
 	)
@@ -9094,7 +9101,8 @@ func TestGetDevices_WithFilters(t *testing.T) {
 		assertAuthorized(t, req)
 	}, response)
 
-	if _, err := client.GetDevices(context.Background(),
+	if _, err := client.GetDevices(
+		context.Background(),
 		WithDevicesFilterUDIDs([]string{"UDID1", "UDID2"}),
 		WithDevicesFilterPlatforms([]string{"ios"}),
 		WithDevicesFilterStatuses([]string{"enabled"}),
@@ -9140,7 +9148,8 @@ func TestGetDevices_WithFiltersAndLimit(t *testing.T) {
 		assertAuthorized(t, req)
 	}, response)
 
-	if _, err := client.GetDevices(context.Background(),
+	if _, err := client.GetDevices(
+		context.Background(),
 		WithDevicesNames([]string{"My iPhone"}),
 		WithDevicesPlatform("IOS"),
 		WithDevicesStatus("ENABLED"),
@@ -9707,7 +9716,8 @@ func TestGetAppEncryptionDeclarationsForApp(t *testing.T) {
 		assertAuthorized(t, req)
 	}, response)
 
-	if _, err := client.GetAppEncryptionDeclarations(context.Background(), "app-1",
+	if _, err := client.GetAppEncryptionDeclarations(
+		context.Background(), "app-1",
 		WithAppEncryptionDeclarationsBuildIDs([]string{"build-1", "build-2"}),
 		WithAppEncryptionDeclarationsFields([]string{"appDescription", "exempt"}),
 		WithAppEncryptionDeclarationsDocumentFields([]string{"fileName", "fileSize"}),
@@ -9744,7 +9754,8 @@ func TestGetAppEncryptionDeclaration(t *testing.T) {
 		assertAuthorized(t, req)
 	}, response)
 
-	if _, err := client.GetAppEncryptionDeclaration(context.Background(), "decl-1",
+	if _, err := client.GetAppEncryptionDeclaration(
+		context.Background(), "decl-1",
 		WithAppEncryptionDeclarationsFields([]string{"appDescription", "exempt"}),
 		WithAppEncryptionDeclarationsDocumentFields([]string{"fileName", "fileSize"}),
 		WithAppEncryptionDeclarationsInclude([]string{"appEncryptionDeclarationDocument"}),
@@ -9856,7 +9867,8 @@ func TestGetAppEncryptionDeclarationsForAppResource(t *testing.T) {
 		assertAuthorized(t, req)
 	}, response)
 
-	if _, err := client.GetAppEncryptionDeclarationsForApp(context.Background(), "app-1",
+	if _, err := client.GetAppEncryptionDeclarationsForApp(
+		context.Background(), "app-1",
 		WithAppEncryptionDeclarationsBuildIDs([]string{"build-1", "build-2"}),
 		WithAppEncryptionDeclarationsFields([]string{"appDescription", "exempt"}),
 		WithAppEncryptionDeclarationsDocumentFields([]string{"fileName", "fileSize"}),
@@ -10255,7 +10267,8 @@ func TestGetAndroidToIosAppMappingDetails(t *testing.T) {
 		assertAuthorized(t, req)
 	}, response)
 
-	_, err := client.GetAndroidToIosAppMappingDetails(context.Background(), "app-1",
+	_, err := client.GetAndroidToIosAppMappingDetails(
+		context.Background(), "app-1",
 		WithAndroidToIosAppMappingDetailsFields([]string{"packageName"}),
 		WithAndroidToIosAppMappingDetailsLimit(20),
 	)
@@ -10283,7 +10296,8 @@ func TestGetAndroidToIosAppMappingDetail(t *testing.T) {
 		assertAuthorized(t, req)
 	}, response)
 
-	_, err := client.GetAndroidToIosAppMappingDetail(context.Background(), "map-1",
+	_, err := client.GetAndroidToIosAppMappingDetail(
+		context.Background(), "map-1",
 		WithAndroidToIosAppMappingDetailsFields([]string{"packageName"}),
 		WithAndroidToIosAppMappingDetailsLimit(20),
 	)

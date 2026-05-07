@@ -12,7 +12,8 @@ import (
 // Headers preserve their original casing and are center-aligned.
 // Data rows are left-aligned for readability.
 func RenderTable(headers []string, rows [][]string) {
-	table := tablewriter.NewTable(os.Stdout,
+	table := tablewriter.NewTable(
+		os.Stdout,
 		tablewriter.WithConfig(tablewriter.Config{
 			Header: tw.CellConfig{
 				Formatting: tw.CellFormatting{
@@ -34,7 +35,8 @@ func RenderTable(headers []string, rows [][]string) {
 // Headers preserve their original casing. Data rows are left-aligned.
 // Pipe characters in cell values are escaped automatically by the renderer.
 func RenderMarkdown(headers []string, rows [][]string) {
-	table := tablewriter.NewTable(os.Stdout,
+	table := tablewriter.NewTable(
+		os.Stdout,
 		tablewriter.WithRenderer(renderer.NewMarkdown()),
 		tablewriter.WithConfig(tablewriter.Config{
 			Header: tw.CellConfig{

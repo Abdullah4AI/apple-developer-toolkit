@@ -329,7 +329,8 @@ func resolvePublishExportOptionsPath(explicit string) (string, error) {
 }
 
 func defaultPublishArchivePath(scheme, platform, version, buildNumber string) string {
-	fileName := fmt.Sprintf("%s-%s-%s-%s.xcarchive",
+	fileName := fmt.Sprintf(
+		"%s-%s-%s-%s.xcarchive",
 		sanitizePublishArtifactToken(scheme),
 		sanitizePublishArtifactToken(platform),
 		sanitizePublishArtifactToken(version),
@@ -339,7 +340,8 @@ func defaultPublishArchivePath(scheme, platform, version, buildNumber string) st
 }
 
 func defaultPublishIPAPath(scheme, platform, version, buildNumber string) string {
-	fileName := fmt.Sprintf("%s-%s-%s-%s.ipa",
+	fileName := fmt.Sprintf(
+		"%s-%s-%s-%s.ipa",
 		sanitizePublishArtifactToken(scheme),
 		sanitizePublishArtifactToken(platform),
 		sanitizePublishArtifactToken(version),

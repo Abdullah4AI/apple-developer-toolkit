@@ -232,7 +232,8 @@ func WebAppsCreateCommand() *ffcli.Command {
 		Name:       "create",
 		ShortUsage: "asc web apps create [flags]",
 		ShortHelp:  "[experimental] Create app via unofficial Apple web API.",
-		LongHelp: fmt.Sprintf(`EXPERIMENTAL / UNOFFICIAL / DISCOURAGED
+		LongHelp: fmt.Sprintf(
+			`EXPERIMENTAL / UNOFFICIAL / DISCOURAGED
 
 Create an app through Apple's internal web API using a web-session login.
 This is the canonical app-creation path for web-session based flows and is

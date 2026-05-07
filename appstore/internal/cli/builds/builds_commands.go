@@ -523,7 +523,8 @@ Examples:
 
 			if *paginate {
 				paginateOpts := append(opts, asc.WithBuildsLimit(200))
-				builds, err := shared.PaginateWithSpinner(requestCtx,
+				builds, err := shared.PaginateWithSpinner(
+					requestCtx,
 					func(ctx context.Context) (asc.PaginatedResponse, error) {
 						return client.GetBuilds(ctx, resolvedAppID, paginateOpts...)
 					},

@@ -188,7 +188,8 @@ func (c *Client) doOnce(ctx context.Context, method, path string, body io.Reader
 	}
 
 	if debugSettings.verboseHTTP {
-		debugLogger.Info("→ HTTP Request",
+		debugLogger.Info(
+			"→ HTTP Request",
 			"method", method,
 			"url", sanitizeURLForLog(req.URL.String()),
 			"content-type", req.Header.Get("Content-Type"),
@@ -201,7 +202,8 @@ func (c *Client) doOnce(ctx context.Context, method, path string, body io.Reader
 
 	if err != nil {
 		if debugSettings.verboseHTTP {
-			debugLogger.Info("← HTTP Error",
+			debugLogger.Info(
+				"← HTTP Error",
 				"error", err.Error(),
 				"elapsed", elapsed.String(),
 			)
@@ -211,7 +213,8 @@ func (c *Client) doOnce(ctx context.Context, method, path string, body io.Reader
 	defer resp.Body.Close()
 
 	if debugSettings.verboseHTTP {
-		debugLogger.Info("← HTTP Response",
+		debugLogger.Info(
+			"← HTTP Response",
 			"status", resp.StatusCode,
 			"elapsed", elapsed.String(),
 			"content-type", resp.Header.Get("Content-Type"),

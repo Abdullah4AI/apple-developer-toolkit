@@ -29,7 +29,8 @@ func findRecentBuildUploadID(ctx context.Context, client *asc.Client, appID, ver
 	if !exportStartedAt.IsZero() && !exportCompletedAt.IsZero() && exportCompletedAt.Before(exportStartedAt) {
 		exportCompletedAt = exportStartedAt
 	}
-	resp, err := client.GetBuildUploads(ctx, appID,
+	resp, err := client.GetBuildUploads(
+		ctx, appID,
 		asc.WithBuildUploadsCFBundleShortVersionStrings([]string{version}),
 		asc.WithBuildUploadsCFBundleVersions([]string{buildNumber}),
 		asc.WithBuildUploadsPlatforms([]string{platform}),

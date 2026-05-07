@@ -94,7 +94,8 @@ func ResolveTiers(ctx context.Context, client *asc.Client, appID, territory stri
 
 // ResolveSubscriptionTiers resolves subscription price point tiers for a subscription and territory.
 func ResolveSubscriptionTiers(ctx context.Context, client *asc.Client, subscriptionID, territory string, refresh bool) ([]TierEntry, error) {
-	return resolveScopedTiers(ctx, client, "subscription", subscriptionID, territory, tierCacheScopeSubscription, refresh,
+	return resolveScopedTiers(
+		ctx, client, "subscription", subscriptionID, territory, tierCacheScopeSubscription, refresh,
 		func(ctx context.Context, client *asc.Client, resourceID, territory, nextURL string) (tierPage, error) {
 			opts := []asc.SubscriptionPricePointsOption{
 				asc.WithSubscriptionPricePointsLimit(200),
@@ -118,7 +119,8 @@ func ResolveSubscriptionTiers(ctx context.Context, client *asc.Client, subscript
 
 // ResolveIAPTiers resolves in-app purchase price point tiers for an IAP and territory.
 func ResolveIAPTiers(ctx context.Context, client *asc.Client, iapID, territory string, refresh bool) ([]TierEntry, error) {
-	return resolveScopedTiers(ctx, client, "in-app purchase", iapID, territory, tierCacheScopeIAP, refresh,
+	return resolveScopedTiers(
+		ctx, client, "in-app purchase", iapID, territory, tierCacheScopeIAP, refresh,
 		func(ctx context.Context, client *asc.Client, resourceID, territory, nextURL string) (tierPage, error) {
 			opts := []asc.IAPPricePointsOption{
 				asc.WithIAPPricePointsLimit(200),

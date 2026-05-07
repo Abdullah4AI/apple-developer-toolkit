@@ -143,7 +143,8 @@ Examples:
 
 			if *paginate {
 				paginateOpts := append(opts, asc.WithBetaTestersLimit(200))
-				testers, err := shared.PaginateWithSpinner(requestCtx,
+				testers, err := shared.PaginateWithSpinner(
+					requestCtx,
 					func(ctx context.Context) (asc.PaginatedResponse, error) {
 						return client.GetBetaTesters(ctx, resolvedAppID, paginateOpts...)
 					},

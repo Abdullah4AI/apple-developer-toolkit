@@ -160,7 +160,8 @@ Examples:
 			requestCtx, cancel := shared.ContextWithTimeout(ctx)
 			defer cancel()
 
-			resp, err := client.GetAndroidToIosAppMappingDetail(requestCtx, strings.TrimSpace(*id),
+			resp, err := client.GetAndroidToIosAppMappingDetail(
+				requestCtx, strings.TrimSpace(*id),
 				asc.WithAndroidToIosAppMappingDetailsFields(fieldValues),
 			)
 			if err != nil {

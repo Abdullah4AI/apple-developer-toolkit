@@ -16,7 +16,8 @@ func UpsertBetaBuildLocalization(ctx context.Context, client *asc.Client, buildI
 		return nil, fmt.Errorf("locale and notes are required")
 	}
 
-	resp, err := client.GetBetaBuildLocalizations(ctx, buildID,
+	resp, err := client.GetBetaBuildLocalizations(
+		ctx, buildID,
 		asc.WithBetaBuildLocalizationsLimit(200),
 	)
 	if err != nil {

@@ -817,7 +817,8 @@ func isolatedCLITestEnv(configPath string) []string {
 		"ASC_STRICT_AUTH",
 		"ASC_APP_ID",
 	)
-	return append(env,
+	return append(
+		env,
 		"ASC_BYPASS_KEYCHAIN=1",
 		"ASC_CONFIG_PATH="+configPath,
 		"HOME="+filepath.Dir(configPath),

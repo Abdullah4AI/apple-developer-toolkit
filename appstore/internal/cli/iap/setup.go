@@ -338,7 +338,8 @@ func executeIAPSetup(ctx context.Context, opts iapSetupOptions) (iapSetupResult,
 
 	hasPricing := opts.hasPricing(opts.StartDate)
 	if !hasPricing {
-		result.Steps = append(result.Steps,
+		result.Steps = append(
+			result.Steps,
 			iapSetupStepResult{
 				Name:    iapSetupStepResolvePricePoint,
 				Status:  "skipped",

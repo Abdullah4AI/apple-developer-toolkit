@@ -130,7 +130,8 @@ Examples:
 				paginateOpts := append(opts, asc.WithBetaBuildLocalizationsLimit(200))
 				requestCtx, cancel := shared.ContextWithTimeout(ctx)
 				defer cancel()
-				resp, err := shared.PaginateWithSpinner(requestCtx,
+				resp, err := shared.PaginateWithSpinner(
+					requestCtx,
 					func(ctx context.Context) (asc.PaginatedResponse, error) {
 						return client.ListBetaBuildLocalizations(ctx, paginateOpts...)
 					},

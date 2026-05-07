@@ -302,7 +302,8 @@ func xcodeCloudWorkflowsList(ctx context.Context, appID string, limit int, next 
 
 	if paginate {
 		paginateOpts := append(opts, asc.WithCiWorkflowsLimit(200))
-		resp, err := shared.PaginateWithSpinner(requestCtx,
+		resp, err := shared.PaginateWithSpinner(
+			requestCtx,
 			func(ctx context.Context) (asc.PaginatedResponse, error) {
 				return client.GetCiWorkflows(ctx, productID, paginateOpts...)
 			},

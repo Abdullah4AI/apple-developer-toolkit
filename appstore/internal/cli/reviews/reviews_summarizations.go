@@ -85,7 +85,8 @@ Examples:
 
 			if *paginate {
 				paginateOpts := append(opts, asc.WithCustomerReviewSummarizationsLimit(200))
-				summaries, err := shared.PaginateWithSpinner(requestCtx,
+				summaries, err := shared.PaginateWithSpinner(
+					requestCtx,
 					func(ctx context.Context) (asc.PaginatedResponse, error) {
 						return client.GetCustomerReviewSummarizations(ctx, resolvedAppID, paginateOpts...)
 					},

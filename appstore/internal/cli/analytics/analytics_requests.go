@@ -2,8 +2,10 @@ package analytics
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
+	"net/http"
 	"os"
 	"strings"
 
@@ -19,6 +21,7 @@ func AnalyticsRequestCommand() *ffcli.Command {
 
 	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
 	accessType := fs.String("access-type", "", "Access type: ONGOING or ONE_TIME_SNAPSHOT")
+	reuseExisting := fs.Bool("reuse-existing", false, "Return an existing active request with the same access type instead of creating a duplicate")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
@@ -29,6 +32,7 @@ func AnalyticsRequestCommand() *ffcli.Command {
 
 Examples:
   asc analytics request --app "123456789" --access-type ONGOING
+  asc analytics request --app "123456789" --access-type ONGOING --reuse-existing
   asc analytics request --app "123456789" --access-type ONE_TIME_SNAPSHOT`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
@@ -44,7 +48,7 @@ Examples:
 			}
 			normalizedAccessType, err := normalizeAnalyticsAccessType(*accessType)
 			if err != nil {
-				return fmt.Errorf("analytics request: %w", err)
+				return shared.UsageError(err.Error())
 			}
 
 			client, err := shared.GetASCClient()
@@ -54,6 +58,15 @@ Examples:
 
 			requestCtx, cancel := shared.ContextWithTimeout(ctx)
 			defer cancel()
+
+			if *reuseExisting {
+				result, err := createOrReuseAnalyticsReportRequest(requestCtx, client, resolvedAppID, normalizedAccessType)
+				if err != nil {
+					return fmt.Errorf("analytics request: %w", err)
+				}
+
+				return shared.PrintOutput(result, *output.Output, *output.Pretty)
+			}
 
 			response, err := client.CreateAnalyticsReportRequest(requestCtx, resolvedAppID, normalizedAccessType)
 			if err != nil {
@@ -163,7 +176,8 @@ Examples:
 
 				if *paginate {
 					paginateOpts := append(opts, asc.WithAnalyticsReportRequestsLimit(200))
-					paginated, err := shared.PaginateWithSpinner(requestCtx,
+					paginated, err := shared.PaginateWithSpinner(
+						requestCtx,
 						func(ctx context.Context) (asc.PaginatedResponse, error) {
 							return client.GetAnalyticsReportRequests(ctx, resolvedAppID, paginateOpts...)
 						},
@@ -186,6 +200,99 @@ Examples:
 
 			return shared.PrintOutput(response, *output.Output, *output.Pretty)
 		},
+	}
+}
+
+func createOrReuseAnalyticsReportRequest(ctx context.Context, client *asc.Client, appID string, accessType asc.AnalyticsAccessType) (*asc.AnalyticsReportRequestReuseResult, error) {
+	requests, err := listAnalyticsReportRequestsForReuse(ctx, client, appID)
+	if err != nil {
+		return nil, err
+	}
+
+	if request, ok := findReusableAnalyticsReportRequest(requests, accessType); ok {
+		return analyticsReportRequestReuseResult(appID, request, false), nil
+	}
+
+	created, err := client.CreateAnalyticsReportRequest(ctx, appID, accessType)
+	if err != nil {
+		if !isAnalyticsReportRequestCreateConflict(err) {
+			return nil, fmt.Errorf("failed to create request: %w", err)
+		}
+
+		requests, listErr := listAnalyticsReportRequestsForReuse(ctx, client, appID)
+		if listErr != nil {
+			return nil, listErr
+		}
+		if request, ok := findReusableAnalyticsReportRequest(requests, accessType); ok {
+			return analyticsReportRequestReuseResult(appID, request, false), nil
+		}
+
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	return analyticsReportRequestReuseResult(appID, created.Data, true), nil
+}
+
+func listAnalyticsReportRequestsForReuse(ctx context.Context, client *asc.Client, appID string) (*asc.AnalyticsReportRequestsResponse, error) {
+	existing, err := client.GetAnalyticsReportRequests(ctx, appID, asc.WithAnalyticsReportRequestsLimit(200))
+	if err != nil {
+		return nil, fmt.Errorf("failed to list requests: %w", err)
+	}
+
+	paginated, err := asc.PaginateAll(ctx, existing, func(ctx context.Context, nextURL string) (asc.PaginatedResponse, error) {
+		return client.GetAnalyticsReportRequests(ctx, appID, asc.WithAnalyticsReportRequestsNextURL(nextURL))
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	if paginated == nil {
+		return nil, fmt.Errorf("failed to list requests: empty paginated response")
+	}
+	requests, ok := paginated.(*asc.AnalyticsReportRequestsResponse)
+	if !ok || requests == nil {
+		return nil, fmt.Errorf("failed to list requests: unexpected paginated response type %T", paginated)
+	}
+
+	return requests, nil
+}
+
+func findReusableAnalyticsReportRequest(requests *asc.AnalyticsReportRequestsResponse, accessType asc.AnalyticsAccessType) (asc.AnalyticsReportRequestResource, bool) {
+	if requests == nil {
+		return asc.AnalyticsReportRequestResource{}, false
+	}
+	for _, request := range requests.Data {
+		if analyticsReportRequestMatches(request, accessType) {
+			return request, true
+		}
+	}
+
+	return asc.AnalyticsReportRequestResource{}, false
+}
+
+func isAnalyticsReportRequestCreateConflict(err error) bool {
+	var apiErr *asc.APIError
+	return errors.As(err, &apiErr) && apiErr != nil && apiErr.StatusCode == http.StatusConflict
+}
+
+func analyticsReportRequestMatches(request asc.AnalyticsReportRequestResource, accessType asc.AnalyticsAccessType) bool {
+	if request.Attributes.AccessType != accessType {
+		return false
+	}
+	if request.Attributes.State == asc.AnalyticsReportRequestStateFailed {
+		return false
+	}
+	return request.Attributes.StoppedDueToInactivity == nil || !*request.Attributes.StoppedDueToInactivity
+}
+
+func analyticsReportRequestReuseResult(appID string, request asc.AnalyticsReportRequestResource, created bool) *asc.AnalyticsReportRequestReuseResult {
+	return &asc.AnalyticsReportRequestReuseResult{
+		RequestID:   request.ID,
+		AppID:       appID,
+		AccessType:  string(request.Attributes.AccessType),
+		State:       string(request.Attributes.State),
+		CreatedDate: request.Attributes.CreatedDate,
+		Created:     created,
 	}
 }
 

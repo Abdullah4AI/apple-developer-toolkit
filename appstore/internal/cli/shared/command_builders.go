@@ -172,7 +172,8 @@ func BuildPaginatedListCommand(config PaginatedListCommandConfig) *ffcli.Command
 				firstPageLimit = limitMax
 			}
 
-			resp, err := PaginateWithSpinner(requestCtx,
+			resp, err := PaginateWithSpinner(
+				requestCtx,
 				func(ctx context.Context) (asc.PaginatedResponse, error) {
 					return config.FetchPage(ctx, client, resolvedParentID, firstPageLimit, *next)
 				},

@@ -21,6 +21,7 @@ func AnalyticsCommand() *ffcli.Command {
 Examples:
   asc analytics sales --vendor "12345678" --type SALES --subtype SUMMARY --frequency DAILY --date "2024-01-20"
   asc analytics request --app "APP_ID" --access-type ONGOING
+  asc analytics request --app "APP_ID" --access-type ONGOING --reuse-existing
   asc analytics requests --app "APP_ID"
   asc analytics get --request-id "REQUEST_ID"
   asc analytics reports get --report-id "REPORT_ID"

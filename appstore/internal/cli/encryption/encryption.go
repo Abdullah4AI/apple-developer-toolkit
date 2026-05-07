@@ -232,7 +232,8 @@ Examples:
 			requestCtx, cancel := shared.ContextWithTimeout(ctx)
 			defer cancel()
 
-			resp, err := client.GetAppEncryptionDeclaration(requestCtx, declarationValue,
+			resp, err := client.GetAppEncryptionDeclaration(
+				requestCtx, declarationValue,
 				asc.WithAppEncryptionDeclarationsFields(fieldsValue),
 				asc.WithAppEncryptionDeclarationsDocumentFields(documentFieldsValue),
 				asc.WithAppEncryptionDeclarationsInclude(includeValue),

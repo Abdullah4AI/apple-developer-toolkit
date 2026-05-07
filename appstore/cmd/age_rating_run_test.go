@@ -8,7 +8,8 @@ import (
 func TestRun_AgeRatingSetInvalidAllNoneReturnsUsage(t *testing.T) {
 	resetReportFlags(t)
 
-	stdout, stderr, exitCode := runHelpSubprocess(t, t.TempDir(),
+	stdout, stderr, exitCode := runHelpSubprocess(
+		t, t.TempDir(),
 		"age-rating", "edit",
 		"--id", "age-1",
 		"--all-none=maybe",
@@ -27,7 +28,8 @@ func TestRun_AgeRatingSetInvalidAllNoneReturnsUsage(t *testing.T) {
 func TestRun_AgeRatingSetAllNoneFalseReturnsUsage(t *testing.T) {
 	resetReportFlags(t)
 
-	stdout, stderr, exitCode := runHelpSubprocess(t, t.TempDir(),
+	stdout, stderr, exitCode := runHelpSubprocess(
+		t, t.TempDir(),
 		"age-rating", "edit",
 		"--id", "age-1",
 		"--all-none", "false",

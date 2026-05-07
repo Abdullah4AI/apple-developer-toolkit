@@ -45,7 +45,8 @@ func (c *Client) FindOrCreateAppStoreVersion(ctx context.Context, appID, version
 		return nil, fmt.Errorf("app ID, version, and platform are required")
 	}
 
-	versions, err := c.GetAppStoreVersions(ctx, appID,
+	versions, err := c.GetAppStoreVersions(
+		ctx, appID,
 		WithAppStoreVersionsVersionStrings([]string{version}),
 		WithAppStoreVersionsPlatforms([]string{platformValue}),
 		WithAppStoreVersionsLimit(10),

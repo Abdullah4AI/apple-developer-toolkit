@@ -33,7 +33,8 @@ func TestGetAppWebhooks_SendsRequest(t *testing.T) {
 		assertAuthorized(t, req)
 	}, response)
 
-	_, err := client.GetAppWebhooks(context.Background(), "app-1",
+	_, err := client.GetAppWebhooks(
+		context.Background(), "app-1",
 		WithWebhooksLimit(5),
 		WithWebhooksFields([]string{"name", "url"}),
 		WithWebhooksAppFields([]string{"name"}),
@@ -204,7 +205,8 @@ func TestGetWebhookDeliveries_SendsRequest(t *testing.T) {
 		assertAuthorized(t, req)
 	}, response)
 
-	_, err := client.GetWebhookDeliveries(context.Background(), "wh-1",
+	_, err := client.GetWebhookDeliveries(
+		context.Background(), "wh-1",
 		WithWebhookDeliveriesLimit(3),
 		WithWebhookDeliveriesDeliveryStates([]string{"failed"}),
 	)

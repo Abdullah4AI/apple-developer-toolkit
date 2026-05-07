@@ -131,7 +131,8 @@ func newMetadataMutationCommand(cfg metadataMutationCommandConfig) *ffcli.Comman
 		Name:       cfg.name,
 		ShortUsage: fmt.Sprintf(`asc metadata %s --app "APP_ID" --version "1.2.3" --dir "./metadata" [--app-info "APP_INFO_ID"] [--dry-run]`, cfg.name),
 		ShortHelp:  fmt.Sprintf("%s metadata changes from canonical files.", cfg.verbTitle),
-		LongHelp: fmt.Sprintf(`%s metadata changes from canonical files.
+		LongHelp: fmt.Sprintf(
+			`%s metadata changes from canonical files.
 
 Examples:
   asc metadata %s --app "APP_ID" --version "1.2.3" --dir "./metadata" --dry-run
@@ -367,7 +368,8 @@ func buildMetadataAppInfoExample(command, appID, version, platform, dir, appInfo
 	if dirValue == "" {
 		dirValue = "./metadata"
 	}
-	parts = append(parts,
+	parts = append(
+		parts,
 		fmt.Sprintf(`--dir %q`, dirValue),
 		fmt.Sprintf(`--app-info %q`, appInfoID),
 	)

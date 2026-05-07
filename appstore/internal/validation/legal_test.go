@@ -5,7 +5,8 @@ import (
 )
 
 func TestLegalChecks_CopyrightEmpty(t *testing.T) {
-	checks := legalChecks("", false, false,
+	checks := legalChecks(
+		"", false, false,
 		[]VersionLocalization{{Locale: "en-US", SupportURL: "https://example.com"}},
 		[]AppInfoLocalization{{Locale: "en-US", PrivacyPolicyURL: "https://example.com/privacy"}},
 	)
@@ -15,7 +16,8 @@ func TestLegalChecks_CopyrightEmpty(t *testing.T) {
 }
 
 func TestLegalChecks_CopyrightWhitespaceOnly(t *testing.T) {
-	checks := legalChecks("   ", false, false,
+	checks := legalChecks(
+		"   ", false, false,
 		[]VersionLocalization{{Locale: "en-US", SupportURL: "https://example.com"}},
 		[]AppInfoLocalization{{Locale: "en-US", PrivacyPolicyURL: "https://example.com/privacy"}},
 	)
@@ -25,7 +27,8 @@ func TestLegalChecks_CopyrightWhitespaceOnly(t *testing.T) {
 }
 
 func TestLegalChecks_CopyrightPresent(t *testing.T) {
-	checks := legalChecks("2026 My Company", false, false,
+	checks := legalChecks(
+		"2026 My Company", false, false,
 		[]VersionLocalization{{Locale: "en-US", SupportURL: "https://example.com"}},
 		[]AppInfoLocalization{{Locale: "en-US", PrivacyPolicyURL: "https://example.com/privacy"}},
 	)
@@ -35,7 +38,8 @@ func TestLegalChecks_CopyrightPresent(t *testing.T) {
 }
 
 func TestLegalChecks_InvalidSupportURL(t *testing.T) {
-	checks := legalChecks("2026 My Company", false, false,
+	checks := legalChecks(
+		"2026 My Company", false, false,
 		[]VersionLocalization{{Locale: "en-US", SupportURL: "not-a-url"}},
 		[]AppInfoLocalization{{Locale: "en-US", PrivacyPolicyURL: "https://example.com/privacy"}},
 	)
@@ -45,7 +49,8 @@ func TestLegalChecks_InvalidSupportURL(t *testing.T) {
 }
 
 func TestLegalChecks_ValidSupportURL(t *testing.T) {
-	checks := legalChecks("2026 My Company", false, false,
+	checks := legalChecks(
+		"2026 My Company", false, false,
 		[]VersionLocalization{{Locale: "en-US", SupportURL: "https://example.com/support?q=1"}},
 		[]AppInfoLocalization{{Locale: "en-US", PrivacyPolicyURL: "https://example.com/privacy"}},
 	)
@@ -55,7 +60,8 @@ func TestLegalChecks_ValidSupportURL(t *testing.T) {
 }
 
 func TestLegalChecks_EmptySupportURL_NoFormatCheck(t *testing.T) {
-	checks := legalChecks("2026 My Company", false, false,
+	checks := legalChecks(
+		"2026 My Company", false, false,
 		[]VersionLocalization{{Locale: "en-US", SupportURL: ""}},
 		[]AppInfoLocalization{{Locale: "en-US", PrivacyPolicyURL: "https://example.com/privacy"}},
 	)
@@ -65,7 +71,8 @@ func TestLegalChecks_EmptySupportURL_NoFormatCheck(t *testing.T) {
 }
 
 func TestLegalChecks_InvalidMarketingURL(t *testing.T) {
-	checks := legalChecks("2026 My Company", false, false,
+	checks := legalChecks(
+		"2026 My Company", false, false,
 		[]VersionLocalization{{Locale: "en-US", SupportURL: "https://example.com", MarketingURL: "ftp://bad"}},
 		[]AppInfoLocalization{{Locale: "en-US", PrivacyPolicyURL: "https://example.com/privacy"}},
 	)
@@ -75,7 +82,8 @@ func TestLegalChecks_InvalidMarketingURL(t *testing.T) {
 }
 
 func TestLegalChecks_InvalidPrivacyPolicyURL(t *testing.T) {
-	checks := legalChecks("2026 My Company", false, false,
+	checks := legalChecks(
+		"2026 My Company", false, false,
 		[]VersionLocalization{{Locale: "en-US", SupportURL: "https://example.com"}},
 		[]AppInfoLocalization{{Locale: "en-US", PrivacyPolicyURL: "not-a-url"}},
 	)
@@ -85,7 +93,8 @@ func TestLegalChecks_InvalidPrivacyPolicyURL(t *testing.T) {
 }
 
 func TestLegalChecks_InvalidPrivacyChoicesURL(t *testing.T) {
-	checks := legalChecks("2026 My Company", false, false,
+	checks := legalChecks(
+		"2026 My Company", false, false,
 		[]VersionLocalization{{Locale: "en-US", SupportURL: "https://example.com"}},
 		[]AppInfoLocalization{{Locale: "en-US", PrivacyPolicyURL: "https://example.com/privacy", PrivacyChoicesURL: "bad-url"}},
 	)
@@ -95,7 +104,8 @@ func TestLegalChecks_InvalidPrivacyChoicesURL(t *testing.T) {
 }
 
 func TestLegalChecks_URLSchemeNoHost(t *testing.T) {
-	checks := legalChecks("2026 My Company", false, false,
+	checks := legalChecks(
+		"2026 My Company", false, false,
 		[]VersionLocalization{{Locale: "en-US", SupportURL: "https://"}},
 		[]AppInfoLocalization{{Locale: "en-US", PrivacyPolicyURL: "https://example.com/privacy"}},
 	)
@@ -105,7 +115,8 @@ func TestLegalChecks_URLSchemeNoHost(t *testing.T) {
 }
 
 func TestLegalChecks_HTTPURLAccepted(t *testing.T) {
-	checks := legalChecks("2026 My Company", false, false,
+	checks := legalChecks(
+		"2026 My Company", false, false,
 		[]VersionLocalization{{Locale: "en-US", SupportURL: "http://example.com"}},
 		[]AppInfoLocalization{{Locale: "en-US", PrivacyPolicyURL: "https://example.com/privacy"}},
 	)
@@ -115,7 +126,8 @@ func TestLegalChecks_HTTPURLAccepted(t *testing.T) {
 }
 
 func TestLegalChecks_RawSpaceInURLRejected(t *testing.T) {
-	checks := legalChecks("2026 My Company", false, false,
+	checks := legalChecks(
+		"2026 My Company", false, false,
 		[]VersionLocalization{{Locale: "en-US", SupportURL: "https://example.com/hello world"}},
 		[]AppInfoLocalization{{Locale: "en-US", PrivacyPolicyURL: "https://example.com/privacy"}},
 	)
@@ -125,7 +137,8 @@ func TestLegalChecks_RawSpaceInURLRejected(t *testing.T) {
 }
 
 func TestLegalChecks_EmptyHostnameRejected(t *testing.T) {
-	checks := legalChecks("2026 My Company", false, false,
+	checks := legalChecks(
+		"2026 My Company", false, false,
 		[]VersionLocalization{{Locale: "en-US", SupportURL: "https://user@:80"}},
 		[]AppInfoLocalization{{Locale: "en-US", PrivacyPolicyURL: "https://example.com/privacy"}},
 	)
@@ -135,7 +148,8 @@ func TestLegalChecks_EmptyHostnameRejected(t *testing.T) {
 }
 
 func TestLegalChecks_PrivacyPolicyRequired_WithSubscriptions(t *testing.T) {
-	checks := legalChecks("2026 My Company", true, false,
+	checks := legalChecks(
+		"2026 My Company", true, false,
 		[]VersionLocalization{{Locale: "en-US", SupportURL: "https://example.com"}},
 		[]AppInfoLocalization{{Locale: "en-US"}},
 	)
@@ -152,7 +166,8 @@ func TestLegalChecks_PrivacyPolicyRequired_WithSubscriptions(t *testing.T) {
 }
 
 func TestLegalChecks_PrivacyPolicyRequired_WithIAPs(t *testing.T) {
-	checks := legalChecks("2026 My Company", true, false,
+	checks := legalChecks(
+		"2026 My Company", true, false,
 		[]VersionLocalization{{Locale: "en-US", SupportURL: "https://example.com"}},
 		[]AppInfoLocalization{{Locale: "en-US"}},
 	)
@@ -169,7 +184,8 @@ func TestLegalChecks_PrivacyPolicyRequired_WithIAPs(t *testing.T) {
 }
 
 func TestLegalChecks_PrivacyPolicyNotRequired_NoSubscriptionsNoIAPs(t *testing.T) {
-	checks := legalChecks("2026 My Company", false, false,
+	checks := legalChecks(
+		"2026 My Company", false, false,
 		[]VersionLocalization{{Locale: "en-US", SupportURL: "https://example.com"}},
 		[]AppInfoLocalization{{Locale: "en-US"}},
 	)
@@ -179,7 +195,8 @@ func TestLegalChecks_PrivacyPolicyNotRequired_NoSubscriptionsNoIAPs(t *testing.T
 }
 
 func TestLegalChecks_MultipleLocales_InvalidURLs(t *testing.T) {
-	checks := legalChecks("2026 Co", false, false,
+	checks := legalChecks(
+		"2026 Co", false, false,
 		[]VersionLocalization{
 			{Locale: "en-US", SupportURL: "bad"},
 			{Locale: "fr-FR", SupportURL: "also-bad"},
@@ -305,7 +322,8 @@ func TestValidate_TermsOfUseLinkNotRequiredWithoutSubscriptions(t *testing.T) {
 }
 
 func TestLegalChecks_AllValid_NoChecks(t *testing.T) {
-	checks := legalChecks("2026 My Company", false, false,
+	checks := legalChecks(
+		"2026 My Company", false, false,
 		[]VersionLocalization{{Locale: "en-US", SupportURL: "https://example.com", MarketingURL: "https://example.com/marketing"}},
 		[]AppInfoLocalization{{Locale: "en-US", PrivacyPolicyURL: "https://example.com/privacy", PrivacyChoicesURL: "https://example.com/choices"}},
 	)

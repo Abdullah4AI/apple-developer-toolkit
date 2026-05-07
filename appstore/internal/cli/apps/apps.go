@@ -48,6 +48,7 @@ Examples:
   asc apps public view --app "1234567890"
   asc apps public search --term "focus" --country us
   asc apps public storefronts list
+  asc apps registry pull --path ".asc/app-registry.json"
   asc apps view --id "APP_ID"
   asc apps info view --app "APP_ID"
   asc apps info edit --app "APP_ID" --locale "en-US" --whats-new "Bug fixes"
@@ -68,6 +69,7 @@ Examples:
 			RemovedAppsCreateCommand(),
 			AppsWallCommand(),
 			AppsPublicCommand(),
+			AppsRegistryCommand(),
 			AppsGetCommand(),
 			AppsInfoCommand(),
 			AppsCIProductCommand(),
@@ -357,7 +359,8 @@ func appsList(ctx context.Context, output string, pretty bool, bundleID string, 
 
 	if paginate {
 		paginateOpts := append(opts, asc.WithAppsLimit(200))
-		apps, err := shared.PaginateWithSpinner(requestCtx,
+		apps, err := shared.PaginateWithSpinner(
+			requestCtx,
 			func(ctx context.Context) (asc.PaginatedResponse, error) {
 				return client.GetApps(ctx, paginateOpts...)
 			},

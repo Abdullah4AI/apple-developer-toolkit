@@ -117,7 +117,8 @@ Examples:
 
 			if *paginate {
 				paginateOpts := append(opts, asc.WithBuildUploadsLimit(200))
-				resp, err := shared.PaginateWithSpinner(requestCtx,
+				resp, err := shared.PaginateWithSpinner(
+					requestCtx,
 					func(ctx context.Context) (asc.PaginatedResponse, error) {
 						return client.GetBuildUploads(ctx, resolvedAppID, paginateOpts...)
 					},
@@ -315,7 +316,8 @@ Examples:
 				}
 
 				paginateOpts := append(opts, asc.WithBuildUploadFilesLimit(200))
-				resp, err := shared.PaginateWithSpinner(requestCtx,
+				resp, err := shared.PaginateWithSpinner(
+					requestCtx,
 					func(ctx context.Context) (asc.PaginatedResponse, error) {
 						return client.GetBuildUploadFiles(ctx, uploadValue, paginateOpts...)
 					},

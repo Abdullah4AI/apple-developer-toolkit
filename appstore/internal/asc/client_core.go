@@ -385,7 +385,8 @@ func WithRetry[T any](ctx context.Context, fn func() (T, error), opts RetryOptio
 		}
 
 		if debugEnabled {
-			debugLogger.Info("⟳ Retrying request",
+			debugLogger.Info(
+				"⟳ Retrying request",
 				"attempt", retryCount+1,
 				"max_retries", opts.MaxRetries,
 				"delay", delay.String(),
