@@ -135,6 +135,7 @@ func OfferCodesCreateCommand() *ffcli.Command {
 		LongHelp: `Create a subscription offer code.
 
 Examples:
+  asc offer-codes create --subscription-id "SUB_ID" --name "SPRING" --customer-eligibilities NEW --offer-eligibility STACK_WITH_INTRO_OFFERS --duration ONE_MONTH --offer-mode FREE_TRIAL --number-of-periods 1
   asc offer-codes create --subscription-id "SUB_ID" --name "SPRING" --customer-eligibilities NEW --offer-eligibility STACK_WITH_INTRO_OFFERS --duration ONE_MONTH --offer-mode PAY_AS_YOU_GO --number-of-periods 1 --prices "USA:PRICE_POINT_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
@@ -203,8 +204,12 @@ Examples:
 			if err != nil {
 				return fmt.Errorf("offer-codes create: %w", err)
 			}
-			if len(priceEntries) == 0 {
+			if len(priceEntries) == 0 && offerModeValue != asc.SubscriptionOfferModeFreeTrial {
 				fmt.Fprintln(os.Stderr, "Error: --prices is required")
+				return flag.ErrHelp
+			}
+			if len(priceEntries) > 0 && offerModeValue == asc.SubscriptionOfferModeFreeTrial {
+				fmt.Fprintln(os.Stderr, "Error: --prices must not be set for FREE_TRIAL offers")
 				return flag.ErrHelp
 			}
 

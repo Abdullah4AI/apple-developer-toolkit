@@ -135,6 +135,7 @@ asc <subcommand> [flags]
 ### Utility
 
 - `diff` - Generate deterministic non-mutating diff plans.
+- `capabilities` - Show CLI, API, web-only, and public-API-limited capability coverage.
 - `snitch` - Report CLI friction as a GitHub issue.
 - `version` - Print version information and exit.
 - `completion` - Print shell completion scripts.

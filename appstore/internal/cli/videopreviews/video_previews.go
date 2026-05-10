@@ -21,9 +21,9 @@ func VideoPreviewsCommand() *ffcli.Command {
 		LongHelp: `Manage App Store app preview videos for a version localization.
 
 Examples:
-  asc video-previews list --version-localization "LOC_ID"
-  asc video-previews upload --version-localization "LOC_ID" --path "./previews" --device-type "IPHONE_69"
-  asc video-previews download --version-localization "LOC_ID" --output-dir "./previews/downloaded"
+  asc video-previews list --version-localization "VERSION_LOCALIZATION_ID"
+  asc video-previews upload --version-localization "VERSION_LOCALIZATION_ID" --path "./previews" --device-type "IPHONE_69"
+  asc video-previews download --version-localization "VERSION_LOCALIZATION_ID" --output-dir "./previews/downloaded"
   asc video-previews delete --id "PREVIEW_ID" --confirm
   asc video-previews set-poster-frame --id "PREVIEW_ID" --time-code "00:00:05:00"`,
 		FlagSet:   fs,

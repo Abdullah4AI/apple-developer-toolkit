@@ -851,6 +851,171 @@ func TestPublishAppStoreLocalBuildRequiresExportOptionsWhenDefaultMissing(t *tes
 	}
 }
 
+func TestPublishAppStoreMetadataDirAppliesAfterEnsureVersionBeforeAttach(t *testing.T) {
+	restore := overridePublishCommandTestHooks(t)
+	defer restore()
+
+	metadataDir := t.TempDir()
+	writePublishVersionMetadataFixture(t, metadataDir, "1.2.3")
+	sequence := make([]string, 0, 4)
+
+	getPublishASCClientFn = func(time.Duration) (*asc.Client, error) { return newPublishCommandTestClient(t), nil }
+	resolvePublishAppIDWithLookupFn = func(_ context.Context, _ *asc.Client, appID string) (string, error) {
+		return appID, nil
+	}
+	validatePublishIPAPathFn = func(string) (os.FileInfo, error) {
+		return newPublishTestFileInfo(t)
+	}
+	uploadBuildAndWaitForIDFn = func(_ context.Context, _ *asc.Client, _ string, _ string, _ os.FileInfo, version, buildNumber string, _ asc.Platform, _ time.Duration, _ time.Duration, _ bool) (*publishUploadResult, error) {
+		return &publishUploadResult{
+			Build: &asc.BuildResponse{
+				Data: asc.Resource[asc.BuildAttributes]{
+					ID:         "build-42",
+					Attributes: asc.BuildAttributes{Version: "42"},
+				},
+			},
+			Version:     version,
+			BuildNumber: buildNumber,
+		}, nil
+	}
+	applyPublishVersionMetadataFn = func(_ context.Context, _ *asc.Client, opts publishVersionMetadataOptions) ([]asc.LocalizationUploadLocaleResult, error) {
+		sequence = append(sequence, "apply_metadata")
+		if opts.VersionID != "version-1" {
+			t.Fatalf("expected metadata version ID version-1, got %q", opts.VersionID)
+		}
+		if opts.Version != "1.2.3" {
+			t.Fatalf("expected metadata version 1.2.3, got %q", opts.Version)
+		}
+		if opts.Dir != metadataDir {
+			t.Fatalf("expected metadata dir %q, got %q", metadataDir, opts.Dir)
+		}
+		if got := opts.ValuesByLocale["en-US"]["description"]; got != "Updated description" {
+			t.Fatalf("expected preflighted metadata values, got %+v", opts.ValuesByLocale)
+		}
+		return nil, nil
+	}
+
+	originalTransport := http.DefaultTransport
+	t.Cleanup(func() { http.DefaultTransport = originalTransport })
+	http.DefaultTransport = publishCommandRoundTripFunc(func(req *http.Request) (*http.Response, error) {
+		switch {
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/apps/app-1/appStoreVersions":
+			sequence = append(sequence, "ensure_version")
+			return publishCommandJSONResponse(http.StatusOK, `{"data":[{"type":"appStoreVersions","id":"version-1","attributes":{"versionString":"1.2.3","platform":"IOS"}}]}`)
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/appStoreVersions/version-1/build":
+			sequence = append(sequence, "lookup_build")
+			return publishCommandJSONResponse(http.StatusNotFound, `{"errors":[{"status":"404","code":"NOT_FOUND","title":"Not Found"}]}`)
+		case req.Method == http.MethodPatch && req.URL.Path == "/v1/appStoreVersions/version-1/relationships/build":
+			sequence = append(sequence, "attach_build")
+			return publishCommandJSONResponse(http.StatusNoContent, "")
+		default:
+			t.Fatalf("unexpected request: %s %s?%s", req.Method, req.URL.Path, req.URL.RawQuery)
+			return nil, nil
+		}
+	})
+
+	cmd := PublishAppStoreCommand()
+	cmd.FlagSet.SetOutput(io.Discard)
+	if err := cmd.FlagSet.Parse([]string{
+		"--app", "app-1",
+		"--ipa", "app.ipa",
+		"--version", "1.2.3",
+		"--build-number", "42",
+		"--metadata-dir", metadataDir,
+		"--output", "json",
+	}); err != nil {
+		t.Fatalf("parse flags: %v", err)
+	}
+
+	var runErr error
+	stdout, _ := capturePublishCommandOutput(t, func() error {
+		runErr = cmd.Exec(context.Background(), nil)
+		return runErr
+	})
+	if runErr != nil {
+		t.Fatalf("cmd.Exec() error: %v", runErr)
+	}
+	if !strings.Contains(stdout, `"attached":true`) {
+		t.Fatalf("expected attached result, got %s", stdout)
+	}
+
+	wantSequence := strings.Join([]string{"ensure_version", "apply_metadata", "lookup_build", "attach_build"}, ",")
+	if gotSequence := strings.Join(sequence, ","); gotSequence != wantSequence {
+		t.Fatalf("expected sequence %s, got %s", wantSequence, gotSequence)
+	}
+}
+
+func TestPublishAppStoreDryRunPlanIncludesMetadataStepWhenMetadataDirProvided(t *testing.T) {
+	restore := overridePublishCommandTestHooks(t)
+	defer restore()
+
+	ipaPath := filepath.Join(t.TempDir(), "app.ipa")
+	if err := os.WriteFile(ipaPath, []byte("payload"), 0o600); err != nil {
+		t.Fatalf("write IPA fixture: %v", err)
+	}
+	metadataDir := t.TempDir()
+	writePublishVersionMetadataFixture(t, metadataDir, "1.2.3")
+
+	cmd := PublishAppStoreCommand()
+	cmd.FlagSet.SetOutput(io.Discard)
+	if err := cmd.FlagSet.Parse([]string{
+		"--app", "123456789",
+		"--ipa", ipaPath,
+		"--version", "1.2.3",
+		"--build-number", "42",
+		"--metadata-dir", metadataDir,
+		"--submit",
+		"--dry-run",
+		"--output", "json",
+	}); err != nil {
+		t.Fatalf("parse flags: %v", err)
+	}
+
+	var runErr error
+	stdout, _ := capturePublishCommandOutput(t, func() error {
+		runErr = cmd.Exec(context.Background(), nil)
+		return runErr
+	})
+	if runErr != nil {
+		t.Fatalf("cmd.Exec() error: %v", runErr)
+	}
+
+	var payload struct {
+		Plan []struct {
+			Name string `json:"name"`
+		} `json:"plan"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
+		t.Fatalf("json.Unmarshal() error: %v\nstdout=%s", err, stdout)
+	}
+	planNames := make([]string, 0, len(payload.Plan))
+	for _, step := range payload.Plan {
+		planNames = append(planNames, step.Name)
+	}
+	expectedPlanNames := []string{
+		"upload_build",
+		"ensure_version",
+		"apply_metadata",
+		"attach_build",
+		"submit_review",
+	}
+	if strings.Join(planNames, ",") != strings.Join(expectedPlanNames, ",") {
+		t.Fatalf("expected plan %v, got %v", expectedPlanNames, planNames)
+	}
+}
+
+func writePublishVersionMetadataFixture(t *testing.T, dir, version string) {
+	t.Helper()
+
+	versionDir := filepath.Join(dir, "version", version)
+	if err := os.MkdirAll(versionDir, 0o755); err != nil {
+		t.Fatalf("create version metadata dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(versionDir, "en-US.json"), []byte(`{"description":"Updated description"}`), 0o600); err != nil {
+		t.Fatalf("write version metadata fixture: %v", err)
+	}
+}
+
 func TestPublishAppStoreLocalBuildRejectsDirectUploadExportOptions(t *testing.T) {
 	restore := overridePublishCommandTestHooks(t)
 	defer restore()
@@ -1168,6 +1333,7 @@ func overridePublishCommandTestHooks(t *testing.T) func() {
 	originalUploadBuildAndWait := uploadBuildAndWaitForIDFn
 	originalResolveAppID := resolvePublishAppIDWithLookupFn
 	originalWaitForProcessing := waitForPublishBuildProcessingFn
+	originalMetadataApply := applyPublishVersionMetadataFn
 
 	return func() {
 		runPublishArchiveFn = originalArchive
@@ -1178,6 +1344,7 @@ func overridePublishCommandTestHooks(t *testing.T) func() {
 		uploadBuildAndWaitForIDFn = originalUploadBuildAndWait
 		resolvePublishAppIDWithLookupFn = originalResolveAppID
 		waitForPublishBuildProcessingFn = originalWaitForProcessing
+		applyPublishVersionMetadataFn = originalMetadataApply
 	}
 }
 

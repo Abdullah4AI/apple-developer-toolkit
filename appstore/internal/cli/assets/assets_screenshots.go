@@ -285,12 +285,17 @@ func AssetsScreenshotsListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "asc screenshots list --version-localization \"LOC_ID\"",
+		ShortUsage: "asc screenshots list --version-localization \"VERSION_LOCALIZATION_ID\"",
 		ShortHelp:  "List screenshots for a localization.",
 		LongHelp: `List screenshots for a localization.
 
+--version-localization is the App Store version localization resource ID
+returned as data[].id by "asc localizations list --version VERSION_ID --output json".
+It is not the locale code such as en-US.
+
 Examples:
-  asc screenshots list --version-localization "LOC_ID"`,
+  asc localizations list --version "VERSION_ID" --output json --locale "en-US"
+  asc screenshots list --version-localization "VERSION_LOCALIZATION_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -406,7 +411,7 @@ func AssetsScreenshotsUploadCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "upload",
-		ShortUsage: "asc screenshots upload (--version-localization \"LOC_ID\" | --app \"APP_ID\" (--version \"1.2.3\" | --version-id \"VERSION_ID\")) --path \"./screenshots\" --device-type \"IPHONE_65\"",
+		ShortUsage: "asc screenshots upload (--version-localization \"VERSION_LOCALIZATION_ID\" | --app \"APP_ID\" (--version \"1.2.3\" | --version-id \"VERSION_ID\")) --path \"./screenshots\" --device-type \"IPHONE_65\"",
 		ShortHelp:  "Upload screenshots for one or more localizations.",
 		LongHelp: `Upload screenshots for one or more localizations.
 
@@ -418,13 +423,18 @@ matching --device-type are uploaded. This supports layouts like
 ./screenshots/en-US/iphone/*.png, or ./screenshots/iphone/en-US/*.png when
 --path points to ./screenshots/iphone.
 
+--version-localization is the App Store version localization resource ID
+returned as data[].id by "asc localizations list --version VERSION_ID --output json".
+It is not the locale code such as en-US.
+
 Examples:
-  asc screenshots upload --version-localization "LOC_ID" --path "./screenshots" --device-type "IPHONE_65"
-  asc screenshots upload --version-localization "LOC_ID" --path "./screenshots" --device-type "IPHONE_65" --skip-existing
-  asc screenshots upload --version-localization "LOC_ID" --path "./screenshots" --device-type "IPHONE_65" --replace
-  asc screenshots upload --version-localization "LOC_ID" --path "./screenshots" --device-type "IPHONE_65" --skip-existing --dry-run
-  asc screenshots upload --version-localization "LOC_ID" --path "./screenshots" --device-type "IPAD_PRO_3GEN_129"
-  asc screenshots upload --version-localization "LOC_ID" --path "./screenshots/en-US.png" --device-type "IPHONE_65"
+  asc localizations list --version "VERSION_ID" --output json --locale "en-US"
+  asc screenshots upload --version-localization "VERSION_LOCALIZATION_ID" --path "./screenshots" --device-type "IPHONE_65"
+  asc screenshots upload --version-localization "VERSION_LOCALIZATION_ID" --path "./screenshots" --device-type "IPHONE_65" --skip-existing
+  asc screenshots upload --version-localization "VERSION_LOCALIZATION_ID" --path "./screenshots" --device-type "IPHONE_65" --replace
+  asc screenshots upload --version-localization "VERSION_LOCALIZATION_ID" --path "./screenshots" --device-type "IPHONE_65" --skip-existing --dry-run
+  asc screenshots upload --version-localization "VERSION_LOCALIZATION_ID" --path "./screenshots" --device-type "IPAD_PRO_3GEN_129"
+  asc screenshots upload --version-localization "VERSION_LOCALIZATION_ID" --path "./screenshots/en-US.png" --device-type "IPHONE_65"
   asc screenshots upload --app "123456789" --version "1.2.3" --path "./screenshots" --device-type "IPHONE_65"
   asc screenshots upload --app "123456789" --version-id "VERSION_ID" --path "./screenshots/ipad" --device-type "IPAD_PRO_3GEN_129" --dry-run
   asc screenshots upload --resume ".asc/reports/screenshots-upload/failures-123.json"`,
@@ -1018,14 +1028,19 @@ func AssetsScreenshotsDownloadCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "download",
-		ShortUsage: "asc screenshots download (--id \"SCREENSHOT_ID\" --output \"./screenshot.png\") | (--version-localization \"LOC_ID\" --output-dir \"./screenshots\")",
+		ShortUsage: "asc screenshots download (--id \"SCREENSHOT_ID\" --output \"./screenshot.png\") | (--version-localization \"VERSION_LOCALIZATION_ID\" --output-dir \"./screenshots\")",
 		ShortHelp:  "Download App Store screenshots to disk.",
 		LongHelp: `Download App Store screenshots to disk.
 
+--version-localization is the App Store version localization resource ID
+returned as data[].id by "asc localizations list --version VERSION_ID --output json".
+It is not the locale code such as en-US.
+
 Examples:
   asc screenshots download --id "SCREENSHOT_ID" --output "./screenshot.png"
-  asc screenshots download --version-localization "LOC_ID" --output-dir "./screenshots"
-  asc screenshots download --version-localization "LOC_ID" --output-dir "./screenshots" --overwrite`,
+  asc localizations list --version "VERSION_ID" --output json --locale "en-US"
+  asc screenshots download --version-localization "VERSION_LOCALIZATION_ID" --output-dir "./screenshots"
+  asc screenshots download --version-localization "VERSION_LOCALIZATION_ID" --output-dir "./screenshots" --overwrite`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

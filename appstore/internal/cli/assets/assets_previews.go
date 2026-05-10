@@ -25,12 +25,17 @@ func AssetsPreviewsListCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "list",
-		ShortUsage: "asc video-previews list --version-localization \"LOC_ID\"",
+		ShortUsage: "asc video-previews list --version-localization \"VERSION_LOCALIZATION_ID\"",
 		ShortHelp:  "List previews for a localization.",
 		LongHelp: `List previews for a localization.
 
+--version-localization is the App Store version localization resource ID
+returned as data[].id by "asc localizations list --version VERSION_ID --output json".
+It is not the locale code such as en-US.
+
 Examples:
-  asc video-previews list --version-localization "LOC_ID"`,
+  asc localizations list --version "VERSION_ID" --output json --locale "en-US"
+  asc video-previews list --version-localization "VERSION_LOCALIZATION_ID"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -88,16 +93,21 @@ func AssetsPreviewsUploadCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "upload",
-		ShortUsage: "asc video-previews upload --version-localization \"LOC_ID\" --path \"./previews\" --device-type \"IPHONE_65\"",
+		ShortUsage: "asc video-previews upload --version-localization \"VERSION_LOCALIZATION_ID\" --path \"./previews\" --device-type \"IPHONE_65\"",
 		ShortHelp:  "Upload previews for a localization.",
 		LongHelp: `Upload previews for a localization.
 
+--version-localization is the App Store version localization resource ID
+returned as data[].id by "asc localizations list --version VERSION_ID --output json".
+It is not the locale code such as en-US.
+
 Examples:
-  asc video-previews upload --version-localization "LOC_ID" --path "./previews" --device-type "IPHONE_65"
-  asc video-previews upload --version-localization "LOC_ID" --path "./previews/preview.mov" --device-type "IPHONE_65"
-  asc video-previews upload --version-localization "LOC_ID" --path "./previews" --device-type "IPHONE_65" --skip-existing
-  asc video-previews upload --version-localization "LOC_ID" --path "./previews" --device-type "IPHONE_65" --replace
-  asc video-previews upload --version-localization "LOC_ID" --path "./previews" --device-type "IPHONE_65" --skip-existing --dry-run`,
+  asc localizations list --version "VERSION_ID" --output json --locale "en-US"
+  asc video-previews upload --version-localization "VERSION_LOCALIZATION_ID" --path "./previews" --device-type "IPHONE_65"
+  asc video-previews upload --version-localization "VERSION_LOCALIZATION_ID" --path "./previews/preview.mov" --device-type "IPHONE_65"
+  asc video-previews upload --version-localization "VERSION_LOCALIZATION_ID" --path "./previews" --device-type "IPHONE_65" --skip-existing
+  asc video-previews upload --version-localization "VERSION_LOCALIZATION_ID" --path "./previews" --device-type "IPHONE_65" --replace
+  asc video-previews upload --version-localization "VERSION_LOCALIZATION_ID" --path "./previews" --device-type "IPHONE_65" --skip-existing --dry-run`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -191,14 +201,19 @@ func AssetsPreviewsDownloadCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "download",
-		ShortUsage: "asc video-previews download (--id \"PREVIEW_ID\" --output \"./preview.mov\") | (--version-localization \"LOC_ID\" --output-dir \"./previews\")",
+		ShortUsage: "asc video-previews download (--id \"PREVIEW_ID\" --output \"./preview.mov\") | (--version-localization \"VERSION_LOCALIZATION_ID\" --output-dir \"./previews\")",
 		ShortHelp:  "Download App Store app preview videos to disk.",
 		LongHelp: `Download App Store app preview videos to disk.
 
+--version-localization is the App Store version localization resource ID
+returned as data[].id by "asc localizations list --version VERSION_ID --output json".
+It is not the locale code such as en-US.
+
 Examples:
   asc video-previews download --id "PREVIEW_ID" --output "./preview.mov"
-  asc video-previews download --version-localization "LOC_ID" --output-dir "./previews"
-  asc video-previews download --version-localization "LOC_ID" --output-dir "./previews" --overwrite`,
+  asc localizations list --version "VERSION_ID" --output json --locale "en-US"
+  asc video-previews download --version-localization "VERSION_LOCALIZATION_ID" --output-dir "./previews"
+  asc video-previews download --version-localization "VERSION_LOCALIZATION_ID" --output-dir "./previews" --overwrite`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

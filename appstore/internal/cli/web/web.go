@@ -39,6 +39,7 @@ Examples:
   asc web review list --app "123456789" --apple-id "user@example.com"
   asc web review show --app "123456789" --apple-id "user@example.com"
   asc web review subscriptions list --app "123456789" --apple-id "user@example.com"
+  asc web subscriptions availability remove-from-sale --subscription-id "SUB_ID" --confirm
   asc web analytics overview --app "123456789" --start 2025-12-24 --end 2026-03-23`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
@@ -48,6 +49,7 @@ Examples:
 			WebAppsCommand(),
 			WebPrivacyCommand(),
 			WebReviewCommand(),
+			WebSubscriptionsCommand(),
 			WebAnalyticsCommand(),
 			WebXcodeCloudCommand(),
 		},

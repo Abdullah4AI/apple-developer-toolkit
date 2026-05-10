@@ -107,7 +107,8 @@ func TestMetadataPullWritesCanonicalLayout(t *testing.T) {
 			body := `{
 				"data":[
 					{"type":"appInfoLocalizations","id":"appinfo-loc-1","attributes":{"locale":"en-US","name":"App Name","subtitle":"Great app"}},
-					{"type":"appInfoLocalizations","id":"appinfo-loc-2","attributes":{"locale":"ja","name":"アプリ"}}
+					{"type":"appInfoLocalizations","id":"appinfo-loc-2","attributes":{"locale":"bn-BD","name":"Bangla App"}},
+					{"type":"appInfoLocalizations","id":"appinfo-loc-3","attributes":{"locale":"ja","name":"アプリ"}}
 				],
 				"links":{"next":""}
 			}`
@@ -120,7 +121,8 @@ func TestMetadataPullWritesCanonicalLayout(t *testing.T) {
 			body := `{
 				"data":[
 					{"type":"appStoreVersionLocalizations","id":"version-loc-1","attributes":{"locale":"en-US","description":"English description","keywords":"one,two","whatsNew":"Bug fixes"}},
-					{"type":"appStoreVersionLocalizations","id":"version-loc-2","attributes":{"locale":"ja","description":"日本語説明"}}
+					{"type":"appStoreVersionLocalizations","id":"version-loc-2","attributes":{"locale":"bn-BD","description":"Bangla description"}},
+					{"type":"appStoreVersionLocalizations","id":"version-loc-3","attributes":{"locale":"ja","description":"日本語説明"}}
 				],
 				"links":{"next":""}
 			}`
@@ -157,8 +159,10 @@ func TestMetadataPullWritesCanonicalLayout(t *testing.T) {
 	}
 
 	paths := []string{
+		filepath.Join(outputDir, "app-info", "bn-BD.json"),
 		filepath.Join(outputDir, "app-info", "en-US.json"),
 		filepath.Join(outputDir, "app-info", "ja.json"),
+		filepath.Join(outputDir, "version", "1.2.3", "bn-BD.json"),
 		filepath.Join(outputDir, "version", "1.2.3", "en-US.json"),
 		filepath.Join(outputDir, "version", "1.2.3", "ja.json"),
 	}
@@ -197,11 +201,11 @@ func TestMetadataPullWritesCanonicalLayout(t *testing.T) {
 		t.Fatalf("unmarshal output: %v\nstdout=%q", err, stdout)
 	}
 
-	if payload.FileCount != 4 {
-		t.Fatalf("expected fileCount 4, got %d", payload.FileCount)
+	if payload.FileCount != 6 {
+		t.Fatalf("expected fileCount 6, got %d", payload.FileCount)
 	}
-	if len(payload.Files) != 4 {
-		t.Fatalf("expected 4 files in output, got %d", len(payload.Files))
+	if len(payload.Files) != 6 {
+		t.Fatalf("expected 6 files in output, got %d", len(payload.Files))
 	}
 	sortedFiles := append([]string(nil), payload.Files...)
 	slices.Sort(sortedFiles)

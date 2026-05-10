@@ -24,6 +24,7 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/buildlocalizations"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/builds"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/bundleids"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/capabilities"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/categories"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/certificates"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/completion"
@@ -171,6 +172,7 @@ func Subcommands(version string) []*ffcli.Command {
 		migrate.MigrateCommand(),
 		notify.NotifyCommand(),
 		gamecenter.GameCenterCommand(),
+		capabilities.Command(),
 		schema.SchemaCommand(),
 		snitch.SnitchCommand(version),
 		VersionCommand(version),

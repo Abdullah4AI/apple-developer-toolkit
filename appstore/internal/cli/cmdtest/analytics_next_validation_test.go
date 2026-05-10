@@ -198,6 +198,52 @@ func TestAnalyticsReportsRelationshipsRejectsInvalidNextURL(t *testing.T) {
 	)
 }
 
+func TestAnalyticsReportsRelationshipsAcceptsPrefixedReportID(t *testing.T) {
+	setupAuth(t)
+	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
+
+	const reportID = "r39-11111111-1111-1111-1111-111111111111"
+	const expectedPath = "/v1/analyticsReports/" + reportID + "/relationships/instances"
+
+	originalTransport := http.DefaultTransport
+	t.Cleanup(func() {
+		http.DefaultTransport = originalTransport
+	})
+
+	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		if req.Method != http.MethodGet || req.URL.Path != expectedPath {
+			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.String())
+		}
+		body := `{"data":[{"type":"analyticsReportInstances","id":"inst-1"}],"links":{}}`
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(strings.NewReader(body)),
+			Header:     http.Header{"Content-Type": []string{"application/json"}},
+		}, nil
+	})
+
+	root := RootCommand("1.2.3")
+	root.FlagSet.SetOutput(io.Discard)
+
+	var runErr error
+	stdout, stderr := captureOutput(t, func() {
+		if err := root.Parse([]string{"analytics", "reports", "links", "--report-id", reportID}); err != nil {
+			t.Fatalf("parse error: %v", err)
+		}
+		runErr = root.Run(context.Background())
+	})
+
+	if runErr != nil {
+		t.Fatalf("run error: %v", runErr)
+	}
+	if stderr != "" {
+		t.Fatalf("expected empty stderr, got %q", stderr)
+	}
+	if !strings.Contains(stdout, `"id":"inst-1"`) {
+		t.Fatalf("expected output to contain instance ID, got %q", stdout)
+	}
+}
+
 func TestAnalyticsReportsRelationshipsPaginateFromNextWithoutReportID(t *testing.T) {
 	const firstURL = "https://api.appstoreconnect.apple.com/v1/analyticsReports/report-1/relationships/instances?cursor=AQ&limit=200"
 	const secondURL = "https://api.appstoreconnect.apple.com/v1/analyticsReports/report-1/relationships/instances?cursor=BQ&limit=200"

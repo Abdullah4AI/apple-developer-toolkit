@@ -110,11 +110,6 @@ Examples:
 			}
 
 			id := strings.TrimSpace(*reportID)
-			if id != "" {
-				if err := validateUUIDFlag("--report-id", id); err != nil {
-					return fmt.Errorf("analytics reports links: %w", err)
-				}
-			}
 			if id == "" && strings.TrimSpace(*next) == "" {
 				fmt.Fprintln(os.Stderr, "Error: --report-id is required")
 				return flag.ErrHelp

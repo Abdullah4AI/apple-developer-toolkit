@@ -501,7 +501,7 @@ func TestSubscriptionsOfferCodesCreateStopsBeforeMutationWhenLookupFails(t *test
 		"--offer-eligibility", "STACK_WITH_INTRO_OFFERS",
 		"--customer-eligibilities", "NEW",
 		"--offer-duration", "ONE_MONTH",
-		"--offer-mode", "FREE_TRIAL",
+		"--offer-mode", "PAY_AS_YOU_GO",
 		"--number-of-periods", "1",
 		"--prices", "usa:pp-us",
 	})
@@ -513,6 +513,191 @@ func TestSubscriptionsOfferCodesCreateStopsBeforeMutationWhenLookupFails(t *test
 	}
 	if requests == 0 {
 		t.Fatal("expected lookup requests before failure")
+	}
+}
+
+func TestSubscriptionsOfferCodesCreateFreeTrialStopsBeforeMutationWhenLookupFails(t *testing.T) {
+	setupStableSelectorAuth(t)
+
+	originalTransport := http.DefaultTransport
+	t.Cleanup(func() { http.DefaultTransport = originalTransport })
+
+	requests := 0
+	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		requests++
+		if req.Method == http.MethodPost && req.URL.Path == "/v1/subscriptionOfferCodes" {
+			t.Fatalf("unexpected mutation request during failed lookup: %s %s", req.Method, req.URL.String())
+		}
+		switch req.URL.Path {
+		case "/v1/apps/app-1/subscriptionGroups":
+			return selectorJSONResponse(`{"data":[{"type":"subscriptionGroups","id":"group-1","attributes":{"referenceName":"Premium"}}]}`), nil
+		case "/v1/subscriptionGroups/group-1/subscriptions":
+			return selectorJSONResponse(`{"data":[]}`), nil
+		default:
+			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.String())
+			return nil, nil
+		}
+	})
+
+	_, _, runErr := runRootCommand(t, []string{
+		"subscriptions", "offers", "offer-codes", "create",
+		"--app", "app-1",
+		"--subscription-id", "com.example.missing",
+		"--name", "SPRING",
+		"--offer-eligibility", "STACK_WITH_INTRO_OFFERS",
+		"--customer-eligibilities", "NEW",
+		"--offer-duration", "ONE_MONTH",
+		"--offer-mode", "FREE_TRIAL",
+		"--number-of-periods", "1",
+	})
+	if runErr == nil {
+		t.Fatal("expected lookup error")
+	}
+	if !strings.Contains(runErr.Error(), "not found") {
+		t.Fatalf("expected not found error, got %v", runErr)
+	}
+	if requests == 0 {
+		t.Fatal("expected lookup requests before failure")
+	}
+}
+
+func TestSubscriptionsOfferCodesCreateFreeTrialResolvesAndOmitsPrices(t *testing.T) {
+	setupStableSelectorAuth(t)
+
+	originalTransport := http.DefaultTransport
+	t.Cleanup(func() { http.DefaultTransport = originalTransport })
+
+	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		switch req.URL.Path {
+		case "/v1/apps/app-1/subscriptionGroups":
+			return selectorJSONResponse(`{"data":[{"type":"subscriptionGroups","id":"group-1","attributes":{"referenceName":"Premium"}}]}`), nil
+		case "/v1/subscriptionGroups/group-1/subscriptions":
+			if req.URL.Query().Get("filter[productId]") != "com.example.monthly" {
+				t.Fatalf("expected product filter on lookup request, got %q", req.URL.Query().Get("filter[productId]"))
+			}
+			return selectorJSONResponse(`{"data":[{"type":"subscriptions","id":"sub-1","attributes":{"name":"Monthly","productId":"com.example.monthly"}}]}`), nil
+		case "/v1/subscriptionOfferCodes":
+			if req.Method != http.MethodPost {
+				t.Fatalf("expected POST to /v1/subscriptionOfferCodes, got %s", req.Method)
+			}
+			rawBody, err := io.ReadAll(req.Body)
+			if err != nil {
+				t.Fatalf("read body error: %v", err)
+			}
+			var payload map[string]any
+			if err := json.Unmarshal(rawBody, &payload); err != nil {
+				t.Fatalf("decode request body: %v\nbody=%s", err, string(rawBody))
+			}
+			data, ok := payload["data"].(map[string]any)
+			if !ok {
+				t.Fatalf("expected payload.data to be an object, got %T", payload["data"])
+			}
+			relationships, ok := data["relationships"].(map[string]any)
+			if !ok {
+				t.Fatalf("expected payload.data.relationships to be an object, got %T", data["relationships"])
+			}
+			if _, ok := relationships["prices"]; ok {
+				t.Fatalf("expected no prices relationship for FREE_TRIAL, but found one: %#v", relationships["prices"])
+			}
+			if _, ok := payload["included"]; ok {
+				t.Fatalf("expected no included entries for FREE_TRIAL, but found some: %#v", payload["included"])
+			}
+			body := `{"data":{"type":"subscriptionOfferCodes","id":"sub-offer-ft-2","attributes":{"name":"SPRING","active":true}}}`
+			return &http.Response{
+				StatusCode: http.StatusCreated,
+				Body:       io.NopCloser(strings.NewReader(body)),
+				Header:     http.Header{"Content-Type": []string{"application/json"}},
+			}, nil
+		default:
+			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.String())
+			return nil, nil
+		}
+	})
+
+	stdout, stderr, runErr := runRootCommand(t, []string{
+		"subscriptions", "offers", "offer-codes", "create",
+		"--app", "app-1",
+		"--subscription-id", "com.example.monthly",
+		"--name", "SPRING",
+		"--offer-eligibility", "STACK_WITH_INTRO_OFFERS",
+		"--customer-eligibilities", "NEW",
+		"--offer-duration", "ONE_MONTH",
+		"--offer-mode", "FREE_TRIAL",
+		"--number-of-periods", "1",
+	})
+	if runErr != nil {
+		t.Fatalf("expected nil error, got %v", runErr)
+	}
+	if stderr != "" {
+		t.Fatalf("expected empty stderr, got %q", stderr)
+	}
+	var resp struct {
+		Data struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &resp); err != nil {
+		t.Fatalf("unmarshal output: %v\nstdout: %s", err, stdout)
+	}
+	if resp.Data.ID != "sub-offer-ft-2" {
+		t.Fatalf("expected offer code id sub-offer-ft-2, got %q", resp.Data.ID)
+	}
+}
+
+func TestSubscriptionsOfferCodesCreateFreeTrialWithPricesIsRejected(t *testing.T) {
+	_, stderr, runErr := runRootCommand(t, []string{
+		"subscriptions", "offers", "offer-codes", "create",
+		"--subscription-id", "8000000001",
+		"--name", "SPRING",
+		"--offer-eligibility", "STACK_WITH_INTRO_OFFERS",
+		"--customer-eligibilities", "NEW",
+		"--offer-duration", "ONE_MONTH",
+		"--offer-mode", "FREE_TRIAL",
+		"--number-of-periods", "1",
+		"--prices", "usa:pp-us",
+	})
+	if runErr == nil {
+		t.Fatal("expected error for FREE_TRIAL with prices, got nil")
+	}
+	if !errors.Is(runErr, flag.ErrHelp) {
+		t.Fatalf("expected flag.ErrHelp (exit 2), got %v", runErr)
+	}
+	if !strings.Contains(stderr, "--prices must not be set for FREE_TRIAL") {
+		t.Fatalf("expected validation message in stderr, got %q", stderr)
+	}
+}
+
+func TestSubscriptionsOfferCodesCreateNonFreeTrialWithoutPricesIsRejected(t *testing.T) {
+	tests := []struct {
+		name      string
+		offerMode string
+	}{
+		{"pay_as_you_go", "PAY_AS_YOU_GO"},
+		{"pay_up_front", "PAY_UP_FRONT"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			_, stderr, runErr := runRootCommand(t, []string{
+				"subscriptions", "offers", "offer-codes", "create",
+				"--subscription-id", "8000000001",
+				"--name", "SPRING",
+				"--offer-eligibility", "STACK_WITH_INTRO_OFFERS",
+				"--customer-eligibilities", "NEW",
+				"--offer-duration", "ONE_MONTH",
+				"--offer-mode", tc.offerMode,
+				"--number-of-periods", "1",
+			})
+			if runErr == nil {
+				t.Fatalf("expected error for %s without prices, got nil", tc.offerMode)
+			}
+			if !errors.Is(runErr, flag.ErrHelp) {
+				t.Fatalf("expected flag.ErrHelp (exit 2), got %v", runErr)
+			}
+			if !strings.Contains(stderr, "--prices is required") {
+				t.Fatalf("expected --prices is required in stderr, got %q", stderr)
+			}
+		})
 	}
 }
 

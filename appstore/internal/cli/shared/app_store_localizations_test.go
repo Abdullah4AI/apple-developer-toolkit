@@ -23,15 +23,15 @@ func TestAppStoreLocalizationCatalogIncludesCurrentHelpAndLiveLocales(t *testing
 func TestSupportedMetadataLocalesDeriveFromSharedCatalog(t *testing.T) {
 	locales := SupportedMetadataLocales()
 
-	if len(locales) != 39 {
-		t.Fatalf("expected 39 metadata locales, got %d", len(locales))
+	if len(locales) != 50 {
+		t.Fatalf("expected 50 metadata locales, got %d", len(locales))
 	}
 	if !slices.Contains(locales, "en-US") {
 		t.Fatalf("expected metadata locales to include en-US, got %v", locales)
 	}
-	for _, unexpected := range []string{"bn-BD", "sl-SI", "ur-PK"} {
-		if slices.Contains(locales, unexpected) {
-			t.Fatalf("expected metadata locales to exclude %q, got %v", unexpected, locales)
+	for _, want := range []string{"bn-BD", "gu-IN", "kn-IN", "ml-IN", "mr-IN", "or-IN", "pa-IN", "sl-SI", "ta-IN", "te-IN", "ur-PK"} {
+		if !slices.Contains(locales, want) {
+			t.Fatalf("expected metadata locales to include %q, got %v", want, locales)
 		}
 	}
 }

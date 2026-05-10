@@ -44,6 +44,15 @@ func loadIndex() ([]Endpoint, error) {
 	return endpoints, nil
 }
 
+// EndpointCount returns the number of endpoints in the embedded schema index.
+func EndpointCount() (int, error) {
+	endpoints, err := loadIndex()
+	if err != nil {
+		return 0, err
+	}
+	return len(endpoints), nil
+}
+
 func matchEndpoint(e Endpoint, query string) bool {
 	q := strings.ToLower(query)
 	if strings.Contains(strings.ToLower(e.Path), q) {

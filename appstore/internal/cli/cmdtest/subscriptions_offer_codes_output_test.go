@@ -51,8 +51,8 @@ func TestSubscriptionsOfferCodesCreateNormalizesValuesAndBuildsPayload(t *testin
 		if attrs["duration"] != "ONE_MONTH" {
 			t.Fatalf("expected normalized duration ONE_MONTH, got %#v", attrs["duration"])
 		}
-		if attrs["offerMode"] != "FREE_TRIAL" {
-			t.Fatalf("expected normalized offerMode FREE_TRIAL, got %#v", attrs["offerMode"])
+		if attrs["offerMode"] != "PAY_AS_YOU_GO" {
+			t.Fatalf("expected normalized offerMode PAY_AS_YOU_GO, got %#v", attrs["offerMode"])
 		}
 		if attrs["numberOfPeriods"] != float64(2) {
 			t.Fatalf("expected numberOfPeriods 2, got %#v", attrs["numberOfPeriods"])
@@ -104,7 +104,7 @@ func TestSubscriptionsOfferCodesCreateNormalizesValuesAndBuildsPayload(t *testin
 			"--offer-eligibility", "replace_intro_offers",
 			"--customer-eligibilities", "new,existing",
 			"--offer-duration", "one_month",
-			"--offer-mode", "free_trial",
+			"--offer-mode", "pay_as_you_go",
 			"--number-of-periods", "2",
 			"--prices", "usa:pp-us",
 			"--auto-renew-enabled", "true",
@@ -130,6 +130,142 @@ func TestSubscriptionsOfferCodesCreateNormalizesValuesAndBuildsPayload(t *testin
 	}
 	if out.Data.ID != "sub-offer-1" {
 		t.Fatalf("expected created offer code id sub-offer-1, got %q", out.Data.ID)
+	}
+}
+
+func TestSubscriptionsOfferCodesCreateFreeTrialOmitsPrices(t *testing.T) {
+	setupAuth(t)
+	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
+
+	originalTransport := http.DefaultTransport
+	t.Cleanup(func() {
+		http.DefaultTransport = originalTransport
+	})
+
+	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		rawBody, err := io.ReadAll(req.Body)
+		if err != nil {
+			t.Fatalf("read body error: %v", err)
+		}
+
+		var payload map[string]any
+		if err := json.Unmarshal(rawBody, &payload); err != nil {
+			t.Fatalf("decode request body: %v\nbody=%s", err, string(rawBody))
+		}
+
+		data, ok := payload["data"].(map[string]any)
+		if !ok {
+			t.Fatalf("expected payload.data to be an object, got %T", payload["data"])
+		}
+		attrs, ok := data["attributes"].(map[string]any)
+		if !ok {
+			t.Fatalf("expected payload.data.attributes to be an object, got %T", data["attributes"])
+		}
+		if attrs["offerMode"] != "FREE_TRIAL" {
+			t.Fatalf("expected offerMode FREE_TRIAL, got %#v", attrs["offerMode"])
+		}
+
+		relationships, ok := data["relationships"].(map[string]any)
+		if !ok {
+			t.Fatalf("expected payload.data.relationships to be an object, got %T", data["relationships"])
+		}
+		if _, ok := relationships["prices"]; ok {
+			t.Fatalf("expected no prices relationship for FREE_TRIAL, but found one: %#v", relationships["prices"])
+		}
+		if _, ok := payload["included"]; ok {
+			t.Fatalf("expected no included entries for FREE_TRIAL, but found some: %#v", payload["included"])
+		}
+
+		body := `{"data":{"type":"subscriptionOfferCodes","id":"sub-offer-ft-1","attributes":{"name":"One Year Free","active":true}}}`
+		return &http.Response{
+			StatusCode: http.StatusCreated,
+			Body:       io.NopCloser(strings.NewReader(body)),
+			Header:     http.Header{"Content-Type": []string{"application/json"}},
+		}, nil
+	})
+
+	root := RootCommand("1.2.3")
+	root.FlagSet.SetOutput(io.Discard)
+
+	stdout, stderr := captureOutput(t, func() {
+		if err := root.Parse([]string{
+			"subscriptions", "offers", "offer-codes", "create",
+			"--subscription-id", "8000000001",
+			"--name", "One Year Free",
+			"--offer-eligibility", "stack_with_intro_offers",
+			"--customer-eligibilities", "new",
+			"--offer-duration", "one_year",
+			"--offer-mode", "free_trial",
+			"--number-of-periods", "1",
+		}); err != nil {
+			t.Fatalf("parse error: %v", err)
+		}
+		if err := root.Run(context.Background()); err != nil {
+			t.Fatalf("run error: %v", err)
+		}
+	})
+
+	if stderr != "" {
+		t.Fatalf("expected empty stderr, got %q", stderr)
+	}
+
+	var out struct {
+		Data struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &out); err != nil {
+		t.Fatalf("unmarshal output: %v\nstdout: %s", err, stdout)
+	}
+	if out.Data.ID != "sub-offer-ft-1" {
+		t.Fatalf("expected created offer code id sub-offer-ft-1, got %q", out.Data.ID)
+	}
+}
+
+func TestSubscriptionsOfferCodesCreateNonFreeTrialRequiresPrices(t *testing.T) {
+	tests := []struct {
+		name      string
+		offerMode string
+	}{
+		{"pay_as_you_go", "pay_as_you_go"},
+		{"pay_up_front", "pay_up_front"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			root := RootCommand("1.2.3")
+			root.FlagSet.SetOutput(io.Discard)
+
+			var runErr error
+			stdout, stderr := captureOutput(t, func() {
+				if err := root.Parse([]string{
+					"subscriptions", "offers", "offer-codes", "create",
+					"--subscription-id", "8000000001",
+					"--name", "Spring Promo",
+					"--offer-eligibility", "stack_with_intro_offers",
+					"--customer-eligibilities", "new",
+					"--offer-duration", "one_month",
+					"--offer-mode", test.offerMode,
+					"--number-of-periods", "1",
+				}); err != nil {
+					t.Fatalf("parse error: %v", err)
+				}
+				runErr = root.Run(context.Background())
+			})
+
+			if runErr == nil {
+				t.Fatal("expected error, got nil")
+			}
+			if !errors.Is(runErr, flag.ErrHelp) {
+				t.Fatalf("expected flag.ErrHelp, got %v", runErr)
+			}
+			if !strings.Contains(stderr, "--prices is required") {
+				t.Fatalf("expected --prices is required in stderr, got %q", stderr)
+			}
+			if stdout != "" {
+				t.Fatalf("expected empty stdout, got %q", stdout)
+			}
+		})
 	}
 }
 
@@ -169,7 +305,7 @@ func TestSubscriptionsOfferCodesCreateReturnsCreateFailure(t *testing.T) {
 			"--offer-eligibility", "replace_intro_offers",
 			"--customer-eligibilities", "new",
 			"--offer-duration", "one_month",
-			"--offer-mode", "free_trial",
+			"--offer-mode", "pay_as_you_go",
 			"--number-of-periods", "1",
 			"--prices", "usa:pp-us",
 		}); err != nil {

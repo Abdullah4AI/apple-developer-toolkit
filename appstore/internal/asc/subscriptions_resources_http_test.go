@@ -781,7 +781,7 @@ func TestCreateSubscriptionOfferCode(t *testing.T) {
 		OfferEligibility:      SubscriptionOfferEligibilityStackWithIntroOffers,
 		CustomerEligibilities: []SubscriptionCustomerEligibility{SubscriptionCustomerEligibilityNew},
 		Duration:              SubscriptionOfferDurationOneMonth,
-		OfferMode:             SubscriptionOfferModeFreeTrial,
+		OfferMode:             SubscriptionOfferModePayAsYouGo,
 		NumberOfPeriods:       1,
 	}
 	prices := []SubscriptionOfferCodePrice{
@@ -792,6 +792,63 @@ func TestCreateSubscriptionOfferCode(t *testing.T) {
 	}
 	if _, err := client.CreateSubscriptionOfferCode(context.Background(), "sub-1", attrs, prices); err != nil {
 		t.Fatalf("CreateSubscriptionOfferCode() error: %v", err)
+	}
+}
+
+func TestCreateSubscriptionOfferCodeFreeTrial(t *testing.T) {
+	response := jsonResponse(http.StatusCreated, `{"data":{"type":"subscriptionOfferCodes","id":"code-ft-1","attributes":{"name":"One Year Free"}}}`)
+	client := newTestClient(t, func(req *http.Request) {
+		if req.Method != http.MethodPost {
+			t.Fatalf("expected POST, got %s", req.Method)
+		}
+		if req.URL.Path != "/v1/subscriptionOfferCodes" {
+			t.Fatalf("expected path /v1/subscriptionOfferCodes, got %s", req.URL.Path)
+		}
+		var payload SubscriptionOfferCodeCreateRequest
+		if err := json.NewDecoder(req.Body).Decode(&payload); err != nil {
+			t.Fatalf("failed to decode request: %v", err)
+		}
+		if payload.Data.Type != ResourceTypeSubscriptionOfferCodes {
+			t.Fatalf("expected type subscriptionOfferCodes, got %q", payload.Data.Type)
+		}
+		if payload.Data.Attributes.OfferMode != SubscriptionOfferModeFreeTrial {
+			t.Fatalf("expected offer mode FREE_TRIAL, got %q", payload.Data.Attributes.OfferMode)
+		}
+		if payload.Data.Relationships.Prices != nil {
+			t.Fatalf("expected no prices relationship for FREE_TRIAL, got %+v", payload.Data.Relationships.Prices)
+		}
+		if len(payload.Included) != 0 {
+			t.Fatalf("expected no included entries for FREE_TRIAL, got %d", len(payload.Included))
+		}
+		assertAuthorized(t, req)
+	}, response)
+
+	attrs := SubscriptionOfferCodeCreateAttributes{
+		Name:                  "One Year Free",
+		OfferEligibility:      SubscriptionOfferEligibilityStackWithIntroOffers,
+		CustomerEligibilities: []SubscriptionCustomerEligibility{SubscriptionCustomerEligibilityNew},
+		Duration:              SubscriptionOfferDurationOneYear,
+		OfferMode:             SubscriptionOfferModeFreeTrial,
+		NumberOfPeriods:       1,
+	}
+	if _, err := client.CreateSubscriptionOfferCode(context.Background(), "sub-1", attrs, nil); err != nil {
+		t.Fatalf("CreateSubscriptionOfferCode() error: %v", err)
+	}
+}
+
+func TestCreateSubscriptionOfferCodeFreeTrialRejectsPrices(t *testing.T) {
+	attrs := SubscriptionOfferCodeCreateAttributes{
+		OfferMode: SubscriptionOfferModeFreeTrial,
+	}
+	prices := []SubscriptionOfferCodePrice{{TerritoryID: "USA", PricePointID: "price-1"}}
+	client := &Client{} // no HTTP needed — validation fires before any call
+	_, err := client.CreateSubscriptionOfferCode(context.Background(), "sub-1", attrs, prices)
+	if err == nil {
+		t.Fatal("expected error for FREE_TRIAL with prices, got nil")
+	}
+	const want = "prices must not be set for FREE_TRIAL offer mode"
+	if err.Error() != want {
+		t.Fatalf("expected %q, got %q", want, err.Error())
 	}
 }
 

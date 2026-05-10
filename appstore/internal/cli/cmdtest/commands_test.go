@@ -1775,13 +1775,18 @@ func TestSubscriptionsValidationErrors(t *testing.T) {
 		},
 		{
 			name:    "subscriptions offer-codes create missing name",
-			args:    []string{"subscriptions", "offers", "offer-codes", "create", "--subscription-id", "SUB_ID", "--offer-eligibility", "STACK_WITH_INTRO_OFFERS", "--customer-eligibilities", "NEW", "--offer-duration", "ONE_MONTH", "--offer-mode", "FREE_TRIAL", "--number-of-periods", "1", "--prices", "PRICE_ID"},
+			args:    []string{"subscriptions", "offers", "offer-codes", "create", "--subscription-id", "SUB_ID", "--offer-eligibility", "STACK_WITH_INTRO_OFFERS", "--customer-eligibilities", "NEW", "--offer-duration", "ONE_MONTH", "--offer-mode", "PAY_AS_YOU_GO", "--number-of-periods", "1", "--prices", "PRICE_ID"},
 			wantErr: "--name is required",
 		},
 		{
 			name:    "subscriptions offer-codes create missing prices",
-			args:    []string{"subscriptions", "offers", "offer-codes", "create", "--subscription-id", "SUB_ID", "--name", "Spring", "--offer-eligibility", "STACK_WITH_INTRO_OFFERS", "--customer-eligibilities", "NEW", "--offer-duration", "ONE_MONTH", "--offer-mode", "FREE_TRIAL", "--number-of-periods", "1"},
+			args:    []string{"subscriptions", "offers", "offer-codes", "create", "--subscription-id", "SUB_ID", "--name", "Spring", "--offer-eligibility", "STACK_WITH_INTRO_OFFERS", "--customer-eligibilities", "NEW", "--offer-duration", "ONE_MONTH", "--offer-mode", "PAY_AS_YOU_GO", "--number-of-periods", "1"},
 			wantErr: "--prices is required",
+		},
+		{
+			name:    "subscriptions offer-codes create free-trial with prices rejected",
+			args:    []string{"subscriptions", "offers", "offer-codes", "create", "--subscription-id", "SUB_ID", "--name", "Spring", "--offer-eligibility", "STACK_WITH_INTRO_OFFERS", "--customer-eligibilities", "NEW", "--offer-duration", "ONE_MONTH", "--offer-mode", "FREE_TRIAL", "--number-of-periods", "1", "--prices", "USA:PRICE_ID"},
+			wantErr: "--prices must not be set for FREE_TRIAL offers",
 		},
 		{
 			name:    "subscriptions offer-codes update missing active",

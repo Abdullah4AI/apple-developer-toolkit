@@ -64,6 +64,10 @@ Finance reports use Apple fiscal months (`YYYY-MM`), not calendar months.
 - Device management UI lives in the Apple Developer portal, not App Store Connect.
 - Device reset is limited to once per membership year; disabling does not free slots.
 
+## Subscription Offer Codes
+
+- `POST /v1/subscriptionOfferCodes`: for `FREE_TRIAL` offers the `prices` relationship **must be omitted entirely** — the API returns 409 if it is present (even as an empty list). The OpenAPI snapshot marks `prices` as required in the relationships schema, but that is incorrect for `FREE_TRIAL` mode. The CLI and client enforce this by omitting the relationship and rejecting `--prices` when `--offer-mode FREE_TRIAL` is set.
+
 ## Pass Type IDs
 
 - Live API rejects `include=passTypeId` and `fields[passTypeIds]` on `/v1/passTypeIds/{id}/certificates` despite the OpenAPI spec allowing them.
