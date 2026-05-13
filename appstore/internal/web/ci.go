@@ -21,6 +21,14 @@ func NewCIClient(session *AuthSession) *Client {
 	}
 }
 
+func (c *Client) ciAuthBaseURL() string {
+	baseURL := strings.TrimRight(strings.TrimSpace(c.baseURL), "/")
+	if baseURL == "" {
+		return appStoreBaseURL
+	}
+	return strings.TrimSuffix(baseURL, "/ci/api")
+}
+
 // NOTE: The CI API (/ci/api) uses snake_case JSON keys and query parameters,
 // unlike the IRIS API (/iris/v1) which uses camelCase. Confirmed via browser
 // network inspection of the ASC web UI.
@@ -359,7 +367,7 @@ type CIWorkflowConfig struct {
 	ProductEnvironmentVariables []string        `json:"product_environment_variables,omitempty"`
 }
 
-// CIEncryptionKeyResponse is the response from /auth/keys/client-encryption.
+// CIEncryptionKeyResponse is the response from /ci/auth/keys/client-encryption.
 type CIEncryptionKeyResponse struct {
 	Key string `json:"key"`
 }
@@ -574,9 +582,9 @@ func (c *Client) GetCISlackChannels(ctx context.Context, teamID string) (json.Ra
 }
 
 // GetCIEncryptionKey fetches the P-256 public key for secret encryption.
-// GET /auth/keys/client-encryption (relative to /ci/api base URL)
+// GET /ci/auth/keys/client-encryption
 func (c *Client) GetCIEncryptionKey(ctx context.Context) (*CIEncryptionKeyResponse, error) {
-	body, err := c.doRequest(ctx, "GET", "/auth/keys/client-encryption", nil)
+	body, err := c.doRequest(ctx, "GET", c.ciAuthBaseURL()+"/ci/auth/keys/client-encryption", nil)
 	if err != nil {
 		return nil, err
 	}

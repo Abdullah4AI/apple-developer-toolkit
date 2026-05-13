@@ -613,7 +613,7 @@ func TestUpdateCIWorkflowRejectsEmptyInputs(t *testing.T) {
 
 func TestGetCIEncryptionKeyParsesResponse(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/auth/keys/client-encryption" {
+		if r.URL.Path != "/ci/auth/keys/client-encryption" {
 			t.Fatalf("unexpected path: %s", r.URL.Path)
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -622,6 +622,7 @@ func TestGetCIEncryptionKeyParsesResponse(t *testing.T) {
 	defer server.Close()
 
 	client := testWebClient(server)
+	client.baseURL = server.URL + "/ci/api"
 	result, err := client.GetCIEncryptionKey(context.Background())
 	if err != nil {
 		t.Fatalf("GetCIEncryptionKey() error = %v", err)

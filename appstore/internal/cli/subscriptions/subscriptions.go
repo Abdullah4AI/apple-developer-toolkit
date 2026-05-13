@@ -1225,6 +1225,7 @@ func SubscriptionsAvailabilityEditCommand() *ffcli.Command {
 	appID := addSubscriptionLookupAppFlag(fs)
 	territories := fs.String("territories", "", "Territory IDs, comma-separated")
 	availableInNew := fs.Bool("available-in-new-territories", false, "Include new territories automatically")
+	billingMode := fs.String("billing-mode", string(subscriptionBillingModeUpfront), "[experimental] Billing mode: upfront or monthly-commitment")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
@@ -1234,7 +1235,8 @@ func SubscriptionsAvailabilityEditCommand() *ffcli.Command {
 		LongHelp: `Edit subscription availability in territories.
 
 Examples:
-  asc subscriptions availability edit --subscription-id "SUB_ID" --territories "US,Canada"`,
+  asc subscriptions availability edit --subscription-id "SUB_ID" --territories "US,Canada"
+  asc subscriptions availability edit --subscription-id "SUB_ID" --billing-mode monthly-commitment --territories "Norway,Germany"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -1255,6 +1257,18 @@ Examples:
 			if len(territoryIDs) == 0 {
 				fmt.Fprintln(os.Stderr, "Error: --territories is required")
 				return flag.ErrHelp
+			}
+			normalizedBillingMode, err := normalizeSubscriptionBillingMode(*billingMode)
+			if err != nil {
+				return shared.UsageError(err.Error())
+			}
+			if normalizedBillingMode == subscriptionBillingModeMonthlyCommitment {
+				territoryIDs, excluded := filterMonthlyCommitmentTerritories(territoryIDs)
+				printMonthlyCommitmentTerritoryWarning(excluded)
+				if len(territoryIDs) == 0 {
+					return shared.UsageError("no eligible monthly-commitment territories remain after excluding USA and Singapore")
+				}
+				return fmt.Errorf("subscriptions availability edit: %w", errMonthlyCommitmentPublicAPINotAvailable)
 			}
 
 			client, err := shared.GetASCClient()

@@ -72,6 +72,9 @@ func TestSubscriptionsHelpShowsSetupCommand(t *testing.T) {
 	if !strings.Contains(setupUsage, "--no-verify") {
 		t.Fatalf("expected subscriptions setup help to show --no-verify, got %q", setupUsage)
 	}
+	if !strings.Contains(setupUsage, "--enable-monthly-commitment") {
+		t.Fatalf("expected subscriptions setup help to show --enable-monthly-commitment, got %q", setupUsage)
+	}
 }
 
 func TestSubscriptionsSetupValidationErrors(t *testing.T) {
@@ -180,6 +183,18 @@ func TestSubscriptionsSetupValidationErrors(t *testing.T) {
 				"--available-in-new-territories",
 			},
 			wantErr: "--territories is required when availability flags are provided unless --price-territory can be used to derive availability",
+		},
+		{
+			name: "monthly commitment requires one year",
+			args: []string{
+				"subscriptions", "setup",
+				"--group-id", "GROUP_ID",
+				"--reference-name", "Pro Monthly",
+				"--product-id", "com.example.pro.monthly",
+				"--subscription-period", "ONE_MONTH",
+				"--enable-monthly-commitment",
+			},
+			wantErr: "--enable-monthly-commitment requires --subscription-period ONE_YEAR",
 		},
 	}
 

@@ -68,6 +68,15 @@ Finance reports use Apple fiscal months (`YYYY-MM`), not calendar months.
 
 - `POST /v1/subscriptionOfferCodes`: for `FREE_TRIAL` offers the `prices` relationship **must be omitted entirely** — the API returns 409 if it is present (even as an empty list). The OpenAPI snapshot marks `prices` as required in the relationships schema, but that is incorrect for `FREE_TRIAL` mode. The CLI and client enforce this by omitting the relationship and rejecting `--prices` when `--offer-mode FREE_TRIAL` is set.
 
+## Monthly Subscriptions with a 12-Month Commitment
+
+- Apple announced Monthly Subscriptions with a 12-Month Commitment on April 27, 2026:
+  - https://developer.apple.com/news/?id=agq42lxe
+  - https://developer.apple.com/help/app-store-connect/manage-subscriptions/set-availability-for-an-auto-renewable-subscription/
+- The App Store Connect help docs describe this as a billing option on a regular 1-year subscription, with separate `1 Year Upfront` and `Monthly with 12-Month Commitment` availability sections for the same product.
+- The public App Store Connect OpenAPI snapshot currently exposes `subscriptionAvailabilities` and `subscriptionPrices` without a billing-mode discriminator or a separate monthly-commitment resource. The CLI therefore exposes an experimental guarded `asc subscriptions pricing monthly-commitment` surface that validates period, territory exclusions, and the 1.5x price rule, then returns a "not yet supported by Apple's public App Store Connect API" error before attempting mutation.
+- The experimental web-session client can observe internal `subscriptionPlanAvailabilities` with a `planType` attribute, but that surface is private and should not be wired into the canonical JWT-backed subscription pricing commands until Apple documents a stable API.
+
 ## Pass Type IDs
 
 - Live API rejects `include=passTypeId` and `fields[passTypeIds]` on `/v1/passTypeIds/{id}/certificates` despite the OpenAPI spec allowing them.

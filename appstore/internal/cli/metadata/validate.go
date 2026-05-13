@@ -2,6 +2,7 @@ package metadata
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -131,11 +132,20 @@ func validateDir(dir string, subscriptionApp bool) (ValidateResult, error) {
 			}
 			filePath := filepath.Join(appInfoDir, entry.Name())
 
-			loc, readErr := ReadAppInfoLocalizationFile(filePath)
+			data, readErr := readFileNoFollow(filePath)
+			if readErr != nil {
+				return ValidateResult{}, shared.UsageErrorf("invalid metadata schema in %s: %v", filePath, readErr)
+			}
+			fieldIntentIssues, fieldIntentErr := metadataFieldIntentIssues(data, appInfoPlanFields)
+			if fieldIntentErr != nil {
+				return ValidateResult{}, shared.UsageErrorf("invalid metadata schema in %s: %v", filePath, fieldIntentErr)
+			}
+			loc, readErr := DecodeAppInfoLocalization(data)
 			if readErr != nil {
 				return ValidateResult{}, shared.UsageErrorf("invalid metadata schema in %s: %v", filePath, readErr)
 			}
 			result.FilesScanned++
+			result.Issues = append(result.Issues, metadataIntentValidateIssues(appInfoDirName, filePath, resolvedLocale, "", fieldIntentIssues)...)
 
 			issues := ValidateAppInfoLocalization(loc, ValidationOptions{RequireName: resolvedLocale != DefaultLocale})
 			for _, issue := range issues {
@@ -185,11 +195,20 @@ func validateDir(dir string, subscriptionApp bool) (ValidateResult, error) {
 				}
 				filePath := filepath.Join(versionPath, localeEntry.Name())
 
-				loc, readErr := ReadVersionLocalizationFile(filePath)
+				data, readErr := readFileNoFollow(filePath)
+				if readErr != nil {
+					return ValidateResult{}, shared.UsageErrorf("invalid metadata schema in %s: %v", filePath, readErr)
+				}
+				fieldIntentIssues, fieldIntentErr := metadataFieldIntentIssues(data, versionPlanFields)
+				if fieldIntentErr != nil {
+					return ValidateResult{}, shared.UsageErrorf("invalid metadata schema in %s: %v", filePath, fieldIntentErr)
+				}
+				loc, readErr := DecodeVersionLocalization(data)
 				if readErr != nil {
 					return ValidateResult{}, shared.UsageErrorf("invalid metadata schema in %s: %v", filePath, readErr)
 				}
 				result.FilesScanned++
+				result.Issues = append(result.Issues, metadataIntentValidateIssues(versionDirName, filePath, resolvedLocale, version, fieldIntentIssues)...)
 
 				issues := ValidateVersionLocalization(loc)
 				for _, issue := range issues {
@@ -241,6 +260,69 @@ func validateDir(dir string, subscriptionApp bool) (ValidateResult, error) {
 	result.Valid = result.ErrorCount == 0
 
 	return result, nil
+}
+
+type metadataFieldIntentIssue struct {
+	Field   string
+	Message string
+}
+
+func metadataFieldIntentIssues(data []byte, allowed []string) ([]metadataFieldIntentIssue, error) {
+	var raw map[string]json.RawMessage
+	if err := decodeStrictJSON(data, &raw); err != nil {
+		return nil, err
+	}
+
+	hasContent := false
+	issues := make([]metadataFieldIntentIssue, 0)
+	for _, key := range sortedKeys(raw) {
+		rawValue := raw[key]
+		canonicalKey, err := canonicalStringFieldPatchKey(key, allowed)
+		if err != nil {
+			return nil, err
+		}
+		var value string
+		if err := json.Unmarshal(rawValue, &value); err != nil {
+			return nil, err
+		}
+		trimmed := strings.TrimSpace(value)
+		if trimmed == "__ASC_DELETE__" {
+			hasContent = true
+			issues = append(issues, metadataFieldIntentIssue{
+				Field:   canonicalKey,
+				Message: fmt.Sprintf("field %q uses unsupported clear token __ASC_DELETE__; omit the key to keep the remote value", canonicalKey),
+			})
+			continue
+		}
+		if trimmed == "" {
+			issues = append(issues, metadataFieldIntentIssue{
+				Field:   canonicalKey,
+				Message: fmt.Sprintf("field %q cannot be empty; omit the key to leave the remote value unchanged", canonicalKey),
+			})
+			continue
+		}
+		hasContent = true
+	}
+	if !hasContent {
+		return nil, nil
+	}
+	return issues, nil
+}
+
+func metadataIntentValidateIssues(scope, filePath, locale, version string, issues []metadataFieldIntentIssue) []ValidateIssue {
+	result := make([]ValidateIssue, 0, len(issues))
+	for _, issue := range issues {
+		result = append(result, ValidateIssue{
+			Scope:    scope,
+			File:     filePath,
+			Locale:   locale,
+			Version:  version,
+			Field:    issue.Field,
+			Severity: issueSeverityError,
+			Message:  issue.Message,
+		})
+	}
+	return result
 }
 
 func versionLengthIssues(filePath, version, locale string, loc VersionLocalization) []ValidateIssue {

@@ -42,6 +42,7 @@ type subscriptionsSetupOptions struct {
 	RefreshTierCache          bool
 	Territories               []string
 	AvailableInNewTerritories bool
+	EnableMonthlyCommitment   bool
 	NoVerify                  bool
 }
 
@@ -132,6 +133,7 @@ func SubscriptionsSetupCommand() *ffcli.Command {
 
 	territories := fs.String("territories", "", "Availability territories to enable after creation (comma-separated; accepts alpha-2, alpha-3, or exact English country names)")
 	availableInNewTerritories := fs.Bool("available-in-new-territories", false, "Include new territories automatically when creating availability")
+	enableMonthlyCommitment := fs.Bool("enable-monthly-commitment", false, "[experimental] Also configure Monthly with 12-Month Commitment availability for ONE_YEAR subscriptions when Apple exposes a public API")
 	noVerify := fs.Bool("no-verify", false, "Skip post-create readback verification for faster execution")
 	output := shared.BindOutputFlags(fs)
 
@@ -159,6 +161,7 @@ Examples:
   asc subscriptions setup --app "APP_ID" --group-reference-name "Pro" --reference-name "Pro Monthly" --product-id "com.example.pro.monthly" --subscription-period ONE_MONTH
   asc subscriptions setup --app "APP_ID" --group-reference-name "Pro" --reference-name "Pro Monthly" --product-id "com.example.pro.monthly" --subscription-period ONE_MONTH --locale "en-US" --display-name "Pro Monthly" --description "Unlock everything"
   asc subscriptions setup --app "APP_ID" --group-reference-name "Pro" --reference-name "Pro Monthly" --product-id "com.example.pro.monthly" --price "3.99" --price-territory "United States" --territories "US,Canada"
+  asc subscriptions setup --app "APP_ID" --group-reference-name "Pro" --reference-name "Pro Yearly" --product-id "com.example.pro.yearly" --subscription-period ONE_YEAR --enable-monthly-commitment
   asc subscriptions setup --group-id "GROUP_ID" --reference-name "Pro Monthly" --product-id "com.example.pro.monthly" --subscription-period ONE_MONTH --no-verify`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
@@ -208,6 +211,7 @@ Examples:
 				Price:                     strings.TrimSpace(*price),
 				Territories:               territoryValues,
 				AvailableInNewTerritories: *availableInNewTerritories,
+				EnableMonthlyCommitment:   *enableMonthlyCommitment,
 				RefreshTierCache:          *refresh,
 				NoVerify:                  *noVerify,
 			}
@@ -233,6 +237,12 @@ Examples:
 				return shared.UsageError(err.Error())
 			}
 			opts.SubscriptionPeriod = normalizedPeriod
+			if opts.EnableMonthlyCommitment && opts.SubscriptionPeriod != asc.SubscriptionPeriodOneYear {
+				return shared.UsageError("--enable-monthly-commitment requires --subscription-period ONE_YEAR")
+			}
+			if opts.EnableMonthlyCommitment {
+				return fmt.Errorf("subscriptions setup: %w", errMonthlyCommitmentPublicAPINotAvailable)
+			}
 
 			if opts.hasLocalization() {
 				if opts.Locale == "" {

@@ -25,6 +25,7 @@ Examples:
   asc subscriptions pricing prices set --subscription-id "SUB_ID" --price-point "PRICE_POINT_ID"
   asc subscriptions pricing price-points list --subscription-id "SUB_ID" --territory "United States"
   asc subscriptions pricing availability view --subscription-id "SUB_ID"
+  asc subscriptions pricing monthly-commitment list --subscription-id "SUB_ID"
   asc subscriptions pricing equalize --subscription-id "SUB_ID" --base-price "3.49"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
@@ -33,6 +34,7 @@ Examples:
 			SubscriptionsPricingPricesCommand(),
 			SubscriptionsPricingPricePointsCommand(),
 			SubscriptionsPricingAvailabilityCommand(),
+			SubscriptionsPricingMonthlyCommitmentCommand(),
 			SubscriptionsPricingEqualizeCommand(),
 		},
 		Exec: func(ctx context.Context, args []string) error {
