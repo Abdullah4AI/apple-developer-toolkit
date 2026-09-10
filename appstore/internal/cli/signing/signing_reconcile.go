@@ -194,8 +194,8 @@ func SigningReconcileCommand() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "reconcile",
 		ShortUsage: "asc signing reconcile <subcommand> [flags]",
-		ShortHelp:  "[experimental] Plan and apply additive ad hoc signing changes.",
-		LongHelp: `[experimental] Plan and apply deterministic, additive signing changes for an Xcode archive.
+		ShortHelp:  "Plan and apply additive ad hoc signing changes.",
+		LongHelp: `Plan and apply deterministic, additive signing changes for an Xcode archive.
 
 Planning never mutates App Store Connect. Apply requires --confirm and only
 registers missing devices, creates safe baseline App IDs, and creates successor
@@ -230,8 +230,8 @@ func SigningReconcilePlanCommand() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "plan",
 		ShortUsage: "asc signing reconcile plan --archive-path PATH --devices-file PATH [flags]",
-		ShortHelp:  "[experimental] Inspect signing state and write a deterministic plan.",
-		LongHelp: `[experimental] Inspect an archive, desired devices, and current signing state without mutation.
+		ShortHelp:  "Inspect signing state and write a deterministic plan.",
+		LongHelp: `Inspect an archive, desired devices, and current signing state without mutation.
 
 A blocked state is written successfully with ready=false so an agent can inspect
 and resolve it before apply.
@@ -275,8 +275,8 @@ func SigningReconcileApplyCommand() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "apply",
 		ShortUsage: "asc signing reconcile apply [--plan PATH] --confirm [flags]",
-		ShortHelp:  "[experimental] Apply an exact ready signing reconciliation plan.",
-		LongHelp: `[experimental] Apply an exact ready reconciliation plan and write a resumable receipt.
+		ShortHelp:  "Apply an exact ready signing reconciliation plan.",
+		LongHelp: `Apply an exact ready reconciliation plan and write a resumable receipt.
 
 The command re-reads protected local inputs and remote preconditions. Completed
 actions are reverified idempotently on retry. No delete or patch request is ever sent.

@@ -672,8 +672,11 @@ func (c *Client) GetResolutionCenterDraftMessage(ctx context.Context, threadID s
 		return nil, fmt.Errorf("failed to parse resolution center draft message response: %w", err)
 	}
 	trimmedData := bytes.TrimSpace(payload.Data)
-	if len(trimmedData) == 0 || bytes.Equal(trimmedData, []byte("null")) {
+	if bytes.Equal(trimmedData, []byte("null")) {
 		return nil, nil
+	}
+	if len(trimmedData) == 0 {
+		return nil, fmt.Errorf("resolution center draft message response did not include data")
 	}
 	var resource jsonAPIResource
 	if err := json.Unmarshal(trimmedData, &resource); err != nil {

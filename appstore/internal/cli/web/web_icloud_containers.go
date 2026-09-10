@@ -25,8 +25,8 @@ func WebICloudContainersCommand() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "icloud-containers",
 		ShortUsage: "asc web icloud-containers <subcommand> [flags]",
-		ShortHelp:  "[experimental] Read iCloud containers via a Developer Portal web session.",
-		LongHelp: `[experimental] Read iCloud containers through the selected Apple Developer team.
+		ShortHelp:  "Read iCloud containers via a Developer Portal web session.",
+		LongHelp: `Read iCloud containers through the selected Apple Developer team.
 
 This command is read-only. Apple currently accepts a bounded 1000-resource
 collection request for this web-session endpoint; the command does not expose a
@@ -56,8 +56,8 @@ func WebICloudContainersListCommand() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "list",
 		ShortUsage: "asc web icloud-containers list [--hidden] [flags]",
-		ShortHelp:  "[experimental] List iCloud containers via a Developer Portal web session.",
-		LongHelp: `[experimental] List iCloud containers visible to the selected Apple Developer team.
+		ShortHelp:  "List iCloud containers via a Developer Portal web session.",
+		LongHelp: `List iCloud containers visible to the selected Apple Developer team.
 
 Visible containers are returned by default. Pass --hidden to request the hidden
 collection. The request asks Apple for up to 1000 resources and does not expose

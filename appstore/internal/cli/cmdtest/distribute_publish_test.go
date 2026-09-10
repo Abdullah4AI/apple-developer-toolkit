@@ -8,11 +8,11 @@ import (
 func TestDistributePublishCommandSurfaceIsAgentDiscoverable(t *testing.T) {
 	root := RootCommand("1.2.3")
 	distribute := findSubcommand(root, "distribute")
-	if distribute == nil || !strings.Contains(distribute.ShortHelp, "[experimental]") {
+	if distribute == nil {
 		t.Fatalf("unexpected distribute command: %#v", distribute)
 	}
 	publish := findSubcommand(root, "distribute", "publish")
-	if publish == nil || !strings.Contains(publish.ShortHelp, "[experimental]") {
+	if publish == nil {
 		t.Fatalf("unexpected distribute publish command: %#v", publish)
 	}
 	verifyTimeoutUsage := ""

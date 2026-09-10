@@ -3,7 +3,7 @@ package cmdtest
 import "testing"
 
 // TestWebXcodeCloudSCMCommandsAreRegistered is the regression for the
-// previously observed root-binary failure where the experimental SCM command
+// previously observed root-binary failure where the lifecycle SCM command
 // was reported as an unknown subcommand.
 func TestWebXcodeCloudSCMCommandsAreRegistered(t *testing.T) {
 	root := RootCommand("1.2.3")

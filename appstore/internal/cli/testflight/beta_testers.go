@@ -97,9 +97,9 @@ func BetaTestersListCommand() *ffcli.Command {
 	email := fs.String("email", "", "Filter by tester email")
 	firstName := fs.String("first-name", "", "Filter by tester first name (exact match)")
 	lastName := fs.String("last-name", "", "Filter by tester last name (exact match)")
-	inviteType := fs.String("invite-type", "", "[experimental] Filter by invite type(s), comma-separated: "+strings.Join(betaTesterInviteTypeValues, ", "))
-	sortBy := fs.String("sort", "", "[experimental] Sort by: "+strings.Join(betaTesterSortValues, ", "))
-	include := fs.String("include", "", "[experimental] Include related resources, comma-separated: "+strings.Join(betaTesterIncludeValues, ", "))
+	inviteType := fs.String("invite-type", "", "Filter by invite type(s), comma-separated: "+strings.Join(betaTesterInviteTypeValues, ", "))
+	sortBy := fs.String("sort", "", "Sort by: "+strings.Join(betaTesterSortValues, ", "))
+	include := fs.String("include", "", "Include related resources, comma-separated: "+strings.Join(betaTesterIncludeValues, ", "))
 	output := shared.BindOutputFlags(fs)
 	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
 	next := fs.String("next", "", "Fetch next page using a links.next URL")
@@ -116,7 +116,6 @@ array, which only JSON output renders. App Store Connect returns at most 50
 related resources per included relationship. --paginate pages the tester
 collection, not included relationships. For complete group membership, run
 asc testflight testers groups list --id "TESTER_ID" --paginate.
-The --invite-type, --sort, and --include flags are experimental.
 A --next URL retains any include query from its original request; JSON output
 is still required to render those included resources.
 
@@ -427,9 +426,9 @@ func BetaTestersRemoveCommand() *ffcli.Command {
 	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
 	email := fs.String("email", "", "Tester email address")
 	confirm := fs.Bool("confirm", false, "Confirm removal")
-	wait := fs.Bool("wait", false, "[experimental] Wait until the removal is visible (tester is gone or reports REVOKED)")
-	pollInterval := fs.Duration("poll-interval", betaTesterRemoveDefaultPollInterval, "[experimental] Polling interval while waiting for removal visibility")
-	timeout := fs.Duration("timeout", betaTesterRemoveDefaultWaitTimeout, "[experimental] Maximum time to wait for removal visibility")
+	wait := fs.Bool("wait", false, "Wait until the removal is visible (tester is gone or reports REVOKED)")
+	pollInterval := fs.Duration("poll-interval", betaTesterRemoveDefaultPollInterval, "Polling interval while waiting for removal visibility")
+	timeout := fs.Duration("timeout", betaTesterRemoveDefaultWaitTimeout, "Maximum time to wait for removal visibility")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{

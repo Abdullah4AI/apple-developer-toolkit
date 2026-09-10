@@ -23,7 +23,7 @@ func WebAppsDistributionUsersCommand() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "users",
 		ShortUsage: "asc web apps distribution users <subcommand> [flags]",
-		ShortHelp:  "[experimental] Manage Apple Account recipients for custom distribution.",
+		ShortHelp:  "Manage Apple Account recipients for custom distribution.",
 		LongHelp: `WEB SESSION WORKFLOWS
 
 List and manage the Apple Account recipients attached to one app's custom
@@ -53,14 +53,14 @@ change the app's distribution method and never retry an ambiguous write.
 func WebAppsDistributionUsersListCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("web apps distribution users list", flag.ExitOnError)
 	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID)")
-	paginate := fs.Bool("paginate", false, "[experimental] Fetch every recipient page")
+	paginate := fs.Bool("paginate", false, "Fetch every recipient page")
 	authFlags := bindWebSessionFlags(fs)
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "list",
 		ShortUsage: "asc web apps distribution users list --app APP_ID [--paginate] [flags]",
-		ShortHelp:  "[experimental] List Apple Account recipients for an app.",
+		ShortHelp:  "List Apple Account recipients for an app.",
 		LongHelp: `List the Apple Account recipients returned by Apple's app-scoped
 customAppUsers collection. JSON output preserves Apple's raw JSON:API envelope,
 including unknown top-level and resource members. Use --paginate to follow the
@@ -122,7 +122,7 @@ func WebAppsDistributionUsersCreateCommand() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "create",
 		ShortUsage: "asc web apps distribution users create --app APP_ID --recipient-apple-id APPLE_ACCOUNT --confirm [flags]",
-		ShortHelp:  "[experimental] Add one Apple Account recipient.",
+		ShortHelp:  "Add one Apple Account recipient.",
 		LongHelp: `Add one Apple Account to the selected app's custom distribution
 recipients. The selected app must already use CUSTOM distribution. The ordinary
 --apple-id web-session flag selects the authenticated session and is separate
@@ -229,7 +229,7 @@ func WebAppsDistributionUsersDeleteCommand() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "delete",
 		ShortUsage: "asc web apps distribution users delete --app APP_ID --id RECIPIENT_ID --confirm [flags]",
-		ShortHelp:  "[experimental] Remove one Apple Account recipient.",
+		ShortHelp:  "Remove one Apple Account recipient.",
 		LongHelp: `Remove one recipient proven to belong to the selected app's
 custom distribution collection. The selected app must already use CUSTOM
 distribution. The command reads the complete collection before writing, sends

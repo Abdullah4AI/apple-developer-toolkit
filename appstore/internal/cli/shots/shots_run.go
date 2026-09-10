@@ -25,8 +25,8 @@ func ShotsRunCommand() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "run",
 		ShortUsage: "asc screenshots run [--plan .asc/screenshots.json] [flags]",
-		ShortHelp:  "[experimental] Run a deterministic screenshot sequence from JSON.",
-		LongHelp: `Run a deterministic screenshot automation sequence (experimental).
+		ShortHelp:  "Run a deterministic screenshot sequence from JSON.",
+		LongHelp: `Run a deterministic screenshot automation sequence.
 
 By default it loads .asc/screenshots.json from the current project root.
 Supported actions: launch, tap, type, wait, wait_for (polling), screenshot.`,

@@ -24,9 +24,7 @@ func TestWebFinanceTransactionTaxCommandRegistrationAndHelp(t *testing.T) {
 		t.Fatalf("transaction-tax command = %#v, want one download subcommand", transactionTax)
 	}
 	download := transactionTax.Subcommands[0]
-	if !strings.HasPrefix(finance.ShortHelp, "[experimental]") || !strings.HasPrefix(transactionTax.ShortHelp, "[experimental]") || !strings.HasPrefix(download.ShortHelp, "[experimental]") {
-		t.Fatalf("experimental labels missing: %q / %q / %q", finance.ShortHelp, transactionTax.ShortHelp, download.ShortHelp)
-	}
+
 	for _, name := range []string{"date", "output-path", "output", "pretty", "apple-id", "provider-id", "public-provider-id"} {
 		if download.FlagSet.Lookup(name) == nil {
 			t.Fatalf("download command missing --%s", name)

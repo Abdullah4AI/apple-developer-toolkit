@@ -28,9 +28,6 @@ func TestValidateCommandAcceptsOptInURLChecks(t *testing.T) {
 	if flagDef == nil {
 		t.Fatal("--check-urls flag is not registered")
 	}
-	if !strings.HasPrefix(flagDef.Usage, "[experimental] ") {
-		t.Fatalf("--check-urls usage = %q, want [experimental] prefix", flagDef.Usage)
-	}
 }
 
 func TestValidateURLChecksAreTopLevelOnly(t *testing.T) {

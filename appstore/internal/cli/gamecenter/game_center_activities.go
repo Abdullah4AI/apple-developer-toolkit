@@ -499,7 +499,7 @@ func GameCenterActivityAchievementsSetCommand() *ffcli.Command {
 	activityID := fs.String("activity-id", "", "Game Center activity ID")
 	ids := shared.BindOnceCSVFlag(fs, "ids", "Comma-separated achievement IDs")
 	remove := fs.Bool("remove", false, "Remove relationships instead of adding")
-	confirm := fs.Bool("confirm", false, "[experimental] Confirm removal (required with --remove)")
+	confirm := fs.Bool("confirm", false, "Confirm removal (required with --remove)")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
@@ -589,7 +589,7 @@ func GameCenterActivityLeaderboardsSetCommand() *ffcli.Command {
 	activityID := fs.String("activity-id", "", "Game Center activity ID")
 	ids := shared.BindOnceCSVFlag(fs, "ids", "Comma-separated leaderboard IDs")
 	remove := fs.Bool("remove", false, "Remove relationships instead of adding")
-	confirm := fs.Bool("confirm", false, "[experimental] Confirm removal (required with --remove)")
+	confirm := fs.Bool("confirm", false, "Confirm removal (required with --remove)")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{

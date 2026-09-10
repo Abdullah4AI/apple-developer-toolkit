@@ -15,7 +15,7 @@ import (
 
 const iapTaxCategoryInheritedLabel = "Inherited from parent app"
 
-// WebIAPCommand returns the experimental In-App Purchase web-session command
+// WebIAPCommand returns the In-App Purchase web-session command
 // group.
 func WebIAPCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("web iap", flag.ExitOnError)
@@ -23,8 +23,8 @@ func WebIAPCommand() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "iap",
 		ShortUsage: "asc web iap <subcommand> [flags]",
-		ShortHelp:  "[experimental] Manage In-App Purchase tax categories via a web session.",
-		LongHelp: `[experimental] WEB SESSION WORKFLOWS
+		ShortHelp:  "Manage In-App Purchase tax categories via a web session.",
+		LongHelp: `WEB SESSION WORKFLOWS
 
 Read and change an In-App Purchase tax category through Apple's internal
 web-session API. The public App Store Connect API does not expose this
@@ -44,7 +44,7 @@ category value.
 	}
 }
 
-// WebIAPTaxCategoryCommand returns the experimental IAP tax-category command
+// WebIAPTaxCategoryCommand returns the IAP tax-category command
 // group.
 func WebIAPTaxCategoryCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("web iap tax-category", flag.ExitOnError)
@@ -52,8 +52,8 @@ func WebIAPTaxCategoryCommand() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "tax-category",
 		ShortUsage: "asc web iap tax-category <subcommand> [flags]",
-		ShortHelp:  "[experimental] Read or set an In-App Purchase tax category.",
-		LongHelp: `[experimental] WEB SESSION WORKFLOWS
+		ShortHelp:  "Read or set an In-App Purchase tax category.",
+		LongHelp: `WEB SESSION WORKFLOWS
 
 Inspect or change the tax category and compatible conditions assigned to one
 In-App Purchase. ` + "`list`" + ` reads the ADDON tax-category catalog, ` + "`view`" + `
@@ -85,8 +85,8 @@ func WebIAPTaxCategoryListCommand() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "list",
 		ShortUsage: "asc web iap tax-category list [flags]",
-		ShortHelp:  "[experimental] List In-App Purchase tax categories and conditions.",
-		LongHelp: `[experimental] WEB SESSION WORKFLOWS
+		ShortHelp:  "List In-App Purchase tax categories and conditions.",
+		LongHelp: `WEB SESSION WORKFLOWS
 
 List the ADDON tax categories and conditions exposed by Apple's In-App Purchase
 tax picker. The opaque IDs returned here are accepted by ` + "`set`" + `.
@@ -133,8 +133,8 @@ func WebIAPTaxCategoryViewCommand() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "view",
 		ShortUsage: "asc web iap tax-category view --iap IAP_ID [flags]",
-		ShortHelp:  "[experimental] View an In-App Purchase tax category.",
-		LongHelp: `[experimental] WEB SESSION WORKFLOWS
+		ShortHelp:  "View an In-App Purchase tax category.",
+		LongHelp: `WEB SESSION WORKFLOWS
 
 Read the explicit tax category and enabled conditions for one In-App Purchase.
 When the explicit resource is absent, human output labels the selection as
@@ -210,8 +210,8 @@ func WebIAPTaxCategorySetCommand() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "set",
 		ShortUsage: "asc web iap tax-category set --iap IAP_ID --category CATEGORY_ID [--condition CONDITION_ID ...] --confirm [flags]",
-		ShortHelp:  "[experimental] Set an In-App Purchase tax category and condition set.",
-		LongHelp: `[experimental] WEB SESSION WORKFLOWS
+		ShortHelp:  "Set an In-App Purchase tax category and condition set.",
+		LongHelp: `WEB SESSION WORKFLOWS
 
 Set the In-App Purchase tax category through Apple's internal web-session API.
 The selected category and every ` + "`--condition`" + ` value are validated against
@@ -329,8 +329,8 @@ func WebIAPTaxCategoryResetCommand() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "reset",
 		ShortUsage: "asc web iap tax-category reset --iap IAP_ID --confirm [flags]",
-		ShortHelp:  "[experimental] Reset an In-App Purchase tax category to inherited state.",
-		LongHelp: `[experimental] WEB SESSION WORKFLOWS
+		ShortHelp:  "Reset an In-App Purchase tax category to inherited state.",
+		LongHelp: `WEB SESSION WORKFLOWS
 
 Remove the explicit In-App Purchase tax-category resource so the purchase
 inherits its parent app's selection. The command reads first, sends DELETE only

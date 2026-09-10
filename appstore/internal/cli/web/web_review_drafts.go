@@ -18,7 +18,7 @@ import (
 
 const webReviewDraftBodyMaxBytes int64 = 1 << 20
 
-// WebReviewDraftsCommand groups the experimental unsent Resolution Center
+// WebReviewDraftsCommand groups the unsent Resolution Center
 // draft operations. The send path remains exclusively on web review reply.
 func WebReviewDraftsCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("web review drafts", flag.ExitOnError)
@@ -26,7 +26,7 @@ func WebReviewDraftsCommand() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "drafts",
 		ShortUsage: "asc web review drafts <subcommand> [flags]",
-		ShortHelp:  "[experimental] Manage unsent Resolution Center drafts.",
+		ShortHelp:  "Manage unsent Resolution Center drafts.",
 		LongHelp: `WEB SESSION WORKFLOWS
 
 Create, update, or delete the unsent draft that belongs to one App Store
@@ -67,7 +67,7 @@ func WebReviewDraftCreateCommand() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "create",
 		ShortUsage: "asc web review drafts create --app APP_ID --thread-id THREAD_ID (--message MESSAGE | --body-file FILE) --confirm [flags]",
-		ShortHelp:  "[experimental] Create an unsent Resolution Center draft.",
+		ShortHelp:  "Create an unsent Resolution Center draft.",
 		LongHelp: `Create one unsent draft on an app-scoped Resolution Center thread.
 
 Exactly one of --message or --body-file is required. The body is preserved
@@ -121,7 +121,7 @@ func WebReviewDraftUpdateCommand() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "update",
 		ShortUsage: "asc web review drafts update --app APP_ID --thread-id THREAD_ID --draft-id DRAFT_ID (--message MESSAGE | --body-file FILE) --confirm [flags]",
-		ShortHelp:  "[experimental] Update an unsent Resolution Center draft.",
+		ShortHelp:  "Update an unsent Resolution Center draft.",
 		LongHelp: `Replace the body of one existing unsent draft on an app-scoped
 Resolution Center thread.
 
@@ -179,7 +179,7 @@ func WebReviewDraftDeleteCommand() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "delete",
 		ShortUsage: "asc web review drafts delete --app APP_ID --thread-id THREAD_ID --draft-id DRAFT_ID --confirm [flags]",
-		ShortHelp:  "[experimental] Delete an unsent Resolution Center draft.",
+		ShortHelp:  "Delete an unsent Resolution Center draft.",
 		LongHelp: `Delete one existing unsent draft from an app-scoped Resolution
 Center thread. --confirm is required. This command never sends a message and
 does not support attachments.

@@ -17,9 +17,7 @@ func TestXcodeSigningPlanApplyCommandsExist(t *testing.T) {
 	if xcode == nil {
 		t.Fatal("expected xcode command group")
 	}
-	if !strings.Contains(xcode.ShortHelp+"\n"+xcode.LongHelp, "[experimental] signing-settings") {
-		t.Fatalf("xcode root help = %q, want experimental signing marker", xcode.ShortHelp+"\n"+xcode.LongHelp)
-	}
+
 	if strings.Contains(xcode.ShortHelp, "macOS only") ||
 		!strings.Contains(xcode.LongHelp, "Signing-plan generation is cross-platform") ||
 		!strings.Contains(xcode.LongHelp, "Windows before modifying project or receipt files") {
@@ -30,9 +28,6 @@ func TestXcodeSigningPlanApplyCommandsExist(t *testing.T) {
 	if group == nil {
 		t.Fatal("expected xcode signing command group")
 	}
-	if !strings.HasPrefix(group.ShortHelp, "[experimental]") {
-		t.Fatalf("xcode signing group ShortHelp = %q, want experimental marker", group.ShortHelp)
-	}
 
 	plan := findSubcommand(root, "xcode", "signing", "plan")
 	if plan == nil {
@@ -41,12 +36,6 @@ func TestXcodeSigningPlanApplyCommandsExist(t *testing.T) {
 	apply := findSubcommand(root, "xcode", "signing", "apply")
 	if apply == nil {
 		t.Fatal("expected xcode signing apply command")
-	}
-	if !strings.HasPrefix(plan.ShortHelp, "[experimental]") {
-		t.Fatalf("xcode signing plan ShortHelp = %q, want experimental marker", plan.ShortHelp)
-	}
-	if !strings.HasPrefix(apply.ShortHelp, "[experimental]") {
-		t.Fatalf("xcode signing apply ShortHelp = %q, want experimental marker", apply.ShortHelp)
 	}
 }
 

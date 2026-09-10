@@ -10,7 +10,7 @@ import (
 	"testing"
 )
 
-func TestXcodeCloudRunDoctorFlagIsExperimental(t *testing.T) {
+func TestXcodeCloudRunDoctorFlagIsRegistered(t *testing.T) {
 	run := findSubcommand(RootCommand("1.2.3"), "xcode-cloud", "run")
 	if run == nil {
 		t.Fatal("expected xcode-cloud run command")
@@ -19,10 +19,8 @@ func TestXcodeCloudRunDoctorFlagIsExperimental(t *testing.T) {
 	if doctor == nil {
 		t.Fatal("expected --doctor flag")
 	}
-	if !strings.HasPrefix(doctor.Usage, "[experimental]") {
-		t.Fatalf("--doctor usage = %q, want [experimental] prefix", doctor.Usage)
-	}
-	if !strings.Contains(run.LongHelp, "experimental --doctor flag") {
+
+	if !strings.Contains(run.LongHelp, "--doctor flag") {
 		t.Fatalf("xcode-cloud run help does not characterize --doctor lifecycle: %q", run.LongHelp)
 	}
 }

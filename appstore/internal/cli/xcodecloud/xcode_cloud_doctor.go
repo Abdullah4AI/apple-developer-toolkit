@@ -26,19 +26,19 @@ type xcodeCloudDoctorOptions struct {
 func XcodeCloudDoctorCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("doctor", flag.ExitOnError)
 
-	runID := fs.String("run-id", "", "[experimental] Build run ID to diagnose")
-	wait := fs.Bool("wait", false, "[experimental] Wait for the build run to complete before diagnosing it")
-	pollInterval := fs.Duration("poll-interval", 10*time.Second, "[experimental] Poll interval when waiting")
-	timeout := fs.Duration("timeout", 0, "[experimental] Timeout for Xcode Cloud requests (0 = use ASC_TIMEOUT or 30m default)")
-	skipLogs := fs.Bool("skip-logs", false, "[experimental] Skip automatic inspection of failed-action log bundles")
-	saveLogs := fs.String("save-logs", "", "[experimental] Directory in which to retain inspected log bundles")
+	runID := fs.String("run-id", "", "Build run ID to diagnose")
+	wait := fs.Bool("wait", false, "Wait for the build run to complete before diagnosing it")
+	pollInterval := fs.Duration("poll-interval", 10*time.Second, "Poll interval when waiting")
+	timeout := fs.Duration("timeout", 0, "Timeout for Xcode Cloud requests (0 = use ASC_TIMEOUT or 30m default)")
+	skipLogs := fs.Bool("skip-logs", false, "Skip automatic inspection of failed-action log bundles")
+	saveLogs := fs.String("save-logs", "", "Directory in which to retain inspected log bundles")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "doctor",
 		ShortUsage: "asc xcode-cloud doctor --run-id \"BUILD_RUN_ID\" [flags]",
-		ShortHelp:  "[experimental] Diagnose an Xcode Cloud build run and inspect failure logs.",
-		LongHelp: `[experimental] Diagnose an Xcode Cloud build run.
+		ShortHelp:  "Diagnose an Xcode Cloud build run and inspect failure logs.",
+		LongHelp: `Diagnose an Xcode Cloud build run.
 
 The command combines run status, actions, issues, and artifacts into one report.
 For failed runs, it inspects failed-action LOG_BUNDLE artifacts in memory and

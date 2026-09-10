@@ -15,7 +15,7 @@ The design has four boundaries:
 
 ## Placement and command contract
 
-The feature belongs to the existing experimental `signing resign` leaf. The command remains local and offline: it reads the IPA, identity, password file, and strict profiles manifest, and does not call App Store Connect.
+The feature belongs to the existing `signing resign` leaf. The command remains local and offline: it reads the IPA, identity, password file, and strict profiles manifest, and does not call App Store Connect.
 
 The intended invocation is:
 
@@ -30,7 +30,7 @@ asc signing resign \
   [--format FORMAT]
 ```
 
-`--rebase-team-claims` is a command-specific `[experimental]` boolean flag. It defaults to false. `--output` remains the artifact destination, and `--format` remains the result renderer; the new flag must not overload either name.
+`--rebase-team-claims` is a command-specific boolean flag. It defaults to false. `--output` remains the artifact destination, and `--format` remains the result renderer; the new flag must not overload either name.
 
 When the flag is absent, the command retains the existing #2241 refusal semantics and structured output shape: an existing unauthorized claim is refused, the diagnostic gives manual remediation, no automatic prefix derivation occurs, and `entitlementRewrites` is omitted. When the flag is present, only claims accepted by the rules below may be transformed. It is not an authorization bypass, a profile repair operation, or a way to grant a capability that was absent from the signed input.
 
@@ -203,7 +203,7 @@ When the flag is enabled but no value changes, `entitlementRewrites` is an empty
 
 ## Failure, compatibility, and lifecycle
 
-The flag is experimental and additive:
+The flag is opt-in and additive:
 
 - existing invocations, help behavior, structured output shape, refusal text, and exit mappings remain unchanged when it is omitted;
 - existing profiles, signed entitlements, and optional-claim omission rules are not broadened by merely adding the flag;
@@ -212,13 +212,13 @@ The flag is experimental and additive:
 - a missing grammar, ambiguous target relationship, malformed value, or unsupported claim remains fail-closed;
 - the operation remains macOS-only and has no App Store Connect network side effects.
 
-The initial release should not migrate old invocations or change the default. Any future move from experimental to stable requires explicit help, documentation, output, and regression review. A future allowlist addition is a separate compatibility decision and must not make an existing invocation rewrite more values merely because a new binary is installed unless the opt-in flag is present.
+The initial release should not migrate old invocations or change the default. Any future interface change requires explicit help, documentation, output, and regression review. A future allowlist addition is a separate compatibility decision and must not make an existing invocation rewrite more values merely because a new binary is installed unless the opt-in flag is present.
 
 ## Implementation plan
 
 Implement the feature against the current `signing resign` contract in these areas:
 
-1. `internal/cli/signing/signing_resign.go`: add `RebaseTeamClaims` to command options, bind the experimental flag, and include the exact help text and plumbing.
+1. `internal/cli/signing/signing_resign.go`: add `RebaseTeamClaims` to command options, bind the flag, and include the exact help text and plumbing.
 2. `internal/cli/signing/signing_resign_entitlements.go`: add typed allowlist metadata, source-prefix parsing, scalar and list planners, duplicate-preserving mixed-prefix handling, and post-transform profile authorization. Return rewrite records as data, not side effects.
 3. `internal/cli/signing/signing_resign_archive.go`: expose a stable target graph and old/new application-identifier lookup, or place the equivalent helper in the pipeline package without duplicating archive discovery.
 4. `internal/cli/signing/signing_resign_pipeline.go`: plan every target before writes, validate graph edges, propagate rewrite records, retain exact generated-document verification, and keep nested non-target code outside the rebase scope.
@@ -236,7 +236,7 @@ Tests should begin with the smallest failing assertion at the command or planner
 
 ### Command and compatibility
 
-- `TestSigningResignCommandExposesRebaseTeamClaimsFlag`: help shows the experimental long-form flag and its default-off meaning.
+- `TestSigningResignCommandExposesRebaseTeamClaimsFlag`: help shows the long-form flag and its default-off meaning.
 - `TestSigningResignCommandPassesRebaseTeamClaimsOption`: the flag reaches the execution options; no flag leaves the option false.
 - `TestSigningResignCommandRejectsInvalidFlagShapes`: positional arguments, unsupported values, and platform-ineligible use remain usage errors with stderr diagnostics and exit 2.
 - A no-flag regression test runs the current unauthorized old-team claim case and asserts the existing refusal/remediation contract is unchanged.

@@ -12,19 +12,28 @@ import (
 )
 
 type webSessionFlags struct {
+	flagSet              *flag.FlagSet
 	appleID              *string
 	twoFactorCodeCommand *string
 	providerID           *int64
 	publicProviderID     *string
+	sessionFromEnv       *bool
 }
 
 func bindWebSessionFlags(fs *flag.FlagSet) webSessionFlags {
 	return webSessionFlags{
+		flagSet:              fs,
 		appleID:              fs.String("apple-id", "", "Apple Account email used to scope a user-owned session cache (optional when a cached session exists)"),
 		twoFactorCodeCommand: fs.String("two-factor-code-command", "", "Shell command that prints the 2FA code to stdout if verification is required"),
 		providerID:           fs.Int64("provider-id", 0, "Numeric App Store Connect provider ID to select for this web session"),
 		publicProviderID:     fs.String("public-provider-id", "", "Public App Store Connect provider/team ID to select for this web session"),
 	}
+}
+
+func bindWebSessionFlagsWithSessionFromEnv(fs *flag.FlagSet) webSessionFlags {
+	flags := bindWebSessionFlags(fs)
+	flags.sessionFromEnv = fs.Bool("session-from-env", false, "Use ASC_WEB_SESSION in memory without persisting it to the session cache or keychain")
+	return flags
 }
 
 // newWebRequestContext returns the bounded context for work that runs after web
@@ -44,6 +53,11 @@ func newWebRequestContext(ctx context.Context) (context.Context, context.CancelF
 // a request context whose timeout starts only once authentication is done; the
 // returned cancel func is never nil, so it is safe to defer before checking err.
 func resolveWebSessionForCommand(ctx context.Context, flags webSessionFlags) (*webcore.AuthSession, context.Context, context.CancelFunc, error) {
+	if flags.sessionFromEnv != nil && *flags.sessionFromEnv {
+		session, err := resolveSessionFromEnv(ctx, flags)
+		requestCtx, cancel := newWebRequestContext(ctx)
+		return session, requestCtx, cancel, err
+	}
 	selection := providerSelectionFromFlags(flags)
 	session, _, err := callResolveSessionForProviderSelection(
 		ctx,

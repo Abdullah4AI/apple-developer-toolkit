@@ -102,15 +102,12 @@ func TestCustomPagesListEmitsQuerySurface(t *testing.T) {
 	}
 }
 
-func TestCustomPagesListQueryFlagsAreExperimental(t *testing.T) {
+func TestCustomPagesListQueryFlagsAreRegistered(t *testing.T) {
 	cmd := findCommandByPath(t, "product-pages", "custom-pages", "list")
 	for _, name := range []string{"visible", "fields", "app-fields", "version-fields", "include", "versions-limit"} {
 		flagValue := cmd.FlagSet.Lookup(name)
 		if flagValue == nil {
 			t.Fatalf("missing --%s flag", name)
-		}
-		if !strings.HasPrefix(flagValue.Usage, "[experimental] ") {
-			t.Fatalf("--%s usage = %q, want experimental marker", name, flagValue.Usage)
 		}
 	}
 }

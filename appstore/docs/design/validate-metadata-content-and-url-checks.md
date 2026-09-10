@@ -8,7 +8,7 @@ This change extends the existing top-level `asc validate` readiness report. It
 does not add a command or an App Store Connect API operation. On the 4.11.0
 baseline, `asc validate --help` accepts `--app`, `--version`, `--version-id`,
 `--platform`, `--strict`, `--deep`, `--apple-id`, `--output`, and `--pretty`.
-The new `--check-urls` flag is top-level and experimental:
+The new `--check-urls` flag is top-level:
 
 ```text
 asc validate --app APP_ID --version-id VERSION_ID --check-urls
@@ -80,9 +80,7 @@ cookies, or mutation requests are used.
 shared checker may be extracted, but the existing metadata validator remains
 backward compatible. Without `--check-urls`, `asc validate` makes no additional
 network request and keeps its existing result shape apart from the new offline
-warning checks. The flag is experimental and can be promoted through the
-repository's normal `experimental` to `stable` lifecycle after operational
-feedback.
+warning checks. Future interface changes require compatibility review.
 
 The implementation must not scrape or interpret HTML, assess page semantics,
 verify contact information, classify editorial copy, add a generic description

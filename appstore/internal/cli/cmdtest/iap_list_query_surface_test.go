@@ -153,15 +153,12 @@ func TestIAPListQuerySurfaceDeduplicatesNormalizedEnumValues(t *testing.T) {
 	}
 }
 
-func TestIAPListQueryFlagsAreExperimental(t *testing.T) {
+func TestIAPListQueryFlagsAreRegistered(t *testing.T) {
 	command := iapcli.IAPListCommand()
 	for _, name := range []string{"product-id", "name", "state", "type", "sort"} {
 		flagValue := command.FlagSet.Lookup(name)
 		if flagValue == nil {
 			t.Fatalf("--%s is not registered", name)
-		}
-		if !strings.HasPrefix(flagValue.Usage, "[experimental] ") {
-			t.Errorf("--%s usage = %q, want [experimental] prefix", name, flagValue.Usage)
 		}
 	}
 }

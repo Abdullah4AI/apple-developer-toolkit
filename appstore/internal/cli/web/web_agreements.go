@@ -40,10 +40,8 @@ func WebAgreementsCommand() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "agreements",
 		ShortUsage: "asc web agreements <subcommand> [flags]",
-		ShortHelp:  "[experimental] Check, download, and accept Apple Developer Program agreements.",
+		ShortHelp:  "Check, download, and accept Apple Developer Program agreements.",
 		LongHelp: `WEB SESSION WORKFLOWS
-
-This command is experimental.
 
 Check, download, and accept Apple Developer Program agreements, such as the
 Apple Developer Program License Agreement, through Apple web-session
@@ -74,16 +72,14 @@ func WebAgreementsStatusCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("web agreements status", flag.ExitOnError)
 
 	authFlags := bindWebSessionFlags(fs)
-	portalFlags := bindDeveloperPortalFlagsExperimental(fs)
+	portalFlags := bindDeveloperPortalFlags(fs)
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "status",
 		ShortUsage: "asc web agreements status [flags]",
-		ShortHelp:  "[experimental] Show Apple Developer Program agreement status.",
+		ShortHelp:  "Show Apple Developer Program agreement status.",
 		LongHelp: `WEB SESSION WORKFLOWS
-
-This command is experimental.
 
 Show the App Store Connect agreement alert banner and the team's Apple
 Developer Program agreement history, including whether an updated agreement
@@ -137,20 +133,18 @@ Example:
 func WebAgreementsDownloadCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("web agreements download", flag.ExitOnError)
 
-	agreementID := fs.String("agreement-id", "", "[experimental] Developer Portal agreement ID to download (from `asc web agreements status`)")
-	out := fs.String("out", "", "[experimental] Destination file path for the agreement content")
-	overwrite := fs.Bool("overwrite", false, "[experimental] Replace an existing file at --out")
+	agreementID := fs.String("agreement-id", "", "Developer Portal agreement ID to download (from `asc web agreements status`)")
+	out := fs.String("out", "", "Destination file path for the agreement content")
+	overwrite := fs.Bool("overwrite", false, "Replace an existing file at --out")
 	authFlags := bindWebSessionFlags(fs)
-	portalFlags := bindDeveloperPortalFlagsExperimental(fs)
+	portalFlags := bindDeveloperPortalFlags(fs)
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "download",
 		ShortUsage: "asc web agreements download --agreement-id AGREEMENT_ID --out ./agreement.pdf [flags]",
-		ShortHelp:  "[experimental] Download an Apple Developer Program agreement.",
+		ShortHelp:  "Download an Apple Developer Program agreement.",
 		LongHelp: `WEB SESSION WORKFLOWS
-
-This command is experimental.
 
 Download the content of an Apple Developer Program agreement, such as the
 Apple Developer Program License Agreement PDF, so it can be reviewed before
@@ -310,19 +304,17 @@ func WebAgreementsAcceptCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("web agreements accept", flag.ExitOnError)
 
 	var agreementIDs shared.MultiStringFlag
-	fs.Var(&agreementIDs, "agreement-id", "[experimental] Developer Portal agreement ID to accept (from `asc web agreements status`; repeatable)")
-	confirm := fs.Bool("confirm", false, "[experimental] Confirm accepting the agreements on behalf of the Account Holder")
+	fs.Var(&agreementIDs, "agreement-id", "Developer Portal agreement ID to accept (from `asc web agreements status`; repeatable)")
+	confirm := fs.Bool("confirm", false, "Confirm accepting the agreements on behalf of the Account Holder")
 	authFlags := bindWebSessionFlags(fs)
-	portalFlags := bindDeveloperPortalFlagsExperimental(fs)
+	portalFlags := bindDeveloperPortalFlags(fs)
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "accept",
 		ShortUsage: "asc web agreements accept --agreement-id AGREEMENT_ID [--agreement-id AGREEMENT_ID ...] --confirm [flags]",
-		ShortHelp:  "[experimental] Accept Apple Developer Program agreements.",
+		ShortHelp:  "Accept Apple Developer Program agreements.",
 		LongHelp: `WEB SESSION WORKFLOWS
-
-This command is experimental.
 
 Accept one or more Apple Developer Program agreements, such as an updated
 Apple Developer Program License Agreement, for the web session's team.

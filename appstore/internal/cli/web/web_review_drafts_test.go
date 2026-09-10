@@ -241,6 +241,40 @@ func TestWebReviewDraftCreateRefusesAnyExistingDraftBeforeWrite(t *testing.T) {
 	}
 }
 
+func TestWebReviewDraftCreateRefusesMissingPreflightData(t *testing.T) {
+	requested := stubWebReviewDraftSequence(t, []webReviewDraftHTTPResponse{
+		{method: http.MethodGet, path: "/iris/v1/apps/app-1/resolutionCenterThreads", status: http.StatusOK, body: webReviewDraftSingleThreadFixture},
+		{method: http.MethodGet, path: "/iris/v1/resolutionCenterThreads/thread-1/resolutionCenterDraftMessage", status: http.StatusOK, body: `{}`},
+	})
+	command := webReviewDraftCommand(t, "create", "--app", "app-1", "--thread-id", "thread-1", "--message", "new", "--confirm", "--output", "json")
+	var commandErr error
+	stdout, _ := captureOutput(t, func() { commandErr = command.Exec(context.Background(), nil) })
+	if commandErr == nil {
+		t.Fatalf("expected missing data error, got %v", commandErr)
+	}
+	if stdout != "" || len(*requested) != 2 {
+		t.Fatalf("expected no receipt or POST, got stdout=%q requests=%#v", stdout, *requested)
+	}
+}
+
+func TestWebReviewDraftDeleteRejectsMissingVerificationData(t *testing.T) {
+	requested := stubWebReviewDraftSequence(t, []webReviewDraftHTTPResponse{
+		{method: http.MethodGet, path: "/iris/v1/apps/app-1/resolutionCenterThreads", status: http.StatusOK, body: webReviewDraftSingleThreadFixture},
+		{method: http.MethodGet, path: "/iris/v1/resolutionCenterThreads/thread-1/resolutionCenterDraftMessage", status: http.StatusOK, body: webReviewDraftResponse("draft-1", "old")},
+		{method: http.MethodDelete, path: "/iris/v1/resolutionCenterDraftMessages/draft-1", status: http.StatusNoContent},
+		{method: http.MethodGet, path: "/iris/v1/resolutionCenterThreads/thread-1/resolutionCenterDraftMessage", status: http.StatusOK, body: `{}`},
+	})
+	command := webReviewDraftCommand(t, "delete", "--app", "app-1", "--thread-id", "thread-1", "--draft-id", "draft-1", "--confirm", "--output", "json")
+	var commandErr error
+	stdout, _ := captureOutput(t, func() { commandErr = command.Exec(context.Background(), nil) })
+	if commandErr == nil || !strings.Contains(commandErr.Error(), "post-read verification failed; do not retry automatically") {
+		t.Fatalf("expected unverified deletion error, got %v", commandErr)
+	}
+	if stdout != "" || len(*requested) != 4 {
+		t.Fatalf("expected no receipt or retry, got stdout=%q requests=%#v", stdout, *requested)
+	}
+}
+
 func TestWebReviewDraftUpdateRefusesMismatchedExistingDraftBeforeWrite(t *testing.T) {
 	requested := stubWebReviewDraftSequence(t, []webReviewDraftHTTPResponse{
 		{method: http.MethodGet, path: "/iris/v1/apps/app-1/resolutionCenterThreads", status: http.StatusOK, body: webReviewDraftSingleThreadFixture},

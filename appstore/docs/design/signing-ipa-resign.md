@@ -2,19 +2,17 @@
 
 ## Placement and command shape
 
-Add `resign` below the existing `signing` command group. The command is an
-experimental, macOS-only local operation:
+Add `resign` below the existing `signing` command group. The command is a
+macOS-only local operation:
 
 ```text
 asc signing resign --ipa PATH --output PATH --identity PATH --profiles-manifest PATH [--identity-password-file PATH] [--rebase-team-claims] [--format FORMAT]
 ```
 
 The command-specific `--ipa`, `--output`, `--identity`,
-`--identity-password-file`, and `--profiles-manifest` flags are experimental;
+`--identity-password-file`, and `--profiles-manifest` flags are supported;
 `--ipa`, `--output`, `--identity`, and `--profiles-manifest` are required, while
-the password-file path is optional. The opt-in `--rebase-team-claims` flag is
-also experimental and defaults to disabled. The help text marks each of these
-flags with `[experimental]`.
+the password-file path is optional. The opt-in `--rebase-team-claims` flag defaults to disabled.
 The destination is create-only: an existing path is a hard conflict and there
 is no overwrite flag in the first release. Positional arguments are rejected.
 The output format uses the repository's standard table, JSON, and Markdown
@@ -204,7 +202,7 @@ inspection and must not be blindly retried.
 
 ## Compatibility and alternatives
 
-This adds only an experimental command and does not alter `signing run`,
+This adds only a command and does not alter `signing run`,
 archive reconciliation, distribution inspection, or stable output schemas.
 It intentionally supports only iOS device IPAs and development, ad-hoc, and
 App Store profiles; other platforms, enterprise profiles, wildcards, arbitrary

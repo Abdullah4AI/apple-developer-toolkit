@@ -25,22 +25,22 @@ type signingResignOptions struct {
 	RebaseTeamClaims     bool
 }
 
-// SigningResignCommand returns the experimental local IPA re-signing command.
+// SigningResignCommand returns the local IPA re-signing command.
 func SigningResignCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("resign", flag.ExitOnError)
-	ipaPath := fs.String("ipa", "", "[experimental] Path to the existing IPA input (required)")
-	outputPath := fs.String("output", "", "[experimental] Path for the newly re-signed IPA (required)")
-	identityPath := fs.String("identity", "", "[experimental] Path to a PKCS#12 signing identity (required)")
-	identityPasswordPath := fs.String("identity-password-file", "", "[experimental] Path to a file containing the PKCS#12 password")
-	profilesManifestPath := fs.String("profiles-manifest", "", "[experimental] Path to the strict bundle-to-profile manifest (required)")
-	rebaseTeamClaims := fs.Bool("rebase-team-claims", false, "[experimental] Rebase allowlisted team-prefix claims; changing KVS selects a different data namespace")
+	ipaPath := fs.String("ipa", "", "Path to the existing IPA input (required)")
+	outputPath := fs.String("output", "", "Path for the newly re-signed IPA (required)")
+	identityPath := fs.String("identity", "", "Path to a PKCS#12 signing identity (required)")
+	identityPasswordPath := fs.String("identity-password-file", "", "Path to a file containing the PKCS#12 password")
+	profilesManifestPath := fs.String("profiles-manifest", "", "Path to the strict bundle-to-profile manifest (required)")
+	rebaseTeamClaims := fs.Bool("rebase-team-claims", false, "Rebase allowlisted team-prefix claims; changing KVS selects a different data namespace")
 	format := shared.BindOutputFlagsWith(fs, "format", shared.DefaultOutputFormat(), "Output format: json, table, markdown")
 
 	return &ffcli.Command{
 		Name:       "resign",
 		ShortUsage: "asc signing resign --ipa PATH --output PATH --identity PATH --profiles-manifest PATH [--rebase-team-claims] [flags]",
-		ShortHelp:  "[experimental] Re-sign an existing iOS IPA with complete nested-target profile mappings.",
-		LongHelp: `[experimental] Re-sign an existing iOS IPA into a new destination.
+		ShortHelp:  "Re-sign an existing iOS IPA with complete nested-target profile mappings.",
+		LongHelp: `Re-sign an existing iOS IPA into a new destination.
 
 The command validates every app-like target and its exact provisioning-profile
 mapping before creating an isolated temporary signing keychain. It never

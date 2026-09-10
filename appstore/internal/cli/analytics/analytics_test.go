@@ -13,13 +13,10 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
-func TestAnalyticsSalesAllowMissingFlagIsExperimental(t *testing.T) {
+func TestAnalyticsSalesAllowMissingFlagIsRegistered(t *testing.T) {
 	flag := AnalyticsSalesCommand().FlagSet.Lookup("allow-missing")
 	if flag == nil {
 		t.Fatal("--allow-missing flag not found")
-	}
-	if !strings.HasPrefix(flag.Usage, "[experimental] ") {
-		t.Fatalf("--allow-missing usage = %q, want [experimental] prefix", flag.Usage)
 	}
 }
 

@@ -2,7 +2,7 @@
 
 ## Placement and current behavior
 
-`asc xcode build` is an experimental leaf beneath the existing local `asc xcode`
+`asc xcode build` is a leaf beneath the existing local `asc xcode`
 group. It wraps the ordinary `xcodebuild ... build` action; it does not archive,
 export, upload, or call App Store Connect.
 
@@ -68,7 +68,7 @@ macOS-only with the existing Xcode availability errors on other hosts.
 
 ## Compatibility and failure modes
 
-This is additive experimental behavior. Existing archive/export invocations, error
+This is additive behavior. Existing archive/export invocations, error
 text, error chains, and output schemas do not change. Command-shape and output
 format validation happen before filesystem or subprocess side effects. Missing
 Xcode, unsupported hosts, nonexistent or mis-typed project/workspace paths,

@@ -5,10 +5,9 @@
 ## Placement and command shape
 
 Apple deprecated the v1 image, localization, and submission resources for
-in-app purchases, subscriptions, and subscription groups. Twenty-seven affected
-CLI leaves are stable and two localization `sync` leaves are experimental. This
-change starts a visible deprecation window for all of them; it does not remove
-commands, flags, or client methods.
+in-app purchases, subscriptions, and subscription groups. Twenty-nine affected
+CLI leaves remain available. This change starts a visible deprecation window
+for all of them; it does not remove commands, flags, or client methods.
 
 The affected command leaves remain at their current paths:
 
@@ -24,8 +23,7 @@ The affected command leaves remain at their current paths:
 Their direct help is marked `DEPRECATED` and points to the matching
 version-scoped command or review-item workflow. Running one of the 29 public
 command leaves writes one warning to stderr before preserving the existing
-flags, request, stdout, and exit behavior. Twenty-seven leaves are stable; the
-two localization `sync` leaves are explicitly experimental.
+flags, request, stdout, and exit behavior.
 
 `asc iap setup` and `asc subscriptions setup` are not deprecated. They warn
 only when localization flags request the legacy localization steps. A

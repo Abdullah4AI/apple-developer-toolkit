@@ -20,15 +20,15 @@ var runToolchainDoctor = localxcode.InspectToolchain
 func XcodeDoctorCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("xcode doctor", flag.ExitOnError)
 
-	developerDir := fs.String("developer-dir", "", "[experimental] Xcode developer directory or .app to inspect (overrides DEVELOPER_DIR and xcode-select)")
-	sdk := fs.String("sdk", "", "[experimental] SDK name to resolve with xcrun (for example iphoneos or iphonesimulator)")
+	developerDir := fs.String("developer-dir", "", "Xcode developer directory or .app to inspect (overrides DEVELOPER_DIR and xcode-select)")
+	sdk := fs.String("sdk", "", "SDK name to resolve with xcrun (for example iphoneos or iphonesimulator)")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "doctor",
 		ShortUsage: "asc xcode doctor [flags]",
-		ShortHelp:  "[experimental] Verify the effective local Xcode toolchain without changing system state.",
-		LongHelp: `[experimental] Verify the effective local Xcode toolchain without changing system state.
+		ShortHelp:  "Verify the effective local Xcode toolchain without changing system state.",
+		LongHelp: `Verify the effective local Xcode toolchain without changing system state.
 
 The candidate is selected in this order: --developer-dir, a non-empty
 DEVELOPER_DIR environment variable, then xcode-select --print-path. The

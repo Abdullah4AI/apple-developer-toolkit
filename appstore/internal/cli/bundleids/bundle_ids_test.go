@@ -77,7 +77,7 @@ func TestBundleIDsCreateCommand_UsesBundleIDPlatformContract(t *testing.T) {
 	}
 }
 
-func TestBundleIDsListQueryFlagsAreExperimental(t *testing.T) {
+func TestBundleIDsListQueryFlagsAreRegistered(t *testing.T) {
 	cmd := BundleIDsListCommand()
 	for _, name := range []string{
 		"name", "platform", "identifier", "seed-id", "id", "sort", "fields",
@@ -86,9 +86,6 @@ func TestBundleIDsListQueryFlagsAreExperimental(t *testing.T) {
 		flagValue := cmd.FlagSet.Lookup(name)
 		if flagValue == nil {
 			t.Fatalf("--%s is not registered", name)
-		}
-		if !strings.HasPrefix(flagValue.Usage, "[experimental] ") {
-			t.Fatalf("--%s usage = %q, want experimental lifecycle label", name, flagValue.Usage)
 		}
 	}
 }

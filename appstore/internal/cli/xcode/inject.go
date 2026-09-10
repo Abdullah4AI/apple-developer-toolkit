@@ -80,8 +80,8 @@ func XcodeInjectCommand() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "inject",
 		ShortUsage: "asc xcode inject --manifest FILE [flags]",
-		ShortHelp:  "[experimental] Generate Xcode deployment metadata files from a manifest.",
-		LongHelp: `[experimental] Generate Xcode deployment metadata files from a manifest.
+		ShortHelp:  "Generate Xcode deployment metadata files from a manifest.",
+		LongHelp: `Generate Xcode deployment metadata files from a manifest.
 
 The manifest is JSON with top-level "values" and "outputs" fields. Outputs can
 generate plist, json, or text files, and can copy declared assets such as app

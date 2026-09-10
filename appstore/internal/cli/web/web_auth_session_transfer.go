@@ -51,18 +51,16 @@ func formatOptionalSessionBundleTime(value *time.Time) string {
 func WebAuthExportCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("web auth export", flag.ExitOnError)
 
-	appleID := fs.String("apple-id", "", "[experimental] Apple Account email to export (default exports the last cached session)")
-	outputPath := fs.String("output-path", "", "[experimental] Destination file for the exported session bundle (required)")
-	overwrite := fs.Bool("overwrite", false, "[experimental] Replace an existing file at --output-path")
+	appleID := fs.String("apple-id", "", "Apple Account email to export (default exports the last cached session)")
+	outputPath := fs.String("output-path", "", "Destination file for the exported session bundle (required)")
+	overwrite := fs.Bool("overwrite", false, "Replace an existing file at --output-path")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "export",
 		ShortUsage: "asc web auth export --output-path FILE [--apple-id EMAIL] [--overwrite]",
-		ShortHelp:  "[experimental] Export the cached web session to a file.",
+		ShortHelp:  "Export the cached web session to a file.",
 		LongHelp: `WEB SESSION WORKFLOWS
-
-This session-transfer command is [experimental].
 
 Write the cached Apple web session to a JSON bundle so another machine or a CI
 job can reuse it with "asc web auth import" instead of repeating two-factor
@@ -180,20 +178,18 @@ func writeWebSessionBundle(path string, payload []byte, overwrite bool) (bool, e
 func WebAuthImportCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("web auth import", flag.ExitOnError)
 
-	filePath := fs.String("file", "", "[experimental] Path to a session bundle produced by \"asc web auth export\" (mutually exclusive with --from-env)")
-	fromEnv := fs.Bool("from-env", false, "[experimental] Read the canonical session bundle from ASC_WEB_SESSION")
-	appleID := fs.String("apple-id", "", "[experimental] Require the bundle to belong to this Apple Account email")
-	overwrite := fs.Bool("overwrite", false, "[experimental] Replace an existing cached session for the bundle Apple Account")
-	validate := fs.Bool("validate", false, "[experimental] Validate the bundle with Apple before importing it")
+	filePath := fs.String("file", "", "Path to a session bundle produced by \"asc web auth export\" (mutually exclusive with --from-env)")
+	fromEnv := fs.Bool("from-env", false, "Read the canonical session bundle from ASC_WEB_SESSION")
+	appleID := fs.String("apple-id", "", "Require the bundle to belong to this Apple Account email")
+	overwrite := fs.Bool("overwrite", false, "Replace an existing cached session for the bundle Apple Account")
+	validate := fs.Bool("validate", false, "Validate the bundle with Apple before importing it")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "import",
 		ShortUsage: "asc web auth import (--file FILE | --from-env) [--apple-id EMAIL] [--overwrite] [--validate]",
-		ShortHelp:  "[experimental] Import a web session bundle into the session cache.",
+		ShortHelp:  "Import a web session bundle into the session cache.",
 		LongHelp: `WEB SESSION WORKFLOWS
-
-This session-transfer command is [experimental].
 
 Load a session bundle written by "asc web auth export" into the same cache
 "asc web auth login" writes, so CI can reuse an existing Apple web session

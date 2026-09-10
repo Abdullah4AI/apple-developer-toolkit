@@ -4,7 +4,7 @@
 
 ## Placement and invocation
 
-This change extends the existing experimental `asc signing sync push` command.
+This change extends the existing `asc signing sync push` command.
 It does not add a second signing store or imply that App Store Connect can
 return a private key.
 
@@ -155,5 +155,5 @@ unknown passwords, and ambiguous certificate selection. Normalization makes the
 semantic payload canonical and unambiguous while PKCS#12 and outer encryption
 remain intentionally randomized. Creating a separate
 identity command would duplicate repository, encryption, and profile resolution
-logic; extending the existing experimental sync command keeps one coherent
+logic; extending the existing sync command keeps one coherent
 store while preserving certificate/profile-only workflows.

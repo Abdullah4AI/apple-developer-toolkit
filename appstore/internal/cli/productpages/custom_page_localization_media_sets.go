@@ -147,7 +147,7 @@ func CustomPageLocalizationsScreenshotSetsListCommand() *ffcli.Command {
 	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
 	next := fs.String("next", "", "Fetch next page using a links.next URL")
 	paginate := fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")
-	includeScreenshots := fs.Bool("include-screenshots", false, "[experimental] Include screenshot IDs and metadata for each set (requires --localization-id and --paginate)")
+	includeScreenshots := fs.Bool("include-screenshots", false, "Include screenshot IDs and metadata for each set (requires --localization-id and --paginate)")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{

@@ -25,12 +25,7 @@ func TestAppsCommandRegistersPublished(t *testing.T) {
 
 func TestAppsPublishedCommandDefaultsToJSON(t *testing.T) {
 	cmd := AppsPublishedCommand()
-	if !strings.HasPrefix(cmd.ShortHelp, "[experimental]") {
-		t.Fatalf("short help = %q, want experimental marker", cmd.ShortHelp)
-	}
-	if !strings.HasPrefix(cmd.LongHelp, "[experimental]") || !strings.Contains(cmd.LongHelp, "This command is experimental.") {
-		t.Fatalf("long help = %q, want experimental lifecycle notice", cmd.LongHelp)
-	}
+
 	output := cmd.FlagSet.Lookup("output")
 	if output == nil {
 		t.Fatal("expected --output flag")

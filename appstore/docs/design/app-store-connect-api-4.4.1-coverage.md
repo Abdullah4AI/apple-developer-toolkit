@@ -785,13 +785,13 @@ Apple deprecates seven resource families in the prose release notes:
 | IAP localizations v1 | `/v2/inAppPurchaseLocalizations`; `asc iap versions localizations ... --version-id` | #1777, #1786 | Four stable leaves preserved with one exact warning and DEPRECATED direct help | CRUD/ID tests, warning/payload/exit compatibility tests, migration docs |
 | IAP images v1 | `/v2/inAppPurchaseImages`; `asc iap versions images ... --version-id` | #1777, #1786 | Five stable leaves preserved with one exact warning and DEPRECATED direct help | Upload characterization, reserve/upload/commit tests, migration docs |
 | IAP submissions | `/v1/reviewSubmissionItems`; `asc review items add --item-type inAppPurchaseVersions` | #1777, #1781, #1786, #1787 | Stable submit leaf warns, remains directly callable, and is visible in parent help | Exact relationship payload, warning/exit tests, rendered-help regression |
-| Subscription localizations v1 | `/v2/subscriptionLocalizations`; `asc subscriptions versions localizations ... --version-id` | #1779, #1786 | Five stable leaves and one experimental `sync` leaf preserved with exact warnings | CRUD/ID, warning/payload/exit, and migration-doc tests |
+| Subscription localizations v1 | `/v2/subscriptionLocalizations`; `asc subscriptions versions localizations ... --version-id` | #1779, #1786 | Six leaves preserved with exact warnings | CRUD/ID, warning/payload/exit, and migration-doc tests |
 | Subscription images v1 | `/v2/subscriptionImages`; `asc subscriptions versions images ... --version-id` | #1779, #1786 | Five stable leaves preserved with exact warnings | Upload characterization, reserve/upload/commit, and migration-doc tests |
-| Subscription-group localizations v1 | `/v2/subscriptionGroupLocalizations`; `asc subscriptions groups versions localizations ... --version-id` | #1780, #1786 | Five stable leaves and one experimental `sync` leaf preserved with exact warnings | CRUD/ID, warning/payload/exit, and migration-doc tests |
+| Subscription-group localizations v1 | `/v2/subscriptionGroupLocalizations`; `asc subscriptions groups versions localizations ... --version-id` | #1780, #1786 | Six leaves preserved with exact warnings | CRUD/ID, warning/payload/exit, and migration-doc tests |
 | Subscription and group submissions | `/v1/reviewSubmissionItems`; item types `subscriptionVersions` and `subscriptionGroupVersions` | #1781, #1786 | Two stable submit leaves preserved with exact warnings and DEPRECATED direct help | Relationship payload, warning/exit, and migration-doc tests |
 
 PR `#1786` begins the repository's required deprecation window for 29 public leaves:
-27 stable and two experimental `sync` commands. `asc iap setup` and
+All 29 direct leaves remain available during the deprecation window. `asc iap setup` and
 `asc subscriptions setup` remain stable but emit one combined warning when
 legacy localization flags are requested. All 33 exported legacy client methods
 carry precise Go `Deprecated:` replacement documentation. The wrapper preserves

@@ -84,7 +84,7 @@ func XcodeCloudRunCommand() *ffcli.Command {
 	sourceRunID := fs.String("source-run-id", "", "Source build run ID to rerun")
 	clean := fs.Bool("clean", false, "Request a clean build")
 	wait := fs.Bool("wait", false, "Wait for build to complete")
-	doctor := fs.Bool("doctor", false, "[experimental] After waiting, diagnose the completed run and inspect failure logs")
+	doctor := fs.Bool("doctor", false, "After waiting, diagnose the completed run and inspect failure logs")
 	pollInterval := fs.Duration("poll-interval", 10*time.Second, "Poll interval when waiting")
 	timeout := fs.Duration("timeout", 0, "Timeout for Xcode Cloud requests (0 = use ASC_TIMEOUT or 30m default)")
 	output := shared.BindOutputFlags(fs)
@@ -103,7 +103,7 @@ Rerun mode:
 - Use --source-run-id to rerun from an existing build run (without workflow/source selectors)
 
 Diagnostic mode:
-- Add --wait and the experimental --doctor flag to return the combined doctor report after completion
+- Add --wait and the --doctor flag to return the combined doctor report after completion
 - A failed build is report data in diagnostic mode and does not make the command exit non-zero
 
 Examples:

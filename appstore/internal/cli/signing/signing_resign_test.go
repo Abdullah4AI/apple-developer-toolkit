@@ -71,15 +71,12 @@ func TestSigningResignEntitlementValuePermitsLegacyKeepsBareWildcardCompatibilit
 	}
 }
 
-func TestSigningResignHelpMarksCommandSpecificFlagsExperimental(t *testing.T) {
+func TestSigningResignHelpChecksCommandSpecificFlags(t *testing.T) {
 	command := SigningResignCommand()
 	for _, name := range []string{"ipa", "output", "identity", "identity-password-file", "profiles-manifest", "rebase-team-claims"} {
 		flagValue := command.FlagSet.Lookup(name)
 		if flagValue == nil {
 			t.Fatalf("missing --%s flag", name)
-		}
-		if !strings.HasPrefix(flagValue.Usage, "[experimental] ") {
-			t.Fatalf("--%s usage = %q, want [experimental] prefix", name, flagValue.Usage)
 		}
 	}
 }

@@ -42,7 +42,7 @@ func WebServiceIDsCommand() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "service-ids",
 		ShortUsage: "asc web service-ids <subcommand> [flags]",
-		ShortHelp:  "[experimental] Manage Services IDs via Developer Portal web sessions.",
+		ShortHelp:  "Manage Services IDs via Developer Portal web sessions.",
 		LongHelp: `WEB SESSION WORKFLOWS
 
 List, inspect, register, rename, and delete Services IDs through Apple's
@@ -78,7 +78,7 @@ func WebServiceIDsListCommand() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "list",
 		ShortUsage: "asc web service-ids list [flags]",
-		ShortHelp:  "[experimental] List Services IDs via a Developer Portal web session.",
+		ShortHelp:  "List Services IDs via a Developer Portal web session.",
 		LongHelp: `List Services IDs visible to the selected Developer Portal team.
 
 The command requests Apple's captured 1000-resource collection with
@@ -141,7 +141,7 @@ func WebServiceIDsViewCommand() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "view",
 		ShortUsage: "asc web service-ids view --service-id SERVICE_RESOURCE_ID [flags]",
-		ShortHelp:  "[experimental] Inspect one Services ID via a Developer Portal web session.",
+		ShortHelp:  "Inspect one Services ID via a Developer Portal web session.",
 		LongHelp: `Inspect one opaque Services ID resource and its included capability
 relationships. The command rejects a Bundle ID whose platform is not SERVICES.
 Use --output json to retain the complete capability graph.
@@ -207,7 +207,7 @@ func WebServiceIDsCreateCommand() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "create",
 		ShortUsage: "asc web service-ids create --identifier IDENTIFIER --name NAME --confirm [flags]",
-		ShortHelp:  "[experimental] Register a Services ID via a Developer Portal web session.",
+		ShortHelp:  "Register a Services ID via a Developer Portal web session.",
 		LongHelp: `Register a minimal Services ID for the selected Developer Portal team.
 
 This command creates the resource with platform=SERVICES and an empty
@@ -289,7 +289,7 @@ func WebServiceIDsRenameCommand() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "rename",
 		ShortUsage: "asc web service-ids rename --service-id SERVICE_RESOURCE_ID --name NAME --confirm [flags]",
-		ShortHelp:  "[experimental] Rename a Services ID via a Developer Portal web session.",
+		ShortHelp:  "Rename a Services ID via a Developer Portal web session.",
 		LongHelp: `Rename one Services ID after reading and validating its current
 platform. The PATCH carries the current capability relationships forward and
 changes only the name plus Apple's required private team attribute.
@@ -368,7 +368,7 @@ func WebServiceIDsDeleteCommand() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "delete",
 		ShortUsage: "asc web service-ids delete --service-id SERVICE_RESOURCE_ID --confirm [flags]",
-		ShortHelp:  "[experimental] Delete a Services ID via a Developer Portal web session.",
+		ShortHelp:  "Delete a Services ID via a Developer Portal web session.",
 		LongHelp: `Delete one Services ID after proving that its resource platform is
 SERVICES. A post-delete detail read must return 404 before the command reports
 success. A 5xx, transport failure, or failed verification is an unknown outcome;

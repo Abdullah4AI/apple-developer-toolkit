@@ -38,9 +38,9 @@ func shotsMatrixCommandWithDependencies(dependencies shotsMatrixCommandDependenc
 	return &ffcli.Command{
 		Name:       "matrix",
 		ShortUsage: "asc screenshots matrix [--plan .asc/screenshots-matrix.json] [flags]",
-		ShortHelp:  "[experimental] Capture a bounded local screenshot matrix and write an offline review.",
+		ShortHelp:  "Capture a bounded local screenshot matrix and write an offline review.",
 		LongHelp: `Capture an existing screenshot plan across device, locale, appearance,
-and content-variant axes (experimental).
+and content-variant axes.
 
 Target simulators must already exist and be booted. This command is local-only:
 it does not upload screenshots or change App Store Connect state. Every run

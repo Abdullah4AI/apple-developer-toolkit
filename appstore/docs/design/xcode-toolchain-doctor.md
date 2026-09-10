@@ -2,7 +2,7 @@
 
 ## Placement and command shape
 
-Issue #2228 adds an experimental leaf beneath the existing local `asc xcode`
+Issue #2228 adds a leaf beneath the existing local `asc xcode`
 group:
 
 ```text
@@ -10,7 +10,7 @@ asc xcode doctor [--developer-dir PATH] [--sdk SDK] [--output json|table|markdow
 ```
 
 `asc xcode --help` exposes `inject`, `build`, `archive`, `export`,
-`export-options`, `validate`, `version`, and the experimental `doctor` leaf.
+`export-options`, `validate`, `version`, and the `doctor` leaf.
 The doctor command is local-only and does not require App Store Connect
 credentials or an API request.
 

@@ -831,6 +831,7 @@ func TestLoginWithOptionalTwoFactorUsesCommandWhenConfigured(t *testing.T) {
 }
 
 func TestLoginWithOptionalTwoFactorReappliesTimeoutAfterDelayedCommand(t *testing.T) {
+	t.Setenv("ASC_TIMEOUT", "30ms")
 	origLogin := webLoginFn
 	origPrepare := prepareTwoFactorChallengeFn
 	origEnsure := ensureTwoFactorCodeRequestedFn
@@ -3529,5 +3530,58 @@ func TestResolveSessionRetriesFreshLoginAfterRequestDeadlineExpired(t *testing.T
 	}
 	if session != freshSession || source != "fresh" {
 		t.Fatalf("expected the fresh session, got session=%p source=%q", session, source)
+	}
+}
+
+func TestProviderSelectionRenewsExpiredRequestBudget(t *testing.T) {
+	originalSelect, originalPersist := selectWebProviderFn, persistWebSessionFn
+	t.Cleanup(func() { selectWebProviderFn, persistWebSessionFn = originalSelect, originalPersist })
+	t.Setenv("ASC_TIMEOUT", "1s")
+	ctx, cancel := shared.ContextWithResolvedTimeout(context.Background(), time.Nanosecond)
+	defer cancel()
+	<-ctx.Done()
+	persisted := false
+	selectWebProviderFn = func(ctx context.Context, session *webcore.AuthSession, selection webcore.ProviderSelection) error {
+		return ctx.Err()
+	}
+	persistWebSessionFn = func(session *webcore.AuthSession) error { persisted = true; return nil }
+	if err := selectResolvedWebSessionProvider(ctx, &webcore.AuthSession{}, webcore.ProviderSelection{ProviderID: 7}); err != nil {
+		t.Fatal(err)
+	}
+	if !persisted {
+		t.Fatal("authenticated selected session was not persisted")
+	}
+}
+
+func TestProviderSelectionPreservesCallerCancellation(t *testing.T) {
+	originalSelect, originalPersist := selectWebProviderFn, persistWebSessionFn
+	t.Cleanup(func() { selectWebProviderFn, persistWebSessionFn = originalSelect, originalPersist })
+	parent, stop := context.WithCancel(context.Background())
+	ctx, cancel := shared.ContextWithTimeout(parent)
+	defer cancel()
+	stop()
+	selectWebProviderFn = func(ctx context.Context, session *webcore.AuthSession, selection webcore.ProviderSelection) error {
+		return ctx.Err()
+	}
+	persistWebSessionFn = func(session *webcore.AuthSession) error {
+		t.Fatal("must not persist after canceled selection")
+		return nil
+	}
+	if err := selectResolvedWebSessionProvider(ctx, &webcore.AuthSession{}, webcore.ProviderSelection{ProviderID: 7}); !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected cancellation, got %v", err)
+	}
+}
+
+func TestLoginRenewsBudgetAfterCredentialPrompt(t *testing.T) {
+	t.Setenv("ASC_TIMEOUT", "1s")
+	ctx, cancel := shared.ContextWithResolvedTimeout(context.Background(), time.Nanosecond)
+	defer cancel()
+	<-ctx.Done()
+	expected := &webcore.AuthSession{}
+	result, err := loginWithOptionalTwoFactorUsing(ctx, "test", "user@example.com", "test-only", "", func(ctx context.Context, creds webcore.LoginCredentials) (*webcore.AuthSession, error) {
+		return expected, ctx.Err()
+	}, nil, nil)
+	if err != nil || result != expected {
+		t.Fatalf("credential wait consumed login budget: %v", err)
 	}
 }

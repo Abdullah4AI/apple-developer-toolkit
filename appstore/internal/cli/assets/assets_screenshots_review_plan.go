@@ -96,8 +96,8 @@ func AssetsScreenshotsPlanCommand() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "plan",
 		ShortUsage: "asc screenshots plan --app \"APP_ID\" (--version \"1.2.3\" | --version-id \"VERSION_ID\") [flags]",
-		ShortHelp:  "[experimental] Plan screenshot uploads from approved review artifacts.",
-		LongHelp: `Plan App Store screenshot uploads from approved review artifacts (experimental).
+		ShortHelp:  "Plan screenshot uploads from approved review artifacts.",
+		LongHelp: `Plan App Store screenshot uploads from approved review artifacts.
 
 This reads review manifest + approvals, maps approved ready entries to remote
 version localizations, and previews grouped upload intent per display type.
@@ -157,8 +157,8 @@ func AssetsScreenshotsApplyCommand() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "apply",
 		ShortUsage: "asc screenshots apply --app \"APP_ID\" (--version \"1.2.3\" | --version-id \"VERSION_ID\") --confirm [flags]",
-		ShortHelp:  "[experimental] Apply screenshot uploads from approved review artifacts.",
-		LongHelp: `Apply App Store screenshot uploads from approved review artifacts (experimental).
+		ShortHelp:  "Apply screenshot uploads from approved review artifacts.",
+		LongHelp: `Apply App Store screenshot uploads from approved review artifacts.
 
 Examples:
   asc screenshots apply --app "123456789" --version "1.2.3" --confirm

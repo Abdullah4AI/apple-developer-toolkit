@@ -46,16 +46,13 @@ func TestBetaTestersRemoveCommand_ConfirmPassesValidation(t *testing.T) {
 	}
 }
 
-func TestBetaTestersRemoveWaitFlagsAreExperimental(t *testing.T) {
+func TestBetaTestersRemoveWaitFlagsAreRegistered(t *testing.T) {
 	cmd := BetaTestersRemoveCommand()
 	for _, name := range []string{"wait", "poll-interval", "timeout"} {
 		t.Run(name, func(t *testing.T) {
 			flagValue := cmd.FlagSet.Lookup(name)
 			if flagValue == nil {
 				t.Fatalf("--%s is not registered", name)
-			}
-			if !strings.HasPrefix(flagValue.Usage, "[experimental] ") {
-				t.Fatalf("--%s usage = %q, want [experimental] prefix", name, flagValue.Usage)
 			}
 		})
 	}

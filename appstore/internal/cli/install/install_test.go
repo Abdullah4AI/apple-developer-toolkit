@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -179,6 +180,11 @@ func TestInstallSkillsCopiesExactPackWithoutNodeAndPreservesUnrelatedData(t *tes
 		}
 		if !strings.Contains(string(data), "name: "+name) {
 			t.Fatalf("%s content = %q", name, data)
+		}
+	}
+	for _, name := range []string{"asc-ad-hoc-distribution", "asc-analytics-reports"} {
+		if _, err := os.Stat(filepath.Join(home, ".agents", "skills", name, "SKILL.md")); err != nil {
+			t.Errorf("current workflow skill %s was not installed: %v", name, err)
 		}
 	}
 	if data, err := os.ReadFile(filepath.Join(home, ".agents", "skills", "asc-release-flow", "references", "release.md")); err != nil {
@@ -736,8 +742,8 @@ func TestPinnedSkillsDocumentationMatchesDirectInstaller(t *testing.T) {
 		if !strings.Contains(content, skillsSourceCommit) {
 			t.Errorf("%s does not mention the pinned skills commit %q", path, skillsSourceCommit)
 		}
-		if !strings.Contains(content, "23") {
-			t.Errorf("%s does not mention verification of all 23 skills", path)
+		if !strings.Contains(content, fmt.Sprintf("%d skills", expectedSkillsCount)) {
+			t.Errorf("%s does not mention verification of all %d skills", path, expectedSkillsCount)
 		}
 	}
 }

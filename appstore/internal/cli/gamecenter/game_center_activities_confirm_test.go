@@ -8,7 +8,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/peterbourgon/ff/v3/ffcli"
@@ -108,7 +107,7 @@ func TestGameCenterActivitySetCommandsRequireConfirmForRemove(t *testing.T) {
 	}
 }
 
-func TestGameCenterActivitySetConfirmFlagsAreExperimental(t *testing.T) {
+func TestGameCenterActivitySetConfirmFlagsAreRegistered(t *testing.T) {
 	for _, tc := range []struct {
 		name string
 		cmd  *ffcli.Command
@@ -120,9 +119,6 @@ func TestGameCenterActivitySetConfirmFlagsAreExperimental(t *testing.T) {
 			confirm := tc.cmd.FlagSet.Lookup("confirm")
 			if confirm == nil {
 				t.Fatal("--confirm is not registered")
-			}
-			if !strings.HasPrefix(confirm.Usage, "[experimental] ") {
-				t.Fatalf("--confirm usage = %q, want [experimental] prefix", confirm.Usage)
 			}
 		})
 	}

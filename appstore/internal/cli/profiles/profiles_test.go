@@ -4,11 +4,10 @@ import (
 	"context"
 	"errors"
 	"flag"
-	"strings"
 	"testing"
 )
 
-func TestProfilesListQueryFlagsAreExperimental(t *testing.T) {
+func TestProfilesListQueryFlagsAreRegistered(t *testing.T) {
 	cmd := ProfilesListCommand()
 	for _, name := range []string{
 		"name", "id", "sort", "fields", "bundle-id-fields", "device-fields", "certificate-fields", "include", "limit-devices", "limit-certificates",
@@ -16,9 +15,6 @@ func TestProfilesListQueryFlagsAreExperimental(t *testing.T) {
 		flagValue := cmd.FlagSet.Lookup(name)
 		if flagValue == nil {
 			t.Fatalf("missing --%s flag", name)
-		}
-		if !strings.HasPrefix(flagValue.Usage, "[experimental] ") {
-			t.Errorf("--%s usage = %q, want [experimental] prefix", name, flagValue.Usage)
 		}
 	}
 }

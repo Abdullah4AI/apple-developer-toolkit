@@ -25,23 +25,23 @@ type publicRankOutput struct {
 	ResultCount int    `json:"resultCount"`
 }
 
-// AppsPublicRankCommand returns the experimental public app ranking command.
+// AppsPublicRankCommand returns the public app ranking command.
 func AppsPublicRankCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("apps public rank", flag.ExitOnError)
 
 	appID := fs.String("app", "", "Public App Store app ID")
 	term := fs.String("term", "", "Search term")
-	platform := fs.String("platform", "", "[experimental] Search platform: IOS or TV_OS")
+	platform := fs.String("platform", "", "Search platform: IOS or TV_OS")
 	country := fs.String("country", "us", "Storefront country code (ISO alpha-2, e.g. us, gb, de)")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "rank",
 		ShortUsage: "asc apps public rank --app APP_ID --term QUERY --platform PLATFORM [--country CODE]",
-		ShortHelp:  "[experimental] Report an app's rank in a public App Store search window.",
-		LongHelp: `[experimental] Report an app's rank in a public App Store search result window.
+		ShortHelp:  "Report an app's rank in a public App Store search window.",
+		LongHelp: `Report an app's rank in a public App Store search result window.
 
-This command is experimental. No authentication is required.
+No authentication is required.
 
 Supported platforms are IOS and TV_OS. A not-found result means the app is
 absent from the result window returned by Apple; it does not prove the app is

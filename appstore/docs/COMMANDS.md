@@ -50,7 +50,7 @@ asc <subcommand> [flags]
 
 - `analytics` - Request and download analytics and sales reports.
 - `ads` - Manage Apple Ads API resources.
-- `optimize` - Build cross-API optimization plans. [experimental]
+- `optimize` - Build cross-API optimization plans.
 - `insights` - Generate weekly and daily insights from App Store data sources.
 - `finance` - Download payments and financial reports.
 - `performance` - Access performance metrics and diagnostic logs.
@@ -63,7 +63,7 @@ asc <subcommand> [flags]
 - `versions` - Manage App Store versions.
 - `localizations` - Manage App Store localization metadata.
 - `metadata` - Manage app metadata with deterministic workflows and keyword tooling.
-- `screenshots` - Upload and manage App Store screenshots; local capture/frame/matrix workflow is [experimental].
+- `screenshots` - Upload and manage App Store screenshots, including local capture, framing, and matrices.
 - `video-previews` - Manage App Store app preview videos.
 - `background-assets` - Manage background assets.
 - `product-pages` - Manage custom product pages and product page experiments.
@@ -89,8 +89,8 @@ asc <subcommand> [flags]
 - `builds` - Manage builds in App Store Connect.
 - `build-bundles` - Manage build bundles and App Clip data.
 - `build-localizations` - Manage build release notes localizations.
-- `xcode` - Local Xcode build/archive/export and [experimental] signing-settings helpers.
-- `distribute` - Plan, execute, inspect, and publish iOS distribution artifacts. [experimental]
+- `xcode` - Local Xcode build/archive/export and signing-settings helpers.
+- `distribute` - Plan, execute, inspect, and publish iOS distribution artifacts.
 - `sandbox` - Manage sandbox testers in App Store Connect.
 
 ### Review and Release
@@ -138,7 +138,7 @@ asc <subcommand> [flags]
 
 ### Utility
 
-- `system-status` - [experimental] Check Apple Developer service health.
+- `system-status` - Check Apple Developer service health.
 - `diff` - Generate deterministic non-mutating diff plans.
 - `capabilities` - Show CLI, API, web-only, and public-API-limited capability coverage.
 - `search` - Search asc commands and examples for agent-oriented command discovery.

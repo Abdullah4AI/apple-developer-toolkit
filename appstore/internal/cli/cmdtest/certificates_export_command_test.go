@@ -171,18 +171,13 @@ func TestCertificatesExport_JSONOutputAndPKCS12RoundTrip(t *testing.T) {
 	}
 }
 
-func TestCertificatesExportMarksCommandAndFlagsExperimental(t *testing.T) {
+func TestCertificatesExportMarksCommandAndFlagsAreRegistered(t *testing.T) {
 	command := certificatescli.CertificatesExportCommand()
-	if !strings.HasPrefix(command.ShortHelp, "[experimental]") {
-		t.Fatalf("ShortHelp = %q, want experimental marker", command.ShortHelp)
-	}
+
 	for _, name := range []string{"certificate", "private-key", "csr", "password-file", "p12-out", "force", "confirm"} {
 		flagDef := command.FlagSet.Lookup(name)
 		if flagDef == nil {
 			t.Fatalf("missing --%s flag", name)
-		}
-		if !strings.HasPrefix(flagDef.Usage, "[experimental]") {
-			t.Fatalf("--%s usage = %q, want experimental marker", name, flagDef.Usage)
 		}
 	}
 }

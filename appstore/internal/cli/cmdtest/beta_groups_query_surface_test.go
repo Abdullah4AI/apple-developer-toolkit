@@ -40,9 +40,6 @@ func TestBetaGroupsListQuerySurfaceHelpDocumentsFlags(t *testing.T) {
 			t.Errorf("list command is missing --%s", name)
 			continue
 		}
-		if !strings.Contains(flagValue.Usage, "[experimental]") {
-			t.Errorf("--%s is missing the [experimental] lifecycle marker", name)
-		}
 	}
 }
 

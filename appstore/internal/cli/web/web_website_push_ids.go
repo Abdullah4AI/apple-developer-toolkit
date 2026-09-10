@@ -38,8 +38,8 @@ func WebWebsitePushIDsCommand() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "website-push-ids",
 		ShortUsage: "asc web website-push-ids <subcommand> [flags]",
-		ShortHelp:  "[experimental] Manage Website Push IDs via Developer Portal web sessions.",
-		LongHelp: `[experimental] WEB SESSION WORKFLOWS
+		ShortHelp:  "Manage Website Push IDs via Developer Portal web sessions.",
+		LongHelp: `WEB SESSION WORKFLOWS
 
 Read and manage Website Push IDs through Apple's Developer Portal web-session
 endpoints. The lifecycle commands use Apple's captured modern JSON:API routes;
@@ -73,8 +73,8 @@ func WebWebsitePushIDsViewCommand() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "view",
 		ShortUsage: "asc web website-push-ids view --website-push-id WEBSITE_PUSH_RESOURCE_ID [flags]",
-		ShortHelp:  "[experimental] Inspect one Website Push ID via a Developer Portal web session.",
-		LongHelp: `[experimental] Inspect one Website Push ID via a Developer Portal web session.
+		ShortHelp:  "Inspect one Website Push ID via a Developer Portal web session.",
+		LongHelp: `Inspect one Website Push ID via a Developer Portal web session.
 
 WEB SESSION WORKFLOWS
 
@@ -150,8 +150,8 @@ func WebWebsitePushIDsCreateCommand() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "create",
 		ShortUsage: "asc web website-push-ids create --name NAME --identifier IDENTIFIER --confirm [flags]",
-		ShortHelp:  "[experimental] Register a Website Push ID via a Developer Portal web session.",
-		LongHelp: `[experimental] Register a Website Push ID via a Developer Portal web session.
+		ShortHelp:  "Register a Website Push ID via a Developer Portal web session.",
+		LongHelp: `Register a Website Push ID via a Developer Portal web session.
 
 The captured request creates the resource with an explicitly empty
 websitepushIdCapabilities relationship. This command refuses to write when
@@ -215,8 +215,8 @@ func WebWebsitePushIDsDeleteCommand() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "delete",
 		ShortUsage: "asc web website-push-ids delete --website-push-id WEBSITE_PUSH_RESOURCE_ID --confirm [flags]",
-		ShortHelp:  "[experimental] Delete a Website Push ID via a Developer Portal web session.",
-		LongHelp: `[experimental] Delete a Website Push ID via a Developer Portal web session.
+		ShortHelp:  "Delete a Website Push ID via a Developer Portal web session.",
+		LongHelp: `Delete a Website Push ID via a Developer Portal web session.
 
 The command requires Apple's detail response to report canDelete=true and an
 explicitly empty websitepushIdCapabilities relationship. The captured delete
@@ -303,8 +303,8 @@ func WebWebsitePushIDsListCommand() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "list",
 		ShortUsage: "asc web website-push-ids list [flags]",
-		ShortHelp:  "[experimental] List Website Push IDs via a Developer Portal web session.",
-		LongHelp: `[experimental] List Website Push IDs via a Developer Portal web session.
+		ShortHelp:  "List Website Push IDs via a Developer Portal web session.",
+		LongHelp: `List Website Push IDs via a Developer Portal web session.
 
 WEB SESSION WORKFLOWS
 

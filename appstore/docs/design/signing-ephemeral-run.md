@@ -9,7 +9,7 @@ that identity into a persistent user keychain. `asc profiles local install`
 similarly installs a profile persistently. Agents therefore have to mutate
 long-lived host state and invent their own cleanup.
 
-This change adds an experimental local execution boundary under the existing
+This change adds a local execution boundary under the existing
 signing command group:
 
 ```text

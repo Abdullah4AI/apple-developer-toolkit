@@ -57,12 +57,12 @@ func UsersListCommand() *ffcli.Command {
 
 	email := fs.String("email", "", "Filter by email/username")
 	role := fs.String("role", "", "Filter by UserRole (comma-separated): "+strings.Join(userRoleList(), ", "))
-	visibleApp := fs.String("visible-app", "", "[experimental] Filter by visible app ID(s), comma-separated")
-	sort := fs.String("sort", "", "[experimental] Sort by one or more comma-separated expressions: username, -username, lastName, or -lastName")
-	fields := fs.String("fields", "", "[experimental] User fields to include: "+strings.Join(usersFieldsList(), ", "))
-	appFields := fs.String("app-fields", "", "[experimental] Fields to include for related apps, comma-separated")
-	include := fs.String("include", "", "[experimental] Include related resources: visibleApps")
-	visibleAppsLimit := fs.Int("visible-apps-limit", 0, "[experimental] Maximum included visible apps (1-50)")
+	visibleApp := fs.String("visible-app", "", "Filter by visible app ID(s), comma-separated")
+	sort := fs.String("sort", "", "Sort by one or more comma-separated expressions: username, -username, lastName, or -lastName")
+	fields := fs.String("fields", "", "User fields to include: "+strings.Join(usersFieldsList(), ", "))
+	appFields := fs.String("app-fields", "", "Fields to include for related apps, comma-separated")
+	include := fs.String("include", "", "Include related resources: visibleApps")
+	visibleAppsLimit := fs.Int("visible-apps-limit", 0, "Maximum included visible apps (1-50)")
 	output := shared.BindOutputFlags(fs)
 	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
 	next := fs.String("next", "", "Fetch next page using a links.next URL")
@@ -260,7 +260,7 @@ func UsersUpdateCommand() *ffcli.Command {
 	id := fs.String("id", "", "User ID")
 	roles := shared.BindOnceCSVFlag(fs, "roles", "Comma-separated UserRole values: "+strings.Join(userRoleList(), ", "))
 	visibleApps := shared.BindOnceCSVFlag(fs, "visible-app", "Comma-separated app IDs for visible apps")
-	confirm := fs.Bool("confirm", false, "[experimental] Confirm replacing visible apps (required with --visible-app)")
+	confirm := fs.Bool("confirm", false, "Confirm replacing visible apps (required with --visible-app)")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{

@@ -1,6 +1,6 @@
 # Apple Developer system status
 
-Status: Experimental
+Status: Implemented
 
 ## Placement and command shape
 
@@ -70,7 +70,7 @@ each snapshot remains one complete JSON record.
 
 ## Compatibility and agent discovery
 
-This is an additive experimental command with no authentication requirement
+This is an additive command with no authentication requirement
 and no changes to existing command behavior. The generated `ASC.md` agent
 reference will instruct agents to query it after unexpected Apple API failures.
 App Store Connect API 5xx errors reference the related system-status services;

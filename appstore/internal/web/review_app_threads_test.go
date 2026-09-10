@@ -306,7 +306,6 @@ func TestGetResolutionCenterDraftMessageReportsAbsentDraft(t *testing.T) {
 		body   string
 	}{
 		{name: "null data", status: http.StatusOK, body: `{"data": null}`},
-		{name: "missing data", status: http.StatusOK, body: `{}`},
 		{name: "not found", status: http.StatusNotFound, body: `{"errors": [{"code": "NOT_FOUND"}]}`},
 	}
 
@@ -327,6 +326,19 @@ func TestGetResolutionCenterDraftMessageReportsAbsentDraft(t *testing.T) {
 				t.Fatalf("expected no draft message, got %#v", draft)
 			}
 		})
+	}
+}
+
+func TestGetResolutionCenterDraftMessageRejectsMissingData(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	defer server.Close()
+
+	draft, err := testWebClient(server).GetResolutionCenterDraftMessage(context.Background(), "thread-1", false)
+	if err == nil {
+		t.Fatalf("expected missing data error, got draft=%#v err=%v", draft, err)
 	}
 }
 

@@ -21,7 +21,7 @@ func webXcodeCloudScmCommand() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "scm",
 		ShortUsage: "asc web xcode-cloud scm <subcommand> [flags]",
-		ShortHelp:  "[experimental] Inspect Xcode Cloud SCM connections.",
+		ShortHelp:  "Inspect Xcode Cloud SCM connections.",
 		LongHelp: `WEB SESSION WORKFLOWS
 
 Inspect SCM provider and connection metadata available to the authenticated
@@ -44,7 +44,7 @@ func webXcodeCloudScmProvidersCommand() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "providers",
 		ShortUsage: "asc web xcode-cloud scm providers <subcommand> [flags]",
-		ShortHelp:  "[experimental] Inspect Xcode Cloud SCM providers.",
+		ShortHelp:  "Inspect Xcode Cloud SCM providers.",
 		LongHelp: `WEB SESSION WORKFLOWS
 
 Inspect SCM providers available to the authenticated Xcode Cloud web session.
@@ -67,7 +67,7 @@ func webXcodeCloudScmProvidersListCommand() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "list",
 		ShortUsage: "asc web xcode-cloud scm providers list [flags]",
-		ShortHelp:  "[experimental] List Xcode Cloud SCM providers.",
+		ShortHelp:  "List Xcode Cloud SCM providers.",
 		LongHelp: `WEB SESSION WORKFLOWS
 
 List SCM providers available to the authenticated Xcode Cloud web session.
@@ -120,7 +120,7 @@ func webXcodeCloudScmConnectionStatusCommand() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "connection-status",
 		ShortUsage: "asc web xcode-cloud scm connection-status --scm-provider-id ID [flags]",
-		ShortHelp:  "[experimental] Show an Xcode Cloud SCM connection status.",
+		ShortHelp:  "Show an Xcode Cloud SCM connection status.",
 		LongHelp: `WEB SESSION WORKFLOWS
 
 Show the connection status for one SCM provider returned by

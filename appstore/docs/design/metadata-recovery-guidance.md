@@ -3,7 +3,7 @@
 ## Decision
 
 `asc metadata validate` remains a directory-based command that is offline by
-default. The explicit experimental `--check-urls` flag can opt into bounded URL
+default. The explicit `--check-urls` flag can opt into bounded URL
 destination checks. The command does not accept `--app` or `--version`; those
 unsupported flags produce a targeted recovery message that points to `--dir`
 and shows `asc metadata pull` when local metadata must be fetched first.

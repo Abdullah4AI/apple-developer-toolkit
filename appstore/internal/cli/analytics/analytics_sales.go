@@ -26,7 +26,7 @@ func AnalyticsSalesCommand() *ffcli.Command {
 	version := fs.String("version", "", "Report format version allowed for the selected type, subtype, and frequency")
 	output := fs.String("output", "", "Output file path (default: sales_report_{date|latest}_{type}.tsv.gz)")
 	decompress := fs.Bool("decompress", false, "Decompress gzip output to .tsv")
-	allowMissing := fs.Bool("allow-missing", false, "[experimental] Return available=false instead of failing when no report exists for the requested date")
+	allowMissing := fs.Bool("allow-missing", false, "Return available=false instead of failing when no report exists for the requested date")
 	outputFlags := shared.BindMetadataOutputFlags(fs)
 
 	return &ffcli.Command{

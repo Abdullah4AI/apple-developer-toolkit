@@ -22,17 +22,13 @@ func TestXcodeCommandExists(t *testing.T) {
 		t.Fatal("expected xcode command")
 		return
 	}
-	if strings.HasPrefix(xcodeCmd.ShortHelp, "[experimental]") {
-		t.Fatalf("expected xcode command not to be experimental, got %q", xcodeCmd.ShortHelp)
-	}
+
 	buildCmd := findSubcommand(root, "xcode", "build")
 	if buildCmd == nil {
 		t.Fatal("expected xcode build command")
 		return
 	}
-	if !strings.HasPrefix(buildCmd.ShortHelp, "[experimental]") {
-		t.Fatalf("expected xcode build to be introduced as experimental, got %q", buildCmd.ShortHelp)
-	}
+
 	for _, name := range []string{"project", "workspace", "scheme", "configuration", "destination", "derived-data-path", "result-bundle-path", "clean", "no-code-signing", "xcodebuild-flag", "output"} {
 		if buildCmd.FlagSet.Lookup(name) == nil {
 			t.Fatalf("expected xcode build to expose --%s", name)
@@ -45,9 +41,7 @@ func TestXcodeCommandExists(t *testing.T) {
 		t.Fatal("expected xcode test command")
 	}
 	testCmd := findSubcommand(root, "xcode", "test")
-	if !strings.HasPrefix(testCmd.ShortHelp, "[experimental]") {
-		t.Fatalf("expected xcode test to be introduced as experimental, got %q", testCmd.ShortHelp)
-	}
+
 	for _, name := range []string{"project", "workspace", "scheme", "action", "configuration", "destination", "test-plan", "xctestrun", "only-testing", "skip-testing", "derived-data-path", "result-bundle-path", "clean", "no-code-signing", "xcodebuild-flag", "output"} {
 		if testCmd.FlagSet.Lookup(name) == nil {
 			t.Fatalf("expected xcode test to expose --%s", name)
@@ -98,8 +92,6 @@ func TestXcodeCommandExists(t *testing.T) {
 	}
 	if flag := editCmd.FlagSet.Lookup("allow-external-xcconfig"); flag == nil {
 		t.Fatal("expected xcode version edit to expose --allow-external-xcconfig")
-	} else if !strings.HasPrefix(flag.Usage, "[experimental]") {
-		t.Fatalf("expected --allow-external-xcconfig to be introduced as experimental, usage = %q", flag.Usage)
 	}
 	bumpCmd := findSubcommand(root, "xcode", "version", "bump")
 	if bumpCmd == nil {
@@ -123,8 +115,6 @@ func TestXcodeCommandExists(t *testing.T) {
 	}
 	if flag := bumpCmd.FlagSet.Lookup("allow-external-xcconfig"); flag == nil {
 		t.Fatal("expected xcode version bump to expose --allow-external-xcconfig")
-	} else if !strings.HasPrefix(flag.Usage, "[experimental]") {
-		t.Fatalf("expected --allow-external-xcconfig to be introduced as experimental, usage = %q", flag.Usage)
 	}
 	if findSubcommand(root, "xcode", "version", "get") != nil {
 		t.Fatal("expected xcode version get command to be absent")

@@ -427,42 +427,22 @@ func TestWebAgreementsRejectPositionalArgs(t *testing.T) {
 	}
 }
 
-func TestWebAgreementsCommandsAndFlagsAreExperimental(t *testing.T) {
-	group := WebAgreementsCommand()
-	if !strings.HasPrefix(group.ShortHelp, "[experimental] ") {
-		t.Fatalf("group ShortHelp = %q, want experimental prefix", group.ShortHelp)
-	}
-
-	status := WebAgreementsStatusCommand()
-	if !strings.HasPrefix(status.ShortHelp, "[experimental] ") {
-		t.Fatalf("status ShortHelp = %q, want experimental prefix", status.ShortHelp)
-	}
-
+func TestWebAgreementsFlagsAreRegistered(t *testing.T) {
 	accept := WebAgreementsAcceptCommand()
-	if !strings.HasPrefix(accept.ShortHelp, "[experimental] ") {
-		t.Fatalf("accept ShortHelp = %q, want experimental prefix", accept.ShortHelp)
-	}
+
 	for _, name := range []string{"agreement-id", "confirm"} {
 		flag := accept.FlagSet.Lookup(name)
 		if flag == nil {
 			t.Fatalf("expected --%s flag", name)
 		}
-		if !strings.HasPrefix(flag.Usage, "[experimental] ") {
-			t.Fatalf("--%s usage = %q, want experimental prefix", name, flag.Usage)
-		}
 	}
 
 	download := WebAgreementsDownloadCommand()
-	if !strings.HasPrefix(download.ShortHelp, "[experimental] ") {
-		t.Fatalf("download ShortHelp = %q, want experimental prefix", download.ShortHelp)
-	}
+
 	for _, name := range []string{"agreement-id", "out", "overwrite"} {
 		flag := download.FlagSet.Lookup(name)
 		if flag == nil {
 			t.Fatalf("expected download --%s flag", name)
-		}
-		if !strings.HasPrefix(flag.Usage, "[experimental] ") {
-			t.Fatalf("download --%s usage = %q, want experimental prefix", name, flag.Usage)
 		}
 	}
 }

@@ -28,8 +28,8 @@ func ShotsReviewApproveCommand() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "review-approve",
 		ShortUsage: "asc screenshots review-approve [--all-ready | --key key1,key2 | --id home] [flags]",
-		ShortHelp:  "[experimental] Write/update approved.json from review manifest selectors.",
-		LongHelp: `Approve review entries and persist to approved.json (experimental).
+		ShortHelp:  "Write/update approved.json from review manifest selectors.",
+		LongHelp: `Approve review entries and persist to approved.json.
 
 Selectors:
 - --all-ready: approve all status=ready entries

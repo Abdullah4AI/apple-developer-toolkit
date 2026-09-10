@@ -364,7 +364,7 @@ func TestTestFlightBetaTestersListPaginateMergesIncludedBetaGroups(t *testing.T)
 	}
 }
 
-func TestTestFlightBetaTestersListQueryFlagsAreExperimental(t *testing.T) {
+func TestTestFlightBetaTestersListQueryFlagsAreRegistered(t *testing.T) {
 	list := findSubcommand(RootCommand("1.2.3"), "testflight", "testers", "list")
 	if list == nil {
 		t.Fatal("testflight testers list command not found")
@@ -374,9 +374,6 @@ func TestTestFlightBetaTestersListQueryFlagsAreExperimental(t *testing.T) {
 		flag := list.FlagSet.Lookup(name)
 		if flag == nil {
 			t.Fatalf("--%s flag not found", name)
-		}
-		if !strings.HasPrefix(flag.Usage, "[experimental] ") {
-			t.Errorf("--%s usage = %q, want [experimental] prefix", name, flag.Usage)
 		}
 	}
 }

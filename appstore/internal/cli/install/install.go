@@ -30,11 +30,13 @@ import (
 const (
 	skillsInstallerPackage    = "skills@1.5.20"
 	skillsSourceRepositoryURL = "https://github.com/rorkai/app-store-connect-cli-skills.git"
-	skillsSourceCommit        = "e30039abddbe388179324d0f9cdccb66c3843115"
-	expectedSkillsCount       = 23
+	skillsSourceCommit        = "f52c4f04323bb2dfb21ca8be82e6494e9cd0b4d8"
+	expectedSkillsCount       = 25
 )
 
 var expectedSkillNames = []string{
+	"asc-ad-hoc-distribution",
+	"asc-analytics-reports",
 	"asc-app-create-ui",
 	"asc-apple-ads",
 	"asc-aso-audit",
@@ -63,29 +65,31 @@ var expectedSkillNames = []string{
 // expectedSkillTreeHashes are the Git tree object IDs at skillsSourceCommit.
 // The external skills CLI uses these hashes for its version 3 lock schema.
 var expectedSkillTreeHashes = map[string]string{
-	"asc-app-create-ui":             "8a254ebc29c92a2db288046b44eb44f98badfaf8",
-	"asc-apple-ads":                 "1b36ce3bc8e377cbbb6f687888e998cceede8394",
-	"asc-aso-audit":                 "cd716013f166a536af1a4b96eda258d7427ec593",
-	"asc-build-lifecycle":           "ace286d720b4ad94978b39d1ee06d3cef436a268",
-	"asc-cli-usage":                 "a71332449b340d465b36fb18f8692938db72d6cf",
+	"asc-ad-hoc-distribution":       "1971fddbfc899aa9c9fdbae966ac1ad910c782f8",
+	"asc-analytics-reports":         "02e6f26daa9bbe072d0a16b0f66174577dab3786",
+	"asc-app-create-ui":             "f0bd798edb26e555c2d1c9a03170839339a9617f",
+	"asc-apple-ads":                 "f880071a54da09438dc263e1e713eec82e30a076",
+	"asc-aso-audit":                 "82236048a284d1539e8f3f9b3ab674027c0593d6",
+	"asc-build-lifecycle":           "33e0a5aa1e7e44614e08c6cfc7be0d90d0c50beb",
+	"asc-cli-usage":                 "bc2e86aff174beffc6822f1ff418fde96ecb8406",
 	"asc-crash-triage":              "ddd74903f7d5ca6a3ab2adca3a5fe5d16bf91a2c",
-	"asc-id-resolver":               "3b3af77091eaf5458a5c96c68da7cca6d1ad6d95",
-	"asc-localize-metadata":         "0e4b61406cab8b4f4f3e56c0c061300e70d078e5",
-	"asc-metadata-sync":             "96acf6364c8f4a6842f1d5a94614d57ee2824c72",
+	"asc-id-resolver":               "622819676125ec107c2d2080f53c5e8a49a4da66",
+	"asc-localize-metadata":         "e62586a64adca119eba2db2b213f53106565a1ad",
+	"asc-metadata-sync":             "579a4bf7b7683f394b0f6fbe62e9c44e2a4c20c3",
 	"asc-notarization":              "36d8850790528df621beafcd6e511a6d24d685c0",
-	"asc-ppp-pricing":               "6362caecb7b9c6db19d4ce6709cdbea0d0ede7a5",
-	"asc-release-flow":              "263b644f73ae241a9fba09167454f7dcd1e3b593",
-	"asc-revenuecat-catalog-sync":   "a358fe99cf76a475ce6b5f1e1bd3cb9f0d1078a3",
+	"asc-ppp-pricing":               "db3ee0d35c88e71550eeb7462dd623d48f2b97c4",
+	"asc-release-flow":              "dc6aa81e498b821d07fa1a56e25ddb6d693c0ba4",
+	"asc-revenuecat-catalog-sync":   "85a89894315657d274695157ea7614d8ed2197d0",
 	"asc-screenshot-resize":         "5ac1818b9083168aa7156d22f422bef8f4a8255f",
 	"asc-shots-pipeline":            "abe751dc2dcbf63518be4337e482485498eb723d",
-	"asc-signing-setup":             "cee2136e2f85f2a15e5c3a75792d59c181946d38",
-	"asc-submission-health":         "c69838e7df462aa99e76d60ef53b1c6ae402bec9",
+	"asc-signing-setup":             "26eeab24b875331b2c527cba32928e1c1bbcf44b",
+	"asc-submission-health":         "af9d35eb1418ab12d276c605b48098f330201610",
 	"asc-subscription-localization": "02b30fc38f23e8d5ce0107f8548096d9ed4902ce",
-	"asc-testflight-orchestration":  "335fe9c5a2826320f9663b4e9c9fbb0722f6d34e",
+	"asc-testflight-orchestration":  "a7a62b24e77df5fe9f2297d0bd1cebf409586068",
 	"asc-wall-submit":               "80e3a2f914a7f07aa7641d523eadab226f869f41",
 	"asc-whats-new-writer":          "95607774f0b4f620cc4a02a33bc4a3281845a76b",
-	"asc-workflow":                  "6f27477fab98a4196e7d5b8ed3821e32416739cc",
-	"asc-xcode-build":               "343717164fa420e104b9f20ee8182d85fa4d0b75",
+	"asc-workflow":                  "06bd9199031d1b18d7c183adc8685540458351b3",
+	"asc-xcode-build":               "c3c4261279a72d0e4d3feeeb837479b4fa5c9c7f",
 }
 
 var (

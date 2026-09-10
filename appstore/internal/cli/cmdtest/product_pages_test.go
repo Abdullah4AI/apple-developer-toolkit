@@ -218,7 +218,7 @@ func TestProductPagesExperimentTreatmentLocalizationMediaSetsValidationErrors(t 
 	}
 }
 
-func TestProductPagesScreenshotSetIncludeScreenshotsIsExperimental(t *testing.T) {
+func TestProductPagesScreenshotSetIncludeScreenshotsIsRegistered(t *testing.T) {
 	root := RootCommand("1.2.3")
 	cases := [][]string{
 		{"product-pages", "custom-pages", "localizations", "screenshot-sets", "list"},
@@ -233,9 +233,6 @@ func TestProductPagesScreenshotSetIncludeScreenshotsIsExperimental(t *testing.T)
 		includeScreenshots := cmd.FlagSet.Lookup("include-screenshots")
 		if includeScreenshots == nil {
 			t.Fatalf("command %v missing --include-screenshots", path)
-		}
-		if !strings.HasPrefix(includeScreenshots.Usage, "[experimental] ") {
-			t.Fatalf("command %v --include-screenshots usage = %q, want [experimental] prefix", path, includeScreenshots.Usage)
 		}
 	}
 }

@@ -128,8 +128,12 @@ func TestWebAPIKeysCreateIndividualUnsupportedPublicationDoesNotCreate(t *testin
 }
 
 func TestWebAPIKeysCreateIndividualGeneratesAndRegistersP8(t *testing.T) {
+	testWebAPIKeysCreateIndividualGeneratesAndRegistersP8(t, t.TempDir())
+}
+
+func testWebAPIKeysCreateIndividualGeneratesAndRegistersP8(t *testing.T, outputDir string) {
+	t.Helper()
 	t.Setenv("ASC_WEB_MIN_REQUEST_INTERVAL", "0")
-	outputDir := t.TempDir()
 	requestCount := 0
 	postCreated := false
 	var registeredPublicKey string

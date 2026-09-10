@@ -1,6 +1,6 @@
 # Crash-recoverable private publication intent
 
-Status: implementation contract for the experimental agent-native distribution
+Status: implementation contract for the agent-native distribution
 orchestrator. This does not change the public `asc distribute publish` command.
 
 ## Placement and invocation

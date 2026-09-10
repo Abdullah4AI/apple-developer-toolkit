@@ -96,7 +96,7 @@ Examples:
 func WebAPIKeysListCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("web api-keys list", flag.ExitOnError)
 
-	authFlags := bindWebSessionFlags(fs)
+	authFlags := bindWebSessionFlagsWithSessionFromEnv(fs)
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
@@ -105,18 +105,22 @@ func WebAPIKeysListCommand() *ffcli.Command {
 		ShortHelp:  "List App Store Connect API keys via a web session.",
 		LongHelp: `WEB SESSION WORKFLOWS
 
-List team and individual App Store Connect API keys visible to the cached Apple
-Account web session. Output includes key ID, name, kind, roles, and active
-state. Creation date is omitted because the existing key-list readers do not
-expose it. Key material is never printed. Individual keys may have empty roles
+List team and individual App Store Connect API keys visible to the Apple Account
+web session. Output includes key ID, name, kind, roles, and active state. Creation
+date is omitted because the existing key-list readers do not expose it. Key material is never printed. Individual keys may have empty roles
 on this list; use "asc web auth capabilities --key-id" to resolve actor-backed
 roles for one key.
+
+By default, this command uses the cached web session. Pass --session-from-env
+to use ASC_WEB_SESSION in memory without persistence. This mode does not read
+or write the session cache or keychain.
 
 The underlying readers already follow every pagination link, so this command
 always returns the complete visible set and does not accept --paginate.
 
 Examples:
   asc web api-keys list
+  asc web api-keys list --session-from-env --output json
   asc web api-keys list --output json
 
 `,
@@ -164,7 +168,7 @@ func WebAPIKeysViewCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("web api-keys view", flag.ExitOnError)
 
 	keyID := fs.String("key-id", "", "API key ID")
-	authFlags := bindWebSessionFlags(fs)
+	authFlags := bindWebSessionFlagsWithSessionFromEnv(fs)
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
@@ -181,8 +185,13 @@ printed.
 Individual keys appear in "asc web api-keys list" but are not loaded by this
 command.
 
+By default, this command uses the cached web session. Pass --session-from-env
+to use ASC_WEB_SESSION in memory without persistence. This mode does not read
+or write the session cache or keychain.
+
 Examples:
   asc web api-keys view --key-id KEY_ID
+  asc web api-keys view --key-id KEY_ID --session-from-env --output json
   asc web api-keys view --key-id KEY_ID --output json
 
 `,

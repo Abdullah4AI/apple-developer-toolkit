@@ -24,7 +24,6 @@ func TestKeywordsRankCommandHelpDescribesPublicZeroAuthWorkflow(t *testing.T) {
 	joined := command.ShortUsage + "\n" + command.ShortHelp + "\n" + command.LongHelp
 	for _, want := range []string{
 		"asc optimize keywords rank",
-		"[experimental]",
 		"No authentication is required.",
 		"--keywords",
 		"--workers",
@@ -33,16 +32,11 @@ func TestKeywordsRankCommandHelpDescribesPublicZeroAuthWorkflow(t *testing.T) {
 			t.Fatalf("help missing %q:\n%s", want, joined)
 		}
 	}
-	if !strings.HasSuffix(command.ShortHelp, "[experimental]") {
-		t.Fatalf("ShortHelp = %q, want experimental suffix", command.ShortHelp)
-	}
+
 	for _, name := range []string{"app", "keywords", "country", "platform", "workers"} {
 		flagDef := command.FlagSet.Lookup(name)
 		if flagDef == nil {
 			t.Fatalf("flag --%s is not registered", name)
-		}
-		if !strings.HasSuffix(flagDef.Usage, "[experimental]") {
-			t.Fatalf("--%s usage = %q, want experimental suffix", name, flagDef.Usage)
 		}
 	}
 }

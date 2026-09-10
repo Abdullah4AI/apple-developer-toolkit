@@ -30,8 +30,8 @@ func distributionPlanCommand() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "plan",
 		ShortUsage: "asc distribute plan --archive-path PATH --config PATH --plan PATH [flags]",
-		ShortHelp:  "[experimental] Build a read-only, hash-bound distribution plan.",
-		LongHelp: `[experimental] Inspect an archive, the requested devices, signing identity,
+		ShortHelp:  "Build a read-only, hash-bound distribution plan.",
+		LongHelp: `Inspect an archive, the requested devices, signing identity,
 current Apple signing state, and a private S3-compatible destination without mutation.
 
 The resulting owner-private plan lists the exact additive account mutations and
@@ -84,8 +84,8 @@ func distributionApplyCommandWithExecutor(execute distributionApplyExecutor) *ff
 	return &ffcli.Command{
 		Name:       "apply",
 		ShortUsage: "asc distribute apply --plan PATH --confirm PLAN_HASH [flags]",
-		ShortHelp:  "[experimental] Apply one exact distribution plan.",
-		LongHelp: `[experimental] Apply the exact additive effects authorized by a distribution plan.
+		ShortHelp:  "Apply one exact distribution plan.",
+		LongHelp: `Apply the exact additive effects authorized by a distribution plan.
 
 Confirmation is the plan's complete SHA-256 planHash, not a boolean. Changed
 inputs or remote state that require different effects stop and require a new plan.
@@ -147,8 +147,8 @@ func distributionVerifyCommandWithExecutor(execute distributionVerifyExecutor) *
 	output := shared.BindOutputFlags(fs)
 	return &ffcli.Command{
 		Name: "verify", ShortUsage: "asc distribute verify --run RUN_ID [flags]",
-		ShortHelp: "[experimental] Reverify published artifacts and optionally observe a device install.",
-		LongHelp: `[experimental] Reverify the immutable receipt, local IPA, and every remotely
+		ShortHelp: "Reverify published artifacts and optionally observe a device install.",
+		LongHelp: `Reverify the immutable receipt, local IPA, and every remotely
 published object without mutation. --device observes the matching bundle, version,
 and build on a connected device; it does not claim byte identity with the IPA.`,
 		FlagSet: fs, UsageFunc: shared.DefaultUsageFunc,
@@ -195,7 +195,7 @@ func distributionRunCommand(name, help string, execute distributionRunExecutor) 
 	output := shared.BindOutputFlags(fs)
 	return &ffcli.Command{
 		Name: name, ShortUsage: "asc distribute " + name + " --run RUN_ID [flags]",
-		ShortHelp: "[experimental] " + help,
+		ShortHelp: "" + help,
 		FlagSet:   fs, UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			if len(args) != 0 {

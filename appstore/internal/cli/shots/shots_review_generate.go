@@ -30,8 +30,8 @@ func ShotsReviewGenerateCommand() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "review-generate",
 		ShortUsage: "asc screenshots review-generate [flags]",
-		ShortHelp:  "[experimental] Generate HTML side-by-side review and JSON manifest.",
-		LongHelp: `Generate review artifacts for screenshots (experimental):
+		ShortHelp:  "Generate HTML side-by-side review and JSON manifest.",
+		LongHelp: `Generate review artifacts for screenshots:
 
 - HTML report for visual QA (raw vs framed side-by-side)
 - JSON manifest for agent checks (size, locale/device grouping, approval state)`,

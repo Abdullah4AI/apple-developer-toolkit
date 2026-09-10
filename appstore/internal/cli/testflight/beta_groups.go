@@ -249,24 +249,24 @@ func BetaGroupsListCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("list", flag.ExitOnError)
 
 	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
-	buildID := fs.String("build-id", "", "[experimental] List groups that contain this build ID")
+	buildID := fs.String("build-id", "", "List groups that contain this build ID")
 	global := fs.Bool("global", false, "List beta groups across all apps (top-level endpoint)")
 	internal := fs.Bool("internal", false, "Filter to internal groups only")
 	external := fs.Bool("external", false, "Filter to external groups only")
-	name := fs.String("name", "", "[experimental] Filter to beta groups with this exact name")
-	sort := fs.String("sort", "", "[experimental] Sort order ("+strings.Join(betaGroupSortValues, ", ")+")")
-	id := fs.String("id", "", "[experimental] Filter by beta group ID(s), comma-separated")
-	publicLinkEnabled := fs.String("public-link-enabled", "", "[experimental] Filter by public link enabled state (true or false)")
-	publicLinkLimitEnabled := fs.String("public-link-limit-enabled", "", "[experimental] Filter by public link limit enabled state (true or false)")
-	publicLink := fs.String("public-link", "", "[experimental] Filter by public link value")
-	fields := fs.String("fields", "", "[experimental] Fields to include for beta groups, comma-separated")
-	appFields := fs.String("app-fields", "", "[experimental] Fields to include for related apps, comma-separated")
-	buildFields := fs.String("build-fields", "", "[experimental] Fields to include for related builds, comma-separated")
-	testerFields := fs.String("tester-fields", "", "[experimental] Fields to include for related beta testers, comma-separated")
-	recruitmentCriteriaFields := fs.String("recruitment-criteria-fields", "", "[experimental] Fields to include for related beta recruitment criteria, comma-separated")
-	include := fs.String("include", "", "[experimental] Include related resources: "+strings.Join(betaGroupIncludeValues, ", "))
-	testersLimit := fs.Int("testers-limit", 0, "[experimental] Maximum included beta testers (1-50)")
-	buildsLimit := fs.Int("builds-limit", 0, "[experimental] Maximum included builds (1-1000)")
+	name := fs.String("name", "", "Filter to beta groups with this exact name")
+	sort := fs.String("sort", "", "Sort order ("+strings.Join(betaGroupSortValues, ", ")+")")
+	id := fs.String("id", "", "Filter by beta group ID(s), comma-separated")
+	publicLinkEnabled := fs.String("public-link-enabled", "", "Filter by public link enabled state (true or false)")
+	publicLinkLimitEnabled := fs.String("public-link-limit-enabled", "", "Filter by public link limit enabled state (true or false)")
+	publicLink := fs.String("public-link", "", "Filter by public link value")
+	fields := fs.String("fields", "", "Fields to include for beta groups, comma-separated")
+	appFields := fs.String("app-fields", "", "Fields to include for related apps, comma-separated")
+	buildFields := fs.String("build-fields", "", "Fields to include for related builds, comma-separated")
+	testerFields := fs.String("tester-fields", "", "Fields to include for related beta testers, comma-separated")
+	recruitmentCriteriaFields := fs.String("recruitment-criteria-fields", "", "Fields to include for related beta recruitment criteria, comma-separated")
+	include := fs.String("include", "", "Include related resources: "+strings.Join(betaGroupIncludeValues, ", "))
+	testersLimit := fs.Int("testers-limit", 0, "Maximum included beta testers (1-50)")
+	buildsLimit := fs.Int("builds-limit", 0, "Maximum included builds (1-1000)")
 	output := shared.BindOutputFlags(fs)
 	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
 	next := fs.String("next", "", "Fetch next page using a links.next URL")
@@ -278,7 +278,7 @@ func BetaGroupsListCommand() *ffcli.Command {
 		ShortHelp:  "List TestFlight beta groups for an app or globally.",
 		LongHelp: `List TestFlight beta groups for an app or globally.
 
-The --build-id lookup is experimental. It resolves the build's app and
+The --build-id lookup resolves the build's app and
 automatically paginates the app's groups, returning both explicit build
 relationships and groups with all-build access.
 App Store Connect exposes no GET /v1/builds/{id}/relationships/betaGroups. It
@@ -302,8 +302,7 @@ GET /v1/apps/{id}/betaGroups accepts only limit and fields[betaGroups], so
 with filter[app]. Those filters are applied by App Store Connect. For ordinary
 one-page filtered and global listings, --limit is the page size. The stable
 app-scoped --internal/--external aggregate fetches with the maximum page size
-of 200 before applying --limit as the final cap. The --name and --sort flags
-are experimental; --name matches the exact group name.
+of 200 before applying --limit as the final cap. --name matches the exact group name.
 The top-level endpoint also supports --id, --public-link-enabled,
 --public-link-limit-enabled, and --public-link filters. Use --include with
 --fields, --app-fields, --build-fields, --tester-fields, or
@@ -689,7 +688,7 @@ Examples:
 			// App-scoped internal/external filtering historically returned every
 			// matching page without requiring --paginate. Keep that stable behavior
 			// while moving the filtering itself to the top-level endpoint. The new
-			// experimental name/sort flags retain the normal one-page default.
+			// name/sort flags retain the normal one-page default.
 			stableAppScopedFilter := !*global && resolvedAppID != "" && internalFilter != nil && nameValue == "" && sortValue == "" && !queryFilterSet
 			if stableAppScopedFilter && !*paginate {
 				// Fetch with Apple's maximum page size before applying the
@@ -812,7 +811,7 @@ type BuildGroupsListCommandConfig struct {
 func BuildGroupsListCommand(config BuildGroupsListCommandConfig) *ffcli.Command {
 	fs := flag.NewFlagSet("list", flag.ExitOnError)
 
-	buildID := fs.String("build-id", "", "[experimental] Build ID whose TestFlight groups should be listed")
+	buildID := fs.String("build-id", "", "Build ID whose TestFlight groups should be listed")
 	output := shared.BindOutputFlags(fs)
 
 	errorPrefix := strings.TrimSpace(config.ErrorPrefix)
@@ -912,17 +911,17 @@ func BetaGroupsCreateCommand() *ffcli.Command {
 	fs.Var(&internal, "internal", "Create as internal group")
 	var accessAllBuilds shared.OptionalBool
 	accessAllBuilds.EnableBoolFlag()
-	fs.Var(&accessAllBuilds, "access-all-builds", "[experimental] Give the group access to all builds")
+	fs.Var(&accessAllBuilds, "access-all-builds", "Give the group access to all builds")
 	var publicLinkEnabled shared.OptionalBool
 	publicLinkEnabled.EnableBoolFlag()
-	fs.Var(&publicLinkEnabled, "public-link-enabled", "[experimental] Enable the public link")
+	fs.Var(&publicLinkEnabled, "public-link-enabled", "Enable the public link")
 	var publicLinkLimitEnabled shared.OptionalBool
 	publicLinkLimitEnabled.EnableBoolFlag()
-	fs.Var(&publicLinkLimitEnabled, "public-link-limit-enabled", "[experimental] Enable the public link tester limit")
-	publicLinkLimit := fs.Int("public-link-limit", 0, "[experimental] Public link tester limit (1-10000)")
+	fs.Var(&publicLinkLimitEnabled, "public-link-limit-enabled", "Enable the public link tester limit")
+	publicLinkLimit := fs.Int("public-link-limit", 0, "Public link tester limit (1-10000)")
 	var feedbackEnabled shared.OptionalBool
 	feedbackEnabled.EnableBoolFlag()
-	fs.Var(&feedbackEnabled, "feedback-enabled", "[experimental] Enable tester feedback")
+	fs.Var(&feedbackEnabled, "feedback-enabled", "Enable tester feedback")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{

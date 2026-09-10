@@ -200,15 +200,12 @@ func TestWebRemovedAppsRestoreValidationBeforeAuth(t *testing.T) {
 	}
 }
 
-func TestWebRemovedAppsRestoreFlagsAreExperimental(t *testing.T) {
+func TestWebRemovedAppsRestoreFlagsAreRegistered(t *testing.T) {
 	cmd := WebRemovedAppsRestoreCommand()
 	for _, name := range []string{"app", "access", "confirm"} {
 		definition := cmd.FlagSet.Lookup(name)
 		if definition == nil {
 			t.Fatalf("missing --%s", name)
-		}
-		if !strings.HasPrefix(definition.Usage, "[experimental] ") {
-			t.Fatalf("--%s usage = %q, want experimental lifecycle prefix", name, definition.Usage)
 		}
 	}
 }

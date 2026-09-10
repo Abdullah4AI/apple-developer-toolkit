@@ -10,6 +10,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -164,7 +165,7 @@ Examples:
 				return fmt.Errorf("prepare individual API key staging path; remote create was not attempted: %w", err)
 			}
 			stagedPath := filepath.Join(outputRoot.Path(), stagedName)
-			if err := outputRoot.CreateNewFile(stagedName, privatePEM, 0o600); err != nil {
+			if err := stageIndividualAPIKey(outputRoot, stagedName, privatePEM); err != nil {
 				return fmt.Errorf("stage individual API key private artifact at %q; remote create was not attempted: %w", stagedPath, err)
 			}
 
@@ -260,6 +261,27 @@ func resolveCreatedIndividualAPIKey(existingIDs map[string]struct{}, keys []webc
 		return nil, fmt.Errorf("created individual API key could not be identified unambiguously: no newly active key was returned")
 	}
 	return candidate, nil
+}
+
+func stageIndividualAPIKey(root rootfs.Root, name string, privatePEM []byte) (err error) {
+	opened, err := root.OpenRoot()
+	if err != nil {
+		return err
+	}
+	defer func() {
+		err = errors.Join(err, opened.Close())
+	}()
+	_, err = shared.SafeWriteFileNoSymlinkWithPreparationAndCreatorInRoot(
+		opened, filepath.Join(root.Path(), name), name, 0o600, false,
+		".asc-api-key-private-*.p8", "",
+		func(file *os.File) error { return secureopen.PreparePrivateFile(file, 0o600) },
+		secureopen.OpenNewPrivateFileNoFollowInRoot,
+		func(file *os.File) (int64, error) {
+			written, writeErr := file.Write(privatePEM)
+			return int64(written), writeErr
+		},
+	)
+	return err
 }
 
 func newIndividualAPIKeyStagingName() (string, error) {

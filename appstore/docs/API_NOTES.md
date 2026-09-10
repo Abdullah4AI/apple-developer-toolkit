@@ -16,7 +16,7 @@ Quirks and tips for specific App Store Connect API endpoints.
 
 ## Public App Store Ranking
 
-- `asc apps public rank` is an unauthenticated experimental storefront command, not an App Store Connect OpenAPI operation or an Apple Ads metric.
+- `asc apps public rank` is an unauthenticated storefront command, not an App Store Connect OpenAPI operation or an Apple Ads metric.
 - iOS ranking inspects up to 200 results from the public iTunes `/search` endpoint. Apple TV ranking uses the undocumented MZStore search endpoint with `X-Apple-Store-Front: <numeric-storefront-id>,33`, so it is available only for countries with a known numeric storefront ID.
 - `found: false` means only that the app was absent from Apple's returned result window. Storefront order, window size, and the Apple TV response schema can change independently of the CLI.
 
@@ -44,7 +44,7 @@ Finance reports use Apple fiscal months (`YYYY-MM`), not calendar months.
 
 **Important:**
 - `FINANCE_DETAIL` reports require region code `Z1` (the only valid region for detailed reports)
-- Transaction Tax reports are not available through the public App Store Connect API; use the experimental `asc web finance transaction-tax download` web-session workflow or App Store Connect.
+- Transaction Tax reports are not available through the public App Store Connect API; use the `asc web finance transaction-tax download` web-session workflow or App Store Connect.
 - Region codes reference: https://developer.apple.com/help/app-store-connect/reference/financial-report-regions-and-currencies/
 - Use `asc finance regions` to see all available region codes
 
@@ -72,8 +72,8 @@ the App Store Connect web-client source captured for issue #2299:
   verified explicit application tax configuration and readback. PATCH,
   condition changes, and account-specific errors remain unverified; selecting
   the legally correct classification remains the operator's responsibility.
-- In-App Purchase tax categories are available through the experimental
-  web-session commands `asc web iap tax-category list`,
+- In-App Purchase tax categories are available through the web-session commands
+  `asc web iap tax-category list`,
   `asc web iap tax-category view --iap IAP_ID`,
   `asc web iap tax-category set --iap IAP_ID --category CATEGORY_ID
   [--condition CONDITION_ID ...] --confirm`, and
@@ -115,7 +115,7 @@ the App Store Connect web-client source captured for issue #2299:
 - `GET /v1/financeReports` accepts only `FINANCIAL` and `FINANCE_DETAIL` in
   `filter[reportType]`, and `GET /v1/salesReports` has no tax report type, so
   Transaction Tax reports cannot be generated or downloaded through the public
-  API. The captured finance workflow is available through the experimental
+  API. The captured finance workflow is available through the
   `asc web finance transaction-tax download` command; provider and period
   eligibility remain account-specific.
 - `asc capabilities --area monetization` reports App Information and
@@ -187,14 +187,14 @@ the App Store Connect web-client source captured for issue #2299:
   `createFromDraftMessage` relationship. These private web-session request
   shapes may change, and they do not prove that Apple will accept a write for
   every account.
-- `asc web review reply --thread-id THREAD_ID --message MESSAGE --confirm` is
-  an experimental one-shot path: it creates one draft, sends it, and re-reads
+- `asc web review reply --thread-id THREAD_ID --message MESSAGE --confirm` is a
+  one-shot path: it creates one draft, sends it, and re-reads
   the thread to verify the returned message ID. The receipt omits the body and
   the client never retries an ambiguous send. Attachments are unsupported
   because their write encoding is not implemented, and the command has no CLI
   resume, edit, or delete-draft workflow. Inspect App Store Connect before
   retrying a failed or ambiguous operation.
-- The experimental `asc web review drafts create|update|delete` commands are
+- The `asc web review drafts create|update|delete` commands are
   the unsent draft CRUD path. `create` requires an app ID, thread ID, exactly
   one `--message` or `--body-file`, and `--confirm`; `update` adds the draft
   ID, while `delete` takes the app, thread, and draft IDs. Each command first
@@ -205,6 +205,9 @@ the App Store Connect web-client source captured for issue #2299:
   upload attachments and never retry an uncertain mutation or post-read
   verification. No disposable live thread/draft fixture was available, so
   Apple provider acceptance of these writes remains unverified.
+- A draft read response without `data` is malformed, not proof of absence.
+  Create refuses it before writing; delete cannot report verified success
+  from it. Only explicit `data: null` or a relationship 404 means no draft.
 
 ## Web-session app distribution method
 
@@ -362,9 +365,9 @@ the App Store Connect web-client source captured for issue #2299:
 - Team resolution: an explicit `--developer-team` wins (case-insensitive ID, then exact name) and fails closed with the available IDs and names if nothing matches. Without a selector, a previously persisted team ID is reused when it is still in the list; otherwise the selected App Store Connect provider is matched by public provider ID, then exact name, then a name-prefix heuristic only when exactly one team matches. A single remaining team is used. Multiple unmatched teams fail closed and ask for `--developer-team`. The resolved team ID is stored in the web session cache next to the provider selection; a new `--developer-team` value overrides and re-persists. `asc web auth status` reports it as additive `developerTeamId`.
 - App Groups mutations still refresh CSRF from `listApplicationGroups.action` in that endpoint's scope after the shared bootstrap. Bundle ID capability and App Group assign/set/unassign paths still read the complete relationship graph, skip already-satisfied writes, and abort rather than rewrite from incomplete data. `asc web bundle-ids capabilities disable` sends one exact-resource `PATCH` with the preserved capability payload, then performs one verification read using the original command context. The read must contain a complete included capability graph, the same Bundle ID, and every pre-existing unrelated capability resource; success requires either the same target resource IDs with `enabled:false` for every target or complete removal of all target resources by Apple. Conflicting included representations and capabilities outside an explicitly supplied relationship are rejected before writing; the captured omitted-relationship form still uses the complete included graph. HTTP 408, 5xx, and transport failures get at most one settling read under the original deadline. A proven disabled state returns the normal receipt; an unverified state returns an error. No PATCH is retried.
 
-## [experimental] Developer Portal Bundle ID reads (web session)
+## Developer Portal Bundle ID reads (web session)
 
-- `[experimental] asc web bundle-ids list` uses the captured cookie-authenticated JSON:API
+- `asc web bundle-ids list` uses the captured cookie-authenticated JSON:API
   proxy `POST /services-account/v1/bundleIds` with
   `X-HTTP-Method-Override: GET`. Its JSON body carries the selected `teamId`
   and `urlEncodedQueryParams`; the first slice sends
@@ -376,7 +379,7 @@ the App Store Connect web-client source captured for issue #2299:
   `entitlementGroupName`, `bundleType`, `platform`, `wildcard`, `dateCreated`,
   `bundleIdCapabilitiesSettingOption`, `seedId`, `name`, `platformName`,
   `deploymentDataNotice`, and `responseId`.
-- `[experimental] asc web bundle-ids view --bundle-id ID` uses the captured detail form
+- `asc web bundle-ids view --bundle-id ID` uses the captured detail form
   `POST /services-account/v1/bundleIds/{id}` with the fields/include query in
   the URL, `X-HTTP-Method-Override: GET`, and a JSON body containing only the
   selected `teamId`.
@@ -396,9 +399,9 @@ the App Store Connect web-client source captured for issue #2299:
   available in JSON for a later resource-family slice, and table/Markdown
   output emits the standard more-pages warning when it is present.
 
-## [experimental] Developer Portal Services IDs (web session)
+## Developer Portal Services IDs (web session)
 
-- `[experimental] asc web service-ids list` uses the private logical `GET
+- `asc web service-ids list` uses the private logical `GET
   /services-account/v1/bundleIds` contract with `limit=1000`, `sort=name`, and
   `filter[platform]=SERVICES`. As with the captured native Bundle ID
   collection, the cookie-authenticated transport sends an actual `POST` to
@@ -408,13 +411,13 @@ the App Store Connect web-client source captured for issue #2299:
   The command validates that every returned resource is a `bundleIds` resource
   whose platform is exactly `SERVICES` and preserves the original JSON:API
   envelope for JSON output.
-- `[experimental] asc web service-ids view --service-id ID` uses the private
+- `asc web service-ids view --service-id ID` uses the private
   logical `GET /services-account/v1/bundleIds/{id}` detail contract with
   `include=bundleIdCapabilities,bundleIdCapabilities.capability,bundleIdCapabilities.appConsentBundleId`.
   The actual transport is `POST` plus `X-HTTP-Method-Override: GET`, with a
   JSON body containing only the selected `teamId`. The returned resource ID and
   `attributes.platform=SERVICES` are checked before a mutation can use it.
-- `[experimental] asc web service-ids create --identifier IDENTIFIER --name
+- `asc web service-ids create --identifier IDENTIFIER --name
   NAME --confirm` uses logical `POST /services-account/v1/bundleIds` with a
   JSON:API `data.type=bundleIds` resource whose attributes are
   `identifier`, `name`, `platform=SERVICES`, `seedId`, and `teamId`, plus an
@@ -425,13 +428,13 @@ the App Store Connect web-client source captured for issue #2299:
   `data.attributes.teamId`. The CLI does not invent capability, Sign in with
   Apple domain, or app-consent settings; it reads the created resource back
   before returning a receipt.
-- `[experimental] asc web service-ids rename --service-id ID --name NAME
+- `asc web service-ids rename --service-id ID --name NAME
   --confirm` reads and validates the current Services ID, then sends logical
   `PATCH /services-account/v1/bundleIds/{id}`. The PATCH preserves the complete
   current relationship map, including `bundleIdCapabilities`, and changes only
   the name plus the private team attribute required by the endpoint. A
   post-write detail read must match the requested name and identifier.
-- `[experimental] asc web service-ids delete --service-id ID --confirm` sends
+- `asc web service-ids delete --service-id ID --confirm` sends
   logical `DELETE /services-account/v1/bundleIds/{id}` as the captured actual
   `POST` plus `X-HTTP-Method-Override: DELETE` and a JSON body containing the
   selected root-level `teamId`. The captured frontend helper retains its
@@ -448,9 +451,9 @@ the App Store Connect web-client source captured for issue #2299:
   Website Push ID lifecycle and iCloud container reads use the separate
   captured workflows documented below.
 
-## [experimental] Developer Portal Website Push IDs (web session)
+## Developer Portal Website Push IDs (web session)
 
-- `[experimental] asc web website-push-ids list` reads the current Developer
+- `asc web website-push-ids list` reads the current Developer
   Portal identifier page at `https://developer.apple.com/account/resources/identifiers/list`.
   Its captured request is `POST /services-account/QH65B2/account/ios/identifiers/listWebsitePushIds.action`
   with an `application/x-www-form-urlencoded` body containing
@@ -472,12 +475,12 @@ the App Store Connect web-client source captured for issue #2299:
   this legacy response. The command reads only the first fixed page and does
   not claim a complete account-wide collection.
 - Website Push mutation preflight and legacy-list verification require page number 1 and a positive returned page size. A collection filling that returned page is incomplete for mutation purposes, even if Apple reduces the requested page size; no continuation contract is assumed.
-- `[experimental] asc web website-push-ids view` reads one modern
+- `asc web website-push-ids view` reads one modern
   `websitepushIds` resource with a physical `POST
   /services-account/v1/websitepushIds/{id}?include=websitepushIdCapabilities`,
   `X-HTTP-Method-Override: GET`, and a JSON body containing only the selected
   `teamId`. JSON output preserves Apple's complete JSON:API envelope.
-- `[experimental] asc web website-push-ids create` sends the captured modern
+- `asc web website-push-ids create` sends the captured modern
   JSON:API `POST /services-account/v1/websitepushIds` body with
   `data.type=websitepushIds`, `name`, `identifier`, `teamId`, and an explicitly
   empty `websitepushIdCapabilities` relationship. The CLI requires the legacy
@@ -485,7 +488,7 @@ the App Store Connect web-client source captured for issue #2299:
   be empty. It expects HTTP 201 and verifies the created resource by detail
   read; an empty or malformed create response is settled from the legacy list
   without retrying the POST.
-- `[experimental] asc web website-push-ids delete` preflights the modern detail
+- `asc web website-push-ids delete` preflights the modern detail
   resource and requires `canDelete=true` plus an explicitly empty capability
   relationship. It sends physical `POST
   /services-account/v1/websitepushIds/{id}` with
@@ -523,7 +526,7 @@ the App Store Connect web-client source captured for issue #2299:
 
 ## Transaction Tax reports (web session)
 
-- The public App Store Connect API and OpenAPI snapshot do not expose Transaction Tax report generation. The experimental `asc web finance transaction-tax download` command uses the authenticated finance web session instead.
+- The public App Store Connect API and OpenAPI snapshot do not expose Transaction Tax report generation. The `asc web finance transaction-tax download` command uses the authenticated finance web session instead.
 - The captured finance page reads the selected month from `/WebObjects/iTunesConnect.woa/ra/paymentConsolidation/providers/{providerId}/sapVendorNumbers/{sapVendorNumber}?year={YYYY}&month={M}` and requires `hasVendorTaxReport=true` before generation. It derives the complete vendor-tax region-currency list from the transformed `reportSummaries[].proceedsByRegion[]` model, then issues exactly one GET to `/WebObjects/iTunesConnect.woa/ra/paymentConsolidation/providers/{providerId}/sapVendorNumbers/{sapVendorNumber}/reports?year={YYYY}&month={M}&regionCurrencyIds={ids}&reportTypes=&isVendorTaxReportReq=true`.
 - The generated UUID is retained only in memory for bounded GET polling at `/reports/{uuid}/status`; readiness requires the captured literal `readyForDownload` status and a download URL. The command fetches the ready artifact once, accepts only an HTTPS same-origin URL and redirects, checks the ZIP signature, and publishes a complete `0600` file without replacing an existing destination.
 - Receipts and errors omit generated job IDs, signed URLs, provider/vendor identifiers, and finance values. Generation, polling, and download failures do not trigger an automatic regeneration or retry. No report-history or caller-supplied report-ID contract was observed.
@@ -550,7 +553,7 @@ Observed 2026-09-02 against a live App Store Connect team. The CLI does not add 
 - Review-submission updates expose nullable `platform`, `submitted`, and `canceled` values plus matching `--clear-*` flags. Setting `submitted=true` or `canceled=true` requires `--confirm`; false, null, and platform-only updates do not.
 - The create schema names its second experiment relationship `appStoreVersionExperimentV2`, but its linked resource type remains `appStoreVersionExperiments`. The CLI selector is `appStoreVersionExperimentsV2`. Experiment treatments are not valid review-item create relationships.
 - Review items require `appCustomProductPageVersions`; `appCustomProductPages` is not an accepted item type because a page ID cannot be silently converted to a version ID.
-- The v1 localization/image commands and submission shortcuts remain available during their deprecation window. Each direct invocation warns on stderr and preserves the existing endpoint, flags, stdout, and exit behavior. The two localization `sync` leaves are experimental; the other 27 direct leaves are stable. No v1 localization or image command is removed in this release.
+- The v1 localization/image commands and submission shortcuts remain available during their deprecation window. Each direct invocation warns on stderr and preserves the existing endpoint, flags, stdout, and exit behavior. No v1 localization or image command is removed in this release.
 - 4.0.0 removes the review item-detail surfaces: `asc review items view` and `asc review items-get` → `asc review items list --submission "SUBMISSION_ID"`; `asc review items update --state` / `items-update --state` → `--resolved` or `--removed`.
 - The 3.x `--item-type appStoreVersionExperimentV2` alias is removed in 4.0.0; the value is rejected with guidance naming the canonical `appStoreVersionExperimentsV2`.
 - `asc iap setup` and `asc subscriptions setup` remain supported, but warn when localization flags request their legacy v1 localization steps. Setup calls without those flags do not warn.
@@ -561,7 +564,7 @@ Observed 2026-09-02 against a live App Store Connect team. The CLI does not add 
   - IAP submissions → `asc review items add --submission "SUBMISSION_ID" --item-type inAppPurchaseVersions --item-id "IAP_VERSION_ID"`.
   - Subscription submissions → `asc review items add --submission "SUBMISSION_ID" --item-type subscriptionVersions --item-id "SUBSCRIPTION_VERSION_ID"`.
   - Subscription group submissions → `asc review items add --submission "SUBMISSION_ID" --item-type subscriptionGroupVersions --item-id "GROUP_VERSION_ID"`.
-- There is no one-command version-scoped replacement for the two experimental legacy localization `sync` leaves. Reconcile entries through the matching version-localization list/create/update/delete commands.
+- There is no one-command version-scoped replacement for the two legacy localization `sync` leaves. Reconcile entries through the matching version-localization list/create/update/delete commands.
 - A legacy IAP image file re-upload has no one-to-one v2 update. Create the replacement version image, then delete the old version image if needed. Subscription v2 image updates do not expose the legacy checksum flag; use the version image upload workflow for a new file.
 - The 33 exported `internal/asc.Client` methods that target these legacy resources remain callable and are marked with Go `Deprecated:` documentation naming their version-scoped or review-item replacement.
 - Nullable v2 localization updates distinguish omitted, value, and JSON `null`; use the corresponding `--clear-*` flag for explicit clears.

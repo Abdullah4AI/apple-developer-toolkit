@@ -884,10 +884,8 @@ func PricingAvailabilityPlatformsCommand() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "platforms",
 		ShortUsage: "asc pricing availability platforms --app \"APP_ID\"",
-		ShortHelp:  "[experimental] Summarize each platform's App Store listing.",
-		LongHelp: `[experimental] Summarize each platform's App Store listing.
-
-This command is experimental.
+		ShortHelp:  "Summarize each platform's App Store listing.",
+		LongHelp: `Summarize each platform's App Store listing.
 
 Shows one row per platform: the live listing when one exists, otherwise the
 newest version and its state. Availability is app-wide — every platform

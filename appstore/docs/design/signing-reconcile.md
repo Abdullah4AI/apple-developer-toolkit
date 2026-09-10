@@ -126,7 +126,7 @@ other sync failures remain fatal.
 
 ## Compatibility, tests, and alternatives
 
-This is an additive experimental surface. Existing signing commands and output
+This is an additive surface. Existing signing commands and output
 remain unchanged. Tests start RED at the command boundary, then cover strict
 input validation before auth, protected bounded input, deterministic hashing
 and ordering, GET-only planning, pagination, App ID and profile creation

@@ -2,7 +2,7 @@ package asc
 
 import "fmt"
 
-// WebReviewReplyResult is the redacted receipt for an experimental
+// WebReviewReplyResult is the redacted receipt for a
 // Resolution Center reply sent through an authenticated web session.
 type WebReviewReplyResult struct {
 	ThreadID  string `json:"threadId"`

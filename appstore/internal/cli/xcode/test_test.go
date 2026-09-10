@@ -357,7 +357,7 @@ func TestXcodeTestPreservesAuthenticationPassthroughPairs(t *testing.T) {
 	}
 }
 
-func TestXcodeTestFlagsAreExperimental(t *testing.T) {
+func TestXcodeTestFlagsAreRegistered(t *testing.T) {
 	command := XcodeTestCommand()
 	wantFlags := map[string]bool{
 		"workspace":          true,
@@ -380,9 +380,7 @@ func TestXcodeTestFlagsAreExperimental(t *testing.T) {
 		if !wantFlags[flagDef.Name] {
 			return
 		}
-		if !strings.HasPrefix(flagDef.Usage, "[experimental] ") {
-			t.Errorf("--%s usage = %q, want [experimental] prefix", flagDef.Name, flagDef.Usage)
-		}
+
 		delete(wantFlags, flagDef.Name)
 	})
 	for flagName := range wantFlags {

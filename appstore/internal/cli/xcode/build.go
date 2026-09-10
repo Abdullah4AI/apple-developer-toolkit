@@ -38,8 +38,8 @@ func XcodeBuildCommand() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "build",
 		ShortUsage: "asc xcode build [flags]",
-		ShortHelp:  "[experimental] Compile an Xcode scheme for a simulator or device.",
-		LongHelp: `[experimental] Compile an Xcode scheme with an ordinary xcodebuild build action.
+		ShortHelp:  "Compile an Xcode scheme for a simulator or device.",
+		LongHelp: `Compile an Xcode scheme with an ordinary xcodebuild build action.
 
 Provide exactly one of --workspace or --project, plus --scheme. Use
 --destination to select a simulator or device. Signing follows Xcode defaults;

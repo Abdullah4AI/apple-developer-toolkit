@@ -25,7 +25,7 @@ func TestPublishTestFlightUploadOnlyHelpIsDiscoverable(t *testing.T) {
 	if uploadOnlyFlag == nil {
 		t.Fatal("expected --upload-only flag")
 	}
-	want := "[experimental] Upload the build without adding it to beta groups or submitting beta review"
+	want := "Upload the build without adding it to beta groups or submitting beta review"
 	if uploadOnlyFlag.Usage != want {
 		t.Fatalf("expected upload-only help %q, got %q", want, uploadOnlyFlag.Usage)
 	}

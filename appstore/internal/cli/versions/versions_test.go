@@ -35,13 +35,10 @@ func TestVersionsCommand_PrefersViewAndRemovesLegacyGet(t *testing.T) {
 	}
 }
 
-func TestVersionsListIncludeFlagIsExperimental(t *testing.T) {
+func TestVersionsListIncludeFlagIsRegistered(t *testing.T) {
 	includeFlag := VersionsListCommand().FlagSet.Lookup("include")
 	if includeFlag == nil {
 		t.Fatal("include flag is not registered")
-	}
-	if !strings.HasPrefix(includeFlag.Usage, "[experimental] ") {
-		t.Fatalf("include flag usage = %q, want experimental lifecycle label", includeFlag.Usage)
 	}
 }
 

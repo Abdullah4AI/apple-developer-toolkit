@@ -37,10 +37,8 @@ func WebFinanceCommand() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "finance",
 		ShortUsage: "asc web finance <subcommand> [flags]",
-		ShortHelp:  "[experimental] Download finance reports through an Apple web session.",
+		ShortHelp:  "Download finance reports through an Apple web session.",
 		LongHelp: `WEB SESSION WORKFLOWS
-
-This command is experimental.
 
 Download finance reports that are available in the App Store Connect finance
 web page. The selected month must expose the Transaction Tax Report option.
@@ -67,10 +65,8 @@ func WebTransactionTaxCommand() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "transaction-tax",
 		ShortUsage: "asc web finance transaction-tax <subcommand> [flags]",
-		ShortHelp:  "[experimental] Work with Transaction Tax Reports.",
+		ShortHelp:  "Work with Transaction Tax Reports.",
 		LongHelp: `WEB SESSION WORKFLOWS
-
-This command is experimental.
 
 Generate and download a Transaction Tax Report for an eligible finance
 period.
@@ -99,10 +95,8 @@ func WebTransactionTaxDownloadCommand() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "download",
 		ShortUsage: "asc web finance transaction-tax download --date YYYY-MM --output-path PATH [flags]",
-		ShortHelp:  "[experimental] Generate and download a Transaction Tax Report.",
+		ShortHelp:  "Generate and download a Transaction Tax Report.",
 		LongHelp: `WEB SESSION WORKFLOWS
-
-This command is experimental.
 
 Generate a Transaction Tax Report for an eligible finance period and save the
 resulting ZIP archive at --output-path. The destination must not already

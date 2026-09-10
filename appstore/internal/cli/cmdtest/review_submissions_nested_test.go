@@ -127,15 +127,12 @@ func TestReviewSubmissionsNestedListMatchesFlatAPIError(t *testing.T) {
 	}
 }
 
-func TestReviewSubmissionsNestedListIsExperimental(t *testing.T) {
+func TestReviewSubmissionsNestedListIsRegistered(t *testing.T) {
 	root := RootCommand("1.2.3")
 	for _, path := range [][]string{{"review", "submissions"}, {"review", "submissions", "list"}} {
 		cmd := findSubcommand(root, path...)
 		if cmd == nil {
 			t.Fatalf("command %v not found", path)
-		}
-		if !strings.HasPrefix(cmd.ShortHelp, "[experimental]") {
-			t.Fatalf("command %v ShortHelp = %q, want [experimental] prefix", path, cmd.ShortHelp)
 		}
 	}
 }

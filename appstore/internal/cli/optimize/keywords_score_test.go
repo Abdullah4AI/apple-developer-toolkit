@@ -24,7 +24,6 @@ func TestKeywordsScoreCommandHelpDocumentsSourcesAndDesignDoc(t *testing.T) {
 	joined := command.ShortUsage + "\n" + command.ShortHelp + "\n" + command.LongHelp
 	for _, want := range []string{
 		"asc optimize keywords score",
-		"[experimental]",
 		"docs/design/optimize-keywords.md",
 		"--ad-account",
 		"--genre",
@@ -36,9 +35,7 @@ func TestKeywordsScoreCommandHelpDocumentsSourcesAndDesignDoc(t *testing.T) {
 			t.Fatalf("help missing %q:\n%s", want, joined)
 		}
 	}
-	if !strings.HasSuffix(command.ShortHelp, "[experimental]") {
-		t.Fatalf("ShortHelp = %q, want experimental suffix", command.ShortHelp)
-	}
+
 	if strings.Contains(joined, "30-day") {
 		t.Fatalf("help describes a 30-day popularity window, but the collector reads one complete week:\n%s", joined)
 	}
@@ -48,15 +45,12 @@ func TestKeywordsScoreCommandHelpDocumentsSourcesAndDesignDoc(t *testing.T) {
 	}
 }
 
-func TestKeywordsScoreCommandFlagsAreExperimental(t *testing.T) {
+func TestKeywordsScoreCommandFlagsAreRegistered(t *testing.T) {
 	command := KeywordsScoreCommand()
 	for _, name := range []string{"keywords", "country", "app", "genre", "ad-account", "ads-profile", "workers"} {
 		flag := command.FlagSet.Lookup(name)
 		if flag == nil {
 			t.Fatalf("missing score flag --%s", name)
-		}
-		if !strings.Contains(flag.Usage, "[experimental]") {
-			t.Fatalf("--%s usage = %q, want experimental marker", name, flag.Usage)
 		}
 	}
 }

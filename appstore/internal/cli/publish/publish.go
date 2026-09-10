@@ -81,7 +81,7 @@ func PublishTestFlightCommand() *ffcli.Command {
 	buildNumber := fs.String("build-number", "", "CFBundleVersion (used for upload metadata with --ipa, or build lookup when --ipa is omitted)")
 	platform := fs.String("platform", "IOS", "Platform: IOS, MAC_OS, TV_OS, VISION_OS")
 	groupIDs := fs.String("group", "", "Beta group ID(s) or name(s), comma-separated")
-	uploadOnly := fs.Bool("upload-only", false, "[experimental] Upload the build without adding it to beta groups or submitting beta review")
+	uploadOnly := fs.Bool("upload-only", false, "Upload the build without adding it to beta groups or submitting beta review")
 	notify := fs.Bool("notify", false, "Notify testers after adding to groups")
 	submit := fs.Bool("submit", false, "Submit build for beta app review after adding external groups")
 	confirm := fs.Bool("confirm", false, "Confirm beta app review submission (required with --submit)")
@@ -98,8 +98,6 @@ func PublishTestFlightCommand() *ffcli.Command {
 		ShortUsage: "asc publish testflight [flags]",
 		ShortHelp:  "Upload and distribute to TestFlight.",
 		LongHelp: `Upload or local-build a binary, then optionally distribute it to TestFlight beta groups.
-
-The --upload-only flag is experimental.
 
 Steps:
 1. Build locally with Xcode or upload an IPA (unless --build-id/--build-number is provided)

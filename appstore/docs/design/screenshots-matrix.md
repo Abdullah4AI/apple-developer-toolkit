@@ -2,7 +2,7 @@
 
 ## Scope
 
-Issue #2230 adds the experimental `asc screenshots matrix` command. It runs an
+Issue #2230 adds the `asc screenshots matrix` command. It runs an
 existing local screenshot plan over a bounded device, locale, appearance, and
 content-variant matrix, writes one isolated artifact directory per cell, and
 creates a report that contains both successful and unsuccessful cells.

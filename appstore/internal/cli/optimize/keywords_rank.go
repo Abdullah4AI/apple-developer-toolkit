@@ -19,19 +19,19 @@ const keywordRankSchemaVersion = "1"
 // KeywordsRankCommand returns the public keyword ranking command.
 func KeywordsRankCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("rank", flag.ExitOnError)
-	appID := fs.String("app", "", "App Store app ID (required, or ASC_APP_ID env) [experimental]")
-	keywords := shared.BindOnceCSVFlag(fs, "keywords", "Comma-separated keyword candidates to rank (required) [experimental]")
-	country := fs.String("country", "us", "ISO alpha-2 App Store storefront country or region [experimental]")
-	platform := fs.String("platform", "IOS", "Public App Store platform: IOS or TV_OS [experimental]")
-	workers := fs.Int("workers", 10, "Number of parallel keyword lookups [experimental]")
+	appID := fs.String("app", "", "App Store app ID (required, or ASC_APP_ID env)")
+	keywords := shared.BindOnceCSVFlag(fs, "keywords", "Comma-separated keyword candidates to rank (required)")
+	country := fs.String("country", "us", "ISO alpha-2 App Store storefront country or region")
+	platform := fs.String("platform", "IOS", "Public App Store platform: IOS or TV_OS")
+	workers := fs.Int("workers", 10, "Number of parallel keyword lookups")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "rank",
 		ShortUsage: "asc optimize keywords rank --app APP_ID --keywords LIST [flags]",
-		ShortHelp:  "Rank an app for keyword candidates in a public storefront. [experimental]",
+		ShortHelp:  "Rank an app for keyword candidates in a public storefront.",
 		LongHelp: `Report where an app appears in the public App Store search result window
-for each keyword candidate. [experimental]
+for each keyword candidate.
 
 No authentication is required. Keywords are normalized to lowercase, collapsed
 whitespace, and deduplicated. Each invocation accepts at most 100 keywords of

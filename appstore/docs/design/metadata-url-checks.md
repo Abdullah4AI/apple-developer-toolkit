@@ -3,7 +3,7 @@
 ## Decision
 
 `asc metadata validate` stays deterministic and offline by default. The new
-experimental `--check-urls` flag opts into bounded HTTP checks for version
+`--check-urls` flag opts into bounded HTTP checks for version
 localization `supportUrl` values and app-info localization
 `privacyPolicyUrl` values.
 

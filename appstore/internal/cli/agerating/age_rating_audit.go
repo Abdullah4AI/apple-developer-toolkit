@@ -20,17 +20,15 @@ const ageRatingAuditWorkers = 5
 func AgeRatingAuditCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("age-rating audit", flag.ExitOnError)
 
-	appIDs := shared.BindOnceCSVFlag(fs, "app", "[experimental] Restrict the audit to specific app IDs (comma-separated)")
-	paginate := fs.Bool("paginate", false, "[experimental] Fetch all app pages (default: first page only)")
+	appIDs := shared.BindOnceCSVFlag(fs, "app", "Restrict the audit to specific app IDs (comma-separated)")
+	paginate := fs.Bool("paginate", false, "Fetch all app pages (default: first page only)")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "audit",
 		ShortUsage: "asc age-rating audit [--app \"APP_ID,APP_ID\"] [--paginate] [flags]",
-		ShortHelp:  "[experimental] Audit social-media age rating responses across apps.",
-		LongHelp: `[experimental] Audit social-media age rating responses across apps.
-
-This command is experimental.
+		ShortHelp:  "Audit social-media age rating responses across apps.",
+		LongHelp: `Audit social-media age rating responses across apps.
 
 Starting September 2026, Apple requires responses to the social-media
 capability questions in the age rating questionnaire for every new submission

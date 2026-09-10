@@ -2,7 +2,7 @@
 
 ## Goal
 
-Add an experimental, read-only `asc optimize keywords` group that **evaluates**
+Add a read-only `asc optimize keywords` group that **evaluates**
 App Store keyword candidates a caller already has. It does not invent keyword
 candidates, and it does not mutate campaigns or App Store metadata.
 

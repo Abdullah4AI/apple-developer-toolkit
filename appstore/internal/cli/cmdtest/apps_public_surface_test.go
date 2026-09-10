@@ -101,8 +101,8 @@ func TestAppsListHelpShowsFeatureExamples(t *testing.T) {
 	} {
 		usage := command.UsageFunc(command)
 		for _, want := range []string{
-			"[experimental] Filter by App Store version state(s)",
-			"[experimental] Filter by review submission state(s)",
+			"Filter by App Store version state(s)",
+			"Filter by review submission state(s)",
 		} {
 			if !strings.Contains(usage, want) {
 				t.Errorf("%s help missing lifecycle marker %q, got %q", name, want, usage)
@@ -136,19 +136,12 @@ func TestAppsPublicHelpShowsSubcommands(t *testing.T) {
 	}
 }
 
-func TestAppsPublicRankHelpIsExperimental(t *testing.T) {
+func TestAppsPublicRankHelpDocumentsSurface(t *testing.T) {
 	root := RootCommand("1.2.3")
 	rankCmd := findSubcommand(root, "apps", "public", "rank")
 	if rankCmd == nil {
 		t.Fatal("expected apps public rank command")
 		return
-	}
-
-	if !strings.HasPrefix(rankCmd.ShortHelp, "[experimental]") {
-		t.Fatalf("ShortHelp = %q, want experimental prefix", rankCmd.ShortHelp)
-	}
-	if !strings.HasPrefix(rankCmd.LongHelp, "[experimental]") {
-		t.Fatalf("LongHelp = %q, want experimental prefix", rankCmd.LongHelp)
 	}
 }
 

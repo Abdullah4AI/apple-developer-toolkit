@@ -127,7 +127,7 @@ func NewAvailabilityRemoveFromSaleCommand(config AvailabilityRemoveFromSaleComma
 	fs := flag.NewFlagSet("pricing availability remove-from-sale", flag.ExitOnError)
 	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID)")
 	confirm := fs.Bool("confirm", false, "Confirm removal from sale in all current territories")
-	allPlatforms := fs.Bool("all-platforms", false, "[experimental] Acknowledge removal of every live platform listing (required when more than one platform is live)")
+	allPlatforms := fs.Bool("all-platforms", false, "Acknowledge removal of every live platform listing (required when more than one platform is live)")
 	output := BindOutputFlags(fs)
 
 	return &ffcli.Command{

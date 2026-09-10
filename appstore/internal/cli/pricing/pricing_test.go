@@ -383,30 +383,22 @@ func TestPricingAvailabilityCommand_RegistersRemoveFromSale(t *testing.T) {
 
 func TestPricingAvailabilityCommand_RegistersPlatforms(t *testing.T) {
 	cmd := PricingAvailabilityCommand()
-
 	for _, subcommand := range cmd.Subcommands {
 		if subcommand.Name == "platforms" {
-			if !strings.HasPrefix(subcommand.ShortHelp, "[experimental]") || !strings.HasPrefix(subcommand.LongHelp, "[experimental]") {
-				t.Fatalf("expected platforms command to enter through the experimental tier, got ShortHelp=%q LongHelp=%q", subcommand.ShortHelp, subcommand.LongHelp)
-			}
 			if !strings.Contains(cmd.LongHelp, `pricing availability platforms --app "123456789"`) {
 				t.Fatalf("expected availability help to mention platforms, got %q", cmd.LongHelp)
 			}
 			return
 		}
 	}
-
 	t.Fatal("expected pricing availability platforms to be registered")
 }
 
-func TestPricingAvailabilityRemoveFromSaleCommand_AllPlatformsIsExperimental(t *testing.T) {
+func TestPricingAvailabilityRemoveFromSaleCommand_AllPlatformsIsRegistered(t *testing.T) {
 	command := PricingAvailabilityRemoveFromSaleCommand()
 	allPlatforms := command.FlagSet.Lookup("all-platforms")
 	if allPlatforms == nil {
 		t.Fatal("expected --all-platforms flag")
-	}
-	if !strings.HasPrefix(allPlatforms.Usage, "[experimental] ") {
-		t.Fatalf("--all-platforms usage = %q, want experimental lifecycle label", allPlatforms.Usage)
 	}
 }
 

@@ -182,9 +182,7 @@ func TestReleaseStageCommandExposesRoutingCoverageFile(t *testing.T) {
 	if flag == nil {
 		t.Fatal("expected --routing-coverage-file flag")
 	}
-	if !strings.HasPrefix(flag.Usage, "[experimental] ") {
-		t.Fatalf("expected --routing-coverage-file to be introduced as experimental, got %q", flag.Usage)
-	}
+
 	if !strings.Contains(flag.Usage, "before readiness") {
 		t.Fatalf("expected routing coverage timing in flag help, got %q", flag.Usage)
 	}

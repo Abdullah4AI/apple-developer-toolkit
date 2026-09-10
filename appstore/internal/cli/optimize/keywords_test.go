@@ -223,9 +223,7 @@ func TestKeywordsGroupReturnsHelpAndRegistersRank(t *testing.T) {
 	if err := group.Exec(context.Background(), nil); !errors.Is(err, flag.ErrHelp) {
 		t.Fatalf("keywords Exec error = %v, want flag.ErrHelp", err)
 	}
-	if !strings.HasSuffix(group.ShortHelp, "[experimental]") {
-		t.Fatalf("ShortHelp = %q, want experimental suffix", group.ShortHelp)
-	}
+
 	normalizedHelp := strings.Join(strings.Fields(group.LongHelp), " ")
 	if !strings.Contains(normalizedHelp, "The rank and score commands evaluate keywords you already have") {
 		t.Fatalf("LongHelp must distinguish evaluation from discovery:\n%s", group.LongHelp)

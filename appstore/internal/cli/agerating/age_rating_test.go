@@ -29,7 +29,7 @@ func TestAgeRatingCommandShape(t *testing.T) {
 	for _, visible := range []string{
 		"\n  view   View an age rating declaration.",
 		"\n  edit   Update an age rating declaration.",
-		"\n  audit  [experimental] Audit social-media age rating responses across apps.",
+		"\n  audit  Audit social-media age rating responses across apps.",
 	} {
 		if !strings.Contains(usage, visible) {
 			t.Fatalf("expected age-rating help to include canonical verb %q, got %q", strings.TrimSpace(visible), usage)
@@ -42,15 +42,12 @@ func TestAgeRatingCommandShape(t *testing.T) {
 	}
 }
 
-func TestAgeRatingAuditFlagsAreExperimental(t *testing.T) {
+func TestAgeRatingAuditFlagsAreRegistered(t *testing.T) {
 	cmd := AgeRatingAuditCommand()
 	for _, name := range []string{"app", "paginate"} {
 		flag := cmd.FlagSet.Lookup(name)
 		if flag == nil {
 			t.Fatalf("expected --%s flag", name)
-		}
-		if !strings.HasPrefix(flag.Usage, "[experimental] ") {
-			t.Fatalf("--%s usage = %q, want [experimental] prefix", name, flag.Usage)
 		}
 	}
 }

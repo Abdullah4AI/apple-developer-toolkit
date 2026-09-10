@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed for 4.12.0 as an experimental command.
+Proposed for 4.12.0 as a command.
 
 ## Problem
 
@@ -143,7 +143,7 @@ profile installation remains a separate explicit command.
 
 ## Validation and live verification
 
-Unit coverage verifies command validation, experimental lifecycle markers,
+Unit coverage verifies command validation, command help,
 private input handling, certificate checks, exact output fields, destination
 refusal, search-list isolation and activation, shared-lock ordering,
 independent-context rollback after cancellation, exact search-list restoration,

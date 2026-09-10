@@ -157,7 +157,7 @@ func TestXcodeCloudProductsListQuerySurface(t *testing.T) {
 	}
 }
 
-func TestXcodeCloudProductsListQueryFlagsAreExperimental(t *testing.T) {
+func TestXcodeCloudProductsListQueryFlagsAreRegistered(t *testing.T) {
 	for _, path := range [][]string{
 		{"xcode-cloud", "products"},
 		{"xcode-cloud", "products", "list"},
@@ -175,9 +175,6 @@ func TestXcodeCloudProductsListQueryFlagsAreExperimental(t *testing.T) {
 			flagValue := cmd.FlagSet.Lookup(name)
 			if flagValue == nil {
 				t.Fatalf("%s: missing --%s flag", strings.Join(path, " "), name)
-			}
-			if !strings.HasPrefix(flagValue.Usage, "[experimental] ") {
-				t.Fatalf("%s --%s usage = %q, want experimental marker", strings.Join(path, " "), name, flagValue.Usage)
 			}
 		}
 	}

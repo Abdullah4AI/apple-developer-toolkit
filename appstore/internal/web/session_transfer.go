@@ -499,35 +499,45 @@ func (b *SessionBundle) normalize(now time.Time) (persistedSession, SessionImpor
 // caller can persist the bundle afterwards with ImportSessionBundleWithOptions
 // when this explicit preflight succeeds.
 func ValidateSessionBundle(ctx context.Context, bundle *SessionBundle) error {
+	_, err := OpenValidatedSessionBundle(ctx, bundle)
+	return err
+}
+
+// OpenValidatedSessionBundle validates a bundle with Apple and returns its
+// in-memory session. It never reads or writes the cache, logs in, or switches
+// providers. The returned provider identity comes from Apple's session response.
+func OpenValidatedSessionBundle(ctx context.Context, bundle *SessionBundle) (*AuthSession, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
 	if bundle == nil {
-		return fmt.Errorf("%w: web session bundle is empty", ErrSessionBundleValidationFailed)
+		return nil, fmt.Errorf("%w: web session bundle is empty", ErrSessionBundleValidationFailed)
 	}
 
 	sess, _, err := bundle.normalize(time.Now().UTC())
 	if err != nil {
-		return fmt.Errorf("%w: %w", ErrSessionBundleValidationFailed, err)
+		return nil, fmt.Errorf("%w: %w", ErrSessionBundleValidationFailed, err)
 	}
 
-	_, info, ok, err := validatePersistedSessionReadOnly(ctx, sess)
+	client, info, ok, err := validatePersistedSessionReadOnly(ctx, sess)
 	if err != nil {
-		return fmt.Errorf("%w: %w", ErrSessionBundleValidationFailed, err)
+		return nil, fmt.Errorf("%w: %w", ErrSessionBundleValidationFailed, err)
 	}
 	if !ok || info == nil {
-		return fmt.Errorf("%w: %w", ErrSessionBundleValidationFailed, ErrSessionBundleUnusable)
+		return nil, fmt.Errorf("%w: %w", ErrSessionBundleValidationFailed, ErrSessionBundleUnusable)
 	}
 
 	expected := strings.TrimSpace(bundle.AppleID)
 	actual := strings.TrimSpace(info.User.EmailAddress)
 	if actual == "" {
-		return fmt.Errorf("%w: Apple session returned no Apple Account identity", ErrSessionBundleValidationFailed)
+		return nil, fmt.Errorf("%w: Apple session returned no Apple Account identity", ErrSessionBundleValidationFailed)
 	}
 	if !strings.EqualFold(expected, actual) {
-		return fmt.Errorf("%w: Apple session account does not match the bundle", ErrSessionBundleValidationFailed)
+		return nil, fmt.Errorf("%w: Apple session account does not match the bundle", ErrSessionBundleValidationFailed)
 	}
-	return nil
+	session := &AuthSession{Client: client}
+	applySessionInfo(session, info)
+	return session, nil
 }
 
 // ImportSessionBundle stores a bundle in the same cache `asc web auth login`

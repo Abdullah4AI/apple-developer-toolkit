@@ -25,7 +25,7 @@ network-facing boundary.
 
 ## PR 2 public contract
 
-The experimental `distribute` family begins with two provider-neutral local
+The `distribute` family begins with two provider-neutral local
 commands:
 
 ```text
@@ -64,7 +64,7 @@ receipt for a partial bundle.
 Both commands print data to stdout, diagnostics to stderr, and use exit code 2
 for invalid flags or missing required flags. IPA or preparation validation
 failures use the ordinary non-zero command error. This is an additive
-experimental surface and requires no migration.
+surface and requires no migration.
 
 ### PR 2 security and verification
 
@@ -842,7 +842,7 @@ Coverage must establish:
 - real archive export with Xcode 26.6 and Xcode 27 before the distribution stack
   is declared complete.
 
-## Handoff and promotion gates
+## Handoff and verification gates
 
 Each slice must be committed on its own feature branch and pushed at the exact
 revision that passed its focused tests and repository validation gates. A
@@ -853,14 +853,14 @@ When matching signing inputs or private storage are unavailable, the handoff
 must explicitly record missing state-machine crash/recovery or object-store
 integration smoke as an unresolved verification risk.
 
-`--method` remains experimental until the complete workflow has exported a real
-archive, published a fetch-verified HTTPS manifest and IPA, and installed the
+The `--method` workflow must be verified by exporting a real archive,
+publishing a fetch-verified HTTPS manifest and IPA, and installing the
 expected bundle and build on a registered device. Manual exports still depend
 on a locally available distribution private key and provisioning profiles that
 cover every embedded target and capability. Later slices must also settle the
 security and retention contract for caller-provided storage, bearer install
-URLs, device identifiers, and resumable state before `asc distribute` can be
-promoted to stable.
+URLs, device identifiers, and resumable state before the full `asc distribute`
+workflow is complete.
 
 ## Alternatives
 

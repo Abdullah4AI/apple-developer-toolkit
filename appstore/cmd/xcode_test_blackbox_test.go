@@ -44,7 +44,7 @@ func TestXcodeTestRejectsEmptyAuthenticationEqualsValuesWithBuiltBinary(t *testi
 				if !strings.HasPrefix(stderr.String(), wantPrefix) {
 					t.Fatalf("stderr = %q, want exact usage diagnostic prefix %q", stderr.String(), wantPrefix)
 				}
-				wantUsage := "\nDESCRIPTION\n  [experimental] Run local Xcode tests and report structured results.\n\nUSAGE\n  asc xcode test [flags]\n"
+				wantUsage := "\nDESCRIPTION\n  Run local Xcode tests and report structured results.\n\nUSAGE\n  asc xcode test [flags]\n"
 				if !strings.Contains(stderr.String(), wantUsage) {
 					t.Fatalf("stderr = %q, want command usage block %q", stderr.String(), wantUsage)
 				}

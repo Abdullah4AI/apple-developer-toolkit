@@ -148,23 +148,17 @@ func TestXcodeCloudDoctorRequiresRunID(t *testing.T) {
 	}
 }
 
-func TestXcodeCloudDoctorHelpMarksNewSurfaceExperimental(t *testing.T) {
+func TestXcodeCloudDoctorHelpRegistersNewSurface(t *testing.T) {
 	root := RootCommand("1.2.3")
 	doctor := findCommand(root, "xcode-cloud", "doctor")
 	if doctor == nil {
 		t.Fatal("xcode-cloud doctor command is not registered")
-	}
-	if !strings.HasPrefix(doctor.ShortHelp, "[experimental]") {
-		t.Fatalf("ShortHelp = %q, want experimental lifecycle label", doctor.ShortHelp)
 	}
 
 	for _, name := range []string{"run-id", "wait", "poll-interval", "timeout", "skip-logs", "save-logs"} {
 		flagValue := doctor.FlagSet.Lookup(name)
 		if flagValue == nil {
 			t.Fatalf("flag --%s is not registered", name)
-		}
-		if !strings.HasPrefix(flagValue.Usage, "[experimental] ") {
-			t.Fatalf("--%s usage = %q, want experimental lifecycle label", name, flagValue.Usage)
 		}
 	}
 }

@@ -2,7 +2,7 @@ package asc
 
 import "fmt"
 
-// WebReviewDraftResult is the redacted receipt for an experimental unsent
+// WebReviewDraftResult is the redacted receipt for an unsent
 // Resolution Center draft mutation.
 type WebReviewDraftResult struct {
 	AppID    string `json:"appId"`

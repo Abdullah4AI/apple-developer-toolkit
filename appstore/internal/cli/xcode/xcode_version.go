@@ -134,7 +134,7 @@ func bindXcodebuildSettingsLookup(fs *flag.FlagSet) *string {
 	return fs.String(
 		"xcodebuild-settings-lookup",
 		"auto",
-		"[experimental] xcodebuild -showBuildSettings fallback policy: auto or never",
+		"xcodebuild -showBuildSettings fallback policy: auto or never",
 	)
 }
 
@@ -228,7 +228,7 @@ func xcodeVersionEditCommand() *ffcli.Command {
 	configuration := fs.String("configuration", "", "Xcode build configuration name to edit")
 	version := fs.String("version", "", "Marketing version (CFBundleShortVersionString)")
 	buildNumber := fs.String("build-number", "", "Build number (CFBundleVersion)")
-	allowExternalXCConfig := fs.Bool("allow-external-xcconfig", false, "[experimental] Allow rewriting xcconfig files referenced outside the project directory")
+	allowExternalXCConfig := fs.Bool("allow-external-xcconfig", false, "Allow rewriting xcconfig files referenced outside the project directory")
 	xcodebuildSettingsLookup := bindXcodebuildSettingsLookup(fs)
 	remote := bindXcodeRemoteBuildNumberFlags(fs)
 	output := shared.BindOutputFlags(fs)
@@ -242,10 +242,10 @@ func xcodeVersionEditCommand() *ffcli.Command {
 Modern project and xcconfig build settings are edited structurally.
 
 By default only xcconfig files inside the project directory are rewritten.
-Pass the experimental --allow-external-xcconfig flag to authorize rewriting an
+Pass the --allow-external-xcconfig flag to authorize rewriting an
 xcconfig the project references outside that directory.
 
-The experimental --xcodebuild-settings-lookup flag controls the hidden
+The --xcodebuild-settings-lookup flag controls the hidden
 xcodebuild fallback when the command must read unresolved version settings.
 The default auto policy warns on stderr before running xcodebuild. Use never to
 fail without launching xcodebuild.
@@ -344,7 +344,7 @@ func xcodeVersionBumpCommand() *ffcli.Command {
 	target := fs.String("target", "", "Xcode target name to bump")
 	configuration := fs.String("configuration", "", "Xcode build configuration name to bump")
 	bumpType := fs.String("type", "", "Bump type: major, minor, patch, or build (required)")
-	allowExternalXCConfig := fs.Bool("allow-external-xcconfig", false, "[experimental] Allow rewriting xcconfig files referenced outside the project directory")
+	allowExternalXCConfig := fs.Bool("allow-external-xcconfig", false, "Allow rewriting xcconfig files referenced outside the project directory")
 	xcodebuildSettingsLookup := bindXcodebuildSettingsLookup(fs)
 	remote := bindXcodeRemoteBuildNumberFlags(fs)
 	output := shared.BindOutputFlags(fs)
@@ -367,8 +367,8 @@ Note:
   --target and --configuration scope both the read and write.
   --next-build-number is accepted with --type build and uses App Store Connect.
   Only xcconfig files inside the project directory are rewritten unless the
-  experimental --allow-external-xcconfig flag is passed.
-  The experimental --xcodebuild-settings-lookup flag controls the hidden
+  --allow-external-xcconfig flag is passed.
+  The --xcodebuild-settings-lookup flag controls the hidden
   xcodebuild fallback for unresolved version settings. The default auto policy
   warns on stderr before running xcodebuild; never fails without launching it.
 

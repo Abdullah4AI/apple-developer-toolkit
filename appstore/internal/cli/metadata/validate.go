@@ -52,7 +52,7 @@ func MetadataValidateCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("metadata validate", flag.ExitOnError)
 
 	dir := fs.String("dir", "", "Metadata root directory (required)")
-	checkURLs := fs.Bool("check-urls", false, "[experimental] Fetch support and privacy policy URLs to detect redirects and root pages")
+	checkURLs := fs.Bool("check-urls", false, "Fetch support and privacy policy URLs to detect redirects and root pages")
 	subscriptionApp := fs.Bool("subscription-app", false, "Enable subscription-specific Terms of Use / EULA link checks")
 	output := shared.BindOutputFlags(fs)
 

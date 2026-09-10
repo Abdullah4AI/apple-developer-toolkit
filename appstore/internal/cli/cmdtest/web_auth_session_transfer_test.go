@@ -42,7 +42,7 @@ func TestWebAuthImportSubcommandIsRegistered(t *testing.T) {
 	}
 }
 
-func TestWebAuthSessionTransferSurfacesAreExperimental(t *testing.T) {
+func TestWebAuthSessionTransferSurfacesAreRegistered(t *testing.T) {
 	root := RootCommand("1.2.3")
 	cases := []struct {
 		path  []string
@@ -57,20 +57,12 @@ func TestWebAuthSessionTransferSurfacesAreExperimental(t *testing.T) {
 		if sub == nil {
 			t.Fatalf("command %v not found", tc.path)
 		}
-		if !strings.HasPrefix(sub.ShortHelp, "[experimental]") {
-			t.Errorf("command %v ShortHelp = %q, want an experimental marker", tc.path, sub.ShortHelp)
-		}
-		if !strings.Contains(sub.LongHelp, "[experimental]") {
-			t.Errorf("command %v LongHelp = %q, want an experimental marker", tc.path, sub.LongHelp)
-		}
+
 		for _, flagName := range tc.flags {
 			flag := sub.FlagSet.Lookup(flagName)
 			if flag == nil {
 				t.Errorf("command %v missing --%s", tc.path, flagName)
 				continue
-			}
-			if !strings.HasPrefix(flag.Usage, "[experimental]") {
-				t.Errorf("command %v --%s usage = %q, want an experimental marker", tc.path, flagName, flag.Usage)
 			}
 		}
 	}

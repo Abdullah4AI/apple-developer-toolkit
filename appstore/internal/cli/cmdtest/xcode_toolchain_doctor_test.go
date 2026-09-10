@@ -11,9 +11,7 @@ func TestXcodeDoctorCommandIsDiscoverable(t *testing.T) {
 	if doctor == nil {
 		t.Fatal("expected xcode doctor command")
 	}
-	if !strings.HasPrefix(doctor.ShortHelp, "[experimental]") {
-		t.Fatalf("ShortHelp = %q, want experimental lifecycle label", doctor.ShortHelp)
-	}
+
 	for _, name := range []string{"developer-dir", "sdk", "output", "pretty"} {
 		if doctor.FlagSet.Lookup(name) == nil {
 			t.Fatalf("expected xcode doctor to expose --%s", name)

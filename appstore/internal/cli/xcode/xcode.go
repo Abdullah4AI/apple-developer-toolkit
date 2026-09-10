@@ -52,10 +52,10 @@ func XcodeCommand() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "xcode",
 		ShortUsage: "asc xcode <subcommand> [flags]",
-		ShortHelp:  "Local Xcode build/archive/export and [experimental] signing-settings helpers.",
+		ShortHelp:  "Local Xcode build/archive/export and signing-settings helpers.",
 		LongHelp: `Local Xcode build/archive/export helpers.
 
-The xcode signing plan/apply helpers are experimental and only modify local
+The xcode signing plan/apply helpers only modify local
 project build settings; they do not contact App Store Connect.
 
 The build/archive/export commands wrap local xcodebuild flows and are supported
@@ -192,7 +192,7 @@ func XcodeExportCommand() *ffcli.Command {
 
 	archivePath := fs.String("archive-path", "", "Path to the .xcarchive input (required)")
 	exportOptions := fs.String("export-options", "", "Path to ExportOptions.plist (generated automatically when omitted)")
-	method := fs.String("method", "app-store-connect", "[experimental] Method for generated options: app-store-connect or release-testing")
+	method := fs.String("method", "app-store-connect", "Method for generated options: app-store-connect or release-testing")
 	signingStyle := fs.String("signing-style", "automatic", "Signing style for generated options: automatic or manual")
 	teamID := fs.String("team-id", "", "Apple Developer team ID for generated options (overrides archive metadata)")
 	ipaPath := fs.String("ipa-path", "", "Destination path for a local .ipa when one is produced (required)")

@@ -27,10 +27,8 @@ func AppsRenameCommand() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "rename",
 		ShortUsage: "asc apps rename --app APP_ID --locale LOCALE --name NAME [flags]",
-		ShortHelp:  "[experimental] Rename an app for one App Store locale.",
-		LongHelp: `[experimental] Create or update the localized App Store name for an app.
-
-This command is experimental.
+		ShortHelp:  "Rename an app for one App Store locale.",
+		LongHelp: `Create or update the localized App Store name for an app.
 
 If the locale does not exist, a new app info localization is created.
 Use --app-info to select a specific App Info record when the app has multiple records.

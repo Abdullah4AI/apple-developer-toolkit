@@ -23,8 +23,8 @@ func ReviewSubmissionsCommand() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "submissions",
 		ShortUsage: "asc review submissions <subcommand> [flags]",
-		ShortHelp:  "[experimental] Manage App Store review submissions.",
-		LongHelp: `[experimental] Manage App Store review submissions.
+		ShortHelp:  "Manage App Store review submissions.",
+		LongHelp: `Manage App Store review submissions.
 
 Examples:
   asc review submissions list --app "123456789"
@@ -49,8 +49,6 @@ func ReviewSubmissionsNestedListCommand() *ffcli.Command {
 		"asc review submissions list",
 	)
 	cmd.Name = "list"
-	cmd.ShortHelp = "[experimental] " + cmd.ShortHelp
-	cmd.LongHelp = "[experimental] " + cmd.LongHelp
 	return cmd
 }
 

@@ -76,8 +76,8 @@ func WebBundleIDsListCommand() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "list",
 		ShortUsage: "asc web bundle-ids list [flags]",
-		ShortHelp:  "[experimental] List Bundle IDs via a Developer Portal web session.",
-		LongHelp: `[experimental] List Bundle IDs via a Developer Portal web session.
+		ShortHelp:  "List Bundle IDs via a Developer Portal web session.",
+		LongHelp: `List Bundle IDs via a Developer Portal web session.
 
 WEB SESSION WORKFLOWS
 
@@ -154,8 +154,8 @@ func newWebBundleIDsViewCommand(errorHandling flag.ErrorHandling) *ffcli.Command
 	return &ffcli.Command{
 		Name:       "view",
 		ShortUsage: "asc web bundle-ids view --bundle-id BUNDLE_RESOURCE_ID [flags]",
-		ShortHelp:  "[experimental] Inspect one Bundle ID via a Developer Portal web session.",
-		LongHelp: `[experimental] Inspect one Bundle ID via a Developer Portal web session.
+		ShortHelp:  "Inspect one Bundle ID via a Developer Portal web session.",
+		LongHelp: `Inspect one Bundle ID via a Developer Portal web session.
 
 WEB SESSION WORKFLOWS
 
@@ -462,7 +462,7 @@ func WebBundleIDCapabilitiesSyncAppClipCommand() *ffcli.Command {
 	parentBundleID := fs.String("parent-bundle-id", "", "Opaque parent app Bundle ID resource ID")
 	capability := fs.String("capability", "", "Capability ID (for example: PUSH_NOTIFICATIONS)")
 	settingsJSON := fs.String("settings-json", "", "Optional JSON array of capability settings")
-	confirm := fs.Bool("confirm", false, "[experimental] Confirm the sync; a changed App ID invalidates existing provisioning profiles")
+	confirm := fs.Bool("confirm", false, "Confirm the sync; a changed App ID invalidates existing provisioning profiles")
 	authFlags := bindWebSessionFlags(fs)
 	output := shared.BindOutputFlags(fs)
 

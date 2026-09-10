@@ -19,7 +19,7 @@ var (
 	runApplySigningPlan      = localxcode.ApplySigningPlan
 )
 
-// XcodeSigningCommand returns the experimental local Xcode signing-settings
+// XcodeSigningCommand returns the local Xcode signing-settings
 // plan/apply command group. It edits only project build settings; credentials,
 // profiles, and certificates remain owned by the asc signing commands.
 func XcodeSigningCommand() *ffcli.Command {
@@ -27,8 +27,8 @@ func XcodeSigningCommand() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "signing",
 		ShortUsage: "asc xcode signing <subcommand> [flags]",
-		ShortHelp:  "[experimental] Plan and apply deterministic Xcode signing settings.",
-		LongHelp: `[experimental] Plan and apply deterministic Xcode signing settings.
+		ShortHelp:  "Plan and apply deterministic Xcode signing settings.",
+		LongHelp: `Plan and apply deterministic Xcode signing settings.
 
 The plan command reads a strict JSON settings manifest, resolves target and
 configuration precedence, and writes a mode-0600 plan artifact. The apply
@@ -58,15 +58,15 @@ func xcodeSigningPlanCommand() *ffcli.Command {
 	project := fs.String("project", "", "Path to the .xcodeproj to plan (required)")
 	settingsFile := fs.String("settings-file", "", "Strict JSON signing settings manifest (required)")
 	stateDir := fs.String("state-dir", ".asc/xcode/signing", "Directory for plan and receipt artifacts")
-	allowExternalXCConfig := fs.Bool("allow-external-xcconfig", false, "[experimental] Allow updating xcconfig files outside the project directory")
+	allowExternalXCConfig := fs.Bool("allow-external-xcconfig", false, "Allow updating xcconfig files outside the project directory")
 	overwrite := fs.Bool("overwrite", false, "Replace an existing plan artifact")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "plan",
 		ShortUsage: "asc xcode signing plan --project PATH --settings-file PATH [flags]",
-		ShortHelp:  "[experimental] Resolve signing settings and write a plan.",
-		LongHelp: `[experimental] Resolve signing settings and write a plan.
+		ShortHelp:  "Resolve signing settings and write a plan.",
+		LongHelp: `Resolve signing settings and write a plan.
 
 The settings file must contain schemaVersion 1 and explicit target,
 configuration, and allowlisted signing-setting values. A representable blocked
@@ -127,15 +127,15 @@ Examples:
 func xcodeSigningApplyCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("apply", flag.ExitOnError)
 	planPath := fs.String("plan", "", "Path to a previously generated signing plan (required)")
-	allowExternalXCConfig := fs.Bool("allow-external-xcconfig", false, "[experimental] Authorize the external xcconfig setting recorded in the plan")
+	allowExternalXCConfig := fs.Bool("allow-external-xcconfig", false, "Authorize the external xcconfig setting recorded in the plan")
 	confirm := fs.Bool("confirm", false, "Confirm local project mutation (required)")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "apply",
 		ShortUsage: "asc xcode signing apply --plan PATH --confirm [flags]",
-		ShortHelp:  "[experimental] Verify and apply a signing plan.",
-		LongHelp: `[experimental] Verify and apply a signing plan.
+		ShortHelp:  "Verify and apply a signing plan.",
+		LongHelp: `Verify and apply a signing plan.
 
 Apply re-resolves the project and strict settings manifest and refuses stale,
 redirected, blocked, or tampered plans. It requires --confirm and records a

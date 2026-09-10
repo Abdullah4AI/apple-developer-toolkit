@@ -175,10 +175,6 @@ func markAdsLegacyCommandDeprecatedWithGuidance(cmd *ffcli.Command, oldPath []st
 	}
 	oldCommand := "asc ads " + strings.Join(oldPath, " ")
 	help := adsLegacyRetirementNotice + " " + helpGuidance
-	shortHelp := strings.TrimSpace(cmd.ShortHelp)
-	if strings.HasPrefix(shortHelp, "[experimental]") {
-		help = "[experimental] " + help
-	}
 	cmd.ShortHelp = "DEPRECATED: " + help
 	if longHelp := strings.TrimSpace(cmd.LongHelp); longHelp != "" {
 		cmd.LongHelp = "DEPRECATED: " + help + "\n\n" + longHelp

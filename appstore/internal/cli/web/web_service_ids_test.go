@@ -52,7 +52,7 @@ func TestWebServiceIDsCommandHierarchy(t *testing.T) {
 	}
 }
 
-func TestWebServiceIDsCommandsAreExperimental(t *testing.T) {
+func TestWebServiceIDsCommandsAreRegistered(t *testing.T) {
 	commands := []*ffcli.Command{
 		WebServiceIDsCommand(),
 		WebServiceIDsListCommand(),
@@ -62,9 +62,7 @@ func TestWebServiceIDsCommandsAreExperimental(t *testing.T) {
 		WebServiceIDsDeleteCommand(),
 	}
 	for _, command := range commands {
-		if !strings.HasPrefix(command.ShortHelp, "[experimental] ") {
-			t.Fatalf("%s ShortHelp = %q, want experimental prefix", command.Name, command.ShortHelp)
-		}
+
 		usage := command.UsageFunc(command)
 		if !strings.Contains(usage, command.ShortHelp) {
 			t.Fatalf("%s help = %q, want ShortHelp %q", command.Name, usage, command.ShortHelp)

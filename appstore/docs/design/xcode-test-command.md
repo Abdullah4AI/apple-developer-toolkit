@@ -2,7 +2,7 @@
 
 ## Placement and scope
 
-`asc xcode test` is an experimental leaf beneath the existing local `asc xcode`
+`asc xcode test` is a leaf beneath the existing local `asc xcode`
 group. It runs an explicitly selected local `xcodebuild` test action and reads
 the resulting `.xcresult` bundle through the active Xcode command-line tools.
 It never calls App Store Connect, uploads an artifact, or mutates an Xcode

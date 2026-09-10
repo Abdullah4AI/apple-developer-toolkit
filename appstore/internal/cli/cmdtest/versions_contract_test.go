@@ -212,7 +212,7 @@ func TestVersionsViewSelectorValidationBeforeClient(t *testing.T) {
 	}
 }
 
-func TestVersionsViewSelectorFlagsAreExperimental(t *testing.T) {
+func TestVersionsViewSelectorFlagsAreRegistered(t *testing.T) {
 	cmd := findSubcommand(RootCommand("test"), "versions", "view")
 	if cmd == nil {
 		t.Fatal("versions view command not found")
@@ -221,9 +221,6 @@ func TestVersionsViewSelectorFlagsAreExperimental(t *testing.T) {
 		flag := cmd.FlagSet.Lookup(name)
 		if flag == nil {
 			t.Fatalf("--%s flag not found", name)
-		}
-		if !strings.HasPrefix(flag.Usage, "[experimental] ") {
-			t.Fatalf("--%s usage = %q, want [experimental] prefix", name, flag.Usage)
 		}
 	}
 }

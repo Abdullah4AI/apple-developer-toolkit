@@ -12,9 +12,8 @@ const (
 
 	// IncludeSensitiveFlagUsage documents the opt-in. It has no environment
 	// variable default: a secret must never become visible because of ambient
-	// configuration. The flag enters through the experimental tier like every
-	// new user-facing flag.
-	IncludeSensitiveFlagUsage = "[experimental] Print secret values such as demo account passwords instead of \"" +
+	// configuration.
+	IncludeSensitiveFlagUsage = "Print secret values such as demo account passwords instead of \"" +
 		"(redacted)\"; applies only to this invocation"
 
 	// IncludeSensitiveWarning is written to stderr whenever the opt-in is used.

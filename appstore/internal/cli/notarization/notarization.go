@@ -154,15 +154,15 @@ Examples:
 func stapleCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("notarization staple", flag.ExitOnError)
 
-	filePath := bindSingleStringFlag(fs, "file", "[experimental] Path to a notarized app bundle, disk image, or signed flat package (required; zip files must be recreated after stapling)")
-	confirm := fs.Bool("confirm", false, "[experimental] Confirm in-place ticket stapling (required)")
+	filePath := bindSingleStringFlag(fs, "file", "Path to a notarized app bundle, disk image, or signed flat package (required; zip files must be recreated after stapling)")
+	confirm := fs.Bool("confirm", false, "Confirm in-place ticket stapling (required)")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "staple",
 		ShortUsage: "asc notarization staple --file <path> --confirm [flags]",
-		ShortHelp:  "[experimental] Attach and validate a macOS notarization ticket locally.",
-		LongHelp: `[experimental] Attach Apple's notarization ticket to a local macOS artifact and
+		ShortHelp:  "Attach and validate a macOS notarization ticket locally.",
+		LongHelp: `Attach Apple's notarization ticket to a local macOS artifact and
 validate it immediately afterward. The target must be a notarized app bundle,
 UDIF disk image, or signed flat installer package. ZIP archives cannot be
 stapled directly; staple the contained item and recreate the archive. This
@@ -293,14 +293,14 @@ Examples:
 func validateStapleCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("notarization validate", flag.ExitOnError)
 
-	filePath := bindSingleStringFlag(fs, "file", "[experimental] Path to an artifact with an existing notarization ticket (required; zip files must be validated after recreating them)")
+	filePath := bindSingleStringFlag(fs, "file", "Path to an artifact with an existing notarization ticket (required; zip files must be validated after recreating them)")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "validate",
 		ShortUsage: "asc notarization validate --file <path> [flags]",
-		ShortHelp:  "[experimental] Validate a stapled macOS notarization ticket locally.",
-		LongHelp: `[experimental] Validate an existing stapled ticket on a local macOS artifact.
+		ShortHelp:  "Validate a stapled macOS notarization ticket locally.",
+		LongHelp: `Validate an existing stapled ticket on a local macOS artifact.
 The target must be a notarized app bundle, UDIF disk image, or signed flat
 installer package. ZIP archives cannot be validated directly; validate the
 contained item after recreating the archive. This command never mutates the

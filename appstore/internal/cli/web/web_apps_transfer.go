@@ -17,7 +17,7 @@ func WebAppsTransferCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("web apps transfer", flag.ExitOnError)
 	return &ffcli.Command{
 		Name: "transfer", ShortUsage: "asc web apps transfer <subcommand> [flags]",
-		ShortHelp: "[experimental] Read app-transfer status via a web session.",
+		ShortHelp: "Read app-transfer status via a web session.",
 		LongHelp: `Read the transfer request attached to an app in App Store Connect.
 Initiate, accept, cancel, and decline remain manual Apple workflows.`,
 		FlagSet: fs, UsageFunc: shared.DefaultUsageFunc,
@@ -34,7 +34,7 @@ func WebAppsTransferStatusCommand() *ffcli.Command {
 	output := shared.BindOutputFlags(fs)
 	return &ffcli.Command{
 		Name: "status", ShortUsage: "asc web apps transfer status --app APP_ID [flags]",
-		ShortHelp: "[experimental] Read the app-attached transfer request and state.",
+		ShortHelp: "Read the app-attached transfer request and state.",
 		LongHelp: `Read the app through Apple's web-session API with appTransferRequest included.
 JSON preserves Apple's full response envelope. Table and Markdown report request
 presence as none for explicit null, present for a resource reference, or unknown

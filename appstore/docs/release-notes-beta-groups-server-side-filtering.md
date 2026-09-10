@@ -7,7 +7,7 @@ filtered the aggregate in Go. Those requests now go to `GET /v1/betaGroups`
 with `filter[app]` and `filter[isInternalGroup]`, while retaining the complete
 multi-page result.
 
-Two new experimental flags cover query parameters that endpoint already
+Two new flags cover query parameters that endpoint already
 documents: `--name` filters on the exact group name (`filter[name]`) and
 `--sort` accepts `name`, `-name`, `createdDate`, `-createdDate`, `publicLinkEnabled`,
 `-publicLinkEnabled`, `publicLinkLimit`, and `-publicLinkLimit`. An unsupported

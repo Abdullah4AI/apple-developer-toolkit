@@ -137,10 +137,8 @@ func ReviewsRespondBatchCommand() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "respond-batch",
 		ShortUsage: "asc reviews respond-batch [flags]",
-		ShortHelp:  "Create responses for multiple customer reviews. Experimental.",
+		ShortHelp:  "Create responses for multiple customer reviews.",
 		LongHelp: fmt.Sprintf(`Create responses for multiple customer reviews from a grouped JSON file.
-
-This command is experimental.
 
 The input file must contain a top-level replies array. Each reply has one
 response body and one or more reviewIds.

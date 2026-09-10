@@ -581,6 +581,9 @@ func twoFactorSubmitFailure(err error, afterPhoneDelivery bool) error {
 }
 
 func loginWithOptionalTwoFactorUsing(ctx context.Context, progressMessage, appleID, password, twoFactorCode string, loginFn func(context.Context, webcore.LoginCredentials) (*webcore.AuthSession, error), twoFactorStarted func(), readCommandCode twoFactorCodeCommandReader, twoFactorCodeCommand ...string) (*webcore.AuthSession, error) {
+	// Credential/keychain prompts may consume the initial command budget.
+	ctx, cancel := shared.ContextWithTimeout(shared.ContextWithoutTimeout(ctx))
+	defer cancel()
 	session, err := withWebSpinnerValue(progressMessage, func() (*webcore.AuthSession, error) {
 		return loginFn(ctx, webcore.LoginCredentials{
 			Username: appleID,
@@ -1073,7 +1076,11 @@ func selectResolvedWebSessionProvider(ctx context.Context, session *webcore.Auth
 	if selection.ProviderID == 0 && strings.TrimSpace(selection.PublicProviderID) == "" {
 		return nil
 	}
-	if err := selectWebProviderFn(ctx, session, selection); err != nil {
+	// Interactive 2FA may outlive the request budget used to start login.
+	// Renew only the internal timeout, preserving caller cancellation.
+	providerCtx, cancel := shared.ContextWithTimeout(shared.ContextWithoutTimeout(ctx))
+	defer cancel()
+	if err := selectWebProviderFn(providerCtx, session, selection); err != nil {
 		return fmt.Errorf("web provider selection failed: %w", err)
 	}
 	if err := persistWebSessionFn(session); err != nil {
@@ -1183,8 +1190,6 @@ Phone-code fallback (including SMS):
 Provider selection:
   - --public-provider-id selects the public App Store Connect provider/team ID
   - --provider-id selects Apple's numeric App Store Connect provider ID
-
-
 
 Examples:
   asc web auth login --apple-id "user@example.com"
@@ -1302,8 +1307,8 @@ func WebAuthLogoutCommand() *ffcli.Command {
 
 	appleID := fs.String("apple-id", "", "Apple Account email to remove from cache")
 	all := fs.Bool("all", false, "Remove all cached web sessions")
-	forgetPassword := fs.Bool("forget-password", false, "[experimental] Also remove the saved Apple Account password")
-	confirm := fs.Bool("confirm", false, "[experimental] Confirm removal of saved password credentials")
+	forgetPassword := fs.Bool("forget-password", false, "Also remove the saved Apple Account password")
+	confirm := fs.Bool("confirm", false, "Confirm removal of saved password credentials")
 
 	return &ffcli.Command{
 		Name:       "logout",

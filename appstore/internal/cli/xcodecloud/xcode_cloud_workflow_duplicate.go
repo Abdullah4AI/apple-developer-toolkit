@@ -218,17 +218,17 @@ func omitNulls(value any) (any, bool) {
 func XcodeCloudWorkflowsDuplicateCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("duplicate", flag.ExitOnError)
 
-	id := fs.String("id", "", "[experimental] Source workflow ID to copy")
-	name := fs.String("name", "", "[experimental] Name for the new workflow")
-	description := fs.String("description", "", "[experimental] Description for the new workflow (default: copied from the source workflow)")
-	enabled := fs.Bool("enabled", false, "[experimental] Enable the new workflow immediately; the copy is created disabled by default")
+	id := fs.String("id", "", "Source workflow ID to copy")
+	name := fs.String("name", "", "Name for the new workflow")
+	description := fs.String("description", "", "Description for the new workflow (default: copied from the source workflow)")
+	enabled := fs.Bool("enabled", false, "Enable the new workflow immediately; the copy is created disabled by default")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "duplicate",
 		ShortUsage: "asc xcode-cloud workflows duplicate --id \"WORKFLOW_ID\" --name \"New Workflow\"",
-		ShortHelp:  "[experimental] Duplicate a workflow under a new name.",
-		LongHelp: `[experimental] Duplicate a workflow under a new name.
+		ShortHelp:  "Duplicate a workflow under a new name.",
+		LongHelp: `Duplicate a workflow under a new name.
 
 Reads the source workflow, then creates a new workflow in the same product with the
 same start conditions, actions, clean setting, Xcode version, macOS version, and

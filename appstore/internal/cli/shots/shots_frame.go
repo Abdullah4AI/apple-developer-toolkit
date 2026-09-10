@@ -61,8 +61,8 @@ func ShotsFrameCommand() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "frame",
 		ShortUsage: "asc screenshots frame (--input ./screenshots/raw/home.png | --config ./koubou.yaml) [flags]",
-		ShortHelp:  "[experimental] Compose a screenshot into an Apple device frame.",
-		LongHelp: `Compose screenshots using Koubou's YAML-based rendering flow (experimental).
+		ShortHelp:  "Compose a screenshot into an Apple device frame.",
+		LongHelp: `Compose screenshots using Koubou's YAML-based rendering flow.
 
 Requires Koubou v0.18.1 (pip install koubou==0.18.1).
 

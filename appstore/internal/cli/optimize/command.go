@@ -21,14 +21,14 @@ var (
 	collectSearchDataForPlan     = ads.CollectSearchOptimizationData
 )
 
-// OptimizeCommand returns the experimental cross-API optimization group.
+// OptimizeCommand returns the cross-API optimization group.
 func OptimizeCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("optimize", flag.ExitOnError)
 	return &ffcli.Command{
 		Name:        "optimize",
 		ShortUsage:  "asc optimize <subcommand> [flags]",
-		ShortHelp:   "Build cross-API optimization plans. [experimental]",
-		LongHelp:    "Build read-only cross-API optimization plans from official Apple APIs. [experimental]",
+		ShortHelp:   "Build cross-API optimization plans.",
+		LongHelp:    "Build read-only cross-API optimization plans from official Apple APIs.",
 		FlagSet:     fs,
 		UsageFunc:   shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{SearchCommand(), KeywordsCommand()},
@@ -44,8 +44,8 @@ func SearchCommand() *ffcli.Command {
 	return &ffcli.Command{
 		Name:        "search",
 		ShortUsage:  "asc optimize search <subcommand> [flags]",
-		ShortHelp:   "Build App Store search optimization plans. [experimental]",
-		LongHelp:    "Build App Store search optimization plans from official Apple APIs. [experimental]",
+		ShortHelp:   "Build App Store search optimization plans.",
+		LongHelp:    "Build App Store search optimization plans from official Apple APIs.",
 		FlagSet:     fs,
 		UsageFunc:   shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{SearchPlanCommand()},
@@ -74,7 +74,7 @@ func SearchPlanCommand() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "plan",
 		ShortUsage: "asc optimize search plan [flags]",
-		ShortHelp:  "Join official Apple Ads and App Store metadata into a search plan. [experimental]",
+		ShortHelp:  "Join official Apple Ads and App Store metadata into a search plan.",
 		LongHelp: `Join the official Apple Ads Platform API v1 with App Store Connect metadata.
 
 This read-only workflow does not mutate campaigns or App Store metadata. It

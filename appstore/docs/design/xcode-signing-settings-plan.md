@@ -2,7 +2,7 @@
 
 ## Placement and current behavior
 
-This change adds an experimental `signing` subgroup beneath the existing
+This change adds a `signing` subgroup beneath the existing
 `asc xcode` command. It is intentionally separate from `asc signing`, which
 manages App Store Connect signing resources and protected local signing files.
 The new command changes only the local Xcode project configuration that tells
@@ -25,7 +25,7 @@ and [target build settings guide][apple-target].
 
 ## Command contract
 
-The command is additive and initially experimental:
+The command is additive:
 
 ```text
 asc xcode signing plan \

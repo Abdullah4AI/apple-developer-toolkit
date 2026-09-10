@@ -13,7 +13,7 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
-func TestBetaGroupsCreateDistributionFlagsAreExperimental(t *testing.T) {
+func TestBetaGroupsCreateDistributionFlagsAreRegistered(t *testing.T) {
 	cmd := findSubcommand(RootCommand("1.2.3"), "testflight", "groups", "create")
 	if cmd == nil {
 		t.Fatal("command [testflight groups create] not found")
@@ -28,9 +28,6 @@ func TestBetaGroupsCreateDistributionFlagsAreExperimental(t *testing.T) {
 		flagValue := cmd.FlagSet.Lookup(name)
 		if flagValue == nil {
 			t.Fatalf("--%s flag not found", name)
-		}
-		if !strings.HasPrefix(flagValue.Usage, "[experimental] ") {
-			t.Fatalf("--%s usage = %q, want experimental prefix", name, flagValue.Usage)
 		}
 	}
 }

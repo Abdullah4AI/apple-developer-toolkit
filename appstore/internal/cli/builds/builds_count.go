@@ -22,7 +22,7 @@ func BuildsCountCommand() *ffcli.Command {
 	buildNumber := fs.String("build-number", "", "Filter by build number (CFBundleVersion)")
 	platform := fs.String("platform", "", "Filter by platform: IOS, MAC_OS, TV_OS, VISION_OS")
 	processingState := fs.String("processing-state", "", "Filter by processing state: VALID, PROCESSING, FAILED, INVALID, or all")
-	betaReviewState := fs.String("beta-review-state", "", "[experimental] Filter by beta app review state, comma-separated ("+strings.Join(buildsListBetaReviewStates, ", ")+")")
+	betaReviewState := fs.String("beta-review-state", "", "Filter by beta app review state, comma-separated ("+strings.Join(buildsListBetaReviewStates, ", ")+")")
 	excludeExpired := fs.Bool("exclude-expired", false, "Exclude expired builds")
 	notExpired := fs.Bool("not-expired", false, "Alias for --exclude-expired")
 	output := shared.BindOutputFlags(fs)

@@ -40,32 +40,32 @@ func (f *exactTestStringFlag) Set(value string) error {
 func XcodeTestCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("xcode test", flag.ExitOnError)
 
-	workspacePath := fs.String("workspace", "", "[experimental] Path to .xcworkspace directory")
-	projectPath := fs.String("project", "", "[experimental] Path to .xcodeproj directory")
-	scheme := fs.String("scheme", "", "[experimental] Xcode scheme name (required except for test-without-building)")
-	action := fs.String("action", string(localxcode.TestActionTest), "[experimental] Xcode test action: test, build-for-testing, or test-without-building")
-	configuration := fs.String("configuration", "", "[experimental] Build configuration (for example Debug or Release)")
+	workspacePath := fs.String("workspace", "", "Path to .xcworkspace directory")
+	projectPath := fs.String("project", "", "Path to .xcodeproj directory")
+	scheme := fs.String("scheme", "", "Xcode scheme name (required except for test-without-building)")
+	action := fs.String("action", string(localxcode.TestActionTest), "Xcode test action: test, build-for-testing, or test-without-building")
+	configuration := fs.String("configuration", "", "Build configuration (for example Debug or Release)")
 	var destinations exactTestStringFlag
-	fs.Var(&destinations, "destination", "[experimental] Xcode destination specifier (repeatable; required)")
-	testPlan := fs.String("test-plan", "", "[experimental] Xcode test plan name")
-	xctestrunPath := fs.String("xctestrun", "", "[experimental] Path to an existing .xctestrun file for test-without-building")
+	fs.Var(&destinations, "destination", "Xcode destination specifier (repeatable; required)")
+	testPlan := fs.String("test-plan", "", "Xcode test plan name")
+	xctestrunPath := fs.String("xctestrun", "", "Path to an existing .xctestrun file for test-without-building")
 	var onlyTesting exactTestStringFlag
-	fs.Var(&onlyTesting, "only-testing", "[experimental] Run only the selected test target or identifier (repeatable)")
+	fs.Var(&onlyTesting, "only-testing", "Run only the selected test target or identifier (repeatable)")
 	var skipTesting exactTestStringFlag
-	fs.Var(&skipTesting, "skip-testing", "[experimental] Skip the selected test target or identifier (repeatable)")
-	derivedDataPath := fs.String("derived-data-path", "", "[experimental] DerivedData directory (defaults to a stable asc cache path)")
-	resultBundlePath := fs.String("result-bundle-path", "", "[experimental] Destination for a new Xcode result bundle")
-	clean := fs.Bool("clean", false, "[experimental] Run clean before the selected Xcode action")
-	noCodeSigning := fs.Bool("no-code-signing", false, "[experimental] Set CODE_SIGNING_ALLOWED=NO explicitly")
+	fs.Var(&skipTesting, "skip-testing", "Skip the selected test target or identifier (repeatable)")
+	derivedDataPath := fs.String("derived-data-path", "", "DerivedData directory (defaults to a stable asc cache path)")
+	resultBundlePath := fs.String("result-bundle-path", "", "Destination for a new Xcode result bundle")
+	clean := fs.Bool("clean", false, "Run clean before the selected Xcode action")
+	noCodeSigning := fs.Bool("no-code-signing", false, "Set CODE_SIGNING_ALLOWED=NO explicitly")
 	var xcodebuildFlags exactTestStringFlag
-	fs.Var(&xcodebuildFlags, "xcodebuild-flag", "[experimental] Pass a raw argument through to xcodebuild (repeatable)")
+	fs.Var(&xcodebuildFlags, "xcodebuild-flag", "Pass a raw argument through to xcodebuild (repeatable)")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "test",
 		ShortUsage: "asc xcode test [flags]",
-		ShortHelp:  "[experimental] Run local Xcode tests and report structured results.",
-		LongHelp: `[experimental] Run a local Xcode test action and report structured results.
+		ShortHelp:  "Run local Xcode tests and report structured results.",
+		LongHelp: `Run a local Xcode test action and report structured results.
 
 For test and build-for-testing, provide exactly one of --workspace or --project,
 plus --scheme and at least one --destination. The default action is test. Use

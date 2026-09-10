@@ -258,7 +258,7 @@ func TestBuildsGroupsListPreservesLookupAPIErrors(t *testing.T) {
 	}
 }
 
-func TestTestFlightGroupsListBuildMembershipFlagIsExperimental(t *testing.T) {
+func TestTestFlightGroupsListBuildMembershipFlagIsRegistered(t *testing.T) {
 	root := RootCommand("1.2.3")
 	list := findCommand(root, "testflight", "groups", "list")
 	if list == nil {
@@ -267,9 +267,6 @@ func TestTestFlightGroupsListBuildMembershipFlagIsExperimental(t *testing.T) {
 	buildID := list.FlagSet.Lookup("build-id")
 	if buildID == nil {
 		t.Fatal("expected --build-id flag")
-	}
-	if !strings.HasPrefix(buildID.Usage, "[experimental] ") {
-		t.Fatalf("--build-id usage = %q, want [experimental] prefix", buildID.Usage)
 	}
 }
 

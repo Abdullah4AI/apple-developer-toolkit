@@ -38,15 +38,6 @@ func TestBindIncludeSensitiveFlagDefaultsFalseWithoutEnvironmentOverride(t *test
 	}
 }
 
-func TestIncludeSensitiveFlagIsMarkedExperimental(t *testing.T) {
-	// New user-facing flags enter through the experimental tier; the marker
-	// keeps the freedom to adjust the opt-in's shape before it becomes a
-	// stable compatibility promise.
-	if !strings.HasPrefix(IncludeSensitiveFlagUsage, "[experimental] ") {
-		t.Fatalf("usage = %q, want the [experimental] prefix", IncludeSensitiveFlagUsage)
-	}
-}
-
 func TestWarnIncludeSensitiveOnlyWarnsWhenEnabled(t *testing.T) {
 	var quiet bytes.Buffer
 	WarnIncludeSensitive(&quiet, false)

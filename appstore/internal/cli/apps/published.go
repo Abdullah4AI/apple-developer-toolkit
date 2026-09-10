@@ -32,10 +32,8 @@ func AppsPublishedCommand() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "published",
 		ShortUsage: "asc apps published [flags]",
-		ShortHelp:  "[experimental] List published apps and their published-territory counts.",
-		LongHelp: `[experimental] List published apps and their published-territory counts.
-
-This command is experimental.
+		ShortHelp:  "List published apps and their published-territory counts.",
+		LongHelp: `List published apps and their published-territory counts.
 
 The command audits every App Store Connect app record and all of its territory
 availability pages. An app is published when at least one territory reports the

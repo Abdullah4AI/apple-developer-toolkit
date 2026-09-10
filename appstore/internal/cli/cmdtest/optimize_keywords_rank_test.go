@@ -38,10 +38,8 @@ func TestOptimizeKeywordsHelpShowsRankSubcommand(t *testing.T) {
 		t.Fatal("expected optimize keywords rank command")
 		return
 	}
-	// The optimize tree marks stability with a trailing [experimental] suffix.
-	if !strings.HasSuffix(rankCmd.ShortHelp, "[experimental]") {
-		t.Fatalf("ShortHelp = %q, want experimental suffix", rankCmd.ShortHelp)
-	}
+	// The optimize tree marks stability with a trailing suffix.
+
 	if rankCmd.UsageFunc == nil {
 		t.Fatal("optimize keywords rank is missing UsageFunc")
 	}

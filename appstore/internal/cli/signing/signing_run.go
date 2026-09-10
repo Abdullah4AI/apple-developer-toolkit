@@ -369,8 +369,8 @@ func SigningRunCommand() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "run",
 		ShortUsage: "asc signing run --identity PATH --profile PATH [flags] -- <command> [args...]",
-		ShortHelp:  "[experimental] Run one command with an ephemeral signing identity.",
-		LongHelp: `[experimental] Run one command with an ephemeral signing identity and provisioning profile.
+		ShortHelp:  "Run one command with an ephemeral signing identity.",
+		LongHelp: `Run one command with an ephemeral signing identity and provisioning profile.
 
 The identity is imported into a dedicated temporary keychain and is available
 only while the child command runs. The child is executed directly without a

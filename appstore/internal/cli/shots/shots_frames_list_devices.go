@@ -22,7 +22,7 @@ func ShotsFramesListDevicesCommand() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "list-frame-devices",
 		ShortUsage: "asc screenshots list-frame-devices [--output json]",
-		ShortHelp:  "[experimental] List supported frame devices and the default.",
+		ShortHelp:  "List supported frame devices and the default.",
 		FlagSet:    fs,
 		UsageFunc:  shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

@@ -43,9 +43,9 @@ func ValidateCommand() *ffcli.Command {
 	versionID := fs.String("version-id", "", "App Store version ID")
 	platform := fs.String("platform", "", "Platform: IOS, MAC_OS, TV_OS, VISION_OS")
 	strict := fs.Bool("strict", false, "Treat warnings as errors (exit non-zero)")
-	deep := fs.Bool("deep", false, "[experimental] Verify blockers that require a cached Apple web session")
-	checkURLs := fs.Bool("check-urls", false, "[experimental] Check metadata URL destinations with bounded public HTTP requests")
-	appleID := fs.String("apple-id", "", "[experimental] Cached Apple web session to use with --deep")
+	deep := fs.Bool("deep", false, "Verify blockers that require a cached Apple web session")
+	checkURLs := fs.Bool("check-urls", false, "Check metadata URL destinations with bounded public HTTP requests")
+	appleID := fs.String("apple-id", "", "Cached Apple web session to use with --deep")
 	output := shared.BindOutputFlags(fs)
 
 	testFlight := wrapValidateSubcommand(ValidateTestFlightCommand(), fs)
@@ -83,7 +83,7 @@ Checks:
   - Subscription review readiness and promotional image guidance
   - Age rating completeness
 
-Experimental deep validation:
+Deep validation:
   --deep adds read-only checks from an existing cached Apple web session for
   App Privacy publication, required agreements, and first-of-type subscription
   attachment. It also classifies every actionable finding as api-fixable,

@@ -131,7 +131,7 @@ Use `asc <command> --help` for subcommands and flags.
 - `init` - Initialize asc helper docs in the current repo.
 - `docs` - Generate asc cli reference docs for a repo.
 - `diff` - Generate deterministic non-mutating diff plans.
-- `system-status` - [experimental] Check Apple Developer service health without authentication.
+- `system-status` - Check Apple Developer service health without authentication.
 - `capabilities` - Show CLI, API, web-only, and public-API-limited capability coverage.
 - `search` - Search asc commands and examples for agent-oriented command discovery.
 - `status` - Show a release pipeline dashboard for an app.
@@ -141,7 +141,7 @@ Use `asc <command> --help` for subcommands and flags.
 - `review` - Manage App Store review details, attachments, and submissions.
 - `analytics` - Request and download analytics and sales reports.
 - `ads` - Manage Apple Ads API resources.
-- `optimize` - Build cross-API optimization plans. [experimental]
+- `optimize` - Build cross-API optimization plans.
 - `performance` - Access performance metrics and diagnostic logs.
 - `finance` - Download payments and financial reports.
 - `apps` - List and manage apps in App Store Connect. App creation moved out of `asc apps`; use `asc web apps create` for the web-session path.
@@ -168,7 +168,7 @@ Use `asc <command> --help` for subcommands and flags.
 - `release` - Run high-level App Store release workflows.
 - `workflow` - Run multi-step automation workflows.
 - `xcode` - Build, archive, and export with local Xcode on macOS; manage project versions; and plan or apply deterministic signing settings. Planning is cross-platform, while apply fails closed on Windows before changing project or receipt files.
-- `distribute` - Plan, execute, inspect, and publish provider-neutral iOS release-testing bundles (experimental).
+- `distribute` - Plan, execute, inspect, and publish provider-neutral iOS release-testing bundles.
 - `versions` - Manage App Store versions.
 - `product-pages` - Manage custom product pages and product page experiments.
 - `routing-coverage` - Manage routing app coverage files.
@@ -178,7 +178,7 @@ Use `asc <command> --help` for subcommands and flags.
 - `pre-orders` - Manage app pre-orders.
 - `localizations` - Manage App Store localization metadata.
 - `metadata` - Pull, validate, push, and keyword-sync canonical metadata workflows.
-- `screenshots` - Upload and manage App Store screenshots; local capture/frame/matrix workflow is `[experimental]`.
+- `screenshots` - Upload and manage App Store screenshots, including local capture, framing, and matrices.
 - `background-assets` - Manage background assets.
 - `build-localizations` - Manage build release notes localizations.
 - `sandbox` - Manage sandbox testers in App Store Connect.
@@ -229,6 +229,7 @@ Use `asc <command> --help` for subcommands and flags.
 - `ASC_STOREKIT_BYPASS_KEYCHAIN` - Disable StoreKit keychain usage and use config-backed storage
 - Web password environment variable (`ASC_WEB` + `_PASSWORD`) - Password source for `asc web auth login` and `asc web apps create`
 - `ASC_WEB_SESSION_CACHE`, `ASC_WEB_SESSION_CACHE_DIR`, `ASC_WEB_SESSION_CACHE_BACKEND` - Web-session cache controls for web flows
+- `ASC_WEB_SESSION` - Canonical web-session bundle for `--session-from-env` on `web removed-apps list` and `web api-keys list` or `view`; used in memory without persistence
 - `ASC_SPINNER_DISABLED` - Disable interactive stderr spinner
 - `ASC_SKILLS_AUTO_CHECK` - Automatic skills update checks (`true`/`1`/`yes`/`y`/`on` enables, `false`/`0`/`no`/`n`/`off` disables; default enabled)
 

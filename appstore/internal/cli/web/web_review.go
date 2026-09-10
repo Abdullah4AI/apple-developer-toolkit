@@ -958,25 +958,25 @@ Subcommands:
 }
 
 // WebReviewReplyCommand sends a Resolution Center reply through the
-// experimental Apple web-session API. It creates and sends one draft, then
+// Apple web-session API. It creates and sends one draft, then
 // verifies the resulting message with the existing read path.
 func WebReviewReplyCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("web review reply", flag.ExitOnError)
 
 	threadID := fs.String("thread-id", "", "Resolution Center thread ID")
 	message := fs.String("message", "", "Reply message body")
-	confirm := fs.Bool("confirm", false, "[experimental] Confirm sending the reply")
+	confirm := fs.Bool("confirm", false, "Confirm sending the reply")
 	authFlags := bindWebSessionFlags(fs)
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "reply",
 		ShortUsage: "asc web review reply --thread-id THREAD_ID --message MESSAGE --confirm [flags]",
-		ShortHelp:  "[experimental] Send a Resolution Center reply.",
+		ShortHelp:  "Send a Resolution Center reply.",
 		LongHelp: `WEB SESSION WORKFLOWS
 
 Send one reply to an App Store Connect Resolution Center thread through the
-experimental Apple web-session API. The command creates one draft, sends it,
+Apple web-session API. The command creates one draft, sends it,
 and re-reads the thread to verify the created message. It never retries a send
 automatically because a failed response can follow a successful Apple write.
 

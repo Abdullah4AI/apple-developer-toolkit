@@ -89,8 +89,8 @@ func PublishCommand() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "publish",
 		ShortUsage: "asc distribute publish --bundle-dir DIR --endpoint URL --region REGION --bucket BUCKET --prefix PREFIX --receipt FILE --link-path FILE [flags]",
-		ShortHelp:  "[experimental] Publish an installable bundle to a caller-owned S3-compatible endpoint.",
-		LongHelp: `[experimental] Publish an installable bundle to a caller-owned S3-compatible endpoint.
+		ShortHelp:  "Publish an installable bundle to a caller-owned S3-compatible endpoint.",
+		LongHelp: `Publish an installable bundle to a caller-owned S3-compatible endpoint.
 
 The command reads bundle.json and payload/app.ipa from --bundle-dir. It uploads
 the content-addressed IPA first, an Apple installation manifest second, and a

@@ -767,15 +767,12 @@ func TestWebAuthLogoutAllCanForgetPasswordsWithSessions(t *testing.T) {
 	}
 }
 
-func TestWebAuthLogoutPasswordFlagsAreExperimental(t *testing.T) {
+func TestWebAuthLogoutPasswordFlagsAreRegistered(t *testing.T) {
 	cmd := WebAuthLogoutCommand()
 	for _, name := range []string{"forget-password", "confirm"} {
 		flag := cmd.FlagSet.Lookup(name)
 		if flag == nil {
 			t.Fatalf("--%s flag not found", name)
-		}
-		if !strings.HasPrefix(flag.Usage, "[experimental]") {
-			t.Fatalf("--%s usage = %q, want [experimental] prefix", name, flag.Usage)
 		}
 	}
 }

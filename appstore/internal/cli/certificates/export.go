@@ -57,20 +57,20 @@ type certificateExportInput struct {
 func CertificatesExportCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("export", flag.ExitOnError)
 
-	certificatePath := fs.String("certificate", "", "[experimental] Apple-issued X.509 certificate path (DER .cer or PEM)")
-	privateKeyPath := fs.String("private-key", "", "[experimental] Matching unencrypted RSA or EC private key path (PEM)")
-	csrPath := fs.String("csr", "", "[experimental] Optional CSR path to verify against the certificate and private key")
-	passwordPath := fs.String("password-file", "", "[experimental] Protected file containing the PKCS#12 password")
-	p12Out := fs.String("p12-out", "", "[experimental] Destination path for the password-protected PKCS#12 identity")
-	force := fs.Bool("force", false, "[experimental] Replace an existing PKCS#12 identity")
-	confirm := fs.Bool("confirm", false, "[experimental] Confirm replacement when --force is set")
+	certificatePath := fs.String("certificate", "", "Apple-issued X.509 certificate path (DER .cer or PEM)")
+	privateKeyPath := fs.String("private-key", "", "Matching unencrypted RSA or EC private key path (PEM)")
+	csrPath := fs.String("csr", "", "Optional CSR path to verify against the certificate and private key")
+	passwordPath := fs.String("password-file", "", "Protected file containing the PKCS#12 password")
+	p12Out := fs.String("p12-out", "", "Destination path for the password-protected PKCS#12 identity")
+	force := fs.Bool("force", false, "Replace an existing PKCS#12 identity")
+	confirm := fs.Bool("confirm", false, "Confirm replacement when --force is set")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "export",
 		ShortUsage: "asc certificates export --certificate ./push/push.cer --private-key ./push/push.key --password-file ./push/password --p12-out ./push/push.p12 [--csr ./push/push.csr] [--force --confirm]",
-		ShortHelp:  "[experimental] Package a certificate and private key as a protected PKCS#12 identity.",
-		LongHelp: "[experimental] Package an Apple-issued certificate and its matching private key as a\n" +
+		ShortHelp:  "Package a certificate and private key as a protected PKCS#12 identity.",
+		LongHelp: "Package an Apple-issued certificate and its matching private key as a\n" +
 			"password-protected PKCS#12 identity. This command is local-only: obtain the\n" +
 			"certificate through Apple's Developer website after uploading the CSR.\n\n" +
 			"The command accepts DER or PEM certificates, validates the private-key match,\n" +

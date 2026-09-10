@@ -739,9 +739,7 @@ func fakeSigningRunDeps(events *[]string) signingRunDeps {
 
 func TestSigningRunCommandFlags(t *testing.T) {
 	command := SigningRunCommand()
-	if !strings.HasPrefix(command.ShortHelp, "[experimental]") {
-		t.Fatalf("ShortHelp = %q, want experimental lifecycle label", command.ShortHelp)
-	}
+
 	for _, name := range []string{
 		"identity",
 		"identity-password-file",

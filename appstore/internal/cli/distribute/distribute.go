@@ -17,13 +17,13 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/rootfs"
 )
 
-// DistributeCommand returns the experimental local distribution command group.
+// DistributeCommand returns the local distribution command group.
 func DistributeCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("distribute", flag.ExitOnError)
 	return &ffcli.Command{
 		Name:       "distribute",
 		ShortUsage: "asc distribute <subcommand> [flags]",
-		ShortHelp:  "Plan, execute, inspect, and publish iOS distribution artifacts. [experimental]",
+		ShortHelp:  "Plan, execute, inspect, and publish iOS distribution artifacts.",
 		LongHelp: `Plan, execute, inspect, and publish provider-neutral iOS release-testing artifacts.
 
 Inspect and prepare perform local, deterministic work without App Store Connect,

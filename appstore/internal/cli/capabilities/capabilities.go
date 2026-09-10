@@ -326,7 +326,7 @@ func capabilityRows() []Capability {
 			Capability: "App distribution method inspection",
 			Status:     statusWebSession,
 			Commands:   []string{"asc web apps distribution view", "asc web apps distribution set", "asc web apps distribution users list", "asc web apps distribution users create", "asc web apps distribution users delete"},
-			Notes:      []string{"The public apps API does not expose distributionType or educationDiscountType. The web commands inspect or update the app-level distribution pair: public (APP_STORE) or private (CUSTOM), with public education discount DISCOUNTED or NOT_DISCOUNTED and private NOT_APPLICABLE. The setter preserves existing custom organization and user rows and does not cover DIRECT_URL or unlisted distribution requests, which remain unavailable.", "Experimental app-scoped customAppUsers reads and lifecycle use the private web-session JSON:API. List preserves Apple's raw envelope; create and delete require --confirm and a validated CUSTOM app, verify selected-app readback, and leave ambiguous outcomes uncertain without retrying. --recipient-apple-id identifies the recipient while --apple-id selects authentication. Organization recipients, invitations, onboarding, rename/PATCH, and implicit distribution changes remain unsupported."},
+			Notes:      []string{"The public apps API does not expose distributionType or educationDiscountType. The web commands inspect or update the app-level distribution pair: public (APP_STORE) or private (CUSTOM), with public education discount DISCOUNTED or NOT_DISCOUNTED and private NOT_APPLICABLE. The setter preserves existing custom organization and user rows and does not cover DIRECT_URL or unlisted distribution requests, which remain unavailable.", "App-scoped customAppUsers reads and lifecycle use the private web-session JSON:API. List preserves Apple's raw envelope; create and delete require --confirm and a validated CUSTOM app, verify selected-app readback, and leave ambiguous outcomes uncertain without retrying. --recipient-apple-id identifies the recipient while --apple-id selects authentication. Organization recipients, invitations, onboarding, rename/PATCH, and implicit distribution changes remain unsupported."},
 			NextAction: "Use App Store Connect web UI, or inspect with asc web apps distribution view and update with asc web apps distribution set --app APP_ID --method public|private [--education-discount discounted|not-discounted] --confirm. For custom recipients, use asc web apps distribution users list --app APP_ID --paginate, then create with --recipient-apple-id APPLE_ACCOUNT --confirm or delete a validated RECIPIENT_ID --confirm.",
 		},
 		{
@@ -527,7 +527,7 @@ func capabilityRows() []Capability {
 			Commands:   []string{"asc web finance transaction-tax download"},
 			Notes: []string{
 				"Apple does not expose Transaction Tax reports through the public App Store Connect API.",
-				"The experimental command uses the captured App Store Connect finance web session to generate, poll, and download one eligible period; report history and generated job IDs are not exposed.",
+				"The command uses the captured App Store Connect finance web session to generate, poll, and download one eligible period; report history and generated job IDs are not exposed.",
 			},
 			NextAction: "Use asc web finance transaction-tax download, or download manually from App Store Connect.",
 		},
@@ -634,7 +634,7 @@ func capabilityRows() []Capability {
 			Capability: "Xcode Cloud usage and web workflow management",
 			Status:     statusWebSession,
 			Commands:   []string{"asc web xcode-cloud"},
-			Notes:      []string{"Compute usage, environment variables, and some workflow option and edit surfaces require Apple CI web-session endpoints. Public asc xcode-cloud covers run, status, and documented workflow CRUD. Experimental asc web xcode-cloud scm providers list and scm connection-status read private provider connection metadata; registration, linking, repository assignment, and onboarding remain unavailable."},
+			Notes:      []string{"Compute usage, environment variables, and some workflow option and edit surfaces require Apple CI web-session endpoints. Public asc xcode-cloud covers run, status, and documented workflow CRUD. asc web xcode-cloud scm providers list and scm connection-status read private provider connection metadata; registration, linking, repository assignment, and onboarding remain unavailable."},
 			NextAction: "Use asc xcode-cloud for public operations, or asc web xcode-cloud for usage and web-only workflow surfaces.",
 		},
 		{
@@ -709,7 +709,7 @@ func capabilityRows() []Capability {
 				"asc web review drafts delete",
 				"asc web review reply",
 			},
-			Notes: []string{"Reviewer-message and rejection-detail surfaces, plus next-version subscription and IAP attachment, are richer or only available in App Store Connect web-session flows. The experimental reply path requires --confirm, has no attachment, and does not automatically retry an ambiguous send; the experimental draft path provides unsent create/update/delete without attachments or automatic retries. Source capture has not proven provider acceptance."},
+			Notes: []string{"Reviewer-message and rejection-detail surfaces, plus next-version subscription and IAP attachment, are richer or only available in App Store Connect web-session flows. The reply path requires --confirm, has no attachment, and does not automatically retry an ambiguous send; the draft path provides unsent create/update/delete without attachments or automatic retries. Source capture has not proven provider acceptance."},
 		},
 	}
 }

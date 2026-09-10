@@ -295,7 +295,7 @@ func TestCertificatesListPassTypeIDFieldsRequiresInclude(t *testing.T) {
 	}
 }
 
-func TestCertificatesListQueryFlagsAreExperimental(t *testing.T) {
+func TestCertificatesListQueryFlagsAreRegistered(t *testing.T) {
 	command := certificatescli.CertificatesListCommand()
 	for _, name := range []string{
 		"display-name",
@@ -309,9 +309,6 @@ func TestCertificatesListQueryFlagsAreExperimental(t *testing.T) {
 		flagDef := command.FlagSet.Lookup(name)
 		if flagDef == nil {
 			t.Fatalf("--%s is not registered", name)
-		}
-		if !strings.HasPrefix(flagDef.Usage, "[experimental]") {
-			t.Fatalf("--%s usage = %q, want [experimental] prefix", name, flagDef.Usage)
 		}
 	}
 }

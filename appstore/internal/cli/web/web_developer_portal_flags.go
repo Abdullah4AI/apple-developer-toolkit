@@ -18,17 +18,9 @@ type developerPortalFlags struct {
 }
 
 func bindDeveloperPortalFlags(fs *flag.FlagSet) developerPortalFlags {
-	return bindDeveloperPortalFlagsWithUsage(fs, developerTeamFlagUsage)
-}
-
-func bindDeveloperPortalFlagsExperimental(fs *flag.FlagSet) developerPortalFlags {
-	return bindDeveloperPortalFlagsWithUsage(fs, "[experimental] "+developerTeamFlagUsage)
-}
-
-func bindDeveloperPortalFlagsWithUsage(fs *flag.FlagSet, usage string) developerPortalFlags {
 	return developerPortalFlags{
 		fs:            fs,
-		developerTeam: fs.String("developer-team", "", usage),
+		developerTeam: fs.String("developer-team", "", developerTeamFlagUsage),
 	}
 }
 

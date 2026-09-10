@@ -223,17 +223,11 @@ func TestSubscriptionsPricingDeriveRequiresAppForLookupSelectorBeforeAuth(t *tes
 	}, "--app is required (or set ASC_APP_ID) when --source-subscription-id is a product ID or name")
 }
 
-func TestSubscriptionsPricingDeriveHelpMarksNewSurfaceExperimental(t *testing.T) {
+func TestSubscriptionsPricingDeriveHelpRegistersNewSurface(t *testing.T) {
 	root := RootCommand("1.2.3")
 	derive := findCommand(root, "subscriptions", "pricing", "derive")
 	if derive == nil {
 		t.Fatal("subscriptions pricing derive command is not registered")
-	}
-	if !strings.HasPrefix(derive.ShortHelp, "[experimental]") {
-		t.Fatalf("ShortHelp = %q, want experimental lifecycle label", derive.ShortHelp)
-	}
-	if !strings.HasPrefix(derive.LongHelp, "[experimental]") {
-		t.Fatalf("LongHelp = %q, want experimental lifecycle label", derive.LongHelp)
 	}
 
 	for _, name := range []string{
@@ -244,9 +238,6 @@ func TestSubscriptionsPricingDeriveHelpMarksNewSurfaceExperimental(t *testing.T)
 		flagValue := derive.FlagSet.Lookup(name)
 		if flagValue == nil {
 			t.Fatalf("flag --%s is not registered", name)
-		}
-		if !strings.HasPrefix(flagValue.Usage, "[experimental] ") {
-			t.Fatalf("--%s usage = %q, want experimental lifecycle label", name, flagValue.Usage)
 		}
 	}
 }

@@ -1,6 +1,6 @@
 # Official search optimization plan
 
-Release 4.4.4 adds an experimental, read-only workflow that turns official
+Release 4.4.4 adds a read-only workflow that turns official
 Apple Ads Platform API v1 evidence and App Store Connect metadata into one
 reviewable search plan:
 

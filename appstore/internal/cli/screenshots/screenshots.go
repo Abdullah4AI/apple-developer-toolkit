@@ -18,14 +18,13 @@ func ScreenshotsCommand() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "screenshots",
 		ShortUsage: "asc screenshots <subcommand> [flags]",
-		ShortHelp:  "Upload and manage App Store screenshots; local capture/frame/matrix workflow is [experimental].",
+		ShortHelp:  "Upload and manage App Store screenshots, including local capture, framing, and matrices.",
 		LongHelp: `Manage the full screenshot workflow from local capture to App Store upload.
 
-Local screenshot automation commands are experimental.
 If you face issues, please file feedback at:
 https://github.com/rorkai/App-Store-Connect-CLI/issues/new/choose
 
-Local workflow (experimental):
+Local workflow:
   asc screenshots run --plan .asc/screenshots.json
   asc screenshots matrix --plan .asc/screenshots-matrix.json
   asc screenshots capture --bundle-id "com.example.app" --name home

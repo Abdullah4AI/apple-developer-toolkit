@@ -24,15 +24,12 @@ func TestSigningSyncCommandRegistersRotatePassword(t *testing.T) {
 	t.Fatal("signing sync command does not register rotate-password")
 }
 
-func TestSigningSyncRotatePasswordFlagsAreExperimental(t *testing.T) {
+func TestSigningSyncRotatePasswordFlagsAreRegistered(t *testing.T) {
 	command := syncRotatePasswordCommand()
 	for _, name := range []string{"repo", "password-file", "new-password-file", "branch", "confirm"} {
 		flagDefinition := command.FlagSet.Lookup(name)
 		if flagDefinition == nil {
 			t.Fatalf("missing --%s flag", name)
-		}
-		if !strings.Contains(flagDefinition.Usage, "[experimental]") {
-			t.Errorf("--%s usage = %q, want experimental lifecycle marker", name, flagDefinition.Usage)
 		}
 	}
 }

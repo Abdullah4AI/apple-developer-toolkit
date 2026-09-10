@@ -135,12 +135,9 @@ func TestSigningKeychainInstallCommandValidatesBeforeExecution(t *testing.T) {
 	}
 }
 
-func TestSigningKeychainInstallFlagsAreExperimental(t *testing.T) {
+func TestSigningKeychainInstallFlagsAreRegistered(t *testing.T) {
 	command := SigningKeychainInstallCommand()
-	group := SigningKeychainCommand()
-	if !strings.Contains(group.ShortHelp, "[experimental]") || !strings.Contains(group.LongHelp, "[experimental]") {
-		t.Fatalf("keychain group help is missing experimental lifecycle marker")
-	}
+
 	for _, name := range []string{
 		"identity", "identity-password-file", "keychain", "keychain-password-file",
 		"expected-certificate-sha256", "add-to-search-list", "confirm",
@@ -148,9 +145,6 @@ func TestSigningKeychainInstallFlagsAreExperimental(t *testing.T) {
 		definition := command.FlagSet.Lookup(name)
 		if definition == nil {
 			t.Fatalf("missing --%s flag", name)
-		}
-		if !strings.Contains(definition.Usage, "[experimental]") {
-			t.Errorf("--%s usage = %q, want experimental lifecycle marker", name, definition.Usage)
 		}
 	}
 }

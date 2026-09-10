@@ -79,10 +79,8 @@ func TestOptimizeKeywordsHelpShowsScoreSubcommand(t *testing.T) {
 		t.Fatal("expected optimize keywords score command")
 		return
 	}
-	// The optimize tree marks stability with a trailing [experimental] suffix.
-	if !strings.HasSuffix(scoreCmd.ShortHelp, "[experimental]") {
-		t.Fatalf("ShortHelp = %q, want experimental suffix", scoreCmd.ShortHelp)
-	}
+	// The optimize tree marks stability with a trailing suffix.
+
 	if !strings.Contains(scoreCmd.LongHelp, "docs/design/optimize-keywords.md") {
 		t.Fatal("expected score help to point at the design document")
 	}

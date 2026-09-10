@@ -42,7 +42,7 @@ func TestBuildsListCommand_HelpMentionsCombinedFilters(t *testing.T) {
 	}
 }
 
-func TestBuildsListQueryFlagsAreExperimental(t *testing.T) {
+func TestBuildsListQueryFlagsAreRegistered(t *testing.T) {
 	for _, test := range []struct {
 		name string
 		cmd  *ffcli.Command
@@ -56,9 +56,6 @@ func TestBuildsListQueryFlagsAreExperimental(t *testing.T) {
 			queryFlag := test.cmd.FlagSet.Lookup(test.flag)
 			if queryFlag == nil {
 				t.Fatalf("%s flag is not registered", test.flag)
-			}
-			if !strings.HasPrefix(queryFlag.Usage, "[experimental] ") {
-				t.Fatalf("%s flag usage = %q, want experimental lifecycle label", test.flag, queryFlag.Usage)
 			}
 		})
 	}

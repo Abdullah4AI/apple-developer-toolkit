@@ -2,7 +2,7 @@
 
 ## Goal
 
-Add an experimental, read-only workflow that turns the official Apple Ads
+Add a read-only workflow that turns the official Apple Ads
 Platform API v1 optimization surface into one evidence-based App Store search
 plan. The workflow joins Apple Ads demand and paid-performance data with the
 selected App Store Connect localization. It never calls Apple web-session or
@@ -165,7 +165,7 @@ release integration; this change does not add an implicit publish mutation.
 
 ## Compatibility and lifecycle
 
-`optimize` is a new experimental root group, so there is no compatibility or
+`optimize` is a new root group, so there is no compatibility or
 deprecation impact. Existing raw Apple Ads and metadata commands do not change.
 The JSON report and artifacts include a schema version so future additions can
 remain explicit.

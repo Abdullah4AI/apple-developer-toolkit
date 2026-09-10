@@ -45,7 +45,7 @@ asc xcode build \
   --output json
 ```
 
-For local unit or UI test execution, use the experimental typed test command.
+For local unit or UI test execution, use the typed test command.
 It keeps Xcode diagnostics on stderr, writes a structured result to stdout, and
 retains the `.xcresult` bundle for inspection:
 
@@ -86,7 +86,7 @@ cross-platform and only reads archive metadata. Manual signing resolution is
 Darwin-only because it inspects local Xcode signing identities and provisioning
 profiles.
 
-To export an IPA for registered devices, use the experimental modern Xcode
+To export an IPA for registered devices, use the modern Xcode
 method name `release-testing` (the older `ad-hoc` spelling is deprecated):
 
 ```bash
@@ -249,7 +249,7 @@ asc workflow run testflight_beta VERSION:1.2.3
 ### Resumable upload and distribution steps
 
 When upload and external distribution need separate retry boundaries, the
-experimental upload-only flag can make the upload its own output-producing
+upload-only flag can make the upload its own output-producing
 step. The successful upload step is persisted with `BUILD_ID`; if the later
 processing wait or distribution step fails, `--resume` skips the upload and
 reuses that exact build ID.

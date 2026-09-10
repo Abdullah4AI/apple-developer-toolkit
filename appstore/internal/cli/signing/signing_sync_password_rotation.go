@@ -19,11 +19,11 @@ import (
 func syncRotatePasswordCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("rotate-password", flag.ExitOnError)
 
-	repoURL := fs.String("repo", "", "[experimental] Git repo URL (required)")
-	passwordFile := fs.String("password-file", "", "[experimental] Protected file containing the current repository encryption password (required)")
-	newPasswordFile := fs.String("new-password-file", "", "[experimental] Protected file containing the new repository encryption password (required)")
-	branch := fs.String("branch", "main", "[experimental] Git branch")
-	confirm := fs.Bool("confirm", false, "[experimental] Confirm that the previous password will no longer decrypt the branch head")
+	repoURL := fs.String("repo", "", "Git repo URL (required)")
+	passwordFile := fs.String("password-file", "", "Protected file containing the current repository encryption password (required)")
+	newPasswordFile := fs.String("new-password-file", "", "Protected file containing the new repository encryption password (required)")
+	branch := fs.String("branch", "main", "Git branch")
+	confirm := fs.Bool("confirm", false, "Confirm that the previous password will no longer decrypt the branch head")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{

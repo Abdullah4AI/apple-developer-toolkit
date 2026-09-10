@@ -52,8 +52,8 @@ func SigningKeychainCommand() *ffcli.Command {
 	return &ffcli.Command{
 		Name:        "keychain",
 		ShortUsage:  "asc signing keychain <subcommand> [flags]",
-		ShortHelp:   "[experimental] Manage dedicated local signing keychains.",
-		LongHelp:    "[experimental] Manage dedicated local signing keychains without changing the default keychain.",
+		ShortHelp:   "Manage dedicated local signing keychains.",
+		LongHelp:    "Manage dedicated local signing keychains without changing the default keychain.",
 		FlagSet:     fs,
 		UsageFunc:   shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{SigningKeychainInstallCommand()},
@@ -66,20 +66,20 @@ func SigningKeychainCommand() *ffcli.Command {
 // SigningKeychainInstallCommand returns the persistent keychain installer.
 func SigningKeychainInstallCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("install", flag.ExitOnError)
-	identityPath := fs.String("identity", "", "[experimental] Path to one PKCS#12 code-signing identity (required)")
-	identityPasswordPath := fs.String("identity-password-file", "", "[experimental] Protected file containing the PKCS#12 password (required)")
-	keychainPath := fs.String("keychain", "", "[experimental] New dedicated keychain path (required)")
-	keychainPasswordPath := fs.String("keychain-password-file", "", "[experimental] Protected file containing the new keychain password (required)")
-	expectedCertificateSHA256 := fs.String("expected-certificate-sha256", "", "[experimental] Expected identity certificate SHA-256")
-	addToSearchList := fs.Bool("add-to-search-list", false, "[experimental] Append the new keychain to the user search list")
-	confirm := fs.Bool("confirm", false, "[experimental] Confirm persistent keychain creation")
+	identityPath := fs.String("identity", "", "Path to one PKCS#12 code-signing identity (required)")
+	identityPasswordPath := fs.String("identity-password-file", "", "Protected file containing the PKCS#12 password (required)")
+	keychainPath := fs.String("keychain", "", "New dedicated keychain path (required)")
+	keychainPasswordPath := fs.String("keychain-password-file", "", "Protected file containing the new keychain password (required)")
+	expectedCertificateSHA256 := fs.String("expected-certificate-sha256", "", "Expected identity certificate SHA-256")
+	addToSearchList := fs.Bool("add-to-search-list", false, "Append the new keychain to the user search list")
+	confirm := fs.Bool("confirm", false, "Confirm persistent keychain creation")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "install",
 		ShortUsage: "asc signing keychain install --identity PATH --identity-password-file PATH --keychain PATH --keychain-password-file PATH --confirm [flags]",
-		ShortHelp:  "[experimental] Install one identity in a new persistent keychain.",
-		LongHelp: `[experimental] Create a dedicated persistent keychain and import one code-signing identity.
+		ShortHelp:  "Install one identity in a new persistent keychain.",
+		LongHelp: `Create a dedicated persistent keychain and import one code-signing identity.
 
 The destination must not exist. Identity and keychain passwords are read from
 protected files and are never placed in command arguments. The command rolls

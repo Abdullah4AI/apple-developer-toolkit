@@ -29,19 +29,19 @@ var collectSearchDataForDiscover = ads.CollectSearchSuggestions
 // command.
 func KeywordsDiscoverCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("discover", flag.ExitOnError)
-	appID := fs.String("app", "", "[experimental] App Store app ID (required, or ASC_APP_ID env)")
-	country := fs.String("country", "us", "[experimental] ISO alpha-2 Apple Ads country or region")
-	genre := fs.String("genre", "", "[experimental] Apple Ads genre; optional report label (does not affect suggestions)")
-	adAccount := fs.String("ad-account", "", "[experimental] Apple Ads ad account ID (or ASC_ADS_AD_ACCOUNT_ID/profile default)")
-	adsProfile := fs.String("ads-profile", "", "[experimental] Use named Apple Ads authentication profile")
-	limit := fs.Int("limit", keywordDiscoverDefaultLimit, "[experimental] Maximum suggestions to return")
+	appID := fs.String("app", "", "App Store app ID (required, or ASC_APP_ID env)")
+	country := fs.String("country", "us", "ISO alpha-2 Apple Ads country or region")
+	genre := fs.String("genre", "", "Apple Ads genre; optional report label (does not affect suggestions)")
+	adAccount := fs.String("ad-account", "", "Apple Ads ad account ID (or ASC_ADS_AD_ACCOUNT_ID/profile default)")
+	adsProfile := fs.String("ads-profile", "", "Use named Apple Ads authentication profile")
+	limit := fs.Int("limit", keywordDiscoverDefaultLimit, "Maximum suggestions to return")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "discover",
 		ShortUsage: "asc optimize keywords discover --app APP_ID [flags]",
-		ShortHelp:  "List official Apple Ads keyword suggestions for an app. [experimental]",
-		LongHelp: `List keyword candidates from Apple's official Ads suggestion endpoints. [experimental]
+		ShortHelp:  "List official Apple Ads keyword suggestions for an app.",
+		LongHelp: `List keyword candidates from Apple's official Ads suggestion endpoints.
 
 Suggestions come only from Apple's documented keyword and phrase suggestion
 endpoints. No campaign is required. Undocumented endpoints, including the

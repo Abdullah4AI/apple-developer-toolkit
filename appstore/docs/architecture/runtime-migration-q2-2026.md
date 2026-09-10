@@ -258,7 +258,7 @@ Goals:
 - define the runtime package shape
 - inventory compatibility aliases and long-lived shims
 - freeze non-essential top-level command expansion during Q2
-- decide which experimental surfaces are explicitly deferred
+- decide which surfaces are explicitly deferred
 - write down the greenfield target so migrations are judged against an end-state, not just against current code
 
 Deliverables:

@@ -40,8 +40,8 @@ func KeywordsCommand() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "keywords",
 		ShortUsage: "asc optimize keywords <subcommand> [flags]",
-		ShortHelp:  "Evaluate App Store keyword candidates. [experimental]",
-		LongHelp: `Evaluate App Store keyword candidates against official Apple data. [experimental]
+		ShortHelp:  "Evaluate App Store keyword candidates.",
+		LongHelp: `Evaluate App Store keyword candidates against official Apple data.
 
 The rank and score commands evaluate keywords you already have. The discover
 command produces only the candidates Apple itself suggests through its official

@@ -26,16 +26,16 @@ var (
 func XcodeInstallCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("xcode install", flag.ExitOnError)
 
-	ipaPath := fs.String("ipa", "", "[experimental] Path to an iOS IPA (required)")
-	deviceID := fs.String("device-id", "", "[experimental] Exact CoreDevice identifier from devicectl list devices (required)")
-	timeout := fs.Duration("timeout", xcodeInstallDefaultTimeout, "[experimental] Maximum duration for inspection, installation, and verification")
+	ipaPath := fs.String("ipa", "", "Path to an iOS IPA (required)")
+	deviceID := fs.String("device-id", "", "Exact CoreDevice identifier from devicectl list devices (required)")
+	timeout := fs.Duration("timeout", xcodeInstallDefaultTimeout, "Maximum duration for inspection, installation, and verification")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "install",
 		ShortUsage: "asc xcode install --ipa FILE --device-id IDENTIFIER [flags]",
-		ShortHelp:  "[experimental] Install a local IPA on one connected iOS device.",
-		LongHelp: `[experimental] Install a local iOS IPA on one exact connected CoreDevice.
+		ShortHelp:  "Install a local IPA on one connected iOS device.",
+		LongHelp: `Install a local iOS IPA on one exact connected CoreDevice.
 
 asc validates the IPA's embedded development or ad-hoc signing profile, finds
 the exact physical device by its CoreDevice identifier, securely materializes

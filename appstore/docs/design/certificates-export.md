@@ -1,8 +1,8 @@
-# [experimental] Local certificate identity export
+# Local certificate identity export
 
 ## Placement and current behavior
 
-This experimental change adds `asc certificates export` beneath the existing
+This change adds `asc certificates export` beneath the existing
 `asc certificates` command group. It is an offline artifact operation and
 does not add a public API endpoint or web-session operation.
 
@@ -70,7 +70,7 @@ symlink, directory, input/output collision, or existing destination without
 `--force --confirm` is rejected. A failed validation or encode leaves an
 existing destination unchanged.
 
-The experimental JSON result contains only metadata, for example:
+The JSON result contains only metadata, for example:
 
 ```json
 {
@@ -95,7 +95,7 @@ and password bytes are never printed or logged.
 
 ## Compatibility and lifecycle
 
-The experimental subcommand is additive and does not change existing certificate, CSR,
+The subcommand is additive and does not change existing certificate, CSR,
 pass-type, merchant-ID, signing, authentication, or web-session behavior.
 It packages an artifact; it does not create, renew, revoke, download, or
 classify a certificate. Renewal remains explicit: obtain a new certificate

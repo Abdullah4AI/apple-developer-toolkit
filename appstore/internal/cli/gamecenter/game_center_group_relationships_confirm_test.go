@@ -103,9 +103,7 @@ func TestGameCenterRelationshipReplacementConfirmFlagsAreStable(t *testing.T) {
 			if confirm == nil {
 				t.Fatal("--confirm is not registered")
 			}
-			if strings.HasPrefix(confirm.Usage, "[experimental] ") {
-				t.Fatalf("--confirm usage = %q, want no [experimental] prefix now that it is required", confirm.Usage)
-			}
+
 			if !strings.Contains(confirm.Usage, "required") {
 				t.Fatalf("--confirm usage = %q, want it documented as required", confirm.Usage)
 			}

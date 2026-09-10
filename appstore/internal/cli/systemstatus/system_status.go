@@ -68,8 +68,8 @@ func commandWithClient(client *http.Client, endpoint string) *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "system-status",
 		ShortUsage: "asc system-status [flags]",
-		ShortHelp:  "[experimental] Check Apple Developer service health.",
-		LongHelp: `[experimental] Check Apple's public Developer System Status feed without authentication.
+		ShortHelp:  "Check Apple Developer service health.",
+		LongHelp: `Check Apple's public Developer System Status feed without authentication.
 
 Use --service to match one or more service-name substrings. Watch mode emits
 the initial snapshot, then emits again only when the selected report changes.

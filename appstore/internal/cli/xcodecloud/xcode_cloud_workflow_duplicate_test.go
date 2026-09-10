@@ -199,12 +199,9 @@ func TestBuildCiWorkflowDuplicatePayloadRejectsIncompleteSource(t *testing.T) {
 
 func TestXcodeCloudWorkflowsDuplicateHelpDisclosesPrivateAPIGaps(t *testing.T) {
 	cmd := XcodeCloudWorkflowsDuplicateCommand()
-	if !strings.HasPrefix(cmd.ShortHelp, "[experimental]") {
-		t.Fatalf("ShortHelp = %q, want [experimental] prefix", cmd.ShortHelp)
-	}
+
 	help := cmd.LongHelp
 	for _, want := range []string{
-		"[experimental]",
 		"clean setting",
 		"TestFlight post-actions",
 		"workflow environment variables",
@@ -222,9 +219,6 @@ func TestXcodeCloudWorkflowsDuplicateHelpDisclosesPrivateAPIGaps(t *testing.T) {
 		flag := cmd.FlagSet.Lookup(name)
 		if flag == nil {
 			t.Fatalf("missing --%s", name)
-		}
-		if !strings.HasPrefix(flag.Usage, "[experimental] ") {
-			t.Fatalf("--%s usage = %q, want [experimental] prefix", name, flag.Usage)
 		}
 	}
 }
