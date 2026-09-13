@@ -2,6 +2,7 @@ package web
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -237,11 +238,47 @@ func (c *Client) CreateAppAvailability(ctx context.Context, attrs AppAvailabilit
 		return nil, err
 	}
 
-	territories := make([]map[string]string, 0, len(normalized.AvailableTerritories))
-	for _, territoryID := range normalized.AvailableTerritories {
-		territories = append(territories, map[string]string{
-			"type": "territories",
-			"id":   territoryID,
+	catalog, err := c.fetchJSONAPIPagesFromWithRequiredLinks(ctx, c.baseURL, "/territories?limit=200", "territories")
+	if err != nil {
+		return nil, fmt.Errorf("fetch territories: %w", err)
+	}
+	if len(catalog.Data) == 0 {
+		return nil, fmt.Errorf("territory catalog is empty; availability was not created")
+	}
+	known := make(map[string]bool, len(catalog.Data))
+	for _, resource := range catalog.Data {
+		id := strings.ToUpper(strings.TrimSpace(resource.ID))
+		if id == "" {
+			return nil, fmt.Errorf("territory catalog contains an empty ID")
+		}
+		known[id] = true
+	}
+	selected := make(map[string]bool, len(normalized.AvailableTerritories))
+	for _, id := range normalized.AvailableTerritories {
+		if !known[id] {
+			return nil, fmt.Errorf("territory %q is missing from Apple's territory catalog", id)
+		}
+		selected[id] = true
+	}
+	territories := make([]map[string]string, 0, len(known))
+	included := make([]map[string]any, 0, len(known))
+	for _, resource := range catalog.Data {
+		territoryID := strings.ToUpper(strings.TrimSpace(resource.ID))
+		if !known[territoryID] {
+			continue
+		}
+		delete(known, territoryID)
+		// Match the browser's temporary compound-resource identifiers.
+		localID, err := json.Marshal(map[string]string{"s": normalized.AppID, "t": territoryID})
+		if err != nil {
+			return nil, err
+		}
+		id := "${" + base64.StdEncoding.EncodeToString(localID) + "}"
+		territories = append(territories, map[string]string{"type": "territoryAvailabilities", "id": id})
+		included = append(included, map[string]any{
+			"type": "territoryAvailabilities", "id": id,
+			"attributes":    map[string]bool{"available": selected[territoryID]},
+			"relationships": map[string]any{"territory": map[string]any{"data": map[string]string{"type": "territories", "id": territoryID}}},
 		})
 	}
 
@@ -258,14 +295,22 @@ func (c *Client) CreateAppAvailability(ctx context.Context, attrs AppAvailabilit
 						"id":   normalized.AppID,
 					},
 				},
-				"availableTerritories": map[string]any{
+				"territoryAvailabilities": map[string]any{
 					"data": territories,
 				},
 			},
 		},
 	}
 
-	responseBody, err := c.doRequest(ctx, http.MethodPost, "/appAvailabilities", requestBody)
+	requestBody["included"] = included
+
+	headers := make(http.Header)
+	headers.Set("Content-Type", "application/json")
+	headers.Set("Accept", "application/json")
+	headers.Set("X-Requested-With", "XMLHttpRequest")
+	headers.Set("Origin", appStoreBaseURL)
+	headers.Set("Referer", appStoreBaseURL+"/")
+	responseBody, err := c.doRequestBase(ctx, c.webIrisV2BaseURL(), http.MethodPost, "/appAvailabilities", requestBody, headers)
 	if err != nil {
 		return nil, err
 	}
@@ -278,5 +323,9 @@ func (c *Client) CreateAppAvailability(ctx context.Context, attrs AppAvailabilit
 	}
 
 	availability := decodeAppAvailabilityResource(payload.Data)
+	// The create response can omit relationships while Apple propagates the
+	// new record. This mutation receipt reflects the accepted request.
+	availability.AvailableTerritories = normalized.AvailableTerritories
+	availability.AvailableInNewTerritories = normalized.AvailableInNewTerritories
 	return &availability, nil
 }

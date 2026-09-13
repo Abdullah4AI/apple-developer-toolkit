@@ -119,18 +119,25 @@ func publishExportStageRows(stage *PublishExportStageResult) ([]string, [][]stri
 	if stage == nil {
 		return []string{"Field", "Value"}, nil
 	}
-	ipaPath := stage.IPAPath
-	if strings.TrimSpace(ipaPath) == "" {
-		ipaPath = "(direct upload - no local artifact)"
-	}
 	rows := [][]string{
 		{"archive_path", stage.ArchivePath},
-		{"ipa_path", ipaPath},
-		{"bundle_id", stage.BundleID},
-		{"version", stage.Version},
-		{"build_number", stage.BuildNumber},
-		{"export_options_path", stage.ExportOptionsPath},
-		{"direct_upload", fmt.Sprintf("%t", stage.DirectUpload)},
 	}
+	if strings.TrimSpace(stage.PKGPath) != "" {
+		rows = append(rows, []string{"pkg_path", stage.PKGPath})
+	} else {
+		ipaPath := stage.IPAPath
+		if strings.TrimSpace(ipaPath) == "" {
+			ipaPath = "(direct upload - no local artifact)"
+		}
+		rows = append(rows, []string{"ipa_path", ipaPath})
+	}
+	rows = append(
+		rows,
+		[]string{"bundle_id", stage.BundleID},
+		[]string{"version", stage.Version},
+		[]string{"build_number", stage.BuildNumber},
+		[]string{"export_options_path", stage.ExportOptionsPath},
+		[]string{"direct_upload", fmt.Sprintf("%t", stage.DirectUpload)},
+	)
 	return []string{"Field", "Value"}, rows
 }

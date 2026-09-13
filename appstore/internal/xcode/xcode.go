@@ -23,6 +23,7 @@ import (
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/infoplist"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/rootfs"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/secureopen"
 )
 
 var (
@@ -93,6 +94,7 @@ type ExportOptions struct {
 	ArchivePath    string
 	ExportOptions  string
 	IPAPath        string
+	PKGPath        string
 	Overwrite      bool
 	XcodebuildArgs []string
 	Environment    []string
@@ -106,6 +108,7 @@ type ExportOptions struct {
 type ExportResult struct {
 	ArchivePath string `json:"archive_path"`
 	IPAPath     string `json:"ipa_path"`
+	PKGPath     string `json:"pkg_path,omitempty"`
 	BundleID    string `json:"bundle_id,omitempty"`
 	Version     string `json:"version,omitempty"`
 	BuildNumber string `json:"build_number,omitempty"`
@@ -113,13 +116,15 @@ type ExportResult struct {
 
 type ValidateOptions struct {
 	IPAPath   string
+	PKGPath   string
 	APIKey    string
 	APIIssuer string
 	LogWriter io.Writer
 }
 
 type ValidateResult struct {
-	IPAPath   string `json:"ipa_path"`
+	IPAPath   string `json:"ipa_path,omitempty"`
+	PKGPath   string `json:"pkg_path,omitempty"`
 	Validated bool   `json:"validated"`
 }
 
@@ -183,18 +188,22 @@ func ValidateExportDestination(ipaPath string, overwrite, directUpload bool) err
 	if directUpload {
 		return nil
 	}
-	info, err := os.Lstat(ipaPath)
+	return validateAvailableExportDestination(ipaPath, "--ipa-path", "ipa path", overwrite)
+}
+
+func validateAvailableExportDestination(path, flagName, description string, overwrite bool) error {
+	info, err := os.Lstat(path)
 	switch {
 	case err == nil && info.IsDir():
-		return exportDestinationUsageError{message: fmt.Sprintf("--ipa-path must not be a directory: %s", ipaPath)}
+		return exportDestinationUsageError{message: fmt.Sprintf("%s must not be a directory: %s", flagName, path)}
 	case err == nil && !overwrite:
-		return exportDestinationUsageError{message: fmt.Sprintf("--ipa-path already exists: %s (use --overwrite to replace it)", ipaPath)}
+		return exportDestinationUsageError{message: fmt.Sprintf("%s already exists: %s (use --overwrite to replace it)", flagName, path)}
 	case err == nil && overwrite:
 		return nil
 	case errors.Is(err, os.ErrNotExist):
 		return nil
 	default:
-		return fmt.Errorf("lstat ipa path: %w", err)
+		return fmt.Errorf("lstat %s: %w", description, err)
 	}
 }
 
@@ -206,6 +215,31 @@ func PreflightExportDestination(ipaPath string, overwrite, directUpload bool) er
 		return err
 	}
 	return preflightWritableParent(strings.TrimSpace(ipaPath), "ipa output")
+}
+
+// ValidateExportPKGDestination checks a PKG destination without mutating the
+// filesystem.
+func ValidateExportPKGDestination(pkgPath string, overwrite, directUpload bool) error {
+	pkgPath = strings.TrimSpace(pkgPath)
+	if pkgPath == "" {
+		return exportDestinationUsageError{message: "--pkg-path is required"}
+	}
+	if !strings.EqualFold(filepath.Ext(pkgPath), ".pkg") {
+		return exportDestinationUsageError{message: "--pkg-path must end with .pkg"}
+	}
+	if directUpload {
+		return nil
+	}
+	return validateAvailableExportDestination(pkgPath, "--pkg-path", "pkg path", overwrite)
+}
+
+// PreflightExportPKGDestination validates a PKG destination and proves its
+// parent writable with a transient probe.
+func PreflightExportPKGDestination(pkgPath string, overwrite, directUpload bool) error {
+	if err := ValidateExportPKGDestination(pkgPath, overwrite, directUpload); err != nil {
+		return err
+	}
+	return preflightWritableParent(strings.TrimSpace(pkgPath), "pkg output")
 }
 
 func preflightWritableParent(path, description string) error {
@@ -266,6 +300,10 @@ func Export(ctx context.Context, opts ExportOptions) (*ExportResult, error) {
 	if err := validateExportOptions(opts); err != nil {
 		return nil, err
 	}
+	uploadMode := isDirectUploadMode(opts.ExportOptions)
+	if opts.IPAPath == "" && opts.PKGPath == "" && !uploadMode {
+		return nil, fmt.Errorf("--ipa-path or --pkg-path is required unless ExportOptions.plist uses destination=upload")
+	}
 	if err := ensureXcodeAvailableWithEnvironment(ctx, opts.Environment, opts.terminateProcessGroup); err != nil {
 		return nil, err
 	}
@@ -273,26 +311,30 @@ func Export(ctx context.Context, opts ExportOptions) (*ExportResult, error) {
 		return nil, err
 	}
 
-	// Always ensure parent dir exists (needed for temp dir creation below).
-	if err := os.MkdirAll(filepath.Dir(opts.IPAPath), 0o755); err != nil {
-		return nil, fmt.Errorf("create output directory: %w", err)
-	}
-
 	// When the ExportOptions plist has destination=upload, xcodebuild uploads
-	// directly to App Store Connect and does not produce a local .ipa file.
+	// directly to App Store Connect and does not produce a local artifact.
 	// This is the normal path for tvOS and some macOS exports. Detect this
-	// mode before prepareIPAPath to avoid deleting an existing IPA that will
-	// never be replaced.
-	uploadMode := isDirectUploadMode(opts.ExportOptions)
+	// mode before preparing a destination that will never be written.
 
 	if !uploadMode {
-		if err := prepareIPAPath(opts.IPAPath, opts.Overwrite); err != nil {
-			return nil, err
+		switch {
+		case opts.PKGPath != "":
+			if err := prepareExportArtifactPath(opts.PKGPath, "--pkg-path", "pkg", opts.Overwrite); err != nil {
+				return nil, err
+			}
+		default:
+			if err := prepareIPAPath(opts.IPAPath, opts.Overwrite); err != nil {
+				return nil, err
+			}
 		}
 	}
 	maybeWarnAboutBetaXcodeForAppStoreExport(ctx, opts.ExportOptions, opts.LogWriter)
 
-	tempExportDir, err := os.MkdirTemp(filepath.Dir(opts.IPAPath), ".asc-xcode-export-*")
+	tempParent := ""
+	if !uploadMode {
+		tempParent = filepath.Dir(exportArtifactPath(opts))
+	}
+	tempExportDir, err := os.MkdirTemp(tempParent, ".asc-xcode-export-*")
 	if err != nil {
 		return nil, fmt.Errorf("create temporary export directory: %w", err)
 	}
@@ -304,7 +346,7 @@ func Export(ctx context.Context, opts ExportOptions) (*ExportResult, error) {
 	}
 
 	if uploadMode {
-		// xcodebuild uploaded directly — no local IPA produced.
+		// xcodebuild uploaded directly — no local artifact produced.
 		info, err := readArchiveBundleInfo(opts.ArchivePath)
 		if err != nil {
 			return nil, fmt.Errorf("read archive bundle info after direct upload: %w", err)
@@ -312,6 +354,27 @@ func Export(ctx context.Context, opts ExportOptions) (*ExportResult, error) {
 		return &ExportResult{
 			ArchivePath: opts.ArchivePath,
 			IPAPath:     "",
+			PKGPath:     "",
+			BundleID:    info.BundleID,
+			Version:     info.Version,
+			BuildNumber: info.BuildNumber,
+		}, nil
+	}
+	if opts.PKGPath != "" {
+		exportedPKGPath, err := findExportedArtifact(tempExportDir, ".pkg", "PKG")
+		if err != nil {
+			return nil, err
+		}
+		info, err := readArchiveBundleInfo(opts.ArchivePath)
+		if err != nil {
+			return nil, fmt.Errorf("read archive bundle info after PKG export: %w", err)
+		}
+		if err := moveExportedArtifact(exportedPKGPath, opts.PKGPath, "PKG", opts.Overwrite); err != nil {
+			return nil, err
+		}
+		return &ExportResult{
+			ArchivePath: opts.ArchivePath,
+			PKGPath:     opts.PKGPath,
 			BundleID:    info.BundleID,
 			Version:     info.Version,
 			BuildNumber: info.BuildNumber,
@@ -355,24 +418,53 @@ func Validate(ctx context.Context, opts ValidateOptions) (*ValidateResult, error
 	if err := ensureXcodeAvailable(ctx); err != nil {
 		return nil, err
 	}
-	if _, err := lookPathFn("xcrun"); err != nil {
-		if errors.Is(err, exec.ErrNotFound) {
+	if _, err := trustedXcodeToolPathFn(ctx, "xcrun", nil); err != nil {
+		if isTrustedXcodeToolUnavailable(err, "xcrun") {
 			return nil, fmt.Errorf("xcrun not available; install Xcode and ensure the active developer directory is configured")
 		}
 		return nil, fmt.Errorf("locate xcrun: %w", err)
 	}
-	if err := validateExistingFile(opts.IPAPath, "--ipa"); err != nil {
-		return nil, err
+	artifactPath := opts.IPAPath
+	artifactFlag := "--ipa"
+	artifactName := "IPA"
+	platform := ""
+	if opts.PKGPath != "" {
+		artifactPath = opts.PKGPath
+		artifactFlag = "--pkg"
+		artifactName = "PKG"
+		platform = "macos"
 	}
-	platform, err := inferValidatePlatform(opts.IPAPath)
+	validatedArtifact, _, err := secureopen.OpenExistingRegularFileNoFollow(artifactPath, artifactName, artifactFlag)
 	if err != nil {
 		return nil, err
 	}
-	if err := runAltoolValidate(ctx, buildValidateCommand(opts, platform), opts.LogWriter); err != nil {
+	defer validatedArtifact.Close()
+	validatedInfo, err := validatedArtifact.Stat()
+	if err != nil {
+		return nil, fmt.Errorf("inspect validated %s: %w", artifactName, err)
+	}
+	snapshotPath, cleanupSnapshot, err := snapshotValidationArtifact(ctx, validatedArtifact, validatedInfo.Size(), strings.ToLower(filepath.Ext(artifactPath)))
+	if err != nil {
+		return nil, fmt.Errorf("prepare %s for validation: %w", artifactName, err)
+	}
+	defer cleanupSnapshot()
+	snapshotArtifact, snapshotInfo, err := secureopen.OpenExistingRegularFileNoFollow(snapshotPath, artifactName+" validation snapshot", artifactFlag)
+	if err != nil {
+		return nil, fmt.Errorf("open %s validation snapshot: %w", artifactName, err)
+	}
+	defer snapshotArtifact.Close()
+	if platform == "" {
+		platform, err = inferValidatePlatformFromFile(snapshotArtifact, snapshotInfo.Size())
+		if err != nil {
+			return nil, err
+		}
+	}
+	if err := runAltoolValidate(ctx, buildValidateCommand(opts, platform, snapshotPath), opts.LogWriter); err != nil {
 		return nil, err
 	}
 	return &ValidateResult{
 		IPAPath:   opts.IPAPath,
+		PKGPath:   opts.PKGPath,
 		Validated: true,
 	}, nil
 }
@@ -385,8 +477,8 @@ func BuildStatus(ctx context.Context, opts BuildStatusOptions) (*BuildStatusResu
 	if err := ensureXcodeAvailable(ctx); err != nil {
 		return nil, err
 	}
-	if _, err := lookPathFn("xcrun"); err != nil {
-		if errors.Is(err, exec.ErrNotFound) {
+	if _, err := trustedXcodeToolPathFn(ctx, "xcrun", nil); err != nil {
+		if isTrustedXcodeToolUnavailable(err, "xcrun") {
 			return nil, fmt.Errorf("xcrun not available; install Xcode and ensure the active developer directory is configured")
 		}
 		return nil, fmt.Errorf("locate xcrun: %w", err)
@@ -415,7 +507,7 @@ func SupportsBuildStatusBundleID(ctx context.Context) bool {
 }
 
 // IsDirectUploadMode reports whether ExportOptions.plist uploads directly to
-// App Store Connect instead of producing a local IPA artifact.
+// App Store Connect instead of producing a local artifact.
 func IsDirectUploadMode(exportOptionsPlistPath string) bool {
 	return isDirectUploadMode(exportOptionsPlistPath)
 }
@@ -470,11 +562,14 @@ func validateExportOptions(opts ExportOptions) error {
 	if opts.ExportOptions == "" {
 		return fmt.Errorf("--export-options is required")
 	}
-	if opts.IPAPath == "" {
-		return fmt.Errorf("--ipa-path is required")
+	if opts.IPAPath != "" && opts.PKGPath != "" {
+		return fmt.Errorf("--ipa-path and --pkg-path are mutually exclusive")
 	}
-	if !strings.EqualFold(filepath.Ext(opts.IPAPath), ".ipa") {
+	if opts.IPAPath != "" && !strings.EqualFold(filepath.Ext(opts.IPAPath), ".ipa") {
 		return fmt.Errorf("--ipa-path must end with .ipa")
+	}
+	if opts.PKGPath != "" && !strings.EqualFold(filepath.Ext(opts.PKGPath), ".pkg") {
+		return fmt.Errorf("--pkg-path must end with .pkg")
 	}
 	if err := ValidateExportXcodebuildArgs(opts.XcodebuildArgs); err != nil {
 		return err
@@ -533,11 +628,19 @@ func validateExportInputPaths(opts ExportOptions) error {
 }
 
 func validateValidateOptions(opts ValidateOptions) error {
-	if opts.IPAPath == "" {
-		return fmt.Errorf("--ipa is required")
+	hasIPA := opts.IPAPath != ""
+	hasPKG := opts.PKGPath != ""
+	if !hasIPA && !hasPKG {
+		return fmt.Errorf("--ipa or --pkg is required")
 	}
-	if !strings.EqualFold(filepath.Ext(opts.IPAPath), ".ipa") {
+	if hasIPA && hasPKG {
+		return fmt.Errorf("--ipa and --pkg are mutually exclusive")
+	}
+	if hasIPA && !strings.EqualFold(filepath.Ext(opts.IPAPath), ".ipa") {
 		return fmt.Errorf("--ipa must end with .ipa")
+	}
+	if hasPKG && !strings.EqualFold(filepath.Ext(opts.PKGPath), ".pkg") {
+		return fmt.Errorf("--pkg must end with .pkg")
 	}
 	if (opts.APIKey == "") != (opts.APIIssuer == "") {
 		return fmt.Errorf("--api-key and --api-issuer must be provided together")
@@ -580,12 +683,14 @@ func normalizeExportOptions(opts ExportOptions) ExportOptions {
 	opts.ArchivePath = normalizeDirectoryPath(opts.ArchivePath)
 	opts.ExportOptions = strings.TrimSpace(opts.ExportOptions)
 	opts.IPAPath = strings.TrimSpace(opts.IPAPath)
+	opts.PKGPath = strings.TrimSpace(opts.PKGPath)
 	opts.Environment = cloneEnvironment(opts.Environment)
 	return opts
 }
 
 func normalizeValidateOptions(opts ValidateOptions) ValidateOptions {
 	opts.IPAPath = strings.TrimSpace(opts.IPAPath)
+	opts.PKGPath = strings.TrimSpace(opts.PKGPath)
 	opts.APIKey = strings.TrimSpace(opts.APIKey)
 	opts.APIIssuer = strings.TrimSpace(opts.APIIssuer)
 	return opts
@@ -653,13 +758,10 @@ func ensureXcodeAvailableWithEnvironment(ctx context.Context, environment []stri
 	if runtimeGOOS != "darwin" {
 		return fmt.Errorf("supported on macOS only; current platform is %s", runtimeGOOS)
 	}
-	if _, err := lookPathFn("xcodebuild"); err != nil {
-		if errors.Is(err, exec.ErrNotFound) {
+	if err := runXcodebuildWithEnvironment(ctx, []string{"-version"}, environment, io.Discard, terminateProcessGroup); err != nil {
+		if isTrustedXcodeToolUnavailable(err, "xcodebuild") {
 			return fmt.Errorf("xcodebuild not available; install Xcode and ensure the active developer directory is configured")
 		}
-		return fmt.Errorf("locate xcodebuild: %w", err)
-	}
-	if err := runXcodebuildWithEnvironment(ctx, []string{"-version"}, environment, io.Discard, terminateProcessGroup); err != nil {
 		return fmt.Errorf("xcodebuild not usable: %w", err)
 	}
 	return nil
@@ -704,15 +806,7 @@ func activeDeveloperDir(ctx context.Context) (string, error) {
 	if developerDir := strings.TrimSpace(os.Getenv("DEVELOPER_DIR")); developerDir != "" {
 		return filepath.Clean(developerDir), nil
 	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	cmd := exec.CommandContext(ctx, "xcode-select", "-p")
-	output, err := outputXcodeCommand(cmd)
-	if err != nil {
-		return "", err
-	}
-	return filepath.Clean(strings.TrimSpace(string(output))), nil
+	return activeDeveloperDirFromTrustedSelect(ctx, nil)
 }
 
 func isBetaXcodePath(pathValue string) bool {
@@ -759,8 +853,8 @@ func buildExportCommand(opts ExportOptions, exportDir string) []string {
 	return args
 }
 
-func inferValidatePlatform(ipaPath string) (string, error) {
-	info, err := readIPABundleInfo(ipaPath)
+func inferValidatePlatformFromFile(ipa *os.File, size int64) (string, error) {
+	info, err := readIPABundleInfoFromReaderAt(ipa, size)
 	if err != nil {
 		return "", fmt.Errorf("inspect IPA metadata before validation: %w", err)
 	}
@@ -770,14 +864,14 @@ func inferValidatePlatform(ipaPath string) (string, error) {
 	return "ios", nil
 }
 
-func buildValidateCommand(opts ValidateOptions, platform string) []string {
+func buildValidateCommand(opts ValidateOptions, platform, artifactPath string) []string {
 	if strings.TrimSpace(platform) == "" {
 		platform = "ios"
 	}
 	args := []string{
 		"altool",
 		"--validate-app",
-		"--file", opts.IPAPath,
+		"--file", artifactPath,
 		"--type", platform,
 	}
 	if opts.APIKey != "" {
@@ -866,7 +960,10 @@ func runAltoolValidate(ctx context.Context, args []string, logWriter io.Writer) 
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	cmd := commandContextFn(ctx, "xcrun", args...)
+	cmd, err := trustedXcodeCommand(ctx, "xcrun", args, nil)
+	if err != nil {
+		return err
+	}
 	outputTail := newTailBuffer(xcodebuildErrorTailLimit)
 	combinedOutput := io.Writer(outputTail)
 	if logWriter != nil {
@@ -1099,7 +1196,10 @@ func runAltoolAndCapture(ctx context.Context, args []string, logWriter io.Writer
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	cmd := commandContextFn(ctx, "xcrun", args...)
+	cmd, err := trustedXcodeCommand(ctx, "xcrun", args, nil)
+	if err != nil {
+		return "", err
+	}
 	var stdout strings.Builder
 	var stderr strings.Builder
 	outputTail := newTailBuffer(xcodebuildErrorTailLimit)
@@ -1142,7 +1242,10 @@ func readAltoolHelpOutput(ctx context.Context) (string, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	cmd := commandContextFn(ctx, "xcrun", "altool", "--help")
+	cmd, err := trustedXcodeCommand(ctx, "xcrun", []string{"altool", "--help"}, nil)
+	if err != nil {
+		return "", err
+	}
 	var stdout strings.Builder
 	var stderr strings.Builder
 	cmd.Stdout = &stdout
@@ -1413,9 +1516,9 @@ func runCommandWithBoundedOutputEnvironmentMode(ctx context.Context, name string
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	cmd := commandContextFn(ctx, name, args...)
-	if environment != nil {
-		cmd.Env = cloneEnvironment(environment)
+	cmd, err := trustedXcodeCommand(ctx, name, args, environment)
+	if err != nil {
+		return err
 	}
 	outputWindow := newXcodeDiagnosticBuffer(xcodebuildErrorTailLimit, logWriter)
 	cmd.Stdout = outputWindow
@@ -1917,39 +2020,54 @@ func prepareArchiveDestination(archivePath string, overwrite bool) error {
 }
 
 func prepareIPAPath(ipaPath string, overwrite bool) error {
-	parent := filepath.Dir(ipaPath)
+	return prepareExportArtifactPath(ipaPath, "--ipa-path", "ipa", overwrite)
+}
+
+func prepareExportArtifactPath(path, flagName, description string, overwrite bool) error {
+	parent := filepath.Dir(path)
 	if err := os.MkdirAll(parent, 0o755); err != nil {
-		return fmt.Errorf("create ipa output directory: %w", err)
+		return fmt.Errorf("create %s output directory: %w", description, err)
 	}
-	_, err := os.Stat(ipaPath)
+	_, err := os.Stat(path)
 	switch {
 	case err == nil && !overwrite:
-		return fmt.Errorf("--ipa-path already exists: %s (use --overwrite to replace it)", ipaPath)
+		return fmt.Errorf("%s already exists: %s (use --overwrite to replace it)", flagName, path)
 	case err == nil && overwrite:
 		return nil
 	case err != nil && !errors.Is(err, os.ErrNotExist):
-		return fmt.Errorf("stat ipa path: %w", err)
+		return fmt.Errorf("stat %s path: %w", description, err)
 	}
 	return nil
 }
 
 func findExportedIPA(exportDir string) (string, error) {
-	matches, err := filepath.Glob(filepath.Join(exportDir, "*.ipa"))
+	return findExportedArtifact(exportDir, ".ipa", "IPA")
+}
+
+func findExportedArtifact(exportDir, extension, artifactName string) (string, error) {
+	matches, err := filepath.Glob(filepath.Join(exportDir, "*"+extension))
 	if err != nil {
-		return "", fmt.Errorf("scan exported ipa: %w", err)
+		return "", fmt.Errorf("scan exported %s: %w", strings.ToLower(artifactName), err)
 	}
 	if len(matches) == 0 {
-		return "", fmt.Errorf("xcodebuild export did not produce an .ipa file")
+		return "", fmt.Errorf("xcodebuild export did not produce a %s file", extension)
 	}
 	if len(matches) > 1 {
-		return "", fmt.Errorf("xcodebuild export produced multiple .ipa files")
+		return "", fmt.Errorf("xcodebuild export produced multiple %s files", extension)
 	}
 	return matches[0], nil
 }
 
+func exportArtifactPath(opts ExportOptions) string {
+	if opts.PKGPath != "" {
+		return opts.PKGPath
+	}
+	return opts.IPAPath
+}
+
 // isDirectUploadMode reads the ExportOptions plist and returns true when
 // destination is set to "upload". In this mode xcodebuild uploads the build
-// directly to App Store Connect and does not produce a local .ipa file.
+// directly to App Store Connect and does not produce a local artifact.
 func isDirectUploadMode(exportOptionsPlistPath string) bool {
 	data, err := os.ReadFile(exportOptionsPlistPath)
 	if err != nil {
@@ -1964,19 +2082,34 @@ func isDirectUploadMode(exportOptionsPlistPath string) bool {
 }
 
 func moveExportedIPA(sourcePath, destinationPath string, overwrite bool) error {
+	return moveExportedArtifact(sourcePath, destinationPath, "IPA", overwrite)
+}
+
+func moveExportedArtifact(sourcePath, destinationPath, artifactName string, overwrite bool) error {
+	artifactLower := strings.ToLower(artifactName)
+	pathInfo, err := os.Lstat(sourcePath)
+	if err != nil {
+		return fmt.Errorf("inspect exported %s: %w", artifactName, err)
+	}
+	if !pathInfo.Mode().IsRegular() {
+		return fmt.Errorf("exported %s is not a regular file", artifactName)
+	}
+	if pathInfo.Size() == 0 {
+		return fmt.Errorf("exported %s is empty", artifactName)
+	}
 	if !overwrite {
 		source, err := os.Open(sourcePath)
 		if err != nil {
-			return fmt.Errorf("open exported ipa: %w", err)
+			return fmt.Errorf("open exported %s: %w", artifactName, err)
 		}
 		defer source.Close()
 		info, err := source.Stat()
 		if err != nil {
-			return fmt.Errorf("inspect exported ipa: %w", err)
+			return fmt.Errorf("inspect exported %s: %w", artifactName, err)
 		}
 		root, err := rootfs.New(filepath.Dir(destinationPath))
 		if err != nil {
-			return fmt.Errorf("open ipa output root: %w", err)
+			return fmt.Errorf("open %s output root: %w", artifactLower, err)
 		}
 		defer root.Close()
 		if _, err := root.CreateNewFrom(filepath.Base(destinationPath), source, info.Mode().Perm()); err != nil {
@@ -1988,15 +2121,20 @@ func moveExportedIPA(sourcePath, destinationPath string, overwrite bool) error {
 	}
 	// Export runs only on macOS, where rename replaces an existing regular file
 	// atomically. Do not unlink the old artifact first: if the final move fails,
-	// the caller's prior IPA remains intact.
+	// the caller's prior artifact remains intact.
 	if err := os.Rename(sourcePath, destinationPath); err != nil {
-		return fmt.Errorf("move exported ipa: %w", err)
+		return fmt.Errorf("move exported %s: %w", artifactLower, err)
 	}
 	return nil
 }
 
 func readArchiveBundleInfo(archivePath string) (bundleInfo, error) {
-	data, err := os.ReadFile(filepath.Join(archivePath, "Info.plist"))
+	archiveRoot, err := os.OpenRoot(archivePath)
+	if err != nil {
+		return bundleInfo{}, fmt.Errorf("open archive: %w", err)
+	}
+	defer func() { _ = archiveRoot.Close() }()
+	data, err := readRegularFileFromRoot(archiveRoot, "Info.plist")
 	if err != nil {
 		return bundleInfo{}, fmt.Errorf("read archive Info.plist: %w", err)
 	}
@@ -2148,7 +2286,7 @@ func readArchivedAppInfoPlistFromRoot(archiveRoot *os.Root, appProps map[string]
 }
 
 func readRegularFileFromRoot(root *os.Root, name string) ([]byte, error) {
-	file, err := root.Open(name)
+	file, err := secureopen.OpenExistingNoFollowInRoot(root, name)
 	if err != nil {
 		return nil, err
 	}
@@ -2160,7 +2298,13 @@ func readRegularFileFromRoot(root *os.Root, name string) ([]byte, error) {
 	if !info.Mode().IsRegular() {
 		return nil, fmt.Errorf("metadata path must be a regular file: %s", name)
 	}
-	return io.ReadAll(file)
+	if info.Size() < 0 {
+		return nil, fmt.Errorf("metadata path has an invalid size: %s", name)
+	}
+	if err := infoplist.CheckDeclaredSize(uint64(info.Size())); err != nil {
+		return nil, err
+	}
+	return infoplist.ReadBounded(file)
 }
 
 func inferAppStorePlatformFromPlist(payload map[string]any) string {

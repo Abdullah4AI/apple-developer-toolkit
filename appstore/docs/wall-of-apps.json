@@ -170,6 +170,11 @@
     "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/f9/73/48/f9734812-afa3-83b4-4862-a9331863f84b/AppIcon-0-0-1x_U007epad-0-0-0-1-0-0-sRGB-85-220.png/512x512bb.jpg"
   },
   {
+    "app": "BrainDrain: 1 Minute Journal",
+    "link": "https://apps.apple.com/us/app/braindrain-1-minute-journal/id6741376368?uo=4",
+    "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/4b/ce/14/4bce140a-0e8c-3c4b-cba1-80288b5878ae/AppIcon-0-0-1x_U007epad-0-1-sRGB-85-220.png/512x512bb.jpg"
+  },
+  {
     "app": "BratVPN",
     "link": "https://apps.apple.com/us/app/bratvpn/id6759875957?uo=4",
     "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/29/91/b8/2991b84b-72ec-130e-071e-18f6fd175a44/AppIcon-0-0-1x_U007emarketing-0-11-0-85-220.png/512x512bb.jpg"
@@ -218,6 +223,11 @@
     "app": "Cat on Chair",
     "link": "https://apps.apple.com/ca/app/cat-on-chair-focus-timer/id6746562271",
     "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/02/3d/6e/023d6ea0-1a98-d132-613c-d01b115d2e0d/AppIcon-0-0-1x_U007epad-0-1-0-85-220.jpeg/512x512bb.jpg"
+  },
+  {
+    "app": "CFB GameDay Board",
+    "link": "https://apps.apple.com/us/app/cfb-gameday-board/id6809035228?uo=4",
+    "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/be/8b/53/be8b5384-addc-fd00-0aeb-7e605b9d8817/AppIcon-0-0-1x_U007ephone-0-1-85-220.png/512x512bb.jpg"
   },
   {
     "app": "Checkify: #1 AI Bill Splitter",
@@ -299,6 +309,11 @@
     "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/40/b9/d8/40b9d80c-b3e5-79e4-1fc6-44f04efc95c4/AppIcon-0-0-1x_U007epad-0-1-sRGB-85-220.png/512x512bb.jpg"
   },
   {
+    "app": "Countdown Visual Timer: Kids",
+    "link": "https://apps.apple.com/us/app/countdown-visual-timer-kids/id6474494320?uo=4",
+    "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/35/3d/ab/353dab23-80da-b33d-4091-db8d3d230cbd/ATVC_Icon-0-0-1x_U007epad-0-1-sRGB-85-220.png/512x512bb.jpg"
+  },
+  {
     "app": "Cruisea: Real-time Tracking",
     "link": "https://apps.apple.com/us/app/cruisea-real-time-tracking/id6755068162?uo=4",
     "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/ad/6c/03/ad6c0376-c349-cdee-bfac-c7882f57a4d7/AppIcon-0-1x_U007ephone-0-1-85-220-0.png/512x512bb.jpg"
@@ -317,6 +332,11 @@
     "app": "cubby: stash & track",
     "link": "https://apps.apple.com/us/app/cubby-stash-track/id6759426602?uo=4",
     "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/77/e6/29/77e6296a-282e-ba85-74d2-93f673233114/AppIcon-0-0-1x_U007epad-0-1-85-220.png/512x512bb.jpg"
+  },
+  {
+    "app": "Curvely",
+    "link": "https://apps.apple.com/us/app/curvely/id6794988370?uo=4",
+    "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/b6/b4/2c/b6b42cc0-44fe-0545-0cac-275ebc6fe8d9/AppIcon-0-0-1x_U007epad-0-1-85-220.png/512x512bb.jpg"
   },
   {
     "app": "CUStats",
@@ -518,6 +538,11 @@
     "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/04/e2/b6/04e2b6e5-d5b6-9e1b-dc3a-fbb65b2ddd84/AppIcon-0-0-1x_U007ephone-0-1-85-220.png/512x512bb.jpg"
   },
   {
+    "app": "Fish Identifier: 96% Accurate",
+    "link": "https://apps.apple.com/us/app/fish-identifier-96-accurate/id6745837821?uo=4",
+    "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/59/12/42/5912423b-8ce4-f251-3698-af61f3accff2/FishAppIcon-0-0-1x_U007ephone-0-1-sRGB-85-220.png/512x512bb.jpg"
+  },
+  {
     "app": "Fisherman SMS Filtering",
     "link": "https://apps.apple.com/app/id6449192504",
     "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/8d/e5/c9/8de5c9bd-5ad9-3371-378a-b30f074a671a/AppIcon-0-0-1x_U007epad-0-11-0-85-220.png/512x512bb.jpg"
@@ -607,9 +632,19 @@
     "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/52/0e/ed/520eed9c-d3f0-5d0e-3e68-5b6e698e5efc/AppIcon-0-0-1x_U007ephone-0-1-85-220.png/512x512bb.jpg"
   },
   {
+    "app": "FunVoice Reverse Audio Singing",
+    "link": "https://apps.apple.com/us/app/funvoice-reverse-audio-singing/id6753986607?uo=4",
+    "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/c7/88/0f/c7880f37-6273-244c-8ef5-d4095471df2b/funvoice_2025-10-14-0-0-1x_U007epad-0-1-sRGB-85-220.png/512x512bb.jpg"
+  },
+  {
     "app": "Game Box - Games for Watch",
     "link": "https://apps.apple.com/us/app/game-box-games-for-watch/id6741334696?uo=4",
     "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/fb/f2/5e/fbf25e58-55d1-77de-a0ad-a1e8488ab7d7/AppIcon-0-0-1x_U007epad-0-1-0-85-220.png/512x512bb.jpg"
+  },
+  {
+    "app": "Gazolina - Prix Essence Gasoil",
+    "link": "https://apps.apple.com/fr/app/gazolina-prix-essence-gasoil/id6757231174?uo=4",
+    "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/3a/5d/48/3a5d4831-2f9a-7d7e-adfa-2e5eb7057c2f/AppIcon-0-0-1x_U007epad-0-1-0-sRGB-85-220.png/512x512bb.jpg"
   },
   {
     "app": "Gecko Med",
@@ -757,6 +792,11 @@
     "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/d3/7d/1c/d37d1c47-8457-7bff-a52f-7c7c90feaa1b/AppIcon-0-0-1x_U007epad-0-1-85-220.png/512x512bb.jpg"
   },
   {
+    "app": "Inkpress",
+    "link": "https://apps.apple.com/us/app/inkpress/id6787759999?uo=4",
+    "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/d6/32/4e/d6324e8a-b7d9-3ef9-93e9-6ad948ed6081/AppIcon-0-0-1x_U007ephone-0-1-85-220.png/512x512bb.jpg"
+  },
+  {
     "app": "Inkput",
     "link": "https://apps.apple.com/app/id6758570182",
     "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/83/e2/68/83e26872-d3d5-ab92-7164-673371673443/AppIcon-0-1x_U007epad-0-1-85-220-0.png/512x512bb.jpg"
@@ -855,6 +895,11 @@
     "app": "LilyFM",
     "link": "https://apps.apple.com/app/id6745472149",
     "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/a6/aa/4e/a6aa4ed4-1750-12c4-c206-8b1031c9c95c/AppIcon-0-0-1x_U007ephone-0-1-sRGB-85-220.png/512x512bb.jpg"
+  },
+  {
+    "app": "Litigate",
+    "link": "https://apps.apple.com/us/app/litigate/id6787857503?uo=4",
+    "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/0f/47/13/0f471335-1649-ae5d-6da1-8406c48f5a74/AppIcon-0-0-1x_U007epad-0-1-85-220.png/512x512bb.jpg"
   },
   {
     "app": "LivaLog",
@@ -1032,6 +1077,16 @@
     "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/86/e6/e4/86e6e45e-f2dd-abe2-e7df-87fa8450c769/AppIcon-0-0-1x_U007emarketing-0-11-0-85-220.png/512x512bb.jpg"
   },
   {
+    "app": "Mynu",
+    "link": "https://apps.apple.com/us/app/mynu/id6767801514?uo=4",
+    "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/c0/0d/f5/c00df540-1a01-07b5-3676-cad11d54ea66/AppIcon-0-0-1x_U007epad-0-1-85-220.png/512x512bb.jpg"
+  },
+  {
+    "app": "Natus: Self-Discovery Journal",
+    "link": "https://apps.apple.com/us/app/natus-self-discovery-journal/id6787200064?uo=4",
+    "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/05/12/da/0512da31-1283-74a1-5c00-3cfba5034c21/AppIcon-0-0-1x_U007epad-0-1-85-220.png/512x512bb.jpg"
+  },
+  {
     "app": "Nemlys: Couple & Relationship",
     "link": "https://apps.apple.com/us/app/nemlys-couple-relationship/id1662262055?uo=4",
     "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/76/c8/96/76c8965a-cf8c-fc3b-2a26-0be58f991537/AppIcon-0-0-1x_U007epad-0-1-85-220.png/512x512bb.jpg"
@@ -1174,6 +1229,11 @@
     "app": "Photo2Calendar Scanner Planner",
     "link": "https://apps.apple.com/us/app/photo2calendar-scanner-planner/id6736373394?uo=4",
     "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/6c/e0/2f/6ce02fb3-6c3a-902e-3e15-ca189da30cfe/AppIcon-0-0-1x_U007epad-0-1-85-220.png/512x512bb.jpg"
+  },
+  {
+    "app": "PhotoCal: AI Calorie Tracker",
+    "link": "https://apps.apple.com/us/app/photocal-ai-calorie-tracker/id6747694364?uo=4",
+    "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/b1/6f/c8/b16fc8e3-34ea-a466-39c4-810c992ce82f/photocaloriecam_icon-2025-09-15-0-0-1x_U007ephone-0-1-sRGB-85-220.png/512x512bb.jpg"
   },
   {
     "app": "Pickle Rite",
@@ -1476,6 +1536,11 @@
     "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/02/4e/89/024e8960-34e7-b77b-3da3-d293b7da39b5/SecureStorage-0-0-1x_U007ephone-0-1-0-sRGB-85-220.png/512x512bb.jpg"
   },
   {
+    "app": "Seekly AI - Ask and Chat",
+    "link": "https://apps.apple.com/us/app/seekly-ai-ask-and-chat/id6743059382?uo=4",
+    "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/12/5f/81/125f8168-16ef-c611-bac6-141a414a668b/AppIcon-0-0-1x_U007emarketing-0-8-0-85-220.png/512x512bb.jpg"
+  },
+  {
     "app": "Set - Strength Log",
     "link": "https://apps.apple.com/us/app/set-strength-log/id6759079224?uo=4",
     "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/4d/80/3d/4d803d98-3f09-a0f4-d5d7-65c6f0f08066/AppIcon-0-0-1x_U007emarketing-0-8-0-85-220.png/512x512bb.jpg"
@@ -1509,6 +1574,11 @@
     "app": "Sift - AI Food Scanner",
     "link": "https://apps.apple.com/us/app/sift-ai-food-scanner/id6760613139?uo=4",
     "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/f4/71/8a/f4718a2c-0eab-61f7-19c4-4c3039dfaaa5/AppIcon-0-0-1x_U007emarketing-0-11-0-85-220.png/512x512bb.jpg"
+  },
+  {
+    "app": "Sight words: First Words Match",
+    "link": "https://apps.apple.com/us/app/sight-words-first-words-match/id6499176211?uo=4",
+    "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/25/29/8c/25298c71-4e09-d790-53d1-19abc35b4e17/AppIcon-0-0-1x_U007emarketing-0-8-0-85-220.png/512x512bb.jpg"
   },
   {
     "app": "Silk: Relationship Tracker",
@@ -1584,6 +1654,16 @@
     "app": "Space - Life Planner",
     "link": "https://apps.apple.com/us/app/space-life-planner/id6502294348?uo=4",
     "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/68/88/12/688812e9-4f3d-ce80-5822-5c55e715b809/default-0-0-1x_U007ephone-0-0-0-1-0-sRGB-85-220.png/512x512bb.jpg"
+  },
+  {
+    "app": "Sparkler Room",
+    "link": "https://apps.apple.com/us/app/sparkler-room/id6807456248?uo=4",
+    "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/22/6a/06/226a06a5-0fe4-2264-8750-66d6d7d4be44/AppIcon-0-0-1x_U007ephone-0-1-85-220.png/512x512bb.jpg"
+  },
+  {
+    "app": "Speaker Cleaner: Sound Eject",
+    "link": "https://apps.apple.com/us/app/speaker-cleaner-sound-eject/id6808605832?uo=4",
+    "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/1b/e2/a8/1be2a854-011a-cefe-f937-3298e10c0f2b/AppIcon-0-0-1x_U007emarketing-0-8-0-85-220.png/512x512bb.jpg"
   },
   {
     "app": "Speed Reading - WPM Arena",
@@ -1719,6 +1799,11 @@
     "app": "takt - car glance",
     "link": "https://apps.apple.com/us/app/takt-car-glance/id6799290528?uo=4",
     "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/8f/6a/ae/8f6aaef7-9f39-5dbe-3573-439b29d12f1a/AppIcon-0-0-1x_U007ephone-0-1-85-220.png/512x512bb.jpg"
+  },
+  {
+    "app": "Talli",
+    "link": "https://apps.apple.com/us/app/talli/id6782366555?uo=4",
+    "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/63/8e/dd/638edd28-f1d3-5002-d912-7511ff80de7f/AppIcon-0-0-1x_U007ephone-0-1-85-220.png/512x512bb.jpg"
   },
   {
     "app": "Tamloot",
@@ -1876,6 +1961,11 @@
     "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/53/c3/b7/53c3b765-6630-5db0-a5f8-abf88f38d181/AppIcon-0-0-1x_U007epad-0-1-85-220.png/512x512bb.jpg"
   },
   {
+    "app": "Verbi: Speak a New Language",
+    "link": "https://apps.apple.com/us/app/verbi-speak-a-new-language/id6760734657?uo=4",
+    "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/9a/75/c8/9a75c847-6917-09ba-3f07-9ddc003b25e4/AppIcon-0-0-1x_U007epad-0-1-85-220.png/512x512bb.jpg"
+  },
+  {
     "app": "Victus: Discipline & Habits",
     "link": "https://apps.apple.com/us/app/victus-discipline-habits/id6754204999?uo=4",
     "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/cc/a6/0a/cca60a66-1e16-573f-043e-97f4c092a07d/AppIcon-0-0-1x_U007emarketing-0-11-0-85-220.png/512x512bb.jpg"
@@ -1964,6 +2054,11 @@
     "app": "WordFlux: Word Puzzles",
     "link": "https://apps.apple.com/us/app/wordflux-word-puzzles/id6757514622?uo=4",
     "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/eb/e9/b7/ebe9b79a-9dd1-d0a7-3bd9-ecb2a4517c83/AppIcon-0-0-1x_U007ephone-0-1-0-sRGB-85-220.png/512x512bb.jpg"
+  },
+  {
+    "app": "Wordroot",
+    "link": "https://apps.apple.com/us/app/wordroot/id6794988021?uo=4",
+    "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/4b/9d/f9/4b9df903-d342-3152-ec35-c823dcd86bc6/AppIcon-0-0-1x_U007epad-0-1-85-220.png/512x512bb.jpg"
   },
   {
     "app": "Wozi Vocabulary Builder",

@@ -63,14 +63,16 @@ on macOS only. Signing-plan generation is cross-platform. Signing apply
 requires native identity-coupled file mutation support and currently fails
 closed on Windows before modifying project or receipt files.
 
-Use these commands to compile projects and produce deterministic .xcarchive and
-.ipa paths that can be passed directly into asc upload and publish commands.
+Use these commands to compile projects and produce deterministic .xcarchive,
+.ipa, and .pkg paths that can be passed directly into asc upload and publish
+commands.
 
 Examples:
   asc xcode inject --manifest .asc/deployment.json --set version=1.3.0 --overwrite
   asc xcode build --project App.xcodeproj --scheme App --destination 'platform=iOS Simulator,name=iPhone 17 Pro Max,OS=27.0' --no-code-signing --output json
   asc xcode archive --workspace App.xcworkspace --scheme App --archive-path .asc/artifacts/App.xcarchive --output json
   asc xcode export --archive-path .asc/artifacts/App.xcarchive --ipa-path .asc/artifacts/App.ipa --output json
+  asc xcode export --archive-path .asc/artifacts/MacApp.xcarchive --pkg-path .asc/artifacts/MacApp.pkg --output json
   asc xcode install --ipa .asc/artifacts/App.ipa --device-id COREDEVICE_IDENTIFIER --output json
   asc xcode export-options generate --archive-path .asc/artifacts/App.xcarchive
   asc xcode doctor --output json
@@ -195,8 +197,9 @@ func XcodeExportCommand() *ffcli.Command {
 	method := fs.String("method", "app-store-connect", "Method for generated options: app-store-connect or release-testing")
 	signingStyle := fs.String("signing-style", "automatic", "Signing style for generated options: automatic or manual")
 	teamID := fs.String("team-id", "", "Apple Developer team ID for generated options (overrides archive metadata)")
-	ipaPath := fs.String("ipa-path", "", "Destination path for a local .ipa when one is produced (required)")
-	overwrite := fs.Bool("overwrite", false, "Replace an existing IPA at --ipa-path")
+	ipaPath := fs.String("ipa-path", "", "Destination path for a local .ipa when one is produced")
+	pkgPath := fs.String("pkg-path", "", "Destination path for a local macOS .pkg when one is produced")
+	overwrite := fs.Bool("overwrite", false, "Replace an existing local artifact at its destination path")
 	wait := fs.Bool("wait", false, "Wait for App Store Connect build discovery and processing when export uploads directly")
 	pollInterval := fs.Duration("poll-interval", shared.PublishDefaultPollInterval, "Polling interval for --wait when waiting for uploaded builds")
 	timeout := fs.Duration("timeout", 0, "Maximum duration for xcodebuild -exportArchive (0 disables local export timeout)")
@@ -207,8 +210,8 @@ func XcodeExportCommand() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "export",
 		ShortUsage: "asc xcode export [flags]",
-		ShortHelp:  "Export an archive to a deterministic IPA path or direct upload.",
-		LongHelp: `Export an archive to a deterministic IPA path or direct upload.
+		ShortHelp:  "Export an archive to an IPA or PKG path, or use direct upload.",
+		LongHelp: `Export an archive to a deterministic IPA or PKG path, or upload directly.
 
 This command runs xcodebuild -exportArchive into a temporary directory.
 When --export-options is omitted, asc generates archive-adjacent options. It
@@ -216,18 +219,22 @@ uses app-store-connect and automatic signing by default. Use
 --method release-testing for a local IPA installable on registered devices. Use
 --signing-style manual to match locally installed certificates and profiles;
 --team-id optionally overrides archive metadata.
-When ExportOptions.plist produces a local IPA, asc moves it to --ipa-path.
+For local exports, provide exactly one destination: --ipa-path for iOS, tvOS,
+or visionOS, or --pkg-path for macOS. asc moves the exported artifact to that
+exact path. Generated manual signing options support iOS and tvOS archives;
+provide an explicit --export-options plist for a manually signed macOS export.
 When ExportOptions.plist uses destination=upload, xcodebuild uploads directly
 to App Store Connect and asc returns archive metadata without writing a local
-IPA at --ipa-path. Use --wait to poll until the uploaded build appears and
-finishes processing.
+artifact or requiring a destination path. Use --wait to generate direct-upload
+options and poll until the uploaded build appears and finishes processing.
 
 Examples:
   asc xcode export --archive-path .asc/artifacts/App.xcarchive --ipa-path .asc/artifacts/App.ipa
+  asc xcode export --archive-path .asc/artifacts/MacApp.xcarchive --pkg-path .asc/artifacts/MacApp.pkg
   asc xcode export --archive-path .asc/artifacts/App.xcarchive --ipa-path .asc/artifacts/App.ipa --method release-testing --signing-style manual
   asc xcode export --archive-path .asc/artifacts/App.xcarchive --ipa-path .asc/artifacts/App.ipa --signing-style manual --team-id TEAM_ID
   asc xcode export --archive-path .asc/artifacts/App.xcarchive --ipa-path .asc/artifacts/App.ipa --timeout 10m
-  asc xcode export --archive-path .asc/artifacts/App.xcarchive --export-options UploadExportOptions.plist --ipa-path .asc/artifacts/App.ipa --wait
+  asc xcode export --archive-path .asc/artifacts/App.xcarchive --export-options UploadExportOptions.plist --wait
   asc xcode export --archive-path .asc/artifacts/App.xcarchive --export-options ExportOptions.plist --ipa-path .asc/artifacts/App.ipa --xcodebuild-flag=-allowProvisioningUpdates --output json`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
@@ -239,10 +246,6 @@ Examples:
 			if strings.TrimSpace(*archivePath) == "" {
 				fmt.Fprintln(os.Stderr, "Error: --archive-path is required")
 				return shared.MissingRequiredUsageError("--archive-path")
-			}
-			if strings.TrimSpace(*ipaPath) == "" {
-				fmt.Fprintln(os.Stderr, "Error: --ipa-path is required")
-				return shared.MissingRequiredUsageError("--ipa-path")
 			}
 			if *wait && *pollInterval <= 0 {
 				return shared.UsageError("--poll-interval must be greater than 0")
@@ -289,6 +292,11 @@ Examples:
 				return shared.UsageError("--team-id must not be empty")
 			}
 			trimmedArchivePath := strings.TrimSpace(*archivePath)
+			trimmedIPAPath := strings.TrimSpace(*ipaPath)
+			trimmedPKGPath := strings.TrimSpace(*pkgPath)
+			if trimmedIPAPath != "" && trimmedPKGPath != "" {
+				return shared.UsageError("--ipa-path and --pkg-path are mutually exclusive")
+			}
 			exportOptionsPath := strings.TrimSpace(*exportOptions)
 			if exportOptionsPath != "" && generationFlagsSet {
 				return shared.UsageError("--export-options cannot be combined with --method, --signing-style, or --team-id")
@@ -296,25 +304,57 @@ Examples:
 			if *wait && methodValue == "release-testing" {
 				return shared.UsageError("--wait cannot be combined with --method release-testing")
 			}
+			if exportOptionsPath == "" && trimmedPKGPath != "" && methodValue == "release-testing" {
+				return shared.UsageError("--pkg-path cannot be combined with --method release-testing")
+			}
+			if exportOptionsPath == "" && trimmedPKGPath != "" && signingStyleValue == "manual" {
+				return shared.UsageError("--pkg-path with manual signing requires an explicit --export-options plist")
+			}
+			directUpload := *wait
+			if exportOptionsPath != "" {
+				directUpload = isDirectUploadExportOptionsFn(exportOptionsPath)
+			}
+			if trimmedIPAPath == "" && trimmedPKGPath == "" && !directUpload {
+				fmt.Fprintln(os.Stderr, "Error: --ipa-path or --pkg-path is required for a local export")
+				return shared.MissingRequiredUsageError("")
+			}
+			if trimmedIPAPath != "" {
+				if err := localxcode.ValidateExportDestination(trimmedIPAPath, *overwrite, directUpload); err != nil {
+					if localxcode.IsExportDestinationUsageError(err) {
+						return shared.UsageError(err.Error())
+					}
+					return fmt.Errorf("xcode export: %w", err)
+				}
+			}
+			if trimmedPKGPath != "" {
+				if err := localxcode.ValidateExportPKGDestination(trimmedPKGPath, *overwrite, directUpload); err != nil {
+					if localxcode.IsExportDestinationUsageError(err) {
+						return shared.UsageError(err.Error())
+					}
+					return fmt.Errorf("xcode export: %w", err)
+				}
+			}
 			if exportOptionsPath == "" {
 				destination := "export"
 				if *wait {
 					destination = "upload"
 				}
-				if err := localxcode.ValidateExportDestination(strings.TrimSpace(*ipaPath), *overwrite, destination == "upload"); err != nil {
-					if localxcode.IsExportDestinationUsageError(err) {
-						return shared.UsageError(err.Error())
-					}
-					return fmt.Errorf("xcode export: %w", err)
-				}
 				if err := runXcodeExportPreflight(ctx); err != nil {
 					return fmt.Errorf("xcode export: %w", err)
 				}
-				if err := localxcode.PreflightExportDestination(strings.TrimSpace(*ipaPath), *overwrite, destination == "upload"); err != nil {
-					if localxcode.IsExportDestinationUsageError(err) {
-						return shared.UsageError(err.Error())
+				if destination != "upload" {
+					var err error
+					if trimmedPKGPath != "" {
+						err = localxcode.PreflightExportPKGDestination(trimmedPKGPath, *overwrite, false)
+					} else {
+						err = localxcode.PreflightExportDestination(trimmedIPAPath, *overwrite, false)
 					}
-					return fmt.Errorf("xcode export: %w", err)
+					if err != nil {
+						if localxcode.IsExportDestinationUsageError(err) {
+							return shared.UsageError(err.Error())
+						}
+						return fmt.Errorf("xcode export: %w", err)
+					}
 				}
 				generatedPath, err := localxcode.UniqueExportOptionsPathForArchive(trimmedArchivePath)
 				if err != nil {
@@ -354,7 +394,8 @@ Examples:
 			result, err := runExport(exportCtx, localxcode.ExportOptions{
 				ArchivePath:    trimmedArchivePath,
 				ExportOptions:  exportOptionsPath,
-				IPAPath:        strings.TrimSpace(*ipaPath),
+				IPAPath:        trimmedIPAPath,
+				PKGPath:        trimmedPKGPath,
 				Overwrite:      *overwrite,
 				XcodebuildArgs: []string(xcodebuildFlags),
 				LogWriter:      os.Stderr,
@@ -373,6 +414,7 @@ Examples:
 				ArchivePath:       result.ArchivePath,
 				ExportOptionsPath: exportOptionsPath,
 				IPAPath:           result.IPAPath,
+				PKGPath:           result.PKGPath,
 				BundleID:          result.BundleID,
 				Version:           result.Version,
 				BuildNumber:       result.BuildNumber,
@@ -447,7 +489,8 @@ Examples:
 func XcodeValidateCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("xcode validate", flag.ExitOnError)
 
-	ipaPath := fs.String("ipa", "", "Path to the .ipa input (required)")
+	ipaPath := fs.String("ipa", "", "Path to an iOS, tvOS, or visionOS .ipa input")
+	pkgPath := fs.String("pkg", "", "Path to a macOS .pkg input")
 	apiKey := fs.String("api-key", "", "App Store Connect API key ID for altool")
 	apiIssuer := fs.String("api-issuer", "", "App Store Connect API issuer ID for altool")
 	output := shared.BindOutputFlags(fs)
@@ -455,19 +498,24 @@ func XcodeValidateCommand() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "validate",
 		ShortUsage: "asc xcode validate [flags]",
-		ShortHelp:  "Validate an IPA with Apple before upload.",
-		LongHelp: `Validate an IPA with Apple before upload.
+		ShortHelp:  "Validate an IPA or PKG with Apple before upload.",
+		LongHelp: `Validate an IPA or PKG with Apple before upload.
 
-This command wraps xcrun altool --validate-app to check whether an IPA passes
+This command wraps xcrun altool --validate-app to check whether an IPA or PKG passes
 Apple's server-side validation before you upload or submit it.
+
+Exactly one of --ipa or --pkg is required. IPA platform metadata is detected
+from the artifact; PKG validation uses the macOS platform.
 
 Examples:
   asc xcode validate --ipa .asc/artifacts/App.ipa
+  asc xcode validate --pkg .asc/artifacts/MacApp.pkg
   asc xcode validate --ipa .asc/artifacts/App.ipa --api-key KEY123ABC --api-issuer 00000000-0000-0000-0000-000000000000 --output json`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			trimmedIPAPath := strings.TrimSpace(*ipaPath)
+			trimmedPKGPath := strings.TrimSpace(*pkgPath)
 			trimmedAPIKey := strings.TrimSpace(*apiKey)
 			trimmedAPIIssuer := strings.TrimSpace(*apiIssuer)
 
@@ -475,12 +523,23 @@ Examples:
 				fmt.Fprintln(os.Stderr, "Error: xcode validate does not accept positional arguments")
 				return flag.ErrHelp
 			}
-			if trimmedIPAPath == "" {
-				fmt.Fprintln(os.Stderr, "Error: --ipa is required")
-				return shared.MissingRequiredUsageError("--ipa")
+			if emptyFlag := firstExplicitlyEmptyFlag(fs, "ipa", "pkg"); emptyFlag != "" {
+				return shared.UsageErrorf("--%s must not be empty", emptyFlag)
 			}
-			if !strings.EqualFold(filepath.Ext(trimmedIPAPath), ".ipa") {
+			hasIPA := trimmedIPAPath != ""
+			hasPKG := trimmedPKGPath != ""
+			if !hasIPA && !hasPKG {
+				fmt.Fprintln(os.Stderr, "Error: --ipa or --pkg is required")
+				return shared.MissingRequiredUsageError("")
+			}
+			if hasIPA && hasPKG {
+				return shared.UsageError("--ipa and --pkg are mutually exclusive")
+			}
+			if hasIPA && !strings.EqualFold(filepath.Ext(trimmedIPAPath), ".ipa") {
 				return shared.UsageError("--ipa must end with .ipa")
+			}
+			if hasPKG && !strings.EqualFold(filepath.Ext(trimmedPKGPath), ".pkg") {
+				return shared.UsageError("--pkg must end with .pkg")
 			}
 			if (trimmedAPIKey == "") != (trimmedAPIIssuer == "") {
 				return shared.UsageError("--api-key and --api-issuer must be provided together")
@@ -488,6 +547,7 @@ Examples:
 
 			result, err := runValidate(ctx, localxcode.ValidateOptions{
 				IPAPath:   trimmedIPAPath,
+				PKGPath:   trimmedPKGPath,
 				APIKey:    trimmedAPIKey,
 				APIIssuer: trimmedAPIIssuer,
 				LogWriter: os.Stderr,
@@ -550,6 +610,7 @@ type xcodeExportCommandResult struct {
 	ArchivePath       string `json:"archive_path"`
 	ExportOptionsPath string `json:"export_options_path"`
 	IPAPath           string `json:"ipa_path"`
+	PKGPath           string `json:"pkg_path,omitempty"`
 	BundleID          string `json:"bundle_id,omitempty"`
 	Version           string `json:"version,omitempty"`
 	BuildNumber       string `json:"build_number,omitempty"`
@@ -564,6 +625,8 @@ func exportResultRows(result xcodeExportCommandResult) [][]string {
 	}
 	if result.IPAPath != "" {
 		rows = append(rows, []string{"ipa_path", result.IPAPath})
+	} else if result.PKGPath != "" {
+		rows = append(rows, []string{"pkg_path", result.PKGPath})
 	} else {
 		rows = append(rows, []string{"ipa_path", "(direct upload — no local artifact)"})
 	}
@@ -583,8 +646,11 @@ func exportResultRows(result xcodeExportCommandResult) [][]string {
 }
 
 func validateResultRows(result *localxcode.ValidateResult) [][]string {
-	return [][]string{
-		{"ipa_path", result.IPAPath},
-		{"validated", fmt.Sprintf("%t", result.Validated)},
+	rows := make([][]string, 0, 2)
+	if strings.TrimSpace(result.PKGPath) != "" {
+		rows = append(rows, []string{"pkg_path", result.PKGPath})
+	} else {
+		rows = append(rows, []string{"ipa_path", result.IPAPath})
 	}
+	return append(rows, []string{"validated", fmt.Sprintf("%t", result.Validated)})
 }

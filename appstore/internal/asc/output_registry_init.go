@@ -458,6 +458,8 @@ func registerAllOutputRenderers() {
 	registerRowsWithSingleToListAdapter[ReviewSubmissionItemResponse, ReviewSubmissionItemsResponse](reviewSubmissionItemsRows)
 	registerRows(reviewSubmissionItemDeleteResultRows)
 	registerRows(appStoreVersionReleaseRequestRows)
+	registerRows(appStoreVersionRatingResetCreateRows)
+	registerRows(appStoreVersionRatingResetDeleteRows)
 	registerRows(appStoreVersionPromotionCreateRows)
 	registerRows(appStoreVersionPhasedReleaseRows)
 	registerRows(appStoreVersionPhasedReleaseDeleteResultRows)

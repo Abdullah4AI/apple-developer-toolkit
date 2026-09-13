@@ -2526,7 +2526,9 @@ func overridePublishCommandTestHooks(t *testing.T) func() {
 	originalGetClient := getPublishASCClientFn
 	originalResolveNextBuildNumber := resolvePublishNextBuildNumberFn
 	originalValidateIPAPath := validatePublishIPAPathFn
+	originalValidatePKGPath := validatePublishPKGPathFn
 	originalUploadBuildAndWait := uploadBuildAndWaitForIDFn
+	originalUploadPKGBuildAndWait := uploadPKGBuildAndWaitForIDFn
 	originalResolveAppID := resolvePublishAppIDWithLookupFn
 	originalWaitForProcessing := waitForPublishBuildProcessingFn
 	originalMetadataApply := applyPublishVersionMetadataFn
@@ -2541,7 +2543,9 @@ func overridePublishCommandTestHooks(t *testing.T) func() {
 		getPublishASCClientFn = originalGetClient
 		resolvePublishNextBuildNumberFn = originalResolveNextBuildNumber
 		validatePublishIPAPathFn = originalValidateIPAPath
+		validatePublishPKGPathFn = originalValidatePKGPath
 		uploadBuildAndWaitForIDFn = originalUploadBuildAndWait
+		uploadPKGBuildAndWaitForIDFn = originalUploadPKGBuildAndWait
 		resolvePublishAppIDWithLookupFn = originalResolveAppID
 		waitForPublishBuildProcessingFn = originalWaitForProcessing
 		applyPublishVersionMetadataFn = originalMetadataApply

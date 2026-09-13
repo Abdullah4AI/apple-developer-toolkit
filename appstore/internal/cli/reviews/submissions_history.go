@@ -380,47 +380,52 @@ func populateSubmissionHistoryItem(histItem *SubmissionHistoryItem, item asc.Rev
 		return
 	}
 
+	// A relationship pointer can be non-nil with a zero-value Data (id "") when
+	// Apple's API includes the key as `"data":null` for a type the item does not
+	// actually carry — e.g. every item gets an `inAppPurchaseVersion` key even
+	// with zero IAPs configured. Require a real ID, not just a non-nil pointer,
+	// or every item mislabels as the first case in this switch.
 	switch {
-	case item.Relationships.InAppPurchaseVersion != nil:
+	case item.Relationships.InAppPurchaseVersion != nil && item.Relationships.InAppPurchaseVersion.Data.ID != "":
 		histItem.Type = "inAppPurchaseVersion"
 		histItem.ResourceID = item.Relationships.InAppPurchaseVersion.Data.ID
-	case item.Relationships.SubscriptionVersion != nil:
+	case item.Relationships.SubscriptionVersion != nil && item.Relationships.SubscriptionVersion.Data.ID != "":
 		histItem.Type = "subscriptionVersion"
 		histItem.ResourceID = item.Relationships.SubscriptionVersion.Data.ID
-	case item.Relationships.SubscriptionGroupVersion != nil:
+	case item.Relationships.SubscriptionGroupVersion != nil && item.Relationships.SubscriptionGroupVersion.Data.ID != "":
 		histItem.Type = "subscriptionGroupVersion"
 		histItem.ResourceID = item.Relationships.SubscriptionGroupVersion.Data.ID
-	case item.Relationships.AppStoreVersion != nil:
+	case item.Relationships.AppStoreVersion != nil && item.Relationships.AppStoreVersion.Data.ID != "":
 		histItem.Type = "appStoreVersion"
 		histItem.ResourceID = item.Relationships.AppStoreVersion.Data.ID
-	case item.Relationships.AppCustomProductPageVersion != nil:
+	case item.Relationships.AppCustomProductPageVersion != nil && item.Relationships.AppCustomProductPageVersion.Data.ID != "":
 		histItem.Type = "appCustomProductPageVersion"
 		histItem.ResourceID = item.Relationships.AppCustomProductPageVersion.Data.ID
-	case item.Relationships.AppStoreVersionExperimentV2 != nil:
+	case item.Relationships.AppStoreVersionExperimentV2 != nil && item.Relationships.AppStoreVersionExperimentV2.Data.ID != "":
 		histItem.Type = "appStoreVersionExperimentV2"
 		histItem.ResourceID = item.Relationships.AppStoreVersionExperimentV2.Data.ID
-	case item.Relationships.AppEvent != nil:
+	case item.Relationships.AppEvent != nil && item.Relationships.AppEvent.Data.ID != "":
 		histItem.Type = "appEvent"
 		histItem.ResourceID = item.Relationships.AppEvent.Data.ID
-	case item.Relationships.BackgroundAssetVersion != nil:
+	case item.Relationships.BackgroundAssetVersion != nil && item.Relationships.BackgroundAssetVersion.Data.ID != "":
 		histItem.Type = "backgroundAssetVersion"
 		histItem.ResourceID = item.Relationships.BackgroundAssetVersion.Data.ID
-	case item.Relationships.GameCenterAchievementVersion != nil:
+	case item.Relationships.GameCenterAchievementVersion != nil && item.Relationships.GameCenterAchievementVersion.Data.ID != "":
 		histItem.Type = "gameCenterAchievementVersion"
 		histItem.ResourceID = item.Relationships.GameCenterAchievementVersion.Data.ID
-	case item.Relationships.GameCenterActivityVersion != nil:
+	case item.Relationships.GameCenterActivityVersion != nil && item.Relationships.GameCenterActivityVersion.Data.ID != "":
 		histItem.Type = "gameCenterActivityVersion"
 		histItem.ResourceID = item.Relationships.GameCenterActivityVersion.Data.ID
-	case item.Relationships.GameCenterChallengeVersion != nil:
+	case item.Relationships.GameCenterChallengeVersion != nil && item.Relationships.GameCenterChallengeVersion.Data.ID != "":
 		histItem.Type = "gameCenterChallengeVersion"
 		histItem.ResourceID = item.Relationships.GameCenterChallengeVersion.Data.ID
-	case item.Relationships.GameCenterLeaderboardSetVersion != nil:
+	case item.Relationships.GameCenterLeaderboardSetVersion != nil && item.Relationships.GameCenterLeaderboardSetVersion.Data.ID != "":
 		histItem.Type = "gameCenterLeaderboardSetVersion"
 		histItem.ResourceID = item.Relationships.GameCenterLeaderboardSetVersion.Data.ID
-	case item.Relationships.GameCenterLeaderboardVersion != nil:
+	case item.Relationships.GameCenterLeaderboardVersion != nil && item.Relationships.GameCenterLeaderboardVersion.Data.ID != "":
 		histItem.Type = "gameCenterLeaderboardVersion"
 		histItem.ResourceID = item.Relationships.GameCenterLeaderboardVersion.Data.ID
-	case item.Relationships.AppStoreVersionExperiment != nil:
+	case item.Relationships.AppStoreVersionExperiment != nil && item.Relationships.AppStoreVersionExperiment.Data.ID != "":
 		histItem.Type = "appStoreVersionExperiment"
 		histItem.ResourceID = item.Relationships.AppStoreVersionExperiment.Data.ID
 	}

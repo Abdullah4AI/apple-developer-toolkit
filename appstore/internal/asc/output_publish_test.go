@@ -50,3 +50,22 @@ func TestAppStorePublishResultRowsDryRunUsesPlanSummaryColumns(t *testing.T) {
 		t.Fatalf("expected will-submit column true, got %q", rows[0][5])
 	}
 }
+
+func TestPublishExportStageRowsUsesPKGPath(t *testing.T) {
+	_, rows := publishExportStageRows(&PublishExportStageResult{
+		ArchivePath: "Demo.xcarchive",
+		PKGPath:     "Demo.pkg",
+	})
+	foundPKG := false
+	for _, row := range rows {
+		if len(row) == 2 && row[0] == "pkg_path" && row[1] == "Demo.pkg" {
+			foundPKG = true
+		}
+		if len(row) == 2 && row[0] == "ipa_path" {
+			t.Fatalf("PKG export must not render an IPA row: %v", rows)
+		}
+	}
+	if !foundPKG {
+		t.Fatalf("expected pkg_path row, got %v", rows)
+	}
+}

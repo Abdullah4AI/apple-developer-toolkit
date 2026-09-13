@@ -72,7 +72,8 @@ func WebAppsAvailabilityCreateCommand() *ffcli.Command {
 		LongHelp: `WEB SESSION WORKFLOWS
 
 Create the initial app availability record for an app that does not yet have one.
-The territories passed with --territory become initially available.
+The territories passed with --territory become initially available. All other
+current territories are initialized as unavailable.
 
 Examples:
   asc web apps availability create --app "123456789" --territory "United States" --available-in-new-territories false

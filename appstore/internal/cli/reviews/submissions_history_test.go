@@ -795,6 +795,20 @@ func TestPopulateSubmissionHistoryItem_SupportsAdditionalRelationshipTypes(t *te
 			wantType: "subscriptionGroupVersion",
 			wantID:   "sgv-1",
 		},
+		{
+			// Apple's API can include a relationship key with `"data":null` for a
+			// type the item does not actually carry (e.g. inAppPurchaseVersion on
+			// an app with zero IAPs configured). That unmarshals into a non-nil
+			// *Relationship with a zero-value Data, not a nil pointer — the item
+			// must not mislabel as that type just because the pointer is set.
+			name: "empty relationship data is not mistaken for a real type",
+			item: asc.ReviewSubmissionItemResource{Relationships: &asc.ReviewSubmissionItemRelationships{
+				InAppPurchaseVersion: &asc.Relationship{},
+				AppStoreVersion:      &asc.Relationship{Data: asc.ResourceData{ID: "asv-1"}},
+			}},
+			wantType: "appStoreVersion",
+			wantID:   "asv-1",
+		},
 	}
 
 	for _, tt := range tests {

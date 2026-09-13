@@ -43,6 +43,11 @@ const (
 	irisV2BaseURL     = appStoreBaseURL + "/iris/v2"
 	olympusBaseURL    = appStoreBaseURL + "/olympus/v1"
 
+	// Public production widget identifier shipped by Apple's ASC login page,
+	// not an account credential. Fallback when the legacy config endpoint is absent.
+	// Verified 2026-09-11: https://unpkg.apple.com/@maison/preauthorization-container@0.2.1/umd/chunks/ASC.BRGDgul9.js
+	appStoreConnectWidgetKey = "e0b80c3bf78523bfe80974d320935bfa30add02e1bff88ec2166c6bd5a706c42"
+
 	// Apple currently uses RFC5054 group 2048 + 32-byte derived password.
 	srpClientSecretBytes  = 256
 	srpDerivedPasswordLen = 32
@@ -610,7 +615,7 @@ func loginWithHTTPClient(ctx context.Context, client *http.Client, creds LoginCr
 
 	serviceKey, err := getAuthServiceKey(ctx, client)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get auth service key: %w", err)
+		return nil, fmt.Errorf("could not load Apple login configuration; password authentication has not started. Run with --api-debug for request details: %w", err)
 	}
 
 	if err := performSRPLogin(ctx, client, creds, serviceKey); err != nil {
@@ -661,6 +666,12 @@ func getAuthServiceKey(ctx context.Context, client *http.Client) (string, error)
 		return "", fmt.Errorf("failed to read auth service key response: %w", err)
 	}
 	logWebAuthHTTP("auth_service_key", req, resp, body, nil)
+	if resp.StatusCode == http.StatusNotFound {
+		if webDebugEnabledFn() {
+			webDebugLogger.Info("using public App Store Connect widget key", "stage", "auth_service_key_fallback")
+		}
+		return appStoreConnectWidgetKey, nil
+	}
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("failed to fetch auth service key (status %d)", resp.StatusCode)
 	}

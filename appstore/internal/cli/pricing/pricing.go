@@ -754,11 +754,9 @@ func PricingAvailabilityCreateCommand() *ffcli.Command {
 		ShortHelp:  "Initialize app availability for territories.",
 		LongHelp: `Initialize app availability for territories.
 
-Creates the initial app availability record and its territory availability
-entries through the public App Store Connect API. Apple can reject this
-bootstrap request even when it matches the published schema. If that happens,
-the command fails without treating availability as configured and explains the
-authenticated web-session or App Store Connect fallback. Once created, use
+Creates the initial app availability record through the public App Store Connect
+API. Every current territory is included: selected territories use --available,
+and unselected territories are initialized as unavailable. Once created, use
 "asc pricing availability edit" to update the record.
 
 Examples:
@@ -804,17 +802,9 @@ Examples:
 
 			availableInNewTerritoriesValue := availableInNewTerritories.Value()
 			availableValue := available.Value()
-			territoryAvailabilities := make([]asc.TerritoryAvailabilityCreate, 0, len(territories))
-			seenTerritories := make(map[string]struct{}, len(territories))
-			for _, territoryID := range territories {
-				if _, exists := seenTerritories[territoryID]; exists {
-					continue
-				}
-				seenTerritories[territoryID] = struct{}{}
-				territoryAvailabilities = append(territoryAvailabilities, asc.TerritoryAvailabilityCreate{
-					TerritoryID: territoryID,
-					Available:   availableValue,
-				})
+			territoryAvailabilities, err := initialTerritoryAvailabilities(requestCtx, client, territories, availableValue)
+			if err != nil {
+				return fmt.Errorf("pricing availability create: %w", err)
 			}
 
 			resp, err := client.CreateAppAvailabilityV2(requestCtx, resolvedAppID, asc.AppAvailabilityV2CreateAttributes{

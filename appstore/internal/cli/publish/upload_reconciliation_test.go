@@ -78,3 +78,54 @@ func TestUploadBuildAndWaitForIDRecoversAmbiguousCommit(t *testing.T) {
 		t.Fatalf("expected recovered build result, got %#v", result)
 	}
 }
+
+func TestUploadPKGBuildAndWaitForIDPinsValidatedFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "Demo.pkg")
+	if err := os.WriteFile(path, []byte("old"), 0o600); err != nil {
+		t.Fatalf("write PKG: %v", err)
+	}
+	fileInfo, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("stat PKG: %v", err)
+	}
+
+	originalTransport := http.DefaultTransport
+	t.Cleanup(func() { http.DefaultTransport = originalTransport })
+	uploadedOriginal := false
+	http.DefaultTransport = publishCommandRoundTripFunc(func(req *http.Request) (*http.Response, error) {
+		switch {
+		case req.Method == http.MethodPost && req.URL.Path == "/v1/buildUploads":
+			return publishCommandJSONResponse(http.StatusCreated, `{"data":{"type":"buildUploads","id":"upload-1"}}`)
+		case req.Method == http.MethodPost && req.URL.Path == "/v1/buildUploadFiles":
+			if err := os.Rename(path, path+".validated"); err != nil {
+				t.Fatalf("rename validated PKG: %v", err)
+			}
+			if err := os.WriteFile(path, []byte("new"), 0o600); err != nil {
+				t.Fatalf("replace PKG path: %v", err)
+			}
+			return publishCommandJSONResponse(http.StatusCreated, `{"data":{"type":"buildUploadFiles","id":"file-1","attributes":{"fileName":"Demo.pkg","fileSize":3,"uti":"com.apple.pkg","assetType":"ASSET","uploadOperations":[{"method":"PUT","url":"https://upload.example.com/part-1","length":3,"offset":0}]}}}`)
+		case req.Method == http.MethodPut && req.URL.Host == "upload.example.com":
+			body, readErr := io.ReadAll(req.Body)
+			if readErr != nil {
+				t.Fatalf("read upload body: %v", readErr)
+			}
+			if string(body) != "old" {
+				t.Fatalf("uploaded swapped path contents %q", body)
+			}
+			uploadedOriginal = true
+			return &http.Response{StatusCode: http.StatusOK, Header: http.Header{}, Body: io.NopCloser(strings.NewReader(""))}, nil
+		case req.Method == http.MethodPatch && req.URL.Path == "/v1/buildUploadFiles/file-1":
+			return publishCommandJSONResponse(http.StatusBadRequest, `{"errors":[{"status":"400","code":"INVALID","title":"stop after upload"}]}`)
+		default:
+			return nil, fmt.Errorf("unexpected request: %s %s", req.Method, req.URL.String())
+		}
+	})
+
+	_, err = uploadPKGBuildAndWaitForID(context.Background(), newPublishCommandTestClient(t), "app-1", path, fileInfo, "1.2.3", "42", asc.PlatformMacOS, time.Millisecond, time.Second, true)
+	if err == nil || !strings.Contains(err.Error(), "stop after upload") {
+		t.Fatalf("expected commit sentinel, got %v", err)
+	}
+	if !uploadedOriginal {
+		t.Fatal("expected upload to read the pinned validated PKG")
+	}
+}

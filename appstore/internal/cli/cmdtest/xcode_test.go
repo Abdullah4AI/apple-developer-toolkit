@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	rootcmd "github.com/Abdullah4AI/apple-developer-toolkit/appstore/cmd"
+	localxcode "github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/xcode"
 )
 
 func TestXcodeCommandExists(t *testing.T) {
@@ -50,8 +51,14 @@ func TestXcodeCommandExists(t *testing.T) {
 	if findSubcommand(root, "xcode", "export") == nil {
 		t.Fatal("expected xcode export command")
 	}
-	if findSubcommand(root, "xcode", "validate") == nil {
+	validateCmd := findSubcommand(root, "xcode", "validate")
+	if validateCmd == nil {
 		t.Fatal("expected xcode validate command")
+	}
+	for _, name := range []string{"ipa", "pkg", "api-key", "api-issuer", "output"} {
+		if validateCmd.FlagSet.Lookup(name) == nil {
+			t.Fatalf("expected xcode validate to expose --%s", name)
+		}
 	}
 	if findSubcommand(root, "xcode", "version") == nil {
 		t.Fatal("expected xcode version command")
@@ -208,6 +215,9 @@ func TestXcodeExportHelpMentionsDirectUploadMode(t *testing.T) {
 	}
 	if got := exportCmd.FlagSet.Lookup("ipa-path").Usage; !strings.Contains(got, "when one is produced") {
 		t.Fatalf("expected ipa-path usage to mention produced IPA behavior, got %q", got)
+	}
+	if got := exportCmd.FlagSet.Lookup("pkg-path").Usage; !strings.Contains(got, "macOS .pkg") {
+		t.Fatalf("expected pkg-path usage to mention macOS PKG behavior, got %q", got)
 	}
 	if exportCmd.FlagSet.Lookup("timeout") == nil {
 		t.Fatal("expected xcode export to expose --timeout")
@@ -394,7 +404,11 @@ func TestXcodeExportRequiresArchivePath(t *testing.T) {
 
 func TestXcodeExportWithoutExportOptionsPreflightsBeforeGeneration(t *testing.T) {
 	if runtime.GOOS == "darwin" {
-		binDir := t.TempDir()
+		developerDir := filepath.Join(t.TempDir(), "Xcode.app", "Contents", "Developer")
+		binDir := filepath.Join(developerDir, "usr", "bin")
+		if err := os.MkdirAll(binDir, 0o755); err != nil {
+			t.Fatalf("create fake developer directory: %v", err)
+		}
 		xcodebuildPath := filepath.Join(binDir, "xcodebuild")
 		script := "#!/bin/sh\n" +
 			"if [ \"$1\" = \"-version\" ]; then\n" +
@@ -406,7 +420,13 @@ func TestXcodeExportWithoutExportOptionsPreflightsBeforeGeneration(t *testing.T)
 		if err := os.WriteFile(xcodebuildPath, []byte(script), 0o755); err != nil {
 			t.Fatalf("write fake xcodebuild: %v", err)
 		}
-		t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+		fakeXcrun := filepath.Join(t.TempDir(), "xcrun")
+		xcrunScript := "#!/bin/sh\nif [ \"$1\" = \"--find\" ] && [ \"$2\" = \"xcodebuild\" ]; then\n  printf '%s\\n' \"$DEVELOPER_DIR/usr/bin/xcodebuild\"\n  exit 0\nfi\nexit 2\n"
+		if err := os.WriteFile(fakeXcrun, []byte(xcrunScript), 0o700); err != nil {
+			t.Fatalf("write fake trusted xcrun: %v", err)
+		}
+		t.Cleanup(localxcode.OverrideTrustedXcrunPathForTesting(fakeXcrun))
+		t.Setenv("DEVELOPER_DIR", developerDir)
 	}
 
 	root := RootCommand("1.2.3")
@@ -484,7 +504,7 @@ func TestXcodeExportRejectsInvalidImplicitDestinationAsUsage(t *testing.T) {
 	}
 }
 
-func TestXcodeValidateRequiresIPA(t *testing.T) {
+func TestXcodeValidateRequiresArtifact(t *testing.T) {
 	root := RootCommand("1.2.3")
 	root.FlagSet.SetOutput(io.Discard)
 
@@ -501,12 +521,12 @@ func TestXcodeValidateRequiresIPA(t *testing.T) {
 	if stdout != "" {
 		t.Fatalf("expected empty stdout, got %q", stdout)
 	}
-	if !strings.Contains(stderr, "Error: --ipa is required") {
-		t.Fatalf("expected ipa error, got %q", stderr)
+	if !strings.Contains(stderr, "Error: --ipa or --pkg is required") {
+		t.Fatalf("expected artifact error, got %q", stderr)
 	}
 }
 
-func TestXcodeExportRequiresIPAPath(t *testing.T) {
+func TestXcodeExportRequiresArtifactPath(t *testing.T) {
 	root := RootCommand("1.2.3")
 	root.FlagSet.SetOutput(io.Discard)
 
@@ -523,7 +543,7 @@ func TestXcodeExportRequiresIPAPath(t *testing.T) {
 	if stdout != "" {
 		t.Fatalf("expected empty stdout, got %q", stdout)
 	}
-	if !strings.Contains(stderr, "Error: --ipa-path is required") {
-		t.Fatalf("expected ipa-path error, got %q", stderr)
+	if !strings.Contains(stderr, "Error: --ipa-path or --pkg-path is required for a local export") {
+		t.Fatalf("expected artifact path error, got %q", stderr)
 	}
 }
