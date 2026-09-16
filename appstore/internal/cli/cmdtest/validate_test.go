@@ -42,6 +42,8 @@ type validateFixture struct {
 	app                        string
 	appStatus                  int
 	versions                   string
+	versionsByQuery            map[string]string
+	versionsStatusByQuery      map[string]int
 	version                    string
 	appInfos                   string
 	appInfoLocs                string
@@ -76,6 +78,7 @@ type validateFixture struct {
 	subscriptionGroupsStatus   int
 	iaps                       string
 	iapsStatus                 int
+	requestObserver            func(*http.Request)
 }
 
 func newValidateTestClient(t *testing.T, fixture validateFixture) *asc.Client {
@@ -86,6 +89,9 @@ func newValidateTestClient(t *testing.T, fixture validateFixture) *asc.Client {
 	writeECDSAPEM(t, keyPath)
 
 	transport := roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		if fixture.requestObserver != nil {
+			fixture.requestObserver(req)
+		}
 		if req.Method != http.MethodGet {
 			return jsonResponse(http.StatusMethodNotAllowed, `{"errors":[{"status":405}]}`)
 		}
@@ -98,6 +104,17 @@ func newValidateTestClient(t *testing.T, fixture validateFixture) *asc.Client {
 			}
 			return jsonResponse(http.StatusOK, fixture.app)
 		case path == "/v1/apps/app-1/appStoreVersions":
+			queryKey := appStoreVersionsQueryKey(req.URL.Query())
+			if status, ok := fixture.versionsStatusByQuery[queryKey]; ok {
+				body := fixture.versionsByQuery[queryKey]
+				if body == "" {
+					body = apiErrorJSONForStatus(status)
+				}
+				return jsonResponse(status, body)
+			}
+			if body, ok := fixture.versionsByQuery[queryKey]; ok {
+				return jsonResponse(http.StatusOK, body)
+			}
 			if fixture.versions != "" {
 				return jsonResponse(http.StatusOK, fixture.versions)
 			}
@@ -248,6 +265,18 @@ func newValidateTestClient(t *testing.T, fixture validateFixture) *asc.Client {
 		t.Fatalf("failed to create client: %v", err)
 	}
 	return client
+}
+
+// appStoreVersionsQueryKey reduces an app store versions list query to the
+// filters that matter for fixtures, in a fixed order.
+func appStoreVersionsQueryKey(query url.Values) string {
+	parts := make([]string, 0, 4)
+	for _, name := range []string{"filter[appStoreState]", "filter[appVersionState]", "filter[platform]", "filter[versionString]"} {
+		if value := query.Get(name); value != "" {
+			parts = append(parts, name+"="+value)
+		}
+	}
+	return strings.Join(parts, "&")
 }
 
 func jsonResponse(status int, body string) (*http.Response, error) {
@@ -412,11 +441,6 @@ func TestValidateRequiresAppAndVersionSelector(t *testing.T) {
 			name:    "missing app",
 			args:    []string{"validate", "--version-id", "ver-1"},
 			wantErr: "--app is required",
-		},
-		{
-			name:    "missing version id",
-			args:    []string{"validate", "--app", "app-1"},
-			wantErr: "--version or --version-id is required",
 		},
 	}
 

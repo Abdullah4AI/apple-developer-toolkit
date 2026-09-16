@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/cmd"
 )
 
 func TestBetaGroupsAddTestersMergesTesterAndEmailWithoutDuplicates(t *testing.T) {
@@ -97,8 +99,8 @@ func TestBetaGroupsAddTestersMergesTesterAndEmailWithoutDuplicates(t *testing.T)
 		}
 	})
 
-	if stdout != "" {
-		t.Fatalf("expected empty stdout, got %q", stdout)
+	if !strings.Contains(stdout, `"action":"added"`) || !strings.Contains(stdout, `"testerIds":["tester-1"]`) {
+		t.Fatalf("expected an added receipt for the deduped tester, got %q", stdout)
 	}
 	if !strings.Contains(stderr, "Successfully added 1 tester(s) to group group-1") {
 		t.Fatalf("expected deduped success message, got %q", stderr)
@@ -200,5 +202,63 @@ func TestBetaGroupsAddTestersEmailPartialLookupFailureDoesNotMutate(t *testing.T
 	}
 	if stdout != "" {
 		t.Fatalf("expected empty stdout on failure, got %q", stdout)
+	}
+}
+
+func TestBetaGroupsAddTestersAmbiguousEmailListsIDsWithoutPersonalData(t *testing.T) {
+	setupAuth(t)
+	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
+
+	requests := 0
+	installDefaultTransport(t, roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		requests++
+		switch requests {
+		case 1:
+			if req.Method != http.MethodGet || req.URL.Path != "/v1/betaGroups/group-1/app" {
+				t.Fatalf("unexpected group app request: %s %s", req.Method, req.URL.String())
+			}
+			return jsonHTTPResponse(http.StatusOK, `{"data":{"type":"apps","id":"app-1"}}`), nil
+		case 2:
+			if req.Method != http.MethodGet || req.URL.Path != "/v1/betaTesters" {
+				t.Fatalf("unexpected tester request: %s %s", req.Method, req.URL.String())
+			}
+			return jsonHTTPResponse(http.StatusOK, `{"data":[
+				{"type":"betaTesters","id":"tester-1","attributes":{"email":"dup@example.com","firstName":"Private","lastName":"One"}},
+				{"type":"betaTesters","id":"tester-2","attributes":{"email":"dup@example.com","firstName":"Private","lastName":"Two"}}
+			]}`), nil
+		default:
+			t.Fatalf("unexpected request after ambiguity: %s %s", req.Method, req.URL.String())
+			return nil, nil
+		}
+	}))
+
+	stdout, stderr := captureOutput(t, func() {
+		code := cmd.Run([]string{
+			"testflight", "groups", "add-testers",
+			"--group", "group-1",
+			"--email", "dup@example.com",
+		}, "1.2.3")
+		if code != cmd.ExitError {
+			t.Fatalf("exit code = %d, want %d", code, cmd.ExitError)
+		}
+	})
+	if stdout != "" {
+		t.Fatalf("expected empty stdout, got %q", stdout)
+	}
+	for _, want := range []string{"pass --tester with one of:", "tester-1", "tester-2"} {
+		if !strings.Contains(stderr, want) {
+			t.Fatalf("stderr missing %q: %s", want, stderr)
+		}
+	}
+	for _, privateValue := range []string{"Private One", "Private Two"} {
+		if strings.Contains(stderr, privateValue) {
+			t.Fatalf("stderr must not expose tester name %q: %s", privateValue, stderr)
+		}
+	}
+	if strings.Count(stderr, "dup@example.com") != 1 {
+		t.Fatalf("selected email should appear only in the ambiguity header: %s", stderr)
+	}
+	if requests != 2 {
+		t.Fatalf("requests = %d, want 2 (no POST)", requests)
 	}
 }

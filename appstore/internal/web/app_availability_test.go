@@ -3,6 +3,7 @@ package web
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -184,6 +185,178 @@ func TestGetAppAvailabilityBuildsExpectedRequest(t *testing.T) {
 	}
 	if !got.AvailableTerritoriesLoaded {
 		t.Fatal("expected availableTerritories relationship to be marked loaded")
+	}
+}
+
+func TestGetAppAvailabilityTreatsNullDataAsAbsent(t *testing.T) {
+	requests := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		if r.URL.Path != "/apps/app-123/appAvailabilityV2" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":null}`))
+	}))
+	defer server.Close()
+
+	got, err := testWebClient(server).GetAppAvailability(context.Background(), "app-123")
+	if err != nil {
+		t.Fatalf("GetAppAvailability() error = %v", err)
+	}
+	if got != nil {
+		t.Fatalf("expected an absent availability, got %#v", got)
+	}
+	if requests != 1 {
+		t.Fatalf("expected one request without a retry or fallback, got %d", requests)
+	}
+}
+
+func TestGetAppAvailabilityRejectsNullDataWithErrors(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		body string
+		want string
+	}{
+		{name: "non-empty errors", body: `{"data":null,"errors":[{"code":"PORTAL_FAILURE"}]}`, want: "contained errors"},
+		{name: "empty errors", body: `{"data":null,"errors":[]}`, want: "data:null cannot be combined with errors"},
+		{name: "null errors", body: `{"data":null,"errors":null}`, want: "malformed errors"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			requests := 0
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				requests++
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(tc.body))
+			}))
+			defer server.Close()
+
+			got, err := testWebClient(server).GetAppAvailability(context.Background(), "app-123")
+			if got != nil {
+				t.Fatalf("expected no availability on mixed data/errors response, got %#v", got)
+			}
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("expected %s error, got %v", tc.name, err)
+			}
+			if requests != 1 {
+				t.Fatalf("expected one request without retry, got %d", requests)
+			}
+		})
+	}
+}
+
+func TestGetAppAvailabilityRejectsUnexpectedResourceType(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":{"type":"apps","id":"app-123","attributes":{"availableInNewTerritories":false},"relationships":{"availableTerritories":{"data":[]}}}}`))
+	}))
+	defer server.Close()
+
+	got, err := testWebClient(server).GetAppAvailability(context.Background(), "app-123")
+	if got != nil {
+		t.Fatalf("expected no availability on wrong resource type, got %#v", got)
+	}
+	if err == nil || !strings.Contains(err.Error(), `unexpected resource type "apps"`) {
+		t.Fatalf("expected wrong-type error, got %v", err)
+	}
+}
+
+func TestGetAppAvailabilityPreservesUnauthorizedFailure(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/apps/app-123/appAvailabilityV2" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = w.Write([]byte(`{"errors":[{"status":"403","code":"FORBIDDEN","title":"not permitted"}]}`))
+	}))
+	defer server.Close()
+
+	got, err := testWebClient(server).GetAppAvailability(context.Background(), "app-123")
+	if got != nil {
+		t.Fatalf("expected no availability on unauthorized response, got %#v", got)
+	}
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) || apiErr.Status != http.StatusForbidden {
+		t.Fatalf("expected forbidden APIError, got %v", err)
+	}
+	if IsNotFound(err) {
+		t.Fatal("forbidden availability read must not be classified as absent")
+	}
+}
+
+func TestGetAppAvailabilityDoesNotRetryHTTPFailures(t *testing.T) {
+	for _, status := range []int{http.StatusUnauthorized, http.StatusForbidden, http.StatusInternalServerError} {
+		t.Run(http.StatusText(status), func(t *testing.T) {
+			requests := 0
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				requests++
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(status)
+				_, _ = w.Write([]byte(`{"errors":[{"code":"REQUEST_FAILED"}]}`))
+			}))
+			defer server.Close()
+
+			got, err := testWebClient(server).GetAppAvailability(context.Background(), "app-123")
+			if got != nil {
+				t.Fatalf("expected no availability on HTTP %d, got %#v", status, got)
+			}
+			var apiErr *APIError
+			if !errors.As(err, &apiErr) || apiErr.Status != status {
+				t.Fatalf("expected HTTP %d APIError, got %v", status, err)
+			}
+			if requests != 1 {
+				t.Fatalf("expected one request for deterministic HTTP %d, got %d", status, requests)
+			}
+		})
+	}
+}
+
+func TestGetAppAvailabilityPreservesMalformedResponseFailure(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/apps/app-123/appAvailabilityV2" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":{"type":"appAvailabilities"}}`))
+	}))
+	defer server.Close()
+
+	got, err := testWebClient(server).GetAppAvailability(context.Background(), "app-123")
+	if got != nil {
+		t.Fatalf("expected no availability on malformed response, got %#v", got)
+	}
+	if err == nil || !strings.Contains(err.Error(), "app availability id missing from response") {
+		t.Fatalf("expected malformed response error, got %v", err)
+	}
+}
+
+func TestGetAppAvailabilityRejectsMissingOrMalformedData(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		body string
+		want string
+	}{
+		{name: "missing data", body: `{}`, want: "app availability response missing data"},
+		{name: "array data", body: `{"data":[]}`, want: "failed to parse app availability resource"},
+		{name: "numeric id", body: `{"data":{"type":"appAvailabilities","id":123}}`, want: "failed to parse app availability resource"},
+		{name: "null id", body: `{"data":{"type":"appAvailabilities","id":null}}`, want: "app availability id missing from response"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(tc.body))
+			}))
+			defer server.Close()
+
+			got, err := testWebClient(server).GetAppAvailability(context.Background(), "app-123")
+			if got != nil {
+				t.Fatalf("expected no availability on %s, got %#v", tc.name, got)
+			}
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("expected %s error, got %v", tc.name, err)
+			}
+		})
 	}
 }
 
@@ -568,6 +741,9 @@ func TestGetAppAvailabilityDoesNotTreatRelatedNotFoundAsMissing(t *testing.T) {
 	if IsNotFound(err) {
 		t.Fatalf("related collection 404 must not be treated as missing app availability: %v", err)
 	}
+	if IsAppAvailabilityNotFound(err) {
+		t.Fatalf("related collection 404 must not be treated as missing primary availability: %v", err)
+	}
 }
 
 func TestGetAppAvailabilityPrimaryNotFoundRemainsNotFound(t *testing.T) {
@@ -586,6 +762,39 @@ func TestGetAppAvailabilityPrimaryNotFoundRemainsNotFound(t *testing.T) {
 	}
 	if !IsNotFound(err) {
 		t.Fatalf("primary availability 404 must remain not found: %v", err)
+	}
+	if !IsAppAvailabilityNotFound(err) {
+		t.Fatalf("JSON:API primary availability 404 must be classified as absent: %v", err)
+	}
+}
+
+func TestIsAppAvailabilityNotFoundRejectsUnclassified404s(t *testing.T) {
+	tests := []struct {
+		name    string
+		status  int
+		body    string
+		want404 bool
+	}{
+		{name: "status only", status: http.StatusNotFound},
+		{name: "HTML portal response", status: http.StatusNotFound, body: "<html>not found</html>"},
+		{name: "empty JSON API errors", status: http.StatusNotFound, body: `{"errors":[]}`},
+		{name: "wrong error status", status: http.StatusNotFound, body: `{"errors":[{"status":"500","code":"PORTAL_FAILURE"}]}`},
+		{name: "wrong error code", status: http.StatusNotFound, body: `{"errors":[{"status":"404","code":"PORTAL_FAILURE"}]}`},
+		{name: "mixed error codes", status: http.StatusNotFound, body: `{"errors":[{"status":"404","code":"NOT_FOUND"},{"status":"404","code":"PORTAL_FAILURE"}]}`},
+		{name: "mixed data and errors", status: http.StatusNotFound, body: `{"data":null,"errors":[{"status":"404","code":"NOT_FOUND"}]}`},
+		{name: "JSON API not found", status: http.StatusNotFound, body: `{"errors":[{"status":"404","code":"NOT_FOUND"}]}`, want404: true},
+		{name: "JSON API not found by code", status: http.StatusNotFound, body: `{"errors":[{"code":"NOT_FOUND"}]}`, want404: true},
+		{name: "JSON API status without code", status: http.StatusNotFound, body: `{"errors":[{"status":"404"}]}`},
+		{name: "server failure", status: http.StatusInternalServerError, body: `{"errors":[{"status":"500","code":"PORTAL_FAILURE"}]}`},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := &APIError{Status: tc.status, rawBody: []byte(tc.body)}
+			if got := IsAppAvailabilityNotFound(err); got != tc.want404 {
+				t.Fatalf("IsAppAvailabilityNotFound() = %v, want %v", got, tc.want404)
+			}
+		})
 	}
 }
 

@@ -308,6 +308,9 @@ func TestWebAuthLoginOmitsPlaintextPasswordAndRemovedTwoFactorCodeFlags(t *testi
 		t.Fatal("expected web auth login command")
 		return
 	}
+	if got, want := cmd.ShortUsage, "asc web auth login [--apple-id EMAIL] [--public-provider-id TEAM_ID]"; got != want {
+		t.Fatalf("ShortUsage = %q, want %q", got, want)
+	}
 	if cmd.FlagSet.Lookup("password") != nil {
 		t.Fatal("did not expect --password flag on web auth login")
 	}
@@ -372,8 +375,8 @@ func TestWebAuthLoginRejectsRemovedTwoFactorCodeFlagAsUnknown(t *testing.T) {
 	if stdout != "" {
 		t.Fatalf("stdout = %q, want empty", stdout)
 	}
-	if !strings.Contains(stderr, "unknown flag `--two-factor-code` for `asc web auth login`") {
-		t.Fatalf("stderr = %q, want unknown-flag diagnostic", stderr)
+	if !strings.Contains(stderr, "`--two-factor-code` was removed in 5.0.0") {
+		t.Fatalf("stderr = %q, want removed-flag diagnostic", stderr)
 	}
 	if !strings.Contains(stderr, "--two-factor-code-command") {
 		t.Fatalf("stderr = %q, want --two-factor-code-command suggestion", stderr)

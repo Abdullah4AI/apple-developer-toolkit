@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/config"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/rootfs"
 )
 
 type DoctorStatus string
@@ -137,12 +138,16 @@ func inspectStorage(options DoctorOptions) DoctorSection {
 
 	if filePermissionsTooPermissive(info.Mode()) {
 		check := DoctorCheck{
-			Status:         DoctorWarn,
-			Message:        fmt.Sprintf("Config file permissions are too permissive (%#o)", info.Mode().Perm()),
-			Recommendation: fmt.Sprintf("Run: chmod 600 %q", configPath),
+			Status:  DoctorWarn,
+			Message: fmt.Sprintf("Config file permissions are too permissive (%#o)", info.Mode().Perm()),
+		}
+		if command, safe := FilePermissionRemediationCommand(configPath); safe {
+			check.Recommendation = fmt.Sprintf("Run: %s", command)
+		} else {
+			check.Recommendation = "Run: asc auth doctor --fix --confirm"
 		}
 		if options.Fix {
-			if err := os.Chmod(configPath, 0o600); err == nil {
+			if err := rootfs.ChmodFileIfSame(configPath, info, 0o600); err == nil {
 				check.Status = DoctorOK
 				check.Message = fmt.Sprintf("Config file permissions fixed to 0600 (%s)", configPath)
 				check.FixApplied = true
@@ -344,9 +349,13 @@ func inspectPrivateKeyPath(path string, options DoctorOptions) DoctorCheck {
 	if filePermissionsTooPermissive(info.Mode()) {
 		check.Status = DoctorWarn
 		check.Message = fmt.Sprintf("%s - permissions %#o (expected 0600)", path, info.Mode().Perm())
-		check.Recommendation = fmt.Sprintf("Run: chmod 600 %q", path)
+		if command, safe := FilePermissionRemediationCommand(path); safe {
+			check.Recommendation = fmt.Sprintf("Run: %s", command)
+		} else {
+			check.Recommendation = "Run: asc auth doctor --fix --confirm"
+		}
 		if options.Fix {
-			if err := os.Chmod(path, 0o600); err == nil {
+			if changed, err := FixPrivateKeyFilePermissions(path); err == nil && changed {
 				check.Status = DoctorOK
 				check.Message = fmt.Sprintf("%s - permissions fixed to 0600", path)
 				check.FixApplied = true

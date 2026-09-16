@@ -35,13 +35,6 @@ func TestMetadataPullValidationErrors(t *testing.T) {
 			wantConcise:   true,
 		},
 		{
-			name:          "missing version",
-			args:          []string{"metadata", "pull", "--app", "app-1", "--dir", "./metadata"},
-			wantStderr:    "Error: --version is required\nFind versions:\n  asc versions list --app \"APP_ID\" --paginate\n",
-			wantParameter: "--version",
-			wantConcise:   true,
-		},
-		{
 			name:          "missing dir",
 			args:          []string{"metadata", "pull", "--app", "app-1", "--version", "1.2.3"},
 			wantStderr:    "Error: --dir is required\n",
@@ -381,8 +374,11 @@ func TestMetadataPullRejectsAmbiguousVersionWithoutPlatform(t *testing.T) {
 	if stdout != "" {
 		t.Fatalf("expected empty stdout, got %q", stdout)
 	}
-	if !strings.Contains(stderr, `Error: --platform is required when multiple app store versions match --version "1.2.3"`) {
+	if !strings.Contains(stderr, `Error: 2 app store versions match version "1.2.3"; pass --platform with one of:`) {
 		t.Fatalf("expected ambiguous-version error, got %q", stderr)
+	}
+	if !strings.Contains(stderr, "\n  IOS     version version-ios\n  MAC_OS  version version-mac\n") {
+		t.Fatalf("expected platform candidates in stderr, got %q", stderr)
 	}
 }
 

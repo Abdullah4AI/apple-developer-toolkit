@@ -97,8 +97,8 @@ func TestWebAppsCreateMissingRequiredInputExposesStructuredDiagnostics(t *testin
 				appleID := ""
 				return promptAppsCreateSessionAppleID(&appleID)
 			},
-			wantError:  "--apple-id is required when no cached web session is available",
-			wantStderr: "Error: --apple-id is required when no cached web session is available\n",
+			wantError:  "--apple-id is required when no cached web session is available; run 'asc web auth login --apple-id EMAIL'",
+			wantStderr: "Error: --apple-id is required when no cached web session is available; run 'asc web auth login --apple-id EMAIL'\n",
 			wantParam:  "--apple-id",
 		},
 	}

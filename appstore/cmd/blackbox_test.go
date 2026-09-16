@@ -45,7 +45,7 @@ func TestUnknownInputRecoveryWithBuiltBinary(t *testing.T) {
 			args: []string{"builds", "lsit"},
 			wantStderr: "Error: unknown command `asc builds lsit`\n" +
 				"Try:\n" +
-				"  asc builds list\n" +
+				"  asc builds list --help\n" +
 				"For help:\n" +
 				"  asc builds --help\n",
 		},

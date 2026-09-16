@@ -119,7 +119,7 @@ Examples:
 			}
 
 			availability, err := getWebAppAvailabilityFn(requestCtx, client, snapshot.ID)
-			if err != nil && !webcore.IsNotFound(err) {
+			if err != nil && !webcore.IsAppAvailabilityNotFound(err) {
 				return withWebAuthHint(fmt.Errorf("web apps delete failed: could not read availability for app %q: %w", snapshot.ID, err), "web apps delete")
 			}
 			if err := validateWebAppDeleteAvailability(snapshot.ID, availability); err != nil {

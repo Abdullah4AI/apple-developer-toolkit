@@ -275,13 +275,12 @@ func findReviewSubscription(subscriptions []webcore.ReviewSubscription, selector
 				Name:      strings.TrimSpace(match.Name),
 			})
 		}
-		return nil, fmt.Errorf("%q matches %d subscriptions by id:\n  %s\nUse the explicit ASC ID to disambiguate", selector, len(idMatches), strings.Join(func() []string {
-			lines := make([]string, 0, len(candidates))
-			for _, candidate := range candidates {
-				lines = append(lines, fmt.Sprintf("%s, productId=%s, name=%s", candidate.ID, candidate.ProductID, candidate.Name))
-			}
-			return lines
-		}(), "\n  "))
+		return nil, &shared.AmbiguousSelectionError{
+			Kind:        "subscription",
+			Description: fmt.Sprintf("%q by id", selector),
+			Flag:        "--subscription-id",
+			Candidates:  shared.ExactSelectorAmbiguousCandidates(candidates),
+		}
 	}
 
 	candidates := make([]shared.ExactSelectorCandidate, 0, len(subscriptions))
@@ -319,6 +318,87 @@ func findReviewSubscriptionsByGroup(subscriptions []webcore.ReviewSubscription, 
 		}
 	}
 	return filtered
+}
+
+// findReviewSubscriptionGroup resolves one group from the app-scoped review
+// listing. The listing contains one row per subscription, so group IDs must be
+// deduplicated before a human-readable group-name lookup can be considered
+// unambiguous.
+func findReviewSubscriptionGroup(subscriptions []webcore.ReviewSubscription, selector string) (*webcore.ReviewSubscription, error) {
+	selector = strings.TrimSpace(selector)
+	if selector == "" {
+		return nil, fmt.Errorf("subscription group selector is required")
+	}
+
+	groups := make([]webcore.ReviewSubscription, 0)
+	groupIndexes := make(map[string]int)
+	for _, subscription := range subscriptions {
+		groupID := strings.TrimSpace(subscription.GroupID)
+		if groupID == "" {
+			continue
+		}
+		if index, ok := groupIndexes[groupID]; ok {
+			// Prefer the row that contains a label if the included resource was
+			// incomplete on an earlier subscription row.
+			if strings.TrimSpace(groups[index].GroupReferenceName) == "" && strings.TrimSpace(subscription.GroupReferenceName) != "" {
+				groups[index].GroupReferenceName = strings.TrimSpace(subscription.GroupReferenceName)
+			}
+			continue
+		}
+		groupIndexes[groupID] = len(groups)
+		groups = append(groups, webcore.ReviewSubscription{
+			GroupID:            groupID,
+			GroupReferenceName: strings.TrimSpace(subscription.GroupReferenceName),
+		})
+	}
+
+	for _, group := range groups {
+		if strings.TrimSpace(group.GroupID) == selector {
+			match := group
+			return &match, nil
+		}
+	}
+
+	candidates := make([]shared.ExactSelectorCandidate, 0, len(groups))
+	for _, group := range groups {
+		candidates = append(candidates, shared.ExactSelectorCandidate{
+			ID:   strings.TrimSpace(group.GroupID),
+			Name: strings.TrimSpace(group.GroupReferenceName),
+		})
+	}
+	candidate, err := shared.ResolveExactSelectorCandidate(selector, "subscription group", candidates)
+	if err != nil {
+		return nil, err
+	}
+	for _, group := range groups {
+		if strings.TrimSpace(group.GroupID) == strings.TrimSpace(candidate.ID) {
+			match := group
+			return &match, nil
+		}
+	}
+	return nil, fmt.Errorf("subscription group %q resolved to %q but was not present in review results", selector, candidate.ID)
+}
+
+func withReviewSelectorDiagnostic(err error, parameter string) error {
+	if err == nil {
+		return nil
+	}
+	// Lookup failures caused by an HTTP response, transport, or context must
+	// retain their existing classification. Only local selector-resolution
+	// failures are validation diagnostics.
+	lower := strings.ToLower(err.Error())
+	if !shared.IsAmbiguousSelection(err) &&
+		!strings.Contains(lower, "selector") &&
+		!strings.Contains(lower, "not found") &&
+		!strings.Contains(lower, " matches ") &&
+		!strings.Contains(lower, "unexpected resource type") {
+		return err
+	}
+	code := shared.DiagnosticInvalidInput
+	if strings.Contains(lower, "not found") {
+		code = shared.DiagnosticResourceNotFound
+	}
+	return shared.WithDiagnostic(shared.NewValidationError(err), code, parameter)
 }
 
 func reviewSubscriptionGroupLabel(subscriptions []webcore.ReviewSubscription, groupID string) string {
@@ -563,7 +643,7 @@ func WebReviewSubscriptionsAttachCommand() *ffcli.Command {
 			}
 			selected, err := findReviewSubscription(subscriptions, trimmedSubscriptionID)
 			if err != nil {
-				return fmt.Errorf("subscription lookup for app %q failed: %w", trimmedAppID, err)
+				return fmt.Errorf("subscription lookup for app %q failed: %w", trimmedAppID, withReviewSelectorDiagnostic(err, "--subscription-id"))
 			}
 			trimmedSubscriptionID = strings.TrimSpace(selected.ID)
 
@@ -617,14 +697,14 @@ func WebReviewSubscriptionsAttachGroupCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("web review subscriptions attach-group", flag.ExitOnError)
 
 	appID := fs.String("app", "", "App ID")
-	groupID := fs.String("group-id", "", "Subscription group ID")
+	groupID := fs.String("group-id", "", "Subscription group ID or exact current name")
 	confirm := fs.Bool("confirm", false, "Confirm the attach-group operation")
 	authFlags := bindWebSessionFlags(fs)
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "attach-group",
-		ShortUsage: "asc web review subscriptions attach-group --app APP_ID --group-id GROUP_ID --confirm [flags]",
+		ShortUsage: "asc web review subscriptions attach-group --app APP_ID --group-id GROUP_ID_OR_NAME --confirm [flags]",
 		ShortHelp:  "Attach all READY_TO_SUBMIT subscriptions in one group.",
 		FlagSet:    fs,
 		UsageFunc:  shared.DefaultUsageFunc,
@@ -651,6 +731,11 @@ func WebReviewSubscriptionsAttachGroupCommand() *ffcli.Command {
 			if err != nil {
 				return withWebAuthHint(err, "web review subscriptions attach-group")
 			}
+			selectedGroup, err := findReviewSubscriptionGroup(subscriptions, trimmedGroupID)
+			if err != nil {
+				return fmt.Errorf("subscription group lookup for app %q failed: %w", trimmedAppID, withReviewSelectorDiagnostic(err, "--group-id"))
+			}
+			trimmedGroupID = strings.TrimSpace(selectedGroup.GroupID)
 			groupSubscriptions := findReviewSubscriptionsByGroup(subscriptions, trimmedGroupID)
 			if len(groupSubscriptions) == 0 {
 				return fmt.Errorf("subscription group %q was not found for app %q", trimmedGroupID, trimmedAppID)
@@ -765,7 +850,7 @@ func WebReviewSubscriptionsRemoveCommand() *ffcli.Command {
 			}
 			selected, err := findReviewSubscription(subscriptions, trimmedSubscriptionID)
 			if err != nil {
-				return fmt.Errorf("subscription lookup for app %q failed: %w", trimmedAppID, err)
+				return fmt.Errorf("subscription lookup for app %q failed: %w", trimmedAppID, withReviewSelectorDiagnostic(err, "--subscription-id"))
 			}
 			trimmedSubscriptionID = strings.TrimSpace(selected.ID)
 
@@ -817,14 +902,14 @@ func WebReviewSubscriptionsRemoveGroupCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("web review subscriptions remove-group", flag.ExitOnError)
 
 	appID := fs.String("app", "", "App ID")
-	groupID := fs.String("group-id", "", "Subscription group ID")
+	groupID := fs.String("group-id", "", "Subscription group ID or exact current name")
 	confirm := fs.Bool("confirm", false, "Confirm the remove-group operation")
 	authFlags := bindWebSessionFlags(fs)
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "remove-group",
-		ShortUsage: "asc web review subscriptions remove-group --app APP_ID --group-id GROUP_ID --confirm [flags]",
+		ShortUsage: "asc web review subscriptions remove-group --app APP_ID --group-id GROUP_ID_OR_NAME --confirm [flags]",
 		ShortHelp:  "Remove all attached subscriptions in one group.",
 		FlagSet:    fs,
 		UsageFunc:  shared.DefaultUsageFunc,
@@ -851,6 +936,11 @@ func WebReviewSubscriptionsRemoveGroupCommand() *ffcli.Command {
 			if err != nil {
 				return withWebAuthHint(err, "web review subscriptions remove-group")
 			}
+			selectedGroup, err := findReviewSubscriptionGroup(subscriptions, trimmedGroupID)
+			if err != nil {
+				return fmt.Errorf("subscription group lookup for app %q failed: %w", trimmedAppID, withReviewSelectorDiagnostic(err, "--group-id"))
+			}
+			trimmedGroupID = strings.TrimSpace(selectedGroup.GroupID)
 			groupSubscriptions := findReviewSubscriptionsByGroup(subscriptions, trimmedGroupID)
 			if len(groupSubscriptions) == 0 {
 				return fmt.Errorf("subscription group %q was not found for app %q", trimmedGroupID, trimmedAppID)

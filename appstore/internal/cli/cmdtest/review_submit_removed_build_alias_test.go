@@ -12,8 +12,7 @@ import (
 
 // TestReviewSubmitBuildAliasIsRemoved locks the 5.0.0 removal of the hidden
 // `--build` alias on `asc review submit`. Only `--build-id` is registered, so
-// the old spelling fails with the generic unknown-flag usage error before
-// authentication or HTTP.
+// the old spelling fails with migration guidance before authentication or HTTP.
 func TestReviewSubmitBuildAliasIsRemoved(t *testing.T) {
 	setupUsageExitCodeEnv(t)
 
@@ -47,10 +46,9 @@ func TestReviewSubmitBuildAliasIsRemoved(t *testing.T) {
 	if stdout != "" {
 		t.Fatalf("stdout = %q, want empty", stdout)
 	}
-	// The generic unknown-flag path suggests the canonical spelling.
-	const want = "Error: unknown flag `--build` for `asc review submit`\nTry:\n  --build-id\nFor help:\n  asc review submit --help\n"
+	const want = "Error: `--build` was removed in 5.0.0; use `--build-id` (see migrate-to-5-0)\nFor help:\n  asc review submit --help\n"
 	if stderr != want {
-		t.Fatalf("stderr = %q, want generic unknown-flag failure %q", stderr, want)
+		t.Fatalf("stderr = %q, want removed-flag guidance %q", stderr, want)
 	}
 	if strings.Contains(stderr, "deprecated") {
 		t.Fatalf("stderr = %q, must not carry the retired alias warning", stderr)

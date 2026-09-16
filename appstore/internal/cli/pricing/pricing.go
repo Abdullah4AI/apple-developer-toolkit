@@ -671,6 +671,11 @@ Examples:
 				resp, err = client.GetAppAvailabilityV2(requestCtx, appValue)
 			}
 			if err != nil {
+				if idValue == "" && asc.IsMissingResourceOfType(err, "appAvailabilities") {
+					safeAppID := asc.SanitizeTerminalText(appValue)
+					fmt.Fprintf(os.Stderr, "App %s has no availability configured yet; create it with: asc pricing availability create --app %s --territory \"USA\" --available true --available-in-new-territories true\n", safeAppID, safeAppID)
+					return shared.NewNotConfiguredReportedError(fmt.Errorf("pricing availability view: app %q has no availability configured", appValue))
+				}
 				if idValue == "" && shared.IsAppAvailabilityMissing(err) {
 					return shared.NewErrorWithCause(
 						fmt.Errorf("pricing availability view: app availability not found for app %q: %w", appValue, asc.ErrNotFound),

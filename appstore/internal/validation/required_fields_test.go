@@ -71,6 +71,18 @@ func TestRequiredFieldChecks_FailsForNonEditableVersionState(t *testing.T) {
 	}
 }
 
+func TestRequiredFieldChecks_AllowsReadyForReviewVersionState(t *testing.T) {
+	checks := requiredFieldChecks("", "1.2.3", "READY_FOR_REVIEW", false, []VersionLocalization{
+		{Locale: "en-US", Description: "desc", Keywords: "kw", SupportURL: "https://example.com"},
+	}, []AppInfoLocalization{
+		{Locale: "en-US", Name: "Name", PrivacyPolicyURL: "https://example.com/privacy"},
+	})
+
+	if hasCheckID(checks, "version.state.editable") {
+		t.Fatalf("did not expect READY_FOR_REVIEW to produce a version state blocker: %#v", checks)
+	}
+}
+
 func TestRequiredFieldChecks_WarnsWhenPrivacyPolicyMissing(t *testing.T) {
 	checks := requiredFieldChecks("", "1.2.3", "PREPARE_FOR_SUBMISSION", false, []VersionLocalization{
 		{Locale: "en-US", Description: "desc", Keywords: "kw", SupportURL: "https://example.com"},

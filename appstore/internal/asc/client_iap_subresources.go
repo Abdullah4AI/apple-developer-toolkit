@@ -175,6 +175,16 @@ func (c *Client) UpdateInAppPurchaseAppStoreReviewScreenshot(ctx context.Context
 	if screenshotID == "" {
 		return nil, fmt.Errorf("screenshotID is required")
 	}
+	if attrs.SourceFileChecksum == nil && attrs.Uploaded == nil {
+		return nil, fmt.Errorf("at least one attribute is required")
+	}
+	if attrs.SourceFileChecksum != nil {
+		checksum := strings.TrimSpace(*attrs.SourceFileChecksum)
+		if checksum == "" {
+			return nil, fmt.Errorf("sourceFileChecksum must not be empty")
+		}
+		attrs.SourceFileChecksum = &checksum
+	}
 
 	payload := InAppPurchaseAppStoreReviewScreenshotUpdateRequest{
 		Data: InAppPurchaseAppStoreReviewScreenshotUpdateData{

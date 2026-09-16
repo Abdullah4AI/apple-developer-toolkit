@@ -223,11 +223,7 @@ func promptAppsCreatePassword(password *string) error {
 
 func promptAppsCreateSessionAppleID(appleID *string) error {
 	if !appCreateCanPromptInteractivelyFn() {
-		return shared.WithDiagnostic(
-			shared.UsageError("--apple-id is required when no cached web session is available"),
-			shared.DiagnosticRequiredInputMissing,
-			"--apple-id",
-		)
+		return missingAppleIDUsageError()
 	}
 	return promptAppsCreateAppleID(appleID)
 }

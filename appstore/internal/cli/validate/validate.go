@@ -54,7 +54,7 @@ func ValidateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "validate",
-		ShortUsage: "asc validate --app \"APP_ID\" (--version-id \"VERSION_ID\" | --version \"VERSION\") [flags]",
+		ShortUsage: "asc validate --app \"APP_ID\" [--version-id \"VERSION_ID\" | --version \"VERSION\"] [flags]",
 		ShortHelp:  "Canonical App Store submission readiness report.",
 		LongHelp: `Validate pre-submission readiness for an App Store version.
 
@@ -90,7 +90,16 @@ Deep validation:
   web-fixable, or manual and returns exact available commands and App Store
   Connect links. Deep validation never starts an interactive login.
 
+Default version selection:
+  When --version and --version-id are omitted, validate selects the app's
+  newest active editable App Store version. If none exists, it checks for a
+  DEVELOPER_REMOVED_FROM_SALE version; if that is absent, it falls back to the newest live version.
+  Pass --platform when that tier has candidates on more than one platform. The
+  selected version is always reported on stderr. A live fallback does not mean the live version is ready for submission;
+  its state is evaluated by the same readiness checks and can still block.
+
 Examples:
+  asc validate --app "APP_ID"
   asc validate --app "APP_ID" --version-id "VERSION_ID"
   asc validate --app "APP_ID" --version "1.0.0" --platform IOS
   asc validate --app "APP_ID" --version-id "VERSION_ID" --platform IOS --output table
@@ -121,9 +130,6 @@ Subscriptions:
 			}
 			trimmedVersion := strings.TrimSpace(*version)
 			trimmedVersionID := strings.TrimSpace(*versionID)
-			if trimmedVersion == "" && trimmedVersionID == "" {
-				return shared.WithDiagnostic(shared.UsageError("--version or --version-id is required"), shared.DiagnosticRequiredInputMissing, "")
-			}
 			if trimmedVersion != "" && trimmedVersionID != "" {
 				return shared.WithDiagnostic(shared.UsageError("--version and --version-id are mutually exclusive"), shared.DiagnosticConflictingInput, "--version-id")
 			}
@@ -229,15 +235,36 @@ func validateFlagVerb(flags []string) string {
 }
 
 func runValidate(ctx context.Context, opts validateOptions) error {
-	report, err := buildReadinessReportFn(ctx, ReadinessOptions{
-		AppID:     opts.AppID,
-		Version:   opts.Version,
-		VersionID: opts.VersionID,
-		Platform:  opts.Platform,
-		Strict:    opts.Strict,
-		Deep:      opts.Deep,
-		CheckURLs: opts.CheckURLs,
-	})
+	var report validation.Report
+	var err error
+	if strings.TrimSpace(opts.Version) == "" && strings.TrimSpace(opts.VersionID) == "" {
+		client, clientErr := clientFactory()
+		if clientErr != nil {
+			err = clientErr
+		} else {
+			resolveCtx, cancel := shared.ContextWithTimeout(ctx)
+			resolved, resolveErr := shared.ResolveAndAnnounceDefaultAppStoreVersion(resolveCtx, client, opts.AppID, opts.Platform, "--version")
+			cancel()
+			if resolveErr != nil {
+				err = resolveErr
+			} else {
+				opts.Version = resolved.VersionString
+				opts.VersionID = resolved.ID
+				opts.Platform = resolved.Platform
+			}
+		}
+	}
+	if err == nil {
+		report, err = buildReadinessReportFn(ctx, ReadinessOptions{
+			AppID:     opts.AppID,
+			Version:   opts.Version,
+			VersionID: opts.VersionID,
+			Platform:  opts.Platform,
+			Strict:    opts.Strict,
+			Deep:      opts.Deep,
+			CheckURLs: opts.CheckURLs,
+		})
+	}
 	if err != nil {
 		if !opts.Deep || !asc.IsRequiredAgreementError(err) {
 			return fmt.Errorf("validate: %w", err)
@@ -327,10 +354,7 @@ func resolveVersionID(ctx context.Context, client *asc.Client, appID, version, p
 		return "", fmt.Errorf("app store version not found for version %q", version)
 	}
 	if len(resp.Data) > 1 {
-		if strings.TrimSpace(platform) != "" {
-			return "", fmt.Errorf("multiple app store versions found for version %q and platform %q (use --version-id)", version, platform)
-		}
-		return "", fmt.Errorf("multiple app store versions found for version %q (use --platform or --version-id)", version)
+		return "", shared.AmbiguousAppStoreVersionError(version, platform, resp.Data, "--platform", "--version-id")
 	}
 	return resp.Data[0].ID, nil
 }

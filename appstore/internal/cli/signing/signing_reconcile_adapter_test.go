@@ -65,8 +65,23 @@ func TestSelectReconcileCertificateWithSHA256(t *testing.T) {
 
 	duplicate := append(resources, resource("cert-3", second.Raw))
 	selected, blockers = selectReconcileCertificateWithFingerprint(duplicate, "", secondSHA, time.Now(), 7)
-	if selected != nil || !strings.Contains(strings.Join(blockers, "\n"), "multiple eligible") {
+	message := strings.Join(blockers, "\n")
+	if selected != nil || !strings.Contains(message, "eligible iOS distribution certificates match") {
 		t.Fatalf("duplicate fingerprint selected=%#v blockers=%#v", selected, blockers)
+	}
+	for _, want := range []string{"cert-2", "cert-3", "cannot choose between duplicate records"} {
+		if !strings.Contains(message, want) {
+			t.Fatalf("duplicate fingerprint guidance missing %q: %q", want, message)
+		}
+	}
+	if strings.Contains(message, "pass --certificate") {
+		t.Fatalf("--certificate cannot disambiguate duplicate fingerprints: %q", message)
+	}
+
+	selected, blockers = selectReconcileCertificateWithFingerprint(duplicate, "cert-2", secondSHA, time.Now(), 7)
+	message = strings.Join(blockers, "\n")
+	if selected != nil || !strings.Contains(message, "cannot choose between duplicate records") || strings.Contains(message, "pass --certificate") {
+		t.Fatalf("explicit ID must retain duplicate-fingerprint rejection with honest guidance: selected=%#v blockers=%#v", selected, blockers)
 	}
 }
 

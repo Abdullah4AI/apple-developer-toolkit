@@ -6,6 +6,7 @@ import (
 	"errors"
 	"flag"
 	"io"
+	"net/http"
 	"os"
 	"strings"
 	"testing"
@@ -181,7 +182,7 @@ func TestWebAppsAvailabilityCreateSkipsCreateWhenAvailabilityExists(t *testing.T
 	}
 }
 
-func TestWebAppsAvailabilityCreateCreatesMissingAvailability(t *testing.T) {
+func TestWebAppsAvailabilityCreateAcceptsExplicitAbsentAvailability(t *testing.T) {
 	origResolveSession := resolveSessionFn
 	origNewWebClient := newWebClientFn
 	origGet := getWebAppAvailabilityFn
@@ -201,7 +202,9 @@ func TestWebAppsAvailabilityCreateCreatesMissingAvailability(t *testing.T) {
 	}
 
 	getWebAppAvailabilityFn = func(ctx context.Context, client *webcore.Client, appID string) (*webcore.AppAvailability, error) {
-		return nil, &webcore.APIError{Status: 404}
+		// The web client returns (nil, nil) for Apple's JSON:API data:null
+		// absent state. The create command must treat that as expected.
+		return nil, nil
 	}
 
 	var received webcore.AppAvailabilityCreateAttributes
@@ -286,9 +289,9 @@ func TestWebAppsAvailabilityCreateWrapsAuthErrors(t *testing.T) {
 		t.Fatalf("parse error: %v", err)
 	}
 
-	// Force create path.
+	// Force create path for the explicit absent state.
 	getWebAppAvailabilityFn = func(ctx context.Context, client *webcore.Client, appID string) (*webcore.AppAvailability, error) {
-		return nil, &webcore.APIError{Status: 404}
+		return nil, nil
 	}
 
 	err := cmd.Exec(context.Background(), nil)
@@ -297,5 +300,169 @@ func TestWebAppsAvailabilityCreateWrapsAuthErrors(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "web apps availability create failed: web session is unauthorized or expired") {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestWebAppsAvailabilityCreatePreservesPreflightPermissionFailure(t *testing.T) {
+	origResolveSession := resolveSessionFn
+	origNewWebClient := newWebClientFn
+	origGet := getWebAppAvailabilityFn
+	origCreate := createWebAppAvailabilityFn
+	t.Cleanup(func() {
+		resolveSessionFn = origResolveSession
+		newWebClientFn = origNewWebClient
+		getWebAppAvailabilityFn = origGet
+		createWebAppAvailabilityFn = origCreate
+	})
+
+	resolveSessionFn = func(ctx context.Context, appleID, password, twoFactorCode string) (*webcore.AuthSession, string, error) {
+		return &webcore.AuthSession{}, "cache", nil
+	}
+	newWebClientFn = func(session *webcore.AuthSession) *webcore.Client {
+		return &webcore.Client{}
+	}
+	permissionErr := &webcore.APIError{Status: http.StatusForbidden}
+	getWebAppAvailabilityFn = func(ctx context.Context, client *webcore.Client, appID string) (*webcore.AppAvailability, error) {
+		return nil, permissionErr
+	}
+	createCalled := false
+	createWebAppAvailabilityFn = func(ctx context.Context, client *webcore.Client, attrs webcore.AppAvailabilityCreateAttributes) (*webcore.AppAvailability, error) {
+		createCalled = true
+		return nil, nil
+	}
+
+	cmd := WebAppsAvailabilityCreateCommand()
+	if err := cmd.FlagSet.Parse([]string{
+		"--app", "app-1",
+		"--territory", "USA",
+		"--available-in-new-territories", "false",
+	}); err != nil {
+		t.Fatalf("parse error: %v", err)
+	}
+
+	err := cmd.Exec(context.Background(), nil)
+	if err == nil {
+		t.Fatal("expected permission failure")
+	}
+	if !strings.Contains(err.Error(), "web session is unauthorized or expired") {
+		t.Fatalf("expected actionable auth diagnostic, got %v", err)
+	}
+	if !errors.Is(err, permissionErr) {
+		t.Fatalf("expected original permission error to remain wrapped, got %v", err)
+	}
+	if createCalled {
+		t.Fatal("must not create availability after a permission failure")
+	}
+}
+
+func TestWebAppsAvailabilityCreateDoesNotPostAfterHTTPPreflightFailure(t *testing.T) {
+	for _, status := range []int{http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound, http.StatusInternalServerError} {
+		t.Run(http.StatusText(status), func(t *testing.T) {
+			origResolveSession := resolveSessionFn
+			origNewWebClient := newWebClientFn
+			origGet := getWebAppAvailabilityFn
+			origCreate := createWebAppAvailabilityFn
+			t.Cleanup(func() {
+				resolveSessionFn = origResolveSession
+				newWebClientFn = origNewWebClient
+				getWebAppAvailabilityFn = origGet
+				createWebAppAvailabilityFn = origCreate
+			})
+
+			resolveSessionFn = func(ctx context.Context, appleID, password, twoFactorCode string) (*webcore.AuthSession, string, error) {
+				return &webcore.AuthSession{}, "cache", nil
+			}
+			newWebClientFn = func(session *webcore.AuthSession) *webcore.Client {
+				return &webcore.Client{}
+			}
+			preflightErr := &webcore.APIError{Status: status}
+			getWebAppAvailabilityFn = func(ctx context.Context, client *webcore.Client, appID string) (*webcore.AppAvailability, error) {
+				return nil, preflightErr
+			}
+			createCalled := false
+			createWebAppAvailabilityFn = func(ctx context.Context, client *webcore.Client, attrs webcore.AppAvailabilityCreateAttributes) (*webcore.AppAvailability, error) {
+				createCalled = true
+				return nil, nil
+			}
+
+			cmd := WebAppsAvailabilityCreateCommand()
+			if err := cmd.FlagSet.Parse([]string{
+				"--app", "app-1",
+				"--territory", "USA",
+				"--available-in-new-territories", "false",
+			}); err != nil {
+				t.Fatalf("parse error: %v", err)
+			}
+
+			err := cmd.Exec(context.Background(), nil)
+			if err == nil {
+				t.Fatal("expected preflight failure")
+			}
+			var gotAPIError *webcore.APIError
+			if !errors.As(err, &gotAPIError) || gotAPIError.Status != status {
+				t.Fatalf("expected original HTTP %d failure, got %v", status, err)
+			}
+			if createCalled {
+				t.Fatalf("must not POST after HTTP %d preflight failure", status)
+			}
+		})
+	}
+}
+
+func TestWebAppsAvailabilityCreateRejectsMixedNotFoundEnvelope(t *testing.T) {
+	origResolveSession := resolveSessionFn
+	origNewWebClient := newWebClientFn
+	origGet := getWebAppAvailabilityFn
+	origCreate := createWebAppAvailabilityFn
+	t.Cleanup(func() {
+		resolveSessionFn = origResolveSession
+		newWebClientFn = origNewWebClient
+		getWebAppAvailabilityFn = origGet
+		createWebAppAvailabilityFn = origCreate
+	})
+
+	resolveSessionFn = func(ctx context.Context, appleID, password, twoFactorCode string) (*webcore.AuthSession, string, error) {
+		return &webcore.AuthSession{
+			Client: &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+				if req.Method != http.MethodGet || req.URL.Path != "/iris/v1/apps/app-1/appAvailabilityV2" {
+					t.Fatalf("unexpected request: %s %s", req.Method, req.URL.Path)
+				}
+				return &http.Response{
+					StatusCode: http.StatusNotFound,
+					Header:     http.Header{"Content-Type": []string{"application/json"}},
+					Body:       io.NopCloser(strings.NewReader(`{"data":null,"errors":[{"status":"404","code":"NOT_FOUND"}]}`)),
+					Request:    req,
+				}, nil
+			})},
+		}, "cache", nil
+	}
+	newWebClientFn = webcore.NewClient
+	getWebAppAvailabilityFn = func(ctx context.Context, client *webcore.Client, appID string) (*webcore.AppAvailability, error) {
+		return client.GetAppAvailability(ctx, appID)
+	}
+	createCalled := false
+	createWebAppAvailabilityFn = func(ctx context.Context, client *webcore.Client, attrs webcore.AppAvailabilityCreateAttributes) (*webcore.AppAvailability, error) {
+		createCalled = true
+		return nil, nil
+	}
+
+	cmd := WebAppsAvailabilityCreateCommand()
+	if err := cmd.FlagSet.Parse([]string{
+		"--app", "app-1",
+		"--territory", "USA",
+		"--available-in-new-territories", "false",
+	}); err != nil {
+		t.Fatalf("parse error: %v", err)
+	}
+
+	err := cmd.Exec(context.Background(), nil)
+	if err == nil {
+		t.Fatal("expected mixed 404 envelope to fail preflight")
+	}
+	if !strings.Contains(err.Error(), "web apps availability create failed") {
+		t.Fatalf("expected preflight failure, got %v", err)
+	}
+	if createCalled {
+		t.Fatal("must not POST after a mixed data/errors 404 envelope")
 	}
 }

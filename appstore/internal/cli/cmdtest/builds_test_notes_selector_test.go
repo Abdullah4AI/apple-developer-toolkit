@@ -271,7 +271,7 @@ func TestBuildsTestNotesCreateUpdatesExistingLocale(t *testing.T) {
 	}
 }
 
-func TestBuildsTestNotesRemovedSelectorAliasesAreUnknownFlags(t *testing.T) {
+func TestBuildsTestNotesRemovedSelectorAliasesHaveGuidance(t *testing.T) {
 	tests := []struct {
 		name string
 		args []string
@@ -311,7 +311,7 @@ func TestBuildsTestNotesRemovedSelectorAliasesAreUnknownFlags(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			assertRemovedFlagIsUnknown(t, test.args, test.flag)
+			assertRemovedFlagGuidance(t, test.args, test.flag)
 		})
 	}
 }

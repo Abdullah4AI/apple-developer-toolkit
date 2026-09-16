@@ -243,7 +243,7 @@ func WebAppsCreateCommand() *ffcli.Command {
 	version := fs.String("version", "1.0", "Initial version string")
 	companyName := fs.String("company-name", "", "Company name (optional)")
 
-	appleID := fs.String("apple-id", "", "Apple Account email (required when no cache is available)")
+	appleID := fs.String("apple-id", "", "Apple Account email (defaults to "+webAppleIDEnv+", then the last or only cached session)")
 	password := fs.String("password", "", "Apple Account password (temporary compatibility flag; will prompt if not provided)")
 	twoFactorCodeCommand := fs.String("two-factor-code-command", "", "Shell command that prints the 2FA code to stdout if verification is required")
 	autoRename := fs.Bool("auto-rename", true, "Retry with unique name suffix if app name is already taken")

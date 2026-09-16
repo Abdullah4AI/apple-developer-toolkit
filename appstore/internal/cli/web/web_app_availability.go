@@ -118,7 +118,7 @@ Examples:
 			err = withWebSpinner("Checking app availability", func() error {
 				var err error
 				existing, err = getWebAppAvailabilityFn(requestCtx, client, resolvedAppID)
-				if err != nil && webcore.IsNotFound(err) {
+				if err != nil && webcore.IsAppAvailabilityNotFound(err) {
 					return nil
 				}
 				return err

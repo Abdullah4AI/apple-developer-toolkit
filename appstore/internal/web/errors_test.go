@@ -24,6 +24,21 @@ func TestAPIErrorRedactsRawBodyInErrorString(t *testing.T) {
 	}
 }
 
+func TestExtractWebPortalErrorReasonSanitizesAndBoundsDetails(t *testing.T) {
+	longDetail := strings.Repeat("x", 600)
+	body := []byte(`{"errors":[{"title":"Attachment refused","detail":"` + longDetail + `\u001b[31m"},{"detail":"second reason"}]}`)
+	reason := extractWebPortalErrorReason(body)
+	if strings.Contains(reason, "\x1b") {
+		t.Fatalf("portal reason contains terminal escape sequence: %q", reason)
+	}
+	if len([]rune(reason)) > 503 {
+		t.Fatalf("portal reason exceeds bound: %d runes", len([]rune(reason)))
+	}
+	if !strings.HasSuffix(reason, "...") {
+		t.Fatalf("expected bounded portal reason to carry truncation marker: %q", reason)
+	}
+}
+
 func TestIsDuplicateAppNameError(t *testing.T) {
 	cases := []struct {
 		name    string

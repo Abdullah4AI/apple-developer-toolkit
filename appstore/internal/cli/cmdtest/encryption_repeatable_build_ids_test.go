@@ -153,8 +153,8 @@ func TestEncryptionAssignBuildsLegacyBuildFlagIsUnknownBeforeRequest(t *testing.
 	if stdout != "" {
 		t.Fatalf("expected empty stdout, got %q", stdout)
 	}
-	if !strings.Contains(stderr, "Error: unknown flag `--build` for `asc encryption declarations assign-builds`") {
-		t.Fatalf("stderr = %q, want unknown flag error", stderr)
+	if !strings.Contains(stderr, "Error: `--build` was removed in 5.0.0; use `--build-id`") {
+		t.Fatalf("stderr = %q, want removed-flag guidance", stderr)
 	}
 	if strings.Contains(stderr, "deprecated") {
 		t.Fatalf("stderr = %q, want no deprecation guidance for the removed alias", stderr)

@@ -37,23 +37,37 @@ All input validation completes before local signing state changes:
   be accessible by group or other users);
 - the PKCS#12 must contain exactly one usable private key and leaf certificate,
   and their public keys must match;
-- the profile must decode as a signed mobile provisioning profile, be unexpired,
-  target iOS, contain a structurally valid exact or terminal-wildcard bundle
-  pattern and registered devices, and not be an enterprise or development
+- the profile must decode as a signed mobile provisioning profile with exactly
+  one expected Apple provisioning signer chaining to a pinned Apple root, be
+  unexpired, target iOS, contain a structurally valid exact or terminal-wildcard
+  bundle pattern and registered devices, and not be an enterprise or development
   profile (exact target matching remains the exporter/orchestrator's job);
 - the profile must embed the identity certificate, and its team identifier must
-  match the certificate organizational unit.
+  match the certificate organizational unit; exactly one TeamIdentifier value,
+  team entitlement, and application-identifier prefix are required. The primary
+  and alternate application-identifier entitlements must agree. Duplicate or
+  missing declarations are rejected, while a legacy prefix may differ from the
+  team identifier when the application identifier uses that prefix.
 
 The command creates an unpredictable mode-0700 temporary directory and a
 dedicated keychain with an in-memory random password. The identity import is
 performed through Security.framework rather than a command-line password and is
 restricted to `/usr/bin/codesign`; `security -A`, the login keychain, and the
-default keychain are never used. The imported certificate, private key, and an
-exact-fingerprint codesign operation are verified before child execution. A
-cross-process lock serializes the short period in which the temporary keychain
-is appended to the user search list. Cleanup rereads the current list and
-removes only ASC's exact temporary entry, preserving unrelated concurrent
-changes, before deleting the temporary keychain.
+default keychain are never used. Keychain user interaction is disabled for the
+import and restored on every return path, so a headless run cannot block on a
+security prompt. The imported certificate, private key, and an exact-fingerprint
+codesign operation are verified before child execution. A cross-process lock
+serializes the short period in which the temporary keychain is appended to the
+user search list. Cleanup rereads the current list and removes only ASC's exact
+temporary entry, preserving unrelated concurrent changes, before deleting the
+temporary keychain.
+
+The child receives only a small allowlist of non-secret execution variables
+(`PATH`, `HOME`, locale, temporary-directory, SDK, and toolchain settings).
+Authentication, signing-password, loader, and unrecognized environment values
+are excluded. Platform utility failures retain a bounded, terminal-safe
+diagnostic so headless callers can distinguish a locked keychain or unusable
+identity from a generic process status.
 
 Mutable input buffers for the source PKCS#12, password file, profile, normalized
 PKCS#12, generated passwords, and partition-list stdin are cleared on every
@@ -63,8 +77,11 @@ for the PKCS#12 library and copies inside Go, C, Security.framework, or the
 operating system are immutable or outside ASC's direct control.
 
 The profile is installed at Xcode's version-appropriate provisioning profile
-path only if no file exists for that UUID. An identical pre-existing profile is
-reused and left untouched; a different file at that path is a hard conflict.
+path only if no file exists for that UUID. Xcode is discovered through the
+trusted absolute `/usr/bin/xcodebuild` path; directory discovery and installation
+honor cancellation before touching the profile directory. An identical
+pre-existing profile is reused and left untouched; a different file at that path
+is a hard conflict.
 A profile created by this command is atomically moved to a same-directory
 quarantine name and its inode and digest are reverified before unlinking. A file
 replaced during cleanup is restored rather than deleted. User files are never

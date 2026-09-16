@@ -1,6 +1,7 @@
 package web
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -48,6 +49,8 @@ type AppAvailabilityCreateAttributes struct {
 }
 
 // IsNotFound reports whether the internal web API returned a not-found response.
+// It remains intentionally generic for other web commands that use this helper.
+// Availability bootstrap callers should use IsAppAvailabilityNotFound instead.
 func IsNotFound(err error) bool {
 	var relatedErr *appAvailabilityRelatedReadError
 	if errors.As(err, &relatedErr) {
@@ -55,6 +58,50 @@ func IsNotFound(err error) bool {
 	}
 	var apiErr *APIError
 	return errors.As(err, &apiErr) && apiErr.Status == http.StatusNotFound
+}
+
+// IsAppAvailabilityNotFound reports whether the primary availability lookup
+// returned Apple's JSON:API not-found envelope. A bare 404 is not enough for
+// availability bootstrap: portal and routing failures can also surface as
+// status-only 404s and must not authorize a POST. Related collection failures
+// are wrapped separately and are never an absent primary availability record.
+func IsAppAvailabilityNotFound(err error) bool {
+	var relatedErr *appAvailabilityRelatedReadError
+	if errors.As(err, &relatedErr) {
+		return false
+	}
+
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) || apiErr == nil || apiErr.Status != http.StatusNotFound {
+		return false
+	}
+
+	var payload struct {
+		Data   json.RawMessage `json:"data"`
+		Errors []struct {
+			Code   string `json:"code"`
+			Status string `json:"status"`
+		} `json:"errors"`
+	}
+	if json.Unmarshal(apiErr.rawResponseBody(), &payload) != nil || len(payload.Errors) == 0 {
+		return false
+	}
+	// JSON:API documents cannot combine a data member with errors. In
+	// particular, data:null is an absent-success response only for 2xx reads;
+	// a 404 envelope containing it is malformed and must not authorize a POST.
+	if payload.Data != nil {
+		return false
+	}
+	found := false
+	for _, responseError := range payload.Errors {
+		status := strings.TrimSpace(responseError.Status)
+		code := strings.ToUpper(strings.TrimSpace(responseError.Code))
+		if (status != "" && status != "404") || code != "NOT_FOUND" {
+			return false
+		}
+		found = true
+	}
+	return found
 }
 
 func normalizeAppAvailabilityCreateAttributes(attrs AppAvailabilityCreateAttributes) (AppAvailabilityCreateAttributes, error) {
@@ -123,6 +170,8 @@ func decodeAppAvailabilityResource(resource jsonAPIResource) AppAvailability {
 }
 
 // GetAppAvailability retrieves the internal web app availability resource for an app.
+// It returns (nil, nil) when Apple's valid JSON:API response has data:null,
+// which is the expected state before an app has been initialized.
 func (c *Client) GetAppAvailability(ctx context.Context, appID string) (*AppAvailability, error) {
 	appID = strings.TrimSpace(appID)
 	if appID == "" {
@@ -136,18 +185,54 @@ func (c *Client) GetAppAvailability(ctx context.Context, appID string) (*AppAvai
 	}
 
 	var payload struct {
-		Data jsonAPIResource `json:"data"`
+		Data   json.RawMessage `json:"data"`
+		Errors json.RawMessage `json:"errors"`
 	}
 	if err := json.Unmarshal(responseBody, &payload); err != nil {
 		return nil, fmt.Errorf("failed to parse app availability response: %w", err)
 	}
+	trimmedErrors := bytes.TrimSpace(payload.Errors)
+	trimmedData := bytes.TrimSpace(payload.Data)
+	if len(trimmedErrors) > 0 {
+		if bytes.Equal(trimmedErrors, []byte("null")) {
+			return nil, fmt.Errorf("app availability response has malformed errors")
+		}
+		var responseErrors []json.RawMessage
+		if err := json.Unmarshal(trimmedErrors, &responseErrors); err != nil {
+			return nil, fmt.Errorf("failed to parse app availability errors: %w", err)
+		}
+		if len(responseErrors) > 0 {
+			return nil, fmt.Errorf("app availability response contained errors")
+		}
+		if bytes.Equal(trimmedData, []byte("null")) {
+			return nil, fmt.Errorf("app availability response data:null cannot be combined with errors")
+		}
+	}
+	if bytes.Equal(trimmedData, []byte("null")) {
+		// Apple represents an app that has not been initialized with a valid
+		// JSON:API envelope whose to-one data is null. Absence is an expected
+		// read result, not an authentication or portal failure, so callers can
+		// continue with the availability bootstrap flow without retrying.
+		return nil, nil
+	}
+	if len(trimmedData) == 0 {
+		return nil, fmt.Errorf("app availability response missing data")
+	}
 
-	availability := decodeAppAvailabilityResource(payload.Data)
+	var resource jsonAPIResource
+	if err := json.Unmarshal(trimmedData, &resource); err != nil {
+		return nil, fmt.Errorf("failed to parse app availability resource: %w", err)
+	}
+	if strings.TrimSpace(resource.ID) == "" {
+		return nil, fmt.Errorf("app availability id missing from response")
+	}
+	if strings.TrimSpace(resource.Type) != "appAvailabilities" {
+		return nil, fmt.Errorf("app availability response returned unexpected resource type %q", strings.TrimSpace(resource.Type))
+	}
+
+	availability := decodeAppAvailabilityResource(resource)
 	if availability.AvailableTerritoriesLoaded {
 		return &availability, nil
-	}
-	if strings.TrimSpace(availability.ID) == "" {
-		return nil, fmt.Errorf("app availability id missing from response")
 	}
 
 	territories, err := c.listAppTerritoryAvailabilities(ctx, availability.ID)

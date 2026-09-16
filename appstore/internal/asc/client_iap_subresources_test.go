@@ -127,6 +127,27 @@ func TestUpdateInAppPurchaseReviewScreenshot(t *testing.T) {
 	}
 }
 
+func TestUpdateInAppPurchaseReviewScreenshotRejectsEmptyAttributes(t *testing.T) {
+	client := newTestClient(t, func(req *http.Request) {
+		t.Fatalf("unexpected request: %s %s", req.Method, req.URL.String())
+	}, jsonResponse(http.StatusOK, `{"data":{"type":"inAppPurchaseAppStoreReviewScreenshots","id":"shot-1"}}`))
+
+	if _, err := client.UpdateInAppPurchaseAppStoreReviewScreenshot(context.Background(), "shot-1", InAppPurchaseAppStoreReviewScreenshotUpdateAttributes{}); err == nil || err.Error() != "at least one attribute is required" {
+		t.Fatalf("expected empty attribute validation error, got %v", err)
+	}
+}
+
+func TestUpdateInAppPurchaseReviewScreenshotRejectsEmptyChecksum(t *testing.T) {
+	client := newTestClient(t, func(req *http.Request) {
+		t.Fatalf("unexpected request: %s %s", req.Method, req.URL.String())
+	}, jsonResponse(http.StatusOK, `{"data":{"type":"inAppPurchaseAppStoreReviewScreenshots","id":"shot-1"}}`))
+
+	checksum := "  "
+	if _, err := client.UpdateInAppPurchaseAppStoreReviewScreenshot(context.Background(), "shot-1", InAppPurchaseAppStoreReviewScreenshotUpdateAttributes{SourceFileChecksum: &checksum}); err == nil || err.Error() != "sourceFileChecksum must not be empty" {
+		t.Fatalf("expected empty checksum validation error, got %v", err)
+	}
+}
+
 func TestDeleteInAppPurchaseReviewScreenshot(t *testing.T) {
 	response := jsonResponse(http.StatusNoContent, "")
 	client := newTestClient(t, func(req *http.Request) {

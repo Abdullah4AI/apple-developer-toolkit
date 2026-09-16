@@ -161,6 +161,7 @@ func requiredFieldChecks(primaryLocale string, versionString string, versionStat
 func isEditableVersionState(state string) bool {
 	switch state {
 	case "PREPARE_FOR_SUBMISSION",
+		"READY_FOR_REVIEW",
 		"DEVELOPER_REJECTED",
 		"REJECTED",
 		"METADATA_REJECTED",

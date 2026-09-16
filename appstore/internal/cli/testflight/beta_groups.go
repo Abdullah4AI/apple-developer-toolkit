@@ -1199,12 +1199,19 @@ func BetaGroupsAddTestersCommand() *ffcli.Command {
 	group := fs.String("group", "", "Beta group ID")
 	tester := shared.BindOnceCSVFlag(fs, "tester", "Beta tester ID(s), comma-separated")
 	email := shared.BindOnceCSVFlag(fs, "email", "Beta tester email(s), comma-separated")
+	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "add-testers",
 		ShortUsage: "asc testflight beta-groups add-testers --group \"GROUP_ID\" [--tester \"TESTER_ID[,TESTER_ID...]\" | --email \"EMAIL[,EMAIL...]\"]",
 		ShortHelp:  "Add beta testers to a beta group.",
 		LongHelp: `Add beta testers to a beta group.
+
+Adding a tester who is already in the group is an expected negative: App Store
+Connect rejects the request with HTTP 409, and asc reports the membership that
+already holds as a skip receipt ("action":"skipped") and exits 0. The conflict
+is only forgiven when a read-back confirms every requested tester is in the
+group; every other conflict still fails.
 
 Examples:
   asc testflight beta-groups add-testers --group "GROUP_ID" --tester "TESTER_ID"
@@ -1258,7 +1265,12 @@ Examples:
 						return fmt.Errorf("beta-groups add-testers: tester email %q not found for app %q", testerEmail, appID)
 					}
 					if len(resp.Data) > 1 {
-						return fmt.Errorf("beta-groups add-testers: multiple testers found for email %q; use --tester ID", testerEmail)
+						return fmt.Errorf("beta-groups add-testers: %w", &shared.AmbiguousSelectionError{
+							Kind:        "beta tester",
+							Description: fmt.Sprintf("email %q", testerEmail),
+							Flag:        "--tester",
+							Candidates:  shared.BetaTesterCandidates(resp.Data),
+						})
 					}
 					testerIDs = append(testerIDs, resp.Data[0].ID)
 				}
@@ -1282,8 +1294,51 @@ Examples:
 			}
 			testerIDs = deduped
 
-			if err := client.AddBetaTestersToGroup(requestCtx, groupID, testerIDs); err != nil {
-				return fmt.Errorf("beta-groups add-testers: failed to add testers: %w", err)
+			addErr := client.AddBetaTestersToGroup(requestCtx, groupID, testerIDs)
+			if addErr != nil {
+				if !isHTTPConflict(addErr) {
+					return fmt.Errorf("beta-groups add-testers: failed to add testers: %w", addErr)
+				}
+
+				membership, readBackErr := readBackBetaGroupMembership(ctx, client, groupID, testerIDs)
+				if readBackErr != nil {
+					return fmt.Errorf(
+						"beta-groups add-testers: failed to add testers: %w (read-back of group membership failed: %w)",
+						addErr,
+						readBackErr,
+					)
+				}
+				if !membership.satisfied() {
+					return fmt.Errorf("beta-groups add-testers: failed to add testers: %w%s", addErr, membership.diagnostic())
+				}
+
+				result := &asc.BetaGroupTestersUpdateResult{
+					GroupID:        groupID,
+					TesterIDs:      testerIDs,
+					Action:         asc.BetaGroupTestersActionSkipped,
+					AlreadyPresent: true,
+				}
+				if err := shared.PrintOutput(result, *output.Output, *output.Pretty); err != nil {
+					return err
+				}
+
+				fmt.Fprintf(
+					os.Stderr,
+					"Skipped: %d tester(s) already in group %s (%s)\n",
+					len(membership.present),
+					groupID,
+					strings.Join(membership.present, ", "),
+				)
+				return nil
+			}
+
+			result := &asc.BetaGroupTestersUpdateResult{
+				GroupID:   groupID,
+				TesterIDs: testerIDs,
+				Action:    asc.BetaGroupTestersActionAdded,
+			}
+			if err := shared.PrintOutput(result, *output.Output, *output.Pretty); err != nil {
+				return err
 			}
 
 			fmt.Fprintf(os.Stderr, "Successfully added %d tester(s) to group %s\n", len(testerIDs), groupID)

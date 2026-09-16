@@ -70,7 +70,7 @@ func importPersistentSigningIdentity(ctx context.Context, keychainPath string, k
 	if err := withPersistentSigningKeychainPasswordInput(keychainPassword, func(stdin []byte) error {
 		_, stderr, err := runSigningUtility(ctx, stdin, "set-key-partition-list", "-S", "apple-tool:,apple:", "-s", "-t", "private", keychainPath)
 		if err != nil {
-			return utilityFailure("restrict key partition list", stderr, err)
+			return utilityFailure("restrict key partition list", stderr, err, keychainPassword)
 		}
 		return nil
 	}); err != nil {

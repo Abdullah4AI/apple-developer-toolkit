@@ -107,6 +107,89 @@ func TestFindReviewIAPMatchesByProductID(t *testing.T) {
 	}
 }
 
+func TestFindReviewIAPMatchesByReferenceName(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"data": [{
+				"id": "iap-reference-name",
+				"type": "inAppPurchases",
+				"attributes": {
+					"productId": "com.example.lifetime",
+					"referenceName": "Lifetime Access",
+					"state": "READY_TO_SUBMIT"
+				}
+			}],
+			"links": {"next": ""}
+		}`))
+	}))
+	defer server.Close()
+
+	client := testWebClient(server)
+	got, found, err := client.FindReviewIAP(context.Background(), "app-123", "lifetime access")
+	if err != nil {
+		t.Fatalf("FindReviewIAP() error = %v", err)
+	}
+	if !found {
+		t.Fatal("expected IAP to be found by reference name")
+	}
+	if got.ID != "iap-reference-name" || got.ReferenceName != "Lifetime Access" {
+		t.Fatalf("unexpected IAP payload: %#v", got)
+	}
+}
+
+func TestFindReviewIAPRejectsAmbiguousProductID(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"data": [
+				{"id":"iap-1","type":"inAppPurchases","attributes":{"productId":"com.example.duplicate","referenceName":"First"}},
+				{"id":"iap-2","type":"inAppPurchases","attributes":{"productId":"com.example.duplicate","referenceName":"Second"}}
+			],
+			"links": {"next": ""}
+		}`))
+	}))
+	defer server.Close()
+
+	client := testWebClient(server)
+	_, found, err := client.FindReviewIAP(context.Background(), "app-123", "com.example.duplicate")
+	if err == nil {
+		t.Fatal("expected ambiguous product ID to fail")
+	}
+	if found {
+		t.Fatal("ambiguous product ID must not report a match")
+	}
+	if !strings.Contains(err.Error(), "matches 2 in-app purchases by product ID") {
+		t.Fatalf("expected ambiguity diagnostic, got %q", err)
+	}
+}
+
+func TestFindReviewIAPRejectsAmbiguousReferenceName(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"data": [
+				{"id":"iap-1","type":"inAppPurchases","attributes":{"productId":"com.example.first","referenceName":"Duplicate Name"}},
+				{"id":"iap-2","type":"inAppPurchases","attributes":{"productId":"com.example.second","referenceName":"duplicate name"}}
+			],
+			"links": {"next": ""}
+		}`))
+	}))
+	defer server.Close()
+
+	client := testWebClient(server)
+	_, found, err := client.FindReviewIAP(context.Background(), "app-123", "duplicate name")
+	if err == nil {
+		t.Fatal("expected ambiguous reference name to fail")
+	}
+	if found {
+		t.Fatal("ambiguous reference name must not report a match")
+	}
+	if !strings.Contains(err.Error(), "matches 2 in-app purchases by reference name") {
+		t.Fatalf("expected ambiguity diagnostic, got %q", err)
+	}
+}
+
 func TestFindReviewIAPPrefersExactResourceIDOverProductIDFallback(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -192,6 +275,48 @@ func TestFindReviewIAPPrefersExactResourceIDOnLaterPage(t *testing.T) {
 	}
 	if calls != 2 {
 		t.Fatalf("expected two paginated requests, got %d", calls)
+	}
+}
+
+func TestFindReviewIAPRejectsAmbiguousProductIDAcrossPages(t *testing.T) {
+	calls := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		w.Header().Set("Content-Type", "application/json")
+		switch calls {
+		case 1:
+			_, _ = w.Write([]byte(`{
+				"data": [{
+					"id": "iap-1",
+					"type": "inAppPurchases",
+					"attributes": {"productId": "com.example.duplicate", "referenceName": "First"}
+				}],
+				"links": {"next": "/apps/app-123/inAppPurchases?page=2"}
+			}`))
+		case 2:
+			_, _ = w.Write([]byte(`{
+				"data": [{
+					"id": "iap-2",
+					"type": "inAppPurchases",
+					"attributes": {"productId": "com.example.duplicate", "referenceName": "Second"}
+				}],
+				"links": {"next": ""}
+			}`))
+		default:
+			t.Fatalf("unexpected extra request %d: %s", calls, r.URL.String())
+		}
+	}))
+	defer server.Close()
+
+	_, found, err := testWebClient(server).FindReviewIAP(context.Background(), "app-123", "com.example.duplicate")
+	if err == nil || !strings.Contains(err.Error(), "matches 2 in-app purchases by product ID") {
+		t.Fatalf("expected cross-page ambiguity error, got found=%t err=%v", found, err)
+	}
+	if found {
+		t.Fatal("ambiguous cross-page product ID must not report a match")
+	}
+	if calls != 2 {
+		t.Fatalf("expected both pages to be scanned, got %d requests", calls)
 	}
 }
 
@@ -302,6 +427,22 @@ func TestFindReviewIAPReturnsFalseWhenMissing(t *testing.T) {
 	}
 	if found {
 		t.Fatal("expected missing IAP")
+	}
+}
+
+func TestFindReviewIAPRejectsUnexpectedResourceType(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":[{"id":"sub-1","type":"subscriptions","attributes":{"productId":"com.example.wrong","referenceName":"Wrong type"}}]}`))
+	}))
+	defer server.Close()
+
+	_, found, err := testWebClient(server).FindReviewIAP(context.Background(), "app-123", "com.example.wrong")
+	if err == nil || !strings.Contains(err.Error(), "unexpected resource type") {
+		t.Fatalf("expected unexpected-type error, got found=%t err=%v", found, err)
+	}
+	if found {
+		t.Fatal("unexpected resource type must not be reported as a match")
 	}
 }
 
@@ -447,9 +588,79 @@ func TestCreateInAppPurchaseSubmissionRejectsUnexpectedResourceType(t *testing.T
 	}
 }
 
+func TestCreateInAppPurchaseSubmissionRejectsMissingOrEmptyResourceType(t *testing.T) {
+	cases := []struct {
+		name string
+		body string
+	}{
+		{name: "missing", body: `{"data":{"id":"submission-1"}}`},
+		{name: "empty", body: `{"data":{"id":"submission-1","type":""}}`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(tc.body))
+			}))
+			defer server.Close()
+
+			if _, err := testWebClient(server).CreateInAppPurchaseSubmission(context.Background(), "iap-1"); err == nil || !strings.Contains(err.Error(), "missing submission resource type") {
+				t.Fatalf("expected missing-resource-type error, got %v", err)
+			}
+		})
+	}
+}
+
+func TestCreateInAppPurchaseSubmissionRejectsMismatchedRelationship(t *testing.T) {
+	cases := []struct {
+		name string
+		data string
+	}{
+		{name: "wrong type", data: `{"type":"subscriptions","id":"iap-1"}`},
+		{name: "wrong id", data: `{"type":"inAppPurchases","id":"iap-2"}`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				body := `{"data":{"id":"submission-1","type":"inAppPurchaseSubmissions","relationships":{"inAppPurchaseV2":{"data":` + tc.data + `}}}}`
+				_, _ = w.Write([]byte(body))
+			}))
+			defer server.Close()
+
+			if _, err := testWebClient(server).CreateInAppPurchaseSubmission(context.Background(), "iap-1"); err == nil || !strings.Contains(err.Error(), "inAppPurchaseV2 relationship") {
+				t.Fatalf("expected inAppPurchaseV2-relationship error, got %v", err)
+			}
+		})
+	}
+}
+
 func TestCreateInAppPurchaseSubmissionRejectsEmptyID(t *testing.T) {
 	client := &Client{}
 	if _, err := client.CreateInAppPurchaseSubmission(context.Background(), "  "); err == nil {
 		t.Fatal("expected error for empty iap id, got nil")
+	}
+}
+
+func TestCreateInAppPurchaseSubmissionPreservesSanitizedPortalReason(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnprocessableEntity)
+		_, _ = w.Write([]byte(`{"errors":[{"code":"STATE_ERROR","title":"Attachment refused","detail":"The IAP is not ready\u001b[31m"}]}`))
+	}))
+	defer server.Close()
+
+	_, err := testWebClient(server).CreateInAppPurchaseSubmission(context.Background(), "iap-1")
+	if err == nil {
+		t.Fatal("expected attachment refusal")
+	}
+	if !strings.Contains(err.Error(), "status 422") {
+		t.Fatalf("expected portal status in error, got %q", err)
+	}
+	if !strings.Contains(err.Error(), "Attachment refused: The IAP is not ready[31m") {
+		t.Fatalf("expected sanitized portal reason in error, got %q", err)
+	}
+	if strings.Contains(err.Error(), "\x1b") {
+		t.Fatalf("portal reason contains terminal escape sequence: %q", err)
 	}
 }

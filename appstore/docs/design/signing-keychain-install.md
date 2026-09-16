@@ -48,10 +48,14 @@ certificate. The PKCS#12 is decoded and checked for a matching private key,
 current certificate validity, code-signing usage, and the expected digest
 before the keychain is created.
 
-The final codesign usability probe is copied into an ASC-owned private
-temporary directory, never the operator-selected keychain directory. An
-existing file beside the destination keychain is therefore outside the probe's
-write and cleanup scope.
+Before import and the final codesign usability probe, the new keychain is
+temporarily staged in the user search list. macOS identity resolution requires
+that staging even when codesign receives the keychain path explicitly. The
+entry is removed again after a successful install unless
+`--add-to-search-list` was requested. The final probe is copied into an
+ASC-owned private temporary directory, never the operator-selected keychain
+directory. An existing file beside the destination keychain is therefore
+outside the probe's write and cleanup scope.
 
 ## Failure and rollback contract
 
@@ -61,9 +65,10 @@ both activation modes. Once creation succeeds, any later import, verification,
 isolation, or search-list failure triggers deletion of the new keychain and
 restoration of that exact snapshot, including a stale destination entry that
 existed before the destination file did. A host-created automatic or stale
-destination entry is removed immediately when `--add-to-search-list` is absent;
-explicit activation is the last operation when the flag is present. If both
-the primary operation and rollback fail, both errors are returned. Rollback
+destination entry is isolated while import and verification run, then removed
+when `--add-to-search-list` is absent; explicit activation keeps the staged
+entry after verification. If both the primary operation and rollback fail,
+both errors are returned. Rollback
 uses an independent bounded context, so cancellation of the initiating command
 does not prevent keychain deletion or search-list restoration. The same rule
 applies when cancellation interrupts initial keychain configuration before the
@@ -155,12 +160,16 @@ unlock error. Darwin coverage accepts a leaf certificate plus its chain while
 rejecting a missing or duplicated leaf. cgo-disabled, Linux, and Windows
 compile paths verify the platform guard.
 
-A gated macOS integration test creates a disposable keychain, imports a real
-test PKCS#12 identity, runs the codesign probe, confirms search-list activation,
-removes the entry, deletes the keychain, and proves the original search list is
-restored. Repository formatting, documentation, build, lint, and full tests run
-before each push. The built CLI is also checked for exit 2 and empty stdout
-when `--confirm` is missing.
+A gated macOS integration test (`ASC_SIGNING_KEYCHAIN_INSTALL_LIVE_TEST=1`)
+creates a unique disposable keychain, imports a protected PKCS#12 containing a
+generated self-signed non-CA code-signing leaf, runs the real
+Security-framework import, partition-list update, and codesign probe, confirms
+search-list activation, removes the entry, deletes the keychain, and proves the
+exact original search list is restored. It uses no personal signing
+credentials; the gate is opt-in because it mutates only the operator's
+temporary keychain/search-list state during the test. Repository formatting,
+documentation, build, lint, and full tests run before each push. The built CLI
+is also checked for exit 2 and empty stdout when `--confirm` is missing.
 
 ## Unresolved risks
 

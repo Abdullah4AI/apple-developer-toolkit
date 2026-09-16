@@ -194,6 +194,11 @@ type APIError struct {
 	AppleRequestID string
 	CorrelationKey string
 	rawBody        []byte
+	// portalReason is populated only for review attachment mutations. Those
+	// endpoints return the actionable refusal reason in errors[].detail, while
+	// the general web API error contract intentionally keeps response details
+	// redacted.
+	portalReason string
 }
 
 type sessionInfoStatusError struct {
@@ -278,6 +283,9 @@ func (e *APIError) Error() string {
 	}
 	if codes := extractServiceErrorCodes(e.rawBody); len(codes) > 0 {
 		parts = append(parts, fmt.Sprintf("codes=%v", codes))
+	}
+	if reason := strings.TrimSpace(e.portalReason); reason != "" {
+		parts = append(parts, fmt.Sprintf("reason=%s", reason))
 	}
 	return strings.Join(parts, ", ")
 }
@@ -647,6 +655,12 @@ func loginWithHTTPClient(ctx context.Context, client *http.Client, creds LoginCr
 }
 
 func getAuthServiceKey(ctx context.Context, client *http.Client) (string, error) {
+	if key, err := getAuthServiceKeyFromSignout(ctx, client); err == nil {
+		return key, nil
+	} else if ctx.Err() != nil {
+		return "", ctx.Err()
+	}
+
 	req, err := http.NewRequestWithContext(ctx, "GET", "https://appstoreconnect.apple.com/olympus/v1/app/config?hostname=itunesconnect.apple.com", nil)
 	if err != nil {
 		return "", fmt.Errorf("failed to build auth service key request: %w", err)
@@ -691,6 +705,51 @@ func getAuthServiceKey(ctx context.Context, client *http.Client) (string, error)
 		return "", fmt.Errorf("auth service key is empty")
 	}
 	return serviceKey, nil
+}
+
+func getAuthServiceKeyFromSignout(ctx context.Context, client *http.Client) (string, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodHead, appStoreBaseURL+"/logout", nil)
+	if err != nil {
+		return "", err
+	}
+
+	// The Location header carries Apple's current public widget key. Sending
+	// session cookies or following that redirect could sign the user out.
+	// Keep the caller's transport (including TLS configuration) and timeout.
+	discoveryClient := *client
+	discoveryClient.Jar = nil
+	discoveryClient.CheckRedirect = func(_ *http.Request, _ []*http.Request) error {
+		return http.ErrUseLastResponse
+	}
+	resp, err := discoveryClient.Do(req)
+	if err != nil {
+		// net/http errors can include a malformed Location containing the key.
+		// Discovery is best effort; log only a generic failure before fallback.
+		err = errors.New("sign-out service key discovery request failed")
+		logWebAuthHTTP("auth_service_key_discovery", req, nil, nil, err)
+		return "", err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	logWebAuthHTTP("auth_service_key_discovery", req, resp, nil, nil)
+
+	switch resp.StatusCode {
+	case http.StatusMovedPermanently, http.StatusFound, http.StatusSeeOther, http.StatusTemporaryRedirect, http.StatusPermanentRedirect:
+	default:
+		return "", fmt.Errorf("sign-out service key discovery returned status %d", resp.StatusCode)
+	}
+	location, err := url.Parse(resp.Header.Get("Location"))
+	if err != nil || location.Scheme != "https" || !strings.EqualFold(location.Host, "idmsa.apple.com") || location.User != nil || location.Path != "/appleauth/signout" {
+		return "", errors.New("sign-out service key discovery returned an invalid redirect")
+	}
+	query, err := url.ParseQuery(location.RawQuery)
+	if err != nil {
+		return "", errors.New("sign-out service key discovery returned an invalid query")
+	}
+	keys := query["widgetKey"]
+	if len(keys) != 1 || strings.TrimSpace(keys[0]) == "" {
+		return "", errors.New("sign-out service key discovery omitted a unique service key")
+	}
+	return strings.TrimSpace(keys[0]), nil
 }
 
 func performSRPLogin(ctx context.Context, client *http.Client, creds LoginCredentials, serviceKey string) error {
@@ -1620,6 +1679,59 @@ func extractServiceErrorCodes(respBody []byte) []string {
 	return codes
 }
 
+func isReviewAttachmentMutation(method, path string) bool {
+	if !strings.EqualFold(strings.TrimSpace(method), http.MethodPost) {
+		return false
+	}
+	switch strings.TrimSpace(path) {
+	case "/subscriptionSubmissions", "/inAppPurchaseSubmissions":
+		return true
+	default:
+		return false
+	}
+}
+
+// extractWebPortalErrorReason keeps the actionable refusal text from the
+// review attachment endpoints without exposing a raw response body. The
+// general web API error contract deliberately omits details because other
+// private endpoints can echo sensitive values.
+func extractWebPortalErrorReason(respBody []byte) string {
+	var payload struct {
+		Errors []struct {
+			Title  string `json:"title"`
+			Detail string `json:"detail"`
+		} `json:"errors"`
+	}
+	if err := json.Unmarshal(respBody, &payload); err != nil {
+		return ""
+	}
+
+	reasons := make([]string, 0, len(payload.Errors))
+	for _, responseError := range payload.Errors {
+		title := sanitizeWebPortalErrorText(responseError.Title)
+		detail := sanitizeWebPortalErrorText(responseError.Detail)
+		switch {
+		case title != "" && detail != "":
+			reasons = append(reasons, title+": "+detail)
+		case title != "":
+			reasons = append(reasons, title)
+		case detail != "":
+			reasons = append(reasons, detail)
+		}
+	}
+	return sanitizeWebPortalErrorText(strings.Join(reasons, "; "))
+}
+
+func sanitizeWebPortalErrorText(value string) string {
+	value = strings.TrimSpace(asc.SanitizeTerminalText(value))
+	const maxLength = 500
+	valueRunes := []rune(value)
+	if len(valueRunes) > maxLength {
+		return string(valueRunes[:maxLength]) + "..."
+	}
+	return value
+}
+
 // Apple currently returns -20101 when signin/complete rejects SRP credentials.
 func isInvalidAppleAccountCredentialsSigninComplete(status int, respBody []byte) bool {
 	if status != http.StatusUnauthorized {
@@ -1746,12 +1858,16 @@ func (c *Client) doRequestBaseWithHTTPClient(client *http.Client, ctx context.Co
 	correlationKey := strings.TrimSpace(resp.Header.Get("X-Apple-Jingle-Correlation-Key"))
 
 	if resp.StatusCode >= 400 {
-		return nil, &APIError{
+		apiErr := &APIError{
 			Status:         resp.StatusCode,
 			AppleRequestID: appleRequestID,
 			CorrelationKey: correlationKey,
 			rawBody:        respBody,
 		}
+		if isReviewAttachmentMutation(method, path) {
+			apiErr.portalReason = extractWebPortalErrorReason(respBody)
+		}
+		return nil, apiErr
 	}
 	return respBody, nil
 }

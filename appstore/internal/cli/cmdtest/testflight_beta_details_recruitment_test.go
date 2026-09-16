@@ -216,7 +216,7 @@ func TestTestFlightDistributionEditRejectsRemovedExternalTestingFlag(t *testing.
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			clientFactoryCalled = false
-			assertRemovedFlagIsUnknown(t, test.args, "--external-testing")
+			assertRemovedFlagGuidance(t, test.args, "--external-testing")
 			if clientFactoryCalled {
 				t.Fatal("expected removed flag to fail before client creation or HTTP")
 			}

@@ -16,6 +16,8 @@ import (
 
 const iapReviewScreenshotPollInterval = 2 * time.Second
 
+const iapReviewScreenshotFileDeprecationWarning = "Warning: `--file` is deprecated and unsupported for `asc iap review-screenshots update`; use `asc iap review-screenshots create --iap-id \"IAP_ID\" --file \"./review.png\"` for a replacement upload, then delete the old screenshot, or use `--checksum` and/or `--uploaded` for PATCH updates."
+
 // IAPReviewScreenshotsCommand returns the review screenshots command group.
 func IAPReviewScreenshotsCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("review-screenshots", flag.ExitOnError)
@@ -29,7 +31,7 @@ func IAPReviewScreenshotsCommand() *ffcli.Command {
 Examples:
   asc iap review-screenshots view --iap-id "IAP_ID"
   asc iap review-screenshots create --iap-id "IAP_ID" --file "./review.png"
-  asc iap review-screenshots update --screenshot-id "SHOT_ID" --file "./review.png"
+  asc iap review-screenshots update --screenshot-id "SHOT_ID" --uploaded true --checksum "HASH"
   asc iap review-screenshots delete --screenshot-id "SHOT_ID" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
@@ -206,40 +208,51 @@ func IAPReviewScreenshotsUpdateCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("review-screenshots update", flag.ExitOnError)
 
 	screenshotID := fs.String("screenshot-id", "", "Review screenshot ID")
-	filePath := fs.String("file", "", "Path to screenshot file")
+	checksum := fs.String("checksum", "", "Source file checksum (MD5)")
+	var uploaded shared.OptionalBool
+	fs.Var(&uploaded, "uploaded", "Mark upload complete: true or false")
+	fs.String("file", "", "[deprecated] Use --checksum and/or --uploaded; upload replacements with create")
+	shared.HideFlagFromHelp(fs.Lookup("file"))
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "update",
-		ShortUsage: "asc iap review-screenshots update --screenshot-id \"SHOT_ID\" --file \"./review.png\"",
-		ShortHelp:  "Re-upload an in-app purchase review screenshot.",
-		LongHelp: `Re-upload an in-app purchase review screenshot.
+		ShortUsage: "asc iap review-screenshots update [flags]",
+		ShortHelp:  "Update an in-app purchase review screenshot.",
+		LongHelp: `Update an in-app purchase review screenshot.
 
 Examples:
-  asc iap review-screenshots update --screenshot-id "SHOT_ID" --file "./review.png"`,
+  asc iap review-screenshots update --screenshot-id "SHOT_ID" --uploaded true --checksum "HASH"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
-			screenshotValue := strings.TrimSpace(*screenshotID)
-			if screenshotValue == "" {
+			if len(args) > 0 {
+				return shared.UsageErrorf("iap review-screenshots update does not accept positional arguments: %s", strings.Join(args, " "))
+			}
+
+			id := strings.TrimSpace(*screenshotID)
+			if id == "" {
 				fmt.Fprintln(os.Stderr, "Error: --screenshot-id is required")
 				return shared.MissingRequiredUsageError("--screenshot-id")
 			}
-			pathValue := strings.TrimSpace(*filePath)
-			if pathValue == "" {
-				fmt.Fprintln(os.Stderr, "Error: --file is required")
-				return shared.MissingRequiredUsageError("--file")
+			legacyFileProvided := false
+			fs.Visit(func(f *flag.Flag) {
+				if f.Name == "file" {
+					legacyFileProvided = true
+				}
+			})
+			if legacyFileProvided {
+				fmt.Fprintln(os.Stderr, iapReviewScreenshotFileDeprecationWarning)
+				return shared.UsageError("`--file` is unsupported for `asc iap review-screenshots update`; use `--checksum` and/or `--uploaded`")
 			}
 
-			file, info, err := openImageFile(pathValue)
-			if err != nil {
-				return fmt.Errorf("iap review-screenshots update: %w", err)
+			checksumValue := strings.TrimSpace(*checksum)
+			if checksumValue == "" && !uploaded.IsSet() {
+				fmt.Fprintln(os.Stderr, "Error: at least one update flag is required")
+				return shared.MissingRequiredUsageError("")
 			}
-			defer file.Close()
-
-			checksum, err := asc.ComputeChecksumFromReader(file, asc.ChecksumAlgorithmMD5)
-			if err != nil {
-				return fmt.Errorf("iap review-screenshots update: %w", err)
+			if _, err := shared.ValidateOutputFormat(*output.Output, *output.Pretty); err != nil {
+				return shared.UsageError(err.Error())
 			}
 
 			client, err := shared.GetASCClient()
@@ -247,56 +260,21 @@ Examples:
 				return fmt.Errorf("iap review-screenshots update: %w", err)
 			}
 
-			requestCtx, cancel := contextWithAssetUploadTimeout(ctx)
+			requestCtx, cancel := shared.ContextWithTimeout(ctx)
 			defer cancel()
 
-			screenshotResp, err := client.GetInAppPurchaseAppStoreReviewScreenshot(requestCtx, screenshotValue)
+			attrs := asc.InAppPurchaseAppStoreReviewScreenshotUpdateAttributes{}
+			if checksumValue != "" {
+				attrs.SourceFileChecksum = &checksumValue
+			}
+			if uploaded.IsSet() {
+				value := uploaded.Value()
+				attrs.Uploaded = &value
+			}
+
+			updated, err := client.UpdateInAppPurchaseAppStoreReviewScreenshot(requestCtx, id, attrs)
 			if err != nil {
-				return fmt.Errorf("iap review-screenshots update: failed to fetch: %w", err)
-			}
-			if screenshotResp == nil {
-				return fmt.Errorf("iap review-screenshots update: empty screenshot response")
-			}
-
-			uploadOps := screenshotResp.Data.Attributes.UploadOperations
-			targetScreenshotID := screenshotValue
-			createdReplacement := false
-			if len(uploadOps) == 0 {
-				iapID, err := relationshipResourceID(screenshotResp.Data.Relationships, "inAppPurchaseV2")
-				if err != nil {
-					return fmt.Errorf("iap review-screenshots update: %w", err)
-				}
-
-				created, err := client.CreateInAppPurchaseAppStoreReviewScreenshot(requestCtx, iapID, info.Name(), info.Size())
-				if err != nil {
-					return fmt.Errorf("iap review-screenshots update: failed to create: %w", err)
-				}
-				if created == nil || len(created.Data.Attributes.UploadOperations) == 0 {
-					return fmt.Errorf("iap review-screenshots update: no upload operations returned")
-				}
-
-				uploadOps = created.Data.Attributes.UploadOperations
-				targetScreenshotID = created.Data.ID
-				createdReplacement = true
-			}
-
-			if err := asc.UploadAssetFromFile(requestCtx, file, info.Size(), uploadOps); err != nil {
-				return fmt.Errorf("iap review-screenshots update: upload failed: %w", err)
-			}
-
-			uploaded := true
-			updated, err := client.UpdateInAppPurchaseAppStoreReviewScreenshot(requestCtx, targetScreenshotID, asc.InAppPurchaseAppStoreReviewScreenshotUpdateAttributes{
-				Uploaded:           &uploaded,
-				SourceFileChecksum: &checksum.Hash,
-			})
-			if err != nil {
-				return fmt.Errorf("iap review-screenshots update: failed to commit upload: %w", err)
-			}
-
-			if createdReplacement {
-				if err := client.DeleteInAppPurchaseAppStoreReviewScreenshot(requestCtx, screenshotValue); err != nil {
-					return fmt.Errorf("iap review-screenshots update: failed to delete previous screenshot: %w", err)
-				}
+				return fmt.Errorf("iap review-screenshots update: failed to update: %w", err)
 			}
 
 			return shared.PrintOutput(updated, *output.Output, *output.Pretty)

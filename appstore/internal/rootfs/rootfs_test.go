@@ -3518,3 +3518,277 @@ func requireSymlinks(t *testing.T) {
 		t.Skip("symlink creation is not permitted on this host")
 	}
 }
+
+func TestChmodFileTightensContainedFileWithoutReadAccess(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows does not expose POSIX permission bits")
+	}
+	if os.Geteuid() == 0 {
+		t.Skip("root bypasses owner read permission")
+	}
+	dir := t.TempDir()
+	path := filepath.Join(dir, "secret.p8")
+	if err := os.WriteFile(path, []byte("key"), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+	if err := os.Chmod(path, 0o044); err != nil {
+		t.Fatalf("Chmod() error = %v", err)
+	}
+
+	err := ChmodFile(path, 0o600)
+	if runtime.GOOS != "linux" {
+		if err == nil {
+			t.Fatal("ChmodFile() repaired an unreadable file without a secure descriptor mechanism")
+		}
+		info, statErr := os.Stat(path)
+		if statErr != nil {
+			t.Fatalf("Stat() error = %v", statErr)
+		}
+		if info.Mode().Perm() != 0o044 {
+			t.Fatalf("permissions = %#o, want 0044 unchanged after fail-closed result", info.Mode().Perm())
+		}
+		return
+	}
+	if err != nil {
+		t.Fatalf("ChmodFile() error = %v", err)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("Stat() error = %v", err)
+	}
+	if info.Mode().Perm() != 0o600 {
+		t.Fatalf("permissions = %#o, want 0600", info.Mode().Perm())
+	}
+}
+
+func TestChmodFileRefusesSymlinkAndDirectory(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows does not expose POSIX permission bits")
+	}
+	dir := t.TempDir()
+	target := filepath.Join(dir, "secret.p8")
+	if err := os.WriteFile(target, []byte("key"), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+	link := filepath.Join(dir, "link.p8")
+	if err := os.Symlink(target, link); err != nil {
+		t.Fatalf("Symlink() error = %v", err)
+	}
+
+	if err := ChmodFile(link, 0o600); !errors.Is(err, ErrSymlink) {
+		t.Fatalf("ChmodFile(symlink) error = %v, want ErrSymlink", err)
+	}
+	info, err := os.Stat(target)
+	if err != nil {
+		t.Fatalf("Stat() error = %v", err)
+	}
+	if info.Mode().Perm() != 0o644 {
+		t.Fatalf("target permissions = %#o, want 0644 untouched", info.Mode().Perm())
+	}
+	if err := ChmodFile(dir, 0o600); err == nil {
+		t.Fatal("expected ChmodFile(directory) to fail")
+	}
+	if err := ChmodFile(filepath.Join(dir, "missing.p8"), 0o600); err == nil {
+		t.Fatal("expected ChmodFile(missing) to fail")
+	}
+}
+
+func TestChmodFileRejectsFinalSymlinkReplacement(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows does not expose POSIX permission bits")
+	}
+	requireSymlinks(t)
+
+	dir := t.TempDir()
+	target := filepath.Join(dir, "key.p8")
+	original := filepath.Join(dir, "key-original.p8")
+	external := filepath.Join(t.TempDir(), "external.p8")
+	mustWrite(t, target, "original")
+	mustWrite(t, external, "external")
+	if err := os.Chmod(target, 0o644); err != nil {
+		t.Fatalf("Chmod(target) error = %v", err)
+	}
+	if err := os.Chmod(external, 0o644); err != nil {
+		t.Fatalf("Chmod(external) error = %v", err)
+	}
+
+	root := mustRoot(t, dir)
+	root.afterValidationForTest = func() {
+		if err := os.Rename(target, original); err != nil {
+			t.Fatalf("rename validated file: %v", err)
+		}
+		if err := os.Symlink(external, target); err != nil {
+			t.Fatalf("replace validated file with symlink: %v", err)
+		}
+	}
+
+	if err := root.ChmodFile("key.p8", 0o600); err == nil {
+		t.Fatal("ChmodFile() accepted a final symlink replacement")
+	}
+	for _, path := range []string{original, external} {
+		info, err := os.Stat(path)
+		if err != nil {
+			t.Fatalf("Stat(%q) error = %v", path, err)
+		}
+		if info.Mode().Perm() != 0o644 {
+			t.Fatalf("%s mode = %#o, want 0644 untouched", path, info.Mode().Perm())
+		}
+	}
+}
+
+func TestChmodFileRejectsFinalDirectoryReplacement(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows does not expose POSIX permission bits")
+	}
+	dir := t.TempDir()
+	target := filepath.Join(dir, "key.p8")
+	original := filepath.Join(dir, "key-original.p8")
+	mustWrite(t, target, "original")
+	if err := os.Chmod(target, 0o644); err != nil {
+		t.Fatalf("Chmod(target) error = %v", err)
+	}
+
+	root := mustRoot(t, dir)
+	root.afterValidationForTest = func() {
+		if err := os.Rename(target, original); err != nil {
+			t.Fatalf("rename validated file: %v", err)
+		}
+		if err := os.Mkdir(target, 0o755); err != nil {
+			t.Fatalf("replace validated file with directory: %v", err)
+		}
+		if err := os.Chmod(target, 0o755); err != nil {
+			t.Fatalf("normalize replacement directory mode: %v", err)
+		}
+	}
+
+	if err := root.ChmodFile("key.p8", 0o600); err == nil {
+		t.Fatal("ChmodFile() accepted a final directory replacement")
+	}
+	info, err := os.Stat(target)
+	if err != nil {
+		t.Fatalf("Stat(replacement) error = %v", err)
+	}
+	if info.Mode().Perm() != 0o755 {
+		t.Fatalf("replacement directory mode = %#o, want 0755 untouched", info.Mode().Perm())
+	}
+}
+
+func TestChmodFileRejectsFinalRegularFileReplacement(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows does not expose POSIX permission bits")
+	}
+	dir := t.TempDir()
+	target := filepath.Join(dir, "key.p8")
+	original := filepath.Join(dir, "key-original.p8")
+	mustWrite(t, target, "original")
+	if err := os.Chmod(target, 0o644); err != nil {
+		t.Fatalf("Chmod(target) error = %v", err)
+	}
+
+	root := mustRoot(t, dir)
+	root.afterValidationForTest = func() {
+		if err := os.Rename(target, original); err != nil {
+			t.Fatalf("rename validated file: %v", err)
+		}
+		mustWrite(t, target, "replacement")
+		if err := os.Chmod(target, 0o644); err != nil {
+			t.Fatalf("normalize replacement mode: %v", err)
+		}
+	}
+
+	err := root.ChmodFile("key.p8", 0o600)
+	if !errors.Is(err, ErrFileIdentityChanged) {
+		t.Fatalf("ChmodFile() error = %v, want ErrFileIdentityChanged", err)
+	}
+	for _, path := range []string{original, target} {
+		info, statErr := os.Stat(path)
+		if statErr != nil {
+			t.Fatalf("Stat(%q) error = %v", path, statErr)
+		}
+		if info.Mode().Perm() != 0o644 {
+			t.Fatalf("%s mode = %#o, want 0644 untouched", path, info.Mode().Perm())
+		}
+	}
+}
+
+func TestChmodFileIfSameRejectsReplacementBeforeRootedValidation(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows does not expose POSIX permission bits")
+	}
+	dir := t.TempDir()
+	target := filepath.Join(dir, "key.p8")
+	original := filepath.Join(dir, "key-original.p8")
+	mustWrite(t, target, "original")
+	if err := os.Chmod(target, 0o644); err != nil {
+		t.Fatalf("Chmod(target) error = %v", err)
+	}
+	expected, err := os.Lstat(target)
+	if err != nil {
+		t.Fatalf("Lstat(target) error = %v", err)
+	}
+
+	if err := os.Rename(target, original); err != nil {
+		t.Fatalf("rename original: %v", err)
+	}
+	mustWrite(t, target, "replacement")
+	if err := os.Chmod(target, 0o644); err != nil {
+		t.Fatalf("normalize replacement mode: %v", err)
+	}
+
+	root := mustRoot(t, dir)
+	err = root.ChmodFileIfSame("key.p8", expected, 0o600)
+	if !errors.Is(err, ErrFileIdentityChanged) {
+		t.Fatalf("ChmodFileIfSame() error = %v, want ErrFileIdentityChanged", err)
+	}
+	for _, path := range []string{original, target} {
+		info, statErr := os.Stat(path)
+		if statErr != nil {
+			t.Fatalf("Stat(%q) error = %v", path, statErr)
+		}
+		if info.Mode().Perm() != 0o644 {
+			t.Fatalf("%s mode = %#o, want 0644 untouched", path, info.Mode().Perm())
+		}
+	}
+}
+
+func TestChmodFileMutatesRetainedDescriptorAfterPathReplacement(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows does not expose POSIX permission bits")
+	}
+	dir := t.TempDir()
+	target := filepath.Join(dir, "key.p8")
+	original := filepath.Join(dir, "key-original.p8")
+	mustWrite(t, target, "original")
+	if err := os.Chmod(target, 0o644); err != nil {
+		t.Fatalf("Chmod(target) error = %v", err)
+	}
+
+	root := mustRoot(t, dir)
+	root.afterChmodOpenForTest = func() {
+		if err := os.Rename(target, original); err != nil {
+			t.Fatalf("rename opened file: %v", err)
+		}
+		mustWrite(t, target, "replacement")
+		if err := os.Chmod(target, 0o644); err != nil {
+			t.Fatalf("normalize replacement mode: %v", err)
+		}
+	}
+
+	if err := root.ChmodFile("key.p8", 0o600); err != nil {
+		t.Fatalf("ChmodFile() error = %v", err)
+	}
+	originalInfo, err := os.Stat(original)
+	if err != nil {
+		t.Fatalf("Stat(original) error = %v", err)
+	}
+	replacementInfo, err := os.Stat(target)
+	if err != nil {
+		t.Fatalf("Stat(replacement) error = %v", err)
+	}
+	if originalInfo.Mode().Perm() != 0o600 {
+		t.Fatalf("retained original mode = %#o, want 0600", originalInfo.Mode().Perm())
+	}
+	if replacementInfo.Mode().Perm() != 0o644 {
+		t.Fatalf("replacement mode = %#o, want 0644 untouched", replacementInfo.Mode().Perm())
+	}
+}

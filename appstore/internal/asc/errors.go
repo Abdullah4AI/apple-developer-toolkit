@@ -227,3 +227,29 @@ func hasAPIErrorCodePrefix(code string, prefixes ...string) bool {
 	}
 	return false
 }
+
+// IsMissingResourceOfType reports whether err is App Store Connect's 404 for a
+// related resource that has not been created yet, such as an app without an
+// availability record or price schedule. It keys on the HTTP status and the
+// resource type named in Apple's detail so a 404 for the parent resource (for
+// example an unknown app ID) is not mistaken for an unconfigured child.
+func IsMissingResourceOfType(err error, resourceType string) bool {
+	resourceType = strings.ToLower(strings.TrimSpace(resourceType))
+	if err == nil || resourceType == "" {
+		return false
+	}
+	apiErr, ok := errors.AsType[*APIError](err)
+	if !ok || apiErr == nil || apiErr.StatusCode != http.StatusNotFound {
+		return false
+	}
+	detail := strings.ToLower(strings.TrimSpace(apiErr.Detail))
+	if detail == "" {
+		return false
+	}
+	// "There is no resource of type 'appAvailabilities' with id '123'"
+	if strings.Contains(detail, "no resource of type '"+resourceType+"'") {
+		return true
+	}
+	// "No appAvailabilities resource exists"
+	return strings.Contains(detail, "no "+resourceType+" resource")
+}

@@ -11,7 +11,7 @@ import (
 
 // TestRemovedHiddenFlagAliasesAreUnknownFlags locks the 5.0.0 removal of the
 // hidden compatibility spellings that 4.x accepted behind a deprecation
-// warning. Each removed alias now fails as a generic unknown flag before any
+// warning. Each removed alias now fails with migration guidance before any
 // HTTP request, and the canonical spelling stays registered.
 func TestRemovedHiddenFlagAliasesAreUnknownFlags(t *testing.T) {
 	tests := []struct {
@@ -61,7 +61,7 @@ func TestRemovedHiddenFlagAliasesAreUnknownFlags(t *testing.T) {
 			if stdout != "" {
 				t.Fatalf("stdout = %q, want empty", stdout)
 			}
-			want := "Error: unknown flag `--" + test.alias + "` for `asc " + commandPath + "`"
+			want := "Error: `--" + test.alias + "` was removed in 5.0.0; use `--" + test.canonical + "`"
 			if !strings.Contains(stderr, want) {
 				t.Fatalf("stderr = %q, want containing %q", stderr, want)
 			}
@@ -116,7 +116,7 @@ func TestRemovedVisibleAppInfoAliasesAreUnknownFlags(t *testing.T) {
 				t.Fatalf("help for %q still advertises a deprecated alias: %q", commandPath, usage)
 			}
 
-			assertUsageExit(t, test.args, "Error: unknown flag `--"+test.alias+"` for `asc "+commandPath+"`")
+			assertUsageExit(t, test.args, "Error: `--"+test.alias+"` was removed in 5.0.0; use `--info-id`")
 		})
 	}
 }
@@ -152,8 +152,8 @@ func TestPreOrdersEnableIgnoredFlagIsUnknown(t *testing.T) {
 	if stdout != "" {
 		t.Fatalf("stdout = %q, want empty", stdout)
 	}
-	if !strings.Contains(stderr, "Error: unknown flag `--available-in-new-territories` for `asc pre-orders enable`") {
-		t.Fatalf("stderr = %q, want unknown flag error", stderr)
+	if !strings.Contains(stderr, "Error: `--available-in-new-territories` was removed in 5.0.0") {
+		t.Fatalf("stderr = %q, want removed-flag guidance", stderr)
 	}
 	if strings.Contains(stderr, "deprecated and ignored") {
 		t.Fatalf("stderr = %q, want no warn-and-ignore diagnostic", stderr)

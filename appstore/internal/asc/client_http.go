@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"syscall"
@@ -309,6 +310,11 @@ func (c *Client) doOnce(ctx context.Context, method, path string, body io.Reader
 		}
 
 		if err := ParseErrorWithStatus(respBody, resp.StatusCode); err != nil {
+			if isIntermittentBuildUploadsNotFound(method, path, err) {
+				// No Retry-After accompanies the flake; the shared exponential
+				// backoff (1s/2s/4s by default) and retry budget apply.
+				return nil, &RetryableError{Err: err}
+			}
 			return nil, err
 		}
 		return nil, fmt.Errorf("API request failed with status %d", resp.StatusCode)
@@ -355,6 +361,85 @@ func isRetryableHTTPStatus(statusCode int) bool {
 	default:
 		return false
 	}
+}
+
+// isBuildUploadsPath reports whether path targets the Build Upload API family
+// (/v1/buildUploads, /v1/buildUploadFiles, and the app relationship views).
+// Apple intermittently answers reads on these endpoints with 404 NOT_FOUND for
+// resources that exist (fastlane/fastlane#29908), so reads there are allowed
+// a bounded retry that no other 404 receives. Full next-page URLs are matched
+// on their path component.
+func isBuildUploadsPath(path string) bool {
+	segments := apiPathSegments(path)
+	if len(segments) < 2 || segments[0] != "v1" {
+		return false
+	}
+	switch segments[1] {
+	case "buildUploads", "buildUploadFiles":
+		return true
+	case "apps":
+		// /v1/apps/{id}/buildUploads and /v1/apps/{id}/relationships/buildUploads
+		switch len(segments) {
+		case 4:
+			return segments[3] == "buildUploads"
+		case 5:
+			return segments[3] == "relationships" && segments[4] == "buildUploads"
+		}
+	}
+	return false
+}
+
+// isIntermittentBuildUploadsNotFound reports whether err is the 404 NOT_FOUND
+// flake Apple emits on Build Upload API reads: the app relationship is
+// reported missing for an app that exists. Only reads are eligible, and only
+// when the missing resource is the app. On /v1/apps/{id}/buildUploads the app
+// is the only resource that can be missing, so any NOT_FOUND qualifies. On
+// /v1/buildUploads* and /v1/buildUploadFiles* the detail must name resource
+// type 'apps'; a genuinely missing upload or file id ("no resource of type
+// 'buildUploads'") is surfaced unchanged without consuming the retry budget.
+func isIntermittentBuildUploadsNotFound(method, path string, err error) bool {
+	if !shouldRetryMethod(method) || !isBuildUploadsPath(path) {
+		return false
+	}
+	apiErr, ok := errors.AsType[*APIError](err)
+	if !ok || apiErr.StatusCode != http.StatusNotFound || !strings.EqualFold(apiErr.Code, "NOT_FOUND") {
+		return false
+	}
+	if isAppBuildUploadsPath(path) {
+		return true
+	}
+	return notFoundNamesAppResource(apiErr)
+}
+
+// isAppBuildUploadsPath reports whether path is the app-scoped Build Upload
+// relationship view (/v1/apps/{id}/buildUploads or its relationships form).
+func isAppBuildUploadsPath(path string) bool {
+	segments := apiPathSegments(path)
+	return len(segments) >= 3 && segments[0] == "v1" && segments[1] == "apps"
+}
+
+// notFoundNamesAppResource reports whether a NOT_FOUND detail names the apps
+// resource type, e.g. "There is no resource of type 'apps' with id '123'".
+func notFoundNamesAppResource(apiErr *APIError) bool {
+	return appResourceNotFoundDetail.MatchString(apiErr.Detail)
+}
+
+var appResourceNotFoundDetail = regexp.MustCompile(`(?i)resource of type ['"‘’“”]?apps['"‘’“”]?(?:\s|$)`)
+
+// apiPathSegments returns the path segments of an API path or absolute URL,
+// without the query string.
+func apiPathSegments(path string) []string {
+	if strings.HasPrefix(path, "http://") || strings.HasPrefix(path, "https://") {
+		parsed, err := url.Parse(path)
+		if err != nil {
+			return nil
+		}
+		path = parsed.Path
+	}
+	if idx := strings.IndexByte(path, '?'); idx >= 0 {
+		path = path[:idx]
+	}
+	return strings.Split(strings.Trim(path, "/"), "/")
 }
 
 // sanitizeAuthHeader redacts the JWT token from Authorization header for logging.

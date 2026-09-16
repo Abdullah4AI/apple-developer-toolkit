@@ -583,7 +583,7 @@ func TestAppsPublicLegacyIDFlagIsUnknown(t *testing.T) {
 				t.Fatalf("apps public %s: removed --id alias is still registered", name)
 			}
 
-			assertUsageExit(t, []string{"apps", "public", name, "--id", "123", "--output", "json"}, "Error: unknown flag `--id` for `asc apps public "+name+"`")
+			assertUsageExit(t, []string{"apps", "public", name, "--id", "123", "--output", "json"}, "Error: `--id` was removed in 5.0.0; use `--app`")
 		})
 	}
 }

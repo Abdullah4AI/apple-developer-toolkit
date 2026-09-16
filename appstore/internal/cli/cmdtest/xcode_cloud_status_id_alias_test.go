@@ -96,8 +96,8 @@ func TestXcodeCloudStatusRejectsRemovedIDAliasAsUnknownFlagBeforeNetwork(t *test
 	if stdout != "" {
 		t.Fatalf("stdout = %q, want empty", stdout)
 	}
-	if !strings.Contains(stderr, "unknown flag `--id` for `asc xcode-cloud status`") {
-		t.Fatalf("stderr = %q, want unknown-flag diagnostic", stderr)
+	if !strings.Contains(stderr, "`--id` was removed in 5.0.0") {
+		t.Fatalf("stderr = %q, want removed-flag diagnostic", stderr)
 	}
 	if !strings.Contains(stderr, "--run-id") {
 		t.Fatalf("stderr = %q, want --run-id suggestion", stderr)

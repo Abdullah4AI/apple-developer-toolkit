@@ -2936,9 +2936,14 @@ func (k failingKeyring) Keys() ([]string, error) { return nil, k.err }
 type countingKeyring struct {
 	inner    *keyring.ArrayKeyring
 	setCalls int
+	getKeys  []string
 }
 
-func (k *countingKeyring) Get(key string) (keyring.Item, error) { return k.inner.Get(key) }
+func (k *countingKeyring) Get(key string) (keyring.Item, error) {
+	k.getKeys = append(k.getKeys, key)
+	return k.inner.Get(key)
+}
+
 func (k *countingKeyring) GetMetadata(key string) (keyring.Metadata, error) {
 	return k.inner.GetMetadata(key)
 }

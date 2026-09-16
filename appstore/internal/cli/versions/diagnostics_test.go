@@ -56,9 +56,17 @@ func TestVersionsLinksInvalidInputExposesStructuredDiagnostics(t *testing.T) {
 			wantParam:  "--next",
 		},
 		{
+			name:       "missing relationship type",
+			args:       []string{"--version-id", "version-1"},
+			wantStderr: "Error: --type is required; must be one of: " + shared.RelationshipTypeValues(appStoreVersionRelationshipList()) + "\n",
+			wantUsage:  true,
+			wantCode:   shared.DiagnosticRequiredInputMissing,
+			wantParam:  "--type",
+		},
+		{
 			name:       "unknown relationship type",
 			args:       []string{"--version-id", "version-1", "--type", "notARelationship"},
-			wantStderr: "Error: --type must be one of: " + strings.Join(appStoreVersionRelationshipList(), ", ") + "\n",
+			wantStderr: `Error: --type "notARelationship" is not a valid relationship type; must be one of: ` + shared.RelationshipTypeValues(appStoreVersionRelationshipList()) + "\n",
 			wantUsage:  true,
 			wantCode:   shared.DiagnosticInvalidInput,
 			wantParam:  "--type",

@@ -116,6 +116,26 @@ func TestEnvironmentSessionReadAllowlist(t *testing.T) {
 	}
 }
 
+func TestEnvironmentSessionIgnoresAppleIDEnvironmentFallback(t *testing.T) {
+	requests, cache := ephemeralSessionFixture(t, http.StatusOK, "user@example.com")
+	t.Setenv("ASC_WEB_APPLE_ID", "different@example.com")
+
+	var code int
+	stdout, stderr := captureOutput(t, func() {
+		code = cmd.Run([]string{"web", "removed-apps", "list", "--session-from-env", "--output", "json"}, "test")
+	})
+	if code != 0 {
+		t.Fatalf("exit=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	if !reflect.DeepEqual(*requests, []string{"GET /olympus/v1/session", "GET /iris/v1/apps"}) {
+		t.Fatalf("requests=%v", *requests)
+	}
+	if strings.Contains(stdout+stderr, "different@example.com") {
+		t.Fatalf("ASC_WEB_APPLE_ID affected ephemeral session output: stdout=%q stderr=%q", stdout, stderr)
+	}
+	assertEphemeralSessionUnchanged(t, cache, stdout+stderr)
+}
+
 func assertEphemeralSessionUnchanged(t *testing.T, cache, output string) {
 	t.Helper()
 	if strings.Contains(output, "super-secret-token") || strings.Contains(output, "override-secret") {

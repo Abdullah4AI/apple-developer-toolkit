@@ -807,3 +807,43 @@ func TestNegativeDurationIsClamped(t *testing.T) {
 		t.Fatalf("durationBucket() = %q, want %q", got, "lt_100ms")
 	}
 }
+
+// TestBuildEventWithContextNeverRecordsWebAppleIDEnvironmentValue pins the
+// privacy contract for the ASC_WEB_APPLE_ID fallback: the variable names an
+// Apple Account email, so the failure-parameter allowlist must keep the flag
+// name and drop the value even when the email arrives attached to it.
+func TestBuildEventWithContextNeverRecordsWebAppleIDEnvironmentValue(t *testing.T) {
+	clearContextEnv(t)
+	setTelemetryTestHome(t)
+
+	const appleID = "someone@example.com"
+	t.Setenv("ASC_WEB_APPLE_ID", appleID)
+
+	ev, ok := BuildEventWithContext(
+		"asc web review show",
+		"1.2.3",
+		0,
+		2,
+		EventContext{
+			InvocationShape:  InvocationShapeLeaf,
+			ErrorKind:        ErrorKindMissingRequired,
+			FailureStage:     FailureStageValidation,
+			FailureParameter: "--apple-id=" + appleID,
+		},
+	)
+	if !ok {
+		t.Fatal("expected event")
+	}
+	if ev.FailureParameter == nil || *ev.FailureParameter != "--apple-id" {
+		t.Fatalf("FailureParameter = %v, want --apple-id", ev.FailureParameter)
+	}
+	data, err := json.Marshal(ev)
+	if err != nil {
+		t.Fatalf("json.Marshal() error: %v", err)
+	}
+	for _, leak := range []string{appleID, "someone", "example.com"} {
+		if strings.Contains(string(data), leak) {
+			t.Fatalf("payload leaked Apple Account %q: %s", leak, data)
+		}
+	}
+}

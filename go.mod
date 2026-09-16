@@ -9,6 +9,7 @@ require (
 	github.com/bitrise-io/go-pkcs12 v0.1.0
 	github.com/creack/pty v1.1.24
 	github.com/fsnotify/fsnotify v1.10.1
+	github.com/fullsailor/pkcs7 v0.0.0-20190404230743-d7302db945fa
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/google/uuid v1.6.0
 	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51
@@ -16,6 +17,7 @@ require (
 	github.com/olekukonko/tablewriter v1.1.4
 	github.com/peterbourgon/ff/v3 v3.4.0
 	github.com/rivo/uniseg v0.4.4
+	github.com/ryanuber/go-glob v1.0.0
 	github.com/spf13/cobra v1.8.1
 	github.com/tidwall/jsonc v0.3.3
 	github.com/zalando/go-keyring v0.2.6
@@ -47,7 +49,6 @@ require (
 	github.com/bitrise-io/go-utils v1.0.13 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
-	github.com/fullsailor/pkcs7 v0.0.0-20190404230743-d7302db945fa // indirect
 	github.com/gofrs/uuid/v5 v5.2.0 // indirect
 	github.com/golang-jwt/jwt/v4 v4.5.0 // indirect
 	github.com/google/go-querystring v1.1.0 // indirect
@@ -56,7 +57,6 @@ require (
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
-	github.com/ryanuber/go-glob v1.0.0 // indirect
 	github.com/stretchr/objx v0.5.2 // indirect
 	github.com/stretchr/testify v1.11.1 // indirect
 )

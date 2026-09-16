@@ -110,11 +110,103 @@ func TestInspectSigningRunInputsAcceptsTerminalWildcard(t *testing.T) {
 	}
 }
 
+func TestSigningRunProfileIdentifiersRequireUniqueValues(t *testing.T) {
+	if _, err := signingRunTeamID([]string{"TEAM12345", "TEAM12345"}); !strings.Contains(err.Error(), "duplicate") {
+		t.Fatalf("duplicate teams error = %v, want duplicate rejection", err)
+	}
+	if _, err := signingRunApplicationIdentifierPrefixes([]string{"PREFIX", "PREFIX"}, "TEAM12345"); !strings.Contains(err.Error(), "duplicate") {
+		t.Fatalf("duplicate prefixes error = %v, want duplicate rejection", err)
+	}
+	profile := signingRunMobileProvision{
+		ApplicationIdentifierPrefix: []string{"LEGACY"},
+		Entitlements:                map[string]any{"application-identifier": "LEGACY.com.example.app"},
+	}
+	if got, err := signingRunBundleID(profile, "TEAM12345"); err != nil || got != "com.example.app" {
+		t.Fatalf("legacy prefix bundle ID = %q, error = %v, want accepted legacy prefix", got, err)
+	}
+	missingPrefix := profile
+	missingPrefix.ApplicationIdentifierPrefix = nil
+	if _, err := signingRunBundleID(missingPrefix, "TEAM12345"); !strings.Contains(err.Error(), "exactly one") {
+		t.Fatalf("missing prefix error = %v, want exact-one rejection", err)
+	}
+	contradictory := profile
+	contradictory.Entitlements = map[string]any{
+		"application-identifier":           "LEGACY.com.example.app",
+		"com.apple.application-identifier": "OTHER.com.example.app",
+	}
+	if _, err := signingRunBundleID(contradictory, "TEAM12345"); !strings.Contains(err.Error(), "contradictory") {
+		t.Fatalf("contradictory identifiers error = %v, want rejection", err)
+	}
+	missingPrimary := profile
+	missingPrimary.Entitlements = map[string]any{"com.apple.application-identifier": "LEGACY.com.example.app"}
+	if _, err := signingRunBundleID(missingPrimary, "TEAM12345"); !strings.Contains(err.Error(), "application identifier is missing") {
+		t.Fatalf("missing primary identifier error = %v, want rejection", err)
+	}
+}
+
+func TestInspectPKCS12IdentityRejectsNilContext(t *testing.T) {
+	_, err := InspectPKCS12Identity(signingRunNilContext(), PKCS12IdentityOptions{IdentityPath: "identity.p12"})
+	if err == nil || !strings.Contains(err.Error(), "context is required") {
+		t.Fatalf("InspectPKCS12Identity() error = %v, want required context", err)
+	}
+}
+
+func TestVerifySigningRunProfileTrustRejectsMultipleSigners(t *testing.T) {
+	key, certificate := makeSigningRunCertificate(t, "Profile Signer", "", time.Now())
+	signed, err := pkcs7.NewSignedData([]byte("fixture"))
+	if err != nil {
+		t.Fatalf("new signed data: %v", err)
+	}
+	if err := signed.AddSigner(certificate, key, pkcs7.SignerInfoConfig{}); err != nil {
+		t.Fatalf("add first signer: %v", err)
+	}
+	if err := signed.AddSigner(certificate, key, pkcs7.SignerInfoConfig{}); err != nil {
+		t.Fatalf("add second signer: %v", err)
+	}
+	data, err := signed.Finish()
+	if err != nil {
+		t.Fatalf("finish signed data: %v", err)
+	}
+	profile, err := pkcs7.Parse(data)
+	if err != nil {
+		t.Fatalf("parse signed data: %v", err)
+	}
+	if err := verifySigningRunProfileTrust(profile, nil, time.Now()); !strings.Contains(err.Error(), "exactly one CMS signer") {
+		t.Fatalf("error = %v, want multiple-signer rejection", err)
+	}
+}
+
+func TestVerifySigningRunProfileTrustRejectsNonAppleSignerAndUnpinnedRoot(t *testing.T) {
+	fixture := newSigningRunFixture(t, signingRunFixtureOptions{})
+	profile, err := pkcs7.Parse(fixture.profile)
+	if err != nil {
+		t.Fatalf("parse profile: %v", err)
+	}
+	if err := verifySigningRunProfileTrust(profile, nil, fixture.now); !strings.Contains(err.Error(), "Apple provisioning signer") {
+		t.Fatalf("non-Apple signer error = %v, want signer rejection", err)
+	}
+
+	for _, certificate := range profile.Certificates {
+		if certificate.Subject.CommonName != "Profile Signer" {
+			continue
+		}
+		certificate.Subject.CommonName = "Apple iPhone OS Provisioning Profile Signing"
+		certificate.Subject.Organization = []string{"Apple Inc."}
+		certificate.Issuer.CommonName = "Apple iPhone Certification Authority"
+		break
+	}
+	if err := verifySigningRunProfileTrust(profile, nil, fixture.now); !strings.Contains(err.Error(), "accepted Apple root") {
+		t.Fatalf("unpinned root error = %v, want pinned-root rejection", err)
+	}
+}
+
 type signingRunFixtureOptions struct {
 	profileExpired               bool
 	getTaskAllow                 bool
 	noDevices                    bool
 	allDevices                   bool
+	codeSigningLeaf              bool
+	selfSignedCodeSigningLeaf    bool
 	platforms                    []string
 	differentEmbeddedCertificate bool
 	certificateTeamID            string
@@ -130,10 +222,16 @@ type signingRunFixture struct {
 	teamID      string
 	bundleID    string
 	profileUUID string
+	trustAnchor []byte
 }
 
 func newSigningRunFixture(t *testing.T, options signingRunFixtureOptions) *signingRunFixture {
 	t.Helper()
+	previousTrustVerifier := signingRunProfileTrustFn
+	signingRunProfileTrustFn = func(profile *pkcs7.PKCS7, roots *x509.CertPool, now time.Time) error {
+		return profile.VerifyWithChainAtTime(roots, now)
+	}
+	t.Cleanup(func() { signingRunProfileTrustFn = previousTrustVerifier })
 	now := time.Date(2026, time.August, 13, 12, 0, 0, 0, time.UTC)
 	teamID := "TEAM12345"
 	certificateTeamID := options.certificateTeamID
@@ -153,7 +251,14 @@ func newSigningRunFixture(t *testing.T, options signingRunFixtureOptions) *signi
 		profileExpiry = now.Add(-time.Hour)
 	}
 
-	identityKey, identityCert := makeSigningRunCertificate(t, "Distribution", certificateTeamID, now)
+	var identityKey *rsa.PrivateKey
+	var identityCert *x509.Certificate
+	var trustAnchor []byte
+	if options.codeSigningLeaf {
+		identityKey, identityCert, trustAnchor = makeSigningRunCodeSigningLeafCertificate(t, "Distribution", certificateTeamID, now, options.selfSignedCodeSigningLeaf)
+	} else {
+		identityKey, identityCert = makeSigningRunCertificate(t, "Distribution", certificateTeamID, now)
+	}
 	identity, err := certificateutil.NewCertificateInfo(*identityCert, identityKey).EncodeToP12("secret")
 	if err != nil {
 		t.Fatalf("encode P12: %v", err)
@@ -213,7 +318,76 @@ func newSigningRunFixture(t *testing.T, options signingRunFixtureOptions) *signi
 		teamID:      teamID,
 		bundleID:    bundleID,
 		profileUUID: profileUUID,
+		trustAnchor: trustAnchor,
 	}
+}
+
+func makeSigningRunCodeSigningLeafCertificate(t *testing.T, commonName, teamID string, now time.Time, selfSigned bool) (*rsa.PrivateKey, *x509.Certificate, []byte) {
+	t.Helper()
+	rootKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("generate test root key: %v", err)
+	}
+	rootSerial, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 120))
+	if err != nil {
+		t.Fatalf("generate test root serial: %v", err)
+	}
+	rootTemplate := &x509.Certificate{
+		SerialNumber:          rootSerial,
+		Subject:               pkix.Name{CommonName: "ASC Signing Test Root"},
+		NotBefore:             now.Add(-24 * time.Hour),
+		NotAfter:              now.Add(365 * 24 * time.Hour),
+		BasicConstraintsValid: true,
+		IsCA:                  true,
+		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign | x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageCodeSigning},
+	}
+	rootDER, err := x509.CreateCertificate(rand.Reader, rootTemplate, rootTemplate, &rootKey.PublicKey, rootKey)
+	if err != nil {
+		t.Fatalf("create test root certificate: %v", err)
+	}
+	rootCertificate, err := x509.ParseCertificate(rootDER)
+	if err != nil {
+		t.Fatalf("parse test root certificate: %v", err)
+	}
+	leafKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("generate test leaf key: %v", err)
+	}
+	leafSerial, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 120))
+	if err != nil {
+		t.Fatalf("generate test leaf serial: %v", err)
+	}
+	leafTemplate := &x509.Certificate{
+		SerialNumber:          leafSerial,
+		Subject:               pkix.Name{CommonName: commonName, OrganizationalUnit: nonEmptyStrings(teamID)},
+		NotBefore:             now.Add(-24 * time.Hour),
+		NotAfter:              now.Add(365 * 24 * time.Hour),
+		BasicConstraintsValid: true,
+		IsCA:                  false,
+		KeyUsage:              x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageCodeSigning},
+	}
+	if selfSigned {
+		leafDER, err := x509.CreateCertificate(rand.Reader, leafTemplate, leafTemplate, &leafKey.PublicKey, leafKey)
+		if err != nil {
+			t.Fatalf("create self-signed test leaf certificate: %v", err)
+		}
+		leafCertificate, err := x509.ParseCertificate(leafDER)
+		if err != nil {
+			t.Fatalf("parse self-signed test leaf certificate: %v", err)
+		}
+		return leafKey, leafCertificate, nil
+	}
+	leafDER, err := x509.CreateCertificate(rand.Reader, leafTemplate, rootCertificate, &leafKey.PublicKey, rootKey)
+	if err != nil {
+		t.Fatalf("create test leaf certificate: %v", err)
+	}
+	leafCertificate, err := x509.ParseCertificate(leafDER)
+	if err != nil {
+		t.Fatalf("parse test leaf certificate: %v", err)
+	}
+	return leafKey, leafCertificate, rootDER
 }
 
 func makeSigningRunCertificate(t *testing.T, commonName, teamID string, now time.Time) (*rsa.PrivateKey, *x509.Certificate) {
@@ -370,6 +544,25 @@ func TestWithSigningRunInputDataClearsEarlierInputsOnReadFailure(t *testing.T) {
 	}
 }
 
+func TestSanitizedChildEnvironmentFiltersSecretsAndInvalidEntries(t *testing.T) {
+	base := []string{
+		"PATH=/usr/bin",
+		"ASC_PRIVATE_KEY=secret",
+		"ASC_ISSUER_ID=issuer",
+		"HOME=/Users/example",
+		"PATH=/custom/bin",
+		"MALFORMED",
+		"LANG=en_US.UTF-8\x00unsafe",
+		"TMPDIR=/tmp/asc",
+	}
+
+	got := SanitizedChildEnvironment(base)
+	want := []string{"PATH=/custom/bin", "HOME=/Users/example", "TMPDIR=/tmp/asc"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("SanitizedChildEnvironment() = %#v, want %#v", got, want)
+	}
+}
+
 func TestRunSigningEnvironmentOrdinarySetupAndCleanupFailuresRemainRootRenderable(t *testing.T) {
 	fixture := newSigningRunFixture(t, signingRunFixtureOptions{})
 	inspection, err := inspectSigningRunInputs(fixture.identity, []byte(fixture.password), fixture.profile, fixture.roots, fixture.now)
@@ -402,6 +595,41 @@ func TestRunSigningEnvironmentOrdinarySetupAndCleanupFailuresRemainRootRenderabl
 		if !strings.Contains(runErr.Error(), text) {
 			t.Fatalf("error = %q, want %q", runErr, text)
 		}
+	}
+}
+
+func TestRunSigningEnvironmentPropagatesEarlyTempCleanupFailure(t *testing.T) {
+	fixture := newSigningRunFixture(t, signingRunFixtureOptions{})
+	inspection, err := inspectSigningRunInputs(fixture.identity, []byte(fixture.password), fixture.profile, fixture.roots, fixture.now)
+	if err != nil {
+		t.Fatalf("inspect fixture: %v", err)
+	}
+	setupErr := errors.New("search list unavailable")
+	cleanupErr := errors.New("temporary directory cleanup failed")
+	events := []string{}
+	deps := fakeSigningRunDeps(&events)
+	deps.KeychainSearchList = func(context.Context) ([]string, error) { return nil, setupErr }
+	deps.RemoveTempDir = func(string) error { events = append(events, "remove-temp"); return cleanupErr }
+	_, runErr := runSigningEnvironment(context.Background(), deps, signingRunOptions{Child: []string{"tool"}}, fixture.profile, inspection, nil)
+	if !errors.Is(runErr, setupErr) || !errors.Is(runErr, cleanupErr) {
+		t.Fatalf("error = %v, want setup and temp cleanup causes", runErr)
+	}
+	if !slices.Contains(events, "remove-temp") {
+		t.Fatalf("cleanup events = %v, want temporary directory cleanup", events)
+	}
+}
+
+// signingRunNilContext supplies a typed nil solely to exercise the production
+// nil-context guards without triggering SA1012 on the call sites.
+func signingRunNilContext() context.Context { return nil }
+
+func TestSigningRunRejectsNilContext(t *testing.T) {
+	if err := executeSigningOperation(signingRunNilContext(), signingRunOptions{}, func(context.Context) error { return nil }); !strings.Contains(err.Error(), "context is required") {
+		t.Fatalf("executeSigningOperation() error = %v, want required context", err)
+	}
+	deps := fakeSigningRunDeps(&[]string{})
+	if _, err := runSigningEnvironment(signingRunNilContext(), deps, signingRunOptions{Child: []string{"tool"}}, nil, nil, func(context.Context) error { return nil }); !strings.Contains(err.Error(), "context is required") {
+		t.Fatalf("runSigningEnvironment() error = %v, want required context", err)
 	}
 }
 
@@ -606,7 +834,7 @@ func TestRunSigningEnvironmentRestoresStateInReverseOrder(t *testing.T) {
 		},
 		RemoveKeychainSearchEntry: func(context.Context, string) error { events = append(events, "remove-search-entry"); return nil },
 		DeleteKeychain:            func(context.Context, string) error { events = append(events, "delete-keychain"); return nil },
-		InstallProfile: func(_ string, _ []byte, _ string, beforeCreate func(signingRunProfileInstall) error) (signingRunProfileInstall, error) {
+		InstallProfile: func(_ context.Context, _ string, _ []byte, _ string, beforeCreate func(signingRunProfileInstall) error) (signingRunProfileInstall, error) {
 			events = append(events, "install-profile")
 			planned := signingRunProfileInstall{Path: "/profiles/uuid.mobileprovision", Created: true, Digest: inspection.ProfileSHA256}
 			if err := beforeCreate(planned); err != nil {
@@ -669,7 +897,7 @@ func TestRunSigningEnvironmentRestoresAfterEachSetupFailure(t *testing.T) {
 				}
 				return nil
 			}
-			deps.InstallProfile = func(_ string, _ []byte, _ string, beforeCreate func(signingRunProfileInstall) error) (signingRunProfileInstall, error) {
+			deps.InstallProfile = func(_ context.Context, _ string, _ []byte, _ string, beforeCreate func(signingRunProfileInstall) error) (signingRunProfileInstall, error) {
 				events = append(events, "install-profile")
 				if failStage == "install-profile" {
 					return signingRunProfileInstall{}, fail
@@ -728,7 +956,7 @@ func fakeSigningRunDeps(events *[]string) signingRunDeps {
 		SetKeychainSearchList:     func(context.Context, []string) error { *events = append(*events, "set-list"); return nil },
 		RemoveKeychainSearchEntry: func(context.Context, string) error { *events = append(*events, "remove-search-entry"); return nil },
 		DeleteKeychain:            func(context.Context, string) error { *events = append(*events, "delete-keychain"); return nil },
-		InstallProfile: func(string, []byte, string, func(signingRunProfileInstall) error) (signingRunProfileInstall, error) {
+		InstallProfile: func(context.Context, string, []byte, string, func(signingRunProfileInstall) error) (signingRunProfileInstall, error) {
 			*events = append(*events, "install-profile")
 			return signingRunProfileInstall{}, nil
 		},
@@ -787,6 +1015,53 @@ func TestSigningRunCommandThreadsFlagsAndChildArgv(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("options = %+v, want %+v", got, want)
+	}
+}
+
+func TestSigningRunCommandPreservesChildExitAndReceipt(t *testing.T) {
+	previous := executeSigningRunFn
+	var got signingRunOptions
+	executeSigningRunFn = func(_ context.Context, options signingRunOptions) error {
+		got = options
+		return withSigningRunReceipt(io.Discard, options.ReceiptPath, func() (signingRunReceipt, error) {
+			return signingRunReceipt{
+				SchemaVersion: 1,
+				Purpose:       signingRunPurposeReleaseTesting,
+				Outcome:       "failed",
+				ChildExitCode: 42,
+			}, shared.NewProcessExitError(42)
+		})
+	}
+	t.Cleanup(func() { executeSigningRunFn = previous })
+
+	receiptPath := filepath.Join(t.TempDir(), "receipt.json")
+	command := SigningRunCommand()
+	command.FlagSet.SetOutput(io.Discard)
+	if err := command.Parse([]string{
+		"--identity", "App.p12",
+		"--profile", "App.mobileprovision",
+		"--receipt", receiptPath,
+		"--", "child-tool", "--child-flag",
+	}); err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	err := command.Run(context.Background())
+	if code, ok := shared.ProcessExitCode(err); !ok || code != 42 {
+		t.Fatalf("process exit = %d, %t; want 42, true; error = %v", code, ok, err)
+	}
+	if !reflect.DeepEqual(got.Child, []string{"child-tool", "--child-flag"}) {
+		t.Fatalf("child argv = %#v, want child command and arguments", got.Child)
+	}
+	receiptData, readErr := os.ReadFile(receiptPath)
+	if readErr != nil {
+		t.Fatalf("read receipt: %v", readErr)
+	}
+	var receipt signingRunReceipt
+	if err := json.Unmarshal(receiptData, &receipt); err != nil {
+		t.Fatalf("decode receipt: %v", err)
+	}
+	if receipt.ChildExitCode != 42 || receipt.Outcome != "failed" {
+		t.Fatalf("receipt = %+v, want failed child exit 42", receipt)
 	}
 }
 

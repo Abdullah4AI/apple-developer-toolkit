@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -295,7 +296,10 @@ func validateKeyFileForOS(path, goos string) error {
 		return newPrivateKeyError(PrivateKeyInvalidFormat, errors.New("private key path is a directory"))
 	}
 	if filePermissionsTooPermissiveForOS(info.Mode(), goos) {
-		return newPrivateKeyError(PrivateKeyPermissionsInsecure, fmt.Errorf("private key file is too permissive; run: chmod 600 %q", path))
+		if command, safe := FilePermissionRemediationCommand(path); safe {
+			return newPrivateKeyError(PrivateKeyPermissionsInsecure, fmt.Errorf("private key file is too permissive; run: %s", command))
+		}
+		return newPrivateKeyError(PrivateKeyPermissionsInsecure, errors.New("private key file is too permissive; use auth login --fix-permissions or auth doctor --fix --confirm"))
 	}
 
 	data, err := io.ReadAll(file)
@@ -1321,22 +1325,11 @@ func GetCredentialsWithSource(profile string) (*config.Config, string, error) {
 		return configCfg, "config", nil
 	}
 
-	credentials, err := listFromKeychain()
+	lookup, err := lookupKeychainCredential(profile)
 	if err == nil {
-		defaultKey := ""
-		resolvedProfile := profile
-		if profile == "" {
-			defaultKey, err = defaultName()
-			if err != nil {
-				return nil, "", err
-			}
-			defaultKey = strings.TrimSpace(defaultKey)
-			resolvedProfile = defaultKey
-		}
-		cfg, selectedCred, found := selectCredential(resolvedProfile, credentials)
-		if found {
-			maybeBackfillCredentialMetadata(selectedCred)
-			return cfg, "keychain", nil
+		if lookup.found {
+			maybeBackfillCredentialMetadata(lookup.credential)
+			return configFromCredential(lookup.credential), "keychain", nil
 		}
 		if profile != "" {
 			if cfg, configErr := getCredentialsFromConfig(profile); configErr == nil {
@@ -1344,14 +1337,14 @@ func GetCredentialsWithSource(profile string) (*config.Config, string, error) {
 			}
 			return nil, "", fmt.Errorf("credentials not found for profile %q", profile)
 		}
-		if defaultKey != "" {
-			configCfg, configErr := getCredentialsFromConfig(defaultKey)
+		if lookup.defaultKey != "" {
+			configCfg, configErr := getCredentialsFromConfig(lookup.defaultKey)
 			if configErr != nil {
 				return nil, "", configErr
 			}
 			return configCfg, "config", nil
 		}
-		if len(credentials) > 0 {
+		if lookup.stored > 0 {
 			return nil, "", ErrDefaultCredentialsNotFound
 		}
 		configCfg, err := getCredentialsFromConfig(profile)
@@ -1424,21 +1417,140 @@ func GetCredentials(profile string) (*config.Config, error) {
 	return cfg, err
 }
 
-func selectCredential(profile string, credentials []Credential) (*config.Config, Credential, bool) {
+// keychainLookup is the outcome of resolving one stored keychain credential.
+type keychainLookup struct {
+	credential Credential
+	found      bool
+	// defaultKey is the configured default credential name; it is only
+	// resolved when no profile was requested.
+	defaultKey string
+	// stored counts the credentials in the keychain, whether or not one was
+	// selected.
+	stored int
+}
+
+// lookupKeychainCredential resolves the credential selected by profile, by the
+// configured default name, or by being the only stored credential.
+//
+// It reads at most one keychain secret. On macOS every secret read is a
+// separate authorization prompt until the running binary is trusted for that
+// item, so enumerating every stored credential to select one multiplies the
+// prompts by the number of stored profiles.
+func lookupKeychainCredential(profile string) (keychainLookup, error) {
+	kr, err := keyringOpener()
+	if err != nil {
+		return keychainLookup{}, err
+	}
+	names, err := keychainCredentialNames(kr)
+	if err != nil {
+		return keychainLookup{}, err
+	}
+	if legacyKeychainHasCredentials() {
+		// The full listing migrates legacy entries into the current keychain.
+		return lookupKeychainCredentialFromListing(profile)
+	}
+
+	lookup := keychainLookup{stored: len(names)}
+	selected, defaultKey, err := selectedCredentialName(profile)
+	if err != nil {
+		return keychainLookup{}, err
+	}
+	lookup.defaultKey = defaultKey
+	if selected == "" {
+		if len(names) != 1 {
+			return lookup, nil
+		}
+		selected = names[0]
+	}
+	if !slices.Contains(names, selected) {
+		return lookup, nil
+	}
+	storedDefault, _ := defaultName()
+	cred, found, err := credentialFromKeyringKey(kr, keyringKey(selected), storedDefault, loadStoredKeychainMetadata())
+	if err != nil {
+		return keychainLookup{}, err
+	}
+	if !found {
+		// The item disappeared after Keys returned it. Do not let a stale
+		// listing suppress the normal config fallback for an empty keychain.
+		lookup.stored--
+		return lookup, nil
+	}
+	if strings.TrimSpace(storedDefault) == "" && len(names) == 1 {
+		cred.IsDefault = true
+	}
+	lookup.credential = cred
+	lookup.found = true
+	return lookup, nil
+}
+
+func lookupKeychainCredentialFromListing(profile string) (keychainLookup, error) {
+	credentials, err := listFromKeychain()
+	if err != nil {
+		return keychainLookup{}, err
+	}
+	lookup := keychainLookup{stored: len(credentials)}
+	selected, defaultKey, err := selectedCredentialName(profile)
+	if err != nil {
+		return keychainLookup{}, err
+	}
+	lookup.defaultKey = defaultKey
+	lookup.credential, lookup.found = selectCredential(selected, credentials)
+	return lookup, nil
+}
+
+// selectedCredentialName returns the credential name to resolve and, when no
+// profile was requested, the configured default name.
+func selectedCredentialName(profile string) (string, string, error) {
+	if profile != "" {
+		return profile, "", nil
+	}
+	defaultKey, err := defaultName()
+	if err != nil {
+		return "", "", err
+	}
+	defaultKey = strings.TrimSpace(defaultKey)
+	return defaultKey, defaultKey, nil
+}
+
+func keychainCredentialNames(kr keyring.Keyring) ([]string, error) {
+	keys, err := kr.Keys()
+	if err != nil {
+		return nil, err
+	}
+	names := make([]string, 0, len(keys))
+	for _, key := range keys {
+		if strings.HasPrefix(key, keyringItemPrefix) {
+			names = append(names, strings.TrimPrefix(key, keyringItemPrefix))
+		}
+	}
+	sort.Strings(names)
+	return names, nil
+}
+
+func legacyKeychainHasCredentials() bool {
+	kr, err := legacyKeyringOpener()
+	if err != nil {
+		return false
+	}
+	names, err := keychainCredentialNames(kr)
+	return err == nil && len(names) > 0
+}
+
+func selectCredential(profile string, credentials []Credential) (Credential, bool) {
 	name := strings.TrimSpace(profile)
 	if name != "" {
 		for _, cred := range credentials {
 			if cred.Name == name {
-				return configFromCredential(cred), cred, true
+				return cred, true
 			}
 		}
-		return nil, Credential{}, false
+		return Credential{}, false
 	}
 	if len(credentials) == 1 {
-		cred := credentials[0]
-		return configFromCredential(cred), cred, true
+		return credentials[0], true
 	}
-	return nil, Credential{}, false
+	return Credential{}, false
 }
 
 func maybeBackfillCredentialMetadata(cred Credential) {
@@ -1804,60 +1916,78 @@ func listFromKeyring(kr keyring.Keyring) ([]Credential, error) {
 		if !strings.HasPrefix(key, keyringItemPrefix) {
 			continue
 		}
-		item, err := kr.Get(key)
+		cred, found, err := credentialFromKeyringKey(kr, key, defaultName, storedMetadata)
 		if err != nil {
-			if errors.Is(err, keyring.ErrKeyNotFound) {
-				continue
-			}
 			return nil, err
 		}
-		var payload credentialPayload
-		if err := json.Unmarshal(item.Data, &payload); err != nil {
-			return nil, fmt.Errorf("invalid keychain entry %q: %w", key, err)
+		if !found {
+			continue
 		}
-		name := strings.TrimPrefix(key, keyringItemPrefix)
-		descriptionMetadata := parseCredentialMetadataDescription(item.Description)
-		metadataNeedsBackfill := !hasCredentialMetadata(descriptionMetadata)
-		metadataModifiedAt := time.Time{}
-		if metadataInfo, metadataErr := kr.GetMetadata(key); metadataErr == nil {
-			metadataModifiedAt = metadataInfo.ModificationTime
-		}
-		if metadataNeedsBackfill {
-			if stored, ok := storedMetadata[name]; ok &&
-				storedKeychainMetadataMatches(stored, metadataModifiedAt) &&
-				credentialMetadataMatchesPayload(storedKeychainMetadataSummary(stored), payload) {
-				metadataNeedsBackfill = false
-			}
-		}
-		needsRewrite := false
-		if strings.TrimSpace(payload.PrivateKeyPEM) == "" {
-			if privateKeyPEM, err := loadPrivateKeyPEMForStorage(payload.PrivateKeyPath); err == nil && strings.TrimSpace(privateKeyPEM) != "" {
-				payload.PrivateKeyPEM = privateKeyPEM
-				needsRewrite = true
-				metadataNeedsBackfill = false
-			}
-		}
-		if needsRewrite {
-			updatedItem, marshalErr := keyringItemForCredential(name, payload)
-			if marshalErr == nil {
-				_ = kr.Set(updatedItem)
-			}
-		}
-		credentials = append(credentials, Credential{
-			Name:                  name,
-			KeyID:                 payload.KeyID,
-			IssuerID:              payload.IssuerID,
-			PrivateKeyPath:        payload.PrivateKeyPath,
-			PrivateKeyPEM:         payload.PrivateKeyPEM,
-			KeyType:               normalizedStoredKeyType(payload.KeyType),
-			IsDefault:             name == defaultName,
-			Source:                "keychain",
-			MetadataNeedsBackfill: metadataNeedsBackfill,
-			MetadataModifiedAt:    metadataModifiedAt,
-		})
+		credentials = append(credentials, cred)
 	}
 
 	return credentials, nil
+}
+
+// credentialFromKeyringKey reads one stored credential, including its secret.
+// It reports found=false when the item disappeared between listing and read.
+func credentialFromKeyringKey(
+	kr keyring.Keyring,
+	key string,
+	defaultName string,
+	storedMetadata map[string]config.KeychainMetadata,
+) (Credential, bool, error) {
+	item, err := kr.Get(key)
+	if err != nil {
+		if errors.Is(err, keyring.ErrKeyNotFound) {
+			return Credential{}, false, nil
+		}
+		return Credential{}, false, err
+	}
+	var payload credentialPayload
+	if err := json.Unmarshal(item.Data, &payload); err != nil {
+		return Credential{}, false, fmt.Errorf("invalid keychain entry %q: %w", key, err)
+	}
+	name := strings.TrimPrefix(key, keyringItemPrefix)
+	descriptionMetadata := parseCredentialMetadataDescription(item.Description)
+	metadataNeedsBackfill := !hasCredentialMetadata(descriptionMetadata)
+	metadataModifiedAt := time.Time{}
+	if metadataInfo, metadataErr := kr.GetMetadata(key); metadataErr == nil {
+		metadataModifiedAt = metadataInfo.ModificationTime
+	}
+	if metadataNeedsBackfill {
+		if stored, ok := storedMetadata[name]; ok &&
+			storedKeychainMetadataMatches(stored, metadataModifiedAt) &&
+			credentialMetadataMatchesPayload(storedKeychainMetadataSummary(stored), payload) {
+			metadataNeedsBackfill = false
+		}
+	}
+	needsRewrite := false
+	if strings.TrimSpace(payload.PrivateKeyPEM) == "" {
+		if privateKeyPEM, err := loadPrivateKeyPEMForStorage(payload.PrivateKeyPath); err == nil && strings.TrimSpace(privateKeyPEM) != "" {
+			payload.PrivateKeyPEM = privateKeyPEM
+			needsRewrite = true
+			metadataNeedsBackfill = false
+		}
+	}
+	if needsRewrite {
+		updatedItem, marshalErr := keyringItemForCredential(name, payload)
+		if marshalErr == nil {
+			_ = kr.Set(updatedItem)
+		}
+	}
+	return Credential{
+		Name:                  name,
+		KeyID:                 payload.KeyID,
+		IssuerID:              payload.IssuerID,
+		PrivateKeyPath:        payload.PrivateKeyPath,
+		PrivateKeyPEM:         payload.PrivateKeyPEM,
+		KeyType:               normalizedStoredKeyType(payload.KeyType),
+		IsDefault:             name == defaultName,
+		Source:                "keychain",
+		MetadataNeedsBackfill: metadataNeedsBackfill,
+		MetadataModifiedAt:    metadataModifiedAt,
+	}, true, nil
 }
 
 func migrateLegacyCredentials(credentials []Credential) {

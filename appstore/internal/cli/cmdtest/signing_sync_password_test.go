@@ -45,8 +45,8 @@ func TestSigningSyncRejectsRemovedPasswordFlagAsUnknown(t *testing.T) {
 			if stdout != "" {
 				t.Fatalf("stdout = %q, want empty", stdout)
 			}
-			if !strings.Contains(stderr, "unknown flag `--password` for `asc signing sync "+tt.name+"`") {
-				t.Fatalf("stderr = %q, want unknown-flag diagnostic", stderr)
+			if !strings.Contains(stderr, "`--password` was removed in 5.0.0") {
+				t.Fatalf("stderr = %q, want removed-flag diagnostic", stderr)
 			}
 			if !strings.Contains(stderr, "--password-file") {
 				t.Fatalf("stderr = %q, want a --password-file suggestion", stderr)

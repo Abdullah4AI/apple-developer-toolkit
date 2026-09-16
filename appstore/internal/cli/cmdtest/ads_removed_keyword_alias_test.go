@@ -10,8 +10,8 @@ import (
 // TestAdsV5NegativeKeywordViewKeywordAliasIsRemoved locks the 5.0.0 removal of
 // the CLI-side hidden `--keyword` alias on the deprecated v5 negative keyword
 // view commands. The v5 tree and its Apple-retirement warnings stay; only
-// `--negative-keyword` is registered, so the old spelling fails with the
-// generic unknown-flag usage error before any Apple Ads authentication.
+// `--negative-keyword` is registered, so the old spelling fails with migration
+// guidance before any Apple Ads authentication.
 func TestAdsV5NegativeKeywordViewKeywordAliasIsRemoved(t *testing.T) {
 	setupUsageExitCodeEnv(t)
 	t.Setenv("ASC_ADS_CLIENT_ID", "")
@@ -54,11 +54,10 @@ func TestAdsV5NegativeKeywordViewKeywordAliasIsRemoved(t *testing.T) {
 			if stdout != "" {
 				t.Fatalf("stdout = %q, want empty", stdout)
 			}
-			// The generic unknown-flag path suggests the canonical spelling.
 			commandPath := "asc " + strings.Join(path, " ")
-			want := "Error: unknown flag `--keyword` for `" + commandPath + "`\nTry:\n  --negative-keyword\nFor help:\n  " + commandPath + " --help\n"
+			want := "Error: `--keyword` was removed in 5.0.0; use `--negative-keyword` (see migrate-to-5-0)\nFor help:\n  " + commandPath + " --help\n"
 			if stderr != want {
-				t.Fatalf("stderr = %q, want generic unknown-flag failure %q", stderr, want)
+				t.Fatalf("stderr = %q, want removed-flag guidance %q", stderr, want)
 			}
 		})
 	}

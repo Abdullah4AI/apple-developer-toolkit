@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/peterbourgon/ff/v3/ffcli"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
@@ -76,6 +77,11 @@ Examples:
 
 			resp, err := client.GetInAppPurchaseAvailability(requestCtx, iapValue)
 			if err != nil {
+				if asc.IsMissingResourceOfType(err, "inAppPurchaseAvailabilities") {
+					safeIAPID := asc.SanitizeTerminalText(iapValue)
+					fmt.Fprintf(os.Stderr, "In-app purchase %s has no availability configured yet; create it with: asc iap pricing availability set --iap-id %s --territories \"USA\"\n", safeIAPID, safeIAPID)
+					return shared.NewNotConfiguredReportedError(fmt.Errorf("iap pricing availability view: in-app purchase %q has no availability configured", iapValue))
+				}
 				return fmt.Errorf("iap pricing availability view: failed to fetch: %w", err)
 			}
 

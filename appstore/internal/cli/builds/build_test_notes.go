@@ -495,7 +495,15 @@ func resolveTestNotesLocalization(ctx context.Context, client *asc.Client, selec
 		return nil, fmt.Errorf("no localization found for build %q and locale %q", buildResp.Data.ID, locale)
 	}
 	if len(localizations.Data) > 1 {
-		return nil, fmt.Errorf("multiple localizations found for build %q and locale %q; use --localization-id", buildResp.Data.ID, locale)
+		return nil, &shared.AmbiguousSelectionError{
+			Kind:        "build localization",
+			Description: fmt.Sprintf("build %q and locale %q", buildResp.Data.ID, strings.TrimSpace(locale)),
+			Flag:        "--localization-id",
+			Candidates: shared.LocalizationCandidates(localizations.Data, func(attributes asc.BetaBuildLocalizationAttributes) string {
+				return attributes.Locale
+			}),
+			Hint: "Use --localization-id instead of the build and locale selectors.",
+		}
 	}
 
 	match := localizations.Data[0]

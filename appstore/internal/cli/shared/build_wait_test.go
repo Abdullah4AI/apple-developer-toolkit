@@ -465,6 +465,12 @@ func TestBuildUploadFailureErrorDoesNotGuessForMixedCodes(t *testing.T) {
 }
 
 func TestWaitForBuildByNumberOrUploadFailureFallsBackWhenUploadLookupFails(t *testing.T) {
+	// Build Upload API 404s are retried; exhaust the budget quickly so the
+	// fallback is exercised behind the retry wrappers without real backoff.
+	t.Setenv("ASC_MAX_RETRIES", "1")
+	t.Setenv("ASC_BASE_DELAY", "1ms")
+	t.Setenv("ASC_MAX_DELAY", "1ms")
+
 	client := newBuildWaitTestClient(t, func(req *http.Request) (*http.Response, error) {
 		if req.Method != http.MethodGet {
 			return nil, fmt.Errorf("expected GET, got %s", req.Method)

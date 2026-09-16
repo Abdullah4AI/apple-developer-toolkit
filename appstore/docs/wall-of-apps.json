@@ -65,6 +65,11 @@
     "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/00/14/93/0014939d-ce61-2386-0bf3-b79c4dd678c4/AppIcon-0-0-1x_U007ephone-0-1-85-220.png/512x512bb.jpg"
   },
   {
+    "app": "AnimAtlas",
+    "link": "https://apps.apple.com/us/app/animatlas/id6792998018?uo=4",
+    "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/50/cd/84/50cd848a-8b56-9d26-4b78-385bf9432f54/ExplorerDex-0-0-1x_U007ephone-0-1-85-220.png/512x512bb.jpg"
+  },
+  {
     "app": "AnLi Kids",
     "link": "https://apps.apple.com/us/app/anli-kids/id6759224873?uo=4",
     "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/32/55/ba/3255ba71-f714-8d4c-b0b2-2dadd0a9fe26/AppIcon-0-0-1x_U007epad-0-1-85-220.png/512x512bb.jpg"
@@ -123,6 +128,11 @@
     "app": "Beauty Fonts - Font Keyboard",
     "link": "https://apps.apple.com/us/app/beauty-fonts-font-keyboard/id1438854446?uo=4",
     "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/ce/85/c5/ce85c50d-e009-34b8-96f1-924e6881a364/AppIcon-0-0-1x_U007epad-0-1-0-85-220-0.png/512x512bb.jpg"
+  },
+  {
+    "app": "Biaura - Sleep & Focus Sounds",
+    "link": "https://apps.apple.com/us/app/biaura-sleep-focus-sounds/id6748336447?uo=4",
+    "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/af/9c/df/af9cdf51-1465-d861-f435-b05afb49def6/AppIcon-0-0-1x_U007ephone-0-1-85-220.png/512x512bb.jpg"
   },
   {
     "app": "Bibliostats",
@@ -377,6 +387,11 @@
     "app": "Dateminder - Event Reminders",
     "link": "https://apps.apple.com/us/app/dateminder-event-reminders/id6480020164?uo=4",
     "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/a2/23/3c/a2233c68-f1ef-e5a4-4574-9ec5fa2a1d4c/AppIcon-0-1x_U007ephone-0-1-sRGB-85-220-0.png/512x512bb.jpg"
+  },
+  {
+    "app": "DAWN for Mastodon by Nightfox",
+    "link": "https://apps.apple.com/us/app/dawn-for-mastodon-by-nightfox/id1668645019?uo=4",
+    "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/da/40/73/da4073fc-6cdb-a01e-3666-3575f021ff74/AppIcon10-0-0-1x_U007epad-0-0-0-1-0-sRGB-85-220.png/512x512bb.jpg"
   },
   {
     "app": "DayBar",
@@ -942,6 +957,10 @@
     "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/12/8e/fb/128efb33-a5ee-d321-2720-924431d772dd/AppIcon-0-0-1x_U007emarketing-0-8-0-85-220.png/512x512bb.jpg"
   },
   {
+    "app": "Majlis",
+    "link": "https://www.joinmajlis.app"
+  },
+  {
     "app": "Margin: AI Article Reader",
     "link": "https://apps.apple.com/us/app/margin-ai-article-reader/id6748705626?uo=4",
     "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/1a/dd/73/1add730b-0e85-d8fd-09eb-722cb492877d/AppIcon-0-0-1x_U007epad-0-1-85-220.png/512x512bb.jpg"
@@ -1224,6 +1243,11 @@
     "app": "Photo Cleanup: Swiper",
     "link": "https://apps.apple.com/us/app/photo-cleanup-swiper/id6752829792?uo=4",
     "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/9f/00/7a/9f007a81-ffab-5968-ae29-35add00577b1/AppIcon-0-0-1x_U007epad-0-1-85-220.png/512x512bb.jpg"
+  },
+  {
+    "app": "Photo Journal & Mood: Loggoo",
+    "link": "https://apps.apple.com/us/app/photo-journal-mood-loggoo/id6799161077?uo=4",
+    "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/fb/cb/04/fbcb0465-34d5-c49f-a341-6df00efd1fc2/AppIcon-0-0-1x_U007ephone-0-1-85-220.png/512x512bb.jpg"
   },
   {
     "app": "Photo2Calendar Scanner Planner",
@@ -1754,6 +1778,11 @@
     "app": "SubList: Subscription List",
     "link": "https://apps.apple.com/us/app/sublist-subscription-list/id6757860829?uo=4",
     "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/45/7e/dd/457edd6b-d9f7-89a7-99b2-72a72cab212f/AppIcon-0-0-1x_U007epad-0-1-P3-85-220.png/512x512bb.jpg"
+  },
+  {
+    "app": "Subscription Tracker: Submindo",
+    "link": "https://apps.apple.com/us/app/subscription-tracker-submindo/id6777319489?uo=4",
+    "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/99/30/b5/9930b5c9-1fb5-45f2-9589-e2c9ec83ef2d/AppIcon-0-0-1x_U007emarketing-0-7-0-85-220.png/512x512bb.jpg"
   },
   {
     "app": "Summit",

@@ -2,6 +2,7 @@ package builds
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -73,6 +74,9 @@ func ResolveBuild(ctx context.Context, client *asc.Client, opts ResolveBuildOpti
 			ExcludeExpired:        opts.ExcludeExpired,
 		}, false)
 		if err != nil {
+			if errors.Is(err, asc.ErrNotFound) {
+				return nil, err
+			}
 			return nil, fmt.Errorf("failed to fetch latest build: %w", err)
 		}
 		return buildResp, nil
@@ -209,7 +213,7 @@ func resolveBuildByNumberSelection(
 	}
 
 	if len(buildsResp.Data) > 1 || strings.TrimSpace(buildsResp.Links.Next) != "" {
-		return nil, ambiguousBuildNumberSelection(resolvedAppID, buildNumber, version, platform)
+		return nil, ambiguousBuildNumberSelection(resolvedAppID, buildNumber, version, platform, shared.BuildCandidates(buildsResp.Data), strings.TrimSpace(buildsResp.Links.Next) != "")
 	}
 
 	return &asc.BuildResponse{Data: buildsResp.Data[0], Links: buildsResp.Links}, nil
@@ -248,7 +252,7 @@ func resolveBuildByNumberSelectionSince(
 				return &asc.BuildResponse{Data: *selected}, nil
 			}
 			if selected != nil {
-				return nil, ambiguousBuildNumberSelection(appID, buildNumber, version, platform)
+				return nil, ambiguousBuildNumberSelection(appID, buildNumber, version, platform, shared.BuildCandidates([]asc.Resource[asc.BuildAttributes]{*selected, build}), true)
 			}
 
 			selectedBuild := build
@@ -270,23 +274,38 @@ func resolveBuildByNumberSelectionSince(
 	}
 }
 
+// noBuildFoundForBuildNumber reports an empty build-number lookup. The error
+// carries asc.ErrNotFound so callers exit with the not-found code instead of a
+// generic failure.
 func noBuildFoundForBuildNumber(appID, buildNumber, version, platform string) error {
-	return fmt.Errorf(
-		"no build found for app %s with build number %q%s",
-		appID,
-		buildNumber,
-		describeBuildNumberSelectionFilters(version, platform),
+	return shared.NewErrorWithCause(
+		fmt.Errorf(
+			"no build found for app %s with build number %q%s; check --build-number, --version, and --platform, or use --build-id",
+			appID,
+			buildNumber,
+			describeBuildNumberSelectionFilters(version, platform),
+		),
+		asc.ErrNotFound,
 	)
 }
 
-func ambiguousBuildNumberSelection(appID, buildNumber, version, platform string) error {
-	return fmt.Errorf(
-		"multiple builds found for app %s with build number %q%s; %s",
-		appID,
-		buildNumber,
-		describeBuildNumberSelectionFilters(version, platform),
-		describeBuildNumberSelectionHint(version, platform),
-	)
+// ambiguousBuildNumberSelection reports a build-number lookup that matched
+// more than one build. The caller has to narrow the selector, so this stays a
+// usage error, and the message names every matching build ID plus the flag
+// that accepts one of them.
+func ambiguousBuildNumberSelection(appID, buildNumber, version, platform string, candidates []shared.AmbiguousCandidate, candidatesAreSample bool) error {
+	hint := describeBuildNumberSelectionHint(version, platform)
+	if candidatesAreSample {
+		hint = strings.TrimSpace("The listed builds are a sample; additional matches may exist. " + hint)
+	}
+	return shared.AmbiguousUsageError(&shared.AmbiguousSelectionError{
+		Kind:                "build",
+		Description:         fmt.Sprintf("build number %q%s for app %s", buildNumber, describeBuildNumberSelectionFilters(version, platform), appID),
+		Flag:                "--build-id",
+		Candidates:          candidates,
+		CandidatesAreSample: candidatesAreSample,
+		Hint:                hint,
+	})
 }
 
 func describeBuildNumberSelectionFilters(version, platform string) string {
@@ -306,12 +325,12 @@ func describeBuildNumberSelectionFilters(version, platform string) string {
 func describeBuildNumberSelectionHint(version, platform string) string {
 	switch {
 	case strings.TrimSpace(version) == "" && strings.TrimSpace(platform) == "":
-		return "add --version and/or --platform, or use --build-id"
+		return "Or narrow the match with --version and/or --platform."
 	case strings.TrimSpace(version) == "":
-		return "add --version, or use --build-id"
+		return "Or narrow the match with --version."
 	case strings.TrimSpace(platform) == "":
-		return "add --platform, or use --build-id"
+		return "Or narrow the match with --platform."
 	default:
-		return "use --build-id"
+		return ""
 	}
 }

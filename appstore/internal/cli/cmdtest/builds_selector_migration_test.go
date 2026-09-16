@@ -7,9 +7,9 @@ import (
 	rootcmd "github.com/Abdullah4AI/apple-developer-toolkit/appstore/cmd"
 )
 
-// assertRemovedFlagIsUnknown runs the CLI entrypoint and asserts the generic
-// unknown-flag usage path: exit code 2, empty stdout, and no deprecation copy.
-func assertRemovedFlagIsUnknown(t *testing.T, args []string, flagName string) {
+// assertRemovedFlagGuidance runs the CLI entrypoint and asserts the removed-flag
+// usage path: exit code 2, empty stdout, and no deprecation copy.
+func assertRemovedFlagGuidance(t *testing.T, args []string, flagName string) {
 	t.Helper()
 
 	var code int
@@ -23,15 +23,15 @@ func assertRemovedFlagIsUnknown(t *testing.T, args []string, flagName string) {
 	if stdout != "" {
 		t.Fatalf("expected empty stdout, got %q", stdout)
 	}
-	if !strings.Contains(stderr, "unknown flag `"+flagName+"`") {
-		t.Fatalf("expected unknown flag diagnostic for %s, got %q", flagName, stderr)
+	if !strings.Contains(stderr, "Error: `"+flagName+"` was removed in 5.0.0") {
+		t.Fatalf("expected removed-flag guidance for %s, got %q", flagName, stderr)
 	}
 	if strings.Contains(stderr, "is deprecated") {
 		t.Fatalf("removed flag %s must not emit deprecation guidance, got %q", flagName, stderr)
 	}
 }
 
-func TestBuildsRemovedSelectorAliasesAreUnknownFlags(t *testing.T) {
+func TestBuildsRemovedSelectorAliasesHaveGuidance(t *testing.T) {
 	tests := []struct {
 		name string
 		args []string
@@ -91,7 +91,7 @@ func TestBuildsRemovedSelectorAliasesAreUnknownFlags(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			assertRemovedFlagIsUnknown(t, test.args, test.flag)
+			assertRemovedFlagGuidance(t, test.args, test.flag)
 		})
 	}
 }

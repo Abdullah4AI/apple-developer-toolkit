@@ -98,6 +98,9 @@ Examples:
 
 			scheduleResp, err := getAppPriceScheduleWithTimeout(ctx, client, resolvedAppID)
 			if err != nil {
+				if isAppPriceScheduleNotConfigured(err) {
+					return reportAppPriceScheduleNotConfigured(resolvedAppID, *output.Output, *output.Pretty)
+				}
 				return fmt.Errorf("pricing current: get app price schedule: %w", err)
 			}
 
@@ -108,6 +111,9 @@ Examples:
 
 			baseTerritoryResp, err := getAppPriceScheduleBaseTerritoryWithTimeout(ctx, client, scheduleID)
 			if err != nil {
+				if isAppPriceScheduleNotConfigured(err) {
+					return reportAppPriceScheduleNotConfigured(resolvedAppID, *output.Output, *output.Pretty)
+				}
 				return fmt.Errorf("pricing current: get base territory: %w", err)
 			}
 
@@ -120,6 +126,9 @@ Examples:
 				return client.GetAppPriceScheduleManualPrices(callCtx, scheduleID, opts...)
 			})
 			if err != nil {
+				if isAppPriceScheduleNotConfigured(err) {
+					return reportAppPriceScheduleNotConfigured(resolvedAppID, *output.Output, *output.Pretty)
+				}
 				return fmt.Errorf("pricing current: fetch manual prices: %w", err)
 			}
 
@@ -142,6 +151,9 @@ Examples:
 					return client.GetAppPriceScheduleAutomaticPrices(callCtx, scheduleID, opts...)
 				})
 				if err != nil {
+					if isAppPriceScheduleNotConfigured(err) {
+						return reportAppPriceScheduleNotConfigured(resolvedAppID, *output.Output, *output.Pretty)
+					}
 					return fmt.Errorf("pricing current: fetch automatic prices: %w", err)
 				}
 				entries = append(entries, automaticEntries...)
@@ -169,6 +181,29 @@ Examples:
 			return printAppCurrentPricingResult(result, *output.Output, *output.Pretty)
 		},
 	}
+}
+
+// isAppPriceScheduleNotConfigured reports whether err is Apple's 404 for an
+// app whose price schedule was never created. Live, GET
+// /v1/apps/{id}/appPriceSchedule still returns a synthetic schedule whose ID is
+// the app ID, and the first schedule sub-resource read (base territory or
+// prices) then fails with "There is no resource of type 'null' with id
+// '{appId}'". The appPriceSchedules shape is accepted as well in case Apple
+// starts rejecting the schedule read itself.
+func isAppPriceScheduleNotConfigured(err error) bool {
+	return asc.IsMissingResourceOfType(err, "appPriceSchedules") || asc.IsMissingResourceOfType(err, "null")
+}
+
+// reportAppPriceScheduleNotConfigured prints the configured=false receipt on
+// stdout and the remediation hint on stderr, then returns the expected-negative
+// error so callers can distinguish "not configured yet" from a failed request.
+func reportAppPriceScheduleNotConfigured(appID, format string, pretty bool) error {
+	if err := shared.PrintOutput(&asc.AppPriceScheduleNotConfiguredResult{AppID: appID, Configured: false}, format, pretty); err != nil {
+		return fmt.Errorf("pricing current: %w", err)
+	}
+	safeAppID := asc.SanitizeTerminalText(appID)
+	fmt.Fprintf(os.Stderr, "App %s has no price schedule configured yet; create it with: asc pricing schedule create --app %s --free --base-territory \"USA\" --start-date \"YYYY-MM-DD\"\n", safeAppID, safeAppID)
+	return shared.NewNotConfiguredReportedError(fmt.Errorf("pricing current: app %q has no price schedule configured", appID))
 }
 
 type appSchedulePricePageFetcher func(context.Context, ...asc.AppPriceSchedulePricesOption) (*asc.AppPricesResponse, error)

@@ -109,6 +109,46 @@ func SelectedProfile() string {
 	return selectedProfile
 }
 
+// RootFlagsForReinvocation returns the root-level flags that were explicitly
+// set, in binding order, so a command can print a re-invocation that keeps the
+// caller's behavior instead of silently dropping flags such as --strict-auth.
+// Values are rendered with ShellQuote; ok is false when any of them cannot be
+// rendered as a copyable argument, so callers omit the suggestion entirely
+// rather than print a command that would run with a different value.
+func RootFlagsForReinvocation() (args []string, ok bool) {
+	args = make([]string, 0, 8)
+	if profile := strings.TrimSpace(selectedProfile); profile != "" {
+		quoted, quotable := ShellQuote(profile)
+		if !quotable {
+			return nil, false
+		}
+		args = append(args, "--profile", quoted)
+	}
+	if strictAuth {
+		args = append(args, "--strict-auth")
+	}
+	// --debug, --api-debug, and --retry-log are deliberately omitted: they only
+	// add stderr diagnostics and never change what a command does, so repeating
+	// them would lengthen the printed command without preserving behavior.
+	for _, report := range []struct {
+		name  string
+		value string
+	}{
+		{name: "--report", value: ReportFormat()},
+		{name: "--report-file", value: ReportFile()},
+	} {
+		if report.value == "" {
+			continue
+		}
+		quoted, quotable := ShellQuote(report.value)
+		if !quotable {
+			return nil, false
+		}
+		args = append(args, report.name, quoted)
+	}
+	return args, true
+}
+
 // ProgressEnabled reports whether it's safe/appropriate to emit progress messages.
 // Progress must be stderr-only and must not appear when stderr is non-interactive.
 func ProgressEnabled() bool {

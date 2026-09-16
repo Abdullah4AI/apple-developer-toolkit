@@ -29,6 +29,11 @@ func TestMain(m *testing.M) {
 	_ = os.Setenv("ASC_MAX_RETRIES", "0")
 	_ = os.Setenv("ASC_TELEMETRY_DISABLED", "1")
 	_ = os.Setenv("HOME", tempDir)
+	// The Apple ID environment fallback for "asc web" commands is a
+	// process-wide input: a developer or CI host that exports it would
+	// otherwise select an account for every session-resolving command under
+	// test. Tests that want it set it themselves.
+	_ = os.Unsetenv(webAppleIDEnvNameForTest())
 
 	code := m.Run()
 

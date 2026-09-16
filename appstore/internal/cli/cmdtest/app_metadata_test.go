@@ -232,7 +232,7 @@ func TestVersionsRelationshipsValidationErrors(t *testing.T) {
 		{
 			name:    "versions links invalid type",
 			args:    []string{"versions", "links", "--version-id", "id-1", "--type", "nope"},
-			wantErr: "--type must be one of",
+			wantErr: `--type "nope" is not a valid relationship type; must be one of`,
 		},
 		{
 			name:    "versions links invalid limit for single",

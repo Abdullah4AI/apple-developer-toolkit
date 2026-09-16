@@ -828,8 +828,8 @@ func TestRemovedBuildSelectorAliasesExitUsage(t *testing.T) {
 			if stdout != "" {
 				t.Fatalf("expected empty stdout, got %q", stdout)
 			}
-			if !strings.Contains(stderr, "Error: unknown flag `"+test.flag+"`") {
-				t.Fatalf("expected unknown flag diagnostic for %s, got %q", test.flag, stderr)
+			if !strings.Contains(stderr, "Error: `"+test.flag+"` was removed in 5.0.0") {
+				t.Fatalf("expected removed-flag guidance for %s, got %q", test.flag, stderr)
 			}
 			if strings.Contains(stderr, "is deprecated") {
 				t.Fatalf("removed alias must not emit deprecation guidance, got %q", stderr)
@@ -922,8 +922,8 @@ func TestTestFlightDistributionEditExternalTestingIsUnknownFlag(t *testing.T) {
 			if stdout != "" {
 				t.Fatalf("expected empty stdout, got %q", stdout)
 			}
-			if !strings.Contains(stderr, "Error: unknown flag `--external-testing`") {
-				t.Fatalf("expected unknown flag diagnostic for --external-testing, got %q", stderr)
+			if !strings.Contains(stderr, "Error: `--external-testing` was removed in 5.0.0") {
+				t.Fatalf("expected removal diagnostic for --external-testing, got %q", stderr)
 			}
 			if strings.Contains(stderr, "is deprecated") {
 				t.Fatalf("removed flag must not emit deprecation guidance, got %q", stderr)
@@ -1066,8 +1066,8 @@ func TestWebAuthLoginRemovedTwoFactorFlagExitCode(t *testing.T) {
 	}
 
 	stderr := string(output)
-	if !strings.Contains(stderr, "unknown flag `--two-factor-code` for `asc web auth login`") {
-		t.Fatalf("expected unknown-flag usage error, got %q", stderr)
+	if !strings.Contains(stderr, "`--two-factor-code` was removed in 5.0.0") {
+		t.Fatalf("expected removed-flag usage error, got %q", stderr)
 	}
 	if !strings.Contains(stderr, "--two-factor-code-command") {
 		t.Fatalf("expected --two-factor-code-command suggestion, got %q", stderr)

@@ -73,7 +73,7 @@ func TestReviewRemovedItemCommandsProvideMigrationGuidance(t *testing.T) {
 		{
 			name:       "ordinary typo",
 			args:       []string{"review", "items", "lits"},
-			wantStderr: "Error: unknown command `asc review items lits`\nTry:\n  asc review items list\nFor help:\n  asc review items --help\n",
+			wantStderr: "Error: unknown command `asc review items lits`\nTry:\n  asc review items list --help\nFor help:\n  asc review items --help\n",
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {

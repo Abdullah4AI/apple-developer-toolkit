@@ -73,22 +73,23 @@ func TestGameCenterRelationshipReplacementRequiresConfirm(t *testing.T) {
 // TestGameCenterRemovedFlagsAreUnknown locks the 5.0.0 removal of flags that
 // 4.x kept registered only to return migration guidance: the pagination flags
 // on the singleton `details list` and --challenge-enabled on `details
-// create|update`. None of them is registered any more, so the failure is the
-// generic unknown-flag usage error with no HTTP request.
+// create|update`. None of them is registered any more, so the failure carries
+// the migration step and makes no HTTP request.
 func TestGameCenterRemovedFlagsAreUnknown(t *testing.T) {
 	setupUsageExitCodeEnv(t)
 
 	tests := []struct {
-		name    string
-		command string
-		args    []string
-		flag    string
+		name     string
+		command  string
+		args     []string
+		flag     string
+		guidance string
 	}{
-		{name: "details list --limit", command: "asc game-center details list", args: []string{"game-center", "details", "list", "--app", "app-1", "--limit", "5"}, flag: "--limit"},
-		{name: "details list --next", command: "asc game-center details list", args: []string{"game-center", "details", "list", "--app", "app-1", "--next", "https://api.appstoreconnect.apple.com/v1/gameCenterDetails?cursor=x"}, flag: "--next"},
-		{name: "details list --paginate", command: "asc game-center details list", args: []string{"game-center", "details", "list", "--app", "app-1", "--paginate"}, flag: "--paginate"},
-		{name: "details create --challenge-enabled", command: "asc game-center details create", args: []string{"game-center", "details", "create", "--app", "app-1", "--challenge-enabled", "true"}, flag: "--challenge-enabled"},
-		{name: "details update --challenge-enabled", command: "asc game-center details update", args: []string{"game-center", "details", "update", "--id", "detail-1", "--challenge-enabled", "true"}, flag: "--challenge-enabled"},
+		{name: "details list --limit", command: "asc game-center details list", args: []string{"game-center", "details", "list", "--app", "app-1", "--limit", "5"}, flag: "--limit", guidance: "each app has a single Game Center detail"},
+		{name: "details list --next", command: "asc game-center details list", args: []string{"game-center", "details", "list", "--app", "app-1", "--next", "https://api.appstoreconnect.apple.com/v1/gameCenterDetails?cursor=x"}, flag: "--next", guidance: "each app has a single Game Center detail"},
+		{name: "details list --paginate", command: "asc game-center details list", args: []string{"game-center", "details", "list", "--app", "app-1", "--paginate"}, flag: "--paginate", guidance: "each app has a single Game Center detail"},
+		{name: "details create --challenge-enabled", command: "asc game-center details create", args: []string{"game-center", "details", "create", "--app", "app-1", "--challenge-enabled", "true"}, flag: "--challenge-enabled", guidance: "App Store Connect no longer accepts `challengeEnabled`"},
+		{name: "details update --challenge-enabled", command: "asc game-center details update", args: []string{"game-center", "details", "update", "--id", "detail-1", "--challenge-enabled", "true"}, flag: "--challenge-enabled", guidance: "App Store Connect no longer accepts `challengeEnabled`"},
 	}
 
 	for _, test := range tests {
@@ -111,9 +112,9 @@ func TestGameCenterRemovedFlagsAreUnknown(t *testing.T) {
 			if stdout != "" {
 				t.Fatalf("stdout = %q, want empty", stdout)
 			}
-			want := "Error: unknown flag `" + test.flag + "` for `" + test.command + "`\nFor help:\n  " + test.command + " --help\n"
+			want := "Error: `" + test.flag + "` was removed in 5.0.0; " + test.guidance + " (see migrate-to-5-0)\nFor help:\n  " + test.command + " --help\n"
 			if stderr != want {
-				t.Fatalf("stderr = %q, want generic unknown-flag failure %q", stderr, want)
+				t.Fatalf("stderr = %q, want removed-flag guidance %q", stderr, want)
 			}
 			if factoryCalled {
 				t.Fatalf("client factory called for removed %s", test.flag)

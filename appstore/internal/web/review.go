@@ -275,6 +275,34 @@ func firstRelationshipRef(resource jsonAPIResource, relationshipName string) *re
 	return &refs[0]
 }
 
+// validateReviewSubmissionRelationship validates a to-one relationship when
+// an attachment submission response includes it. A missing relationship is
+// distinct from a present-but-malformed relationship: callers may fall back
+// to the requested resource ID only in the former case.
+func validateReviewSubmissionRelationship(resource jsonAPIResource, relationshipName, expectedType, expectedID string) (string, bool, error) {
+	relationship, present := resource.Relationships[relationshipName]
+	if !present {
+		return "", false, nil
+	}
+
+	refs := parseRelationshipRefs(relationship.Data)
+	if len(refs) == 0 {
+		return "", true, fmt.Errorf("submission response %s relationship is present but has no resource data", relationshipName)
+	}
+	if len(refs) != 1 {
+		return "", true, fmt.Errorf("submission response %s relationship contains %d resources, want one", relationshipName, len(refs))
+	}
+
+	ref := refs[0]
+	if strings.TrimSpace(ref.Type) != expectedType {
+		return "", true, fmt.Errorf("submission response %s relationship has unexpected resource type %q, want %q", relationshipName, ref.Type, expectedType)
+	}
+	if strings.TrimSpace(ref.ID) != strings.TrimSpace(expectedID) {
+		return "", true, fmt.Errorf("submission response %s relationship refers to %q, want %q", relationshipName, ref.ID, expectedID)
+	}
+	return strings.TrimSpace(ref.ID), true, nil
+}
+
 func stringAttr(attrs map[string]any, keys ...string) string {
 	if attrs == nil {
 		return ""

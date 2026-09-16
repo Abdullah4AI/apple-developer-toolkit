@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 	webcore "github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/web"
 )
 
@@ -700,6 +701,112 @@ func TestWebReviewIAPsAttachRefusesIAPOutsideApp(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), `in-app purchase "9000000001" was not found under app "123456789"`) {
 		t.Fatalf("expected app-scoping error, got %v", err)
+	}
+}
+
+func TestWebReviewIAPsAttachRejectsAmbiguousSelectorBeforeMutation(t *testing.T) {
+	_ = stubWebProgressLabels(t)
+
+	origResolveSession := resolveSessionFn
+	t.Cleanup(func() { resolveSessionFn = origResolveSession })
+
+	postCalls := 0
+	resolveSessionFn = func(ctx context.Context, appleID, password, twoFactorCode string) (*webcore.AuthSession, string, error) {
+		return &webcore.AuthSession{
+			Client: &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+				switch {
+				case req.Method == http.MethodGet && req.URL.Path == "/iris/v1/apps/123456789/inAppPurchases":
+					body := `{"data":[{"id":"iap-1","type":"inAppPurchases","attributes":{"productId":"com.example.duplicate","referenceName":"First"}},{"id":"iap-2","type":"inAppPurchases","attributes":{"productId":"com.example.duplicate","referenceName":"Second"}}],"links":{"next":""}}`
+					return &http.Response{StatusCode: http.StatusOK, Header: http.Header{"Content-Type": []string{"application/json"}}, Body: io.NopCloser(strings.NewReader(body)), Request: req}, nil
+				case req.Method == http.MethodPost:
+					postCalls++
+					t.Fatalf("ambiguous selector must not attach: %s", req.URL.Path)
+					return nil, nil
+				default:
+					t.Fatalf("unexpected request: %s %s", req.Method, req.URL.Path)
+					return nil, nil
+				}
+			})},
+		}, "cache", nil
+	}
+
+	cmd := WebReviewIAPsAttachCommand()
+	if err := cmd.FlagSet.Parse([]string{"--app", "123456789", "--iap-id", "com.example.duplicate", "--confirm"}); err != nil {
+		t.Fatalf("parse error: %v", err)
+	}
+	err := cmd.Exec(context.Background(), nil)
+	if err == nil {
+		t.Fatal("expected ambiguous selector error")
+	}
+	if !strings.Contains(err.Error(), "matches 2 in-app purchases by product ID") {
+		t.Fatalf("expected ambiguity diagnostic, got %v", err)
+	}
+	diagnostic, ok := shared.DiagnosticFromError(err)
+	if !ok || diagnostic.Code != shared.DiagnosticInvalidInput || diagnostic.Parameter != "--iap-id" {
+		t.Fatalf("diagnostic = %+v, found=%t, want invalid_input for --iap-id", diagnostic, ok)
+	}
+	if postCalls != 0 {
+		t.Fatalf("expected no attach request, got %d", postCalls)
+	}
+}
+
+func TestWebReviewIAPsAttachRejectsMissingOrWrongTypeBeforeMutation(t *testing.T) {
+	_ = stubWebProgressLabels(t)
+
+	cases := []struct {
+		name string
+		body string
+		want string
+	}{
+		{
+			name: "missing",
+			body: `{"data":[],"links":{"next":""}}`,
+			want: `was not found under app`,
+		},
+		{
+			name: "wrong type",
+			body: `{"data":[{"id":"sub-1","type":"subscriptions","attributes":{"productId":"com.example.wrong"}}],"links":{"next":""}}`,
+			want: `unexpected resource type`,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			origResolveSession := resolveSessionFn
+			t.Cleanup(func() { resolveSessionFn = origResolveSession })
+
+			postCalls := 0
+			resolveSessionFn = func(ctx context.Context, appleID, password, twoFactorCode string) (*webcore.AuthSession, string, error) {
+				return &webcore.AuthSession{
+					Client: &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+						if req.Method == http.MethodPost {
+							postCalls++
+							t.Fatalf("%s selector must not attach: %s", tc.name, req.URL.Path)
+						}
+						if req.Method != http.MethodGet || req.URL.Path != "/iris/v1/apps/123456789/inAppPurchases" {
+							t.Fatalf("unexpected request: %s %s", req.Method, req.URL.Path)
+						}
+						return &http.Response{
+							StatusCode: http.StatusOK,
+							Header:     http.Header{"Content-Type": []string{"application/json"}},
+							Body:       io.NopCloser(strings.NewReader(tc.body)),
+							Request:    req,
+						}, nil
+					})},
+				}, "cache", nil
+			}
+
+			cmd := WebReviewIAPsAttachCommand()
+			if err := cmd.FlagSet.Parse([]string{"--app", "123456789", "--iap-id", tc.name, "--confirm"}); err != nil {
+				t.Fatalf("parse error: %v", err)
+			}
+			err := cmd.Exec(context.Background(), nil)
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("expected %q error, got %v", tc.want, err)
+			}
+			if postCalls != 0 {
+				t.Fatalf("expected no attach request, got %d", postCalls)
+			}
+		})
 	}
 }
 

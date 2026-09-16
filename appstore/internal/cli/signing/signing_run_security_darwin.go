@@ -14,6 +14,8 @@ typedef struct {
     OSStatus cleanup_status;
 } ASCSigningKeychainCreateResult;
 
+typedef ASCSigningKeychainCreateResult ASCSigningKeychainImportResult;
+
 static ASCSigningKeychainCreateResult asc_signing_keychain_create(
     const char *path,
     const unsigned char *password,
@@ -48,7 +50,7 @@ static ASCSigningKeychainCreateResult asc_signing_keychain_create(
     return result;
 }
 
-static OSStatus asc_signing_keychain_import_pkcs12(
+static ASCSigningKeychainImportResult asc_signing_keychain_import_pkcs12(
     const char *keychain_path,
     const unsigned char *pkcs12_data,
     size_t pkcs12_length,
@@ -56,6 +58,7 @@ static OSStatus asc_signing_keychain_import_pkcs12(
     size_t pkcs12_password_length,
     const char *trusted_application_path
 ) {
+    ASCSigningKeychainImportResult result = { errSecSuccess, errSecSuccess };
     OSStatus status = errSecSuccess;
     SecKeychainRef keychain = NULL;
     CFDataRef data = NULL;
@@ -64,7 +67,14 @@ static OSStatus asc_signing_keychain_import_pkcs12(
     CFArrayRef applications = NULL;
     SecAccessRef access = NULL;
     CFArrayRef items = NULL;
+    Boolean previous_user_interaction_allowed = true;
+    Boolean user_interaction_state_captured = false;
 
+    status = SecKeychainGetUserInteractionAllowed(&previous_user_interaction_allowed);
+    if (status != errSecSuccess) goto cleanup;
+    user_interaction_state_captured = true;
+    status = SecKeychainSetUserInteractionAllowed(false);
+    if (status != errSecSuccess) goto cleanup;
     status = SecKeychainOpen(keychain_path, &keychain);
     if (status != errSecSuccess) goto cleanup;
 
@@ -110,6 +120,12 @@ static OSStatus asc_signing_keychain_import_pkcs12(
     );
 
 cleanup:
+    if (user_interaction_state_captured) {
+        OSStatus restore_status = SecKeychainSetUserInteractionAllowed(previous_user_interaction_allowed);
+        if (restore_status != errSecSuccess) {
+            result.cleanup_status = restore_status;
+        }
+    }
     if (items != NULL) CFRelease(items);
     if (access != NULL) CFRelease(access);
     if (applications != NULL) CFRelease(applications);
@@ -117,7 +133,8 @@ cleanup:
     if (passphrase != NULL) CFRelease(passphrase);
     if (data != NULL) CFRelease(data);
     if (keychain != NULL) CFRelease(keychain);
-    return status;
+    result.operation_status = status;
+    return result;
 }
 */
 import "C"
@@ -177,7 +194,7 @@ func importPKCS12WithSecurityFramework(keychainPath string, data, password []byt
 	cCodesignPath := C.CString("/usr/bin/codesign")
 	defer C.free(unsafe.Pointer(cKeychainPath))
 	defer C.free(unsafe.Pointer(cCodesignPath))
-	status := C.asc_signing_keychain_import_pkcs12(
+	result := C.asc_signing_keychain_import_pkcs12(
 		cKeychainPath,
 		(*C.uchar)(unsafe.Pointer(&data[0])),
 		C.size_t(len(data)),
@@ -185,8 +202,17 @@ func importPKCS12WithSecurityFramework(keychainPath string, data, password []byt
 		C.size_t(len(password)),
 		cCodesignPath,
 	)
-	if status != 0 {
-		return fmt.Errorf("security framework status %d", int32(status))
+	return securityFrameworkKeychainImportError(int32(result.operation_status), int32(result.cleanup_status))
+}
+
+func securityFrameworkKeychainImportError(operationStatus, cleanupStatus int32) error {
+	var operationErr error
+	if operationStatus != 0 {
+		operationErr = fmt.Errorf("security framework status %d", operationStatus)
 	}
-	return nil
+	var cleanupErr error
+	if cleanupStatus != 0 {
+		cleanupErr = fmt.Errorf("security framework keychain import cleanup status %d", cleanupStatus)
+	}
+	return errors.Join(operationErr, cleanupErr)
 }

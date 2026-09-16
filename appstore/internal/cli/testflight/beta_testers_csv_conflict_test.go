@@ -54,6 +54,14 @@ func TestBetaTesterGroupConflictAlreadySatisfied(t *testing.T) {
 			want:         false,
 			wantRequests: 0,
 		},
+		{
+			name:         "conflict code without HTTP 409 does not query memberships",
+			requestErr:   &asc.APIError{Code: "CONFLICT", StatusCode: http.StatusUnprocessableEntity},
+			requested:    []string{"group-1"},
+			memberships:  [][]string{{"group-1"}},
+			want:         false,
+			wantRequests: 0,
+		},
 	}
 
 	for _, test := range tests {

@@ -210,6 +210,17 @@ func NewValidationReportedError(err error) error {
 	return NewReportedError(NewValidationError(err))
 }
 
+// NewNotConfiguredReportedError classifies an already-printed expected
+// negative for a resource that has not been configured yet, such as an app
+// without an availability record. It maps to the validation exit code and the
+// state_not_ready diagnostic instead of a not-found API failure.
+func NewNotConfiguredReportedError(err error) error {
+	if err == nil {
+		return nil
+	}
+	return WithDiagnostic(NewValidationReportedError(err), DiagnosticStateNotReady, "")
+}
+
 // NewErrorWithCause preserves err's rendered message and classification while
 // retaining an additional cause for errors.Is/errors.As and telemetry.
 func NewErrorWithCause(err, cause error) error {

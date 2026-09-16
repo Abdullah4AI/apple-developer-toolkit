@@ -83,7 +83,7 @@ Examples:
 				SkipInternal: *skipInternal,
 			})
 			if err != nil {
-				return fmt.Errorf("builds add-groups: failed to add groups: %w", err)
+				return reportBuildBetaGroupAssignmentFailure(requestCtx, client, buildID, assignmentIncludesExternalGroup(resolvedGroups), err)
 			}
 
 			submissionResult, err := shared.SubmitBuildBetaReviewIfNeeded(requestCtx, client, buildID, resolvedGroups, addResult.AddedGroupIDs, *submit, "builds add-groups")

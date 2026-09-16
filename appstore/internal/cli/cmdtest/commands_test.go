@@ -1092,8 +1092,13 @@ func TestIAPValidationErrors(t *testing.T) {
 		},
 		{
 			name:    "iap review-screenshots update missing screenshot-id",
-			args:    []string{"iap", "review-screenshots", "update", "--file", "./review.png"},
+			args:    []string{"iap", "review-screenshots", "update", "--checksum", "HASH"},
 			wantErr: "--screenshot-id is required",
+		},
+		{
+			name:    "iap review-screenshots update missing update flags",
+			args:    []string{"iap", "review-screenshots", "update", "--screenshot-id", "SHOT_ID"},
+			wantErr: "at least one update flag is required",
 		},
 		{
 			name:    "iap review-screenshots delete missing confirm",

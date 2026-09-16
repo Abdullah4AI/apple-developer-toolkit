@@ -29,6 +29,27 @@ type BetaTesterGroupsUpdateResult struct {
 	Action   string   `json:"action"`
 }
 
+// Actions reported by the beta group tester add receipt.
+const (
+	// BetaGroupTestersActionAdded reports that App Store Connect created the
+	// requested memberships.
+	BetaGroupTestersActionAdded = "added"
+	// BetaGroupTestersActionSkipped reports that a post-conflict read-back
+	// confirmed every requested tester in the group.
+	BetaGroupTestersActionSkipped = "skipped"
+)
+
+// BetaGroupTestersUpdateResult represents CLI output for beta group tester
+// additions. AlreadyPresent is set when App Store Connect rejected the add
+// with a conflict and a membership read-back confirmed every requested tester
+// is already in the group.
+type BetaGroupTestersUpdateResult struct {
+	GroupID        string   `json:"groupId"`
+	TesterIDs      []string `json:"testerIds"`
+	Action         string   `json:"action"`
+	AlreadyPresent bool     `json:"alreadyPresent,omitempty"`
+}
+
 // BetaTesterAppsUpdateResult represents CLI output for beta tester app updates.
 type BetaTesterAppsUpdateResult struct {
 	TesterID string   `json:"testerId"`
@@ -214,6 +235,12 @@ func betaTesterDeleteResultRows(result *BetaTesterDeleteResult) ([]string, [][]s
 func betaTesterGroupsUpdateResultRows(result *BetaTesterGroupsUpdateResult) ([]string, [][]string) {
 	headers := []string{"Tester ID", "Group IDs", "Action"}
 	rows := [][]string{{result.TesterID, strings.Join(result.GroupIDs, ","), result.Action}}
+	return headers, rows
+}
+
+func betaGroupTestersUpdateResultRows(result *BetaGroupTestersUpdateResult) ([]string, [][]string) {
+	headers := []string{"Group ID", "Tester IDs", "Action", "Already Present"}
+	rows := [][]string{{result.GroupID, strings.Join(result.TesterIDs, ","), result.Action, fmt.Sprintf("%t", result.AlreadyPresent)}}
 	return headers, rows
 }
 

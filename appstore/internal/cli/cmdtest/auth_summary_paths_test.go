@@ -101,25 +101,23 @@ func TestAuthStatusValidateUsesStoredCredentials(t *testing.T) {
 	}
 }
 
-func TestAuthStatusVerboseUsesStoredCredentials(t *testing.T) {
+func TestAuthStatusVerboseUsesCredentialSummaries(t *testing.T) {
 	t.Setenv("ASC_BYPASS_KEYCHAIN", "1")
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "config.json"))
 
 	restoreSummary := authcmd.SetListCredentialSummaries(func() ([]authsvc.Credential, error) {
-		t.Fatal("expected --verbose to use full credential loading")
-		return nil, nil
+		return []authsvc.Credential{{
+			Name:      "default",
+			KeyID:     "KEY123",
+			IsDefault: true,
+			Source:    "keychain",
+		}}, nil
 	})
 	t.Cleanup(restoreSummary)
 
 	restoreFull := authcmd.SetListStoredCredentials(func() ([]authsvc.Credential, error) {
-		return []authsvc.Credential{{
-			Name:           "default",
-			KeyID:          "KEY123",
-			IssuerID:       "ISS456",
-			PrivateKeyPath: "/tmp/AuthKey.p8",
-			IsDefault:      true,
-			Source:         "keychain",
-		}}, nil
+		t.Fatal("expected --verbose without --validate to avoid full credential loading")
+		return nil, nil
 	})
 	t.Cleanup(restoreFull)
 

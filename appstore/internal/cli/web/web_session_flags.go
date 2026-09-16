@@ -11,6 +11,8 @@ import (
 	webcore "github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/web"
 )
 
+var errNoCachedWebSession = errors.New("no cached web session is available")
+
 type webSessionFlags struct {
 	flagSet              *flag.FlagSet
 	appleID              *string
@@ -23,7 +25,7 @@ type webSessionFlags struct {
 func bindWebSessionFlags(fs *flag.FlagSet) webSessionFlags {
 	return webSessionFlags{
 		flagSet:              fs,
-		appleID:              fs.String("apple-id", "", "Apple Account email used to scope a user-owned session cache (optional when a cached session exists)"),
+		appleID:              fs.String("apple-id", "", "Apple Account email used to scope a user-owned session cache (defaults to "+webAppleIDEnv+", then the last or only cached session)"),
 		twoFactorCodeCommand: fs.String("two-factor-code-command", "", "Shell command that prints the 2FA code to stdout if verification is required"),
 		providerID:           fs.Int64("provider-id", 0, "Numeric App Store Connect provider ID to select for this web session"),
 		publicProviderID:     fs.String("public-provider-id", "", "Public App Store Connect provider/team ID to select for this web session"),

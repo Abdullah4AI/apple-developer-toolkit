@@ -91,14 +91,14 @@ func TestTestFlightGroupsViewRejectsRemovedGroupIDAlias(t *testing.T) {
 		t.Fatal("removed alias --group-id must not be registered on testflight groups view")
 	}
 
-	assertRemovedFlagIsUnknown(t, []string{"testflight", "groups", "view", "--group-id", "group-1"}, "--group-id")
+	assertRemovedFlagGuidance(t, []string{"testflight", "groups", "view", "--group-id", "group-1"}, "--group-id")
 }
 
 func TestBuildIDOnlyCommandsRejectLegacyBuildAliasAsUnknownFlag(t *testing.T) {
 	for _, path := range buildIDOnlyCommands {
 		t.Run(strings.Join(path, " "), func(t *testing.T) {
 			args := append(append([]string{}, path...), "--build", "BUILD_123")
-			assertRemovedFlagIsUnknown(t, args, "--build")
+			assertRemovedFlagGuidance(t, args, "--build")
 		})
 	}
 }

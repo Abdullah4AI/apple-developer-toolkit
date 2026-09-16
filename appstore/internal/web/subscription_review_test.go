@@ -125,6 +125,35 @@ func TestDecodeReviewSubscriptionsDistinguishesMissingAttachmentAttribute(t *tes
 	}
 }
 
+func TestDecodeReviewSubscriptionsDeduplicatesRelationshipRows(t *testing.T) {
+	resources := []jsonAPIResource{{
+		ID:   "group-1",
+		Type: "subscriptionGroups",
+		Relationships: map[string]jsonAPIRelationship{
+			"subscriptions": {Data: json.RawMessage(`[
+				{"type":"subscriptions","id":"sub-1"},
+				{"type":"subscriptions","id":"sub-1"}
+			]`)},
+		},
+	}}
+	included := []jsonAPIResource{{
+		ID:   "sub-1",
+		Type: "subscriptions",
+		Attributes: map[string]any{
+			"productId": "com.example.monthly",
+			"name":      "Monthly",
+		},
+	}}
+
+	got := decodeReviewSubscriptions(resources, included)
+	if len(got) != 1 {
+		t.Fatalf("decodeReviewSubscriptions() returned %d rows, want one: %#v", len(got), got)
+	}
+	if got[0].ID != "sub-1" || got[0].GroupID != "group-1" {
+		t.Fatalf("unexpected decoded subscription: %#v", got[0])
+	}
+}
+
 func TestListReviewSubscriptionsAggregatesPagination(t *testing.T) {
 	var server *httptest.Server
 	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -332,6 +361,27 @@ func TestListReviewSubscriptionsHandlesMissingIncludedSubscriptionResource(t *te
 	}
 }
 
+func TestListReviewSubscriptionsRejectsUnexpectedGroupResourceType(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"data": [{
+				"id": "app-1",
+				"type": "apps",
+				"relationships": {
+					"subscriptions": {"data": [{"type": "subscriptions", "id": "sub-1"}]}
+				}
+			}]
+		}`))
+	}))
+	defer server.Close()
+
+	_, err := testWebClient(server).ListReviewSubscriptions(context.Background(), "app-123")
+	if err == nil || !strings.Contains(err.Error(), "unexpected resource type") {
+		t.Fatalf("expected unexpected-group-type error, got %v", err)
+	}
+}
+
 func TestCreateSubscriptionSubmissionFallsBackToRequestedIDWhenRelationshipMissing(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/subscriptionSubmissions" {
@@ -365,5 +415,99 @@ func TestCreateSubscriptionSubmissionFallsBackToRequestedIDWhenRelationshipMissi
 	}
 	if !got.SubmitWithNextAppStoreVersion {
 		t.Fatalf("expected submitWithNextAppStoreVersion true, got %#v", got)
+	}
+}
+
+func TestCreateSubscriptionSubmissionPreservesSanitizedPortalReason(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnprocessableEntity)
+		_, _ = w.Write([]byte(`{"errors":[{"code":"STATE_ERROR","title":"Attachment refused","detail":"The subscription is not ready\u001b[31m"}]}`))
+	}))
+	defer server.Close()
+
+	_, err := testWebClient(server).CreateSubscriptionSubmission(context.Background(), "sub-1")
+	if err == nil {
+		t.Fatal("expected attachment refusal")
+	}
+	if !strings.Contains(err.Error(), "status 422") {
+		t.Fatalf("expected portal status in error, got %q", err)
+	}
+	if !strings.Contains(err.Error(), "Attachment refused: The subscription is not ready[31m") {
+		t.Fatalf("expected sanitized portal reason in error, got %q", err)
+	}
+	if strings.Contains(err.Error(), "\x1b") {
+		t.Fatalf("portal reason contains terminal escape sequence: %q", err)
+	}
+}
+
+func TestCreateSubscriptionSubmissionRejectsMissingSubmissionID(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":{"type":"subscriptionSubmissions","attributes":{"submitWithNextAppStoreVersion":true}}}`))
+	}))
+	defer server.Close()
+
+	if _, err := testWebClient(server).CreateSubscriptionSubmission(context.Background(), "sub-1"); err == nil || !strings.Contains(err.Error(), "missing submission id") {
+		t.Fatalf("expected missing-submission-id error, got %v", err)
+	}
+}
+
+func TestCreateSubscriptionSubmissionRejectsUnexpectedResourceType(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":{"id":"submission-1","type":"unexpectedResources"}}`))
+	}))
+	defer server.Close()
+
+	if _, err := testWebClient(server).CreateSubscriptionSubmission(context.Background(), "sub-1"); err == nil || !strings.Contains(err.Error(), "unexpected resource type") {
+		t.Fatalf("expected unexpected-type error, got %v", err)
+	}
+}
+
+func TestCreateSubscriptionSubmissionRejectsMissingOrEmptyResourceType(t *testing.T) {
+	cases := []struct {
+		name string
+		body string
+	}{
+		{name: "missing", body: `{"data":{"id":"submission-1"}}`},
+		{name: "empty", body: `{"data":{"id":"submission-1","type":""}}`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(tc.body))
+			}))
+			defer server.Close()
+
+			if _, err := testWebClient(server).CreateSubscriptionSubmission(context.Background(), "sub-1"); err == nil || !strings.Contains(err.Error(), "missing submission resource type") {
+				t.Fatalf("expected missing-resource-type error, got %v", err)
+			}
+		})
+	}
+}
+
+func TestCreateSubscriptionSubmissionRejectsMismatchedRelationship(t *testing.T) {
+	cases := []struct {
+		name string
+		data string
+	}{
+		{name: "wrong type", data: `{"type":"inAppPurchases","id":"sub-1"}`},
+		{name: "wrong id", data: `{"type":"subscriptions","id":"sub-2"}`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				body := `{"data":{"id":"submission-1","type":"subscriptionSubmissions","relationships":{"subscription":{"data":` + tc.data + `}}}}`
+				_, _ = w.Write([]byte(body))
+			}))
+			defer server.Close()
+
+			if _, err := testWebClient(server).CreateSubscriptionSubmission(context.Background(), "sub-1"); err == nil || !strings.Contains(err.Error(), "subscription relationship") {
+				t.Fatalf("expected subscription-relationship error, got %v", err)
+			}
+		})
 	}
 }
