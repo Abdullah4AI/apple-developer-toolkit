@@ -1,0 +1,204 @@
+package web
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/url"
+	"regexp"
+	"strings"
+)
+
+const signInKeyService = "APPLE_ID_AUTH_KEY_CONFIGURATION"
+
+var developerKeyIDPattern = regexp.MustCompile(`^[A-Za-z0-9]{1,32}$`)
+
+type DeveloperSignInKey struct {
+	Raw         json.RawMessage `json:"-"`
+	KeyID       string          `json:"keyId"`
+	KeyName     string          `json:"keyName"`
+	CanDownload bool            `json:"canDownload"`
+	Services    []struct {
+		ID             string            `json:"id"`
+		Configurations []json.RawMessage `json:"configurations"`
+	} `json:"services,omitempty"`
+}
+
+type DeveloperSignInKeysResult struct {
+	Keys []DeveloperSignInKey `json:"keys"`
+	Raw  json.RawMessage      `json:"-"`
+}
+
+func (r *DeveloperSignInKeysResult) MarshalJSON() ([]byte, error) { return r.Raw, nil }
+
+// developerSignInKeyDownloadRecoveryError retains a successful response that
+// failed P8 validation. Apple may consume a one-time download even when it
+// returns a malformed body, so callers need a private recovery path without
+// exposing the response through the error text.
+type developerSignInKeyDownloadRecoveryError struct {
+	cause error
+	body  []byte
+}
+
+func (e *developerSignInKeyDownloadRecoveryError) Error() string { return e.cause.Error() }
+
+func (e *developerSignInKeyDownloadRecoveryError) Unwrap() error { return e.cause }
+
+func (e *developerSignInKeyDownloadRecoveryError) RecoveryBody() []byte {
+	return append([]byte(nil), e.body...)
+}
+
+func parseDeveloperSignInKeys(body []byte) (*DeveloperSignInKeysResult, error) {
+	var envelope struct {
+		ResultCode *int                 `json:"resultCode"`
+		Keys       []DeveloperSignInKey `json:"keys"`
+	}
+	if err := json.Unmarshal(body, &envelope); err != nil {
+		return nil, fmt.Errorf("invalid Developer Portal key response")
+	}
+	if envelope.ResultCode == nil {
+		return nil, fmt.Errorf("developer portal key response missing result code")
+	}
+	if *envelope.ResultCode != 0 {
+		return nil, fmt.Errorf("developer portal key request failed (result code %d)", *envelope.ResultCode)
+	}
+	if envelope.Keys == nil {
+		return nil, fmt.Errorf("developer portal key response missing keys")
+	}
+	for _, key := range envelope.Keys {
+		if !developerKeyIDPattern.MatchString(key.KeyID) {
+			return nil, fmt.Errorf("developer portal returned invalid key ID")
+		}
+	}
+	return &DeveloperSignInKeysResult{Keys: envelope.Keys, Raw: body}, nil
+}
+
+// ListDeveloperSignInKeys preserves the legacy portal envelope, including metadata
+// for other authentication-key services. List is also Apple's key-family CSRF bootstrap.
+func (c *Client) ListDeveloperSignInKeys(ctx context.Context) (*DeveloperSignInKeysResult, error) {
+	if err := c.ensureDeveloperPortalSession(ctx); err != nil {
+		return nil, err
+	}
+	body, err := c.doDeveloperPortalLegacyFormRequest(ctx, "/account/auth/key/list", url.Values{
+		"teamId": {c.developerPortalTeamID()}, "pageNumber": {"1"}, "pageSize": {"1000"}, "sort": {"name=asc"},
+	}, false)
+	if err != nil {
+		return nil, err
+	}
+	return parseDeveloperSignInKeys(body)
+}
+
+func (c *Client) GetDeveloperSignInKey(ctx context.Context, keyID string) (*DeveloperSignInKey, error) {
+	if !developerKeyIDPattern.MatchString(keyID) {
+		return nil, fmt.Errorf("invalid key ID")
+	}
+	if err := c.ensureDeveloperPortalSession(ctx); err != nil {
+		return nil, err
+	}
+	body, err := c.doDeveloperPortalLegacyFormRequest(ctx, "/account/auth/key/get", url.Values{"teamId": {c.developerPortalTeamID()}, "keyId": {keyID}}, false)
+	if err != nil {
+		return nil, err
+	}
+	result, err := parseDeveloperSignInKeys(body)
+	if err != nil {
+		return nil, err
+	}
+	if len(result.Keys) != 1 || result.Keys[0].KeyID != keyID {
+		return nil, fmt.Errorf("developer portal returned mismatched key")
+	}
+	result.Keys[0].Raw = result.Raw
+	return &result.Keys[0], nil
+}
+
+func (c *Client) CreateDeveloperSignInKey(ctx context.Context, name, bundleID string) (*DeveloperSignInKey, error) {
+	name = strings.TrimSpace(name)
+	if name == "" || !developerKeyIDPattern.MatchString(bundleID) {
+		return nil, fmt.Errorf("name and opaque bundle resource ID are required")
+	}
+	existing, err := c.ListDeveloperSignInKeys(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, key := range existing.Keys {
+		if key.KeyName == name {
+			return nil, fmt.Errorf("key %s already has this name; inspect it instead of creating a duplicate", key.KeyID)
+		}
+	}
+	payload := map[string]any{"teamId": c.developerPortalTeamID(), "name": name, "serviceConfigurationsRequests": []any{map[string]any{
+		"isNew": true, "serviceId": signInKeyService, "identifiers": map[string]any{"bundle": []string{bundleID}},
+	}}}
+	headers := developerPortalHeaders("")
+	headers.Set("Content-Type", "application/json")
+	if err := c.applyDeveloperPortalCSRF(headers, true); err != nil {
+		return nil, err
+	}
+	body, err := c.doDeveloperPortalHTTPAndCapture(ctx, http.MethodPost, c.developerPortalOrigin()+developerPortalLegacyPath+"/account/auth/key/v2/create", payload, headers)
+	if err != nil {
+		return nil, fmt.Errorf("key creation outcome is unknown; inspect sign-in-keys list before retrying: %w", err)
+	}
+	result, err := parseDeveloperSignInKeys(body)
+	if err != nil {
+		return nil, fmt.Errorf("inspect sign-in-keys list before retrying: %w", err)
+	}
+	if len(result.Keys) != 1 {
+		return nil, fmt.Errorf("key creation returned unexpected key count; inspect list before retrying")
+	}
+	keyID := result.Keys[0].KeyID
+	detail, err := c.GetDeveloperSignInKey(ctx, keyID)
+	if err != nil {
+		return nil, fmt.Errorf("key %s created, but configuration verification failed; inspect before retrying: %w", keyID, err)
+	}
+	for _, service := range detail.Services {
+		if service.ID != signInKeyService {
+			continue
+		}
+		for _, raw := range service.Configurations {
+			var config struct {
+				ID   string `json:"id"`
+				Type string `json:"type"`
+			}
+			if json.Unmarshal(raw, &config) == nil && config.ID == bundleID && config.Type == "bundle" {
+				return detail, nil
+			}
+		}
+	}
+	return nil, fmt.Errorf("key %s created, but requested Sign in with Apple bundle association was not verified; inspect before retrying", keyID)
+}
+
+func (c *Client) DownloadDeveloperSignInKey(ctx context.Context, keyID string) ([]byte, error) {
+	if _, err := c.ListDeveloperSignInKeys(ctx); err != nil {
+		return nil, err
+	}
+	key, err := c.GetDeveloperSignInKey(ctx, keyID)
+	if err != nil {
+		return nil, err
+	}
+	supported := false
+	for _, service := range key.Services {
+		if service.ID == signInKeyService {
+			supported = true
+		}
+	}
+	if !supported {
+		return nil, fmt.Errorf("key %s is not a Sign in with Apple key", keyID)
+	}
+	if !key.CanDownload {
+		return nil, fmt.Errorf("key %s is no longer downloadable", keyID)
+	}
+	query := url.Values{"teamId": {c.developerPortalTeamID()}, "keyId": {keyID}}
+	headers := developerPortalHeaders("")
+	headers.Del("Content-Type")
+	headers.Set("Accept", "application/json, text/plain, */*")
+	if err := c.applyDeveloperPortalCSRF(headers, true); err != nil {
+		return nil, err
+	}
+	body, err := c.doDeveloperPortalHTTPAndCapture(ctx, http.MethodGet, c.developerPortalOrigin()+developerPortalLegacyPath+"/account/auth/key/download?"+query.Encode(), nil, headers)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateAPIKeyP8(body); err != nil {
+		return nil, &developerSignInKeyDownloadRecoveryError{cause: err, body: append([]byte(nil), body...)}
+	}
+	return body, nil
+}

@@ -5,11 +5,19 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"unicode/utf8"
 )
 
 // AmbiguousCandidateLimit bounds how many candidates an ambiguity error lists.
 // Remaining candidates are summarized as "... and N more".
 const AmbiguousCandidateLimit = 10
+
+// AmbiguousDiagnosticTextLimit bounds each provider-supplied text field in a
+// terminal ambiguity diagnostic. The limit is measured in bytes, with the
+// truncation boundary adjusted to preserve valid UTF-8.
+const AmbiguousDiagnosticTextLimit = 256
+
+const ambiguousDiagnosticTextTruncationMarker = "..."
 
 // AmbiguousCandidate is one resource that matched a selector which should
 // have matched exactly one. ID is the value the disambiguating flag accepts;
@@ -41,6 +49,10 @@ type AmbiguousSelectionError struct {
 	CandidatesAreSample bool
 	// Hint is an optional final line with additional guidance.
 	Hint string
+	// DisplayTextLimit bounds each rendered field after terminal sanitization.
+	// Zero preserves the historical unbounded rendering. Structured fields
+	// always retain their complete values.
+	DisplayTextLimit int
 }
 
 // AmbiguousError builds an AmbiguousSelectionError for a selector value that
@@ -58,9 +70,9 @@ func AmbiguousError(kind, flag, selector string, candidates []AmbiguousCandidate
 func (e *AmbiguousSelectionError) Error() string {
 	var b strings.Builder
 	if e.CandidatesAreSample {
-		fmt.Fprintf(&b, "multiple %s match %s", pluralizeKind(e.Kind), sanitizeAmbiguousText(e.Description))
+		fmt.Fprintf(&b, "multiple %s match %s", pluralizeKind(e.Kind), sanitizeAmbiguousText(e.Description, e.DisplayTextLimit))
 	} else {
-		fmt.Fprintf(&b, "%d %s match %s", len(e.Candidates), pluralizeKind(e.Kind), sanitizeAmbiguousText(e.Description))
+		fmt.Fprintf(&b, "%d %s match %s", len(e.Candidates), pluralizeKind(e.Kind), sanitizeAmbiguousText(e.Description, e.DisplayTextLimit))
 	}
 	if flag := strings.TrimSpace(e.Flag); flag != "" {
 		if e.CandidatesAreSample {
@@ -69,7 +81,11 @@ func (e *AmbiguousSelectionError) Error() string {
 			fmt.Fprintf(&b, "; pass %s with one of:", flag)
 		}
 	} else {
-		b.WriteString(":")
+		if e.CandidatesAreSample {
+			b.WriteString("; these are sample matches:")
+		} else {
+			b.WriteString(":")
+		}
 	}
 
 	shown := e.Candidates
@@ -80,9 +96,9 @@ func (e *AmbiguousSelectionError) Error() string {
 	idWidth, labelWidth := 0, 0
 	for _, candidate := range shown {
 		row := [3]string{
-			sanitizeAmbiguousText(candidate.ID),
-			sanitizeAmbiguousText(candidate.Label),
-			sanitizeAmbiguousText(candidate.Extra),
+			sanitizeAmbiguousText(candidate.ID, e.DisplayTextLimit),
+			sanitizeAmbiguousText(candidate.Label, e.DisplayTextLimit),
+			sanitizeAmbiguousText(candidate.Extra, e.DisplayTextLimit),
 		}
 		if row[0] == "" {
 			row[0] = "<no id>"
@@ -105,7 +121,7 @@ func (e *AmbiguousSelectionError) Error() string {
 	if remaining := len(e.Candidates) - len(shown); remaining > 0 {
 		fmt.Fprintf(&b, "\n  ... and %d more", remaining)
 	}
-	if hint := sanitizeAmbiguousText(e.Hint); hint != "" {
+	if hint := sanitizeAmbiguousText(e.Hint, e.DisplayTextLimit); hint != "" {
 		b.WriteString("\n")
 		b.WriteString(hint)
 	}
@@ -125,6 +141,15 @@ func IsAmbiguousSelection(err error) bool {
 // this because its terminal sanitizer flattens the candidate table onto one
 // line.
 func AmbiguousUsageError(err error) error {
+	return AmbiguousUsageErrorWithKind(err, UsageErrorOther)
+}
+
+// AmbiguousUsageErrorWithKind prints an ambiguity error to stderr line by
+// line and returns a usage-class error (exit code 2) with the requested
+// telemetry classification. The default AmbiguousUsageError intentionally
+// remains UsageErrorOther for callers whose ambiguity is not a missing or
+// invalid flag.
+func AmbiguousUsageErrorWithKind(err error, kind UsageErrorKind) error {
 	if err == nil {
 		return nil
 	}
@@ -136,13 +161,64 @@ func AmbiguousUsageError(err error) error {
 	// the candidates; cmd does not reprint usage-class errors, so this cannot
 	// duplicate the stderr output above.
 	return NewErrorWithCause(
-		classifiedUsageError{kind: UsageErrorOther, message: message},
+		classifiedUsageError{kind: kind, message: message},
 		err,
 	)
 }
 
-func sanitizeAmbiguousText(value string) string {
-	return strings.TrimSpace(SanitizeTerminal(strings.TrimSpace(value)))
+// MarkAmbiguousSelectionSample marks an ambiguity whose candidates came from
+// a response that advertises another page. The returned error keeps its
+// concrete type and wrapping chain so callers can still inspect the
+// candidates and classify the failure.
+func MarkAmbiguousSelectionSample(err error) error {
+	if err == nil {
+		return nil
+	}
+	var ambiguous *AmbiguousSelectionError
+	if errors.As(err, &ambiguous) {
+		ambiguous.CandidatesAreSample = true
+	}
+	return err
+}
+
+func sanitizeAmbiguousText(value string, limit ...int) string {
+	value = strings.TrimSpace(SanitizeTerminal(strings.TrimSpace(value)))
+	if len(limit) == 0 || limit[0] <= 0 || len(value) <= limit[0] {
+		return value
+	}
+	return truncateAmbiguousDiagnosticText(value, limit[0])
+}
+
+func truncateAmbiguousDiagnosticText(value string, limit int) string {
+	if limit <= 0 {
+		return ""
+	}
+	value = strings.ToValidUTF8(value, "\uFFFD")
+	if len(value) <= limit {
+		return value
+	}
+	marker := ambiguousDiagnosticTextTruncationMarker
+	if len(marker) >= limit {
+		return utf8SafePrefix(value, limit)
+	}
+	prefixLimit := limit - len(marker)
+	for prefixLimit > 0 && !utf8.ValidString(value[:prefixLimit]) {
+		prefixLimit--
+	}
+	return value[:prefixLimit] + marker
+}
+
+func utf8SafePrefix(value string, limit int) string {
+	if limit <= 0 {
+		return ""
+	}
+	if len(value) <= limit {
+		return value
+	}
+	for limit > 0 && !utf8.ValidString(value[:limit]) {
+		limit--
+	}
+	return value[:limit]
 }
 
 func pluralizeKind(kind string) string {

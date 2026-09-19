@@ -2,11 +2,15 @@ package web
 
 import (
 	"context"
+	"errors"
 	"net/http"
+	"net/http/cookiejar"
 	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
+
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/urlsanitize"
 )
 
 func testWebClient(server *httptest.Server) *Client {
@@ -405,6 +409,137 @@ func TestDownloadAttachmentErrorDoesNotLeakSignedURLTokens(t *testing.T) {
 	}
 }
 
+func TestDownloadAttachmentSendsSessionCookieOnceAndStripsRedirectCredentials(t *testing.T) {
+	var initialCookie, redirectCookie, redirectReferer string
+	finalServer := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		redirectCookie = r.Header.Get("Cookie")
+		redirectReferer = r.Header.Get("Referer")
+		_, _ = w.Write([]byte("attachment"))
+	}))
+	defer finalServer.Close()
+
+	startServer := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		initialCookie = r.Header.Get("Cookie")
+		http.Redirect(w, r, finalServer.URL+"/final?X-Amz-Signature=redirect-secret", http.StatusFound)
+	}))
+	defer startServer.Close()
+
+	parsedStart, err := url.Parse(startServer.URL)
+	if err != nil {
+		t.Fatalf("parse start server URL: %v", err)
+	}
+	t.Setenv(attachmentHostsEnv, parsedStart.Hostname())
+	jar, err := cookiejar.New(nil)
+	if err != nil {
+		t.Fatalf("cookiejar.New() error: %v", err)
+	}
+	jar.SetCookies(parsedStart, []*http.Cookie{{Name: "session", Value: "secret-session", Path: "/"}})
+
+	client := testWebClient(startServer)
+	client.httpClient.Jar = jar
+	body, status, err := client.DownloadAttachment(context.Background(), startServer.URL+"/start?token=very-secret")
+	if err != nil {
+		t.Fatalf("DownloadAttachment() error: %v", err)
+	}
+	if status != http.StatusOK || string(body) != "attachment" {
+		t.Fatalf("DownloadAttachment() = status %d body %q", status, body)
+	}
+	if initialCookie != "session=secret-session" {
+		t.Fatalf("initial Cookie = %q, want one session cookie", initialCookie)
+	}
+	if redirectCookie != "" {
+		t.Fatalf("redirect Cookie = %q, want empty", redirectCookie)
+	}
+	if redirectReferer != "" {
+		t.Fatalf("redirect Referer = %q, want empty", redirectReferer)
+	}
+}
+
+func TestDownloadAttachmentStripsCredentialsAddedByRedirectPolicy(t *testing.T) {
+	var policyCookie, policyReferer, redirectCookie, redirectReferer string
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/start":
+			http.Redirect(w, r, "/final", http.StatusFound)
+		case "/final":
+			redirectCookie = r.Header.Get("Cookie")
+			redirectReferer = r.Header.Get("Referer")
+			_, _ = w.Write([]byte("attachment"))
+		default:
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+	parsedURL, err := url.Parse(server.URL)
+	if err != nil {
+		t.Fatalf("parse server URL: %v", err)
+	}
+	t.Setenv(attachmentHostsEnv, parsedURL.Hostname())
+	client := testWebClient(server)
+	client.httpClient.CheckRedirect = func(redirect *http.Request, _ []*http.Request) error {
+		policyCookie = redirect.Header.Get("Cookie")
+		policyReferer = redirect.Header.Get("Referer")
+		// A custom policy can bypass http.Header's canonicalization by assigning
+		// directly to the map. Credential stripping must still be case-insensitive.
+		redirect.Header["cookie"] = []string{"policy=secret"}
+		redirect.Header["referer"] = []string{"https://example.test/source?token=secret"}
+		return nil
+	}
+
+	if _, _, err := client.DownloadAttachment(context.Background(), server.URL+"/start?token=very-secret"); err != nil {
+		t.Fatalf("DownloadAttachment() error: %v", err)
+	}
+	if policyCookie != "" || policyReferer != "" {
+		t.Fatalf("redirect policy observed Cookie %q Referer %q, want both empty", policyCookie, policyReferer)
+	}
+	if redirectCookie != "" || redirectReferer != "" {
+		t.Fatalf("redirect credentials = Cookie %q Referer %q, want both empty", redirectCookie, redirectReferer)
+	}
+}
+
+func TestDownloadAttachmentRedactsMalformedRedirectLocation(t *testing.T) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Location", "https://developer.apple.com:badport/attachment?token=very-secret&X-Amz-Signature=abc123")
+		w.WriteHeader(http.StatusFound)
+	}))
+	defer server.Close()
+	parsedURL, err := url.Parse(server.URL)
+	if err != nil {
+		t.Fatalf("parse server URL: %v", err)
+	}
+	t.Setenv(attachmentHostsEnv, parsedURL.Hostname())
+	client := testWebClient(server)
+
+	_, _, err = client.DownloadAttachment(context.Background(), server.URL+"/start?token=initial-secret")
+	if err == nil {
+		t.Fatal("expected malformed redirect error")
+	}
+	for _, leaked := range []string{"very-secret", "abc123", "initial-secret", "X-Amz-Signature", "?token="} {
+		if strings.Contains(err.Error(), leaked) {
+			t.Fatalf("DownloadAttachment() error = %q leaks %q", err, leaked)
+		}
+	}
+	var transportErr *urlsanitize.TransportError
+	if !errors.As(err, &transportErr) {
+		t.Fatalf("DownloadAttachment() error type = %T, want *urlsanitize.TransportError", err)
+	}
+}
+
+func TestDownloadAttachmentTransportErrorPreservesCause(t *testing.T) {
+	sentinel := errors.New("sentinel transport failure")
+	client := &Client{httpClient: &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+		return nil, sentinel
+	})}}
+
+	_, _, err := client.DownloadAttachment(context.Background(), "https://developer.apple.com/attachment?token=very-secret")
+	if !errors.Is(err, sentinel) {
+		t.Fatalf("DownloadAttachment() error = %v, want sentinel in chain", err)
+	}
+	if strings.Contains(err.Error(), "very-secret") || strings.Contains(err.Error(), "?token=") {
+		t.Fatalf("DownloadAttachment() error leaks signed query: %q", err)
+	}
+}
+
 func TestDownloadAttachmentRejectsNonHTTPS(t *testing.T) {
 	client := &Client{httpClient: &http.Client{}}
 
@@ -426,5 +561,88 @@ func TestDownloadAttachmentRejectsUntrustedHost(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "host is not allowed") {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestDownloadAttachmentRejectsUntrustedRedirectBeforeClientPolicy(t *testing.T) {
+	policyCalls := 0
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/start" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		w.Header().Set("Location", "https://example.invalid/attachment")
+		w.WriteHeader(http.StatusFound)
+	}))
+	defer server.Close()
+	parsedURL, err := url.Parse(server.URL)
+	if err != nil {
+		t.Fatalf("parse server URL: %v", err)
+	}
+	t.Setenv(attachmentHostsEnv, parsedURL.Hostname())
+	client := testWebClient(server)
+	client.httpClient.CheckRedirect = func(*http.Request, []*http.Request) error {
+		policyCalls++
+		return nil
+	}
+
+	_, _, err = client.DownloadAttachment(context.Background(), server.URL+"/start")
+	if err == nil || !strings.Contains(err.Error(), "host is not allowed") {
+		t.Fatalf("DownloadAttachment() error = %v, want redirect host rejection", err)
+	}
+	if policyCalls != 0 {
+		t.Fatalf("client redirect policy called %d times, want no callback before validation", policyCalls)
+	}
+}
+
+func TestDownloadAttachmentRejectsRedirectRewrittenByClientPolicy(t *testing.T) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/start" {
+			http.Redirect(w, r, "/final", http.StatusFound)
+			return
+		}
+		if r.URL.Path == "/final" {
+			_, _ = w.Write([]byte("attachment"))
+			return
+		}
+		t.Fatalf("unexpected path: %s", r.URL.Path)
+	}))
+	defer server.Close()
+	parsedURL, err := url.Parse(server.URL)
+	if err != nil {
+		t.Fatalf("parse server URL: %v", err)
+	}
+	t.Setenv(attachmentHostsEnv, parsedURL.Hostname())
+	client := testWebClient(server)
+	client.httpClient.CheckRedirect = func(redirect *http.Request, _ []*http.Request) error {
+		redirect.URL, _ = url.Parse("https://example.invalid/rewritten")
+		return nil
+	}
+
+	_, _, err = client.DownloadAttachment(context.Background(), server.URL+"/start")
+	if err == nil || !strings.Contains(err.Error(), "host is not allowed") {
+		t.Fatalf("DownloadAttachment() error = %v, want rewritten redirect host rejection", err)
+	}
+}
+
+func TestDownloadAttachmentCapsAllowedRedirectLoop(t *testing.T) {
+	redirects := 0
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		redirects++
+		http.Redirect(w, r, "/loop", http.StatusFound)
+	}))
+	defer server.Close()
+	parsedURL, err := url.Parse(server.URL)
+	if err != nil {
+		t.Fatalf("parse server URL: %v", err)
+	}
+	t.Setenv(attachmentHostsEnv, parsedURL.Hostname())
+	client := testWebClient(server)
+
+	_, _, err = client.DownloadAttachment(context.Background(), server.URL+"/loop")
+	if err == nil || !strings.Contains(err.Error(), "10 redirects") {
+		t.Fatalf("DownloadAttachment() error = %v, want redirect cap error", err)
+	}
+	if redirects > 11 {
+		t.Fatalf("redirect requests = %d, want at most 11", redirects)
 	}
 }

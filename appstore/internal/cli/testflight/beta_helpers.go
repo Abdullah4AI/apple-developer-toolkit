@@ -120,17 +120,25 @@ func findBetaTesterIDByEmail(ctx context.Context, client *asc.Client, appID, ema
 	if err != nil {
 		return "", err
 	}
+	if testers == nil {
+		return "", fmt.Errorf("empty beta testers response")
+	}
 
-	if len(testers.Data) == 0 {
+	pageHasNext := strings.TrimSpace(testers.Links.Next) != ""
+	if len(testers.Data) == 0 && !pageHasNext {
 		return "", errBetaTesterNotFound
 	}
-	if len(testers.Data) > 1 {
-		return "", &shared.AmbiguousSelectionError{
+	if len(testers.Data) > 1 || pageHasNext {
+		ambiguous := &shared.AmbiguousSelectionError{
 			Kind:        "beta tester",
 			Description: fmt.Sprintf("email %q", strings.TrimSpace(email)),
 			Candidates:  shared.BetaTesterCandidates(testers.Data),
 			Hint:        "This command selects testers by --email only; inspect the duplicates with `asc testflight beta-testers view --id <ID>`.",
 		}
+		if pageHasNext {
+			return "", shared.MarkAmbiguousSelectionSample(ambiguous)
+		}
+		return "", ambiguous
 	}
 
 	return testers.Data[0].ID, nil

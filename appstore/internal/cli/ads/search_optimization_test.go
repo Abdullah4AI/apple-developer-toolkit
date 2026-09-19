@@ -341,7 +341,7 @@ func TestFetchOptimizationPhraseSuggestionsReadsPhraseField(t *testing.T) {
 	}
 }
 
-func TestFetchSearchSuggestionsSortsByPopularityAndHonorsLimit(t *testing.T) {
+func TestFetchSearchSuggestionsOmitsSortingAndHonorsLimit(t *testing.T) {
 	var requests []string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requests = append(requests, r.URL.Path)
@@ -351,7 +351,9 @@ func TestFetchSearchSuggestionsSortsByPopularityAndHonorsLimit(t *testing.T) {
 			http.Error(w, "invalid test request", http.StatusBadRequest)
 			return
 		}
-		assertSorting(t, body, "popularity", "order", "DESC")
+		if _, hasSorting := body["sorting"]; hasSorting {
+			t.Errorf("sorting = %#v, want omitted (Apple rejects popularity sort on suggestions)", body["sorting"])
+		}
 		pagination, ok := body["pagination"].(map[string]any)
 		if !ok || pagination["offset"] != float64(0) || pagination["pageSize"] != float64(2) {
 			t.Errorf("pagination = %#v, want offset 0/pageSize 2", body["pagination"])

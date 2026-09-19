@@ -2,6 +2,7 @@ package web
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"strconv"
@@ -72,6 +73,29 @@ func validateReviewIAPAttachInputs(appID, iapID string, confirm bool) error {
 	}
 }
 
+func reviewIAPAmbiguousSelectionError(err error) *shared.AmbiguousSelectionError {
+	var ambiguous *webcore.ReviewIAPAmbiguousError
+	if !errors.As(err, &ambiguous) || ambiguous == nil {
+		return nil
+	}
+	candidates := make([]shared.AmbiguousCandidate, 0, len(ambiguous.Matches))
+	for _, match := range ambiguous.Matches {
+		candidates = append(candidates, shared.AmbiguousCandidate{
+			ID:    strings.TrimSpace(match.ID),
+			Label: strings.TrimSpace(match.ProductID),
+			Extra: strings.TrimSpace(match.ReferenceName),
+		})
+	}
+	return &shared.AmbiguousSelectionError{
+		Kind:             "in-app purchase",
+		Description:      fmt.Sprintf("%q by %s", strings.TrimSpace(ambiguous.Selector), strings.TrimSpace(ambiguous.Field)),
+		Flag:             "--iap-id",
+		Candidates:       candidates,
+		Hint:             "Use the Iris resource ID to disambiguate.",
+		DisplayTextLimit: shared.AmbiguousDiagnosticTextLimit,
+	}
+}
+
 // iapStateIndicatesAlreadyAttached reports whether the IAP's current ASC
 // state implies it is already enrolled in the next app version review.
 //
@@ -102,6 +126,9 @@ func verifyReviewIAPBelongsToApp(ctx context.Context, client reviewIAPFinder, ap
 
 	iap, found, err := client.FindReviewIAP(ctx, appID, iapID)
 	if err != nil {
+		if ambiguous := reviewIAPAmbiguousSelectionError(err); ambiguous != nil {
+			return webcore.ReviewIAP{}, fmt.Errorf("verify in-app purchase %q under app %q: %w", iapID, appID, ambiguous)
+		}
 		return webcore.ReviewIAP{}, fmt.Errorf("verify in-app purchase %q under app %q: %w", iapID, appID, err)
 	}
 	if !found {

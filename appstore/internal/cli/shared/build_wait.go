@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"regexp"
 	"sort"
@@ -81,7 +82,7 @@ func WaitForBuildByNumberOrUploadFailure(ctx context.Context, client *asc.Client
 			return build, true, nil
 		}
 		return nil, false, nil
-	}, asc.PollOptions{Tolerate: asc.IsTransientWaitError})
+	}, asc.PollOptions{Tolerate: isTransientBuildWaitError})
 }
 
 // VerifyBuildUploadAfterCommit briefly watches a newly committed upload for
@@ -118,6 +119,15 @@ func VerifyBuildUploadAfterCommit(ctx context.Context, client *asc.Client, appID
 	_, err := asc.PollUntil(verifyCtx, effectiveInterval, func(ctx context.Context) (*asc.BuildUploadResponse, bool, error) {
 		upload, err := client.GetBuildUpload(ctx, uploadID)
 		if err != nil {
+			if isTerminalBuildWaitNotFound(err) {
+				if callerCtx.Err() != nil {
+					return nil, false, callerCtx.Err()
+				}
+				// Verification is best effort, but the request-level retry
+				// budget has already been consumed. Stop instead of replaying
+				// the same permanent lookup for the rest of this window.
+				return nil, true, nil
+			}
 			// A retry delay that cannot fit in this bounded verification window
 			// is already a terminal best-effort outcome: stop probing now and
 			// preserve the caller's asynchronous-success behavior.
@@ -206,7 +216,7 @@ func findPreReleaseVersionIDForBuildWait(ctx context.Context, client *asc.Client
 	}
 
 	for _, variant := range variants {
-		ids, _, err := findPreReleaseVersionIDsForVersions(ctx, client, appID, []string{variant}, platform)
+		ids, _, err := findPreReleaseVersionIDsForVersions(ctx, client, appID, []string{variant}, platform, 0)
 		if err != nil {
 			return "", err
 		}
@@ -522,7 +532,26 @@ func joinDiagnosticDetails(values []string) string {
 }
 
 func shouldIgnoreBuildWaitLookupError(err error) bool {
-	return asc.IsNotFound(err)
+	return asc.IsNotFound(err) && !isTerminalBuildWaitNotFound(err)
+}
+
+func isTransientBuildWaitError(ctx context.Context, err error) bool {
+	if isTerminalBuildWaitNotFound(err) {
+		return false
+	}
+	return asc.IsTransientWaitError(ctx, err)
+}
+
+func isTerminalBuildWaitNotFound(err error) bool {
+	if !asc.IsRetryBudgetExhausted(err) && !asc.IsRetryDelayExceeded(err) {
+		return false
+	}
+
+	var apiErr *asc.APIError
+	if !errors.As(err, &apiErr) || apiErr == nil {
+		return false
+	}
+	return apiErr.StatusCode == http.StatusNotFound && strings.EqualFold(apiErr.Code, "NOT_FOUND")
 }
 
 // SetBuildUploadFailureDiagnosticsForTesting overrides build failure enrichment.

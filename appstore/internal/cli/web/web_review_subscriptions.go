@@ -276,10 +276,11 @@ func findReviewSubscription(subscriptions []webcore.ReviewSubscription, selector
 			})
 		}
 		return nil, &shared.AmbiguousSelectionError{
-			Kind:        "subscription",
-			Description: fmt.Sprintf("%q by id", selector),
-			Flag:        "--subscription-id",
-			Candidates:  shared.ExactSelectorAmbiguousCandidates(candidates),
+			Kind:             "subscription",
+			Description:      fmt.Sprintf("%q by id", selector),
+			Flag:             "--subscription-id",
+			Candidates:       shared.ExactSelectorAmbiguousCandidates(candidates),
+			DisplayTextLimit: shared.AmbiguousDiagnosticTextLimit,
 		}
 	}
 

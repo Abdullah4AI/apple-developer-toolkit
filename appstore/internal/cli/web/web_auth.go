@@ -54,10 +54,12 @@ var (
 	termReadPasswordFn                       = term.ReadPassword
 	termIsTerminalFn                         = term.IsTerminal
 	tryResumeSessionFn                       = webcore.TryResumeSession
+	tryResumeSessionFromSourceFn             = webcore.TryResumeSessionFromSource
 	tryResumeLastFn                          = webcore.TryResumeLastSession
 	loadCachedSessionFn                      = webcore.LoadCachedSession
+	loadCachedSessionFromSourceFn            = webcore.LoadCachedSessionFromSource
 	loadLastCachedSessionFn                  = webcore.LoadLastCachedSession
-	defaultCachedAppleIDFn                   = webcore.DefaultCachedAppleID
+	defaultCachedAppleIDFn                   = webcore.DefaultCachedAppleIDWithSource
 	webLoginWithClientFn                     = webcore.LoginWithClient
 	loadStoredWebPasswordFn                  = webcore.LoadPassword
 	storeStoredWebPasswordFn                 = webcore.StorePassword
@@ -546,7 +548,7 @@ func printEnvAppleIDNotice(appleID string) {
 	if sessionDefaultNoticeWriter == nil {
 		return
 	}
-	_, _ = fmt.Fprintf(sessionDefaultNoticeWriter, "Using web session for %s from %s; pass --apple-id to override\n", appleID, webAppleIDEnv)
+	_, _ = fmt.Fprintf(sessionDefaultNoticeWriter, "Using web session for %s from %s; pass --apple-id to override\n", shared.SanitizeTerminal(appleID), webAppleIDEnv)
 }
 
 // resolveDefaultCachedAppleID picks the Apple ID of the only cached web session
@@ -558,29 +560,29 @@ func printEnvAppleIDNotice(appleID string) {
 // result with a warning.
 // The boolean reports the empty-cache case, the only one a command may still
 // answer with an interactive Apple ID prompt.
-func resolveDefaultCachedAppleID() (appleID string, cacheEmpty bool, err error) {
-	appleID, err = defaultCachedAppleIDFn()
+func resolveDefaultCachedAppleID() (appleID string, source webcore.CachedSessionSource, cacheEmpty bool, err error) {
+	appleID, source, err = defaultCachedAppleIDFn()
 	if err == nil {
 		appleID = strings.TrimSpace(appleID)
 		if appleID == "" {
-			return "", true, webcore.ErrNoCachedSession
+			return "", webcore.CachedSessionSourceUnknown, true, webcore.ErrNoCachedSession
 		}
 		if sessionDefaultNoticeWriter != nil {
-			_, _ = fmt.Fprintf(sessionDefaultNoticeWriter, "Using cached web session for %s; pass --apple-id to override\n", appleID)
+			_, _ = fmt.Fprintf(sessionDefaultNoticeWriter, "Using cached web session for %s; pass --apple-id to override\n", shared.SanitizeTerminal(appleID))
 		}
-		return appleID, false, nil
+		return appleID, source, false, nil
 	}
 	var ambiguous *webcore.AmbiguousCachedSessionError
 	switch {
 	case errors.As(err, &ambiguous):
-		return "", false, ambiguous
+		return "", source, false, ambiguous
 	case errors.Is(err, webcore.ErrNoCachedSession):
-		return "", true, webcore.ErrNoCachedSession
+		return "", source, true, webcore.ErrNoCachedSession
 	default:
 		if sessionCacheWarningWriter != nil {
 			_, _ = fmt.Fprintf(sessionCacheWarningWriter, "Warning: listing cached web sessions failed: %v\n", err)
 		}
-		return "", true, webcore.ErrNoCachedSession
+		return "", source, true, webcore.ErrNoCachedSession
 	}
 }
 
@@ -843,6 +845,17 @@ func resolveKnownWebSession(ctx context.Context, appleID string) (*webcore.AuthS
 	return nil, false, false, fmt.Errorf("checking cached web session failed: %w", err)
 }
 
+func resolveKnownWebSessionFromSource(ctx context.Context, appleID string, source webcore.CachedSessionSource) (*webcore.AuthSession, bool, bool, error) {
+	resumed, ok, err := tryResumeSessionFromSourceFn(ctx, appleID, source)
+	if err == nil {
+		return resumed, ok, false, nil
+	}
+	if errors.Is(err, webcore.ErrCachedSessionExpired) {
+		return nil, false, true, nil
+	}
+	return nil, false, false, fmt.Errorf("checking cached web session failed: %w", err)
+}
+
 func resolveWebSession(ctx context.Context, appleID, password, twoFactorCode string, opts webSessionResolveOptions) (*webcore.AuthSession, string, error) {
 	shared.ApplyRootLoggingOverrides()
 
@@ -955,8 +968,15 @@ func resolveWebSession(ctx context.Context, appleID, password, twoFactorCode str
 		return fmt.Errorf("%w; the supplied two-factor code was already consumed by the expired session, so the stale cached session was discarded: re-run with a new code, or configure --two-factor-code-command or %s to fetch one automatically", loginErr, webTwoFactorCodeCommandEnv)
 	}
 
-	tryKnownSession := func(targetAppleID string) (*webcore.AuthSession, string, bool, error) {
-		resumed, ok, cacheExpired, err := resolveKnownWebSession(ctx, targetAppleID)
+	tryKnownSession := func(targetAppleID string, source webcore.CachedSessionSource) (*webcore.AuthSession, string, bool, error) {
+		var resumed *webcore.AuthSession
+		var ok, cacheExpired bool
+		var err error
+		if source == webcore.CachedSessionSourceUnknown {
+			resumed, ok, cacheExpired, err = resolveKnownWebSession(ctx, targetAppleID)
+		} else {
+			resumed, ok, cacheExpired, err = resolveKnownWebSessionFromSource(ctx, targetAppleID, source)
+		}
 		if err != nil {
 			printCacheLookupWarning(sessionCacheWarningWriter, err)
 			return nil, "", false, nil
@@ -970,7 +990,11 @@ func resolveWebSession(ctx context.Context, appleID, password, twoFactorCode str
 
 		var cachedOK bool
 		if strings.TrimSpace(targetAppleID) != "" {
-			expiredCachedSession, cachedOK, err = loadCachedSessionFn(targetAppleID)
+			if source == webcore.CachedSessionSourceUnknown {
+				expiredCachedSession, cachedOK, err = loadCachedSessionFn(targetAppleID)
+			} else {
+				expiredCachedSession, cachedOK, err = loadCachedSessionFromSourceFn(targetAppleID, source)
+			}
 		} else {
 			expiredCachedSession, cachedOK, err = loadLastCachedSessionFn()
 		}
@@ -1042,7 +1066,7 @@ func resolveWebSession(ctx context.Context, appleID, password, twoFactorCode str
 		return nil, "", false, nil
 	}
 
-	if session, source, ok, err := tryKnownSession(resolvedAppleID); err != nil {
+	if session, source, ok, err := tryKnownSession(resolvedAppleID, webcore.CachedSessionSourceUnknown); err != nil {
 		return nil, "", err
 	} else if ok {
 		return session, source, nil
@@ -1052,7 +1076,7 @@ func resolveWebSession(ctx context.Context, appleID, password, twoFactorCode str
 		// The last-session pointer resolved nothing, so fall back to the only
 		// cached account when there is exactly one. Only an empty cache may
 		// still prompt (apps create); an ambiguous cache never guesses.
-		defaultAppleID, cacheEmpty, defaultErr := resolveDefaultCachedAppleID()
+		defaultAppleID, defaultSource, cacheEmpty, defaultErr := resolveDefaultCachedAppleID()
 		switch {
 		case defaultErr == nil:
 			resolvedAppleID = defaultAppleID
@@ -1067,8 +1091,9 @@ func resolveWebSession(ctx context.Context, appleID, password, twoFactorCode str
 				return nil, "", err
 			}
 			resolvedAppleID = strings.TrimSpace(resolvedAppleID)
+			defaultSource = webcore.CachedSessionSourceUnknown
 		}
-		if session, source, ok, err := tryKnownSession(resolvedAppleID); err != nil {
+		if session, source, ok, err := tryKnownSession(resolvedAppleID, defaultSource); err != nil {
 			return nil, "", err
 		} else if ok {
 			return session, source, nil

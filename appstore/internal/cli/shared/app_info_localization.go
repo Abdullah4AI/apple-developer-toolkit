@@ -45,6 +45,7 @@ func PlanAppInfoLocalizationUpsert(
 	if localizations == nil {
 		return nil, fmt.Errorf("empty app info localizations response")
 	}
+	pageHasNext := strings.TrimSpace(localizations.Links.Next) != ""
 
 	plan := &AppInfoLocalizationUpsertPlan{
 		AppInfoID: resolvedAppInfoID,
@@ -52,19 +53,29 @@ func PlanAppInfoLocalizationUpsert(
 	}
 	switch len(localizations.Data) {
 	case 0:
+		if pageHasNext {
+			return nil, MarkAmbiguousSelectionSample(AmbiguousLocalizationError("app info localization", locale, nil))
+		}
 		if strings.TrimSpace(values["name"]) == "" {
 			return nil, UsageError("--name is required when creating an app info localization")
 		}
 		plan.Create = true
 		plan.Attributes = buildAppInfoLocalizationAttributes(locale, values, true)
 	case 1:
+		if pageHasNext {
+			return nil, MarkAmbiguousSelectionSample(AmbiguousLocalizationError("app info localization", locale, LocalizationCandidates(localizations.Data, func(attributes asc.AppInfoLocalizationAttributes) string { return attributes.Locale })))
+		}
 		plan.LocalizationID = strings.TrimSpace(localizations.Data[0].ID)
 		if plan.LocalizationID == "" {
 			return nil, fmt.Errorf("localization id is empty")
 		}
 		plan.Attributes = buildAppInfoLocalizationAttributes(locale, values, false)
 	default:
-		return nil, AmbiguousLocalizationError("app info localization", locale, LocalizationCandidates(localizations.Data, func(attributes asc.AppInfoLocalizationAttributes) string { return attributes.Locale }))
+		ambiguous := AmbiguousLocalizationError("app info localization", locale, LocalizationCandidates(localizations.Data, func(attributes asc.AppInfoLocalizationAttributes) string { return attributes.Locale }))
+		if pageHasNext {
+			return nil, MarkAmbiguousSelectionSample(ambiguous)
+		}
+		return nil, ambiguous
 	}
 
 	return plan, nil

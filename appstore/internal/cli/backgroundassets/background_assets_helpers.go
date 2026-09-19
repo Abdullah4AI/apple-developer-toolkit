@@ -7,7 +7,10 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
 )
 
-const backgroundAssetsMaxLimit = 200
+const (
+	backgroundAssetsMaxLimit                      = 200
+	backgroundAssetsReviewSubmissionItemsMaxPages = 1000
+)
 
 var backgroundAssetUploadFileAssetTypeValues = []string{
 	string(asc.BackgroundAssetUploadFileAssetTypeAsset),

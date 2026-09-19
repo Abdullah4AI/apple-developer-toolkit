@@ -157,7 +157,36 @@ func (c *Client) GetAppBetaGroupsRelationships(ctx context.Context, appID string
 
 // GetAppBuildUploadsRelationships retrieves build upload linkages for an app.
 func (c *Client) GetAppBuildUploadsRelationships(ctx context.Context, appID string, opts ...LinkagesOption) (*LinkagesResponse, error) {
-	return c.getAppLinkages(ctx, appID, "buildUploads", opts...)
+	query := &linkagesQuery{}
+	for _, opt := range opts {
+		opt(query)
+	}
+
+	appID = strings.TrimSpace(appID)
+	if query.nextURL == "" && appID == "" {
+		return nil, fmt.Errorf("appID is required")
+	}
+
+	path := fmt.Sprintf("/v1/apps/%s/relationships/buildUploads", appID)
+	if query.nextURL != "" {
+		if err := validateNextURL(query.nextURL); err != nil {
+			return nil, fmt.Errorf("appRelationships: %w", err)
+		}
+		path = query.nextURL
+	} else if queryString := buildLinkagesQuery(query); queryString != "" {
+		path += "?" + queryString
+	}
+
+	data, err := c.doAppBuildUploadsRead(ctx, appID, path)
+	if err != nil {
+		return nil, err
+	}
+
+	var response LinkagesResponse
+	if err := json.Unmarshal(data, &response); err != nil {
+		return nil, fmt.Errorf("failed to parse buildUploads relationship response: %w", err)
+	}
+	return &response, nil
 }
 
 // GetAppBuildsRelationships retrieves build linkages for an app.

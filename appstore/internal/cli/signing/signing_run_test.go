@@ -930,6 +930,48 @@ func TestRunSigningEnvironmentRestoresAfterEachSetupFailure(t *testing.T) {
 	}
 }
 
+func TestRunSigningEnvironmentCleansUpProfileWhenInstallerReturnsErrorAfterJournaling(t *testing.T) {
+	fixture := newSigningRunFixture(t, signingRunFixtureOptions{})
+	inspection, err := inspectSigningRunInputs(fixture.identity, []byte(fixture.password), fixture.profile, fixture.roots, fixture.now)
+	if err != nil {
+		t.Fatalf("inspect fixture: %v", err)
+	}
+	installErr := errors.New("profile installation failed after staging")
+	profileCleanupErr := errors.New("staged profile cleanup failed")
+	planned := signingRunProfileInstall{
+		Path: "/profiles/uuid.mobileprovision", StagedPath: "/profiles/.staged",
+		Created: true, Digest: inspection.ProfileSHA256, Device: 1, Inode: 2,
+	}
+	events := []string{}
+	deps := fakeSigningRunDeps(&events)
+	deps.InstallProfile = func(_ context.Context, _ string, _ []byte, _ string, beforeCreate func(signingRunProfileInstall) error) (signingRunProfileInstall, error) {
+		events = append(events, "install-profile")
+		if err := beforeCreate(planned); err != nil {
+			return signingRunProfileInstall{}, err
+		}
+		return signingRunProfileInstall{}, installErr
+	}
+	var removed signingRunProfileInstall
+	deps.RemoveProfile = func(install signingRunProfileInstall) error {
+		events = append(events, "remove-profile")
+		removed = install
+		return profileCleanupErr
+	}
+	deps.RemoveTempDir = func(string) error { events = append(events, "remove-temp"); return nil }
+	deps.RemoveJournal = func() error { events = append(events, "remove-journal"); return nil }
+
+	_, runErr := runSigningEnvironment(context.Background(), deps, signingRunOptions{Child: []string{"tool"}}, fixture.profile, inspection, nil)
+	if !errors.Is(runErr, installErr) || !errors.Is(runErr, profileCleanupErr) {
+		t.Fatalf("error = %v, want install and profile cleanup causes", runErr)
+	}
+	if !reflect.DeepEqual(removed, planned) {
+		t.Fatalf("removed profile = %+v, want journaled staged ownership %+v", removed, planned)
+	}
+	if slices.Contains(events, "remove-temp") || slices.Contains(events, "remove-journal") {
+		t.Fatalf("cleanup removed recovery state after profile cleanup failure: %v", events)
+	}
+}
+
 func fakeSigningRunDeps(events *[]string) signingRunDeps {
 	return signingRunDeps{
 		GOOS:          "darwin",

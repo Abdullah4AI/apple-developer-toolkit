@@ -23,6 +23,7 @@ type BuildBetaGroupsUpdateResult struct {
 	BuildID  string   `json:"buildId"`
 	GroupIDs []string `json:"groupIds"`
 	Action   string   `json:"action"`
+	DryRun   bool     `json:"dryRun,omitempty"`
 }
 
 // BuildIndividualTestersUpdateResult represents CLI output for build individual tester updates.

@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
@@ -38,6 +40,39 @@ func openImageFile(path string) (*os.File, os.FileInfo, error) {
 		return nil, nil, err
 	}
 	return file, info, nil
+}
+
+// snapshotImageFile copies the selected image into a private temporary file
+// before any checksum or upload work begins. Hashing and uploading the source
+// pathname independently would allow an in-place rewrite between those reads
+// to commit a checksum for different bytes than the upload sent.
+func snapshotImageFile(source *os.File, size int64) (*os.File, func(), error) {
+	if source == nil {
+		return nil, func() {}, fmt.Errorf("image source file is required")
+	}
+	if size <= 0 {
+		return nil, func() {}, fmt.Errorf("image source file must not be empty")
+	}
+
+	snapshot, err := os.CreateTemp("", ".asc-iap-image-*")
+	if err != nil {
+		return nil, func() {}, fmt.Errorf("create image snapshot: %w", err)
+	}
+	cleanup := func() {
+		name := snapshot.Name()
+		_ = snapshot.Close()
+		_ = os.Remove(name)
+	}
+
+	if _, err := io.CopyN(snapshot, io.NewSectionReader(source, 0, size), size); err != nil {
+		cleanup()
+		return nil, func() {}, fmt.Errorf("copy image snapshot: %w", err)
+	}
+	if _, err := snapshot.Seek(0, io.SeekStart); err != nil {
+		cleanup()
+		return nil, func() {}, fmt.Errorf("rewind image snapshot: %w", err)
+	}
+	return snapshot, cleanup, nil
 }
 
 func parseOfferCodeEligibilities(value string) ([]string, error) {
@@ -135,6 +170,9 @@ type relationshipReference struct {
 func relationshipResourceID(relationships json.RawMessage, key string) (string, error) {
 	if len(relationships) == 0 {
 		return "", fmt.Errorf("missing relationships")
+	}
+	if !utf8.Valid(relationships) {
+		return "", fmt.Errorf("relationships contain invalid UTF-8")
 	}
 
 	var references map[string]relationshipReference

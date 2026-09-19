@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"time"
 )
 
 type persistentSigningUtilityRunner func(context.Context, []byte, ...string) ([]byte, []byte, error)
@@ -27,38 +26,28 @@ func platformSigningKeychainInstallDeps() signingKeychainInstallDeps {
 	}
 }
 
-func createPersistentSigningKeychain(ctx context.Context, keychainPath string, password []byte) error {
+func createPersistentSigningKeychain(ctx context.Context, keychainPath string, password []byte) (bool, error) {
 	if len(password) == 0 {
-		return fmt.Errorf("keychain password is empty")
+		return false, fmt.Errorf("keychain password is empty")
 	}
-	if err := createPersistentKeychainWithSecurityFramework(keychainPath, password); err != nil {
-		return err
+	created, err := createPersistentKeychainWithSecurityFramework(keychainPath, password)
+	if err != nil {
+		return created, err
 	}
-	return configurePersistentSigningKeychain(ctx, keychainPath, runSigningUtility, deleteSigningRunKeychain)
+	if err := configurePersistentSigningKeychain(ctx, keychainPath, runSigningUtility); err != nil {
+		return true, err
+	}
+	return true, nil
 }
 
 func configurePersistentSigningKeychain(
 	ctx context.Context,
 	keychainPath string,
 	runUtility persistentSigningUtilityRunner,
-	deleteKeychain func(context.Context, string) error,
 ) error {
 	_, stderr, err := runUtility(ctx, nil, "set-keychain-settings", "-l", keychainPath)
 	if err != nil {
-		configureErr := utilityFailure("configure persistent keychain", stderr, err)
-		if cleanupErr := deleteCreatedPersistentSigningKeychain(keychainPath, deleteKeychain); cleanupErr != nil {
-			return errors.Join(configureErr, cleanupErr)
-		}
-		return configureErr
-	}
-	return nil
-}
-
-func deleteCreatedPersistentSigningKeychain(keychainPath string, deleteKeychain func(context.Context, string) error) error {
-	cleanupCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
-	if err := deleteKeychain(cleanupCtx, keychainPath); err != nil {
-		return fmt.Errorf("remove unconfigured keychain: %w", err)
+		return utilityFailure("configure persistent keychain", stderr, err)
 	}
 	return nil
 }

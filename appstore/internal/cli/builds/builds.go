@@ -20,13 +20,14 @@ func BuildsAddGroupsCommand() *ffcli.Command {
 	selectors := bindBuildSelectorFlags(fs, buildSelectorFlagOptions{})
 	groups := shared.BindOnceCSVFlag(fs, "group", "Comma-separated beta group IDs or names")
 	skipInternal := fs.Bool("skip-internal", false, "Skip internal beta groups instead of adding them")
+	dryRun := fs.Bool("dry-run", false, "Preview beta group assignment without adding groups")
 	submit := fs.Bool("submit", false, "Submit build for beta app review after adding external groups")
 	confirm := fs.Bool("confirm", false, "Confirm beta app review submission (required with --submit)")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "add-groups",
-		ShortUsage: "asc builds add-groups (--build-id BUILD_ID | --app APP --latest | --app APP --build-number BUILD_NUMBER --platform PLATFORM [--version VERSION]) --group GROUP_ID[,GROUP_ID...] [--submit --confirm]",
+		ShortUsage: "asc builds add-groups (--build-id BUILD_ID | --app APP --latest | --app APP --build-number BUILD_NUMBER --platform PLATFORM [--version VERSION]) --group GROUP_ID[,GROUP_ID...] [--dry-run | --submit --confirm]",
 		ShortHelp:  "Add beta groups to a build for TestFlight distribution.",
 		LongHelp: `Add beta groups to a build for TestFlight distribution.
 
@@ -36,7 +37,19 @@ Examples:
   asc builds add-groups --build-id "BUILD_ID" --group "External Testers"
   asc builds add-groups --build-id "BUILD_ID" --group "GROUP1,GROUP2"
   asc builds add-groups --build-id "BUILD_ID" --group "INTERNAL_ID,EXTERNAL_ID" --skip-internal
-  asc builds add-groups --build-id "BUILD_ID" --group "GROUP_ID" --submit --confirm`,
+  asc builds add-groups --build-id "BUILD_ID" --group "GROUP_ID" --dry-run
+  asc builds add-groups --build-id "BUILD_ID" --group "GROUP_ID" --submit --confirm
+
+Use --dry-run to resolve the build and groups and preview the relationship
+without adding groups or submitting a review. Any state shown by its
+best-effort reads is observational and advisory, and does not predict whether
+a later assignment will be accepted.
+
+Normal assignments verify the current build processing and expiry before
+sending the relationship request. Assignments that include an external group
+also verify encryption, audience, and beta-review state. If App Store Connect
+does not provide enough state to prove readiness, the command stops without
+sending that request.`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -51,6 +64,13 @@ Examples:
 			if len(groupInputs) == 0 {
 				fmt.Fprintln(os.Stderr, "Error: --group is required")
 				return shared.MissingRequiredUsageError("--group")
+			}
+			if *submit && *dryRun {
+				return shared.WithDiagnostic(
+					shared.UsageError("--submit cannot be used with --dry-run"),
+					shared.DiagnosticConflictingInput,
+					"--dry-run",
+				)
 			}
 			if *submit && !*confirm {
 				fmt.Fprintln(os.Stderr, "Error: --confirm is required with --submit")
@@ -79,6 +99,18 @@ Examples:
 				return fmt.Errorf("builds add-groups: %w", err)
 			}
 
+			plan := shared.PlanBuildBetaGroupAssignment(resolvedGroups, shared.AddBuildBetaGroupsOptions{
+				SkipInternal: *skipInternal,
+			})
+			if *dryRun {
+				return reportBuildBetaGroupAssignmentDryRun(requestCtx, client, buildID, plan, output)
+			}
+			if err := shared.PreflightBuildBetaGroupAssignment(requestCtx, client, buildID, plan, shared.BuildBetaGroupPreflightOptions{
+				OperationName: "builds add-groups",
+			}); err != nil {
+				return err
+			}
+
 			addResult, err := shared.AddBuildBetaGroups(requestCtx, client, buildID, resolvedGroups, shared.AddBuildBetaGroupsOptions{
 				SkipInternal: *skipInternal,
 			})
@@ -96,7 +128,7 @@ Examples:
 					os.Stderr,
 					"Skipped internal group %q (%s) because --skip-internal was set\n",
 					group.NameForDisplay(),
-					group.ID,
+					shared.SanitizeTerminal(group.ID),
 				)
 			}
 

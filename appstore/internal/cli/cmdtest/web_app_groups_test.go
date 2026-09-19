@@ -3,6 +3,7 @@ package cmdtest
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -11,6 +12,61 @@ import (
 	webcmd "github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/web"
 	webcore "github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/web"
 )
+
+func TestWebAppGroupsAuthenticationFailureUsesAuthExit(t *testing.T) {
+	stubWebAppGroupsSession(t)
+	restoreDelete := webcmd.SetDeleteDeveloperAppGroup(func(context.Context, *webcore.Client, webcore.DeveloperAppGroupDeleteRequest) (*asc.WebAppGroupDeleteResult, error) {
+		return nil, fmt.Errorf("web session is unauthorized or expired for Developer Portal: %w", &webcore.APIError{Status: 401})
+	})
+	t.Cleanup(restoreDelete)
+
+	var code int
+	stdout, stderr := captureOutput(t, func() {
+		code = cmd.Run([]string{"web", "app-groups", "delete", "--group-id", "GROUP1", "--confirm", "--output", "json"}, "1.0.0")
+	})
+	if code != cmd.ExitAuth {
+		t.Fatalf("exit code = %d, want %d; stderr=%q", code, cmd.ExitAuth, stderr)
+	}
+	if stdout != "" {
+		t.Fatalf("expected empty stdout, got %q", stdout)
+	}
+	if !strings.Contains(stderr, "unauthorized or expired") {
+		t.Fatalf("stderr lost authentication guidance: %q", stderr)
+	}
+}
+
+func TestWebAppGroupsPortalRefusalSanitizesStderr(t *testing.T) {
+	stubWebAppGroupsSession(t)
+	restoreDelete := webcmd.SetDeleteDeveloperAppGroup(func(context.Context, *webcore.Client, webcore.DeveloperAppGroupDeleteRequest) (*asc.WebAppGroupDeleteResult, error) {
+		return nil, &webcore.DeveloperPortalResultError{
+			ResultCode: 35,
+			RequestID:  "request-1\x1b[31m\r\nforged-request",
+			Message:    "Denied\x1b]8;;https://example.invalid\a\r\nforged-message",
+		}
+	})
+	t.Cleanup(restoreDelete)
+
+	var code int
+	stdout, stderr := captureOutput(t, func() {
+		code = cmd.Run([]string{"web", "app-groups", "delete", "--group-id", "GROUP1", "--confirm", "--output", "json"}, "1.0.0")
+	})
+	if code != cmd.ExitError {
+		t.Fatalf("exit code = %d, want %d; stderr=%q", code, cmd.ExitError, stderr)
+	}
+	if stdout != "" {
+		t.Fatalf("expected empty stdout, got %q", stdout)
+	}
+	for _, unsafe := range []string{"\x1b", "\r", "\nforged-request", "\nforged-message"} {
+		if strings.Contains(stderr, unsafe) {
+			t.Fatalf("stderr contains unsafe sequence %q: %q", unsafe, stderr)
+		}
+	}
+	for _, preserved := range []string{"request-1", "forged-request", "Denied", "forged-message"} {
+		if !strings.Contains(stderr, preserved) {
+			t.Fatalf("stderr lost sanitized text %q: %q", preserved, stderr)
+		}
+	}
+}
 
 func TestWebAppGroupsMutationSubcommandsAreRegistered(t *testing.T) {
 	root := RootCommand("1.2.3")

@@ -198,6 +198,7 @@ func TestBuildsNextBuildNumberExplainsUnavailableUploadHistory(t *testing.T) {
 
 			originalTransport := http.DefaultTransport
 			t.Cleanup(func() { http.DefaultTransport = originalTransport })
+			appChecks := 0
 			http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
 				switch {
 				case req.Method == http.MethodGet && req.URL.Path == "/v1/builds":
@@ -206,6 +207,9 @@ func TestBuildsNextBuildNumberExplainsUnavailableUploadHistory(t *testing.T) {
 					return jsonHTTPResponse(http.StatusOK, `{"data":[],"links":{"next":"https://api.appstoreconnect.apple.com/v1/apps/100000001/buildUploads?cursor=next-page"}}`), nil
 				case req.Method == http.MethodGet && req.URL.Path == "/v1/apps/100000001/buildUploads":
 					return jsonHTTPResponse(tt.status, tt.responseBody), nil
+				case req.Method == http.MethodGet && req.URL.Path == "/v1/apps/100000001" && tt.status == http.StatusNotFound:
+					appChecks++
+					return jsonHTTPResponse(http.StatusNotFound, tt.responseBody), nil
 				default:
 					t.Fatalf("unexpected request: %s %s", req.Method, req.URL.String())
 					return nil, nil
@@ -243,6 +247,13 @@ func TestBuildsNextBuildNumberExplainsUnavailableUploadHistory(t *testing.T) {
 			}
 			if stdout != "" || stderr != "" {
 				t.Fatalf("expected no partial output, got stdout=%q stderr=%q", stdout, stderr)
+			}
+			wantAppChecks := 0
+			if tt.status == http.StatusNotFound {
+				wantAppChecks = 1
+			}
+			if appChecks != wantAppChecks {
+				t.Fatalf("app existence checks = %d, want %d", appChecks, wantAppChecks)
 			}
 		})
 	}
@@ -833,13 +844,10 @@ func TestBuildsNextBuildNumberHelpExplainsChronologicalAndNumericValues(t *testi
 	}
 }
 
-// Apple intermittently answers GET /v1/apps/{id}/buildUploads with 404
-// NOT_FOUND for apps that exist (fastlane/fastlane#29908). The lookup must
-// absorb a bounded number of those before giving up.
-func TestBuildsNextBuildNumberRetriesIntermittentBuildUploadsNotFound(t *testing.T) {
+func TestBuildsNextBuildNumberRetriesBuildUploadsNotFoundForExistingApp(t *testing.T) {
 	setupAuth(t)
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
-	t.Setenv("ASC_MAX_RETRIES", "2")
+	t.Setenv("ASC_MAX_RETRIES", "3")
 	t.Setenv("ASC_BASE_DELAY", "1ms")
 	t.Setenv("ASC_MAX_DELAY", "1ms")
 
@@ -847,6 +855,7 @@ func TestBuildsNextBuildNumberRetriesIntermittentBuildUploadsNotFound(t *testing
 	t.Cleanup(func() { http.DefaultTransport = originalTransport })
 
 	uploadAttempts := 0
+	appChecks := 0
 	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		switch {
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/builds":
@@ -857,6 +866,9 @@ func TestBuildsNextBuildNumberRetriesIntermittentBuildUploadsNotFound(t *testing
 				return jsonHTTPResponse(http.StatusNotFound, `{"errors":[{"status":"404","code":"NOT_FOUND","title":"The specified resource does not exist","detail":"There is no resource of type 'apps' with id '100000001'"}]}`), nil
 			}
 			return jsonHTTPResponse(http.StatusOK, `{"data":[{"type":"buildUploads","id":"upload-1","attributes":{"cfBundleVersion":"101"}}],"links":{"next":""}}`), nil
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/apps/100000001":
+			appChecks++
+			return jsonHTTPResponse(http.StatusOK, `{"data":{"type":"apps","id":"100000001"}}`), nil
 		default:
 			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.String())
 			return nil, nil
@@ -877,6 +889,9 @@ func TestBuildsNextBuildNumberRetriesIntermittentBuildUploadsNotFound(t *testing
 
 	if uploadAttempts != 3 {
 		t.Fatalf("expected 3 buildUploads attempts (404, 404, 200), got %d", uploadAttempts)
+	}
+	if appChecks != 1 {
+		t.Fatalf("expected one app existence check, got %d", appChecks)
 	}
 	if stderr != "" {
 		t.Fatalf("expected empty stderr, got %q", stderr)

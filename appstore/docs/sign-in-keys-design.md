@@ -1,0 +1,12 @@
+# Sign in with Apple private keys
+
+Add `asc web sign-in-keys list`, `view --key-id ID`, `create --name NAME --bundle-id RESOURCE_ID --output-dir DIR --confirm`, and `download --key-id ID --output-dir DIR --confirm` to the existing web-session command family. The installed CLI has no Developer Portal authentication-key lifecycle commands. Existing App Store Connect API-key commands remain unchanged.
+
+Use the existing Developer Portal session and team selection, request timeout, error handling, root-anchored, identity-checked private file writes on macOS and Linux, and output conventions. Creating a remote key or consuming a one-time download requires `--confirm`; neither is automatically retried after an ambiguous response. Downloaded P8 material must never appear in output; reserve a private destination before downloading, validate a real EC PKCS8 key, and emit a receipt containing only the key ID and saved path. Listing preserves Apple's raw envelope. Do not expose revoke in this bounded addition.
+
+The private Developer Portal endpoints are outside the public OpenAPI schema. Confirm endpoint and payload evidence from maintained portal clients before implementation and verify through the live account. Tests cover required flags before authentication, expected request payloads, one-time download output handling, path collision and invalid responses. Run adjacent package tests, command generation and repository gates plus the mandated isolated Codex review.
+
+
+Endpoint evidence: Expo's `@expo/apple-utils` 2.2.1 and Fastlane's portal client use legacy `/services-account/QH65B2/account/auth/key/{list,get,v2/create,download}`. The create request uses application/json and `serviceConfigurationsRequests: [{isNew: true, serviceId: "APPLE_ID_AUTH_KEY_CONFIGURATION", identifiers: {bundle: [resourceID]}}]`. The bodyless download GET must omit Content-Type. Listing primes key-family CSRF. Detail configuration entries identify the primary bundle using `type: "bundle"` and the opaque `id`.
+
+Live verification on September 15, 2026: list and view succeeded; a dedicated key was created with the requested bundle association and its P8 was downloaded, parsed as P-256 PKCS8, saved mode 0600, and secured in the operator's vault. Initial download rejected the JSON:API Content-Type with HTTP 415 without consuming the key; removing Content-Type matched Expo's transport and completed the download. Existing keys were preserved.

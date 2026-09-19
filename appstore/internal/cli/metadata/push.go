@@ -464,8 +464,38 @@ func resolveMetadataAppInfoID(
 	if err != nil {
 		return "", err
 	}
+	if resp == nil {
+		return "", fmt.Errorf("empty app infos response for app %q", appID)
+	}
 	if len(resp.Data) == 0 {
+		if strings.TrimSpace(resp.Links.Next) != "" {
+			return "", shared.AmbiguousUsageError(shared.MarkAmbiguousSelectionSample(&shared.AmbiguousSelectionError{
+				Kind:        "app info",
+				Description: fmt.Sprintf("app %q", appID),
+				Flag:        "--app-info",
+				Candidates:  nil,
+				Hint:        fmt.Sprintf("Inspect them with `asc apps info list --app %q` before retrying.", appID),
+			}))
+		}
 		return "", fmt.Errorf("no app info found for app %q", appID)
+	}
+	if strings.TrimSpace(resp.Links.Next) != "" {
+		candidates := asc.AppInfoCandidates(resp.Data)
+		exampleAppInfoID := "<APP_INFO_ID>"
+		for _, candidate := range candidates {
+			if candidate.ID != "" {
+				exampleAppInfoID = candidate.ID
+				break
+			}
+		}
+		exampleCommand := buildExample(appID, version, platform, dir, exampleAppInfoID)
+		return "", shared.AmbiguousUsageError(shared.MarkAmbiguousSelectionSample(&shared.AmbiguousSelectionError{
+			Kind:        "app info",
+			Description: fmt.Sprintf("app %q", appID),
+			Flag:        "--app-info",
+			Candidates:  shared.AppInfoAmbiguousCandidates(candidates),
+			Hint:        fmt.Sprintf("Inspect them with `asc apps info list --app %q`. Example: %s", appID, exampleCommand),
+		}))
 	}
 	if len(resp.Data) == 1 {
 		return strings.TrimSpace(resp.Data[0].ID), nil

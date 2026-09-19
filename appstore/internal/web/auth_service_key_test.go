@@ -75,8 +75,9 @@ func TestLoginDiscoversServiceKeyWithoutSigningOut(t *testing.T) {
 	if discoveryCalls != 1 || signinCalls != 1 || redirectCalls != 0 {
 		t.Fatalf("discovery = %d, SRP = %d, redirects = %d; want 1, 1, 0", discoveryCalls, signinCalls, redirectCalls)
 	}
-	if client.Jar != jar || client.Timeout != 5*time.Second || client.CheckRedirect == nil {
-		t.Fatal("discovery modified the authentication client")
+	tracked, ok := client.Jar.(*sessionCookieTrackingJar)
+	if !ok || tracked.CookieJar != jar || client.Timeout != 5*time.Second || client.CheckRedirect == nil {
+		t.Fatal("discovery did not preserve the authentication client and underlying cookie jar")
 	}
 	for _, cookie := range jar.Cookies(&url.URL{Scheme: "https", Host: "appstoreconnect.apple.com"}) {
 		if cookie.Name == "session" && cookie.Value != "authenticated" {

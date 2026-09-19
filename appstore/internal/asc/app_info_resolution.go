@@ -168,18 +168,18 @@ func (c *Client) ResolveAppInfoIDForAppStoreVersion(ctx context.Context, version
 		return "", err
 	}
 
-	appInfos, err := c.GetAppInfos(ctx, appID)
+	appInfos, err := c.ListAppInfoCandidatesForApp(ctx, appID)
 	if err != nil {
 		return "", err
 	}
-	if len(appInfos.Data) == 0 {
+	if len(appInfos) == 0 {
 		return "", fmt.Errorf("no app info found for app %q", appID)
 	}
-	if len(appInfos.Data) == 1 {
-		return strings.TrimSpace(appInfos.Data[0].ID), nil
+	if len(appInfos) == 1 {
+		return strings.TrimSpace(appInfos[0].ID), nil
 	}
 
-	candidates := AppInfoCandidates(appInfos.Data)
+	candidates := appInfos
 
 	if resolvedID, ok := AutoResolveAppInfoIDByVersionState(candidates, ResolveAppStoreVersionState(versionResp.Data.Attributes)); ok {
 		return resolvedID, nil

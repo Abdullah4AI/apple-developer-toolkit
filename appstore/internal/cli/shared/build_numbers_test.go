@@ -356,6 +356,30 @@ func TestFindPreReleaseVersionIDsDeduplicatesAndSkipsBlankIDs(t *testing.T) {
 	}
 }
 
+func TestFindPreReleaseVersionIDsWithMaxPagesStopsBeforeFetchingBeyondLimit(t *testing.T) {
+	calls := 0
+	client := newBuildWaitTestClient(t, func(req *http.Request) (*http.Response, error) {
+		if req.URL.Path != "/v1/preReleaseVersions" {
+			return nil, fmt.Errorf("unexpected path: %s", req.URL.Path)
+		}
+		calls++
+		return buildWaitJSONResponse(fmt.Sprintf(
+			`{"data":[],"links":{"next":"/v1/preReleaseVersions?cursor=%d"}}`,
+			calls,
+		))
+	})
+
+	_, err := FindPreReleaseVersionIDsWithMaxPages(
+		context.Background(), client, "app-1", "1.2.3", "IOS", 2,
+	)
+	if err == nil || !strings.Contains(err.Error(), "page 3") || !strings.Contains(err.Error(), "2-page safety limit") {
+		t.Fatalf("expected page-limit error for page 3, got %v", err)
+	}
+	if calls != 2 {
+		t.Fatalf("requests = %d, want 2 before limit rejection", calls)
+	}
+}
+
 func TestResolveLatestBuildSelectionCarriesEveryEquivalentUploadVersion(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -393,5 +417,45 @@ func TestResolveLatestBuildSelectionCarriesEveryEquivalentUploadVersion(t *testi
 				t.Fatalf("BuildUploadVersions = %v, want every equivalent spelling", selection.BuildUploadVersions)
 			}
 		})
+	}
+}
+
+func TestFindMostRecentlyUploadedBuildPropagatesLaterHTTPErrorAfterOrderingAnomaly(t *testing.T) {
+	const (
+		pageTwoURL   = "https://api.appstoreconnect.apple.com/v1/builds?cursor=page-two"
+		pageThreeURL = "https://api.appstoreconnect.apple.com/v1/builds?cursor=page-three"
+	)
+
+	requestCount := 0
+	client := newBuildWaitTestClient(t, func(req *http.Request) (*http.Response, error) {
+		requestCount++
+		switch requestCount {
+		case 1:
+			return buildWaitJSONResponse(`{
+				"data": [{"type":"builds","id":"build-old","attributes":{"version":"1","uploadedDate":"2026-09-01T00:00:00Z"}}],
+				"links": {"next": "` + pageTwoURL + `"}
+			}`)
+		case 2:
+			return buildWaitJSONResponse(`{
+				"data": [{"type":"builds","id":"build-new","attributes":{"version":"2","uploadedDate":"2026-09-02T00:00:00Z"}}],
+				"links": {"next": "` + pageThreeURL + `"}
+			}`)
+		case 3:
+			return buildWaitJSONStatusResponse(http.StatusBadRequest, `{"errors":[{"code":"BAD_REQUEST","detail":"later page unavailable"}]}`)
+		default:
+			t.Fatalf("unexpected request #%d: %s", requestCount, req.URL.String())
+			return nil, nil
+		}
+	})
+
+	got, err := findMostRecentlyUploadedBuild(context.Background(), client, "app-1")
+	if err == nil {
+		t.Fatal("expected later pagination HTTP error, got nil")
+	}
+	if !strings.Contains(err.Error(), "later page unavailable") {
+		t.Fatalf("expected later page error to be preserved, got %v", err)
+	}
+	if got != nil {
+		t.Fatalf("expected no build alongside pagination error, got %#v", got)
 	}
 }

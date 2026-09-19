@@ -412,18 +412,32 @@ func summarizeReviewSubmissionItems(ctx context.Context, client *asc.Client, sub
 		return summary, err
 	}
 
-	for {
-		accumulateReviewSubmissionItems(&summary, resp.Data, versionID)
-
-		nextURL := strings.TrimSpace(resp.Links.Next)
-		if nextURL == "" {
-			return summary, nil
-		}
-
-		resp, err = client.GetReviewSubmissionItems(ctx, submissionID, asc.WithReviewSubmissionItemsNextURL(nextURL))
+	trimReviewSubmissionItemsNextURL(resp)
+	err = asc.PaginateEach(ctx, resp, func(ctx context.Context, nextURL string) (asc.PaginatedResponse, error) {
+		nextPage, err := client.GetReviewSubmissionItems(ctx, submissionID, asc.WithReviewSubmissionItemsNextURL(strings.TrimSpace(nextURL)))
 		if err != nil {
-			return summary, err
+			return nil, err
 		}
+		trimReviewSubmissionItemsNextURL(nextPage)
+		return nextPage, nil
+	}, func(page asc.PaginatedResponse) error {
+		pageResp, ok := page.(*asc.ReviewSubmissionItemsResponse)
+		if !ok || pageResp == nil {
+			return fmt.Errorf("unexpected review submission items pagination response type %T", page)
+		}
+		accumulateReviewSubmissionItems(&summary, pageResp.Data, versionID)
+		return nil
+	})
+	if err != nil {
+		return summary, err
+	}
+
+	return summary, nil
+}
+
+func trimReviewSubmissionItemsNextURL(resp *asc.ReviewSubmissionItemsResponse) {
+	if resp != nil {
+		resp.Links.Next = strings.TrimSpace(resp.Links.Next)
 	}
 }
 

@@ -40,7 +40,7 @@ func TestSubmitResolvedVersionReusesReadySubmissionWithTargetVersion(t *testing.
 						}
 					}
 				}],
-				"links": {}
+				"links": {"self": "/v1/apps/app-1/reviewSubmissions"}
 			}`)
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/reviewSubmissions/existing-submission/items":
 			return submitJSONResponse(http.StatusOK, `{
@@ -52,8 +52,9 @@ func TestSubmitResolvedVersionReusesReadySubmissionWithTargetVersion(t *testing.
 							"data": {"type": "appStoreVersions", "id": "version-1"}
 						}
 					}
-				}]
-			}`)
+				}],
+				"links": {"self": "/v1/reviewSubmissions/existing-submission/items"}
+				}`)
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/reviewSubmissions/existing-submission":
 			return submitJSONResponse(http.StatusOK, `{
 				"data": {
@@ -133,6 +134,274 @@ func TestSubmitResolvedVersionReusesReadySubmissionWithTargetVersion(t *testing.
 	}
 	if !strings.Contains(strings.Join(emittedMessages, "\n"), wantMessage) {
 		t.Fatalf("expected emit callback to receive reuse notice, got %#v", emittedMessages)
+	}
+}
+
+func TestSubmitResolvedVersionFailsClosedWhenReviewSubmissionPreparationFails(t *testing.T) {
+	transportErr := errors.New("review submission lookup transport failed")
+	tests := []struct {
+		name      string
+		handler   func(*http.Request) (*http.Response, error)
+		wantAPI   bool
+		wantCause error
+	}{
+		{
+			name: "initial submission lookup",
+			handler: func(req *http.Request) (*http.Response, error) {
+				return submitJSONResponse(http.StatusBadRequest, `{"errors":[{"status":"400","code":"BAD_REQUEST","title":"Invalid request"}]}`)
+			},
+			wantAPI: true,
+		},
+		{
+			name: "initial transport failure",
+			handler: func(req *http.Request) (*http.Response, error) {
+				return nil, transportErr
+			},
+			wantCause: transportErr,
+		},
+		{
+			name: "initial malformed response",
+			handler: func(req *http.Request) (*http.Response, error) {
+				return submitJSONResponse(http.StatusOK, `{`)
+			},
+		},
+		{
+			name: "initial response missing data",
+			handler: func(req *http.Request) (*http.Response, error) {
+				return submitJSONResponse(http.StatusOK, `{}`)
+			},
+		},
+		{
+			name: "initial response has null data",
+			handler: func(req *http.Request) (*http.Response, error) {
+				return submitJSONResponse(http.StatusOK, `{"data":null}`)
+			},
+		},
+		{
+			name: "initial response claims omitted submissions",
+			handler: func(req *http.Request) (*http.Response, error) {
+				return submitJSONResponse(http.StatusOK, `{
+					"data": [],
+				"links": {"self": "/v1/apps/app-1/reviewSubmissions"},
+					"meta": {"paging": {"total": 1, "limit": 200}}
+				}`)
+			},
+		},
+		{
+			name: "later submission page",
+			handler: func(req *http.Request) (*http.Response, error) {
+				if req.URL.Query().Get("cursor") == "" {
+					return submitJSONResponse(http.StatusOK, `{
+						"data": [],
+					"links": {"self": "/v1/apps/app-1/reviewSubmissions", "next": "https://api.appstoreconnect.apple.com/v1/apps/app-1/reviewSubmissions?cursor=page-2"}
+					}`)
+				}
+				return submitJSONResponse(http.StatusBadRequest, `{"errors":[{"status":"400","code":"BAD_REQUEST","title":"Invalid request"}]}`)
+			},
+			wantAPI: true,
+		},
+		{
+			name: "later submission page missing data",
+			handler: func(req *http.Request) (*http.Response, error) {
+				if req.URL.Query().Get("cursor") == "" {
+					return submitJSONResponse(http.StatusOK, `{
+						"data": [],
+					"links": {"self": "/v1/apps/app-1/reviewSubmissions", "next": "https://api.appstoreconnect.apple.com/v1/apps/app-1/reviewSubmissions?cursor=page-2"}
+					}`)
+				}
+				return submitJSONResponse(http.StatusOK, `{}`)
+			},
+		},
+		{
+			name: "submission item inspection",
+			handler: func(req *http.Request) (*http.Response, error) {
+				if req.URL.Path == "/v1/apps/app-1/reviewSubmissions" {
+					return submitJSONResponse(http.StatusOK, `{
+						"data": [{
+							"type": "reviewSubmissions",
+							"id": "unproven-submission",
+							"attributes": {"state": "READY_FOR_REVIEW", "platform": "IOS"}
+						}],
+						"links": {"self": "/v1/apps/app-1/reviewSubmissions"}
+					}`)
+				}
+				return submitJSONResponse(http.StatusBadRequest, `{"errors":[{"status":"400","code":"BAD_REQUEST","title":"Invalid request"}]}`)
+			},
+			wantAPI: true,
+		},
+		{
+			name: "submission item response missing data",
+			handler: func(req *http.Request) (*http.Response, error) {
+				if req.URL.Path == "/v1/apps/app-1/reviewSubmissions" {
+					return submitJSONResponse(http.StatusOK, `{
+						"data": [{
+							"type": "reviewSubmissions",
+							"id": "unproven-submission",
+							"attributes": {"state": "READY_FOR_REVIEW", "platform": "IOS"}
+						}],
+						"links": {"self": "/v1/apps/app-1/reviewSubmissions"}
+					}`)
+				}
+				return submitJSONResponse(http.StatusOK, `{}`)
+			},
+		},
+		{
+			name: "submission item response has null data",
+			handler: func(req *http.Request) (*http.Response, error) {
+				if req.URL.Path == "/v1/apps/app-1/reviewSubmissions" {
+					return submitJSONResponse(http.StatusOK, `{
+						"data": [{
+							"type": "reviewSubmissions",
+							"id": "unproven-submission",
+							"attributes": {"state": "READY_FOR_REVIEW", "platform": "IOS"}
+						}],
+						"links": {"self": "/v1/apps/app-1/reviewSubmissions"}
+					}`)
+				}
+				return submitJSONResponse(http.StatusOK, `{"data":null}`)
+			},
+		},
+		{
+			name: "submission item response claims omitted items",
+			handler: func(req *http.Request) (*http.Response, error) {
+				if req.URL.Path == "/v1/apps/app-1/reviewSubmissions" {
+					return submitJSONResponse(http.StatusOK, `{
+						"data": [{
+							"type": "reviewSubmissions",
+							"id": "unproven-submission",
+							"attributes": {"state": "READY_FOR_REVIEW", "platform": "IOS"}
+						}],
+						"links": {"self": "/v1/apps/app-1/reviewSubmissions"}
+					}`)
+				}
+				return submitJSONResponse(http.StatusOK, `{
+					"data": [],
+					"links": {"self": "/v1/apps/app-1/reviewSubmissions"},
+					"meta": {"paging": {"total": 1, "limit": 200}}
+				}`)
+			},
+		},
+		{
+			name: "ready submission missing ID",
+			handler: func(req *http.Request) (*http.Response, error) {
+				return submitJSONResponse(http.StatusOK, `{
+					"data": [{
+						"type": "reviewSubmissions",
+						"id": "",
+						"attributes": {"state": "READY_FOR_REVIEW", "platform": "IOS"}
+					}],
+					"links": {"self": "/v1/apps/app-1/reviewSubmissions"}
+				}`)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mutated := false
+			client := newSubmitTestClient(t, submitRoundTripFunc(func(req *http.Request) (*http.Response, error) {
+				if req.Method != http.MethodGet {
+					mutated = true
+					return nil, errors.New("mutation attempted after uncertain preparation")
+				}
+				return tt.handler(req)
+			}))
+
+			_, err := SubmitResolvedVersion(context.Background(), client, SubmitResolvedVersionOptions{
+				AppID:     "app-1",
+				VersionID: "version-1",
+				Platform:  "IOS",
+			})
+			if err == nil {
+				t.Fatal("expected preparation failure")
+			}
+			if mutated {
+				t.Fatal("review submission preparation failure must stop before mutation")
+			}
+			if tt.wantAPI {
+				var apiErr *asc.APIError
+				if !errors.As(err, &apiErr) {
+					t.Fatalf("expected API error identity to be preserved, got %T: %v", err, err)
+				}
+			}
+			if tt.wantCause != nil && !errors.Is(err, tt.wantCause) {
+				t.Fatalf("expected error to preserve %v, got %v", tt.wantCause, err)
+			}
+		})
+	}
+}
+
+func TestSubmitResolvedVersionPreflightsBeforeBuildAttachment(t *testing.T) {
+	buildLookup := false
+	mutated := false
+	client := newSubmitTestClient(t, submitRoundTripFunc(func(req *http.Request) (*http.Response, error) {
+		switch {
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/apps/app-1/reviewSubmissions":
+			return submitJSONResponse(http.StatusBadRequest, `{"errors":[{"status":"400","code":"BAD_REQUEST","title":"Invalid request"}]}`)
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/appStoreVersions/version-1/build":
+			buildLookup = true
+			return submitJSONResponse(http.StatusOK, `{"data":{"type":"builds","id":"build-old"}}`)
+		default:
+			if req.Method != http.MethodGet {
+				mutated = true
+			}
+			return nil, fmt.Errorf("unexpected request: %s %s", req.Method, req.URL.RequestURI())
+		}
+	}))
+
+	_, err := SubmitResolvedVersion(context.Background(), client, SubmitResolvedVersionOptions{
+		AppID:               "app-1",
+		VersionID:           "version-1",
+		BuildID:             "build-target",
+		Platform:            "IOS",
+		EnsureBuildAttached: true,
+	})
+	if err == nil {
+		t.Fatal("expected review submission preflight failure")
+	}
+	if buildLookup {
+		t.Fatal("build attachment lookup must not run before review submission preflight succeeds")
+	}
+	if mutated {
+		t.Fatal("review submission preflight failure must stop before mutation")
+	}
+}
+
+func TestSubmitResolvedVersionRejectsRepeatedPreparationPageBeforeMutation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	pageReads := 0
+	mutated := false
+	client := newSubmitTestClient(t, submitRoundTripFunc(func(req *http.Request) (*http.Response, error) {
+		if req.Method != http.MethodGet {
+			mutated = true
+			return nil, errors.New("mutation attempted after repeated pagination URL")
+		}
+		pageReads++
+		if pageReads > 2 {
+			cancel()
+			return nil, context.Canceled
+		}
+		return submitJSONResponse(http.StatusOK, `{
+			"data": [],
+			"links": {"self": "/v1/apps/app-1/reviewSubmissions", "next": "https://api.appstoreconnect.apple.com/v1/apps/app-1/reviewSubmissions?cursor=same"}
+		}`)
+	}))
+
+	_, err := SubmitResolvedVersion(ctx, client, SubmitResolvedVersionOptions{
+		AppID:     "app-1",
+		VersionID: "version-1",
+		Platform:  "IOS",
+	})
+	if !errors.Is(err, asc.ErrRepeatedPaginationURL) {
+		t.Fatalf("expected repeated-pagination error, got %v", err)
+	}
+	if pageReads != 2 {
+		t.Fatalf("review submission pages read = %d, want 2", pageReads)
+	}
+	if mutated {
+		t.Fatal("repeated review submission page must stop before mutation")
 	}
 }
 

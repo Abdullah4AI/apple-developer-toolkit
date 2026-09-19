@@ -35,6 +35,22 @@ func TestBuildsListCommand_VersionAndBuildNumberDescriptions(t *testing.T) {
 	}
 }
 
+func TestBuildsAddGroupsCommandDryRunHelpDescribesNoMutation(t *testing.T) {
+	cmd := BuildsAddGroupsCommand()
+	dryRunFlag := cmd.FlagSet.Lookup("dry-run")
+	if dryRunFlag == nil {
+		t.Fatal("expected --dry-run flag to be registered")
+	}
+	if !strings.Contains(dryRunFlag.Usage, "without adding groups") {
+		t.Fatalf("expected --dry-run usage to describe no mutation, got %q", dryRunFlag.Usage)
+	}
+	for _, want := range []string{"--dry-run", "without adding groups", "observational and advisory", "does not predict"} {
+		if !strings.Contains(cmd.LongHelp, want) {
+			t.Fatalf("expected add-groups help to contain %q, got %q", want, cmd.LongHelp)
+		}
+	}
+}
+
 func TestBuildsListCommand_HelpMentionsCombinedFilters(t *testing.T) {
 	cmd := BuildsListCommand()
 	if !strings.Contains(cmd.LongHelp, `--version "1.2.3" --build-number "123"`) {

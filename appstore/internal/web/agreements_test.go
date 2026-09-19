@@ -257,7 +257,7 @@ func TestGetAgreementsStatusSurfacesHTTPStatusErrors(t *testing.T) {
 		wantText   string
 		wantAPIErr bool
 	}{
-		{name: "expired session", status: http.StatusUnauthorized, wantText: "web session is unauthorized or expired for Developer Portal"},
+		{name: "expired session", status: http.StatusUnauthorized, wantText: "web session is unauthorized or expired for Developer Portal", wantAPIErr: true},
 		{name: "server error", status: http.StatusInternalServerError, wantText: "web api error", wantAPIErr: true},
 	}
 
@@ -283,6 +283,9 @@ func TestGetAgreementsStatusSurfacesHTTPStatusErrors(t *testing.T) {
 			var apiErr *APIError
 			if errors.As(err, &apiErr) != tc.wantAPIErr {
 				t.Fatalf("GetAgreementsStatus() error = %T, APIError match = %t, want %t", err, errors.As(err, &apiErr), tc.wantAPIErr)
+			}
+			if tc.wantAPIErr && apiErr.Status != tc.status {
+				t.Fatalf("APIError status = %d, want %d", apiErr.Status, tc.status)
 			}
 		})
 	}

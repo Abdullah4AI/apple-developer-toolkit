@@ -764,7 +764,7 @@ func (c *Client) GetBuildUploads(ctx context.Context, appID string, opts ...Buil
 		path += "?" + queryString
 	}
 
-	data, err := c.do(ctx, "GET", path, nil)
+	data, err := c.doAppBuildUploadsRead(ctx, appID, path)
 	if err != nil {
 		return nil, err
 	}

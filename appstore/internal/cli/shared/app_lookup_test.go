@@ -46,6 +46,12 @@ func appsResponseFromApps(apps []appFixture) *asc.AppsResponse {
 	return resp
 }
 
+func appsResponseFromAppsWithNext(apps []appFixture) *asc.AppsResponse {
+	resp := appsResponseFromApps(apps)
+	resp.Links.Next = "https://api.appstoreconnect.apple.com/v1/apps?cursor=next"
+	return resp
+}
+
 func TestResolveAppIDWithLookup_NumericPassthrough(t *testing.T) {
 	t.Setenv("ASC_APP_ID", "")
 	got, err := ResolveAppIDWithLookup(context.Background(), nil, "123456789")
@@ -178,6 +184,74 @@ func TestResolveAppIDWithLookup_AmbiguousName(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), `2 apps match "My App"; pass --app with one of:`) {
 		t.Fatalf("expected ambiguous name error, got %v", err)
+	}
+}
+
+func TestResolveAppIDLookupsRejectSingleBundleSample(t *testing.T) {
+	for _, test := range []struct {
+		name    string
+		resolve func(context.Context, appLookupClient, string) (string, error)
+	}{
+		{name: "lookup", resolve: ResolveAppIDWithLookup},
+		{name: "exact lookup", resolve: ResolveAppIDWithExactLookup},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Setenv("ASC_APP_ID", "")
+			stub := &sequenceAppLookupStub{responses: []*asc.AppsResponse{
+				appsResponseFromAppsWithNext([]appFixture{{id: "app-1", name: "Example"}}),
+			}}
+
+			_, err := test.resolve(context.Background(), stub, "com.example.app")
+			if err == nil {
+				t.Fatal("expected incomplete-page ambiguity")
+			}
+			if !strings.Contains(err.Error(), "sample matches") || !strings.Contains(err.Error(), "app-1") {
+				t.Fatalf("expected sample candidate error, got %v", err)
+			}
+			if stub.calls != 1 {
+				t.Fatalf("expected one lookup and no fallback, got %d calls", stub.calls)
+			}
+		})
+	}
+}
+
+func TestResolveAppIDLookupsRejectEmptyBundleSampleWithoutFallback(t *testing.T) {
+	for _, test := range []struct {
+		name    string
+		resolve func(context.Context, appLookupClient, string) (string, error)
+	}{
+		{name: "lookup", resolve: ResolveAppIDWithLookup},
+		{name: "exact lookup", resolve: ResolveAppIDWithExactLookup},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Setenv("ASC_APP_ID", "")
+			stub := &sequenceAppLookupStub{responses: []*asc.AppsResponse{
+				appsResponseFromAppsWithNext(nil),
+			}}
+
+			_, err := test.resolve(context.Background(), stub, "com.example.app")
+			if err == nil || !strings.Contains(err.Error(), "sample matches") {
+				t.Fatalf("expected incomplete-page ambiguity, got %v", err)
+			}
+			if stub.calls != 1 {
+				t.Fatalf("expected one lookup and no name fallback, got %d calls", stub.calls)
+			}
+		})
+	}
+}
+
+func TestResolveAppIDWithLookupRejectsSingleFuzzySample(t *testing.T) {
+	t.Setenv("ASC_APP_ID", "")
+	stub := &sequenceAppLookupStub{responses: []*asc.AppsResponse{
+		appsResponseFromApps(nil),
+		appsResponseFromApps(nil),
+		appsResponseFromApps(nil),
+		appsResponseFromAppsWithNext([]appFixture{{id: "app-fuzzy", name: "Example Pro"}}),
+	}}
+
+	_, err := ResolveAppIDWithLookup(context.Background(), stub, "Example")
+	if err == nil || !strings.Contains(err.Error(), "sample matches") {
+		t.Fatalf("expected incomplete fuzzy-page ambiguity, got %v", err)
 	}
 }
 

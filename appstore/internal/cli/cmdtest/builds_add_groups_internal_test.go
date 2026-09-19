@@ -43,6 +43,11 @@ func TestBuildsAddGroupsInternalGroupAddsGroup(t *testing.T) {
 				Header:     http.Header{"Content-Type": []string{"application/json"}},
 			}, nil
 		case 3:
+			if req.Method != http.MethodGet || req.URL.Path != "/v1/builds/build-1" {
+				t.Fatalf("unexpected request %d: %s %s", requestCount, req.Method, req.URL.String())
+			}
+			return jsonHTTPResponse(http.StatusOK, `{"data":{"type":"builds","id":"build-1","attributes":{"processingState":"VALID","expired":false}}}`), nil
+		case 4:
 			if req.Method != http.MethodPost || req.URL.Path != "/v1/builds/build-1/relationships/betaGroups" {
 				t.Fatalf("unexpected request %d: %s %s", requestCount, req.Method, req.URL.String())
 			}
@@ -77,8 +82,8 @@ func TestBuildsAddGroupsInternalGroupAddsGroup(t *testing.T) {
 		}
 	})
 
-	if requestCount != 3 {
-		t.Fatalf("expected app lookup, group lookup, and add request; got %d requests", requestCount)
+	if requestCount != 4 {
+		t.Fatalf("expected app lookup, group lookup, build preflight, and add request; got %d requests", requestCount)
 	}
 	if !strings.Contains(stdout, `"groupIds":["group-internal"]`) {
 		t.Fatalf("expected internal group in output, got %q", stdout)
@@ -122,6 +127,16 @@ func TestBuildsAddGroupsAddsMixedInternalAndExternalGroups(t *testing.T) {
 				Header:     http.Header{"Content-Type": []string{"application/json"}},
 			}, nil
 		case 3:
+			if req.Method != http.MethodGet || req.URL.Path != "/v1/builds/build-1" {
+				t.Fatalf("unexpected request %d: %s %s", requestCount, req.Method, req.URL.String())
+			}
+			return jsonHTTPResponse(http.StatusOK, `{"data":{"type":"builds","id":"build-1","attributes":{"processingState":"VALID","expired":false,"buildAudienceType":"APP_STORE_ELIGIBLE","usesNonExemptEncryption":false}}}`), nil
+		case 4:
+			if req.Method != http.MethodGet || req.URL.Path != "/v1/builds/build-1/buildBetaDetail" {
+				t.Fatalf("unexpected request %d: %s %s", requestCount, req.Method, req.URL.String())
+			}
+			return jsonHTTPResponse(http.StatusOK, `{"data":{"type":"buildBetaDetails","id":"detail-1","attributes":{"externalBuildState":"READY_FOR_BETA_TESTING"}}}`), nil
+		case 5:
 			if req.Method != http.MethodPost || req.URL.Path != "/v1/builds/build-1/relationships/betaGroups" {
 				t.Fatalf("unexpected request %d: %s %s", requestCount, req.Method, req.URL.String())
 			}
@@ -202,6 +217,16 @@ func TestBuildsAddGroupsSkipInternalAddsOnlyExternalGroups(t *testing.T) {
 				Header:     http.Header{"Content-Type": []string{"application/json"}},
 			}, nil
 		case 3:
+			if req.Method != http.MethodGet || req.URL.Path != "/v1/builds/build-1" {
+				t.Fatalf("unexpected request %d: %s %s", requestCount, req.Method, req.URL.String())
+			}
+			return jsonHTTPResponse(http.StatusOK, `{"data":{"type":"builds","id":"build-1","attributes":{"processingState":"VALID","expired":false,"buildAudienceType":"APP_STORE_ELIGIBLE","usesNonExemptEncryption":false}}}`), nil
+		case 4:
+			if req.Method != http.MethodGet || req.URL.Path != "/v1/builds/build-1/buildBetaDetail" {
+				t.Fatalf("unexpected request %d: %s %s", requestCount, req.Method, req.URL.String())
+			}
+			return jsonHTTPResponse(http.StatusOK, `{"data":{"type":"buildBetaDetails","id":"detail-1","attributes":{"externalBuildState":"READY_FOR_BETA_TESTING"}}}`), nil
+		case 5:
 			if req.Method != http.MethodPost || req.URL.Path != "/v1/builds/build-1/relationships/betaGroups" {
 				t.Fatalf("unexpected request %d: %s %s", requestCount, req.Method, req.URL.String())
 			}

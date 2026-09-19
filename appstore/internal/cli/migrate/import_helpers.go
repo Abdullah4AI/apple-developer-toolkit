@@ -45,11 +45,19 @@ func resolveAppID(ctx context.Context, client *asc.Client, appFlag string, confi
 		if err != nil {
 			return "", fmt.Errorf("failed to resolve app identifier %q: %w", config.AppIdentifier, err)
 		}
-		if len(resp.Data) == 0 {
+		if resp == nil {
+			return "", fmt.Errorf("empty app response for bundle ID %q", config.AppIdentifier)
+		}
+		pageHasNext := strings.TrimSpace(resp.Links.Next) != ""
+		if len(resp.Data) == 0 && !pageHasNext {
 			return "", fmt.Errorf("no app found for bundle ID %q", config.AppIdentifier)
 		}
-		if len(resp.Data) > 1 {
-			return "", shared.AmbiguousError("app", "--app", config.AppIdentifier, shared.AppCandidates(resp.Data))
+		if len(resp.Data) > 1 || pageHasNext {
+			ambiguous := shared.AmbiguousError("app", "--app", config.AppIdentifier, shared.AppCandidates(resp.Data))
+			if pageHasNext {
+				return "", shared.MarkAmbiguousSelectionSample(ambiguous)
+			}
+			return "", ambiguous
 		}
 		return resp.Data[0].ID, nil
 	}
@@ -354,6 +362,13 @@ func prepareAppInfoLocalizations(ctx context.Context, client *asc.Client, appID 
 	appInfos, err := client.GetAppInfos(ctx, appID)
 	if err != nil {
 		return appInfoLocalizationPlan{}, fmt.Errorf("migrate import: failed to get app info: %w", err)
+	}
+	if appInfos == nil {
+		return appInfoLocalizationPlan{}, fmt.Errorf("migrate import: empty app info response")
+	}
+	pageHasNext := strings.TrimSpace(appInfos.Links.Next) != ""
+	if pageHasNext {
+		return appInfoLocalizationPlan{}, shared.MarkAmbiguousSelectionSample(shared.AmbiguousAppInfoError(appID, "--app-info", asc.AppInfoCandidates(appInfos.Data)))
 	}
 	if len(appInfos.Data) == 0 {
 		return appInfoLocalizationPlan{}, fmt.Errorf("migrate import: no app info found for app")

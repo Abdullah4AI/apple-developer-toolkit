@@ -537,6 +537,55 @@ func TestWaitForBuildByNumberOrUploadFailureFallsBackWhenUploadLookupFails(t *te
 	}
 }
 
+func TestWaitForBuildByNumberOrUploadFailureStopsAfterExhaustedBuildUploadNotFound(t *testing.T) {
+	t.Setenv("ASC_MAX_RETRIES", "1")
+	t.Setenv("ASC_BASE_DELAY", "1ms")
+	t.Setenv("ASC_MAX_DELAY", "1ms")
+	asc.ResetConfigCacheForTest()
+	t.Cleanup(asc.ResetConfigCacheForTest)
+
+	uploadCalls := 0
+	fallbackCalls := 0
+	client := newBuildWaitTestClient(t, func(req *http.Request) (*http.Response, error) {
+		switch req.URL.Path {
+		case "/v1/buildUploads/upload-current":
+			uploadCalls++
+			return buildWaitJSONStatusResponse(http.StatusNotFound, `{
+				"errors": [{
+					"status": "404",
+					"code": "NOT_FOUND",
+					"title": "The specified resource does not exist",
+					"detail": "There is no resource of type 'apps' with id 'app-1'"
+				}]
+			}`)
+		case "/v1/preReleaseVersions":
+			fallbackCalls++
+			return buildWaitJSONResponse(`{"data":[],"links":{}}`)
+		default:
+			return nil, fmt.Errorf("unexpected path: %s", req.URL.Path)
+		}
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 80*time.Millisecond)
+	defer cancel()
+	_, err := WaitForBuildByNumberOrUploadFailure(ctx, client, "app-1", "upload-current", "1.2.3", "42", "IOS", time.Millisecond)
+	if err == nil {
+		t.Fatal("expected exhausted build-upload lookup error")
+	}
+	if uploadCalls != 2 {
+		t.Fatalf("build-upload lookup made %d requests, want one attempt plus one retry", uploadCalls)
+	}
+	if fallbackCalls != 0 {
+		t.Fatalf("build discovery replayed %d times after terminal upload lookup", fallbackCalls)
+	}
+	if !asc.IsNotFound(err) || !asc.IsRetryBudgetExhausted(err) {
+		t.Fatalf("error = %v, want exhausted NOT_FOUND", err)
+	}
+	if !strings.Contains(err.Error(), "There is no resource of type 'apps' with id 'app-1'") {
+		t.Fatalf("error lost Apple's detail: %v", err)
+	}
+}
+
 func TestWaitForBuildByNumberOrUploadFailureFallsBackWhenLinkedBuildLookupFails(t *testing.T) {
 	client := newBuildWaitTestClient(t, func(req *http.Request) (*http.Response, error) {
 		if req.Method != http.MethodGet {
@@ -1113,6 +1162,44 @@ func TestVerifyBuildUploadAfterCommitIgnoresRetryDelayBeyondVerificationBudget(t
 	}
 	if lookupCalls != 1 {
 		t.Fatalf("expected one best-effort upload lookup before honoring Retry-After, got %d", lookupCalls)
+	}
+}
+
+func TestVerifyBuildUploadAfterCommitStopsAfterExhaustedBuildUploadNotFound(t *testing.T) {
+	t.Setenv("ASC_MAX_RETRIES", "1")
+	t.Setenv("ASC_BASE_DELAY", "1ms")
+	t.Setenv("ASC_MAX_DELAY", "1ms")
+	asc.ResetConfigCacheForTest()
+	t.Cleanup(asc.ResetConfigCacheForTest)
+
+	lookupCalls := 0
+	client := newBuildWaitTestClient(t, func(req *http.Request) (*http.Response, error) {
+		if req.URL.Path != "/v1/buildUploads/upload-current" {
+			return nil, fmt.Errorf("unexpected path: %s", req.URL.Path)
+		}
+		lookupCalls++
+		return buildWaitJSONStatusResponse(http.StatusNotFound, `{
+			"errors": [{
+				"status": "404",
+				"code": "NOT_FOUND",
+				"title": "The specified resource does not exist",
+				"detail": "There is no resource of type 'apps' with id 'app-1'"
+			}]
+		}`)
+	})
+
+	verifyTimeout := 150 * time.Millisecond
+	started := time.Now()
+	err := VerifyBuildUploadAfterCommit(context.Background(), client, "app-1", "upload-current", time.Millisecond, verifyTimeout)
+	elapsed := time.Since(started)
+	if err != nil {
+		t.Fatalf("VerifyBuildUploadAfterCommit() error: %v", err)
+	}
+	if lookupCalls != 2 {
+		t.Fatalf("build-upload verification made %d requests, want one attempt plus one retry", lookupCalls)
+	}
+	if elapsed >= verifyTimeout/2 {
+		t.Fatalf("verification replayed a terminal lookup for %v (budget %v)", elapsed, verifyTimeout)
 	}
 }
 

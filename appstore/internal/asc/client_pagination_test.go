@@ -238,6 +238,78 @@ func TestPaginateAll_TypedNilFirstPage(t *testing.T) {
 	}
 }
 
+func TestPaginateAll_NonPointerResponseReturnsError(t *testing.T) {
+	firstPage := valuePaginatedResponse{data: []string{"first"}}
+
+	_, err := PaginateAll(context.Background(), firstPage, nil)
+	if err == nil {
+		t.Fatal("expected an unsupported response error, got nil")
+	}
+	if !strings.Contains(err.Error(), "expected pointer") {
+		t.Fatalf("expected pointer error, got %v", err)
+	}
+}
+
+func TestPaginateAll_NilFetcherWithNextLink(t *testing.T) {
+	firstPage := makeBetaGroupsPage(1, 1, 2)
+
+	_, err := PaginateAll(context.Background(), firstPage, nil)
+	if !errors.Is(err, ErrMissingPaginationFetcher) {
+		t.Fatalf("expected ErrMissingPaginationFetcher, got %v", err)
+	}
+}
+
+func TestPaginateAll_TypedNilNextPage(t *testing.T) {
+	firstPage := makeBetaGroupsPage(1, 1, 2)
+
+	_, err := PaginateAll(context.Background(), firstPage, func(context.Context, string) (PaginatedResponse, error) {
+		var nextPage *BetaGroupsResponse
+		return nextPage, nil
+	})
+	if !errors.Is(err, ErrNilPaginationPage) {
+		t.Fatalf("expected ErrNilPaginationPage, got %v", err)
+	}
+}
+
+func TestPaginateAll_PointerToNonStructResponseReturnsError(t *testing.T) {
+	page := pointerToNonStructPaginatedResponse{"first"}
+
+	_, err := PaginateAll(context.Background(), &page, nil)
+	if err == nil {
+		t.Fatal("expected an unsupported response error, got nil")
+	}
+	if !strings.Contains(err.Error(), "unsupported response type") {
+		t.Fatalf("expected unsupported response error, got %v", err)
+	}
+}
+
+func TestPaginateAll_TypedNilPointerToNonStructResponseReturnsError(t *testing.T) {
+	var page *pointerToNonStructPaginatedResponse
+
+	_, err := PaginateAll(context.Background(), page, nil)
+	if err == nil {
+		t.Fatal("expected an unsupported response error, got nil")
+	}
+	if !strings.Contains(err.Error(), "unsupported response type") {
+		t.Fatalf("expected unsupported response error, got %v", err)
+	}
+}
+
+// valuePaginatedResponse verifies that paginator input validation does not
+// call reflect.Value.IsNil on a non-nilable concrete implementation.
+type valuePaginatedResponse struct {
+	links Links
+	data  []string
+}
+
+func (r valuePaginatedResponse) GetLinks() *Links { return &r.links }
+func (r valuePaginatedResponse) GetData() any     { return r.data }
+
+type pointerToNonStructPaginatedResponse []string
+
+func (r *pointerToNonStructPaginatedResponse) GetLinks() *Links { return nil }
+func (r *pointerToNonStructPaginatedResponse) GetData() any     { return []string(*r) }
+
 func TestPaginateAll_EmptyData(t *testing.T) {
 	firstPage := &BetaTestersResponse{
 		Data:  []Resource[BetaTesterAttributes]{},

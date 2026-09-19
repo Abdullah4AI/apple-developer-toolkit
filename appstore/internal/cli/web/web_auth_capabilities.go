@@ -260,6 +260,10 @@ func wrapWebAuthCapabilitiesError(keyID string, err error) error {
 		case 403:
 			return webAuthCapabilitiesError("web auth capabilities failed: capability discovery is not permitted for this account or provider; verify the selected provider and account role", err)
 		}
+		return webAuthCapabilitiesError(
+			fmt.Sprintf("web auth capabilities failed: capability discovery is unavailable; retry or run 'asc web auth login': %s", apiErr.Error()),
+			err,
+		)
 	}
 	return webAuthCapabilitiesError("web auth capabilities failed: capability discovery is unavailable; retry or run 'asc web auth login'", err)
 }

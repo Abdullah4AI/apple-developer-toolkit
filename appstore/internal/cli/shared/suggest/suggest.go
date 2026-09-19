@@ -132,14 +132,15 @@ func isSubstringMatch(input, name string) bool {
 
 func withinThreshold(input string, dist int) bool {
 	n := len(input)
-	// Conservative default thresholds that work well for short command names.
+	// Edit-distance suggestions never exceed two edits; short command names use
+	// a stricter one-edit limit.
 	switch {
 	case n <= 4:
 		return dist <= 1
 	case n <= 7:
 		return dist <= 2
 	default:
-		return dist <= 3
+		return dist <= 2
 	}
 }
 

@@ -30,14 +30,28 @@ func findOrCreatePublishAppStoreVersion(ctx context.Context, client *asc.Client,
 		if err != nil {
 			return nil, false, err
 		}
+		if versions == nil {
+			return nil, false, fmt.Errorf("empty app store versions response")
+		}
+		pageHasNext := strings.TrimSpace(versions.Links.Next) != ""
 
 		switch len(versions.Data) {
 		case 0:
+			if pageHasNext {
+				return nil, false, shared.MarkAmbiguousSelectionSample(shared.AmbiguousAppStoreVersionError(version, platformValue, versions.Data, "", ""))
+			}
 			return nil, false, nil
 		case 1:
+			if pageHasNext {
+				return nil, false, shared.MarkAmbiguousSelectionSample(shared.AmbiguousAppStoreVersionError(version, platformValue, versions.Data, "", ""))
+			}
 			return &asc.AppStoreVersionResponse{Data: versions.Data[0]}, true, nil
 		default:
-			return nil, false, shared.AmbiguousAppStoreVersionError(version, platformValue, versions.Data, "", "")
+			ambiguous := shared.AmbiguousAppStoreVersionError(version, platformValue, versions.Data, "", "")
+			if pageHasNext {
+				ambiguous = shared.MarkAmbiguousSelectionSample(ambiguous)
+			}
+			return nil, false, ambiguous
 		}
 	}
 

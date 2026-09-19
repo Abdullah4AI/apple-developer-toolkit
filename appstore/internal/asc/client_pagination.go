@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"reflect"
+	"strings"
 )
 
 // PaginateFunc is a function that fetches a page of results
@@ -32,9 +34,9 @@ func PaginateAll(ctx context.Context, firstPage PaginatedResponse, fetchNext Pag
 		return nil, nil
 	}
 
-	// Check for typed nil (non-nil interface containing nil pointer).
+	// Check for typed nil (non-nil interface containing a nil value).
 	// Return an empty result of the same type rather than panicking.
-	if reflect.ValueOf(firstPage).IsNil() {
+	if isNilPaginatedResponse(firstPage) {
 		return newEmptyPaginatedResponse(firstPage)
 	}
 
@@ -60,22 +62,30 @@ func PaginateAll(ctx context.Context, firstPage PaginatedResponse, fetchNext Pag
 			}
 		}
 
-		// Check for next page
 		links := firstPage.GetLinks()
 		if links == nil || links.Next == "" {
 			break
 		}
 
-		if _, ok := seenNext[links.Next]; ok {
+		nextURL := links.Next
+		nextIdentity := PaginationURLIdentity(nextURL)
+		if _, ok := seenNext[nextIdentity]; ok {
 			return result, fmt.Errorf("page %d: %w", page+1, ErrRepeatedPaginationURL)
 		}
-		seenNext[links.Next] = struct{}{}
+		seenNext[nextIdentity] = struct{}{}
 		page++
 
+		if fetchNext == nil {
+			return result, fmt.Errorf("page %d: %w", page, ErrMissingPaginationFetcher)
+		}
+
 		// Fetch next page
-		nextPage, err := fetchNext(ctx, links.Next)
+		nextPage, err := fetchNext(ctx, nextURL)
 		if err != nil {
 			return result, fmt.Errorf("page %d: %w", page, err)
+		}
+		if isNilPaginatedResponse(nextPage) {
+			return result, fmt.Errorf("page %d: %w", page, ErrNilPaginationPage)
 		}
 
 		// Validate that the response type matches
@@ -95,6 +105,20 @@ func PaginateAll(ctx context.Context, firstPage PaginatedResponse, fetchNext Pag
 // PaginateEach iterates pages and invokes consume for each page without
 // aggregating all page data in memory.
 func PaginateEach(ctx context.Context, firstPage PaginatedResponse, fetchNext PaginateFunc, consume PageConsumer) error {
+	return paginateEach(ctx, firstPage, fetchNext, consume, 0)
+}
+
+// PaginateEachWithMaxPages iterates pages and invokes consume for each page,
+// stopping before it would fetch a page beyond maxPages. A positive limit is
+// required; use PaginateEach when the caller intentionally has no page cap.
+func PaginateEachWithMaxPages(ctx context.Context, firstPage PaginatedResponse, fetchNext PaginateFunc, consume PageConsumer, maxPages int) error {
+	if maxPages <= 0 {
+		return fmt.Errorf("max pages must be greater than zero")
+	}
+	return paginateEach(ctx, firstPage, fetchNext, consume, maxPages)
+}
+
+func paginateEach(ctx context.Context, firstPage PaginatedResponse, fetchNext PaginateFunc, consume PageConsumer, maxPages int) error {
 	if firstPage == nil {
 		return nil
 	}
@@ -102,8 +126,8 @@ func PaginateEach(ctx context.Context, firstPage PaginatedResponse, fetchNext Pa
 		return fmt.Errorf("page consumer is required")
 	}
 
-	// Handle typed nil (non-nil interface containing nil pointer).
-	if reflect.ValueOf(firstPage).IsNil() {
+	// Handle typed nil (non-nil interface containing a nil value).
+	if isNilPaginatedResponse(firstPage) {
 		return nil
 	}
 
@@ -112,6 +136,13 @@ func PaginateEach(ctx context.Context, firstPage PaginatedResponse, fetchNext Pa
 	seenNext := make(map[string]struct{})
 
 	for {
+		// Reject a missing fetcher before invoking the consumer when this page
+		// already advertises another page. Consumers may perform side effects.
+		preflightLinks := current.GetLinks()
+		if preflightLinks != nil && preflightLinks.Next != "" && fetchNext == nil {
+			return fmt.Errorf("page %d: %w", page+1, ErrMissingPaginationFetcher)
+		}
+
 		if err := consume(current); err != nil {
 			return fmt.Errorf("page %d: %w", page, err)
 		}
@@ -120,14 +151,26 @@ func PaginateEach(ctx context.Context, firstPage PaginatedResponse, fetchNext Pa
 		if links == nil || links.Next == "" {
 			return nil
 		}
-		if _, ok := seenNext[links.Next]; ok {
+		if maxPages > 0 && page >= maxPages {
+			return fmt.Errorf("page %d: exceeded the %d-page safety limit", page+1, maxPages)
+		}
+		nextURL := links.Next
+		nextIdentity := PaginationURLIdentity(nextURL)
+		if _, ok := seenNext[nextIdentity]; ok {
 			return fmt.Errorf("page %d: %w", page+1, ErrRepeatedPaginationURL)
 		}
-		seenNext[links.Next] = struct{}{}
+		seenNext[nextIdentity] = struct{}{}
 
-		nextPage, err := fetchNext(ctx, links.Next)
+		if fetchNext == nil {
+			return fmt.Errorf("page %d: %w", page+1, ErrMissingPaginationFetcher)
+		}
+
+		nextPage, err := fetchNext(ctx, nextURL)
 		if err != nil {
 			return fmt.Errorf("page %d: %w", page+1, err)
+		}
+		if isNilPaginatedResponse(nextPage) {
+			return fmt.Errorf("page %d: %w", page+1, ErrNilPaginationPage)
 		}
 		if reflect.TypeOf(nextPage) != reflect.TypeOf(current) {
 			return fmt.Errorf("page %d: unexpected response type (expected %T, got %T)", page+1, current, nextPage)
@@ -138,6 +181,78 @@ func PaginateEach(ctx context.Context, firstPage PaginatedResponse, fetchNext Pa
 	}
 }
 
+func isNilPaginatedResponse(page PaginatedResponse) bool {
+	if page == nil {
+		return true
+	}
+
+	value := reflect.ValueOf(page)
+	switch value.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
+		return value.IsNil()
+	default:
+		return false
+	}
+}
+
+// PaginationURLIdentity returns the request identity used for cycle
+// detection. It intentionally leaves the URL passed to fetchNext untouched:
+// callers may rely on the provider's exact next-link spelling. Only a
+// same-host HTTPS absolute URL is collapsed to its request URI so it compares
+// equal to the equivalent relative link. Query parameters are decoded and
+// re-encoded to make their order irrelevant. Invalid, insecure, and untrusted
+// absolute URLs retain their trimmed spelling for the caller's validation and
+// error handling.
+func PaginationURLIdentity(nextURL string) string {
+	nextURL = strings.TrimSpace(nextURL)
+	if nextURL == "" {
+		return nextURL
+	}
+
+	parsed, err := url.Parse(nextURL)
+	if err != nil {
+		return nextURL
+	}
+
+	// Match validateNextURL's absolute-URL recognition so this helper cannot
+	// turn a URL that the request path treats as relative into a trusted one.
+	if !strings.HasPrefix(nextURL, "https://") {
+		if !strings.HasPrefix(nextURL, "http://") {
+			return canonicalPaginationRequestURI(parsed, nextURL)
+		}
+		return nextURL
+	}
+
+	baseURL, err := url.Parse(BaseURL)
+	if err != nil || parsed.Scheme != baseURL.Scheme || parsed.Host != baseURL.Host || parsed.User != nil {
+		return nextURL
+	}
+	return canonicalPaginationRequestURI(parsed, nextURL)
+}
+
+func canonicalPaginationRequestURI(parsed *url.URL, fallback string) string {
+	if parsed == nil {
+		return fallback
+	}
+	if parsed.RawQuery != "" {
+		values, err := url.ParseQuery(parsed.RawQuery)
+		if err != nil {
+			return fallback
+		}
+		parsed.RawQuery = values.Encode()
+	}
+	// A trailing '?' does not change the request's empty query. Do not let
+	// URL.Parse's ForceQuery marker split equivalent continuation identities.
+	if parsed.RawQuery == "" {
+		parsed.ForceQuery = false
+	}
+	requestURI := parsed.RequestURI()
+	if requestURI == "" && fallback != "" {
+		return fallback
+	}
+	return requestURI
+}
+
 // newEmptyPaginatedResponse creates a new zero-valued instance of the same
 // concrete type as src. The returned value is a pointer to a new struct that
 // satisfies PaginatedResponse.
@@ -145,6 +260,9 @@ func newEmptyPaginatedResponse(src PaginatedResponse) (PaginatedResponse, error)
 	srcValue := reflect.ValueOf(src)
 	if srcValue.Kind() != reflect.Pointer {
 		return nil, fmt.Errorf("unsupported response type for pagination: %T (expected pointer)", src)
+	}
+	if srcValue.Type().Elem().Kind() != reflect.Struct {
+		return nil, fmt.Errorf("unsupported response type for pagination: %T (expected pointer to struct)", src)
 	}
 
 	// Create a new zero-valued struct of the same type.

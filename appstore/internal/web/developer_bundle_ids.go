@@ -111,6 +111,8 @@ type developerBundleIDResponse struct {
 	Included []developerResource `json:"included"`
 }
 
+const developerBundleIDCapabilitiesIncludeLimit = 50
+
 type developerBundleIDPatchRequest struct {
 	Data struct {
 		ID            string                     `json:"id"`
@@ -450,8 +452,9 @@ func findDeveloperCapability(response developerCapabilityMetadataResponse, capab
 
 func (c *Client) loadDeveloperBundleID(ctx context.Context, bundleID string) (developerBundleIDResponse, error) {
 	query := make(url.Values)
-	query.Set("fields[bundleIds]", "name,identifier,platform,seedId,wildcard,~permissions.delete,~permissions.edit")
+	query.Set("fields[bundleIds]", "name,identifier,platform,seedId,wildcard,bundleIdCapabilities,~permissions.delete,~permissions.edit")
 	query.Set("include", strings.Join(developerBundleIDIncludes, ","))
+	query.Set("limit[bundleIdCapabilities]", strconv.Itoa(developerBundleIDCapabilitiesIncludeLimit))
 	path := "/bundleIds/" + url.PathEscape(bundleID)
 	body, err := c.doDeveloperPortalProxyRead(ctx, path, query, developerPortalHeaders(bundleID))
 	if err != nil {
@@ -640,131 +643,54 @@ func marshalDeveloperBundleIDCapabilitiesForPatch(capabilities []developerResour
 }
 
 func developerBundleIDCapabilities(current developerBundleIDResponse) ([]developerResource, error) {
-	var relationship developerResourceRelationship
-	rawRelationship, ok := current.Data.Relationships["bundleIdCapabilities"]
-	if ok {
-		if err := json.Unmarshal(rawRelationship, &relationship); err != nil {
-			return nil, fmt.Errorf("failed to parse current Bundle ID capability relationships: %w", err)
-		}
+	references, err := developerBundleIDCapabilityReferencesForReplacement(current)
+	if err != nil {
+		return nil, err
 	}
-
-	includedByID := make(map[string]developerResource)
-	includedOrder := make([]string, 0)
+	includedByID, err := indexDeveloperCapabilityResources(current.Included)
+	if err != nil {
+		return nil, fmt.Errorf("cannot safely update Bundle ID %q: %w", current.Data.ID, err)
+	}
+	referenced := make(map[string]struct{}, len(references))
+	for _, reference := range references {
+		referenced[reference.ID] = struct{}{}
+	}
 	for _, resource := range current.Included {
-		if resource.Type != "bundleIdCapabilities" || strings.TrimSpace(resource.ID) == "" {
-			continue
-		}
-		if _, exists := includedByID[resource.ID]; !exists {
-			includedOrder = append(includedOrder, resource.ID)
-		}
-		includedByID[resource.ID] = resource
-	}
-
-	capabilities := make([]developerResource, 0, len(relationship.Data))
-	seen := make(map[string]struct{})
-	for _, resource := range relationship.Data {
 		if resource.Type != "bundleIdCapabilities" {
 			continue
 		}
-		if resource.ID != "" {
-			if _, duplicate := seen[resource.ID]; duplicate {
-				continue
-			}
-			seen[resource.ID] = struct{}{}
-			if included, ok := includedByID[resource.ID]; ok {
-				resource = included
-			}
+		if strings.TrimSpace(resource.ID) == "" {
+			return nil, fmt.Errorf("cannot safely update Bundle ID %q: included capability has no id", current.Data.ID)
 		}
-		if _, err := developerBundleIDCapabilityID(resource); err != nil {
-			return nil, fmt.Errorf("cannot safely preserve Bundle ID capability %q: %w", resource.ID, err)
+		if _, ok := referenced[resource.ID]; !ok {
+			return nil, fmt.Errorf("cannot safely update Bundle ID %q: Developer Portal included capability %q that the Bundle ID does not reference", current.Data.ID, resource.ID)
 		}
-		capabilities = append(capabilities, resource)
 	}
-	for _, id := range includedOrder {
-		if _, ok := seen[id]; ok {
+
+	capabilities := make([]developerResource, 0, len(references))
+	seen := make(map[string]struct{}, len(references))
+	for _, reference := range references {
+		if _, duplicate := seen[reference.ID]; duplicate {
 			continue
 		}
-		resource := includedByID[id]
-		if _, err := developerBundleIDCapabilityID(resource); err != nil {
-			return nil, fmt.Errorf("cannot safely preserve Bundle ID capability %q: %w", resource.ID, err)
+		seen[reference.ID] = struct{}{}
+		resource := reference
+		if included, ok := includedByID[reference.ID]; ok {
+			resource = included
 		}
-		seen[id] = struct{}{}
+		if _, err := developerBundleIDCapabilityID(resource); err != nil {
+			return nil, fmt.Errorf("cannot safely preserve Bundle ID capability %q: relationship resource is incomplete: %w", resource.ID, err)
+		}
 		capabilities = append(capabilities, resource)
 	}
 	return capabilities, nil
 }
 
-// developerBundleIDCapabilitiesForDisable requires the included capability
-// graph used by the Developer Portal response. The endpoint's selected fields
-// omit data.relationships in live responses, so a present included array is
-// the completeness boundary for disable verification.
+// developerBundleIDCapabilitiesForDisable applies the same complete ownership
+// boundary used to build replacement PATCHes. A disable verification cannot
+// trust included resources that the selected relationship does not own.
 func developerBundleIDCapabilitiesForDisable(current developerBundleIDResponse) ([]developerResource, error) {
-	if current.Included == nil {
-		return nil, fmt.Errorf("cannot safely verify Bundle ID capability graph: included data is missing")
-	}
-
-	var relationshipReferences []developerResource
-	rawRelationship, hasRelationship := current.Data.Relationships["bundleIdCapabilities"]
-	if hasRelationship {
-		var relationship struct {
-			Data json.RawMessage `json:"data"`
-		}
-		if err := json.Unmarshal(rawRelationship, &relationship); err != nil {
-			return nil, fmt.Errorf("cannot safely verify Bundle ID capability graph: invalid relationship: %w", err)
-		}
-		if value := strings.TrimSpace(string(relationship.Data)); value == "" || value == "null" {
-			return nil, fmt.Errorf("cannot safely verify Bundle ID capability graph: relationship data is missing")
-		}
-		if err := json.Unmarshal(relationship.Data, &relationshipReferences); err != nil {
-			return nil, fmt.Errorf("cannot safely verify Bundle ID capability graph: invalid relationship data: %w", err)
-		}
-		for _, reference := range relationshipReferences {
-			if reference.Type != "bundleIdCapabilities" || strings.TrimSpace(reference.ID) == "" {
-				return nil, fmt.Errorf("cannot safely verify Bundle ID capability graph: relationship contains an invalid resource reference")
-			}
-		}
-	}
-
-	for _, resource := range current.Included {
-		if resource.Type == "bundleIdCapabilities" && strings.TrimSpace(resource.ID) == "" {
-			return nil, fmt.Errorf("cannot safely verify Bundle ID capability graph: included resource has no id")
-		}
-	}
-
-	if _, err := indexDeveloperCapabilityResources(current.Included); err != nil {
-		return nil, fmt.Errorf("cannot safely verify Bundle ID capability graph: %w", err)
-	}
-	if hasRelationship {
-		referenced := make(map[string]struct{}, len(relationshipReferences))
-		for _, reference := range relationshipReferences {
-			referenced[reference.ID] = struct{}{}
-		}
-		for _, resource := range current.Included {
-			if resource.Type != "bundleIdCapabilities" {
-				continue
-			}
-			if _, ok := referenced[resource.ID]; !ok {
-				return nil, fmt.Errorf("cannot safely verify Bundle ID capability graph: included capability %q is not referenced", resource.ID)
-			}
-		}
-	}
-
-	capabilities, err := developerBundleIDCapabilities(current)
-	if err != nil {
-		return nil, err
-	}
-	if len(relationshipReferences) > 0 {
-		resolved := make(map[string]struct{}, len(capabilities))
-		for _, capability := range capabilities {
-			resolved[capability.ID] = struct{}{}
-		}
-		for _, reference := range relationshipReferences {
-			if _, ok := resolved[reference.ID]; !ok {
-				return nil, fmt.Errorf("cannot safely verify Bundle ID capability graph: relationship resource %q is incomplete", reference.ID)
-			}
-		}
-	}
-	return capabilities, nil
+	return developerBundleIDCapabilities(current)
 }
 
 func developerBundleIDCapabilityID(resource developerResource) (string, error) {

@@ -9,6 +9,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -21,6 +22,15 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/rootfs"
 )
+
+type signingRunPartialWriter struct {
+	written int
+	err     error
+}
+
+func (w signingRunPartialWriter) Write([]byte) (int, error) {
+	return w.written, w.err
+}
 
 func TestParseKeychainSearchList(t *testing.T) {
 	got, err := parseKeychainSearchList([]byte("    \"/Users/me/Library/Keychains/login.keychain-db\"\n    \"/private/tmp/path with spaces.keychain-db\"\n"))
@@ -360,6 +370,110 @@ func TestRecoverSigningRunJournalRemovesCodesignProbeCrashResidue(t *testing.T) 
 	}
 }
 
+func TestRecoverSigningRunJournalDistinguishesPartialWriteFromReplacement(t *testing.T) {
+	for _, test := range []struct {
+		name         string
+		recorded     []byte
+		staged       []byte
+		wantErr      bool
+		wantPreserve bool
+	}{
+		{name: "recorded empty stage", recorded: nil, staged: nil},
+		{name: "unrecorded partial write", recorded: nil, staged: []byte("signed"), wantErr: true, wantPreserve: true},
+		{name: "recorded full write", recorded: []byte("signed-profile"), staged: []byte("signed-profile")},
+		{name: "foreign replacement", recorded: nil, staged: []byte("foreign replacement"), wantErr: true, wantPreserve: true},
+		{name: "oversized foreign replacement", recorded: nil, staged: bytes.Repeat([]byte("x"), signingRunInputLimit+1), wantErr: true, wantPreserve: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			stateDir := t.TempDir()
+			tempDir, err := os.MkdirTemp("", "asc-signing-run.")
+			if err != nil {
+				t.Fatalf("create signing temp dir: %v", err)
+			}
+			if err := os.Chmod(tempDir, 0o700); err != nil {
+				t.Fatalf("chmod signing temp dir: %v", err)
+			}
+			t.Cleanup(func() { _ = os.RemoveAll(tempDir) })
+
+			homeDir := t.TempDir()
+			t.Setenv("HOME", homeDir)
+			profileDir := filepath.Join(homeDir, "Library", "Developer", "Xcode", "UserData", "Provisioning Profiles")
+			if err := os.MkdirAll(profileDir, 0o700); err != nil {
+				t.Fatalf("create profile dir: %v", err)
+			}
+			stagedPath := filepath.Join(profileDir, ".asc-signing-run-profile-recovery")
+			if err := os.WriteFile(stagedPath, test.staged, 0o600); err != nil {
+				t.Fatalf("write staged profile: %v", err)
+			}
+			info, err := os.Stat(stagedPath)
+			if err != nil {
+				t.Fatalf("stat staged profile: %v", err)
+			}
+			stat, ok := info.Sys().(*syscall.Stat_t)
+			if !ok {
+				t.Fatal("staged profile has no platform file identity")
+			}
+			profileData := []byte("signed-profile")
+			digest := sha256.Sum256(profileData)
+			stagedDigest := sha256.Sum256(test.recorded)
+
+			previousStateAnchor := signingRunStateAnchorFn
+			previousRemoveSearch := signingRunRecoveryRemoveSearchEntryFn
+			previousDeleteKeychain := signingRunRecoveryDeleteKeychainFn
+			signingRunStateAnchorFn = func() (*signingRunStateAnchor, error) {
+				stateRoot, rootErr := rootfs.New(stateDir)
+				if rootErr != nil {
+					return nil, rootErr
+				}
+				return &signingRunStateAnchor{root: stateRoot, relative: "."}, nil
+			}
+			signingRunRecoveryRemoveSearchEntryFn = func(context.Context, string) error { return nil }
+			signingRunRecoveryDeleteKeychainFn = func(context.Context, string) error { return nil }
+			t.Cleanup(func() {
+				signingRunStateAnchorFn = previousStateAnchor
+				signingRunRecoveryRemoveSearchEntryFn = previousRemoveSearch
+				signingRunRecoveryDeleteKeychainFn = previousDeleteKeychain
+			})
+
+			journal := signingRunJournal{
+				SchemaVersion: 1,
+				TempDir:       tempDir,
+				KeychainPath:  filepath.Join(tempDir, "signing.keychain-db"),
+				ProfilePath: filepath.Join(
+					profileDir, "a7efef21-3432-404f-a488-083800b570ff.mobileprovision",
+				),
+				StagedProfilePath:   stagedPath,
+				ProfileDigest:       hex.EncodeToString(digest[:]),
+				StagedProfileDigest: hex.EncodeToString(stagedDigest[:]),
+				ProfileDevice:       uint64(stat.Dev),
+				ProfileInode:        stat.Ino,
+				ProfileCreated:      true,
+			}
+			if err := writeSigningRunJournal(journal, false); err != nil {
+				t.Fatalf("write recovery journal: %v", err)
+			}
+			recoveryErr := recoverSigningRunJournal(context.Background())
+			if test.wantErr != errors.Is(recoveryErr, errSigningRunStagedProfileChanged) {
+				t.Fatalf("recover signing run error = %v, changed=%t", recoveryErr, test.wantErr)
+			}
+			_, stagedErr := os.Stat(stagedPath)
+			if test.wantPreserve {
+				if stagedErr != nil {
+					t.Fatalf("preserved staged profile stat: %v", stagedErr)
+				}
+			} else if !errors.Is(stagedErr, os.ErrNotExist) {
+				t.Fatalf("staged profile stat error = %v, want not exist", stagedErr)
+			}
+			if _, err := os.Stat(tempDir); !errors.Is(err, os.ErrNotExist) {
+				t.Fatalf("temp dir stat error = %v, want not exist", err)
+			}
+			if _, err := os.Stat(filepath.Join(stateDir, "journal.json")); !errors.Is(err, os.ErrNotExist) {
+				t.Fatalf("journal stat error = %v, want not exist", err)
+			}
+		})
+	}
+}
+
 func TestLimitedSigningBufferBoundsOutput(t *testing.T) {
 	buffer := &limitedSigningBuffer{limit: 4}
 	if written, err := buffer.Write([]byte("123456789")); err != nil || written != 9 {
@@ -472,8 +586,10 @@ func TestInstallSigningRunProfileReusesAndProtectsExistingFiles(t *testing.T) {
 	digestBytes := sha256.Sum256(data)
 	digest := strings.ToUpper(hex.EncodeToString(digestBytes[:]))
 	journaled := signingRunProfileInstall{}
+	var stagedDigests []string
 	installed, err := installSigningRunProfile(context.Background(), uuid, data, digest, func(planned signingRunProfileInstall) error {
 		journaled = planned
+		stagedDigests = append(stagedDigests, planned.StagedDigest)
 		return nil
 	})
 	if err != nil {
@@ -481,6 +597,11 @@ func TestInstallSigningRunProfileReusesAndProtectsExistingFiles(t *testing.T) {
 	}
 	if !installed.Created || journaled.StagedPath == "" || journaled.Device == 0 || journaled.Inode == 0 {
 		t.Fatalf("missing staged ownership proof: installed=%+v journaled=%+v", installed, journaled)
+	}
+	emptyDigest := sha256.Sum256(nil)
+	wantStagedDigests := []string{hex.EncodeToString(emptyDigest[:]), strings.ToLower(digest)}
+	if !reflect.DeepEqual(stagedDigests, wantStagedDigests) {
+		t.Fatalf("staged journal digests = %v, want %v", stagedDigests, wantStagedDigests)
 	}
 	reused, err := installSigningRunProfile(context.Background(), uuid, data, digest, func(signingRunProfileInstall) error {
 		t.Fatal("reused profile must not create a new journal entry")
@@ -494,6 +615,155 @@ func TestInstallSigningRunProfileReusesAndProtectsExistingFiles(t *testing.T) {
 	}
 	if err := removeSigningRunProfile(installed); err != nil {
 		t.Fatalf("removeSigningRunProfile: %v", err)
+	}
+}
+
+func TestInstallSigningRunProfileRetainsOwnershipAfterJournalFailure(t *testing.T) {
+	installDir := t.TempDir()
+	previous := signingRunProfileInstallDirFn
+	signingRunProfileInstallDirFn = func(context.Context) (string, error) { return installDir, nil }
+	t.Cleanup(func() { signingRunProfileInstallDirFn = previous })
+	const uuid = "A7EFEF21-3432-404F-A488-083800B570FF"
+	data := []byte("signed-profile")
+	digestBytes := sha256.Sum256(data)
+	digest := hex.EncodeToString(digestBytes[:])
+	journalErr := errors.New("journal unavailable")
+
+	installed, err := installSigningRunProfile(context.Background(), uuid, data, digest, func(signingRunProfileInstall) error {
+		return journalErr
+	})
+	if !errors.Is(err, journalErr) {
+		t.Fatalf("installSigningRunProfile() error = %v, want journal failure", err)
+	}
+	if !installed.Created || installed.StagedPath == "" || installed.Device == 0 || installed.Inode == 0 {
+		t.Fatalf("missing retained ownership proof: %+v", installed)
+	}
+	if _, statErr := os.Stat(installed.Path); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("published profile stat error = %v, want not exist", statErr)
+	}
+	if _, statErr := os.Stat(installed.StagedPath); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("staged profile stat error = %v, want defer cleanup", statErr)
+	}
+}
+
+func TestWriteSigningRunStagedProfileHashesPartialWrite(t *testing.T) {
+	data := []byte("signed-profile")
+	wantErr := errors.New("injected partial write")
+	digest, err := writeSigningRunStagedProfile(signingRunPartialWriter{written: 6, err: wantErr}, data)
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("writeSigningRunStagedProfile() error = %v, want injected failure", err)
+	}
+	wantDigest := sha256.Sum256(data[:6])
+	if digest != hex.EncodeToString(wantDigest[:]) {
+		t.Fatalf("partial digest = %q, want %q", digest, hex.EncodeToString(wantDigest[:]))
+	}
+
+	_, err = writeSigningRunStagedProfile(signingRunPartialWriter{written: 6}, data)
+	if !errors.Is(err, io.ErrShortWrite) {
+		t.Fatalf("short write error = %v, want io.ErrShortWrite", err)
+	}
+}
+
+func TestInstallSigningRunProfilePreservesStagedReplacementAfterJournalFailure(t *testing.T) {
+	installDir := t.TempDir()
+	previous := signingRunProfileInstallDirFn
+	signingRunProfileInstallDirFn = func(context.Context) (string, error) { return installDir, nil }
+	t.Cleanup(func() { signingRunProfileInstallDirFn = previous })
+	const uuid = "A7EFEF21-3432-404F-A488-083800B570FF"
+	data := []byte("signed-profile")
+	replacement := []byte("foreign replacement")
+	digestBytes := sha256.Sum256(data)
+	digest := hex.EncodeToString(digestBytes[:])
+	journalErr := errors.New("journal unavailable")
+	var planned signingRunProfileInstall
+
+	installed, err := installSigningRunProfile(context.Background(), uuid, data, digest, func(candidate signingRunProfileInstall) error {
+		planned = candidate
+		if removeErr := os.Remove(candidate.StagedPath); removeErr != nil {
+			t.Fatalf("remove original staged profile: %v", removeErr)
+		}
+		if writeErr := os.WriteFile(candidate.StagedPath, replacement, 0o600); writeErr != nil {
+			t.Fatalf("write staged replacement: %v", writeErr)
+		}
+		return journalErr
+	})
+
+	if !errors.Is(err, journalErr) || !strings.Contains(err.Error(), "file identity changed") {
+		t.Fatalf("installSigningRunProfile() error = %v, want journal and identity failures", err)
+	}
+	if installed.StagedPath != planned.StagedPath || installed.Device != planned.Device || installed.Inode != planned.Inode {
+		t.Fatalf("retained ownership proof changed: installed=%+v planned=%+v", installed, planned)
+	}
+	if _, statErr := os.Stat(installed.Path); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("published profile stat error = %v, want not exist", statErr)
+	}
+	got, readErr := os.ReadFile(planned.StagedPath)
+	if readErr != nil {
+		t.Fatalf("read staged replacement: %v", readErr)
+	}
+	if !bytes.Equal(got, replacement) {
+		t.Fatalf("staged replacement = %q, want %q", got, replacement)
+	}
+}
+
+func TestInstallSigningRunProfileRejectsStagedReplacementBeforePublish(t *testing.T) {
+	installDir := t.TempDir()
+	previous := signingRunProfileInstallDirFn
+	signingRunProfileInstallDirFn = func(context.Context) (string, error) { return installDir, nil }
+	t.Cleanup(func() { signingRunProfileInstallDirFn = previous })
+	const uuid = "A7EFEF21-3432-404F-A488-083800B570FF"
+	data := []byte("signed-profile")
+	replacement := []byte("foreign replacement")
+	digestBytes := sha256.Sum256(data)
+	digest := hex.EncodeToString(digestBytes[:])
+	var planned signingRunProfileInstall
+
+	installed, err := installSigningRunProfile(context.Background(), uuid, data, digest, func(candidate signingRunProfileInstall) error {
+		planned = candidate
+		if removeErr := os.Remove(candidate.StagedPath); removeErr != nil {
+			t.Fatalf("remove original staged profile: %v", removeErr)
+		}
+		if writeErr := os.WriteFile(candidate.StagedPath, replacement, 0o600); writeErr != nil {
+			t.Fatalf("write staged replacement: %v", writeErr)
+		}
+		return nil
+	})
+
+	if err == nil || (!strings.Contains(err.Error(), "identity changed") && !strings.Contains(err.Error(), "content changed")) {
+		t.Fatalf("installSigningRunProfile() error = %v, want replacement rejection", err)
+	}
+	if installed.StagedPath != planned.StagedPath || installed.Device != planned.Device || installed.Inode != planned.Inode {
+		t.Fatalf("retained ownership proof changed: installed=%+v planned=%+v", installed, planned)
+	}
+	if _, statErr := os.Stat(installed.Path); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("published profile stat error = %v, want not exist", statErr)
+	}
+	got, readErr := os.ReadFile(installed.StagedPath)
+	if readErr != nil {
+		t.Fatalf("read restored staged replacement: %v", readErr)
+	}
+	if !bytes.Equal(got, replacement) {
+		t.Fatalf("restored staged replacement = %q, want %q", got, replacement)
+	}
+}
+
+func TestRemoveSigningRunStagedProfileRequiresIdentity(t *testing.T) {
+	path := filepath.Join(t.TempDir(), ".asc-signing-run-profile-unowned")
+	data := []byte("unowned staged profile")
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatalf("write staged profile: %v", err)
+	}
+
+	err := removeSigningRunStagedProfile(path, 0, 0, strings.Repeat("A", sha256.Size*2))
+	if err == nil || !strings.Contains(err.Error(), "identity is unavailable") {
+		t.Fatalf("removeSigningRunStagedProfile() error = %v, want unavailable identity", err)
+	}
+	got, readErr := os.ReadFile(path)
+	if readErr != nil {
+		t.Fatalf("read preserved staged profile: %v", readErr)
+	}
+	if !bytes.Equal(got, data) {
+		t.Fatalf("preserved staged profile = %q, want %q", got, data)
 	}
 }
 
@@ -548,6 +818,30 @@ func TestRemoveSigningRunProfileRefusesReplacement(t *testing.T) {
 	}
 }
 
+func TestRemoveSigningRunProfileSupportsFullInputLimit(t *testing.T) {
+	installDir := t.TempDir()
+	previous := signingRunProfileInstallDirFn
+	signingRunProfileInstallDirFn = func(context.Context) (string, error) { return installDir, nil }
+	t.Cleanup(func() { signingRunProfileInstallDirFn = previous })
+	const uuid = "A7EFEF21-3432-404F-A488-083800B570FF"
+	data := bytes.Repeat([]byte("p"), (8<<20)+1)
+	digestBytes := sha256.Sum256(data)
+	digest := hex.EncodeToString(digestBytes[:])
+
+	installed, err := installSigningRunProfile(context.Background(), uuid, data, digest, func(signingRunProfileInstall) error {
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("installSigningRunProfile() error: %v", err)
+	}
+	if err := removeSigningRunProfile(installed); err != nil {
+		t.Fatalf("removeSigningRunProfile() error for profile above default identity limit: %v", err)
+	}
+	if _, err := os.Stat(installed.Path); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("profile stat error = %v, want profile removed", err)
+	}
+}
+
 func TestRemoveSigningRunStagedProfileQuarantinesBeforeRemoval(t *testing.T) {
 	installDir := t.TempDir()
 	path := filepath.Join(installDir, ".asc-signing-run-profile-staged")
@@ -562,11 +856,277 @@ func TestRemoveSigningRunStagedProfileQuarantinesBeforeRemoval(t *testing.T) {
 	if !ok {
 		t.Fatal("staged profile has no platform file identity")
 	}
-	if err := removeSigningRunStagedProfile(path, uint64(stat.Dev), uint64(stat.Ino)); err != nil {
+	digest := sha256.Sum256([]byte("staged-profile"))
+	if err := removeSigningRunStagedProfile(path, uint64(stat.Dev), uint64(stat.Ino), hex.EncodeToString(digest[:])); err != nil {
 		t.Fatalf("removeSigningRunStagedProfile() error: %v", err)
 	}
 	if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("staged profile stat error = %v, want not exist", err)
+	}
+}
+
+func TestRemoveSigningRunStagedProfileSupportsFullInputLimit(t *testing.T) {
+	installDir := t.TempDir()
+	path := filepath.Join(installDir, ".asc-signing-run-profile-large")
+	data := bytes.Repeat([]byte("p"), (8<<20)+1)
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatalf("write staged profile: %v", err)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("stat staged profile: %v", err)
+	}
+	stat, ok := info.Sys().(*syscall.Stat_t)
+	if !ok {
+		t.Fatal("staged profile has no platform file identity")
+	}
+	digest := sha256.Sum256(data)
+	if err := removeSigningRunStagedProfile(path, uint64(stat.Dev), uint64(stat.Ino), hex.EncodeToString(digest[:])); err != nil {
+		t.Fatalf("removeSigningRunStagedProfile() error: %v", err)
+	}
+	if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("staged profile stat error = %v, want not exist", err)
+	}
+}
+
+func TestRemoveSigningRunStagedProfilePreservesSameInodeReplacement(t *testing.T) {
+	installDir := t.TempDir()
+	path := filepath.Join(installDir, ".asc-signing-run-profile-staged")
+	original := []byte("staged-profile")
+	replacement := []byte("foreign same-inode replacement")
+	if err := os.WriteFile(path, original, 0o600); err != nil {
+		t.Fatalf("write staged profile: %v", err)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("stat staged profile: %v", err)
+	}
+	stat, ok := info.Sys().(*syscall.Stat_t)
+	if !ok {
+		t.Fatal("staged profile has no platform file identity")
+	}
+	if err := os.WriteFile(path, replacement, 0o600); err != nil {
+		t.Fatalf("replace staged profile contents: %v", err)
+	}
+	replacedInfo, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("stat replaced staged profile: %v", err)
+	}
+	replacedStat, ok := replacedInfo.Sys().(*syscall.Stat_t)
+	if !ok || replacedStat.Dev != stat.Dev || replacedStat.Ino != stat.Ino {
+		t.Fatal("test setup did not preserve the staged profile inode")
+	}
+
+	digest := sha256.Sum256(original)
+	err = removeSigningRunStagedProfile(path, uint64(stat.Dev), uint64(stat.Ino), hex.EncodeToString(digest[:]))
+	if err == nil || !strings.Contains(err.Error(), "content changed") {
+		t.Fatalf("removeSigningRunStagedProfile() error = %v, want content-change refusal", err)
+	}
+	got, readErr := os.ReadFile(path)
+	if readErr != nil {
+		t.Fatalf("read preserved staged replacement: %v", readErr)
+	}
+	if !bytes.Equal(got, replacement) {
+		t.Fatalf("preserved staged replacement = %q, want %q", got, replacement)
+	}
+}
+
+func TestRemoveSigningRunStagedProfileClassifiesRemovalRaceAsChanged(t *testing.T) {
+	installDir := t.TempDir()
+	name := ".asc-signing-run-profile-staged"
+	path := filepath.Join(installDir, name)
+	original := []byte("staged-profile")
+	replacement := []byte("foreign replacement")
+	if err := os.WriteFile(path, original, 0o600); err != nil {
+		t.Fatalf("write staged profile: %v", err)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("stat staged profile: %v", err)
+	}
+	stat, ok := info.Sys().(*syscall.Stat_t)
+	if !ok {
+		t.Fatal("staged profile has no platform file identity")
+	}
+	digest := sha256.Sum256(original)
+	installRoot, err := rootfs.New(installDir)
+	if err != nil {
+		t.Fatalf("open install root: %v", err)
+	}
+	t.Cleanup(func() { _ = installRoot.Close() })
+
+	err = removeSigningRunStagedProfileEntryWithHook(
+		installRoot, name, uint64(stat.Dev), uint64(stat.Ino), hex.EncodeToString(digest[:]),
+		func() error {
+			if err := os.Remove(path); err != nil {
+				return err
+			}
+			return os.WriteFile(path, replacement, 0o600)
+		},
+	)
+	if !errors.Is(err, errSigningRunStagedProfileChanged) || !errors.Is(err, rootfs.ErrFileIdentityChanged) {
+		t.Fatalf("remove staged profile error = %v, want staged and rootfs identity-change sentinels", err)
+	}
+	got, readErr := os.ReadFile(path)
+	if readErr != nil {
+		t.Fatalf("read preserved replacement: %v", readErr)
+	}
+	if !bytes.Equal(got, replacement) {
+		t.Fatalf("preserved replacement = %q, want %q", got, replacement)
+	}
+}
+
+func TestRemoveSigningRunStagedProfileClassifiesSpecialFileReplacementsAsChanged(t *testing.T) {
+	for _, test := range []struct {
+		name   string
+		create func(t *testing.T, path string)
+		mode   os.FileMode
+	}{
+		{
+			name: "symlink",
+			create: func(t *testing.T, path string) {
+				t.Helper()
+				if err := os.Symlink("foreign-target", path); err != nil {
+					t.Fatalf("create staged symlink replacement: %v", err)
+				}
+			},
+			mode: os.ModeSymlink,
+		},
+		{
+			name: "directory",
+			create: func(t *testing.T, path string) {
+				t.Helper()
+				if err := os.Mkdir(path, 0o700); err != nil {
+					t.Fatalf("create staged directory replacement: %v", err)
+				}
+			},
+			mode: os.ModeDir,
+		},
+		{
+			name: "fifo",
+			create: func(t *testing.T, path string) {
+				t.Helper()
+				if err := syscall.Mkfifo(path, 0o600); err != nil {
+					t.Fatalf("create staged FIFO replacement: %v", err)
+				}
+			},
+			mode: os.ModeNamedPipe,
+		},
+	} {
+		for _, phase := range []string{"initial verification", "identity capture"} {
+			t.Run(test.name+"/"+phase, func(t *testing.T) {
+				installDir := t.TempDir()
+				name := ".asc-signing-run-profile-staged"
+				path := filepath.Join(installDir, name)
+				original := []byte("staged-profile")
+				if err := os.WriteFile(path, original, 0o600); err != nil {
+					t.Fatalf("write staged profile: %v", err)
+				}
+				info, err := os.Stat(path)
+				if err != nil {
+					t.Fatalf("stat staged profile: %v", err)
+				}
+				stat, ok := info.Sys().(*syscall.Stat_t)
+				if !ok {
+					t.Fatal("staged profile has no platform file identity")
+				}
+				if err := os.Remove(path); err != nil {
+					t.Fatalf("remove staged profile: %v", err)
+				}
+				test.create(t, path)
+				digest := sha256.Sum256(original)
+
+				switch phase {
+				case "initial verification":
+					err = removeSigningRunStagedProfile(path, uint64(stat.Dev), uint64(stat.Ino), hex.EncodeToString(digest[:]))
+				case "identity capture":
+					installRoot, rootErr := rootfs.New(installDir)
+					if rootErr != nil {
+						t.Fatalf("open install root: %v", rootErr)
+					}
+					t.Cleanup(func() { _ = installRoot.Close() })
+					err = removeSigningRunStagedProfileEntry(installRoot, name, uint64(stat.Dev), uint64(stat.Ino), hex.EncodeToString(digest[:]))
+				}
+				if !errors.Is(err, errSigningRunStagedProfileChanged) {
+					t.Fatalf("remove staged profile error = %v, want staged-profile-changed sentinel", err)
+				}
+				replacementInfo, lstatErr := os.Lstat(path)
+				if lstatErr != nil {
+					t.Fatalf("lstat preserved special-file replacement: %v", lstatErr)
+				}
+				if replacementInfo.Mode()&test.mode == 0 {
+					t.Fatalf("preserved replacement mode = %v, want %v", replacementInfo.Mode(), test.mode)
+				}
+			})
+		}
+	}
+}
+
+func TestClassifySigningRunStagedProfileRemovalErrorPreservesOperationalFailures(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		err  error
+	}{
+		{
+			name: "quarantine cleanup uncertainty",
+			err:  errors.Join(rootfs.ErrFileIdentityChanged, rootfs.ErrQuarantineCleanupUncertain),
+		},
+		{
+			name: "directory sync failure",
+			err:  errors.Join(rootfs.ErrFileIdentityChanged, errors.New("sync parent directory")),
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			got := classifySigningRunStagedProfileRemovalError(test.err)
+			if errors.Is(got, errSigningRunStagedProfileChanged) {
+				t.Fatalf("classified operational failure as staged change: %v", got)
+			}
+			if !errors.Is(got, rootfs.ErrFileIdentityChanged) {
+				t.Fatalf("lost identity-change evidence: %v", got)
+			}
+		})
+	}
+}
+
+func TestRemoveSigningRunStagedProfilePreservesJoinedCaptureFailure(t *testing.T) {
+	installDir := t.TempDir()
+	name := ".asc-signing-run-profile-staged"
+	path := filepath.Join(installDir, name)
+	data := []byte("staged-profile")
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatalf("write staged profile: %v", err)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("stat staged profile: %v", err)
+	}
+	stat, ok := info.Sys().(*syscall.Stat_t)
+	if !ok {
+		t.Fatal("staged profile has no platform file identity")
+	}
+	installRoot, err := rootfs.New(installDir)
+	if err != nil {
+		t.Fatalf("open install root: %v", err)
+	}
+	t.Cleanup(func() { _ = installRoot.Close() })
+	operationalErr := errors.New("reinspect staged profile")
+	digest := sha256.Sum256(data)
+	err = removeSigningRunStagedProfileEntryWithCaptureHook(
+		installRoot,
+		name,
+		uint64(stat.Dev),
+		uint64(stat.Ino),
+		hex.EncodeToString(digest[:]),
+		func() (*rootfs.FileIdentity, error) {
+			return nil, errors.Join(rootfs.ErrFileIdentityChanged, operationalErr)
+		},
+		nil,
+	)
+	if !errors.Is(err, operationalErr) || errors.Is(err, errSigningRunStagedProfileChanged) {
+		t.Fatalf("remove staged profile error = %v, want retained operational failure", err)
+	}
+	if got, readErr := os.ReadFile(path); readErr != nil || !bytes.Equal(got, data) {
+		t.Fatalf("preserved staged profile = %q, %v; want %q", got, readErr, data)
 	}
 }
 

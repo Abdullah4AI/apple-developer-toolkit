@@ -131,8 +131,11 @@ func TestEnableDeveloperBundleIDCapabilityPreservesWritablePayloadAndGraph(t *te
 			if err != nil {
 				t.Fatalf("bundle query: %v", err)
 			}
-			if got := query.Get("fields[bundleIds]"); got != "name,identifier,platform,seedId,wildcard,~permissions.delete,~permissions.edit" {
+			if got := query.Get("fields[bundleIds]"); got != "name,identifier,platform,seedId,wildcard,bundleIdCapabilities,~permissions.delete,~permissions.edit" {
 				t.Fatalf("fields[bundleIds] = %q", got)
+			}
+			if got := query.Get("limit[bundleIdCapabilities]"); got != "50" {
+				t.Fatalf("limit[bundleIdCapabilities] = %q, want 50", got)
 			}
 			include := query.Get("include")
 			for _, relationship := range []string{
@@ -693,8 +696,8 @@ func TestDisableDeveloperBundleIDCapabilityRejectsOmittedIncludedGraphAfterWrite
 	if !errors.As(err, &unverified) {
 		t.Fatalf("error = %v, want unverified omitted-graph result", err)
 	}
-	if !strings.Contains(err.Error(), "included data is missing") {
-		t.Fatalf("error = %v, want missing included-data diagnostic", err)
+	if !strings.Contains(err.Error(), "did not resolve") {
+		t.Fatalf("error = %v, want unresolved ownership diagnostic", err)
 	}
 	if requestCount != 5 {
 		t.Fatalf("request count = %d, want 5", requestCount)
@@ -715,7 +718,7 @@ func TestDisableDeveloperBundleIDCapabilityRejectsMalformedIncludedGraphAfterWri
 		case 4:
 			return developerPortalTestResponse(http.StatusOK, ``, nil), nil
 		case 5:
-			return developerPortalTestResponse(http.StatusOK, `{"data":{"id":"bundle-1","type":"bundleIds","attributes":{"name":"Example","identifier":"com.example.app"}},"included":[{"type":"bundleIdCapabilities","id":"icloud-1","attributes":{"enabled":true}}]}`, nil), nil
+			return developerPortalTestResponse(http.StatusOK, `{"data":{"id":"bundle-1","type":"bundleIds","attributes":{"name":"Example","identifier":"com.example.app"},"relationships":{"bundleIdCapabilities":{"data":[{"type":"bundleIdCapabilities","id":"icloud-1"}]}}},"included":[{"type":"bundleIdCapabilities","id":"icloud-1","attributes":{"enabled":true}}]}`, nil), nil
 		default:
 			t.Fatalf("unexpected request %d: %s %s", requestCount, r.Method, r.URL.String())
 			return nil, nil
@@ -1016,7 +1019,7 @@ func TestEnableDeveloperBundleIDCapabilityAlreadyEnabledSkipsPatch(t *testing.T)
 	}
 }
 
-func TestEnableDeveloperBundleIDCapabilityUsesIncludedCapabilitiesWhenTopLevelRelationshipsAreOmitted(t *testing.T) {
+func TestEnableDeveloperBundleIDCapabilityFailsClosedWhenSelectedRelationshipIsOmitted(t *testing.T) {
 	requestCount := 0
 	client := developerPortalTestClient(t, func(r *http.Request) (*http.Response, error) {
 		requestCount++
@@ -1043,14 +1046,37 @@ func TestEnableDeveloperBundleIDCapabilityUsesIncludedCapabilitiesWhenTopLevelRe
 		BundleID:   "bundle-1",
 		Capability: "PRIVATE_CLOUD_COMPUTE",
 	})
-	if err != nil {
-		t.Fatalf("EnableDeveloperBundleIDCapability() error: %v", err)
-	}
-	if !result.Enabled || result.Changed || result.Status != "already-enabled" {
-		t.Fatalf("unexpected result: %+v", result)
+	if err == nil || result != nil || !strings.Contains(err.Error(), "did not resolve") {
+		t.Fatalf("result = %+v, error = %v; want fail-closed unresolved relationship", result, err)
 	}
 	if requestCount != 3 {
 		t.Fatalf("request count = %d, want 3", requestCount)
+	}
+}
+
+func TestDeveloperBundleIDCapabilityMutationsRejectPotentiallyTruncatedGraph(t *testing.T) {
+	references := make([]string, 0, developerBundleIDCapabilitiesIncludeLimit)
+	included := make([]string, 0, developerBundleIDCapabilitiesIncludeLimit)
+	for index := 0; index < developerBundleIDCapabilitiesIncludeLimit; index++ {
+		references = append(references, fmt.Sprintf(`{"type":"bundleIdCapabilities","id":"cap-%d"}`, index))
+		included = append(included, fmt.Sprintf(`{"type":"bundleIdCapabilities","id":"cap-%d","attributes":{"enabled":true,"settings":[]},"relationships":{"capability":{"data":{"type":"capabilities","id":"CAPABILITY_%d"}}}}`, index, index))
+	}
+	var response developerBundleIDResponse
+	body := fmt.Sprintf(`{"data":{"id":"bundle-1","type":"bundleIds","attributes":{"identifier":"com.example.app"},"relationships":{"bundleIdCapabilities":{"data":[%s]}}},"included":[%s]}`, strings.Join(references, ","), strings.Join(included, ","))
+	if err := json.Unmarshal([]byte(body), &response); err != nil {
+		t.Fatal(err)
+	}
+
+	_, _, err := buildDeveloperBundleIDCapabilityPatchRequest(response, DeveloperBundleIDCapabilityEnableRequest{
+		BundleID:   "bundle-1",
+		Capability: "PRIVATE_CLOUD_COMPUTE",
+	})
+	if err == nil || !strings.Contains(err.Error(), "may be truncated") {
+		t.Fatalf("enable error = %v, want truncation refusal", err)
+	}
+	_, err = developerBundleIDCapabilityDisableState(response, "PRIVATE_CLOUD_COMPUTE")
+	if err == nil || !strings.Contains(err.Error(), "may be truncated") {
+		t.Fatalf("disable error = %v, want truncation refusal", err)
 	}
 }
 
@@ -1348,7 +1374,7 @@ func developerBundleResponseWithTwoPCCStates(firstEnabled, secondEnabled bool) s
 }
 
 func developerBundleResponseWithICloudOnly() string {
-	return `{"data":{"id":"bundle-1","type":"bundleIds","attributes":{"name":"Example","identifier":"com.example.app","platform":"IOS","seedId":"TEAMID"}},"included":[{"type":"bundleIdCapabilities","id":"icloud-1","attributes":{"enabled":true,"settings":[{"key":"ICLOUD_VERSION"}]},"relationships":{"capability":{"data":{"type":"capabilities","id":"ICLOUD"}},"cloudContainers":{"data":[{"type":"cloudContainers","id":"cloud-1"}]}}}]}`
+	return `{"data":{"id":"bundle-1","type":"bundleIds","attributes":{"name":"Example","identifier":"com.example.app","platform":"IOS","seedId":"TEAMID"},"relationships":{"bundleIdCapabilities":{"data":[{"type":"bundleIdCapabilities","id":"icloud-1"}]}}},"included":[{"type":"bundleIdCapabilities","id":"icloud-1","attributes":{"enabled":true,"settings":[{"key":"ICLOUD_VERSION"}]},"relationships":{"capability":{"data":{"type":"capabilities","id":"ICLOUD"}},"cloudContainers":{"data":[{"type":"cloudContainers","id":"cloud-1"}]}}}]}`
 }
 
 func developerBundleResponseWithPCCAndICloud(pccEnabled bool) string {

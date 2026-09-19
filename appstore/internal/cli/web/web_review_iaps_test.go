@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 	webcore "github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/web"
@@ -738,8 +739,13 @@ func TestWebReviewIAPsAttachRejectsAmbiguousSelectorBeforeMutation(t *testing.T)
 	if err == nil {
 		t.Fatal("expected ambiguous selector error")
 	}
-	if !strings.Contains(err.Error(), "matches 2 in-app purchases by product ID") {
+	if !strings.Contains(err.Error(), `2 in-app purchases match "com.example.duplicate" by product ID; pass --iap-id with one of:`) {
 		t.Fatalf("expected ambiguity diagnostic, got %v", err)
+	}
+	for _, want := range []string{"iap-1", "com.example.duplicate", "First", "iap-2", "Second", "Use the Iris resource ID to disambiguate"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("expected %q in bounded ambiguity diagnostic, got %v", want, err)
+		}
 	}
 	diagnostic, ok := shared.DiagnosticFromError(err)
 	if !ok || diagnostic.Code != shared.DiagnosticInvalidInput || diagnostic.Parameter != "--iap-id" {
@@ -747,6 +753,49 @@ func TestWebReviewIAPsAttachRejectsAmbiguousSelectorBeforeMutation(t *testing.T)
 	}
 	if postCalls != 0 {
 		t.Fatalf("expected no attach request, got %d", postCalls)
+	}
+}
+
+func TestReviewIAPAmbiguousSelectionBoundsProviderText(t *testing.T) {
+	recoveryID := "iap-recovery-id-" + strings.Repeat("9", shared.AmbiguousDiagnosticTextLimit+32)
+	providerText := strings.Repeat("界", shared.AmbiguousDiagnosticTextLimit)
+	providerInvalidUTF8 := string([]byte{'r', 'e', 'f', 0xff, 'e', 'r', 'e', 'n', 'c', 'e'})
+	err := reviewIAPAmbiguousSelectionError(&webcore.ReviewIAPAmbiguousError{
+		Selector: "com.example.duplicate",
+		Field:    "product ID",
+		Matches: []webcore.ReviewIAP{
+			{ID: recoveryID, ProductID: providerText + "\nproduct-tail", ReferenceName: providerInvalidUTF8},
+			{ID: "iap-2", ProductID: "com.example.duplicate", ReferenceName: "Second"},
+		},
+	})
+	if err == nil {
+		t.Fatal("expected an ambiguity error")
+	}
+	message := err.Error()
+	if !utf8.ValidString(message) {
+		t.Fatalf("ambiguity diagnostic must remain valid UTF-8: %q", message)
+	}
+	if strings.Contains(message, recoveryID) {
+		t.Fatalf("displayed recovery ID should be bounded: %q", message)
+	}
+	if !strings.Contains(message, recoveryID[:len("iap-recovery-id-")]) {
+		t.Fatalf("bounded recovery ID should retain useful context: %q", message)
+	}
+	if strings.Contains(message, "product-tail") || strings.Contains(message, "\x1b") || strings.Contains(message, "\nref") {
+		t.Fatalf("provider text must be bounded and terminal-safe: %q", message)
+	}
+	if !strings.Contains(message, "ref�erence") {
+		t.Fatalf("invalid provider UTF-8 should be replaced while retaining context: %q", message)
+	}
+	var structured *shared.AmbiguousSelectionError
+	if !errors.As(err, &structured) || len(structured.Candidates) != 2 || structured.Candidates[0].ID != recoveryID {
+		t.Fatalf("structured ambiguity must retain exact recovery candidates: %#v", structured)
+	}
+	if structured.Candidates[0].Label != providerText+"\nproduct-tail" || structured.Candidates[0].Extra != providerInvalidUTF8 {
+		t.Fatalf("structured ambiguity must retain provider fields for machine consumers: %#v", structured.Candidates[0])
+	}
+	if structured.Description != `"com.example.duplicate" by product ID` || structured.Flag != "--iap-id" {
+		t.Fatalf("structured ambiguity lost selector semantics: %#v", structured)
 	}
 }
 

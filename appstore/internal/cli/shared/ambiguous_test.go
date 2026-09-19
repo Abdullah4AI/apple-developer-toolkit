@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
 )
@@ -88,6 +89,13 @@ func TestAmbiguousErrorWithoutFlagAndWithHint(t *testing.T) {
 	}
 }
 
+func TestAmbiguousErrorSampleWithoutFlagLabelsCandidatesAsSample(t *testing.T) {
+	err := MarkAmbiguousSelectionSample(AmbiguousError("source app store version", "", `version "1.2.3"`, []AmbiguousCandidate{{ID: "version-1"}}))
+	if !strings.Contains(err.Error(), "; these are sample matches:") {
+		t.Fatalf("expected sample wording without a disambiguating flag, got %q", err)
+	}
+}
+
 func TestAmbiguousErrorSanitizesCandidateText(t *testing.T) {
 	err := AmbiguousError("app", "--app", "x", []AmbiguousCandidate{
 		{ID: "1", Label: "bad\nname\x1b[31m"},
@@ -96,6 +104,59 @@ func TestAmbiguousErrorSanitizesCandidateText(t *testing.T) {
 	msg := err.Error()
 	if strings.Contains(msg, "\x1b") || strings.Count(msg, "\n") != 2 {
 		t.Fatalf("candidate text must be sanitized:\n%q", msg)
+	}
+}
+
+func TestAmbiguousErrorBoundsProviderTextAndPreservesRecoveryID(t *testing.T) {
+	recoveryID := "iap-recovery-id-" + strings.Repeat("9", AmbiguousDiagnosticTextLimit+32)
+	providerText := strings.Repeat("界", AmbiguousDiagnosticTextLimit)
+	err := &AmbiguousSelectionError{
+		Kind:             "in-app purchase",
+		Description:      providerText + "\nselector-tail",
+		Flag:             "--iap-id",
+		DisplayTextLimit: AmbiguousDiagnosticTextLimit,
+		Candidates: []AmbiguousCandidate{{
+			ID:    recoveryID,
+			Label: providerText + "\x1b[31m-label-tail",
+			Extra: providerText + "\u202e-extra-tail",
+		}},
+		Hint: providerText + "\x00-hint-tail",
+	}
+
+	message := err.Error()
+	if !utf8.ValidString(message) {
+		t.Fatalf("ambiguity message must remain valid UTF-8: %q", message)
+	}
+	if strings.Contains(message, "selector-tail") || strings.Contains(message, "-label-tail") || strings.Contains(message, "-extra-tail") || strings.Contains(message, "-hint-tail") {
+		t.Fatalf("provider text beyond the field bound must not be rendered: %q", message)
+	}
+	if strings.Contains(message, recoveryID) {
+		t.Fatalf("displayed recovery ID should be bounded: %q", message)
+	}
+	if !strings.Contains(message, recoveryID[:len("iap-recovery-id-")]) {
+		t.Fatalf("bounded recovery ID should retain useful context: %q", message)
+	}
+	if strings.ContainsAny(message, "\x00\x1b\u202e") {
+		t.Fatalf("provider terminal controls must not be rendered: %q", message)
+	}
+
+	for _, field := range []string{sanitizeAmbiguousText(err.Description, err.DisplayTextLimit), sanitizeAmbiguousText(err.Candidates[0].Label, err.DisplayTextLimit), sanitizeAmbiguousText(err.Candidates[0].Extra, err.DisplayTextLimit), sanitizeAmbiguousText(err.Hint, err.DisplayTextLimit)} {
+		if len(field) > AmbiguousDiagnosticTextLimit {
+			t.Fatalf("sanitized provider field is %d bytes, want <= %d: %q", len(field), AmbiguousDiagnosticTextLimit, field)
+		}
+		if !utf8.ValidString(field) {
+			t.Fatalf("sanitized provider field must remain valid UTF-8: %q", field)
+		}
+	}
+}
+
+func TestSanitizeAmbiguousTextReplacesInvalidUTF8(t *testing.T) {
+	got := sanitizeAmbiguousText(string([]byte{'o', 'k', 0xff, 0xfe, ' ', 't', 'a', 'i', 'l'}))
+	if !utf8.ValidString(got) {
+		t.Fatalf("sanitized text must remain valid UTF-8: %q", got)
+	}
+	if got != "ok�� tail" {
+		t.Fatalf("invalid UTF-8 must be replaced without dropping surrounding context: %q", got)
 	}
 }
 
@@ -131,6 +192,35 @@ func TestAmbiguousUsageErrorPrintsEveryLineAndKeepsUsageExit(t *testing.T) {
 	want := "Error: 2 app store versions match \"1.2.3\"; pass --platform with one of:\n  v-ios  IOS\n  v-mac  MAC_OS\n"
 	if stderr != want {
 		t.Fatalf("unexpected stderr:\n got: %q\nwant: %q", stderr, want)
+	}
+}
+
+func TestAmbiguousUsageErrorWithKindPreservesRequestedClassification(t *testing.T) {
+	original := AmbiguousError("app store version", "--platform", "1.2.3", []AmbiguousCandidate{{ID: "version-ios"}})
+	stderr := captureStderr(t, func() {
+		err := AmbiguousUsageErrorWithKind(original, UsageErrorMissingRequired)
+		if !errors.Is(err, flag.ErrHelp) {
+			t.Fatalf("expected usage-class error, got %T %v", err, err)
+		}
+		if !IsAmbiguousSelection(err) {
+			t.Fatal("usage wrapper must preserve ambiguity classification")
+		}
+		if ClassifyUsageError(err) != UsageErrorMissingRequired {
+			t.Fatalf("unexpected usage kind %q", ClassifyUsageError(err))
+		}
+	})
+	if !strings.HasPrefix(stderr, "Error: 1 app store versions match") {
+		t.Fatalf("unexpected stderr: %q", stderr)
+	}
+}
+
+func TestMarkAmbiguousSelectionSample(t *testing.T) {
+	err := AmbiguousError("app", "--app", "Example", []AmbiguousCandidate{{ID: "app-1"}})
+	if got := MarkAmbiguousSelectionSample(err); !errors.Is(got, err) {
+		t.Fatalf("expected marker to preserve error identity")
+	}
+	if !strings.HasPrefix(err.Error(), `multiple apps match "Example"; pass --app with one of these sample matches:`) {
+		t.Fatalf("expected sample ambiguity wording, got %q", err)
 	}
 }
 

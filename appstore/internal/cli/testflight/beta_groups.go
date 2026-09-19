@@ -1261,16 +1261,24 @@ Examples:
 					if err != nil {
 						return fmt.Errorf("beta-groups add-testers: failed to resolve tester email %q: %w", testerEmail, err)
 					}
-					if len(resp.Data) == 0 {
+					if resp == nil {
+						return fmt.Errorf("beta-groups add-testers: empty tester response for email %q", testerEmail)
+					}
+					pageHasNext := strings.TrimSpace(resp.Links.Next) != ""
+					if len(resp.Data) == 0 && !pageHasNext {
 						return fmt.Errorf("beta-groups add-testers: tester email %q not found for app %q", testerEmail, appID)
 					}
-					if len(resp.Data) > 1 {
-						return fmt.Errorf("beta-groups add-testers: %w", &shared.AmbiguousSelectionError{
+					if len(resp.Data) > 1 || pageHasNext {
+						ambiguous := &shared.AmbiguousSelectionError{
 							Kind:        "beta tester",
 							Description: fmt.Sprintf("email %q", testerEmail),
 							Flag:        "--tester",
 							Candidates:  shared.BetaTesterCandidates(resp.Data),
-						})
+						}
+						if pageHasNext {
+							return fmt.Errorf("beta-groups add-testers: %w", shared.MarkAmbiguousSelectionSample(ambiguous))
+						}
+						return fmt.Errorf("beta-groups add-testers: %w", ambiguous)
 					}
 					testerIDs = append(testerIDs, resp.Data[0].ID)
 				}

@@ -3,6 +3,7 @@ package web
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -161,6 +162,13 @@ func TestFindReviewIAPRejectsAmbiguousProductID(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "matches 2 in-app purchases by product ID") {
 		t.Fatalf("expected ambiguity diagnostic, got %q", err)
+	}
+	var ambiguous *ReviewIAPAmbiguousError
+	if !errors.As(err, &ambiguous) {
+		t.Fatalf("expected typed ambiguity error, got %T", err)
+	}
+	if len(ambiguous.Matches) != 2 || ambiguous.Matches[0].ID != "iap-1" || ambiguous.Matches[1].ID != "iap-2" {
+		t.Fatalf("ambiguity must retain recovery IDs, got %#v", ambiguous.Matches)
 	}
 }
 

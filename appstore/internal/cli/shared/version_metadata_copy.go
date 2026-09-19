@@ -162,6 +162,9 @@ func findSourceAppStoreVersion(
 	if err != nil {
 		return nil, fmt.Errorf("failed to lookup source version %q: %w", versionValue, err)
 	}
+	if resp == nil {
+		return nil, fmt.Errorf("empty source version response")
+	}
 
 	matches := make([]asc.Resource[asc.AppStoreVersionAttributes], 0, len(resp.Data))
 	for _, version := range resp.Data {
@@ -177,16 +180,29 @@ func findSourceAppStoreVersion(
 		matches = append(matches, version)
 	}
 
+	pageHasNext := strings.TrimSpace(resp.Links.Next) != ""
 	if len(matches) == 0 {
+		if pageHasNext {
+			return nil, MarkAmbiguousSelectionSample(&AmbiguousSelectionError{
+				Kind:        "source app store version",
+				Description: fmt.Sprintf("version %q on platform %s", versionValue, platformValue),
+				Candidates:  AppStoreVersionCandidates(matches),
+				Hint:        "App Store Connect returned an incomplete version sample; --copy-metadata-from cannot select safely.",
+			})
+		}
 		return nil, fmt.Errorf("source version %q not found for platform %s", versionValue, platformValue)
 	}
-	if len(matches) > 1 {
-		return nil, &AmbiguousSelectionError{
+	if len(matches) > 1 || pageHasNext {
+		ambiguous := &AmbiguousSelectionError{
 			Kind:        "source app store version",
 			Description: fmt.Sprintf("version %q on platform %s", versionValue, platformValue),
 			Candidates:  AppStoreVersionCandidates(matches),
 			Hint:        "App Store Connect returned duplicate versions for this string; --copy-metadata-from cannot select between them.",
 		}
+		if pageHasNext {
+			return nil, MarkAmbiguousSelectionSample(ambiguous)
+		}
+		return nil, ambiguous
 	}
 
 	return &matches[0], nil

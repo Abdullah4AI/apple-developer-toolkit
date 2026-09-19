@@ -18,6 +18,11 @@ var (
 	ErrRepeatedPaginationURL = errors.New("detected repeated pagination URL")
 )
 
+var (
+	ErrMissingPaginationFetcher = errors.New("pagination fetch function is required")
+	ErrNilPaginationPage        = errors.New("pagination page is nil")
+)
+
 type responseBodyReadError struct {
 	err error
 }

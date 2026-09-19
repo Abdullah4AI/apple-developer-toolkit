@@ -471,6 +471,19 @@ func (c *Client) developerPortalTeamID() string {
 	return c.developerTeamID
 }
 
+type developerPortalSessionStatusError struct {
+	status int
+	cause  *APIError
+}
+
+func (e *developerPortalSessionStatusError) Error() string {
+	return fmt.Sprintf("web session is unauthorized or expired for Developer Portal (status %d); %s", e.status, developerPortalAuthHint)
+}
+
+func (e *developerPortalSessionStatusError) Unwrap() error {
+	return e.cause
+}
+
 func developerPortalSessionError(status int) error {
-	return fmt.Errorf("web session is unauthorized or expired for Developer Portal (status %d); %s", status, developerPortalAuthHint)
+	return &developerPortalSessionStatusError{status: status, cause: &APIError{Status: status}}
 }

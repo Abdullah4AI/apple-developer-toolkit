@@ -33,6 +33,16 @@ func TestBuildsAddGroupsSubmitCreatesBetaReviewSubmissionForExternalGroups(t *te
 			}
 			return jsonHTTPResponse(http.StatusOK, `{"data":[{"type":"betaGroups","id":"group-external","attributes":{"name":"External QA","isInternalGroup":false}}]}`), nil
 		case 3:
+			if req.Method != http.MethodGet || req.URL.Path != "/v1/builds/build-1" {
+				t.Fatalf("unexpected request %d: %s %s", requestCount, req.Method, req.URL.String())
+			}
+			return jsonHTTPResponse(http.StatusOK, `{"data":{"type":"builds","id":"build-1","attributes":{"processingState":"VALID","expired":false,"buildAudienceType":"APP_STORE_ELIGIBLE","usesNonExemptEncryption":false}}}`), nil
+		case 4:
+			if req.Method != http.MethodGet || req.URL.Path != "/v1/builds/build-1/buildBetaDetail" {
+				t.Fatalf("unexpected request %d: %s %s", requestCount, req.Method, req.URL.String())
+			}
+			return jsonHTTPResponse(http.StatusOK, `{"data":{"type":"buildBetaDetails","id":"detail-1","attributes":{"externalBuildState":"READY_FOR_BETA_SUBMISSION"}}}`), nil
+		case 5:
 			if req.Method != http.MethodPost || req.URL.Path != "/v1/builds/build-1/relationships/betaGroups" {
 				t.Fatalf("unexpected request %d: %s %s", requestCount, req.Method, req.URL.String())
 			}
@@ -44,12 +54,12 @@ func TestBuildsAddGroupsSubmitCreatesBetaReviewSubmissionForExternalGroups(t *te
 				t.Fatalf("expected beta group add payload to include group-external, got %s", string(payload))
 			}
 			return jsonHTTPResponse(http.StatusNoContent, ``), nil
-		case 4:
+		case 6:
 			if req.Method != http.MethodGet || req.URL.Path != "/v1/builds/build-1/betaAppReviewSubmission" {
 				t.Fatalf("unexpected request %d: %s %s", requestCount, req.Method, req.URL.String())
 			}
 			return jsonHTTPResponse(http.StatusNotFound, `{"errors":[{"status":"404","code":"NOT_FOUND","title":"Not Found"}]}`), nil
-		case 5:
+		case 7:
 			if req.Method != http.MethodPost || req.URL.Path != "/v1/betaAppReviewSubmissions" {
 				t.Fatalf("unexpected request %d: %s %s", requestCount, req.Method, req.URL.String())
 			}
@@ -86,8 +96,8 @@ func TestBuildsAddGroupsSubmitCreatesBetaReviewSubmissionForExternalGroups(t *te
 		}
 	})
 
-	if requestCount != 5 {
-		t.Fatalf("expected app lookup, group lookup, add request, submission lookup, and submission create; got %d requests", requestCount)
+	if requestCount != 7 {
+		t.Fatalf("expected app/group lookup, build preflight, add request, submission lookup, and submission create; got %d requests", requestCount)
 	}
 	if !strings.Contains(stdout, `"groupIds":["group-external"]`) {
 		t.Fatalf("expected external group in output, got %q", stdout)
@@ -124,6 +134,11 @@ func TestBuildsAddGroupsSubmitSkipsBetaReviewSubmissionForInternalGroups(t *test
 			}
 			return jsonHTTPResponse(http.StatusOK, `{"data":[{"type":"betaGroups","id":"group-internal","attributes":{"name":"Friends & Family","isInternalGroup":true}}]}`), nil
 		case 3:
+			if req.Method != http.MethodGet || req.URL.Path != "/v1/builds/build-1" {
+				t.Fatalf("unexpected request %d: %s %s", requestCount, req.Method, req.URL.String())
+			}
+			return jsonHTTPResponse(http.StatusOK, `{"data":{"type":"builds","id":"build-1","attributes":{"processingState":"VALID","expired":false}}}`), nil
+		case 4:
 			if req.Method != http.MethodPost || req.URL.Path != "/v1/builds/build-1/relationships/betaGroups" {
 				t.Fatalf("unexpected request %d: %s %s", requestCount, req.Method, req.URL.String())
 			}
@@ -159,8 +174,8 @@ func TestBuildsAddGroupsSubmitSkipsBetaReviewSubmissionForInternalGroups(t *test
 		}
 	})
 
-	if requestCount != 3 {
-		t.Fatalf("expected app lookup, group lookup, and add request; got %d requests", requestCount)
+	if requestCount != 4 {
+		t.Fatalf("expected app lookup, group lookup, build preflight, and add request; got %d requests", requestCount)
 	}
 	if !strings.Contains(stdout, `"groupIds":["group-internal"]`) {
 		t.Fatalf("expected internal group in output, got %q", stdout)
@@ -197,11 +212,21 @@ func TestBuildsAddGroupsSubmitTreatsExistingSubmissionAsAlreadyDone(t *testing.T
 			}
 			return jsonHTTPResponse(http.StatusOK, `{"data":[{"type":"betaGroups","id":"group-external","attributes":{"name":"External QA","isInternalGroup":false}}]}`), nil
 		case 3:
+			if req.Method != http.MethodGet || req.URL.Path != "/v1/builds/build-1" {
+				t.Fatalf("unexpected request %d: %s %s", requestCount, req.Method, req.URL.String())
+			}
+			return jsonHTTPResponse(http.StatusOK, `{"data":{"type":"builds","id":"build-1","attributes":{"processingState":"VALID","expired":false,"buildAudienceType":"APP_STORE_ELIGIBLE","usesNonExemptEncryption":false}}}`), nil
+		case 4:
+			if req.Method != http.MethodGet || req.URL.Path != "/v1/builds/build-1/buildBetaDetail" {
+				t.Fatalf("unexpected request %d: %s %s", requestCount, req.Method, req.URL.String())
+			}
+			return jsonHTTPResponse(http.StatusOK, `{"data":{"type":"buildBetaDetails","id":"detail-1","attributes":{"externalBuildState":"READY_FOR_BETA_TESTING"}}}`), nil
+		case 5:
 			if req.Method != http.MethodPost || req.URL.Path != "/v1/builds/build-1/relationships/betaGroups" {
 				t.Fatalf("unexpected request %d: %s %s", requestCount, req.Method, req.URL.String())
 			}
 			return jsonHTTPResponse(http.StatusNoContent, ``), nil
-		case 4:
+		case 6:
 			if req.Method != http.MethodGet || req.URL.Path != "/v1/builds/build-1/betaAppReviewSubmission" {
 				t.Fatalf("unexpected request %d: %s %s", requestCount, req.Method, req.URL.String())
 			}
@@ -230,8 +255,8 @@ func TestBuildsAddGroupsSubmitTreatsExistingSubmissionAsAlreadyDone(t *testing.T
 		}
 	})
 
-	if requestCount != 4 {
-		t.Fatalf("expected app lookup, group lookup, add request, and submission lookup; got %d requests", requestCount)
+	if requestCount != 6 {
+		t.Fatalf("expected app/group lookup, build preflight, add request, and submission lookup; got %d requests", requestCount)
 	}
 	if !strings.Contains(stdout, `"groupIds":["group-external"]`) {
 		t.Fatalf("expected external group in output, got %q", stdout)
@@ -265,16 +290,26 @@ func TestBuildsAddGroupsSubmitPreservesPartialSuccessWhenSubmissionFails(t *test
 			}
 			return jsonHTTPResponse(http.StatusOK, `{"data":[{"type":"betaGroups","id":"group-external","attributes":{"name":"External QA","isInternalGroup":false}}]}`), nil
 		case 3:
+			if req.Method != http.MethodGet || req.URL.Path != "/v1/builds/build-1" {
+				t.Fatalf("unexpected request %d: %s %s", requestCount, req.Method, req.URL.String())
+			}
+			return jsonHTTPResponse(http.StatusOK, `{"data":{"type":"builds","id":"build-1","attributes":{"processingState":"VALID","expired":false,"buildAudienceType":"APP_STORE_ELIGIBLE","usesNonExemptEncryption":false}}}`), nil
+		case 4:
+			if req.Method != http.MethodGet || req.URL.Path != "/v1/builds/build-1/buildBetaDetail" {
+				t.Fatalf("unexpected request %d: %s %s", requestCount, req.Method, req.URL.String())
+			}
+			return jsonHTTPResponse(http.StatusOK, `{"data":{"type":"buildBetaDetails","id":"detail-1","attributes":{"externalBuildState":"READY_FOR_BETA_TESTING"}}}`), nil
+		case 5:
 			if req.Method != http.MethodPost || req.URL.Path != "/v1/builds/build-1/relationships/betaGroups" {
 				t.Fatalf("unexpected request %d: %s %s", requestCount, req.Method, req.URL.String())
 			}
 			return jsonHTTPResponse(http.StatusNoContent, ``), nil
-		case 4:
+		case 6:
 			if req.Method != http.MethodGet || req.URL.Path != "/v1/builds/build-1/betaAppReviewSubmission" {
 				t.Fatalf("unexpected request %d: %s %s", requestCount, req.Method, req.URL.String())
 			}
 			return jsonHTTPResponse(http.StatusNotFound, `{"errors":[{"status":"404","code":"NOT_FOUND","title":"Not Found"}]}`), nil
-		case 5:
+		case 7:
 			if req.Method != http.MethodPost || req.URL.Path != "/v1/betaAppReviewSubmissions" {
 				t.Fatalf("unexpected request %d: %s %s", requestCount, req.Method, req.URL.String())
 			}

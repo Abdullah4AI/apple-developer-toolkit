@@ -29,7 +29,8 @@ func TestPrepareReviewSubmissionForCreateDoesNotCancelSubmissionForAnotherVersio
 							"data": {"type": "appStoreVersions", "id": "version-2"}
 						}
 					}
-				}]
+				}],
+				"links": {"self": "https://api.appstoreconnect.apple.com/v1/apps/app-1/reviewSubmissions"}
 			}`)
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/reviewSubmissions/other-version-submission/items":
 			return submitJSONResponse(http.StatusOK, `{
@@ -41,7 +42,8 @@ func TestPrepareReviewSubmissionForCreateDoesNotCancelSubmissionForAnotherVersio
 							"data": {"type": "appStoreVersions", "id": "version-2"}
 						}
 					}
-				}]
+				}],
+				"links": {"self": "https://api.appstoreconnect.apple.com/v1/reviewSubmissions/other-version-submission/items"}
 			}`)
 		default:
 			return nil, fmt.Errorf("unexpected request: %s %s", req.Method, req.URL.RequestURI())
@@ -49,7 +51,10 @@ func TestPrepareReviewSubmissionForCreateDoesNotCancelSubmissionForAnotherVersio
 	}))
 
 	stderr := captureSubmitStderr(t, func() {
-		got := prepareReviewSubmissionForCreate(context.Background(), client, "app-1", "IOS", "version-1", nil)
+		got, err := prepareReviewSubmissionForCreate(context.Background(), client, "app-1", "IOS", "version-1", nil)
+		if err != nil {
+			t.Fatalf("prepareReviewSubmissionForCreate() error: %v", err)
+		}
 		if got.reuseSubmissionID != "" {
 			t.Fatalf("expected no reusable submission, got %#v", got)
 		}
@@ -83,7 +88,8 @@ func TestPrepareReviewSubmissionForCreateDoesNotCancelUnprovenSubmission(t *test
 					"type": "reviewSubmissions",
 					"id": "unproven-submission",
 					"attributes": {"state": "READY_FOR_REVIEW", "platform": "IOS"}
-				}]
+				}],
+				"links": {"self": "https://api.appstoreconnect.apple.com/v1/apps/app-1/reviewSubmissions"}
 			}`)
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/reviewSubmissions/unproven-submission/items":
 			return submitJSONResponse(http.StatusBadRequest, `{"errors":[{"status":"400","title":"Invalid request"}]}`)
@@ -93,7 +99,10 @@ func TestPrepareReviewSubmissionForCreateDoesNotCancelUnprovenSubmission(t *test
 	}))
 
 	stderr := captureSubmitStderr(t, func() {
-		got := prepareReviewSubmissionForCreate(context.Background(), client, "app-1", "IOS", "version-1", nil)
+		got, err := prepareReviewSubmissionForCreate(context.Background(), client, "app-1", "IOS", "version-1", nil)
+		if err == nil {
+			t.Fatal("expected unproven submission inspection to fail")
+		}
 		if got.reuseSubmissionID != "" {
 			t.Fatalf("expected unproven submission not to be reused, got %#v", got)
 		}
@@ -104,7 +113,7 @@ func TestPrepareReviewSubmissionForCreateDoesNotCancelUnprovenSubmission(t *test
 			t.Fatalf("expected no cancellation request, got %v", requests)
 		}
 	}
-	if !strings.Contains(stderr, "Skipped stale review submission unproven-submission") {
-		t.Fatalf("expected skip diagnostic naming the submission, got %q", stderr)
+	if stderr != "" {
+		t.Fatalf("expected preparation failure to return through the error channel, got stderr %q", stderr)
 	}
 }

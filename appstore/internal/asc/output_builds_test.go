@@ -5,6 +5,33 @@ import (
 	"testing"
 )
 
+func TestBuildBetaGroupsUpdateResultDryRunOutputIsAdditive(t *testing.T) {
+	normal, err := json.Marshal(&BuildBetaGroupsUpdateResult{
+		BuildID:  "build-1",
+		GroupIDs: []string{"group-1"},
+		Action:   "added",
+	})
+	if err != nil {
+		t.Fatalf("marshal normal result: %v", err)
+	}
+	if got, want := string(normal), `{"buildId":"build-1","groupIds":["group-1"],"action":"added"}`; got != want {
+		t.Fatalf("normal result JSON = %s, want %s", got, want)
+	}
+
+	dryRun, err := json.Marshal(&BuildBetaGroupsUpdateResult{
+		BuildID:  "build-1",
+		GroupIDs: []string{"group-1"},
+		Action:   "would-add",
+		DryRun:   true,
+	})
+	if err != nil {
+		t.Fatalf("marshal dry-run result: %v", err)
+	}
+	if got, want := string(dryRun), `{"buildId":"build-1","groupIds":["group-1"],"action":"would-add","dryRun":true}`; got != want {
+		t.Fatalf("dry-run result JSON = %s, want %s", got, want)
+	}
+}
+
 func TestExtractPreReleaseVersionMap(t *testing.T) {
 	included := json.RawMessage(`[
 		{"type":"preReleaseVersions","id":"prv-1","attributes":{"version":"1.2.3","platform":"IOS"}},

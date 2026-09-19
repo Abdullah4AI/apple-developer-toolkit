@@ -1,11 +1,16 @@
 package web
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 	"strings"
 	"testing"
+	"unicode/utf8"
+
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
 )
 
 func TestAPIErrorRedactsRawBodyInErrorString(t *testing.T) {
@@ -22,6 +27,150 @@ func TestAPIErrorRedactsRawBodyInErrorString(t *testing.T) {
 	if !strings.Contains(message, "status 422") {
 		t.Fatalf("expected status in error message, got %q", message)
 	}
+}
+
+func TestAPIErrorPreservesOrdinaryDiagnosticFormat(t *testing.T) {
+	err := &APIError{
+		Status:         http.StatusUnauthorized,
+		AppleRequestID: "req-123",
+		CorrelationKey: "corr-456",
+		rawBody:        []byte(`{"serviceErrors":[{"code":"AUTH-401"}]}`),
+	}
+	if got, want := err.Error(), "web api error (status 401), request_id=req-123, correlation_key=corr-456, codes=[AUTH-401]"; got != want {
+		t.Fatalf("Error() = %q, want %q", got, want)
+	}
+}
+
+func TestTwoFAVerificationFailedErrorBoundsAndSanitizesCodes(t *testing.T) {
+	codes := make([]map[string]string, 12)
+	for i := range codes {
+		codes[i] = map[string]string{
+			"code": fmt.Sprintf("CODE-%02d-%s", i, strings.Repeat("é", 200)),
+		}
+	}
+	codes[0]["code"] = "CODE-00-bad\x1b[2J\n" + strings.Repeat("x", 300)
+	body, err := json.Marshal(map[string]any{"serviceErrors": codes})
+	if err != nil {
+		t.Fatalf("marshal response body: %v", err)
+	}
+	bodyBefore := bytes.Clone(body)
+	verificationErr := &twoFAVerificationFailedError{
+		Kind:   "trusted-device",
+		Status: http.StatusBadRequest,
+		Body:   body,
+	}
+
+	message := verificationErr.Error()
+	if !utf8.ValidString(message) || asc.HasInterpretedTerminalSequence(message) {
+		t.Fatalf("2FA diagnostic is not terminal-safe UTF-8: %q", message)
+	}
+	if strings.Contains(message, "CODE-10-") || strings.Contains(message, "CODE-11-") || !strings.Contains(message, "... and 2 more") {
+		t.Fatalf("2FA diagnostic is not count-bounded: %q", message)
+	}
+	if verificationErr.HTTPStatusCode() != http.StatusBadRequest || !bytes.Equal(verificationErr.Body, bodyBefore) {
+		t.Fatalf("2FA structured error data changed: %#v", verificationErr)
+	}
+
+	ordinary := &twoFAVerificationFailedError{
+		Kind:   "trusted-device",
+		Status: http.StatusBadRequest,
+		Body:   []byte(`{"serviceErrors":[{"code":"-21669"}]}`),
+	}
+	if got, want := ordinary.Error(), "trusted-device 2fa failed (status 400, codes=[-21669])"; got != want {
+		t.Fatalf("ordinary 2FA diagnostic = %q, want %q", got, want)
+	}
+}
+
+func TestAPIErrorBoundsAndSanitizesProviderDiagnostics(t *testing.T) {
+	requestID := "  request\x1b[31m\n" + strings.Repeat("é", 200) + string([]byte{0xff}) + "tail  "
+	correlationKey := "  correlation\u202e" + strings.Repeat("c", 400) + "  "
+	codes := make([]map[string]string, 12)
+	for i := range codes {
+		codes[i] = map[string]string{
+			"code": fmt.Sprintf("CODE-%02d-%s", i, strings.Repeat("x", 300)),
+		}
+	}
+	codes[0]["code"] = "CODE-00-bad\x1b[2J\n" + strings.Repeat("x", 300)
+	rawBody, err := json.Marshal(map[string]any{"errors": codes})
+	if err != nil {
+		t.Fatalf("marshal response body: %v", err)
+	}
+	rawBodyBefore := bytes.Clone(rawBody)
+
+	apiErr := &APIError{
+		Status:         http.StatusUnprocessableEntity,
+		AppleRequestID: requestID,
+		CorrelationKey: correlationKey,
+		rawBody:        rawBody,
+	}
+	message := apiErr.Error()
+
+	if !utf8.ValidString(message) {
+		t.Fatalf("Error() returned invalid UTF-8: %q", message)
+	}
+	if asc.HasInterpretedTerminalSequence(message) {
+		t.Fatalf("Error() retained interpreted terminal characters: %q", message)
+	}
+	if strings.Contains(message, "CODE-10-") || strings.Contains(message, "CODE-11-") {
+		t.Fatalf("Error() included service codes beyond the display cap: %q", message)
+	}
+	if !strings.Contains(message, "... and 2 more") {
+		t.Fatalf("Error() omitted the service-code truncation marker: %q", message)
+	}
+	if got := diagnosticValueBetween(t, message, "request_id=", ", correlation_key="); len(got) > 256 || !strings.HasSuffix(got, "...") {
+		t.Fatalf("request ID projection is not bounded to 256 bytes: len=%d value=%q", len(got), got)
+	}
+	if got := diagnosticValueBetween(t, message, "correlation_key=", ", codes="); len(got) > 256 || !strings.HasSuffix(got, "...") {
+		t.Fatalf("correlation key projection is not bounded to 256 bytes: len=%d value=%q", len(got), got)
+	}
+
+	if apiErr.AppleRequestID != requestID || apiErr.CorrelationKey != correlationKey {
+		t.Fatalf("Error() mutated structured provider identifiers: %#v", apiErr)
+	}
+	if !bytes.Equal(apiErr.rawBody, rawBodyBefore) {
+		t.Fatal("Error() mutated the raw response body")
+	}
+	rawCodes := extractServiceErrorCodes(apiErr.rawBody)
+	if len(rawCodes) != 12 || !strings.Contains(rawCodes[0], "\x1b[2J\n") {
+		t.Fatalf("structured service codes were altered: %#v", rawCodes)
+	}
+}
+
+func TestBoundedWebAuthDiagnosticCodesPreservesOrdinaryValuesAndDropsEmptyOnes(t *testing.T) {
+	if got := boundedWebAuthDiagnosticCodes([]string{"AUTH-401"}); len(got) != 1 || got[0] != "AUTH-401" {
+		t.Fatalf("ordinary service code changed: %#v", got)
+	}
+
+	codes := []string{"\x1b"}
+	for i := 0; i < 12; i++ {
+		codes = append(codes, fmt.Sprintf("CODE-%02d-%s", i, strings.Repeat("é", 200)))
+	}
+	got := boundedWebAuthDiagnosticCodes(codes)
+	if len(got) != 11 {
+		t.Fatalf("bounded code count = %d, want 11: %#v", len(got), got)
+	}
+	for i, code := range got[:10] {
+		if len(code) > 256 || !utf8.ValidString(code) || asc.HasInterpretedTerminalSequence(code) {
+			t.Fatalf("code %d is not a safe 256-byte projection: len=%d value=%q", i, len(code), code)
+		}
+	}
+	if got[10] != "... and 2 more" {
+		t.Fatalf("unexpected truncation marker: %q", got[10])
+	}
+}
+
+func diagnosticValueBetween(t *testing.T, message, prefix, suffix string) string {
+	t.Helper()
+	start := strings.Index(message, prefix)
+	if start < 0 {
+		t.Fatalf("message %q does not contain %q", message, prefix)
+	}
+	start += len(prefix)
+	end := strings.Index(message[start:], suffix)
+	if end < 0 {
+		t.Fatalf("message %q does not contain %q after %q", message, suffix, prefix)
+	}
+	return message[start : start+end]
 }
 
 func TestExtractWebPortalErrorReasonSanitizesAndBoundsDetails(t *testing.T) {

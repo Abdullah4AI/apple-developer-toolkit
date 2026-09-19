@@ -129,6 +129,48 @@ func (c *Client) do(ctx context.Context, method, path string, body io.Reader) ([
 	return request(ctx)
 }
 
+// doAppBuildUploadsRead retries the app-scoped Build Upload API only after a
+// separate app read proves that the parent exists. Apple returns the same 404
+// shape for a transient build-upload propagation failure and a permanently
+// invalid app ID, so status and error detail alone cannot classify it safely.
+func (c *Client) doAppBuildUploadsRead(ctx context.Context, appID, path string) ([]byte, error) {
+	request, err := c.replayableRequest(http.MethodGet, path, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	// The request path, not the caller's original appID, determines whether
+	// this is an app-scoped endpoint. A top-level continuation URL must keep
+	// the normal detail-based classification for missing upload resources.
+	appID = appIDFromBuildUploadsPath(path)
+	retryOpts := ResolveRetryOptions()
+	appVerified := false
+	return withRetry(ctx, func() ([]byte, error) {
+		data, requestErr := request(ctx)
+		if requestErr == nil || !isAppBuildUploadsNotFound(requestErr) {
+			return data, requestErr
+		}
+		if appID == "" || retryOpts.MaxRetries == 0 {
+			return nil, requestErr
+		}
+		if !appVerified {
+			_, verifyErr := c.doOnce(ctx, http.MethodGet, fmt.Sprintf("/v1/apps/%s", appID), nil)
+			if verifyErr != nil {
+				if IsNotFound(verifyErr) {
+					return nil, requestErr
+				}
+				return nil, appBuildUploadsVerificationError(appID, verifyErr)
+			}
+			appVerified = true
+		}
+		return nil, &RetryableError{Err: requestErr}
+	}, retryOpts, IsRetryable)
+}
+
+func appBuildUploadsVerificationError(appID string, err error) error {
+	return fmt.Errorf("verify app %q before retrying build uploads: %w", appID, err)
+}
+
 // doIdempotentMutation performs an explicitly idempotent mutating request with
 // the same transient-failure retry policy used by reads. Callers must only use
 // this for operations whose exact payload can be safely replayed.
@@ -363,8 +405,8 @@ func isRetryableHTTPStatus(statusCode int) bool {
 	}
 }
 
-// isBuildUploadsPath reports whether path targets the Build Upload API family
-// (/v1/buildUploads, /v1/buildUploadFiles, and the app relationship views).
+// isBuildUploadsPath reports whether path targets the top-level Build Upload
+// API family (/v1/buildUploads and /v1/buildUploadFiles).
 // Apple intermittently answers reads on these endpoints with 404 NOT_FOUND for
 // resources that exist (fastlane/fastlane#29908), so reads there are allowed
 // a bounded retry that no other 404 receives. Full next-page URLs are matched
@@ -377,14 +419,6 @@ func isBuildUploadsPath(path string) bool {
 	switch segments[1] {
 	case "buildUploads", "buildUploadFiles":
 		return true
-	case "apps":
-		// /v1/apps/{id}/buildUploads and /v1/apps/{id}/relationships/buildUploads
-		switch len(segments) {
-		case 4:
-			return segments[3] == "buildUploads"
-		case 5:
-			return segments[3] == "relationships" && segments[4] == "buildUploads"
-		}
 	}
 	return false
 }
@@ -392,11 +426,10 @@ func isBuildUploadsPath(path string) bool {
 // isIntermittentBuildUploadsNotFound reports whether err is the 404 NOT_FOUND
 // flake Apple emits on Build Upload API reads: the app relationship is
 // reported missing for an app that exists. Only reads are eligible, and only
-// when the missing resource is the app. On /v1/apps/{id}/buildUploads the app
-// is the only resource that can be missing, so any NOT_FOUND qualifies. On
-// /v1/buildUploads* and /v1/buildUploadFiles* the detail must name resource
-// type 'apps'; a genuinely missing upload or file id ("no resource of type
-// 'buildUploads'") is surfaced unchanged without consuming the retry budget.
+// when the missing resource is the app. The detail on /v1/buildUploads* and
+// /v1/buildUploadFiles* must name resource type 'apps'; a genuinely missing
+// upload or file id ("no resource of type 'buildUploads'") and all app-scoped
+// 404s are surfaced unchanged without consuming the retry budget.
 func isIntermittentBuildUploadsNotFound(method, path string, err error) bool {
 	if !shouldRetryMethod(method) || !isBuildUploadsPath(path) {
 		return false
@@ -405,17 +438,23 @@ func isIntermittentBuildUploadsNotFound(method, path string, err error) bool {
 	if !ok || apiErr.StatusCode != http.StatusNotFound || !strings.EqualFold(apiErr.Code, "NOT_FOUND") {
 		return false
 	}
-	if isAppBuildUploadsPath(path) {
-		return true
-	}
 	return notFoundNamesAppResource(apiErr)
 }
 
-// isAppBuildUploadsPath reports whether path is the app-scoped Build Upload
-// relationship view (/v1/apps/{id}/buildUploads or its relationships form).
-func isAppBuildUploadsPath(path string) bool {
+func isAppBuildUploadsNotFound(err error) bool {
+	apiErr, ok := errors.AsType[*APIError](err)
+	return ok && apiErr.StatusCode == http.StatusNotFound && strings.EqualFold(apiErr.Code, "NOT_FOUND")
+}
+
+func appIDFromBuildUploadsPath(path string) string {
 	segments := apiPathSegments(path)
-	return len(segments) >= 3 && segments[0] == "v1" && segments[1] == "apps"
+	if len(segments) == 4 && segments[0] == "v1" && segments[1] == "apps" && segments[3] == "buildUploads" {
+		return strings.TrimSpace(segments[2])
+	}
+	if len(segments) == 5 && segments[0] == "v1" && segments[1] == "apps" && segments[3] == "relationships" && segments[4] == "buildUploads" {
+		return strings.TrimSpace(segments[2])
+	}
+	return ""
 }
 
 // notFoundNamesAppResource reports whether a NOT_FOUND detail names the apps

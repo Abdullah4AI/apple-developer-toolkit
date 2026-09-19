@@ -32,11 +32,25 @@ func ResolveAppIDWithExactLookup(ctx context.Context, client appLookupClient, ap
 	if err != nil {
 		return "", fmt.Errorf("resolve app by bundle ID: %w", err)
 	}
+	if byBundle == nil {
+		return "", fmt.Errorf("resolve app by bundle ID: empty response")
+	}
+	bundlePageHasNext := strings.TrimSpace(byBundle.Links.Next) != ""
+	if bundlePageHasNext && len(byBundle.Data) == 0 {
+		return "", MarkAmbiguousSelectionSample(AmbiguousError("app", "--app", resolved, nil))
+	}
 	if len(byBundle.Data) == 1 {
+		if bundlePageHasNext {
+			return "", MarkAmbiguousSelectionSample(AmbiguousError("app", "--app", resolved, AppCandidates(byBundle.Data)))
+		}
 		return strings.TrimSpace(byBundle.Data[0].ID), nil
 	}
 	if len(byBundle.Data) > 1 {
-		return "", AmbiguousError("app", "--app", resolved, AppCandidates(byBundle.Data))
+		ambiguous := AmbiguousError("app", "--app", resolved, AppCandidates(byBundle.Data))
+		if bundlePageHasNext {
+			ambiguous = MarkAmbiguousSelectionSample(ambiguous)
+		}
+		return "", ambiguous
 	}
 
 	nameMatches, err := findExactAppNameMatches(ctx, client, resolved, true)
@@ -84,11 +98,25 @@ func ResolveAppIDWithLookup(ctx context.Context, client appLookupClient, appID s
 	if err != nil {
 		return "", fmt.Errorf("resolve app by bundle ID: %w", err)
 	}
+	if byBundle == nil {
+		return "", fmt.Errorf("resolve app by bundle ID: empty response")
+	}
+	bundlePageHasNext := strings.TrimSpace(byBundle.Links.Next) != ""
+	if bundlePageHasNext && len(byBundle.Data) == 0 {
+		return "", MarkAmbiguousSelectionSample(AmbiguousError("app", "--app", resolved, nil))
+	}
 	if len(byBundle.Data) == 1 {
+		if bundlePageHasNext {
+			return "", MarkAmbiguousSelectionSample(AmbiguousError("app", "--app", resolved, AppCandidates(byBundle.Data)))
+		}
 		return strings.TrimSpace(byBundle.Data[0].ID), nil
 	}
 	if len(byBundle.Data) > 1 {
-		return "", AmbiguousError("app", "--app", resolved, AppCandidates(byBundle.Data))
+		ambiguous := AmbiguousError("app", "--app", resolved, AppCandidates(byBundle.Data))
+		if bundlePageHasNext {
+			ambiguous = MarkAmbiguousSelectionSample(ambiguous)
+		}
+		return "", ambiguous
 	}
 
 	nameMatches, err := findExactAppNameMatches(ctx, client, resolved, true)
@@ -116,15 +144,25 @@ func ResolveAppIDWithLookup(ctx context.Context, client appLookupClient, appID s
 
 	// Backward compatibility: if no exact name match exists, keep legacy behavior
 	// by accepting a unique fuzzy name-filter result.
-	fuzzyMatches, err := findFuzzyAppNameMatches(ctx, client, resolved)
+	fuzzyMatches, fuzzyMatchesAreSample, err := findFuzzyAppNameMatches(ctx, client, resolved)
 	if err != nil {
 		return "", fmt.Errorf("resolve app by name: %w", err)
 	}
 	if len(fuzzyMatches) == 1 {
+		if fuzzyMatchesAreSample {
+			return "", MarkAmbiguousSelectionSample(AmbiguousError("app", "--app", resolved, fuzzyMatches))
+		}
 		return fuzzyMatches[0].ID, nil
 	}
 	if len(fuzzyMatches) > 1 {
-		return "", AmbiguousError("app", "--app", resolved, fuzzyMatches)
+		ambiguous := AmbiguousError("app", "--app", resolved, fuzzyMatches)
+		if fuzzyMatchesAreSample {
+			ambiguous = MarkAmbiguousSelectionSample(ambiguous)
+		}
+		return "", ambiguous
+	}
+	if fuzzyMatchesAreSample {
+		return "", MarkAmbiguousSelectionSample(AmbiguousError("app", "--app", resolved, fuzzyMatches))
 	}
 	return "", fmt.Errorf("app %q not found (expected app ID, exact bundle ID, or exact app name)", resolved)
 }
@@ -192,18 +230,18 @@ func findExactAppNameMatches(ctx context.Context, client appLookupClient, name s
 	return matches, nil
 }
 
-func findFuzzyAppNameMatches(ctx context.Context, client appLookupClient, name string) ([]AmbiguousCandidate, error) {
+func findFuzzyAppNameMatches(ctx context.Context, client appLookupClient, name string) ([]AmbiguousCandidate, bool, error) {
 	name = strings.TrimSpace(name)
 	if name == "" || client == nil {
-		return nil, nil
+		return nil, false, nil
 	}
 
 	resp, err := client.GetApps(ctx, asc.WithAppsNames([]string{name}), asc.WithAppsLimit(2))
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	if resp == nil {
-		return nil, nil
+		return nil, false, nil
 	}
 
 	seen := map[string]struct{}{}
@@ -220,7 +258,7 @@ func findFuzzyAppNameMatches(ctx context.Context, client appLookupClient, name s
 		matches = append(matches, appCandidate(app))
 	}
 	sortAmbiguousCandidatesByID(matches)
-	return matches, nil
+	return matches, strings.TrimSpace(resp.Links.Next) != "", nil
 }
 
 // IsNumericAppID reports whether a value is a non-empty decimal app ID.

@@ -469,6 +469,10 @@ Examples:
 			requestCtx, cancel := shared.ContextWithTimeout(ctx)
 			defer cancel()
 
+			if _, err := shared.ResolveOwnedAppStoreVersionByID(requestCtx, client, resolvedAppID, strings.TrimSpace(*versionID), ""); err != nil {
+				return fmt.Errorf("migrate export: %w", err)
+			}
+
 			// Fetch all localizations
 			resp, err := client.GetAppStoreVersionLocalizations(requestCtx, strings.TrimSpace(*versionID))
 			if err != nil {
@@ -544,6 +548,7 @@ Examples:
 						}{
 							{"name.txt", loc.Attributes.Name},
 							{"subtitle.txt", loc.Attributes.Subtitle},
+							{"privacy_url.txt", loc.Attributes.PrivacyPolicyURL},
 						}
 						for _, file := range files {
 							written, err := writeAndCount(root, filepath.Join(localeDir, file.name), file.content)

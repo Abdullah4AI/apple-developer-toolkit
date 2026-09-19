@@ -191,15 +191,23 @@ func resolveAppClipID(ctx context.Context, client *asc.Client, appID string, app
 	if err != nil {
 		return "", fmt.Errorf("failed to resolve app clip ID: %w", err)
 	}
-	if len(resp.Data) == 0 {
+	if resp == nil {
+		return "", fmt.Errorf("empty App Clip response for bundle ID %q", bundle)
+	}
+	pageHasNext := strings.TrimSpace(resp.Links.Next) != ""
+	if len(resp.Data) == 0 && !pageHasNext {
 		return "", fmt.Errorf("no App Clip found for bundle ID %q", bundle)
 	}
-	if len(resp.Data) > 1 {
+	if len(resp.Data) > 1 || pageHasNext {
 		candidates := make([]shared.AmbiguousCandidate, 0, len(resp.Data))
 		for _, clip := range resp.Data {
 			candidates = append(candidates, shared.AmbiguousCandidate{ID: strings.TrimSpace(clip.ID), Label: strings.TrimSpace(clip.Attributes.BundleID)})
 		}
-		return "", shared.AmbiguousError("App Clip", "--app-clip-id", bundle, candidates)
+		ambiguous := shared.AmbiguousError("App Clip", "--app-clip-id", bundle, candidates)
+		if pageHasNext {
+			return "", shared.MarkAmbiguousSelectionSample(ambiguous)
+		}
+		return "", ambiguous
 	}
 
 	return resp.Data[0].ID, nil

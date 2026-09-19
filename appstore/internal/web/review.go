@@ -15,6 +15,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/urlsanitize"
 )
 
 const (
@@ -1272,19 +1274,52 @@ func (c *Client) DownloadAttachment(ctx context.Context, signedURL string) ([]by
 	request.Header.Set("Accept", "*/*")
 	setModifiedCookieHeader(c.httpClient, request)
 
-	response, err := c.httpClient.Do(request)
+	httpClient := *c.httpClient
+	// The initial request already has the authenticated session cookie copied
+	// explicitly. Disable the jar on this one-purpose client so it neither
+	// duplicates that cookie nor attaches session state to redirect targets.
+	httpClient.Jar = nil
+	previousCheckRedirect := httpClient.CheckRedirect
+	httpClient.CheckRedirect = func(redirect *http.Request, via []*http.Request) error {
+		stripReviewAttachmentRedirectCredentials(redirect)
+		if len(via) >= 10 {
+			return &reviewAttachmentRedirectError{message: "download stopped after 10 redirects"}
+		}
+		if err := validateReviewAttachmentDownloadTarget(redirect.URL, "redirect"); err != nil {
+			return err
+		}
+		if previousCheckRedirect != nil {
+			if err := previousCheckRedirect(redirect, via); err != nil {
+				return err
+			}
+			stripReviewAttachmentRedirectCredentials(redirect)
+			// The wrapped policy receives the mutable upcoming request and may
+			// have rewritten its URL; never send the request to an unchecked host.
+			return validateReviewAttachmentDownloadTarget(redirect.URL, "redirect")
+		}
+		return nil
+	}
+
+	response, err := httpClient.Do(request)
 	if err != nil {
+		var redirectErr *reviewAttachmentRedirectError
+		if errors.As(err, &redirectErr) {
+			return nil, 0, redirectErr
+		}
 		var urlErr *url.Error
 		if errors.As(err, &urlErr) {
 			if errors.Is(urlErr.Err, context.Canceled) || errors.Is(urlErr.Err, context.DeadlineExceeded) {
 				return nil, 0, urlErr.Err
 			}
-			return nil, 0, fmt.Errorf("download request failed: %s", strings.TrimSpace(urlErr.Err.Error()))
 		}
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 			return nil, 0, err
 		}
-		return nil, 0, fmt.Errorf("download request failed")
+		return nil, 0, urlsanitize.NewTransportError(
+			"attachment download request",
+			urlsanitize.RedactURLForError(signedURL),
+			err,
+		)
 	}
 	defer func() { _ = response.Body.Close() }()
 
@@ -1296,4 +1331,38 @@ func (c *Client) DownloadAttachment(ctx context.Context, signedURL string) ([]by
 		return nil, response.StatusCode, fmt.Errorf("attachment download failed with status %d", response.StatusCode)
 	}
 	return body, response.StatusCode, nil
+}
+
+type reviewAttachmentRedirectError struct {
+	message string
+}
+
+func (e *reviewAttachmentRedirectError) Error() string {
+	return e.message
+}
+
+func stripReviewAttachmentRedirectCredentials(request *http.Request) {
+	if request == nil {
+		return
+	}
+	for name := range request.Header {
+		if strings.EqualFold(name, "Cookie") || strings.EqualFold(name, "Referer") {
+			delete(request.Header, name)
+		}
+	}
+}
+
+// validateReviewAttachmentDownloadTarget validates a redirect target without
+// echoing its potentially signed URL in diagnostics.
+func validateReviewAttachmentDownloadTarget(target *url.URL, kind string) error {
+	if target == nil || strings.TrimSpace(target.Hostname()) == "" {
+		return &reviewAttachmentRedirectError{message: fmt.Sprintf("download %s host is required", kind)}
+	}
+	if !strings.EqualFold(target.Scheme, "https") {
+		return &reviewAttachmentRedirectError{message: fmt.Sprintf("download %s must use https", kind)}
+	}
+	if !isAllowedAttachmentHost(target.Hostname()) {
+		return &reviewAttachmentRedirectError{message: fmt.Sprintf("download %s host is not allowed", kind)}
+	}
+	return nil
 }

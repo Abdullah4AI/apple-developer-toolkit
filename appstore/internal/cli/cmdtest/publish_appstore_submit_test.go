@@ -41,7 +41,7 @@ func respondToFinalReviewSubmissionValidation(req *http.Request) (*http.Response
 		resp, err := jsonResponse(http.StatusOK, `{"data":{"type":"reviewSubmissions","id":"review-sub-1","attributes":{"state":"READY_FOR_REVIEW","platform":"IOS"},"relationships":{"app":{"data":{"type":"apps","id":"app-1"}}}}}`)
 		return resp, err, true
 	case "/v1/reviewSubmissions/review-sub-1/items":
-		resp, err := jsonResponse(http.StatusOK, `{"data":[{"type":"reviewSubmissionItems","id":"item-1","relationships":{"appStoreVersion":{"data":{"type":"appStoreVersions","id":"version-1"}}}}]}`)
+		resp, err := jsonResponse(http.StatusOK, `{"data":[{"type":"reviewSubmissionItems","id":"item-1","relationships":{"appStoreVersion":{"data":{"type":"appStoreVersions","id":"version-1"}}}}],"links":{"self":"/v1/reviewSubmissions/review-sub-1/items"}}`)
 		return resp, err, true
 	default:
 		return nil, nil, false
@@ -130,7 +130,7 @@ func TestPublishAppStoreSubmitUsesModernReviewSubmissionFlow(t *testing.T) {
 			if req.URL.Query().Get("filter[platform]") != "IOS" {
 				t.Fatalf("expected platform filter IOS, got %q", req.URL.Query().Get("filter[platform]"))
 			}
-			return jsonResponse(http.StatusOK, `{"data":[],"links":{}}`)
+			return jsonResponse(http.StatusOK, `{"data":[],"links":{"self":"/v1/apps/app-1/reviewSubmissions"}}`)
 		case req.Method == http.MethodPost && req.URL.Path == "/v1/reviewSubmissions":
 			return jsonResponse(http.StatusCreated, `{"data":{"type":"reviewSubmissions","id":"review-sub-1","attributes":{"state":"READY_FOR_REVIEW","platform":"IOS"}}}`)
 		case req.Method == http.MethodPost && req.URL.Path == "/v1/reviewSubmissionItems":
@@ -188,6 +188,22 @@ func TestPublishAppStoreSubmitUsesModernReviewSubmissionFlow(t *testing.T) {
 	}
 	if got := strings.Count(joined, "GET /v1/appStoreVersions/version-1/appStoreVersionSubmission"); got != 1 {
 		t.Fatalf("expected exactly one existing submission lookup, got %d requests: %v", got, recordedRequests)
+	}
+	reviewPreflightIndex, buildAttachmentIndex := -1, -1
+	for idx, request := range recordedRequests {
+		switch request {
+		case "GET /v1/apps/app-1/reviewSubmissions":
+			if reviewPreflightIndex == -1 {
+				reviewPreflightIndex = idx
+			}
+		case "GET /v1/appStoreVersions/version-1/build":
+			if buildAttachmentIndex == -1 {
+				buildAttachmentIndex = idx
+			}
+		}
+	}
+	if reviewPreflightIndex == -1 || buildAttachmentIndex == -1 || reviewPreflightIndex > buildAttachmentIndex {
+		t.Fatalf("expected review submission preflight before build attachment, requests: %v", recordedRequests)
 	}
 }
 
@@ -349,6 +365,7 @@ func TestPublishAppStoreSubmitLocalizationPreflightUsesCanonicalGuidance(t *test
 		t.Fatalf("write ipa fixture: %v", err)
 	}
 
+	buildAttachmentAttempted := false
 	installDefaultTransport(t, roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		if resp, err, ok := respondToPublishAppLookup(t, req); ok {
 			return resp, err
@@ -387,8 +404,10 @@ func TestPublishAppStoreSubmitLocalizationPreflightUsesCanonicalGuidance(t *test
 				return nil, nil
 			}
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/appStoreVersions/version-1/build":
+			buildAttachmentAttempted = true
 			return jsonResponse(http.StatusNotFound, `{"errors":[{"status":"404","code":"NOT_FOUND","title":"Not Found"}]}`)
 		case req.Method == http.MethodPatch && req.URL.Path == "/v1/appStoreVersions/version-1/relationships/build":
+			buildAttachmentAttempted = true
 			return jsonResponse(http.StatusNoContent, "")
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/appStoreVersions/version-1/appStoreVersionSubmission":
 			return jsonResponse(http.StatusNotFound, `{"errors":[{"status":"404","code":"NOT_FOUND","title":"Not Found"}]}`)
@@ -434,6 +453,9 @@ func TestPublishAppStoreSubmitLocalizationPreflightUsesCanonicalGuidance(t *test
 	}
 	if strings.Contains(stderr, "submit create") {
 		t.Fatalf("did not expect removed submit create guidance, got %q", stderr)
+	}
+	if buildAttachmentAttempted {
+		t.Fatal("publish appstore --submit must not inspect or mutate build attachment before submission preflight succeeds")
 	}
 }
 
@@ -713,7 +735,7 @@ func TestPublishAppStoreSubmitUsesFreshTimeoutBudgetsForPreflightAndSubmission(t
 			if req.URL.Query().Get("filter[platform]") != "IOS" {
 				t.Fatalf("expected platform filter IOS, got %q", req.URL.Query().Get("filter[platform]"))
 			}
-			return jsonResponse(http.StatusOK, `{"data":[],"links":{}}`)
+			return jsonResponse(http.StatusOK, `{"data":[],"links":{"self":"/v1/apps/app-1/reviewSubmissions"}}`)
 		case req.Method == http.MethodPost && req.URL.Path == "/v1/reviewSubmissions":
 			deadline, ok := req.Context().Deadline()
 			if !ok {
@@ -847,7 +869,7 @@ func TestPublishAppStoreSubmitPreflightUsesPublishTimeoutOverride(t *testing.T) 
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/appStoreVersions/version-1/appStoreVersionSubmission":
 			return jsonResponse(http.StatusNotFound, `{"errors":[{"status":"404","code":"NOT_FOUND","title":"Not Found"}]}`)
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/apps/app-1/reviewSubmissions":
-			return jsonResponse(http.StatusOK, `{"data":[],"links":{}}`)
+			return jsonResponse(http.StatusOK, `{"data":[],"links":{"self":"/v1/apps/app-1/reviewSubmissions"}}`)
 		case req.Method == http.MethodPost && req.URL.Path == "/v1/reviewSubmissions":
 			return jsonResponse(http.StatusCreated, `{"data":{"type":"reviewSubmissions","id":"review-sub-1","attributes":{"state":"READY_FOR_REVIEW","platform":"IOS"}}}`)
 		case req.Method == http.MethodPost && req.URL.Path == "/v1/reviewSubmissionItems":
@@ -970,7 +992,7 @@ func TestPublishAppStoreSubmitDefaultPathHonorsASCTimeout(t *testing.T) {
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/appStoreVersions/version-1/appStoreVersionSubmission":
 			return jsonResponse(http.StatusNotFound, `{"errors":[{"status":"404","code":"NOT_FOUND","title":"Not Found"}]}`)
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/apps/app-1/reviewSubmissions":
-			return jsonResponse(http.StatusOK, `{"data":[],"links":{}}`)
+			return jsonResponse(http.StatusOK, `{"data":[],"links":{"self":"/v1/apps/app-1/reviewSubmissions"}}`)
 		case req.Method == http.MethodPost && req.URL.Path == "/v1/reviewSubmissions":
 			return nil, stopErr
 		case req.Method == http.MethodPost && req.URL.Path == "/v1/reviewSubmissionItems":
@@ -1104,7 +1126,7 @@ func TestPublishAppStoreSubmitDefaultTimeoutUsesSharedPipelineBudget(t *testing.
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/appStoreVersions/version-1/appStoreVersionSubmission":
 			return jsonResponse(http.StatusNotFound, `{"errors":[{"status":"404","code":"NOT_FOUND","title":"Not Found"}]}`)
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/apps/app-1/reviewSubmissions":
-			return jsonResponse(http.StatusOK, `{"data":[],"links":{}}`)
+			return jsonResponse(http.StatusOK, `{"data":[],"links":{"self":"/v1/apps/app-1/reviewSubmissions"}}`)
 		case req.Method == http.MethodPost && req.URL.Path == "/v1/reviewSubmissions":
 			deadline, ok := req.Context().Deadline()
 			if !ok {

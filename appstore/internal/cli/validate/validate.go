@@ -347,14 +347,22 @@ func resolveVersionID(ctx context.Context, client *asc.Client, appID, version, p
 	if err != nil {
 		return "", fmt.Errorf("failed to resolve app store version: %w", err)
 	}
-	if resp == nil || len(resp.Data) == 0 {
+	if resp == nil {
+		return "", fmt.Errorf("failed to resolve app store version: empty response")
+	}
+	pageHasNext := strings.TrimSpace(resp.Links.Next) != ""
+	if len(resp.Data) == 0 && !pageHasNext {
 		if strings.TrimSpace(platform) != "" {
 			return "", fmt.Errorf("app store version not found for version %q and platform %q", version, platform)
 		}
 		return "", fmt.Errorf("app store version not found for version %q", version)
 	}
-	if len(resp.Data) > 1 {
-		return "", shared.AmbiguousAppStoreVersionError(version, platform, resp.Data, "--platform", "--version-id")
+	if len(resp.Data) > 1 || pageHasNext {
+		ambiguous := shared.AmbiguousAppStoreVersionError(version, platform, resp.Data, "--platform", "--version-id")
+		if pageHasNext {
+			return "", shared.MarkAmbiguousSelectionSample(ambiguous)
+		}
+		return "", ambiguous
 	}
 	return resp.Data[0].ID, nil
 }

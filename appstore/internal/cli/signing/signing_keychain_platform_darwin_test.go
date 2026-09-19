@@ -15,7 +15,7 @@ import (
 	"time"
 )
 
-func TestConfigurePersistentSigningKeychainCleansUpWithIndependentContext(t *testing.T) {
+func TestConfigurePersistentSigningKeychainLeavesCleanupToCaller(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	configureErr := errors.New("configuration failed")
 	deleted := false
@@ -26,18 +26,8 @@ func TestConfigurePersistentSigningKeychainCleansUpWithIndependentContext(t *tes
 			cancel()
 			return nil, nil, configureErr
 		},
-		func(cleanupCtx context.Context, path string) error {
-			if cleanupCtx.Err() != nil {
-				t.Fatalf("cleanup context is canceled: %v", cleanupCtx.Err())
-			}
-			if path != "/tmp/persistent.keychain-db" {
-				t.Fatalf("cleanup path = %q", path)
-			}
-			deleted = true
-			return nil
-		},
 	)
-	if !errors.Is(err, configureErr) || !deleted {
+	if !errors.Is(err, configureErr) || deleted {
 		t.Fatalf("configure error = %v, deleted = %v", err, deleted)
 	}
 }
@@ -130,7 +120,7 @@ func TestSigningKeychainInstallLiveDedicatedKeychain(t *testing.T) {
 		}
 	})
 
-	createKeychain := func(ctx context.Context, path string, password []byte) error {
+	createKeychain := func(ctx context.Context, path string, password []byte) (bool, error) {
 		return createPersistentSigningKeychain(ctx, path, password)
 	}
 	importIdentity := func(ctx context.Context, path string, keychainPassword, identityData, identityPassword []byte, expectedSHA1 string) error {

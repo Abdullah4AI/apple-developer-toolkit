@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"flag"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -170,6 +171,40 @@ func TestIAPReviewScreenshotsUpdateSupportsIndividualFields(t *testing.T) {
 	}
 }
 
+func TestIAPReviewScreenshotsUpdateRejectsConfirmWithoutFile(t *testing.T) {
+	setupAuth(t)
+	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
+
+	originalTransport := http.DefaultTransport
+	t.Cleanup(func() { http.DefaultTransport = originalTransport })
+	requestCount := 0
+	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		requestCount++
+		t.Fatalf("unexpected request: %s %s", req.Method, req.URL.String())
+		return nil, nil
+	})
+
+	stdout, stderr, runErr := runRootCommand(t, []string{
+		"iap", "review-screenshots", "update",
+		"--screenshot-id", "shot-1",
+		"--uploaded", "true",
+		"--confirm",
+		"--output", "json",
+	})
+	if runErr == nil || !strings.Contains(runErr.Error(), "--confirm can only be used with --file") {
+		t.Fatalf("expected confirm usage error, got %v", runErr)
+	}
+	if requestCount != 0 {
+		t.Fatalf("expected no network requests, got %d", requestCount)
+	}
+	if stdout != "" {
+		t.Fatalf("expected empty stdout, got %q", stdout)
+	}
+	if !strings.Contains(stderr, "--confirm can only be used with --file") {
+		t.Fatalf("expected usage diagnostic on stderr, got %q", stderr)
+	}
+}
+
 func TestIAPReviewScreenshotsUpdateUsesRegisteredTableRenderer(t *testing.T) {
 	setupAuth(t)
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
@@ -287,41 +322,204 @@ func TestIAPReviewScreenshotsUpdateTreatsBlankChecksumAsMissing(t *testing.T) {
 	}
 }
 
-func TestIAPReviewScreenshotsUpdateRejectsDeprecatedFileBeforeRequest(t *testing.T) {
+func TestIAPReviewScreenshotsUpdateReuploadsExistingInProgressScreenshot(t *testing.T) {
 	setupAuth(t)
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 
+	filePath := filepath.Join(t.TempDir(), "review.png")
+	writePNG(t, filePath, 1, 1)
+	info, err := os.Stat(filePath)
+	if err != nil {
+		t.Fatalf("stat fixture: %v", err)
+	}
+	checksum, err := asc.ComputeFileChecksum(filePath, asc.ChecksumAlgorithmMD5)
+	if err != nil {
+		t.Fatalf("compute fixture checksum: %v", err)
+	}
+
 	originalTransport := http.DefaultTransport
 	t.Cleanup(func() { http.DefaultTransport = originalTransport })
-	requestCount := 0
+	var requests []string
 	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		requestCount++
-		t.Fatalf("unexpected request: %s %s", req.Method, req.URL.String())
-		return nil, nil
+		switch {
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/inAppPurchaseAppStoreReviewScreenshots/shot-1" && len(requests) == 0:
+			requests = append(requests, "GET old")
+			return jsonResponse(http.StatusOK, iapReviewScreenshotResponse("shot-1", true, "UPLOADING", info.Size()))
+		case req.Method == http.MethodPut && req.URL.Path == "/part":
+			requests = append(requests, "PUT")
+			return jsonResponse(http.StatusOK, "")
+		case req.Method == http.MethodPatch && req.URL.Path == "/v1/inAppPurchaseAppStoreReviewScreenshots/shot-1":
+			requests = append(requests, "PATCH old")
+			var payload asc.InAppPurchaseAppStoreReviewScreenshotUpdateRequest
+			if err := json.NewDecoder(req.Body).Decode(&payload); err != nil {
+				t.Fatalf("decode commit payload: %v", err)
+			}
+			if payload.Data.Attributes == nil || payload.Data.Attributes.Uploaded == nil || !*payload.Data.Attributes.Uploaded {
+				t.Fatalf("expected uploaded=true, got %#v", payload.Data.Attributes)
+			}
+			if payload.Data.Attributes.SourceFileChecksum == nil || *payload.Data.Attributes.SourceFileChecksum != checksum.Hash {
+				t.Fatalf("expected checksum %q, got %#v", checksum.Hash, payload.Data.Attributes.SourceFileChecksum)
+			}
+			return jsonResponse(http.StatusOK, iapReviewScreenshotResponse("shot-1", false, "UPLOADING", info.Size()))
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/inAppPurchaseAppStoreReviewScreenshots/shot-1" && len(requests) > 0:
+			requests = append(requests, "GET final")
+			return jsonResponse(http.StatusOK, iapReviewScreenshotResponse("shot-1", false, "COMPLETE", info.Size()))
+		default:
+			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.String())
+			return nil, nil
+		}
 	})
 
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-	var runErr error
-	_, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{
-			"iap", "review-screenshots", "update",
-			"--screenshot-id", "shot-1",
-			"--file", "./review.png",
-		}); err != nil {
-			t.Fatalf("parse error: %v", err)
+	stdout, stderr, runErr := runRootCommand(t, []string{
+		"iap", "review-screenshots", "update",
+		"--screenshot-id", "shot-1",
+		"--file", filePath,
+		"--output", "json",
+	})
+	if runErr != nil {
+		t.Fatalf("expected file update success, got %v", runErr)
+	}
+	if stderr != "" {
+		t.Fatalf("expected empty stderr, got %q", stderr)
+	}
+	if got, want := strings.Join(requests, ","), "GET old,PUT,PATCH old,GET final"; got != want {
+		t.Fatalf("request sequence = %q, want %q", got, want)
+	}
+	if strings.Contains(stdout, "deprecated") {
+		t.Fatalf("unexpected deprecation output: %q", stdout)
+	}
+}
+
+func TestIAPReviewScreenshotsUpdateRejectsInProgressFileSizeMismatch(t *testing.T) {
+	setupAuth(t)
+	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
+
+	filePath := filepath.Join(t.TempDir(), "review.png")
+	writePNG(t, filePath, 1, 1)
+	info, err := os.Stat(filePath)
+	if err != nil {
+		t.Fatalf("stat fixture: %v", err)
+	}
+
+	originalTransport := http.DefaultTransport
+	t.Cleanup(func() { http.DefaultTransport = originalTransport })
+	var requests []string
+	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		if req.Method != http.MethodGet || req.URL.Path != "/v1/inAppPurchaseAppStoreReviewScreenshots/shot-1" {
+			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.String())
 		}
-		runErr = root.Run(context.Background())
+		requests = append(requests, "GET old")
+		return jsonResponse(http.StatusOK, iapReviewScreenshotResponse("shot-1", true, "UPLOADING", info.Size()+1))
+	})
+
+	stdout, stderr, runErr := runRootCommand(t, []string{
+		"iap", "review-screenshots", "update",
+		"--screenshot-id", "shot-1",
+		"--file", filePath,
+		"--output", "json",
+	})
+	if runErr == nil || !strings.Contains(runErr.Error(), "does not match") {
+		t.Fatalf("expected file-size mismatch, got %v", runErr)
+	}
+	if stdout != "" || stderr != "" {
+		t.Fatalf("expected no command output, stdout=%q stderr=%q", stdout, stderr)
+	}
+	if got, want := strings.Join(requests, ","), "GET old"; got != want {
+		t.Fatalf("request sequence = %q, want %q", got, want)
+	}
+}
+
+func TestIAPReviewScreenshotsUpdateRejectsCompletedScreenshotReplacementAfterConfirmation(t *testing.T) {
+	setupAuth(t)
+	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
+
+	filePath := filepath.Join(t.TempDir(), "replacement.png")
+	writePNG(t, filePath, 1, 1)
+	info, err := os.Stat(filePath)
+	if err != nil {
+		t.Fatalf("stat fixture: %v", err)
+	}
+
+	originalTransport := http.DefaultTransport
+	t.Cleanup(func() { http.DefaultTransport = originalTransport })
+	var requests []string
+	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		if req.Method != http.MethodGet || req.URL.Path != "/v1/inAppPurchaseAppStoreReviewScreenshots/old-shot" {
+			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.String())
+		}
+		requests = append(requests, "GET old")
+		return jsonResponse(http.StatusOK, iapReviewScreenshotResponse("old-shot", false, "COMPLETE", info.Size()))
+	})
+
+	stdout, stderr, runErr := runRootCommand(t, []string{
+		"iap", "review-screenshots", "update",
+		"--screenshot-id", "old-shot",
+		"--file", filePath,
+		"--confirm",
+		"--output", "json",
+	})
+	if runErr == nil || !strings.Contains(runErr.Error(), "does not support replacing completed screenshot") {
+		t.Fatalf("expected unsupported replacement error, got %v", runErr)
+	}
+	if !strings.Contains(runErr.Error(), "delete --screenshot-id") || !strings.Contains(runErr.Error(), "--confirm") || !strings.Contains(runErr.Error(), "create --iap-id") {
+		t.Fatalf("expected manual delete-then-create guidance, got %v", runErr)
+	}
+	if stdout != "" || stderr != "" {
+		t.Fatalf("expected no command output, stdout=%q stderr=%q", stdout, stderr)
+	}
+	if got, want := strings.Join(requests, ","), "GET old"; got != want {
+		t.Fatalf("request sequence = %q, want %q", got, want)
+	}
+}
+
+func TestIAPReviewScreenshotsUpdateRequiresConfirmationBeforeReplacingCompletedScreenshot(t *testing.T) {
+	setupAuth(t)
+	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
+
+	filePath := filepath.Join(t.TempDir(), "replacement.png")
+	writePNG(t, filePath, 1, 1)
+
+	originalTransport := http.DefaultTransport
+	t.Cleanup(func() { http.DefaultTransport = originalTransport })
+	var requests []string
+	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		if req.Method != http.MethodGet || req.URL.Path != "/v1/inAppPurchaseAppStoreReviewScreenshots/old-shot" {
+			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.String())
+		}
+		requests = append(requests, "GET old")
+		return jsonResponse(http.StatusOK, iapReviewScreenshotResponse("old-shot", false, "COMPLETE", 1))
+	})
+
+	stdout, stderr, runErr := runRootCommand(t, []string{
+		"iap", "review-screenshots", "update",
+		"--screenshot-id", "old-shot",
+		"--file", filePath,
+		"--output", "json",
 	})
 	if runErr == nil || !errors.Is(runErr, flag.ErrHelp) {
-		t.Fatalf("expected usage error, got %v", runErr)
+		t.Fatalf("expected confirmation usage error, got %v", runErr)
 	}
-	if !strings.Contains(stderr, "Warning: `--file` is deprecated and unsupported") || !strings.Contains(stderr, "Error: `--file` is unsupported") {
-		t.Fatalf("expected deprecation and migration diagnostics, got %q", stderr)
+	if !strings.Contains(stderr, "--confirm is required") {
+		t.Fatalf("expected confirmation diagnostic, got %q", stderr)
 	}
-	if requestCount != 0 {
-		t.Fatalf("expected no requests, got %d", requestCount)
+	if !strings.Contains(stderr, "delete --screenshot-id") || !strings.Contains(stderr, "create --iap-id") {
+		t.Fatalf("expected manual delete-then-create guidance, got %q", stderr)
 	}
+	if stdout != "" {
+		t.Fatalf("expected empty stdout, got %q", stdout)
+	}
+	if got, want := strings.Join(requests, ","), "GET old"; got != want {
+		t.Fatalf("request sequence = %q, want %q", got, want)
+	}
+}
+
+func iapReviewScreenshotResponse(id string, hasUploadOperations bool, state string, fileSize int64) string {
+	attributes := fmt.Sprintf(`"fileSize":%d,"assetDeliveryState":{"state":%q}`, fileSize, state)
+	if hasUploadOperations {
+		attributes += fmt.Sprintf(`,"uploadOperations":[{"method":"PUT","url":"https://uploads.example/part","offset":0,"length":%d}]`, fileSize)
+	}
+	relationships := `,"relationships":{"inAppPurchaseV2":{"data":{"type":"inAppPurchases","id":"iap-1"}}}`
+	return fmt.Sprintf(`{"data":{"type":"inAppPurchaseAppStoreReviewScreenshots","id":%q,"attributes":{%s}%s},"links":{}}`, id, attributes, relationships)
 }
 
 func TestIAPReviewScreenshotsUpdateRejectsInvalidUploadedFlag(t *testing.T) {

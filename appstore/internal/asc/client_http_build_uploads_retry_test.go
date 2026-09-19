@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -35,14 +36,14 @@ func newBuildUploadsNotFoundServer(t *testing.T, failures int, attempts *atomic.
 	return server
 }
 
-func TestClientDo_RetriesIntermittentNotFoundOnAppBuildUploads(t *testing.T) {
+func TestClientDo_RetriesIntermittentNotFoundOnBuildUploads(t *testing.T) {
 	setFastRetryEnv(t, "3")
 
 	var attempts atomic.Int32
 	server := newBuildUploadsNotFoundServer(t, 2, &attempts)
 	client := newMutationRetryTestClient(t, server.Client())
 
-	data, err := client.do(context.Background(), http.MethodGet, server.URL+"/v1/apps/6759231657/buildUploads?limit=1", nil)
+	data, err := client.do(context.Background(), http.MethodGet, server.URL+"/v1/buildUploads/bu-1", nil)
 	if err != nil {
 		t.Fatalf("do() error: %v", err)
 	}
@@ -226,34 +227,227 @@ func TestClientDo_DoesNotRetryGenuinelyMissingBuildUploadResources(t *testing.T)
 	}
 }
 
-// The app-scoped view has only one resource that can be missing, so any
-// NOT_FOUND there is the flake even when Apple omits the detail.
-func TestClientDo_RetriesAppBuildUploadsNotFoundWithoutDetail(t *testing.T) {
+func TestClientDo_DoesNotRetryAppBuildUploadsNotFound(t *testing.T) {
 	setFastRetryEnv(t, "3")
 
-	for _, path := range []string{
-		"/v1/apps/6759231657/buildUploads",
-		"/v1/apps/6759231657/relationships/buildUploads",
+	for _, tc := range []struct {
+		path   string
+		detail string
+	}{
+		{path: "/v1/apps/6759231657/buildUploads"},
+		{path: "/v1/apps/6759231657/buildUploads", detail: "There is no resource of type 'apps' with id '6759231657'"},
+		{path: "/v1/apps/6759231657/relationships/buildUploads"},
+		{path: "/v1/apps/6759231657/relationships/buildUploads", detail: "There is no resource of type 'apps' with id '6759231657'"},
 	} {
-		t.Run(path, func(t *testing.T) {
+		t.Run(tc.path+"|"+tc.detail, func(t *testing.T) {
 			var attempts atomic.Int32
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				attempts.Add(1)
 				w.Header().Set("Content-Type", "application/json")
-				if attempts.Add(1) == 1 {
-					w.WriteHeader(http.StatusNotFound)
-					_, _ = io.WriteString(w, `{"errors":[{"status":"404","code":"NOT_FOUND","title":"The specified resource does not exist"}]}`)
-					return
-				}
-				_, _ = io.WriteString(w, `{"data":[]}`)
+				w.WriteHeader(http.StatusNotFound)
+				_, _ = io.WriteString(w, `{"errors":[{"status":"404","code":"NOT_FOUND","title":"The specified resource does not exist","detail":"`+tc.detail+`"}]}`)
 			}))
 			t.Cleanup(server.Close)
 			client := newMutationRetryTestClient(t, server.Client())
 
-			if _, err := client.do(context.Background(), http.MethodGet, server.URL+path, nil); err != nil {
-				t.Fatalf("do() error: %v", err)
+			_, err := client.do(context.Background(), http.MethodGet, server.URL+tc.path, nil)
+			if err == nil {
+				t.Fatal("expected 404 error")
 			}
-			if got := attempts.Load(); got != 2 {
-				t.Fatalf("expected 2 attempts (404, 200), got %d", got)
+			if got := attempts.Load(); got != 1 {
+				t.Fatalf("expected a single attempt for an app-scoped 404, got %d", got)
+			}
+			if IsRetryable(err) || IsRetryBudgetExhausted(err) {
+				t.Fatalf("expected a terminal app-scoped 404, got %v", err)
+			}
+			if !IsNotFound(err) {
+				t.Fatalf("expected not-found error, got %v", err)
+			}
+		})
+	}
+}
+
+func TestGetBuildUploadsDoesNotRetryWhenAppIsMissing(t *testing.T) {
+	setFastRetryEnv(t, "3")
+
+	var paths []string
+	client := newTestClient(
+		t, func(req *http.Request) {
+			paths = append(paths, req.URL.Path)
+		},
+		jsonResponse(http.StatusNotFound, buildUploadsFlakyNotFoundBody),
+		jsonResponse(http.StatusNotFound, buildUploadsFlakyNotFoundBody),
+	)
+
+	_, err := client.GetBuildUploads(context.Background(), "6759231657")
+	if err == nil {
+		t.Fatal("expected missing-app error")
+	}
+	if !IsNotFound(err) {
+		t.Fatalf("expected not-found error, got %v", err)
+	}
+	if IsRetryable(err) || IsRetryBudgetExhausted(err) {
+		t.Fatalf("expected terminal missing-app error, got %v", err)
+	}
+	if want := []string{"/v1/apps/6759231657/buildUploads", "/v1/apps/6759231657"}; !slices.Equal(paths, want) {
+		t.Fatalf("paths = %v, want %v", paths, want)
+	}
+}
+
+func TestGetBuildUploadsRetriesWhenAppVerificationFailsTransiently(t *testing.T) {
+	setFastRetryEnv(t, "3")
+
+	var paths []string
+	client := newTestClient(
+		t, func(req *http.Request) {
+			paths = append(paths, req.URL.Path)
+		},
+		jsonResponse(http.StatusNotFound, buildUploadsFlakyNotFoundBody),
+		jsonResponse(http.StatusInternalServerError, `{"errors":[{"status":"500","code":"UNEXPECTED_ERROR","title":"Temporary failure"}]}`),
+		jsonResponse(http.StatusNotFound, buildUploadsFlakyNotFoundBody),
+		jsonResponse(http.StatusOK, `{"data":{"type":"apps","id":"6759231657"}}`),
+		jsonResponse(http.StatusOK, `{"data":[{"type":"buildUploads","id":"bu-1"}]}`),
+	)
+
+	response, err := client.GetBuildUploads(context.Background(), "6759231657")
+	if err != nil {
+		t.Fatalf("GetBuildUploads() error: %v", err)
+	}
+	if len(response.Data) != 1 || response.Data[0].ID != "bu-1" {
+		t.Fatalf("response data = %#v, want bu-1", response.Data)
+	}
+	if want := []string{
+		"/v1/apps/6759231657/buildUploads",
+		"/v1/apps/6759231657",
+		"/v1/apps/6759231657/buildUploads",
+		"/v1/apps/6759231657",
+		"/v1/apps/6759231657/buildUploads",
+	}; !slices.Equal(paths, want) {
+		t.Fatalf("paths = %v, want %v", paths, want)
+	}
+}
+
+func TestGetBuildUploadsMaxRetriesZeroSkipsAppVerification(t *testing.T) {
+	setFastRetryEnv(t, "0")
+
+	var paths []string
+	client := newTestClient(t, func(req *http.Request) {
+		paths = append(paths, req.URL.Path)
+	}, jsonResponse(http.StatusNotFound, buildUploadsFlakyNotFoundBody))
+
+	_, err := client.GetBuildUploads(context.Background(), "6759231657")
+	if err == nil {
+		t.Fatal("expected build-uploads error")
+	}
+	if !IsNotFound(err) || IsRetryable(err) || IsRetryBudgetExhausted(err) {
+		t.Fatalf("expected original terminal 404, got %v", err)
+	}
+	if want := []string{"/v1/apps/6759231657/buildUploads"}; !slices.Equal(paths, want) {
+		t.Fatalf("paths = %v, want %v", paths, want)
+	}
+}
+
+func TestGetAppBuildUploadsRelationshipsRetriesWhenAppExists(t *testing.T) {
+	setFastRetryEnv(t, "3")
+
+	var paths []string
+	client := newTestClient(
+		t, func(req *http.Request) {
+			paths = append(paths, req.URL.Path)
+		},
+		jsonResponse(http.StatusNotFound, buildUploadsFlakyNotFoundBody),
+		jsonResponse(http.StatusOK, `{"data":{"type":"apps","id":"6759231657"}}`),
+		jsonResponse(http.StatusOK, `{"data":[{"type":"buildUploads","id":"bu-1"}]}`),
+	)
+
+	response, err := client.GetAppBuildUploadsRelationships(context.Background(), "6759231657")
+	if err != nil {
+		t.Fatalf("GetAppBuildUploadsRelationships() error: %v", err)
+	}
+	if len(response.Data) != 1 || response.Data[0].ID != "bu-1" {
+		t.Fatalf("response data = %#v, want bu-1", response.Data)
+	}
+	if want := []string{
+		"/v1/apps/6759231657/relationships/buildUploads",
+		"/v1/apps/6759231657",
+		"/v1/apps/6759231657/relationships/buildUploads",
+	}; !slices.Equal(paths, want) {
+		t.Fatalf("paths = %v, want %v", paths, want)
+	}
+}
+
+func TestGetBuildUploadsNextURLOnlyRetriesWhenAppExists(t *testing.T) {
+	setFastRetryEnv(t, "3")
+
+	var paths []string
+	client := newTestClient(
+		t, func(req *http.Request) {
+			paths = append(paths, req.URL.Path)
+		},
+		jsonResponse(http.StatusNotFound, buildUploadsFlakyNotFoundBody),
+		jsonResponse(http.StatusOK, `{"data":{"type":"apps","id":"6759231657"}}`),
+		jsonResponse(http.StatusOK, `{"data":[{"type":"buildUploads","id":"bu-2"}]}`),
+	)
+
+	response, err := client.GetBuildUploads(
+		context.Background(),
+		"",
+		WithBuildUploadsNextURL("https://api.appstoreconnect.apple.com/v1/apps/6759231657/buildUploads?cursor=page-2"),
+	)
+	if err != nil {
+		t.Fatalf("GetBuildUploads() error: %v", err)
+	}
+	if len(response.Data) != 1 || response.Data[0].ID != "bu-2" {
+		t.Fatalf("response data = %#v, want bu-2", response.Data)
+	}
+	if want := []string{
+		"/v1/apps/6759231657/buildUploads",
+		"/v1/apps/6759231657",
+		"/v1/apps/6759231657/buildUploads",
+	}; !slices.Equal(paths, want) {
+		t.Fatalf("paths = %v, want %v", paths, want)
+	}
+}
+
+func TestGetBuildUploadsTopLevelNextURLDoesNotVerifyCallerApp(t *testing.T) {
+	setFastRetryEnv(t, "3")
+
+	var paths []string
+	client := newTestClient(t, func(req *http.Request) {
+		paths = append(paths, req.URL.Path)
+	}, jsonResponse(http.StatusNotFound, `{"errors":[{"status":"404","code":"NOT_FOUND","title":"The specified resource does not exist","detail":"There is no resource of type 'buildUploads' with id 'bu-missing'"}]}`))
+
+	_, err := client.GetBuildUploads(
+		context.Background(),
+		"6759231657",
+		WithBuildUploadsNextURL("https://api.appstoreconnect.apple.com/v1/buildUploads/bu-missing"),
+	)
+	if err == nil {
+		t.Fatal("expected missing-upload error")
+	}
+	if !IsNotFound(err) || IsRetryable(err) || IsRetryBudgetExhausted(err) {
+		t.Fatalf("expected terminal missing-upload error, got %v", err)
+	}
+	if want := []string{"/v1/buildUploads/bu-missing"}; !slices.Equal(paths, want) {
+		t.Fatalf("paths = %v, want %v", paths, want)
+	}
+}
+
+func TestAppIDFromBuildUploadsPath(t *testing.T) {
+	for _, tc := range []struct {
+		path string
+		want string
+	}{
+		{"/v1/apps/6759231657/buildUploads", "6759231657"},
+		{"/v1/apps/6759231657/relationships/buildUploads", "6759231657"},
+		{"https://api.appstoreconnect.apple.com/v1/apps/6759231657/buildUploads?cursor=page-2", "6759231657"},
+		{"/v1/apps/6759231657/buildUploads/extra", ""},
+		{"/v1/apps/6759231657/builds", ""},
+		{"/v1/buildUploads/bu-1", ""},
+	} {
+		t.Run(tc.path, func(t *testing.T) {
+			if got := appIDFromBuildUploadsPath(tc.path); got != tc.want {
+				t.Fatalf("appIDFromBuildUploadsPath(%q) = %q, want %q", tc.path, got, tc.want)
 			}
 		})
 	}
@@ -297,7 +491,7 @@ func TestClientDo_BuildUploadsNotFoundRetryHonorsContextCancellation(t *testing.
 	}()
 
 	start := time.Now()
-	_, err := client.do(ctx, http.MethodGet, server.URL+"/v1/apps/6759231657/buildUploads", nil)
+	_, err := client.do(ctx, http.MethodGet, server.URL+"/v1/buildUploads/bu-1", nil)
 	if err == nil {
 		t.Fatal("expected error after cancellation")
 	}
@@ -322,7 +516,7 @@ func TestClientDo_RespectsMaxRetriesZeroForBuildUploadsNotFound(t *testing.T) {
 	server := newBuildUploadsNotFoundServer(t, 4, &attempts)
 	client := newMutationRetryTestClient(t, server.Client())
 
-	_, err := client.do(context.Background(), http.MethodGet, server.URL+"/v1/apps/6759231657/buildUploads", nil)
+	_, err := client.do(context.Background(), http.MethodGet, server.URL+"/v1/buildUploads/bu-1", nil)
 	if err == nil {
 		t.Fatal("expected 404 error")
 	}
@@ -345,10 +539,10 @@ func TestIsBuildUploadsPath(t *testing.T) {
 		{"/v1/buildUploads/bu-1/relationships/buildUploadFiles", true},
 		{"/v1/buildUploadFiles", true},
 		{"/v1/buildUploadFiles/f-1", true},
-		{"/v1/apps/6759231657/buildUploads", true},
-		{"/v1/apps/6759231657/buildUploads?filter[cfBundleVersion]=22", true},
-		{"/v1/apps/6759231657/relationships/buildUploads", true},
-		{"https://api.appstoreconnect.apple.com/v1/apps/6759231657/buildUploads?cursor=abc", true},
+		{"/v1/apps/6759231657/buildUploads", false},
+		{"/v1/apps/6759231657/buildUploads?filter[cfBundleVersion]=22", false},
+		{"/v1/apps/6759231657/relationships/buildUploads", false},
+		{"https://api.appstoreconnect.apple.com/v1/apps/6759231657/buildUploads?cursor=abc", false},
 		{"https://api.appstoreconnect.apple.com/v1/buildUploads/bu-1", true},
 		{"", false},
 		{"/v1/apps/6759231657", false},

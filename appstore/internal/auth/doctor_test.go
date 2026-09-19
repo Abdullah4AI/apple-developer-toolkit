@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -34,6 +35,102 @@ func TestDoctorConfigPermissionsWarning(t *testing.T) {
 	}
 	if info.Mode().Perm()&0o077 != 0 {
 		t.Fatalf("expected config permissions fixed to 0600, got %#o", info.Mode().Perm())
+	}
+}
+
+func TestDoctorConfigPathRejectsSymlinkWithoutUnsafeRecommendation(t *testing.T) {
+	t.Setenv("ASC_BYPASS_KEYCHAIN", "1")
+
+	tempDir := t.TempDir()
+	targetPath := filepath.Join(tempDir, "config-target.json")
+	if err := os.WriteFile(targetPath, []byte("{}"), 0o644); err != nil {
+		t.Fatalf("write config target error: %v", err)
+	}
+	configPath := filepath.Join(tempDir, "config.json")
+	if err := os.Symlink(targetPath, configPath); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+	t.Setenv("ASC_CONFIG_PATH", configPath)
+
+	report := Doctor(DoctorOptions{Fix: true})
+	section := findDoctorSection(t, report, "Storage")
+	if !sectionHasStatus(section, DoctorFail, "symbolic link") {
+		t.Fatalf("expected config symlink rejection, got %#v", section.Checks)
+	}
+	for _, check := range section.Checks {
+		if strings.Contains(check.Recommendation, "chmod") || check.FixApplied {
+			t.Fatalf("unexpected symlink remediation: %#v", check)
+		}
+	}
+	info, err := os.Stat(targetPath)
+	if err != nil {
+		t.Fatalf("stat config target error: %v", err)
+	}
+	if got := info.Mode().Perm(); got != 0o644 {
+		t.Fatalf("config target mode = %#o, want 0644", got)
+	}
+}
+
+func TestDoctorConfigPathRejectsParentSymlinkWithoutUnsafeRecommendation(t *testing.T) {
+	t.Setenv("ASC_BYPASS_KEYCHAIN", "1")
+
+	tempDir := t.TempDir()
+	targetDir := filepath.Join(tempDir, "config-target")
+	if err := os.Mkdir(targetDir, 0o700); err != nil {
+		t.Fatalf("make config target dir error: %v", err)
+	}
+	targetPath := filepath.Join(targetDir, "config.json")
+	if err := os.WriteFile(targetPath, []byte("{}"), 0o644); err != nil {
+		t.Fatalf("write config target error: %v", err)
+	}
+	linkDir := filepath.Join(tempDir, "config-link")
+	if err := os.Symlink(targetDir, linkDir); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+	t.Setenv("ASC_CONFIG_PATH", filepath.Join(linkDir, "config.json"))
+
+	report := Doctor(DoctorOptions{Fix: true})
+	section := findDoctorSection(t, report, "Storage")
+	if !sectionHasStatus(section, DoctorFail, "symlink") {
+		t.Fatalf("expected config parent symlink rejection, got %#v", section.Checks)
+	}
+	for _, check := range section.Checks {
+		if strings.Contains(check.Recommendation, "chmod") || check.FixApplied {
+			t.Fatalf("unexpected symlink remediation: %#v", check)
+		}
+	}
+	info, err := os.Stat(targetPath)
+	if err != nil {
+		t.Fatalf("stat config target error: %v", err)
+	}
+	if got := info.Mode().Perm(); got != 0o644 {
+		t.Fatalf("config target mode = %#o, want 0644", got)
+	}
+}
+
+func TestDoctorConfigPathRejectsSpecialFileWithoutUnsafeRecommendation(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("/dev/null is not a POSIX special file on Windows")
+	}
+	info, err := os.Lstat(os.DevNull)
+	if err != nil {
+		t.Fatalf("Lstat(%q) error: %v", os.DevNull, err)
+	}
+	if info.Mode().IsRegular() {
+		t.Skipf("%s is a regular file on this platform", os.DevNull)
+	}
+
+	t.Setenv("ASC_BYPASS_KEYCHAIN", "1")
+	t.Setenv("ASC_CONFIG_PATH", os.DevNull)
+	report := Doctor(DoctorOptions{Fix: true})
+	section := findDoctorSection(t, report, "Storage")
+	if !sectionHasStatus(section, DoctorFail, "not a regular file") {
+		t.Fatalf("expected config special-file rejection, got %#v", section.Checks)
+	}
+	for _, check := range section.Checks {
+		if strings.Contains(check.Recommendation, "chmod") || check.FixApplied {
+			t.Fatalf("unexpected special-file remediation: %#v", check)
+		}
 	}
 }
 
@@ -882,6 +979,66 @@ func TestDoctorPrivateKeyPathRejectsSpecialFiles(t *testing.T) {
 	check := inspectPrivateKeyPath(os.DevNull, DoctorOptions{})
 	if check.Status != DoctorFail || !strings.Contains(check.Message, "not a regular file") {
 		t.Fatalf("expected special-file rejection, got %#v", check)
+	}
+}
+
+func TestDoctorPrivateKeyPathRejectsSymlinkWithoutUnsafeRecommendation(t *testing.T) {
+	tempDir := t.TempDir()
+	targetPath := filepath.Join(tempDir, "AuthKey-target.p8")
+	writeECDSAPEM(t, targetPath, 0o600, true)
+	if err := os.Chmod(targetPath, 0o644); err != nil {
+		t.Fatalf("chmod key target error: %v", err)
+	}
+	keyPath := filepath.Join(tempDir, "AuthKey.p8")
+	if err := os.Symlink(targetPath, keyPath); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+
+	check := inspectPrivateKeyPath(keyPath, DoctorOptions{Fix: true})
+	if check.Status != DoctorFail || !strings.Contains(check.Message, "symbolic link") {
+		t.Fatalf("expected private key symlink rejection, got %#v", check)
+	}
+	if strings.Contains(check.Recommendation, "chmod") || check.FixApplied {
+		t.Fatalf("unexpected symlink remediation: %#v", check)
+	}
+	info, err := os.Stat(targetPath)
+	if err != nil {
+		t.Fatalf("stat key target error: %v", err)
+	}
+	if got := info.Mode().Perm(); got != 0o644 {
+		t.Fatalf("key target mode = %#o, want 0644", got)
+	}
+}
+
+func TestDoctorPrivateKeyPathRejectsParentSymlinkWithoutUnsafeRecommendation(t *testing.T) {
+	tempDir := t.TempDir()
+	targetDir := filepath.Join(tempDir, "key-target")
+	if err := os.Mkdir(targetDir, 0o700); err != nil {
+		t.Fatalf("make key target dir error: %v", err)
+	}
+	targetPath := filepath.Join(targetDir, "AuthKey.p8")
+	writeECDSAPEM(t, targetPath, 0o600, true)
+	if err := os.Chmod(targetPath, 0o644); err != nil {
+		t.Fatalf("chmod key target error: %v", err)
+	}
+	linkDir := filepath.Join(tempDir, "key-link")
+	if err := os.Symlink(targetDir, linkDir); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+
+	check := inspectPrivateKeyPath(filepath.Join(linkDir, "AuthKey.p8"), DoctorOptions{Fix: true})
+	if check.Status != DoctorFail || !strings.Contains(check.Message, "symlink") {
+		t.Fatalf("expected private key parent symlink rejection, got %#v", check)
+	}
+	if strings.Contains(check.Recommendation, "chmod") || check.FixApplied {
+		t.Fatalf("unexpected symlink remediation: %#v", check)
+	}
+	info, err := os.Stat(targetPath)
+	if err != nil {
+		t.Fatalf("stat key target error: %v", err)
+	}
+	if got := info.Mode().Perm(); got != 0o644 {
+		t.Fatalf("key target mode = %#o, want 0644", got)
 	}
 }
 

@@ -52,9 +52,11 @@ any later observation, cleanup, or durability error so the caller can target
 only that inode during recovery. If retaining the identity fails, the operation
 returns a nil identity with `ErrFilePublicationUncertain`;
 callers must then preserve transaction evidence and must not perform a
-path-based rollback. Capture and retained publication data are bounded at 8 MiB,
-matching the existing Xcode signing-plan input limit; `CaptureFileLimited` can
-choose a smaller bound and refuses oversize files with
+path-based rollback. Default capture, identity-backed mutation, and retained
+publication data are bounded at 8 MiB, matching the existing Xcode signing-plan
+input limit. `CaptureFileLimited` can explicitly capture up to 16 MiB for a
+caller with a larger bounded input contract without widening mutation or
+publication limits, and refuses oversize files with
 `ErrFileIdentityDataTooLarge`. Oversize identity-backed replacements fail
 before mutation. Capture and verification use repeated bounded reads plus
 descriptor and rooted-entry observations so an overlapping in-place write,

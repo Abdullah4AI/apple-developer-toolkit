@@ -8,6 +8,7 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -387,6 +388,152 @@ func TestAccumulateReviewSubmissionItemsIgnoresUnrelatedSubmissionItems(t *testi
 	}
 }
 
+func TestSummarizeReviewSubmissionItemsStopsOnRepeatedNextURL(t *testing.T) {
+	setupReviewTestAuth(t)
+
+	requestCount := 0
+	keyPath := filepath.Join(t.TempDir(), "AuthKey.p8")
+	if err := os.WriteFile(keyPath, []byte(os.Getenv("ASC_PRIVATE_KEY")), 0o600); err != nil {
+		t.Fatalf("write test key: %v", err)
+	}
+	client, err := asc.NewClientWithHTTPClient(
+		"KEY_ID",
+		"ISSUER_ID",
+		keyPath,
+		&http.Client{Transport: reviewRoundTripFunc(func(req *http.Request) (*http.Response, error) {
+			requestCount++
+			if requestCount > 2 {
+				return nil, fmt.Errorf("unexpected request after repeated pagination URL: %d", requestCount)
+			}
+
+			return reviewJSONResponse(http.StatusOK, fmt.Sprintf(`{
+				"data":[{
+					"type":"reviewSubmissionItems",
+					"id":"item-%d",
+					"attributes":{"state":"REMOVED"},
+					"relationships":{"appStoreVersion":{"data":{"type":"appStoreVersions","id":"ver-1"}}}
+				}],
+				"links":{"self":"/v1/reviewSubmissions/submission-1/items","next":"/v1/reviewSubmissions/submission-1/items?page=2"}
+			}`, requestCount))
+		})},
+	)
+	if err != nil {
+		t.Fatalf("create test client: %v", err)
+	}
+
+	_, err = summarizeReviewSubmissionItems(context.Background(), client, "submission-1", "ver-1")
+	if !errors.Is(err, asc.ErrRepeatedPaginationURL) {
+		t.Fatalf("expected ErrRepeatedPaginationURL, got %v", err)
+	}
+	if requestCount != 2 {
+		t.Fatalf("expected one initial request and one continuation request, got %d", requestCount)
+	}
+}
+
+func TestSummarizeReviewSubmissionItemsTreatsWhitespaceNextURLAsEnd(t *testing.T) {
+	setupReviewTestAuth(t)
+	t.Setenv("ASC_MAX_RETRIES", "0")
+
+	requestCount := 0
+	keyPath := filepath.Join(t.TempDir(), "AuthKey.p8")
+	if err := os.WriteFile(keyPath, []byte(os.Getenv("ASC_PRIVATE_KEY")), 0o600); err != nil {
+		t.Fatalf("write test key: %v", err)
+	}
+	client, err := asc.NewClientWithHTTPClient(
+		"KEY_ID",
+		"ISSUER_ID",
+		keyPath,
+		&http.Client{Transport: reviewRoundTripFunc(func(req *http.Request) (*http.Response, error) {
+			requestCount++
+			if requestCount > 1 {
+				return nil, fmt.Errorf("unexpected request for whitespace-only next URL")
+			}
+			return reviewJSONResponse(http.StatusOK, `{
+				"data":[{
+					"type":"reviewSubmissionItems",
+					"id":"item-1",
+					"attributes":{"state":"REMOVED"},
+					"relationships":{"appStoreVersion":{"data":{"type":"appStoreVersions","id":"ver-1"}}}
+				}],
+				"links":{"self":"/v1/reviewSubmissions/submission-1/items","next":" \t\n "}
+			}`)
+		})},
+	)
+	if err != nil {
+		t.Fatalf("create test client: %v", err)
+	}
+
+	summary, err := summarizeReviewSubmissionItems(context.Background(), client, "submission-1", "ver-1")
+	if err != nil {
+		t.Fatalf("summarizeReviewSubmissionItems() error = %v", err)
+	}
+	if requestCount != 1 {
+		t.Fatalf("request count = %d, want 1", requestCount)
+	}
+	if summary.TotalCount != 1 || summary.RemovedCount != 1 {
+		t.Fatalf("summary = %+v, want one removed item", summary)
+	}
+}
+
+func TestSummarizeReviewSubmissionItemsTrimsPaddedNextURL(t *testing.T) {
+	setupReviewTestAuth(t)
+	t.Setenv("ASC_MAX_RETRIES", "0")
+
+	requestCount := 0
+	keyPath := filepath.Join(t.TempDir(), "AuthKey.p8")
+	if err := os.WriteFile(keyPath, []byte(os.Getenv("ASC_PRIVATE_KEY")), 0o600); err != nil {
+		t.Fatalf("write test key: %v", err)
+	}
+	client, err := asc.NewClientWithHTTPClient(
+		"KEY_ID",
+		"ISSUER_ID",
+		keyPath,
+		&http.Client{Transport: reviewRoundTripFunc(func(req *http.Request) (*http.Response, error) {
+			requestCount++
+			if req.URL.Path != "/v1/reviewSubmissions/submission-1/items" {
+				return nil, fmt.Errorf("unexpected request path %q", req.URL.Path)
+			}
+			if requestCount == 1 {
+				return reviewJSONResponse(http.StatusOK, `{
+					"data":[{
+						"type":"reviewSubmissionItems",
+						"id":"item-1",
+						"attributes":{"state":"REMOVED"},
+						"relationships":{"appStoreVersion":{"data":{"type":"appStoreVersions","id":"ver-1"}}}
+					}],
+					"links":{"self":"/v1/reviewSubmissions/submission-1/items","next":" \t/v1/reviewSubmissions/submission-1/items?page=2 \n "}
+				}`)
+			}
+			if req.URL.Query().Get("page") != "2" {
+				return nil, fmt.Errorf("continuation query = %q, want page=2", req.URL.RawQuery)
+			}
+			return reviewJSONResponse(http.StatusOK, `{
+				"data":[{
+					"type":"reviewSubmissionItems",
+					"id":"item-2",
+					"attributes":{"state":"APPROVED"},
+					"relationships":{"appStoreVersion":{"data":{"type":"appStoreVersions","id":"ver-1"}}}
+				}],
+				"links":{"self":"/v1/reviewSubmissions/submission-1/items","next":""}
+			}`)
+		})},
+	)
+	if err != nil {
+		t.Fatalf("create test client: %v", err)
+	}
+
+	summary, err := summarizeReviewSubmissionItems(context.Background(), client, "submission-1", "ver-1")
+	if err != nil {
+		t.Fatalf("summarizeReviewSubmissionItems() error = %v", err)
+	}
+	if requestCount != 2 {
+		t.Fatalf("request count = %d, want 2", requestCount)
+	}
+	if summary.TotalCount != 2 || summary.RemovedCount != 1 || summary.ActiveCount != 1 {
+		t.Fatalf("summary = %+v, want one removed and one active item", summary)
+	}
+}
+
 func TestSelectRelevantReviewSubmissionPrefersActiveSubmissionWithoutSubmittedDate(t *testing.T) {
 	submissions := []asc.ReviewSubmissionResource{
 		{
@@ -477,7 +624,7 @@ func TestReviewDoctorUsesTimedContextForReadinessReport(t *testing.T) {
 				"errors":[{"status":"404","code":"NOT_FOUND","title":"Not Found"}]
 			}`)
 		case "/v1/apps/123456789/reviewSubmissions":
-			return reviewJSONResponse(http.StatusOK, `{"data":[],"links":{"next":""}}`)
+			return reviewJSONResponse(http.StatusOK, `{"data":[],"links":{"self":"/v1/apps/123456789/reviewSubmissions","next":""}}`)
 		default:
 			return nil, fmt.Errorf("unexpected request: %s %s", req.Method, req.URL.String())
 		}

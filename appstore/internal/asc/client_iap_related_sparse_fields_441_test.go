@@ -168,3 +168,23 @@ func TestIAPRelatedSparseFieldsExplicitIncludesAreDeduplicated441(t *testing.T) 
 		t.Fatalf("GetInAppPurchaseContent() error: %v", err)
 	}
 }
+
+func TestIAPReviewScreenshotFieldsArePropagated441(t *testing.T) {
+	client := newTestClient(t, func(req *http.Request) {
+		if req.Method != http.MethodGet {
+			t.Fatalf("method = %s, want GET", req.Method)
+		}
+		if got := req.URL.Query().Get("fields[inAppPurchaseAppStoreReviewScreenshots]"); got != "fileSize,uploadOperations,assetDeliveryState,inAppPurchaseV2" {
+			t.Fatalf("screenshot fields = %q, want fileSize,uploadOperations,assetDeliveryState,inAppPurchaseV2", got)
+		}
+	}, jsonResponse(http.StatusOK, `{"data":{"type":"inAppPurchaseAppStoreReviewScreenshots","id":"shot-1"}}`))
+
+	_, err := client.GetInAppPurchaseAppStoreReviewScreenshot(
+		context.Background(),
+		"shot-1",
+		WithIAPReviewScreenshotFields([]string{"fileSize", "uploadOperations", "assetDeliveryState", "inAppPurchaseV2"}),
+	)
+	if err != nil {
+		t.Fatalf("GetInAppPurchaseAppStoreReviewScreenshot() error: %v", err)
+	}
+}

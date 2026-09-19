@@ -399,7 +399,11 @@ func TestListEndpoints_UseNextURL(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			response := jsonResponse(http.StatusOK, `{"data":[]}`)
+			body := `{"data":[]}`
+			if tt.name == "ListReviewSubmissions" {
+				body = `{"data":[],"links":{"self":"https://api.appstoreconnect.apple.com/v1/reviewSubmissions"}}`
+			}
+			response := jsonResponse(http.StatusOK, body)
 			client := newTestClient(t, func(req *http.Request) {
 				if req.URL.String() != tt.next {
 					t.Fatalf("expected next URL %q, got %q", tt.next, req.URL.String())
@@ -12514,7 +12518,7 @@ func TestListBetaBuildLocalizationsGlobal_WithBuildFilter(t *testing.T) {
 }
 
 func TestListReviewSubmissionsGlobal_UsesV1ReviewSubmissionsPath(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[{"type":"reviewSubmissions","id":"rs-1","attributes":{"platform":"IOS","state":"READY_FOR_REVIEW"}}]}`)
+	response := jsonResponse(http.StatusOK, `{"data":[{"type":"reviewSubmissions","id":"rs-1","attributes":{"platform":"IOS","state":"READY_FOR_REVIEW"}}],"links":{"self":"https://api.appstoreconnect.apple.com/v1/reviewSubmissions"}}`)
 	client := newTestClient(t, func(req *http.Request) {
 		if req.Method != http.MethodGet {
 			t.Fatalf("expected GET, got %s", req.Method)
@@ -12542,7 +12546,7 @@ func TestListReviewSubmissionsGlobal_UsesV1ReviewSubmissionsPath(t *testing.T) {
 }
 
 func TestListReviewSubmissionsGlobal_WithFilters(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[]}`)
+	response := jsonResponse(http.StatusOK, `{"data":[],"links":{"self":"https://api.appstoreconnect.apple.com/v1/reviewSubmissions"}}`)
 	client := newTestClient(t, func(req *http.Request) {
 		if req.URL.Path != "/v1/reviewSubmissions" {
 			t.Fatalf("expected path /v1/reviewSubmissions, got %s", req.URL.Path)

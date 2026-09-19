@@ -20,7 +20,17 @@ func ResolveAppStoreVersionIDAndState(ctx context.Context, client *asc.Client, a
 	if err != nil {
 		return "", "", err
 	}
-	if resp == nil || len(resp.Data) == 0 {
+	if resp == nil {
+		return "", "", NewErrorWithCause(
+			fmt.Errorf("app store version not found for version %q and platform %q", version, platform),
+			asc.ErrNotFound,
+		)
+	}
+	pageHasNext := strings.TrimSpace(resp.Links.Next) != ""
+	if pageHasNext {
+		return "", "", MarkAmbiguousSelectionSample(AmbiguousAppStoreVersionError(version, platform, resp.Data, "", "--version-id"))
+	}
+	if len(resp.Data) == 0 {
 		return "", "", NewErrorWithCause(
 			fmt.Errorf("app store version not found for version %q and platform %q", version, platform),
 			asc.ErrNotFound,
@@ -79,6 +89,13 @@ func ResolveAppInfoIDWithFlag(ctx context.Context, client *asc.Client, appID, ap
 	resp, err := client.GetAppInfos(ctx, appID)
 	if err != nil {
 		return "", err
+	}
+	if resp == nil {
+		return "", fmt.Errorf("empty app infos response for app %q", appID)
+	}
+	pageHasNext := strings.TrimSpace(resp.Links.Next) != ""
+	if pageHasNext {
+		return "", MarkAmbiguousSelectionSample(AmbiguousAppInfoError(appID, appInfoFlag, asc.AppInfoCandidates(resp.Data)))
 	}
 	if len(resp.Data) == 0 {
 		return "", fmt.Errorf("no app info found for app %q", appID)

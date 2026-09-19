@@ -69,6 +69,25 @@ func TestResolveSessionUsesEnvAppleIDForFreshLogin(t *testing.T) {
 	}
 }
 
+func TestResolveSessionSanitizesEnvAppleIDNotice(t *testing.T) {
+	dir := t.TempDir()
+	stderr := stubDefaultAppleIDResolverInputs(t, dir)
+	t.Setenv(webAppleIDEnv, "attacker@example.com\nINJECTED\x1b[31m\u202e")
+
+	var lookups []string
+	recordSessionLookups(&lookups)
+
+	if _, _, err := resolveSession(context.Background(), "", "", ""); err != nil {
+		t.Fatalf("resolveSession() error = %v", err)
+	}
+	if got, want := strings.Join(lookups, ","), "attacker@example.com\nINJECTED\x1b[31m\u202e"; got != want {
+		t.Fatalf("session lookup = %q, want unsanitized identity %q", got, want)
+	}
+	if got, want := stderr.String(), "Using web session for attacker@example.com INJECTED[31m from "+webAppleIDEnv+"; pass --apple-id to override\n"; got != want {
+		t.Fatalf("stderr = %q, want sanitized notice %q", got, want)
+	}
+}
+
 func TestResolveSessionExplicitAppleIDOverridesEnvAppleID(t *testing.T) {
 	dir := t.TempDir()
 	stderr := stubDefaultAppleIDResolverInputs(t, dir)
@@ -76,9 +95,9 @@ func TestResolveSessionExplicitAppleIDOverridesEnvAppleID(t *testing.T) {
 
 	origDefault := defaultCachedAppleIDFn
 	t.Cleanup(func() { defaultCachedAppleIDFn = origDefault })
-	defaultCachedAppleIDFn = func() (string, error) {
+	defaultCachedAppleIDFn = func() (string, webcore.CachedSessionSource, error) {
 		t.Fatal("did not expect cached-session default resolution when --apple-id is set")
-		return "", nil
+		return "", webcore.CachedSessionSourceUnknown, nil
 	}
 
 	var lookups []string
@@ -164,9 +183,9 @@ func TestResolveWebSessionEnvAppleIDSkipsAppleIDPromptWithEmptyCache(t *testing.
 
 	origDefault := defaultCachedAppleIDFn
 	t.Cleanup(func() { defaultCachedAppleIDFn = origDefault })
-	defaultCachedAppleIDFn = func() (string, error) {
+	defaultCachedAppleIDFn = func() (string, webcore.CachedSessionSource, error) {
 		t.Fatal("did not expect cached-session default resolution when " + webAppleIDEnv + " names an account")
-		return "", nil
+		return "", webcore.CachedSessionSourceUnknown, nil
 	}
 
 	var lookups []string

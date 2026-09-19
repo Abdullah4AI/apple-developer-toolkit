@@ -388,9 +388,12 @@ func fetchOptimizationSuggestionsLimitedWithMore(ctx context.Context, client *ap
 	} else {
 		filters = append(filters, optimizationFilter("countriesOrRegions", "IN", []string{strings.ToUpper(strings.TrimSpace(request.Country))}))
 	}
+	// Omit sorting: Apple's suggestions endpoints reject sorting by
+	// "popularity" (INVALID_FIELD_ATTRIBUTE: Field 'popularity' is not
+	// queryable). Official starter payloads for these endpoints also omit
+	// sorting. Callers that need popularity order sort locally after merge.
 	body := map[string]any{
 		"filters": filters,
-		"sorting": []any{map[string]any{"field": "popularity", "order": "DESC"}},
 	}
 	items, more, err := queryOptimizationListBoundedWithMore[suggestionResponse](ctx, client, spec, body, 1000, limit)
 	result := make([]SearchSuggestion, 0, len(items))

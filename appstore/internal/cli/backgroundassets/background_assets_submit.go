@@ -145,20 +145,43 @@ Examples:
 			if currentSubmissionID == "" {
 				createResp, err := client.CreateReviewSubmission(requestCtx, resolvedAppID, asc.Platform(normalizedPlatform))
 				if err != nil {
+					var partialErr *asc.ReviewSubmissionCreatePartialError
+					if errors.As(err, &partialErr) && partialErr.Response != nil &&
+						partialErr.Response.Data.Type == asc.ResourceTypeReviewSubmissions {
+						createdSubmissionID := strings.TrimSpace(partialErr.Response.Data.ID)
+						if createdSubmissionID != "" {
+							return rollbackBackgroundAssetReviewSubmission(requestCtx, client, createdSubmissionID, "create review submission", err)
+						}
+					}
 					return fmt.Errorf("background-assets submit: create review submission: %w", err)
 				}
-				currentSubmissionID = createResp.Data.ID
+				createdSubmissionID := ""
+				if createResp != nil {
+					createdSubmissionID = strings.TrimSpace(createResp.Data.ID)
+				}
+				if err := validateBackgroundAssetReviewSubmissionCreateReceipt(createResp, resolvedAppID, normalizedPlatform); err != nil {
+					if createdSubmissionID != "" {
+						return rollbackBackgroundAssetReviewSubmission(requestCtx, client, createdSubmissionID, "validate create receipt", err)
+					}
+					return fmt.Errorf("background-assets submit: create review submission receipt: %w", err)
+				}
+				currentSubmissionID = createdSubmissionID
 				createdHere = true
 			}
 			result.SubmissionID = currentSubmissionID
 
-			alreadyAttached := map[string]struct{}{}
-			if !createdHere {
-				existing, err := fetchAlreadyAttachedBackgroundAssetVersions(requestCtx, client, currentSubmissionID)
-				if err != nil {
-					return fmt.Errorf("background-assets submit: inspect existing items on submission %q: %w", currentSubmissionID, err)
+			if err := validateBackgroundAssetReviewSubmissionBeforeAdd(requestCtx, client, currentSubmissionID, resolvedAppID, normalizedPlatform); err != nil {
+				if createdHere {
+					return rollbackBackgroundAssetReviewSubmission(requestCtx, client, currentSubmissionID, "validate before adding items", err)
 				}
-				alreadyAttached = existing
+				return fmt.Errorf("background-assets submit: validate review submission %q before adding items: %w", currentSubmissionID, err)
+			}
+			alreadyAttached, err := fetchAlreadyAttachedBackgroundAssetVersions(requestCtx, client, currentSubmissionID)
+			if err != nil {
+				if createdHere {
+					return rollbackBackgroundAssetReviewSubmission(requestCtx, client, currentSubmissionID, "inspect existing items", err)
+				}
+				return fmt.Errorf("background-assets submit: inspect existing items on submission %q: %w", currentSubmissionID, err)
 			}
 
 			for i, item := range items {
@@ -168,7 +191,8 @@ Examples:
 				}
 				if _, err := client.CreateReviewSubmissionItem(requestCtx, currentSubmissionID, asc.ReviewSubmissionItemTypeBackgroundAssetVersion, item.BackgroundAssetVersionID); err != nil {
 					if createdHere {
-						if _, cancelErr := client.CancelReviewSubmission(requestCtx, currentSubmissionID); cancelErr == nil {
+						cancelErr := cancelBackgroundAssetReviewSubmission(requestCtx, client, currentSubmissionID)
+						if cancelErr == nil {
 							return fmt.Errorf("background-assets submit: attach version %q (index %d, %d already attached) to submission %q failed; rolled back the submission: %w", item.BackgroundAssetVersionID, i, result.AttachedItems, currentSubmissionID, err)
 						} else {
 							return fmt.Errorf("background-assets submit: attach version %q (index %d, %d already attached) to submission %q failed; rollback also failed (submission %q is leaked with %d partial item(s)): %w", item.BackgroundAssetVersionID, i, result.AttachedItems, currentSubmissionID, currentSubmissionID, result.AttachedItems, errors.Join(err, cancelErr))
@@ -197,6 +221,22 @@ Examples:
 
 			return shared.PrintOutput(result, *output.Output, *output.Pretty)
 		},
+	}
+}
+
+func cancelBackgroundAssetReviewSubmission(ctx context.Context, client backgroundAssetSubmitClient, submissionID string) error {
+	rollbackParent := context.WithoutCancel(shared.ContextWithoutTimeout(ctx))
+	rollbackCtx, cancel := shared.ContextWithTimeout(rollbackParent)
+	defer cancel()
+	_, err := client.CancelReviewSubmission(rollbackCtx, submissionID)
+	return err
+}
+
+func rollbackBackgroundAssetReviewSubmission(ctx context.Context, client backgroundAssetSubmitClient, submissionID, stage string, cause error) error {
+	if cancelErr := cancelBackgroundAssetReviewSubmission(ctx, client, submissionID); cancelErr == nil {
+		return fmt.Errorf("background-assets submit: %s on newly created submission %q failed; rolled back the submission: %w", stage, submissionID, cause)
+	} else {
+		return fmt.Errorf("background-assets submit: %s on newly created submission %q failed; rollback also failed (submission %q is leaked): %w", stage, submissionID, submissionID, errors.Join(cause, cancelErr))
 	}
 }
 
@@ -233,11 +273,92 @@ type backgroundAssetSubmitSelection struct {
 type backgroundAssetSubmitClient interface {
 	GetBackgroundAssets(ctx context.Context, appID string, opts ...asc.BackgroundAssetsOption) (*asc.BackgroundAssetsResponse, error)
 	GetBackgroundAssetVersions(ctx context.Context, backgroundAssetID string, opts ...asc.BackgroundAssetVersionsOption) (*asc.BackgroundAssetVersionsResponse, error)
-	GetReviewSubmissionItems(ctx context.Context, submissionID string, opts ...asc.ReviewSubmissionItemsOption) (*asc.ReviewSubmissionItemsResponse, error)
+	GetReviewSubmissionStrict(ctx context.Context, submissionID string, opts ...asc.ReviewSubmissionOption) (*asc.ReviewSubmissionResponse, error)
+	GetReviewSubmissionItemsStrict(ctx context.Context, submissionID string, opts ...asc.ReviewSubmissionItemsOption) (*asc.ReviewSubmissionItemsResponse, error)
 	CreateReviewSubmission(ctx context.Context, appID string, platform asc.Platform) (*asc.ReviewSubmissionResponse, error)
 	CreateReviewSubmissionItem(ctx context.Context, submissionID string, itemType asc.ReviewSubmissionItemType, itemID string) (*asc.ReviewSubmissionItemResponse, error)
 	SubmitReviewSubmission(ctx context.Context, submissionID string) (*asc.ReviewSubmissionResponse, error)
 	CancelReviewSubmission(ctx context.Context, submissionID string) (*asc.ReviewSubmissionResponse, error)
+}
+
+func validateBackgroundAssetReviewSubmissionCreateReceipt(response *asc.ReviewSubmissionResponse, appID, platform string) error {
+	if response == nil {
+		return fmt.Errorf("created review submission response is required")
+	}
+	resource := &response.Data
+	if resource.Type != asc.ResourceTypeReviewSubmissions {
+		return fmt.Errorf("created review submission returned resource type %q, not %q", resource.Type, asc.ResourceTypeReviewSubmissions)
+	}
+	resourceID := strings.TrimSpace(resource.ID)
+	if resourceID == "" {
+		return fmt.Errorf("created review submission returned an empty ID")
+	}
+	if state := resource.Attributes.SubmissionState; state != "" && state != asc.ReviewSubmissionStateReadyForReview {
+		return fmt.Errorf("created review submission %s is in state %q, not %q", resourceID, state, asc.ReviewSubmissionStateReadyForReview)
+	}
+	if actualPlatform := strings.TrimSpace(string(resource.Attributes.Platform)); actualPlatform != "" && !strings.EqualFold(actualPlatform, strings.TrimSpace(platform)) {
+		return fmt.Errorf("created review submission %s is for platform %q, not %q", resourceID, actualPlatform, strings.TrimSpace(platform))
+	}
+	if resource.Relationships == nil || resource.Relationships.App == nil {
+		return nil
+	}
+	appRelationship := resource.Relationships.App.Data
+	if appRelationship.Type != asc.ResourceTypeApps {
+		return fmt.Errorf("created review submission %s returned app relationship type %q, not %q", resourceID, appRelationship.Type, asc.ResourceTypeApps)
+	}
+	actualAppID := strings.TrimSpace(appRelationship.ID)
+	if actualAppID == "" {
+		return fmt.Errorf("created review submission %s returned an empty app relationship ID", resourceID)
+	}
+	if actualAppID != strings.TrimSpace(appID) {
+		return fmt.Errorf("created review submission %s belongs to app %q, not %q", resourceID, actualAppID, strings.TrimSpace(appID))
+	}
+	return nil
+}
+
+func validateBackgroundAssetReviewSubmissionBeforeAdd(ctx context.Context, client backgroundAssetSubmitClient, submissionID, appID, platform string) error {
+	submissionID = strings.TrimSpace(submissionID)
+	appID = strings.TrimSpace(appID)
+	platform = strings.TrimSpace(platform)
+	response, err := client.GetReviewSubmissionStrict(ctx, submissionID, asc.WithReviewSubmissionInclude([]string{"app"}))
+	if err != nil {
+		return err
+	}
+	if response == nil {
+		return fmt.Errorf("review submission response is required")
+	}
+	resource := &response.Data
+	if resource.Type != asc.ResourceTypeReviewSubmissions {
+		return fmt.Errorf("review submission %s returned resource type %q, not %q", submissionID, resource.Type, asc.ResourceTypeReviewSubmissions)
+	}
+	actualID := strings.TrimSpace(resource.ID)
+	if actualID == "" {
+		return fmt.Errorf("review submission %s returned an empty ID", submissionID)
+	}
+	if actualID != submissionID {
+		return fmt.Errorf("app store connect returned review submission %s instead of %s", actualID, submissionID)
+	}
+	if resource.Attributes.SubmissionState != asc.ReviewSubmissionStateReadyForReview {
+		return fmt.Errorf("review submission %s is in state %q, not %q", actualID, resource.Attributes.SubmissionState, asc.ReviewSubmissionStateReadyForReview)
+	}
+	if !strings.EqualFold(string(resource.Attributes.Platform), platform) {
+		return fmt.Errorf("review submission %s is for platform %q, not %q", actualID, resource.Attributes.Platform, platform)
+	}
+	if resource.Relationships == nil || resource.Relationships.App == nil {
+		return fmt.Errorf("review submission %s did not prove its app relationship", actualID)
+	}
+	appRelationship := resource.Relationships.App.Data
+	if appRelationship.Type != asc.ResourceTypeApps {
+		return fmt.Errorf("review submission %s returned app relationship type %q, not %q", actualID, appRelationship.Type, asc.ResourceTypeApps)
+	}
+	actualAppID := strings.TrimSpace(appRelationship.ID)
+	if actualAppID == "" {
+		return fmt.Errorf("review submission %s did not prove its app relationship", actualID)
+	}
+	if actualAppID != appID {
+		return fmt.Errorf("review submission %s belongs to app %q, not %q", actualID, actualAppID, appID)
+	}
+	return nil
 }
 
 type backgroundAssetSubmitResolver struct {
@@ -431,30 +552,45 @@ func fetchAlreadyAttachedBackgroundAssetVersions(ctx context.Context, client bac
 		asc.WithReviewSubmissionItemsLimit(backgroundAssetsMaxLimit),
 		asc.WithReviewSubmissionItemsInclude([]string{"backgroundAssetVersion"}),
 	}
-	first, err := client.GetReviewSubmissionItems(ctx, submissionID, opts...)
+	first, err := client.GetReviewSubmissionItemsStrict(ctx, submissionID, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("list submission items: %w", err)
 	}
-	resp, err := asc.PaginateAll(ctx, first, func(ctx context.Context, nextURL string) (asc.PaginatedResponse, error) {
-		return client.GetReviewSubmissionItems(ctx, submissionID, asc.WithReviewSubmissionItemsNextURL(nextURL), asc.WithReviewSubmissionItemsInclude([]string{"backgroundAssetVersion"}))
-	})
-	if err != nil {
-		return nil, fmt.Errorf("paginate submission items: %w", err)
-	}
-	aggregate, ok := resp.(*asc.ReviewSubmissionItemsResponse)
-	if !ok {
-		aggregate = first
-	}
-	for _, item := range aggregate.Data {
-		if item.Relationships == nil || item.Relationships.BackgroundAssetVersion == nil {
-			continue
-		}
-		if strings.EqualFold(string(item.Attributes.State), "REMOVED") {
-			continue
-		}
-		bgVer := item.Relationships.BackgroundAssetVersion.Data.ID
-		if bgVer != "" {
+	page := first
+	seenNext := make(map[string]struct{})
+	for pageNumber := 1; ; pageNumber++ {
+		for _, item := range page.Data {
+			if item.Relationships == nil || item.Relationships.BackgroundAssetVersion == nil {
+				continue
+			}
+			if strings.EqualFold(string(item.Attributes.State), "REMOVED") {
+				continue
+			}
+			backgroundAssetVersion := item.Relationships.BackgroundAssetVersion.Data
+			if backgroundAssetVersion.Type != asc.ResourceTypeBackgroundAssetVersions {
+				return nil, fmt.Errorf("review submission item %q returned background asset version relationship type %q, not %q", strings.TrimSpace(item.ID), backgroundAssetVersion.Type, asc.ResourceTypeBackgroundAssetVersions)
+			}
+			bgVer := strings.TrimSpace(backgroundAssetVersion.ID)
+			if bgVer == "" {
+				return nil, fmt.Errorf("review submission item %q returned an empty background asset version relationship ID", strings.TrimSpace(item.ID))
+			}
 			attached[bgVer] = struct{}{}
+		}
+
+		nextURL := page.Links.Next
+		if nextURL == "" {
+			break
+		}
+		if pageNumber >= backgroundAssetsReviewSubmissionItemsMaxPages {
+			return nil, fmt.Errorf("paginate submission items: page %d exceeds the maximum of %d pages", pageNumber+1, backgroundAssetsReviewSubmissionItemsMaxPages)
+		}
+		if _, exists := seenNext[nextURL]; exists {
+			return nil, fmt.Errorf("paginate submission items: page %d: %w", pageNumber+1, asc.ErrRepeatedPaginationURL)
+		}
+		seenNext[nextURL] = struct{}{}
+		page, err = client.GetReviewSubmissionItemsStrict(ctx, submissionID, asc.WithReviewSubmissionItemsNextURL(nextURL), asc.WithReviewSubmissionItemsInclude([]string{"backgroundAssetVersion"}))
+		if err != nil {
+			return nil, fmt.Errorf("paginate submission items: page %d: %w", pageNumber+1, err)
 		}
 	}
 	return attached, nil

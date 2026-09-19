@@ -2,6 +2,7 @@ package app_events
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -57,7 +58,7 @@ Examples:
 				return fmt.Errorf("app-events submit: %w", err)
 			}
 
-			client, err := shared.GetASCClient()
+			client, err := appEventsClientFactory()
 			if err != nil {
 				return fmt.Errorf("app-events submit: %w", err)
 			}
@@ -67,6 +68,20 @@ Examples:
 
 			reviewSubmission, err := client.CreateReviewSubmission(requestCtx, resolvedAppID, asc.Platform(normalizedPlatform))
 			if err != nil {
+				var partialErr *asc.ReviewSubmissionCreatePartialError
+				if errors.As(err, &partialErr) && partialErr.Response != nil &&
+					partialErr.Response.Data.Type == asc.ResourceTypeReviewSubmissions {
+					submissionID := strings.TrimSpace(partialErr.Response.Data.ID)
+					if submissionID != "" {
+						return fmt.Errorf(
+							"app-events submit: review submission %q may have been created, but no event was added or submitted; inspect it with `asc review submissions-get --id %s` or cancel it with `asc submit cancel --id %s --confirm`: %w",
+							submissionID,
+							submissionID,
+							submissionID,
+							err,
+						)
+					}
+				}
 				return fmt.Errorf("app-events submit: failed to create review submission: %w", err)
 			}
 

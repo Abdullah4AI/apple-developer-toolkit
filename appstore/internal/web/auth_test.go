@@ -24,6 +24,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
+
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
 )
 
 type roundTripFunc func(*http.Request) (*http.Response, error)
@@ -47,6 +50,22 @@ func TestAuthStatusErrorsExposeHTTPStatus(t *testing.T) {
 				t.Fatalf("HTTPStatusCode() = %d, want an HTTP error status", got)
 			}
 		})
+	}
+}
+
+func TestInvalidCredentialsClassificationScansUnboundedRawCodes(t *testing.T) {
+	codes := make([]map[string]string, 12)
+	for i := 0; i < 11; i++ {
+		codes[i] = map[string]string{"code": fmt.Sprintf("NOISE-%02d", i)}
+	}
+	codes[11] = map[string]string{"code": "-20101"}
+	body, err := json.Marshal(map[string]any{"serviceErrors": codes})
+	if err != nil {
+		t.Fatalf("marshal response body: %v", err)
+	}
+
+	if !isInvalidAppleAccountCredentialsSigninComplete(http.StatusUnauthorized, body) {
+		t.Fatal("invalid-credentials classifier did not inspect the raw code beyond the display cap")
 	}
 }
 
@@ -120,6 +139,79 @@ func TestLogWebAuthHTTPRedactsSensitiveQueryValues(t *testing.T) {
 	}
 	if !strings.Contains(output, "%5BREDACTED%5D") {
 		t.Fatalf("expected redacted marker in debug output, got %q", output)
+	}
+}
+
+type diagnosticCaptureHandler struct {
+	values map[string]string
+}
+
+func (h *diagnosticCaptureHandler) Enabled(context.Context, slog.Level) bool { return true }
+
+func (h *diagnosticCaptureHandler) Handle(_ context.Context, record slog.Record) error {
+	record.Attrs(func(attr slog.Attr) bool {
+		h.values[attr.Key] = fmt.Sprint(attr.Value.Any())
+		return true
+	})
+	return nil
+}
+
+func (h *diagnosticCaptureHandler) WithAttrs([]slog.Attr) slog.Handler { return h }
+
+func (h *diagnosticCaptureHandler) WithGroup(string) slog.Handler { return h }
+
+func TestLogWebAuthHTTPBoundsAndSanitizesProviderDiagnostics(t *testing.T) {
+	origLogger := webDebugLogger
+	origDebugEnabled := webDebugEnabledFn
+	t.Cleanup(func() {
+		webDebugLogger = origLogger
+		webDebugEnabledFn = origDebugEnabled
+	})
+
+	handler := &diagnosticCaptureHandler{values: make(map[string]string)}
+	webDebugLogger = slog.New(handler)
+	webDebugEnabledFn = func() bool { return true }
+
+	codes := make([]map[string]string, 12)
+	for i := range codes {
+		codes[i] = map[string]string{
+			"code": fmt.Sprintf("CODE-%02d-%s", i, strings.Repeat("x", 300)),
+		}
+	}
+	codes[0]["code"] = "CODE-00-bad\x1b[2J\n" + strings.Repeat("x", 300)
+	body, err := json.Marshal(map[string]any{"errors": codes})
+	if err != nil {
+		t.Fatalf("marshal response body: %v", err)
+	}
+	requestID := "request\x1b[31m\n" + strings.Repeat("é", 200) + string([]byte{0xff})
+	correlationKey := "correlation\u202e" + strings.Repeat("c", 400)
+	resp := &http.Response{
+		StatusCode: http.StatusUnprocessableEntity,
+		Header: http.Header{
+			"X-Apple-Request-Uuid":           []string{requestID},
+			"X-Apple-Jingle-Correlation-Key": []string{correlationKey},
+		},
+	}
+
+	logWebAuthHTTP("signin_complete", nil, resp, body, nil)
+
+	for _, key := range []string{"request_id", "correlation_key", "codes"} {
+		value := handler.values[key]
+		if !utf8.ValidString(value) {
+			t.Fatalf("%s is not valid UTF-8: %q", key, value)
+		}
+		if asc.HasInterpretedTerminalSequence(value) {
+			t.Fatalf("%s retained interpreted terminal characters: %q", key, value)
+		}
+	}
+	for _, key := range []string{"request_id", "correlation_key"} {
+		if value := handler.values[key]; len(value) > 256 || !strings.HasSuffix(value, "...") {
+			t.Fatalf("%s projection is not bounded to 256 bytes: len=%d value=%q", key, len(value), value)
+		}
+	}
+	codeValue := handler.values["codes"]
+	if strings.Contains(codeValue, "CODE-10-") || strings.Contains(codeValue, "CODE-11-") || !strings.Contains(codeValue, "... and 2 more") {
+		t.Fatalf("codes projection is not count-bounded: %q", codeValue)
 	}
 }
 

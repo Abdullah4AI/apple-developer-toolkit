@@ -116,6 +116,34 @@ func TestFixPrivateKeyFilePermissionsTightensPermissiveKey(t *testing.T) {
 	}
 }
 
+func TestFixPrivateKeyFilePermissionsAcceptsDarwinTmpAlias(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("/tmp is a system symlink on Darwin")
+	}
+	dir, err := os.MkdirTemp("/tmp", "asc-auth-key-")
+	if err != nil {
+		t.Fatalf("MkdirTemp(/tmp) error = %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	path := filepath.Join(dir, "AuthKey.p8")
+	writeECDSAPEM(t, path, 0o644, true)
+
+	changed, err := FixPrivateKeyFilePermissions(path)
+	if err != nil {
+		t.Fatalf("FixPrivateKeyFilePermissions(%q) error = %v", path, err)
+	}
+	if !changed {
+		t.Fatal("expected permissions to be reported as changed")
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("Stat(path) error = %v", err)
+	}
+	if got, want := info.Mode().Perm(), os.FileMode(0o600); got != want {
+		t.Fatalf("key mode = %#o, want %#o", got, want)
+	}
+}
+
 func TestFixPrivateKeyFilePermissionsLeavesOwnerOnlyKeyUntouched(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("Windows does not expose POSIX key permissions")

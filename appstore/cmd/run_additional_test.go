@@ -1325,6 +1325,13 @@ func TestRun_UnknownCommandsReturnConciseRecovery(t *testing.T) {
 				"  asc --help\n",
 		},
 		{
+			name: "root typo beyond edit distance contract",
+			args: []string{"agxxxments"},
+			wantStderr: "Error: unknown command `asc agxxxments`\n" +
+				"For help:\n" +
+				"  asc --help\n",
+		},
+		{
 			name: "nested typo",
 			args: []string{"builds", "lsit"},
 			wantStderr: "Error: unknown command `asc builds lsit`\n" +

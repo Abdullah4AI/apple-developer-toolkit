@@ -48,12 +48,16 @@ func stubDefaultAppleIDResolverInputs(t *testing.T, cacheDir string) *bytes.Buff
 	t.Setenv(webPasswordEnv, "")
 
 	origTryResume := tryResumeSessionFn
+	origTryResumeFromSource := tryResumeSessionFromSourceFn
 	origTryResumeLast := tryResumeLastFn
+	origLoadCachedFromSource := loadCachedSessionFromSourceFn
 	origNoticeWriter := sessionDefaultNoticeWriter
 	origWarningWriter := sessionCacheWarningWriter
 	t.Cleanup(func() {
 		tryResumeSessionFn = origTryResume
+		tryResumeSessionFromSourceFn = origTryResumeFromSource
 		tryResumeLastFn = origTryResumeLast
+		loadCachedSessionFromSourceFn = origLoadCachedFromSource
 		sessionDefaultNoticeWriter = origNoticeWriter
 		sessionCacheWarningWriter = origWarningWriter
 	})
@@ -67,6 +71,12 @@ func stubDefaultAppleIDResolverInputs(t *testing.T, cacheDir string) *bytes.Buff
 	tryResumeSessionFn = func(ctx context.Context, username string) (*webcore.AuthSession, bool, error) {
 		t.Fatalf("unexpected user-scoped cache lookup for %q", username)
 		return nil, false, nil
+	}
+	tryResumeSessionFromSourceFn = func(ctx context.Context, username string, _ webcore.CachedSessionSource) (*webcore.AuthSession, bool, error) {
+		return tryResumeSessionFn(ctx, username)
+	}
+	loadCachedSessionFromSourceFn = func(username string, _ webcore.CachedSessionSource) (*webcore.AuthSession, bool, error) {
+		return loadCachedSessionFn(username)
 	}
 	return stderr
 }
@@ -97,6 +107,28 @@ func TestResolveSessionDefaultsToSoleCachedAppleID(t *testing.T) {
 	}
 	if got, want := stderr.String(), "Using cached web session for only@example.com; pass --apple-id to override\n"; got != want {
 		t.Fatalf("stderr = %q, want %q", got, want)
+	}
+}
+
+func TestResolveSessionSanitizesSoleCachedAppleIDNotice(t *testing.T) {
+	dir := t.TempDir()
+	stderr := stubDefaultAppleIDResolverInputs(t, dir)
+	writeTestCachedWebSession(t, dir, "attacker@example.com\nINJECTED\x1b[31m\u202e")
+
+	var lookup string
+	tryResumeSessionFn = func(ctx context.Context, username string) (*webcore.AuthSession, bool, error) {
+		lookup = username
+		return &webcore.AuthSession{UserEmail: username}, true, nil
+	}
+
+	if _, _, err := resolveSession(context.Background(), "", "", ""); err != nil {
+		t.Fatalf("resolveSession() error = %v", err)
+	}
+	if got, want := lookup, "attacker@example.com\nINJECTED\x1b[31m\u202e"; got != want {
+		t.Fatalf("session lookup = %q, want unsanitized identity %q", got, want)
+	}
+	if got, want := stderr.String(), "Using cached web session for attacker@example.com INJECTED[31m; pass --apple-id to override\n"; got != want {
+		t.Fatalf("stderr = %q, want sanitized notice %q", got, want)
 	}
 }
 
@@ -259,8 +291,8 @@ func TestResolveSessionDefaultLookupFailureFallsBackToUsageError(t *testing.T) {
 
 	origDefault := defaultCachedAppleIDFn
 	t.Cleanup(func() { defaultCachedAppleIDFn = origDefault })
-	defaultCachedAppleIDFn = func() (string, error) {
-		return "", errors.New("boom")
+	defaultCachedAppleIDFn = func() (string, webcore.CachedSessionSource, error) {
+		return "", webcore.CachedSessionSourceUnknown, errors.New("boom")
 	}
 
 	_, _, err := resolveSession(context.Background(), "", "", "")
@@ -346,9 +378,9 @@ func TestResolveWebSessionForCommandSessionFromEnvSkipsCachedDefault(t *testing.
 
 	origDefault := defaultCachedAppleIDFn
 	t.Cleanup(func() { defaultCachedAppleIDFn = origDefault })
-	defaultCachedAppleIDFn = func() (string, error) {
+	defaultCachedAppleIDFn = func() (string, webcore.CachedSessionSource, error) {
 		t.Fatal("did not expect cached-session default resolution with --session-from-env")
-		return "", nil
+		return "", webcore.CachedSessionSourceUnknown, nil
 	}
 
 	fs := flag.NewFlagSet("test", flag.ContinueOnError)

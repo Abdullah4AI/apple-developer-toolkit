@@ -818,6 +818,51 @@ func TestExecuteStage_SuccessPath(t *testing.T) {
 	}
 }
 
+func TestExecuteStageRejectsIncompleteVersionBeforeMetadata(t *testing.T) {
+	originalClientFactory := releaseClientFactory
+	originalMetadataExecutor := metadataPushExecutor
+	originalReadinessBuilder := readinessReportBuilder
+	originalTransport := http.DefaultTransport
+	t.Cleanup(func() {
+		releaseClientFactory = originalClientFactory
+		metadataPushExecutor = originalMetadataExecutor
+		readinessReportBuilder = originalReadinessBuilder
+		http.DefaultTransport = originalTransport
+	})
+
+	metadataPushExecutor = func(context.Context, metadata.PushExecutionOptions) (metadata.PushPlanResult, error) {
+		t.Fatal("metadata must not run after an incomplete version lookup")
+		return metadata.PushPlanResult{}, nil
+	}
+	readinessReportBuilder = func(context.Context, validatecli.ReadinessOptions) (validation.Report, error) {
+		t.Fatal("readiness must not run after an incomplete version lookup")
+		return validation.Report{}, nil
+	}
+	http.DefaultTransport = releaseRoundTripFunc(func(req *http.Request) (*http.Response, error) {
+		if resp, ok := releaseBuildAppLinkageResponse(req); ok {
+			return resp, nil
+		}
+		if req.Method == http.MethodGet && req.URL.Path == "/v1/apps/APP_123/appStoreVersions" {
+			return releaseJSONResponse(http.StatusOK, `{"data":[{"type":"appStoreVersions","id":"VERSION_123","attributes":{"versionString":"2.4.0","platform":"IOS"}}],"links":{"next":"https://api.appstoreconnect.apple.com/v1/apps/APP_123/appStoreVersions?cursor=next"}}`)
+		}
+		return nil, fmt.Errorf("unexpected request: %s %s", req.Method, req.URL.Path)
+	})
+	releaseClientFactory = func() (*asc.Client, error) { return newReleaseTestClient(t), nil }
+
+	result, err := executeStage(context.Background(), runOptions{
+		AppID:          "APP_123",
+		Version:        "2.4.0",
+		BuildID:        "BUILD_123",
+		Platform:       "IOS",
+		Timeout:        releaseRunTimeout,
+		Confirm:        true,
+		CheckpointFile: filepath.Join(t.TempDir(), "stage-checkpoint.json"),
+	})
+	if err == nil || !strings.Contains(err.Error(), "sample matches") {
+		t.Fatalf("expected incomplete-version ambiguity, got result=%+v err=%v", result, err)
+	}
+}
+
 func TestExecuteStage_CopyMetadataSuccessPath(t *testing.T) {
 	origClientFactory := releaseClientFactory
 	origMetadataExecutor := metadataPushExecutor

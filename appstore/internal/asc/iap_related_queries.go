@@ -12,8 +12,9 @@ type IAPContentOption func(*iapContentQuery)
 type PromotedPurchaseGetOption func(*promotedPurchaseGetQuery)
 
 type iapReviewScreenshotQuery struct {
-	iapFields []string
-	include   []string
+	screenshotFields []string
+	iapFields        []string
+	include          []string
 }
 
 type iapContentQuery struct {
@@ -25,6 +26,11 @@ type promotedPurchaseGetQuery struct {
 	iapFields          []string
 	subscriptionFields []string
 	include            []string
+}
+
+// WithIAPReviewScreenshotFields sets fields[inAppPurchaseAppStoreReviewScreenshots].
+func WithIAPReviewScreenshotFields(fields []string) IAPReviewScreenshotOption {
+	return func(q *iapReviewScreenshotQuery) { q.screenshotFields = normalizeUniqueList(fields) }
 }
 
 // WithIAPReviewScreenshotIAPFields sets fields[inAppPurchases] for included IAPs.
@@ -64,6 +70,7 @@ func WithPromotedPurchaseInclude(include []string) PromotedPurchaseGetOption {
 
 func buildIAPReviewScreenshotQuery(query *iapReviewScreenshotQuery) string {
 	values := url.Values{}
+	addCSV(values, "fields[inAppPurchaseAppStoreReviewScreenshots]", query.screenshotFields)
 	addCSV(values, "fields[inAppPurchases]", query.iapFields)
 	addCSV(values, "include", includeWhenFieldsSelected(query.include, "inAppPurchaseV2", query.iapFields))
 	return values.Encode()

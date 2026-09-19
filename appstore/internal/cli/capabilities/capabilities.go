@@ -574,6 +574,14 @@ func capabilityRows() []Capability {
 			NextAction: "Use asc web bundle-ids list, then asc web bundle-ids view --bundle-id BUNDLE_RESOURCE_ID.",
 		},
 		{
+			Area:       "signing",
+			Capability: "Sign in with Apple private keys",
+			Status:     statusWebSession,
+			Commands:   []string{"asc web sign-in-keys list", "asc web sign-in-keys view", "asc web sign-in-keys create", "asc web sign-in-keys download"},
+			Notes:      []string{"Uses private Developer Portal authentication-key endpoints. Creation verifies the primary Bundle ID association; one-time P8 download saves private files on macOS or Linux. Revoke is not exposed."},
+			NextAction: "Use list and view to inspect existing keys, then create with --name, --bundle-id, --output-dir, and --confirm, or recover a download with --key-id, --output-dir, and --confirm.",
+		},
+		{
 			Area:         "signing",
 			Capability:   "Developer Portal Services ID lifecycle",
 			Status:       statusWebSession,

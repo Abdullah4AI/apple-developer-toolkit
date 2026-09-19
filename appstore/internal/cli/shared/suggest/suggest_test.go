@@ -28,6 +28,18 @@ func TestCommandsEditDistanceSuggestion(t *testing.T) {
 	}
 }
 
+func TestCommandsRejectsEditDistanceAboveContract(t *testing.T) {
+	if got := Commands("agxxxments", []string{"agreements"}); got != nil {
+		t.Fatalf("Commands() = %v, want no suggestion", got)
+	}
+	if !withinThreshold("agreements", 2) {
+		t.Fatal("long command should accept a two-edit suggestion")
+	}
+	if withinThreshold("agreements", 3) {
+		t.Fatal("long command should reject a three-edit suggestion")
+	}
+}
+
 func TestCommandsConservativeBehavior(t *testing.T) {
 	if got := Commands("", []string{"apps"}); got != nil {
 		t.Fatalf("expected nil for empty input, got %v", got)

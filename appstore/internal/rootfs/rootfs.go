@@ -73,10 +73,11 @@ var (
 )
 
 const (
-	temporaryFilePattern        = ".asc-tmp-*"
-	backupFilePattern           = ".asc-tmp-backup-*"
-	rollbackFilePattern         = ".asc-tmp-rollback-*"
-	fileIdentityDataLimit int64 = 8 << 20
+	temporaryFilePattern           = ".asc-tmp-*"
+	backupFilePattern              = ".asc-tmp-backup-*"
+	rollbackFilePattern            = ".asc-tmp-rollback-*"
+	fileIdentityDataLimit    int64 = 8 << 20
+	fileIdentityCaptureLimit int64 = 16 << 20
 )
 
 // Root is a trusted directory anchor for rooted filesystem operations.
@@ -372,15 +373,19 @@ func (identity *rootIdentity) retainIdentity(file *os.File, info os.FileInfo, da
 }
 
 func (identity *rootIdentity) retainIdentityWithMetadata(file *os.File, info os.FileInfo, data []byte, path string, metadata fileIdentityMetadata, metadataCaptured bool) (*FileIdentity, error) {
+	return identity.retainIdentityWithMetadataLimited(file, info, data, path, metadata, metadataCaptured, fileIdentityDataLimit)
+}
+
+func (identity *rootIdentity) retainIdentityWithMetadataLimited(file *os.File, info os.FileInfo, data []byte, path string, metadata fileIdentityMetadata, metadataCaptured bool, limit int64) (*FileIdentity, error) {
 	if file == nil || info == nil {
 		if file != nil {
 			_ = file.Close()
 		}
 		return nil, fmt.Errorf("%w: descriptor or metadata is unavailable", ErrFileIdentityChanged)
 	}
-	if int64(len(data)) > fileIdentityDataLimit {
+	if int64(len(data)) > limit {
 		_ = file.Close()
-		return nil, fmt.Errorf("%w: %d bytes exceeds %d-byte limit", ErrFileIdentityDataTooLarge, len(data), fileIdentityDataLimit)
+		return nil, fmt.Errorf("%w: %d bytes exceeds %d-byte limit", ErrFileIdentityDataTooLarge, len(data), limit)
 	}
 	multipleHardLinks, err := hasMultipleHardLinks(file, info)
 	if err != nil {
@@ -635,7 +640,32 @@ func OpenFile(path string) (*os.File, error) {
 	if err != nil {
 		return nil, err
 	}
-	return root.OpenFile(relative)
+	file, openErr := root.OpenFile(relative)
+	closeErr := root.Close()
+	if openErr != nil || closeErr != nil {
+		if file != nil {
+			closeErr = errors.Join(closeErr, file.Close())
+		}
+		if openErr == nil {
+			return nil, closeErr
+		}
+		if closeErr == nil {
+			return nil, openErr
+		}
+		return nil, errors.Join(openErr, closeErr)
+	}
+	return file, nil
+}
+
+// CheckContainedPath verifies an operator-supplied path through the same
+// rooted traversal used by OpenFile without opening the target. It rejects a
+// symlink in any component below the selected trusted anchor.
+func CheckContainedPath(path string) error {
+	root, relative, err := trustedAnchorFor(path)
+	if err != nil {
+		return err
+	}
+	return errors.Join(root.CheckContained(relative), root.Close())
 }
 
 // ChmodFile changes the mode of an existing regular file through the same
@@ -674,7 +704,9 @@ func trustedAnchorFor(path string) (Root, string, error) {
 	}
 	volumeRoot := filepath.VolumeName(absolute) + string(filepath.Separator)
 	rootPath := volumeRoot
-	for _, candidate := range []string{workingDirectory(), os.TempDir()} {
+	candidates := []string{workingDirectory(), os.TempDir()}
+	candidates = append(candidates, trustedPathAliases()...)
+	for _, candidate := range candidates {
 		candidate, err = filepath.Abs(candidate)
 		if err != nil {
 			continue
@@ -1292,8 +1324,9 @@ func (r Root) chmodFile(name string, expected os.FileInfo, mode os.FileMode) err
 
 // CaptureFile opens and reads a regular file beneath the root while retaining
 // the descriptor that supplied its identity. The default snapshot is bounded
-// by the identity memory limit; use CaptureFileLimited to request a smaller
-// bound. The returned token is bound to this Root and remains valid until
+// by the general identity memory limit; use CaptureFileLimited when a caller's
+// input contract permits the larger explicit capture bound. The returned token
+// is bound to this Root and remains valid until
 // Root.Close. Callers must use the token for subsequent identity-checked
 // mutations instead of retaining an os.FileInfo snapshot returned by os.Stat.
 func (r Root) CaptureFile(name string) (*FileIdentity, error) {
@@ -1302,8 +1335,10 @@ func (r Root) CaptureFile(name string) (*FileIdentity, error) {
 
 // CaptureFileLimited is CaptureFile with an explicit maximum byte count for
 // the retained data snapshot. It refuses, rather than truncates, a regular
-// file larger than limit. The limit cannot exceed the identity memory bound so
-// every retained token remains bounded until Root.Close.
+// file larger than limit. The explicit limit cannot exceed the capture memory
+// bound. Callers should request only the smallest bound their input contract
+// requires; general identity-backed mutation and publication remain subject to
+// the smaller identity memory limit.
 func (r Root) CaptureFileLimited(name string, limit int64) (*FileIdentity, error) {
 	if err := r.selectedIdentity.begin(); err != nil {
 		return nil, err
@@ -1312,8 +1347,8 @@ func (r Root) CaptureFileLimited(name string, limit int64) (*FileIdentity, error
 	if limit < 0 {
 		return nil, fmt.Errorf("file identity capture limit must not be negative")
 	}
-	if limit > fileIdentityDataLimit {
-		return nil, fmt.Errorf("file identity capture limit %d exceeds %d-byte limit: %w", limit, fileIdentityDataLimit, ErrFileIdentityDataTooLarge)
+	if limit > fileIdentityCaptureLimit {
+		return nil, fmt.Errorf("file identity capture limit %d exceeds %d-byte limit: %w", limit, fileIdentityCaptureLimit, ErrFileIdentityDataTooLarge)
 	}
 	resolved, err := r.Resolve(name)
 	if err != nil {
@@ -1413,7 +1448,7 @@ func (r Root) CaptureFileLimited(name string, limit int64) (*FileIdentity, error
 		!bytes.Equal(data, verifiedData) || finalInfo.Size() != int64(len(verifiedData)) {
 		return nil, fmt.Errorf("%w: %q changed during identity capture", ErrFileIdentityChanged, resolved)
 	}
-	identity, err := r.selectedIdentity.retainIdentityWithMetadata(file, finalInfo, verifiedData, resolved, finalMetadata, true)
+	identity, err := r.selectedIdentity.retainIdentityWithMetadataLimited(file, finalInfo, verifiedData, resolved, finalMetadata, true, limit)
 	if err != nil {
 		return nil, err
 	}

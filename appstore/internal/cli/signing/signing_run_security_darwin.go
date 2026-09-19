@@ -12,6 +12,7 @@ package signing
 typedef struct {
     OSStatus operation_status;
     OSStatus cleanup_status;
+    Boolean created;
 } ASCSigningKeychainCreateResult;
 
 typedef ASCSigningKeychainCreateResult ASCSigningKeychainImportResult;
@@ -33,6 +34,7 @@ static ASCSigningKeychainCreateResult asc_signing_keychain_create(
         &keychain
     );
     if (status == errSecSuccess) {
+        result.created = true;
         status = SecKeychainUnlock(
             keychain,
             (UInt32)password_length,
@@ -148,16 +150,17 @@ import (
 func signingRunSecurityAvailable() bool { return true }
 
 func createKeychainWithSecurityFramework(path string, password []byte) error {
+	_, err := createKeychainWithSecurityFrameworkMode(path, password, false)
+	return err
+}
+
+func createPersistentKeychainWithSecurityFramework(path string, password []byte) (bool, error) {
 	return createKeychainWithSecurityFrameworkMode(path, password, false)
 }
 
-func createPersistentKeychainWithSecurityFramework(path string, password []byte) error {
-	return createKeychainWithSecurityFrameworkMode(path, password, true)
-}
-
-func createKeychainWithSecurityFrameworkMode(path string, password []byte, deleteOnUnlockFailure bool) error {
+func createKeychainWithSecurityFrameworkMode(path string, password []byte, deleteOnUnlockFailure bool) (bool, error) {
 	if len(password) == 0 {
-		return fmt.Errorf("keychain password is empty")
+		return false, fmt.Errorf("keychain password is empty")
 	}
 	cPath := C.CString(path)
 	defer C.free(unsafe.Pointer(cPath))
@@ -171,7 +174,7 @@ func createKeychainWithSecurityFrameworkMode(path string, password []byte, delet
 		C.size_t(len(password)),
 		deleteOnUnlockFailureValue,
 	)
-	return securityFrameworkKeychainCreationError(int32(result.operation_status), int32(result.cleanup_status))
+	return result.created != 0, securityFrameworkKeychainCreationError(int32(result.operation_status), int32(result.cleanup_status))
 }
 
 func securityFrameworkKeychainCreationError(operationStatus, cleanupStatus int32) error {

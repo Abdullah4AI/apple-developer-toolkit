@@ -51,11 +51,17 @@ func (e selectorAmbiguousError) ambiguous() *AmbiguousSelectionError {
 	if flag == "" {
 		flag = SelectorFlagForResource(e.resourceName)
 	}
+	displayTextLimit := 0
+	switch strings.TrimSpace(e.resourceName) {
+	case "in-app purchase", "subscription", "subscription group":
+		displayTextLimit = AmbiguousDiagnosticTextLimit
+	}
 	return &AmbiguousSelectionError{
-		Kind:        e.resourceName,
-		Description: fmt.Sprintf("%q by %s", e.selector, e.fieldName),
-		Flag:        flag,
-		Candidates:  ExactSelectorAmbiguousCandidates(e.matches),
+		Kind:             e.resourceName,
+		Description:      fmt.Sprintf("%q by %s", e.selector, e.fieldName),
+		Flag:             flag,
+		Candidates:       ExactSelectorAmbiguousCandidates(e.matches),
+		DisplayTextLimit: displayTextLimit,
 	}
 }
 

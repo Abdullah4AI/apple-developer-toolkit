@@ -262,3 +262,50 @@ func TestBetaGroupsAddTestersAmbiguousEmailListsIDsWithoutPersonalData(t *testin
 		t.Fatalf("requests = %d, want 2 (no POST)", requests)
 	}
 }
+
+func TestBetaGroupsAddTestersSingleEmailSampleFailsClosed(t *testing.T) {
+	setupAuth(t)
+	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
+
+	requests := 0
+	installDefaultTransport(t, roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		requests++
+		switch requests {
+		case 1:
+			if req.Method != http.MethodGet || req.URL.Path != "/v1/betaGroups/group-1/app" {
+				t.Fatalf("unexpected group app request: %s %s", req.Method, req.URL.String())
+			}
+			return jsonHTTPResponse(http.StatusOK, `{"data":{"type":"apps","id":"app-1"}}`), nil
+		case 2:
+			if req.Method != http.MethodGet || req.URL.Path != "/v1/betaTesters" {
+				t.Fatalf("unexpected tester request: %s %s", req.Method, req.URL.String())
+			}
+			return jsonHTTPResponse(http.StatusOK, `{"data":[{"type":"betaTesters","id":"tester-1","attributes":{"email":"sample@example.com"}}],"links":{"next":"https://api.appstoreconnect.apple.com/v1/apps/app-1/betaTesters?cursor=next"}}`), nil
+		default:
+			t.Fatalf("unexpected request after incomplete tester sample: %s %s", req.Method, req.URL.String())
+			return nil, nil
+		}
+	}))
+
+	stdout, stderr := captureOutput(t, func() {
+		code := cmd.Run([]string{
+			"testflight", "groups", "add-testers",
+			"--group", "group-1",
+			"--email", "sample@example.com",
+		}, "1.2.3")
+		if code != cmd.ExitError {
+			t.Fatalf("exit code = %d, want %d", code, cmd.ExitError)
+		}
+	})
+	if stdout != "" {
+		t.Fatalf("expected empty stdout, got %q", stdout)
+	}
+	for _, want := range []string{"sample matches", "tester-1"} {
+		if !strings.Contains(stderr, want) {
+			t.Fatalf("stderr missing %q: %s", want, stderr)
+		}
+	}
+	if requests != 2 {
+		t.Fatalf("requests = %d, want 2 (no POST)", requests)
+	}
+}

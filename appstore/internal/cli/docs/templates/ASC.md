@@ -108,6 +108,7 @@ Lower-level alternative:
 
 ```bash
 asc builds add-groups --build-id "BUILD_ID" --group "GROUP_ID"
+asc builds add-groups --build-id "BUILD_ID" --group "GROUP_ID" --dry-run
 asc builds add-groups --build-id "BUILD_ID" --group "GROUP_ID" --submit --confirm
 ```
 

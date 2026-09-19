@@ -46,7 +46,7 @@ func reportBuildBetaGroupAssignmentFailure(
 		buildID,
 		appleUnprocessableDetail(apiErr),
 	)
-	lines := readBuildBetaGroupFailureDiagnostics(ctx, client, buildID, includesExternal)
+	lines := readBuildBetaGroupStateDiagnostics(ctx, client, buildID, includesExternal)
 
 	fmt.Fprintf(os.Stderr, "Error: %s\n", shared.SanitizeTerminal(message))
 	for _, line := range lines {
@@ -65,7 +65,49 @@ func reportBuildBetaGroupAssignmentFailure(
 	)
 }
 
-func readBuildBetaGroupFailureDiagnostics(
+func reportBuildBetaGroupAssignmentDryRun(
+	ctx context.Context,
+	client *asc.Client,
+	buildID string,
+	plan shared.BuildBetaGroupAssignmentPlan,
+	output shared.OutputFlags,
+) error {
+	for _, group := range plan.SkippedInternalGroups {
+		fmt.Fprintf(
+			os.Stderr,
+			"Skipped internal group %q (%s) because --skip-internal was set\n",
+			group.NameForDisplay(),
+			shared.SanitizeTerminal(group.ID),
+		)
+	}
+
+	groupIDs := plan.GroupIDsToAdd()
+	if len(groupIDs) == 0 {
+		fmt.Fprintf(os.Stderr, "No groups to add for build %s after applying filters\n", buildID)
+	} else {
+		lines := readBuildBetaGroupStateDiagnostics(ctx, client, buildID, plan.IncludesExternalGroup())
+		for _, line := range lines {
+			fmt.Fprintln(os.Stderr, shared.SanitizeTerminal(line))
+		}
+		if len(lines) == 0 {
+			fmt.Fprintf(os.Stderr, "Dry-run readiness is unknown; re-check the current build state with asc builds info --build-id %q\n", buildID)
+		}
+		fmt.Fprintf(os.Stderr, "Dry run: no beta groups were added to build %s; readiness is advisory and does not predict a future assignment\n", buildID)
+	}
+
+	action := "would-add"
+	if len(groupIDs) == 0 {
+		action = "no-op"
+	}
+	return shared.PrintOutput(&asc.BuildBetaGroupsUpdateResult{
+		BuildID:  buildID,
+		GroupIDs: groupIDs,
+		Action:   action,
+		DryRun:   true,
+	}, *output.Output, *output.Pretty)
+}
+
+func readBuildBetaGroupStateDiagnostics(
 	ctx context.Context,
 	client *asc.Client,
 	buildID string,

@@ -170,6 +170,9 @@ func TestBuildSigningPlanRejectsOversizedXCConfig(t *testing.T) {
 }
 
 func TestBuildSigningPlanRejectsOversizedUnselectedXCConfigBeforeArtifactPublication(t *testing.T) {
+	if testing.Short() {
+		t.Skip("builds a 4,096-file xcconfig graph")
+	}
 	project := writeStructuredVersionProject(t, false)
 	projectRoot := filepath.Dir(project)
 	configDir := filepath.Join(projectRoot, "Configs")

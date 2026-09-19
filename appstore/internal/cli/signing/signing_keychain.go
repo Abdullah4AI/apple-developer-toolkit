@@ -33,7 +33,7 @@ type signingKeychainInstallDeps struct {
 	SecurityAvailable         bool
 	Now                       func() time.Time
 	AcquireLock               func(context.Context) (func() error, error)
-	CreateKeychain            func(context.Context, string, []byte) error
+	CreateKeychain            func(context.Context, string, []byte) (bool, error)
 	ImportIdentity            func(context.Context, string, []byte, []byte, []byte, string) error
 	KeychainSearchList        func(context.Context) ([]string, error)
 	SetKeychainSearchList     func(context.Context, []string) error
@@ -252,10 +252,10 @@ func executeSigningKeychainInstallWith(ctx context.Context, options signingKeych
 		}
 		return primary
 	}
-	if err := deps.CreateKeychain(ctx, resolvedKeychainPath, keychainPassword); err != nil {
-		return nil, fmt.Errorf("signing keychain install: create keychain: %w", err)
+	created, err = deps.CreateKeychain(ctx, resolvedKeychainPath, keychainPassword)
+	if err != nil {
+		return nil, rollback(fmt.Errorf("signing keychain install: create keychain: %w", err))
 	}
-	created = true
 	removedSearchEntry := false
 	if !options.AddToSearchList && searchListHadPath {
 		if err := deps.RemoveKeychainSearchEntry(ctx, resolvedKeychainPath); err != nil {

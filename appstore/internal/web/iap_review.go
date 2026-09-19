@@ -157,25 +157,30 @@ func appendUniqueReviewIAPMatch(matches *[]ReviewIAP, candidate ReviewIAP) {
 	*matches = append(*matches, candidate)
 }
 
-func ambiguousReviewIAPSelectorError(selector, field string, matches []ReviewIAP) error {
-	lines := make([]string, 0, len(matches))
-	for _, match := range matches {
-		line := strings.TrimSpace(match.ID)
-		if productID := strings.TrimSpace(match.ProductID); productID != "" {
-			line += ", productId=" + productID
-		}
-		if referenceName := strings.TrimSpace(match.ReferenceName); referenceName != "" {
-			line += ", referenceName=" + referenceName
-		}
-		lines = append(lines, line)
-	}
-	return fmt.Errorf(
-		"%q matches %d in-app purchases by %s:\n  %s\nUse the Iris resource ID to disambiguate",
-		selector,
-		len(matches),
-		field,
-		strings.Join(lines, "\n  "),
+// ReviewIAPAmbiguousError reports that a selector matched more than one IAP.
+// Matches remain available to the CLI so it can render bounded, terminal-safe
+// recovery details without making this web client depend on CLI packages.
+type ReviewIAPAmbiguousError struct {
+	Selector string
+	Field    string
+	Matches  []ReviewIAP
+}
+
+func (e *ReviewIAPAmbiguousError) Error() string {
+	return fmt.Sprintf(
+		"%q matches %d in-app purchases by %s",
+		strings.TrimSpace(e.Selector),
+		len(e.Matches),
+		strings.TrimSpace(e.Field),
 	)
+}
+
+func ambiguousReviewIAPSelectorError(selector, field string, matches []ReviewIAP) error {
+	return &ReviewIAPAmbiguousError{
+		Selector: selector,
+		Field:    field,
+		Matches:  matches,
+	}
 }
 
 // CreateInAppPurchaseSubmission attaches a non-renewing in-app purchase to the

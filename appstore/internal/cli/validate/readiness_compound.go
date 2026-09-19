@@ -141,6 +141,12 @@ func fetchAppInfoReadinessData(ctx context.Context, client *asc.Client, appID st
 	if err != nil {
 		return appInfoReadinessData{}, fmt.Errorf("failed to fetch app info: %w", err)
 	}
+	if response == nil {
+		return appInfoReadinessData{}, fmt.Errorf("failed to fetch app info: empty response")
+	}
+	if strings.TrimSpace(response.Links.Next) != "" {
+		return appInfoReadinessData{}, fmt.Errorf("failed to select app info: %w", shared.MarkAmbiguousSelectionSample(shared.AmbiguousAppInfoError(appID, "", asc.AppInfoCandidates(response.Data))))
+	}
 
 	appInfoID := shared.SelectBestAppInfoID(response)
 	if strings.TrimSpace(appInfoID) == "" {

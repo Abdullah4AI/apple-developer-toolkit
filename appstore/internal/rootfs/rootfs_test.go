@@ -3751,6 +3751,120 @@ func TestChmodFileIfSameRejectsReplacementBeforeRootedValidation(t *testing.T) {
 	}
 }
 
+func TestCheckContainedPathRejectsSymlinks(t *testing.T) {
+	t.Run("final component", func(t *testing.T) {
+		dir := t.TempDir()
+		target := filepath.Join(dir, "target")
+		if err := os.WriteFile(target, []byte("data"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		link := filepath.Join(dir, "link")
+		if err := os.Symlink(target, link); err != nil {
+			t.Skipf("symlink unavailable: %v", err)
+		}
+		if err := CheckContainedPath(link); !errors.Is(err, ErrSymlink) {
+			t.Fatalf("CheckContainedPath() error = %v, want ErrSymlink", err)
+		}
+	})
+
+	t.Run("parent component", func(t *testing.T) {
+		dir := t.TempDir()
+		targetDir := filepath.Join(dir, "target")
+		if err := os.Mkdir(targetDir, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		target := filepath.Join(targetDir, "file")
+		if err := os.WriteFile(target, []byte("data"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		linkDir := filepath.Join(dir, "link")
+		if err := os.Symlink(targetDir, linkDir); err != nil {
+			t.Skipf("symlink unavailable: %v", err)
+		}
+		if err := CheckContainedPath(filepath.Join(linkDir, "file")); !errors.Is(err, ErrSymlink) {
+			t.Fatalf("CheckContainedPath() error = %v, want ErrSymlink", err)
+		}
+	})
+
+	t.Run("regular file", func(t *testing.T) {
+		target := filepath.Join(t.TempDir(), "file")
+		if err := os.WriteFile(target, []byte("data"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := CheckContainedPath(target); err != nil {
+			t.Fatalf("CheckContainedPath() error = %v", err)
+		}
+	})
+}
+
+func TestChmodFileIfSameAcceptsDarwinTmpAlias(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("/tmp is a system symlink on Darwin")
+	}
+	dir, err := os.MkdirTemp("/tmp", "asc-rootfs-chmod-")
+	if err != nil {
+		t.Fatalf("MkdirTemp(/tmp) error = %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	target := filepath.Join(dir, "key.p8")
+	mustWrite(t, target, "private key")
+	if err := os.Chmod(target, 0o644); err != nil {
+		t.Fatalf("Chmod(target) error = %v", err)
+	}
+	expected, err := os.Lstat(target)
+	if err != nil {
+		t.Fatalf("Lstat(target) error = %v", err)
+	}
+
+	if err := ChmodFileIfSame(target, expected, 0o600); err != nil {
+		t.Fatalf("ChmodFileIfSame(%q) error = %v", target, err)
+	}
+	info, err := os.Stat(target)
+	if err != nil {
+		t.Fatalf("Stat(target) error = %v", err)
+	}
+	if got, want := info.Mode().Perm(), os.FileMode(0o600); got != want {
+		t.Fatalf("target mode = %#o, want %#o", got, want)
+	}
+}
+
+func TestChmodFileIfSameDarwinTmpAliasRejectsNestedSymlink(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("/tmp is a system symlink on Darwin")
+	}
+	dir, err := os.MkdirTemp("/tmp", "asc-rootfs-symlink-")
+	if err != nil {
+		t.Fatalf("MkdirTemp(/tmp) error = %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	outside := t.TempDir()
+	target := filepath.Join(outside, "key.p8")
+	mustWrite(t, target, "private key")
+	if err := os.Chmod(target, 0o644); err != nil {
+		t.Fatalf("Chmod(target) error = %v", err)
+	}
+	linkedParent := filepath.Join(dir, "linked")
+	if err := os.Symlink(outside, linkedParent); err != nil {
+		t.Fatalf("Symlink() error = %v", err)
+	}
+	expected, err := os.Lstat(filepath.Join(linkedParent, "key.p8"))
+	if err != nil {
+		t.Fatalf("Lstat(linked target) error = %v", err)
+	}
+
+	err = ChmodFileIfSame(filepath.Join(linkedParent, "key.p8"), expected, 0o600)
+	if !errors.Is(err, ErrSymlink) {
+		t.Fatalf("ChmodFileIfSame() error = %v, want ErrSymlink", err)
+	}
+	info, err := os.Stat(target)
+	if err != nil {
+		t.Fatalf("Stat(target) error = %v", err)
+	}
+	if got, want := info.Mode().Perm(), os.FileMode(0o644); got != want {
+		t.Fatalf("symlink target mode = %#o, want %#o untouched", got, want)
+	}
+}
+
 func TestChmodFileMutatesRetainedDescriptorAfterPathReplacement(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("Windows does not expose POSIX permission bits")

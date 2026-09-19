@@ -369,9 +369,16 @@ func executePipeline(ctx context.Context, opts runOptions) (runResult, error) {
 		if getErr != nil {
 			return stepOutcome{}, fmt.Errorf("ensure version: %w", getErr)
 		}
+		if versionResp == nil {
+			return stepOutcome{}, fmt.Errorf("ensure version: empty app store versions response")
+		}
+		pageHasNext := strings.TrimSpace(versionResp.Links.Next) != ""
 
 		switch len(versionResp.Data) {
 		case 0:
+			if pageHasNext {
+				return stepOutcome{}, fmt.Errorf("ensure version: %w", shared.MarkAmbiguousSelectionSample(shared.AmbiguousAppStoreVersionError(opts.Version, opts.Platform, versionResp.Data, "", "")))
+			}
 			if opts.DryRun {
 				versionPlannedCreate = true
 				return stepOutcome{
@@ -396,6 +403,9 @@ func executePipeline(ctx context.Context, opts runOptions) (runResult, error) {
 				ResolvedID: created.Data.ID,
 			}, nil
 		case 1:
+			if pageHasNext {
+				return stepOutcome{}, fmt.Errorf("ensure version: %w", shared.MarkAmbiguousSelectionSample(shared.AmbiguousAppStoreVersionError(opts.Version, opts.Platform, versionResp.Data, "", "")))
+			}
 			foundID := strings.TrimSpace(versionResp.Data[0].ID)
 			status := "ok"
 			message := "reused existing app store version"
@@ -411,7 +421,11 @@ func executePipeline(ctx context.Context, opts runOptions) (runResult, error) {
 				ResolvedID: foundID,
 			}, nil
 		default:
-			return stepOutcome{}, fmt.Errorf("ensure version: %w", shared.AmbiguousAppStoreVersionError(opts.Version, opts.Platform, versionResp.Data, "", ""))
+			ambiguous := shared.AmbiguousAppStoreVersionError(opts.Version, opts.Platform, versionResp.Data, "", "")
+			if pageHasNext {
+				ambiguous = shared.MarkAmbiguousSelectionSample(ambiguous)
+			}
+			return stepOutcome{}, fmt.Errorf("ensure version: %w", ambiguous)
 		}
 	}); err != nil {
 		return result, err

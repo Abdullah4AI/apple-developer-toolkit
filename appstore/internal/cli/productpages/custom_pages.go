@@ -303,6 +303,8 @@ func CustomPagesCreateCommand() *ffcli.Command {
 		ShortHelp:  "Create a custom product page.",
 		LongHelp: `Create a custom product page.
 
+The command also creates an initial version and a localization using the app's primary locale.
+
 Examples:
   asc product-pages custom-pages create --app "APP_ID" --name "Summer Campaign"`,
 		FlagSet:   fs,

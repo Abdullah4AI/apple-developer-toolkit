@@ -1,6 +1,7 @@
 package rootfs
 
 import (
+	"bytes"
 	"errors"
 	"os"
 	"os/exec"
@@ -569,6 +570,39 @@ func TestCaptureFileIdentityRejectsOversizeSnapshot(t *testing.T) {
 	}
 	if got := mustRead(t, filepath.Join(dir, "large")); got != "12345" {
 		t.Fatalf("destination after oversize replacement = %q, want unchanged snapshot", got)
+	}
+}
+
+func TestCaptureFileLimitedAllowsExplicitBoundAboveDefault(t *testing.T) {
+	requireStrictIdentityPlatform(t)
+	dir := t.TempDir()
+	root := mustRoot(t, dir)
+	t.Cleanup(func() { _ = root.Close() })
+	data := bytes.Repeat([]byte("x"), int(fileIdentityDataLimit)+1)
+	if err := os.WriteFile(filepath.Join(dir, "large"), data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := root.CaptureFile("large"); !errors.Is(err, ErrFileIdentityDataTooLarge) {
+		t.Fatalf("CaptureFile() error = %v, want default size-limit refusal", err)
+	}
+	identity, err := root.CaptureFileLimited("large", int64(len(data)))
+	if err != nil {
+		t.Fatalf("CaptureFileLimited() error: %v", err)
+	}
+	if got := len(identity.Data()); got != len(data) {
+		t.Fatalf("captured %d bytes, want %d", got, len(data))
+	}
+}
+
+func TestCaptureFileLimitedRejectsBoundAboveExplicitCaptureLimit(t *testing.T) {
+	requireStrictIdentityPlatform(t)
+	dir := t.TempDir()
+	root := mustRoot(t, dir)
+	t.Cleanup(func() { _ = root.Close() })
+
+	if _, err := root.CaptureFileLimited("large", fileIdentityCaptureLimit+1); !errors.Is(err, ErrFileIdentityDataTooLarge) {
+		t.Fatalf("CaptureFileLimited() error = %v, want ErrFileIdentityDataTooLarge", err)
 	}
 }
 

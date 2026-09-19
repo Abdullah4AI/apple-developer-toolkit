@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"flag"
+	"fmt"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
 )
@@ -324,6 +326,58 @@ func TestResolveIAPID_AmbiguousExactNameFails(t *testing.T) {
 	}
 }
 
+func TestResolveIAPID_AmbiguousSelectorBoundsProviderText(t *testing.T) {
+	recoveryID := "iap-recovery-id-" + strings.Repeat("9", AmbiguousDiagnosticTextLimit+32)
+	providerName := strings.Repeat("名", AmbiguousDiagnosticTextLimit) + "-iap-name-tail"
+	providerProductID := strings.Repeat("界", AmbiguousDiagnosticTextLimit) + "-iap-product-tail\x1b[31m"
+	invalidUTF8 := string([]byte{'r', 'e', 'f', 0xff, 'e', 'r', 'e', 'n', 'c', 'e'})
+	stub := &sequenceIAPLookupStub{
+		responses: []*asc.InAppPurchasesV2Response{
+			iapResponse(),
+			iapResponse(
+				iapLookupFixture{id: recoveryID, productID: providerProductID, name: providerName},
+				iapLookupFixture{id: "iap-2", productID: invalidUTF8, name: providerName},
+			),
+		},
+	}
+
+	_, err := ResolveIAPID(context.Background(), stub, "app-1", providerName)
+	if err == nil {
+		t.Fatal("expected ambiguous error")
+	}
+	if !errors.Is(err, errSelectorAmbiguous) {
+		t.Fatalf("expected ambiguous selector error, got %v", err)
+	}
+	message := err.Error()
+	if !utf8.ValidString(message) {
+		t.Fatalf("ambiguity diagnostic must remain valid UTF-8: %q", message)
+	}
+	if strings.Contains(message, recoveryID) {
+		t.Fatalf("displayed recovery ID should be bounded: %q", message)
+	}
+	if !strings.Contains(message, recoveryID[:len("iap-recovery-id-")]) {
+		t.Fatalf("bounded recovery ID should retain useful context: %q", message)
+	}
+	for _, tail := range []string{"-iap-name-tail", "-iap-product-tail", "\x1b"} {
+		if strings.Contains(message, tail) {
+			t.Fatalf("provider text must be bounded and terminal-safe: %q", message)
+		}
+	}
+	if !strings.Contains(message, "ref�erence") {
+		t.Fatalf("invalid provider UTF-8 should be replaced while retaining context: %q", message)
+	}
+	var structured *AmbiguousSelectionError
+	if !errors.As(err, &structured) || len(structured.Candidates) != 2 {
+		t.Fatalf("expected structured ambiguity candidates, got %#v", structured)
+	}
+	if structured.Candidates[0].ID != recoveryID || structured.Candidates[0].Label != providerProductID || structured.Candidates[0].Extra != providerName {
+		t.Fatalf("structured ambiguity must retain exact IAP values: %#v", structured.Candidates[0])
+	}
+	if structured.Description != fmt.Sprintf("%q by name", providerName) || structured.Flag != "--iap-id" || structured.DisplayTextLimit != AmbiguousDiagnosticTextLimit {
+		t.Fatalf("structured ambiguity lost IAP selector semantics: %#v", structured)
+	}
+}
+
 func TestResolveSubscriptionID_DedupesAcrossGroups(t *testing.T) {
 	stub := &sequenceSubscriptionLookupStub{
 		groupResponses: []*asc.SubscriptionGroupsResponse{
@@ -460,6 +514,63 @@ func TestResolveSubscriptionID_WithAppContextDoesNotSuppressNumericAmbiguity(t *
 	}
 	if !strings.Contains(err.Error(), "pass --subscription-id with one of:") {
 		t.Fatalf("expected disambiguation guidance, got %v", err)
+	}
+}
+
+func TestResolveSubscriptionID_AmbiguousSelectorBoundsProviderText(t *testing.T) {
+	recoveryID := "sub-recovery-id-" + strings.Repeat("9", AmbiguousDiagnosticTextLimit+32)
+	providerName := strings.Repeat("名", AmbiguousDiagnosticTextLimit) + "-subscription-name-tail"
+	providerProductID := strings.Repeat("界", AmbiguousDiagnosticTextLimit) + "-subscription-product-tail\x1b[31m"
+	invalidUTF8 := string([]byte{'r', 'e', 'f', 0xff, 'e', 'r', 'e', 'n', 'c', 'e'})
+	stub := &sequenceSubscriptionLookupStub{
+		groupResponses: []*asc.SubscriptionGroupsResponse{
+			subscriptionGroupsResponse("group-1"),
+		},
+		subscriptionResponses: map[string][]*asc.SubscriptionsResponse{
+			"group-1": {
+				subscriptionsResponse(),
+				subscriptionsResponse(
+					subscriptionLookupFixture{id: recoveryID, productID: providerProductID, name: providerName},
+					subscriptionLookupFixture{id: "sub-2", productID: invalidUTF8, name: providerName},
+				),
+			},
+		},
+	}
+
+	_, err := ResolveSubscriptionID(context.Background(), stub, "app-1", providerName)
+	if err == nil {
+		t.Fatal("expected ambiguous error")
+	}
+	if !errors.Is(err, errSelectorAmbiguous) {
+		t.Fatalf("expected ambiguous selector error, got %v", err)
+	}
+	message := err.Error()
+	if !utf8.ValidString(message) {
+		t.Fatalf("ambiguity diagnostic must remain valid UTF-8: %q", message)
+	}
+	if strings.Contains(message, recoveryID) {
+		t.Fatalf("displayed recovery ID should be bounded: %q", message)
+	}
+	if !strings.Contains(message, recoveryID[:len("sub-recovery-id-")]) {
+		t.Fatalf("bounded recovery ID should retain useful context: %q", message)
+	}
+	for _, tail := range []string{"-subscription-name-tail", "-subscription-product-tail", "\x1b"} {
+		if strings.Contains(message, tail) {
+			t.Fatalf("provider text must be bounded and terminal-safe: %q", message)
+		}
+	}
+	if !strings.Contains(message, "ref�erence") {
+		t.Fatalf("invalid provider UTF-8 should be replaced while retaining context: %q", message)
+	}
+	var structured *AmbiguousSelectionError
+	if !errors.As(err, &structured) || len(structured.Candidates) != 2 {
+		t.Fatalf("expected structured ambiguity candidates, got %#v", structured)
+	}
+	if structured.Candidates[0].ID != recoveryID || structured.Candidates[0].Label != providerProductID || structured.Candidates[0].Extra != providerName {
+		t.Fatalf("structured ambiguity must retain exact subscription values: %#v", structured.Candidates[0])
+	}
+	if structured.Description != fmt.Sprintf("%q by name", providerName) || structured.Flag != "--subscription-id" || structured.DisplayTextLimit != AmbiguousDiagnosticTextLimit {
+		t.Fatalf("structured ambiguity lost subscription selector semantics: %#v", structured)
 	}
 }
 

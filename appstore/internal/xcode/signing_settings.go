@@ -15,6 +15,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/bitrise-io/go-xcode/xcodeproject/serialized"
 	"github.com/google/uuid"
@@ -2627,9 +2628,10 @@ func validateSigningArtifactAliasesWithAuthorizedProtectedPaths(planPath, receip
 		}
 		artifactPhysicalPaths[artifact.label] = physical
 	}
+	authorizedPathIndex := newSigningAuthorizedPathIndex(authorizedProtectedPaths)
 	protectedPhysicalPaths := make(map[string]string, len(protectedPaths))
 	for _, protectedPath := range protectedPaths {
-		if !protectedPathIsAuthorized(protectedPath, authorizedProtectedPaths) {
+		if !authorizedPathIndex.contains(protectedPath) {
 			continue
 		}
 		// The rooted inspector never follows a final symlink, so an aliased
@@ -2736,13 +2738,56 @@ func validateSigningArtifactAliasesWithAuthorizedProtectedPaths(planPath, receip
 	return nil
 }
 
-func protectedPathIsAuthorized(path string, authorizedPaths []string) bool {
-	for _, authorizedPath := range authorizedPaths {
-		if signingPathCaseEquivalent(path, authorizedPath) {
+type signingAuthorizedPathIndex struct {
+	exact  map[string]struct{}
+	folded map[string][]string
+}
+
+// newSigningAuthorizedPathIndex builds a per-validation lexical membership
+// index. Exact normalized paths are the common case. Folded buckets only
+// narrow candidates; signingPathCaseEquivalentNormalized remains the authority
+// for case-sensitive versus case-insensitive directory semantics.
+func newSigningAuthorizedPathIndex(paths []string) signingAuthorizedPathIndex {
+	index := signingAuthorizedPathIndex{
+		exact:  make(map[string]struct{}, len(paths)),
+		folded: make(map[string][]string, len(paths)),
+	}
+	for _, path := range paths {
+		normalized := normalizeSigningLexicalPath(path)
+		index.exact[normalized] = struct{}{}
+		key := signingPathCaseFoldKey(normalized)
+		index.folded[key] = append(index.folded[key], normalized)
+	}
+	return index
+}
+
+func (index signingAuthorizedPathIndex) contains(path string) bool {
+	normalized := normalizeSigningLexicalPath(path)
+	if _, ok := index.exact[normalized]; ok {
+		return true
+	}
+	for _, authorized := range index.folded[signingPathCaseFoldKey(normalized)] {
+		if signingPathCaseEquivalentNormalized(normalized, authorized) {
 			return true
 		}
 	}
 	return false
+}
+
+// signingPathCaseFoldKey is an EqualFold-compatible bucket key. It is only an
+// index accelerator: authorization still requires the platform-aware
+// comparator above. Simple-folding avoids false negatives for Unicode path
+// spellings that strings.ToLower does not coalesce.
+func signingPathCaseFoldKey(path string) string {
+	return strings.Map(func(r rune) rune {
+		folded := r
+		for next := unicode.SimpleFold(r); next != r; next = unicode.SimpleFold(next) {
+			if next < folded {
+				folded = next
+			}
+		}
+		return folded
+	}, path)
 }
 
 func signingProjectInputPaths(

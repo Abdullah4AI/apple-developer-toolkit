@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/peterbourgon/ff/v3/ffcli"
 
@@ -176,6 +177,40 @@ func TestReviewSubscriptionAttachSkipReasonReadyToSubmitDoesNotClaimAlreadyAttac
 	}
 }
 
+func TestFindReviewSubscriptionBoundsDuplicateIDDiagnostic(t *testing.T) {
+	selector := "subscription-id-" + strings.Repeat("9", shared.AmbiguousDiagnosticTextLimit) + "-selector-tail"
+	providerProductID := strings.Repeat("界", shared.AmbiguousDiagnosticTextLimit) + "-product-tail\x1b[31m"
+	providerName := strings.Repeat("名", shared.AmbiguousDiagnosticTextLimit) + "-name-tail"
+
+	_, err := findReviewSubscription([]webcore.ReviewSubscription{
+		{ID: selector, ProductID: providerProductID, Name: providerName},
+		{ID: selector, ProductID: "com.example.second", Name: "Second"},
+	}, selector)
+	if err == nil {
+		t.Fatal("expected duplicate subscription ID to fail")
+	}
+	message := err.Error()
+	if !utf8.ValidString(message) {
+		t.Fatalf("ambiguity diagnostic must remain valid UTF-8: %q", message)
+	}
+	for _, unsafe := range []string{"-selector-tail", "-product-tail", "-name-tail", "\x1b"} {
+		if strings.Contains(message, unsafe) {
+			t.Fatalf("provider text must be bounded and terminal-safe: %q", message)
+		}
+	}
+
+	var structured *shared.AmbiguousSelectionError
+	if !errors.As(err, &structured) {
+		t.Fatalf("expected structured ambiguity error, got %T: %v", err, err)
+	}
+	if structured.DisplayTextLimit != shared.AmbiguousDiagnosticTextLimit {
+		t.Fatalf("display text limit = %d, want %d", structured.DisplayTextLimit, shared.AmbiguousDiagnosticTextLimit)
+	}
+	if len(structured.Candidates) != 2 || structured.Candidates[0].ID != selector || structured.Candidates[0].Label != providerProductID || structured.Candidates[0].Extra != providerName {
+		t.Fatalf("structured ambiguity must retain exact provider values: %#v", structured.Candidates)
+	}
+}
+
 func TestFindReviewSubscriptionGroupMatchesReferenceName(t *testing.T) {
 	got, err := findReviewSubscriptionGroup([]webcore.ReviewSubscription{
 		{GroupID: "group-1", GroupReferenceName: "Premium", ID: "sub-1"},
@@ -199,6 +234,40 @@ func TestFindReviewSubscriptionGroupRejectsAmbiguousReferenceName(t *testing.T) 
 	}
 	if !strings.Contains(err.Error(), `2 subscription groups match "Premium" by name; pass --group-id with one of:`) {
 		t.Fatalf("expected ambiguity diagnostic, got %q", err)
+	}
+}
+
+func TestFindReviewSubscriptionGroupBoundsProviderDiagnostic(t *testing.T) {
+	selector := strings.Repeat("名", shared.AmbiguousDiagnosticTextLimit) + "-selector-tail"
+	firstID := "group-recovery-id-" + strings.Repeat("9", shared.AmbiguousDiagnosticTextLimit) + "-id-tail\x1b[31m"
+	secondID := "group-2"
+
+	_, err := findReviewSubscriptionGroup([]webcore.ReviewSubscription{
+		{GroupID: firstID, GroupReferenceName: selector, ID: "sub-1"},
+		{GroupID: secondID, GroupReferenceName: selector, ID: "sub-2"},
+	}, selector)
+	if err == nil {
+		t.Fatal("expected ambiguous group name to fail")
+	}
+	message := err.Error()
+	if !utf8.ValidString(message) {
+		t.Fatalf("ambiguity diagnostic must remain valid UTF-8: %q", message)
+	}
+	for _, unsafe := range []string{"-selector-tail", "-id-tail", "\x1b"} {
+		if strings.Contains(message, unsafe) {
+			t.Fatalf("provider text must be bounded and terminal-safe: %q", message)
+		}
+	}
+
+	var structured *shared.AmbiguousSelectionError
+	if !errors.As(err, &structured) {
+		t.Fatalf("expected structured ambiguity error, got %T: %v", err, err)
+	}
+	if structured.DisplayTextLimit != shared.AmbiguousDiagnosticTextLimit {
+		t.Fatalf("display text limit = %d, want %d", structured.DisplayTextLimit, shared.AmbiguousDiagnosticTextLimit)
+	}
+	if len(structured.Candidates) != 2 || structured.Candidates[0].ID != firstID || structured.Candidates[0].Extra != selector {
+		t.Fatalf("structured ambiguity must retain exact provider values: %#v", structured.Candidates)
 	}
 }
 
