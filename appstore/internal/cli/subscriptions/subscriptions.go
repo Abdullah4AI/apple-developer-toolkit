@@ -1801,8 +1801,12 @@ func SubscriptionsAvailabilityEditCommand() *ffcli.Command {
 	subID := fs.String("subscription-id", "", "Subscription ID, product ID, or exact current name")
 	appID := addSubscriptionLookupAppFlag(fs)
 	territories := fs.String("territories", "", "Territory IDs, comma-separated")
-	availableInNew := fs.Bool("available-in-new-territories", false, "Include new territories automatically")
+	lastBool := &lastVisitedBoolFlag{}
+	availableInNewFlag := bindVisitedBoolFlag(fs, lastBool, "available-in-new-territories", "Include new territories automatically")
+	availableInNew := &availableInNewFlag.value
 	billingMode := fs.String("billing-mode", string(subscriptionBillingModeUpfront), "Billing mode: upfront or monthly-commitment")
+	confirmFlag := bindVisitedBoolFlag(fs, lastBool, "confirm", "Confirm monthly-commitment availability changes")
+	confirm := &confirmFlag.value
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
@@ -1813,11 +1817,20 @@ func SubscriptionsAvailabilityEditCommand() *ffcli.Command {
 
 Examples:
   asc subscriptions pricing availability edit --subscription-id "SUB_ID" --territories "US,Canada"
-  asc subscriptions pricing availability edit --subscription-id "SUB_ID" --billing-mode monthly-commitment --territories "Norway,Germany"`,
+  asc subscriptions pricing availability edit --subscription-id "SUB_ID" --billing-mode monthly-commitment --territories "Norway,Germany" --confirm
+
+Confirmation is required when --billing-mode monthly-commitment is selected.`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
-			if err := shared.RecoverBoolFlagTailArgs(fs, args, availableInNew); err != nil {
+			var trailingBool *bool
+			switch lastBool.name {
+			case "available-in-new-territories":
+				trailingBool = availableInNew
+			case "confirm":
+				trailingBool = confirm
+			}
+			if err := shared.RecoverBoolFlagTailArgs(fs, args, trailingBool); err != nil {
 				return err
 			}
 
@@ -1844,10 +1857,13 @@ Examples:
 					return shared.UsageError("--available-in-new-territories is not supported for MONTHLY plan availability")
 				}
 				territoryIDs, excluded := filterMonthlyCommitmentTerritories(territoryIDs)
-				printMonthlyCommitmentTerritoryWarning(excluded)
 				if len(territoryIDs) == 0 {
 					return shared.UsageError("no eligible monthly-commitment territories remain after excluding USA and Singapore")
 				}
+				if !*confirm {
+					return shared.UsageError("--confirm is required for monthly-commitment availability changes")
+				}
+				printMonthlyCommitmentTerritoryWarning(excluded)
 			}
 
 			client, err := shared.GetASCClient()
