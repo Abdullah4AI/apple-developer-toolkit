@@ -44,14 +44,19 @@ func Run(args []string, versionInfo string) int {
 	}
 
 	root := rootCommandForArgs(versionInfo, args)
+	// The credential profile is a root-owned selector, so relocate a misplaced
+	// `--profile` before anything else reads the argv. Running it first also
+	// keeps spaced boolean recovery working for the flags that follow it.
+	args = hoistRootProfileFlag(root, args)
 	args = normalizeSpacedBooleanFlags(root, args)
 	analysis := analyzeInvocation(root, args)
+	parseArgs := markLeadingSearchFlagTerminator(root, args)
 	runCtx, stopSignals := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stopSignals()
 
 	parseOutput := &parseOutputBuffer{}
-	restoreFlagOutputs := prepareFlagParsing(root, args, parseOutput)
-	parseErr := root.Parse(args)
+	restoreFlagOutputs := prepareFlagParsing(root, parseArgs, parseOutput)
+	parseErr := root.Parse(parseArgs)
 	restoreFlagOutputs()
 	if parseErr != nil {
 		if errors.Is(parseErr, flag.ErrHelp) {
@@ -131,6 +136,19 @@ func Run(args []string, versionInfo string) int {
 	if shouldRenderConciseUnknownChild(root, analysis, commandName) {
 		printConciseUnknownCommand(analysis, commandName)
 		if err := writeUsageJUnitReport(commandName, unknownCommandError(analysis, commandName)); err != nil {
+			printUsageJUnitReportFailure(commandName, versionInfo, analysis, err)
+			return ExitError
+		}
+		emitImmediateTelemetry(args, root, versionInfo, validationFailureContext(analysis, flag.ErrHelp))
+		return ExitUsage
+	}
+	// A flag-only leaf command cannot use a bare operand. Reject it here, before
+	// the command runs, so `asc apps view 123` names the stray token and the
+	// flag it belongs to instead of dropping it silently or reporting only the
+	// missing flag.
+	if operands := strayPositionalOperands(analysis, commandName); len(operands) > 0 {
+		printStrayPositionalOperands(commandName, operands, analysis.command.FlagSet)
+		if err := writeUsageJUnitReport(commandName, strayPositionalError(operands)); err != nil {
 			printUsageJUnitReportFailure(commandName, versionInfo, analysis, err)
 			return ExitError
 		}
@@ -411,6 +429,39 @@ func requestedHelp(root *ffcli.Command, args []string) bool {
 		i = next
 	}
 	return false
+}
+
+// markLeadingSearchFlagTerminator preserves a terminator that the search flag
+// set would otherwise remove before Exec. A terminator after the first query
+// token is already retained because flag parsing stops at that positional.
+func markLeadingSearchFlagTerminator(root *ffcli.Command, args []string) []string {
+	rootSearch := findDirectSubcommand(root, "search")
+	command := root
+	for i := 0; command != nil && i < len(args); {
+		token := args[i]
+		if token == "--" {
+			if command != rootSearch {
+				return args
+			}
+			marked := append([]string(nil), args...)
+			marked[i] = shared.FlagTerminatorSentinel
+			return marked
+		}
+		if token == "" {
+			return args
+		}
+		if subcommand := findDirectSubcommand(command, token); subcommand != nil {
+			command = subcommand
+			i++
+			continue
+		}
+		next, consumed := consumeFlagToken(command.FlagSet, token, args, i)
+		if !consumed {
+			return args
+		}
+		i = next
+	}
+	return args
 }
 
 func printParseFailure(parseErr error, parseOutput string, analysis invocationAnalysis, commandName string) {

@@ -25,7 +25,7 @@ asc <subcommand> [flags]
 
 - `--api-debug` - Enable HTTP debug logging to stderr (redacts sensitive values)
 - `--debug` - Enable debug logging to stderr
-- `--profile` - Use named authentication profile
+- `--profile` - Use named authentication profile (accepted before or after the command name)
 - `--report` - Report format for CI output (e.g., junit)
 - `--report-file` - Path to write CI report file
 - `--retry-log` - Enable retry logging to stderr (overrides ASC_RETRY_LOG/config when set)
@@ -189,6 +189,12 @@ ASC_BYPASS_KEYCHAIN=1 asc notarization validate --file ./MyApp.dmg --output json
 
 # Run local Xcode tests with structured results
 asc xcode test --project App.xcodeproj --scheme App --destination 'platform=iOS Simulator,name=iPhone 17 Pro' --output json
+
+# List local Xcode test destinations without changing Simulator state
+asc xcode test-destinations --platform iOS --available-only --output json
+
+# Convert an existing Xcode result bundle to JUnit
+asc xcode test junit --xcresult ./Test.xcresult --report-file ./junit.xml --output json
 
 # Plan, confirm, resume, check status, and live-verify a private ad hoc distribution run
 asc distribute plan --archive-path ./App.xcarchive --config .asc/distribution.json --plan .asc/distribution/plan.json --state-dir .asc/distribution/runs --output json

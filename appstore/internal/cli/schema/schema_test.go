@@ -1,8 +1,34 @@
 package schema
 
 import (
+	"flag"
+	"strings"
 	"testing"
 )
+
+func TestParseInterspersedSchemaFlagsPreservesErrorPrecedence(t *testing.T) {
+	t.Run("earlier unknown flag", func(t *testing.T) {
+		fs := flag.NewFlagSet("schema", flag.ContinueOnError)
+		fs.String("method", "", "")
+
+		_, err := parseInterspersedSchemaFlags(fs, []string{
+			"apps", "--bogus", "--profile", "staging",
+		})
+		if err == nil || !strings.Contains(err.Error(), "flag provided but not defined: -bogus") {
+			t.Fatalf("parseInterspersedSchemaFlags() error = %v, want the unknown-flag error", err)
+		}
+	})
+
+	t.Run("misplaced root profile", func(t *testing.T) {
+		fs := flag.NewFlagSet("schema", flag.ContinueOnError)
+		fs.String("method", "", "")
+
+		_, err := parseInterspersedSchemaFlags(fs, []string{"apps", "--profile", "staging"})
+		if err == nil || err.Error() != "`--profile` must appear before positional arguments" {
+			t.Fatalf("parseInterspersedSchemaFlags() error = %v, want the profile-placement error", err)
+		}
+	})
+}
 
 func TestLoadIndex_ParsesEmbeddedData(t *testing.T) {
 	endpoints, err := loadIndex()

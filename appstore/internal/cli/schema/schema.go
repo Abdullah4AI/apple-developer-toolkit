@@ -303,6 +303,9 @@ func parseInterspersedSchemaFlags(fs *flag.FlagSet, args []string) ([]string, er
 
 		f := fs.Lookup(name)
 		if f == nil {
+			if name == shared.RootProfileFlagName {
+				return nil, fmt.Errorf("`--profile` must appear before positional arguments")
+			}
 			return nil, fmt.Errorf("flag provided but not defined: -%s", name)
 		}
 
