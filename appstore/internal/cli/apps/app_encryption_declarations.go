@@ -38,7 +38,7 @@ Examples:
 func AppEncryptionDeclarationsListCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("apps app-encryption-declarations list", flag.ExitOnError)
 
-	appID := fs.String("id", "", "App Store Connect app ID (or ASC_APP_ID)")
+	appID := shared.BindResourceIDFlag(fs, "id", "apps", "App Store Connect app ID (or ASC_APP_ID)")
 	builds := fs.String("build-id", "", "Filter by build IDs (comma-separated)")
 	fields := fs.String("fields", "", "Fields to include: "+strings.Join(appEncryptionDeclarationFieldsList(), ", "))
 	documentFields := fs.String("document-fields", "", "Document fields to include: "+strings.Join(appEncryptionDeclarationDocumentFieldsList(), ", "))

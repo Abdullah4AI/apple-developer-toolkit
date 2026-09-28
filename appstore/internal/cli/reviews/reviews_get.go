@@ -15,7 +15,7 @@ import (
 func ReviewsGetCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("reviews view", flag.ExitOnError)
 
-	reviewID := fs.String("id", "", "Customer review ID")
+	reviewID := shared.BindResourceIDFlag(fs, "id", "customerReviews", "Customer review ID")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{

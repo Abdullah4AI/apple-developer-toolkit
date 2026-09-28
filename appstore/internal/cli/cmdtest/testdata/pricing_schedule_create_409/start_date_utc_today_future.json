@@ -1,0 +1,12 @@
+{
+  "errors" : [ {
+    "id" : "08201cf9-9d11-44d1-8743-c342eb72e5f2",
+    "status" : "409",
+    "code" : "ENTITY_ERROR.INVALID_START_DATE",
+    "title" : "There is a problem with the request entity",
+    "detail" : "Entire timeline must be covered for USA. The first interval has a start date 2026-09-27T00:00 in the future",
+    "source" : {
+      "pointer" : "/data/relationships/manualPrices/data/0/attributes/startDate"
+    }
+  } ]
+}

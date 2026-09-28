@@ -45,7 +45,7 @@ Examples:
 func ProfilesRelationshipsBundleIDCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("bundle-id", flag.ExitOnError)
 
-	id := fs.String("id", "", "Profile ID")
+	id := shared.BindResourceIDFlag(fs, "id", "profiles", "Profile ID")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
@@ -87,7 +87,7 @@ Examples:
 func ProfilesRelationshipsCertificatesCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("certificates", flag.ExitOnError)
 
-	id := fs.String("id", "", "Profile ID")
+	id := shared.BindResourceIDFlag(fs, "id", "profiles", "Profile ID")
 	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
 	next := fs.String("next", "", "Fetch next page using a links.next URL")
 	paginate := fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")
@@ -172,7 +172,7 @@ Examples:
 func ProfilesRelationshipsDevicesCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("devices", flag.ExitOnError)
 
-	id := fs.String("id", "", "Profile ID")
+	id := shared.BindResourceIDFlag(fs, "id", "profiles", "Profile ID")
 	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
 	next := fs.String("next", "", "Fetch next page using a links.next URL")
 	paginate := fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")

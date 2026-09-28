@@ -1,6 +1,7 @@
 package cmdtest
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -16,6 +17,7 @@ import (
 	"testing"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shots"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/rootfs"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/screenshots"
 )
 
@@ -857,58 +859,6 @@ func TestShotsFrame_MacDeviceSubtitleOnly(t *testing.T) {
 	}
 }
 
-func TestShotsFrame_CanvasFlagsRejectNonCanvasDevice(t *testing.T) {
-	tests := []struct {
-		name string
-		args []string
-	}{
-		{
-			name: "title on iphone",
-			args: []string{"screenshots", "frame", "--input", "/tmp/raw.png", "--title", "Hello"},
-		},
-		{
-			name: "bg-color on iphone",
-			args: []string{"screenshots", "frame", "--input", "/tmp/raw.png", "--bg-color", "#fff"},
-		},
-		{
-			name: "title-color on iphone",
-			args: []string{"screenshots", "frame", "--input", "/tmp/raw.png", "--title-color", "#000"},
-		},
-		{
-			name: "subtitle on iphone",
-			args: []string{"screenshots", "frame", "--input", "/tmp/raw.png", "--subtitle", "Tagline"},
-		},
-		{
-			name: "subtitle-color on iphone",
-			args: []string{"screenshots", "frame", "--input", "/tmp/raw.png", "--subtitle-color", "#333"},
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			root := RootCommand("1.2.3")
-			root.FlagSet.SetOutput(io.Discard)
-
-			stdout, stderr := captureOutput(t, func() {
-				if err := root.Parse(test.args); err != nil {
-					t.Fatalf("parse error: %v", err)
-				}
-				err := root.Run(context.Background())
-				if !errors.Is(err, flag.ErrHelp) {
-					t.Fatalf("expected ErrHelp, got %v", err)
-				}
-			})
-
-			if stdout != "" {
-				t.Fatalf("expected empty stdout, got %q", stdout)
-			}
-			if !strings.Contains(stderr, "only apply to canvas devices") {
-				t.Fatalf("expected canvas device error, got %q", stderr)
-			}
-		})
-	}
-}
-
 func TestShotsFrame_CanvasFlagsRejectConfigMode(t *testing.T) {
 	root := RootCommand("1.2.3")
 	root.FlagSet.SetOutput(io.Discard)
@@ -1239,6 +1189,11 @@ func frameResultWithWrittenPNG(t *testing.T, outputPath string, result screensho
 	}
 
 	writeFramePNG(t, path, makeRawImage(width, height))
+	var err error
+	result.OutputHash, err = screenshots.HashFile(t.Context(), path)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	result.Path = path
 	if result.Width == 0 {
@@ -1248,6 +1203,235 @@ func frameResultWithWrittenPNG(t *testing.T, outputPath string, result screensho
 		result.Height = height
 	}
 	return &result
+}
+
+func TestShotsFrame_ResumeSkipsUnchangedInput(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+	rawPath := filepath.Join(dir, "raw.png")
+	writeFramePNG(t, rawPath, makeRawImage(20, 40))
+	outputDir := filepath.Join(dir, "framed")
+	calls := 0
+	installMockFrame(t, func(_ context.Context, req screenshots.FrameRequest) (*screenshots.FrameResult, error) {
+		calls++
+		if req.Canvas == nil || req.Canvas.Title != "Home" {
+			t.Fatalf("canvas = %+v", req.Canvas)
+		}
+		return frameResultWithWrittenPNG(t, req.OutputPath, screenshots.FrameResult{
+			Path:   req.OutputPath,
+			Device: req.Device,
+		}), nil
+	})
+
+	run := func() {
+		root := RootCommand("1.2.3")
+		root.FlagSet.SetOutput(io.Discard)
+		if err := root.Parse([]string{
+			"screenshots", "frame",
+			"--input", rawPath,
+			"--output-dir", outputDir,
+			"--title", "Home",
+			"--resume",
+			"--output", "json",
+		}); err != nil {
+			t.Fatal(err)
+		}
+		if err := root.Run(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	run()
+	run()
+	if calls != 1 {
+		t.Fatalf("frame calls = %d, want 1 on resume", calls)
+	}
+	// A render without --resume (or another tool) can replace the output
+	// while the source and recorded render settings remain unchanged.
+	outputPath := filepath.Join(outputDir, "raw-iphone-air.png")
+	writeFramePNG(t, outputPath, makeRawImage(30, 50))
+	run()
+	if calls != 2 {
+		t.Fatalf("frame calls = %d, want 2 after output replacement", calls)
+	}
+}
+
+func TestShotsFrameResumeRerenderRejectsSymlinkOutput(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the fake Koubou script and symlink fixture require POSIX")
+	}
+	for _, test := range []struct {
+		name        string
+		fingerprint func(string) string
+	}{
+		{name: "matching state", fingerprint: func(current string) string { return current }},
+		{name: "stale state", fingerprint: func(string) string { return "stale" }},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			dir := t.TempDir()
+			t.Chdir(dir)
+			t.Setenv("ASC_APP_ID", "")
+			t.Setenv("ASC_CONFIG_PATH", filepath.Join(dir, "config.json"))
+
+			inputPath := filepath.Join(dir, "raw.png")
+			writeFramePNG(t, inputPath, makeRawImage(20, 40))
+			outputPath := filepath.Join(dir, "framed.png")
+			targetPath := filepath.Join(t.TempDir(), "target.png")
+			if err := os.WriteFile(targetPath, []byte("keep"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Symlink(targetPath, outputPath); err != nil {
+				t.Fatal(err)
+			}
+
+			resumeRoot, err := rootfs.New(dir)
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = resumeRoot.Close() })
+			sourceHash, err := screenshots.HashFile(t.Context(), inputPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			currentFingerprint := screenshots.FingerprintFrameResume(screenshots.FrameResumeFingerprint{
+				SourceHash: sourceHash,
+				Device:     string(screenshots.DefaultFrameDevice()),
+			})
+			if err := screenshots.SaveFrameResumeState(resumeRoot, screenshots.FrameResumeStateRel, screenshots.FrameResumeState{
+				Files: map[string]screenshots.FrameResumeEntry{
+					outputPath: {Fingerprint: test.fingerprint(currentFingerprint)},
+				},
+			}); err != nil {
+				t.Fatal(err)
+			}
+			statePath := filepath.Join(dir, screenshots.FrameResumeStateRel)
+			stateBefore, err := os.ReadFile(statePath)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			binDir := t.TempDir()
+			logPath := filepath.Join(dir, "kou.log")
+			kouPath := filepath.Join(binDir, "kou")
+			if err := os.WriteFile(kouPath, []byte(`#!/bin/sh
+set -eu
+if [ "$1" = "--version" ]; then
+  echo "kou 0.20.0"
+  exit 0
+fi
+if [ "$1" = "setup-frames" ]; then
+  exit 0
+fi
+if [ "$1" != "generate" ]; then
+  exit 1
+fi
+config="$2"
+output_dir=$(dirname "$config")/output
+mkdir -p "$output_dir"
+cp "$KOU_INPUT" "$output_dir/framed.png"
+echo generate >> "$KOU_LOG_PATH"
+echo '[{"name":"framed","path":"output/framed.png","success":true,"error":""}]'
+`), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+			t.Setenv("KOU_INPUT", inputPath)
+			t.Setenv("KOU_LOG_PATH", logPath)
+
+			restore := shots.SetFrameFunc(nil)
+			t.Cleanup(restore)
+			root := RootCommand("1.2.3")
+			root.FlagSet.SetOutput(io.Discard)
+			if err := root.Parse([]string{
+				"screenshots", "frame",
+				"--input", inputPath,
+				"--output-path", outputPath,
+				"--resume",
+				"--output", "json",
+			}); err != nil {
+				t.Fatal(err)
+			}
+			if err := root.Run(context.Background()); err == nil {
+				t.Fatal("expected symlink output publication to fail closed")
+			}
+
+			contents, err := os.ReadFile(targetPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(contents) != "keep" {
+				t.Fatalf("symlink target changed to %q", contents)
+			}
+			outputInfo, err := os.Lstat(outputPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if outputInfo.Mode()&os.ModeSymlink == 0 {
+				t.Fatalf("output mode = %v, want symlink preserved", outputInfo.Mode())
+			}
+			stateAfter, err := os.ReadFile(statePath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !bytes.Equal(stateAfter, stateBefore) {
+				t.Fatalf("resume state changed after failed rerender: before=%q after=%q", stateBefore, stateAfter)
+			}
+			log, err := os.ReadFile(logPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := strings.TrimSpace(string(log)); got != "generate" {
+				t.Fatalf("Koubou generation log = %q, want one rerender", got)
+			}
+		})
+	}
+}
+
+func TestShotsFrame_ResumeUsesPinnedInput(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+	rawPath := filepath.Join(dir, "raw.png")
+	writeFramePNG(t, rawPath, makeRawImage(20, 40))
+	original, err := os.ReadFile(rawPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	outputPath := filepath.Join(dir, "framed.png")
+	installMockFrame(t, func(_ context.Context, req screenshots.FrameRequest) (*screenshots.FrameResult, error) {
+		pinned, err := os.ReadFile(req.InputPath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Equal(pinned, original) {
+			t.Fatal("renderer received bytes different from the fingerprinted input")
+		}
+		writeFramePNG(t, rawPath, makeRawImage(30, 50))
+		stillPinned, err := os.ReadFile(req.InputPath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Equal(stillPinned, original) {
+			t.Fatal("pinned renderer input changed after the source was replaced")
+		}
+		return frameResultWithWrittenPNG(t, req.OutputPath, screenshots.FrameResult{
+			Path:   req.OutputPath,
+			Device: req.Device,
+		}), nil
+	})
+
+	root := RootCommand("1.2.3")
+	root.FlagSet.SetOutput(io.Discard)
+	if err := root.Parse([]string{
+		"screenshots", "frame",
+		"--input", rawPath,
+		"--output-path", outputPath,
+		"--resume",
+		"--output", "json",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := root.Run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func writeFramePNG(t *testing.T, path string, img image.Image) {
@@ -1279,4 +1463,33 @@ func makeRawImage(width, height int) image.Image {
 		}
 	}
 	return img
+}
+
+func TestShotsFrameResumeRejectsReplacedPublication(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+	input := filepath.Join(dir, "raw.png")
+	output := filepath.Join(dir, "framed.png")
+	writeFramePNG(t, input, makeRawImage(20, 40))
+	calls := 0
+	installMockFrame(t, func(_ context.Context, req screenshots.FrameRequest) (*screenshots.FrameResult, error) {
+		calls++
+		result := frameResultWithWrittenPNG(t, req.OutputPath, screenshots.FrameResult{Device: req.Device})
+		if calls == 1 {
+			writeFramePNG(t, req.OutputPath, makeRawImage(30, 50))
+		}
+		return result, nil
+	})
+	for range 2 {
+		root := RootCommand("1.2.3")
+		if err := root.Parse([]string{"screenshots", "frame", "--input", input, "--output-path", output, "--resume", "--output", "json"}); err != nil {
+			t.Fatal(err)
+		}
+		if err := root.Run(t.Context()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if calls != 2 {
+		t.Fatalf("frame calls = %d, want 2 after publication was replaced", calls)
+	}
 }

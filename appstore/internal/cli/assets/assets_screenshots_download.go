@@ -53,8 +53,8 @@ type screenshotDownloadResult struct {
 func AssetsScreenshotsDownloadCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("download", flag.ExitOnError)
 
-	id := fs.String("id", "", "Screenshot ID to download")
-	localizationID := fs.String("version-localization", "", "App Store version localization ID (download all screenshots)")
+	id := shared.BindResourceIDFlag(fs, "id", "appScreenshots", "Screenshot ID to download")
+	localizationID := shared.BindResourceIDFlag(fs, "version-localization", "appStoreVersionLocalizations", "App Store version localization ID (download all screenshots)")
 	outputPath := fs.String("output", "", "Output file path (required with --id)")
 	outputDir := fs.String("output-dir", "", "Output directory (required with --version-localization)")
 	overwrite := fs.Bool("overwrite", false, "Overwrite existing files")
@@ -248,7 +248,7 @@ Examples:
 					continue
 				}
 
-				downloadCtx, cancel := shared.ContextWithTimeout(ctx)
+				downloadCtx, cancel := shared.ContextWithDownloadTimeout(ctx)
 				written, contentType, unchanged, err := downloadScreenshotURLToFile(downloadCtx, item.URL, item.OutputPath, *overwrite)
 				cancel()
 				if err != nil {

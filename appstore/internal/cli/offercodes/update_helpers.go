@@ -21,6 +21,7 @@ type activeUpdateCommandConfig struct {
 	LongHelp    string
 	IDFlag      string
 	IDUsage     string
+	IDType      string
 	ErrorPrefix string
 	Update      func(context.Context, *asc.Client, string, *bool) (any, error)
 }
@@ -28,7 +29,7 @@ type activeUpdateCommandConfig struct {
 func newActiveUpdateCommand(config activeUpdateCommandConfig) *ffcli.Command {
 	fs := flag.NewFlagSet(config.FlagSetName, flag.ExitOnError)
 
-	id := fs.String(config.IDFlag, "", config.IDUsage)
+	id := shared.BindResourceIDFlag(fs, config.IDFlag, config.IDType, config.IDUsage)
 	active := fs.String("active", "", "Set active (true/false)")
 	output := shared.BindOutputFlags(fs)
 

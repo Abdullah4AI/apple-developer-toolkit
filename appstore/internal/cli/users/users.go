@@ -203,7 +203,7 @@ Examples:
 func UsersGetCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("view", flag.ExitOnError)
 
-	id := fs.String("id", "", "User ID")
+	id := shared.BindResourceIDFlag(fs, "id", "users", "User ID")
 	include := fs.String("include", "", "Include related resources: visibleApps")
 	output := shared.BindOutputFlags(fs)
 
@@ -257,7 +257,7 @@ Examples:
 func UsersUpdateCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("update", flag.ExitOnError)
 
-	id := fs.String("id", "", "User ID")
+	id := shared.BindResourceIDFlag(fs, "id", "users", "User ID")
 	roles := shared.BindOnceCSVFlag(fs, "roles", "Comma-separated UserRole values: "+strings.Join(userRoleList(), ", "))
 	visibleApps := shared.BindOnceCSVFlag(fs, "visible-app", "Comma-separated app IDs for visible apps")
 	confirm := fs.Bool("confirm", false, "Confirm replacing visible apps (required with --visible-app)")
@@ -349,7 +349,7 @@ Examples:
 func UsersDeleteCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("delete", flag.ExitOnError)
 
-	id := fs.String("id", "", "User ID")
+	id := shared.BindResourceIDFlag(fs, "id", "users", "User ID")
 	confirm := fs.Bool("confirm", false, "Confirm deletion")
 	output := shared.BindOutputFlags(fs)
 
@@ -595,7 +595,7 @@ Examples:
 func UsersInvitesGetCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("view", flag.ExitOnError)
 
-	id := fs.String("id", "", "Invitation ID")
+	id := shared.BindResourceIDFlag(fs, "id", "userInvitations", "Invitation ID")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
@@ -637,7 +637,7 @@ Examples:
 func UsersInvitesRevokeCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("revoke", flag.ExitOnError)
 
-	id := fs.String("id", "", "Invitation ID")
+	id := shared.BindResourceIDFlag(fs, "id", "userInvitations", "Invitation ID")
 	confirm := fs.Bool("confirm", false, "Confirm revocation")
 	output := shared.BindOutputFlags(fs)
 

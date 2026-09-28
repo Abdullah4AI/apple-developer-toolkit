@@ -218,7 +218,7 @@ func omitNulls(value any) (any, bool) {
 func XcodeCloudWorkflowsDuplicateCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("duplicate", flag.ExitOnError)
 
-	id := fs.String("id", "", "Source workflow ID to copy")
+	id := shared.BindResourceIDFlag(fs, "id", "ciWorkflows", "Source workflow ID to copy")
 	name := fs.String("name", "", "Name for the new workflow")
 	description := fs.String("description", "", "Description for the new workflow (default: copied from the source workflow)")
 	enabled := fs.Bool("enabled", false, "Enable the new workflow immediately; the copy is created disabled by default")

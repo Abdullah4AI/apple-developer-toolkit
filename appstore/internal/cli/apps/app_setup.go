@@ -78,7 +78,7 @@ func AppSetupInfoSetCommand() *ffcli.Command {
 	bundleID := fs.String("bundle-id", "", "Bundle ID to set")
 	primaryLocale := fs.String("primary-locale", "", "Primary locale (e.g., en-US)")
 	locale := fs.String("locale", "", "Locale for app info localization (defaults to --primary-locale)")
-	appInfoID := fs.String("app-info", "", "App Info ID (optional override)")
+	appInfoID := shared.BindResourceIDFlag(fs, "app-info", "appInfos", "App Info ID (optional override)")
 	name := fs.String("name", "", "Localized app name")
 	subtitle := fs.String("subtitle", "", "Localized app subtitle")
 	privacyPolicyURL := fs.String("privacy-policy-url", "", "Localized privacy policy URL")
@@ -101,7 +101,10 @@ Examples:
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
-			appIDValue := strings.TrimSpace(*appID)
+			appIDValue, err := shared.AppIDFlagValue(*appID)
+			if err != nil {
+				return err
+			}
 			if appIDValue == "" {
 				fmt.Fprintln(os.Stderr, "Error: --app is required")
 				return shared.MissingRequiredUsageError("--app")
@@ -356,15 +359,16 @@ func AppSetupPricingSetCommand() *ffcli.Command {
 		ShortHelp:   "Set app pricing.",
 		LongHelp: `Set app pricing.
 
---start-date defaults to today's date in UTC when omitted, and the chosen date
-is printed on stderr. Apple requires the start date to be today or later.
+--start-date defaults to today's date in US Pacific time when omitted, because
+App Store Connect uses that date as today; the chosen date is printed on
+stderr. Apple requires the start date to be today or later.
 
 Examples:
   asc app-setup pricing set --app "APP_ID" --price-point "PRICE_POINT_ID" --base-territory "USA"
   asc app-setup pricing set --app "APP_ID" --price-point "PRICE_POINT_ID" --base-territory "USA" --start-date "YYYY-MM-DD"
   asc app-setup pricing set --app "APP_ID" --free --start-date "YYYY-MM-DD"`,
 		ErrorPrefix:           "app-setup pricing set",
-		StartDateHelp:         "Start date (YYYY-MM-DD, default: today in UTC; Apple requires today or later)",
+		StartDateHelp:         "Start date (YYYY-MM-DD, default: today in US Pacific time; Apple requires today or later)",
 		StartDateDefaultToday: true,
 		ResolveBaseTerritory:  true,
 	})
@@ -395,9 +399,9 @@ Examples:
 func AppSetupLocalizationsUploadCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("app-setup localizations upload", flag.ExitOnError)
 
-	versionID := fs.String("version", "", "App Store version ID")
+	versionID := shared.BindResourceIDFlag(fs, "version", "appStoreVersions", "App Store version ID")
 	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
-	appInfoID := fs.String("app-info", "", "App Info ID (optional override)")
+	appInfoID := shared.BindResourceIDFlag(fs, "app-info", "appInfos", "App Info ID (optional override)")
 	locType := fs.String("type", shared.LocalizationTypeVersion, "Localization type: version (default) or app-info")
 	locale := fs.String("locale", "", "Filter by locale(s), comma-separated")
 	path := fs.String("path", "", "Input path (directory or .strings file)")

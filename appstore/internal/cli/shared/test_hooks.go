@@ -3,6 +3,7 @@ package shared
 import (
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
 )
@@ -74,4 +75,18 @@ func resetTierCacheDirOverrideForTest() {
 		return
 	}
 	_ = os.RemoveAll(override)
+}
+
+// SetPricingNowForTesting replaces the clock pricing set commands use for the
+// default --start-date. It returns a restore function to reset the clock.
+func SetPricingNowForTesting(fn func() time.Time) func() {
+	previous := pricingNow
+	if fn == nil {
+		pricingNow = time.Now
+	} else {
+		pricingNow = fn
+	}
+	return func() {
+		pricingNow = previous
+	}
 }

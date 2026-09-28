@@ -118,6 +118,7 @@ Examples:
   asc offer-codes view --offer-code-id "OFFER_CODE_ID"`,
 		IDFlag:      "offer-code-id",
 		IDUsage:     "Subscription offer code ID (required)",
+		IDType:      "subscriptionOfferCodes",
 		ErrorPrefix: "offer-codes view",
 		Fetch: func(ctx context.Context, client *asc.Client, id string) (any, error) {
 			return client.GetSubscriptionOfferCode(ctx, id)
@@ -129,7 +130,7 @@ Examples:
 func OfferCodesCreateCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("create", flag.ExitOnError)
 
-	subscriptionID := fs.String("subscription-id", "", "Subscription ID, product ID, or exact current name (required)")
+	subscriptionID := shared.BindResourceIDFlag(fs, "subscription-id", "subscriptions", "Subscription ID, product ID, or exact current name (required)")
 	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env; required when --subscription-id uses a product ID or name)")
 	name := fs.String("name", "", "Offer code name (required)")
 	customerEligibilities := fs.String("customer-eligibilities", "", "Customer eligibilities: "+strings.Join(offerCodeCustomerEligibilityValues, ", "))
@@ -278,6 +279,7 @@ Examples:
   asc offer-codes update --offer-code-id "OFFER_CODE_ID" --active true`,
 		IDFlag:      "offer-code-id",
 		IDUsage:     "Subscription offer code ID (required)",
+		IDType:      "subscriptionOfferCodes",
 		ErrorPrefix: "offer-codes update",
 		Update: func(ctx context.Context, client *asc.Client, id string, active *bool) (any, error) {
 			return client.UpdateSubscriptionOfferCode(ctx, id, asc.SubscriptionOfferCodeUpdateAttributes{Active: active})

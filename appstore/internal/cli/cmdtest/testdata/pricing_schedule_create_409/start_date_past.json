@@ -1,0 +1,12 @@
+{
+  "errors" : [ {
+    "id" : "4e33e336-382f-4c14-b0c6-76e89677419c",
+    "status" : "409",
+    "code" : "ENTITY_ERROR.INVALID_START_DATE",
+    "title" : "There is a problem with the request entity",
+    "detail" : "Interval can not have a start date in the past",
+    "source" : {
+      "pointer" : "/data/relationships/manualPrices/data/0/attributes/startDate"
+    }
+  } ]
+}

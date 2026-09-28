@@ -83,6 +83,11 @@ type APIError struct {
 	// order, including empty details. Callers that classify a response by its
 	// diagnostic text must consult this slice so a later cause is not lost.
 	AllDetails []string
+	// Entries lists every errors[] entry's code and detail together, in
+	// response order. Callers that match a code against its own detail must
+	// use this slice: AllCodes omits empty codes, so its indexes do not line
+	// up with AllDetails.
+	Entries []APIErrorEntry
 	// Remediation is operator guidance for error codes whose cause is an
 	// account-level state that no API key permission can satisfy. It is
 	// appended to Error() so the guidance travels with the error itself.
@@ -129,6 +134,12 @@ func IsRequiredAgreementError(err error) bool {
 		return false
 	}
 	return remediationForAPIError(apiErr.Code) != ""
+}
+
+// APIErrorEntry is one entry of Apple's errors[] array.
+type APIErrorEntry struct {
+	Code   string
+	Detail string
 }
 
 // APIAssociatedError represents an additional actionable error returned

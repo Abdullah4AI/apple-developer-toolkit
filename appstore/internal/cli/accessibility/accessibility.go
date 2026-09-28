@@ -166,7 +166,7 @@ func rejectAccessibilityNextFlagConflicts(fs *flag.FlagSet, next string, names .
 func AccessibilityGetCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("view", flag.ExitOnError)
 
-	id := fs.String("id", "", "Accessibility declaration ID (required)")
+	id := shared.BindResourceIDFlag(fs, "id", "accessibilityDeclarations", "Accessibility declaration ID (required)")
 	fields := fs.String("fields", "", "Fields to include: "+strings.Join(accessibilityDeclarationFieldList(), ", "))
 	output := shared.BindOutputFlags(fs)
 
@@ -294,7 +294,7 @@ Examples:
 func AccessibilityUpdateCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("update", flag.ExitOnError)
 
-	id := fs.String("id", "", "Accessibility declaration ID (required)")
+	id := shared.BindResourceIDFlag(fs, "id", "accessibilityDeclarations", "Accessibility declaration ID (required)")
 	publish := fs.String("publish", "", "Publish declaration (true/false)")
 	supportsAudioDescriptions := fs.String("supports-audio-descriptions", "", "Supports audio descriptions (true/false)")
 	supportsCaptions := fs.String("supports-captions", "", "Supports captions (true/false)")
@@ -367,7 +367,7 @@ Examples:
 func AccessibilityDeleteCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("delete", flag.ExitOnError)
 
-	id := fs.String("id", "", "Accessibility declaration ID (required)")
+	id := shared.BindResourceIDFlag(fs, "id", "accessibilityDeclarations", "Accessibility declaration ID (required)")
 	confirm := fs.Bool("confirm", false, "Confirm deletion")
 	output := shared.BindOutputFlags(fs)
 

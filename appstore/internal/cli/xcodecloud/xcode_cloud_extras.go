@@ -88,6 +88,7 @@ Examples:
   asc xcode-cloud products view --id "PRODUCT_ID" --output table`,
 		IDFlag:      "id",
 		IDUsage:     "Product ID",
+		IDType:      "ciProducts",
 		ErrorPrefix: "xcode-cloud products view",
 		ContextTimeout: func(ctx context.Context) (context.Context, context.CancelFunc) {
 			return contextWithXcodeCloudTimeout(ctx, 0)
@@ -100,8 +101,8 @@ Examples:
 
 func XcodeCloudProductsAppCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("app", flag.ExitOnError)
-	id := fs.String("id", "", "Product ID")
-	appInfoFields := fs.String("app-info-fields", "", "Sparse fields for included app info records: kidsAgeBand (deprecated; prefer age-rating data)")
+	id := shared.BindResourceIDFlag(fs, "id", "ciProducts", "Product ID")
+	appInfoFields := fs.String("app-info-fields", "", "Sparse fields for included app info records: kidsAgeBand (deprecated; removed from API 4.5; prefer age-rating data)")
 	iapFields := fs.String("iap-fields", "", "Sparse fields for included in-app purchases: versions")
 	subscriptionGroupFields := fs.String("subscription-group-fields", "", "Sparse fields for included subscription groups: versions")
 	output := shared.BindOutputFlags(fs)
@@ -135,6 +136,8 @@ Examples:
 			if err != nil {
 				return shared.UsageError(err.Error())
 			}
+
+			shared.WarnDeprecatedAppInfoFields(appInfoFieldValues, "")
 
 			client, err := shared.GetASCClient()
 			if err != nil {
@@ -182,6 +185,7 @@ Examples:
   asc xcode-cloud products build-runs --id "PRODUCT_ID" --paginate`,
 		ParentFlag:  "id",
 		ParentUsage: "Product ID",
+		ParentType:  "ciProducts",
 		LimitMax:    200,
 		ErrorPrefix: "xcode-cloud products build-runs",
 		ContextTimeout: func(ctx context.Context) (context.Context, context.CancelFunc) {
@@ -211,6 +215,7 @@ Examples:
   asc xcode-cloud products workflows --id "PRODUCT_ID" --paginate`,
 		ParentFlag:  "id",
 		ParentUsage: "Product ID",
+		ParentType:  "ciProducts",
 		LimitMax:    200,
 		ErrorPrefix: "xcode-cloud products workflows",
 		ContextTimeout: func(ctx context.Context) (context.Context, context.CancelFunc) {
@@ -240,6 +245,7 @@ Examples:
   asc xcode-cloud products primary-repositories --id "PRODUCT_ID" --paginate`,
 		ParentFlag:  "id",
 		ParentUsage: "Product ID",
+		ParentType:  "ciProducts",
 		LimitMax:    200,
 		ErrorPrefix: "xcode-cloud products primary-repositories",
 		ContextTimeout: func(ctx context.Context) (context.Context, context.CancelFunc) {
@@ -269,6 +275,7 @@ Examples:
   asc xcode-cloud products additional-repositories --id "PRODUCT_ID" --paginate`,
 		ParentFlag:  "id",
 		ParentUsage: "Product ID",
+		ParentType:  "ciProducts",
 		LimitMax:    200,
 		ErrorPrefix: "xcode-cloud products additional-repositories",
 		ContextTimeout: func(ctx context.Context) (context.Context, context.CancelFunc) {
@@ -296,6 +303,7 @@ Examples:
   asc xcode-cloud products delete --id "PRODUCT_ID" --confirm`,
 		IDFlag:      "id",
 		IDUsage:     "Product ID",
+		IDType:      "ciProducts",
 		ErrorPrefix: "xcode-cloud products delete",
 		ContextTimeout: func(ctx context.Context) (context.Context, context.CancelFunc) {
 			return contextWithXcodeCloudTimeout(ctx, 0)
@@ -649,6 +657,7 @@ Examples:
   asc xcode-cloud macos-versions view --id "MACOS_VERSION_ID" --output table`,
 		IDFlag:      "id",
 		IDUsage:     "macOS version ID",
+		IDType:      "ciMacOsVersions",
 		ErrorPrefix: "xcode-cloud macos-versions view",
 		ContextTimeout: func(ctx context.Context) (context.Context, context.CancelFunc) {
 			return contextWithXcodeCloudTimeout(ctx, 0)
@@ -673,6 +682,7 @@ Examples:
   asc xcode-cloud macos-versions xcode-versions --id "MACOS_VERSION_ID" --paginate`,
 		ParentFlag:  "id",
 		ParentUsage: "macOS version ID",
+		ParentType:  "ciMacOsVersions",
 		LimitMax:    200,
 		ErrorPrefix: "xcode-cloud macos-versions xcode-versions",
 		ContextTimeout: func(ctx context.Context) (context.Context, context.CancelFunc) {
@@ -776,6 +786,7 @@ Examples:
   asc xcode-cloud xcode-versions view --id "XCODE_VERSION_ID" --output table`,
 		IDFlag:      "id",
 		IDUsage:     "Xcode version ID",
+		IDType:      "ciXcodeVersions",
 		ErrorPrefix: "xcode-cloud xcode-versions view",
 		ContextTimeout: func(ctx context.Context) (context.Context, context.CancelFunc) {
 			return contextWithXcodeCloudTimeout(ctx, 0)
@@ -800,6 +811,7 @@ Examples:
   asc xcode-cloud xcode-versions macos-versions --id "XCODE_VERSION_ID" --paginate`,
 		ParentFlag:  "id",
 		ParentUsage: "Xcode version ID",
+		ParentType:  "ciXcodeVersions",
 		LimitMax:    200,
 		ErrorPrefix: "xcode-cloud xcode-versions macos-versions",
 		ContextTimeout: func(ctx context.Context) (context.Context, context.CancelFunc) {

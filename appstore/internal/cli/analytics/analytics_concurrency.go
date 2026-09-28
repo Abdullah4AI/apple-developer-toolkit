@@ -9,7 +9,7 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
 )
 
-const analyticsInstanceFetchConcurrency = 4
+const analyticsInstanceFetchConcurrency = 8
 
 var (
 	analyticsInstanceFetchMaxInFlight atomic.Int32

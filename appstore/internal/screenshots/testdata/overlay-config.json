@@ -1,0 +1,19 @@
+{
+  "default": {
+    "title": "Plan every trip",
+    "keyword": "Offline maps",
+    "background": "#0d0c1e"
+  },
+  "data": [
+    {
+      "filter": "paywall",
+      "title": "Unlock Pro",
+      "keyword": "Unlimited routes",
+      "background": "#140f2d"
+    },
+    {
+      "filter": "settings",
+      "title": "Make it yours"
+    }
+  ]
+}

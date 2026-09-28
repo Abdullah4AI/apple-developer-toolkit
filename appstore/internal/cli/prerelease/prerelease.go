@@ -136,7 +136,7 @@ Examples:
 func PreReleaseVersionsGetCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("pre-release-versions view", flag.ExitOnError)
 
-	id := fs.String("id", "", "Pre-release version ID")
+	id := shared.BindResourceIDFlag(fs, "id", "preReleaseVersions", "Pre-release version ID")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{

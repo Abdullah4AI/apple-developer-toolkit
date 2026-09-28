@@ -133,7 +133,7 @@ Examples:
 func BetaAppLocalizationsGetCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("view", flag.ExitOnError)
 
-	id := fs.String("id", "", "Beta app localization ID")
+	id := shared.BindResourceIDFlag(fs, "id", "betaAppLocalizations", "Beta app localization ID")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
@@ -253,7 +253,7 @@ Examples:
 func BetaAppLocalizationsUpdateCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("update", flag.ExitOnError)
 
-	id := fs.String("id", "", "Beta app localization ID")
+	id := shared.BindResourceIDFlag(fs, "id", "betaAppLocalizations", "Beta app localization ID")
 	description := fs.String("description", "", "Beta app description")
 	feedbackEmail := fs.String("feedback-email", "", "Feedback email")
 	marketingURL := fs.String("marketing-url", "", "Marketing URL")
@@ -338,7 +338,7 @@ Examples:
 func BetaAppLocalizationsDeleteCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("delete", flag.ExitOnError)
 
-	id := fs.String("id", "", "Beta app localization ID")
+	id := shared.BindResourceIDFlag(fs, "id", "betaAppLocalizations", "Beta app localization ID")
 	confirm := fs.Bool("confirm", false, "Confirm deletion")
 	output := shared.BindOutputFlags(fs)
 

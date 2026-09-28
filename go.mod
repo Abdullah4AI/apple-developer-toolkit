@@ -14,7 +14,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51
 	github.com/modelcontextprotocol/go-sdk v1.3.1
-	github.com/olekukonko/tablewriter v1.1.4
+	github.com/olekukonko/tablewriter v1.1.5
 	github.com/peterbourgon/ff/v3 v3.4.0
 	github.com/rivo/uniseg v0.4.4
 	github.com/ryanuber/go-glob v1.0.0
@@ -22,7 +22,7 @@ require (
 	github.com/tidwall/jsonc v0.3.3
 	github.com/zalando/go-keyring v0.2.6
 	go.mozilla.org/pkcs7 v0.10.0
-	golang.org/x/crypto v0.56.0
+	golang.org/x/crypto v0.57.0
 	golang.org/x/mod v0.41.0
 	golang.org/x/sys v0.48.0
 	golang.org/x/term v0.46.0
@@ -59,6 +59,7 @@ require (
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/stretchr/objx v0.5.2 // indirect
 	github.com/stretchr/testify v1.11.1 // indirect
+	rsc.io/qr v0.2.0 // indirect
 )
 
 require (
@@ -67,8 +68,9 @@ require (
 	github.com/aws/aws-sdk-go-v2 v1.47.0
 	github.com/aws/aws-sdk-go-v2/config v1.33.5
 	github.com/aws/aws-sdk-go-v2/credentials v1.20.5
-	github.com/aws/aws-sdk-go-v2/service/s3 v1.113.1
-	github.com/aws/smithy-go v1.28.1
+	github.com/aws/aws-sdk-go-v2/service/s3 v1.113.2
+	github.com/aws/aws-sdk-go-v2/service/secretsmanager v1.50.0
+	github.com/aws/smithy-go v1.28.2
 	github.com/bitrise-io/go-utils/v2 v2.0.0-alpha.39
 	github.com/bitrise-io/go-xcode v1.3.4
 	github.com/bitrise-io/go-xcode/v2 v2.0.0-alpha.84.0.20260710143042-ba29d6757432
@@ -85,6 +87,7 @@ require (
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mattn/go-runewidth v0.0.19 // indirect
+	github.com/mdp/qrterminal/v3 v3.2.1
 	github.com/mgutz/ansi v0.0.0-20170206155736-9520e82c474b // indirect
 	github.com/mtibben/percent v0.2.1 // indirect
 	github.com/olekukonko/cat v0.0.0-20250911104152-50322a0618f6 // indirect

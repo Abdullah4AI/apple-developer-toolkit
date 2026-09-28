@@ -1,0 +1,21 @@
+{
+  "default": {
+    "title": "Plan every trip",
+    "keyword": "Offline maps",
+    "background": "#0d0c1e",
+    "textBox": true,
+    "textBoxColor": "#00000099"
+  },
+  "data": [
+    {
+      "filter": "paywall",
+      "title": "Unlock Pro",
+      "keyword": "Unlimited routes",
+      "background": "#f4f1ea",
+      "textBox": true,
+      "textBoxColor": "#1b3a5bcc",
+      "textBoxPadding": 32,
+      "textBoxRadius": 0
+    }
+  ]
+}

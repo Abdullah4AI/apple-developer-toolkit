@@ -183,7 +183,7 @@ Examples:
 func EncryptionDeclarationsGetCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("encryption declarations view", flag.ExitOnError)
 
-	declarationID := fs.String("id", "", "Encryption declaration ID (required)")
+	declarationID := shared.BindResourceIDFlag(fs, "id", "appEncryptionDeclarations", "Encryption declaration ID (required)")
 	fields := fs.String("fields", "", "Fields to include: "+strings.Join(encryptionDeclarationFieldList(), ", "))
 	documentFields := fs.String("document-fields", "", "Document fields to include: "+strings.Join(encryptionDocumentFieldList(), ", "))
 	include := fs.String("include", "", "Include relationships: "+strings.Join(encryptionDeclarationIncludeList(), ", "))
@@ -540,7 +540,7 @@ func isAllowedPlistSymlinkComponent(path string) bool {
 func EncryptionDeclarationsAssignBuildsCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("encryption declarations assign-builds", flag.ExitOnError)
 
-	declarationID := fs.String("id", "", "Encryption declaration ID (required)")
+	declarationID := shared.BindResourceIDFlag(fs, "id", "appEncryptionDeclarations", "Encryption declaration ID (required)")
 	builds := shared.BindOnceCSVFlag(fs, "build-id", "Build IDs to assign (comma-separated)")
 	output := shared.BindOutputFlags(fs)
 
@@ -618,7 +618,7 @@ Examples:
 func EncryptionDocumentsGetCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("encryption documents view", flag.ExitOnError)
 
-	documentID := fs.String("id", "", "Document ID (required)")
+	documentID := shared.BindResourceIDFlag(fs, "id", "appEncryptionDeclarationDocuments", "Document ID (required)")
 	fields := fs.String("fields", "", "Fields to include: "+strings.Join(encryptionDocumentFieldList(), ", "))
 	output := shared.BindOutputFlags(fs)
 
@@ -666,7 +666,7 @@ Examples:
 func EncryptionDocumentsUploadCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("encryption documents upload", flag.ExitOnError)
 
-	declarationID := fs.String("declaration", "", "Encryption declaration ID (required)")
+	declarationID := shared.BindResourceIDFlag(fs, "declaration", "appEncryptionDeclarations", "Encryption declaration ID (required)")
 	filePath := fs.String("file", "", "Path to document file (required)")
 	output := shared.BindOutputFlags(fs)
 

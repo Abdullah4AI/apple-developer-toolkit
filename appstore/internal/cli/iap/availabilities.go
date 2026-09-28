@@ -42,7 +42,7 @@ Examples:
 func IAPAvailabilitiesGetCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("pricing availabilities view", flag.ExitOnError)
 
-	availabilityID := fs.String("id", "", "Availability ID")
+	availabilityID := shared.BindResourceIDFlag(fs, "id", "inAppPurchaseAvailabilities", "Availability ID")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
@@ -84,7 +84,7 @@ Examples:
 func IAPAvailabilitiesAvailableTerritoriesCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("pricing availabilities available-territories", flag.ExitOnError)
 
-	availabilityID := fs.String("id", "", "Availability ID")
+	availabilityID := shared.BindResourceIDFlag(fs, "id", "inAppPurchaseAvailabilities", "Availability ID")
 	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
 	next := fs.String("next", "", "Fetch next page using a links.next URL")
 	paginate := fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")

@@ -17,8 +17,14 @@ import (
 )
 
 const (
-	gitProcessTestTimeout       = 2 * time.Second
-	gitProcessTestStartupWindow = 3 * time.Second
+	// gitProcessTestHangGuard only bounds waits that would otherwise hang.
+	// Cancellation is triggered explicitly after the helper reports readiness,
+	// so slow process startup under host load cannot race the deadline.
+	gitProcessTestHangGuard = 30 * time.Second
+	// gitHelperBlockSeconds keeps the blocking helper and its child alive well
+	// past every hang guard, so only process-group termination can end them
+	// before the test gives up.
+	gitHelperBlockSeconds = 300
 )
 
 func TestGitStoreCloneCancellationTerminatesProcessGroupAndWaits(t *testing.T) {
@@ -33,36 +39,13 @@ func TestGitStoreCloneCancellationTerminatesProcessGroupAndWaits(t *testing.T) {
 		LocalDir: filepath.Join(t.TempDir(), "clone"),
 		Branch:   "main",
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), gitProcessTestTimeout)
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	started := make(chan struct{})
-	go waitForGitHelperFile(t, startedPath, started)
-	startedAt := time.Now()
 	done := make(chan error, 1)
 	go func() { done <- store.Clone(ctx, true) }()
-	select {
-	case <-started:
-	case <-time.After(gitProcessTestStartupWindow):
-		t.Fatal("Git clone helper did not start")
-	}
-
-	childPID := readGitHelperPID(t, childPIDPath)
-
-	select {
-	case err := <-done:
-		if err == nil {
-			t.Fatal("canceled Git clone unexpectedly succeeded")
-		}
-	case <-time.After(gitProcessTestStartupWindow):
-		t.Fatal("Git clone did not return after context cancellation")
-	}
-	if ctx.Err() == nil {
-		t.Fatal("Git clone returned before its context was canceled")
-	}
-	if elapsed := time.Since(startedAt); elapsed > gitProcessTestStartupWindow+gitProcessTestTimeout {
-		t.Fatalf("canceled Git clone took %v, want bounded termination", elapsed)
-	}
+	childPID := waitForGitHelperStart(t, "clone", startedPath, childPIDPath, done)
+	cancelGitHelperOperation(t, "clone", cancel, done)
 	assertGitHelperProcessExited(t, childPID)
 	assertGitHelperEnvironmentWasRedacted(t, environmentPath)
 	assertGitHelperDidNotReportSuccess(t, successPath)
@@ -82,31 +65,13 @@ func TestGitStorePushCancellationTerminatesProcessGroupAndWaits(t *testing.T) {
 	configureGitHelperProcess(t, "push", startedPath, childPIDPath, environmentPath, successPath)
 
 	store := &GitStore{LocalDir: t.TempDir(), Branch: "main"}
-	ctx, cancel := context.WithTimeout(context.Background(), gitProcessTestTimeout)
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	started := make(chan struct{})
-	go waitForGitHelperFile(t, startedPath, started)
 	done := make(chan error, 1)
 	go func() { done <- store.CommitAndPush(ctx, "test signing update") }()
-	select {
-	case <-started:
-	case <-time.After(gitProcessTestStartupWindow):
-		t.Fatal("Git push helper did not start")
-	}
-	childPID := readGitHelperPID(t, childPIDPath)
-
-	select {
-	case err := <-done:
-		if err == nil {
-			t.Fatal("canceled Git push unexpectedly succeeded")
-		}
-	case <-time.After(gitProcessTestStartupWindow):
-		t.Fatal("Git push did not return after context cancellation")
-	}
-	if ctx.Err() == nil {
-		t.Fatal("Git push returned before its context was canceled")
-	}
+	childPID := waitForGitHelperStart(t, "push", startedPath, childPIDPath, done)
+	cancelGitHelperOperation(t, "push", cancel, done)
 	assertGitHelperProcessExited(t, childPID)
 	assertGitHelperEnvironmentWasRedacted(t, environmentPath)
 	assertGitHelperDidNotReportSuccess(t, successPath)
@@ -136,7 +101,7 @@ func TestGitStoreGitHelperProcess(t *testing.T) {
 	if gitOperation == os.Getenv("ASC_GIT_HELPER_BLOCK_OPERATION") {
 		startedPath := os.Getenv("ASC_GIT_HELPER_STARTED")
 		childPIDPath := os.Getenv("ASC_GIT_HELPER_CHILD_PID")
-		child := exec.Command("sleep", "30")
+		child := exec.Command("sleep", strconv.Itoa(gitHelperBlockSeconds))
 		if err := child.Start(); err != nil {
 			os.Exit(3)
 		}
@@ -148,7 +113,7 @@ func TestGitStoreGitHelperProcess(t *testing.T) {
 		if err := writeGitHelperFileAtomically(startedPath, strconv.Itoa(os.Getpid())); err != nil {
 			os.Exit(2)
 		}
-		time.Sleep(30 * time.Second)
+		time.Sleep(gitHelperBlockSeconds * time.Second)
 		if err := writeGitHelperFileAtomically(os.Getenv("ASC_GIT_HELPER_SUCCESS"), "success"); err != nil {
 			os.Exit(6)
 		}
@@ -251,24 +216,89 @@ func writeGitHelperEnvironment(path string) {
 	_ = os.WriteFile(path, []byte(os.Getenv("ASC_SIGNING_SYNC_PASSWORD")), 0o600)
 }
 
-func waitForGitHelperFile(t *testing.T, path string, ready chan<- struct{}) {
+// waitForGitHelperStart waits until the blocking helper has published its
+// child PID and started marker. The operation context has no deadline, so this
+// wait tolerates arbitrarily slow startup up to the hang guard. It returns the
+// child PID and registers failure-only cleanup for the helper processes.
+func waitForGitHelperStart(t *testing.T, operation, startedPath, childPIDPath string, done <-chan error) int {
 	t.Helper()
-	deadline := time.Now().Add(gitProcessTestStartupWindow)
+	deadline := time.Now().Add(gitProcessTestHangGuard)
 	for {
-		if data, err := os.ReadFile(path); err == nil && strings.TrimSpace(string(data)) != "" {
-			close(ready)
-			return
+		if data, err := os.ReadFile(startedPath); err == nil && strings.TrimSpace(string(data)) != "" {
+			helperPID, parseErr := strconv.Atoi(strings.TrimSpace(string(data)))
+			if parseErr != nil || helperPID <= 0 {
+				t.Fatalf("parse Git %s helper PID %q: %v", operation, data, parseErr)
+			}
+			childPID := readGitHelperPID(t, childPIDPath)
+			// Capture identities while both processes are known to be alive and
+			// blocked, so failure cleanup can tell them apart from reused PIDs.
+			helperIdentity := gitHelperProcessIdentity(helperPID)
+			childIdentity := gitHelperProcessIdentity(childPID)
+			t.Cleanup(func() {
+				if t.Failed() {
+					killGitHelperProcessIfUnchanged(helperPID, helperIdentity)
+					killGitHelperProcessIfUnchanged(childPID, childIdentity)
+				}
+			})
+			return childPID
+		}
+		select {
+		case err := <-done:
+			t.Fatalf("Git %s returned before its helper started: %v", operation, err)
+		default:
 		}
 		if time.Now().After(deadline) {
-			return
+			t.Fatalf("Git %s helper did not start within %v", operation, gitProcessTestHangGuard)
 		}
 		time.Sleep(5 * time.Millisecond)
 	}
 }
 
+// gitHelperProcessIdentity returns the start time and command line of pid.
+// Together with the PID they identify one process instance; a reused PID has a
+// different start time.
+func gitHelperProcessIdentity(pid int) string {
+	output, err := exec.Command("ps", "-o", "lstart=,command=", "-p", strconv.Itoa(pid)).Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(output))
+}
+
+// killGitHelperProcessIfUnchanged kills pid only when it is still the process
+// instance recorded in identity, so failure cleanup never signals a process
+// that merely reused a helper's PID.
+func killGitHelperProcessIfUnchanged(pid int, identity string) {
+	if identity == "" || gitHelperProcessIdentity(pid) != identity {
+		return
+	}
+	_ = syscall.Kill(pid, syscall.SIGKILL)
+}
+
+// cancelGitHelperOperation asserts the operation is still blocked on the
+// helper, cancels its context, and waits for it to fail. The helper blocks for
+// longer than the hang guard, so a return here proves cancellation ended it.
+func cancelGitHelperOperation(t *testing.T, operation string, cancel context.CancelFunc, done <-chan error) {
+	t.Helper()
+	select {
+	case err := <-done:
+		t.Fatalf("Git %s returned before its context was canceled: %v", operation, err)
+	default:
+	}
+	cancel()
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatalf("canceled Git %s unexpectedly succeeded", operation)
+		}
+	case <-time.After(gitProcessTestHangGuard):
+		t.Fatalf("Git %s did not return within %v after context cancellation", operation, gitProcessTestHangGuard)
+	}
+}
+
 func readGitHelperPID(t *testing.T, path string) int {
 	t.Helper()
-	deadline := time.Now().Add(gitProcessTestStartupWindow)
+	deadline := time.Now().Add(gitProcessTestHangGuard)
 	var lastContents []byte
 	var lastErr error
 	for {
@@ -292,7 +322,7 @@ func readGitHelperPID(t *testing.T, path string) int {
 
 func assertGitHelperProcessExited(t *testing.T, pid int) {
 	t.Helper()
-	deadline := time.Now().Add(gitProcessTestStartupWindow)
+	deadline := time.Now().Add(gitProcessTestHangGuard)
 	for {
 		err := syscall.Kill(pid, 0)
 		if errors.Is(err, syscall.ESRCH) {

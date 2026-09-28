@@ -154,6 +154,7 @@ func TestSigningSyncResultRendererRendersSingleTargetSummaries(t *testing.T) {
 			result: &SigningSyncResult{
 				Operation:       "push",
 				RepoURL:         "file:///tmp/signing.git",
+				Storage:         &SigningSyncStorage{Kind: "git", Location: "file:///tmp/signing.git", Branch: "main"},
 				BundleID:        "com.example.app",
 				ProfileType:     "IOS_APP_STORE",
 				Files:           []string{"profiles/appstore/profile.mobileprovision"},
@@ -162,6 +163,7 @@ func TestSigningSyncResultRendererRendersSingleTargetSummaries(t *testing.T) {
 			want: []string{
 				"push",
 				"file:///tmp/signing.git",
+				"git",
 				"com.example.app",
 				"IOS_APP_STORE",
 				"profiles/appstore/profile.mobileprovision",
@@ -191,7 +193,7 @@ func TestSigningSyncResultRendererRendersSingleTargetSummaries(t *testing.T) {
 			if err != nil {
 				t.Fatalf("signing sync rows handler: %v", err)
 			}
-			wantHeaders := []string{"Operation", "Repo URL", "Bundle ID", "Profile Type", "Files", "Identity Present"}
+			wantHeaders := []string{"Operation", "Repo URL", "Storage", "Bundle ID", "Profile Type", "Files", "Identity Present"}
 			if len(rows) != 1 {
 				t.Fatalf("single-target rows = %d, want 1: %v", len(rows), rows)
 			}
@@ -220,5 +222,68 @@ func TestSigningSyncResultRendererRendersSingleTargetSummaries(t *testing.T) {
 				})
 			}
 		})
+	}
+}
+
+func TestSigningSyncResultJSONPinsStorageForEveryBackend(t *testing.T) {
+	tests := []struct {
+		name    string
+		repoURL string
+		storage *SigningSyncStorage
+		want    string
+	}{
+		{
+			name:    "git",
+			repoURL: "git@github.com:team/certs.git",
+			storage: &SigningSyncStorage{Kind: "git", Location: "git@github.com:team/certs.git", Branch: "main"},
+			want:    `{"operation":"pull","repoUrl":"git@github.com:team/certs.git","storage":{"kind":"git","location":"git@github.com:team/certs.git","branch":"main"},"bundleId":"","profileType":"","files":[],"identityPresent":false}`,
+		},
+		{
+			name:    "gitlab-secure-files",
+			repoURL: "gitlab-secure-files://gitlab.com/projects/42/asc-signing",
+			storage: &SigningSyncStorage{Kind: "gitlab-secure-files", Location: "gitlab-secure-files://gitlab.com/projects/42/asc-signing"},
+			want:    `{"operation":"pull","repoUrl":"gitlab-secure-files://gitlab.com/projects/42/asc-signing","storage":{"kind":"gitlab-secure-files","location":"gitlab-secure-files://gitlab.com/projects/42/asc-signing"},"bundleId":"","profileType":"","files":[],"identityPresent":false}`,
+		},
+		{
+			name:    "aws-secrets-manager",
+			repoURL: "aws-secrets-manager://us-east-1/asc-signing",
+			storage: &SigningSyncStorage{Kind: "aws-secrets-manager", Location: "aws-secrets-manager://us-east-1/asc-signing"},
+			want:    `{"operation":"pull","repoUrl":"aws-secrets-manager://us-east-1/asc-signing","storage":{"kind":"aws-secrets-manager","location":"aws-secrets-manager://us-east-1/asc-signing"},"bundleId":"","profileType":"","files":[],"identityPresent":false}`,
+		},
+		{
+			name:    "object",
+			repoURL: "s3://team-certs/asc",
+			storage: &SigningSyncStorage{Kind: "object", Location: "s3://team-certs/asc"},
+			want:    `{"operation":"pull","repoUrl":"s3://team-certs/asc","storage":{"kind":"object","location":"s3://team-certs/asc"},"bundleId":"","profileType":"","files":[],"identityPresent":false}`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			data, err := json.Marshal(&SigningSyncResult{Operation: "pull", RepoURL: tt.repoURL, Storage: tt.storage, Files: []string{}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(data) != tt.want {
+				t.Fatalf("JSON = %s\nwant   %s", data, tt.want)
+			}
+		})
+	}
+}
+
+func TestSigningSyncResultBatchJSONIncludesStorage(t *testing.T) {
+	result := &SigningSyncResult{
+		Operation: "push",
+		RepoURL:   "s3://team-certs/asc",
+		Storage:   &SigningSyncStorage{Kind: "object", Location: "s3://team-certs/asc"},
+		Files:     []string{},
+	}
+	result.MarkBatch()
+	data, err := json.Marshal(result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `{"operation":"push","repoUrl":"s3://team-certs/asc","storage":{"kind":"object","location":"s3://team-certs/asc"},"profileType":"","files":[],"identityPresent":false}`
+	if string(data) != want {
+		t.Fatalf("batch JSON = %s, want %s", data, want)
 	}
 }

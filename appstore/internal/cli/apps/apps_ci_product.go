@@ -38,7 +38,7 @@ Examples:
 func AppsCIProductGetCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("view", flag.ExitOnError)
 
-	id := fs.String("id", "", "App Store Connect app ID")
+	id := shared.BindResourceIDFlag(fs, "id", "apps", "App Store Connect app ID")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{

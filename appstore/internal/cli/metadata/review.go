@@ -68,11 +68,16 @@ type MetadataReviewStatus struct {
 }
 
 type metadataPlanOptions struct {
-	AppID        string   `json:"appId"`
-	AppInfoID    string   `json:"appInfoId,omitempty"`
-	Version      string   `json:"version"`
-	Platform     string   `json:"platform,omitempty"`
-	Dir          string   `json:"dir"`
+	AppID     string `json:"appId"`
+	AppInfoID string `json:"appInfoId,omitempty"`
+	Version   string `json:"version"`
+	Platform  string `json:"platform,omitempty"`
+	Dir       string `json:"dir"`
+	// IfExists binds the reviewed conflict policy to the plan hash, so an
+	// approved plan cannot be applied with a policy the reviewer never saw.
+	// The default, fail, is rendered as the empty string and omitted, which
+	// keeps plan artifacts written before --if-exists existed hash-identical.
+	IfExists     string   `json:"ifExists,omitempty"`
 	Includes     []string `json:"includes"`
 	AllowDeletes bool     `json:"allowDeletes"`
 }
@@ -88,12 +93,13 @@ func MetadataPlanCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("metadata plan", flag.ExitOnError)
 
 	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
-	appInfoID := fs.String("app-info", "", "App Info ID (optional override)")
+	appInfoID := shared.BindResourceIDFlag(fs, "app-info", "appInfos", "App Info ID (optional override)")
 	version := fs.String("version", "", "App version string (for example 1.2.3)")
 	platform := fs.String("platform", "", "Optional platform: IOS, MAC_OS, TV_OS, or VISION_OS")
 	dir := fs.String("dir", "", "Metadata root directory (required)")
-	include := fs.String("include", includeLocalizations, "Included metadata scopes (comma-separated)")
+	include := fs.String("include", includeLocalizations, "Included scopes: localizations,app-clip,previews (comma-separated)")
 	allowDeletes := fs.Bool("allow-deletes", false, "Plan destructive delete operations (disables default locale fallback for missing locales)")
+	ifExists := shared.BindIfExistsFlag(fs, shared.IfExistsSkip, shared.IfExistsUpdate)
 	reviewDir := fs.String("review-dir", defaultMetadataReviewDir, "Directory for metadata review artifacts")
 	output := shared.BindOutputFlags(fs)
 
@@ -112,6 +118,11 @@ Examples:
 			if len(args) > 0 {
 				return shared.UsageError("metadata plan does not accept positional arguments")
 			}
+			// See the note in push.go: the bound flag defaults to fail, so an
+			// empty value is an explicitly supplied unsupported value.
+			if _, err := shared.ParseIfExistsMode(*ifExists, shared.IfExistsSkip, shared.IfExistsUpdate); err != nil {
+				return err
+			}
 			artifact, warnings, err := ExecuteMetadataPlanWithWarnings(ctx, PushExecutionOptions{
 				CommandName:  "plan",
 				AppID:        *appID,
@@ -122,6 +133,7 @@ Examples:
 				Include:      *include,
 				DryRun:       true,
 				AllowDeletes: *allowDeletes,
+				IfExists:     *ifExists,
 			}, *reviewDir)
 			if err != nil {
 				return err
@@ -147,13 +159,13 @@ func MetadataApproveCommand() *ffcli.Command {
 	reviewDir := fs.String("review-dir", defaultMetadataReviewDir, "Directory containing metadata review artifacts")
 	all := fs.Bool("all", false, "Approve every planned metadata change")
 	key := fs.String("key", "", "Approve specific plan key(s), comma-separated")
-	scope := fs.String("scope", "", "Approve all changes in scope(s): app-info, version")
+	scope := fs.String("scope", "", "Approve all changes in scope(s): app-info, version, store-assets")
 	note := fs.String("note", "", "Optional reviewer note written to approved.json")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "approve",
-		ShortUsage: `asc metadata approve [--review-dir ".asc/metadata/review"] (--all | --key "KEY" | --scope app-info,version)`,
+		ShortUsage: `asc metadata approve [--review-dir ".asc/metadata/review"] (--all | --key "KEY" | --scope app-info,version,store-assets)`,
 		ShortHelp:  "Approve a metadata review plan.",
 		LongHelp: `Approve a metadata review plan by writing approved.json.
 
@@ -425,6 +437,24 @@ func metadataReviewDir(reviewDir string) string {
 	return trimmed
 }
 
+// normalizedIfExistsPlanValue renders the --if-exists mode for the review plan
+// hash. fail, the default, renders as the empty string so a plan recorded
+// before this flag existed keeps its hash; skip and update each change it, so
+// switching the conflict policy invalidates the approval.
+func normalizedIfExistsPlanValue(raw string) string {
+	mode, err := shared.ParseOptionalIfExistsMode(raw, shared.IfExistsSkip, shared.IfExistsUpdate)
+	if err != nil {
+		// Unreachable in practice: an unsupported value is a usage error
+		// before any plan is hashed. Keep the raw spelling so it can never
+		// collide with a supported mode's hash.
+		return strings.ToLower(strings.TrimSpace(raw))
+	}
+	if mode == shared.IfExistsFail {
+		return ""
+	}
+	return string(mode)
+}
+
 func metadataPlanOptionsFromPush(opts PushExecutionOptions, result PushPlanResult) metadataPlanOptions {
 	platform := strings.TrimSpace(opts.Platform)
 	if platform != "" {
@@ -433,6 +463,7 @@ func metadataPlanOptionsFromPush(opts PushExecutionOptions, result PushPlanResul
 		}
 	}
 	return metadataPlanOptions{
+		IfExists:     normalizedIfExistsPlanValue(opts.IfExists),
 		AppID:        result.AppID,
 		AppInfoID:    result.AppInfoID,
 		Version:      result.Version,
@@ -567,11 +598,12 @@ func selectApprovedMetadataKeys(items []PlanItem, opts MetadataApproveOptions) (
 	allowedScopes := map[string]struct{}{
 		appInfoDirName: {},
 		versionDirName: {},
+		"store-assets": {},
 	}
 	scopeSet := make(map[string]struct{}, len(scopes))
 	for _, scope := range scopes {
 		if _, ok := allowedScopes[scope]; !ok {
-			return nil, "", shared.UsageErrorf("--scope must be one of %s, %s", appInfoDirName, versionDirName)
+			return nil, "", shared.UsageErrorf("--scope must be one of %s, %s, store-assets", appInfoDirName, versionDirName)
 		}
 		scopeSet[scope] = struct{}{}
 	}

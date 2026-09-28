@@ -105,6 +105,7 @@ Examples:
   asc pre-orders list --next "NEXT_URL"`,
 		ParentFlag:  "availability",
 		ParentUsage: "App availability ID",
+		ParentType:  "appAvailabilities",
 		LimitMax:    200,
 		ErrorPrefix: "pre-orders list",
 		FetchPage: func(ctx context.Context, client *asc.Client, availabilityID string, limit int, next string) (asc.PaginatedResponse, error) {
@@ -268,7 +269,7 @@ Examples:
 func PreOrdersUpdateCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("pre-orders update", flag.ExitOnError)
 
-	territoryAvailabilityID := fs.String("territory-availability", "", "Territory availability ID")
+	territoryAvailabilityID := shared.BindResourceIDFlag(fs, "territory-availability", "territoryAvailabilities", "Territory availability ID")
 	releaseDate := fs.String("release-date", "", "Release date (YYYY-MM-DD)")
 	var preOrderEnabled shared.OptionalBool
 	fs.Var(&preOrderEnabled, "pre-order-enabled", "Set pre-order enabled: true or false")
@@ -351,7 +352,7 @@ Examples:
 func PreOrdersDisableCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("pre-orders disable", flag.ExitOnError)
 
-	territoryAvailabilityID := fs.String("territory-availability", "", "Territory availability ID")
+	territoryAvailabilityID := shared.BindResourceIDFlag(fs, "territory-availability", "territoryAvailabilities", "Territory availability ID")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{

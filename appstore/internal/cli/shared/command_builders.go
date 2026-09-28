@@ -21,6 +21,9 @@ type IDGetCommandConfig struct {
 
 	IDFlag  string
 	IDUsage string
+	// IDType is the API resource type named by the ID flag. When set, the flag
+	// also accepts that resource's self-link and rejects links of other types.
+	IDType string
 
 	ErrorPrefix string
 
@@ -41,7 +44,7 @@ func BuildIDGetCommand(config IDGetCommandConfig) *ffcli.Command {
 		idUsage = "Resource ID"
 	}
 
-	id := fs.String(idFlagName, "", idUsage)
+	id := bindBuilderIDFlag(fs, idFlagName, config.IDType, idUsage)
 	output := BindOutputFlags(fs)
 
 	timeout := config.ContextTimeout
@@ -91,6 +94,9 @@ type PaginatedListCommandConfig struct {
 
 	ParentFlag  string
 	ParentUsage string
+	// ParentType is the API resource type named by the parent flag. When set,
+	// the flag also accepts that resource's self-link.
+	ParentType string
 
 	LimitMax int
 
@@ -118,7 +124,7 @@ func BuildPaginatedListCommand(config PaginatedListCommandConfig) *ffcli.Command
 		limitMax = 200
 	}
 
-	parentID := fs.String(parentFlagName, "", parentUsage)
+	parentID := bindBuilderIDFlag(fs, parentFlagName, config.ParentType, parentUsage)
 	limit := fs.Int("limit", 0, fmt.Sprintf("Maximum results per page (1-%d)", limitMax))
 	next := fs.String("next", "", "Fetch next page using a links.next URL")
 	paginate := fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")
@@ -211,6 +217,7 @@ type PricePointEqualizationsCommandConfig struct {
 
 	ParentFlag  string
 	ParentUsage string
+	ParentType  string
 	LimitMax    int
 
 	ErrorPrefix string
@@ -256,6 +263,7 @@ Examples:
   %s --next "NEXT_URL"`, subject, baseExample, baseExample, baseExample, commandPath),
 		ParentFlag:     config.ParentFlag,
 		ParentUsage:    config.ParentUsage,
+		ParentType:     config.ParentType,
 		LimitMax:       config.LimitMax,
 		ErrorPrefix:    config.ErrorPrefix,
 		ContextTimeout: config.ContextTimeout,
@@ -274,6 +282,9 @@ type ConfirmDeleteCommandConfig struct {
 
 	IDFlag  string
 	IDUsage string
+	// IDType is the API resource type named by the ID flag; see
+	// IDGetCommandConfig.IDType.
+	IDType string
 
 	ErrorPrefix string
 
@@ -296,7 +307,7 @@ func BuildConfirmDeleteCommand(config ConfirmDeleteCommandConfig) *ffcli.Command
 		idUsage = "Resource ID"
 	}
 
-	id := fs.String(idFlagName, "", idUsage)
+	id := bindBuilderIDFlag(fs, idFlagName, config.IDType, idUsage)
 	confirm := fs.Bool("confirm", false, "Confirm deletion")
 	output := BindOutputFlags(fs)
 
@@ -337,4 +348,13 @@ func BuildConfirmDeleteCommand(config ConfirmDeleteCommandConfig) *ffcli.Command
 			return PrintOutput(result, *output.Output, *output.Pretty)
 		},
 	}
+}
+
+// bindBuilderIDFlag registers a builder's ID flag, accepting the resource's
+// self-link when the builder config names its resource type.
+func bindBuilderIDFlag(fs *flag.FlagSet, name, resourceType, usage string) *string {
+	if strings.TrimSpace(resourceType) == "" {
+		return fs.String(name, "", usage)
+	}
+	return BindResourceIDFlag(fs, name, resourceType, usage)
 }

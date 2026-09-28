@@ -170,6 +170,17 @@ the App Store Connect web-client source captured for issue #2299:
 - `asc web apps delete` uses this collection for the "removed from sale in all territories" preflight. The public API counterpart is `/v2/appAvailabilities/{id}/territoryAvailabilities`.
 - `asc web removed-apps restore` uses PATCH `/iris/v1/apps/{id}` with `removed:false`, verifies the app is no longer removed, then POSTs `/iris/v1/userAppPermissions` with `GRANT` (full) or `REVOKE` (limited) for `ALL_SILOABLE_USERS`. Permission writes are skipped when PATCH or verification fails.
 
+## App price schedules (`POST /v1/appPriceSchedules`)
+
+- The POST is the only write on the resource and replaces the app's whole schedule. Live runs against disposable app `6759231657` on 2026-09-26 and 2026-09-27 (each one snapshot, attempts, restore, and verification in a single serialized session) returned HTTP 409 for each of these causes. The raw bodies are checked in under `internal/cli/cmdtest/testdata/pricing_schedule_create_409/`, byte for byte including Apple's per-response error `id`.
+  - A manual price whose `startDate` is before today: `ENTITY_ERROR.INVALID_START_DATE`, detail `Interval can not have a start date in the past`.
+  - A single manual price whose `startDate` is after today: `ENTITY_ERROR.INVALID_START_DATE`, detail `Entire timeline must be covered for USA. The first interval has a start date 2026-10-26T00:00 in the future`. The request must cover the timeline from today, so a one-price request cannot schedule a future change; this also failed when the existing schedule already had a current price.
+  - A price point from another territory than `baseTerritory` (a USA price point with base territory FRA): `ENTITY_ERROR.BASE_TERRITORY_INTERVAL_REQUIRED`, detail `There must be at least one manual price for the base territory.`
+  - An unknown price point ID, including a valid price point of another app: `ENTITY_ERROR.NOT_FOUND`, detail `The resource 'appPricePoints' with id '…' was not found.`
+- App Store Connect's "today" is not the UTC date. At 23:22 UTC on 2026-09-26, `startDate` 2026-09-26 returned 201. At 00:03 UTC on 2026-09-27, `startDate` 2026-09-27 (the UTC date, and the CLI's default at the time) returned the future-start 409 above, while 2026-09-26 (the US Pacific date) returned 201. Both observations match the US Pacific date; the exact time zone is not documented. The CLI's UTC default for `--start-date` was therefore rejected between UTC midnight and US Pacific midnight, so `asc pricing schedule create` and `asc app-setup pricing set` now default to today's date in US Pacific time (`America/Los_Angeles`, with the time zone database embedded in the binary).
+- An accepted `startDate` of today is stored as `startDate: null`. Omitting `startDate` also returned 201 and restored the original `startDate: null` / `endDate: null` interval.
+- `asc pricing schedule create` and `asc app-setup pricing set` explain these four causes with a specific message, keep Apple's response after it, add an allowlisted diagnostic (`invalid_input` on `--start-date`, `conflicting_input` on `--base-territory`, or `resource_not_found` on the price flag), and keep the 409 exit code and `api_conflict` telemetry kind. Any other 409, including the same code with an unrecognized detail, prints exactly as before.
+
 ## Developer Portal iCloud containers
 
 - `asc web icloud-containers list` reads the modern Developer Portal collection through the cookie-authenticated web session. The logical request is `GET /services-account/v1/cloudContainers?filter[AND][hidden]=false` (or `true` with `--hidden`); Apple's browser transport sends it as `POST` with `X-HTTP-Method-Override: GET`.
@@ -273,6 +284,17 @@ the App Store Connect web-client source captured for issue #2299:
 - Before a normal `asc builds add-groups` assignment, the CLI reads the current build state and, when the plan includes an external group, its build beta detail. It stops before the relationship POST for known processing, expired, export-compliance, audience, or beta-review blockers, and fails closed when App Store Connect does not provide enough state to prove readiness. Internal-only assignments do not require the external beta-detail read. `READY_FOR_BETA_SUBMISSION` remains assignment-ready for the documented two-step workflow; `--submit --confirm` keeps the existing post-assignment beta-review submission flow.
 - When `POST /v1/builds/{id}/relationships/betaGroups` returns HTTP 422, `asc builds add-groups` preserves Apple's error and exit status, then makes bounded, best-effort reads of the build and, for external groups, its beta detail. The resulting diagnostic reports the current state without claiming which state caused Apple's rejection. Successful assignments and non-422 failures do not make these diagnostic reads.
 - `asc builds add-groups --dry-run` is an explicit no-mutation preview: it resolves the build and groups, then may read the build and external beta detail, but never sends the relationship POST or submits beta app review. There is no documented validation-only App Store Connect endpoint, so the state shown by dry-run is observational and advisory rather than proof that a later assignment will succeed. `--submit` cannot be combined with `--dry-run`.
+
+## TestFlight text validation (What to Test)
+
+- A live probe on 2026-09-25 against `betaAppLocalizations` `description` on a disposable app (the app had no builds, so `betaBuildLocalizations` `whatsNew` could not be written directly) rejected the write with `An attribute value has invalid text.: Text contains invalid characters/formats.` for: any `<` (including `a<b` and `x < y`); decomposed `Cafe` + U+0301 that NFC would compose; U+0301 after `q` or at the start of the text; U+1AB0; U+20D7; and every tested emoji (`❤`, `❤️`, U+FE0E, keycap, ZWJ family, skin tone, `😀`).
+- The same probe accepted `>`, `&`, the literal text `&lt;`, newlines, precomposed Vietnamese, and script-specific combining marks: Devanagari (`हिंदी में परीक्षण करें`, including a leading U+0902), Thai tone marks, Hebrew niqqud, Arabic harakat, and the Cyrillic titlo U+0483.
+- A live probe on 2026-09-26 against `betaBuildLocalizations` `whatsNew` (PATCH on an existing localization, disposable app) answered 409 `An attribute value has invalid text.: Text for whatsNew contains invalid characters:'[…]'` and listed each offending character. Rejected: every supplementary-plane character (U+1F600, ZWJ family, skin tone U+1F3FD, regional indicators U+1F1FA/U+1F1F8, U+1F004, U+1F130, U+1D400, U+1D11E, U+10330, U+20000); Variation Selectors U+FE00, U+FE0E, U+FE0F (even after a plain `a`); enclosing marks U+20DD and keycap U+20E3; Control Pictures U+2400 and OCR U+2440; Box Drawing U+2500/U+257F and Block Elements U+2588/U+2591; Miscellaneous Symbols U+2600–U+26FF (`☀☂☺♠♥⚠★☆`, U+26FF); Dingbats U+2701–U+27BF (`✓✔✖✗✂✨✅❤`, U+2794, U+27BF); Miscellaneous Mathematical Symbols-A U+27C2 and -B U+2980; Braille U+2801; Supplemental Mathematical Operators U+2A00; Miscellaneous Symbols and Arrows U+2B00–U+2BFF (`⬆⭐⭕⬛`); Private Use U+E000 and U+F8FF; U+FFFD. Accepted: Arrows (U+2192, U+2194, U+21FF), Supplemental Arrows-A U+27F6 and -B U+2934, Letterlike (`™`, `ℹ`, `№`), `©`, `®`, Miscellaneous Technical (U+2300, `⌘⌚⌛`, U+23E9, U+23F0, U+23FF), Enclosed Alphanumerics (U+2460, `Ⓜ`, U+24FF), Geometric Shapes (U+25A0, U+25AA, `▶`, U+25CF, U+25FB, U+25FF), Mathematical Operators, General Punctuation (`•…—‼⁉`), `€`, U+3030, U+303D, U+3297, U+3299, newlines, CRLF, tabs, NBSP, soft hyphen, ZWSP, ZWJ/ZWNJ inside Devanagari and Persian, LRM/RLO, U+FEFF, and Latin, Greek, Cyrillic, IPA, CJK, Hangul, Thai, Hebrew, Arabic, Devanagari, and Tamil text.
+- The same probe also saw App Store Connect reject whole scripts and presentation forms in whatsNew: Ethiopic, Cherokee, Khmer, Georgian, Tibetan, Mongolian, Yi, Vai, Glagolitic, U+02C6 (Spacing Modifier Letters), Alphabetic Presentation Forms U+FB01, Arabic Presentation Forms U+FDFD, Vertical Forms U+FE10, Small Form Variants U+FE50, and CJK Compatibility U+3300. The CLI does not refuse these locally: they were sampled with only a few characters each and some neighboring characters (IPA, U+F900) are accepted, so App Store Connect stays the authority for them.
+- `asc builds test-notes create|update`, `asc builds upload --test-notes`, and `asc publish testflight --test-notes` therefore NFC-normalize What to Test notes, then remove `<` and nonspacing marks from the generic combining-diacritic blocks (U+0300–036F, U+1AB0–1AFF, U+1DC0–1DFF, U+20D0–20FF, U+FE20–FE2F) that NFC could not compose. Script-specific marks are never modified. A one-line stderr notice names what was removed without echoing the notes. Characters in the rejected symbol ranges above (supplementary planes, Variation Selectors, remaining U+20D0–20FF enclosing marks, U+2400–245F, U+2500–259F, U+2600–27EF, U+2800–28FF, U+2980–2BFF, Private Use, U+FFFD) are a usage error (exit 2) that lists each distinct code point and never echoes the notes; they are refused rather than removed because stripping emoji silently changes the operator's text.
+- The check runs before any request, so a refused note never leaves a side effect. Before this, `asc builds test-notes create` with `❤️` for a locale missing its `betaAppLocalizations` record created that record and only then received the whatsNew rejection. When App Store Connect still rejects notes after the CLI created the locale's TestFlight app localization, the CLI keeps that record and reports the creation on stderr: it is the prerequisite for any What to Test in that locale, a retry needs it, and deleting it would be an unconfirmed destructive write.
+- Before writing What to Test, the CLI ensures the app has a `betaAppLocalizations` record for the locale. The lookup uses `filter[app]` plus `filter[locale]`; a live check on 2026-09-25 showed App Store Connect matches `filter[locale]` case-insensitively (`fr-fr` and `FR-FR` both returned `fr-FR`). A missing record is created with only the locale and app relationship, and a one-line stderr notice names the locale and app.
+- `POST /v1/betaAppLocalizations` returns HTTP 409 both for a duplicate locale (`There is an entity with same 'locale'`, including a case-only difference) and for an invalid locale (`The 'locale' value is invalid.`). A 409 therefore does not prove the record exists: the CLI repeats the filtered lookup and keeps Apple's original error unless the locale is now present.
 
 ## Game Center
 
@@ -458,8 +480,32 @@ the App Store Connect web-client source captured for issue #2299:
   failed post-read is an unverified outcome; no Services ID mutation is
   retried automatically.
 - Services ID lifecycle support is private-only because the public OpenAPI
-  `BundleIdPlatform` enum does not include `SERVICES`. Capability graph
-  mutation and Sign in with Apple domain configuration remain uncaptured.
+  `BundleIdPlatform` enum does not include `SERVICES`.
+- `asc web service-ids domains set` replaces complete domain and return URL
+  lists on an already enabled Sign in with Apple Services ID. The primary App ID
+  must already be configured; this command does not enable or re-parent it.
+  The 2026-09-26 browser capture accepted `PATCH /services-account/v1/bundleIds/{id}`
+  with an ID-less `bundleIdCapabilities` child linked to capability `APPLE_ID_AUTH`
+  and its existing `appConsentBundleId`. Its `inputs` use keys
+  `APPLE_ID_AUTH_WEB_DOMAIN` and `APPLE_ID_AUTH_WEB_RETURN_URL`, with `values`
+  arrays of `{ "value": "..." }` objects. Other capability inputs/settings and
+  parent relationships are preserved. A separate detail read must confirm the
+  resulting state; ambiguous writes are never retried automatically.
+  The captured detail response reported `paging.total=0` with
+  `limit=2147483647` despite populated capability linkage. This specific
+  placeholder is accepted only with resolved references and no next page;
+  positive count mismatches and missing or unreferenced included capabilities fail.
+  Because the detail read sends no `limit[bundleIdCapabilities]`, a short page is
+  not proof of completeness: the relationship must carry an exact `paging.total`
+  or that placeholder. Missing paging metadata, a missing total, or a `limit`
+  below the returned count fails before the PATCH and on the verification read.
+  Capability relationships may also contain navigation-only links without `data`
+  (for example, `appGroups` and `bundleId`). Known navigation-only relationships
+  are omitted from the PATCH; explicit relationship data is preserved, and unknown
+  unresolved relationships fail before writing.
+  Live CLI verification on 2026-09-27 confirmed an update, unchanged repeat, and
+  two-domain/two-return-URL replacement with the existing primary App ID preserved.
+  The disposable Services ID and parent App ID were deleted afterward.
   Website Push ID lifecycle and iCloud container reads use the separate
   captured workflows documented below.
 

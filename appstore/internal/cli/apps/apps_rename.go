@@ -19,7 +19,7 @@ func AppsRenameCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("apps rename", flag.ExitOnError)
 
 	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
-	appInfoID := fs.String("app-info", "", "App Info ID (optional override)")
+	appInfoID := shared.BindResourceIDFlag(fs, "app-info", "appInfos", "App Info ID (optional override)")
 	locale := fs.String("locale", "", "App name locale (e.g., en-US) (required)")
 	name := fs.String("name", "", "New localized app name (required)")
 	output := shared.BindOutputFlags(fs)

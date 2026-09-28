@@ -80,7 +80,7 @@ func TestFlightMetricsBetaTesterUsagesCommand() *ffcli.Command {
 	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
 	period := fs.String("period", "", "Reporting period: "+strings.Join(betaTesterUsagePeriodList(), ", "))
 	groupBy := fs.String("group-by", "testers", "Group results by dimension (testers)")
-	filterTester := fs.String("filter-tester", "", "Filter by beta tester ID")
+	filterTester := shared.BindResourceIDFlag(fs, "filter-tester", "betaTesters", "Filter by beta tester ID")
 	resolveTesters := fs.Bool("resolve-testers", false, "Resolve tester IDs to email and name (extra API calls)")
 	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
 	next := fs.String("next", "", "Fetch next page using a links.next URL")

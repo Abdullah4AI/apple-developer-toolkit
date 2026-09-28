@@ -391,7 +391,13 @@ func TestRun_ProfileAfterPositionalWritesRequestedJUnitReport(t *testing.T) {
 // `profile` flag. Those keep it, so a new command-local `--profile` must be a
 // deliberate decision rather than a silent change to credential selection.
 func TestCommandOwnedProfileFlagInventory(t *testing.T) {
-	want := map[string]struct{}{"asc signing run": {}}
+	// Both commands take a provisioning-profile file path as --profile. They
+	// are local-only commands that never read credentials, so the local flag
+	// shadowing the root credential selector is deliberate.
+	want := map[string]struct{}{
+		"asc signing run":        {},
+		"asc xcode signing plan": {},
+	}
 
 	got := map[string]struct{}{}
 	var walk func(command *ffcli.Command, path []string)

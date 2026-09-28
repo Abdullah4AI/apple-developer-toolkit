@@ -61,7 +61,7 @@ func SearchPlanCommand() *ffcli.Command {
 	appID := fs.String("app", "", "App Store Connect app ID, bundle ID, or exact app name (required, or ASC_APP_ID env)")
 	version := fs.String("version", "", "App Store version string (required)")
 	platform := fs.String("platform", "IOS", "App Store platform: IOS, MAC_OS, TV_OS, VISION_OS")
-	appInfoID := fs.String("app-info", "", "App Info ID override when multiple records cannot be auto-resolved")
+	appInfoID := shared.BindResourceIDFlag(fs, "app-info", "appInfos", "App Info ID override when multiple records cannot be auto-resolved")
 	adAccount := fs.String("ad-account", "", "Apple Ads ad account ID (or ASC_ADS_AD_ACCOUNT_ID/profile default)")
 	adsProfile := fs.String("ads-profile", "", "Use named Apple Ads authentication profile")
 	country := fs.String("country", "", "ISO alpha-2 Apple Ads country or region (required)")

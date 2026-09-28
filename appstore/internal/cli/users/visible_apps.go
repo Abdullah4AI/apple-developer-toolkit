@@ -43,7 +43,7 @@ Examples:
 func UsersVisibleAppsListCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("visible-apps list", flag.ExitOnError)
 
-	id := fs.String("id", "", "User ID")
+	id := shared.BindResourceIDFlag(fs, "id", "users", "User ID")
 	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
 	next := fs.String("next", "", "Fetch next page using a links.next URL")
 	paginate := fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")
@@ -128,7 +128,7 @@ Examples:
 func UsersVisibleAppsGetCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("visible-apps view", flag.ExitOnError)
 
-	id := fs.String("id", "", "User ID")
+	id := shared.BindResourceIDFlag(fs, "id", "users", "User ID")
 	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
 	next := fs.String("next", "", "Fetch next page using a links.next URL")
 	paginate := fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")

@@ -157,7 +157,7 @@ Examples:
 func BackgroundAssetsGetCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("view", flag.ExitOnError)
 
-	assetID := fs.String("id", "", "Background asset ID")
+	assetID := shared.BindResourceIDFlag(fs, "id", "backgroundAssets", "Background asset ID")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
@@ -248,7 +248,7 @@ Examples:
 func BackgroundAssetsUpdateCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("update", flag.ExitOnError)
 
-	assetID := fs.String("id", "", "Background asset ID")
+	assetID := shared.BindResourceIDFlag(fs, "id", "backgroundAssets", "Background asset ID")
 	archived := fs.String("archived", "", "Set archived state (true/false)")
 	output := shared.BindOutputFlags(fs)
 

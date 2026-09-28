@@ -53,6 +53,7 @@ Examples:
   asc localizations preview-sets list --localization-id "LOCALIZATION_ID"`,
 		ParentFlag:  "localization-id",
 		ParentUsage: "App Store version localization ID",
+		ParentType:  "appStoreVersionLocalizations",
 		LimitMax:    200,
 		ErrorPrefix: "localizations preview-sets list",
 		FetchPage: func(ctx context.Context, client *asc.Client, localizationID string, limit int, next string) (asc.PaginatedResponse, error) {
@@ -82,6 +83,7 @@ Examples:
   asc localizations preview-sets view --id "PREVIEW_SET_ID"`,
 		IDFlag:      "id",
 		IDUsage:     "App preview set ID",
+		IDType:      "appPreviewSets",
 		ErrorPrefix: "localizations preview-sets view",
 		Fetch: func(ctx context.Context, client *asc.Client, id string) (any, error) {
 			return client.GetAppPreviewSet(ctx, id)
@@ -102,6 +104,7 @@ Examples:
   asc localizations preview-sets links --localization-id "LOCALIZATION_ID"`,
 		ParentFlag:  "localization-id",
 		ParentUsage: "App Store version localization ID",
+		ParentType:  "appStoreVersionLocalizations",
 		LimitMax:    200,
 		ErrorPrefix: "localizations preview-sets links",
 		FetchPage: func(ctx context.Context, client *asc.Client, localizationID string, limit int, next string) (asc.PaginatedResponse, error) {
@@ -160,6 +163,7 @@ Examples:
   asc localizations screenshot-sets view --id "SCREENSHOT_SET_ID"`,
 		IDFlag:      "id",
 		IDUsage:     "App screenshot set ID",
+		IDType:      "appScreenshotSets",
 		ErrorPrefix: "localizations screenshot-sets view",
 		Fetch: func(ctx context.Context, client *asc.Client, id string) (any, error) {
 			return client.GetAppScreenshotSet(ctx, id)
@@ -171,7 +175,7 @@ Examples:
 func LocalizationsScreenshotSetsDeleteCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("localizations screenshot-sets delete", flag.ExitOnError)
 
-	setID := fs.String("id", "", "App screenshot set ID")
+	setID := shared.BindResourceIDFlag(fs, "id", "appScreenshotSets", "App screenshot set ID")
 	confirm := fs.Bool("confirm", false, "Confirm deletion")
 	output := shared.BindOutputFlags(fs)
 
@@ -231,6 +235,7 @@ Examples:
   asc localizations screenshot-sets list --localization-id "LOCALIZATION_ID"`,
 		ParentFlag:  "localization-id",
 		ParentUsage: "App Store version localization ID",
+		ParentType:  "appStoreVersionLocalizations",
 		LimitMax:    200,
 		ErrorPrefix: "localizations screenshot-sets list",
 		FetchPage: func(ctx context.Context, client *asc.Client, localizationID string, limit int, next string) (asc.PaginatedResponse, error) {
@@ -260,6 +265,7 @@ Examples:
   asc localizations screenshot-sets links --localization-id "LOCALIZATION_ID"`,
 		ParentFlag:  "localization-id",
 		ParentUsage: "App Store version localization ID",
+		ParentType:  "appStoreVersionLocalizations",
 		LimitMax:    200,
 		ErrorPrefix: "localizations screenshot-sets links",
 		FetchPage: func(ctx context.Context, client *asc.Client, localizationID string, limit int, next string) (asc.PaginatedResponse, error) {

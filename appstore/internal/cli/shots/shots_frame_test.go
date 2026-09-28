@@ -1,6 +1,7 @@
 package shots
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -40,5 +41,27 @@ func TestResolveOutputPath_RejectsNameWithPathSeparators(t *testing.T) {
 		if !strings.Contains(err.Error(), "file name without path separators") {
 			t.Fatalf("resolveOutputPath() error = %v, want name validation error for %q", err, tc)
 		}
+	}
+}
+
+func TestPathFoldsCaseMatchesFilesystem(t *testing.T) {
+	base := t.TempDir()
+	probe := filepath.Join(base, "Probe")
+	if err := os.Mkdir(probe, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	original, err := os.Stat(probe)
+	if err != nil {
+		t.Fatal(err)
+	}
+	swapped, swappedErr := os.Stat(filepath.Join(base, "pROBE"))
+	want := swappedErr == nil && os.SameFile(original, swapped)
+
+	if got := pathFoldsCase(probe); got != want {
+		t.Fatalf("pathFoldsCase(existing) = %v, want %v", got, want)
+	}
+	// A missing output directory is judged by its nearest existing ancestor.
+	if got := pathFoldsCase(filepath.Join(probe, "missing", "framed")); got != want {
+		t.Fatalf("pathFoldsCase(missing) = %v, want %v", got, want)
 	}
 }

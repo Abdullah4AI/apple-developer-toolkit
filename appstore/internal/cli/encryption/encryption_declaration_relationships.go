@@ -38,7 +38,7 @@ Examples:
 func EncryptionDeclarationsAppGetCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("encryption declarations app view", flag.ExitOnError)
 
-	declarationID := fs.String("id", "", "Encryption declaration ID (required)")
+	declarationID := shared.BindResourceIDFlag(fs, "id", "appEncryptionDeclarations", "Encryption declaration ID (required)")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
@@ -103,7 +103,7 @@ Examples:
 func EncryptionDeclarationsDeclarationDocumentGetCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("encryption declarations app-encryption-declaration-document view", flag.ExitOnError)
 
-	declarationID := fs.String("id", "", "Encryption declaration ID (required)")
+	declarationID := shared.BindResourceIDFlag(fs, "id", "appEncryptionDeclarations", "Encryption declaration ID (required)")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{

@@ -143,7 +143,7 @@ func ProfilesLocalInstallCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("install", flag.ExitOnError)
 
 	sourcePath := fs.String("path", "", "Path to a .mobileprovision or .provisionprofile file to install")
-	profileID := fs.String("id", "", "Profile ID to download and install")
+	profileID := shared.BindResourceIDFlag(fs, "id", "profiles", "Profile ID to download and install")
 	installDir := fs.String("install-dir", "", "Directory to use (defaults by active Xcode version on macOS)")
 	force := fs.Bool("force", false, "Overwrite an existing installed profile with the same UUID")
 	output := shared.BindOutputFlags(fs)

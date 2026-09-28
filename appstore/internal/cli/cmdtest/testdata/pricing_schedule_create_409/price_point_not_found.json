@@ -1,0 +1,12 @@
+{
+  "errors" : [ {
+    "id" : "d496e6bd-e75b-4071-a6c0-d7991f4d3fdf",
+    "status" : "409",
+    "code" : "ENTITY_ERROR.NOT_FOUND",
+    "title" : "There is a problem with the request entity",
+    "detail" : "The resource 'appPricePoints' with id 'not-a-price-point' was not found.",
+    "source" : {
+      "pointer" : "/included/relationships/appPricePoints/data/0/id"
+    }
+  } ]
+}

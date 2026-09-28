@@ -1,0 +1,42 @@
+project:
+    name: ASC Shots Frame
+    output_dir: $WORK/output
+    device: iPad Pro 13 - M4 - Space Gray - Portrait
+    output_size: iPadPro13
+screenshots:
+    framed:
+        background:
+            type: linear
+            colors:
+                - '#140f2d'
+                - '#140f2d'
+        content:
+            - type: text
+              content: Unlock Pro
+              position:
+                - 50%
+                - 85%
+              color: '#fafafa'
+              size: 144
+              weight: bold
+              font_family: Helvetica
+              alignment: center
+              max_width: 1858
+            - type: text
+              content: Unlimited routes
+              position:
+                - 50%
+                - 92%
+              color: '#aaaaaa'
+              size: 83
+              font_family: Helvetica
+              alignment: center
+              max_width: 1858
+            - type: image
+              asset: $WORK/03-paywall.png
+              position:
+                - 50%
+                - 39%
+              scale: 0.6788
+              frame: true
+              alignment: center

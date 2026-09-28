@@ -152,45 +152,32 @@ func TestShotsValidationDiagnostics(t *testing.T) {
 			wantParameter: "--config",
 		},
 		{
-			name: "frame canvas flags with noncanvas device",
+			name: "frame unsupported frame color",
 			command: func() interface {
 				ParseAndRun(context.Context, []string) error
 			} {
 				return ShotsFrameCommand()
 			},
-			args:          []string{"--input", "/tmp/raw.png", "--title", "Hello"},
-			wantError:     flag.ErrHelp.Error(),
-			wantStderr:    "Error: --title, --subtitle, --bg-color, --title-color, --subtitle-color only apply to canvas devices (e.g. --device mac)\n",
+			args:          []string{"--input", "/tmp/raw.png", "--device", "iphone-17", "--frame-color", "gold"},
+			wantError:     `--frame-color: unsupported frame color "gold" for device iphone-17 (allowed: white, black, lavender, mist-blue, sage)`,
+			wantStderr:    `Error: --frame-color: unsupported frame color "gold" for device iphone-17 (allowed: white, black, lavender, mist-blue, sage)` + "\n",
 			wantUsage:     true,
-			wantCode:      shared.DiagnosticConflictingInput,
-			wantParameter: "--title",
+			wantCode:      shared.DiagnosticInvalidInput,
+			wantParameter: "--frame-color",
 		},
 		{
-			name: "frame subtitle with noncanvas device",
+			name: "frame input dir with input",
 			command: func() interface {
 				ParseAndRun(context.Context, []string) error
 			} {
 				return ShotsFrameCommand()
 			},
-			args:          []string{"--input", "/tmp/raw.png", "--subtitle", "Hello"},
-			wantError:     flag.ErrHelp.Error(),
-			wantStderr:    "Error: --title, --subtitle, --bg-color, --title-color, --subtitle-color only apply to canvas devices (e.g. --device mac)\n",
+			args:          []string{"--input", "/tmp/raw.png", "--input-dir", "/tmp/raw"},
+			wantError:     "use either --input, --input-dir, or --config",
+			wantStderr:    "Error: use either --input, --input-dir, or --config\n",
 			wantUsage:     true,
 			wantCode:      shared.DiagnosticConflictingInput,
-			wantParameter: "--subtitle",
-		},
-		{
-			name: "frame multiple canvas flags with noncanvas device",
-			command: func() interface {
-				ParseAndRun(context.Context, []string) error
-			} {
-				return ShotsFrameCommand()
-			},
-			args:       []string{"--input", "/tmp/raw.png", "--title", "Hello", "--bg-color", "#000000"},
-			wantError:  flag.ErrHelp.Error(),
-			wantStderr: "Error: --title, --subtitle, --bg-color, --title-color, --subtitle-color only apply to canvas devices (e.g. --device mac)\n",
-			wantUsage:  true,
-			wantCode:   shared.DiagnosticConflictingInput,
+			wantParameter: "--input-dir",
 		},
 		{
 			name: "frame name with path separators",

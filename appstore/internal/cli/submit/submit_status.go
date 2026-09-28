@@ -20,8 +20,8 @@ import (
 func SubmitStatusCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("submit status", flag.ExitOnError)
 
-	submissionID := fs.String("id", "", "Submission ID")
-	versionID := fs.String("version-id", "", "App Store version ID")
+	submissionID := shared.BindResourceIDFlag(fs, "id", "reviewSubmissions", "Submission ID")
+	versionID := shared.BindResourceIDFlag(fs, "version-id", "appStoreVersions", "App Store version ID")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{

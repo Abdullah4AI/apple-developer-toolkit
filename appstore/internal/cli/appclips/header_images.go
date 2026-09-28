@@ -44,7 +44,7 @@ Examples:
 func AppClipHeaderImagesGetCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("view", flag.ExitOnError)
 
-	imageID := fs.String("id", "", "Header image ID")
+	imageID := shared.BindResourceIDFlag(fs, "id", "appClipHeaderImages", "Header image ID")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
@@ -86,7 +86,7 @@ Examples:
 func AppClipHeaderImagesCreateCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("create", flag.ExitOnError)
 
-	localizationID := fs.String("localization-id", "", "Default experience localization ID")
+	localizationID := shared.BindResourceIDFlag(fs, "localization-id", "appClipDefaultExperienceLocalizations", "Default experience localization ID")
 	filePath := fs.String("file", "", "Path to image file (PNG)")
 	output := shared.BindOutputFlags(fs)
 
@@ -137,7 +137,7 @@ Examples:
 func AppClipHeaderImagesDeleteCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("delete", flag.ExitOnError)
 
-	imageID := fs.String("id", "", "Header image ID")
+	imageID := shared.BindResourceIDFlag(fs, "id", "appClipHeaderImages", "Header image ID")
 	confirm := fs.Bool("confirm", false, "Confirm deletion")
 	output := shared.BindOutputFlags(fs)
 

@@ -46,9 +46,9 @@ func DiffLocalizationsCommand() *ffcli.Command {
 
 	appID := fs.String("app", "", "App Store Connect app ID (required, or ASC_APP_ID env)")
 	path := fs.String("path", "", "Local .strings directory or file (source)")
-	fromVersion := fs.String("from-version", "", "Remote source app store version ID")
-	version := fs.String("version", "", "Remote target app store version ID (when using --path)")
-	toVersion := fs.String("to-version", "", "Remote target app store version ID (when using --from-version)")
+	fromVersion := shared.BindResourceIDFlag(fs, "from-version", "appStoreVersions", "Remote source app store version ID")
+	version := shared.BindResourceIDFlag(fs, "version", "appStoreVersions", "Remote target app store version ID (when using --path)")
+	toVersion := shared.BindResourceIDFlag(fs, "to-version", "appStoreVersions", "Remote target app store version ID (when using --from-version)")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{

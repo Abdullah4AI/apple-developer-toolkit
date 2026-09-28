@@ -61,7 +61,7 @@ Examples:
 func SubscriptionsIntroductoryOffersListCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("introductory-offers list", flag.ExitOnError)
 
-	subscriptionID := fs.String("subscription-id", "", "Subscription ID, product ID, or exact current name")
+	subscriptionID := shared.BindResourceIDFlag(fs, "subscription-id", "subscriptions", "Subscription ID, product ID, or exact current name")
 	appID := addSubscriptionLookupAppFlag(fs)
 	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
 	next := fs.String("next", "", "Fetch next page using a links.next URL")
@@ -165,9 +165,9 @@ Examples:
 func SubscriptionsIntroductoryOffersGetCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("introductory-offers view", flag.ExitOnError)
 
-	subscriptionID := fs.String("subscription-id", "", "Subscription ID, product ID, or exact current name")
+	subscriptionID := shared.BindResourceIDFlag(fs, "subscription-id", "subscriptions", "Subscription ID, product ID, or exact current name")
 	appID := addSubscriptionLookupAppFlag(fs)
-	offerID := fs.String("id", "", "Introductory offer ID")
+	offerID := shared.BindResourceIDFlag(fs, "id", "subscriptionIntroductoryOffers", "Introductory offer ID")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
@@ -257,7 +257,7 @@ func findSubscriptionIntroductoryOffer(ctx context.Context, client *asc.Client, 
 func SubscriptionsIntroductoryOffersCreateCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("introductory-offers create", flag.ExitOnError)
 
-	subscriptionID := fs.String("subscription-id", "", "Subscription ID, product ID, or exact current name")
+	subscriptionID := shared.BindResourceIDFlag(fs, "subscription-id", "subscriptions", "Subscription ID, product ID, or exact current name")
 	appID := addSubscriptionLookupAppFlag(fs)
 	offerDuration := fs.String("offer-duration", "", "Offer duration: "+strings.Join(subscriptionOfferDurationValues, ", "))
 	offerMode := fs.String("offer-mode", "", "Offer mode: "+strings.Join(subscriptionOfferModeValues, ", "))
@@ -266,7 +266,7 @@ func SubscriptionsIntroductoryOffersCreateCommand() *ffcli.Command {
 	endDate := fs.String("end-date", "", "End date (YYYY-MM-DD)")
 	territory := fs.String("territory", "", "Territory for the offer (accepts alpha-2, alpha-3, or exact English country name; required unless --all-territories)")
 	allTerritories := fs.Bool("all-territories", false, "Create introductory offers for all current subscription availability territories")
-	pricePoint := fs.String("price-point", "", "Subscription price point ID")
+	pricePoint := shared.BindResourceIDFlag(fs, "price-point", "subscriptionPricePoints", "Subscription price point ID")
 	dryRun := fs.Bool("dry-run", false, "Print a summary without creating offers; single-territory mode makes no network requests")
 	continueOnError := fs.Bool("continue-on-error", true, "Continue creating offers after a territory fails")
 	output := shared.BindOutputFlags(fs)
@@ -714,7 +714,7 @@ func pluralizeIntroductoryOfferCreateTerritories(n int) string {
 func SubscriptionsIntroductoryOffersUpdateCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("introductory-offers update", flag.ExitOnError)
 
-	offerID := fs.String("id", "", "Introductory offer ID")
+	offerID := shared.BindResourceIDFlag(fs, "id", "subscriptionIntroductoryOffers", "Introductory offer ID")
 	endDate := fs.String("end-date", "", "End date (YYYY-MM-DD)")
 	output := shared.BindOutputFlags(fs)
 
@@ -771,7 +771,7 @@ Examples:
 func SubscriptionsIntroductoryOffersDeleteCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("introductory-offers delete", flag.ExitOnError)
 
-	offerID := fs.String("id", "", "Introductory offer ID")
+	offerID := shared.BindResourceIDFlag(fs, "id", "subscriptionIntroductoryOffers", "Introductory offer ID")
 	confirm := fs.Bool("confirm", false, "Confirm deletion")
 	output := shared.BindOutputFlags(fs)
 

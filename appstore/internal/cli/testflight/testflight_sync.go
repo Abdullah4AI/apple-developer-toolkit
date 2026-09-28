@@ -115,7 +115,7 @@ func TestFlightSyncPullCommand() *ffcli.Command {
 	output := fs.String("output", "", "Output file path for YAML (required)")
 	includeBuilds := fs.Bool("include-builds", false, "Include builds and group assignments")
 	includeTesters := fs.Bool("include-testers", false, "Include testers and group memberships")
-	groupFilter := fs.String("group", "", "Filter to a specific beta group (name or ID)")
+	groupFilter := shared.BindResourceIDFlag(fs, "group", "betaGroups", "Filter to a specific beta group (name or ID)")
 	buildFilter := fs.String("build-id", "", "Filter to build ID(s), comma-separated")
 	testerFilter := fs.String("tester", "", "Filter to tester ID(s) or emails, comma-separated")
 	pretty := shared.BindPrettyJSONFlag(fs)

@@ -207,8 +207,11 @@ func TestPricingScheduleCreateCommand_HelpDocumentsStartDateDefault(t *testing.T
 	cmd := PricingScheduleCreateCommand()
 
 	usage := cmd.FlagSet.Lookup("start-date").Usage
-	if !strings.Contains(usage, "default: today in UTC") {
-		t.Fatalf("expected --start-date help to document the UTC default, got %q", usage)
+	if !strings.Contains(usage, "default: today in US Pacific time") {
+		t.Fatalf("expected --start-date help to document the US Pacific default, got %q", usage)
+	}
+	if !strings.Contains(cmd.LongHelp, "today's date in US Pacific time") {
+		t.Fatalf("expected long help to document the US Pacific default, got %q", cmd.LongHelp)
 	}
 	if !strings.Contains(usage, "today or later") {
 		t.Fatalf("expected --start-date help to mention Apple requires today or later, got %q", usage)

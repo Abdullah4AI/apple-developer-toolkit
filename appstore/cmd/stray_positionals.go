@@ -22,7 +22,8 @@ import (
 // and fails when the two disagree.
 func commandAcceptsOperandsPath(commandName string) bool {
 	switch commandName {
-	case "asc docs show",
+	case "asc api",
+		"asc docs show",
 		"asc schema",
 		"asc search",
 		"asc signing run",

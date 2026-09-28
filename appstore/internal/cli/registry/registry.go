@@ -17,9 +17,11 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/alternativedistribution"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/analytics"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/androidiosmapping"
+	apicmd "github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/api"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/app_events"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/appclips"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/apps"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/artifacts"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/auth"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/backgroundassets"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/buildbundles"
@@ -161,6 +163,8 @@ func NewCatalog(version string) *Catalog {
 		commandFactory("workflow", "Run multi-step automation workflows.", workflow.WorkflowCommand),
 		commandFactory("xcode", "Local Xcode build/archive/export and signing-settings helpers.", xcode.XcodeCommand),
 		commandFactory("distribute", "Plan, execute, inspect, and publish iOS distribution artifacts.", distribute.DistributeCommand),
+		commandFactory("ipa-info", "Inspect a local IPA without contacting App Store Connect.", artifacts.IPAInfoCommand),
+		commandFactory("pkg-info", "Inspect a local flat component package without contacting Apple.", artifacts.PKGInfoCommand),
 		commandFactory("versions", "Manage App Store versions.", versions.VersionsCommand),
 		commandFactory("product-pages", "Manage custom product pages and product page experiments.", productpages.ProductPagesCommand),
 		commandFactory("routing-coverage", "Manage routing app coverage files.", routingcoverage.RoutingCoverageCommand),
@@ -193,6 +197,7 @@ func NewCatalog(version string) *Catalog {
 		commandFactory("game-center", "Manage Game Center resources in App Store Connect.", gamecenter.GameCenterCommand),
 		commandFactory("capabilities", "Show CLI, API, web-only, and public-API-limited capability coverage.", capabilities.Command),
 		commandFactory("schema", "Inspect App Store Connect API endpoint schemas at runtime.", schema.SchemaCommand),
+		commandFactory("api", "Send an authenticated raw request to the App Store Connect API.", apicmd.Command),
 		commandFactory("telemetry", "Manage CLI telemetry settings.", telemetrycmd.TelemetryCommand),
 		commandFactory("search", "Search asc commands and examples for agent-oriented command discovery.", func() *ffcli.Command {
 			return searchcmd.SearchCommand(catalog.All)

@@ -1,9 +1,12 @@
 package schema
 
 import (
+	"context"
 	"flag"
 	"strings"
 	"testing"
+
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
 func TestParseInterspersedSchemaFlagsPreservesErrorPrecedence(t *testing.T) {
@@ -11,11 +14,11 @@ func TestParseInterspersedSchemaFlagsPreservesErrorPrecedence(t *testing.T) {
 		fs := flag.NewFlagSet("schema", flag.ContinueOnError)
 		fs.String("method", "", "")
 
-		_, err := parseInterspersedSchemaFlags(fs, []string{
+		_, err := shared.ParseInterspersedFlags(fs, []string{
 			"apps", "--bogus", "--profile", "staging",
 		})
 		if err == nil || !strings.Contains(err.Error(), "flag provided but not defined: -bogus") {
-			t.Fatalf("parseInterspersedSchemaFlags() error = %v, want the unknown-flag error", err)
+			t.Fatalf("ParseInterspersedFlags() error = %v, want the unknown-flag error", err)
 		}
 	})
 
@@ -23,11 +26,18 @@ func TestParseInterspersedSchemaFlagsPreservesErrorPrecedence(t *testing.T) {
 		fs := flag.NewFlagSet("schema", flag.ContinueOnError)
 		fs.String("method", "", "")
 
-		_, err := parseInterspersedSchemaFlags(fs, []string{"apps", "--profile", "staging"})
+		_, err := shared.ParseInterspersedFlags(fs, []string{"apps", "--profile", "staging"})
 		if err == nil || err.Error() != "`--profile` must appear before positional arguments" {
-			t.Fatalf("parseInterspersedSchemaFlags() error = %v, want the profile-placement error", err)
+			t.Fatalf("ParseInterspersedFlags() error = %v, want the profile-placement error", err)
 		}
 	})
+}
+
+func TestSchemaCommandExecRejectsMisplacedProfileAfterQuery(t *testing.T) {
+	err := SchemaCommand().Exec(context.Background(), []string{"apps", "--profile", "work"})
+	if err == nil || err.Error() != "`--profile` must appear before positional arguments" {
+		t.Fatalf("SchemaCommand().Exec() error = %v, want the profile-placement usage error", err)
+	}
 }
 
 func TestLoadIndex_ParsesEmbeddedData(t *testing.T) {

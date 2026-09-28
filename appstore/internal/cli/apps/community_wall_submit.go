@@ -26,6 +26,7 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/itunes"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/readonly"
 )
 
 const (
@@ -1125,6 +1126,9 @@ func (client communityWallGitHubClientAPI) request(ctx context.Context, method, 
 		bodyReader = bytes.NewReader(body)
 	}
 
+	if err := readonly.Check(ctx, method, readonly.Target(communityWallGitHubAPIBase+path)); err != nil {
+		return nil, 0, err
+	}
 	req, err := http.NewRequestWithContext(ctx, method, communityWallGitHubAPIBase+path, bodyReader)
 	if err != nil {
 		return nil, 0, err

@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
 	signingpkg "github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/signing"
 	modernpkcs12 "software.sslmate.com/src/go-pkcs12"
 )
@@ -151,6 +152,9 @@ func TestSigningSyncRotatePasswordReencryptsCompleteRepositoryAndIdentity(t *tes
 	}
 	if result.Operation != "rotate-password" || result.RepoURL != remoteURL || !result.IdentityPresent {
 		t.Fatalf("rotation result = %#v", result)
+	}
+	if result.Storage == nil || *result.Storage != (asc.SigningSyncStorage{Kind: "git", Location: remoteURL, Branch: "main"}) {
+		t.Fatalf("rotation storage = %#v, want git storage with the branch", result.Storage)
 	}
 	if len(result.Files) != 4 || len(result.SensitiveFiles) != 1 || result.SensitiveFiles[0] != artifacts.IdentityPath {
 		t.Fatalf("rotation files = %#v sensitive = %#v", result.Files, result.SensitiveFiles)

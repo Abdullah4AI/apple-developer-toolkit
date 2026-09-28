@@ -1,0 +1,52 @@
+project:
+    name: ASC Shots Frame
+    output_dir: $WORK/output
+    device: iPhone Air - Light Gold - Portrait
+    output_size: iPhone6_9_alt
+screenshots:
+    framed:
+        background:
+            type: linear
+            colors:
+                - '#0d0c1e'
+                - '#0d0c1e'
+        content:
+            - type: text
+              content: Plan every trip
+              position:
+                - 50%
+                - 85%
+              color: '#ffffff'
+              size: 88
+              weight: bold
+              font_family: font.ttf
+              alignment: center
+              max_width: 1134
+              box:
+                level: paragraph
+                type: rounded
+                color: '#00000099'
+                padding: 22
+            - type: text
+              content: Offline maps
+              position:
+                - 50%
+                - 92%
+              color: '#aaaaaa'
+              size: 50
+              font_family: font.ttf
+              alignment: center
+              max_width: 1134
+              box:
+                level: paragraph
+                type: rounded
+                color: '#00000099'
+                padding: 13
+            - type: image
+              asset: $WORK/01-home.png
+              position:
+                - 50%
+                - 39%
+              scale: 0.703
+              frame: true
+              alignment: center

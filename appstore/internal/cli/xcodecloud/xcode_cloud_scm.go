@@ -112,6 +112,7 @@ Examples:
   asc xcode-cloud scm providers view --provider-id "PROVIDER_ID"`,
 		IDFlag:      "provider-id",
 		IDUsage:     "SCM provider ID",
+		IDType:      "scmProviders",
 		ErrorPrefix: "xcode-cloud scm providers view",
 		ContextTimeout: func(ctx context.Context) (context.Context, context.CancelFunc) {
 			return contextWithXcodeCloudTimeout(ctx, 0)
@@ -135,6 +136,7 @@ Examples:
   asc xcode-cloud scm providers repositories --provider-id "PROVIDER_ID" --paginate`,
 		ParentFlag:  "provider-id",
 		ParentUsage: "SCM provider ID",
+		ParentType:  "scmProviders",
 		LimitMax:    200,
 		ErrorPrefix: "xcode-cloud scm providers repositories",
 		ContextTimeout: func(ctx context.Context) (context.Context, context.CancelFunc) {
@@ -219,6 +221,7 @@ Examples:
   asc xcode-cloud scm repositories view --id "REPO_ID"`,
 		IDFlag:      "id",
 		IDUsage:     "SCM repository ID",
+		IDType:      "scmRepositories",
 		ErrorPrefix: "xcode-cloud scm repositories view",
 		ContextTimeout: func(ctx context.Context) (context.Context, context.CancelFunc) {
 			return contextWithXcodeCloudTimeout(ctx, 0)
@@ -246,6 +249,7 @@ Examples:
   asc xcode-cloud scm repositories git-references --repo-id "REPO_ID" --paginate`,
 		ParentFlag:  "repo-id",
 		ParentUsage: "SCM repository ID",
+		ParentType:  "scmRepositories",
 		LimitMax:    200,
 		ErrorPrefix: "xcode-cloud scm repositories git-references",
 		ContextTimeout: func(ctx context.Context) (context.Context, context.CancelFunc) {
@@ -278,6 +282,7 @@ Examples:
   asc xcode-cloud scm repositories pull-requests --repo-id "REPO_ID" --paginate`,
 		ParentFlag:  "repo-id",
 		ParentUsage: "SCM repository ID",
+		ParentType:  "scmRepositories",
 		LimitMax:    200,
 		ErrorPrefix: "xcode-cloud scm repositories pull-requests",
 		ContextTimeout: func(ctx context.Context) (context.Context, context.CancelFunc) {
@@ -334,6 +339,7 @@ Examples:
   asc xcode-cloud scm repositories links git-references --repo-id "REPO_ID" --paginate`,
 		ParentFlag:  "repo-id",
 		ParentUsage: "SCM repository ID",
+		ParentType:  "scmRepositories",
 		LimitMax:    200,
 		ErrorPrefix: "xcode-cloud scm repositories links git-references",
 		ContextTimeout: func(ctx context.Context) (context.Context, context.CancelFunc) {
@@ -366,6 +372,7 @@ Examples:
   asc xcode-cloud scm repositories links pull-requests --repo-id "REPO_ID" --paginate`,
 		ParentFlag:  "repo-id",
 		ParentUsage: "SCM repository ID",
+		ParentType:  "scmRepositories",
 		LimitMax:    200,
 		ErrorPrefix: "xcode-cloud scm repositories links pull-requests",
 		ContextTimeout: func(ctx context.Context) (context.Context, context.CancelFunc) {
@@ -420,6 +427,7 @@ Examples:
   asc xcode-cloud scm git-references view --id "REF_ID"`,
 		IDFlag:      "id",
 		IDUsage:     "SCM git reference ID",
+		IDType:      "scmGitReferences",
 		ErrorPrefix: "xcode-cloud scm git-references view",
 		ContextTimeout: func(ctx context.Context) (context.Context, context.CancelFunc) {
 			return contextWithXcodeCloudTimeout(ctx, 0)
@@ -465,6 +473,7 @@ Examples:
   asc xcode-cloud scm pull-requests view --id "PR_ID"`,
 		IDFlag:      "id",
 		IDUsage:     "SCM pull request ID",
+		IDType:      "scmPullRequests",
 		ErrorPrefix: "xcode-cloud scm pull-requests view",
 		ContextTimeout: func(ctx context.Context) (context.Context, context.CancelFunc) {
 			return contextWithXcodeCloudTimeout(ctx, 0)

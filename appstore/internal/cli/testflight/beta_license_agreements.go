@@ -125,7 +125,7 @@ Examples:
 func BetaLicenseAgreementsGetCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("view", flag.ExitOnError)
 
-	id := fs.String("id", "", "Beta license agreement ID")
+	id := shared.BindResourceIDFlag(fs, "id", "betaLicenseAgreements", "Beta license agreement ID")
 	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
 	fields := fs.String("fields", "", "Fields to include (betaLicenseAgreements), comma-separated")
 	appFields := fs.String("app-fields", "", "App fields to include, comma-separated")
@@ -197,7 +197,7 @@ Examples:
 func BetaLicenseAgreementsUpdateCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("update", flag.ExitOnError)
 
-	id := fs.String("id", "", "Beta license agreement ID")
+	id := shared.BindResourceIDFlag(fs, "id", "betaLicenseAgreements", "Beta license agreement ID")
 	agreementText := fs.String("agreement-text", "", "Updated agreement text")
 	output := shared.BindOutputFlags(fs)
 

@@ -50,7 +50,7 @@ Examples:
 func EULAGetCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("view", flag.ExitOnError)
 
-	id := fs.String("id", "", "EULA ID")
+	id := shared.BindResourceIDFlag(fs, "id", "endUserLicenseAgreements", "EULA ID")
 	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
 	output := shared.BindOutputFlags(fs)
 
@@ -207,7 +207,7 @@ Examples:
 func EULAUpdateCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("update", flag.ExitOnError)
 
-	id := fs.String("id", "", "EULA ID")
+	id := shared.BindResourceIDFlag(fs, "id", "endUserLicenseAgreements", "EULA ID")
 	agreementText := fs.String("agreement-text", "", "Agreement text")
 	territories := shared.BindOnceCSVFlag(fs, "territory", "Territory inputs, comma-separated (accepts alpha-2, alpha-3, or exact English country names)")
 	output := shared.BindOutputFlags(fs)
@@ -267,7 +267,7 @@ Examples:
 func EULADeleteCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("delete", flag.ExitOnError)
 
-	id := fs.String("id", "", "EULA ID")
+	id := shared.BindResourceIDFlag(fs, "id", "endUserLicenseAgreements", "EULA ID")
 	confirm := fs.Bool("confirm", false, "Confirm deletion")
 	output := shared.BindOutputFlags(fs)
 

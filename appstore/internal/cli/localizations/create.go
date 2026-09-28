@@ -17,7 +17,7 @@ import (
 func LocalizationsCreateCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("create", flag.ExitOnError)
 
-	versionID := fs.String("version", "", "App Store version ID (required)")
+	versionID := shared.BindResourceIDFlag(fs, "version", "appStoreVersions", "App Store version ID (required)")
 	locale := fs.String("locale", "", "Locale code to create (required; use canonical ASC values like en-US, ja, ar-SA, zh-Hans)")
 	description := fs.String("description", "", "App description")
 	keywords := fs.String("keywords", "", "Search keywords")

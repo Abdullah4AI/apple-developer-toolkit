@@ -146,7 +146,7 @@ Examples:
 func BuildsUploadsViewCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("uploads view", flag.ExitOnError)
 
-	id := fs.String("id", "", "Build upload ID")
+	id := shared.BindResourceIDFlag(fs, "id", "buildUploads", "Build upload ID")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
@@ -188,7 +188,7 @@ Examples:
 func BuildsUploadsDeleteCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("uploads delete", flag.ExitOnError)
 
-	id := fs.String("id", "", "Build upload ID")
+	id := shared.BindResourceIDFlag(fs, "id", "buildUploads", "Build upload ID")
 	confirm := fs.Bool("confirm", false, "Confirm deletion")
 	output := shared.BindOutputFlags(fs)
 
@@ -265,7 +265,7 @@ Examples:
 func BuildsUploadFilesListCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("files list", flag.ExitOnError)
 
-	uploadID := fs.String("upload", "", "Build upload ID")
+	uploadID := shared.BindResourceIDFlag(fs, "upload", "buildUploads", "Build upload ID")
 	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
 	next := fs.String("next", "", "Fetch next page using a links.next URL")
 	paginate := fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")
@@ -346,7 +346,7 @@ Examples:
 func BuildsUploadFilesViewCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("files view", flag.ExitOnError)
 
-	id := fs.String("id", "", "Build upload file ID")
+	id := shared.BindResourceIDFlag(fs, "id", "buildUploadFiles", "Build upload file ID")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{

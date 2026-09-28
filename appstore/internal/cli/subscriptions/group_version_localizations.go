@@ -66,7 +66,7 @@ func subscriptionGroupVersionLocalizationOptions(includeValue, fieldsValue, vers
 // SubscriptionsGroupsVersionLocalizationsListCommand lists localizations owned by a version.
 func SubscriptionsGroupsVersionLocalizationsListCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("groups versions localizations list", flag.ExitOnError)
-	versionID := fs.String("version-id", "", "Subscription group version ID")
+	versionID := shared.BindResourceIDFlag(fs, "version-id", "subscriptionGroupVersions", "Subscription group version ID")
 	include := fs.String("include", "", "Include relationship: version")
 	fields := fs.String("fields", "", "Localization fields: name,customAppName,locale,version")
 	versionFields := fs.String("version-fields", "", "Included version fields (comma-separated)")
@@ -123,7 +123,7 @@ func SubscriptionsGroupsVersionLocalizationsListCommand() *ffcli.Command {
 // SubscriptionsGroupsVersionLocalizationsCreateCommand creates a v2 localization.
 func SubscriptionsGroupsVersionLocalizationsCreateCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("groups versions localizations create", flag.ExitOnError)
-	versionID := fs.String("version-id", "", "Subscription group version ID")
+	versionID := shared.BindResourceIDFlag(fs, "version-id", "subscriptionGroupVersions", "Subscription group version ID")
 	name := fs.String("name", "", "Localized name")
 	locale := fs.String("locale", "", "Locale (for example, en-US)")
 	customAppName := fs.String("custom-app-name", "", "Custom app name")
@@ -172,7 +172,7 @@ func SubscriptionsGroupsVersionLocalizationsCreateCommand() *ffcli.Command {
 // SubscriptionsGroupsVersionLocalizationsViewCommand retrieves a v2 localization.
 func SubscriptionsGroupsVersionLocalizationsViewCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("groups versions localizations view", flag.ExitOnError)
-	id := fs.String("id", "", "Subscription group localization ID")
+	id := shared.BindResourceIDFlag(fs, "id", "subscriptionGroupLocalizations", "Subscription group localization ID")
 	include := fs.String("include", "", "Include relationship: version")
 	fields := fs.String("fields", "", "Localization fields: name,customAppName,locale,version")
 	versionFields := fs.String("version-fields", "", "Included version fields (comma-separated)")
@@ -221,7 +221,7 @@ func subscriptionGroupFlagSet(fs *flag.FlagSet, name string) bool {
 // SubscriptionsGroupsVersionLocalizationsUpdateCommand updates nullable v2 attributes.
 func SubscriptionsGroupsVersionLocalizationsUpdateCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("groups versions localizations update", flag.ExitOnError)
-	id := fs.String("id", "", "Subscription group localization ID")
+	id := shared.BindResourceIDFlag(fs, "id", "subscriptionGroupLocalizations", "Subscription group localization ID")
 	name := fs.String("name", "", "Localized name")
 	customAppName := fs.String("custom-app-name", "", "Custom app name")
 	clearName := fs.Bool("clear-name", false, "Set the localized name to null")
@@ -284,7 +284,7 @@ func SubscriptionsGroupsVersionLocalizationsUpdateCommand() *ffcli.Command {
 // SubscriptionsGroupsVersionLocalizationsDeleteCommand deletes a v2 localization.
 func SubscriptionsGroupsVersionLocalizationsDeleteCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("groups versions localizations delete", flag.ExitOnError)
-	id := fs.String("id", "", "Subscription group localization ID")
+	id := shared.BindResourceIDFlag(fs, "id", "subscriptionGroupLocalizations", "Subscription group localization ID")
 	confirm := fs.Bool("confirm", false, "Confirm deletion")
 	output := shared.BindOutputFlags(fs)
 	return &ffcli.Command{

@@ -42,7 +42,7 @@ Examples:
 func SubscriptionsGracePeriodsGetCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("grace-periods view", flag.ExitOnError)
 
-	gracePeriodID := fs.String("id", "", "Subscription grace period ID")
+	gracePeriodID := shared.BindResourceIDFlag(fs, "id", "subscriptionGracePeriods", "Subscription grace period ID")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
@@ -84,7 +84,7 @@ Examples:
 func SubscriptionsGracePeriodsUpdateCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("grace-periods update", flag.ExitOnError)
 
-	gracePeriodID := fs.String("id", "", "Subscription grace period ID")
+	gracePeriodID := shared.BindResourceIDFlag(fs, "id", "subscriptionGracePeriods", "Subscription grace period ID")
 	var optIn shared.OptionalBool
 	fs.Var(&optIn, "opt-in", "Enable grace period opt-in: true or false")
 	var sandboxOptIn shared.OptionalBool

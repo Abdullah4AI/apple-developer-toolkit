@@ -17,7 +17,7 @@ import (
 func SandboxGetCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("view", flag.ExitOnError)
 
-	testerID := fs.String("id", "", "Sandbox tester ID")
+	testerID := shared.BindResourceIDFlag(fs, "id", "sandboxTesters", "Sandbox tester ID")
 	email := fs.String("email", "", "Tester email address")
 	output := shared.BindOutputFlags(fs)
 
@@ -70,7 +70,7 @@ Examples:
 func SandboxUpdateCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("update", flag.ExitOnError)
 
-	testerID := fs.String("id", "", "Sandbox tester ID")
+	testerID := shared.BindResourceIDFlag(fs, "id", "sandboxTesters", "Sandbox tester ID")
 	email := fs.String("email", "", "Tester email address")
 	territory := fs.String("territory", "", "App Store territory input (accepts alpha-2, alpha-3, or exact English country name)")
 	subscriptionRenewalRate := fs.String("subscription-renewal-rate", "", "Subscription renewal rate (MONTHLY_RENEWAL_EVERY_ONE_HOUR, MONTHLY_RENEWAL_EVERY_THIRTY_MINUTES, MONTHLY_RENEWAL_EVERY_FIFTEEN_MINUTES, MONTHLY_RENEWAL_EVERY_FIVE_MINUTES, MONTHLY_RENEWAL_EVERY_THREE_MINUTES)")
@@ -162,7 +162,7 @@ Examples:
 func SandboxClearHistoryCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("clear-history", flag.ExitOnError)
 
-	testerID := fs.String("id", "", "Sandbox tester ID")
+	testerID := shared.BindResourceIDFlag(fs, "id", "sandboxTesters", "Sandbox tester ID")
 	email := fs.String("email", "", "Tester email address")
 	confirm := fs.Bool("confirm", false, "Confirm clearing purchase history")
 	output := shared.BindOutputFlags(fs)

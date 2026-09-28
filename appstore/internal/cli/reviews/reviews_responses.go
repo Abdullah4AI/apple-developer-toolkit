@@ -17,7 +17,7 @@ import (
 func ReviewsRespondCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("respond", flag.ExitOnError)
 
-	reviewID := fs.String("review-id", "", "Customer review ID (required)")
+	reviewID := shared.BindResourceIDFlag(fs, "review-id", "customerReviews", "Customer review ID (required)")
 	response := fs.String("response", "", "Response body text (required)")
 	output := shared.BindOutputFlags(fs)
 
@@ -94,7 +94,7 @@ Examples:
 func ReviewsResponseGetCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("view", flag.ExitOnError)
 
-	responseID := fs.String("id", "", "Customer review response ID (required)")
+	responseID := shared.BindResourceIDFlag(fs, "id", "customerReviewResponses", "Customer review response ID (required)")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
@@ -136,7 +136,7 @@ Examples:
 func ReviewsResponseDeleteCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("delete", flag.ExitOnError)
 
-	responseID := fs.String("id", "", "Customer review response ID (required)")
+	responseID := shared.BindResourceIDFlag(fs, "id", "customerReviewResponses", "Customer review response ID (required)")
 	confirm := fs.Bool("confirm", false, "Confirm deletion")
 	output := shared.BindOutputFlags(fs)
 
@@ -188,7 +188,7 @@ Examples:
 func ReviewsResponseForReviewCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("for-review", flag.ExitOnError)
 
-	reviewID := fs.String("review-id", "", "Customer review ID (required)")
+	reviewID := shared.BindResourceIDFlag(fs, "review-id", "customerReviews", "Customer review ID (required)")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{

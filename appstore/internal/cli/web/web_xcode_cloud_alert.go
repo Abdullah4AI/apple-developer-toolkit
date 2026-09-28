@@ -19,6 +19,8 @@ import (
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/readonly"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/urlsanitize"
 	webcore "github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/web"
 )
 
@@ -641,6 +643,10 @@ func postUsageAlertJSON(
 		return 0, fmt.Errorf("failed to marshal notification payload: %w", err)
 	}
 
+	// Name only the host: webhook paths commonly carry the secret.
+	if err := readonly.Check(ctx, http.MethodPost, urlsanitize.RedactURLHostForError(endpoint)); err != nil {
+		return 0, err
+	}
 	req, err := http.NewRequestWithContext(ctx, "POST", endpoint, bytes.NewReader(body))
 	if err != nil {
 		return 0, fmt.Errorf("failed to build notification request: %w", err)

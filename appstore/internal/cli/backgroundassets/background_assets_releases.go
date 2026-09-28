@@ -38,7 +38,7 @@ Examples:
 func BackgroundAssetsAppStoreReleasesGetCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("view", flag.ExitOnError)
 
-	id := fs.String("id", "", "Release ID")
+	id := shared.BindResourceIDFlag(fs, "id", "backgroundAssetVersionAppStoreReleases", "Release ID")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
@@ -103,7 +103,7 @@ Examples:
 func BackgroundAssetsExternalBetaReleasesGetCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("view", flag.ExitOnError)
 
-	id := fs.String("id", "", "Release ID")
+	id := shared.BindResourceIDFlag(fs, "id", "backgroundAssetVersionExternalBetaReleases", "Release ID")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
@@ -168,7 +168,7 @@ Examples:
 func BackgroundAssetsInternalBetaReleasesGetCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("view", flag.ExitOnError)
 
-	id := fs.String("id", "", "Release ID")
+	id := shared.BindResourceIDFlag(fs, "id", "backgroundAssetVersionInternalBetaReleases", "Release ID")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{

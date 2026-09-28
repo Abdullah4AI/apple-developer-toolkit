@@ -129,7 +129,7 @@ Examples:
 func ActorsGetCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("view", flag.ExitOnError)
 
-	id := fs.String("id", "", "Actor ID")
+	id := shared.BindResourceIDFlag(fs, "id", "actors", "Actor ID")
 	fields := fs.String("fields", "", "Fields to include: "+strings.Join(actorFieldsList(), ", "))
 	output := shared.BindOutputFlags(fs)
 

@@ -1,0 +1,12 @@
+{
+  "errors" : [ {
+    "id" : "b237c2cc-ae4f-4283-9995-7df6e4841b9e",
+    "status" : "409",
+    "code" : "ENTITY_ERROR.BASE_TERRITORY_INTERVAL_REQUIRED",
+    "title" : "There is a problem with the request entity",
+    "detail" : "There must be at least one manual price for the base territory.",
+    "source" : {
+      "pointer" : "/data/relationships/manualPrices"
+    }
+  } ]
+}

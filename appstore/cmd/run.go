@@ -18,6 +18,7 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/install"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared/errfmt"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/readonly"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/telemetry"
 )
 
@@ -32,6 +33,9 @@ var (
 // It returns the intended process exit code.
 func Run(args []string, versionInfo string) int {
 	defer shared.CleanupTempPrivateKeys()
+	// --read-only is per invocation: clear it on return so an embedded or
+	// test caller's next Run starts from the environment alone.
+	defer readonly.SetFlagEnabled(false)
 	// A command may register a structured report for the root runner. Clear
 	// any report left by a direct command test or an interrupted prior run.
 	shared.ConsumeJUnitReport()
@@ -50,9 +54,41 @@ func Run(args []string, versionInfo string) int {
 	args = hoistRootProfileFlag(root, args)
 	args = normalizeSpacedBooleanFlags(root, args)
 	analysis := analyzeInvocation(root, args)
-	parseArgs := markLeadingSearchFlagTerminator(root, args)
 	runCtx, stopSignals := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stopSignals()
+
+	// Resolve @env:/@file: flag values before parsing so every value-taking
+	// flag, including typed and repeat-safe values, validates the resolved
+	// text. Structural analyses keep using the original args: the rewrite is
+	// token-for-token, so structural diagnostics and telemetry keep the
+	// original tokens. Typed flag validation may quote an invalid value.
+	//
+	// An explicit help request wins unconditionally: help output depends only
+	// on which command the args select, so the indirect flag tokens are
+	// dropped instead of resolved. `--help` then reads no environment
+	// variable and opens no file, help prints whether or not the value would
+	// have resolved, and no resolved value can reach help output or a parse
+	// diagnostic.
+	helpRequested := requestedHelp(root, args)
+	var parseArgs []string
+	if helpRequested {
+		parseArgs = dropIndirectFlagValues(root, args)
+	} else {
+		resolvedArgs, err := resolveFlagValueIndirection(root, args)
+		if err != nil {
+			recoverCIReportFlags(root, args)
+			fmt.Fprint(os.Stderr, errfmt.FormatStderr(err))
+			commandName := getCommandName(root, args)
+			if reportErr := writeUsageJUnitReport(commandName, err); reportErr != nil {
+				printUsageJUnitReportFailure(commandName, versionInfo, analysis, reportErr)
+				return ExitError
+			}
+			emitImmediateTelemetry(args, root, versionInfo, validationFailureContext(analysis, err))
+			return ExitUsage
+		}
+		parseArgs = resolvedArgs
+	}
+	parseArgs = markLeadingSearchFlagTerminator(root, parseArgs)
 
 	parseOutput := &parseOutputBuffer{}
 	restoreFlagOutputs := prepareFlagParsing(root, parseArgs, parseOutput)
@@ -64,7 +100,7 @@ func Run(args []string, versionInfo string) int {
 			// diagnostic: agents pipe and redirect it, so it belongs on stdout
 			// with a success exit code. Help raised by any other parse path is
 			// a usage failure and stays on stderr.
-			if requestedHelp(root, args) {
+			if helpRequested {
 				fmt.Fprint(os.Stdout, parseOutput.String())
 				return ExitSuccess
 			}
@@ -386,6 +422,7 @@ func normalizeSpacedBooleanFlags(root *ffcli.Command, args []string) []string {
 func commandAcceptsPositionalPayload(commandPath []string) bool {
 	switch strings.Join(commandPath, " ") {
 	case "asc docs show",
+		"asc api",
 		"asc schema",
 		"asc search",
 		"asc snitch",

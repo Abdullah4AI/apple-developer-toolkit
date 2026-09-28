@@ -65,8 +65,8 @@ func newXcodeCloudActionResourceListCommand(config xcodeCloudActionResourceListC
 		runUsage = "Build run ID to resolve a single action from"
 	}
 
-	actionID := fs.String("action-id", "", actionUsage)
-	runID := fs.String("run-id", "", runUsage)
+	actionID := shared.BindResourceIDFlag(fs, "action-id", "ciBuildActions", actionUsage)
+	runID := shared.BindResourceIDFlag(fs, "run-id", "ciBuildRuns", runUsage)
 	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
 	next := fs.String("next", "", "Fetch next page using a links.next URL")
 	paginate := fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")
@@ -102,6 +102,7 @@ type xcodeCloudActionResourceGetConfig struct {
 	ShortHelp   string
 	LongHelp    string
 	IDUsage     string
+	IDType      string
 	ErrorPrefix string
 	Fetch       func(context.Context, *asc.Client, string) (any, error)
 }
@@ -115,6 +116,7 @@ func newXcodeCloudActionResourceGetCommand(config xcodeCloudActionResourceGetCon
 		LongHelp:    config.LongHelp,
 		IDFlag:      "id",
 		IDUsage:     config.IDUsage,
+		IDType:      config.IDType,
 		ErrorPrefix: config.ErrorPrefix,
 		ContextTimeout: func(ctx context.Context) (context.Context, context.CancelFunc) {
 			return contextWithXcodeCloudTimeout(ctx, 0)
@@ -142,6 +144,7 @@ type xcodeCloudActionResourceCommandConfig struct {
 	GetShortHelp   string
 	GetLongHelp    string
 	GetIDUsage     string
+	GetIDType      string
 	GetErrorPrefix string
 	GetFetch       func(context.Context, *asc.Client, string) (any, error)
 }
@@ -167,6 +170,7 @@ func newXcodeCloudActionResourceCommand(config xcodeCloudActionResourceCommandCo
 			ShortHelp:   config.GetShortHelp,
 			LongHelp:    config.GetLongHelp,
 			IDUsage:     config.GetIDUsage,
+			IDType:      config.GetIDType,
 			ErrorPrefix: config.GetErrorPrefix,
 			Fetch:       config.GetFetch,
 		}),
@@ -212,6 +216,7 @@ Examples:
   asc xcode-cloud issues view --id "ISSUE_ID"
   asc xcode-cloud issues view --id "ISSUE_ID" --output table`,
 	GetIDUsage:     "Issue ID",
+	GetIDType:      "ciIssues",
 	GetErrorPrefix: "xcode-cloud issues view",
 	GetFetch: func(ctx context.Context, client *asc.Client, id string) (any, error) {
 		return client.GetCiIssue(ctx, id)
@@ -257,6 +262,7 @@ Examples:
   asc xcode-cloud test-results view --id "TEST_RESULT_ID"
   asc xcode-cloud test-results view --id "TEST_RESULT_ID" --output table`,
 	GetIDUsage:     "Test result ID",
+	GetIDType:      "ciTestResults",
 	GetErrorPrefix: "xcode-cloud test-results view",
 	GetFetch: func(ctx context.Context, client *asc.Client, id string) (any, error) {
 		return client.GetCiTestResult(ctx, id)

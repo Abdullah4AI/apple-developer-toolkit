@@ -37,6 +37,7 @@ Examples:
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
 			GameCenterDetailsListCommand(),
+			GameCenterBlockedPlayersCommand(),
 			GameCenterDetailsGetCommand(),
 			GameCenterDetailsCreateCommand(),
 			GameCenterDetailsUpdateCommand(),
@@ -127,7 +128,7 @@ Examples:
 func GameCenterDetailsGetCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("view", flag.ExitOnError)
 
-	detailID := fs.String("id", "", "Game Center detail ID")
+	detailID := shared.BindResourceIDFlag(fs, "id", "gameCenterDetails", "Game Center detail ID")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
@@ -211,9 +212,9 @@ Examples:
 func GameCenterDetailsUpdateCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("update", flag.ExitOnError)
 
-	detailID := fs.String("id", "", "Game Center detail ID")
-	gameCenterGroupID := fs.String("game-center-group-id", "", "Game Center group ID to associate")
-	defaultLeaderboardID := fs.String("default-leaderboard-id", "", "Default leaderboard ID")
+	detailID := shared.BindResourceIDFlag(fs, "id", "gameCenterDetails", "Game Center detail ID")
+	gameCenterGroupID := shared.BindResourceIDFlag(fs, "game-center-group-id", "gameCenterGroups", "Game Center group ID to associate")
+	defaultLeaderboardID := shared.BindResourceIDFlag(fs, "default-leaderboard-id", "gameCenterLeaderboards", "Default leaderboard ID")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
@@ -315,7 +316,7 @@ Examples:
 func GameCenterDetailsAppVersionsListCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("list", flag.ExitOnError)
 
-	detailID := fs.String("id", "", "Game Center detail ID")
+	detailID := shared.BindResourceIDFlag(fs, "id", "gameCenterDetails", "Game Center detail ID")
 	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
 	next := fs.String("next", "", "Fetch next page using a links.next URL")
 	paginate := fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")
@@ -418,7 +419,7 @@ Examples:
 func GameCenterDetailsGroupGetCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("view", flag.ExitOnError)
 
-	detailID := fs.String("id", "", "Game Center detail ID")
+	detailID := shared.BindResourceIDFlag(fs, "id", "gameCenterDetails", "Game Center detail ID")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
@@ -483,7 +484,7 @@ Examples:
 func GameCenterDetailsAchievementsV2ListCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("list", flag.ExitOnError)
 
-	detailID := fs.String("id", "", "Game Center detail ID")
+	detailID := shared.BindResourceIDFlag(fs, "id", "gameCenterDetails", "Game Center detail ID")
 	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
 	next := fs.String("next", "", "Fetch next page using a links.next URL")
 	paginate := fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")
@@ -582,7 +583,7 @@ Examples:
 func GameCenterDetailsLeaderboardsV2ListCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("list", flag.ExitOnError)
 
-	detailID := fs.String("id", "", "Game Center detail ID")
+	detailID := shared.BindResourceIDFlag(fs, "id", "gameCenterDetails", "Game Center detail ID")
 	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
 	next := fs.String("next", "", "Fetch next page using a links.next URL")
 	paginate := fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")
@@ -681,7 +682,7 @@ Examples:
 func GameCenterDetailsLeaderboardSetsV2ListCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("list", flag.ExitOnError)
 
-	detailID := fs.String("id", "", "Game Center detail ID")
+	detailID := shared.BindResourceIDFlag(fs, "id", "gameCenterDetails", "Game Center detail ID")
 	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
 	next := fs.String("next", "", "Fetch next page using a links.next URL")
 	paginate := fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")
@@ -780,7 +781,7 @@ Examples:
 func GameCenterDetailsAchievementReleasesListCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("list", flag.ExitOnError)
 
-	detailID := fs.String("id", "", "Game Center detail ID")
+	detailID := shared.BindResourceIDFlag(fs, "id", "gameCenterDetails", "Game Center detail ID")
 	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
 	next := fs.String("next", "", "Fetch next page using a links.next URL")
 	paginate := fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")
@@ -879,7 +880,7 @@ Examples:
 func GameCenterDetailsLeaderboardReleasesListCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("list", flag.ExitOnError)
 
-	detailID := fs.String("id", "", "Game Center detail ID")
+	detailID := shared.BindResourceIDFlag(fs, "id", "gameCenterDetails", "Game Center detail ID")
 	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
 	next := fs.String("next", "", "Fetch next page using a links.next URL")
 	paginate := fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")
@@ -978,7 +979,7 @@ Examples:
 func GameCenterDetailsLeaderboardSetReleasesListCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("list", flag.ExitOnError)
 
-	detailID := fs.String("id", "", "Game Center detail ID")
+	detailID := shared.BindResourceIDFlag(fs, "id", "gameCenterDetails", "Game Center detail ID")
 	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
 	next := fs.String("next", "", "Fetch next page using a links.next URL")
 	paginate := fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")
@@ -1079,7 +1080,7 @@ Examples:
 func GameCenterDetailsClassicMatchmakingCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("classic-matchmaking", flag.ExitOnError)
 
-	detailID := fs.String("id", "", "Game Center detail ID")
+	detailID := shared.BindResourceIDFlag(fs, "id", "gameCenterDetails", "Game Center detail ID")
 	granularity := fs.String("granularity", "", "Granularity (P1D, PT1H, PT15M)")
 	groupBy := fs.String("group-by", "", "Group by (comma-separated: result)")
 	filterResult := fs.String("filter-result", "", "Filter result (MATCHED, CANCELED, EXPIRED)")
@@ -1098,7 +1099,7 @@ func GameCenterDetailsClassicMatchmakingCommand() *ffcli.Command {
 func GameCenterDetailsRuleBasedMatchmakingCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("rule-based-matchmaking", flag.ExitOnError)
 
-	detailID := fs.String("id", "", "Game Center detail ID")
+	detailID := shared.BindResourceIDFlag(fs, "id", "gameCenterDetails", "Game Center detail ID")
 	granularity := fs.String("granularity", "", "Granularity (P1D, PT1H, PT15M)")
 	groupBy := fs.String("group-by", "", "Group by (comma-separated: result)")
 	filterResult := fs.String("filter-result", "", "Filter result (MATCHED, CANCELED, EXPIRED)")

@@ -20,7 +20,7 @@ import (
 func AssetsPreviewsListCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("list", flag.ExitOnError)
 
-	localizationID := fs.String("version-localization", "", "App Store version localization ID")
+	localizationID := shared.BindResourceIDFlag(fs, "version-localization", "appStoreVersionLocalizations", "App Store version localization ID")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
@@ -100,7 +100,7 @@ func assetsPreviewsUploadCommandWithDependencies(deps previewUploadDependencies)
 
 	fs := flag.NewFlagSet("upload", flag.ExitOnError)
 
-	localizationID := fs.String("version-localization", "", "App Store version localization ID")
+	localizationID := shared.BindResourceIDFlag(fs, "version-localization", "appStoreVersionLocalizations", "App Store version localization ID")
 	path := fs.String("path", "", "Path to preview file or directory")
 	deviceType := fs.String("device-type", "", "Device type (e.g., IPHONE_65)")
 	skipExisting := fs.Bool("skip-existing", false, "Skip files whose MD5 checksum already exists in the target preview set")
@@ -227,8 +227,8 @@ type previewDownloadResult struct {
 func AssetsPreviewsDownloadCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("download", flag.ExitOnError)
 
-	id := fs.String("id", "", "Preview ID to download")
-	localizationID := fs.String("version-localization", "", "App Store version localization ID (download all previews)")
+	id := shared.BindResourceIDFlag(fs, "id", "appPreviews", "Preview ID to download")
+	localizationID := shared.BindResourceIDFlag(fs, "version-localization", "appStoreVersionLocalizations", "App Store version localization ID (download all previews)")
 	outputPath := fs.String("output", "", "Output file path (required with --id)")
 	outputDir := fs.String("output-dir", "", "Output directory (required with --version-localization)")
 	overwrite := fs.Bool("overwrite", false, "Overwrite existing files")
@@ -439,7 +439,7 @@ Examples:
 					continue
 				}
 
-				downloadCtx, cancel := shared.ContextWithTimeout(ctx)
+				downloadCtx, cancel := shared.ContextWithDownloadTimeout(ctx)
 				written, contentType, err := downloadURLToFile(downloadCtx, item.URL, item.OutputPath, *overwrite)
 				cancel()
 				if err != nil {
@@ -536,7 +536,7 @@ func renderPreviewDownloadResult(result *previewDownloadResult, markdown bool) e
 func AssetsPreviewsDeleteCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("delete", flag.ExitOnError)
 
-	id := fs.String("id", "", "Preview ID")
+	id := shared.BindResourceIDFlag(fs, "id", "appPreviews", "Preview ID")
 	confirm := fs.Bool("confirm", false, "Confirm deletion")
 	output := shared.BindOutputFlags(fs)
 
@@ -587,7 +587,7 @@ Examples:
 func AssetsPreviewsSetPosterFrameCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("set-poster-frame", flag.ExitOnError)
 
-	id := fs.String("id", "", "Preview ID")
+	id := shared.BindResourceIDFlag(fs, "id", "appPreviews", "Preview ID")
 	timeCode := fs.String("time-code", "", "Poster frame timecode (e.g., 00:00:05:00 or 00:00:05.000)")
 	output := shared.BindOutputFlags(fs)
 
@@ -1206,3 +1206,6 @@ func waitForPreviewDelivery(ctx context.Context, client *asc.Client, previewID s
 		return resp.Data.Attributes.AssetDeliveryState, nil
 	})
 }
+
+// ValidPreviewFrameTimeCode reports whether a timecode matches the upload contract.
+func ValidPreviewFrameTimeCode(tc string) bool { return isValidPreviewFrameTimeCode(tc) }

@@ -1,0 +1,245 @@
+# Device frame PNG stems shipped by Koubou v0.20.0.
+# Source: github.com/bitomule/Koubou tag v0.20.0, src/koubou/frames/*.png.
+# The release workflow packages that directory as frames-v0.20.0.tar.gz,
+# which `kou setup-frames` downloads. Regenerate when the Koubou pin changes.
+AW Ultra 2 - Black + Alpine Loop Dark Green
+AW Ultra 2 - Black + Alpine Loop Navy
+AW Ultra 2 - Black + Alpine Loop Tan
+AW Ultra 2 - Black + Ocean Band Black
+AW Ultra 2 - Black + Ocean Band Ice Blue
+AW Ultra 2 - Black + Ocean Band Navy
+AW Ultra 2 - Black + Titanium Milanese Loop
+AW Ultra 2 - Black + Trail Loop Black
+AW Ultra 2 - Black + Trail Loop Blue
+AW Ultra 2 - Black + Trail Loop Green
+AW Ultra 2 - Natural + Alpine Loop Dark Green
+AW Ultra 2 - Natural + Alpine Loop Navy
+AW Ultra 2 - Natural + Alpine Loop Tan
+AW Ultra 2 - Natural + Ocean Band Black
+AW Ultra 2 - Natural + Ocean Band Ice Blue
+AW Ultra 2 - Natural + Ocean Band Navy
+AW Ultra 2 - Natural + Titanium Milanese Loop
+AW Ultra 2 - Natural + Trail Loop Black
+AW Ultra 2 - Natural + Trail Loop Blue
+AW Ultra 3 - Black + Alpine Loop Black
+AW Ultra 3 - Black + Alpine Loop Light Blue
+AW Ultra 3 - Black + Milanese Loop
+AW Ultra 3 - Black + Ocean Band Anchor Blue
+AW Ultra 3 - Black + Ocean Band Black
+AW Ultra 3 - Black + Trail Loop Black Charcoal
+AW Ultra 3 - Natural + Alpine Loop Light Blue
+AW Ultra 3 - Natural + Alpine Loop Terra Cotta
+AW Ultra 3 - Natural + Milanese Loop
+AW Ultra 3 - Natural + Ocean Band Anchor Blue
+AW Ultra 3 - Natural + Ocean Band Neon Green
+AW Ultra 3 - Natural + Trail Loop Blue Bright Blue
+AW Ultra 3 - Natural + Trail Loop Green Neon
+Apple TV - 4K
+Apple Watch S11 - 42mm - Aluminum Jet Black + Sport Band Black
+Apple Watch S11 - 42mm - Aluminum Jet Black + Sport Loop Dark Gray
+Apple Watch S11 - 42mm - Aluminum Rose Gold + Sport Band Light Blush
+Apple Watch S11 - 42mm - Aluminum Rose Gold + Sport Loop Purple Fog
+Apple Watch S11 - 42mm - Aluminum Silver + Sport Band Neon Yellow
+Apple Watch S11 - 42mm - Aluminum Silver + Sport Band Purple Fog
+Apple Watch S11 - 42mm - Aluminum Silver + Sport Loop Forest
+Apple Watch S11 - 42mm - Aluminum Silver + Sport Loop Neon Yellow
+Apple Watch S11 - 42mm - Aluminum Space Gray + Sport Band Anchor Blue
+Apple Watch S11 - 42mm - Aluminum Space Gray + Sport Band Black
+Apple Watch S11 - 42mm - Aluminum Space Gray + Sport Loop Anchor Blue
+Apple Watch S11 - 42mm - Aluminum Space Gray + Sport Loop Forest
+Apple Watch S11 - 42mm - Titanium Gold + Magnetic Link Sage Gray
+Apple Watch S11 - 42mm - Titanium Gold + Milanese Loop
+Apple Watch S11 - 42mm - Titanium Gold + Sport Band Light Blush
+Apple Watch S11 - 42mm - Titanium Gold + Sport Band Purple Fog
+Apple Watch S11 - 42mm - Titanium Natural + Magnetic Link Caramel
+Apple Watch S11 - 42mm - Titanium Natural + Milanese Loop
+Apple Watch S11 - 42mm - Titanium Natural + Sport Band Stone Gray
+Apple Watch S11 - 42mm - Titanium Slate + Magnetic Link Navy
+Apple Watch S11 - 42mm - Titanium Slate + Milanese Loop
+Apple Watch S11 - 42mm - Titanium Slate + Sport Band Black
+Apple Watch S11 - 46mm - Aluminum Jet Black + Sport Band Black
+Apple Watch S11 - 46mm - Aluminum Jet Black + Sport Loop Dark Gray
+Apple Watch S11 - 46mm - Aluminum Rose Gold + Sport Band Light Blush
+Apple Watch S11 - 46mm - Aluminum Rose Gold + Sport Loop Purple Fog
+Apple Watch S11 - 46mm - Aluminum Silver + Sport Band Neon Yellow
+Apple Watch S11 - 46mm - Aluminum Silver + Sport Band Purple Fog
+Apple Watch S11 - 46mm - Aluminum Silver + Sport Loop Forest
+Apple Watch S11 - 46mm - Aluminum Silver + Sport Loop Neon Yellow
+Apple Watch S11 - 46mm - Aluminum Space Gray + Sport Band Anchor Blue
+Apple Watch S11 - 46mm - Aluminum Space Gray + Sport Band Black
+Apple Watch S11 - 46mm - Aluminum Space Gray + Sport Loop Anchor Blue
+Apple Watch S11 - 46mm - Aluminum Space Gray + Sport Loop Forest
+Apple Watch S11 - 46mm - Titanium Gold + Magnetic Link Sage Gray
+Apple Watch S11 - 46mm - Titanium Gold + Milanese Loop
+Apple Watch S11 - 46mm - Titanium Gold + Sport Band Light Blush
+Apple Watch S11 - 46mm - Titanium Gold + Sport Band Purple Fog
+Apple Watch S11 - 46mm - Titanium Natural + Magnetic Link Caramel
+Apple Watch S11 - 46mm - Titanium Natural + Milanese Loop
+Apple Watch S11 - 46mm - Titanium Natural + Sport Band Stone Gray
+Apple Watch S11 - 46mm - Titanium Slate + Magnetic Link Navy
+Apple Watch S11 - 46mm - Titanium Slate + Milanese Loop
+Apple Watch S11 - 46mm - Titanium Slate + Sport Band Black
+MacBook Air 13 - 4th Gen - Midnight
+MacBook Air 2020
+MacBook Air 2022
+MacBook Pro 2021 14
+MacBook Pro 2021 16
+MacBook Pro M4 14-inch Silver
+MacBook Pro M4 16-inch Silver
+Watch Series 4 40
+Watch Series 4 44
+Watch Series 7 45 Midnight
+Watch Series 7 45 Starlight
+Watch Ultra 2022
+iMac 2021
+iMac 24 - Silver
+iPad - Silver - Landscape
+iPad - Silver - Portrait
+iPad 2021 Landscape
+iPad 2021 Portrait
+iPad Air 11 - M2 - Blue - Landscape
+iPad Air 11 - M2 - Blue - Portrait
+iPad Air 11 - M2 - Purple - Landscape
+iPad Air 11 - M2 - Purple - Portrait
+iPad Air 11 - M2 - Space Gray - Landscape
+iPad Air 11 - M2 - Space Gray - Portrait
+iPad Air 11 - M2 - Stardust - Landscape
+iPad Air 11 - M2 - Stardust - Portrait
+iPad Air 13 - M2 - Blue - Landscape
+iPad Air 13 - M2 - Blue - Portrait
+iPad Air 13 - M2 - Purple - Landscape
+iPad Air 13 - M2 - Purple - Portrait
+iPad Air 13 - M2 - Space Gray - Landscape
+iPad Air 13 - M2 - Space Gray - Portrait
+iPad Air 13 - M2 - Stardust - Landscape
+iPad Air 13 - M2 - Stardust - Portrait
+iPad Air 2020 Landscape
+iPad Air 2020 Portrait
+iPad Pro 11 - M4 - Silver - Landscape
+iPad Pro 11 - M4 - Silver - Portrait
+iPad Pro 11 - M4 - Space Gray - Landscape
+iPad Pro 11 - M4 - Space Gray - Portrait
+iPad Pro 13 - M4 - Silver - Landscape
+iPad Pro 13 - M4 - Silver - Portrait
+iPad Pro 13 - M4 - Space Gray - Landscape
+iPad Pro 13 - M4 - Space Gray - Portrait
+iPad Pro 2018-2021 11 Landscape
+iPad Pro 2018-2021 11 Portrait
+iPad Pro 2018-2021 Landscape
+iPad Pro 2018-2021 Portrait
+iPad mini - Starlight - Landscape
+iPad mini - Starlight - Portrait
+iPad mini 2021 Landscape
+iPad mini 2021 Portrait
+iPhone 11 Landscape
+iPhone 11 Portrait
+iPhone 11 Pro Max Landscape
+iPhone 11 Pro Max Portrait
+iPhone 11 Pro Portrait
+iPhone 12-13 Pro Landscape
+iPhone 12-13 Pro Max Landscape
+iPhone 12-13 Pro Max Portrait
+iPhone 12-13 Pro Portrait
+iPhone 12-13 mini Landscape
+iPhone 12-13 mini Portrait
+iPhone 14 Pro Landscape
+iPhone 14 Pro Landscape_frame_no_island
+iPhone 14 Pro Max Landscape
+iPhone 14 Pro Max Landscape_frame_no_island
+iPhone 14 Pro Max Portrait
+iPhone 14 Pro Max Portrait_frame_no_island
+iPhone 14 Pro Portrait
+iPhone 14 Pro Portrait_frame_no_island
+iPhone 15 - Black - Landscape
+iPhone 15 - Black - Portrait
+iPhone 15 - Blue - Landscape
+iPhone 15 - Blue - Portrait
+iPhone 15 - Green - Landscape
+iPhone 15 - Green - Portrait
+iPhone 15 - Pink - Landscape
+iPhone 15 - Pink - Portrait
+iPhone 15 - Yellow - Landscape
+iPhone 15 - Yellow - Portrait
+iPhone 15 Pro - Black Titanium - Landscape
+iPhone 15 Pro - Black Titanium - Portrait
+iPhone 15 Pro - Blue Titanium - Landscape
+iPhone 15 Pro - Blue Titanium - Portrait
+iPhone 15 Pro - Natural Titanium - Landscape
+iPhone 15 Pro - Natural Titanium - Portrait
+iPhone 15 Pro - White Titanium - Landscape
+iPhone 15 Pro - White Titanium - Portrait
+iPhone 15 Pro Max - Black Titanium - Landscape
+iPhone 15 Pro Max - Black Titanium - Portrait
+iPhone 15 Pro Max - Blue Titanium - Landscape
+iPhone 15 Pro Max - Blue Titanium - Portrait
+iPhone 15 Pro Max - Natural Titanium - Landscape
+iPhone 15 Pro Max - Natural Titanium - Portrait
+iPhone 15 Pro Max - White Titanium - Landscape
+iPhone 15 Pro Max - White Titanium - Portrait
+iPhone 16 - Black - Landscape
+iPhone 16 - Black - Portrait
+iPhone 16 - Pink - Landscape
+iPhone 16 - Pink - Portrait
+iPhone 16 - Teal - Landscape
+iPhone 16 - Teal - Portrait
+iPhone 16 - Ultramarine - Landscape
+iPhone 16 - Ultramarine - Portrait
+iPhone 16 - White - Landscape
+iPhone 16 - White - Portrait
+iPhone 16 Plus - Black - Landscape
+iPhone 16 Plus - Black - Portrait
+iPhone 16 Plus - Pink - Landscape
+iPhone 16 Plus - Pink - Portrait
+iPhone 16 Plus - Teal - Landscape
+iPhone 16 Plus - Teal - Portrait
+iPhone 16 Plus - Ultramarine - Landscape
+iPhone 16 Plus - Ultramarine - Portrait
+iPhone 16 Plus - White - Landscape
+iPhone 16 Plus - White - Portrait
+iPhone 16 Pro - Black Titanium - Landscape
+iPhone 16 Pro - Black Titanium - Portrait
+iPhone 16 Pro - Desert Titanium - Landscape
+iPhone 16 Pro - Desert Titanium - Portrait
+iPhone 16 Pro - Natural Titanium - Landscape
+iPhone 16 Pro - Natural Titanium - Portrait
+iPhone 16 Pro - White Titanium - Landscape
+iPhone 16 Pro - White Titanium - Portrait
+iPhone 16 Pro Max - Black Titanium - Landscape
+iPhone 16 Pro Max - Black Titanium - Portrait
+iPhone 16 Pro Max - Desert Titanium - Landscape
+iPhone 16 Pro Max - Desert Titanium - Portrait
+iPhone 16 Pro Max - Natural Titanium - Landscape
+iPhone 16 Pro Max - Natural Titanium - Portrait
+iPhone 16 Pro Max - White Titanium - Landscape
+iPhone 16 Pro Max - White Titanium - Portrait
+iPhone 17 - Black - Landscape
+iPhone 17 - Black - Portrait
+iPhone 17 - Lavender - Landscape
+iPhone 17 - Lavender - Portrait
+iPhone 17 - Mist Blue - Landscape
+iPhone 17 - Mist Blue - Portrait
+iPhone 17 - Sage - Landscape
+iPhone 17 - Sage - Portrait
+iPhone 17 - White - Landscape
+iPhone 17 - White - Portrait
+iPhone 17 Pro - Cosmic Orange - Landscape
+iPhone 17 Pro - Cosmic Orange - Portrait
+iPhone 17 Pro - Deep Blue - Landscape
+iPhone 17 Pro - Deep Blue - Portrait
+iPhone 17 Pro - Silver - Landscape
+iPhone 17 Pro - Silver - Portrait
+iPhone 17 Pro Max - Cosmic Orange - Landscape
+iPhone 17 Pro Max - Cosmic Orange - Portrait
+iPhone 17 Pro Max - Deep Blue - Landscape
+iPhone 17 Pro Max - Deep Blue - Portrait
+iPhone 17 Pro Max - Silver - Landscape
+iPhone 17 Pro Max - Silver - Portrait
+iPhone 8 and 2020 SE
+iPhone Air - Cloud White - Landscape
+iPhone Air - Cloud White - Portrait
+iPhone Air - Light Gold - Landscape
+iPhone Air - Light Gold - Portrait
+iPhone Air - Sky Blue - Landscape
+iPhone Air - Sky Blue - Portrait
+iPhone Air - Space Black - Landscape
+iPhone Air - Space Black - Portrait

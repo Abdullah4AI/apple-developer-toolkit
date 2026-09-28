@@ -140,7 +140,7 @@ Examples:
 func AppClipsGetCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("view", flag.ExitOnError)
 
-	appClipID := fs.String("id", "", "App Clip ID")
+	appClipID := shared.BindResourceIDFlag(fs, "id", "appClips", "App Clip ID")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{

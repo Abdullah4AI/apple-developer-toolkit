@@ -61,7 +61,7 @@ Examples:
 func PhasedReleaseGetCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("phased-release view", flag.ExitOnError)
 
-	versionID := fs.String("version-id", "", "App Store version ID (required)")
+	versionID := shared.BindResourceIDFlag(fs, "version-id", "appStoreVersions", "App Store version ID (required)")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
@@ -103,7 +103,7 @@ Examples:
 func PhasedReleaseCreateCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("phased-release create", flag.ExitOnError)
 
-	versionID := fs.String("version-id", "", "App Store version ID (required)")
+	versionID := shared.BindResourceIDFlag(fs, "version-id", "appStoreVersions", "App Store version ID (required)")
 	state := fs.String("state", "", "Initial state: INACTIVE, ACTIVE (optional, defaults to INACTIVE)")
 	output := shared.BindOutputFlags(fs)
 
@@ -161,7 +161,7 @@ Examples:
 func PhasedReleaseUpdateCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("phased-release update", flag.ExitOnError)
 
-	phasedID := fs.String("id", "", "Phased release ID (required)")
+	phasedID := shared.BindResourceIDFlag(fs, "id", "appStoreVersionPhasedReleases", "Phased release ID (required)")
 	state := fs.String("state", "", "New state: ACTIVE, PAUSED, COMPLETE (required)")
 	confirm := fs.Bool("confirm", false, "Confirm COMPLETE, which releases the update to all users immediately")
 	output := shared.BindOutputFlags(fs)
@@ -228,7 +228,7 @@ Examples:
 func PhasedReleaseDeleteCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("phased-release delete", flag.ExitOnError)
 
-	phasedID := fs.String("id", "", "Phased release ID (required)")
+	phasedID := shared.BindResourceIDFlag(fs, "id", "appStoreVersionPhasedReleases", "Phased release ID (required)")
 	confirm := fs.Bool("confirm", false, "Confirm deletion (required)")
 	output := shared.BindOutputFlags(fs)
 

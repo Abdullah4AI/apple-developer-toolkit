@@ -46,7 +46,7 @@ Examples:
 func SubscriptionsPromotionalOffersListCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("promotional-offers list", flag.ExitOnError)
 
-	subscriptionID := fs.String("subscription-id", "", "Subscription ID, product ID, or exact current name")
+	subscriptionID := shared.BindResourceIDFlag(fs, "subscription-id", "subscriptions", "Subscription ID, product ID, or exact current name")
 	appID := addSubscriptionLookupAppFlag(fs)
 	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
 	next := fs.String("next", "", "Fetch next page using a links.next URL")
@@ -142,7 +142,7 @@ Examples:
 func SubscriptionsPromotionalOffersGetCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("promotional-offers view", flag.ExitOnError)
 
-	offerID := fs.String("id", "", "Promotional offer ID")
+	offerID := shared.BindResourceIDFlag(fs, "id", "subscriptionPromotionalOffers", "Promotional offer ID")
 	subscriptionFields := fs.String("subscription-fields", "", "Included subscription fields (comma-separated)")
 	output := shared.BindOutputFlags(fs)
 
@@ -193,7 +193,7 @@ Examples:
 func SubscriptionsPromotionalOffersCreateCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("promotional-offers create", flag.ExitOnError)
 
-	subscriptionID := fs.String("subscription-id", "", "Subscription ID, product ID, or exact current name")
+	subscriptionID := shared.BindResourceIDFlag(fs, "subscription-id", "subscriptions", "Subscription ID, product ID, or exact current name")
 	appID := addSubscriptionLookupAppFlag(fs)
 	offerCode := fs.String("offer-code", "", "Offer code")
 	name := fs.String("name", "", "Offer name")
@@ -296,7 +296,7 @@ Examples:
 func SubscriptionsPromotionalOffersUpdateCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("promotional-offers update", flag.ExitOnError)
 
-	offerID := fs.String("id", "", "Promotional offer ID")
+	offerID := shared.BindResourceIDFlag(fs, "id", "subscriptionPromotionalOffers", "Promotional offer ID")
 	prices := shared.BindOnceCSVFlag(fs, "prices", "Promotional offer price ID(s), comma-separated")
 	output := shared.BindOutputFlags(fs)
 
@@ -345,7 +345,7 @@ Examples:
 func SubscriptionsPromotionalOffersDeleteCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("promotional-offers delete", flag.ExitOnError)
 
-	offerID := fs.String("id", "", "Promotional offer ID")
+	offerID := shared.BindResourceIDFlag(fs, "id", "subscriptionPromotionalOffers", "Promotional offer ID")
 	confirm := fs.Bool("confirm", false, "Confirm deletion")
 	output := shared.BindOutputFlags(fs)
 
@@ -392,7 +392,7 @@ Examples:
 func SubscriptionsPromotionalOfferPricesCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("promotional-offers prices", flag.ExitOnError)
 
-	offerID := fs.String("id", "", "Promotional offer ID")
+	offerID := shared.BindResourceIDFlag(fs, "id", "subscriptionPromotionalOffers", "Promotional offer ID")
 	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
 	next := fs.String("next", "", "Fetch next page using a links.next URL")
 	paginate := fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")

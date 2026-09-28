@@ -38,7 +38,7 @@ Examples:
 func CertificatesRelationshipsPassTypeIDCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("pass-type-id", flag.ExitOnError)
 
-	id := fs.String("id", "", "Certificate ID")
+	id := shared.BindResourceIDFlag(fs, "id", "certificates", "Certificate ID")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{

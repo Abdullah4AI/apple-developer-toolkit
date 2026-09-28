@@ -17,7 +17,7 @@ import (
 func AssetsScreenshotsDeleteCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("delete", flag.ExitOnError)
 
-	id := fs.String("id", "", "Screenshot ID")
+	id := shared.BindResourceIDFlag(fs, "id", "appScreenshots", "Screenshot ID")
 	confirm := fs.Bool("confirm", false, "Confirm deletion")
 	output := shared.BindOutputFlags(fs)
 

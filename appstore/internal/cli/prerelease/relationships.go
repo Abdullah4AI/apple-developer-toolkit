@@ -58,7 +58,7 @@ Examples:
 func PreReleaseVersionsRelationshipsGetCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("relationships view", flag.ExitOnError)
 
-	versionID := fs.String("id", "", "Pre-release version ID")
+	versionID := shared.BindResourceIDFlag(fs, "id", "preReleaseVersions", "Pre-release version ID")
 	relType := fs.String("type", "", shared.RelationshipTypeFlagUsage(preReleaseRelationshipList()))
 	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
 	next := fs.String("next", "", "Fetch next page using a links.next URL")

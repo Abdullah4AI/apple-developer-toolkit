@@ -113,7 +113,7 @@ Examples:
 func WinBackOffersListCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("list", flag.ExitOnError)
 
-	subscriptionID := fs.String("subscription-id", "", "Subscription ID, product ID, or exact current name")
+	subscriptionID := shared.BindResourceIDFlag(fs, "subscription-id", "subscriptions", "Subscription ID, product ID, or exact current name")
 	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env; required when --subscription-id uses a product ID or name)")
 	fields := fs.String("fields", "", "Fields to include: "+strings.Join(winBackOfferFieldsList(), ", "))
 	priceFields := fs.String("price-fields", "", "Price fields to include: "+strings.Join(winBackOfferPriceFieldsList(), ", "))
@@ -244,6 +244,7 @@ Examples:
   asc win-back-offers view --id "OFFER_ID"`,
 		IDFlag:      "id",
 		IDUsage:     "Win-back offer ID",
+		IDType:      "winBackOffers",
 		ErrorPrefix: "win-back-offers view",
 		Fetch: func(ctx context.Context, client *asc.Client, id string) (any, error) {
 			return client.GetWinBackOffer(ctx, id)
@@ -255,7 +256,7 @@ Examples:
 func WinBackOffersCreateCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("create", flag.ExitOnError)
 
-	subscriptionID := fs.String("subscription-id", "", "Subscription ID, product ID, or exact current name")
+	subscriptionID := shared.BindResourceIDFlag(fs, "subscription-id", "subscriptions", "Subscription ID, product ID, or exact current name")
 	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env; required when --subscription-id uses a product ID or name)")
 	referenceName := fs.String("reference-name", "", "Reference name")
 	offerID := fs.String("offer-id", "", "Offer ID")
@@ -564,7 +565,7 @@ Examples:
 func WinBackOffersUpdateCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("update", flag.ExitOnError)
 
-	id := fs.String("id", "", "Win-back offer ID")
+	id := shared.BindResourceIDFlag(fs, "id", "winBackOffers", "Win-back offer ID")
 	var eligibilityPaidMonths optionalInt
 	fs.Var(&eligibilityPaidMonths, "eligibility-paid-months", "Paid subscription duration in months")
 	var eligibilityLastSubscribedMin optionalInt
@@ -700,7 +701,7 @@ Examples:
 func WinBackOffersDeleteCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("delete", flag.ExitOnError)
 
-	id := fs.String("id", "", "Win-back offer ID")
+	id := shared.BindResourceIDFlag(fs, "id", "winBackOffers", "Win-back offer ID")
 	confirm := fs.Bool("confirm", false, "Confirm deletion")
 	output := shared.BindOutputFlags(fs)
 
@@ -751,7 +752,7 @@ Examples:
 func WinBackOffersPricesCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("prices", flag.ExitOnError)
 
-	id := fs.String("id", "", "Win-back offer ID")
+	id := shared.BindResourceIDFlag(fs, "id", "winBackOffers", "Win-back offer ID")
 	territories := fs.String("territory", "", "Territory inputs, comma-separated (accepts alpha-2, alpha-3, or exact English country names)")
 	fields := fs.String("fields", "", "Fields to include: "+strings.Join(winBackOfferPriceFieldsList(), ", "))
 	territoryFields := fs.String("territory-fields", "", "Territory fields to include: "+strings.Join(winBackOfferTerritoryFieldsList(), ", "))
@@ -875,6 +876,7 @@ Examples:
   asc win-back-offers prices-links --id "OFFER_ID" --paginate`,
 		ParentFlag:  "id",
 		ParentUsage: "Win-back offer ID",
+		ParentType:  "winBackOffers",
 		LimitMax:    winBackOffersMaxLimit,
 		ErrorPrefix: "win-back-offers prices-links",
 		FetchPage: func(ctx context.Context, client *asc.Client, offerID string, limit int, next string) (asc.PaginatedResponse, error) {
@@ -891,7 +893,7 @@ Examples:
 func WinBackOffersRelationshipsCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("links", flag.ExitOnError)
 
-	subscriptionID := fs.String("subscription-id", "", "Subscription ID, product ID, or exact current name")
+	subscriptionID := shared.BindResourceIDFlag(fs, "subscription-id", "subscriptions", "Subscription ID, product ID, or exact current name")
 	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env; required when --subscription-id uses a product ID or name)")
 	limit := fs.Int("limit", 0, fmt.Sprintf("Maximum results per page (1-%d)", winBackOffersMaxLimit))
 	next := fs.String("next", "", "Fetch next page using a links.next URL")

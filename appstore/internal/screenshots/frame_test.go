@@ -2,6 +2,7 @@ package screenshots
 
 import (
 	"context"
+	"errors"
 	"image"
 	"image/color"
 	"image/png"
@@ -12,6 +13,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/rootfs"
 	"gopkg.in/yaml.v3"
 )
 
@@ -123,6 +125,9 @@ func TestResolveKoubouOutputSize(t *testing.T) {
 		{name: "alternate named size", value: "iPhone6_9_alt", wantWidth: 1260, wantHeight: 2736, wantOK: true},
 		{name: "iphone 6.3 size", value: "iPhone6_3", wantWidth: 1206, wantHeight: 2622, wantOK: true},
 		{name: "desktop named size", value: "AppDesktop_2880", wantWidth: 2880, wantHeight: 1800, wantOK: true},
+		{name: "ipad 13 named size", value: "iPadPro13", wantWidth: 2064, wantHeight: 2752, wantOK: true},
+		{name: "ipad 12.9 named size", value: "iPadPro12_9", wantWidth: 2048, wantHeight: 2732, wantOK: true},
+		{name: "ipad 11 named size", value: "iPadPro11", wantWidth: 1668, wantHeight: 2388, wantOK: true},
 		{name: "custom list", value: []any{1200, 2500}, wantWidth: 1200, wantHeight: 2500, wantOK: true},
 		{name: "unknown name", value: "iphone7_2", wantOK: false},
 		{name: "invalid list", value: []any{"bad", 2}, wantOK: false},
@@ -144,12 +149,134 @@ func TestResolveKoubouOutputSize(t *testing.T) {
 	}
 }
 
+func TestKoubouDisplayTypeForIPadSizeNames(t *testing.T) {
+	for sizeName, want := range map[string]string{
+		"iPadPro13":   "APP_IPAD_PRO_3GEN_129",
+		"iPadPro12_9": "APP_IPAD_PRO_3GEN_129",
+		"iPadPro11":   "APP_IPAD_PRO_3GEN_11",
+	} {
+		got, ok := koubouDisplayTypeForSizeName(sizeName)
+		if !ok || got != want {
+			t.Fatalf("koubouDisplayTypeForSizeName(%q) = %q, %v; want %q", sizeName, got, ok, want)
+		}
+	}
+}
+
 func TestDisplayTypeForDimensions_Mac(t *testing.T) {
 	for _, sz := range [][2]int{{1280, 800}, {1440, 900}, {2560, 1600}, {2880, 1800}} {
 		displayType, ok := displayTypeForDimensions(sz[0], sz[1])
 		if !ok || displayType != "APP_DESKTOP" {
 			t.Fatalf("displayTypeForDimensions(%d, %d) = %q, %v; want APP_DESKTOP, true", sz[0], sz[1], displayType, ok)
 		}
+	}
+}
+
+// publishGeneratedScreenshotForTest publishes source to destination through a
+// root anchored at destination's directory, as Frame does.
+func publishGeneratedScreenshotForTest(t *testing.T, source, destination string, limit int64) (string, error) {
+	t.Helper()
+	sourceFile, err := os.Open(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sourceFile.Close()
+	outputRoot, err := rootfs.New(filepath.Dir(destination))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer outputRoot.Close()
+	return publishGeneratedScreenshot(t.Context(), sourceFile, outputRoot, filepath.Base(destination), limit)
+}
+
+func TestPublishGeneratedScreenshotRejectsSymlinkDestinationWithoutMutatingTarget(t *testing.T) {
+	dir := t.TempDir()
+	source := filepath.Join(dir, "generated.png")
+	if err := os.WriteFile(source, []byte("generated"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(t.TempDir(), "target.png")
+	if err := os.WriteFile(target, []byte("keep"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	destination := filepath.Join(dir, "framed.png")
+	if err := os.Symlink(target, destination); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := publishGeneratedScreenshotForTest(t, source, destination, maxMatrixArtifactBytes); err == nil {
+		t.Fatal("publishGeneratedScreenshot() error = nil, want symlink destination rejection")
+	}
+	contents, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(contents) != "keep" {
+		t.Fatalf("symlink target changed to %q", contents)
+	}
+	info, err := os.Lstat(destination)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode()&os.ModeSymlink == 0 {
+		t.Fatalf("destination mode = %v, want symlink preserved", info.Mode())
+	}
+}
+
+func TestPublishGeneratedScreenshotAtomicallyReplacesRegularDestination(t *testing.T) {
+	dir := t.TempDir()
+	source := filepath.Join(dir, "generated.png")
+	destination := filepath.Join(dir, "framed.png")
+	if err := os.WriteFile(source, []byte("generated"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(destination, []byte("old"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	digest, err := publishGeneratedScreenshotForTest(t, source, destination, maxMatrixArtifactBytes)
+	if err != nil {
+		t.Fatalf("publishGeneratedScreenshot() error = %v", err)
+	}
+	contents, err := os.ReadFile(destination)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(contents) != "generated" {
+		t.Fatalf("destination contents = %q, want generated", contents)
+	}
+	if want, err := HashFile(t.Context(), destination); err != nil || digest != want {
+		t.Fatalf("publishGeneratedScreenshot() digest = %q, want %q (err %v)", digest, want, err)
+	}
+	info, err := os.Stat(destination)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Windows reports synthetic permission bits; the DACL tests cover access there.
+	if got := info.Mode().Perm(); runtime.GOOS != "windows" && got != 0o600 {
+		t.Fatalf("destination mode = %#o, want %#o", got, 0o600)
+	}
+}
+
+func TestPublishGeneratedScreenshotRejectsOversizedSourceWithoutReplacingDestination(t *testing.T) {
+	dir := t.TempDir()
+	source := filepath.Join(dir, "generated.png")
+	destination := filepath.Join(dir, "framed.png")
+	if err := os.WriteFile(source, []byte("oversized"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(destination, []byte("keep"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := publishGeneratedScreenshotForTest(t, source, destination, 4); err == nil {
+		t.Fatal("publishGeneratedScreenshot() error = nil, want size-limit rejection")
+	}
+	contents, err := os.ReadFile(destination)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(contents) != "keep" {
+		t.Fatalf("destination contents = %q, want original contents", contents)
 	}
 }
 
@@ -289,7 +416,7 @@ func runFrameWhitespacePathTest(t *testing.T, whitespaceInput, whitespaceOutput 
 
 	kouFixturePath := filepath.Join(baseDir, "kou-fixture.png")
 	writeFrameTestPNG(t, kouFixturePath, makeFrameTestImage(1320, 2868))
-	installFrameTestMockKou(t, kouFixturePath, filepath.Join(baseDir, "kou-out", "framed.png"))
+	installFrameTestMockKou(t, kouFixturePath, "")
 
 	result, err := Frame(context.Background(), FrameRequest{
 		InputPath:  inputPath,
@@ -407,9 +534,15 @@ func TestFrame_InputModeCleansTemporaryKoubouDirectory(t *testing.T) {
 
 	kouFixturePath := filepath.Join(t.TempDir(), "kou-fixture.png")
 	writeFrameTestPNG(t, kouFixturePath, makeFrameTestImage(1320, 2868))
-	installFrameTestMockKou(t, kouFixturePath, filepath.Join(t.TempDir(), "kou-out", "framed.png"))
+	installFrameTestMockKou(t, kouFixturePath, "")
 
 	before := listFrameTempWorkDirs(t)
+	previousWorkRootHook := matrixFrameWorkRootBeforeReadForTest
+	var generatedWorkRoot string
+	matrixFrameWorkRootBeforeReadForTest = func(path string) {
+		generatedWorkRoot = path
+	}
+	t.Cleanup(func() { matrixFrameWorkRootBeforeReadForTest = previousWorkRootHook })
 	outputPath := filepath.Join(t.TempDir(), "framed", "home.png")
 	result, err := Frame(context.Background(), FrameRequest{
 		InputPath:  rawPath,
@@ -422,6 +555,19 @@ func TestFrame_InputModeCleansTemporaryKoubouDirectory(t *testing.T) {
 	if _, err := os.Stat(result.Path); err != nil {
 		t.Fatalf("expected output file at %q: %v", result.Path, err)
 	}
+	outputHash, err := HashFile(t.Context(), result.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.OutputHash != outputHash {
+		t.Fatalf("published output hash = %q, want %q", result.OutputHash, outputHash)
+	}
+	if generatedWorkRoot == "" {
+		t.Fatal("direct Frame() did not use the pinned Koubou work root")
+	}
+	if _, err := os.Stat(generatedWorkRoot); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("direct Frame() work root stat error = %v, want cleaned up", err)
+	}
 
 	for _, dir := range listFrameTempWorkDirs(t) {
 		if slices.Contains(before, dir) {
@@ -431,6 +577,33 @@ func TestFrame_InputModeCleansTemporaryKoubouDirectory(t *testing.T) {
 	}
 }
 
+// TestFrame_InputModeRejectsGeneratedOutputOutsideWorkDirectory checks that
+// the image Frame publishes must come from Koubou's private work directory, so
+// a Koubou result naming any other file is refused before publication.
+func TestFrame_InputModeRejectsGeneratedOutputOutsideWorkDirectory(t *testing.T) {
+	rawPath := filepath.Join(t.TempDir(), "raw.png")
+	writeFrameTestPNG(t, rawPath, makeFrameTestImage(200, 300))
+	kouFixturePath := filepath.Join(t.TempDir(), "kou-fixture.png")
+	writeFrameTestPNG(t, kouFixturePath, makeFrameTestImage(1320, 2868))
+	installFrameTestMockKou(t, kouFixturePath, filepath.Join(t.TempDir(), "elsewhere", "framed.png"))
+
+	outputPath := filepath.Join(t.TempDir(), "framed", "home.png")
+	result, err := Frame(context.Background(), FrameRequest{
+		InputPath:  rawPath,
+		OutputPath: outputPath,
+		Device:     string(DefaultFrameDevice()),
+	})
+	if err == nil || !strings.Contains(err.Error(), "escapes rooted work directory") {
+		t.Fatalf("Frame() = %+v, %v; want work directory escape rejection", result, err)
+	}
+	if _, statErr := os.Stat(outputPath); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("output stat error = %v, want nothing published", statErr)
+	}
+}
+
+// installFrameTestMockKou installs a fake Koubou that copies fixturePath to
+// outputPath on generate. An empty outputPath writes where real Koubou does:
+// output/framed.png beside the generated config, inside the work directory.
 func installFrameTestMockKou(t *testing.T, fixturePath, outputPath string) {
 	t.Helper()
 	skipWindowsUnixExecutableFixtures(t)
@@ -439,16 +612,20 @@ func installFrameTestMockKou(t *testing.T, fixturePath, outputPath string) {
 	kouPath := filepath.Join(binDir, "kou")
 	script := `#!/bin/sh
 if [ "$1" = "--version" ]; then
-  echo "kou 0.18.1"
+  echo "kou 0.20.0"
   exit 0
 fi
 if [ "$1" = "setup-frames" ]; then
   exit 0
 fi
 if [ "$1" = "generate" ]; then
-  mkdir -p "$(dirname "$MOCK_KOU_OUTPUT")"
-  cp "$MOCK_KOU_FIXTURE" "$MOCK_KOU_OUTPUT"
-  printf '[{"name":"framed","path":"%s","success":true}]' "$MOCK_KOU_OUTPUT"
+  output="$MOCK_KOU_OUTPUT"
+  if [ -z "$output" ]; then
+    output="$(dirname "$2")/output/framed.png"
+  fi
+  mkdir -p "$(dirname "$output")"
+  cp "$MOCK_KOU_FIXTURE" "$output"
+  printf '[{"name":"framed","path":"%s","success":true}]' "$output"
   exit 0
 fi
 echo "unsupported args" >&2
@@ -654,7 +831,7 @@ func TestCreateDefaultKoubouConfig_CanvasCustomColors(t *testing.T) {
 func listFrameTempWorkDirs(t *testing.T) []string {
 	t.Helper()
 
-	pattern := filepath.Join(os.TempDir(), "asc-shots-kou-*")
+	pattern := filepath.Join(os.TempDir(), ".asc-matrix-attempt-ns-*")
 	matches, err := filepath.Glob(pattern)
 	if err != nil {
 		t.Fatalf("filepath.Glob(%q) error: %v", pattern, err)
@@ -675,7 +852,7 @@ func TestRunKoubouGenerate_ParsesJSONFromStdoutWhenStderrHasWarnings(t *testing.
 	writeExecutable(t, filepath.Join(binDir, "kou"), `#!/bin/sh
 set -eu
 if [ "$1" = "--version" ]; then
-  echo "kou 0.18.1"
+  echo "kou 0.20.0"
   exit 0
 fi
 if [ "$1" = "setup-frames" ]; then
@@ -710,7 +887,7 @@ func TestRunKoubouGenerate_RunsSetupFramesBeforeGenerate(t *testing.T) {
 	writeExecutable(t, filepath.Join(binDir, "kou"), `#!/bin/sh
 set -eu
 if [ "$1" = "--version" ]; then
-  echo "kou 0.18.1"
+  echo "kou 0.20.0"
   exit 0
 fi
 if [ "$1" = "setup-frames" ]; then
@@ -752,7 +929,7 @@ func TestRunKoubouGenerate_SetupFramesFailureIncludesHint(t *testing.T) {
 	writeExecutable(t, filepath.Join(binDir, "kou"), `#!/bin/sh
 set -eu
 if [ "$1" = "--version" ]; then
-  echo "kou 0.18.1"
+  echo "kou 0.20.0"
   exit 0
 fi
 if [ "$1" = "setup-frames" ]; then
@@ -789,7 +966,7 @@ func TestRunKoubouGenerate_RechecksSetupFramesWhenKouBinaryChanges(t *testing.T)
 	writeExecutable(t, filepath.Join(firstBinDir, "kou"), `#!/bin/sh
 set -eu
 if [ "$1" = "--version" ]; then
-  echo "kou 0.18.1"
+  echo "kou 0.20.0"
   exit 0
 fi
 if [ "$1" = "setup-frames" ]; then
@@ -809,7 +986,7 @@ exit 1
 	writeExecutable(t, filepath.Join(secondBinDir, "kou"), `#!/bin/sh
 set -eu
 if [ "$1" = "--version" ]; then
-  echo "kou 0.18.1"
+  echo "kou 0.20.0"
   exit 0
 fi
 if [ "$1" = "setup-frames" ]; then
@@ -860,7 +1037,7 @@ func TestRunKoubouGenerate_SkipsSetupFramesForCanvasOnlyConfig(t *testing.T) {
 	writeExecutable(t, filepath.Join(binDir, "kou"), `#!/bin/sh
 set -eu
 if [ "$1" = "--version" ]; then
-  echo "kou 0.18.1"
+  echo "kou 0.20.0"
   exit 0
 fi
 if [ "$1" = "setup-frames" ]; then
@@ -926,8 +1103,39 @@ exit 1
 	if !strings.Contains(err.Error(), "unsupported Koubou version 0.12.0") {
 		t.Fatalf("expected unsupported version error, got %v", err)
 	}
-	if !strings.Contains(err.Error(), "0.18.1") {
+	if !strings.Contains(err.Error(), "0.20.0") {
 		t.Fatalf("expected pinned version in error, got %v", err)
+	}
+}
+
+func TestRunKoubouGenerate_OlderVersionIncludesUpgradeHint(t *testing.T) {
+	skipWindowsUnixExecutableFixtures(t)
+	resetKoubouVersionCacheForTest()
+	t.Cleanup(resetKoubouVersionCacheForTest)
+	binDir := t.TempDir()
+	writeExecutable(t, filepath.Join(binDir, "kou"), `#!/bin/sh
+if [ "$1" = "--version" ]; then
+  echo "kou 0.18.1"
+  exit 0
+fi
+echo "unsupported args" >&2
+exit 1
+`)
+	t.Setenv("PATH", binDir)
+
+	_, err := runKoubouGenerate(context.Background(), "frame.yaml")
+	if err == nil {
+		t.Fatal("expected version pinning error")
+	}
+	for _, want := range []string{
+		"unsupported Koubou version 0.18.1",
+		"pinned to 0.20.0",
+		"pip install -U koubou==0.20.0",
+		"brew upgrade bitomule/tap/koubou",
+	} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("error %q does not contain %q", err, want)
+		}
 	}
 }
 
@@ -938,7 +1146,57 @@ func TestRunKoubouGenerate_NotFoundIncludesPinnedInstallHint(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected not found error")
 	}
-	if !strings.Contains(err.Error(), "pip install koubou==0.18.1") {
+	if !strings.Contains(err.Error(), "pip install koubou==0.20.0") {
 		t.Fatalf("expected pinned install command in error, got %v", err)
+	}
+}
+
+func TestRunKoubouGenerate_ConcurrentCallsRunSetupOnce(t *testing.T) {
+	resetKoubouVersionCacheForTest()
+
+	binDir := t.TempDir()
+	logPath := filepath.Join(t.TempDir(), "kou.log")
+	writeExecutable(t, filepath.Join(binDir, "kou"), `#!/bin/sh
+set -eu
+if [ "$1" = "--version" ]; then
+  echo "version" >> "$KOU_LOG_PATH"
+  echo "kou 0.20.0"
+  exit 0
+fi
+if [ "$1" = "setup-frames" ]; then
+  echo "setup-frames" >> "$KOU_LOG_PATH"
+  /bin/sleep 0.2
+  exit 0
+fi
+if [ "$1" = "generate" ]; then
+  echo '[{"name":"framed","path":"output/framed.png","success":true,"error":""}]'
+  exit 0
+fi
+echo "unsupported args" >&2
+exit 1
+`)
+	t.Setenv("KOU_LOG_PATH", logPath)
+	t.Setenv("PATH", binDir)
+
+	const callers = 4
+	errs := make(chan error, callers)
+	for range callers {
+		go func() {
+			_, err := runKoubouGenerate(context.Background(), "frame.yaml")
+			errs <- err
+		}()
+	}
+	for range callers {
+		if err := <-errs; err != nil {
+			t.Fatalf("runKoubouGenerate() error = %v", err)
+		}
+	}
+
+	logBytes, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatalf("ReadFile(%q) error = %v", logPath, err)
+	}
+	if got := strings.TrimSpace(string(logBytes)); got != "version\nsetup-frames" {
+		t.Fatalf("concurrent renders must check the version and set up frames once, got %q", got)
 	}
 }

@@ -64,7 +64,7 @@ Examples:
 func AgreementsTerritoriesListCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("list", flag.ExitOnError)
 
-	id := fs.String("id", "", "EULA ID")
+	id := shared.BindResourceIDFlag(fs, "id", "endUserLicenseAgreements", "EULA ID")
 	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
 	next := fs.String("next", "", "Fetch next page using a links.next URL")
 	paginate := fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")

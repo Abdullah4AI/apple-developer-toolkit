@@ -97,6 +97,7 @@ Examples:
   asc xcode-cloud workflows view --id "WORKFLOW_ID" --output table`,
 		IDFlag:      "id",
 		IDUsage:     "Workflow ID",
+		IDType:      "ciWorkflows",
 		ErrorPrefix: "xcode-cloud workflows view",
 		ContextTimeout: func(ctx context.Context) (context.Context, context.CancelFunc) {
 			return contextWithXcodeCloudTimeout(ctx, 0)
@@ -120,6 +121,7 @@ Examples:
   asc xcode-cloud workflows repository --id "WORKFLOW_ID" --output table`,
 		IDFlag:      "id",
 		IDUsage:     "Workflow ID",
+		IDType:      "ciWorkflows",
 		ErrorPrefix: "xcode-cloud workflows repository",
 		ContextTimeout: func(ctx context.Context) (context.Context, context.CancelFunc) {
 			return contextWithXcodeCloudTimeout(ctx, 0)
@@ -183,7 +185,7 @@ Examples:
 func XcodeCloudWorkflowsUpdateCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("update", flag.ExitOnError)
 
-	id := fs.String("id", "", "Workflow ID")
+	id := shared.BindResourceIDFlag(fs, "id", "ciWorkflows", "Workflow ID")
 	file := fs.String("file", "", "Path to workflow JSON payload")
 	output := shared.BindOutputFlags(fs)
 
@@ -244,6 +246,7 @@ Examples:
   asc xcode-cloud workflows delete --id "WORKFLOW_ID" --confirm`,
 		IDFlag:      "id",
 		IDUsage:     "Workflow ID",
+		IDType:      "ciWorkflows",
 		ErrorPrefix: "xcode-cloud workflows delete",
 		ContextTimeout: func(ctx context.Context) (context.Context, context.CancelFunc) {
 			return contextWithXcodeCloudTimeout(ctx, 0)

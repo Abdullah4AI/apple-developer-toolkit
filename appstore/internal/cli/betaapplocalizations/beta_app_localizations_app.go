@@ -38,7 +38,7 @@ Examples:
 func BetaAppLocalizationsAppGetCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("app view", flag.ExitOnError)
 
-	id := fs.String("id", "", "Beta app localization ID")
+	id := shared.BindResourceIDFlag(fs, "id", "betaAppLocalizations", "Beta app localization ID")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{

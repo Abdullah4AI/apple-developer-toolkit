@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/readonly"
 )
 
 const (
@@ -134,7 +135,8 @@ func (c *Client) fetchAgreementHistory(ctx context.Context) (string, *developerA
 	if teamID == "" {
 		return "", nil, fmt.Errorf("developer portal team is not selected; %s", developerPortalAuthHint)
 	}
-	envelope, err := c.doDeveloperPortalAgreementsRequest(ctx, developerPortalAgreementHistoryPath, map[string]string{"teamId": teamID})
+	// Agreement history is a POST-shaped read on the Developer Portal.
+	envelope, err := c.doDeveloperPortalAgreementsRequest(readonly.WithReadIntent(ctx), developerPortalAgreementHistoryPath, map[string]string{"teamId": teamID})
 	if err != nil {
 		return teamID, nil, err
 	}

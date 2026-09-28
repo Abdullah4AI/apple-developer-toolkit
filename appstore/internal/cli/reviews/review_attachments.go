@@ -19,7 +19,7 @@ import (
 func ReviewDetailsAttachmentsListCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("attachments-list", flag.ExitOnError)
 
-	reviewDetailID := fs.String("review-detail", "", "App Store review detail ID (required unless --next is provided)")
+	reviewDetailID := shared.BindResourceIDFlag(fs, "review-detail", "appStoreReviewDetails", "App Store review detail ID (required unless --next is provided)")
 	fields := fs.String("fields", "", "Fields to include: "+strings.Join(reviewAttachmentFieldList(), ", "))
 	detailFields := fs.String("detail-fields", "", "Review detail fields to include: "+strings.Join(reviewDetailFieldList(), ", "))
 	include := fs.String("include", "", "Include relationships: "+strings.Join(reviewAttachmentIncludeList(), ", "))
@@ -144,7 +144,7 @@ Examples:
 func ReviewDetailsAttachmentsGetCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("attachments-get", flag.ExitOnError)
 
-	attachmentID := fs.String("id", "", "Review attachment ID (required)")
+	attachmentID := shared.BindResourceIDFlag(fs, "id", "appStoreReviewAttachments", "Review attachment ID (required)")
 	fields := fs.String("fields", "", "Fields to include: "+strings.Join(reviewAttachmentFieldList(), ", "))
 	detailFields := fs.String("detail-fields", "", "Review detail fields to include: "+strings.Join(reviewDetailFieldList(), ", "))
 	include := fs.String("include", "", "Include relationships: "+strings.Join(reviewAttachmentIncludeList(), ", "))
@@ -217,7 +217,7 @@ Examples:
 func ReviewDetailsAttachmentsUploadCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("attachments-upload", flag.ExitOnError)
 
-	reviewDetailID := fs.String("review-detail", "", "App Store review detail ID (required)")
+	reviewDetailID := shared.BindResourceIDFlag(fs, "review-detail", "appStoreReviewDetails", "App Store review detail ID (required)")
 	filePath := fs.String("file", "", "Path to attachment file (required)")
 	output := shared.BindOutputFlags(fs)
 
@@ -327,7 +327,7 @@ Examples:
 func ReviewDetailsAttachmentsDeleteCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("attachments-delete", flag.ExitOnError)
 
-	attachmentID := fs.String("id", "", "Review attachment ID (required)")
+	attachmentID := shared.BindResourceIDFlag(fs, "id", "appStoreReviewAttachments", "Review attachment ID (required)")
 	confirm := fs.Bool("confirm", false, "Confirm deletion")
 	output := shared.BindOutputFlags(fs)
 

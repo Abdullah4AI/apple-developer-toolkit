@@ -8,6 +8,7 @@ import (
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/readonly"
 )
 
 type ClassifiedError struct {
@@ -24,6 +25,13 @@ const (
 func Classify(err error) ClassifiedError {
 	if err == nil {
 		return ClassifiedError{}
+	}
+
+	// A read-only refusal is a policy decision, not a command failure: render
+	// the refusal itself so the line stays stable regardless of which command
+	// wrapped it, and add no hint because the message already names the cause.
+	if refused, ok := errors.AsType[*readonly.RefusedError](err); ok {
+		return ClassifiedError{Message: refused.Error()}
 	}
 
 	if errors.Is(err, shared.ErrMissingAuth) {

@@ -15,3 +15,14 @@ Use `--password-file` or `ASC_SIGNING_SYNC_PASSWORD` for the signing repository
 password. The older `--password` flag and `ASC_MATCH_PASSWORD` environment
 variable remain available through 4.x with a deprecation warning and will be
 rejected in 5.0.0.
+
+## Profile lifecycle
+
+`asc signing sync push --renew-expired` replaces an expired profile with a
+same-name successor. `--force-for-new-devices` recreates a development or ad
+hoc profile when its devices differ from the enabled device list, and
+`--include-mac-in-profiles` adds enabled Apple silicon Macs to iOS development
+and ad hoc device sets. `asc signing sync nuke --profile-type TYPE --confirm`
+deletes every profile of one type, revokes its certificates, and removes their
+encrypted artifacts; `--dry-run` previews the plan without changes. See
+[Renew, refresh, and remove synced profiles](../commands/signing.mdx#renew-refresh-and-remove-synced-profiles).

@@ -198,7 +198,7 @@ Examples:
 func NominationsGetCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("nominations view", flag.ExitOnError)
 
-	nominationID := fs.String("id", "", "Nomination ID (required)")
+	nominationID := shared.BindResourceIDFlag(fs, "id", "nominations", "Nomination ID (required)")
 	fields := fs.String("fields", "", "Fields to include: "+strings.Join(nominationFieldsList(), ", "))
 	include := fs.String("include", "", "Include related resources: "+strings.Join(nominationIncludeList(), ", "))
 	inAppEventsLimit := fs.Int("in-app-events-limit", 0, "Maximum included in-app events (1-50)")
@@ -450,7 +450,7 @@ Examples:
 func NominationsUpdateCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("nominations update", flag.ExitOnError)
 
-	nominationID := fs.String("id", "", "Nomination ID (required)")
+	nominationID := shared.BindResourceIDFlag(fs, "id", "nominations", "Nomination ID (required)")
 	name := fs.String("name", "", "Nomination name")
 	nomType := fs.String("type", "", "Nomination type: "+strings.Join(nominationTypeList(), ", "))
 	description := fs.String("description", "", "Nomination description")
@@ -662,7 +662,7 @@ Examples:
 func NominationsDeleteCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("nominations delete", flag.ExitOnError)
 
-	nominationID := fs.String("id", "", "Nomination ID (required)")
+	nominationID := shared.BindResourceIDFlag(fs, "id", "nominations", "Nomination ID (required)")
 	confirm := fs.Bool("confirm", false, "Confirm deletion")
 	output := shared.BindOutputFlags(fs)
 

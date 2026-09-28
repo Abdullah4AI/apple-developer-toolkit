@@ -63,6 +63,14 @@ func redactSubmittedSecretFromError(err error, secret *string) error {
 				safe.AllDetails[index] = redact(detail)
 			}
 		}
+		if apiError.Entries != nil {
+			safe.Entries = make([]APIErrorEntry, len(apiError.Entries))
+			for index, entry := range apiError.Entries {
+				// Keep each code verbatim for the same reason as Code above.
+				entry.Detail = redact(entry.Detail)
+				safe.Entries[index] = entry
+			}
+		}
 		if apiError.AssociatedErrors != nil {
 			safe.AssociatedErrors = make(map[string][]APIAssociatedError, len(apiError.AssociatedErrors))
 			for resource, entries := range apiError.AssociatedErrors {

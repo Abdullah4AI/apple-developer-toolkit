@@ -31,8 +31,11 @@ func TestShotsFramesListDevices_JSON(t *testing.T) {
 	var result struct {
 		Default string `json:"default"`
 		Devices []struct {
-			ID      string `json:"id"`
-			Default bool   `json:"default"`
+			ID                string   `json:"id"`
+			Default           bool     `json:"default"`
+			Family            string   `json:"family"`
+			DefaultFrameColor string   `json:"defaultFrameColor"`
+			FrameColors       []string `json:"frameColors"`
 		} `json:"devices"`
 	}
 	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
@@ -50,6 +53,14 @@ func TestShotsFramesListDevices_JSON(t *testing.T) {
 		"iphone-16e",
 		"iphone-17",
 		"mac",
+		"ipad-pro-13",
+		"ipad-pro-11",
+		"ipad-air-13",
+		"ipad-air-11",
+		"ipad-mini",
+		"watch-series-11",
+		"watch-ultra-3",
+		"apple-tv",
 	}
 	if len(result.Devices) != len(expected) {
 		t.Fatalf("expected %d devices, got %d", len(expected), len(result.Devices))
@@ -66,5 +77,13 @@ func TestShotsFramesListDevices_JSON(t *testing.T) {
 	}
 	if defaultCount != 1 || !result.Devices[0].Default {
 		t.Fatalf("expected only iphone-air to be marked default: %+v", result.Devices)
+	}
+	air := result.Devices[0]
+	if air.Family != "iphone" || air.DefaultFrameColor != "light-gold" || len(air.FrameColors) != 4 || air.FrameColors[0] != "light-gold" {
+		t.Fatalf("iphone-air colors = %+v", air)
+	}
+	mac := result.Devices[5]
+	if mac.Family != "mac" || mac.DefaultFrameColor != "" || len(mac.FrameColors) != 0 {
+		t.Fatalf("mac must not advertise frame colors: %+v", mac)
 	}
 }

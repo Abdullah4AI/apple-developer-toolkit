@@ -49,7 +49,7 @@ Examples:
 
 func capabilityReconcileCommand(name string, apply bool) *ffcli.Command {
 	fs := flag.NewFlagSet(name, flag.ExitOnError)
-	bundleID := fs.String("bundle", "", "Bundle ID resource ID or identifier")
+	bundleID := shared.BindResourceIDFlag(fs, "bundle", "bundleIds", "Bundle ID resource ID or identifier")
 	entitlements := fs.String("entitlements", "", "Path to an entitlements plist")
 	ignoreUnknown := fs.Bool("ignore-unknown", false, "Ignore entitlement keys this mapping does not know")
 	allowRemove := fs.Bool("allow-remove", false, "Remove mapped capabilities that the entitlements file does not request")

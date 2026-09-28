@@ -213,6 +213,7 @@ func TestLeafOperandContractMatchesDeclaredUsage(t *testing.T) {
 	}
 
 	wantAllowed := []string{
+		"asc api",
 		"asc docs show",
 		"asc schema",
 		"asc search",

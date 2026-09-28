@@ -139,7 +139,7 @@ Examples:
 func GameCenterAppVersionsGetCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("view", flag.ExitOnError)
 
-	appVersionID := fs.String("id", "", "Game Center app version ID")
+	appVersionID := shared.BindResourceIDFlag(fs, "id", "gameCenterAppVersions", "Game Center app version ID")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
@@ -181,7 +181,7 @@ Examples:
 func GameCenterAppVersionsCreateCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("create", flag.ExitOnError)
 
-	appStoreVersionID := fs.String("app-store-version-id", "", "App Store version ID to associate")
+	appStoreVersionID := shared.BindResourceIDFlag(fs, "app-store-version-id", "appStoreVersions", "App Store version ID to associate")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
@@ -223,7 +223,7 @@ Examples:
 func GameCenterAppVersionsUpdateCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("update", flag.ExitOnError)
 
-	appVersionID := fs.String("id", "", "Game Center app version ID")
+	appVersionID := shared.BindResourceIDFlag(fs, "id", "gameCenterAppVersions", "Game Center app version ID")
 	enabled := fs.String("enabled", "", "Enable or disable the app version (true/false)")
 	output := shared.BindOutputFlags(fs)
 
@@ -309,7 +309,7 @@ Examples:
 func GameCenterAppVersionCompatibilityListCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("list", flag.ExitOnError)
 
-	appVersionID := fs.String("id", "", "Game Center app version ID")
+	appVersionID := shared.BindResourceIDFlag(fs, "id", "gameCenterAppVersions", "Game Center app version ID")
 	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
 	next := fs.String("next", "", "Fetch next page using a links.next URL")
 	paginate := fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")
@@ -412,7 +412,7 @@ Examples:
 func GameCenterAppVersionAppStoreVersionGetCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("view", flag.ExitOnError)
 
-	appVersionID := fs.String("id", "", "Game Center app version ID")
+	appVersionID := shared.BindResourceIDFlag(fs, "id", "gameCenterAppVersions", "Game Center app version ID")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
