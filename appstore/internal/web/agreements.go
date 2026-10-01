@@ -201,7 +201,6 @@ func (c *Client) DownloadAgreement(ctx context.Context, agreementID string) (*Ag
 	request.Header.Set("Accept", "application/pdf, application/octet-stream, */*;q=0.1")
 	request.Header.Set("Referer", developerPortalBaseURL+"/account")
 	request.Header.Set("User-Agent", "App-Store-Connect-CLI")
-	setModifiedCookieHeader(c.httpClient, request)
 
 	httpClient := *c.httpClient
 	previousCheckRedirect := httpClient.CheckRedirect

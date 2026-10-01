@@ -164,7 +164,7 @@ func NewCatalog(version string) *Catalog {
 		commandFactory("xcode", "Local Xcode build/archive/export and signing-settings helpers.", xcode.XcodeCommand),
 		commandFactory("distribute", "Plan, execute, inspect, and publish iOS distribution artifacts.", distribute.DistributeCommand),
 		commandFactory("ipa-info", "Inspect a local IPA without contacting App Store Connect.", artifacts.IPAInfoCommand),
-		commandFactory("pkg-info", "Inspect a local flat component package without contacting Apple.", artifacts.PKGInfoCommand),
+		commandFactory("pkg-info", "Inspect a local flat package or product archive without contacting Apple.", artifacts.PKGInfoCommand),
 		commandFactory("versions", "Manage App Store versions.", versions.VersionsCommand),
 		commandFactory("product-pages", "Manage custom product pages and product page experiments.", productpages.ProductPagesCommand),
 		commandFactory("routing-coverage", "Manage routing app coverage files.", routingcoverage.RoutingCoverageCommand),

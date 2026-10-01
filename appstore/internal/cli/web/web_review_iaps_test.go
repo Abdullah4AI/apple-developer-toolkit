@@ -16,6 +16,7 @@ import (
 )
 
 func TestWebReviewIAPsAttachRequiresApp(t *testing.T) {
+	t.Setenv("ASC_APP_ID", "")
 	cmd := WebReviewIAPsAttachCommand()
 	if err := cmd.FlagSet.Parse([]string{
 		"--iap-id", "9000000001",

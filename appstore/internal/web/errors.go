@@ -41,6 +41,36 @@ func IsDuplicateAppNameError(err error) bool {
 	return false
 }
 
+// AllCodes returns every errors[].code in the response body, in order, like
+// asc.APIError.AllCodes on the public API. Apple can report several causes for
+// one response and the one a caller keys on is not always first: re-creating
+// an existing app answers POST /iris/v1/apps with three entries (captured live
+// on 2026-09-29, see docs/API_NOTES.md). Blank codes are dropped; a body that
+// is not a JSON:API error document yields nil.
+func (e *APIError) AllCodes() []string {
+	if e == nil || len(e.rawResponseBody()) == 0 {
+		return nil
+	}
+	var payload struct {
+		Errors []struct {
+			Code string `json:"code"`
+		} `json:"errors"`
+	}
+	if json.Unmarshal(e.rawResponseBody(), &payload) != nil {
+		return nil
+	}
+	codes := make([]string, 0, len(payload.Errors))
+	for _, responseError := range payload.Errors {
+		if code := strings.TrimSpace(responseError.Code); code != "" {
+			codes = append(codes, code)
+		}
+	}
+	if len(codes) == 0 {
+		return nil
+	}
+	return codes
+}
+
 // IsMissingCompanyNameError reports whether an internal API error means Apple
 // requires a company name for the app-creation request. The response body is
 // only used for this package-internal classification; APIError.Error keeps it

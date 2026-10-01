@@ -204,6 +204,16 @@ func sanitizeAppNameSuffix(value string) string {
 	return strings.Trim(b.String(), "-")
 }
 
+// autoRenameCandidate returns the name --auto-rename tries on the given
+// zero-based attempt: the bundle-ID suffix first, then suffix-2, suffix-3, ...
+func autoRenameCandidate(baseName, suffix string, attempt int) string {
+	trySuffix := suffix
+	if attempt > 0 {
+		trySuffix = fmt.Sprintf("%s-%d", suffix, attempt+1)
+	}
+	return formatAppNameWithSuffix(baseName, trySuffix)
+}
+
 func formatAppNameWithSuffix(baseName, suffix string) string {
 	baseName = strings.TrimSpace(baseName)
 	suffix = strings.TrimSpace(suffix)
@@ -247,6 +257,7 @@ func WebAppsCreateCommand() *ffcli.Command {
 	password := fs.String("password", "", "Apple Account password (temporary compatibility flag; will prompt if not provided)")
 	twoFactorCodeCommand := fs.String("two-factor-code-command", "", "Shell command that prints the 2FA code to stdout if verification is required")
 	autoRename := fs.Bool("auto-rename", true, "Retry with unique name suffix if app name is already taken")
+	ifExists := shared.BindIfExistsFlag(fs, webAppCreateIfExistsModes...)
 	access := fs.String("access", "", "App access after create: full or limited")
 	var users shared.MultiStringFlag
 	fs.Var(&users, "user", "User ID granted Limited Access (repeatable; requires --access limited)")
@@ -282,12 +293,22 @@ Bundle ID preflight:
   If official ASC API authentication is available, the CLI will check or create
   the Bundle ID before app creation. Otherwise it assumes the Bundle ID already exists.
 
-
+Existing apps (--if-exists fail|skip):
+  fail (default) returns Apple's 409 unchanged. skip treats a 409 duplicate
+  conflict as success when the public API read-back finds an app on this
+  account with the requested bundle ID, SKU, and name (or, with --auto-rename,
+  one of the suffixed names it would have tried); the app is left unchanged and
+  a receipt with alreadyExists and action is printed. skip runs before
+  --auto-rename: if the bundle ID or SKU belongs to a different app the command
+  fails without renaming. skip needs official App Store Connect API
+  authentication and cannot be combined with --access. update is not offered
+  because none of the remaining create inputs has a safe matching write.
 
 Examples:
   asc web apps create
   asc web apps create --name "My App" --bundle-id "com.example.app" --sku "MYAPP123" --apple-id "user@example.com"
   asc web apps create --name "My App" --bundle-id "com.example.app" --sku "MYAPP123" --access limited --user USER_ID
+  asc web apps create --name "My App" --bundle-id "com.example.app" --sku "MYAPP123" --if-exists skip
   %s asc web apps create --name "My App" --bundle-id "com.example.app" --sku "MYAPP123" --apple-id "user@example.com"
   %s='osascript /path/to/get-apple-2fa-code.scpt' asc web apps create --apple-id "user@example.com"`,
 			webPasswordEnvDisplay(),
@@ -298,6 +319,10 @@ Examples:
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
+			ifExistsMode, err := shared.ParseIfExistsMode(*ifExists, webAppCreateIfExistsModes...)
+			if err != nil {
+				return err
+			}
 			return RunAppsCreate(ctx, AppsCreateRunOptions{
 				Name:                 *name,
 				BundleID:             *bundleID,
@@ -310,6 +335,7 @@ Examples:
 				Password:             *password,
 				TwoFactorCodeCommand: *twoFactorCodeCommand,
 				AutoRename:           *autoRename,
+				IfExists:             ifExistsMode,
 				Access:               *access,
 				Users:                append([]string(nil), users...),
 				Output:               *output.Output,

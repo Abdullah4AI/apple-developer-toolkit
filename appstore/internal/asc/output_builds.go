@@ -128,6 +128,37 @@ type BuildWaitResult struct {
 	Elapsed         string                    `json:"elapsed"`
 }
 
+// BuildWaitPendingResult is the builds wait --report-pending receipt for a
+// wait whose --timeout expired before the build reached a terminal processing
+// state. Status is always "pending"; Phase is "discovery" while no build
+// matches the selector yet and "processing" once the build exists.
+type BuildWaitPendingResult struct {
+	Status          string                  `json:"status"`
+	Phase           string                  `json:"phase"`
+	Summary         string                  `json:"summary"`
+	AppID           string                  `json:"appId,omitempty"`
+	BuildID         string                  `json:"buildId,omitempty"`
+	Version         string                  `json:"version,omitempty"`
+	BuildNumber     string                  `json:"buildNumber,omitempty"`
+	Platform        string                  `json:"platform,omitempty"`
+	ProcessingState string                  `json:"processingState,omitempty"`
+	Upload          *BuildWaitPendingUpload `json:"upload,omitempty"`
+	Elapsed         string                  `json:"elapsed"`
+	Timeout         string                  `json:"timeout"`
+	ResumeCommand   string                  `json:"resumeCommand,omitempty"`
+}
+
+// BuildWaitPendingUpload describes the newest build upload that matches a
+// builds wait selector while no build is visible for it yet.
+type BuildWaitPendingUpload struct {
+	ID           string `json:"id"`
+	State        string `json:"state,omitempty"`
+	Version      string `json:"version,omitempty"`
+	BuildNumber  string `json:"buildNumber,omitempty"`
+	Platform     string `json:"platform,omitempty"`
+	UploadedDate string `json:"uploadedDate,omitempty"`
+}
+
 // formatEncryptionStatus formats the UsesNonExemptEncryption field for display.
 // Returns "required" if true (needs encryption declaration), "exempt" if false,
 // or "n/a" if null (no information available).
@@ -452,6 +483,26 @@ func buildWaitResultRows(result *BuildWaitResult) ([]string, [][]string) {
 		result.BuildNumber,
 		result.ProcessingState,
 		result.Elapsed,
+	}}
+	return headers, rows
+}
+
+func buildWaitPendingResultRows(result *BuildWaitPendingResult) ([]string, [][]string) {
+	headers := []string{"Status", "Phase", "Build ID", "Processing State", "Upload ID", "Upload State", "Elapsed", "Resume Command"}
+	uploadID, uploadState := "", ""
+	if result.Upload != nil {
+		uploadID = result.Upload.ID
+		uploadState = result.Upload.State
+	}
+	rows := [][]string{{
+		result.Status,
+		result.Phase,
+		result.BuildID,
+		result.ProcessingState,
+		uploadID,
+		uploadState,
+		result.Elapsed,
+		result.ResumeCommand,
 	}}
 	return headers, rows
 }

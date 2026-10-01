@@ -1,0 +1,43 @@
+project:
+    name: ASC Shots Frame
+    output_dir: $WORK/output
+    device: Apple Watch S11 - 46mm - Aluminum Jet Black + Sport Band Black
+    output_size:
+        - 416
+        - 496
+screenshots:
+    framed:
+        background:
+            type: linear
+            colors:
+                - '#0d0c1e'
+                - '#140f2d'
+            direction: 135
+        content:
+            - type: text
+              content: Roll the die
+              position:
+                - 50%
+                - 85%
+              color: '#ffffff'
+              size: 29
+              weight: bold
+              alignment: center
+              max_width: 374
+            - type: text
+              content: Right on your wrist
+              position:
+                - 50%
+                - 92%
+              color: '#aaaaaa'
+              size: 17
+              alignment: center
+              max_width: 374
+            - type: image
+              asset: $WORK/watch.png
+              position:
+                - 50%
+                - 39%
+              scale: 0.4171
+              frame: true
+              alignment: center

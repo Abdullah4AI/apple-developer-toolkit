@@ -553,10 +553,10 @@ func buildReviewStatusResult(snapshot reviewSnapshot) reviewStatusResult {
 	}
 
 	if snapshot.LatestSubmission == nil {
-		switch versionState {
-		case "READY_FOR_SALE":
+		switch {
+		case shared.IsLiveAppStoreVersionState(versionState):
 			result.NextAction = "No action needed."
-		case "PENDING_DEVELOPER_RELEASE":
+		case versionState == "PENDING_DEVELOPER_RELEASE":
 			result.NextAction = "Release the approved version when ready."
 		default:
 			result.NextAction = "Submit the version for App Review when ready."
@@ -598,6 +598,14 @@ func buildReviewDoctorResult(snapshot reviewSnapshot, report validation.Report) 
 		result.ReviewState = "NOT_SUBMITTED"
 	}
 
+	if shared.IsLiveAppStoreVersionState(snapshot.Version.State) {
+		// A live version does not need another submission.
+		// Keep all other readiness findings and leave submission validation intact.
+		report.Checks = slices.DeleteFunc(slices.Clone(report.Checks), func(check validation.CheckResult) bool {
+			return check.ID == "version.state.editable"
+		})
+		report.Summary = validation.SummarizeChecks(report.Checks, report.Strict)
+	}
 	result.Summary = report.Summary
 	for _, check := range report.Checks {
 		switch check.Severity {
@@ -647,7 +655,7 @@ func buildReviewDoctorResult(snapshot reviewSnapshot, report validation.Report) 
 		result.NextAction = result.BlockingChecks[0].Message
 	case strings.EqualFold(result.ReviewState, string(asc.ReviewSubmissionStateWaitingForReview)) || strings.EqualFold(result.ReviewState, string(asc.ReviewSubmissionStateInReview)):
 		result.NextAction = "No submission blockers detected. Wait for App Store review outcome."
-	case strings.EqualFold(strings.TrimSpace(snapshot.Version.State), "READY_FOR_SALE"):
+	case shared.IsLiveAppStoreVersionState(snapshot.Version.State):
 		result.NextAction = "No action needed."
 	default:
 		result.NextAction = "No public-API submission blockers detected. Run `" + reviewDeclarationsListCommand(snapshot.AppID) + "` before submission."
@@ -684,10 +692,10 @@ func reviewDoctorCoverageWarnings(appID string) []reviewCoverageWarning {
 }
 
 func reviewPostCompleteAction(versionState string) string {
-	switch strings.ToUpper(strings.TrimSpace(versionState)) {
-	case "READY_FOR_SALE":
+	switch {
+	case shared.IsLiveAppStoreVersionState(versionState):
 		return "No action needed."
-	case "PENDING_DEVELOPER_RELEASE":
+	case strings.EqualFold(strings.TrimSpace(versionState), "PENDING_DEVELOPER_RELEASE"):
 		return "Release the approved version when ready."
 	default:
 		return "Review the completed App Review outcome."

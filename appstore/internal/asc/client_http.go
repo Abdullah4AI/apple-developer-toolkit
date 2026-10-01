@@ -255,21 +255,41 @@ func (c *Client) doWithMutatingRequestLimiter(ctx context.Context, request func(
 	}
 
 	requestTimeout, hasDeadline := requestTimeoutBudget(ctx)
-	limiter := c.getMutatingRequestLimiter()
 
-	select {
-	case limiter <- struct{}{}:
-		defer func() { <-limiter }()
-		if err := ctx.Err(); err != nil {
-			return nil, fmt.Errorf("wait for mutating request slot: %w", err)
+	// Ordinary writes take a default-limit slot first, then a slot under the
+	// client-wide ceiling; bulk writes take only the ceiling slot. Bulk writes
+	// never hold a default-limit slot, so the fixed acquisition order cannot
+	// deadlock.
+	if !usesBulkMutatingRequestLimit(ctx) {
+		release, err := acquireMutatingRequestSlot(ctx, c.getMutatingRequestLimiter())
+		if err != nil {
+			return nil, err
 		}
-	case <-ctx.Done():
-		return nil, fmt.Errorf("wait for mutating request slot: %w", ctx.Err())
+		defer release()
 	}
+	release, err := acquireMutatingRequestSlot(ctx, c.getBulkMutatingRequestLimiter())
+	if err != nil {
+		return nil, err
+	}
+	defer release()
 
 	requestCtx, cancel := deriveMutatingRequestContext(ctx, requestTimeout, hasDeadline)
 	defer cancel()
 	return request(requestCtx)
+}
+
+func acquireMutatingRequestSlot(ctx context.Context, limiter chan struct{}) (func(), error) {
+	select {
+	case limiter <- struct{}{}:
+		release := func() { <-limiter }
+		if err := ctx.Err(); err != nil {
+			release()
+			return nil, fmt.Errorf("wait for mutating request slot: %w", err)
+		}
+		return release, nil
+	case <-ctx.Done():
+		return nil, fmt.Errorf("wait for mutating request slot: %w", ctx.Err())
+	}
 }
 
 func requestTimeoutBudget(ctx context.Context) (time.Duration, bool) {

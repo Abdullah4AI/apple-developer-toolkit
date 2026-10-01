@@ -592,14 +592,14 @@ func capabilityRows() []Capability {
 		},
 		{
 			Area:       "signing",
-			Capability: "Developer Portal iCloud container reads",
+			Capability: "Developer Portal iCloud containers",
 			Status:     statusWebSession,
-			Commands:   []string{"asc web icloud-containers list"},
+			Commands:   []string{"asc web icloud-containers list", "asc web icloud-containers create"},
 			APIResources: []string{
 				"cloudContainers",
 			},
-			Notes:      []string{"Read-only iCloud container collection reads use the captured Developer Portal web-session endpoint; this surface does not expose container create, update, delete, or detail commands."},
-			NextAction: "Use asc web icloud-containers list.",
+			Notes:      []string{"List uses the captured Developer Portal web-session collection. create sends a JSON:API POST to the same cloudContainers collection and verifies the new container by reading the collections back. iCloud containers can never be deleted. Rename, delete, and detail remain unavailable."},
+			NextAction: "Use asc web icloud-containers list, or asc web icloud-containers create --confirm for a permanent new container.",
 		},
 		{
 			Area:       "signing",

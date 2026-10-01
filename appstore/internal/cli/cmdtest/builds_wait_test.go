@@ -193,6 +193,10 @@ func TestBuildsWaitByAppLatestDiscoversThenWaits(t *testing.T) {
 
 	requestCount := 0
 	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		// Discovery also reads the app's build uploads to describe a timeout.
+		if resp, ok := buildsWaitNoBuildUploads(req); ok {
+			return resp, nil
+		}
 		requestCount++
 		switch requestCount {
 		case 1:
@@ -289,6 +293,10 @@ func TestBuildsWaitByAppWithSinceSkipsOlderMatch(t *testing.T) {
 
 	requestCount := 0
 	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		// Discovery also reads the app's build uploads to describe a timeout.
+		if resp, ok := buildsWaitNoBuildUploads(req); ok {
+			return resp, nil
+		}
 		requestCount++
 		switch requestCount {
 		case 1:
@@ -708,6 +716,10 @@ func TestBuildsWaitByBuildNumberDiscoveryPollsUntilTimeout(t *testing.T) {
 
 	requestCount := 0
 	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		// Discovery also reads the app's build uploads to describe a timeout.
+		if resp, ok := buildsWaitNoBuildUploads(req); ok {
+			return resp, nil
+		}
 		requestCount++
 		if req.Method != http.MethodGet {
 			t.Fatalf("expected GET, got %s", req.Method)
@@ -784,6 +796,10 @@ func TestBuildsWaitByAppDiscoveryTimeoutReturnsError(t *testing.T) {
 	})
 
 	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		// Discovery also reads the app's build uploads to describe a timeout.
+		if resp, ok := buildsWaitNoBuildUploads(req); ok {
+			return resp, nil
+		}
 		if req.URL.Path != "/v1/builds" {
 			t.Fatalf("expected path /v1/builds, got %s", req.URL.Path)
 		}
@@ -1044,4 +1060,17 @@ func parseBuildsWaitJSON(t *testing.T, stdout string) buildsWaitJSONResult {
 		t.Fatalf("failed to parse builds wait output JSON %q: %v", stdout, err)
 	}
 	return parsed
+}
+
+// buildsWaitNoBuildUploads answers the build-upload lookup that build
+// discovery makes on polls that find no build, with no uploads.
+func buildsWaitNoBuildUploads(req *http.Request) (*http.Response, bool) {
+	if req.URL.Path != "/v1/apps/123456789/buildUploads" {
+		return nil, false
+	}
+	return &http.Response{
+		StatusCode: http.StatusOK,
+		Body:       io.NopCloser(strings.NewReader(`{"data":[]}`)),
+		Header:     http.Header{"Content-Type": []string{"application/json"}},
+	}, true
 }

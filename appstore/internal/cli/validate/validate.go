@@ -24,6 +24,7 @@ type validateOptions struct {
 	Deep      bool
 	CheckURLs bool
 	AppleID   string
+	IPAPath   string
 	Output    string
 	Pretty    bool
 }
@@ -46,6 +47,7 @@ func ValidateCommand() *ffcli.Command {
 	deep := fs.Bool("deep", false, "Verify blockers that require a cached Apple web session")
 	checkURLs := fs.Bool("check-urls", false, "Check metadata URL destinations with bounded public HTTP requests")
 	appleID := fs.String("apple-id", "", "Cached Apple web session to use with --deep")
+	ipaPath := fs.String("ipa", "", "Path to the version's .ipa; its UIDeviceFamily decides whether iPad screenshots are required")
 	output := shared.BindOutputFlags(fs)
 
 	testFlight := wrapValidateSubcommand(ValidateTestFlightCommand(), fs)
@@ -78,8 +80,9 @@ Checks:
   - Build attached and processed
   - Build encryption declaration readiness
   - App content rights declaration
-  - Pricing schedule and territory availability
+  - Pricing schedule, base territory price (Free counts), and territory availability
   - Screenshot presence and size compatibility
+  - Required iPad screenshots for builds that run on iPad (--ipa)
   - Subscription review readiness and promotional image guidance
   - Age rating completeness
 
@@ -89,6 +92,17 @@ Deep validation:
   attachment. It also classifies every actionable finding as api-fixable,
   web-fixable, or manual and returns exact available commands and App Store
   Connect links. Deep validation never starts an interactive login.
+
+iPad screenshots:
+  The App Store Connect API does not report whether a build runs on iPad, so
+  pass --ipa with the IOS version's .ipa to read UIDeviceFamily locally. When
+  it includes iPad (2) and the primary locale has no APP_IPAD_PRO_3GEN_129
+  screenshot set, screenshots.required.ipad blocks submission. Without --ipa,
+  a version with iPhone screenshots but no primary-locale APP_IPAD_PRO_3GEN_129
+  set gets the non-blocking screenshots.required.ipad_unverified info check.
+  The IPA's bundle ID must
+  match the app's, its CFBundleShortVersionString must match the version, and
+  its CFBundleVersion must match the attached build when one is attached.
 
 Default version selection:
   When --version and --version-id are omitted, validate selects the app's
@@ -106,6 +120,7 @@ Examples:
   asc validate --app "APP_ID" --version-id "VERSION_ID" --strict
   asc validate --app "APP_ID" --version-id "VERSION_ID" --deep
   asc validate --app "APP_ID" --version-id "VERSION_ID" --check-urls
+  asc validate --app "APP_ID" --version-id "VERSION_ID" --ipa "./App.ipa"
   asc validate --app "APP_ID" --version "1.0.0" --deep --apple-id "user@example.com"
 
 TestFlight:
@@ -161,6 +176,7 @@ Subscriptions:
 				Deep:      *deep,
 				CheckURLs: *checkURLs,
 				AppleID:   trimmedAppleID,
+				IPAPath:   strings.TrimSpace(*ipaPath),
 				Output:    *output.Output,
 				Pretty:    *output.Pretty,
 			})
@@ -194,7 +210,7 @@ func validateParentFlagUsageMessage(parentFlags *flag.FlagSet) string {
 		switch f.Name {
 		case "app", "output", "pretty", "strict":
 			moveAfterSubcommand = append(moveAfterSubcommand, "--"+f.Name)
-		case "version", "version-id", "platform", "deep", "check-urls", "apple-id":
+		case "version", "version-id", "platform", "deep", "check-urls", "apple-id", "ipa":
 			topLevelOnly = append(topLevelOnly, "--"+f.Name)
 		}
 	})
@@ -235,6 +251,15 @@ func validateFlagVerb(flags []string) string {
 }
 
 func runValidate(ctx context.Context, opts validateOptions) error {
+	var localIPA *LocalIPA
+	if opts.IPAPath != "" {
+		loaded, loadErr := loadLocalIPA(opts.IPAPath)
+		if loadErr != nil {
+			return shared.WithDiagnostic(fmt.Errorf("validate: --ipa: %w", loadErr), shared.DiagnosticInvalidInput, "--ipa")
+		}
+		localIPA = loaded
+	}
+
 	var report validation.Report
 	var err error
 	if strings.TrimSpace(opts.Version) == "" && strings.TrimSpace(opts.VersionID) == "" {
@@ -263,6 +288,7 @@ func runValidate(ctx context.Context, opts validateOptions) error {
 			Strict:    opts.Strict,
 			Deep:      opts.Deep,
 			CheckURLs: opts.CheckURLs,
+			IPA:       localIPA,
 		})
 	}
 	if err != nil {

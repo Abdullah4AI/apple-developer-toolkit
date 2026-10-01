@@ -42,6 +42,14 @@ const (
 	defaultMaxIdleConns         = 128
 	defaultMaxIdleConnsPerHost  = 32
 	defaultMutatingRequestLimit = 8
+
+	// BulkMutatingRequestLimit is the client-wide ceiling on concurrent
+	// mutating requests. Ordinary writes are held to
+	// defaultMutatingRequestLimit beneath it; only writes whose context is
+	// marked with WithBulkMutatingRequestLimit may use the extra slots, so a
+	// bulk fan-out can run more writes at once without raising the limit for
+	// every other command.
+	BulkMutatingRequestLimit = 16
 )
 
 var retryLogger = slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
@@ -644,6 +652,9 @@ type Client struct {
 
 	mutatingRequestLimiterOnce sync.Once
 	mutatingRequestLimiter     chan struct{}
+
+	bulkMutatingRequestLimiterOnce sync.Once
+	bulkMutatingRequestLimiter     chan struct{}
 }
 
 // NewClient creates a new ASC client.
@@ -735,4 +746,31 @@ func (c *Client) getMutatingRequestLimiter() chan struct{} {
 		}
 	})
 	return c.mutatingRequestLimiter
+}
+
+// getBulkMutatingRequestLimiter returns the client-wide write ceiling shared
+// by bulk and ordinary mutating requests.
+func (c *Client) getBulkMutatingRequestLimiter() chan struct{} {
+	c.bulkMutatingRequestLimiterOnce.Do(func() {
+		if c.bulkMutatingRequestLimiter == nil {
+			c.bulkMutatingRequestLimiter = make(chan struct{}, BulkMutatingRequestLimit)
+		}
+	})
+	return c.bulkMutatingRequestLimiter
+}
+
+type bulkMutatingRequestLimitKey struct{}
+
+// WithBulkMutatingRequestLimit marks ctx for a bulk write fan-out. Mutating
+// requests sent with the returned context share the client-wide
+// BulkMutatingRequestLimit instead of the lower default limit for ordinary
+// writes. Retry and backoff behavior is unchanged. Callers must size their
+// worker pools to at most BulkMutatingRequestLimit.
+func WithBulkMutatingRequestLimit(ctx context.Context) context.Context {
+	return context.WithValue(ctx, bulkMutatingRequestLimitKey{}, true)
+}
+
+func usesBulkMutatingRequestLimit(ctx context.Context) bool {
+	bulk, _ := ctx.Value(bulkMutatingRequestLimitKey{}).(bool)
+	return bulk
 }

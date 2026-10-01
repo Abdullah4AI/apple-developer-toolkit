@@ -37,6 +37,10 @@ const maxPendingDeviceCallbackTokens = 1024
 
 var errDeviceCallbackToken = errors.New("unknown registration token")
 
+// errDeviceRegistrationSessionEnded refuses requests after the session reached
+// --max-devices or began shutting down.
+var errDeviceRegistrationSessionEnded = errors.New("registration session ended")
+
 type deviceURLServer struct {
 	token      string
 	name       string
@@ -57,6 +61,14 @@ type deviceURLServer struct {
 	// stream, when set, receives one JSON receipt line per device arrival.
 	stream    io.Writer
 	streamErr error
+	// maxDevices, when positive, ends the session once that many new devices
+	// are registered (or collected without --confirm). Duplicates and devices
+	// already in App Store Connect do not count.
+	maxDevices int
+	accepted   int
+	// limitReached is set, and limitDone closed, when maxDevices is reached.
+	limitReached bool
+	limitDone    chan struct{}
 }
 
 func serveDeviceRegistration(ctx context.Context, options deviceURLServeOptions) (*asc.DeviceURLRegistrationResult, error) {
@@ -91,14 +103,16 @@ func serveDeviceRegistration(ctx context.Context, options deviceURLServeOptions)
 		publicURL = "http://" + bound
 	}
 	serverState := &deviceURLServer{
-		token:     token,
-		name:      options.Name,
-		platform:  options.Platform,
-		confirm:   options.Confirm,
-		client:    options.Client,
-		publicURL: publicURL,
-		seen:      map[string]struct{}{},
-		stream:    options.Stream,
+		token:      token,
+		name:       options.Name,
+		platform:   options.Platform,
+		confirm:    options.Confirm,
+		client:     options.Client,
+		publicURL:  publicURL,
+		seen:       map[string]struct{}{},
+		stream:     options.Stream,
+		maxDevices: options.MaxDevices,
+		limitDone:  make(chan struct{}),
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/enroll", serverState.enroll)
@@ -123,6 +137,8 @@ func serveDeviceRegistration(ctx context.Context, options deviceURLServeOptions)
 	select {
 	case serveErr = <-errCh:
 	case <-waitCtx.Done():
+	case <-serverState.limitDone:
+		fmt.Fprintf(os.Stderr, "Reached --max-devices %d; ending the registration session.\n", options.MaxDevices)
 	}
 	cancel()
 	if errors.Is(serveErr, http.ErrServerClosed) {
@@ -177,7 +193,9 @@ type deviceURLServeOptions struct {
 	Platform       string
 	Confirm        bool
 	OutputFile     string
-	Client         *asc.Client
+	// MaxDevices, when positive, ends the session after that many new devices.
+	MaxDevices int
+	Client     *asc.Client
 	// Stream, when non-nil, receives one JSON receipt line per device arrival.
 	Stream io.Writer
 }
@@ -185,6 +203,10 @@ type deviceURLServeOptions struct {
 func (server *deviceURLServer) enroll(w http.ResponseWriter, r *http.Request) {
 	if !server.validToken(r) {
 		http.Error(w, "unknown registration token", http.StatusForbidden)
+		return
+	}
+	if server.sessionEnded() {
+		http.Error(w, errDeviceRegistrationSessionEnded.Error(), http.StatusGone)
 		return
 	}
 	profileURL := server.publicURL + "/profile?token=" + url.QueryEscape(server.token)
@@ -198,6 +220,10 @@ func (server *deviceURLServer) profile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	callbackToken, err := server.issueCallbackToken()
+	if errors.Is(err, errDeviceRegistrationSessionEnded) {
+		http.Error(w, err.Error(), http.StatusGone)
+		return
+	}
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusServiceUnavailable)
 		return
@@ -242,12 +268,23 @@ func (server *deviceURLServer) callback(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, err.Error(), http.StatusForbidden)
 		return
 	}
+	if errors.Is(err, errDeviceRegistrationSessionEnded) {
+		http.Error(w, err.Error(), http.StatusGone)
+		return
+	}
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(record)
+}
+
+// sessionEnded reports whether the session stopped or reached --max-devices.
+func (server *deviceURLServer) sessionEnded() bool {
+	server.mu.Lock()
+	defer server.mu.Unlock()
+	return server.stopped || server.limitReached
 }
 
 func (server *deviceURLServer) validToken(r *http.Request) bool {
@@ -258,8 +295,8 @@ func (server *deviceURLServer) validToken(r *http.Request) bool {
 func (server *deviceURLServer) issueCallbackToken() (string, error) {
 	server.mu.Lock()
 	defer server.mu.Unlock()
-	if server.stopped {
-		return "", fmt.Errorf("registration session ended")
+	if server.stopped || server.limitReached {
+		return "", errDeviceRegistrationSessionEnded
 	}
 	if len(server.callbackTokens) >= maxPendingDeviceCallbackTokens {
 		return "", fmt.Errorf("too many pending device registrations")
@@ -315,8 +352,8 @@ func (server *deviceURLServer) acceptDevice(ctx context.Context, token, udid, pr
 	record = asc.DeviceURLRegistration{Name: name, UDID: udid, Platform: server.platform, Status: "collected"}
 	server.mu.Lock()
 	defer server.mu.Unlock()
-	if server.stopped {
-		return record, fmt.Errorf("registration session ended")
+	if server.stopped || server.limitReached {
+		return record, errDeviceRegistrationSessionEnded
 	}
 	if err := server.claimCallbackToken(token, normalized); err != nil {
 		return record, err
@@ -374,7 +411,21 @@ func (server *deviceURLServer) acceptDevice(ctx context.Context, token, udid, pr
 	server.seen[normalized] = struct{}{}
 	server.devices = append(server.devices, record)
 	server.outputRows = append(server.outputRows, deviceBatchRecord{UDID: udid, Name: name, Platform: server.platform})
+	server.countAcceptedDevice()
 	return record, nil
+}
+
+// countAcceptedDevice records a newly registered or collected device and ends
+// the session once --max-devices is reached. The caller must hold server.mu.
+func (server *deviceURLServer) countAcceptedDevice() {
+	server.accepted++
+	if server.maxDevices <= 0 || server.limitReached || server.accepted < server.maxDevices {
+		return
+	}
+	server.limitReached = true
+	if server.limitDone != nil {
+		close(server.limitDone)
+	}
 }
 
 // streamArrival writes one JSON receipt line for a device arrival. The caller
@@ -539,6 +590,9 @@ func subtleTokenEqual(got, want string) bool {
 func validateDeviceURLServeOptions(options deviceURLServeOptions) error {
 	if options.TTL <= 0 {
 		return shared.UsageError("--ttl must be greater than zero")
+	}
+	if options.MaxDevices < 0 {
+		return shared.UsageError("--max-devices must be at least 1")
 	}
 	if err := validateDeviceRegisterListen(options.Listen, options.ListenExplicit); err != nil {
 		return err

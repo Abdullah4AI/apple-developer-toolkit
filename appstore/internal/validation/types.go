@@ -148,6 +148,8 @@ type Input struct {
 	Build                       *Build
 	PriceScheduleID             string
 	PricingFetchSkipReason      string
+	BaseTerritory               string
+	BasePriceMissing            bool
 	AvailabilityID              string
 	AvailableTerritories        int
 	AppAvailableTerritories     []string
@@ -156,6 +158,9 @@ type Input struct {
 	AvailabilityFetchSkipReason string
 	PricingCoverageSkipReason   string
 	ScreenshotSets              []ScreenshotSet
+	// SupportsIPad reports whether the app binary declares iPad support in
+	// UIDeviceFamily. It is nil when no binary was inspected.
+	SupportsIPad                *bool
 	Subscriptions               []Subscription
 	SubscriptionFetchSkipReason string
 	IAPs                        []IAP

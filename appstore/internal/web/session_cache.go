@@ -265,7 +265,11 @@ func (j *sessionCookieTrackingJar) Cookies(u *url.URL) []*http.Cookie {
 	}
 	j.mu.Lock()
 	defer j.mu.Unlock()
-	return j.CookieJar.Cookies(u)
+	cookies := j.CookieJar.Cookies(u)
+	for i, cookie := range cookies {
+		cookies[i] = appleCookieForRequest(cookie)
+	}
+	return cookies
 }
 
 func (j *sessionCookieTrackingJar) SetCookies(u *url.URL, cookies []*http.Cookie) {
@@ -404,6 +408,41 @@ func trackedCookieUpdateForPersistedCookie(updates map[trackedCookieKey]trackedC
 			continue
 		}
 		if !cookieScopesMatchForOrigin(origin, update.cookie, cookie) {
+			continue
+		}
+		if found && !sameTrackedCookieUpdate(matched, update) {
+			return trackedCookieUpdate{}, false
+		}
+		matched = update
+		found = true
+	}
+	return matched, found
+}
+
+// trackedCookieUpdateForObservedCookie matches a cookie read back through
+// CookieJar.Cookies, which never reports Domain. An exact scope match wins;
+// otherwise a unique update whose Domain covers the origin applies, so Apple's
+// Domain-scoped cookies keep their deadlines. Conflicting candidates, including
+// a host-only and a Domain update for the same value, still fail closed.
+func trackedCookieUpdateForObservedCookie(updates map[trackedCookieKey]trackedCookieUpdate, origin string, cookie pCookie) (trackedCookieUpdate, bool) {
+	if update, ok := trackedCookieUpdateForPersistedCookie(updates, origin, cookie); ok {
+		return update, true
+	}
+	if normalizedCookieDomain(cookie.Domain) != "" || normalizedCookieDomain(cookie.ScopeDomain) != "" {
+		return trackedCookieUpdate{}, false
+	}
+	var (
+		matched trackedCookieUpdate
+		found   bool
+	)
+	for key, update := range updates {
+		if key.name != cookie.Name || key.value != cookie.Value {
+			continue
+		}
+		if key.origin != origin && (key.origin != olympusSessionURL || !isAppStoreConnectRootOrigin(origin)) {
+			continue
+		}
+		if !observedCookieScopeMatchesForOrigin(origin, update.cookie, cookie) {
 			continue
 		}
 		if found && !sameTrackedCookieUpdate(matched, update) {
@@ -614,7 +653,7 @@ func patchTrackedCookieScopes(origin string, probe *url.URL, cookies []pCookie, 
 	patched := make([]pCookie, 0, len(cookies))
 	now := time.Now().UTC()
 	for _, cookie := range cookies {
-		if update, ok := trackedCookieUpdateForPersistedCookie(updates, origin, cookie); ok {
+		if update, ok := trackedCookieUpdateForObservedCookie(updates, origin, cookie); ok {
 			if isSessionOnlyCookie(update.cookie) && (update.sessionOnlyReplacement || cachedCookieHasActiveScope(cached, origin, update.cookie, now)) {
 				continue
 			}
@@ -638,6 +677,32 @@ func cookieScopesMatchForOrigin(origin string, a, b pCookie) bool {
 		return persistedCookieScopeDomain(nil, a) == persistedCookieScopeDomain(nil, b)
 	}
 	return persistedCookieScopeDomain(base, a) == persistedCookieScopeDomain(base, b)
+}
+
+// observedCookieScopeMatchesForOrigin compares a cookie whose scope is known
+// (a tracked Set-Cookie) with one read back through
+// CookieJar.Cookies. The jar never reports Domain, so an observation without
+// any domain information also matches a known Domain cookie that covers the
+// origin. Apple scopes its sign-in cookies (the DES trust cookie, aasp,
+// myacinfo) with a Domain attribute; requiring an exact domain match here
+// silently dropped their deadlines, and the cache then replayed cookies Apple
+// had already expired (#2806).
+func observedCookieScopeMatchesForOrigin(origin string, known, observed pCookie) bool {
+	if cookieScopesMatchForOrigin(origin, known, observed) {
+		return true
+	}
+	if normalizedCookieDomain(observed.Domain) != "" || normalizedCookieDomain(observed.ScopeDomain) != "" {
+		return false
+	}
+	if persistedCookiePath(known.Path) != persistedCookiePath(observed.Path) {
+		return false
+	}
+	base, err := url.Parse(origin)
+	if err != nil || base == nil {
+		return false
+	}
+	domain := persistedCookieScopeDomain(base, known)
+	return domain != "" && cookieDomainMatchesHost(domain, base.Hostname())
 }
 
 func persistedCookieScopeDomain(origin *url.URL, cookie pCookie) string {
@@ -952,7 +1017,7 @@ func preserveCachedCookieDeadlines(current *persistedSession, cached *persistedS
 	for origin, cookies := range current.Cookies {
 		persistable := make([]pCookie, 0, len(cookies))
 		for i := range cookies {
-			if refreshed, ok := trackedCookieUpdateForPersistedCookie(updates, origin, cookies[i]); ok {
+			if refreshed, ok := trackedCookieUpdateForObservedCookie(updates, origin, cookies[i]); ok {
 				if isSessionOnlyCookie(refreshed.cookie) && (refreshed.sessionOnlyReplacement || cachedCookieHasActiveScope(cached, origin, refreshed.cookie, now)) {
 					continue
 				}

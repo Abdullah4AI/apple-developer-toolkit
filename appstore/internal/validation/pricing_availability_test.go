@@ -3,21 +3,46 @@ package validation
 import "testing"
 
 func TestPricingChecks_MissingSchedule(t *testing.T) {
-	checks := pricingChecks("app-1", "", "")
+	checks := pricingChecks("app-1", "", false, "", "")
 	if !hasCheckID(checks, "pricing.schedule.missing") {
 		t.Fatalf("expected pricing.schedule.missing check, got %v", checks)
 	}
 }
 
 func TestPricingChecks_Pass(t *testing.T) {
-	checks := pricingChecks("app-1", "sched-1", "")
+	checks := pricingChecks("app-1", "sched-1", false, "USA", "")
 	if len(checks) != 0 {
 		t.Fatalf("expected no checks, got %d (%v)", len(checks), checks)
 	}
 }
 
+func TestPricingChecks_MissingBaseTerritoryPrice(t *testing.T) {
+	checks := pricingChecks("app-1", "app-1", true, "usa", "")
+	if len(checks) != 1 {
+		t.Fatalf("expected one check, got %d (%v)", len(checks), checks)
+	}
+	check := checks[0]
+	if check.ID != "pricing.base_price.missing" || check.Severity != SeverityError {
+		t.Fatalf("expected blocking pricing.base_price.missing, got %+v", check)
+	}
+	if check.Message != "app has no price set for base territory USA" {
+		t.Fatalf("unexpected message %q", check.Message)
+	}
+	wantRemediation := `Set a price (Free counts): asc pricing schedule create --app app-1 --free --base-territory "USA" --start-date "YYYY-MM-DD"`
+	if check.Remediation != wantRemediation {
+		t.Fatalf("remediation = %q, want %q", check.Remediation, wantRemediation)
+	}
+}
+
+func TestPricingChecks_UnverifiedSuppressesMissingBaseTerritoryPrice(t *testing.T) {
+	checks := pricingChecks("app-1", "app-1", true, "USA", "pricing access unavailable")
+	if hasCheckID(checks, "pricing.base_price.missing") || !hasCheckID(checks, "pricing.schedule.unverified") {
+		t.Fatalf("expected only pricing.schedule.unverified, got %v", checks)
+	}
+}
+
 func TestPricingChecks_UnverifiedWhenSkipped(t *testing.T) {
-	checks := pricingChecks("app-1", "", "pricing access unavailable")
+	checks := pricingChecks("app-1", "", false, "", "pricing access unavailable")
 	if !hasCheckID(checks, "pricing.schedule.unverified") {
 		t.Fatalf("expected pricing.schedule.unverified check, got %v", checks)
 	}

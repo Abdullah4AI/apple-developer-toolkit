@@ -2,6 +2,7 @@ package asc
 
 import (
 	"encoding/json"
+	"slices"
 	"testing"
 )
 
@@ -210,6 +211,51 @@ func TestBuildWaitResultRows(t *testing.T) {
 		if rows[0][i] != cell {
 			t.Fatalf("rows[0][%d] = %q, want %q", i, rows[0][i], cell)
 		}
+	}
+}
+
+func TestBuildWaitPendingResultRows(t *testing.T) {
+	tests := []struct {
+		name   string
+		result *BuildWaitPendingResult
+		want   []string
+	}{
+		{
+			name: "discovery with upload",
+			result: &BuildWaitPendingResult{
+				Status:        "pending",
+				Phase:         "discovery",
+				Upload:        &BuildWaitPendingUpload{ID: "upload-78", State: "COMPLETE"},
+				Elapsed:       "50s",
+				ResumeCommand: "asc builds wait --app 123456789 --latest --report-pending",
+			},
+			want: []string{"pending", "discovery", "", "", "upload-78", "COMPLETE", "50s", "asc builds wait --app 123456789 --latest --report-pending"},
+		},
+		{
+			name: "processing",
+			result: &BuildWaitPendingResult{
+				Status:          "pending",
+				Phase:           "processing",
+				BuildID:         "build-99",
+				ProcessingState: "PROCESSING",
+				Elapsed:         "50s",
+				ResumeCommand:   "asc builds wait --build-id build-99 --report-pending",
+			},
+			want: []string{"pending", "processing", "build-99", "PROCESSING", "", "", "50s", "asc builds wait --build-id build-99 --report-pending"},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			headers, rows := buildWaitPendingResultRows(test.result)
+			wantHeaders := []string{"Status", "Phase", "Build ID", "Processing State", "Upload ID", "Upload State", "Elapsed", "Resume Command"}
+			if !slices.Equal(headers, wantHeaders) {
+				t.Fatalf("headers = %v, want %v", headers, wantHeaders)
+			}
+			if len(rows) != 1 || !slices.Equal(rows[0], test.want) {
+				t.Fatalf("rows = %v, want [%v]", rows, test.want)
+			}
+		})
 	}
 }
 

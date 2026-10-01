@@ -61,7 +61,7 @@ func renderReviewIAPMutationMarkdown(payload reviewIAPMutationOutput) error {
 func validateReviewIAPAttachInputs(appID, iapID string, confirm bool) error {
 	switch {
 	case strings.TrimSpace(appID) == "":
-		return shared.UsageError("--app is required")
+		return shared.UsageError("--app is required (or set ASC_APP_ID)")
 	case shared.SelectorNeedsLookup(appID):
 		return shared.UsageError("--app must be a numeric App Store Connect app ID")
 	case strings.TrimSpace(iapID) == "":
@@ -180,7 +180,7 @@ submitWithNextAppStoreVersion=true; this command exposes that same call.
 func WebReviewIAPsAttachCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("web review iaps attach", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App ID")
+	appID := fs.String("app", "", "App ID (or ASC_APP_ID env)")
 	iapID := fs.String("iap-id", "", "Iris IAP resource ID, product ID, or exact reference name")
 	confirm := fs.Bool("confirm", false, "Confirm the attach operation")
 	authFlags := bindWebSessionFlags(fs)
@@ -202,7 +202,7 @@ expose the public numeric ASC IAP id, so that numeric id is not resolved by this
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
-			trimmedAppID := strings.TrimSpace(*appID)
+			trimmedAppID := strings.TrimSpace(shared.ResolveAppID(*appID))
 			trimmedIAPID := strings.TrimSpace(*iapID)
 			if err := validateReviewIAPAttachInputs(trimmedAppID, trimmedIAPID, *confirm); err != nil {
 				return err

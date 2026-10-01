@@ -1,0 +1,43 @@
+project:
+    name: ASC Shots Frame
+    output_dir: $WORK/output
+    device: AW Ultra 3 - Black + Ocean Band Black
+    output_size:
+        - 422
+        - 514
+screenshots:
+    framed:
+        background:
+            type: linear
+            colors:
+                - '#0d0c1e'
+                - '#140f2d'
+            direction: 135
+        content:
+            - type: text
+              content: Roll the die
+              position:
+                - 50%
+                - 8%
+              color: '#ffffff'
+              size: 30
+              weight: bold
+              alignment: center
+              max_width: 380
+            - type: text
+              content: Built for Ultra
+              position:
+                - 50%
+                - 15%
+              color: '#aaaaaa'
+              size: 17
+              alignment: center
+              max_width: 380
+            - type: image
+              asset: $WORK/watch.png
+              position:
+                - 50%
+                - 61%
+              scale: 0.3962
+              frame: true
+              alignment: center

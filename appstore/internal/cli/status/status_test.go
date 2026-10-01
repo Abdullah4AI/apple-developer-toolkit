@@ -483,6 +483,27 @@ func TestBuildStatusSummary_GreenWhenReadyForSale(t *testing.T) {
 	}
 }
 
+func TestBuildStatusSummary_GreenWhenReadyForDistribution(t *testing.T) {
+	// appVersionState reports a live version as READY_FOR_DISTRIBUTION and
+	// is preferred over the legacy appStoreState READY_FOR_SALE.
+	resp := &dashboardResponse{
+		AppStore: &appStoreSection{
+			State: "READY_FOR_DISTRIBUTION",
+		},
+		Builds: &buildsSection{
+			Latest: &latestBuild{ID: "build-1"},
+		},
+	}
+
+	summary := buildStatusSummary(resp)
+	if summary.Health != "green" {
+		t.Fatalf("expected health=green, got %q", summary.Health)
+	}
+	if summary.NextAction != "No action needed." {
+		t.Fatalf("expected no action needed, got %q", summary.NextAction)
+	}
+}
+
 func TestBuildStatusSummary_BetaReviewCorrelation(t *testing.T) {
 	latest := &betaReviewBuildStatus{ID: "build-326", Version: "1.2.3", BuildNumber: "326", Platform: "IOS"}
 	tests := []struct {

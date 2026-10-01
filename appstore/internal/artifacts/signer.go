@@ -78,6 +78,8 @@ type forwardReader struct {
 	pos    int64
 	size   int64
 	err    error
+	// capture, when set, receives the primary slice's code signature.
+	capture *signatureCapture
 }
 
 func (reader *forwardReader) skipTo(offset int64) error {
@@ -127,7 +129,13 @@ func (reader *forwardReader) read(length int64) ([]byte, error) {
 // in file order. A slice that cannot be read is reported as unreadable; an
 // error means no slice could be identified.
 func readMachOSignatures(source io.Reader, size int64) ([]ArchitectureSignature, int, error) {
-	reader := &forwardReader{source: source, size: size}
+	return readMachOSignaturesCapture(source, size, nil)
+}
+
+// readMachOSignaturesCapture is readMachOSignatures that also keeps the
+// primary slice's code signature in capture when capture is non-nil.
+func readMachOSignaturesCapture(source io.Reader, size int64, capture *signatureCapture) ([]ArchitectureSignature, int, error) {
+	reader := &forwardReader{source: source, size: size, capture: capture}
 	magic, err := reader.read(4)
 	if err != nil {
 		return nil, 0, err
@@ -211,7 +219,11 @@ func readFatSignatures(reader *forwardReader, wide bool) ([]ArchitectureSignatur
 		}
 	}
 	slices := make([]ArchitectureSignature, count)
-	for _, index := range order {
+	for position, index := range order {
+		if position == 1 {
+			// Only the primary slice, stored first, is captured for verification.
+			reader.capture = nil
+		}
 		architecture := architectures[index]
 		slices[index] = newArchitectureSignature(architecture.cpuType, architecture.cpuSubtype)
 		slices[index].record(readFatSlice(reader, architecture))
@@ -316,6 +328,9 @@ func readThinSignature(reader *forwardReader, header thinHeader, base, sliceSize
 	}
 	if err := reader.skipTo(base + dataOffset); err != nil {
 		return "", nil, err
+	}
+	if reader.capture != nil {
+		return captureSuperblob(reader, base, sliceSize, dataSize)
 	}
 	return readSuperblob(reader, dataSize)
 }
@@ -453,6 +468,7 @@ func signerIdentity(certificate *x509.Certificate) *SignerIdentity {
 }
 
 type xarSignature struct {
+	xarHeapRange
 	Certificates []string `xml:"KeyInfo>X509Data>X509Certificate"`
 }
 

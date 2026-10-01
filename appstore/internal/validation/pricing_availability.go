@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-func pricingChecks(appID string, priceScheduleID string, skipReason string) []CheckResult {
+func pricingChecks(appID string, priceScheduleID string, basePriceMissing bool, baseTerritory string, skipReason string) []CheckResult {
 	if strings.TrimSpace(skipReason) != "" {
 		return []CheckResult{{
 			ID:           "pricing.schedule.unverified",
@@ -18,7 +18,25 @@ func pricingChecks(appID string, priceScheduleID string, skipReason string) []Ch
 		}}
 	}
 	if strings.TrimSpace(priceScheduleID) != "" {
-		return nil
+		if !basePriceMissing {
+			return nil
+		}
+		territory := strings.ToUpper(strings.TrimSpace(baseTerritory))
+		message := "app has no price set"
+		remediationTerritory := "USA"
+		if territory != "" {
+			message = fmt.Sprintf("app has no price set for base territory %s", territory)
+			remediationTerritory = territory
+		}
+		return []CheckResult{{
+			ID:           "pricing.base_price.missing",
+			Severity:     SeverityError,
+			Field:        "manualPrices",
+			ResourceType: "appPriceSchedule",
+			ResourceID:   strings.TrimSpace(priceScheduleID),
+			Message:      message,
+			Remediation:  fmt.Sprintf("Set a price (Free counts): asc pricing schedule create --app %s --free --base-territory %q --start-date \"YYYY-MM-DD\"", strings.TrimSpace(appID), remediationTerritory),
+		}}
 	}
 	return []CheckResult{
 		{

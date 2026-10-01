@@ -9,6 +9,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/peterbourgon/ff/v3/ffcli"
+
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
 	webcore "github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/web"
 )
 
@@ -17,8 +20,11 @@ func TestWebICloudContainersCommandHierarchy(t *testing.T) {
 	if command.Name != "icloud-containers" || command.UsageFunc == nil {
 		t.Fatalf("unexpected command: %+v", command)
 	}
-	if len(command.Subcommands) != 1 || command.Subcommands[0].Name != "list" || command.Subcommands[0].UsageFunc == nil {
-		t.Fatalf("subcommands = %+v, want list with usage", command.Subcommands)
+	if len(command.Subcommands) != 2 || command.Subcommands[0].Name != "list" || command.Subcommands[1].Name != "create" {
+		t.Fatalf("subcommands = %+v, want list and create", command.Subcommands)
+	}
+	if command.Subcommands[0].UsageFunc == nil || command.Subcommands[1].UsageFunc == nil {
+		t.Fatal("iCloud container subcommands must set UsageFunc")
 	}
 	if command.Subcommands[0].FlagSet.Lookup("paginate") != nil {
 		t.Fatal("iCloud container list must not advertise --paginate")
@@ -34,6 +40,160 @@ func TestWebICloudContainersCommandHierarchy(t *testing.T) {
 	}
 	if !found {
 		t.Fatal("web command did not register icloud-containers")
+	}
+}
+
+func stubWebICloudContainerCreateDependencies(t *testing.T) (*int, *int) {
+	t.Helper()
+	origResolveSession := resolveSessionFn
+	origNewWebClient := newWebClientFn
+	origCreate := createDeveloperICloudContainerFn
+	origPersist := persistWebSessionFn
+	t.Cleanup(func() {
+		resolveSessionFn = origResolveSession
+		newWebClientFn = origNewWebClient
+		createDeveloperICloudContainerFn = origCreate
+		persistWebSessionFn = origPersist
+	})
+	var resolveCalls, persistCalls int
+	resolveSessionFn = func(context.Context, string, string, string) (*webcore.AuthSession, string, error) {
+		resolveCalls++
+		return &webcore.AuthSession{}, "cache", nil
+	}
+	newWebClientFn = func(*webcore.AuthSession) *webcore.Client { return &webcore.Client{} }
+	persistWebSessionFn = func(*webcore.AuthSession) error {
+		persistCalls++
+		return nil
+	}
+	createDeveloperICloudContainerFn = func(context.Context, *webcore.Client, webcore.DeveloperICloudContainerCreateRequest) (*asc.WebICloudContainerCreateResult, error) {
+		t.Fatal("create must not be called")
+		return nil, nil
+	}
+	return &resolveCalls, &persistCalls
+}
+
+func TestWebICloudContainersCreatePrintsVerifiedPermanentReceipt(t *testing.T) {
+	_, persistCalls := stubWebICloudContainerCreateDependencies(t)
+	var got webcore.DeveloperICloudContainerCreateRequest
+	createDeveloperICloudContainerFn = func(_ context.Context, _ *webcore.Client, request webcore.DeveloperICloudContainerCreateRequest) (*asc.WebICloudContainerCreateResult, error) {
+		got = request
+		return &asc.WebICloudContainerCreateResult{
+			Operation: "create", ContainerID: "cloud-1", Identifier: request.Identifier, Name: request.Name,
+			Prefix: "TEAM123456", Changed: true, Verified: true, Permanent: true, Status: "created",
+		}, nil
+	}
+
+	command := WebICloudContainersCreateCommand()
+	if err := command.FlagSet.Parse([]string{
+		"--identifier", " iCloud.com.example.app ",
+		"--name", " Example Container ",
+		"--confirm",
+		"--output", "json",
+	}); err != nil {
+		t.Fatalf("parse error: %v", err)
+	}
+	stdout, _ := captureWebCommandOutput(t, func() {
+		if err := command.Exec(context.Background(), command.FlagSet.Args()); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+	if got.Identifier != "iCloud.com.example.app" || got.Name != "Example Container" {
+		t.Fatalf("create request = %+v", got)
+	}
+	var receipt map[string]any
+	if err := json.Unmarshal([]byte(stdout), &receipt); err != nil {
+		t.Fatalf("stdout is not JSON: %v (%q)", err, stdout)
+	}
+	for key, want := range map[string]any{
+		"operation": "create", "containerId": "cloud-1", "identifier": "iCloud.com.example.app",
+		"name": "Example Container", "prefix": "TEAM123456", "verified": true, "permanent": true, "status": "created",
+	} {
+		if receipt[key] != want {
+			t.Errorf("receipt[%q] = %v, want %v", key, receipt[key], want)
+		}
+	}
+	if *persistCalls != 1 {
+		t.Fatalf("persist calls = %d, want 1", *persistCalls)
+	}
+}
+
+func TestWebICloudContainersCreateHelpStatesContainersAreNeverDeleted(t *testing.T) {
+	for _, command := range []*ffcli.Command{WebICloudContainersCommand(), WebICloudContainersCreateCommand()} {
+		if !strings.Contains(command.LongHelp, "can never be deleted") {
+			t.Errorf("%s help does not say iCloud containers can never be deleted:\n%s", command.Name, command.LongHelp)
+		}
+	}
+}
+
+func TestWebICloudContainersCreateRejectsInvalidIdentifierBeforeSession(t *testing.T) {
+	resolveCalls, _ := stubWebICloudContainerCreateDependencies(t)
+	for _, tc := range []struct{ identifier, want string }{
+		{"com.example.app", `must start with "iCloud."`},
+		{"icloud.com.example.app", `use "iCloud.com.example.app"`},
+		{"iCloud.", "reverse-DNS string"},
+	} {
+		t.Run(tc.identifier, func(t *testing.T) {
+			command := WebICloudContainersCreateCommand()
+			if err := command.FlagSet.Parse([]string{"--identifier", tc.identifier, "--name", "Example", "--confirm"}); err != nil {
+				t.Fatalf("parse error: %v", err)
+			}
+			stdout, stderr := captureWebCommandOutput(t, func() {
+				if err := command.Exec(context.Background(), command.FlagSet.Args()); !errors.Is(err, flag.ErrHelp) {
+					t.Fatalf("expected usage error, got %v", err)
+				}
+			})
+			if stdout != "" || !strings.Contains(stderr, tc.want) {
+				t.Fatalf("stdout = %q, stderr = %q, want %q", stdout, stderr, tc.want)
+			}
+		})
+	}
+	if *resolveCalls != 0 {
+		t.Fatalf("session resolved %d times before validation", *resolveCalls)
+	}
+}
+
+func TestWebICloudContainersCreateReportsUnverifiedOutcome(t *testing.T) {
+	_, persistCalls := stubWebICloudContainerCreateDependencies(t)
+	createDeveloperICloudContainerFn = func(context.Context, *webcore.Client, webcore.DeveloperICloudContainerCreateRequest) (*asc.WebICloudContainerCreateResult, error) {
+		return nil, &webcore.DeveloperICloudContainerUnverifiedError{Err: errors.New("developer portal accepted the iCloud container create but the read-back failed; run asc web icloud-containers list before retrying")}
+	}
+	command := WebICloudContainersCreateCommand()
+	if err := command.FlagSet.Parse([]string{"--identifier", "iCloud.com.example.app", "--name", "Example", "--confirm"}); err != nil {
+		t.Fatalf("parse error: %v", err)
+	}
+	stdout, _ := captureWebCommandOutput(t, func() {
+		err := command.Exec(context.Background(), command.FlagSet.Args())
+		if err == nil || errors.Is(err, flag.ErrHelp) || !strings.Contains(err.Error(), "run asc web icloud-containers list before retrying") {
+			t.Fatalf("error = %v, want unverified outcome", err)
+		}
+	})
+	if stdout != "" {
+		t.Fatalf("stdout = %q, want empty", stdout)
+	}
+	if *persistCalls != 1 {
+		t.Fatalf("persist calls = %d, want 1 even on failure", *persistCalls)
+	}
+}
+
+func TestWebICloudContainersCreateRequiresConfirm(t *testing.T) {
+	command := WebICloudContainersCreateCommand()
+	if err := command.FlagSet.Parse([]string{
+		"--identifier", "iCloud.com.example.app",
+		"--name", "Example",
+	}); err != nil {
+		t.Fatalf("parse error: %v", err)
+	}
+	stdout, stderr := captureWebCommandOutput(t, func() {
+		err := command.Exec(context.Background(), command.FlagSet.Args())
+		if !errors.Is(err, flag.ErrHelp) {
+			t.Fatalf("expected usage error, got %v", err)
+		}
+	})
+	if stdout != "" {
+		t.Fatalf("stdout = %q, want empty", stdout)
+	}
+	if !strings.Contains(stderr, "--confirm is required") {
+		t.Fatalf("stderr = %q", stderr)
 	}
 }
 

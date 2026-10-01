@@ -83,3 +83,12 @@ func runReadinessTasks(ctx context.Context, tasks ...readinessTask) error {
 	wg.Wait()
 	return firstErr
 }
+
+// runReadinessRequest runs a request that reports only an error through the
+// shared readiness request gate.
+func runReadinessRequest(ctx context.Context, request func(context.Context) error) error {
+	_, err := doReadinessRequest(ctx, func(requestCtx context.Context) (struct{}, error) {
+		return struct{}{}, request(requestCtx)
+	})
+	return err
+}

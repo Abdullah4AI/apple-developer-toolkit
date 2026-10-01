@@ -1074,7 +1074,7 @@ Examples:
 func WebReviewListCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("web review list", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App ID")
+	appID := fs.String("app", "", "App ID (or ASC_APP_ID env)")
 	stateCSV := fs.String("state", "", "Optional comma-separated state filter")
 	authFlags := bindWebSessionFlags(fs)
 	output := shared.BindOutputFlags(fs)
@@ -1086,9 +1086,9 @@ func WebReviewListCommand() *ffcli.Command {
 		FlagSet:    fs,
 		UsageFunc:  shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
-			trimmedAppID := strings.TrimSpace(*appID)
+			trimmedAppID := strings.TrimSpace(shared.ResolveAppID(*appID))
 			if trimmedAppID == "" {
-				return shared.UsageError("--app is required")
+				return shared.UsageError("--app is required (or set ASC_APP_ID)")
 			}
 			states, err := parseSubmissionStates(*stateCSV)
 			if err != nil {
@@ -1127,7 +1127,7 @@ func WebReviewListCommand() *ffcli.Command {
 func WebReviewThreadsCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("web review threads", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App ID")
+	appID := fs.String("app", "", "App ID (or ASC_APP_ID env)")
 	drafts := fs.Bool("drafts", false, "Also read each thread's unsent draft message (one extra request per thread)")
 	plainText := fs.Bool("plain-text", false, "Project draft messageBody HTML into plain text (requires --drafts)")
 	authFlags := bindWebSessionFlags(fs)
@@ -1159,10 +1159,10 @@ are never returned because this surface is read-only.
 					"args",
 				)
 			}
-			trimmedAppID := strings.TrimSpace(*appID)
+			trimmedAppID := strings.TrimSpace(shared.ResolveAppID(*appID))
 			if trimmedAppID == "" {
 				return shared.WithDiagnostic(
-					shared.UsageError("--app is required"),
+					shared.UsageError("--app is required (or set ASC_APP_ID)"),
 					shared.DiagnosticRequiredInputMissing,
 					"--app",
 				)
@@ -1229,7 +1229,7 @@ are never returned because this surface is read-only.
 func WebReviewShowCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("web review show", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App ID")
+	appID := fs.String("app", "", "App ID (or ASC_APP_ID env)")
 	submissionID := fs.String("submission", "", "Review submission ID (default: latest unresolved, else latest)")
 	outDir := fs.String("out", "", "Directory for auto-downloaded screenshots (default: ./.asc/web-review/<app>/<submission>)")
 	pattern := fs.String("pattern", "", "Optional filename glob filter for auto-download (for example: *.png)")
@@ -1255,10 +1255,10 @@ Selection:
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
-			trimmedAppID := strings.TrimSpace(*appID)
+			trimmedAppID := strings.TrimSpace(shared.ResolveAppID(*appID))
 			if trimmedAppID == "" {
 				return shared.WithDiagnostic(
-					shared.UsageError("--app is required"),
+					shared.UsageError("--app is required (or set ASC_APP_ID)"),
 					shared.DiagnosticRequiredInputMissing,
 					"--app",
 				)

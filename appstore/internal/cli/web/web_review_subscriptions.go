@@ -607,7 +607,7 @@ func WebReviewSubscriptionsListCommand() *ffcli.Command {
 func WebReviewSubscriptionsAttachCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("web review subscriptions attach", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App ID")
+	appID := fs.String("app", "", "App ID (or ASC_APP_ID env)")
 	subscriptionID := fs.String("subscription-id", "", "Subscription ID, product ID, or exact current name")
 	confirm := fs.Bool("confirm", false, "Confirm the attach operation")
 	authFlags := bindWebSessionFlags(fs)
@@ -620,11 +620,11 @@ func WebReviewSubscriptionsAttachCommand() *ffcli.Command {
 		FlagSet:    fs,
 		UsageFunc:  shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
-			trimmedAppID := strings.TrimSpace(*appID)
+			trimmedAppID := strings.TrimSpace(shared.ResolveAppID(*appID))
 			trimmedSubscriptionID := strings.TrimSpace(*subscriptionID)
 			switch {
 			case trimmedAppID == "":
-				return shared.UsageError("--app is required")
+				return shared.UsageError("--app is required (or set ASC_APP_ID)")
 			case trimmedSubscriptionID == "":
 				return shared.UsageError("--subscription-id is required")
 			case !*confirm:
@@ -697,7 +697,7 @@ func WebReviewSubscriptionsAttachCommand() *ffcli.Command {
 func WebReviewSubscriptionsAttachGroupCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("web review subscriptions attach-group", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App ID")
+	appID := fs.String("app", "", "App ID (or ASC_APP_ID env)")
 	groupID := fs.String("group-id", "", "Subscription group ID or exact current name")
 	confirm := fs.Bool("confirm", false, "Confirm the attach-group operation")
 	authFlags := bindWebSessionFlags(fs)
@@ -710,11 +710,11 @@ func WebReviewSubscriptionsAttachGroupCommand() *ffcli.Command {
 		FlagSet:    fs,
 		UsageFunc:  shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
-			trimmedAppID := strings.TrimSpace(*appID)
+			trimmedAppID := strings.TrimSpace(shared.ResolveAppID(*appID))
 			trimmedGroupID := strings.TrimSpace(*groupID)
 			switch {
 			case trimmedAppID == "":
-				return shared.UsageError("--app is required")
+				return shared.UsageError("--app is required (or set ASC_APP_ID)")
 			case trimmedGroupID == "":
 				return shared.UsageError("--group-id is required")
 			case !*confirm:
@@ -814,7 +814,7 @@ func WebReviewSubscriptionsAttachGroupCommand() *ffcli.Command {
 func WebReviewSubscriptionsRemoveCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("web review subscriptions remove", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App ID")
+	appID := fs.String("app", "", "App ID (or ASC_APP_ID env)")
 	subscriptionID := fs.String("subscription-id", "", "Subscription ID, product ID, or exact current name")
 	confirm := fs.Bool("confirm", false, "Confirm the remove operation")
 	authFlags := bindWebSessionFlags(fs)
@@ -827,11 +827,11 @@ func WebReviewSubscriptionsRemoveCommand() *ffcli.Command {
 		FlagSet:    fs,
 		UsageFunc:  shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
-			trimmedAppID := strings.TrimSpace(*appID)
+			trimmedAppID := strings.TrimSpace(shared.ResolveAppID(*appID))
 			trimmedSubscriptionID := strings.TrimSpace(*subscriptionID)
 			switch {
 			case trimmedAppID == "":
-				return shared.UsageError("--app is required")
+				return shared.UsageError("--app is required (or set ASC_APP_ID)")
 			case trimmedSubscriptionID == "":
 				return shared.UsageError("--subscription-id is required")
 			case !*confirm:
@@ -902,7 +902,7 @@ func WebReviewSubscriptionsRemoveCommand() *ffcli.Command {
 func WebReviewSubscriptionsRemoveGroupCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("web review subscriptions remove-group", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App ID")
+	appID := fs.String("app", "", "App ID (or ASC_APP_ID env)")
 	groupID := fs.String("group-id", "", "Subscription group ID or exact current name")
 	confirm := fs.Bool("confirm", false, "Confirm the remove-group operation")
 	authFlags := bindWebSessionFlags(fs)
@@ -915,11 +915,11 @@ func WebReviewSubscriptionsRemoveGroupCommand() *ffcli.Command {
 		FlagSet:    fs,
 		UsageFunc:  shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
-			trimmedAppID := strings.TrimSpace(*appID)
+			trimmedAppID := strings.TrimSpace(shared.ResolveAppID(*appID))
 			trimmedGroupID := strings.TrimSpace(*groupID)
 			switch {
 			case trimmedAppID == "":
-				return shared.UsageError("--app is required")
+				return shared.UsageError("--app is required (or set ASC_APP_ID)")
 			case trimmedGroupID == "":
 				return shared.UsageError("--group-id is required")
 			case !*confirm:

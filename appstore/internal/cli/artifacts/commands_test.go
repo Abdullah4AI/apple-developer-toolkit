@@ -35,8 +35,8 @@ func TestArtifactReceiptsDeclareUnverifiedSignatures(t *testing.T) {
 	receipts := []any{
 		ipaReceipt("Demo.ipa", artifacts.IPAManifest{Status: "readable"}),
 		pkgReceipt("Demo.pkg", artifacts.PKGManifest{Status: "readable"}),
-		unreadableReceipt("ipa-info", "missing.ipa"),
-		unreadableReceipt("pkg-info", "missing.pkg"),
+		unreadableReceipt("ipa-info", "missing.ipa", false),
+		unreadableReceipt("pkg-info", "missing.pkg", false),
 	}
 	for _, receipt := range receipts {
 		encoded, err := json.Marshal(receipt)

@@ -22,6 +22,15 @@ const maxUnknownChildSuggestions = 3
 // guessed token, so this table is seeded from realistic guesses rather than
 // observed ones and ranks ahead of the nearest-name suggester.
 //
+// The table also maps the paths agents guess from older or sibling command
+// shapes: subscription metadata that now lives under versions
+// (`asc subscriptions localizations`), resources nested one level deeper than
+// the guess (`asc subscriptions prices`), and spellings borrowed from a sibling
+// group (`asc subscriptions review-screenshots`, after `asc iap
+// review-screenshots`). The "asc" key covers root-level guesses, where the
+// nearest-name suggester otherwise names an unrelated command (`asc app-info`
+// is not `asc ipa-info`).
+//
 // Keys are trimmed lowercase tokens. Values are copy-paste valid invocations of
 // real leaf commands, anywhere in the tree, using long-form flags that command
 // defines and bare uppercase placeholders (APP_ID, VERSION_ID). A synonym may
@@ -30,6 +39,17 @@ const maxUnknownChildSuggestions = 3
 // resolve every entry against the live command tree and reject a key that
 // shadows a real subcommand, so keep the table in sync with the commands.
 var unknownChildSynonyms = map[string]map[string][]string{
+	"asc": {
+		"app-info":  {"asc apps info view --app APP_ID", "asc apps info list --app APP_ID"},
+		"app-infos": {"asc apps info list --app APP_ID", "asc apps info view --app APP_ID"},
+		"app-availability": {
+			"asc pricing availability view --app APP_ID",
+			"asc pricing availability edit --app APP_ID --territory TERRITORIES --available true",
+		},
+		"submissions": {"asc review submissions list --app APP_ID", "asc review status --app APP_ID"},
+		"privacy":     {"asc web privacy pull --app APP_ID"},
+		"beta":        {"asc testflight groups list --app APP_ID", "asc testflight testers list --app APP_ID"},
+	},
 	"asc age-rating": {
 		"get":    {"asc age-rating view --app APP_ID", "asc age-rating audit --app APP_ID"},
 		"show":   {"asc age-rating view --app APP_ID", "asc age-rating audit --app APP_ID"},
@@ -49,6 +69,10 @@ var unknownChildSynonyms = map[string]map[string][]string{
 		"show":   {"asc apps view --id APP_ID", "asc apps info view --app APP_ID"},
 		"find":   {"asc apps list --name NAME", "asc apps list --bundle-id BUNDLE_ID"},
 		"search": {"asc apps list --name NAME", "asc apps list --bundle-id BUNDLE_ID"},
+		"availability": {
+			"asc pricing availability view --app APP_ID",
+			"asc pricing availability edit --app APP_ID --territory TERRITORIES --available true",
+		},
 	},
 	"asc auth": {
 		"whoami":    {"asc auth status", "asc auth doctor"},
@@ -91,11 +115,28 @@ var unknownChildSynonyms = map[string]map[string][]string{
 		"update":   {"asc metadata push --app APP_ID --version VERSION --dir ./metadata --confirm", "asc metadata validate --dir ./metadata"},
 		"upload":   {"asc metadata push --app APP_ID --version VERSION --dir ./metadata --confirm", "asc metadata validate --dir ./metadata"},
 	},
+	"asc pricing": {
+		"view": {"asc pricing current --app APP_ID", "asc pricing availability view --app APP_ID"},
+		"set": {
+			"asc pricing schedule create --app APP_ID --price-point PRICE_POINT_ID --base-territory TERRITORY",
+			"asc pricing schedule create --app APP_ID --free --base-territory TERRITORY",
+		},
+	},
+	"asc pricing availability": {
+		"territories": {
+			"asc pricing availability view --app APP_ID",
+			"asc pricing availability territory-availabilities --availability AVAILABILITY_ID",
+			"asc pricing territories list",
+		},
+	},
 	"asc review": {
 		"submit-for-review": {"asc review submit --app APP_ID --version VERSION --build-id BUILD_ID --confirm"},
 		"state":             {"asc review status --app APP_ID", "asc review doctor --app APP_ID"},
 		"check":             {"asc review status --app APP_ID", "asc review doctor --app APP_ID"},
 		"list":              {"asc review history --app APP_ID", "asc review submissions list --app APP_ID"},
+	},
+	"asc review submissions": {
+		"create": {"asc review submissions-create --app APP_ID --platform IOS"},
 	},
 	"asc screenshots": {
 		"add":  {"asc screenshots upload --app APP_ID --version VERSION --path DIR --device-type IPHONE_65", "asc screenshots plan --app APP_ID --version VERSION"},
@@ -111,8 +152,33 @@ var unknownChildSynonyms = map[string]map[string][]string{
 		"add": {
 			"asc subscriptions create --group-id GROUP_ID --reference-name NAME --product-id PRODUCT_ID --subscription-period PERIOD",
 		},
+		"localizations": {
+			"asc subscriptions versions list --subscription-id SUBSCRIPTION_ID",
+			"asc subscriptions versions localizations list --version-id VERSION_ID",
+		},
+		"prices": {
+			"asc subscriptions pricing prices list --subscription-id SUBSCRIPTION_ID",
+			"asc subscriptions pricing prices set --subscription-id SUBSCRIPTION_ID --price PRICE --territory TERRITORY",
+		},
+		"availability": {
+			"asc subscriptions pricing availability view --subscription-id SUBSCRIPTION_ID",
+			"asc subscriptions pricing availability edit --subscription-id SUBSCRIPTION_ID --territories TERRITORIES",
+		},
+		"review-screenshots": {
+			"asc subscriptions review screenshots create --subscription-id SUBSCRIPTION_ID --file FILE_PATH",
+			"asc subscriptions review screenshots view --screenshot-id SCREENSHOT_ID",
+		},
+		"introductory-offers": {
+			"asc subscriptions offers introductory list --subscription-id SUBSCRIPTION_ID",
+			"asc subscriptions offers introductory create --subscription-id SUBSCRIPTION_ID --territory TERRITORY " +
+				"--offer-duration DURATION --offer-mode MODE --number-of-periods PERIODS",
+		},
 	},
 	"asc subscriptions groups": {
+		"localizations": {
+			"asc subscriptions groups versions list --group-id GROUP_ID",
+			"asc subscriptions groups versions localizations list --version-id VERSION_ID",
+		},
 		"add":          {"asc subscriptions groups create --app APP_ID --reference-name NAME", "asc subscriptions groups list --app APP_ID"},
 		"new":          {"asc subscriptions groups create --app APP_ID --reference-name NAME", "asc subscriptions groups list --app APP_ID"},
 		"create-group": {"asc subscriptions groups create --app APP_ID --reference-name NAME", "asc subscriptions groups list --app APP_ID"},
@@ -136,8 +202,10 @@ var unknownChildSynonyms = map[string]map[string][]string{
 			"asc testflight testers add --app APP_ID --email EMAIL --group GROUP_NAME",
 			"asc testflight groups add-testers --group GROUP_ID --email EMAIL",
 		},
+		"beta-groups": {"asc testflight groups list --app APP_ID", "asc testflight groups create --app APP_ID --name NAME"},
 	},
 	"asc testflight groups": {
+		"builds":       {"asc builds add-groups --build-id BUILD_ID --group GROUP_ID", "asc testflight groups list --build-id BUILD_ID"},
 		"add":          {"asc testflight groups create --app APP_ID --name NAME", "asc testflight groups add-testers --group GROUP_ID --email EMAIL"},
 		"create-group": {"asc testflight groups create --app APP_ID --name NAME"},
 		"new":          {"asc testflight groups create --app APP_ID --name NAME"},
@@ -152,6 +220,11 @@ var unknownChildSynonyms = map[string]map[string][]string{
 		"status":  {"asc versions list --app APP_ID", "asc review status --app APP_ID"},
 		"show":    {"asc versions view --version-id VERSION_ID", "asc versions list --app APP_ID"},
 		"get":     {"asc versions view --version-id VERSION_ID", "asc versions list --app APP_ID"},
+		"localizations": {
+			"asc localizations list --version VERSION_ID",
+			"asc localizations list --app APP_ID --version VERSION",
+		},
+		"get-build": {"asc versions view --version-id VERSION_ID --include-build", "asc builds info --build-id BUILD_ID"},
 	},
 }
 

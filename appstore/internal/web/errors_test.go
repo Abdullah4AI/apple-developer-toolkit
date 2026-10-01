@@ -389,3 +389,32 @@ func TestIsAlreadyExistsConflict(t *testing.T) {
 		})
 	}
 }
+
+func TestAPIErrorAllCodesReturnsEveryErrorsEntryInOrder(t *testing.T) {
+	// Codes captured live on 2026-09-29 for POST /iris/v1/apps re-creating an
+	// existing app; the entries' other fields were not captured.
+	captured := &APIError{Status: 409, rawBody: []byte(`{"errors":[` +
+		`{"code":"ENTITY_ERROR.ATTRIBUTE.INVALID.DUPLICATE"},` +
+		`{"code":" ENTITY_ERROR.ATTRIBUTE.INVALID.DUPLICATE "},` +
+		`{"code":""},` +
+		`{"code":"ENTITY_ERROR.ATTRIBUTE.INVALID.DUPLICATE.SAME_ACCOUNT"}]}`)}
+	got := captured.AllCodes()
+	want := []string{
+		"ENTITY_ERROR.ATTRIBUTE.INVALID.DUPLICATE",
+		"ENTITY_ERROR.ATTRIBUTE.INVALID.DUPLICATE",
+		"ENTITY_ERROR.ATTRIBUTE.INVALID.DUPLICATE.SAME_ACCOUNT",
+	}
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Fatalf("AllCodes() = %v, want %v", got, want)
+	}
+
+	for _, body := range []string{``, `not json`, `{"errors":[]}`, `{"serviceErrors":[{"code":"AUTH-401"}]}`} {
+		if got := (&APIError{Status: 409, rawBody: []byte(body)}).AllCodes(); got != nil {
+			t.Fatalf("AllCodes(%q) = %v, want nil", body, got)
+		}
+	}
+	var nilErr *APIError
+	if got := nilErr.AllCodes(); got != nil {
+		t.Fatalf("nil AllCodes() = %v, want nil", got)
+	}
+}

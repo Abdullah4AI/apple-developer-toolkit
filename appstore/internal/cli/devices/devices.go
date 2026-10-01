@@ -271,6 +271,7 @@ func DevicesRegisterCommand() *ffcli.Command {
 	ttl := fs.Duration("ttl", 30*time.Minute, "How long to wait for device callbacks")
 	outputFile := fs.String("output-file", "", "Collect-only TSV for register-batch when --confirm is not set")
 	confirm := fs.Bool("confirm", false, "Register collected devices in App Store Connect")
+	maxDevices := fs.Int("max-devices", 0, "With --via-url, end the session after N (at least 1) new devices are registered or collected; unbounded when unset")
 	stream := fs.Bool("stream", false, "With --via-url, write one JSON receipt line per device arrival before the final summary (requires --output json)")
 	platform := fs.String("platform", "", "Device platform: "+strings.Join(devicePlatformList(), ", "))
 	output := shared.BindOutputFlags(fs)
@@ -285,7 +286,8 @@ Examples:
   asc devices register --name "iPhone 15" --udid "UDID" --platform IOS
   asc devices register --name "My Mac" --udid-from-system --platform MAC_OS
   asc devices register --via-url --output-file ./devices.tsv
-  asc devices register --via-url --confirm --stream --output json --public-url "https://tunnel.example"`,
+  asc devices register --via-url --confirm --stream --output json --public-url "https://tunnel.example"
+  asc devices register --via-url --confirm --max-devices 5 --public-url "https://tunnel.example"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -294,7 +296,7 @@ Examples:
 				var unused string
 				fs.Visit(func(f *flag.Flag) {
 					switch f.Name {
-					case "listen", "public-url", "ttl", "output-file", "confirm", "stream":
+					case "listen", "public-url", "ttl", "output-file", "confirm", "stream", "max-devices":
 						if unused == "" {
 							unused = f.Name
 						}
@@ -320,6 +322,15 @@ Examples:
 						return shared.UsageError("--stream cannot be combined with --pretty")
 					}
 				}
+				maxDevicesSet := false
+				fs.Visit(func(f *flag.Flag) {
+					if f.Name == "max-devices" {
+						maxDevicesSet = true
+					}
+				})
+				if maxDevicesSet && *maxDevices < 1 {
+					return shared.UsageError("--max-devices must be at least 1")
+				}
 				options := deviceURLServeOptions{
 					Name:           nameValue,
 					Listen:         strings.TrimSpace(*listen),
@@ -328,6 +339,7 @@ Examples:
 					TTL:            *ttl,
 					Confirm:        *confirm,
 					OutputFile:     strings.TrimSpace(*outputFile),
+					MaxDevices:     *maxDevices,
 				}
 				if err := validateDeviceURLServeOptions(options); err != nil {
 					return err

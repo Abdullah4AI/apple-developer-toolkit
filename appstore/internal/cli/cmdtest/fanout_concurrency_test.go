@@ -15,10 +15,11 @@ import (
 )
 
 // Fan-out bounds for the two commands tracked by issue #2615. They mirror
-// bulkAvailabilityWorkers (internal/cli/shared) and
-// analyticsInstanceFetchConcurrency (internal/cli/analytics).
+// bulkAvailabilityWorkers (internal/cli/shared), which issue #2786 raised to
+// asc.BulkMutatingRequestLimit, and analyticsInstanceFetchConcurrency
+// (internal/cli/analytics).
 const (
-	pricingAvailabilityEditFanOut = 8
+	pricingAvailabilityEditFanOut = 16
 	analyticsViewInstanceFanOut   = 8
 
 	fanOutTerritoryCount = 175 // territories Apple returns for a typical app

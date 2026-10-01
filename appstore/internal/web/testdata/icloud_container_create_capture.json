@@ -1,0 +1,37 @@
+{
+  "provenance": {
+    "captured": "2026-09-29 live run of asc web icloud-containers create built from 414167918, one approved permanent container",
+    "request": "captured: the exact body the CLI sent, accepted by Apple with HTTP 201",
+    "createStatus": "captured",
+    "createResponseBody": "not captured; the create response body was not printed, so the test replays both an inferred JSON:API resource and an empty body",
+    "readBackResource": "id, type, identifier, name, prefix, and hidden are captured from the receipt and the separate list read-back; canEdit, canDelete, and responseId are inferred from the list contract"
+  },
+  "request": {
+    "method": "POST",
+    "path": "/services-account/v1/cloudContainers",
+    "body": {
+      "data": {
+        "type": "cloudContainers",
+        "attributes": {
+          "identifier": "iCloud.com.rorkai.asc.capture.t1790620906",
+          "name": "asc capture container",
+          "teamId": "YQZQG7N4WG"
+        }
+      }
+    }
+  },
+  "createStatus": 201,
+  "readBackResource": {
+    "type": "cloudContainers",
+    "id": "7PU5FAD3YR",
+    "attributes": {
+      "identifier": "iCloud.com.rorkai.asc.capture.t1790620906",
+      "name": "asc capture container",
+      "prefix": "YQZQG7N4WG",
+      "hidden": false,
+      "canEdit": true,
+      "canDelete": false,
+      "responseId": "inferred-response-id"
+    }
+  }
+}

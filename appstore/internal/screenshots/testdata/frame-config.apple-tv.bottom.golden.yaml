@@ -1,0 +1,43 @@
+project:
+    name: ASC Shots Frame
+    output_dir: $WORK/output
+    device: Apple TV - 4K
+    output_size:
+        - 3840
+        - 2160
+screenshots:
+    framed:
+        background:
+            type: linear
+            colors:
+                - '#0d0c1e'
+                - '#140f2d'
+            direction: 135
+        content:
+            - type: text
+              content: Dice Oracle on TV
+              position:
+                - 50%
+                - 85%
+              color: '#ffffff'
+              size: 151
+              weight: bold
+              alignment: center
+              max_width: 3456
+            - type: text
+              content: Big screen answers
+              position:
+                - 50%
+                - 92%
+              color: '#aaaaaa'
+              size: 86
+              alignment: center
+              max_width: 3456
+            - type: image
+              asset: $WORK/tv.png
+              position:
+                - 50%
+                - 39%
+              scale: 0.575
+              frame: true
+              alignment: center

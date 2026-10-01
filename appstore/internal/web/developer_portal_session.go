@@ -383,7 +383,6 @@ func (c *Client) doDeveloperPortalHTTP(ctx context.Context, method, requestURL s
 		return nil, nil, fmt.Errorf("failed to create Developer Portal request: %w", err)
 	}
 	request.Header = cloneHeaders(headers)
-	setModifiedCookieHeader(c.httpClient, request)
 
 	httpClient := *c.httpClient
 	previousCheckRedirect := httpClient.CheckRedirect

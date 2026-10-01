@@ -23,6 +23,10 @@ func TestParseOlderThanDuration(t *testing.T) {
 		{name: "zero", input: "0d", wantErr: true},
 		{name: "bad unit", input: "10y", wantErr: true},
 		{name: "bad number", input: "xd", wantErr: true},
+		{name: "largest days", input: "106751d", want: 106751 * 24 * time.Hour},
+		{name: "days overflow", input: "110000d", wantErr: true},
+		{name: "weeks overflow", input: "16000w", wantErr: true},
+		{name: "months overflow", input: "4000m", wantErr: true},
 	}
 
 	for _, test := range tests {
@@ -71,6 +75,13 @@ func TestParseOlderThanThreshold(t *testing.T) {
 		{
 			name:    "invalid",
 			input:   "not-a-threshold",
+			wantErr: true,
+		},
+		{
+			// An overflowing duration used to wrap negative and put the
+			// threshold in the future, which matched every build.
+			name:    "overflowing duration",
+			input:   "110000d",
 			wantErr: true,
 		},
 	}

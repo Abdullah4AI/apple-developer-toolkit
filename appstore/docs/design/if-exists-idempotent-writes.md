@@ -225,6 +225,60 @@ approved plan with a different mode fails with the existing
 string and is omitted, so plan artifacts written before this flag existed keep
 their hash and stay approvable.
 
+### `web apps create`
+
+`asc web apps create` creates the app through the web-session Iris endpoint
+`POST /iris/v1/apps`, so its conflict is a web API error (`webcore.APIError`),
+not an `asc.APIError`. `webcore.APIError.AllCodes` is the web equivalent of
+`asc.APIError.AllCodes` and returns every `errors[].code` in order.
+
+- Codes keyed on: `ENTITY_ERROR.ATTRIBUTE.INVALID.DUPLICATE` and
+  `ENTITY_ERROR.ATTRIBUTE.INVALID.DUPLICATE.SAME_ACCOUNT`, on HTTP 409 only.
+  **Captured live** on 2026-09-29 by re-creating disposable app `6759231657`
+  (its own name, bundle ID and SKU, `--auto-rename=false`): HTTP 409 with three
+  `errors[]` entries, codes `DUPLICATE`, `DUPLICATE`, `DUPLICATE.SAME_ACCOUNT`.
+  Only the status and codes were captured; the `detail` and `source` of each
+  entry were not printed, so nothing keys on which attribute an entry names.
+  `DUPLICATE.DIFFERENT_ACCOUNT` (a name held by another team) is not listed.
+- Read-back: the public API, `GET /v1/apps?filter[bundleId]=` matched exactly
+  (case-insensitive) on `bundleId`. The existing app counts as "already
+  exists" only when its `sku` equals `--sku` and its `name` equals `--name`,
+  or, with `--auto-rename` on, one of the suffixed names the rename loop tries,
+  so a retry of a run that renamed the app still resolves. When no app holds
+  the bundle ID, `GET /v1/apps?filter[sku]=` checks whether the SKU is taken.
+  `skip` therefore needs official App Store Connect API authentication, which
+  is checked before any request. The public API is used because its `apps`
+  schema in `docs/openapi/latest.json` documents `name`, `bundleId` and `sku`
+  and supports both filters.
+- `skip` prints an additive receipt, `asc.WebAppCreateIfExistsResult`
+  (`id`, `name`, `bundleId`, `sku` from the read-back, plus `alreadyExists`
+  and `action: skipped`), and one stderr line. It cannot be combined with
+  `--access` (usage error, exit 2): skip leaves the app unchanged, so an access
+  change would be silently dropped.
+- `update` is not offered (usage error, exit 2). When bundle ID, SKU and name
+  all match, the remaining create inputs are the initial platform and version
+  string and the company name, which are create-only, and the primary locale,
+  which a retried create should not rewrite on an existing app. There is no
+  safe matching write.
+
+Precedence with `--auto-rename` (default `true`, which retries a taken name
+with a bundle-ID suffix):
+
+1. With `--if-exists skip`, the conflict is resolved on the first 409, before
+   any rename. A matching app resolves as `skip`.
+2. If the bundle ID belongs to an app with a different name or SKU, or the SKU
+   belongs to an app with a different bundle ID, the command fails with
+   Apple's 409 plus the mismatch and does **not** auto-rename: a duplicate
+   bundle ID or SKU never turns into a renamed new app.
+3. Only when neither the bundle ID nor the SKU is held on this account (for
+   example, the name is taken by another team) does `--auto-rename` run as
+   before.
+4. With `--if-exists fail` (default) nothing changes: no read-back, and the
+   historical rename loop runs whenever the response names the app name. Its
+   retries keep the same bundle ID and SKU, so Apple's own uniqueness rules
+   reject them if either is taken; that is Apple's documented uniqueness, not
+   something the CLI verified live.
+
 ### Series
 
 1. `if-exists-core`: shared flag and helpers, receipt fields, `versions create`
@@ -262,6 +316,9 @@ their hash and stay approvable.
    built around Apple's own resource object rather than re-read. Where a detail
    endpoint does exist (`localizations create`, `review details-create`) the
    convention re-reads instead of building an envelope.
+
+5. `if-exists-web-apps-create`: `web apps create` (`skip` only; see
+   "`web apps create`" below).
 
 `metadata push` moved to follow-up: every mutation in `push.go` already runs
 through `shared.RunReconciledMutation` with a field-matching read-back, so a

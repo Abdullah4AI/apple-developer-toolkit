@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"math"
 	"os"
 	"sort"
 	"strconv"
@@ -348,14 +349,23 @@ func parseOlderThanDuration(value string) (time.Duration, error) {
 		return 0, fmt.Errorf("--older-than must be a duration like 90d, 2w, or 3m")
 	}
 
+	var unitDays int
 	switch unit {
 	case 'd':
-		return time.Duration(valueInt) * 24 * time.Hour, nil
+		unitDays = 1
 	case 'w':
-		return time.Duration(valueInt) * 7 * 24 * time.Hour, nil
+		unitDays = 7
 	case 'm':
-		return time.Duration(valueInt) * 30 * 24 * time.Hour, nil
+		unitDays = 30
 	default:
 		return 0, fmt.Errorf("--older-than must be a duration like 90d, 2w, or 3m")
 	}
+
+	// Reject values that would overflow time.Duration and wrap negative,
+	// which would move the threshold into the future and match every build.
+	const maxDays = int64(math.MaxInt64 / int64(24*time.Hour))
+	if int64(valueInt) > maxDays/int64(unitDays) {
+		return 0, fmt.Errorf("--older-than duration is too large")
+	}
+	return time.Duration(valueInt) * time.Duration(unitDays) * 24 * time.Hour, nil
 }

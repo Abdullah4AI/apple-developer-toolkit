@@ -171,7 +171,7 @@ Use `asc <command> --help` for subcommands and flags.
 - `xcode` - Build, archive, and export with local Xcode on macOS; manage project versions; and plan or apply deterministic signing settings. Planning is cross-platform, while apply fails closed on Windows before changing project or receipt files.
 - `distribute` - Plan, execute, inspect, and publish provider-neutral iOS release-testing bundles.
 - `ipa-info` - Inspect a local IPA without contacting App Store Connect.
-- `pkg-info` - Inspect a local flat component package without contacting Apple.
+- `pkg-info` - Inspect a local flat package or product archive without contacting Apple.
 - `versions` - Manage App Store versions.
 - `product-pages` - Manage custom product pages and product page experiments.
 - `routing-coverage` - Manage routing app coverage files.

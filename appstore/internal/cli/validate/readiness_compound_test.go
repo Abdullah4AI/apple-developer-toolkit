@@ -68,9 +68,11 @@ func TestBuildReadinessReport_UsesCompoundReadsWithoutFallbacks(t *testing.T) {
 			}`)
 		case "/v1/apps/app-1/appPriceSchedule":
 			return buildsJSONResponse(http.StatusOK, `{"data":{"type":"appPriceSchedules","id":"schedule-1"}}`)
+		case "/v1/appPriceSchedules/schedule-1/baseTerritory":
+			return buildsJSONResponse(http.StatusOK, `{"data":{"type":"territories","id":"USA"}}`)
 		case "/v1/appPriceSchedules/schedule-1/manualPrices":
 			return buildsJSONResponse(http.StatusOK, `{
-				"data":[{"type":"appPrices","id":"price-1","attributes":{"startDate":"2026-01-01","manual":true},"relationships":{"appPricePoint":{"data":{"type":"appPricePoints","id":"point-1"}}}}],
+				"data":[{"type":"appPrices","id":"price-1","attributes":{"startDate":"2026-01-01","manual":true},"relationships":{"appPricePoint":{"data":{"type":"appPricePoints","id":"point-1"}},"territory":{"data":{"type":"territories","id":"USA"}}}}],
 				"included":[{"type":"appPricePoints","id":"point-1","attributes":{"customerPrice":"4.99"}}]
 			}`)
 		case "/v1/apps/app-1":
@@ -138,8 +140,11 @@ func TestBuildReadinessReport_UsesCompoundReadsWithoutFallbacks(t *testing.T) {
 	for _, count := range requests {
 		totalRequests += count
 	}
-	if totalRequests != 5 {
-		t.Fatalf("compound readiness request count = %d, want 5 (version verification, version, app infos, price schedule, current price)", totalRequests)
+	if totalRequests != 7 {
+		t.Fatalf("compound readiness request count = %d, want 7 (version verification, version, app infos, price schedule, base territory, base price, current price)", totalRequests)
+	}
+	if got := requests["/v1/appPriceSchedules/schedule-1/manualPrices"]; got != 2 {
+		t.Fatalf("manual price reads = %d, want 2 (base price presence and deep paid evidence)", got)
 	}
 	if got := queries["/v1/appPriceSchedules/schedule-1/manualPrices"]; got != "fields%5BappPricePoints%5D=customerPrice&fields%5BappPrices%5D=manual%2CstartDate%2CendDate%2CappPricePoint&include=appPricePoint&limit=200" {
 		t.Fatalf("unexpected current pricing query: %q", got)

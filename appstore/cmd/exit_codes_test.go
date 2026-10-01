@@ -91,6 +91,16 @@ func TestExitCodeFromError(t *testing.T) {
 			expected: ExitError,
 		},
 		{
+			name:     "pending wait returns pending",
+			err:      shared.NewPendingError("build is still pending"),
+			expected: ExitPending,
+		},
+		{
+			name:     "wrapped pending wait returns pending",
+			err:      fmt.Errorf("builds wait: %w", shared.NewPendingError("build is still pending")),
+			expected: ExitPending,
+		},
+		{
 			name:     "read-only refusal returns read-only",
 			err:      &readonly.RefusedError{Source: readonly.EnvVar, Method: http.MethodPatch, Target: "/v1/apps/1"},
 			expected: ExitReadOnly,
@@ -200,6 +210,9 @@ func TestExitCodeConstants(t *testing.T) {
 	}
 	if ExitReadOnly != 6 {
 		t.Errorf("ExitReadOnly = %d, want 6", ExitReadOnly)
+	}
+	if ExitPending != 7 {
+		t.Errorf("ExitPending = %d, want 7", ExitPending)
 	}
 }
 

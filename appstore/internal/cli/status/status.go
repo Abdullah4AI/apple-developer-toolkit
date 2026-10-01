@@ -1353,10 +1353,10 @@ func resolveNextAction(resp *dashboardResponse, blockers []string) string {
 	}
 	if resp.AppStore != nil {
 		state := strings.ToUpper(strings.TrimSpace(resp.AppStore.State))
-		switch state {
-		case "PREPARE_FOR_SUBMISSION":
+		switch {
+		case state == "PREPARE_FOR_SUBMISSION":
 			return "Prepare metadata and submit for review."
-		case "READY_FOR_SALE":
+		case shared.IsLiveAppStoreVersionState(state):
 			return "No action needed."
 		}
 	}

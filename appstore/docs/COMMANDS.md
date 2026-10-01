@@ -93,7 +93,7 @@ asc <subcommand> [flags]
 - `xcode` - Local Xcode build/archive/export and signing-settings helpers.
 - `distribute` - Plan, execute, inspect, and publish iOS distribution artifacts.
 - `ipa-info` - Inspect a local IPA without contacting App Store Connect.
-- `pkg-info` - Inspect a local flat component package without contacting Apple.
+- `pkg-info` - Inspect a local flat package or product archive without contacting Apple.
 - `sandbox` - Manage sandbox testers in App Store Connect.
 
 ### Review and Release

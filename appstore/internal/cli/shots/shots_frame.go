@@ -454,6 +454,9 @@ framed screenshots whenever the YAML config or referenced raw assets change.`,
 				return shared.PrintOutput(framed, *output.Output, *output.Pretty)
 			}
 
+			if inputSet {
+				warnFrameAspectMismatch(absInput, absInput, deviceVal)
+			}
 			result, err := shotsFrameFn(timeoutCtx, request)
 			if err != nil {
 				return fmt.Errorf("screenshots frame: %w", err)
@@ -541,6 +544,27 @@ func (settings frameRenderSettings) canvasFor(inputPath string) (*screenshots.Ca
 	return canvasOpts, nil
 }
 
+// warnFrameAspectMismatch writes a stderr warning when the PNG at readPath
+// does not match device's screen aspect ratio, because Koubou then letterboxes
+// it inside the frame. displayPath names the input as the operator selected
+// it. Unreadable inputs are left for the render to report.
+func warnFrameAspectMismatch(displayPath, readPath string, device screenshots.FrameDevice) {
+	mismatch, err := screenshots.CheckFrameInputAspect(readPath, device)
+	if err != nil || mismatch == nil {
+		return
+	}
+	fmt.Fprintf(
+		os.Stderr,
+		"Warning: %s is %dx%d, but %s screenshots are %dx%d; the image will be letterboxed inside the device screen\n",
+		displayPath,
+		mismatch.InputWidth,
+		mismatch.InputHeight,
+		device,
+		mismatch.ScreenWidth,
+		mismatch.ScreenHeight,
+	)
+}
+
 // frameInputOpener snapshots one framed input so hashing and rendering read
 // the same bytes.
 type frameInputOpener func(context.Context) (*screenshots.FrameInputSnapshot, error)
@@ -600,6 +624,7 @@ func frameSnapshot(ctx context.Context, open frameInputOpener, request screensho
 			return finish(&result, nil)
 		}
 	}
+	warnFrameAspectMismatch(request.InputPath, snapshot.Path(), settings.device)
 	request.InputPath = snapshot.Path()
 	var result *screenshots.FrameResult
 	if outputRoot != nil {

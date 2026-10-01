@@ -108,6 +108,35 @@ func TestBuildReviewStatusResultExplainsRemovedOnlyCompletedSubmission(t *testin
 	}
 }
 
+func TestReviewStatusTreatsLiveVersionStatesAsNoActionNeeded(t *testing.T) {
+	// appVersionState reports a live version as READY_FOR_DISTRIBUTION and
+	// is preferred over the legacy appStoreState READY_FOR_SALE.
+	for _, state := range []string{"READY_FOR_SALE", "READY_FOR_DISTRIBUTION"} {
+		t.Run(state, func(t *testing.T) {
+			version := &reviewVersionContext{ID: "ver-1", Version: "1.2.3", Platform: "IOS", State: state}
+
+			noSubmission := buildReviewStatusResult(reviewSnapshot{
+				AppID:          "123456789",
+				Version:        version,
+				ReviewDetailID: "detail-1",
+			})
+			if noSubmission.NextAction != "No action needed." {
+				t.Fatalf("status without submission: expected no action needed, got %q", noSubmission.NextAction)
+			}
+
+			completed := buildReviewStatusResult(reviewSnapshot{
+				AppID:            "123456789",
+				Version:          version,
+				ReviewDetailID:   "detail-1",
+				LatestSubmission: &reviewSubmissionContext{ID: "review-sub-1", State: "COMPLETE"},
+			})
+			if completed.NextAction != "No action needed." {
+				t.Fatalf("status after completed submission: expected no action needed, got %q", completed.NextAction)
+			}
+		})
+	}
+}
+
 func TestBuildReviewDoctorResultAddsSyntheticUnresolvedIssuesBlocker(t *testing.T) {
 	snapshot := reviewSnapshot{
 		AppID: "123456789",

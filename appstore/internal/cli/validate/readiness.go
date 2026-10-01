@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/pricing"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/validation"
 )
@@ -23,6 +24,9 @@ type ReadinessOptions struct {
 	Deep      bool
 	CheckURLs bool
 	Build     *validation.Build
+	// IPA is the local binary evidence for iPad support. When nil, a missing
+	// iPad screenshot set is reported as informational only.
+	IPA *LocalIPA
 }
 
 // BuildReadinessReport fetches live App Store Connect data and returns a
@@ -84,6 +88,8 @@ func BuildReadinessReport(ctx context.Context, opts ReadinessOptions) (validatio
 	attachedBuild := versionData.build
 	priceScheduleID := ""
 	pricingFetchSkipReason := ""
+	baseTerritory := ""
+	basePriceMissing := false
 	hasPaidAppPrice := false
 	appPricingKnown := false
 	availabilityID := ""
@@ -127,6 +133,22 @@ func BuildReadinessReport(ctx context.Context, opts ReadinessOptions) (validatio
 				return fmt.Errorf("failed to fetch app price schedule: %w", fetchErr)
 			}
 			priceScheduleID = priceScheduleResp.Data.ID
+			basePrice, fetchErr := pricing.FetchAppBasePriceStatus(taskCtx, client, priceScheduleID, runReadinessRequest)
+			switch {
+			case fetchErr != nil:
+				if errors.Is(fetchErr, context.Canceled) {
+					return fetchErr
+				}
+				pricingFetchSkipReason = readinessBasePriceSkipReason(fetchErr)
+			case !basePrice.Configured:
+				// Apple returns a synthetic schedule for apps that never set a
+				// price, so only the schedule's prices show it is missing.
+				priceScheduleID = ""
+				return nil
+			default:
+				baseTerritory = basePrice.BaseTerritory
+				basePriceMissing = !basePrice.HasPrice
+			}
 			if opts.Deep {
 				hasPaidAppPrice, appPricingKnown = fetchCurrentAppPaidPricingEvidence(taskCtx, client, priceScheduleID)
 			}
@@ -245,6 +267,21 @@ func BuildReadinessReport(ctx context.Context, opts ReadinessOptions) (validatio
 		platform = string(versionData.response.Data.Attributes.Platform)
 	}
 
+	var supportsIPad *bool
+	if opts.IPA != nil {
+		if err := checkLocalIPAMatchesVersion(
+			opts.IPA,
+			platform,
+			appInfoData.app.Attributes.BundleID,
+			versionData.response.Data.Attributes.VersionString,
+			attachedBuild,
+		); err != nil {
+			return validation.Report{}, err
+		}
+		value := opts.IPA.SupportsIPad()
+		supportsIPad = &value
+	}
+
 	report := validation.Validate(validation.Input{
 		AppID:                       opts.AppID,
 		AppInfoID:                   appInfoData.appInfoID,
@@ -261,6 +298,8 @@ func BuildReadinessReport(ctx context.Context, opts ReadinessOptions) (validatio
 		Build:                       attachedBuild,
 		PriceScheduleID:             priceScheduleID,
 		PricingFetchSkipReason:      pricingFetchSkipReason,
+		BaseTerritory:               baseTerritory,
+		BasePriceMissing:            basePriceMissing,
 		AvailabilityID:              availabilityID,
 		AvailableTerritories:        availableTerritories,
 		AppAvailableTerritories:     appAvailableTerritories,
@@ -269,6 +308,7 @@ func BuildReadinessReport(ctx context.Context, opts ReadinessOptions) (validatio
 		AvailabilityFetchSkipReason: availabilityFetchSkipReason,
 		PricingCoverageSkipReason:   pricingCoverageSkipReason,
 		ScreenshotSets:              screenshotSets,
+		SupportsIPad:                supportsIPad,
 		Subscriptions:               subscriptions,
 		SubscriptionFetchSkipReason: subscriptionFetchSkipReason,
 		IAPs:                        iaps,
@@ -337,6 +377,16 @@ func readinessPricingSkipReason(err error) (string, bool) {
 		return "Review app pricing in App Store Connect; readiness could not verify it automatically because the Pricing and Availability endpoints could not be reached", true
 	}
 	return "", false
+}
+
+// readinessBasePriceSkipReason explains why the base territory price could not
+// be verified. Any failure reads as unverified rather than missing so an
+// unrelated API problem never reports a false missing price.
+func readinessBasePriceSkipReason(err error) string {
+	if reason, ok := readinessPricingSkipReason(err); ok {
+		return reason
+	}
+	return "Review app pricing in App Store Connect; readiness could not verify the base territory price automatically because the price schedule response could not be interpreted"
 }
 
 func readinessAvailabilitySkipReason(err error) (string, bool) {

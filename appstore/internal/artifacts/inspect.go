@@ -6,9 +6,12 @@ import (
 	"compress/zlib"
 	"encoding/binary"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
+	"math"
 	"path"
+	"strconv"
 	"strings"
 	"time"
 
@@ -37,6 +40,9 @@ type IPAManifest struct {
 	BuildNumber      string
 	MinimumOSVersion string
 	Platforms        []string
+	// DeviceFamilies lists the top-level app's UIDeviceFamily values (1 is
+	// iPhone, 2 is iPad). It is nil when the key is absent or unreadable.
+	DeviceFamilies   []int
 	TeamID           string
 	SignerCommonName string
 	Status           string
@@ -56,6 +62,9 @@ type IPAManifest struct {
 	// SignerConsistent reports whether every slice has the same signature
 	// classification and signer. It is nil when Architectures is nil.
 	SignerConsistent *bool
+	// SignatureVerification is set only when verification was requested. It
+	// covers the primary slice, the one stored first.
+	SignatureVerification *SignatureVerification
 }
 
 // NestedBundle is an extension or App Clip inside the IPA.
@@ -73,7 +82,8 @@ type ProfileSummary struct {
 	ProfileType    string
 }
 
-// PKGManifest is the offline manifest for a flat component package.
+// PKGManifest is the offline manifest for a flat component package or a
+// Distribution-style product archive.
 type PKGManifest struct {
 	ProductID        string
 	Version          string
@@ -82,10 +92,23 @@ type PKGManifest struct {
 	SignerCommonName string
 	TeamID           string
 	Status           string
+	// The fields below are set only for product archives. App fields come from
+	// the primary component's app Info.plist when its payload can be read.
+	BundleID          string
+	BuildNumber       string
+	MinimumOSVersion  string
+	Platforms         []string
+	HostArchitectures []string
+	Components        []PKGComponent
+	// Warnings describe component metadata that could not be read without
+	// making the package unreadable.
+	Warnings []string
 	// PackageSignature classifies the xar signature in the table of contents.
 	PackageSignature      string
 	PackageSignatureError string
 	Signer                *SignerIdentity
+	// SignatureVerification is set only when verification was requested.
+	SignatureVerification *SignatureVerification
 }
 
 type bundlePlist struct {
@@ -99,31 +122,100 @@ type bundlePlist struct {
 	MinimumSystem    string   `plist:"LSMinimumSystemVersion"`
 	Platforms        []string `plist:"CFBundleSupportedPlatforms"`
 	Platform         string   `plist:"DTPlatformName"`
+	// DeviceFamily is decoded loosely so an unusual UIDeviceFamily value never
+	// makes the rest of the Info.plist unreadable.
+	DeviceFamily any `plist:"UIDeviceFamily"`
+}
+
+// IPAOptions selects optional IPA inspection work.
+type IPAOptions struct {
+	IncludeEntitlements bool
+	IncludeProfile      bool
+	// VerifySignature verifies the main executable's code signature offline.
+	VerifySignature bool
 }
 
 // InspectIPA reads a bounded IPA zip and returns a metadata manifest. A missing
 // embedded profile is reported as unsigned. The main executable's signer
 // identity is read from its code signature, which is not verified.
 func InspectIPA(source io.ReaderAt, size int64, includeEntitlements, includeProfile bool) (IPAManifest, error) {
+	return InspectIPAWithOptions(source, size, IPAOptions{IncludeEntitlements: includeEntitlements, IncludeProfile: includeProfile})
+}
+
+// InspectIPAWithOptions is InspectIPA with optional signature verification
+// against the embedded Apple roots.
+func InspectIPAWithOptions(source io.ReaderAt, size int64, options IPAOptions) (IPAManifest, error) {
+	if !options.VerifySignature {
+		return inspectIPA(source, size, options.IncludeEntitlements, options.IncludeProfile, nil)
+	}
+	policy, err := appleTrustPolicy()
+	if err != nil {
+		return IPAManifest{Status: "unreadable"}, fmt.Errorf("load Apple certificates: %w", err)
+	}
+	return inspectIPAVerifying(source, size, options.IncludeEntitlements, options.IncludeProfile, policy)
+}
+
+func inspectIPAVerifying(source io.ReaderAt, size int64, includeEntitlements, includeProfile bool, policy *trustPolicy) (IPAManifest, error) {
+	manifest, err := inspectIPA(source, size, includeEntitlements, includeProfile, policy)
+	if manifest.SignatureVerification == nil {
+		detail := "IPA could not be inspected"
+		if err != nil {
+			detail += ": " + err.Error()
+		}
+		manifest.SignatureVerification = &SignatureVerification{Status: VerificationUnsupported, Detail: detail}
+	}
+	return manifest, err
+}
+
+// InspectIPAInfoPlist reads only the IPA's top-level app Info.plist, under
+// the same archive bounds as InspectIPA, without reading the executable or the
+// embedded profile. Unlike InspectIPA, it fails when UIDeviceFamily is present
+// but malformed, so a caller that acts on the device families never mistakes
+// an unreadable declaration for an iPhone-only app.
+func InspectIPAInfoPlist(source io.ReaderAt, size int64) (IPAManifest, error) {
+	scan, err := scanIPA(source, size)
+	if err != nil {
+		return IPAManifest{Status: "unreadable"}, err
+	}
+	mainPlist, err := readZipPlist(scan.main)
+	if err != nil {
+		return IPAManifest{Status: "unreadable"}, err
+	}
+	if _, err := deviceFamilies(mainPlist.DeviceFamily); err != nil {
+		return IPAManifest{Status: "unreadable"}, err
+	}
+	manifest := manifestFromPlist(mainPlist)
+	manifest.Status = "readable"
+	return manifest, nil
+}
+
+// ipaScan holds the members an IPA inspection selects from the archive.
+type ipaScan struct {
+	reader *zip.Reader
+	main   *zip.File
+	nested []*zip.File
+}
+
+// scanIPA opens a bounded IPA zip and selects its single top-level app
+// Info.plist and the nested bundle Info.plist members.
+func scanIPA(source io.ReaderAt, size int64) (ipaScan, error) {
 	if err := validateZIPDirectory(source, size); err != nil {
-		return IPAManifest{Status: "unreadable"}, fmt.Errorf("open IPA: %w", err)
+		return ipaScan{}, fmt.Errorf("open IPA: %w", err)
 	}
 	bounded := &zipDirectoryReader{ReaderAt: source, remaining: maxZIPDirectoryBytes + (512 << 10)}
 	reader, err := zip.NewReader(bounded, size)
 	bounded.remaining = -1
 	if err != nil {
-		return IPAManifest{Status: "unreadable"}, fmt.Errorf("open IPA: %w", err)
+		return ipaScan{}, fmt.Errorf("open IPA: %w", err)
 	}
 	if len(reader.File) > maxZipEntries {
-		return IPAManifest{Status: "unreadable"}, fmt.Errorf("IPA contains %d entries; limit is %d", len(reader.File), maxZipEntries)
+		return ipaScan{}, fmt.Errorf("IPA contains %d entries; limit is %d", len(reader.File), maxZipEntries)
 	}
+	scan := ipaScan{reader: reader}
 	var declared uint64
-	var main *zip.File
-	var nested []*zip.File
-	var profile *zip.File
 	for _, file := range reader.File {
 		if file.UncompressedSize64 > maxZipDeclaredBytes-declared {
-			return IPAManifest{Status: "unreadable"}, fmt.Errorf("IPA declared expansion exceeds the limit")
+			return ipaScan{}, fmt.Errorf("IPA declared expansion exceeds the limit")
 		}
 		declared += file.UncompressedSize64
 		name := zipMemberName(file.Name)
@@ -131,19 +223,30 @@ func InspectIPA(source io.ReaderAt, size int64, includeEntitlements, includeProf
 			continue
 		}
 		if isTopLevelAppInfoPlist(name) {
-			if main != nil {
-				return IPAManifest{Status: "unreadable"}, fmt.Errorf("IPA has multiple top-level app Info.plist entries")
+			if scan.main != nil {
+				return ipaScan{}, fmt.Errorf("IPA has multiple top-level app Info.plist entries")
 			}
-			main = file
+			scan.main = file
 			continue
 		}
 		if isNestedInfoPlist(name) {
-			nested = append(nested, file)
+			scan.nested = append(scan.nested, file)
 		}
 	}
-	if main == nil {
-		return IPAManifest{Status: "unreadable"}, fmt.Errorf("IPA has no top-level app Info.plist")
+	if scan.main == nil {
+		return ipaScan{}, fmt.Errorf("IPA has no top-level app Info.plist")
 	}
+	return scan, nil
+}
+
+// inspectIPA verifies the code signature when policy is non-nil.
+func inspectIPA(source io.ReaderAt, size int64, includeEntitlements, includeProfile bool, policy *trustPolicy) (IPAManifest, error) {
+	scan, err := scanIPA(source, size)
+	if err != nil {
+		return IPAManifest{Status: "unreadable"}, err
+	}
+	reader, main, nested := scan.reader, scan.main, scan.nested
+	var profile *zip.File
 	appRoot := strings.TrimSuffix(zipMemberName(main.Name), "Info.plist")
 	for _, file := range reader.File {
 		if zipMemberName(file.Name) == appRoot+"embedded.mobileprovision" {
@@ -175,9 +278,13 @@ func InspectIPA(source io.ReaderAt, size int64, includeEntitlements, includeProf
 			Path:     path,
 		})
 	}
+	var capture *signatureCapture
+	if policy != nil {
+		capture = &signatureCapture{}
+	}
 	if executableErr == nil {
 		var primary int
-		manifest.Architectures, primary, executableErr = readExecutableSignatures(source, executable)
+		manifest.Architectures, primary, executableErr = readExecutableSignatures(source, executable, capture)
 		if executableErr == nil {
 			slice := manifest.Architectures[primary]
 			manifest.CodeSignature, manifest.CodeSignatureError, manifest.Signer = slice.CodeSignature, slice.CodeSignatureError, slice.Signer
@@ -188,6 +295,14 @@ func InspectIPA(source io.ReaderAt, size int64, includeEntitlements, includeProf
 	if executableErr != nil {
 		manifest.CodeSignature, manifest.Signer = SignatureUnreadable, nil
 		manifest.CodeSignatureError = executableErr.Error()
+	}
+	if policy != nil {
+		var readErr error
+		if manifest.CodeSignatureError != "" {
+			readErr = errors.New(manifest.CodeSignatureError)
+		}
+		verification := verifyIPACodeSignature(source, reader.File, appRoot, main, executable, manifest.CodeSignature, readErr, capture, policy)
+		manifest.SignatureVerification = &verification
 	}
 	if manifest.Signer != nil {
 		manifest.SignerCommonName = manifest.Signer.CommonName
@@ -243,12 +358,12 @@ func mainExecutableMember(files []*zip.File, appRoot, name string) (*zip.File, e
 	return found, nil
 }
 
-func readExecutableSignatures(source io.ReaderAt, file *zip.File) ([]ArchitectureSignature, int, error) {
+func readExecutableSignatures(source io.ReaderAt, file *zip.File, capture *signatureCapture) ([]ArchitectureSignature, int, error) {
 	size := int64(file.UncompressedSize64)
 	if file.Method == zip.Store && file.CompressedSize64 == file.UncompressedSize64 {
 		// Stored members are addressable, so skipping code pages costs no reads.
 		if offset, err := file.DataOffset(); err == nil {
-			return readMachOSignatures(io.NewSectionReader(source, offset, size), size)
+			return readMachOSignaturesCapture(io.NewSectionReader(source, offset, size), size, capture)
 		}
 	}
 	if err := compressedExecutableScanError(file.CompressedSize64, file.UncompressedSize64); err != nil {
@@ -259,7 +374,7 @@ func readExecutableSignatures(source io.ReaderAt, file *zip.File) ([]Architectur
 		return nil, 0, fmt.Errorf("open main executable: %w", err)
 	}
 	defer reader.Close()
-	return readMachOSignatures(reader, size)
+	return readMachOSignaturesCapture(reader, size, capture)
 }
 
 // A compressed executable must be inflated up to its code signature near the
@@ -279,6 +394,7 @@ func manifestFromPlist(parsed bundlePlist) IPAManifest {
 	if len(platforms) == 0 && parsed.Platform != "" {
 		platforms = []string{parsed.Platform}
 	}
+	families, _ := deviceFamilies(parsed.DeviceFamily)
 	return IPAManifest{
 		BundleID:         parsed.BundleID,
 		Name:             firstNonEmpty(parsed.DisplayName, parsed.Name),
@@ -286,6 +402,59 @@ func manifestFromPlist(parsed bundlePlist) IPAManifest {
 		BuildNumber:      parsed.BuildNumber,
 		MinimumOSVersion: firstNonEmpty(parsed.MinimumOSVersion, parsed.MinimumSystem),
 		Platforms:        platforms,
+		DeviceFamilies:   families,
+	}
+}
+
+// deviceFamilies normalizes a decoded UIDeviceFamily value. Xcode writes an
+// array of integers; a single integer and numeric strings are also accepted.
+// An absent key returns nil: Apple's Information Property List Key Reference
+// documents value 1 (iPhone and iPod touch) as the default, and Xcode always
+// writes the key from the Targeted Device Family build setting, so a binary
+// without it is iPhone-only. A present but empty array declares no device
+// family and is malformed.
+func deviceFamilies(value any) ([]int, error) {
+	if value == nil {
+		return nil, nil
+	}
+	items, ok := value.([]any)
+	if !ok {
+		items = []any{value}
+	}
+	if len(items) == 0 {
+		return nil, fmt.Errorf("info.plist UIDeviceFamily is an empty array")
+	}
+	families := make([]int, 0, len(items))
+	for _, item := range items {
+		family, ok := deviceFamilyValue(item)
+		if !ok {
+			return nil, fmt.Errorf("info.plist UIDeviceFamily has unreadable value %v", item)
+		}
+		families = append(families, family)
+	}
+	return families, nil
+}
+
+func deviceFamilyValue(value any) (int, bool) {
+	switch typed := value.(type) {
+	case uint64:
+		if typed > math.MaxInt32 {
+			return 0, false
+		}
+		return int(typed), true
+	case int64:
+		if typed < 0 || typed > math.MaxInt32 {
+			return 0, false
+		}
+		return int(typed), true
+	case string:
+		parsed, err := strconv.Atoi(strings.TrimSpace(typed))
+		if err != nil || parsed < 0 {
+			return 0, false
+		}
+		return parsed, true
+	default:
+		return 0, false
 	}
 }
 
@@ -330,6 +499,10 @@ func readZipPlist(file *zip.File) (bundlePlist, error) {
 	if len(data) > maxPlistBytes {
 		return bundlePlist{}, fmt.Errorf("info.plist exceeds %d bytes", maxPlistBytes)
 	}
+	return decodeBundlePlist(data)
+}
+
+func decodeBundlePlist(data []byte) (bundlePlist, error) {
 	if err := infoplist.ValidateStructure(data); err != nil {
 		return bundlePlist{}, fmt.Errorf("validate Info.plist: %w", err)
 	}
@@ -433,11 +606,48 @@ func stringValue(value any) string {
 	return text
 }
 
-// InspectPKG reads PackageInfo from a flat xar component package. The signer
-// identity is read from the package signature certificates, which are not
-// verified.
+// PKGOptions selects optional package inspection work.
+type PKGOptions struct {
+	// VerifySignature verifies the package signature offline.
+	VerifySignature bool
+}
+
+// InspectPKG reads PackageInfo from a flat xar component package, or the
+// Distribution and embedded component packages of a product archive. The
+// signer identity is read from the package signature certificates, which are
+// not verified.
 func InspectPKG(source io.ReaderAt, size int64) (PKGManifest, error) {
-	document, files, err := readXarFiles(source, size)
+	return inspectPKG(source, size, nil)
+}
+
+// InspectPKGWithOptions is InspectPKG with optional signature verification
+// against the embedded Apple roots.
+func InspectPKGWithOptions(source io.ReaderAt, size int64, options PKGOptions) (PKGManifest, error) {
+	if !options.VerifySignature {
+		return inspectPKG(source, size, nil)
+	}
+	policy, err := appleTrustPolicy()
+	if err != nil {
+		return PKGManifest{Status: "unreadable"}, fmt.Errorf("load Apple certificates: %w", err)
+	}
+	return inspectPKGVerifying(source, size, policy)
+}
+
+func inspectPKGVerifying(source io.ReaderAt, size int64, policy *trustPolicy) (PKGManifest, error) {
+	manifest, err := inspectPKG(source, size, policy)
+	if manifest.SignatureVerification == nil {
+		detail := "package table of contents could not be read"
+		if err != nil {
+			detail += ": " + err.Error()
+		}
+		manifest.SignatureVerification = &SignatureVerification{Status: VerificationUnsupported, Detail: detail}
+	}
+	return manifest, err
+}
+
+// inspectPKG verifies the package signature when policy is non-nil.
+func inspectPKG(source io.ReaderAt, size int64, policy *trustPolicy) (PKGManifest, error) {
+	document, heap, files, err := readXarFiles(source, size)
 	if document == nil {
 		return PKGManifest{Status: "unreadable"}, err
 	}
@@ -453,6 +663,10 @@ func InspectPKG(source io.ReaderAt, size int64) (PKGManifest, error) {
 		signature.SignerCommonName = signature.Signer.CommonName
 		signature.TeamID = signature.Signer.TeamID
 	}
+	if policy != nil {
+		verification := verifyXarSignature(source, size, document, signature.PackageSignature, signatureErr, policy)
+		signature.SignatureVerification = &verification
+	}
 	withSignature := func(manifest PKGManifest, status string) PKGManifest {
 		manifest.Status = status
 		manifest.SignerCommonName = signature.SignerCommonName
@@ -460,6 +674,7 @@ func InspectPKG(source io.ReaderAt, size int64) (PKGManifest, error) {
 		manifest.PackageSignature = signature.PackageSignature
 		manifest.PackageSignatureError = signature.PackageSignatureError
 		manifest.Signer = signature.Signer
+		manifest.SignatureVerification = signature.SignatureVerification
 		return manifest
 	}
 	if err != nil {
@@ -467,6 +682,13 @@ func InspectPKG(source io.ReaderAt, size int64) (PKGManifest, error) {
 	}
 	info, ok := files["PackageInfo"]
 	if !ok {
+		if distribution := xarChild(document.Files, "Distribution", "file"); distribution != nil {
+			manifest, err := inspectProductArchive(document.Files, *distribution, heap, heap.Size())
+			if err != nil {
+				return withSignature(manifest, "unreadable"), err
+			}
+			return withSignature(manifest, "readable"), nil
+		}
 		return withSignature(PKGManifest{}, "unreadable"), fmt.Errorf("flat pkg has no PackageInfo")
 	}
 	manifest, err := parsePackageInfo(info)
@@ -485,13 +707,24 @@ type packageInfoXML struct {
 }
 
 type packageBundle struct {
-	ID string `xml:"id,attr"`
+	ID           string `xml:"id,attr"`
+	Path         string `xml:"path,attr"`
+	ShortVersion string `xml:"CFBundleShortVersionString,attr"`
+	Version      string `xml:"CFBundleVersion,attr"`
+}
+
+func decodePackageInfo(data []byte) (packageInfoXML, error) {
+	var info packageInfoXML
+	if err := xml.Unmarshal(data, &info); err != nil {
+		return packageInfoXML{}, fmt.Errorf("decode PackageInfo: %w", err)
+	}
+	return info, nil
 }
 
 func parsePackageInfo(data []byte) (PKGManifest, error) {
-	var info packageInfoXML
-	if err := xml.Unmarshal(data, &info); err != nil {
-		return PKGManifest{}, fmt.Errorf("decode PackageInfo: %w", err)
+	info, err := decodePackageInfo(data)
+	if err != nil {
+		return PKGManifest{}, err
 	}
 	ids := make([]string, 0, len(info.Bundles))
 	for _, bundle := range info.Bundles {
@@ -507,19 +740,20 @@ func parsePackageInfo(data []byte) (PKGManifest, error) {
 	}, nil
 }
 
-// readXarFiles returns the decoded table of contents whenever it could be read,
-// even if reading a member fails.
-func readXarFiles(source io.ReaderAt, size int64) (*xarDocument, map[string][]byte, error) {
+// readXarFiles returns the decoded table of contents and the heap whenever the
+// table of contents could be read, even if reading a member fails.
+func readXarFiles(source io.ReaderAt, size int64) (*xarDocument, *io.SectionReader, map[string][]byte, error) {
 	toc, heapStart, err := readXarTOC(source, size)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	document, err := decodeXarTOC(toc)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
-	files, err := xarFilesFromDocument(document, io.NewSectionReader(source, heapStart, size-heapStart), size-heapStart)
-	return &document, files, err
+	heap := io.NewSectionReader(source, heapStart, size-heapStart)
+	files, err := xarFilesFromDocument(document, heap, heap.Size())
+	return &document, heap, files, err
 }
 
 func readXarTOC(source io.ReaderAt, size int64) ([]byte, int64, error) {
@@ -565,19 +799,39 @@ type xarDocument struct {
 	Files      []xarFile     `xml:"toc>file"`
 	Signature  *xarSignature `xml:"toc>signature"`
 	XSignature *xarSignature `xml:"toc>x-signature"`
+	Checksum   *xarHeapRange `xml:"toc>checksum"`
+}
+
+// xarHeapRange locates a TOC checksum or signature in the heap.
+type xarHeapRange struct {
+	Style  string `xml:"style,attr"`
+	Offset int64  `xml:"offset"`
+	Size   int64  `xml:"size"`
 }
 
 type xarFile struct {
 	Name string  `xml:"name"`
 	Type string  `xml:"type"`
 	Data xarData `xml:"data"`
+	// Files are the members of a directory.
+	Files []xarFile `xml:"file"`
 }
 
 type xarData struct {
-	Length   int64       `xml:"length"`
-	Size     int64       `xml:"size"`
-	Offset   int64       `xml:"offset"`
-	Encoding xarEncoding `xml:"encoding"`
+	// XMLName is set only when the member has a data element.
+	XMLName          xml.Name
+	Length           int64            `xml:"length"`
+	Size             int64            `xml:"size"`
+	Offset           int64            `xml:"offset"`
+	Encoding         xarEncoding      `xml:"encoding"`
+	ArchivedChecksum *xarFileChecksum `xml:"archived-checksum"`
+}
+
+// xarFileChecksum is the hex digest the table of contents records for a
+// member's bytes in the heap.
+type xarFileChecksum struct {
+	Style string `xml:"style,attr"`
+	Value string `xml:",chardata"`
 }
 
 type xarEncoding struct {
@@ -606,41 +860,63 @@ func xarFilesFromDocument(document xarDocument, heap io.ReaderAt, heapSize int64
 		if file.Type != "file" || file.Name != "PackageInfo" {
 			continue
 		}
-		if file.Data.Length < 0 || file.Data.Offset < 0 || file.Data.Size < 0 || file.Data.Length > maxXarFileBytes || file.Data.Size > maxXarFileBytes {
-			return nil, fmt.Errorf("xar file %q is outside the read limit", file.Name)
-		}
-		if file.Data.Offset > heapSize || file.Data.Length > heapSize-file.Data.Offset {
-			return nil, fmt.Errorf("xar file %q is truncated", file.Name)
-		}
-		payload := make([]byte, int(file.Data.Length))
-		if _, err := heap.ReadAt(payload, file.Data.Offset); err != nil {
-			return nil, fmt.Errorf("read xar PackageInfo: %w", err)
-		}
-		switch file.Data.Encoding.Style {
-		case "", "application/octet-stream":
-		case "application/x-gzip":
-			reader, err := zlib.NewReader(bytes.NewReader(payload))
-			if err != nil {
-				return nil, fmt.Errorf("open xar PackageInfo: %w", err)
-			}
-			payload, err = io.ReadAll(io.LimitReader(reader, maxXarFileBytes+1))
-			reader.Close()
-			if err != nil {
-				return nil, fmt.Errorf("read xar PackageInfo: %w", err)
-			}
-			if len(payload) > maxXarFileBytes {
-				return nil, fmt.Errorf("xar PackageInfo exceeds the read limit")
-			}
-		default:
-			return nil, fmt.Errorf("xar file %q uses unsupported encoding %q", file.Name, file.Data.Encoding.Style)
-		}
-		if int64(len(payload)) != file.Data.Size {
-			return nil, fmt.Errorf("xar PackageInfo size does not match its declaration")
+		payload, err := readXarMember(file, heap, heapSize)
+		if err != nil {
+			return nil, err
 		}
 		if _, exists := files[file.Name]; exists {
 			return nil, fmt.Errorf("xar has duplicate PackageInfo entries")
 		}
-		files[file.Name] = append([]byte(nil), payload...)
+		files[file.Name] = payload
 	}
 	return files, nil
+}
+
+// xarMemberSection validates a member's heap range without reading it.
+func xarMemberSection(file xarFile, heap io.ReaderAt, heapSize int64) (*io.SectionReader, error) {
+	if file.Data.Length < 0 || file.Data.Offset < 0 || file.Data.Size < 0 {
+		return nil, fmt.Errorf("xar file %q has a negative size or offset", file.Name)
+	}
+	if file.Data.Offset > heapSize || file.Data.Length > heapSize-file.Data.Offset {
+		return nil, fmt.Errorf("xar file %q is truncated", file.Name)
+	}
+	return io.NewSectionReader(heap, file.Data.Offset, file.Data.Length), nil
+}
+
+// readXarMember reads a small metadata member such as PackageInfo or
+// Distribution into memory.
+func readXarMember(file xarFile, heap io.ReaderAt, heapSize int64) ([]byte, error) {
+	if file.Data.Length > maxXarFileBytes || file.Data.Size > maxXarFileBytes {
+		return nil, fmt.Errorf("xar file %q is outside the read limit", file.Name)
+	}
+	section, err := xarMemberSection(file, heap, heapSize)
+	if err != nil {
+		return nil, err
+	}
+	payload := make([]byte, int(file.Data.Length))
+	if _, err := io.ReadFull(section, payload); err != nil {
+		return nil, fmt.Errorf("read xar %s: %w", file.Name, err)
+	}
+	switch file.Data.Encoding.Style {
+	case "", "application/octet-stream":
+	case "application/x-gzip":
+		reader, err := zlib.NewReader(bytes.NewReader(payload))
+		if err != nil {
+			return nil, fmt.Errorf("open xar %s: %w", file.Name, err)
+		}
+		payload, err = io.ReadAll(io.LimitReader(reader, maxXarFileBytes+1))
+		reader.Close()
+		if err != nil {
+			return nil, fmt.Errorf("read xar %s: %w", file.Name, err)
+		}
+		if len(payload) > maxXarFileBytes {
+			return nil, fmt.Errorf("xar %s exceeds the read limit", file.Name)
+		}
+	default:
+		return nil, fmt.Errorf("xar file %q uses unsupported encoding %q", file.Name, file.Data.Encoding.Style)
+	}
+	if int64(len(payload)) != file.Data.Size {
+		return nil, fmt.Errorf("xar %s size does not match its declaration", file.Name)
+	}
+	return payload, nil
 }

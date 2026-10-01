@@ -230,3 +230,54 @@ func TestFrameDeviceFamilyUsesSpecFamily(t *testing.T) {
 		}
 	}
 }
+
+func TestCheckFrameInputAspect(t *testing.T) {
+	tests := []struct {
+		name          string
+		device        FrameDevice
+		width, height int
+		wantMismatch  bool
+	}{
+		{name: "native watch series 11 capture", device: FrameDeviceWatchSeries11, width: 416, height: 496},
+		{name: "native watch ultra 3 capture", device: FrameDeviceWatchUltra3, width: 422, height: 514},
+		{name: "native apple tv 4k capture", device: FrameDeviceAppleTV, width: 3840, height: 2160},
+		{name: "apple tv hd capture", device: FrameDeviceAppleTV, width: 1920, height: 1080},
+		{name: "iphone 17 pro max capture on iphone air", device: FrameDeviceIPhoneAir, width: 1320, height: 2868},
+		{name: "ipad air 11 capture on ipad air 11", device: FrameDeviceIPadAir11, width: 1640, height: 2360},
+		{name: "mac capture", device: FrameDeviceMac, width: 1440, height: 900},
+		{name: "iphone capture on watch", device: FrameDeviceWatchUltra3, width: 1206, height: 2622, wantMismatch: true},
+		{name: "ipad capture on tv", device: FrameDeviceAppleTV, width: 2064, height: 2752, wantMismatch: true},
+		{name: "4:3 capture on mac canvas", device: FrameDeviceMac, width: 1200, height: 900, wantMismatch: true},
+		{name: "landscape iphone capture on portrait frame", device: FrameDeviceIPhone17Pro, width: 2622, height: 1206, wantMismatch: true},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "raw.png")
+			writeMinimalPNG(t, path, test.width, test.height)
+			mismatch, err := CheckFrameInputAspect(path, test.device)
+			if err != nil {
+				t.Fatalf("CheckFrameInputAspect() error = %v", err)
+			}
+			if got := mismatch != nil; got != test.wantMismatch {
+				t.Fatalf("CheckFrameInputAspect() mismatch = %+v, want mismatch %v", mismatch, test.wantMismatch)
+			}
+			if mismatch == nil {
+				return
+			}
+			if mismatch.InputWidth != test.width || mismatch.InputHeight != test.height {
+				t.Fatalf("input dimensions = %dx%d, want %dx%d", mismatch.InputWidth, mismatch.InputHeight, test.width, test.height)
+			}
+			wantWidth, wantHeight, _ := frameDeviceKoubouSpecs[test.device].outputDimensions()
+			if mismatch.ScreenWidth != wantWidth || mismatch.ScreenHeight != wantHeight {
+				t.Fatalf("screen dimensions = %dx%d, want %dx%d", mismatch.ScreenWidth, mismatch.ScreenHeight, wantWidth, wantHeight)
+			}
+		})
+	}
+}
+
+func TestCheckFrameInputAspectReportsUnreadableInput(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "missing.png")
+	if _, err := CheckFrameInputAspect(path, FrameDeviceWatchUltra3); err == nil {
+		t.Fatal("CheckFrameInputAspect() error = nil, want missing input error")
+	}
+}

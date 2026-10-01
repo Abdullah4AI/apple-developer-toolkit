@@ -1272,7 +1272,7 @@ func (c *Client) DownloadAttachment(ctx context.Context, signedURL string) ([]by
 		return nil, 0, fmt.Errorf("failed to create download request")
 	}
 	request.Header.Set("Accept", "*/*")
-	setModifiedCookieHeader(c.httpClient, request)
+	copyJarCookiesToHeader(c.httpClient, request)
 
 	httpClient := *c.httpClient
 	// The initial request already has the authenticated session cookie copied

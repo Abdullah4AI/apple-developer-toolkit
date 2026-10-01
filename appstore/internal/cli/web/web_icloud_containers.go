@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/peterbourgon/ff/v3/ffcli"
 
@@ -18,25 +19,29 @@ var listDeveloperICloudContainersFn = func(ctx context.Context, client *webcore.
 	return client.ListDeveloperICloudContainers(ctx, hidden)
 }
 
-// WebICloudContainersCommand returns the read-only Developer Portal iCloud
-// container command group.
+var createDeveloperICloudContainerFn = func(ctx context.Context, client *webcore.Client, request webcore.DeveloperICloudContainerCreateRequest) (*asc.WebICloudContainerCreateResult, error) {
+	return client.CreateDeveloperICloudContainer(ctx, request)
+}
+
+// WebICloudContainersCommand returns the Developer Portal iCloud container
+// command group.
 func WebICloudContainersCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("web icloud-containers", flag.ExitOnError)
 	return &ffcli.Command{
 		Name:       "icloud-containers",
 		ShortUsage: "asc web icloud-containers <subcommand> [flags]",
-		ShortHelp:  "Read iCloud containers via a Developer Portal web session.",
-		LongHelp: `Read iCloud containers through the selected Apple Developer team.
+		ShortHelp:  "List and create iCloud containers via a Developer Portal web session.",
+		LongHelp: `List and create iCloud containers for the selected Apple Developer team.
 
-This command is read-only. Apple currently accepts a bounded 1000-resource
-collection request for this web-session endpoint; the command does not expose a
---paginate flag. Use --output json when the complete Apple response envelope,
-including links and metadata, is needed.
+list reads a bounded first page and does not expose --paginate. create
+registers a new container. iCloud containers can never be deleted, so create
+requires --confirm and cannot be undone.
 `,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
 			WebICloudContainersListCommand(),
+			WebICloudContainersCreateCommand(),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp
@@ -62,7 +67,7 @@ func WebICloudContainersListCommand() *ffcli.Command {
 Visible containers are returned by default. Pass --hidden to request the hidden
 collection. The request asks Apple for up to 1000 resources and does not expose
 --paginate; any links or paging metadata Apple returns remain available in JSON.
-This command does not create, rename, delete, or inspect individual containers.
+This command does not rename, delete, or inspect individual containers.
 
 Examples:
   asc web icloud-containers list --output table
@@ -151,6 +156,96 @@ func renderDeveloperICloudContainersMarkdown(result *webcore.DeveloperICloudCont
 	}
 	asc.RenderMarkdown(developerICloudContainersHeaders(), developerICloudContainersRows(result.Data))
 	return nil
+}
+
+// WebICloudContainersCreateCommand registers one permanent iCloud container.
+func WebICloudContainersCreateCommand() *ffcli.Command {
+	fs := flag.NewFlagSet("web icloud-containers create", flag.ExitOnError)
+	identifier := fs.String("identifier", "", "iCloud container identifier; must start with iCloud. (for example iCloud.com.example.app)")
+	name := fs.String("name", "", "Container display name")
+	confirm := fs.Bool("confirm", false, "Confirm creating a permanent iCloud container")
+	authFlags := bindWebSessionFlags(fs)
+	portalFlags := bindDeveloperPortalFlags(fs)
+	output := shared.BindOutputFlags(fs)
+
+	return &ffcli.Command{
+		Name:       "create",
+		ShortUsage: "asc web icloud-containers create --identifier iCloud.ID --name NAME --confirm [flags]",
+		ShortHelp:  "Create a permanent iCloud container via a Developer Portal web session.",
+		LongHelp: `Create one iCloud container for the selected Apple Developer team.
+
+iCloud containers can never be deleted. Apple keeps the identifier reserved
+for your team permanently, so check the identifier before you run this.
+
+--identifier must start with "iCloud." followed by a reverse-DNS string of
+letters, digits, hyphens, and dots, for example iCloud.com.example.app. The
+CLI does not add the prefix for you.
+
+The command reads the visible and hidden containers first and refuses an
+identifier that already exists. After Apple accepts the create, it reads the
+collections again and prints a receipt only when the new container is found.
+If the outcome cannot be verified, run asc web icloud-containers list before
+retrying; the create request is never retried automatically.
+
+Examples:
+  asc web icloud-containers create --identifier "iCloud.com.example.app" --name "Example" --confirm
+  asc web icloud-containers create --identifier "iCloud.com.example.app" --name "Example" --confirm --output json
+`,
+		FlagSet:   fs,
+		UsageFunc: shared.DefaultUsageFunc,
+		Exec: func(ctx context.Context, args []string) error {
+			if len(args) > 0 {
+				return shared.UsageError("web icloud-containers create does not accept positional arguments")
+			}
+			resolvedIdentifier := strings.TrimSpace(*identifier)
+			resolvedName := strings.TrimSpace(*name)
+			if resolvedIdentifier == "" {
+				return shared.UsageError("--identifier is required")
+			}
+			if err := webcore.ValidateDeveloperICloudContainerIdentifier(resolvedIdentifier); err != nil {
+				return shared.UsageError(err.Error())
+			}
+			if resolvedName == "" {
+				return shared.UsageError("--name is required")
+			}
+			if !*confirm {
+				return shared.UsageError("--confirm is required")
+			}
+			if err := validateDeveloperPortalFlags(portalFlags); err != nil {
+				return err
+			}
+			if _, err := shared.ValidateOutputFormat(*output.Output, *output.Pretty); err != nil {
+				return shared.UsageError(err.Error())
+			}
+
+			session, requestCtx, cancel, err := resolveWebSessionForCommand(ctx, authFlags)
+			defer cancel()
+			if err != nil {
+				return withWebAuthHint(err, "web icloud-containers create")
+			}
+
+			var result *asc.WebICloudContainerCreateResult
+			err = withWebSpinner("Creating Developer Portal iCloud container", func() error {
+				var createErr error
+				result, createErr = createDeveloperICloudContainerFn(requestCtx, newDeveloperPortalClient(session, portalFlags), webcore.DeveloperICloudContainerCreateRequest{
+					Identifier: resolvedIdentifier,
+					Name:       resolvedName,
+				})
+				return createErr
+			})
+			persistDeveloperPortalSession(session)
+			if err != nil {
+				return withWebAuthHint(err, "web icloud-containers create")
+			}
+			if result == nil {
+				return fmt.Errorf("web icloud-containers create failed: missing create result")
+			}
+			if result.RequestedName != "" {
+				fmt.Fprintf(os.Stderr, "Warning: Apple stored the container name as %q instead of the requested %q\n", result.Name, result.RequestedName)
+			}
+			return shared.PrintOutput(result, *output.Output, *output.Pretty)
+		},
+	}
 }
 
 // Shared output warns for links.next; this covers totals without a next link.

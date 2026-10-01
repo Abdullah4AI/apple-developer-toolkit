@@ -56,7 +56,7 @@ Subcommands:
 // WebReviewDraftCreateCommand creates one unsent Resolution Center draft.
 func WebReviewDraftCreateCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("web review drafts create", flag.ExitOnError)
-	appID := fs.String("app", "", "App Store Connect app ID")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
 	threadID := fs.String("thread-id", "", "Resolution Center thread ID")
 	message := fs.String("message", "", "Draft message body")
 	bodyFile := fs.String("body-file", "", "Read the draft message body from a regular file")
@@ -109,7 +109,7 @@ Example:
 // WebReviewDraftUpdateCommand updates one existing unsent Resolution Center draft.
 func WebReviewDraftUpdateCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("web review drafts update", flag.ExitOnError)
-	appID := fs.String("app", "", "App Store Connect app ID")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
 	threadID := fs.String("thread-id", "", "Resolution Center thread ID")
 	draftID := fs.String("draft-id", "", "Resolution Center draft message ID")
 	message := fs.String("message", "", "Draft message body")
@@ -169,7 +169,7 @@ Example:
 // WebReviewDraftDeleteCommand deletes one existing unsent Resolution Center draft.
 func WebReviewDraftDeleteCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("web review drafts delete", flag.ExitOnError)
-	appID := fs.String("app", "", "App Store Connect app ID")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
 	threadID := fs.String("thread-id", "", "Resolution Center thread ID")
 	draftID := fs.String("draft-id", "", "Resolution Center draft message ID")
 	confirm := fs.Bool("confirm", false, "Confirm deleting the unsent draft")
@@ -239,9 +239,9 @@ func validateWebReviewDraftOutput(output shared.OutputFlags) error {
 }
 
 func validateWebReviewDraftIDs(appID, threadID string) (string, string, error) {
-	app := strings.TrimSpace(appID)
+	app := strings.TrimSpace(shared.ResolveAppID(appID))
 	if app == "" {
-		return "", "", shared.UsageError("--app is required")
+		return "", "", shared.UsageError("--app is required (or set ASC_APP_ID)")
 	}
 	thread := strings.TrimSpace(threadID)
 	if thread == "" {

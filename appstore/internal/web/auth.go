@@ -315,7 +315,10 @@ func logWebAuthHTTP(stage string, req *http.Request, resp *http.Response, body [
 	if !webDebugEnabledFn() {
 		return
 	}
+	webDebugLogger.Info("web auth http", webAuthHTTPLogFields(stage, req, resp, body, err)...)
+}
 
+func webAuthHTTPLogFields(stage string, req *http.Request, resp *http.Response, body []byte, err error) []any {
 	fields := []any{
 		"stage", strings.TrimSpace(stage),
 	}
@@ -345,7 +348,7 @@ func logWebAuthHTTP(stage string, req *http.Request, resp *http.Response, body [
 		}
 		fields = append(fields, "error", errorText)
 	}
-	webDebugLogger.Info("web auth http", fields...)
+	return fields
 }
 
 func sanitizeWebAuthDiagnosticValue(value string) string {
@@ -716,7 +719,6 @@ func getAuthServiceKey(ctx context.Context, client *http.Client) (string, error)
 	if err != nil {
 		return "", fmt.Errorf("failed to build auth service key request: %w", err)
 	}
-	setModifiedCookieHeader(client, req)
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -818,6 +820,10 @@ func performSRPLogin(ctx context.Context, client *http.Client, creds LoginCreden
 
 	initResp, err := signinInit(ctx, client, strings.TrimSpace(creds.Username), aBase64, serviceKey)
 	if err != nil {
+		var serviceErr *SigninServiceError
+		if errors.As(err, &serviceErr) {
+			return err
+		}
 		return fmt.Errorf("signin init failed: %w", err)
 	}
 
@@ -848,6 +854,10 @@ func performSRPLogin(ctx context.Context, client *http.Client, creds LoginCreden
 	}
 
 	if err := signinComplete(ctx, client, strings.TrimSpace(creds.Username), m1, m2, initResp.Challenge, serviceKey, hashcash); err != nil {
+		var serviceErr *SigninServiceError
+		if errors.As(err, &serviceErr) {
+			return err
+		}
 		return fmt.Errorf("signin complete failed: %w", err)
 	}
 
@@ -1050,7 +1060,6 @@ func getHashcash(ctx context.Context, client *http.Client, serviceKey string) (s
 		return "", err
 	}
 	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
-	setModifiedCookieHeader(client, req)
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -1103,31 +1112,38 @@ func hasLeadingZeroBits(sum []byte, bits int) bool {
 	return (sum[fullBytes] & mask) == 0
 }
 
-// setModifiedCookieHeader mirrors fastlane's workaround where DES cookies
-// require explicit quotes for some Apple auth endpoints.
-func setModifiedCookieHeader(client *http.Client, req *http.Request) {
+// copyJarCookiesToHeader copies the jar's cookies for req into an explicit
+// Cookie header. Use it only when the request is sent by a client whose Jar
+// is nil: net/http appends the jar's cookies after any explicit header, so
+// calling it for a jar-backed client sends every cookie twice.
+func copyJarCookiesToHeader(client *http.Client, req *http.Request) {
 	if client == nil || client.Jar == nil || req == nil || req.URL == nil {
 		return
 	}
-	cookies := client.Jar.Cookies(req.URL)
-	if len(cookies) == 0 {
-		return
+	for _, c := range client.Jar.Cookies(req.URL) {
+		if c != nil {
+			req.AddCookie(appleCookieForRequest(c))
+		}
 	}
+}
 
-	parts := make([]string, 0, len(cookies))
-	for _, c := range cookies {
-		if c == nil {
-			continue
-		}
-		value := c.Value
-		if strings.Contains(c.Name, "DES") && !strings.HasPrefix(value, "\"") {
-			value = "\"" + value + "\""
-		}
-		parts = append(parts, c.Name+"="+value)
+// appleCookieForRequest applies fastlane's DES trust-cookie workaround
+// (spaceship/lib/spaceship/client.rb, send_shared_login_request): Apple's
+// sign-in service expects the two-factor trust cookie value in quotes. Go's
+// cookie jar keeps the quotes Apple sent, but a cached jar hydrated from disk
+// does not, so quote the value explicitly.
+func appleCookieForRequest(c *http.Cookie) *http.Cookie {
+	if c == nil || c.Quoted || !isAppleTrustCookieName(c.Name) {
+		return c
 	}
-	if len(parts) > 0 {
-		req.Header.Set("Cookie", strings.Join(parts, "; "))
-	}
+	quoted := *c
+	quoted.Value = strings.Trim(quoted.Value, `"`)
+	quoted.Quoted = true
+	return &quoted
+}
+
+func isAppleTrustCookieName(name string) bool {
+	return strings.Contains(name, "DES")
 }
 
 func signinInit(ctx context.Context, client *http.Client, username, aBase64, serviceKey string) (*signinInitResponse, error) {
@@ -1149,7 +1165,6 @@ func signinInit(ctx context.Context, client *http.Client, username, aBase64, ser
 	req.Header.Set("X-Apple-Widget-Key", serviceKey)
 	req.Header.Set("X-Requested-With", "XMLHttpRequest")
 	req.Header.Set("Accept", "application/json, text/javascript")
-	setModifiedCookieHeader(client, req)
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -1163,10 +1178,12 @@ func signinInit(ctx context.Context, client *http.Client, username, aBase64, ser
 		logWebAuthHTTP("signin_init", req, resp, nil, err)
 		return nil, fmt.Errorf("failed to read signin init response: %w", err)
 	}
-	logWebAuthHTTP("signin_init", req, resp, respBody, nil)
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("signin init failed with status %d", resp.StatusCode)
+		sensitive := signinRequestSecrets(client, req, username, aBase64)
+		logWebAuthHTTPFailure("signin_init", req, resp, respBody, sensitive)
+		return nil, newSigninServiceError("signin_init", resp, respBody, sensitive)
 	}
+	logWebAuthHTTP("signin_init", req, resp, respBody, nil)
 	return parseSigninInitResponse(respBody)
 }
 
@@ -1200,7 +1217,6 @@ func signinComplete(ctx context.Context, client *http.Client, username, m1, m2 s
 	if strings.TrimSpace(hashcash) != "" {
 		req.Header.Set("X-Apple-HC", hashcash)
 	}
-	setModifiedCookieHeader(client, req)
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -1214,24 +1230,26 @@ func signinComplete(ctx context.Context, client *http.Client, username, m1, m2 s
 		logWebAuthHTTP("signin_complete", req, resp, nil, err)
 		return fmt.Errorf("failed to read signin complete response: %w", err)
 	}
-	logWebAuthHTTP("signin_complete", req, resp, respBody, nil)
-
 	if resp.StatusCode == http.StatusOK {
+		logWebAuthHTTP("signin_complete", req, resp, respBody, nil)
 		return nil
 	}
 	if resp.StatusCode == http.StatusConflict {
+		logWebAuthHTTP("signin_complete", req, resp, respBody, nil)
 		return &TwoFactorRequiredError{
 			AppleIDSessionID: strings.TrimSpace(resp.Header.Get("X-Apple-ID-Session-Id")),
 			SCNT:             strings.TrimSpace(resp.Header.Get("scnt")),
 		}
 	}
+	sensitive := signinRequestSecrets(client, req, username, m1, m2, hashcash)
+	logWebAuthHTTPFailure("signin_complete", req, resp, respBody, sensitive)
 	if isAppleAccountActionRequiredSigninComplete(resp.StatusCode, respBody) {
 		return errAppleAccountActionRequired
 	}
 	if isInvalidAppleAccountCredentialsSigninComplete(resp.StatusCode, respBody) {
 		return errInvalidAppleAccountCredentials
 	}
-	return fmt.Errorf("signin complete failed with status %d", resp.StatusCode)
+	return newSigninServiceError("signin_complete", resp, respBody, sensitive)
 }
 
 func getSessionInfo(ctx context.Context, client *http.Client) (*sessionInfo, error) {
@@ -1243,7 +1261,6 @@ func getSessionInfoAt(ctx context.Context, client *http.Client, endpoint string)
 	if err != nil {
 		return nil, err
 	}
-	setModifiedCookieHeader(client, req)
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -1391,7 +1408,6 @@ func SelectProvider(ctx context.Context, session *AuthSession, selection Provide
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Requested-With", "olympus-ui")
-	setModifiedCookieHeader(session.Client, req)
 
 	resp, err := session.Client.Do(req)
 	if err != nil {
@@ -1453,7 +1469,6 @@ func getAuthOptions(ctx context.Context, session *AuthSession) (*authOptionsResp
 		}
 	}
 	req.Header.Set("Accept", "application/json")
-	setModifiedCookieHeader(session.Client, req)
 
 	resp, err := session.Client.Do(req)
 	if err != nil {
@@ -1494,7 +1509,6 @@ func requestPhoneCode(ctx context.Context, session *AuthSession, phoneID int, mo
 		payload,
 		json.Marshal,
 		func(req *http.Request) {
-			setModifiedCookieHeader(session.Client, req)
 		},
 		logWebAuthHTTP,
 	)
@@ -1563,7 +1577,6 @@ func submitTrustedDeviceCode(ctx context.Context, session *AuthSession, code str
 		payload,
 		json.Marshal,
 		func(req *http.Request) {
-			setModifiedCookieHeader(session.Client, req)
 		},
 		logWebAuthHTTP,
 	)
@@ -1596,7 +1609,6 @@ func submitPhoneCode(ctx context.Context, session *AuthSession, code string, pho
 		payload,
 		json.Marshal,
 		func(req *http.Request) {
-			setModifiedCookieHeader(session.Client, req)
 		},
 		logWebAuthHTTP,
 	)
@@ -1624,7 +1636,6 @@ func finalizeTwoFactor(ctx context.Context, session *AuthSession) error {
 		}
 	}
 	req.Header.Set("Accept", "application/json")
-	setModifiedCookieHeader(session.Client, req)
 
 	resp, err := session.Client.Do(req)
 	if err != nil {
@@ -1892,7 +1903,6 @@ func (c *Client) doRequestBaseWithHTTPClient(client *http.Client, ctx context.Co
 	if strings.TrimSpace(req.Header.Get("Accept")) == "" {
 		req.Header.Set("Accept", "application/json")
 	}
-	setModifiedCookieHeader(client, req)
 
 	resp, err := client.Do(req)
 	if err != nil {

@@ -157,6 +157,10 @@ func TestBuildReadinessReport_OverlapsSixIndependentReadGroups(t *testing.T) {
 			}`)
 		case "/v1/apps/app-1/appPriceSchedule":
 			fmt.Fprint(w, `{"data":{"type":"appPriceSchedules","id":"schedule-1"}}`)
+		case "/v1/appPriceSchedules/schedule-1/baseTerritory":
+			fmt.Fprint(w, `{"data":{"type":"territories","id":"USA"}}`)
+		case "/v1/appPriceSchedules/schedule-1/manualPrices":
+			fmt.Fprint(w, `{"data":[],"links":{"next":""}}`)
 		case "/v1/apps/app-1/appAvailabilityV2":
 			w.WriteHeader(http.StatusNotFound)
 			fmt.Fprint(w, `{"errors":[{"status":"404","code":"NOT_FOUND"}]}`)
@@ -247,78 +251,105 @@ func TestBuildReadinessReport_CancelsSiblingCompoundReadOnHardError(t *testing.T
 }
 
 func TestBuildReadinessReport_SharedGateCapsNestedSubscriptionRequests(t *testing.T) {
-	tracker := &requestConcurrencyTracker{}
-	client := newBuildsTestClient(t, buildsRoundTripFunc(func(req *http.Request) (*http.Response, error) {
-		delay := 10 * time.Millisecond
-		switch req.URL.Path {
-		case "/v1/apps/app-1/appPriceSchedule", "/v1/apps/app-1/appAvailabilityV2", "/v1/apps/app-1/inAppPurchasesV2":
-			delay = 200 * time.Millisecond
-		case "/v1/apps/app-1/subscriptionGroups":
-			delay = 20 * time.Millisecond
-		case "/v1/subscriptionGroups/group-1/subscriptions",
-			"/v1/subscriptionGroups/group-2/subscriptions",
-			"/v1/subscriptionGroups/group-3/subscriptions",
-			"/v1/subscriptionGroups/group-4/subscriptions":
-			delay = 100 * time.Millisecond
-		}
-		if err := tracker.wait(req.Context(), delay); err != nil {
-			return nil, err
-		}
-
-		switch req.URL.Path {
-		case "/v1/appStoreVersions/ver-1":
-			return buildsJSONResponse(http.StatusOK, `{
-				"data":{"type":"appStoreVersions","id":"ver-1","attributes":{"platform":"IOS","versionString":"1.0"},"relationships":{
-					"app":{"data":{"type":"apps","id":"app-1"}},
-					"appStoreVersionLocalizations":{"data":[],"meta":{"paging":{"total":0,"limit":50}}},
-					"build":{"data":null},
-					"appStoreReviewDetail":{"data":null}
-				}},
-				"included":[]
-			}`)
-		case "/v1/apps/app-1/appInfos":
-			return buildsJSONResponse(http.StatusOK, `{
-				"data":[{"type":"appInfos","id":"info-1","attributes":{"state":"PREPARE_FOR_SUBMISSION"},"relationships":{
-					"app":{"data":{"type":"apps","id":"app-1"}},
-					"ageRatingDeclaration":{"data":null},
-					"appInfoLocalizations":{"data":[],"meta":{"paging":{"total":0,"limit":50}}},
-					"primaryCategory":{"data":null}
-				}}],
-				"included":[{"type":"apps","id":"app-1","attributes":{"primaryLocale":"en-US"}}]
-			}`)
-		case "/v1/apps/app-1/appPriceSchedule", "/v1/apps/app-1/appAvailabilityV2":
-			return buildsJSONResponse(http.StatusNotFound, `{"errors":[{"status":"404","code":"NOT_FOUND"}]}`)
-		case "/v1/apps/app-1/inAppPurchasesV2":
-			return buildsJSONResponse(http.StatusOK, `{"data":[]}`)
-		case "/v1/apps/app-1/subscriptionGroups":
-			return buildsJSONResponse(http.StatusOK, `{"data":[
-				{"type":"subscriptionGroups","id":"group-1","attributes":{"referenceName":"One"}},
-				{"type":"subscriptionGroups","id":"group-2","attributes":{"referenceName":"Two"}},
-				{"type":"subscriptionGroups","id":"group-3","attributes":{"referenceName":"Three"}},
-				{"type":"subscriptionGroups","id":"group-4","attributes":{"referenceName":"Four"}}
-			]}`)
-		case "/v1/subscriptionGroups/group-1/subscriptions",
-			"/v1/subscriptionGroups/group-2/subscriptions",
-			"/v1/subscriptionGroups/group-3/subscriptions",
-			"/v1/subscriptionGroups/group-4/subscriptions":
-			groupID := strings.TrimSuffix(strings.TrimPrefix(req.URL.Path, "/v1/subscriptionGroups/"), "/subscriptions")
-			return buildsJSONResponse(http.StatusOK, fmt.Sprintf(`{"data":[{"type":"subscriptions","id":"sub-%s","attributes":{"name":"%s","productId":"%s","state":"REMOVED_FROM_SALE"}}]}`, groupID, groupID, groupID))
-		case "/v1/subscriptions/sub-group-1/images",
-			"/v1/subscriptions/sub-group-2/images",
-			"/v1/subscriptions/sub-group-3/images",
-			"/v1/subscriptions/sub-group-4/images":
-			return buildsJSONResponse(http.StatusOK, `{"data":[]}`)
-		default:
-			return buildsJSONResponse(http.StatusInternalServerError, `{"errors":[{"status":"500","code":"UNEXPECTED_REQUEST"}]}`)
-		}
-	}))
-	restoreClient := SetClientFactory(func() (*asc.Client, error) { return client, nil })
-	t.Cleanup(restoreClient)
-
-	if _, err := BuildReadinessReport(context.Background(), ReadinessOptions{AppID: "app-1", VersionID: "ver-1"}); err != nil {
-		t.Fatalf("BuildReadinessReport() error = %v", err)
+	tests := []struct {
+		name                  string
+		priceScheduleResponse string
+		deep                  bool
+	}{
+		{name: "unconfigured price schedule"},
+		{name: "configured price schedule", priceScheduleResponse: `{"data":{"type":"appPriceSchedules","id":"schedule-1"}}`},
+		{name: "configured price schedule with deep pricing", priceScheduleResponse: `{"data":{"type":"appPriceSchedules","id":"schedule-1"}}`, deep: true},
 	}
-	if got := tracker.max.Load(); got != readinessConcurrencyLimit {
-		t.Fatalf("maximum in-flight requests = %d, want exactly %d across nested tasks", got, readinessConcurrencyLimit)
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			tracker := &requestConcurrencyTracker{}
+			client := newBuildsTestClient(t, buildsRoundTripFunc(func(req *http.Request) (*http.Response, error) {
+				delay := 10 * time.Millisecond
+				switch req.URL.Path {
+				case "/v1/apps/app-1/appPriceSchedule", "/v1/apps/app-1/appAvailabilityV2", "/v1/apps/app-1/inAppPurchasesV2":
+					delay = 200 * time.Millisecond
+				case "/v1/apps/app-1/subscriptionGroups":
+					delay = 20 * time.Millisecond
+				case "/v1/appPriceSchedules/schedule-1/baseTerritory",
+					"/v1/appPriceSchedules/schedule-1/manualPrices",
+					"/v1/subscriptionGroups/group-1/subscriptions",
+					"/v1/subscriptionGroups/group-2/subscriptions",
+					"/v1/subscriptionGroups/group-3/subscriptions",
+					"/v1/subscriptionGroups/group-4/subscriptions":
+					delay = 100 * time.Millisecond
+				}
+				if err := tracker.wait(req.Context(), delay); err != nil {
+					return nil, err
+				}
+
+				switch req.URL.Path {
+				case "/v1/appStoreVersions/ver-1":
+					return buildsJSONResponse(http.StatusOK, `{
+						"data":{"type":"appStoreVersions","id":"ver-1","attributes":{"platform":"IOS","versionString":"1.0"},"relationships":{
+							"app":{"data":{"type":"apps","id":"app-1"}},
+							"appStoreVersionLocalizations":{"data":[],"meta":{"paging":{"total":0,"limit":50}}},
+							"build":{"data":null},
+							"appStoreReviewDetail":{"data":null}
+						}},
+						"included":[]
+					}`)
+				case "/v1/apps/app-1/appInfos":
+					return buildsJSONResponse(http.StatusOK, `{
+						"data":[{"type":"appInfos","id":"info-1","attributes":{"state":"PREPARE_FOR_SUBMISSION"},"relationships":{
+							"app":{"data":{"type":"apps","id":"app-1"}},
+							"ageRatingDeclaration":{"data":null},
+							"appInfoLocalizations":{"data":[],"meta":{"paging":{"total":0,"limit":50}}},
+							"primaryCategory":{"data":null}
+						}}],
+						"included":[{"type":"apps","id":"app-1","attributes":{"primaryLocale":"en-US"}}]
+					}`)
+				case "/v1/apps/app-1/appPriceSchedule":
+					if test.priceScheduleResponse == "" {
+						return buildsJSONResponse(http.StatusNotFound, `{"errors":[{"status":"404","code":"NOT_FOUND"}]}`)
+					}
+					return buildsJSONResponse(http.StatusOK, test.priceScheduleResponse)
+				case "/v1/appPriceSchedules/schedule-1/baseTerritory":
+					return buildsJSONResponse(http.StatusOK, `{"data":{"type":"territories","id":"USA"}}`)
+				case "/v1/appPriceSchedules/schedule-1/manualPrices":
+					return buildsJSONResponse(http.StatusOK, `{
+						"data":[{"type":"appPrices","id":"price-1","attributes":{"startDate":"2026-01-01","manual":true},"relationships":{"appPricePoint":{"data":{"type":"appPricePoints","id":"point-1"}},"territory":{"data":{"type":"territories","id":"USA"}}}}],
+						"included":[{"type":"appPricePoints","id":"point-1","attributes":{"customerPrice":"0.00"}}]
+					}`)
+				case "/v1/apps/app-1/appAvailabilityV2":
+					return buildsJSONResponse(http.StatusNotFound, `{"errors":[{"status":"404","code":"NOT_FOUND"}]}`)
+				case "/v1/apps/app-1/inAppPurchasesV2":
+					return buildsJSONResponse(http.StatusOK, `{"data":[]}`)
+				case "/v1/apps/app-1/subscriptionGroups":
+					return buildsJSONResponse(http.StatusOK, `{"data":[
+						{"type":"subscriptionGroups","id":"group-1","attributes":{"referenceName":"One"}},
+						{"type":"subscriptionGroups","id":"group-2","attributes":{"referenceName":"Two"}},
+						{"type":"subscriptionGroups","id":"group-3","attributes":{"referenceName":"Three"}},
+						{"type":"subscriptionGroups","id":"group-4","attributes":{"referenceName":"Four"}}
+					]}`)
+				case "/v1/subscriptionGroups/group-1/subscriptions",
+					"/v1/subscriptionGroups/group-2/subscriptions",
+					"/v1/subscriptionGroups/group-3/subscriptions",
+					"/v1/subscriptionGroups/group-4/subscriptions":
+					groupID := strings.TrimSuffix(strings.TrimPrefix(req.URL.Path, "/v1/subscriptionGroups/"), "/subscriptions")
+					return buildsJSONResponse(http.StatusOK, fmt.Sprintf(`{"data":[{"type":"subscriptions","id":"sub-%s","attributes":{"name":"%s","productId":"%s","state":"REMOVED_FROM_SALE"}}]}`, groupID, groupID, groupID))
+				case "/v1/subscriptions/sub-group-1/images",
+					"/v1/subscriptions/sub-group-2/images",
+					"/v1/subscriptions/sub-group-3/images",
+					"/v1/subscriptions/sub-group-4/images":
+					return buildsJSONResponse(http.StatusOK, `{"data":[]}`)
+				default:
+					return buildsJSONResponse(http.StatusInternalServerError, `{"errors":[{"status":"500","code":"UNEXPECTED_REQUEST"}]}`)
+				}
+			}))
+			restoreClient := SetClientFactory(func() (*asc.Client, error) { return client, nil })
+			t.Cleanup(restoreClient)
+
+			if _, err := BuildReadinessReport(context.Background(), ReadinessOptions{AppID: "app-1", VersionID: "ver-1", Deep: test.deep}); err != nil {
+				t.Fatalf("BuildReadinessReport() error = %v", err)
+			}
+			if got := tracker.max.Load(); got != readinessConcurrencyLimit {
+				t.Fatalf("maximum in-flight requests = %d, want exactly %d across nested tasks", got, readinessConcurrencyLimit)
+			}
+		})
 	}
 }

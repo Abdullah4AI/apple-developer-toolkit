@@ -387,7 +387,6 @@ func (c *Client) openTransactionTaxDownload(ctx context.Context, origin *url.URL
 	if _, bounded := ctx.Deadline(); bounded {
 		client.Timeout = 0
 	}
-	setModifiedCookieHeader(client, request)
 
 	previousCheckRedirect := client.CheckRedirect
 	client.CheckRedirect = func(redirect *http.Request, via []*http.Request) error {

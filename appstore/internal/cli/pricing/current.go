@@ -122,7 +122,7 @@ Examples:
 				return fmt.Errorf("pricing current: base territory missing from response")
 			}
 
-			manualEntries, manualValues, manualCurrencies, err := fetchAppSchedulePriceEntries(ctx, func(callCtx context.Context, opts ...asc.AppPriceSchedulePricesOption) (*asc.AppPricesResponse, error) {
+			manualEntries, manualValues, manualCurrencies, err := fetchAppSchedulePriceEntries(ctx, runAppPriceRequestWithTimeout, func(callCtx context.Context, opts ...asc.AppPriceSchedulePricesOption) (*asc.AppPricesResponse, error) {
 				return client.GetAppPriceScheduleManualPrices(callCtx, scheduleID, opts...)
 			})
 			if err != nil {
@@ -147,7 +147,7 @@ Examples:
 			}
 
 			if needAutomatic {
-				automaticEntries, automaticValues, automaticCurrencies, err := fetchAppSchedulePriceEntries(ctx, func(callCtx context.Context, opts ...asc.AppPriceSchedulePricesOption) (*asc.AppPricesResponse, error) {
+				automaticEntries, automaticValues, automaticCurrencies, err := fetchAppSchedulePriceEntries(ctx, runAppPriceRequestWithTimeout, func(callCtx context.Context, opts ...asc.AppPriceSchedulePricesOption) (*asc.AppPricesResponse, error) {
 					return client.GetAppPriceScheduleAutomaticPrices(callCtx, scheduleID, opts...)
 				})
 				if err != nil {
@@ -210,30 +210,34 @@ type appSchedulePricePageFetcher func(context.Context, ...asc.AppPriceSchedulePr
 
 func fetchAppSchedulePriceEntries(
 	ctx context.Context,
+	run AppPriceRequestRunner,
 	fetch appSchedulePricePageFetcher,
 ) ([]appPriceEntry, map[string]appPricePointValue, map[string]string, error) {
 	const limit = 200
 
 	fetchPage := func(nextURL string) (*asc.AppPricesResponse, error) {
-		callCtx, cancel := shared.ContextWithTimeout(ctx)
-		defer cancel()
-
-		if strings.TrimSpace(nextURL) != "" {
-			mergedNextURL, err := shared.MergeNextURLQuery(nextURL, appSchedulePricesQuery(limit))
-			if err != nil {
-				return nil, err
-			}
-			return fetch(callCtx, asc.WithAppPriceSchedulePricesNextURL(mergedNextURL))
-		}
-
-		return fetch(
-			callCtx,
+		opts := []asc.AppPriceSchedulePricesOption{
 			asc.WithAppPriceSchedulePricesInclude([]string{"appPricePoint", "territory"}),
 			asc.WithAppPriceSchedulePricesFields([]string{"manual", "startDate", "endDate", "appPricePoint", "territory"}),
 			asc.WithAppPriceSchedulePricesPricePointFields([]string{"customerPrice", "proceeds", "territory"}),
 			asc.WithAppPriceSchedulePricesTerritoryFields([]string{"currency"}),
 			asc.WithAppPriceSchedulePricesLimit(limit),
-		)
+		}
+		if strings.TrimSpace(nextURL) != "" {
+			mergedNextURL, err := shared.MergeNextURLQuery(nextURL, appSchedulePricesQuery(limit))
+			if err != nil {
+				return nil, err
+			}
+			opts = []asc.AppPriceSchedulePricesOption{asc.WithAppPriceSchedulePricesNextURL(mergedNextURL)}
+		}
+
+		var page *asc.AppPricesResponse
+		err := run(ctx, func(callCtx context.Context) error {
+			var fetchErr error
+			page, fetchErr = fetch(callCtx, opts...)
+			return fetchErr
+		})
+		return page, err
 	}
 
 	firstPage, err := fetchPage("")

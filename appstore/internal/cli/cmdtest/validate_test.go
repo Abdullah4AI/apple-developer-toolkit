@@ -54,6 +54,10 @@ type validateFixture struct {
 	build                      string
 	priceSchedule              string
 	waitForPriceScheduleCtx    bool
+	baseTerritory              string
+	manualPrices               string
+	manualPricesStatus         int
+	manualPricesBody           string
 	availabilityV2             string
 	availabilityV2Status       int
 	territories                string
@@ -153,6 +157,23 @@ func newValidateTestClient(t *testing.T, fixture validateFixture) *asc.Client {
 				return jsonResponse(http.StatusOK, fixture.priceSchedule)
 			}
 			return jsonResponse(http.StatusNotFound, `{"errors":[{"code":"NOT_FOUND","title":"Not Found","detail":"resource not found"}]}`)
+		case strings.HasPrefix(path, "/v1/appPriceSchedules/") && strings.HasSuffix(path, "/baseTerritory"):
+			if fixture.baseTerritory != "" {
+				return jsonResponse(http.StatusOK, fixture.baseTerritory)
+			}
+			return jsonResponse(http.StatusOK, `{"data":{"type":"territories","id":"USA","attributes":{"currency":"USD"}}}`)
+		case strings.HasPrefix(path, "/v1/appPriceSchedules/") && strings.HasSuffix(path, "/manualPrices"):
+			if fixture.manualPricesStatus != 0 {
+				body := fixture.manualPricesBody
+				if body == "" {
+					body = apiErrorJSONForStatus(fixture.manualPricesStatus)
+				}
+				return jsonResponse(fixture.manualPricesStatus, body)
+			}
+			if fixture.manualPrices != "" {
+				return jsonResponse(http.StatusOK, fixture.manualPrices)
+			}
+			return jsonResponse(http.StatusOK, validateFreeManualPricesBody)
 		case path == "/v1/apps/app-1/appAvailabilityV2":
 			if fixture.availabilityV2Status != 0 {
 				return jsonResponse(fixture.availabilityV2Status, fixture.availabilityV2)
@@ -311,6 +332,8 @@ func hasCheckWithID(checks []validation.CheckResult, id string) bool {
 	}
 	return false
 }
+
+const validateFreeManualPricesBody = `{"data":[{"type":"appPrices","id":"price-usa","attributes":{"manual":true,"startDate":"2026-01-01"},"relationships":{"appPricePoint":{"data":{"type":"appPricePoints","id":"point-free"}},"territory":{"data":{"type":"territories","id":"USA"}}}}],"included":[{"type":"appPricePoints","id":"point-free","attributes":{"customerPrice":"0.00","proceeds":"0.00"}}],"links":{"next":""}}`
 
 func validValidateFixture() validateFixture {
 	return validateFixture{
@@ -707,6 +730,11 @@ func TestValidateSubcommandsRejectParentValidateFlags(t *testing.T) {
 			name:    "shared flag before subcommand",
 			args:    []string{"validate", "--strict", "testflight", "--app", "app-1", "--build-id", "build-1"},
 			wantErr: "--strict must be passed after the validate subcommand name",
+		},
+		{
+			name:    "ipa before subcommand",
+			args:    []string{"validate", "--ipa", "App.ipa", "testflight", "--app", "app-1", "--build-id", "build-1"},
+			wantErr: "--ipa is only valid for asc validate",
 		},
 	}
 
@@ -2317,6 +2345,145 @@ func TestValidateFailsWhenPriceScheduleMissing(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("expected pricing.schedule.missing check, got %+v", report.Checks)
+	}
+}
+
+func runValidateReport(t *testing.T, fixture validateFixture) (validation.Report, error) {
+	t.Helper()
+	client := newValidateTestClient(t, fixture)
+	restore := validate.SetClientFactory(func() (*asc.Client, error) {
+		return client, nil
+	})
+	defer restore()
+
+	root := RootCommand("1.2.3")
+	var runErr error
+	stdout, _ := captureOutput(t, func() {
+		if err := root.Parse([]string{"validate", "--app", "app-1", "--version-id", "ver-1", "--output", "json"}); err != nil {
+			t.Fatalf("parse error: %v", err)
+		}
+		runErr = root.Run(context.Background())
+	})
+
+	var report validation.Report
+	if err := json.Unmarshal([]byte(stdout), &report); err != nil {
+		t.Fatalf("failed to parse JSON output %q: %v", stdout, err)
+	}
+	return report, runErr
+}
+
+func findCheck(checks []validation.CheckResult, id string) (validation.CheckResult, bool) {
+	for _, check := range checks {
+		if check.ID == id {
+			return check, true
+		}
+	}
+	return validation.CheckResult{}, false
+}
+
+func TestValidateFailsWhenSyntheticPriceScheduleWasNeverConfigured(t *testing.T) {
+	// Live sequence for a first-time app: the schedule read returns a synthetic
+	// schedule whose ID is the app ID, and manualPrices returns a 404 for a
+	// resource of type 'null'.
+	fixture := validValidateFixture()
+	fixture.priceSchedule = `{"data":{"type":"appPriceSchedules","id":"app-1"}}`
+	fixture.manualPricesStatus = http.StatusNotFound
+	fixture.manualPricesBody = `{"errors":[{"status":"404","code":"NOT_FOUND","title":"The specified resource does not exist","detail":"There is no resource of type 'null' with id 'app-1'"}]}`
+
+	report, runErr := runValidateReport(t, fixture)
+	if _, ok := errors.AsType[ReportedError](runErr); !ok {
+		t.Fatalf("expected ReportedError, got %v", runErr)
+	}
+	check, ok := findCheck(report.Checks, "pricing.schedule.missing")
+	if !ok || check.Severity != validation.SeverityError {
+		t.Fatalf("expected blocking pricing.schedule.missing, got %+v", report.Checks)
+	}
+	if hasCheckWithID(report.Checks, "pricing.base_price.missing") {
+		t.Fatalf("did not expect pricing.base_price.missing alongside a missing schedule, got %+v", report.Checks)
+	}
+}
+
+func TestValidateFailsWhenBaseTerritoryHasNoPrice(t *testing.T) {
+	fixture := validValidateFixture()
+	fixture.manualPrices = `{"data":[],"links":{"next":""}}`
+
+	report, runErr := runValidateReport(t, fixture)
+	if _, ok := errors.AsType[ReportedError](runErr); !ok {
+		t.Fatalf("expected ReportedError, got %v", runErr)
+	}
+	check, ok := findCheck(report.Checks, "pricing.base_price.missing")
+	if !ok || check.Severity != validation.SeverityError {
+		t.Fatalf("expected blocking pricing.base_price.missing, got %+v", report.Checks)
+	}
+	if check.Message != "app has no price set for base territory USA" {
+		t.Fatalf("unexpected message %q", check.Message)
+	}
+}
+
+func TestValidateFailsWhenBaseTerritoryPriceEnded(t *testing.T) {
+	fixture := validValidateFixture()
+	fixture.manualPrices = `{"data":[{"type":"appPrices","id":"price-usa","attributes":{"manual":true,"startDate":"2025-01-01","endDate":"2025-06-01"},"relationships":{"appPricePoint":{"data":{"type":"appPricePoints","id":"point-free"}},"territory":{"data":{"type":"territories","id":"USA"}}}}],"links":{"next":""}}`
+
+	report, _ := runValidateReport(t, fixture)
+	if !hasCheckWithID(report.Checks, "pricing.base_price.missing") {
+		t.Fatalf("expected pricing.base_price.missing for an ended price, got %+v", report.Checks)
+	}
+}
+
+func TestValidateAcceptsFreeAndScheduledBaseTerritoryPrices(t *testing.T) {
+	scheduled := `{"data":[{"type":"appPrices","id":"price-usa","attributes":{"manual":true,"startDate":"2999-01-01"},"relationships":{"appPricePoint":{"data":{"type":"appPricePoints","id":"point-paid"}},"territory":{"data":{"type":"territories","id":"USA"}}}}],"links":{"next":""}}`
+	for name, manualPrices := range map[string]string{
+		"free":      validateFreeManualPricesBody,
+		"scheduled": scheduled,
+	} {
+		t.Run(name, func(t *testing.T) {
+			fixture := validValidateFixture()
+			fixture.manualPrices = manualPrices
+
+			report, runErr := runValidateReport(t, fixture)
+			if runErr != nil {
+				t.Fatalf("expected validate to pass, got %v (%+v)", runErr, report.Checks)
+			}
+			for _, id := range []string{"pricing.base_price.missing", "pricing.schedule.missing", "pricing.schedule.unverified"} {
+				if hasCheckWithID(report.Checks, id) {
+					t.Fatalf("did not expect %s, got %+v", id, report.Checks)
+				}
+			}
+		})
+	}
+}
+
+func TestValidateDowngradesUnreadableBaseTerritoryPriceToUnverified(t *testing.T) {
+	for name, fixture := range map[string]validateFixture{
+		"rate limited": func() validateFixture {
+			fixture := validValidateFixture()
+			fixture.manualPricesStatus = http.StatusTooManyRequests
+			return fixture
+		}(),
+		"unrelated not found": func() validateFixture {
+			fixture := validValidateFixture()
+			fixture.manualPricesStatus = http.StatusNotFound
+			return fixture
+		}(),
+		"unattributed price": func() validateFixture {
+			fixture := validValidateFixture()
+			fixture.manualPrices = `{"data":[{"type":"appPrices","id":"opaque","attributes":{"manual":true}}],"links":{"next":""}}`
+			return fixture
+		}(),
+	} {
+		t.Run(name, func(t *testing.T) {
+			report, runErr := runValidateReport(t, fixture)
+			if runErr != nil {
+				t.Fatalf("expected an unverified warning to stay non-blocking, got %v (%+v)", runErr, report.Checks)
+			}
+			check, ok := findCheck(report.Checks, "pricing.schedule.unverified")
+			if !ok || check.Severity != validation.SeverityWarning {
+				t.Fatalf("expected pricing.schedule.unverified warning, got %+v", report.Checks)
+			}
+			if hasCheckWithID(report.Checks, "pricing.base_price.missing") || hasCheckWithID(report.Checks, "pricing.schedule.missing") {
+				t.Fatalf("did not expect a missing-price error for unverifiable pricing, got %+v", report.Checks)
+			}
+		})
 	}
 }
 

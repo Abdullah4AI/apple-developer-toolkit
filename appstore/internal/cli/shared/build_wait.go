@@ -53,7 +53,7 @@ func WaitForBuildByNumberOrUploadFailure(ctx context.Context, client *asc.Client
 					return nil, false, err
 				}
 			} else {
-				if err := buildUploadFailureError(upload); err != nil {
+				if err := BuildUploadFailureError(upload); err != nil {
 					return nil, false, enrichBuildUploadFailure(ctx, client, appID, upload, err)
 				}
 				buildID, err := buildIDForUpload(upload)
@@ -90,6 +90,87 @@ func WaitForBuildByNumberOrUploadFailure(ctx context.Context, client *asc.Client
 // include=build is requested, so plain reads never reveal the created build.
 func getBuildUploadWithLinkedBuild(ctx context.Context, client *asc.Client, uploadID string) (*asc.BuildUploadResponse, error) {
 	return client.GetBuildUpload(ctx, uploadID, asc.WithBuildUploadInclude([]string{"build"}))
+}
+
+// BuildUploadWaitSelector identifies the build uploads a build wait reports on
+// while no build matching its selector is visible yet. Empty fields do not
+// filter.
+type BuildUploadWaitSelector struct {
+	AppID       string
+	Version     string
+	BuildNumber string
+	Platform    string
+	Since       *time.Time
+}
+
+// buildUploadWaitLookupLimit bounds the single page a wait reads. The filters
+// already narrow it to the selector, and only the newest upload is reported.
+const buildUploadWaitLookupLimit = 20
+
+// LatestBuildUploadForWait returns the most recently uploaded build upload
+// that matches selector, or nil when none is visible. The build number and
+// platform filters are exact; the marketing version also matches its
+// equivalent "1.2"/"1.2.0" spelling like build discovery does. Uploads whose
+// upload (or, before the upload finishes, creation) time is before Since are
+// skipped. Callers use the result only to describe a wait that has not found
+// its build yet, so they may treat an error as "no upload information".
+func LatestBuildUploadForWait(ctx context.Context, client *asc.Client, selector BuildUploadWaitSelector) (*asc.BuildUploadResponse, error) {
+	appID := strings.TrimSpace(selector.AppID)
+	if client == nil || appID == "" {
+		return nil, nil
+	}
+
+	opts := []asc.BuildUploadsOption{
+		asc.WithBuildUploadsSort("-uploadedDate"),
+		asc.WithBuildUploadsLimit(buildUploadWaitLookupLimit),
+	}
+	if buildNumber := strings.TrimSpace(selector.BuildNumber); buildNumber != "" {
+		opts = append(opts, asc.WithBuildUploadsCFBundleVersions([]string{buildNumber}))
+	}
+	if versions := versionQueryVariants(selector.Version); len(versions) > 0 {
+		opts = append(opts, asc.WithBuildUploadsCFBundleShortVersionStrings(versions))
+	}
+	if platform := strings.TrimSpace(selector.Platform); platform != "" {
+		opts = append(opts, asc.WithBuildUploadsPlatforms([]string{platform}))
+	}
+
+	uploads, err := client.GetBuildUploads(ctx, appID, opts...)
+	if err != nil {
+		return nil, err
+	}
+
+	var newest *asc.Resource[asc.BuildUploadAttributes]
+	var newestAt time.Time
+	for index := range uploads.Data {
+		upload := &uploads.Data[index]
+		at, known := buildUploadActivityTime(upload.Attributes)
+		if selector.Since != nil && (!known || at.Before(selector.Since.UTC())) {
+			continue
+		}
+		if newest == nil || (known && at.After(newestAt)) {
+			newest = upload
+			newestAt = at
+		}
+	}
+	if newest == nil {
+		return nil, nil
+	}
+	return &asc.BuildUploadResponse{Data: *newest}, nil
+}
+
+// buildUploadActivityTime is when an upload last moved: its upload time, or
+// its creation time while the upload has not finished.
+func buildUploadActivityTime(attributes asc.BuildUploadAttributes) (time.Time, bool) {
+	for _, value := range []*string{attributes.UploadedDate, attributes.CreatedDate} {
+		if value == nil || strings.TrimSpace(*value) == "" {
+			continue
+		}
+		parsed, err := time.Parse(time.RFC3339Nano, strings.TrimSpace(*value))
+		if err == nil {
+			return parsed.UTC(), true
+		}
+	}
+	return time.Time{}, false
 }
 
 // VerifyBuildUploadAfterCommit briefly watches a newly committed upload for
@@ -152,7 +233,7 @@ func VerifyBuildUploadAfterCommit(ctx context.Context, client *asc.Client, appID
 			}
 			return nil, false, err
 		}
-		if err := buildUploadFailureError(upload); err != nil {
+		if err := BuildUploadFailureError(upload); err != nil {
 			return nil, false, enrichBuildUploadFailure(ctx, client, appID, upload, err)
 		}
 		buildID, err := buildIDForUpload(upload)
@@ -330,7 +411,9 @@ func buildIDForUpload(upload *asc.BuildUploadResponse) (string, error) {
 	return strings.TrimSpace(relationships.Build.Data.ID), nil
 }
 
-func buildUploadFailureError(upload *asc.BuildUploadResponse) error {
+// BuildUploadFailureError describes a FAILED build upload with Apple's error
+// details and recovery guidance. It returns nil for any other upload state.
+func BuildUploadFailureError(upload *asc.BuildUploadResponse) error {
 	if upload == nil || upload.Data.Attributes.State == nil || upload.Data.Attributes.State.State == nil {
 		return nil
 	}

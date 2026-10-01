@@ -20,7 +20,10 @@ import (
 
 const (
 	bulkAvailabilityTimeout = 5 * time.Minute
-	bulkAvailabilityWorkers = 8
+	// bulkAvailabilityWorkers matches the client-wide bulk write limit that
+	// updateTerritoryAvailabilityTargets opts into, so every worker can hold a
+	// write slot at once.
+	bulkAvailabilityWorkers = asc.BulkMutatingRequestLimit
 )
 
 var availabilityClientFactory = getASCClient
@@ -585,6 +588,7 @@ type territoryAvailabilityUpdateResult struct {
 }
 
 func updateTerritoryAvailabilityTargets(ctx context.Context, client *asc.Client, targets []availabilityEditTarget, available bool) map[string]error {
+	ctx = asc.WithBulkMutatingRequestLimit(ctx)
 	workerCount := min(bulkAvailabilityWorkers, len(targets))
 	jobs := make(chan availabilityEditTarget)
 	results := make(chan territoryAvailabilityUpdateResult, len(targets))

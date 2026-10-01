@@ -106,7 +106,7 @@ func TestLoginWithOptionalTwoFactorUsesProgressLabels(t *testing.T) {
 		return nil
 	}
 
-	if _, err := loginWithOptionalTwoFactor(context.Background(), "user@example.com", "secret", "654321", nil); err != nil {
+	if _, err := loginWithOptionalTwoFactor(context.Background(), "user@example.com", "secret", "654321", nil, nil); err != nil {
 		t.Fatalf("loginWithOptionalTwoFactor() error = %v", err)
 	}
 

@@ -301,3 +301,65 @@ func TestGeneratedContentItemsAnchorOnCenter(t *testing.T) {
 		})
 	}
 }
+
+// TestWatchAndTVRendererConfigGolden pins the Koubou YAML for native Apple
+// Watch and Apple TV captures with titles above and below the device. Each
+// golden was rendered with Koubou 0.20.0 from native-size captures (416x496,
+// 422x514, and 3840x2160) and checked visually: the whole capture lands inside
+// the detected screen at a uniform scale, and the text clears the device.
+func TestWatchAndTVRendererConfigGolden(t *testing.T) {
+	tests := []struct {
+		device   FrameDevice
+		input    string
+		title    string
+		subtitle string
+	}{
+		{device: FrameDeviceWatchSeries11, input: "watch.png", title: "Roll the die", subtitle: "Right on your wrist"},
+		{device: FrameDeviceWatchUltra3, input: "watch.png", title: "Roll the die", subtitle: "Built for Ultra"},
+		{device: FrameDeviceAppleTV, input: "tv.png", title: "Dice Oracle on TV", subtitle: "Big screen answers"},
+	}
+	for _, test := range tests {
+		for _, position := range []TextPosition{TextPositionTop, TextPositionBottom} {
+			name := string(test.device) + "." + string(position)
+			t.Run(name, func(t *testing.T) {
+				spec, _, err := resolveFrameSpec(test.device, "")
+				if err != nil {
+					t.Fatal(err)
+				}
+				workDir := t.TempDir()
+				input := filepath.Join(workDir, test.input)
+				if err := os.WriteFile(input, []byte("png"), 0o644); err != nil {
+					t.Fatal(err)
+				}
+				canvas := &CanvasOptions{Title: test.title, Subtitle: test.subtitle, TextPosition: position}
+				configPath, metadata, err := createDefaultKoubouConfigAt(input, spec, canvas, workDir)
+				if err != nil {
+					t.Fatal(err)
+				}
+				wantWidth, wantHeight, _ := spec.outputDimensions()
+				if metadata.UploadWidth != wantWidth || metadata.UploadHeight != wantHeight || metadata.DisplayType != spec.DisplayType {
+					t.Fatalf("metadata = %+v, want %dx%d %s", metadata, wantWidth, wantHeight, spec.DisplayType)
+				}
+				data, err := os.ReadFile(configPath)
+				if err != nil {
+					t.Fatal(err)
+				}
+				got := strings.ReplaceAll(string(data), workDir+string(filepath.Separator), "$WORK/")
+				goldenPath := filepath.Join("testdata", "frame-config."+name+".golden.yaml")
+				if os.Getenv("ASC_UPDATE_GOLDEN") == "1" {
+					if err := os.WriteFile(goldenPath, []byte(got), 0o644); err != nil {
+						t.Fatal(err)
+					}
+				}
+				want, err := os.ReadFile(goldenPath)
+				if err != nil {
+					t.Fatal(err)
+				}
+				wantText := strings.ReplaceAll(string(want), "\r\n", "\n")
+				if got != wantText {
+					t.Fatalf("renderer config mismatch\n--- got ---\n%s\n--- want ---\n%s", got, wantText)
+				}
+			})
+		}
+	}
+}

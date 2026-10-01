@@ -457,7 +457,7 @@ func TestBuildUploadFailureErrorIncludesRecoveryGuidance(t *testing.T) {
 			upload.Data.ID = "upload-1"
 			upload.Data.Attributes.State = &asc.AppMediaAssetState{State: &state, Errors: details}
 
-			err := buildUploadFailureError(upload)
+			err := BuildUploadFailureError(upload)
 			if err == nil {
 				t.Fatal("expected failure error")
 			}
@@ -493,7 +493,7 @@ func TestBuildUploadFailureErrorCombinesIndependentVersionRecoveries(t *testing.
 		},
 	}
 
-	err := buildUploadFailureError(upload)
+	err := BuildUploadFailureError(upload)
 	if err == nil {
 		t.Fatal("expected failure error")
 	}
@@ -515,7 +515,7 @@ func TestBuildUploadFailureErrorRecognizesIndividualCodeFromFamily(t *testing.T)
 				Errors: []asc.StateDetail{{Code: code}},
 			}
 
-			err := buildUploadFailureError(upload)
+			err := BuildUploadFailureError(upload)
 			if err == nil || !strings.Contains(err.Error(), "increase the marketing version") {
 				t.Fatalf("expected closed-version guidance for %s, got %v", code, err)
 			}
@@ -532,7 +532,7 @@ func TestBuildUploadFailureErrorLeavesUnknownFailuresUnchanged(t *testing.T) {
 		Errors: []asc.StateDetail{{Code: "UNKNOWN", Description: "Server-provided detail", Message: "Server-provided detail"}},
 	}
 
-	err := buildUploadFailureError(upload)
+	err := BuildUploadFailureError(upload)
 	if err == nil {
 		t.Fatal("expected failure error")
 	}
@@ -551,7 +551,7 @@ func TestBuildUploadFailureErrorPreservesDescriptionWhenMessageIsEmpty(t *testin
 		Errors: []asc.StateDetail{{Code: "90054", Description: "raw App Store Connect description"}},
 	}
 
-	err := buildUploadFailureError(upload)
+	err := BuildUploadFailureError(upload)
 	if err == nil {
 		t.Fatal("expected failure error")
 	}
@@ -572,7 +572,7 @@ func TestBuildUploadFailureErrorDoesNotGuessForMixedCodes(t *testing.T) {
 		},
 	}
 
-	err := buildUploadFailureError(upload)
+	err := BuildUploadFailureError(upload)
 	if err == nil {
 		t.Fatal("expected failure error")
 	}

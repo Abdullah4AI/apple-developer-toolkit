@@ -1,6 +1,9 @@
 package asc
 
-import "strings"
+import (
+	"fmt"
+	"strings"
+)
 
 // AppRenameResult represents a localized app-name change.
 type AppRenameResult struct {
@@ -19,6 +22,28 @@ type WebAppCreateResult struct {
 	ID     string   `json:"id"`
 	Access string   `json:"access"`
 	Users  []string `json:"users"`
+}
+
+// WebAppCreateIfExistsResult is the receipt for `asc web apps create
+// --if-exists skip` when the app already exists. Every field comes from the
+// public-API read-back of the existing app, not from the request flags.
+type WebAppCreateIfExistsResult struct {
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	BundleID string `json:"bundleId"`
+	SKU      string `json:"sku"`
+	IdempotentWriteReceipt
+}
+
+func webAppCreateIfExistsResultRows(result *WebAppCreateIfExistsResult) ([]string, [][]string) {
+	return []string{"ID", "Name", "Bundle ID", "SKU", "Already Exists", "Action"}, [][]string{{
+		result.ID,
+		compactWhitespace(result.Name),
+		result.BundleID,
+		compactWhitespace(result.SKU),
+		fmt.Sprintf("%t", result.AlreadyExists),
+		result.Action,
+	}}
 }
 
 func appRenameResultRows(result *AppRenameResult) ([]string, [][]string) {

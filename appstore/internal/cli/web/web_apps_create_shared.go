@@ -32,6 +32,10 @@ type AppsCreateRunOptions struct {
 	Output     string
 	Pretty     bool
 
+	// IfExists selects how an Apple 409 for an app that already exists is
+	// handled. Empty means fail, the historical behavior.
+	IfExists shared.IfExistsMode
+
 	Access string
 	Users  []string
 
@@ -46,6 +50,7 @@ type AppsCreateRunOptions struct {
 }
 
 const (
+	appCreateAutoRenameAttempts   = 5
 	appCreateDefaultPrimaryLocale = "en-US"
 	appCreateDefaultPlatform      = "IOS"
 	appCreateDefaultVersion       = "1.0"
@@ -310,6 +315,12 @@ func RunAppsCreate(ctx context.Context, opts AppsCreateRunOptions) error {
 	if err != nil {
 		return err
 	}
+	if opts.IfExists, err = shared.ParseOptionalIfExistsMode(string(opts.IfExists), webAppCreateIfExistsModes...); err != nil {
+		return err
+	}
+	if opts.IfExists == shared.IfExistsSkip && access != "" {
+		return shared.UsageError("--if-exists skip cannot be combined with --access: skip leaves an existing app unchanged, so the access change would not be applied")
+	}
 
 	missingName := opts.Name == ""
 	missingBundleID := opts.BundleID == ""
@@ -344,6 +355,14 @@ func RunAppsCreate(ctx context.Context, opts AppsCreateRunOptions) error {
 	}
 
 	opts = normalizeAppsCreateRunOptions(opts)
+
+	var ifExistsClient *asc.Client
+	if opts.IfExists == shared.IfExistsSkip {
+		ifExistsClient, err = shared.GetASCClient()
+		if err != nil {
+			return fmt.Errorf("web apps create failed: --if-exists skip requires official App Store Connect API authentication for the read-back: %w", err)
+		}
+	}
 
 	var accessClient *asc.Client
 	if access != "" {
@@ -433,15 +452,27 @@ func RunAppsCreate(ctx context.Context, opts AppsCreateRunOptions) error {
 	app, err := withWebSpinnerValue("Creating app via Apple web API", func() (*webcore.AppResponse, error) {
 		return createWebAppFn(requestCtx, client, attrs)
 	})
-	if err != nil && opts.AutoRename && webcore.IsDuplicateAppNameError(err) {
+	// --if-exists skip runs before --auto-rename: a 409 for an app this
+	// account already owns must never be retried under a new name. Only when
+	// the read-back finds neither the bundle ID nor the SKU on this account
+	// does the historical rename path below run.
+	conflictHandled := false
+	if err != nil && ifExistsClient != nil {
+		existing, handled, resolveErr := resolveWebAppCreateConflict(ctx, ifExistsClient, opts, err)
+		if handled {
+			conflictHandled = true
+			if resolveErr == nil {
+				fmt.Fprintf(os.Stderr, "web apps create: app %s already exists with bundle ID %q; left unchanged (--if-exists skip)\n", existing.ID, existing.BundleID)
+				return shared.PrintOutput(existing, opts.Output, opts.Pretty)
+			}
+			err = resolveErr
+		}
+	}
+	if err != nil && !conflictHandled && opts.AutoRename && webcore.IsDuplicateAppNameError(err) {
 		suffix := bundleIDNameSuffix(opts.BundleID)
 		if suffix != "" {
-			for i := 0; i < 5; i++ {
-				trySuffix := suffix
-				if i > 0 {
-					trySuffix = fmt.Sprintf("%s-%d", suffix, i+1)
-				}
-				tryName := formatAppNameWithSuffix(opts.Name, trySuffix)
+			for i := 0; i < appCreateAutoRenameAttempts; i++ {
+				tryName := autoRenameCandidate(opts.Name, suffix, i)
 				if tryName == "" || tryName == attrs.Name {
 					continue
 				}

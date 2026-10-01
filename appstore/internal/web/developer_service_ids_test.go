@@ -171,7 +171,7 @@ func TestRenameDeveloperServiceIDPreservesCapabilityGraph(t *testing.T) {
 			if got := string(payload.Data.Relationships["bundleIdCapabilities"]); !strings.Contains(got, `"id":"cap-1"`) || !strings.Contains(got, `"id":"cap-2"`) {
 				t.Fatalf("rename dropped capability graph: %s", got)
 			}
-			if got := string(payload.Data.Relationships["bundleIdCapabilities"]); !strings.Contains(got, `"meta":{"opaque":"keep"}`) {
+			if got := string(payload.Data.Relationships["bundleIdCapabilities"]); !strings.Contains(got, `"meta":{"opaque":"keep","paging":{"total":2,"limit":2147483647}}`) {
 				t.Fatalf("rename dropped opaque capability relationship members: %s", got)
 			}
 			return developerPortalTestResponse(http.StatusOK, `{}`, nil), nil
@@ -533,7 +533,7 @@ func TestRenameDeveloperServiceIDRejectsIncompleteIdentityBeforeMutation(t *test
 }
 
 func TestRenameDeveloperServiceIDPreservesValidEmptyCapabilityRelationship(t *testing.T) {
-	const relationship = `{"bundleIdCapabilities":{"data":[],"meta":{"opaque":"keep"}}}`
+	const relationship = `{"bundleIdCapabilities":{"data":[],"meta":{"opaque":"keep","paging":{"total":0,"limit":2147483647}}}}`
 	var requests int
 	client := developerPortalTestClient(t, func(r *http.Request) (*http.Response, error) {
 		requests++
@@ -547,7 +547,7 @@ func TestRenameDeveloperServiceIDPreservesValidEmptyCapabilityRelationship(t *te
 			if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 				t.Fatalf("decode rename payload: %v", err)
 			}
-			if got := string(payload.Data.Relationships["bundleIdCapabilities"]); got != `{"data":[],"meta":{"opaque":"keep"}}` {
+			if got := string(payload.Data.Relationships["bundleIdCapabilities"]); got != `{"data":[],"meta":{"opaque":"keep","paging":{"total":0,"limit":2147483647}}}` {
 				t.Fatalf("rename changed valid empty capability relationship: %s", got)
 			}
 			return developerPortalTestResponse(http.StatusOK, `{}`, nil), nil
@@ -684,7 +684,7 @@ func TestRenameDeveloperServiceIDMarksAmbiguousHTTPAsUnknownWithoutRetry(t *test
 }
 
 func serviceIDDetailFixture(name, platform string) string {
-	return serviceIDDetailFixtureWithRelationships(name, platform, `{"bundleIdCapabilities":{"data":[{"type":"bundleIdCapabilities","id":"cap-1"},{"type":"bundleIdCapabilities","id":"cap-2"}],"meta":{"opaque":"keep"}}}`)
+	return serviceIDDetailFixtureWithRelationships(name, platform, `{"bundleIdCapabilities":{"data":[{"type":"bundleIdCapabilities","id":"cap-1"},{"type":"bundleIdCapabilities","id":"cap-2"}],"meta":{"opaque":"keep","paging":{"total":2,"limit":2147483647}}}}`)
 }
 
 func serviceIDDetailFixtureWithRelationships(name, platform, relationships string) string {

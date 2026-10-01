@@ -418,7 +418,7 @@ func TestShotsFrame_ExplicitDeviceIPhone17Pro(t *testing.T) {
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "config.json"))
 
 	rawPath := filepath.Join(t.TempDir(), "raw.png")
-	writeFramePNG(t, rawPath, makeRawImage(120, 240))
+	writeFramePNG(t, rawPath, makeRawImage(120, 261))
 	outputDir := filepath.Join(t.TempDir(), "framed")
 	installMockFrame(t, func(_ context.Context, req screenshots.FrameRequest) (*screenshots.FrameResult, error) {
 		if req.InputPath != rawPath {

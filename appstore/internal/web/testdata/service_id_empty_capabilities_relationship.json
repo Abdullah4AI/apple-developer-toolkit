@@ -1,0 +1,8 @@
+{
+  "meta": {"paging": {"total": 0, "limit": 2147483647}},
+  "data": [],
+  "links": {
+    "self": "https://developer.apple.com:443/services-account/v1/bundleIds/service-1/relationships/bundleIdCapabilities",
+    "related": "https://developer.apple.com:443/services-account/v1/bundleIds/service-1/bundleIdCapabilities"
+  }
+}

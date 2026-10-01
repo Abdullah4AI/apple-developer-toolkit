@@ -374,6 +374,11 @@ func buildDeveloperServiceIDRenamePayload(current developerBundleIDResponse, nam
 			return developerBundleIDPatchRequest{}, fmt.Errorf("cannot safely rename Services ID %q: bundleIdCapabilities relationship contains an invalid reference (type %q, id %q)", current.Data.ID, reference.Type, reference.ID)
 		}
 	}
+	// The PATCH echoes this relationship back as the complete capability set,
+	// so a truncated read would silently remove capabilities.
+	if err := validateServiceIDCapabilityCompleteness(rawRelationship, len(references)); err != nil {
+		return developerBundleIDPatchRequest{}, fmt.Errorf("cannot safely rename Services ID %q: %w", current.Data.ID, err)
+	}
 	var attributes map[string]json.RawMessage
 	if err := json.Unmarshal(current.Data.Attributes, &attributes); err != nil {
 		return developerBundleIDPatchRequest{}, fmt.Errorf("failed to parse Services ID %q attributes for rename: %w", current.Data.ID, err)
@@ -541,6 +546,13 @@ func verifyDeveloperServiceIDCapabilityGraph(expected map[string]developerServic
 
 	got, err := developerServiceIDCapabilityGraph(postRead)
 	if err != nil {
+		return fmt.Errorf("cannot inspect post-write capability graph: %w", err)
+	}
+	gotReferences, err := decodeStrictDeveloperRelationship(postRead.Data.Relationships["bundleIdCapabilities"])
+	if err != nil {
+		return fmt.Errorf("cannot inspect post-write capability graph: bundleIdCapabilities relationship %w", err)
+	}
+	if err := validateServiceIDCapabilityCompleteness(postRead.Data.Relationships["bundleIdCapabilities"], len(gotReferences)); err != nil {
 		return fmt.Errorf("cannot inspect post-write capability graph: %w", err)
 	}
 	if len(expected) != len(got) {
@@ -736,4 +748,68 @@ func developerServiceIDWriteError(operation string, err error) error {
 func developerServiceIDIsNotFound(err error) bool {
 	var apiErr *APIError
 	return errors.As(err, &apiErr) && apiErr.Status == http.StatusNotFound
+}
+
+// serviceIDCapabilityPlaceholderLimit is the paging limit Apple reports with
+// the zero-total placeholder on Services ID detail reads with populated
+// linkage (captured 2026-09-26).
+const serviceIDCapabilityPlaceholderLimit = 2147483647
+
+// validateServiceIDCapabilityCompleteness fails closed unless the relationship
+// proves it carries every capability: no continuation link, and either an
+// exact paging total, or Apple's captured zero-total placeholder with the
+// maximum limit and resolved linkage. A limit below the returned count is
+// contradictory. Missing metadata or a missing total could describe a page
+// Apple truncated at an unstated default, so neither is accepted. A Services
+// ID with no capabilities (captured 2026-09-28) reports empty linkage with
+// paging total 0 and the maximum limit, which is proven by the exact total.
+// Both the domains update and the rename use this check before and after
+// their PATCH, because each PATCH replaces the relationship wholesale.
+func validateServiceIDCapabilityCompleteness(raw json.RawMessage, returned int) error {
+	const label = "Services ID capability graph"
+	var relationship map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &relationship); err != nil || relationship == nil {
+		return fmt.Errorf("%s could not be parsed", label)
+	}
+	// The shared validator owns continuation-link handling; paging totals are
+	// judged below because the placeholder deliberately disagrees with them.
+	linksOnly, err := json.Marshal(map[string]json.RawMessage{"links": relationship["links"]})
+	if err != nil {
+		return fmt.Errorf("%s links are unreadable", label)
+	}
+	if err = validateDeveloperRelationshipCompleteness(linksOnly, returned, 0, label); err != nil {
+		return err
+	}
+	var meta map[string]json.RawMessage
+	if rawMeta, ok := relationship["meta"]; !ok || json.Unmarshal(rawMeta, &meta) != nil || meta == nil {
+		return fmt.Errorf("%s has no paging metadata proving it is complete", label)
+	}
+	var paging map[string]json.RawMessage
+	if rawPaging, ok := meta["paging"]; !ok || json.Unmarshal(rawPaging, &paging) != nil || paging == nil {
+		return fmt.Errorf("%s has no paging metadata proving it is complete", label)
+	}
+	rawTotal, ok := paging["total"]
+	if !ok || string(rawTotal) == "null" {
+		return fmt.Errorf("%s has no paging total proving it is complete", label)
+	}
+	var total int
+	if err = json.Unmarshal(rawTotal, &total); err != nil || total < 0 {
+		return fmt.Errorf("%s paging total is unreadable", label)
+	}
+	limit := -1
+	if rawLimit, ok := paging["limit"]; ok && string(rawLimit) != "null" {
+		if err = json.Unmarshal(rawLimit, &limit); err != nil || limit < 0 {
+			return fmt.Errorf("%s paging limit is unreadable", label)
+		}
+		if limit < returned {
+			return fmt.Errorf("%s returned %d resources beyond its paging limit of %d", label, returned, limit)
+		}
+	}
+	if total == returned {
+		return nil
+	}
+	if total == 0 && limit == serviceIDCapabilityPlaceholderLimit && returned > 0 {
+		return nil
+	}
+	return fmt.Errorf("%s returned %d of %d resources", label, returned, total)
 }

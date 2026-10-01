@@ -95,7 +95,10 @@ func (c *Client) ListDeveloperICloudContainers(ctx context.Context, hidden bool)
 	if err := c.ensureDeveloperPortalSession(ctx); err != nil {
 		return nil, err
 	}
+	return c.listDeveloperICloudContainersAfterSession(ctx, hidden)
+}
 
+func (c *Client) listDeveloperICloudContainersAfterSession(ctx context.Context, hidden bool) (*DeveloperICloudContainersListResult, error) {
 	teamID := c.developerPortalTeamID()
 	if teamID == "" {
 		return nil, fmt.Errorf("developer portal team is not selected; %s", developerPortalAuthHint)

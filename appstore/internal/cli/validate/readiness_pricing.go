@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/pricing"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
@@ -23,23 +24,22 @@ func fetchCurrentAppPaidPricingEvidence(ctx context.Context, client *asc.Client,
 	const limit = 200
 	query := currentAppPricingQuery(limit)
 	fetchPage := func(nextURL string) (*asc.AppPricesResponse, error) {
-		requestCtx, cancel := shared.ContextWithTimeout(ctx)
-		defer cancel()
+		opts := []asc.AppPriceSchedulePricesOption{
+			asc.WithAppPriceSchedulePricesInclude([]string{"appPricePoint"}),
+			asc.WithAppPriceSchedulePricesFields([]string{"manual", "startDate", "endDate", "appPricePoint"}),
+			asc.WithAppPriceSchedulePricesPricePointFields([]string{"customerPrice"}),
+			asc.WithAppPriceSchedulePricesLimit(limit),
+		}
 		if strings.TrimSpace(nextURL) != "" {
 			merged, err := shared.MergeNextURLQuery(nextURL, query)
 			if err != nil {
 				return nil, err
 			}
-			return client.GetAppPriceScheduleManualPrices(requestCtx, scheduleID, asc.WithAppPriceSchedulePricesNextURL(merged))
+			opts = []asc.AppPriceSchedulePricesOption{asc.WithAppPriceSchedulePricesNextURL(merged)}
 		}
-		return client.GetAppPriceScheduleManualPrices(
-			requestCtx,
-			scheduleID,
-			asc.WithAppPriceSchedulePricesInclude([]string{"appPricePoint"}),
-			asc.WithAppPriceSchedulePricesFields([]string{"manual", "startDate", "endDate", "appPricePoint"}),
-			asc.WithAppPriceSchedulePricesPricePointFields([]string{"customerPrice"}),
-			asc.WithAppPriceSchedulePricesLimit(limit),
-		)
+		return doReadinessRequest(ctx, func(requestCtx context.Context) (*asc.AppPricesResponse, error) {
+			return client.GetAppPriceScheduleManualPrices(requestCtx, scheduleID, opts...)
+		})
 	}
 
 	firstPage, err := fetchPage("")
@@ -172,14 +172,9 @@ func appPriceActiveOn(attributes asc.AppPriceAttributes, now time.Time) (bool, b
 			return false, true
 		}
 	}
-	end := strings.TrimSpace(attributes.EndDate)
-	if end != "" {
-		if _, err := time.Parse("2006-01-02", end); err != nil {
-			return false, false
-		}
-		if end <= today {
-			return false, true
-		}
+	ended, known := pricing.AppPriceEndedOn(attributes.EndDate, now)
+	if !known {
+		return false, false
 	}
-	return true, true
+	return !ended, true
 }
