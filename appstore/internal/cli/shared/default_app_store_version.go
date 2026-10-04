@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -42,18 +43,6 @@ var defaultActiveEditableAppVersionStates = []string{
 // query above. Keeping it below active drafts prevents a removed listing from
 // overriding the version currently being prepared.
 var defaultRemovedEditableAppStoreVersionStates = []string{"DEVELOPER_REMOVED_FROM_SALE"}
-
-// defaultLiveAppStoreVersionStates lists the legacy appStoreState values that
-// mark the version currently on the App Store.
-var defaultLiveAppStoreVersionStates = []string{"READY_FOR_SALE"}
-
-// defaultLiveAppVersionStates lists the modern appVersionState spelling of the
-// same condition. Apple returns appStoreState and appVersionState
-// inconsistently across versions and the READY_FOR_DISTRIBUTION-to-
-// READY_FOR_SALE remapping is client-side only (docs/API_NOTES.md), so the
-// live tier queries both spellings and merges the results. Filtering on one
-// alone would report "no live version" for apps that expose only the other.
-var defaultLiveAppVersionStates = []string{"READY_FOR_DISTRIBUTION"}
 
 // DefaultAppStoreVersion describes the version selected when --version is
 // omitted.
@@ -136,14 +125,14 @@ func ResolveDefaultAppStoreVersion(ctx context.Context, client *asc.Client, appI
 	}
 	trimmedPlatform := strings.ToUpper(strings.TrimSpace(platform))
 
-	editable, err := listDefaultVersionCandidates(ctx, client, trimmedAppID, trimmedPlatform, asc.WithAppStoreVersionsVersionStates(defaultActiveEditableAppVersionStates))
+	editable, err := listAppStoreVersionsWithState(ctx, client, trimmedAppID, trimmedPlatform, asc.WithAppStoreVersionsVersionStates(defaultActiveEditableAppVersionStates), callerRequestContext)
 	if err != nil {
 		return DefaultAppStoreVersion{}, err
 	}
 	if selected, ok, err := selectDefaultAppStoreVersion(trimmedAppID, DefaultAppStoreVersionSourceEditable, editable); ok || err != nil {
 		return selected, err
 	}
-	removedEditable, err := listDefaultVersionCandidates(ctx, client, trimmedAppID, trimmedPlatform, asc.WithAppStoreVersionsStates(defaultRemovedEditableAppStoreVersionStates))
+	removedEditable, err := listAppStoreVersionsWithState(ctx, client, trimmedAppID, trimmedPlatform, asc.WithAppStoreVersionsStates(defaultRemovedEditableAppStoreVersionStates), callerRequestContext)
 	if err != nil {
 		return DefaultAppStoreVersion{}, err
 	}
@@ -151,10 +140,17 @@ func ResolveDefaultAppStoreVersion(ctx context.Context, client *asc.Client, appI
 		return selected, err
 	}
 
-	live, err := listDefaultLiveVersionCandidates(ctx, client, trimmedAppID, trimmedPlatform)
+	// Query both live-state spellings: filtering on one alone would report "no
+	// live version" for apps that expose only the other. A version the legacy
+	// filter still reports as READY_FOR_SALE is dropped when its
+	// appVersionState says it is no longer live.
+	live, err := ListAppStoreVersionsInStates(ctx, client, trimmedAppID, trimmedPlatform, LiveAppStoreVersionStateFilter())
 	if err != nil {
 		return DefaultAppStoreVersion{}, err
 	}
+	live = slices.DeleteFunc(live, func(version asc.Resource[asc.AppStoreVersionAttributes]) bool {
+		return !IsLiveAppStoreVersion(version.Attributes)
+	})
 	if selected, ok, err := selectDefaultAppStoreVersion(trimmedAppID, DefaultAppStoreVersionSourceLive, live); ok || err != nil {
 		return selected, err
 	}
@@ -167,61 +163,6 @@ func ResolveDefaultAppStoreVersion(ctx context.Context, client *asc.Client, appI
 		fmt.Errorf("%s; create one with `asc versions create` or pass --version", message),
 		asc.ErrNotFound,
 	)
-}
-
-// listDefaultLiveVersionCandidates queries both live-state spellings and merges
-// the results, deduplicating by version ID so a version Apple reports under
-// both attributes is considered once.
-func listDefaultLiveVersionCandidates(ctx context.Context, client *asc.Client, appID, platform string) ([]asc.Resource[asc.AppStoreVersionAttributes], error) {
-	legacy, err := listDefaultVersionCandidates(ctx, client, appID, platform, asc.WithAppStoreVersionsStates(defaultLiveAppStoreVersionStates))
-	if err != nil {
-		return nil, err
-	}
-	modern, err := listDefaultVersionCandidates(ctx, client, appID, platform, asc.WithAppStoreVersionsVersionStates(defaultLiveAppVersionStates))
-	if err != nil {
-		return nil, err
-	}
-
-	merged := make([]asc.Resource[asc.AppStoreVersionAttributes], 0, len(legacy)+len(modern))
-	seen := make(map[string]struct{}, len(legacy)+len(modern))
-	for _, group := range [][]asc.Resource[asc.AppStoreVersionAttributes]{legacy, modern} {
-		for _, version := range group {
-			id := strings.TrimSpace(version.ID)
-			if id != "" {
-				if _, duplicate := seen[id]; duplicate {
-					continue
-				}
-				seen[id] = struct{}{}
-			}
-			merged = append(merged, version)
-		}
-	}
-	return merged, nil
-}
-
-func listDefaultVersionCandidates(ctx context.Context, client *asc.Client, appID, platform string, stateOpt asc.AppStoreVersionsOption) ([]asc.Resource[asc.AppStoreVersionAttributes], error) {
-	opts := []asc.AppStoreVersionsOption{stateOpt, asc.WithAppStoreVersionsLimit(200)}
-	if platform != "" {
-		opts = append(opts, asc.WithAppStoreVersionsPlatforms([]string{platform}))
-	}
-	firstPage, err := client.GetAppStoreVersions(ctx, appID, opts...)
-	if err != nil {
-		return nil, fmt.Errorf("failed to list app store versions: %w", err)
-	}
-	if firstPage == nil {
-		return nil, nil
-	}
-	all, err := asc.PaginateAll(ctx, firstPage, func(ctx context.Context, nextURL string) (asc.PaginatedResponse, error) {
-		return client.GetAppStoreVersions(ctx, appID, asc.WithAppStoreVersionsNextURL(nextURL))
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to list app store versions: %w", err)
-	}
-	typed, ok := all.(*asc.AppStoreVersionsResponse)
-	if !ok {
-		return nil, fmt.Errorf("unexpected paginated response type %T", all)
-	}
-	return typed.Data, nil
 }
 
 // selectDefaultAppStoreVersion keeps the newest candidate per platform. It

@@ -26,7 +26,6 @@ const (
 	dsymDefaultWaitTimeout     = 15 * time.Minute
 	dsymDefaultPollInterval    = 30 * time.Second
 	dsymNotReadyStatus         = "dsym_not_ready"
-	dsymLiveAppStoreState      = "READY_FOR_SALE"
 	dsymLivePreorderStoreState = "PREORDER_READY_FOR_SALE"
 )
 
@@ -210,7 +209,7 @@ func resolveDSYMTargets(ctx context.Context, client *asc.Client, selection dsymS
 	defer cancel()
 	buildResp, err := ResolveBuild(requestCtx, client, selection.Resolve)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("builds dsyms: %w", err)
 	}
 	if buildResp == nil || strings.TrimSpace(buildResp.Data.ID) == "" {
 		return nil, fmt.Errorf("builds dsyms: no build matched")
@@ -225,7 +224,7 @@ func resolveDSYMTargets(ctx context.Context, client *asc.Client, selection dsymS
 func resolveSelectedDSYMTargets(ctx context.Context, client *asc.Client, selection dsymSelection) ([]dsymTarget, error) {
 	appID, err := shared.ResolveAppIDWithLookup(ctx, client, selection.Resolve.AppID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("builds dsyms: %w", err)
 	}
 	exactVersion := selection.Resolve.Version
 	platform := selection.Resolve.Platform
@@ -253,49 +252,31 @@ func resolveSelectedDSYMTargets(ctx context.Context, client *asc.Client, selecti
 	return targets, nil
 }
 
+// resolveLiveAppVersion finds the newest live (or pre-order) App Store
+// version. It queries both state spellings because Apple reports a live
+// version as appStoreState READY_FOR_SALE on some versions and only as
+// appVersionState READY_FOR_DISTRIBUTION on others.
 func resolveLiveAppVersion(ctx context.Context, client *asc.Client, appID, platform string) (liveAppVersion, error) {
-	requestCtx, cancel := shared.ContextWithTimeout(ctx)
-	defer cancel()
-	opts := []asc.AppStoreVersionsOption{
-		asc.WithAppStoreVersionsStates([]string{dsymLiveAppStoreState, dsymLivePreorderStoreState}),
-		asc.WithAppStoreVersionsLimit(200),
-	}
-	if platform != "" {
-		opts = append(opts, asc.WithAppStoreVersionsPlatforms([]string{platform}))
-	}
-	first, err := client.GetAppStoreVersions(requestCtx, appID, opts...)
+	filter := shared.LiveAppStoreVersionStateFilter()
+	filter.AppStoreStates = append(filter.AppStoreStates, dsymLivePreorderStoreState)
+	versions, err := shared.ListAppStoreVersionsInStatesWithRequestTimeouts(ctx, client, appID, platform, filter)
 	if err != nil {
-		return liveAppVersion{}, fmt.Errorf("builds dsyms: failed to list App Store versions: %w", err)
+		return liveAppVersion{}, fmt.Errorf("builds dsyms: %w", err)
 	}
-	var collected []liveAppVersion
-	err = asc.PaginateEach(ctx, first, func(ctx context.Context, nextURL string) (asc.PaginatedResponse, error) {
-		pageCtx, pageCancel := shared.ContextWithTimeout(ctx)
-		defer pageCancel()
-		return client.GetAppStoreVersions(pageCtx, appID, asc.WithAppStoreVersionsNextURL(nextURL))
-	}, func(page asc.PaginatedResponse) error {
-		resp, ok := page.(*asc.AppStoreVersionsResponse)
-		if !ok || resp == nil {
-			return fmt.Errorf("unexpected app store versions page type %T", page)
+	collected := make([]liveAppVersion, 0, len(versions))
+	for _, item := range versions {
+		if !shared.IsLiveOrPreorderAppStoreVersion(item.Attributes) {
+			continue
 		}
-		for _, item := range resp.Data {
-			state := strings.ToUpper(strings.TrimSpace(item.Attributes.AppStoreState))
-			if state != dsymLiveAppStoreState && state != dsymLivePreorderStoreState {
-				continue
-			}
-			created, parseErr := time.Parse(time.RFC3339, strings.TrimSpace(item.Attributes.CreatedDate))
-			if parseErr != nil {
-				return fmt.Errorf("app store version %q has invalid createdDate %q", item.ID, item.Attributes.CreatedDate)
-			}
-			collected = append(collected, liveAppVersion{
-				Version:     strings.TrimSpace(item.Attributes.VersionString),
-				Platform:    strings.ToUpper(strings.TrimSpace(string(item.Attributes.Platform))),
-				CreatedDate: created,
-			})
+		created, parseErr := time.Parse(time.RFC3339, strings.TrimSpace(item.Attributes.CreatedDate))
+		if parseErr != nil {
+			return liveAppVersion{}, fmt.Errorf("builds dsyms: app store version %q has invalid createdDate %q", item.ID, item.Attributes.CreatedDate)
 		}
-		return nil
-	})
-	if err != nil {
-		return liveAppVersion{}, fmt.Errorf("builds dsyms: failed to list App Store versions: %w", err)
+		collected = append(collected, liveAppVersion{
+			Version:     strings.TrimSpace(item.Attributes.VersionString),
+			Platform:    strings.ToUpper(strings.TrimSpace(string(item.Attributes.Platform))),
+			CreatedDate: created,
+		})
 	}
 	return chooseLiveVersion(collected, platform)
 }

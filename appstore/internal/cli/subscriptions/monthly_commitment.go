@@ -7,7 +7,6 @@ import (
 	"math/big"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/peterbourgon/ff/v3/ffcli"
 
@@ -516,7 +515,7 @@ func validateMonthlyCommitmentUpfrontPrices(
 		subscriptionID,
 		200,
 		"",
-		time.Now().UTC(),
+		subscriptionPricingToday(),
 		asc.SubscriptionPlanTypeUpfront,
 		"",
 	)
@@ -566,14 +565,13 @@ func prepareMonthlySubscriptionPrices(
 	territoryIDs []string,
 	monthlyPrice string,
 ) ([]monthlySubscriptionPriceCreate, error) {
-	now := time.Now().UTC()
 	resolvedPrices, err := fetchResolvedSubscriptionPrices(
 		ctx,
 		client,
 		subscriptionID,
 		200,
 		"",
-		now,
+		subscriptionPricingToday(),
 		asc.SubscriptionPlanTypeMonthly,
 		"",
 	)

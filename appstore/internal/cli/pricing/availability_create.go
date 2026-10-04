@@ -9,8 +9,9 @@ import (
 )
 
 // Initial availability requires an entry for every territory, including those
-// where the app must remain unavailable.
-func initialTerritoryAvailabilities(ctx context.Context, client *asc.Client, selected []string, available bool) ([]asc.TerritoryAvailabilityCreate, error) {
+// where the app must remain unavailable. allTerritories selects every catalog
+// territory, so each one is set to available.
+func initialTerritoryAvailabilities(ctx context.Context, client *asc.Client, selected []string, allTerritories, available bool) ([]asc.TerritoryAvailabilityCreate, error) {
 	first, err := client.GetTerritories(ctx, asc.WithTerritoriesLimit(200))
 	if err != nil {
 		return nil, fmt.Errorf("fetch territories: %w", err)
@@ -51,7 +52,7 @@ func initialTerritoryAvailabilities(ctx context.Context, client *asc.Client, sel
 		if !known[id] {
 			continue
 		}
-		result = append(result, asc.TerritoryAvailabilityCreate{TerritoryID: id, Available: false})
+		result = append(result, asc.TerritoryAvailabilityCreate{TerritoryID: id, Available: allTerritories && available})
 		delete(known, id)
 	}
 	return result, nil

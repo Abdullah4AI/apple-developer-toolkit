@@ -199,3 +199,37 @@ func TestVersionsListLatestRejectsNextURL(t *testing.T) {
 		t.Fatalf("expected latest/next conflict diagnostic, got %q", stderr)
 	}
 }
+
+// The help recommends --state READY_FOR_DISTRIBUTION --latest for live versions
+// that Apple reports only through appVersionState; it must filter on that
+// attribute and return such a version.
+func TestVersionsListLatestFindsVersionReportedOnlyAsReadyForDistribution(t *testing.T) {
+	setupAuth(t)
+	originalTransport := http.DefaultTransport
+	t.Cleanup(func() { http.DefaultTransport = originalTransport })
+
+	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		if req.Method != http.MethodGet || req.URL.Path != "/v1/apps/app-1/appStoreVersions" {
+			return nil, fmt.Errorf("unexpected request: %s %s", req.Method, req.URL.String())
+		}
+		query := req.URL.Query()
+		if got := query.Get("filter[appVersionState]"); got != "READY_FOR_DISTRIBUTION" {
+			return nil, fmt.Errorf("filter[appVersionState] = %q, want READY_FOR_DISTRIBUTION", got)
+		}
+		if got := query.Get("filter[appStoreState]"); got != "" {
+			return nil, fmt.Errorf("filter[appStoreState] = %q, want unset", got)
+		}
+		return jsonHTTPResponse(http.StatusOK, `{"data":[
+			{"type":"appStoreVersions","id":"ver-live","attributes":{"platform":"IOS","versionString":"3.0","appVersionState":"READY_FOR_DISTRIBUTION","createdDate":"2026-09-01T00:00:00Z"}}
+		],"links":{}}`), nil
+	})
+
+	stdout, stderr := captureOutput(t, func() {
+		if code := rootcmd.Run([]string{"versions", "list", "--app", "app-1", "--state", "READY_FOR_DISTRIBUTION", "--latest", "--output", "json"}, "1.2.3"); code != rootcmd.ExitSuccess {
+			t.Fatalf("exit code = %d, want %d", code, rootcmd.ExitSuccess)
+		}
+	})
+	if !strings.Contains(stdout, `"id":"ver-live"`) {
+		t.Fatalf("expected the READY_FOR_DISTRIBUTION version, got stdout=%q stderr=%q", stdout, stderr)
+	}
+}

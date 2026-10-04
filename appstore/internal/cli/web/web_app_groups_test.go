@@ -846,6 +846,11 @@ func TestWebAppGroupsClassifiesOperatorFailures(t *testing.T) {
 			wantCode: shared.DiagnosticAuthenticationRejected,
 		},
 		{
+			name:     "no usable web session for the account",
+			err:      newMissingWebSessionError("user@example.com", ""),
+			wantCode: shared.DiagnosticRequiredInputMissing,
+		},
+		{
 			name:     "missing App Group",
 			err:      &webcore.DeveloperAppGroupNotFoundError{GroupID: "GROUP1"},
 			wantCode: shared.DiagnosticResourceNotFound,

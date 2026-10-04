@@ -100,7 +100,7 @@ func NewAvailabilitySetCommand(config AvailabilitySetCommandConfig) *ffcli.Comma
 				return fmt.Errorf("%s: %w", config.ErrorPrefix, err)
 			}
 
-			requestCtx, cancel := contextWithAvailabilityTimeout(ctx, *allTerritories)
+			requestCtx, cancel := ContextWithAvailabilityTimeout(ctx, *allTerritories)
 			defer cancel()
 
 			var expectedAvailableInNewTerritories *bool
@@ -180,7 +180,7 @@ Examples:
 				return fmt.Errorf("pricing availability remove-from-sale: %w", err)
 			}
 
-			requestCtx, cancel := contextWithAvailabilityTimeout(ctx, true)
+			requestCtx, cancel := ContextWithAvailabilityTimeout(ctx, true)
 			defer cancel()
 
 			liveListings, listingsErr := fetchLiveAvailabilityPlatformListings(requestCtx, client, resolvedAppID)
@@ -569,7 +569,10 @@ func availabilityListingStatus(attributes asc.AppStoreVersionAttributes) (string
 	return state, live, stateKnown
 }
 
-func contextWithAvailabilityTimeout(ctx context.Context, allTerritories bool) (context.Context, context.CancelFunc) {
+// ContextWithAvailabilityTimeout returns the request context for availability
+// updates: all-territories updates fan out one PATCH per territory, so they get
+// the longer bulk timeout.
+func ContextWithAvailabilityTimeout(ctx context.Context, allTerritories bool) (context.Context, context.CancelFunc) {
 	if allTerritories {
 		return ContextWithResolvedTimeout(ctx, bulkAvailabilityTimeout)
 	}

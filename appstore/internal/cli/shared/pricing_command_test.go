@@ -98,11 +98,7 @@ func TestPricingDefaultStartDateUsesUSPacificCalendar(t *testing.T) {
 			if err != nil {
 				t.Fatalf("parse now: %v", err)
 			}
-			got, err := pricingDefaultStartDate(now)
-			if err != nil {
-				t.Fatalf("pricingDefaultStartDate() error: %v", err)
-			}
-			if got != test.want {
+			if got := pricingDefaultStartDate(now); got != test.want {
 				t.Fatalf("pricingDefaultStartDate(%s) = %q, want %q", test.now, got, test.want)
 			}
 		})

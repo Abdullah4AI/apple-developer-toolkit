@@ -1676,6 +1676,7 @@ func TestIsAppUpdate_IncludesReleasedAndRemovedStatesFilters(t *testing.T) {
 }
 
 func TestIsAppUpdate_EmptyPlatformSkipsPlatformFilter(t *testing.T) {
+	var stateQueries []string
 	client := newSubmitTestClient(t, submitRoundTripFunc(func(req *http.Request) (*http.Response, error) {
 		if req.Method != http.MethodGet {
 			return nil, fmt.Errorf("unexpected method: %s", req.Method)
@@ -1688,9 +1689,11 @@ func TestIsAppUpdate_EmptyPlatformSkipsPlatformFilter(t *testing.T) {
 		if got := query.Get("filter[platform]"); got != "" {
 			return nil, fmt.Errorf("did not expect filter[platform], got %q", got)
 		}
-		if got := query.Get("filter[appStoreState]"); got != "READY_FOR_SALE,DEVELOPER_REMOVED_FROM_SALE,REMOVED_FROM_SALE" {
-			return nil, fmt.Errorf("unexpected filter[appStoreState]: %q", got)
+		stateQuery := query.Get("filter[appStoreState]") + "|" + query.Get("filter[appVersionState]")
+		if stateQuery != "READY_FOR_SALE,DEVELOPER_REMOVED_FROM_SALE,REMOVED_FROM_SALE|" && stateQuery != "|READY_FOR_DISTRIBUTION" {
+			return nil, fmt.Errorf("unexpected state filters: %q", stateQuery)
 		}
+		stateQueries = append(stateQueries, stateQuery)
 		if got := query.Get("limit"); got != "1" {
 			return nil, fmt.Errorf("unexpected limit: got %q want %q", got, "1")
 		}
@@ -1704,6 +1707,34 @@ func TestIsAppUpdate_EmptyPlatformSkipsPlatformFilter(t *testing.T) {
 	}
 	if isUpdate {
 		t.Fatal("isAppUpdate() = true, want false when no versions are returned")
+	}
+	if got, want := strings.Join(stateQueries, ","), "READY_FOR_SALE,DEVELOPER_REMOVED_FROM_SALE,REMOVED_FROM_SALE|,|READY_FOR_DISTRIBUTION"; got != want {
+		t.Fatalf("state queries = %q, want %q", got, want)
+	}
+}
+
+func TestIsAppUpdate_DetectsVersionLiveOnlyUnderAppVersionState(t *testing.T) {
+	client := newSubmitTestClient(t, submitRoundTripFunc(func(req *http.Request) (*http.Response, error) {
+		if req.Method != http.MethodGet || req.URL.Path != "/v1/apps/app-123/appStoreVersions" {
+			return nil, fmt.Errorf("unexpected request: %s %s", req.Method, req.URL.Path)
+		}
+		query := req.URL.Query()
+		switch {
+		case query.Get("filter[appStoreState]") == "READY_FOR_SALE,DEVELOPER_REMOVED_FROM_SALE,REMOVED_FROM_SALE":
+			return submitJSONResponse(http.StatusOK, `{"data":[]}`)
+		case query.Get("filter[appVersionState]") == "READY_FOR_DISTRIBUTION":
+			return submitJSONResponse(http.StatusOK, `{"data":[{"type":"appStoreVersions","id":"version-1","attributes":{"platform":"IOS","appVersionState":"READY_FOR_DISTRIBUTION"}}]}`)
+		default:
+			return nil, fmt.Errorf("unexpected query: %s", req.URL.RawQuery)
+		}
+	}))
+
+	isUpdate, err := isAppUpdate(context.Background(), client, "app-123", "IOS")
+	if err != nil {
+		t.Fatalf("isAppUpdate() error = %v", err)
+	}
+	if !isUpdate {
+		t.Fatal("isAppUpdate() = false, want true when a version is live under appVersionState")
 	}
 }
 

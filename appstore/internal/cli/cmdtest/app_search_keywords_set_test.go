@@ -173,10 +173,14 @@ func TestAppsSearchKeywordsSetResolutionFailures(t *testing.T) {
 		wantCalls int
 	}{
 		{
-			name:      "version not found",
-			responses: []string{`{"data":[]}`},
-			wantErr:   `app store version not found for version "1.2.3"`,
-			wantCalls: 1,
+			name: "version not found",
+			responses: []string{
+				`{"data":[]}`,
+				// The not-found diagnostic lists the app's existing versions.
+				`{"data":[{"type":"appStoreVersions","id":"version-2","attributes":{"platform":"IOS","versionString":"2.0","appStoreState":"PREPARE_FOR_SUBMISSION"}}]}`,
+			},
+			wantErr:   "app store version not found for version \"1.2.3\"\nExisting App Store versions for app \"app-1\" (newest first):\n  2.0  IOS  PREPARE_FOR_SUBMISSION  version-2\n",
+			wantCalls: 2,
 		},
 		{
 			name:      "platform is ambiguous",

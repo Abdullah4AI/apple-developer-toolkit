@@ -351,7 +351,7 @@ func TestMetadataPushDryRunDoesNotWarnForCompleteCreate(t *testing.T) {
 				Header:     http.Header{"Content-Type": []string{"application/json"}},
 			}, nil
 		case "/v1/apps/app-1/appStoreVersions":
-			if strings.Contains(req.URL.RawQuery, "filter%5BappStoreState%5D") {
+			if strings.Contains(req.URL.RawQuery, "filter%5BappStoreState%5D") || req.URL.Query().Get("filter[appVersionState]") == "READY_FOR_DISTRIBUTION" {
 				body := `{"data":[],"links":{"next":""}}`
 				return &http.Response{
 					StatusCode: http.StatusOK,
@@ -1214,7 +1214,7 @@ func TestMetadataPushApplyWarnsWhenUpdateRequiresWhatsNew(t *testing.T) {
 				Header:     http.Header{"Content-Type": []string{"application/json"}},
 			}, nil
 		case "/v1/apps/app-1/appStoreVersions":
-			if strings.Contains(req.URL.RawQuery, "filter%5BappStoreState%5D") {
+			if strings.Contains(req.URL.RawQuery, "filter%5BappStoreState%5D") || req.URL.Query().Get("filter[appVersionState]") == "READY_FOR_DISTRIBUTION" {
 				body := `{"data":[{"type":"appStoreVersions","id":"released-version","attributes":{"versionString":"1.0","platform":"IOS","appStoreState":"READY_FOR_SALE"}}],"links":{"next":""}}`
 				return &http.Response{
 					StatusCode: http.StatusOK,

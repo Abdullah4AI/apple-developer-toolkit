@@ -276,6 +276,32 @@ func Path() (string, error) {
 	return resolvePath()
 }
 
+// OverridePath returns the ASC_CONFIG_PATH override and true when it is set.
+func OverridePath() (string, bool, error) {
+	envPath := strings.TrimSpace(os.Getenv(configPathEnvVar))
+	if envPath == "" {
+		return "", false, nil
+	}
+	path, err := cleanConfigPath(envPath)
+	if err != nil {
+		return "", true, err
+	}
+	return path, true, nil
+}
+
+// DefaultWritePath returns the config file that commands storing credentials
+// write to when no explicit destination is requested: ASC_CONFIG_PATH when it
+// is set, because reads then use only that file, otherwise the global config.
+// Unlike Path, it never selects a repo-local config found by the upward search;
+// callers write there only when the user asks for it explicitly.
+func DefaultWritePath() (string, error) {
+	path, ok, err := OverridePath()
+	if err != nil || ok {
+		return path, err
+	}
+	return GlobalPath()
+}
+
 // LocalPath returns the local configuration file path.
 func LocalPath() (string, error) {
 	baseDir, err := localConfigBaseDir()
@@ -286,8 +312,8 @@ func LocalPath() (string, error) {
 }
 
 func resolvePath() (string, error) {
-	if envPath := strings.TrimSpace(os.Getenv(configPathEnvVar)); envPath != "" {
-		return cleanConfigPath(envPath)
+	if path, ok, err := OverridePath(); ok || err != nil {
+		return path, err
 	}
 
 	localPath, err := findLocalConfigPath()
@@ -295,6 +321,7 @@ func resolvePath() (string, error) {
 		return "", err
 	}
 	if localPath != "" {
+		warnIfAccountHomeLocalConfig(localPath)
 		return localPath, nil
 	}
 

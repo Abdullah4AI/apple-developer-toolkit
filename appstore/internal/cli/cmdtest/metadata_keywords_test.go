@@ -1166,7 +1166,7 @@ func TestMetadataKeywordsPlanBuildsKeywordOnlyRemotePlan(t *testing.T) {
 		}
 		switch req.URL.Path {
 		case "/v1/apps/app-1/appStoreVersions":
-			if req.URL.Query().Get("filter[appStoreState]") != "" {
+			if req.URL.Query().Get("filter[appStoreState]") != "" || req.URL.Query().Get("filter[appVersionState]") == "READY_FOR_DISTRIBUTION" {
 				return metadataKeywordsJSONResponse(`{"data":[],"links":{"next":""}}`)
 			}
 			return metadataKeywordsJSONResponse(`{"data":[{"type":"appStoreVersions","id":"version-1","attributes":{"versionString":"1.2.3","platform":"IOS"}}],"links":{"next":""}}`)
@@ -1271,7 +1271,7 @@ func TestMetadataKeywordsPlanUsesFreshReadinessContextAfterSlowPagination(t *tes
 		}
 		switch req.URL.Path {
 		case "/v1/apps/app-1/appStoreVersions":
-			if req.URL.Query().Get("filter[appStoreState]") != "" {
+			if req.URL.Query().Get("filter[appStoreState]") != "" || req.URL.Query().Get("filter[appVersionState]") == "READY_FOR_DISTRIBUTION" {
 				return metadataKeywordsJSONResponse(`{"data":[{"type":"appStoreVersions","id":"released","attributes":{"versionString":"1.0","platform":"IOS","appStoreState":"READY_FOR_SALE"}}],"links":{"next":""}}`)
 			}
 			return metadataKeywordsJSONResponse(`{"data":[{"type":"appStoreVersions","id":"version-1","attributes":{"versionString":"1.2.3","platform":"IOS"}}],"links":{"next":""}}`)
@@ -1340,7 +1340,7 @@ func TestMetadataKeywordsPlanDoesNotWarnForExistingLocaleUpdate(t *testing.T) {
 		}
 		switch req.URL.Path {
 		case "/v1/apps/app-1/appStoreVersions":
-			if req.URL.Query().Get("filter[appStoreState]") != "" {
+			if req.URL.Query().Get("filter[appStoreState]") != "" || req.URL.Query().Get("filter[appVersionState]") == "READY_FOR_DISTRIBUTION" {
 				return metadataKeywordsJSONResponse(`{"data":[],"links":{"next":""}}`)
 			}
 			return metadataKeywordsJSONResponse(`{"data":[{"type":"appStoreVersions","id":"version-1","attributes":{"versionString":"1.2.3","platform":"IOS"}}],"links":{"next":""}}`)
@@ -1419,7 +1419,7 @@ func TestMetadataKeywordsDiffIncludesCreateWarnings(t *testing.T) {
 		}
 		switch req.URL.Path {
 		case "/v1/apps/app-1/appStoreVersions":
-			if req.URL.Query().Get("filter[appStoreState]") != "" {
+			if req.URL.Query().Get("filter[appStoreState]") != "" || req.URL.Query().Get("filter[appVersionState]") == "READY_FOR_DISTRIBUTION" {
 				return metadataKeywordsJSONResponse(`{"data":[],"links":{"next":""}}`)
 			}
 			return metadataKeywordsJSONResponse(`{"data":[{"type":"appStoreVersions","id":"version-1","attributes":{"versionString":"1.2.3","platform":"IOS"}}],"links":{"next":""}}`)
@@ -1748,7 +1748,7 @@ func TestMetadataKeywordsApplyCreatesLocale(t *testing.T) {
 	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		switch req.URL.Path {
 		case "/v1/apps/app-1/appStoreVersions":
-			if strings.Contains(req.URL.RawQuery, "filter%5BappStoreState%5D") {
+			if strings.Contains(req.URL.RawQuery, "filter%5BappStoreState%5D") || req.URL.Query().Get("filter[appVersionState]") == "READY_FOR_DISTRIBUTION" {
 				return metadataKeywordsJSONResponse(`{"data":[],"links":{"next":""}}`)
 			}
 			return metadataKeywordsJSONResponse(`{"data":[{"type":"appStoreVersions","id":"version-1","attributes":{"versionString":"1.2.3","platform":"IOS"}}],"links":{"next":""}}`)

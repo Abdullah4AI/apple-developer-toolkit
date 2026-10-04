@@ -431,7 +431,7 @@ func StoreCredentialsWithKeyType(name, keyID, issuerID, keyPath, keyType string)
 			return err
 		}
 		// Successfully stored in keychain - remove matching config entry for security
-		if err := removeFromConfigIfPresent(name); err != nil && !errors.Is(err, config.ErrNotFound) {
+		if err := removeFromConfigIfPresent(name, false); err != nil && !errors.Is(err, config.ErrNotFound) {
 			// Log but don't fail - keychain is the authoritative storage
 			_ = err
 		}
@@ -770,19 +770,15 @@ func StoreCredentialsConfig(name, keyID, issuerID, keyPath string) error {
 	return StoreCredentialsConfigWithKeyType(name, keyID, issuerID, keyPath, config.CredentialKeyTypeTeam)
 }
 
-// StoreCredentialsConfigWithKeyType stores credentials in the config file only with an explicit key type.
+// StoreCredentialsConfigWithKeyType stores credentials in the config file only
+// with an explicit key type. It writes to ASC_CONFIG_PATH when set, matching
+// where reads look, and otherwise to the global config.
 func StoreCredentialsConfigWithKeyType(name, keyID, issuerID, keyPath, keyType string) error {
-	payload := credentialPayload{
-		KeyID:          keyID,
-		IssuerID:       issuerID,
-		PrivateKeyPath: keyPath,
-		KeyType:        normalizedStoredKeyType(keyType),
-	}
-	path, err := config.GlobalPath()
+	path, err := config.DefaultWritePath()
 	if err != nil {
 		return err
 	}
-	return storeInConfigAt(name, payload, path)
+	return StoreCredentialsConfigAtWithKeyType(name, keyID, issuerID, keyPath, path, keyType)
 }
 
 // StoreCredentialsConfigAt stores credentials in the specified config file.
@@ -1121,10 +1117,10 @@ func removeMigratedKeychainCredential(name string) error {
 	return nil
 }
 
-// clearConfigCredentials clears credentials from the config file.
-// This is called after successfully migrating to keychain storage.
-func clearConfigCredentials() error {
-	paths, err := configCleanupPaths()
+// clearConfigCredentials clears credentials from the config files that
+// configCleanupPaths selects.
+func clearConfigCredentials(includeGlobal bool) error {
+	paths, err := configCleanupPaths(includeGlobal)
 	if err != nil {
 		return err
 	}
@@ -1265,8 +1261,23 @@ func normalizeCredentialDefaults(credentials []Credential) {
 	}
 }
 
-// RemoveCredentials removes a named credential.
+// RemoveOptions controls which config files credential removal edits.
+type RemoveOptions struct {
+	// IncludeGlobalConfig also removes matching credentials from the global
+	// config (~/.asc/config.json) when ASC_CONFIG_PATH selects another file.
+	// Without ASC_CONFIG_PATH the global config is always included.
+	IncludeGlobalConfig bool
+}
+
+// RemoveCredentials removes a named credential from the keychain and the
+// config files selected by the default RemoveOptions.
 func RemoveCredentials(name string) error {
+	return RemoveCredentialsWithOptions(name, RemoveOptions{})
+}
+
+// RemoveCredentialsWithOptions removes a named credential from the keychain
+// and the config files that opts selects.
+func RemoveCredentialsWithOptions(name string, opts RemoveOptions) error {
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return fmt.Errorf("credential name is required")
@@ -1287,7 +1298,7 @@ func RemoveCredentials(name string) error {
 		}
 	}
 
-	configErr := removeFromConfigIfPresent(name)
+	configErr := removeFromConfigIfPresent(name, opts.IncludeGlobalConfig)
 	if configErr != nil &&
 		!errors.Is(configErr, config.ErrNotFound) &&
 		!errors.Is(configErr, keyring.ErrKeyNotFound) {
@@ -1302,11 +1313,18 @@ func RemoveCredentials(name string) error {
 	return configErr
 }
 
-// RemoveAllCredentials removes all stored credentials
+// RemoveAllCredentials removes all stored credentials from the keychain and
+// the config files selected by the default RemoveOptions.
 func RemoveAllCredentials() error {
+	return RemoveAllCredentialsWithOptions(RemoveOptions{})
+}
+
+// RemoveAllCredentialsWithOptions removes all stored credentials from the
+// keychain and the config files that opts selects.
+func RemoveAllCredentialsWithOptions(opts RemoveOptions) error {
 	// Always attempt to clear config credentials first, regardless of keychain state
 	// This ensures config is cleaned even if keychain has issues (e.g., locked, read-only)
-	configErr := clearConfigCredentials()
+	configErr := clearConfigCredentials(opts.IncludeGlobalConfig)
 
 	// Try to clear keychain as well, but don't fail if keychain has issues
 	keychainErr := removeAllFromKeychain()
@@ -1322,6 +1340,44 @@ func RemoveAllCredentials() error {
 
 	// Both failed - return keychain error as primary
 	return keychainErr
+}
+
+// RetainedGlobalConfigCredentials reports whether the global config
+// (~/.asc/config.json) holds credentials that removal with the default
+// RemoveOptions leaves in place because ASC_CONFIG_PATH selects another file.
+// An empty name matches any stored credential. It returns the global config
+// path when such credentials exist.
+func RetainedGlobalConfigCredentials(name string) (string, bool, error) {
+	overridePath, overridden, err := config.OverridePath()
+	if err != nil || !overridden {
+		return "", false, err
+	}
+	globalPath, err := config.GlobalPath()
+	if err != nil {
+		return "", false, err
+	}
+	if sameConfigPath(overridePath, globalPath) {
+		return "", false, nil
+	}
+	cfg, err := config.LoadAt(globalPath)
+	if errors.Is(err, config.ErrNotFound) {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, err
+	}
+	name = strings.TrimSpace(name)
+	retained := false
+	if name == "" {
+		// Match what --include-global would clear, including keychain metadata.
+		retained = hasAnyCredentials(cfg) || len(cfg.KeychainMetadata) > 0
+	} else {
+		retained = removeCredentialFromConfig(cloneConfigForCredentialRemoval(cfg), name)
+	}
+	if !retained {
+		return "", false, nil
+	}
+	return globalPath, true, nil
 }
 
 func sameConfigPath(left, right string) bool {
@@ -2025,8 +2081,8 @@ func migrateLegacyCredentials(credentials []Credential) {
 	}
 }
 
-func removeFromConfigIfPresent(name string) error {
-	paths, err := configCleanupPaths()
+func removeFromConfigIfPresent(name string, includeGlobal bool) error {
+	paths, err := configCleanupPaths(includeGlobal)
 	if err != nil {
 		return err
 	}
@@ -2041,6 +2097,8 @@ func removeFromConfigIfPresent(name string) error {
 	for _, path := range paths {
 		cfg, err := config.LoadAt(path)
 		if errors.Is(err, config.ErrNotFound) {
+			// A missing config file holds no matching credential.
+			missingCredential = true
 			continue
 		}
 		if err != nil {
@@ -2536,10 +2594,17 @@ func clearDefaultNameIf(name string) error {
 	return nil
 }
 
-func configCleanupPaths() ([]string, error) {
+// configCleanupPaths returns the config files credential cleanup edits: the
+// active config, plus the global config when ASC_CONFIG_PATH is unset or
+// includeGlobal is true. While ASC_CONFIG_PATH is set, reads never consult the
+// global config, so default cleanup leaves it alone.
+func configCleanupPaths(includeGlobal bool) ([]string, error) {
 	activePath, err := config.Path()
 	if err != nil {
 		return nil, err
+	}
+	if _, overridden, _ := config.OverridePath(); overridden && !includeGlobal {
+		return []string{activePath}, nil
 	}
 	globalPath, err := config.GlobalPath()
 	if err != nil {

@@ -7,6 +7,8 @@ import (
 	"io"
 	"strings"
 	"testing"
+
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
 // TestWebCommandsSelectAppleIDFromEnvironmentOverAmbiguousCache pins the
@@ -14,7 +16,8 @@ import (
 // cached-session default ambiguous, so without the variable this invocation
 // ends in the "pass --apple-id to choose one" usage error. The environment
 // account has no cached session and no password source, so resolution stops at
-// the password usage error instead of attempting a live login.
+// the missing-session error for that account instead of attempting a live
+// login.
 func TestWebCommandsSelectAppleIDFromEnvironmentOverAmbiguousCache(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("HOME", t.TempDir())
@@ -29,15 +32,15 @@ func TestWebCommandsSelectAppleIDFromEnvironmentOverAmbiguousCache(t *testing.T)
 	writeCachedWebSessionFile(t, dir, "amy@example.com")
 
 	stderr, runErr := runWebCommandForAppleIDDefault(t, "web", "review", "show", "--app", "123456789")
-	if !errors.Is(runErr, flag.ErrHelp) {
-		t.Fatalf("expected usage error (exit 2), got %v", runErr)
+	if !errors.Is(runErr, shared.ErrMissingWebSession) || errors.Is(runErr, flag.ErrHelp) {
+		t.Fatalf("expected the missing-session error without the usage page, got %v", runErr)
 	}
 	// The stderr notice naming the source is written through the session
 	// diagnostics writer bound at package init, which this harness cannot
-	// capture; the resolver unit tests assert its text. Reaching the password
-	// usage error for an uncached account is what proves the variable chose it.
-	if !strings.Contains(stderr, "password is required") {
-		t.Fatalf("stderr = %q, want the password usage error for the environment account", stderr)
+	// capture; the resolver unit tests assert its text. The missing-session
+	// error naming the uncached environment account proves the variable chose it.
+	if !strings.Contains(runErr.Error(), "no usable Apple web session for env@example.com") {
+		t.Fatalf("error = %q, want the missing-session error for the environment account", runErr)
 	}
 	if strings.Contains(stderr, "multiple cached web sessions are available") {
 		t.Fatalf("stderr = %q, did not expect the ambiguous-cache usage error", stderr)

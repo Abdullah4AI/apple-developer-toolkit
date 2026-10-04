@@ -62,6 +62,59 @@ func TestConsumeResolvedAppPricePage_SkipsFutureAndExpiredRows(t *testing.T) {
 	}
 }
 
+func TestConsumeResolvedAppPricePage_DateBoundaries(t *testing.T) {
+	page := &asc.AppPricesResponse{
+		Data: []asc.Resource[asc.AppPriceAttributes]{
+			newResolvedAppPriceResource("old-price", "pp-old", "2026-01-01", "2026-10-01", true),
+			newResolvedAppPriceResource("new-price", "pp-new", "2026-10-01", "", true),
+		},
+		Included: mustMarshalResolvedAppJSON(t, []map[string]any{
+			appPricePointIncluded("pp-old", "0.99", "0.84"),
+			appPricePointIncluded("pp-new", "1.99", "1.69"),
+		}),
+	}
+
+	tests := []struct {
+		now  time.Time
+		want string
+	}{
+		// 17:30 PDT on 2026-09-30: the price ending 2026-10-01 still applies.
+		{now: time.Date(2026, time.October, 1, 0, 30, 0, 0, time.UTC), want: "0.99"},
+		// Pacific midnight: the old price ends on its end date.
+		{now: time.Date(2026, time.October, 1, 7, 0, 0, 0, time.UTC), want: "1.99"},
+	}
+	for _, test := range tests {
+		t.Run(test.now.Format(time.RFC3339), func(t *testing.T) {
+			candidates := make(map[string]resolvedAppPriceCandidate)
+			if err := consumeResolvedAppPricePage(candidates, page, test.now); err != nil {
+				t.Fatalf("consumeResolvedAppPricePage() error = %v", err)
+			}
+			if got := candidates["USA"].row.CustomerPrice; got != test.want {
+				t.Fatalf("customerPrice = %q, want %q", got, test.want)
+			}
+		})
+	}
+}
+
+func TestConsumeResolvedAppPricePage_SkipsPriceOnItsEndDate(t *testing.T) {
+	page := &asc.AppPricesResponse{
+		Data: []asc.Resource[asc.AppPriceAttributes]{
+			newResolvedAppPriceResource("ending-price", "pp-ending", "2026-01-01", "2026-09-30", true),
+		},
+		Included: mustMarshalResolvedAppJSON(t, []map[string]any{
+			appPricePointIncluded("pp-ending", "0.99", "0.84"),
+		}),
+	}
+
+	candidates := make(map[string]resolvedAppPriceCandidate)
+	if err := consumeResolvedAppPricePage(candidates, page, time.Date(2026, time.September, 30, 20, 0, 0, 0, time.UTC)); err != nil {
+		t.Fatalf("consumeResolvedAppPricePage() error = %v", err)
+	}
+	if len(candidates) != 0 {
+		t.Fatalf("expected the price ending today to be excluded, got %+v", candidates)
+	}
+}
+
 func newResolvedAppPriceResource(
 	priceID string,
 	pricePointID string,

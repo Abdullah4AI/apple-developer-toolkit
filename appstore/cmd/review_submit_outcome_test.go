@@ -21,13 +21,18 @@ func TestRunReviewSubmitMissingVersionIsNotFound(t *testing.T) {
 		if req.Method != http.MethodGet || req.URL.Path != "/v1/apps/app-1/appStoreVersions" {
 			t.Fatalf("request = %s %s, want GET /v1/apps/app-1/appStoreVersions", req.Method, req.URL.Path)
 		}
-		if got := req.URL.Query().Get("filter[versionString]"); got != "9.9.9" {
-			t.Fatalf("filter[versionString] = %q, want 9.9.9", got)
-		}
 		if got := req.URL.Query().Get("filter[platform]"); got != "IOS" {
 			t.Fatalf("filter[platform] = %q, want IOS", got)
 		}
 		w.Header().Set("Content-Type", "application/json")
+		if !req.URL.Query().Has("filter[versionString]") {
+			// The not-found diagnostic lists the platform's existing versions.
+			fmt.Fprint(w, `{"data":[{"type":"appStoreVersions","id":"ver-2","attributes":{"versionString":"2.0.0","platform":"IOS","appVersionState":"PREPARE_FOR_SUBMISSION","createdDate":"2026-08-01T00:00:00Z"}}]}`)
+			return
+		}
+		if got := req.URL.Query().Get("filter[versionString]"); got != "9.9.9" {
+			t.Fatalf("filter[versionString] = %q, want 9.9.9", got)
+		}
 		fmt.Fprint(w, `{"data":[]}`)
 	}))
 	defer server.Close()
@@ -63,6 +68,10 @@ func TestRunReviewSubmitMissingVersionIsNotFound(t *testing.T) {
 	}
 	if !strings.Contains(stderr, `app store version not found for version "9.9.9" and platform "IOS"`) {
 		t.Fatalf("stderr = %q, want missing-version diagnostic", stderr)
+	}
+	if !strings.Contains(stderr, "\n  2.0.0  IOS  PREPARE_FOR_SUBMISSION  ver-2\n") ||
+		!strings.Contains(stderr, `asc versions update --version-id "ver-2" --version "9.9.9"`) {
+		t.Fatalf("stderr = %q, want existing versions and the rename command", stderr)
 	}
 	if gotExitCode != ExitNotFound || gotContext.OutcomeKind != telemetry.OutcomeNotFound {
 		t.Fatalf("unexpected telemetry: exit=%d context=%+v", gotExitCode, gotContext)

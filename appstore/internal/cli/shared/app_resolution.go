@@ -31,10 +31,10 @@ func ResolveAppStoreVersionIDAndState(ctx context.Context, client *asc.Client, a
 		return "", "", MarkAmbiguousSelectionSample(AmbiguousAppStoreVersionError(version, platform, resp.Data, "", "--version-id"))
 	}
 	if len(resp.Data) == 0 {
-		return "", "", NewErrorWithCause(
+		return "", "", WithAppStoreVersionNotFoundDiagnostics(ctx, client, appID, version, platform, NewErrorWithCause(
 			fmt.Errorf("app store version not found for version %q and platform %q", version, platform),
 			asc.ErrNotFound,
-		)
+		))
 	}
 	if len(resp.Data) > 1 {
 		return "", "", AmbiguousAppStoreVersionError(version, platform, resp.Data, "", "--version-id")

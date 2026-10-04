@@ -358,10 +358,10 @@ func resolveLocalizationsListVersionString(ctx context.Context, client *asc.Clie
 		if platform != "" {
 			description += fmt.Sprintf(" and platform %q", platform)
 		}
-		return "", shared.NewErrorWithCause(
+		return "", shared.WithAppStoreVersionNotFoundDiagnostics(ctx, client, appID, version, platform, shared.NewErrorWithCause(
 			fmt.Errorf("app store version not found for %s", description),
 			asc.ErrNotFound,
-		)
+		))
 	}
 	if len(resp.Data) > 1 || pageHasNext {
 		ambiguous := shared.AmbiguousAppStoreVersionError(version, platform, resp.Data, "--platform", "--version")

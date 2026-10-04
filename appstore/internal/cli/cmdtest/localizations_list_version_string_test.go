@@ -119,8 +119,10 @@ func TestLocalizationsListVersionStringErrors(t *testing.T) {
 			args: []string{"localizations", "list", "--app", "123456789", "--version", "9.9"},
 			versions: map[string]string{
 				"filter[versionString]=9.9": `{"data":[],"links":{"next":""}}`,
+				// The not-found diagnostic lists the app's existing versions.
+				"": `{"data":[{"type":"appStoreVersions","id":"ver-1","attributes":{"platform":"IOS","versionString":"1.0","appVersionState":"READY_FOR_DISTRIBUTION"}}],"links":{"next":""}}`,
 			},
-			wantStderr: `app store version not found for version "9.9"`,
+			wantStderr: "app store version not found for version \"9.9\"\nExisting App Store versions for app \"123456789\" (newest first):\n  1.0  IOS  READY_FOR_DISTRIBUTION  ver-1\n",
 			wantExit:   rootcmd.ExitNotFound,
 		},
 		{

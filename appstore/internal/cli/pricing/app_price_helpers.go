@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
 const appPriceDateLayout = "2006-01-02"
@@ -49,14 +50,10 @@ func dateOnlyUTC(value time.Time) time.Time {
 	return time.Date(value.UTC().Year(), value.UTC().Month(), value.UTC().Day(), 0, 0, 0, 0, time.UTC)
 }
 
-func appPriceEntryActiveOn(entry appPriceEntry, at time.Time) bool {
-	if entry.StartAt != nil && entry.StartAt.After(at) {
-		return false
-	}
-	if entry.EndAt != nil && entry.EndAt.Before(at) {
-		return false
-	}
-	return true
+// appPriceEntryActiveOn reports whether entry applies on date, a pricing date
+// from shared.PricingDate.
+func appPriceEntryActiveOn(entry appPriceEntry, date time.Time) bool {
+	return shared.PriceActiveOn(entry.StartAt, entry.EndAt, date)
 }
 
 func appPriceEntryIsNewer(candidate, existing appPriceEntry) bool {

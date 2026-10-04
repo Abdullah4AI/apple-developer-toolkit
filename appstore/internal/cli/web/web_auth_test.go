@@ -1278,7 +1278,7 @@ func TestResolveSessionUsesLastCachedSessionWhenAppleIDMissing(t *testing.T) {
 	}
 }
 
-func TestResolveSessionRequiresAppleIDWhenNoCachedSessionExists(t *testing.T) {
+func TestResolveSessionReportsMissingWebSessionWhenNoCachedSessionExists(t *testing.T) {
 	origTryResumeLast := tryResumeLastFn
 	t.Cleanup(func() {
 		tryResumeLastFn = origTryResumeLast
@@ -1289,8 +1289,15 @@ func TestResolveSessionRequiresAppleIDWhenNoCachedSessionExists(t *testing.T) {
 	}
 
 	_, _, err := resolveSession(context.Background(), "", "", "")
+	if !errors.Is(err, shared.ErrMissingWebSession) || errors.Is(err, flag.ErrHelp) {
+		t.Fatalf("expected the missing-session error without the usage page, got %v", err)
+	}
+
+	captureOutput(t, func() {
+		_, _, err = resolveSession(contextForWebSignIn(context.Background()), "", "", "")
+	})
 	if !errors.Is(err, flag.ErrHelp) {
-		t.Fatalf("expected ErrHelp, got %v", err)
+		t.Fatalf("expected web auth login to keep the --apple-id usage error, got %v", err)
 	}
 }
 

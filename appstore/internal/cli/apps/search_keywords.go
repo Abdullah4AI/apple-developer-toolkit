@@ -189,10 +189,11 @@ func resolveSearchKeywordsVersionID(ctx context.Context, client *asc.Client, app
 
 	switch len(candidates) {
 	case 0:
+		notFound := fmt.Errorf("app store version not found for version %q", version)
 		if platform != "" {
-			return "", fmt.Errorf("app store version not found for version %q and platform %q", version, platform)
+			notFound = fmt.Errorf("app store version not found for version %q and platform %q", version, platform)
 		}
-		return "", fmt.Errorf("app store version not found for version %q", version)
+		return "", shared.WithAppStoreVersionNotFoundDiagnostics(ctx, client, appID, version, platform, notFound)
 	case 1:
 		return candidates[0].ID, nil
 	}

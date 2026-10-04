@@ -7,15 +7,52 @@ import (
 	"flag"
 	"io"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
 func setupStableSelectorAuth(t *testing.T) {
 	t.Helper()
 	setupAuth(t)
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
+}
+
+// selectorLookupHangGuard bounds request budgets once a selector lookup has
+// timed out. It only stops a hung test; no assertion depends on it.
+const selectorLookupHangGuard = 30 * time.Second
+
+// expireSelectorLookup gives the command a 10 ms request budget so its selector
+// lookup times out for real, and returns the transport handler for that lookup.
+// The handler waits for the lookup's own deadline, then raises ASC_TIMEOUT to
+// selectorLookupHangGuard, so the requests that follow the fallback cannot time
+// out on a loaded host. A fallback request that reused the lookup's context or
+// budget would still see it expired, so fresh-context assertions keep their
+// meaning. Call it after the auth setup, which the client factory reads.
+func expireSelectorLookup(t *testing.T) func(*http.Request) (*http.Response, error) {
+	t.Helper()
+	t.Setenv("ASC_TIMEOUT", "10ms")
+	t.Setenv("ASC_TIMEOUT_SECONDS", "")
+	// The client fixes its whole-request HTTP timeout when it is built, so build
+	// it with the hang guard; only the per-request budgets start at 10 ms.
+	t.Cleanup(shared.SetASCClientFactoryForTesting(func() (*asc.Client, error) {
+		return asc.NewClientWithTimeout(
+			os.Getenv("ASC_KEY_ID"),
+			os.Getenv("ASC_ISSUER_ID"),
+			os.Getenv("ASC_PRIVATE_KEY_PATH"),
+			selectorLookupHangGuard,
+		)
+	}))
+	return func(req *http.Request) (*http.Response, error) {
+		<-req.Context().Done()
+		t.Setenv("ASC_TIMEOUT", selectorLookupHangGuard.String())
+		return nil, req.Context().Err()
+	}
 }
 
 func selectorJSONResponse(body string) *http.Response {
@@ -184,8 +221,7 @@ func TestIAPContentGetFallsBackToNumericIDWhenLookupErrors(t *testing.T) {
 func TestIAPContentGetFallsBackToNumericIDAfterLookupTimeout(t *testing.T) {
 	setupStableSelectorAuth(t)
 	t.Setenv("ASC_APP_ID", "")
-	t.Setenv("ASC_TIMEOUT", "10ms")
-	t.Setenv("ASC_TIMEOUT_SECONDS", "")
+	lookupTimeout := expireSelectorLookup(t)
 
 	originalTransport := http.DefaultTransport
 	t.Cleanup(func() { http.DefaultTransport = originalTransport })
@@ -195,8 +231,7 @@ func TestIAPContentGetFallsBackToNumericIDAfterLookupTimeout(t *testing.T) {
 		requests++
 		switch req.URL.Path {
 		case "/v1/apps/app-123/inAppPurchasesV2":
-			<-req.Context().Done()
-			return nil, req.Context().Err()
+			return lookupTimeout(req)
 		case "/v2/inAppPurchases/2024/content":
 			if err := req.Context().Err(); err != nil {
 				t.Fatalf("expected fresh fetch context after lookup timeout, got %v", err)
@@ -239,8 +274,7 @@ func TestIAPContentGetFallsBackToNumericIDAfterLookupTimeout(t *testing.T) {
 func TestIAPContentViewFallsBackToNumericIDAfterLookupTimeout(t *testing.T) {
 	setupStableSelectorAuth(t)
 	t.Setenv("ASC_APP_ID", "")
-	t.Setenv("ASC_TIMEOUT", "10ms")
-	t.Setenv("ASC_TIMEOUT_SECONDS", "")
+	lookupTimeout := expireSelectorLookup(t)
 
 	originalTransport := http.DefaultTransport
 	t.Cleanup(func() { http.DefaultTransport = originalTransport })
@@ -250,8 +284,7 @@ func TestIAPContentViewFallsBackToNumericIDAfterLookupTimeout(t *testing.T) {
 		requests++
 		switch req.URL.Path {
 		case "/v1/apps/app-123/inAppPurchasesV2":
-			<-req.Context().Done()
-			return nil, req.Context().Err()
+			return lookupTimeout(req)
 		case "/v2/inAppPurchases/2024/content":
 			if err := req.Context().Err(); err != nil {
 				t.Fatalf("expected fresh content context after lookup timeout, got %v", err)
@@ -460,8 +493,7 @@ func TestSubscriptionPromotedPurchaseViewResolvesStableSelectorWithAppFlag(t *te
 func TestSubscriptionVersionsListFallsBackToNumericIDAfterLookupTimeout(t *testing.T) {
 	setupStableSelectorAuth(t)
 	t.Setenv("ASC_APP_ID", "")
-	t.Setenv("ASC_TIMEOUT", "10ms")
-	t.Setenv("ASC_TIMEOUT_SECONDS", "")
+	lookupTimeout := expireSelectorLookup(t)
 
 	originalTransport := http.DefaultTransport
 	t.Cleanup(func() { http.DefaultTransport = originalTransport })
@@ -471,8 +503,7 @@ func TestSubscriptionVersionsListFallsBackToNumericIDAfterLookupTimeout(t *testi
 		requests++
 		switch req.URL.Path {
 		case "/v1/apps/app-123/subscriptionGroups":
-			<-req.Context().Done()
-			return nil, req.Context().Err()
+			return lookupTimeout(req)
 		case "/v1/subscriptions/2024/versions":
 			if err := req.Context().Err(); err != nil {
 				t.Fatalf("expected fresh versions context after lookup timeout, got %v", err)
@@ -845,8 +876,7 @@ func TestWinBackOffersLinksResolvesStableSelector(t *testing.T) {
 func TestWinBackOffersLinksFallsBackToNumericIDAfterLookupTimeout(t *testing.T) {
 	setupStableSelectorAuth(t)
 	t.Setenv("ASC_APP_ID", "")
-	t.Setenv("ASC_TIMEOUT", "10ms")
-	t.Setenv("ASC_TIMEOUT_SECONDS", "")
+	lookupTimeout := expireSelectorLookup(t)
 
 	originalTransport := http.DefaultTransport
 	t.Cleanup(func() { http.DefaultTransport = originalTransport })
@@ -856,8 +886,7 @@ func TestWinBackOffersLinksFallsBackToNumericIDAfterLookupTimeout(t *testing.T) 
 		requests++
 		switch req.URL.Path {
 		case "/v1/apps/app-123/subscriptionGroups":
-			<-req.Context().Done()
-			return nil, req.Context().Err()
+			return lookupTimeout(req)
 		case "/v1/subscriptions/2024/relationships/winBackOffers":
 			if err := req.Context().Err(); err != nil {
 				t.Fatalf("expected fresh win-back request context after lookup timeout, got %v", err)

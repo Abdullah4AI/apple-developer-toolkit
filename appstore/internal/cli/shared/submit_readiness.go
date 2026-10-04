@@ -31,7 +31,7 @@ type SubmitReadinessCreateWarning struct {
 // SubmitReadinessOptions controls optional submit-readiness checks.
 type SubmitReadinessOptions struct {
 	// RequireWhatsNew enables whatsNew validation. This should be set for
-	// app updates (when a READY_FOR_SALE version already exists) because
+	// app updates (when a released version already exists) because
 	// App Store Connect requires whatsNew for every locale on updates.
 	RequireWhatsNew bool
 }
@@ -124,25 +124,13 @@ func SubmitReadinessCreateWarningForLocaleWithOptions(locale string, attrs asc.A
 
 // AppUpdateRequiresWhatsNew returns true when the target app/platform has a
 // previously released App Store version, which means whatsNew is required on
-// every localization for update submissions.
+// every localization for update submissions. A released version is one that
+// is live under either state spelling, or one that was removed from sale
+// (a legacy appStoreState-only condition).
 func AppUpdateRequiresWhatsNew(ctx context.Context, client *asc.Client, appID, platform string) (bool, error) {
-	opts := []asc.AppStoreVersionsOption{
-		asc.WithAppStoreVersionsStates([]string{
-			"READY_FOR_SALE",
-			"DEVELOPER_REMOVED_FROM_SALE",
-			"REMOVED_FROM_SALE",
-		}),
-		asc.WithAppStoreVersionsLimit(1),
-	}
-	if strings.TrimSpace(platform) != "" {
-		opts = append(opts, asc.WithAppStoreVersionsPlatforms([]string{platform}))
-	}
-
-	versions, err := client.GetAppStoreVersions(ctx, appID, opts...)
-	if err != nil {
-		return false, err
-	}
-	return len(versions.Data) > 0, nil
+	filter := LiveAppStoreVersionStateFilter()
+	filter.AppStoreStates = append(filter.AppStoreStates, "DEVELOPER_REMOVED_FROM_SALE", "REMOVED_FROM_SALE")
+	return HasAppStoreVersionInStates(ctx, client, appID, platform, filter)
 }
 
 // ResolveSubmitReadinessOptionsForVersion resolves create-warning options for a

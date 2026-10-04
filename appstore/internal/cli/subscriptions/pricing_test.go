@@ -155,3 +155,41 @@ func newSubscriptionPriceResource(
 		Relationships: rawRelationships,
 	}
 }
+
+func TestSelectCurrentSubscriptionPriceValue_UsesUSPacificDay(t *testing.T) {
+	// Subscription prices carry only a startDate: each price ends on the date
+	// the next one starts, the end-equals-next-start shape App Store Connect
+	// uses for app and in-app purchase schedules.
+	prices := []asc.Resource[asc.SubscriptionPriceAttributes]{
+		newSubscriptionPriceResource("pp-old", "2026-01-01", false),
+		newSubscriptionPriceResource("pp-new", "2026-10-01", false),
+	}
+	values := map[string]subscriptionPricePointValue{
+		"pp-old": {CustomerPrice: "0.99"},
+		"pp-new": {CustomerPrice: "1.99"},
+	}
+
+	tests := []struct {
+		name string
+		now  time.Time
+		want string
+	}{
+		// 17:30 PDT on 2026-09-30: the 2026-10-01 price has not started.
+		{name: "00:30 UTC is the previous Pacific day", now: time.Date(2026, time.October, 1, 0, 30, 0, 0, time.UTC), want: "0.99"},
+		// Pacific midnight: the old price ends as the new one starts.
+		{name: "Pacific midnight starts the next price", now: time.Date(2026, time.October, 1, 7, 0, 0, 0, time.UTC), want: "1.99"},
+		// PST midnight (08:00 UTC) on a winter boundary.
+		{name: "PST midnight starts the next price", now: time.Date(2026, time.December, 1, 8, 0, 0, 0, time.UTC), want: "1.99"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got, ok := selectCurrentSubscriptionPriceValue(prices, values, test.now)
+			if !ok {
+				t.Fatal("expected selected value")
+			}
+			if got.CustomerPrice != test.want {
+				t.Fatalf("customerPrice = %q, want %q", got.CustomerPrice, test.want)
+			}
+		})
+	}
+}

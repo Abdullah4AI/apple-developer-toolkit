@@ -55,12 +55,34 @@ func TestCurrentAppPaidPricingEvidenceFailsClosedOnIncompleteCurrentPrice(t *tes
 	}
 }
 
-func TestAppPriceActiveOnExcludesPriceOnEndDate(t *testing.T) {
-	active, known := appPriceActiveOn(
-		asc.AppPriceAttributes{StartDate: "2026-01-01", EndDate: "2026-08-29"},
-		time.Date(2026, time.August, 29, 0, 0, 0, 0, time.UTC),
-	)
-	if !known || active {
-		t.Fatalf("active = %t known = %t, want inactive and known on end date", active, known)
+func TestCurrentAppPaidPricingEvidenceDateBoundaries(t *testing.T) {
+	page := &asc.AppPricesResponse{
+		Data: []asc.Resource[asc.AppPriceAttributes]{
+			{ID: "old", Attributes: asc.AppPriceAttributes{StartDate: "2026-01-01", EndDate: "2026-08-29"}, Relationships: json.RawMessage(`{"appPricePoint":{"data":{"id":"paid"}}}`)},
+			{ID: "new", Attributes: asc.AppPriceAttributes{StartDate: "2026-08-29"}, Relationships: json.RawMessage(`{"appPricePoint":{"data":{"id":"free"}}}`)},
+		},
+		Included: json.RawMessage(`[
+			{"type":"appPricePoints","id":"free","attributes":{"customerPrice":"0.00"}},
+			{"type":"appPricePoints","id":"paid","attributes":{"customerPrice":"4.99"}}
+		]`),
+	}
+
+	tests := []struct {
+		name     string
+		now      time.Time
+		wantPaid bool
+	}{
+		// 17:30 PDT on 2026-08-28: the paid price ending 2026-08-29 still applies.
+		{name: "UTC midnight is still the previous Pacific day", now: time.Date(2026, time.August, 29, 0, 30, 0, 0, time.UTC), wantPaid: true},
+		// The paid price ends on its end date, so only the free price applies.
+		{name: "price ending today does not apply", now: time.Date(2026, time.August, 29, 20, 0, 0, 0, time.UTC), wantPaid: false},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			paid, known := currentAppPaidPricingEvidence([]*asc.AppPricesResponse{page}, test.now)
+			if !known || paid != test.wantPaid {
+				t.Fatalf("pricing evidence = paid %t known %t, want paid %t and known", paid, known, test.wantPaid)
+			}
+		})
 	}
 }

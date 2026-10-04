@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"time"
@@ -109,6 +110,12 @@ func SubscriptionsReviewScreenshotsCreateCommand() *ffcli.Command {
 		ShortHelp:  "Upload a review screenshot for a subscription.",
 		LongHelp: `Upload a review screenshot for a subscription.
 
+The file must be a PNG or JPEG named .png, .jpg, or .jpeg; any other file is
+rejected before anything is uploaded. The command also warns, and still
+uploads, when the size matches no documented App Store screenshot size (such
+as 1290x2796 for iPhone), the image has an alpha channel, or the image data
+does not fully decode.
+
 Examples:
   asc subscriptions review-screenshots create --subscription-id "SUB_ID" --file "./screenshot.png"`,
 		FlagSet:   fs,
@@ -132,12 +139,15 @@ Examples:
 				return shared.UsageError(err.Error())
 			}
 
-			file, info, err := openSubscriptionImageFile(pathValue)
+			snapshot, info, cleanupSnapshot, err := snapshotSubscriptionReviewScreenshot(pathValue)
 			if err != nil {
 				return fmt.Errorf("subscriptions review-screenshots create: %w", err)
 			}
-			defer file.Close()
-			checksum, err := asc.ComputeFileChecksum(pathValue, asc.ChecksumAlgorithmMD5)
+			defer cleanupSnapshot()
+			if err := shared.PreflightReviewScreenshot(pathValue, snapshot, info.Size()); err != nil {
+				return shared.ReviewScreenshotUsageError("--file", shared.RewriteUsageMessage(ctx, "subscriptions review-screenshots create: "+err.Error()))
+			}
+			checksum, err := asc.ComputeChecksumFromReader(io.NewSectionReader(snapshot, 0, info.Size()), asc.ChecksumAlgorithmMD5)
 			if err != nil {
 				return fmt.Errorf("subscriptions review-screenshots create: checksum failed: %w", err)
 			}
@@ -152,7 +162,7 @@ Examples:
 				return err
 			}
 
-			finalResp, err := createOrResumeSubscriptionReviewScreenshot(ctx, client, id, pathValue, info, checksum.Hash)
+			finalResp, err := createOrResumeSubscriptionReviewScreenshot(ctx, client, id, snapshot, info, checksum.Hash)
 			if err != nil {
 				return fmt.Errorf("subscriptions review-screenshots create: %w", err)
 			}

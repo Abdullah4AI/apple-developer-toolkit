@@ -10,6 +10,7 @@ func TestHasCurrentOrScheduledPrice(t *testing.T) {
 	tests := []struct {
 		name    string
 		entries []appPriceEntry
+		now     time.Time
 		want    bool
 	}{
 		{name: "no prices", want: false},
@@ -18,11 +19,17 @@ func TestHasCurrentOrScheduledPrice(t *testing.T) {
 		{name: "price ending today", entries: []appPriceEntry{newAppPriceEntry("USA", "paid", "2026-01-01", "2026-09-30", true)}, want: false},
 		{name: "price ending tomorrow", entries: []appPriceEntry{newAppPriceEntry("USA", "paid", "2026-01-01", "2026-10-01", true)}, want: true},
 		{name: "ended price", entries: []appPriceEntry{newAppPriceEntry("USA", "paid", "2026-01-01", "2026-09-29", true)}, want: false},
+		{name: "price ending on the UTC date but not the Pacific date", entries: []appPriceEntry{newAppPriceEntry("USA", "paid", "2026-01-01", "2026-10-01", true)}, now: time.Date(2026, time.October, 1, 0, 30, 0, 0, time.UTC), want: true},
+		{name: "price ending today at Pacific midnight", entries: []appPriceEntry{newAppPriceEntry("USA", "paid", "2026-01-01", "2026-10-01", true)}, now: time.Date(2026, time.October, 1, 7, 0, 0, 0, time.UTC), want: false},
 		{name: "other territory only", entries: []appPriceEntry{newAppPriceEntry("CAN", "paid", "2026-01-01", "", true)}, want: false},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			if got := hasCurrentOrScheduledPrice(test.entries, "usa", now); got != test.want {
+			at := now
+			if !test.now.IsZero() {
+				at = test.now
+			}
+			if got := hasCurrentOrScheduledPrice(test.entries, "usa", at); got != test.want {
 				t.Fatalf("hasCurrentOrScheduledPrice() = %t, want %t", got, test.want)
 			}
 		})

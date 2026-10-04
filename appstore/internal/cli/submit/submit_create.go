@@ -711,14 +711,6 @@ func refreshReviewSubmission(ctx context.Context, client *asc.Client, submission
 	return &resp.Data, nil
 }
 
-func reviewSubmissionIsState(ctx context.Context, client *asc.Client, submissionID string, wantState asc.ReviewSubmissionState) (bool, error) {
-	refreshed, err := refreshReviewSubmission(ctx, client, submissionID)
-	if err != nil || refreshed == nil {
-		return false, err
-	}
-	return refreshed.Attributes.SubmissionState == wantState, nil
-}
-
 func preserveCreatedReviewSubmission(submissionID string, emit func(string)) {
 	submissionID = strings.TrimSpace(submissionID)
 	if submissionID == "" {

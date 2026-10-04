@@ -105,6 +105,14 @@ func TestRuntimeFailureContextClassifiesLowCardinalityFailures(t *testing.T) {
 			wantOutcome: telemetry.OutcomeAuthError,
 		},
 		{
+			name:        "missing Apple web session is a missing-input usage failure",
+			err:         fmt.Errorf("web review show failed: %w", &shared.MissingWebSessionError{Message: "no Apple web session is cached"}),
+			exitCode:    ExitUsage,
+			wantKind:    telemetry.ErrorKindMissingRequired,
+			wantStage:   telemetry.FailureStageValidation,
+			wantOutcome: telemetry.OutcomeUsageError,
+		},
+		{
 			name:        "invalid Apple Account credentials",
 			err:         fmt.Errorf("SRP login failed: %w", webcore.ErrInvalidAppleAccountCredentials),
 			exitCode:    ExitError,

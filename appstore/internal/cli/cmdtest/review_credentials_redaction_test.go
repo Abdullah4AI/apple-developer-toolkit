@@ -268,6 +268,10 @@ func TestReviewDetailsCreateSendsPasswordButRedactsResponse(t *testing.T) {
 		if err := root.Parse([]string{
 			"review", "details-create",
 			"--version-id", "version-1",
+			"--contact-first-name", "Dev",
+			"--contact-last-name", "Support",
+			"--contact-email", "dev@example.com",
+			"--contact-phone", "+1 408 555 0100",
 			"--output", "json",
 			"--demo-account-required=true",
 			"--demo-account-name", "reviewer@example.com",

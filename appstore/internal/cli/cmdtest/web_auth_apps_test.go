@@ -80,35 +80,6 @@ func TestWebAppsCreateHelpMentionsInteractiveContract(t *testing.T) {
 	}
 }
 
-func TestWebAppsCreateRequiresAppleIDWhenNoCacheAndNoTTY(t *testing.T) {
-	t.Setenv("ASC_WEB_SESSION_CACHE_BACKEND", "file")
-	t.Setenv("ASC_WEB_SESSION_CACHE_DIR", t.TempDir())
-	t.Setenv(webPasswordEnvNameForTest(), "")
-
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	var runErr error
-	_, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{
-			"web", "apps", "create",
-			"--name", "My App",
-			"--bundle-id", "com.example.app",
-			"--sku", "SKU123",
-		}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		runErr = root.Run(context.Background())
-	})
-
-	if !errors.Is(runErr, flag.ErrHelp) {
-		t.Fatalf("expected ErrHelp, got %v", runErr)
-	}
-	if !strings.Contains(stderr, "no cached web session is available") {
-		t.Fatalf("expected missing cached-session message, got %q", stderr)
-	}
-}
-
 func TestWebAuthLogoutMutuallyExclusiveFlags(t *testing.T) {
 	root := RootCommand("1.2.3")
 	root.FlagSet.SetOutput(io.Discard)

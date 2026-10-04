@@ -14,6 +14,7 @@ import (
 	"net/url"
 	"slices"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -9763,6 +9764,29 @@ func TestClientLimitsConcurrentMutatingRequests(t *testing.T) {
 	}
 }
 
+// fixedDeadlineContext reports a deadline without arming a timer, so a test can
+// check deadline arithmetic without racing the wall clock. It never expires on
+// its own. read is closed the first time a caller asks for the deadline.
+type fixedDeadlineContext struct {
+	context.Context
+	deadline time.Time
+	read     chan struct{}
+	readOnce sync.Once
+}
+
+func newFixedDeadlineContext(deadline time.Time) *fixedDeadlineContext {
+	return &fixedDeadlineContext{
+		Context:  context.Background(),
+		deadline: deadline,
+		read:     make(chan struct{}),
+	}
+}
+
+func (c *fixedDeadlineContext) Deadline() (time.Time, bool) {
+	c.readOnce.Do(func() { close(c.read) })
+	return c.deadline, true
+}
+
 func TestClientRenewsMutatingRequestTimeoutAfterLimiterWait(t *testing.T) {
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
@@ -9773,7 +9797,6 @@ func TestClientRenewsMutatingRequestTimeoutAfterLimiterWait(t *testing.T) {
 	started := make(chan struct{}, 2)
 	var requests atomic.Int32
 	derivedDeadlineCh := make(chan time.Time, 1)
-	parentDeadlineCh := make(chan time.Time, 1)
 
 	client := &Client{
 		httpClient: &http.Client{
@@ -9785,10 +9808,8 @@ func TestClientRenewsMutatingRequestTimeoutAfterLimiterWait(t *testing.T) {
 				if attempt == 1 {
 					<-release
 				} else {
-					deadline, ok := req.Context().Deadline()
-					if !ok {
-						t.Fatal("expected queued mutating request to have a timeout")
-					}
+					// A zero time reports a missing deadline to the test goroutine.
+					deadline, _ := req.Context().Deadline()
 					derivedDeadlineCh <- deadline
 				}
 
@@ -9808,26 +9829,21 @@ func TestClientRenewsMutatingRequestTimeoutAfterLimiterWait(t *testing.T) {
 	}()
 	<-started
 
+	// The queued request's deadline is fixed data rather than a timer, so a
+	// stalled host cannot expire it while the request waits for the slot.
+	parent := newFixedDeadlineContext(time.Now().Add(time.Minute))
 	go func() {
-		requestCtx, cancel := context.WithTimeout(context.Background(), 80*time.Millisecond)
-		defer cancel()
-		deadline, ok := requestCtx.Deadline()
-		if !ok {
-			errCh <- fmt.Errorf("expected parent mutating request context to have a deadline")
-			return
-		}
-		parentDeadlineCh <- deadline
-
-		_, err := client.CreateSubscriptionAvailability(requestCtx, "sub-2", []string{"CAN"}, SubscriptionAvailabilityAttributes{})
+		_, err := client.CreateSubscriptionAvailability(parent, "sub-2", []string{"CAN"}, SubscriptionAvailabilityAttributes{})
 		errCh <- err
 	}()
 
+	// The client sizes the queued request's budget from the parent deadline
+	// before it waits for the slot the first request still holds.
 	select {
-	case <-started:
-		t.Fatal("expected second mutating request to wait for limiter")
-	case <-time.After(20 * time.Millisecond):
+	case <-parent.read:
+	case <-time.After(30 * time.Second):
+		t.Fatal("queued mutating request never read its parent deadline")
 	}
-
 	close(release)
 
 	for i := 0; i < 2; i++ {
@@ -9836,12 +9852,14 @@ func TestClientRenewsMutatingRequestTimeoutAfterLimiterWait(t *testing.T) {
 		}
 	}
 
-	parentDeadline := <-parentDeadlineCh
 	derivedDeadline := <-derivedDeadlineCh
-	if !derivedDeadline.After(parentDeadline) {
+	if derivedDeadline.IsZero() {
+		t.Fatal("expected queued mutating request to have a timeout")
+	}
+	if !derivedDeadline.After(parent.deadline) {
 		t.Fatalf(
 			"expected queued request to receive a refreshed timeout deadline after %s, got %s",
-			parentDeadline.Format(time.RFC3339Nano),
+			parent.deadline.Format(time.RFC3339Nano),
 			derivedDeadline.Format(time.RFC3339Nano),
 		)
 	}

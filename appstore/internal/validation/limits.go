@@ -10,6 +10,12 @@ const (
 	LimitSubtitle        = 30
 )
 
+// LimitReviewNotes is the App Review notes limit on appStoreReviewDetails.
+// App Store Connect rejects longer notes with "Review Notes cannot be longer
+// than 4000 characters"; the OpenAPI snapshot carries no maxLength for it.
+// ReviewNotesLength counts a value against this limit.
+const LimitReviewNotes = 4000
+
 // LimitScreenshotsPerSet is the maximum number of screenshots the App Store
 // accepts in a single screenshot set, meaning one display type within one
 // localization. The App Store Connect OpenAPI snapshot does not express this

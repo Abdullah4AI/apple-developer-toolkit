@@ -2374,6 +2374,8 @@ func TestStoreCredentials_RejectsWhitespaceOnlyProfileName(t *testing.T) {
 
 func TestStoreCredentials_RemovesStaleGlobalCredentialWhenLocalConfigActive(t *testing.T) {
 	t.Setenv("ASC_BYPASS_KEYCHAIN", "0")
+	// TestMain sets ASC_CONFIG_PATH; clear it so the local config is active.
+	t.Setenv("ASC_CONFIG_PATH", "")
 
 	homeDir := t.TempDir()
 	t.Setenv("HOME", homeDir)
@@ -2469,7 +2471,11 @@ func TestStoreCredentials_RemovesStaleGlobalCredentialWhenLocalConfigActive(t *t
 	}
 }
 
-func TestStoreCredentials_RemovesStaleCredentialFromOverrideAndGlobalConfigs(t *testing.T) {
+// Before 5.9.1 a keychain login also removed the replaced profile from
+// ~/.asc/config.json while ASC_CONFIG_PATH selected another file (#530). The
+// cleanup is now scoped to the active config file; `asc auth logout
+// --include-global` keeps the cross-file cleanup available.
+func TestStoreCredentials_RemovesStaleCredentialFromOverrideConfigOnly(t *testing.T) {
 	t.Setenv("ASC_BYPASS_KEYCHAIN", "0")
 
 	homeDir := t.TempDir()
@@ -2521,6 +2527,10 @@ func TestStoreCredentials_RemovesStaleCredentialFromOverrideAndGlobalConfigs(t *
 	if err := config.SaveAt(globalPath, globalCfg); err != nil {
 		t.Fatalf("SaveAt(global) error: %v", err)
 	}
+	globalBefore, err := os.ReadFile(globalPath)
+	if err != nil {
+		t.Fatalf("ReadFile(global) error: %v", err)
+	}
 
 	previousKeyringOpener := keyringOpener
 	kr := keyring.NewArrayKeyring([]keyring.Item{})
@@ -2543,12 +2553,12 @@ func TestStoreCredentials_RemovesStaleCredentialFromOverrideAndGlobalConfigs(t *
 		t.Fatalf("expected override config to keep non-target credential, got %+v", loadedOverride.Keys)
 	}
 
-	loadedGlobal, err := config.LoadAt(globalPath)
+	globalAfter, err := os.ReadFile(globalPath)
 	if err != nil {
-		t.Fatalf("LoadAt(global) error: %v", err)
+		t.Fatalf("ReadFile(global) error: %v", err)
 	}
-	if len(loadedGlobal.Keys) != 1 || loadedGlobal.Keys[0].Name != "keep-global" {
-		t.Fatalf("expected global config to keep non-target credential, got %+v", loadedGlobal.Keys)
+	if !bytes.Equal(globalAfter, globalBefore) {
+		t.Fatalf("expected global config to stay untouched while ASC_CONFIG_PATH is set:\nbefore: %s\nafter: %s", globalBefore, globalAfter)
 	}
 }
 
@@ -2741,9 +2751,9 @@ func TestRemoveCredentials_RestoresEarlierConfigWhenLaterPathFails(t *testing.T)
 		t.Fatalf("MkdirAll(global config path) error: %v", err)
 	}
 
-	err := RemoveCredentials("trim-key")
+	err := RemoveCredentialsWithOptions("trim-key", RemoveOptions{IncludeGlobalConfig: true})
 	if err == nil {
-		t.Fatal("RemoveCredentials() error = nil, want later config path failure")
+		t.Fatal("RemoveCredentialsWithOptions() error = nil, want later config path failure")
 	}
 	cfg, err := config.LoadAt(overridePath)
 	if err != nil {

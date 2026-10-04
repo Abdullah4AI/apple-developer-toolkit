@@ -1059,20 +1059,29 @@ func TestAuthSwitchCommand(t *testing.T) {
 }
 
 type authLogoutTestCalls struct {
-	names []string
-	all   int
+	names   []string
+	all     int
+	options []authsvc.RemoveOptions
 }
 
 func stubLogoutRemovers(t *testing.T) *authLogoutTestCalls {
 	t.Helper()
+	// The retained-global-config warning reads the global config, so keep it
+	// away from the developer's home directory.
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "config.json"))
 	calls := &authLogoutTestCalls{}
 	restore := SetLogoutCredentialRemovers(
-		func(name string) error {
+		func(name string, opts authsvc.RemoveOptions) error {
 			calls.names = append(calls.names, name)
+			calls.options = append(calls.options, opts)
 			return nil
 		},
-		func() error {
+		func(opts authsvc.RemoveOptions) error {
 			calls.all++
+			calls.options = append(calls.options, opts)
 			return nil
 		},
 	)
@@ -1106,6 +1115,66 @@ func TestAuthLogoutCommand(t *testing.T) {
 			if strings.Contains(cmd.LongHelp, unexpected) {
 				t.Fatalf("logout help still mentions %q: %q", unexpected, cmd.LongHelp)
 			}
+		}
+	})
+
+	t.Run("help documents config scope", func(t *testing.T) {
+		cmd := AuthLogoutCommand()
+		includeGlobal := cmd.FlagSet.Lookup("include-global")
+		if includeGlobal == nil {
+			t.Fatal("expected --include-global flag")
+		}
+		if includeGlobal.DefValue != "false" {
+			t.Fatalf("--include-global default = %q, want false", includeGlobal.DefValue)
+		}
+		if !strings.Contains(includeGlobal.Usage, "~/.asc/config.json") || !strings.Contains(includeGlobal.Usage, "ASC_CONFIG_PATH") {
+			t.Fatalf("--include-global usage = %q", includeGlobal.Usage)
+		}
+		for _, expected := range []string{
+			"ASC_CONFIG_PATH",
+			"--include-global",
+			`asc auth logout --all --include-global --confirm`,
+		} {
+			if !strings.Contains(cmd.LongHelp, expected) {
+				t.Fatalf("expected logout help to contain %q, got %q", expected, cmd.LongHelp)
+			}
+		}
+	})
+
+	t.Run("include-global reaches the removers", func(t *testing.T) {
+		for _, args := range [][]string{
+			{"--name", "demo", "--include-global", "--confirm"},
+			{"--all", "--include-global", "--confirm"},
+		} {
+			t.Run(strings.Join(args, " "), func(t *testing.T) {
+				calls := stubLogoutRemovers(t)
+
+				cmd := AuthLogoutCommand()
+				if err := cmd.FlagSet.Parse(args); err != nil {
+					t.Fatalf("Parse() error: %v", err)
+				}
+				if err := cmd.Exec(context.Background(), []string{}); err != nil {
+					t.Fatalf("Exec() error: %v", err)
+				}
+				if len(calls.options) != 1 || !calls.options[0].IncludeGlobalConfig {
+					t.Fatalf("expected IncludeGlobalConfig to be passed, got %+v", calls.options)
+				}
+			})
+		}
+	})
+
+	t.Run("removal defaults to the active config scope", func(t *testing.T) {
+		calls := stubLogoutRemovers(t)
+
+		cmd := AuthLogoutCommand()
+		if err := cmd.FlagSet.Parse([]string{"--all", "--confirm"}); err != nil {
+			t.Fatalf("Parse() error: %v", err)
+		}
+		if err := cmd.Exec(context.Background(), []string{}); err != nil {
+			t.Fatalf("Exec() error: %v", err)
+		}
+		if len(calls.options) != 1 || calls.options[0].IncludeGlobalConfig {
+			t.Fatalf("expected default removal options, got %+v", calls.options)
 		}
 	})
 

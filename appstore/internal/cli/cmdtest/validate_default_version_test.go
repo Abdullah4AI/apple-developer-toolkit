@@ -19,7 +19,7 @@ const (
 	editableVersionStateQuery = "filter[appVersionState]=DEVELOPER_REJECTED,INVALID_BINARY,METADATA_REJECTED,PREPARE_FOR_SUBMISSION,READY_FOR_REVIEW,REJECTED,WAITING_FOR_REVIEW"
 	removedEditableStateQuery = "filter[appStoreState]=DEVELOPER_REMOVED_FROM_SALE"
 	liveVersionStateQuery     = "filter[appStoreState]=READY_FOR_SALE"
-	// The live tier queries both state spellings; see defaultLiveAppVersionStates.
+	// The live tier queries both state spellings; see shared.LiveAppStoreVersionStateFilter.
 	liveVersionModernStateQuery = "filter[appVersionState]=READY_FOR_DISTRIBUTION"
 )
 

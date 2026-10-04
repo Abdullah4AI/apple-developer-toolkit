@@ -17,7 +17,7 @@ func TestIAPReviewScreenshotsCreateKeepsChecksumAndUploadBytesTogether(t *testin
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 
 	filePath := filepath.Join(t.TempDir(), "review.png")
-	writePNG(t, filePath, 1, 1)
+	writeReviewScreenshotPNG(t, filePath)
 	original, err := os.ReadFile(filePath)
 	if err != nil {
 		t.Fatalf("read fixture: %v", err)
@@ -94,7 +94,7 @@ func TestIAPReviewScreenshotsUpdateKeepsChecksumAndUploadBytesTogether(t *testin
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 
 	filePath := filepath.Join(t.TempDir(), "review.png")
-	writePNG(t, filePath, 1, 1)
+	writeReviewScreenshotPNG(t, filePath)
 	original, err := os.ReadFile(filePath)
 	if err != nil {
 		t.Fatalf("read fixture: %v", err)

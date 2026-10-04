@@ -45,8 +45,9 @@ func ExitCodeFromError(err error) int {
 		return code
 	}
 
-	// Usage errors
-	if errors.Is(err, flag.ErrHelp) || shared.IsReportedUsageError(err) {
+	// Usage errors. A missing Apple web session is rendered without the usage
+	// page but keeps the usage exit code its callers rely on.
+	if errors.Is(err, flag.ErrHelp) || shared.IsReportedUsageError(err) || errors.Is(err, shared.ErrMissingWebSession) {
 		return ExitUsage
 	}
 

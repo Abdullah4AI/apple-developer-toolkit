@@ -17,7 +17,7 @@ func TestIAPReviewScreenshotsCreatePrintsVerifiedScreenshot(t *testing.T) {
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 
 	imagePath := filepath.Join(t.TempDir(), "review.png")
-	writePNG(t, imagePath, 1242, 2688)
+	writeReviewScreenshotPNG(t, imagePath)
 	imageInfo, err := os.Stat(imagePath)
 	if err != nil {
 		t.Fatalf("stat review screenshot fixture: %v", err)
@@ -99,7 +99,7 @@ func TestIAPReviewScreenshotsCreateFailsWhenDeliveryVerificationFails(t *testing
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 
 	imagePath := filepath.Join(t.TempDir(), "review.png")
-	writePNG(t, imagePath, 1242, 2688)
+	writeReviewScreenshotPNG(t, imagePath)
 	imageInfo, err := os.Stat(imagePath)
 	if err != nil {
 		t.Fatalf("stat review screenshot fixture: %v", err)
@@ -169,11 +169,10 @@ func TestIAPReviewScreenshotsCreateFailsWhenDeliveryVerificationFails(t *testing
 func TestIAPReviewScreenshotsCreateFallsBackToNumericIDAfterLookupTimeout(t *testing.T) {
 	setupStableSelectorAuth(t)
 	t.Setenv("ASC_APP_ID", "")
-	t.Setenv("ASC_TIMEOUT", "10ms")
-	t.Setenv("ASC_TIMEOUT_SECONDS", "")
+	lookupTimeout := expireSelectorLookup(t)
 
 	imagePath := filepath.Join(t.TempDir(), "review.png")
-	writePNG(t, imagePath, 1242, 2688)
+	writeReviewScreenshotPNG(t, imagePath)
 	imageInfo, err := os.Stat(imagePath)
 	if err != nil {
 		t.Fatalf("stat review screenshot fixture: %v", err)
@@ -190,8 +189,7 @@ func TestIAPReviewScreenshotsCreateFallsBackToNumericIDAfterLookupTimeout(t *tes
 		requests++
 		switch {
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/apps/app-123/inAppPurchasesV2":
-			<-req.Context().Done()
-			return nil, req.Context().Err()
+			return lookupTimeout(req)
 		case req.Method == http.MethodPost && req.URL.Path == "/v1/inAppPurchaseAppStoreReviewScreenshots":
 			if err := req.Context().Err(); err != nil {
 				t.Fatalf("expected fresh upload context after lookup timeout, got %v", err)

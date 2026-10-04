@@ -107,7 +107,7 @@ func TestPublishAppStoreSubmitUsesModernReviewSubmissionFlow(t *testing.T) {
 			switch {
 			case query.Get("filter[versionString]") == "1.2.3":
 				return jsonResponse(http.StatusOK, `{"data":[{"type":"appStoreVersions","id":"version-1","attributes":{"versionString":"1.2.3","platform":"IOS"}}]}`)
-			case strings.Contains(query.Get("filter[appStoreState]"), "READY_FOR_SALE"):
+			case isReleasedVersionStateQuery(query):
 				return jsonResponse(http.StatusOK, `{"data":[]}`)
 			default:
 				t.Fatalf("unexpected app store versions query: %s", req.URL.RawQuery)
@@ -250,7 +250,7 @@ func TestPublishAppStoreSubmitAlreadySubmittedSkipsPreflightAndBuildAttachment(t
 			switch {
 			case query.Get("filter[versionString]") == "1.2.3":
 				return jsonResponse(http.StatusOK, `{"data":[{"type":"appStoreVersions","id":"version-1","attributes":{"versionString":"1.2.3","platform":"IOS"}}]}`)
-			case strings.Contains(query.Get("filter[appStoreState]"), "READY_FOR_SALE"):
+			case isReleasedVersionStateQuery(query):
 				t.Fatalf("did not expect publish-state preflight when version is already submitted")
 				return nil, nil
 			default:
@@ -397,7 +397,7 @@ func TestPublishAppStoreSubmitLocalizationPreflightUsesCanonicalGuidance(t *test
 			switch {
 			case query.Get("filter[versionString]") == "1.2.3":
 				return jsonResponse(http.StatusOK, `{"data":[{"type":"appStoreVersions","id":"version-1","attributes":{"versionString":"1.2.3","platform":"IOS"}}]}`)
-			case strings.Contains(query.Get("filter[appStoreState]"), "READY_FOR_SALE"):
+			case isReleasedVersionStateQuery(query):
 				return jsonResponse(http.StatusOK, `{"data":[]}`)
 			default:
 				t.Fatalf("unexpected app store versions query: %s", req.URL.RawQuery)
@@ -706,7 +706,7 @@ func TestPublishAppStoreSubmitUsesFreshTimeoutBudgetsForPreflightAndSubmission(t
 			switch {
 			case query.Get("filter[versionString]") == "1.2.3":
 				return jsonResponse(http.StatusOK, `{"data":[{"type":"appStoreVersions","id":"version-1","attributes":{"versionString":"1.2.3","platform":"IOS"}}]}`)
-			case strings.Contains(query.Get("filter[appStoreState]"), "READY_FOR_SALE"):
+			case isReleasedVersionStateQuery(query):
 				return jsonResponse(http.StatusOK, `{"data":[]}`)
 			default:
 				t.Fatalf("unexpected app store versions query: %s", req.URL.RawQuery)
@@ -842,7 +842,7 @@ func TestPublishAppStoreSubmitPreflightUsesPublishTimeoutOverride(t *testing.T) 
 			switch {
 			case query.Get("filter[versionString]") == "1.2.3":
 				return jsonResponse(http.StatusOK, `{"data":[{"type":"appStoreVersions","id":"version-1","attributes":{"versionString":"1.2.3","platform":"IOS"}}]}`)
-			case strings.Contains(query.Get("filter[appStoreState]"), "READY_FOR_SALE"):
+			case isReleasedVersionStateQuery(query):
 				return jsonResponse(http.StatusOK, `{"data":[]}`)
 			default:
 				t.Fatalf("unexpected app store versions query: %s", req.URL.RawQuery)
@@ -965,7 +965,7 @@ func TestPublishAppStoreSubmitDefaultPathHonorsASCTimeout(t *testing.T) {
 			switch {
 			case query.Get("filter[versionString]") == "1.2.3":
 				return jsonResponse(http.StatusOK, `{"data":[{"type":"appStoreVersions","id":"version-1","attributes":{"versionString":"1.2.3","platform":"IOS"}}]}`)
-			case strings.Contains(query.Get("filter[appStoreState]"), "READY_FOR_SALE"):
+			case isReleasedVersionStateQuery(query):
 				return jsonResponse(http.StatusOK, `{"data":[]}`)
 			default:
 				t.Fatalf("unexpected app store versions query: %s", req.URL.RawQuery)
@@ -1092,7 +1092,7 @@ func TestPublishAppStoreSubmitDefaultTimeoutUsesSharedPipelineBudget(t *testing.
 			switch {
 			case query.Get("filter[versionString]") == "1.2.3":
 				return jsonResponse(http.StatusOK, `{"data":[{"type":"appStoreVersions","id":"version-1","attributes":{"versionString":"1.2.3","platform":"IOS"}}]}`)
-			case strings.Contains(query.Get("filter[appStoreState]"), "READY_FOR_SALE"):
+			case isReleasedVersionStateQuery(query):
 				return jsonResponse(http.StatusOK, `{"data":[]}`)
 			default:
 				t.Fatalf("unexpected app store versions query: %s", req.URL.RawQuery)

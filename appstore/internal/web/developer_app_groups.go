@@ -1157,6 +1157,15 @@ func developerBundleIDCapabilityReferencesForReplacement(current developerBundle
 // would make a destructive relationship replacement partial. When a maximum
 // include limit was requested, a full page without a matching total is also
 // ambiguous: Apple may have truncated the included resources at that limit.
+//
+// Apple reports a Bundle ID's selected bundleIdCapabilities relationship
+// with a zero-total placeholder beside the linkage it returns, echoing the
+// requested include limit, and the nested appGroups relationship of its
+// APP_GROUPS capability with the unbounded placeholder Services IDs carry
+// (both captured 2026-10-03): {"total":0,"limit":50} with two references,
+// and {"total":0,"limit":2147483647} with one. Either is accepted only as
+// isDeveloperZeroTotalPlaceholder allows; a continuation link still rejects
+// it.
 func validateDeveloperRelationshipCompleteness(raw json.RawMessage, returned, requestedLimit int, label string) error {
 	var members map[string]json.RawMessage
 	if err := json.Unmarshal(raw, &members); err != nil || members == nil {
@@ -1193,7 +1202,7 @@ func validateDeveloperRelationshipCompleteness(raw json.RawMessage, returned, re
 				if err := json.Unmarshal(rawTotal, &total); err != nil || total < 0 {
 					return fmt.Errorf("%s paging total is unreadable", label)
 				}
-				if total != returned {
+				if total != returned && !isDeveloperZeroTotalPlaceholder(paging, total, returned, requestedLimit) {
 					return fmt.Errorf("%s returned %d of %d resources", label, returned, total)
 				}
 				hasExactTotal = true
@@ -1204,6 +1213,30 @@ func validateDeveloperRelationshipCompleteness(raw json.RawMessage, returned, re
 		return fmt.Errorf("%s may be truncated at the requested limit of %d", label, requestedLimit)
 	}
 	return nil
+}
+
+// isDeveloperZeroTotalPlaceholder reports whether paging metadata is Apple's
+// zero-total placeholder for a relationship that is provably complete. With
+// an include limit requested, the limit it reports must be that one and
+// fewer resources must have come back than it allows. With none requested,
+// it must report the unbounded limit, as on Services IDs, so nothing was
+// held back.
+func isDeveloperZeroTotalPlaceholder(paging map[string]json.RawMessage, total, returned, requestedLimit int) bool {
+	if total != 0 || returned == 0 {
+		return false
+	}
+	rawLimit, ok := paging["limit"]
+	if !ok {
+		return false
+	}
+	var limit int
+	if err := json.Unmarshal(rawLimit, &limit); err != nil {
+		return false
+	}
+	if requestedLimit > 0 {
+		return limit == requestedLimit && returned < requestedLimit
+	}
+	return limit == serviceIDCapabilityPlaceholderLimit
 }
 
 // developerRelationshipUnresolved reports whether a JSON:API relationship

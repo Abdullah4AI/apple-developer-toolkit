@@ -464,7 +464,7 @@ func verifyIAPSetupState(ctx context.Context, client *asc.Client, result iapSetu
 	verification := &iapSetupVerification{
 		Status: "verified",
 	}
-	now := time.Now().UTC()
+	now := shared.PricingNow()
 
 	iapCtx, iapCancel := shared.ContextWithTimeout(ctx)
 	iapResp, err := client.GetInAppPurchaseV2(iapCtx, result.IAPID)
@@ -814,5 +814,5 @@ func isFutureSetupStartDate(startDate string, now time.Time) bool {
 	if err != nil {
 		return false
 	}
-	return dateOnlyUTC(parsed.UTC()).After(dateOnlyUTC(now))
+	return dateOnlyUTC(parsed.UTC()).After(shared.PricingDate(now))
 }

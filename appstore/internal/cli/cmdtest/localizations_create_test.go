@@ -157,8 +157,8 @@ func TestLocalizationsCreate_WarnsWhenCreatedLocaleIsSubmitIncomplete(t *testing
 			return jsonResponse(http.StatusOK, `{"data":{"type":"appStoreVersions","id":"version-1","attributes":{"platform":"IOS"},"relationships":{"app":{"data":{"type":"apps","id":"app-1"}}}}}`)
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/apps/app-1/appStoreVersions":
 			query := req.URL.Query()
-			if got := query.Get("filter[appStoreState]"); got != "READY_FOR_SALE,DEVELOPER_REMOVED_FROM_SALE,REMOVED_FROM_SALE" {
-				t.Fatalf("expected released-state filter, got %q", got)
+			if !isReleasedVersionStateQuery(query) {
+				t.Fatalf("expected released-state filter, got %q", req.URL.RawQuery)
 			}
 			if got := query.Get("filter[platform]"); got != "IOS" {
 				t.Fatalf("expected platform filter IOS, got %q", got)
@@ -280,8 +280,8 @@ func TestLocalizationsCreate_WarnsWhenUpdateVersionIsMissingWhatsNew(t *testing.
 			return jsonResponse(http.StatusOK, `{"data":{"type":"appStoreVersions","id":"version-1","attributes":{"platform":"IOS"},"relationships":{"app":{"data":{"type":"apps","id":"app-1"}}}}}`)
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/apps/app-1/appStoreVersions":
 			query := req.URL.Query()
-			if got := query.Get("filter[appStoreState]"); got != "READY_FOR_SALE,DEVELOPER_REMOVED_FROM_SALE,REMOVED_FROM_SALE" {
-				t.Fatalf("expected released-state filter, got %q", got)
+			if !isReleasedVersionStateQuery(query) {
+				t.Fatalf("expected released-state filter, got %q", req.URL.RawQuery)
 			}
 			if got := query.Get("filter[platform]"); got != "IOS" {
 				t.Fatalf("expected platform filter IOS, got %q", got)
@@ -356,8 +356,8 @@ func TestLocalizationsCreate_UpdateWarningIncludesWhatsNewAlongsideBaseMissingFi
 			return jsonResponse(http.StatusOK, `{"data":{"type":"appStoreVersions","id":"version-1","attributes":{"platform":"IOS"},"relationships":{"app":{"data":{"type":"apps","id":"app-1"}}}}}`)
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/apps/app-1/appStoreVersions":
 			query := req.URL.Query()
-			if got := query.Get("filter[appStoreState]"); got != "READY_FOR_SALE,DEVELOPER_REMOVED_FROM_SALE,REMOVED_FROM_SALE" {
-				t.Fatalf("expected released-state filter, got %q", got)
+			if !isReleasedVersionStateQuery(query) {
+				t.Fatalf("expected released-state filter, got %q", req.URL.RawQuery)
 			}
 			if got := query.Get("filter[platform]"); got != "IOS" {
 				t.Fatalf("expected platform filter IOS, got %q", got)

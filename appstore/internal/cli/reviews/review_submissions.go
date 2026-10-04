@@ -439,6 +439,9 @@ Examples:
 
 			resp, err := client.UpdateReviewSubmission(requestCtx, trimmedID, attrs)
 			if err != nil {
+				if canceledProvided && *canceled {
+					err = shared.ExplainReviewSubmissionNotCancellable(ctx, client, trimmedID, err)
+				}
 				return fmt.Errorf("review submissions-update: %w", err)
 			}
 
@@ -535,9 +538,10 @@ Examples:
 			requestCtx, cancel := shared.ContextWithTimeout(ctx)
 			defer cancel()
 
-			resp, err := client.CancelReviewSubmission(requestCtx, strings.TrimSpace(*submissionID))
+			trimmedID := strings.TrimSpace(*submissionID)
+			resp, err := client.CancelReviewSubmission(requestCtx, trimmedID)
 			if err != nil {
-				return fmt.Errorf("review submissions-cancel: %w", err)
+				return fmt.Errorf("review submissions-cancel: %w", shared.ExplainReviewSubmissionNotCancellable(ctx, client, trimmedID, err))
 			}
 
 			return shared.PrintOutput(resp, *output.Output, *output.Pretty)

@@ -91,16 +91,6 @@ func TestWebAppsCreateMissingRequiredInputExposesStructuredDiagnostics(t *testin
 			wantStderr: "Error: missing required flags: --name\n",
 			wantParam:  "--name",
 		},
-		{
-			name: "apple id required without cached session",
-			run: func() error {
-				appleID := ""
-				return promptAppsCreateSessionAppleID(&appleID)
-			},
-			wantError:  "--apple-id is required when no cached web session is available; run 'asc web auth login --apple-id EMAIL'",
-			wantStderr: "Error: --apple-id is required when no cached web session is available; run 'asc web auth login --apple-id EMAIL'\n",
-			wantParam:  "--apple-id",
-		},
 	}
 
 	for _, test := range tests {

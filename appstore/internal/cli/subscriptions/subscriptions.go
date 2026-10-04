@@ -9,7 +9,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/peterbourgon/ff/v3/ffcli"
 
@@ -1151,7 +1150,7 @@ Examples:
 			}
 
 			if *resolved {
-				resp, err := fetchResolvedSubscriptionPrices(ctx, client, id, *limit, *next, time.Now().UTC(), planTypeFilter, territoryFilter)
+				resp, err := fetchResolvedSubscriptionPrices(ctx, client, id, *limit, *next, subscriptionPricingToday(), planTypeFilter, territoryFilter)
 				if err != nil {
 					return fmt.Errorf("subscriptions prices list: failed to resolve: %w", err)
 				}

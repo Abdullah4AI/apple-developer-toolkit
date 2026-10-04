@@ -80,7 +80,7 @@ func SetMigrateKeychainToConfig(fn func(authsvc.MigrateKeychainToConfigOptions) 
 
 // SetLogoutCredentialRemovers replaces the credential removal hooks for tests.
 // It returns a restore function to reset the previous handlers.
-func SetLogoutCredentialRemovers(remove func(string) error, removeAll func() error) func() {
+func SetLogoutCredentialRemovers(remove func(string, authsvc.RemoveOptions) error, removeAll func(authsvc.RemoveOptions) error) func() {
 	previousRemove := removeStoredCredential
 	previousRemoveAll := removeStoredCredentials
 	if remove != nil {

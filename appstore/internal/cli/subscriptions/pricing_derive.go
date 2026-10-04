@@ -175,9 +175,8 @@ Examples:
 			}
 
 			fmt.Fprintln(os.Stderr, "Fetching current source and target subscription prices...")
-			now := time.Now().UTC()
 			sourcePrices, err := fetchResolvedSubscriptionPrices(
-				ctx, client, sourceID, 200, "", now, asc.SubscriptionPlanTypeUpfront, territoryID,
+				ctx, client, sourceID, 200, "", subscriptionPricingToday(), asc.SubscriptionPlanTypeUpfront, territoryID,
 			)
 			if err != nil {
 				return fmt.Errorf("subscriptions pricing derive: fetch source prices: %w", err)

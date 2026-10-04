@@ -77,7 +77,7 @@ func TestPricingCurrentNotConfiguredIsExpectedNegativeJSON(t *testing.T) {
 	stdout, stderr, runErr := runPricingCurrent(t, "pricing", "current", "--app", "app-1", "--output", "json")
 
 	assertNotConfiguredExpectedNegative(t, runErr)
-	wantStderr := `App app-1 has no price schedule configured yet; create it with: asc pricing schedule create --app app-1 --free --base-territory "USA" --start-date "YYYY-MM-DD"` + "\n"
+	wantStderr := `App app-1 has no price schedule configured yet; create it with: asc pricing schedule create --app app-1 --free --base-territory "USA"` + "\n"
 	if stderr != wantStderr {
 		t.Fatalf("stderr = %q, want %q", stderr, wantStderr)
 	}
@@ -94,7 +94,7 @@ func TestPricingCurrentManualPricesNotConfiguredIsExpectedNegative(t *testing.T)
 	stdout, stderr, runErr := runPricingCurrent(t, "pricing", "current", "--app", "app-1", "--output", "json")
 
 	assertNotConfiguredExpectedNegative(t, runErr)
-	wantStderr := `App app-1 has no price schedule configured yet; create it with: asc pricing schedule create --app app-1 --free --base-territory "USA" --start-date "YYYY-MM-DD"` + "\n"
+	wantStderr := `App app-1 has no price schedule configured yet; create it with: asc pricing schedule create --app app-1 --free --base-territory "USA"` + "\n"
 	if stderr != wantStderr {
 		t.Fatalf("stderr = %q, want %q", stderr, wantStderr)
 	}

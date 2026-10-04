@@ -17,6 +17,7 @@ import (
 func TestRun_BuiltBinaryEmitsSchemaV4Payload(t *testing.T) {
 	binaryPath := buildASCBlackboxBinary(t)
 	home := t.TempDir()
+	endpoint, workerConnected := startClosingTelemetryEndpoint(t)
 	command := exec.Command(
 		binaryPath,
 		"versions",
@@ -24,12 +25,13 @@ func TestRun_BuiltBinaryEmitsSchemaV4Payload(t *testing.T) {
 		"--version-id",
 		"VERSION_ID",
 	)
-	command.Env = telemetryBlackboxEnv(home, false, "https://127.0.0.1:1/events")
+	command.Env = telemetryBlackboxEnv(home, false, endpoint)
 	output, err := command.CombinedOutput()
 	var exitError *exec.ExitError
 	if !errors.As(err, &exitError) || exitError.ExitCode() != ExitUsage {
 		t.Fatalf("built command error = %v, want exit %d; output=%s", err, ExitUsage, output)
 	}
+	waitForTelemetryWorker(t, home, workerConnected)
 
 	spoolData, err := os.ReadFile(filepath.Join(home, ".asc", "telemetry-spool.jsonl"))
 	if err != nil {
@@ -60,6 +62,81 @@ func TestRun_BuiltBinaryEmitsSchemaV4Payload(t *testing.T) {
 	}
 	if value, exists := payload["diagnostic_code"]; !exists || value != string(shared.DiagnosticRequiredInputMissing) {
 		t.Fatalf("diagnostic_code = %v (exists=%t), want %q", value, exists, shared.DiagnosticRequiredInputMissing)
+	}
+}
+
+// telemetryWorkerLockName is the lock file the detached telemetry worker holds
+// in HOME/.asc for its whole delivery pass.
+const telemetryWorkerLockName = "telemetry-worker.lock"
+
+// telemetryWorkerHangGuard only stops a hung test; no assertion depends on it.
+const telemetryWorkerHangGuard = 30 * time.Second
+
+// startClosingTelemetryEndpoint accepts and immediately closes every
+// connection, so delivery fails transiently and the spooled event stays on
+// disk. The returned channel is closed when the first connection arrives.
+func startClosingTelemetryEndpoint(t *testing.T) (string, <-chan struct{}) {
+	t.Helper()
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen for telemetry endpoint: %v", err)
+	}
+	connected := make(chan struct{})
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		first := true
+		for {
+			connection, err := listener.Accept()
+			if err != nil {
+				return
+			}
+			_ = connection.Close()
+			if first {
+				close(connected)
+				first = false
+			}
+		}
+	}()
+	t.Cleanup(func() {
+		_ = listener.Close()
+		<-done
+	})
+	return "https://" + listener.Addr().String() + "/events", connected
+}
+
+// waitForTelemetryWorker waits until the detached worker that the CLI started
+// has attempted delivery and released its lock. The worker outlives the CLI
+// process and writes under HOME/.asc, so returning before it finishes lets it
+// race the test's TempDir cleanup.
+func waitForTelemetryWorker(t *testing.T, home string, connected <-chan struct{}) {
+	t.Helper()
+	select {
+	case <-connected:
+	case <-time.After(telemetryWorkerHangGuard):
+		t.Fatal("detached telemetry worker never attempted delivery")
+	}
+	// The worker takes this lock before it reads the spool and holds it until
+	// its delivery pass ends, so acquiring it here means the worker is done.
+	lockFile, err := os.OpenFile(filepath.Join(home, ".asc", telemetryWorkerLockName), os.O_RDWR, 0)
+	if err != nil {
+		t.Fatalf("open telemetry worker lock: %v", err)
+	}
+	defer lockFile.Close()
+	locked := make(chan error, 1)
+	go func() {
+		locked <- lockFileExclusive(lockFile)
+	}()
+	select {
+	case err := <-locked:
+		if err != nil {
+			t.Fatalf("lock telemetry worker lock: %v", err)
+		}
+	case <-time.After(telemetryWorkerHangGuard):
+		t.Fatal("detached telemetry worker did not release its lock")
+	}
+	if err := unlockFile(lockFile); err != nil {
+		t.Fatalf("unlock telemetry worker lock: %v", err)
 	}
 }
 

@@ -210,6 +210,42 @@ func TestConsumeResolvedSubscriptionPricePage_PrefersDatedCurrentOverUndatedFall
 	}
 }
 
+func TestConsumeResolvedSubscriptionPricePage_EndsPriceOnSuccessorStartDate(t *testing.T) {
+	// Subscription prices carry only a startDate: each price ends on the date
+	// the next one starts, the end-equals-next-start shape App Store Connect
+	// uses for app and in-app purchase schedules.
+	page := &asc.SubscriptionPricesResponse{
+		Data: []asc.Resource[asc.SubscriptionPriceAttributes]{
+			newResolvedSubscriptionPriceResource("price-old", "USA", "pp-old", "2026-01-01", false),
+			newResolvedSubscriptionPriceResource("price-new", "USA", "pp-new", "2026-10-01", false),
+		},
+		Included: mustMarshalJSON(t, []map[string]any{
+			subscriptionPricePointIncluded("pp-old", "0.99", "0.84", "0.84"),
+			subscriptionPricePointIncluded("pp-new", "1.99", "1.69", "1.69"),
+			territoryIncluded("USA", "USD"),
+		}),
+	}
+
+	tests := []struct {
+		date time.Time
+		want string
+	}{
+		{date: time.Date(2026, time.September, 30, 0, 0, 0, 0, time.UTC), want: "0.99"},
+		{date: time.Date(2026, time.October, 1, 0, 0, 0, 0, time.UTC), want: "1.99"},
+	}
+	for _, test := range tests {
+		t.Run(test.date.Format("2006-01-02"), func(t *testing.T) {
+			candidates := make(map[string]resolvedSubscriptionPriceCandidate)
+			if err := consumeResolvedSubscriptionPricePage(candidates, page, test.date, ""); err != nil {
+				t.Fatalf("consumeResolvedSubscriptionPricePage() error = %v", err)
+			}
+			if got := candidates["USA"].row.CustomerPrice; got != test.want {
+				t.Fatalf("customerPrice = %q, want %q", got, test.want)
+			}
+		})
+	}
+}
+
 func newResolvedSubscriptionPriceResource(
 	priceID string,
 	territoryID string,

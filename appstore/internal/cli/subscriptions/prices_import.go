@@ -482,10 +482,14 @@ func fetchSubscriptionPriceImportState(ctx context.Context, client *asc.Client, 
 	if err != nil {
 		return nil, err
 	}
-	index.now = subscriptionImportNow()
+	index.now = shared.PricingNow()
 	return index, nil
 }
 
+// matches reports whether target already exists. An explicit start date is the
+// caller's own date and must match exactly. An immediate target matches the
+// territory's price that applies on today's US Pacific pricing date: the
+// latest one that has started, because each price ends when the next starts.
 func (index *subscriptionPriceImportStateIndex) matches(target subscriptionPriceImportResolvedRow) bool {
 	if index == nil {
 		return false
@@ -504,7 +508,7 @@ func (index *subscriptionPriceImportStateIndex) matches(target subscriptionPrice
 		return false
 	}
 
-	asOf := dateOnlyUTC(index.now)
+	today := shared.PricingDate(index.now)
 	var selected *subscriptionPriceImportState
 	selectedStart := time.Time{}
 	for _, state := range index.states {
@@ -515,7 +519,7 @@ func (index *subscriptionPriceImportStateIndex) matches(target subscriptionPrice
 		start := time.Time{}
 		if state.startDate != "" {
 			parsed, err := time.Parse(equalizeDateLayout, state.startDate)
-			if err != nil || parsed.After(asOf) {
+			if err != nil || !shared.PriceActiveOn(&parsed, nil, today) {
 				continue
 			}
 			start = parsed
@@ -536,7 +540,7 @@ func (index *subscriptionPriceImportStateIndex) add(target subscriptionPriceImpo
 	}
 	startDate := strings.TrimSpace(target.startDate)
 	if startDate == "" {
-		startDate = dateOnlyUTC(index.now).Format(equalizeDateLayout)
+		startDate = shared.PricingDate(index.now).Format(equalizeDateLayout)
 	}
 	index.states = append(index.states, subscriptionPriceImportState{
 		territoryID:          strings.ToUpper(strings.TrimSpace(target.territoryID)),

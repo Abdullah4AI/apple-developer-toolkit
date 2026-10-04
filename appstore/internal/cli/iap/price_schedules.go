@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/peterbourgon/ff/v3/ffcli"
 
@@ -414,7 +413,7 @@ Examples:
 			defer cancel()
 
 			if *resolved {
-				resp, err := fetchResolvedIAPSchedulePrices(requestCtx, client, id, "manual", *limit, *next, time.Now().UTC())
+				resp, err := fetchResolvedIAPSchedulePrices(requestCtx, client, id, "manual", *limit, *next, shared.PricingNow())
 				if err != nil {
 					return fmt.Errorf("iap pricing schedules manual-prices: failed to resolve: %w", err)
 				}
@@ -503,7 +502,7 @@ Examples:
 			defer cancel()
 
 			if *resolved {
-				resp, err := fetchResolvedIAPSchedulePrices(requestCtx, client, id, "automatic", *limit, *next, time.Now().UTC())
+				resp, err := fetchResolvedIAPSchedulePrices(requestCtx, client, id, "automatic", *limit, *next, shared.PricingNow())
 				if err != nil {
 					return fmt.Errorf("iap pricing schedules automatic-prices: failed to resolve: %w", err)
 				}

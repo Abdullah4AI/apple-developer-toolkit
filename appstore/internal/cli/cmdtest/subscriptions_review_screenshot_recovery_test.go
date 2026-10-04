@@ -729,7 +729,7 @@ func runSubscriptionReviewScreenshotCreate(t *testing.T, path string) (string, s
 
 func writeSubscriptionReviewScreenshotFixture(t *testing.T) (string, []byte, string) {
 	t.Helper()
-	content := []byte("subscription-review-screenshot")
+	content := reviewScreenshotPNG(t)
 	path := filepath.Join(t.TempDir(), "review.png")
 	if err := os.WriteFile(path, content, 0o600); err != nil {
 		t.Fatalf("write screenshot fixture: %v", err)

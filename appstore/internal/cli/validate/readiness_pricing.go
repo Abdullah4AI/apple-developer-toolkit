@@ -59,7 +59,7 @@ func fetchCurrentAppPaidPricingEvidence(ctx context.Context, client *asc.Client,
 	}); err != nil {
 		return false, false
 	}
-	return currentAppPaidPricingEvidence(pages, time.Now().UTC())
+	return currentAppPaidPricingEvidence(pages, shared.PricingNow())
 }
 
 func currentAppPricingQuery(limit int) url.Values {
@@ -79,7 +79,7 @@ func currentAppPaidPricingEvidence(pages []*asc.AppPricesResponse, now time.Time
 		}
 		pricePoints := includedAppPricePoints(page.Included)
 		for _, resource := range page.Data {
-			active, datesKnown := appPriceActiveOn(resource.Attributes, now)
+			active, datesKnown := pricing.AppPriceActiveOn(resource.Attributes.StartDate, resource.Attributes.EndDate, now)
 			if !datesKnown {
 				return false, false
 			}
@@ -159,22 +159,4 @@ func appPriceRelationshipID(raw json.RawMessage) string {
 		return ""
 	}
 	return strings.TrimSpace(relationships.AppPricePoint.Data.ID)
-}
-
-func appPriceActiveOn(attributes asc.AppPriceAttributes, now time.Time) (bool, bool) {
-	today := now.UTC().Format("2006-01-02")
-	start := strings.TrimSpace(attributes.StartDate)
-	if start != "" {
-		if _, err := time.Parse("2006-01-02", start); err != nil {
-			return false, false
-		}
-		if start > today {
-			return false, true
-		}
-	}
-	ended, known := pricing.AppPriceEndedOn(attributes.EndDate, now)
-	if !known {
-		return false, false
-	}
-	return !ended, true
 }

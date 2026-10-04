@@ -507,10 +507,85 @@ func staleSessionDiscardWarning(err error) error {
 	return fmt.Errorf("discarding the stale cached web session failed: %w", err)
 }
 
-// missingAppleIDUsageError is the usage error for a web command that has no
-// Apple ID to work with: nothing was passed and the session cache holds
-// nothing to default to. It carries errNoCachedWebSession so command-specific
-// session diagnostics can tell a missing session from an expired one.
+type webSignInContextKey struct{}
+
+type publicAPIAlternativeContextKey struct{}
+
+// contextForWebSignIn marks ctx as belonging to `asc web auth login`. That
+// command exists to create the session, so a missing Apple Account or password
+// stays an ordinary usage error with its usage page for it; every other web
+// command reports the missing session as shared.MissingWebSessionError, which
+// keeps the usage exit code but prints a sign-in hint instead of the page.
+func contextForWebSignIn(ctx context.Context) context.Context {
+	return context.WithValue(ctx, webSignInContextKey{}, true)
+}
+
+func isWebSignIn(ctx context.Context) bool {
+	if ctx == nil {
+		return false
+	}
+	signIn, _ := ctx.Value(webSignInContextKey{}).(bool)
+	return signIn
+}
+
+// contextWithPublicAPIAlternative records a sentence naming the App Store
+// Connect API command that answers the same question without a web session, so
+// a missing-session error can point at it.
+func contextWithPublicAPIAlternative(ctx context.Context, sentence string) context.Context {
+	return context.WithValue(ctx, publicAPIAlternativeContextKey{}, strings.TrimSpace(sentence))
+}
+
+func publicAPIAlternativeFromContext(ctx context.Context) string {
+	if ctx == nil {
+		return ""
+	}
+	sentence, _ := ctx.Value(publicAPIAlternativeContextKey{}).(string)
+	return sentence
+}
+
+// newMissingWebSessionError reports that a web command has no usable Apple web
+// session and no way to sign in without a terminal. appleID names the selected
+// account, if any. Without one the error also carries errNoCachedWebSession so
+// command-specific session diagnostics can tell a missing session from an
+// expired one, and the required_input_missing --apple-id diagnostic the usage
+// error it replaced reported. alternative, when set, is appended to the hint.
+func newMissingWebSessionError(appleID, alternative string) error {
+	message := "no Apple web session is cached"
+	trimmedAppleID := strings.TrimSpace(appleID)
+	if trimmedAppleID != "" {
+		message = "no usable Apple web session for " + shared.SanitizeTerminal(trimmedAppleID)
+	}
+	hint := fmt.Sprintf(
+		"asc web commands need a signed-in Apple Account session, and signing in needs an interactive terminal for the password and two-factor code. Run 'asc web auth login --apple-id EMAIL' in a terminal, or load a session exported elsewhere with 'asc web auth import --file FILE'. Unattended sign-in needs %s and %s, plus --apple-id or %s.",
+		webPasswordEnvDisplay(),
+		webTwoFactorCodeCommandEnv,
+		webAppleIDEnv,
+	)
+	if alternative = strings.TrimSpace(alternative); alternative != "" {
+		hint += " " + alternative
+	}
+	err := &shared.MissingWebSessionError{Message: message, Hint: hint}
+	if trimmedAppleID == "" {
+		return shared.NewErrorWithCause(
+			shared.WithDiagnostic(err, shared.DiagnosticRequiredInputMissing, "--apple-id"),
+			errNoCachedWebSession,
+		)
+	}
+	return err
+}
+
+// passwordRequiredUsageError is the usage error for a sign-in that reached the
+// password step without one: `asc web auth login` without a password source,
+// or an interactive `web apps create` prompt answered with an empty password.
+func passwordRequiredUsageError() error {
+	return shared.UsageError(fmt.Sprintf("password is required: run in a terminal for an interactive prompt or set %s", webPasswordEnvDisplay()))
+}
+
+// missingAppleIDUsageError is the usage error `asc web auth login` returns
+// when it has no Apple ID to sign in with: nothing was passed and the session
+// cache holds nothing to default to. It carries errNoCachedWebSession so
+// command-specific session diagnostics can tell a missing session from an
+// expired one.
 func missingAppleIDUsageError() error {
 	return shared.NewErrorWithCause(
 		shared.WithDiagnostic(
@@ -1098,7 +1173,10 @@ func resolveWebSession(ctx context.Context, appleID, password, twoFactorCode str
 			if errors.As(defaultErr, &ambiguous) {
 				return nil, "", ambiguousAppleIDUsageError(ambiguous.AppleIDs)
 			}
-			return nil, "", missingAppleIDUsageError()
+			if isWebSignIn(ctx) {
+				return nil, "", missingAppleIDUsageError()
+			}
+			return nil, "", newMissingWebSessionError("", publicAPIAlternativeFromContext(ctx))
 		default:
 			if err := opts.promptAppleID(&resolvedAppleID); err != nil {
 				return nil, "", err
@@ -1130,7 +1208,13 @@ func resolveWebSession(ctx context.Context, appleID, password, twoFactorCode str
 		}
 	}
 	if !webPasswordProvided(resolvedPassword.value) {
-		return nil, "", shared.UsageError(fmt.Sprintf("password is required: run in a terminal for an interactive prompt or set %s", webPasswordEnvDisplay()))
+		if isWebSignIn(ctx) {
+			return nil, "", passwordRequiredUsageError()
+		}
+		// No usable cached session and no way to sign in here: the command
+		// needs a session it cannot create. Say so with the sign-in hint rather
+		// than a missing-password usage page.
+		return nil, "", newMissingWebSessionError(resolvedAppleID, publicAPIAlternativeFromContext(ctx))
 	}
 
 	// A 5xx on the cached jar alone does not prove the jar is stale: Apple also
@@ -1398,7 +1482,7 @@ Examples:
 				ProviderID:       *providerID,
 				PublicProviderID: *publicProviderID,
 			}
-			session, source, err := callResolveSessionForProviderSelection(ctx, *appleID, "", "", *twoFactorCodeCommand, selection)
+			session, source, err := callResolveSessionForProviderSelection(contextForWebSignIn(ctx), *appleID, "", "", *twoFactorCodeCommand, selection)
 			if err != nil {
 				return err
 			}

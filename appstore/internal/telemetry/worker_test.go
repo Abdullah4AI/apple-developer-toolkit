@@ -96,6 +96,7 @@ func TestFlushSpoolDoesNotRetryPermanentCollectorRejections(t *testing.T) {
 
 func TestMaintenanceWorkerDeduplicatesActiveFlushes(t *testing.T) {
 	clearContextEnv(t)
+	clearTelemetryOptOutEnv(t)
 	setTelemetryTestHome(t)
 	store := testSpoolStore(filepath.Join(t.TempDir(), spoolFileName))
 	if err := store.append(testSpoolRecord("event-01")); err != nil {
@@ -141,6 +142,7 @@ func TestMaintenanceWorkerDeduplicatesActiveFlushes(t *testing.T) {
 
 func TestMaintenanceWorkerWaitsForPreviousWorkerHandoff(t *testing.T) {
 	clearContextEnv(t)
+	clearTelemetryOptOutEnv(t)
 	setTelemetryTestHome(t)
 	store := testSpoolStore(filepath.Join(t.TempDir(), spoolFileName))
 	if err := store.append(testSpoolRecord("event-01")); err != nil {
@@ -258,4 +260,13 @@ func TestMaintenanceWorkerEnvironmentFiltersWebSession(t *testing.T) {
 	if got, want := environment[len(environment)-1], internalWorkerEnvVar+"=1"; got != want {
 		t.Fatalf("maintenance worker marker = %q, want %q", got, want)
 	}
+}
+
+// clearTelemetryOptOutEnv removes the environment opt-outs for tests that need
+// the worker to deliver events, so they pass even when the invoking shell sets
+// ASC_TELEMETRY_DISABLED or DO_NOT_TRACK.
+func clearTelemetryOptOutEnv(t *testing.T) {
+	t.Helper()
+	t.Setenv("ASC_TELEMETRY_DISABLED", "")
+	t.Setenv("DO_NOT_TRACK", "")
 }

@@ -191,23 +191,113 @@ func TestResolveSessionSoleCachedAppleIDCanAutoReauthenticate(t *testing.T) {
 	}
 }
 
-func TestResolveSessionWithoutCachedSessionsPointsToLogin(t *testing.T) {
+func TestResolveSessionWithoutCachedSessionsReportsMissingWebSession(t *testing.T) {
 	dir := t.TempDir()
 	stderr := stubDefaultAppleIDResolverInputs(t, dir)
 
 	_, _, err := resolveSession(context.Background(), "", "", "")
-	if !errors.Is(err, flag.ErrHelp) {
-		t.Fatalf("expected usage error, got %v", err)
+	if errors.Is(err, flag.ErrHelp) {
+		t.Fatalf("expected the missing-session error without the usage page, got %v", err)
 	}
-	if got, want := err.Error(), "--apple-id is required when no cached web session is available; run 'asc web auth login --apple-id EMAIL'"; got != want {
+	if !errors.Is(err, shared.ErrMissingWebSession) || !errors.Is(err, errNoCachedWebSession) {
+		t.Fatalf("expected ErrMissingWebSession caused by errNoCachedWebSession, got %v", err)
+	}
+	missing, ok := errors.AsType[*shared.MissingWebSessionError](err)
+	if !ok {
+		t.Fatalf("expected *shared.MissingWebSessionError, got %T", err)
+	}
+	if got, want := err.Error(), "no Apple web session is cached"; got != want {
 		t.Fatalf("error = %q, want %q", got, want)
+	}
+	if !strings.Contains(missing.Hint, "'asc web auth login --apple-id EMAIL' in a terminal") ||
+		!strings.Contains(missing.Hint, "'asc web auth import --file FILE'") {
+		t.Fatalf("hint = %q, want the terminal sign-in and session import next steps", missing.Hint)
 	}
 	diagnostic, ok := shared.DiagnosticFromError(err)
 	if !ok || diagnostic.Code != shared.DiagnosticRequiredInputMissing || diagnostic.Parameter != "--apple-id" {
-		t.Fatalf("diagnostic = %+v (found=%v), want required_input_missing --apple-id", diagnostic, ok)
+		t.Fatalf("diagnostic = %+v (found=%v), want the required_input_missing --apple-id diagnostic the usage error reported", diagnostic, ok)
+	}
+	if got := shared.ClassifyUsageError(err); got != shared.UsageErrorMissingRequired {
+		t.Fatalf("usage classification = %q, want %q", got, shared.UsageErrorMissingRequired)
 	}
 	if stderr.Len() != 0 {
 		t.Fatalf("stderr = %q, want empty", stderr.String())
+	}
+}
+
+func TestResolveSessionForUncachedAccountWithoutPasswordReportsMissingWebSession(t *testing.T) {
+	dir := t.TempDir()
+	_ = stubDefaultAppleIDResolverInputs(t, dir)
+	t.Setenv("ASC_WEB_DONT_STORE_PASSWORD", "1")
+	tryResumeSessionFn = func(context.Context, string) (*webcore.AuthSession, bool, error) {
+		return nil, false, nil
+	}
+	origPromptPassword := promptPasswordFn
+	t.Cleanup(func() { promptPasswordFn = origPromptPassword })
+	promptPasswordFn = func(context.Context) (string, error) { return "", nil }
+
+	_, _, err := resolveSession(context.Background(), "user@example.com", "", "")
+	if errors.Is(err, flag.ErrHelp) {
+		t.Fatalf("expected the missing-session error without the usage page, got %v", err)
+	}
+	if !errors.Is(err, shared.ErrMissingWebSession) {
+		t.Fatalf("expected ErrMissingWebSession, got %v", err)
+	}
+	if got, want := err.Error(), "no usable Apple web session for user@example.com"; got != want {
+		t.Fatalf("error = %q, want %q", got, want)
+	}
+}
+
+// TestResolveSessionForSignInKeepsUsageErrors pins the one command whose job is
+// to create the session: `asc web auth login` still treats a missing account or
+// password as a usage error.
+func TestResolveSessionForSignInKeepsUsageErrors(t *testing.T) {
+	dir := t.TempDir()
+	_ = stubDefaultAppleIDResolverInputs(t, dir)
+	t.Setenv("ASC_WEB_DONT_STORE_PASSWORD", "1")
+	tryResumeSessionFn = func(context.Context, string) (*webcore.AuthSession, bool, error) {
+		return nil, false, nil
+	}
+	origPromptPassword := promptPasswordFn
+	t.Cleanup(func() { promptPasswordFn = origPromptPassword })
+	promptPasswordFn = func(context.Context) (string, error) { return "", nil }
+
+	signInCtx := contextForWebSignIn(context.Background())
+	for _, tc := range []struct {
+		name    string
+		appleID string
+		want    string
+	}{
+		{name: "no account", want: "--apple-id is required when no cached web session is available; run 'asc web auth login --apple-id EMAIL'"},
+		{name: "no password", appleID: "user@example.com", want: "password is required: run in a terminal for an interactive prompt or set ASC_WEB_PASSWORD"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var err error
+			captureOutput(t, func() {
+				_, _, err = resolveSession(signInCtx, tc.appleID, "", "")
+			})
+			if !errors.Is(err, flag.ErrHelp) || errors.Is(err, shared.ErrMissingWebSession) {
+				t.Fatalf("expected the sign-in usage error, got %v", err)
+			}
+			if got := err.Error(); got != tc.want {
+				t.Fatalf("error = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestResolveSessionNamesPublicAPIAlternative(t *testing.T) {
+	dir := t.TempDir()
+	_ = stubDefaultAppleIDResolverInputs(t, dir)
+
+	ctx := contextWithPublicAPIAlternative(context.Background(), "Without a web session, use the public API.")
+	_, _, err := resolveSession(ctx, "", "", "")
+	missing, ok := errors.AsType[*shared.MissingWebSessionError](err)
+	if !ok {
+		t.Fatalf("expected *shared.MissingWebSessionError, got %v", err)
+	}
+	if !strings.HasSuffix(missing.Hint, " Without a web session, use the public API.") {
+		t.Fatalf("hint = %q, want the public API alternative appended", missing.Hint)
 	}
 }
 
@@ -285,7 +375,7 @@ func TestResolveSessionPrefersLastCachedSessionOverSoleDefault(t *testing.T) {
 	}
 }
 
-func TestResolveSessionDefaultLookupFailureFallsBackToUsageError(t *testing.T) {
+func TestResolveSessionDefaultLookupFailureFallsBackToMissingWebSession(t *testing.T) {
 	dir := t.TempDir()
 	stderr := stubDefaultAppleIDResolverInputs(t, dir)
 
@@ -296,11 +386,12 @@ func TestResolveSessionDefaultLookupFailureFallsBackToUsageError(t *testing.T) {
 	}
 
 	_, _, err := resolveSession(context.Background(), "", "", "")
-	if !errors.Is(err, flag.ErrHelp) {
-		t.Fatalf("expected usage error, got %v", err)
+	missing, ok := errors.AsType[*shared.MissingWebSessionError](err)
+	if !ok {
+		t.Fatalf("expected the missing-session error, got %v", err)
 	}
-	if !strings.Contains(err.Error(), "run 'asc web auth login") {
-		t.Fatalf("error = %q, want login hint", err)
+	if !strings.Contains(missing.Hint, "'asc web auth login --apple-id EMAIL'") {
+		t.Fatalf("hint = %q, want login hint", missing.Hint)
 	}
 	if !strings.Contains(stderr.String(), "Warning: listing cached web sessions failed: boom") {
 		t.Fatalf("stderr = %q, want cache listing warning", stderr.String())
@@ -348,7 +439,7 @@ func TestResolveWebSessionEmptyCachePromptsWithoutPrintingUsageError(t *testing.
 	}
 }
 
-func TestResolveWebSessionEmptyCacheNonInteractivePrintsOneUsageError(t *testing.T) {
+func TestResolveWebSessionEmptyCacheNonInteractiveReportsMissingWebSessionWithoutPrinting(t *testing.T) {
 	dir := t.TempDir()
 	stubDefaultAppleIDResolverInputs(t, dir)
 	originalCanPrompt := appCreateCanPromptInteractivelyFn
@@ -362,11 +453,12 @@ func TestResolveWebSessionEmptyCacheNonInteractivePrintsOneUsageError(t *testing
 			resolvePassword: resolveSessionPassword,
 		})
 	})
-	if !errors.Is(err, flag.ErrHelp) {
-		t.Fatalf("expected usage error, got %v", err)
+	if !errors.Is(err, shared.ErrMissingWebSession) || errors.Is(err, flag.ErrHelp) {
+		t.Fatalf("expected the missing-session error without the usage page, got %v", err)
 	}
-	if got := strings.Count(stderr, "Error:"); got != 1 {
-		t.Fatalf("stderr = %q, want exactly one usage error, got %d", stderr, got)
+	// The root renderer prints the single diagnostic; the resolver must not.
+	if strings.Contains(stderr, "Error:") {
+		t.Fatalf("stderr = %q, want no diagnostic before the root renderer", stderr)
 	}
 }
 

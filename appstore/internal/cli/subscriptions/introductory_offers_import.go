@@ -451,7 +451,7 @@ func fetchSubscriptionIntroductoryOfferImportState(ctx context.Context, client *
 	if err != nil {
 		return nil, err
 	}
-	index.now = subscriptionImportNow()
+	index.now = shared.PricingNow()
 	return index, nil
 }
 
@@ -479,11 +479,16 @@ func (index *subscriptionIntroductoryOfferImportStateIndex) add(target subscript
 		return
 	}
 	if strings.TrimSpace(target.startDate) == "" {
-		target.startDate = dateOnlyUTC(index.now).Format(equalizeDateLayout)
+		target.startDate = shared.PricingDate(index.now).Format(equalizeDateLayout)
 	}
 	index.offers = append(index.offers, target)
 }
 
+// introductoryOfferStartDateMatches compares an existing offer's start date
+// with a target's. An explicit target start date is the caller's own date and
+// must match exactly; an immediate target matches an offer that has started on
+// today's US Pacific pricing date. End dates are compared exactly by the
+// caller, because the import row supplies them.
 func introductoryOfferStartDateMatches(actual, target string, now time.Time) bool {
 	actual = strings.TrimSpace(actual)
 	target = strings.TrimSpace(target)
@@ -494,7 +499,7 @@ func introductoryOfferStartDateMatches(actual, target string, now time.Time) boo
 		return true
 	}
 	parsed, err := time.Parse(equalizeDateLayout, actual)
-	return err == nil && !parsed.After(dateOnlyUTC(now))
+	return err == nil && shared.PriceActiveOn(&parsed, nil, shared.PricingDate(now))
 }
 
 func extractResourceRelationshipID(relationships json.RawMessage, key string) string {

@@ -21,10 +21,10 @@ func TestReviewDetailsCreateCommandClarifiesReviewerAccessGuidance(t *testing.T)
 	if got := cmd.FlagSet.Lookup("notes").Usage; !strings.Contains(got, "reviewer instructions") {
 		t.Fatalf("expected --notes usage to mention reviewer instructions, got %q", got)
 	}
-	if !strings.Contains(cmd.LongHelp, `--contact-first-name "Dev" --contact-last-name "Support" --contact-email "dev@example.com" --contact-phone "+1 555 0100" --notes "Reviewer can use the guest flow from the welcome screen."`) {
+	if !strings.Contains(cmd.LongHelp, `--contact-first-name "Dev" --contact-last-name "Support" --contact-email "dev@example.com" --contact-phone "+1 408 555 0100" --notes "Reviewer can use the guest flow from the welcome screen."`) {
 		t.Fatalf("expected notes-only create example to include the required contact fields, got %q", cmd.LongHelp)
 	}
-	if !strings.Contains(cmd.LongHelp, `--contact-first-name "Dev" --contact-last-name "Support" --contact-email "dev@example.com" --contact-phone "+1 555 0100" --demo-account-required=true --demo-account-name "reviewer@example.com" --demo-account-password "app-specific-password" --notes "2FA is disabled for this review account."`) {
+	if !strings.Contains(cmd.LongHelp, `--contact-first-name "Dev" --contact-last-name "Support" --contact-email "dev@example.com" --contact-phone "+1 408 555 0100" --demo-account-required=true --demo-account-name "reviewer@example.com" --demo-account-password "app-specific-password" --notes "2FA is disabled for this review account."`) {
 		t.Fatalf("expected credentialed create example to include the required contact fields, got %q", cmd.LongHelp)
 	}
 }

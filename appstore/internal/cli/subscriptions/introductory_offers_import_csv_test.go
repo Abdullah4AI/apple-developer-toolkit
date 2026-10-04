@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
 func TestParseSubscriptionIntroductoryOffersImportCSVHeader_StripsUTF8BOM(t *testing.T) {
@@ -81,14 +82,47 @@ func TestSubscriptionIntroductoryOfferImportStateMatchesImmediateUpfrontOffer(t 
 	}
 }
 
-func TestSubscriptionIntroductoryOfferImportReconcilesAcrossUTCMidnight(t *testing.T) {
-	t.Setenv("ASC_MAX_RETRIES", "1")
-	originalNow := subscriptionImportNow
-	t.Cleanup(func() { subscriptionImportNow = originalNow })
-	current := time.Date(2026, time.June, 24, 23, 59, 0, 0, time.UTC)
-	subscriptionImportNow = func() time.Time {
-		return current
+func TestSubscriptionIntroductoryOfferImportStateUsesUSPacificDay(t *testing.T) {
+	target := subscriptionIntroductoryOfferImportResolvedRow{
+		territory:       "USA",
+		offerMode:       "FREE_TRIAL",
+		offerDuration:   "ONE_WEEK",
+		numberOfPeriods: 1,
+		planType:        asc.SubscriptionPlanTypeUpfront,
 	}
+	scheduled := target
+	scheduled.startDate = "2026-06-25"
+
+	// 17:30 PDT on 2026-06-24: an offer starting 2026-06-25 is still
+	// scheduled, so it does not satisfy an immediate target.
+	beforePacificMidnight := time.Date(2026, time.June, 25, 0, 30, 0, 0, time.UTC)
+	index := &subscriptionIntroductoryOfferImportStateIndex{
+		now:    beforePacificMidnight,
+		offers: []subscriptionIntroductoryOfferImportResolvedRow{scheduled},
+	}
+	if index.matches(target) {
+		t.Fatal("expected an offer starting on the next Pacific day not to match an immediate target")
+	}
+
+	index.now = time.Date(2026, time.June, 25, 7, 0, 0, 0, time.UTC)
+	if !index.matches(target) {
+		t.Fatal("expected the offer to match an immediate target from Pacific midnight")
+	}
+
+	recorded := &subscriptionIntroductoryOfferImportStateIndex{now: beforePacificMidnight}
+	recorded.add(target)
+	if len(recorded.offers) != 1 || recorded.offers[0].startDate != "2026-06-24" {
+		t.Fatalf("expected the immediate offer recorded on the Pacific date 2026-06-24, got %+v", recorded.offers)
+	}
+}
+
+func TestSubscriptionIntroductoryOfferImportReconcilesAcrossPacificMidnight(t *testing.T) {
+	t.Setenv("ASC_MAX_RETRIES", "1")
+	// 23:59 PDT on 2026-06-24.
+	current := time.Date(2026, time.June, 25, 6, 59, 0, 0, time.UTC)
+	t.Cleanup(shared.SetPricingNowForTesting(func() time.Time {
+		return current
+	}))
 
 	originalTransport := http.DefaultTransport
 	t.Cleanup(func() { http.DefaultTransport = originalTransport })
@@ -96,7 +130,9 @@ func TestSubscriptionIntroductoryOfferImportReconcilesAcrossUTCMidnight(t *testi
 		if req.Method != http.MethodGet || req.URL.Path != "/v1/subscriptions/sub-1/introductoryOffers" {
 			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.String())
 		}
-		current = time.Date(2026, time.June, 25, 0, 1, 0, 0, time.UTC)
+		// The read finishes after Pacific midnight, when Apple reports the
+		// immediate offer on the new Pacific date.
+		current = time.Date(2026, time.June, 25, 7, 1, 0, 0, time.UTC)
 		body := `{"data":[{"type":"subscriptionIntroductoryOffers","id":"offer-1","attributes":{"startDate":"2026-06-25","duration":"ONE_WEEK","offerMode":"FREE_TRIAL","numberOfPeriods":1,"targetSubscriptionPlanType":"UPFRONT"},"relationships":{"territory":{"data":{"type":"territories","id":"USA"}}}}],"links":{}}`
 		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(body)), Header: http.Header{"Content-Type": []string{"application/json"}}}, nil
 	})

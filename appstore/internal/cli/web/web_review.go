@@ -1070,6 +1070,28 @@ Examples:
 	}
 }
 
+// reviewPublicAPIAppArg renders the app for a suggested App Store Connect API
+// command, using a placeholder for anything other than a plain numeric app ID.
+func reviewPublicAPIAppArg(appID string) string {
+	if shared.IsNumericAppID(appID) {
+		return appID
+	}
+	return "APP_ID"
+}
+
+// reviewSubmissionsPublicAPIAlternative names the public API command that lists
+// an app's review submissions without a web session.
+func reviewSubmissionsPublicAPIAlternative(appID string) string {
+	return fmt.Sprintf(`Without a web session, 'asc review submissions-list --app "%s"' lists review submissions through the App Store Connect API.`, reviewPublicAPIAppArg(appID))
+}
+
+// reviewStatusPublicAPIAlternative names the public API command that reports an
+// app's App Review state without a web session; Resolution Center threads and
+// messages have no public API equivalent.
+func reviewStatusPublicAPIAlternative(appID string) string {
+	return fmt.Sprintf(`Without a web session, 'asc review status --app "%s"' reports App Review state through the App Store Connect API; Resolution Center messages need a web session.`, reviewPublicAPIAppArg(appID))
+}
+
 // WebReviewListCommand lists review submissions for an app.
 func WebReviewListCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("web review list", flag.ExitOnError)
@@ -1095,7 +1117,7 @@ func WebReviewListCommand() *ffcli.Command {
 				return err
 			}
 
-			session, requestCtx, cancel, err := resolveWebSessionForCommand(ctx, authFlags)
+			session, requestCtx, cancel, err := resolveWebSessionForCommand(contextWithPublicAPIAlternative(ctx, reviewSubmissionsPublicAPIAlternative(trimmedAppID)), authFlags)
 			defer cancel()
 			if err != nil {
 				return err
@@ -1175,7 +1197,7 @@ are never returned because this surface is read-only.
 				)
 			}
 
-			session, requestCtx, cancel, err := resolveWebSessionForCommand(ctx, authFlags)
+			session, requestCtx, cancel, err := resolveWebSessionForCommand(contextWithPublicAPIAlternative(ctx, reviewStatusPublicAPIAlternative(trimmedAppID)), authFlags)
 			defer cancel()
 			if err != nil {
 				return err
@@ -1274,7 +1296,7 @@ Selection:
 				}
 			}
 
-			session, requestCtx, cancel, err := resolveWebSessionForCommand(ctx, authFlags)
+			session, requestCtx, cancel, err := resolveWebSessionForCommand(contextWithPublicAPIAlternative(ctx, reviewStatusPublicAPIAlternative(trimmedAppID)), authFlags)
 			defer cancel()
 			if err != nil {
 				return err

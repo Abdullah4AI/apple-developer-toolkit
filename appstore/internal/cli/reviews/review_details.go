@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 
@@ -12,13 +13,15 @@ import (
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/validation"
 )
 
 const (
 	reviewDetailDemoAccountNameUsage     = "Demo account name when demo credentials are required"
 	reviewDetailDemoAccountPasswordUsage = "Demo account password when demo credentials are required; 100 characters or fewer"
 	reviewDetailDemoAccountRequiredUsage = "Set true only when App Review needs demo credentials; leave false when reviewer guidance in --notes is enough"
-	reviewDetailNotesUsage               = "Review notes for reviewer instructions or context; supplemental when demo credentials are required"
+	reviewDetailNotesUsage               = "Review notes for reviewer instructions or context; supplemental when demo credentials are required; at most 4,000 characters"
+	reviewDetailContactPhoneUsage        = "Contact phone with a plus sign and country code, for example +1 408 555 0100"
 	reviewDetailDemoCredentialsError     = "Error: --demo-account-required=true requires both --demo-account-name and --demo-account-password"
 	reviewDetailDemoPasswordLengthError  = "Error: --demo-account-password must be 100 characters or fewer"
 	reviewDetailDemoPasswordMaxLength    = 100
@@ -142,10 +145,10 @@ func ReviewDetailsCreateCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("details-create", flag.ExitOnError)
 
 	versionID := shared.BindResourceIDFlag(fs, "version-id", "appStoreVersions", "App Store version ID (required)")
-	contactFirstName := fs.String("contact-first-name", "", "Contact first name")
+	contactFirstName := fs.String("contact-first-name", "", "Contact first name (required for new review details)")
 	contactLastName := fs.String("contact-last-name", "", "Contact last name")
 	contactEmail := fs.String("contact-email", "", "Contact email")
-	contactPhone := fs.String("contact-phone", "", "Contact phone")
+	contactPhone := fs.String("contact-phone", "", reviewDetailContactPhoneUsage+" (required for new review details)")
 	demoAccountName := fs.String("demo-account-name", "", reviewDetailDemoAccountNameUsage)
 	demoAccountPassword := fs.String("demo-account-password", "", reviewDetailDemoAccountPasswordUsage)
 	demoAccountRequired := fs.Bool("demo-account-required", false, reviewDetailDemoAccountRequiredUsage)
@@ -160,13 +163,19 @@ func ReviewDetailsCreateCommand() *ffcli.Command {
 		ShortHelp:  "Create App Store review details for a version.",
 		LongHelp: `Create App Store review details for a version.
 
+New review details need ` + "`--contact-first-name`" + ` and ` + "`--contact-phone`" + `, which App
+Store Connect rejects a new detail without; with ` + "`--if-exists skip`" + ` or ` + "`update`" + ` they
+may come from the existing detail. ` + "`--notes`" + ` allow at most 4,000 characters, and
++1 phone numbers need 10 digits after the country code. These are checked
+before any request.
+
 Leave ` + "`--demo-account-required`" + ` false when ` + "`--notes`" + ` are enough for reviewer instructions.
 Use ` + "`--demo-account-required=true`" + ` only when App Review needs demo credentials.
 Do not use placeholder demo credentials just to satisfy the field shape.
 
 Examples:
-  asc review details-create --version-id "VERSION_ID" --contact-first-name "Dev" --contact-last-name "Support" --contact-email "dev@example.com" --contact-phone "+1 555 0100" --notes "Reviewer can use the guest flow from the welcome screen."
-  asc review details-create --version-id "VERSION_ID" --contact-first-name "Dev" --contact-last-name "Support" --contact-email "dev@example.com" --contact-phone "+1 555 0100" --demo-account-required=true --demo-account-name "reviewer@example.com" --demo-account-password "app-specific-password" --notes "2FA is disabled for this review account."
+  asc review details-create --version-id "VERSION_ID" --contact-first-name "Dev" --contact-last-name "Support" --contact-email "dev@example.com" --contact-phone "+1 408 555 0100" --notes "Reviewer can use the guest flow from the welcome screen."
+  asc review details-create --version-id "VERSION_ID" --contact-first-name "Dev" --contact-last-name "Support" --contact-email "dev@example.com" --contact-phone "+1 408 555 0100" --demo-account-required=true --demo-account-name "reviewer@example.com" --demo-account-password "app-specific-password" --notes "2FA is disabled for this review account."
   asc review details-create --version-id "VERSION_ID" --notes "Reviewer notes" --if-exists update
 
 --if-exists controls what happens when App Store Connect answers 409 because
@@ -201,6 +210,19 @@ Any other 409 keeps failing.`,
 				}
 			} else if visited["demo-account-password"] {
 				if err := validateReviewDetailDemoPasswordLength(strings.TrimSpace(*demoAccountPassword)); err != nil {
+					return err
+				}
+			}
+			if err := validateReviewDetailInputValues(visited, strings.TrimSpace(*notes), strings.TrimSpace(*contactPhone)); err != nil {
+				return err
+			}
+			// With --if-exists skip or update the version may already carry its
+			// contact fields, so only a plain create must supply them.
+			if ifExistsMode == shared.IfExistsFail {
+				if err := validateReviewDetailCreateContacts(visited, map[string]string{
+					"contact-first-name": *contactFirstName,
+					"contact-phone":      *contactPhone,
+				}); err != nil {
 					return err
 				}
 			}
@@ -322,7 +344,7 @@ func ReviewDetailsUpdateCommand() *ffcli.Command {
 	contactFirstName := fs.String("contact-first-name", "", "Contact first name")
 	contactLastName := fs.String("contact-last-name", "", "Contact last name")
 	contactEmail := fs.String("contact-email", "", "Contact email")
-	contactPhone := fs.String("contact-phone", "", "Contact phone")
+	contactPhone := fs.String("contact-phone", "", reviewDetailContactPhoneUsage)
 	demoAccountName := fs.String("demo-account-name", "", reviewDetailDemoAccountNameUsage)
 	demoAccountPassword := fs.String("demo-account-password", "", reviewDetailDemoAccountPasswordUsage)
 	demoAccountRequired := fs.Bool("demo-account-required", false, reviewDetailDemoAccountRequiredUsage)
@@ -335,6 +357,9 @@ func ReviewDetailsUpdateCommand() *ffcli.Command {
 		ShortUsage: "asc review details-update --id \"DETAIL_ID\" [flags]",
 		ShortHelp:  "Update App Store review details.",
 		LongHelp: `Update App Store review details.
+
+` + "`--notes`" + ` allow at most 4,000 characters, and +1 phone numbers need 10 digits
+after the country code. These are checked before any request.
 
 Leave ` + "`--demo-account-required`" + ` false when ` + "`--notes`" + ` are enough for reviewer instructions.
 Use ` + "`--demo-account-required=true`" + ` only when App Review needs demo credentials.
@@ -365,6 +390,9 @@ Examples:
 				if err := validateReviewDetailDemoPasswordLength(strings.TrimSpace(*demoAccountPassword)); err != nil {
 					return err
 				}
+			}
+			if err := validateReviewDetailInputValues(visited, strings.TrimSpace(*notes), strings.TrimSpace(*contactPhone)); err != nil {
+				return err
 			}
 
 			client, err := shared.GetASCClient()
@@ -533,4 +561,105 @@ func validateReviewDetailDemoPasswordLength(demoAccountPassword string) error {
 
 	fmt.Fprintln(os.Stderr, reviewDetailDemoPasswordLengthError)
 	return shared.WithDiagnostic(flag.ErrHelp, shared.DiagnosticInvalidInput, "--demo-account-password")
+}
+
+// reviewDetailCreateContactFlags lists the contact flags App Store Connect was
+// observed rejecting a new review detail without. Last name and email are left
+// to App Store Connect.
+var reviewDetailCreateContactFlags = []string{
+	"contact-first-name",
+	"contact-phone",
+}
+
+// validateReviewDetailInputValues checks the notes and contact phone the
+// command is about to send. App Store Connect otherwise rejects them only after
+// the request, without saying by how much the notes are over the limit.
+func validateReviewDetailInputValues(visited map[string]bool, notes, contactPhone string) error {
+	if visited["notes"] {
+		if err := validateReviewDetailNotesLength(notes); err != nil {
+			return err
+		}
+	}
+	if visited["contact-phone"] {
+		return validateReviewDetailContactPhone(contactPhone)
+	}
+	return nil
+}
+
+func validateReviewDetailNotesLength(notes string) error {
+	length := validation.ReviewNotesLength(notes)
+	if length <= validation.LimitReviewNotes {
+		return nil
+	}
+	over := length - validation.LimitReviewNotes
+	unit := "characters"
+	if over == 1 {
+		unit = "character"
+	}
+	message := fmt.Sprintf(
+		"--notes is %s characters; App Store review notes allow at most %s. Remove at least %s %s.",
+		formatReviewDetailCount(length),
+		formatReviewDetailCount(validation.LimitReviewNotes),
+		formatReviewDetailCount(over),
+		unit,
+	)
+	return reportReviewDetailUsageError(shared.UsageErrorInvalidValue, shared.DiagnosticInvalidInput, "--notes", message)
+}
+
+// validateReviewDetailContactPhone rejects only +1 numbers whose digit count
+// cannot be a North American number. App Store Connect accepts numbers without
+// a plus sign and validates other country codes against numbering data the CLI
+// does not carry, so every other value is left to App Store Connect.
+func validateReviewDetailContactPhone(contactPhone string) error {
+	count, ok := validation.NANPNationalDigitCount(contactPhone)
+	if !ok || count == validation.NANPNationalNumberDigits {
+		return nil
+	}
+	message := fmt.Sprintf(
+		"--contact-phone has %d digits after +1; North American (+1) numbers need exactly %d (3-digit area code and 7-digit number), for example +1 408 555 0100",
+		count,
+		validation.NANPNationalNumberDigits,
+	)
+	return reportReviewDetailUsageError(shared.UsageErrorInvalidValue, shared.DiagnosticInvalidInput, "--contact-phone", message)
+}
+
+// validateReviewDetailCreateContacts requires the contact fields App Store
+// Connect demands on a new review detail; it rejects the POST one missing field
+// at a time.
+func validateReviewDetailCreateContacts(visited map[string]bool, values map[string]string) error {
+	var missing []string
+	for _, name := range reviewDetailCreateContactFlags {
+		if !visited[name] || strings.TrimSpace(values[name]) == "" {
+			missing = append(missing, "--"+name)
+		}
+	}
+	if len(missing) == 0 {
+		return nil
+	}
+	message := fmt.Sprintf(
+		"review details-create needs %s; App Store Connect rejects a new review detail without them. To change a version that already has review details, use asc review details-update or --if-exists update.",
+		strings.Join(missing, " and "),
+	)
+	return reportReviewDetailUsageError(shared.UsageErrorMissingRequired, shared.DiagnosticRequiredInputMissing, missing[0], message)
+}
+
+// reportReviewDetailUsageError prints one diagnostic line and returns a usage
+// error (exit 2) without the full usage page.
+func reportReviewDetailUsageError(kind shared.UsageErrorKind, code shared.DiagnosticCode, parameter, message string) error {
+	fmt.Fprintf(os.Stderr, "Error: %s\n", message)
+	return shared.WithDiagnostic(shared.NewReportedUsageError(kind, message), code, parameter)
+}
+
+// formatReviewDetailCount formats a non-negative count with thousands
+// separators.
+func formatReviewDetailCount(value int) string {
+	digits := strconv.Itoa(value)
+	var formatted strings.Builder
+	for i, digit := range digits {
+		if i > 0 && (len(digits)-i)%3 == 0 {
+			formatted.WriteByte(',')
+		}
+		formatted.WriteRune(digit)
+	}
+	return formatted.String()
 }

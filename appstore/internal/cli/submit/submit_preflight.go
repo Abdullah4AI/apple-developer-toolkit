@@ -71,8 +71,9 @@ func runSubmissionLocalizationPreflight(
 
 // isAppUpdate returns true if the target platform has ever been released,
 // meaning this submission is an update and whatsNew is required. Checks for
-// READY_FOR_SALE as well as removed-from-sale states, since apps that were
-// previously published then removed are still considered updates by Apple.
+// live versions (READY_FOR_SALE or READY_FOR_DISTRIBUTION) as well as
+// removed-from-sale states, since apps that were previously published then
+// removed are still considered updates by Apple.
 func isAppUpdate(ctx context.Context, client *asc.Client, appID, platform string) (bool, error) {
 	return shared.AppUpdateRequiresWhatsNew(ctx, client, appID, platform)
 }

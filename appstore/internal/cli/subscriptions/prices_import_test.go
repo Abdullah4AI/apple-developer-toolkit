@@ -255,3 +255,47 @@ func TestSubscriptionPriceImportStateRejectsMonthlyPrice(t *testing.T) {
 		t.Fatal("expected a MONTHLY price not to satisfy an UPFRONT import")
 	}
 }
+
+func TestSubscriptionPriceImportStateUsesUSPacificDay(t *testing.T) {
+	// The 2026-10-01 price ends the 2026-01-01 price on its start date.
+	states := []subscriptionPriceImportState{
+		{territoryID: "USA", pricePointID: "pp-old", startDate: "2026-01-01", planType: asc.SubscriptionPlanTypeUpfront},
+		{territoryID: "USA", pricePointID: "pp-new", startDate: "2026-10-01", planType: asc.SubscriptionPlanTypeUpfront},
+	}
+	tests := []struct {
+		name    string
+		now     time.Time
+		current string
+	}{
+		// 17:30 PDT on 2026-09-30: the 2026-10-01 price is still scheduled.
+		{name: "00:30 UTC is the previous Pacific day", now: time.Date(2026, time.October, 1, 0, 30, 0, 0, time.UTC), current: "pp-old"},
+		{name: "Pacific midnight starts the next price", now: time.Date(2026, time.October, 1, 7, 0, 0, 0, time.UTC), current: "pp-new"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			index := &subscriptionPriceImportStateIndex{now: test.now, states: states}
+			for _, pricePointID := range []string{"pp-old", "pp-new"} {
+				target := subscriptionPriceImportResolvedRow{
+					territoryID:  "USA",
+					pricePointID: pricePointID,
+					planType:     asc.SubscriptionPlanTypeUpfront,
+				}
+				if got, want := index.matches(target), pricePointID == test.current; got != want {
+					t.Fatalf("matches(%s) = %t, want %t", pricePointID, got, want)
+				}
+			}
+		})
+	}
+}
+
+func TestSubscriptionPriceImportStateAddRecordsUSPacificDate(t *testing.T) {
+	index := &subscriptionPriceImportStateIndex{now: time.Date(2026, time.October, 1, 0, 30, 0, 0, time.UTC)}
+	index.add(subscriptionPriceImportResolvedRow{
+		territoryID:  "USA",
+		pricePointID: "pp-new",
+		planType:     asc.SubscriptionPlanTypeUpfront,
+	})
+	if len(index.states) != 1 || index.states[0].startDate != "2026-09-30" {
+		t.Fatalf("expected the immediate price recorded on the Pacific date 2026-09-30, got %+v", index.states)
+	}
+}

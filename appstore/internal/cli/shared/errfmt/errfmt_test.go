@@ -23,6 +23,24 @@ func TestClassify_MissingAuth(t *testing.T) {
 	}
 }
 
+func TestClassify_MissingWebSessionUsesItsOwnHint(t *testing.T) {
+	err := fmt.Errorf("web review show failed: %w", &shared.MissingWebSessionError{
+		Message: "no Apple web session is cached",
+		Hint:    "Sign in with 'asc web auth login' in a terminal.",
+	})
+
+	ce := Classify(err)
+	if ce.Message != "web review show failed: no Apple web session is cached" {
+		t.Fatalf("Message = %q", ce.Message)
+	}
+	if ce.Hint != "Sign in with 'asc web auth login' in a terminal." {
+		t.Fatalf("Hint = %q, want the web session hint", ce.Hint)
+	}
+	if got, want := FormatStderr(err), "Error: web review show failed: no Apple web session is cached\nHint: Sign in with 'asc web auth login' in a terminal.\n"; got != want {
+		t.Fatalf("FormatStderr = %q, want %q", got, want)
+	}
+}
+
 func TestClassify_Forbidden(t *testing.T) {
 	apiErr := &asc.APIError{Code: "FORBIDDEN", Title: "Forbidden", Detail: "Nope"}
 	ce := Classify(apiErr)

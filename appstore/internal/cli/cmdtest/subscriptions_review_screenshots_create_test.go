@@ -19,7 +19,7 @@ func TestSubscriptionsReviewScreenshotsCreatePrintsVerifiedScreenshot(t *testing
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 
 	imagePath := filepath.Join(t.TempDir(), "review.png")
-	writePNG(t, imagePath, 1242, 2688)
+	writeReviewScreenshotPNG(t, imagePath)
 	imageInfo, err := os.Stat(imagePath)
 	if err != nil {
 		t.Fatalf("stat review screenshot fixture: %v", err)
@@ -106,7 +106,7 @@ func TestSubscriptionsReviewScreenshotsCreateFailsWhenDeliveryVerificationFails(
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 
 	imagePath := filepath.Join(t.TempDir(), "review.png")
-	writePNG(t, imagePath, 1242, 2688)
+	writeReviewScreenshotPNG(t, imagePath)
 	imageInfo, err := os.Stat(imagePath)
 	if err != nil {
 		t.Fatalf("stat review screenshot fixture: %v", err)

@@ -85,6 +85,18 @@ func TestWrapWebAuthCapabilitiesSessionErrorDistinguishesMissingAndExpired(t *te
 	}
 }
 
+func TestWrapWebAuthCapabilitiesSessionErrorPreservesMissingWebSession(t *testing.T) {
+	err := newMissingWebSessionError("user@example.com", "")
+	wrapped := wrapWebAuthCapabilitiesSessionError(err)
+	if got, want := wrapped.Error(), err.Error(); got != want {
+		t.Fatalf("wrapped error = %q, want the missing-session error unchanged %q", got, want)
+	}
+	missing, ok := errors.AsType[*shared.MissingWebSessionError](wrapped)
+	if !ok || missing.Hint == "" {
+		t.Fatalf("wrapped error = %v, want the missing-session hint to survive", wrapped)
+	}
+}
+
 func TestWebAuthCapabilitiesMissingSessionPreservesUsageDiagnostic(t *testing.T) {
 	origResolveSession := resolveSessionFn
 	t.Cleanup(func() { resolveSessionFn = origResolveSession })

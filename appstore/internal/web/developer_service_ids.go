@@ -752,7 +752,8 @@ func developerServiceIDIsNotFound(err error) bool {
 
 // serviceIDCapabilityPlaceholderLimit is the paging limit Apple reports with
 // the zero-total placeholder on Services ID detail reads with populated
-// linkage (captured 2026-09-26).
+// linkage (captured 2026-09-26), and on the appGroups relationship of a
+// Bundle ID's APP_GROUPS capability (captured 2026-10-03).
 const serviceIDCapabilityPlaceholderLimit = 2147483647
 
 // validateServiceIDCapabilityCompleteness fails closed unless the relationship

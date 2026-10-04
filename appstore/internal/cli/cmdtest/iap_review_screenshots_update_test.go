@@ -327,7 +327,7 @@ func TestIAPReviewScreenshotsUpdateReuploadsExistingInProgressScreenshot(t *test
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 
 	filePath := filepath.Join(t.TempDir(), "review.png")
-	writePNG(t, filePath, 1, 1)
+	writeReviewScreenshotPNG(t, filePath)
 	info, err := os.Stat(filePath)
 	if err != nil {
 		t.Fatalf("stat fixture: %v", err)
@@ -395,7 +395,7 @@ func TestIAPReviewScreenshotsUpdateRejectsInProgressFileSizeMismatch(t *testing.
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 
 	filePath := filepath.Join(t.TempDir(), "review.png")
-	writePNG(t, filePath, 1, 1)
+	writeReviewScreenshotPNG(t, filePath)
 	info, err := os.Stat(filePath)
 	if err != nil {
 		t.Fatalf("stat fixture: %v", err)
@@ -434,7 +434,7 @@ func TestIAPReviewScreenshotsUpdateRejectsCompletedScreenshotReplacementAfterCon
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 
 	filePath := filepath.Join(t.TempDir(), "replacement.png")
-	writePNG(t, filePath, 1, 1)
+	writeReviewScreenshotPNG(t, filePath)
 	info, err := os.Stat(filePath)
 	if err != nil {
 		t.Fatalf("stat fixture: %v", err)
@@ -477,7 +477,7 @@ func TestIAPReviewScreenshotsUpdateRequiresConfirmationBeforeReplacingCompletedS
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 
 	filePath := filepath.Join(t.TempDir(), "replacement.png")
-	writePNG(t, filePath, 1, 1)
+	writeReviewScreenshotPNG(t, filePath)
 
 	originalTransport := http.DefaultTransport
 	t.Cleanup(func() { http.DefaultTransport = originalTransport })

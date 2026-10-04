@@ -78,7 +78,7 @@ Examples:
 					if asc.IsNotFound(err) {
 						return fmt.Errorf("submit cancel: no review submission found for ID %q", resolvedSubmissionID)
 					}
-					return fmt.Errorf("submit cancel: %w", err)
+					return fmt.Errorf("submit cancel: %w", shared.ExplainReviewSubmissionNotCancellable(ctx, client, resolvedSubmissionID, err))
 				}
 			} else {
 				resolvedVersionID := strings.TrimSpace(*versionID)
@@ -125,13 +125,20 @@ Examples:
 						_, cancelErr := client.CancelReviewSubmission(requestCtx, submission.ID)
 						if cancelErr != nil {
 							if isExpectedNonCancellableReviewSubmissionError(cancelErr) {
-								if refreshedCanceling, refreshErr := reviewSubmissionIsState(requestCtx, client, submission.ID, asc.ReviewSubmissionStateCanceling); refreshErr == nil && refreshedCanceling {
-									resolvedSubmissionID = submission.ID
-									result := &asc.AppStoreVersionSubmissionCancelResult{
-										ID:        resolvedSubmissionID,
-										Cancelled: true,
+								refreshed, refreshErr := refreshReviewSubmission(requestCtx, client, submission.ID)
+								if refreshErr == nil && refreshed != nil {
+									refreshedState := refreshed.Attributes.SubmissionState
+									if refreshedState == asc.ReviewSubmissionStateCanceling {
+										resolvedSubmissionID = submission.ID
+										result := &asc.AppStoreVersionSubmissionCancelResult{
+											ID:        resolvedSubmissionID,
+											Cancelled: true,
+										}
+										return shared.PrintOutput(result, *output.Output, *output.Pretty)
 									}
-									return shared.PrintOutput(result, *output.Output, *output.Pretty)
+									if strings.TrimSpace(string(refreshedState)) != "" && shared.IsReviewSubmissionNotCancellableError(cancelErr) {
+										return fmt.Errorf("submit cancel: %w", shared.NewReviewSubmissionNotCancellableError(submission.ID, refreshedState, cancelErr))
+									}
 								}
 								return fmt.Errorf("submit cancel: submission %s is no longer cancellable: %w", submission.ID, cancelErr)
 							} else {
@@ -175,7 +182,7 @@ Examples:
 					return shared.PrintOutput(result, *output.Output, *output.Pretty)
 				}
 				if !asc.IsNotFound(err) {
-					return fmt.Errorf("submit cancel: %w", err)
+					return fmt.Errorf("submit cancel: %w", shared.ExplainReviewSubmissionNotCancellable(ctx, client, resolvedSubmissionID, err))
 				}
 
 				if err := client.DeleteAppStoreVersionSubmission(requestCtx, resolvedSubmissionID); err != nil {

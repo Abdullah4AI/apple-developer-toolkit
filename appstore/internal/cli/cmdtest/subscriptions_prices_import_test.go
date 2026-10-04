@@ -12,6 +12,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
 func TestSubscriptionsPricesImport_InvalidBooleanReturnsUsageError(t *testing.T) {
@@ -376,6 +378,10 @@ func TestSubscriptionsPricesImport_ReconcilesAmbiguousCreateWithoutReplay(t *tes
 
 func TestSubscriptionsPricesImport_SkipsImmediatePriceWithConcreteEffectiveDate(t *testing.T) {
 	setupAuth(t)
+	// 17:30 PDT on 2026-09-30: an immediate price carries the Pacific date.
+	t.Cleanup(shared.SetPricingNowForTesting(func() time.Time {
+		return time.Date(2026, time.October, 1, 0, 30, 0, 0, time.UTC)
+	}))
 
 	originalTransport := http.DefaultTransport
 	t.Cleanup(func() { http.DefaultTransport = originalTransport })
@@ -385,7 +391,7 @@ func TestSubscriptionsPricesImport_SkipsImmediatePriceWithConcreteEffectiveDate(
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/subscriptions/8000000001/prices":
 			assertSubscriptionPriceImportStateQuery(t, req)
 			readCount++
-			body := `{"data":[{"type":"subscriptionPrices","id":"price-existing","attributes":{"startDate":"` + time.Now().UTC().Format("2006-01-02") + `","preserved":false,"planType":"UPFRONT"},"relationships":{"territory":{"data":{"type":"territories","id":"USA"}},"subscriptionPricePoint":{"data":{"type":"subscriptionPricePoints","id":"pp-usa"}}}}],"links":{}}`
+			body := `{"data":[{"type":"subscriptionPrices","id":"price-existing","attributes":{"startDate":"2026-09-30","preserved":false,"planType":"UPFRONT"},"relationships":{"territory":{"data":{"type":"territories","id":"USA"}},"subscriptionPricePoint":{"data":{"type":"subscriptionPricePoints","id":"pp-usa"}}}}],"links":{}}`
 			return jsonHTTPResponse(http.StatusOK, body), nil
 		case req.Method == http.MethodPost:
 			t.Fatalf("current immediate price must not be posted again")

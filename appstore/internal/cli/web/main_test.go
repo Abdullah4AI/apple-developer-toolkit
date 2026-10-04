@@ -2,6 +2,7 @@ package web
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -14,6 +15,11 @@ func TestMain(m *testing.M) {
 		panic(err)
 	}
 	_ = os.Setenv("HOME", tempDir)
+	// A temporary HOME alone does not isolate stored config: the upward
+	// .asc/config.json search starts at the package directory, so a checkout
+	// inside the developer's home reaches their real ~/.asc/config.json.
+	// Pin the config path to a file that never exists.
+	_ = os.Setenv("ASC_CONFIG_PATH", filepath.Join(tempDir, "config.json"))
 	_ = os.Setenv("ASC_BYPASS_KEYCHAIN", "1")
 	_ = os.Setenv("ASC_WEB_SESSION_CACHE_DIR", tempDir)
 	_ = os.Setenv("ASC_WEB_SESSION_CACHE_BACKEND", "file")

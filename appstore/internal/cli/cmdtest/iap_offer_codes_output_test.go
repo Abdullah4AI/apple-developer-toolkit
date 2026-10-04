@@ -305,8 +305,7 @@ func TestIAPOfferCodesListFallsBackToNumericIDAfterLookupTimeout(t *testing.T) {
 	setupAuth(t)
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 	t.Setenv("ASC_APP_ID", "")
-	t.Setenv("ASC_TIMEOUT", "10ms")
-	t.Setenv("ASC_TIMEOUT_SECONDS", "")
+	lookupTimeout := expireSelectorLookup(t)
 
 	originalTransport := http.DefaultTransport
 	t.Cleanup(func() {
@@ -318,8 +317,7 @@ func TestIAPOfferCodesListFallsBackToNumericIDAfterLookupTimeout(t *testing.T) {
 		requests++
 		switch req.URL.Path {
 		case "/v1/apps/app-123/inAppPurchasesV2":
-			<-req.Context().Done()
-			return nil, req.Context().Err()
+			return lookupTimeout(req)
 		case "/v2/inAppPurchases/2024/offerCodes":
 			if err := req.Context().Err(); err != nil {
 				t.Fatalf("expected fresh list context after lookup timeout, got %v", err)
@@ -367,8 +365,7 @@ func TestIAPOfferCodesCreateFallsBackToNumericIDAfterLookupTimeout(t *testing.T)
 	setupAuth(t)
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 	t.Setenv("ASC_APP_ID", "")
-	t.Setenv("ASC_TIMEOUT", "10ms")
-	t.Setenv("ASC_TIMEOUT_SECONDS", "")
+	lookupTimeout := expireSelectorLookup(t)
 
 	originalTransport := http.DefaultTransport
 	t.Cleanup(func() {
@@ -380,8 +377,7 @@ func TestIAPOfferCodesCreateFallsBackToNumericIDAfterLookupTimeout(t *testing.T)
 		requests++
 		switch req.URL.Path {
 		case "/v1/apps/app-123/inAppPurchasesV2":
-			<-req.Context().Done()
-			return nil, req.Context().Err()
+			return lookupTimeout(req)
 		case "/v1/inAppPurchaseOfferCodes":
 			if err := req.Context().Err(); err != nil {
 				t.Fatalf("expected fresh create context after lookup timeout, got %v", err)

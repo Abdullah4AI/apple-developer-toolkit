@@ -11,6 +11,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
 func TestSubscriptionsPricingEqualizeValidationErrors(t *testing.T) {
@@ -833,7 +835,12 @@ func TestSubscriptionsPricingEqualize_AutoSchedulesApprovedSubscriptions(t *test
 
 	basePricePointID := testSubscriptionPricePointID("USA")
 	canPricePointID := testSubscriptionPricePointID("CAN")
-	wantStartDate := time.Now().UTC().AddDate(0, 0, 1).Format("2006-01-02")
+	// 17:30 PDT on 2026-09-30: tomorrow is the Pacific day after, which is
+	// still the UTC date.
+	t.Cleanup(shared.SetPricingNowForTesting(func() time.Time {
+		return time.Date(2026, time.October, 1, 0, 30, 0, 0, time.UTC)
+	}))
+	wantStartDate := "2026-10-01"
 	postChecked := false
 
 	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
@@ -916,7 +923,11 @@ func TestSubscriptionsPricingEqualize_DryRunShowsAutoScheduledApprovedSubscripti
 
 	basePricePointID := testSubscriptionPricePointID("USA")
 	canPricePointID := testSubscriptionPricePointID("CAN")
-	wantStartDate := time.Now().UTC().AddDate(0, 0, 1).Format("2006-01-02")
+	// Pacific midnight on 2026-10-01: tomorrow is 2026-10-02.
+	t.Cleanup(shared.SetPricingNowForTesting(func() time.Time {
+		return time.Date(2026, time.October, 1, 7, 0, 0, 0, time.UTC)
+	}))
+	wantStartDate := "2026-10-02"
 
 	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		switch {

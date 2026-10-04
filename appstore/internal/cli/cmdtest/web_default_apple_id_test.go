@@ -12,6 +12,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
 // webAppleIDEnvNameForTest names the Apple ID environment fallback without
@@ -59,7 +61,7 @@ func runWebCommandForAppleIDDefault(t *testing.T, args ...string) (string, error
 	return stderr, runErr
 }
 
-func TestWebCommandsRequireAppleIDWithLoginHintWhenNothingIsCached(t *testing.T) {
+func TestWebCommandsReportMissingWebSessionWhenNothingIsCached(t *testing.T) {
 	for _, tc := range []struct {
 		name string
 		args []string
@@ -74,18 +76,19 @@ func TestWebCommandsRequireAppleIDWithLoginHintWhenNothingIsCached(t *testing.T)
 			t.Setenv(webPasswordEnvNameForTest(), "")
 
 			stderr, runErr := runWebCommandForAppleIDDefault(t, tc.args...)
-			if !errors.Is(runErr, flag.ErrHelp) {
-				t.Fatalf("expected ErrHelp (exit 2), got %v", runErr)
+			if errors.Is(runErr, flag.ErrHelp) {
+				t.Fatalf("expected the missing-session error without the usage page, got %v", runErr)
 			}
-			want := "Error: --apple-id is required when no cached web session is available; run 'asc web auth login --apple-id EMAIL'\n"
-			if !strings.Contains(stderr, want) {
-				t.Fatalf("stderr = %q, want it to contain %q", stderr, want)
+			if !errors.Is(runErr, shared.ErrMissingWebSession) {
+				t.Fatalf("expected ErrMissingWebSession, got %v", runErr)
 			}
-			if strings.Contains(stderr, "Using cached web session") {
-				t.Fatalf("stderr = %q, did not expect a cached-session notice", stderr)
+			if !strings.Contains(runErr.Error(), "no Apple web session is cached") {
+				t.Fatalf("error = %q, want the missing-session message", runErr)
 			}
-			if got := strings.Count(stderr, "Error: "); got != 1 {
-				t.Fatalf("stderr = %q, want exactly one diagnostic, got %d", stderr, got)
+			// The root renderer prints the one diagnostic; the command itself
+			// must not have written a usage error or a cached-session notice.
+			if stderr != "" {
+				t.Fatalf("stderr = %q, want nothing before the root renderer runs", stderr)
 			}
 		})
 	}

@@ -7,6 +7,7 @@ import (
 	"flag"
 	"io"
 	"net/http"
+	"net/url"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -100,8 +101,8 @@ func TestReviewSubmitLocalizationPreflightUsesReviewSubmitGuidance(t *testing.T)
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/appStoreVersions/version-1/appStoreVersionLocalizations":
 			return jsonResponse(http.StatusOK, `{"data":[{"type":"appStoreVersionLocalizations","id":"loc-1","attributes":{"locale":"en-US"}}]}`)
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/apps/app-1/appStoreVersions":
-			if !strings.Contains(req.URL.RawQuery, "filter%5BappStoreState%5D=") {
-				t.Fatalf("expected appStoreState filter, got %q", req.URL.RawQuery)
+			if !isReleasedVersionStateQuery(req.URL.Query()) {
+				t.Fatalf("expected released-version state filter, got %q", req.URL.RawQuery)
 			}
 			return jsonResponse(http.StatusOK, `{"data":[]}`)
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/appStoreVersions/version-1/appStoreVersionSubmission":
@@ -145,6 +146,75 @@ func TestReviewSubmitLocalizationPreflightUsesReviewSubmitGuidance(t *testing.T)
 	}
 }
 
+func TestReviewSubmitPreflightRequiresWhatsNewWhenOnlyAppVersionStateIsLive(t *testing.T) {
+	setupAuth(t)
+	t.Setenv("ASC_APP_ID", "")
+	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
+
+	var versionQueries []string
+	installDefaultTransport(t, roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		switch {
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/appStoreVersions/version-1":
+			return jsonResponse(http.StatusOK, `{
+				"data":{
+					"type":"appStoreVersions",
+					"id":"version-1",
+					"attributes":{"platform":"IOS","versionString":"1.2.3"},
+					"relationships":{"app":{"data":{"type":"apps","id":"app-1"}}}
+				},
+				"included":[{"type":"apps","id":"app-1","attributes":{"bundleId":"app-1","name":"App One"}}]
+			}`)
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/appStoreVersions/version-1/appStoreVersionLocalizations":
+			return jsonResponse(http.StatusOK, `{"data":[{"type":"appStoreVersionLocalizations","id":"loc-1","attributes":{"locale":"en-US","description":"Description","keywords":"one,two","supportUrl":"https://example.com/support"}}]}`)
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/apps/app-1/appStoreVersions":
+			query := req.URL.Query()
+			legacyFilter := query.Get("filter[appStoreState]")
+			modernFilter := query.Get("filter[appVersionState]")
+			versionQueries = append(versionQueries, legacyFilter+"|"+modernFilter)
+			switch {
+			case legacyFilter == "READY_FOR_SALE,DEVELOPER_REMOVED_FROM_SALE,REMOVED_FROM_SALE" && modernFilter == "":
+				return jsonResponse(http.StatusOK, `{"data":[]}`)
+			case legacyFilter == "" && modernFilter == "READY_FOR_DISTRIBUTION":
+				return jsonResponse(http.StatusOK, `{"data":[{"type":"appStoreVersions","id":"version-0","attributes":{"platform":"IOS","versionString":"1.0.0","appVersionState":"READY_FOR_DISTRIBUTION"}}]}`)
+			default:
+				t.Fatalf("unexpected released-version query: %s", req.URL.RawQuery)
+				return nil, nil
+			}
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/appStoreVersions/version-1/appStoreVersionSubmission":
+			return jsonResponse(http.StatusNotFound, `{"errors":[{"status":"404","code":"NOT_FOUND","title":"Not Found"}]}`)
+		default:
+			t.Fatalf("unexpected request during localization preflight: %s %s?%s", req.Method, req.URL.Path, req.URL.RawQuery)
+			return nil, nil
+		}
+	}))
+
+	root := RootCommand("1.2.3")
+	root.FlagSet.SetOutput(io.Discard)
+
+	var runErr error
+	_, stderr := captureOutput(t, func() {
+		if err := root.Parse([]string{
+			"review", "submit",
+			"--app", "app-1",
+			"--version-id", "version-1",
+			"--build-id", "build-1",
+			"--confirm",
+		}); err != nil {
+			t.Fatalf("parse error: %v", err)
+		}
+		runErr = root.Run(context.Background())
+	})
+	if runErr == nil || !strings.Contains(runErr.Error(), "review submit: submit preflight failed") {
+		t.Fatalf("expected submit preflight failure, got %v", runErr)
+	}
+	if !strings.Contains(stderr, "en-US: whatsNew") {
+		t.Fatalf("expected whatsNew to be required for an app update, got %q", stderr)
+	}
+	if got, want := strings.Join(versionQueries, ","), "READY_FOR_SALE,DEVELOPER_REMOVED_FROM_SALE,REMOVED_FROM_SALE|,|READY_FOR_DISTRIBUTION"; got != want {
+		t.Fatalf("released-version queries = %q, want %q", got, want)
+	}
+}
+
 func TestReviewSubmitSubscriptionPreflightUsesReviewSubmitGuidance(t *testing.T) {
 	setupAuth(t)
 	t.Setenv("ASC_APP_ID", "")
@@ -168,8 +238,8 @@ func TestReviewSubmitSubscriptionPreflightUsesReviewSubmitGuidance(t *testing.T)
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/appStoreVersions/version-1/appStoreVersionLocalizations":
 			return jsonResponse(http.StatusOK, `{"data":[{"type":"appStoreVersionLocalizations","id":"loc-1","attributes":{"locale":"en-US","description":"Description","keywords":"keyword","supportUrl":"https://example.com/support"}}]}`)
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/apps/app-1/appStoreVersions":
-			if !strings.Contains(req.URL.RawQuery, "filter%5BappStoreState%5D=") {
-				t.Fatalf("expected appStoreState filter, got %q", req.URL.RawQuery)
+			if !isReleasedVersionStateQuery(req.URL.Query()) {
+				t.Fatalf("expected released-version state filter, got %q", req.URL.RawQuery)
 			}
 			return jsonResponse(http.StatusOK, `{"data":[]}`)
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/apps/app-1/subscriptionGroups":
@@ -250,8 +320,8 @@ func TestReviewSubmitDryRunPreviewsWithoutMutations(t *testing.T) {
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/appStoreVersions/version-1/appStoreVersionLocalizations":
 			return jsonResponse(http.StatusOK, `{"data":[{"type":"appStoreVersionLocalizations","id":"loc-1","attributes":{"locale":"en-US","description":"Description","keywords":"keyword","supportUrl":"https://example.com/support"}}]}`)
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/apps/app-1/appStoreVersions":
-			if !strings.Contains(req.URL.RawQuery, "filter%5BappStoreState%5D=") {
-				t.Fatalf("expected appStoreState filter, got %q", req.URL.RawQuery)
+			if !isReleasedVersionStateQuery(req.URL.Query()) {
+				t.Fatalf("expected released-version state filter, got %q", req.URL.RawQuery)
 			}
 			return jsonResponse(http.StatusOK, `{"data":[]}`)
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/apps/app-1/subscriptionGroups":
@@ -364,7 +434,7 @@ func TestReviewSubmitUsesModernReviewSubmissionFlow(t *testing.T) {
 					t.Fatalf("expected filter[platform]=IOS, got %q", query.Get("filter[platform]"))
 				}
 				return jsonResponse(http.StatusOK, `{"data":[{"type":"appStoreVersions","id":"version-1","attributes":{"versionString":"1.2.3","platform":"IOS"}}]}`)
-			case query.Get("filter[platform]") == "IOS" && strings.Contains(query.Get("filter[appStoreState]"), "READY_FOR_SALE"):
+			case query.Get("filter[platform]") == "IOS" && isReleasedVersionStateQuery(query):
 				return jsonResponse(http.StatusOK, `{"data":[]}`)
 			default:
 				t.Fatalf("unexpected app store versions query: %s", req.URL.RawQuery)
@@ -592,4 +662,12 @@ func TestReviewSubmitAlreadySubmittedSkipsPreflightAndBuildAttachment(t *testing
 	if strings.Contains(recordedRequests, "/relationships/build") {
 		t.Fatalf("did not expect build mutation requests, got requests: %s", recordedRequests)
 	}
+}
+
+// isReleasedVersionStateQuery reports whether an app store versions request is
+// the released-version lookup that decides whether whatsNew is required. It
+// queries the deprecated appStoreState and appVersionState separately.
+func isReleasedVersionStateQuery(query url.Values) bool {
+	return query.Get("filter[appStoreState]") == "READY_FOR_SALE,DEVELOPER_REMOVED_FROM_SALE,REMOVED_FROM_SALE" ||
+		(query.Get("filter[appStoreState]") == "" && query.Get("filter[appVersionState]") == "READY_FOR_DISTRIBUTION")
 }

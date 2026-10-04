@@ -383,7 +383,7 @@ func TestIAPPricesFetchesAllScheduleEntriesWhenIncludedHitsLimit(t *testing.T) {
 					{
 						"type":"inAppPurchasePrices",
 						"id":"mus-old",
-						"attributes":{"startDate":"2024-01-01","endDate":"2098-12-31"},
+						"attributes":{"startDate":"2024-01-01","endDate":"2099-01-01"},
 						"relationships":{
 							"territory":{"data":{"type":"territories","id":"MUS"}},
 							"inAppPurchasePricePoint":{"data":{"type":"inAppPurchasePricePoints","id":"pp-mus-old"}}

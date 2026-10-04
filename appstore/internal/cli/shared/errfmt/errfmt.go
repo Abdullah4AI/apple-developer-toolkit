@@ -34,6 +34,13 @@ func Classify(err error) ClassifiedError {
 		return ClassifiedError{Message: refused.Error()}
 	}
 
+	// A missing Apple web session carries its own next step; the App Store
+	// Connect API credential hint below would send the caller to the wrong
+	// sign-in.
+	if missing, ok := errors.AsType[*shared.MissingWebSessionError](err); ok {
+		return ClassifiedError{Message: err.Error(), Hint: missing.Hint}
+	}
+
 	if errors.Is(err, shared.ErrMissingAuth) {
 		return ClassifiedError{
 			Message: err.Error(),

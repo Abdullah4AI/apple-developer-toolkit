@@ -335,7 +335,8 @@ func TestPricingAvailabilityCreateCommand_MissingFlags(t *testing.T) {
 		wantStderr string
 	}{
 		{name: "missing app", args: []string{"--territory", "USA", "--available", "true", "--available-in-new-territories", "true"}, wantStderr: "--app is required"},
-		{name: "missing territory", args: []string{"--app", "APP", "--available", "true", "--available-in-new-territories", "true"}, wantStderr: "--territory must include at least one value"},
+		{name: "missing territory", args: []string{"--app", "APP", "--available", "true", "--available-in-new-territories", "true"}, wantStderr: "--territory or --all-territories is required"},
+		{name: "territory and all territories", args: []string{"--app", "APP", "--territory", "USA", "--all-territories", "--available", "true", "--available-in-new-territories", "true"}, wantStderr: "--territory and --all-territories are mutually exclusive"},
 		{name: "invalid territory csv", args: []string{"--app", "APP", "--territory", ",,,", "--available", "true", "--available-in-new-territories", "true"}, wantStderr: "--territory must include at least one value"},
 		{name: "missing available", args: []string{"--app", "APP", "--territory", "USA", "--available-in-new-territories", "true"}, wantStderr: "--available is required"},
 		{name: "missing available in new territories", args: []string{"--app", "APP", "--territory", "USA", "--available", "true"}, wantStderr: "--available-in-new-territories is required"},

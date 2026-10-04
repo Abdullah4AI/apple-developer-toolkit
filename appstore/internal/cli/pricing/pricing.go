@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/peterbourgon/ff/v3/ffcli"
 
@@ -43,6 +42,7 @@ Examples:
   asc pricing availability view --app "123456789"
   asc pricing availability view --id "AVAILABILITY_ID"
   asc pricing availability create --app "123456789" --territory "USA,GBR,DEU" --available true --available-in-new-territories true
+  asc pricing availability create --app "123456789" --all-territories --available true --available-in-new-territories true
   asc pricing availability edit --app "123456789" --territory "US,France,DEU" --available true
   asc pricing availability edit --app "123456789" --all-territories --available true
   asc pricing availability platforms --app "123456789"
@@ -468,7 +468,7 @@ Examples:
 			defer cancel()
 
 			if *resolved {
-				resp, err := fetchResolvedAppSchedulePrices(requestCtx, client, trimmedScheduleID, "manual", *limit, *next, time.Now().UTC())
+				resp, err := fetchResolvedAppSchedulePrices(requestCtx, client, trimmedScheduleID, "manual", *limit, *next, shared.PricingNow())
 				if err != nil {
 					return fmt.Errorf("pricing schedule manual-prices: failed to resolve: %w", err)
 				}
@@ -558,7 +558,7 @@ Examples:
 			defer cancel()
 
 			if *resolved {
-				resp, err := fetchResolvedAppSchedulePrices(requestCtx, client, trimmedScheduleID, "automatic", *limit, *next, time.Now().UTC())
+				resp, err := fetchResolvedAppSchedulePrices(requestCtx, client, trimmedScheduleID, "automatic", *limit, *next, shared.PricingNow())
 				if err != nil {
 					return fmt.Errorf("pricing schedule automatic-prices: failed to resolve: %w", err)
 				}
@@ -609,6 +609,7 @@ Examples:
   asc pricing availability view --app "123456789"
   asc pricing availability view --id "AVAILABILITY_ID"
   asc pricing availability create --app "123456789" --territory "USA,GBR,DEU" --available true --available-in-new-territories true
+  asc pricing availability create --app "123456789" --all-territories --available true --available-in-new-territories true
   asc pricing availability edit --app "123456789" --territory "US,France,DEU" --available true
   asc pricing availability edit --app "123456789" --all-territories --available true
   asc pricing availability platforms --app "123456789"
@@ -756,7 +757,8 @@ func PricingAvailabilityCreateCommand() *ffcli.Command {
 	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID)")
 	var availableInNewTerritories shared.OptionalBool
 	fs.Var(&availableInNewTerritories, "available-in-new-territories", "Automatically make app available in new territories: true or false (required)")
-	territory := fs.String("territory", "", "Territory inputs (comma-separated; accepts alpha-2, alpha-3, or exact English country names, e.g., US,USA,France)")
+	territory := fs.String("territory", "", "Territory inputs (comma-separated; accepts alpha-2, alpha-3, or exact English country names, e.g., US,USA,France; required unless --all-territories)")
+	allTerritories := fs.Bool("all-territories", false, "Apply --available to every territory in Apple's current territory catalog (mutually exclusive with --territory)")
 	var available shared.OptionalBool
 	fs.Var(&available, "available", "Set availability for specified territories: true or false (required)")
 	ifExists := shared.BindIfExistsFlag(fs, shared.IfExistsSkip, shared.IfExistsUpdate)
@@ -764,25 +766,29 @@ func PricingAvailabilityCreateCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "create",
-		ShortUsage: "asc pricing availability create --app \"APP_ID\" --territory \"USA,GBR\" --available true --available-in-new-territories true",
+		ShortUsage: "asc pricing availability create --app \"APP_ID\" (--territory \"USA,GBR\" | --all-territories) --available true --available-in-new-territories true",
 		ShortHelp:  "Initialize app availability for territories.",
 		LongHelp: `Initialize app availability for territories.
 
 Creates the initial app availability record through the public App Store Connect
 API. Every current territory is included: selected territories use --available,
-and unselected territories are initialized as unavailable. Once created, use
-"asc pricing availability edit" to update the record.
+and unselected territories are initialized as unavailable. --all-territories
+selects every territory in Apple's current territory catalog instead of a
+--territory list. Once created, use "asc pricing availability edit" to update
+the record.
 
 Examples:
   asc pricing availability create --app "123456789" --territory "USA,GBR,DEU" --available true --available-in-new-territories true
+  asc pricing availability create --app "123456789" --all-territories --available true --available-in-new-territories true
   asc pricing availability create --app "123456789" --territory "USA,GBR,DEU" --available false --available-in-new-territories false
   asc pricing availability create --app "123456789" --territory "USA,GBR,DEU" --available true --available-in-new-territories true --if-exists skip
 
 --if-exists controls what happens when App Store Connect answers 409 because
 the app already has an availability record. fail (default) returns the error.
 skip reads the existing record back, prints it, and exits 0 without changing
-it. update applies --territory and --available to the existing record through
-the same path as "asc pricing availability edit"; Apple exposes no update for
+it. update applies --territory (or, with --all-territories, every territory in
+the existing record) and --available to the existing record through the same
+path as "asc pricing availability edit"; Apple exposes no update for
 availableInNewTerritories, so on update that flag is only verified against the
 existing policy. Any other 409, including Apple's rejection of public-API
 bootstrap, keeps failing.`,
@@ -803,13 +809,31 @@ bootstrap, keeps failing.`,
 				return shared.MissingRequiredUsageError("--available-in-new-territories")
 			}
 
-			territories, err := shared.NormalizeASCTerritoryCSV(*territory)
-			if err != nil {
-				return shared.UsageError(err.Error())
+			territoryProvided := false
+			fs.Visit(func(f *flag.Flag) {
+				if f.Name == "territory" {
+					territoryProvided = true
+				}
+			})
+			if territoryProvided && *allTerritories {
+				fmt.Fprintln(os.Stderr, "Error: --territory and --all-territories are mutually exclusive")
+				return shared.WithDiagnostic(shared.InvalidValueUsageError("--all-territories"), shared.DiagnosticConflictingInput, "--all-territories")
 			}
-			if len(territories) == 0 {
-				fmt.Fprintln(os.Stderr, "Error: --territory must include at least one value")
-				return shared.WithDiagnostic(flag.ErrHelp, shared.DiagnosticInvalidInput, "--territory")
+			if !territoryProvided && !*allTerritories {
+				fmt.Fprintln(os.Stderr, "Error: --territory or --all-territories is required")
+				return shared.MissingRequiredUsageError("--territory")
+			}
+			var territories []string
+			if !*allTerritories {
+				normalizedTerritories, err := shared.NormalizeASCTerritoryCSV(*territory)
+				if err != nil {
+					return shared.UsageError(err.Error())
+				}
+				if len(normalizedTerritories) == 0 {
+					fmt.Fprintln(os.Stderr, "Error: --territory must include at least one value")
+					return shared.WithDiagnostic(flag.ErrHelp, shared.DiagnosticInvalidInput, "--territory")
+				}
+				territories = normalizedTerritories
 			}
 			if !available.IsSet() {
 				fmt.Fprintln(os.Stderr, "Error: --available is required (true or false)")
@@ -826,12 +850,12 @@ bootstrap, keeps failing.`,
 				return fmt.Errorf("pricing availability create: %w", err)
 			}
 
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
+			requestCtx, cancel := shared.ContextWithAvailabilityTimeout(ctx, *allTerritories)
 			defer cancel()
 
 			availableInNewTerritoriesValue := availableInNewTerritories.Value()
 			availableValue := available.Value()
-			territoryAvailabilities, err := initialTerritoryAvailabilities(requestCtx, client, territories, availableValue)
+			territoryAvailabilities, err := initialTerritoryAvailabilities(requestCtx, client, territories, *allTerritories, availableValue)
 			if err != nil {
 				return fmt.Errorf("pricing availability create: %w", err)
 			}
@@ -866,6 +890,7 @@ bootstrap, keeps failing.`,
 					updated, changedTerritories, updateErr := shared.ApplyTerritoryAvailabilityUpdate(requestCtx, client, shared.TerritoryAvailabilityUpdateRequest{
 						AppID:                             resolvedAppID,
 						Territories:                       territories,
+						AllTerritories:                    *allTerritories,
 						Available:                         availableValue,
 						ExpectedAvailableInNewTerritories: &availableInNewTerritoriesValue,
 						ErrorPrefix:                       "pricing availability create",

@@ -300,11 +300,15 @@ func TestVersionsCreateDefaultIfExistsFailPreservesConflict(t *testing.T) {
 	stdout, _, seen, runErr := runIfExistsCommand(t, []string{
 		"versions", "create", "--app", "app-1", "--version", "2.0.0", "--output", "json",
 	}, func(req ifExistsRequest) (*http.Response, error) {
-		if req.Method == http.MethodPost && req.Path == "/v1/appStoreVersions" {
+		switch {
+		case req.Method == http.MethodPost && req.Path == "/v1/appStoreVersions":
 			return jsonResponse(http.StatusConflict, versionsDuplicate409)
+		case isVersionsCreateDiagnosticListing(req):
+			return jsonResponse(http.StatusOK, existingVersionsList)
+		default:
+			t.Fatalf("unexpected request %s %s", req.Method, req.Path)
+			return nil, nil
 		}
-		t.Fatalf("unexpected request %s %s", req.Method, req.Path)
-		return nil, nil
 	})
 	if runErr == nil || !errors.Is(runErr, asc.ErrConflict) {
 		t.Fatalf("run error = %v, want the 409 conflict", runErr)
@@ -314,12 +318,27 @@ func TestVersionsCreateDefaultIfExistsFailPreservesConflict(t *testing.T) {
 	if !strings.Contains(runErr.Error(), "You cannot create a new version of the App in the current state.") {
 		t.Fatalf("run error = %v, want Apple detail preserved", runErr)
 	}
+	// The failure path adds one read of the platform's versions so the error
+	// can name the version that already uses this string.
+	if !strings.Contains(runErr.Error(), `Version "2.0.0" already exists on IOS as version-existing (PREPARE_FOR_SUBMISSION). Reuse it with --if-exists skip or --if-exists update`) {
+		t.Fatalf("run error = %v, want the existing version named", runErr)
+	}
 	if stdout != "" {
 		t.Fatalf("stdout = %q, want empty", stdout)
 	}
-	if len(seen) != 1 {
-		t.Fatalf("requests = %+v, want only the POST", seen)
+	if len(seen) != 2 {
+		t.Fatalf("requests = %+v, want the POST then one diagnostic listing", seen)
 	}
+}
+
+// isVersionsCreateDiagnosticListing reports the read that versions create
+// makes after a 409: every version on the platform, not a version-string
+// read-back.
+func isVersionsCreateDiagnosticListing(req ifExistsRequest) bool {
+	return req.Method == http.MethodGet &&
+		req.Path == "/v1/apps/app-1/appStoreVersions" &&
+		!strings.Contains(req.Query, "filter%5BversionString%5D") &&
+		strings.Contains(req.Query, "filter%5Bplatform%5D=IOS")
 }
 
 func TestVersionsCreateDefaultIfExistsFailPreservesSuccessfulOutput(t *testing.T) {
@@ -380,8 +399,8 @@ func TestVersionsCreateIfExistsSkipStillFailsWhenReadBackFindsNothing(t *testing
 	if stdout != "" {
 		t.Fatalf("stdout = %q, want empty", stdout)
 	}
-	if len(seen) != 2 {
-		t.Fatalf("requests = %+v, want POST then read-back", seen)
+	if len(seen) != 3 || isVersionsCreateDiagnosticListing(seen[1]) || !isVersionsCreateDiagnosticListing(seen[2]) {
+		t.Fatalf("requests = %+v, want POST, read-back, then the diagnostic listing", seen)
 	}
 }
 
@@ -394,11 +413,15 @@ func TestVersionsCreateIfExistsOnlyHandlesDuplicateVersionCode(t *testing.T) {
 			stdout, _, seen, runErr := runIfExistsCommand(t, []string{
 				"versions", "create", "--app", "app-1", "--version", "2.0.0", "--if-exists", "skip", "--output", "json",
 			}, func(req ifExistsRequest) (*http.Response, error) {
-				if req.Method == http.MethodPost && req.Path == "/v1/appStoreVersions" {
+				switch {
+				case req.Method == http.MethodPost && req.Path == "/v1/appStoreVersions":
 					return jsonResponse(http.StatusConflict, body)
+				case isVersionsCreateDiagnosticListing(req):
+					return jsonResponse(http.StatusOK, `{"data":[{"type":"appStoreVersions","id":"version-draft","attributes":{"versionString":"1.9.0","platform":"IOS","appStoreState":"PREPARE_FOR_SUBMISSION"}}]}`)
+				default:
+					t.Fatalf("unexpected request %s %s", req.Method, req.Path)
+					return nil, nil
 				}
-				t.Fatalf("unexpected request %s %s", req.Method, req.Path)
-				return nil, nil
 			})
 			if runErr == nil || !errors.Is(runErr, asc.ErrConflict) {
 				t.Fatalf("run error = %v, want the original 409", runErr)
@@ -406,8 +429,14 @@ func TestVersionsCreateIfExistsOnlyHandlesDuplicateVersionCode(t *testing.T) {
 			if stdout != "" {
 				t.Fatalf("stdout = %q, want empty", stdout)
 			}
-			if len(seen) != 1 {
-				t.Fatalf("requests = %+v, want only the POST (no read-back for a non-existence 409)", seen)
+			// No version-string read-back: the 409 is not an existence
+			// conflict, so skip cannot apply. The only extra read is the
+			// diagnostic listing that names the unreleased version.
+			if len(seen) != 2 || !isVersionsCreateDiagnosticListing(seen[1]) {
+				t.Fatalf("requests = %+v, want the POST then one diagnostic listing", seen)
+			}
+			if !strings.Contains(runErr.Error(), `To ship "2.0.0" from editable version 1.9.0, rename it: asc versions update --version-id "version-draft" --version "2.0.0"`) {
+				t.Fatalf("run error = %v, want the unreleased version named", runErr)
 			}
 		})
 	}
@@ -530,7 +559,10 @@ func TestReviewDetailsCreateIfExistsUpdateReusesExistingDemoCredentials(t *testi
 
 func TestReviewDetailsCreateDefaultIfExistsFailPreservesConflict(t *testing.T) {
 	stdout, _, seen, runErr := runIfExistsCommand(t, []string{
-		"review", "details-create", "--version-id", "version-1", "--notes", "new notes", "--output", "json",
+		"review", "details-create", "--version-id", "version-1",
+		"--contact-first-name", "Dev", "--contact-last-name", "Support",
+		"--contact-email", "dev@example.com", "--contact-phone", "+1 408 555 0100",
+		"--notes", "new notes", "--output", "json",
 	}, func(req ifExistsRequest) (*http.Response, error) {
 		if req.Method == http.MethodPost && req.Path == "/v1/appStoreReviewDetails" {
 			return jsonResponse(http.StatusConflict, reviewDetailExists409)

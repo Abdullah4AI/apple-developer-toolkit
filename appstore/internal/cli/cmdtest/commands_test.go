@@ -5287,6 +5287,9 @@ func TestAuthLoginIndividualKeyAllowsMissingIssuer(t *testing.T) {
 	tempDir := t.TempDir()
 	keyPath := filepath.Join(tempDir, "AuthKey.p8")
 	writeECDSAPEM(t, keyPath)
+	// With ASC_CONFIG_PATH set, a --local login warns that reads use the other
+	// file; clear it so stderr shows only credential-shape diagnostics.
+	t.Setenv("ASC_CONFIG_PATH", "")
 
 	workDir := t.TempDir()
 	previousDir, err := os.Getwd()
@@ -5379,7 +5382,8 @@ func TestAuthLoginUsesEnvBypass(t *testing.T) {
 	keyPath := filepath.Join(tempDir, "AuthKey.p8")
 	writeECDSAPEM(t, keyPath)
 
-	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "config.json"))
+	configPath := filepath.Join(t.TempDir(), "config.json")
+	t.Setenv("ASC_CONFIG_PATH", configPath)
 	t.Setenv("ASC_BYPASS_KEYCHAIN", "1")
 
 	root := RootCommand("1.2.3")
@@ -5401,12 +5405,12 @@ func TestAuthLoginUsesEnvBypass(t *testing.T) {
 		}
 	})
 
-	globalPath, err := config.GlobalPath()
+	cfg, err := config.LoadAt(configPath)
 	if err != nil {
-		t.Fatalf("GlobalPath() error: %v", err)
+		t.Fatalf("expected config to be written to ASC_CONFIG_PATH, got %v", err)
 	}
-	if _, err := os.Stat(globalPath); err != nil {
-		t.Fatalf("expected config to be written, got %v", err)
+	if len(cfg.Keys) != 1 || cfg.Keys[0].Name != "EnvKey" {
+		t.Fatalf("expected EnvKey in ASC_CONFIG_PATH config, got %+v", cfg.Keys)
 	}
 }
 

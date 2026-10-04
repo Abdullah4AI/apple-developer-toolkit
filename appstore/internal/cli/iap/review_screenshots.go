@@ -129,6 +129,12 @@ func IAPReviewScreenshotsCreateCommand() *ffcli.Command {
 		ShortHelp:  "Upload an in-app purchase review screenshot.",
 		LongHelp: `Upload an in-app purchase review screenshot.
 
+The file must be a PNG or JPEG named .png, .jpg, or .jpeg; any other file is
+rejected before anything is uploaded. The command also warns, and still
+uploads, when the size matches no documented App Store screenshot size (such
+as 1290x2796 for iPhone), the image has an alpha channel, or the image data
+does not fully decode.
+
 Examples:
   asc iap review-screenshots create --iap-id "IAP_ID" --file "./review.png"`,
 		FlagSet:   fs,
@@ -150,11 +156,14 @@ Examples:
 				return fmt.Errorf("iap review-screenshots create: %w", err)
 			}
 			defer file.Close()
-			snapshot, cleanupSnapshot, err := snapshotImageFile(file, info.Size())
+			snapshot, cleanupSnapshot, err := shared.SnapshotImageFile(file, info.Size())
 			if err != nil {
 				return fmt.Errorf("iap review-screenshots create: %w", err)
 			}
 			defer cleanupSnapshot()
+			if err := shared.PreflightReviewScreenshot(pathValue, snapshot, info.Size()); err != nil {
+				return shared.ReviewScreenshotUsageError("--file", "iap review-screenshots create: "+err.Error())
+			}
 
 			checksum, err := asc.ComputeChecksumFromReader(snapshot, asc.ChecksumAlgorithmMD5)
 			if err != nil {
@@ -269,16 +278,20 @@ Examples:
 			}
 
 			if fileProvided {
-				file, info, err := openImageFile(strings.TrimSpace(*filePath))
+				pathValue := strings.TrimSpace(*filePath)
+				file, info, err := openImageFile(pathValue)
 				if err != nil {
 					return fmt.Errorf("iap review-screenshots update: %w", err)
 				}
 				defer file.Close()
-				snapshot, cleanupSnapshot, err := snapshotImageFile(file, info.Size())
+				snapshot, cleanupSnapshot, err := shared.SnapshotImageFile(file, info.Size())
 				if err != nil {
 					return fmt.Errorf("iap review-screenshots update: %w", err)
 				}
 				defer cleanupSnapshot()
+				if err := shared.PreflightReviewScreenshot(pathValue, snapshot, info.Size()); err != nil {
+					return shared.ReviewScreenshotUsageError("--file", "iap review-screenshots update: "+err.Error())
+				}
 
 				checksum, err := asc.ComputeChecksumFromReader(snapshot, asc.ChecksumAlgorithmMD5)
 				if err != nil {

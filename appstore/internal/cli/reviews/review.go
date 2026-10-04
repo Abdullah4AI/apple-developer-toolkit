@@ -25,7 +25,7 @@ Examples:
   asc review submit --app "123456789" --version "1.2.3" --build-id "BUILD_ID" --confirm
   asc review details-get --id "DETAIL_ID"
   asc review details-for-version --version-id "VERSION_ID"
-  asc review details-create --version-id "VERSION_ID" --contact-email "dev@example.com"
+  asc review details-create --version-id "VERSION_ID" --contact-first-name "Dev" --contact-last-name "Support" --contact-email "dev@example.com" --contact-phone "+1 408 555 0100"
   asc review details-update --id "DETAIL_ID" --notes "Updated review notes"
   asc review attachments-list --review-detail "DETAIL_ID"
   asc review submissions list --app "123456789"

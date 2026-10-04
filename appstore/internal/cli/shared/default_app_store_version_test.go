@@ -302,3 +302,28 @@ func TestResolveDefaultAppStoreVersionDeduplicatesLiveCandidates(t *testing.T) {
 		t.Fatalf("unexpected resolution: %+v", resolved)
 	}
 }
+
+// appVersionState is authoritative when present: a version the legacy filter
+// still reports as READY_FOR_SALE but whose appVersionState says it was
+// replaced is not live, so it must not become a candidate (here it would
+// otherwise make the live tier ambiguous across platforms).
+func TestResolveDefaultAppStoreVersionIgnoresStaleLegacyLiveVersions(t *testing.T) {
+	client := defaultVersionTestClient(t, map[string]string{
+		"|" + defaultVersionEditableFilter + "|":   `{"data":[],"links":{"next":""}}`,
+		defaultVersionRemovedEditableFilter + "||": `{"data":[],"links":{"next":""}}`,
+		"READY_FOR_SALE||": `{"data":[
+			{"type":"appStoreVersions","id":"ver-stale","attributes":{"versionString":"1.0.0","platform":"MAC_OS","appStoreState":"READY_FOR_SALE","appVersionState":"REPLACED_WITH_NEW_VERSION","createdDate":"2024-01-01T00:00:00Z"}}
+		],"links":{"next":""}}`,
+		"|READY_FOR_DISTRIBUTION|": `{"data":[
+			{"type":"appStoreVersions","id":"ver-live","attributes":{"versionString":"2.0.0","platform":"IOS","appVersionState":"READY_FOR_DISTRIBUTION","createdDate":"2026-01-01T00:00:00Z"}}
+		],"links":{"next":""}}`,
+	}, nil)
+
+	resolved, err := ResolveDefaultAppStoreVersion(context.Background(), client, "app-1", "")
+	if err != nil {
+		t.Fatalf("ResolveDefaultAppStoreVersion() error: %v", err)
+	}
+	if resolved.ID != "ver-live" || resolved.Platform != "IOS" || resolved.Source != DefaultAppStoreVersionSourceLive {
+		t.Fatalf("unexpected resolution: %+v", resolved)
+	}
+}

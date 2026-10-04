@@ -78,57 +78,138 @@ func TestBuildsDSYMExactVersionDownloadsNewestMatchingBuild(t *testing.T) {
 }
 
 func TestBuildsDSYMVersionLiveDownloadsNewestReleasedBuild(t *testing.T) {
+	const empty = `{"data":[],"links":{}}`
+	tests := []struct {
+		name string
+		// legacy answers filter[appStoreState]=READY_FOR_SALE,PREORDER_READY_FOR_SALE.
+		legacy string
+		// modern answers filter[appVersionState]=READY_FOR_DISTRIBUTION.
+		modern string
+	}{
+		{
+			name: "legacy appStoreState only",
+			legacy: `{"data":[
+				{"type":"appStoreVersions","id":"ver-old","attributes":{"platform":"IOS","versionString":"1.0","appStoreState":"READY_FOR_SALE","createdDate":"2024-01-01T00:00:00Z"}},
+				{"type":"appStoreVersions","id":"ver-live","attributes":{"platform":"IOS","versionString":"2.0","appStoreState":"READY_FOR_SALE","createdDate":"2026-02-01T00:00:00Z"}}
+			],"links":{}}`,
+			modern: empty,
+		},
+		{
+			name:   "modern appVersionState only",
+			legacy: empty,
+			modern: `{"data":[
+				{"type":"appStoreVersions","id":"ver-old","attributes":{"platform":"IOS","versionString":"1.0","appVersionState":"READY_FOR_DISTRIBUTION","createdDate":"2024-01-01T00:00:00Z"}},
+				{"type":"appStoreVersions","id":"ver-live","attributes":{"platform":"IOS","versionString":"2.0","appVersionState":"READY_FOR_DISTRIBUTION","createdDate":"2026-02-01T00:00:00Z"}}
+			],"links":{}}`,
+		},
+		{
+			name: "modern appVersionState returned by the legacy filter",
+			legacy: `{"data":[
+				{"type":"appStoreVersions","id":"ver-live","attributes":{"platform":"IOS","versionString":"2.0","appVersionState":"READY_FOR_DISTRIBUTION","createdDate":"2026-02-01T00:00:00Z"}}
+			],"links":{}}`,
+			modern: empty,
+		},
+		{
+			name: "both spellings present",
+			legacy: `{"data":[
+				{"type":"appStoreVersions","id":"ver-old","attributes":{"platform":"IOS","versionString":"1.0","appStoreState":"READY_FOR_SALE","createdDate":"2024-01-01T00:00:00Z"}},
+				{"type":"appStoreVersions","id":"ver-live","attributes":{"platform":"IOS","versionString":"2.0","appStoreState":"READY_FOR_SALE","appVersionState":"READY_FOR_DISTRIBUTION","createdDate":"2026-02-01T00:00:00Z"}}
+			],"links":{}}`,
+			modern: `{"data":[
+				{"type":"appStoreVersions","id":"ver-live","attributes":{"platform":"IOS","versionString":"2.0","appStoreState":"READY_FOR_SALE","appVersionState":"READY_FOR_DISTRIBUTION","createdDate":"2026-02-01T00:00:00Z"}}
+			],"links":{}}`,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			setupAuth(t)
+			outputDir := filepath.Join(t.TempDir(), "dsyms")
+			restoreTransport(t)
+
+			var versionQueries []string
+			http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+				switch {
+				case req.URL.Path == "/v1/apps/123456789/appStoreVersions":
+					query := req.URL.Query()
+					legacyFilter := query.Get("filter[appStoreState]")
+					modernFilter := query.Get("filter[appVersionState]")
+					versionQueries = append(versionQueries, legacyFilter+"|"+modernFilter)
+					switch {
+					case legacyFilter == "READY_FOR_SALE,PREORDER_READY_FOR_SALE" && modernFilter == "":
+						return dsymJSON(test.legacy), nil
+					case legacyFilter == "" && modernFilter == "READY_FOR_DISTRIBUTION":
+						return dsymJSON(test.modern), nil
+					default:
+						t.Fatalf("live version query = %s", req.URL.RawQuery)
+						return nil, nil
+					}
+				case req.URL.Path == "/v1/builds":
+					if req.URL.Query().Get("include") != "preReleaseVersion" || req.URL.Query().Get("filter[app]") != "123456789" {
+						t.Fatalf("builds query = %s", req.URL.RawQuery)
+					}
+					if got := req.URL.Query().Get("filter[preReleaseVersion.platform]"); got != "IOS" {
+						t.Fatalf("builds platform filter = %q, want IOS", got)
+					}
+					body := `{"data":[
+						{"type":"builds","id":"build-old","attributes":{"version":"9","uploadedDate":"2025-01-01T00:00:00Z"},"relationships":{"preReleaseVersion":{"data":{"type":"preReleaseVersions","id":"prv-old"}}}},
+						{"type":"builds","id":"build-live-old","attributes":{"version":"20","uploadedDate":"2026-01-01T00:00:00Z"},"relationships":{"preReleaseVersion":{"data":{"type":"preReleaseVersions","id":"prv-live"}}}},
+						{"type":"builds","id":"build-live","attributes":{"version":"21","uploadedDate":"2026-03-01T00:00:00Z"},"relationships":{"preReleaseVersion":{"data":{"type":"preReleaseVersions","id":"prv-live"}}}}
+					],"included":[
+						{"type":"preReleaseVersions","id":"prv-old","attributes":{"version":"1.0","platform":"IOS"}},
+						{"type":"preReleaseVersions","id":"prv-live","attributes":{"version":"2.0","platform":"IOS"}}
+					],"links":{}}`
+					return dsymJSON(body), nil
+				case req.URL.Path == "/v1/builds/build-live" && req.URL.Query().Get("include") == "buildBundles":
+					body := `{"data":{"type":"builds","id":"build-live","attributes":{"version":"21"}},"included":[{"type":"buildBundles","id":"bundle-live","attributes":{"bundleId":"com.example.app","dSYMUrl":"https://downloads.example.com/live.dSYM.zip"}}]}`
+					return dsymJSON(body), nil
+				case req.URL.Host == "downloads.example.com" && req.URL.Path == "/live.dSYM.zip":
+					return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader("livedata")), Header: make(http.Header)}, nil
+				default:
+					t.Fatalf("unexpected request: %s %s?%s", req.Method, req.URL.Path, req.URL.RawQuery)
+					return nil, nil
+				}
+			})
+
+			stdout, stderr := runDSYM(t, outputDir, "builds", "dsyms", "--app", "123456789", "--version", "live", "--output", "json")
+			if got, want := strings.Join(versionQueries, ","), "READY_FOR_SALE,PREORDER_READY_FOR_SALE|,|READY_FOR_DISTRIBUTION"; got != want {
+				t.Fatalf("live version queries = %q, want %q", got, want)
+			}
+			if !strings.Contains(stderr, "Resolved build build-live") {
+				t.Fatalf("stderr = %q", stderr)
+			}
+			if strings.Contains(stdout, "build-old") || strings.Contains(stdout, "build-live-old") {
+				t.Fatalf("downloaded unexpected builds: %s", stdout)
+			}
+			if !strings.Contains(stdout, `"buildId":"build-live"`) || !strings.Contains(stdout, `"sha256":"`+sha256Hex("livedata")+`"`) {
+				t.Fatalf("stdout = %s", stdout)
+			}
+			if _, err := os.Stat(filepath.Join(outputDir, "com.example.app-2.0-21.dSYM.zip")); err != nil {
+				t.Fatalf("expected live dSYM file: %v", err)
+			}
+		})
+	}
+}
+
+func TestBuildsDSYMVersionLiveSkipsVersionsThatAreNoLongerLive(t *testing.T) {
 	setupAuth(t)
 	outputDir := filepath.Join(t.TempDir(), "dsyms")
 	restoreTransport(t)
 
 	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		switch {
-		case req.URL.Path == "/v1/apps/123456789/appStoreVersions":
-			if !strings.Contains(req.URL.Query().Get("filter[appStoreState]"), "READY_FOR_SALE") || !strings.Contains(req.URL.Query().Get("filter[appStoreState]"), "PREORDER_READY_FOR_SALE") {
-				t.Fatalf("live version query = %s", req.URL.RawQuery)
-			}
-			body := `{"data":[
-				{"type":"appStoreVersions","id":"ver-old","attributes":{"platform":"IOS","versionString":"1.0","appStoreState":"READY_FOR_SALE","createdDate":"2024-01-01T00:00:00Z"}},
-				{"type":"appStoreVersions","id":"ver-live","attributes":{"platform":"IOS","versionString":"2.0","appStoreState":"READY_FOR_SALE","createdDate":"2026-02-01T00:00:00Z"}}
-			],"links":{}}`
-			return dsymJSON(body), nil
-		case req.URL.Path == "/v1/builds":
-			if req.URL.Query().Get("include") != "preReleaseVersion" || req.URL.Query().Get("filter[app]") != "123456789" {
-				t.Fatalf("builds query = %s", req.URL.RawQuery)
-			}
-			body := `{"data":[
-				{"type":"builds","id":"build-old","attributes":{"version":"9","uploadedDate":"2025-01-01T00:00:00Z"},"relationships":{"preReleaseVersion":{"data":{"type":"preReleaseVersions","id":"prv-old"}}}},
-				{"type":"builds","id":"build-live-old","attributes":{"version":"20","uploadedDate":"2026-01-01T00:00:00Z"},"relationships":{"preReleaseVersion":{"data":{"type":"preReleaseVersions","id":"prv-live"}}}},
-				{"type":"builds","id":"build-live","attributes":{"version":"21","uploadedDate":"2026-03-01T00:00:00Z"},"relationships":{"preReleaseVersion":{"data":{"type":"preReleaseVersions","id":"prv-live"}}}}
-			],"included":[
-				{"type":"preReleaseVersions","id":"prv-old","attributes":{"version":"1.0","platform":"IOS"}},
-				{"type":"preReleaseVersions","id":"prv-live","attributes":{"version":"2.0","platform":"IOS"}}
-			],"links":{}}`
-			return dsymJSON(body), nil
-		case req.URL.Path == "/v1/builds/build-live" && req.URL.Query().Get("include") == "buildBundles":
-			body := `{"data":{"type":"builds","id":"build-live","attributes":{"version":"21"}},"included":[{"type":"buildBundles","id":"bundle-live","attributes":{"bundleId":"com.example.app","dSYMUrl":"https://downloads.example.com/live.dSYM.zip"}}]}`
-			return dsymJSON(body), nil
-		case req.URL.Host == "downloads.example.com" && req.URL.Path == "/live.dSYM.zip":
-			return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader("livedata")), Header: make(http.Header)}, nil
-		default:
+		if req.URL.Path != "/v1/apps/123456789/appStoreVersions" {
 			t.Fatalf("unexpected request: %s %s?%s", req.Method, req.URL.Path, req.URL.RawQuery)
-			return nil, nil
 		}
+		// appVersionState is authoritative when present: a replaced version
+		// whose deprecated appStoreState still reads READY_FOR_SALE is not live.
+		return dsymJSON(`{"data":[
+			{"type":"appStoreVersions","id":"ver-replaced","attributes":{"platform":"IOS","versionString":"1.0","appStoreState":"READY_FOR_SALE","appVersionState":"REPLACED_WITH_NEW_VERSION","createdDate":"2024-01-01T00:00:00Z"}}
+		],"links":{}}`), nil
 	})
 
-	stdout, stderr := runDSYM(t, outputDir, "builds", "dsyms", "--app", "123456789", "--version", "live", "--output", "json")
-	if !strings.Contains(stderr, "Resolved build build-live") {
-		t.Fatalf("stderr = %q", stderr)
-	}
-	if strings.Contains(stdout, "build-old") || strings.Contains(stdout, "build-live-old") {
-		t.Fatalf("downloaded unexpected builds: %s", stdout)
-	}
-	if !strings.Contains(stdout, `"buildId":"build-live"`) || !strings.Contains(stdout, `"sha256":"`+sha256Hex("livedata")+`"`) {
-		t.Fatalf("stdout = %s", stdout)
-	}
-	if _, err := os.Stat(filepath.Join(outputDir, "com.example.app-2.0-21.dSYM.zip")); err != nil {
-		t.Fatalf("expected live dSYM file: %v", err)
+	_, _, err := runDSYMErr(t, "builds", "dsyms", "--app", "123456789", "--version", "live", "--output", "json", "--output-dir", outputDir)
+	if err == nil || !strings.Contains(err.Error(), "no live App Store version") {
+		t.Fatalf("err = %v, want no live App Store version", err)
 	}
 }
 

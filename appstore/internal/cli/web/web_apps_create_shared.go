@@ -228,7 +228,7 @@ func promptAppsCreatePassword(password *string) error {
 
 func promptAppsCreateSessionAppleID(appleID *string) error {
 	if !appCreateCanPromptInteractivelyFn() {
-		return missingAppleIDUsageError()
+		return newMissingWebSessionError("", "")
 	}
 	return promptAppsCreateAppleID(appleID)
 }
@@ -262,7 +262,9 @@ func resolveAppCreatePassword(_ context.Context, password string) (string, error
 		return "", err
 	}
 	if !webPasswordProvided(password) {
-		return "", nil
+		// The terminal was available and the prompt came back empty: that is
+		// missing input, not a missing session.
+		return "", passwordRequiredUsageError()
 	}
 	return password, nil
 }

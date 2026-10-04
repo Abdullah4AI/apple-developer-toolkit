@@ -18,13 +18,16 @@ type resolvedSubscriptionPriceCandidate struct {
 	preserved bool
 }
 
+// fetchResolvedSubscriptionPrices returns each territory's price that applies
+// on date, a pricing date such as subscriptionPricingToday() or a scheduled
+// start date.
 func fetchResolvedSubscriptionPrices(
 	ctx context.Context,
 	client *asc.Client,
 	subscriptionID string,
 	limit int,
 	nextURL string,
-	now time.Time,
+	date time.Time,
 	planType asc.SubscriptionPlanType,
 	territory string,
 ) (*shared.ResolvedPricesResult, error) {
@@ -78,7 +81,7 @@ func fetchResolvedSubscriptionPrices(
 		if !ok {
 			return fmt.Errorf("unexpected subscription prices response type %T", page)
 		}
-		return consumeResolvedSubscriptionPricePage(candidates, resp, now, planType)
+		return consumeResolvedSubscriptionPricePage(candidates, resp, date, planType)
 	}); err != nil {
 		return nil, err
 	}
@@ -109,10 +112,12 @@ func resolvedSubscriptionPricesQuery(limit int, planType asc.SubscriptionPlanTyp
 	return values
 }
 
+// consumeResolvedSubscriptionPricePage records the prices on page that have
+// started on date, a pricing date as midnight UTC.
 func consumeResolvedSubscriptionPricePage(
 	candidates map[string]resolvedSubscriptionPriceCandidate,
 	page *asc.SubscriptionPricesResponse,
-	now time.Time,
+	date time.Time,
 	planType asc.SubscriptionPlanType,
 ) error {
 	if page == nil {
@@ -120,7 +125,6 @@ func consumeResolvedSubscriptionPricePage(
 	}
 
 	values, currencies := parseSubscriptionPricesIncluded(page.Included)
-	asOf := dateOnlyUTC(now)
 
 	for _, price := range page.Data {
 		territoryID := extractSubscriptionPriceRelationshipID(price, "territory")
@@ -139,7 +143,7 @@ func consumeResolvedSubscriptionPricePage(
 		}
 
 		startAt := parseSubscriptionPricingDate(price.Attributes.StartDate)
-		if startAt != nil && startAt.After(asOf) {
+		if !shared.PriceActiveOn(startAt, nil, date) {
 			continue
 		}
 

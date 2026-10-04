@@ -1432,7 +1432,7 @@ class HookChecksTest(unittest.TestCase):
                 self.assertEqual(code, 0)
                 self.assertIn("make format", calls)
                 self.assertIn("make lint", calls)
-                self.assertIn("go test -short ./...", calls)
+                self.assertIn("make test-short", calls)
 
     def test_instruction_validation_failure_blocks_commit(self) -> None:
         for target in ["check-repo-docs", "check-agent-skills"]:

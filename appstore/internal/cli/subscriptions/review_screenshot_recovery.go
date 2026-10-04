@@ -48,7 +48,7 @@ var subscriptionReviewScreenshotFields = []string{
 	"assetDeliveryState",
 }
 
-func createOrResumeSubscriptionReviewScreenshot(ctx context.Context, client *asc.Client, subscriptionID, path string, info os.FileInfo, checksum string) (*asc.SubscriptionAppStoreReviewScreenshotResponse, error) {
+func createOrResumeSubscriptionReviewScreenshot(ctx context.Context, client *asc.Client, subscriptionID string, file *os.File, info os.FileInfo, checksum string) (*asc.SubscriptionAppStoreReviewScreenshotResponse, error) {
 	target := subscriptionReviewScreenshotTarget{
 		FileName: strings.TrimSpace(info.Name()),
 		FileSize: info.Size(),
@@ -93,7 +93,7 @@ func createOrResumeSubscriptionReviewScreenshot(ctx context.Context, client *asc
 		return nil, fmt.Errorf("unsupported screenshot recovery action %q", action)
 	}
 
-	err = asc.ExecuteUploadOperations(ctx, path, reservation.Data.Attributes.UploadOperations)
+	err = asc.ExecuteUploadOperationsFromFile(ctx, file, reservation.Data.Attributes.UploadOperations)
 	if err != nil {
 		return nil, fmt.Errorf("upload failed: %w", err)
 	}

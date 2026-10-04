@@ -131,7 +131,7 @@ func consumeResolvedAppPricePage(
 		return err
 	}
 
-	asOf := dateOnlyUTC(now)
+	asOf := shared.PricingDate(now)
 	for _, item := range page.Data {
 		entry, row, ok := resolvedAppPriceCandidateFromResource(item, values, currencies)
 		if !ok || !appPriceEntryActiveOn(entry, asOf) {

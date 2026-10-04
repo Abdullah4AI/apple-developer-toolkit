@@ -266,6 +266,47 @@ func TestPathEnvOverrideRequiresAbsolutePath(t *testing.T) {
 	}
 }
 
+func TestDefaultWritePath(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	workDir := t.TempDir()
+	if err := SaveAt(filepath.Join(workDir, ".asc", "config.json"), &Config{AppID: "123"}); err != nil {
+		t.Fatalf("SaveAt(local) error: %v", err)
+	}
+	t.Chdir(workDir)
+
+	t.Run("override", func(t *testing.T) {
+		override := filepath.Join(t.TempDir(), "nested", "..", "config.json")
+		t.Setenv("ASC_CONFIG_PATH", override)
+		path, err := DefaultWritePath()
+		if err != nil {
+			t.Fatalf("DefaultWritePath() error: %v", err)
+		}
+		if path != filepath.Clean(override) {
+			t.Fatalf("DefaultWritePath() = %q, want %q", path, filepath.Clean(override))
+		}
+	})
+
+	t.Run("relative override", func(t *testing.T) {
+		t.Setenv("ASC_CONFIG_PATH", "config.json")
+		if _, err := DefaultWritePath(); !errors.Is(err, ErrInvalidPath) {
+			t.Fatalf("DefaultWritePath() error = %v, want ErrInvalidPath", err)
+		}
+	})
+
+	t.Run("no override ignores the local config", func(t *testing.T) {
+		t.Setenv("ASC_CONFIG_PATH", "")
+		path, err := DefaultWritePath()
+		if err != nil {
+			t.Fatalf("DefaultWritePath() error: %v", err)
+		}
+		if want := filepath.Join(home, ".asc", "config.json"); path != want {
+			t.Fatalf("DefaultWritePath() = %q, want %q", path, want)
+		}
+	})
+}
+
 func TestPathUsesLocalConfig(t *testing.T) {
 	tempDir := t.TempDir()
 	t.Setenv("ASC_CONFIG_PATH", "")

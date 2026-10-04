@@ -81,11 +81,21 @@ func VersionsListCommand() *ffcli.Command {
 		ShortHelp:  "List app store versions for an app.",
 		LongHelp: `List app store versions for an app.
 
-The App Store Connect API can report every historical version of an app as
-READY_FOR_SALE, so a state filter alone cannot identify the live version.
+App Store Connect reports a live version under two state attributes:
+appVersionState READY_FOR_DISTRIBUTION and the deprecated appStoreState
+READY_FOR_SALE. Apple fills them inconsistently: some live versions report
+only READY_FOR_DISTRIBUTION, and versions that were later replaced can still
+report READY_FOR_SALE. --state filters on one attribute per command and
+cannot mix the two spellings, so no single --state value finds every live
+version.
+
 --latest fetches every page and keeps only the newest version per platform by
-createdDate; combine it with --state READY_FOR_SALE to get the version that
-is actually live on each platform.
+createdDate. With --state READY_FOR_DISTRIBUTION it returns the live version
+on each platform where Apple reports appVersionState. To also find a live
+version that reports only READY_FOR_SALE, list --state READY_FOR_SALE with
+--paginate rather than --latest, skip results whose appVersionState is
+present and is not READY_FOR_DISTRIBUTION, and keep the newest version left
+on each platform across both lists.
 
 Use --include to return related resources in the same response instead of
 issuing a follow-up request per version. Included review-detail passwords are
@@ -95,7 +105,8 @@ Examples:
   asc versions list --app "123456789"
   asc versions list --app "123456789" --version "1.0.0"
   asc versions list --app "123456789" --platform IOS --state READY_FOR_REVIEW
-  asc versions list --app "123456789" --state READY_FOR_SALE --latest
+  asc versions list --app "123456789" --state READY_FOR_DISTRIBUTION --latest
+  asc versions list --app "123456789" --state READY_FOR_SALE --paginate
   asc versions list --app "123456789" --include "build,appStoreVersionSubmission"
   asc versions list --app "123456789" --paginate`,
 		FlagSet:   fs,
@@ -601,10 +612,20 @@ version. Any other 409 keeps failing.`,
 			copyMetadata := copyMetadataFromValue != ""
 			conflictHandled := false
 			if err != nil {
+				readBackFailed := false
 				existing, handled, resolveErr := shared.ResolveIfExistsConflict(ifExistsMode, err, versionsCreateExistsCodes, func() (*asc.AppStoreVersionResponse, bool, error) {
-					return findExistingAppStoreVersion(requestCtx, client, resolvedAppID, attrs.VersionString, normalizedPlatform)
+					found, ok, lookupErr := findExistingAppStoreVersion(requestCtx, client, resolvedAppID, attrs.VersionString, normalizedPlatform)
+					readBackFailed = lookupErr != nil && !asc.IsNotFound(lookupErr)
+					return found, ok, lookupErr
 				})
 				if resolveErr != nil {
+					// An unhandled conflict comes back as Apple's original
+					// error. Explain it from the platform's current versions
+					// unless the read-back already failed, in which case
+					// another read is unlikely to help.
+					if !readBackFailed {
+						resolveErr = shared.WithAppStoreVersionCreateConflictDiagnostics(requestCtx, client, resolvedAppID, attrs.VersionString, normalizedPlatform, resolveErr)
+					}
 					return fmt.Errorf("versions create: %w", resolveErr)
 				}
 				if !handled {

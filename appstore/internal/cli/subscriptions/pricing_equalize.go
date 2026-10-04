@@ -28,8 +28,6 @@ const (
 
 var errEqualizePricePointFound = errors.New("equalize price point found")
 
-var equalizeNow = time.Now
-
 // SubscriptionsPricingEqualizeCommand returns the equalize subcommand.
 func SubscriptionsPricingEqualizeCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("equalize", flag.ExitOnError)
@@ -475,10 +473,15 @@ func renderEqualizeFailures(failures []equalizeAttemptFailure) []equalizeFailure
 	return rendered
 }
 
+// normalizeEqualizeStartDate returns the normalized --start-date and the
+// pricing date the new prices take effect on: today's US Pacific date when
+// --start-date is omitted, or the explicit start date, which must be after
+// today's US Pacific date.
 func normalizeEqualizeStartDate(value string) (string, time.Time, error) {
+	today := subscriptionPricingToday()
 	trimmed := strings.TrimSpace(value)
 	if trimmed == "" {
-		return "", equalizeNow(), nil
+		return "", today, nil
 	}
 
 	normalized, err := shared.NormalizeDate(trimmed, "--start-date")
@@ -489,28 +492,27 @@ func normalizeEqualizeStartDate(value string) (string, time.Time, error) {
 	if err != nil {
 		return "", time.Time{}, err
 	}
-	if !parsed.After(dateOnlyUTC(equalizeNow())) {
+	if !parsed.After(today) {
 		return "", time.Time{}, shared.UsageError("--start-date must be a future date")
 	}
 	return normalized, parsed, nil
 }
 
+// autoScheduleEqualizeStartDate schedules approved or live subscriptions for
+// tomorrow, the day after today's US Pacific pricing date. It returns the
+// start date and the pricing date the prices take effect on.
 func autoScheduleEqualizeStartDate(ctx context.Context, client *asc.Client, subID string) (string, string, bool, time.Time, error) {
 	state, err := fetchEqualizeSubscriptionState(ctx, client, subID)
 	if err != nil {
 		return "", "", false, time.Time{}, fmt.Errorf("failed to inspect subscription state for auto scheduling: %w", err)
 	}
+	today := subscriptionPricingToday()
 	if !isApprovedOrLiveSubscriptionState(state) {
-		return "", state, false, equalizeNow(), nil
+		return "", state, false, today, nil
 	}
 
-	effectiveAt := equalizeNow().UTC().AddDate(0, 0, 1)
-	startDate := effectiveAt.Format(equalizeDateLayout)
-	parsed, err := time.Parse(equalizeDateLayout, startDate)
-	if err != nil {
-		return "", state, false, time.Time{}, err
-	}
-	return startDate, state, true, parsed, nil
+	effectiveDate := today.AddDate(0, 0, 1)
+	return effectiveDate.Format(equalizeDateLayout), state, true, effectiveDate, nil
 }
 
 func fetchEqualizeSubscriptionState(ctx context.Context, client *asc.Client, subID string) (string, error) {
