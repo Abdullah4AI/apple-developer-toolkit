@@ -5,9 +5,11 @@ import (
 	"flag"
 	"net/http"
 
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/appleads"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/readonly"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/storekit"
 	webcore "github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/web"
 )
 
@@ -20,7 +22,7 @@ const (
 	ExitNotFound = 4 // Resource not found
 	ExitConflict = 5 // Conflict / resource already exists
 	ExitReadOnly = 6 // Read-only mode refused a mutating request
-	ExitPending  = 7 // An opted-in bounded wait ended before its target finished (builds wait --report-pending)
+	ExitPending  = 7 // An opted-in bounded wait ended before its target finished (builds wait --report-pending, status --until)
 
 	// HTTP 4xx range: 10 + (status - 400)
 	// Note: 404 and 409 are mapped to ExitNotFound and ExitConflict above.
@@ -65,7 +67,11 @@ func ExitCodeFromError(err error) int {
 	if errors.Is(err, shared.ErrMissingAuth) ||
 		errors.Is(err, asc.ErrUnauthorized) ||
 		errors.Is(err, asc.ErrForbidden) ||
-		errors.Is(err, webcore.ErrInvalidAppleAccountCredentials) {
+		errors.Is(err, webcore.ErrInvalidAppleAccountCredentials) ||
+		errors.Is(err, webcore.ErrTwoFactorCodeRejected) {
+		return ExitAuth
+	}
+	if errors.Is(err, appleads.ErrOAuthCredentialsRejected) {
 		return ExitAuth
 	}
 	if errors.Is(err, asc.ErrNotFound) {
@@ -84,8 +90,12 @@ func ExitCodeFromError(err error) int {
 		// Fall back to API error code mapping
 		return APIErrorCodeToExitCode(apiErr.Code)
 	}
-	if webErr, ok := errors.AsType[*webcore.APIError](err); ok {
-		return HTTPStatusToExitCode(webErr.HTTPStatusCode())
+	// StoreKit keeps the generic exit code it has always had. Public storefront
+	// endpoints take no credentials, so their 401 and 403 are not auth failures.
+	if _, ok := errors.AsType[*storekit.APIError](err); !ok && !isPublicStorefrontError(err) {
+		if status := httpStatusFromError(err); status > 0 {
+			return HTTPStatusToExitCode(status)
+		}
 	}
 
 	// Generic error

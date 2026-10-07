@@ -172,6 +172,21 @@ func TestLoadLocalMetadataRejectsVersionPathTraversal(t *testing.T) {
 	}
 }
 
+func TestLoadLocalMetadataPointsVersionFolderAtMetadataRoot(t *testing.T) {
+	versionDir := filepath.Join(t.TempDir(), versionDirName, "2.4.0")
+	if err := os.MkdirAll(versionDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(versionDir, "en-US.json"), []byte(`{"description":"Hi"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := loadLocalMetadata(versionDir, "2.4.0")
+	if err == nil || !strings.Contains(err.Error(), "pass the metadata root (the directory containing version/ and app-info/)") {
+		t.Fatalf("expected metadata root hint, got %v", err)
+	}
+}
+
 func TestBuildScopePlanTreatsMissingLocalFieldsAsNoOp(t *testing.T) {
 	local := map[string]localPlanFields{
 		"en-US": {

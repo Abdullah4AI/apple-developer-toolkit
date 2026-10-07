@@ -81,7 +81,7 @@ func buildSubscriptionDiagnostics(input SubscriptionsInput) []SubscriptionDiagno
 				sub.IntroductoryOfferCount,
 				sub.IntroductoryOfferCheckSkipped,
 				sub.IntroductoryOfferCheckReason,
-				"Optional: configure an introductory offer or free trial with `asc subscriptions introductory-offers create` if this subscription should launch with one.",
+				"Optional: configure an introductory offer or free trial with `asc subscriptions offers introductory create` if this subscription should launch with one.",
 			),
 			buildOptionalOfferDiagnosticRow(
 				"promotional_offers",
@@ -89,7 +89,7 @@ func buildSubscriptionDiagnostics(input SubscriptionsInput) []SubscriptionDiagno
 				sub.PromotionalOfferCount,
 				sub.PromotionalOfferCheckSkipped,
 				sub.PromotionalOfferCheckReason,
-				"Optional: configure promotional offers with `asc subscriptions promotional-offers create` if you plan to use them.",
+				"Optional: configure promotional offers with `asc subscriptions offers promotional create` if you plan to use them.",
 			),
 			buildOptionalOfferDiagnosticRow(
 				"win_back_offers",
@@ -567,7 +567,7 @@ func buildPriceRecordsDiagnosticRow(sub Subscription) SubscriptionDiagnosticRow 
 	if len(territories) == 0 || sub.PriceCount == 0 {
 		row.Status = DiagnosticStatusNo
 		row.Evidence = "none"
-		row.Remediation = fmt.Sprintf("Configure prices with `asc subscriptions pricing prices set --subscription-id %q ...` or `asc subscriptions pricing equalize --subscription-id %q --base-territory USA`.", fallbackString(strings.TrimSpace(sub.ID), "SUB_ID"), fallbackString(strings.TrimSpace(sub.ID), "SUB_ID"))
+		row.Remediation = fmt.Sprintf("Configure prices with `asc subscriptions pricing prices set --subscription-id %q ...` or `asc subscriptions pricing equalize --subscription-id %q --base-price PRICE --base-territory USA --dry-run`.", fallbackString(strings.TrimSpace(sub.ID), "SUB_ID"), fallbackString(strings.TrimSpace(sub.ID), "SUB_ID"))
 		return row
 	}
 
@@ -609,7 +609,7 @@ func buildSubscriptionAvailabilityCoverageDiagnosticRow(sub Subscription) Subscr
 	if len(missing) > 0 {
 		row.Status = DiagnosticStatusNo
 		row.Evidence = fmt.Sprintf("priced=%s missing=%s", formatList(priced), formatList(missing))
-		row.Remediation = fmt.Sprintf("Add prices for the missing territories with `asc subscriptions pricing prices set --subscription-id %q ...` or `asc subscriptions pricing equalize --subscription-id %q --base-territory USA`.", fallbackString(strings.TrimSpace(sub.ID), "SUB_ID"), fallbackString(strings.TrimSpace(sub.ID), "SUB_ID"))
+		row.Remediation = fmt.Sprintf("Add prices for the missing territories with `asc subscriptions pricing prices set --subscription-id %q ...` or `asc subscriptions pricing equalize --subscription-id %q --base-price PRICE --base-territory USA --dry-run`.", fallbackString(strings.TrimSpace(sub.ID), "SUB_ID"), fallbackString(strings.TrimSpace(sub.ID), "SUB_ID"))
 		return row
 	}
 
@@ -700,7 +700,7 @@ func buildAppAvailabilityCoverageDiagnosticRow(sub Subscription, appTerritories 
 
 		row.Status = DiagnosticStatusNo
 		row.Evidence = fmt.Sprintf("priced_count=%d app_count=%d", pricedCount, appTerritoryCount)
-		row.Remediation = fmt.Sprintf("Add prices for the missing app territories with `asc subscriptions pricing prices set --subscription-id %q ...` or `asc subscriptions pricing equalize --subscription-id %q --base-territory USA`.", fallbackString(strings.TrimSpace(sub.ID), "SUB_ID"), fallbackString(strings.TrimSpace(sub.ID), "SUB_ID"))
+		row.Remediation = fmt.Sprintf("Add prices for the missing app territories with `asc subscriptions pricing prices set --subscription-id %q ...` or `asc subscriptions pricing equalize --subscription-id %q --base-price PRICE --base-territory USA --dry-run`.", fallbackString(strings.TrimSpace(sub.ID), "SUB_ID"), fallbackString(strings.TrimSpace(sub.ID), "SUB_ID"))
 		return row
 	}
 
@@ -708,7 +708,7 @@ func buildAppAvailabilityCoverageDiagnosticRow(sub Subscription, appTerritories 
 	if len(missing) > 0 {
 		row.Status = DiagnosticStatusNo
 		row.Evidence = fmt.Sprintf("priced=%s missing=%s", formatList(priced), formatList(missing))
-		row.Remediation = fmt.Sprintf("Add prices for the missing app territories with `asc subscriptions pricing prices set --subscription-id %q ...` or `asc subscriptions pricing equalize --subscription-id %q --base-territory USA`.", fallbackString(strings.TrimSpace(sub.ID), "SUB_ID"), fallbackString(strings.TrimSpace(sub.ID), "SUB_ID"))
+		row.Remediation = fmt.Sprintf("Add prices for the missing app territories with `asc subscriptions pricing prices set --subscription-id %q ...` or `asc subscriptions pricing equalize --subscription-id %q --base-price PRICE --base-territory USA --dry-run`.", fallbackString(strings.TrimSpace(sub.ID), "SUB_ID"), fallbackString(strings.TrimSpace(sub.ID), "SUB_ID"))
 		return row
 	}
 

@@ -1,7 +1,8 @@
-// Package storekit implements Apple's In-App Purchase and StoreKit server APIs.
+// Package storekit implements Apple's In-App Purchase and StoreKit server APIs:
+// the App Store Server API and the Retention Messaging API.
 //
 // StoreKit API credentials are intentionally separate from App Store Connect
-// API credentials. Retention Messaging signs a fresh JWT for every request.
+// API credentials. The client signs a fresh JWT for every request.
 package storekit
 
 import (
@@ -10,8 +11,8 @@ import (
 )
 
 const (
-	ProductionBaseURL = "https://api.storekit.apple.com/inApps/v1/messaging"
-	SandboxBaseURL    = "https://api.storekit-sandbox.apple.com/inApps/v1/messaging"
+	ProductionBaseURL = "https://api.storekit.apple.com"
+	SandboxBaseURL    = "https://api.storekit-sandbox.apple.com"
 )
 
 // Environment selects the StoreKit server environment.

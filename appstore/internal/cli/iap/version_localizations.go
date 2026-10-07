@@ -17,7 +17,7 @@ func IAPVersionLocalizationsCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("versions localizations", flag.ExitOnError)
 	return &ffcli.Command{
 		Name: "localizations", ShortUsage: "asc iap versions localizations <subcommand> [flags]", ShortHelp: "Manage version-scoped IAP localizations.", LongHelp: "Manage version-scoped IAP localizations.", FlagSet: fs, UsageFunc: shared.DefaultUsageFunc,
-		Subcommands: []*ffcli.Command{IAPVersionLocalizationsListCommand(), IAPVersionLocalizationsCreateCommand(), IAPVersionLocalizationsViewCommand(), IAPVersionLocalizationsUpdateCommand(), IAPVersionLocalizationsDeleteCommand()}, Exec: func(context.Context, []string) error { return flag.ErrHelp },
+		Subcommands: []*ffcli.Command{IAPVersionLocalizationsListCommand(), IAPVersionLocalizationsCreateCommand(), IAPVersionLocalizationsViewCommand(), IAPVersionLocalizationsUpdateCommand(), IAPVersionLocalizationsDeleteCommand(), IAPVersionLocalizationsImportCommand()}, Exec: func(context.Context, []string) error { return flag.ErrHelp },
 	}
 }
 

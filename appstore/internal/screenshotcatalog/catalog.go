@@ -52,6 +52,10 @@ func uniqueSortedDimensions(dims []Dimension) []Dimension {
 }
 
 var (
+	iphoneDuoDimensions = combineDimensions(
+		portraitLandscape(1398, 2034),
+		portraitLandscape(2007, 2853),
+	)
 	iphone69Dimensions = combineDimensions(
 		portraitLandscape(1260, 2736),
 		portraitLandscape(1290, 2796),
@@ -112,6 +116,7 @@ var (
 )
 
 var registry = map[string][]Dimension{
+	"APP_IPHONE_DUO":                 iphoneDuoDimensions,
 	"APP_IPHONE_69":                  iphone69Dimensions,
 	"APP_IPHONE_67":                  iphone67Dimensions,
 	"APP_IPHONE_61":                  iphone61Dimensions,

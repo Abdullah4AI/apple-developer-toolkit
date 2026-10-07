@@ -83,7 +83,7 @@ Examples:
   asc subscriptions pricing derive --source-subscription-id "MONTHLY_ID" --target-subscription-id "YEARLY_ID" --multiplier "10" --round exact --dry-run
   asc subscriptions pricing derive --source-subscription-id "MONTHLY_ID" --target-subscription-id "YEARLY_ID" --multiplier "10" --territory "SWE" --dry-run
   asc subscriptions pricing derive --source-subscription-id "MONTHLY_ID" --target-subscription-id "YEARLY_ID" --multiplier "10" --round nearest --confirm
-  asc subscriptions pricing derive --source-subscription-id "MONTHLY_ID" --target-subscription-id "YEARLY_ID" --multiplier "9.6" --start-date "2026-09-01" --confirm`,
+  asc subscriptions pricing derive --source-subscription-id "MONTHLY_ID" --target-subscription-id "YEARLY_ID" --multiplier "9.6" --start-date "YYYY-MM-DD" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

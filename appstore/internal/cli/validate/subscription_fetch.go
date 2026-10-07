@@ -546,7 +546,7 @@ func fetchSubscriptionReviewScreenshot(ctx context.Context, client *asc.Client, 
 		}
 		return "", "", nil, metadataCheckStatus{}, err
 	}
-	if resp == nil {
+	if resp == nil || strings.TrimSpace(resp.Data.ID) == "" {
 		return "", "", nil, metadataCheckStatus{Verified: true}, nil
 	}
 

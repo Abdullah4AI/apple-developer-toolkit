@@ -61,6 +61,26 @@ func TestRun_UnknownChildOffersSynonymSuggestions(t *testing.T) {
 				"  asc auth --help\n",
 		},
 		{
+			name: "auth list points at the stored credential status",
+			args: []string{"auth", "list"},
+			wantStderr: "Error: unknown command `asc auth list`\n" +
+				"Try:\n" +
+				"  asc auth status\n" +
+				"  asc auth switch --name PROFILE\n" +
+				"For help:\n" +
+				"  asc auth --help\n",
+		},
+		{
+			name: "builds view maps to builds info like get and show",
+			args: []string{"builds", "view"},
+			wantStderr: "Error: unknown command `asc builds view`\n" +
+				"Try:\n" +
+				"  asc builds info --build-id BUILD_ID\n" +
+				"  asc builds list --app APP_ID\n" +
+				"For help:\n" +
+				"  asc builds --help\n",
+		},
+		{
 			name: "agreements accept points at the web session command",
 			args: []string{"agreements", "accept"},
 			wantStderr: "Error: unknown command `asc agreements accept`\n" +

@@ -72,6 +72,9 @@ Examples:
 			if err := shared.ValidateNextURL(*next); err != nil {
 				return fmt.Errorf("beta-app-localizations list: %w", err)
 			}
+			if err := shared.RejectNextFlagConflicts(fs, *next, "testflight app-localizations list", "locale"); err != nil {
+				return err
+			}
 
 			resolvedAppID := shared.ResolveAppID(*appID)
 			if resolvedAppID == "" && strings.TrimSpace(*next) == "" {

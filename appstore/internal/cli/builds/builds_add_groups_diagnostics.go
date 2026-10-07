@@ -57,9 +57,9 @@ func reportBuildBetaGroupAssignmentFailure(
 	}
 
 	return shared.WithDiagnostic(
-		shared.NewValidationReportedError(
+		shared.NewStderrReportedError(shared.NewValidationError(
 			shared.NewErrorWithCause(errors.New(message), originalErr),
-		),
+		)),
 		shared.DiagnosticStateNotReady,
 		"",
 	)

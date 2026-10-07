@@ -139,6 +139,7 @@ Examples:
 				Results:         make([]metadataKeywordsPushResultItem, 0, len(entries)),
 			}
 
+			var refused error
 			for _, entry := range entries {
 				result := metadataKeywordsPushResultItem{Locale: entry.Locale}
 				existingItem, exists := existingByLocale[strings.ToLower(entry.Locale)]
@@ -154,6 +155,7 @@ Examples:
 					if updateErr != nil {
 						result.Status = "failed"
 						result.Error = fmt.Sprintf("update locale %q keywords: %v", entry.Locale, updateErr)
+						refused = shared.KeepReadOnlyRefusal(refused, updateErr)
 						summary.Failed++
 						summary.Results = append(summary.Results, result)
 						if !continueOnErrorValue {
@@ -181,6 +183,7 @@ Examples:
 				if createErr != nil {
 					result.Status = "failed"
 					result.Error = fmt.Sprintf("create locale %q keywords: %v", entry.Locale, createErr)
+					refused = shared.KeepReadOnlyRefusal(refused, createErr)
 					summary.Failed++
 					summary.Results = append(summary.Results, result)
 					if !continueOnErrorValue {
@@ -196,12 +199,14 @@ Examples:
 				summary.Results = append(summary.Results, result)
 			}
 
+			var failureArtifactErr error
 			if summary.Failed > 0 {
 				artifactPath, artifactErr := writeMetadataKeywordsPushFailureArtifact(summary)
 				if artifactErr != nil {
-					return fmt.Errorf("metadata keywords push: write failure artifact: %w", artifactErr)
+					failureArtifactErr = fmt.Errorf("metadata keywords push: write failure artifact: %w", artifactErr)
+				} else {
+					summary.FailureArtifactPath = artifactPath
 				}
-				summary.FailureArtifactPath = artifactPath
 			}
 
 			if err := shared.PrintOutputWithRenderers(
@@ -214,8 +219,14 @@ Examples:
 				return err
 			}
 
+			if failureArtifactErr != nil {
+				if refused != nil {
+					fmt.Fprintf(os.Stderr, "Warning: %s\n", shared.SanitizeTerminal(failureArtifactErr.Error()))
+				}
+				return shared.NewErrorWithCause(failureArtifactErr, refused)
+			}
 			if summary.Failed > 0 {
-				return shared.NewReportedError(fmt.Errorf("metadata keywords push: %d locale(s) failed", summary.Failed))
+				return shared.NewReportedError(shared.NewErrorWithCause(fmt.Errorf("metadata keywords push: %d locale(s) failed", summary.Failed), refused))
 			}
 			return nil
 		},

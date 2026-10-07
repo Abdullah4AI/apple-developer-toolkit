@@ -138,10 +138,11 @@ type ExperimentTreatmentLocalizationScreenshotUploadResult struct {
 
 // CustomProductPagePreviewUploadResult represents custom product page preview upload output.
 type CustomProductPagePreviewUploadResult struct {
-	CustomProductPageLocalizationID string                  `json:"customProductPageLocalizationId"`
-	SetID                           string                  `json:"setId"`
-	PreviewType                     string                  `json:"previewType"`
-	Results                         []AssetUploadResultItem `json:"results"`
+	CustomProductPageLocalizationID string                   `json:"customProductPageLocalizationId"`
+	SetID                           string                   `json:"setId"`
+	PreviewType                     string                   `json:"previewType"`
+	Results                         []AssetUploadResultItem  `json:"results"`
+	Failures                        []AssetUploadFailureItem `json:"failures,omitempty"`
 }
 
 // AssetDeleteResult represents deletion output for assets.

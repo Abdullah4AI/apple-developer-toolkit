@@ -12,6 +12,7 @@ type buildsQuery struct {
 	version              string
 	preReleaseVersion    string
 	processingStates     []string
+	buildAudienceType    BuildAudienceType
 	preReleasePlatforms  []string
 	preReleaseVersionIDs []string
 	betaReviewStates     []string
@@ -199,6 +200,11 @@ func WithBuildsPreReleaseVersionVersion(version string) BuildsOption {
 // App Store Connect models build number as build version, so this maps to filter[version].
 func WithBuildsBuildNumber(buildNumber string) BuildsOption {
 	return WithBuildsVersion(buildNumber)
+}
+
+// WithBuildsAudienceType filters builds by their distribution audience.
+func WithBuildsAudienceType(audience BuildAudienceType) BuildsOption {
+	return func(q *buildsQuery) { q.buildAudienceType = audience }
 }
 
 // WithBuildsProcessingStates filters builds by processing state.

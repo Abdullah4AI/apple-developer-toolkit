@@ -625,7 +625,7 @@ func TestSubscriptionsReviewScreenshotCreateRejectsUnsafeExistingState(t *testin
 	}{
 		{name: "complete conflict", checksum: func(string) string { return "different" }, state: "COMPLETE", want: "different checksum", conflict: true},
 		{name: "processing checksum conflict", checksum: func(string) string { return "different" }, state: "PROCESSING", want: "different checksum", conflict: true},
-		{name: "failed delivery", checksum: func(value string) string { return value }, state: "FAILED", want: "delivery failed"},
+		{name: "failed delivery", checksum: func(value string) string { return value }, state: "FAILED", want: "run asc subscriptions review screenshots delete --screenshot-id shot-1 --confirm", conflict: true},
 		{name: "missing operations", checksum: func(string) string { return "" }, state: "", want: "no upload operations"},
 		{name: "incomplete identity mismatch", checksum: func(string) string { return "" }, state: "", ops: true, fileName: "other.png", want: "different incomplete", conflict: true},
 		{name: "forbidden read", status: http.StatusForbidden, body: `{"errors":[{"status":"403","code":"FORBIDDEN","detail":"denied"}]}`, want: "denied"},

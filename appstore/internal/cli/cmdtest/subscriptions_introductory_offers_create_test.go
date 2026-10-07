@@ -872,31 +872,22 @@ func TestSubscriptionsIntroductoryOffersCreateAllTerritoriesPartialFailureReturn
 		}
 	})
 
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	var runErr error
+	var code int
 	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{
+		code = rootcmd.Run([]string{
 			"subscriptions", "offers", "introductory", "create",
 			"--subscription-id", "8000000001",
 			"--offer-duration", "ONE_MONTH",
 			"--offer-mode", "FREE_TRIAL",
 			"--number-of-periods", "1",
 			"--all-territories",
-		}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		runErr = root.Run(context.Background())
+		}, "1.2.3")
 	})
-	if runErr == nil {
-		t.Fatal("expected error, got nil")
+	if code != rootcmd.ExitError {
+		t.Fatalf("exit code = %d, want %d", code, rootcmd.ExitError)
 	}
-	if _, ok := errors.AsType[ReportedError](runErr); !ok {
-		t.Fatalf("expected ReportedError, got %v", runErr)
-	}
-	if stderr != "" {
-		t.Fatalf("expected empty stderr, got %q", stderr)
+	if want := "Error: subscriptions introductory-offers create: 1 territory failed\n"; stderr != want {
+		t.Fatalf("stderr = %q, want %q", stderr, want)
 	}
 
 	var summary struct {

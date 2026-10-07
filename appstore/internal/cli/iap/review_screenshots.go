@@ -3,6 +3,7 @@ package iap
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -133,7 +134,9 @@ The file must be a PNG or JPEG named .png, .jpg, or .jpeg; any other file is
 rejected before anything is uploaded. The command also warns, and still
 uploads, when the size matches no documented App Store screenshot size (such
 as 1290x2796 for iPhone), the image has an alpha channel, or the image data
-does not fully decode.
+does not fully decode. App Store Connect may still reject such an image at
+delivery; if it does, delete the failed screenshot and upload a corrected file:
+  asc iap review-screenshots delete --screenshot-id "SHOT_ID" --confirm
 
 Examples:
   asc iap review-screenshots create --iap-id "IAP_ID" --file "./review.png"`,
@@ -153,7 +156,11 @@ Examples:
 
 			file, info, err := openImageFile(pathValue)
 			if err != nil {
-				return fmt.Errorf("iap review-screenshots create: %w", err)
+				err = fmt.Errorf("iap review-screenshots create: %w", err)
+				if errors.Is(err, os.ErrNotExist) {
+					return shared.WithDiagnostic(shared.NewValidationError(err), shared.DiagnosticFileNotFound, "--file")
+				}
+				return err
 			}
 			defer file.Close()
 			snapshot, cleanupSnapshot, err := shared.SnapshotImageFile(file, info.Size())
@@ -479,19 +486,7 @@ func waitForIAPReviewScreenshotDelivery(ctx context.Context, client *asc.Client,
 				verifiedResp = resp
 				return struct{}{}, true, nil
 			case "FAILED":
-				errMsgs := make([]string, 0, len(state.Errors))
-				for _, e := range state.Errors {
-					if e.Code != "" {
-						errMsgs = append(errMsgs, e.Code)
-					} else if e.Message != "" {
-						errMsgs = append(errMsgs, e.Message)
-					}
-				}
-				detail := strings.Join(errMsgs, "; ")
-				if detail == "" {
-					detail = "unknown error"
-				}
-				return struct{}{}, false, fmt.Errorf("screenshot %s delivery failed: %s", screenshotID, detail)
+				return struct{}{}, false, shared.ReviewScreenshotDeliveryError("asc iap review-screenshots", screenshotID, state.Errors)
 			}
 		}
 		return struct{}{}, false, nil

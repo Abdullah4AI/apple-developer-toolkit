@@ -135,6 +135,9 @@ func inferSigningSettings(project *structuredVersionProject, opts SigningPlanOpt
 			continue
 		}
 		bundleID, bundleErr := signingBundleID(project, scope)
+		if value, found := signingManifestString(overrides, scope.target, scope.name, "PRODUCT_BUNDLE_IDENTIFIER"); found && value != "" {
+			bundleID, bundleErr = value, nil
+		}
 		if bundleErr != nil || bundleID == "" {
 			if covered[scope.target+"\x00"+scope.name] {
 				settingsOnly = append(settingsOnly, signingProfileAssignment{target: scope.target, configuration: scope.name})
@@ -149,8 +152,36 @@ func inferSigningSettings(project *structuredVersionProject, opts SigningPlanOpt
 		}
 		sdk := signingTargetSDK(project, scope)
 		platformProfiles := signingProfilesForSDK(active, sdk)
-		selected, discarded, match := selectSigningProfile(signingProfilesForMethod(platformProfiles, requestedMethod), bundleID)
+		candidates := signingProfilesForMethod(platformProfiles, requestedMethod)
+		selector, _ := signingManifestString(overrides, scope.target, scope.name, "PROVISIONING_PROFILE_SPECIFIER")
+		if selector == "" {
+			selector, _ = signingManifestString(overrides, scope.target, scope.name, "PROVISIONING_PROFILE")
+		}
+		style, _ := signingManifestString(overrides, scope.target, scope.name, "CODE_SIGN_STYLE")
+		knownOverride := selector != "" && !strings.EqualFold(style, "Automatic") && len(signingProfilesNamed(profiles, selector)) > 0
+		if knownOverride {
+			// Membership is checked against every supplied profile, before
+			// eligibility filtering. An expired or incompatible supplied
+			// override must not fall back to an unknown external profile.
+			candidates = signingProfilesNamed(candidates, selector)
+		}
+		if !strings.EqualFold(style, "Automatic") && (knownOverride || selector == "") {
+			if team, found := signingManifestString(overrides, scope.target, scope.name, "DEVELOPMENT_TEAM"); found {
+				filtered := make([]signingProfile, 0, len(candidates))
+				for _, profile := range candidates {
+					if strings.EqualFold(profile.teamID, team) {
+						filtered = append(filtered, profile)
+					}
+				}
+				candidates = filtered
+			}
+		}
+		selected, discarded, match := selectSigningProfile(candidates, bundleID)
 		if selected == nil {
+			if knownOverride {
+				blockers = append(blockers, fmt.Sprintf("supplied provisioning profile %s is not eligible for %s/%s bundle ID %s; check its expiration, certificate, platform, team, and export method", selector, scope.target, scope.name, bundleID))
+				continue
+			}
 			if covered[scope.target+"\x00"+scope.name] {
 				settingsOnly = append(settingsOnly, signingProfileAssignment{target: scope.target, configuration: scope.name, bundleID: bundleID})
 				continue
@@ -167,7 +198,7 @@ func inferSigningSettings(project *structuredVersionProject, opts SigningPlanOpt
 			blockers = append(blockers, fmt.Sprintf("unmatched signing target %s/%s bundle ID %s%s", scope.target, scope.name, bundleID, detail))
 			continue
 		}
-		if len(discarded) > 0 {
+		if len(discarded) > 0 && !knownOverride {
 			names := make([]string, 0, len(discarded))
 			for _, profile := range discarded {
 				names = append(names, profile.name)
@@ -222,7 +253,8 @@ func inferSigningSettings(project *structuredVersionProject, opts SigningPlanOpt
 			blockers = append(blockers, methodBlocker)
 		}
 	}
-	exportOptions, teams := signingExportOptions(method, assigned, settingsOnly, manifest)
+	exportOptions, teams, exportBlockers := signingExportOptions(method, assigned, settingsOnly, manifest)
+	blockers = append(blockers, exportBlockers...)
 	if len(teams) > 1 {
 		blockers = append(blockers, "selected profiles use more than one development team")
 	}
@@ -255,6 +287,18 @@ func partitionExpiredSigningProfiles(profiles []signingProfile, now time.Time) (
 		active = append(active, profile)
 	}
 	return active, expired
+}
+
+// signingProfilesNamed matches an explicit profile name or UUID without
+// deciding whether the profile is eligible for a target.
+func signingProfilesNamed(profiles []signingProfile, selector string) []signingProfile {
+	matched := make([]signingProfile, 0)
+	for _, profile := range profiles {
+		if profile.name == selector || strings.EqualFold(profile.uuid, selector) {
+			matched = append(matched, profile)
+		}
+	}
+	return matched
 }
 
 func signingProfilesForMethod(profiles []signingProfile, method string) []signingProfile {
@@ -538,6 +582,14 @@ func overlaySigningManifest(inferred, overrides *signingSettingsManifest) []stri
 				continue
 			}
 			existing := inferred.Targets[position].Configurations[configPosition].Settings
+			var profileUUID string
+			if value, found := configuration.Settings["PROVISIONING_PROFILE"]; found && json.Unmarshal(value, &profileUUID) == nil && strings.TrimSpace(profileUUID) != "" {
+				if _, explicit := configuration.Settings["PROVISIONING_PROFILE_SPECIFIER"]; !explicit {
+					// A legacy UUID override replaces the inferred name; retaining
+					// both would make Xcode and export options prefer the name.
+					existing["PROVISIONING_PROFILE_SPECIFIER"] = json.RawMessage("null")
+				}
+			}
 			for key, value := range configuration.Settings {
 				if _, present := existing[key]; present && string(existing[key]) != string(value) {
 					warnings = append(warnings, fmt.Sprintf("settings file overrides inferred %s for %s/%s", key, name, configName))
@@ -621,8 +673,10 @@ func inferSigningExportMethod(assigned []signingProfileAssignment) (string, stri
 // any --settings-file override, so the plist names the same bundle ID,
 // profile, and team that the plan writes into the project. It also returns
 // the distinct development teams those settings use.
-func signingExportOptions(method string, assigned, settingsOnly []signingProfileAssignment, manifest *signingSettingsManifest) (*SigningPlanExportOptions, []string) {
+func signingExportOptions(method string, assigned, settingsOnly []signingProfileAssignment, manifest *signingSettingsManifest) (*SigningPlanExportOptions, []string, []string) {
 	profiles := make(map[string]string)
+	profileIdentities := make(map[string]string)
+	conflicts := make(map[string]bool)
 	teamSet := make(map[string]bool)
 	items := make([]signingProfileAssignment, 0, len(assigned)+len(settingsOnly))
 	items = append(items, assigned...)
@@ -655,7 +709,15 @@ func signingExportOptions(method string, assigned, settingsOnly []signingProfile
 			team = value
 		}
 		if name != "" && bundleID != "" {
+			identity := "external:" + name
+			if item.profile != nil && (name == item.profile.name || strings.EqualFold(name, item.profile.uuid)) {
+				identity = "supplied:" + strings.ToLower(item.profile.uuid)
+			}
+			if previous, found := profileIdentities[bundleID]; found && previous != identity {
+				conflicts[bundleID] = true
+			}
 			profiles[bundleID] = name
+			profileIdentities[bundleID] = identity
 		}
 		if team != "" {
 			teamSet[team] = true
@@ -666,10 +728,18 @@ func signingExportOptions(method string, assigned, settingsOnly []signingProfile
 		teams = append(teams, team)
 	}
 	sort.Strings(teams)
+	if len(conflicts) > 0 {
+		blockers := make([]string, 0, len(conflicts))
+		for bundleID := range conflicts {
+			blockers = append(blockers, fmt.Sprintf("bundle ID %s maps to more than one provisioning profile; pass --configuration to select one configuration", bundleID))
+		}
+		sort.Strings(blockers)
+		return nil, teams, blockers
+	}
 	// Export options are manual-signing mappings; with no manually signed
 	// target left (all automatic, or none selected) there is nothing to map.
 	if method == "" || len(profiles) == 0 {
-		return nil, teams
+		return nil, teams, nil
 	}
 	options := &SigningPlanExportOptions{
 		Method:               method,
@@ -679,7 +749,7 @@ func signingExportOptions(method string, assigned, settingsOnly []signingProfile
 	if len(teams) > 0 {
 		options.TeamID = teams[0]
 	}
-	return options, teams
+	return options, teams, nil
 }
 
 // signingManifestString returns a string setting from the final manifest. A
@@ -762,7 +832,8 @@ func parseSigningProfile(path string) (signingProfile, error) {
 		Name                        string         `plist:"Name"`
 		TeamIdentifier              []string       `plist:"TeamIdentifier"`
 		ApplicationIdentifierPrefix []string       `plist:"ApplicationIdentifierPrefix"`
-		ExpirationDate              time.Time      `plist:"ExpirationDate"`
+		ExpirationDate              any            `plist:"ExpirationDate"`
+		CreationDate                any            `plist:"CreationDate"`
 		Entitlements                map[string]any `plist:"Entitlements"`
 		DeveloperCertificates       [][]byte       `plist:"DeveloperCertificates"`
 		ProvisionsAllDevices        bool           `plist:"ProvisionsAllDevices"`
@@ -771,6 +842,22 @@ func parseSigningProfile(path string) (signingProfile, error) {
 	}
 	if _, err := plist.Unmarshal(signed.Content, &payload); err != nil {
 		return signingProfile{}, fmt.Errorf("decode profile %s: %w", path, err)
+	}
+	expiration, validExpiration := payload.ExpirationDate.(time.Time)
+	if !validExpiration || expiration.IsZero() {
+		if payload.ExpirationDate == nil {
+			return signingProfile{}, fmt.Errorf("profile %s is missing expiration date", path)
+		}
+		return signingProfile{}, fmt.Errorf("profile %s has invalid expiration date", path)
+	}
+	if payload.CreationDate != nil {
+		creation, validCreation := payload.CreationDate.(time.Time)
+		if !validCreation {
+			return signingProfile{}, fmt.Errorf("profile %s has invalid creation date", path)
+		}
+		if !creation.IsZero() && creation.After(signingProfileNow()) {
+			return signingProfile{}, fmt.Errorf("profile %s creation date is in the future", path)
+		}
 	}
 	teamID := firstSigningProfileString(payload.TeamIdentifier)
 	prefix := firstSigningProfileString(payload.ApplicationIdentifierPrefix)
@@ -804,7 +891,7 @@ func parseSigningProfile(path string) (signingProfile, error) {
 		teamID:      strings.ToUpper(teamID),
 		pattern:     pattern,
 		wildcard:    wildcard,
-		expires:     earliestSigningExpiry(payload.ExpirationDate, certExpires),
+		expires:     earliestSigningExpiry(expiration, certExpires),
 		noValidCert: !certValid,
 		identity:    identity,
 		certSHA256:  certSHA,

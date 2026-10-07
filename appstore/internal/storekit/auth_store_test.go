@@ -336,6 +336,12 @@ func TestRemoveAllCredentialsClearsLocalAndGlobalConfigs(t *testing.T) {
 		t.Fatalf("SaveAt(local) error = %v", err)
 	}
 	t.Chdir(projectDir)
+	original := openStoreKitKeyring
+	openStoreKitKeyring = func() (keyring.Keyring, error) {
+		t.Fatal("RemoveAllCredentials opened the keychain despite ASC_STOREKIT_BYPASS_KEYCHAIN")
+		return nil, nil
+	}
+	t.Cleanup(func() { openStoreKitKeyring = original })
 
 	if err := RemoveAllCredentials(); err != nil {
 		t.Fatalf("RemoveAllCredentials() error = %v", err)

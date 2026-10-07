@@ -762,8 +762,8 @@ func TestRunReviewsRespondBatchPartialFailureReturnsExitError(t *testing.T) {
 		}
 	})
 
-	if stderr != "" {
-		t.Fatalf("expected empty stderr, got %q", stderr)
+	if want := "Error: reviews respond-batch: 1 review(s) failed\n"; stderr != want {
+		t.Fatalf("stderr = %q, want %q", stderr, want)
 	}
 	payload := decodeReviewBatchTestOutput(t, stdout)
 	if payload.Summary.Created != 1 || payload.Summary.Failed != 1 {

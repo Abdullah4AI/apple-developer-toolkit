@@ -102,6 +102,7 @@ Examples:
 			}
 			seenInput := make(map[string]int, len(records))
 
+			var refused error
 			for _, record := range records {
 				normalizedUDID := normalizeDeviceUDIDForComparison(record.UDID)
 				result := asc.DeviceBatchRegistrationItem{
@@ -150,6 +151,7 @@ Examples:
 				if createErr != nil {
 					result.Status = "failed"
 					result.Error = createErr.Error()
+					refused = shared.KeepReadOnlyRefusal(refused, createErr)
 					summary.Failed++
 					summary.Results = append(summary.Results, result)
 					if !*continueOnError || ctx.Err() != nil {
@@ -169,7 +171,7 @@ Examples:
 				return err
 			}
 			if summary.Failed > 0 {
-				return shared.NewReportedError(fmt.Errorf("devices register-batch: %d registration(s) failed", summary.Failed))
+				return shared.NewReportedError(shared.NewErrorWithCause(fmt.Errorf("devices register-batch: %d registration(s) failed", summary.Failed), refused))
 			}
 			return nil
 		},

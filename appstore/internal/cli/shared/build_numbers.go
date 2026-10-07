@@ -22,6 +22,7 @@ type LatestBuildSelectionOptions struct {
 	Platform              string
 	ProcessingStateValues []string
 	ExcludeExpired        bool
+	BuildAudienceType     asc.BuildAudienceType
 }
 
 type latestBuildSelectionResult struct {
@@ -228,6 +229,9 @@ func resolveLatestBuildSelection(ctx context.Context, client *asc.Client, opts L
 		if len(opts.ProcessingStateValues) > 0 {
 			buildOpts = append(buildOpts, asc.WithBuildsProcessingStates(opts.ProcessingStateValues))
 		}
+		if opts.BuildAudienceType != "" {
+			buildOpts = append(buildOpts, asc.WithBuildsAudienceType(opts.BuildAudienceType))
+		}
 		if opts.ExcludeExpired {
 			buildOpts = append(buildOpts, asc.WithBuildsExpired(false))
 		}
@@ -247,6 +251,9 @@ func resolveLatestBuildSelection(ctx context.Context, client *asc.Client, opts L
 		}
 		if len(opts.ProcessingStateValues) > 0 {
 			buildOpts = append(buildOpts, asc.WithBuildsProcessingStates(opts.ProcessingStateValues))
+		}
+		if opts.BuildAudienceType != "" {
+			buildOpts = append(buildOpts, asc.WithBuildsAudienceType(opts.BuildAudienceType))
 		}
 		if opts.ExcludeExpired {
 			buildOpts = append(buildOpts, asc.WithBuildsExpired(false))
@@ -278,6 +285,9 @@ func resolveLatestBuildSelection(ctx context.Context, client *asc.Client, opts L
 			}
 			if len(opts.ProcessingStateValues) > 0 {
 				buildOpts = append(buildOpts, asc.WithBuildsProcessingStates(opts.ProcessingStateValues))
+			}
+			if opts.BuildAudienceType != "" {
+				buildOpts = append(buildOpts, asc.WithBuildsAudienceType(opts.BuildAudienceType))
 			}
 			if opts.ExcludeExpired {
 				buildOpts = append(buildOpts, asc.WithBuildsExpired(false))

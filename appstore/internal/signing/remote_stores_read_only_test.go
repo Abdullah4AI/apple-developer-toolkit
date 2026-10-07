@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"sync/atomic"
 	"testing"
 
@@ -99,5 +100,31 @@ func TestRemoteStoresReadOnlyAllowsFetchButRefusesPublish(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+func TestGitStoreReadOnlyRefusesPushBeforeCommitting(t *testing.T) {
+	environment := standaloneTestGitEnvironment(t)
+	remoteDir := filepath.Join(t.TempDir(), "signing.git")
+	runTestGitWithEnvironment(t, environment, "init", "--bare", "--initial-branch=main", remoteDir)
+	store := &GitStore{RepoURL: remoteDir, LocalDir: filepath.Join(t.TempDir(), "clone")}
+	if err := store.Clone(context.Background(), true); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Cleanup() })
+	if err := store.WriteEncryptedFile("certs/distribution/serial.cer", []byte("certificate"), "password"); err != nil {
+		t.Fatal(err)
+	}
+
+	enableRemoteStoreReadOnly(t, "env")
+	err := store.CommitAndPush(context.Background(), "Update signing assets")
+	if !errors.Is(err, readonly.ErrRefused) {
+		t.Fatalf("CommitAndPush error = %v, want readonly.ErrRefused", err)
+	}
+	if refs := runTestGitOutput(t, environment, remoteDir, "for-each-ref"); refs != "" {
+		t.Fatalf("push reached the remote in read-only mode: %s", refs)
+	}
+	if commits := runTestGitOutput(t, environment, store.LocalDir, "rev-list", "--all"); commits != "" {
+		t.Fatalf("read-only mode left a local commit: %s", commits)
 	}
 }

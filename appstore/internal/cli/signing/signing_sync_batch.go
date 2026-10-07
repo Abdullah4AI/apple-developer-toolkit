@@ -179,7 +179,7 @@ func runSigningSyncBatch(ctx context.Context, client *asc.Client, options signin
 		unchanged := make([]signingSyncBatchTarget, 0, len(bundleIDs))
 		for _, bundleID := range bundleIDs {
 			requestCtx, cancelRequest := contextWithTimeout(ctx)
-			bundleIDResponse, err := findBundleID(requestCtx, client, bundleID)
+			bundleIDResponse, err := shared.FindBundleID(requestCtx, client, bundleID)
 			cancelRequest()
 			if err != nil {
 				return partial(fmt.Errorf("resolve bundle ID %s: %w", bundleID, err), targets)
@@ -240,7 +240,7 @@ func runSigningSyncBatch(ctx context.Context, client *asc.Client, options signin
 	}
 	for _, bundleID := range bundleIDs {
 		requestCtx, cancelRequest := contextWithTimeout(ctx)
-		bundleIDResponse, err := findBundleID(requestCtx, client, bundleID)
+		bundleIDResponse, err := shared.FindBundleID(requestCtx, client, bundleID)
 		if err != nil {
 			cancelRequest()
 			return partial(

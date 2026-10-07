@@ -48,10 +48,11 @@ type statusApp struct {
 }
 
 type statusSummary struct {
-	Health     string   `json:"health"`
-	NextAction string   `json:"nextAction"`
-	Blockers   []string `json:"blockers"`
-	Platform   string   `json:"platform,omitempty"`
+	Health       string                  `json:"health"`
+	NextAction   string                  `json:"nextAction"`
+	NextCommands []asc.StatusNextCommand `json:"nextCommands"`
+	Blockers     []string                `json:"blockers"`
+	Platform     string                  `json:"platform,omitempty"`
 }
 
 type buildsSection struct {
@@ -173,6 +174,8 @@ func StatusCommand() *ffcli.Command {
 	watch := fs.Bool("watch", false, "Poll and emit snapshots when status changes")
 	pollInterval := fs.Duration("poll-interval", 30*time.Second, "Polling interval for --watch")
 	maxPolls := fs.Int("max-polls", 0, "Maximum polls for --watch (0 = unlimited)")
+	until := fs.String("until", "", "Wait until a condition is reached, then exit (implies --watch): "+strings.Join(untilConditions, ", "))
+	timeout := fs.Duration("timeout", 0, "Maximum time to wait for --until (0 = no limit)")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
@@ -191,7 +194,28 @@ Examples:
   asc status --app "123456789" --platform MAC_OS
   asc status --app "123456789" --include builds,testflight,submission
   asc status --app "123456789" --watch --poll-interval 15s
-  asc status --app "123456789" --output table`,
+  asc status --app "123456789" --until review-done --timeout 2h
+  asc status --app "123456789" --output table
+
+--until polls like --watch, then prints a final result after the snapshots
+({"until","reached","outcome","state","polls"}) and exits:
+  review-done       latest App Store version is approved (ACCEPTED, PENDING_*_RELEASE,
+                    PROCESSING_FOR_DISTRIBUTION, READY_FOR_DISTRIBUTION) -> exit 0,
+                    or REJECTED, METADATA_REJECTED, INVALID_BINARY, DEVELOPER_REJECTED -> exit 1
+  ready-for-sale    latest App Store version is READY_FOR_DISTRIBUTION -> exit 0,
+                    or rejected as above -> exit 1
+  processed         latest build processingState is VALID -> exit 0, FAILED or INVALID -> exit 1
+  testflight-ready  latest build internal TestFlight state is READY_FOR_BETA_TESTING or
+                    IN_BETA_TESTING -> exit 0, PROCESSING_EXCEPTION,
+                    MISSING_EXPORT_COMPLIANCE, or EXPIRED -> exit 1
+  change            first snapshot that differs from the first one -> exit 0
+Conditions are checked on every snapshot, including the first. When --max-polls,
+--timeout, or an interrupt ends the wait first, the result reports "pending"
+and the command exits 7.
+
+summary.nextCommands lists runnable asc commands for common states, with a
+reason and whether each command mutates App Store Connect. Read-only mode
+omits mutating commands.`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -216,7 +240,19 @@ Examples:
 			if *maxPolls < 0 {
 				return shared.UsageError("--max-polls must be greater than or equal to 0")
 			}
-			if *maxPolls > 0 && !*watch {
+			if *until != "" {
+				if err := validateUntil(*until, includes); err != nil {
+					return shared.UsageError(err.Error())
+				}
+			}
+			if *timeout < 0 {
+				return shared.UsageError("--timeout must be greater than or equal to 0")
+			}
+			if *timeout > 0 && *until == "" {
+				return shared.UsageError("--timeout requires --until")
+			}
+			watching := *watch || *until != ""
+			if *maxPolls > 0 && !watching {
 				return shared.UsageError("--max-polls requires --watch")
 			}
 			normalizedPlatform := ""
@@ -239,8 +275,13 @@ Examples:
 				return fmt.Errorf("status: %w", err)
 			}
 
-			if *watch {
-				return watchDashboard(ctx, client, resolvedAppID, normalizedPlatform, includes, *output.Output, *output.Pretty, *pollInterval, *maxPolls)
+			if watching {
+				if *timeout > 0 {
+					var cancelWait context.CancelFunc
+					ctx, cancelWait = context.WithTimeout(ctx, *timeout)
+					defer cancelWait()
+				}
+				return watchDashboard(ctx, client, resolvedAppID, normalizedPlatform, includes, *output.Output, *output.Pretty, *pollInterval, *maxPolls, *until)
 			}
 
 			requestCtx, cancel := shared.ContextWithTimeout(ctx)
@@ -262,8 +303,16 @@ Examples:
 	}
 }
 
-func watchDashboard(ctx context.Context, client *asc.Client, appID string, platform string, includes includeSet, output string, pretty bool, pollInterval time.Duration, maxPolls int) error {
+func watchDashboard(ctx context.Context, client *asc.Client, appID string, platform string, includes includeSet, output string, pretty bool, pollInterval time.Duration, maxPolls int, until string) error {
 	seen := ""
+	polls := 0
+	var check untilCheck
+	finish := func() error {
+		if until == "" {
+			return nil
+		}
+		return finishUntil(until, check, polls, output, pretty)
+	}
 
 	for poll := 1; maxPolls == 0 || poll <= maxPolls; poll++ {
 		requestCtx, cancel := shared.ContextWithTimeout(ctx)
@@ -271,34 +320,40 @@ func watchDashboard(ctx context.Context, client *asc.Client, appID string, platf
 		cancel()
 		if err != nil {
 			if watchContextDone(ctx) {
-				return nil
+				return finish()
 			}
 			return fmt.Errorf("status: %w", err)
 		}
+		polls = poll
 
 		current, err := buildDashboardSnapshotSignature(resp)
 		if err != nil {
 			return fmt.Errorf("status: encode watch snapshot: %w", err)
 		}
-		if poll == 1 || current != seen {
+		changed := poll > 1 && current != seen
+		if poll == 1 || changed {
 			if err := printWatchSnapshot(resp, output, pretty, poll > 1); err != nil {
 				return err
 			}
 			seen = current
 		}
 
+		if check = evaluateUntil(until, resp, changed); check.outcome != "" {
+			return finish()
+		}
+
 		if maxPolls > 0 && poll >= maxPolls {
-			return nil
+			return finish()
 		}
 		if err := waitForNextPoll(ctx, pollInterval); err != nil {
 			if watchContextDone(ctx) {
-				return nil
+				return finish()
 			}
 			return err
 		}
 	}
 
-	return nil
+	return finish()
 }
 
 func watchContextDone(ctx context.Context) bool {
@@ -490,6 +545,7 @@ func collectDashboard(ctx context.Context, client *asc.Client, appID string, pla
 		return nil, err
 	}
 	resp.Summary = buildStatusSummary(resp)
+	resp.Summary.NextCommands = resolveNextCommands(resp, appID, platform)
 	resp.Summary.Platform = platform
 
 	return resp, nil
@@ -532,10 +588,14 @@ func runTasks(tasks []sectionTask, limit int) error {
 }
 
 func fillBuildsAndTestFlight(ctx context.Context, client *asc.Client, appID string, platform string, includes includeSet, resp *dashboardResponse) error {
+	buildIncludes := []string{"preReleaseVersion"}
+	if includes.testflight {
+		buildIncludes = append(buildIncludes, "buildBetaDetail")
+	}
 	buildOpts := []asc.BuildsOption{
 		asc.WithBuildsSort("-uploadedDate"),
 		asc.WithBuildsLimit(50),
-		asc.WithBuildsInclude([]string{"preReleaseVersion"}),
+		asc.WithBuildsInclude(buildIncludes),
 	}
 	if platform != "" {
 		buildOpts = append(buildOpts, asc.WithBuildsPreReleaseVersionPlatforms([]string{platform}))
@@ -600,21 +660,7 @@ func fillBuildsAndTestFlight(ctx context.Context, client *asc.Client, appID stri
 		return nil
 	}
 
-	buildIDs := make([]string, 0, len(buildsResp.Data))
-	for _, build := range buildsResp.Data {
-		buildIDs = append(buildIDs, build.ID)
-	}
-
-	betaDetails, err := client.GetBuildBetaDetails(
-		ctx,
-		asc.WithBuildBetaDetailsBuildIDs(buildIDs),
-		asc.WithBuildBetaDetailsIncludeBuild(),
-		asc.WithBuildBetaDetailsLimit(200),
-	)
-	if err != nil {
-		return err
-	}
-	betaStatesByBuild := buildBetaStatesByBuildID(buildIDs, betaDetails)
+	betaStatesByBuild := buildBetaStatesByBuildID(buildsResp)
 
 	// The latest build carries the internal state operators need: it can still be
 	// PROCESSING for internal testers while processingState already reads VALID.
@@ -796,26 +842,28 @@ func fetchBetaReviewSubmissionsForStatus(
 	return result, nil
 }
 
-func buildBetaStatesByBuildID(buildIDs []string, betaDetails *asc.BuildBetaDetailsResponse) map[string]betaBuildStates {
-	// BuildBetaDetails can omit relationships.build in some real API responses.
-	// Use relationship mapping when available, otherwise fall back to positional mapping.
-	statesByBuild := make(map[string]betaBuildStates, len(buildIDs))
-	if betaDetails != nil {
-		usedRelationshipMapping := false
-		for _, detail := range betaDetails.Data {
-			buildID, ok := optionalRelationshipResourceID(detail.Relationships, "build")
-			if !ok {
-				continue
-			}
-			usedRelationshipMapping = true
-			statesByBuild[buildID] = betaBuildStatesFromAttributes(detail.Attributes)
-		}
+func buildBetaStatesByBuildID(builds *asc.BuildsResponse) map[string]betaBuildStates {
+	statesByBuild := make(map[string]betaBuildStates, len(builds.Data))
+	if len(builds.Included) == 0 {
+		return statesByBuild
+	}
 
-		// Without relationships, mapping by position is ambiguous for multiple
-		// builds because the API does not guarantee response order for filters.
-		// Keep a single-item fallback where positional mapping is unambiguous.
-		if !usedRelationshipMapping && len(buildIDs) == 1 && len(betaDetails.Data) == 1 {
-			statesByBuild[buildIDs[0]] = betaBuildStatesFromAttributes(betaDetails.Data[0].Attributes)
+	var included []asc.Resource[asc.BuildBetaDetailAttributes]
+	if err := json.Unmarshal(builds.Included, &included); err != nil {
+		return statesByBuild
+	}
+	statesByDetail := make(map[string]betaBuildStates, len(included))
+	for _, resource := range included {
+		if resource.Type == asc.ResourceTypeBuildBetaDetails {
+			statesByDetail[resource.ID] = betaBuildStatesFromAttributes(resource.Attributes)
+		}
+	}
+
+	for _, build := range builds.Data {
+		if detailID, ok := optionalRelationshipResourceID(build.Relationships, "buildBetaDetail"); ok {
+			if states, found := statesByDetail[detailID]; found {
+				statesByBuild[build.ID] = states
+			}
 		}
 	}
 
@@ -1480,6 +1528,14 @@ func renderDashboard(resp *dashboardResponse, markdown bool) {
 			attentionRows = append(attentionRows, []string{fmt.Sprintf("[x] blocker_%d", i+1), blocker})
 		}
 		shared.RenderSection("Needs Attention", []string{"item", "detail"}, attentionRows, markdown)
+	}
+
+	if len(summary.NextCommands) > 0 {
+		commandRows := make([][]string, 0, len(summary.NextCommands))
+		for _, next := range summary.NextCommands {
+			commandRows = append(commandRows, []string{next.Command, fmt.Sprintf("%t", next.Mutates), next.Reason})
+		}
+		shared.RenderSection("Next Commands", []string{"command", "mutates", "reason"}, commandRows, markdown)
 	}
 
 	if resp.App != nil {

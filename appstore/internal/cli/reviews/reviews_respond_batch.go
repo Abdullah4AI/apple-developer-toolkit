@@ -98,6 +98,8 @@ type reviewBatchResult struct {
 	DryRun  bool                      `json:"dryRun"`
 	Summary reviewBatchSummary        `json:"summary"`
 	Results []reviewBatchReviewResult `json:"results"`
+
+	refused error
 }
 
 type reviewBatchSummary struct {
@@ -220,7 +222,7 @@ Examples:
 				return err
 			}
 			if result.Summary.Failed > 0 {
-				return shared.NewReportedError(fmt.Errorf("reviews respond-batch: %d review(s) failed", result.Summary.Failed))
+				return shared.NewReportedError(shared.NewErrorWithCause(fmt.Errorf("reviews respond-batch: %d review(s) failed", result.Summary.Failed), result.refused))
 			}
 			return nil
 		},
@@ -736,6 +738,7 @@ func executeReviewsRespondBatch(ctx context.Context, client *asc.Client, appID s
 
 		created, err := client.CreateCustomerReviewResponse(ctx, target.ReviewID, target.Response)
 		if err != nil {
+			result.refused = shared.KeepReadOnlyRefusal(result.refused, err)
 			result.append(reviewBatchReviewResult{
 				ReviewID:           target.ReviewID,
 				Status:             reviewBatchStatusFailed,

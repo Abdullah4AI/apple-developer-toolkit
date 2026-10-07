@@ -39,6 +39,7 @@ Examples:
 			AppEventLocalizationsCreateCommand(),
 			AppEventLocalizationsUpdateCommand(),
 			AppEventLocalizationsDeleteCommand(),
+			shared.CreativePlacementsCommand("appEventLocalizations", "app-events localizations", "an in-app event localization"),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp

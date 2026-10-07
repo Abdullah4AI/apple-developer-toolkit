@@ -187,7 +187,7 @@ func classifySubscriptionReviewScreenshot(resp *asc.SubscriptionAppStoreReviewSc
 	attrs := resp.Data.Attributes
 	state := subscriptionReviewScreenshotDeliveryState(resp)
 	if state == "FAILED" {
-		return "", subscriptionReviewScreenshotDeliveryError(resp)
+		return "", shared.WithDiagnostic(newSubscriptionReviewScreenshotConflictError("existing %s", subscriptionReviewScreenshotDeliveryError(resp)), shared.DiagnosticResourceConflict, "")
 	}
 
 	remoteChecksum := strings.TrimSpace(attrs.SourceFileChecksum)
@@ -221,25 +221,11 @@ func subscriptionReviewScreenshotDeliveryState(resp *asc.SubscriptionAppStoreRev
 }
 
 func subscriptionReviewScreenshotDeliveryError(resp *asc.SubscriptionAppStoreReviewScreenshotResponse) error {
-	id := ""
-	var details []string
-	if resp != nil {
-		id = strings.TrimSpace(resp.Data.ID)
-		if state := resp.Data.Attributes.AssetDeliveryState; state != nil {
-			for _, item := range state.Errors {
-				if strings.TrimSpace(item.Code) != "" {
-					details = append(details, strings.TrimSpace(item.Code))
-				} else if strings.TrimSpace(item.Message) != "" {
-					details = append(details, strings.TrimSpace(item.Message))
-				}
-			}
-		}
+	var details []asc.StateDetail
+	if state := resp.Data.Attributes.AssetDeliveryState; state != nil {
+		details = state.Errors
 	}
-	detail := strings.Join(details, "; ")
-	if detail == "" {
-		detail = "unknown error"
-	}
-	return fmt.Errorf("screenshot %s delivery failed: %s", id, detail)
+	return shared.ReviewScreenshotDeliveryError("asc subscriptions review screenshots", strings.TrimSpace(resp.Data.ID), details)
 }
 
 func pollSubscriptionReviewScreenshot(ctx context.Context, client *asc.Client, screenshotID, expectedChecksum string) (*asc.SubscriptionAppStoreReviewScreenshotResponse, error) {

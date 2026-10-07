@@ -188,7 +188,10 @@ func TestScreenshotDisplayTypesMatchOpenAPI(t *testing.T) {
 	}
 
 	extrasInCode := differenceStrings(codeTypes, specTypes)
-	allowedExtras := []string{"APP_IPHONE_69", "IMESSAGE_APP_IPHONE_69"}
+	// APP_IPHONE_DUO was accepted by the live public API on 2026-10-06.
+	// See docs/design/iphone-duo-screenshots.md; the published snapshot lags.
+	runtimeVerifiedTypes := []string{"APP_IPHONE_DUO"}
+	allowedExtras := append([]string{"APP_IPHONE_69", "IMESSAGE_APP_IPHONE_69"}, runtimeVerifiedTypes...)
 	unexpectedExtras := differenceStrings(extrasInCode, allowedExtras)
 	if len(unexpectedExtras) > 0 {
 		t.Fatalf("unexpected screenshot display types not in OpenAPI: %v", unexpectedExtras)
@@ -200,6 +203,9 @@ func TestScreenshotDisplayTypesMatchOpenAPI(t *testing.T) {
 	}
 	for _, displayType := range codeTypes {
 		canonical := CanonicalScreenshotDisplayTypeForAPI(displayType)
+		if canonical == "APP_IPHONE_DUO" {
+			continue
+		}
 		if _, ok := specSet[canonical]; !ok {
 			t.Fatalf("canonical display type %q for %q is not in OpenAPI", canonical, displayType)
 		}

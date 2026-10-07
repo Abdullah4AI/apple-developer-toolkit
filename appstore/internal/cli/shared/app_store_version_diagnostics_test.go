@@ -380,3 +380,45 @@ func TestAppStoreVersionCreateConflictDiagnosticsKeepOriginalWhenListingFails(t 
 		t.Fatalf("error = %v, want original error returned unchanged", err)
 	}
 }
+
+func TestAppStoreVersionNotFoundDiagnosticsPointToOtherPlatforms(t *testing.T) {
+	const macVersions = `{"data":[` +
+		`{"type":"appStoreVersions","id":"ver-mac-2","attributes":{"versionString":"2.0","platform":"MAC_OS","appVersionState":"READY_FOR_DISTRIBUTION","createdDate":"2026-08-01T00:00:00Z"}},` +
+		`{"type":"appStoreVersions","id":"ver-mac-1","attributes":{"versionString":"1.0","platform":"MAC_OS","appVersionState":"REPLACED_WITH_NEW_VERSION","createdDate":"2026-01-01T00:00:00Z"}}` +
+		`]}`
+	tests := []struct {
+		name    string
+		version string
+		want    string
+	}{
+		{
+			name:    "version exists on another platform",
+			version: "1.0",
+			want:    `App "app-1" has no App Store versions on IOS, but version "1.0" exists on MAC_OS. Retry with --platform MAC_OS.`,
+		},
+		{
+			name:    "version exists nowhere",
+			version: "3.0",
+			want:    `App "app-1" has no App Store versions on IOS; it has versions on MAC_OS. Retry with --platform MAC_OS, or create one on IOS: asc versions create --app "app-1" --version "3.0" --platform IOS`,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			client, _ := newDiagnosticTestClient(t, func(req diagnosticRequest) (*http.Response, error) {
+				if isDiagnosticListing(req) && len(req.Query["filter[platform]"]) == 0 {
+					return diagnosticJSONResponse(http.StatusOK, macVersions)
+				}
+				return diagnosticJSONResponse(http.StatusOK, `{"data":[]}`)
+			})
+
+			_, _, err := ResolveAppStoreVersionIDAndState(context.Background(), client, "app-1", test.version, "IOS")
+			if !errors.Is(err, asc.ErrNotFound) {
+				t.Fatalf("error = %v, want asc.ErrNotFound", err)
+			}
+			want := fmt.Sprintf("app store version not found for version %q and platform \"IOS\"\n%s", test.version, test.want)
+			if err.Error() != want {
+				t.Fatalf("error =\n%s\nwant\n%s", err.Error(), want)
+			}
+		})
+	}
+}

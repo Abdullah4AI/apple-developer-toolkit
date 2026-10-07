@@ -70,9 +70,8 @@ func TestAgeRatingValidationErrors(t *testing.T) {
 		if err := cmd.FlagSet.Parse([]string{"--app-info-id", "A", "--version-id", "V"}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
-		err := cmd.Exec(context.Background(), nil)
-		if err == nil || errors.Is(err, flag.ErrHelp) {
-			t.Fatalf("expected non-ErrHelp error, got %v", err)
+		if err := cmd.Exec(context.Background(), nil); !errors.Is(err, flag.ErrHelp) {
+			t.Fatalf("expected ErrHelp, got %v", err)
 		}
 	})
 

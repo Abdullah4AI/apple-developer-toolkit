@@ -2022,6 +2022,9 @@ func TestResolveCredentials_KeychainAccessDeniedStopsFallback(t *testing.T) {
 	if !errors.Is(err, auth.ErrKeychainAccessDenied) {
 		t.Fatalf("expected ErrKeychainAccessDenied, got %v", err)
 	}
+	if !errors.Is(err, ErrMissingAuth) {
+		t.Fatalf("expected keychain denial to report missing authentication, got %v", err)
+	}
 }
 
 func TestResolveCredentials_KeychainGenericErrorStopsEnvFallback(t *testing.T) {

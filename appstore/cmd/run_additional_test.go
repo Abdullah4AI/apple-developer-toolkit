@@ -1001,8 +1001,8 @@ func TestRun_AuthStatusValidationFailuresEmitExpectedNegative(t *testing.T) {
 		}
 	})
 
-	if stderr != "" {
-		t.Fatalf("expected empty stderr, got %q", stderr)
+	if want := "Error: auth status: validation failed for 1 credential(s)\n"; stderr != want {
+		t.Fatalf("stderr = %q, want %q", stderr, want)
 	}
 	if !strings.Contains(stdout, "default (Key ID: KEY123): failed") {
 		t.Fatalf("expected validation failure output, got %q", stdout)
@@ -1031,8 +1031,8 @@ func TestRun_MetadataValidateFindingsEmitExpectedNegative(t *testing.T) {
 		}
 	})
 
-	if stderr != "" {
-		t.Fatalf("expected empty stderr, got %q", stderr)
+	if want := "Error: metadata validate: found 1 error(s)\n"; stderr != want {
+		t.Fatalf("stderr = %q, want %q", stderr, want)
 	}
 	var result struct {
 		Valid      bool `json:"valid"`
@@ -1147,8 +1147,8 @@ func TestRun_MetadataApplyMixedFailuresUseFirstCauseConsistently(t *testing.T) {
 	if exitCode != ExitHTTPInternalServer {
 		t.Fatalf("Run() exit code = %d, want %d; stdout=%s", exitCode, ExitHTTPInternalServer, stdout)
 	}
-	if stderr != "" {
-		t.Fatalf("expected empty stderr, got %q", stderr)
+	if want := "Error: metadata apply: 2 localization(s) failed\nHint: Check Apple's service health with `asc system-status --service \"App Store Connect\"`.\n"; stderr != want {
+		t.Fatalf("stderr = %q, want %q", stderr, want)
 	}
 	var result struct {
 		Failed  int `json:"failed"`
@@ -2972,7 +2972,7 @@ func TestRun_InvalidParentOutputReturnsUsageBeforeLeafExec(t *testing.T) {
 		}
 	})
 
-	if !strings.Contains(stderr, `(got "yaml")`) {
+	if !strings.Contains(stderr, "--output must be passed after the subcommand name") {
 		t.Fatalf("expected output validation error, got %q", stderr)
 	}
 	if strings.Contains(stderr, "missing authentication") {
@@ -3008,7 +3008,7 @@ func TestRun_InvalidParentPrettyReturnsUsageBeforeLeafExec(t *testing.T) {
 		}
 	})
 
-	if !strings.Contains(stderr, "--pretty is only valid with JSON output") {
+	if !strings.Contains(stderr, "--output, --pretty must be passed after the subcommand name") {
 		t.Fatalf("expected pretty/output validation error, got %q", stderr)
 	}
 	if strings.Contains(stderr, "missing authentication") {

@@ -10504,34 +10504,6 @@ func TestGetBetaAppReviewSubmission(t *testing.T) {
 	}
 }
 
-func TestGetBuildBetaDetails_WithBuildFilterAndInclude(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[{"type":"buildBetaDetails","id":"detail-1","attributes":{"autoNotifyEnabled":true}}]}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/buildBetaDetails" {
-			t.Fatalf("expected path /v1/buildBetaDetails, got %s", req.URL.Path)
-		}
-		if got := req.URL.Query().Get("include"); got != "build" {
-			t.Fatalf("expected include=build, got %q", got)
-		}
-		values := req.URL.Query()
-		if values.Get("filter[build]") != "build-1" {
-			t.Fatalf("expected filter[build]=build-1, got %q", values.Get("filter[build]"))
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetBuildBetaDetails(
-		context.Background(),
-		WithBuildBetaDetailsBuildIDs([]string{"build-1"}),
-		WithBuildBetaDetailsIncludeBuild(),
-	); err != nil {
-		t.Fatalf("GetBuildBetaDetails() error: %v", err)
-	}
-}
-
 func TestGetBuildBetaDetail(t *testing.T) {
 	response := jsonResponse(http.StatusOK, `{"data":{"type":"buildBetaDetails","id":"detail-1","attributes":{"autoNotifyEnabled":true,"internalBuildState":"PROCESSING","externalBuildState":"READY_FOR_TESTING"}}}`)
 	client := newTestClient(t, func(req *http.Request) {

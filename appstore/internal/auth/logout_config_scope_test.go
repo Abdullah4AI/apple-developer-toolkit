@@ -131,6 +131,21 @@ func TestRemoveAllCredentialsIncludeGlobalClearsOverrideAndGlobalConfigs(t *test
 	requireKeychainEmpty(t, fixture.keyring)
 }
 
+func TestRemoveAllCredentialsWithBypassKeychainLeavesKeychainUntouched(t *testing.T) {
+	fixture := newScopedLogoutFixture(t)
+	t.Setenv("ASC_BYPASS_KEYCHAIN", "1")
+
+	if err := RemoveAllCredentialsWithOptions(RemoveOptions{IncludeGlobalConfig: true}); err != nil {
+		t.Fatalf("RemoveAllCredentialsWithOptions() error: %v", err)
+	}
+
+	requireConfigKeyNames(t, fixture.overridePath)
+	requireConfigKeyNames(t, fixture.globalPath)
+	if _, err := fixture.keyring.Get(keyringKey("shared")); err != nil {
+		t.Fatalf("keychain credential removed despite ASC_BYPASS_KEYCHAIN: %v", err)
+	}
+}
+
 func TestRemoveCredentialsWithConfigPathOverrideLeavesGlobalConfigUntouched(t *testing.T) {
 	fixture := newScopedLogoutFixture(t)
 	globalBefore := readConfigBytes(t, fixture.globalPath)

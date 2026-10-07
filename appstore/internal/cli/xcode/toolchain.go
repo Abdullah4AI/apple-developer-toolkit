@@ -76,14 +76,14 @@ Examples:
 					return fmt.Errorf("xcode doctor: %w", doctorErr)
 				}
 				fmt.Fprintln(os.Stderr, "Error: xcode doctor: toolchain checks failed")
-				return shared.NewReportedError(fmt.Errorf("xcode doctor: %w", doctorErr))
+				return shared.NewStderrReportedError(fmt.Errorf("xcode doctor: %w", doctorErr))
 			}
 			if report == nil {
 				return fmt.Errorf("xcode doctor: inspector returned no report")
 			}
 			if report.Status == localxcode.ToolchainStatusFail {
 				fmt.Fprintln(os.Stderr, "Error: xcode doctor: toolchain checks failed")
-				return shared.NewReportedError(fmt.Errorf("xcode doctor: toolchain checks failed"))
+				return shared.NewStderrReportedError(fmt.Errorf("xcode doctor: toolchain checks failed"))
 			}
 			return nil
 		},

@@ -28,7 +28,7 @@ func TestPricingChecks_MissingBaseTerritoryPrice(t *testing.T) {
 	if check.Message != "app has no price set for base territory USA" {
 		t.Fatalf("unexpected message %q", check.Message)
 	}
-	wantRemediation := `Set a price (Free counts): asc pricing schedule create --app app-1 --free --base-territory "USA" --start-date "YYYY-MM-DD"`
+	wantRemediation := `Set a price (Free counts): asc pricing schedule create --app app-1 --free --base-territory "USA"`
 	if check.Remediation != wantRemediation {
 		t.Fatalf("remediation = %q, want %q", check.Remediation, wantRemediation)
 	}

@@ -73,6 +73,7 @@ var ValidScreenshotDisplayTypes = ScreenshotDisplayTypes()
 
 // Valid preview types for validation.
 var ValidPreviewTypes = []string{
+	"IPHONE_DUO",
 	"IPHONE_67",
 	"IPHONE_65",
 	"IPHONE_61",

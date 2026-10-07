@@ -634,6 +634,9 @@ func TestAssetsScreenshotsUploadAcceptsLatestIPhoneAndIPad11Dimensions(t *testin
 func writePNG(t *testing.T, path string, width, height int) {
 	t.Helper()
 	img := image.NewRGBA(image.Rect(0, 0, width, height))
+	for i := 3; i < len(img.Pix); i += 4 {
+		img.Pix[i] = 255
+	}
 	file, err := os.Create(path)
 	if err != nil {
 		t.Fatalf("create image: %v", err)

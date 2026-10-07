@@ -342,6 +342,24 @@ func TestRuntimeFailureContextCarriesStructuredDiagnostic(t *testing.T) {
 	}
 }
 
+func TestPendingWaitEmitsExpectedNegativeStateNotReady(t *testing.T) {
+	err := shared.NewPendingError("builds wait: Build is still pending after 50s")
+	eventContext := runtimeFailureContext(
+		invocationAnalysis{shape: telemetry.InvocationShapeLeaf},
+		err,
+		ExitCodeFromError(err),
+	)
+
+	event, ok := telemetry.BuildEventWithContext("asc builds wait", "1.0.0", 0, ExitPending, eventContext)
+	if !ok {
+		t.Fatal("BuildEventWithContext() returned no event")
+	}
+	if event.OutcomeKind != telemetry.OutcomeExpectedNegative ||
+		event.DiagnosticCode == nil || *event.DiagnosticCode != string(shared.DiagnosticStateNotReady) {
+		t.Fatalf("event outcome=%q diagnostic=%v, want expected_negative with state_not_ready", event.OutcomeKind, event.DiagnosticCode)
+	}
+}
+
 func TestRuntimeFailureContextKeepsExplainedConflictAsAPIConflict(t *testing.T) {
 	// Apple's 409 for a past start date on POST /v1/appPriceSchedules, captured
 	// live on 2026-09-26. The pricing command explains it and adds a
@@ -692,5 +710,23 @@ func TestParseFailureContextClassifiesUnknownChildAsOther(t *testing.T) {
 
 	if got.ErrorKind != telemetry.ErrorKindOther || got.FailureStage != telemetry.FailureStageParse {
 		t.Fatalf("parseFailureContext() = %+v, want kind=%q stage=%q", got, telemetry.ErrorKindOther, telemetry.FailureStageParse)
+	}
+}
+
+func TestRun_GroupUnknownFlagNamesSubcommandsThatAcceptIt(t *testing.T) {
+	stdout, stderr := captureCommandOutput(t, func() {
+		if code := Run([]string{"apps", "info", "--app", "123"}, "1.0.0"); code != ExitUsage {
+			t.Fatalf("Run() exit code = %d, want %d", code, ExitUsage)
+		}
+	})
+
+	if stdout != "" {
+		t.Fatalf("stdout = %q, want empty", stdout)
+	}
+	want := "Error: unknown flag `--app` for `asc apps info`\n" +
+		"Did you mean a subcommand? These accept `--app`: list, view, edit\n" +
+		"For help:\n  asc apps info --help\n"
+	if stderr != want {
+		t.Fatalf("stderr = %q, want %q", stderr, want)
 	}
 }

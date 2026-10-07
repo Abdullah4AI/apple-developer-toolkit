@@ -22,7 +22,7 @@ func TestReadOnlyModeRefusesRetentionWritesBeforeSending(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, err := NewClient(testCredentials(t), Sandbox, WithHTTPClient(server.Client()), WithBaseURL(server.URL+"/inApps/v1/messaging"))
+	client, err := NewClient(testCredentials(t), Sandbox, WithHTTPClient(server.Client()), WithBaseURL(server.URL))
 	if err != nil {
 		t.Fatalf("NewClient() error = %v", err)
 	}

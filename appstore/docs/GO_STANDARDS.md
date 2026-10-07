@@ -35,7 +35,10 @@ Follow idiomatic Go so the code is predictable to anyone who reads Go.
 - Data goes to stdout, errors to stderr
 - Keep JSON minified by default
 - If a command already prints structured output and must exit non-zero,
-  return `cmd.NewReportedError(err)` to avoid duplicate stderr logging
+  return `shared.NewReportedError(err)`; the root prints `err` once to stderr
+  as an `Error:` line
+- If the command already wrote its own error line to stderr, return
+  `shared.NewStderrReportedError(err)` instead so nothing is printed twice
 
 ## Dependencies
 

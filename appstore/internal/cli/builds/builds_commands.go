@@ -3,6 +3,7 @@ package builds
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -68,7 +69,7 @@ its platform is automatically set to MAC_OS.
 
 Examples:
   asc builds upload --app "123456789" --ipa "path/to/app.ipa"
-  asc builds upload --ipa "app.ipa" --version "1.0.0" --build-number "123"
+  asc builds upload --app "123456789" --ipa "app.ipa" --version "1.0.0" --build-number "123"
   asc builds upload --app "123456789" --ipa "app.ipa" --dry-run
   asc builds upload --app "123456789" --ipa "app.ipa" --dry-run --include-sensitive
   asc builds upload --app "123456789" --ipa "app.ipa" --test-notes "Test flow" --locale "en-US"
@@ -136,7 +137,7 @@ Examples:
 			if hasPKG {
 				// For PKG files, platform must be MAC_OS
 				if *platform != "" && strings.ToUpper(*platform) != "MAC_OS" {
-					return fmt.Errorf("builds upload: --pkg requires --platform MAC_OS (or omit --platform)")
+					return shared.UsageError("builds upload: --pkg requires --platform MAC_OS (or omit --platform)")
 				}
 				platformValue = asc.PlatformMacOS
 			} else {
@@ -153,7 +154,7 @@ Examples:
 			switch platformValue {
 			case asc.PlatformIOS, asc.PlatformMacOS, asc.PlatformTVOS, asc.PlatformVisionOS:
 			default:
-				return fmt.Errorf("builds upload: --platform must be IOS, MAC_OS, TV_OS, or VISION_OS")
+				return shared.UsageError("builds upload: --platform must be IOS, MAC_OS, TV_OS, or VISION_OS")
 			}
 			concurrencySet := false
 			fs.Visit(func(f *flag.Flag) {
@@ -163,16 +164,16 @@ Examples:
 			})
 			if *dryRun {
 				if concurrencySet {
-					return fmt.Errorf("builds upload: --concurrency is not supported with --dry-run")
+					return shared.UsageError("builds upload: --concurrency is not supported with --dry-run")
 				}
 				if *verifyChecksum {
-					return fmt.Errorf("builds upload: --checksum is not supported with --dry-run")
+					return shared.UsageError("builds upload: --checksum is not supported with --dry-run")
 				}
 				if *wait {
-					return fmt.Errorf("builds upload: --wait is not supported with --dry-run")
+					return shared.UsageError("builds upload: --wait is not supported with --dry-run")
 				}
 			} else if *concurrency < 1 {
-				return fmt.Errorf("builds upload: --concurrency must be at least 1")
+				return shared.UsageError("builds upload: --concurrency must be at least 1")
 			}
 
 			testNotesValue := strings.TrimSpace(*testNotes)
@@ -187,7 +188,7 @@ Examples:
 			}
 			if testNotesValue != "" {
 				if *dryRun {
-					return fmt.Errorf("builds upload: --test-notes is not supported with --dry-run")
+					return shared.UsageError("builds upload: --test-notes is not supported with --dry-run")
 				}
 				if err := shared.ValidateBuildLocalizationLocale(localeValue); err != nil {
 					return fmt.Errorf("builds upload: %w", err)
@@ -199,7 +200,7 @@ Examples:
 				testNotesValue = normalizedNotes
 			}
 			if (*wait || testNotesValue != "") && *pollInterval <= 0 {
-				return fmt.Errorf("builds upload: --poll-interval must be greater than 0")
+				return shared.UsageError("builds upload: --poll-interval must be greater than 0")
 			}
 
 			versionValue := strings.TrimSpace(*version)
@@ -208,11 +209,11 @@ Examples:
 			if hasIPA {
 				ipaInfo, extractErr := shared.ExtractBundleInfoFromIPAFile(artifactFile)
 				if extractErr != nil {
-					return fmt.Errorf("builds upload: inspect IPA metadata: %w", extractErr)
+					return invalidIPAFormat(fmt.Errorf("builds upload: inspect IPA metadata: %w", extractErr))
 				}
 				ipaBundleID = strings.TrimSpace(ipaInfo.BundleID)
 				if ipaBundleID == "" {
-					return fmt.Errorf("builds upload: IPA top-level app Info.plist is missing CFBundleIdentifier")
+					return invalidIPAFormat(errors.New("builds upload: IPA top-level app Info.plist is missing CFBundleIdentifier"))
 				}
 				if versionValue == "" {
 					versionValue = ipaInfo.Version
@@ -222,7 +223,7 @@ Examples:
 				}
 				if ipaInfo.Platform != "" {
 					if strings.TrimSpace(*platform) != "" && platformValue != ipaInfo.Platform {
-						return fmt.Errorf("builds upload: --platform %s does not match IPA platform %s", platformValue, ipaInfo.Platform)
+						return shared.UsageErrorf("builds upload: --platform %s does not match IPA platform %s", platformValue, ipaInfo.Platform)
 					}
 					platformValue = ipaInfo.Platform
 				}
@@ -235,7 +236,7 @@ Examples:
 				if buildNumberValue == "" {
 					missingFlags = append(missingFlags, "--build-number")
 				}
-				return fmt.Errorf("builds upload: %s required for PKG uploads", strings.Join(missingFlags, " and "))
+				return shared.UsageErrorf("builds upload: %s required for PKG uploads", strings.Join(missingFlags, " and "))
 			}
 			if versionValue == "" || buildNumberValue == "" {
 				missingFields := make([]string, 0, 2)
@@ -248,7 +249,7 @@ Examples:
 					missingFields = append(missingFields, "CFBundleVersion")
 					missingFlags = append(missingFlags, "--build-number")
 				}
-				return fmt.Errorf("builds upload: missing Info.plist keys %s; provide %s", strings.Join(missingFields, " and "), strings.Join(missingFlags, " and "))
+				return invalidIPAFormat(fmt.Errorf("builds upload: missing Info.plist keys %s; provide %s", strings.Join(missingFields, " and "), strings.Join(missingFlags, " and ")))
 			}
 
 			client, err := shared.GetASCClient()
@@ -284,7 +285,7 @@ Examples:
 					if appName == "" {
 						appName = resolvedAppID
 					}
-					return fmt.Errorf("builds upload: IPA bundle ID %q does not match selected app %q bundle ID %q", ipaBundleID, appName, appBundleID)
+					return shared.WithDiagnostic(shared.NewValidationError(fmt.Errorf("builds upload: IPA bundle ID %q does not match selected app %q bundle ID %q", ipaBundleID, appName, appBundleID)), shared.DiagnosticInvalidInput, "--ipa")
 				}
 			}
 
@@ -944,4 +945,8 @@ Examples:
 			return shared.PrintOutput(build, format, *output.Pretty)
 		},
 	}
+}
+
+func invalidIPAFormat(err error) error {
+	return shared.WithDiagnostic(shared.NewValidationError(err), shared.DiagnosticFileInvalidFormat, "--ipa")
 }

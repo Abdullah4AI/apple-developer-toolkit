@@ -317,6 +317,9 @@ func TestFetchVersionReadinessData_TruncatedLocalizationIncludeFallsBackOnlyForL
 				"included":[{"type":"appStoreVersionLocalizations","id":"loc-1","attributes":{"locale":"en-US"}}]
 			}`)
 		case "/v1/appStoreVersions/ver-1/appStoreVersionLocalizations":
+			if got := req.URL.Query().Get("limit"); got != "200" {
+				return buildsJSONResponse(http.StatusBadRequest, `{"errors":[{"status":"400","code":"UNEXPECTED_LIMIT","detail":"limit=`+got+`"}]}`)
+			}
 			return buildsJSONResponse(http.StatusOK, `{"data":[
 				{"type":"appStoreVersionLocalizations","id":"loc-1","attributes":{"locale":"en-US"}},
 				{"type":"appStoreVersionLocalizations","id":"loc-2","attributes":{"locale":"fr-FR"}}

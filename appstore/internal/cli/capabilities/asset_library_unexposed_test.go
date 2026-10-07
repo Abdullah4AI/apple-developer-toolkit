@@ -1,54 +1,44 @@
 package capabilities
 
 import (
+	"slices"
 	"strings"
 	"testing"
-	"unicode"
 )
 
-func TestAssetLibraryIsNotInPublicCapabilities(t *testing.T) {
-	for _, capability := range capabilityRows() {
-		fields := []string{
-			capability.Area,
-			capability.Capability,
-			strings.Join(capability.Commands, " "),
-			strings.Join(capability.APIResources, " "),
-			strings.Join(capability.Notes, " "),
-			capability.NextAction,
-		}
-		row := strings.ToLower(strings.Join(fields, " "))
-		if containsAssetLibraryTerm(row) {
-			t.Fatalf("Asset Library must remain absent from public capabilities, got %+v", capability)
+func TestAssetLibraryCapabilitiesIncludeImageUpload(t *testing.T) {
+	for _, c := range capabilityRows() {
+		if c.Capability == "Asset Library media and specifications" {
+			if c.Status != statusCLISupported || !strings.Contains(strings.Join(c.Notes, " "), "image upload") {
+				t.Fatalf("incorrect scope: %+v", c)
+			}
+			return
 		}
 	}
+	t.Fatal("missing verified Asset Library capability")
 }
 
-func TestContainsAssetLibraryTerm(t *testing.T) {
-	tests := []struct {
-		value string
-		want  bool
-	}{
-		{value: "asset library", want: true},
-		{value: "asc asset-library", want: true},
-		{value: "creative-assets", want: true},
-		{value: "assetLibraryItems", want: true},
-		{value: "asset catalog", want: false},
-		{value: "creative tools", want: false},
-	}
-
-	for _, test := range tests {
-		if got := containsAssetLibraryTerm(test.value); got != test.want {
-			t.Errorf("containsAssetLibraryTerm(%q) = %t, want %t", test.value, got, test.want)
+func TestAssetLibraryCapabilitiesExposeStandaloneReview(t *testing.T) {
+	for _, c := range capabilityRows() {
+		if c.Capability != "Asset Library media and specifications" {
+			continue
 		}
-	}
-}
-
-func containsAssetLibraryTerm(value string) bool {
-	normalized := strings.Map(func(r rune) rune {
-		if unicode.IsLetter(r) || unicode.IsDigit(r) {
-			return unicode.ToLower(r)
+		for _, command := range []string{"asc review submissions-create", "asc review items add", "asc review submissions-submit --confirm"} {
+			if !slices.Contains(c.Commands, command) {
+				t.Errorf("missing review command %q: %+v", command, c)
+			}
 		}
-		return -1
-	}, value)
-	return strings.Contains(normalized, "assetlibrary") || strings.Contains(normalized, "creativeasset")
+		for _, resource := range []string{"appAssetLibraryImages", "appAssetLibraryVideos", "reviewSubmissions", "reviewSubmissionItems"} {
+			if !slices.Contains(c.APIResources, resource) {
+				t.Errorf("missing review resource %q: %+v", resource, c)
+			}
+		}
+		notes := strings.Join(c.Notes, " ")
+		// Keep the review prerequisite discoverable without snapshotting audit prose.
+		if strings.Contains(notes, "Review submission is not exposed") || !strings.Contains(notes, "approved app version") {
+			t.Errorf("missing standalone review prerequisite or misleading availability: %s", notes)
+		}
+		return
+	}
+	t.Fatal("missing Asset Library capability")
 }

@@ -18,7 +18,7 @@ import (
 )
 
 // migrateRequestContext bounds a single outbound request. It derives from the
-// command context rather than the caller's context so a multi-locale import is
+// command context rather than the caller's context so a multi-locale operation is
 // not capped by one shared request deadline.
 func migrateRequestContext(ctx context.Context) (context.Context, context.CancelFunc) {
 	return shared.ContextWithTimeout(shared.ContextWithoutTimeout(ctx))
@@ -410,7 +410,9 @@ func prepareAppInfoLocalizations(ctx context.Context, client *asc.Client, appID 
 }
 
 func fetchAppInfoLocalizationsForPlan(ctx context.Context, client *asc.Client, appInfoID string) ([]asc.Resource[asc.AppInfoLocalizationAttributes], error) {
-	firstPage, err := client.GetAppInfoLocalizations(ctx, appInfoID, asc.WithAppInfoLocalizationsLimit(200))
+	requestCtx, cancel := migrateRequestContext(ctx)
+	firstPage, err := client.GetAppInfoLocalizations(requestCtx, appInfoID, asc.WithAppInfoLocalizationsLimit(200))
+	cancel()
 	if err != nil {
 		return nil, err
 	}
@@ -419,7 +421,9 @@ func fetchAppInfoLocalizationsForPlan(ctx context.Context, client *asc.Client, a
 	}
 
 	paginated, err := asc.PaginateAll(ctx, firstPage, func(pageCtx context.Context, nextURL string) (asc.PaginatedResponse, error) {
-		nextPage, err := client.GetAppInfoLocalizations(pageCtx, appInfoID, asc.WithAppInfoLocalizationsNextURL(nextURL))
+		requestCtx, cancel := migrateRequestContext(pageCtx)
+		nextPage, err := client.GetAppInfoLocalizations(requestCtx, appInfoID, asc.WithAppInfoLocalizationsNextURL(nextURL))
+		cancel()
 		if err != nil {
 			return nil, err
 		}
@@ -439,7 +443,9 @@ func fetchAppInfoLocalizationsForPlan(ctx context.Context, client *asc.Client, a
 }
 
 func fetchVersionLocalizationsForPlan(ctx context.Context, client *asc.Client, versionID string) ([]asc.Resource[asc.AppStoreVersionLocalizationAttributes], error) {
-	firstPage, err := client.GetAppStoreVersionLocalizations(ctx, versionID, asc.WithAppStoreVersionLocalizationsLimit(200))
+	requestCtx, cancel := migrateRequestContext(ctx)
+	firstPage, err := client.GetAppStoreVersionLocalizations(requestCtx, versionID, asc.WithAppStoreVersionLocalizationsLimit(200))
+	cancel()
 	if err != nil {
 		return nil, err
 	}
@@ -448,7 +454,9 @@ func fetchVersionLocalizationsForPlan(ctx context.Context, client *asc.Client, v
 	}
 
 	paginated, err := asc.PaginateAll(ctx, firstPage, func(pageCtx context.Context, nextURL string) (asc.PaginatedResponse, error) {
-		nextPage, err := client.GetAppStoreVersionLocalizations(pageCtx, versionID, asc.WithAppStoreVersionLocalizationsNextURL(nextURL))
+		requestCtx, cancel := migrateRequestContext(pageCtx)
+		nextPage, err := client.GetAppStoreVersionLocalizations(requestCtx, versionID, asc.WithAppStoreVersionLocalizationsNextURL(nextURL))
+		cancel()
 		if err != nil {
 			return nil, err
 		}

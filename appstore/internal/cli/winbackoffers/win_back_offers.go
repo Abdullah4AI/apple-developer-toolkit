@@ -143,6 +143,9 @@ Examples:
 			if err := shared.ValidateNextURL(*next); err != nil {
 				return fmt.Errorf("win-back-offers list: %w", err)
 			}
+			if err := shared.RejectNextFlagConflicts(fs, *next, "subscriptions offers win-back list", "fields", "price-fields", "include", "prices-limit"); err != nil {
+				return err
+			}
 			if *pricesLimit != 0 && (*pricesLimit < 1 || *pricesLimit > winBackOffersPricesMaxLimit) {
 				return fmt.Errorf("win-back-offers list: --prices-limit must be between 1 and %d", winBackOffersPricesMaxLimit)
 			}
@@ -780,6 +783,9 @@ Examples:
 			}
 			if err := shared.ValidateNextURL(*next); err != nil {
 				return fmt.Errorf("win-back-offers prices: %w", err)
+			}
+			if err := shared.RejectNextFlagConflicts(fs, *next, "subscriptions offers win-back prices", "territory", "fields", "territory-fields", "price-point-fields", "include"); err != nil {
+				return err
 			}
 
 			trimmedID := strings.TrimSpace(*id)

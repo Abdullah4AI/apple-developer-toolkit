@@ -63,7 +63,7 @@ func addSubscriptionPromotedPurchaseLookupAppFlag(cmd *ffcli.Command) *string {
 
 func configureSubscriptionsPromotedPurchasesCreate(cmd *ffcli.Command) {
 	promotedpurchases.ConfigureFixedProductTypeCreateCommand(cmd, promotedpurchases.FixedProductTypeCreateConfig{
-		ShortUsage: "asc subscriptions promoted-purchases create --app APP_ID --product-id PRODUCT_ID --visible-for-all-users",
+		ShortUsage: "asc subscriptions promoted-purchases create --app APP_ID --product-id PRODUCT_ID --visible-for-all-users true|false",
 		ShortHelp:  "Create a promoted purchase for a subscription.",
 		LongHelp: `Create a promoted purchase for a subscription.
 

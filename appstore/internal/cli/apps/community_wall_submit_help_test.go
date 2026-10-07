@@ -1,13 +1,12 @@
 package apps
 
 import (
-	"flag"
 	"strings"
 	"testing"
 )
 
 func TestAppsWallSubmitHelpMentionsPublicAppStoreLookup(t *testing.T) {
-	cmd := AppsWallSubmitCommand(flag.NewFlagSet("wall", flag.ContinueOnError))
+	cmd := AppsWallSubmitCommand()
 	if cmd == nil {
 		t.Fatal("expected apps wall submit command")
 		return

@@ -94,7 +94,7 @@ func TestAuthLogoutAllIncludeGlobalClearsBothConfigsWithoutWarning(t *testing.T)
 	if stdout != "Successfully removed stored credentials\n" {
 		t.Fatalf("stdout = %q", stdout)
 	}
-	if stderr != "" {
+	if stderr != authLogoutBypassNote {
 		t.Fatalf("expected no warning with --include-global, got %q", stderr)
 	}
 	requireConfigProfiles(t, overridePath)
@@ -124,7 +124,7 @@ func TestAuthLogoutNamedWithConfigPathOverrideSkipsWarningWhenGlobalLacksProfile
 
 	_, stderr := runAuthConfigCommand(t, "auth", "logout", "--name", "override-only", "--confirm")
 
-	if stderr != "" {
+	if stderr != authLogoutBypassNote {
 		t.Fatalf("expected no warning when the global config lacks the profile, got %q", stderr)
 	}
 	requireConfigProfiles(t, overridePath, "shared")
@@ -167,7 +167,7 @@ func TestAuthLogoutNamedIncludeGlobalRemovesFromBothConfigs(t *testing.T) {
 
 	_, stderr := runAuthConfigCommand(t, "auth", "logout", "--name", "shared", "--include-global", "--confirm")
 
-	if stderr != "" {
+	if stderr != authLogoutBypassNote {
 		t.Fatalf("expected no warning with --include-global, got %q", stderr)
 	}
 	requireConfigProfiles(t, overridePath, "override-only")
@@ -186,7 +186,7 @@ func TestAuthLogoutWithoutConfigPathOverrideClearsGlobalConfig(t *testing.T) {
 
 	_, stderr := runAuthConfigCommand(t, "auth", "logout", "--all", "--confirm")
 
-	if stderr != "" {
+	if stderr != authLogoutBypassNote {
 		t.Fatalf("expected no warning without ASC_CONFIG_PATH, got %q", stderr)
 	}
 	requireConfigProfiles(t, globalPath)

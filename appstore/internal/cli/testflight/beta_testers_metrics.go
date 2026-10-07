@@ -2,9 +2,11 @@ package testflight
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/peterbourgon/ff/v3/ffcli"
@@ -50,6 +52,9 @@ Examples:
 			}
 			if err := shared.ValidateNextURL(*next); err != nil {
 				return shared.UsageErrorfCtx(ctx, "testflight beta-testers metrics: %v", err)
+			}
+			if err := shared.RejectNextFlagConflicts(fs, *next, "testflight testers metrics", "period"); err != nil {
+				return err
 			}
 
 			testerValue := strings.TrimSpace(*testerID)
@@ -100,7 +105,7 @@ Examples:
 				return fmt.Errorf("testflight beta-testers metrics: failed to fetch: %w", err)
 			}
 
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+			return printBetaTesterMetrics(resp, *output.Output, *output.Pretty)
 		},
 	}
 }
@@ -122,4 +127,55 @@ func normalizeBetaTesterUsagePeriod(value string) (string, error) {
 
 func betaTesterUsagePeriodList() []string {
 	return []string{"P7D", "P30D", "P90D", "P365D"}
+}
+
+// printBetaTesterMetrics renders one tester's usage, whose rows are keyed by
+// app rather than tester, so it cannot reuse the app-testers renderer.
+func printBetaTesterMetrics(resp *asc.BetaTesterUsagesResponse, format string, pretty bool) error {
+	render := func(renderRows func([]string, [][]string) error) func() error {
+		return func() error {
+			var payload struct {
+				Data []struct {
+					DataPoints []struct {
+						Start  string `json:"start"`
+						End    string `json:"end"`
+						Values struct {
+							SessionCount  *int `json:"sessionCount"`
+							CrashCount    *int `json:"crashCount"`
+							FeedbackCount *int `json:"feedbackCount"`
+						} `json:"values"`
+					} `json:"dataPoints"`
+					Dimensions struct {
+						Apps struct {
+							Data *asc.MetricDimensionData `json:"data"`
+						} `json:"apps"`
+					} `json:"dimensions"`
+				} `json:"data"`
+			}
+			if resp != nil && len(resp.Data) > 0 {
+				if err := json.Unmarshal(resp.Data, &payload); err != nil {
+					return fmt.Errorf("parse response: %w", err)
+				}
+			}
+			var rows [][]string
+			for _, entry := range payload.Data {
+				appID := ""
+				if entry.Dimensions.Apps.Data != nil {
+					appID = entry.Dimensions.Apps.Data.ID
+				}
+				for _, point := range entry.DataPoints {
+					rows = append(rows, []string{appID, point.Start, point.End, formatCount(point.Values.SessionCount), formatCount(point.Values.CrashCount), formatCount(point.Values.FeedbackCount)})
+				}
+			}
+			return renderRows([]string{"App ID", "Start", "End", "Sessions", "Crashes", "Feedback"}, rows)
+		}
+	}
+	return shared.PrintOutputWithRenderers(resp, format, pretty, render(asc.WriteTable), render(asc.WriteMarkdown))
+}
+
+func formatCount(n *int) string {
+	if n == nil {
+		return ""
+	}
+	return strconv.Itoa(*n)
 }

@@ -69,10 +69,10 @@ func Run(args []string, versionInfo string) int {
 	// variable and opens no file, help prints whether or not the value would
 	// have resolved, and no resolved value can reach help output or a parse
 	// diagnostic.
-	helpRequested := requestedHelp(root, args)
+	helpArgs, helpRequested := requestedHelpArgs(root, args)
 	var parseArgs []string
 	if helpRequested {
-		parseArgs = dropIndirectFlagValues(root, args)
+		parseArgs = dropIndirectFlagValues(root, helpArgs)
 	} else {
 		resolvedArgs, err := resolveFlagValueIndirection(root, args)
 		if err != nil {
@@ -192,6 +192,16 @@ func Run(args []string, versionInfo string) int {
 		return ExitUsage
 	}
 
+	if err := groupFlagsBeforeSubcommandError(root); err != nil {
+		fmt.Fprint(os.Stderr, errfmt.FormatStderr(err))
+		if reportErr := writeUsageJUnitReport(commandName, err); reportErr != nil {
+			printUsageJUnitReportFailure(commandName, versionInfo, analysis, reportErr)
+			return ExitError
+		}
+		emitImmediateTelemetry(args, root, versionInfo, validationFailureContext(analysis, err))
+		return ExitUsage
+	}
+
 	runUsageOutput := &bytes.Buffer{}
 	restoreRunUsageOutput := redirectCommandFlagOutput(analysis.command, runUsageOutput)
 	start := time.Now()
@@ -246,6 +256,9 @@ func Run(args []string, versionInfo string) int {
 
 	if runErr != nil {
 		if _, ok := errors.AsType[shared.ReportedError](runErr); ok {
+			if !shared.IsPrintedToStderr(runErr) {
+				fmt.Fprint(os.Stderr, errfmt.FormatStderr(runErr))
+			}
 			exitCode := ExitCodeFromError(runErr)
 			emitTelemetry(commandName, versionInfo, elapsed, exitCode, runtimeFailureContext(analysis, runErr, exitCode))
 			return exitCode
@@ -433,13 +446,16 @@ func commandAcceptsPositionalPayload(commandPath []string) bool {
 	}
 }
 
-// requestedHelp reports whether the invocation explicitly asked for help with
+// requestedHelpArgs reports whether the invocation explicitly asked for help with
 // any -h or -help spelling accepted by the standard flag package. That package
 // raises flag.ErrHelp for an undefined help token, so the token itself is the
 // only reliable signal that the operator asked for the help page instead of
 // tripping over a usage failure.
-func requestedHelp(root *ffcli.Command, args []string) bool {
+func requestedHelpArgs(root *ffcli.Command, args []string) ([]string, bool) {
 	command := root
+	commandPath := []string{root.Name}
+	firstPositional := -1
+	var flags, positionals []string
 	for i := 0; i < len(args); {
 		token := args[i]
 		if token == "" {
@@ -449,23 +465,47 @@ func requestedHelp(root *ffcli.Command, args []string) bool {
 		// Everything after the terminator is positional and never parsed as a
 		// help request.
 		if token == "--" {
-			return false
+			return args, false
 		}
-		if subcommand := findDirectSubcommand(command, token); subcommand != nil {
-			command = subcommand
-			i++
-			continue
+		if firstPositional < 0 {
+			if subcommand := findDirectSubcommand(command, token); subcommand != nil {
+				command = subcommand
+				commandPath = append(commandPath, command.Name)
+				i++
+				continue
+			}
 		}
 		if isHelpToken(token) {
-			return true
+			if firstPositional < 0 {
+				return args, true
+			}
+			// Standard flag parsing stops at the first positional. Keep literal
+			// flag validation before help, and place the payload after it.
+			normalized := append([]string(nil), args[:firstPositional]...)
+			normalized = append(normalized, flags...)
+			normalized = append(normalized, token)
+			normalized = append(normalized, positionals...)
+			normalized = append(normalized, args[i+1:]...)
+			return normalized, true
 		}
 		next, consumed := consumeFlagToken(command.FlagSet, token, args, i)
-		if !consumed {
-			return false
+		if consumed {
+			if firstPositional >= 0 {
+				flags = append(flags, args[i:next]...)
+			}
+			i = next
+			continue
 		}
-		i = next
+		if strings.HasPrefix(token, "-") && token != "-" || !commandAcceptsPositionalPayload(commandPath) {
+			return args, false
+		}
+		if firstPositional < 0 {
+			firstPositional = i
+		}
+		positionals = append(positionals, token)
+		i++
 	}
-	return false
+	return args, false
 }
 
 // markLeadingSearchFlagTerminator preserves a terminator that the search flag

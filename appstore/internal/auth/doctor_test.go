@@ -1619,3 +1619,26 @@ func clearMigrationTestEnv(t *testing.T) {
 	t.Setenv("ASC_PRIVATE_KEY", "")
 	t.Setenv("ASC_PRIVATE_KEY_B64", "")
 }
+
+func TestDoctorWarnsWhenNoCredentialsAreConfigured(t *testing.T) {
+	t.Setenv("ASC_BYPASS_KEYCHAIN", "1")
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "config.json"))
+	for _, name := range []string{"ASC_KEY_ID", "ASC_ISSUER_ID", "ASC_PRIVATE_KEY_PATH", "ASC_PRIVATE_KEY", "ASC_PRIVATE_KEY_B64", "ASC_PROFILE"} {
+		t.Setenv(name, "")
+	}
+
+	report := Doctor(DoctorOptions{})
+	if !sectionHasStatus(findDoctorSection(t, report, "Profiles"), DoctorWarn, "No credentials configured") {
+		t.Fatalf("expected a no-credentials warning, got %#v", report.Sections)
+	}
+	if !sliceContains(report.Recommendations, "Create an API key at "+APIKeysURL+", then run: "+LoginCommandExample) {
+		t.Fatalf("expected login recommendation, got %#v", report.Recommendations)
+	}
+
+	t.Setenv("ASC_KEY_ID", "ENVKEY")
+	report = Doctor(DoctorOptions{})
+	if sectionHasStatus(findDoctorSection(t, report, "Profiles"), DoctorWarn, "No credentials configured") {
+		t.Fatalf("expected no warning when environment credentials are set, got %#v", report.Sections)
+	}
+}

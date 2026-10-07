@@ -33,6 +33,8 @@ var reviewSubmissionItemCollectionResourceSpec = reviewCollectionResourceSpec{
 	relationshipTypes: map[string]reviewRelationshipSpec{
 		"appStoreVersion":                 {resourceType: ResourceTypeAppStoreVersions},
 		"appCustomProductPageVersion":     {resourceType: ResourceTypeAppCustomProductPageVersions},
+		"appAssetLibraryImage":            {resourceType: ResourceTypeAppAssetLibraryImages},
+		"appAssetLibraryVideo":            {resourceType: ResourceTypeAppAssetLibraryVideos},
 		"appEvent":                        {resourceType: ResourceTypeAppEvents},
 		"appStoreVersionExperiment":       {resourceType: ResourceTypeAppStoreVersionExperiments},
 		"appStoreVersionExperimentV2":     {resourceType: ResourceTypeAppStoreVersionExperiments},

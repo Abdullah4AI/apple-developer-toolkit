@@ -22,11 +22,20 @@ StoreKit credentials are separate from App Store Connect API credentials.
 
 Examples:
   asc storekit auth login --name Production --key-id KEY_ID --issuer-id ISSUER_ID --private-key ./SubscriptionKey.p8 --bundle-id com.example.app
+  asc storekit transactions history --transaction-id 2000000000000001 --environment production --paginate
+  asc storekit subscriptions status --transaction-id 2000000000000001 --environment production
+  asc storekit notifications history --start 2026-09-01 --end 2026-09-08 --environment production
   asc storekit retention-messaging messages list --environment sandbox
   asc storekit retention-messaging endpoint set --url https://example.com/retention --environment production`,
 		FlagSet: fs,
 		Subcommands: []*ffcli.Command{
 			AuthCommand(),
+			TransactionsCommand(),
+			SubscriptionsCommand(),
+			RefundsCommand(),
+			OrdersCommand(),
+			NotificationsCommand(),
+			GroupsCommand(),
 			RetentionMessagingCommand(),
 		},
 		UsageFunc: shared.DefaultUsageFunc,

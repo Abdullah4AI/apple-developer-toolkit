@@ -406,6 +406,9 @@ func inferDisplayTypeFromFilename(path string) string {
 	}
 
 	replacements := map[string]string{
+		"iphone duo":       "APP_IPHONE_DUO",
+		"iphone_duo":       "APP_IPHONE_DUO",
+		"iphoneduo":        "APP_IPHONE_DUO",
 		"iphone 6.9":       "APP_IPHONE_69",
 		"iphone6.9":        "APP_IPHONE_69",
 		"iphone 6.7":       "APP_IPHONE_67",
@@ -468,6 +471,8 @@ func orderedDimensions(width, height int) (int, int) {
 func inferDisplayTypeFromDimensions(width, height int) string {
 	maxDim, minDim := orderedDimensions(width, height)
 	switch {
+	case (maxDim == 2034 && minDim == 1398) || (maxDim == 2853 && minDim == 2007):
+		return "APP_IPHONE_DUO"
 	case maxDim == 2688 && minDim == 1242:
 		return "APP_IPHONE_65"
 	case maxDim == 2778 && minDim == 1284:

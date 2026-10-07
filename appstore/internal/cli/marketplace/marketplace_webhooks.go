@@ -72,6 +72,9 @@ Examples:
 			if err := shared.ValidateNextURL(*next); err != nil {
 				return shared.UsageErrorf("marketplace webhooks list: %v", err)
 			}
+			if err := shared.RejectNextFlagConflicts(fs, *next, "marketplace webhooks list", "fields"); err != nil {
+				return err
+			}
 
 			fieldsValue, err := normalizeMarketplaceWebhookFields(*fields)
 			if err != nil {

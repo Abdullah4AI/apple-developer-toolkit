@@ -847,6 +847,9 @@ Examples:
 			if err := shared.ValidateNextURL(*next); err != nil {
 				return shared.UsageErrorfCtx(ctx, "testflight recruitment options: %v", err)
 			}
+			if err := shared.RejectNextFlagConflicts(fs, *next, "testflight recruitment options", "fields"); err != nil {
+				return err
+			}
 
 			fieldsValue, err := normalizeBetaRecruitmentCriterionOptionsFields(*fields)
 			if err != nil {

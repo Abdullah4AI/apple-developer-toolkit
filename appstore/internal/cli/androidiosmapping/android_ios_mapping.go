@@ -78,6 +78,9 @@ Examples:
 			if err := shared.ValidateNextURL(*next); err != nil {
 				return shared.UsageErrorf("android-ios-mapping list: %v", err)
 			}
+			if err := shared.RejectNextFlagConflicts(fs, *next, "android-ios-mapping list", "fields"); err != nil {
+				return err
+			}
 			fieldValues, err := normalizeAndroidIosMappingFields(*fields)
 			if err != nil {
 				return fmt.Errorf("android-ios-mapping list: %w", err)

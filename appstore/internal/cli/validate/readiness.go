@@ -276,7 +276,7 @@ func BuildReadinessReport(ctx context.Context, opts ReadinessOptions) (validatio
 			versionData.response.Data.Attributes.VersionString,
 			attachedBuild,
 		); err != nil {
-			return validation.Report{}, err
+			return validation.Report{}, shared.WithDiagnostic(shared.NewValidationError(err), shared.DiagnosticInvalidInput, "--ipa")
 		}
 		value := opts.IPA.SupportsIPad()
 		supportsIPad = &value

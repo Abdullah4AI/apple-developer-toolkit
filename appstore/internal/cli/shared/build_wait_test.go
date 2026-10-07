@@ -1366,12 +1366,12 @@ func TestBuildStatusPrivateKeyPathFallsBackToStoredPEMWhenPathMissing(t *testing
 	CleanupTempPrivateKeys()
 	t.Cleanup(CleanupTempPrivateKeys)
 
-	resolvedPath, err := buildStatusPrivateKeyPath(ResolvedAuthCredentials{
+	resolvedPath, err := AltoolPrivateKeyPath(ResolvedAuthCredentials{
 		KeyPath: filepath.Join(tempDir, "missing.p8"),
 		KeyPEM:  string(keyData),
 	})
 	if err != nil {
-		t.Fatalf("buildStatusPrivateKeyPath() error: %v", err)
+		t.Fatalf("AltoolPrivateKeyPath() error: %v", err)
 	}
 	if resolvedPath == filepath.Join(tempDir, "missing.p8") {
 		t.Fatalf("expected fallback temp path, got missing configured path %q", resolvedPath)
@@ -1402,12 +1402,12 @@ func TestBuildStatusPrivateKeyPathPrefersStoredPEMOverExistingKeyPath(t *testing
 	CleanupTempPrivateKeys()
 	t.Cleanup(CleanupTempPrivateKeys)
 
-	resolvedPath, err := buildStatusPrivateKeyPath(ResolvedAuthCredentials{
+	resolvedPath, err := AltoolPrivateKeyPath(ResolvedAuthCredentials{
 		KeyPath: keyPath,
 		KeyPEM:  string(keyData),
 	})
 	if err != nil {
-		t.Fatalf("buildStatusPrivateKeyPath() error: %v", err)
+		t.Fatalf("AltoolPrivateKeyPath() error: %v", err)
 	}
 	if resolvedPath == keyPath {
 		t.Fatalf("expected PEM-backed temp path instead of configured key path %q", resolvedPath)
@@ -1430,11 +1430,11 @@ func TestBuildStatusPrivateKeyPathDecodesStoredBase64PEM(t *testing.T) {
 	CleanupTempPrivateKeys()
 	t.Cleanup(CleanupTempPrivateKeys)
 
-	resolvedPath, err := buildStatusPrivateKeyPath(ResolvedAuthCredentials{
+	resolvedPath, err := AltoolPrivateKeyPath(ResolvedAuthCredentials{
 		KeyPEM: base64.StdEncoding.EncodeToString(keyData),
 	})
 	if err != nil {
-		t.Fatalf("buildStatusPrivateKeyPath() error: %v", err)
+		t.Fatalf("AltoolPrivateKeyPath() error: %v", err)
 	}
 	if resolvedPath == "" {
 		t.Fatal("expected decoded temp key path, got empty path")

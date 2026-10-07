@@ -77,7 +77,7 @@ func TestBuildsDSYMExactVersionDownloadsNewestMatchingBuild(t *testing.T) {
 	}
 }
 
-func TestBuildsDSYMVersionLiveDownloadsNewestReleasedBuild(t *testing.T) {
+func TestBuildsDSYMVersionLiveDownloadsAttachedBuild(t *testing.T) {
 	const empty = `{"data":[],"links":{}}`
 	tests := []struct {
 		name string
@@ -119,6 +119,11 @@ func TestBuildsDSYMVersionLiveDownloadsNewestReleasedBuild(t *testing.T) {
 				{"type":"appStoreVersions","id":"ver-live","attributes":{"platform":"IOS","versionString":"2.0","appStoreState":"READY_FOR_SALE","appVersionState":"READY_FOR_DISTRIBUTION","createdDate":"2026-02-01T00:00:00Z"}}
 			],"links":{}}`,
 		},
+		{
+			name:   "preorder",
+			legacy: `{"data":[{"type":"appStoreVersions","id":"ver-live","attributes":{"platform":"IOS","versionString":"2.0","appStoreState":"PREORDER_READY_FOR_SALE","createdDate":"2026-02-01T00:00:00Z"}}],"links":{}}`,
+			modern: empty,
+		},
 	}
 
 	for _, test := range tests {
@@ -144,6 +149,10 @@ func TestBuildsDSYMVersionLiveDownloadsNewestReleasedBuild(t *testing.T) {
 						t.Fatalf("live version query = %s", req.URL.RawQuery)
 						return nil, nil
 					}
+				case req.URL.Path == "/v1/appStoreVersions/ver-live/relationships/build":
+					return dsymJSON(`{"data":{"type":"builds","id":"build-live-old"}}`), nil
+				case req.URL.Path == "/v1/builds/build-live-old" && req.URL.RawQuery == "":
+					return dsymJSON(`{"data":{"type":"builds","id":"build-live-old","attributes":{"version":"20","uploadedDate":"2026-01-01T00:00:00Z"}}}`), nil
 				case req.URL.Path == "/v1/builds":
 					if req.URL.Query().Get("include") != "preReleaseVersion" || req.URL.Query().Get("filter[app]") != "123456789" {
 						t.Fatalf("builds query = %s", req.URL.RawQuery)
@@ -160,7 +169,7 @@ func TestBuildsDSYMVersionLiveDownloadsNewestReleasedBuild(t *testing.T) {
 						{"type":"preReleaseVersions","id":"prv-live","attributes":{"version":"2.0","platform":"IOS"}}
 					],"links":{}}`
 					return dsymJSON(body), nil
-				case req.URL.Path == "/v1/builds/build-live" && req.URL.Query().Get("include") == "buildBundles":
+				case (req.URL.Path == "/v1/builds/build-live" || req.URL.Path == "/v1/builds/build-live-old") && req.URL.Query().Get("include") == "buildBundles":
 					body := `{"data":{"type":"builds","id":"build-live","attributes":{"version":"21"}},"included":[{"type":"buildBundles","id":"bundle-live","attributes":{"bundleId":"com.example.app","dSYMUrl":"https://downloads.example.com/live.dSYM.zip"}}]}`
 					return dsymJSON(body), nil
 				case req.URL.Host == "downloads.example.com" && req.URL.Path == "/live.dSYM.zip":
@@ -175,16 +184,16 @@ func TestBuildsDSYMVersionLiveDownloadsNewestReleasedBuild(t *testing.T) {
 			if got, want := strings.Join(versionQueries, ","), "READY_FOR_SALE,PREORDER_READY_FOR_SALE|,|READY_FOR_DISTRIBUTION"; got != want {
 				t.Fatalf("live version queries = %q, want %q", got, want)
 			}
-			if !strings.Contains(stderr, "Resolved build build-live") {
+			if !strings.Contains(stderr, "Resolved build build-live-old") {
 				t.Fatalf("stderr = %q", stderr)
 			}
-			if strings.Contains(stdout, "build-old") || strings.Contains(stdout, "build-live-old") {
+			if strings.Contains(stdout, "build-old") || strings.Contains(stdout, `"buildId":"build-live"`) {
 				t.Fatalf("downloaded unexpected builds: %s", stdout)
 			}
-			if !strings.Contains(stdout, `"buildId":"build-live"`) || !strings.Contains(stdout, `"sha256":"`+sha256Hex("livedata")+`"`) {
+			if !strings.Contains(stdout, `"buildId":"build-live-old"`) || !strings.Contains(stdout, `"sha256":"`+sha256Hex("livedata")+`"`) {
 				t.Fatalf("stdout = %s", stdout)
 			}
-			if _, err := os.Stat(filepath.Join(outputDir, "com.example.app-2.0-21.dSYM.zip")); err != nil {
+			if _, err := os.Stat(filepath.Join(outputDir, "com.example.app-2.0-20.dSYM.zip")); err != nil {
 				t.Fatalf("expected live dSYM file: %v", err)
 			}
 		})

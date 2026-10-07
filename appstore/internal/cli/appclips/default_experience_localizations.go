@@ -71,6 +71,9 @@ Examples:
 			if err := shared.ValidateNextURL(*next); err != nil {
 				return shared.UsageErrorf("app-clips default-experiences localizations list: %v", err)
 			}
+			if err := shared.RejectNextFlagConflicts(fs, *next, "app-clips default-experiences localizations list", "locale"); err != nil {
+				return err
+			}
 
 			experienceValue := strings.TrimSpace(*experienceID)
 			if experienceValue == "" {

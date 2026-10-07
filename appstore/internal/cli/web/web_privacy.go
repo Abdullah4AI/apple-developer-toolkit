@@ -2103,7 +2103,7 @@ Examples:
 				cause := withWebAuthHint(applyErr, "web privacy apply")
 				message := privacyApplyFailureMessage(resolvedAppID, payload, cause, recheckErr)
 				fmt.Fprintf(os.Stderr, "Error: %s\n", shared.SanitizeTerminal(message))
-				return shared.NewReportedError(
+				return shared.NewStderrReportedError(
 					shared.NewErrorWithCause(fmt.Errorf("%s", message), cause),
 				)
 			}

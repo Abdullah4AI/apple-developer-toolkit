@@ -225,3 +225,13 @@ func appStoreVersionRatingResetDeleteRows(result *AppStoreVersionRatingResetDele
 	rows := [][]string{{result.RatingResetRequestID, fmt.Sprintf("%t", result.Cancelled)}}
 	return headers, rows
 }
+
+// AppStoreVersionDeleteResult represents CLI output for version deletions.
+type AppStoreVersionDeleteResult struct {
+	Deleted   bool   `json:"deleted"`
+	VersionID string `json:"versionId"`
+}
+
+func appStoreVersionDeleteResultRows(result *AppStoreVersionDeleteResult) ([]string, [][]string) {
+	return []string{"Version ID", "Deleted"}, [][]string{{result.VersionID, fmt.Sprintf("%t", result.Deleted)}}
+}

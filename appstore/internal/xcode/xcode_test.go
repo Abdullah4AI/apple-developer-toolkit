@@ -20,6 +20,7 @@ import (
 	"howett.net/plist"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/infoplist"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/readonly"
 )
 
 func TestArchiveUnsupportedPlatform(t *testing.T) {
@@ -68,6 +69,19 @@ func TestArchiveMissingXcodebuild(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "xcodebuild not available") {
 		t.Fatalf("expected xcodebuild error, got %v", err)
+	}
+}
+
+func TestValidateExistingPathReportsMissingInputPath(t *testing.T) {
+	missing := filepath.Join(t.TempDir(), "Missing.xcarchive")
+	for _, err := range []error{
+		validateExistingPath(missing, ".xcarchive", "--archive-path"),
+		validateExistingFile(missing, "--archive-path"),
+	} {
+		var notFound *InputPathNotFoundError
+		if !errors.As(err, &notFound) || notFound.Flag != "--archive-path" {
+			t.Fatalf("expected InputPathNotFoundError for --archive-path, got %v", err)
+		}
 	}
 }
 
@@ -391,6 +405,10 @@ func TestValidateRunsAltoolWithAuthFlags(t *testing.T) {
 		t.Fatalf("writeTestIPA() error: %v", err)
 	}
 	logPath := filepath.Join(tempDir, "commands.log")
+	p8Path := filepath.Join(tempDir, "AuthKey_KEY123ABC.p8")
+	if err := os.WriteFile(p8Path, []byte("key"), 0o600); err != nil {
+		t.Fatalf("WriteFile() error: %v", err)
+	}
 
 	restore := overrideTestEnvironment(t)
 	runtimeGOOS = "darwin"
@@ -408,9 +426,10 @@ func TestValidateRunsAltoolWithAuthFlags(t *testing.T) {
 	t.Cleanup(restore)
 
 	result, err := Validate(context.Background(), ValidateOptions{
-		IPAPath:   ipaPath,
-		APIKey:    "KEY123ABC",
-		APIIssuer: "issuer-123",
+		IPAPath:    ipaPath,
+		APIKey:     "KEY123ABC",
+		APIIssuer:  "issuer-123",
+		P8FilePath: p8Path,
 	})
 	if err != nil {
 		t.Fatalf("Validate() error: %v", err)
@@ -434,7 +453,7 @@ func TestValidateRunsAltoolWithAuthFlags(t *testing.T) {
 		t.Fatalf("expected version probe, got %q", lines[0])
 	}
 	if !strings.Contains(lines[1], "xcrun|altool|--validate-app|--file|") ||
-		!strings.Contains(lines[1], ".ipa|--type|ios|--apiKey|KEY123ABC|--apiIssuer|issuer-123") {
+		!strings.Contains(lines[1], ".ipa|--type|ios|--apiKey|KEY123ABC|--apiIssuer|issuer-123|--p8-file-path|"+p8Path) {
 		t.Fatalf("expected validate invocation with auth flags, got %q", lines[1])
 	}
 	commandArgs := strings.Split(lines[1], "|")
@@ -1476,6 +1495,37 @@ func TestExportDirectUploadDoesNotRequireOrCreateArtifactDestination(t *testing.
 	}
 	if result.PKGPath != "" {
 		t.Fatalf("expected no local pkg path for direct upload, got %q", result.PKGPath)
+	}
+}
+
+func TestExportDirectUploadRefusedInReadOnlyModeBeforeRunningXcodebuild(t *testing.T) {
+	tempDir := t.TempDir()
+	archivePath := filepath.Join(tempDir, "Demo.xcarchive")
+	if err := writeArchiveInfoPlist(archivePath); err != nil {
+		t.Fatalf("writeArchiveInfoPlist() error: %v", err)
+	}
+	exportOptionsPath := filepath.Join(tempDir, "ExportOptions.plist")
+	writeExportOptionsPlist(t, exportOptionsPath, map[string]any{"destination": "upload"})
+	logPath := filepath.Join(tempDir, "commands.log")
+
+	restore := overrideTestEnvironment(t)
+	runtimeGOOS = "darwin"
+	lookPathFn = func(file string) (string, error) {
+		return "/usr/bin/xcodebuild", nil
+	}
+	commandContextFn = helperCommandContext(t, logPath)
+	t.Cleanup(restore)
+	t.Setenv(readonly.EnvVar, "1")
+
+	_, err := Export(context.Background(), ExportOptions{
+		ArchivePath:   archivePath,
+		ExportOptions: exportOptionsPath,
+	})
+	if !errors.Is(err, readonly.ErrRefused) {
+		t.Fatalf("Export() error = %v, want readonly.ErrRefused", err)
+	}
+	if _, statErr := os.Stat(logPath); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("xcodebuild ran in read-only mode (log stat: %v)", statErr)
 	}
 }
 

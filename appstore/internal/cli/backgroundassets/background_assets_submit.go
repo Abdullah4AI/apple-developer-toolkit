@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/peterbourgon/ff/v3/ffcli"
@@ -134,7 +135,7 @@ Examples:
 
 			if *dryRun {
 				result.Messages = append(result.Messages, fmt.Sprintf("dry-run: would submit %d background asset version(s) for review", len(items)))
-				return shared.PrintOutput(result, *output.Output, *output.Pretty)
+				return printBackgroundAssetsSubmitResult(result, *output.Output, *output.Pretty)
 			}
 
 			currentSubmissionID := strings.TrimSpace(*submissionID)
@@ -207,7 +208,7 @@ Examples:
 
 			if *noSubmit {
 				result.Messages = append(result.Messages, fmt.Sprintf("--no-submit set; submission %s left open with %d item(s) attached", currentSubmissionID, result.AttachedItems))
-				return shared.PrintOutput(result, *output.Output, *output.Pretty)
+				return printBackgroundAssetsSubmitResult(result, *output.Output, *output.Pretty)
 			}
 
 			submitCtx, submitCancel := backgroundAssetSubmitRequestContext(ctx)
@@ -223,7 +224,7 @@ Examples:
 				}
 			}
 
-			return shared.PrintOutput(result, *output.Output, *output.Pretty)
+			return printBackgroundAssetsSubmitResult(result, *output.Output, *output.Pretty)
 		},
 	}
 }
@@ -262,6 +263,20 @@ type backgroundAssetsSubmitResult struct {
 	Items                  []backgroundAssetsSubmitResultItem `json:"items"`
 	SkippedAlreadyAttached []backgroundAssetsSubmitResultItem `json:"skippedAlreadyAttached,omitempty"`
 	Messages               []string                           `json:"messages,omitempty"`
+}
+
+func printBackgroundAssetsSubmitResult(result backgroundAssetsSubmitResult, format string, pretty bool) error {
+	headers := []string{"App ID", "Platform", "Submission ID", "State", "Items", "Attached", "Dry Run"}
+	rows := [][]string{{
+		result.AppID,
+		result.Platform,
+		result.SubmissionID,
+		result.SubmissionState,
+		strconv.Itoa(len(result.Items)),
+		strconv.Itoa(result.AttachedItems),
+		strconv.FormatBool(result.DryRun),
+	}}
+	return shared.PrintOutputRows(result, format, pretty, headers, rows)
 }
 
 type backgroundAssetsSubmitResultItem struct {

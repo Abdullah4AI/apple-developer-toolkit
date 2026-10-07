@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
-	"flag"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -304,7 +303,7 @@ func TestAppsWallSubmitCommandPassesCountryFlagToDryRunLookup(t *testing.T) {
 		communityWallNow = previousNow
 	})
 
-	cmd := AppsWallSubmitCommand(flag.NewFlagSet("wall", flag.ContinueOnError))
+	cmd := AppsWallSubmitCommand()
 	cmd.FlagSet.SetOutput(io.Discard)
 	var runErr error
 	stderr := captureAppsCreateOutput(t, func() {

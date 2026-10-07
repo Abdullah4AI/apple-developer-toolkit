@@ -896,6 +896,7 @@ func TestXcodeInjectCommandRequiresManifest(t *testing.T) {
 func TestXcodeValidatePassesIPAAndAuthFlags(t *testing.T) {
 	restore := overrideXcodeCommandTestHooks(t)
 	defer restore()
+	setXcodeValidateEnvCredentials(t)
 
 	var gotOpts localxcode.ValidateOptions
 	runValidate = func(_ context.Context, opts localxcode.ValidateOptions) (*localxcode.ValidateResult, error) {
@@ -937,6 +938,9 @@ func TestXcodeValidatePassesIPAAndAuthFlags(t *testing.T) {
 	if gotOpts.APIIssuer != "issuer-123" {
 		t.Fatalf("expected api issuer issuer-123, got %q", gotOpts.APIIssuer)
 	}
+	if gotOpts.P8FilePath != "" {
+		t.Fatalf("expected no resolved p8 path with explicit flags, got %q", gotOpts.P8FilePath)
+	}
 
 	var payload struct {
 		IPAPath   string `json:"ipa_path"`
@@ -953,6 +957,7 @@ func TestXcodeValidatePassesIPAAndAuthFlags(t *testing.T) {
 func TestXcodeValidatePassesPKGAndRendersPKGPath(t *testing.T) {
 	restore := overrideXcodeCommandTestHooks(t)
 	defer restore()
+	setXcodeValidateEnvCredentials(t)
 
 	var gotOpts localxcode.ValidateOptions
 	runValidate = func(_ context.Context, opts localxcode.ValidateOptions) (*localxcode.ValidateResult, error) {
@@ -998,6 +1003,145 @@ func TestXcodeValidatePassesPKGAndRendersPKGPath(t *testing.T) {
 	rows := validateResultRows(&localxcode.ValidateResult{PKGPath: "Demo.pkg", Validated: true})
 	if len(rows) != 2 || rows[0][0] != "pkg_path" || rows[0][1] != "Demo.pkg" || rows[1][0] != "validated" {
 		t.Fatalf("unexpected rendered PKG rows: %v", rows)
+	}
+}
+
+func TestXcodeValidateDefaultsToResolvedCredentials(t *testing.T) {
+	restore := overrideXcodeCommandTestHooks(t)
+	defer restore()
+	keyPath := setXcodeValidateEnvCredentials(t)
+
+	var gotOpts localxcode.ValidateOptions
+	runValidate = func(_ context.Context, opts localxcode.ValidateOptions) (*localxcode.ValidateResult, error) {
+		gotOpts = opts
+		return &localxcode.ValidateResult{IPAPath: opts.IPAPath, Validated: true}, nil
+	}
+
+	cmd := XcodeValidateCommand()
+	cmd.FlagSet.SetOutput(io.Discard)
+	if err := cmd.FlagSet.Parse([]string{"--ipa", "Demo.ipa", "--output", "json"}); err != nil {
+		t.Fatalf("failed to parse flags: %v", err)
+	}
+	var runErr error
+	captureCommandOutput(t, func() error {
+		runErr = cmd.Exec(context.Background(), nil)
+		return runErr
+	})
+	if runErr != nil {
+		t.Fatalf("Exec() error: %v", runErr)
+	}
+	if gotOpts.APIKey != "ENVKEY123" || gotOpts.APIIssuer != "env-issuer" || gotOpts.P8FilePath != keyPath {
+		t.Fatalf("expected resolved credentials and p8 path %q, got %+v", keyPath, gotOpts)
+	}
+}
+
+func TestXcodeValidateWithoutCredentialsReturnsAuthError(t *testing.T) {
+	restore := overrideXcodeCommandTestHooks(t)
+	defer restore()
+	isolateXcodeValidateAuthEnv(t)
+
+	runValidate = func(context.Context, localxcode.ValidateOptions) (*localxcode.ValidateResult, error) {
+		t.Fatal("runValidate must not be called without credentials")
+		return nil, nil
+	}
+
+	cmd := XcodeValidateCommand()
+	cmd.FlagSet.SetOutput(io.Discard)
+	if err := cmd.FlagSet.Parse([]string{"--ipa", "Demo.ipa"}); err != nil {
+		t.Fatalf("failed to parse flags: %v", err)
+	}
+	var runErr error
+	captureCommandOutput(t, func() error {
+		runErr = cmd.Exec(context.Background(), nil)
+		return runErr
+	})
+	if !errors.Is(runErr, shared.ErrMissingAuth) || !strings.Contains(runErr.Error(), "asc auth login") {
+		t.Fatalf("expected missing auth error pointing at asc auth login, got %v", runErr)
+	}
+}
+
+func isolateXcodeValidateAuthEnv(t *testing.T) {
+	t.Helper()
+	t.Setenv("ASC_BYPASS_KEYCHAIN", "1")
+	t.Setenv("ASC_PROFILE", "")
+	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
+	t.Setenv("ASC_KEY_ID", "")
+	t.Setenv("ASC_ISSUER_ID", "")
+	t.Setenv("ASC_KEY_TYPE", "")
+	t.Setenv("ASC_PRIVATE_KEY_PATH", "")
+	t.Setenv("ASC_PRIVATE_KEY", "")
+	t.Setenv("ASC_PRIVATE_KEY_B64", "")
+	t.Setenv("ASC_STRICT_AUTH", "")
+}
+
+func setXcodeValidateEnvCredentials(t *testing.T) string {
+	t.Helper()
+	isolateXcodeValidateAuthEnv(t)
+	keyPath := filepath.Join(t.TempDir(), "AuthKey_ENVKEY123.p8")
+	if err := os.WriteFile(keyPath, []byte("key"), 0o600); err != nil {
+		t.Fatalf("WriteFile() error: %v", err)
+	}
+	t.Setenv("ASC_KEY_ID", "ENVKEY123")
+	t.Setenv("ASC_ISSUER_ID", "env-issuer")
+	t.Setenv("ASC_PRIVATE_KEY_PATH", keyPath)
+	return keyPath
+}
+
+func TestXcodeArchiveRejectsExistingArchivePathBeforeRunning(t *testing.T) {
+	restore := overrideXcodeCommandTestHooks(t)
+	defer restore()
+
+	runArchive = func(context.Context, localxcode.ArchiveOptions) (*localxcode.ArchiveResult, error) {
+		t.Fatal("runArchive must not be called when --archive-path exists without --overwrite")
+		return nil, nil
+	}
+	archivePath := filepath.Join(t.TempDir(), "Demo.xcarchive")
+	if err := os.MkdirAll(archivePath, 0o755); err != nil {
+		t.Fatalf("MkdirAll() error: %v", err)
+	}
+
+	cmd := XcodeArchiveCommand()
+	cmd.FlagSet.SetOutput(io.Discard)
+	if err := cmd.FlagSet.Parse([]string{"--project", "Demo.xcodeproj", "--scheme", "Demo", "--archive-path", archivePath}); err != nil {
+		t.Fatalf("failed to parse flags: %v", err)
+	}
+	var runErr error
+	_, stderr := captureCommandOutput(t, func() error {
+		runErr = cmd.Exec(context.Background(), nil)
+		return runErr
+	})
+	if !errors.Is(runErr, flag.ErrHelp) {
+		t.Fatalf("expected usage error, got %v", runErr)
+	}
+	if !strings.Contains(stderr, "--archive-path already exists") || !strings.Contains(stderr, "--overwrite") {
+		t.Fatalf("expected archive-exists usage error, got %q", stderr)
+	}
+}
+
+func TestXcodeArchiveClassifiesMissingInputPathAsFileNotFound(t *testing.T) {
+	restore := overrideXcodeCommandTestHooks(t)
+	defer restore()
+
+	runArchive = func(context.Context, localxcode.ArchiveOptions) (*localxcode.ArchiveResult, error) {
+		return nil, &localxcode.InputPathNotFoundError{Flag: "--project", Err: os.ErrNotExist}
+	}
+
+	cmd := XcodeArchiveCommand()
+	cmd.FlagSet.SetOutput(io.Discard)
+	if err := cmd.FlagSet.Parse([]string{"--project", "Missing.xcodeproj", "--scheme", "Demo", "--archive-path", filepath.Join(t.TempDir(), "Demo.xcarchive")}); err != nil {
+		t.Fatalf("failed to parse flags: %v", err)
+	}
+	var runErr error
+	captureCommandOutput(t, func() error {
+		runErr = cmd.Exec(context.Background(), nil)
+		return runErr
+	})
+	if !shared.IsValidationError(runErr) {
+		t.Fatalf("expected validation error, got %v", runErr)
+	}
+	diagnostic, ok := shared.DiagnosticFromError(runErr)
+	if !ok || diagnostic.Code != shared.DiagnosticFileNotFound || diagnostic.Parameter != "--project" {
+		t.Fatalf("expected file_not_found diagnostic for --project, got %+v (ok=%v)", diagnostic, ok)
 	}
 }
 

@@ -133,8 +133,9 @@ adds one read per discovery poll and none while waiting for processing.
 - The success JSON (`asc.BuildWaitResult`) is unchanged.
 - The pending receipt is a new type with a registered renderer, so its fields
   follow the additive output contract.
-- Telemetry classification is unchanged: the pending error does not wrap
-  `context.DeadlineExceeded`, like the timeout error it replaces.
+- The default timeout keeps its telemetry classification: it does not wrap
+  `context.DeadlineExceeded`. The opted-in pending outcome (exit 7) is
+  recorded as `expected_negative` with the `state_not_ready` diagnostic.
 
 ## Alternatives considered
 

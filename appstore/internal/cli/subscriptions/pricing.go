@@ -267,11 +267,10 @@ func resolveSubscriptionPriceSummary(
 		GroupName:          sub.GroupName,
 	}
 
-	// Use the subscription prices endpoint with include=subscriptionPricePoint,territory
-	// and filter[territory]=<territory>. This returns just the current price assignment
-	// for the target territory with the price point data included -- one API call total.
+	// The endpoint returns the territory's full price history unsorted, so every
+	// page must be read before the current price can be chosen.
 	pricesCtx, pricesCancel := shared.ContextWithTimeout(ctx)
-	pricesResp, err := client.GetSubscriptionPrices(
+	firstPage, err := client.GetSubscriptionPrices(
 		pricesCtx,
 		sub.Sub.ID,
 		asc.WithSubscriptionPricesTerritory(territory),
@@ -279,11 +278,23 @@ func resolveSubscriptionPriceSummary(
 		asc.WithSubscriptionPricesInclude([]string{"subscriptionPricePoint", "territory"}),
 		asc.WithSubscriptionPricesPricePointFields([]string{"customerPrice", "proceeds", "proceedsYear2"}),
 		asc.WithSubscriptionPricesTerritoryFields([]string{"currency"}),
-		asc.WithSubscriptionPricesLimit(10),
+		asc.WithSubscriptionPricesLimit(200),
 	)
 	pricesCancel()
 	if err != nil {
 		return summary, fmt.Errorf("fetch prices: %w", err)
+	}
+	allPages, err := asc.PaginateAll(ctx, firstPage, func(ctx context.Context, nextURL string) (asc.PaginatedResponse, error) {
+		pageCtx, pageCancel := shared.ContextWithTimeout(ctx)
+		defer pageCancel()
+		return client.GetSubscriptionPrices(pageCtx, sub.Sub.ID, asc.WithSubscriptionPricesNextURL(nextURL))
+	})
+	if err != nil {
+		return summary, fmt.Errorf("fetch prices: %w", err)
+	}
+	pricesResp, ok := allPages.(*asc.SubscriptionPricesResponse)
+	if !ok {
+		return summary, fmt.Errorf("fetch prices: unexpected response type %T", allPages)
 	}
 
 	// Parse the included resources for price point values and territory currencies

@@ -26,6 +26,9 @@ func TestMain(m *testing.M) {
 	// The Apple ID environment fallback must not leak in from the developer's
 	// own shell: a test that does not set it expects no Apple ID at all.
 	_ = os.Unsetenv(webAppleIDEnv)
+	// Tests stand in for the 2FA prompt, so the host's terminal must not decide
+	// whether a sign-in may start.
+	twoFactorPromptAvailableFn = func() bool { return true }
 
 	code := m.Run()
 

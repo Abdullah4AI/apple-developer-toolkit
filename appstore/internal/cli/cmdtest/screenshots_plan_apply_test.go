@@ -1149,6 +1149,9 @@ func pngBytes(t *testing.T, width, height int) []byte {
 	t.Helper()
 
 	img := image.NewRGBA(image.Rect(0, 0, width, height))
+	for i := 3; i < len(img.Pix); i += 4 {
+		img.Pix[i] = 255
+	}
 	var buf bytes.Buffer
 	if err := png.Encode(&buf, img); err != nil {
 		t.Fatalf("encode png: %v", err)

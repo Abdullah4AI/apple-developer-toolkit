@@ -73,12 +73,12 @@ func NewListCommand(config shared.ListCommandConfig) *ffcli.Command {
 		FlagSet:    fs,
 		UsageFunc:  usageFunc,
 		Exec: func(ctx context.Context, args []string) error {
-			return runListCommand(ctx, config, flags)
+			return runListCommand(ctx, config, fs, flags)
 		},
 	}
 }
 
-func runListCommand(ctx context.Context, config shared.ListCommandConfig, flags listCommandFlags) error {
+func runListCommand(ctx context.Context, config shared.ListCommandConfig, fs *flag.FlagSet, flags listCommandFlags) error {
 	prefix := strings.TrimSpace(config.ErrorPrefix)
 	if prefix == "" {
 		prefix = "feedback"
@@ -89,6 +89,9 @@ func runListCommand(ctx context.Context, config shared.ListCommandConfig, flags 
 	}
 	if err := shared.ValidateNextURL(*flags.next); err != nil {
 		return shared.UsageErrorf("%s: %v", prefix, err)
+	}
+	if err := shared.RejectNextFlagConflicts(fs, *flags.next, prefix, "include-screenshots", "device-model", "os-version", "app-platform", "device-platform", "build-id", "build-pre-release-version", "tester", "include", "sort"); err != nil {
+		return err
 	}
 	if err := shared.ValidateSort(*flags.sort, "createdDate", "-createdDate"); err != nil {
 		return shared.UsageErrorf("%s: %v", prefix, err)

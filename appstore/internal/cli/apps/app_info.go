@@ -446,7 +446,7 @@ Examples:
 				)
 			}
 
-			batchResult, warnings, err := runAppInfoSetBatch(
+			batchResult, warnings, batchErr := runAppInfoSetBatch(
 				requestCtx,
 				client,
 				resolvedAppID,
@@ -455,8 +455,8 @@ Examples:
 				submitOpts,
 				*dryRun,
 			)
-			if err != nil {
-				return fmt.Errorf("apps info edit: %w", err)
+			if batchErr != nil && batchResult == nil {
+				return fmt.Errorf("apps info edit: %w", batchErr)
 			}
 			if err := shared.PrintOutput(batchResult, *output.Output, *output.Pretty); err != nil {
 				return err
@@ -467,7 +467,7 @@ Examples:
 			if batchResult.Failed > 0 {
 				summaryErr := fmt.Errorf("apps info edit: %d locale(s) failed", batchResult.Failed)
 				fmt.Fprintf(os.Stderr, "Error: %s\n", summaryErr.Error())
-				return shared.NewReportedError(summaryErr)
+				return shared.NewStderrReportedError(shared.NewErrorWithCause(summaryErr, batchErr))
 			}
 			return nil
 		},
@@ -700,6 +700,7 @@ func runAppInfoSetBatch(
 	sem := make(chan struct{}, workers)
 	var wg sync.WaitGroup
 	createWarningAttrs := make([]asc.AppStoreVersionLocalizationAttributes, len(locales))
+	readOnlyRefusals := make([]error, len(locales))
 	for idx, locale := range locales {
 		idx := idx
 		locale := locale
@@ -728,6 +729,7 @@ func runAppInfoSetBatch(
 				attrs.Locale = locale
 				resp, createErr := client.CreateAppStoreVersionLocalization(ctx, versionID, attrs)
 				if createErr != nil {
+					readOnlyRefusals[idx] = shared.KeepReadOnlyRefusal(nil, createErr)
 					if !appInfoSetIsConflictError(createErr) {
 						localeResult.Status = "failed"
 						localeResult.Error = createErr.Error()
@@ -770,6 +772,7 @@ func runAppInfoSetBatch(
 
 			resp, updateErr := client.UpdateAppStoreVersionLocalization(ctx, existingID, attrs)
 			if updateErr != nil {
+				readOnlyRefusals[idx] = shared.KeepReadOnlyRefusal(nil, updateErr)
 				localeResult.Status = "failed"
 				localeResult.Error = updateErr.Error()
 				localeResult.LocalizationID = existingID
@@ -790,7 +793,9 @@ func runAppInfoSetBatch(
 	wg.Wait()
 
 	warnings := make([]shared.SubmitReadinessCreateWarning, 0, len(locales))
+	var refused error
 	for idx, locale := range locales {
+		refused = shared.KeepReadOnlyRefusal(refused, readOnlyRefusals[idx])
 		if existingByLocale[strings.ToLower(locale)] != "" || results[idx].Status != "success" {
 			continue
 		}
@@ -799,7 +804,7 @@ func runAppInfoSetBatch(
 		}
 	}
 
-	return buildAppInfoSetBatchResult(appID, versionID, false, results), shared.NormalizeSubmitReadinessCreateWarnings(warnings), nil
+	return buildAppInfoSetBatchResult(appID, versionID, false, results), shared.NormalizeSubmitReadinessCreateWarnings(warnings), refused
 }
 
 func fetchAppInfoSetLocalizationByLocale(ctx context.Context, client *asc.Client, versionID, locale string) (asc.Resource[asc.AppStoreVersionLocalizationAttributes], bool, error) {

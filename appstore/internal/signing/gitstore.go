@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -14,6 +15,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/readonly"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/rootfs"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/urlsanitize"
 	"golang.org/x/text/unicode/norm"
@@ -486,6 +488,9 @@ func (g *GitStore) CommitAndPush(ctx context.Context, message string) error {
 	}
 	if strings.TrimSpace(status) == "" {
 		return nil // nothing to commit
+	}
+	if err := readonly.Check(ctx, http.MethodPost, RedactRepoURL(g.RepoURL)); err != nil {
+		return err
 	}
 
 	if err := g.gitRun(ctx, g.LocalDir, "commit", "-m", message); err != nil {

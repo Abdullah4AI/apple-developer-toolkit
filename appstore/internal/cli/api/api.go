@@ -121,7 +121,13 @@ type rawRequest struct {
 // access. Every failure is a usage error with exit code 2.
 func parseRequest(positional []string, query []string, body, bodyFile string, bodyProvided, bodyFileProvided, paginate, confirm, allowUnknownPath bool) (rawRequest, error) {
 	if len(positional) < 2 {
-		return rawRequest{}, shared.UsageError("api: METHOD and PATH are required")
+		err := shared.UsageError("api: METHOD and PATH are required")
+		if len(positional) == 1 && (strings.HasPrefix(positional[0], "/") || strings.HasPrefix(positional[0], "https://")) {
+			if quoted, ok := shared.ShellQuote(positional[0]); ok {
+				fmt.Fprintf(os.Stderr, "Hint: pass the method first: asc api GET %s\n", quoted)
+			}
+		}
+		return rawRequest{}, err
 	}
 	if len(positional) > 2 {
 		return rawRequest{}, shared.UsageErrorf("api: unexpected argument %q", positional[2])

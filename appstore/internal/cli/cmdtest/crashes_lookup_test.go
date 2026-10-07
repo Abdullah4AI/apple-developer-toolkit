@@ -116,8 +116,6 @@ func TestCrashesNextURLSkipsAppLookupForNonNumericApp(t *testing.T) {
 			"testflight", "crashes", "list",
 			"--next", nextURL,
 			"--app", "com.example.crashes",
-			"--sort", "-createdDate",
-			"--limit", "5",
 		}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}

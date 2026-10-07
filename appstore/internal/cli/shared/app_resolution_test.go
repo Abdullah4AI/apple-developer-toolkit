@@ -227,6 +227,20 @@ func TestResolveAppInfoID_AutoSelectsEditableFromMultiple(t *testing.T) {
 	}
 }
 
+func TestResolveAppInfoID_SkipsReplacedAppInfo(t *testing.T) {
+	client := newAppResolutionTestClient(t, func(req *http.Request) (*http.Response, error) {
+		return appResolutionJSONResponse(`{"data":[
+			{"type":"appInfos","id":"info-live","attributes":{"state":"READY_FOR_DISTRIBUTION"}},
+			{"type":"appInfos","id":"info-old","attributes":{"state":"REPLACED_WITH_NEW_INFO"}}
+		]}`)
+	})
+
+	id, err := ResolveAppInfoID(context.Background(), client, "app-1", "")
+	if err != nil || id != "info-live" {
+		t.Fatalf("ResolveAppInfoID() = %q, %v; want info-live", id, err)
+	}
+}
+
 func TestResolveAppInfoID_ReturnsErrorWhenMultipleRemainAmbiguous(t *testing.T) {
 	testCases := []struct {
 		name           string

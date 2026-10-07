@@ -212,7 +212,7 @@ Examples:
   asc game-center activities create --app "APP_ID" --reference-name "Weekly" --vendor-id "com.example.weekly"
   asc game-center activities create --app "APP_ID" --reference-name "Weekly" --vendor-id "com.example.weekly" --create-initial-version true
   asc game-center activities create --app "APP_ID" --reference-name "Weekly" --vendor-id "com.example.weekly" --create-initial-version true --initial-fallback-url "https://example.com/fallback"
-  asc game-center activities create --group-id "GROUP_ID" --reference-name "Weekly" --vendor-id "com.example.weekly"`,
+  asc game-center activities create --group-id "GROUP_ID" --reference-name "Weekly" --vendor-id "grp.com.example.weekly"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

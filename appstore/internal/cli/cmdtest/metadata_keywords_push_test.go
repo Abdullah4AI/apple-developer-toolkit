@@ -337,8 +337,8 @@ func TestRunMetadataKeywordsPushPartialFailureReturnsExitError(t *testing.T) {
 		}
 	})
 
-	if stderr != "" {
-		t.Fatalf("expected empty stderr, got %q", stderr)
+	if want := "Error: metadata keywords push: 1 locale(s) failed\n"; stderr != want {
+		t.Fatalf("stderr = %q, want %q", stderr, want)
 	}
 
 	var payload map[string]any
@@ -408,8 +408,8 @@ func TestRunMetadataKeywordsPushTableOutputIncludesSummaryAndFailureArtifact(t *
 		}
 	})
 
-	if stderr != "" {
-		t.Fatalf("expected empty stderr, got %q", stderr)
+	if want := "Error: metadata keywords push: 1 locale(s) failed\n"; stderr != want {
+		t.Fatalf("stderr = %q, want %q", stderr, want)
 	}
 	for _, want := range []string{
 		"Version ID",

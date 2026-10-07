@@ -126,7 +126,7 @@ Examples:
 				return fmt.Errorf("metadata keywords sync: %w", err)
 			}
 			if planResult.Failed > 0 {
-				return shared.NewReportedError(fmt.Errorf("metadata keywords sync: %d locale(s) failed", planResult.Failed))
+				return shared.NewReportedError(shared.NewErrorWithCause(fmt.Errorf("metadata keywords sync: %d locale(s) failed", planResult.Failed), planResult.refused))
 			}
 			return nil
 		},

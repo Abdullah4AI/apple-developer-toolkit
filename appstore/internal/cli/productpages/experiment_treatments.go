@@ -181,6 +181,7 @@ func ExperimentTreatmentsCreateCommand() *ffcli.Command {
 
 	experimentID := shared.BindResourceIDFlag(fs, "experiment-id", "appStoreVersionExperiments", "Experiment ID")
 	name := fs.String("name", "", "Treatment name")
+	v2 := fs.Bool("v2", false, "Create a treatment for a v2 experiment")
 	appIconName := fs.String("app-icon-name", "", "App icon asset name")
 	output := shared.BindOutputFlags(fs)
 
@@ -188,11 +189,12 @@ func ExperimentTreatmentsCreateCommand() *ffcli.Command {
 		Name:       "create",
 		ShortUsage: "asc product-pages experiments treatments create --experiment-id \"EXPERIMENT_ID\" --name \"NAME\"",
 		ShortHelp:  "Create a treatment.",
-		LongHelp: `Create a treatment.
+		LongHelp: `Create a treatment. Use --v2 when the experiment was created with --v2.
 
 Examples:
   asc product-pages experiments treatments create --experiment-id "EXPERIMENT_ID" --name "Variant A"
-  asc product-pages experiments treatments create --experiment-id "EXPERIMENT_ID" --name "Variant A" --app-icon-name "Icon A"`,
+  asc product-pages experiments treatments create --experiment-id "EXPERIMENT_ID" --name "Variant A" --app-icon-name "Icon A"
+  asc product-pages experiments treatments create --experiment-id "EXPERIMENT_ID" --name "Variant A" --v2`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -216,7 +218,12 @@ Examples:
 			requestCtx, cancel := shared.ContextWithTimeout(ctx)
 			defer cancel()
 
-			resp, err := client.CreateAppStoreVersionExperimentTreatment(requestCtx, trimmedID, nameValue, strings.TrimSpace(*appIconName))
+			var resp *asc.AppStoreVersionExperimentTreatmentResponse
+			if *v2 {
+				resp, err = client.CreateAppStoreVersionExperimentTreatmentV2(requestCtx, trimmedID, nameValue, strings.TrimSpace(*appIconName))
+			} else {
+				resp, err = client.CreateAppStoreVersionExperimentTreatment(requestCtx, trimmedID, nameValue, strings.TrimSpace(*appIconName))
+			}
 			if err != nil {
 				return fmt.Errorf("experiments treatments create: failed to create: %w", err)
 			}

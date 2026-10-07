@@ -29,7 +29,7 @@ type BetaTesterGroupsUpdateResult struct {
 	Action   string   `json:"action"`
 }
 
-// Actions reported by the beta group tester add receipt.
+// Actions reported by the beta group tester add and remove receipts.
 const (
 	// BetaGroupTestersActionAdded reports that App Store Connect created the
 	// requested memberships.
@@ -37,12 +37,15 @@ const (
 	// BetaGroupTestersActionSkipped reports that a post-conflict read-back
 	// confirmed every requested tester in the group.
 	BetaGroupTestersActionSkipped = "skipped"
+	// BetaGroupTestersActionRemoved reports that App Store Connect removed the
+	// requested memberships.
+	BetaGroupTestersActionRemoved = "removed"
 )
 
 // BetaGroupTestersUpdateResult represents CLI output for beta group tester
-// additions. AlreadyPresent is set when App Store Connect rejected the add
-// with a conflict and a membership read-back confirmed every requested tester
-// is already in the group.
+// additions and removals. AlreadyPresent is set when App Store Connect
+// rejected the add with a conflict and a membership read-back confirmed every
+// requested tester is already in the group.
 type BetaGroupTestersUpdateResult struct {
 	GroupID        string   `json:"groupId"`
 	TesterIDs      []string `json:"testerIds"`
@@ -99,6 +102,12 @@ type BuildBetaGroupMembershipFailure struct {
 	GroupID   string `json:"groupId"`
 	GroupName string `json:"groupName,omitempty"`
 	Error     string `json:"error"`
+}
+
+// BetaGroupDeleteResult represents CLI output for beta group deletions.
+type BetaGroupDeleteResult struct {
+	ID      string `json:"id"`
+	Deleted bool   `json:"deleted"`
 }
 
 // BetaFeedbackSubmissionDeleteResult represents CLI output for beta feedback deletions.
@@ -229,6 +238,12 @@ func betaTestersRows(resp *BetaTestersResponse) ([]string, [][]string) {
 func betaTesterDeleteResultRows(result *BetaTesterDeleteResult) ([]string, [][]string) {
 	headers := []string{"ID", "Email", "Deleted"}
 	rows := [][]string{{result.ID, result.Email, fmt.Sprintf("%t", result.Deleted)}}
+	return headers, rows
+}
+
+func betaGroupDeleteResultRows(result *BetaGroupDeleteResult) ([]string, [][]string) {
+	headers := []string{"ID", "Deleted"}
+	rows := [][]string{{result.ID, fmt.Sprintf("%t", result.Deleted)}}
 	return headers, rows
 }
 
@@ -430,4 +445,45 @@ func (p *BetaTesterUsagesPage) GetData() any {
 		return nil
 	}
 	return p.Data
+}
+
+func betaBuildUsagesRows(resp *BetaBuildUsagesResponse) ([]string, [][]string, error) {
+	headers := []string{"Start", "End", "Installs", "Sessions", "Crashes", "Feedback", "Invites"}
+	if len(resp.Data) == 0 {
+		return headers, nil, nil
+	}
+	var payload struct {
+		Data []struct {
+			DataPoints []struct {
+				Start  string `json:"start"`
+				End    string `json:"end"`
+				Values struct {
+					InstallCount  *int `json:"installCount"`
+					SessionCount  *int `json:"sessionCount"`
+					CrashCount    *int `json:"crashCount"`
+					FeedbackCount *int `json:"feedbackCount"`
+					InviteCount   *int `json:"inviteCount"`
+				} `json:"values"`
+			} `json:"dataPoints"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(resp.Data, &payload); err != nil {
+		return nil, nil, fmt.Errorf("parse beta build usages: %w", err)
+	}
+	var rows [][]string
+	for _, metric := range payload.Data {
+		for _, point := range metric.DataPoints {
+			v := point.Values
+			rows = append(rows, []string{
+				point.Start,
+				point.End,
+				formatOptionalInt(v.InstallCount),
+				formatOptionalInt(v.SessionCount),
+				formatOptionalInt(v.CrashCount),
+				formatOptionalInt(v.FeedbackCount),
+				formatOptionalInt(v.InviteCount),
+			})
+		}
+	}
+	return headers, rows, nil
 }

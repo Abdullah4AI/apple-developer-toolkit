@@ -19,11 +19,3 @@ func TestValidateHelpDocumentsDeepCachedSessionContract(t *testing.T) {
 		}
 	}
 }
-
-func TestValidateDeepFlagsAreTopLevelOnly(t *testing.T) {
-	cmd := ValidateCommand()
-	err := cmd.ParseAndRun(t.Context(), []string{"--deep", "testflight", "--app", "app-1", "--build-id", "build-1"})
-	if err == nil || !strings.Contains(err.Error(), "--deep is only valid for asc validate") {
-		t.Fatalf("error = %v, want top-level-only deep diagnostic", err)
-	}
-}

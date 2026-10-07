@@ -242,6 +242,9 @@ type Config struct {
 // ErrNotFound is returned when the config file doesn't exist
 var ErrNotFound = fmt.Errorf("configuration not found")
 
+// ErrParse is returned when the config file is not valid JSON.
+var ErrParse = errors.New("failed to parse config")
+
 // ErrInvalidPath is returned when the config path is invalid.
 var ErrInvalidPath = errors.New("invalid config path")
 
@@ -441,7 +444,7 @@ func LoadAt(path string) (*Config, error) {
 
 	var cfg Config
 	if err := json.Unmarshal(data, &cfg); err != nil {
-		return nil, fmt.Errorf("failed to parse config: %w", err)
+		return nil, fmt.Errorf("%w %s: %w", ErrParse, path, err)
 	}
 
 	if err := cfg.Validate(); err != nil {

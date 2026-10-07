@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -266,5 +267,64 @@ func TestReadOnlyRawAPITransport(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+func TestReadOnlyRefusalInBatchCommandExitsReadOnly(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		args    func(input string) []string
+		listGET string
+		listRes string
+	}{
+		{
+			name:  "metadata keywords push",
+			input: `{"en-US":"alpha,beta"}`,
+			args: func(input string) []string {
+				return []string{"metadata", "keywords", "push", "--version-id", "ver-1", "--input", input}
+			},
+			listGET: "/v1/appStoreVersions/ver-1/appStoreVersionLocalizations",
+			listRes: `{"data":[{"type":"appStoreVersionLocalizations","id":"loc-en","attributes":{"locale":"en-US","keywords":"old"}}],"links":{}}`,
+		},
+		{
+			name:  "devices register-batch",
+			input: "AA-BB-CC\tPhone One\tIOS\n",
+			args: func(input string) []string {
+				return []string{"devices", "register-batch", "--file", input, "--confirm"}
+			},
+			listGET: "/v1/devices",
+			listRes: `{"data":[],"links":{}}`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			setupAuth(t)
+			t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
+			t.Setenv(readonly.EnvVar, "1")
+			t.Chdir(t.TempDir())
+			if err := os.WriteFile("input", []byte(tt.input), 0o600); err != nil {
+				t.Fatalf("WriteFile() error: %v", err)
+			}
+
+			installDefaultTransport(t, roundTripFunc(func(req *http.Request) (*http.Response, error) {
+				if req.Method != http.MethodGet || req.URL.Path != tt.listGET {
+					t.Errorf("unexpected request left the client: %s %s", req.Method, req.URL.Path)
+					return nil, io.ErrUnexpectedEOF
+				}
+				return jsonResponse(http.StatusOK, tt.listRes)
+			}))
+
+			var code int
+			stdout, stderr := captureOutput(t, func() {
+				code = cmd.Run(append(tt.args("input"), "--output", "json"), "1.0.0")
+			})
+			if code != cmd.ExitReadOnly {
+				t.Fatalf("exit code = %d, want %d; stdout=%q stderr=%q", code, cmd.ExitReadOnly, stdout, stderr)
+			}
+			if !strings.Contains(stdout, "ASC_READ_ONLY is set; refusing") {
+				t.Fatalf("stdout = %q, want the per-item refusal", stdout)
+			}
+		})
 	}
 }

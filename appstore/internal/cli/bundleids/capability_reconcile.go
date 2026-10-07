@@ -289,17 +289,11 @@ func resolveCapabilityBundleID(ctx context.Context, client *asc.Client, value st
 	if !asc.IsNotFound(err) {
 		return "", err
 	}
-	resp, err := client.GetBundleIDs(ctx, asc.WithBundleIDsFilterIdentifier(value))
+	resp, err := shared.FindBundleID(ctx, client, value)
 	if err != nil {
 		return "", err
 	}
-	if len(resp.Data) == 0 {
-		return "", fmt.Errorf("bundle ID not found: %s", value)
-	}
-	if len(resp.Data) > 1 {
-		return "", fmt.Errorf("multiple bundle IDs found for identifier %q; use a resource ID", value)
-	}
-	return resp.Data[0].ID, nil
+	return resp.Data.ID, nil
 }
 
 func listBundleCapabilities(ctx context.Context, client *asc.Client, bundleID string) ([]asc.Resource[asc.BundleIDCapabilityAttributes], error) {

@@ -195,3 +195,28 @@ func wrap(base error, target error) error {
 	_ = base
 	return isWrapper{target: target}
 }
+
+func TestClassify_AppNotFoundByBundleIDHintsNumericAppID(t *testing.T) {
+	tests := []struct {
+		name     string
+		id       string
+		wantHint string
+	}{
+		{
+			name:     "bundle ID",
+			id:       "com.example.app",
+			wantHint: "App IDs are numeric. Find this app's ID with `asc apps list --bundle-id \"com.example.app\"` and pass that instead.",
+		},
+		{name: "numeric app ID", id: "123456789"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			body := `{"errors":[{"status":"404","code":"NOT_FOUND","title":"The specified resource does not exist","detail":"There is no resource of type 'apps' with id '` + test.id + `'"}]}`
+			err := fmt.Errorf("versions list: %w", asc.ParseErrorWithStatus([]byte(body), 404))
+
+			if got := Classify(err).Hint; got != test.wantHint {
+				t.Fatalf("Hint = %q, want %q", got, test.wantHint)
+			}
+		})
+	}
+}

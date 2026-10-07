@@ -8,6 +8,7 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -20,8 +21,8 @@ func TestPrivateKeyErrorsCarryStructuredKinds(t *testing.T) {
 		path := filepath.Join(t.TempDir(), "missing.p8")
 		err := ValidateKeyFile(path)
 		assertPrivateKeyErrorKind(t, err, PrivateKeyNotFound)
-		if !strings.Contains(err.Error(), "failed to open key file") {
-			t.Fatalf("error message changed: %v", err)
+		if got, want := err.Error(), fmt.Sprintf("private key file not found: %q", path); got != want {
+			t.Fatalf("error = %q, want %q", got, want)
 		}
 	})
 

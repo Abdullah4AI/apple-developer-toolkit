@@ -62,7 +62,7 @@ func addIAPPromotedPurchaseLookupAppFlag(cmd *ffcli.Command) *string {
 
 func configureIAPPromotedPurchasesCreate(cmd *ffcli.Command) {
 	promotedpurchases.ConfigureFixedProductTypeCreateCommand(cmd, promotedpurchases.FixedProductTypeCreateConfig{
-		ShortUsage: "asc iap promoted-purchases create --app APP_ID --product-id PRODUCT_ID --visible-for-all-users",
+		ShortUsage: "asc iap promoted-purchases create --app APP_ID --product-id PRODUCT_ID --visible-for-all-users true|false",
 		ShortHelp:  "Create a promoted purchase for an in-app purchase.",
 		LongHelp: `Create a promoted purchase for an in-app purchase.
 

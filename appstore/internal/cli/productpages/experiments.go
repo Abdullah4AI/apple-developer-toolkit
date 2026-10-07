@@ -78,6 +78,9 @@ Examples:
 			if err := shared.ValidateNextURL(*next); err != nil {
 				return shared.UsageErrorf("experiments list: %v", err)
 			}
+			if err := shared.RejectNextFlagConflicts(fs, *next, "product-pages experiments list", "state"); err != nil {
+				return err
+			}
 
 			stateValues, err := normalizeExperimentStates(shared.SplitCSVUpper(*state))
 			if err != nil {

@@ -43,6 +43,7 @@ type metadataKeywordsApplySummary struct {
 	Failed    int
 	Actions   []ApplyAction
 	Results   []MetadataKeywordsMutationResult
+	refused   error
 }
 
 func shouldPrintMetadataKeywordsPlanResult(result MetadataKeywordsPlanResult, err error) bool {
@@ -110,7 +111,7 @@ Examples:
 				return fmt.Errorf("metadata keywords apply: %w", err)
 			}
 			if result.Failed > 0 {
-				return shared.NewReportedError(fmt.Errorf("metadata keywords apply: %d locale(s) failed", result.Failed))
+				return shared.NewReportedError(shared.NewErrorWithCause(fmt.Errorf("metadata keywords apply: %d locale(s) failed", result.Failed), result.refused))
 			}
 			return nil
 		},
@@ -186,6 +187,7 @@ func applyMetadataKeywordChanges(
 					formatAttemptedFieldMap(keywordPlanFields, localPatch.setFields),
 					createErr,
 				)
+				summary.refused = shared.KeepReadOnlyRefusal(summary.refused, createErr)
 				summary.Failed++
 				summary.Results = append(summary.Results, result)
 				continue
@@ -216,6 +218,7 @@ func applyMetadataKeywordChanges(
 					formatAttemptedFieldMap(keywordPlanFields, localPatch.setFields),
 					updateErr,
 				)
+				summary.refused = shared.KeepReadOnlyRefusal(summary.refused, updateErr)
 				summary.Failed++
 				summary.Results = append(summary.Results, result)
 				continue

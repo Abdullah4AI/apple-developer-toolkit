@@ -60,6 +60,8 @@ const (
 	ResourceTypeReviewSubmissionItems                           ResourceType = "reviewSubmissionItems"
 	ResourceTypeAppCustomProductPages                           ResourceType = "appCustomProductPages"
 	ResourceTypeAppCustomProductPageVersions                    ResourceType = "appCustomProductPageVersions"
+	ResourceTypeAppAssetLibraryImages                           ResourceType = "appAssetLibraryImages"
+	ResourceTypeAppAssetLibraryVideos                           ResourceType = "appAssetLibraryVideos"
 	ResourceTypeAppCustomProductPageLocalizations               ResourceType = "appCustomProductPageLocalizations"
 	ResourceTypeAppEvents                                       ResourceType = "appEvents"
 	ResourceTypeAppEventLocalizations                           ResourceType = "appEventLocalizations"

@@ -187,46 +187,6 @@ func TestAppsListStateFiltersRejectUnknownValues(t *testing.T) {
 	}
 }
 
-func TestAppsListRejectsListFlagsBeforeSubcommand(t *testing.T) {
-	tests := []struct {
-		name string
-		args []string
-		want string
-	}{
-		{
-			name: "state filter before list",
-			args: []string{"apps", "--version-state", "IN_REVIEW", "list"},
-			want: "--version-state cannot be placed before an apps subcommand",
-		},
-		{
-			name: "state filter before another subcommand",
-			args: []string{"apps", "--review-submission-state", "IN_REVIEW", "view", "--id", "app-1"},
-			want: "--review-submission-state cannot be placed before an apps subcommand",
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			root := RootCommand("1.2.3")
-			root.FlagSet.SetOutput(io.Discard)
-			stdout, stderr := captureOutput(t, func() {
-				if err := root.Parse(test.args); err != nil {
-					t.Fatalf("parse error: %v", err)
-				}
-				if err := root.Run(context.Background()); !errors.Is(err, flag.ErrHelp) {
-					t.Fatalf("error = %v, want flag.ErrHelp", err)
-				}
-			})
-			if stdout != "" {
-				t.Fatalf("stdout = %q, want empty", stdout)
-			}
-			if !strings.Contains(stderr, test.want) {
-				t.Fatalf("stderr = %q, want it to contain %q", stderr, test.want)
-			}
-		})
-	}
-}
-
 // TestAppsListStateFiltersRejectNextCombination proves the filters are never
 // accepted and silently dropped: a links.next URL already carries its own
 // query, so combining it with a state filter is a usage error.

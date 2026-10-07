@@ -252,7 +252,7 @@ func TestXcodeCloudProductsListRejectsQueryFlagsCombinedWithNext(t *testing.T) {
 			if got := rootcmd.ExitCodeFromError(err); got != rootcmd.ExitUsage {
 				t.Fatalf("exit code = %d, want %d (err=%v)", got, rootcmd.ExitUsage, err)
 			}
-			want := "xcode-cloud products: --next cannot be combined with --" + test.flagName
+			want := ": --next cannot be combined with --" + test.flagName
 			if !strings.Contains(stderr, want) {
 				t.Fatalf("stderr = %q, want %q", stderr, want)
 			}

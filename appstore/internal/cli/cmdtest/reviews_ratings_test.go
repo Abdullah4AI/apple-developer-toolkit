@@ -113,3 +113,21 @@ func TestReviewsRatingsOutputErrors(t *testing.T) {
 // Note: Help-related tests (TestReviewsHelpShowsRatings, TestReviewsRatingsHelp) were removed
 // because flag.ExitOnError causes os.Exit(0) when --help is passed, which panics in tests.
 // The validation tests above cover the important functionality.
+
+func TestReviewsRatingsUsesASCAppID(t *testing.T) {
+	t.Setenv("ASC_APP_ID", "123")
+
+	root := RootCommand("1.2.3")
+	root.FlagSet.SetOutput(io.Discard)
+	_, stderr := captureOutput(t, func() {
+		if err := root.Parse([]string{"reviews", "ratings", "--workers", "0"}); err != nil {
+			t.Fatalf("parse error: %v", err)
+		}
+		if err := root.Run(context.Background()); !isUsageClassError(err) {
+			t.Fatalf("error = %v, want the --workers usage error", err)
+		}
+	})
+	if strings.Contains(stderr, "--app is required") || !strings.Contains(stderr, "--workers must be at least 1") {
+		t.Fatalf("stderr = %q, want ASC_APP_ID to satisfy --app", stderr)
+	}
+}

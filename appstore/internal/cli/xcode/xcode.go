@@ -158,6 +158,9 @@ Examples:
 			if emptyFlag := firstExplicitlyEmptyFlag(fs, "configuration"); emptyFlag != "" {
 				return shared.UsageErrorf("--%s must not be empty", emptyFlag)
 			}
+			if _, err := os.Stat(strings.TrimSpace(*archivePath)); err == nil && !*overwrite {
+				return shared.UsageErrorf("--archive-path already exists: %s (use --overwrite to replace it)", strings.TrimSpace(*archivePath))
+			}
 
 			result, err := runArchive(ctx, localxcode.ArchiveOptions{
 				WorkspacePath:  strings.TrimSpace(*workspacePath),
@@ -171,7 +174,7 @@ Examples:
 				LogWriter:      os.Stderr,
 			})
 			if err != nil {
-				return fmt.Errorf("xcode archive: %w", err)
+				return xcodeCommandError("xcode archive", err)
 			}
 
 			return shared.PrintOutputWithRenderers(
@@ -222,6 +225,8 @@ uses app-store-connect and automatic signing by default. Use
 --method release-testing for a local IPA installable on registered devices. Use
 --signing-style manual to match locally installed certificates and profiles;
 --team-id optionally overrides archive metadata.
+Automatic signing may need --xcodebuild-flag=-allowProvisioningUpdates so
+xcodebuild can create or update provisioning profiles.
 For local exports, provide exactly one destination: --ipa-path for iOS, tvOS,
 or visionOS, or --pkg-path for macOS. asc moves the exported artifact to that
 exact path. Generated manual signing options support iOS, tvOS, and App Store
@@ -370,7 +375,7 @@ Examples:
 					Overwrite:    false,
 				})
 				if err != nil {
-					return fmt.Errorf("xcode export: generate export options: %w", err)
+					return xcodeCommandError("xcode export: generate export options", err)
 				}
 				if generated == nil || strings.TrimSpace(generated.Path) == "" {
 					return fmt.Errorf("xcode export: generate export options: generator returned an empty path")
@@ -404,7 +409,7 @@ Examples:
 				if *timeout > 0 && errors.Is(err, context.DeadlineExceeded) {
 					return fmt.Errorf("xcode export: timed out after %s while running xcodebuild -exportArchive: %w", timeout.String(), err)
 				}
-				return fmt.Errorf("xcode export: %w", err)
+				return xcodeCommandError("xcode export", err)
 			}
 			exportCompletedAt := time.Now()
 			if exportCompletedAt.Before(exportStartedAt) {
@@ -507,6 +512,11 @@ Apple's server-side validation before you upload or submit it.
 Exactly one of --ipa or --pkg is required. IPA platform metadata is detected
 from the artifact; PKG validation uses the macOS platform.
 
+By default, altool receives asc's resolved credentials (from 'asc auth login'
+or ASC_* environment variables), including the private key via --p8-file-path.
+With --api-key and --api-issuer, altool looks up AuthKey_<KEY_ID>.p8 in its own
+private_keys directories instead.
+
 Examples:
   asc xcode validate --ipa .asc/artifacts/App.ipa
   asc xcode validate --pkg .asc/artifacts/MacApp.pkg
@@ -544,16 +554,25 @@ Examples:
 			if (trimmedAPIKey == "") != (trimmedAPIIssuer == "") {
 				return shared.UsageError("--api-key and --api-issuer must be provided together")
 			}
+			p8FilePath := ""
+			if trimmedAPIKey == "" {
+				var err error
+				trimmedAPIKey, trimmedAPIIssuer, p8FilePath, err = resolveAltoolCredentials()
+				if err != nil {
+					return fmt.Errorf("xcode validate: %w", err)
+				}
+			}
 
 			result, err := runValidate(ctx, localxcode.ValidateOptions{
-				IPAPath:   trimmedIPAPath,
-				PKGPath:   trimmedPKGPath,
-				APIKey:    trimmedAPIKey,
-				APIIssuer: trimmedAPIIssuer,
-				LogWriter: os.Stderr,
+				IPAPath:    trimmedIPAPath,
+				PKGPath:    trimmedPKGPath,
+				APIKey:     trimmedAPIKey,
+				APIIssuer:  trimmedAPIIssuer,
+				P8FilePath: p8FilePath,
+				LogWriter:  os.Stderr,
 			})
 			if err != nil {
-				return fmt.Errorf("xcode validate: %w", err)
+				return xcodeCommandError("xcode validate", err)
 			}
 
 			return shared.PrintOutputWithRenderers(
@@ -571,6 +590,34 @@ Examples:
 			)
 		},
 	}
+}
+
+// resolveAltoolCredentials returns asc's own API key, issuer, and .p8 path so
+// altool does not depend on its private_keys search directories.
+func resolveAltoolCredentials() (keyID, issuerID, p8FilePath string, err error) {
+	creds, err := shared.ResolveAuthCredentials("")
+	if err != nil {
+		return "", "", "", err
+	}
+	p8FilePath, err = shared.AltoolPrivateKeyPath(creds)
+	if err != nil {
+		return "", "", "", fmt.Errorf("prepare private key for altool: %w", err)
+	}
+	if strings.TrimSpace(creds.IssuerID) == "" || p8FilePath == "" {
+		return "", "", "", fmt.Errorf("%w: altool needs a team API key with an issuer ID and a readable .p8 file; run 'asc auth login' or pass --api-key and --api-issuer", shared.ErrMissingAuth)
+	}
+	return strings.TrimSpace(creds.KeyID), strings.TrimSpace(creds.IssuerID), p8FilePath, nil
+}
+
+// xcodeCommandError prefixes err with command and classifies a missing input
+// path as a validation failure instead of an internal error.
+func xcodeCommandError(command string, err error) error {
+	wrapped := fmt.Errorf("%s: %w", command, err)
+	var notFound *localxcode.InputPathNotFoundError
+	if errors.As(err, &notFound) {
+		return shared.WithDiagnostic(shared.NewValidationError(wrapped), shared.DiagnosticFileNotFound, notFound.Flag)
+	}
+	return wrapped
 }
 
 // firstExplicitlyEmptyFlag reports the first of names that the caller supplied

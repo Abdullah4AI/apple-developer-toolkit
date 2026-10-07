@@ -1,6 +1,8 @@
 package builds
 
 import (
+	"context"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -9,6 +11,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
 )
 
 func TestParseDSYMSelectionExactVersionDoesNotRequireLatest(t *testing.T) {
@@ -118,5 +122,154 @@ func TestSaveSingleDSYMVerifiesExistingFileContent(t *testing.T) {
 				t.Fatalf("existing file changed to %q", data)
 			}
 		})
+	}
+}
+
+func TestResolveLiveDSYMTargetAttachmentValidation(t *testing.T) {
+	for _, test := range []struct {
+		name, link, attributes, wantError string
+		exclude                           bool
+	}{
+		{"missing", `null`, ``, "no attached build", false},
+		{"expired excluded", `{"type":"builds","id":"attached"}`, `,"expired":true`, "expired attached build", true},
+		{"expired allowed", `{"type":"builds","id":"attached"}`, `,"expired":true`, "", false},
+		{"unknown expiration", `{"type":"builds","id":"attached"}`, ``, "", true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			client := newBuildsWaitTestClient(t, func(req *http.Request) (*http.Response, error) {
+				switch req.URL.Path {
+				case "/v1/appStoreVersions/live/relationships/build":
+					return buildsWaitJSONResponse(200, `{"data":`+test.link+`}`)
+				case "/v1/builds/attached":
+					return buildsWaitJSONResponse(200, `{"data":{"type":"builds","id":"attached","attributes":{"version":"20","uploadedDate":"2026-01-01T00:00:00Z"`+test.attributes+`}}}`)
+				default:
+					t.Fatalf("unexpected request: %s", req.URL.Path)
+					return nil, nil
+				}
+			})
+			targets, err := resolveLiveDSYMTarget(t.Context(), client, liveAppVersion{ID: "live", Version: "2.0"}, test.exclude)
+			if test.wantError != "" {
+				if err == nil || !strings.Contains(err.Error(), test.wantError) {
+					t.Fatalf("targets=%v err=%v", targets, err)
+				}
+			} else if err != nil || len(targets) != 1 || targets[0].ID != "attached" || targets[0].AppVersion != "2.0" || targets[0].BuildNumber != "20" {
+				t.Fatalf("targets=%v err=%v", targets, err)
+			}
+		})
+	}
+}
+
+func TestResolveLiveDSYMTargetPreservesCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	client := newBuildsWaitTestClient(t, func(req *http.Request) (*http.Response, error) { return nil, req.Context().Err() })
+	_, err := resolveLiveDSYMTarget(ctx, client, liveAppVersion{ID: "live"}, false)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("err=%v", err)
+	}
+}
+
+func TestResolveSelectedDSYMLiveRangesStillListBuilds(t *testing.T) {
+	for _, after := range []*time.Time{nil, func() *time.Time { value := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC); return &value }()} {
+		client := newBuildsWaitTestClient(t, func(req *http.Request) (*http.Response, error) {
+			switch req.URL.Path {
+			case "/v1/apps/123/appStoreVersions":
+				return buildsWaitJSONResponse(200, `{"data":[{"type":"appStoreVersions","id":"live","attributes":{"platform":"IOS","versionString":"2.0","appStoreState":"READY_FOR_SALE","createdDate":"2026-01-01T00:00:00Z"}}]}`)
+			case "/v1/builds":
+				return buildsWaitJSONResponse(200, `{"data":[{"type":"builds","id":"newer","attributes":{"version":"21","uploadedDate":"2026-02-01T00:00:00Z"},"relationships":{"preReleaseVersion":{"data":{"id":"prv"}}}}],"included":[{"type":"preReleaseVersions","id":"prv","attributes":{"version":"2.0","platform":"IOS"}}]}`)
+			default:
+				t.Fatalf("range requested attachment: %s", req.URL.Path)
+				return nil, nil
+			}
+		})
+		targets, err := resolveSelectedDSYMTargets(t.Context(), client, dsymSelection{Live: true, All: true, After: after, Resolve: ResolveBuildOptions{AppID: "123"}})
+		if err != nil || len(targets) != 1 || targets[0].ID != "newer" {
+			t.Fatalf("targets=%v err=%v", targets, err)
+		}
+	}
+}
+
+func TestResolveLiveDSYMTargetPreservesAPIErrors(t *testing.T) {
+	failure := errors.New("provider sentinel")
+	for _, failBuild := range []bool{false, true} {
+		client := newBuildsWaitTestClient(t, func(req *http.Request) (*http.Response, error) {
+			if failBuild && strings.HasSuffix(req.URL.Path, "/relationships/build") {
+				return buildsWaitJSONResponse(200, `{"data":{"type":"builds","id":"attached"}}`)
+			}
+			return nil, failure
+		})
+		_, err := resolveLiveDSYMTarget(t.Context(), client, liveAppVersion{ID: "live"}, false)
+		if !errors.Is(err, failure) {
+			t.Fatalf("err=%v", err)
+		}
+	}
+}
+
+func TestListDSYMTargetsDetectsRepeatedNextURL(t *testing.T) {
+	for _, links := range [][2]string{
+		{"https://api.appstoreconnect.apple.com/v1/builds?cursor=loop", "https://api.appstoreconnect.apple.com/v1/builds?cursor=loop"},
+		{"https://api.appstoreconnect.apple.com/v1/builds?cursor=loop&limit=200", "/v1/builds?limit=200&cursor=loop"},
+	} {
+		t.Run(links[1], func(t *testing.T) {
+			requests := 0
+			client := newBuildsWaitTestClient(t, func(req *http.Request) (*http.Response, error) {
+				requests++
+				if requests == 2 && req.URL.RawQuery != strings.SplitN(links[0], "?", 2)[1] {
+					t.Fatalf("raw next link changed: %s", req.URL.RawQuery)
+				}
+				if requests <= 2 {
+					return buildsWaitJSONResponse(200, `{"data":[],"links":{"next":"`+links[requests-1]+`"}}`)
+				}
+				return buildsWaitJSONResponse(200, `{"data":[],"links":{}}`)
+			})
+			_, err := listDSYMTargets(t.Context(), client, "123", "IOS", "", "", nil, false)
+			if !errors.Is(err, asc.ErrRepeatedPaginationURL) || requests != 2 {
+				t.Fatalf("requests=%d err=%v", requests, err)
+			}
+		})
+	}
+}
+
+func TestListDSYMTargetsPaginationControls(t *testing.T) {
+	for _, cutoff := range []bool{false, true} {
+		requests := 0
+		client := newBuildsWaitTestClient(t, func(req *http.Request) (*http.Response, error) {
+			requests++
+			if requests == 1 {
+				return buildsWaitJSONResponse(200, `{"data":[{"type":"builds","id":"first","attributes":{"version":"20","uploadedDate":"2026-01-01T00:00:00Z"}}],"links":{"next":"/v1/builds?cursor=next"}}`)
+			}
+			if req.URL.RawQuery != "cursor=next" {
+				t.Fatalf("query=%s", req.URL.RawQuery)
+			}
+			return buildsWaitJSONResponse(200, `{"data":[{"type":"builds","id":"second","attributes":{"version":"19","uploadedDate":"2025-01-01T00:00:00Z"}}]}`)
+		})
+		var after *time.Time
+		if cutoff {
+			value := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+			after = &value
+		}
+		targets, err := listDSYMTargets(t.Context(), client, "123", "", "", "", after, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cutoff {
+			if requests != 1 || len(targets) != 0 {
+				t.Fatalf("requests=%d targets=%v", requests, targets)
+			}
+		} else if requests != 2 || len(targets) != 2 || targets[0].ID != "first" || targets[1].ID != "second" {
+			t.Fatalf("requests=%d targets=%v", requests, targets)
+		}
+	}
+}
+
+func TestListDSYMTargetsRejectsUntrustedNextURL(t *testing.T) {
+	requests := 0
+	client := newBuildsWaitTestClient(t, func(req *http.Request) (*http.Response, error) {
+		requests++
+		return buildsWaitJSONResponse(200, `{"data":[],"links":{"next":"https://untrusted.example/v1/builds?cursor=next"}}`)
+	})
+	_, err := listDSYMTargets(t.Context(), client, "123", "", "", "", nil, false)
+	if err == nil || requests != 1 {
+		t.Fatalf("requests=%d err=%v", requests, err)
 	}
 }

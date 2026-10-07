@@ -83,8 +83,8 @@ func TestLookupRemovedFlagIsExactPerCommand(t *testing.T) {
 		{command: "versions view", flag: "id", want: "use `--version-id`", found: true},
 		{command: "apps view", flag: "app", want: "use `--id`", found: true},
 		{command: "builds test-notes view", flag: "id", want: "use `--localization-id`", found: true},
-		{command: "builds test-notes view", flag: "build", want: "use `--build-id`", found: true},
-		{command: "builds individual-testers add", flag: "build", want: "use `--build-id`", found: true},
+		{command: "builds test-notes view", flag: "build", want: "use `--build-id` or `--build-number`", found: true},
+		{command: "builds individual-testers add", flag: "build", want: "use `--build-id` or `--build-number`", found: true},
 		{command: "apps info relationships primary-category", flag: "id", want: "use `--info-id`", found: true},
 		{command: "web auth login", flag: "two-factor-code", want: "use `--two-factor-code-command` or `ASC_WEB_2FA_CODE_COMMAND`", found: true},
 		// `web auth logout` never bound the 2FA flags, so the historical rule

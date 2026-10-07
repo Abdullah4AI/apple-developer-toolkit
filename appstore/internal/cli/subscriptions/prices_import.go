@@ -42,6 +42,8 @@ type subscriptionPriceImportSummary struct {
 	FailureArtifact      string                                `json:"failureArtifactPath,omitempty"`
 	FailureArtifactError string                                `json:"failureArtifactError,omitempty"`
 	Results              []subscriptionPriceImportResultItem   `json:"results,omitempty"`
+	failureCauses        []error
+	refused              error
 }
 
 type subscriptionPriceImportSummaryError struct {
@@ -234,7 +236,7 @@ Examples:
 			for _, csvRow := range rows {
 				resolvedRow, rowErr := resolveSubscriptionPriceImportRow(csvRow, defaultStartDate, *preserved)
 				if rowErr != nil {
-					appendSubscriptionPriceImportFailure(summary, resolvedRow, rowErr)
+					appendSubscriptionPriceImportFailure(summary, resolvedRow, shared.NewValidationError(rowErr))
 					if !*continueOnError {
 						break
 					}
@@ -349,15 +351,30 @@ Examples:
 			}
 
 			if summary.Failed > 0 {
-				rowErr := fmt.Errorf("subscriptions prices import: %d row(s) failed", summary.Failed)
-				if summary.FailureArtifactError != "" {
-					rowErr = errors.Join(rowErr, fmt.Errorf("write failure artifact: %s", summary.FailureArtifactError))
-				}
-				return shared.NewReportedError(rowErr)
+				return shared.NewReportedError(shared.NewErrorWithCause(subscriptionPriceImportFailure(summary), summary.refused))
 			}
 			return nil
 		},
 	}
+}
+
+// subscriptionPriceImportFailure keeps the first API failure as the cause so
+// its HTTP status sets the exit code. When every row failed on its own values,
+// the input file is what needs fixing.
+func subscriptionPriceImportFailure(summary *subscriptionPriceImportSummary) error {
+	err := fmt.Errorf("subscriptions prices import: %d row(s) failed", summary.Failed)
+	if summary.FailureArtifactError != "" {
+		err = errors.Join(err, fmt.Errorf("write failure artifact: %s", summary.FailureArtifactError))
+	}
+	for _, cause := range summary.failureCauses {
+		if !shared.IsValidationError(cause) {
+			return shared.NewErrorWithCause(err, cause)
+		}
+	}
+	if summary.FailureArtifactError != "" {
+		return err
+	}
+	return shared.WithDiagnostic(shared.NewValidationError(err), shared.DiagnosticInvalidInput, "--input")
 }
 
 func renderSubscriptionPriceImportSummaryTables(summary *subscriptionPriceImportSummary, markdown bool) error {
@@ -407,6 +424,8 @@ func appendSubscriptionPriceImportFailure(summary *subscriptionPriceImportSummar
 		return
 	}
 	summary.Failed++
+	summary.failureCauses = append(summary.failureCauses, err)
+	summary.refused = shared.KeepReadOnlyRefusal(summary.refused, err)
 	summary.Failures = append(summary.Failures, subscriptionPriceImportSummaryError{
 		Row:       row.row,
 		Territory: row.territoryID,
@@ -769,11 +788,11 @@ func (c *subscriptionPricePointLookupCache) lookupPricePointID(
 	ids := territoryPrices[priceKey]
 	switch len(ids) {
 	case 0:
-		return "", fmt.Errorf("row price %q was not found in subscription price points for territory %q", rawPrice, territoryID)
+		return "", shared.NewValidationError(fmt.Errorf("row price %q was not found in subscription price points for territory %q", rawPrice, territoryID))
 	case 1:
 		return ids[0], nil
 	default:
-		return "", fmt.Errorf("row price %q matched multiple subscription price points in territory %q", rawPrice, territoryID)
+		return "", shared.NewValidationError(fmt.Errorf("row price %q matched multiple subscription price points in territory %q", rawPrice, territoryID))
 	}
 }
 

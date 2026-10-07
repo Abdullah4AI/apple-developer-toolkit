@@ -36,6 +36,7 @@ Examples:
 			ExperimentTreatmentLocalizationsDeleteCommand(),
 			ExperimentTreatmentLocalizationPreviewSetsCommand(),
 			ExperimentTreatmentLocalizationScreenshotSetsCommand(),
+			shared.CreativePlacementsCommand("appStoreVersionExperimentTreatmentLocalizations", "product-pages experiments treatments localizations", "a product page optimization treatment localization"),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp

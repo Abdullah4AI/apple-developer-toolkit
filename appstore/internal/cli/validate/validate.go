@@ -2,6 +2,7 @@ package validate
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -49,10 +50,6 @@ func ValidateCommand() *ffcli.Command {
 	appleID := fs.String("apple-id", "", "Cached Apple web session to use with --deep")
 	ipaPath := fs.String("ipa", "", "Path to the version's .ipa; its UIDeviceFamily decides whether iPad screenshots are required")
 	output := shared.BindOutputFlags(fs)
-
-	testFlight := wrapValidateSubcommand(ValidateTestFlightCommand(), fs)
-	iap := wrapValidateSubcommand(ValidateIAPCommand(), fs)
-	subscriptions := wrapValidateSubcommand(ValidateSubscriptionsCommand(), fs)
 
 	return &ffcli.Command{
 		Name:       "validate",
@@ -134,9 +131,9 @@ Subscriptions:
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
-			testFlight,
-			iap,
-			subscriptions,
+			ValidateTestFlightCommand(),
+			ValidateIAPCommand(),
+			ValidateSubscriptionsCommand(),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			if len(args) > 0 {
@@ -184,72 +181,6 @@ Subscriptions:
 	}
 }
 
-func wrapValidateSubcommand(cmd *ffcli.Command, parentFlags *flag.FlagSet) *ffcli.Command {
-	if cmd == nil || cmd.Exec == nil {
-		return cmd
-	}
-
-	originalExec := cmd.Exec
-	cmd.Exec = func(ctx context.Context, args []string) error {
-		if message := validateParentFlagUsageMessage(parentFlags); message != "" {
-			return shared.WithDiagnostic(shared.UsageError(message), shared.DiagnosticInvalidInput, "")
-		}
-		return originalExec(ctx, args)
-	}
-	return cmd
-}
-
-func validateParentFlagUsageMessage(parentFlags *flag.FlagSet) string {
-	if parentFlags == nil {
-		return ""
-	}
-
-	moveAfterSubcommand := make([]string, 0, 4)
-	topLevelOnly := make([]string, 0, 8)
-	parentFlags.Visit(func(f *flag.Flag) {
-		switch f.Name {
-		case "app", "output", "pretty", "strict":
-			moveAfterSubcommand = append(moveAfterSubcommand, "--"+f.Name)
-		case "version", "version-id", "platform", "deep", "check-urls", "apple-id", "ipa":
-			topLevelOnly = append(topLevelOnly, "--"+f.Name)
-		}
-	})
-
-	if len(moveAfterSubcommand) == 0 && len(topLevelOnly) == 0 {
-		return ""
-	}
-
-	parts := make([]string, 0, 2)
-	if len(moveAfterSubcommand) > 0 {
-		parts = append(parts, fmt.Sprintf("%s must be passed after the validate subcommand name", formatValidateFlagList(moveAfterSubcommand)))
-	}
-	if len(topLevelOnly) > 0 {
-		parts = append(parts, fmt.Sprintf("%s %s only valid for asc validate", formatValidateFlagList(topLevelOnly), validateFlagVerb(topLevelOnly)))
-	}
-
-	return strings.Join(parts, "; ")
-}
-
-func formatValidateFlagList(flags []string) string {
-	switch len(flags) {
-	case 0:
-		return ""
-	case 1:
-		return flags[0]
-	case 2:
-		return flags[0] + " and " + flags[1]
-	default:
-		return strings.Join(flags[:len(flags)-1], ", ") + ", and " + flags[len(flags)-1]
-	}
-}
-
-func validateFlagVerb(flags []string) string {
-	if len(flags) == 1 {
-		return "is"
-	}
-	return "are"
-}
-
 func runValidate(ctx context.Context, opts validateOptions) error {
 	var localIPA *LocalIPA
 	if opts.IPAPath != "" {
@@ -290,6 +221,12 @@ func runValidate(ctx context.Context, opts validateOptions) error {
 			CheckURLs: opts.CheckURLs,
 			IPA:       localIPA,
 		})
+		if ambiguous, ok := errors.AsType[*shared.AmbiguousSelectionError](err); ok {
+			message := "validate: " + err.Error()
+			fmt.Fprintf(os.Stderr, "Error: %s\n", message)
+			reported := shared.WithDiagnostic(shared.NewReportedUsageError(shared.UsageErrorInvalidValue, message), shared.DiagnosticInvalidInput, ambiguous.Flag)
+			return shared.NewErrorWithCause(reported, err)
+		}
 	}
 	if err != nil {
 		if !opts.Deep || !asc.IsRequiredAgreementError(err) {
@@ -382,7 +319,8 @@ func resolveVersionID(ctx context.Context, client *asc.Client, appID, version, p
 		if strings.TrimSpace(platform) != "" {
 			notFound = fmt.Errorf("app store version not found for version %q and platform %q", version, platform)
 		}
-		return "", shared.WithAppStoreVersionNotFoundDiagnostics(ctx, client, appID, version, platform, notFound)
+		notFound = shared.WithAppStoreVersionNotFoundDiagnostics(ctx, client, appID, version, platform, notFound)
+		return "", shared.WithDiagnostic(shared.NewValidationError(notFound), shared.DiagnosticResourceNotFound, "--version")
 	}
 	if len(resp.Data) > 1 || pageHasNext {
 		ambiguous := shared.AmbiguousAppStoreVersionError(version, platform, resp.Data, "--platform", "--version-id")

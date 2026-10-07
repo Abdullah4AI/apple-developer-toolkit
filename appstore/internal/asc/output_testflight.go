@@ -191,3 +191,7 @@ func formatBetaGroupMetricCount(value *int) string {
 	}
 	return fmt.Sprintf("%d", *value)
 }
+
+func betaRecruitmentCompatibleBuildCheckRows(resp *BetaRecruitmentCriterionCompatibleBuildCheckResponse) ([]string, [][]string) {
+	return []string{"ID", "Has Compatible Build"}, [][]string{{resp.Data.ID, fmt.Sprintf("%t", resp.Data.Attributes.HasCompatibleBuild)}}
+}

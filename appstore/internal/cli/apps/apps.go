@@ -53,9 +53,6 @@ func AppsCommand() *ffcli.Command {
 		AppEncryptionDeclarationsCommand(),
 		AppsContentRightsCommand(),
 	}
-	for _, subcommand := range subcommands {
-		rejectAppsListFlagsBeforeSubcommand(fs, subcommand)
-	}
 
 	return &ffcli.Command{
 		Name:       "apps",
@@ -110,34 +107,6 @@ Examples:
 			}
 			return appsList(ctx, fs, *output.Output, *output.Pretty, *bundleID, *name, *sku, *versionState, *reviewSubmissionState, *sort, *limit, *next, *paginate, *appInfoFields, *iapFields, *subscriptionGroupFields)
 		},
-	}
-}
-
-var appsListOnlyFlagNames = []string{
-	"bundle-id", "name", "sku", "version-state", "review-submission-state",
-	"sort", "limit", "next", "paginate", "app-info-fields", "iap-fields",
-	"subscription-group-fields",
-}
-
-// rejectAppsListFlagsBeforeSubcommand prevents ffcli from accepting a parent
-// list flag and then silently dropping it when dispatching to a child command.
-// Direct `asc apps [flags]` listing remains supported; subcommand flags belong
-// after `list` so the selected command owns their values and validation.
-func rejectAppsListFlagsBeforeSubcommand(parentFS *flag.FlagSet, command *ffcli.Command) {
-	if command == nil {
-		return
-	}
-	if command.Exec != nil {
-		exec := command.Exec
-		command.Exec = func(ctx context.Context, args []string) error {
-			if flagName, ok := appFlagWasProvided(parentFS, appsListOnlyFlagNames...); ok {
-				return shared.UsageErrorf("%s cannot be placed before an apps subcommand; use asc apps [flags] or place it after asc apps list", flagName)
-			}
-			return exec(ctx, args)
-		}
-	}
-	for _, subcommand := range command.Subcommands {
-		rejectAppsListFlagsBeforeSubcommand(parentFS, subcommand)
 	}
 }
 

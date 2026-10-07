@@ -76,8 +76,9 @@ func WithHTTPClient(httpClient *http.Client) ClientOption {
 	return func(client *Client) { client.httpClient = httpClient }
 }
 
-// WithBaseURL overrides the complete Retention Messaging API base URL.
-// It exists for tests and Apple-compatible proxies.
+// WithBaseURL overrides the StoreKit server API host URL that request paths
+// such as /inApps/v1/... are appended to. It exists for tests and
+// Apple-compatible proxies.
 func WithBaseURL(baseURL string) ClientOption {
 	return func(client *Client) { client.baseURL = baseURL }
 }

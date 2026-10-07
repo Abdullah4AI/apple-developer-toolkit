@@ -28,7 +28,7 @@ Examples:
   asc background-assets upload-files list --version-id "VERSION_ID"
   asc background-assets upload-files view --upload-file-id "UPLOAD_FILE_ID"
   asc background-assets upload-files create --version-id "VERSION_ID" --file "./asset.zip" --asset-type ASSET
-  asc background-assets upload-files update --upload-file-id "UPLOAD_FILE_ID" --uploaded true --file "./asset.zip"`,
+  asc background-assets upload-files update --upload-file-id "UPLOAD_FILE_ID" --uploaded true --file "./asset.zip" --checksum`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{

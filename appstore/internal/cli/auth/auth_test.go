@@ -523,6 +523,33 @@ func TestAuthLoginCommand(t *testing.T) {
 		if !strings.Contains(stderr, "--key-id is required") {
 			t.Fatalf("expected key ID error in stderr, got %q", stderr)
 		}
+		if strings.Contains(stderr, "key file name suggests") {
+			t.Fatalf("expected no key ID hint for a generic key file name, got %q", stderr)
+		}
+		if !strings.Contains(stderr, "Hint: create an API key at "+authsvc.APIKeysURL+", then run: "+authsvc.LoginCommandExample+"\n") {
+			t.Fatalf("expected login form hint, got %q", stderr)
+		}
+	})
+
+	t.Run("missing key id hints from key file name", func(t *testing.T) {
+		cmd := AuthLoginCommand()
+		if err := cmd.FlagSet.Parse([]string{
+			"--name", "demo",
+			"--issuer-id", "ISS",
+			"--private-key", "/tmp/keys/AuthKey_39MX87M9Y4.p8",
+		}); err != nil {
+			t.Fatalf("Parse() error: %v", err)
+		}
+		_, stderr := captureAuthOutput(t, func() {
+			err := cmd.Exec(context.Background(), []string{})
+			if !errors.Is(err, flag.ErrHelp) {
+				t.Fatalf("expected flag.ErrHelp, got %v", err)
+			}
+			assertAuthDiagnostic(t, err, shared.DiagnosticRequiredInputMissing, "--key-id")
+		})
+		if !strings.Contains(stderr, "Error: --key-id is required\nHint: the key file name suggests --key-id 39MX87M9Y4\n") {
+			t.Fatalf("expected key ID hint in stderr, got %q", stderr)
+		}
 	})
 
 	for _, test := range []struct {

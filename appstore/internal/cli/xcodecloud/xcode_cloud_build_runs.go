@@ -50,7 +50,7 @@ Examples:
 			XcodeCloudBuildRunsBuildsCommand(),
 		},
 		Exec: func(ctx context.Context, args []string) error {
-			return xcodeCloudBuildRunsList(ctx, *workflowID, *sort, *limit, *next, *paginate, *output, *pretty)
+			return xcodeCloudBuildRunsList(ctx, fs, *workflowID, *sort, *limit, *next, *paginate, *output, *pretty)
 		},
 	}
 }
@@ -74,7 +74,7 @@ Examples:
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
-			return xcodeCloudBuildRunsList(ctx, *workflowID, *sort, *limit, *next, *paginate, *output, *pretty)
+			return xcodeCloudBuildRunsList(ctx, fs, *workflowID, *sort, *limit, *next, *paginate, *output, *pretty)
 		},
 	}
 }
@@ -153,9 +153,12 @@ Examples:
 	}
 }
 
-func xcodeCloudBuildRunsList(ctx context.Context, workflowID string, sort string, limit int, next string, paginate bool, output string, pretty bool) error {
+func xcodeCloudBuildRunsList(ctx context.Context, fs *flag.FlagSet, workflowID string, sort string, limit int, next string, paginate bool, output string, pretty bool) error {
 	if err := shared.ValidateSort(sort, "number", "-number"); err != nil {
 		return shared.UsageError(err.Error())
+	}
+	if err := shared.RejectNextFlagConflicts(fs, next, "xcode-cloud build-runs", "sort"); err != nil {
+		return err
 	}
 
 	return runXcodeCloudPaginatedParentList(

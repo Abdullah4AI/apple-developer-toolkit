@@ -411,3 +411,34 @@ func TestBetaGroupsListInternalAndExternalMutuallyExclusive(t *testing.T) {
 		t.Fatalf("expected mutually exclusive error, got %q", stderr)
 	}
 }
+
+func TestTestFlightGroupsErrorKeepsTransportVerbAndURL(t *testing.T) {
+	setupAuth(t)
+	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
+
+	originalTransport := http.DefaultTransport
+	t.Cleanup(func() {
+		http.DefaultTransport = originalTransport
+	})
+	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		return nil, errors.New("boom")
+	})
+
+	root := RootCommand("1.2.3")
+	root.FlagSet.SetOutput(io.Discard)
+
+	var runErr error
+	captureOutput(t, func() {
+		if err := root.Parse([]string{"testflight", "groups", "list", "--global"}); err != nil {
+			t.Fatalf("parse error: %v", err)
+		}
+		runErr = root.Run(context.Background())
+	})
+
+	if runErr == nil {
+		t.Fatal("expected run error")
+	}
+	if message := runErr.Error(); !strings.Contains(message, `Get "https://api.appstoreconnect.apple.com/v1/betaGroups`) {
+		t.Fatalf("error = %q, want the HTTP verb and URL unchanged", message)
+	}
+}

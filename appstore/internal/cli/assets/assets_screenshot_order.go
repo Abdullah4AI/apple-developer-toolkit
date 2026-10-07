@@ -15,8 +15,6 @@ type screenshotUploadProgress struct {
 	PendingFiles    []string
 	PendingAssets   []screenshotPendingAsset
 	CleanupFailures []screenshotPendingAsset
-	CleanupError    error
-	UploadError     error
 	FailedFile      string
 }
 
@@ -138,8 +136,6 @@ func resumeScreenshotsWithOrderState(ctx context.Context, client *asc.Client, se
 	progress.PendingFiles = remaining.PendingFiles
 	progress.PendingAssets = remaining.PendingAssets
 	progress.CleanupFailures = remaining.CleanupFailures
-	progress.CleanupError = remaining.CleanupError
-	progress.UploadError = remaining.UploadError
 	progress.FailedFile = remaining.FailedFile
 	return progress, err
 }

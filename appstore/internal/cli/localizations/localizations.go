@@ -30,6 +30,7 @@ Examples:
   asc localizations create --version "VERSION_ID" --locale "ja"
   asc localizations supported-locales --version "VERSION_ID"
   asc localizations search-keywords list --localization-id "LOCALIZATION_ID"
+  asc localizations placements list --localization-id "LOCALIZATION_ID" --placement-type PRODUCT_PAGE_HEADER_ASSET
   asc localizations preview-sets list --localization-id "LOCALIZATION_ID"
   asc localizations preview-sets view --id "PREVIEW_SET_ID"
   asc localizations screenshot-sets view --id "SCREENSHOT_SET_ID"
@@ -43,6 +44,7 @@ Examples:
 			LocalizationsUpdateCommand(),
 			LocalizationsSupportedLocalesCommand(),
 			LocalizationsSearchKeywordsCommand(),
+			LocalizationsPlacementsCommand(),
 			LocalizationsPreviewSetsCommand(),
 			LocalizationsScreenshotSetsCommand(),
 			LocalizationsDownloadCommand(),
@@ -109,6 +111,9 @@ Examples:
 			}
 			if err := shared.ValidateNextURL(*next); err != nil {
 				return shared.UsageErrorf("localizations list: %v", err)
+			}
+			if err := shared.RejectNextFlagConflicts(fs, *next, "localizations list", "locale"); err != nil {
+				return err
 			}
 
 			normalizedType, err := shared.NormalizeLocalizationType(*locType)
@@ -395,8 +400,8 @@ func LocalizationsDownloadCommand() *ffcli.Command {
 	locale := fs.String("locale", "", "Filter by locale(s), comma-separated")
 	path := fs.String("path", "localizations", "Output path (directory or .strings file)")
 	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
-	next := fs.String("next", "", "Fetch next page using a links.next URL")
-	paginate := fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")
+	next := fs.String("next", "", "Start from a links.next URL")
+	fs.Bool("paginate", false, "Fetch all pages (always on; kept for compatibility)")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
@@ -405,11 +410,12 @@ func LocalizationsDownloadCommand() *ffcli.Command {
 		ShortHelp:  "Download localizations to .strings files.",
 		LongHelp: `Download localizations to .strings files.
 
+Every page of localizations is fetched, so all matching locales are written.
+
 Examples:
   asc localizations download --version "VERSION_ID" --path "./localizations"
   asc localizations download --app "APP_ID" --type app-info --path "./localizations"
-  asc localizations download --version "VERSION_ID" --locale "en-US" --path "en-US.strings"
-  asc localizations download --version "VERSION_ID" --paginate --path "./localizations"`,
+  asc localizations download --version "VERSION_ID" --locale "en-US" --path "en-US.strings"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -426,6 +432,10 @@ Examples:
 			}
 
 			locales := shared.SplitCSV(*locale)
+			pageLimit := *limit
+			if pageLimit == 0 {
+				pageLimit = 200
+			}
 
 			switch normalizedType {
 			case shared.LocalizationTypeVersion:
@@ -443,53 +453,31 @@ Examples:
 				defer cancel()
 
 				opts := []asc.AppStoreVersionLocalizationsOption{
-					asc.WithAppStoreVersionLocalizationsLimit(*limit),
+					asc.WithAppStoreVersionLocalizationsLimit(pageLimit),
 					asc.WithAppStoreVersionLocalizationsNextURL(*next),
 				}
 				if len(locales) > 0 {
 					opts = append(opts, asc.WithAppStoreVersionLocalizationLocales(locales))
 				}
 
-				if *paginate {
-					paginateOpts := append(opts, asc.WithAppStoreVersionLocalizationsLimit(200))
-					firstPage, err := client.GetAppStoreVersionLocalizations(requestCtx, strings.TrimSpace(*versionID), paginateOpts...)
-					if err != nil {
-						return fmt.Errorf("localizations download: failed to fetch: %w", err)
-					}
-
-					resp, err := asc.PaginateAll(requestCtx, firstPage, func(ctx context.Context, nextURL string) (asc.PaginatedResponse, error) {
-						return client.GetAppStoreVersionLocalizations(ctx, strings.TrimSpace(*versionID), asc.WithAppStoreVersionLocalizationsNextURL(nextURL))
-					})
-					if err != nil {
-						return fmt.Errorf("localizations download: %w", err)
-					}
-
-					aggregated, ok := resp.(*asc.AppStoreVersionLocalizationsResponse)
-					if !ok {
-						return fmt.Errorf("localizations download: unexpected pagination response type")
-					}
-
-					files, err := shared.WriteVersionLocalizationStrings(*path, aggregated.Data)
-					if err != nil {
-						return fmt.Errorf("localizations download: %w", err)
-					}
-
-					result := asc.LocalizationDownloadResult{
-						Type:       normalizedType,
-						VersionID:  strings.TrimSpace(*versionID),
-						OutputPath: *path,
-						Files:      files,
-					}
-
-					return shared.PrintOutput(&result, *output.Output, *output.Pretty)
-				}
-
-				resp, err := client.GetAppStoreVersionLocalizations(requestCtx, strings.TrimSpace(*versionID), opts...)
+				firstPage, err := client.GetAppStoreVersionLocalizations(requestCtx, strings.TrimSpace(*versionID), opts...)
 				if err != nil {
 					return fmt.Errorf("localizations download: failed to fetch: %w", err)
 				}
 
-				files, err := shared.WriteVersionLocalizationStrings(*path, resp.Data)
+				resp, err := asc.PaginateAll(requestCtx, firstPage, func(ctx context.Context, nextURL string) (asc.PaginatedResponse, error) {
+					return client.GetAppStoreVersionLocalizations(ctx, strings.TrimSpace(*versionID), asc.WithAppStoreVersionLocalizationsNextURL(nextURL))
+				})
+				if err != nil {
+					return fmt.Errorf("localizations download: %w", err)
+				}
+
+				aggregated, ok := resp.(*asc.AppStoreVersionLocalizationsResponse)
+				if !ok {
+					return fmt.Errorf("localizations download: unexpected pagination response type")
+				}
+
+				files, err := shared.WriteVersionLocalizationStrings(*path, aggregated.Data)
 				if err != nil {
 					return fmt.Errorf("localizations download: %w", err)
 				}
@@ -522,54 +510,31 @@ Examples:
 				}
 
 				opts := []asc.AppInfoLocalizationsOption{
-					asc.WithAppInfoLocalizationsLimit(*limit),
+					asc.WithAppInfoLocalizationsLimit(pageLimit),
 					asc.WithAppInfoLocalizationsNextURL(*next),
 				}
 				if len(locales) > 0 {
 					opts = append(opts, asc.WithAppInfoLocalizationLocales(locales))
 				}
 
-				if *paginate {
-					paginateOpts := append(opts, asc.WithAppInfoLocalizationsLimit(200))
-					firstPage, err := client.GetAppInfoLocalizations(requestCtx, appInfo, paginateOpts...)
-					if err != nil {
-						return fmt.Errorf("localizations download: failed to fetch: %w", err)
-					}
-
-					resp, err := asc.PaginateAll(requestCtx, firstPage, func(ctx context.Context, nextURL string) (asc.PaginatedResponse, error) {
-						return client.GetAppInfoLocalizations(ctx, appInfo, asc.WithAppInfoLocalizationsNextURL(nextURL))
-					})
-					if err != nil {
-						return fmt.Errorf("localizations download: %w", err)
-					}
-
-					aggregated, ok := resp.(*asc.AppInfoLocalizationsResponse)
-					if !ok {
-						return fmt.Errorf("localizations download: unexpected pagination response type")
-					}
-
-					files, err := shared.WriteAppInfoLocalizationStrings(*path, aggregated.Data)
-					if err != nil {
-						return fmt.Errorf("localizations download: %w", err)
-					}
-
-					result := asc.LocalizationDownloadResult{
-						Type:       normalizedType,
-						AppID:      resolvedAppID,
-						AppInfoID:  appInfo,
-						OutputPath: *path,
-						Files:      files,
-					}
-
-					return shared.PrintOutput(&result, *output.Output, *output.Pretty)
-				}
-
-				resp, err := client.GetAppInfoLocalizations(requestCtx, appInfo, opts...)
+				firstPage, err := client.GetAppInfoLocalizations(requestCtx, appInfo, opts...)
 				if err != nil {
 					return fmt.Errorf("localizations download: failed to fetch: %w", err)
 				}
 
-				files, err := shared.WriteAppInfoLocalizationStrings(*path, resp.Data)
+				resp, err := asc.PaginateAll(requestCtx, firstPage, func(ctx context.Context, nextURL string) (asc.PaginatedResponse, error) {
+					return client.GetAppInfoLocalizations(ctx, appInfo, asc.WithAppInfoLocalizationsNextURL(nextURL))
+				})
+				if err != nil {
+					return fmt.Errorf("localizations download: %w", err)
+				}
+
+				aggregated, ok := resp.(*asc.AppInfoLocalizationsResponse)
+				if !ok {
+					return fmt.Errorf("localizations download: unexpected pagination response type")
+				}
+
+				files, err := shared.WriteAppInfoLocalizationStrings(*path, aggregated.Data)
 				if err != nil {
 					return fmt.Errorf("localizations download: %w", err)
 				}
@@ -764,7 +729,7 @@ func localizationUploadReportedError(failed int, uploadErr error, artifactError 
 	if strings.TrimSpace(artifactError) != "" {
 		message += "; write failure artifact: " + artifactError
 	}
-	return shared.NewReportedError(fmt.Errorf("%s", message))
+	return shared.NewReportedError(shared.NewErrorWithCause(errors.New(message), shared.KeepReadOnlyRefusal(nil, uploadErr)))
 }
 
 func sharedVersionLocalizationValuesNeedUpdateContext(valuesByLocale map[string]map[string]string) bool {

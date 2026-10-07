@@ -664,8 +664,8 @@ func TestWorkflowValidate_InvalidWorkflowWithExplicitJSONExitsWithErrorCode(t *t
 	if code != rootcmd.ExitError {
 		t.Fatalf("exit code = %d, want %d; stderr=%q", code, rootcmd.ExitError, stderr)
 	}
-	if stderr != "" {
-		t.Fatalf("expected structured validation failure only on stdout, got stderr %q", stderr)
+	if want := "Error: workflow validate: found 1 error(s)\n"; stderr != want {
+		t.Fatalf("stderr = %q, want one error line %q", stderr, want)
 	}
 
 	var result struct {

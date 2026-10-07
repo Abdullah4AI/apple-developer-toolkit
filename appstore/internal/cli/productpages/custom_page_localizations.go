@@ -40,6 +40,7 @@ Examples:
 			CustomPageLocalizationsSearchKeywordsCommand(),
 			CustomPageLocalizationsPreviewSetsCommand(),
 			CustomPageLocalizationsScreenshotSetsCommand(),
+			shared.CreativePlacementsCommand("appCustomProductPageLocalizations", "product-pages custom-pages localizations", "a custom product page localization"),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp

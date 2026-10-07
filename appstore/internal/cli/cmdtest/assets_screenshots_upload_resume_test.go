@@ -10,10 +10,12 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/cmd"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
 func TestRunScreenshotsUploadResumeRejectsSelectorFlags(t *testing.T) {
@@ -190,19 +192,26 @@ func TestRunScreenshotsUploadWritesFailureArtifactAndResumeCompletes(t *testing.
 			"--concurrency", "1",
 			"--output", "json",
 		}, "1.2.3")
-		if code != cmd.ExitError {
-			t.Fatalf("expected exit code %d, got %d", cmd.ExitError, code)
+		if code != cmd.ExitHTTPInternalServer {
+			t.Fatalf("expected exit code %d, got %d", cmd.ExitHTTPInternalServer, code)
 		}
 	})
 
-	if stderr != "" {
-		t.Fatalf("expected empty stderr for reported upload failure, got %q", stderr)
-	}
 	if err := json.Unmarshal([]byte(stdout), &firstResult); err != nil {
 		t.Fatalf("failed to parse first stdout JSON: %v\nstdout=%s", err, stdout)
 	}
 	if firstResult.FailureArtifactPath == "" {
 		t.Fatalf("expected failureArtifactPath in stdout, got %s", stdout)
+	}
+	if !strings.Contains(stderr, "Error: screenshots upload: 2 of 3 file(s) not uploaded: ") || !strings.Contains(stderr, "upload create failed") {
+		t.Fatalf("expected partial failure and its cause on stderr, got %q", stderr)
+	}
+	quotedPath, ok := shared.ShellQuote(firstResult.FailureArtifactPath)
+	if !ok {
+		t.Fatalf("generated artifact path cannot be quoted: %q", firstResult.FailureArtifactPath)
+	}
+	if !strings.Contains(stderr, fmt.Sprintf("Hint: resume with `asc screenshots upload --resume %s`", quotedPath)) {
+		t.Fatalf("expected resume hint on stderr, got %q", stderr)
 	}
 	if firstResult.Pending != 2 {
 		t.Fatalf("expected pending=2 after partial failure, got %d", firstResult.Pending)
@@ -282,6 +291,52 @@ func TestRunScreenshotsUploadWritesFailureArtifactAndResumeCompletes(t *testing.
 	}
 	if relationshipPatchCount != 1 {
 		t.Fatalf("expected exactly one relationship reorder patch on resume, got %d", relationshipPatchCount)
+	}
+}
+
+func TestRunScreenshotsUploadWarnsWhenFileNamesAlreadyInSet(t *testing.T) {
+	setupAuth(t)
+	t.Setenv("ASC_BYPASS_KEYCHAIN", "1")
+	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
+	t.Setenv("ASC_APP_ID", "")
+
+	workDir := t.TempDir()
+	writeCmdtestScreenshotPNG(t, workDir, "01-home.png")
+	writeCmdtestScreenshotPNG(t, workDir, "02-settings.png")
+
+	originalTransport := http.DefaultTransport
+	t.Cleanup(func() {
+		http.DefaultTransport = originalTransport
+	})
+	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		switch {
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/appStoreVersionLocalizations/LOC_123/appScreenshotSets":
+			return screenshotsUploadJSONResponse(http.StatusOK, `{"data":[{"type":"appScreenshotSets","id":"set-1","attributes":{"screenshotDisplayType":"APP_IPHONE_65"}}],"links":{}}`)
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/appScreenshotSets/set-1/appScreenshots":
+			return screenshotsUploadJSONResponse(http.StatusOK, `{"data":[{"type":"appScreenshots","id":"old-1","attributes":{"fileName":"01-home.png"}}],"links":{}}`)
+		default:
+			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.String())
+			return nil, nil
+		}
+	})
+
+	_, stderr := captureOutput(t, func() {
+		code := cmd.Run([]string{
+			"screenshots", "upload",
+			"--version-localization", "LOC_123",
+			"--path", workDir,
+			"--device-type", "IPHONE_65",
+			"--dry-run",
+			"--output", "json",
+		}, "1.2.3")
+		if code != cmd.ExitSuccess {
+			t.Fatalf("expected exit code %d, got %d", cmd.ExitSuccess, code)
+		}
+	})
+
+	want := "Warning: screenshots upload: 1 file(s) already in the target screenshot set (01-home.png); uploading them again creates duplicates. Use --skip-existing to upload only missing files, --replace --confirm to replace the set, or --resume with the failure artifact to finish a failed upload.\n"
+	if stderr != want {
+		t.Fatalf("stderr = %q, want %q", stderr, want)
 	}
 }
 
@@ -430,13 +485,13 @@ func TestRunScreenshotsUploadFanoutPrintsPartialResultsOnLocaleFailure(t *testin
 			"--concurrency", "1",
 			"--output", "json",
 		}, "1.2.3")
-		if code != cmd.ExitError {
-			t.Fatalf("expected exit code %d, got %d", cmd.ExitError, code)
+		if code != cmd.ExitHTTPInternalServer {
+			t.Fatalf("expected exit code %d, got %d", cmd.ExitHTTPInternalServer, code)
 		}
 	})
 
-	if stderr != "" {
-		t.Fatalf("expected empty stderr for reported fan-out upload failure, got %q", stderr)
+	if !strings.Contains(stderr, "Error: screenshots upload: 1 of 2 file(s) not uploaded: ") || !strings.Contains(stderr, "Hint: resume with `asc screenshots upload --resume ") {
+		t.Fatalf("expected fan-out partial failure and resume hint on stderr, got %q", stderr)
 	}
 	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
 		t.Fatalf("failed to parse fan-out stdout JSON: %v\nstdout=%s", err, stdout)
@@ -512,4 +567,58 @@ func screenshotsUploadJSONResponse(status int, body string) (*http.Response, err
 		Header:     http.Header{"Content-Type": []string{"application/json"}},
 		Body:       io.NopCloser(strings.NewReader(body)),
 	}, nil
+}
+
+func TestRunScreenshotsResumeKeepsLiteralFailureArtifactPath(t *testing.T) {
+	for _, name := range []string{"retry$NAME$(printf expanded)`printf backtick`'quote.json", "retry\x1b[2J\nforged.json"} {
+		t.Run(name, func(t *testing.T) {
+			if runtime.GOOS == "windows" && strings.ContainsAny(name, "\x1b\n") {
+				t.Skip("Windows does not permit control characters in filenames")
+			}
+			setupAuth(t)
+			t.Setenv("ASC_BYPASS_KEYCHAIN", "1")
+			t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
+			t.Setenv("ASC_APP_ID", "")
+			path := filepath.Join(t.TempDir(), name)
+			artifact := `{"versionLocalizationId":"LOC_123","setId":"SET_123","cleanupFailures":[{"assetId":"SHOT_BAD"}]}`
+			if err := os.WriteFile(path, []byte(artifact), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			originalTransport := http.DefaultTransport
+			t.Cleanup(func() { http.DefaultTransport = originalTransport })
+			calls := 0
+			http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+				if req.Method != http.MethodDelete || req.URL.Path != "/v1/appScreenshots/SHOT_BAD" {
+					t.Fatalf("unexpected request: %s %s", req.Method, req.URL.Path)
+				}
+				calls++
+				return screenshotsUploadJSONResponse(http.StatusBadRequest, `{"errors":[{"status":"400","code":"BAD_REQUEST","detail":"cleanup failed"}]}`)
+			})
+			stdout, stderr := captureOutput(t, func() {
+				if code := cmd.Run([]string{"screenshots", "upload", "--resume", path, "--output", "json"}, "1.2.3"); code != cmd.ExitHTTPBadRequest {
+					t.Fatalf("expected HTTP 400 exit %d, got %d", cmd.ExitHTTPBadRequest, code)
+				}
+			})
+			var result struct {
+				FailureArtifactPath string `json:"failureArtifactPath"`
+				Resumed             bool   `json:"resumed"`
+			}
+			if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+				t.Fatalf("invalid receipt: %v, %q", err, stdout)
+			}
+			if result.FailureArtifactPath != path || !result.Resumed || calls != 1 {
+				t.Fatalf("resume outcome changed: %+v, calls=%d", result, calls)
+			}
+			if !strings.Contains(stderr, "cleanup failed") || strings.Count(stderr, "Error:") != 1 {
+				t.Fatalf("failure cause not preserved: %q", stderr)
+			}
+			if quoted, ok := shared.ShellQuote(path); ok {
+				if !strings.Contains(stderr, "Hint: resume with `asc screenshots upload --resume "+quoted+"`\n") {
+					t.Fatalf("literal artifact path lost: %q", stderr)
+				}
+			} else if strings.Contains(stderr, "`asc screenshots upload --resume ") || !strings.Contains(stderr, "failure artifact path from the JSON result") {
+				t.Fatalf("unsafe filename must not be approximated: %q", stderr)
+			}
+		})
+	}
 }

@@ -41,7 +41,7 @@ func TestValidateSubcommandsRejectParentValidateFlagsExitCode(t *testing.T) {
 		{
 			name:    "strict before subcommand",
 			args:    []string{"validate", "--strict", "testflight", "--app", "app-1", "--build-id", "build-1"},
-			wantErr: "--strict must be passed after the validate subcommand name",
+			wantErr: "--strict must be passed after the subcommand name (asc validate testflight [flags])",
 		},
 	}
 

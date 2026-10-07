@@ -307,6 +307,53 @@ func TestRunHelpWinsOverUnresolvableIndirectValue(t *testing.T) {
 	}
 }
 
+func TestRunHelpAfterPositionalSkipsIndirectValues(t *testing.T) {
+	t.Setenv("ASC_TEST_INDIRECT_UNSET", "")
+	for _, value := range []string{"@env:ASC_TEST_INDIRECT_UNSET", "@file:" + filepath.Join(t.TempDir(), "missing")} {
+		t.Run(value, func(t *testing.T) {
+			resetReportFlags(t)
+			stdout, stderr := captureCommandOutput(t, func() {
+				if code := Run([]string{"search", "upload a build", "--limit", value, "--help"}, "1.0.0"); code != ExitSuccess {
+					t.Fatalf("Run() exit code = %d, want %d", code, ExitSuccess)
+				}
+			})
+			if !strings.Contains(stdout, "USAGE") || !strings.Contains(stdout, "asc search") || stderr != "" {
+				t.Fatalf("stdout=%q stderr=%q, want search help only on stdout", stdout, stderr)
+			}
+		})
+	}
+}
+
+func TestRunHelpAfterPositionalPreservesParsing(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		args []string
+		code int
+		help bool
+	}{
+		{"supported flags", []string{"search", "apps", "--limit", "2", "--help"}, ExitSuccess, true},
+		{"terminator", []string{"search", "apps", "--", "--help"}, ExitSuccess, false},
+		{"unknown query token", []string{"search", "apps", "--unknown", "--help"}, ExitSuccess, false},
+		{"invalid literal", []string{"search", "apps", "--limit", "invalid", "--help"}, ExitUsage, false},
+		{"unsupported positional", []string{"apps", "list", "unexpected", "--help"}, ExitUsage, false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			resetReportFlags(t)
+			stdout, stderr := captureCommandOutput(t, func() {
+				if code := Run(test.args, "1.0.0"); code != test.code {
+					t.Fatalf("Run() exit code = %d, want %d", code, test.code)
+				}
+			})
+			if strings.Contains(stdout, "USAGE") != test.help {
+				t.Fatalf("stdout=%q, want help=%t", stdout, test.help)
+			}
+			if test.code == ExitSuccess && stderr != "" || test.code == ExitUsage && stderr == "" {
+				t.Fatalf("stderr=%q for exit code %d", stderr, test.code)
+			}
+		})
+	}
+}
+
 func TestResolveFlagValueIndirectionScopesRootSelectorsToRootFlagSet(t *testing.T) {
 	t.Setenv("ASC_TEST_PROFILE_PATH", "/tmp/asc-test/dev.mobileprovision")
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -30,6 +31,10 @@ const (
 	clientSecretAud     = "https://appleid.apple.com"
 	grantClientCreds    = "client_credentials"
 )
+
+// ErrOAuthCredentialsRejected reports that Apple's OAuth token endpoint
+// rejected the configured Apple Ads client credentials.
+var ErrOAuthCredentialsRejected = errors.New("apple ads rejected the OAuth client credentials")
 
 // Credentials contains resolved Apple Ads authentication inputs.
 type Credentials struct {
@@ -96,6 +101,15 @@ func (c *Client) bearerToken(ctx context.Context) (string, error) {
 		return "", fmt.Errorf("read token response: %w", err)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		var oauthErr struct {
+			Error string `json:"error"`
+		}
+		if json.Unmarshal(body, &oauthErr) == nil {
+			switch oauthErr.Error {
+			case "invalid_client", "invalid_grant", "unauthorized_client":
+				return "", fmt.Errorf("%w (%s); check ASC_ADS_CLIENT_ID, ASC_ADS_TEAM_ID, ASC_ADS_KEY_ID, and the private key, or run 'asc ads auth login' again", ErrOAuthCredentialsRejected, oauthErr.Error)
+			}
+		}
 		return "", parseError(body, resp.StatusCode)
 	}
 

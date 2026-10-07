@@ -419,21 +419,33 @@ func TestExecuteAppScreenshotUploadSurfacesCleanupFailures(t *testing.T) {
 		}
 	}))
 
-	result, err := executeAppScreenshotUpload(
-		withScreenshotUploadConcurrency(context.Background(), 3),
-		screenshotUploadConfig[asc.AppScreenshotUploadResult]{
-			Client:         client,
-			LocalizationID: "LOC_123",
-			DisplayType:    "APP_IPHONE_65",
-			Files:          files,
-			RequestContext: contextWithAssetUploadTimeout,
-			UploadContext:  contextWithAssetUploadTimeout,
-			Access:         appStoreVersionScreenshotSetAccess,
-		},
-		artifactPath,
+	var (
+		result asc.AppScreenshotUploadResult
+		err    error
 	)
+	_, stderr := captureOutput(t, func() {
+		result, err = executeAppScreenshotUpload(
+			withScreenshotUploadConcurrency(context.Background(), 3),
+			screenshotUploadConfig[asc.AppScreenshotUploadResult]{
+				Client:         client,
+				LocalizationID: "LOC_123",
+				DisplayType:    "APP_IPHONE_65",
+				Files:          files,
+				RequestContext: contextWithAssetUploadTimeout,
+				UploadContext:  contextWithAssetUploadTimeout,
+				Access:         appStoreVersionScreenshotSetAccess,
+			},
+			artifactPath,
+		)
+	})
 	if !errors.Is(err, uploadErr) || !strings.Contains(err.Error(), "cleanup failed") {
 		t.Fatalf("executeAppScreenshotUpload() error = %v, want upload and cleanup failures", err)
+	}
+	if _, ok := errors.AsType[shared.ReportedError](err); !ok {
+		t.Fatalf("executeAppScreenshotUpload() error = %v, want reported error", err)
+	}
+	if !strings.Contains(stderr, "upload failed") || !strings.Contains(stderr, "cleanup failed") {
+		t.Fatalf("stderr = %q, want upload and cleanup failures", stderr)
 	}
 	if len(result.Failures) != 2 {
 		t.Fatalf("result failures = %#v, want upload plus cleanup entries", result.Failures)
@@ -901,7 +913,7 @@ func TestExecuteAppScreenshotUploadOrderSyncFailureSurfacesOrderingError(t *test
 	if !errors.As(err, &reported) {
 		t.Fatalf("expected ReportedError, got %T: %v", err, err)
 	}
-	if err.Error() != "screenshots upload: retry needed to sync screenshot ordering" {
+	if err.Error() != "screenshots upload: retry needed to sync screenshot ordering: App Store Connect internal server error (status 500): reorder failed" {
 		t.Fatalf("unexpected retry message: %v", err)
 	}
 	if result.Pending != 0 {

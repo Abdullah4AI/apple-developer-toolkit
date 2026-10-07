@@ -102,7 +102,7 @@ func assetsPreviewsUploadCommandWithDependencies(deps previewUploadDependencies)
 
 	localizationID := shared.BindResourceIDFlag(fs, "version-localization", "appStoreVersionLocalizations", "App Store version localization ID")
 	path := fs.String("path", "", "Path to preview file or directory")
-	deviceType := fs.String("device-type", "", "Device type (e.g., IPHONE_65)")
+	deviceType := fs.String("device-type", "", "Device type (e.g., IPHONE_DUO or IPHONE_65)")
 	skipExisting := fs.Bool("skip-existing", false, "Skip files whose MD5 checksum already exists in the target preview set")
 	replace := fs.Bool("replace", false, "Delete all existing previews from the target set before uploading (requires --confirm)")
 	confirm := fs.Bool("confirm", false, "Confirm the deletions performed by --replace (required with --replace)")
@@ -122,6 +122,7 @@ It is not the locale code such as en-US.
 Each preview set supports at most three files.
 
 Examples:
+  asc video-previews upload --version-localization "VERSION_LOCALIZATION_ID" --path "./previews/duo.mp4" --device-type "IPHONE_DUO"
   asc video-previews upload --version-localization "VERSION_LOCALIZATION_ID" --path "./previews" --device-type "IPHONE_65"
   asc video-previews upload --version-localization "VERSION_LOCALIZATION_ID" --path "./previews/preview.mov" --device-type "IPHONE_65"
   asc video-previews upload --version-localization "VERSION_LOCALIZATION_ID" --path "./previews" --device-type "IPHONE_65" --skip-existing
@@ -958,27 +959,7 @@ func uploadPreviews(ctx context.Context, client *asc.Client, localizationID, pre
 		Results:               append(append([]asc.AssetUploadResultItem{}, skippedResults...), uploadedResults...),
 	}
 	if err != nil {
-		var failureErr *previewUploadFailure
-		if errors.As(err, &failureErr) {
-			failedResult := failureErr.Item
-			if failedResult.FileName == "" {
-				failedResult.FileName = filepath.Base(failureErr.FilePath)
-			}
-			if failedResult.FilePath == "" {
-				failedResult.FilePath = failureErr.FilePath
-			}
-			if failedResult.State == "" {
-				failedResult.State = "failed"
-			}
-			if !containsAssetUploadResult(result.Results, failedResult) {
-				result.Results = append(result.Results, failedResult)
-			}
-			result.Failures = append(result.Failures, asc.AssetUploadFailureItem{
-				FileName: failedResult.FileName,
-				FilePath: failedResult.FilePath,
-				Error:    err.Error(),
-			})
-		}
+		result.Results, result.Failures = previewUploadFailureReceipt(result.Results, err)
 		return result, err
 	}
 
@@ -1037,7 +1018,44 @@ func (e *previewUploadFailure) Unwrap() error {
 	return e.Err
 }
 
+// UploadPreviewFiles uploads previews and rolls back resources created by this run on failure.
+// setCreated must be true only when this run created the preview set.
+func UploadPreviewFiles(uploadCtx, rollbackBase context.Context, client *asc.Client, setID string, setCreated bool, files []string) ([]asc.AssetUploadResultItem, []asc.AssetUploadFailureItem, error) {
+	results, err := uploadPreviewFilesWithSetCleanup(uploadCtx, rollbackBase, client, setID, setCreated, files, uploadPreviewAsset)
+	results, failures := previewUploadFailureReceipt(results, err)
+	return results, failures, err
+}
+
+func previewUploadFailureReceipt(results []asc.AssetUploadResultItem, err error) ([]asc.AssetUploadResultItem, []asc.AssetUploadFailureItem) {
+	var failureErr *previewUploadFailure
+	if !errors.As(err, &failureErr) {
+		return results, nil
+	}
+	failedResult := failureErr.Item
+	if failedResult.FileName == "" {
+		failedResult.FileName = filepath.Base(failureErr.FilePath)
+	}
+	if failedResult.FilePath == "" {
+		failedResult.FilePath = failureErr.FilePath
+	}
+	if failedResult.State == "" {
+		failedResult.State = "failed"
+	}
+	if !containsAssetUploadResult(results, failedResult) {
+		results = append(results, failedResult)
+	}
+	return results, []asc.AssetUploadFailureItem{{
+		FileName: failedResult.FileName,
+		FilePath: failedResult.FilePath,
+		Error:    err.Error(),
+	}}
+}
+
 func uploadPreviewFiles(uploadCtx, rollbackBase context.Context, client *asc.Client, setID string, files []string, upload previewAssetUploadFunc) ([]asc.AssetUploadResultItem, error) {
+	return uploadPreviewFilesWithSetCleanup(uploadCtx, rollbackBase, client, setID, false, files, upload)
+}
+
+func uploadPreviewFilesWithSetCleanup(uploadCtx, rollbackBase context.Context, client *asc.Client, setID string, setCreated bool, files []string, upload previewAssetUploadFunc) ([]asc.AssetUploadResultItem, error) {
 	results := make([]asc.AssetUploadResultItem, 0, len(files))
 	for _, filePath := range files {
 		item, err := upload(uploadCtx, client, setID, filePath)
@@ -1052,13 +1070,19 @@ func uploadPreviewFiles(uploadCtx, rollbackBase context.Context, client *asc.Cli
 			if strings.TrimSpace(item.AssetID) != "" {
 				rollbackItems = append(rollbackItems, item)
 			}
-			if len(rollbackItems) > 0 {
+			if len(rollbackItems) > 0 || setCreated {
 				var rollbackErr error
 				rollbackItems, rollbackErr = func() ([]asc.AssetUploadResultItem, error) {
 					rollbackParent := context.WithoutCancel(shared.ContextWithoutTimeout(rollbackBase))
 					rollbackCtx, rollbackCancel := shared.ContextWithTimeout(rollbackParent)
 					defer rollbackCancel()
-					return deleteUploadedPreviews(rollbackCtx, client, rollbackItems)
+					items, cleanupErr := deleteUploadedPreviews(rollbackCtx, client, rollbackItems)
+					if cleanupErr == nil && setCreated {
+						if err := client.DeleteAppPreviewSet(rollbackCtx, setID); err != nil {
+							cleanupErr = fmt.Errorf("delete preview set %q: %w", setID, err)
+						}
+					}
+					return items, cleanupErr
 				}()
 				if rollbackErr != nil {
 					failure.Err = errors.Join(err, fmt.Errorf("roll back previews created by this upload: %w", rollbackErr))

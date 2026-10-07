@@ -97,48 +97,6 @@ func (c *Client) ListAppInfoCandidatesForApp(ctx context.Context, appID string) 
 	return AppInfoCandidates(appInfos.Data), nil
 }
 
-// ResolveCurrentAppInfoIDForApp resolves the single non-historical app info for an app.
-func (c *Client) ResolveCurrentAppInfoIDForApp(ctx context.Context, appID string) (string, error) {
-	candidates, err := c.ListAppInfoCandidatesForApp(ctx, appID)
-	if err != nil {
-		return "", err
-	}
-	return resolveCurrentAppInfoIDFromCandidates(appID, candidates)
-}
-
-func resolveCurrentAppInfoID(appID string, appInfos []Resource[AppInfoAttributes]) (string, error) {
-	if len(appInfos) == 0 {
-		return "", fmt.Errorf("no app info found for app %q", appID)
-	}
-	return resolveCurrentAppInfoIDFromCandidates(appID, AppInfoCandidates(appInfos))
-}
-
-func resolveCurrentAppInfoIDFromCandidates(appID string, candidates []AppInfoCandidate) (string, error) {
-	current := CurrentAppInfoCandidates(candidates)
-	if len(candidates) == 0 {
-		return "", fmt.Errorf("no app info found for app %q", appID)
-	}
-	if len(current) == 1 && current[0].ID != "" {
-		return current[0].ID, nil
-	}
-
-	formatted := FormatAppInfoCandidates(candidates)
-	if len(current) == 0 {
-		return "", fmt.Errorf(
-			"no current app info found for app %q (%s); run `asc apps info list --app %q` to inspect candidates",
-			appID,
-			formatted,
-			appID,
-		)
-	}
-	return "", fmt.Errorf(
-		"multiple current app infos found for app %q (%s); run `asc apps info list --app %q` to inspect candidates",
-		appID,
-		formatted,
-		appID,
-	)
-}
-
 // CurrentAppInfoCandidates excludes historical app info records.
 func CurrentAppInfoCandidates(candidates []AppInfoCandidate) []AppInfoCandidate {
 	current := make([]AppInfoCandidate, 0, len(candidates))

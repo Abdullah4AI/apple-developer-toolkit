@@ -72,6 +72,9 @@ Examples:
 			if err := shared.ValidateNextURL(*next); err != nil {
 				return shared.UsageErrorf("apps info territory-age-ratings list: %v", err)
 			}
+			if err := shared.RejectNextFlagConflicts(fs, *next, "apps info territory-age-ratings list", "fields", "territory-fields", "include"); err != nil {
+				return err
+			}
 
 			resolvedAppID := shared.ResolveAppID(*appID)
 			if resolvedAppID == "" && infoIDValue == "" && strings.TrimSpace(*next) == "" {

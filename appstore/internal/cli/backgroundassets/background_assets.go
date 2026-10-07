@@ -91,6 +91,9 @@ Examples:
 			if err := shared.ValidateNextURL(*next); err != nil {
 				return shared.UsageErrorf("background-assets list: %v", err)
 			}
+			if err := shared.RejectNextFlagConflicts(fs, *next, "background-assets list", "archived", "asset-pack-identifier", "versions-locale"); err != nil {
+				return err
+			}
 
 			var archivedFilter []string
 			if strings.TrimSpace(*archived) != "" {

@@ -36,10 +36,10 @@ func waitForBuildCompletion(ctx context.Context, client *asc.Client, buildRunID 
 	})
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
-			return fmt.Errorf("xcode-cloud: canceled waiting for build run %s (last status: %s)", buildRunID, lastStatus)
+			return fmt.Errorf("xcode-cloud: canceled waiting for build run %s (last status: %s): %w", buildRunID, lastStatus, err)
 		}
-		if errors.Is(err, context.DeadlineExceeded) {
-			return fmt.Errorf("xcode-cloud: timed out waiting for build run %s (last status: %s)", buildRunID, lastStatus)
+		if ctx.Err() != nil && errors.Is(err, context.DeadlineExceeded) {
+			return fmt.Errorf("xcode-cloud: timed out waiting for build run %s (last status: %s); rerun with a longer --timeout: %w", buildRunID, lastStatus, err)
 		}
 		return err
 	}

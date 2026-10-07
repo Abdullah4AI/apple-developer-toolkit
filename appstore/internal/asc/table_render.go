@@ -38,6 +38,11 @@ func RenderTable(headers []string, rows [][]string) {
 	_ = renderTable(headers, rows)
 }
 
+// WriteTable is RenderTable that reports stdout write failures.
+func WriteTable(headers []string, rows [][]string) error {
+	return renderTable(headers, rows)
+}
+
 func renderTable(headers []string, rows [][]string) error {
 	safeHeaders, safeRows := sanitizeHumanTableData(headers, rows)
 	output := &renderErrorWriter{writer: os.Stdout}
@@ -70,6 +75,11 @@ func renderTable(headers []string, rows [][]string) error {
 // Pipe characters in cell values are escaped automatically by the renderer.
 func RenderMarkdown(headers []string, rows [][]string) {
 	_ = renderMarkdown(headers, rows)
+}
+
+// WriteMarkdown is RenderMarkdown that reports stdout write failures.
+func WriteMarkdown(headers []string, rows [][]string) error {
+	return renderMarkdown(headers, rows)
 }
 
 func renderMarkdown(headers []string, rows [][]string) error {

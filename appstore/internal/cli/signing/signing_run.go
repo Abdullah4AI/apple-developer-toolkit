@@ -573,7 +573,7 @@ func joinSigningRunCompanionError(stderr io.Writer, primary, companion error) er
 		stderr = io.Discard
 	}
 	fmt.Fprint(stderr, errfmt.FormatStderr(companion))
-	return errors.Join(primary, shared.NewReportedError(companion))
+	return errors.Join(primary, shared.NewStderrReportedError(companion))
 }
 
 func readBoundedSigningRunFile(path string, limit int64, private bool) ([]byte, error) {

@@ -35,7 +35,7 @@ func TestTestFlightGroupsDeleteUsesCanonicalSuccessMessage(t *testing.T) {
 	root := RootCommand("1.2.3")
 	root.FlagSet.SetOutput(io.Discard)
 
-	stdout, stderr := captureOutput(t, func() {
+	_, stderr := captureOutput(t, func() {
 		if err := root.Parse([]string{"testflight", "groups", "delete", "--id", "group-1", "--confirm"}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
@@ -44,9 +44,6 @@ func TestTestFlightGroupsDeleteUsesCanonicalSuccessMessage(t *testing.T) {
 		}
 	})
 
-	if stdout != "" {
-		t.Fatalf("expected empty stdout, got %q", stdout)
-	}
 	if !strings.Contains(stderr, "Successfully deleted group group-1") {
 		t.Fatalf("expected canonical delete message, got %q", stderr)
 	}

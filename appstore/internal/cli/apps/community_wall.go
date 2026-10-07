@@ -53,7 +53,7 @@ Examples:
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
-			AppsWallSubmitCommand(fs),
+			AppsWallSubmitCommand(),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			if len(args) > 0 {

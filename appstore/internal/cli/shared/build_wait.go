@@ -423,18 +423,20 @@ func BuildUploadFailureError(upload *asc.BuildUploadResponse) error {
 		return nil
 	}
 
-	details := buildUploadStateDetails(upload.Data.Attributes.State.Errors)
-	recovery := buildUploadRecoveryGuidance(upload.Data.Attributes.State.Errors)
-	if details == "" {
-		if recovery != "" {
-			return fmt.Errorf("build upload %q failed with state %s; recovery: %s", upload.Data.ID, state, recovery)
-		}
-		return fmt.Errorf("build upload %q failed with state %s", upload.Data.ID, state)
+	message := fmt.Sprintf("build upload %q failed with state %s", upload.Data.ID, state)
+	if details := buildUploadStateDetails(upload.Data.Attributes.State.Errors); details != "" {
+		message += ": " + details
 	}
-	if recovery != "" {
-		return fmt.Errorf("build upload %q failed with state %s: %s; recovery: %s", upload.Data.ID, state, details, recovery)
+	if recovery := buildUploadRecoveryGuidance(upload.Data.Attributes.State.Errors); recovery != "" {
+		message += "; recovery: " + recovery
 	}
-	return fmt.Errorf("build upload %q failed with state %s: %s", upload.Data.ID, state, details)
+	return buildStateFailure(errors.New(message))
+}
+
+// buildStateFailure classifies App Store Connect rejecting an uploaded build
+// as an expected negative instead of a CLI defect.
+func buildStateFailure(err error) error {
+	return WithDiagnostic(NewValidationError(err), DiagnosticStateNotReady, "")
 }
 
 var usageDescriptionKeyPattern = regexp.MustCompile(`\b[A-Za-z0-9_]+UsageDescription\b`)
@@ -573,7 +575,7 @@ func WaitForBuildProcessingWithDetails(ctx context.Context, client *asc.Client, 
 	if build != nil {
 		failure.BundleVersion = build.Data.Attributes.Version
 	}
-	return build, EnrichBuildProcessingFailure(ctx, client, failure, err)
+	return build, buildStateFailure(EnrichBuildProcessingFailure(ctx, client, failure, err))
 }
 
 // EnrichBuildProcessingFailure appends the App Store Connect processing
@@ -693,10 +695,9 @@ func linkedBuildUploadID(ctx context.Context, client *asc.Client, appID, buildID
 
 // findBuildUploadByVersion matches an upload by the artifact identity it was
 // uploaded with. Processing details are reported per app, build number,
-// marketing version, and platform, so any upload matching all four describes
-// the same artifact as the build; an incomplete identity is left unmatched
-// rather than guessed. The lookup stays on the first page because these
-// filters already narrow the result to one artifact.
+// marketing version, and platform, but retries can reuse that identity, so a
+// fallback is safe only when exactly one matching upload is visible. An
+// incomplete or paginated result is left unmatched rather than guessed.
 func findBuildUploadByVersion(ctx context.Context, client *asc.Client, appID, bundleVersion, shortVersion, platform string) (*asc.BuildUploadResponse, error) {
 	if shortVersion == "" || platform == "" {
 		return nil, nil
@@ -713,6 +714,8 @@ func findBuildUploadByVersion(ctx context.Context, client *asc.Client, appID, bu
 	if err != nil {
 		return nil, err
 	}
+	var match asc.Resource[asc.BuildUploadAttributes]
+	matches := 0
 	for _, upload := range uploads.Data {
 		if strings.TrimSpace(upload.Attributes.CFBundleVersion) != bundleVersion {
 			continue
@@ -723,9 +726,22 @@ func findBuildUploadByVersion(ctx context.Context, client *asc.Client, appID, bu
 		if !strings.EqualFold(strings.TrimSpace(string(upload.Attributes.Platform)), platform) {
 			continue
 		}
-		return &asc.BuildUploadResponse{Data: upload}, nil
+		matches++
+		if matches > 1 {
+			return nil, nil
+		}
+		match = upload
 	}
-	return nil, nil
+	if matches != 1 || strings.TrimSpace(match.ID) == "" {
+		return nil, nil
+	}
+	if strings.TrimSpace(uploads.Links.Next) != "" {
+		return nil, nil
+	}
+	if total, ok := asc.ParsePagingTotalOK(uploads.Meta); ok && total != 1 {
+		return nil, nil
+	}
+	return &asc.BuildUploadResponse{Data: match}, nil
 }
 
 func enrichBuildUploadFailure(ctx context.Context, client *asc.Client, appID string, upload *asc.BuildUploadResponse, baseErr error) error {
@@ -758,7 +774,7 @@ func diagnoseBuildUploadFailure(ctx context.Context, client *asc.Client, appID s
 	if err != nil {
 		return "", err
 	}
-	keyPath, err := buildStatusPrivateKeyPath(creds)
+	keyPath, err := AltoolPrivateKeyPath(creds)
 	if err != nil {
 		return "", err
 	}
@@ -797,7 +813,10 @@ func resolveBuildStatusBundleID(ctx context.Context, client *asc.Client, appID s
 	return strings.TrimSpace(app.Data.Attributes.BundleID)
 }
 
-func buildStatusPrivateKeyPath(creds ResolvedAuthCredentials) (string, error) {
+// AltoolPrivateKeyPath returns a .p8 path for altool's --p8-file-path, writing
+// PEM material loaded from the keychain or environment to a private temp file.
+// It returns "" when creds carry no usable key.
+func AltoolPrivateKeyPath(creds ResolvedAuthCredentials) (string, error) {
 	if pem := strings.TrimSpace(creds.KeyPEM); pem != "" {
 		if decoded, cacheKey, ok := decodeBuildStatusPrivateKeyPEMBase64(pem); ok {
 			if path := cachedTempPrivateKeyPath(cacheKey); path != "" {

@@ -114,6 +114,9 @@ Examples:
 			if err := shared.ValidateNextURL(*next); err != nil {
 				return shared.UsageErrorf("app-clips advanced-experiences list: %v", err)
 			}
+			if err := shared.RejectNextFlagConflicts(fs, *next, "app-clips advanced-experiences list", "action", "status", "place-status"); err != nil {
+				return err
+			}
 
 			actionValues, err := normalizeAppClipActionList(*action)
 			if err != nil {

@@ -449,7 +449,7 @@ func printMigrateValidateResultTable(result *MigrateValidateResult) error {
 
 func renderMigrateStoreAssets(result *MigrateImportResult, render func([]string, [][]string)) {
 	rows := [][]string{}
-	if result.DryRun {
+	if result.DryRun && !result.RemoteChecked {
 		if result.AppClip != nil {
 			if result.AppClip.Action != "" {
 				rows = append(rows, []string{"app_clip", "", "action.txt", result.AppClip.Action, "local input", ""})
@@ -488,7 +488,13 @@ func renderMigrateStoreAssets(result *MigrateImportResult, render func([]string,
 		}
 	}
 	if len(rows) > 0 {
-		fmt.Println("Store assets:")
+		if result.RemoteChecked {
+			fmt.Println("Remote store asset changes:")
+		} else {
+			fmt.Println("Store assets:")
+		}
 		render([]string{"Kind", "Locale", "File", "Action", "Status", "Details"}, rows)
+	} else if result.RemoteChecked {
+		fmt.Println("No remote store asset changes.")
 	}
 }

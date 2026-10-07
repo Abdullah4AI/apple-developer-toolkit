@@ -79,12 +79,25 @@ func reviewSubscriptionState(subscription webcore.ReviewSubscription) string {
 	return strings.ToUpper(strings.TrimSpace(subscription.State))
 }
 
+// A response without submitWithNextAppStoreVersion is an upstream failure, not
+// an operator mistake. Nothing prints this error first, so it must not be a
+// ReportedError or the command exits silently.
+func reviewSubscriptionUnknownAttachmentError(operation, appID, subscriptionID string) error {
+	return shared.WithDiagnostic(
+		fmt.Errorf(
+			"web review subscriptions %s: App Store Connect did not return the next-version attachment state for subscription %q; check it with `asc web review subscriptions list --app \"%s\"`, then retry",
+			operation,
+			strings.TrimSpace(subscriptionID),
+			appID,
+		),
+		shared.DiagnosticDependencyFailed,
+		"",
+	)
+}
+
 func reviewSubscriptionAttachPreflight(appID string, subscription webcore.ReviewSubscription) error {
 	if !subscription.SubmitWithNextAppStoreVersionKnown {
-		return shared.NewReportedError(fmt.Errorf(
-			"web review subscriptions attach: Apple did not return a reliable next-version attachment state for subscription %q; refresh App Store Connect and retry",
-			strings.TrimSpace(subscription.ID),
-		))
+		return reviewSubscriptionUnknownAttachmentError("attach", appID, subscription.ID)
 	}
 	state := reviewSubscriptionState(subscription)
 	if state == "READY_TO_SUBMIT" {
@@ -124,7 +137,7 @@ func reviewSubscriptionAttachPreflight(appID string, subscription webcore.Review
 		fmt.Fprintln(os.Stderr, "Hint: Complete the outstanding App Store Connect action for this subscription, then retry once it reaches READY_TO_SUBMIT.")
 	}
 
-	return shared.NewReportedError(
+	return shared.NewStderrReportedError(
 		fmt.Errorf(
 			"web review subscriptions attach: subscription %q is %s; Apple only allows attach once it reaches READY_TO_SUBMIT",
 			subscriptionID,
@@ -502,7 +515,7 @@ func reviewSubscriptionGroupAttachPreflight(appID, groupID string, subscriptions
 	fmt.Fprintln(os.Stderr, "Hint: Apple only allows attach after the relevant subscriptions reach READY_TO_SUBMIT.")
 	fmt.Fprintln(os.Stderr, "Hint: In live testing, a subscription promotional image also mattered in addition to localization, pricing coverage, and the App Store review screenshot.")
 
-	return shared.NewReportedError(
+	return shared.NewStderrReportedError(
 		fmt.Errorf(
 			"web review subscriptions attach-group: group %q has no READY_TO_SUBMIT subscriptions to attach",
 			groupID,
@@ -862,10 +875,7 @@ func WebReviewSubscriptionsRemoveCommand() *ffcli.Command {
 				Subscription: *selected,
 			}
 			if !selected.SubmitWithNextAppStoreVersionKnown {
-				return shared.NewReportedError(fmt.Errorf(
-					"web review subscriptions remove: Apple did not return a reliable next-version attachment state for subscription %q; refresh App Store Connect and retry",
-					trimmedSubscriptionID,
-				))
+				return reviewSubscriptionUnknownAttachmentError("remove", trimmedAppID, trimmedSubscriptionID)
 			}
 			if selected.SubmitWithNextAppStoreVersion {
 				err = withWebSpinner("Removing subscription from next app version", func() error {

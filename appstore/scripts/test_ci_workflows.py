@@ -293,6 +293,10 @@ def assert_optimized_workflow_text(path: Path, workflow: str, test_job: str) -> 
         assert "ASC_BYPASS_KEYCHAIN=1 go test -short -count=1 ./internal/rootfs" in command, (
             f"{path}: {runner} must run ./internal/rootfs with the keychain bypass"
         )
+    windows = matrix_command_for_runner(build_platforms, "windows-latest")
+    assert "ASC_BYPASS_KEYCHAIN=1 ASC_WINDOWS_CREDENTIAL_SMOKE=1 ASC_WINDOWS_SMOKE_BINARY=../../../build/asc_dev_windows_amd64.exe go test -count=1 ./internal/cli/auth -run '^TestWindowsCredentialManagerNativeRoundTrip$'" in windows, (
+        f"{path}: missing opt-in native Windows Credential Manager smoke"
+    )
     for arch in ("amd64", "arm64"):
         command = f"CGO_ENABLED=1 GOOS=darwin GOARCH={arch} go build"
         assert command in build_platforms, f"{path}: missing cgo-enabled Darwin {arch} build"

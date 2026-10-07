@@ -22,6 +22,7 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/appclips"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/apps"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/artifacts"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/assetlibrary"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/auth"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/backgroundassets"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/buildbundles"
@@ -176,6 +177,7 @@ func NewCatalog(version string) *Catalog {
 		commandFactory("metadata", "Manage app metadata with deterministic workflows and keyword tooling.", metadata.MetadataCommand),
 		commandFactory("screenshots", "Upload and manage App Store screenshots, including local capture, framing, and matrices.", screenshots.ScreenshotsCommand),
 		commandFactory("video-previews", "Manage App Store app preview videos.", videopreviews.VideoPreviewsCommand),
+		commandFactory("asset-library", "Inspect Asset Library media and specifications, and upload images and videos.", assetlibrary.Command),
 		commandFactory("background-assets", "Manage background assets.", backgroundassets.BackgroundAssetsCommand),
 		commandFactory("build-localizations", "Manage build release notes localizations.", buildlocalizations.BuildLocalizationsCommand),
 		commandFactory("sandbox", "Manage sandbox testers in App Store Connect.", sandbox.SandboxCommand),

@@ -1126,17 +1126,20 @@ Examples:
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
-			return runDetailsMetrics(ctx, name, detailID, granularity, groupBy, filterResult, sort, limit, next, paginate, output, pretty, fetch)
+			return runDetailsMetrics(ctx, name, fs, detailID, granularity, groupBy, filterResult, sort, limit, next, paginate, output, pretty, fetch)
 		},
 	}
 }
 
-func runDetailsMetrics(ctx context.Context, name string, detailID *string, granularity *string, groupBy *string, filterResult *string, sort *string, limit *int, next *string, paginate *bool, output *string, pretty *bool, fetch func(client *asc.Client, ctx context.Context, id string, opts ...asc.GCMatchmakingMetricsOption) (*asc.GameCenterMetricsResponse, error)) error {
+func runDetailsMetrics(ctx context.Context, name string, fs *flag.FlagSet, detailID *string, granularity *string, groupBy *string, filterResult *string, sort *string, limit *int, next *string, paginate *bool, output *string, pretty *bool, fetch func(client *asc.Client, ctx context.Context, id string, opts ...asc.GCMatchmakingMetricsOption) (*asc.GameCenterMetricsResponse, error)) error {
 	if *limit != 0 && (*limit < 1 || *limit > 200) {
 		return shared.UsageErrorf("game-center details metrics %s: --limit must be between 1 and 200", name)
 	}
 	if err := shared.ValidateNextURL(*next); err != nil {
 		return shared.UsageErrorf("game-center details metrics %s: %v", name, err)
+	}
+	if err := shared.RejectNextFlagConflicts(fs, *next, "game-center details metrics "+name, "granularity", "group-by", "filter-result", "sort"); err != nil {
+		return err
 	}
 
 	id := strings.TrimSpace(*detailID)

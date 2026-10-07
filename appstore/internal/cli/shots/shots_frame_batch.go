@@ -172,7 +172,7 @@ func runFrameBatch(ctx context.Context, opts frameBatchOptions) error {
 		message += "; rerun the same command to retry only the failed inputs"
 	}
 	fmt.Fprintf(os.Stderr, "Error: %s\n", message)
-	return shared.NewReportedError(errors.New(message))
+	return shared.NewStderrReportedError(errors.New(message))
 }
 
 // renderFrameBatch frames jobs with up to workers renders in flight and

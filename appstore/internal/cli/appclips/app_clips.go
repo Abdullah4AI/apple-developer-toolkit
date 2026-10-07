@@ -80,6 +80,9 @@ Examples:
 			if err := shared.ValidateNextURL(*next); err != nil {
 				return shared.UsageErrorf("app-clips list: %v", err)
 			}
+			if err := shared.RejectNextFlagConflicts(fs, *next, "app-clips list", "bundle-id"); err != nil {
+				return err
+			}
 
 			appValue := strings.TrimSpace(shared.ResolveAppID(*appID))
 			if appValue == "" {

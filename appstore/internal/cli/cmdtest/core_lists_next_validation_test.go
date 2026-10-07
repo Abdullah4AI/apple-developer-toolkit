@@ -324,7 +324,7 @@ func TestNominationsListPaginateFromNext(t *testing.T) {
 	root.FlagSet.SetOutput(io.Discard)
 
 	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"nominations", "list", "--status", "DRAFT", "--paginate", "--next", firstURL}); err != nil {
+		if err := root.Parse([]string{"nominations", "list", "--paginate", "--next", firstURL}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
 		if err := root.Run(context.Background()); err != nil {

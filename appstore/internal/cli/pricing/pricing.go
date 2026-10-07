@@ -187,6 +187,9 @@ Examples:
 			if err := shared.ValidateNextURL(*next); err != nil {
 				return shared.UsageErrorf("pricing price-points: %v", err)
 			}
+			if err := shared.RejectNextFlagConflicts(fs, *next, "pricing price-points", "territory"); err != nil {
+				return err
+			}
 
 			resolvedAppID := shared.ResolveAppID(*appID)
 			if resolvedAppID == "" && strings.TrimSpace(*next) == "" {
@@ -319,7 +322,7 @@ func PricingScheduleCommand() *ffcli.Command {
 Examples:
   asc pricing schedule view --app "123456789"
   asc pricing schedule view --id "SCHEDULE_ID"
-  asc pricing schedule create --app "123456789" --price-point "PRICE_POINT_ID" --start-date "YYYY-MM-DD"
+  asc pricing schedule create --app "123456789" --price-point "PRICE_POINT_ID" --base-territory "United States" --start-date "YYYY-MM-DD"
   asc pricing schedule create --app "123456789" --free --base-territory "US" --start-date "YYYY-MM-DD"
   asc pricing schedule manual-prices --schedule "SCHEDULE_ID"
   asc pricing schedule automatic-prices --schedule "SCHEDULE_ID"`,

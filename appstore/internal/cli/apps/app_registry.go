@@ -67,7 +67,7 @@ Examples:
   asc apps registry pull
   asc apps registry pull --path ".asc/app-registry.json"
   asc apps registry pull --path "/Users/me/clawd/config/app_registry.json" --dry-run
-  asc apps registry pull --prune-missing`,
+  asc apps registry pull --prune-missing --dry-run`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{

@@ -351,6 +351,7 @@ Examples:
 				Total:           len(parsedRows),
 			}
 
+			var refused error
 			for idx, row := range parsedRows {
 				rowNumber := idx + 1 // 1-based data row index (excluding header)
 
@@ -444,6 +445,7 @@ Examples:
 							Email: emailValue,
 							Error: err.Error(),
 						})
+						refused = shared.KeepReadOnlyRefusal(refused, err)
 						if !*continueOnError {
 							break
 						}
@@ -468,6 +470,7 @@ Examples:
 						Email: emailValue,
 						Error: err.Error(),
 					})
+					refused = shared.KeepReadOnlyRefusal(refused, err)
 					if !*continueOnError {
 						break
 					}
@@ -501,6 +504,7 @@ Examples:
 							Email: emailValue,
 							Error: err.Error(),
 						})
+						refused = shared.KeepReadOnlyRefusal(refused, err)
 						if !*continueOnError {
 							break
 						}
@@ -535,7 +539,7 @@ Examples:
 			}
 
 			if summary.Failed > 0 {
-				return shared.NewReportedError(fmt.Errorf("beta-testers import: %d row(s) failed", summary.Failed))
+				return shared.NewReportedError(shared.NewErrorWithCause(fmt.Errorf("beta-testers import: %d row(s) failed", summary.Failed), refused))
 			}
 			return nil
 		},

@@ -167,6 +167,12 @@ var removedFlagRules = []removedFlagRule{
 	{
 		flag:        "build",
 		commands:    buildIDAliasCommands,
+		requireFlag: "build-number",
+		replacement: "`--build-id` or `--build-number`",
+	},
+	{
+		flag:        "build",
+		commands:    buildIDAliasCommands,
 		replacement: "`--build-id`",
 	},
 	{
@@ -192,7 +198,7 @@ var removedFlagRules = []removedFlagRule{
 	{
 		flag:        "external-testing",
 		commands:    []string{"testflight distribution edit"},
-		replacement: "`asc builds add-groups --submit --confirm` or `asc builds remove-groups --confirm`",
+		replacement: "`asc builds add-groups --build-id BUILD_ID --group GROUP_ID --submit --confirm` or `asc builds remove-groups --build-id BUILD_ID --group GROUP_ID --confirm`",
 	},
 	{flag: "id", commands: []string{"versions view", "versions update"}, replacement: "`--version-id`"},
 	{flag: "app", commands: []string{"apps view"}, replacement: "`--id`"},

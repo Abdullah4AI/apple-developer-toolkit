@@ -95,6 +95,9 @@ Examples:
 			if err := shared.ValidateNextURL(*next); err != nil {
 				return shared.UsageErrorf("app-tags list: %v", err)
 			}
+			if err := shared.RejectNextFlagConflicts(fs, *next, "app-tags list", "visible-in-app-store", "sort", "fields", "include", "territory-fields", "territory-limit"); err != nil {
+				return err
+			}
 			if err := shared.ValidateSort(*sort, "name", "-name"); err != nil {
 				return shared.UsageErrorf("app-tags list: %v", err)
 			}
@@ -428,6 +431,9 @@ Examples:
 			}
 			if err := shared.ValidateNextURL(*next); err != nil {
 				return shared.UsageErrorf("app-tags territories: %v", err)
+			}
+			if err := shared.RejectNextFlagConflicts(fs, *next, "app-tags territories", "fields"); err != nil {
+				return err
 			}
 
 			fieldsValue, err := normalizeTerritoryFields(*fields)

@@ -12,6 +12,7 @@ import (
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/metadata"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 	validatecli "github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/validate"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/validation"
 )
@@ -141,6 +142,9 @@ func TestExecuteStageDryRunRejectsPlannedDeletesWithoutAllowDeletes(t *testing.T
 	}
 	if !strings.Contains(err.Error(), "--allow-deletes") {
 		t.Fatalf("expected error naming --allow-deletes, got %v", err)
+	}
+	if !shared.IsValidationError(err) {
+		t.Fatalf("expected the planned-deletes refusal to be a validation outcome, got %T", err)
 	}
 	if errors.Is(err, flag.ErrHelp) {
 		t.Fatalf("mid-pipeline plan failure was classified as invalid command usage: %v", err)

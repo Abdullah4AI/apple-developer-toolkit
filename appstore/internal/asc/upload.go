@@ -282,7 +282,7 @@ func executeUploadOperation(ctx context.Context, file *os.File, task uploadTask,
 			}
 		}
 		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-			return struct{}{}, fmt.Errorf("upload request failed with status %s", resp.Status)
+			return struct{}{}, &uploadStatusError{status: resp.Status, statusCode: resp.StatusCode}
 		}
 
 		return struct{}{}, nil
@@ -292,6 +292,26 @@ func executeUploadOperation(ctx context.Context, file *os.File, task uploadTask,
 	}
 	return nil
 }
+
+// uploadStatusError reports a presigned upload request rejected by the upload
+// service. The URL carries its own short-lived signature rather than App Store
+// Connect credentials, so a 401 or 403 does not mean the API key failed.
+type uploadStatusError struct {
+	status     string
+	statusCode int
+}
+
+func (e *uploadStatusError) Error() string {
+	message := "upload request failed with status " + e.status
+	if e.statusCode == http.StatusForbidden {
+		message += "; the upload URL may have expired, rerun the upload"
+	}
+	return message
+}
+
+func (e *uploadStatusError) HTTPStatusCode() int { return e.statusCode }
+
+func (e *uploadStatusError) PresignedUploadError() bool { return true }
 
 // newSanitizedUploadError is the single upload-error boundary: presigned upload
 // URLs carry their capability in userinfo, query, and fragment, and net/http

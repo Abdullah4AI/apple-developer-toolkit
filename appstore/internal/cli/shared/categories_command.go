@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/peterbourgon/ff/v3/ffcli"
@@ -24,7 +23,7 @@ type CategoriesSetCommandConfig struct {
 func NewCategoriesSetCommand(config CategoriesSetCommandConfig) *ffcli.Command {
 	fs := flag.NewFlagSet(config.FlagSetName, flag.ExitOnError)
 
-	appID := fs.String("app", os.Getenv("ASC_APP_ID"), "App ID (required)")
+	appID := fs.String("app", "", "App ID (required)")
 	var appInfoID *string
 	if config.IncludeAppInfo {
 		appInfoID = BindResourceIDFlag(fs, "app-info", "appInfos", "App Info ID (optional override)")
@@ -45,7 +44,7 @@ func NewCategoriesSetCommand(config CategoriesSetCommandConfig) *ffcli.Command {
 		FlagSet:    fs,
 		UsageFunc:  DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
-			appIDValue, err := AppIDFlagValue(*appID)
+			appIDValue, err := AppIDFlagValue(ResolveAppID(*appID))
 			if err != nil {
 				return err
 			}
@@ -62,10 +61,10 @@ func NewCategoriesSetCommand(config CategoriesSetCommandConfig) *ffcli.Command {
 			}
 
 			if appIDValue == "" {
-				return fmt.Errorf("%s: --app is required", config.ErrorPrefix)
+				return UsageErrorf("%s: --app is required (or set ASC_APP_ID)", config.ErrorPrefix)
 			}
 			if primaryValue == "" {
-				return fmt.Errorf("%s: --primary is required", config.ErrorPrefix)
+				return UsageErrorf("%s: --primary is required", config.ErrorPrefix)
 			}
 
 			client, err := getASCClient()

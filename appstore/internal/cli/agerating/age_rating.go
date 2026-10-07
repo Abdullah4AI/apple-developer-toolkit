@@ -117,7 +117,7 @@ Examples:
 			appValue := strings.TrimSpace(shared.ResolveAppID(strings.TrimSpace(*appID)))
 
 			if appInfoValue != "" && versionValue != "" {
-				return fmt.Errorf("age-rating view: only one of --app-info-id or --version-id is allowed")
+				return shared.WithDiagnostic(shared.UsageError("only one of --app-info-id or --version-id is allowed"), shared.DiagnosticConflictingInput, "--version-id")
 			}
 			if appInfoValue == "" && versionValue == "" && appValue == "" {
 				fmt.Fprintln(os.Stderr, "Error: --app is required (or set ASC_APP_ID)")
@@ -234,7 +234,7 @@ Examples:
 
 			if idValue == "" {
 				if appInfoValue != "" && versionValue != "" {
-					return fmt.Errorf("age-rating edit: only one of --app-info-id or --version-id is allowed")
+					return shared.WithDiagnostic(shared.UsageError("only one of --app-info-id or --version-id is allowed"), shared.DiagnosticConflictingInput, "--version-id")
 				}
 				if appInfoValue == "" && versionValue == "" && appValue == "" {
 					fmt.Fprintln(os.Stderr, "Error: --id or --app is required (or set ASC_APP_ID)")
@@ -388,12 +388,39 @@ func fetchAgeRatingDeclaration(ctx context.Context, client *asc.Client, appID, a
 	case versionID != "":
 		return client.GetAgeRatingDeclarationForAppStoreVersion(ctx, versionID, opts...)
 	default:
-		appInfoID, err := client.ResolveCurrentAppInfoIDForApp(ctx, appID)
+		appInfoID, err := resolveAppInfoIDForApp(ctx, client, appID)
 		if err != nil {
 			return nil, fmt.Errorf("failed to resolve current app info: %w", err)
 		}
 		return client.GetAgeRatingDeclarationForAppInfo(ctx, appInfoID, opts...)
 	}
+}
+
+// While a new version is being prepared, an app has a live and an editable app
+// info; like shared.ResolveAppInfoIDWithFlag, select the editable one. Unlike it,
+// read every page.
+func resolveAppInfoIDForApp(ctx context.Context, client *asc.Client, appID string) (string, error) {
+	candidates, err := client.ListAppInfoCandidatesForApp(ctx, appID)
+	if err != nil {
+		return "", err
+	}
+	current := asc.CurrentAppInfoCandidates(candidates)
+	if len(current) == 0 {
+		return "", shared.WithDiagnostic(shared.NewValidationError(fmt.Errorf(
+			"no current app info found for app %q (%s); run `asc apps info list --app %q` to inspect candidates",
+			appID,
+			asc.FormatAppInfoCandidates(candidates),
+			appID,
+		)), shared.DiagnosticStateNotReady, "")
+	}
+	if len(current) == 1 && current[0].ID != "" {
+		return current[0].ID, nil
+	}
+	if editableID, ok := asc.AutoResolveAppInfoIDByVersionState(current, "PREPARE_FOR_SUBMISSION"); ok {
+		fmt.Fprintf(os.Stderr, "Multiple app infos found for app %s, auto-selected %s (PREPARE_FOR_SUBMISSION).\n", appID, editableID)
+		return editableID, nil
+	}
+	return "", shared.WithDiagnostic(shared.AmbiguousUsageError(shared.AmbiguousAppInfoError(appID, "--app-info-id", current)), shared.DiagnosticConflictingInput, "--app-info-id")
 }
 
 func resolveAgeRatingDeclarationID(ctx context.Context, client *asc.Client, appID, appInfoID, versionID string) (string, error) {

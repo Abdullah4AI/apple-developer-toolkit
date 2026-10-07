@@ -66,6 +66,7 @@ asc <subcommand> [flags]
 - `metadata` - Manage app metadata with deterministic workflows and keyword tooling.
 - `screenshots` - Upload and manage App Store screenshots, including local capture, framing, and matrices.
 - `video-previews` - Manage App Store app preview videos.
+- `asset-library` - Inspect Asset Library media and specifications, and upload images and videos.
 - `background-assets` - Manage background assets.
 - `product-pages` - Manage custom product pages and product page experiments.
 - `routing-coverage` - Manage routing app coverage files.

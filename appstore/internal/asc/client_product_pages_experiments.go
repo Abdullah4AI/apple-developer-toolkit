@@ -152,7 +152,8 @@ type AppStoreVersionExperimentTreatmentCreateAttributes struct {
 
 // AppStoreVersionExperimentTreatmentCreateRelationships describes create relationships.
 type AppStoreVersionExperimentTreatmentCreateRelationships struct {
-	AppStoreVersionExperiment *Relationship `json:"appStoreVersionExperiment"`
+	AppStoreVersionExperiment   *Relationship `json:"appStoreVersionExperiment,omitempty"`
+	AppStoreVersionExperimentV2 *Relationship `json:"appStoreVersionExperimentV2,omitempty"`
 }
 
 // AppStoreVersionExperimentTreatmentCreateData is the data payload for create requests.
@@ -673,6 +674,15 @@ func (c *Client) GetAppStoreVersionExperimentTreatment(ctx context.Context, trea
 
 // CreateAppStoreVersionExperimentTreatment creates a treatment.
 func (c *Client) CreateAppStoreVersionExperimentTreatment(ctx context.Context, experimentID, name, appIconName string) (*AppStoreVersionExperimentTreatmentResponse, error) {
+	return c.createAppStoreVersionExperimentTreatment(ctx, experimentID, name, appIconName, false)
+}
+
+// CreateAppStoreVersionExperimentTreatmentV2 creates a treatment for a v2 experiment.
+func (c *Client) CreateAppStoreVersionExperimentTreatmentV2(ctx context.Context, experimentID, name, appIconName string) (*AppStoreVersionExperimentTreatmentResponse, error) {
+	return c.createAppStoreVersionExperimentTreatment(ctx, experimentID, name, appIconName, true)
+}
+
+func (c *Client) createAppStoreVersionExperimentTreatment(ctx context.Context, experimentID, name, appIconName string, v2 bool) (*AppStoreVersionExperimentTreatmentResponse, error) {
 	experimentID = strings.TrimSpace(experimentID)
 	name = strings.TrimSpace(name)
 	appIconName = strings.TrimSpace(appIconName)
@@ -683,18 +693,21 @@ func (c *Client) CreateAppStoreVersionExperimentTreatment(ctx context.Context, e
 		return nil, fmt.Errorf("name is required")
 	}
 
+	relationship := &Relationship{Data: ResourceData{
+		Type: ResourceTypeAppStoreVersionExperiments,
+		ID:   experimentID,
+	}}
+	relationships := &AppStoreVersionExperimentTreatmentCreateRelationships{}
+	if v2 {
+		relationships.AppStoreVersionExperimentV2 = relationship
+	} else {
+		relationships.AppStoreVersionExperiment = relationship
+	}
 	payload := AppStoreVersionExperimentTreatmentCreateRequest{
 		Data: AppStoreVersionExperimentTreatmentCreateData{
-			Type:       ResourceTypeAppStoreVersionExperimentTreatments,
-			Attributes: AppStoreVersionExperimentTreatmentCreateAttributes{Name: name, AppIconName: appIconName},
-			Relationships: &AppStoreVersionExperimentTreatmentCreateRelationships{
-				AppStoreVersionExperiment: &Relationship{
-					Data: ResourceData{
-						Type: ResourceTypeAppStoreVersionExperiments,
-						ID:   experimentID,
-					},
-				},
-			},
+			Type:          ResourceTypeAppStoreVersionExperimentTreatments,
+			Attributes:    AppStoreVersionExperimentTreatmentCreateAttributes{Name: name, AppIconName: appIconName},
+			Relationships: relationships,
 		},
 	}
 

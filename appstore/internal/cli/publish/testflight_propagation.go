@@ -45,6 +45,10 @@ type postUploadBuildProcessingFailure struct {
 func (e *postUploadBuildProcessingFailure) Error() string {
 	return fmt.Sprintf("build processing failed: %s", e.state)
 }
+func (e *postUploadBuildProcessingFailure) ValidationFailure() bool { return true }
+func (e *postUploadBuildProcessingFailure) Diagnostic() shared.Diagnostic {
+	return shared.Diagnostic{Code: shared.DiagnosticStateNotReady}
+}
 
 func addUploadedBuildBetaGroups(
 	ctx context.Context,

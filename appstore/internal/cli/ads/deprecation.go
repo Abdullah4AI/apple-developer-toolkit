@@ -94,7 +94,7 @@ var adsLegacyMigrations = map[string]adsLegacyMigration{
 	"delete-a-targeting-keyword":                {kind: adsLegacyDirect, replacement: []string{"targeting-keywords", "delete"}},
 	"delete-targeting-keywords": {
 		kind:     adsLegacyNone,
-		guidance: "No one-command replacement exists. Query matching keywords with `asc ads targeting-keywords find`, then delete each ID with `asc ads targeting-keywords delete --confirm`.",
+		guidance: "No one-command replacement exists. Query matching keywords with `asc ads targeting-keywords find`, then delete each ID with `asc ads targeting-keywords delete --keyword KEYWORD_ID --confirm`.",
 	},
 
 	"get-all-campaign-negative-keywords": {kind: adsLegacyBreaking, replacement: []string{"negative-keywords", "find"}},
@@ -104,7 +104,7 @@ var adsLegacyMigrations = map[string]adsLegacyMigration{
 	"update-campaign-negative-keywords":  {kind: adsLegacyBreaking, replacement: []string{"negative-keywords", "update-bulk"}},
 	"delete-campaign-negative-keywords": {
 		kind:     adsLegacyNone,
-		guidance: "No one-command replacement exists. Query matching negative keywords with `asc ads negative-keywords find`, then delete each ID with `asc ads negative-keywords delete --confirm`.",
+		guidance: "No one-command replacement exists. Query matching negative keywords with `asc ads negative-keywords find`, then delete each ID with `asc ads negative-keywords delete --negative-keyword NEGATIVE_KEYWORD_ID --confirm`.",
 	},
 
 	"get-all-ad-group-negative-keywords": {kind: adsLegacyBreaking, replacement: []string{"negative-keywords", "find"}},
@@ -114,7 +114,7 @@ var adsLegacyMigrations = map[string]adsLegacyMigration{
 	"update-ad-group-negative-keywords":  {kind: adsLegacyBreaking, replacement: []string{"negative-keywords", "update-bulk"}},
 	"delete-ad-group-negative-keywords": {
 		kind:     adsLegacyNone,
-		guidance: "No one-command replacement exists. Query matching negative keywords with `asc ads negative-keywords find`, then delete each ID with `asc ads negative-keywords delete --confirm`.",
+		guidance: "No one-command replacement exists. Query matching negative keywords with `asc ads negative-keywords find`, then delete each ID with `asc ads negative-keywords delete --negative-keyword NEGATIVE_KEYWORD_ID --confirm`.",
 	},
 
 	"search-for-geolocations":     {kind: adsLegacyBreaking, replacement: []string{"geo", "search"}},

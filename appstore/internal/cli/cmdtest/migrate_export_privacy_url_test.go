@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"testing"
 )
 
@@ -20,6 +21,7 @@ func TestMigrateExportPreservesAppInfoPrivacyPolicyURL(t *testing.T) {
 
 	outputDir := filepath.Join(t.TempDir(), "fastlane")
 	const privacyURL = "https://example.com/privacy?locale=en-US#policy"
+	var versionLocalizationsLimit200 atomic.Bool
 	installDefaultTransport(t, roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		switch {
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/appStoreVersions/VERSION_ID/appClipDefaultExperience":
@@ -27,10 +29,13 @@ func TestMigrateExportPreservesAppInfoPrivacyPolicyURL(t *testing.T) {
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/appStoreVersions/VERSION_ID":
 			return migrateJSONResponse(http.StatusOK, `{"data":{"type":"appStoreVersions","id":"VERSION_ID","attributes":{"versionString":"1.0","platform":"IOS"},"relationships":{"app":{"data":{"type":"apps","id":"APP_ID"}}}}}`), nil
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/appStoreVersions/VERSION_ID/appStoreVersionLocalizations":
+			if req.URL.Query().Get("limit") == "200" {
+				versionLocalizationsLimit200.Store(true)
+			}
 			return migrateJSONResponse(http.StatusOK, `{"data":[],"links":{"next":""}}`), nil
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/apps/APP_ID/appInfos":
 			return migrateJSONResponse(http.StatusOK, `{"data":[{"type":"appInfos","id":"INFO_ID","attributes":{"state":"PREPARE_FOR_SUBMISSION"}}],"links":{"next":""}}`), nil
-		case req.Method == http.MethodGet && req.URL.Path == "/v1/appInfos/INFO_ID/appInfoLocalizations":
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/appInfos/INFO_ID/appInfoLocalizations" && req.URL.Query().Get("limit") == "200":
 			return migrateJSONResponse(http.StatusOK, `{"data":[
 				{"type":"appInfoLocalizations","id":"LOC_EN","attributes":{"locale":"en-US","name":"English","subtitle":"English subtitle","privacyPolicyUrl":"`+privacyURL+`"}},
 				{"type":"appInfoLocalizations","id":"LOC_FR","attributes":{"locale":"fr-FR","name":"French","subtitle":"French subtitle"}},
@@ -57,6 +62,9 @@ func TestMigrateExportPreservesAppInfoPrivacyPolicyURL(t *testing.T) {
 	})
 	if runErr != nil {
 		t.Fatalf("migrate export error: %v", runErr)
+	}
+	if !versionLocalizationsLimit200.Load() {
+		t.Fatal("expected version localizations to be requested with limit=200")
 	}
 	var result struct {
 		TotalFiles int `json:"totalFiles"`

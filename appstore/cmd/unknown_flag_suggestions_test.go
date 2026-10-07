@@ -248,6 +248,14 @@ func TestUnknownFlagSuggestionRankingTiers(t *testing.T) {
 			want:    []string{"ipa", "output"},
 		},
 		{
+			name: "an artifact-agnostic path flag does not answer --ipa",
+			flags: func(fs *flag.FlagSet) {
+				fs.String("path", "", "Path to the metadata directory (required)")
+			},
+			unknown: "--ipa",
+			want:    nil,
+		},
+		{
 			name: "a format-only output flag is not a path destination",
 			flags: func(fs *flag.FlagSet) {
 				fs.String("output", "", "Output format: json, table, markdown (default: json)")

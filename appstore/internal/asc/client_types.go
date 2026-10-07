@@ -91,6 +91,8 @@ const (
 	ResourceTypeReviewSubmissionItems                           = types.ResourceTypeReviewSubmissionItems
 	ResourceTypeAppCustomProductPages                           = types.ResourceTypeAppCustomProductPages
 	ResourceTypeAppCustomProductPageVersions                    = types.ResourceTypeAppCustomProductPageVersions
+	ResourceTypeAppAssetLibraryImages                           = types.ResourceTypeAppAssetLibraryImages
+	ResourceTypeAppAssetLibraryVideos                           = types.ResourceTypeAppAssetLibraryVideos
 	ResourceTypeAppCustomProductPageLocalizations               = types.ResourceTypeAppCustomProductPageLocalizations
 	ResourceTypeAppEvents                                       = types.ResourceTypeAppEvents
 	ResourceTypeAppEventLocalizations                           = types.ResourceTypeAppEventLocalizations

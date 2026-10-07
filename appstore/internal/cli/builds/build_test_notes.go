@@ -89,6 +89,9 @@ Examples:
 			if err := shared.ValidateNextURL(*next); err != nil {
 				return shared.UsageErrorf("builds test-notes list: %v", err)
 			}
+			if err := shared.RejectNextFlagConflicts(fs, *next, "builds test-notes list", "locale"); err != nil {
+				return err
+			}
 
 			locales := shared.SplitCSV(*locale)
 			if err := shared.ValidateBuildLocalizationLocales(locales); err != nil {

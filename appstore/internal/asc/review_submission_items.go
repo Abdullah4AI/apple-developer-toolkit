@@ -13,6 +13,8 @@ type ReviewSubmissionItemType string
 const (
 	ReviewSubmissionItemTypeAppStoreVersion                 ReviewSubmissionItemType = "appStoreVersions"
 	ReviewSubmissionItemTypeAppCustomProductPageVersion     ReviewSubmissionItemType = "appCustomProductPageVersions"
+	ReviewSubmissionItemTypeAppAssetLibraryImage            ReviewSubmissionItemType = "appAssetLibraryImages"
+	ReviewSubmissionItemTypeAppAssetLibraryVideo            ReviewSubmissionItemType = "appAssetLibraryVideos"
 	ReviewSubmissionItemTypeAppEvent                        ReviewSubmissionItemType = "appEvents"
 	ReviewSubmissionItemTypeAppStoreVersionExperiment       ReviewSubmissionItemType = "appStoreVersionExperiments"
 	ReviewSubmissionItemTypeAppStoreVersionExperimentV2     ReviewSubmissionItemType = "appStoreVersionExperimentsV2"
@@ -36,6 +38,8 @@ type ReviewSubmissionItemAttributes struct {
 type ReviewSubmissionItemRelationships struct {
 	AppStoreVersion                 *Relationship `json:"appStoreVersion,omitempty"`
 	AppCustomProductPageVersion     *Relationship `json:"appCustomProductPageVersion,omitempty"`
+	AppAssetLibraryImage            *Relationship `json:"appAssetLibraryImage,omitempty"`
+	AppAssetLibraryVideo            *Relationship `json:"appAssetLibraryVideo,omitempty"`
 	AppEvent                        *Relationship `json:"appEvent,omitempty"`
 	AppStoreVersionExperiment       *Relationship `json:"appStoreVersionExperiment,omitempty"`
 	AppStoreVersionExperimentV2     *Relationship `json:"appStoreVersionExperimentV2,omitempty"`
@@ -89,6 +93,8 @@ type ReviewSubmissionItemCreateRelationships struct {
 	ReviewSubmission                *Relationship `json:"reviewSubmission"`
 	AppStoreVersion                 *Relationship `json:"appStoreVersion,omitempty"`
 	AppCustomProductPageVersion     *Relationship `json:"appCustomProductPageVersion,omitempty"`
+	AppAssetLibraryImage            *Relationship `json:"appAssetLibraryImage,omitempty"`
+	AppAssetLibraryVideo            *Relationship `json:"appAssetLibraryVideo,omitempty"`
 	AppEvent                        *Relationship `json:"appEvent,omitempty"`
 	AppStoreVersionExperiment       *Relationship `json:"appStoreVersionExperiment,omitempty"`
 	AppStoreVersionExperimentV2     *Relationship `json:"appStoreVersionExperimentV2,omitempty"`
@@ -148,6 +154,18 @@ var reviewSubmissionItemTypeSpecs = []reviewSubmissionItemTypeSpec{
 		canonical: ReviewSubmissionItemTypeAppCustomProductPageVersion,
 		applyRelationship: func(relationships *ReviewSubmissionItemCreateRelationships, itemID string) {
 			relationships.AppCustomProductPageVersion = reviewSubmissionItemRelationship(ResourceTypeAppCustomProductPageVersions, itemID)
+		},
+	},
+	{
+		canonical: ReviewSubmissionItemTypeAppAssetLibraryImage,
+		applyRelationship: func(relationships *ReviewSubmissionItemCreateRelationships, itemID string) {
+			relationships.AppAssetLibraryImage = reviewSubmissionItemRelationship(ResourceTypeAppAssetLibraryImages, itemID)
+		},
+	},
+	{
+		canonical: ReviewSubmissionItemTypeAppAssetLibraryVideo,
+		applyRelationship: func(relationships *ReviewSubmissionItemCreateRelationships, itemID string) {
+			relationships.AppAssetLibraryVideo = reviewSubmissionItemRelationship(ResourceTypeAppAssetLibraryVideos, itemID)
 		},
 	},
 	{

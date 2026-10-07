@@ -78,6 +78,9 @@ Examples:
 			if err := shared.ValidateNextURL(*next); err != nil {
 				return shared.UsageErrorfCtx(ctx, "beta-license-agreements list: %v", err)
 			}
+			if err := shared.RejectNextFlagConflicts(fs, *next, "testflight agreements list", "app", "fields", "app-fields", "include"); err != nil {
+				return err
+			}
 
 			client, err := shared.GetASCClient()
 			if err != nil {

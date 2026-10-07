@@ -418,3 +418,22 @@ func TestAPIErrorAllCodesReturnsEveryErrorsEntryInOrder(t *testing.T) {
 		t.Fatalf("nil AllCodes() = %v, want nil", got)
 	}
 }
+
+func TestTwoFAVerificationFailedErrorIsRejectedCodeOnlyForRefusals(t *testing.T) {
+	for _, test := range []struct {
+		kind   string
+		status int
+		want   bool
+	}{
+		{kind: "trusted-device", status: http.StatusBadRequest, want: true},
+		{kind: "phone", status: http.StatusUnauthorized, want: true},
+		{kind: "trusted-device", status: http.StatusTooManyRequests},
+		{kind: "trusted-device", status: http.StatusServiceUnavailable},
+		{kind: "phone-request", status: http.StatusBadRequest},
+	} {
+		err := fmt.Errorf("wrapped: %w", &twoFAVerificationFailedError{Kind: test.kind, Status: test.status})
+		if got := errors.Is(err, ErrTwoFactorCodeRejected); got != test.want {
+			t.Errorf("%s status %d: errors.Is(ErrTwoFactorCodeRejected) = %t, want %t", test.kind, test.status, got, test.want)
+		}
+	}
+}

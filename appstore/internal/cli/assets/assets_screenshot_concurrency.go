@@ -155,8 +155,6 @@ func uploadScreenshotsConcurrently(ctx context.Context, client *asc.Client, setI
 			progress.PendingAssets = []screenshotPendingAsset{slots[failed].pending}
 		}
 		progress.CleanupFailures = cleanupFailures
-		progress.CleanupError = cleanupErr
-		progress.UploadError = slots[failed].err
 		progress.FailedFile = files[failed]
 		return progress, errors.Join(slots[failed].err, cleanupErr)
 	}

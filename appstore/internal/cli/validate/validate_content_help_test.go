@@ -29,11 +29,3 @@ func TestValidateCommandAcceptsOptInURLChecks(t *testing.T) {
 		t.Fatal("--check-urls flag is not registered")
 	}
 }
-
-func TestValidateURLChecksAreTopLevelOnly(t *testing.T) {
-	cmd := ValidateCommand()
-	err := cmd.ParseAndRun(t.Context(), []string{"--check-urls", "testflight", "--app", "app-1", "--build-id", "build-1"})
-	if err == nil || !strings.Contains(err.Error(), "--check-urls is only valid for asc validate") {
-		t.Fatalf("error = %v, want top-level-only URL-check diagnostic", err)
-	}
-}

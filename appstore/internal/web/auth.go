@@ -72,6 +72,14 @@ var (
 	// ErrInvalidAppleAccountCredentials reports rejected Apple Account
 	// credentials during web login flows.
 	ErrInvalidAppleAccountCredentials = errInvalidAppleAccountCredentials
+	// ErrAppleAccountActionRequired reports a sign-in Apple holds until the
+	// account owner completes a prompt on the Apple Account website.
+	ErrAppleAccountActionRequired = errAppleAccountActionRequired
+	// ErrTwoFactorCodeRejected reports a verification code Apple refused.
+	ErrTwoFactorCodeRejected = errors.New("two-factor code rejected")
+	// ErrInvalidProviderSelection reports a provider selection that matches
+	// none of the account's providers.
+	ErrInvalidProviderSelection = errors.New("invalid provider selection")
 )
 
 var webTLSRootBundlePaths = []string{
@@ -474,6 +482,18 @@ func (e *twoFAVerificationFailedError) Error() string {
 		return fmt.Sprintf("%s 2fa failed (status %d, codes=%v)", e.Kind, e.Status, codes)
 	}
 	return fmt.Sprintf("%s 2fa failed (status %d)", e.Kind, e.Status)
+}
+
+func (e *twoFAVerificationFailedError) Is(target error) bool {
+	if target != ErrTwoFactorCodeRejected || e.Kind == "phone-request" {
+		return false
+	}
+	switch e.Status {
+	case http.StatusBadRequest, http.StatusUnauthorized, http.StatusForbidden:
+		return true
+	default:
+		return false
+	}
 }
 
 func (e *twoFAVerificationFailedError) HTTPStatusCode() int {
@@ -1325,6 +1345,20 @@ func availableProviderSummaries(info *sessionInfo) string {
 	return strings.Join(summaries, ", ")
 }
 
+type invalidProviderSelectionError struct {
+	message string
+}
+
+func newInvalidProviderSelectionError(format string, args ...any) error {
+	return invalidProviderSelectionError{message: fmt.Sprintf(format, args...)}
+}
+
+func (e invalidProviderSelectionError) Error() string { return e.message }
+
+func (e invalidProviderSelectionError) Is(target error) bool {
+	return target == ErrInvalidProviderSelection
+}
+
 func resolveProviderSelection(info *sessionInfo, selection ProviderSelection) (sessionProviderInfo, error) {
 	if info == nil {
 		return sessionProviderInfo{}, fmt.Errorf("session info is required")
@@ -1345,15 +1379,15 @@ func resolveProviderSelection(info *sessionInfo, selection ProviderSelection) (s
 			case idMatches && publicMatches:
 				matched = &provider
 			case idMatches:
-				return sessionProviderInfo{}, fmt.Errorf("provider selection mismatch: provider-id %d is %q, not %q", selection.ProviderID, strings.TrimSpace(provider.PublicProviderID), publicID)
+				return sessionProviderInfo{}, newInvalidProviderSelectionError("provider selection mismatch: provider-id %d is %q, not %q", selection.ProviderID, strings.TrimSpace(provider.PublicProviderID), publicID)
 			case publicMatches:
-				return sessionProviderInfo{}, fmt.Errorf("provider selection mismatch: public-provider-id %q is provider-id %d, not %d", publicID, provider.ProviderID, selection.ProviderID)
+				return sessionProviderInfo{}, newInvalidProviderSelectionError("provider selection mismatch: public-provider-id %q is provider-id %d, not %d", publicID, provider.ProviderID, selection.ProviderID)
 			}
 			continue
 		}
 		switch {
 		case idMatches && publicID != "" && !publicMatches:
-			return sessionProviderInfo{}, fmt.Errorf("provider selection mismatch: provider-id %d is %q, not %q", selection.ProviderID, strings.TrimSpace(provider.PublicProviderID), publicID)
+			return sessionProviderInfo{}, newInvalidProviderSelectionError("provider selection mismatch: provider-id %d is %q, not %q", selection.ProviderID, strings.TrimSpace(provider.PublicProviderID), publicID)
 		case idMatches || publicMatches:
 			matched = &provider
 		}
@@ -1361,9 +1395,9 @@ func resolveProviderSelection(info *sessionInfo, selection ProviderSelection) (s
 	if matched == nil {
 		available := availableProviderSummaries(info)
 		if available == "" {
-			return sessionProviderInfo{}, fmt.Errorf("provider selection %s did not match any available providers", providerSelectionDescription(selection))
+			return sessionProviderInfo{}, newInvalidProviderSelectionError("provider selection %s did not match any available providers", providerSelectionDescription(selection))
 		}
-		return sessionProviderInfo{}, fmt.Errorf("provider selection %s did not match any available providers (available: %s)", providerSelectionDescription(selection), available)
+		return sessionProviderInfo{}, newInvalidProviderSelectionError("provider selection %s did not match any available providers (available: %s)", providerSelectionDescription(selection), available)
 	}
 	return *matched, nil
 }
@@ -1484,7 +1518,7 @@ func getAuthOptions(ctx context.Context, session *AuthSession) (*authOptionsResp
 	}
 	logWebAuthHTTP("auth_options", req, resp, body, nil)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("auth options failed with status %d", resp.StatusCode)
+		return nil, fmt.Errorf("auth options failed: %w", &APIError{Status: resp.StatusCode, AppleRequestID: extractAppleRequestID(resp.Header)})
 	}
 
 	var result authOptionsResponse

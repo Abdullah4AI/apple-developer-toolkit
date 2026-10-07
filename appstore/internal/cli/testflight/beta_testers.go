@@ -37,7 +37,7 @@ Examples:
   asc testflight beta-testers import --app "APP_ID" --input "./testflight-testers.csv" --dry-run
   asc testflight beta-testers remove --app "APP_ID" --email "tester@example.com" --confirm
   asc testflight beta-testers add-groups --id "TESTER_ID" --group "GROUP_ID"
-  asc testflight beta-testers remove-groups --id "TESTER_ID" --group "GROUP_ID"
+  asc testflight beta-testers remove-groups --id "TESTER_ID" --group "GROUP_ID" --confirm
   asc testflight beta-testers add-builds --id "TESTER_ID" --build-id "BUILD_ID"
   asc testflight beta-testers remove-builds --id "TESTER_ID" --build-id "BUILD_ID" --confirm
   asc testflight beta-testers remove-apps --id "TESTER_ID" --app "APP_ID" --confirm
@@ -119,7 +119,7 @@ asc testflight testers groups list --id "TESTER_ID" --paginate.
 A --next URL retains any include query from its original request; JSON output
 is still required to render those included resources.
 
---invite-type, --sort, and --include cannot be combined with --next: a
+Filter, --sort, and --include flags cannot be combined with --next: a
 links.next URL already carries the query it was produced from, so those values
 would never reach the request. Invalid values and these incompatible flag
 combinations exit 2 before making a request.
@@ -162,10 +162,10 @@ Examples:
 			}
 			// A links.next URL already carries the query it was produced from, so
 			// these flags would be accepted and silently dropped.
-			if err := rejectBetaTestersNextFlagConflicts(fs, *next, "invite-type", "sort", "include"); err != nil {
+			if err := rejectBetaTestersNextFlagConflicts(fs, *next, "build-id", "group", "email", "first-name", "last-name", "invite-type", "sort", "include"); err != nil {
 				return err
 			}
-			if strings.TrimSpace(*group) != "" && strings.TrimSpace(*buildID) != "" && strings.TrimSpace(*next) == "" {
+			if strings.TrimSpace(*group) != "" && strings.TrimSpace(*buildID) != "" {
 				return shared.WithDiagnostic(
 					shared.UsageError("--group cannot be combined with --build-id"),
 					shared.DiagnosticConflictingInput,
@@ -231,7 +231,7 @@ Examples:
 				}
 			}
 
-			if strings.TrimSpace(*group) != "" && strings.TrimSpace(*next) == "" {
+			if strings.TrimSpace(*group) != "" {
 				groupID, err := resolveBetaGroupID(requestCtx, client, resolvedAppID, *group)
 				if err != nil {
 					return fmt.Errorf("beta-testers list: %w", err)

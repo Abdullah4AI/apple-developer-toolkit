@@ -14,6 +14,9 @@ import (
 	authcmd "github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/auth"
 )
 
+// cmdtest runs with ASC_BYPASS_KEYCHAIN=1, so every logout prints this note.
+const authLogoutBypassNote = "Note: ASC_BYPASS_KEYCHAIN is set, so auth logout changes config files only and leaves keychain entries untouched.\n"
+
 type authLogoutCalls struct {
 	names   []string
 	all     int
@@ -62,7 +65,7 @@ func TestAuthLogoutConfirmRemovesNamedCredentialWithoutWarning(t *testing.T) {
 	if stdout != "Successfully removed stored credential 'demo'\n" {
 		t.Fatalf("stdout = %q", stdout)
 	}
-	if stderr != "" {
+	if stderr != authLogoutBypassNote {
 		t.Fatalf("expected no warning with --confirm, got %q", stderr)
 	}
 	if len(calls.names) != 1 || calls.names[0] != "demo" || calls.all != 0 {
@@ -87,7 +90,7 @@ func TestAuthLogoutConfirmRemovesAllCredentialsWithoutWarning(t *testing.T) {
 	if stdout != "Successfully removed stored credentials\n" {
 		t.Fatalf("stdout = %q", stdout)
 	}
-	if stderr != "" {
+	if stderr != authLogoutBypassNote {
 		t.Fatalf("expected no warning with --confirm, got %q", stderr)
 	}
 	if len(calls.names) != 0 || calls.all != 1 {

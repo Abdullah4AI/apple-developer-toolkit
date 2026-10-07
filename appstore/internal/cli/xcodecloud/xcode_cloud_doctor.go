@@ -176,10 +176,10 @@ func waitForBuildRunForDoctor(ctx context.Context, client *asc.Client, runID str
 	})
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
-			return nil, fmt.Errorf("canceled waiting for build run %s (last status: %s)", runID, lastStatus)
+			return nil, fmt.Errorf("canceled waiting for build run %s (last status: %s): %w", runID, lastStatus, err)
 		}
-		if errors.Is(err, context.DeadlineExceeded) {
-			return nil, fmt.Errorf("timed out waiting for build run %s (last status: %s)", runID, lastStatus)
+		if ctx.Err() != nil && errors.Is(err, context.DeadlineExceeded) {
+			return nil, fmt.Errorf("timed out waiting for build run %s (last status: %s); rerun with a longer --timeout: %w", runID, lastStatus, err)
 		}
 		return nil, err
 	}

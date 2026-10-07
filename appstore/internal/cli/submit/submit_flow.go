@@ -294,11 +294,18 @@ func SubmitResolvedVersion(ctx context.Context, client *asc.Client, opts SubmitR
 		platform,
 		versionID,
 	); err != nil {
+		if submissionIDToSubmit == createdSubmissionID {
+			preserveCreatedReviewSubmission(createdSubmissionID, emit)
+		}
 		return result, fmt.Errorf("submit review: final submission validation: %w", err)
 	}
 
 	submitResp, err := client.SubmitReviewSubmission(submitCtx, submissionIDToSubmit)
 	if err != nil {
+		if submissionIDToSubmit == createdSubmissionID {
+			preserveCreatedReviewSubmission(createdSubmissionID, emit)
+		}
+		printSubmissionErrorHints(err, submissionErrorHintContext{AppID: appID, Platform: platform, VersionID: versionID})
 		return result, fmt.Errorf("submit review: submit for review: %w", err)
 	}
 

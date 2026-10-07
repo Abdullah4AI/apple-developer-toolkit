@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"github.com/peterbourgon/ff/v3/ffcli"
+
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/auth"
 )
 
 var ansiEscapePattern = regexp.MustCompile("\x1b\\[[0-9;]*m")
@@ -13,6 +15,7 @@ var ansiEscapePattern = regexp.MustCompile("\x1b\\[[0-9;]*m")
 // wantGettingStartedInvocations pins the copy-paste invocations that teach the
 // discovery loop on the first screen of `asc --help`.
 var wantGettingStartedInvocations = []string{
+	auth.LoginCommandExample,
 	`asc search "upload a build" --output json`,
 	"asc auth doctor",
 	"asc apps list --paginate --output table",

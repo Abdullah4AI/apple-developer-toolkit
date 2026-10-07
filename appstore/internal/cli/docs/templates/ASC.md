@@ -141,6 +141,7 @@ Use `asc <command> --help` for subcommands and flags.
 - `reviews` - List and manage App Store customer reviews.
 - `review` - Manage App Store review details, attachments, and submissions.
 - `analytics` - Request and download analytics and sales reports.
+- `asset-library` - Inspect App Store Asset Library media and specifications.
 - `ads` - Manage Apple Ads API resources.
 - `optimize` - Build cross-API optimization plans.
 - `performance` - Access performance metrics and diagnostic logs.

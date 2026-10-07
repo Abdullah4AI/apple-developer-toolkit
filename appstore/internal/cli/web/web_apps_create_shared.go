@@ -60,6 +60,7 @@ var (
 	appCreateAskOneFn                     = survey.AskOne
 	resolveAppCreateSessionFn         any = resolveAppCreateSession
 	appCreateCanPromptInteractivelyFn     = appCreateCanPromptInteractively
+	appCreateCanPromptForFieldsFn         = appCreateCanPromptForFields
 )
 
 func callResolveAppCreateSessionFn(ctx context.Context, appleID, password, twoFactorCode, twoFactorCodeCommand string) (*webcore.AuthSession, string, error) {
@@ -72,6 +73,12 @@ func appCreateCanPromptInteractively() bool {
 		return true
 	}
 	return termIsTerminalFn(int(os.Stdin.Fd()))
+}
+
+// The field wizard reads stdin and renders to stdout, so a reachable
+// controlling TTY is not enough: piped or captured streams must fail fast.
+func appCreateCanPromptForFields() bool {
+	return termIsTerminalFn(int(os.Stdin.Fd())) && termIsTerminalFn(int(os.Stdout.Fd()))
 }
 
 func trimAppsCreateRunOptions(opts AppsCreateRunOptions) AppsCreateRunOptions {
@@ -328,7 +335,7 @@ func RunAppsCreate(ctx context.Context, opts AppsCreateRunOptions) error {
 	missingBundleID := opts.BundleID == ""
 	missingSKU := opts.SKU == ""
 	if missingName || missingBundleID || missingSKU {
-		if !appCreateCanPromptInteractivelyFn() {
+		if !appCreateCanPromptForFieldsFn() {
 			missingFlags := make([]string, 0, 3)
 			if missingName {
 				missingFlags = append(missingFlags, "--name")
@@ -500,7 +507,8 @@ func RunAppsCreate(ctx context.Context, opts AppsCreateRunOptions) error {
 
 	fmt.Fprintf(os.Stderr, "Created app successfully (id=%s)\n", strings.TrimSpace(app.Data.ID))
 	if access == "" {
-		return shared.PrintOutput(app, opts.Output, opts.Pretty)
+		row := []string{app.Data.ID, attrs.Name, attrs.BundleID, attrs.SKU}
+		return shared.PrintOutputRows(app, opts.Output, opts.Pretty, []string{"ID", "Name", "Bundle ID", "SKU"}, [][]string{row})
 	}
 
 	accessCtx, accessCancel := shared.ContextWithTimeout(ctx)

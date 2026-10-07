@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
 func TestSubmitResolvedVersionReusesReadySubmissionWithTargetVersion(t *testing.T) {
@@ -744,5 +745,125 @@ func TestLookupExistingSubmissionForVersionRejectsEmptyVersionID(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "resolved version ID is empty") {
 		t.Fatalf("expected empty version ID validation error, got %v", err)
+	}
+}
+
+func TestSubmitResolvedVersionPreservesCreatedSubmissionMissingTargetVersion(t *testing.T) {
+	client := newSubmitTestClient(t, submitRoundTripFunc(func(req *http.Request) (*http.Response, error) {
+		switch {
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/apps/app-1/reviewSubmissions":
+			return submitJSONResponse(http.StatusOK, `{"data":[],"links":{"self":"/v1/apps/app-1/reviewSubmissions"}}`)
+		case req.Method == http.MethodPost && req.URL.Path == "/v1/reviewSubmissions":
+			return submitJSONResponse(http.StatusCreated, `{"data":{"type":"reviewSubmissions","id":"new-submission"}}`)
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/reviewSubmissions/new-submission":
+			return submitJSONResponse(http.StatusOK, `{"data":{"type":"reviewSubmissions","id":"new-submission","attributes":{"state":"READY_FOR_REVIEW","platform":"IOS"},"relationships":{"app":{"data":{"type":"apps","id":"app-1"}}}}}`)
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/reviewSubmissions/new-submission/items":
+			return submitJSONResponse(http.StatusOK, `{"data":[],"links":{"self":"/v1/reviewSubmissions/new-submission/items"}}`)
+		case req.Method == http.MethodPost && req.URL.Path == "/v1/reviewSubmissionItems":
+			return submitJSONResponse(http.StatusCreated, `{"data":{"type":"reviewSubmissionItems","id":"item-1"}}`)
+		default:
+			return nil, fmt.Errorf("unexpected request: %s %s", req.Method, req.URL.RequestURI())
+		}
+	}))
+
+	got, err := SubmitResolvedVersion(context.Background(), client, SubmitResolvedVersionOptions{
+		AppID:     "app-1",
+		VersionID: "version-1",
+		Platform:  "IOS",
+	})
+	if err == nil || !strings.Contains(err.Error(), "does not contain target version version-1") {
+		t.Fatalf("expected missing target version error, got %v", err)
+	}
+	assertSubmitDiagnostic(t, err, shared.DiagnosticStateNotReady)
+	if !strings.Contains(strings.Join(got.Messages, "\n"), "asc submit cancel --id new-submission --confirm") {
+		t.Fatalf("expected preserved submission notice, got %#v", got.Messages)
+	}
+}
+
+func TestReviewSubmissionValidationFailuresAreClassified(t *testing.T) {
+	const otherItem = `{"type":"reviewSubmissionItems","id":"item-2","relationships":{"appStoreVersion":{"data":{"type":"appStoreVersions","id":"version-2"}}}}`
+	const targetItem = `{"type":"reviewSubmissionItems","id":"item-1","relationships":{"appStoreVersion":{"data":{"type":"appStoreVersions","id":"version-1"}}}}`
+	transport := func(state, items string) submitRoundTripFunc {
+		return func(req *http.Request) (*http.Response, error) {
+			switch {
+			case req.Method == http.MethodPost && req.URL.Path == "/v1/reviewSubmissionItems":
+				return submitJSONResponse(http.StatusConflict, `{"errors":[{"status":"409","code":"ENTITY_ERROR.RELATIONSHIP.INVALID","detail":"appStoreVersions with id version-1 was already added to another reviewSubmission with id sub-1"}]}`)
+			case req.Method == http.MethodGet && req.URL.Path == "/v1/reviewSubmissions/sub-0/items":
+				return submitJSONResponse(http.StatusOK, `{"data":[],"links":{"self":"/v1/reviewSubmissions/sub-0/items"}}`)
+			case req.Method == http.MethodGet && req.URL.Path == "/v1/reviewSubmissions/sub-1/items":
+				return submitJSONResponse(http.StatusOK, `{"data":[`+items+`],"links":{"self":"/v1/reviewSubmissions/sub-1/items"}}`)
+			case req.Method == http.MethodGet && strings.HasPrefix(req.URL.Path, "/v1/reviewSubmissions/"):
+				id, submissionState := strings.TrimPrefix(req.URL.Path, "/v1/reviewSubmissions/"), state
+				if id == "sub-0" {
+					submissionState = "READY_FOR_REVIEW"
+				}
+				return submitJSONResponse(http.StatusOK, `{"data":{"type":"reviewSubmissions","id":"`+id+`","attributes":{"state":"`+submissionState+`","platform":"IOS"},"relationships":{"app":{"data":{"type":"apps","id":"app-1"}}}}}`)
+			default:
+				return nil, fmt.Errorf("unexpected request: %s %s", req.Method, req.URL.RequestURI())
+			}
+		}
+	}
+
+	tests := []struct {
+		name  string
+		state string
+		items string
+		run   func(*asc.Client) error
+		want  shared.DiagnosticCode
+	}{
+		{
+			name:  "unrelated items before submit",
+			state: "READY_FOR_REVIEW",
+			items: targetItem + "," + otherItem,
+			run: func(client *asc.Client) error {
+				return verifyReviewSubmissionForSubmit(context.Background(), client, "sub-1", "app-1", "IOS", "version-1")
+			},
+			want: shared.DiagnosticResourceConflict,
+		},
+		{
+			name:  "unrelated items before add",
+			state: "READY_FOR_REVIEW",
+			items: otherItem,
+			run: func(client *asc.Client) error {
+				_, err := validateReviewSubmissionBeforeAdd(context.Background(), client, "sub-1", "app-1", "IOS", "version-1")
+				return err
+			},
+			want: shared.DiagnosticResourceConflict,
+		},
+		{
+			name:  "submission no longer ready",
+			state: "WAITING_FOR_REVIEW",
+			items: targetItem,
+			run: func(client *asc.Client) error {
+				return verifyReviewSubmissionForSubmit(context.Background(), client, "sub-1", "app-1", "IOS", "version-1")
+			},
+			want: shared.DiagnosticStateNotReady,
+		},
+		{
+			name:  "conflicting submission cannot be reused",
+			state: "WAITING_FOR_REVIEW",
+			items: targetItem,
+			run: func(client *asc.Client) error {
+				_, err := addVersionToSubmissionOrRecover(context.Background(), client, "sub-0", "version-1", "app-1", "IOS", func(string) {})
+				return err
+			},
+			want: shared.DiagnosticResourceConflict,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := newSubmitTestClient(t, transport(tt.state, tt.items))
+			assertSubmitDiagnostic(t, tt.run(client), tt.want)
+		})
+	}
+}
+
+func assertSubmitDiagnostic(t *testing.T, err error, want shared.DiagnosticCode) {
+	t.Helper()
+	if !shared.IsValidationError(err) {
+		t.Fatalf("expected a validation-class error, got %v", err)
+	}
+	if diagnostic, ok := shared.DiagnosticFromError(err); !ok || diagnostic.Code != want {
+		t.Fatalf("expected diagnostic %q, got %+v (ok=%v) for %v", want, diagnostic, ok, err)
 	}
 }

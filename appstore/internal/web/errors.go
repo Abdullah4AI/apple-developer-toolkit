@@ -7,6 +7,15 @@ import (
 	"strings"
 )
 
+// IsSessionAuthFailure reports whether a web API or session-info request
+// failed with 401 or 403, meaning the cached web session no longer works.
+func IsSessionAuthFailure(err error) bool {
+	if apiErr, ok := errors.AsType[*APIError](err); ok && (apiErr.Status == http.StatusUnauthorized || apiErr.Status == http.StatusForbidden) {
+		return true
+	}
+	return isSessionInfoAuthExpired(err)
+}
+
 // IsDuplicateAppNameError reports whether an internal API error means app name is taken.
 func IsDuplicateAppNameError(err error) bool {
 	var apiErr *APIError

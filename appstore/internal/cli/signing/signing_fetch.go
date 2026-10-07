@@ -812,7 +812,7 @@ func bundleIdentifierMatches(parent, candidate string, matchExtensions bool) boo
 // its dotted descendants.
 func listSigningBundleIDs(ctx context.Context, client *asc.Client, identifier string, matchExtensions bool) ([]asc.Resource[asc.BundleIDAttributes], error) {
 	if !matchExtensions || strings.Contains(identifier, "*") {
-		exact, err := findBundleID(ctx, client, identifier)
+		exact, err := shared.FindBundleID(ctx, client, identifier)
 		if err != nil {
 			return nil, err
 		}
@@ -866,41 +866,6 @@ func listSigningBundleIDs(ctx context.Context, client *asc.Client, identifier st
 		return nil, fmt.Errorf("bundle ID not found: %s", identifier)
 	}
 	return append([]asc.Resource[asc.BundleIDAttributes]{*exact}, extensions...), nil
-}
-
-// findBundleID returns the bundle ID whose identifier equals identifier.
-// App Store Connect's filter[identifier] is a prefix/substring match, so the
-// filtered list is read in full and the exact identifier is selected instead
-// of trusting the first result.
-func findBundleID(ctx context.Context, client *asc.Client, identifier string) (*asc.BundleIDResponse, error) {
-	want := strings.TrimSpace(identifier)
-	next := ""
-	page := 1
-	seenNext := make(map[string]struct{})
-	for {
-		opts := []asc.BundleIDsOption{asc.WithBundleIDsFilterIdentifier(identifier), asc.WithBundleIDsLimit(200)}
-		if next != "" {
-			opts = []asc.BundleIDsOption{asc.WithBundleIDsNextURL(next)}
-		}
-		resp, err := client.GetBundleIDs(ctx, opts...)
-		if err != nil {
-			return nil, err
-		}
-		for _, item := range resp.Data {
-			if strings.EqualFold(strings.TrimSpace(item.Attributes.Identifier), want) {
-				return &asc.BundleIDResponse{Data: item}, nil
-			}
-		}
-		if strings.TrimSpace(resp.Links.Next) == "" {
-			return nil, fmt.Errorf("bundle ID not found: %s", identifier)
-		}
-		if _, repeated := seenNext[resp.Links.Next]; repeated {
-			return nil, fmt.Errorf("list bundle IDs page %d: %w", page+1, asc.ErrRepeatedPaginationURL)
-		}
-		seenNext[resp.Links.Next] = struct{}{}
-		page++
-		next = resp.Links.Next
-	}
 }
 
 func findCertificates(ctx context.Context, client *asc.Client, profileType, certType string) (*asc.CertificatesResponse, error) {

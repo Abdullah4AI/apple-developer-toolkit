@@ -14,6 +14,7 @@ import (
 	"sync/atomic"
 	"syscall"
 	"testing"
+	"testing/synctest"
 	"time"
 )
 
@@ -186,45 +187,48 @@ func TestClientDo_RateLimitedMutationExhaustsRetriesWithStatus(t *testing.T) {
 func TestClientDo_RateLimitTimeoutPreservesRetryableCause(t *testing.T) {
 	setFastRetryEnv(t, "3")
 
-	var attempts atomic.Int32
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		attempts.Add(1)
-		w.Header().Set("Retry-After", "1")
-		w.WriteHeader(http.StatusTooManyRequests)
-		_, _ = io.WriteString(w, `{"errors":[{"status":"429","code":"RATE_LIMIT_EXCEEDED"}]}`)
-	}))
-	t.Cleanup(server.Close)
+	// The deadline must still be pending when the 429 arrives. A real socket
+	// and a 20ms wall-clock budget can time out before the first request on CI.
+	synctest.Test(t, func(t *testing.T) {
+		var attempts atomic.Int32
+		client := newMutationRetryTestClient(t, &http.Client{Transport: roundTripFunc(func(_ *http.Request) (*http.Response, error) {
+			attempts.Add(1)
+			return &http.Response{
+				StatusCode: http.StatusTooManyRequests,
+				Header:     http.Header{"Retry-After": {"1"}},
+				Body:       io.NopCloser(strings.NewReader(`{"errors":[{"status":"429","code":"RATE_LIMIT_EXCEEDED"}]}`)),
+			}, nil
+		})})
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+		defer cancel()
 
-	client := newMutationRetryTestClient(t, server.Client())
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
-	defer cancel()
-
-	_, err := client.do(ctx, http.MethodPost, server.URL+"/v1/apps", nil)
-	if err == nil {
-		t.Fatal("expected retry wait to exceed the request deadline")
-	}
-	if got := attempts.Load(); got != 1 {
-		t.Fatalf("expected no second request before Retry-After elapsed, got %d attempts", got)
-	}
-	if message := err.Error(); !strings.Contains(message, "retry cap") || !strings.Contains(message, "context deadline") {
-		t.Fatalf("expected retry-cap and context-budget diagnostics, got %v", err)
-	}
-	if errors.Is(err, context.DeadlineExceeded) {
-		t.Fatalf("did not expect context deadline classification before the parent context expires, got %v", err)
-	}
-	if !IsRetryable(err) {
-		t.Fatalf("expected original 429 retryable classification to be preserved, got %v", err)
-	}
-	if IsRetryBudgetExhausted(err) {
-		t.Fatalf("did not expect retry budget exhaustion before a retry was attempted, got %v", err)
-	}
-	if got := GetRetryAfter(err); got != time.Second {
-		t.Fatalf("expected Retry-After to be preserved, got %s", got)
-	}
-	var statusErr interface{ HTTPStatusCode() int }
-	if !errors.As(err, &statusErr) || statusErr.HTTPStatusCode() != http.StatusTooManyRequests {
-		t.Fatalf("expected status 429 to remain inspectable, got %v", err)
-	}
+		_, err := client.do(ctx, http.MethodPost, "https://api.appstoreconnect.apple.com/v1/apps", nil)
+		if err == nil {
+			t.Fatal("expected retry wait to exceed the request deadline")
+		}
+		if got := attempts.Load(); got != 1 {
+			t.Fatalf("expected no second request before Retry-After elapsed, got %d attempts", got)
+		}
+		if message := err.Error(); !strings.Contains(message, "retry cap") || !strings.Contains(message, "context deadline") {
+			t.Fatalf("expected retry-cap and context-budget diagnostics, got %v", err)
+		}
+		if errors.Is(err, context.DeadlineExceeded) {
+			t.Fatalf("did not expect context deadline classification before the parent context expires, got %v", err)
+		}
+		if !IsRetryable(err) {
+			t.Fatalf("expected original 429 retryable classification to be preserved, got %v", err)
+		}
+		if IsRetryBudgetExhausted(err) {
+			t.Fatalf("did not expect retry budget exhaustion before a retry was attempted, got %v", err)
+		}
+		if got := GetRetryAfter(err); got != time.Second {
+			t.Fatalf("expected Retry-After to be preserved, got %s", got)
+		}
+		var statusErr interface{ HTTPStatusCode() int }
+		if !errors.As(err, &statusErr) || statusErr.HTTPStatusCode() != http.StatusTooManyRequests {
+			t.Fatalf("expected status 429 to remain inspectable, got %v", err)
+		}
+	})
 }
 
 // 5xx failures are ambiguous for a write: App Store Connect may already have

@@ -71,12 +71,12 @@ func TestRunAppsCreateAccessLimitedWithoutUserMakesNoHTTP(t *testing.T) {
 func TestRunAppsCreateInvalidAccessFailsBeforeWizard(t *testing.T) {
 	origCreate := createWebAppFn
 	origResolve := resolveAppCreateSessionFn
-	origCanPrompt := appCreateCanPromptInteractivelyFn
+	origCanPrompt := appCreateCanPromptForFieldsFn
 	origAskOne := appCreateAskOneFn
 	t.Cleanup(func() {
 		createWebAppFn = origCreate
 		resolveAppCreateSessionFn = origResolve
-		appCreateCanPromptInteractivelyFn = origCanPrompt
+		appCreateCanPromptForFieldsFn = origCanPrompt
 		appCreateAskOneFn = origAskOne
 	})
 	createWebAppFn = func(ctx context.Context, client *webcore.Client, attrs webcore.AppCreateAttributes) (*webcore.AppResponse, error) {
@@ -87,7 +87,7 @@ func TestRunAppsCreateInvalidAccessFailsBeforeWizard(t *testing.T) {
 		t.Fatal("did not expect web session lookup")
 		return nil, "", nil
 	}
-	appCreateCanPromptInteractivelyFn = func() bool { return true }
+	appCreateCanPromptForFieldsFn = func() bool { return true }
 	appCreateAskOneFn = func(_ survey.Prompt, _ interface{}, _ ...survey.AskOpt) error {
 		t.Fatal("did not expect app-details wizard")
 		return nil
@@ -113,7 +113,7 @@ func TestRunAppsCreateInvalidAccessFailsBeforeWizard(t *testing.T) {
 func TestRunAppsCreateAccessWithMissingNameMakesNoHTTP(t *testing.T) {
 	origCreate := createWebAppFn
 	origResolve := resolveAppCreateSessionFn
-	origCanPrompt := appCreateCanPromptInteractivelyFn
+	origCanPrompt := appCreateCanPromptForFieldsFn
 	origClientFactory := shared.SetASCClientFactoryForTesting(func() (*asc.Client, error) {
 		t.Fatal("did not expect ASC client lookup")
 		return nil, nil
@@ -121,7 +121,7 @@ func TestRunAppsCreateAccessWithMissingNameMakesNoHTTP(t *testing.T) {
 	t.Cleanup(func() {
 		createWebAppFn = origCreate
 		resolveAppCreateSessionFn = origResolve
-		appCreateCanPromptInteractivelyFn = origCanPrompt
+		appCreateCanPromptForFieldsFn = origCanPrompt
 		origClientFactory()
 	})
 	createWebAppFn = func(ctx context.Context, client *webcore.Client, attrs webcore.AppCreateAttributes) (*webcore.AppResponse, error) {
@@ -132,7 +132,7 @@ func TestRunAppsCreateAccessWithMissingNameMakesNoHTTP(t *testing.T) {
 		t.Fatal("did not expect web session lookup")
 		return nil, "", nil
 	}
-	appCreateCanPromptInteractivelyFn = func() bool { return false }
+	appCreateCanPromptForFieldsFn = func() bool { return false }
 
 	var err error
 	_, stderr := captureOutput(t, func() {

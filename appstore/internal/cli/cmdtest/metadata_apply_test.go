@@ -1673,8 +1673,8 @@ func TestMetadataApplyPartialBatchPreservesTypedExitCode(t *testing.T) {
 	if run.code != rootcmd.ExitHTTPUnprocessable {
 		t.Fatalf("expected partial exit %d, got %d; stderr=%q", rootcmd.ExitHTTPUnprocessable, run.code, run.stderr)
 	}
-	if run.stderr != "" {
-		t.Fatalf("expected reported error to avoid duplicate stderr, got %q", run.stderr)
+	if want := "Error: metadata apply: 1 localization(s) failed\n"; run.stderr != want {
+		t.Fatalf("stderr = %q, want one root error line %q", run.stderr, want)
 	}
 	var result struct {
 		Failed              int    `json:"failed"`

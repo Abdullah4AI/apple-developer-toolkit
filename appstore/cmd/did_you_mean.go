@@ -79,6 +79,7 @@ var unknownChildSynonyms = map[string]map[string][]string{
 		"me":        {"asc auth status", "asc auth doctor"},
 		"current":   {"asc auth status", "asc auth doctor"},
 		"show":      {"asc auth status", "asc auth doctor"},
+		"list":      {"asc auth status", "asc auth switch --name PROFILE"},
 		"check":     {"asc auth status --validate", "asc auth doctor"},
 		"verify":    {"asc auth status --validate", "asc auth doctor"},
 		"validate":  {"asc auth status --validate", "asc auth doctor"},
@@ -93,6 +94,7 @@ var unknownChildSynonyms = map[string]map[string][]string{
 		"status":  {"asc builds info --app APP_ID --latest", "asc builds wait --app APP_ID --latest"},
 		"show":    {"asc builds info --build-id BUILD_ID", "asc builds list --app APP_ID"},
 		"get":     {"asc builds info --build-id BUILD_ID", "asc builds list --app APP_ID"},
+		"view":    {"asc builds info --build-id BUILD_ID", "asc builds list --app APP_ID"},
 	},
 	"asc iap": {
 		"get":  {"asc iap view --id IAP_ID", "asc iap list --app APP_ID"},

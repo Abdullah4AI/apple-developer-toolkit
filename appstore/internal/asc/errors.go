@@ -171,6 +171,9 @@ func (e *APIError) Error() string {
 	if associated := formatAssociatedErrors(e.AssociatedErrors); associated != "" {
 		sections = append(sections, associated)
 	}
+	if additional := formatAdditionalErrors(e.Entries, detail); additional != "" {
+		sections = append(sections, additional)
+	}
 	if remediation := strings.TrimSpace(SanitizeTerminalText(e.Remediation)); remediation != "" {
 		sections = append(sections, remediation)
 	}
@@ -182,6 +185,43 @@ func (e *APIError) HTTPStatusCode() int {
 		return 0
 	}
 	return e.StatusCode
+}
+
+const maxAdditionalAPIErrors = 5
+
+// formatAdditionalErrors lists the errors[] entries after the first, because
+// Apple can put the actionable cause in a later entry.
+func formatAdditionalErrors(entries []APIErrorEntry, firstDetail string) string {
+	if len(entries) < 2 {
+		return ""
+	}
+
+	seen := map[string]bool{firstDetail: true, "": true}
+	messages := make([]string, 0, len(entries)-1)
+	for _, entry := range entries[1:] {
+		message := strings.TrimSpace(SanitizeTerminalText(entry.Detail))
+		if message == "" {
+			message = strings.TrimSpace(SanitizeTerminalText(entry.Code))
+		}
+		if seen[message] {
+			continue
+		}
+		seen[message] = true
+		messages = append(messages, message)
+	}
+	if len(messages) == 0 {
+		return ""
+	}
+
+	lines := []string{"Additional errors:"}
+	for index, message := range messages {
+		if index == maxAdditionalAPIErrors {
+			lines = append(lines, fmt.Sprintf("  - and %d more", len(messages)-index))
+			break
+		}
+		lines = append(lines, "  - "+message)
+	}
+	return strings.Join(lines, "\n")
 }
 
 func formatAssociatedErrors(values map[string][]APIAssociatedError) string {

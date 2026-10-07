@@ -46,7 +46,7 @@ func TestReviewSubmitBuildAliasIsRemoved(t *testing.T) {
 	if stdout != "" {
 		t.Fatalf("stdout = %q, want empty", stdout)
 	}
-	const want = "Error: `--build` was removed in 5.0.0; use `--build-id` (see migrate-to-5-0)\nFor help:\n  asc review submit --help\n"
+	const want = "Error: `--build` was removed in 5.0.0; use `--build-id` or `--build-number` (see migrate-to-5-0)\nFor help:\n  asc review submit --help\n"
 	if stderr != want {
 		t.Fatalf("stderr = %q, want removed-flag guidance %q", stderr, want)
 	}

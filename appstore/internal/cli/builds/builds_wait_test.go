@@ -471,6 +471,71 @@ func TestWaitForBuildProcessingStateFailureFallsBackWhenLinkedUploadLookupFails(
 	}
 }
 
+func TestWaitForBuildProcessingStateFailureLeavesStateErrorWhenFallbackIsAmbiguous(t *testing.T) {
+	const matchingUpload = `{"type":"buildUploads","id":"upload-retry-1","attributes":{"cfBundleShortVersionString":"1.2.3","cfBundleVersion":"42","platform":"IOS"}}`
+	tests := []struct {
+		name  string
+		data  string
+		links string
+		meta  string
+	}{
+		{
+			name:  "duplicate matching uploads",
+			data:  matchingUpload + "," + strings.Replace(matchingUpload, "upload-retry-1", "upload-retry-2", 1),
+			links: `{}`,
+			meta:  `{}`,
+		},
+		{
+			name:  "uninspected next page",
+			data:  matchingUpload,
+			links: `{"next":"https://api.appstoreconnect.apple.com/v1/apps/app-1/buildUploads?cursor=next"}`,
+			meta:  `{}`,
+		},
+		{
+			name:  "total reports another upload",
+			data:  matchingUpload,
+			links: `{}`,
+			meta:  `{"paging":{"total":2}}`,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Setenv("ASC_MAX_RETRIES", "0")
+			diagnostics := stubBuildsWaitProcessingDetails(t, buildsWaitProcessingDetail, nil)
+			client := newBuildsWaitTestClient(t, func(req *http.Request) (*http.Response, error) {
+				switch req.URL.Path {
+				case "/v1/builds/build-1":
+					return buildsWaitJSONResponse(http.StatusOK, `{"data":{"type":"builds","id":"build-1","attributes":{"version":"42","processingState":"FAILED"}}}`)
+				case "/v1/builds/build-1/preReleaseVersion":
+					return buildsWaitJSONResponse(http.StatusOK, buildsWaitPreReleaseVersionBody)
+				case "/v1/builds":
+					return buildsWaitJSONResponse(http.StatusOK, buildsWaitNoLinkedUploadsBody)
+				case "/v1/apps/app-1/buildUploads":
+					if req.URL.Query().Get("cursor") != "" {
+						t.Fatal("ambiguous diagnostic fallback must not follow additional pages")
+					}
+					return buildsWaitJSONResponse(http.StatusOK, fmt.Sprintf(`{"data":[%s],"links":%s,"meta":%s}`, test.data, test.links, test.meta))
+				default:
+					return nil, fmt.Errorf("unexpected path: %s", req.URL.Path)
+				}
+			})
+			var err error
+			captureBuildsWaitStderr(t, func() {
+				_, err = waitForBuildProcessingState(context.Background(), client, "build-1", time.Millisecond, false, shared.BuildProcessingFailureContext{AppID: "app-1"}, nil)
+			})
+			if err == nil {
+				t.Fatal("expected terminal FAILED error, got nil")
+			}
+			if got := err.Error(); got != "build processing failed with state FAILED" {
+				t.Fatalf("error = %q, want the unmodified state error", got)
+			}
+			if diagnostics.calls != 0 {
+				t.Fatalf("diagnostics lookups = %d, want 0", diagnostics.calls)
+			}
+		})
+	}
+}
+
 // Processing details are reported per app, build number, marketing version,
 // and platform, so an upload must not be guessed from an incomplete identity.
 func TestWaitForBuildProcessingStateFailureSkipsUploadMatchWithUnknownMarketingVersion(t *testing.T) {

@@ -74,7 +74,7 @@ Examples:
 func AppSetupInfoSetCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("app-setup info set", flag.ExitOnError)
 
-	appID := fs.String("app", os.Getenv("ASC_APP_ID"), "App Store Connect app ID (required)")
+	appID := fs.String("app", "", "App Store Connect app ID (required)")
 	bundleID := fs.String("bundle-id", "", "Bundle ID to set")
 	primaryLocale := fs.String("primary-locale", "", "Primary locale (e.g., en-US)")
 	locale := fs.String("locale", "", "Locale for app info localization (defaults to --primary-locale)")
@@ -101,12 +101,12 @@ Examples:
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
-			appIDValue, err := shared.AppIDFlagValue(*appID)
+			appIDValue, err := shared.AppIDFlagValue(shared.ResolveAppID(*appID))
 			if err != nil {
 				return err
 			}
 			if appIDValue == "" {
-				fmt.Fprintln(os.Stderr, "Error: --app is required")
+				fmt.Fprintln(os.Stderr, "Error: --app is required (or set ASC_APP_ID)")
 				return shared.MissingRequiredUsageError("--app")
 			}
 

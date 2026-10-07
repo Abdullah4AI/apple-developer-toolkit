@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -86,7 +87,7 @@ func WithAppStoreVersionNotFoundDiagnostics(ctx context.Context, client *asc.Cli
 		if safePlatform == "" {
 			lines = append(lines, fmt.Sprintf("App %q has no App Store versions. Create one: asc versions create --app %q --version %q --platform PLATFORM", safeAppID, safeAppID, safeVersion))
 		} else {
-			lines = append(lines, fmt.Sprintf("App %q has no App Store versions on %s. Create one: %s", safeAppID, safePlatform, versionsCreateCommand(safeAppID, safeVersion, safePlatform)))
+			lines = append(lines, noAppStoreVersionsOnPlatformLine(ctx, client, appID, safeAppID, safeVersion, safePlatform))
 		}
 		return appendAppStoreVersionDiagnostics(notFound, lines)
 	}
@@ -282,6 +283,47 @@ func unreleasedAppStoreVersionGuidance(row appStoreVersionDiagnosticRow, safeVer
 		return fmt.Sprintf("Version %s is approved and waiting for release; release it: asc versions release --version-id %q --confirm", row.VersionString, row.ID)
 	}
 	return fmt.Sprintf("Version %s is %s; wait until review finishes or it is released, or inspect it: asc versions view --version-id %q", row.VersionString, row.State, row.ID)
+}
+
+// noAppStoreVersionsOnPlatformLine explains an empty platform listing. The
+// platform is often the IOS default rather than the caller's choice, so a
+// create suggestion could add a platform the app never shipped on. When the
+// app has versions on other platforms, point at --platform first.
+func noAppStoreVersionsOnPlatformLine(ctx context.Context, client *asc.Client, appID, safeAppID, safeVersion, safePlatform string) string {
+	createCommand := versionsCreateCommand(safeAppID, safeVersion, safePlatform)
+	listing, ok := readAppStoreVersionDiagnosticListing(ctx, client, appID, "")
+	var withVersion, others []string
+	if ok {
+		for _, row := range listing.Rows {
+			if row.Platform == "" || row.Platform == safePlatform {
+				continue
+			}
+			others = append(others, row.Platform)
+			if row.VersionString == safeVersion {
+				withVersion = append(withVersion, row.Platform)
+			}
+		}
+	}
+	slices.Sort(withVersion)
+	withVersion = slices.Compact(withVersion)
+	slices.Sort(others)
+	others = slices.Compact(others)
+
+	switch {
+	case len(withVersion) > 0:
+		return fmt.Sprintf("App %q has no App Store versions on %s, but version %q exists on %s. %s.", safeAppID, safePlatform, safeVersion, strings.Join(withVersion, ", "), retryWithPlatform(withVersion))
+	case len(others) > 0:
+		return fmt.Sprintf("App %q has no App Store versions on %s; it has versions on %s. %s, or create one on %s: %s", safeAppID, safePlatform, strings.Join(others, ", "), retryWithPlatform(others), safePlatform, createCommand)
+	default:
+		return fmt.Sprintf("App %q has no App Store versions on %s. Create one: %s", safeAppID, safePlatform, createCommand)
+	}
+}
+
+func retryWithPlatform(platforms []string) string {
+	if len(platforms) == 1 {
+		return "Retry with --platform " + platforms[0]
+	}
+	return "Retry with --platform set to one of them"
 }
 
 func versionsCreateCommand(safeAppID, safeVersion, safePlatform string) string {

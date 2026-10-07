@@ -299,7 +299,7 @@ func (c *Client) GetBuilds(ctx context.Context, appID string, opts ...BuildsOpti
 		// version/preReleaseVersion.version/processingState/preReleaseVersion/platform/
 		// betaAppReviewSubmission.betaReviewState/expired,
 		// since /v1/apps/{id}/builds doesn't support these
-		if query.sort != "" || query.limit > 0 || query.version != "" || query.preReleaseVersion != "" || len(query.processingStates) > 0 || len(query.preReleasePlatforms) > 0 || len(query.preReleaseVersionIDs) > 0 || len(query.betaReviewStates) > 0 || query.expired != nil || len(query.include) > 0 {
+		if query.sort != "" || query.limit > 0 || query.version != "" || query.preReleaseVersion != "" || len(query.processingStates) > 0 || len(query.preReleasePlatforms) > 0 || len(query.preReleaseVersionIDs) > 0 || len(query.betaReviewStates) > 0 || query.expired != nil || query.buildAudienceType != "" || len(query.include) > 0 {
 			path = "/v1/builds"
 			values.Set("filter[app]", appID)
 			if query.sort != "" {
@@ -313,6 +313,9 @@ func (c *Client) GetBuilds(ctx context.Context, appID string, opts ...BuildsOpti
 			}
 			if query.preReleaseVersion != "" {
 				values.Set("filter[preReleaseVersion.version]", query.preReleaseVersion)
+			}
+			if query.buildAudienceType != "" {
+				values.Set("filter[buildAudienceType]", string(query.buildAudienceType))
 			}
 			if len(query.processingStates) > 0 {
 				values.Set("filter[processingState]", strings.Join(query.processingStates, ","))

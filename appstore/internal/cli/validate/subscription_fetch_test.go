@@ -324,3 +324,17 @@ func TestFetchSubscriptionReviewScreenshot_ReportsAssetDeliveryState(t *testing.
 		})
 	}
 }
+
+func TestFetchSubscriptionReviewScreenshot_TreatsNullDataAsMissing(t *testing.T) {
+	client := newBuildsTestClient(t, buildsRoundTripFunc(func(*http.Request) (*http.Response, error) {
+		return buildsJSONResponse(http.StatusOK, `{"data":null}`)
+	}))
+
+	id, state, _, status, err := fetchSubscriptionReviewScreenshot(context.Background(), client, "sub-1")
+	if err != nil {
+		t.Fatalf("fetchSubscriptionReviewScreenshot() error = %v", err)
+	}
+	if id != "" || state != "" || !status.Verified || status.SkipReason != "" {
+		t.Fatalf("expected verified missing screenshot, got id=%q state=%q status=%+v", id, state, status)
+	}
+}

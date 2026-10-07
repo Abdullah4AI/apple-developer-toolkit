@@ -107,7 +107,7 @@ func ResolveBetaGroupsFromList(inputGroups []string, groups *asc.BetaGroupsRespo
 			matches := groupNameToIDs[strings.ToLower(group)]
 			switch len(matches) {
 			case 0:
-				return nil, fmt.Errorf("beta group %q not found", group)
+				return nil, WithDiagnostic(NewValidationError(fmt.Errorf("beta group %q not found", group)), DiagnosticResourceNotFound, "--group")
 			case 1:
 				resolvedID = matches[0]
 			default:

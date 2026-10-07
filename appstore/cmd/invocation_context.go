@@ -14,6 +14,7 @@ import (
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/registry"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared/errfmt"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared/suggest"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/telemetry"
 	webcore "github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/web"
@@ -172,6 +173,17 @@ func printConciseUnknownFlag(root *ffcli.Command, analysis invocationAnalysis, c
 			shared.SanitizeTerminal(flagName),
 		)
 		return
+	}
+	if name, ok := flagLookupName(flagName); ok {
+		var accepting []string
+		for _, sub := range analysis.command.Subcommands {
+			if sub != nil && sub.FlagSet != nil && sub.FlagSet.Lookup(name) != nil && !isDeprecatedCommandHelp(sub.ShortHelp) {
+				accepting = append(accepting, sub.Name)
+			}
+		}
+		if len(accepting) > 0 {
+			fmt.Fprintf(os.Stderr, "Did you mean a subcommand? These accept `--%s`: %s\n", name, strings.Join(accepting, ", "))
+		}
 	}
 
 	printFlagSuggestions(os.Stderr, unknownFlagSuggestions(
@@ -770,9 +782,9 @@ func runtimeFailureContext(analysis invocationAnalysis, err error, exitCode int)
 	switch {
 	case errors.Is(err, shared.ErrMissingAuth):
 		eventContext.FailureStage = telemetry.FailureStageValidation
-	case shared.IsValidationError(err):
+	case shared.IsValidationError(err), errors.Is(err, shared.ErrPending):
 		eventContext.FailureStage = telemetry.FailureStageValidation
-	case errors.Is(err, context.DeadlineExceeded):
+	case errors.Is(err, context.DeadlineExceeded), errfmt.IsNetworkFailure(err):
 		eventContext.FailureStage = telemetry.FailureStageRequest
 	case eventContext.HTTPStatus == 409:
 		eventContext.ErrorKind = telemetry.ErrorKindAPIConflict
@@ -801,7 +813,7 @@ func runtimeOutcomeKind(err error, exitCode int, eventContext telemetry.EventCon
 		return telemetry.OutcomeCancelled
 	case errors.Is(err, shared.ErrMissingAuth), errors.Is(err, webcore.ErrInvalidAppleAccountCredentials), exitCode == ExitAuth:
 		return telemetry.OutcomeAuthError
-	case shared.IsValidationError(err):
+	case shared.IsValidationError(err), errors.Is(err, shared.ErrPending):
 		return telemetry.OutcomeExpectedNegative
 	case eventContext.PublicStorefront && (eventContext.HTTPStatus == 401 || eventContext.HTTPStatus == 403):
 		return telemetry.OutcomeAPIClientError
@@ -826,9 +838,15 @@ func runtimeOutcomeKind(err error, exitCode int, eventContext telemetry.EventCon
 	}
 }
 
+// isPublicStorefrontError reports an HTTP status from an endpoint that does not
+// use App Store Connect credentials, so a 401 or 403 is not an auth failure.
 func isPublicStorefrontError(err error) bool {
 	var storefrontError interface{ PublicStorefrontError() bool }
-	return errors.As(err, &storefrontError) && storefrontError.PublicStorefrontError()
+	if errors.As(err, &storefrontError) && storefrontError.PublicStorefrontError() {
+		return true
+	}
+	var uploadError interface{ PresignedUploadError() bool }
+	return errors.As(err, &uploadError) && uploadError.PresignedUploadError()
 }
 
 func httpStatusFromError(err error) int {

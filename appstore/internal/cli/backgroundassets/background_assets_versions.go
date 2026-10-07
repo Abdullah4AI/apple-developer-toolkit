@@ -75,6 +75,9 @@ Examples:
 			if err := shared.ValidateNextURL(*next); err != nil {
 				return shared.UsageErrorf("background-assets versions list: %v", err)
 			}
+			if err := shared.RejectNextFlagConflicts(fs, *next, "background-assets versions list", "locale"); err != nil {
+				return err
+			}
 
 			client, err := shared.GetASCClient()
 			if err != nil {

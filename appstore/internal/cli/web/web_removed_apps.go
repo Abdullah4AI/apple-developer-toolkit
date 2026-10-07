@@ -98,6 +98,9 @@ Examples:
 			if err := validateRemovedAppsNextURL(nextValue); err != nil {
 				return shared.UsageError("web removed-apps list: " + err.Error())
 			}
+			if err := shared.RejectNextFlagConflicts(fs, nextValue, "web removed-apps list", "limit"); err != nil {
+				return err
+			}
 
 			session, requestCtx, cancel, err := resolveWebSessionForCommand(ctx, authFlags)
 			defer cancel()

@@ -40,6 +40,7 @@ Examples:
 			SubscriptionsVersionLocalizationsCreateCommand(),
 			SubscriptionsVersionLocalizationsUpdateCommand(),
 			SubscriptionsVersionLocalizationsDeleteCommand(),
+			SubscriptionsVersionLocalizationsImportCommand(),
 		},
 		Exec: func(context.Context, []string) error { return flag.ErrHelp },
 	}

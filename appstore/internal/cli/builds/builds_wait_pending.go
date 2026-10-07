@@ -120,7 +120,7 @@ func (t *buildsWaitTimeout) finish(prefix, state string, result *asc.BuildWaitPe
 		if resumable {
 			message += "; resume with: " + resume
 		}
-		return errors.New(message + "; " + buildWaitReportPendingHint)
+		return shared.NewValidationError(errors.New(message + "; " + buildWaitReportPendingHint))
 	}
 
 	format, err := shared.ValidateOutputFormat(*t.output.Output, *t.output.Pretty)

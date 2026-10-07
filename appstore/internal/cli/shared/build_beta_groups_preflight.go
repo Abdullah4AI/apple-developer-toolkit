@@ -262,7 +262,7 @@ func reportBuildBetaGroupPrecondition(operationName string, precondition buildBe
 	}
 
 	return WithDiagnostic(
-		NewValidationReportedError(errors.New(message)),
+		NewStderrReportedError(NewValidationError(errors.New(message))),
 		DiagnosticStateNotReady,
 		"",
 	)
@@ -289,10 +289,10 @@ func reportBuildBetaGroupPreflightUnknown(operationName, buildID, subject string
 	// so HTTP-derived exit codes and telemetry still describe that failure.
 	if cause != nil {
 		return WithDiagnostic(
-			NewReportedError(NewErrorWithCause(errors.New(message), cause)),
+			NewStderrReportedError(NewErrorWithCause(errors.New(message), cause)),
 			DiagnosticRequestFailed,
 			"",
 		)
 	}
-	return WithDiagnostic(NewValidationReportedError(errors.New(message)), DiagnosticStateNotReady, "")
+	return WithDiagnostic(NewStderrReportedError(NewValidationError(errors.New(message))), DiagnosticStateNotReady, "")
 }

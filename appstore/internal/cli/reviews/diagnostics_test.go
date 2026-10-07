@@ -139,7 +139,7 @@ func TestReviewSubmitInputFailuresKeepStructuredDiagnostics(t *testing.T) {
 		{
 			name:       "missing build",
 			args:       []string{"--app", "123456789"},
-			wantStderr: "Error: --build-id is required\n",
+			wantStderr: "Error: --build-id, --build-number, or --latest is required\n",
 			wantCode:   shared.DiagnosticRequiredInputMissing,
 			wantParam:  "--build-id",
 		},

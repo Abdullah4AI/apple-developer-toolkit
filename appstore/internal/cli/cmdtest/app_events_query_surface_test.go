@@ -305,7 +305,6 @@ func TestAppEventsListQuerySurfaceAllowsAppWithNextAndUsesOpaqueURL(t *testing.T
 		"app-events", "list",
 		"--app", "app-123",
 		"--next", nextURL,
-		"--limit", "10",
 		"--output", "json",
 	)
 	if err != nil {

@@ -75,6 +75,9 @@ Examples:
 			if err := shared.ValidateNextURL(*next); err != nil {
 				return shared.UsageErrorf("pass-type-ids certificates list: %v", err)
 			}
+			if err := shared.RejectNextFlagConflicts(fs, *next, "pass-type-ids certificates list", "display-name", "certificate-type", "serial-number", "id", "sort", "fields"); err != nil {
+				return err
+			}
 			if strings.TrimSpace(*next) != "" {
 				derivedID, err := passTypeIDFromCertificatesNextURL(*next, false)
 				if err != nil {

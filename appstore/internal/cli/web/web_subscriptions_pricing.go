@@ -295,7 +295,15 @@ func WebSubscriptionsPricingAdjustedEqualizationsViewCommand() *ffcli.Command {
 			if err != nil {
 				return withWebAuthHint(err, "web subscriptions pricing adjusted-equalizations view")
 			}
-			return shared.PrintOutput(result, *output.Output, *output.Pretty)
+			if !result.Available {
+				row := []string{result.PricePointID, "false", result.Code, result.Detail, strings.Join(result.MissingTerritories, ", ")}
+				return shared.PrintOutputRows(result, *output.Output, *output.Pretty, []string{"Price Point ID", "Available", "Code", "Detail", "Missing Territories"}, [][]string{row})
+			}
+			rows := make([][]string, 0, len(result.Equalizations))
+			for _, eq := range result.Equalizations {
+				rows = append(rows, []string{eq.ID, eq.Territory, eq.CustomerPrice, eq.Currency})
+			}
+			return shared.PrintOutputRows(result, *output.Output, *output.Pretty, []string{"ID", "Territory", "Customer Price", "Currency"}, rows)
 		},
 	}
 }

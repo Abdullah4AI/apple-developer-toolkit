@@ -209,7 +209,7 @@ Examples:
 				}
 			}
 			for _, warning := range plan.Warnings {
-				fmt.Fprintf(os.Stderr, "Warning: %s\n", warning)
+				fmt.Fprintf(os.Stderr, "Warning: %s\n", shared.SanitizeTerminal(warning))
 			}
 			return shared.PrintOutput(newXcodeSigningPlanOutput(plan), *output.Output, *output.Pretty)
 		},

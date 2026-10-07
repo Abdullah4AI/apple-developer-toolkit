@@ -27,7 +27,7 @@ func AppClipInvocationsCommand() *ffcli.Command {
 
 Examples:
   asc app-clips invocations list --build-bundle-id "BUILD_BUNDLE_ID"
-  asc app-clips invocations create --build-bundle-id "BUILD_BUNDLE_ID" --url "https://example.com/clip"`,
+  asc app-clips invocations create --build-bundle-id "BUILD_BUNDLE_ID" --url "https://example.com/clip" --locale "en-US" --title "Try it"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{

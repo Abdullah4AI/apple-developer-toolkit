@@ -14,6 +14,12 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/rootfs"
 )
 
+// APIKeysURL is where App Store Connect API keys are created.
+const APIKeysURL = "https://appstoreconnect.apple.com/access/integrations/api"
+
+// LoginCommandExample is a complete auth login invocation for a team key.
+const LoginCommandExample = "asc auth login --name MyKey --key-id KEY_ID --issuer-id ISSUER_ID --private-key /path/to/AuthKey_KEY_ID.p8"
+
 type DoctorStatus string
 
 const (
@@ -213,12 +219,19 @@ func inspectProfiles() DoctorSection {
 		}
 	}
 
-	if len(credentials) == 0 {
+	switch {
+	case len(credentials) == 0 && strings.TrimSpace(os.Getenv("ASC_KEY_ID")) == "" && !hasEnvironmentPrivateKey():
+		checks = append(checks, DoctorCheck{
+			Status:         DoctorWarn,
+			Message:        "No credentials configured",
+			Recommendation: fmt.Sprintf("Create an API key at %s, then run: %s", APIKeysURL, LoginCommandExample),
+		})
+	case len(credentials) == 0:
 		checks = append(checks, DoctorCheck{
 			Status:  DoctorInfo,
 			Message: "No stored credentials found",
 		})
-	} else {
+	default:
 		for _, cred := range credentials {
 			source := cred.Source
 			if cred.SourcePath != "" {

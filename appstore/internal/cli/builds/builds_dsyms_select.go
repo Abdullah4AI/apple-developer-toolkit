@@ -67,6 +67,7 @@ type dsymTarget struct {
 }
 
 type liveAppVersion struct {
+	ID          string
 	Version     string
 	Platform    string
 	CreatedDate time.Time
@@ -233,6 +234,9 @@ func resolveSelectedDSYMTargets(ctx context.Context, client *asc.Client, selecti
 		if err != nil {
 			return nil, err
 		}
+		if !selection.All && selection.After == nil {
+			return resolveLiveDSYMTarget(ctx, client, live, selection.Resolve.ExcludeExpired)
+		}
 		exactVersion = live.Version
 		if platform == "" {
 			platform = live.Platform
@@ -250,6 +254,36 @@ func resolveSelectedDSYMTargets(ctx context.Context, client *asc.Client, selecti
 		return targets[:1], nil
 	}
 	return targets, nil
+}
+
+func resolveLiveDSYMTarget(ctx context.Context, client *asc.Client, live liveAppVersion, excludeExpired bool) ([]dsymTarget, error) {
+	requestCtx, cancel := shared.ContextWithTimeout(ctx)
+	link, err := client.GetAppStoreVersionBuildRelationship(requestCtx, live.ID)
+	cancel()
+	if err != nil {
+		return nil, fmt.Errorf("builds dsyms: failed to resolve live version build: %w", err)
+	}
+	if link == nil || strings.TrimSpace(link.Data.ID) == "" {
+		return nil, fmt.Errorf("builds dsyms: live App Store version %s has no attached build", live.ID)
+	}
+	requestCtx, cancel = shared.ContextWithTimeout(ctx)
+	build, err := client.GetBuild(requestCtx, link.Data.ID)
+	cancel()
+	if err != nil {
+		return nil, fmt.Errorf("builds dsyms: failed to get live version build: %w", err)
+	}
+	if build == nil || strings.TrimSpace(build.Data.ID) == "" {
+		return nil, fmt.Errorf("builds dsyms: live App Store version %s has no attached build", live.ID)
+	}
+	expired, set := build.Data.Attributes.ExpiredValue()
+	if excludeExpired && set && expired {
+		return nil, fmt.Errorf("builds dsyms: live App Store version %s has an expired attached build", live.ID)
+	}
+	uploaded, err := time.Parse(time.RFC3339, strings.TrimSpace(build.Data.Attributes.UploadedDate))
+	if err != nil {
+		return nil, fmt.Errorf("builds dsyms: build %s has invalid uploadedDate %q", build.Data.ID, build.Data.Attributes.UploadedDate)
+	}
+	return []dsymTarget{{ID: build.Data.ID, AppVersion: live.Version, BuildNumber: build.Data.Attributes.Version, Uploaded: uploaded}}, nil
 }
 
 // resolveLiveAppVersion finds the newest live (or pre-order) App Store
@@ -273,6 +307,7 @@ func resolveLiveAppVersion(ctx context.Context, client *asc.Client, appID, platf
 			return liveAppVersion{}, fmt.Errorf("builds dsyms: app store version %q has invalid createdDate %q", item.ID, item.Attributes.CreatedDate)
 		}
 		collected = append(collected, liveAppVersion{
+			ID:          item.ID,
 			Version:     strings.TrimSpace(item.Attributes.VersionString),
 			Platform:    strings.ToUpper(strings.TrimSpace(string(item.Attributes.Platform))),
 			CreatedDate: created,
@@ -338,6 +373,7 @@ func listDSYMTargets(ctx context.Context, client *asc.Client, appID, platform, e
 
 	var targets []dsymTarget
 	page := first
+	seenNext := make(map[string]struct{})
 	for page != nil {
 		pageTargets, stop, err := dsymTargetsFromPage(page, exactVersion, minVersion, after, excludeExpired)
 		if err != nil {
@@ -347,6 +383,11 @@ func listDSYMTargets(ctx context.Context, client *asc.Client, appID, platform, e
 		if stop || strings.TrimSpace(page.Links.Next) == "" {
 			break
 		}
+		identity := asc.PaginationURLIdentity(page.Links.Next)
+		if _, repeated := seenNext[identity]; repeated {
+			return nil, fmt.Errorf("builds dsyms: failed to list builds: %w", asc.ErrRepeatedPaginationURL)
+		}
+		seenNext[identity] = struct{}{}
 		nextCtx, nextCancel := shared.ContextWithTimeout(ctx)
 		page, err = client.GetBuilds(nextCtx, appID, asc.WithBuildsNextURL(page.Links.Next))
 		nextCancel()

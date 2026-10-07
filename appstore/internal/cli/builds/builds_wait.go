@@ -215,12 +215,13 @@ Examples:
 }
 
 type appBuildWaitSelector struct {
-	Latest      bool
-	AppID       string
-	Version     string
-	BuildNumber string
-	Platform    string
-	Since       *time.Time
+	Latest            bool
+	AppID             string
+	Version           string
+	BuildNumber       string
+	Platform          string
+	Since             *time.Time
+	BuildAudienceType asc.BuildAudienceType
 }
 
 // buildWaitObservation is the latest state a wait has seen, kept so a wait
@@ -246,7 +247,7 @@ func waitForBuildDiscovery(
 ) (*asc.BuildResponse, error) {
 	started := buildsWaitNow()
 	return asc.PollUntilTolerant(ctx, pollInterval, func(ctx context.Context) (*asc.BuildResponse, bool, error) {
-		buildResp, err := resolveBuildForAppWait(ctx, client, selector)
+		buildResp, err := resolveBuildForAppWait(ctx, client, selector, true)
 		if err != nil {
 			return nil, false, err
 		}
@@ -282,6 +283,7 @@ func resolveBuildForAppWait(
 	ctx context.Context,
 	client *asc.Client,
 	selector appBuildWaitSelector,
+	allowEmpty bool,
 ) (*asc.BuildResponse, error) {
 	if selector.Latest {
 		buildResp, err := shared.ResolveLatestBuild(ctx, client, shared.LatestBuildSelectionOptions{
@@ -289,7 +291,8 @@ func resolveBuildForAppWait(
 			Version:               selector.Version,
 			Platform:              selector.Platform,
 			ProcessingStateValues: buildsWaitProcessingStates(),
-		}, true)
+			BuildAudienceType:     selector.BuildAudienceType,
+		}, allowEmpty)
 		if err != nil {
 			return nil, err
 		}
@@ -303,7 +306,7 @@ func resolveBuildForAppWait(
 		Platform:              selector.Platform,
 		Since:                 selector.Since,
 		ProcessingStateValues: buildsWaitProcessingStates(),
-	}, true)
+	}, allowEmpty)
 	if err != nil {
 		return nil, err
 	}
@@ -430,5 +433,9 @@ func buildProcessingFailureError(
 	if buildResp != nil {
 		failure.BundleVersion = buildResp.Data.Attributes.Version
 	}
-	return shared.EnrichBuildProcessingFailure(ctx, client, failure, baseErr)
+	return shared.WithDiagnostic(
+		shared.NewValidationError(shared.EnrichBuildProcessingFailure(ctx, client, failure, baseErr)),
+		shared.DiagnosticStateNotReady,
+		"",
+	)
 }

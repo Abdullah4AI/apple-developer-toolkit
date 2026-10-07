@@ -4,11 +4,17 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
+	"net/http"
+	"net/url"
+	"regexp"
 	"strings"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/auth"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/readonly"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/urlsanitize"
 )
 
 type ClassifiedError struct {
@@ -20,6 +26,9 @@ const (
 	requestTimeoutHint = "Increase the request timeout (e.g. set `ASC_TIMEOUT=90s`)."
 	uploadTimeoutHint  = "Increase the upload timeout (e.g. set `ASC_UPLOAD_TIMEOUT=600s`)."
 	systemStatusHint   = "Check Apple's service health with `asc system-status --service \"App Store Connect\"`."
+	missingAuthHint    = "Run `asc auth status` to see configured credentials. To add an API key, create one at " + auth.APIKeysURL +
+		" and run `" + auth.LoginCommandExample + "` (or set ASC_KEY_ID/ASC_ISSUER_ID/ASC_PRIVATE_KEY_PATH)."
+	networkHint = "Check your network connection and proxy settings (HTTPS_PROXY), then retry."
 )
 
 func Classify(err error) ClassifiedError {
@@ -44,11 +53,16 @@ func Classify(err error) ClassifiedError {
 	if errors.Is(err, shared.ErrMissingAuth) {
 		return ClassifiedError{
 			Message: err.Error(),
-			Hint:    "Run `asc auth login` or `asc auth init` (or set ASC_KEY_ID/ASC_ISSUER_ID/ASC_PRIVATE_KEY_PATH). Try `asc auth doctor` if you're unsure what's misconfigured.",
+			Hint:    missingAuthHint,
 		}
 	}
 
 	if errors.Is(err, context.DeadlineExceeded) {
+		// A wait that already names its --timeout flag needs no second,
+		// conflicting knob.
+		if strings.Contains(err.Error(), "--timeout") {
+			return ClassifiedError{Message: err.Error()}
+		}
 		hint := requestTimeoutHint
 		if isUploadTimeoutError(err) {
 			hint = uploadTimeoutHint
@@ -59,11 +73,22 @@ func Classify(err error) ClassifiedError {
 		}
 	}
 
+	if IsNetworkFailure(err) {
+		return ClassifiedError{Message: err.Error(), Hint: networkHint}
+	}
+
 	var apiErr *asc.APIError
 	if errors.As(err, &apiErr) && apiErr.HTTPStatusCode() >= 500 {
 		return ClassifiedError{
 			Message: err.Error(),
 			Hint:    systemStatusHint,
+		}
+	}
+
+	if bundleID := appNotFoundBundleID(apiErr); bundleID != "" {
+		return ClassifiedError{
+			Message: err.Error(),
+			Hint:    fmt.Sprintf("App IDs are numeric. Find this app's ID with `asc apps list --bundle-id %q` and pass that instead.", bundleID),
 		}
 	}
 
@@ -100,6 +125,40 @@ func Classify(err error) ClassifiedError {
 		Message: err.Error(),
 		Hint:    "",
 	}
+}
+
+// IsNetworkFailure reports whether err is a failure to reach a server (dial,
+// DNS, TLS, proxy, or a dropped connection) rather than a server response or
+// local work. It matches the transport error types, never a bare io.EOF, so a
+// truncated local file is not mistaken for a network problem.
+func IsNetworkFailure(err error) bool {
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return false
+	}
+	_, isURLError := errors.AsType[*url.Error](err)
+	_, isTransportError := errors.AsType[*urlsanitize.TransportError](err)
+	_, isOpError := errors.AsType[*net.OpError](err)
+	return isURLError || isTransportError || isOpError
+}
+
+// appNotFoundIDPattern matches Apple's 404 detail for an unknown app, such as
+// "There is no resource of type 'apps' with id 'com.example.app'". Many
+// commands put --app straight into /v1/apps/{id}, so a bundle ID there ends
+// in this error instead of a lookup.
+var (
+	appNotFoundIDPattern = regexp.MustCompile(`no resource of type 'apps' with id '([^']*)'`)
+	bundleIDPattern      = regexp.MustCompile(`^[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$`)
+)
+
+func appNotFoundBundleID(apiErr *asc.APIError) string {
+	if apiErr == nil || apiErr.HTTPStatusCode() != http.StatusNotFound {
+		return ""
+	}
+	match := appNotFoundIDPattern.FindStringSubmatch(apiErr.Detail)
+	if match == nil || !bundleIDPattern.MatchString(match[1]) {
+		return ""
+	}
+	return match[1]
 }
 
 func isUploadTimeoutError(err error) bool {

@@ -5,8 +5,12 @@ import (
 	"errors"
 	"flag"
 	"io"
+	"os"
 	"strings"
 	"testing"
+
+	rootcmd "github.com/Abdullah4AI/apple-developer-toolkit/appstore/cmd"
+	webcli "github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/web"
 )
 
 func webPasswordEnvNameForTest() string {
@@ -77,6 +81,33 @@ func TestWebAppsCreateHelpMentionsInteractiveContract(t *testing.T) {
 	passwordFlag := "--" + "password"
 	if !strings.Contains(usage, passwordFlag) {
 		t.Fatalf("expected temporary password compatibility in usage, got %q", usage)
+	}
+}
+
+func TestWebAppsCreateMissingFieldsWithControllingTTYReturnsUsageError(t *testing.T) {
+	t.Cleanup(webcli.SetControllingTTYForTesting(func() (*os.File, error) {
+		return os.Open(os.DevNull)
+	}))
+
+	root := RootCommand("1.2.3")
+	root.FlagSet.SetOutput(io.Discard)
+
+	var runErr error
+	stdout, stderr := captureOutput(t, func() {
+		if err := root.Parse([]string{"web", "apps", "create", "--name", "My App"}); err != nil {
+			t.Fatalf("parse error: %v", err)
+		}
+		runErr = root.Run(context.Background())
+	})
+
+	if got := rootcmd.ExitCodeFromError(runErr); got != rootcmd.ExitUsage {
+		t.Fatalf("exit code = %d, want %d (err=%v)", got, rootcmd.ExitUsage, runErr)
+	}
+	if stdout != "" {
+		t.Fatalf("expected empty stdout, got %q", stdout)
+	}
+	if !strings.Contains(stderr, "missing required flags: --bundle-id, --sku") {
+		t.Fatalf("expected missing-flags usage error, got %q", stderr)
 	}
 }
 

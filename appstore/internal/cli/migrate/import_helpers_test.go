@@ -19,8 +19,10 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
 type migrateUploadRoundTripFunc func(*http.Request) (*http.Response, error)
@@ -272,5 +274,51 @@ func TestNormalizeDeliverfilePlatformRejectsUnknownValue(t *testing.T) {
 	}
 	if err.Error() != `unsupported Deliverfile platform "android"` {
 		t.Fatalf("error = %q, want unsupported Deliverfile platform message", err)
+	}
+}
+
+// Each page gets a new budget; finishing one request must release its context.
+func TestFetchLocalizationsForPlanRequestContexts(t *testing.T) {
+	for _, kind := range []string{"version", "app info"} {
+		t.Run(kind, func(t *testing.T) {
+			t.Setenv("ASC_TIMEOUT", "1s")
+			parent, cancel := shared.ContextWithTimeout(context.Background())
+			defer cancel()
+			parentDeadline, _ := parent.Deadline()
+			t.Setenv("ASC_TIMEOUT", "30s")
+			var requests []context.Context
+			original := http.DefaultTransport
+			t.Cleanup(func() { http.DefaultTransport = original })
+			http.DefaultTransport = migrateUploadRoundTripFunc(func(req *http.Request) (*http.Response, error) {
+				deadline, ok := req.Context().Deadline()
+				if !ok || time.Until(deadline) <= 0 || deadline.Sub(parentDeadline) < 20*time.Second {
+					t.Fatal("request reused inherited timeout instead of a fresh budget")
+				}
+				if len(requests) > 0 && requests[len(requests)-1].Err() != context.Canceled {
+					t.Fatal("previous request context was not canceled")
+				}
+				requests = append(requests, req.Context())
+				if len(requests) == 1 {
+					return migrateJSONResponse(200, fmt.Sprintf(`{"data":[],"links":{"next":%q}}`, "https://api.appstoreconnect.apple.com"+req.URL.Path+"?page=2"))
+				}
+				return migrateJSONResponse(200, `{"data":[]}`)
+			})
+			client := newMigrateUploadTestClient(t)
+			var err error
+			if kind == "version" {
+				_, err = fetchVersionLocalizationsForPlan(parent, client, "VERSION_ID")
+			} else {
+				_, err = fetchAppInfoLocalizationsForPlan(parent, client, "INFO_ID")
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(requests) != 2 {
+				t.Fatalf("requests=%d, want 2", len(requests))
+			}
+			if requests[1].Err() != context.Canceled {
+				t.Fatal("final request context was not canceled")
+			}
+		})
 	}
 }

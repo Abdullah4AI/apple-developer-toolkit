@@ -269,6 +269,9 @@ Examples:
 			if err := shared.ValidateNextURL(*next); err != nil {
 				return shared.UsageErrorf("apps search-keywords list: %v", err)
 			}
+			if err := shared.RejectNextFlagConflicts(fs, *next, "apps search-keywords list", "platform", "locale"); err != nil {
+				return err
+			}
 
 			resolvedAppID := shared.ResolveAppID(*appID)
 			if resolvedAppID == "" && strings.TrimSpace(*next) == "" {

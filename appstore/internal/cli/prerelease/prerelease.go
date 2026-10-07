@@ -70,6 +70,9 @@ Examples:
 			if err := shared.ValidateNextURL(*next); err != nil {
 				return fmt.Errorf("pre-release-versions list: %w", err)
 			}
+			if err := shared.RejectNextFlagConflicts(fs, *next, "testflight pre-release list", "platform", "version"); err != nil {
+				return err
+			}
 
 			platforms, err := shared.NormalizeAppStoreVersionPlatforms(shared.SplitCSVUpper(*platform))
 			if err != nil {

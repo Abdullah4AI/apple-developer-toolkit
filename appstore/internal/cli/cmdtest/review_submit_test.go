@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/cmd"
 )
 
 func TestReviewSubmitValidationErrors(t *testing.T) {
@@ -29,7 +31,7 @@ func TestReviewSubmitValidationErrors(t *testing.T) {
 		{
 			name:    "missing build",
 			args:    []string{"review", "submit", "--app", "app-1", "--version", "1.2.3", "--confirm"},
-			wantErr: "--build-id is required",
+			wantErr: "--build-id, --build-number, or --latest is required",
 		},
 		{
 			name:    "missing version selector",
@@ -670,4 +672,74 @@ func TestReviewSubmitAlreadySubmittedSkipsPreflightAndBuildAttachment(t *testing
 func isReleasedVersionStateQuery(query url.Values) bool {
 	return query.Get("filter[appStoreState]") == "READY_FOR_SALE,DEVELOPER_REMOVED_FROM_SALE,REMOVED_FROM_SALE" ||
 		(query.Get("filter[appStoreState]") == "" && query.Get("filter[appVersionState]") == "READY_FOR_DISTRIBUTION")
+}
+
+func TestReviewSubmitConflictAtFinalSubmitReportsCreatedSubmissionAndHints(t *testing.T) {
+	setupAuth(t)
+	t.Setenv("ASC_APP_ID", "")
+	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
+
+	itemAdded := false
+	installDefaultTransport(t, roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		if req.Method == http.MethodGet && req.URL.Path == "/v1/reviewSubmissions/review-sub-1/items" && !itemAdded {
+			return jsonResponse(http.StatusOK, `{"data":[],"links":{"self":"/v1/reviewSubmissions/review-sub-1/items"}}`)
+		}
+		if resp, err, ok := respondToFinalReviewSubmissionValidation(req); ok {
+			return resp, err
+		}
+
+		switch {
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/apps/app-1/appStoreVersions":
+			if isReleasedVersionStateQuery(req.URL.Query()) {
+				return jsonResponse(http.StatusOK, `{"data":[]}`)
+			}
+			return jsonResponse(http.StatusOK, `{"data":[{"type":"appStoreVersions","id":"version-1","attributes":{"versionString":"1.2.3","platform":"IOS"}}]}`)
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/appStoreVersions/version-1/appStoreVersionLocalizations":
+			return jsonResponse(http.StatusOK, `{"data":[{"type":"appStoreVersionLocalizations","id":"loc-1","attributes":{"locale":"en-US","description":"Description","keywords":"keyword","supportUrl":"https://example.com/support"}}]}`)
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/apps/app-1/subscriptionGroups":
+			return jsonResponse(http.StatusOK, `{"data":[]}`)
+		case req.Method == http.MethodGet && (req.URL.Path == "/v1/appStoreVersions/version-1/build" || req.URL.Path == "/v1/appStoreVersions/version-1/appStoreVersionSubmission"):
+			return jsonResponse(http.StatusNotFound, `{"errors":[{"status":"404","code":"NOT_FOUND","title":"Not Found"}]}`)
+		case req.Method == http.MethodPatch && req.URL.Path == "/v1/appStoreVersions/version-1/relationships/build":
+			return jsonResponse(http.StatusNoContent, "")
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/apps/app-1/reviewSubmissions":
+			return jsonResponse(http.StatusOK, `{"data":[],"links":{"self":"/v1/apps/app-1/reviewSubmissions"}}`)
+		case req.Method == http.MethodPost && req.URL.Path == "/v1/reviewSubmissions":
+			return jsonResponse(http.StatusCreated, `{"data":{"type":"reviewSubmissions","id":"review-sub-1","attributes":{"state":"READY_FOR_REVIEW","platform":"IOS"}}}`)
+		case req.Method == http.MethodPost && req.URL.Path == "/v1/reviewSubmissionItems":
+			itemAdded = true
+			return jsonResponse(http.StatusCreated, `{"data":{"type":"reviewSubmissionItems","id":"item-1"}}`)
+		case req.Method == http.MethodPatch && req.URL.Path == "/v1/reviewSubmissions/review-sub-1":
+			return jsonResponse(http.StatusConflict, `{"errors":[{"status":"409","code":"STATE_ERROR.ENTITY_STATE_INVALID","title":"The request cannot be fulfilled because of the state of another resource.","detail":"Submission is not complete.","meta":{"associatedErrors":{"/v1/ageRatingDeclarations/age-1":[{"code":"ENTITY_ERROR.ATTRIBUTE.REQUIRED","detail":"An attribute value is required."}],"/v1/apps/app-1/contentRightsDeclaration":[{"code":"ENTITY_ERROR.ATTRIBUTE.REQUIRED","detail":"An attribute value is required."}]}}}]}`)
+		default:
+			t.Fatalf("unexpected request: %s %s?%s", req.Method, req.URL.Path, req.URL.RawQuery)
+			return nil, nil
+		}
+	}))
+
+	code, stdout, stderr := runASCForExitCode(
+		t,
+		"review", "submit",
+		"--app", "app-1",
+		"--version", "1.2.3",
+		"--build-id", "build-1",
+		"--confirm",
+		"--output", "json",
+	)
+
+	if code != cmd.ExitConflict {
+		t.Fatalf("expected exit code %d, got %d (stderr %q)", cmd.ExitConflict, code, stderr)
+	}
+	if stdout != "" {
+		t.Fatalf("expected empty stdout, got %q", stdout)
+	}
+	for _, want := range []string{
+		"asc submit cancel --id review-sub-1 --confirm",
+		"Hint: Review current age rating: asc age-rating view --app app-1",
+		"Hint: If your app does not use third-party content: asc apps update --id app-1 --content-rights DOES_NOT_USE_THIRD_PARTY_CONTENT",
+	} {
+		if !strings.Contains(stderr, want) {
+			t.Fatalf("expected stderr to contain %q, got %q", want, stderr)
+		}
+	}
 }

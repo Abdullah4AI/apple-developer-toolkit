@@ -33,6 +33,7 @@ Examples:
   asc review items add --submission "SUBMISSION_ID" --item-type inAppPurchaseVersions --item-id "IAP_VERSION_ID"
   asc review items add --submission "SUBMISSION_ID" --item-type subscriptionVersions --item-id "SUBSCRIPTION_VERSION_ID"
   asc review items add --submission "SUBMISSION_ID" --item-type subscriptionGroupVersions --item-id "GROUP_VERSION_ID"
+  asc review items add --submission "SUBMISSION_ID" --item-type appAssetLibraryImages --item-id "IMAGE_ID"
   asc review items update --id "ITEM_ID" --resolved true
   asc review items remove --id "ITEM_ID" --confirm`,
 		FlagSet:   fs,
@@ -44,6 +45,7 @@ Examples:
   asc review items add --submission "SUBMISSION_ID" --item-type inAppPurchaseVersions --item-id "IAP_VERSION_ID"
   asc review items add --submission "SUBMISSION_ID" --item-type subscriptionVersions --item-id "SUBSCRIPTION_VERSION_ID"
   asc review items add --submission "SUBMISSION_ID" --item-type subscriptionGroupVersions --item-id "GROUP_VERSION_ID"
+  asc review items add --submission "SUBMISSION_ID" --item-type appAssetLibraryImages --item-id "IMAGE_ID"
   asc review items add --submission "SUBMISSION_ID" --item-type gameCenterChallengeVersions --item-id "VERSION_ID"`),
 			reviewItemsUpdateCommand("update", "review items update", `asc review items update --id "ITEM_ID" [flags]`, `asc review items update --id "ITEM_ID" --resolved true
   asc review items update --id "ITEM_ID" --clear-removed`),
@@ -175,7 +177,7 @@ func rejectReviewNextFlagConflicts(fs *flag.FlagSet, next, command string, names
 }
 
 var reviewSubmissionItemFields = []string{
-	"state", "appStoreVersion", "appCustomProductPageVersion", "appStoreVersionExperiment",
+	"state", "appStoreVersion", "appCustomProductPageVersion", "appAssetLibraryImage", "appAssetLibraryVideo", "appStoreVersionExperiment",
 	"appStoreVersionExperimentV2", "appEvent", "backgroundAssetVersion", "gameCenterAchievementVersion",
 	"gameCenterActivityVersion", "gameCenterChallengeVersion", "gameCenterLeaderboardSetVersion",
 	"gameCenterLeaderboardVersion", "inAppPurchaseVersion", "subscriptionVersion", "subscriptionGroupVersion",
@@ -253,6 +255,7 @@ func ReviewItemsAddCommand() *ffcli.Command {
   asc review items-add --submission "SUBMISSION_ID" --item-type inAppPurchaseVersions --item-id "IAP_VERSION_ID"
   asc review items-add --submission "SUBMISSION_ID" --item-type subscriptionVersions --item-id "SUBSCRIPTION_VERSION_ID"
   asc review items-add --submission "SUBMISSION_ID" --item-type subscriptionGroupVersions --item-id "GROUP_VERSION_ID"
+  asc review items-add --submission "SUBMISSION_ID" --item-type appAssetLibraryVideos --item-id "VIDEO_ID"
   asc review items-add --submission "SUBMISSION_ID" --item-type gameCenterChallengeVersions --item-id "VERSION_ID"`)
 }
 
@@ -271,6 +274,10 @@ func reviewItemsAddCommand(name, errorPrefix, shortUsage, examples string) *ffcl
 		ShortUsage: shortUsage,
 		ShortHelp:  "Add an item to a review submission.",
 		LongHelp: `Add an item to a review submission.
+
+Asset Library images and videos can be reviewed separately after the app has
+an approved version. For the first app version, submit assets with the version.
+App Store Connect validates asset readiness when the submission is submitted.
 
 --if-exists controls what happens when App Store Connect answers 409 because
 the item is already on the submission. fail (default) returns the error. skip
@@ -582,6 +589,10 @@ func reviewSubmissionItemRelationshipName(itemType asc.ReviewSubmissionItemType)
 		return "appStoreVersion"
 	case asc.ReviewSubmissionItemTypeAppCustomProductPageVersion:
 		return "appCustomProductPageVersion"
+	case asc.ReviewSubmissionItemTypeAppAssetLibraryImage:
+		return "appAssetLibraryImage"
+	case asc.ReviewSubmissionItemTypeAppAssetLibraryVideo:
+		return "appAssetLibraryVideo"
 	case asc.ReviewSubmissionItemTypeAppEvent:
 		return "appEvent"
 	case asc.ReviewSubmissionItemTypeAppStoreVersionExperiment:
@@ -630,6 +641,10 @@ func reviewSubmissionItemLinkedID(item asc.ReviewSubmissionItemResource, itemTyp
 		return relationship(item.Relationships.AppStoreVersion)
 	case asc.ReviewSubmissionItemTypeAppCustomProductPageVersion:
 		return relationship(item.Relationships.AppCustomProductPageVersion)
+	case asc.ReviewSubmissionItemTypeAppAssetLibraryImage:
+		return relationship(item.Relationships.AppAssetLibraryImage)
+	case asc.ReviewSubmissionItemTypeAppAssetLibraryVideo:
+		return relationship(item.Relationships.AppAssetLibraryVideo)
 	case asc.ReviewSubmissionItemTypeAppEvent:
 		return relationship(item.Relationships.AppEvent)
 	case asc.ReviewSubmissionItemTypeAppStoreVersionExperiment:

@@ -91,8 +91,7 @@ Examples:
 			if trimmedNext == "" {
 				resolvedLocalizationID, err = resolveAppEventLocalizationID(requestCtx, client, *eventID, resolvedLocalizationID, *locale)
 				if err != nil {
-					fmt.Fprintln(os.Stderr, "Error:", err.Error())
-					return flag.ErrHelp
+					return fmt.Errorf("app-events screenshots links: %w", err)
 				}
 			}
 
@@ -174,8 +173,7 @@ Examples:
 			if strings.TrimSpace(*next) == "" {
 				resolvedLocalizationID, err = resolveAppEventLocalizationID(requestCtx, client, *eventID, resolvedLocalizationID, *locale)
 				if err != nil {
-					fmt.Fprintln(os.Stderr, "Error:", err.Error())
-					return flag.ErrHelp
+					return fmt.Errorf("app-events screenshots list: %w", err)
 				}
 			}
 
@@ -302,8 +300,7 @@ Examples:
 
 			resolvedLocalizationID, err := resolveAppEventLocalizationID(requestCtx, client, *eventID, *localizationID, *locale)
 			if err != nil {
-				fmt.Fprintln(os.Stderr, "Error:", err.Error())
-				return flag.ErrHelp
+				return fmt.Errorf("app-events screenshots create: %w", err)
 			}
 
 			file, info, err := openAssetFile(pathValue)

@@ -238,14 +238,14 @@ func TestBetaGroupsAddTestersAmbiguousEmailListsIDsWithoutPersonalData(t *testin
 			"--group", "group-1",
 			"--email", "dup@example.com",
 		}, "1.2.3")
-		if code != cmd.ExitError {
-			t.Fatalf("exit code = %d, want %d", code, cmd.ExitError)
+		if code != cmd.ExitUsage {
+			t.Fatalf("exit code = %d, want %d", code, cmd.ExitUsage)
 		}
 	})
 	if stdout != "" {
 		t.Fatalf("expected empty stdout, got %q", stdout)
 	}
-	for _, want := range []string{"pass --tester with one of:", "tester-1", "tester-2"} {
+	for _, want := range []string{`Error: groups add-testers: 2 testers match email "dup@example.com"; pass --tester with one of:`, "tester-1", "tester-2"} {
 		if !strings.Contains(stderr, want) {
 			t.Fatalf("stderr missing %q: %s", want, stderr)
 		}
@@ -293,8 +293,8 @@ func TestBetaGroupsAddTestersSingleEmailSampleFailsClosed(t *testing.T) {
 			"--group", "group-1",
 			"--email", "sample@example.com",
 		}, "1.2.3")
-		if code != cmd.ExitError {
-			t.Fatalf("exit code = %d, want %d", code, cmd.ExitError)
+		if code != cmd.ExitUsage {
+			t.Fatalf("exit code = %d, want %d", code, cmd.ExitUsage)
 		}
 	})
 	if stdout != "" {

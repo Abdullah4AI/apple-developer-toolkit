@@ -35,7 +35,7 @@ func pricingChecks(appID string, priceScheduleID string, basePriceMissing bool, 
 			ResourceType: "appPriceSchedule",
 			ResourceID:   strings.TrimSpace(priceScheduleID),
 			Message:      message,
-			Remediation:  fmt.Sprintf("Set a price (Free counts): asc pricing schedule create --app %s --free --base-territory %q --start-date \"YYYY-MM-DD\"", strings.TrimSpace(appID), remediationTerritory),
+			Remediation:  fmt.Sprintf("Set a price (Free counts): asc pricing schedule create --app %s --free --base-territory %q", strings.TrimSpace(appID), remediationTerritory),
 		}}
 	}
 	return []CheckResult{

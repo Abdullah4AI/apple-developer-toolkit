@@ -73,7 +73,7 @@ Examples:
   asc nominations list --status DRAFT
   asc nominations list --status DRAFT --type APP_LAUNCH
   asc nominations list --app "APP_ID" --status SUBMITTED --output table
-  asc nominations list --include relatedApps --related-apps-limit 10`,
+  asc nominations list --status DRAFT --include relatedApps --related-apps-limit 10`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -82,6 +82,9 @@ Examples:
 			}
 			if err := shared.ValidateNextURL(*next); err != nil {
 				return shared.UsageErrorf("nominations list: %v", err)
+			}
+			if err := shared.RejectNextFlagConflicts(fs, *next, "nominations list", "app", "status", "type", "sort", "fields", "include", "in-app-events-limit", "related-apps-limit", "supported-territories-limit"); err != nil {
+				return err
 			}
 			if err := shared.ValidateSort(*sort, nominationSortList()...); err != nil {
 				return shared.UsageErrorf("nominations list: %v", err)
@@ -100,7 +103,7 @@ Examples:
 			if err != nil {
 				return fmt.Errorf("nominations list: %w", err)
 			}
-			if len(statusValues) == 0 {
+			if len(statusValues) == 0 && strings.TrimSpace(*next) == "" {
 				fmt.Fprintln(os.Stderr, "Error: --status is required")
 				return shared.MissingRequiredUsageError("--status")
 			}

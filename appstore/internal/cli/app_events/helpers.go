@@ -214,7 +214,7 @@ func resolveAppEventLocalizationID(ctx context.Context, client *asc.Client, even
 	}
 	eventID = strings.TrimSpace(eventID)
 	if eventID == "" {
-		return "", fmt.Errorf("--event-id is required")
+		return "", shared.UsageError("--event-id is required")
 	}
 	locale = strings.TrimSpace(locale)
 	if locale == "" {
@@ -225,7 +225,7 @@ func resolveAppEventLocalizationID(ctx context.Context, client *asc.Client, even
 		locale = strings.TrimSpace(event.Data.Attributes.PrimaryLocale)
 	}
 	if locale == "" {
-		return "", fmt.Errorf("no locale resolved for app event %q (use --locale or --localization-id)", eventID)
+		return "", shared.UsageErrorf("no locale resolved for app event %q (use --locale or --localization-id)", eventID)
 	}
 
 	resp, err := client.GetAppEventLocalizations(ctx, eventID, asc.WithAppEventLocalizationsLimit(200))
@@ -237,7 +237,7 @@ func resolveAppEventLocalizationID(ctx context.Context, client *asc.Client, even
 			return localization.ID, nil
 		}
 	}
-	return "", fmt.Errorf("no localization found for locale %q (use --localization-id to specify)", locale)
+	return "", shared.UsageErrorf("no localization found for locale %q (use --localization-id to specify)", locale)
 }
 
 func openAssetFile(path string) (*os.File, os.FileInfo, error) {

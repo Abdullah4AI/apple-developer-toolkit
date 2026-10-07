@@ -133,7 +133,7 @@ func findBetaTesterIDByEmail(ctx context.Context, client *asc.Client, appID, ema
 			Kind:        "beta tester",
 			Description: fmt.Sprintf("email %q", strings.TrimSpace(email)),
 			Candidates:  shared.BetaTesterCandidates(testers.Data),
-			Hint:        "This command selects testers by --email only; inspect the duplicates with `asc testflight beta-testers view --id <ID>`.",
+			Hint:        "This command selects testers by --email only; inspect the duplicates with `asc testflight testers view --id <ID>`.",
 		}
 		if pageHasNext {
 			return "", shared.MarkAmbiguousSelectionSample(ambiguous)

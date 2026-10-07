@@ -13,6 +13,7 @@ import (
 	"github.com/peterbourgon/ff/v3/ffcli"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/builds"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 	webcli "github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/web"
 )
@@ -34,6 +35,7 @@ Examples:
   asc versions create --app "123456789" --version "2.4.0" --copy-metadata-from "2.3.2"
   asc versions update --version-id "VERSION_ID" --release-type MANUAL
   asc versions attach-build --version-id "VERSION_ID" --build-id "BUILD_ID"
+  asc versions attach-build --app "123456789" --version "2.0.0" --build-number "45"
   asc versions release --version-id "VERSION_ID" --confirm
   asc versions phased-release view --version-id "VERSION_ID"
   asc versions rating-reset view --version-id "VERSION_ID"`,
@@ -117,6 +119,9 @@ Examples:
 			}
 			if err := shared.ValidateNextURL(*next); err != nil {
 				return shared.UsageErrorf("versions list: %v", err)
+			}
+			if err := shared.RejectNextFlagConflicts(fs, *next, "versions list", "version", "platform", "state"); err != nil {
+				return err
 			}
 			if *latest && strings.TrimSpace(*next) != "" {
 				return shared.UsageError("versions list: --latest fetches all pages itself and cannot be combined with --next")
@@ -912,9 +917,9 @@ Examples:
 				return fmt.Errorf("versions delete: %w", err)
 			}
 
-			result := map[string]any{
-				"versionId": strings.TrimSpace(*versionID),
-				"deleted":   true,
+			result := &asc.AppStoreVersionDeleteResult{
+				Deleted:   true,
+				VersionID: strings.TrimSpace(*versionID),
 			}
 
 			return shared.PrintOutput(result, *output.Output, *output.Pretty)
@@ -925,8 +930,11 @@ Examples:
 func VersionsAttachBuildCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("versions attach-build", flag.ExitOnError)
 
-	versionID := shared.BindResourceIDFlag(fs, "version-id", "appStoreVersions", "App Store version ID (required)")
-	buildID := shared.BindResourceIDFlag(fs, "build-id", "builds", "Build ID to attach (required)")
+	appID := shared.BindResourceIDFlag(fs, "app", "apps", "App Store Connect app ID, bundle ID, or exact app name (or ASC_APP_ID)")
+	version := fs.String("version", "", "App Store version string")
+	versionID := shared.BindResourceIDFlag(fs, "version-id", "appStoreVersions", "App Store version ID")
+	platform := fs.String("platform", "IOS", "Platform: IOS, MAC_OS, TV_OS, VISION_OS")
+	build := builds.BindVersionBuildSelector(fs)
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
@@ -935,23 +943,56 @@ func VersionsAttachBuildCommand() *ffcli.Command {
 		ShortHelp:  "Attach a build to an app store version.",
 		LongHelp: `Attach a build to an app store version.
 
+Select the version with --version-id, or with --app and --version (and
+--platform). Select the build with --build-id, or with --build-number or
+--latest, which only match builds of the version's app, version string, and
+platform. A selected build must be VALID; --wait waits for processing first.
+Right after an upload, prefer --build-number: --latest picks the newest build
+App Store Connect lists, which can still be the previous upload.
+
 To find the version and build IDs, list each resource for the app and use its
 returned id field:
   asc versions list --app "APP_ID" --paginate --output json
   asc builds list --app "APP_ID" --paginate --output json
 
 Examples:
-  asc versions attach-build --version-id "VERSION_ID" --build-id "BUILD_ID"`,
+  asc versions attach-build --version-id "VERSION_ID" --build-id "BUILD_ID"
+  asc versions attach-build --app "123456789" --version "1.2.0" --build-number "45"
+  asc versions attach-build --app "123456789" --version "1.2.0" --platform MAC_OS --latest
+  asc versions attach-build --app "123456789" --version "1.2.0" --build-number "46" --wait --timeout 30m`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
-			if strings.TrimSpace(*versionID) == "" {
-				fmt.Fprintln(os.Stderr, "Error: --version-id is required")
+			versionValue := strings.TrimSpace(*version)
+			versionIDValue := strings.TrimSpace(*versionID)
+			if versionValue == "" && versionIDValue == "" {
+				fmt.Fprintln(os.Stderr, "Error: --version-id or --version is required")
 				return shared.MissingRequiredUsageError("--version-id")
 			}
-			if strings.TrimSpace(*buildID) == "" {
-				fmt.Fprintln(os.Stderr, "Error: --build-id is required")
-				return shared.MissingRequiredUsageError("--build-id")
+			if versionValue != "" && versionIDValue != "" {
+				return shared.WithDiagnostic(shared.UsageError("--version and --version-id are mutually exclusive"), shared.DiagnosticConflictingInput, "")
+			}
+			if err := build.Validate(); err != nil {
+				return err
+			}
+
+			visited := map[string]bool{}
+			fs.Visit(func(f *flag.Flag) {
+				visited[f.Name] = true
+			})
+			needsScope := versionValue != "" || build.NeedsScope() || visited["app"] || visited["platform"]
+			appValue := shared.ResolveAppID(*appID)
+			if needsScope && appValue == "" {
+				fmt.Fprintln(os.Stderr, "Error: --app is required with --version, --platform, --build-number, or --latest (or set ASC_APP_ID)")
+				return shared.MissingRequiredUsageError("--app")
+			}
+			requestedPlatform := ""
+			if versionValue != "" || visited["platform"] {
+				normalized, err := shared.NormalizeAppStoreVersionPlatform(*platform)
+				if err != nil {
+					return shared.WithDiagnostic(shared.UsageError(err.Error()), shared.DiagnosticInvalidInput, "--platform")
+				}
+				requestedPlatform = normalized
 			}
 
 			client, err := shared.GetASCClient()
@@ -959,22 +1000,65 @@ Examples:
 				return fmt.Errorf("versions attach-build: %w", err)
 			}
 
+			resolvedVersionID := versionIDValue
+			var scope builds.VersionBuildScope
+			if needsScope {
+				resolvedVersionID, scope, err = resolveAttachBuildVersion(ctx, client, appValue, versionIDValue, versionValue, requestedPlatform)
+				if err != nil {
+					return fmt.Errorf("versions attach-build: %w", err)
+				}
+			}
+
+			buildID, err := build.Resolve(ctx, client, scope)
+			if err != nil {
+				return fmt.Errorf("versions attach-build: %w", err)
+			}
+
 			requestCtx, cancel := shared.ContextWithTimeout(ctx)
 			defer cancel()
 
-			if err := client.AttachBuildToVersion(requestCtx, strings.TrimSpace(*versionID), strings.TrimSpace(*buildID)); err != nil {
+			if err := client.AttachBuildToVersion(requestCtx, resolvedVersionID, buildID); err != nil {
 				return fmt.Errorf("versions attach-build: %w", err)
 			}
 
 			result := &asc.AppStoreVersionAttachBuildResult{
-				VersionID: strings.TrimSpace(*versionID),
-				BuildID:   strings.TrimSpace(*buildID),
+				VersionID: resolvedVersionID,
+				BuildID:   buildID,
 				Attached:  true,
 			}
 
 			return shared.PrintOutput(result, *output.Output, *output.Pretty)
 		},
 	}
+}
+
+// resolveAttachBuildVersion returns the version ID and the train its builds
+// come from, checking that a --version-id belongs to the app.
+func resolveAttachBuildVersion(ctx context.Context, client *asc.Client, appInput, versionID, version, platform string) (string, builds.VersionBuildScope, error) {
+	requestCtx, cancel := shared.ContextWithTimeout(ctx)
+	defer cancel()
+
+	appID, err := shared.ResolveAppIDWithLookup(requestCtx, client, appInput)
+	if err != nil {
+		return "", builds.VersionBuildScope{}, err
+	}
+	if versionID == "" {
+		versionID, err = shared.ResolveAppStoreVersionID(requestCtx, client, appID, version, platform)
+		if err != nil {
+			return "", builds.VersionBuildScope{}, err
+		}
+		return versionID, builds.VersionBuildScope{AppID: appID, Version: version, Platform: platform}, nil
+	}
+
+	versionData, err := shared.ResolveOwnedAppStoreVersionByID(requestCtx, client, appID, versionID, platform)
+	if err != nil {
+		return "", builds.VersionBuildScope{}, err
+	}
+	return versionID, builds.VersionBuildScope{
+		AppID:    appID,
+		Version:  strings.TrimSpace(versionData.Attributes.VersionString),
+		Platform: strings.TrimSpace(string(versionData.Attributes.Platform)),
+	}, nil
 }
 
 func fetchOptionalBuild(ctx context.Context, versionID string, fetch func(context.Context, string) (*asc.BuildResponse, error)) (*asc.BuildResponse, error) {

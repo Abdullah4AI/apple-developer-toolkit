@@ -13,6 +13,7 @@ import (
 
 	"howett.net/plist"
 
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/validation"
 )
 
@@ -227,6 +228,10 @@ func TestValidateIPARejectsMismatchedBinary(t *testing.T) {
 			_, err := runValidateIPadReport(t, test.fixture, "--ipa", writeValidateIPA(t, test.info))
 			if err == nil || !strings.Contains(err.Error(), test.wantErr) {
 				t.Fatalf("expected %q, got %v", test.wantErr, err)
+			}
+			diagnostic, _ := shared.DiagnosticFromError(err)
+			if !shared.IsValidationError(err) || diagnostic.Code != shared.DiagnosticInvalidInput || diagnostic.Parameter != "--ipa" {
+				t.Fatalf("expected validation error with invalid_input on --ipa, got validation=%t diagnostic=%+v", shared.IsValidationError(err), diagnostic)
 			}
 		})
 	}

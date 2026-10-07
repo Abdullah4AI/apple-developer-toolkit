@@ -44,7 +44,7 @@ func TestRemovedFlagAliasesNameTheirReplacement(t *testing.T) {
 		{
 			name: "review submit --build",
 			args: []string{"review", "submit", "--app", "app-1", "--version-id", "version-1", "--build", "PRIVATE_VALUE"},
-			want: "Error: `--build` was removed in 5.0.0; use `--build-id` (see migrate-to-5-0)\nFor help:\n  asc review submit --help\n",
+			want: "Error: `--build` was removed in 5.0.0; use `--build-id` or `--build-number` (see migrate-to-5-0)\nFor help:\n  asc review submit --help\n",
 		},
 		{
 			name: "testflight groups view --group-id",
@@ -59,7 +59,7 @@ func TestRemovedFlagAliasesNameTheirReplacement(t *testing.T) {
 		{
 			name: "builds info --build",
 			args: []string{"builds", "info", "--build", "PRIVATE_VALUE"},
-			want: "Error: `--build` was removed in 5.0.0; use `--build-id` (see migrate-to-5-0)\nFor help:\n  asc builds info --help\n",
+			want: "Error: `--build` was removed in 5.0.0; use `--build-id` or `--build-number` (see migrate-to-5-0)\nFor help:\n  asc builds info --help\n",
 		},
 		{
 			name: "release stage --build",
@@ -69,7 +69,7 @@ func TestRemovedFlagAliasesNameTheirReplacement(t *testing.T) {
 		{
 			name: "single-dash spelling",
 			args: []string{"builds", "info", "-build", "PRIVATE_VALUE"},
-			want: "Error: `--build` was removed in 5.0.0; use `--build-id` (see migrate-to-5-0)\nFor help:\n  asc builds info --help\n",
+			want: "Error: `--build` was removed in 5.0.0; use `--build-id` or `--build-number` (see migrate-to-5-0)\nFor help:\n  asc builds info --help\n",
 		},
 		{
 			name: "pre-orders enable --available-in-new-territories has no replacement",

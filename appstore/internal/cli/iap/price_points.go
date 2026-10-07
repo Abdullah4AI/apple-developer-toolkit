@@ -77,6 +77,9 @@ Examples:
 			if err := shared.ValidateNextURL(*next); err != nil {
 				return shared.UsageErrorf("iap price-points list: %v", err)
 			}
+			if err := shared.RejectNextFlagConflicts(fs, *next, "iap price-points list", "territory"); err != nil {
+				return err
+			}
 
 			priceFilter := shared.PriceFilter{
 				Price:    strings.TrimSpace(*price),

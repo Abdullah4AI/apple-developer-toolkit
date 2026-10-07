@@ -122,12 +122,8 @@ func ensureBundleIDExists(ctx context.Context, bundleID, appName, platform strin
 		return false, err
 	}
 
-	existing, err := client.GetBundleIDs(ctx, asc.WithBundleIDsFilterIdentifier(bundleID), asc.WithBundleIDsLimit(1))
-	if err != nil {
+	if _, err := shared.FindBundleID(ctx, client, bundleID); !errors.Is(err, shared.ErrBundleIDNotFound) {
 		return false, err
-	}
-	if existing != nil && len(existing.Data) > 0 {
-		return false, nil
 	}
 
 	_, err = client.CreateBundleID(ctx, asc.BundleIDCreateAttributes{
@@ -137,8 +133,7 @@ func ensureBundleIDExists(ctx context.Context, bundleID, appName, platform strin
 	})
 	if err != nil {
 		if isDuplicateBundleIDError(err) {
-			existing, findErr := client.GetBundleIDs(ctx, asc.WithBundleIDsFilterIdentifier(bundleID), asc.WithBundleIDsLimit(1))
-			if findErr == nil && existing != nil && len(existing.Data) > 0 {
+			if _, findErr := shared.FindBundleID(ctx, client, bundleID); findErr == nil {
 				return false, nil
 			}
 		}
@@ -159,15 +154,15 @@ func deleteBundleIDByIdentifier(ctx context.Context, bundleID string) error {
 		return err
 	}
 
-	existing, err := client.GetBundleIDs(ctx, asc.WithBundleIDsFilterIdentifier(bundleID), asc.WithBundleIDsLimit(1))
+	existing, err := shared.FindBundleID(ctx, client, bundleID)
+	if errors.Is(err, shared.ErrBundleIDNotFound) {
+		return nil
+	}
 	if err != nil {
 		return err
 	}
-	if existing == nil || len(existing.Data) == 0 {
-		return nil
-	}
 
-	return client.DeleteBundleID(ctx, strings.TrimSpace(existing.Data[0].ID))
+	return client.DeleteBundleID(ctx, strings.TrimSpace(existing.Data.ID))
 }
 
 func bundleIDNameSuffix(bundleID string) string {
@@ -273,8 +268,9 @@ func WebAppsCreateCommand() *ffcli.Command {
 Create an app through Apple's web API using a web-session login.
 This is the canonical app-creation path for web-session based flows.
 
-If required fields are omitted in an interactive terminal, the CLI will prompt
-for the missing app-creation inputs.
+If required fields are omitted in an interactive terminal (stdin and stdout are
+both terminals), the CLI will prompt for the missing app-creation inputs.
+Otherwise it exits with a usage error listing the missing flags.
 
 --access full|limited applies team access after create through the public
 users API. Limited access requires at least one --user. Omitting --access

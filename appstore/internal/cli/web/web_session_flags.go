@@ -101,8 +101,7 @@ func withWebAuthHint(err error, operation string) error {
 	if strings.HasPrefix(err.Error(), operation+" failed:") {
 		return err
 	}
-	var apiErr *webcore.APIError
-	if errors.As(err, &apiErr) && (apiErr.Status == 401 || apiErr.Status == 403) {
+	if webcore.IsSessionAuthFailure(err) {
 		return fmt.Errorf("%s failed: web session is unauthorized or expired (run 'asc web auth login'): %w", operation, err)
 	}
 	return fmt.Errorf("%s failed: %w", operation, err)

@@ -202,7 +202,7 @@ func TestTestFlightTestersMetricsTableDoesNotUseAppTestersRenderer(t *testing.T)
 	if strings.Contains(stdout, "Tester ID") {
 		t.Fatalf("per-tester metrics table must not use the app-testers renderer, got %q", stdout)
 	}
-	if !strings.Contains(stdout, `"apps"`) || !strings.Contains(stdout, `"app-1"`) {
-		t.Fatalf("expected JSON fallback with apps dimension, got %q", stdout)
+	if !strings.Contains(stdout, "App ID") || !strings.Contains(stdout, "app-1") || strings.Contains(stdout, `"apps"`) {
+		t.Fatalf("expected per-tester table keyed by app, got %q", stdout)
 	}
 }

@@ -160,6 +160,43 @@ func TestParseErrorWithStatus_KeepsEachCodeWithItsDetail(t *testing.T) {
 	}
 }
 
+func TestAPIErrorError_ListsLaterErrorEntries(t *testing.T) {
+	const first = "An attribute value is invalid.: The version string is not valid."
+	tests := []struct {
+		name    string
+		entries string
+		want    string
+	}{
+		{
+			name:    "single entry is unchanged",
+			entries: `{"code":"ENTITY_ERROR.ATTRIBUTE.INVALID","title":"An attribute value is invalid.","detail":"The version string is not valid."}`,
+			want:    first,
+		},
+		{
+			name: "later details are listed once in order",
+			entries: `{"code":"ENTITY_ERROR.ATTRIBUTE.INVALID","title":"An attribute value is invalid.","detail":"The version string is not valid."},` +
+				`{"code":"ENTITY_ERROR.ATTRIBUTE.INVALID","title":"An attribute value is invalid.","detail":"earliestReleaseDate must be in the future\u0007"},` +
+				`{"code":"ENTITY_ERROR.ATTRIBUTE.INVALID","title":"An attribute value is invalid.","detail":"The version string is not valid."},` +
+				`{"code":"ENTITY_ERROR.ATTRIBUTE.INVALID","title":"An attribute value is invalid.","detail":"earliestReleaseDate must be in the future"},` +
+				`{"code":"ENTITY_ERROR.RELATIONSHIP.INVALID","title":"A relationship value is invalid.","detail":""}`,
+			want: first + "\n\nAdditional errors:\n  - earliestReleaseDate must be in the future\n  - ENTITY_ERROR.RELATIONSHIP.INVALID",
+		},
+		{
+			name:    "additional entries are capped",
+			entries: `{"title":"T","detail":"d0"},{"detail":"d1"},{"detail":"d2"},{"detail":"d3"},{"detail":"d4"},{"detail":"d5"},{"detail":"d6"},{"detail":"d7"}`,
+			want:    "T: d0\n\nAdditional errors:\n  - d1\n  - d2\n  - d3\n  - d4\n  - d5\n  - and 2 more",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			err := ParseErrorWithStatus([]byte(`{"errors":[`+test.entries+`]}`), 409)
+			if got := err.Error(); got != test.want {
+				t.Fatalf("Error() = %q, want %q", got, test.want)
+			}
+		})
+	}
+}
+
 func TestIsMissingResourceOfType(t *testing.T) {
 	const missingAvailability = `{"errors":[{"id":"b8a2b802-0512-4f42-b46a-cb444c0dc8db","status":"404","code":"NOT_FOUND","title":"The specified resource does not exist","detail":"There is no resource of type 'appAvailabilities' with id '6807733044'"}]}`
 	const missingApp = `{"errors":[{"id":"1c5bfc66-b18d-46ce-9863-635985130e62","status":"404","code":"NOT_FOUND","title":"The specified resource does not exist","detail":"There is no resource of type 'apps' with id '999999999999'"}]}`

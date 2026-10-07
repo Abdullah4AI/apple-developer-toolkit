@@ -123,9 +123,9 @@ requires selector.orderBy. HOURLY granularity is available for
 	request row totals.
 
 Examples:
-  asc ads v5 reports preset --level campaigns --from 2026-05-01 --to 2026-05-31 --fields campaignName,impressions,taps,localSpend --sort -impressions --org "123456"
+  asc ads v5 reports preset --level campaigns --last-days 30 --fields campaignName,impressions,taps,localSpend --sort -impressions --org "123456"
   asc ads v5 reports preset --level keywords --campaign 12345 --last-days 7 --fields keyword,impressions,taps --org "123456"
-  asc ads v5 reports preset --level ads --campaign 12345 --from 2026-05-01 --to 2026-05-31 --sort -impressions --org "123456"`,
+  asc ads v5 reports preset --level ads --campaign 12345 --from YYYY-MM-DD --to YYYY-MM-DD --sort -impressions --org "123456"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {

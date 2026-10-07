@@ -60,7 +60,8 @@ target)` runs immediately before the request is built in:
 | Developer Portal | `web.Client.doDeveloperPortalHTTP` |
 | Apple Ads | `appleads.Client.requestOnce`, `appleads.Client.UploadPlatformAsset` |
 | StoreKit retention messaging | `storekit.Client.request` |
-| Encrypted signing remote stores | `signing.GitLabSecureFilesStore.do`, AWS `createSecret` and `putSecretValue` |
+| Encrypted signing remote stores | `signing.GitLabSecureFilesStore.do`, AWS `createSecret` and `putSecretValue`, `signing.GitStore.CommitAndPush` before `git commit` and `git push` |
+| Xcode direct upload | `xcode.Export` before `xcodebuild -exportArchive` when the export options use `destination=upload` |
 | Ad hoc distribution object store | `distribution.S3Store.Ensure` and `ReplaceCorrupt` |
 | Slack notifications | `asc notify slack` |
 | GitHub | `asc snitch` issue creation, Wall of Apps submission |
@@ -79,11 +80,13 @@ command can clear the variable for something it starts
 (`ASC_READ_ONLY=0 asc ...`), steps that run other tools (`curl`, vendor CLIs)
 never reach these guards, and the subprocesses the CLI shells out to for local
 work (`xcodebuild`, `codesign`, `git`) are outside the mode by design: it is a
-statement about the requests `asc` itself makes. Refusing `workflow run`
-outright under the mode was considered and rejected, because reviewing your own
-workflow against production credentials is one of the main reasons to turn the
-mode on; a workflow file you do not trust needs a credential that cannot
-write, not a local flag.
+statement about the requests `asc` itself makes. The exceptions are the two
+subprocess calls that exist to write remotely, the signing sync `git push` and
+an `xcodebuild` direct upload, which are refused before they start. Refusing
+`workflow run` outright under the mode was considered and rejected, because
+reviewing your own workflow against production credentials is one of the main
+reasons to turn the mode on; a workflow file you do not trust needs a
+credential that cannot write, not a local flag.
 
 ### Reads transported as writes
 

@@ -11,6 +11,8 @@ import (
 	"github.com/google/uuid"
 )
 
+const messagingPath = "inApps/v1/messaging/"
+
 func (c *Client) UploadImage(ctx context.Context, identifier string, size ImageSize, data []byte) error {
 	if err := validateUUID("image identifier", identifier); err != nil {
 		return err
@@ -21,7 +23,7 @@ func (c *Client) UploadImage(ctx context.Context, identifier string, size ImageS
 	if len(data) == 0 {
 		return fmt.Errorf("image data is required")
 	}
-	path := "image/" + url.PathEscape(strings.TrimSpace(identifier)) + "?imageSize=" + url.QueryEscape(string(size))
+	path := messagingPath + "image/" + url.PathEscape(strings.TrimSpace(identifier)) + "?imageSize=" + url.QueryEscape(string(size))
 	return c.request(ctx, http.MethodPut, path, "image/png", data, nil)
 }
 
@@ -29,12 +31,12 @@ func (c *Client) DeleteImage(ctx context.Context, identifier string) error {
 	if err := validateUUID("image identifier", identifier); err != nil {
 		return err
 	}
-	return c.request(ctx, http.MethodDelete, "image/"+url.PathEscape(strings.TrimSpace(identifier)), "", nil, nil)
+	return c.request(ctx, http.MethodDelete, messagingPath+"image/"+url.PathEscape(strings.TrimSpace(identifier)), "", nil, nil)
 }
 
 func (c *Client) ListImages(ctx context.Context) (*ImageListResponse, error) {
 	var response ImageListResponse
-	if err := c.request(ctx, http.MethodGet, "image/list", "", nil, &response); err != nil {
+	if err := c.request(ctx, http.MethodGet, messagingPath+"image/list", "", nil, &response); err != nil {
 		return nil, err
 	}
 	return &response, nil
@@ -51,19 +53,19 @@ func (c *Client) UploadMessage(ctx context.Context, identifier string, message M
 	if err != nil {
 		return err
 	}
-	return c.request(ctx, http.MethodPut, "message/"+url.PathEscape(strings.TrimSpace(identifier)), "application/json", body, nil)
+	return c.request(ctx, http.MethodPut, messagingPath+"message/"+url.PathEscape(strings.TrimSpace(identifier)), "application/json", body, nil)
 }
 
 func (c *Client) DeleteMessage(ctx context.Context, identifier string) error {
 	if err := validateUUID("message identifier", identifier); err != nil {
 		return err
 	}
-	return c.request(ctx, http.MethodDelete, "message/"+url.PathEscape(strings.TrimSpace(identifier)), "", nil, nil)
+	return c.request(ctx, http.MethodDelete, messagingPath+"message/"+url.PathEscape(strings.TrimSpace(identifier)), "", nil, nil)
 }
 
 func (c *Client) ListMessages(ctx context.Context) (*MessageListResponse, error) {
 	var response MessageListResponse
-	if err := c.request(ctx, http.MethodGet, "message/list", "", nil, &response); err != nil {
+	if err := c.request(ctx, http.MethodGet, messagingPath+"message/list", "", nil, &response); err != nil {
 		return nil, err
 	}
 	return &response, nil
@@ -116,7 +118,7 @@ func (c *Client) DeleteDefault(ctx context.Context, productID, locale string) er
 }
 
 func defaultPath(productID, locale string) string {
-	return "default/" + url.PathEscape(strings.TrimSpace(productID)) + "/" + url.PathEscape(strings.TrimSpace(locale))
+	return messagingPath + "default/" + url.PathEscape(strings.TrimSpace(productID)) + "/" + url.PathEscape(strings.TrimSpace(locale))
 }
 
 func (c *Client) SetRealtimeURL(ctx context.Context, realtimeURL string) (*RealtimeURLResponse, error) {
@@ -128,7 +130,7 @@ func (c *Client) SetRealtimeURL(ctx context.Context, realtimeURL string) (*Realt
 		return nil, err
 	}
 	response := RealtimeURLResponse{RealtimeURL: strings.TrimSpace(realtimeURL)}
-	if err := c.request(ctx, http.MethodPut, "realtime/url", "application/json", body, nil); err != nil {
+	if err := c.request(ctx, http.MethodPut, messagingPath+"realtime/url", "application/json", body, nil); err != nil {
 		return nil, err
 	}
 	return &response, nil
@@ -136,14 +138,14 @@ func (c *Client) SetRealtimeURL(ctx context.Context, realtimeURL string) (*Realt
 
 func (c *Client) GetRealtimeURL(ctx context.Context) (*RealtimeURLResponse, error) {
 	var response RealtimeURLResponse
-	if err := c.request(ctx, http.MethodGet, "realtime/url", "", nil, &response); err != nil {
+	if err := c.request(ctx, http.MethodGet, messagingPath+"realtime/url", "", nil, &response); err != nil {
 		return nil, err
 	}
 	return &response, nil
 }
 
 func (c *Client) DeleteRealtimeURL(ctx context.Context) error {
-	return c.request(ctx, http.MethodDelete, "realtime/url", "", nil, nil)
+	return c.request(ctx, http.MethodDelete, messagingPath+"realtime/url", "", nil, nil)
 }
 
 func (c *Client) StartPerformanceTest(ctx context.Context, originalTransactionID string) (*PerformanceTestStartResponse, error) {
@@ -155,7 +157,7 @@ func (c *Client) StartPerformanceTest(ctx context.Context, originalTransactionID
 		return nil, err
 	}
 	var response PerformanceTestStartResponse
-	if err := c.request(ctx, http.MethodPost, "performanceTest", "application/json", body, &response); err != nil {
+	if err := c.request(ctx, http.MethodPost, messagingPath+"performanceTest", "application/json", body, &response); err != nil {
 		return nil, err
 	}
 	return &response, nil
@@ -166,7 +168,7 @@ func (c *Client) GetPerformanceTestResult(ctx context.Context, requestID string)
 		return nil, fmt.Errorf("request ID is required")
 	}
 	var response PerformanceTestResult
-	path := "performanceTest/result/" + url.PathEscape(strings.TrimSpace(requestID))
+	path := messagingPath + "performanceTest/result/" + url.PathEscape(strings.TrimSpace(requestID))
 	if err := c.request(ctx, http.MethodGet, path, "", nil, &response); err != nil {
 		return nil, err
 	}

@@ -112,6 +112,9 @@ Examples:
 			if err := shared.ValidateNextURL(*next); err != nil {
 				return shared.UsageErrorf("encryption declarations list: %v", err)
 			}
+			if err := shared.RejectNextFlagConflicts(fs, *next, "encryption declarations list", "build-id", "fields", "document-fields", "include", "build-limit"); err != nil {
+				return err
+			}
 
 			fieldsValue, err := normalizeEncryptionDeclarationFields(*fields)
 			if err != nil {

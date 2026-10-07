@@ -102,6 +102,9 @@ Examples:
 			if err := shared.ValidateNextURL(*next); err != nil {
 				return shared.UsageErrorf("devices list: %v", err)
 			}
+			if err := shared.RejectNextFlagConflicts(fs, *next, "devices list", "name", "platform", "status", "udid", "id", "sort", "fields"); err != nil {
+				return err
+			}
 			if err := shared.ValidateSort(*sort, "id", "-id", "name", "-name", "platform", "-platform", "status", "-status", "udid", "-udid"); err != nil {
 				return shared.UsageErrorf("devices list: %v", err)
 			}

@@ -43,6 +43,8 @@ type MetadataKeywordsPlanResult struct {
 	Actions             []ApplyAction                    `json:"actions,omitempty"`
 	Results             []MetadataKeywordsMutationResult `json:"results,omitempty"`
 	Warnings            []MetadataKeywordsWarning        `json:"warnings,omitempty"`
+
+	refused error
 }
 
 type metadataKeywordsPlanOptions struct {
@@ -258,6 +260,7 @@ func executeMetadataKeywordsPlan(ctx context.Context, opts metadataKeywordsPlanO
 	result.Succeeded = applySummary.Succeeded
 	result.Failed = applySummary.Failed
 	result.Actions = applySummary.Actions
+	result.refused = applySummary.refused
 	if applySummary.Failed == 0 {
 		result.Applied = true
 		return result, nil
@@ -265,7 +268,11 @@ func executeMetadataKeywordsPlan(ctx context.Context, opts metadataKeywordsPlanO
 	result.Results = applySummary.Results
 	artifactPath, err := writeMetadataKeywordsApplyFailureArtifact(result, opts.FailureArtifactScope)
 	if err != nil {
-		return result, fmt.Errorf("write failure artifact: %w", err)
+		artifactErr := fmt.Errorf("write failure artifact: %w", err)
+		if result.refused != nil {
+			fmt.Fprintf(os.Stderr, "Warning: %s\n", shared.SanitizeTerminal(artifactErr.Error()))
+		}
+		return result, shared.NewErrorWithCause(artifactErr, result.refused)
 	}
 	result.FailureArtifactPath = artifactPath
 	return result, nil

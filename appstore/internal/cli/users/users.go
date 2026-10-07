@@ -29,7 +29,7 @@ Examples:
   asc users view --id "USER_ID" --include visibleApps
   asc users update --id "USER_ID" --roles "ADMIN"
   asc users delete --id "USER_ID" --confirm
-  asc users invite --email "user@example.com" --roles "ADMIN" --all-apps
+  asc users invite --email "user@example.com" --first-name "Jane" --last-name "Doe" --roles "ADMIN" --all-apps
   asc users invites list
   asc users invites visible-apps list --id "INVITE_ID"
   asc users visible-apps list --id "USER_ID"

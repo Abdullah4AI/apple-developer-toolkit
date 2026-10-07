@@ -69,11 +69,16 @@ var (
 )
 
 type missingAuthError struct {
-	msg string
+	msg   string
+	cause error
 }
 
 func (e missingAuthError) Error() string {
 	return e.msg
+}
+
+func (e missingAuthError) Unwrap() error {
+	return e.cause
 }
 
 func (e missingAuthError) Is(target error) bool {
@@ -498,16 +503,10 @@ func resolveCredentialsForProfile(profileOverride string) (resolvedCredentials, 
 	// Priority 1: Stored credentials (keychain/config)
 	cfg, storedSource, err := getCredentialsWithSourceFn(profile)
 	if err != nil {
-		if profile != "" {
-			return resolvedCredentials{}, err
-		}
-		// If the user explicitly denied keychain access, fail fast instead of
-		// silently falling back to env/config credentials.
-		if errors.Is(err, auth.ErrKeychainAccessDenied) {
-			return resolvedCredentials{}, fmt.Errorf("keychain access denied; set ASC_BYPASS_KEYCHAIN=1 to bypass: %w", err)
-		}
-		if !allowsEnvFallbackForStoredError(err) {
-			return resolvedCredentials{}, err
+		// An explicit keychain denial also fails fast instead of silently
+		// falling back to env/config credentials.
+		if profile != "" || !allowsEnvFallbackForStoredError(err) {
+			return resolvedCredentials{}, storedCredentialsError(profile, err)
 		}
 	} else if cfg != nil {
 		actualKeyID = cfg.KeyID
@@ -908,6 +907,39 @@ func selectCredentialMetadataSummary(cfg *config.Config, profile string) (creden
 	return credentialMetadataSummary{}, config.ErrNotFound
 }
 
+// storedCredentialsError reports expected local credential failures as
+// missing authentication, naming what the user can fix.
+func storedCredentialsError(profile string, err error) error {
+	switch {
+	case errors.Is(err, auth.ErrKeychainAccessDenied):
+		return missingAuthError{msg: fmt.Sprintf("keychain access denied; set ASC_BYPASS_KEYCHAIN=1 to bypass: %v", err), cause: err}
+	case errors.Is(err, config.ErrParse):
+		return missingAuthError{msg: err.Error(), cause: err}
+	case profile != "" && (errors.Is(err, config.ErrNotFound) || errors.Is(err, auth.ErrProfileNotFound)):
+		return missingAuthError{msg: profileNotFoundMessage(profile), cause: err}
+	}
+	return err
+}
+
+func profileNotFoundMessage(profile string) string {
+	message := fmt.Sprintf("credentials not found for profile %q", profile)
+	credentials, _ := listCredentialSummariesFn()
+	names := make([]string, 0, len(credentials))
+	for _, cred := range credentials {
+		if name := strings.TrimSpace(cred.Name); name != "" {
+			names = append(names, name)
+		}
+	}
+	if len(names) > 0 {
+		slices.Sort(names)
+		return SanitizeTerminal(message + "; available profiles: " + strings.Join(names, ", "))
+	}
+	if path, err := config.Path(); err == nil {
+		return SanitizeTerminal(message + "; no profiles are configured (config file: " + path + ")")
+	}
+	return message + "; no profiles are configured"
+}
+
 func allowsEnvFallbackForStoredError(err error) bool {
 	return errors.Is(err, config.ErrNotFound) || errors.Is(err, auth.ErrDefaultCredentialsNotFound)
 }
@@ -930,16 +962,52 @@ func getASCClientWithTimeout(timeout time.Duration) (*asc.Client, error) {
 
 func newASCClientFromResolvedCredentials(resolved resolvedCredentials, timeout time.Duration) (*asc.Client, error) {
 	ApplyRootLoggingOverrides()
-	if strings.TrimSpace(resolved.keyPEM) != "" {
-		if timeout > 0 {
-			return asc.NewClientFromPEMWithTimeout(resolved.keyID, resolved.issuerID, resolved.keyPEM, timeout)
-		}
-		return asc.NewClientFromPEM(resolved.keyID, resolved.issuerID, resolved.keyPEM)
+	var (
+		client *asc.Client
+		err    error
+	)
+	switch {
+	case strings.TrimSpace(resolved.keyPEM) != "" && timeout > 0:
+		client, err = asc.NewClientFromPEMWithTimeout(resolved.keyID, resolved.issuerID, resolved.keyPEM, timeout)
+	case strings.TrimSpace(resolved.keyPEM) != "":
+		client, err = asc.NewClientFromPEM(resolved.keyID, resolved.issuerID, resolved.keyPEM)
+	case timeout > 0:
+		client, err = asc.NewClientWithTimeout(resolved.keyID, resolved.issuerID, resolved.keyPath, timeout)
+	default:
+		client, err = asc.NewClient(resolved.keyID, resolved.issuerID, resolved.keyPath)
 	}
-	if timeout > 0 {
-		return asc.NewClientWithTimeout(resolved.keyID, resolved.issuerID, resolved.keyPath, timeout)
+	if _, ok := auth.PrivateKeyErrorKindOf(err); ok {
+		// An unusable private key leaves the command without working
+		// credentials, so report it like missing authentication.
+		return nil, WithPrivateKeyDiagnostic(missingAuthError{msg: err.Error(), cause: err}, err)
 	}
-	return asc.NewClient(resolved.keyID, resolved.issuerID, resolved.keyPath)
+	return client, err
+}
+
+// WithPrivateKeyDiagnostic attaches the --private-key diagnostic that matches
+// cause's private key failure reason. Other errors are returned unchanged.
+func WithPrivateKeyDiagnostic(rendered, cause error) error {
+	kind, ok := auth.PrivateKeyErrorKindOf(cause)
+	if !ok {
+		return rendered
+	}
+
+	code := DiagnosticRequestFailed
+	switch kind {
+	case auth.PrivateKeyNotFound:
+		code = DiagnosticFileNotFound
+	case auth.PrivateKeyPermissionDenied:
+		code = DiagnosticFilePermissionDenied
+	case auth.PrivateKeyPermissionsInsecure:
+		code = DiagnosticFilePermissionsInsecure
+	case auth.PrivateKeyInvalidFormat:
+		code = DiagnosticFileInvalidFormat
+	case auth.PrivateKeyUnsupportedAlgorithm:
+		code = DiagnosticKeyAlgorithmUnsupported
+	case auth.PrivateKeyAccessFailed:
+		code = DiagnosticRequestFailed
+	}
+	return WithDiagnostic(rendered, code, "--private-key")
 }
 
 // ApplyRootLoggingOverrides applies root-level logging flag overrides
@@ -1906,6 +1974,17 @@ func PrintOutput(data any, format string, pretty bool) error {
 
 func PrintOutputWithRenderers(data any, format string, pretty bool, tableRenderer, markdownRenderer func() error) error {
 	return printOutputWithRenderers(data, format, pretty, tableRenderer, markdownRenderer)
+}
+
+// PrintOutputRows prints data as JSON, or as one table of headers and rows.
+func PrintOutputRows(data any, format string, pretty bool, headers []string, rows [][]string) error {
+	return printOutputWithRenderers(
+		data,
+		format,
+		pretty,
+		func() error { return asc.WriteTable(headers, rows) },
+		func() error { return asc.WriteMarkdown(headers, rows) },
+	)
 }
 
 func ValidateOutputFormat(format string, pretty bool) (string, error) {

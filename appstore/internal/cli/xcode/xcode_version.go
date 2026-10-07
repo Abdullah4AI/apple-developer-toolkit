@@ -253,6 +253,7 @@ fail without launching xcodebuild.
 Examples:
   asc xcode version edit --version "1.3.0"
   asc xcode version edit --build-number "42"
+  asc xcode version edit --build-number "42" --project ./ios/App.xcodeproj
   asc xcode version edit --target Widget --configuration Release --build-number "42"
   asc xcode version edit --next-build-number --app "com.example.app"`,
 		FlagSet:   fs,
@@ -331,7 +332,9 @@ Examples:
 				return fmt.Errorf("xcode version edit: %w", err)
 			}
 
-			return shared.PrintOutput(result, *output.Output, *output.Pretty)
+			return shared.PrintOutputRows(result, *output.Output, *output.Pretty,
+				[]string{"Version", "Build", "Target", "Configuration", "Changed Files"},
+				[][]string{{result.Version, result.BuildNumber, result.Target, result.Configuration, strings.Join(result.ChangedFiles, ", ")}})
 		},
 	}
 }
@@ -455,7 +458,9 @@ Examples:
 				return fmt.Errorf("xcode version bump: %w", err)
 			}
 
-			return shared.PrintOutput(result, *output.Output, *output.Pretty)
+			return shared.PrintOutputRows(result, *output.Output, *output.Pretty,
+				[]string{"Bump Type", "Old Version", "New Version", "Old Build", "New Build", "Changed Files"},
+				[][]string{{result.BumpType, result.OldVersion, result.NewVersion, result.OldBuild, result.NewBuild, strings.Join(result.ChangedFiles, ", ")}})
 		},
 	}
 }

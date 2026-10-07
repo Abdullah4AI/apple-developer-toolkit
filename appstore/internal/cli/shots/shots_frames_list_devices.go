@@ -3,6 +3,8 @@ package shots
 import (
 	"context"
 	"flag"
+	"strconv"
+	"strings"
 
 	"github.com/peterbourgon/ff/v3/ffcli"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
@@ -30,7 +32,11 @@ func ShotsFramesListDevicesCommand() *ffcli.Command {
 				Default: string(screenshots.DefaultFrameDevice()),
 				Devices: screenshots.FrameDeviceOptions(),
 			}
-			return shared.PrintOutput(result, *output.Output, *output.Pretty)
+			rows := make([][]string, 0, len(result.Devices))
+			for _, device := range result.Devices {
+				rows = append(rows, []string{device.ID, device.Family, strconv.FormatBool(device.Default), strings.Join(device.FrameColors, ", ")})
+			}
+			return shared.PrintOutputRows(result, *output.Output, *output.Pretty, []string{"ID", "Family", "Default", "Frame Colors"}, rows)
 		},
 	}
 }

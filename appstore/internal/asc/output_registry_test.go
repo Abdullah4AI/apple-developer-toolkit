@@ -14,6 +14,50 @@ func TestOutputRegistry(t *testing.T) {
 	t.Run("panic scenarios", runOutputRegistryPanicScenarios)
 }
 
+// Types that CLI commands pass to the printer. Without a registration,
+// --output table/markdown silently falls back to JSON.
+func TestCommandOutputTypesHaveTableRenderers(t *testing.T) {
+	ensureOutputRegistryPopulated()
+
+	for _, typ := range []reflect.Type{
+		typeKey[SubscriptionPricePointsResponse](),
+		typeKey[SubscriptionPricePointResponse](),
+		typeKey[SubscriptionIntroductoryOffersResponse](),
+		typeKey[SubscriptionIntroductoryOfferResponse](),
+		typeKey[SubscriptionPromotionalOffersResponse](),
+		typeKey[SubscriptionPromotionalOfferResponse](),
+		typeKey[SubscriptionPromotionalOfferPricesResponse](),
+		typeKey[SubscriptionAppStoreReviewScreenshotResponse](),
+		typeKey[AppInfoLocalizationResponse](),
+		typeKey[BuildUploadResponse](),
+		typeKey[BuildUploadFileResponse](),
+		typeKey[BetaBuildUsagesResponse](),
+		typeKey[BetaCrashLogResponse](),
+		typeKey[BetaFeedbackCrashSubmissionResponse](),
+		typeKey[BetaFeedbackScreenshotSubmissionResponse](),
+		typeKey[BetaRecruitmentCriterionCompatibleBuildCheckResponse](),
+		typeKey[TerritoryAvailabilityResponse](),
+		typeKey[CertificatePassTypeIDLinkageResponse](),
+		typeKey[ProfileBundleIDLinkageResponse](),
+		typeKey[AppStoreVersionDeleteResult](),
+		typeKey[GameCenterAchievementImageResponse](),
+		typeKey[GameCenterLeaderboardImageResponse](),
+		typeKey[GameCenterLeaderboardSetImageResponse](),
+		typeKey[GameCenterLeaderboardSetMemberLocalizationsResponse](),
+		typeKey[GameCenterLeaderboardSetMemberLocalizationResponse](),
+		typeKey[GameCenterLeaderboardSetMemberLocalizationDeleteResult](),
+		typeKey[GameCenterLeaderboardSetMembersUpdateResult](),
+	} {
+		if !isRegistryTypeRegistered(typ) {
+			t.Errorf("no table renderer registered for %s", typ)
+			continue
+		}
+		if err := renderByRegistry(reflect.New(typ.Elem()).Interface(), func([]string, [][]string) {}); err != nil {
+			t.Errorf("render zero %s: %v", typ, err)
+		}
+	}
+}
+
 func runOutputRegistryRenderByRegistryScenarios(t *testing.T) {
 	t.Run("fallback to JSON for unregistered types", func(t *testing.T) {
 		type unregistered struct {

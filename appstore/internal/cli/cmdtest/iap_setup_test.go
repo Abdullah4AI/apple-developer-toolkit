@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	rootcmd "github.com/Abdullah4AI/apple-developer-toolkit/appstore/cmd"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
 )
 
@@ -356,28 +357,24 @@ func TestIAPSetupClientInitFailureProducesStructuredError(t *testing.T) {
 	t.Setenv("ASC_PRIVATE_KEY_B64", "")
 	t.Setenv("ASC_PROFILE", "")
 
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
 	var result iapSetupOutput
+	var code int
 	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{
+		code = rootcmd.Run([]string{
 			"iap", "setup",
 			"--app", "app-1",
 			"--type", "NON_CONSUMABLE",
 			"--reference-name", "Pro Lifetime",
 			"--product-id", "lifetime",
 			"--output", "json",
-		}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(context.Background()); err == nil {
-			t.Fatal("expected error, got nil")
-		}
+		}, "1.2.3")
 	})
 
-	if stderr != "" {
-		t.Fatalf("expected empty stderr for reported json error, got %q", stderr)
+	if code != rootcmd.ExitAuth {
+		t.Fatalf("exit code = %d, want %d", code, rootcmd.ExitAuth)
+	}
+	if strings.Count(stderr, "Error:") != 1 || !strings.HasPrefix(stderr, "Error: iap setup:") {
+		t.Fatalf("expected one stderr error line for reported json error, got %q", stderr)
 	}
 	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
 		t.Fatalf("parse setup result: %v\nstdout=%q", err, stdout)

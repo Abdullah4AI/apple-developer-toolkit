@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"flag"
+	"net/url"
 	"sort"
 	"strings"
 
@@ -140,7 +141,7 @@ func rewriteCommandErrors(cmd *ffcli.Command, replacements []textReplacement) {
 				return err
 			}
 
-			rewritten := applyTextReplacements(err.Error(), replacements)
+			rewritten := rewriteErrorText(err, replacements)
 			if rewritten == err.Error() {
 				return err
 			}
@@ -168,6 +169,19 @@ func usageMessageRewrites(replacements []textReplacement) []shared.UsageMessageR
 		})
 	}
 	return rewrites
+}
+
+// rewriteErrorText renames commands in an error message but leaves an
+// embedded net/http error alone, so `Get "https://..."` keeps its HTTP method
+// and URL instead of becoming `View "https://..."`.
+func rewriteErrorText(err error, replacements []textReplacement) string {
+	message := err.Error()
+	if urlErr, ok := errors.AsType[*url.Error](err); ok {
+		if before, after, found := strings.Cut(message, urlErr.Error()); found {
+			return applyTextReplacements(before, replacements) + urlErr.Error() + applyTextReplacements(after, replacements)
+		}
+	}
+	return applyTextReplacements(message, replacements)
 }
 
 func applyTextReplacements(input string, replacements []textReplacement) string {

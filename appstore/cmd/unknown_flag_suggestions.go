@@ -50,6 +50,9 @@ var conditionalSynonyms = map[string][]conditionalSynonym{
 	"path": {{target: "output", when: isPathValuedUsage}},
 	"dir":  {{target: "output", when: isPathValuedUsage}},
 	"file": {{target: "output", when: isPathValuedUsage}},
+	// Only a `--path` whose help names the artifact, never a metadata directory.
+	"ipa": {{target: "path", when: regexp.MustCompile(`(?i)\bipa\b`).MatchString}},
+	"pkg": {{target: "path", when: regexp.MustCompile(`(?i)\bpkg\b`).MatchString}},
 }
 
 // pathValuedUsagePattern matches help text that describes a filesystem

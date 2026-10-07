@@ -459,3 +459,52 @@ func includedPricePointRelationshipValue(included subscriptionPriceIncludedAttri
 		return "", false
 	}
 }
+
+func subscriptionPricePointsRows(resp *SubscriptionPricePointsResponse) ([]string, [][]string) {
+	headers := []string{"ID", "Customer Price", "Proceeds", "Proceeds Year 2"}
+	rows := make([][]string, 0, len(resp.Data))
+	for _, item := range resp.Data {
+		rows = append(rows, []string{item.ID, item.Attributes.CustomerPrice, item.Attributes.Proceeds, item.Attributes.ProceedsYear2})
+	}
+	return headers, rows
+}
+
+func subscriptionIntroductoryOffersRows(resp *SubscriptionIntroductoryOffersResponse) ([]string, [][]string) {
+	headers := []string{"ID", "Duration", "Mode", "Periods", "Start Date", "End Date"}
+	rows := make([][]string, 0, len(resp.Data))
+	for _, item := range resp.Data {
+		attrs := item.Attributes
+		rows = append(rows, []string{item.ID, string(attrs.Duration), string(attrs.OfferMode), formatInt(attrs.NumberOfPeriods), attrs.StartDate, attrs.EndDate})
+	}
+	return headers, rows
+}
+
+func subscriptionPromotionalOffersRows(resp *SubscriptionPromotionalOffersResponse) ([]string, [][]string) {
+	headers := []string{"ID", "Name", "Offer Code", "Duration", "Mode", "Periods"}
+	rows := make([][]string, 0, len(resp.Data))
+	for _, item := range resp.Data {
+		attrs := item.Attributes
+		rows = append(rows, []string{item.ID, compactWhitespace(attrs.Name), attrs.OfferCode, string(attrs.Duration), string(attrs.OfferMode), formatInt(attrs.NumberOfPeriods)})
+	}
+	return headers, rows
+}
+
+func subscriptionPromotionalOfferPricesRows(resp *SubscriptionPromotionalOfferPricesResponse) ([]string, [][]string, error) {
+	headers := []string{"ID", "Territory", "Price Point"}
+	rows := make([][]string, 0, len(resp.Data))
+	for _, item := range resp.Data {
+		territoryID, pricePointID, err := offerCodePriceRelationshipIDs(item.Relationships)
+		if err != nil {
+			return nil, nil, err
+		}
+		rows = append(rows, []string{item.ID, territoryID, pricePointID})
+	}
+	return headers, rows, nil
+}
+
+func subscriptionAppStoreReviewScreenshotRows(resp *SubscriptionAppStoreReviewScreenshotResponse) ([]string, [][]string) {
+	headers := []string{"ID", "File Name", "File Size", "State"}
+	attrs := resp.Data.Attributes
+	rows := [][]string{{resp.Data.ID, attrs.FileName, fmt.Sprintf("%d", attrs.FileSize), formatAssetDeliveryState(attrs.AssetDeliveryState)}}
+	return headers, rows
+}

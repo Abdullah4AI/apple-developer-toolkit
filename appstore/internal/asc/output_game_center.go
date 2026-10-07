@@ -727,3 +727,42 @@ func formatMetricGranularity(value any) string {
 	}
 	return fmt.Sprint(value)
 }
+
+func gameCenterImageRows(id, fileName string, fileSize int64, state *AssetDeliveryState) ([]string, [][]string) {
+	headers := []string{"ID", "File Name", "File Size", "Delivery State"}
+	return headers, [][]string{{id, fileName, fmt.Sprintf("%d", fileSize), assetDeliveryStateValue(state)}}
+}
+
+func gameCenterAchievementImageRows(resp *GameCenterAchievementImageResponse) ([]string, [][]string) {
+	attrs := resp.Data.Attributes
+	return gameCenterImageRows(resp.Data.ID, attrs.FileName, attrs.FileSize, attrs.AssetDeliveryState)
+}
+
+func gameCenterLeaderboardImageRows(resp *GameCenterLeaderboardImageResponse) ([]string, [][]string) {
+	attrs := resp.Data.Attributes
+	return gameCenterImageRows(resp.Data.ID, attrs.FileName, attrs.FileSize, attrs.AssetDeliveryState)
+}
+
+func gameCenterLeaderboardSetImageRows(resp *GameCenterLeaderboardSetImageResponse) ([]string, [][]string) {
+	attrs := resp.Data.Attributes
+	return gameCenterImageRows(resp.Data.ID, attrs.FileName, attrs.FileSize, attrs.AssetDeliveryState)
+}
+
+func gameCenterLeaderboardSetMemberLocalizationsRows(resp *GameCenterLeaderboardSetMemberLocalizationsResponse) ([]string, [][]string) {
+	headers := []string{"ID", "Locale", "Name"}
+	rows := make([][]string, 0, len(resp.Data))
+	for _, item := range resp.Data {
+		rows = append(rows, []string{item.ID, item.Attributes.Locale, compactWhitespace(item.Attributes.Name)})
+	}
+	return headers, rows
+}
+
+func gameCenterLeaderboardSetMemberLocalizationDeleteResultRows(result *GameCenterLeaderboardSetMemberLocalizationDeleteResult) ([]string, [][]string) {
+	return []string{"ID", "Deleted"}, [][]string{{result.ID, fmt.Sprintf("%t", result.Deleted)}}
+}
+
+func gameCenterLeaderboardSetMembersUpdateResultRows(result *GameCenterLeaderboardSetMembersUpdateResult) ([]string, [][]string) {
+	headers := []string{"Set ID", "Member Count", "Member IDs", "Updated"}
+	rows := [][]string{{result.SetID, formatInt(result.MemberCount), strings.Join(result.MemberIDs, ", "), fmt.Sprintf("%t", result.Updated)}}
+	return headers, rows
+}

@@ -66,6 +66,28 @@ func TestResolveCapabilityBundleIDAcceptsIdentifierWithoutDot(t *testing.T) {
 	}
 }
 
+func TestResolveCapabilityBundleIDSelectsExactIdentifierAmongExtensions(t *testing.T) {
+	client := newReconcileClient(t, func(req *http.Request) *http.Response {
+		switch {
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/bundleIds/com.acme.app":
+			return reconcileJSON(http.StatusNotFound, `{"errors":[{"status":"404","code":"NOT_FOUND"}]}`)
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/bundleIds":
+			return reconcileJSON(http.StatusOK, `{"data":[
+				{"type":"bundleIds","id":"id-widget","attributes":{"identifier":"com.acme.app.widget"}},
+				{"type":"bundleIds","id":"id-app","attributes":{"identifier":"com.acme.app"}},
+				{"type":"bundleIds","id":"id-clip","attributes":{"identifier":"com.acme.app.clip"}}
+			],"links":{}}`)
+		default:
+			t.Fatalf("unexpected %s %s", req.Method, req.URL.String())
+			return nil
+		}
+	})
+	id, err := resolveCapabilityBundleID(context.Background(), client, "com.acme.app")
+	if err != nil || id != "id-app" {
+		t.Fatalf("id=%q error=%v, want the exact com.acme.app resource", id, err)
+	}
+}
+
 func TestResolveCapabilityBundleIDDoesNotMaskLookupError(t *testing.T) {
 	client := newReconcileClient(t, func(req *http.Request) *http.Response {
 		if req.Method != http.MethodGet || req.URL.Path != "/v1/bundleIds/example" {

@@ -82,6 +82,9 @@ Examples:
 			if err := shared.ValidateNextURL(*next); err != nil {
 				return shared.UsageErrorf("merchant-ids certificates list: %v", err)
 			}
+			if err := shared.RejectNextFlagConflicts(fs, *next, "merchant-ids certificates list", "display-name", "certificate-type", "serial-number", "certificate-id", "sort", "fields", "pass-type-fields", "include"); err != nil {
+				return err
+			}
 			if err := shared.ValidateSort(*sort, certificateSortValues...); err != nil {
 				return shared.UsageErrorf("merchant-ids certificates list: %v", err)
 			}

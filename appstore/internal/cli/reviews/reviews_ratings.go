@@ -65,8 +65,9 @@ Examples:
 				return shared.WithDiagnostic(flag.ErrHelp, shared.DiagnosticInvalidInput, "")
 			}
 
-			if strings.TrimSpace(*appID) == "" {
-				fmt.Fprintln(os.Stderr, "Error: --app is required")
+			app := shared.ResolveAppID(*appID)
+			if strings.TrimSpace(app) == "" {
+				fmt.Fprintln(os.Stderr, "Error: --app is required (or set ASC_APP_ID)")
 				return shared.MissingRequiredUsageError("--app")
 			}
 
@@ -81,7 +82,7 @@ Examples:
 				}
 			}
 
-			return executeRatings(ctx, *appID, *country, *all, *workers, *output.Output, *output.Pretty)
+			return executeRatings(ctx, app, *country, *all, *workers, *output.Output, *output.Pretty)
 		},
 	}
 }

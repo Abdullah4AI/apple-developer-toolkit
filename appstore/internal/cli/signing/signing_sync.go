@@ -418,7 +418,7 @@ func syncPushCommand() *ffcli.Command {
 			// Fetch signing assets from ASC.
 			fmt.Fprintln(os.Stderr, "Fetching signing assets from App Store Connect...")
 
-			bundleIDResp, err := findBundleID(requestCtx, client, bundle)
+			bundleIDResp, err := shared.FindBundleID(requestCtx, client, bundle)
 			if err != nil {
 				return fmt.Errorf("signing sync push: %w", err)
 			}

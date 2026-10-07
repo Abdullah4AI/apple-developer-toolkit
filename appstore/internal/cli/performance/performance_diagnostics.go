@@ -70,6 +70,9 @@ Examples:
 			if *limit != 0 && (*limit < 1 || *limit > 200) {
 				return shared.UsageError("performance diagnostics list: --limit must be between 1 and 200")
 			}
+			if err := shared.RejectNextFlagConflicts(fs, *next, "performance diagnostics list", "diagnostic-type", "fields"); err != nil {
+				return err
+			}
 
 			diagnosticTypes, err := normalizeDiagnosticSignatureTypes(shared.SplitCSVUpper(*diagnosticType))
 			if err != nil {

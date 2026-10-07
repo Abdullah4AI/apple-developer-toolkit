@@ -84,3 +84,7 @@ func reviewsRows(resp *ReviewsResponse) ([]string, [][]string) {
 	}
 	return headers, rows
 }
+
+func betaCrashLogRows(resp *BetaCrashLogResponse) ([]string, [][]string) {
+	return []string{"ID", "Log"}, [][]string{{resp.Data.ID, resp.Data.Attributes.LogText}}
+}

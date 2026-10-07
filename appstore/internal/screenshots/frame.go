@@ -1105,6 +1105,7 @@ func displayTypeForDimensions(width, height int) (string, bool) {
 	}
 
 	iphoneDisplayTypes := []string{
+		"APP_IPHONE_DUO",
 		"APP_IPHONE_69",
 		"APP_IPHONE_67",
 		"APP_IPHONE_61",

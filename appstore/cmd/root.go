@@ -10,6 +10,7 @@ import (
 
 	"github.com/peterbourgon/ff/v3/ffcli"
 
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/auth"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/registry"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared/suggest"
@@ -18,10 +19,13 @@ import (
 var versionRequested bool
 
 // rootGettingStartedSamples teaches the discovery loop on the first help
-// screen: find the right command, diagnose credentials, locate an app, then
-// inspect it. Every sample is a copy-paste-valid long-form invocation, and
-// placeholders stay bare uppercase so shells do not read them as redirection.
-const rootGettingStartedSamples = `  Find the command, with examples:
+// screen: sign in, find the right command, diagnose credentials, locate an
+// app, then inspect it. Every sample is a copy-paste-valid long-form
+// invocation, and placeholders stay bare uppercase so shells do not read them
+// as redirection.
+const rootGettingStartedSamples = `  Sign in with an API key from ` + auth.APIKeysURL + `:
+    ` + auth.LoginCommandExample + `
+  Find the command, with examples:
     asc search "upload a build" --output json
   Diagnose local auth configuration:
     asc auth doctor
@@ -65,6 +69,7 @@ func rootCommandForArgs(version string, args []string) *ffcli.Command {
 	for _, subcommand := range root.Subcommands {
 		if strings.EqualFold(subcommand.Name, parts[1]) {
 			shared.WrapCommandOutputValidation(subcommand)
+			shared.WrapNextLimitConflicts(subcommand)
 			break
 		}
 	}
@@ -85,6 +90,7 @@ func newRootCommand(version string, subcommands []*ffcli.Command) *ffcli.Command
 
 	for _, subcommand := range subcommands {
 		shared.WrapCommandOutputValidation(subcommand)
+		shared.WrapNextLimitConflicts(subcommand)
 	}
 
 	root.FlagSet.BoolVar(&versionRequested, "version", false, "Print version and exit")

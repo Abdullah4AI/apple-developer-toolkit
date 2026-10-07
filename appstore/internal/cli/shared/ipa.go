@@ -3,6 +3,7 @@ package shared
 import (
 	"archive/zip"
 	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"path"
@@ -47,13 +48,28 @@ func ValidatePKGPath(pkgPath string) (os.FileInfo, error) {
 // OpenValidatedIPAPath opens and validates an IPA without following a symlink.
 // The returned handle pins the validated file across the upload lifecycle.
 func OpenValidatedIPAPath(ipaPath string) (*os.File, os.FileInfo, error) {
-	return secureopen.OpenExistingRegularFileNoFollow(ipaPath, "IPA", "--ipa")
+	return openValidatedArtifactPath(ipaPath, "IPA", "--ipa")
 }
 
 // OpenValidatedPKGPath opens and validates a PKG without following a symlink.
 // The returned handle pins the validated file across the upload lifecycle.
 func OpenValidatedPKGPath(pkgPath string) (*os.File, os.FileInfo, error) {
-	return secureopen.OpenExistingRegularFileNoFollow(pkgPath, "PKG", "--pkg")
+	return openValidatedArtifactPath(pkgPath, "PKG", "--pkg")
+}
+
+func openValidatedArtifactPath(artifactPath, artifactName, flagName string) (*os.File, os.FileInfo, error) {
+	file, fileInfo, err := secureopen.OpenExistingRegularFileNoFollow(artifactPath, artifactName, flagName)
+	switch {
+	case err == nil:
+		return file, fileInfo, nil
+	case errors.Is(err, os.ErrNotExist):
+		notFound := NewErrorWithCause(fmt.Errorf("%s file not found: %q", flagName, artifactPath), err)
+		return nil, nil, WithDiagnostic(NewValidationError(notFound), DiagnosticFileNotFound, flagName)
+	case errors.Is(err, os.ErrPermission):
+		return nil, nil, WithDiagnostic(NewValidationError(err), DiagnosticFilePermissionDenied, flagName)
+	default:
+		return nil, nil, WithDiagnostic(NewValidationError(err), DiagnosticInvalidInput, flagName)
+	}
 }
 
 // ExtractBundleInfoFromIPA reads the top-level app's bundle identifier and

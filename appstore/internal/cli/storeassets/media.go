@@ -221,7 +221,7 @@ func (b *probeBuffer) Write(p []byte) (int, error) {
 func validPreviewDimensions(device string, w, h int) bool {
 	match := func(a, b int) bool { return (w == a && h == b) || (w == b && h == a) }
 	switch device {
-	case "IPHONE_67", "IPHONE_65", "IPHONE_61", "IPHONE_58":
+	case "IPHONE_DUO", "IPHONE_67", "IPHONE_65", "IPHONE_61", "IPHONE_58":
 		return match(886, 1920)
 	case "IPHONE_55", "IPHONE_40":
 		return match(1080, 1920)

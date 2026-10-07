@@ -2,8 +2,11 @@ package release
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
+	"io"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -11,6 +14,7 @@ import (
 
 	routingcoveragecli "github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/routingcoverage"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/validation"
 )
 
 // ReleaseStageCommand prepares an App Store version without submitting it for review.
@@ -36,7 +40,7 @@ func ReleaseStageCommand() *ffcli.Command {
 
 	return &ffcli.Command{
 		Name:       "stage",
-		ShortUsage: "asc release stage --app \"APP_ID\" --version \"2.4.0\" --build-id \"BUILD_ID\" (--metadata-dir \"./metadata/version/2.4.0\" | --copy-metadata-from \"2.3.2\") [--routing-coverage-file \"./coverage.geojson\"] [flags]",
+		ShortUsage: "asc release stage --app \"APP_ID\" --version \"2.4.0\" --build-id \"BUILD_ID\" (--metadata-dir \"./metadata\" | --copy-metadata-from \"2.3.2\") [--routing-coverage-file \"./coverage.geojson\"] [flags]",
 		ShortHelp:  "Run version + metadata + attach + validate.",
 		LongHelp: `Run a deterministic pre-submit App Store staging pipeline:
 1. Verify --build-id exists, belongs to --app, and matches --platform
@@ -49,10 +53,20 @@ func ReleaseStageCommand() *ffcli.Command {
 Stops before creating a review submission.
 Supports dry-run planning, step-level structured output, and checkpointed resume.
 
+--copy-metadata-from copies version localization text only (description,
+keywords, promotional text, what's new, marketing and support URLs) into
+locales that already exist on the target version. Neither metadata source sets
+the age rating, screenshots, review details, category, or pricing, so readiness
+still blocks until those are complete and the attached build is ready. When it
+does, the earlier steps stay applied, the blockers are printed to stderr, and
+the command exits 1; fix them and rerun the same command to resume from the
+checkpoint. List the remaining blockers with:
+  asc validate --app "APP_ID" --version "2.4.0"
+
 Examples:
   asc release stage --app "APP_ID" --version "2.4.0" --build-id "BUILD_ID" --copy-metadata-from "2.3.2" --dry-run
   asc release stage --app "APP_ID" --version "2.4.0" --build-id "BUILD_ID" --copy-metadata-from "2.3.2" --confirm
-  asc release stage --app "APP_ID" --version "2.4.0" --build-id "BUILD_ID" --metadata-dir "./metadata/version/2.4.0" --confirm
+  asc release stage --app "APP_ID" --version "2.4.0" --build-id "BUILD_ID" --metadata-dir "./metadata" --confirm
   asc release stage --app "APP_ID" --version "2.4.0" --build-id "BUILD_ID" --copy-metadata-from "2.3.2" --routing-coverage-file "./coverage.geojson" --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
@@ -152,13 +166,42 @@ Examples:
 				StrictValidate:              *strictValidate,
 				CheckpointFile:              absCheckpointPath,
 			})
-			if printErr := shared.PrintOutput(result, *output.Output, *output.Pretty); printErr != nil {
+			if printErr := printStageResult(result, *output.Output, *output.Pretty); printErr != nil {
 				return printErr
 			}
 			if runErr != nil {
+				if blocked, ok := errors.AsType[readinessBlockedError](runErr); ok {
+					printReadinessBlockers(os.Stderr, blocked.report, resolvedAppID, trimmedVersion, normalizedPlatform)
+					return shared.NewStderrReportedError(runErr)
+				}
 				return shared.NewReportedError(runErr)
 			}
 			return nil
 		},
 	}
+}
+
+const maxListedReadinessBlockers = 5
+
+func printReadinessBlockers(w io.Writer, report validation.Report, appID, version, platform string) {
+	fmt.Fprintf(w, "Error: release stage: %s: %d blocking issue(s)\n", stepValidateReadiness, report.Summary.Blocking)
+	listed := 0
+	for _, step := range report.Remediation.Steps {
+		if !step.Blocking {
+			continue
+		}
+		if listed == maxListedReadinessBlockers {
+			break
+		}
+		fmt.Fprintf(w, "  - %s: %s\n", shared.SanitizeTerminal(step.Message), shared.SanitizeTerminal(step.Remediation))
+		listed++
+	}
+	if remaining := report.Summary.Blocking - listed; remaining > 0 && listed > 0 {
+		fmt.Fprintf(w, "  ... and %d more\n", remaining)
+	}
+	command := fmt.Sprintf("asc validate --app %q --version %q --platform %q", appID, version, platform)
+	if report.Strict {
+		command += " --strict"
+	}
+	fmt.Fprintf(w, "Run: %s\n", shared.SanitizeTerminal(command))
 }

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -371,5 +372,20 @@ func TestResolveWebSessionForCommandRequestContextFollowsParentCancellation(t *t
 	}
 	if !errors.Is(requestCtx.Err(), context.Canceled) {
 		t.Fatalf("request context error = %v, want context.Canceled", requestCtx.Err())
+	}
+}
+
+func TestWithWebAuthHintCoversSessionInfoAuthStatus(t *testing.T) {
+	for _, status := range []int{http.StatusUnauthorized, http.StatusForbidden} {
+		session := &webcore.AuthSession{Client: &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+			return &http.Response{StatusCode: status, Body: http.NoBody, Header: http.Header{}}, nil
+		})}}
+		err := webcore.SelectProvider(context.Background(), session, webcore.ProviderSelection{ProviderID: 123456})
+		if err == nil {
+			t.Fatalf("SelectProvider() error = nil, want session info status %d", status)
+		}
+		if got := withWebAuthHint(err, "web apps list").Error(); !strings.Contains(got, "run 'asc web auth login'") {
+			t.Fatalf("withWebAuthHint() = %q, want the web auth login hint for status %d", got, status)
+		}
 	}
 }

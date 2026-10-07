@@ -57,6 +57,30 @@ func TestRun_CapabilitiesJSONReportsKnownGaps(t *testing.T) {
 	}
 
 	assertCapability(t, resp, "App Store release submission", "cli-supported", "asc publish appstore --submit")
+	// Discover the integrated library workflows through the stable capability rows.
+	for _, command := range []string{
+		"asc asset-library images upload",
+		"asc asset-library videos upload",
+		"asc asset-library images list",
+		"asc asset-library videos list",
+		"asc asset-library images rename",
+		"asc asset-library images archive --confirm",
+		"asc asset-library images unarchive",
+		"asc asset-library images delete --confirm",
+		"asc asset-library videos set-poster-frame",
+	} {
+		assertCapability(t, resp, "Asset Library media and specifications", "cli-supported", command)
+	}
+	for _, command := range []string{
+		"asc localizations placements list",
+		"asc localizations placements reorder",
+		"asc localizations placements swap --confirm",
+		"asc product-pages custom-pages localizations placements",
+		"asc product-pages experiments treatments localizations placements",
+		"asc app-events localizations placements",
+	} {
+		assertCapability(t, resp, "Localized header and search image assignment", "cli-supported", command)
+	}
 	assertCapability(t, resp, "Developer Portal Website Push ID reads", "web-session", "asc web website-push-ids list")
 	assertCapability(t, resp, "Developer Portal Website Push ID reads", "web-session", "asc web website-push-ids view")
 	assertCapability(t, resp, "Developer Portal Website Push ID lifecycle", "web-session", "asc web website-push-ids create")

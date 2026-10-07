@@ -283,6 +283,71 @@ func TestSubscriptionsPricingUsesLatestEffectivePriceAsCurrent(t *testing.T) {
 	}
 }
 
+func TestSubscriptionsPricingFollowsPricePagesBeforeChoosingCurrent(t *testing.T) {
+	setupAuth(t)
+
+	originalTransport := http.DefaultTransport
+	t.Cleanup(func() {
+		http.DefaultTransport = originalTransport
+	})
+
+	const nextURL = "https://api.appstoreconnect.apple.com/v1/subscriptions/8000000001/prices?cursor=page-2"
+	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		var body string
+		switch {
+		case req.URL.Path == "/v1/subscriptions/8000000001" && req.Method == http.MethodGet:
+			body = `{"data":{"type":"subscriptions","id":"8000000001","attributes":{"name":"Monthly","productId":"com.example.monthly","subscriptionPeriod":"ONE_MONTH","state":"APPROVED"}}}`
+		case req.URL.Path == "/v1/subscriptions/8000000001/prices" && req.URL.Query().Get("cursor") == "":
+			if got := req.URL.Query().Get("limit"); got != "200" {
+				t.Fatalf("expected limit=200, got %q", got)
+			}
+			body = `{
+				"data":[{"type":"subscriptionPrices","id":"price-old","attributes":{"startDate":"2020-01-01"},
+					"relationships":{"territory":{"data":{"type":"territories","id":"USA"}},"subscriptionPricePoint":{"data":{"type":"subscriptionPricePoints","id":"pp-old"}}}}],
+				"included":[
+					{"type":"subscriptionPricePoints","id":"pp-old","attributes":{"customerPrice":"4.99","proceeds":"3.49","proceedsYear2":"4.24"}},
+					{"type":"territories","id":"USA","attributes":{"currency":"USD"}}
+				],
+				"links":{"next":"` + nextURL + `"}
+			}`
+		case req.URL.Path == "/v1/subscriptions/8000000001/prices" && req.URL.Query().Get("cursor") == "page-2":
+			body = `{
+				"data":[{"type":"subscriptionPrices","id":"price-current","attributes":{"startDate":"2025-01-01"},
+					"relationships":{"territory":{"data":{"type":"territories","id":"USA"}},"subscriptionPricePoint":{"data":{"type":"subscriptionPricePoints","id":"pp-current"}}}}],
+				"included":[{"type":"subscriptionPricePoints","id":"pp-current","attributes":{"customerPrice":"9.99","proceeds":"7.00","proceedsYear2":"8.49"}}],
+				"links":{"next":""}
+			}`
+		default:
+			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.String())
+			return nil, nil
+		}
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(strings.NewReader(body)),
+			Header:     http.Header{"Content-Type": []string{"application/json"}},
+		}, nil
+	})
+
+	root := RootCommand("1.2.3")
+	root.FlagSet.SetOutput(io.Discard)
+
+	stdout, stderr := captureOutput(t, func() {
+		if err := root.Parse([]string{"subscriptions", "pricing", "summary", "--subscription-id", "8000000001"}); err != nil {
+			t.Fatalf("parse error: %v", err)
+		}
+		if err := root.Run(context.Background()); err != nil {
+			t.Fatalf("run error: %v", err)
+		}
+	})
+
+	if stderr != "" {
+		t.Fatalf("expected empty stderr, got %q", stderr)
+	}
+	if !strings.Contains(stdout, `"currentPrice":{"amount":"9.99","currency":"USD"}`) {
+		t.Fatalf("expected the second-page price as current, got %q", stdout)
+	}
+}
+
 func TestSubscriptionsPricingReturnsWorkerErrorNotContextCancelled(t *testing.T) {
 	setupAuth(t)
 

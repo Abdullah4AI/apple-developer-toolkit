@@ -86,7 +86,7 @@ func SandboxUpdateCommand() *ffcli.Command {
 
 Examples:
   asc sandbox update --id "SANDBOX_TESTER_ID" --territory "US"
-  asc sandbox update --email "tester@example.com" --interrupt-purchases
+  asc sandbox update --email "tester@example.com" --interrupt-purchases true
   asc sandbox update --id "SANDBOX_TESTER_ID" --subscription-renewal-rate "MONTHLY_RENEWAL_EVERY_ONE_HOUR"`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,

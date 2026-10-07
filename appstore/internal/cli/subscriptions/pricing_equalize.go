@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -55,11 +56,15 @@ Apple's equalized prices for all other territories, and sets them in one
 operation. This replaces the manual process of exporting equalizations and
 importing a CSV.
 
+Prerequisite: the subscription's availability must already include every
+pricing territory. Equalize only sets prices; configure territories first with
+` + "`asc subscriptions pricing availability edit`" + `.
+
 Examples:
-  asc subscriptions pricing equalize --subscription-id "SUB_ID" --base-price "3.49" --confirm
-  asc subscriptions pricing equalize --subscription-id "SUB_ID" --base-price "3.49" --start-date "2026-04-01" --confirm
-  asc subscriptions pricing equalize --subscription-id "SUB_ID" --base-price "38.49" --base-territory "United States" --confirm
   asc subscriptions pricing equalize --subscription-id "SUB_ID" --base-price "3.49" --dry-run
+  asc subscriptions pricing equalize --subscription-id "SUB_ID" --base-price "3.49" --confirm
+  asc subscriptions pricing equalize --subscription-id "SUB_ID" --base-price "3.49" --start-date "YYYY-MM-DD" --confirm
+  asc subscriptions pricing equalize --subscription-id "SUB_ID" --base-price "38.49" --base-territory "United States" --confirm
   asc subscriptions pricing equalize --subscription-id "SUB_ID" --base-price "3.49" --confirm --workers 16`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
@@ -254,7 +259,7 @@ Examples:
 					if err := printEqualizeResult(result, *output.Output, *output.Pretty); err != nil {
 						return err
 					}
-					return shared.NewReportedError(fmt.Errorf("equalize: failed to set initial price in %s", baseTarget.Territory))
+					return shared.NewReportedError(shared.NewErrorWithCause(fmt.Errorf("equalize: failed to set initial price in %s", baseTarget.Territory), err))
 				}
 				succeeded++
 				remainingTerritories = allTerritories[1:]
@@ -287,7 +292,12 @@ Examples:
 				return err
 			}
 			if result.Failed > 0 {
-				return shared.NewReportedError(fmt.Errorf("equalize: %d territory update(s) failed", result.Failed))
+				// Concurrent failures arrive in any order; the territory that sorts
+				// first supplies the cause, so the exit code is stable across runs.
+				primary := slices.MinFunc(failures, func(a, b equalizeAttemptFailure) int {
+					return strings.Compare(a.Target.Territory, b.Target.Territory)
+				})
+				return shared.NewReportedError(shared.NewErrorWithCause(fmt.Errorf("equalize: %d territory update(s) failed", result.Failed), primary.Err))
 			}
 			return nil
 		},
@@ -653,7 +663,14 @@ func findPricePoint(ctx context.Context, client *asc.Client, subID, territory, t
 		return "", err
 	}
 
-	return "", fmt.Errorf("no price point found for %s %s", territory, targetPrice)
+	return "", shared.WithDiagnostic(
+		shared.NewValidationError(fmt.Errorf(
+			"no price point found for %s %s; list valid prices with `asc subscriptions pricing price-points list --subscription-id %q --territory %s --paginate`",
+			territory, targetPrice, subID, territory,
+		)),
+		shared.DiagnosticInvalidInput,
+		"--base-price",
+	)
 }
 
 func fetchEqualizations(ctx context.Context, client *asc.Client, pricePointID, baseTerritory string) ([]equalization, error) {
@@ -719,9 +736,13 @@ func validateEqualizeAvailability(ctx context.Context, client *asc.Client, subID
 				return 0, verifyErr
 			}
 			if !exists {
-				return 0, fmt.Errorf("subscription %q was not found", subID)
+				return 0, shared.WithDiagnostic(
+					shared.NewErrorWithCause(fmt.Errorf("subscription %q was not found", subID), err),
+					shared.DiagnosticResourceNotFound,
+					"--subscription-id",
+				)
 			}
-			return 0, fmt.Errorf("subscription availability is not configured; equalize only updates prices and will not change sale availability. Configure territories first with `asc subscriptions pricing availability edit`")
+			return 0, equalizeAvailabilityNotReady(errors.New("subscription availability is not configured; equalize only updates prices and will not change sale availability. Configure territories first with `asc subscriptions pricing availability edit`"))
 		}
 		return 0, fmt.Errorf("failed to fetch availability: %w", err)
 	}
@@ -755,7 +776,11 @@ func validateEqualizeAvailability(ctx context.Context, client *asc.Client, subID
 	}
 
 	sort.Strings(missing)
-	return 0, fmt.Errorf("subscription availability is missing %d equalized territor%s (%s); equalize only updates prices and will not change sale availability. Configure territories first with `asc subscriptions pricing availability edit`", len(missing), pluralizeEqualizeTerritories(len(missing)), summarizeEqualizeTerritories(missing, 8))
+	return 0, equalizeAvailabilityNotReady(fmt.Errorf("subscription availability is missing %d equalized territor%s (%s); equalize only updates prices and will not change sale availability. Configure territories first with `asc subscriptions pricing availability edit`", len(missing), pluralizeEqualizeTerritories(len(missing)), summarizeEqualizeTerritories(missing, 8)))
+}
+
+func equalizeAvailabilityNotReady(err error) error {
+	return shared.WithDiagnostic(shared.NewValidationError(err), shared.DiagnosticStateNotReady, "--subscription-id")
 }
 
 func subscriptionExists(ctx context.Context, client *asc.Client, subID string) (bool, error) {

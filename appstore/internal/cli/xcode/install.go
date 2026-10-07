@@ -85,7 +85,7 @@ Examples:
 				if result != nil {
 					diagnostic := installFailureDiagnostic(result)
 					fmt.Fprintf(os.Stderr, "Error: %s\n", diagnostic)
-					return shared.NewReportedError(shared.NewErrorWithCause(errors.New(diagnostic), installErr))
+					return shared.NewStderrReportedError(shared.NewErrorWithCause(errors.New(diagnostic), installErr))
 				}
 				return shared.NewErrorWithCause(errors.New("xcode install failed"), installErr)
 			}

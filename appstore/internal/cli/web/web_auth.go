@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -43,6 +44,7 @@ func webPasswordEnvAssignmentExample() string {
 var (
 	openTTYFn                                = openTTY
 	promptTwoFactorCodeFn                    = promptTwoFactorCodeInteractive
+	twoFactorPromptAvailableFn               = twoFactorPromptAvailable
 	promptPasswordFn                         = promptPasswordInteractive
 	readTwoFactorCodeFromCommandFn           = readTwoFactorCodeFromCommand
 	webLoginFn                               = webcore.Login
@@ -173,6 +175,24 @@ type webAuthStatus struct {
 	ProviderID       int64  `json:"providerId,omitempty"`
 	PublicProviderID string `json:"publicProviderId,omitempty"`
 	DeveloperTeamID  string `json:"developerTeamId,omitempty"`
+}
+
+func printWebAuthStatus(status webAuthStatus, format string, pretty bool) error {
+	providerID := ""
+	if status.ProviderID != 0 {
+		providerID = strconv.FormatInt(status.ProviderID, 10)
+	}
+	rows := [][]string{
+		{"Authenticated", strconv.FormatBool(status.Authenticated)},
+		{"Password Stored", strconv.FormatBool(status.PasswordStored)},
+		{"Source", status.Source},
+		{"Apple ID", status.AppleID},
+		{"Team ID", status.TeamID},
+		{"Provider ID", providerID},
+		{"Public Provider ID", status.PublicProviderID},
+		{"Developer Team ID", status.DeveloperTeamID},
+	}
+	return shared.PrintOutputRows(status, format, pretty, []string{"Field", "Value"}, rows)
 }
 
 func expiredWebAuthStatus(appleID string) webAuthStatus {
@@ -367,6 +387,8 @@ func readTwoFactorCodeFromTerminalFD(fd int, writer io.Writer) (string, error) {
 	return code, nil
 }
 
+var errNoTwoFactorCodeSource = errors.New("2fa required: run in a terminal for an interactive prompt, pass --two-factor-code-command, or set " + webTwoFactorCodeCommandEnv)
+
 func promptTwoFactorCodeInteractive() (string, error) {
 	if tty, err := openTTYFn(); err == nil {
 		defer func() { _ = tty.Close() }()
@@ -375,7 +397,19 @@ func promptTwoFactorCodeInteractive() (string, error) {
 	if termIsTerminalFn(int(os.Stdin.Fd())) {
 		return readTwoFactorCodeFromTerminalFD(int(os.Stdin.Fd()), os.Stderr)
 	}
-	return "", fmt.Errorf("2fa required: run in a terminal for an interactive prompt, pass --two-factor-code-command, or set %s", webTwoFactorCodeCommandEnv)
+	return "", errNoTwoFactorCodeSource
+}
+
+func twoFactorPromptAvailable() bool {
+	if tty, err := openTTYFn(); err == nil {
+		_ = tty.Close()
+		return true
+	}
+	return termIsTerminalFn(int(os.Stdin.Fd()))
+}
+
+func twoFactorInputError(err error, code shared.DiagnosticCode) error {
+	return shared.WithDiagnostic(shared.NewValidationError(err), code, "--two-factor-code-command")
 }
 
 func twoFactorCodeCommandShellArgs(command string) []string {
@@ -736,7 +770,11 @@ func twoFactorSubmitFailure(err error, afterPhoneDelivery bool) error {
 	if afterPhoneDelivery {
 		stage += " after switching to phone delivery"
 	}
-	return fmt.Errorf("%s: %w", stage, err)
+	err = fmt.Errorf("%s: %w", stage, err)
+	if errors.Is(err, webcore.ErrTwoFactorCodeRejected) {
+		return shared.WithDiagnostic(err, shared.DiagnosticAuthenticationRejected, "")
+	}
+	return err
 }
 
 func loginWithOptionalTwoFactorUsing(ctx context.Context, progressMessage, appleID, password, twoFactorCode string, loginFn func(context.Context, webcore.LoginCredentials) (*webcore.AuthSession, error), twoFactorStarted func(), readCommandCode twoFactorCodeCommandReader, twoFactorCodeCommand ...string) (*webcore.AuthSession, error) {
@@ -758,16 +796,21 @@ func loginWithOptionalTwoFactorUsing(ctx context.Context, progressMessage, apple
 		if twoFactorStarted != nil {
 			twoFactorStarted()
 		}
-		challenge, prepErr := prepareTwoFactorChallengeFn(ctx, session)
-		if prepErr != nil {
-			return nil, fmt.Errorf("2fa challenge setup failed: %w", prepErr)
-		}
-
 		code := strings.TrimSpace(twoFactorCode)
 		command := ""
 		if len(twoFactorCodeCommand) > 0 {
 			command = strings.TrimSpace(twoFactorCodeCommand[0])
 		}
+		// Stop before asking Apple for the challenge, which can deliver a code
+		// to the account's devices or phone that nobody here can enter.
+		if code == "" && command == "" && !twoFactorPromptAvailableFn() {
+			return nil, twoFactorInputError(errNoTwoFactorCodeSource, shared.DiagnosticRequiredInputMissing)
+		}
+		challenge, prepErr := prepareTwoFactorChallengeFn(ctx, session)
+		if prepErr != nil {
+			return nil, fmt.Errorf("2fa challenge setup failed: %w", prepErr)
+		}
+
 		writeDeliveryNotice := func(destination string) {
 			destination = strings.TrimSpace(destination)
 			if destination == "" || twoFactorStatusWriter == nil {
@@ -798,12 +841,21 @@ func loginWithOptionalTwoFactorUsing(ctx context.Context, progressMessage, apple
 		}
 		readCode := func() (string, error) {
 			if command != "" {
+				read := readTwoFactorCodeFromCommandFn
 				if readCommandCode != nil {
-					return readCommandCode(ctx, command)
+					read = readCommandCode
 				}
-				return readTwoFactorCodeFromCommandFn(ctx, command)
+				code, err := read(ctx, command)
+				if err != nil {
+					return "", twoFactorInputError(err, shared.DiagnosticDependencyFailed)
+				}
+				return code, nil
 			}
-			return promptTwoFactorCodeFn()
+			code, err := promptTwoFactorCodeFn()
+			if err != nil {
+				return "", twoFactorInputError(err, shared.DiagnosticRequiredInputMissing)
+			}
+			return code, nil
 		}
 		if code == "" {
 			if command == "" {
@@ -1216,6 +1268,12 @@ func resolveWebSession(ctx context.Context, appleID, password, twoFactorCode str
 		// than a missing-password usage page.
 		return nil, "", newMissingWebSessionError(resolvedAppleID, publicAPIAlternativeFromContext(ctx))
 	}
+	// Without a cached cookie jar there is no trusted-device cookie, so Apple
+	// always answers the password step with a 2FA challenge. Refuse before
+	// signing in when nothing here can supply the code.
+	if expiredCachedSession == nil && twoFactorCode == "" && command == "" && !twoFactorPromptAvailableFn() {
+		return nil, "", twoFactorInputError(errNoTwoFactorCodeSource, shared.DiagnosticRequiredInputMissing)
+	}
 
 	// A 5xx on the cached jar alone does not prove the jar is stale: Apple also
 	// answers outages and throttling with 5xx, and the entry may still hold a
@@ -1295,7 +1353,11 @@ func resolveWebSession(ctx context.Context, appleID, password, twoFactorCode str
 		if isSigninServerError(err) {
 			return nil, "", fmt.Errorf("web auth login failed: %w; %s", err, signinServerErrorHint(resolvedAppleID))
 		}
-		return nil, "", fmt.Errorf("web auth login failed: %w", err)
+		err = fmt.Errorf("web auth login failed: %w", err)
+		if errors.Is(err, webcore.ErrAppleAccountActionRequired) {
+			return nil, "", shared.WithDiagnostic(shared.NewValidationError(err), shared.DiagnosticStateNotReady, "")
+		}
+		return nil, "", err
 	}
 	persistPromptedWebPassword(resolvedAppleID, resolvedPassword)
 	if opts.persistFresh != nil {
@@ -1348,7 +1410,15 @@ func selectResolvedWebSessionProvider(ctx context.Context, session *webcore.Auth
 	providerCtx, cancel := shared.ContextWithTimeout(shared.ContextWithoutTimeout(ctx))
 	defer cancel()
 	if err := selectWebProviderFn(providerCtx, session, selection); err != nil {
-		return fmt.Errorf("web provider selection failed: %w", err)
+		err = fmt.Errorf("web provider selection failed: %w", err)
+		if !errors.Is(err, webcore.ErrInvalidProviderSelection) {
+			return err
+		}
+		parameter := "--provider-id"
+		if strings.TrimSpace(selection.PublicProviderID) != "" {
+			parameter = "--public-provider-id"
+		}
+		return shared.WithDiagnostic(shared.NewValidationError(err), shared.DiagnosticInvalidInput, parameter)
 	}
 	if err := persistWebSessionFn(session); err != nil {
 		return fmt.Errorf("web provider selection succeeded but failed to cache session: %w", err)
@@ -1450,9 +1520,12 @@ Password input options:
   - %s=1 disables saved-password reads and writes
 
 Two-factor input options:
-  - secure interactive prompt (default for manual use)
+  - secure interactive prompt (default for manual use; needs a terminal)
   - --two-factor-code-command
   - %s environment variable (recommended for automation)
+
+Without a terminal, a fresh sign-in needs a 2FA code command; without one it
+fails before the password is sent, so Apple does not send a code nobody can enter.
 
 Phone-code fallback (including SMS):
   - interactive: if Apple offers a registered phone fallback, enter an incorrect trusted-device code once
@@ -1464,10 +1537,12 @@ Provider selection:
   - --provider-id selects Apple's numeric App Store Connect provider ID
 
 Examples:
+  # Interactive (in a terminal)
   asc web auth login --apple-id "user@example.com"
   asc web auth login --apple-id "user@example.com" --public-provider-id "Z4N6A5FQKW"
-  %s asc web auth login --apple-id "user@example.com"
-  %s='osascript /path/to/get-apple-2fa-code.scpt' asc web auth login --apple-id "user@example.com"`,
+
+  # Non-interactive (agents, CI): supply the password and a 2FA code source
+  %s %s='osascript /path/to/get-apple-2fa-code.scpt' asc web auth login --apple-id "user@example.com"`,
 			webAppleIDEnv,
 			webPasswordEnvDisplay(),
 			webDontStorePasswordEnv,
@@ -1506,7 +1581,7 @@ Examples:
 				PublicProviderID: session.PublicProviderID,
 				DeveloperTeamID:  session.DeveloperTeamID,
 			}
-			return shared.PrintOutput(status, *output.Output, *output.Pretty)
+			return printWebAuthStatus(status, *output.Output, *output.Pretty)
 		},
 	}
 }
@@ -1548,19 +1623,19 @@ If --apple-id is not provided, this checks the last cached session.
 			if err != nil {
 				if errors.Is(err, webcore.ErrCachedSessionExpired) {
 					status := expiredWebAuthStatus(trimmedAppleID)
-					return shared.PrintOutput(status, *output.Output, *output.Pretty)
+					return printWebAuthStatus(status, *output.Output, *output.Pretty)
 				}
 				return fmt.Errorf("web auth status failed: %w", err)
 			}
 
 			if !ok || session == nil {
-				return shared.PrintOutput(webAuthStatus{
+				return printWebAuthStatus(webAuthStatus{
 					Authenticated:  false,
 					PasswordStored: storedWebPasswordStatus(trimmedAppleID),
 					AppleID:        trimmedAppleID,
 				}, *output.Output, *output.Pretty)
 			}
-			return shared.PrintOutput(webAuthStatus{
+			return printWebAuthStatus(webAuthStatus{
 				Authenticated:    true,
 				PasswordStored:   storedWebPasswordStatus(session.UserEmail),
 				Source:           "cache",

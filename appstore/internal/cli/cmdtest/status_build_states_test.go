@@ -32,6 +32,9 @@ func installStatusBuildStateTransport(t *testing.T) *statusBuildStateRequestCoun
 			if req.URL.Query().Get("filter[betaAppReviewSubmission.betaReviewState]") != "" {
 				return statusJSONResponse(`{"data":[],"links":{"next":""}}`), nil
 			}
+			if got := req.URL.Query().Get("include"); got != "preReleaseVersion,buildBetaDetail" {
+				t.Fatalf("expected snapshot builds to include preReleaseVersion,buildBetaDetail, got include=%q", got)
+			}
 			return statusJSONResponse(`{
 				"data":[
 					{
@@ -43,7 +46,10 @@ func installStatusBuildStateTransport(t *testing.T) *statusBuildStateRequestCoun
 							"processingState":"VALID",
 							"expired":true
 						},
-						"relationships":{"preReleaseVersion":{"data":{"type":"preReleaseVersions","id":"train-1.2.3-ios"}}}
+						"relationships":{
+							"preReleaseVersion":{"data":{"type":"preReleaseVersions","id":"train-1.2.3-ios"}},
+							"buildBetaDetail":{"data":{"type":"buildBetaDetails","id":"bbd-2"}}
+						}
 					},
 					{
 						"type":"builds",
@@ -54,34 +60,22 @@ func installStatusBuildStateTransport(t *testing.T) *statusBuildStateRequestCoun
 							"processingState":"VALID",
 							"expired":false
 						},
-						"relationships":{"preReleaseVersion":{"data":{"type":"preReleaseVersions","id":"train-1.2.3-ios"}}}
+						"relationships":{
+							"preReleaseVersion":{"data":{"type":"preReleaseVersions","id":"train-1.2.3-ios"}},
+							"buildBetaDetail":{"data":{"type":"buildBetaDetails","id":"bbd-1"}}
+						}
 					}
 				],
-				"included":[{"type":"preReleaseVersions","id":"train-1.2.3-ios","attributes":{"version":"1.2.3","platform":"IOS"}}],
+				"included":[
+					{"type":"preReleaseVersions","id":"train-1.2.3-ios","attributes":{"version":"1.2.3","platform":"IOS"}},
+					{"type":"buildBetaDetails","id":"bbd-1","attributes":{"internalBuildState":"IN_BETA_TESTING","externalBuildState":"IN_BETA_TESTING"}},
+					{"type":"buildBetaDetails","id":"bbd-2","attributes":{"internalBuildState":"PROCESSING","externalBuildState":"NOT_READY_FOR_TESTING"}}
+				],
 				"links":{"next":""}
 			}`), nil
 		case "/v1/buildBetaDetails":
 			counts.buildBetaDetails.Inc()
-			if got := req.URL.Query().Get("include"); got != "build" {
-				t.Fatalf("expected build beta details to include build relationships, got include=%q", got)
-			}
-			return statusJSONResponse(`{
-				"data":[
-					{
-						"type":"buildBetaDetails",
-						"id":"bbd-2",
-						"attributes":{"internalBuildState":"PROCESSING","externalBuildState":"NOT_READY_FOR_TESTING"},
-						"relationships":{"build":{"data":{"type":"builds","id":"build-2"}}}
-					},
-					{
-						"type":"buildBetaDetails",
-						"id":"bbd-1",
-						"attributes":{"internalBuildState":"IN_BETA_TESTING","externalBuildState":"IN_BETA_TESTING"},
-						"relationships":{"build":{"data":{"type":"builds","id":"build-1"}}}
-					}
-				],
-				"links":{"next":""}
-			}`), nil
+			return statusJSONResponse(`{"data":[],"links":{"next":""}}`), nil
 		case "/v1/betaAppReviewSubmissions":
 			counts.betaAppReviewSubmissions.Inc()
 			return statusJSONResponse(`{"data":[],"links":{"next":""}}`), nil
@@ -102,8 +96,8 @@ func assertStatusBuildStateRequestCounts(t *testing.T, counts *statusBuildStateR
 	if got := counts.builds.Load(); got != 2 {
 		t.Fatalf("expected 2 build requests (snapshot plus active beta review scan), got %d", got)
 	}
-	if got := counts.buildBetaDetails.Load(); got != 1 {
-		t.Fatalf("expected 1 build beta details request, got %d", got)
+	if got := counts.buildBetaDetails.Load(); got != 0 {
+		t.Fatalf("expected no build beta details requests (states come from included buildBetaDetail), got %d", got)
 	}
 	if got := counts.betaAppReviewSubmissions.Load(); got != 1 {
 		t.Fatalf("expected 1 beta app review submissions request, got %d", got)

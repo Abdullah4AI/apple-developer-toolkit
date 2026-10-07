@@ -151,7 +151,7 @@ func (e communityWallUsageError) Is(target error) bool {
 }
 
 // AppsWallSubmitCommand returns the wall submit subcommand.
-func AppsWallSubmitCommand(parentWallFlags *flag.FlagSet) *ffcli.Command {
+func AppsWallSubmitCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("apps wall submit", flag.ExitOnError)
 
 	appID := fs.String("app", "", "App Store or App Store Connect app ID")
@@ -185,10 +185,6 @@ Examples:
 		Exec: func(ctx context.Context, args []string) error {
 			if len(args) > 0 {
 				fmt.Fprintln(os.Stderr, "Error: apps wall submit does not accept positional arguments")
-				return flag.ErrHelp
-			}
-			if err := validateAppsWallSubmitParentFlags(parentWallFlags); err != nil {
-				fmt.Fprintf(os.Stderr, "Error: %s\n", err.Error())
 				return flag.ErrHelp
 			}
 			if !*dryRun && !*confirm {
@@ -236,28 +232,6 @@ Examples:
 
 			return shared.PrintOutput(result, *output.Output, *output.Pretty)
 		},
-	}
-}
-
-func validateAppsWallSubmitParentFlags(parentWallFlags *flag.FlagSet) error {
-	if parentWallFlags == nil {
-		return nil
-	}
-
-	visited := make([]string, 0, 4)
-	parentWallFlags.Visit(func(f *flag.Flag) {
-		visited = append(visited, "--"+strings.TrimSpace(f.Name))
-	})
-	if len(visited) == 0 {
-		return nil
-	}
-
-	sort.Strings(visited)
-	return communityWallUsageError{
-		message: fmt.Sprintf(
-			"apps wall submit does not accept parent wall flags (%s); move flags after \"submit\" or use \"asc apps wall\" for listing",
-			strings.Join(visited, ", "),
-		),
 	}
 }
 

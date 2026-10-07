@@ -35,6 +35,10 @@ var ErrKeychainAccessDenied = errors.New("keychain access denied")
 // default selection resolves for the current no-profile lookup.
 var ErrDefaultCredentialsNotFound = errors.New("default credentials not found")
 
+// ErrProfileNotFound indicates that no stored credentials match the selected
+// profile name.
+var ErrProfileNotFound = errors.New("credentials not found")
+
 // PrivateKeyErrorKind classifies private-key failures without exposing key
 // material or filesystem paths to callers that only need recovery metadata.
 type PrivateKeyErrorKind string
@@ -91,6 +95,20 @@ func privateKeyAccessErrorKind(err error) PrivateKeyErrorKind {
 	default:
 		return PrivateKeyAccessFailed
 	}
+}
+
+// privateKeyOpenError names the path the caller passed for a missing key file.
+// The rooted open error would otherwise show only a root-relative remainder.
+func privateKeyOpenError(path, action string, err error) error {
+	kind := privateKeyAccessErrorKind(err)
+	if kind != PrivateKeyNotFound {
+		return newPrivateKeyError(kind, fmt.Errorf("%s: %w", action, err))
+	}
+	message := fmt.Sprintf("private key file not found: %q", path)
+	if strings.HasPrefix(path, "~/") {
+		message += " (the shell did not expand ~; use an absolute path)"
+	}
+	return newPrivateKeyError(PrivateKeyNotFound, errors.New(message))
 }
 
 var (
@@ -273,7 +291,16 @@ var keyringOpener = func() (keyring.Keyring, error) {
 }
 
 var legacyKeyringOpener = func() (keyring.Keyring, error) {
-	return keyring.Open(keyringConfig(legacyKeychain))
+	return openLegacyKeyringForOS(runtime.GOOS, keyring.Open)
+}
+
+func openLegacyKeyringForOS(goos string, open func(keyring.Config) (keyring.Keyring, error)) (keyring.Keyring, error) {
+	// Only macOS has a distinct legacy named keychain. Other native
+	// backends ignore KeychainName and would alias the current store.
+	if goos != "darwin" {
+		return nil, keyring.ErrNoAvailImpl
+	}
+	return open(keyringConfig(legacyKeychain))
 }
 
 // ValidateKeyFile validates that the private key file exists and is valid
@@ -287,7 +314,7 @@ func validateKeyFileForOS(path, goos string) error {
 	}
 	file, err := rootfs.OpenFile(path)
 	if err != nil {
-		return newPrivateKeyError(privateKeyAccessErrorKind(err), fmt.Errorf("failed to open key file: %w", err))
+		return privateKeyOpenError(path, "failed to open key file", err)
 	}
 	defer file.Close()
 
@@ -339,7 +366,7 @@ func validateKeyFileForOS(path, goos string) error {
 func LoadPrivateKey(path string) (*ecdsa.PrivateKey, error) {
 	file, err := rootfs.OpenFile(path)
 	if err != nil {
-		return nil, newPrivateKeyError(privateKeyAccessErrorKind(err), fmt.Errorf("failed to read key file: %w", err))
+		return nil, privateKeyOpenError(path, "failed to read key file", err)
 	}
 	data, readErr := io.ReadAll(file)
 	closeErr := file.Close()
@@ -1289,7 +1316,7 @@ func RemoveCredentialsWithOptions(name string, opts RemoveOptions) error {
 			return err
 		}
 		legacy, err := normalizedKeychainItems(legacyKeyringOpener, name, true, "legacy keychain")
-		if err != nil {
+		if err != nil && !isKeyringUnavailable(err) {
 			return err
 		}
 		removed, err = removeKeychainItems(append(current, legacy...))
@@ -1320,11 +1347,15 @@ func RemoveAllCredentials() error {
 }
 
 // RemoveAllCredentialsWithOptions removes all stored credentials from the
-// keychain and the config files that opts selects.
+// keychain and the config files that opts selects. ASC_BYPASS_KEYCHAIN leaves
+// the keychain untouched.
 func RemoveAllCredentialsWithOptions(opts RemoveOptions) error {
 	// Always attempt to clear config credentials first, regardless of keychain state
 	// This ensures config is cleaned even if keychain has issues (e.g., locked, read-only)
 	configErr := clearConfigCredentials(opts.IncludeGlobalConfig)
+	if shouldBypassKeychain() {
+		return configErr
+	}
 
 	// Try to clear keychain as well, but don't fail if keychain has issues
 	keychainErr := removeAllFromKeychain()
@@ -1410,7 +1441,7 @@ func GetCredentialsWithSource(profile string) (*config.Config, string, error) {
 			if cfg, configErr := getCredentialsFromConfig(profile); configErr == nil {
 				return cfg, "config", nil
 			}
-			return nil, "", fmt.Errorf("credentials not found for profile %q", profile)
+			return nil, "", fmt.Errorf("%w for profile %q", ErrProfileNotFound, profile)
 		}
 		if lookup.defaultKey != "" {
 			configCfg, configErr := getCredentialsFromConfig(lookup.defaultKey)
@@ -2438,7 +2469,7 @@ func selectConfigCredential(cfg *config.Config, profile string) (*config.Config,
 	if profile != "" {
 		cred, found, complete := findConfigCredential(cfg, profile)
 		if !found {
-			return nil, fmt.Errorf("credentials not found for profile %q", profile)
+			return nil, fmt.Errorf("%w for profile %q", ErrProfileNotFound, profile)
 		}
 		if !complete {
 			return nil, fmt.Errorf("incomplete credentials for profile %q", profile)

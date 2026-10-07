@@ -270,7 +270,7 @@ Examples:
 				if summary.FailureArtifactError != "" {
 					rowErr = errors.Join(rowErr, fmt.Errorf("write failure artifact: %s", summary.FailureArtifactError))
 				}
-				return shared.NewReportedError(rowErr)
+				return shared.NewReportedError(shared.NewErrorWithCause(rowErr, summary.refused))
 			}
 			return nil
 		},
@@ -291,6 +291,8 @@ type subscriptionIntroductoryOfferImportSummary struct {
 	FailureArtifactPath  string                                              `json:"failureArtifactPath,omitempty"`
 	FailureArtifactError string                                              `json:"failureArtifactError,omitempty"`
 	Results              []subscriptionIntroductoryOfferImportResultItem     `json:"results,omitempty"`
+
+	refused error
 }
 
 type subscriptionIntroductoryOfferImportSummaryFailure struct {
@@ -374,6 +376,7 @@ func appendSubscriptionIntroductoryOfferImportFailure(summary *subscriptionIntro
 		return
 	}
 	summary.Failed++
+	summary.refused = shared.KeepReadOnlyRefusal(summary.refused, err)
 	summary.Failures = append(summary.Failures, subscriptionIntroductoryOfferImportSummaryFailure{
 		Row:       row.row,
 		Territory: row.territory,

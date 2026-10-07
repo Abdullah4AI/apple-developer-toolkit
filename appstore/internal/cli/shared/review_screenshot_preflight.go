@@ -1,6 +1,7 @@
 package shared
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -38,4 +39,34 @@ func ReviewScreenshotUsageError(parameter, message string) error {
 	message = strings.TrimSpace(SanitizeTerminal(message))
 	fmt.Fprintf(os.Stderr, "Error: %s\n", message)
 	return WithDiagnostic(NewReportedUsageError(UsageErrorInvalidValue, message), DiagnosticInvalidInput, parameter)
+}
+
+// ReviewScreenshotDeliveryError reports a review screenshot that App Store
+// Connect rejected after upload as invalid --file input. The failed screenshot
+// stays attached and blocks a new upload, so the message names the delete
+// command of group.
+func ReviewScreenshotDeliveryError(group, screenshotID string, details []asc.StateDetail) error {
+	parts := make([]string, 0, len(details))
+	for _, detail := range details {
+		code := strings.TrimSpace(detail.Code)
+		description := strings.TrimSpace(detail.Description)
+		switch {
+		case code != "" && description != "":
+			parts = append(parts, fmt.Sprintf("%s (%s)", code, description))
+		case code != "":
+			parts = append(parts, code)
+		case description != "":
+			parts = append(parts, description)
+		}
+	}
+	reason := strings.Join(parts, ", ")
+	if reason == "" {
+		reason = "unknown error"
+	}
+	quotedID, ok := ShellQuote(screenshotID)
+	if !ok {
+		quotedID = "SCREENSHOT_ID"
+	}
+	message := fmt.Sprintf("screenshot %s delivery failed: %s; run %s delete --screenshot-id %s --confirm, then upload a corrected file", screenshotID, reason, group, quotedID)
+	return WithDiagnostic(NewValidationError(errors.New(SanitizeTerminal(message))), DiagnosticInvalidInput, "--file")
 }

@@ -417,8 +417,8 @@ func TestSubscriptionsSetupRejectsAppleMissingMetadataState(t *testing.T) {
 			t.Fatalf("expected MISSING_METADATA failure, got %v", err)
 		}
 	})
-	if stderr != "" {
-		t.Fatalf("expected structured error without stderr duplication, got %q", stderr)
+	if want := "Error: subscriptions setup: verify_state: apple reports subscription state MISSING_METADATA after setup\n"; stderr != want {
+		t.Fatalf("stderr = %q, want %q", stderr, want)
 	}
 	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
 		t.Fatalf("parse setup result: %v\nstdout=%q", err, stdout)
@@ -485,8 +485,8 @@ func TestSubscriptionsSetupVerifiesAllExistingAvailabilityPriceCoverage(t *testi
 			t.Fatalf("expected missing CAN price coverage failure, got %v", err)
 		}
 	})
-	if stderr != "" {
-		t.Fatalf("expected structured error without stderr duplication, got %q", stderr)
+	if want := "Error: subscriptions setup: verify_state: missing price coverage for enabled availability territories: CAN\n"; stderr != want {
+		t.Fatalf("stderr = %q, want %q", stderr, want)
 	}
 	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
 		t.Fatalf("parse setup result: %v\nstdout=%q", err, stdout)
@@ -728,8 +728,8 @@ func TestSubscriptionsSetupRejectsMismatchedExistingSubscription(t *testing.T) {
 	if result.Status != "error" || result.FailedStep != "create_subscription" {
 		t.Fatalf("unexpected setup result: %+v", result)
 	}
-	if stderr != "" {
-		t.Fatalf("expected empty stderr, got %q", stderr)
+	if want := "Error: subscriptions setup: create_subscription: existing subscription \"sub-1\" has a different reference name; update it or choose a different product ID\n"; stderr != want {
+		t.Fatalf("stderr = %q, want %q", stderr, want)
 	}
 	if requestCount != 2 {
 		t.Fatalf("expected lookup requests only, got %d", requestCount)
@@ -781,8 +781,8 @@ func TestSubscriptionsSetupRejectsMismatchedExistingSubscriptionFamilySharingDef
 	if result.Status != "error" || result.FailedStep != "create_subscription" {
 		t.Fatalf("unexpected setup result: %+v", result)
 	}
-	if stderr != "" {
-		t.Fatalf("expected empty stderr, got %q", stderr)
+	if want := "Error: subscriptions setup: create_subscription: existing subscription \"sub-1\" has a different family sharing setting; update it or choose a different product ID\n"; stderr != want {
+		t.Fatalf("stderr = %q, want %q", stderr, want)
 	}
 	if requestCount != 1 {
 		t.Fatalf("expected only subscription lookup request, got %d", requestCount)
@@ -835,8 +835,8 @@ func TestSubscriptionsSetupRejectsAmbiguousExistingGroupReference(t *testing.T) 
 	if result.Status != "error" || result.FailedStep != "ensure_group" {
 		t.Fatalf("unexpected setup result: %+v", result)
 	}
-	if stderr != "" {
-		t.Fatalf("expected empty stderr, got %q", stderr)
+	if want := "Error: subscriptions setup: ensure_group: multiple subscription groups match reference name \"Pro\"; pass --group-id to choose one\n"; stderr != want {
+		t.Fatalf("stderr = %q, want %q", stderr, want)
 	}
 	if requestCount != 1 {
 		t.Fatalf("expected only group lookup request, got %d", requestCount)
@@ -911,8 +911,8 @@ func TestSubscriptionsSetupRejectsMismatchedExistingLocalization(t *testing.T) {
 	if result.Status != "error" || result.FailedStep != "create_localization" {
 		t.Fatalf("unexpected setup result: %+v", result)
 	}
-	if stderr != subscriptionsSetupLegacyLocalizationWarning {
-		t.Fatalf("stderr = %q, want exact deprecation warning %q", stderr, subscriptionsSetupLegacyLocalizationWarning)
+	if want := subscriptionsSetupLegacyLocalizationWarning + "Error: subscriptions setup: create_localization: existing subscription localization \"loc-1\" has a different display name; update it or choose a different locale\n"; stderr != want {
+		t.Fatalf("stderr = %q, want %q", stderr, want)
 	}
 	if requestCount != 3 {
 		t.Fatalf("expected lookup requests only, got %d", requestCount)
@@ -984,8 +984,8 @@ func TestSubscriptionsSetupRejectsMismatchedExistingLocalizationDescription(t *t
 	if result.Status != "error" || result.FailedStep != "create_localization" {
 		t.Fatalf("unexpected setup result: %+v", result)
 	}
-	if stderr != subscriptionsSetupLegacyLocalizationWarning {
-		t.Fatalf("stderr = %q, want exact deprecation warning %q", stderr, subscriptionsSetupLegacyLocalizationWarning)
+	if want := subscriptionsSetupLegacyLocalizationWarning + "Error: subscriptions setup: create_localization: existing subscription localization \"loc-1\" has a different description; update it or choose a different locale\n"; stderr != want {
+		t.Fatalf("stderr = %q, want %q", stderr, want)
 	}
 	if requestCount != 3 {
 		t.Fatalf("expected lookup requests only, got %d", requestCount)
@@ -2045,11 +2045,15 @@ func runSubscriptionsSetupPriceFailureCase(t *testing.T, mode subscriptionsSetup
 		}
 		runErr = root.Run(context.Background())
 	})
-	if stderr != "" {
-		t.Fatalf("expected empty stderr, got %q", stderr)
-	}
 	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
 		t.Fatalf("parse setup result: %v\nstdout=%q", err, stdout)
+	}
+	wantStderr := ""
+	if runErr != nil {
+		wantStderr = "Error: subscriptions setup: " + result.FailedStep + ": " + result.Error + "\n"
+	}
+	if stderr != wantStderr {
+		t.Fatalf("stderr = %q, want %q", stderr, wantStderr)
 	}
 
 	switch mode {

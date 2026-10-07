@@ -106,10 +106,15 @@ Examples:
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			result, err := executeCustomPagePreviewUpload(ctx, *localizationID, *path, *deviceType, false)
+			if result != nil {
+				if printErr := shared.PrintOutput(result, *output.Output, *output.Pretty); printErr != nil {
+					return printErr
+				}
+			}
 			if err != nil {
 				return fmt.Errorf("custom-pages localizations preview-sets upload: %w", err)
 			}
-			return shared.PrintOutput(result, *output.Output, *output.Pretty)
+			return nil
 		},
 	}
 }
@@ -143,10 +148,15 @@ Examples:
 			}
 
 			result, err := executeCustomPagePreviewUpload(ctx, *localizationID, *path, *deviceType, true)
+			if result != nil {
+				if printErr := shared.PrintOutput(result, *output.Output, *output.Pretty); printErr != nil {
+					return printErr
+				}
+			}
 			if err != nil {
 				return fmt.Errorf("custom-pages localizations preview-sets sync: %w", err)
 			}
-			return shared.PrintOutput(result, *output.Output, *output.Pretty)
+			return nil
 		},
 	}
 }
@@ -229,7 +239,7 @@ func executeCustomPagePreviewUpload(
 	requestCtx, cancel := contextWithCustomPageMediaUploadTimeout(ctx)
 	defer cancel()
 
-	set, err := ensureCustomPageLocalizationPreviewSet(requestCtx, client, trimmedLocalizationID, previewType)
+	set, setCreated, err := ensureCustomPageLocalizationPreviewSet(requestCtx, client, trimmedLocalizationID, previewType)
 	if err != nil {
 		return nil, err
 	}
@@ -239,21 +249,15 @@ func executeCustomPagePreviewUpload(
 		}
 	}
 
-	results := make([]asc.AssetUploadResultItem, 0, len(files))
-	for _, filePath := range files {
-		item, err := uploadCustomPagePreviewAsset(requestCtx, client, set.ID, filePath)
-		if err != nil {
-			return nil, err
-		}
-		results = append(results, item)
-	}
+	results, failures, err := assets.UploadPreviewFiles(requestCtx, ctx, client, set.ID, setCreated, files)
 
 	return &asc.CustomProductPagePreviewUploadResult{
 		CustomProductPageLocalizationID: trimmedLocalizationID,
 		SetID:                           set.ID,
 		PreviewType:                     set.Attributes.PreviewType,
 		Results:                         results,
-	}, nil
+		Failures:                        failures,
+	}, err
 }
 
 func contextWithCustomPageMediaUploadTimeout(ctx context.Context) (context.Context, context.CancelFunc) {
@@ -264,21 +268,21 @@ func collectCustomPageMediaFiles(path string) ([]string, error) {
 	return assets.CollectAssetFiles(path)
 }
 
-func ensureCustomPageLocalizationPreviewSet(ctx context.Context, client *asc.Client, localizationID, previewType string) (asc.Resource[asc.AppPreviewSetAttributes], error) {
+func ensureCustomPageLocalizationPreviewSet(ctx context.Context, client *asc.Client, localizationID, previewType string) (asc.Resource[asc.AppPreviewSetAttributes], bool, error) {
 	resp, err := client.GetAppCustomProductPageLocalizationPreviewSets(ctx, localizationID)
 	if err != nil {
-		return asc.Resource[asc.AppPreviewSetAttributes]{}, err
+		return asc.Resource[asc.AppPreviewSetAttributes]{}, false, err
 	}
 	for _, set := range resp.Data {
 		if strings.EqualFold(set.Attributes.PreviewType, previewType) {
-			return set, nil
+			return set, false, nil
 		}
 	}
 	created, err := client.CreateAppPreviewSetForCustomProductPageLocalization(ctx, localizationID, previewType)
 	if err != nil {
-		return asc.Resource[asc.AppPreviewSetAttributes]{}, err
+		return asc.Resource[asc.AppPreviewSetAttributes]{}, false, err
 	}
-	return created.Data, nil
+	return created.Data, true, nil
 }
 
 func deleteAllPreviewsInSet(ctx context.Context, client *asc.Client, setID string) error {
@@ -292,8 +296,4 @@ func deleteAllPreviewsInSet(ctx context.Context, client *asc.Client, setID strin
 		}
 	}
 	return nil
-}
-
-func uploadCustomPagePreviewAsset(ctx context.Context, client *asc.Client, setID, filePath string) (asc.AssetUploadResultItem, error) {
-	return assets.UploadPreviewAsset(ctx, client, setID, filePath)
 }

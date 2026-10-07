@@ -87,6 +87,15 @@ type runResult struct {
 	Steps               []stepResult `json:"steps"`
 }
 
+func printStageResult(result runResult, format string, pretty bool) error {
+	headers := []string{"Step", "Status", "Duration (ms)", "Message"}
+	rows := make([][]string, 0, len(result.Steps))
+	for _, step := range result.Steps {
+		rows = append(rows, []string{step.Name, step.Status, fmt.Sprintf("%d", step.DurationMS), step.Message})
+	}
+	return shared.PrintOutputRows(result, format, pretty, headers, rows)
+}
+
 type runCheckpoint struct {
 	AppID               string          `json:"appId"`
 	Version             string          `json:"version"`
@@ -109,6 +118,16 @@ type stepOutcome struct {
 	Details     any
 	Persist     bool
 	ResolvedID  string
+}
+
+// readinessBlockedError carries the readiness report so the stage command can
+// summarize the blockers on stderr.
+type readinessBlockedError struct {
+	report validation.Report
+}
+
+func (e readinessBlockedError) Error() string {
+	return fmt.Sprintf("validate readiness: found %d blocking issue(s)", e.report.Summary.Blocking)
 }
 
 func executeStage(ctx context.Context, opts runOptions) (runResult, error) {
@@ -476,7 +495,7 @@ func executePipeline(ctx context.Context, opts runOptions) (runResult, error) {
 					Message:     "metadata plan requires --allow-deletes",
 					Remediation: "Add the missing localizations to --metadata-dir, or rerun with --allow-deletes to apply the planned deletions.",
 					Details:     details,
-				}, errors.New("apply metadata: --allow-deletes is required to apply delete operations")
+				}, shared.NewValidationError(errors.New("apply metadata: --allow-deletes is required to apply delete operations"))
 			}
 
 			changeCount := len(pushResult.Adds) + len(pushResult.Updates) + len(pushResult.Deletes)
@@ -629,7 +648,7 @@ func executePipeline(ctx context.Context, opts runOptions) (runResult, error) {
 			return stepOutcome{
 				Message: "readiness checks reported blocking issues",
 				Details: map[string]any{"report": report},
-			}, fmt.Errorf("validate readiness: found %d blocking issue(s)", report.Summary.Blocking)
+			}, shared.NewValidationError(readinessBlockedError{report: report})
 		}
 
 		status := "ok"

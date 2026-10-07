@@ -86,50 +86,33 @@ func TestStatusDefaultJSONIncludesAllSections(t *testing.T) {
 			if query.Get("limit") != "50" {
 				t.Fatalf("expected limit=50, got %q", query.Get("limit"))
 			}
+			if query.Get("include") != "preReleaseVersion,buildBetaDetail" {
+				t.Fatalf("expected include=preReleaseVersion,buildBetaDetail, got %q", query.Get("include"))
+			}
 			return statusJSONResponse(`{
 				"data": [
 					{
 						"type":"builds",
 						"id":"build-2",
-						"attributes":{"version":"45","uploadedDate":"2026-02-20T00:00:00Z","processingState":"VALID"}
+						"attributes":{"version":"45","uploadedDate":"2026-02-20T00:00:00Z","processingState":"VALID"},
+						"relationships":{"buildBetaDetail":{"data":{"type":"buildBetaDetails","id":"bbd-2"}}}
 					},
 					{
 						"type":"builds",
 						"id":"build-1",
-						"attributes":{"version":"44","uploadedDate":"2026-02-19T00:00:00Z","processingState":"VALID"}
+						"attributes":{"version":"44","uploadedDate":"2026-02-19T00:00:00Z","processingState":"VALID"},
+						"relationships":{"buildBetaDetail":{"data":{"type":"buildBetaDetails","id":"bbd-1"}}}
 					}
+				],
+				"included": [
+					{"type":"buildBetaDetails","id":"bbd-2","attributes":{"externalBuildState":"IN_BETA_TESTING"}},
+					{"type":"buildBetaDetails","id":"bbd-1","attributes":{"externalBuildState":"NOT_READY_FOR_TESTING"}}
 				],
 				"links":{"next":""}
 			}`), nil
 		case "/v1/builds/build-2/preReleaseVersion":
 			return statusJSONResponse(`{
 				"data":{"type":"preReleaseVersions","id":"prv-2","attributes":{"version":"1.2.3","platform":"IOS"}}
-			}`), nil
-		case "/v1/buildBetaDetails":
-			query := req.URL.Query()
-			if query.Get("limit") != "200" {
-				t.Fatalf("expected build beta details limit=200, got %q", query.Get("limit"))
-			}
-			filter := query.Get("filter[build]")
-			if !strings.Contains(filter, "build-1") || !strings.Contains(filter, "build-2") {
-				t.Fatalf("expected filter[build] to include build-1 and build-2, got %q", filter)
-			}
-			return statusJSONResponse(`{
-				"data": [
-					{
-						"type":"buildBetaDetails",
-						"id":"bbd-2",
-						"attributes":{"externalBuildState":"IN_BETA_TESTING"},
-						"relationships":{"build":{"data":{"type":"builds","id":"build-2"}}}
-					},
-					{
-						"type":"buildBetaDetails",
-						"id":"bbd-1",
-						"attributes":{"externalBuildState":"NOT_READY_FOR_TESTING"},
-						"relationships":{"build":{"data":{"type":"builds","id":"build-1"}}}
-					}
-				],
-				"links":{"next":""}
 			}`), nil
 		case "/v1/betaAppReviewSubmissions":
 			query := req.URL.Query()
@@ -289,8 +272,6 @@ func TestStatusCorrelatesOlderBetaReviewSubmissionWithItsActualBuild(t *testing.
 			return statusJSONResponse(`{
 				"data":{"type":"preReleaseVersions","id":"train-1.2.3-ios","attributes":{"version":"1.2.3","platform":"IOS"}}
 			}`), nil
-		case "/v1/buildBetaDetails":
-			return statusJSONResponse(`{"data":[],"links":{"next":""}}`), nil
 		case "/v1/betaAppReviewSubmissions":
 			return statusJSONResponse(`{
 				"data":[{
@@ -409,8 +390,6 @@ func TestStatusResolvesMissingActiveBetaReviewBuildBeforeSelection(t *testing.T)
 				"included":[{"type":"preReleaseVersions","id":"train-1.2.3-ios","attributes":{"version":"1.2.3","platform":"IOS"}}],
 				"links":{"next":""}
 			}`), nil
-		case "/v1/buildBetaDetails":
-			return statusJSONResponse(`{"data":[],"links":{"next":""}}`), nil
 		case "/v1/betaAppReviewSubmissions":
 			if req.URL.Query().Get("include") != "build" {
 				t.Fatalf("expected include=build, got %q", req.URL.Query().Get("include"))
@@ -532,8 +511,6 @@ func TestStatusResolvesSelectedActiveBetaReviewBeyondPrefetchCap(t *testing.T) {
 				"included":[{"type":"preReleaseVersions","id":"train-1.2.3-ios","attributes":{"version":"1.2.3","platform":"IOS"}}],
 				"links":{"next":""}
 			}`), nil
-		case req.URL.Path == "/v1/buildBetaDetails":
-			return statusJSONResponse(`{"data":[],"links":{"next":""}}`), nil
 		case req.URL.Path == "/v1/betaAppReviewSubmissions":
 			return statusJSONResponse(string(reviewResponse)), nil
 		case strings.HasPrefix(req.URL.Path, "/v1/betaAppReviewSubmissions/waiting-") && strings.HasSuffix(req.URL.Path, "/build"):
@@ -629,8 +606,6 @@ func TestStatusEnrichesLinkedActiveReviewBuildOutsideSnapshot(t *testing.T) {
 				"included":[{"type":"preReleaseVersions","id":"train-1.2.3-ios","attributes":{"version":"1.2.3","platform":"IOS"}}],
 				"links":{"next":""}
 			}`), nil
-		case "/v1/buildBetaDetails":
-			return statusJSONResponse(`{"data":[],"links":{"next":""}}`), nil
 		case "/v1/betaAppReviewSubmissions":
 			return statusJSONResponse(`{
 				"data":[{
@@ -771,8 +746,6 @@ func TestStatusFindsActiveBetaReviewBeyondFiftyBuildSnapshot(t *testing.T) {
 				t.Fatalf("marshal builds response: %v", err)
 			}
 			return statusJSONResponse(string(body)), nil
-		case "/v1/buildBetaDetails":
-			return statusJSONResponse(`{"data":[],"links":{"next":""}}`), nil
 		case "/v1/betaAppReviewSubmissions":
 			reviewSubmissionCalls++
 			buildFilter := req.URL.Query().Get("filter[build]")
@@ -1660,7 +1633,7 @@ func TestStatusIncludeAppOnly(t *testing.T) {
 	}
 }
 
-func TestStatusTestFlightHandlesMissingBuildRelationship(t *testing.T) {
+func TestStatusTestFlightReadsStatesFromIncludedBuildBetaDetail(t *testing.T) {
 	setupAuth(t)
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 	t.Setenv("ASC_APP_ID", "")
@@ -1682,25 +1655,28 @@ func TestStatusTestFlightHandlesMissingBuildRelationship(t *testing.T) {
 				"data":{"type":"apps","id":"app-1","attributes":{"name":"My App","bundleId":"com.example.myapp","sku":"my-app-sku"}}
 			}`), nil
 		case "/v1/builds":
+			if req.URL.Query().Get("filter[betaAppReviewSubmission.betaReviewState]") == "" && req.URL.Query().Get("include") != "preReleaseVersion,buildBetaDetail" {
+				t.Fatalf("expected snapshot builds include=preReleaseVersion,buildBetaDetail, got %q", req.URL.Query().Get("include"))
+			}
 			return statusJSONResponse(`{
 				"data":[{
 					"type":"builds",
 					"id":"build-2",
 					"attributes":{"version":"45","uploadedDate":"2026-02-20T00:00:00Z","processingState":"VALID"},
-					"relationships":{"preReleaseVersion":{"data":{"type":"preReleaseVersions","id":"train-1.2.3-ios"}}}
+					"relationships":{
+						"preReleaseVersion":{"data":{"type":"preReleaseVersions","id":"train-1.2.3-ios"}},
+						"buildBetaDetail":{"data":{"type":"buildBetaDetails","id":"bbd-2"}}
+					}
 				}],
-				"included":[{"type":"preReleaseVersions","id":"train-1.2.3-ios","attributes":{"version":"1.2.3","platform":"IOS"}}],
+				"included":[
+					{"type":"preReleaseVersions","id":"train-1.2.3-ios","attributes":{"version":"1.2.3","platform":"IOS"}},
+					{"type":"buildBetaDetails","id":"bbd-2","attributes":{"internalBuildState":"IN_BETA_TESTING","externalBuildState":"READY_FOR_TESTING"}}
+				],
 				"links":{"next":""}
 			}`), nil
 		case "/v1/buildBetaDetails":
 			buildBetaDetailsCalls++
-			if req.URL.Query().Get("filter[build]") != "build-2" {
-				t.Fatalf("expected build beta details filter[build]=build-2, got %q", req.URL.Query().Get("filter[build]"))
-			}
-			return statusJSONResponse(`{
-				"data":[{"type":"buildBetaDetails","id":"bbd-2","attributes":{"externalBuildState":"READY_FOR_TESTING"}}],
-				"links":{"next":""}
-			}`), nil
+			return statusJSONResponse(`{"data":[],"links":{"next":""}}`), nil
 		case "/v1/betaAppReviewSubmissions":
 			return statusJSONResponse(`{"data":[],"links":{"next":""}}`), nil
 		default:
@@ -1724,8 +1700,8 @@ func TestStatusTestFlightHandlesMissingBuildRelationship(t *testing.T) {
 	if stderr != "" {
 		t.Fatalf("expected empty stderr, got %q", stderr)
 	}
-	if buildBetaDetailsCalls < 1 {
-		t.Fatal("expected build beta details request")
+	if buildBetaDetailsCalls != 0 {
+		t.Fatalf("expected no /v1/buildBetaDetails requests, got %d", buildBetaDetailsCalls)
 	}
 
 	var payload map[string]any
@@ -1742,6 +1718,9 @@ func TestStatusTestFlightHandlesMissingBuildRelationship(t *testing.T) {
 	}
 	if testflight["externalBuildState"] != "READY_FOR_TESTING" {
 		t.Fatalf("expected externalBuildState=READY_FOR_TESTING, got %v", testflight["externalBuildState"])
+	}
+	if testflight["internalBuildState"] != "IN_BETA_TESTING" {
+		t.Fatalf("expected internalBuildState=IN_BETA_TESTING, got %v", testflight["internalBuildState"])
 	}
 }
 

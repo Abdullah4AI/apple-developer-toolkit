@@ -498,7 +498,7 @@ func createSubscriptionIntroductoryOffersForAllTerritories(
 		Total:           len(territories),
 	}
 
-	var operationErr error
+	var operationErr, refused error
 	for _, territoryID := range territories {
 		if _, ok := existing[territoryID]; ok {
 			appendSubscriptionIntroductoryOfferCreateBulkSkip(summary, territoryID, "introductory offer already exists for territory")
@@ -521,6 +521,7 @@ func createSubscriptionIntroductoryOffersForAllTerritories(
 		createCancel()
 		if err != nil {
 			appendSubscriptionIntroductoryOfferCreateBulkFailure(summary, territoryID, err)
+			refused = shared.KeepReadOnlyRefusal(refused, err)
 			if ctxErr := ctx.Err(); ctxErr != nil {
 				operationErr = ctxErr
 				break
@@ -541,7 +542,7 @@ func createSubscriptionIntroductoryOffersForAllTerritories(
 		return shared.NewReportedError(fmt.Errorf("subscriptions introductory-offers create: operation stopped: %w", operationErr))
 	}
 	if summary.Failed > 0 {
-		return shared.NewReportedError(fmt.Errorf("subscriptions introductory-offers create: %d territor%s failed", summary.Failed, pluralizeIntroductoryOfferCreateTerritories(summary.Failed)))
+		return shared.NewReportedError(shared.NewErrorWithCause(fmt.Errorf("subscriptions introductory-offers create: %d territor%s failed", summary.Failed, pluralizeIntroductoryOfferCreateTerritories(summary.Failed)), refused))
 	}
 	return nil
 }

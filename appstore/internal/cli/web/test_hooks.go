@@ -124,13 +124,27 @@ func SetPersistWebSession(fn func(*webcore.AuthSession) error) func() {
 	}
 }
 
+func SetWebLogin(fn func(context.Context, webcore.LoginCredentials) (*webcore.AuthSession, error)) func() {
+	prev := webLoginFn
+	webLoginFn = fn
+	return func() {
+		webLoginFn = prev
+	}
+}
+
 // DisableControllingTTYForTesting prevents tests from opening the process's
 // controlling terminal. The returned function restores the previous behavior.
 func DisableControllingTTYForTesting() func() {
-	previous := openTTYFn
-	openTTYFn = func() (*os.File, error) {
+	return SetControllingTTYForTesting(func() (*os.File, error) {
 		return nil, os.ErrNotExist
-	}
+	})
+}
+
+// SetControllingTTYForTesting replaces how the process's controlling terminal
+// is opened. The returned function restores the previous behavior.
+func SetControllingTTYForTesting(fn func() (*os.File, error)) func() {
+	previous := openTTYFn
+	openTTYFn = fn
 	return func() {
 		openTTYFn = previous
 	}

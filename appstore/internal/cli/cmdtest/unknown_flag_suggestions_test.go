@@ -117,6 +117,20 @@ func TestUnknownFlagSuggestsTheIntendedFlag(t *testing.T) {
 				"For help:\n  asc signing resign --help\n",
 		},
 		{
+			name: "ipa-info --ipa",
+			args: []string{"ipa-info", "--ipa", "PRIVATE_VALUE"},
+			want: "Error: unknown flag `--ipa` for `asc ipa-info`\n" +
+				"Try:\n  --path\n" +
+				"For help:\n  asc ipa-info --help\n",
+		},
+		{
+			name: "pkg-info --pkg",
+			args: []string{"pkg-info", "--pkg", "PRIVATE_VALUE"},
+			want: "Error: unknown flag `--pkg` for `asc pkg-info`\n" +
+				"Try:\n  --path\n" +
+				"For help:\n  asc pkg-info --help\n",
+		},
+		{
 			name: "a format-only --output does not answer --path",
 			args: []string{"apps", "list", "--path", "PRIVATE_VALUE"},
 			want: "Error: unknown flag `--path` for `asc apps list`\n" +

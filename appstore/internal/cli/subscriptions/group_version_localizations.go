@@ -30,6 +30,7 @@ commands for new workflows.`,
 			SubscriptionsGroupsVersionLocalizationsViewCommand(),
 			SubscriptionsGroupsVersionLocalizationsUpdateCommand(),
 			SubscriptionsGroupsVersionLocalizationsDeleteCommand(),
+			SubscriptionsGroupsVersionLocalizationsImportCommand(),
 		},
 		Exec: func(context.Context, []string) error { return flag.ErrHelp },
 	}

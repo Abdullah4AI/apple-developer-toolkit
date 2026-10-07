@@ -465,6 +465,9 @@ func loadLocalMetadataWithAssets(dir, version string, allowEmpty bool) (localMet
 	}
 
 	if filesSeen == 0 && !allowEmpty {
+		if jsonFiles, _ := filepath.Glob(filepath.Join(dir, "*.json")); len(jsonFiles) > 0 {
+			return localMetadataBundle{}, shared.UsageErrorf("no metadata .json files found under %s; pass the metadata root (the directory containing version/ and app-info/), e.g. ./metadata", dir)
+		}
 		return localMetadataBundle{}, shared.UsageError("no metadata .json files found")
 	}
 	return localMetadataBundle{

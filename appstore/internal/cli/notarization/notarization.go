@@ -1248,7 +1248,7 @@ func reportStaplerFailure(command string, err error) error {
 		} else {
 			fmt.Fprintf(os.Stderr, "Error: notarization %s was canceled\n", command)
 		}
-		return shared.NewReportedError(err)
+		return shared.NewStderrReportedError(err)
 	}
 	var commandErr *localxcode.StaplerCommandError
 	if errors.As(err, &commandErr) {
@@ -1256,24 +1256,24 @@ func reportStaplerFailure(command string, err error) error {
 			reportStaplerPartialMutation(partialErr)
 			if partialErr != nil && partialErr.Interrupted {
 				if commandErr.ExitCode > 0 {
-					return shared.NewReportedError(shared.NewProcessExitErrorWithCause(commandErr.ExitCode, err))
+					return shared.NewStderrReportedError(shared.NewProcessExitErrorWithCause(commandErr.ExitCode, err))
 				}
-				return shared.NewReportedError(err)
+				return shared.NewStderrReportedError(err)
 			}
 			if commandErr.ExitCode > 0 {
-				return shared.NewReportedError(shared.NewProcessExitErrorWithCause(commandErr.ExitCode, err))
+				return shared.NewStderrReportedError(shared.NewProcessExitErrorWithCause(commandErr.ExitCode, err))
 			}
 			if errors.Is(err, localxcode.ErrStaplerDiagnosticOutput) && !isStaplerTargetStageError(err) {
 				// The child already reported a successful process status, so the
 				// partial-mutation warning above is the complete diagnosis. Adding
 				// the missing-exit-status message would misreport a working child.
-				return shared.NewReportedError(err)
+				return shared.NewStderrReportedError(err)
 			}
 			if staplerStapleChildFailure(err) {
 				// The staple child ran and failed without an ordinary status. The
 				// partial-mutation warning above already names that stage, so the
 				// generic missing-status line would only repeat it.
-				return shared.NewReportedError(err)
+				return shared.NewStderrReportedError(err)
 			}
 		}
 		if commandErr.ExitCode > 0 {
@@ -1284,7 +1284,7 @@ func reportStaplerFailure(command string, err error) error {
 			} else if !partialMutation || commandErr.Operation != string(localxcode.StaplerOperationValidate) {
 				fmt.Fprintf(os.Stderr, "Error: notarization %s failed during %s (exit status %d)\n", command, commandErr.Operation, commandErr.ExitCode)
 			}
-			return shared.NewReportedError(shared.NewProcessExitErrorWithCause(commandErr.ExitCode, err))
+			return shared.NewStderrReportedError(shared.NewProcessExitErrorWithCause(commandErr.ExitCode, err))
 		}
 		if errors.Is(err, localxcode.ErrStaplerDiagnosticOutput) && !isStaplerTargetStageError(err) {
 			// The child reported success; only copying its output to the
@@ -1295,25 +1295,25 @@ func reportStaplerFailure(command string, err error) error {
 			} else {
 				fmt.Fprintf(os.Stderr, "Error: notarization %s completed, but the %s diagnostic output could not be written\n", command, commandErr.Operation)
 			}
-			return shared.NewReportedError(err)
+			return shared.NewStderrReportedError(err)
 		}
 		fmt.Fprintf(os.Stderr, "Error: notarization %s failed during %s before a usable exit status was available\n", command, commandErr.Operation)
-		return shared.NewReportedError(err)
+		return shared.NewStderrReportedError(err)
 	}
 	if partialMutation {
 		reportStaplerPartialMutation(partialErr)
-		return shared.NewReportedError(err)
+		return shared.NewStderrReportedError(err)
 	}
 	if errors.Is(err, context.Canceled) {
 		fmt.Fprintf(os.Stderr, "Error: notarization %s was canceled\n", command)
-		return shared.NewReportedError(err)
+		return shared.NewStderrReportedError(err)
 	}
 	if errors.Is(err, context.DeadlineExceeded) {
 		fmt.Fprintf(os.Stderr, "Error: notarization %s timed out\n", command)
-		return shared.NewReportedError(err)
+		return shared.NewStderrReportedError(err)
 	}
 	fmt.Fprintf(os.Stderr, "Error: notarization %s: %v\n", command, err)
-	return shared.NewReportedError(err)
+	return shared.NewStderrReportedError(err)
 }
 
 func reportStaplerPartialMutation(err *localxcode.StaplerPartialMutationError) {
@@ -1401,7 +1401,7 @@ func staplerStapleChildFailure(err error) bool {
 func reportStaplerTargetFilesystemFailure(command string) error {
 	message := fmt.Sprintf("notarization %s: could not inspect artifact filesystem", command)
 	fmt.Fprintln(os.Stderr, "Error: "+message)
-	return shared.NewReportedError(errors.New(message))
+	return shared.NewStderrReportedError(errors.New(message))
 }
 
 // isStaplerTargetStageError reports whether err came from a stage boundary
@@ -1422,10 +1422,10 @@ func reportStaplerTargetStageFailure(command, fallbackStage string, err error) e
 	if errors.As(err, &commandErr) && commandErr.ExitCode > 0 {
 		detail := strings.TrimPrefix(message, "notarization "+command+": ")
 		fmt.Fprintf(os.Stderr, "Error: notarization %s failed during %s (exit status %d): %s\n", command, commandErr.Operation, commandErr.ExitCode, detail)
-		return shared.NewReportedError(shared.NewProcessExitErrorWithCause(commandErr.ExitCode, err))
+		return shared.NewStderrReportedError(shared.NewProcessExitErrorWithCause(commandErr.ExitCode, err))
 	}
 	fmt.Fprintln(os.Stderr, "Error: "+message)
-	return shared.NewReportedError(errors.Join(errors.New(message), err))
+	return shared.NewStderrReportedError(errors.Join(errors.New(message), err))
 }
 
 func staplerTargetStageFailureMessage(command, fallbackStage string, err error) string {

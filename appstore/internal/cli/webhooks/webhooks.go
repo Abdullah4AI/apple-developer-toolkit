@@ -448,6 +448,9 @@ Examples:
 			if err := shared.ValidateNextURL(*next); err != nil {
 				return shared.UsageErrorf("webhooks deliveries: %v", err)
 			}
+			if err := shared.RejectNextFlagConflicts(fs, *next, "webhooks deliveries", "created-after", "created-before"); err != nil {
+				return err
+			}
 
 			client, err := shared.GetASCClient()
 			if err != nil {

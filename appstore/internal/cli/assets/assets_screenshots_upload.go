@@ -33,6 +33,18 @@ func normalizeScreenshotDisplayType(input string) (string, error) {
 
 func validateScreenshotDimensions(files []string, displayType string) error {
 	for _, filePath := range files {
+		file, err := rootfs.OpenFile(filePath)
+		if err != nil {
+			return err
+		}
+		_, alphaErr := asc.ReadAppStoreImageFormatFrom(file)
+		closeErr := file.Close()
+		if alphaErr != nil {
+			return fmt.Errorf("%q: %w", filePath, alphaErr)
+		}
+		if closeErr != nil {
+			return closeErr
+		}
 		if err := asc.ValidateScreenshotDimensions(filePath, displayType); err != nil {
 			return err
 		}
@@ -562,7 +574,7 @@ func validateOpenedScreenshotFileFormat(filePath string, file *os.File) error {
 	if _, err := file.Seek(0, io.SeekStart); err != nil {
 		return err
 	}
-	format, err := asc.ReadImageFormatFrom(file)
+	format, err := asc.ReadAppStoreImageFormatFrom(file)
 	if err != nil {
 		return fmt.Errorf("%q: %w", filePath, err)
 	}

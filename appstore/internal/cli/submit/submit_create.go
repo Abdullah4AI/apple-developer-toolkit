@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
 func addVersionToSubmissionOrRecover(
@@ -40,11 +41,15 @@ func addVersionToSubmissionOrRecover(
 		return "", err
 	}
 	if verifyErr := verifyReviewSubmissionForSubmit(ctx, client, conflictSubmissionID, appID, platform, versionID); verifyErr != nil {
-		return "", fmt.Errorf(
+		reuseErr := fmt.Errorf(
 			"conflict review submission %s could not be safely reused: %w",
 			conflictSubmissionID,
 			verifyErr,
 		)
+		if shared.IsValidationError(verifyErr) {
+			reuseErr = shared.WithDiagnostic(reuseErr, shared.DiagnosticResourceConflict, "")
+		}
+		return "", reuseErr
 	}
 
 	message := fmt.Sprintf("Version already in review submission %s, reusing it.", conflictSubmissionID)
@@ -93,7 +98,7 @@ func validateReviewSubmissionBeforeAdd(
 		return false, fmt.Errorf("inspect review submission items before adding item: %w", err)
 	}
 	if summary.hasOtherItems {
-		return false, fmt.Errorf("review submission %s contains unrelated review items", submissionID)
+		return false, unrelatedReviewItemsError(submissionID)
 	}
 	return summary.hasTargetVersion, nil
 }
@@ -131,12 +136,24 @@ func verifyReviewSubmissionForSubmit(
 		return fmt.Errorf("inspect review submission items: %w", err)
 	}
 	if !summary.hasTargetVersion {
-		return fmt.Errorf("review submission %s does not contain target version %s", submissionID, versionID)
+		return shared.WithDiagnostic(
+			shared.NewValidationError(fmt.Errorf("review submission %s does not contain target version %s", submissionID, versionID)),
+			shared.DiagnosticStateNotReady,
+			"",
+		)
 	}
 	if summary.hasOtherItems {
-		return fmt.Errorf("review submission %s contains unrelated review items", submissionID)
+		return unrelatedReviewItemsError(submissionID)
 	}
 	return nil
+}
+
+func unrelatedReviewItemsError(submissionID string) error {
+	return shared.WithDiagnostic(
+		shared.NewValidationError(fmt.Errorf("review submission %s contains unrelated review items", submissionID)),
+		shared.DiagnosticResourceConflict,
+		"",
+	)
 }
 
 func validateReviewSubmissionForMutation(submission *asc.ReviewSubmissionResource, expectedID, appID, platform string) error {
@@ -157,11 +174,15 @@ func validateReviewSubmissionForMutation(submission *asc.ReviewSubmissionResourc
 		return fmt.Errorf("app store connect returned review submission %s instead of %s", actualID, expectedID)
 	}
 	if submission.Attributes.SubmissionState != asc.ReviewSubmissionStateReadyForReview {
-		return fmt.Errorf(
-			"review submission %s is in state %q, not %q",
-			actualID,
-			submission.Attributes.SubmissionState,
-			asc.ReviewSubmissionStateReadyForReview,
+		return shared.WithDiagnostic(
+			shared.NewValidationError(fmt.Errorf(
+				"review submission %s is in state %q, not %q",
+				actualID,
+				submission.Attributes.SubmissionState,
+				asc.ReviewSubmissionStateReadyForReview,
+			)),
+			shared.DiagnosticStateNotReady,
+			"",
 		)
 	}
 	if !strings.EqualFold(string(submission.Attributes.Platform), platform) {

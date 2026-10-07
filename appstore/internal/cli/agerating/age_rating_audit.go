@@ -116,7 +116,7 @@ Examples:
 				}
 				err := fmt.Errorf("age-rating audit: %d %s could not be audited; see row errors in the output", result.ErrorCount, noun)
 				fmt.Fprintln(os.Stderr, err)
-				return shared.NewReportedError(err)
+				return shared.NewStderrReportedError(err)
 			}
 			return nil
 		},

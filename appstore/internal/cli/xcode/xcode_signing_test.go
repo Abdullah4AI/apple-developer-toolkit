@@ -2,6 +2,7 @@ package xcode
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -700,5 +701,35 @@ func TestXcodeSigningPlanRejectsExportOptionsAliasingPlanInputs(t *testing.T) {
 		if data, _ := os.ReadFile(pbxproj); string(data) != "project" {
 			t.Fatalf("project file was overwritten: %q", data)
 		}
+	}
+}
+
+func TestXcodeSigningPlanSanitizesWarningsWithoutChangingJSON(t *testing.T) {
+	stubXcodeSigningPlanSideEffects(t)
+	warning := "discarded Profile\x1b[31mName"
+	runBuildSigningPlan = func(localxcode.SigningPlanOptions) (*localxcode.SigningPlan, error) {
+		return &localxcode.SigningPlan{Ready: true, PlanPath: "plan.json", Warnings: []string{warning}}, nil
+	}
+	command := xcodeSigningPlanCommand()
+	command.FlagSet.SetOutput(io.Discard)
+	if err := command.FlagSet.Parse([]string{"--project", "App.xcodeproj", "--profile", "App.mobileprovision", "--output", "json"}); err != nil {
+		t.Fatal(err)
+	}
+	var execErr error
+	stdout, stderr := captureCommandOutput(t, func() error { execErr = command.Exec(context.Background(), nil); return execErr })
+	if execErr != nil {
+		t.Fatal(execErr)
+	}
+	if strings.ContainsRune(stderr, '\x1b') || !strings.Contains(stderr, shared.SanitizeTerminal(warning)) {
+		t.Fatalf("unsafe terminal warning: %q", stderr)
+	}
+	var output struct {
+		Warnings []string `json:"warnings"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &output); err != nil {
+		t.Fatal(err)
+	}
+	if len(output.Warnings) != 1 || output.Warnings[0] != warning {
+		t.Fatalf("JSON warning changed: %#v", output.Warnings)
 	}
 }

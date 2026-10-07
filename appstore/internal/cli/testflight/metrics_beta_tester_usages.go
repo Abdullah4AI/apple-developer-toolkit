@@ -110,6 +110,9 @@ Examples:
 			if err := shared.ValidateNextURL(*next); err != nil {
 				return shared.UsageErrorfCtx(ctx, "testflight metrics beta-tester-usages: %v", err)
 			}
+			if err := shared.RejectNextFlagConflicts(fs, *next, "testflight metrics app-testers", "period", "group-by", "filter-tester"); err != nil {
+				return err
+			}
 
 			periodValue, err := normalizeBetaTesterUsagePeriod(*period)
 			if err != nil {

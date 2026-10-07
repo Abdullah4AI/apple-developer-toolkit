@@ -135,8 +135,8 @@ func TestRun_IntroductoryOffersImportPartialFailureReturnsExitError(t *testing.T
 		}
 	})
 
-	if stderr != "" {
-		t.Fatalf("expected empty stderr, got %q", stderr)
+	if want := "Error: subscriptions offers introductory import: 1 row(s) failed\n"; stderr != want {
+		t.Fatalf("stderr = %q, want %q", stderr, want)
 	}
 	if !strings.Contains(stdout, `"failed":1`) {
 		t.Fatalf("expected failure summary in stdout, got %q", stdout)
@@ -411,7 +411,7 @@ func TestRun_UsageValidationErrorsReturnExitUsage(t *testing.T) {
 				"--app", "1234567890",
 				"--dry-run",
 			},
-			wantErr: `apps wall submit does not accept parent wall flags (--limit, --output)`,
+			wantErr: "--output must be passed after the subcommand name (asc apps wall submit [flags]); --limit is only valid for asc apps wall",
 		},
 		{
 			name:    "apps public view missing app",

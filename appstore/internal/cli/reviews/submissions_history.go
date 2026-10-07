@@ -342,6 +342,8 @@ func reviewSubmissionItemHistoryFields() []string {
 		"state",
 		"appStoreVersion",
 		"appCustomProductPageVersion",
+		"appAssetLibraryImage",
+		"appAssetLibraryVideo",
 		"appStoreVersionExperiment",
 		"appStoreVersionExperimentV2",
 		"appEvent",
@@ -361,6 +363,8 @@ func reviewSubmissionItemHistoryIncludes() []string {
 	return []string{
 		"appStoreVersion",
 		"appCustomProductPageVersion",
+		"appAssetLibraryImage",
+		"appAssetLibraryVideo",
 		"appStoreVersionExperiment",
 		"appEvent",
 		"backgroundAssetVersion",
@@ -401,6 +405,12 @@ func populateSubmissionHistoryItem(histItem *SubmissionHistoryItem, item asc.Rev
 	case item.Relationships.AppCustomProductPageVersion != nil && item.Relationships.AppCustomProductPageVersion.Data.ID != "":
 		histItem.Type = "appCustomProductPageVersion"
 		histItem.ResourceID = item.Relationships.AppCustomProductPageVersion.Data.ID
+	case item.Relationships.AppAssetLibraryImage != nil && item.Relationships.AppAssetLibraryImage.Data.ID != "":
+		histItem.Type = "appAssetLibraryImage"
+		histItem.ResourceID = item.Relationships.AppAssetLibraryImage.Data.ID
+	case item.Relationships.AppAssetLibraryVideo != nil && item.Relationships.AppAssetLibraryVideo.Data.ID != "":
+		histItem.Type = "appAssetLibraryVideo"
+		histItem.ResourceID = item.Relationships.AppAssetLibraryVideo.Data.ID
 	case item.Relationships.AppStoreVersionExperimentV2 != nil && item.Relationships.AppStoreVersionExperimentV2.Data.ID != "":
 		histItem.Type = "appStoreVersionExperimentV2"
 		histItem.ResourceID = item.Relationships.AppStoreVersionExperimentV2.Data.ID

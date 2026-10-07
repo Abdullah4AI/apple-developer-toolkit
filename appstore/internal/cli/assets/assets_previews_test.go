@@ -869,3 +869,49 @@ func TestIsValidPreviewFrameTimeCode(t *testing.T) {
 		})
 	}
 }
+
+func TestUploadPreviewFilesCleansNewSetWithBoundedDetachedContext(t *testing.T) {
+	for _, reserved := range []bool{false, true} {
+		t.Run(fmt.Sprint(reserved), func(t *testing.T) {
+			t.Setenv("ASC_TIMEOUT", "1s")
+			originalTransport := http.DefaultTransport
+			t.Cleanup(func() { http.DefaultTransport = originalTransport })
+			var requests []string
+			http.DefaultTransport = assetsUploadRoundTripFunc(func(req *http.Request) (*http.Response, error) {
+				if req.Context().Err() != nil {
+					t.Fatalf("cleanup inherited cancellation: %v", req.Context().Err())
+				}
+				deadline, ok := req.Context().Deadline()
+				if !ok || time.Until(deadline) > time.Second {
+					t.Fatalf("cleanup lacks bounded timeout: %v", deadline)
+				}
+				requests = append(requests, req.Method+" "+req.URL.Path)
+				return &http.Response{StatusCode: http.StatusNoContent, Body: io.NopCloser(strings.NewReader("")), Header: http.Header{}}, nil
+			})
+			base, cancel := context.WithCancel(context.Background())
+			cancel()
+			results, err := uploadPreviewFilesWithSetCleanup(base, base, newAssetsUploadTestClient(t), "new-set", true, []string{"preview.mov"}, func(ctx context.Context, _ *asc.Client, _, _ string) (asc.AssetUploadResultItem, error) {
+				if ctx.Err() != context.Canceled {
+					t.Fatal("expected canceled upload")
+				}
+				if reserved {
+					return asc.AssetUploadResultItem{AssetID: "reserved-1"}, context.Canceled
+				}
+				return asc.AssetUploadResultItem{}, context.Canceled
+			})
+			if !errors.Is(err, context.Canceled) {
+				t.Fatalf("original cancellation cause lost: %v", err)
+			}
+			want := []string{"DELETE /v1/appPreviewSets/new-set"}
+			if reserved {
+				want = append([]string{"DELETE /v1/appPreviews/reserved-1"}, want...)
+				if len(results) != 1 || results[0].AssetID != "reserved-1" || results[0].State != "rolled-back" {
+					t.Fatalf("receipt=%#v", results)
+				}
+			}
+			if !reflect.DeepEqual(requests, want) {
+				t.Fatalf("requests=%v want=%v", requests, want)
+			}
+		})
+	}
+}

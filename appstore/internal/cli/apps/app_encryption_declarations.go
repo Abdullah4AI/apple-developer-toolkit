@@ -71,6 +71,9 @@ Examples:
 			if err := shared.ValidateNextURL(*next); err != nil {
 				return shared.UsageErrorf("apps app-encryption-declarations list: %v", err)
 			}
+			if err := shared.RejectNextFlagConflicts(fs, *next, "apps app-encryption-declarations list", "build-id", "fields", "document-fields", "include", "build-limit"); err != nil {
+				return err
+			}
 
 			fieldsValue, err := normalizeAppEncryptionDeclarationFields(*fields)
 			if err != nil {

@@ -1864,6 +1864,77 @@ func TestResolveSessionAutoReauthsExpiredCachedSessionUsingEnvPassword(t *testin
 	}
 }
 
+// A cached cookie jar can carry Apple's trusted-device cookie, so a sign-in
+// without any 2FA code source must still try it, and stop only once Apple asks
+// for a code, before the challenge is requested.
+func TestResolveSessionWithoutTwoFactorSourceStillTriesCachedJar(t *testing.T) {
+	for _, needsTwoFactor := range []bool{false, true} {
+		t.Run(fmt.Sprintf("two-factor challenge %t", needsTwoFactor), func(t *testing.T) {
+			origTryResume := tryResumeSessionFn
+			origLoadCachedSession := loadCachedSessionFn
+			origWebLogin := webLoginFn
+			origWebLoginWithClient := webLoginWithClientFn
+			origPersistWebSession := persistWebSessionFn
+			origPrepare := prepareTwoFactorChallengeFn
+			origPromptAvailable := twoFactorPromptAvailableFn
+			origExpiredWriter := sessionExpiredWriter
+			t.Cleanup(func() {
+				tryResumeSessionFn = origTryResume
+				loadCachedSessionFn = origLoadCachedSession
+				webLoginFn = origWebLogin
+				webLoginWithClientFn = origWebLoginWithClient
+				persistWebSessionFn = origPersistWebSession
+				prepareTwoFactorChallengeFn = origPrepare
+				twoFactorPromptAvailableFn = origPromptAvailable
+				sessionExpiredWriter = origExpiredWriter
+			})
+
+			t.Setenv(webPasswordEnv, "env-secret")
+			t.Setenv(webTwoFactorCodeCommandEnv, "")
+			sessionExpiredWriter = io.Discard
+			twoFactorPromptAvailableFn = func() bool { return false }
+
+			cachedClient := &http.Client{}
+			trusted := &webcore.AuthSession{Client: cachedClient, UserEmail: "user@example.com"}
+			tryResumeSessionFn = func(ctx context.Context, username string) (*webcore.AuthSession, bool, error) {
+				return nil, false, webcore.ErrCachedSessionExpired
+			}
+			loadCachedSessionFn = func(username string) (*webcore.AuthSession, bool, error) {
+				return &webcore.AuthSession{Client: cachedClient, UserEmail: username}, true, nil
+			}
+			webLoginWithClientFn = func(ctx context.Context, client *http.Client, creds webcore.LoginCredentials) (*webcore.AuthSession, error) {
+				if needsTwoFactor {
+					return &webcore.AuthSession{Client: client}, &webcore.TwoFactorRequiredError{}
+				}
+				return trusted, nil
+			}
+			webLoginFn = func(ctx context.Context, creds webcore.LoginCredentials) (*webcore.AuthSession, error) {
+				t.Fatal("did not expect a fresh sign-in")
+				return nil, nil
+			}
+			persistWebSessionFn = func(*webcore.AuthSession) error { return nil }
+			prepareTwoFactorChallengeFn = func(ctx context.Context, session *webcore.AuthSession) (*webcore.TwoFactorChallenge, error) {
+				t.Fatal("did not expect a 2FA challenge request without a code source")
+				return nil, nil
+			}
+
+			session, _, err := resolveSession(context.Background(), "user@example.com", "", "")
+			if !needsTwoFactor {
+				if err != nil || session != trusted {
+					t.Fatalf("resolveSession() = %v, %v; want the trusted cached-jar session", session, err)
+				}
+				return
+			}
+			if !errors.Is(err, errNoTwoFactorCodeSource) || !shared.IsValidationError(err) {
+				t.Fatalf("resolveSession() error = %v, want validation error for the missing 2FA source", err)
+			}
+			if diagnostic, ok := shared.DiagnosticFromError(err); !ok || diagnostic.Code != shared.DiagnosticRequiredInputMissing {
+				t.Fatalf("diagnostic = %+v, want %q", diagnostic, shared.DiagnosticRequiredInputMissing)
+			}
+		})
+	}
+}
+
 func TestResolveSessionAutoReauthsExpiredLastCachedSessionUsingStoredEmail(t *testing.T) {
 	origTryResume := tryResumeSessionFn
 	origTryResumeLast := tryResumeLastFn

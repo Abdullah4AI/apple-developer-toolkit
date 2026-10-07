@@ -61,8 +61,8 @@ func TestReportsPresetCommandHelpShowsOperatorGuidance(t *testing.T) {
 		"campaign, ad-group, and keyword report levels",
 		"Search-term report levels cannot",
 		"request row totals",
-		"asc ads v5 reports preset --level campaigns --from 2026-05-01 --to 2026-05-31 --fields campaignName,impressions,taps,localSpend --sort -impressions",
-		"asc ads v5 reports preset --level ads --campaign 12345 --from 2026-05-01 --to 2026-05-31 --sort -impressions",
+		"asc ads v5 reports preset --level campaigns --last-days 30 --fields campaignName,impressions,taps,localSpend --sort -impressions",
+		"asc ads v5 reports preset --level ads --campaign 12345 --from YYYY-MM-DD --to YYYY-MM-DD --sort -impressions",
 	} {
 		if !strings.Contains(cmd.LongHelp, want) {
 			t.Fatalf("LongHelp missing %q\n%s", want, cmd.LongHelp)

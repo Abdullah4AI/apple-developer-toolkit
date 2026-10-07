@@ -210,11 +210,14 @@ Setup uses Apple's price-point equalizations to materialize the complete App
 Store price matrix. Sale availability remains the independently selected subset.
 
 By default, setup reads Apple's final subscription state back and verifies the
-resulting metadata, screenshot delivery, pricing, and availability. A final
-MISSING_METADATA state fails the command and includes deep diagnostics when
---app is available. Use --repair to atomically rebuild and re-save that complete
-matrix even when the selected base price is unchanged. Use --no-verify only
-when intentionally skipping these postcondition checks.
+resulting metadata, screenshot delivery, pricing, and availability. Verification
+passes only when Apple reports a complete state, which needs group and
+subscription localizations, a review screenshot, a price, and availability. A
+final MISSING_METADATA state fails the command and includes deep diagnostics
+when --app is available. Use --repair to atomically rebuild and re-save that
+complete matrix even when the selected base price is unchanged. Add --no-verify
+when an invocation leaves metadata for later commands, then check the result
+with asc validate subscriptions once that metadata exists.
 
 The subscription and group localization flags use Apple's deprecated v1
 localization resources and remain only for compatibility. For new workflows,
@@ -222,9 +225,7 @@ create or resolve subscription and group versions, then use their
 version-scoped localization commands.
 
 Examples:
-  asc subscriptions setup --app "APP_ID" --group-reference-name "Pro" --reference-name "Pro Monthly" --product-id "com.example.pro.monthly" --subscription-period ONE_MONTH
-  asc subscriptions setup --app "APP_ID" --group-reference-name "Pro" --reference-name "Pro Monthly" --product-id "com.example.pro.monthly" --price "3.99" --price-territory "United States" --territories "US,Canada"
-  asc subscriptions setup --app "APP_ID" --group-reference-name "Pro" --reference-name "Pro Yearly" --product-id "com.example.pro.yearly" --subscription-period ONE_YEAR --enable-monthly-commitment
+  asc subscriptions setup --app "APP_ID" --group-reference-name "Pro" --reference-name "Pro Monthly" --product-id "com.example.pro.monthly" --subscription-period ONE_MONTH --price "2.99" --price-territory "United States" --territories "US,Canada" --review-screenshot "./review.png" --no-verify
   asc subscriptions setup --group-id "GROUP_ID" --reference-name "Pro Monthly" --product-id "com.example.pro.monthly" --subscription-period ONE_MONTH --no-verify`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
@@ -393,10 +394,22 @@ Examples:
 				return printErr
 			}
 			if runErr != nil {
-				return shared.NewReportedError(runErr)
+				writeSubscriptionsSetupFailure(os.Stderr, &result)
+				return shared.NewStderrReportedError(runErr)
 			}
 			return nil
 		},
+	}
+}
+
+func writeSubscriptionsSetupFailure(w io.Writer, result *subscriptionsSetupResult) {
+	fmt.Fprintf(w, "Error: subscriptions setup: %s: %s\n", result.FailedStep, shared.SanitizeTerminal(result.Error))
+	for _, diagnostic := range result.Diagnostics {
+		for _, row := range diagnostic.Rows {
+			if row.Blocking && row.Status != validation.DiagnosticStatusYes {
+				fmt.Fprintf(w, "- %s: %s\n", row.Label, shared.SanitizeTerminal(row.Remediation))
+			}
+		}
 	}
 }
 
@@ -1273,7 +1286,7 @@ func verifySubscriptionsSetupState(ctx context.Context, client *asc.Client, resu
 			state = "UNKNOWN"
 		}
 		message := fmt.Sprintf("Apple reports subscription state %s after setup", state)
-		return verification, subscriptionsSetupStepResult{Name: subscriptionsSetupStepVerifyState, Status: "failed", Message: message}, fmt.Errorf("apple reports subscription state %s after setup", state)
+		return verification, subscriptionsSetupStepResult{Name: subscriptionsSetupStepVerifyState, Status: "failed", Message: message}, shared.WithDiagnostic(shared.NewValidationError(fmt.Errorf("apple reports subscription state %s after setup", state)), shared.DiagnosticStateNotReady, "")
 	}
 
 	return verification, subscriptionsSetupStepResult{Name: subscriptionsSetupStepVerifyState, Status: "completed"}, nil
