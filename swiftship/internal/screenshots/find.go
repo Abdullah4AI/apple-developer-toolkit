@@ -134,7 +134,10 @@ func RequirementsForFamily(deviceFamily string) ScreenshotRequirements {
 // Returns which required types are fulfilled and which are missing.
 // For iPhone: accepts either IPHONE_69 or IPHONE_65 to satisfy the iPhone requirement.
 func ValidateScreenshots(dir string, reqs ScreenshotRequirements) (fulfilled []string, missing []string) {
-	screenshots := ListScreenshots(dir)
+	return validateScreenshotList(ListScreenshots(dir), reqs)
+}
+
+func validateScreenshotList(screenshots []UploadedScreenshot, reqs ScreenshotRequirements) (fulfilled []string, missing []string) {
 	found := map[string]bool{}
 	for _, s := range screenshots {
 		if s.DeviceType != "" {
