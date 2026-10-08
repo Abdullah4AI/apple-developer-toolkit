@@ -4,13 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"image"
 	"io"
 	"log"
+	"mime"
 	"net"
 	"net/http"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/swiftship/internal/terminal"
@@ -20,8 +21,45 @@ import (
 // Opens the browser, waits for done or skip, then shuts down.
 // Returns true if screenshots were uploaded.
 func RunUploadServer(ctx context.Context, screenshotDir string, reqs ScreenshotRequirements) bool {
+	root, err := os.OpenRoot(screenshotDir)
+	if err != nil {
+		log.Printf("[screenshots] failed to open screenshot directory: %v", err)
+		return false
+	}
+	defer root.Close()
 	done := make(chan bool, 1)
+	mux := newUploadHandler(root, reqs, done)
 
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		log.Printf("[screenshots] failed to start server: %v", err)
+		return false
+	}
+	url := fmt.Sprintf("http://127.0.0.1:%d", listener.Addr().(*net.TCPAddr).Port)
+	server := &http.Server{Handler: mux}
+	go server.Serve(listener)
+	defer server.Shutdown(context.Background())
+
+	log.Printf("[screenshots] upload server at %s", url)
+	terminal.Info(fmt.Sprintf("Opening browser for screenshot upload: %s", url))
+	_ = exec.Command("open", url).Start()
+
+	select {
+	case uploaded := <-done:
+		if uploaded {
+			terminal.Success("Screenshots uploaded")
+		} else {
+			terminal.Info("Screenshot upload skipped")
+		}
+		return uploaded
+	case <-ctx.Done():
+		return false
+	}
+}
+
+// newUploadHandler builds the local upload UI without launching a browser.
+// The caller must keep root open until the server has shut down.
+func newUploadHandler(root *os.Root, reqs ScreenshotRequirements, done chan<- bool) http.Handler {
 	// Build requirements JSON for embedding in the page
 	type acceptedDim struct {
 		Width  int    `json:"w"`
@@ -29,8 +67,8 @@ func RunUploadServer(ctx context.Context, screenshotDir string, reqs ScreenshotR
 		Device string `json:"device"`
 	}
 	type reqsPayload struct {
-		Required   []string     `json:"required"`
-		Accepted   []acceptedDim `json:"accepted"`
+		Required []string      `json:"required"`
+		Accepted []acceptedDim `json:"accepted"`
 	}
 
 	var accepted []acceptedDim
@@ -69,6 +107,7 @@ func RunUploadServer(ctx context.Context, screenshotDir string, reqs ScreenshotR
 			return
 		}
 
+		defer r.MultipartForm.RemoveAll()
 		files := r.MultipartForm.File["screenshots"]
 		if len(files) == 0 {
 			json.NewEncoder(w).Encode(map[string]any{"ok": false, "error": "no files received"})
@@ -77,33 +116,38 @@ func RunUploadServer(ctx context.Context, screenshotDir string, reqs ScreenshotR
 
 		var saved []map[string]string
 		for _, fh := range files {
+			// ParseMultipartForm strips path components; reject the original
+			// filename too so traversal is not silently normalized.
+			_, params, err := mime.ParseMediaType(fh.Header.Get("Content-Disposition"))
+			if err != nil || !validScreenshotFilename(params["filename"]) || params["filename"] != fh.Filename {
+				continue
+			}
 			src, err := fh.Open()
 			if err != nil {
 				log.Printf("[screenshots] failed to open uploaded file %s: %v", fh.Filename, err)
 				continue
 			}
 
-			destPath := filepath.Join(screenshotDir, fh.Filename)
-			out, err := os.Create(destPath)
+			out, err := root.Create(fh.Filename)
 			if err != nil {
 				src.Close()
-				log.Printf("[screenshots] failed to create %s: %v", destPath, err)
+				log.Printf("[screenshots] failed to create %s: %v", fh.Filename, err)
 				continue
 			}
 			if _, err := io.Copy(out, src); err != nil {
 				out.Close()
 				src.Close()
-				log.Printf("[screenshots] failed to write %s: %v", destPath, err)
+				log.Printf("[screenshots] failed to write %s: %v", fh.Filename, err)
 				continue
 			}
 			out.Close()
 			src.Close()
 
-			dt := detectDeviceType(destPath)
+			dt := rootDeviceType(root, fh.Filename)
 			if dt == "" {
 				dt = "UNKNOWN"
 			}
-			log.Printf("[screenshots] uploaded: %s -> %s (device: %s)", fh.Filename, destPath, dt)
+			log.Printf("[screenshots] uploaded: %s (device: %s)", fh.Filename, dt)
 			saved = append(saved, map[string]string{
 				"filename":   fh.Filename,
 				"deviceType": dt,
@@ -111,7 +155,7 @@ func RunUploadServer(ctx context.Context, screenshotDir string, reqs ScreenshotR
 		}
 
 		// Check fulfillment
-		fulfilled, missing := ValidateScreenshots(screenshotDir, reqs)
+		fulfilled, missing := validateScreenshotList(listRootScreenshots(root), reqs)
 
 		resp := map[string]any{
 			"ok":          true,
@@ -143,7 +187,7 @@ func RunUploadServer(ctx context.Context, screenshotDir string, reqs ScreenshotR
 
 	mux.HandleFunc("/screenshots", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		screenshots := ListScreenshots(screenshotDir)
+		screenshots := listRootScreenshots(root)
 		var items []map[string]string
 		for _, s := range screenshots {
 			items = append(items, map[string]string{
@@ -156,46 +200,81 @@ func RunUploadServer(ctx context.Context, screenshotDir string, reqs ScreenshotR
 	})
 
 	mux.HandleFunc("/screenshots/", func(w http.ResponseWriter, r *http.Request) {
-		filename := filepath.Base(r.URL.Path)
-		filePath := filepath.Join(screenshotDir, filename)
-		if _, err := os.Stat(filePath); os.IsNotExist(err) {
-			http.Error(w, "not found", 404)
+		filename := strings.TrimPrefix(r.URL.Path, "/screenshots/")
+		if !validScreenshotFilename(filename) {
+			http.NotFound(w, r)
 			return
 		}
-		http.ServeFile(w, r, filePath)
+		f, err := root.Open(filename)
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		defer f.Close()
+		info, err := f.Stat()
+		if err != nil || !info.Mode().IsRegular() {
+			http.NotFound(w, r)
+			return
+		}
+		http.ServeContent(w, r, filename, info.ModTime(), f)
 	})
 
-	// Find a free port
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		log.Printf("[screenshots] failed to start server: %v", err)
+	return mux
+}
+
+// validScreenshotFilename permits only a single visible PNG/JPEG filename.
+func validScreenshotFilename(name string) bool {
+	if name == "" || strings.HasPrefix(name, ".") || strings.ContainsAny(name, "/\\:\x00") || !isImageFile(name) {
 		return false
 	}
-	port := listener.Addr().(*net.TCPAddr).Port
-	url := fmt.Sprintf("http://127.0.0.1:%d", port)
-
-	server := &http.Server{Handler: mux}
-	go server.Serve(listener)
-
-	// Open browser
-	log.Printf("[screenshots] upload server at %s", url)
-	terminal.Info(fmt.Sprintf("Opening browser for screenshot upload: %s", url))
-	_ = exec.Command("open", url).Start()
-
-	// Wait for done, skip, or context cancellation
-	select {
-	case uploaded := <-done:
-		server.Shutdown(context.Background())
-		if uploaded {
-			terminal.Success("Screenshots uploaded")
-			return true
+	for _, r := range name {
+		if r < 32 || r == 127 {
+			return false
 		}
-		terminal.Info("Screenshot upload skipped")
-		return false
-	case <-ctx.Done():
-		server.Shutdown(context.Background())
-		return false
 	}
+	return true
+}
+
+func rootDeviceType(root *os.Root, name string) string {
+	f, err := root.Open(name)
+	if err != nil {
+		return ""
+	}
+	defer f.Close()
+	info, err := f.Stat()
+	if err != nil || !info.Mode().IsRegular() {
+		return ""
+	}
+	cfg, _, err := image.DecodeConfig(f)
+	if err != nil {
+		return ""
+	}
+	return dimensionToDevice[[2]int{cfg.Width, cfg.Height}]
+}
+
+func listRootScreenshots(root *os.Root) []UploadedScreenshot {
+	dir, err := root.Open(".")
+	if err != nil {
+		return nil
+	}
+	defer dir.Close()
+	entries, err := dir.ReadDir(-1)
+	if err != nil {
+		return nil
+	}
+	var result []UploadedScreenshot
+	for _, entry := range entries {
+		name := entry.Name()
+		if !validScreenshotFilename(name) {
+			continue
+		}
+		info, err := root.Stat(name)
+		if err != nil || !info.Mode().IsRegular() {
+			continue
+		}
+		result = append(result, UploadedScreenshot{Filename: name, DeviceType: rootDeviceType(root, name)})
+	}
+	return result
 }
 
 const screenshotUploadPage = `<!DOCTYPE html>

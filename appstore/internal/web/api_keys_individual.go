@@ -1,8 +1,8 @@
 package web
 
 import (
+	"bytes"
 	"context"
-	"crypto/sha256"
 	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
@@ -23,14 +23,14 @@ type WebUser struct {
 
 // IndividualAPIKey is the non-secret state needed by the individual-key
 // creation flow. PublicKeyPresent reports whether Apple's resource has a
-// registered public key without retaining or exposing the key bytes.
+// registered public key. Only validated public DER is retained internally;
+// private key material is never accepted or retained.
 type IndividualAPIKey struct {
 	KeyID            string
 	Active           bool
 	PublicKeyPresent bool
 
-	publicKeyFingerprint    [sha256.Size]byte
-	publicKeyFingerprintSet bool
+	publicKeyDER []byte
 }
 
 type individualAPIKeyResource struct {
@@ -51,11 +51,11 @@ type individualAPIKeyListPayload struct {
 // the supplied key. The comparison is over the validated DER bytes, so PEM
 // line-ending and wrapping differences do not change the result.
 func (key IndividualAPIKey) MatchesPublicKey(publicKeyPEM string) bool {
-	if !key.PublicKeyPresent || !key.publicKeyFingerprintSet {
+	if !key.PublicKeyPresent || len(key.publicKeyDER) == 0 {
 		return false
 	}
-	fingerprint, err := individualAPIKeyPublicKeyFingerprint(publicKeyPEM)
-	return err == nil && fingerprint == key.publicKeyFingerprint
+	der, err := individualAPIKeyPublicKeyDER(publicKeyPEM)
+	return err == nil && bytes.Equal(der, key.publicKeyDER)
 }
 
 // GetWebUser returns the web-session user resource for a supplied user id.
@@ -196,37 +196,38 @@ func decodeIndividualAPIKeyResource(resource individualAPIKeyResource) (*Individ
 		return nil, fmt.Errorf("resource did not include an api key id")
 	}
 	publicKeyPresent := false
-	var publicKeyFingerprint [sha256.Size]byte
+	var publicKeyDER []byte
 	if resource.Attributes.PublicKey != nil && strings.TrimSpace(*resource.Attributes.PublicKey) != "" {
 		publicKeyPresent = true
 		var err error
-		publicKeyFingerprint, err = individualAPIKeyPublicKeyFingerprint(*resource.Attributes.PublicKey)
+		publicKeyDER, err = individualAPIKeyPublicKeyDER(*resource.Attributes.PublicKey)
 		if err != nil {
 			return nil, fmt.Errorf("resource public key: %w", err)
 		}
 	}
 	return &IndividualAPIKey{
-		KeyID:                   keyID,
-		Active:                  resource.Attributes.IsActive,
-		PublicKeyPresent:        publicKeyPresent,
-		publicKeyFingerprint:    publicKeyFingerprint,
-		publicKeyFingerprintSet: publicKeyPresent,
+		KeyID:            keyID,
+		Active:           resource.Attributes.IsActive,
+		PublicKeyPresent: publicKeyPresent,
+		publicKeyDER:     publicKeyDER,
 	}, nil
 }
 
-func individualAPIKeyPublicKeyFingerprint(publicKeyPEM string) ([sha256.Size]byte, error) {
+// individualAPIKeyPublicKeyDER validates a PUBLIC KEY block and returns its DER.
+// Comparing public DER directly avoids treating a key identity check as password hashing.
+func individualAPIKeyPublicKeyDER(publicKeyPEM string) ([]byte, error) {
 	block, rest := pem.Decode([]byte(publicKeyPEM))
 	if block == nil {
-		return [sha256.Size]byte{}, fmt.Errorf("public key is not valid PEM")
+		return nil, fmt.Errorf("public key is not valid PEM")
 	}
 	if block.Type != "PUBLIC KEY" {
-		return [sha256.Size]byte{}, fmt.Errorf("public key PEM block type %q is not PUBLIC KEY", block.Type)
+		return nil, fmt.Errorf("public key PEM block type %q is not PUBLIC KEY", block.Type)
 	}
 	if strings.TrimSpace(string(rest)) != "" {
-		return [sha256.Size]byte{}, fmt.Errorf("public key PEM contains trailing data")
+		return nil, fmt.Errorf("public key PEM contains trailing data")
 	}
 	if _, err := x509.ParsePKIXPublicKey(block.Bytes); err != nil {
-		return [sha256.Size]byte{}, fmt.Errorf("parse public key DER: %w", err)
+		return nil, fmt.Errorf("parse public key DER: %w", err)
 	}
-	return sha256.Sum256(block.Bytes), nil
+	return block.Bytes, nil
 }

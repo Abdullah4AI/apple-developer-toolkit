@@ -2,6 +2,7 @@ package icons
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -164,12 +165,16 @@ function setStatus(msg, isError) {
 </body>
 </html>`
 
-// RunUploadServer starts a temporary local HTTP server for icon upload.
-// Opens the browser, waits for upload or skip, then shuts down.
-// Returns true if an icon was set.
-func RunUploadServer(ctx context.Context, appIconDir, platform string) bool {
-	done := make(chan bool, 1)
+// writeUploadError encodes error text as JSON rather than interpolating it.
+func writeUploadError(w http.ResponseWriter, message string) {
+	_ = json.NewEncoder(w).Encode(struct {
+		OK    bool   `json:"ok"`
+		Error string `json:"error"`
+	}{Error: message})
+}
 
+// newUploadMux builds the upload handlers without starting a server or browser.
+func newUploadMux(appIconDir, platform string, done chan<- bool) *http.ServeMux {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -186,7 +191,7 @@ func RunUploadServer(ctx context.Context, appIconDir, platform string) bool {
 
 		file, header, err := r.FormFile("icon")
 		if err != nil {
-			w.Write([]byte(`{"ok":false,"error":"no file received"}`))
+			writeUploadError(w, "no file received")
 			return
 		}
 		defer file.Close()
@@ -202,12 +207,12 @@ func RunUploadServer(ctx context.Context, appIconDir, platform string) bool {
 		destPath := filepath.Join(appIconDir, iconFilename)
 		out, err := os.Create(destPath)
 		if err != nil {
-			w.Write([]byte(fmt.Sprintf(`{"ok":false,"error":"failed to save: %s"}`, err.Error())))
+			writeUploadError(w, "failed to save: "+err.Error())
 			return
 		}
 		if _, err := io.Copy(out, file); err != nil {
 			out.Close()
-			w.Write([]byte(fmt.Sprintf(`{"ok":false,"error":"failed to write: %s"}`, err.Error())))
+			writeUploadError(w, "failed to write: "+err.Error())
 			return
 		}
 		out.Close()
@@ -215,7 +220,7 @@ func RunUploadServer(ctx context.Context, appIconDir, platform string) bool {
 		// Update Contents.json
 		if err := UpdateContentsJSON(appIconDir, iconFilename, platform); err != nil {
 			log.Printf("[asc] icon Contents.json update failed: %v", err)
-			w.Write([]byte(fmt.Sprintf(`{"ok":false,"error":"icon saved but Contents.json update failed: %s"}`, err.Error())))
+			writeUploadError(w, "icon saved but Contents.json update failed: "+err.Error())
 			return
 		}
 
@@ -246,6 +251,16 @@ func RunUploadServer(ctx context.Context, appIconDir, platform string) bool {
 		default:
 		}
 	})
+
+	return mux
+}
+
+// RunUploadServer starts a temporary local HTTP server for icon upload.
+// Opens the browser, waits for upload or skip, then shuts down.
+// Returns true if an icon was set.
+func RunUploadServer(ctx context.Context, appIconDir, platform string) bool {
+	done := make(chan bool, 1)
+	mux := newUploadMux(appIconDir, platform, done)
 
 	// Find a free port
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
