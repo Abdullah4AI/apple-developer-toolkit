@@ -25,6 +25,9 @@ TARGET_NAMES = {"snitch_redaction_test.go", "z_audit_adversarial_test.go"}
 # identifies one. These values are synthetic test fixtures, never credentials.
 EXTRA_PATTERNS = (
     re.compile(r"\bSG\.[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{32,}\b"),
+    # A trailing hyphen is part of the key, not a word boundary. Partner
+    # scanners detect these fixtures even when gitleaks misses them.
+    re.compile(r"(?<![A-Za-z0-9_-])AIza[A-Za-z0-9_-]{35}(?![A-Za-z0-9_-])"),
 )
 
 
