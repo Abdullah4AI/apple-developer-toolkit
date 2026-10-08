@@ -599,7 +599,7 @@ env: [{name: *credential, value: [REDACTED]}]`,
 		},
 		{
 			name:  "standalone Google API key ending in hyphen",
-			input: "Google request failed for AIzaAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA-",
+			input: "Google request failed for AIzaAAAAAAAAAAAAAAA" + "AAAAAAAAAAAAAAAAAAA-",
 			want:  "Google request failed for [REDACTED]",
 		},
 		{
