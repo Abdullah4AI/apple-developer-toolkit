@@ -68,25 +68,6 @@ func runCommand(t *testing.T, args []string) (string, string, error) {
 	return stdout, stderr, runErr
 }
 
-func TestAppsHelpShowsPublicSubcommand(t *testing.T) {
-	root := RootCommand("1.2.3")
-	var appsCmd any
-	for _, sub := range root.Subcommands {
-		if sub != nil && sub.Name == "apps" {
-			appsCmd = sub
-			break
-		}
-	}
-	if appsCmd == nil {
-		t.Fatal("expected apps command in root subcommands")
-	}
-
-	usage := appsCmd.(*ffcli.Command).UsageFunc(appsCmd.(*ffcli.Command))
-	if !strings.Contains(usage, "public") {
-		t.Fatalf("expected apps help to show public subcommand, got %q", usage)
-	}
-}
-
 func TestAppsListHelpShowsFeatureExamples(t *testing.T) {
 	root := RootCommand("1.2.3")
 	appsCmd := findSubcommand(root, "apps")
@@ -133,15 +114,6 @@ func TestAppsPublicHelpShowsSubcommands(t *testing.T) {
 		if !strings.Contains(usage, want) {
 			t.Fatalf("expected apps public help to contain %q, got %q", want, usage)
 		}
-	}
-}
-
-func TestAppsPublicRankHelpDocumentsSurface(t *testing.T) {
-	root := RootCommand("1.2.3")
-	rankCmd := findSubcommand(root, "apps", "public", "rank")
-	if rankCmd == nil {
-		t.Fatal("expected apps public rank command")
-		return
 	}
 }
 

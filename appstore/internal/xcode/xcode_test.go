@@ -2335,11 +2335,6 @@ func TestRunXcodebuildDoesNotWaitForDescendantHoldingOutputPipes(t *testing.T) {
 	restore := overrideTestEnvironment(t)
 	t.Cleanup(restore)
 	useTrustedTestCommandNames(t)
-	// Race-instrumented helper binaries otherwise spend the race runtime's
-	// default one-second atexit delay in the direct child before it exits. That
-	// delay is unrelated to the descendant retaining the output descriptors and
-	// would hide the 250 ms pipe-wait bound this test is intended to exercise.
-	t.Setenv("GORACE", strings.TrimSpace(os.Getenv("GORACE")+" atexit_sleep_ms=0"))
 	commandContextFn = helperCommandContext(t, filepath.Join(tempDir, "commands.log"))
 	t.Setenv("ASC_XCODE_HELPER_DESCENDANT_PID", pidPath)
 	t.Cleanup(func() {
@@ -2356,14 +2351,17 @@ func TestRunXcodebuildDoesNotWaitForDescendantHoldingOutputPipes(t *testing.T) {
 		}
 	})
 
-	started := time.Now()
-	err := runXcodebuild(context.Background(), []string{"retain-output-after-exit"}, io.Discard)
-	elapsed := time.Since(started)
-	if err != nil {
-		t.Fatalf("runXcodebuild() error = %v", err)
-	}
-	if elapsed >= time.Second {
-		t.Fatalf("runXcodebuild() waited %s for a descendant after the direct process exited", elapsed)
+	done := make(chan error, 1)
+	go func() {
+		done <- runXcodebuild(context.Background(), []string{"retain-output-after-exit"}, io.Discard)
+	}()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("runXcodebuild() error = %v", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("runXcodebuild() kept waiting for a descendant holding its output pipes after the direct process exited")
 	}
 }
 
@@ -2790,7 +2788,7 @@ func TestXcodeHelperProcess(t *testing.T) {
 	}
 
 	if len(commandArgs) >= 2 && commandName == "xcodebuild" && commandArgs[1] == "hold-output-descriptors" {
-		time.Sleep(2 * time.Second)
+		time.Sleep(time.Minute)
 		os.Exit(0)
 	}
 

@@ -3,7 +3,6 @@ package web
 import (
 	"crypto/ecdh"
 	"encoding/base64"
-	"encoding/json"
 	"testing"
 )
 
@@ -68,28 +67,4 @@ func TestECIESEncrypt_DifferentEachTime(t *testing.T) {
 	if ct1 == ct2 {
 		t.Error("two encryptions of the same plaintext should produce different ciphertexts")
 	}
-}
-
-// TestECIESEncrypt_ProduceCiphertextForLiveTest produces a ciphertext that can be
-// used to create a secret env var via the live API. Run with -v to see the value.
-func TestECIESEncrypt_ProduceCiphertextForLiveTest(t *testing.T) {
-	serverKeyB64 := "0xm9f0gX7lzArxrChNrDVUR3MKxueb1DdheWBeLndCVOqoiEsT2jxqZW6cHsIuDGDykvYWgQ1qaPBSxCNFXEUg=="
-	plaintext := "encrypted-by-go"
-
-	ct, err := ECIESEncrypt(serverKeyB64, plaintext)
-	if err != nil {
-		t.Fatalf("ECIESEncrypt failed: %v", err)
-	}
-
-	// Print the env var JSON that can be used in a PUT request
-	envVar := map[string]interface{}{
-		"id":   "e0e0e0e0-go01-test-0001-000000000001",
-		"name": "GO_ECIES_TEST",
-		"value": map[string]string{
-			"ciphertext": ct,
-		},
-	}
-	jsonBytes, _ := json.MarshalIndent(envVar, "", "  ")
-	t.Logf("Secret env var for live test:\n%s", string(jsonBytes))
-	t.Logf("\nCiphertext to use: %s", ct)
 }

@@ -159,23 +159,6 @@ func newReleaseTestPrivateKeyPEM(t *testing.T) []byte {
 	return pemBytes
 }
 
-func TestReleaseCommandShape(t *testing.T) {
-	cmd := ReleaseCommand()
-	if cmd == nil {
-		t.Fatal("expected release command")
-		return
-	}
-	if cmd.Name != "release" {
-		t.Fatalf("expected command name release, got %q", cmd.Name)
-	}
-	if len(cmd.Subcommands) != 1 {
-		t.Fatalf("expected 1 subcommand, got %d", len(cmd.Subcommands))
-	}
-	if cmd.Subcommands[0].Name != "stage" {
-		t.Fatalf("expected subcommand stage, got %q", cmd.Subcommands[0].Name)
-	}
-}
-
 func TestReleaseStageCommand_MissingRequiredFlags(t *testing.T) {
 	cmd := ReleaseStageCommand()
 	if err := cmd.FlagSet.Parse([]string{"--dry-run"}); err != nil {

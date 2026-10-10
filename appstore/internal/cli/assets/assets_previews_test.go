@@ -13,6 +13,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
@@ -750,7 +751,7 @@ func TestUploadPreviewFilesRollsBackPostCreateFailureWithFreshContext(t *testing
 func TestUploadPreviewFilesStartsRollbackTimeoutAfterSlowUpload(t *testing.T) {
 	t.Setenv("ASC_TIMEOUT", "20ms")
 	requests := make([]string, 0, 1)
-	client := newAssetsUploadTestServerClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	client := newAssetsUploadTestHandlerClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requests = append(requests, r.Method+" "+r.URL.Path)
 		if r.Method != http.MethodDelete || r.URL.Path != "/v1/appPreviews/created-1" {
 			writeAssetsTestJSON(w, http.StatusInternalServerError, `{"errors":[{"status":"500","detail":"unexpected request"}]}`)
@@ -760,17 +761,20 @@ func TestUploadPreviewFilesStartsRollbackTimeoutAfterSlowUpload(t *testing.T) {
 	}))
 
 	uploadErr := errors.New("slow upload failed after reservation")
-	_, err := uploadPreviewFiles(
-		context.Background(),
-		context.Background(),
-		client,
-		"set-1",
-		[]string{"preview.mov"},
-		func(context.Context, *asc.Client, string, string) (asc.AssetUploadResultItem, error) {
-			time.Sleep(50 * time.Millisecond)
-			return asc.AssetUploadResultItem{AssetID: "created-1"}, uploadErr
-		},
-	)
+	var err error
+	synctest.Test(t, func(*testing.T) {
+		_, err = uploadPreviewFiles(
+			context.Background(),
+			context.Background(),
+			client,
+			"set-1",
+			[]string{"preview.mov"},
+			func(context.Context, *asc.Client, string, string) (asc.AssetUploadResultItem, error) {
+				time.Sleep(50 * time.Millisecond)
+				return asc.AssetUploadResultItem{AssetID: "created-1"}, uploadErr
+			},
+		)
+	})
 	if !errors.Is(err, uploadErr) {
 		t.Fatalf("uploadPreviewFiles() error = %v, want original upload error", err)
 	}

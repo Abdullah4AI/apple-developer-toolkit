@@ -12,27 +12,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/peterbourgon/ff/v3/ffcli"
 	localxcode "github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/xcode"
 	"howett.net/plist"
 )
-
-func TestXcodeExportMethodFlagsAreRegistered(t *testing.T) {
-	for _, tc := range []struct {
-		name string
-		cmd  *ffcli.Command
-	}{
-		{name: "export options generate", cmd: XcodeExportOptionsCommand()},
-		{name: "export", cmd: XcodeExportCommand()},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			methodFlag := tc.cmd.FlagSet.Lookup("method")
-			if methodFlag == nil {
-				t.Fatal("method flag is not registered")
-			}
-		})
-	}
-}
 
 func TestXcodeExportOptionsGenerateWritesRequestedAutomaticOptionsAndJSON(t *testing.T) {
 	archivePath := writeXcodeExportOptionsTestArchive(t)
@@ -638,15 +620,6 @@ func TestXcodeExportRejectsExplicitlyEmptyTeamIDBeforeSideEffects(t *testing.T) 
 	runErr := cmd.Exec(context.Background(), nil)
 	if !errors.Is(runErr, flag.ErrHelp) || !strings.Contains(runErr.Error(), "--team-id must not be empty") {
 		t.Fatalf("expected empty team-id usage error, got %v", runErr)
-	}
-}
-
-func TestXcodeExportSigningFlagsAreDiscoverable(t *testing.T) {
-	cmd := XcodeExportCommand()
-	for _, name := range []string{"signing-style", "team-id"} {
-		if cmd.FlagSet.Lookup(name) == nil {
-			t.Fatalf("expected --%s in xcode export help", name)
-		}
 	}
 }
 

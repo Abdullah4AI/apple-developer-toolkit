@@ -2,10 +2,12 @@ package cmdtest
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	rootcmd "github.com/Abdullah4AI/apple-developer-toolkit/appstore/cmd"
@@ -23,16 +25,22 @@ func TestSubscriptionsPricePointsListPaginateUsesPerPageTimeout(t *testing.T) {
 	requests := 0
 	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		requests++
+		if deadline, ok := req.Context().Deadline(); !ok || time.Until(deadline) != 120*time.Millisecond {
+			t.Errorf("page %d did not get a fresh 120ms deadline: ok=%v remaining=%s", requests, ok, time.Until(deadline))
+			return nil, context.DeadlineExceeded
+		}
 		time.Sleep(70 * time.Millisecond)
 
 		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
+			t.Errorf("expected GET, got %s", req.Method)
+			return nil, errors.New("test transport assertion failed")
 		}
 
 		switch req.URL.RawQuery {
 		case "limit=200":
 			if req.URL.Path != "/v1/subscriptions/8000000001/pricePoints" {
-				t.Fatalf("unexpected first page path: %s", req.URL.Path)
+				t.Errorf("unexpected first page path: %s", req.URL.Path)
+				return nil, errors.New("test transport assertion failed")
 			}
 			body := `{"data":[{"type":"subscriptionPricePoints","id":"pp-1"}],"links":{"next":"https://api.appstoreconnect.apple.com/v1/subscriptions/8000000001/pricePoints?cursor=AQ&limit=200"}}`
 			return &http.Response{
@@ -42,7 +50,8 @@ func TestSubscriptionsPricePointsListPaginateUsesPerPageTimeout(t *testing.T) {
 			}, nil
 		case "cursor=AQ&limit=200":
 			if req.URL.Path != "/v1/subscriptions/8000000001/pricePoints" {
-				t.Fatalf("unexpected second page path: %s", req.URL.Path)
+				t.Errorf("unexpected second page path: %s", req.URL.Path)
+				return nil, errors.New("test transport assertion failed")
 			}
 			body := `{"data":[{"type":"subscriptionPricePoints","id":"pp-2"}],"links":{"next":"https://api.appstoreconnect.apple.com/v1/subscriptions/8000000001/pricePoints?cursor=BQ&limit=200"}}`
 			return &http.Response{
@@ -52,7 +61,8 @@ func TestSubscriptionsPricePointsListPaginateUsesPerPageTimeout(t *testing.T) {
 			}, nil
 		case "cursor=BQ&limit=200":
 			if req.URL.Path != "/v1/subscriptions/8000000001/pricePoints" {
-				t.Fatalf("unexpected third page path: %s", req.URL.Path)
+				t.Errorf("unexpected third page path: %s", req.URL.Path)
+				return nil, errors.New("test transport assertion failed")
 			}
 			body := `{"data":[{"type":"subscriptionPricePoints","id":"pp-3"}],"links":{}}`
 			return &http.Response{
@@ -61,8 +71,8 @@ func TestSubscriptionsPricePointsListPaginateUsesPerPageTimeout(t *testing.T) {
 				Header:     http.Header{"Content-Type": []string{"application/json"}},
 			}, nil
 		default:
-			t.Fatalf("unexpected request path/query: %s?%s", req.URL.Path, req.URL.RawQuery)
-			return nil, nil
+			t.Errorf("unexpected request path/query: %s?%s", req.URL.Path, req.URL.RawQuery)
+			return nil, errors.New("unexpected test transport request")
 		}
 	})
 
@@ -78,7 +88,9 @@ func TestSubscriptionsPricePointsListPaginateUsesPerPageTimeout(t *testing.T) {
 		}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
-		if err := root.Run(context.Background()); err != nil {
+		var runErr error
+		synctest.Test(t, func(*testing.T) { runErr = root.Run(context.Background()) })
+		if err := runErr; err != nil {
 			t.Fatalf("run error: %v", err)
 		}
 	})

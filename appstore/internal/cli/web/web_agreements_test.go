@@ -427,26 +427,6 @@ func TestWebAgreementsRejectPositionalArgs(t *testing.T) {
 	}
 }
 
-func TestWebAgreementsFlagsAreRegistered(t *testing.T) {
-	accept := WebAgreementsAcceptCommand()
-
-	for _, name := range []string{"agreement-id", "confirm"} {
-		flag := accept.FlagSet.Lookup(name)
-		if flag == nil {
-			t.Fatalf("expected --%s flag", name)
-		}
-	}
-
-	download := WebAgreementsDownloadCommand()
-
-	for _, name := range []string{"agreement-id", "out", "overwrite"} {
-		flag := download.FlagSet.Lookup(name)
-		if flag == nil {
-			t.Fatalf("expected download --%s flag", name)
-		}
-	}
-}
-
 // stubWebAgreementsDownload replaces the download hook and records the
 // requested agreement IDs.
 func stubWebAgreementsDownload(t *testing.T, download *webcore.AgreementDownload, downloadErr error) *[]string {

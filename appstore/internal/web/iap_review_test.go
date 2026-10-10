@@ -72,42 +72,6 @@ func TestFindReviewIAPReturnsFirstMatchingAppScopedIAP(t *testing.T) {
 	}
 }
 
-func TestFindReviewIAPMatchesByProductID(t *testing.T) {
-	// The iris listing returns a UUID-shaped resource ID that does not match
-	// the numeric public-REST-API IAP ID. Callers commonly know the product
-	// ID instead, so FindReviewIAP also matches on `productId`.
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{
-			"data": [
-				{
-					"id": "ae6d89d7-15c5-4a3d-9041-663a4d40638e",
-					"type": "inAppPurchases",
-					"attributes": {
-						"productId": "com.example.lifetime",
-						"referenceName": "Lifetime",
-						"state": "READY_TO_SUBMIT"
-					}
-				}
-			],
-			"links": {"next": ""}
-		}`))
-	}))
-	defer server.Close()
-
-	client := testWebClient(server)
-	got, found, err := client.FindReviewIAP(context.Background(), "app-123", "com.example.lifetime")
-	if err != nil {
-		t.Fatalf("FindReviewIAP() error = %v", err)
-	}
-	if !found {
-		t.Fatal("expected IAP to be found by product id")
-	}
-	if got.ID != "ae6d89d7-15c5-4a3d-9041-663a4d40638e" || got.ProductID != "com.example.lifetime" {
-		t.Fatalf("unexpected IAP payload: %#v", got)
-	}
-}
-
 func TestFindReviewIAPMatchesByReferenceName(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

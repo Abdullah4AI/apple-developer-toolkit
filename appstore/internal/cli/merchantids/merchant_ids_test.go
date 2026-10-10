@@ -9,23 +9,6 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
-func TestMerchantIDsCommandShape(t *testing.T) {
-	cmd := MerchantIDsCommand()
-	if cmd == nil {
-		t.Fatal("expected merchant-ids command")
-		return
-	}
-	if cmd.Name != "merchant-ids" {
-		t.Fatalf("unexpected command name: %q", cmd.Name)
-	}
-	if len(cmd.Subcommands) != 6 {
-		t.Fatalf("expected 6 subcommands, got %d", len(cmd.Subcommands))
-	}
-	if got := MerchantIDsCommand(); got == nil {
-		t.Fatal("expected Command wrapper to return command")
-	}
-}
-
 func TestMerchantIDsValidationErrors(t *testing.T) {
 	t.Run("list invalid limit", func(t *testing.T) {
 		cmd := MerchantIDsListCommand()

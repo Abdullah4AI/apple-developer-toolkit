@@ -2258,28 +2258,6 @@ func TestPrivacyApplyStepsRunPrerequisiteDeletesBeforeCreates(t *testing.T) {
 	}
 }
 
-func TestPrivacyApplyStepsRunDeletesLastForCollectedPlans(t *testing.T) {
-	steps := privacyApplySteps(privacyPlanOutput{
-		Updates: []privacyPlanChange{
-			{Key: "A|P|DATA_NOT_LINKED_TO_YOU", Category: "A", Purpose: "P", DataProtection: dataProtectionNotLinked, UsageID: "usage-update"},
-		},
-		Adds: []privacyPlanChange{
-			{Key: "B|P|DATA_LINKED_TO_YOU", Category: "B", Purpose: "P", DataProtection: dataProtectionLinked},
-		},
-		Deletes: []privacyPlanChange{
-			{Key: "C|P|DATA_LINKED_TO_YOU", Category: "C", Purpose: "P", DataProtection: dataProtectionLinked, UsageID: "usage-delete"},
-		},
-	})
-
-	got := make([]string, 0, len(steps))
-	for _, step := range steps {
-		got = append(got, step.Action)
-	}
-	if !reflect.DeepEqual(got, []string{"update", "create", "delete"}) {
-		t.Fatalf("unexpected step order: %#v", got)
-	}
-}
-
 func TestPrivacyApplyStepsRunNotCollectedDeleteBeforeCollectedCreates(t *testing.T) {
 	steps := privacyApplySteps(privacyPlanOutput{
 		Adds: []privacyPlanChange{

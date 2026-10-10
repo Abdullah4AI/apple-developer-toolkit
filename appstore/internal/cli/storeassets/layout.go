@@ -155,9 +155,10 @@ func ReadPreviews(base string) (previews []PreviewLayout, err error) {
 				return nil, err
 			}
 			var group []PreviewLayout
+			names := map[string]bool{}
 			for _, entry := range entries {
 				ext := strings.ToLower(filepath.Ext(entry.Name()))
-				if ext != ".mp4" && ext != ".mov" && ext != ".m4v" {
+				if ext != ".mp4" && ext != ".mov" && ext != ".m4v" && ext != ".m3u8" {
 					continue
 				}
 				if err := segment(entry.Name()); err != nil {
@@ -176,15 +177,25 @@ func ReadPreviews(base string) (previews []PreviewLayout, err error) {
 				if !info.Mode().IsRegular() || info.Size() == 0 {
 					return nil, fmt.Errorf("preview %s must be a nonempty regular file", name)
 				}
-				poster := strings.TrimSuffix(name, filepath.Ext(name)) + ".poster_frame.txt"
-				frame, _, err := readText(root, poster)
+				preview := PreviewLayout{Locale: locale, DeviceType: strings.ToLower(device), FileName: entry.Name(), Path: filepath.Join(root.Path(), name), sourceRoot: root}
+				if ext == ".m3u8" {
+					if err := readPreviewReference(root, strings.TrimSuffix(name, filepath.Ext(name))+".preview.json", &preview); err != nil {
+						return nil, err
+					}
+				}
+				poster := filepath.Join(deviceDir, strings.TrimSuffix(preview.FileName, filepath.Ext(preview.FileName))+".poster_frame.txt")
+				preview.PosterFrame, _, err = readText(root, poster)
 				if err != nil {
 					return nil, err
 				}
-				if frame != "" && !assets.ValidPreviewFrameTimeCode(frame) {
+				if preview.PosterFrame != "" && !assets.ValidPreviewFrameTimeCode(preview.PosterFrame) {
 					return nil, fmt.Errorf("invalid poster frame %s; use HH:MM:SS:FF or HH:MM:SS.mmm", poster)
 				}
-				group = append(group, PreviewLayout{Locale: locale, DeviceType: strings.ToLower(device), FileName: entry.Name(), Path: filepath.Join(root.Path(), name), PosterFrame: frame, sourceRoot: root})
+				if names[preview.FileName] {
+					return nil, fmt.Errorf("%s has more than one preview named %q", deviceDir, preview.FileName)
+				}
+				names[preview.FileName] = true
+				group = append(group, preview)
 			}
 			if len(group) > 3 {
 				return nil, fmt.Errorf("%s contains more than three preview files", deviceDir)
@@ -223,6 +234,35 @@ func ReadPreviews(base string) (previews []PreviewLayout, err error) {
 		keep = true
 	}
 	return previews, nil
+}
+
+// previewReference identifies a remote preview whose original video App Store
+// Connect does not expose; exports save its HLS playlist beside this sidecar.
+type previewReference struct {
+	ID                 string `json:"id"`
+	FileName           string `json:"fileName"`
+	FileSize           int64  `json:"fileSize"`
+	SourceFileChecksum string `json:"sourceFileChecksum"`
+}
+
+func readPreviewReference(root rootfs.Root, name string, preview *PreviewLayout) error {
+	text, exists, err := readText(root, name)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return fmt.Errorf("%s is an App Store Connect streaming playlist without its %s sidecar; App Store Connect does not provide original preview videos, so replace it with the original video file", preview.Path, filepath.Base(name))
+	}
+	var ref previewReference
+	if err := json.Unmarshal([]byte(text), &ref); err != nil {
+		return fmt.Errorf("preview reference %s: %w", name, err)
+	}
+	ext := strings.ToLower(filepath.Ext(ref.FileName))
+	if segment(ref.FileName) != nil || (ext != ".mp4" && ext != ".mov" && ext != ".m4v") || ref.ID == "" {
+		return fmt.Errorf("preview reference %s needs an id and a video fileName", name)
+	}
+	preview.FileName, preview.checksum, preview.reference, preview.referenceID = ref.FileName, ref.SourceFileChecksum, true, ref.ID
+	return nil
 }
 
 func readDir(root rootfs.Root, name string) ([]os.DirEntry, error) {

@@ -499,44 +499,8 @@ func TestCertificatesRevokeCommand_MissingConfirm(t *testing.T) {
 	}
 }
 
-func TestCertificatesUpdateCommand_MissingID(t *testing.T) {
-	cmd := CertificatesUpdateCommand()
-
-	if err := cmd.FlagSet.Parse([]string{"--activated", "true"}); err != nil {
-		t.Fatalf("failed to parse flags: %v", err)
-	}
-
-	if err := cmd.Exec(context.Background(), []string{}); !errors.Is(err, flag.ErrHelp) {
-		t.Fatalf("expected flag.ErrHelp when --id is missing, got %v", err)
-	}
-}
-
-func TestCertificatesUpdateCommand_MissingActivated(t *testing.T) {
-	cmd := CertificatesUpdateCommand()
-
-	if err := cmd.FlagSet.Parse([]string{"--id", "CERT_ID"}); err != nil {
-		t.Fatalf("failed to parse flags: %v", err)
-	}
-
-	if err := cmd.Exec(context.Background(), []string{}); !errors.Is(err, flag.ErrHelp) {
-		t.Fatalf("expected flag.ErrHelp when --activated is missing, got %v", err)
-	}
-}
-
 func TestCertificatesGetCommand_MissingID(t *testing.T) {
 	cmd := CertificatesGetCommand()
-
-	if err := cmd.FlagSet.Parse([]string{}); err != nil {
-		t.Fatalf("failed to parse flags: %v", err)
-	}
-
-	if err := cmd.Exec(context.Background(), []string{}); !errors.Is(err, flag.ErrHelp) {
-		t.Fatalf("expected flag.ErrHelp when --id is missing, got %v", err)
-	}
-}
-
-func TestCertificatesRelationshipsPassTypeIDCommand_MissingID(t *testing.T) {
-	cmd := CertificatesRelationshipsPassTypeIDCommand()
 
 	if err := cmd.FlagSet.Parse([]string{}); err != nil {
 		t.Fatalf("failed to parse flags: %v", err)

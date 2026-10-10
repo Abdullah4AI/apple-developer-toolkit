@@ -58,6 +58,8 @@ func TestScreenshotsListWithoutLocaleListsEveryLocalization(t *testing.T) {
 			writeScreenshotsListJSON(t, w, `{"data":[{"type":"appScreenshotSets","id":"set-en","attributes":{"screenshotDisplayType":"APP_IPHONE_65"}}],"links":{}}`)
 		case "/v1/appScreenshotSets/set-en/appScreenshots":
 			writeScreenshotsListJSON(t, w, `{"data":[{"type":"appScreenshots","id":"shot-en","attributes":{"fileName":"home.png","fileSize":42}}],"links":{}}`)
+		case "/v1/appScreenshotSets/set-en/relationships/appScreenshots":
+			writeScreenshotsListJSON(t, w, `{"data":[{"type":"appScreenshots","id":"shot-en"}],"links":{}}`)
 		case "/v1/appStoreVersionLocalizations/loc-de/appScreenshotSets":
 			writeScreenshotsListJSON(t, w, `{"data":[],"links":{}}`)
 		default:
@@ -124,6 +126,8 @@ func TestScreenshotsListWithoutLocaleTableOutputIncludesLocaleColumn(t *testing.
 			writeScreenshotsListJSON(t, w, `{"data":[{"type":"appScreenshotSets","id":"set-en","attributes":{"screenshotDisplayType":"APP_IPHONE_65"}}],"links":{}}`)
 		case "/v1/appScreenshotSets/set-en/appScreenshots":
 			writeScreenshotsListJSON(t, w, `{"data":[{"type":"appScreenshots","id":"shot-en","attributes":{"fileName":"home.png","fileSize":42}}],"links":{}}`)
+		case "/v1/appScreenshotSets/set-en/relationships/appScreenshots":
+			writeScreenshotsListJSON(t, w, `{"data":[{"type":"appScreenshots","id":"shot-en"}],"links":{}}`)
 		default:
 			t.Errorf("unexpected request: %s %s", req.Method, req.URL.String())
 			http.Error(w, "unexpected request", http.StatusNotFound)
@@ -180,5 +184,46 @@ func writeScreenshotsListJSON(t *testing.T, w http.ResponseWriter, body string) 
 	w.WriteHeader(http.StatusOK)
 	if _, err := io.WriteString(w, body); err != nil {
 		t.Errorf("write response: %v", err)
+	}
+}
+
+func TestVideoPreviewsListReadsEveryPreviewSetPage(t *testing.T) {
+	const nextURL = "https://api.appstoreconnect.apple.com/v1/appStoreVersionLocalizations/loc-1/appPreviewSets?cursor=page-2&include=appPreviews"
+	installScreenshotsListTestClient(t, func(w http.ResponseWriter, req *http.Request) {
+		if req.URL.Path != "/v1/appStoreVersionLocalizations/loc-1/appPreviewSets" {
+			t.Errorf("unexpected request: %s %s", req.Method, req.URL.String())
+			http.Error(w, "unexpected request", http.StatusNotFound)
+			return
+		}
+		if req.URL.Query().Get("cursor") == "page-2" {
+			writeScreenshotsListJSON(t, w, `{"data":[{"type":"appPreviewSets","id":"set-2","attributes":{"previewType":"IPAD_PRO_3GEN_129"},"relationships":{"appPreviews":{"data":[{"type":"appPreviews","id":"preview-2"}]}}}],"included":[{"type":"appPreviews","id":"preview-2","attributes":{"fileName":"ipad.mov"}}],"links":{}}`)
+			return
+		}
+		writeScreenshotsListJSON(t, w, `{"data":[{"type":"appPreviewSets","id":"set-1","attributes":{"previewType":"IPHONE_65"},"relationships":{"appPreviews":{"data":[{"type":"appPreviews","id":"preview-1"}]}}}],"included":[{"type":"appPreviews","id":"preview-1","attributes":{"fileName":"iphone.mov"}}],"links":{"next":"`+nextURL+`"}}`)
+	})
+
+	stdout, stderr, runErr := runRootCommand(t, []string{"video-previews", "list", "--version-localization", "loc-1", "--output", "json"})
+	if runErr != nil {
+		t.Fatalf("video-previews list error: %v (stderr %q)", runErr, stderr)
+	}
+
+	var payload struct {
+		Sets []struct {
+			Set struct {
+				ID string `json:"id"`
+			} `json:"set"`
+			Previews []struct {
+				ID string `json:"id"`
+			} `json:"previews"`
+		} `json:"sets"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
+		t.Fatalf("unmarshal stdout %q: %v", stdout, err)
+	}
+	if len(payload.Sets) != 2 || payload.Sets[0].Set.ID != "set-1" || payload.Sets[1].Set.ID != "set-2" {
+		t.Fatalf("sets = %#v, want set-1 and set-2", payload.Sets)
+	}
+	if len(payload.Sets[1].Previews) != 1 || payload.Sets[1].Previews[0].ID != "preview-2" {
+		t.Fatalf("set-2 previews = %#v, want preview-2", payload.Sets[1].Previews)
 	}
 }

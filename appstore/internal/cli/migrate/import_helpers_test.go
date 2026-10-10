@@ -17,7 +17,9 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"sort"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -110,6 +112,191 @@ func TestUploadScreenshots_ReordersPlannedFilesBeforeUntouchedRemoteExtras(t *te
 	}
 	if !relationshipPatchCalled {
 		t.Fatal("expected screenshot relationship reorder PATCH to be called")
+	}
+}
+
+func TestUploadScreenshots_UploadsSetConcurrentlyInPlanOrder(t *testing.T) {
+	dir := t.TempDir()
+	files := []string{
+		writeMigrateTestPNG(t, dir, "01-a.png"),
+		writeMigrateTestPNG(t, dir, "02-b.png"),
+		writeMigrateTestPNG(t, dir, "03-c.png"),
+	}
+	size := migrateFileSize(t, files[0])
+
+	var mu sync.Mutex
+	inFlight := 0
+	release := make(chan struct{})
+	var gotOrder []string
+
+	origTransport := http.DefaultTransport
+	http.DefaultTransport = migrateUploadRoundTripFunc(func(req *http.Request) (*http.Response, error) {
+		switch {
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/appStoreVersionLocalizations/loc-1/appScreenshotSets":
+			return migrateJSONResponse(http.StatusOK, `{"data":[{"type":"appScreenshotSets","id":"set-1","attributes":{"screenshotDisplayType":"APP_IPHONE_65"}}]}`)
+		case req.Method == http.MethodGet && (req.URL.Path == "/v1/appScreenshotSets/set-1/appScreenshots" || req.URL.Path == "/v1/appScreenshotSets/set-1/relationships/appScreenshots"):
+			return migrateJSONResponse(http.StatusOK, `{"data":[],"links":{}}`)
+		case req.Method == http.MethodPost && req.URL.Path == "/v1/appScreenshots":
+			var payload struct {
+				Data struct {
+					Attributes struct {
+						FileName string `json:"fileName"`
+					} `json:"attributes"`
+				} `json:"data"`
+			}
+			if err := json.NewDecoder(req.Body).Decode(&payload); err != nil {
+				t.Errorf("decode create body: %v", err)
+			}
+			id := strings.TrimSuffix(payload.Data.Attributes.FileName, ".png")
+			return migrateJSONResponse(http.StatusCreated, fmt.Sprintf(`{"data":{"type":"appScreenshots","id":"%s","attributes":{"uploadOperations":[{"method":"PUT","url":"https://upload.example/%s","length":%d,"offset":0}]}}}`, id, id, size))
+		case req.Method == http.MethodPut && req.URL.Host == "upload.example":
+			mu.Lock()
+			inFlight++
+			if inFlight == len(files) {
+				close(release)
+			}
+			mu.Unlock()
+			select {
+			case <-release:
+				return migrateJSONResponse(http.StatusOK, `{}`)
+			case <-time.After(5 * time.Second):
+				t.Errorf("upload PUT %s did not overlap with the other uploads in the set", req.URL.Path)
+				return migrateJSONResponse(http.StatusInternalServerError, `{}`)
+			}
+		case req.Method == http.MethodPatch && strings.HasPrefix(req.URL.Path, "/v1/appScreenshots/"):
+			id := strings.TrimPrefix(req.URL.Path, "/v1/appScreenshots/")
+			return migrateJSONResponse(http.StatusOK, fmt.Sprintf(`{"data":{"type":"appScreenshots","id":"%s","attributes":{"uploaded":true}}}`, id))
+		case req.Method == http.MethodGet && strings.HasPrefix(req.URL.Path, "/v1/appScreenshots/"):
+			id := strings.TrimPrefix(req.URL.Path, "/v1/appScreenshots/")
+			return migrateJSONResponse(http.StatusOK, fmt.Sprintf(`{"data":{"type":"appScreenshots","id":"%s","attributes":{"assetDeliveryState":{"state":"COMPLETE"},"sourceFileChecksum":"settled"}}}`, id))
+		case req.Method == http.MethodPatch && req.URL.Path == "/v1/appScreenshotSets/set-1/relationships/appScreenshots":
+			var payload asc.RelationshipRequest
+			if err := json.NewDecoder(req.Body).Decode(&payload); err != nil {
+				t.Errorf("decode relationship patch body: %v", err)
+			}
+			for _, item := range payload.Data {
+				gotOrder = append(gotOrder, item.ID)
+			}
+			return migrateJSONResponse(http.StatusNoContent, "")
+		default:
+			t.Errorf("unexpected request: %s %s", req.Method, req.URL.String())
+			return migrateJSONResponse(http.StatusNotFound, `{}`)
+		}
+	})
+	t.Cleanup(func() {
+		http.DefaultTransport = origTransport
+	})
+
+	results, err := uploadScreenshots(
+		context.Background(),
+		newMigrateUploadTestClient(t),
+		"version-1",
+		map[string]string{"en-US": "loc-1"},
+		[]ScreenshotPlan{{Locale: "en-US", DisplayType: "APP_IPHONE_65", Files: files}},
+	)
+	if err != nil {
+		t.Fatalf("uploadScreenshots() error: %v", err)
+	}
+
+	wantIDs := []string{"01-a", "02-b", "03-c"}
+	if len(results) != 1 || len(results[0].Uploaded) != len(wantIDs) {
+		t.Fatalf("unexpected results: %#v", results)
+	}
+	for i, item := range results[0].Uploaded {
+		if item.AssetID != wantIDs[i] || item.FilePath != files[i] {
+			t.Fatalf("uploaded[%d] = %#v, want asset %q from %q", i, item, wantIDs[i], files[i])
+		}
+	}
+	if !reflect.DeepEqual(gotOrder, wantIDs) {
+		t.Fatalf("relationship order = %v, want %v", gotOrder, wantIDs)
+	}
+}
+
+func TestUploadScreenshots_FailedUploadDeletesLaterUploadsAndOmitsLaterSkips(t *testing.T) {
+	dir := t.TempDir()
+	files := []string{
+		writeMigrateTestPNG(t, dir, "01-a.png"),
+		writeMigrateTestPNG(t, dir, "02-b.png"),
+		writeMigrateTestPNG(t, dir, "03-c.png"),
+	}
+	if err := os.Mkdir(filepath.Join(dir, "dup"), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	laterDuplicate := writeMigrateTestPNG(t, filepath.Join(dir, "dup"), "03-c.png")
+	size := migrateFileSize(t, files[0])
+
+	var mu sync.Mutex
+	var deleted []string
+	reordered := false
+
+	origTransport := http.DefaultTransport
+	http.DefaultTransport = migrateUploadRoundTripFunc(func(req *http.Request) (*http.Response, error) {
+		switch {
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/appStoreVersionLocalizations/loc-1/appScreenshotSets":
+			return migrateJSONResponse(http.StatusOK, `{"data":[{"type":"appScreenshotSets","id":"set-1","attributes":{"screenshotDisplayType":"APP_IPHONE_65"}}]}`)
+		case req.Method == http.MethodGet && (req.URL.Path == "/v1/appScreenshotSets/set-1/appScreenshots" || req.URL.Path == "/v1/appScreenshotSets/set-1/relationships/appScreenshots"):
+			return migrateJSONResponse(http.StatusOK, `{"data":[],"links":{}}`)
+		case req.Method == http.MethodPost && req.URL.Path == "/v1/appScreenshots":
+			var payload struct {
+				Data struct {
+					Attributes struct {
+						FileName string `json:"fileName"`
+					} `json:"attributes"`
+				} `json:"data"`
+			}
+			if err := json.NewDecoder(req.Body).Decode(&payload); err != nil {
+				t.Errorf("decode create body: %v", err)
+			}
+			id := strings.TrimSuffix(payload.Data.Attributes.FileName, ".png")
+			return migrateJSONResponse(http.StatusCreated, fmt.Sprintf(`{"data":{"type":"appScreenshots","id":"%s","attributes":{"uploadOperations":[{"method":"PUT","url":"https://upload.example/%s","length":%d,"offset":0}]}}}`, id, id, size))
+		case req.Method == http.MethodPut && req.URL.Host == "upload.example":
+			if req.URL.Path == "/01-a" {
+				return migrateJSONResponse(http.StatusForbidden, `{}`)
+			}
+			return migrateJSONResponse(http.StatusOK, `{}`)
+		case req.Method == http.MethodPatch && strings.HasPrefix(req.URL.Path, "/v1/appScreenshots/"):
+			id := strings.TrimPrefix(req.URL.Path, "/v1/appScreenshots/")
+			return migrateJSONResponse(http.StatusOK, fmt.Sprintf(`{"data":{"type":"appScreenshots","id":"%s","attributes":{"uploaded":true}}}`, id))
+		case req.Method == http.MethodGet && strings.HasPrefix(req.URL.Path, "/v1/appScreenshots/"):
+			id := strings.TrimPrefix(req.URL.Path, "/v1/appScreenshots/")
+			return migrateJSONResponse(http.StatusOK, fmt.Sprintf(`{"data":{"type":"appScreenshots","id":"%s","attributes":{"assetDeliveryState":{"state":"COMPLETE"},"sourceFileChecksum":"settled"}}}`, id))
+		case req.Method == http.MethodDelete && strings.HasPrefix(req.URL.Path, "/v1/appScreenshots/"):
+			mu.Lock()
+			deleted = append(deleted, strings.TrimPrefix(req.URL.Path, "/v1/appScreenshots/"))
+			mu.Unlock()
+			return migrateJSONResponse(http.StatusNoContent, "")
+		case req.Method == http.MethodPatch && req.URL.Path == "/v1/appScreenshotSets/set-1/relationships/appScreenshots":
+			reordered = true
+			return migrateJSONResponse(http.StatusNoContent, "")
+		default:
+			t.Errorf("unexpected request: %s %s", req.Method, req.URL.String())
+			return migrateJSONResponse(http.StatusNotFound, `{}`)
+		}
+	})
+	t.Cleanup(func() {
+		http.DefaultTransport = origTransport
+	})
+
+	results, err := uploadScreenshots(
+		context.Background(),
+		newMigrateUploadTestClient(t),
+		"version-1",
+		map[string]string{"en-US": "loc-1"},
+		[]ScreenshotPlan{{Locale: "en-US", DisplayType: "APP_IPHONE_65", Files: append(append([]string(nil), files...), laterDuplicate)}},
+	)
+	if err == nil || !strings.Contains(err.Error(), files[0]) {
+		t.Fatalf("uploadScreenshots() error = %v, want failure for %s", err, files[0])
+	}
+
+	sort.Strings(deleted)
+	if want := []string{"02-b", "03-c"}; !reflect.DeepEqual(deleted, want) {
+		t.Fatalf("deleted = %v, want %v", deleted, want)
+	}
+	if reordered {
+		t.Fatal("reorder PATCH sent after a failed upload")
+	}
+	if len(results) != 1 || len(results[0].Uploaded) != 0 || len(results[0].Skipped) != 0 {
+		t.Fatalf("receipt = %#v, want no uploads or later skips", results)
 	}
 }
 

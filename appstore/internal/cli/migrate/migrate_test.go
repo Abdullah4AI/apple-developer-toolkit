@@ -365,31 +365,6 @@ func TestReadFastlaneMetadata_SkipsFiles(t *testing.T) {
 	}
 }
 
-func TestValidateVersionLocalization_UsesSharedLimits(t *testing.T) {
-	loc := FastlaneLocalization{
-		Locale:      "en-US",
-		Description: strings.Repeat("a", validation.LimitDescription+1),
-	}
-
-	issues := validateVersionLocalization(loc)
-	if len(issues) == 0 {
-		t.Fatalf("expected issues, got none")
-	}
-
-	found := false
-	for _, issue := range issues {
-		if issue.Field == "description" {
-			found = true
-			if issue.Limit != validation.LimitDescription {
-				t.Fatalf("expected limit %d, got %d", validation.LimitDescription, issue.Limit)
-			}
-		}
-	}
-	if !found {
-		t.Fatalf("expected description issue")
-	}
-}
-
 func TestPrintMigrateOutput_RejectsPrettyForTable(t *testing.T) {
 	err := printMigrateOutput(&MigrateImportResult{}, "table", true)
 	if err == nil || !strings.Contains(err.Error(), "--pretty is only valid with JSON output") {

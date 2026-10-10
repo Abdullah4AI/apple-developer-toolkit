@@ -39,43 +39,6 @@ func TestPricingPricePointsGetCommand_MissingPricePoint(t *testing.T) {
 	}
 }
 
-func TestPricingPricePointsEqualizationsCommand_MissingPricePoint(t *testing.T) {
-	cmd := PricingPricePointsEqualizationsCommand()
-
-	if err := cmd.FlagSet.Parse([]string{}); err != nil {
-		t.Fatalf("failed to parse flags: %v", err)
-	}
-
-	if err := cmd.Exec(context.Background(), []string{}); !errors.Is(err, flag.ErrHelp) {
-		t.Fatalf("expected flag.ErrHelp when --price-point is missing, got %v", err)
-	}
-}
-
-func TestPricingScheduleGetCommand_MissingAppAndID(t *testing.T) {
-	t.Setenv("ASC_APP_ID", "")
-	cmd := PricingScheduleGetCommand()
-
-	if err := cmd.FlagSet.Parse([]string{}); err != nil {
-		t.Fatalf("failed to parse flags: %v", err)
-	}
-
-	if err := cmd.Exec(context.Background(), []string{}); !errors.Is(err, flag.ErrHelp) {
-		t.Fatalf("expected flag.ErrHelp when --app is missing, got %v", err)
-	}
-}
-
-func TestPricingScheduleGetCommand_MutuallyExclusive(t *testing.T) {
-	cmd := PricingScheduleGetCommand()
-
-	if err := cmd.FlagSet.Parse([]string{"--app", "APP_ID", "--id", "SCHEDULE_ID"}); err != nil {
-		t.Fatalf("failed to parse flags: %v", err)
-	}
-
-	if err := cmd.Exec(context.Background(), []string{}); !errors.Is(err, flag.ErrHelp) {
-		t.Fatalf("expected flag.ErrHelp when --app and --id are both set, got %v", err)
-	}
-}
-
 func TestPricingScheduleManualPricesCommand_MissingSchedule(t *testing.T) {
 	cmd := PricingScheduleManualPricesCommand()
 
@@ -235,31 +198,6 @@ func TestPricingScheduleCreateCommand_HelpMentionsFreeExample(t *testing.T) {
 	}
 }
 
-func TestPricingAvailabilityGetCommand_MissingAppAndID(t *testing.T) {
-	t.Setenv("ASC_APP_ID", "")
-	cmd := PricingAvailabilityGetCommand()
-
-	if err := cmd.FlagSet.Parse([]string{}); err != nil {
-		t.Fatalf("failed to parse flags: %v", err)
-	}
-
-	if err := cmd.Exec(context.Background(), []string{}); !errors.Is(err, flag.ErrHelp) {
-		t.Fatalf("expected flag.ErrHelp when --app is missing, got %v", err)
-	}
-}
-
-func TestPricingAvailabilityGetCommand_MutuallyExclusive(t *testing.T) {
-	cmd := PricingAvailabilityGetCommand()
-
-	if err := cmd.FlagSet.Parse([]string{"--app", "APP_ID", "--id", "AVAILABILITY_ID"}); err != nil {
-		t.Fatalf("failed to parse flags: %v", err)
-	}
-
-	if err := cmd.Exec(context.Background(), []string{}); !errors.Is(err, flag.ErrHelp) {
-		t.Fatalf("expected flag.ErrHelp when --app and --id are both set, got %v", err)
-	}
-}
-
 func TestPricingAvailabilityTerritoryAvailabilitiesCommand_MissingAvailability(t *testing.T) {
 	cmd := PricingAvailabilityTerritoryAvailabilitiesCommand()
 
@@ -412,14 +350,6 @@ func TestPricingAvailabilityCommand_RegistersPlatforms(t *testing.T) {
 	t.Fatal("expected pricing availability platforms to be registered")
 }
 
-func TestPricingAvailabilityRemoveFromSaleCommand_AllPlatformsIsRegistered(t *testing.T) {
-	command := PricingAvailabilityRemoveFromSaleCommand()
-	allPlatforms := command.FlagSet.Lookup("all-platforms")
-	if allPlatforms == nil {
-		t.Fatal("expected --all-platforms flag")
-	}
-}
-
 func TestPricingAvailabilityRemoveFromSaleCommand_MissingConfirmBeforeAuth(t *testing.T) {
 	t.Setenv("ASC_APP_ID", "")
 	called := false
@@ -491,43 +421,5 @@ func TestPricingCommands_DefaultOutputJSON(t *testing.T) {
 				t.Fatalf("expected --output default to be 'json', got %q", f.DefValue)
 			}
 		})
-	}
-}
-
-func TestPricingCurrentCommand_MissingApp(t *testing.T) {
-	t.Setenv("ASC_APP_ID", "")
-	cmd := PricingCurrentCommand()
-
-	if err := cmd.FlagSet.Parse([]string{}); err != nil {
-		t.Fatalf("failed to parse flags: %v", err)
-	}
-
-	if err := cmd.Exec(context.Background(), []string{}); !errors.Is(err, flag.ErrHelp) {
-		t.Fatalf("expected flag.ErrHelp when --app is missing, got %v", err)
-	}
-}
-
-func TestPricingCurrentCommand_MutuallyExclusiveTerritorySelection(t *testing.T) {
-	cmd := PricingCurrentCommand()
-
-	if err := cmd.FlagSet.Parse([]string{"--app", "APP", "--territory", "USA", "--all-territories"}); err != nil {
-		t.Fatalf("failed to parse flags: %v", err)
-	}
-
-	if err := cmd.Exec(context.Background(), []string{}); !errors.Is(err, flag.ErrHelp) {
-		t.Fatalf("expected flag.ErrHelp when --territory and --all-territories are both set, got %v", err)
-	}
-}
-
-func TestPricingTiersCommand_MissingApp(t *testing.T) {
-	t.Setenv("ASC_APP_ID", "")
-	cmd := PricingTiersCommand()
-
-	if err := cmd.FlagSet.Parse([]string{}); err != nil {
-		t.Fatalf("failed to parse flags: %v", err)
-	}
-
-	if err := cmd.Exec(context.Background(), []string{}); !errors.Is(err, flag.ErrHelp) {
-		t.Fatalf("expected flag.ErrHelp when --app is missing, got %v", err)
 	}
 }

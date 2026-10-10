@@ -13,6 +13,7 @@ import (
 	_ "image/jpeg"
 	_ "image/png"
 	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -37,20 +38,27 @@ func UploadAsset(ctx context.Context, filePath string, operations []UploadOperat
 }
 
 // UploadAssetFromFile uploads a file using the provided upload operations.
-// Operations run sequentially through the shared upload executor, so a part
+// Operations run concurrently through the shared upload executor, so a part
 // that hits a transient transport failure or retryable status is retried
-// instead of leaving the asset partially uploaded.
+// instead of leaving the asset partially uploaded. When several parts fail,
+// the error is from the first to fail in time, not the lowest-numbered part;
+// parts still in flight are cancelled.
 func UploadAssetFromFile(ctx context.Context, file *os.File, fileSize int64, operations []UploadOperation) error {
+	return uploadAssetFromFile(ctx, file, fileSize, operations, newUploadClient)
+}
+
+// UploadAssetFromFile uploads an asset using this client's dedicated upload pool.
+// API credentials and cookies are never attached to upload requests.
+func (c *Client) UploadAssetFromFile(ctx context.Context, file *os.File, fileSize int64, operations []UploadOperation) error {
+	return uploadAssetFromFile(ctx, file, fileSize, operations, c.newPooledUploadClient)
+}
+
+func uploadAssetFromFile(ctx context.Context, file *os.File, fileSize int64, operations []UploadOperation, newClient func() *http.Client) error {
 	if len(operations) == 0 {
 		return fmt.Errorf("no upload operations provided")
 	}
 	if ctx == nil {
 		ctx = context.Background()
-	}
-
-	uploadOpts := UploadOptions{
-		Client:    clientWithoutRedirects(newUploadClient()),
-		RetryOpts: ResolveRetryOptions(),
 	}
 
 	for i, op := range operations {
@@ -71,13 +79,7 @@ func UploadAssetFromFile(ctx context.Context, file *os.File, fileSize int64, ope
 		}
 	}
 
-	for i, op := range operations {
-		if err := executeUploadOperation(ctx, file, uploadTask{index: i, op: op}, uploadOpts); err != nil {
-			return err
-		}
-	}
-
-	return nil
+	return ExecuteUploadOperationsFromFile(ctx, file, operations, WithUploadHTTPClient(newClient()))
 }
 
 // ValidateAssetFile validates that a file exists and is safe to read.

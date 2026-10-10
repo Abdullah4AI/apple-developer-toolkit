@@ -33,27 +33,6 @@ func findCommand(root *ffcli.Command, path ...string) *ffcli.Command {
 	return cmd
 }
 
-func TestDefaultOutputEnvSetsFlagDefault(t *testing.T) {
-	resetDefaultOutput(t)
-	t.Setenv("ASC_DEFAULT_OUTPUT", "table")
-
-	root := RootCommand("1.2.3")
-	cmd := findCommand(root, "categories", "list")
-	if cmd == nil {
-		t.Fatal("expected categories list command")
-		return
-	}
-
-	outputFlag := cmd.FlagSet.Lookup("output")
-	if outputFlag == nil {
-		t.Fatal("expected --output flag")
-		return
-	}
-	if got := outputFlag.DefValue; got != "table" {
-		t.Fatalf("expected default output to be table, got %q", got)
-	}
-}
-
 func TestDefaultOutputEnvOverriddenByExplicitFlag(t *testing.T) {
 	resetDefaultOutput(t)
 	t.Setenv("ASC_DEFAULT_OUTPUT", "table")

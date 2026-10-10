@@ -18,6 +18,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
@@ -853,12 +854,13 @@ func TestWaitForBuildProcessingStateFailureKeepsStateErrorWhenDetailsOutlastDead
 		}
 	})
 
-	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
-	defer cancel()
-
 	var err error
 	captureBuildsWaitStderr(t, func() {
-		_, err = waitForBuildProcessingState(ctx, client, "build-1", time.Millisecond, false, shared.BuildProcessingFailureContext{AppID: "app-1"}, nil)
+		synctest.Test(t, func(*testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+			defer cancel()
+			_, err = waitForBuildProcessingState(ctx, client, "build-1", time.Millisecond, false, shared.BuildProcessingFailureContext{AppID: "app-1"}, nil)
+		})
 	})
 	if err == nil {
 		t.Fatal("expected terminal FAILED error, got nil")

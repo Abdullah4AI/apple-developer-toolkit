@@ -123,6 +123,21 @@ func TestSubscriptionsInputValidationReturnsUsageExitCode(t *testing.T) {
 			args:    []string{"subscriptions", "offers", "offer-codes", "prices", "--offer-code-id", "o", "--next", "http://example.com/x"},
 			wantErr: "subscriptions offers offer-codes prices: --next must be an App Store Connect URL",
 		},
+		{
+			name:    "pricing price-points view without price-point-id",
+			args:    []string{"subscriptions", "pricing", "price-points", "view"},
+			wantErr: "--price-point-id is required",
+		},
+		{
+			name:    "offers promotional view without id",
+			args:    []string{"subscriptions", "offers", "promotional", "view"},
+			wantErr: "--id is required",
+		},
+		{
+			name:    "versions images view without id",
+			args:    []string{"subscriptions", "versions", "images", "view"},
+			wantErr: "--id is required",
+		},
 	}
 
 	for _, test := range tests {

@@ -7,22 +7,6 @@ import (
 	rootcmd "github.com/Abdullah4AI/apple-developer-toolkit/appstore/cmd"
 )
 
-func TestWebIAPTaxCategoryCommandsAreRegistered(t *testing.T) {
-	root := RootCommand("1.2.3")
-	for _, path := range [][]string{
-		{"web", "iap"},
-		{"web", "iap", "tax-category"},
-		{"web", "iap", "tax-category", "list"},
-		{"web", "iap", "tax-category", "view"},
-		{"web", "iap", "tax-category", "set"},
-		{"web", "iap", "tax-category", "reset"},
-	} {
-		if findSubcommand(root, path...) == nil {
-			t.Fatalf("command %v is not registered", path)
-		}
-	}
-}
-
 // TestWebIAPTaxCategoryInputValidationReturnsUsageExitCode locks the
 // pre-session validation contract for each IAP tax-category leaf. Required
 // inputs and positional arguments must produce one concise stderr diagnostic

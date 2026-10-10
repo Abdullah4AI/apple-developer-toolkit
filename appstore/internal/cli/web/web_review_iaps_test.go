@@ -15,27 +15,6 @@ import (
 	webcore "github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/web"
 )
 
-func TestWebReviewIAPsAttachRequiresApp(t *testing.T) {
-	t.Setenv("ASC_APP_ID", "")
-	cmd := WebReviewIAPsAttachCommand()
-	if err := cmd.FlagSet.Parse([]string{
-		"--iap-id", "9000000001",
-		"--confirm",
-	}); err != nil {
-		t.Fatalf("parse error: %v", err)
-	}
-
-	_, stderr := captureOutput(t, func() {
-		err := cmd.Exec(context.Background(), nil)
-		if !errors.Is(err, flag.ErrHelp) {
-			t.Fatalf("expected flag.ErrHelp, got %v", err)
-		}
-	})
-	if !strings.Contains(stderr, "--app is required") {
-		t.Fatalf("expected --app guidance in stderr, got %q", stderr)
-	}
-}
-
 func TestWebReviewIAPsAttachRequiresIAPID(t *testing.T) {
 	cmd := WebReviewIAPsAttachCommand()
 	if err := cmd.FlagSet.Parse([]string{

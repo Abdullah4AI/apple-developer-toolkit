@@ -14,6 +14,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	rootcmd "github.com/Abdullah4AI/apple-developer-toolkit/appstore/cmd"
@@ -28,13 +29,15 @@ func TestSubscriptionsReviewScreenshotCreateSkipsCompleteMatchingAsset(t *testin
 	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		requests++
 		if req.Method != http.MethodGet {
-			t.Fatalf("expected state reads only, got %s %s", req.Method, req.URL.Path)
+			t.Errorf("expected state reads only, got %s %s", req.Method, req.URL.Path)
+			return nil, errors.New("test transport assertion failed")
 		}
 		if req.URL.Path == "/v1/subscriptionAppStoreReviewScreenshots/shot-1" {
 			return jsonHTTPResponse(http.StatusOK, subscriptionReviewScreenshotFullResponse("shot-1", filepath.Base(path), int64(len(content)), checksum, "COMPLETE")), nil
 		}
 		if req.URL.Path != "/v1/subscriptions/8000000001/appStoreReviewScreenshot" {
-			t.Fatalf("unexpected state read: %s", req.URL.Path)
+			t.Errorf("unexpected state read: %s", req.URL.Path)
+			return nil, errors.New("test transport assertion failed")
 		}
 		assertSubscriptionReviewScreenshotSparseFields(t, req)
 		return jsonHTTPResponse(http.StatusOK, subscriptionReviewScreenshotResponse("shot-1", filepath.Base(path), int64(len(content)), strings.ToUpper(checksum), "COMPLETE", false)), nil
@@ -66,7 +69,8 @@ func TestSubscriptionsReviewScreenshotCreateResumesMatchingReservation(t *testin
 			sequence = append(sequence, "upload")
 			body, err := io.ReadAll(req.Body)
 			if err != nil || string(body) != string(content) {
-				t.Fatalf("unexpected upload body: %q err=%v", body, err)
+				t.Errorf("unexpected upload body: %q err=%v", body, err)
+				return nil, errors.New("test transport assertion failed")
 			}
 			return jsonHTTPResponse(http.StatusOK, ``), nil
 		case req.Method == http.MethodPatch && req.URL.Path == "/v1/subscriptionAppStoreReviewScreenshots/shot-1":
@@ -77,8 +81,8 @@ func TestSubscriptionsReviewScreenshotCreateResumesMatchingReservation(t *testin
 			sequence = append(sequence, "poll")
 			return jsonHTTPResponse(http.StatusOK, subscriptionReviewScreenshotFullResponse("shot-1", filepath.Base(path), int64(len(content)), checksum, "COMPLETE")), nil
 		default:
-			t.Fatalf("unexpected request: %s %s host=%s", req.Method, req.URL.Path, req.URL.Host)
-			return nil, nil
+			t.Errorf("unexpected request: %s %s host=%s", req.Method, req.URL.Path, req.URL.Host)
+			return nil, errors.New("unexpected test transport request")
 		}
 	})
 
@@ -116,8 +120,8 @@ func TestSubscriptionsReviewScreenshotCreateRejectsConflictingReservationDuringR
 			posts++
 			return jsonHTTPResponse(http.StatusInternalServerError, `{"errors":[{"status":"500","code":"INTERNAL_ERROR","detail":"ambiguous"}]}`), nil
 		default:
-			t.Fatalf("conflicting reservation must stop recovery: %s %s", req.Method, req.URL.Path)
-			return nil, nil
+			t.Errorf("conflicting reservation must stop recovery: %s %s", req.Method, req.URL.Path)
+			return nil, errors.New("unexpected test transport request")
 		}
 	})
 
@@ -169,8 +173,8 @@ func TestSubscriptionsReviewScreenshotCreateRejectsConflictingCommitDuringReconc
 					patches++
 					return jsonHTTPResponse(http.StatusInternalServerError, `{"errors":[{"status":"500","code":"INTERNAL_ERROR","detail":"ambiguous"}]}`), nil
 				default:
-					t.Fatalf("conflicting commit must stop recovery: %s %s", req.Method, req.URL.Path)
-					return nil, nil
+					t.Errorf("conflicting commit must stop recovery: %s %s", req.Method, req.URL.Path)
+					return nil, errors.New("unexpected test transport request")
 				}
 			})
 
@@ -196,7 +200,8 @@ func TestSubscriptionsReviewScreenshotCreatePollsMatchingProcessingAsset(t *test
 	reads := 0
 	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		if req.Method != http.MethodGet {
-			t.Fatalf("processing resume must not mutate: %s %s", req.Method, req.URL.Path)
+			t.Errorf("processing resume must not mutate: %s %s", req.Method, req.URL.Path)
+			return nil, errors.New("test transport assertion failed")
 		}
 		reads++
 		if req.URL.Path == "/v1/subscriptions/8000000001/appStoreReviewScreenshot" {
@@ -205,8 +210,8 @@ func TestSubscriptionsReviewScreenshotCreatePollsMatchingProcessingAsset(t *test
 		if req.URL.Path == "/v1/subscriptionAppStoreReviewScreenshots/shot-1" {
 			return jsonHTTPResponse(http.StatusOK, subscriptionReviewScreenshotResponse("shot-1", filepath.Base(path), int64(len(content)), checksum, "COMPLETE", false)), nil
 		}
-		t.Fatalf("unexpected request: %s %s", req.Method, req.URL.Path)
-		return nil, nil
+		t.Errorf("unexpected request: %s %s", req.Method, req.URL.Path)
+		return nil, errors.New("unexpected test transport request")
 	})
 
 	stdout, stderr, err := runSubscriptionReviewScreenshotCreate(t, path)
@@ -228,7 +233,8 @@ func TestSubscriptionsReviewScreenshotCreateRejectsChangedChecksumDuringPoll(t *
 	reads := 0
 	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		if req.Method != http.MethodGet {
-			t.Fatalf("checksum race must not mutate: %s %s", req.Method, req.URL.Path)
+			t.Errorf("checksum race must not mutate: %s %s", req.Method, req.URL.Path)
+			return nil, errors.New("test transport assertion failed")
 		}
 		reads++
 		switch req.URL.Path {
@@ -237,8 +243,8 @@ func TestSubscriptionsReviewScreenshotCreateRejectsChangedChecksumDuringPoll(t *
 		case "/v1/subscriptionAppStoreReviewScreenshots/shot-1":
 			return jsonHTTPResponse(http.StatusOK, subscriptionReviewScreenshotResponse("shot-1", filepath.Base(path), int64(len(content)), "different", "COMPLETE", false)), nil
 		default:
-			t.Fatalf("unexpected request: %s", req.URL.Path)
-			return nil, nil
+			t.Errorf("unexpected request: %s", req.URL.Path)
+			return nil, errors.New("unexpected test transport request")
 		}
 	})
 
@@ -264,7 +270,8 @@ func TestSubscriptionsReviewScreenshotCreateStopsWhenPollDeadlineExpires(t *test
 	reads := 0
 	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		if req.Method != http.MethodGet {
-			t.Fatalf("poll timeout must not mutate: %s %s", req.Method, req.URL.Path)
+			t.Errorf("poll timeout must not mutate: %s %s", req.Method, req.URL.Path)
+			return nil, errors.New("test transport assertion failed")
 		}
 		reads++
 		return jsonHTTPResponse(http.StatusOK, subscriptionReviewScreenshotResponse("shot-1", filepath.Base(path), int64(len(content)), checksum, "PROCESSING", false)), nil
@@ -305,8 +312,8 @@ func TestSubscriptionsReviewScreenshotCreateReconcilesAmbiguousReservation(t *te
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/subscriptionAppStoreReviewScreenshots/shot-1":
 			return jsonHTTPResponse(http.StatusOK, subscriptionReviewScreenshotResponse("shot-1", filepath.Base(path), int64(len(content)), checksum, "COMPLETE", false)), nil
 		default:
-			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.Path)
-			return nil, nil
+			t.Errorf("unexpected request: %s %s", req.Method, req.URL.Path)
+			return nil, errors.New("unexpected test transport request")
 		}
 	})
 
@@ -340,8 +347,8 @@ func TestSubscriptionsReviewScreenshotCreateReconcilesAmbiguousCommit(t *testing
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/subscriptionAppStoreReviewScreenshots/shot-1":
 			return jsonHTTPResponse(http.StatusOK, subscriptionReviewScreenshotResponse("shot-1", filepath.Base(path), int64(len(content)), checksum, "COMPLETE", false)), nil
 		default:
-			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.Path)
-			return nil, nil
+			t.Errorf("unexpected request: %s %s", req.Method, req.URL.Path)
+			return nil, errors.New("unexpected test transport request")
 		}
 	})
 
@@ -369,8 +376,8 @@ func TestSubscriptionsReviewScreenshotCreateRejectsMismatchedCommitResponse(t *t
 			patches++
 			return jsonHTTPResponse(http.StatusOK, subscriptionReviewScreenshotResponse("shot-other", filepath.Base(path), int64(len(content)), checksum, "PROCESSING", false)), nil
 		default:
-			t.Fatalf("mismatched commit must not be polled: %s %s", req.Method, req.URL.Path)
-			return nil, nil
+			t.Errorf("mismatched commit must not be polled: %s %s", req.Method, req.URL.Path)
+			return nil, errors.New("unexpected test transport request")
 		}
 	})
 
@@ -417,8 +424,8 @@ func TestSubscriptionsReviewScreenshotCreateTreatsNullRelationshipAsAbsentBefore
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/subscriptionAppStoreReviewScreenshots/shot-1":
 			return jsonHTTPResponse(http.StatusOK, subscriptionReviewScreenshotResponse("shot-1", filepath.Base(path), int64(len(content)), checksum, "COMPLETE", false)), nil
 		default:
-			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.Path)
-			return nil, nil
+			t.Errorf("unexpected request: %s %s", req.Method, req.URL.Path)
+			return nil, errors.New("unexpected test transport request")
 		}
 	})
 
@@ -455,8 +462,8 @@ func TestSubscriptionsReviewScreenshotCreateReadsTwiceBeforeCommitReplay(t *test
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/subscriptionAppStoreReviewScreenshots/shot-1":
 			return jsonHTTPResponse(http.StatusOK, subscriptionReviewScreenshotResponse("shot-1", filepath.Base(path), int64(len(content)), checksum, "COMPLETE", false)), nil
 		default:
-			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.Path)
-			return nil, nil
+			t.Errorf("unexpected request: %s %s", req.Method, req.URL.Path)
+			return nil, errors.New("unexpected test transport request")
 		}
 	})
 
@@ -477,7 +484,8 @@ func TestSubscriptionsReviewScreenshotCreateUsesFreshStageDeadlines(t *testing.T
 	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		deadline, ok := req.Context().Deadline()
 		if !ok || time.Until(deadline) < 350*time.Millisecond {
-			t.Fatalf("expected fresh deadline for %s %s, remaining=%s", req.Method, req.URL.Path, time.Until(deadline))
+			t.Errorf("expected fresh deadline for %s %s, remaining=%s", req.Method, req.URL.Path, time.Until(deadline))
+			return nil, errors.New("test transport assertion failed")
 		}
 		switch {
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/subscriptions/8000000001/appStoreReviewScreenshot":
@@ -495,8 +503,8 @@ func TestSubscriptionsReviewScreenshotCreateUsesFreshStageDeadlines(t *testing.T
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/subscriptionAppStoreReviewScreenshots/shot-1":
 			return jsonHTTPResponse(http.StatusOK, subscriptionReviewScreenshotResponse("shot-1", filepath.Base(path), int64(len(content)), checksum, "COMPLETE", false)), nil
 		default:
-			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.Path)
-			return nil, nil
+			t.Errorf("unexpected request: %s %s", req.Method, req.URL.Path)
+			return nil, errors.New("unexpected test transport request")
 		}
 	})
 
@@ -530,7 +538,8 @@ func TestSubscriptionsReviewScreenshotCreateUsesFreshTimeoutForEachUploadPart(t 
 		case req.Method == http.MethodPut && req.URL.Host == "upload.example":
 			deadline, ok := req.Context().Deadline()
 			if !ok || time.Until(deadline) < 100*time.Millisecond {
-				t.Fatalf("upload part inherited stale deadline: %s", time.Until(deadline))
+				t.Errorf("upload part inherited stale deadline: %s", time.Until(deadline))
+				return nil, errors.New("test transport assertion failed")
 			}
 			sequence.Add(req.URL.Path)
 			if req.URL.Path == "/part-1" {
@@ -548,8 +557,8 @@ func TestSubscriptionsReviewScreenshotCreateUsesFreshTimeoutForEachUploadPart(t 
 			sequence.Add("poll")
 			return jsonHTTPResponse(http.StatusOK, subscriptionReviewScreenshotResponse("shot-1", filepath.Base(path), int64(len(content)), checksum, "COMPLETE", false)), nil
 		default:
-			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.Path)
-			return nil, nil
+			t.Errorf("unexpected request: %s %s", req.Method, req.URL.Path)
+			return nil, errors.New("unexpected test transport request")
 		}
 	})
 
@@ -594,8 +603,8 @@ func TestSubscriptionsReviewScreenshotCreateDoesNotCommitAfterUploadFailure(t *t
 			}
 			return jsonHTTPResponse(http.StatusOK, ``), nil
 		default:
-			t.Fatalf("failed upload must not be committed: %s %s", req.Method, req.URL.Path)
-			return nil, nil
+			t.Errorf("failed upload must not be committed: %s %s", req.Method, req.URL.Path)
+			return nil, errors.New("unexpected test transport request")
 		}
 	})
 
@@ -642,7 +651,8 @@ func TestSubscriptionsReviewScreenshotCreateRejectsUnsafeExistingState(t *testin
 			http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
 				requests++
 				if req.Method != http.MethodGet {
-					t.Fatalf("unsafe state must not mutate: %s %s", req.Method, req.URL.Path)
+					t.Errorf("unsafe state must not mutate: %s %s", req.Method, req.URL.Path)
+					return nil, errors.New("test transport assertion failed")
 				}
 				if tt.status != 0 {
 					return jsonHTTPResponse(tt.status, tt.body), nil
@@ -722,7 +732,7 @@ func runSubscriptionReviewScreenshotCreate(t *testing.T, path string) (string, s
 		}); err != nil {
 			t.Fatalf("parse: %v", err)
 		}
-		runErr = root.Run(context.Background())
+		synctest.Test(t, func(*testing.T) { runErr = root.Run(context.Background()) })
 	})
 	return stdout, stderr, runErr
 }

@@ -2,14 +2,6 @@ package cmdtest
 
 import "testing"
 
-func TestIAPListRejectsInvalidNextURLPhase61(t *testing.T) {
-	runGameCenterAchievementsInvalidNextURLCases(
-		t,
-		[]string{"iap", "list"},
-		"iap list: --next",
-	)
-}
-
 func TestIAPListPaginateFromNextWithoutAppPhase61(t *testing.T) {
 	const firstURL = "https://api.appstoreconnect.apple.com/v1/apps/app-1/inAppPurchasesV2?cursor=AQ&limit=200"
 	const secondURL = "https://api.appstoreconnect.apple.com/v1/apps/app-1/inAppPurchasesV2?cursor=BQ&limit=200"
@@ -80,14 +72,6 @@ func TestIAPOfferCodeOneTimeCodesListPaginateFromNextWithoutOfferCodeIDPhase61(t
 		secondBody,
 		"iap-one-time-code-next-1",
 		"iap-one-time-code-next-2",
-	)
-}
-
-func TestIAPOfferCodePricesRejectsInvalidNextURLPhase61(t *testing.T) {
-	runGameCenterAchievementsInvalidNextURLCases(
-		t,
-		[]string{"iap", "offer-codes", "prices"},
-		"iap offer-codes prices: --next",
 	)
 }
 

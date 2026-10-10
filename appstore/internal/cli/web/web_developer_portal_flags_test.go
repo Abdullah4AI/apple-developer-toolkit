@@ -194,13 +194,6 @@ func TestWebDeveloperTeamPersistedAndReusedBySecondCommand(t *testing.T) {
 	}
 }
 
-func TestWebAgreementsStatusAcceptsDeveloperTeamFlag(t *testing.T) {
-	fs := WebAgreementsStatusCommand().FlagSet
-	if fs.Lookup("developer-team") == nil {
-		t.Fatal("expected --developer-team on web agreements status")
-	}
-}
-
 func TestValidateDeveloperPortalFlagsRejectsBlankSelector(t *testing.T) {
 	omitted := bindDeveloperPortalFlags(flag.NewFlagSet("omit", flag.ContinueOnError))
 	if err := validateDeveloperPortalFlags(omitted); err != nil {

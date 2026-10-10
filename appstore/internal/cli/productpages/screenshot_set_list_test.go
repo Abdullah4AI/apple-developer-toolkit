@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 	"time"
 
@@ -26,13 +27,17 @@ func (t screenshotSetDeadlineRoundTripper) RoundTrip(req *http.Request) (*http.R
 
 func TestScreenshotSetListResultFetchesNestedScreenshots(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		if req.Method != http.MethodGet || req.URL.Path != "/v1/appScreenshotSets/set-1/appScreenshots" {
+		if req.Method != http.MethodGet || (req.URL.Path != "/v1/appScreenshotSets/set-1/appScreenshots" && req.URL.Path != "/v1/appScreenshotSets/set-1/relationships/appScreenshots") {
 			t.Errorf("unexpected request: %s %s", req.Method, req.URL.String())
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
+		if req.URL.Path == "/v1/appScreenshotSets/set-1/relationships/appScreenshots" {
+			_, _ = io.WriteString(w, `{"data":[{"type":"appScreenshots","id":"screenshot-1"}]}`)
+			return
+		}
 		_, _ = io.WriteString(w, `{"data":[{"type":"appScreenshots","id":"screenshot-1","attributes":{"fileName":"01-home.png"}}]}`)
 	}))
 	t.Cleanup(server.Close)
@@ -66,7 +71,7 @@ func TestScreenshotSetListResultRenewsNestedRequestTimeouts(t *testing.T) {
 
 	callCount := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		if req.Method != http.MethodGet || (req.URL.Path != "/v1/appScreenshotSets/set-1/appScreenshots" && req.URL.Path != "/v1/appScreenshotSets/set-2/appScreenshots") {
+		if req.Method != http.MethodGet || !strings.HasPrefix(req.URL.Path, "/v1/appScreenshotSets/set-") {
 			t.Errorf("unexpected request: %s %s", req.Method, req.URL.String())
 			w.WriteHeader(http.StatusInternalServerError)
 			return
@@ -85,7 +90,7 @@ func TestScreenshotSetListResultRenewsNestedRequestTimeouts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parse test server URL: %v", err)
 	}
-	deadlines := make([]time.Duration, 0, 2)
+	deadlines := make([]time.Duration, 0, 4)
 	httpClient := server.Client()
 	httpClient.Transport = screenshotSetDeadlineRoundTripper{
 		deadlines: &deadlines,
@@ -105,8 +110,8 @@ func TestScreenshotSetListResultRenewsNestedRequestTimeouts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("screenshotSetListResult() error: %v", err)
 	}
-	if len(deadlines) != 2 {
-		t.Fatalf("recorded %d nested request deadlines, want 2", len(deadlines))
+	if len(deadlines) != 4 {
+		t.Fatalf("recorded %d nested request deadlines, want 4", len(deadlines))
 	}
 	if deadlines[1] < 350*time.Millisecond {
 		t.Fatalf("second nested request inherited the first request deadline: %s", deadlines[1])

@@ -711,30 +711,6 @@ func TestResolveWebhook(t *testing.T) {
 	}
 }
 
-func TestNotifyCommandHasSubcommands(t *testing.T) {
-	cmd := NotifyCommand()
-	if len(cmd.Subcommands) == 0 {
-		t.Fatal("expected subcommands, got none")
-	}
-	found := false
-	for _, sub := range cmd.Subcommands {
-		if sub.Name == "slack" {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Fatal("expected 'slack' subcommand")
-	}
-}
-
-func TestSlackCommandName(t *testing.T) {
-	cmd := SlackCommand()
-	if cmd.Name != "slack" {
-		t.Errorf("expected name 'slack', got %q", cmd.Name)
-	}
-}
-
 func TestSlackCommandHasUsageFunc(t *testing.T) {
 	cmd := SlackCommand()
 	if cmd.UsageFunc == nil {

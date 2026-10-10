@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"sync"
 
@@ -100,52 +101,10 @@ func cleanupScreenshotAssets(ctx context.Context, client *asc.Client, assets []s
 }
 
 func uploadScreenshotsConcurrently(ctx context.Context, client *asc.Client, setID string, progress screenshotUploadProgress, files []string, sourceRootPath string, openedFiles openedScreenshotFiles, syncIfNoNew, syncAfterUpload bool, concurrency int) (screenshotUploadProgress, error) {
-	slots := make([]screenshotUploadSlot, len(files))
-	work := make(chan int)
-	var wg sync.WaitGroup
-	workerCount := concurrency
-	if workerCount > len(files) {
-		workerCount = len(files)
-	}
-	for range workerCount {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for idx := range work {
-				if ctx.Err() != nil {
-					slots[idx].err = ctx.Err()
-					continue
-				}
-				filePath := files[idx]
-				item, pending, err := uploadOneScreenshot(ctx, client, setID, filePath, sourceRootPath, openedFiles)
-				slots[idx] = screenshotUploadSlot{item: item, pending: pending, err: err}
-			}
-		}()
-	}
-	for idx := range files {
-		work <- idx
-	}
-	close(work)
-	wg.Wait()
-
-	failed := -1
-	for idx, slot := range slots {
-		if slot.err != nil {
-			failed = idx
-			break
-		}
-	}
+	slots, failed, cleanupFailures, cleanupErr := runScreenshotUploadPool(ctx, client, files, concurrency, func(ctx context.Context, filePath string) (asc.AssetUploadResultItem, screenshotPendingAsset, error) {
+		return uploadOneScreenshot(ctx, client, setID, filePath, sourceRootPath, openedFiles)
+	})
 	if failed >= 0 {
-		cleanupAssets := make([]screenshotPendingAsset, 0, len(slots)-failed-1)
-		for idx := failed + 1; idx < len(slots); idx++ {
-			if id := strings.TrimSpace(slots[idx].item.AssetID); id != "" {
-				cleanupAssets = append(cleanupAssets, screenshotUploadItemPending(slots[idx].item))
-			}
-			if id := strings.TrimSpace(slots[idx].pending.AssetID); id != "" {
-				cleanupAssets = append(cleanupAssets, slots[idx].pending)
-			}
-		}
-		cleanupFailures, cleanupErr := cleanupScreenshotAssets(ctx, client, cleanupAssets)
 		for idx := 0; idx < failed; idx++ {
 			progress.Results = append(progress.Results, slots[idx].item)
 			progress.OrderedIDs = appendUniqueAssetID(progress.OrderedIDs, slots[idx].item.AssetID)
@@ -176,4 +135,95 @@ func uploadScreenshotsConcurrently(ctx context.Context, client *asc.Client, setI
 		return progress, err
 	}
 	return progress, nil
+}
+
+// runScreenshotUploadPool uploads files with up to concurrency workers and
+// keeps each slot at its file index. When an upload fails, it returns the
+// first failed index and deletes the screenshots uploaded after it.
+func runScreenshotUploadPool(ctx context.Context, client *asc.Client, files []string, concurrency int, upload func(context.Context, string) (asc.AssetUploadResultItem, screenshotPendingAsset, error)) ([]screenshotUploadSlot, int, []screenshotPendingAsset, error) {
+	slots := make([]screenshotUploadSlot, len(files))
+	work := make(chan int)
+	var wg sync.WaitGroup
+	workerCount := concurrency
+	if workerCount > len(files) {
+		workerCount = len(files)
+	}
+	for range workerCount {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for idx := range work {
+				if ctx.Err() != nil {
+					slots[idx].err = ctx.Err()
+					continue
+				}
+				item, pending, err := upload(ctx, files[idx])
+				slots[idx] = screenshotUploadSlot{item: item, pending: pending, err: err}
+			}
+		}()
+	}
+	for idx := range files {
+		work <- idx
+	}
+	close(work)
+	wg.Wait()
+
+	for failed, slot := range slots {
+		if slot.err == nil {
+			continue
+		}
+		cleanupAssets := make([]screenshotPendingAsset, 0, len(slots)-failed-1)
+		for idx := failed + 1; idx < len(slots); idx++ {
+			if id := strings.TrimSpace(slots[idx].item.AssetID); id != "" {
+				cleanupAssets = append(cleanupAssets, screenshotUploadItemPending(slots[idx].item))
+			}
+			if id := strings.TrimSpace(slots[idx].pending.AssetID); id != "" {
+				cleanupAssets = append(cleanupAssets, slots[idx].pending)
+			}
+		}
+		cleanupFailures, cleanupErr := cleanupScreenshotAssets(ctx, client, cleanupAssets)
+		return slots, failed, cleanupFailures, cleanupErr
+	}
+	return slots, -1, nil, nil
+}
+
+// UploadScreenshotAssetsConcurrently uploads files into setID with the
+// screenshot upload worker pool. Each upload runs under its own context from
+// uploadContext and reads the handle from open, which it closes; a nil handle
+// uploads from the path. Results keep file order. On failure it returns the
+// results before the first failed file, that file, and the error, and deletes
+// the screenshots uploaded after it.
+func UploadScreenshotAssetsConcurrently(ctx context.Context, client *asc.Client, setID string, files []string, uploadContext func(context.Context) (context.Context, context.CancelFunc), open func(filePath string) (*os.File, error)) ([]asc.AssetUploadResultItem, string, error) {
+	slots, failed, _, cleanupErr := runScreenshotUploadPool(ctx, client, files, defaultScreenshotUploadConcurrency, func(ctx context.Context, filePath string) (asc.AssetUploadResultItem, screenshotPendingAsset, error) {
+		uploadCtx, cancel := uploadContext(ctx)
+		defer cancel()
+		file, err := open(filePath)
+		if err != nil {
+			return asc.AssetUploadResultItem{}, screenshotPendingAsset{}, err
+		}
+		if file == nil {
+			sourceRootPath, err := resolveScreenshotUploadRoot("", []string{filePath})
+			if err != nil {
+				return asc.AssetUploadResultItem{}, screenshotPendingAsset{}, err
+			}
+			return uploadScreenshotAsset(uploadCtx, client, setID, sourceRootPath, filePath)
+		}
+		item, pending, err := uploadScreenshotAssetFromFile(uploadCtx, client, setID, filePath, file)
+		if closeErr := file.Close(); err == nil && closeErr != nil {
+			return asc.AssetUploadResultItem{}, screenshotUploadItemPending(item), closeErr
+		}
+		return item, pending, err
+	})
+	results := make([]asc.AssetUploadResultItem, 0, len(files))
+	end := len(slots)
+	if failed >= 0 {
+		end = failed
+	}
+	for _, slot := range slots[:end] {
+		results = append(results, slot.item)
+	}
+	if failed >= 0 {
+		return results, files[failed], errors.Join(slots[failed].err, cleanupErr)
+	}
+	return results, "", nil
 }

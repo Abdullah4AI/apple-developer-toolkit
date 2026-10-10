@@ -88,6 +88,196 @@ func TestGameCenterInputValidationReturnsUsageExitCode(t *testing.T) {
 			args:    []string{"game-center", "matchmaking", "queues", "list", "--limit", "201"},
 			wantErr: "game-center matchmaking queues list: --limit must be between 1 and 200",
 		},
+		{
+			name:    "achievements view without id",
+			args:    []string{"game-center", "achievements", "view"},
+			wantErr: "--id is required",
+		},
+		{
+			name:    "achievements group-achievement view without id",
+			args:    []string{"game-center", "achievements", "group-achievement", "view"},
+			wantErr: "--id is required",
+		},
+		{
+			name:    "achievements v2 versions view without id",
+			args:    []string{"game-center", "achievements", "v2", "versions", "view"},
+			wantErr: "--id is required",
+		},
+		{
+			name:    "achievements v2 localizations view without id",
+			args:    []string{"game-center", "achievements", "v2", "localizations", "view"},
+			wantErr: "--id is required",
+		},
+		{
+			name:    "achievements localizations view without id",
+			args:    []string{"game-center", "achievements", "localizations", "view"},
+			wantErr: "--id is required",
+		},
+		{
+			name:    "achievements localizations image view without id",
+			args:    []string{"game-center", "achievements", "localizations", "image", "view"},
+			wantErr: "--id is required",
+		},
+		{
+			name:    "achievements localizations achievement view without id",
+			args:    []string{"game-center", "achievements", "localizations", "achievement", "view"},
+			wantErr: "--id is required",
+		},
+		{
+			name:    "achievements images view without id",
+			args:    []string{"game-center", "achievements", "images", "view"},
+			wantErr: "--id is required",
+		},
+		{
+			name:    "leaderboards view without id",
+			args:    []string{"game-center", "leaderboards", "view"},
+			wantErr: "--id is required",
+		},
+		{
+			name:    "leaderboards group-leaderboard view without id",
+			args:    []string{"game-center", "leaderboards", "group-leaderboard", "view"},
+			wantErr: "--id is required",
+		},
+		{
+			name:    "leaderboards v2 versions view without id",
+			args:    []string{"game-center", "leaderboards", "v2", "versions", "view"},
+			wantErr: "--id is required",
+		},
+		{
+			name:    "leaderboards v2 localizations view without id",
+			args:    []string{"game-center", "leaderboards", "v2", "localizations", "view"},
+			wantErr: "--id is required",
+		},
+		{
+			name:    "leaderboards localizations view without id",
+			args:    []string{"game-center", "leaderboards", "localizations", "view"},
+			wantErr: "--id is required",
+		},
+		{
+			name:    "leaderboards localizations image view without id",
+			args:    []string{"game-center", "leaderboards", "localizations", "image", "view"},
+			wantErr: "--id is required",
+		},
+		{
+			name:    "leaderboard-sets view without id",
+			args:    []string{"game-center", "leaderboard-sets", "view"},
+			wantErr: "--id is required",
+		},
+		{
+			name:    "leaderboard-sets group-leaderboard-set view without id",
+			args:    []string{"game-center", "leaderboard-sets", "group-leaderboard-set", "view"},
+			wantErr: "--id is required",
+		},
+		{
+			name:    "leaderboard-sets v2 view without id",
+			args:    []string{"game-center", "leaderboard-sets", "v2", "view"},
+			wantErr: "--id is required",
+		},
+		{
+			name:    "leaderboard-sets v2 versions view without id",
+			args:    []string{"game-center", "leaderboard-sets", "v2", "versions", "view"},
+			wantErr: "--id is required",
+		},
+		{
+			name:    "leaderboard-sets v2 localizations view without id",
+			args:    []string{"game-center", "leaderboard-sets", "v2", "localizations", "view"},
+			wantErr: "--id is required",
+		},
+		{
+			name:    "leaderboard-sets member-localizations view without id",
+			args:    []string{"game-center", "leaderboard-sets", "member-localizations", "view"},
+			wantErr: "--id is required",
+		},
+		{
+			name:    "leaderboard-sets member-localizations leaderboard view without id",
+			args:    []string{"game-center", "leaderboard-sets", "member-localizations", "leaderboard", "view"},
+			wantErr: "--id is required",
+		},
+		{
+			name:    "leaderboard-sets member-localizations leaderboard-set view without id",
+			args:    []string{"game-center", "leaderboard-sets", "member-localizations", "leaderboard-set", "view"},
+			wantErr: "--id is required",
+		},
+		{
+			name:    "leaderboard-sets localizations view without id",
+			args:    []string{"game-center", "leaderboard-sets", "localizations", "view"},
+			wantErr: "--id is required",
+		},
+		{
+			name:    "leaderboard-sets localizations image view without id",
+			args:    []string{"game-center", "leaderboard-sets", "localizations", "image", "view"},
+			wantErr: "--id is required",
+		},
+		{
+			name:    "challenges view without id",
+			args:    []string{"game-center", "challenges", "view"},
+			wantErr: "--id is required",
+		},
+		{
+			name:    "challenges versions view without id",
+			args:    []string{"game-center", "challenges", "versions", "view"},
+			wantErr: "--id is required",
+		},
+		{
+			name:    "challenges versions default-image view without id",
+			args:    []string{"game-center", "challenges", "versions", "default-image", "view"},
+			wantErr: "--id is required",
+		},
+		{
+			name:    "challenges localizations view without id",
+			args:    []string{"game-center", "challenges", "localizations", "view"},
+			wantErr: "--id is required",
+		},
+		{
+			name:    "challenges localizations image view without id",
+			args:    []string{"game-center", "challenges", "localizations", "image", "view"},
+			wantErr: "--id is required",
+		},
+		{
+			name:    "challenges images view without id",
+			args:    []string{"game-center", "challenges", "images", "view"},
+			wantErr: "--id is required",
+		},
+		{
+			name:    "activities view without id",
+			args:    []string{"game-center", "activities", "view"},
+			wantErr: "--id is required",
+		},
+		{
+			name:    "activities versions view without id",
+			args:    []string{"game-center", "activities", "versions", "view"},
+			wantErr: "--id is required",
+		},
+		{
+			name:    "activities versions default-image view without id",
+			args:    []string{"game-center", "activities", "versions", "default-image", "view"},
+			wantErr: "--id is required",
+		},
+		{
+			name:    "activities localizations view without id",
+			args:    []string{"game-center", "activities", "localizations", "view"},
+			wantErr: "--id is required",
+		},
+		{
+			name:    "activities localizations image view without id",
+			args:    []string{"game-center", "activities", "localizations", "image", "view"},
+			wantErr: "--id is required",
+		},
+		{
+			name:    "activities images view without id",
+			args:    []string{"game-center", "activities", "images", "view"},
+			wantErr: "--id is required",
+		},
+		{
+			name:    "matchmaking queues view without id",
+			args:    []string{"game-center", "matchmaking", "queues", "view"},
+			wantErr: "--id is required",
+		},
+		{
+			name:    "matchmaking rule-sets view without id",
+			args:    []string{"game-center", "matchmaking", "rule-sets", "view"},
+			wantErr: "--id is required",
+		},
 	}
 
 	for _, test := range tests {

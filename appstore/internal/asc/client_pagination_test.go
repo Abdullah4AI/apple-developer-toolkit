@@ -107,6 +107,110 @@ func TestPaginateAll_MultiPage(t *testing.T) {
 	}
 }
 
+func TestPaginateAll_AggregatesNonGenericResponseTypes(t *testing.T) {
+	const totalPages = 3
+	const perPage = 2
+
+	tests := []struct {
+		name string
+		page func(ids []string, links Links) PaginatedResponse
+	}{
+		{"CiBuildRuns", func(ids []string, links Links) PaginatedResponse {
+			resp := &CiBuildRunsResponse{Links: links}
+			for _, id := range ids {
+				resp.Data = append(resp.Data, CiBuildRunResource{Type: ResourceTypeCiBuildRuns, ID: id})
+			}
+			return resp
+		}},
+		{"CiArtifacts", func(ids []string, links Links) PaginatedResponse {
+			resp := &CiArtifactsResponse{Links: links}
+			for _, id := range ids {
+				resp.Data = append(resp.Data, CiArtifactResource{Type: ResourceTypeCiArtifacts, ID: id})
+			}
+			return resp
+		}},
+		{"CiTestResults", func(ids []string, links Links) PaginatedResponse {
+			resp := &CiTestResultsResponse{Links: links}
+			for _, id := range ids {
+				resp.Data = append(resp.Data, CiTestResultResource{Type: ResourceTypeCiTestResults, ID: id})
+			}
+			return resp
+		}},
+		{"CiIssues", func(ids []string, links Links) PaginatedResponse {
+			resp := &CiIssuesResponse{Links: links}
+			for _, id := range ids {
+				resp.Data = append(resp.Data, CiIssueResource{Type: ResourceTypeCiIssues, ID: id})
+			}
+			return resp
+		}},
+		{"ScmRepositories", func(ids []string, links Links) PaginatedResponse {
+			resp := &ScmRepositoriesResponse{Links: links}
+			for _, id := range ids {
+				resp.Data = append(resp.Data, ScmRepositoryResource{Type: ResourceTypeScmRepositories, ID: id})
+			}
+			return resp
+		}},
+		{"CiMacOsVersions", func(ids []string, links Links) PaginatedResponse {
+			resp := &CiMacOsVersionsResponse{Links: links}
+			for _, id := range ids {
+				resp.Data = append(resp.Data, CiMacOsVersionResource{Type: ResourceTypeCiMacOsVersions, ID: id})
+			}
+			return resp
+		}},
+		{"CiXcodeVersions", func(ids []string, links Links) PaginatedResponse {
+			resp := &CiXcodeVersionsResponse{Links: links}
+			for _, id := range ids {
+				resp.Data = append(resp.Data, CiXcodeVersionResource{Type: ResourceTypeCiXcodeVersions, ID: id})
+			}
+			return resp
+		}},
+		{"Linkages", func(ids []string, links Links) PaginatedResponse {
+			resp := &LinkagesResponse{Links: links}
+			for _, id := range ids {
+				resp.Data = append(resp.Data, ResourceData{Type: ResourceTypeBetaGroups, ID: id})
+			}
+			return resp
+		}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			makePage := func(page int) PaginatedResponse {
+				ids := make([]string, perPage)
+				for i := range ids {
+					ids[i] = fmt.Sprintf("%s-%d-%d", tt.name, page, i)
+				}
+				links := Links{}
+				if page < totalPages {
+					links.Next = fmt.Sprintf("page=%d", page+1)
+				}
+				return tt.page(ids, links)
+			}
+
+			firstPage := makePage(1)
+			result, err := PaginateAll(context.Background(), firstPage, func(ctx context.Context, nextURL string) (PaginatedResponse, error) {
+				page, err := parseMockPageNum(nextURL)
+				if err != nil {
+					return nil, err
+				}
+				return makePage(page), nil
+			})
+			if err != nil {
+				t.Fatalf("PaginateAll() error: %v", err)
+			}
+			if fmt.Sprintf("%T", result) != fmt.Sprintf("%T", firstPage) {
+				t.Fatalf("expected %T, got %T", firstPage, result)
+			}
+			if count, ok := PageDataLen(result); !ok || count != totalPages*perPage {
+				t.Fatalf("PageDataLen() = (%d, %t), want (%d, true)", count, ok, totalPages*perPage)
+			}
+			if next := result.GetLinks().Next; next != "" {
+				t.Fatalf("expected next link to be cleared, got %q", next)
+			}
+		})
+	}
+}
+
 func TestPaginateAll_APIErrorOnPageN(t *testing.T) {
 	const totalPages = 5
 	const perPage = 2
@@ -148,31 +252,6 @@ func TestPaginateAll_APIErrorOnPageN(t *testing.T) {
 	expectedItems := (failOnPage - 1) * perPage
 	if len(apps.Data) != expectedItems {
 		t.Fatalf("expected %d partial items (pages 1-%d), got %d", expectedItems, failOnPage-1, len(apps.Data))
-	}
-}
-
-func TestPaginateAll_RepeatedURL_Sentinel(t *testing.T) {
-	firstPage := &BetaGroupsResponse{
-		Data: []Resource[BetaGroupAttributes]{
-			{Type: ResourceTypeBetaGroups, ID: "group-1"},
-		},
-		Links: Links{Next: "page=1"},
-	}
-
-	_, err := PaginateAll(context.Background(), firstPage, func(ctx context.Context, nextURL string) (PaginatedResponse, error) {
-		return &BetaGroupsResponse{
-			Data: []Resource[BetaGroupAttributes]{
-				{Type: ResourceTypeBetaGroups, ID: "group-2"},
-			},
-			Links: Links{Next: "page=1"}, // Same URL → repeated
-		}, nil
-	})
-
-	if err == nil {
-		t.Fatal("expected error, got nil")
-	}
-	if !errors.Is(err, ErrRepeatedPaginationURL) {
-		t.Fatalf("expected ErrRepeatedPaginationURL, got: %v", err)
 	}
 }
 
@@ -466,42 +545,6 @@ func TestPaginateAll_ContextCancelled(t *testing.T) {
 	}
 }
 
-func TestPaginateAll_LinkagesResponse(t *testing.T) {
-	const totalPages = 2
-	const perPage = 3
-
-	firstPage := &LinkagesResponse{
-		Data:  make([]ResourceData, perPage),
-		Links: Links{Next: "page=2"},
-	}
-	for i := range perPage {
-		firstPage.Data[i] = ResourceData{Type: ResourceTypeBetaGroups, ID: fmt.Sprintf("linkage-1-%d", i)}
-	}
-
-	result, err := PaginateAll(context.Background(), firstPage, func(ctx context.Context, nextURL string) (PaginatedResponse, error) {
-		page2 := &LinkagesResponse{
-			Data:  make([]ResourceData, perPage),
-			Links: Links{},
-		}
-		for i := range perPage {
-			page2.Data[i] = ResourceData{Type: ResourceTypeBetaGroups, ID: fmt.Sprintf("linkage-2-%d", i)}
-		}
-		return page2, nil
-	})
-	if err != nil {
-		t.Fatalf("PaginateAll() error: %v", err)
-	}
-
-	linkages, ok := result.(*LinkagesResponse)
-	if !ok {
-		t.Fatalf("expected *LinkagesResponse, got %T", result)
-	}
-	expected := totalPages * perPage
-	if len(linkages.Data) != expected {
-		t.Fatalf("expected %d linkages, got %d", expected, len(linkages.Data))
-	}
-}
-
 func TestPaginateAll_PreReleaseVersionsResponse(t *testing.T) {
 	const totalPages = 2
 	const perPage = 2
@@ -594,99 +637,6 @@ func TestPaginateAll_PreReleaseVersionsEmptyDataIsArray(t *testing.T) {
 	}
 	if string(versions.Meta) != `{"paging":{"total":0,"limit":50}}` {
 		t.Fatalf("expected document meta to be preserved, got %s", versions.Meta)
-	}
-}
-
-func TestPaginateAll_ManyPages_BetaTesters(t *testing.T) {
-	const totalPages = 10
-	const perPage = 5
-
-	makePage := func(page int) *BetaTestersResponse {
-		data := make([]Resource[BetaTesterAttributes], 0, perPage)
-		for i := range perPage {
-			data = append(data, Resource[BetaTesterAttributes]{
-				Type: ResourceTypeBetaTesters,
-				ID:   fmt.Sprintf("tester-%d-%d", page, i),
-				Attributes: BetaTesterAttributes{
-					Email: fmt.Sprintf("tester-%d-%d@example.com", page, i),
-				},
-			})
-		}
-		links := Links{}
-		if page < totalPages {
-			links.Next = fmt.Sprintf("page=%d", page+1)
-		}
-		return &BetaTestersResponse{Data: data, Links: links}
-	}
-
-	firstPage := makePage(1)
-	result, err := PaginateAll(context.Background(), firstPage, func(ctx context.Context, nextURL string) (PaginatedResponse, error) {
-		page, err := parseMockPageNum(nextURL)
-		if err != nil {
-			return nil, err
-		}
-		return makePage(page), nil
-	})
-	if err != nil {
-		t.Fatalf("PaginateAll() error: %v", err)
-	}
-
-	testers, ok := result.(*BetaTestersResponse)
-	if !ok {
-		t.Fatalf("expected *BetaTestersResponse, got %T", result)
-	}
-	expected := totalPages * perPage
-	if len(testers.Data) != expected {
-		t.Fatalf("expected %d testers, got %d", expected, len(testers.Data))
-	}
-	// Verify last item
-	last := testers.Data[expected-1]
-	if last.ID != fmt.Sprintf("tester-%d-%d", totalPages, perPage-1) {
-		t.Fatalf("expected last tester ID tester-%d-%d, got %q", totalPages, perPage-1, last.ID)
-	}
-}
-
-func TestPaginateAll_Builds(t *testing.T) {
-	const totalPages = 3
-	const perPage = 4
-
-	makePage := func(page int) *BuildsResponse {
-		data := make([]Resource[BuildAttributes], 0, perPage)
-		for i := range perPage {
-			data = append(data, Resource[BuildAttributes]{
-				Type: ResourceTypeBuilds,
-				ID:   fmt.Sprintf("build-%d-%d", page, i),
-				Attributes: BuildAttributes{
-					Version: fmt.Sprintf("%d.%d", page, i),
-				},
-			})
-		}
-		links := Links{}
-		if page < totalPages {
-			links.Next = fmt.Sprintf("page=%d", page+1)
-		}
-		return &BuildsResponse{Data: data, Links: links}
-	}
-
-	firstPage := makePage(1)
-	result, err := PaginateAll(context.Background(), firstPage, func(ctx context.Context, nextURL string) (PaginatedResponse, error) {
-		page, err := parseMockPageNum(nextURL)
-		if err != nil {
-			return nil, err
-		}
-		return makePage(page), nil
-	})
-	if err != nil {
-		t.Fatalf("PaginateAll() error: %v", err)
-	}
-
-	builds, ok := result.(*BuildsResponse)
-	if !ok {
-		t.Fatalf("expected *BuildsResponse, got %T", result)
-	}
-	expected := totalPages * perPage
-	if len(builds.Data) != expected {
-		t.Fatalf("expected %d builds, got %d", expected, len(builds.Data))
 	}
 }
 
@@ -1086,86 +1036,4 @@ func mergeRawJSONArrayBaseline(dst, src json.RawMessage) (json.RawMessage, error
 		return nil, fmt.Errorf("marshal merged array: %w", err)
 	}
 	return result, nil
-}
-
-func TestPaginateAll_GameCenterEnabledVersions(t *testing.T) {
-	const totalPages = 2
-	const perPage = 3
-
-	makePage := func(page int) *GameCenterEnabledVersionsResponse {
-		data := make([]Resource[GameCenterEnabledVersionAttributes], 0, perPage)
-		for i := range perPage {
-			data = append(data, Resource[GameCenterEnabledVersionAttributes]{
-				Type: ResourceTypeGameCenterEnabledVersions,
-				ID:   fmt.Sprintf("gcev-%d-%d", page, i),
-			})
-		}
-		links := Links{}
-		if page < totalPages {
-			links.Next = fmt.Sprintf("page=%d", page+1)
-		}
-		return &GameCenterEnabledVersionsResponse{Data: data, Links: links}
-	}
-
-	firstPage := makePage(1)
-	result, err := PaginateAll(context.Background(), firstPage, func(ctx context.Context, nextURL string) (PaginatedResponse, error) {
-		page, err := parseMockPageNum(nextURL)
-		if err != nil {
-			return nil, err
-		}
-		return makePage(page), nil
-	})
-	if err != nil {
-		t.Fatalf("PaginateAll() error: %v", err)
-	}
-
-	versions, ok := result.(*GameCenterEnabledVersionsResponse)
-	if !ok {
-		t.Fatalf("expected *GameCenterEnabledVersionsResponse, got %T", result)
-	}
-	expected := totalPages * perPage
-	if len(versions.Data) != expected {
-		t.Fatalf("expected %d versions, got %d", expected, len(versions.Data))
-	}
-}
-
-func TestPaginateAll_SubscriptionGroups(t *testing.T) {
-	const totalPages = 2
-	const perPage = 2
-
-	makePage := func(page int) *SubscriptionGroupsResponse {
-		data := make([]Resource[SubscriptionGroupAttributes], 0, perPage)
-		for i := range perPage {
-			data = append(data, Resource[SubscriptionGroupAttributes]{
-				Type: ResourceTypeSubscriptionGroups,
-				ID:   fmt.Sprintf("subgrp-%d-%d", page, i),
-			})
-		}
-		links := Links{}
-		if page < totalPages {
-			links.Next = fmt.Sprintf("page=%d", page+1)
-		}
-		return &SubscriptionGroupsResponse{Data: data, Links: links}
-	}
-
-	firstPage := makePage(1)
-	result, err := PaginateAll(context.Background(), firstPage, func(ctx context.Context, nextURL string) (PaginatedResponse, error) {
-		page, err := parseMockPageNum(nextURL)
-		if err != nil {
-			return nil, err
-		}
-		return makePage(page), nil
-	})
-	if err != nil {
-		t.Fatalf("PaginateAll() error: %v", err)
-	}
-
-	groups, ok := result.(*SubscriptionGroupsResponse)
-	if !ok {
-		t.Fatalf("expected *SubscriptionGroupsResponse, got %T", result)
-	}
-	expected := totalPages * perPage
-	if len(groups.Data) != expected {
-		t.Fatalf("expected %d subscription groups, got %d", expected, len(groups.Data))
-	}
 }

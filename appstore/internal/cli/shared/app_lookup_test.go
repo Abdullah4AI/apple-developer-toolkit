@@ -368,19 +368,3 @@ func TestResolveAppIDWithExactLookup_NumericPassthroughTakesPriorityOverExactNam
 		t.Fatalf("expected numeric passthrough without lookup calls, got %d", stub.calls)
 	}
 }
-
-func TestResolveAppIDWithExactLookup_NumericPassthroughWhenNoExactMatch(t *testing.T) {
-	t.Setenv("ASC_APP_ID", "")
-	stub := &sequenceAppLookupStub{}
-
-	got, err := ResolveAppIDWithExactLookup(context.Background(), stub, "123456789")
-	if err != nil {
-		t.Fatalf("ResolveAppIDWithExactLookup() error: %v", err)
-	}
-	if got != "123456789" {
-		t.Fatalf("expected numeric passthrough app id 123456789, got %q", got)
-	}
-	if stub.calls != 0 {
-		t.Fatalf("expected numeric passthrough without lookup calls, got %d", stub.calls)
-	}
-}

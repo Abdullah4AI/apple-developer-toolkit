@@ -1,6 +1,7 @@
 package cmdtest
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -8,6 +9,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/cmd"
@@ -475,16 +477,29 @@ func TestBuildsWaitReportPendingDuringProcessingResumesByBuildID(t *testing.T) {
 		"/v1/builds/build-99": buildsWaitPendingBuildProcessing,
 	}, nil)
 
-	stdout, stderr, code := runBuildsWaitPending(t, []string{
-		"builds", "wait",
-		"--app", "123456789",
-		"--latest",
-		"--timeout", "200ms",
-		"--poll-interval", "20ms",
-		"--fail-on-invalid",
-		"--report-pending",
-		"--output", "json",
-		"--pretty",
+	var code int
+	// The --timeout deadline runs on the bubble's fake clock, so host load
+	// cannot expire it before discovery observes the processing build.
+	stdout, stderr := captureOutput(t, func() {
+		synctest.Test(t, func(t *testing.T) {
+			root := RootCommand("1.0.0")
+			root.FlagSet.SetOutput(io.Discard)
+			err := root.Parse([]string{
+				"builds", "wait",
+				"--app", "123456789",
+				"--latest",
+				"--timeout", "200ms",
+				"--poll-interval", "20ms",
+				"--fail-on-invalid",
+				"--report-pending",
+				"--output", "json",
+				"--pretty",
+			})
+			if err == nil {
+				err = root.Run(context.Background())
+			}
+			code = cmd.ExitCodeFromError(err)
+		})
 	})
 
 	if code != cmd.ExitPending {

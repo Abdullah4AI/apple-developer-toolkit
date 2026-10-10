@@ -75,7 +75,11 @@ func gameCenterScoreModerationsListCommand() *ffcli.Command {
 		if slices.Contains(includes, "player") && len(selected) > 0 && !slices.Contains(selected, "player") {
 			selected = append(selected, "player")
 		}
-		query := asc.GCScoreModerationsQuery{Fields: selected, PlayerFields: players, Include: includes, Limit: *limit, NextURL: nextURL}
+		firstPageLimit := *limit
+		if *paginate && firstPageLimit == 0 {
+			firstPageLimit = 200
+		}
+		query := asc.GCScoreModerationsQuery{Fields: selected, PlayerFields: players, Include: includes, Limit: firstPageLimit, NextURL: nextURL}
 		if blocked.IsSet() {
 			value := blocked.Value()
 			query.ExistsBlocked = &value

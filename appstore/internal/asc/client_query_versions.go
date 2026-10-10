@@ -106,11 +106,13 @@ type appCustomProductPageLocalizationPreviewSetsQuery struct {
 
 type appCustomProductPageLocalizationScreenshotSetsQuery struct {
 	listQuery
+	includeMedia   bool
 	requestContext RequestContextFunc
 }
 
 type appStoreVersionLocalizationPreviewSetsQuery struct {
 	listQuery
+	includeMedia bool
 }
 
 type appStoreVersionLocalizationScreenshotSetsQuery struct {
@@ -142,6 +144,7 @@ type appStoreVersionExperimentTreatmentLocalizationPreviewSetsQuery struct {
 
 type appStoreVersionExperimentTreatmentLocalizationScreenshotSetsQuery struct {
 	listQuery
+	includeMedia   bool
 	requestContext RequestContextFunc
 }
 
@@ -338,12 +341,18 @@ func buildAppCustomProductPageLocalizationPreviewSetsQuery(query *appCustomProdu
 func buildAppCustomProductPageLocalizationScreenshotSetsQuery(query *appCustomProductPageLocalizationScreenshotSetsQuery) string {
 	values := url.Values{}
 	addLimit(values, query.limit)
+	if query.includeMedia {
+		addIncludedSetMedia(values, "appScreenshots")
+	}
 	return values.Encode()
 }
 
 func buildAppStoreVersionLocalizationPreviewSetsQuery(query *appStoreVersionLocalizationPreviewSetsQuery) string {
 	values := url.Values{}
 	addLimit(values, query.limit)
+	if query.includeMedia {
+		addIncludedSetMedia(values, "appPreviews")
+	}
 	return values.Encode()
 }
 
@@ -388,6 +397,9 @@ func buildAppStoreVersionExperimentTreatmentLocalizationPreviewSetsQuery(query *
 func buildAppStoreVersionExperimentTreatmentLocalizationScreenshotSetsQuery(query *appStoreVersionExperimentTreatmentLocalizationScreenshotSetsQuery) string {
 	values := url.Values{}
 	addLimit(values, query.limit)
+	if query.includeMedia {
+		addIncludedSetMedia(values, "appScreenshots")
+	}
 	return values.Encode()
 }
 
@@ -1133,6 +1145,13 @@ func WithAppCustomProductPageLocalizationScreenshotSetsLimit(limit int) AppCusto
 	}
 }
 
+// WithAppCustomProductPageLocalizationScreenshotSetsIncludeScreenshots includes each set's screenshots.
+func WithAppCustomProductPageLocalizationScreenshotSetsIncludeScreenshots() AppCustomProductPageLocalizationScreenshotSetsOption {
+	return func(q *appCustomProductPageLocalizationScreenshotSetsQuery) {
+		q.includeMedia = true
+	}
+}
+
 // WithAppCustomProductPageLocalizationScreenshotSetsNextURL uses a next page URL directly.
 func WithAppCustomProductPageLocalizationScreenshotSetsNextURL(next string) AppCustomProductPageLocalizationScreenshotSetsOption {
 	return func(q *appCustomProductPageLocalizationScreenshotSetsQuery) {
@@ -1148,6 +1167,13 @@ func WithAppStoreVersionLocalizationPreviewSetsLimit(limit int) AppStoreVersionL
 		if limit > 0 {
 			q.limit = limit
 		}
+	}
+}
+
+// WithAppStoreVersionLocalizationPreviewSetsIncludePreviews includes each set's previews.
+func WithAppStoreVersionLocalizationPreviewSetsIncludePreviews() AppStoreVersionLocalizationPreviewSetsOption {
+	return func(q *appStoreVersionLocalizationPreviewSetsQuery) {
+		q.includeMedia = true
 	}
 }
 
@@ -1202,6 +1228,13 @@ func WithAppStoreVersionExperimentTreatmentLocalizationScreenshotSetsLimit(limit
 		if limit > 0 {
 			q.limit = limit
 		}
+	}
+}
+
+// WithAppStoreVersionExperimentTreatmentLocalizationScreenshotSetsIncludeScreenshots includes each set's screenshots.
+func WithAppStoreVersionExperimentTreatmentLocalizationScreenshotSetsIncludeScreenshots() AppStoreVersionExperimentTreatmentLocalizationScreenshotSetsOption {
+	return func(q *appStoreVersionExperimentTreatmentLocalizationScreenshotSetsQuery) {
+		q.includeMedia = true
 	}
 }
 

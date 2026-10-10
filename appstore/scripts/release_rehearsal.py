@@ -7,9 +7,13 @@ import argparse
 import hashlib
 import os
 import re
+import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
+
+from assemble_release_candidate import assemble
 
 
 SEMVER = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
@@ -225,18 +229,7 @@ def write_outputs(*, source: SourceState, version: str, release_dir: Path) -> Re
             raise RehearsalError(f"missing release artifact: {artifact}")
         artifacts.append(artifact)
 
-    notes_path = release_dir / f"asc_{version}_release-notes.md"
-    notes = [
-        f"# Release {version}",
-        "",
-        f"Tested commit: `{source.tested_sha}`",
-        "",
-        f"## Changes since {source.previous_tag or 'repository start'}",
-        "",
-        *(f"- {subject}" for subject in source.subjects),
-        "",
-    ]
-    notes_path.write_text("\n".join(notes), encoding="utf-8")
+    notes_path = write_release_notes(source=source, version=version, release_dir=release_dir)
 
     checksums_path = release_dir / f"asc_{version}_checksums.txt"
     checksum_lines = [f"{sha256(artifact)}  {artifact.name}" for artifact in artifacts]
@@ -250,6 +243,22 @@ def write_outputs(*, source: SourceState, version: str, release_dir: Path) -> Re
     )
 
 
+def write_release_notes(*, source: SourceState, version: str, release_dir: Path) -> Path:
+    notes_path = release_dir / f"asc_{version}_release-notes.md"
+    notes = [
+        f"# Release {version}",
+        "",
+        f"Tested commit: `{source.tested_sha}`",
+        "",
+        f"## Changes since {source.previous_tag or 'repository start'}",
+        "",
+        *(f"- {subject}" for subject in source.subjects),
+        "",
+    ]
+    notes_path.write_text("\n".join(notes), encoding="utf-8")
+    return notes_path
+
+
 def rehearse(*, root: Path, version: str, expected_sha: str, release_dir: Path) -> RehearsalResult:
     source = validate_source(root=root, version=version, expected_sha=expected_sha)
     return write_outputs(source=source, version=version, release_dir=release_dir)
@@ -261,6 +270,62 @@ def run_command(root: Path, *args: str) -> None:
     result = subprocess.run(args, cwd=root, check=False, env=environment)
     if result.returncode != 0:
         raise RehearsalError(f"{' '.join(args)} failed with exit {result.returncode}")
+
+
+def assemble_release_lanes(*, root: Path, version: str, tested_sha: str, release_dir: Path) -> None:
+    """Pack the built binaries into the release workflow's per-lane archives and join them."""
+    with tempfile.TemporaryDirectory() as workdir:
+        workdir = Path(workdir)
+        lanes = {"macos": [], "portable": []}
+        for name in expected_artifact_names(version):
+            lanes["macos" if "_macOS_" in name else "portable"].append(name)
+        for lane, names in lanes.items():
+            lane_dir = workdir / lane
+            (lane_dir / "release").mkdir(parents=True)
+            for name in names:
+                artifact = release_dir / name
+                if not artifact.is_file() or artifact.stat().st_size == 0:
+                    raise RehearsalError(f"missing release artifact: {artifact}")
+                shutil.move(artifact, lane_dir / "release" / name)
+            (lane_dir / "commit").write_text(f"{tested_sha}\n", encoding="utf-8")
+            environment = os.environ.copy()
+            environment["COPYFILE_DISABLE"] = "1"
+            result = subprocess.run(
+                ["tar", "-cf", str(workdir / f"{lane}.tar"), "release", "commit"],
+                cwd=lane_dir,
+                check=False,
+                env=environment,
+            )
+            if result.returncode != 0:
+                raise RehearsalError(f"packing the {lane} lane failed with exit {result.returncode}")
+
+        try:
+            assemble(
+                workdir / "macos.tar",
+                workdir / "portable.tar",
+                workdir / "candidate",
+                version,
+                tested_sha,
+            )
+        except ValueError as error:
+            raise RehearsalError(f"release candidate assembly failed: {error}") from error
+        for asset in (workdir / "candidate" / "release").iterdir():
+            shutil.move(asset, release_dir / asset.name)
+
+    verify = subprocess.run(
+        [
+            sys.executable,
+            str(Path(__file__).with_name("verify_release_assets.py")),
+            "--release-dir",
+            str(release_dir),
+            "--version",
+            version,
+        ],
+        cwd=root,
+        check=False,
+    )
+    if verify.returncode != 0:
+        raise RehearsalError(f"release asset verification failed with exit {verify.returncode}")
 
 
 def run_release_rehearsal(
@@ -280,7 +345,16 @@ def run_release_rehearsal(
     )
     ensure_clean_source(root=root, release_dir=release_dir)
     source = validate_source(root=root, version=version, expected_sha=expected_sha)
-    return write_outputs(source=source, version=version, release_dir=release_dir)
+    assemble_release_lanes(
+        root=root, version=version, tested_sha=source.tested_sha, release_dir=release_dir
+    )
+    notes_path = write_release_notes(source=source, version=version, release_dir=release_dir)
+    return RehearsalResult(
+        tested_sha=source.tested_sha,
+        previous_tag=source.previous_tag,
+        notes_path=notes_path,
+        checksums_path=release_dir / f"asc_{version}_checksums.txt",
+    )
 
 
 def main() -> int:

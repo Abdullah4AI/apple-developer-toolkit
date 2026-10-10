@@ -9,23 +9,6 @@ import (
 	"testing"
 )
 
-func TestWebPrivacyCommandsAreRegistered(t *testing.T) {
-	root := RootCommand("1.2.3")
-
-	for _, path := range [][]string{
-		{"web", "privacy"},
-		{"web", "privacy", "catalog"},
-		{"web", "privacy", "pull"},
-		{"web", "privacy", "plan"},
-		{"web", "privacy", "apply"},
-		{"web", "privacy", "publish"},
-	} {
-		if sub := findSubcommand(root, path...); sub == nil {
-			t.Fatalf("expected command %q to be registered", strings.Join(path, " "))
-		}
-	}
-}
-
 func TestWebPrivacyPullRequiresApp(t *testing.T) {
 	t.Setenv("ASC_APP_ID", "")
 

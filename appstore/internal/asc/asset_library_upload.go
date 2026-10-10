@@ -10,6 +10,8 @@ import (
 	"time"
 )
 
+var assetLibraryProcessingPollInterval = 2 * time.Second
+
 type assetLibraryImageUploadResponse struct {
 	Data struct {
 		ID         string `json:"id"`
@@ -106,7 +108,7 @@ func (c *Client) UploadAssetLibraryImageWithCategory(ctx context.Context, librar
 		return result, fmt.Errorf("commit image %s: %w", result.ImageID, err)
 	}
 	result.Uploaded = true
-	_, err = PollUntilTolerant(ctx, 2*time.Second, func(context.Context) (struct{}, bool, error) {
+	_, err = PollUntilTolerant(ctx, assetLibraryProcessingPollInterval, func(context.Context) (struct{}, bool, error) {
 		raw, err := request("GET", path, nil)
 		if err != nil {
 			return struct{}{}, false, err

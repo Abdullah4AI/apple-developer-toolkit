@@ -335,6 +335,7 @@ func resolveVersionID(ctx context.Context, client *asc.Client, appID, version, p
 func fetchScreenshotSets(ctx context.Context, client *asc.Client, localizations []asc.Resource[asc.AppStoreVersionLocalizationAttributes]) ([]validation.ScreenshotSet, error) {
 	ctx = withReadinessRequestGate(ctx)
 	setsByLocalization := make([][]asc.Resource[asc.AppScreenshotSetAttributes], len(localizations))
+	includedByLocalization := make([]map[string][]asc.Resource[asc.AppScreenshotAttributes], len(localizations))
 	setTasks := make([]readinessTask, 0, len(localizations))
 	for index := range localizations {
 		index := index
@@ -345,6 +346,7 @@ func fetchScreenshotSets(ctx context.Context, client *asc.Client, localizations 
 				return fmt.Errorf("validate: failed to fetch screenshot sets for %s: %w", localization.ID, err)
 			}
 			setsByLocalization[index] = response.Data
+			includedByLocalization[index] = asc.IncludedAppScreenshots(response)
 			return nil
 		})
 	}
@@ -355,13 +357,18 @@ func fetchScreenshotSets(ctx context.Context, client *asc.Client, localizations 
 	type screenshotSetRef struct {
 		localization asc.Resource[asc.AppStoreVersionLocalizationAttributes]
 		set          asc.Resource[asc.AppScreenshotSetAttributes]
+		screenshots  []asc.Resource[asc.AppScreenshotAttributes]
+		included     bool
 	}
 	setRefs := make([]screenshotSetRef, 0)
 	for localizationIndex, localizationSets := range setsByLocalization {
 		for _, set := range localizationSets {
+			screenshots, included := includedByLocalization[localizationIndex][set.ID]
 			setRefs = append(setRefs, screenshotSetRef{
 				localization: localizations[localizationIndex],
 				set:          set,
+				screenshots:  screenshots,
+				included:     included,
 			})
 		}
 	}
@@ -371,14 +378,18 @@ func fetchScreenshotSets(ctx context.Context, client *asc.Client, localizations 
 	for index := range setRefs {
 		index := index
 		screenshotTasks = append(screenshotTasks, func(taskCtx context.Context) error {
-			set := setRefs[index].set
-			response, err := fetchAllScreenshotsForValidation(taskCtx, client, set.ID)
-			if err != nil {
-				return fmt.Errorf("validate: failed to fetch screenshots for %s: %w", set.ID, err)
+			ref := setRefs[index]
+			data := ref.screenshots
+			if !ref.included {
+				response, err := fetchAllScreenshotsForValidation(taskCtx, client, ref.set.ID)
+				if err != nil {
+					return fmt.Errorf("validate: failed to fetch screenshots for %s: %w", ref.set.ID, err)
+				}
+				data = response.Data
 			}
 
-			screenshots := make([]validation.Screenshot, 0, len(response.Data))
-			for _, shot := range response.Data {
+			screenshots := make([]validation.Screenshot, 0, len(data))
+			for _, shot := range data {
 				width := 0
 				height := 0
 				if shot.Attributes.ImageAsset != nil {
@@ -433,7 +444,7 @@ func fetchScreenshotSets(ctx context.Context, client *asc.Client, localizations 
 
 func fetchAllScreenshotSetsForValidation(ctx context.Context, client *asc.Client, localizationID string) (*asc.AppScreenshotSetsResponse, error) {
 	firstPage, err := doReadinessRequest(ctx, func(requestCtx context.Context) (*asc.AppScreenshotSetsResponse, error) {
-		return client.GetAppStoreVersionLocalizationScreenshotSets(requestCtx, localizationID, asc.WithAppStoreVersionLocalizationScreenshotSetsLimit(200))
+		return client.GetAppScreenshotSets(requestCtx, localizationID, asc.WithAppScreenshotSetsLimit(200), asc.WithAppScreenshotSetsIncludeScreenshots())
 	})
 	if err != nil {
 		return nil, err
@@ -441,7 +452,7 @@ func fetchAllScreenshotSetsForValidation(ctx context.Context, client *asc.Client
 
 	paginated, err := asc.PaginateAll(ctx, firstPage, func(_ context.Context, nextURL string) (asc.PaginatedResponse, error) {
 		return doReadinessRequest(ctx, func(requestCtx context.Context) (asc.PaginatedResponse, error) {
-			return client.GetAppStoreVersionLocalizationScreenshotSets(requestCtx, "", asc.WithAppStoreVersionLocalizationScreenshotSetsNextURL(nextURL))
+			return client.GetAppScreenshotSets(requestCtx, "", asc.WithAppScreenshotSetsNextURL(nextURL))
 		})
 	})
 	if err != nil {

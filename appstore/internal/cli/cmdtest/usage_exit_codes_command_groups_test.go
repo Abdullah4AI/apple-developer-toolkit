@@ -607,6 +607,141 @@ func TestCommandGroupInputValidationReturnsUsageExitCode(t *testing.T) {
 			args:    []string{"versions", "list", "--next", "http://api.appstoreconnect.apple.com/v1/apps"},
 			wantErr: "versions list: --next must be an App Store Connect URL",
 		},
+		{
+			name:    "web apps compatibility view without app",
+			args:    []string{"web", "apps", "compatibility", "view"},
+			wantErr: "--app is required (or set ASC_APP_ID)",
+		},
+		{
+			name:    "web apps tax-category view without app",
+			args:    []string{"web", "apps", "tax-category", "view"},
+			wantErr: "--app is required (or set ASC_APP_ID)",
+		},
+		{
+			name:    "web service-ids view without service-id",
+			args:    []string{"web", "service-ids", "view"},
+			wantErr: "--service-id is required",
+		},
+		{
+			name:    "web sign-in-keys view without key-id",
+			args:    []string{"web", "sign-in-keys", "view"},
+			wantErr: "--key-id is required",
+		},
+		{
+			name:    "web subscriptions pricing adjusted-equalizations view without price-point-id",
+			args:    []string{"web", "subscriptions", "pricing", "adjusted-equalizations", "view"},
+			wantErr: "--price-point-id is required",
+		},
+		{
+			name:    "web xcode-cloud settings version-aliases view without product-id",
+			args:    []string{"web", "xcode-cloud", "settings", "version-aliases", "view"},
+			wantErr: "--product-id is required",
+		},
+		{
+			name:    "reviews view without id",
+			args:    []string{"reviews", "view"},
+			wantErr: "--id is required",
+		},
+		{
+			name:    "apps ci-product view without id",
+			args:    []string{"apps", "ci-product", "view"},
+			wantErr: "--id is required",
+		},
+		{
+			name:    "apps content-rights view without app",
+			args:    []string{"apps", "content-rights", "view"},
+			wantErr: "--app is required (or set ASC_APP_ID)",
+		},
+		{
+			name:    "app-clips default-experiences view without experience-id",
+			args:    []string{"app-clips", "default-experiences", "view"},
+			wantErr: "--experience-id is required",
+		},
+		{
+			name:    "app-clips default-experiences localizations view without localization-id",
+			args:    []string{"app-clips", "default-experiences", "localizations", "view"},
+			wantErr: "--localization-id is required",
+		},
+		{
+			name:    "app-clips advanced-experiences view without experience-id",
+			args:    []string{"app-clips", "advanced-experiences", "view"},
+			wantErr: "--experience-id is required",
+		},
+		{
+			name:    "app-clips advanced-experiences images view without id",
+			args:    []string{"app-clips", "advanced-experiences", "images", "view"},
+			wantErr: "--id is required",
+		},
+		{
+			name:    "app-clips header-images view without id",
+			args:    []string{"app-clips", "header-images", "view"},
+			wantErr: "--id is required",
+		},
+		{
+			name:    "app-clips invocations view without invocation-id",
+			args:    []string{"app-clips", "invocations", "view"},
+			wantErr: "--invocation-id is required",
+		},
+		{
+			name:    "app-clips review-details view without id",
+			args:    []string{"app-clips", "review-details", "view"},
+			wantErr: "--id is required",
+		},
+		{
+			name:    "product-pages custom-pages view without custom-page-id",
+			args:    []string{"product-pages", "custom-pages", "view"},
+			wantErr: "--custom-page-id is required",
+		},
+		{
+			name:    "product-pages custom-pages versions view without custom-page-version-id",
+			args:    []string{"product-pages", "custom-pages", "versions", "view"},
+			wantErr: "--custom-page-version-id is required",
+		},
+		{
+			name:    "product-pages custom-pages localizations view without localization-id",
+			args:    []string{"product-pages", "custom-pages", "localizations", "view"},
+			wantErr: "--localization-id is required",
+		},
+		{
+			name:    "product-pages experiments view without experiment-id",
+			args:    []string{"product-pages", "experiments", "view"},
+			wantErr: "--experiment-id is required",
+		},
+		{
+			name:    "product-pages experiments treatments view without treatment-id",
+			args:    []string{"product-pages", "experiments", "treatments", "view"},
+			wantErr: "--treatment-id is required",
+		},
+		{
+			name:    "product-pages experiments treatments localizations view without localization-id",
+			args:    []string{"product-pages", "experiments", "treatments", "localizations", "view"},
+			wantErr: "--localization-id is required",
+		},
+		{
+			name:    "build-localizations view without id",
+			args:    []string{"build-localizations", "view"},
+			wantErr: "--id is required",
+		},
+		{
+			name:    "app-events view without event-id",
+			args:    []string{"app-events", "view"},
+			wantErr: "--event-id is required",
+		},
+		{
+			name:    "app-events localizations view without localization-id",
+			args:    []string{"app-events", "localizations", "view"},
+			wantErr: "--localization-id is required",
+		},
+		{
+			name:    "app-events screenshots view without screenshot-id",
+			args:    []string{"app-events", "screenshots", "view"},
+			wantErr: "--screenshot-id is required",
+		},
+		{
+			name:    "app-events video-clips view without clip-id",
+			args:    []string{"app-events", "video-clips", "view"},
+			wantErr: "--clip-id is required",
+		},
 	}
 
 	for _, test := range tests {

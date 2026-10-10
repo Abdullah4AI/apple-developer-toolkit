@@ -13,7 +13,6 @@ import (
 
 	rootcmd "github.com/Abdullah4AI/apple-developer-toolkit/appstore/cmd"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
-	iapcli "github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/iap"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
@@ -150,16 +149,6 @@ func TestIAPListQuerySurfaceDeduplicatesNormalizedEnumValues(t *testing.T) {
 	}
 	if got := captured.query.Get("filter[inAppPurchaseType]"); got != "CONSUMABLE" {
 		t.Fatalf("filter[inAppPurchaseType] = %q, want CONSUMABLE", got)
-	}
-}
-
-func TestIAPListQueryFlagsAreRegistered(t *testing.T) {
-	command := iapcli.IAPListCommand()
-	for _, name := range []string{"product-id", "name", "state", "type", "sort"} {
-		flagValue := command.FlagSet.Lookup(name)
-		if flagValue == nil {
-			t.Fatalf("--%s is not registered", name)
-		}
 	}
 }
 

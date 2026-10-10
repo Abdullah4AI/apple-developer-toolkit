@@ -985,6 +985,9 @@ func resolveKnownWebSessionFromSource(ctx context.Context, appleID string, sourc
 
 func resolveWebSession(ctx context.Context, appleID, password, twoFactorCode string, opts webSessionResolveOptions) (*webcore.AuthSession, string, error) {
 	shared.ApplyRootLoggingOverrides()
+	if err := webcore.SessionBackendConflict(); err != nil {
+		return nil, "", shared.UsageError(err.Error())
+	}
 
 	resolvedAppleID := strings.TrimSpace(appleID)
 	// ASC_WEB_APPLE_ID sits between the flag and the cached-session default: it
@@ -1108,6 +1111,9 @@ func resolveWebSession(ctx context.Context, appleID, password, twoFactorCode str
 			resumed, ok, cacheExpired, err = resolveKnownWebSession(ctx, targetAppleID)
 		} else {
 			resumed, ok, cacheExpired, err = resolveKnownWebSessionFromSource(ctx, targetAppleID, source)
+		}
+		if errors.Is(err, webcore.ErrSessionKeychainBypassed) {
+			return nil, "", false, shared.UsageError(err.Error())
 		}
 		if err != nil {
 			printCacheLookupWarning(sessionCacheWarningWriter, err)

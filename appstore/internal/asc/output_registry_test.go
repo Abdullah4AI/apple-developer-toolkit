@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -12,6 +13,64 @@ func TestOutputRegistry(t *testing.T) {
 	t.Run("render by registry scenarios", runOutputRegistryRenderByRegistryScenarios)
 	t.Run("helper registrations", runOutputRegistryHelperRegistrations)
 	t.Run("panic scenarios", runOutputRegistryPanicScenarios)
+}
+
+// Every registered renderer must still print its headers when the response is
+// empty, so an empty list never renders as a blank table.
+func TestPrintTableAndMarkdown_EmptyResponsesKeepHeaders(t *testing.T) {
+	ensureOutputRegistryPopulated()
+	errorsWhenEmpty := map[reflect.Type]bool{
+		typeForPtr[DiagnosticLogsResponse]():      true,
+		typeForPtr[PerfPowerMetricsResponse]():    true,
+		typeForPtr[PerformanceOverviewResponse](): true,
+	}
+
+	var types []reflect.Type
+	for typ := range outputRegistry {
+		types = append(types, typ)
+	}
+	for typ := range directRenderRegistry {
+		types = append(types, typ)
+	}
+	slices.SortFunc(types, func(a, b reflect.Type) int { return strings.Compare(a.String(), b.String()) })
+
+	for _, typ := range types {
+		empty := reflect.New(typ.Elem()).Interface()
+		var headers []string
+		var err error
+		captureStdout(t, func() error {
+			err = renderByRegistry(empty, func(h []string, _ [][]string) {
+				if len(h) == 0 {
+					t.Errorf("%s: empty response rendered without headers", typ)
+					return
+				}
+				headers = append(headers, h[0])
+			})
+			return nil
+		})
+		if errorsWhenEmpty[typ] {
+			if err == nil {
+				t.Errorf("%s: expected an error for an empty response", typ)
+			}
+			continue
+		}
+		if err != nil {
+			t.Errorf("%s: render error: %v", typ, err)
+			continue
+		}
+		if len(headers) == 0 {
+			t.Errorf("%s: empty response rendered no table", typ)
+			continue
+		}
+		for name, print := range map[string]func(any) error{"table": PrintTable, "markdown": PrintMarkdown} {
+			output := captureStdout(t, func() error { return print(empty) })
+			for _, header := range headers {
+				if !strings.Contains(output, header) {
+					t.Errorf("%s %s: missing header %q in %q", typ, name, header, output)
+				}
+			}
+		}
+	}
 }
 
 // Types that CLI commands pass to the printer. Without a registration,

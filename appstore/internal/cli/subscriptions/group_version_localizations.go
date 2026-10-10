@@ -93,7 +93,11 @@ func SubscriptionsGroupsVersionLocalizationsListCommand() *ffcli.Command {
 			if strings.TrimSpace(*next) != "" && subscriptionGroupAnyFlagSet(fs, "include", "fields", "version-fields", "limit") {
 				return shared.UsageError("subscriptions groups versions localizations list: --next cannot be combined with query flags")
 			}
-			opts, err := subscriptionGroupVersionLocalizationOptions(*include, *fields, *versionFields, *limit, *next)
+			firstPageLimit := *limit
+			if *paginate && firstPageLimit == 0 {
+				firstPageLimit = 200
+			}
+			opts, err := subscriptionGroupVersionLocalizationOptions(*include, *fields, *versionFields, firstPageLimit, *next)
 			if err != nil {
 				return shared.UsageError("subscriptions groups versions localizations list: " + err.Error())
 			}

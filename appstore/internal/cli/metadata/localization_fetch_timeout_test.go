@@ -89,7 +89,7 @@ func TestLocalizationFetchesUseFreshDeadlinePerPage(t *testing.T) {
 	}
 }
 
-func newMetadataFetchClient(t *testing.T) *asc.Client {
+func newMetadataFetchClient(t testing.TB) *asc.Client {
 	t.Helper()
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {

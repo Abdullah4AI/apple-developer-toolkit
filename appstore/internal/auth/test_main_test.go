@@ -24,6 +24,8 @@ func TestMain(m *testing.M) {
 
 	previousKeyringOpener := keyringOpener
 	previousLegacyKeyringOpener := legacyKeyringOpener
+	previousLegacyMarkerPath := legacyKeychainEmptyMarkerPath
+	legacyKeychainEmptyMarkerPath = func() (string, error) { return "", nil }
 
 	kr := keyring.NewArrayKeyring([]keyring.Item{})
 	legacyKr := keyring.NewArrayKeyring([]keyring.Item{})
@@ -39,6 +41,7 @@ func TestMain(m *testing.M) {
 
 	keyringOpener = previousKeyringOpener
 	legacyKeyringOpener = previousLegacyKeyringOpener
+	legacyKeychainEmptyMarkerPath = previousLegacyMarkerPath
 	_ = os.RemoveAll(tempDir)
 
 	os.Exit(code)

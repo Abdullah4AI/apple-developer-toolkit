@@ -58,7 +58,7 @@ func TestOrderScreenshotsForDownloadUsesRelationshipOrder(t *testing.T) {
 		{ID: "shot-a", Attributes: asc.AppScreenshotAttributes{FileName: "03-paywall.png"}},
 	}
 
-	ordered := orderScreenshotsForDownload(shots, []string{"shot-a", "shot-b"})
+	ordered := orderMediaForDownload(shots, []string{"shot-a", "shot-b"}, func(a asc.AppScreenshotAttributes) string { return a.FileName })
 
 	gotIDs := make([]string, 0, len(ordered))
 	for _, shot := range ordered {

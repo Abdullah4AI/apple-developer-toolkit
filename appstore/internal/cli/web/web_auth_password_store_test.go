@@ -766,13 +766,3 @@ func TestWebAuthLogoutAllCanForgetPasswordsWithSessions(t *testing.T) {
 		t.Fatalf("logout output = %q, want stored-password confirmation", stdout)
 	}
 }
-
-func TestWebAuthLogoutPasswordFlagsAreRegistered(t *testing.T) {
-	cmd := WebAuthLogoutCommand()
-	for _, name := range []string{"forget-password", "confirm"} {
-		flag := cmd.FlagSet.Lookup(name)
-		if flag == nil {
-			t.Fatalf("--%s flag not found", name)
-		}
-	}
-}

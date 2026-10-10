@@ -9,23 +9,6 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
 )
 
-func TestNominationsCommandShape(t *testing.T) {
-	cmd := NominationsCommand()
-	if cmd == nil {
-		t.Fatal("expected nominations command")
-		return
-	}
-	if cmd.Name != "nominations" {
-		t.Fatalf("unexpected command name: %q", cmd.Name)
-	}
-	if len(cmd.Subcommands) != 5 {
-		t.Fatalf("expected 5 subcommands, got %d", len(cmd.Subcommands))
-	}
-	if got := NominationsCommand(); got == nil {
-		t.Fatal("expected Command wrapper to return command")
-	}
-}
-
 func TestNominationsValidationErrors(t *testing.T) {
 	t.Setenv("ASC_APP_ID", "")
 

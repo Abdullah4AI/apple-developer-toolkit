@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
@@ -54,6 +55,7 @@ func runIfExistsCommand(t *testing.T, args []string, handler func(req ifExistsRe
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 
 	log := newRequestLog(4)
+	var seenMu sync.Mutex
 	var seen []ifExistsRequest
 	installDefaultTransport(t, roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		body := ""
@@ -66,7 +68,9 @@ func runIfExistsCommand(t *testing.T, args []string, handler func(req ifExistsRe
 		}
 		entry := ifExistsRequest{Method: req.Method, Path: req.URL.Path, Query: req.URL.RawQuery, Body: body}
 		log.Add(req.Method + " " + req.URL.Path)
+		seenMu.Lock()
 		seen = append(seen, entry)
+		seenMu.Unlock()
 		return handler(entry)
 	}))
 

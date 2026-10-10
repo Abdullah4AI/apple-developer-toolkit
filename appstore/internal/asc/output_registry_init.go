@@ -212,6 +212,7 @@ func registerAllOutputRenderers() {
 		return nil
 	})
 	registerRows(signingResignResultRows)
+	registerRows(iosArtifactResultRows)
 	registerRows(subscriptionAvailabilityRows)
 	registerRowsWithSingleResourceAdapter(subscriptionPlanAvailabilitiesRows)
 	registerDirect(func(v *SubscriptionPlanAvailabilitySetResult, render func([]string, [][]string)) error {

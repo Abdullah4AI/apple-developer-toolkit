@@ -56,16 +56,6 @@ func TestDebugFlagLogsHTTPRequests(t *testing.T) {
 	}
 }
 
-func TestDebugEnvVarEnablesDebugMode(t *testing.T) {
-	t.Setenv("ASC_DEBUG", "1")
-	asc.SetDebugOverride(nil)
-	asc.SetDebugHTTPOverride(nil)
-
-	if !asc.ResolveDebugEnabled() {
-		t.Fatal("ASC_DEBUG=1 should enable debug mode")
-	}
-}
-
 func TestDebugDisabledByDefault(t *testing.T) {
 	// Ensure no env var is set
 	t.Setenv("ASC_DEBUG", "")

@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"testing/synctest"
 )
 
 func TestBuildsWaitByBuildIDPollsUntilValid(t *testing.T) {
@@ -722,21 +723,26 @@ func TestBuildsWaitByBuildNumberDiscoveryPollsUntilTimeout(t *testing.T) {
 		}
 		requestCount++
 		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
+			t.Errorf("expected GET, got %s", req.Method)
+			return nil, errors.New("test transport assertion failed")
 		}
 		if req.URL.Path != "/v1/builds" {
-			t.Fatalf("expected path /v1/builds, got %s", req.URL.Path)
+			t.Errorf("expected path /v1/builds, got %s", req.URL.Path)
+			return nil, errors.New("test transport assertion failed")
 		}
 
 		query := req.URL.Query()
 		if query.Get("filter[app]") != "123456789" {
-			t.Fatalf("expected filter[app]=123456789, got %q", query.Get("filter[app]"))
+			t.Errorf("expected filter[app]=123456789, got %q", query.Get("filter[app]"))
+			return nil, errors.New("test transport assertion failed")
 		}
 		if query.Get("filter[version]") != "42" {
-			t.Fatalf("expected filter[version]=42, got %q", query.Get("filter[version]"))
+			t.Errorf("expected filter[version]=42, got %q", query.Get("filter[version]"))
+			return nil, errors.New("test transport assertion failed")
 		}
 		if query.Get("filter[preReleaseVersion.platform]") != "IOS" {
-			t.Fatalf("expected IOS platform filter, got %q", query.Get("filter[preReleaseVersion.platform]"))
+			t.Errorf("expected IOS platform filter, got %q", query.Get("filter[preReleaseVersion.platform]"))
+			return nil, errors.New("test transport assertion failed")
 		}
 
 		body := `{"data":[]}`
@@ -762,7 +768,7 @@ func TestBuildsWaitByBuildNumberDiscoveryPollsUntilTimeout(t *testing.T) {
 		}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
-		runErr = root.Run(context.Background())
+		synctest.Test(t, func(*testing.T) { runErr = root.Run(context.Background()) })
 	})
 
 	if runErr == nil {

@@ -377,15 +377,6 @@ func TestRun_ReportWriteFailureReturnsExitError(t *testing.T) {
 	}
 }
 
-func TestRun_UnknownCommandReturnsUsage(t *testing.T) {
-	resetReportFlags(t)
-
-	code := Run([]string{"unknown-command"}, "1.0.0")
-	if code != ExitUsage {
-		t.Fatalf("Run() exit code = %d, want %d", code, ExitUsage)
-	}
-}
-
 func TestRun_BareGroupPrintsHelpToStdoutAndExitsSuccessfully(t *testing.T) {
 	resetReportFlags(t)
 	originalEmitTelemetry := emitTelemetry

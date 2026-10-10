@@ -214,3 +214,17 @@ func TestInferSigningPlanRejectsInvalidProfileDates(t *testing.T) {
 		})
 	}
 }
+
+func TestInferSigningPlanToleratesCreationDateClockSkew(t *testing.T) {
+	requireStrictSigningPlatform(t)
+	for _, ahead := range []time.Duration{5 * time.Second, 4 * time.Minute} {
+		t.Run(ahead.String(), func(t *testing.T) {
+			project := writeInferredSigningProject(t)
+			root := t.TempDir()
+			profile := writeSigningTestProfileWith(t, filepath.Join(root, "A.mobileprovision"), "A", "11111111-1111-1111-1111-111111111111", "ABCDE12345.com.example.demo", time.Now().Add(time.Hour), func(p map[string]any) { p["CreationDate"] = time.Now().Add(ahead) })
+			if _, err := BuildSigningPlan(SigningPlanOptions{ProjectPath: project, ProfilePaths: []string{profile}, Configuration: "Release", SkipTargets: []string{"Widget", "Watch"}, StateDir: filepath.Join(root, "state")}); err != nil {
+				t.Fatalf("BuildSigningPlan() error = %v", err)
+			}
+		})
+	}
+}

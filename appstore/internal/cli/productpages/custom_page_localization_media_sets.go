@@ -196,6 +196,9 @@ Examples:
 				asc.WithAppCustomProductPageLocalizationScreenshotSetsLimit(*limit),
 				asc.WithAppCustomProductPageLocalizationScreenshotSetsNextURL(*next),
 			}
+			if *includeScreenshots {
+				opts = append(opts, asc.WithAppCustomProductPageLocalizationScreenshotSetsIncludeScreenshots())
+			}
 
 			if *paginate {
 				paginateOpts := make([]asc.AppCustomProductPageLocalizationScreenshotSetsOption, 0, len(opts)+2)

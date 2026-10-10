@@ -171,25 +171,6 @@ func TestJUnitReport_EscapeSpecialChars(t *testing.T) {
 	}
 }
 
-func TestCIReportFlags(t *testing.T) {
-	if ReportFormat() != "" {
-		t.Errorf("ReportFormat() = %q, want empty", ReportFormat())
-	}
-	if ReportFile() != "" {
-		t.Errorf("ReportFile() = %q, want empty", ReportFile())
-	}
-
-	SetReportFormat("junit")
-	SetReportFile("/tmp/report.xml")
-
-	if ReportFormat() != "junit" {
-		t.Errorf("ReportFormat() = %q, want 'junit'", ReportFormat())
-	}
-	if ReportFile() != "/tmp/report.xml" {
-		t.Errorf("ReportFile() = %q, want '/tmp/report.xml'", ReportFile())
-	}
-}
-
 func TestValidateReportFlags(t *testing.T) {
 	tests := []struct {
 		name      string

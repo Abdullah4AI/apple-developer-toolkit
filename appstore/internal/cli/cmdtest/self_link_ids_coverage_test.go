@@ -92,8 +92,9 @@ func TestSelfLinkCoverageSendsExtractedID(t *testing.T) {
 			wantPath: "GET /v1/appStoreVersionLocalizations/loc-1/appPreviewSets",
 			wantID:   "preview-set-1",
 			bodies: map[string]string{
-				"/v1/appStoreVersionLocalizations/loc-1/appPreviewSets": `{"data":[{"type":"appPreviewSets","id":"preview-set-1","attributes":{"previewType":"IPHONE_67"}}],"links":{}}`,
-				"/v1/appPreviewSets/preview-set-1/appPreviews":          `{"data":[],"links":{}}`,
+				"/v1/appStoreVersionLocalizations/loc-1/appPreviewSets":      `{"data":[{"type":"appPreviewSets","id":"preview-set-1","attributes":{"previewType":"IPHONE_67"}}],"links":{}}`,
+				"/v1/appPreviewSets/preview-set-1/appPreviews":               `{"data":[],"links":{}}`,
+				"/v1/appPreviewSets/preview-set-1/relationships/appPreviews": `{"data":[],"links":{}}`,
 			},
 		},
 		{
@@ -102,8 +103,9 @@ func TestSelfLinkCoverageSendsExtractedID(t *testing.T) {
 			wantPath: "GET /v1/appStoreVersionLocalizations/loc-1/appScreenshotSets",
 			wantID:   "screenshot-set-1",
 			bodies: map[string]string{
-				"/v1/appStoreVersionLocalizations/loc-1/appScreenshotSets": `{"data":[{"type":"appScreenshotSets","id":"screenshot-set-1","attributes":{"screenshotDisplayType":"APP_IPHONE_67"}}],"links":{}}`,
-				"/v1/appScreenshotSets/screenshot-set-1/appScreenshots":    `{"data":[],"links":{}}`,
+				"/v1/appStoreVersionLocalizations/loc-1/appScreenshotSets":            `{"data":[{"type":"appScreenshotSets","id":"screenshot-set-1","attributes":{"screenshotDisplayType":"APP_IPHONE_67"}}],"links":{}}`,
+				"/v1/appScreenshotSets/screenshot-set-1/appScreenshots":               `{"data":[],"links":{}}`,
+				"/v1/appScreenshotSets/screenshot-set-1/relationships/appScreenshots": `{"data":[],"links":{}}`,
 			},
 		},
 		{

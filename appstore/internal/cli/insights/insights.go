@@ -12,6 +12,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/peterbourgon/ff/v3/ffcli"
@@ -25,6 +26,8 @@ const (
 	sourceSales     = "sales"
 
 	analyticsInstancePageLimit = 200
+
+	analyticsInstanceFetchConcurrency = 4
 )
 
 // analyticsInstanceGranularities covers every documented instance granularity so
@@ -328,17 +331,15 @@ func collectWeeklyInsights(ctx context.Context, client *asc.Client, appID, sourc
 	switch sourceName {
 	case sourceSales:
 		resp.Source.VendorNumber = vendor
-		appResp, appErr := client.GetApp(ctx, appID)
+		scope, reports, reportErrs, appErr := fetchAppSalesReports(ctx, client, appID, [2]asc.SalesReportParams{
+			salesSummaryReportParams(vendor, asc.SalesReportFrequencyWeekly, thisWeek.end.Format("2006-01-02")),
+			salesSummaryReportParams(vendor, asc.SalesReportFrequencyWeekly, previousWeek.end.Format("2006-01-02")),
+		})
 		if appErr != nil {
 			return nil, appErr
 		}
-		scope := salesScope{
-			AppID:  appID,
-			AppSKU: strings.TrimSpace(appResp.Data.Attributes.SKU),
-		}
 		resp.Source.AppSKU = scope.AppSKU
-		metrics := collectSalesMetrics(ctx, client, vendor, scope, thisWeek, previousWeek)
-		resp.Metrics = metrics
+		resp.Metrics = collectSalesMetrics(reports[0], reportErrs[0], reports[1], reportErrs[1])
 	case sourceAnalytics:
 		metrics, requestsScanned, err := collectAnalyticsMetrics(ctx, client, appID, thisWeek, previousWeek)
 		if err != nil {
@@ -354,20 +355,18 @@ func collectWeeklyInsights(ctx context.Context, client *asc.Client, appID, sourc
 }
 
 func collectDailyInsights(ctx context.Context, client *asc.Client, appID, vendor string, reportDate time.Time) (*dailyInsightsResponse, error) {
-	appResp, err := client.GetApp(ctx, appID)
-	if err != nil {
-		return nil, err
-	}
-
-	scope := salesScope{
-		AppID:  appID,
-		AppSKU: strings.TrimSpace(appResp.Data.Attributes.SKU),
-	}
 	thisDay := reportDate.Format("2006-01-02")
 	previousDay := reportDate.AddDate(0, 0, -1).Format("2006-01-02")
 
-	thisData, thisErr := fetchSalesDayMetrics(ctx, client, vendor, thisDay, scope)
-	prevData, prevErr := fetchSalesDayMetrics(ctx, client, vendor, previousDay, scope)
+	scope, reports, reportErrs, err := fetchAppSalesReports(ctx, client, appID, [2]asc.SalesReportParams{
+		salesSummaryReportParams(vendor, asc.SalesReportFrequencyDaily, thisDay),
+		salesSummaryReportParams(vendor, asc.SalesReportFrequencyDaily, previousDay),
+	})
+	if err != nil {
+		return nil, err
+	}
+	thisData, thisErr := reports[0], reportErrs[0]
+	prevData, prevErr := reports[1], reportErrs[1]
 
 	availabilityReason := ""
 	if thisErr != nil || prevErr != nil {
@@ -475,10 +474,7 @@ func collectDailyInsights(ctx context.Context, client *asc.Client, appID, vendor
 	return resp, nil
 }
 
-func collectSalesMetrics(ctx context.Context, client *asc.Client, vendor string, scope salesScope, thisWeek, previousWeek reportWeekWindow) []weeklyMetric {
-	thisData, thisErr := fetchSalesWeekMetrics(ctx, client, vendor, thisWeek.end.Format("2006-01-02"), scope)
-	prevData, prevErr := fetchSalesWeekMetrics(ctx, client, vendor, previousWeek.end.Format("2006-01-02"), scope)
-
+func collectSalesMetrics(thisData salesWeekMetrics, thisErr error, prevData salesWeekMetrics, prevErr error) []weeklyMetric {
 	availabilityReason := ""
 	if thisErr != nil || prevErr != nil {
 		reasons := make([]string, 0, 2)
@@ -546,46 +542,58 @@ func collectSalesMetrics(ctx context.Context, client *asc.Client, vendor string,
 	return metrics
 }
 
-func fetchSalesWeekMetrics(ctx context.Context, client *asc.Client, vendor, reportDate string, scope salesScope) (salesWeekMetrics, error) {
-	download, err := client.GetSalesReport(ctx, asc.SalesReportParams{
+func salesSummaryReportParams(vendor string, frequency asc.SalesReportFrequency, reportDate string) asc.SalesReportParams {
+	return asc.SalesReportParams{
 		VendorNumber:  vendor,
 		ReportType:    asc.SalesReportTypeSales,
 		ReportSubType: asc.SalesReportSubTypeSummary,
-		Frequency:     asc.SalesReportFrequencyWeekly,
+		Frequency:     frequency,
 		ReportDate:    reportDate,
 		Version:       asc.SalesReportVersion1_0,
-	})
-	if err != nil {
-		return salesWeekMetrics{}, err
 	}
-	defer download.Body.Close()
-
-	metrics, err := ParseSalesReportMetrics(download.Body, scope)
-	if err != nil {
-		return salesWeekMetrics{}, err
-	}
-	return metrics, nil
 }
 
-func fetchSalesDayMetrics(ctx context.Context, client *asc.Client, vendor, reportDate string, scope salesScope) (salesWeekMetrics, error) {
-	download, err := client.GetSalesReport(ctx, asc.SalesReportParams{
-		VendorNumber:  vendor,
-		ReportType:    asc.SalesReportTypeSales,
-		ReportSubType: asc.SalesReportSubTypeSummary,
-		Frequency:     asc.SalesReportFrequencyDaily,
-		ReportDate:    reportDate,
-		Version:       asc.SalesReportVersion1_0,
-	})
-	if err != nil {
-		return salesWeekMetrics{}, err
+// fetchAppSalesReports overlaps the app SKU lookup with both report downloads.
+// App lookup errors keep precedence; each report keeps its own error.
+func fetchAppSalesReports(ctx context.Context, client *asc.Client, appID string, reports [2]asc.SalesReportParams) (salesScope, [2]salesWeekMetrics, [2]error, error) {
+	readCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	var (
+		scope   salesScope
+		metrics [2]salesWeekMetrics
+		errs    [2]error
+		workers sync.WaitGroup
+	)
+	scopeReady := make(chan struct{})
+	for i, params := range reports {
+		workers.Go(func() {
+			download, err := client.GetSalesReport(readCtx, params)
+			if err != nil {
+				errs[i] = err
+				return
+			}
+			defer download.Body.Close()
+			select {
+			case <-scopeReady:
+				metrics[i], errs[i] = ParseSalesReportMetrics(download.Body, scope)
+			case <-readCtx.Done():
+				errs[i] = readCtx.Err()
+			}
+		})
 	}
-	defer download.Body.Close()
-
-	metrics, err := ParseSalesReportMetrics(download.Body, scope)
+	appResp, err := client.GetApp(ctx, appID)
 	if err != nil {
-		return salesWeekMetrics{}, err
+		cancel()
+		workers.Wait()
+		return salesScope{}, metrics, errs, err
 	}
-	return metrics, nil
+	scope = salesScope{
+		AppID:  appID,
+		AppSKU: strings.TrimSpace(appResp.Data.Attributes.SKU),
+	}
+	close(scopeReady)
+	workers.Wait()
+	return scope, metrics, errs, nil
 }
 
 // ParseSalesReportMetrics reads a gzip-compressed sales TSV from reader and
@@ -602,6 +610,38 @@ func ParseSalesReportMetrics(reader io.Reader, scope salesScope) (salesWeekMetri
 	tsvReader.FieldsPerRecord = -1
 	tsvReader.LazyQuotes = true
 
+	if strings.TrimSpace(scope.AppSKU) != "" {
+		tsvReader.ReuseRecord = true
+		headers, err := tsvReader.Read()
+		if err == io.EOF {
+			return salesWeekMetrics{}, fmt.Errorf("report is empty")
+		}
+		if err != nil {
+			return salesWeekMetrics{}, fmt.Errorf("parse report rows: %w", err)
+		}
+		accumulator, headerErr := newSalesReportAccumulator(headers, scope)
+		for {
+			row, err := tsvReader.Read()
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				return salesWeekMetrics{}, fmt.Errorf("parse report rows: %w", err)
+			}
+			if headerErr == nil {
+				accumulator.add(row)
+			}
+		}
+		// Read the entire stream before reporting header errors, matching the
+		// buffered path's CSV and gzip checksum error precedence.
+		if headerErr != nil {
+			return salesWeekMetrics{}, headerErr
+		}
+		return accumulator.metrics, nil
+	}
+
+	// A missing SKU may be discovered after linked IAP rows. Retain the
+	// full report so enrichment precedes aggregation for this fallback.
 	rows, err := tsvReader.ReadAll()
 	if err != nil {
 		return salesWeekMetrics{}, fmt.Errorf("parse report rows: %w", err)
@@ -609,93 +649,119 @@ func ParseSalesReportMetrics(reader io.Reader, scope salesScope) (salesWeekMetri
 	if len(rows) == 0 {
 		return salesWeekMetrics{}, fmt.Errorf("report is empty")
 	}
-
-	headers := rows[0]
-	appleIdentifierIdx := findColumnIndex(headers, "appleidentifier")
-	parentIdentifierIdx := findColumnIndex(headers, "parentidentifier")
-	skuIdx := findColumnIndex(headers, "sku")
-	productTypeIdentifierIdx := findColumnIndex(headers, "producttypeidentifier")
-	subscriptionIdx := findColumnIndex(headers, "subscription")
-	unitsIdx := findColumnIndex(headers, "units")
-	developerProceedsIdx := findColumnIndex(headers, "developerproceeds")
-	customerPriceIdx := findColumnIndex(headers, "customerprice")
-	if appleIdentifierIdx < 0 && parentIdentifierIdx < 0 {
-		return salesWeekMetrics{}, fmt.Errorf("report is missing Apple Identifier and Parent Identifier columns")
+	accumulator, err := newSalesReportAccumulator(rows[0], scope)
+	if err != nil {
+		return salesWeekMetrics{}, err
 	}
-
-	scope = EnrichSalesScopeFromRows(scope, rows[1:], appleIdentifierIdx, skuIdx)
-	metrics := salesWeekMetrics{
-		UnitsColumnPresent:             unitsIdx >= 0,
-		DownloadUnitsAvailable:         unitsIdx >= 0 && productTypeIdentifierIdx >= 0,
-		DeveloperProceedsColumnPresent: developerProceedsIdx >= 0,
-		CustomerPriceColumnPresent:     customerPriceIdx >= 0,
-		SubscriptionColumnPresent:      subscriptionIdx >= 0,
-	}
+	accumulator.scope = EnrichSalesScopeFromRows(scope, rows[1:], accumulator.appleIdentifierIdx, accumulator.skuIdx)
 	for _, row := range rows[1:] {
-		if isEmptyRow(row) {
-			continue
-		}
+		accumulator.add(row)
+	}
+	return accumulator.metrics, nil
+}
 
-		appleIdentifier := strings.TrimSpace(valueAtIndex(row, appleIdentifierIdx))
-		parentIdentifier := strings.TrimSpace(valueAtIndex(row, parentIdentifierIdx))
-		isAppRow, isMonetizedRow, include := RowMatchesSalesScope(scope, appleIdentifier, parentIdentifier)
-		if !include {
-			continue
-		}
-		subscriptionValue := strings.TrimSpace(valueAtIndex(row, subscriptionIdx))
-		isSubscriptionRow := subscriptionValue != ""
-		isRenewalRow := isRenewalSubscriptionState(subscriptionValue)
+// salesReportAccumulator retains column indexes and totals, never input rows.
+// Both parser paths use the same ordered aggregation rules.
+type salesReportAccumulator struct {
+	scope                    salesScope
+	metrics                  salesWeekMetrics
+	appleIdentifierIdx       int
+	parentIdentifierIdx      int
+	skuIdx                   int
+	productTypeIdentifierIdx int
+	subscriptionIdx          int
+	unitsIdx                 int
+	developerProceedsIdx     int
+	customerPriceIdx         int
+}
 
-		metrics.RowCount++
-		if isSubscriptionRow {
-			metrics.SubscriptionRows++
-		}
-		if isRenewalRow {
-			metrics.RenewalRows++
-		}
+func newSalesReportAccumulator(headers []string, scope salesScope) (salesReportAccumulator, error) {
+	a := salesReportAccumulator{scope: scope}
+	a.appleIdentifierIdx = findColumnIndex(headers, "appleidentifier")
+	a.parentIdentifierIdx = findColumnIndex(headers, "parentidentifier")
+	a.skuIdx = findColumnIndex(headers, "sku")
+	a.productTypeIdentifierIdx = findColumnIndex(headers, "producttypeidentifier")
+	a.subscriptionIdx = findColumnIndex(headers, "subscription")
+	a.unitsIdx = findColumnIndex(headers, "units")
+	a.developerProceedsIdx = findColumnIndex(headers, "developerproceeds")
+	a.customerPriceIdx = findColumnIndex(headers, "customerprice")
+	if a.appleIdentifierIdx < 0 && a.parentIdentifierIdx < 0 {
+		return a, fmt.Errorf("report is missing Apple Identifier and Parent Identifier columns")
+	}
 
-		if unitsIdx >= 0 {
-			if value, ok := parseNumericValue(valueAtIndex(row, unitsIdx)); ok {
-				metrics.UnitsTotal += value
-				if isAppRow && isInitialAppDownloadProductType(valueAtIndex(row, productTypeIdentifierIdx)) {
-					metrics.DownloadUnitsTotal += value
-				}
-				if isMonetizedRow {
-					metrics.MonetizedUnitsTotal += value
-				}
-				if isSubscriptionRow {
-					metrics.SubscriptionUnitsTotal += value
-				}
-				if isRenewalRow {
-					metrics.RenewalUnitsTotal += value
-				}
+	a.metrics = salesWeekMetrics{
+		UnitsColumnPresent:             a.unitsIdx >= 0,
+		DownloadUnitsAvailable:         a.unitsIdx >= 0 && a.productTypeIdentifierIdx >= 0,
+		DeveloperProceedsColumnPresent: a.developerProceedsIdx >= 0,
+		CustomerPriceColumnPresent:     a.customerPriceIdx >= 0,
+		SubscriptionColumnPresent:      a.subscriptionIdx >= 0,
+	}
+	return a, nil
+}
+
+func (a *salesReportAccumulator) add(row []string) {
+	metrics := &a.metrics
+	if isEmptyRow(row) {
+		return
+	}
+
+	appleIdentifier := strings.TrimSpace(valueAtIndex(row, a.appleIdentifierIdx))
+	parentIdentifier := strings.TrimSpace(valueAtIndex(row, a.parentIdentifierIdx))
+	isAppRow, isMonetizedRow, include := RowMatchesSalesScope(a.scope, appleIdentifier, parentIdentifier)
+	if !include {
+		return
+	}
+	subscriptionValue := strings.TrimSpace(valueAtIndex(row, a.subscriptionIdx))
+	isSubscriptionRow := subscriptionValue != ""
+	isRenewalRow := isRenewalSubscriptionState(subscriptionValue)
+
+	metrics.RowCount++
+	if isSubscriptionRow {
+		metrics.SubscriptionRows++
+	}
+	if isRenewalRow {
+		metrics.RenewalRows++
+	}
+
+	if a.unitsIdx >= 0 {
+		if value, ok := parseNumericValue(valueAtIndex(row, a.unitsIdx)); ok {
+			metrics.UnitsTotal += value
+			if isAppRow && isInitialAppDownloadProductType(valueAtIndex(row, a.productTypeIdentifierIdx)) {
+				metrics.DownloadUnitsTotal += value
 			}
-		}
-		if developerProceedsIdx >= 0 {
-			if value, ok := parseNumericValue(valueAtIndex(row, developerProceedsIdx)); ok {
-				metrics.DeveloperProceedsTotal += value
-				if isSubscriptionRow {
-					metrics.SubscriptionDeveloperProceeds += value
-				}
-				if isRenewalRow {
-					metrics.RenewalDeveloperProceeds += value
-				}
+			if isMonetizedRow {
+				metrics.MonetizedUnitsTotal += value
 			}
-		}
-		if customerPriceIdx >= 0 {
-			if value, ok := parseNumericValue(valueAtIndex(row, customerPriceIdx)); ok {
-				metrics.CustomerPriceTotal += value
-				if isSubscriptionRow {
-					metrics.SubscriptionCustomerPrice += value
-				}
-				if isRenewalRow {
-					metrics.RenewalCustomerPrice += value
-				}
+			if isSubscriptionRow {
+				metrics.SubscriptionUnitsTotal += value
+			}
+			if isRenewalRow {
+				metrics.RenewalUnitsTotal += value
 			}
 		}
 	}
-
-	return metrics, nil
+	if a.developerProceedsIdx >= 0 {
+		if value, ok := parseNumericValue(valueAtIndex(row, a.developerProceedsIdx)); ok {
+			metrics.DeveloperProceedsTotal += value
+			if isSubscriptionRow {
+				metrics.SubscriptionDeveloperProceeds += value
+			}
+			if isRenewalRow {
+				metrics.RenewalDeveloperProceeds += value
+			}
+		}
+	}
+	if a.customerPriceIdx >= 0 {
+		if value, ok := parseNumericValue(valueAtIndex(row, a.customerPriceIdx)); ok {
+			metrics.CustomerPriceTotal += value
+			if isSubscriptionRow {
+				metrics.SubscriptionCustomerPrice += value
+			}
+			if isRenewalRow {
+				metrics.RenewalCustomerPrice += value
+			}
+		}
+	}
 }
 
 func isInitialAppDownloadProductType(value string) bool {
@@ -807,25 +873,25 @@ func collectAnalyticsMetrics(ctx context.Context, client *asc.Client, appID stri
 			return nil, requestCount, reportsErr
 		}
 
-		for _, report := range reportsResp.Data {
-			instances, instancesErr := fetchAnalyticsReportInstances(
-				ctx,
-				client,
-				report.ID,
-				asc.WithAnalyticsReportInstancesProcessingDates(processingDates),
-				asc.WithAnalyticsReportInstancesGranularities(analyticsInstanceGranularities),
-			)
-			if instancesErr != nil {
-				if isLikelyForbidden(instancesErr) {
-					return analyticsUnavailableMetrics("analytics report instance endpoints are not permitted for the current API key"), requestCount, nil
-				}
-				if isLikelyNotFound(instancesErr) {
-					return analyticsUnavailableMetrics("analytics report instances are unavailable for this app"), requestCount, nil
-				}
-				return nil, requestCount, instancesErr
+		reportInstances, instancesErr := fetchAnalyticsReportsInstances(
+			ctx,
+			client,
+			reportsResp.Data,
+			asc.WithAnalyticsReportInstancesProcessingDates(processingDates),
+			asc.WithAnalyticsReportInstancesGranularities(analyticsInstanceGranularities),
+		)
+		if instancesErr != nil {
+			if isLikelyForbidden(instancesErr) {
+				return analyticsUnavailableMetrics("analytics report instance endpoints are not permitted for the current API key"), requestCount, nil
 			}
+			if isLikelyNotFound(instancesErr) {
+				return analyticsUnavailableMetrics("analytics report instances are unavailable for this app"), requestCount, nil
+			}
+			return nil, requestCount, instancesErr
+		}
 
-			for _, instance := range instances {
+		for index, report := range reportsResp.Data {
+			for _, instance := range reportInstances[index] {
 				processingDate, ok := parseDateValue(instance.Attributes.ProcessingDate)
 				if !ok {
 					continue
@@ -905,6 +971,60 @@ func weekWindowProcessingDates(windows ...reportWeekWindow) []string {
 		}
 	}
 	return dates
+}
+
+// fetchAnalyticsReportsInstances fetches each report's instances through a
+// bounded pool. The first error in report order wins, matching a serial walk.
+func fetchAnalyticsReportsInstances(
+	ctx context.Context,
+	client *asc.Client,
+	reports []asc.Resource[asc.AnalyticsReportAttributes],
+	opts ...asc.AnalyticsReportInstancesOption,
+) ([][]asc.Resource[asc.AnalyticsReportInstanceAttributes], error) {
+	type result struct {
+		instances []asc.Resource[asc.AnalyticsReportInstanceAttributes]
+		err       error
+	}
+	workCtx, cancel := context.WithCancel(ctx)
+	var workers sync.WaitGroup
+	defer func() {
+		cancel()
+		workers.Wait()
+	}()
+
+	results := make([]chan result, len(reports))
+	for index := range results {
+		results[index] = make(chan result, 1)
+	}
+	jobs := make(chan int)
+	workers.Go(func() {
+		defer close(jobs)
+		for index := range reports {
+			jobs <- index
+		}
+	})
+	for range min(analyticsInstanceFetchConcurrency, len(reports)) {
+		workers.Go(func() {
+			for index := range jobs {
+				if err := workCtx.Err(); err != nil {
+					results[index] <- result{err: err}
+					continue
+				}
+				instances, err := fetchAnalyticsReportInstances(workCtx, client, reports[index].ID, opts...)
+				results[index] <- result{instances: instances, err: err}
+			}
+		})
+	}
+
+	instances := make([][]asc.Resource[asc.AnalyticsReportInstanceAttributes], len(reports))
+	for index := range reports {
+		result := <-results[index]
+		if result.err != nil {
+			return nil, result.err
+		}
+		instances[index] = result.instances
+	}
+	return instances, nil
 }
 
 // fetchAnalyticsReportInstances returns every instance page for a report so

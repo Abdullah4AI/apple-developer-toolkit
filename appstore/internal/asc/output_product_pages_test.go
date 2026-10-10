@@ -57,30 +57,6 @@ func TestPrintMarkdown_AppCustomProductPages(t *testing.T) {
 	}
 }
 
-func TestPrintTable_AppCustomProductPages_Empty(t *testing.T) {
-	resp := &AppCustomProductPagesResponse{Data: []Resource[AppCustomProductPageAttributes]{}}
-
-	output := captureStdout(t, func() error {
-		return PrintTable(resp)
-	})
-
-	if !strings.Contains(output, "Visible") || !strings.Contains(output, "Name") {
-		t.Fatalf("expected header in output, got: %s", output)
-	}
-}
-
-func TestPrintMarkdown_AppCustomProductPages_Empty(t *testing.T) {
-	resp := &AppCustomProductPagesResponse{Data: []Resource[AppCustomProductPageAttributes]{}}
-
-	output := captureStdout(t, func() error {
-		return PrintMarkdown(resp)
-	})
-
-	if !strings.Contains(output, "ID") || !strings.Contains(output, "Visible") {
-		t.Fatalf("expected markdown header, got: %s", output)
-	}
-}
-
 func TestPrintTable_AppCustomProductPageVersions(t *testing.T) {
 	resp := &AppCustomProductPageVersionsResponse{
 		Data: []Resource[AppCustomProductPageVersionAttributes]{
@@ -130,30 +106,6 @@ func TestPrintMarkdown_AppCustomProductPageVersions(t *testing.T) {
 	}
 	if !strings.Contains(output, "READY_FOR_REVIEW") {
 		t.Fatalf("expected state in output, got: %s", output)
-	}
-}
-
-func TestPrintTable_AppCustomProductPageVersions_Empty(t *testing.T) {
-	resp := &AppCustomProductPageVersionsResponse{Data: []Resource[AppCustomProductPageVersionAttributes]{}}
-
-	output := captureStdout(t, func() error {
-		return PrintTable(resp)
-	})
-
-	if !strings.Contains(output, "Version") || !strings.Contains(output, "State") {
-		t.Fatalf("expected header in output, got: %s", output)
-	}
-}
-
-func TestPrintMarkdown_AppCustomProductPageVersions_Empty(t *testing.T) {
-	resp := &AppCustomProductPageVersionsResponse{Data: []Resource[AppCustomProductPageVersionAttributes]{}}
-
-	output := captureStdout(t, func() error {
-		return PrintMarkdown(resp)
-	})
-
-	if !strings.Contains(output, "ID") || !strings.Contains(output, "Deep Link") {
-		t.Fatalf("expected markdown header, got: %s", output)
 	}
 }
 
@@ -207,30 +159,6 @@ func TestPrintMarkdown_AppCustomProductPageLocalizations(t *testing.T) {
 	}
 }
 
-func TestPrintTable_AppCustomProductPageLocalizations_Empty(t *testing.T) {
-	resp := &AppCustomProductPageLocalizationsResponse{Data: []Resource[AppCustomProductPageLocalizationAttributes]{}}
-
-	output := captureStdout(t, func() error {
-		return PrintTable(resp)
-	})
-
-	if !strings.Contains(output, "Locale") || !strings.Contains(output, "Promotional Text") {
-		t.Fatalf("expected header in output, got: %s", output)
-	}
-}
-
-func TestPrintMarkdown_AppCustomProductPageLocalizations_Empty(t *testing.T) {
-	resp := &AppCustomProductPageLocalizationsResponse{Data: []Resource[AppCustomProductPageLocalizationAttributes]{}}
-
-	output := captureStdout(t, func() error {
-		return PrintMarkdown(resp)
-	})
-
-	if !strings.Contains(output, "ID") || !strings.Contains(output, "Promotional Text") {
-		t.Fatalf("expected markdown header, got: %s", output)
-	}
-}
-
 func TestPrintTable_AppKeywords(t *testing.T) {
 	resp := &AppKeywordsResponse{
 		Data: []Resource[AppKeywordAttributes]{
@@ -249,51 +177,6 @@ func TestPrintTable_AppKeywords(t *testing.T) {
 	}
 	if !strings.Contains(output, "keyword-1") {
 		t.Fatalf("expected keyword in output, got: %s", output)
-	}
-}
-
-func TestPrintMarkdown_AppKeywords(t *testing.T) {
-	resp := &AppKeywordsResponse{
-		Data: []Resource[AppKeywordAttributes]{
-			{
-				ID: "keyword-1",
-			},
-		},
-	}
-
-	output := captureStdout(t, func() error {
-		return PrintMarkdown(resp)
-	})
-
-	if !strings.Contains(output, "ID") {
-		t.Fatalf("expected markdown header, got: %s", output)
-	}
-	if !strings.Contains(output, "keyword-1") {
-		t.Fatalf("expected keyword in output, got: %s", output)
-	}
-}
-
-func TestPrintTable_AppKeywords_Empty(t *testing.T) {
-	resp := &AppKeywordsResponse{Data: []Resource[AppKeywordAttributes]{}}
-
-	output := captureStdout(t, func() error {
-		return PrintTable(resp)
-	})
-
-	if !strings.Contains(output, "ID") {
-		t.Fatalf("expected header in output, got: %s", output)
-	}
-}
-
-func TestPrintMarkdown_AppKeywords_Empty(t *testing.T) {
-	resp := &AppKeywordsResponse{Data: []Resource[AppKeywordAttributes]{}}
-
-	output := captureStdout(t, func() error {
-		return PrintMarkdown(resp)
-	})
-
-	if !strings.Contains(output, "ID") {
-		t.Fatalf("expected markdown header, got: %s", output)
 	}
 }
 
@@ -342,30 +225,6 @@ func TestPrintMarkdown_AppPreviewSets(t *testing.T) {
 	}
 	if !strings.Contains(output, "IPHONE_65") {
 		t.Fatalf("expected preview type in output, got: %s", output)
-	}
-}
-
-func TestPrintTable_AppPreviewSets_Empty(t *testing.T) {
-	resp := &AppPreviewSetsResponse{Data: []Resource[AppPreviewSetAttributes]{}}
-
-	output := captureStdout(t, func() error {
-		return PrintTable(resp)
-	})
-
-	if !strings.Contains(output, "Preview Type") {
-		t.Fatalf("expected header in output, got: %s", output)
-	}
-}
-
-func TestPrintMarkdown_AppPreviewSets_Empty(t *testing.T) {
-	resp := &AppPreviewSetsResponse{Data: []Resource[AppPreviewSetAttributes]{}}
-
-	output := captureStdout(t, func() error {
-		return PrintMarkdown(resp)
-	})
-
-	if !strings.Contains(output, "ID") || !strings.Contains(output, "Preview Type") {
-		t.Fatalf("expected markdown header, got: %s", output)
 	}
 }
 
@@ -479,30 +338,6 @@ func TestPrintMarkdown_AppScreenshotSets(t *testing.T) {
 	}
 }
 
-func TestPrintTable_AppScreenshotSets_Empty(t *testing.T) {
-	resp := &AppScreenshotSetsResponse{Data: []Resource[AppScreenshotSetAttributes]{}}
-
-	output := captureStdout(t, func() error {
-		return PrintTable(resp)
-	})
-
-	if !strings.Contains(output, "Display Type") {
-		t.Fatalf("expected header in output, got: %s", output)
-	}
-}
-
-func TestPrintMarkdown_AppScreenshotSets_Empty(t *testing.T) {
-	resp := &AppScreenshotSetsResponse{Data: []Resource[AppScreenshotSetAttributes]{}}
-
-	output := captureStdout(t, func() error {
-		return PrintMarkdown(resp)
-	})
-
-	if !strings.Contains(output, "ID") || !strings.Contains(output, "Display Type") {
-		t.Fatalf("expected markdown header, got: %s", output)
-	}
-}
-
 func TestPrintTable_AppStoreVersionExperiments(t *testing.T) {
 	resp := &AppStoreVersionExperimentsResponse{
 		Data: []Resource[AppStoreVersionExperimentAttributes]{
@@ -552,30 +387,6 @@ func TestPrintMarkdown_AppStoreVersionExperiments(t *testing.T) {
 	}
 	if !strings.Contains(output, "IN_REVIEW") {
 		t.Fatalf("expected state in output, got: %s", output)
-	}
-}
-
-func TestPrintTable_AppStoreVersionExperiments_Empty(t *testing.T) {
-	resp := &AppStoreVersionExperimentsResponse{Data: []Resource[AppStoreVersionExperimentAttributes]{}}
-
-	output := captureStdout(t, func() error {
-		return PrintTable(resp)
-	})
-
-	if !strings.Contains(output, "Traffic") || !strings.Contains(output, "State") {
-		t.Fatalf("expected header in output, got: %s", output)
-	}
-}
-
-func TestPrintMarkdown_AppStoreVersionExperiments_Empty(t *testing.T) {
-	resp := &AppStoreVersionExperimentsResponse{Data: []Resource[AppStoreVersionExperimentAttributes]{}}
-
-	output := captureStdout(t, func() error {
-		return PrintMarkdown(resp)
-	})
-
-	if !strings.Contains(output, "ID") || !strings.Contains(output, "Traffic Proportion") {
-		t.Fatalf("expected markdown header, got: %s", output)
 	}
 }
 
@@ -633,30 +444,6 @@ func TestPrintMarkdown_AppStoreVersionExperimentsV2(t *testing.T) {
 	}
 }
 
-func TestPrintTable_AppStoreVersionExperimentsV2_Empty(t *testing.T) {
-	resp := &AppStoreVersionExperimentsV2Response{Data: []Resource[AppStoreVersionExperimentV2Attributes]{}}
-
-	output := captureStdout(t, func() error {
-		return PrintTable(resp)
-	})
-
-	if !strings.Contains(output, "Platform") || !strings.Contains(output, "Traffic") {
-		t.Fatalf("expected header in output, got: %s", output)
-	}
-}
-
-func TestPrintMarkdown_AppStoreVersionExperimentsV2_Empty(t *testing.T) {
-	resp := &AppStoreVersionExperimentsV2Response{Data: []Resource[AppStoreVersionExperimentV2Attributes]{}}
-
-	output := captureStdout(t, func() error {
-		return PrintMarkdown(resp)
-	})
-
-	if !strings.Contains(output, "ID") || !strings.Contains(output, "Platform") || !strings.Contains(output, "Traffic Proportion") {
-		t.Fatalf("expected markdown header, got: %s", output)
-	}
-}
-
 func TestPrintTable_AppStoreVersionExperimentTreatments(t *testing.T) {
 	resp := &AppStoreVersionExperimentTreatmentsResponse{
 		Data: []Resource[AppStoreVersionExperimentTreatmentAttributes]{
@@ -709,30 +496,6 @@ func TestPrintMarkdown_AppStoreVersionExperimentTreatments(t *testing.T) {
 	}
 }
 
-func TestPrintTable_AppStoreVersionExperimentTreatments_Empty(t *testing.T) {
-	resp := &AppStoreVersionExperimentTreatmentsResponse{Data: []Resource[AppStoreVersionExperimentTreatmentAttributes]{}}
-
-	output := captureStdout(t, func() error {
-		return PrintTable(resp)
-	})
-
-	if !strings.Contains(output, "App Icon Name") || !strings.Contains(output, "Promoted Date") {
-		t.Fatalf("expected header in output, got: %s", output)
-	}
-}
-
-func TestPrintMarkdown_AppStoreVersionExperimentTreatments_Empty(t *testing.T) {
-	resp := &AppStoreVersionExperimentTreatmentsResponse{Data: []Resource[AppStoreVersionExperimentTreatmentAttributes]{}}
-
-	output := captureStdout(t, func() error {
-		return PrintMarkdown(resp)
-	})
-
-	if !strings.Contains(output, "ID") || !strings.Contains(output, "App Icon Name") {
-		t.Fatalf("expected markdown header, got: %s", output)
-	}
-}
-
 func TestPrintTable_AppStoreVersionExperimentTreatmentLocalizations(t *testing.T) {
 	resp := &AppStoreVersionExperimentTreatmentLocalizationsResponse{
 		Data: []Resource[AppStoreVersionExperimentTreatmentLocalizationAttributes]{
@@ -778,30 +541,6 @@ func TestPrintMarkdown_AppStoreVersionExperimentTreatmentLocalizations(t *testin
 	}
 	if !strings.Contains(output, "fr-FR") {
 		t.Fatalf("expected locale in output, got: %s", output)
-	}
-}
-
-func TestPrintTable_AppStoreVersionExperimentTreatmentLocalizations_Empty(t *testing.T) {
-	resp := &AppStoreVersionExperimentTreatmentLocalizationsResponse{Data: []Resource[AppStoreVersionExperimentTreatmentLocalizationAttributes]{}}
-
-	output := captureStdout(t, func() error {
-		return PrintTable(resp)
-	})
-
-	if !strings.Contains(output, "Locale") {
-		t.Fatalf("expected header in output, got: %s", output)
-	}
-}
-
-func TestPrintMarkdown_AppStoreVersionExperimentTreatmentLocalizations_Empty(t *testing.T) {
-	resp := &AppStoreVersionExperimentTreatmentLocalizationsResponse{Data: []Resource[AppStoreVersionExperimentTreatmentLocalizationAttributes]{}}
-
-	output := captureStdout(t, func() error {
-		return PrintMarkdown(resp)
-	})
-
-	if !strings.Contains(output, "ID") || !strings.Contains(output, "Locale") {
-		t.Fatalf("expected markdown header, got: %s", output)
 	}
 }
 

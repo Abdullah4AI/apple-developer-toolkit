@@ -5,90 +5,53 @@ import (
 	"errors"
 	"io"
 	"net/http"
-	"net/http/httptest"
-	"net/url"
 	"testing"
+	"testing/synctest"
 	"time"
 )
 
-func TestBuildFinanceReportQuery(t *testing.T) {
-	query := buildFinanceReportQuery(FinanceReportParams{
-		VendorNumber: "12345678",
-		ReportType:   FinanceReportTypeFinancial,
-		RegionCode:   "US",
-		ReportDate:   "2025-12",
-	})
-
-	values, err := url.ParseQuery(query)
-	if err != nil {
-		t.Fatalf("failed to parse query: %v", err)
-	}
-	if got := values.Get("filter[vendorNumber]"); got != "12345678" {
-		t.Fatalf("expected vendorNumber filter, got %q", got)
-	}
-	if got := values.Get("filter[reportType]"); got != "FINANCIAL" {
-		t.Fatalf("expected reportType filter, got %q", got)
-	}
-	if got := values.Get("filter[regionCode]"); got != "US" {
-		t.Fatalf("expected regionCode filter, got %q", got)
-	}
-	if got := values.Get("filter[reportDate]"); got != "2025-12" {
-		t.Fatalf("expected reportDate filter, got %q", got)
-	}
-}
-
 func TestDownloadFinanceReportSurvivesShortClientTimeout(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		if req.URL.Path != "/v1/financeReports" || req.Header.Get("Authorization") == "" {
-			t.Errorf("unexpected finance request: %s, authorized=%v", req.URL.Path, req.Header.Get("Authorization") != "")
+	synctest.Test(t, func(t *testing.T) {
+		client := newTestClient(t, nil, rawResponse("unused"))
+		client.httpClient = &http.Client{
+			Timeout: 40 * time.Millisecond,
+			Transport: streamingTransport(func(w http.ResponseWriter, req *http.Request) {
+				if req.URL.Path != "/v1/financeReports" || req.Header.Get("Authorization") == "" {
+					t.Errorf("unexpected finance request: %s, authorized=%v", req.URL.Path, req.Header.Get("Authorization") != "")
+				}
+				_, _ = io.WriteString(w, "gz")
+				select {
+				case <-time.After(150 * time.Millisecond):
+					_, _ = io.WriteString(w, "data")
+				case <-req.Context().Done():
+				}
+			}),
 		}
-		_, _ = io.WriteString(w, "gz")
-		w.(http.Flusher).Flush()
-		select {
-		case <-time.After(150 * time.Millisecond):
-			_, _ = io.WriteString(w, "data")
-		case <-req.Context().Done():
+
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+
+		download, err := client.DownloadFinanceReport(ctx, FinanceReportParams{
+			VendorNumber: "12345678",
+			ReportType:   FinanceReportTypeFinancial,
+			RegionCode:   "US",
+			ReportDate:   "2025-12",
+		})
+		if err != nil {
+			t.Fatalf("DownloadFinanceReport() error = %v", err)
 		}
-	}))
-	defer server.Close()
-	serverURL, err := url.Parse(server.URL)
-	if err != nil {
-		t.Fatal(err)
-	}
-	client := newTestClient(t, nil, rawResponse("unused"))
-	transport := server.Client().Transport
-	client.httpClient = &http.Client{
-		Timeout: 40 * time.Millisecond,
-		Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
-			local := req.Clone(req.Context())
-			local.URL.Scheme, local.URL.Host = serverURL.Scheme, serverURL.Host
-			return transport.RoundTrip(local)
-		}),
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-
-	download, err := client.DownloadFinanceReport(ctx, FinanceReportParams{
-		VendorNumber: "12345678",
-		ReportType:   FinanceReportTypeFinancial,
-		RegionCode:   "US",
-		ReportDate:   "2025-12",
+		defer download.Body.Close()
+		body, err := io.ReadAll(download.Body)
+		if err != nil {
+			t.Fatalf("read body: %v", err)
+		}
+		if client.httpClient.Timeout != 40*time.Millisecond {
+			t.Fatal("streaming mutated the shared client timeout")
+		}
+		if string(body) != "gzdata" {
+			t.Fatalf("body = %q", body)
+		}
 	})
-	if err != nil {
-		t.Fatalf("DownloadFinanceReport() error = %v", err)
-	}
-	defer download.Body.Close()
-	body, err := io.ReadAll(download.Body)
-	if err != nil {
-		t.Fatalf("read body: %v", err)
-	}
-	if client.httpClient.Timeout != 40*time.Millisecond {
-		t.Fatal("streaming mutated the shared client timeout")
-	}
-	if string(body) != "gzdata" {
-		t.Fatalf("body = %q", body)
-	}
 }
 
 func TestDownloadFinanceReport_SendsRequest(t *testing.T) {

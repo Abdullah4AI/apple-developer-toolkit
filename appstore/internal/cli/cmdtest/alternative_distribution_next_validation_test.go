@@ -7,65 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
-	rootcmd "github.com/Abdullah4AI/apple-developer-toolkit/appstore/cmd"
 )
-
-func runAlternativeDistributionInvalidNextURLCases(
-	t *testing.T,
-	argsPrefix []string,
-	wantErrPrefix string,
-) {
-	t.Helper()
-
-	tests := []struct {
-		name    string
-		next    string
-		wantErr string
-	}{
-		{
-			name:    "invalid scheme",
-			next:    "http://api.appstoreconnect.apple.com/v1/alternativeDistributionDomains?cursor=AQ",
-			wantErr: wantErrPrefix + " must be an App Store Connect URL",
-		},
-		{
-			name:    "malformed URL",
-			next:    "https://api.appstoreconnect.apple.com/%zz",
-			wantErr: wantErrPrefix + " must be a valid URL:",
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			args := append(append([]string{}, argsPrefix...), "--next", test.next)
-
-			root := RootCommand("1.2.3")
-			root.FlagSet.SetOutput(io.Discard)
-
-			var runErr error
-			stdout, stderr := captureOutput(t, func() {
-				if err := root.Parse(args); err != nil {
-					t.Fatalf("parse error: %v", err)
-				}
-				runErr = root.Run(context.Background())
-			})
-
-			if runErr == nil {
-				t.Fatal("expected error, got nil")
-			}
-			if !strings.Contains(runErr.Error(), test.wantErr) {
-				t.Fatalf("expected error %q, got %v", test.wantErr, runErr)
-			}
-			if stdout != "" {
-				t.Fatalf("expected empty stdout, got %q", stdout)
-			}
-			if got := rootcmd.ExitCodeFromError(runErr); got != rootcmd.ExitUsage {
-				t.Fatalf("exit code = %d, want %d", got, rootcmd.ExitUsage)
-			}
-			assertUsageDiagnosticFirstLine(t, stderr, test.wantErr)
-		})
-	}
-}
 
 func runAlternativeDistributionPaginateFromNext(
 	t *testing.T,
@@ -139,14 +81,6 @@ func runAlternativeDistributionPaginateFromNext(
 	}
 }
 
-func TestAlternativeDistributionDomainsListRejectsInvalidNextURL(t *testing.T) {
-	runAlternativeDistributionInvalidNextURLCases(
-		t,
-		[]string{"alternative-distribution", "domains", "list"},
-		"alternative-distribution domains list: --next",
-	)
-}
-
 func TestAlternativeDistributionDomainsListPaginateFromNext(t *testing.T) {
 	const firstURL = "https://api.appstoreconnect.apple.com/v1/alternativeDistributionDomains?cursor=AQ&limit=200"
 	const secondURL = "https://api.appstoreconnect.apple.com/v1/alternativeDistributionDomains?cursor=BQ&limit=200"
@@ -163,14 +97,6 @@ func TestAlternativeDistributionDomainsListPaginateFromNext(t *testing.T) {
 		secondBody,
 		"alt-domain-next-1",
 		"alt-domain-next-2",
-	)
-}
-
-func TestAlternativeDistributionKeysListRejectsInvalidNextURL(t *testing.T) {
-	runAlternativeDistributionInvalidNextURLCases(
-		t,
-		[]string{"alternative-distribution", "keys", "list"},
-		"alternative-distribution keys list: --next",
 	)
 }
 
@@ -193,14 +119,6 @@ func TestAlternativeDistributionKeysListPaginateFromNext(t *testing.T) {
 	)
 }
 
-func TestAlternativeDistributionPackageVersionsListRejectsInvalidNextURL(t *testing.T) {
-	runAlternativeDistributionInvalidNextURLCases(
-		t,
-		[]string{"alternative-distribution", "packages", "versions", "list", "--package-id", "pkg-1"},
-		"alternative-distribution packages versions list: --next",
-	)
-}
-
 func TestAlternativeDistributionPackageVersionsListPaginateFromNext(t *testing.T) {
 	const firstURL = "https://api.appstoreconnect.apple.com/v1/alternativeDistributionPackages/pkg-1/versions?cursor=AQ&limit=200"
 	const secondURL = "https://api.appstoreconnect.apple.com/v1/alternativeDistributionPackages/pkg-1/versions?cursor=BQ&limit=200"
@@ -220,14 +138,6 @@ func TestAlternativeDistributionPackageVersionsListPaginateFromNext(t *testing.T
 	)
 }
 
-func TestAlternativeDistributionPackageVersionsDeltasRejectsInvalidNextURL(t *testing.T) {
-	runAlternativeDistributionInvalidNextURLCases(
-		t,
-		[]string{"alternative-distribution", "packages", "versions", "deltas", "--version-id", "ver-1"},
-		"alternative-distribution packages versions deltas: --next",
-	)
-}
-
 func TestAlternativeDistributionPackageVersionsDeltasPaginateFromNext(t *testing.T) {
 	const firstURL = "https://api.appstoreconnect.apple.com/v1/alternativeDistributionPackageVersions/ver-1/deltas?cursor=AQ&limit=200"
 	const secondURL = "https://api.appstoreconnect.apple.com/v1/alternativeDistributionPackageVersions/ver-1/deltas?cursor=BQ&limit=200"
@@ -244,14 +154,6 @@ func TestAlternativeDistributionPackageVersionsDeltasPaginateFromNext(t *testing
 		secondBody,
 		"alt-delta-next-1",
 		"alt-delta-next-2",
-	)
-}
-
-func TestAlternativeDistributionPackageVersionsVariantsRejectsInvalidNextURL(t *testing.T) {
-	runAlternativeDistributionInvalidNextURLCases(
-		t,
-		[]string{"alternative-distribution", "packages", "versions", "variants", "--version-id", "ver-1"},
-		"alternative-distribution packages versions variants: --next",
 	)
 }
 

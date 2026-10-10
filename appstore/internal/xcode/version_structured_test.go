@@ -76,7 +76,8 @@ func TestStructuredVersionSupportsLargeXCConfig(t *testing.T) {
 	project := writeStructuredVersionProject(t, true)
 	sharedPath := filepath.Join(filepath.Dir(project), "Configs", "Shared.xcconfig")
 	original := mustReadVersionTestFile(t, sharedPath)
-	padding := strings.Repeat("// compatibility padding\n", signingPlanMaxBytes/len("// compatibility padding\n")+1)
+	// This covers the byte limit; parser line handling has separate tests.
+	padding := "// compatibility padding " + strings.Repeat("x", signingPlanMaxBytes) + "\n"
 	if err := os.WriteFile(sharedPath, []byte(padding+original), 0o640); err != nil {
 		t.Fatalf("WriteFile(large Shared.xcconfig) error = %v", err)
 	}
@@ -106,7 +107,8 @@ func TestStructuredVersionBumpSupportsLargeXCConfig(t *testing.T) {
 	sharedPath := filepath.Join(filepath.Dir(project), "Configs", "Shared.xcconfig")
 	original := mustReadVersionTestFile(t, sharedPath)
 	const unrelated = "UNRELATED_SETTING = KEEP\n"
-	padding := strings.Repeat("// compatibility padding\n", signingPlanMaxBytes/len("// compatibility padding\n")+1)
+	// This covers the byte limit; parser line handling has separate tests.
+	padding := "// compatibility padding " + strings.Repeat("x", signingPlanMaxBytes) + "\n"
 	if err := os.WriteFile(sharedPath, []byte(padding+original+unrelated), 0o640); err != nil {
 		t.Fatalf("WriteFile(large Shared.xcconfig) error = %v", err)
 	}
@@ -2181,7 +2183,7 @@ func containsPathSuffix(paths []string, suffix string) bool {
 	return false
 }
 
-func mustReadVersionTestFile(t *testing.T, path string) string {
+func mustReadVersionTestFile(t testing.TB, path string) string {
 	t.Helper()
 	contents, err := os.ReadFile(path)
 	if err != nil {
@@ -2199,7 +2201,7 @@ func mustStatVersionTestFile(t *testing.T, path string) os.FileInfo {
 	return info
 }
 
-func writeStructuredVersionProject(t *testing.T, xcconfigBacked bool) string {
+func writeStructuredVersionProject(t testing.TB, xcconfigBacked bool) string {
 	t.Helper()
 	root := t.TempDir()
 	projectPath := filepath.Join(root, "Demo.xcodeproj")

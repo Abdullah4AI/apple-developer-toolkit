@@ -91,3 +91,12 @@ func SetPricingNowForTesting(fn func() time.Time) func() {
 		pricingNow = previous
 	}
 }
+
+// ResetEquivalentVersionNotesForTest forgets which equivalent-version notes
+// were already printed, so each in-process command run reports them again.
+func ResetEquivalentVersionNotesForTest() {
+	equivalentVersionNoteMu.Lock()
+	defer equivalentVersionNoteMu.Unlock()
+
+	equivalentVersionNotes = map[string]struct{}{}
+}

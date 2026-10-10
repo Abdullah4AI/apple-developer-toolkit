@@ -12,7 +12,9 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	rootcmd "github.com/Abdullah4AI/apple-developer-toolkit/appstore/cmd"
@@ -657,7 +659,7 @@ func TestMetadataApplyFailsOnPartialMutation(t *testing.T) {
 		http.DefaultTransport = originalTransport
 	})
 
-	patchCount := 0
+	var patchCount atomic.Int32
 	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		switch req.URL.Path {
 		case "/v1/apps/app-1/appInfos":
@@ -693,7 +695,7 @@ func TestMetadataApplyFailsOnPartialMutation(t *testing.T) {
 			}, nil
 		case "/v1/appInfoLocalizations/loc-app-en":
 			if req.Method == http.MethodPatch {
-				patchCount++
+				patchCount.Add(1)
 				assertMetadataPatchPayload(t, req, "appInfoLocalizations", "loc-app-en", map[string]string{
 					"name":     "App Name",
 					"subtitle": "Local subtitle",
@@ -707,7 +709,7 @@ func TestMetadataApplyFailsOnPartialMutation(t *testing.T) {
 			}
 		case "/v1/appStoreVersionLocalizations/loc-ver-fr":
 			if req.Method == http.MethodPatch {
-				patchCount++
+				patchCount.Add(1)
 				assertMetadataPatchPayload(t, req, "appStoreVersionLocalizations", "loc-ver-fr", map[string]string{"description": "Local French"})
 				body := `{"errors":[{"status":"500","code":"INTERNAL_ERROR","title":"Internal Error","detail":"boom"}]}`
 				return &http.Response{
@@ -718,7 +720,7 @@ func TestMetadataApplyFailsOnPartialMutation(t *testing.T) {
 			}
 		case "/v1/appStoreVersionLocalizations/loc-ver-ja":
 			if req.Method == http.MethodPatch {
-				patchCount++
+				patchCount.Add(1)
 				assertMetadataPatchPayload(t, req, "appStoreVersionLocalizations", "loc-ver-ja", map[string]string{"description": "Local Japanese"})
 				body := `{"data":{"type":"appStoreVersionLocalizations","id":"loc-ver-ja","attributes":{"locale":"ja","description":"Local Japanese"}}}`
 				return &http.Response{
@@ -755,8 +757,8 @@ func TestMetadataApplyFailsOnPartialMutation(t *testing.T) {
 	if got := rootcmd.ExitCodeFromError(runErr); got != rootcmd.ExitHTTPInternalServer {
 		t.Fatalf("expected partial server failure exit %d, got %d", rootcmd.ExitHTTPInternalServer, got)
 	}
-	if patchCount != 3 {
-		t.Fatalf("expected all three patch attempts despite the middle failure, got %d", patchCount)
+	if patchCount.Load() != 3 {
+		t.Fatalf("expected all three patch attempts despite the middle failure, got %d", patchCount.Load())
 	}
 	if !strings.Contains(runErr.Error(), "metadata apply: 1 localization(s) failed") {
 		t.Fatalf("expected batch failure summary, got %v", runErr)
@@ -1152,15 +1154,16 @@ func TestMetadataApplyReconcilesRequestTimeoutWithFreshReadback(t *testing.T) {
 			return jsonHTTPResponse(http.StatusOK, body), nil
 		case "/v1/appStoreVersionLocalizations/loc-ver-en":
 			if req.Method != http.MethodPatch {
-				t.Fatalf("expected PATCH, got %s", req.Method)
+				t.Errorf("expected PATCH, got %s", req.Method)
+				return nil, errors.New("test transport assertion failed")
 			}
 			patchCount++
 			<-req.Context().Done()
 			time.Sleep(5 * time.Millisecond)
 			return nil, req.Context().Err()
 		default:
-			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.Path)
-			return nil, nil
+			t.Errorf("unexpected request: %s %s", req.Method, req.URL.Path)
+			return nil, errors.New("unexpected test transport request")
 		}
 	})
 
@@ -1176,7 +1179,9 @@ func TestMetadataApplyReconcilesRequestTimeoutWithFreshReadback(t *testing.T) {
 		}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
-		if err := root.Run(context.Background()); err != nil {
+		var runErr error
+		synctest.Test(t, func(*testing.T) { runErr = root.Run(context.Background()) })
+		if err := runErr; err != nil {
 			t.Fatalf("run error: %v", err)
 		}
 	})
@@ -1455,7 +1460,8 @@ func TestMetadataApplyRetriesInitialReadWithFreshDeadline(t *testing.T) {
 				return nil, req.Context().Err()
 			}
 			if err := req.Context().Err(); err != nil {
-				t.Fatalf("retry received expired context: %v", err)
+				t.Errorf("retry received expired context: %v", err)
+				return nil, errors.New("test transport assertion failed")
 			}
 			return jsonHTTPResponse(http.StatusOK, `{"data":[{"type":"appStoreVersions","id":"version-1","attributes":{"versionString":"1.2.3","platform":"IOS"}}],"links":{"next":""}}`), nil
 		case "/v1/apps/app-1/appInfos":
@@ -1467,8 +1473,8 @@ func TestMetadataApplyRetriesInitialReadWithFreshDeadline(t *testing.T) {
 		case "/v1/appStoreVersions/version-1":
 			return jsonHTTPResponse(http.StatusOK, `{"data":{"type":"appStoreVersions","id":"version-1","attributes":{"versionString":"1.2.3","platform":"IOS"},"relationships":{"app":{"data":{"type":"apps","id":"app-1"}}}}}`), nil
 		default:
-			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.Path)
-			return nil, nil
+			t.Errorf("unexpected request: %s %s", req.Method, req.URL.Path)
+			return nil, errors.New("unexpected test transport request")
 		}
 	})
 
@@ -1484,7 +1490,9 @@ func TestMetadataApplyRetriesInitialReadWithFreshDeadline(t *testing.T) {
 		}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
-		if err := root.Run(context.Background()); err != nil {
+		var runErr error
+		synctest.Test(t, func(*testing.T) { runErr = root.Run(context.Background()) })
+		if err := runErr; err != nil {
 			t.Fatalf("run error: %v", err)
 		}
 	})
@@ -1526,23 +1534,28 @@ func TestMetadataApplyUsesFreshDeadlineForEachSnapshotPage(t *testing.T) {
 			}
 			deadline, ok := req.Context().Deadline()
 			if !ok || time.Until(deadline) < 70*time.Millisecond {
-				t.Fatalf("expected fresh second-page deadline, remaining=%s", time.Until(deadline))
+				t.Errorf("expected fresh second-page deadline, remaining=%s", time.Until(deadline))
+				return nil, context.DeadlineExceeded
 			}
 			return jsonHTTPResponse(http.StatusOK, `{"data":[],"links":{"next":""}}`), nil
 		case "/v1/appStoreVersions/version-1/appStoreVersionLocalizations":
 			return jsonHTTPResponse(http.StatusOK, `{"data":[],"links":{"next":""}}`), nil
 		default:
-			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.Path)
-			return nil, nil
+			t.Errorf("unexpected request: %s %s", req.Method, req.URL.Path)
+			return nil, errors.New("unexpected test transport request")
 		}
 	})
 
-	result, _, err := metadatacli.ExecutePushWithWarnings(context.Background(), metadatacli.PushExecutionOptions{
-		CommandName: "apply",
-		AppID:       "app-1",
-		Version:     "1.2.3",
-		Dir:         dir,
-		DryRun:      true,
+	var result metadatacli.PushPlanResult
+	var err error
+	synctest.Test(t, func(*testing.T) {
+		result, _, err = metadatacli.ExecutePushWithWarnings(context.Background(), metadatacli.PushExecutionOptions{
+			CommandName: "apply",
+			AppID:       "app-1",
+			Version:     "1.2.3",
+			Dir:         dir,
+			DryRun:      true,
+		})
 	})
 	if err != nil {
 		t.Fatalf("ExecutePushWithWarnings() error: %v", err)
@@ -1602,7 +1615,10 @@ func TestMetadataApplyCancellationArtifactsRemainingActionsAcrossScopes(t *testi
 				cancel: cancel,
 			}
 			return &http.Response{StatusCode: http.StatusOK, Body: body, Header: http.Header{"Content-Type": []string{"application/json"}}}, nil
-		case "/v1/appInfoLocalizations/loc-fr", "/v1/appStoreVersionLocalizations/loc-ja":
+		case "/v1/appInfoLocalizations/loc-fr":
+			<-req.Context().Done()
+			return nil, req.Context().Err()
+		case "/v1/appStoreVersionLocalizations/loc-ja":
 			mutations++
 			t.Fatalf("unexpected mutation after cancellation: %s", req.URL.Path)
 			return nil, nil

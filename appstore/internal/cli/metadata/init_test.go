@@ -5,15 +5,6 @@ import (
 	"testing"
 )
 
-func TestMetadataInitCommandFlags(t *testing.T) {
-	cmd := MetadataInitCommand()
-	for _, name := range []string{"dir", "version", "locale", "force"} {
-		if cmd.FlagSet.Lookup(name) == nil {
-			t.Fatalf("expected --%s flag to be defined", name)
-		}
-	}
-}
-
 func TestMetadataInitCommandDefaultsLocale(t *testing.T) {
 	cmd := MetadataInitCommand()
 	f := cmd.FlagSet.Lookup("locale")
@@ -58,18 +49,5 @@ func TestBuildInitWritePlansWritesBlankTemplates(t *testing.T) {
 	wantVersion := `{"description":"","keywords":"","marketingUrl":"","promotionalText":"","supportUrl":"","whatsNew":""}`
 	if string(plans[1].Contents) != wantVersion {
 		t.Fatalf("version template = %q, want %q", string(plans[1].Contents), wantVersion)
-	}
-}
-
-func TestBuildInitWritePlansCanWriteAppInfoOnly(t *testing.T) {
-	plans, err := BuildInitWritePlans("/tmp/metadata", "en-US", "")
-	if err != nil {
-		t.Fatalf("BuildInitWritePlans() error: %v", err)
-	}
-	if len(plans) != 1 {
-		t.Fatalf("expected 1 plan, got %d", len(plans))
-	}
-	if got, want := plans[0].Path, "/tmp/metadata/app-info/en-US.json"; got != want {
-		t.Fatalf("app-info path = %q, want %q", got, want)
 	}
 }

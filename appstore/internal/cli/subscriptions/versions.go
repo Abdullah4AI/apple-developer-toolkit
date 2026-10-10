@@ -196,8 +196,12 @@ Examples:
 			}
 			requestCtx, cancel := shared.ContextWithTimeout(ctx)
 			defer cancel()
+			firstPageLimit := *limit
+			if *paginate && firstPageLimit == 0 {
+				firstPageLimit = 200
+			}
 			opts := []asc.SubscriptionVersionsOption{
-				asc.WithSubscriptionVersionsLimit(*limit), asc.WithSubscriptionVersionsNextURL(*next),
+				asc.WithSubscriptionVersionsLimit(firstPageLimit), asc.WithSubscriptionVersionsNextURL(*next),
 				asc.WithSubscriptionVersionsStates(states), asc.WithSubscriptionVersionsFields(versionFieldValues),
 				asc.WithSubscriptionVersionsSubscriptionFields(subscriptionFieldValues),
 				asc.WithSubscriptionVersionsImageFields(imageFieldValues),
@@ -348,7 +352,11 @@ func SubscriptionsVersionsLinksCommand() *ffcli.Command {
 			}
 			requestCtx, cancel := shared.ContextWithTimeout(ctx)
 			defer cancel()
-			resp, err := client.GetSubscriptionVersionsRelationships(requestCtx, id, asc.WithLinkagesLimit(*limit), asc.WithLinkagesNextURL(*next))
+			firstPageLimit := *limit
+			if *paginate && firstPageLimit == 0 {
+				firstPageLimit = 200
+			}
+			resp, err := client.GetSubscriptionVersionsRelationships(requestCtx, id, asc.WithLinkagesLimit(firstPageLimit), asc.WithLinkagesNextURL(*next))
 			if err != nil {
 				return fmt.Errorf("subscriptions versions links: failed to fetch: %w", err)
 			}

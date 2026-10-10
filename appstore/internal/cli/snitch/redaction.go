@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 
 	"gopkg.in/yaml.v3"
 )
@@ -93,8 +94,56 @@ const (
 )
 
 type redactionRule struct {
-	pattern     *regexp.Regexp
+	pattern     *lazyRegexp
 	replacement string
+}
+
+// lazyRegexp keeps package init from compiling patterns on every asc invocation.
+type lazyRegexp struct {
+	once sync.Once
+	expr string
+	re   *regexp.Regexp
+}
+
+var lazyPatterns []*lazyRegexp
+
+func lazyMustCompile(expr string) *lazyRegexp {
+	l := &lazyRegexp{expr: expr}
+	lazyPatterns = append(lazyPatterns, l)
+	return l
+}
+
+func (l *lazyRegexp) compiled() *regexp.Regexp {
+	l.once.Do(func() { l.re = regexp.MustCompile(l.expr) })
+	return l.re
+}
+
+func (l *lazyRegexp) MatchString(s string) bool { return l.compiled().MatchString(s) }
+
+func (l *lazyRegexp) FindStringIndex(s string) []int { return l.compiled().FindStringIndex(s) }
+
+func (l *lazyRegexp) FindStringSubmatch(s string) []string {
+	return l.compiled().FindStringSubmatch(s)
+}
+
+func (l *lazyRegexp) FindStringSubmatchIndex(s string) []int {
+	return l.compiled().FindStringSubmatchIndex(s)
+}
+
+func (l *lazyRegexp) FindAllStringIndex(s string, n int) [][]int {
+	return l.compiled().FindAllStringIndex(s, n)
+}
+
+func (l *lazyRegexp) FindAllStringSubmatch(s string, n int) [][]string {
+	return l.compiled().FindAllStringSubmatch(s, n)
+}
+
+func (l *lazyRegexp) FindAllStringSubmatchIndex(s string, n int) [][]int {
+	return l.compiled().FindAllStringSubmatchIndex(s, n)
+}
+
+func (l *lazyRegexp) ReplaceAllString(src, repl string) string {
+	return l.compiled().ReplaceAllString(src, repl)
 }
 
 type yamlAnchorLocation struct {
@@ -114,10 +163,10 @@ type yamlExplicitMappingRestoration struct {
 }
 
 var (
-	secretMarkerPattern            = regexp.MustCompile(`(?i)(^|[ \t])-{1,2}secret(?:` + singleLineShellTerminator + `|[ \t]*=[ \t]*(?:1|t|true)(?:` + singleLineShellTerminator + `))`)
-	secretValuePattern             = regexp.MustCompile(`(?i)(^|[ \t])(-{1,2}value(?:[ \t]+|[ \t]*=[ \t]*))(?:\[REDACTED(?: PRIVATE KEY)?\]|` + escapeAwareQuotedValue + `|` + unterminatedQuotedValue + `|` + flagUnquotedValue + `)`)
-	kubectlFromLiteralValue        = regexp.MustCompile(`(?i)(--from-literal(?:[ \t]+|[ \t]*=[ \t]*))(?:\[REDACTED(?: PRIVATE KEY)?\]|` + kubectlShellWord + `)`)
-	securityCredentialFlagPatterns = map[string]*regexp.Regexp{
+	secretMarkerPattern            = lazyMustCompile(`(?i)(^|[ \t])-{1,2}secret(?:` + singleLineShellTerminator + `|[ \t]*=[ \t]*(?:1|t|true)(?:` + singleLineShellTerminator + `))`)
+	secretValuePattern             = lazyMustCompile(`(?i)(^|[ \t])(-{1,2}value(?:[ \t]+|[ \t]*=[ \t]*))(?:\[REDACTED(?: PRIVATE KEY)?\]|` + escapeAwareQuotedValue + `|` + unterminatedQuotedValue + `|` + flagUnquotedValue + `)`)
+	kubectlFromLiteralValue        = lazyMustCompile(`(?i)(--from-literal(?:[ \t]+|[ \t]*=[ \t]*))(?:\[REDACTED(?: PRIVATE KEY)?\]|` + kubectlShellWord + `)`)
+	securityCredentialFlagPatterns = map[string]*lazyRegexp{
 		"create-keychain":                      newCommandShortCredentialFlagPattern("p"),
 		"unlock-keychain":                      newCommandShortCredentialFlagPattern("p"),
 		"set-keychain-password":                newCommandShortCredentialFlagPattern("o", "p"),
@@ -146,7 +195,7 @@ var (
 		"create-filevaultmaster-keychain":      "p",
 	}
 	opensslCredentialOptions            = []string{"passin", "passout", "passcerts", "pass", "k", "K"}
-	opensslSubcommandCredentialPatterns = map[string]*regexp.Regexp{
+	opensslSubcommandCredentialPatterns = map[string]*lazyRegexp{
 		"ca":   newCommandCredentialFlagValueStartPattern("key"),
 		"dgst": newCommandCredentialFlagValueStartPattern("hmac"),
 	}
@@ -166,142 +215,142 @@ var (
 	jarsignerCredentialFlagPattern        = newCommandCredentialFlagPatternWithSuffix("(?::(?:env|file))?", "storepass", "keypass")
 	dockerLoginCredentialFlagPattern      = newCommandShortCredentialFlagPattern("p")
 	zipCredentialFlagPattern              = newCommandShortCredentialFlagPattern("P")
-	rawCookieJarPattern                   = regexp.MustCompile(`(?i)"cookies"[ \t\r\n]*:[ \t\r\n]*(?:\{|\[)`)
-	escapedCookieJarPattern               = regexp.MustCompile(`(?i)\\"cookies\\"[ \t\r\n]*:[ \t\r\n]*(?:\{|\[)`)
-	rawRegistryAuthsPattern               = regexp.MustCompile(`(?i)"auths"[ \t\r\n]*:[ \t\r\n]*\{`)
-	escapedRegistryAuthsPattern           = regexp.MustCompile(`(?i)\\"auths\\"[ \t\r\n]*:[ \t\r\n]*\{`)
-	rawRequestHeaders                     = regexp.MustCompile(`(?i)"requestHeaders"[ \t\r\n]*:[ \t\r\n]*\[`)
-	escapedRequestHeaders                 = regexp.MustCompile(`(?i)\\"requestHeaders\\"[ \t\r\n]*:[ \t\r\n]*\[`)
-	rawStructuredValueStart               = regexp.MustCompile(`(?i)"value"[ \t\r\n]*:[ \t\r\n]*"`)
-	escapedValueStart                     = regexp.MustCompile(`(?i)\\"value\\"[ \t\r\n]*:[ \t\r\n]*\\"`)
-	rawCredentialObject                   = regexp.MustCompile(`(?i)"` + structuredCredentialName + `"[ \t\r\n]*:[ \t\r\n]*\{`)
-	escapedCredentialObject               = regexp.MustCompile(`(?i)\\"` + structuredCredentialName + `\\"[ \t\r\n]*:[ \t\r\n]*\{`)
-	rawCredentialArray                    = regexp.MustCompile(`(?i)"` + structuredCredentialName + `"[ \t\r\n]*:[ \t\r\n]*\[`)
-	escapedCredentialArray                = regexp.MustCompile(`(?i)\\"` + structuredCredentialName + `\\"[ \t\r\n]*:[ \t\r\n]*\[`)
-	credentialHeaderNamePattern           = regexp.MustCompile(`(?i)^` + credentialHeaderName + `$`)
-	sensitiveAssignmentHeaderName         = regexp.MustCompile(`(?i)^` + sensitivePrefixedName + `$`)
-	queryCredentialNamePattern            = regexp.MustCompile(`(?i)^` + queryCredentialName + `$`)
-	queryParameterName                    = regexp.MustCompile(`[?&]([^=&#\s"'<>]+)=`)
-	curlHeaderOptionStart                 = regexp.MustCompile(`(?i)(^|\s)(` + curlHeaderOptionPrefix + `)`)
-	completeShellWord                     = regexp.MustCompile(`^(` + fishShellWord + `)(` + singleLineShellTerminator + `)`)
-	netrcEntryStart                       = regexp.MustCompile(`(?im)(?:^|[\r\n])[ \t]*(?:machine[ \t]+[^\s#]+|default)(?:[ \t\r\n]|\z)`)
-	netrcPasswordValue                    = regexp.MustCompile(`(?i)(^|[ \t\r\n])(password[ \t]+)` + singleLineShellWord + `(` + singleLineShellTerminator + `)`)
-	booleanSecretMarker                   = regexp.MustCompile(`(?i)(^|\s)(-{1,2}secret)([ \t]*=[ \t]*)(true|false|1|0|t|f)(` + singleLineShellTerminator + `)`)
-	yamlCredentialScalar                  = regexp.MustCompile(`(?i)^([ \t]*(?:-[ \t]+)?` + yamlMappingKeyProperties + `(?:["']?` + yamlCredentialName + `["']?)[ \t]*:[ \t]*)(?:(?:[!&][^\s#]+)[ \t]*)*[|>](?:[+-]?[1-9]?|[1-9][+-]?)[ \t]*(?:#[^\r\n]*)?$`)
-	yamlCredentialMapping                 = regexp.MustCompile(`(?i)^([ \t]*(?:-[ \t]+)?` + yamlMappingKeyProperties + `(?:["']?` + yamlCredentialName + `["']?)[ \t]*:)[ \t]*(?:(?:[!&][^\s#]+)[ \t]*)*(?:#[^\r\n]*)?$`)
-	yamlCredentialPlainScalar             = regexp.MustCompile(`(?i)^([ \t]*(?:-[ \t]+)?` + yamlMappingKeyProperties + `(?:["']?` + yamlCredentialName + `["']?)[ \t]*:[ \t]*)[^"'[\{\s\r\n][^\r\n]*$`)
-	yamlCredentialFlowStart               = regexp.MustCompile(`(?im)^([ \t]*(?:-[ \t]+)?` + yamlMappingKeyProperties + `(?:["']?` + yamlCredentialName + `["']?)[ \t]*:[ \t]*)([\[{])`)
-	yamlExplicitCredentialKey             = regexp.MustCompile(`(?i)^[ \t]*(?:-[ \t]+)?\?[ \t]+` + yamlMappingKeyProperties + `(?:["']?` + yamlCredentialName + `["']?)[ \t]*(?:#[^\r\n]*)?$`)
-	yamlBlockScalarIndicator              = regexp.MustCompile(`^[|>](?:[+-]?[1-9]?|[1-9][+-]?)$`)
-	yamlCredentialAlias                   = regexp.MustCompile(`(?im)^[ \t]*(?:-[ \t]+)?` + yamlMappingKeyProperties + `(?:["']?` + yamlCredentialName + `["']?)[ \t]*:[ \t]*\*([a-z0-9_-]+)[ \t]*(?:#[^\r\n]*)?$`)
-	yamlDocumentBoundary                  = regexp.MustCompile(`^(?:---|\.\.\.)(?:[ \t]|$)`)
-	yamlValueAlias                        = regexp.MustCompile(`\*([a-zA-Z0-9_-]+)\b`)
-	yamlAnchor                            = regexp.MustCompile(`&([a-zA-Z0-9_-]+)\b`)
-	yamlSensitiveNameAnchor               = regexp.MustCompile(`(?im)&([a-zA-Z0-9_-]+)[ \t]+(?:(?:` + yamlNodeTag + `)[ \t]+)*(?:["']?` + yamlCredentialName + `["']?)[ \t]*(?:#[^\r\n]*)?$`)
-	yamlAliasMappingKey                   = regexp.MustCompile(`(?i)^([ \t]*(?:-[ \t]+)?)(\*([a-zA-Z0-9_-]+))([ \t]*:)`)
-	yamlExplicitAliasKey                  = regexp.MustCompile(`(?i)^([ \t]*(?:-[ \t]+)?\?[ \t]+)(\*([a-zA-Z0-9_-]+))([ \t]*(?:#[^\r\n]*)?)$`)
-	jsonQuotedScalarLine                  = regexp.MustCompile(`^"(?:\\.|[^"\\])*"[ \t]*,?[ \t]*$`)
-	jsonCredentialName                    = regexp.MustCompile(`(?i)^(?:` + structuredCredentialName + `)$`)
-	yamlCredentialNamePattern             = regexp.MustCompile(`(?i)^(?:` + yamlCredentialName + `)$`)
-	tomlCredentialName                    = regexp.MustCompile(`(?i)^(?:` + sensitivePrefixedName + `)$`)
-	tomlMultilineCredentialStart          = regexp.MustCompile(`(?i)(?:^|[^-a-z0-9_])(?:` + sensitivePrefixedName + `\b|` + tomlQuotedSensitiveKey + `)[ \t]*=[ \t]*(?:"""|''')`)
-	sensitiveCommandSubstitutionStart     = regexp.MustCompile(`(?i)(?:^|\s)(?:` + sensitiveShellFlagToken + `(?:[ \t]+|[ \t]*=[ \t]*)|` + sensitivePrefixedName + `\b[ \t]*[:=][ \t]*)(\$\(|\(|\x60)`)
-	powerShellHereStringCredential        = regexp.MustCompile(`(?i)(?:^|\s)(?:` + sensitiveShellFlagToken + `(?:` + shellCommandPathSeparator + `|[ \t]*=[ \t]*)|` + powerShellSensitiveVariable + `[ \t]*=[ \t]*)(@["']\r?\n)`)
-	powerShellCollectionCredential        = regexp.MustCompile(`(?i)(?:^|\s)` + powerShellSensitiveVariable + `[ \t]*=[ \t]*(@[({])`)
-	commandPromptQuotedSetAssignment      = regexp.MustCompile(`(?im)(?:^|[ \t;&|])set[ \t]+"` + sensitivePrefixedName + `\b[ \t]*=[ \t]*`)
-	commandPromptUnquotedSetAssignment    = regexp.MustCompile(`(?im)(?:^|[ \t;&|()])set[ \t]+` + sensitivePrefixedName + `\b[ \t]*=[ \t]*`)
-	bareEnvironmentDumpCredential         = regexp.MustCompile(`(?im)^([ \t]*(?:export[ \t]+)?(?:` + sensitivePrefixedName + `|(?-i:` + uppercaseSessionEnvironmentName + `))\b[ \t]*=[ \t]*)([^\s"'\\;&|<>()]+(?:[ \t]+[^\s"'\\;&|<>()]+)+)([ \t]*\r?)$`)
-	shellAssignmentWord                   = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*=`)
-	curlConfigCertificateEntry            = regexp.MustCompile(`(?im)^([ \t]*(?:cert|proxy-cert)` + curlConfigSeparator + `)`)
-	xmlCredentialElementStart             = regexp.MustCompile(`(?i)<(?:[a-z_][a-z0-9_.-]*:)?` + structuredCredentialName + `(?:[ \t\r\n/>])`)
-	xmlCredentialName                     = regexp.MustCompile(`(?i)^(?:` + structuredCredentialName + `)$`)
-	xmlElementStart                       = regexp.MustCompile(`<[a-zA-Z_:][a-zA-Z0-9_.:-]*(?:[ \t\r\n/>])`)
-	xmlAttribute                          = regexp.MustCompile(`(?s)(?:^|[ \t\r\n])([a-zA-Z_:][a-zA-Z0-9_.:-]*)[ \t\r\n]*=[ \t\r\n]*(?:"([^"]*)"|'([^']*)')`)
-	authorizationHeaderValueStart         = regexp.MustCompile(`(?i)\bauthorization[ \t]*[:=][ \t]*`)
-	standaloneBearerCandidate             = regexp.MustCompile(`(?i)\bbearer[ \t]+([-a-z0-9._~+/=]+)`)
-	envLongSplitStringOption              = regexp.MustCompile(`(?i)--split-string[ \t]*=`)
-	standaloneURLSafeCredentialCandidates = []*regexp.Regexp{
-		regexp.MustCompile(`AIza[A-Za-z0-9_-]{35}`),
-		regexp.MustCompile(`SG\.[A-Za-z0-9_-]{22}\.[A-Za-z0-9_-]{43}`),
+	rawCookieJarPattern                   = lazyMustCompile(`(?i)"cookies"[ \t\r\n]*:[ \t\r\n]*(?:\{|\[)`)
+	escapedCookieJarPattern               = lazyMustCompile(`(?i)\\"cookies\\"[ \t\r\n]*:[ \t\r\n]*(?:\{|\[)`)
+	rawRegistryAuthsPattern               = lazyMustCompile(`(?i)"auths"[ \t\r\n]*:[ \t\r\n]*\{`)
+	escapedRegistryAuthsPattern           = lazyMustCompile(`(?i)\\"auths\\"[ \t\r\n]*:[ \t\r\n]*\{`)
+	rawRequestHeaders                     = lazyMustCompile(`(?i)"requestHeaders"[ \t\r\n]*:[ \t\r\n]*\[`)
+	escapedRequestHeaders                 = lazyMustCompile(`(?i)\\"requestHeaders\\"[ \t\r\n]*:[ \t\r\n]*\[`)
+	rawStructuredValueStart               = lazyMustCompile(`(?i)"value"[ \t\r\n]*:[ \t\r\n]*"`)
+	escapedValueStart                     = lazyMustCompile(`(?i)\\"value\\"[ \t\r\n]*:[ \t\r\n]*\\"`)
+	rawCredentialObject                   = lazyMustCompile(`(?i)"` + structuredCredentialName + `"[ \t\r\n]*:[ \t\r\n]*\{`)
+	escapedCredentialObject               = lazyMustCompile(`(?i)\\"` + structuredCredentialName + `\\"[ \t\r\n]*:[ \t\r\n]*\{`)
+	rawCredentialArray                    = lazyMustCompile(`(?i)"` + structuredCredentialName + `"[ \t\r\n]*:[ \t\r\n]*\[`)
+	escapedCredentialArray                = lazyMustCompile(`(?i)\\"` + structuredCredentialName + `\\"[ \t\r\n]*:[ \t\r\n]*\[`)
+	credentialHeaderNamePattern           = lazyMustCompile(`(?i)^` + credentialHeaderName + `$`)
+	sensitiveAssignmentHeaderName         = lazyMustCompile(`(?i)^` + sensitivePrefixedName + `$`)
+	queryCredentialNamePattern            = lazyMustCompile(`(?i)^` + queryCredentialName + `$`)
+	queryParameterName                    = lazyMustCompile(`[?&]([^=&#\s"'<>]+)=`)
+	curlHeaderOptionStart                 = lazyMustCompile(`(?i)(^|\s)(` + curlHeaderOptionPrefix + `)`)
+	completeShellWord                     = lazyMustCompile(`^(` + fishShellWord + `)(` + singleLineShellTerminator + `)`)
+	netrcEntryStart                       = lazyMustCompile(`(?im)(?:^|[\r\n])[ \t]*(?:machine[ \t]+[^\s#]+|default)(?:[ \t\r\n]|\z)`)
+	netrcPasswordValue                    = lazyMustCompile(`(?i)(^|[ \t\r\n])(password[ \t]+)` + singleLineShellWord + `(` + singleLineShellTerminator + `)`)
+	booleanSecretMarker                   = lazyMustCompile(`(?i)(^|\s)(-{1,2}secret)([ \t]*=[ \t]*)(true|false|1|0|t|f)(` + singleLineShellTerminator + `)`)
+	yamlCredentialScalar                  = lazyMustCompile(`(?i)^([ \t]*(?:-[ \t]+)?` + yamlMappingKeyProperties + `(?:["']?` + yamlCredentialName + `["']?)[ \t]*:[ \t]*)(?:(?:[!&][^\s#]+)[ \t]*)*[|>](?:[+-]?[1-9]?|[1-9][+-]?)[ \t]*(?:#[^\r\n]*)?$`)
+	yamlCredentialMapping                 = lazyMustCompile(`(?i)^([ \t]*(?:-[ \t]+)?` + yamlMappingKeyProperties + `(?:["']?` + yamlCredentialName + `["']?)[ \t]*:)[ \t]*(?:(?:[!&][^\s#]+)[ \t]*)*(?:#[^\r\n]*)?$`)
+	yamlCredentialPlainScalar             = lazyMustCompile(`(?i)^([ \t]*(?:-[ \t]+)?` + yamlMappingKeyProperties + `(?:["']?` + yamlCredentialName + `["']?)[ \t]*:[ \t]*)[^"'[\{\s\r\n][^\r\n]*$`)
+	yamlCredentialFlowStart               = lazyMustCompile(`(?im)^([ \t]*(?:-[ \t]+)?` + yamlMappingKeyProperties + `(?:["']?` + yamlCredentialName + `["']?)[ \t]*:[ \t]*)([\[{])`)
+	yamlExplicitCredentialKey             = lazyMustCompile(`(?i)^[ \t]*(?:-[ \t]+)?\?[ \t]+` + yamlMappingKeyProperties + `(?:["']?` + yamlCredentialName + `["']?)[ \t]*(?:#[^\r\n]*)?$`)
+	yamlBlockScalarIndicator              = lazyMustCompile(`^[|>](?:[+-]?[1-9]?|[1-9][+-]?)$`)
+	yamlCredentialAlias                   = lazyMustCompile(`(?im)^[ \t]*(?:-[ \t]+)?` + yamlMappingKeyProperties + `(?:["']?` + yamlCredentialName + `["']?)[ \t]*:[ \t]*\*([a-z0-9_-]+)[ \t]*(?:#[^\r\n]*)?$`)
+	yamlDocumentBoundary                  = lazyMustCompile(`^(?:---|\.\.\.)(?:[ \t]|$)`)
+	yamlValueAlias                        = lazyMustCompile(`\*([a-zA-Z0-9_-]+)\b`)
+	yamlAnchor                            = lazyMustCompile(`&([a-zA-Z0-9_-]+)\b`)
+	yamlSensitiveNameAnchor               = lazyMustCompile(`(?im)&([a-zA-Z0-9_-]+)[ \t]+(?:(?:` + yamlNodeTag + `)[ \t]+)*(?:["']?` + yamlCredentialName + `["']?)[ \t]*(?:#[^\r\n]*)?$`)
+	yamlAliasMappingKey                   = lazyMustCompile(`(?i)^([ \t]*(?:-[ \t]+)?)(\*([a-zA-Z0-9_-]+))([ \t]*:)`)
+	yamlExplicitAliasKey                  = lazyMustCompile(`(?i)^([ \t]*(?:-[ \t]+)?\?[ \t]+)(\*([a-zA-Z0-9_-]+))([ \t]*(?:#[^\r\n]*)?)$`)
+	jsonQuotedScalarLine                  = lazyMustCompile(`^"(?:\\.|[^"\\])*"[ \t]*,?[ \t]*$`)
+	jsonCredentialName                    = lazyMustCompile(`(?i)^(?:` + structuredCredentialName + `)$`)
+	yamlCredentialNamePattern             = lazyMustCompile(`(?i)^(?:` + yamlCredentialName + `)$`)
+	tomlCredentialName                    = lazyMustCompile(`(?i)^(?:` + sensitivePrefixedName + `)$`)
+	tomlMultilineCredentialStart          = lazyMustCompile(`(?i)(?:^|[^-a-z0-9_])(?:` + sensitivePrefixedName + `\b|` + tomlQuotedSensitiveKey + `)[ \t]*=[ \t]*(?:"""|''')`)
+	sensitiveCommandSubstitutionStart     = lazyMustCompile(`(?i)(?:^|\s)(?:` + sensitiveShellFlagToken + `(?:[ \t]+|[ \t]*=[ \t]*)|` + sensitivePrefixedName + `\b[ \t]*[:=][ \t]*)(\$\(|\(|\x60)`)
+	powerShellHereStringCredential        = lazyMustCompile(`(?i)(?:^|\s)(?:` + sensitiveShellFlagToken + `(?:` + shellCommandPathSeparator + `|[ \t]*=[ \t]*)|` + powerShellSensitiveVariable + `[ \t]*=[ \t]*)(@["']\r?\n)`)
+	powerShellCollectionCredential        = lazyMustCompile(`(?i)(?:^|\s)` + powerShellSensitiveVariable + `[ \t]*=[ \t]*(@[({])`)
+	commandPromptQuotedSetAssignment      = lazyMustCompile(`(?im)(?:^|[ \t;&|])set[ \t]+"` + sensitivePrefixedName + `\b[ \t]*=[ \t]*`)
+	commandPromptUnquotedSetAssignment    = lazyMustCompile(`(?im)(?:^|[ \t;&|()])set[ \t]+` + sensitivePrefixedName + `\b[ \t]*=[ \t]*`)
+	bareEnvironmentDumpCredential         = lazyMustCompile(`(?im)^([ \t]*(?:export[ \t]+)?(?:` + sensitivePrefixedName + `|(?-i:` + uppercaseSessionEnvironmentName + `))\b[ \t]*=[ \t]*)([^\s"'\\;&|<>()]+(?:[ \t]+[^\s"'\\;&|<>()]+)+)([ \t]*\r?)$`)
+	shellAssignmentWord                   = lazyMustCompile(`^[A-Za-z_][A-Za-z0-9_]*=`)
+	curlConfigCertificateEntry            = lazyMustCompile(`(?im)^([ \t]*(?:cert|proxy-cert)` + curlConfigSeparator + `)`)
+	xmlCredentialElementStart             = lazyMustCompile(`(?i)<(?:[a-z_][a-z0-9_.-]*:)?` + structuredCredentialName + `(?:[ \t\r\n/>])`)
+	xmlCredentialName                     = lazyMustCompile(`(?i)^(?:` + structuredCredentialName + `)$`)
+	xmlElementStart                       = lazyMustCompile(`<[a-zA-Z_:][a-zA-Z0-9_.:-]*(?:[ \t\r\n/>])`)
+	xmlAttribute                          = lazyMustCompile(`(?s)(?:^|[ \t\r\n])([a-zA-Z_:][a-zA-Z0-9_.:-]*)[ \t\r\n]*=[ \t\r\n]*(?:"([^"]*)"|'([^']*)')`)
+	authorizationHeaderValueStart         = lazyMustCompile(`(?i)\bauthorization[ \t]*[:=][ \t]*`)
+	standaloneBearerCandidate             = lazyMustCompile(`(?i)\bbearer[ \t]+([-a-z0-9._~+/=]+)`)
+	envLongSplitStringOption              = lazyMustCompile(`(?i)--split-string[ \t]*=`)
+	standaloneURLSafeCredentialCandidates = []*lazyRegexp{
+		lazyMustCompile(`AIza[A-Za-z0-9_-]{35}`),
+		lazyMustCompile(`SG\.[A-Za-z0-9_-]{22}\.[A-Za-z0-9_-]{43}`),
 	}
-	xcodeCloudEnvVarSetCommand = regexp.MustCompile(`(?i)(?:\basc\b|"asc"|'asc')` + shellCommandPathSeparator + `web` + shellCommandPathSeparator + `xcode-cloud` + shellCommandPathSeparator + `env-vars` + shellCommandPathSeparator + `(?:shared` + shellCommandPathSeparator + `)?set\b`)
+	xcodeCloudEnvVarSetCommand = lazyMustCompile(`(?i)(?:\basc\b|"asc"|'asc')` + shellCommandPathSeparator + `web` + shellCommandPathSeparator + `xcode-cloud` + shellCommandPathSeparator + `env-vars` + shellCommandPathSeparator + `(?:shared` + shellCommandPathSeparator + `)?set\b`)
 )
 
 var structuredContainerValueRedactionRules = []redactionRule{
 	{
-		pattern:     regexp.MustCompile(`(?i)("value"[ \t\r\n]*:[ \t\r\n]*")(?:\\.|[^"\\\r\n])*(")([ \t\r\n]*(?:[,}\]]|\z))`),
+		pattern:     lazyMustCompile(`(?i)("value"[ \t\r\n]*:[ \t\r\n]*")(?:\\.|[^"\\\r\n])*(")([ \t\r\n]*(?:[,}\]]|\z))`),
 		replacement: `${1}` + redactionMarker + `${2}${3}`,
 	},
 	{
-		pattern:     regexp.MustCompile(`(?i)(\\"value\\"[ \t\r\n]*:[ \t\r\n]*\\")(?:\\.|[^"\\\r\n])*?(\\")([ \t\r\n]*(?:[,}\]]|\z))`),
+		pattern:     lazyMustCompile(`(?i)(\\"value\\"[ \t\r\n]*:[ \t\r\n]*\\")(?:\\.|[^"\\\r\n])*?(\\")([ \t\r\n]*(?:[,}\]]|\z))`),
 		replacement: `${1}` + redactionMarker + `${2}${3}`,
 	},
 }
 
 var registryAuthValueRedactionRules = []redactionRule{
 	{
-		pattern:     regexp.MustCompile(`(?i)("auth"[ \t\r\n]*:[ \t\r\n]*")(?:\\.|[^"\\\r\n])*(")`),
+		pattern:     lazyMustCompile(`(?i)("auth"[ \t\r\n]*:[ \t\r\n]*")(?:\\.|[^"\\\r\n])*(")`),
 		replacement: `${1}` + redactionMarker + `${2}`,
 	},
 	{
-		pattern:     regexp.MustCompile(`(?i)(\\"auth\\"[ \t\r\n]*:[ \t\r\n]*\\")(?:\\.|[^"\\\r\n])*?(\\")`),
+		pattern:     lazyMustCompile(`(?i)(\\"auth\\"[ \t\r\n]*:[ \t\r\n]*\\")(?:\\.|[^"\\\r\n])*?(\\")`),
 		replacement: `${1}` + redactionMarker + `${2}`,
 	},
 }
 
 var curlUserCredentialRedactionRules = []redactionRule{
 	{
-		pattern:     regexp.MustCompile(`(?i)(^|\s)((?:-u|--(?:proxy-)?user)\b` + curlOptionValueSeparator + `)(?:\[REDACTED(?: PRIVATE KEY)?\]|` + credentialPairValue + `)`),
+		pattern:     lazyMustCompile(`(?i)(^|\s)((?:-u|--(?:proxy-)?user)\b` + curlOptionValueSeparator + `)(?:\[REDACTED(?: PRIVATE KEY)?\]|` + credentialPairValue + `)`),
 		replacement: `${1}${2}` + redactionMarker,
 	},
 	{
-		pattern:     regexp.MustCompile(`(?i)(^|\s)((?:-u|--(?:proxy-)?user)\b[ \t]*=[ \t]*)(?:\[REDACTED(?: PRIVATE KEY)?\]|` + credentialPairValue + `)`),
+		pattern:     lazyMustCompile(`(?i)(^|\s)((?:-u|--(?:proxy-)?user)\b[ \t]*=[ \t]*)(?:\[REDACTED(?: PRIVATE KEY)?\]|` + credentialPairValue + `)`),
 		replacement: `${1}${2}` + redactionMarker,
 	},
 	{
-		pattern:     regexp.MustCompile(`(?i)(^|\s)(-u)(?:\[REDACTED(?: PRIVATE KEY)?\]|` + credentialPairValue + `)`),
+		pattern:     lazyMustCompile(`(?i)(^|\s)(-u)(?:\[REDACTED(?: PRIVATE KEY)?\]|` + credentialPairValue + `)`),
 		replacement: `${1}${2}` + redactionMarker,
 	},
 }
 
 var curlCertificateCredentialRedactionRules = []redactionRule{
 	{
-		pattern:     regexp.MustCompile(`(?i)(^|\s)(` + curlCertOptionPrefix + `)(")((?:` + escapedQuotedCharacter + `|[^"\\:\r\n])*):(?:` + escapedQuotedCharacter + `|[^"\\])+(")`),
+		pattern:     lazyMustCompile(`(?i)(^|\s)(` + curlCertOptionPrefix + `)(")((?:` + escapedQuotedCharacter + `|[^"\\:\r\n])*):(?:` + escapedQuotedCharacter + `|[^"\\])+(")`),
 		replacement: `${1}${2}${3}${4}:` + redactionMarker + `${5}`,
 	},
 	{
-		pattern:     regexp.MustCompile(`(?i)(^|\s)(` + curlCertOptionPrefix + `)(')((?:` + escapedQuotedCharacter + `|[^'\\:\r\n])*):(?:` + escapedQuotedCharacter + `|[^'\\])+(')`),
+		pattern:     lazyMustCompile(`(?i)(^|\s)(` + curlCertOptionPrefix + `)(')((?:` + escapedQuotedCharacter + `|[^'\\:\r\n])*):(?:` + escapedQuotedCharacter + `|[^'\\])+(')`),
 		replacement: `${1}${2}${3}${4}:` + redactionMarker + `${5}`,
 	},
 	{
-		pattern:     regexp.MustCompile(`(?i)(^|\s)(` + curlCertOptionPrefix + `)(` + curlCertShellPath + `):` + singleLineShellWord),
+		pattern:     lazyMustCompile(`(?i)(^|\s)(` + curlCertOptionPrefix + `)(` + curlCertShellPath + `):` + singleLineShellWord),
 		replacement: `${1}${2}${3}:` + redactionMarker,
 	},
 }
 
 var curlArgumentCredentialRedactionRules = []redactionRule{
 	{
-		pattern:     regexp.MustCompile(`(?i)(^|\s)(` + curlHeaderOptionPrefix + `)(` + credentialHeaderName + `)[ \t]*:[ \t]*(?:\\(?:\r?\n|[^\r\n])|[^\s;&|<>()])+`),
+		pattern:     lazyMustCompile(`(?i)(^|\s)(` + curlHeaderOptionPrefix + `)(` + credentialHeaderName + `)[ \t]*:[ \t]*(?:\\(?:\r?\n|[^\r\n])|[^\s;&|<>()])+`),
 		replacement: `${1}${2}${3}:` + redactionMarker,
 	},
 	{
-		pattern:     regexp.MustCompile(`(?i)(^|\s)((?:(?-i:-b)|--cookie)\b[ \t]+)(?:\[REDACTED(?: PRIVATE KEY)?\]|` + cookieDataValue + `)`),
+		pattern:     lazyMustCompile(`(?i)(^|\s)((?:(?-i:-b)|--cookie)\b[ \t]+)(?:\[REDACTED(?: PRIVATE KEY)?\]|` + cookieDataValue + `)`),
 		replacement: `${1}${2}` + redactionMarker,
 	},
 	{
-		pattern:     regexp.MustCompile(`(?i)(^|\s)((?:(?-i:-b)|--cookie)\b[ \t]*=[ \t]*)(?:\[REDACTED(?: PRIVATE KEY)?\]|` + cookieDataValue + `)`),
+		pattern:     lazyMustCompile(`(?i)(^|\s)((?:(?-i:-b)|--cookie)\b[ \t]*=[ \t]*)(?:\[REDACTED(?: PRIVATE KEY)?\]|` + cookieDataValue + `)`),
 		replacement: `${1}${2}` + redactionMarker,
 	},
 	{
-		pattern:     regexp.MustCompile(`(?i)(^|\s)((?-i:-b))(?:\[REDACTED(?: PRIVATE KEY)?\]|` + cookieDataValue + `)`),
+		pattern:     lazyMustCompile(`(?i)(^|\s)((?-i:-b))(?:\[REDACTED(?: PRIVATE KEY)?\]|` + cookieDataValue + `)`),
 		replacement: `${1}${2}` + redactionMarker,
 	},
 	{
-		pattern:     regexp.MustCompile(`(?i)(^|\s)(` + curlFormDataOptionPrefix + `)(")((?:\\.|[^"\\])*?` + sensitivePrefixedName + `\b[ \t]*=[ \t]*)(?:\\.|[^"\\])*(")`),
+		pattern:     lazyMustCompile(`(?i)(^|\s)(` + curlFormDataOptionPrefix + `)(")((?:\\.|[^"\\])*?` + sensitivePrefixedName + `\b[ \t]*=[ \t]*)(?:\\.|[^"\\])*(")`),
 		replacement: `${1}${2}${3}${4}` + redactionMarker + `${5}`,
 	},
 	{
-		pattern:     regexp.MustCompile(`(?i)(^|\s)(` + curlFormDataOptionPrefix + `)(')([^']*?` + sensitivePrefixedName + `\b[ \t]*=[ \t]*)[^']*(')`),
+		pattern:     lazyMustCompile(`(?i)(^|\s)(` + curlFormDataOptionPrefix + `)(')([^']*?` + sensitivePrefixedName + `\b[ \t]*=[ \t]*)[^']*(')`),
 		replacement: `${1}${2}${3}${4}` + redactionMarker + `${5}`,
 	},
 }
@@ -311,205 +360,205 @@ var curlArgumentCredentialRedactionRules = []redactionRule{
 // line cannot claim a later command's opening quote as its closer.
 var singleLineShellWordRedactionRules = []redactionRule{
 	{
-		pattern:     regexp.MustCompile(`(?m)(^|[ \t;&|])(` + uppercaseSessionEnvironmentName + `[ \t]*=[ \t]*)` + singleLineShellWord + `(` + singleLineShellTerminator + `)`),
+		pattern:     lazyMustCompile(`(?m)(^|[ \t;&|])(` + uppercaseSessionEnvironmentName + `[ \t]*=[ \t]*)` + singleLineShellWord + `(` + singleLineShellTerminator + `)`),
 		replacement: `${1}${2}` + redactionMarker + `${3}`,
 	},
 	{
-		pattern:     regexp.MustCompile(`(?im)(^|[ \t;&|])(` + powerShellSensitiveVariable + `[ \t]*=[ \t]*)(?:&[ \t]+)?(?:[a-z0-9_.-]+\\)?ConvertTo-SecureString[ \t]+(?:` + powerShellSecureStringSwitch + `)*(?:-String(?:[ \t]+|[ \t]*:[ \t]*))?` + fishShellWord + `(` + singleLineShellTerminator + `)`),
+		pattern:     lazyMustCompile(`(?im)(^|[ \t;&|])(` + powerShellSensitiveVariable + `[ \t]*=[ \t]*)(?:&[ \t]+)?(?:[a-z0-9_.-]+\\)?ConvertTo-SecureString[ \t]+(?:` + powerShellSecureStringSwitch + `)*(?:-String(?:[ \t]+|[ \t]*:[ \t]*))?` + fishShellWord + `(` + singleLineShellTerminator + `)`),
 		replacement: `${1}${2}` + redactionMarker + `${3}`,
 	},
 	{
-		pattern:     regexp.MustCompile(`(?im)(^|[;&|][ \t]*)([ \t]*set[ \t]+(?:(?:--|-[a-z]+|--[a-z][a-z-]*)[ \t]+)*` + sensitivePrefixedName + `\b[ \t]+)` + fishShellWord + `(?:[ \t]+` + fishShellWord + `)*`),
+		pattern:     lazyMustCompile(`(?im)(^|[;&|][ \t]*)([ \t]*set[ \t]+(?:(?:--|-[a-z]+|--[a-z][a-z-]*)[ \t]+)*` + sensitivePrefixedName + `\b[ \t]+)` + fishShellWord + `(?:[ \t]+` + fishShellWord + `)*`),
 		replacement: `${1}${2}` + redactionMarker,
 	},
 	{
-		pattern:     regexp.MustCompile(`(?i)(^|\s)(` + sensitiveOrSecretShellToken + `[ \t]*=[ \t]*)` + fishShellWord + `(` + singleLineShellTerminator + `)`),
+		pattern:     lazyMustCompile(`(?i)(^|\s)(` + sensitiveOrSecretShellToken + `[ \t]*=[ \t]*)` + fishShellWord + `(` + singleLineShellTerminator + `)`),
 		replacement: `${1}${2}` + redactionMarker + `${3}`,
 	},
 	{
-		pattern:     regexp.MustCompile(`(?i)(^|[^-a-z0-9_])(` + sensitivePrefixedName + `\b[ \t]*=[ \t]*)` + singleLineShellWord + `(` + singleLineShellTerminator + `)`),
+		pattern:     lazyMustCompile(`(?i)(^|[^-a-z0-9_])(` + sensitivePrefixedName + `\b[ \t]*=[ \t]*)` + singleLineShellWord + `(` + singleLineShellTerminator + `)`),
 		replacement: `${1}${2}` + redactionMarker + `${3}`,
 	},
 }
 
 var commandScopedSensitiveFlagRedactionRules = []redactionRule{
 	{
-		pattern:     regexp.MustCompile(`(?i)(^|\s)(` + sensitiveShellFlagToken + shellCommandPathSeparator + `)` + fishShellWord + `(` + singleLineShellTerminator + `)`),
+		pattern:     lazyMustCompile(`(?i)(^|\s)(` + sensitiveShellFlagToken + shellCommandPathSeparator + `)` + fishShellWord + `(` + singleLineShellTerminator + `)`),
 		replacement: `${1}${2}` + redactionMarker + `${3}`,
 	},
 	{
-		pattern:     regexp.MustCompile(`(?i)(^|\s)(` + sensitiveShellFlagToken + shellCommandPathSeparator + `)(?:\[REDACTED(?: PRIVATE KEY)?\]|` + escapeAwareQuotedValue + `|` + unterminatedQuotedValue + `|` + shellUnquotedValue + `)`),
+		pattern:     lazyMustCompile(`(?i)(^|\s)(` + sensitiveShellFlagToken + shellCommandPathSeparator + `)(?:\[REDACTED(?: PRIVATE KEY)?\]|` + escapeAwareQuotedValue + `|` + unterminatedQuotedValue + `|` + shellUnquotedValue + `)`),
 		replacement: `${1}${2}` + redactionMarker,
 	},
 }
 
 var sensitiveTextRedactionRules = []redactionRule{
 	{
-		pattern:     regexp.MustCompile(`(?s)-----BEGIN[ \t]+(?:[A-Z0-9]+[ \t]+)*PRIVATE[ \t]+KEY(?:[ \t]+BLOCK)?-----.*?-----END[ \t]+(?:[A-Z0-9]+[ \t]+)*PRIVATE[ \t]+KEY(?:[ \t]+BLOCK)?-----`),
+		pattern:     lazyMustCompile(`(?s)-----BEGIN[ \t]+(?:[A-Z0-9]+[ \t]+)*PRIVATE[ \t]+KEY(?:[ \t]+BLOCK)?-----.*?-----END[ \t]+(?:[A-Z0-9]+[ \t]+)*PRIVATE[ \t]+KEY(?:[ \t]+BLOCK)?-----`),
 		replacement: privateKeyRedactionMarker,
 	},
 	{
-		pattern:     regexp.MustCompile(`(?s)-----BEGIN[ \t]+(?:[A-Z0-9]+[ \t]+)*PRIVATE[ \t]+KEY(?:[ \t]+BLOCK)?-----.*\z`),
+		pattern:     lazyMustCompile(`(?s)-----BEGIN[ \t]+(?:[A-Z0-9]+[ \t]+)*PRIVATE[ \t]+KEY(?:[ \t]+BLOCK)?-----.*\z`),
 		replacement: privateKeyRedactionMarker,
 	},
 	{
-		pattern:     regexp.MustCompile(`(?im)^([ \t]*(?:redirect_)?http_` + cgiCredentialHeaderName + `\b[ \t]*=[ \t]*)[^\r\n]*(\r?)$`),
+		pattern:     lazyMustCompile(`(?im)^([ \t]*(?:redirect_)?http_` + cgiCredentialHeaderName + `\b[ \t]*=[ \t]*)[^\r\n]*(\r?)$`),
 		replacement: `${1}` + redactionMarker + `${2}`,
 	},
 	{
-		pattern:     regexp.MustCompile(`(?m)^(` + passwordFileHostField + `:(?:[0-9]+|\*):` + passwordFileField + `:` + passwordFileField + `:)` + passwordFileField + `(\r?)$`),
+		pattern:     lazyMustCompile(`(?m)^(` + passwordFileHostField + `:(?:[0-9]+|\*):` + passwordFileField + `:` + passwordFileField + `:)` + passwordFileField + `(\r?)$`),
 		replacement: `${1}` + redactionMarker + `${2}`,
 	},
 	{
-		pattern:     regexp.MustCompile(`(?im)^([ \t]*(?:-[ \t]+)?` + yamlMappingKeyProperties + yamlCredentialName + `[ \t]*:[ \t]*)(?:\[[^\]\r\n]*\]|\{[^}\r\n]*\})`),
+		pattern:     lazyMustCompile(`(?im)^([ \t]*(?:-[ \t]+)?` + yamlMappingKeyProperties + yamlCredentialName + `[ \t]*:[ \t]*)(?:\[[^\]\r\n]*\]|\{[^}\r\n]*\})`),
 		replacement: `${1}` + redactionMarker,
 	},
 	{
-		pattern:     regexp.MustCompile(`(?im)^([ \t]*(?:-[ \t]+)?` + yamlMappingKeyProperties + `["']` + yamlCredentialName + `["'][ \t]*:[ \t]*)(?:\[[ \t]*[^"'\]\r\n][^\]\r\n]*\]|\{[ \t]*[^"'}\r\n][^}\r\n]*\})`),
+		pattern:     lazyMustCompile(`(?im)^([ \t]*(?:-[ \t]+)?` + yamlMappingKeyProperties + `["']` + yamlCredentialName + `["'][ \t]*:[ \t]*)(?:\[[ \t]*[^"'\]\r\n][^\]\r\n]*\]|\{[ \t]*[^"'}\r\n][^}\r\n]*\})`),
 		replacement: `${1}` + redactionMarker,
 	},
 	{
-		pattern:     regexp.MustCompile(`(?im)^([ \t]*` + yamlMappingKeyProperties + `(?:["']?` + yamlCredentialName + `["']?)[ \t]*:[ \t]*)(?:[^"'[{\s\r\n][^\r\n]*)(\r?)$`),
+		pattern:     lazyMustCompile(`(?im)^([ \t]*` + yamlMappingKeyProperties + `(?:["']?` + yamlCredentialName + `["']?)[ \t]*:[ \t]*)(?:[^"'[{\s\r\n][^\r\n]*)(\r?)$`),
 		replacement: `${1}` + redactionMarker + `${2}`,
 	},
 	{
-		pattern:     regexp.MustCompile(`(?i)(["']` + structuredCredentialName + `["'][ \t\r\n]*:[ \t\r\n]*\[)[ \t\r\n]*(?:"(?:\\.|[^"\\\r\n])*"(?:[ \t\r\n]*,[ \t\r\n]*"(?:\\.|[^"\\\r\n])*")*)[ \t\r\n]*(\])`),
+		pattern:     lazyMustCompile(`(?i)(["']` + structuredCredentialName + `["'][ \t\r\n]*:[ \t\r\n]*\[)[ \t\r\n]*(?:"(?:\\.|[^"\\\r\n])*"(?:[ \t\r\n]*,[ \t\r\n]*"(?:\\.|[^"\\\r\n])*")*)[ \t\r\n]*(\])`),
 		replacement: `${1}"` + redactionMarker + `"${2}`,
 	},
 	{
-		pattern:     regexp.MustCompile(`(?i)(\\"` + structuredCredentialName + `\\"[ \t\r\n]*:[ \t\r\n]*\[)[ \t\r\n]*(?:\\"(?:\\.|[^"\\\r\n])*?\\"(?:[ \t\r\n]*,[ \t\r\n]*\\"(?:\\.|[^"\\\r\n])*?\\")*)[ \t\r\n]*(\])`),
+		pattern:     lazyMustCompile(`(?i)(\\"` + structuredCredentialName + `\\"[ \t\r\n]*:[ \t\r\n]*\[)[ \t\r\n]*(?:\\"(?:\\.|[^"\\\r\n])*?\\"(?:[ \t\r\n]*,[ \t\r\n]*\\"(?:\\.|[^"\\\r\n])*?\\")*)[ \t\r\n]*(\])`),
 		replacement: `${1}\"` + redactionMarker + `\"${2}`,
 	},
 	{
-		pattern:     regexp.MustCompile(`(?i)("securitycode"[ \t\r\n]*:[ \t\r\n]*\{[ \t\r\n]*"code"[ \t\r\n]*:[ \t\r\n]*")(?:\\.|[^"\\\r\n])*(")`),
+		pattern:     lazyMustCompile(`(?i)("securitycode"[ \t\r\n]*:[ \t\r\n]*\{[ \t\r\n]*"code"[ \t\r\n]*:[ \t\r\n]*")(?:\\.|[^"\\\r\n])*(")`),
 		replacement: `${1}` + redactionMarker + `${2}`,
 	},
 	{
-		pattern:     regexp.MustCompile(`(?i)(\\"securitycode\\"[ \t\r\n]*:[ \t\r\n]*\{[ \t\r\n]*\\"code\\"[ \t\r\n]*:[ \t\r\n]*\\")(?:\\.|[^"\\\r\n])*?(\\")`),
+		pattern:     lazyMustCompile(`(?i)(\\"securitycode\\"[ \t\r\n]*:[ \t\r\n]*\{[ \t\r\n]*\\"code\\"[ \t\r\n]*:[ \t\r\n]*\\")(?:\\.|[^"\\\r\n])*?(\\")`),
 		replacement: `${1}` + redactionMarker + `${2}`,
 	},
 	{
-		pattern:     regexp.MustCompile(`(?i)("authorization[ \t]*:[ \t]*)(?:` + escapedQuotedCharacter + `|[^"\\])*(")`),
+		pattern:     lazyMustCompile(`(?i)("authorization[ \t]*:[ \t]*)(?:` + escapedQuotedCharacter + `|[^"\\])*(")`),
 		replacement: `${1}` + redactionMarker + `${2}`,
 	},
 	{
-		pattern:     regexp.MustCompile(`(?i)('authorization[ \t]*:[ \t]*)(?:` + escapedQuotedCharacter + `|[^'\\])*(')`),
+		pattern:     lazyMustCompile(`(?i)('authorization[ \t]*:[ \t]*)(?:` + escapedQuotedCharacter + `|[^'\\])*(')`),
 		replacement: `${1}` + redactionMarker + `${2}`,
 	},
 	{
-		pattern:     regexp.MustCompile(`(?i)\bauthorization[ \t]*[:=][ \t]*(?:bearer|basic|token)[ \t]+(?:` + escapeAwareQuotedValue + `|` + unterminatedQuotedValue + `|[^\s,;"']+)` + foldedHeaderContinuation),
+		pattern:     lazyMustCompile(`(?i)\bauthorization[ \t]*[:=][ \t]*(?:bearer|basic|token)[ \t]+(?:` + escapeAwareQuotedValue + `|` + unterminatedQuotedValue + `|[^\s,;"']+)` + foldedHeaderContinuation),
 		replacement: "Authorization: " + redactionMarker,
 	},
 	{
-		pattern:     regexp.MustCompile(`(?i)\bauthorization[ \t]*[:=][ \t]*[a-z][a-z0-9_-]*[ \t]+[^\s=,]+[ \t]*=[^\r\n]+` + foldedHeaderContinuation),
+		pattern:     lazyMustCompile(`(?i)\bauthorization[ \t]*[:=][ \t]*[a-z][a-z0-9_-]*[ \t]+[^\s=,]+[ \t]*=[^\r\n]+` + foldedHeaderContinuation),
 		replacement: "Authorization: " + redactionMarker,
 	},
 	{
-		pattern:     regexp.MustCompile(`(?i)("` + traceCredentialHeader + `[ \t]*:[ \t]*)(?:` + escapedQuotedCharacter + `|[^"\\])*(")`),
+		pattern:     lazyMustCompile(`(?i)("` + traceCredentialHeader + `[ \t]*:[ \t]*)(?:` + escapedQuotedCharacter + `|[^"\\])*(")`),
 		replacement: `${1}` + redactionMarker + `${2}`,
 	},
 	{
-		pattern:     regexp.MustCompile(`(?i)('` + traceCredentialHeader + `[ \t]*:[ \t]*)(?:` + escapedQuotedCharacter + `|[^'\\])*(')`),
+		pattern:     lazyMustCompile(`(?i)('` + traceCredentialHeader + `[ \t]*:[ \t]*)(?:` + escapedQuotedCharacter + `|[^'\\])*(')`),
 		replacement: `${1}` + redactionMarker + `${2}`,
 	},
 	{
-		pattern:     regexp.MustCompile(`(?i)\b(` + credentialHeaderName + `|` + sensitivePrefixedName + `)[ \t]*:\[[^\]\r\n]*\]`),
+		pattern:     lazyMustCompile(`(?i)\b(` + credentialHeaderName + `|` + sensitivePrefixedName + `)[ \t]*:\[[^\]\r\n]*\]`),
 		replacement: `${1}:` + redactionMarker,
 	},
 	{
-		pattern:     regexp.MustCompile(`(?im)^([ \t]*(?:(?:[<>][ \t]*)?` + traceCredentialHeader + `|[<>][ \t]*` + sensitivePrefixedName + `))[ \t]*:[ \t]*[^\r\n]+` + foldedHeaderContinuation),
+		pattern:     lazyMustCompile(`(?im)^([ \t]*(?:(?:[<>][ \t]*)?` + traceCredentialHeader + `|[<>][ \t]*` + sensitivePrefixedName + `))[ \t]*:[ \t]*[^\r\n]+` + foldedHeaderContinuation),
 		replacement: `${1}: ` + redactionMarker,
 	},
 	{
-		pattern:     regexp.MustCompile(`(?i)(^|[\s"'(<>{}\[\],;])((?:cookie|set-cookie)[ \t]*:[ \t]*)(?:` + cookieDataQuoted + `|` + cookieDataUnquoted + `)(?:[ \t]*;[ \t]*` + cookieDataUnquoted + `)*` + foldedHeaderContinuation),
+		pattern:     lazyMustCompile(`(?i)(^|[\s"'(<>{}\[\],;])((?:cookie|set-cookie)[ \t]*:[ \t]*)(?:` + cookieDataQuoted + `|` + cookieDataUnquoted + `)(?:[ \t]*;[ \t]*` + cookieDataUnquoted + `)*` + foldedHeaderContinuation),
 		replacement: `${1}${2}` + redactionMarker,
 	},
 	{
-		pattern:     regexp.MustCompile(`(?i)(^|[\s"'(<>{}\[\],;])((?:` + traceCredentialHeader + `)[ \t]*:[ \t]*)(?:\[REDACTED(?: PRIVATE KEY)?\]|` + escapeAwareQuotedValue + `|` + unterminatedQuotedValue + `|[^\s,;"'()<>{}\[\]]+)` + foldedHeaderContinuation),
+		pattern:     lazyMustCompile(`(?i)(^|[\s"'(<>{}\[\],;])((?:` + traceCredentialHeader + `)[ \t]*:[ \t]*)(?:\[REDACTED(?: PRIVATE KEY)?\]|` + escapeAwareQuotedValue + `|` + unterminatedQuotedValue + `|[^\s,;"'()<>{}\[\]]+)` + foldedHeaderContinuation),
 		replacement: `${1}${2}` + redactionMarker,
 	},
 	{
-		pattern:     regexp.MustCompile(`(?i)\b([a-z][a-z0-9+.-]*://)[^/?#\s@]+@`),
+		pattern:     lazyMustCompile(`(?i)\b([a-z][a-z0-9+.-]*://)[^/?#\s@]+@`),
 		replacement: `${1}` + redactionMarker + `@`,
 	},
 	{
-		pattern:     regexp.MustCompile(`(?i)(^|[\s"'=])[^/?#\s@:]+:[^/?#\s@]+@([a-z0-9.-]+:[^\s"'<>]+)`),
+		pattern:     lazyMustCompile(`(?i)(^|[\s"'=])[^/?#\s@:]+:[^/?#\s@]+@([a-z0-9.-]+:[^\s"'<>]+)`),
 		replacement: `${1}` + redactionMarker + `@${2}`,
 	},
 	{
-		pattern:     regexp.MustCompile(`(?i)\b(https://hooks\.slack(?:-gov)?\.com/services/)[^?#\s"'()<>{}\[\],;]+`),
+		pattern:     lazyMustCompile(`(?i)\b(https://hooks\.slack(?:-gov)?\.com/services/)[^?#\s"'()<>{}\[\],;]+`),
 		replacement: `${1}` + redactionMarker,
 	},
 	{
-		pattern:     regexp.MustCompile(`(?i)\b(https://(?:(?:canary|ptb)\.)?discord(?:app)?\.com/api(?:/v[0-9]+)?/webhooks/[0-9]+/)[^?#\s"'()<>{}\[\],;]+`),
+		pattern:     lazyMustCompile(`(?i)\b(https://(?:(?:canary|ptb)\.)?discord(?:app)?\.com/api(?:/v[0-9]+)?/webhooks/[0-9]+/)[^?#\s"'()<>{}\[\],;]+`),
 		replacement: `${1}` + redactionMarker,
 	},
 	{
-		pattern:     regexp.MustCompile(`(?i)([?&]` + queryCredentialName + `=)[^&#\s"'<>]+`),
+		pattern:     lazyMustCompile(`(?i)([?&]` + queryCredentialName + `=)[^&#\s"'<>]+`),
 		replacement: `${1}` + redactionMarker,
 	},
 	{
-		pattern:     regexp.MustCompile(`(?im)^([ \t]*(?:header|proxy-header)` + curlConfigSeparator + `")(` + credentialHeaderName + `|` + sensitivePrefixedName + `)([ \t]*:[ \t]*)(?:\\.|[^"\\\r\n])+(")`),
+		pattern:     lazyMustCompile(`(?im)^([ \t]*(?:header|proxy-header)` + curlConfigSeparator + `")(` + credentialHeaderName + `|` + sensitivePrefixedName + `)([ \t]*:[ \t]*)(?:\\.|[^"\\\r\n])+(")`),
 		replacement: `${1}${2}${3}` + redactionMarker + `${4}`,
 	},
 	{
-		pattern:     regexp.MustCompile(`(?im)^([ \t]*(?:header|proxy-header)` + curlConfigSeparator + `)(` + credentialHeaderName + `|` + sensitivePrefixedName + `)([ \t]*:[ \t]*)[^\r\n]+$`),
+		pattern:     lazyMustCompile(`(?im)^([ \t]*(?:header|proxy-header)` + curlConfigSeparator + `)(` + credentialHeaderName + `|` + sensitivePrefixedName + `)([ \t]*:[ \t]*)[^\r\n]+$`),
 		replacement: `${1}${2}${3}` + redactionMarker,
 	},
 	{
-		pattern:     regexp.MustCompile(`(?im)^([ \t]*(?:user|proxy-user)` + curlConfigSeparator + `)(?:\[REDACTED(?: PRIVATE KEY)?\]|` + credentialPairValue + `)`),
+		pattern:     lazyMustCompile(`(?im)^([ \t]*(?:user|proxy-user)` + curlConfigSeparator + `)(?:\[REDACTED(?: PRIVATE KEY)?\]|` + credentialPairValue + `)`),
 		replacement: `${1}` + redactionMarker,
 	},
 	{
-		pattern:     regexp.MustCompile(`(?im)^([ \t]*(?:oauth2-bearer|proxy-tlspassword|tlspassword)` + curlConfigSeparator + `)(?:\[REDACTED(?: PRIVATE KEY)?\]|` + escapeAwareQuotedValue + `|` + unterminatedQuotedValue + `|[^\s#]+)`),
+		pattern:     lazyMustCompile(`(?im)^([ \t]*(?:oauth2-bearer|proxy-tlspassword|tlspassword)` + curlConfigSeparator + `)(?:\[REDACTED(?: PRIVATE KEY)?\]|` + escapeAwareQuotedValue + `|` + unterminatedQuotedValue + `|[^\s#]+)`),
 		replacement: `${1}` + redactionMarker,
 	},
 	{
-		pattern:     regexp.MustCompile(`(?im)^([ \t]*pass` + curlConfigExplicitSeparator + `)(?:\[REDACTED(?: PRIVATE KEY)?\]|` + escapeAwareQuotedValue + `|` + unterminatedQuotedValue + `|[^\s#]+)`),
+		pattern:     lazyMustCompile(`(?im)^([ \t]*pass` + curlConfigExplicitSeparator + `)(?:\[REDACTED(?: PRIVATE KEY)?\]|` + escapeAwareQuotedValue + `|` + unterminatedQuotedValue + `|[^\s#]+)`),
 		replacement: `${1}` + redactionMarker,
 	},
 	{
-		pattern:     regexp.MustCompile(`(?im)^([ \t]*cookie` + curlConfigSeparator + `)(?:\[REDACTED(?: PRIVATE KEY)?\]|` + cookieDataValue + `)`),
+		pattern:     lazyMustCompile(`(?im)^([ \t]*cookie` + curlConfigSeparator + `)(?:\[REDACTED(?: PRIVATE KEY)?\]|` + cookieDataValue + `)`),
 		replacement: `${1}` + redactionMarker,
 	},
 	{
-		pattern:     regexp.MustCompile(`(?im)^((?:#HttpOnly_)?[^#\t\r\n][^\t\r\n]*\t(?:TRUE|FALSE)\t[^\t\r\n]*\t(?:TRUE|FALSE)\t[0-9]+\t[^\t\r\n]+\t)(?:\[REDACTED(?: PRIVATE KEY)?\]|[^\t\r\n]+)`),
+		pattern:     lazyMustCompile(`(?im)^((?:#HttpOnly_)?[^#\t\r\n][^\t\r\n]*\t(?:TRUE|FALSE)\t[^\t\r\n]*\t(?:TRUE|FALSE)\t[0-9]+\t[^\t\r\n]+\t)(?:\[REDACTED(?: PRIVATE KEY)?\]|[^\t\r\n]+)`),
 		replacement: `${1}` + redactionMarker,
 	},
 	{
-		pattern:     regexp.MustCompile(`(?i)(^|\s)(-{1,2}secret\b` + shellCommandPathSeparator + `)(?:\[REDACTED(?: PRIVATE KEY)?\]|` + escapeAwareQuotedValue + `|` + unterminatedQuotedValue + `|` + flagUnquotedValue + `)`),
+		pattern:     lazyMustCompile(`(?i)(^|\s)(-{1,2}secret\b` + shellCommandPathSeparator + `)(?:\[REDACTED(?: PRIVATE KEY)?\]|` + escapeAwareQuotedValue + `|` + unterminatedQuotedValue + `|` + flagUnquotedValue + `)`),
 		replacement: `${1}${2}` + redactionMarker,
 	},
 	{
-		pattern:     regexp.MustCompile(`(?i)(^|\s)(` + sensitiveOrSecretShellToken + `[ \t]*=[ \t]*)(?:\[REDACTED(?: PRIVATE KEY)?\]|` + escapeAwareQuotedValue + `|` + unterminatedQuotedValue + `|` + shellUnquotedValue + `)`),
+		pattern:     lazyMustCompile(`(?i)(^|\s)(` + sensitiveOrSecretShellToken + `[ \t]*=[ \t]*)(?:\[REDACTED(?: PRIVATE KEY)?\]|` + escapeAwareQuotedValue + `|` + unterminatedQuotedValue + `|` + shellUnquotedValue + `)`),
 		replacement: `${1}${2}` + redactionMarker,
 	},
 	{
-		pattern:     regexp.MustCompile(`(?i)(\\"` + structuredCredentialName + `\\"[ \t\r\n]*:[ \t\r\n]*\\")(?:\\.|[^"\\\r\n])*?(\\")([ \t\r\n]*(?:[,}\]]|\z))`),
+		pattern:     lazyMustCompile(`(?i)(\\"` + structuredCredentialName + `\\"[ \t\r\n]*:[ \t\r\n]*\\")(?:\\.|[^"\\\r\n])*?(\\")([ \t\r\n]*(?:[,}\]]|\z))`),
 		replacement: `${1}` + redactionMarker + `${2}${3}`,
 	},
 	{
-		pattern:     regexp.MustCompile(`(?i)(["']` + structuredCredentialName + `["'][ \t\r\n]*:[ \t\r\n]*)(?:` + escapeAwareQuotedValue + `|` + unterminatedQuotedValue + `|[^\s,;}\[\]]+)`),
+		pattern:     lazyMustCompile(`(?i)(["']` + structuredCredentialName + `["'][ \t\r\n]*:[ \t\r\n]*)(?:` + escapeAwareQuotedValue + `|` + unterminatedQuotedValue + `|[^\s,;}\[\]]+)`),
 		replacement: `${1}"` + redactionMarker + `"`,
 	},
 	{
-		pattern:     regexp.MustCompile(`(?i)(^|[^-a-z0-9_])(` + tomlQuotedSensitiveKey + `[ \t]*=[ \t]*)(?:\[REDACTED(?: PRIVATE KEY)?\]|` + escapeAwareQuotedValue + `|` + unterminatedQuotedValue + `|` + shellUnquotedValue + `)`),
+		pattern:     lazyMustCompile(`(?i)(^|[^-a-z0-9_])(` + tomlQuotedSensitiveKey + `[ \t]*=[ \t]*)(?:\[REDACTED(?: PRIVATE KEY)?\]|` + escapeAwareQuotedValue + `|` + unterminatedQuotedValue + `|` + shellUnquotedValue + `)`),
 		replacement: `${1}${2}` + redactionMarker,
 	},
 	{
-		pattern:     regexp.MustCompile(`(?i)(^|[^-a-z0-9_])(` + sensitivePrefixedName + `\b[ \t]*=[ \t]*)(?:\[REDACTED(?: PRIVATE KEY)?\]|(?:(?:bearer|basic|token)[ \t]+)` + shellUnquotedValue + `|` + escapeAwareQuotedValue + `|` + unterminatedQuotedValue + `|` + shellUnquotedValue + `)`),
+		pattern:     lazyMustCompile(`(?i)(^|[^-a-z0-9_])(` + sensitivePrefixedName + `\b[ \t]*=[ \t]*)(?:\[REDACTED(?: PRIVATE KEY)?\]|(?:(?:bearer|basic|token)[ \t]+)` + shellUnquotedValue + `|` + escapeAwareQuotedValue + `|` + unterminatedQuotedValue + `|` + shellUnquotedValue + `)`),
 		replacement: `${1}${2}` + redactionMarker,
 	},
 	{
-		pattern:     regexp.MustCompile(`(?im)(^[ \t]*|[\[{(,;][ \t]*)(` + yamlMappingKeyProperties + sensitivePrefixedName + `\b[ \t]*:[ \t]*)(?:\[REDACTED(?: PRIVATE KEY)?\]|(?:(?:bearer|basic|token)[ \t]+)` + structuredUnquotedValue + `|` + escapeAwareQuotedValue + `|` + unterminatedQuotedValue + `|` + structuredUnquotedValue + `)`),
+		pattern:     lazyMustCompile(`(?im)(^[ \t]*|[\[{(,;][ \t]*)(` + yamlMappingKeyProperties + sensitivePrefixedName + `\b[ \t]*:[ \t]*)(?:\[REDACTED(?: PRIVATE KEY)?\]|(?:(?:bearer|basic|token)[ \t]+)` + structuredUnquotedValue + `|` + escapeAwareQuotedValue + `|` + unterminatedQuotedValue + `|` + structuredUnquotedValue + `)`),
 		replacement: `${1}${2}` + redactionMarker,
 	},
 	{
-		pattern:     regexp.MustCompile(`\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b`),
+		pattern:     lazyMustCompile(`\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b`),
 		replacement: redactionMarker,
 	},
 	{
-		pattern:     regexp.MustCompile(`\b(?:github_pat_[A-Za-z0-9_]{20,}|gh[pousr]_[A-Za-z0-9]{20,}|xoxb-[0-9]{10,}-[0-9]{10,}-[A-Za-z0-9]{20,}|xoxp-[A-Za-z0-9-]{20,}|xapp-[0-9]+-[A-Za-z0-9]{10,}(?:-[A-Za-z0-9]{6,})+|npm_[A-Za-z0-9]{36}|glpat-[A-Za-z0-9_-]{20,}|[sr]k_(?:live|test)_[A-Za-z0-9]{16,})\b`),
+		pattern:     lazyMustCompile(`\b(?:github_pat_[A-Za-z0-9_]{20,}|gh[pousr]_[A-Za-z0-9]{20,}|xoxb-[0-9]{10,}-[0-9]{10,}-[A-Za-z0-9]{20,}|xoxp-[A-Za-z0-9-]{20,}|xapp-[0-9]+-[A-Za-z0-9]{10,}(?:-[A-Za-z0-9]{6,})+|npm_[A-Za-z0-9]{36}|glpat-[A-Za-z0-9_-]{20,}|[sr]k_(?:live|test)_[A-Za-z0-9]{16,})\b`),
 		replacement: redactionMarker,
 	},
 }
@@ -2306,7 +2355,7 @@ func redactCommandPromptSetAssignments(value string) (string, bool) {
 	return redacted, changed
 }
 
-func redactCommandPromptSetAssignmentValues(value string, pattern *regexp.Regexp, findValueEnd func(string, int) int) (string, bool) {
+func redactCommandPromptSetAssignmentValues(value string, pattern *lazyRegexp, findValueEnd func(string, int) int) (string, bool) {
 	redacted := value
 	changed := false
 	for searchStart := 0; searchStart < len(redacted); {
@@ -4065,7 +4114,7 @@ func normalizeYAMLAliasCredentialKeys(value string) (string, map[string]string) 
 	lines := strings.SplitAfter(value, "\n")
 	restorations := make(map[string]string)
 	placeholderIndex := 0
-	patterns := []*regexp.Regexp{yamlAliasMappingKey, yamlExplicitAliasKey}
+	patterns := []*lazyRegexp{yamlAliasMappingKey, yamlExplicitAliasKey}
 	for line := range lines {
 		content, ending := splitLineEnding(lines[line])
 		for _, pattern := range patterns {
@@ -4446,7 +4495,7 @@ func protectBooleanSecretMarkers(value string) (string, string) {
 
 func redactStructuredCredentialObjects(value string) (string, bool) {
 	type objectPattern struct {
-		pattern       *regexp.Regexp
+		pattern       *lazyRegexp
 		escapedQuotes bool
 		replacement   string
 		array         bool
@@ -4587,7 +4636,7 @@ func redactStructuredCookieValues(value string) (string, bool) {
 	}
 
 	type cookieObjectPattern struct {
-		pattern       *regexp.Regexp
+		pattern       *lazyRegexp
 		escapedQuotes bool
 	}
 	patterns := []cookieObjectPattern{
@@ -4629,7 +4678,7 @@ func redactStructuredCookieValues(value string) (string, bool) {
 // diagnostic fields with that name remain useful.
 func redactRegistryConfigurationAuthValues(value string) (string, bool) {
 	type authsContainerPattern struct {
-		pattern       *regexp.Regexp
+		pattern       *lazyRegexp
 		escapedQuotes bool
 	}
 	patterns := []authsContainerPattern{
@@ -4667,7 +4716,7 @@ func redactRegistryConfigurationAuthValues(value string) (string, bool) {
 // names, matching asc.RedactUploadOperations while preserving useful metadata.
 func redactStructuredUploadHeaderValues(value string) (string, bool) {
 	type headerContainerPattern struct {
-		pattern       *regexp.Regexp
+		pattern       *lazyRegexp
 		escapedQuotes bool
 	}
 	patterns := []headerContainerPattern{
@@ -4774,28 +4823,28 @@ func redactKubectlSecretLiterals(value string) (string, bool) {
 	return result, changed
 }
 
-func newCommandCredentialFlagPatternWithSuffix(suffix string, flags ...string) *regexp.Regexp {
+func newCommandCredentialFlagPatternWithSuffix(suffix string, flags ...string) *lazyRegexp {
 	escapedFlags := make([]string, 0, len(flags))
 	for _, flag := range flags {
 		escapedFlags = append(escapedFlags, regexp.QuoteMeta(flag))
 	}
-	return regexp.MustCompile(`(^|[ \t]|\\\r?\n)(-(?:` + strings.Join(escapedFlags, "|") + `)` + suffix + `(?:` + shellCommandPathSeparator + `|[ \t]*=[ \t]*))(?:\[REDACTED(?: PRIVATE KEY)?\]|` + escapeAwareQuotedValue + `|` + unterminatedQuotedValue + `|` + commandFlagUnquotedValue + `)`)
+	return lazyMustCompile(`(^|[ \t]|\\\r?\n)(-(?:` + strings.Join(escapedFlags, "|") + `)` + suffix + `(?:` + shellCommandPathSeparator + `|[ \t]*=[ \t]*))(?:\[REDACTED(?: PRIVATE KEY)?\]|` + escapeAwareQuotedValue + `|` + unterminatedQuotedValue + `|` + commandFlagUnquotedValue + `)`)
 }
 
-func newCommandShortCredentialFlagPattern(flags ...string) *regexp.Regexp {
+func newCommandShortCredentialFlagPattern(flags ...string) *lazyRegexp {
 	escapedFlags := make([]string, 0, len(flags))
 	for _, flag := range flags {
 		escapedFlags = append(escapedFlags, regexp.QuoteMeta(flag))
 	}
-	return regexp.MustCompile(`(^|[ \t]|\\\r?\n)(-(?:` + strings.Join(escapedFlags, "|") + `)(?:(?:[ \t]*=[ \t]*|` + shellCommandPathSeparator + `))?)(?:\[REDACTED(?: PRIVATE KEY)?\]|` + commandShortShellWord + `|` + unterminatedQuotedValue + `)`)
+	return lazyMustCompile(`(^|[ \t]|\\\r?\n)(-(?:` + strings.Join(escapedFlags, "|") + `)(?:(?:[ \t]*=[ \t]*|` + shellCommandPathSeparator + `))?)(?:\[REDACTED(?: PRIVATE KEY)?\]|` + commandShortShellWord + `|` + unterminatedQuotedValue + `)`)
 }
 
-func newCommandCredentialFlagValueStartPattern(flags ...string) *regexp.Regexp {
+func newCommandCredentialFlagValueStartPattern(flags ...string) *lazyRegexp {
 	escapedFlags := make([]string, 0, len(flags))
 	for _, flag := range flags {
 		escapedFlags = append(escapedFlags, regexp.QuoteMeta(flag))
 	}
-	return regexp.MustCompile(`(^|[ \t]|\\\r?\n)-(?:` + strings.Join(escapedFlags, "|") + `)(?:` + shellCommandPathSeparator + `|[ \t]*=[ \t]*)`)
+	return lazyMustCompile(`(^|[ \t]|\\\r?\n)-(?:` + strings.Join(escapedFlags, "|") + `)(?:` + shellCommandPathSeparator + `|[ \t]*=[ \t]*)`)
 }
 
 func redactOpenSSLCredentialArguments(value string) (string, bool) {
@@ -4851,11 +4900,11 @@ func redactOpenSSLSubcommandCredentialArguments(value string) (string, bool) {
 	return result, changed
 }
 
-func redactCommandCredentialFlagValues(command string, pattern *regexp.Regexp) (string, bool) {
+func redactCommandCredentialFlagValues(command string, pattern *lazyRegexp) (string, bool) {
 	return redactCommandCredentialFlagValuesMatching(command, pattern, func(string) bool { return true })
 }
 
-func redactCommandCredentialFlagValuesMatching(command string, pattern *regexp.Regexp, shouldRedact func(string) bool) (string, bool) {
+func redactCommandCredentialFlagValuesMatching(command string, pattern *lazyRegexp, shouldRedact func(string) bool) (string, bool) {
 	result := command
 	changed := false
 	for searchStart := 0; searchStart < len(result); {
@@ -5663,7 +5712,7 @@ func redactSSHKeygenCredentialArguments(value string) (string, bool) {
 	return result, changed
 }
 
-func redactNamedCommandCredentialArguments(value, commandName string, pattern *regexp.Regexp) (string, bool) {
+func redactNamedCommandCredentialArguments(value, commandName string, pattern *lazyRegexp) (string, bool) {
 	result := value
 	changed := false
 	for start := 0; start < len(result); {

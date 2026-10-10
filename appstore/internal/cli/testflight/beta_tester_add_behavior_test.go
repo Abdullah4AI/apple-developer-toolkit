@@ -24,24 +24,6 @@ func isolateTestFlightAuthEnvForAddTests(t *testing.T) {
 	t.Setenv("ASC_APP_ID", "")
 }
 
-func TestBetaTestersAddCommand_EmailOnlyPassesValidation(t *testing.T) {
-	isolateTestFlightAuthEnvForAddTests(t)
-
-	cmd := BetaTestersAddCommand()
-	if err := cmd.FlagSet.Parse([]string{
-		"--app", "123456789",
-		"--email", "tester@example.com",
-		"--group", "Beta",
-	}); err != nil {
-		t.Fatalf("parse flags: %v", err)
-	}
-
-	err := cmd.Exec(context.Background(), []string{})
-	if errors.Is(err, flag.ErrHelp) {
-		t.Fatalf("email-only add should pass validation, got %v", err)
-	}
-}
-
 func TestBetaTestersAddCommand_FirstNameOnlyPassesValidation(t *testing.T) {
 	isolateTestFlightAuthEnvForAddTests(t)
 

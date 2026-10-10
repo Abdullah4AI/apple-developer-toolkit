@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 )
 
@@ -1207,9 +1208,9 @@ func TestSetDeveloperAppGroupsSettlesAmbiguousWriteFailure(t *testing.T) {
 	}
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
-			seen := 0
+			var seen atomic.Int32
 			client := newDeveloperAppGroupsTestClient(t, func(requestNumber int, request *http.Request) (*http.Response, error) {
-				seen = requestNumber
+				seen.Store(int32(requestNumber))
 				switch requestNumber {
 				case 1:
 					return assertDeveloperPortalBootstrap(t, request), nil
@@ -1233,8 +1234,8 @@ func TestSetDeveloperAppGroupsSettlesAmbiguousWriteFailure(t *testing.T) {
 				}
 			})
 			result, err := client.SetDeveloperAppGroups(context.Background(), DeveloperAppGroupSetRequest{BundleID: "bundle-1", GroupIDs: []string{"GROUP2"}})
-			if seen != test.wantRequests {
-				t.Fatalf("expected %d requests, saw %d", test.wantRequests, seen)
+			if got := int(seen.Load()); got != test.wantRequests {
+				t.Fatalf("expected %d requests, saw %d", test.wantRequests, got)
 			}
 			var unverified *DeveloperAppGroupUnverifiedError
 			if test.wantErr == "" {
@@ -1254,9 +1255,9 @@ func TestSetDeveloperAppGroupsSettlesAmbiguousWriteFailure(t *testing.T) {
 }
 
 func TestSetDeveloperAppGroupsDoesNotSettleCSRFPrimeFailure(t *testing.T) {
-	seen := 0
+	var seen atomic.Int32
 	client := newDeveloperAppGroupsTestClient(t, func(requestNumber int, request *http.Request) (*http.Response, error) {
-		seen = requestNumber
+		seen.Store(int32(requestNumber))
 		switch requestNumber {
 		case 1:
 			return assertDeveloperPortalBootstrap(t, request), nil
@@ -1278,8 +1279,8 @@ func TestSetDeveloperAppGroupsDoesNotSettleCSRFPrimeFailure(t *testing.T) {
 	if errors.As(err, &unverified) {
 		t.Fatalf("CSRF prime failure must stay retry-safe, got unverified error: %v", err)
 	}
-	if seen != 3 {
-		t.Fatalf("expected 3 requests, saw %d", seen)
+	if got := seen.Load(); got != 3 {
+		t.Fatalf("expected 3 requests, saw %d", got)
 	}
 }
 
@@ -1363,9 +1364,9 @@ func TestDeleteDeveloperAppGroupSettlesAmbiguousWriteFailure(t *testing.T) {
 	}
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
-			seen := 0
+			var seen atomic.Int32
 			client := newDeveloperAppGroupsTestClient(t, func(requestNumber int, request *http.Request) (*http.Response, error) {
-				seen = requestNumber
+				seen.Store(int32(requestNumber))
 				switch requestNumber {
 				case 1:
 					return assertDeveloperPortalBootstrap(t, request), nil
@@ -1388,8 +1389,8 @@ func TestDeleteDeveloperAppGroupSettlesAmbiguousWriteFailure(t *testing.T) {
 				}
 			})
 			result, err := client.DeleteDeveloperAppGroup(context.Background(), DeveloperAppGroupDeleteRequest{GroupID: "GROUP12345"})
-			if seen != test.wantRequests {
-				t.Fatalf("expected %d requests, saw %d", test.wantRequests, seen)
+			if got := int(seen.Load()); got != test.wantRequests {
+				t.Fatalf("expected %d requests, saw %d", test.wantRequests, got)
 			}
 			var unverified *DeveloperAppGroupUnverifiedError
 			if test.wantErr == "" {
@@ -1777,10 +1778,9 @@ func decodeDeveloperAppGroupsCapability(t *testing.T, capability developerResour
 
 func newDeveloperAppGroupsTestClient(t *testing.T, handler func(int, *http.Request) (*http.Response, error)) *Client {
 	t.Helper()
-	requestNumber := 0
+	var requestNumber atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		requestNumber++
-		response, err := handler(requestNumber, request)
+		response, err := handler(int(requestNumber.Add(1)), request)
 		if err != nil {
 			t.Errorf("test Developer Portal handler: %v", err)
 			http.Error(writer, err.Error(), http.StatusInternalServerError)

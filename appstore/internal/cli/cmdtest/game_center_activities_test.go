@@ -29,25 +29,6 @@ func TestGameCenterActivitiesListValidationErrors(t *testing.T) {
 	}
 }
 
-func TestGameCenterActivitiesGetValidationErrors(t *testing.T) {
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	stdout, _ := captureOutput(t, func() {
-		if err := root.Parse([]string{"game-center", "activities", "get"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		err := root.Run(context.Background())
-		if !errors.Is(err, flag.ErrHelp) {
-			t.Fatalf("expected ErrHelp, got %v", err)
-		}
-	})
-
-	if stdout != "" {
-		t.Fatalf("expected empty stdout, got %q", stdout)
-	}
-}
-
 func TestGameCenterActivitiesCreateValidationErrors(t *testing.T) {
 	t.Setenv("ASC_APP_ID", "")
 
@@ -266,25 +247,6 @@ func TestGameCenterActivityVersionsListValidationErrors(t *testing.T) {
 	}
 }
 
-func TestGameCenterActivityVersionsGetValidationErrors(t *testing.T) {
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	stdout, _ := captureOutput(t, func() {
-		if err := root.Parse([]string{"game-center", "activities", "versions", "get"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		err := root.Run(context.Background())
-		if !errors.Is(err, flag.ErrHelp) {
-			t.Fatalf("expected ErrHelp, got %v", err)
-		}
-	})
-
-	if stdout != "" {
-		t.Fatalf("expected empty stdout, got %q", stdout)
-	}
-}
-
 func TestGameCenterActivityVersionsCreateValidationErrors(t *testing.T) {
 	root := RootCommand("1.2.3")
 	root.FlagSet.SetOutput(io.Discard)
@@ -479,25 +441,6 @@ func TestGameCenterActivityImagesUploadValidationErrors(t *testing.T) {
 	}
 }
 
-func TestGameCenterActivityImagesGetValidationErrors(t *testing.T) {
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	stdout, _ := captureOutput(t, func() {
-		if err := root.Parse([]string{"game-center", "activities", "images", "get"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		err := root.Run(context.Background())
-		if !errors.Is(err, flag.ErrHelp) {
-			t.Fatalf("expected ErrHelp, got %v", err)
-		}
-	})
-
-	if stdout != "" {
-		t.Fatalf("expected empty stdout, got %q", stdout)
-	}
-}
-
 func TestGameCenterActivityImagesDeleteValidationErrors(t *testing.T) {
 	tests := []struct {
 		name string
@@ -625,44 +568,6 @@ func TestGameCenterActivitiesListLimitValidation(t *testing.T) {
 		err := root.Run(context.Background())
 		if err == nil {
 			t.Fatalf("expected error, got nil")
-		}
-	})
-
-	if stdout != "" {
-		t.Fatalf("expected empty stdout, got %q", stdout)
-	}
-}
-
-func TestGameCenterActivityLocalizationImageGetValidationErrors(t *testing.T) {
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	stdout, _ := captureOutput(t, func() {
-		if err := root.Parse([]string{"game-center", "activities", "localizations", "image", "get"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		err := root.Run(context.Background())
-		if !errors.Is(err, flag.ErrHelp) {
-			t.Fatalf("expected ErrHelp, got %v", err)
-		}
-	})
-
-	if stdout != "" {
-		t.Fatalf("expected empty stdout, got %q", stdout)
-	}
-}
-
-func TestGameCenterActivityVersionDefaultImageGetValidationErrors(t *testing.T) {
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	stdout, _ := captureOutput(t, func() {
-		if err := root.Parse([]string{"game-center", "activities", "versions", "default-image", "get"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		err := root.Run(context.Background())
-		if !errors.Is(err, flag.ErrHelp) {
-			t.Fatalf("expected ErrHelp, got %v", err)
 		}
 	})
 

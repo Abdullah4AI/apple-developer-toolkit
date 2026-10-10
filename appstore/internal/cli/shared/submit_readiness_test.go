@@ -12,19 +12,6 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
 )
 
-func TestMissingSubmitRequiredLocalizationFields_BaseFields(t *testing.T) {
-	attrs := asc.AppStoreVersionLocalizationAttributes{
-		Locale:      "en-US",
-		Description: "A great app",
-		Keywords:    "quran,islam",
-		SupportURL:  "https://example.com",
-	}
-	missing := MissingSubmitRequiredLocalizationFields(attrs)
-	if len(missing) != 0 {
-		t.Fatalf("expected no missing fields, got %v", missing)
-	}
-}
-
 func TestMissingSubmitRequiredLocalizationFields_AllEmpty(t *testing.T) {
 	attrs := asc.AppStoreVersionLocalizationAttributes{Locale: "en-US"}
 	missing := MissingSubmitRequiredLocalizationFields(attrs)

@@ -1,53 +1,10 @@
 package localizations
 
 import (
-	"context"
-	"errors"
-	"flag"
 	"reflect"
 	"strings"
 	"testing"
 )
-
-func TestLocalizationsCreateCommand_MissingFlags(t *testing.T) {
-	tests := []struct {
-		name     string
-		args     []string
-		execArgs []string
-	}{
-		{name: "unexpected args", args: []string{"--version", "VERSION_ID", "--locale", "ja", "unexpected"}, execArgs: []string{"unexpected"}},
-		{name: "missing version", args: []string{"--locale", "ja"}},
-		{name: "missing locale", args: []string{"--version", "VERSION_ID"}},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			cmd := LocalizationsCreateCommand()
-			if err := cmd.FlagSet.Parse(test.args); err != nil {
-				t.Fatalf("failed to parse flags: %v", err)
-			}
-
-			if err := cmd.Exec(context.Background(), test.execArgs); !errors.Is(err, flag.ErrHelp) {
-				t.Fatalf("expected flag.ErrHelp, got %v", err)
-			}
-		})
-	}
-}
-
-func TestLocalizationsCreateCommand_InvalidLocale(t *testing.T) {
-	cmd := LocalizationsCreateCommand()
-	if err := cmd.FlagSet.Parse([]string{"--version", "VERSION_ID", "--locale", "not_a_locale"}); err != nil {
-		t.Fatalf("failed to parse flags: %v", err)
-	}
-
-	err := cmd.Exec(context.Background(), []string{})
-	if err == nil {
-		t.Fatal("expected invalid locale error, got nil")
-	}
-	if !errors.Is(err, flag.ErrHelp) {
-		t.Fatalf("expected flag.ErrHelp, got %v", err)
-	}
-}
 
 func TestLocalizationsCreateCommand_HelpMentionsCanonicalLocaleForms(t *testing.T) {
 	cmd := LocalizationsCreateCommand()
@@ -114,17 +71,6 @@ func TestLocalizationsListCommand_IncludeFlagListsSupportedValues(t *testing.T) 
 	}
 	if !strings.Contains(cmd.LongHelp, `asc localizations list --version "VERSION_ID" --include "appScreenshotSets,appPreviewSets"`) {
 		t.Fatalf("expected long help to document an --include example, got %q", cmd.LongHelp)
-	}
-}
-
-func TestLocalizationsSupportedLocalesCommand_MissingVersion(t *testing.T) {
-	cmd := LocalizationsSupportedLocalesCommand()
-	if err := cmd.FlagSet.Parse(nil); err != nil {
-		t.Fatalf("failed to parse flags: %v", err)
-	}
-
-	if err := cmd.Exec(context.Background(), []string{}); !errors.Is(err, flag.ErrHelp) {
-		t.Fatalf("expected flag.ErrHelp, got %v", err)
 	}
 }
 

@@ -1,7 +1,12 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import contextlib
 import importlib.util
+import io
+import runpy
+import sys
+import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
@@ -39,6 +44,12 @@ FLAGS
 
 
 class ParseHelpTests(unittest.TestCase):
+    @patch.object(check_commands_docs.subprocess, "run")
+    def test_command_check_uses_explicit_binary_without_go_run(self, run: Mock) -> None:
+        run.return_value = Mock(stdout=HELP_WITH_SAMPLES, stderr="")
+        self.assertEqual(check_commands_docs.run_help_text(Path("/tmp/current-asc")), HELP_WITH_SAMPLES)
+        self.assertEqual(run.call_args.args[0], ["/tmp/current-asc", "--help"])
+
     @patch.object(generate_command_docs.subprocess, "run")
     def test_help_stdout_wins_over_go_download_diagnostics(self, run: Mock) -> None:
         run.return_value = Mock(stdout=HELP_WITH_SAMPLES, stderr="go: downloading example.com/module\n")
@@ -96,6 +107,47 @@ class RenderTests(unittest.TestCase):
             "asc xcode test junit --xcresult ./Test.xcresult --report-file ./junit.xml --output json",
             rendered,
         )
+
+
+class CombinedCommandDocsTests(unittest.TestCase):
+    def check_combined(self, *, drift: bool = False, example: str = "asc search query") -> tuple[int, str, int]:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            doc = root / "COMMANDS.md"
+            generated = generate_command_docs.render(*generate_command_docs.parse_help(HELP_WITH_SAMPLES))
+            doc.write_text(generated + ("stale content\n" if drift else ""))
+            examples = root / "README.md"
+            examples.write_text(example + "\n")
+            output = io.StringIO()
+            with patch.object(generate_command_docs, "OUTPUT_PATH", doc), \
+                 patch.object(check_commands_docs, "REPO_ROOT", root), \
+                 patch.object(check_commands_docs, "COMMANDS_DOC_PATH", doc), \
+                 patch.object(check_commands_docs, "DOC_EXAMPLE_PATHS", [examples]), \
+                 patch.object(check_commands_docs, "run_help_text", return_value=HELP_WITH_SAMPLES) as help_run, \
+                 patch.object(runpy, "run_path", return_value=generate_command_docs.__dict__), \
+                 patch.object(sys, "argv", ["check-commands-docs.py", "--check-generated"]), \
+                 contextlib.redirect_stdout(output):
+                status = check_commands_docs.main()
+            return status, output.getvalue(), help_run.call_count
+
+    def test_generated_drift_is_checked_using_existing_renderer(self) -> None:
+        status, output, calls = self.check_combined(drift=True)
+        self.assertEqual(status, 1)
+        self.assertEqual(output, "docs/COMMANDS.md is out of date.\nRun: make generate-command-docs\n")
+        self.assertEqual(calls, 1)
+
+    def test_combined_checks_share_one_root_help_result(self) -> None:
+        status, output, calls = self.check_combined()
+        self.assertEqual(status, 0)
+        self.assertIn("docs/COMMANDS.md is up to date.", output)
+        self.assertIn("example docs validated", output)
+        self.assertEqual(calls, 1)
+
+    def test_example_validation_is_retained_after_generated_comparison(self) -> None:
+        status, output, calls = self.check_combined(example="asc nonexistent list")
+        self.assertEqual(status, 1)
+        self.assertIn("unknown top-level command 'nonexistent'", output)
+        self.assertEqual(calls, 1)
 
 
 if __name__ == "__main__":

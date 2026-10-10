@@ -124,9 +124,10 @@ func TestBundleIDCapabilitiesSettingsValidationStopsBeforeHTTP(t *testing.T) {
 	})
 
 	tests := []struct {
-		name    string
-		args    []string
-		wantErr string
+		name        string
+		args        []string
+		wantErr     string
+		wantDetails []string
 	}{
 		{
 			name:    "add rejects unknown field",
@@ -159,9 +160,10 @@ func TestBundleIDCapabilitiesSettingsValidationStopsBeforeHTTP(t *testing.T) {
 			wantErr: `capability setting key at index 0 must not be empty`,
 		},
 		{
-			name:    "add rejects malformed options",
-			args:    []string{"bundle-ids", "capabilities", "add", "--bundle", "bundle1", "--capability", "ICLOUD", "--settings", `[{"key":"FUTURE_SETTING","options":{}}]`},
-			wantErr: `cannot unmarshal object into Go struct field CapabilitySetting.options`,
+			name:        "add rejects malformed options",
+			args:        []string{"bundle-ids", "capabilities", "add", "--bundle", "bundle1", "--capability", "ICLOUD", "--settings", `[{"key":"FUTURE_SETTING","options":{}}]`},
+			wantErr:     `--settings must be valid JSON array: json: cannot unmarshal object`,
+			wantDetails: []string{"options", "of type []asc.CapabilityOption"},
 		},
 		{
 			name:    "add rejects null schema field",
@@ -187,8 +189,11 @@ func TestBundleIDCapabilitiesSettingsValidationStopsBeforeHTTP(t *testing.T) {
 			if stdout != "" {
 				t.Fatalf("expected empty stdout, got %q", stdout)
 			}
-			if !strings.Contains(stderr, tc.wantErr) {
-				t.Fatalf("expected stderr to contain %q, got %q", tc.wantErr, stderr)
+			diagnostic := strings.SplitN(stderr, "\n", 2)[0]
+			for _, want := range append([]string{tc.wantErr}, tc.wantDetails...) {
+				if !strings.Contains(diagnostic, want) {
+					t.Fatalf("expected stderr to contain %q, got %q", want, stderr)
+				}
 			}
 			if got := rootcmd.ExitCodeFromError(runErr); got != rootcmd.ExitUsage {
 				t.Fatalf("exit code = %d, want %d (err=%v)", got, rootcmd.ExitUsage, runErr)

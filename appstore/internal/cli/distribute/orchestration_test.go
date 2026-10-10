@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
@@ -1251,6 +1252,10 @@ func TestExecuteDistributionVerifyMissingRunIsReadOnly(t *testing.T) {
 }
 
 func TestDistributionVerifyUsesOneTotalTimeoutBudget(t *testing.T) {
+	synctest.Test(t, testDistributionVerifyUsesOneTotalTimeoutBudget)
+}
+
+func testDistributionVerifyUsesOneTotalTimeoutBudget(t *testing.T) {
 	plan := validPersistedDistributionPlan(t)
 	run := validCompletedDistributionRun(plan)
 	receipt := validPersistedDistributionReceipt(run)
@@ -1260,18 +1265,18 @@ func TestDistributionVerifyUsesOneTotalTimeoutBudget(t *testing.T) {
 	deps.readPlan = func(string) (persistedDistributionPlan, error) { return plan, nil }
 	deps.readReceipt = func(string, string) (persistedDistributionReceipt, error) { return receipt, nil }
 	deps.reverifyPublish = func(ctx context.Context, request privatePublishVerificationRequest) (publishExecutionResult, error) {
-		if request.VerifyTimeout <= 0 || request.VerifyTimeout > 80*time.Millisecond {
+		if request.VerifyTimeout <= 0 || request.VerifyTimeout > 80*time.Second {
 			t.Fatalf("publication timeout = %s", request.VerifyTimeout)
 		}
 		select {
-		case <-time.After(50 * time.Millisecond):
+		case <-time.After(50 * time.Second):
 		case <-ctx.Done():
 			return publishExecutionResult{}, ctx.Err()
 		}
 		return validDistributionPublishResultForCompletion(plan, run), nil
 	}
 	deps.observeDevice = func(ctx context.Context, request distributionDeviceObservationRequest) (deviceObservation, error) {
-		if request.Timeout <= 0 || request.Timeout >= 50*time.Millisecond {
+		if request.Timeout <= 0 || request.Timeout >= 50*time.Second {
 			t.Fatalf("device received fresh rather than remaining budget: %s", request.Timeout)
 		}
 		<-ctx.Done()
@@ -1279,8 +1284,8 @@ func TestDistributionVerifyUsesOneTotalTimeoutBudget(t *testing.T) {
 	}
 	installDistributionOrchestrationDependencies(t, deps)
 	started := time.Now()
-	_, err := executeDistributionVerify(context.Background(), distributionVerifyRequest{RunID: run.RunID, StateDir: plan.Paths.StateDir, Device: "phone", Timeout: 80 * time.Millisecond})
-	if err == nil || time.Since(started) > 250*time.Millisecond {
+	_, err := executeDistributionVerify(context.Background(), distributionVerifyRequest{RunID: run.RunID, StateDir: plan.Paths.StateDir, Device: "phone", Timeout: 80 * time.Second})
+	if err == nil || time.Since(started) > 80*time.Second {
 		t.Fatalf("total deadline error=%v elapsed=%s", err, time.Since(started))
 	}
 }

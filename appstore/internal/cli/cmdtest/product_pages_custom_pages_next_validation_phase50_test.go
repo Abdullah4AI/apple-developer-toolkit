@@ -7,65 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
-	rootcmd "github.com/Abdullah4AI/apple-developer-toolkit/appstore/cmd"
 )
-
-func runProductPagesInvalidNextURLCases(
-	t *testing.T,
-	argsPrefix []string,
-	wantErrPrefix string,
-) {
-	t.Helper()
-
-	tests := []struct {
-		name    string
-		next    string
-		wantErr string
-	}{
-		{
-			name:    "invalid scheme",
-			next:    "http://api.appstoreconnect.apple.com/v1/apps/app-1/appCustomProductPages?cursor=AQ",
-			wantErr: wantErrPrefix + " must be an App Store Connect URL",
-		},
-		{
-			name:    "malformed URL",
-			next:    "https://api.appstoreconnect.apple.com/%zz",
-			wantErr: wantErrPrefix + " must be a valid URL:",
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			args := append(append([]string{}, argsPrefix...), "--next", test.next)
-
-			root := RootCommand("1.2.3")
-			root.FlagSet.SetOutput(io.Discard)
-
-			var runErr error
-			stdout, stderr := captureOutput(t, func() {
-				if err := root.Parse(args); err != nil {
-					t.Fatalf("parse error: %v", err)
-				}
-				runErr = root.Run(context.Background())
-			})
-
-			if runErr == nil {
-				t.Fatal("expected error, got nil")
-			}
-			if !strings.Contains(runErr.Error(), test.wantErr) {
-				t.Fatalf("expected error %q, got %v", test.wantErr, runErr)
-			}
-			if stdout != "" {
-				t.Fatalf("expected empty stdout, got %q", stdout)
-			}
-			if got := rootcmd.ExitCodeFromError(runErr); got != rootcmd.ExitUsage {
-				t.Fatalf("exit code = %d, want %d", got, rootcmd.ExitUsage)
-			}
-			assertUsageDiagnosticFirstLine(t, stderr, test.wantErr)
-		})
-	}
-}
 
 func runProductPagesPaginateFromNext(
 	t *testing.T,
@@ -139,14 +81,6 @@ func runProductPagesPaginateFromNext(
 	}
 }
 
-func TestCustomPagesListRejectsInvalidNextURL(t *testing.T) {
-	runProductPagesInvalidNextURLCases(
-		t,
-		[]string{"product-pages", "custom-pages", "list", "--app", "app-1"},
-		"custom-pages list: --next",
-	)
-}
-
 func TestCustomPagesListPaginateFromNext(t *testing.T) {
 	const firstURL = "https://api.appstoreconnect.apple.com/v1/apps/app-1/appCustomProductPages?cursor=AQ&limit=200"
 	const secondURL = "https://api.appstoreconnect.apple.com/v1/apps/app-1/appCustomProductPages?cursor=BQ&limit=200"
@@ -163,14 +97,6 @@ func TestCustomPagesListPaginateFromNext(t *testing.T) {
 		secondBody,
 		"custom-page-next-1",
 		"custom-page-next-2",
-	)
-}
-
-func TestCustomPageVersionsListRejectsInvalidNextURL(t *testing.T) {
-	runProductPagesInvalidNextURLCases(
-		t,
-		[]string{"product-pages", "custom-pages", "versions", "list", "--custom-page-id", "page-1"},
-		"custom-pages versions list: --next",
 	)
 }
 
@@ -193,14 +119,6 @@ func TestCustomPageVersionsListPaginateFromNext(t *testing.T) {
 	)
 }
 
-func TestCustomPageLocalizationsListRejectsInvalidNextURL(t *testing.T) {
-	runProductPagesInvalidNextURLCases(
-		t,
-		[]string{"product-pages", "custom-pages", "localizations", "list", "--custom-page-version-id", "version-1"},
-		"custom-pages localizations list: --next",
-	)
-}
-
 func TestCustomPageLocalizationsListPaginateFromNext(t *testing.T) {
 	const firstURL = "https://api.appstoreconnect.apple.com/v1/appCustomProductPageVersions/version-1/appCustomProductPageLocalizations?cursor=AQ&limit=200"
 	const secondURL = "https://api.appstoreconnect.apple.com/v1/appCustomProductPageVersions/version-1/appCustomProductPageLocalizations?cursor=BQ&limit=200"
@@ -220,14 +138,6 @@ func TestCustomPageLocalizationsListPaginateFromNext(t *testing.T) {
 	)
 }
 
-func TestCustomPageLocalizationPreviewSetsListRejectsInvalidNextURL(t *testing.T) {
-	runProductPagesInvalidNextURLCases(
-		t,
-		[]string{"product-pages", "custom-pages", "localizations", "preview-sets", "list"},
-		"custom-pages localizations preview-sets list: --next",
-	)
-}
-
 func TestCustomPageLocalizationPreviewSetsListPaginateFromNextWithoutLocalizationID(t *testing.T) {
 	const firstURL = "https://api.appstoreconnect.apple.com/v1/appCustomProductPageLocalizations/loc-1/appPreviewSets?cursor=AQ&limit=200"
 	const secondURL = "https://api.appstoreconnect.apple.com/v1/appCustomProductPageLocalizations/loc-1/appPreviewSets?cursor=BQ&limit=200"
@@ -244,14 +154,6 @@ func TestCustomPageLocalizationPreviewSetsListPaginateFromNextWithoutLocalizatio
 		secondBody,
 		"custom-page-preview-set-next-1",
 		"custom-page-preview-set-next-2",
-	)
-}
-
-func TestCustomPageLocalizationScreenshotSetsListRejectsInvalidNextURL(t *testing.T) {
-	runProductPagesInvalidNextURLCases(
-		t,
-		[]string{"product-pages", "custom-pages", "localizations", "screenshot-sets", "list"},
-		"custom-pages localizations screenshot-sets list: --next",
 	)
 }
 

@@ -19,8 +19,6 @@ func signingRunSecurityAvailable() bool { return false }
 
 func systemSigningRunRoots() (*x509.CertPool, error) { return x509.SystemCertPool() }
 
-func validateSigningRunInputPermissions(string, os.FileInfo, bool) error { return nil }
-
 func platformSigningRunContext(ctx context.Context) (context.Context, func()) {
 	return ctx, func() {}
 }

@@ -4,8 +4,11 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
 	webcli "github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/web"
+	webcore "github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/web"
 )
 
 var testConfigPath string
@@ -23,6 +26,9 @@ func TestMain(m *testing.M) {
 	originalStdin := os.Stdin
 	os.Stdin = testStdin
 	restoreControllingTTY := webcli.DisableControllingTTYForTesting()
+	// The core web package tests the default and rate-limit behavior.
+	restorePacing := webcore.DisableRequestPacingForTesting()
+	restoreAssetLibraryPoll := asc.SetAssetLibraryProcessingPollIntervalForTest(time.Millisecond)
 
 	_ = os.Setenv("ASC_CONFIG_PATH", testConfigPath)
 	_ = os.Setenv("ASC_BYPASS_KEYCHAIN", "1")
@@ -37,6 +43,8 @@ func TestMain(m *testing.M) {
 
 	code := m.Run()
 
+	restoreAssetLibraryPoll()
+	restorePacing()
 	restoreControllingTTY()
 	os.Stdin = originalStdin
 	_ = testStdin.Close()

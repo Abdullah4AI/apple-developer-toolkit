@@ -187,7 +187,7 @@ func findLatestExpiredProfile(ctx context.Context, client *asc.Client, bundleIDR
 	page := 1
 	seenNext := make(map[string]struct{})
 	for {
-		profiles, err := client.GetBundleIDProfiles(ctx, bundleIDResourceID, asc.WithBundleIDProfilesNextURL(next))
+		profiles, err := client.GetBundleIDProfiles(ctx, bundleIDResourceID, asc.WithBundleIDProfilesLimit(200), asc.WithBundleIDProfilesNextURL(next))
 		if err != nil {
 			return nil, err
 		}

@@ -258,18 +258,6 @@ func TestBuildsGroupsListPreservesLookupAPIErrors(t *testing.T) {
 	}
 }
 
-func TestTestFlightGroupsListBuildMembershipFlagIsRegistered(t *testing.T) {
-	root := RootCommand("1.2.3")
-	list := findCommand(root, "testflight", "groups", "list")
-	if list == nil {
-		t.Fatal("expected testflight groups list command")
-	}
-	buildID := list.FlagSet.Lookup("build-id")
-	if buildID == nil {
-		t.Fatal("expected --build-id flag")
-	}
-}
-
 func TestTestFlightGroupsListBuildMembershipUsesOfficialFilterAndPaginates(t *testing.T) {
 	setupAuth(t)
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))

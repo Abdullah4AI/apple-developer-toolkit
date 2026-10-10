@@ -1088,8 +1088,7 @@ func searchTokensMatch(token, term string) bool {
 	}
 
 	termForms := searchTokenForms(term)
-	tokenParts := strings.Split(token, "-")
-	for _, tokenPart := range tokenParts {
+	for tokenPart := range strings.SplitSeq(token, "-") {
 		if searchTokenFormsOverlap(searchTokenForms(tokenPart), termForms) {
 			return true
 		}
@@ -1103,26 +1102,33 @@ func sameSearchStem(left, right string) bool {
 	return left != "" && right != "" && searchTokenFormsOverlap(searchTokenForms(left), searchTokenForms(right))
 }
 
-func searchTokenForms(token string) []string {
-	forms := []string{token}
+func searchTokenForms(token string) [3]string {
+	forms := [3]string{token}
 	if len(token) > 4 && strings.HasSuffix(token, "ies") {
-		forms = append(forms, strings.TrimSuffix(token, "ies")+"y")
-		return uniqueStrings(forms)
+		forms[1] = strings.TrimSuffix(token, "ies") + "y"
+	} else {
+		if len(token) > 3 && strings.HasSuffix(token, "es") {
+			forms[1] = strings.TrimSuffix(token, "es")
+		}
+		if len(token) > 3 && strings.HasSuffix(token, "s") &&
+			!strings.HasSuffix(token, "ss") &&
+			!strings.HasSuffix(token, "us") &&
+			!strings.HasSuffix(token, "is") {
+			forms[2] = strings.TrimSuffix(token, "s")
+		}
 	}
-	if len(token) > 3 && strings.HasSuffix(token, "es") {
-		forms = append(forms, strings.TrimSuffix(token, "es"))
+	// Preserve normalization after suffix checks, including for direct callers.
+	for i := range forms {
+		forms[i] = strings.ToLower(strings.TrimSpace(forms[i]))
 	}
-	if len(token) > 3 && strings.HasSuffix(token, "s") &&
-		!strings.HasSuffix(token, "ss") &&
-		!strings.HasSuffix(token, "us") &&
-		!strings.HasSuffix(token, "is") {
-		forms = append(forms, strings.TrimSuffix(token, "s"))
-	}
-	return uniqueStrings(forms)
+	return forms
 }
 
-func searchTokenFormsOverlap(left, right []string) bool {
+func searchTokenFormsOverlap(left, right [3]string) bool {
 	for _, leftForm := range left {
+		if leftForm == "" {
+			continue
+		}
 		for _, rightForm := range right {
 			if leftForm == rightForm {
 				return true

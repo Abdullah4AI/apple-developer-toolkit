@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
@@ -439,7 +440,8 @@ func TestSubscriptionsPricesImport_RetriesTimedOutInitialStateRead(t *testing.T)
 	readCount := 0
 	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		if req.Method != http.MethodGet || req.URL.Path != "/v1/subscriptions/8000000001/prices" {
-			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.String())
+			t.Errorf("unexpected request: %s %s", req.Method, req.URL.String())
+			return nil, errors.New("test transport assertion failed")
 		}
 		assertSubscriptionPriceImportStateQuery(t, req)
 		readCount++
@@ -448,7 +450,8 @@ func TestSubscriptionsPricesImport_RetriesTimedOutInitialStateRead(t *testing.T)
 			return nil, req.Context().Err()
 		}
 		if err := req.Context().Err(); err != nil {
-			t.Fatalf("expected fresh state-read context, got %v", err)
+			t.Errorf("expected fresh state-read context, got %v", err)
+			return nil, errors.New("test transport assertion failed")
 		}
 		body := `{"data":[{"type":"subscriptionPrices","id":"price-existing","attributes":{"startDate":"2026-08-01","preserved":false,"planType":"UPFRONT"},"relationships":{"territory":{"data":{"type":"territories","id":"USA"}},"subscriptionPricePoint":{"data":{"type":"subscriptionPricePoints","id":"pp-usa"}}}}],"links":{}}`
 		return jsonHTTPResponse(http.StatusOK, body), nil
@@ -464,7 +467,9 @@ func TestSubscriptionsPricesImport_RetriesTimedOutInitialStateRead(t *testing.T)
 		if err := root.Parse([]string{"subscriptions", "pricing", "prices", "import", "--subscription-id", "8000000001", "--input", csvPath, "--output", "json", "--confirm"}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
-		if err := root.Run(context.Background()); err != nil {
+		var runErr error
+		synctest.Test(t, func(*testing.T) { runErr = root.Run(context.Background()) })
+		if err := runErr; err != nil {
 			t.Fatalf("run error: %v", err)
 		}
 	})
@@ -485,7 +490,8 @@ func TestSubscriptionsPricesImport_RetriesTimedOutPricePointRead(t *testing.T) {
 	readCount := 0
 	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		if req.Method != http.MethodGet || req.URL.Path != "/v1/subscriptions/8000000001/pricePoints" {
-			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.String())
+			t.Errorf("unexpected request: %s %s", req.Method, req.URL.String())
+			return nil, errors.New("test transport assertion failed")
 		}
 		assertSubscriptionPricePointImportQuery(t, req, "USA")
 		readCount++
@@ -494,7 +500,8 @@ func TestSubscriptionsPricesImport_RetriesTimedOutPricePointRead(t *testing.T) {
 			return nil, req.Context().Err()
 		}
 		if err := req.Context().Err(); err != nil {
-			t.Fatalf("expected fresh price-point context, got %v", err)
+			t.Errorf("expected fresh price-point context, got %v", err)
+			return nil, errors.New("test transport assertion failed")
 		}
 		return jsonHTTPResponse(http.StatusOK, `{"data":[{"type":"subscriptionPricePoints","id":"pp-usa","attributes":{"customerPrice":"19.99"}}],"links":{}}`), nil
 	})
@@ -509,7 +516,9 @@ func TestSubscriptionsPricesImport_RetriesTimedOutPricePointRead(t *testing.T) {
 		if err := root.Parse([]string{"subscriptions", "pricing", "prices", "import", "--subscription-id", "8000000001", "--input", csvPath, "--dry-run", "--output", "json"}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
-		if err := root.Run(context.Background()); err != nil {
+		var runErr error
+		synctest.Test(t, func(*testing.T) { runErr = root.Run(context.Background()) })
+		if err := runErr; err != nil {
 			t.Fatalf("run error: %v", err)
 		}
 	})
@@ -537,17 +546,19 @@ func TestSubscriptionsPricesImport_RetriesTimedOutSelectorResolution(t *testing.
 				return nil, req.Context().Err()
 			}
 			if err := req.Context().Err(); err != nil {
-				t.Fatalf("expected fresh selector context, got %v", err)
+				t.Errorf("expected fresh selector context, got %v", err)
+				return nil, errors.New("test transport assertion failed")
 			}
 			return jsonHTTPResponse(http.StatusOK, `{"data":[{"type":"subscriptionGroups","id":"group-1"}],"links":{}}`), nil
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/subscriptionGroups/group-1/subscriptions":
 			if got := req.URL.Query().Get("filter[productId]"); got != "com.example.monthly" {
-				t.Fatalf("unexpected product ID filter: %q", got)
+				t.Errorf("unexpected product ID filter: %q", got)
+				return nil, errors.New("test transport assertion failed")
 			}
 			return jsonHTTPResponse(http.StatusOK, `{"data":[{"type":"subscriptions","id":"8000000001","attributes":{"name":"Monthly","productId":"com.example.monthly"}}],"links":{}}`), nil
 		default:
-			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.String())
-			return nil, nil
+			t.Errorf("unexpected request: %s %s", req.Method, req.URL.String())
+			return nil, errors.New("unexpected test transport request")
 		}
 	})
 
@@ -564,7 +575,9 @@ func TestSubscriptionsPricesImport_RetriesTimedOutSelectorResolution(t *testing.
 		}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
-		if err := root.Run(context.Background()); err != nil {
+		var runErr error
+		synctest.Test(t, func(*testing.T) { runErr = root.Run(context.Background()) })
+		if err := runErr; err != nil {
 			t.Fatalf("run error: %v", err)
 		}
 	})

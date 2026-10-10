@@ -276,6 +276,10 @@ func inferSigningSettings(project *structuredVersionProject, opts SigningPlanOpt
 // signingProfileNow is the clock used to exclude expired profiles.
 var signingProfileNow = time.Now
 
+// signingProfileCreationSkew allows a freshly issued profile whose creation
+// date is slightly ahead of a lagging local clock.
+const signingProfileCreationSkew = 5 * time.Minute
+
 func partitionExpiredSigningProfiles(profiles []signingProfile, now time.Time) ([]signingProfile, []signingProfile) {
 	active := make([]signingProfile, 0, len(profiles))
 	expired := make([]signingProfile, 0)
@@ -855,7 +859,7 @@ func parseSigningProfile(path string) (signingProfile, error) {
 		if !validCreation {
 			return signingProfile{}, fmt.Errorf("profile %s has invalid creation date", path)
 		}
-		if !creation.IsZero() && creation.After(signingProfileNow()) {
+		if !creation.IsZero() && creation.After(signingProfileNow().Add(signingProfileCreationSkew)) {
 			return signingProfile{}, fmt.Errorf("profile %s creation date is in the future", path)
 		}
 	}

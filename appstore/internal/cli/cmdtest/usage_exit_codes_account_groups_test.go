@@ -184,6 +184,11 @@ func TestAccountAndDistributionInputValidationReturnsUsageExitCode(t *testing.T)
 			wantErr: "merchant-ids certificates list: --next must be an App Store Connect URL",
 		},
 		{
+			name:    "merchant-ids certificates list next without merchant id",
+			args:    []string{"merchant-ids", "certificates", "list", "--next", "http://api.appstoreconnect.apple.com/v1/apps"},
+			wantErr: "merchant-ids certificates list: --next must be an App Store Connect URL",
+		},
+		{
 			name:    "merchant-ids certificates view limit",
 			args:    []string{"merchant-ids", "certificates", "view", "--merchant-id", "M", "--limit", "201"},
 			wantErr: "merchant-ids certificates view: --limit must be between 1 and 200",
@@ -191,6 +196,11 @@ func TestAccountAndDistributionInputValidationReturnsUsageExitCode(t *testing.T)
 		{
 			name:    "merchant-ids certificates view next",
 			args:    []string{"merchant-ids", "certificates", "view", "--merchant-id", "M", "--next", "http://api.appstoreconnect.apple.com/v1/apps"},
+			wantErr: "merchant-ids certificates view: --next must be an App Store Connect URL",
+		},
+		{
+			name:    "merchant-ids certificates view next without merchant id",
+			args:    []string{"merchant-ids", "certificates", "view", "--next", "http://api.appstoreconnect.apple.com/v1/apps"},
 			wantErr: "merchant-ids certificates view: --next must be an App Store Connect URL",
 		},
 		{
@@ -289,6 +299,11 @@ func TestAccountAndDistributionInputValidationReturnsUsageExitCode(t *testing.T)
 			wantErr: "profiles links certificates: --next must be an App Store Connect URL",
 		},
 		{
+			name:    "profiles links certificates next without id",
+			args:    []string{"profiles", "links", "certificates", "--next", "http://api.appstoreconnect.apple.com/v1/apps"},
+			wantErr: "profiles links certificates: --next must be an App Store Connect URL",
+		},
+		{
 			name:    "profiles links devices limit",
 			args:    []string{"profiles", "links", "devices", "--id", "X", "--limit", "201"},
 			wantErr: "profiles links devices: --limit must be between 1 and 200",
@@ -296,6 +311,11 @@ func TestAccountAndDistributionInputValidationReturnsUsageExitCode(t *testing.T)
 		{
 			name:    "profiles links devices next",
 			args:    []string{"profiles", "links", "devices", "--id", "X", "--next", "http://api.appstoreconnect.apple.com/v1/apps"},
+			wantErr: "profiles links devices: --next must be an App Store Connect URL",
+		},
+		{
+			name:    "profiles links devices next without id",
+			args:    []string{"profiles", "links", "devices", "--next", "http://api.appstoreconnect.apple.com/v1/apps"},
 			wantErr: "profiles links devices: --next must be an App Store Connect URL",
 		},
 		{
@@ -447,6 +467,26 @@ func TestAccountAndDistributionInputValidationReturnsUsageExitCode(t *testing.T)
 			name:    "xcode-cloud workflows next",
 			args:    []string{"xcode-cloud", "workflows", "--next", "http://api.appstoreconnect.apple.com/v1/apps"},
 			wantErr: "xcode-cloud workflows: --next must be an App Store Connect URL",
+		},
+		{
+			name:    "bundle-ids app view without id",
+			args:    []string{"bundle-ids", "app", "view"},
+			wantErr: "--id is required",
+		},
+		{
+			name:    "background-assets app-store-releases view without id",
+			args:    []string{"background-assets", "app-store-releases", "view"},
+			wantErr: "--id is required",
+		},
+		{
+			name:    "background-assets external-beta-releases view without id",
+			args:    []string{"background-assets", "external-beta-releases", "view"},
+			wantErr: "--id is required",
+		},
+		{
+			name:    "background-assets internal-beta-releases view without id",
+			args:    []string{"background-assets", "internal-beta-releases", "view"},
+			wantErr: "--id is required",
 		},
 	}
 

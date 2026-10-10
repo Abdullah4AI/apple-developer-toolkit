@@ -1,20 +1,16 @@
 # Testing Guidelines
 
+The rules for which tests to write, and which not to, are in the `Tests` section of `AGENTS.md`. This file covers patterns.
+
 ## General Principles
 
-- Write tests for all exported functions
-- Use table-driven tests when testing multiple cases
-- Mock external API calls
-- Test error cases, not just happy paths
-- Prefer test-driven development (write tests first, then implement)
-- Prefer a small number of high-signal tests over broad repetitive matrices
+- Mock external API calls (`httptest` or a stub transport); only the opt-in `make test-integration` suite calls App Store Connect.
+- Write the failing test first, then implement.
+- Prefer a few high-signal tests over broad repetitive matrices.
 
-## Coverage Requirements
+## Client Endpoint Coverage
 
-For each client endpoint, cover:
-1. Success path
-2. Validation errors
-3. API error responses
+Shared request, validation, and error-decoding code is tested once. Do not add a success, validation, and API-error test to every endpoint; test only what an endpoint does differently, such as its path, query, body, or response shape.
 
 When consolidating repetitive client tests:
 - Keep grouped/table-driven coverage for repeated request wiring
@@ -93,8 +89,8 @@ func territoryResponse(fixture *handlertest.Asserter, payload any) *http.Respons
 
 ### CLI Tests
 
-- Add CLI-level tests for command output/parsing
-- Tests should capture stderr for usage text (help output goes to stderr)
+- Use `internal/cli/cmdtest` for command output and parsing tests
+- Capture stderr for usage text (help output goes to stderr)
 
 ## Running Tests
 

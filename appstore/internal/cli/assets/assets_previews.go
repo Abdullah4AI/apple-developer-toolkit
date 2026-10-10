@@ -5,7 +5,10 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"mime"
+	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -51,29 +54,29 @@ Examples:
 			}
 
 			requestCtx, cancel := shared.ContextWithTimeout(ctx)
-			setsResp, err := client.GetAppPreviewSets(requestCtx, locID)
+			firstPage, err := client.GetAppStoreVersionLocalizationPreviewSets(requestCtx, locID, asc.WithAppStoreVersionLocalizationPreviewSetsIncludePreviews())
 			cancel()
 			if err != nil {
 				return fmt.Errorf("video-previews list: failed to fetch sets: %w", err)
 			}
-
-			result := asc.AppPreviewListResult{
-				VersionLocalizationID: locID,
-				Sets:                  make([]asc.AppPreviewSetWithPreviews, 0, len(setsResp.Data)),
-			}
-
-			for _, set := range setsResp.Data {
+			allPages, err := asc.PaginateAll(ctx, firstPage, func(ctx context.Context, nextURL string) (asc.PaginatedResponse, error) {
 				requestCtx, cancel := shared.ContextWithTimeout(ctx)
-				previews, err := client.GetAppPreviews(requestCtx, set.ID)
-				cancel()
-				if err != nil {
-					return fmt.Errorf("video-previews list: failed to fetch previews for set %s: %w", set.ID, err)
-				}
-				result.Sets = append(result.Sets, asc.AppPreviewSetWithPreviews{
-					Set:      set,
-					Previews: previews.Data,
-				})
+				defer cancel()
+				return client.GetAppStoreVersionLocalizationPreviewSets(requestCtx, "", asc.WithAppStoreVersionLocalizationPreviewSetsNextURL(nextURL))
+			})
+			if err != nil {
+				return fmt.Errorf("video-previews list: failed to fetch sets: %w", err)
 			}
+			setsResp, ok := allPages.(*asc.AppPreviewSetsResponse)
+			if !ok {
+				return fmt.Errorf("video-previews list: unexpected sets response type %T", allPages)
+			}
+
+			sets, err := client.AppPreviewSetsWithPreviews(ctx, setsResp, shared.ContextWithTimeout)
+			if err != nil {
+				return fmt.Errorf("video-previews list: %w", err)
+			}
+			result := asc.AppPreviewListResult{VersionLocalizationID: locID, Sets: sets}
 
 			return shared.PrintOutput(&result, *output.Output, *output.Pretty)
 		},
@@ -177,6 +180,8 @@ Examples:
 				return fmt.Errorf("video-previews upload: %w", err)
 			}
 
+			defer client.CloseUploadConnections()
+
 			result, err := uploadPreviews(ctx, client, locID, previewType, files, *skipExisting, *replace, *dryRun)
 			if hasAppPreviewUploadResultOutput(result) {
 				if printErr := shared.PrintOutput(&result, *output.Output, *output.Pretty); printErr != nil {
@@ -245,6 +250,11 @@ func AssetsPreviewsDownloadCommand() *ffcli.Command {
 returned as data[].id by:
   asc localizations list --version "VERSION_ID" --output json --locale "en-US"
 It is not the locale code such as en-US.
+
+App Store Connect exposes processed previews only as HLS streaming playlists,
+not as the original video file. With --version-localization, playlists are
+saved with a .m3u8 extension. With --id, the file is written to --output as
+given and a warning notes that it is a .m3u8 playlist.
 
 Examples:
   asc video-previews download --id "PREVIEW_ID" --output "./preview.mov"
@@ -343,11 +353,24 @@ Examples:
 				})
 			} else {
 				requestCtx, cancel := shared.ContextWithTimeout(ctx)
-				setsResp, err := client.GetAppPreviewSets(requestCtx, locID)
+				firstPage, err := client.GetAppStoreVersionLocalizationPreviewSets(requestCtx, locID, asc.WithAppStoreVersionLocalizationPreviewSetsIncludePreviews())
 				cancel()
 				if err != nil {
 					return fmt.Errorf("video-previews download: failed to fetch sets: %w", err)
 				}
+				allPages, err := asc.PaginateAll(ctx, firstPage, func(ctx context.Context, nextURL string) (asc.PaginatedResponse, error) {
+					requestCtx, cancel := shared.ContextWithTimeout(ctx)
+					defer cancel()
+					return client.GetAppStoreVersionLocalizationPreviewSets(requestCtx, "", asc.WithAppStoreVersionLocalizationPreviewSetsNextURL(nextURL))
+				})
+				if err != nil {
+					return fmt.Errorf("video-previews download: failed to fetch sets: %w", err)
+				}
+				setsResp, ok := allPages.(*asc.AppPreviewSetsResponse)
+				if !ok {
+					return fmt.Errorf("video-previews download: unexpected sets response type %T", allPages)
+				}
+				includedPreviews := asc.IncludedAppPreviews(setsResp)
 
 				sets := make([]asc.Resource[asc.AppPreviewSetAttributes], 0, len(setsResp.Data))
 				sets = append(sets, setsResp.Data...)
@@ -363,23 +386,23 @@ Examples:
 				for _, set := range sets {
 					previewType := strings.TrimSpace(set.Attributes.PreviewType)
 
-					requestCtx, cancel := shared.ContextWithTimeout(ctx)
-					previewsResp, err := client.GetAppPreviews(requestCtx, set.ID)
-					cancel()
-					if err != nil {
-						return fmt.Errorf("video-previews download: failed to fetch previews for set %s: %w", set.ID, err)
-					}
-
-					previews := make([]asc.Resource[asc.AppPreviewAttributes], 0, len(previewsResp.Data))
-					previews = append(previews, previewsResp.Data...)
-					sort.Slice(previews, func(i, j int) bool {
-						fi := strings.ToLower(strings.TrimSpace(previews[i].Attributes.FileName))
-						fj := strings.ToLower(strings.TrimSpace(previews[j].Attributes.FileName))
-						if fi == fj {
-							return previews[i].ID < previews[j].ID
+					previews, ok := includedPreviews[set.ID]
+					if !ok {
+						requestCtx, cancel := shared.ContextWithTimeout(ctx)
+						previewsResp, err := client.GetAppPreviews(requestCtx, set.ID)
+						cancel()
+						if err != nil {
+							return fmt.Errorf("video-previews download: failed to fetch previews for set %s: %w", set.ID, err)
 						}
-						return fi < fj
-					})
+
+						requestCtx, cancel = shared.ContextWithTimeout(ctx)
+						orderedIDs, err := getOrderedAppPreviewIDs(requestCtx, client, set.ID)
+						cancel()
+						if err != nil {
+							return fmt.Errorf("video-previews download: failed to fetch preview order for set %s: %w", set.ID, err)
+						}
+						previews = orderMediaForDownload(previewsResp.Data, orderedIDs, func(a asc.AppPreviewAttributes) string { return a.FileName })
+					}
 
 					for idx, preview := range previews {
 						base := sanitizeBaseFileName(preview.Attributes.FileName)
@@ -439,10 +462,18 @@ Examples:
 				if strings.TrimSpace(item.URL) == "" {
 					continue
 				}
+				requestedPath := item.OutputPath
+				resolvePath := func(contentType string) string {
+					if idValue == "" && IsHLSPlaylist(contentType, item.URL) {
+						return strings.TrimSuffix(requestedPath, filepath.Ext(requestedPath)) + ".m3u8"
+					}
+					return requestedPath
+				}
 
 				downloadCtx, cancel := shared.ContextWithDownloadTimeout(ctx)
-				written, contentType, err := downloadURLToFile(downloadCtx, item.URL, item.OutputPath, *overwrite)
+				written, contentType, err := downloadURLToResolvedFile(downloadCtx, item.URL, resolvePath, *overwrite)
 				cancel()
+				item.OutputPath = resolvePath(contentType)
 				if err != nil {
 					result.Failures = append(result.Failures, previewDownloadFailure{
 						ID:          item.ID,
@@ -457,6 +488,9 @@ Examples:
 				item.BytesWritten = written
 				item.ContentType = contentType
 				result.Downloaded++
+				if idValue != "" && IsHLSPlaylist(contentType, item.URL) && !strings.EqualFold(filepath.Ext(item.OutputPath), ".m3u8") {
+					fmt.Fprintf(os.Stderr, "Warning: App Store Connect only exposes an HLS streaming playlist for previews; %s is a .m3u8 playlist, not a video file\n", item.OutputPath)
+				}
 			}
 
 			result.Items = items
@@ -479,6 +513,19 @@ Examples:
 			return nil
 		},
 	}
+}
+
+// IsHLSPlaylist reports whether a preview download is an HLS playlist; pass an
+// empty contentType to decide from the URL alone before downloading.
+func IsHLSPlaylist(contentType, rawURL string) bool {
+	if mediaType, _, err := mime.ParseMediaType(contentType); err == nil {
+		switch strings.ToLower(mediaType) {
+		case "application/vnd.apple.mpegurl", "audio/mpegurl":
+			return true
+		}
+	}
+	parsed, err := url.Parse(rawURL)
+	return err == nil && strings.EqualFold(path.Ext(parsed.Path), ".m3u8")
 }
 
 func renderPreviewDownloadResult(result *previewDownloadResult, markdown bool) error {
@@ -789,7 +836,7 @@ func uploadPreviewAsset(ctx context.Context, client *asc.Client, setID, filePath
 		return result, fmt.Errorf("no upload operations returned for %q", info.Name())
 	}
 
-	if err := asc.UploadAssetFromFile(ctx, file, info.Size(), created.Data.Attributes.UploadOperations); err != nil {
+	if err := client.UploadAssetFromFile(ctx, file, info.Size(), created.Data.Attributes.UploadOperations); err != nil {
 		return result, err
 	}
 

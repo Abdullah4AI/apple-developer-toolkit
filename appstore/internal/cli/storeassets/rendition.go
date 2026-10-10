@@ -23,13 +23,19 @@ const maxPreviewBytes int64 = 500_000_000
 // describes the original upload, not necessarily the bytes returned by Apple.
 func resolvePreviewMatch(ctx context.Context, client *asc.Client, preview *PreviewLayout, existing []asc.Resource[asc.AppPreviewAttributes]) error {
 	for _, item := range existing {
+		if preview.referenceID != "" && item.ID == preview.referenceID {
+			preview.existingID, preview.sourceChecksum = item.ID, item.Attributes.SourceFileChecksum
+			return nil
+		}
+	}
+	for _, item := range existing {
 		if strings.EqualFold(item.Attributes.SourceFileChecksum, preview.checksum) {
 			preview.existingID, preview.sourceChecksum = item.ID, item.Attributes.SourceFileChecksum
 			return nil
 		}
 	}
 	for _, item := range existing {
-		if item.Attributes.FileName != preview.FileName {
+		if preview.referenceID != "" || item.Attributes.FileName != preview.FileName {
 			continue
 		}
 		mediaURL := strings.TrimSpace(item.Attributes.VideoURL)
@@ -52,6 +58,9 @@ func resolvePreviewMatch(ctx context.Context, client *asc.Client, preview *Previ
 			}
 			preview.existingID, preview.sourceChecksum = item.ID, item.Attributes.SourceFileChecksum
 		}
+	}
+	if preview.reference && preview.existingID == "" {
+		return fmt.Errorf("%s is an App Store Connect streaming playlist, not a video, and no preview in %s/%s matches it; App Store Connect does not provide original preview videos, so replace it with the original video file or skip previews (migrate import --skip-previews, or omit previews from metadata push --include)", preview.Path, preview.Locale, strings.ToUpper(preview.DeviceType))
 	}
 	return nil
 }

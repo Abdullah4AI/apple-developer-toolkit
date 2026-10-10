@@ -1841,23 +1841,6 @@ func TestGetPreReleaseVersion(t *testing.T) {
 	}
 }
 
-func TestGetAppStoreVersion(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":{"type":"appStoreVersions","id":"1","attributes":{"versionString":"1.0.0","platform":"IOS"}}}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/appStoreVersions/1" {
-			t.Fatalf("expected path /v1/appStoreVersions/1, got %s", req.URL.Path)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetAppStoreVersion(context.Background(), "1"); err != nil {
-		t.Fatalf("GetAppStoreVersion() error: %v", err)
-	}
-}
-
 func TestGetAppStoreVersion_WithCompoundReadOptions(t *testing.T) {
 	response := jsonResponse(http.StatusOK, `{"data":{"type":"appStoreVersions","id":"1"},"included":[]}`)
 	client := newTestClient(t, func(req *http.Request) {
@@ -2616,23 +2599,6 @@ func TestBuildAttributesPreservesExpiredPresence(t *testing.T) {
 				t.Fatalf("ExpiredValue() = (%t, %t), want (%t, %t)", expired, known, tc.value, tc.known)
 			}
 		})
-	}
-}
-
-func TestGetApp_ByID(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":{"type":"apps","id":"app-1","attributes":{"name":"Demo","bundleId":"com.example.demo","sku":"SKU1"}}}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/apps/app-1" {
-			t.Fatalf("expected path /v1/apps/app-1, got %s", req.URL.Path)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetApp(context.Background(), "app-1"); err != nil {
-		t.Fatalf("GetApp() error: %v", err)
 	}
 }
 
@@ -4097,23 +4063,6 @@ func TestUpdateAppInfoLocalizationFields_PreservesExplicitEmpty(t *testing.T) {
 		"subtitle": "",
 	}); err != nil {
 		t.Fatalf("UpdateAppInfoLocalizationFields() error: %v", err)
-	}
-}
-
-func TestGetAppInfos(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[{"type":"appInfos","id":"info-1"}]}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/apps/app-1/appInfos" {
-			t.Fatalf("expected path /v1/apps/app-1/appInfos, got %s", req.URL.Path)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetAppInfos(context.Background(), "app-1"); err != nil {
-		t.Fatalf("GetAppInfos() error: %v", err)
 	}
 }
 
@@ -8291,34 +8240,6 @@ func TestUpdateBundleIDCapability_ReturnsAPIError(t *testing.T) {
 	}
 }
 
-func TestGetCertificates_WithFilter(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[{"type":"certificates","id":"c1","attributes":{"name":"Cert","certificateType":"IOS_DISTRIBUTION"}}]}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/certificates" {
-			t.Fatalf("expected path /v1/certificates, got %s", req.URL.Path)
-		}
-		values := req.URL.Query()
-		if values.Get("filter[certificateType]") != "IOS_DISTRIBUTION,IOS_DEVELOPMENT" {
-			t.Fatalf("expected filter[certificateType] to be set, got %q", values.Get("filter[certificateType]"))
-		}
-		if values.Get("limit") != "5" {
-			t.Fatalf("expected limit=5, got %q", values.Get("limit"))
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetCertificates(
-		context.Background(),
-		WithCertificatesTypes([]string{"IOS_DISTRIBUTION", "IOS_DEVELOPMENT"}),
-		WithCertificatesLimit(5),
-	); err != nil {
-		t.Fatalf("GetCertificates() error: %v", err)
-	}
-}
-
 func TestCreateCertificate_SendsRequest(t *testing.T) {
 	response := jsonResponse(http.StatusCreated, `{"data":{"type":"certificates","id":"c1","attributes":{"name":"Cert","certificateType":"IOS_DISTRIBUTION"}}}`)
 	client := newTestClient(t, func(req *http.Request) {
@@ -8479,44 +8400,6 @@ func TestUpdateCertificate_SendsRequest(t *testing.T) {
 	}
 }
 
-func TestGetCertificate_SendsRequest(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":{"type":"certificates","id":"c1","attributes":{"name":"Cert","certificateType":"IOS_DISTRIBUTION"}}}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/certificates/c1" {
-			t.Fatalf("expected path /v1/certificates/c1, got %s", req.URL.Path)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetCertificate(context.Background(), "c1"); err != nil {
-		t.Fatalf("GetCertificate() error: %v", err)
-	}
-}
-
-func TestGetCertificate_WithInclude(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":{"type":"certificates","id":"c1","attributes":{"name":"Cert","certificateType":"PASS_TYPE_ID"}}}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/certificates/c1" {
-			t.Fatalf("expected path /v1/certificates/c1, got %s", req.URL.Path)
-		}
-		values := req.URL.Query()
-		if values.Get("include") != "passTypeId" {
-			t.Fatalf("expected include=passTypeId, got %q", values.Get("include"))
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetCertificate(context.Background(), "c1", WithCertificatesInclude([]string{"passTypeId"})); err != nil {
-		t.Fatalf("GetCertificate() error: %v", err)
-	}
-}
-
 func TestRevokeCertificate_SendsRequest(t *testing.T) {
 	response := jsonResponse(http.StatusNoContent, ``)
 	client := newTestClient(t, func(req *http.Request) {
@@ -8552,23 +8435,6 @@ func TestGetDevices_WithFilter(t *testing.T) {
 
 	if _, err := client.GetDevices(context.Background(), WithDevicesPlatforms([]string{"IOS", "MAC_OS"})); err != nil {
 		t.Fatalf("GetDevices() error: %v", err)
-	}
-}
-
-func TestGetDevice_SendsRequest(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":{"type":"devices","id":"d1","attributes":{"name":"Device","udid":"UDID","platform":"IOS","status":"ENABLED"}}}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/devices/d1" {
-			t.Fatalf("expected path /v1/devices/d1, got %s", req.URL.Path)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetDevice(context.Background(), "d1", nil); err != nil {
-		t.Fatalf("GetDevice() error: %v", err)
 	}
 }
 

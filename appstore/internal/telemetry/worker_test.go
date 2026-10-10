@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 )
 
@@ -141,6 +142,10 @@ func TestMaintenanceWorkerDeduplicatesActiveFlushes(t *testing.T) {
 }
 
 func TestMaintenanceWorkerWaitsForPreviousWorkerHandoff(t *testing.T) {
+	synctest.Test(t, testMaintenanceWorkerWaitsForPreviousWorkerHandoff)
+}
+
+func testMaintenanceWorkerWaitsForPreviousWorkerHandoff(t *testing.T) {
 	clearContextEnv(t)
 	clearTelemetryOptOutEnv(t)
 	setTelemetryTestHome(t)

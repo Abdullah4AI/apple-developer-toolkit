@@ -24,17 +24,6 @@ func TestBackgroundAssetsListCommand_MissingApp(t *testing.T) {
 	}
 }
 
-func TestBackgroundAssetsListCommand_InvalidLimit(t *testing.T) {
-	cmd := BackgroundAssetsListCommand()
-	if err := cmd.FlagSet.Parse([]string{"--app", "APP_ID", "--limit", "201"}); err != nil {
-		t.Fatalf("failed to parse flags: %v", err)
-	}
-
-	if err := cmd.Exec(context.Background(), []string{}); err == nil || !errors.Is(err, flag.ErrHelp) {
-		t.Fatalf("expected usage error for invalid --limit, got %v", err)
-	}
-}
-
 func TestBackgroundAssetsGetCommand_MissingID(t *testing.T) {
 	cmd := BackgroundAssetsGetCommand()
 	if err := cmd.FlagSet.Parse([]string{}); err != nil {

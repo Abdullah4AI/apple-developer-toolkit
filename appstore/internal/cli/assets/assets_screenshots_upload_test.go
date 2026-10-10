@@ -14,6 +14,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
@@ -169,7 +170,7 @@ func TestUploadScreenshotsSkipExistingStartsUploadTimeoutAfterChecksumFiltering(
 	})
 
 	deliveryCalls := 0
-	client := newAssetsUploadTestServerClient(t, http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		if err := req.Context().Err(); err != nil {
 			t.Fatalf("request context error: %v", err)
 		}
@@ -201,9 +202,17 @@ func TestUploadScreenshotsSkipExistingStartsUploadTimeoutAfterChecksumFiltering(
 		default:
 			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.String())
 		}
-	}))
+	})
+	client := newAssetsUploadTestHandlerClient(t, handler)
+	originalTransport := http.DefaultTransport
+	http.DefaultTransport = assetsHandlerTransport(handler)
+	t.Cleanup(func() { http.DefaultTransport = originalTransport })
 
-	result, err := uploadScreenshots(context.Background(), client, "LOC_123", "APP_IPHONE_65", []string{filePath}, true, false, false)
+	var result asc.AppScreenshotUploadResult
+	var err error
+	synctest.Test(t, func(*testing.T) {
+		result, err = uploadScreenshots(context.Background(), client, "LOC_123", "APP_IPHONE_65", []string{filePath}, true, false, false)
+	})
 	if err != nil {
 		t.Fatalf("uploadScreenshots() error: %v", err)
 	}
@@ -328,7 +337,7 @@ func TestExecuteAppScreenshotUploadSkipExistingDoesNotWaitForUndeliveredReservat
 		t.Run(tt.name, func(t *testing.T) {
 			filePath := writeAssetsTestPNG(t, t.TempDir(), "01-home.png")
 			detailCalls := 0
-			client := newAssetsUploadTestServerClient(t, http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			client := newAssetsUploadTestHandlerClient(t, http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 				switch {
 				case req.Method == http.MethodGet && req.URL.Path == "/v1/appStoreVersionLocalizations/LOC_123/appScreenshotSets":
 					writeAssetsTestJSON(w, http.StatusOK, `{"data":[{"type":"appScreenshotSets","id":"set-1","attributes":{"screenshotDisplayType":"APP_IPHONE_65"}}],"links":{}}`)
@@ -342,21 +351,25 @@ func TestExecuteAppScreenshotUploadSkipExistingDoesNotWaitForUndeliveredReservat
 				}
 			}))
 
-			result, err := executeAppScreenshotUpload(context.Background(), screenshotUploadConfig[asc.AppScreenshotUploadResult]{
-				Client:         client,
-				LocalizationID: "LOC_123",
-				DisplayType:    "APP_IPHONE_65",
-				Files:          []string{filePath},
-				SkipExisting:   true,
-				DryRun:         true,
-				RequestContext: func(ctx context.Context) (context.Context, context.CancelFunc) {
-					return context.WithTimeout(ctx, 20*time.Millisecond)
-				},
-				Access: appStoreVersionScreenshotSetAccess,
-				BuildResult: func(localizationID string, set asc.Resource[asc.AppScreenshotSetAttributes], dryRun bool, results []asc.AssetUploadResultItem) asc.AppScreenshotUploadResult {
-					return buildAppScreenshotUploadResult(localizationID, set, dryRun, results)
-				},
-			}, "")
+			var result asc.AppScreenshotUploadResult
+			var err error
+			synctest.Test(t, func(*testing.T) {
+				result, err = executeAppScreenshotUpload(context.Background(), screenshotUploadConfig[asc.AppScreenshotUploadResult]{
+					Client:         client,
+					LocalizationID: "LOC_123",
+					DisplayType:    "APP_IPHONE_65",
+					Files:          []string{filePath},
+					SkipExisting:   true,
+					DryRun:         true,
+					RequestContext: func(ctx context.Context) (context.Context, context.CancelFunc) {
+						return context.WithTimeout(ctx, 20*time.Millisecond)
+					},
+					Access: appStoreVersionScreenshotSetAccess,
+					BuildResult: func(localizationID string, set asc.Resource[asc.AppScreenshotSetAttributes], dryRun bool, results []asc.AssetUploadResultItem) asc.AppScreenshotUploadResult {
+						return buildAppScreenshotUploadResult(localizationID, set, dryRun, results)
+					},
+				}, "")
+			})
 			if err != nil {
 				t.Fatalf("executeAppScreenshotUpload() error: %v", err)
 			}
@@ -374,7 +387,7 @@ func TestUploadScreenshotsSkipExistingChecksumTimeoutIncludesAssetID(t *testing.
 	filePath := writeAssetsTestPNG(t, t.TempDir(), "01-home.png")
 
 	createCalls := 0
-	client := newAssetsUploadTestServerClient(t, http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+	client := newAssetsUploadTestHandlerClient(t, http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		switch {
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/appStoreVersionLocalizations/LOC_123/appScreenshotSets":
 			writeAssetsTestJSON(w, http.StatusOK, `{"data":[{"type":"appScreenshotSets","id":"set-1","attributes":{"screenshotDisplayType":"APP_IPHONE_65"}}],"links":{}}`)
@@ -390,20 +403,23 @@ func TestUploadScreenshotsSkipExistingChecksumTimeoutIncludesAssetID(t *testing.
 		}
 	}))
 
-	_, err := uploadScreenshotsWithConfig(context.Background(), screenshotUploadConfig[asc.AppScreenshotUploadResult]{
-		Client:         client,
-		LocalizationID: "LOC_123",
-		DisplayType:    "APP_IPHONE_65",
-		Files:          []string{filePath},
-		SkipExisting:   true,
-		DryRun:         true,
-		RequestContext: func(ctx context.Context) (context.Context, context.CancelFunc) {
-			return context.WithTimeout(ctx, 20*time.Millisecond)
-		},
-		Access: appStoreVersionScreenshotSetAccess,
-		BuildResult: func(localizationID string, set asc.Resource[asc.AppScreenshotSetAttributes], dryRun bool, results []asc.AssetUploadResultItem) asc.AppScreenshotUploadResult {
-			return buildAppScreenshotUploadResult(localizationID, set, dryRun, results)
-		},
+	var err error
+	synctest.Test(t, func(*testing.T) {
+		_, err = uploadScreenshotsWithConfig(context.Background(), screenshotUploadConfig[asc.AppScreenshotUploadResult]{
+			Client:         client,
+			LocalizationID: "LOC_123",
+			DisplayType:    "APP_IPHONE_65",
+			Files:          []string{filePath},
+			SkipExisting:   true,
+			DryRun:         true,
+			RequestContext: func(ctx context.Context) (context.Context, context.CancelFunc) {
+				return context.WithTimeout(ctx, 20*time.Millisecond)
+			},
+			Access: appStoreVersionScreenshotSetAccess,
+			BuildResult: func(localizationID string, set asc.Resource[asc.AppScreenshotSetAttributes], dryRun bool, results []asc.AssetUploadResultItem) asc.AppScreenshotUploadResult {
+				return buildAppScreenshotUploadResult(localizationID, set, dryRun, results)
+			},
+		})
 	})
 	if err == nil {
 		t.Fatal("expected checksum settlement timeout")

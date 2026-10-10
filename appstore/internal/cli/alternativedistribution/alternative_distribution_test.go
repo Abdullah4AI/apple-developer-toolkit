@@ -88,17 +88,6 @@ func TestAlternativeDistributionDomainsDeleteCommand_MissingConfirm(t *testing.T
 	}
 }
 
-func TestAlternativeDistributionDomainsListCommand_InvalidLimit(t *testing.T) {
-	cmd := AlternativeDistributionDomainsListCommand()
-	if err := cmd.FlagSet.Parse([]string{"--limit", "500"}); err != nil {
-		t.Fatalf("failed to parse flags: %v", err)
-	}
-
-	if err := cmd.Exec(context.Background(), []string{}); err == nil || !errors.Is(err, flag.ErrHelp) {
-		t.Fatalf("expected usage error for invalid --limit, got %v", err)
-	}
-}
-
 func TestAlternativeDistributionKeysGetCommand_MissingID(t *testing.T) {
 	cmd := AlternativeDistributionKeysGetCommand()
 	if err := cmd.FlagSet.Parse([]string{}); err != nil {
@@ -276,27 +265,5 @@ func TestAlternativeDistributionPackageVersionsVariantsCommand_MissingID(t *test
 
 	if err := cmd.Exec(context.Background(), []string{}); !errors.Is(err, flag.ErrHelp) {
 		t.Fatalf("expected flag.ErrHelp when --version-id is missing, got %v", err)
-	}
-}
-
-func TestAlternativeDistributionPackageVersionsDeltasCommand_InvalidLimit(t *testing.T) {
-	cmd := AlternativeDistributionPackageVersionsDeltasCommand()
-	if err := cmd.FlagSet.Parse([]string{"--version-id", "VERSION_ID", "--limit", "1000"}); err != nil {
-		t.Fatalf("failed to parse flags: %v", err)
-	}
-
-	if err := cmd.Exec(context.Background(), []string{}); err == nil || !errors.Is(err, flag.ErrHelp) {
-		t.Fatalf("expected usage error for invalid --limit, got %v", err)
-	}
-}
-
-func TestAlternativeDistributionPackageVersionsListCommand_InvalidLimit(t *testing.T) {
-	cmd := AlternativeDistributionPackageVersionsListCommand()
-	if err := cmd.FlagSet.Parse([]string{"--package-id", "PACKAGE_ID", "--limit", "1000"}); err != nil {
-		t.Fatalf("failed to parse flags: %v", err)
-	}
-
-	if err := cmd.Exec(context.Background(), []string{}); err == nil || !errors.Is(err, flag.ErrHelp) {
-		t.Fatalf("expected usage error for invalid --limit, got %v", err)
 	}
 }

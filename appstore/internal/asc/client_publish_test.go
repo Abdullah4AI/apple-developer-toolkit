@@ -12,6 +12,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 )
 
@@ -39,10 +40,12 @@ func TestWaitForBuildProcessing_ReturnsValid(t *testing.T) {
 		privateKey: key,
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
-	defer cancel()
-
-	build, err := client.WaitForBuildProcessing(ctx, "build-1", 1*time.Millisecond)
+	var build *BuildResponse
+	synctest.Test(t, func(*testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+		defer cancel()
+		build, err = client.WaitForBuildProcessing(ctx, "build-1", 1*time.Millisecond)
+	})
 	if err != nil {
 		t.Fatalf("WaitForBuildProcessing() error: %v", err)
 	}
@@ -69,10 +72,12 @@ func TestWaitForBuildProcessing_InvalidReturnsError(t *testing.T) {
 		privateKey: key,
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
-	defer cancel()
-
-	build, err := client.WaitForBuildProcessing(ctx, "build-1", 1*time.Millisecond)
+	var build *BuildResponse
+	synctest.Test(t, func(*testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+		defer cancel()
+		build, err = client.WaitForBuildProcessing(ctx, "build-1", 1*time.Millisecond)
+	})
 	if err == nil {
 		t.Fatalf("expected error, got nil")
 	}
@@ -99,10 +104,12 @@ func TestWaitForBuildProcessing_FailedReturnsError(t *testing.T) {
 		privateKey: key,
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
-	defer cancel()
-
-	build, err := client.WaitForBuildProcessing(ctx, "build-1", 1*time.Millisecond)
+	var build *BuildResponse
+	synctest.Test(t, func(*testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+		defer cancel()
+		build, err = client.WaitForBuildProcessing(ctx, "build-1", 1*time.Millisecond)
+	})
 	if err == nil {
 		t.Fatalf("expected error, got nil")
 	}

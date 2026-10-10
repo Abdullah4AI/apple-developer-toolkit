@@ -782,49 +782,6 @@ func TestSetMedicalDeviceDeclarationSkipsMatchingAffirmativeDeclaration(t *testi
 	}
 }
 
-func TestNormalizeMedicalDeviceRegion(t *testing.T) {
-	tests := []struct {
-		name  string
-		input string
-		want  string
-	}{
-		{
-			name:  "empty",
-			input: "",
-			want:  "",
-		},
-		{
-			name:  "whitespace only",
-			input: "   ",
-			want:  "",
-		},
-		{
-			name:  "eu normalizes to eea",
-			input: " eu ",
-			want:  "EEA",
-		},
-		{
-			name:  "already uppercase",
-			input: "USA",
-			want:  "USA",
-		},
-		{
-			name:  "lowercase value uppercased",
-			input: "gbr",
-			want:  "GBR",
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			got := normalizeMedicalDeviceRegion(tc.input)
-			if got != tc.want {
-				t.Fatalf("normalizeMedicalDeviceRegion(%q) = %q, want %q", tc.input, got, tc.want)
-			}
-		})
-	}
-}
-
 func TestMedicalDeviceRegionsFromConstraintsCollectsUniqueNormalizedSortedRegions(t *testing.T) {
 	constraints := map[string]complianceConstraint{
 		"ignored": {

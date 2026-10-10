@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"image"
 	_ "image/jpeg"
@@ -110,15 +111,24 @@ func Validate(ctx context.Context, clip *AppClipLayout, previews []PreviewLayout
 		if err != nil {
 			return cleanup, err
 		}
-		if err := validateVideo(ctx, staged, p.DeviceType, p.PosterFrame); err != nil {
-			return cleanup, fmt.Errorf("preview %s: %w", p.Path, err)
+		if !p.reference {
+			if p.reference, err = isPlaylistFile(staged); err != nil {
+				return cleanup, err
+			}
+		}
+		if !p.reference {
+			if err := validateVideo(ctx, staged, p.DeviceType, p.PosterFrame); err != nil {
+				return cleanup, fmt.Errorf("preview %s: %w", p.Path, err)
+			}
 		}
 		p.stagedPath = staged
-		hash, err := asc.ComputeFileChecksum(staged, asc.ChecksumAlgorithmMD5)
-		if err != nil {
-			return cleanup, err
+		if p.checksum == "" {
+			hash, err := asc.ComputeFileChecksum(staged, asc.ChecksumAlgorithmMD5)
+			if err != nil {
+				return cleanup, err
+			}
+			p.checksum = hash.Hash
 		}
-		p.checksum = hash.Hash
 		key := p.Locale + "/" + strings.ToUpper(p.DeviceType) + "/" + p.checksum
 		if previous, ok := previewContent[key]; ok {
 			return cleanup, fmt.Errorf("duplicate preview content in %s/%s: %q and %q", p.Locale, p.DeviceType, previous, p.FileName)
@@ -127,6 +137,21 @@ func Validate(ctx context.Context, clip *AppClipLayout, previews []PreviewLayout
 	}
 	success = true
 	return cleanup, nil
+}
+
+// Older exports saved App Store Connect's HLS playlist under the video's name.
+func isPlaylistFile(path string) (bool, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return false, err
+	}
+	defer file.Close()
+	header := make([]byte, len("#EXTM3U"))
+	n, err := io.ReadFull(file, header)
+	if err != nil && !errors.Is(err, io.ErrUnexpectedEOF) {
+		return false, err
+	}
+	return string(header[:n]) == "#EXTM3U", nil
 }
 
 var (

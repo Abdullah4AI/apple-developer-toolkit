@@ -372,29 +372,6 @@ func TestBuildsInfoValidationErrors(t *testing.T) {
 	}
 }
 
-func TestBuildsExpireRequiresBuildID(t *testing.T) {
-	t.Setenv("ASC_APP_ID", "")
-
-	root := RootCommand("1.2.3")
-
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"builds", "expire"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		err := root.Run(context.Background())
-		if !errors.Is(err, flag.ErrHelp) {
-			t.Fatalf("expected ErrHelp, got %v", err)
-		}
-	})
-
-	if stdout != "" {
-		t.Fatalf("expected empty stdout, got %q", stdout)
-	}
-	if !strings.Contains(stderr, "--build-id or --app is required") {
-		t.Fatalf("expected missing build error, got %q", stderr)
-	}
-}
-
 func TestSubscriptionsOfferCodesOneTimeCodesListRequiresOfferCodeID(t *testing.T) {
 	t.Setenv("ASC_APP_ID", "")
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "config.json"))
@@ -3256,15 +3233,6 @@ func TestParseCommaSeparatedIDs(t *testing.T) {
 	}
 }
 
-func TestBetaTestersListAcceptsBuildFilter(t *testing.T) {
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	if err := root.Parse([]string{"testflight", "testers", "list", "--app", "X", "--build-id", "Y"}); err != nil {
-		t.Fatalf("parse error: %v", err)
-	}
-}
-
 func TestLocalizationsValidationErrors(t *testing.T) {
 	t.Setenv("ASC_APP_ID", "")
 
@@ -3600,6 +3568,11 @@ func TestBuildsTestNotesValidationErrors(t *testing.T) {
 		{
 			name:    "builds test-notes update localization id conflicts with build selector",
 			args:    []string{"builds", "test-notes", "update", "--localization-id", "LOC_ID", "--build-id", "BUILD_ID", "--locale", "en-US", "--whats-new", "Notes"},
+			wantErr: "--localization-id cannot be combined with build selectors or --locale",
+		},
+		{
+			name:    "builds test-notes update localization id conflicts with build selector without locale",
+			args:    []string{"builds", "test-notes", "update", "--localization-id", "LOC_ID", "--build-id", "BUILD_ID", "--whats-new", "Notes"},
 			wantErr: "--localization-id cannot be combined with build selectors or --locale",
 		},
 		{

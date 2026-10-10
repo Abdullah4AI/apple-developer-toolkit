@@ -205,9 +205,10 @@ func TestXCConfigResolverRestoresStackAfterCyclicIncludeBeforeSibling(t *testing
 }
 
 func TestXCConfigCollectorBoundsSigningSourceGraph(t *testing.T) {
+	root := t.TempDir()
 	paths := make([]string, signingPlanMaxFiles+1)
 	for i := range paths {
-		paths[i] = filepath.Join(t.TempDir(), "source.xcconfig")
+		paths[i] = filepath.Join(root, fmt.Sprintf("source-%04d.xcconfig", i))
 	}
 	contents := make(map[string][]byte, len(paths))
 	for i, path := range paths {

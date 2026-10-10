@@ -52,13 +52,8 @@ func TestDistributionRunLockSameRunContendsAndHonorsCancellation(t *testing.T) {
 	case <-time.After(3 * distributionRunLockPollInterval):
 	}
 	cancel()
-	select {
-	case err := <-errCh:
-		if !errors.Is(err, context.Canceled) {
-			t.Fatalf("contending acquire error = %v, want context.Canceled", err)
-		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("contending lock did not stop after context cancellation")
+	if err := <-errCh; !errors.Is(err, context.Canceled) {
+		t.Fatalf("contending acquire error = %v, want context.Canceled", err)
 	}
 }
 
@@ -95,11 +90,7 @@ func TestDistributionRunLockRejectsPathReplacementWhileWaiterContends(t *testing
 		distributionRunLockAfterOpenForTest = nil
 	}()
 
-	select {
-	case <-opened:
-	case <-time.After(2 * time.Second):
-		t.Fatal("waiter did not open the original lock inode")
-	}
+	<-opened
 	lockPath := filepath.Join(runDir, distributionRunLockFilename)
 	oldLockPath := filepath.Join(runDir, "lock.replaced")
 	if err := os.Rename(lockPath, oldLockPath); err != nil {
@@ -118,13 +109,8 @@ func TestDistributionRunLockRejectsPathReplacementWhileWaiterContends(t *testing
 	}
 	firstReleased = true
 
-	select {
-	case err := <-errCh:
-		if err == nil || !strings.Contains(err.Error(), "path was replaced") {
-			t.Fatalf("waiter error = %v, want lock path replacement rejection", err)
-		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("waiter did not reject the replaced lock path")
+	if err := <-errCh; err == nil || !strings.Contains(err.Error(), "path was replaced") {
+		t.Fatalf("waiter error = %v, want lock path replacement rejection", err)
 	}
 }
 
@@ -158,21 +144,10 @@ func TestDistributionRunLockContendsAcrossProcesses(t *testing.T) {
 		}
 	})
 
-	readyCh := make(chan error, 1)
-	go func() {
-		line, readErr := bufio.NewReader(stdout).ReadString('\n')
-		if readErr == nil && line != "locked\n" {
-			readErr = fmt.Errorf("unexpected helper output %q", line)
-		}
-		readyCh <- readErr
-	}()
-	select {
-	case err := <-readyCh:
-		if err != nil {
-			t.Fatalf("wait for lock helper: %v", err)
-		}
-	case <-time.After(5 * time.Second):
-		t.Fatal("lock helper did not become ready")
+	// The helper either reports the held lock or exits, which ends this read
+	// with EOF, so readiness needs no wall-clock bound.
+	if line, err := bufio.NewReader(stdout).ReadString('\n'); err != nil || line != "locked\n" {
+		t.Fatalf("wait for lock helper: line=%q err=%v", line, err)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
@@ -230,9 +205,7 @@ func TestDistributionRunLockDifferentRunsDoNotContend(t *testing.T) {
 	}
 	defer func() { _ = releaseFirst() }()
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	releaseSecond, err := acquireDistributionRunLock(ctx, stateDir, secondRunID)
+	releaseSecond, err := acquireDistributionRunLock(context.Background(), stateDir, secondRunID)
 	if err != nil {
 		t.Fatalf("acquire different run lock: %v", err)
 	}

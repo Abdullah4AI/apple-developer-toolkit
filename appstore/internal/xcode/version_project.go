@@ -1360,6 +1360,8 @@ const signingPlanMaxMissingOptionalIncludes = 256
 func (project *structuredVersionProject) signingXCConfigConsumersWithOptionalMissing(selectedIDs map[string]bool, allowExternal bool) (map[string]map[string]bool, map[string][]string, map[string]string, bool, []string, []string, map[string][]string, bool, []string, error) {
 	var protectedConfigPaths []string
 	var blockedExternalPaths []string
+	protectedPathSet := make(map[string]struct{})
+	blockedPathSet := make(map[string]struct{})
 	var missingOptionalIncludes []string
 	missingOptionalOverflow := false
 	unauthorizedExternal := false
@@ -1369,20 +1371,18 @@ func (project *structuredVersionProject) signingXCConfigConsumersWithOptionalMis
 	sourceBudget := &xcconfigSourceBudget{}
 	addProtectedPath := func(path string) {
 		absolute := normalizeSigningLexicalPath(path)
-		for _, existing := range protectedConfigPaths {
-			if normalizeSigningLexicalPath(existing) == absolute {
-				return
-			}
+		if _, exists := protectedPathSet[absolute]; exists {
+			return
 		}
+		protectedPathSet[absolute] = struct{}{}
 		protectedConfigPaths = append(protectedConfigPaths, absolute)
 	}
 	addBlockedPath := func(path string) {
 		absolute := normalizeSigningLexicalPath(path)
-		for _, existing := range blockedExternalPaths {
-			if normalizeSigningLexicalPath(existing) == absolute {
-				return
-			}
+		if _, exists := blockedPathSet[absolute]; exists {
+			return
 		}
+		blockedPathSet[absolute] = struct{}{}
 		blockedExternalPaths = append(blockedExternalPaths, absolute)
 	}
 	addMissingOptionalInclude := func(path string) {
@@ -1406,6 +1406,7 @@ func (project *structuredVersionProject) signingXCConfigConsumersWithOptionalMis
 		var collectionErrorPath string
 		var collectionErrorExternal bool
 		observedPaths := make([]string, 0)
+		observedPathSet := make(map[string]struct{})
 		var identify func(string) (os.FileInfo, error)
 		if xcconfigUsesIdentityTraversal() {
 			identify = signingXCConfigIdentityFn
@@ -1447,7 +1448,11 @@ func (project *structuredVersionProject) signingXCConfigConsumersWithOptionalMis
 				// An external path remains protected from artifact writes even
 				// when the operator opted into reading it.
 				addProtectedPath(filePath)
-				observedPaths = appendUniqueSigningPaths(observedPaths, filePath)
+				absolute := normalizeSigningLexicalPath(filePath)
+				if _, exists := observedPathSet[absolute]; !exists {
+					observedPathSet[absolute] = struct{}{}
+					observedPaths = append(observedPaths, absolute)
+				}
 			},
 			func(filePath string, _ error) {
 				collectionErrorPath = filePath

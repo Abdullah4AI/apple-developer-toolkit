@@ -323,6 +323,7 @@ Examples:
 				if err != nil {
 					return fmt.Errorf("migrate import: %w", err)
 				}
+				defer client.CloseUploadConnections()
 				resolveCtx, cancelResolve := migrateRequestContext(ctx)
 				defer cancelResolve()
 				requestCtx = resolveCtx
@@ -614,7 +615,7 @@ Examples:
 				}
 			}
 
-			assetPlan, assetWarnings, err := storeassets.ExportPlan(ctx, client, strings.TrimSpace(*versionID), "metadata", true, true)
+			assetPlan, assetWarnings, err := storeassets.ExportPlanWithVersionLocalizations(ctx, client, strings.TrimSpace(*versionID), "metadata", true, true, localizations)
 			if err != nil {
 				return fmt.Errorf("migrate export: %w", err)
 			}

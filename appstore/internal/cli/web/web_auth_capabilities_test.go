@@ -297,27 +297,6 @@ func TestWebAuthCapabilitiesEmptyCapabilitySetOutputsEmptyArray(t *testing.T) {
 	}
 }
 
-func TestWebAuthCapabilitiesMissingLocalAuthReturnsUsageError(t *testing.T) {
-	origResolveAuth := resolveWebAuthCredentialsFn
-	t.Cleanup(func() {
-		resolveWebAuthCredentialsFn = origResolveAuth
-	})
-
-	resolveWebAuthCredentialsFn = func(profile string) (shared.ResolvedAuthCredentials, error) {
-		return shared.ResolvedAuthCredentials{}, errors.New("missing authentication")
-	}
-
-	cmd := WebAuthCapabilitiesCommand()
-	if err := cmd.FlagSet.Parse([]string{"--output", "json"}); err != nil {
-		t.Fatalf("parse error: %v", err)
-	}
-
-	err := cmd.Exec(context.Background(), nil)
-	if !errors.Is(err, flag.ErrHelp) {
-		t.Fatalf("expected usage error, got %v", err)
-	}
-}
-
 func TestWebAuthCapabilitiesKeyIDOutputsJSON(t *testing.T) {
 	labels := stubWebProgressLabels(t)
 

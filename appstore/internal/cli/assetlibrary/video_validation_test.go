@@ -77,22 +77,15 @@ printf '%s' '{"streams":[{"codec_type":"video","codec_name":"h264","width":1920,
 	}
 }
 
+// The real-container fixtures in testdata are one-frame 176x144 clips made with
+// ffmpeg -f lavfi -i color=c=black:s=176x144:r=30 -frames:v 1 -an, using
+// -c:v mpeg4 -f 3gp for 3gp-renamed.mp4 and -c:v libx264 with the mp4, mov and
+// ipod muxers for video.mp4, video.mov and video.m4v.
 func TestLibraryVideoRejectsReal3GPRenamedMP4(t *testing.T) {
-	executable, err := exec.LookPath("ffmpeg")
-	if err != nil {
-		t.Skip("ffmpeg required for actual-container fixture")
-	}
 	if _, err := exec.LookPath("ffprobe"); err != nil {
 		t.Skip("ffprobe required for actual-container fixture")
 	}
-	path := filepath.Join(t.TempDir(), "renamed.mp4")
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	command := exec.CommandContext(ctx, executable, "-v", "error", "-f", "lavfi", "-i", "color=c=black:s=176x144:r=30", "-t", "5", "-an", "-c:v", "mpeg4", "-f", "3gp", path)
-	if output, err := command.CombinedOutput(); err != nil {
-		t.Fatalf("generate real 3GP: %v %s", err, output)
-	}
-	if p, err := inspectLibraryVideo(ctx, path); err == nil || !strings.Contains(err.Error(), "container") {
+	if p, err := inspectLibraryVideo(context.Background(), filepath.Join("testdata", "3gp-renamed.mp4")); err == nil || !strings.Contains(err.Error(), "container") {
 		t.Fatalf("renamed real 3GP accepted: %+v err=%v", p, err)
 	}
 }
@@ -110,23 +103,12 @@ func TestLibraryVideoContainerCompatibleBrand(t *testing.T) {
 }
 
 func TestLibraryVideoRealSupportedContainers(t *testing.T) {
-	executable, err := exec.LookPath("ffmpeg")
-	if err != nil {
-		t.Skip("ffmpeg required for actual-container fixtures")
-	}
 	if _, err := exec.LookPath("ffprobe"); err != nil {
 		t.Skip("ffprobe required for actual-container fixtures")
 	}
-	for _, fixture := range []struct{ extension, muxer, mime string }{{".mp4", "mp4", "video/mp4"}, {".mov", "mov", "video/quicktime"}, {".m4v", "ipod", "video/x-m4v"}} {
+	for _, fixture := range []struct{ extension, mime string }{{".mp4", "video/mp4"}, {".mov", "video/quicktime"}, {".m4v", "video/x-m4v"}} {
 		t.Run(fixture.extension, func(t *testing.T) {
-			path := filepath.Join(t.TempDir(), "video"+fixture.extension)
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			defer cancel()
-			command := exec.CommandContext(ctx, executable, "-v", "error", "-f", "lavfi", "-i", "color=c=black:s=176x144:r=30", "-t", "1", "-an", "-c:v", "libx264", "-f", fixture.muxer, path)
-			if output, err := command.CombinedOutput(); err != nil {
-				t.Fatalf("generate actual %s: %v %s", fixture.muxer, err, output)
-			}
-			p, err := inspectLibraryVideo(ctx, path)
+			p, err := inspectLibraryVideo(context.Background(), filepath.Join("testdata", "video"+fixture.extension))
 			if err != nil || p.MIMEType != fixture.mime || p.Codec != "h264" {
 				t.Fatalf("actual %s properties=%+v err=%v", fixture.extension, p, err)
 			}

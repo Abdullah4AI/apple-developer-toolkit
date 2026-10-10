@@ -23,18 +23,6 @@ func TestXcodeCommandIncludesInstall(t *testing.T) {
 	t.Fatal("xcode command does not expose the install subcommand")
 }
 
-func TestXcodeInstallFlagsAreRegistered(t *testing.T) {
-	command := XcodeInstallCommand()
-	for _, name := range []string{"ipa", "device-id", "timeout"} {
-		t.Run(name, func(t *testing.T) {
-			value := command.FlagSet.Lookup(name)
-			if value == nil {
-				t.Fatalf("flag %q is missing", name)
-			}
-		})
-	}
-}
-
 func TestXcodeInstallRequiresInputs(t *testing.T) {
 	command := XcodeInstallCommand()
 	command.FlagSet.SetOutput(io.Discard)

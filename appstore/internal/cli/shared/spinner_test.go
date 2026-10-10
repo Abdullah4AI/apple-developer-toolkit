@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
@@ -12,6 +13,21 @@ import (
 
 func withTTYStub(t *testing.T, stdoutTTY, stderrTTY bool) {
 	t.Helper()
+
+	// go test -json gives the test binary one fd for stdout and stderr, which
+	// an fd-keyed stub cannot tell apart.
+	if os.Stdout.Fd() == os.Stderr.Fd() {
+		devNull, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
+		if err != nil {
+			t.Fatalf("open %s: %v", os.DevNull, err)
+		}
+		prevStderr := os.Stderr
+		os.Stderr = devNull
+		t.Cleanup(func() {
+			os.Stderr = prevStderr
+			_ = devNull.Close()
+		})
+	}
 
 	prevIsTerminal := isTerminal
 	stdoutFD := int(os.Stdout.Fd())
@@ -316,7 +332,11 @@ func TestWithSpinnerDelayed_NoOpWhenFast(t *testing.T) {
 	stdout, stderr := captureOutput(t, func() {
 		withTTYStub(t, true, true)
 
-		if err := WithSpinnerDelayed("Working", 200*time.Millisecond, func() error { return nil }); err != nil {
+		var err error
+		synctest.Test(t, func(*testing.T) {
+			err = WithSpinnerDelayed("Working", 200*time.Millisecond, func() error { return nil })
+		})
+		if err != nil {
 			t.Fatalf("WithSpinnerDelayed() error: %v", err)
 		}
 	})
@@ -335,10 +355,14 @@ func TestWithSpinnerDelayed_StartsWhenSlow(t *testing.T) {
 	stdout, stderr := captureOutput(t, func() {
 		withTTYStub(t, true, true)
 
-		if err := WithSpinnerDelayed("Working", 10*time.Millisecond, func() error {
-			time.Sleep(30 * time.Millisecond)
-			return nil
-		}); err != nil {
+		var err error
+		synctest.Test(t, func(*testing.T) {
+			err = WithSpinnerDelayed("Working", 10*time.Millisecond, func() error {
+				time.Sleep(30 * time.Millisecond)
+				return nil
+			})
+		})
+		if err != nil {
 			t.Fatalf("WithSpinnerDelayed() error: %v", err)
 		}
 	})

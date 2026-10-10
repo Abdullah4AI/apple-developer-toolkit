@@ -65,6 +65,11 @@ func TestIAPInputValidationReturnsUsageExitCode(t *testing.T) {
 			wantErr: "iap offer-codes prices: --next must be an App Store Connect URL",
 		},
 		{
+			name:    "offer-codes prices invalid next without offer code id",
+			args:    []string{"iap", "offer-codes", "prices", "--next", "http://api.appstoreconnect.apple.com/v1/x"},
+			wantErr: "iap offer-codes prices: --next must be an App Store Connect URL",
+		},
+		{
 			name:    "pricing price-points list limit above maximum",
 			args:    []string{"iap", "pricing", "price-points", "list", "--limit", "201"},
 			wantErr: "iap price-points list: --limit must be between 1 and 200",
@@ -83,6 +88,11 @@ func TestIAPInputValidationReturnsUsageExitCode(t *testing.T) {
 			name:    "pricing availabilities available-territories limit above maximum",
 			args:    []string{"iap", "pricing", "availabilities", "available-territories", "--limit", "201"},
 			wantErr: "iap availabilities available-territories: --limit must be between 1 and 200",
+		},
+		{
+			name:    "versions images view without image-id",
+			args:    []string{"iap", "versions", "images", "view"},
+			wantErr: "--image-id is required",
 		},
 	}
 

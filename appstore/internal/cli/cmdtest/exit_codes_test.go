@@ -1,7 +1,6 @@
 package cmdtest
 
 import (
-	"flag"
 	"io"
 	"net/http"
 	"os"
@@ -11,34 +10,7 @@ import (
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/cmd"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
-	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
-
-// TestExitCodeConstantsMatch tests that exit codes from cmd package match expected values
-func TestExitCodeConstantsMatch(t *testing.T) {
-	tests := []struct {
-		name     string
-		expected int
-		getter   func() int
-	}{
-		{"Success", 0, func() int { return cmd.ExitSuccess }},
-		{"Error", 1, func() int { return cmd.ExitError }},
-		{"Usage", 2, func() int { return cmd.ExitUsage }},
-		{"Auth", 3, func() int { return cmd.ExitAuth }},
-		{"NotFound", 4, func() int { return cmd.ExitNotFound }},
-		{"Conflict", 5, func() int { return cmd.ExitConflict }},
-		{"ReadOnly", 6, func() int { return cmd.ExitReadOnly }},
-		{"Pending", 7, func() int { return cmd.ExitPending }},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := tt.getter(); got != tt.expected {
-				t.Errorf("%s = %d, want %d", tt.name, got, tt.expected)
-			}
-		})
-	}
-}
 
 func TestRun_IntroductoryOffersImportInvalidStartDateReturnsExitUsage(t *testing.T) {
 	t.Setenv("ASC_BYPASS_KEYCHAIN", "1")
@@ -143,53 +115,6 @@ func TestRun_IntroductoryOffersImportPartialFailureReturnsExitError(t *testing.T
 	}
 	if getCount != 2 || postCount != 2 {
 		t.Fatalf("expected initial GET, two POSTs, and one readback GET; got GET=%d POST=%d", getCount, postCount)
-	}
-}
-
-// TestExitCodeMapper_NilError tests that nil error returns success
-func TestExitCodeMapper_NilError(t *testing.T) {
-	result := cmd.ExitCodeFromError(nil)
-	if result != cmd.ExitSuccess {
-		t.Errorf("ExitCodeFromError(nil) = %d, want %d", result, cmd.ExitSuccess)
-	}
-}
-
-// TestExitCodeMapper_UsageError tests that flag.ErrHelp returns usage
-func TestExitCodeMapper_UsageError(t *testing.T) {
-	result := cmd.ExitCodeFromError(flag.ErrHelp)
-	if result != cmd.ExitUsage {
-		t.Errorf("ExitCodeFromError(flag.ErrHelp) = %d, want %d", result, cmd.ExitUsage)
-	}
-}
-
-// TestExitCodeMapper_SharedErrors tests that shared.ErrMissingAuth returns auth exit
-func TestExitCodeMapper_SharedErrors(t *testing.T) {
-	result := cmd.ExitCodeFromError(shared.ErrMissingAuth)
-	if result != cmd.ExitAuth {
-		t.Errorf("ExitCodeFromError(shared.ErrMissingAuth) = %d, want %d", result, cmd.ExitAuth)
-	}
-}
-
-// TestExitCodeMapper_ASCErrors tests that asc errors return correct exit codes
-func TestExitCodeMapper_ASCErrors(t *testing.T) {
-	tests := []struct {
-		name string
-		err  error
-		want int
-	}{
-		{"ErrUnauthorized", asc.ErrUnauthorized, cmd.ExitAuth},
-		{"ErrForbidden", asc.ErrForbidden, cmd.ExitAuth},
-		{"ErrNotFound", asc.ErrNotFound, cmd.ExitNotFound},
-		{"ErrConflict", asc.ErrConflict, cmd.ExitConflict},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := cmd.ExitCodeFromError(tt.err)
-			if result != tt.want {
-				t.Errorf("ExitCodeFromError(%s) = %d, want %d", tt.name, result, tt.want)
-			}
-		})
 	}
 }
 

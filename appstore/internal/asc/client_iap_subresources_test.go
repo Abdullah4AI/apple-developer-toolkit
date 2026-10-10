@@ -316,23 +316,6 @@ func TestGetInAppPurchasePricePoints_WithIncludeAndFields(t *testing.T) {
 	}
 }
 
-func TestGetInAppPurchasePricePointEqualizations(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[]}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/inAppPurchasePricePoints/price-1/equalizations" {
-			t.Fatalf("expected path /v1/inAppPurchasePricePoints/price-1/equalizations, got %s", req.URL.Path)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetInAppPurchasePricePointEqualizations(context.Background(), "price-1"); err != nil {
-		t.Fatalf("GetInAppPurchasePricePointEqualizations() error: %v", err)
-	}
-}
-
 func TestGetInAppPurchasePricePointEqualizations_WithQueryOptions(t *testing.T) {
 	t.Run("limit", func(t *testing.T) {
 		client := newTestClient(t, func(req *http.Request) {
@@ -450,23 +433,6 @@ func TestGetInAppPurchasePriceScheduleAutomaticPrices_WithLimit(t *testing.T) {
 
 	if _, err := client.GetInAppPurchasePriceScheduleAutomaticPrices(context.Background(), "schedule-1", WithIAPPriceSchedulePricesLimit(5)); err != nil {
 		t.Fatalf("GetInAppPurchasePriceScheduleAutomaticPrices() error: %v", err)
-	}
-}
-
-func TestGetInAppPurchasePriceScheduleByID(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":{"type":"inAppPurchasePriceSchedules","id":"schedule-1"}}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/inAppPurchasePriceSchedules/schedule-1" {
-			t.Fatalf("expected path /v1/inAppPurchasePriceSchedules/schedule-1, got %s", req.URL.Path)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetInAppPurchasePriceScheduleByID(context.Background(), "schedule-1"); err != nil {
-		t.Fatalf("GetInAppPurchasePriceScheduleByID() error: %v", err)
 	}
 }
 

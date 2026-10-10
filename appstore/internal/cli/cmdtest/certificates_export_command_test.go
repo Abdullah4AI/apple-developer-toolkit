@@ -171,17 +171,6 @@ func TestCertificatesExport_JSONOutputAndPKCS12RoundTrip(t *testing.T) {
 	}
 }
 
-func TestCertificatesExportMarksCommandAndFlagsAreRegistered(t *testing.T) {
-	command := certificatescli.CertificatesExportCommand()
-
-	for _, name := range []string{"certificate", "private-key", "csr", "password-file", "p12-out", "force", "confirm"} {
-		flagDef := command.FlagSet.Lookup(name)
-		if flagDef == nil {
-			t.Fatalf("missing --%s flag", name)
-		}
-	}
-}
-
 func TestCertificatesExport_RejectsStdoutDestinationAsUsageError(t *testing.T) {
 	root := RootCommand("1.2.3")
 	root.FlagSet.SetOutput(io.Discard)

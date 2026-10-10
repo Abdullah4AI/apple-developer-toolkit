@@ -1,12 +1,18 @@
 #!/usr/bin/env python3
-"""Run deterministic Go test shards for CI.
+"""Run deterministic Go test shards for CI and local runs.
 
-The script supports two sharding levels:
+The script supports three modes:
 
 * package mode: list packages with `go list`, optionally exclude packages, and
   run a stable subset of packages for the requested shard.
 * tests mode: list top-level tests in a single package and run a stable subset
   through one `go test -run` regex.
+* local mode: run every package at once on one host, splitting the slowest
+  packages into test shards. Half the CPU budget (--jobs, else GOMAXPROCS,
+  else the CPU count) runs shards at GOMAXPROCS=1 each; the remaining packages
+  run as one `go test` with GOMAXPROCS and -p set to the other half. Without
+  split packages, or with a budget too small to give each one a shard, it runs
+  one `go test` with GOMAXPROCS and -p set to the whole budget.
 
 It intentionally keeps selection deterministic from repository contents only so
 CI does not depend on checked-in timing data.
@@ -15,10 +21,14 @@ CI does not depend on checked-in timing data.
 from __future__ import annotations
 
 import argparse
+import os
 import re
+import signal
 import subprocess
 import sys
+import tempfile
 
+GO = os.environ.get("GO") or "go"
 
 def run_capture(command: list[str]) -> list[str]:
     result = subprocess.run(command, check=True, text=True, stdout=subprocess.PIPE)
@@ -26,7 +36,7 @@ def run_capture(command: list[str]) -> list[str]:
 
 
 def go_list(patterns: list[str]) -> list[str]:
-    return run_capture(["go", "list", *patterns])
+    return run_capture([GO, "list", *patterns])
 
 
 def normalize_packages(patterns: list[str]) -> set[str]:
@@ -56,12 +66,11 @@ def run_package_shard(args: argparse.Namespace) -> int:
         print(f"  {package}", flush=True)
     if not selected:
         return 0
-    return subprocess.run(["go", "test", *args.go_test_args, *selected]).returncode
+    return subprocess.run([GO, "test", *args.go_test_args, *selected]).returncode
 
 
 def run_test_shard(args: argparse.Namespace) -> int:
-    tests = run_capture(["go", "test", "-list", "^Test", args.package])
-    tests = [test for test in tests if test.startswith("Test")]
+    tests = list_tests(args.package)
     selected = select_shard(tests, args.shard_index, args.shard_total)
     print(
         f"Selected {len(selected)} test(s) from {args.package} for shard "
@@ -70,10 +79,93 @@ def run_test_shard(args: argparse.Namespace) -> int:
     )
     if not selected:
         return 0
-    pattern = "^(?:" + "|".join(re.escape(test) for test in selected) + ")(?:/.*)?$"
     return subprocess.run(
-        ["go", "test", *args.go_test_args, "-run", pattern, args.package],
+        [GO, "test", *args.go_test_args, "-run", run_pattern(selected), args.package],
     ).returncode
+
+
+def run_pattern(tests: list[str]) -> str:
+    return "^(?:" + "|".join(re.escape(test) for test in tests) + ")(?:/.*)?$"
+
+
+def list_tests(package: str, *flags: str, env: dict[str, str] | None = None) -> list[str]:
+    result = subprocess.run([GO, "test", *flags, "-list", "^Test", package], check=True, text=True, stdout=subprocess.PIPE, env=env)
+    return [line.strip() for line in result.stdout.splitlines() if line.strip().startswith("Test")]
+
+
+def run_local(args: argparse.Namespace) -> int:
+    signal.signal(signal.SIGTERM, lambda signum, frame: sys.exit(128 + signum))
+    gomaxprocs = os.environ.get("GOMAXPROCS") or "0"
+    if not gomaxprocs.isdigit():
+        print(f"error: GOMAXPROCS must be a positive integer, got {gomaxprocs!r}", file=sys.stderr)
+        return 2
+    budget = args.jobs or int(gomaxprocs) or os.cpu_count() or 1
+    packages = go_list(args.packages)
+    split = [package for package in dict.fromkeys(go_list(args.split) if args.split else []) if package in packages]
+    rest = [package for package in packages if package not in split]
+    # Half the budget runs shards of the split packages, one CPU per shard,
+    # handed out in --split order; the other half runs the remaining packages.
+    shard_slots = budget // 2
+    if not split or shard_slots < len(split):
+        split, rest, shard_slots = [], args.packages, 0
+
+    failed = []
+    with tempfile.TemporaryDirectory(prefix="go-test-local-") as directory:
+        runs = []
+
+        def start(label: str, command: list[str], cpus: int = 1) -> None:
+            log = open(os.path.join(directory, f"{len(runs)}.log"), "w+b")
+            environment = {**os.environ, "GOMAXPROCS": str(cpus)}
+            process = subprocess.Popen(
+                command, stdout=log, stderr=subprocess.STDOUT, env=environment, start_new_session=True
+            )
+            runs.append((label, log, process))
+
+        try:
+            if rest or not split:
+                rest_jobs = budget - shard_slots
+                start(f"packages, -p={rest_jobs}", [GO, "test", f"-p={rest_jobs}", *args.go_test_args, *rest], rest_jobs)
+            # Listing builds each split package's test binary within the
+            # shards' share of the budget, so the shards reuse it. A package
+            # that fails to build runs whole and reports the failure.
+            listed = {}
+            for package in split:
+                try:
+                    listed[package] = list_tests(package, f"-p={shard_slots}", env={**os.environ, "GOMAXPROCS": "1"})
+                except subprocess.CalledProcessError:
+                    listed[package] = None
+            for index, package in enumerate(split):
+                if listed[package] is None:
+                    start(package, [GO, "test", *args.go_test_args, package])
+                    continue
+                shards = shard_slots // len(split) + (index < shard_slots % len(split))
+                for shard in range(shards):
+                    selected = select_shard(listed[package], shard, shards)
+                    if selected:
+                        start(f"{package} shard {shard + 1}/{shards}",
+                              [GO, "test", *args.go_test_args, "-run", run_pattern(selected), package])
+            for label, log, process in runs:
+                status = process.wait()
+                log.seek(0)
+                print(f"==> {label} (exit {status})", flush=True)
+                sys.stdout.buffer.write(log.read())
+                sys.stdout.flush()
+                if status != 0:
+                    failed.append(label)
+        finally:
+            # Stop every run, test binaries included, before the caller removes
+            # their shared state.
+            for _, log, process in runs:
+                if process.poll() is None:
+                    try:
+                        os.killpg(process.pid, signal.SIGTERM)
+                    except (ProcessLookupError, PermissionError):
+                        pass
+                process.wait()
+                log.close()
+    for label in failed:
+        print(f"FAILED: {label}", file=sys.stderr)
+    return 1 if failed else 0
 
 
 def parse_args() -> argparse.Namespace:
@@ -93,13 +185,23 @@ def parse_args() -> argparse.Namespace:
     test_parser.add_argument("--shard-total", type=int, required=True)
     test_parser.add_argument("go_test_args", nargs=argparse.REMAINDER)
 
+    local_parser = subparsers.add_parser("local")
+    local_parser.add_argument("--packages", nargs="+", default=["./..."])
+    local_parser.add_argument("--split", action="append", default=[])
+    local_parser.add_argument("--jobs", type=int, default=0)
+    local_parser.add_argument("go_test_args", nargs=argparse.REMAINDER)
+
     args = parser.parse_args()
+    if args.go_test_args and args.go_test_args[0] == "--":
+        args.go_test_args = args.go_test_args[1:]
+    if args.mode == "local":
+        if args.jobs < 0:
+            parser.error("--jobs must be a positive integer")
+        return args
     if args.shard_total < 1:
         parser.error("--shard-total must be at least 1")
     if args.shard_index < 0 or args.shard_index >= args.shard_total:
         parser.error("--shard-index must be between 0 and shard-total - 1")
-    if args.go_test_args and args.go_test_args[0] == "--":
-        args.go_test_args = args.go_test_args[1:]
     return args
 
 
@@ -109,6 +211,14 @@ def main() -> int:
         return run_package_shard(args)
     if args.mode == "tests":
         return run_test_shard(args)
+    if args.mode == "local":
+        try:
+            return run_local(args)
+        except KeyboardInterrupt:
+            return 130
+        except subprocess.CalledProcessError as error:
+            # go already printed the failure to stderr.
+            return error.returncode
     raise AssertionError(f"unknown mode {args.mode}")
 
 

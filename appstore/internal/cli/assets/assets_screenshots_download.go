@@ -8,12 +8,15 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/peterbourgon/ff/v3/ffcli"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
+
+const screenshotDownloadConcurrency = 4
 
 type screenshotDownloadItem struct {
 	ID          string `json:"id"`
@@ -167,10 +170,11 @@ Examples:
 					OutputPath: outputFile,
 				})
 			} else {
-				setsResp, err := client.GetAllAppScreenshotSets(ctx, locID, asc.WithAppScreenshotSetsRequestContext(shared.ContextWithTimeout))
+				setsResp, err := client.GetAllAppScreenshotSets(ctx, locID, asc.WithAppScreenshotSetsIncludeScreenshots(), asc.WithAppScreenshotSetsRequestContext(shared.ContextWithTimeout))
 				if err != nil {
 					return fmt.Errorf("screenshots download: failed to fetch sets: %w", err)
 				}
+				includedShots := asc.IncludedAppScreenshots(setsResp)
 
 				sets := make([]asc.Resource[asc.AppScreenshotSetAttributes], 0, len(setsResp.Data))
 				sets = append(sets, setsResp.Data...)
@@ -186,18 +190,21 @@ Examples:
 				for _, set := range sets {
 					displayType := strings.TrimSpace(set.Attributes.ScreenshotDisplayType)
 
-					shotsResp, err := client.GetAllAppScreenshots(ctx, set.ID, asc.WithAppScreenshotsRequestContext(shared.ContextWithTimeout))
-					if err != nil {
-						return fmt.Errorf("screenshots download: failed to fetch screenshots for set %s: %w", set.ID, err)
-					}
+					shots, ok := includedShots[set.ID]
+					if !ok {
+						shotsResp, err := client.GetAllAppScreenshots(ctx, set.ID, asc.WithAppScreenshotsRequestContext(shared.ContextWithTimeout))
+						if err != nil {
+							return fmt.Errorf("screenshots download: failed to fetch screenshots for set %s: %w", set.ID, err)
+						}
 
-					requestCtx, cancel := shared.ContextWithTimeout(ctx)
-					orderedIDs, err := GetOrderedAppScreenshotIDs(requestCtx, client, set.ID)
-					cancel()
-					if err != nil {
-						return fmt.Errorf("screenshots download: failed to fetch screenshot order for set %s: %w", set.ID, err)
+						requestCtx, cancel := shared.ContextWithTimeout(ctx)
+						orderedIDs, err := GetOrderedAppScreenshotIDs(requestCtx, client, set.ID)
+						cancel()
+						if err != nil {
+							return fmt.Errorf("screenshots download: failed to fetch screenshot order for set %s: %w", set.ID, err)
+						}
+						shots = orderMediaForDownload(shotsResp.Data, orderedIDs, func(a asc.AppScreenshotAttributes) string { return a.FileName })
 					}
-					shots := orderScreenshotsForDownload(shotsResp.Data, orderedIDs)
 
 					for idx, shot := range shots {
 						base := sanitizeBaseFileName(shot.Attributes.FileName)
@@ -242,15 +249,41 @@ Examples:
 				}
 			}
 
+			type downloadOutcome struct {
+				written     int64
+				contentType string
+				unchanged   bool
+				err         error
+			}
+			outcomes := make([]downloadOutcome, len(items))
+			slots := make(chan struct{}, screenshotDownloadConcurrency)
+			var wg sync.WaitGroup
+			for i := range items {
+				item := items[i]
+				if strings.TrimSpace(item.URL) == "" {
+					continue
+				}
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					slots <- struct{}{}
+					defer func() { <-slots }()
+					downloadCtx, cancel := shared.ContextWithDownloadTimeout(ctx)
+					defer cancel()
+					outcome := &outcomes[i]
+					outcome.written, outcome.contentType, outcome.unchanged, outcome.err = downloadScreenshotURLToFile(downloadCtx, item.URL, item.OutputPath, *overwrite)
+				}()
+			}
+			wg.Wait()
+
 			for i := range items {
 				item := &items[i]
 				if strings.TrimSpace(item.URL) == "" {
 					continue
 				}
 
-				downloadCtx, cancel := shared.ContextWithDownloadTimeout(ctx)
-				written, contentType, unchanged, err := downloadScreenshotURLToFile(downloadCtx, item.URL, item.OutputPath, *overwrite)
-				cancel()
+				outcome := outcomes[i]
+				written, contentType, unchanged, err := outcome.written, outcome.contentType, outcome.unchanged, outcome.err
 				if err != nil {
 					result.Failures = append(result.Failures, screenshotDownloadFailure{
 						ID:          item.ID,
@@ -305,8 +338,8 @@ func resolveScreenshotDownloadURL(ctx context.Context, client *asc.Client, shot 
 	return resolveImageAssetDownloadURL(imageAsset, shot.Attributes.FileName)
 }
 
-func orderScreenshotsForDownload(shots []asc.Resource[asc.AppScreenshotAttributes], orderedIDs []string) []asc.Resource[asc.AppScreenshotAttributes] {
-	ordered := append([]asc.Resource[asc.AppScreenshotAttributes](nil), shots...)
+func orderMediaForDownload[T any](items []asc.Resource[T], orderedIDs []string, fileName func(T) string) []asc.Resource[T] {
+	ordered := append([]asc.Resource[T](nil), items...)
 	orderByID := make(map[string]int, len(orderedIDs))
 	for idx, id := range orderedIDs {
 		id = strings.TrimSpace(id)
@@ -331,8 +364,8 @@ func orderScreenshotsForDownload(shots []asc.Resource[asc.AppScreenshotAttribute
 			return false
 		}
 
-		fi := strings.ToLower(strings.TrimSpace(ordered[i].Attributes.FileName))
-		fj := strings.ToLower(strings.TrimSpace(ordered[j].Attributes.FileName))
+		fi := strings.ToLower(strings.TrimSpace(fileName(ordered[i].Attributes)))
+		fj := strings.ToLower(strings.TrimSpace(fileName(ordered[j].Attributes)))
 		if fi == fj {
 			return ordered[i].ID < ordered[j].ID
 		}

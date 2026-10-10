@@ -21,6 +21,7 @@ import (
 
 	"github.com/99designs/keyring"
 
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/auth"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/secureopen"
 )
 
@@ -133,6 +134,24 @@ var (
 	sessionGenerationReader     = func(b []byte) (int, error) { return rand.Read(b) }
 )
 
+var ErrSessionKeychainBypassed = errors.New("web session keychain backend is disabled by ASC_BYPASS_KEYCHAIN; unset " + webSessionBackendEnv + " or set it to file")
+
+// SessionBackendConflict reports ErrSessionKeychainBypassed when the keychain
+// backend is explicitly selected while ASC_BYPASS_KEYCHAIN disables it.
+func SessionBackendConflict() error {
+	if auth.ShouldBypassKeychain() && resolveBackendSelection().backend == sessionBackendKeychain {
+		return ErrSessionKeychainBypassed
+	}
+	return nil
+}
+
+func openSessionKeyring() (keyring.Keyring, error) {
+	if auth.ShouldBypassKeychain() {
+		return nil, ErrSessionKeychainBypassed
+	}
+	return sessionKeyringOpen()
+}
+
 func webSessionCacheEnabled() bool {
 	raw := strings.TrimSpace(os.Getenv(webSessionCacheEnabledEnv))
 	if raw == "" {
@@ -164,9 +183,9 @@ func resolveBackendSelection() backendSelection {
 	case "", "auto":
 		// Default to file-backed web sessions so successful logins can be reused
 		// without recurring per-binary keychain approval prompts.
-		return backendSelection{backend: sessionBackendFile, fallbackKeychain: true}
+		return backendSelection{backend: sessionBackendFile, fallbackKeychain: !auth.ShouldBypassKeychain()}
 	default:
-		return backendSelection{backend: sessionBackendFile, fallbackKeychain: true}
+		return backendSelection{backend: sessionBackendFile, fallbackKeychain: !auth.ShouldBypassKeychain()}
 	}
 }
 
@@ -1381,7 +1400,7 @@ func writeSessionToKeychain(key string, sess persistedSession) error {
 }
 
 func writeSessionToKeychainUnlocked(key string, sess persistedSession) error {
-	kr, err := sessionKeyringOpen()
+	kr, err := openSessionKeyring()
 	if err != nil {
 		return err
 	}
@@ -1399,7 +1418,7 @@ func writeSessionToKeychainUnlocked(key string, sess persistedSession) error {
 }
 
 func writeSessionToKeychainIfAbsentUnlocked(key string, sess persistedSession) error {
-	kr, err := sessionKeyringOpen()
+	kr, err := openSessionKeyring()
 	if err != nil {
 		return err
 	}
@@ -1423,7 +1442,7 @@ func writeSessionToKeychainIfAbsentUnlocked(key string, sess persistedSession) e
 }
 
 func writeSessionToKeychainWithRecoveryUnlocked(key string, sess persistedSession, recoverMalformed bool) error {
-	kr, err := sessionKeyringOpen()
+	kr, err := openSessionKeyring()
 	if err != nil {
 		return err
 	}
@@ -1445,7 +1464,7 @@ func writeSessionToKeychainWithRecoveryUnlocked(key string, sess persistedSessio
 }
 
 func keychainSessionEntryCollisionUnlocked(key string) error {
-	kr, err := sessionKeyringOpen()
+	kr, err := openSessionKeyring()
 	if err != nil {
 		return err
 	}
@@ -1462,7 +1481,7 @@ func keychainSessionEntryCollisionUnlocked(key string) error {
 }
 
 func readSessionFromKeychain(key string) (persistedSession, bool, error) {
-	kr, err := sessionKeyringOpen()
+	kr, err := openSessionKeyring()
 	if err != nil {
 		return persistedSession{}, false, err
 	}
@@ -2017,7 +2036,7 @@ type keychainSessionState struct {
 // last-session choice and malformed-store bytes when a later write fails.
 // Callers hold the shared store lock when the keychain is part of a mutation.
 func captureKeychainSessionState(key string) (keychainSessionState, error) {
-	kr, err := sessionKeyringOpen()
+	kr, err := openSessionKeyring()
 	if err != nil {
 		if isKeyringUnavailable(err) {
 			return keychainSessionState{}, nil
@@ -2044,7 +2063,7 @@ func (state keychainSessionState) restore() error {
 	if !state.captured {
 		return nil
 	}
-	kr, err := sessionKeyringOpen()
+	kr, err := openSessionKeyring()
 	if err != nil {
 		return fmt.Errorf("failed to restore keychain session: %w", err)
 	}
@@ -2291,7 +2310,7 @@ func readLastSessionFromKeychain() (persistedSession, bool, error) {
 }
 
 func readLastSessionFromKeychainWithKey() (persistedSession, string, bool, error) {
-	kr, err := sessionKeyringOpen()
+	kr, err := openSessionKeyring()
 	if err != nil {
 		return persistedSession{}, "", false, err
 	}
@@ -2382,7 +2401,7 @@ func deleteSessionFromKeychainUnlocked(key string) error {
 }
 
 func deleteSessionFromKeychainWithRecoveryUnlocked(key string, recoverMalformed bool) error {
-	kr, err := sessionKeyringOpen()
+	kr, err := openSessionKeyring()
 	if err != nil {
 		return err
 	}
@@ -2434,7 +2453,7 @@ func clearLastKeyInFile() error {
 }
 
 func clearLastKeyInKeychainUnlocked() error {
-	kr, err := sessionKeyringOpen()
+	kr, err := openSessionKeyring()
 	if err != nil {
 		return err
 	}
@@ -2479,7 +2498,7 @@ func deleteAllFromFile() error {
 }
 
 func deleteAllFromKeychainUnlocked() error {
-	kr, err := sessionKeyringOpen()
+	kr, err := openSessionKeyring()
 	if err != nil {
 		return err
 	}

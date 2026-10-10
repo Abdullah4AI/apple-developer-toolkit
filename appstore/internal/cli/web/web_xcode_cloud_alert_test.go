@@ -404,22 +404,6 @@ func TestWebXcodeCloudUsageAlertLoadsMonthlyTrend(t *testing.T) {
 	}
 }
 
-func TestUsageAlertMonthWindowAnchorsToMonthBoundaries(t *testing.T) {
-	startMonth, startYear, endMonth, endYear := usageAlertMonthWindow(
-		time.Date(2026, time.March, 31, 20, 15, 0, 0, time.UTC),
-		2,
-	)
-	if startMonth != 2 || startYear != 2026 || endMonth != 3 || endYear != 2026 {
-		t.Fatalf(
-			"expected Feb 2026 -> Mar 2026 window, got %02d/%d -> %02d/%d",
-			startMonth,
-			startYear,
-			endMonth,
-			endYear,
-		)
-	}
-}
-
 func TestWebXcodeCloudUsageAlertTrendUsesMonthAnchoredWindow(t *testing.T) {
 	origResolveSession := resolveSessionFn
 	origWebNow := webNowFn

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 )
 
@@ -129,14 +130,18 @@ func TestParseRetryAfterHeaderHandlesNumericDateAndBoundaryValues(t *testing.T) 
 func TestWithRetry_HonorsRetryAfterWithinCap(t *testing.T) {
 	var attempts atomic.Int32
 
-	start := time.Now()
-	_, err := WithRetry(context.Background(), func() (struct{}, error) {
-		if attempts.Add(1) == 1 {
-			return struct{}{}, rateLimitedError(60 * time.Millisecond)
-		}
-		return struct{}{}, nil
-	}, RetryOptions{MaxRetries: 2, BaseDelay: time.Millisecond, MaxDelay: 5 * time.Second})
-	elapsed := time.Since(start)
+	var err error
+	var elapsed time.Duration
+	synctest.Test(t, func(*testing.T) {
+		start := time.Now()
+		_, err = WithRetry(context.Background(), func() (struct{}, error) {
+			if attempts.Add(1) == 1 {
+				return struct{}{}, rateLimitedError(60 * time.Millisecond)
+			}
+			return struct{}{}, nil
+		}, RetryOptions{MaxRetries: 2, BaseDelay: time.Millisecond, MaxDelay: 5 * time.Second})
+		elapsed = time.Since(start)
+	})
 
 	if err != nil {
 		t.Fatalf("WithRetry() error: %v", err)
@@ -158,17 +163,21 @@ func TestWithRetry_HonorsRetryAfterWithinCap(t *testing.T) {
 func TestWithRetry_FailsFastWhenRetryAfterExceedsCap(t *testing.T) {
 	var attempts atomic.Int32
 
-	// Bound the test: a regression sleeps the server's hint, and this turns that
-	// into a failure instead of an hour-long hang.
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
+	var err error
+	var elapsed time.Duration
+	synctest.Test(t, func(*testing.T) {
+		// Bound the test: a regression sleeps the server's hint, and this turns that
+		// into a failure instead of an hour-long hang.
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
 
-	start := time.Now()
-	_, err := WithRetry(ctx, func() (struct{}, error) {
-		attempts.Add(1)
-		return struct{}{}, rateLimitedError(time.Hour)
-	}, RetryOptions{MaxRetries: 3, BaseDelay: time.Millisecond, MaxDelay: 30 * time.Second})
-	elapsed := time.Since(start)
+		start := time.Now()
+		_, err = WithRetry(ctx, func() (struct{}, error) {
+			attempts.Add(1)
+			return struct{}{}, rateLimitedError(time.Hour)
+		}, RetryOptions{MaxRetries: 3, BaseDelay: time.Millisecond, MaxDelay: 30 * time.Second})
+		elapsed = time.Since(start)
+	})
 
 	if err == nil {
 		t.Fatal("expected error, got nil")
@@ -209,15 +218,19 @@ func TestWithRetry_FailsFastWhenRetryAfterExceedsCap(t *testing.T) {
 func TestWithRetry_FailsFastWhenRetryAfterExceedsContextBudget(t *testing.T) {
 	var attempts atomic.Int32
 
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
-	defer cancel()
+	var err error
+	var elapsed time.Duration
+	synctest.Test(t, func(*testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+		defer cancel()
 
-	start := time.Now()
-	_, err := WithRetry(ctx, func() (struct{}, error) {
-		attempts.Add(1)
-		return struct{}{}, rateLimitedError(5 * time.Second)
-	}, RetryOptions{MaxRetries: 3, BaseDelay: time.Millisecond, MaxDelay: 10 * time.Second})
-	elapsed := time.Since(start)
+		start := time.Now()
+		_, err = WithRetry(ctx, func() (struct{}, error) {
+			attempts.Add(1)
+			return struct{}{}, rateLimitedError(5 * time.Second)
+		}, RetryOptions{MaxRetries: 3, BaseDelay: time.Millisecond, MaxDelay: 10 * time.Second})
+		elapsed = time.Since(start)
+	})
 
 	if err == nil {
 		t.Fatal("expected error, got nil")
@@ -247,18 +260,22 @@ func TestWithRetry_FailsFastWhenRetryAfterExceedsContextBudget(t *testing.T) {
 func TestWithRetry_FailsFastWhenOptedInFallbackExceedsContextBudget(t *testing.T) {
 	var attempts atomic.Int32
 
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
-	defer cancel()
+	var err error
+	var elapsed time.Duration
+	synctest.Test(t, func(*testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+		defer cancel()
 
-	start := time.Now()
-	_, err := WithRetry(ctx, func() (struct{}, error) {
-		attempts.Add(1)
-		return struct{}{}, &RetryableError{
-			Err:                     buildRetryableError(http.StatusTooManyRequests, 0, nil),
-			PreserveErrorOnDeadline: true,
-		}
-	}, RetryOptions{MaxRetries: 3, BaseDelay: time.Second, MaxDelay: time.Second})
-	elapsed := time.Since(start)
+		start := time.Now()
+		_, err = WithRetry(ctx, func() (struct{}, error) {
+			attempts.Add(1)
+			return struct{}{}, &RetryableError{
+				Err:                     buildRetryableError(http.StatusTooManyRequests, 0, nil),
+				PreserveErrorOnDeadline: true,
+			}
+		}, RetryOptions{MaxRetries: 3, BaseDelay: time.Second, MaxDelay: time.Second})
+		elapsed = time.Since(start)
+	})
 
 	if err == nil {
 		t.Fatal("expected error, got nil")
@@ -474,30 +491,33 @@ func TestClientDo_RateLimitBeyondCapFailsWithoutWaiting(t *testing.T) {
 	t.Cleanup(resetConfigCacheForTest)
 
 	var attempts atomic.Int32
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		attempts.Add(1)
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Retry-After", "3600")
 		w.WriteHeader(http.StatusTooManyRequests)
 		_, _ = io.WriteString(w, `{"errors":[{"status":"429","code":"RATE_LIMIT_EXCEEDED","title":"Too many requests"}]}`)
-	}))
-	t.Cleanup(server.Close)
+	})
 
 	client := &Client{
-		httpClient: server.Client(),
+		httpClient: &http.Client{Transport: inProcessTransport(handler)},
 		keyID:      "KEY123",
 		issuerID:   "ISS456",
 		privateKey: testJWTPrivateKey(t),
 	}
 
-	// Bound the test the same way: without the cap check this sleeps the full
-	// hour the server asked for.
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
+	var err error
+	var elapsed time.Duration
+	synctest.Test(t, func(*testing.T) {
+		// Bound the test the same way: without the cap check this sleeps the full
+		// hour the server asked for.
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
 
-	start := time.Now()
-	_, err := client.do(ctx, http.MethodGet, server.URL+"/v1/apps", nil)
-	elapsed := time.Since(start)
+		start := time.Now()
+		_, err = client.do(ctx, http.MethodGet, "https://api.appstoreconnect.apple.com/v1/apps", nil)
+		elapsed = time.Since(start)
+	})
 
 	if err == nil {
 		t.Fatal("expected error, got nil")
@@ -522,25 +542,28 @@ func TestClientDo_RateLimitWithHugeNumericRetryAfterFailsWithoutRetry(t *testing
 
 	const hugeRetryAfter = "9223372036854775807"
 	var attempts atomic.Int32
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		attempts.Add(1)
 		w.Header().Set("Retry-After", hugeRetryAfter)
 		w.WriteHeader(http.StatusTooManyRequests)
-	}))
-	t.Cleanup(server.Close)
+	})
 
 	client := &Client{
-		httpClient: server.Client(),
+		httpClient: &http.Client{Transport: inProcessTransport(handler)},
 		keyID:      "KEY123",
 		issuerID:   "ISS456",
 		privateKey: testJWTPrivateKey(t),
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	start := time.Now()
-	_, err := client.do(ctx, http.MethodGet, server.URL+"/v1/apps", nil)
-	elapsed := time.Since(start)
+	var err error
+	var elapsed time.Duration
+	synctest.Test(t, func(*testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		start := time.Now()
+		_, err = client.do(ctx, http.MethodGet, "https://api.appstoreconnect.apple.com/v1/apps", nil)
+		elapsed = time.Since(start)
+	})
 
 	if err == nil {
 		t.Fatal("expected error, got nil")
@@ -554,4 +577,15 @@ func TestClientDo_RateLimitWithHugeNumericRetryAfterFailsWithoutRetry(t *testing
 	if !strings.Contains(err.Error(), "retry cap") {
 		t.Fatalf("expected retry-cap error, got %q", err)
 	}
+}
+
+func inProcessTransport(handler http.Handler) http.RoundTripper {
+	return roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		recorder := httptest.NewRecorder()
+		handler.ServeHTTP(recorder, req)
+		if err := req.Context().Err(); err != nil {
+			return nil, err
+		}
+		return recorder.Result(), nil
+	})
 }

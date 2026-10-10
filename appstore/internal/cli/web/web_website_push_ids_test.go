@@ -11,16 +11,6 @@ import (
 	webcore "github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/web"
 )
 
-func TestWebWebsitePushIDsListCommand(t *testing.T) {
-	command := WebWebsitePushIDsListCommand()
-	if command.Name != "list" || command.UsageFunc == nil {
-		t.Fatalf("unexpected command: %+v", command)
-	}
-	if command.ShortUsage != "asc web website-push-ids list [flags]" {
-		t.Fatalf("ShortUsage = %q", command.ShortUsage)
-	}
-}
-
 func TestWebWebsitePushIDsCommandHierarchy(t *testing.T) {
 	command := WebWebsitePushIDsCommand()
 	if command.Name != "website-push-ids" || command.UsageFunc == nil {

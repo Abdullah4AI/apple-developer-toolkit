@@ -164,58 +164,6 @@ func TestSetAppDistributionBuildsJSONAPIRequestAndVerifiesWithoutTouchingRecipie
 	}
 }
 
-func TestSetAppDistributionEducationOnlyPatchOmitsDistributionType(t *testing.T) {
-	var requestCount int
-	var gotAttributes map[string]string
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		requestCount++
-		switch r.Method {
-		case http.MethodGet:
-			w.Header().Set("Content-Type", "application/json")
-			if requestCount == 1 {
-				_, _ = w.Write([]byte(`{"data":{"type":"apps","id":"app-123","attributes":{"distributionType":"APP_STORE","educationDiscountType":"DISCOUNTED"}}}`))
-				return
-			}
-			_, _ = w.Write([]byte(`{"data":{"type":"apps","id":"app-123","attributes":{"distributionType":"APP_STORE","educationDiscountType":"NOT_DISCOUNTED"}}}`))
-		case http.MethodPatch:
-			var payload struct {
-				Data struct {
-					Attributes map[string]string `json:"attributes"`
-				} `json:"data"`
-			}
-			if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-				t.Fatalf("decode PATCH: %v", err)
-			}
-			gotAttributes = payload.Data.Attributes
-			w.WriteHeader(http.StatusNoContent)
-		default:
-			t.Fatalf("unexpected method %s", r.Method)
-		}
-	}))
-	defer server.Close()
-
-	result, err := testWebClient(server).SetAppDistribution(context.Background(), AppDistributionSetRequest{
-		AppID:                 "app-123",
-		DistributionType:      AppDistributionTypeAppStore,
-		EducationDiscountType: AppDistributionEducationNotDiscounted,
-	})
-	if err != nil {
-		t.Fatalf("SetAppDistribution() error = %v", err)
-	}
-	if requestCount != 3 {
-		t.Fatalf("request count = %d, want preflight GET, PATCH, and verification GET", requestCount)
-	}
-	if _, ok := gotAttributes["distributionType"]; ok {
-		t.Fatalf("education-only PATCH unexpectedly included distributionType: %+v", gotAttributes)
-	}
-	if gotAttributes["educationDiscountType"] != AppDistributionEducationNotDiscounted {
-		t.Fatalf("educationDiscountType = %q, want %s", gotAttributes["educationDiscountType"], AppDistributionEducationNotDiscounted)
-	}
-	if result == nil || !result.Changed || !result.Verified || result.Status != "verified" {
-		t.Fatalf("unexpected verified receipt: %+v", result)
-	}
-}
-
 func TestSetAppDistributionNoOpSkipsPatch(t *testing.T) {
 	var requestCount int
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

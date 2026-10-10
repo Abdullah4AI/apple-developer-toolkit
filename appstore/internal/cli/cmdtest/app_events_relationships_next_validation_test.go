@@ -7,57 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
-	rootcmd "github.com/Abdullah4AI/apple-developer-toolkit/appstore/cmd"
 )
-
-func TestAppEventsRelationshipsRejectsInvalidNextURL(t *testing.T) {
-	tests := []struct {
-		name    string
-		next    string
-		wantErr string
-	}{
-		{
-			name:    "invalid scheme",
-			next:    "http://api.appstoreconnect.apple.com/v1/appEvents/event-1/relationships/localizations?cursor=AQ",
-			wantErr: "app-events links: --next must be an App Store Connect URL",
-		},
-		{
-			name:    "malformed URL",
-			next:    "https://api.appstoreconnect.apple.com/%zz",
-			wantErr: "app-events links: --next must be a valid URL:",
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			root := RootCommand("1.2.3")
-			root.FlagSet.SetOutput(io.Discard)
-
-			var runErr error
-			stdout, stderr := captureOutput(t, func() {
-				if err := root.Parse([]string{"app-events", "links", "--next", test.next}); err != nil {
-					t.Fatalf("parse error: %v", err)
-				}
-				runErr = root.Run(context.Background())
-			})
-
-			if runErr == nil {
-				t.Fatal("expected error, got nil")
-			}
-			if !strings.Contains(runErr.Error(), test.wantErr) {
-				t.Fatalf("expected error %q, got %v", test.wantErr, runErr)
-			}
-			if stdout != "" {
-				t.Fatalf("expected empty stdout, got %q", stdout)
-			}
-			if got := rootcmd.ExitCodeFromError(runErr); got != rootcmd.ExitUsage {
-				t.Fatalf("exit code = %d, want %d", got, rootcmd.ExitUsage)
-			}
-			assertUsageDiagnosticFirstLine(t, stderr, test.wantErr)
-		})
-	}
-}
 
 func TestAppEventsRelationshipsPaginateFromNextWithoutEventID(t *testing.T) {
 	setupAuth(t)
@@ -118,54 +68,6 @@ func TestAppEventsRelationshipsPaginateFromNextWithoutEventID(t *testing.T) {
 	}
 	if !strings.Contains(stdout, `"id":"event-rel-next-1"`) || !strings.Contains(stdout, `"id":"event-rel-next-2"`) {
 		t.Fatalf("expected paginated event localization relationships in output, got %q", stdout)
-	}
-}
-
-func TestAppEventsScreenshotsRelationshipsRejectsInvalidNextURL(t *testing.T) {
-	tests := []struct {
-		name    string
-		next    string
-		wantErr string
-	}{
-		{
-			name:    "invalid scheme",
-			next:    "http://api.appstoreconnect.apple.com/v1/appEventLocalizations/loc-1/relationships/appEventScreenshots?cursor=AQ",
-			wantErr: "app-events screenshots links: --next must be an App Store Connect URL",
-		},
-		{
-			name:    "malformed URL",
-			next:    "https://api.appstoreconnect.apple.com/%zz",
-			wantErr: "app-events screenshots links: --next must be a valid URL:",
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			root := RootCommand("1.2.3")
-			root.FlagSet.SetOutput(io.Discard)
-
-			var runErr error
-			stdout, stderr := captureOutput(t, func() {
-				if err := root.Parse([]string{"app-events", "screenshots", "links", "--next", test.next}); err != nil {
-					t.Fatalf("parse error: %v", err)
-				}
-				runErr = root.Run(context.Background())
-			})
-
-			if runErr == nil {
-				t.Fatal("expected error, got nil")
-			}
-			if !strings.Contains(runErr.Error(), test.wantErr) {
-				t.Fatalf("expected error %q, got %v", test.wantErr, runErr)
-			}
-			if stdout != "" {
-				t.Fatalf("expected empty stdout, got %q", stdout)
-			}
-			if got := rootcmd.ExitCodeFromError(runErr); got != rootcmd.ExitUsage {
-				t.Fatalf("exit code = %d, want %d", got, rootcmd.ExitUsage)
-			}
-			assertUsageDiagnosticFirstLine(t, stderr, test.wantErr)
-		})
 	}
 }
 
@@ -231,54 +133,6 @@ func TestAppEventsScreenshotsRelationshipsPaginateFromNextWithoutLocalizationOrE
 	}
 }
 
-func TestAppEventsVideoClipsRelationshipsRejectsInvalidNextURL(t *testing.T) {
-	tests := []struct {
-		name    string
-		next    string
-		wantErr string
-	}{
-		{
-			name:    "invalid scheme",
-			next:    "http://api.appstoreconnect.apple.com/v1/appEventLocalizations/loc-1/relationships/appEventVideoClips?cursor=AQ",
-			wantErr: "app-events video-clips links: --next must be an App Store Connect URL",
-		},
-		{
-			name:    "malformed URL",
-			next:    "https://api.appstoreconnect.apple.com/%zz",
-			wantErr: "app-events video-clips links: --next must be a valid URL:",
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			root := RootCommand("1.2.3")
-			root.FlagSet.SetOutput(io.Discard)
-
-			var runErr error
-			stdout, stderr := captureOutput(t, func() {
-				if err := root.Parse([]string{"app-events", "video-clips", "links", "--next", test.next}); err != nil {
-					t.Fatalf("parse error: %v", err)
-				}
-				runErr = root.Run(context.Background())
-			})
-
-			if runErr == nil {
-				t.Fatal("expected error, got nil")
-			}
-			if !strings.Contains(runErr.Error(), test.wantErr) {
-				t.Fatalf("expected error %q, got %v", test.wantErr, runErr)
-			}
-			if stdout != "" {
-				t.Fatalf("expected empty stdout, got %q", stdout)
-			}
-			if got := rootcmd.ExitCodeFromError(runErr); got != rootcmd.ExitUsage {
-				t.Fatalf("exit code = %d, want %d", got, rootcmd.ExitUsage)
-			}
-			assertUsageDiagnosticFirstLine(t, stderr, test.wantErr)
-		})
-	}
-}
-
 func TestAppEventsVideoClipsRelationshipsPaginateFromNextWithoutLocalizationOrEventID(t *testing.T) {
 	setupAuth(t)
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
@@ -341,54 +195,6 @@ func TestAppEventsVideoClipsRelationshipsPaginateFromNextWithoutLocalizationOrEv
 	}
 }
 
-func TestAppEventLocalizationScreenshotsListRejectsInvalidNextURL(t *testing.T) {
-	tests := []struct {
-		name    string
-		next    string
-		wantErr string
-	}{
-		{
-			name:    "invalid scheme",
-			next:    "http://api.appstoreconnect.apple.com/v1/appEventLocalizations/loc-1/appEventScreenshots?cursor=AQ",
-			wantErr: "app-events localizations screenshots list: --next must be an App Store Connect URL",
-		},
-		{
-			name:    "malformed URL",
-			next:    "https://api.appstoreconnect.apple.com/%zz",
-			wantErr: "app-events localizations screenshots list: --next must be a valid URL:",
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			root := RootCommand("1.2.3")
-			root.FlagSet.SetOutput(io.Discard)
-
-			var runErr error
-			stdout, stderr := captureOutput(t, func() {
-				if err := root.Parse([]string{"app-events", "localizations", "screenshots", "list", "--localization-id", "loc-1", "--next", test.next}); err != nil {
-					t.Fatalf("parse error: %v", err)
-				}
-				runErr = root.Run(context.Background())
-			})
-
-			if runErr == nil {
-				t.Fatal("expected error, got nil")
-			}
-			if !strings.Contains(runErr.Error(), test.wantErr) {
-				t.Fatalf("expected error %q, got %v", test.wantErr, runErr)
-			}
-			if stdout != "" {
-				t.Fatalf("expected empty stdout, got %q", stdout)
-			}
-			if got := rootcmd.ExitCodeFromError(runErr); got != rootcmd.ExitUsage {
-				t.Fatalf("exit code = %d, want %d", got, rootcmd.ExitUsage)
-			}
-			assertUsageDiagnosticFirstLine(t, stderr, test.wantErr)
-		})
-	}
-}
-
 func TestAppEventLocalizationScreenshotsListPaginateFromNext(t *testing.T) {
 	setupAuth(t)
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
@@ -448,54 +254,6 @@ func TestAppEventLocalizationScreenshotsListPaginateFromNext(t *testing.T) {
 	}
 	if !strings.Contains(stdout, `"id":"loc-shot-next-1"`) || !strings.Contains(stdout, `"id":"loc-shot-next-2"`) {
 		t.Fatalf("expected paginated localization screenshots in output, got %q", stdout)
-	}
-}
-
-func TestAppEventLocalizationVideoClipsListRejectsInvalidNextURL(t *testing.T) {
-	tests := []struct {
-		name    string
-		next    string
-		wantErr string
-	}{
-		{
-			name:    "invalid scheme",
-			next:    "http://api.appstoreconnect.apple.com/v1/appEventLocalizations/loc-1/appEventVideoClips?cursor=AQ",
-			wantErr: "app-events localizations video-clips list: --next must be an App Store Connect URL",
-		},
-		{
-			name:    "malformed URL",
-			next:    "https://api.appstoreconnect.apple.com/%zz",
-			wantErr: "app-events localizations video-clips list: --next must be a valid URL:",
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			root := RootCommand("1.2.3")
-			root.FlagSet.SetOutput(io.Discard)
-
-			var runErr error
-			stdout, stderr := captureOutput(t, func() {
-				if err := root.Parse([]string{"app-events", "localizations", "video-clips", "list", "--localization-id", "loc-1", "--next", test.next}); err != nil {
-					t.Fatalf("parse error: %v", err)
-				}
-				runErr = root.Run(context.Background())
-			})
-
-			if runErr == nil {
-				t.Fatal("expected error, got nil")
-			}
-			if !strings.Contains(runErr.Error(), test.wantErr) {
-				t.Fatalf("expected error %q, got %v", test.wantErr, runErr)
-			}
-			if stdout != "" {
-				t.Fatalf("expected empty stdout, got %q", stdout)
-			}
-			if got := rootcmd.ExitCodeFromError(runErr); got != rootcmd.ExitUsage {
-				t.Fatalf("exit code = %d, want %d", got, rootcmd.ExitUsage)
-			}
-			assertUsageDiagnosticFirstLine(t, stderr, test.wantErr)
-		})
 	}
 }
 

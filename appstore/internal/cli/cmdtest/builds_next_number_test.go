@@ -13,6 +13,7 @@ import (
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/cmd"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
 func TestBuildsNextBuildNumberUsesUploadsAndBuilds(t *testing.T) {
@@ -390,6 +391,7 @@ func TestBuildsNextBuildNumberWithFiltersUsesCanonicalQueryShape(t *testing.T) {
 
 func TestBuildsNextBuildNumberScansEveryEquivalentVersionUpload(t *testing.T) {
 	setupAuth(t)
+	shared.ResetEquivalentVersionNotesForTest()
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 
 	originalTransport := http.DefaultTransport

@@ -133,14 +133,6 @@ func TestWebhooksListPaginateFromNext(t *testing.T) {
 	}
 }
 
-func TestWebhookDeliveriesRejectsInvalidNextURL(t *testing.T) {
-	runInvalidNextURLUsageErrorCases(
-		t,
-		[]string{"webhooks", "deliveries", "--webhook-id", "wh-1"},
-		"webhooks deliveries: --next",
-	)
-}
-
 func TestWebhookDeliveriesPaginateFromNext(t *testing.T) {
 	setupAuth(t)
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))

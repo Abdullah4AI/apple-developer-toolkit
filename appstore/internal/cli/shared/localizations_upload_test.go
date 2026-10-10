@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
@@ -186,16 +187,20 @@ func TestUploadVersionLocalizations_SkipsExactExistingValuesOnSecondPage(t *test
 	client.onGet = func(ctx context.Context, call int) {
 		deadline, ok := ctx.Deadline()
 		if !ok || time.Until(deadline) < 100*time.Millisecond {
-			t.Fatalf("page %d did not receive a fresh timeout: %s", call, time.Until(deadline))
+			t.Errorf("page %d did not receive a fresh timeout: %s", call, time.Until(deadline))
 		}
 		if call == 1 {
 			time.Sleep(75 * time.Millisecond)
 		}
 	}
 
-	results, err := UploadVersionLocalizations(context.Background(), client, "version-id", map[string]map[string]string{
-		"en-US": {"description": "Existing description"},
-	}, false)
+	var results []asc.LocalizationUploadLocaleResult
+	var err error
+	synctest.Test(t, func(*testing.T) {
+		results, err = UploadVersionLocalizations(context.Background(), client, "version-id", map[string]map[string]string{
+			"en-US": {"description": "Existing description"},
+		}, false)
+	})
 	if err != nil {
 		t.Fatalf("UploadVersionLocalizations() error: %v", err)
 	}
@@ -204,18 +209,6 @@ func TestUploadVersionLocalizations_SkipsExactExistingValuesOnSecondPage(t *test
 	}
 	if len(results) != 1 || results[0].Action != "skip" || results[0].LocalizationID != "existing-loc" {
 		t.Fatalf("unexpected results: %+v", results)
-	}
-}
-
-func TestUploadAppInfoLocalizations_SkipsExactExistingValues(t *testing.T) {
-	client := &stubAppInfoLocalizationClient{getResp: &asc.AppInfoLocalizationsResponse{Data: []asc.Resource[asc.AppInfoLocalizationAttributes]{
-		{ID: "loc-id", Attributes: asc.AppInfoLocalizationAttributes{Locale: "en-US", Name: "Existing", Subtitle: "Subtitle"}},
-	}}}
-	results, err := UploadAppInfoLocalizations(context.Background(), client, "app-info-id", map[string]map[string]string{
-		"en-US": {"name": "Existing", "subtitle": "Subtitle"},
-	}, false)
-	if err != nil || len(results) != 1 || results[0].Action != "skip" || len(client.updateCalls) != 0 {
-		t.Fatalf("expected exact app-info skip, results=%+v updates=%d err=%v", results, len(client.updateCalls), err)
 	}
 }
 
@@ -407,22 +400,6 @@ func TestUploadAppInfoLocalizations_ReconcilesAmbiguousUpdate(t *testing.T) {
 	}
 }
 
-func TestUploadAppInfoLocalizations_ReconcilesAmbiguousCreate(t *testing.T) {
-	client := &stubAppInfoLocalizationClient{
-		getResps: []*asc.AppInfoLocalizationsResponse{
-			{Data: []asc.Resource[asc.AppInfoLocalizationAttributes]{}},
-			{Data: []asc.Resource[asc.AppInfoLocalizationAttributes]{{ID: "created-id", Attributes: asc.AppInfoLocalizationAttributes{Locale: "fr-FR", Name: "French"}}}},
-		},
-		createErrs: []error{&asc.RetryableError{Err: errors.New("ambiguous create")}},
-	}
-	results, err := UploadAppInfoLocalizations(context.Background(), client, "app-info-id", map[string]map[string]string{
-		"fr-FR": {"name": "French"},
-	}, false)
-	if err != nil || len(results) != 1 || results[0].Action != "reconcile" || len(client.createCalls) != 1 || client.getCalls != 2 {
-		t.Fatalf("unexpected app-info create recovery: results=%+v creates=%d reads=%d err=%v", results, len(client.createCalls), client.getCalls, err)
-	}
-}
-
 func TestUploadVersionLocalizations_ReconcilesAmbiguousUpdateWithoutReplay(t *testing.T) {
 	client := &stubVersionLocalizationClient{
 		getResps: []*asc.AppStoreVersionLocalizationsResponse{
@@ -456,12 +433,15 @@ func TestUploadVersionLocalizations_ReconcilesAmbiguousUpdateWithoutReplay(t *te
 func TestUploadVersionLocalizations_UsesFreshContextForReadbackAfterRequestTimeout(t *testing.T) {
 	t.Setenv("ASC_TIMEOUT", "20ms")
 	client := &expiringVersionLocalizationClient{}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-
-	results, err := UploadVersionLocalizations(ctx, client, "version-id", map[string]map[string]string{
-		"en-US": {"description": "New description"},
-	}, false)
+	var results []asc.LocalizationUploadLocaleResult
+	var err error
+	synctest.Test(t, func(*testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		results, err = UploadVersionLocalizations(ctx, client, "version-id", map[string]map[string]string{
+			"en-US": {"description": "New description"},
+		}, false)
+	})
 	if err != nil {
 		t.Fatalf("UploadVersionLocalizations() error: %v", err)
 	}

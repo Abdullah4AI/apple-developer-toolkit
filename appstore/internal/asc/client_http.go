@@ -221,7 +221,23 @@ func (c *Client) replayableRequestWithHTTPClient(method, path string, body io.Re
 	var bodyBytes []byte
 	if body != nil {
 		var err error
-		bodyBytes, err = io.ReadAll(body)
+		remaining := -1
+		switch reader := body.(type) {
+		case *bytes.Reader:
+			remaining = reader.Len()
+		case *bytes.Buffer:
+			remaining = reader.Len()
+		case *strings.Reader:
+			remaining = reader.Len()
+		}
+		if remaining >= 0 {
+			// Keep a private replay snapshot, but avoid growing buffers when
+			// these readers expose their exact remaining length.
+			bodyBytes = make([]byte, remaining)
+			_, err = io.ReadFull(body, bodyBytes)
+		} else {
+			bodyBytes, err = io.ReadAll(body)
+		}
 		if err != nil {
 			return nil, fmt.Errorf("failed to read request body: %w", err)
 		}

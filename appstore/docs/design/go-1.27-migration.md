@@ -1,0 +1,15 @@
+# Go 1.27 migration
+
+The accepted compatibility change moves source and release builds to Go 1.27.1 and requires macOS 13 Ventura for the resulting Darwin binaries. CI continues to read the version from go.mod. Go 1.27 retains the encoding/json v1 API; no CLI command, flag, output envelope, endpoint, or retry policy changes.
+
+Use gofumpt 0.12.0 and golangci-lint 2.14.0, which support Go 1.27. Rebuild tools with the selected compiler. Keep vulnerability scanning enabled. Existing formatting, documentation, lint, complete tests, and focused race checks remain required.
+
+Initial CGO release builds inherited the installed SDK and declared macOS 27 despite Go 1.27’s internal-linker default of 13. Makefile builds and Darwin release/CI commands now explicitly set MACOSX_DEPLOYMENT_TARGET=13.0. Changing only that environment variable reused cached objects and binaries built for macOS 27. Darwin CGO compiler and linker flags therefore also include -mmacosx-version-min=13.0, which participates in Go’s build cache key. Other compiler flags are retained, including flags supplied directly to make. Regression coverage overrides conflicting environment and command-line target settings for all three Make build targets. Both Darwin architectures must be rebuilt and their actual Mach-O minimum checked.
+
+The generated Homebrew formula declares Ventura. The install script is fetched from main but selects releases/latest, so an unconditional OS guard would block compatible releases before the migration ships. For older Macs only, inspect go.mod at the exact selected release tag and reject Go 1.27 or newer before downloading or installing its binary. An unavailable or malformed declaration fails with a diagnostic. Supported Macs and Linux need no extra network request. Documentation explains the new release floor and retaining a compatible older release on older systems.
+
+The initial full suite found two tests coupled to Go 1.26 JSON field-path wording. Production validation still rejected the same inputs before HTTP. The unit assertions now verify the wrapped JSON error type, offending value, and destination type. The CLI assertion checks its diagnostic line, usage exit, empty stdout, and zero requests without depending on Go struct-name formatting. Other JSON validation cases remain unchanged.
+
+Installer regression coverage establishes rejection before downloads, the pre-release transition, toolchain directives, unreadable metadata, patch OS versions, supported platforms, and existing checksum/retry behavior. Full tests cover JSON diagnostics/output, compression and media artifacts. Build both Darwin architectures with CGO enabled and inspect deployment targets; cross-build Linux and Windows. Local current-macOS checks do not establish execution on a physical Ventura host. Runtime performance changes are validated separately and together with this toolchain without copying them into this migration PR.
+
+References: [Go 1.27 notes](https://go.dev/doc/go1.27), [gofumpt 0.12](https://github.com/mvdan/gofumpt/releases/tag/v0.12.0), [golangci-lint changelog](https://golangci-lint.run/docs/product/changelog/).

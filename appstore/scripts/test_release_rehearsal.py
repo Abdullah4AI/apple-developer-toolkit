@@ -49,6 +49,7 @@ class ReleaseRehearsalTests(unittest.TestCase):
         release_dir.mkdir()
         for name in release_rehearsal.expected_artifact_names(version):
             (release_dir / name).write_bytes(f"binary:{name}".encode())
+            (release_dir / name).chmod(0o755)
         return release_dir
 
     def test_generates_notes_and_checksums_for_exact_commit(self) -> None:
@@ -343,6 +344,14 @@ class ReleaseRehearsalTests(unittest.TestCase):
             )
 
         self.assertEqual(result.tested_sha, head)
+        release_dir = self.root / "release"
+        self.assertEqual(
+            result.checksums_path.read_text().splitlines(),
+            [
+                f"{release_rehearsal.sha256(release_dir / name)}  {name}"
+                for name in sorted(release_rehearsal.expected_artifact_names("1.2.4"))
+            ],
+        )
         self.assertEqual(
             command.call_args_list,
             [

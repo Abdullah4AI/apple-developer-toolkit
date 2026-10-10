@@ -32,44 +32,44 @@ type WebSubscriptionMonthlyCommitmentBootstrapResult struct {
 func webSubscriptionMonthlyCommitmentBootstrapRows(result *WebSubscriptionMonthlyCommitmentBootstrapResult) ([]string, [][]string) {
 	if result.DryRun {
 		return []string{
-				"Dry Run",
-				"Subscription ID",
-				"Territory",
-				"Plan Availability ID",
-				"Would Create Availability",
-				"Upfront Price Point ID",
-				"Monthly Price Point ID",
-				"Start Date",
-				"Preserve Current Price",
-			}, [][]string{{
-				fmt.Sprintf("%t", result.DryRun),
-				result.SubscriptionID,
-				result.Territory,
-				result.PlanAvailabilityID,
-				fmt.Sprintf("%t", result.PlanAvailabilityWouldCreate),
-				result.UpfrontPricePointID,
-				result.MonthlyPricePointID,
-				result.StartDate,
-				fmt.Sprintf("%t", result.PreserveCurrentPrice),
-			}}
-	}
-	return []string{
+			"Dry Run",
 			"Subscription ID",
 			"Territory",
 			"Plan Availability ID",
-			"Availability Created",
-			"Prices Created",
-			"Verified",
-			"Completed Stage",
-			"Failure",
+			"Would Create Availability",
+			"Upfront Price Point ID",
+			"Monthly Price Point ID",
+			"Start Date",
+			"Preserve Current Price",
 		}, [][]string{{
+			fmt.Sprintf("%t", result.DryRun),
 			result.SubscriptionID,
 			result.Territory,
 			result.PlanAvailabilityID,
-			fmt.Sprintf("%t", result.PlanAvailabilityNew),
-			fmt.Sprintf("%t", result.PricesCreated),
-			fmt.Sprintf("%t", result.Verified),
-			result.CompletedStage,
-			result.Failure,
+			fmt.Sprintf("%t", result.PlanAvailabilityWouldCreate),
+			result.UpfrontPricePointID,
+			result.MonthlyPricePointID,
+			result.StartDate,
+			fmt.Sprintf("%t", result.PreserveCurrentPrice),
 		}}
+	}
+	return []string{
+		"Subscription ID",
+		"Territory",
+		"Plan Availability ID",
+		"Availability Created",
+		"Prices Created",
+		"Verified",
+		"Completed Stage",
+		"Failure",
+	}, [][]string{{
+		result.SubscriptionID,
+		result.Territory,
+		result.PlanAvailabilityID,
+		fmt.Sprintf("%t", result.PlanAvailabilityNew),
+		fmt.Sprintf("%t", result.PricesCreated),
+		fmt.Sprintf("%t", result.Verified),
+		result.CompletedStage,
+		result.Failure,
+	}}
 }

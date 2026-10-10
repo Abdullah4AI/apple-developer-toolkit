@@ -11,13 +11,6 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
 )
 
-func resetEquivalentVersionNotes() {
-	equivalentVersionNoteMu.Lock()
-	defer equivalentVersionNoteMu.Unlock()
-
-	equivalentVersionNotes = map[string]struct{}{}
-}
-
 func TestParseBuildNumberRejectsNonNumeric(t *testing.T) {
 	_, err := parseBuildNumber("1a", "processed build")
 	if err == nil {
@@ -42,16 +35,6 @@ func TestParseBuildNumberAllowsNumeric(t *testing.T) {
 	}
 	if got.String() != "42" {
 		t.Fatalf("expected 42, got %q", got.String())
-	}
-}
-
-func TestParseBuildNumberAllowsDotSeparatedNumeric(t *testing.T) {
-	got, err := parseBuildNumber("1.2.3", "build upload")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if got.String() != "1.2.3" {
-		t.Fatalf("expected 1.2.3, got %q", got.String())
 	}
 }
 
@@ -187,7 +170,7 @@ func newPreReleaseVersionLookupClient(t *testing.T, storedVersion string, calls 
 }
 
 func TestFindPreReleaseVersionIDsMatchesEquivalentVersionFormat(t *testing.T) {
-	resetEquivalentVersionNotes()
+	ResetEquivalentVersionNotesForTest()
 
 	var calls []string
 	client := newPreReleaseVersionLookupClient(t, "1.2", &calls)
@@ -212,7 +195,7 @@ func TestFindPreReleaseVersionIDsMatchesEquivalentVersionFormat(t *testing.T) {
 }
 
 func TestFindPreReleaseVersionIDsPrefersRequestedVersionFormat(t *testing.T) {
-	resetEquivalentVersionNotes()
+	ResetEquivalentVersionNotesForTest()
 
 	var calls []string
 	client := newPreReleaseVersionLookupClient(t, "1.2.0", &calls)
@@ -237,7 +220,7 @@ func TestFindPreReleaseVersionIDsPrefersRequestedVersionFormat(t *testing.T) {
 }
 
 func TestFindPreReleaseVersionIDsCollectsEquivalentFormatsAcrossPlatforms(t *testing.T) {
-	resetEquivalentVersionNotes()
+	ResetEquivalentVersionNotesForTest()
 
 	var calls []string
 	client := newBuildWaitTestClient(t, func(req *http.Request) (*http.Response, error) {
@@ -270,7 +253,7 @@ func TestFindPreReleaseVersionIDsCollectsEquivalentFormatsAcrossPlatforms(t *tes
 }
 
 func TestFindPreReleaseVersionIDsNotesEquivalentMatchOnlyOnce(t *testing.T) {
-	resetEquivalentVersionNotes()
+	ResetEquivalentVersionNotesForTest()
 
 	var calls []string
 	client := newPreReleaseVersionLookupClient(t, "1.2", &calls)
@@ -288,7 +271,7 @@ func TestFindPreReleaseVersionIDsNotesEquivalentMatchOnlyOnce(t *testing.T) {
 }
 
 func TestFindPreReleaseVersionIDsReportsNoMatchWithoutNote(t *testing.T) {
-	resetEquivalentVersionNotes()
+	ResetEquivalentVersionNotesForTest()
 
 	var calls []string
 	client := newPreReleaseVersionLookupClient(t, "9.9", &calls)
@@ -313,7 +296,7 @@ func TestFindPreReleaseVersionIDsReportsNoMatchWithoutNote(t *testing.T) {
 }
 
 func TestFindPreReleaseVersionIDsWithoutVersionFilterQueriesOnce(t *testing.T) {
-	resetEquivalentVersionNotes()
+	ResetEquivalentVersionNotesForTest()
 
 	var calls []string
 	client := newPreReleaseVersionLookupClient(t, "", &calls)
@@ -331,7 +314,7 @@ func TestFindPreReleaseVersionIDsWithoutVersionFilterQueriesOnce(t *testing.T) {
 }
 
 func TestFindPreReleaseVersionIDsDeduplicatesAndSkipsBlankIDs(t *testing.T) {
-	resetEquivalentVersionNotes()
+	ResetEquivalentVersionNotesForTest()
 
 	client := newBuildWaitTestClient(t, func(req *http.Request) (*http.Response, error) {
 		if req.URL.Path != "/v1/preReleaseVersions" {

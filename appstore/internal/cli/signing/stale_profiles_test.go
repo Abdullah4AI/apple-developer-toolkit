@@ -12,16 +12,6 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
 )
 
-func TestProfileExpirationPassed(t *testing.T) {
-	now := time.Date(2026, 9, 17, 0, 0, 0, 0, time.UTC)
-	if !asc.ProfileExpirationPassed("2000-01-01T00:00:00Z", now) {
-		t.Fatal("expected a past RFC3339 date to be stale")
-	}
-	if asc.ProfileExpirationPassed("2100-01-01T00:00:00Z", now) {
-		t.Fatal("expected a future date to stay current")
-	}
-}
-
 func TestProfileIsStaleSkipsUnrelatedType(t *testing.T) {
 	profile := asc.Resource[asc.ProfileAttributes]{
 		Attributes: asc.ProfileAttributes{

@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 )
 
@@ -709,8 +710,8 @@ func TestPublishAppStoreSubmitUsesFreshTimeoutBudgetsForPreflightAndSubmission(t
 			case isReleasedVersionStateQuery(query):
 				return jsonResponse(http.StatusOK, `{"data":[]}`)
 			default:
-				t.Fatalf("unexpected app store versions query: %s", req.URL.RawQuery)
-				return nil, nil
+				t.Errorf("unexpected app store versions query: %s", req.URL.RawQuery)
+				return nil, errors.New("unexpected test transport request")
 			}
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/appStoreVersions/version-1/build":
 			return jsonResponse(http.StatusNotFound, `{"errors":[{"status":"404","code":"NOT_FOUND","title":"Not Found"}]}`)
@@ -730,16 +731,19 @@ func TestPublishAppStoreSubmitUsesFreshTimeoutBudgetsForPreflightAndSubmission(t
 			return jsonResponse(http.StatusNotFound, `{"errors":[{"status":"404","code":"NOT_FOUND","title":"Not Found"}]}`)
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/apps/app-1/reviewSubmissions":
 			if req.URL.Query().Get("filter[state]") != "READY_FOR_REVIEW" {
-				t.Fatalf("expected READY_FOR_REVIEW filter, got %q", req.URL.Query().Get("filter[state]"))
+				t.Errorf("expected READY_FOR_REVIEW filter, got %q", req.URL.Query().Get("filter[state]"))
+				return nil, errors.New("test transport assertion failed")
 			}
 			if req.URL.Query().Get("filter[platform]") != "IOS" {
-				t.Fatalf("expected platform filter IOS, got %q", req.URL.Query().Get("filter[platform]"))
+				t.Errorf("expected platform filter IOS, got %q", req.URL.Query().Get("filter[platform]"))
+				return nil, errors.New("test transport assertion failed")
 			}
 			return jsonResponse(http.StatusOK, `{"data":[],"links":{"self":"/v1/apps/app-1/reviewSubmissions"}}`)
 		case req.Method == http.MethodPost && req.URL.Path == "/v1/reviewSubmissions":
 			deadline, ok := req.Context().Deadline()
 			if !ok {
-				t.Fatal("expected review submission request to have a deadline")
+				t.Error("expected review submission request to have a deadline")
+				return nil, errors.New("test transport assertion failed")
 			}
 			reviewSubmissionBudget = time.Until(deadline)
 			return jsonResponse(http.StatusCreated, `{"data":{"type":"reviewSubmissions","id":"review-sub-1","attributes":{"state":"READY_FOR_REVIEW","platform":"IOS"}}}`)
@@ -748,8 +752,8 @@ func TestPublishAppStoreSubmitUsesFreshTimeoutBudgetsForPreflightAndSubmission(t
 		case req.Method == http.MethodPatch && req.URL.Path == "/v1/reviewSubmissions/review-sub-1":
 			return jsonResponse(http.StatusOK, `{"data":{"type":"reviewSubmissions","id":"review-sub-1","attributes":{"state":"WAITING_FOR_REVIEW","submittedDate":"2026-03-15T00:00:00Z"}}}`)
 		default:
-			t.Fatalf("unexpected request: %s %s?%s", req.Method, req.URL.Path, req.URL.RawQuery)
-			return nil, nil
+			t.Errorf("unexpected request: %s %s?%s", req.Method, req.URL.Path, req.URL.RawQuery)
+			return nil, errors.New("unexpected test transport request")
 		}
 	})
 
@@ -770,7 +774,9 @@ func TestPublishAppStoreSubmitUsesFreshTimeoutBudgetsForPreflightAndSubmission(t
 		}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
-		if err := root.Run(context.Background()); err != nil {
+		var runErr error
+		synctest.Test(t, func(*testing.T) { runErr = root.Run(context.Background()) })
+		if err := runErr; err != nil {
 			t.Fatalf("expected publish appstore submit to succeed with fresh timeout budgets, got %v", err)
 		}
 	})
@@ -845,8 +851,8 @@ func TestPublishAppStoreSubmitPreflightUsesPublishTimeoutOverride(t *testing.T) 
 			case isReleasedVersionStateQuery(query):
 				return jsonResponse(http.StatusOK, `{"data":[]}`)
 			default:
-				t.Fatalf("unexpected app store versions query: %s", req.URL.RawQuery)
-				return nil, nil
+				t.Errorf("unexpected app store versions query: %s", req.URL.RawQuery)
+				return nil, errors.New("unexpected test transport request")
 			}
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/appStoreVersions/version-1/build":
 			return jsonResponse(http.StatusNotFound, `{"errors":[{"status":"404","code":"NOT_FOUND","title":"Not Found"}]}`)
@@ -855,14 +861,16 @@ func TestPublishAppStoreSubmitPreflightUsesPublishTimeoutOverride(t *testing.T) 
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/appStoreVersions/version-1/appStoreVersionLocalizations":
 			deadline, ok := req.Context().Deadline()
 			if !ok {
-				t.Fatal("expected localization preflight request to have a deadline")
+				t.Error("expected localization preflight request to have a deadline")
+				return nil, errors.New("test transport assertion failed")
 			}
 			localizationBudget = time.Until(deadline)
 			return jsonResponse(http.StatusOK, `{"data":[{"type":"appStoreVersionLocalizations","id":"loc-en","attributes":{"locale":"en-US","description":"Description","keywords":"keyword","supportUrl":"https://example.com/support","whatsNew":"Bug fixes"}}]}`)
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/apps/app-1/subscriptionGroups":
 			deadline, ok := req.Context().Deadline()
 			if !ok {
-				t.Fatal("expected subscription preflight request to have a deadline")
+				t.Error("expected subscription preflight request to have a deadline")
+				return nil, errors.New("test transport assertion failed")
 			}
 			subscriptionBudget = time.Until(deadline)
 			return jsonResponse(http.StatusOK, `{"data":[],"links":{}}`)
@@ -877,8 +885,8 @@ func TestPublishAppStoreSubmitPreflightUsesPublishTimeoutOverride(t *testing.T) 
 		case req.Method == http.MethodPatch && req.URL.Path == "/v1/reviewSubmissions/review-sub-1":
 			return jsonResponse(http.StatusOK, `{"data":{"type":"reviewSubmissions","id":"review-sub-1","attributes":{"state":"WAITING_FOR_REVIEW","submittedDate":"2026-03-15T00:00:00Z"}}}`)
 		default:
-			t.Fatalf("unexpected request: %s %s?%s", req.Method, req.URL.Path, req.URL.RawQuery)
-			return nil, nil
+			t.Errorf("unexpected request: %s %s?%s", req.Method, req.URL.Path, req.URL.RawQuery)
+			return nil, errors.New("unexpected test transport request")
 		}
 	})
 
@@ -899,7 +907,9 @@ func TestPublishAppStoreSubmitPreflightUsesPublishTimeoutOverride(t *testing.T) 
 		}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
-		if err := root.Run(context.Background()); err != nil {
+		var runErr error
+		synctest.Test(t, func(*testing.T) { runErr = root.Run(context.Background()) })
+		if err := runErr; err != nil {
 			t.Fatalf("expected publish appstore submit to succeed with explicit timeout override, got %v", err)
 		}
 	})
@@ -968,8 +978,8 @@ func TestPublishAppStoreSubmitDefaultPathHonorsASCTimeout(t *testing.T) {
 			case isReleasedVersionStateQuery(query):
 				return jsonResponse(http.StatusOK, `{"data":[]}`)
 			default:
-				t.Fatalf("unexpected app store versions query: %s", req.URL.RawQuery)
-				return nil, nil
+				t.Errorf("unexpected app store versions query: %s", req.URL.RawQuery)
+				return nil, errors.New("unexpected test transport request")
 			}
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/appStoreVersions/version-1/build":
 			return jsonResponse(http.StatusNotFound, `{"errors":[{"status":"404","code":"NOT_FOUND","title":"Not Found"}]}`)
@@ -978,14 +988,16 @@ func TestPublishAppStoreSubmitDefaultPathHonorsASCTimeout(t *testing.T) {
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/appStoreVersions/version-1/appStoreVersionLocalizations":
 			deadline, ok := req.Context().Deadline()
 			if !ok {
-				t.Fatal("expected localization preflight request to have a deadline")
+				t.Error("expected localization preflight request to have a deadline")
+				return nil, errors.New("test transport assertion failed")
 			}
 			localizationBudget = time.Until(deadline)
 			return jsonResponse(http.StatusOK, `{"data":[{"type":"appStoreVersionLocalizations","id":"loc-en","attributes":{"locale":"en-US","description":"Description","keywords":"keyword","supportUrl":"https://example.com/support","whatsNew":"Bug fixes"}}]}`)
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/apps/app-1/subscriptionGroups":
 			deadline, ok := req.Context().Deadline()
 			if !ok {
-				t.Fatal("expected subscription preflight request to have a deadline")
+				t.Error("expected subscription preflight request to have a deadline")
+				return nil, errors.New("test transport assertion failed")
 			}
 			subscriptionBudget = time.Until(deadline)
 			return jsonResponse(http.StatusOK, `{"data":[],"links":{}}`)
@@ -1000,8 +1012,8 @@ func TestPublishAppStoreSubmitDefaultPathHonorsASCTimeout(t *testing.T) {
 		case req.Method == http.MethodPatch && req.URL.Path == "/v1/reviewSubmissions/review-sub-1":
 			return jsonResponse(http.StatusOK, `{"data":{"type":"reviewSubmissions","id":"review-sub-1","attributes":{"state":"WAITING_FOR_REVIEW","submittedDate":"2026-03-15T00:00:00Z"}}}`)
 		default:
-			t.Fatalf("unexpected request: %s %s?%s", req.Method, req.URL.Path, req.URL.RawQuery)
-			return nil, nil
+			t.Errorf("unexpected request: %s %s?%s", req.Method, req.URL.Path, req.URL.RawQuery)
+			return nil, errors.New("unexpected test transport request")
 		}
 	}))
 
@@ -1022,7 +1034,7 @@ func TestPublishAppStoreSubmitDefaultPathHonorsASCTimeout(t *testing.T) {
 		}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
-		runErr = root.Run(context.Background())
+		synctest.Test(t, func(*testing.T) { runErr = root.Run(context.Background()) })
 	})
 
 	if runErr == nil || !strings.Contains(runErr.Error(), stopErr.Error()) {

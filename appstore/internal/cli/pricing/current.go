@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/peterbourgon/ff/v3/ffcli"
@@ -123,20 +124,6 @@ Examples:
 				return fmt.Errorf("pricing current: base territory missing from response")
 			}
 
-			manualEntries, manualValues, manualCurrencies, err := fetchAppSchedulePriceEntries(ctx, runAppPriceRequestWithTimeout, func(callCtx context.Context, opts ...asc.AppPriceSchedulePricesOption) (*asc.AppPricesResponse, error) {
-				return client.GetAppPriceScheduleManualPrices(callCtx, scheduleID, opts...)
-			})
-			if err != nil {
-				if isAppPriceScheduleNotConfigured(err) {
-					return reportAppPriceScheduleNotConfigured(resolvedAppID, *output.Output, *output.Pretty)
-				}
-				return fmt.Errorf("pricing current: fetch manual prices: %w", err)
-			}
-
-			values := manualValues
-			currencies := manualCurrencies
-			entries := manualEntries
-
 			needAutomatic := *allTerritories
 			if !needAutomatic {
 				for _, territoryID := range requestedTerritories {
@@ -146,20 +133,12 @@ Examples:
 					}
 				}
 			}
-
-			if needAutomatic {
-				automaticEntries, automaticValues, automaticCurrencies, err := fetchAppSchedulePriceEntries(ctx, runAppPriceRequestWithTimeout, func(callCtx context.Context, opts ...asc.AppPriceSchedulePricesOption) (*asc.AppPricesResponse, error) {
-					return client.GetAppPriceScheduleAutomaticPrices(callCtx, scheduleID, opts...)
-				})
-				if err != nil {
-					if isAppPriceScheduleNotConfigured(err) {
-						return reportAppPriceScheduleNotConfigured(resolvedAppID, *output.Output, *output.Pretty)
-					}
-					return fmt.Errorf("pricing current: fetch automatic prices: %w", err)
+			entries, values, currencies, err := fetchAppCurrentSchedulePrices(ctx, client, scheduleID, needAutomatic)
+			if err != nil {
+				if isAppPriceScheduleNotConfigured(err) {
+					return reportAppPriceScheduleNotConfigured(resolvedAppID, *output.Output, *output.Pretty)
 				}
-				entries = append(entries, automaticEntries...)
-				maps.Copy(values, automaticValues)
-				maps.Copy(currencies, automaticCurrencies)
+				return fmt.Errorf("pricing current: %w", err)
 			}
 
 			entries = dedupeAppPriceEntries(entries)
@@ -185,6 +164,52 @@ Examples:
 			return printAppCurrentPricingResult(result, *output.Output, *output.Pretty)
 		},
 	}
+}
+
+func fetchAppCurrentSchedulePrices(ctx context.Context, client *asc.Client, scheduleID string, needAutomatic bool) ([]appPriceEntry, map[string]appPricePointValue, map[string]string, error) {
+	type automaticResult struct {
+		entries    []appPriceEntry
+		values     map[string]appPricePointValue
+		currencies map[string]string
+		err        error
+	}
+	var automatic chan automaticResult
+	if needAutomatic {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithCancel(ctx)
+		automatic = make(chan automaticResult, 1)
+		var wg sync.WaitGroup
+		defer func() {
+			// On a manual error, stop and join the independent automatic
+			// chain before returning the manual error to the caller.
+			cancel()
+			wg.Wait()
+		}()
+		wg.Go(func() {
+			entries, values, currencies, err := fetchAppSchedulePriceEntries(ctx, runAppPriceRequestWithTimeout, func(callCtx context.Context, opts ...asc.AppPriceSchedulePricesOption) (*asc.AppPricesResponse, error) {
+				return client.GetAppPriceScheduleAutomaticPrices(callCtx, scheduleID, opts...)
+			})
+			automatic <- automaticResult{entries: entries, values: values, currencies: currencies, err: err}
+		})
+	}
+	entries, values, currencies, err := fetchAppSchedulePriceEntries(ctx, runAppPriceRequestWithTimeout, func(callCtx context.Context, opts ...asc.AppPriceSchedulePricesOption) (*asc.AppPricesResponse, error) {
+		return client.GetAppPriceScheduleManualPrices(callCtx, scheduleID, opts...)
+	})
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("fetch manual prices: %w", err)
+	}
+	if needAutomatic {
+		// Consume manual first to preserve error precedence, then merge in
+		// the original order regardless of which chain finished first.
+		result := <-automatic
+		if result.err != nil {
+			return nil, nil, nil, fmt.Errorf("fetch automatic prices: %w", result.err)
+		}
+		entries = append(entries, result.entries...)
+		maps.Copy(values, result.values)
+		maps.Copy(currencies, result.currencies)
+	}
+	return entries, values, currencies, nil
 }
 
 // isAppPriceScheduleNotConfigured reports whether err is Apple's 404 for an

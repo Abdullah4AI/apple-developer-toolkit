@@ -151,11 +151,7 @@ Examples:
 					return fmt.Errorf("metadata pull: %w", err)
 				}
 
-				appInfoItems, err = fetchAppInfoLocalizations(ctx, client, appInfoIDValue)
-				if err != nil {
-					return fmt.Errorf("metadata pull: %w", err)
-				}
-				versionItems, err = fetchVersionLocalizations(ctx, client, versionIDValue)
+				appInfoItems, versionItems, err = fetchMetadataLocalizations(ctx, client, appInfoIDValue, versionIDValue, true, true)
 				if err != nil {
 					return fmt.Errorf("metadata pull: %w", err)
 				}
@@ -206,7 +202,13 @@ Examples:
 			if err != nil {
 				return fmt.Errorf("metadata pull: %w", err)
 			}
-			assetFiles, assetWarnings, err := storeassets.ExportPlan(ctx, client, versionIDValue, ".", includesScope(includes, "app-clip"), includesScope(includes, "previews"))
+			var assetFiles []storeassets.ExportFile
+			var assetWarnings []string
+			if includesScope(includes, includeLocalizations) {
+				assetFiles, assetWarnings, err = storeassets.ExportPlanWithVersionLocalizations(ctx, client, versionIDValue, ".", includesScope(includes, "app-clip"), includesScope(includes, "previews"), versionItems)
+			} else {
+				assetFiles, assetWarnings, err = storeassets.ExportPlan(ctx, client, versionIDValue, ".", includesScope(includes, "app-clip"), includesScope(includes, "previews"))
+			}
 			if err != nil {
 				return fmt.Errorf("metadata pull: %w", err)
 			}

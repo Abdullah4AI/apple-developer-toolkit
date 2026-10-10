@@ -227,27 +227,6 @@ func TestGameCenterGroupLeaderboardsSetValidationErrors(t *testing.T) {
 	}
 }
 
-func TestGameCenterGroupsListLimitValidation(t *testing.T) {
-	t.Setenv("ASC_APP_ID", "APP_ID")
-
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	stdout, _ := captureOutput(t, func() {
-		if err := root.Parse([]string{"game-center", "groups", "list", "--app", "APP_ID", "--limit", "300"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		err := root.Run(context.Background())
-		if err == nil {
-			t.Fatalf("expected error, got nil")
-		}
-	})
-
-	if stdout != "" {
-		t.Fatalf("expected empty stdout, got %q", stdout)
-	}
-}
-
 func TestGameCenterGroupDetailsListValidationErrors(t *testing.T) {
 	root := RootCommand("1.2.3")
 	root.FlagSet.SetOutput(io.Discard)

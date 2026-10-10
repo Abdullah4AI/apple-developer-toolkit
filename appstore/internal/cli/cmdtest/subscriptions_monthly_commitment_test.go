@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
@@ -763,7 +764,7 @@ func TestSubscriptionsPricingMonthlyCommitmentEnableCreatesMonthlyPrices(t *test
 				body := `{
 					"data":[{
 						"type":"subscriptionPrices","id":"price-upfront",
-						"attributes":{"planType":"UPFRONT","startDate":"2024-01-01"},
+						"attributes":{"planType":"UPFRONT","startDate":"1999-01-01"},
 						"relationships":{
 							"territory":{"data":{"type":"territories","id":"NOR"}},
 							"subscriptionPricePoint":{"data":{"type":"subscriptionPricePoints","id":"pp-upfront"}}
@@ -780,8 +781,8 @@ func TestSubscriptionsPricingMonthlyCommitmentEnableCreatesMonthlyPrices(t *test
 				time.Sleep(60 * time.Millisecond)
 				return jsonResponse(http.StatusOK, `{"data":[],"links":{"next":""}}`)
 			default:
-				t.Fatalf("unexpected prices query: %q", req.URL.RawQuery)
-				return nil, nil
+				t.Errorf("unexpected prices query: %q", req.URL.RawQuery)
+				return nil, errors.New("unexpected test transport request")
 			}
 		case req.URL.Path == "/v1/subscriptions/8000000001/pricePoints" && req.Method == http.MethodGet:
 			body := `{"data":[{"type":"subscriptionPricePoints","id":"pp-monthly","attributes":{"customerPrice":"10.00","proceeds":"7.00"}}],"links":{"next":""}}`
@@ -790,21 +791,26 @@ func TestSubscriptionsPricingMonthlyCommitmentEnableCreatesMonthlyPrices(t *test
 			mutationOrder = append(mutationOrder, "price")
 			deadline, ok := req.Context().Deadline()
 			if !ok {
-				t.Fatal("expected subscription price create request to carry a timeout deadline")
+				t.Error("expected subscription price create request to carry a timeout deadline")
+				return nil, errors.New("test transport assertion failed")
 			}
 			createDeadlineRemaining = time.Until(deadline)
 			var payload asc.SubscriptionPriceCreateRequest
 			if err := json.NewDecoder(req.Body).Decode(&payload); err != nil {
-				t.Fatalf("decode create price payload: %v", err)
+				t.Errorf("decode create price payload: %v", err)
+				return nil, errors.New("test transport assertion failed")
 			}
 			if payload.Data.Attributes == nil || payload.Data.Attributes.PlanType != asc.SubscriptionPlanTypeMonthly {
-				t.Fatalf("expected planType MONTHLY, got %#v", payload.Data.Attributes)
+				t.Errorf("expected planType MONTHLY, got %#v", payload.Data.Attributes)
+				return nil, errors.New("test transport assertion failed")
 			}
 			if payload.Data.Relationships == nil || payload.Data.Relationships.Territory == nil || payload.Data.Relationships.Territory.Data.ID != "NOR" {
-				t.Fatalf("expected NOR territory, got %#v", payload.Data.Relationships)
+				t.Errorf("expected NOR territory, got %#v", payload.Data.Relationships)
+				return nil, errors.New("test transport assertion failed")
 			}
 			if payload.Data.Relationships.SubscriptionPricePoint == nil || payload.Data.Relationships.SubscriptionPricePoint.Data.ID != "pp-monthly" {
-				t.Fatalf("expected pp-monthly price point, got %#v", payload.Data.Relationships)
+				t.Errorf("expected pp-monthly price point, got %#v", payload.Data.Relationships)
+				return nil, errors.New("test transport assertion failed")
 			}
 			return jsonResponse(http.StatusCreated, `{"data":{"type":"subscriptionPrices","id":"price-monthly","attributes":{"planType":"MONTHLY"}}}`)
 		case req.URL.Path == "/v1/subscriptions/8000000001/planAvailabilities" && req.Method == http.MethodGet:
@@ -813,21 +819,24 @@ func TestSubscriptionsPricingMonthlyCommitmentEnableCreatesMonthlyPrices(t *test
 			mutationOrder = append(mutationOrder, "availability")
 			deadline, ok := req.Context().Deadline()
 			if !ok {
-				t.Fatal("expected plan availability create request to carry a timeout deadline")
+				t.Error("expected plan availability create request to carry a timeout deadline")
+				return nil, errors.New("test transport assertion failed")
 			}
 			availabilityDeadlineRemaining = time.Until(deadline)
 			var payload asc.SubscriptionPlanAvailabilityCreateRequest
 			if err := json.NewDecoder(req.Body).Decode(&payload); err != nil {
-				t.Fatalf("decode plan availability payload: %v", err)
+				t.Errorf("decode plan availability payload: %v", err)
+				return nil, errors.New("test transport assertion failed")
 			}
 			postedPlanType = string(payload.Data.Attributes.PlanType)
 			if payload.Data.Attributes.AvailableInNewTerritories != nil {
-				t.Fatalf("MONTHLY create must omit availableInNewTerritories, got %#v", payload.Data.Attributes)
+				t.Errorf("MONTHLY create must omit availableInNewTerritories, got %#v", payload.Data.Attributes)
+				return nil, errors.New("test transport assertion failed")
 			}
 			return jsonResponse(http.StatusCreated, `{"data":{"type":"subscriptionPlanAvailabilities","id":"plan-1","attributes":{"planType":"MONTHLY","availableInNewTerritories":false}}}`)
 		default:
-			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.String())
-			return nil, nil
+			t.Errorf("unexpected request: %s %s", req.Method, req.URL.String())
+			return nil, errors.New("unexpected test transport request")
 		}
 	}))
 
@@ -845,7 +854,7 @@ func TestSubscriptionsPricingMonthlyCommitmentEnableCreatesMonthlyPrices(t *test
 		}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
-		runErr = root.Run(context.Background())
+		synctest.Test(t, func(*testing.T) { runErr = root.Run(context.Background()) })
 	})
 	if runErr != nil {
 		t.Fatalf("run error: %v; stderr=%q stdout=%q", runErr, stderr, stdout)

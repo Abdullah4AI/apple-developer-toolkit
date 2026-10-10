@@ -164,7 +164,7 @@ Use `asc <command> --help` for subcommands and flags.
 - `actors` - Lookup actors (users, API keys) by ID.
 - `devices` - Manage devices in App Store Connect.
 - `testflight` - Manage TestFlight workflows.
-- `builds` - Manage builds (TestFlight/App Store).
+- `builds` - Manage builds (TestFlight/App Store); compile and package iOS apps locally with installed xtool/rcodesign.
 - `build-bundles` - Manage build bundles and App Clip data.
 - `publish` - High-level publish workflows; use `publish testflight` for TestFlight.
 - `release` - Run high-level App Store release workflows.

@@ -179,14 +179,6 @@ func TestAppsListPaginateFromNext(t *testing.T) {
 	)
 }
 
-func TestAppsSearchKeywordsListRejectsInvalidNextURL(t *testing.T) {
-	runAppsInvalidNextURLCases(
-		t,
-		[]string{"apps", "search-keywords", "list"},
-		"apps search-keywords list: --next",
-	)
-}
-
 func TestAppsSearchKeywordsListPaginateFromNextWithoutApp(t *testing.T) {
 	const firstURL = "https://api.appstoreconnect.apple.com/v1/apps/app-1/searchKeywords?cursor=AQ&limit=200"
 	const secondURL = "https://api.appstoreconnect.apple.com/v1/apps/app-1/searchKeywords?cursor=BQ&limit=200"
@@ -206,14 +198,6 @@ func TestAppsSearchKeywordsListPaginateFromNextWithoutApp(t *testing.T) {
 	)
 }
 
-func TestAppsAppEncryptionDeclarationsListRejectsInvalidNextURL(t *testing.T) {
-	runAppsInvalidNextURLCases(
-		t,
-		[]string{"apps", "app-encryption-declarations", "list"},
-		"apps app-encryption-declarations list: --next",
-	)
-}
-
 func TestAppsAppEncryptionDeclarationsListPaginateFromNextWithoutID(t *testing.T) {
 	const firstURL = "https://api.appstoreconnect.apple.com/v1/appEncryptionDeclarations?cursor=AQ&limit=200"
 	const secondURL = "https://api.appstoreconnect.apple.com/v1/appEncryptionDeclarations?cursor=BQ&limit=200"
@@ -230,14 +214,6 @@ func TestAppsAppEncryptionDeclarationsListPaginateFromNextWithoutID(t *testing.T
 		secondBody,
 		"app-encryption-declaration-next-1",
 		"app-encryption-declaration-next-2",
-	)
-}
-
-func TestAppInfoTerritoryAgeRatingsListRejectsInvalidNextURL(t *testing.T) {
-	runAppsInvalidNextURLCases(
-		t,
-		[]string{"apps", "info", "territory-age-ratings", "list"},
-		"apps info territory-age-ratings list: --next",
 	)
 }
 

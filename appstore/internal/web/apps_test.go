@@ -2,7 +2,6 @@ package web
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -118,16 +117,6 @@ func fixtureAppCreateAttributes() AppCreateAttributes {
 	}
 }
 
-func TestBuildAppCreateRequestBodyMatchesCapturedContract(t *testing.T) {
-	raw, err := json.Marshal(buildAppCreateRequest(fixtureAppCreateAttributes()))
-	if err != nil {
-		t.Fatalf("json.Marshal error: %v", err)
-	}
-	if string(raw) != frozenAppCreateRequestBody {
-		t.Fatalf("create request body changed\ngot:  %s\nwant: %s", raw, frozenAppCreateRequestBody)
-	}
-}
-
 func TestCreateAppSendsCapturedContractBody(t *testing.T) {
 	fixture := handlertest.New(t)
 	var gotBody string
@@ -152,26 +141,6 @@ func TestCreateAppSendsCapturedContractBody(t *testing.T) {
 	}
 	if gotBody != frozenAppCreateRequestBody {
 		t.Fatalf("create request body changed\ngot:  %s\nwant: %s", gotBody, frozenAppCreateRequestBody)
-	}
-}
-
-func TestBuildAppCreateRequestUsesLocalizationForName(t *testing.T) {
-	req := buildAppCreateRequest(fixtureAppCreateAttributes())
-
-	raw, err := json.Marshal(req)
-	if err != nil {
-		t.Fatalf("json.Marshal error: %v", err)
-	}
-	payload := string(raw)
-
-	if strings.Contains(payload, `"attributes":{"name":"My App","sku"`) {
-		t.Fatalf("expected name not to be part of top-level app attributes, payload=%s", payload)
-	}
-	if !strings.Contains(payload, `"appInfoLocalizations"`) {
-		t.Fatalf("expected appInfoLocalization relationship, payload=%s", payload)
-	}
-	if !strings.Contains(payload, `"name":"My App"`) {
-		t.Fatalf("expected localized app name in payload, payload=%s", payload)
 	}
 }
 

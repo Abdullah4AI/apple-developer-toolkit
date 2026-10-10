@@ -134,20 +134,6 @@ func TestSigningKeychainInstallCommandValidatesBeforeExecution(t *testing.T) {
 	}
 }
 
-func TestSigningKeychainInstallFlagsAreRegistered(t *testing.T) {
-	command := SigningKeychainInstallCommand()
-
-	for _, name := range []string{
-		"identity", "identity-password-file", "keychain", "keychain-password-file",
-		"expected-certificate-sha256", "add-to-search-list", "confirm",
-	} {
-		definition := command.FlagSet.Lookup(name)
-		if definition == nil {
-			t.Fatalf("missing --%s flag", name)
-		}
-	}
-}
-
 func TestExecuteSigningKeychainInstallCreatesDedicatedKeychain(t *testing.T) {
 	fixture := newSigningRunFixture(t, signingRunFixtureOptions{})
 	identityPath := filepath.Join(t.TempDir(), "App.p12")

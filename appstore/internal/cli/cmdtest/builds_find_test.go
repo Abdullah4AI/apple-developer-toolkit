@@ -734,10 +734,3 @@ func TestBuildsFindAliasIsRemoved(t *testing.T) {
 		t.Fatalf("expected builds find to stay omitted from help, got %q", stderr)
 	}
 }
-
-func TestBuildsFindAliasHiddenFromCanonicalHelp(t *testing.T) {
-	usage := usageForCommand(t, "builds")
-	if strings.Contains(usage, "\n  find\t") || strings.Contains(usage, "\n  find ") {
-		t.Fatalf("expected deprecated builds find alias to stay hidden from canonical help, got %q", usage)
-	}
-}

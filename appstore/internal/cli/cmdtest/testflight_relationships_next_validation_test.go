@@ -9,14 +9,6 @@ import (
 	"testing"
 )
 
-func TestTestFlightBetaGroupsLinksViewRejectsInvalidNextURL(t *testing.T) {
-	runInvalidNextURLUsageErrorCases(
-		t,
-		[]string{"testflight", "groups", "links", "view", "--group-id", "group-1", "--type", "betaTesters"},
-		"testflight groups links view: --next",
-	)
-}
-
 func TestTestFlightBetaGroupsLinksViewPaginateFromNextWithoutGroupID(t *testing.T) {
 	setupAuth(t)
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
@@ -83,14 +75,6 @@ func TestTestFlightBetaGroupsLinksViewPaginateFromNextWithoutGroupID(t *testing.
 	if !strings.Contains(stdout, `"id":"tester-rel-1"`) || !strings.Contains(stdout, `"id":"tester-rel-2"`) {
 		t.Fatalf("expected paginated relationship data in output, got %q", stdout)
 	}
-}
-
-func TestTestFlightBetaTestersLinksViewRejectsInvalidNextURL(t *testing.T) {
-	runInvalidNextURLUsageErrorCases(
-		t,
-		[]string{"testflight", "testers", "links", "view", "--tester-id", "tester-1", "--type", "apps"},
-		"testflight testers links view: --next",
-	)
 }
 
 func TestTestFlightBetaTestersLinksViewPaginateFromNextWithoutTesterID(t *testing.T) {

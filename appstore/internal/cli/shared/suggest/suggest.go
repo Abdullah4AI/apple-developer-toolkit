@@ -28,23 +28,30 @@ func Commands(input string, candidates []string) []string {
 			continue
 		}
 
-		d := editDistance(in, name)
-
-		// Strongest signal: prefix relationship.
+		score := 2
+		// Strong matches admit arbitrary distance and still use the exact
+		// distance to rank candidates within their category.
 		if strings.HasPrefix(name, in) || strings.HasPrefix(in, name) {
-			collected = append(collected, candidate{name: name, score: 0, dist: d})
+			score = 0
+		} else if isSubstringMatch(in, name) {
+			score = 1
+		} else {
+			// Insertions and deletions cannot close a length difference larger
+			// than the weak-match threshold, including with transpositions.
+			lengthDifference := len(in) - len(name)
+			if lengthDifference < 0 {
+				lengthDifference = -lengthDifference
+			}
+			if !withinThreshold(in, lengthDifference) {
+				continue
+			}
+		}
+
+		d := editDistance(in, name)
+		if score == 2 && !withinThreshold(in, d) {
 			continue
 		}
-		// A remembered component span of a hyphenated name (`phased` for
-		// `phased-release` or `list` for `app-list-all`).
-		if isSubstringMatch(in, name) {
-			collected = append(collected, candidate{name: name, score: 1, dist: d})
-			continue
-		}
-		if !withinThreshold(in, d) {
-			continue
-		}
-		collected = append(collected, candidate{name: name, score: 2, dist: d})
+		collected = append(collected, candidate{name: name, score: score, dist: d})
 	}
 
 	if len(collected) == 0 {

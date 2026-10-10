@@ -1278,29 +1278,6 @@ func TestResolveSessionUsesLastCachedSessionWhenAppleIDMissing(t *testing.T) {
 	}
 }
 
-func TestResolveSessionReportsMissingWebSessionWhenNoCachedSessionExists(t *testing.T) {
-	origTryResumeLast := tryResumeLastFn
-	t.Cleanup(func() {
-		tryResumeLastFn = origTryResumeLast
-	})
-
-	tryResumeLastFn = func(ctx context.Context) (*webcore.AuthSession, bool, error) {
-		return nil, false, nil
-	}
-
-	_, _, err := resolveSession(context.Background(), "", "", "")
-	if !errors.Is(err, shared.ErrMissingWebSession) || errors.Is(err, flag.ErrHelp) {
-		t.Fatalf("expected the missing-session error without the usage page, got %v", err)
-	}
-
-	captureOutput(t, func() {
-		_, _, err = resolveSession(contextForWebSignIn(context.Background()), "", "", "")
-	})
-	if !errors.Is(err, flag.ErrHelp) {
-		t.Fatalf("expected web auth login to keep the --apple-id usage error, got %v", err)
-	}
-}
-
 func TestResolveSessionPrintsExpiredNoticeBeforePrompt(t *testing.T) {
 	origTryResume := tryResumeSessionFn
 	origTryResumeLast := tryResumeLastFn

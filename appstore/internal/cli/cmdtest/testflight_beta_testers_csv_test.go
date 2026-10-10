@@ -7,11 +7,13 @@ import (
 	"encoding/json"
 	"errors"
 	"flag"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -123,63 +125,36 @@ func TestTestFlightBetaTestersExport_IncludeGroupsAddsColumn(t *testing.T) {
 		http.DefaultTransport = originalTransport
 	})
 
-	callCount := 0
+	// Group membership reads run concurrently, so match requests by path and
+	// avoid t.Fatalf on transport goroutines.
 	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		callCount++
-		switch callCount {
-		case 1:
-			if req.Method != http.MethodGet || req.URL.Path != "/v1/apps/app-1/betaGroups" {
-				t.Fatalf("unexpected request 1: %s %s", req.Method, req.URL.Path)
-			}
+		var body string
+		switch {
+		case req.Method != http.MethodGet:
+		case req.URL.Path == "/v1/apps/app-1/betaGroups":
 			if req.URL.Query().Get("limit") != "200" {
-				t.Fatalf("expected limit=200, got %q", req.URL.Query().Get("limit"))
+				t.Errorf("expected limit=200, got %q", req.URL.Query().Get("limit"))
+				return nil, fmt.Errorf("unexpected limit")
 			}
-			body := `{"data":[` +
+			body = `{"data":[` +
 				`{"type":"betaGroups","id":"group-1","attributes":{"name":"Alpha"}},` +
 				`{"type":"betaGroups","id":"group-2","attributes":{"name":"Beta"}}` +
 				`]}`
-			return &http.Response{
-				StatusCode: http.StatusOK,
-				Body:       io.NopCloser(strings.NewReader(body)),
-				Header:     http.Header{"Content-Type": []string{"application/json"}},
-			}, nil
-		case 2:
-			if req.Method != http.MethodGet || req.URL.Path != "/v1/betaTesters" {
-				t.Fatalf("unexpected request 2: %s %s", req.Method, req.URL.Path)
-			}
-			body := `{"data":[` +
+		case req.URL.Path == "/v1/betaTesters":
+			body = `{"data":[` +
 				`{"type":"betaTesters","id":"tester-2","attributes":{"email":"b@example.com","firstName":"B","lastName":"Bee"}},` +
 				`{"type":"betaTesters","id":"tester-1","attributes":{"email":"a@example.com","firstName":"A","lastName":"Aye"}}` +
 				`]}`
-			return &http.Response{
-				StatusCode: http.StatusOK,
-				Body:       io.NopCloser(strings.NewReader(body)),
-				Header:     http.Header{"Content-Type": []string{"application/json"}},
-			}, nil
-		case 3:
-			if req.Method != http.MethodGet || req.URL.Path != "/v1/betaGroups/group-1/betaTesters" {
-				t.Fatalf("unexpected request 3: %s %s", req.Method, req.URL.Path)
-			}
-			body := `{"data":[{"type":"betaTesters","id":"tester-1"}]}`
-			return &http.Response{
-				StatusCode: http.StatusOK,
-				Body:       io.NopCloser(strings.NewReader(body)),
-				Header:     http.Header{"Content-Type": []string{"application/json"}},
-			}, nil
-		case 4:
-			if req.Method != http.MethodGet || req.URL.Path != "/v1/betaGroups/group-2/betaTesters" {
-				t.Fatalf("unexpected request 4: %s %s", req.Method, req.URL.Path)
-			}
-			body := `{"data":[{"type":"betaTesters","id":"tester-1"},{"type":"betaTesters","id":"tester-2"}]}`
-			return &http.Response{
-				StatusCode: http.StatusOK,
-				Body:       io.NopCloser(strings.NewReader(body)),
-				Header:     http.Header{"Content-Type": []string{"application/json"}},
-			}, nil
-		default:
-			t.Fatalf("unexpected request count %d", callCount)
-			return nil, nil
+		case req.URL.Path == "/v1/betaGroups/group-1/betaTesters":
+			body = `{"data":[{"type":"betaTesters","id":"tester-1"}]}`
+		case req.URL.Path == "/v1/betaGroups/group-2/betaTesters":
+			body = `{"data":[{"type":"betaTesters","id":"tester-1"},{"type":"betaTesters","id":"tester-2"}]}`
 		}
+		if body == "" {
+			t.Errorf("unexpected request: %s %s", req.Method, req.URL)
+			return nil, fmt.Errorf("unexpected request")
+		}
+		return jsonHTTPResponse(http.StatusOK, body), nil
 	})
 
 	outPath := filepath.Join(t.TempDir(), "testers.csv")
@@ -225,38 +200,35 @@ func TestTestFlightBetaTestersExport_IncludeGroupsRenewsRequestTimeout(t *testin
 		http.DefaultTransport = originalTransport
 	})
 
+	// One group read as two sequential 300ms pages exceeds a single 500ms
+	// timeout, so the export only succeeds if each request renews it.
 	const requestDelay = 300 * time.Millisecond
-	callCount := 0
+	var callCount atomic.Int32
 	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		callCount++
-		switch callCount {
-		case 1:
-			if req.Method != http.MethodGet || req.URL.Path != "/v1/apps/app-1/betaGroups" {
-				t.Fatalf("unexpected request 1: %s %s", req.Method, req.URL.Path)
-			}
-			return jsonHTTPResponse(http.StatusOK, `{"data":[{"type":"betaGroups","id":"group-1","attributes":{"name":"Alpha"}},{"type":"betaGroups","id":"group-2","attributes":{"name":"Beta"}}]}`), nil
-		case 2:
-			if req.Method != http.MethodGet || req.URL.Path != "/v1/betaTesters" {
-				t.Fatalf("unexpected request 2: %s %s", req.Method, req.URL.Path)
-			}
+		callCount.Add(1)
+		if req.Method != http.MethodGet {
+			t.Errorf("unexpected request: %s %s", req.Method, req.URL)
+			return nil, fmt.Errorf("unexpected request")
+		}
+		var body string
+		switch {
+		case req.URL.Path == "/v1/apps/app-1/betaGroups":
+			return jsonHTTPResponse(http.StatusOK, `{"data":[{"type":"betaGroups","id":"group-1","attributes":{"name":"Alpha"}}]}`), nil
+		case req.URL.Path == "/v1/betaTesters":
 			return jsonHTTPResponse(http.StatusOK, `{"data":[{"type":"betaTesters","id":"tester-1","attributes":{"email":"a@example.com","firstName":"A","lastName":"Aye"}}]}`), nil
-		case 3, 4:
-			groupID := "group-1"
-			if callCount == 4 {
-				groupID = "group-2"
-			}
-			if req.Method != http.MethodGet || req.URL.Path != "/v1/betaGroups/"+groupID+"/betaTesters" {
-				t.Fatalf("unexpected request %d: %s %s", callCount, req.Method, req.URL.Path)
-			}
-			select {
-			case <-time.After(requestDelay):
-				return jsonHTTPResponse(http.StatusOK, `{"data":[{"type":"betaTesters","id":"tester-1"}]}`), nil
-			case <-req.Context().Done():
-				return nil, req.Context().Err()
-			}
+		case req.URL.Path == "/v1/betaGroups/group-1/betaTesters" && req.URL.Query().Get("cursor") == "":
+			body = `{"data":[{"type":"betaTesters","id":"tester-1"}],"links":{"next":"https://api.appstoreconnect.apple.com/v1/betaGroups/group-1/betaTesters?cursor=page-2"}}`
+		case req.URL.Path == "/v1/betaGroups/group-1/betaTesters":
+			body = `{"data":[{"type":"betaTesters","id":"tester-2"}]}`
 		default:
-			t.Fatalf("unexpected request count %d", callCount)
-			return nil, nil
+			t.Errorf("unexpected request: %s %s", req.Method, req.URL)
+			return nil, fmt.Errorf("unexpected request")
+		}
+		select {
+		case <-time.After(requestDelay):
+			return jsonHTTPResponse(http.StatusOK, body), nil
+		case <-req.Context().Done():
+			return nil, req.Context().Err()
 		}
 	})
 
@@ -279,14 +251,14 @@ func TestTestFlightBetaTestersExport_IncludeGroupsRenewsRequestTimeout(t *testin
 	if !strings.Contains(stdout, `"includeGroups":true`) {
 		t.Fatalf("expected includeGroups true in summary, got %q", stdout)
 	}
-	if callCount != 4 {
-		t.Fatalf("expected four HTTP requests, got %d", callCount)
+	if got := callCount.Load(); got != 4 {
+		t.Fatalf("expected four HTTP requests, got %d", got)
 	}
 
 	records := readCSVRecords(t, outPath)
 	want := [][]string{
 		{"email", "first_name", "last_name", "groups"},
-		{"a@example.com", "A", "Aye", "Alpha;Beta"},
+		{"a@example.com", "A", "Aye", "Alpha"},
 	}
 	if got := strings.TrimSpace(csvRecordsToString(records)); got != strings.TrimSpace(csvRecordsToString(want)) {
 		t.Fatalf("CSV records mismatch\nwant:\n%s\ngot:\n%s", csvRecordsToString(want), csvRecordsToString(records))

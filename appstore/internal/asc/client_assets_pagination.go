@@ -3,6 +3,7 @@ package asc
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"strings"
 )
 
@@ -11,6 +12,7 @@ import (
 type appScreenshotSetsQuery struct {
 	listQuery
 	limitSet       bool
+	includeMedia   bool
 	requestContext RequestContextFunc
 }
 
@@ -29,7 +31,12 @@ type AppScreenshotSetsOption func(*appScreenshotSetsQuery)
 type AppScreenshotsOption func(*appScreenshotsQuery)
 
 func buildAppScreenshotSetsQuery(query *appScreenshotSetsQuery) string {
-	return buildListQuery(&query.listQuery)
+	values := url.Values{}
+	addLimit(values, query.limit)
+	if query.includeMedia {
+		addIncludedSetMedia(values, "appScreenshots")
+	}
+	return values.Encode()
 }
 
 func buildAppScreenshotsQuery(query *appScreenshotsQuery) string {
@@ -41,6 +48,13 @@ func WithAppScreenshotSetsLimit(limit int) AppScreenshotSetsOption {
 	return func(query *appScreenshotSetsQuery) {
 		query.limit = limit
 		query.limitSet = true
+	}
+}
+
+// WithAppScreenshotSetsIncludeScreenshots includes each set's screenshots.
+func WithAppScreenshotSetsIncludeScreenshots() AppScreenshotSetsOption {
+	return func(query *appScreenshotSetsQuery) {
+		query.includeMedia = true
 	}
 }
 

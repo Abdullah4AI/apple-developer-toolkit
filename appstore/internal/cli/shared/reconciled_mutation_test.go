@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
@@ -250,24 +251,30 @@ func TestRunReconciledMutationUsesFreshTimeoutForReplay(t *testing.T) {
 	mutations := 0
 	readbacks := 0
 
-	value, status, err := RunReconciledMutation(
-		context.Background(),
-		func(ctx context.Context) (string, error) {
-			mutations++
-			if mutations == 1 {
-				<-ctx.Done()
-				return "", ctx.Err()
-			}
-			if err := ctx.Err(); err != nil {
-				t.Fatalf("replay received expired context: %v", err)
-			}
-			return "localization-id", nil
-		},
-		func(context.Context) (string, bool, error) {
-			readbacks++
-			return "", false, nil
-		},
-	)
+	var value string
+	var status ReconciledMutationStatus
+	var err error
+	synctest.Test(t, func(*testing.T) {
+		value, status, err = RunReconciledMutation(
+			context.Background(),
+			func(ctx context.Context) (string, error) {
+				mutations++
+				if mutations == 1 {
+					<-ctx.Done()
+					return "", ctx.Err()
+				}
+				if err := ctx.Err(); err != nil {
+					t.Errorf("replay received expired context: %v", err)
+					return "", err
+				}
+				return "localization-id", nil
+			},
+			func(context.Context) (string, bool, error) {
+				readbacks++
+				return "", false, nil
+			},
+		)
+	})
 	if err != nil {
 		t.Fatalf("RunReconciledMutation() error: %v", err)
 	}
@@ -309,23 +316,28 @@ func TestRunReconciledMutationRetriesReadbackChildDeadline(t *testing.T) {
 	t.Setenv("ASC_MAX_DELAY", "1ms")
 	readbacks := 0
 
-	value, status, err := RunReconciledMutation(
-		context.Background(),
-		func(context.Context) (string, error) {
-			return "", &asc.RetryableError{Err: errors.New("ambiguous")}
-		},
-		func(ctx context.Context) (string, bool, error) {
-			value, readErr := RetryReadWithFreshTimeout(ctx, func(requestCtx context.Context) (string, error) {
-				readbacks++
-				if readbacks == 1 {
-					<-requestCtx.Done()
-					return "", requestCtx.Err()
-				}
-				return "localization-id", nil
-			})
-			return value, value != "", readErr
-		},
-	)
+	var value string
+	var status ReconciledMutationStatus
+	var err error
+	synctest.Test(t, func(*testing.T) {
+		value, status, err = RunReconciledMutation(
+			context.Background(),
+			func(context.Context) (string, error) {
+				return "", &asc.RetryableError{Err: errors.New("ambiguous")}
+			},
+			func(ctx context.Context) (string, bool, error) {
+				value, readErr := RetryReadWithFreshTimeout(ctx, func(requestCtx context.Context) (string, error) {
+					readbacks++
+					if readbacks == 1 {
+						<-requestCtx.Done()
+						return "", requestCtx.Err()
+					}
+					return "localization-id", nil
+				})
+				return value, value != "", readErr
+			},
+		)
+	})
 	if err != nil {
 		t.Fatalf("RunReconciledMutation() error: %v", err)
 	}

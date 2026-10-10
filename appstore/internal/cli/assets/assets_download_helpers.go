@@ -148,21 +148,25 @@ func resolveImageAssetDownloadURL(asset *asc.ImageAsset, fileName string) (strin
 }
 
 func downloadURLToFile(ctx context.Context, rawURL string, outputPath string, overwrite bool) (int64, string, error) {
+	return downloadURLToResolvedFile(ctx, rawURL, func(string) string { return outputPath }, overwrite)
+}
+
+// downloadURLToResolvedFile picks the output path from the response Content-Type.
+func downloadURLToResolvedFile(ctx context.Context, rawURL string, outputPath func(contentType string) string, overwrite bool) (int64, string, error) {
 	written, contentType, _, err := downloadURLToFileWithEquivalence(ctx, rawURL, outputPath, overwrite, false)
 	return written, contentType, err
 }
 
 func downloadScreenshotURLToFile(ctx context.Context, rawURL string, outputPath string, overwrite bool) (int64, string, bool, error) {
-	return downloadURLToFileWithEquivalence(ctx, rawURL, outputPath, overwrite, true)
+	return downloadURLToFileWithEquivalence(ctx, rawURL, func(string) string { return outputPath }, overwrite, true)
 }
 
-func downloadURLToFileWithEquivalence(ctx context.Context, rawURL string, outputPath string, overwrite, preserveEquivalentPNG bool) (int64, string, bool, error) {
+func downloadURLToFileWithEquivalence(ctx context.Context, rawURL string, outputPath func(contentType string) string, overwrite, preserveEquivalentPNG bool) (int64, string, bool, error) {
 	rawURL = strings.TrimSpace(rawURL)
 	if rawURL == "" {
 		return 0, "", false, fmt.Errorf("download URL is required")
 	}
-	outputPath = strings.TrimSpace(outputPath)
-	if outputPath == "" {
+	if strings.TrimSpace(outputPath("")) == "" {
 		return 0, "", false, fmt.Errorf("output path is required")
 	}
 
@@ -196,7 +200,7 @@ func downloadURLToFileWithEquivalence(ctx context.Context, rawURL string, output
 	return 0, lastContentType, false, lastErr
 }
 
-func downloadURLToFileOnce(ctx context.Context, rawURL string, outputPath string, overwrite, preserveEquivalentPNG bool) (int64, string, bool, error) {
+func downloadURLToFileOnce(ctx context.Context, rawURL string, resolveOutputPath func(contentType string) string, overwrite, preserveEquivalentPNG bool) (int64, string, bool, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
 		return 0, "", false, err
@@ -226,6 +230,7 @@ func downloadURLToFileOnce(ctx context.Context, rawURL string, outputPath string
 		}
 	}
 
+	outputPath := strings.TrimSpace(resolveOutputPath(contentType))
 	if preserveEquivalentPNG && overwrite && isRegularFile(outputPath) {
 		written, unchanged, err := writeScreenshotDownload(outputPath, resp.Body)
 		return written, contentType, unchanged, err

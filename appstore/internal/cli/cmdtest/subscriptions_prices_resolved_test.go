@@ -3,10 +3,12 @@ package cmdtest
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
@@ -26,7 +28,8 @@ func TestSubscriptionsPricingPricesListResolvedUsesFreshDeadlinePerPage(t *testi
 		}
 		deadline, ok := req.Context().Deadline()
 		if !ok || time.Until(deadline) < 70*time.Millisecond {
-			t.Fatalf("expected fresh second-page deadline, remaining=%s", time.Until(deadline))
+			t.Errorf("expected fresh second-page deadline, remaining=%s", time.Until(deadline))
+			return nil, errors.New("test transport assertion failed")
 		}
 		return jsonResponse(http.StatusOK, `{"data":[],"links":{"next":""}}`)
 	}))
@@ -41,7 +44,9 @@ func TestSubscriptionsPricingPricesListResolvedUsesFreshDeadlinePerPage(t *testi
 		}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
-		if err := root.Run(context.Background()); err != nil {
+		var runErr error
+		synctest.Test(t, func(*testing.T) { runErr = root.Run(context.Background()) })
+		if err := runErr; err != nil {
 			t.Fatalf("run error: %v", err)
 		}
 	})

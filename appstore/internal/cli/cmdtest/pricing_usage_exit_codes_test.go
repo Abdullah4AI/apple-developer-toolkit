@@ -53,6 +53,11 @@ func TestPricingInputValidationReturnsUsageExitCode(t *testing.T) {
 			args:    []string{"pricing", "schedule", "automatic-prices", "--schedule", "s", "--next", "http://example.com/x"},
 			wantErr: "pricing schedule automatic-prices: --next must be an App Store Connect URL",
 		},
+		{
+			name:    "schedule automatic-prices next without schedule",
+			args:    []string{"pricing", "schedule", "automatic-prices", "--next", "http://api.appstoreconnect.apple.com/v1/x"},
+			wantErr: "pricing schedule automatic-prices: --next must be an App Store Connect URL",
+		},
 	}
 
 	for _, test := range tests {

@@ -117,15 +117,6 @@ func clearCIEnvironment(t *testing.T) {
 	}
 }
 
-func TestDefaultOutputFormat_ReturnsJSON(t *testing.T) {
-	resetDefaultOutput(t)
-	setTerminalDetection(t, func(int) bool { return false })
-	t.Setenv("ASC_DEFAULT_OUTPUT", "")
-	if got := DefaultOutputFormat(); got != "json" {
-		t.Fatalf("expected json, got %q", got)
-	}
-}
-
 func TestDefaultOutputFormat_UnsetReturnsJSON(t *testing.T) {
 	resetDefaultOutput(t)
 	setTerminalDetection(t, func(int) bool { return false })
@@ -206,22 +197,6 @@ func TestDefaultOutputFormat_ExplicitEnvOverridesCI(t *testing.T) {
 
 	if got := DefaultOutputFormat(); got != "table" {
 		t.Fatalf("DefaultOutputFormat() = %q, want explicit table", got)
-	}
-}
-
-func TestDefaultOutputFormat_Table(t *testing.T) {
-	resetDefaultOutput(t)
-	t.Setenv("ASC_DEFAULT_OUTPUT", "table")
-	if got := DefaultOutputFormat(); got != "table" {
-		t.Fatalf("expected table, got %q", got)
-	}
-}
-
-func TestDefaultOutputFormat_Markdown(t *testing.T) {
-	resetDefaultOutput(t)
-	t.Setenv("ASC_DEFAULT_OUTPUT", "markdown")
-	if got := DefaultOutputFormat(); got != "markdown" {
-		t.Fatalf("expected markdown, got %q", got)
 	}
 }
 
@@ -2556,55 +2531,6 @@ func writeECDSAPEM(t *testing.T, path string) {
 	}
 	if err := os.WriteFile(path, data, 0o600); err != nil {
 		t.Fatalf("write key file error: %v", err)
-	}
-}
-
-func TestProgressEnabled_DisabledByFlag(t *testing.T) {
-	previousNoProgress := noProgress
-	t.Cleanup(func() {
-		noProgress = previousNoProgress
-	})
-
-	SetNoProgress(true)
-	if ProgressEnabled() {
-		t.Fatal("expected ProgressEnabled() to return false when noProgress is true")
-	}
-
-	SetNoProgress(false)
-	// Progress should still be disabled in tests because stderr is piped (not a TTY)
-	if ProgressEnabled() {
-		t.Fatal("expected ProgressEnabled() to return false in test environment (stderr not a TTY)")
-	}
-}
-
-func TestProgressEnabled_DisabledInNonTTY(t *testing.T) {
-	previousNoProgress := noProgress
-	noProgress = false
-	t.Cleanup(func() {
-		noProgress = previousNoProgress
-	})
-
-	// In test environment, stderr is piped (not a TTY)
-	// So ProgressEnabled should return false regardless of flag
-	if ProgressEnabled() {
-		t.Fatal("expected ProgressEnabled() to return false when stderr is not a TTY")
-	}
-}
-
-func TestSetNoProgress(t *testing.T) {
-	previousNoProgress := noProgress
-	t.Cleanup(func() {
-		noProgress = previousNoProgress
-	})
-
-	SetNoProgress(true)
-	if !noProgress {
-		t.Fatal("expected noProgress to be true after SetNoProgress(true)")
-	}
-
-	SetNoProgress(false)
-	if noProgress {
-		t.Fatal("expected noProgress to be false after SetNoProgress(false)")
 	}
 }
 

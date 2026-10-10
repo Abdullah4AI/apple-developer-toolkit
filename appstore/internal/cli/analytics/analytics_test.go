@@ -13,13 +13,6 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
-func TestAnalyticsSalesAllowMissingFlagIsRegistered(t *testing.T) {
-	flag := AnalyticsSalesCommand().FlagSet.Lookup("allow-missing")
-	if flag == nil {
-		t.Fatal("--allow-missing flag not found")
-	}
-}
-
 func TestAnalyticsViewProcessingDateFlagLifecycle(t *testing.T) {
 	root := AnalyticsCommand()
 	viewIndex := -1
@@ -358,76 +351,6 @@ func TestAnalyticsViewValidationErrors(t *testing.T) {
 	}
 	if !strings.Contains(stderr, "--request-id is required") {
 		t.Fatalf("expected missing request-id error, got %q", stderr)
-	}
-}
-
-func TestAnalyticsReportsGetValidationErrors(t *testing.T) {
-	stdout, stderr, err := runAnalyticsCommand(t, []string{"analytics", "reports", "view"})
-	if !errors.Is(err, flag.ErrHelp) {
-		t.Fatalf("expected ErrHelp, got %v", err)
-	}
-
-	if stdout != "" {
-		t.Fatalf("expected empty stdout, got %q", stdout)
-	}
-	if !strings.Contains(stderr, "--report-id is required") {
-		t.Fatalf("expected missing report-id error, got %q", stderr)
-	}
-}
-
-func TestAnalyticsReportsRelationshipsValidationErrors(t *testing.T) {
-	stdout, stderr, err := runAnalyticsCommand(t, []string{"analytics", "reports", "links"})
-	if !errors.Is(err, flag.ErrHelp) {
-		t.Fatalf("expected ErrHelp, got %v", err)
-	}
-
-	if stdout != "" {
-		t.Fatalf("expected empty stdout, got %q", stdout)
-	}
-	if !strings.Contains(stderr, "--report-id is required") {
-		t.Fatalf("expected missing report-id error, got %q", stderr)
-	}
-}
-
-func TestAnalyticsInstancesGetValidationErrors(t *testing.T) {
-	stdout, stderr, err := runAnalyticsCommand(t, []string{"analytics", "instances", "view"})
-	if !errors.Is(err, flag.ErrHelp) {
-		t.Fatalf("expected ErrHelp, got %v", err)
-	}
-
-	if stdout != "" {
-		t.Fatalf("expected empty stdout, got %q", stdout)
-	}
-	if !strings.Contains(stderr, "--instance-id is required") {
-		t.Fatalf("expected missing instance-id error, got %q", stderr)
-	}
-}
-
-func TestAnalyticsInstancesRelationshipsValidationErrors(t *testing.T) {
-	stdout, stderr, err := runAnalyticsCommand(t, []string{"analytics", "instances", "links"})
-	if !errors.Is(err, flag.ErrHelp) {
-		t.Fatalf("expected ErrHelp, got %v", err)
-	}
-
-	if stdout != "" {
-		t.Fatalf("expected empty stdout, got %q", stdout)
-	}
-	if !strings.Contains(stderr, "--instance-id is required") {
-		t.Fatalf("expected missing instance-id error, got %q", stderr)
-	}
-}
-
-func TestAnalyticsSegmentsGetValidationErrors(t *testing.T) {
-	stdout, stderr, err := runAnalyticsCommand(t, []string{"analytics", "segments", "view"})
-	if !errors.Is(err, flag.ErrHelp) {
-		t.Fatalf("expected ErrHelp, got %v", err)
-	}
-
-	if stdout != "" {
-		t.Fatalf("expected empty stdout, got %q", stdout)
-	}
-	if !strings.Contains(stderr, "--segment-id is required") {
-		t.Fatalf("expected missing segment-id error, got %q", stderr)
 	}
 }
 

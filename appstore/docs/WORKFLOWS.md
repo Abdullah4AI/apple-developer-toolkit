@@ -19,7 +19,9 @@ App Clip files are stored at `app_clip/action.txt` and `<locale>/app_clip/` bene
 same App Clip layout beneath its resolved `metadata/` directory and previews
 beneath the selected Fastlane directory. Existing JSON and Fastlane text metadata
 formats are unchanged. Preview validation needs `ffprobe` on `PATH`. Exported media
-is Apple's delivered rendition, which may differ from the original upload bytes.
+is Apple's delivered rendition, which may differ from the original upload bytes;
+previews are exported as `.m3u8` playlists that only reference existing remote
+previews; importing them where that preview does not exist requires the original videos.
 
 `asc workflow` lets you compose existing `asc` commands and shell commands into
 repeatable release pipelines once you know which top-level path you want.

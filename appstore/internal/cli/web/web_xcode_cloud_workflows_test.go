@@ -1300,18 +1300,6 @@ func TestWorkflowsDisableMissingConfirm(t *testing.T) {
 	}
 }
 
-func TestWorkflowsCommandsHaveUsageFunc(t *testing.T) {
-	cmd := webXcodeCloudWorkflowsCommand()
-	if cmd.UsageFunc == nil {
-		t.Fatalf("workflows command should have UsageFunc set")
-	}
-	for _, sub := range cmd.Subcommands {
-		if sub.UsageFunc == nil {
-			t.Fatalf("subcommand %q should have UsageFunc set", sub.Name)
-		}
-	}
-}
-
 func TestWorkflowSectionSummaries(t *testing.T) {
 	start := json.RawMessage(`{"branch":{"branch":"main"},"pull_request":{"target":"main"}}`)
 	startSummary := summarizeStartConditions(start)

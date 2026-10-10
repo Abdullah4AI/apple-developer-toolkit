@@ -889,6 +889,7 @@ func findCertificates(ctx context.Context, client *asc.Client, profileType, cert
 		resp, err := client.GetCertificates(
 			ctx,
 			asc.WithCertificatesFilterType(certType),
+			asc.WithCertificatesLimit(200),
 			asc.WithCertificatesNextURL(next),
 		)
 		if err != nil {
@@ -1391,7 +1392,7 @@ func findStaleSigningProfiles(ctx context.Context, client *asc.Client, bundleIDR
 	seenNext := make(map[string]struct{})
 	now := signingFetchNowFn()
 	for {
-		profiles, err := client.GetBundleIDProfiles(ctx, bundleIDResourceID, asc.WithBundleIDProfilesNextURL(next))
+		profiles, err := client.GetBundleIDProfiles(ctx, bundleIDResourceID, asc.WithBundleIDProfilesLimit(200), asc.WithBundleIDProfilesNextURL(next))
 		if err != nil {
 			return nil, err
 		}
@@ -1443,6 +1444,7 @@ func findActiveProfiles(ctx context.Context, client *asc.Client, bundleIDResourc
 		profiles, err := client.GetBundleIDProfiles(
 			ctx,
 			bundleIDResourceID,
+			asc.WithBundleIDProfilesLimit(200),
 			asc.WithBundleIDProfilesNextURL(next),
 		)
 		if err != nil {
@@ -1485,6 +1487,7 @@ func findProfileCertificates(ctx context.Context, client *asc.Client, profileID,
 		response, err := client.GetProfileCertificates(
 			ctx,
 			profileID,
+			asc.WithProfileCertificatesLimit(200),
 			asc.WithProfileCertificatesNextURL(next),
 		)
 		if err != nil {

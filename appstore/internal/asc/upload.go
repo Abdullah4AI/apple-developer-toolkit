@@ -64,17 +64,40 @@ func WithUploadHTTPClient(client *http.Client) UploadOption {
 // with appropriate timeouts and a cloned transport when possible to avoid
 // sharing the connection pool with http.DefaultClient.
 func newUploadClient() *http.Client {
+	transport, _ := newUploadTransport()
+	return &http.Client{Timeout: ResolveUploadTimeout(), Transport: transport}
+}
+
+func newUploadTransport() (http.RoundTripper, *http.Transport) {
 	transport := http.DefaultTransport
 	if base, ok := transport.(*http.Transport); ok {
 		cloned := base.Clone()
 		if cloned.MaxIdleConnsPerHost < uploadMaxIdleConnsPerHost {
 			cloned.MaxIdleConnsPerHost = uploadMaxIdleConnsPerHost
 		}
-		transport = cloned
+		return cloned, cloned
 	}
-	return &http.Client{
-		Timeout:   ResolveUploadTimeout(),
-		Transport: transport,
+	return transport, nil
+}
+
+func (c *Client) newPooledUploadClient() *http.Client {
+	c.uploadTransportMu.Lock()
+	if c.uploadTransport == nil {
+		c.uploadTransport, c.ownedUploadTransport = newUploadTransport()
+	}
+	transport := c.uploadTransport
+	c.uploadTransportMu.Unlock()
+	return &http.Client{Timeout: ResolveUploadTimeout(), Transport: transport}
+}
+
+// CloseUploadConnections closes idle connections owned by the dedicated upload pool.
+// Call after all uploads finish; externally supplied transports are not closed.
+func (c *Client) CloseUploadConnections() {
+	c.uploadTransportMu.Lock()
+	owned := c.ownedUploadTransport
+	c.uploadTransportMu.Unlock()
+	if owned != nil {
+		owned.CloseIdleConnections()
 	}
 }
 
@@ -360,9 +383,13 @@ func VerifySourceFileChecksumsFromFile(file *os.File, expected *Checksums) (*Che
 		if expectedHash == "" {
 			return nil, errors.New("composite checksum hash is missing")
 		}
-		sum, err := ComputeFileChecksumFromFile(file, expected.Composite.Algorithm)
-		if err != nil {
-			return nil, err
+		sum := computed.File
+		if sum == nil || sum.Algorithm != expected.Composite.Algorithm {
+			var err error
+			sum, err = ComputeFileChecksumFromFile(file, expected.Composite.Algorithm)
+			if err != nil {
+				return nil, err
+			}
 		}
 		if !strings.EqualFold(expectedHash, sum.Hash) {
 			return nil, fmt.Errorf("composite checksum mismatch (expected %s, got %s)", expectedHash, sum.Hash)

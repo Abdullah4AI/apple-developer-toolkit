@@ -58,24 +58,24 @@ type SubscriptionPricingDeriveResult struct {
 
 func subscriptionPricingDeriveSummaryRows(result *SubscriptionPricingDeriveResult) ([]string, [][]string) {
 	return []string{
-			"Source Subscription", "Target Subscription", "Multiplier", "Rounding",
-			"Dry Run", "Start Date", "Total", "Planned", "Noop", "Applied",
-			"Verified", "Unresolved", "Failed",
-		}, [][]string{{
-			result.SourceSubscriptionID,
-			result.TargetSubscriptionID,
-			result.Multiplier,
-			result.Rounding,
-			fmt.Sprintf("%t", result.DryRun),
-			result.StartDate,
-			fmt.Sprintf("%d", result.Summary.Total),
-			fmt.Sprintf("%d", result.Summary.Planned),
-			fmt.Sprintf("%d", result.Summary.Noop),
-			fmt.Sprintf("%d", result.Summary.Applied),
-			fmt.Sprintf("%d", result.Summary.Verified),
-			fmt.Sprintf("%d", result.Summary.Unresolved),
-			fmt.Sprintf("%d", result.Summary.Failed),
-		}}
+		"Source Subscription", "Target Subscription", "Multiplier", "Rounding",
+		"Dry Run", "Start Date", "Total", "Planned", "Noop", "Applied",
+		"Verified", "Unresolved", "Failed",
+	}, [][]string{{
+		result.SourceSubscriptionID,
+		result.TargetSubscriptionID,
+		result.Multiplier,
+		result.Rounding,
+		fmt.Sprintf("%t", result.DryRun),
+		result.StartDate,
+		fmt.Sprintf("%d", result.Summary.Total),
+		fmt.Sprintf("%d", result.Summary.Planned),
+		fmt.Sprintf("%d", result.Summary.Noop),
+		fmt.Sprintf("%d", result.Summary.Applied),
+		fmt.Sprintf("%d", result.Summary.Verified),
+		fmt.Sprintf("%d", result.Summary.Unresolved),
+		fmt.Sprintf("%d", result.Summary.Failed),
+	}}
 }
 
 func subscriptionPricingDeriveRowRows(result *SubscriptionPricingDeriveResult) ([]string, [][]string) {

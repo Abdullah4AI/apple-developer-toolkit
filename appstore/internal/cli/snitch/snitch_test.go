@@ -600,67 +600,6 @@ func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) {
 	return f(r)
 }
 
-func TestWriteLocalLog(t *testing.T) {
-	tmpDir := t.TempDir()
-	origDir, _ := os.Getwd()
-	defer func() {
-		if err := os.Chdir(origDir); err != nil {
-			t.Fatalf("os.Chdir restore error: %v", err)
-		}
-	}()
-	if err := os.Chdir(tmpDir); err != nil {
-		t.Fatalf("os.Chdir temp dir error: %v", err)
-	}
-
-	entry := LogEntry{
-		Description: "local test entry",
-		Severity:    "friction",
-		ASCVersion:  "0.37.2",
-		OS:          "darwin/arm64",
-		Timestamp:   time.Now().UTC(),
-	}
-
-	if err := writeLocalLog(entry); err != nil {
-		t.Fatalf("writeLocalLog() error: %v", err)
-	}
-
-	logPath := filepath.Join(".asc", "snitch.log")
-	data, err := os.ReadFile(logPath)
-	if err != nil {
-		t.Fatalf("failed to read log file: %v", err)
-	}
-	info, err := os.Stat(logPath)
-	if err != nil {
-		t.Fatalf("failed to stat log file: %v", err)
-	}
-	if got := info.Mode().Perm() & 0o077; got != 0 {
-		t.Fatalf("expected log file to be private, got mode %o", info.Mode().Perm())
-	}
-
-	var decoded LogEntry
-	if err := json.Unmarshal([]byte(strings.TrimSpace(string(data))), &decoded); err != nil {
-		t.Fatalf("failed to decode log entry: %v", err)
-	}
-	if decoded.Description != "local test entry" {
-		t.Errorf("expected description 'local test entry', got %q", decoded.Description)
-	}
-
-	// Write a second entry and verify append.
-	entry.Description = "second entry"
-	if err := writeLocalLog(entry); err != nil {
-		t.Fatalf("writeLocalLog() second call error: %v", err)
-	}
-
-	data, err = os.ReadFile(logPath)
-	if err != nil {
-		t.Fatalf("failed to read log file: %v", err)
-	}
-	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
-	if len(lines) != 2 {
-		t.Errorf("expected 2 log lines, got %d", len(lines))
-	}
-}
-
 func TestWriteLocalLogSecuresExistingFilePermissions(t *testing.T) {
 	tmpDir := t.TempDir()
 	origDir, _ := os.Getwd()

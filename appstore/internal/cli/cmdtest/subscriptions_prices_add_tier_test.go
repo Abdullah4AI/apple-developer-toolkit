@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
@@ -749,11 +750,13 @@ func TestSubscriptionsPricesAddRefreshesContextAfterTierResolution(t *testing.T)
 		case req.Method == http.MethodGet && strings.HasSuffix(req.URL.Path, "/relationships/prices"):
 			deadline, ok := req.Context().Deadline()
 			if !ok {
-				t.Fatal("expected prices relationship request to carry a timeout deadline")
+				t.Error("expected prices relationship request to carry a timeout deadline")
+				return nil, errors.New("test transport assertion failed")
 			}
 			relationshipDeadlineRemaining = time.Until(deadline)
 			if relationshipDeadlineRemaining < 35*time.Millisecond {
-				t.Fatalf("expected fresh prices context after tier resolution, got only %v remaining", relationshipDeadlineRemaining)
+				t.Errorf("expected fresh prices context after tier resolution, got only %v remaining", relationshipDeadlineRemaining)
+				return nil, errors.New("test transport assertion failed")
 			}
 
 			body := `{"data":[{"type":"subscriptionPrices","id":"existing-price-1"}],"links":{}}`
@@ -777,8 +780,8 @@ func TestSubscriptionsPricesAddRefreshesContextAfterTierResolution(t *testing.T)
 				Header:     http.Header{"Content-Type": []string{"application/json"}},
 			}, nil
 		default:
-			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.Path)
-			return nil, nil
+			t.Errorf("unexpected request: %s %s", req.Method, req.URL.Path)
+			return nil, errors.New("unexpected test transport request")
 		}
 	})
 
@@ -796,7 +799,9 @@ func TestSubscriptionsPricesAddRefreshesContextAfterTierResolution(t *testing.T)
 		}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
-		if err := root.Run(context.Background()); err != nil {
+		var runErr error
+		synctest.Test(t, func(*testing.T) { runErr = root.Run(context.Background()) })
+		if err := runErr; err != nil {
 			t.Fatalf("run error: %v", err)
 		}
 	})

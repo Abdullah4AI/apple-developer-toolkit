@@ -17,6 +17,13 @@ func TestMoveExportedIPANoOverwriteClosesRootDescriptor(t *testing.T) {
 	directory := t.TempDir()
 	previousGCPercent := debug.SetGCPercent(-1)
 	defer debug.SetGCPercent(previousGCPercent)
+	warmup := filepath.Join(directory, "warmup.ipa")
+	if err := os.WriteFile(warmup, []byte("ipa"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := moveExportedIPA(warmup, filepath.Join(directory, "warmup-destination.ipa"), false); err != nil {
+		t.Fatal(err)
+	}
 	before := countOpenXcodeDescriptors(t)
 	for index := range 16 {
 		source := filepath.Join(directory, fmt.Sprintf("source-%d.ipa", index))

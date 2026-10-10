@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
@@ -34,9 +35,14 @@ func TestConcurrentScreenshotUploadPreservesOrderAndSpeedsUp(t *testing.T) {
 		inFlight.Add(-1)
 		return asc.AssetUploadResultItem{AssetID: filePath, FileName: filePath}, screenshotPendingAsset{}, nil
 	}
-	start := time.Now()
-	progress, err := uploadScreenshotsWithOrderStateWithOpenedFiles(withScreenshotUploadConcurrency(context.Background(), 4), nil, "set", nil, files, "", false, false, nil)
-	elapsed := time.Since(start)
+	var progress screenshotUploadProgress
+	var err error
+	var elapsed time.Duration
+	synctest.Test(t, func(*testing.T) {
+		start := time.Now()
+		progress, err = uploadScreenshotsWithOrderStateWithOpenedFiles(withScreenshotUploadConcurrency(context.Background(), 4), nil, "set", nil, files, "", false, false, nil)
+		elapsed = time.Since(start)
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -48,11 +54,11 @@ func TestConcurrentScreenshotUploadPreservesOrderAndSpeedsUp(t *testing.T) {
 			t.Fatalf("order[%d]=%s, want %s", index, progress.OrderedIDs[index], file)
 		}
 	}
-	if max := maxInFlight.Load(); max < 2 || max > 4 {
-		t.Fatalf("max in-flight = %d, want 2-4", max)
+	if max := maxInFlight.Load(); max != 4 {
+		t.Fatalf("max in-flight = %d, want 4", max)
 	}
-	if elapsed > 250*time.Millisecond {
-		t.Fatalf("elapsed %s, want 40 delayed uploads under 250ms", elapsed)
+	if elapsed != 50*time.Millisecond {
+		t.Fatalf("elapsed %s, want 40 delayed uploads in 10 rounds of 5ms", elapsed)
 	}
 }
 
@@ -134,7 +140,7 @@ func TestCleanupScreenshotAssetsUsesFreshBoundedContext(t *testing.T) {
 func TestCleanupScreenshotAssetsUsesBoundedTimeout(t *testing.T) {
 	t.Setenv("ASC_TIMEOUT", "20ms")
 	requestCanceled := make(chan struct{}, 1)
-	client := newAssetsUploadTestServerClient(t, http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+	client := newAssetsUploadTestHandlerClient(t, http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		if req.Method != http.MethodDelete || req.URL.Path != "/v1/appScreenshots/asset-1" {
 			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.Path)
 		}
@@ -142,20 +148,26 @@ func TestCleanupScreenshotAssetsUsesBoundedTimeout(t *testing.T) {
 		requestCanceled <- struct{}{}
 	}))
 
-	started := time.Now()
-	remaining, err := cleanupScreenshotAssets(context.Background(), client, []screenshotPendingAsset{{AssetID: "asset-1"}})
+	var remaining []screenshotPendingAsset
+	var err error
+	var elapsed time.Duration
+	synctest.Test(t, func(*testing.T) {
+		started := time.Now()
+		remaining, err = cleanupScreenshotAssets(context.Background(), client, []screenshotPendingAsset{{AssetID: "asset-1"}})
+		elapsed = time.Since(started)
+	})
 	if err == nil {
 		t.Fatal("cleanupScreenshotAssets() error = nil, want bounded timeout error")
 	}
 	if len(remaining) != 1 || remaining[0].AssetID != "asset-1" {
 		t.Fatalf("remaining assets = %#v, want asset-1", remaining)
 	}
-	if elapsed := time.Since(started); elapsed > time.Second {
+	if elapsed > time.Second {
 		t.Fatalf("cleanupScreenshotAssets() took %s, want bounded timeout", elapsed)
 	}
 	select {
 	case <-requestCanceled:
-	case <-time.After(time.Second):
+	default:
 		t.Fatal("server request did not observe cleanup cancellation")
 	}
 }

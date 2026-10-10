@@ -9,14 +9,6 @@ import (
 	"testing"
 )
 
-func TestTestFlightReviewGetRejectsInvalidNextURL(t *testing.T) {
-	runInvalidNextURLUsageErrorCases(
-		t,
-		[]string{"testflight", "review", "view"},
-		"testflight review view: --next",
-	)
-}
-
 func TestTestFlightReviewGetFromNextWithoutApp(t *testing.T) {
 	setupAuth(t)
 	t.Setenv("ASC_APP_ID", "")
@@ -118,14 +110,6 @@ func TestTestFlightReviewViewFromNextWithoutBuild(t *testing.T) {
 	}
 }
 
-func TestTestFlightRecruitmentOptionsRejectsInvalidNextURL(t *testing.T) {
-	runInvalidNextURLUsageErrorCases(
-		t,
-		[]string{"testflight", "recruitment", "options"},
-		"testflight recruitment options: --next",
-	)
-}
-
 func TestTestFlightRecruitmentOptionsFromNext(t *testing.T) {
 	setupAuth(t)
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
@@ -170,14 +154,6 @@ func TestTestFlightRecruitmentOptionsFromNext(t *testing.T) {
 	if !strings.Contains(stdout, `"id":"opt-next-1"`) {
 		t.Fatalf("expected option id in output, got %q", stdout)
 	}
-}
-
-func TestTestFlightReviewSubmissionsListRejectsInvalidNextURL(t *testing.T) {
-	runInvalidNextURLUsageErrorCases(
-		t,
-		[]string{"testflight", "review", "submissions", "list", "--build-id", "build-1"},
-		"testflight review submissions list: --next",
-	)
 }
 
 func TestTestFlightReviewSubmissionsListPaginateFromNext(t *testing.T) {

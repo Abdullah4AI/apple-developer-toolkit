@@ -566,23 +566,6 @@ func TestSigningSyncPushAcceptsDeviceWithForceForNewDevices(t *testing.T) {
 	}
 }
 
-func TestSigningSyncPushLifecycleHelpDocumentsFlags(t *testing.T) {
-	fs := syncPushCommand().FlagSet
-	for name, want := range map[string]string{
-		"renew-expired":           "expired",
-		"force-for-new-devices":   "enabled device",
-		"include-mac-in-profiles": "Apple silicon",
-	} {
-		lookup := fs.Lookup(name)
-		if lookup == nil {
-			t.Fatalf("missing --%s flag", name)
-		}
-		if !strings.Contains(lookup.Usage, want) {
-			t.Fatalf("--%s usage = %q, want it to mention %q", name, lookup.Usage, want)
-		}
-	}
-}
-
 func TestResolveSigningAssetsRenewExpiredKeepsCertificateMismatchErrorWhenActiveProfileExists(t *testing.T) {
 	withSigningFetchNow(t, time.Date(2026, 9, 27, 0, 0, 0, 0, time.UTC))
 	api := newLifecycleAPI(t)

@@ -21,6 +21,7 @@ func TestAssetListCommandsRenewRequestTimeout(t *testing.T) {
 		command     string
 		setsPath    string
 		assetsPath  string
+		orderPath   string
 		setsBody    string
 		assetsBody  string
 		assetID     string
@@ -31,6 +32,7 @@ func TestAssetListCommandsRenewRequestTimeout(t *testing.T) {
 			command:     "screenshots",
 			setsPath:    "/v1/appStoreVersionLocalizations/loc-1/appScreenshotSets",
 			assetsPath:  "/v1/appScreenshotSets/set-1/appScreenshots",
+			orderPath:   "/v1/appScreenshotSets/set-1/relationships/appScreenshots",
 			setsBody:    `{"data":[{"type":"appScreenshotSets","id":"set-1","attributes":{"screenshotDisplayType":"APP_IPHONE_65"}}]}`,
 			assetsBody:  `{"data":[{"type":"appScreenshots","id":"shot-1","attributes":{"fileName":"home.png","fileSize":123}}]}`,
 			assetID:     "shot-1",
@@ -41,6 +43,7 @@ func TestAssetListCommandsRenewRequestTimeout(t *testing.T) {
 			command:     "video-previews",
 			setsPath:    "/v1/appStoreVersionLocalizations/loc-1/appPreviewSets",
 			assetsPath:  "/v1/appPreviewSets/set-1/appPreviews",
+			orderPath:   "/v1/appPreviewSets/set-1/relationships/appPreviews",
 			setsBody:    `{"data":[{"type":"appPreviewSets","id":"set-1","attributes":{"previewType":"IPHONE_65"}}]}`,
 			assetsBody:  `{"data":[{"type":"appPreviews","id":"preview-1","attributes":{"fileName":"preview.mov","fileSize":456}}]}`,
 			assetID:     "preview-1",
@@ -71,6 +74,11 @@ func TestAssetListCommandsRenewRequestTimeout(t *testing.T) {
 						t.Fatalf("unexpected assets request: %s %s", req.Method, req.URL.Path)
 					}
 					body = tt.assetsBody
+				case 3:
+					if req.Method != http.MethodGet || req.URL.Path != tt.orderPath {
+						t.Fatalf("unexpected order request: %s %s", req.Method, req.URL.Path)
+					}
+					body = `{"data":[]}`
 				default:
 					t.Fatalf("unexpected request count %d", callCount)
 				}
@@ -129,8 +137,8 @@ func TestAssetListCommandsRenewRequestTimeout(t *testing.T) {
 			if stderr != "" {
 				t.Fatalf("expected empty stderr, got %q", stderr)
 			}
-			if callCount != 2 {
-				t.Fatalf("request count = %d, want 2", callCount)
+			if callCount != 3 {
+				t.Fatalf("request count = %d, want 3", callCount)
 			}
 			if !requestDeadlines[1].After(requestDeadlines[0]) {
 				t.Fatalf("child request deadline = %v, want later than set request deadline %v", requestDeadlines[1], requestDeadlines[0])

@@ -3,7 +3,9 @@
 
 from __future__ import annotations
 
+import argparse
 import re
+import runpy
 import subprocess
 from pathlib import Path
 
@@ -22,9 +24,9 @@ DOC_EXAMPLE_PATHS = [
 ROOT_FLAGS_WITH_VALUE = {"--profile", "--report", "--report-file"}
 
 
-def run_help_text() -> str:
+def run_help_text(binary_path: Path | None = None) -> str:
     proc = subprocess.run(
-        ["go", "run", ".", "--help"],
+        [str(binary_path), "--help"] if binary_path is not None else ["go", "run", ".", "--help"],
         cwd=REPO_ROOT,
         check=True,
         capture_output=True,
@@ -91,7 +93,20 @@ def validate_document_examples(path: Path, live_commands: set[str]) -> list[str]
 
 
 def main() -> int:
-    help_text = run_help_text()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--binary", type=Path, help="Use a CLI freshly built by the caller instead of go run.")
+    parser.add_argument(
+        "--check-generated",
+        action="store_true",
+        help="Also compare docs/COMMANDS.md with the generated reference using the same live help",
+    )
+    args = parser.parse_args()
+    help_text = run_help_text(args.binary.resolve()) if args.binary is not None else run_help_text()
+    if args.check_generated:
+        generator = runpy.run_path(str(Path(__file__).with_name("generate-command-docs.py")))
+        generated = generator["render"](*generator["parse_help"](help_text))
+        if generator["check_generated"](generated) != 0:
+            return 1
     live_commands = parse_live_commands(help_text)
     doc_commands = parse_documented_commands(COMMANDS_DOC_PATH)
 

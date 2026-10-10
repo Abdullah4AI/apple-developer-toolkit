@@ -619,28 +619,16 @@ func fetchScreenshotList(
 	localizationID string,
 	requestContext func(context.Context) (context.Context, context.CancelFunc),
 ) (*asc.AppScreenshotListResult, error) {
-	setsResp, err := client.GetAllAppScreenshotSets(ctx, localizationID, asc.WithAppScreenshotSetsRequestContext(requestContext))
+	setsResp, err := client.GetAllAppScreenshotSets(ctx, localizationID, asc.WithAppScreenshotSetsIncludeScreenshots(), asc.WithAppScreenshotSetsRequestContext(requestContext))
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch sets: %w", err)
 	}
 
-	result := &asc.AppScreenshotListResult{
-		VersionLocalizationID: localizationID,
-		Sets:                  make([]asc.AppScreenshotSetWithScreenshots, 0, len(setsResp.Data)),
+	sets, err := client.AppScreenshotSetsWithScreenshots(ctx, setsResp, requestContext)
+	if err != nil {
+		return nil, err
 	}
-
-	for _, set := range setsResp.Data {
-		screenshots, err := client.GetAllAppScreenshots(ctx, set.ID, asc.WithAppScreenshotsRequestContext(requestContext))
-		if err != nil {
-			return nil, fmt.Errorf("failed to fetch screenshots for set %s: %w", set.ID, err)
-		}
-		result.Sets = append(result.Sets, asc.AppScreenshotSetWithScreenshots{
-			Set:         set,
-			Screenshots: screenshots.Data,
-		})
-	}
-
-	return result, nil
+	return &asc.AppScreenshotListResult{VersionLocalizationID: localizationID, Sets: sets}, nil
 }
 
 // AssetsScreenshotsSizesCommand returns the screenshots sizes subcommand.
@@ -797,6 +785,8 @@ Examples:
 				if err != nil {
 					return fmt.Errorf("screenshots upload: %w", err)
 				}
+
+				defer client.CloseUploadConnections()
 
 				result, err := resumeAppScreenshotUpload(ctx, client, resumePath)
 				if hasAppScreenshotUploadResultOutput(result) {
@@ -963,6 +953,8 @@ func executeScreenshotUploadCommand(ctx context.Context, opts screenshotUploadCo
 		if err != nil {
 			return nil, err
 		}
+		defer client.CloseUploadConnections()
+
 		result, err := deps.ExecuteUpload(ctx, screenshotUploadConfig[asc.AppScreenshotUploadResult]{
 			Client:         client,
 			LocalizationID: locID,
@@ -1012,6 +1004,8 @@ func executeScreenshotUploadCommand(ctx context.Context, opts screenshotUploadCo
 	if err != nil {
 		return nil, err
 	}
+
+	defer client.CloseUploadConnections()
 
 	requestCtx, cancel := deps.RequestContext(ctx)
 	defer cancel()

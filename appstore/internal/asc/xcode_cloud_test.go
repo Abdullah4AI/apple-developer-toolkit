@@ -1009,23 +1009,6 @@ func TestPrintMarkdown_CiProductDeleteResult(t *testing.T) {
 	}
 }
 
-func TestBuildCiProductsQuery(t *testing.T) {
-	query := &ciProductsQuery{}
-	WithCiProductsAppID("app-1")(query)
-	WithCiProductsLimit(25)(query)
-
-	values, err := url.ParseQuery(buildCiProductsQuery(query))
-	if err != nil {
-		t.Fatalf("failed to parse query: %v", err)
-	}
-	if got := values.Get("filter[app]"); got != "app-1" {
-		t.Fatalf("expected filter[app]=app-1, got %q", got)
-	}
-	if got := values.Get("limit"); got != "25" {
-		t.Fatalf("expected limit=25, got %q", got)
-	}
-}
-
 func TestBuildCiWorkflowsQuery(t *testing.T) {
 	query := &ciWorkflowsQuery{}
 	WithCiWorkflowsLimit(50)(query)
@@ -1036,19 +1019,6 @@ func TestBuildCiWorkflowsQuery(t *testing.T) {
 	}
 	if got := values.Get("limit"); got != "50" {
 		t.Fatalf("expected limit=50, got %q", got)
-	}
-}
-
-func TestBuildScmGitReferencesQuery(t *testing.T) {
-	query := &scmGitReferencesQuery{}
-	WithScmGitReferencesLimit(100)(query)
-
-	values, err := url.ParseQuery(buildScmGitReferencesQuery(query))
-	if err != nil {
-		t.Fatalf("failed to parse query: %v", err)
-	}
-	if got := values.Get("limit"); got != "100" {
-		t.Fatalf("expected limit=100, got %q", got)
 	}
 }
 
@@ -1066,96 +1036,5 @@ func TestBuildCiBuildRunsQuery(t *testing.T) {
 	}
 	if got := values.Get("sort"); got != "-number" {
 		t.Fatalf("expected sort=-number, got %q", got)
-	}
-}
-
-func TestBuildCiArtifactsQuery(t *testing.T) {
-	query := &ciArtifactsQuery{}
-	WithCiArtifactsLimit(25)(query)
-
-	values, err := url.ParseQuery(buildCiArtifactsQuery(query))
-	if err != nil {
-		t.Fatalf("failed to parse query: %v", err)
-	}
-	if got := values.Get("limit"); got != "25" {
-		t.Fatalf("expected limit=25, got %q", got)
-	}
-}
-
-func TestBuildCiTestResultsQuery(t *testing.T) {
-	query := &ciTestResultsQuery{}
-	WithCiTestResultsLimit(30)(query)
-
-	values, err := url.ParseQuery(buildCiTestResultsQuery(query))
-	if err != nil {
-		t.Fatalf("failed to parse query: %v", err)
-	}
-	if got := values.Get("limit"); got != "30" {
-		t.Fatalf("expected limit=30, got %q", got)
-	}
-}
-
-func TestBuildCiIssuesQuery(t *testing.T) {
-	query := &ciIssuesQuery{}
-	WithCiIssuesLimit(35)(query)
-
-	values, err := url.ParseQuery(buildCiIssuesQuery(query))
-	if err != nil {
-		t.Fatalf("failed to parse query: %v", err)
-	}
-	if got := values.Get("limit"); got != "35" {
-		t.Fatalf("expected limit=35, got %q", got)
-	}
-}
-
-func TestBuildCiMacOsVersionsQuery(t *testing.T) {
-	query := &ciMacOsVersionsQuery{}
-	WithCiMacOsVersionsLimit(15)(query)
-
-	values, err := url.ParseQuery(buildCiMacOsVersionsQuery(query))
-	if err != nil {
-		t.Fatalf("failed to parse query: %v", err)
-	}
-	if got := values.Get("limit"); got != "15" {
-		t.Fatalf("expected limit=15, got %q", got)
-	}
-}
-
-func TestBuildCiXcodeVersionsQuery(t *testing.T) {
-	query := &ciXcodeVersionsQuery{}
-	WithCiXcodeVersionsLimit(20)(query)
-
-	values, err := url.ParseQuery(buildCiXcodeVersionsQuery(query))
-	if err != nil {
-		t.Fatalf("failed to parse query: %v", err)
-	}
-	if got := values.Get("limit"); got != "20" {
-		t.Fatalf("expected limit=20, got %q", got)
-	}
-}
-
-func TestBuildCiProductRepositoriesQuery(t *testing.T) {
-	query := &ciProductRepositoriesQuery{}
-	WithCiProductRepositoriesLimit(12)(query)
-
-	values, err := url.ParseQuery(buildCiProductRepositoriesQuery(query))
-	if err != nil {
-		t.Fatalf("failed to parse query: %v", err)
-	}
-	if got := values.Get("limit"); got != "12" {
-		t.Fatalf("expected limit=12, got %q", got)
-	}
-}
-
-func TestBuildCiBuildRunBuildsQuery(t *testing.T) {
-	query := &ciBuildRunBuildsQuery{}
-	WithCiBuildRunBuildsLimit(8)(query)
-
-	values, err := url.ParseQuery(buildCiBuildRunBuildsQuery(query))
-	if err != nil {
-		t.Fatalf("failed to parse query: %v", err)
-	}
-	if got := values.Get("limit"); got != "8" {
-		t.Fatalf("expected limit=8, got %q", got)
 	}
 }

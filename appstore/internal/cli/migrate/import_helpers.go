@@ -665,48 +665,55 @@ func uploadScreenshots(ctx context.Context, client *asc.Client, versionID string
 			}
 			uploadedIDsByName := make(map[string]string)
 
-			for _, filePath := range plan.Files {
+			uploadFiles := make([]string, 0, len(plan.Files))
+			uploadPlanIndexes := make([]int, 0, len(plan.Files))
+			skippedPlanIndexes := make([]int, 0)
+			queued := make(map[string]bool, len(plan.Files))
+			for planIndex, filePath := range plan.Files {
 				name := filepath.Base(filePath)
-				if fileNames[name] {
+				if fileNames[name] || queued[name] {
 					result.Skipped = append(result.Skipped, SkippedItem{
 						Path:   filePath,
 						Reason: "already exists",
 					})
+					skippedPlanIndexes = append(skippedPlanIndexes, planIndex)
 					continue
 				}
-				var item asc.AssetUploadResultItem
-				var err error
-				// Each asset reserves, transfers, and commits under its own
-				// upload budget; a shared request deadline would truncate the
-				// transfer of the first large screenshot.
-				uploadCtx, uploadCancel := migrateUploadContext(ctx)
-				if opened, ok, openErr := plan.openedFile(filePath); openErr != nil {
-					err = openErr
-				} else if ok {
-					item, err = assets.UploadScreenshotAssetFromFile(uploadCtx, client, setID, filePath, opened)
-					if closeErr := opened.Close(); err == nil {
-						err = closeErr
-					}
-				} else {
-					// Keep compatibility for callers that construct plans
-					// directly; migrate import discovery always supplies a
-					// pinned rooted handle.
-					item, err = assets.UploadScreenshotAsset(uploadCtx, client, setID, filePath)
-				}
-				uploadCancel()
-				if err != nil {
-					// Keep the assets that already uploaded for this set so the
-					// caller can report them.
-					results = append(results, result)
-					return sortedScreenshotResults(results), fmt.Errorf("migrate import: failed to upload screenshot %s: %w", filePath, err)
-				}
+				queued[name] = true
+				uploadFiles = append(uploadFiles, filePath)
+				uploadPlanIndexes = append(uploadPlanIndexes, planIndex)
+			}
+			// Each asset reserves, transfers, and commits under its own
+			// upload budget; a shared request deadline would truncate the
+			// transfer of the first large screenshot.
+			uploaded, failedFile, err := assets.UploadScreenshotAssetsConcurrently(ctx, client, setID, uploadFiles, migrateUploadContext, func(filePath string) (*os.File, error) {
+				opened, _, err := plan.openedFile(filePath)
+				return opened, err
+			})
+			for _, item := range uploaded {
+				name := filepath.Base(item.FilePath)
 				fileNames[name] = true
 				uploadedIDsByName[name] = item.AssetID
 				result.Uploaded = append(result.Uploaded, item)
 			}
+			if err != nil {
+				// Report only files the serial order would have reached before
+				// the failure; later uploads were deleted.
+				failedPlanIndex := uploadPlanIndexes[len(uploaded)]
+				for i, planIndex := range skippedPlanIndexes {
+					if planIndex > failedPlanIndex {
+						result.Skipped = result.Skipped[:i]
+						break
+					}
+				}
+				// Keep the assets that already uploaded for this set so the
+				// caller can report them.
+				results = append(results, result)
+				return sortedScreenshotResults(results), fmt.Errorf("migrate import: failed to upload screenshot %s: %w", failedFile, err)
+			}
 			orderedIDs := buildPlannedScreenshotOrder(plan.Files, existingOrderByType[canonicalDisplayType], fileIDs, uploadedIDsByName)
 			reorderCtx, reorderCancel := migrateRequestContext(ctx)
-			err := assets.SetOrderedAppScreenshots(reorderCtx, client, setID, orderedIDs)
+			err = assets.SetOrderedAppScreenshots(reorderCtx, client, setID, orderedIDs)
 			reorderCancel()
 			if err != nil {
 				results = append(results, result)

@@ -12,7 +12,6 @@ import (
 
 	rootcmd "github.com/Abdullah4AI/apple-developer-toolkit/appstore/cmd"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
-	certificatescli "github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/certificates"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
@@ -292,23 +291,5 @@ func TestCertificatesListPassTypeIDFieldsRequiresInclude(t *testing.T) {
 	}
 	if captured.calls != 0 {
 		t.Fatalf("validation made %d client-factory call(s)", captured.calls)
-	}
-}
-
-func TestCertificatesListQueryFlagsAreRegistered(t *testing.T) {
-	command := certificatescli.CertificatesListCommand()
-	for _, name := range []string{
-		"display-name",
-		"serial-number",
-		"id",
-		"sort",
-		"fields",
-		"pass-type-id-fields",
-		"include",
-	} {
-		flagDef := command.FlagSet.Lookup(name)
-		if flagDef == nil {
-			t.Fatalf("--%s is not registered", name)
-		}
 	}
 }

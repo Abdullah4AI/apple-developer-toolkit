@@ -187,15 +187,6 @@ func TestBetaAppLocalizationsListPaginateFromNextWithoutApp(t *testing.T) {
 	)
 }
 
-func TestBuildLocalizationsListRejectsInvalidNextURL(t *testing.T) {
-	runLocalizationsInvalidNextURLCases(
-		t,
-		[]string{"build-localizations", "list", "--build-id", "build-1"},
-		"build-localizations list: --next",
-		true,
-	)
-}
-
 func TestBuildLocalizationsListPaginateFromNext(t *testing.T) {
 	setupAuth(t)
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))

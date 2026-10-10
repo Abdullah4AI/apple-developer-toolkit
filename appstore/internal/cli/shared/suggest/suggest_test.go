@@ -6,13 +6,6 @@ import (
 	"testing"
 )
 
-func TestCommandsPrefixSuggestion(t *testing.T) {
-	got := Commands("buil", []string{"builds", "reviews", "apps"})
-	if len(got) == 0 || got[0] != "builds" {
-		t.Fatalf("expected prefix suggestion to prioritize builds, got %v", got)
-	}
-}
-
 func TestCommandsRanksClosestPrefixBeforeSpecializedGroups(t *testing.T) {
 	got := Commands("buil", []string{"build-bundles", "build-localizations", "builds"})
 	want := []string{"builds", "build-bundles", "build-localizations"}

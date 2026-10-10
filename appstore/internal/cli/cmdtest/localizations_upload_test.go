@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"testing/synctest"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/cmd"
 )
@@ -458,8 +459,8 @@ func TestAppInfoLocalizationsUploadUsesFreshReadbackAfterMutationTimeout(t *test
 			<-req.Context().Done()
 			return nil, req.Context().Err()
 		default:
-			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.String())
-			return nil, nil
+			t.Errorf("unexpected request: %s %s", req.Method, req.URL.String())
+			return nil, errors.New("unexpected test transport request")
 		}
 	})
 
@@ -471,7 +472,9 @@ func TestAppInfoLocalizationsUploadUsesFreshReadbackAfterMutationTimeout(t *test
 		}); err != nil {
 			t.Fatalf("parse: %v", err)
 		}
-		if err := root.Run(context.Background()); err != nil {
+		var runErr error
+		synctest.Test(t, func(*testing.T) { runErr = root.Run(context.Background()) })
+		if err := runErr; err != nil {
 			t.Fatalf("run: %v", err)
 		}
 	})

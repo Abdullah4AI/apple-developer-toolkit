@@ -25,18 +25,6 @@ func TestAppSetupInfoSetCommand_MissingApp(t *testing.T) {
 	}
 }
 
-func TestAppSetupInfoSetCommand_MissingUpdates(t *testing.T) {
-	cmd := AppSetupInfoSetCommand()
-
-	if err := cmd.FlagSet.Parse([]string{"--app", "APP"}); err != nil {
-		t.Fatalf("failed to parse flags: %v", err)
-	}
-
-	if err := cmd.Exec(context.Background(), []string{}); !errors.Is(err, flag.ErrHelp) {
-		t.Fatalf("expected flag.ErrHelp when no update flags provided, got %v", err)
-	}
-}
-
 func TestAppSetupInfoSetCommand_MissingLocale(t *testing.T) {
 	cmd := AppSetupInfoSetCommand()
 

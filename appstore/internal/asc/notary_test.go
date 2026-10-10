@@ -503,27 +503,6 @@ func TestListNotarizations_SendsRequest(t *testing.T) {
 	}
 }
 
-func TestListNotarizations_EmptyResult(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		resp := NotarySubmissionsListResponse{
-			Data: []NotarySubmissionStatusData{},
-		}
-		w.Header().Set("Content-Type", "application/json")
-		mustEncodeJSON(t, w, resp)
-	}))
-	defer server.Close()
-
-	client := newTestNotaryClient(t, server.URL)
-	resp, err := client.ListNotarizations(context.Background())
-	if err != nil {
-		t.Fatalf("ListNotarizations() error: %v", err)
-	}
-
-	if len(resp.Data) != 0 {
-		t.Errorf("expected empty list, got %d items", len(resp.Data))
-	}
-}
-
 func TestListNotarizations_ErrorResponse(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
@@ -924,24 +903,6 @@ func TestSubmitNotarization_EmptyInputs(t *testing.T) {
 	_, err = client.SubmitNotarization(ctx, testNotarySHA256, "")
 	if err == nil {
 		t.Fatal("expected error for empty name")
-	}
-}
-
-func TestGetNotarizationStatus_EmptyID(t *testing.T) {
-	client := newTestNotaryClient(t, "")
-
-	_, err := client.GetNotarizationStatus(context.Background(), "")
-	if err == nil {
-		t.Fatal("expected error for empty ID")
-	}
-}
-
-func TestGetNotarizationLogs_EmptyID(t *testing.T) {
-	client := newTestNotaryClient(t, "")
-
-	_, err := client.GetNotarizationLogs(context.Background(), "")
-	if err == nil {
-		t.Fatal("expected error for empty ID")
 	}
 }
 

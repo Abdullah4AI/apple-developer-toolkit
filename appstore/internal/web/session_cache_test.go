@@ -22,40 +22,56 @@ import (
 
 type countingKeyring struct {
 	keyring.Keyring
+	mu        sync.Mutex
 	getCounts map[string]int
 }
 
 func (kr *countingKeyring) Get(key string) (keyring.Item, error) {
+	kr.mu.Lock()
+	defer kr.mu.Unlock()
 	kr.getCounts[key]++
 	return kr.Keyring.Get(key)
 }
 
 func (kr *countingKeyring) GetMetadata(key string) (keyring.Metadata, error) {
+	kr.mu.Lock()
+	defer kr.mu.Unlock()
 	return kr.Keyring.GetMetadata(key)
 }
 
 func (kr *countingKeyring) Set(item keyring.Item) error {
+	kr.mu.Lock()
+	defer kr.mu.Unlock()
 	return kr.Keyring.Set(item)
 }
 
 func (kr *countingKeyring) Remove(key string) error {
+	kr.mu.Lock()
+	defer kr.mu.Unlock()
 	return kr.Keyring.Remove(key)
 }
 
 func (kr *countingKeyring) Keys() ([]string, error) {
+	kr.mu.Lock()
+	defer kr.mu.Unlock()
 	return kr.Keyring.Keys()
 }
 
 func (kr *countingKeyring) ResetCounts() {
+	kr.mu.Lock()
+	defer kr.mu.Unlock()
 	kr.getCounts = map[string]int{}
 }
 
 func (kr *countingKeyring) GetCount(key string) int {
+	kr.mu.Lock()
+	defer kr.mu.Unlock()
 	return kr.getCounts[key]
 }
 
 func withArraySessionKeyring(t *testing.T) *countingKeyring {
 	t.Helper()
+	t.Setenv("ASC_BYPASS_KEYCHAIN", "")
 	prev := sessionKeyringOpen
 	kr := &countingKeyring{
 		Keyring:   keyring.NewArrayKeyring([]keyring.Item{}),
@@ -72,6 +88,7 @@ func withArraySessionKeyring(t *testing.T) *countingKeyring {
 
 func withUnavailableSessionKeyring(t *testing.T) {
 	t.Helper()
+	t.Setenv("ASC_BYPASS_KEYCHAIN", "")
 	prev := sessionKeyringOpen
 	sessionKeyringOpen = func() (keyring.Keyring, error) {
 		return nil, keyring.ErrNoAvailImpl
@@ -96,6 +113,7 @@ func withSessionInfoStub(t *testing.T) {
 }
 
 func TestResolveBackendSelectionDefaultsToFileWithKeychainFallback(t *testing.T) {
+	t.Setenv("ASC_BYPASS_KEYCHAIN", "")
 	t.Setenv(webSessionCacheEnabledEnv, "1")
 	t.Setenv(webSessionBackendEnv, "")
 
@@ -3910,5 +3928,39 @@ func TestSamePersistedSessionIdentityRejectsGeneratedLegacyPair(t *testing.T) {
 	now := time.Now().UTC()
 	if samePersistedSessionIdentity(persistedSession{UpdatedAt: now}, &AuthSession{cachedUpdatedAt: now, cachedGeneration: "generated"}) {
 		t.Fatal("generated and legacy sessions must not match")
+	}
+}
+
+func TestBypassKeychainKeepsWebSessionsOutOfKeychain(t *testing.T) {
+	t.Setenv("ASC_BYPASS_KEYCHAIN", "1")
+	t.Setenv(webSessionCacheEnabledEnv, "1")
+	t.Setenv(webSessionBackendEnv, "")
+	t.Setenv(webSessionCacheDirEnv, filepath.Join(t.TempDir(), "web-cache"))
+
+	opened := 0
+	previousOpen := sessionKeyringOpen
+	sessionKeyringOpen = func() (keyring.Keyring, error) {
+		opened++
+		return keyring.NewArrayKeyring(nil), nil
+	}
+	t.Cleanup(func() { sessionKeyringOpen = previousOpen })
+
+	if appleIDs, err := CachedSessionAppleIDs(); err != nil || len(appleIDs) != 0 {
+		t.Fatalf("CachedSessionAppleIDs() = %v, %v; want empty, nil", appleIDs, err)
+	}
+	if err := DeleteAllSessions(); err != nil {
+		t.Fatalf("DeleteAllSessions() error: %v", err)
+	}
+	if opened != 0 {
+		t.Fatalf("keychain opened %d times with ASC_BYPASS_KEYCHAIN=1", opened)
+	}
+
+	t.Setenv(webSessionBackendEnv, "keychain")
+	err := DeleteAllSessions()
+	if err == nil || !strings.Contains(err.Error(), "ASC_BYPASS_KEYCHAIN") {
+		t.Fatalf("DeleteAllSessions() with explicit keychain backend error = %v, want ASC_BYPASS_KEYCHAIN conflict", err)
+	}
+	if opened != 0 {
+		t.Fatalf("keychain opened %d times with explicit keychain backend and ASC_BYPASS_KEYCHAIN=1", opened)
 	}
 }

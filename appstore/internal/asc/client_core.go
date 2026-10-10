@@ -640,6 +640,10 @@ func resolveTimeoutWithDefaultAndEnv(defaultTimeout time.Duration, durationEnv, 
 
 // Client is an App Store Connect API client
 type Client struct {
+	uploadTransportMu    sync.Mutex
+	uploadTransport      http.RoundTripper
+	ownedUploadTransport *http.Transport
+
 	httpClient    *http.Client
 	keyID         string
 	issuerID      string

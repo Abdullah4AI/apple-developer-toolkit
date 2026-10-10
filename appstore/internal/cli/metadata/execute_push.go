@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/storeassets"
 )
@@ -114,6 +113,7 @@ func ExecutePushWithWarnings(ctx context.Context, opts PushExecutionOptions) (Pu
 	if err != nil {
 		return PushPlanResult{}, nil, fmt.Errorf("%s: %w", errorPrefix, err)
 	}
+	defer client.CloseUploadConnections()
 
 	type versionResolution struct {
 		id    string
@@ -159,19 +159,12 @@ func ExecutePushWithWarnings(ctx context.Context, opts PushExecutionOptions) (Pu
 
 	// Only managed JSON scopes participate in localization changes. Preview
 	// uploads also need version localization IDs, but must not plan their deletion.
-	var remoteAppInfoItems []asc.Resource[asc.AppInfoLocalizationAttributes]
-	if localBundle.appInfoManaged {
-		remoteAppInfoItems, err = fetchAppInfoLocalizations(ctx, client, appInfoIDValue)
-		if err != nil {
-			return PushPlanResult{}, nil, fmt.Errorf("%s: %w", errorPrefix, err)
-		}
-	}
-	var remoteVersionItems []asc.Resource[asc.AppStoreVersionLocalizationAttributes]
-	if localBundle.versionManaged || len(previews) > 0 {
-		remoteVersionItems, err = fetchVersionLocalizations(ctx, client, versionIDValue)
-		if err != nil {
-			return PushPlanResult{}, nil, fmt.Errorf("%s: %w", errorPrefix, err)
-		}
+	remoteAppInfoItems, remoteVersionItems, err := fetchMetadataLocalizations(
+		ctx, client, appInfoIDValue, versionIDValue,
+		localBundle.appInfoManaged, localBundle.versionManaged || len(previews) > 0,
+	)
+	if err != nil {
+		return PushPlanResult{}, nil, fmt.Errorf("%s: %w", errorPrefix, err)
 	}
 
 	remoteAppInfo := make(map[string]AppInfoLocalization, len(remoteAppInfoItems))
@@ -328,6 +321,16 @@ func ExecutePushWithWarnings(ctx context.Context, opts PushExecutionOptions) (Pu
 			opts.AllowDeletes,
 			metadataIfExistsOptions{mode: ifExistsMode, prefix: errorPrefix, lateAppInfoIDs: lateAppInfoIDs},
 		)
+		if createdLocales := appInfoCreatedVersionLocales(actions, localVersion, managedVersionItems); len(createdLocales) > 0 {
+			versionCalls.list++
+			for _, action := range actions {
+				if action.convertedFromCreate {
+					versionCalls.create--
+					versionCalls.update++
+				}
+			}
+			result.APICalls = buildAPICallSummary(appInfoCalls, versionCalls)
+		}
 	}
 
 	result.Actions = actions

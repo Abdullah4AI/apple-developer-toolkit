@@ -208,14 +208,6 @@ func TestBuildsListPaginateFromNextWithoutAppPhase63(t *testing.T) {
 	)
 }
 
-func TestExperimentsListRejectsInvalidNextURLPhase63(t *testing.T) {
-	runGameCenterAchievementsInvalidNextURLCases(
-		t,
-		[]string{"product-pages", "experiments", "list"},
-		"experiments list: --next",
-	)
-}
-
 func TestExperimentsListPaginateFromNextPhase63(t *testing.T) {
 	const firstURL = "https://api.appstoreconnect.apple.com/v1/appStoreVersions/version-1/appStoreVersionExperiments?cursor=AQ&limit=200"
 	const secondURL = "https://api.appstoreconnect.apple.com/v1/appStoreVersions/version-1/appStoreVersionExperiments?cursor=BQ&limit=200"
@@ -232,14 +224,6 @@ func TestExperimentsListPaginateFromNextPhase63(t *testing.T) {
 		secondBody,
 		"experiment-next-1",
 		"experiment-next-2",
-	)
-}
-
-func TestExperimentsTreatmentsListRejectsInvalidNextURLPhase63(t *testing.T) {
-	runGameCenterAchievementsInvalidNextURLCases(
-		t,
-		[]string{"product-pages", "experiments", "treatments", "list"},
-		"experiments treatments list: --next",
 	)
 }
 
@@ -262,14 +246,6 @@ func TestExperimentsTreatmentsListPaginateFromNextPhase63(t *testing.T) {
 	)
 }
 
-func TestExperimentsTreatmentsLocalizationsListRejectsInvalidNextURLPhase63(t *testing.T) {
-	runGameCenterAchievementsInvalidNextURLCases(
-		t,
-		[]string{"product-pages", "experiments", "treatments", "localizations", "list"},
-		"experiments treatments localizations list: --next",
-	)
-}
-
 func TestExperimentsTreatmentsLocalizationsListPaginateFromNextPhase63(t *testing.T) {
 	const firstURL = "https://api.appstoreconnect.apple.com/v1/appStoreVersionExperimentTreatments/treatment-1/appStoreVersionExperimentTreatmentLocalizations?cursor=AQ&limit=200"
 	const secondURL = "https://api.appstoreconnect.apple.com/v1/appStoreVersionExperimentTreatments/treatment-1/appStoreVersionExperimentTreatmentLocalizations?cursor=BQ&limit=200"
@@ -286,14 +262,6 @@ func TestExperimentsTreatmentsLocalizationsListPaginateFromNextPhase63(t *testin
 		secondBody,
 		"treatment-localization-next-1",
 		"treatment-localization-next-2",
-	)
-}
-
-func TestExperimentsTreatmentsLocalizationsPreviewSetsListRejectsInvalidNextURLPhase63(t *testing.T) {
-	runGameCenterAchievementsInvalidNextURLCases(
-		t,
-		[]string{"product-pages", "experiments", "treatments", "localizations", "preview-sets", "list"},
-		"experiments treatments localizations preview-sets list: --next",
 	)
 }
 
@@ -316,14 +284,6 @@ func TestExperimentsTreatmentsLocalizationsPreviewSetsListPaginateFromNextPhase6
 	)
 }
 
-func TestExperimentsTreatmentsLocalizationsScreenshotSetsListRejectsInvalidNextURLPhase63(t *testing.T) {
-	runGameCenterAchievementsInvalidNextURLCases(
-		t,
-		[]string{"product-pages", "experiments", "treatments", "localizations", "screenshot-sets", "list"},
-		"experiments treatments localizations screenshot-sets list: --next",
-	)
-}
-
 func TestExperimentsTreatmentsLocalizationsScreenshotSetsListPaginateFromNextPhase63(t *testing.T) {
 	const firstURL = "https://api.appstoreconnect.apple.com/v1/appStoreVersionExperimentTreatmentLocalizations/localization-1/appScreenshotSets?cursor=AQ&limit=200"
 	const secondURL = "https://api.appstoreconnect.apple.com/v1/appStoreVersionExperimentTreatmentLocalizations/localization-1/appScreenshotSets?cursor=BQ&limit=200"
@@ -340,14 +300,6 @@ func TestExperimentsTreatmentsLocalizationsScreenshotSetsListPaginateFromNextPha
 		secondBody,
 		"screenshot-set-next-1",
 		"screenshot-set-next-2",
-	)
-}
-
-func TestLocalizationsDownloadRejectsInvalidNextURLPhase63(t *testing.T) {
-	runGameCenterAchievementsInvalidNextURLCases(
-		t,
-		[]string{"localizations", "download"},
-		"localizations download: --next",
 	)
 }
 
@@ -405,14 +357,6 @@ func TestPricingPricePointsPaginateFromNextWithoutAppPhase63(t *testing.T) {
 	)
 }
 
-func TestPricingTerritoriesListRejectsInvalidNextURLPhase63(t *testing.T) {
-	runGameCenterAchievementsInvalidNextURLCases(
-		t,
-		[]string{"pricing", "territories", "list"},
-		"pricing territories list: --next",
-	)
-}
-
 func TestPricingTerritoriesListPaginateFromNextPhase63(t *testing.T) {
 	const firstURL = "https://api.appstoreconnect.apple.com/v1/territories?cursor=AQ&limit=200"
 	const secondURL = "https://api.appstoreconnect.apple.com/v1/territories?cursor=BQ&limit=200"
@@ -429,14 +373,6 @@ func TestPricingTerritoriesListPaginateFromNextPhase63(t *testing.T) {
 		secondBody,
 		"pricing-territory-next-1",
 		"pricing-territory-next-2",
-	)
-}
-
-func TestReviewAttachmentsListRejectsInvalidNextURLPhase63(t *testing.T) {
-	runGameCenterAchievementsInvalidNextURLCases(
-		t,
-		[]string{"review", "attachments-list"},
-		"review attachments-list: --next",
 	)
 }
 

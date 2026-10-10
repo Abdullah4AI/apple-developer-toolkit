@@ -7,23 +7,6 @@ import (
 	"testing"
 )
 
-func TestAccessibilityCommandShape(t *testing.T) {
-	cmd := AccessibilityCommand()
-	if cmd == nil {
-		t.Fatal("expected accessibility command")
-		return
-	}
-	if cmd.Name != "accessibility" {
-		t.Fatalf("unexpected command name: %q", cmd.Name)
-	}
-	if len(cmd.Subcommands) != 5 {
-		t.Fatalf("expected 5 subcommands, got %d", len(cmd.Subcommands))
-	}
-	if got := AccessibilityCommand(); got == nil {
-		t.Fatal("expected Command wrapper to return command")
-	}
-}
-
 func TestAccessibilityValidationErrors(t *testing.T) {
 	t.Setenv("ASC_APP_ID", "")
 

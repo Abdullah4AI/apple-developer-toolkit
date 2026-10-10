@@ -216,7 +216,7 @@ func listSessionsFromFile() ([]persistedSession, error) {
 }
 
 func listSessionsFromKeychain() ([]persistedSession, error) {
-	kr, err := sessionKeyringOpen()
+	kr, err := openSessionKeyring()
 	if err != nil {
 		return nil, err
 	}

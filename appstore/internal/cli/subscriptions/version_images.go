@@ -84,8 +84,12 @@ func SubscriptionsVersionImagesListCommand() *ffcli.Command {
 			}
 			requestCtx, cancel := shared.ContextWithTimeout(ctx)
 			defer cancel()
+			firstPageLimit := *limit
+			if *paginate && firstPageLimit == 0 {
+				firstPageLimit = 200
+			}
 			resp, err := client.GetSubscriptionVersionImages(requestCtx, id,
-				asc.WithSubscriptionVersionImagesLimit(*limit), asc.WithSubscriptionVersionImagesNextURL(*next), asc.WithSubscriptionVersionImagesFields(fieldValues))
+				asc.WithSubscriptionVersionImagesLimit(firstPageLimit), asc.WithSubscriptionVersionImagesNextURL(*next), asc.WithSubscriptionVersionImagesFields(fieldValues))
 			if err != nil {
 				return fmt.Errorf("subscriptions versions images list: failed to fetch: %w", err)
 			}
@@ -179,7 +183,11 @@ func SubscriptionsVersionImagesLinksCommand() *ffcli.Command {
 			}
 			requestCtx, cancel := shared.ContextWithTimeout(ctx)
 			defer cancel()
-			resp, err := client.GetSubscriptionVersionImagesRelationships(requestCtx, id, asc.WithLinkagesLimit(*limit), asc.WithLinkagesNextURL(*next))
+			firstPageLimit := *limit
+			if *paginate && firstPageLimit == 0 {
+				firstPageLimit = 200
+			}
+			resp, err := client.GetSubscriptionVersionImagesRelationships(requestCtx, id, asc.WithLinkagesLimit(firstPageLimit), asc.WithLinkagesNextURL(*next))
 			if err != nil {
 				return fmt.Errorf("subscriptions versions images links: failed to fetch: %w", err)
 			}

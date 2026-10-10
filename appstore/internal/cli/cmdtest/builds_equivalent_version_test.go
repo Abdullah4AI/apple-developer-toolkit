@@ -8,10 +8,13 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
 func TestBuildsListMatchesEquivalentMarketingVersionForPlatform(t *testing.T) {
 	setupAuth(t)
+	shared.ResetEquivalentVersionNotesForTest()
 	t.Setenv("ASC_APP_ID", "")
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 
@@ -83,6 +86,7 @@ func TestBuildsListMatchesEquivalentMarketingVersionForPlatform(t *testing.T) {
 
 func TestBuildsCountMatchesEquivalentMarketingVersionForPlatform(t *testing.T) {
 	setupAuth(t)
+	shared.ResetEquivalentVersionNotesForTest()
 	t.Setenv("ASC_APP_ID", "")
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 

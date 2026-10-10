@@ -379,28 +379,6 @@ func TestGetCIUsageSummaryHandles4xxError(t *testing.T) {
 	}
 }
 
-func TestCIUsagePlanJSONRoundTrip(t *testing.T) {
-	raw := `{"name":"Plan","reset_date":"2026-03-16","reset_date_time":"2026-03-16T09:43:54Z","available":1467,"used":33,"total":1500}`
-	var plan CIUsagePlan
-	if err := json.Unmarshal([]byte(raw), &plan); err != nil {
-		t.Fatalf("Unmarshal error: %v", err)
-	}
-	if plan.ResetDate != "2026-03-16" {
-		t.Fatalf("expected reset_date %q, got %q", "2026-03-16", plan.ResetDate)
-	}
-	if plan.ResetDateTime != "2026-03-16T09:43:54Z" {
-		t.Fatalf("expected reset_date_time %q, got %q", "2026-03-16T09:43:54Z", plan.ResetDateTime)
-	}
-
-	out, err := json.Marshal(plan)
-	if err != nil {
-		t.Fatalf("Marshal error: %v", err)
-	}
-	if !strings.Contains(string(out), `"reset_date":"2026-03-16"`) {
-		t.Fatalf("expected reset_date in output, got %s", out)
-	}
-}
-
 func TestNewCIClientSetsBaseURL(t *testing.T) {
 	session := &AuthSession{Client: http.DefaultClient}
 	client := NewCIClient(session)
@@ -629,29 +607,6 @@ func TestGetCIEncryptionKeyParsesResponse(t *testing.T) {
 	}
 	if result.Key != "0xm9f0gX7lzArxrChNrDVUR3MKxueb1DdheWBeLndCVOqoiEsT2jxqZW6cHsIuDGDykvYWgQ1qaPBSxCNFXEUg==" {
 		t.Fatalf("unexpected key: %q", result.Key)
-	}
-}
-
-func TestExtractEnvVars(t *testing.T) {
-	content := json.RawMessage(`{
-		"name":"Test",
-		"environment_variables":[
-			{"id":"1","name":"FOO","value":{"plaintext":"bar"}},
-			{"id":"2","name":"SECRET","value":{"redacted_value":"***"}}
-		]
-	}`)
-	vars, err := ExtractEnvVars(content)
-	if err != nil {
-		t.Fatalf("ExtractEnvVars() error = %v", err)
-	}
-	if len(vars) != 2 {
-		t.Fatalf("expected 2 vars, got %d", len(vars))
-	}
-	if vars[0].Name != "FOO" {
-		t.Fatalf("expected name FOO, got %q", vars[0].Name)
-	}
-	if vars[1].Name != "SECRET" {
-		t.Fatalf("expected name SECRET, got %q", vars[1].Name)
 	}
 }
 

@@ -290,13 +290,6 @@ func TestBuildSelectorCommandsExposeExcludeExpiredFlags(t *testing.T) {
 	}
 }
 
-func TestBuildsUpdateCommand_HelpContainsExamples(t *testing.T) {
-	cmd := BuildsUpdateCommand()
-	if !strings.Contains(cmd.LongHelp, "--uses-non-exempt-encryption=false") {
-		t.Fatalf("expected long help to include encryption example, got %q", cmd.LongHelp)
-	}
-}
-
 func TestBuildsUpdateCommand_ShortUsageShowsRequiredFlag(t *testing.T) {
 	cmd := BuildsUpdateCommand()
 	want := "asc builds update (--build-id BUILD_ID | --app APP --latest | --app APP --build-number BUILD_NUMBER --platform PLATFORM [--version VERSION]) --uses-non-exempt-encryption [true|false] [flags]"

@@ -1,48 +1,8 @@
 package agreements
 
 import (
-	"context"
-	"errors"
-	"flag"
 	"testing"
 )
-
-func TestAgreementsCommandShape(t *testing.T) {
-	cmd := AgreementsCommand()
-	if cmd == nil {
-		t.Fatal("expected agreements command")
-		return
-	}
-	if cmd.Name != "agreements" {
-		t.Fatalf("unexpected command name: %q", cmd.Name)
-	}
-	if len(cmd.Subcommands) != 1 {
-		t.Fatalf("expected 1 subcommand, got %d", len(cmd.Subcommands))
-	}
-}
-
-func TestAgreementsTerritoriesListValidation(t *testing.T) {
-	t.Run("missing id and next", func(t *testing.T) {
-		cmd := AgreementsTerritoriesListCommand()
-		if err := cmd.FlagSet.Parse([]string{}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := cmd.Exec(context.Background(), nil); !errors.Is(err, flag.ErrHelp) {
-			t.Fatalf("expected ErrHelp, got %v", err)
-		}
-	})
-
-	t.Run("invalid limit", func(t *testing.T) {
-		cmd := AgreementsTerritoriesListCommand()
-		if err := cmd.FlagSet.Parse([]string{"--id", "EULA_ID", "--limit", "300"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		err := cmd.Exec(context.Background(), nil)
-		if err == nil || !errors.Is(err, flag.ErrHelp) {
-			t.Fatalf("expected usage limit error, got %v", err)
-		}
-	})
-}
 
 func TestExtractEULATerritoryIDFromNextURL(t *testing.T) {
 	tests := []struct {

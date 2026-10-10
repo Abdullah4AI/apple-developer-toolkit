@@ -18,15 +18,6 @@ import (
 	webcore "github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/web"
 )
 
-func TestValidateDateFlagValidDates(t *testing.T) {
-	tests := []string{"2026-01-01", "2025-12-31", "2000-06-15"}
-	for _, d := range tests {
-		if err := validateDateFlag("--start", d); err != nil {
-			t.Fatalf("validateDateFlag(%q) unexpected error: %v", d, err)
-		}
-	}
-}
-
 func TestValidateDateFlagRejectsEmpty(t *testing.T) {
 	err := validateDateFlag("--start", "")
 	if err == nil {
@@ -583,22 +574,6 @@ func TestWebXcodeCloudUsageDaysFlagSet(t *testing.T) {
 	}
 
 	for _, name := range []string{"product-ids", "start", "end"} {
-		if fs.Lookup(name) == nil {
-			t.Fatalf("expected --%s flag", name)
-		}
-	}
-}
-
-func TestWebXcodeCloudUsageMonthsFlagSet(t *testing.T) {
-	cmd := WebXcodeCloudCommand()
-	monthsCmd := findSub(findSub(cmd, "usage"), "months")
-	if monthsCmd == nil {
-		t.Fatal("could not find 'usage months' subcommand")
-		return
-	}
-
-	fs := monthsCmd.FlagSet
-	for _, name := range []string{"start-month", "start-year", "end-month", "end-year", "product-ids"} {
 		if fs.Lookup(name) == nil {
 			t.Fatalf("expected --%s flag", name)
 		}

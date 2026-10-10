@@ -8,25 +8,6 @@ import (
 	"testing"
 )
 
-func TestGameCenterMatchmakingQueuesGetValidationErrors(t *testing.T) {
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	stdout, _ := captureOutput(t, func() {
-		if err := root.Parse([]string{"game-center", "matchmaking", "queues", "get"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		err := root.Run(context.Background())
-		if !errors.Is(err, flag.ErrHelp) {
-			t.Fatalf("expected ErrHelp, got %v", err)
-		}
-	})
-
-	if stdout != "" {
-		t.Fatalf("expected empty stdout, got %q", stdout)
-	}
-}
-
 func TestGameCenterMatchmakingQueuesCreateValidationErrors(t *testing.T) {
 	tests := []struct {
 		name string
@@ -135,25 +116,6 @@ func TestGameCenterMatchmakingQueuesDeleteValidationErrors(t *testing.T) {
 				t.Fatalf("expected empty stdout, got %q", stdout)
 			}
 		})
-	}
-}
-
-func TestGameCenterMatchmakingRuleSetsGetValidationErrors(t *testing.T) {
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	stdout, _ := captureOutput(t, func() {
-		if err := root.Parse([]string{"game-center", "matchmaking", "rule-sets", "get"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		err := root.Run(context.Background())
-		if !errors.Is(err, flag.ErrHelp) {
-			t.Fatalf("expected ErrHelp, got %v", err)
-		}
-	})
-
-	if stdout != "" {
-		t.Fatalf("expected empty stdout, got %q", stdout)
 	}
 }
 
@@ -657,25 +619,6 @@ func TestGameCenterMatchmakingRuleSetTestsCreateValidationErrors(t *testing.T) {
 		err := root.Run(context.Background())
 		if !errors.Is(err, flag.ErrHelp) {
 			t.Fatalf("expected ErrHelp, got %v", err)
-		}
-	})
-
-	if stdout != "" {
-		t.Fatalf("expected empty stdout, got %q", stdout)
-	}
-}
-
-func TestGameCenterMatchmakingQueuesListLimitValidation(t *testing.T) {
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	stdout, _ := captureOutput(t, func() {
-		if err := root.Parse([]string{"game-center", "matchmaking", "queues", "list", "--limit", "400"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		err := root.Run(context.Background())
-		if err == nil {
-			t.Fatalf("expected error, got nil")
 		}
 	})
 

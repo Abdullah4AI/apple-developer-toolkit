@@ -7,65 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
-	rootcmd "github.com/Abdullah4AI/apple-developer-toolkit/appstore/cmd"
 )
-
-func runAppTagsInvalidNextURLCases(
-	t *testing.T,
-	argsPrefix []string,
-	wantErrPrefix string,
-) {
-	t.Helper()
-
-	tests := []struct {
-		name    string
-		next    string
-		wantErr string
-	}{
-		{
-			name:    "invalid scheme",
-			next:    "http://api.appstoreconnect.apple.com/v1/apps/app-1/relationships/appTags?cursor=AQ",
-			wantErr: wantErrPrefix + " must be an App Store Connect URL",
-		},
-		{
-			name:    "malformed URL",
-			next:    "https://api.appstoreconnect.apple.com/%zz",
-			wantErr: wantErrPrefix + " must be a valid URL:",
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			args := append(append([]string{}, argsPrefix...), "--next", test.next)
-
-			root := RootCommand("1.2.3")
-			root.FlagSet.SetOutput(io.Discard)
-
-			var runErr error
-			stdout, stderr := captureOutput(t, func() {
-				if err := root.Parse(args); err != nil {
-					t.Fatalf("parse error: %v", err)
-				}
-				runErr = root.Run(context.Background())
-			})
-
-			if runErr == nil {
-				t.Fatal("expected error, got nil")
-			}
-			if !strings.Contains(runErr.Error(), test.wantErr) {
-				t.Fatalf("expected error %q, got %v", test.wantErr, runErr)
-			}
-			if stdout != "" {
-				t.Fatalf("expected empty stdout, got %q", stdout)
-			}
-			if got := rootcmd.ExitCodeFromError(runErr); got != rootcmd.ExitUsage {
-				t.Fatalf("exit code = %d, want %d", got, rootcmd.ExitUsage)
-			}
-			assertUsageDiagnosticFirstLine(t, stderr, test.wantErr)
-		})
-	}
-}
 
 func runAppTagsPaginateFromNext(
 	t *testing.T,
@@ -143,14 +85,6 @@ func runAppTagsPaginateFromNext(
 	}
 }
 
-func TestAppTagsRelationshipsRejectsInvalidNextURL(t *testing.T) {
-	runAppTagsInvalidNextURLCases(
-		t,
-		[]string{"app-tags", "links"},
-		"app-tags links: --next",
-	)
-}
-
 func TestAppTagsRelationshipsPaginateFromNextWithoutApp(t *testing.T) {
 	const firstURL = "https://api.appstoreconnect.apple.com/v1/apps/app-1/relationships/appTags?cursor=AQ&limit=200"
 	const secondURL = "https://api.appstoreconnect.apple.com/v1/apps/app-1/relationships/appTags?cursor=BQ&limit=200"
@@ -170,14 +104,6 @@ func TestAppTagsRelationshipsPaginateFromNextWithoutApp(t *testing.T) {
 	)
 }
 
-func TestAppTagsTerritoriesRejectsInvalidNextURL(t *testing.T) {
-	runAppTagsInvalidNextURLCases(
-		t,
-		[]string{"app-tags", "territories"},
-		"app-tags territories: --next",
-	)
-}
-
 func TestAppTagsTerritoriesPaginateFromNextWithoutID(t *testing.T) {
 	const firstURL = "https://api.appstoreconnect.apple.com/v1/appTags/tag-1/territories?cursor=AQ&limit=200"
 	const secondURL = "https://api.appstoreconnect.apple.com/v1/appTags/tag-1/territories?cursor=BQ&limit=200"
@@ -194,14 +120,6 @@ func TestAppTagsTerritoriesPaginateFromNextWithoutID(t *testing.T) {
 		secondBody,
 		"app-tag-territory-next-1",
 		"app-tag-territory-next-2",
-	)
-}
-
-func TestAppTagsTerritoriesRelationshipsRejectsInvalidNextURL(t *testing.T) {
-	runAppTagsInvalidNextURLCases(
-		t,
-		[]string{"app-tags", "territories-links"},
-		"app-tags territories-links: --next",
 	)
 }
 

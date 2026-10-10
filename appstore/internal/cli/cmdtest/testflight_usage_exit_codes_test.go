@@ -173,6 +173,26 @@ func TestTestFlightInputValidationReturnsUsageExitCode(t *testing.T) {
 			args:    []string{"testflight", "metrics", "app-testers", "--app", "123", "--next", "http://example.com/x"},
 			wantErr: "testflight metrics app-testers: --next must be an App Store Connect URL",
 		},
+		{
+			name:    "feedback view without submission-id",
+			args:    []string{"testflight", "feedback", "view"},
+			wantErr: "--submission-id is required",
+		},
+		{
+			name:    "review app view without id",
+			args:    []string{"testflight", "review", "app", "view"},
+			wantErr: "--id is required",
+		},
+		{
+			name:    "review submissions view without id",
+			args:    []string{"testflight", "review", "submissions", "view"},
+			wantErr: "--id is required",
+		},
+		{
+			name:    "distribution build view without id",
+			args:    []string{"testflight", "distribution", "build", "view"},
+			wantErr: "--id is required",
+		},
 	}
 
 	for _, test := range tests {

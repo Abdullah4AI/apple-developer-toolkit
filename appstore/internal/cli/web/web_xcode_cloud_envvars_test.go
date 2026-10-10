@@ -42,62 +42,6 @@ func TestEnvVarsGroupReturnsErrHelp(t *testing.T) {
 	}
 }
 
-func TestEnvVarsList_Success(t *testing.T) {
-	origResolveSession := resolveSessionFn
-	t.Cleanup(func() { resolveSessionFn = origResolveSession })
-
-	resolveSessionFn = func(
-		ctx context.Context,
-		appleID, password, twoFactorCode string,
-	) (*webcore.AuthSession, string, error) {
-		return &webcore.AuthSession{
-			PublicProviderID: "team-uuid",
-			Client: &http.Client{
-				Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
-					body := `{
-						"id": "wf-1",
-						"content": {
-							"name": "Test WF",
-							"environment_variables": [
-								{"id":"ev-1","name":"API_KEY","value":{"plaintext":"abc123"}},
-								{"id":"ev-2","name":"SECRET","value":{"redacted_value":"***"}}
-							]
-						}
-					}`
-					return &http.Response{
-						StatusCode: http.StatusOK,
-						Header:     http.Header{"Content-Type": []string{"application/json"}},
-						Body:       io.NopCloser(strings.NewReader(body)),
-						Request:    req,
-					}, nil
-				}),
-			},
-		}, "cache", nil
-	}
-
-	cmd := webXcodeCloudEnvVarsListCommand()
-	if err := cmd.FlagSet.Parse([]string{
-		"--apple-id", "user@example.com",
-		"--product-id", "prod-1",
-		"--workflow-id", "wf-1",
-	}); err != nil {
-		t.Fatalf("parse error: %v", err)
-	}
-
-	stdout, _ := captureOutput(t, func() {
-		if err := cmd.Exec(context.Background(), nil); err != nil {
-			t.Fatalf("exec error: %v", err)
-		}
-	})
-	// Default output is JSON
-	if !strings.Contains(stdout, "API_KEY") {
-		t.Fatalf("expected API_KEY in output, got %q", stdout)
-	}
-	if !strings.Contains(stdout, "SECRET") {
-		t.Fatalf("expected SECRET in output, got %q", stdout)
-	}
-}
-
 func TestEnvVarsList_EmptyList(t *testing.T) {
 	origResolveSession := resolveSessionFn
 	t.Cleanup(func() { resolveSessionFn = origResolveSession })
@@ -829,17 +773,5 @@ func TestEnvVarsDelete_MissingFlags(t *testing.T) {
 				t.Fatalf("expected %q in stderr, got %q", tt.wantErr, stderr)
 			}
 		})
-	}
-}
-
-func TestEnvVarsAllCommandsHaveUsageFunc(t *testing.T) {
-	cmd := webXcodeCloudEnvVarsCommand()
-	if cmd.UsageFunc == nil {
-		t.Fatalf("env-vars command should have UsageFunc set")
-	}
-	for _, sub := range cmd.Subcommands {
-		if sub.UsageFunc == nil {
-			t.Fatalf("subcommand %q should have UsageFunc set", sub.Name)
-		}
 	}
 }

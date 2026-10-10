@@ -149,32 +149,9 @@ func buildSubscriptionsPricingSummaryCommand(
 					return fmt.Errorf("subscriptions pricing: unexpected groups response type %T", paginatedGroups)
 				}
 
-				for _, group := range groups.Data {
-					subsCtx, subsCancel := shared.ContextWithTimeout(ctx)
-					subsResp, err := client.GetSubscriptions(subsCtx, group.ID, asc.WithSubscriptionsLimit(200))
-					subsCancel()
-					if err != nil {
-						return fmt.Errorf("subscriptions pricing: failed to fetch subscriptions for group %s: %w", group.ID, err)
-					}
-
-					paginatedSubs, err := asc.PaginateAll(ctx, subsResp, func(_ context.Context, nextURL string) (asc.PaginatedResponse, error) {
-						pageCtx, pageCancel := shared.ContextWithTimeout(ctx)
-						defer pageCancel()
-						return client.GetSubscriptions(pageCtx, group.ID, asc.WithSubscriptionsNextURL(nextURL))
-					})
-					if err != nil {
-						return fmt.Errorf("subscriptions pricing: paginate subscriptions: %w", err)
-					}
-
-					subsResult, ok := paginatedSubs.(*asc.SubscriptionsResponse)
-					if !ok {
-						return fmt.Errorf("subscriptions pricing: unexpected subscriptions response type %T", paginatedSubs)
-					}
-
-					groupName := group.Attributes.ReferenceName
-					for _, sub := range subsResult.Data {
-						subs = append(subs, subWithGroup{Sub: sub, GroupName: groupName})
-					}
+				subs, err = fetchSubscriptionPricingGroups(ctx, client, groups.Data)
+				if err != nil {
+					return err
 				}
 			}
 
@@ -190,6 +167,73 @@ func buildSubscriptionsPricingSummaryCommand(
 			return printSubscriptionPricingResult(&subscriptionPricingResult{Subscriptions: summaries}, *output.Output, *output.Pretty)
 		},
 	}
+}
+
+func fetchSubscriptionPricingGroup(ctx context.Context, client *asc.Client, group asc.Resource[asc.SubscriptionGroupAttributes]) ([]subWithGroup, error) {
+	subsCtx, subsCancel := shared.ContextWithTimeout(ctx)
+	subsResp, err := client.GetSubscriptions(subsCtx, group.ID, asc.WithSubscriptionsLimit(200))
+	subsCancel()
+	if err != nil {
+		return nil, fmt.Errorf("subscriptions pricing: failed to fetch subscriptions for group %s: %w", group.ID, err)
+	}
+	paginatedSubs, err := asc.PaginateAll(ctx, subsResp, func(pageParent context.Context, nextURL string) (asc.PaginatedResponse, error) {
+		pageCtx, pageCancel := shared.ContextWithTimeout(pageParent)
+		defer pageCancel()
+		return client.GetSubscriptions(pageCtx, group.ID, asc.WithSubscriptionsNextURL(nextURL))
+	})
+	if err != nil {
+		return nil, fmt.Errorf("subscriptions pricing: paginate subscriptions: %w", err)
+	}
+	subsResult, ok := paginatedSubs.(*asc.SubscriptionsResponse)
+	if !ok {
+		return nil, fmt.Errorf("subscriptions pricing: unexpected subscriptions response type %T", paginatedSubs)
+	}
+	result := make([]subWithGroup, 0, len(subsResult.Data))
+	for _, sub := range subsResult.Data {
+		result = append(result, subWithGroup{Sub: sub, GroupName: group.Attributes.ReferenceName})
+	}
+	return result, nil
+}
+
+func fetchSubscriptionPricingGroups(ctx context.Context, client *asc.Client, groups []asc.Resource[asc.SubscriptionGroupAttributes]) ([]subWithGroup, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	type groupResult struct {
+		items []subWithGroup
+		err   error
+	}
+	var results []subWithGroup
+	// Enumeration finishes before price summaries start, keeping both phases
+	// within the same request budget. Consume each wave in group order so
+	// output and the first reported error do not depend on response timing.
+	for start := 0; start < len(groups); start += defaultSubscriptionPricingWorkers {
+		end := min(start+defaultSubscriptionPricingWorkers, len(groups))
+		waveCtx, cancel := context.WithCancel(ctx)
+		completions := make([]chan groupResult, end-start)
+		var wg sync.WaitGroup
+		for index := range completions {
+			completions[index] = make(chan groupResult, 1)
+			wg.Go(func() {
+				items, err := fetchSubscriptionPricingGroup(waveCtx, client, groups[start+index])
+				completions[index] <- groupResult{items: items, err: err}
+			})
+		}
+		for _, completion := range completions {
+			result := <-completion
+			if result.err != nil {
+				// Cancel and join peers as soon as the earliest ordered error
+				// is known; waiting for the whole wave first can stall here.
+				cancel()
+				wg.Wait()
+				return nil, result.err
+			}
+			results = append(results, result.items...)
+		}
+		cancel()
+		wg.Wait()
+	}
+	return results, nil
 }
 
 func resolveSubscriptionPriceSummaries(

@@ -102,16 +102,6 @@ func TestCustomPagesListEmitsQuerySurface(t *testing.T) {
 	}
 }
 
-func TestCustomPagesListQueryFlagsAreRegistered(t *testing.T) {
-	cmd := findCommandByPath(t, "product-pages", "custom-pages", "list")
-	for _, name := range []string{"visible", "fields", "app-fields", "version-fields", "include", "versions-limit"} {
-		flagValue := cmd.FlagSet.Lookup(name)
-		if flagValue == nil {
-			t.Fatalf("missing --%s flag", name)
-		}
-	}
-}
-
 func TestCustomPagesListRejectsNextQueryFlagsBeforeAuth(t *testing.T) {
 	const nextURL = "https://api.appstoreconnect.apple.com/v1/apps/app-1/appCustomProductPages?cursor=next"
 	tests := []struct {

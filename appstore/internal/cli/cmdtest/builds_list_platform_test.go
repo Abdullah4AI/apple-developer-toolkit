@@ -65,46 +65,6 @@ func TestBuildsListPlatformFilter(t *testing.T) {
 	}
 }
 
-func TestBuildsListPlatformFilterCaseInsensitive(t *testing.T) {
-	setupAuth(t)
-	t.Setenv("ASC_APP_ID", "")
-	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
-
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() {
-		http.DefaultTransport = originalTransport
-	})
-
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		query := req.URL.Query()
-		if query.Get("filter[preReleaseVersion.platform]") != "IOS" {
-			t.Fatalf("expected normalized platform IOS, got %q", query.Get("filter[preReleaseVersion.platform]"))
-		}
-		body := `{"data":[{"type":"builds","id":"build-ios-1"}]}`
-		return &http.Response{
-			StatusCode: http.StatusOK,
-			Body:       io.NopCloser(strings.NewReader(body)),
-			Header:     http.Header{"Content-Type": []string{"application/json"}},
-		}, nil
-	})
-
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	stdout, _ := captureOutput(t, func() {
-		if err := root.Parse([]string{"builds", "list", "--app", "123456789", "--platform", "ios"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatalf("run error: %v", err)
-		}
-	})
-
-	if !strings.Contains(stdout, `"id":"build-ios-1"`) {
-		t.Fatalf("expected build output, got %q", stdout)
-	}
-}
-
 func TestBuildsListPlatformFilterWithVersionLookup(t *testing.T) {
 	setupAuth(t)
 	t.Setenv("ASC_APP_ID", "")

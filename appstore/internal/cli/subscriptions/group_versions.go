@@ -200,7 +200,11 @@ func SubscriptionsGroupsVersionsListCommand() *ffcli.Command {
 			if strings.TrimSpace(*next) != "" && subscriptionGroupAnyFlagSet(fs, "state", "include", "fields", "group-fields", "localization-fields", "limit", "localizations-limit") {
 				return shared.UsageError("subscriptions groups versions list: --next cannot be combined with query flags")
 			}
-			opts, err := subscriptionGroupVersionOptions(*state, *include, *fields, *groupFields, *localizationFields, *limit, *localizationsLimit, *next)
+			firstPageLimit := *limit
+			if *paginate && firstPageLimit == 0 {
+				firstPageLimit = 200
+			}
+			opts, err := subscriptionGroupVersionOptions(*state, *include, *fields, *groupFields, *localizationFields, firstPageLimit, *localizationsLimit, *next)
 			if err != nil {
 				return shared.UsageError("subscriptions groups versions list: " + err.Error())
 			}
@@ -327,8 +331,12 @@ func subscriptionsGroupsVersionLinkagesCommand(name string, groupOwned bool) *ff
 			}
 			requestCtx, cancel := shared.ContextWithTimeout(ctx)
 			defer cancel()
+			firstPageLimit := *limit
+			if *paginate && firstPageLimit == 0 {
+				firstPageLimit = 200
+			}
 			fetch := func(ctx context.Context, nextURL string) (*asc.LinkagesResponse, error) {
-				opts := []asc.LinkagesOption{asc.WithLinkagesLimit(*limit), asc.WithLinkagesNextURL(nextURL)}
+				opts := []asc.LinkagesOption{asc.WithLinkagesLimit(firstPageLimit), asc.WithLinkagesNextURL(nextURL)}
 				if groupOwned {
 					return client.GetSubscriptionGroupVersionsRelationships(ctx, id, opts...)
 				}

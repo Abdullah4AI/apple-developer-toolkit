@@ -133,6 +133,7 @@ func TestBetaTesterGroupConflictAlreadySatisfied(t *testing.T) {
 
 func newBetaTesterCSVConflictClient(t *testing.T, server *httptest.Server) *asc.Client {
 	t.Helper()
+	t.Setenv("ASC_BASE_DELAY", "1ms")
 
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {

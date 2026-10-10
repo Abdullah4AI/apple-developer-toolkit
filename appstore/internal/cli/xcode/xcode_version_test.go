@@ -292,30 +292,6 @@ func TestXcodeVersionBumpCommandSupportsTargetFlag(t *testing.T) {
 	}
 }
 
-func TestXcodeVersionEditCommandExposesTargetFlag(t *testing.T) {
-	if xcodeVersionEditCommand().FlagSet.Lookup("target") == nil {
-		t.Fatal("expected edit command to expose --target")
-	}
-}
-
-func TestXcodeVersionCommandsExposeProjectFlag(t *testing.T) {
-	if xcodeVersionViewCommand().FlagSet.Lookup("project") == nil {
-		t.Fatal("expected view command to expose --project")
-	}
-	if xcodeVersionEditCommand().FlagSet.Lookup("project") == nil {
-		t.Fatal("expected edit command to expose --project")
-	}
-	if xcodeVersionBumpCommand().FlagSet.Lookup("project") == nil {
-		t.Fatal("expected bump command to expose --project")
-	}
-}
-
-func TestXcodeVersionBumpCommandExposesTargetFlag(t *testing.T) {
-	if xcodeVersionBumpCommand().FlagSet.Lookup("target") == nil {
-		t.Fatal("expected bump command to expose --target")
-	}
-}
-
 func TestXcodeVersionCommandsExposeStructuredScopeAndRemoteFlags(t *testing.T) {
 	for name, command := range map[string]*ffcli.Command{
 		"view": xcodeVersionViewCommand(),

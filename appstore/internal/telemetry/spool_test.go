@@ -1,6 +1,7 @@
 package telemetry
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"os"
@@ -105,8 +106,9 @@ func TestSpoolConcurrentProcessWriters(t *testing.T) {
 	}
 
 	type process struct {
-		id  string
-		cmd *exec.Cmd
+		id     string
+		cmd    *exec.Cmd
+		output *bytes.Buffer
 	}
 	processes := make([]process, 0, 12)
 	for i := range 12 {
@@ -118,14 +120,17 @@ func TestSpoolConcurrentProcessWriters(t *testing.T) {
 			"ASC_TEST_TELEMETRY_SPOOL_PATH="+path,
 			"ASC_TEST_TELEMETRY_EVENT_ID="+id,
 		)
+		output := &bytes.Buffer{}
+		cmd.Stdout = output
+		cmd.Stderr = output
 		if err := cmd.Start(); err != nil {
 			t.Fatalf("start writer %s: %v", id, err)
 		}
-		processes = append(processes, process{id: id, cmd: cmd})
+		processes = append(processes, process{id: id, cmd: cmd, output: output})
 	}
 	for _, process := range processes {
 		if err := process.cmd.Wait(); err != nil {
-			t.Fatalf("writer %s failed: %v", process.id, err)
+			t.Fatalf("writer %s failed: %v\n%s", process.id, err, process.output)
 		}
 	}
 
@@ -153,7 +158,10 @@ func TestSpoolWriterHelperProcess(t *testing.T) {
 		return
 	}
 	store := testSpoolStore(os.Getenv("ASC_TEST_TELEMETRY_SPOOL_PATH"))
-	store.lockWait = lockTimeout
+	// Twelve writers queue on one lock, so a slow runner can spend the whole
+	// production budget waiting. This test checks that every append lands
+	// intact, not how long the queue takes; the deadline only stops a hang.
+	store.lockWait = time.Hour
 	if err := store.append(testSpoolRecord(os.Getenv("ASC_TEST_TELEMETRY_EVENT_ID"))); err != nil {
 		t.Fatalf("append helper record: %v", err)
 	}

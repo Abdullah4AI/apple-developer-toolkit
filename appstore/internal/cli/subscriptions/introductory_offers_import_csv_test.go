@@ -173,7 +173,7 @@ func (fn introImportRoundTripFunc) RoundTrip(req *http.Request) (*http.Response,
 	return fn(req)
 }
 
-func introImportTestPrivateKeyPEM(t *testing.T) string {
+func introImportTestPrivateKeyPEM(t testing.TB) string {
 	t.Helper()
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {

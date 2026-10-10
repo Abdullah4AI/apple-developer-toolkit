@@ -105,25 +105,6 @@ func TestBuildsCountCommand_NoPaginateFlag(t *testing.T) {
 	}
 }
 
-func TestBuildsCountCommand_ShortHelp(t *testing.T) {
-	cmd := BuildsCountCommand()
-
-	if cmd.ShortHelp == "" {
-		t.Error("expected non-empty ShortHelp")
-	}
-	if !strings.Contains(strings.ToLower(cmd.ShortHelp), "count") && !strings.Contains(strings.ToLower(cmd.ShortHelp), "total") {
-		t.Errorf("expected ShortHelp to mention count or total, got %q", cmd.ShortHelp)
-	}
-}
-
-func TestBuildsCountCommand_LongHelpHasExamples(t *testing.T) {
-	cmd := BuildsCountCommand()
-
-	if !strings.Contains(cmd.LongHelp, "asc builds count") {
-		t.Errorf("expected LongHelp to contain example invocation, got %q", cmd.LongHelp)
-	}
-}
-
 func TestCountBuildsViaPaginationCountsEachPage(t *testing.T) {
 	t.Setenv("ASC_SPINNER_DISABLED", "1")
 

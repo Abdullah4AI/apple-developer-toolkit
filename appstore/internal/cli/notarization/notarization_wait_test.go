@@ -10,6 +10,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -148,7 +149,18 @@ func TestWaitForNotarizationReportsWaitDeadlineDuringInFlightStatusRequest(t *te
 }
 
 func TestWaitForNotarizationReportsLastTransientFailureAtDeadline(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	waitCtx, expire := context.WithCancel(context.Background())
+	defer expire()
+	ctx := expiringContext{Context: waitCtx}
+	var requests atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if requests.Add(1) > 1 {
+			// The first failure has been recorded; expire the wait while this
+			// poll is in flight instead of racing a wall-clock deadline.
+			expire()
+			<-req.Context().Done()
+			return
+		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadGateway)
 		_, _ = io.WriteString(w, `{"errors":[{"code":"BAD_GATEWAY","title":"Bad Gateway","detail":"notary is unavailable"}]}`)
@@ -156,9 +168,6 @@ func TestWaitForNotarizationReportsLastTransientFailureAtDeadline(t *testing.T) 
 	t.Cleanup(server.Close)
 
 	client := newNotarizationTestClient(t, server)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Millisecond)
-	defer cancel()
 
 	var waitErr error
 	captureNotarizationStderr(t, func() {
@@ -205,6 +214,19 @@ func TestWaitForNotarizationReportsCancellationSeparatelyFromTimeout(t *testing.
 	if strings.Contains(waitErr.Error(), "timed out") {
 		t.Fatalf("waitForNotarization() error = %v, cancellation must not be reported as a timeout", waitErr)
 	}
+}
+
+// expiringContext reports an expired deadline once its parent is canceled, so
+// a test decides exactly when the wait deadline passes.
+type expiringContext struct {
+	context.Context
+}
+
+func (c expiringContext) Err() error {
+	if c.Context.Err() != nil {
+		return context.DeadlineExceeded
+	}
+	return nil
 }
 
 func writeNotaryStatus(t *testing.T, w http.ResponseWriter, status asc.NotarySubmissionStatus) {

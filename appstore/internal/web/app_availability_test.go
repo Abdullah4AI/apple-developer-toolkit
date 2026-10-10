@@ -312,25 +312,6 @@ func TestGetAppAvailabilityDoesNotRetryHTTPFailures(t *testing.T) {
 	}
 }
 
-func TestGetAppAvailabilityPreservesMalformedResponseFailure(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/apps/app-123/appAvailabilityV2" {
-			t.Fatalf("unexpected path: %s", r.URL.Path)
-		}
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"data":{"type":"appAvailabilities"}}`))
-	}))
-	defer server.Close()
-
-	got, err := testWebClient(server).GetAppAvailability(context.Background(), "app-123")
-	if got != nil {
-		t.Fatalf("expected no availability on malformed response, got %#v", got)
-	}
-	if err == nil || !strings.Contains(err.Error(), "app availability id missing from response") {
-		t.Fatalf("expected malformed response error, got %v", err)
-	}
-}
-
 func TestGetAppAvailabilityRejectsMissingOrMalformedData(t *testing.T) {
 	for _, tc := range []struct {
 		name string

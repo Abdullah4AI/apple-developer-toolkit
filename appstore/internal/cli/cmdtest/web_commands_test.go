@@ -46,27 +46,6 @@ func TestWebCommandUsesProductionHelpContract(t *testing.T) {
 	}
 }
 
-func TestWebAppsCreateSubcommandIsRegistered(t *testing.T) {
-	root := RootCommand("1.2.3")
-	if sub := findSubcommand(root, "web", "apps", "create"); sub == nil {
-		t.Fatalf("expected web apps create to be registered")
-	}
-}
-
-func TestWebRemovedAppsListSubcommandIsRegistered(t *testing.T) {
-	root := RootCommand("1.2.3")
-	if sub := findSubcommand(root, "web", "removed-apps", "list"); sub == nil {
-		t.Fatalf("expected web removed-apps list to be registered")
-	}
-}
-
-func TestWebAppsDeleteSubcommandIsRegistered(t *testing.T) {
-	root := RootCommand("1.2.3")
-	if sub := findSubcommand(root, "web", "apps", "delete"); sub == nil {
-		t.Fatalf("expected web apps delete to be registered")
-	}
-}
-
 func TestWebAppsMedicalDeviceSetSubcommandIsRegistered(t *testing.T) {
 	root := RootCommand("1.2.3")
 	if sub := findSubcommand(root, "web", "apps", "medical-device", "set"); sub == nil {
@@ -151,27 +130,6 @@ func TestWebBundleIDCapabilitiesEnableSubcommandIsRegistered(t *testing.T) {
 		if sub.FlagSet.Lookup(flagName) == nil {
 			t.Fatalf("expected --%s flag", flagName)
 		}
-	}
-}
-
-func TestWebSandboxCreateSubcommandIsRegistered(t *testing.T) {
-	root := RootCommand("1.2.3")
-	if sub := findSubcommand(root, "web", "sandbox", "create"); sub == nil {
-		t.Fatalf("expected web sandbox create to be registered")
-	}
-}
-
-func TestWebAuthCapabilitiesSubcommandIsRegistered(t *testing.T) {
-	root := RootCommand("1.2.3")
-	if sub := findSubcommand(root, "web", "auth", "capabilities"); sub == nil {
-		t.Fatalf("expected web auth capabilities to be registered")
-	}
-}
-
-func TestWebXcodeCloudWorkflowsCreateSubcommandIsRegistered(t *testing.T) {
-	root := RootCommand("1.2.3")
-	if sub := findSubcommand(root, "web", "xcode-cloud", "workflows", "create"); sub == nil {
-		t.Fatalf("expected web xcode-cloud workflows create to be registered")
 	}
 }
 

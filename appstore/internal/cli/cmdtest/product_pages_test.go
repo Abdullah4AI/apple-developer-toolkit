@@ -218,25 +218,6 @@ func TestProductPagesExperimentTreatmentLocalizationMediaSetsValidationErrors(t 
 	}
 }
 
-func TestProductPagesScreenshotSetIncludeScreenshotsIsRegistered(t *testing.T) {
-	root := RootCommand("1.2.3")
-	cases := [][]string{
-		{"product-pages", "custom-pages", "localizations", "screenshot-sets", "list"},
-		{"product-pages", "experiments", "treatments", "localizations", "screenshot-sets", "list"},
-	}
-
-	for _, path := range cases {
-		cmd := findSubcommand(root, path...)
-		if cmd == nil {
-			t.Fatalf("command %v not found", path)
-		}
-		includeScreenshots := cmd.FlagSet.Lookup("include-screenshots")
-		if includeScreenshots == nil {
-			t.Fatalf("command %v missing --include-screenshots", path)
-		}
-	}
-}
-
 func TestProductPagesScreenshotSetIncludeScreenshotsRequiresFullLocalizationList(t *testing.T) {
 	const nextURL = "https://api.appstoreconnect.apple.com/v1/appCustomProductPageLocalizations/loc-1/appScreenshotSets?cursor=next"
 

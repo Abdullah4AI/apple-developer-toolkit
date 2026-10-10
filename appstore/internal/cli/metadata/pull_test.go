@@ -5,13 +5,6 @@ import (
 	"testing"
 )
 
-func TestMetadataPullCommand_AppInfoFlagDefined(t *testing.T) {
-	cmd := MetadataPullCommand()
-	if cmd.FlagSet.Lookup("app-info") == nil {
-		t.Fatal("expected --app-info flag to be defined on metadata pull")
-	}
-}
-
 func TestMetadataPullCommand_AppInfoFlagDefault(t *testing.T) {
 	cmd := MetadataPullCommand()
 	f := cmd.FlagSet.Lookup("app-info")

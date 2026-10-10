@@ -412,6 +412,7 @@ func writeSearchResults(w http.ResponseWriter, appIDs ...int64) {
 
 func stubKeywordsClient(t *testing.T, baseURL string) {
 	t.Helper()
+	t.Setenv("ASC_BASE_DELAY", "1ms")
 	previous := newKeywordsItunesClient
 	t.Cleanup(func() { newKeywordsItunesClient = previous })
 	newKeywordsItunesClient = func() *itunes.Client {

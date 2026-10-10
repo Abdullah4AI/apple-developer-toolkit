@@ -58,7 +58,11 @@ func gameCenterBlockedPlayersListCommand() *ffcli.Command {
 			defer cancel()
 			return client.GetGameCenterBlockedPlayers(requestCtx, detailID, q)
 		}
-		first, err := fetch(ctx, asc.GCBlockedPlayersQuery{Fields: selected, Limit: *limit, NextURL: nextURL})
+		firstPageLimit := *limit
+		if *paginate && firstPageLimit == 0 {
+			firstPageLimit = 200
+		}
+		first, err := fetch(ctx, asc.GCBlockedPlayersQuery{Fields: selected, Limit: firstPageLimit, NextURL: nextURL})
 		if err != nil {
 			return fmt.Errorf("%s: %w", command, err)
 		}

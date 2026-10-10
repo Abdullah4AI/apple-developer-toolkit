@@ -14,6 +14,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 
@@ -353,6 +354,7 @@ func BuildSigningPlan(opts SigningPlanOptions) (*SigningPlan, error) {
 }
 
 func buildSigningPlan(opts SigningPlanOptions) (*signingPlanBuild, error) {
+	defer beginSigningPlanRootScope()()
 	if strings.TrimSpace(opts.ProjectPath) == "" {
 		return nil, fmt.Errorf("--project is required")
 	}
@@ -485,7 +487,7 @@ func buildSigningPlan(opts SigningPlanOptions) (*signingPlanBuild, error) {
 			// alias checks. The collector has already authorized this path, so a
 			// no-follow prospective lookup is within the requested scope.
 			(opts.AllowExternalXCConfig && !contained) {
-			authorizedProtectedConfigPaths = appendUniqueSigningPaths(authorizedProtectedConfigPaths, protectedPath)
+			authorizedProtectedConfigPaths = append(authorizedProtectedConfigPaths, protectedPath)
 		}
 	}
 	hasUnauthorizedExternal := func(paths []string) bool {
@@ -1294,6 +1296,8 @@ type signingSettingResolver struct {
 	// require membership in authorizedPath (the successfully collected files).
 	lexicalConfigPaths map[string][]string
 	authorizedPath     map[string]bool
+	collectedPaths     map[string]signingAuthorizedPathIndex
+	lexicalPaths       map[string]map[string]struct{}
 	allowExternal      bool
 	// stagedXCConfig contains private bytes for xcconfigs changed by the
 	// current planning pass. The map is keyed by normalized lexical path;
@@ -1307,12 +1311,22 @@ func newSigningSettingResolver(project *structuredVersionProject, configFiles ma
 		configFiles:        configFiles,
 		lexicalConfigPaths: lexicalConfigPaths,
 		authorizedPath:     make(map[string]bool),
+		collectedPaths:     make(map[string]signingAuthorizedPathIndex, len(configFiles)),
+		lexicalPaths:       make(map[string]map[string]struct{}, len(lexicalConfigPaths)),
 		allowExternal:      allowExternal,
 	}
-	for _, paths := range configFiles {
+	for configurationID, paths := range configFiles {
 		for _, path := range paths {
 			resolver.authorizedPath[normalizeSigningLexicalPath(path)] = true
 		}
+		resolver.collectedPaths[configurationID] = newSigningAuthorizedPathIndex(paths)
+	}
+	for configurationID, paths := range lexicalConfigPaths {
+		observed := make(map[string]struct{}, len(paths))
+		for _, path := range paths {
+			observed[normalizeSigningLexicalPath(path)] = struct{}{}
+		}
+		resolver.lexicalPaths[configurationID] = observed
 	}
 	return resolver
 }
@@ -1348,14 +1362,11 @@ func (resolver *signingSettingResolver) configurationXCConfigPath(
 	if configuration == nil {
 		return absolute, false, nil
 	}
-	for _, collected := range resolver.configFiles[configuration.id] {
-		collected = normalizeSigningLexicalPath(collected)
-		if collected == absolute {
-			return collected, true, nil
-		}
+	collectedPaths := resolver.collectedPaths[configuration.id]
+	if _, ok := collectedPaths.exact[absolute]; ok {
+		return absolute, true, nil
 	}
-	for _, collected := range resolver.configFiles[configuration.id] {
-		collected = normalizeSigningLexicalPath(collected)
+	for _, collected := range collectedPaths.folded[signingPathCaseFoldKey(absolute)] {
 		if !signingPathCaseEquivalent(absolute, collected) {
 			continue
 		}
@@ -1372,13 +1383,8 @@ func (resolver *signingSettingResolver) configurationLexicallyObservedPath(confi
 	if configuration == nil {
 		return false
 	}
-	key := normalizeSigningLexicalPath(path)
-	for _, observed := range resolver.lexicalConfigPaths[configuration.id] {
-		if normalizeSigningLexicalPath(observed) == key {
-			return true
-		}
-	}
-	return false
+	_, ok := resolver.lexicalPaths[configuration.id][normalizeSigningLexicalPath(path)]
+	return ok
 }
 
 func (resolver *signingSettingResolver) statXCConfigFor(configuration *versionConfiguration, path string) (os.FileInfo, error) {
@@ -2730,14 +2736,20 @@ func validateSigningArtifactAliasesWithAuthorizedProtectedPaths(planPath, receip
 		}
 	}
 
-	seenInputs := make([]string, 0, len(inputPaths))
+	seenInputKeys := make(map[string]struct{}, len(inputPaths))
+	seenInputsByFold := make(map[string][]string, len(inputPaths))
 	for _, inputPath := range inputPaths {
 		if strings.TrimSpace(inputPath) == "" {
 			continue
 		}
 		inputPath = normalize(inputPath)
+		inputKey := signingLexicalPathKey(inputPath)
+		if _, duplicate := seenInputKeys[inputKey]; duplicate {
+			continue
+		}
+		foldKey := signingPathCaseFoldKey(inputPath)
 		duplicate := false
-		for _, seenInput := range seenInputs {
+		for _, seenInput := range seenInputsByFold[foldKey] {
 			if signingArtifactLexicalPathEqual(seenInput, inputPath) {
 				duplicate = true
 				break
@@ -2746,7 +2758,8 @@ func validateSigningArtifactAliasesWithAuthorizedProtectedPaths(planPath, receip
 		if duplicate {
 			continue
 		}
-		seenInputs = append(seenInputs, inputPath)
+		seenInputKeys[inputKey] = struct{}{}
+		seenInputsByFold[foldKey] = append(seenInputsByFold[foldKey], inputPath)
 		for _, artifact := range artifacts {
 			if signingArtifactLexicalPathEqual(inputPath, artifact.path) {
 				return newSigningInputError(newSigningArtifactAliasError(fmt.Errorf("%s path aliases project input %s", artifact.label, inputPath)))
@@ -4012,21 +4025,21 @@ func validateSigningXCConfigPath(project *structuredVersionProject, path string,
 	if !signingPathLexicallyContained(project, path) && !allowExternal {
 		return fmt.Errorf("xcconfig path %s is outside the project directory: %w", path, rootfs.ErrEscapesRoot)
 	}
-	root, err := rootfs.New(project.rootDir)
+	root, release, err := openSigningRoot(project.rootDir)
 	if err != nil {
 		return err
 	}
-	defer root.Close()
+	defer release()
 	if err := root.AllowingInternalSymlinks().CheckContained(path); err == nil {
 		return nil
 	} else if !allowExternal {
 		return err
 	}
-	externalRoot, err := rootfs.New(filepath.Dir(path))
+	externalRoot, releaseExternal, err := openSigningRoot(filepath.Dir(path))
 	if err != nil {
 		return err
 	}
-	defer externalRoot.Close()
+	defer releaseExternal()
 	return externalRoot.CheckContained(filepath.Base(path))
 }
 
@@ -4048,12 +4061,86 @@ func readSigningRegularFile(path string, limit int64) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	root, err := rootfs.New(filepath.Dir(absolute))
+	root, release, err := openSigningRoot(filepath.Dir(absolute))
 	if err != nil {
 		return nil, err
 	}
-	defer root.Close()
+	defer release()
 	return root.ReadFileLimited(filepath.Base(absolute), limit)
+}
+
+// signingPlanRoots lets one signing plan build reuse the Root selected for each
+// directory instead of reselecting it for every xcconfig read or stat. Every
+// rooted operation still reopens the selected directory without following
+// symlinks and verifies its pinned identity, so a replaced directory fails
+// closed rather than redirecting a read.
+// signingPlanMaxCachedRoots bounds the directory descriptors one plan build
+// keeps open; directories beyond it get a Root that closes after each use.
+const signingPlanMaxCachedRoots = 64
+
+var signingPlanRoots struct {
+	sync.Mutex
+	scopes   int
+	borrowed int
+	roots    map[string]rootfs.Root
+}
+
+func beginSigningPlanRootScope() func() {
+	signingPlanRoots.Lock()
+	signingPlanRoots.scopes++
+	signingPlanRoots.Unlock()
+	return func() {
+		signingPlanRoots.Lock()
+		defer signingPlanRoots.Unlock()
+		signingPlanRoots.scopes--
+		closeIdleSigningPlanRootsLocked()
+	}
+}
+
+func releaseSigningPlanRoot() {
+	signingPlanRoots.Lock()
+	defer signingPlanRoots.Unlock()
+	signingPlanRoots.borrowed--
+	closeIdleSigningPlanRootsLocked()
+}
+
+func closeIdleSigningPlanRootsLocked() {
+	if signingPlanRoots.scopes > 0 || signingPlanRoots.borrowed > 0 {
+		return
+	}
+	for _, root := range signingPlanRoots.roots {
+		_ = root.Close()
+	}
+	signingPlanRoots.roots = nil
+}
+
+func openSigningRoot(directory string) (rootfs.Root, func(), error) {
+	signingPlanRoots.Lock()
+	cached, ok := signingPlanRoots.roots[directory]
+	if signingPlanRoots.scopes == 0 || (!ok && len(signingPlanRoots.roots) >= signingPlanMaxCachedRoots) {
+		signingPlanRoots.Unlock()
+		root, err := rootfs.New(directory)
+		if err != nil {
+			return rootfs.Root{}, nil, err
+		}
+		return root, func() { _ = root.Close() }, nil
+	}
+	defer signingPlanRoots.Unlock()
+	root := cached
+	if !ok {
+		var err error
+		root, err = rootfs.New(directory)
+		if err != nil {
+			return rootfs.Root{}, nil, err
+		}
+		if signingPlanRoots.roots == nil {
+			signingPlanRoots.roots = make(map[string]rootfs.Root)
+		}
+		signingPlanRoots.roots[directory] = root
+	}
+	signingPlanRoots.borrowed++
+	var once sync.Once
+	return root, func() { once.Do(releaseSigningPlanRoot) }, nil
 }
 
 // signingXCConfigReadFileFn keeps configuration reads behind the same rooted
@@ -4080,11 +4167,11 @@ func signingRegularFileInfo(path string) (os.FileInfo, error) {
 	if err != nil {
 		return nil, err
 	}
-	root, err := rootfs.New(filepath.Dir(absolute))
+	root, release, err := openSigningRoot(filepath.Dir(absolute))
 	if err != nil {
 		return nil, err
 	}
-	defer root.Close()
+	defer release()
 	if err := root.CheckCreateNewFile(filepath.Base(absolute)); err == nil {
 		return nil, os.ErrNotExist
 	} else if !errors.Is(err, os.ErrExist) {

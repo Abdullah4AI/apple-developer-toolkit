@@ -164,16 +164,6 @@ func TestRequireAppForStableSelector_MissingAppContext(t *testing.T) {
 	}
 }
 
-func TestRequireAppForStableSelector_NameShapedSelectorRequiresLookup(t *testing.T) {
-	err := RequireAppForStableSelector("", "PLAN_ID", "--iap-id")
-	if err == nil {
-		t.Fatal("expected usage error for PLAN_ID selector")
-	}
-	if !errors.Is(err, flag.ErrHelp) {
-		t.Fatalf("expected ErrHelp usage error, got %v", err)
-	}
-}
-
 func TestResolveIAPID_NumericPassthroughSkipsLookup(t *testing.T) {
 	stub := &sequenceIAPLookupStub{}
 

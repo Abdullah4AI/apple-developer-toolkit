@@ -72,8 +72,12 @@ func IAPVersionLocalizationsListCommand() *ffcli.Command {
 			}
 			requestCtx, cancel := shared.ContextWithTimeout(ctx)
 			defer cancel()
+			firstPageLimit := *limit
+			if *paginate && firstPageLimit == 0 {
+				firstPageLimit = 200
+			}
 			opts := []asc.IAPVersionLocalizationsOption{
-				asc.WithIAPVersionLocalizationsLimit(*limit),
+				asc.WithIAPVersionLocalizationsLimit(firstPageLimit),
 				asc.WithIAPVersionLocalizationsNextURL(*next),
 				asc.WithIAPVersionLocalizationsInclude(includes),
 				asc.WithIAPVersionLocalizationsFields(localizationFieldValues),

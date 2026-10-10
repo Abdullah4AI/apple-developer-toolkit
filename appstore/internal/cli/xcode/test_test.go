@@ -357,37 +357,6 @@ func TestXcodeTestPreservesAuthenticationPassthroughPairs(t *testing.T) {
 	}
 }
 
-func TestXcodeTestFlagsAreRegistered(t *testing.T) {
-	command := XcodeTestCommand()
-	wantFlags := map[string]bool{
-		"workspace":          true,
-		"project":            true,
-		"scheme":             true,
-		"action":             true,
-		"configuration":      true,
-		"destination":        true,
-		"test-plan":          true,
-		"xctestrun":          true,
-		"only-testing":       true,
-		"skip-testing":       true,
-		"derived-data-path":  true,
-		"result-bundle-path": true,
-		"clean":              true,
-		"no-code-signing":    true,
-		"xcodebuild-flag":    true,
-	}
-	command.FlagSet.VisitAll(func(flagDef *flag.Flag) {
-		if !wantFlags[flagDef.Name] {
-			return
-		}
-
-		delete(wantFlags, flagDef.Name)
-	})
-	for flagName := range wantFlags {
-		t.Errorf("--%s was not registered", flagName)
-	}
-}
-
 func TestXcodeTestRendersTableAndMarkdown(t *testing.T) {
 	originalRunTest := runTest
 	t.Cleanup(func() { runTest = originalRunTest })

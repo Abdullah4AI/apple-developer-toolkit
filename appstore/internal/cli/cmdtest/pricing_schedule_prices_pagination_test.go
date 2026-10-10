@@ -183,11 +183,3 @@ func TestPricingScheduleManualPricesRejectsInvalidLimit(t *testing.T) {
 		t.Fatalf("expected invalid limit usage error, got %q", stderr)
 	}
 }
-
-func TestPricingScheduleAutomaticPricesRejectsInvalidNextURL(t *testing.T) {
-	runInvalidNextURLUsageErrorCases(
-		t,
-		[]string{"pricing", "schedule", "automatic-prices"},
-		"pricing schedule automatic-prices: --next",
-	)
-}

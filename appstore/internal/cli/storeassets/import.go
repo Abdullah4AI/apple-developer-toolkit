@@ -29,6 +29,8 @@ type PreviewLayout struct {
 	checksum       string
 	existingID     string
 	sourceChecksum string
+	reference      bool
+	referenceID    string
 	Locale         string `json:"locale"`
 	DeviceType     string `json:"deviceType"`
 	FileName       string `json:"fileName"`
@@ -334,7 +336,7 @@ func uploadHeader(ctx context.Context, c *asc.Client, locID, path string, curren
 	}
 	uploadCtx, cancel := shared.ContextWithUploadTimeout(shared.ContextWithoutTimeout(ctx))
 	defer cancel()
-	if err := asc.UploadAssetFromFile(uploadCtx, file, info.Size(), created.Data.Attributes.UploadOperations); err != nil {
+	if err := c.UploadAssetFromFile(uploadCtx, file, info.Size(), created.Data.Attributes.UploadOperations); err != nil {
 		return id, "upload", current.ID != "", err
 	}
 	_, err = request(ctx, func(ctx context.Context) (*asc.AppClipHeaderImageResponse, error) {
@@ -420,6 +422,10 @@ func preparePreviews(ctx context.Context, c *asc.Client, p *ImportPlan) (*Import
 		locIDs[loc.Attributes.Locale] = loc.ID
 	}
 	checksums := map[string]map[string]bool{}
+	setsByLocalization := map[string]struct {
+		sets     []asc.Resource[asc.AppPreviewSetAttributes]
+		included map[string][]asc.Resource[asc.AppPreviewAttributes]
+	}{}
 	for i := range p.Previews {
 		preview := &p.Previews[i]
 		key := preview.Locale + "/" + strings.ToUpper(preview.DeviceType)
@@ -428,17 +434,27 @@ func preparePreviews(ctx context.Context, c *asc.Client, p *ImportPlan) (*Import
 			group = &previewGroup{Locale: preview.Locale, Device: strings.ToUpper(preview.DeviceType), LocalizationID: locIDs[preview.Locale]}
 			p.previewGroups[key] = group
 			if locID := locIDs[preview.Locale]; locID != "" {
-				sets, err := previewSets(ctx, c, locID)
-				if err != nil {
-					return nil, err
+				cached, ok := setsByLocalization[locID]
+				if !ok {
+					cached.sets, cached.included, err = previewSets(ctx, c, locID)
+					if err != nil {
+						return nil, err
+					}
+					setsByLocalization[locID] = cached
 				}
+				sets, included := cached.sets, cached.included
 				for _, set := range sets {
 					if strings.EqualFold(set.Attributes.PreviewType, preview.DeviceType) {
 						group.SetID = set.ID
 						break
 					}
 				}
-				if group.SetID != "" {
+				if items, ok := included[group.SetID]; ok {
+					group.Existing = items
+					for _, item := range items {
+						group.CurrentOrder = append(group.CurrentOrder, item.ID)
+					}
+				} else if group.SetID != "" {
 					group.CurrentOrder, err = previewOrder(ctx, c, group.SetID)
 					if err != nil {
 						return nil, err

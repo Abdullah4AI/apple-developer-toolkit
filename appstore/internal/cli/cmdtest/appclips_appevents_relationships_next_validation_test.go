@@ -7,65 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
-	rootcmd "github.com/Abdullah4AI/apple-developer-toolkit/appstore/cmd"
 )
-
-func runPhase39InvalidNextURLCases(
-	t *testing.T,
-	argsPrefix []string,
-	wantErrPrefix string,
-) {
-	t.Helper()
-
-	tests := []struct {
-		name    string
-		next    string
-		wantErr string
-	}{
-		{
-			name:    "invalid scheme",
-			next:    "http://api.appstoreconnect.apple.com/v1/appClips/clip-1/relationships/appClipDefaultExperiences?cursor=AQ",
-			wantErr: wantErrPrefix + " must be an App Store Connect URL",
-		},
-		{
-			name:    "malformed URL",
-			next:    "https://api.appstoreconnect.apple.com/%zz",
-			wantErr: wantErrPrefix + " must be a valid URL:",
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			args := append(append([]string{}, argsPrefix...), "--next", test.next)
-
-			root := RootCommand("1.2.3")
-			root.FlagSet.SetOutput(io.Discard)
-
-			var runErr error
-			stdout, stderr := captureOutput(t, func() {
-				if err := root.Parse(args); err != nil {
-					t.Fatalf("parse error: %v", err)
-				}
-				runErr = root.Run(context.Background())
-			})
-
-			if runErr == nil {
-				t.Fatal("expected error, got nil")
-			}
-			if !strings.Contains(runErr.Error(), test.wantErr) {
-				t.Fatalf("expected error %q, got %v", test.wantErr, runErr)
-			}
-			if stdout != "" {
-				t.Fatalf("expected empty stdout, got %q", stdout)
-			}
-			if got := rootcmd.ExitCodeFromError(runErr); got != rootcmd.ExitUsage {
-				t.Fatalf("exit code = %d, want %d", got, rootcmd.ExitUsage)
-			}
-			assertUsageDiagnosticFirstLine(t, stderr, test.wantErr)
-		})
-	}
-}
 
 func runPhase39PaginateFromNext(
 	t *testing.T,
@@ -139,14 +81,6 @@ func runPhase39PaginateFromNext(
 	}
 }
 
-func TestAppClipsAdvancedExperiencesRelationshipsRejectsInvalidNextURL(t *testing.T) {
-	runPhase39InvalidNextURLCases(
-		t,
-		[]string{"app-clips", "advanced-experiences-links"},
-		"app-clips advanced-experiences-links: --next",
-	)
-}
-
 func TestAppClipsAdvancedExperiencesRelationshipsPaginateFromNextWithoutAppClipID(t *testing.T) {
 	const firstURL = "https://api.appstoreconnect.apple.com/v1/appClips/clip-1/relationships/appClipAdvancedExperiences?cursor=AQ&limit=200"
 	const secondURL = "https://api.appstoreconnect.apple.com/v1/appClips/clip-1/relationships/appClipAdvancedExperiences?cursor=BQ&limit=200"
@@ -163,14 +97,6 @@ func TestAppClipsAdvancedExperiencesRelationshipsPaginateFromNextWithoutAppClipI
 		secondBody,
 		"clip-adv-rel-next-1",
 		"clip-adv-rel-next-2",
-	)
-}
-
-func TestAppClipsDefaultExperiencesRelationshipsRejectsInvalidNextURL(t *testing.T) {
-	runPhase39InvalidNextURLCases(
-		t,
-		[]string{"app-clips", "default-experiences-links"},
-		"app-clips default-experiences-links: --next",
 	)
 }
 
@@ -193,14 +119,6 @@ func TestAppClipsDefaultExperiencesRelationshipsPaginateFromNextWithoutAppClipID
 	)
 }
 
-func TestAppClipsDefaultExperienceLocalizationsListRejectsInvalidNextURL(t *testing.T) {
-	runPhase39InvalidNextURLCases(
-		t,
-		[]string{"app-clips", "default-experiences", "localizations", "list", "--experience-id", "exp-1"},
-		"app-clips default-experiences localizations list: --next",
-	)
-}
-
 func TestAppClipsDefaultExperienceLocalizationsListPaginateFromNext(t *testing.T) {
 	const firstURL = "https://api.appstoreconnect.apple.com/v1/appClipDefaultExperiences/exp-1/appClipDefaultExperienceLocalizations?cursor=AQ&limit=200"
 	const secondURL = "https://api.appstoreconnect.apple.com/v1/appClipDefaultExperiences/exp-1/appClipDefaultExperienceLocalizations?cursor=BQ&limit=200"
@@ -220,14 +138,6 @@ func TestAppClipsDefaultExperienceLocalizationsListPaginateFromNext(t *testing.T
 	)
 }
 
-func TestAppEventLocalizationScreenshotsRelationshipsRejectsInvalidNextURL(t *testing.T) {
-	runPhase39InvalidNextURLCases(
-		t,
-		[]string{"app-events", "localizations", "screenshots-links"},
-		"app-events localizations screenshots-links: --next",
-	)
-}
-
 func TestAppEventLocalizationScreenshotsRelationshipsPaginateFromNextWithoutLocalizationID(t *testing.T) {
 	const firstURL = "https://api.appstoreconnect.apple.com/v1/appEventLocalizations/loc-1/relationships/appEventScreenshots?cursor=AQ&limit=200"
 	const secondURL = "https://api.appstoreconnect.apple.com/v1/appEventLocalizations/loc-1/relationships/appEventScreenshots?cursor=BQ&limit=200"
@@ -244,14 +154,6 @@ func TestAppEventLocalizationScreenshotsRelationshipsPaginateFromNextWithoutLoca
 		secondBody,
 		"event-shot-rel-next-1",
 		"event-shot-rel-next-2",
-	)
-}
-
-func TestAppEventLocalizationVideoClipsRelationshipsRejectsInvalidNextURL(t *testing.T) {
-	runPhase39InvalidNextURLCases(
-		t,
-		[]string{"app-events", "localizations", "video-clips-links"},
-		"app-events localizations video-clips-links: --next",
 	)
 }
 

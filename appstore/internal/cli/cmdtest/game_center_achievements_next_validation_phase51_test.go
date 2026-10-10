@@ -149,14 +149,6 @@ func runGameCenterAchievementsPaginateFromNext(
 	}
 }
 
-func TestGameCenterAchievementsListRejectsInvalidNextURL(t *testing.T) {
-	runGameCenterAchievementsInvalidNextURLCases(
-		t,
-		[]string{"game-center", "achievements", "list"},
-		"game-center achievements list: --next",
-	)
-}
-
 func TestGameCenterAchievementsListPaginateFromNextWithoutApp(t *testing.T) {
 	const firstURL = "https://api.appstoreconnect.apple.com/v1/gameCenterDetails/gc-detail-1/gameCenterAchievements?cursor=AQ&limit=200"
 	const secondURL = "https://api.appstoreconnect.apple.com/v1/gameCenterDetails/gc-detail-1/gameCenterAchievements?cursor=BQ&limit=200"

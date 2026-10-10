@@ -45,6 +45,7 @@ func WaitForBuildByNumberOrUploadFailure(ctx context.Context, client *asc.Client
 	}
 	uploadID = strings.TrimSpace(uploadID)
 
+	preReleaseID := ""
 	return asc.PollUntilTolerant(ctx, pollInterval, func(ctx context.Context) (*asc.BuildResponse, bool, error) {
 		if uploadID != "" {
 			upload, err := getBuildUploadWithLinkedBuild(ctx, client, uploadID)
@@ -74,7 +75,17 @@ func WaitForBuildByNumberOrUploadFailure(ctx context.Context, client *asc.Client
 				}
 			}
 		}
-		build, err := findBuildByNumber(ctx, client, appID, version, buildNumber, platform, uploadID)
+		if preReleaseID == "" {
+			id, err := findPreReleaseVersionIDForBuildWait(ctx, client, appID, version, platform)
+			if err != nil {
+				return nil, false, err
+			}
+			if id == "" {
+				return nil, false, nil
+			}
+			preReleaseID = id
+		}
+		build, err := findBuildByNumber(ctx, client, appID, preReleaseID, buildNumber, uploadID)
 		if err != nil {
 			return nil, false, err
 		}
@@ -294,15 +305,7 @@ func findBuildIDForUpload(ctx context.Context, client *asc.Client, appID, upload
 	return "", nil
 }
 
-func findBuildByNumber(ctx context.Context, client *asc.Client, appID, version, buildNumber, platform, uploadID string) (*asc.BuildResponse, error) {
-	preReleaseID, err := findPreReleaseVersionIDForBuildWait(ctx, client, appID, version, platform)
-	if err != nil {
-		return nil, err
-	}
-	if preReleaseID == "" {
-		return nil, nil
-	}
-
+func findBuildByNumber(ctx context.Context, client *asc.Client, appID, preReleaseID, buildNumber, uploadID string) (*asc.BuildResponse, error) {
 	buildOpts := []asc.BuildsOption{
 		asc.WithBuildsPreReleaseVersion(preReleaseID),
 		asc.WithBuildsSort("-uploadedDate"),

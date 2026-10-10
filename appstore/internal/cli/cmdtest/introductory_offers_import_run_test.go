@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"testing/synctest"
 )
 
 func TestSubscriptionsIntroductoryOffersImport_CreateSuccessSummary(t *testing.T) {
@@ -798,7 +799,8 @@ func TestSubscriptionsIntroductoryOffersImport_RetriesTimedOutInitialStateRead(t
 	readCount := 0
 	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		if req.Method != http.MethodGet || req.URL.Path != "/v1/subscriptions/8000000003/introductoryOffers" {
-			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.String())
+			t.Errorf("unexpected request: %s %s", req.Method, req.URL.String())
+			return nil, errors.New("test transport assertion failed")
 		}
 		assertIntroductoryOfferImportStateQuery(t, req)
 		readCount++
@@ -807,9 +809,10 @@ func TestSubscriptionsIntroductoryOffersImport_RetriesTimedOutInitialStateRead(t
 			return nil, req.Context().Err()
 		}
 		if err := req.Context().Err(); err != nil {
-			t.Fatalf("expected fresh request context, got %v", err)
+			t.Errorf("expected fresh request context, got %v", err)
+			return nil, errors.New("test transport assertion failed")
 		}
-		body := `{"data":[{"type":"subscriptionIntroductoryOffers","id":"offer-existing","attributes":{"startDate":"2020-01-01","duration":"ONE_WEEK","offerMode":"FREE_TRIAL","numberOfPeriods":1,"targetSubscriptionPlanType":"UPFRONT"},"relationships":{"territory":{"data":{"type":"territories","id":"USA"}}}}],"links":{}}`
+		body := `{"data":[{"type":"subscriptionIntroductoryOffers","id":"offer-existing","attributes":{"startDate":"1999-01-01","duration":"ONE_WEEK","offerMode":"FREE_TRIAL","numberOfPeriods":1,"targetSubscriptionPlanType":"UPFRONT"},"relationships":{"territory":{"data":{"type":"territories","id":"USA"}}}}],"links":{}}`
 		return jsonHTTPResponse(http.StatusOK, body), nil
 	})
 
@@ -825,7 +828,9 @@ func TestSubscriptionsIntroductoryOffersImport_RetriesTimedOutInitialStateRead(t
 		}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
-		if err := root.Run(context.Background()); err != nil {
+		var runErr error
+		synctest.Test(t, func(*testing.T) { runErr = root.Run(context.Background()) })
+		if err := runErr; err != nil {
 			t.Fatalf("run error: %v", err)
 		}
 	})

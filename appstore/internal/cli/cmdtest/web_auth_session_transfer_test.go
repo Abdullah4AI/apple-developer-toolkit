@@ -42,32 +42,6 @@ func TestWebAuthImportSubcommandIsRegistered(t *testing.T) {
 	}
 }
 
-func TestWebAuthSessionTransferSurfacesAreRegistered(t *testing.T) {
-	root := RootCommand("1.2.3")
-	cases := []struct {
-		path  []string
-		flags []string
-	}{
-		{path: []string{"web", "auth", "export"}, flags: []string{"apple-id", "output-path", "overwrite"}},
-		{path: []string{"web", "auth", "import"}, flags: []string{"file", "from-env", "apple-id", "overwrite", "validate"}},
-	}
-
-	for _, tc := range cases {
-		sub := findSubcommand(root, tc.path...)
-		if sub == nil {
-			t.Fatalf("command %v not found", tc.path)
-		}
-
-		for _, flagName := range tc.flags {
-			flag := sub.FlagSet.Lookup(flagName)
-			if flag == nil {
-				t.Errorf("command %v missing --%s", tc.path, flagName)
-				continue
-			}
-		}
-	}
-}
-
 // isolateWebSessionCache points the web-session cache at an empty temporary
 // directory and pins the file backend so no test can read, write, or prompt
 // for the developer's real Apple session.

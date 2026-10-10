@@ -5,29 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"net/url"
 	"testing"
 )
-
-func TestBuildSandboxTestersQuery(t *testing.T) {
-	query := &sandboxTestersQuery{}
-	opts := []SandboxTestersOption{
-		WithSandboxTestersEmail(" tester@example.com "),
-		WithSandboxTestersTerritory("usa"),
-		WithSandboxTestersLimit(10),
-	}
-	for _, opt := range opts {
-		opt(query)
-	}
-
-	values, err := url.ParseQuery(buildSandboxTestersQuery(query))
-	if err != nil {
-		t.Fatalf("failed to parse query: %v", err)
-	}
-	if got := values.Get("limit"); got != "10" {
-		t.Fatalf("expected limit=10, got %q", got)
-	}
-}
 
 func TestGetSandboxTesters_WithFilters(t *testing.T) {
 	response := jsonResponse(http.StatusOK, `{"data":[{"type":"sandboxTesters","id":"1","attributes":{"acAccountName":"tester@example.com","firstName":"Test","lastName":"User","territory":"USA"}},{"type":"sandboxTesters","id":"2","attributes":{"acAccountName":"other@example.com","firstName":"Other","lastName":"User","territory":"JPN"}}]}`)

@@ -812,30 +812,40 @@ func fetchTesterGroupMemberships(ctx context.Context, client *asc.Client, resolv
 		return nil, fmt.Errorf("group resolver is required")
 	}
 
-	membership := make(map[string][]string)
-	for _, groupID := range resolver.sortedGroupIDs {
-		exportValue := resolver.exportValueForID(groupID)
-
-		requestCtx, cancel := shared.ContextWithTimeout(ctx)
-		firstPage, err := client.GetBetaGroupTesters(requestCtx, groupID, asc.WithBetaGroupTestersLimit(200))
-		cancel()
-		if err != nil {
-			return nil, err
-		}
-		all, err := asc.PaginateAll(ctx, firstPage, func(ctx context.Context, nextURL string) (asc.PaginatedResponse, error) {
+	groupTesters := make([]*asc.BetaTestersResponse, len(resolver.sortedGroupIDs))
+	tasks := make([]func(context.Context) error, len(resolver.sortedGroupIDs))
+	for i, groupID := range resolver.sortedGroupIDs {
+		tasks[i] = func(ctx context.Context) error {
 			requestCtx, cancel := shared.ContextWithTimeout(ctx)
-			defer cancel()
-			return client.GetBetaGroupTesters(requestCtx, groupID, asc.WithBetaGroupTestersNextURL(nextURL))
-		})
-		if err != nil {
-			return nil, err
+			firstPage, err := client.GetBetaGroupTesters(requestCtx, groupID, asc.WithBetaGroupTestersLimit(200))
+			cancel()
+			if err != nil {
+				return err
+			}
+			all, err := asc.PaginateAll(ctx, firstPage, func(ctx context.Context, nextURL string) (asc.PaginatedResponse, error) {
+				requestCtx, cancel := shared.ContextWithTimeout(ctx)
+				defer cancel()
+				return client.GetBetaGroupTesters(requestCtx, groupID, asc.WithBetaGroupTestersNextURL(nextURL))
+			})
+			if err != nil {
+				return err
+			}
+			testersResp, ok := all.(*asc.BetaTestersResponse)
+			if !ok || testersResp == nil {
+				return fmt.Errorf("unexpected beta group testers response type")
+			}
+			groupTesters[i] = testersResp
+			return nil
 		}
-		testersResp, ok := all.(*asc.BetaTestersResponse)
-		if !ok || testersResp == nil {
-			return nil, fmt.Errorf("unexpected beta group testers response type")
-		}
+	}
+	if _, err := runTestFlightGroupFetches(ctx, tasks); err != nil {
+		return nil, err
+	}
 
-		for _, tester := range testersResp.Data {
+	membership := make(map[string][]string)
+	for i, groupID := range resolver.sortedGroupIDs {
+		exportValue := resolver.exportValueForID(groupID)
+		for _, tester := range groupTesters[i].Data {
 			id := strings.TrimSpace(tester.ID)
 			if id == "" {
 				continue

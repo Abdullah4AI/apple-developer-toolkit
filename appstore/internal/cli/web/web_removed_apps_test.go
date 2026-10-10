@@ -200,16 +200,6 @@ func TestWebRemovedAppsRestoreValidationBeforeAuth(t *testing.T) {
 	}
 }
 
-func TestWebRemovedAppsRestoreFlagsAreRegistered(t *testing.T) {
-	cmd := WebRemovedAppsRestoreCommand()
-	for _, name := range []string{"app", "access", "confirm"} {
-		definition := cmd.FlagSet.Lookup(name)
-		if definition == nil {
-			t.Fatalf("missing --%s", name)
-		}
-	}
-}
-
 func TestWebRemovedAppsRestoreSessionErrorIncludesAuthHint(t *testing.T) {
 	restoreSession := SetResolveWebSession(func(context.Context, string, string, string, string) (*webcore.AuthSession, string, error) {
 		return nil, "", &webcore.APIError{Status: 401}

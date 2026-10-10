@@ -103,9 +103,13 @@ func SubscriptionsVersionLocalizationsListCommand() *ffcli.Command {
 			}
 			requestCtx, cancel := shared.ContextWithTimeout(ctx)
 			defer cancel()
+			firstPageLimit := *limit
+			if *paginate && firstPageLimit == 0 {
+				firstPageLimit = 200
+			}
 			resp, err := client.GetSubscriptionVersionLocalizations(
 				requestCtx, id,
-				asc.WithSubscriptionVersionLocalizationsLimit(*limit),
+				asc.WithSubscriptionVersionLocalizationsLimit(firstPageLimit),
 				asc.WithSubscriptionVersionLocalizationsNextURL(*next),
 				asc.WithSubscriptionVersionLocalizationsFields(fieldValues),
 				asc.WithSubscriptionVersionLocalizationsVersionFields(versionFieldValues),
@@ -167,7 +171,11 @@ func SubscriptionsVersionLocalizationsLinksCommand() *ffcli.Command {
 			}
 			requestCtx, cancel := shared.ContextWithTimeout(ctx)
 			defer cancel()
-			resp, err := client.GetSubscriptionVersionLocalizationsRelationships(requestCtx, id, asc.WithLinkagesLimit(*limit), asc.WithLinkagesNextURL(*next))
+			firstPageLimit := *limit
+			if *paginate && firstPageLimit == 0 {
+				firstPageLimit = 200
+			}
+			resp, err := client.GetSubscriptionVersionLocalizationsRelationships(requestCtx, id, asc.WithLinkagesLimit(firstPageLimit), asc.WithLinkagesNextURL(*next))
 			if err != nil {
 				return fmt.Errorf("subscriptions versions localizations links: failed to fetch: %w", err)
 			}

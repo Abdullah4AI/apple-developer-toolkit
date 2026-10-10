@@ -115,17 +115,6 @@ func TestMarketplaceWebhooksCommandIncludesView(t *testing.T) {
 	t.Fatal("expected marketplace webhooks view subcommand")
 }
 
-func TestMarketplaceWebhooksGetCommand_MissingID(t *testing.T) {
-	cmd := MarketplaceWebhooksGetCommand()
-	if err := cmd.FlagSet.Parse([]string{}); err != nil {
-		t.Fatalf("failed to parse flags: %v", err)
-	}
-
-	if err := cmd.Exec(context.Background(), []string{}); !errors.Is(err, flag.ErrHelp) {
-		t.Fatalf("expected flag.ErrHelp when --webhook-id is missing, got %v", err)
-	}
-}
-
 func TestMarketplaceWebhooksCreateCommand_MissingURL(t *testing.T) {
 	cmd := MarketplaceWebhooksCreateCommand()
 	if err := cmd.FlagSet.Parse([]string{"--secret", "secret"}); err != nil {
@@ -189,17 +178,6 @@ func TestMarketplaceWebhooksDeleteCommand_MissingConfirm(t *testing.T) {
 
 	if err := cmd.Exec(context.Background(), []string{}); !errors.Is(err, flag.ErrHelp) {
 		t.Fatalf("expected flag.ErrHelp when --confirm is missing, got %v", err)
-	}
-}
-
-func TestMarketplaceWebhooksListCommand_InvalidLimit(t *testing.T) {
-	cmd := MarketplaceWebhooksListCommand()
-	if err := cmd.FlagSet.Parse([]string{"--limit", "201"}); err != nil {
-		t.Fatalf("failed to parse flags: %v", err)
-	}
-
-	if err := cmd.Exec(context.Background(), []string{}); err == nil || !errors.Is(err, flag.ErrHelp) {
-		t.Fatalf("expected usage error for invalid --limit, got %v", err)
 	}
 }
 

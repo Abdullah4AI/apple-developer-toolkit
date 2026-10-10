@@ -25,6 +25,17 @@ type ExportFile struct {
 
 // ExportPlan obtains all remote assets before touching the selected output root.
 func ExportPlan(ctx context.Context, client *asc.Client, versionID, metadataPrefix string, clip, previews bool) ([]ExportFile, []string, error) {
+	return exportPlan(ctx, client, versionID, metadataPrefix, clip, previews, nil, false)
+}
+
+// ExportPlanWithVersionLocalizations reuses a complete localization collection
+// fetched for this version within the caller's current export. A nil collection
+// is a resolved empty result. The supplied resources are only read.
+func ExportPlanWithVersionLocalizations(ctx context.Context, client *asc.Client, versionID, metadataPrefix string, clip, previews bool, localizations []asc.Resource[asc.AppStoreVersionLocalizationAttributes]) ([]ExportFile, []string, error) {
+	return exportPlan(ctx, client, versionID, metadataPrefix, clip, previews, localizations, true)
+}
+
+func exportPlan(ctx context.Context, client *asc.Client, versionID, metadataPrefix string, clip, previews bool, localizations []asc.Resource[asc.AppStoreVersionLocalizationAttributes], localizationsResolved bool) ([]ExportFile, []string, error) {
 	var files []ExportFile
 	var warnings []string
 	if clip {
@@ -70,15 +81,19 @@ func ExportPlan(ctx context.Context, client *asc.Client, versionID, metadataPref
 		}
 	}
 	if previews {
-		locs, err := versionLocalizations(ctx, client, versionID)
-		if err != nil {
-			return nil, nil, err
+		locs := localizations
+		if !localizationsResolved {
+			var err error
+			locs, err = versionLocalizations(ctx, client, versionID)
+			if err != nil {
+				return nil, nil, err
+			}
 		}
 		for _, loc := range locs {
 			if err := segment(loc.Attributes.Locale); err != nil {
 				return nil, nil, err
 			}
-			sets, err := previewSets(ctx, client, loc.ID)
+			sets, included, err := previewSets(ctx, client, loc.ID)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -87,30 +102,13 @@ func ExportPlan(ctx context.Context, client *asc.Client, versionID, metadataPref
 				if err != nil {
 					return nil, nil, err
 				}
-				items, err := previewItems(ctx, client, set.ID)
-				if err != nil {
-					return nil, nil, err
-				}
-				ids, err := previewOrder(ctx, client, set.ID)
-				if err != nil {
-					return nil, nil, err
-				}
-				byID := map[string]asc.Resource[asc.AppPreviewAttributes]{}
-				for _, item := range items {
-					byID[item.ID] = item
-				}
-				ordered := make([]asc.Resource[asc.AppPreviewAttributes], 0, len(items))
-				for _, id := range ids {
-					item, ok := byID[id]
-					if !ok {
-						return nil, nil, fmt.Errorf("preview order references missing asset %s", id)
+				items, ok := included[set.ID]
+				if !ok {
+					items, err = orderedPreviewItems(ctx, client, set.ID)
+					if err != nil {
+						return nil, nil, err
 					}
-					ordered = append(ordered, item)
 				}
-				if len(ordered) != len(items) {
-					return nil, nil, fmt.Errorf("preview set %s changed during export; retry", set.ID)
-				}
-				items = ordered
 				order := make([]string, 0, len(items))
 				for _, item := range items {
 					name := item.Attributes.FileName
@@ -134,7 +132,13 @@ func ExportPlan(ctx context.Context, client *asc.Client, versionID, metadataPref
 						}
 					}
 					path := filepath.Join("app_previews", loc.Attributes.Locale, strings.ToLower(device), name)
-					files = append(files, ExportFile{Path: path, URL: url})
+					if assets.IsHLSPlaylist("", url) {
+						data, _ := json.Marshal(previewReference{ID: item.ID, FileName: name, FileSize: item.Attributes.FileSize, SourceFileChecksum: item.Attributes.SourceFileChecksum})
+						reference := string(data) + "\n"
+						files = append(files, ExportFile{Path: path + ".m3u8", URL: url}, ExportFile{Path: path + ".preview.json", Text: &reference})
+					} else {
+						files = append(files, ExportFile{Path: path, URL: url})
+					}
 					if item.Attributes.PreviewFrameTimeCode != "" {
 						frame := item.Attributes.PreviewFrameTimeCode + "\n"
 						files = append(files, ExportFile{Path: strings.TrimSuffix(path, filepath.Ext(path)) + ".poster_frame.txt", Text: &frame})
@@ -225,6 +229,14 @@ func request[T any](ctx context.Context, fn func(context.Context) (T, error)) (T
 }
 
 func pages[T any](ctx context.Context, fetch func(context.Context, string) (*asc.Response[T], error)) ([]asc.Resource[T], error) {
+	response, err := pagesResponse(ctx, fetch)
+	if err != nil {
+		return nil, err
+	}
+	return response.Data, nil
+}
+
+func pagesResponse[T any](ctx context.Context, fetch func(context.Context, string) (*asc.Response[T], error)) (*asc.Response[T], error) {
 	first, err := request(ctx, func(c context.Context) (*asc.Response[T], error) { return fetch(c, "") })
 	if err != nil {
 		return nil, err
@@ -239,7 +251,7 @@ func pages[T any](ctx context.Context, fetch func(context.Context, string) (*asc
 	if !ok {
 		return nil, fmt.Errorf("unexpected asset pagination response")
 	}
-	return response.Data, nil
+	return response, nil
 }
 
 func clipLocalizations(ctx context.Context, c *asc.Client, id string) ([]asc.Resource[asc.AppClipDefaultExperienceLocalizationAttributes], error) {
@@ -254,10 +266,42 @@ func versionLocalizations(ctx context.Context, c *asc.Client, id string) ([]asc.
 	})
 }
 
-func previewSets(ctx context.Context, c *asc.Client, id string) ([]asc.Resource[asc.AppPreviewSetAttributes], error) {
-	return pages(ctx, func(ctx context.Context, next string) (*asc.AppPreviewSetsResponse, error) {
-		return c.GetAppStoreVersionLocalizationPreviewSets(ctx, id, asc.WithAppStoreVersionLocalizationPreviewSetsNextURL(next))
+// previewSets also returns each set's previews in order when Apple included them.
+func previewSets(ctx context.Context, c *asc.Client, id string) ([]asc.Resource[asc.AppPreviewSetAttributes], map[string][]asc.Resource[asc.AppPreviewAttributes], error) {
+	response, err := pagesResponse(ctx, func(ctx context.Context, next string) (*asc.AppPreviewSetsResponse, error) {
+		return c.GetAppStoreVersionLocalizationPreviewSets(ctx, id, asc.WithAppStoreVersionLocalizationPreviewSetsIncludePreviews(), asc.WithAppStoreVersionLocalizationPreviewSetsNextURL(next))
 	})
+	if err != nil {
+		return nil, nil, err
+	}
+	return response.Data, asc.IncludedAppPreviews(response), nil
+}
+
+func orderedPreviewItems(ctx context.Context, c *asc.Client, setID string) ([]asc.Resource[asc.AppPreviewAttributes], error) {
+	items, err := previewItems(ctx, c, setID)
+	if err != nil {
+		return nil, err
+	}
+	ids, err := previewOrder(ctx, c, setID)
+	if err != nil {
+		return nil, err
+	}
+	byID := map[string]asc.Resource[asc.AppPreviewAttributes]{}
+	for _, item := range items {
+		byID[item.ID] = item
+	}
+	ordered := make([]asc.Resource[asc.AppPreviewAttributes], 0, len(items))
+	for _, id := range ids {
+		item, ok := byID[id]
+		if !ok {
+			return nil, fmt.Errorf("preview order references missing asset %s", id)
+		}
+		ordered = append(ordered, item)
+	}
+	if len(ordered) != len(items) {
+		return nil, fmt.Errorf("preview set %s changed during export; retry", setID)
+	}
+	return ordered, nil
 }
 
 func previewItems(ctx context.Context, c *asc.Client, id string) ([]asc.Resource[asc.AppPreviewAttributes], error) {

@@ -144,8 +144,12 @@ func readCommand(name, help, selector, path string, collection bool) *ffcli.Comm
 			if next != "" {
 				target = next
 			} else {
-				if limit > 0 {
-					query.Set("limit", strconv.Itoa(limit))
+				pageLimit := limit
+				if paginate && pageLimit == 0 {
+					pageLimit = 200
+				}
+				if pageLimit > 0 {
+					query.Set("limit", strconv.Itoa(pageLimit))
 				}
 				if len(query) > 0 {
 					target += "?" + query.Encode()

@@ -9,6 +9,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 )
 
@@ -123,22 +124,26 @@ func TestUploadAssetFromFileHonorsRetryAfterHeader(t *testing.T) {
 	defer file.Close()
 
 	var requests int32
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		atomic.AddInt32(&requests, 1)
 		_, _ = io.Copy(io.Discard, r.Body)
 		w.Header().Set("Retry-After", "60")
 		w.WriteHeader(http.StatusTooManyRequests)
-	}))
-	defer server.Close()
+	})
+	originalTransport := http.DefaultTransport
+	http.DefaultTransport = inProcessTransport(handler)
+	t.Cleanup(func() { http.DefaultTransport = originalTransport })
 
 	ops := []UploadOperation{
-		{Method: http.MethodPut, URL: server.URL + "/part1", Length: 3, Offset: 0},
+		{Method: http.MethodPut, URL: "https://upload.example.test/part1", Length: 3, Offset: 0},
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
-	defer cancel()
-
-	err := UploadAssetFromFile(ctx, file, 3, ops)
+	var err error
+	synctest.Test(t, func(*testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
+		defer cancel()
+		err = UploadAssetFromFile(ctx, file, 3, ops)
+	})
 	if err == nil {
 		t.Fatal("expected upload to fail")
 	}

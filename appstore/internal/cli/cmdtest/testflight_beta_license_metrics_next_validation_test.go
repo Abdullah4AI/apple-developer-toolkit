@@ -9,14 +9,6 @@ import (
 	"testing"
 )
 
-func TestTestFlightBetaLicenseAgreementsListRejectsInvalidNextURL(t *testing.T) {
-	runInvalidNextURLUsageErrorCases(
-		t,
-		[]string{"testflight", "agreements", "list"},
-		"agreements list: --next",
-	)
-}
-
 func TestTestFlightBetaLicenseAgreementsListPaginateFromNext(t *testing.T) {
 	setupAuth(t)
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))

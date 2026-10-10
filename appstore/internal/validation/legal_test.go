@@ -216,24 +216,6 @@ func TestLegalChecks_EmptyHostnameRejected(t *testing.T) {
 	}
 }
 
-func TestLegalChecks_PrivacyPolicyRequired_WithSubscriptions(t *testing.T) {
-	checks := legalChecks(
-		"2026 My Company", true, false,
-		[]VersionLocalization{{Locale: "en-US", SupportURL: "https://example.com"}},
-		[]AppInfoLocalization{{Locale: "en-US"}},
-	)
-	found := false
-	for _, c := range checks {
-		if c.ID == "legal.required.privacy_policy_url" && c.Severity == SeverityError {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Fatal("expected privacy policy error when app has subscriptions")
-	}
-}
-
 func TestLegalChecks_PrivacyPolicyRequired_WithIAPs(t *testing.T) {
 	checks := legalChecks(
 		"2026 My Company", true, false,

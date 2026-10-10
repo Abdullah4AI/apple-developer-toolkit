@@ -100,8 +100,12 @@ func creativePlacementsListCommand(resource, prefix, label string) *ffcli.Comman
 				if *sort != "" {
 					q.Set("sort", *sort)
 				}
-				if *limit > 0 {
-					q.Set("limit", strconv.Itoa(*limit))
+				pageLimit := *limit
+				if *paginate && pageLimit == 0 {
+					pageLimit = 200
+				}
+				if pageLimit > 0 {
+					q.Set("limit", strconv.Itoa(pageLimit))
 				}
 				if len(q) > 0 {
 					target += "?" + q.Encode()

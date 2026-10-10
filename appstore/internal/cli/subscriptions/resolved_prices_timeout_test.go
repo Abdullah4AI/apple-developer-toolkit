@@ -6,9 +6,11 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
 type resolvedPricesRoundTripFunc func(*http.Request) (*http.Response, error)
@@ -31,7 +33,8 @@ func TestFetchResolvedSubscriptionPricesUsesFreshDeadlinePerPage(t *testing.T) {
 		}
 		deadline, ok := req.Context().Deadline()
 		if !ok || time.Until(deadline) < 70*time.Millisecond {
-			t.Fatalf("expected fresh second-page deadline, remaining=%s", time.Until(deadline))
+			t.Errorf("expected fresh second-page deadline, remaining=%s", time.Until(deadline))
+			return nil, context.DeadlineExceeded
 		}
 		return resolvedPricesJSONResponse(`{"data":[],"links":{"next":""}}`), nil
 	})
@@ -40,7 +43,10 @@ func TestFetchResolvedSubscriptionPricesUsesFreshDeadlinePerPage(t *testing.T) {
 		t.Fatalf("NewClientFromPEM() error: %v", err)
 	}
 
-	result, err := fetchResolvedSubscriptionPrices(context.Background(), client, "sub-1", 200, "", time.Now().UTC(), "", "")
+	var result *shared.ResolvedPricesResult
+	synctest.Test(t, func(*testing.T) {
+		result, err = fetchResolvedSubscriptionPrices(context.Background(), client, "sub-1", 200, "", time.Now().UTC(), "", "")
+	})
 	if err != nil {
 		t.Fatalf("fetchResolvedSubscriptionPrices() error: %v", err)
 	}
@@ -84,7 +90,8 @@ func TestMonthlyCommitmentResolvedPriceCallersUseFreshDeadlinePerPage(t *testing
 				}
 				deadline, ok := req.Context().Deadline()
 				if !ok || time.Until(deadline) < 70*time.Millisecond {
-					t.Fatalf("expected fresh second-page deadline, remaining=%s", time.Until(deadline))
+					t.Errorf("expected fresh second-page deadline, remaining=%s", time.Until(deadline))
+					return nil, context.DeadlineExceeded
 				}
 				return resolvedPricesJSONResponse(`{"data":[],"links":{"next":""}}`), nil
 			})
@@ -93,7 +100,8 @@ func TestMonthlyCommitmentResolvedPriceCallersUseFreshDeadlinePerPage(t *testing
 				t.Fatalf("NewClientFromPEM() error: %v", err)
 			}
 
-			if err := test.run(context.Background(), client); err != nil {
+			synctest.Test(t, func(*testing.T) { err = test.run(context.Background(), client) })
+			if err != nil {
 				t.Fatalf("caller error: %v", err)
 			}
 			if calls != 2 {

@@ -14,6 +14,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
@@ -683,9 +684,12 @@ func TestWaitForBuildByNumberOrUploadFailureStopsAfterExhaustedBuildUploadNotFou
 		}
 	})
 
-	ctx, cancel := context.WithTimeout(context.Background(), 80*time.Millisecond)
-	defer cancel()
-	_, err := WaitForBuildByNumberOrUploadFailure(ctx, client, "app-1", "upload-current", "1.2.3", "42", "IOS", time.Millisecond)
+	var err error
+	synctest.Test(t, func(*testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 80*time.Millisecond)
+		defer cancel()
+		_, err = WaitForBuildByNumberOrUploadFailure(ctx, client, "app-1", "upload-current", "1.2.3", "42", "IOS", time.Millisecond)
+	})
 	if err == nil {
 		t.Fatal("expected exhausted build-upload lookup error")
 	}
@@ -982,7 +986,7 @@ func TestWaitForBuildByNumberOrUploadFailureFailsAfterConsecutiveTransientLimit(
 }
 
 func TestWaitForBuildByNumberOrUploadFailureMatchesEquivalentVersionFormat(t *testing.T) {
-	resetEquivalentVersionNotes()
+	ResetEquivalentVersionNotesForTest()
 
 	var versionFilters []string
 	client := newBuildWaitTestClient(t, func(req *http.Request) (*http.Response, error) {
@@ -1053,7 +1057,7 @@ func TestWaitForBuildByNumberOrUploadFailureMatchesEquivalentVersionFormat(t *te
 }
 
 func TestWaitForBuildByNumberOrUploadFailureFiltersNearMatchesAcrossPages(t *testing.T) {
-	resetEquivalentVersionNotes()
+	ResetEquivalentVersionNotesForTest()
 
 	var buildFilters []string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
@@ -1125,7 +1129,7 @@ func TestWaitForBuildByNumberOrUploadFailureFiltersNearMatchesAcrossPages(t *tes
 }
 
 func TestWaitForBuildByNumberOrUploadFailurePrefersRequestedVersionFormat(t *testing.T) {
-	resetEquivalentVersionNotes()
+	ResetEquivalentVersionNotesForTest()
 
 	var versionFilters []string
 	client := newBuildWaitTestClient(t, func(req *http.Request) (*http.Response, error) {
@@ -1227,7 +1231,10 @@ func TestVerifyBuildUploadAfterCommitIgnoresRetryableLookupErrorsUntilBuildLinks
 		}`)
 	})
 
-	_, err := VerifyBuildUploadAfterCommit(context.Background(), client, "app-1", "upload-current", time.Millisecond, 50*time.Millisecond)
+	var err error
+	synctest.Test(t, func(*testing.T) {
+		_, err = VerifyBuildUploadAfterCommit(context.Background(), client, "app-1", "upload-current", time.Millisecond, 50*time.Millisecond)
+	})
 	if err != nil {
 		t.Fatalf("VerifyBuildUploadAfterCommit() error: %v", err)
 	}
@@ -1244,7 +1251,7 @@ func TestVerifyBuildUploadAfterCommitIgnoresRetryDelayBeyondVerificationBudget(t
 	t.Cleanup(asc.ResetConfigCacheForTest)
 
 	lookupCalls := 0
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+	client := newBuildWaitTestClient(t, func(req *http.Request) (*http.Response, error) {
 		if req.Method != http.MethodGet {
 			t.Errorf("expected GET, got %s", req.Method)
 		}
@@ -1252,28 +1259,18 @@ func TestVerifyBuildUploadAfterCommitIgnoresRetryDelayBeyondVerificationBudget(t
 			t.Errorf("unexpected path: %s", req.URL.Path)
 		}
 		lookupCalls++
-		w.Header().Set("Content-Type", "application/json")
-		w.Header().Set("Retry-After", "1")
-		w.WriteHeader(http.StatusTooManyRequests)
-		_, _ = io.WriteString(w, `{
+		resp, err := buildWaitJSONStatusResponse(http.StatusTooManyRequests, `{
 			"errors": [{"status": "429", "code": "RATE_LIMIT_EXCEEDED", "title": "Too many requests"}]
 		}`)
-	}))
-	t.Cleanup(server.Close)
-	serverURL, err := url.Parse(server.URL)
-	if err != nil {
-		t.Fatalf("parse test server URL: %v", err)
-	}
-	client := newBuildWaitTestClient(t, func(req *http.Request) (*http.Response, error) {
-		redirected := req.Clone(req.Context())
-		redirected.URL.Scheme = serverURL.Scheme
-		redirected.URL.Host = serverURL.Host
-		redirected.Host = serverURL.Host
-		return server.Client().Do(redirected)
+		resp.Header.Set("Retry-After", "1")
+		return resp, err
 	})
 
 	verifyTimeout := 30 * time.Millisecond
-	_, err = VerifyBuildUploadAfterCommit(context.Background(), client, "app-1", "upload-current", time.Millisecond, verifyTimeout)
+	var err error
+	synctest.Test(t, func(*testing.T) {
+		_, err = VerifyBuildUploadAfterCommit(context.Background(), client, "app-1", "upload-current", time.Millisecond, verifyTimeout)
+	})
 	if err != nil {
 		t.Fatalf("VerifyBuildUploadAfterCommit() error: %v", err)
 	}
@@ -1306,9 +1303,13 @@ func TestVerifyBuildUploadAfterCommitStopsAfterExhaustedBuildUploadNotFound(t *t
 	})
 
 	verifyTimeout := 150 * time.Millisecond
-	started := time.Now()
-	_, err := VerifyBuildUploadAfterCommit(context.Background(), client, "app-1", "upload-current", time.Millisecond, verifyTimeout)
-	elapsed := time.Since(started)
+	var err error
+	var elapsed time.Duration
+	synctest.Test(t, func(*testing.T) {
+		started := time.Now()
+		_, err = VerifyBuildUploadAfterCommit(context.Background(), client, "app-1", "upload-current", time.Millisecond, verifyTimeout)
+		elapsed = time.Since(started)
+	})
 	if err != nil {
 		t.Fatalf("VerifyBuildUploadAfterCommit() error: %v", err)
 	}
@@ -1448,5 +1449,36 @@ func TestBuildStatusPrivateKeyPathDecodesStoredBase64PEM(t *testing.T) {
 	}
 	if _, err := asc.NewClient("KEY123", "ISS456", resolvedPath); err != nil {
 		t.Fatalf("expected base64-decoded private key path to be usable, got %v", err)
+	}
+}
+
+func TestWaitForBuildByNumberOrUploadFailureResolvesPreReleaseVersionOnce(t *testing.T) {
+	preReleaseCalls := 0
+	buildCalls := 0
+	client := newBuildWaitTestClient(t, func(req *http.Request) (*http.Response, error) {
+		switch req.URL.Path {
+		case "/v1/preReleaseVersions":
+			preReleaseCalls++
+			return buildWaitJSONResponse(`{"data": [{"type": "preReleaseVersions", "id": "prv-1", "attributes": {"version": "1.2.3", "platform": "IOS"}}], "links": {}}`)
+		case "/v1/builds":
+			buildCalls++
+			if buildCalls < 3 {
+				return buildWaitJSONResponse(`{"data": [], "links": {}}`)
+			}
+			return buildWaitJSONResponse(`{"data": [{"type": "builds", "id": "build-123", "attributes": {"version": "42"}}], "links": {}}`)
+		default:
+			return nil, fmt.Errorf("unexpected path: %s", req.URL.Path)
+		}
+	})
+
+	buildResp, err := WaitForBuildByNumberOrUploadFailure(context.Background(), client, "app-1", "", "1.2.3", "42", "IOS", time.Millisecond)
+	if err != nil {
+		t.Fatalf("WaitForBuildByNumberOrUploadFailure() error: %v", err)
+	}
+	if buildResp == nil || buildResp.Data.ID != "build-123" {
+		t.Fatalf("expected build-123, got %+v", buildResp)
+	}
+	if preReleaseCalls != 1 {
+		t.Fatalf("expected 1 pre-release version lookup across %d polls, got %d", buildCalls, preReleaseCalls)
 	}
 }

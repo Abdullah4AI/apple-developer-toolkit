@@ -17,16 +17,6 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
-func TestCategoriesListSupportsPaginationFlags(t *testing.T) {
-	cmd := findCommandByPath(t, "categories", "list")
-
-	for _, name := range []string{"next", "paginate"} {
-		if cmd.FlagSet.Lookup(name) == nil {
-			t.Fatalf("expected --%s flag on categories list", name)
-		}
-	}
-}
-
 func TestCategoriesListHelpDocumentsCursorResumeExamples(t *testing.T) {
 	cmd := findCommandByPath(t, "categories", "list")
 	for _, example := range []string{

@@ -15,34 +15,6 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
-func TestBetaGroupsListQuerySurfaceHelpDocumentsFlags(t *testing.T) {
-	cmd := findSubcommand(RootCommand("1.2.3"), "testflight", "groups", "list")
-	if cmd == nil {
-		t.Fatal("command [testflight groups list] not found")
-	}
-
-	for _, name := range []string{
-		"id",
-		"public-link-enabled",
-		"public-link-limit-enabled",
-		"public-link",
-		"fields",
-		"app-fields",
-		"build-fields",
-		"tester-fields",
-		"recruitment-criteria-fields",
-		"include",
-		"testers-limit",
-		"builds-limit",
-	} {
-		flagValue := cmd.FlagSet.Lookup(name)
-		if flagValue == nil {
-			t.Errorf("list command is missing --%s", name)
-			continue
-		}
-	}
-}
-
 func TestBetaGroupsListQuerySurfacePropagatesOpenAPIFiltersAndIncludes(t *testing.T) {
 	setupAuth(t)
 	t.Setenv("ASC_APP_ID", "")

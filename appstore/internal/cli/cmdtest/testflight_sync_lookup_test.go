@@ -2,11 +2,13 @@ package cmdtest
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 )
 
@@ -22,23 +24,34 @@ func TestTestFlightConfigExportResolvesAppByBundleID(t *testing.T) {
 		http.DefaultTransport = originalTransport
 	})
 
-	callCount := 0
+	var callCount atomic.Int32
+	// GetApp runs on its own goroutine, so failures must not use t.Fatalf here.
+	fail := func(format string, args ...any) error {
+		t.Errorf(format, args...)
+		return fmt.Errorf(format, args...)
+	}
 	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		callCount++
-		switch callCount {
+		// The app and beta group reads run concurrently, so match them by path.
+		count := callCount.Add(1)
+		if (count == 2 || count == 3) && req.URL.Path == "/v1/apps/app-sync/betaGroups" {
+			count = 3
+		} else if count == 3 {
+			count = 2
+		}
+		switch count {
 		case 1:
 			if req.Method != http.MethodGet {
-				t.Fatalf("expected GET, got %s", req.Method)
+				return nil, fail("expected GET, got %s", req.Method)
 			}
 			if req.URL.Path != "/v1/apps" {
-				t.Fatalf("expected path /v1/apps, got %s", req.URL.Path)
+				return nil, fail("expected path /v1/apps, got %s", req.URL.Path)
 			}
 			query := req.URL.Query()
 			if query.Get("filter[bundleId]") != "com.example.sync" {
-				t.Fatalf("expected bundle filter com.example.sync, got %q", query.Get("filter[bundleId]"))
+				return nil, fail("expected bundle filter com.example.sync, got %q", query.Get("filter[bundleId]"))
 			}
 			if query.Get("limit") != "2" {
-				t.Fatalf("expected limit=2, got %q", query.Get("limit"))
+				return nil, fail("expected limit=2, got %q", query.Get("limit"))
 			}
 			body := `{"data":[{"type":"apps","id":"app-sync"}]}`
 			return &http.Response{
@@ -48,10 +61,10 @@ func TestTestFlightConfigExportResolvesAppByBundleID(t *testing.T) {
 			}, nil
 		case 2:
 			if req.Method != http.MethodGet {
-				t.Fatalf("expected GET, got %s", req.Method)
+				return nil, fail("expected GET, got %s", req.Method)
 			}
 			if req.URL.Path != "/v1/apps/app-sync" {
-				t.Fatalf("expected path /v1/apps/app-sync, got %s", req.URL.Path)
+				return nil, fail("expected path /v1/apps/app-sync, got %s", req.URL.Path)
 			}
 			body := `{"data":{"type":"apps","id":"app-sync","attributes":{"name":"Sync Demo","bundleId":"com.example.sync"}}}`
 			return &http.Response{
@@ -61,13 +74,13 @@ func TestTestFlightConfigExportResolvesAppByBundleID(t *testing.T) {
 			}, nil
 		case 3:
 			if req.Method != http.MethodGet {
-				t.Fatalf("expected GET, got %s", req.Method)
+				return nil, fail("expected GET, got %s", req.Method)
 			}
 			if req.URL.Path != "/v1/apps/app-sync/betaGroups" {
-				t.Fatalf("expected path /v1/apps/app-sync/betaGroups, got %s", req.URL.Path)
+				return nil, fail("expected path /v1/apps/app-sync/betaGroups, got %s", req.URL.Path)
 			}
 			if req.URL.Query().Get("limit") != "200" {
-				t.Fatalf("expected limit=200, got %q", req.URL.Query().Get("limit"))
+				return nil, fail("expected limit=200, got %q", req.URL.Query().Get("limit"))
 			}
 			body := `{"data":[],"links":{"next":""}}`
 			return &http.Response{
@@ -76,8 +89,7 @@ func TestTestFlightConfigExportResolvesAppByBundleID(t *testing.T) {
 				Header:     http.Header{"Content-Type": []string{"application/json"}},
 			}, nil
 		default:
-			t.Fatalf("unexpected request count %d", callCount)
-			return nil, nil
+			return nil, fail("unexpected request count %d", count)
 		}
 	})
 

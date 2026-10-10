@@ -586,7 +586,20 @@ func applyDarwinTLSRootFallback(transport *http.Transport) {
 	transport.TLSClientConfig = clonedTLS
 }
 
+var requestPacingDisabledForTesting bool
+
+// DisableRequestPacingForTesting turns off web request pacing for mock-server
+// tests. The returned function restores the previous behavior.
+func DisableRequestPacingForTesting() func() {
+	previous := requestPacingDisabledForTesting
+	requestPacingDisabledForTesting = true
+	return func() { requestPacingDisabledForTesting = previous }
+}
+
 func resolveWebMinRequestInterval() time.Duration {
+	if requestPacingDisabledForTesting {
+		return 0
+	}
 	raw := strings.TrimSpace(os.Getenv(webMinRequestIntervalEnv))
 	if raw == "" {
 		return defaultWebMinRequestInterval

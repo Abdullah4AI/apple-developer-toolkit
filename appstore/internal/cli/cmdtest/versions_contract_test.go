@@ -212,19 +212,6 @@ func TestVersionsViewSelectorValidationBeforeClient(t *testing.T) {
 	}
 }
 
-func TestVersionsViewSelectorFlagsAreRegistered(t *testing.T) {
-	cmd := findSubcommand(RootCommand("test"), "versions", "view")
-	if cmd == nil {
-		t.Fatal("versions view command not found")
-	}
-	for _, name := range []string{"app", "version", "platform"} {
-		flag := cmd.FlagSet.Lookup(name)
-		if flag == nil {
-			t.Fatalf("--%s flag not found", name)
-		}
-	}
-}
-
 func TestVersionsViewIncludeValidationBeforeClient(t *testing.T) {
 	tests := []struct {
 		name       string

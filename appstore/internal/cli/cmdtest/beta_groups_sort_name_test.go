@@ -7,19 +7,6 @@ import (
 	"testing"
 )
 
-func TestBetaGroupsListNameAndSortFlagsAreRegistered(t *testing.T) {
-	cmd := findSubcommand(RootCommand("1.2.3"), "testflight", "groups", "list")
-	if cmd == nil {
-		t.Fatal("command [testflight groups list] not found")
-	}
-	for _, name := range []string{"name", "sort"} {
-		flag := cmd.FlagSet.Lookup(name)
-		if flag == nil {
-			t.Fatalf("--%s flag not found", name)
-		}
-	}
-}
-
 // TestBetaGroupsListSortPropagates proves --sort reaches the API.
 func TestBetaGroupsListSortPropagates(t *testing.T) {
 	setupAuth(t)

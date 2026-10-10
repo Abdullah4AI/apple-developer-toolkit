@@ -35,13 +35,6 @@ func TestVersionsCommand_PrefersViewAndRemovesLegacyGet(t *testing.T) {
 	}
 }
 
-func TestVersionsListIncludeFlagIsRegistered(t *testing.T) {
-	includeFlag := VersionsListCommand().FlagSet.Lookup("include")
-	if includeFlag == nil {
-		t.Fatal("include flag is not registered")
-	}
-}
-
 func TestFetchOptionalBuild_NotFound(t *testing.T) {
 	resp, err := fetchOptionalBuild(context.Background(), "VERSION_ID", func(ctx context.Context, versionID string) (*asc.BuildResponse, error) {
 		return nil, &asc.APIError{Code: "NOT_FOUND", Title: "Not Found"}

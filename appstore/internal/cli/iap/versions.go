@@ -255,7 +255,11 @@ Examples:
 			); err != nil {
 				return err
 			}
-			opts, err := iapVersionQueryOptions(*state, *include, *limit, *imagesLimit, *localizationsLimit, *next, fieldFlags)
+			firstPageLimit := *limit
+			if *paginate && firstPageLimit == 0 && strings.TrimSpace(*next) == "" {
+				firstPageLimit = 200
+			}
+			opts, err := iapVersionQueryOptions(*state, *include, firstPageLimit, *imagesLimit, *localizationsLimit, *next, fieldFlags)
 			if err != nil {
 				return shared.UsageError("iap versions list: " + err.Error())
 			}
@@ -509,7 +513,11 @@ func iapVersionLinkagesCommand(name string, parentIAP bool) *ffcli.Command {
 				}
 				return client.GetInAppPurchaseVersionLocalizationsRelationships(pageCtx, value, opts...)
 			}
-			resp, err := fetchPage(requestCtx, asc.WithLinkagesLimit(*limit), asc.WithLinkagesNextURL(*next))
+			firstPageLimit := *limit
+			if *paginate && firstPageLimit == 0 {
+				firstPageLimit = 200
+			}
+			resp, err := fetchPage(requestCtx, asc.WithLinkagesLimit(firstPageLimit), asc.WithLinkagesNextURL(*next))
 			if err != nil {
 				return fmt.Errorf("iap versions links %s: failed to fetch: %w", name, err)
 			}

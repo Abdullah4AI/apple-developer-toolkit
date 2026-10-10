@@ -419,7 +419,12 @@ func BuildsCommand() *ffcli.Command {
 		Name:       "builds",
 		ShortUsage: "asc builds <subcommand> [flags]",
 		ShortHelp:  "Manage builds in App Store Connect.",
-		LongHelp: `Manage builds in App Store Connect.
+		LongHelp: `Manage builds in App Store Connect and compile or package iOS apps locally.
+
+compile and package run locally with installed xtool and rcodesign on Linux
+or macOS. They make no App Store Connect requests, do not provision Apple
+resources, and do not upload the resulting artifacts. xtool may rebuild an
+outdated installed SDK; use a compatible xtool/SDK pair.
 
 Examples:
   asc builds list --app "123456789"
@@ -451,7 +456,9 @@ Examples:
   asc builds links view --app "123456789" --latest --type "app"
   asc builds metrics beta-usages --app "123456789" --latest
   asc builds dsyms --build-id "BUILD_ID" --output-dir "./dsyms"
-  asc builds dsyms --app "123456789" --version live --wait`,
+  asc builds dsyms --app "123456789" --version live --wait
+  asc builds compile --package-path ./AppPackage --product App --app-path ./artifacts/App.app --platform device
+  asc builds package --app-path ./artifacts/App.app --ipa-path ./artifacts/App.ipa --ad-hoc`,
 		FlagSet:   fs,
 		UsageFunc: shared.VisibleUsageFunc,
 		Subcommands: []*ffcli.Command{
@@ -479,6 +486,8 @@ Examples:
 			BuildsRelationshipsCommand(),
 			BuildsMetricsCommand(),
 			BuildsDsymsCommand(),
+			BuildsCompileCommand(),
+			BuildsPackageCommand(),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp

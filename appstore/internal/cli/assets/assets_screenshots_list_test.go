@@ -29,6 +29,8 @@ func TestExecuteScreenshotListCommandResolvesVersionLocalizationByVersionIDAndLo
 			writeAssetsTestJSON(w, http.StatusOK, `{"data":[{"type":"appScreenshotSets","id":"set-1","attributes":{"screenshotDisplayType":"APP_IPHONE_65"}}],"links":{}}`)
 		case "/v1/appScreenshotSets/set-1/appScreenshots":
 			writeAssetsTestJSON(w, http.StatusOK, `{"data":[{"type":"appScreenshots","id":"shot-1","attributes":{"fileName":"home.png","fileSize":42}}],"links":{}}`)
+		case "/v1/appScreenshotSets/set-1/relationships/appScreenshots":
+			writeAssetsTestJSON(w, http.StatusOK, `{"data":[{"type":"appScreenshots","id":"shot-1"}],"links":{}}`)
 		default:
 			t.Errorf("unexpected request: %s %s", req.Method, req.URL.String())
 			http.Error(w, "unexpected request", http.StatusNotFound)
@@ -73,6 +75,10 @@ func TestExecuteScreenshotListCommandIncludesPaginatedScreenshotSetsAndScreensho
 			writeAssetsTestJSON(w, http.StatusOK, `{"data":[{"type":"appScreenshots","id":"shot-1","attributes":{"fileName":"01-home.png"}}],"links":{"next":"`+screenshotsNext+`"}}`)
 		case "/v1/appScreenshotSets/set-2/appScreenshots":
 			writeAssetsTestJSON(w, http.StatusOK, `{"data":[{"type":"appScreenshots","id":"shot-3","attributes":{"fileName":"03-ipad.png"}}],"links":{}}`)
+		case "/v1/appScreenshotSets/set-1/relationships/appScreenshots":
+			writeAssetsTestJSON(w, http.StatusOK, `{"data":[{"type":"appScreenshots","id":"shot-1"},{"type":"appScreenshots","id":"shot-2"}],"links":{}}`)
+		case "/v1/appScreenshotSets/set-2/relationships/appScreenshots":
+			writeAssetsTestJSON(w, http.StatusOK, `{"data":[{"type":"appScreenshots","id":"shot-3"}],"links":{}}`)
 		default:
 			t.Errorf("unexpected request: %s %s", req.Method, req.URL.String())
 			http.Error(w, "unexpected request", http.StatusNotFound)
@@ -298,6 +304,8 @@ func TestExecuteScreenshotListCommandWithoutLocaleListsEveryLocalization(t *test
 			writeAssetsTestJSON(w, http.StatusOK, `{"data":[{"type":"appScreenshotSets","id":"set-en","attributes":{"screenshotDisplayType":"APP_IPHONE_65"}}],"links":{}}`)
 		case "/v1/appScreenshotSets/set-en/appScreenshots":
 			writeAssetsTestJSON(w, http.StatusOK, `{"data":[{"type":"appScreenshots","id":"shot-en","attributes":{"fileName":"home.png","fileSize":42}}],"links":{}}`)
+		case "/v1/appScreenshotSets/set-en/relationships/appScreenshots":
+			writeAssetsTestJSON(w, http.StatusOK, `{"data":[{"type":"appScreenshots","id":"shot-en"}],"links":{}}`)
 		case "/v1/appStoreVersionLocalizations/loc-de/appScreenshotSets":
 			writeAssetsTestJSON(w, http.StatusOK, `{"data":[],"links":{}}`)
 		default:

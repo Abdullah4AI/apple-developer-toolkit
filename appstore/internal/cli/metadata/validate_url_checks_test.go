@@ -49,13 +49,6 @@ func (f *fakeMetadataURLChecker) totalCalls() int {
 	return total
 }
 
-func TestMetadataValidateCommandAcceptsCheckURLsFlag(t *testing.T) {
-	command := MetadataValidateCommand()
-	if err := command.Parse([]string{"--dir", t.TempDir(), "--check-urls"}); err != nil {
-		t.Fatalf("Parse() error: %v", err)
-	}
-}
-
 func TestValidateDirCheckURLsWarnsForRedirectedHostAndSiteRoot(t *testing.T) {
 	dir := writeMetadataURLFixtures(t, map[string]string{
 		filepath.Join(appInfoDirName, "en-US.json"):          `{"name":"Example App","privacyPolicyUrl":"https://app.example.com/privacy"}`,

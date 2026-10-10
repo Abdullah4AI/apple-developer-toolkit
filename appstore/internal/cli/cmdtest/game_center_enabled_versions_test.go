@@ -98,25 +98,6 @@ func TestGameCenterEnabledVersionsListLimitValidation(t *testing.T) {
 	}
 }
 
-func TestGameCenterEnabledVersionsCompatibleVersionsLimitValidation(t *testing.T) {
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	stdout, _ := captureOutput(t, func() {
-		if err := root.Parse([]string{"game-center", "enabled-versions", "compatible-versions", "--id", "ENABLED_VERSION_ID", "--limit", "300"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		err := root.Run(context.Background())
-		if err == nil {
-			t.Fatalf("expected error, got nil")
-		}
-	})
-
-	if stdout != "" {
-		t.Fatalf("expected empty stdout, got %q", stdout)
-	}
-}
-
 func TestGameCenterEnabledVersionsOutputErrors(t *testing.T) {
 	tests := []struct {
 		name    string

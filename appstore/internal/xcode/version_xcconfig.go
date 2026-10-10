@@ -647,7 +647,12 @@ func collectXCConfigFilesWithHooksAndIdentityAndOptionalMissingLimitWithBudget(
 		key  string
 		info os.FileInfo
 	}
-	var collected []collectedIdentity
+	// Buckets only narrow candidates: identity and filesystem case checks
+	// below still determine whether two spellings can be coalesced.
+	var collectedByFoldedPath map[string][]collectedIdentity
+	if identify != nil {
+		collectedByFoldedPath = make(map[string][]collectedIdentity)
+	}
 	var paths []string
 	var pathEvents []string
 	var optionalMissing []string
@@ -706,8 +711,12 @@ func collectXCConfigFilesWithHooksAndIdentityAndOptionalMissingLimitWithBudget(
 		// Coalesce only spellings that differ by case: general hard links may
 		// live in different directories, where their relative includes resolve
 		// against different bases and must still be traversed independently.
+		var foldedPathKey string
+		if identify != nil {
+			foldedPathKey = signingPathCaseFoldKey(pathKey)
+		}
 		if identity != nil {
-			for _, entry := range collected {
+			for _, entry := range collectedByFoldedPath[foldedPathKey] {
 				if signingPathCaseEquivalentNormalized(entry.key, pathKey) && entry.info != nil && os.SameFile(identity, entry.info) {
 					return nil, false
 				}
@@ -722,7 +731,7 @@ func collectXCConfigFilesWithHooksAndIdentityAndOptionalMissingLimitWithBudget(
 			if identify == nil {
 				return nil, false
 			}
-			for _, entry := range collected {
+			for _, entry := range collectedByFoldedPath[foldedPathKey] {
 				if entry.key == pathKey && entry.info != nil && os.SameFile(identity, entry.info) {
 					return nil, false
 				}
@@ -783,7 +792,7 @@ func collectXCConfigFilesWithHooksAndIdentityAndOptionalMissingLimitWithBudget(
 		seen[pathKey] = true
 		paths = append(paths, path)
 		if identity != nil {
-			collected = append(collected, collectedIdentity{key: pathKey, info: identity})
+			collectedByFoldedPath[foldedPathKey] = append(collectedByFoldedPath[foldedPathKey], collectedIdentity{key: pathKey, info: identity})
 		}
 		if budget != nil {
 			budget.add(path, identity)

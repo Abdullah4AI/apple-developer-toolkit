@@ -171,7 +171,7 @@ func exportPathScope(path, prefix string) (string, error) {
 		}
 		name := parts[3]
 		ext := strings.ToLower(filepath.Ext(name))
-		if name == "order.json" || strings.HasSuffix(name, ".poster_frame.txt") || ext == ".mp4" || ext == ".mov" || ext == ".m4v" {
+		if name == "order.json" || strings.HasSuffix(name, ".poster_frame.txt") || strings.HasSuffix(name, ".preview.json") || ext == ".m3u8" || ext == ".mp4" || ext == ".mov" || ext == ".m4v" {
 			return "previews", nil
 		}
 	}

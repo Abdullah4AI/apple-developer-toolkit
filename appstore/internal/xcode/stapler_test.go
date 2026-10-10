@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -1083,8 +1084,10 @@ func TestStaplePreservesChildExitWhenContextCancelsAfterStartBeforeWait(t *testi
 		}
 		// CommandContext normally kills the process as soon as cancellation is
 		// observed. Keep this child alive long enough to return its concrete
-		// status so the post-Start/pre-Wait race is deterministic.
+		// status so the post-Start/pre-Wait race is deterministic. WaitDelay
+		// would otherwise SIGKILL a helper still starting 250ms after cancel.
 		cmd.Cancel = func() error { return nil }
+		cmd.WaitDelay = 0
 		cancel()
 	}
 	t.Cleanup(func() { afterStaplerCommandStartFn = previousStartHook })
@@ -1146,12 +1149,11 @@ func TestValidatePreservesChildExitWhenContextCancelSucceedsBeforeWait(t *testin
 			cmd.Args[len(cmd.Args)-1] != target {
 			return
 		}
+		// WaitDelay would otherwise SIGKILL a helper still starting 250ms after
+		// cancel and replace its exit status with a signal.
+		cmd.WaitDelay = 0
 		cancel()
-		select {
-		case <-cancelCalled:
-		case <-time.After(2 * time.Second):
-			t.Fatal("context cancellation callback was not invoked")
-		}
+		<-cancelCalled
 	}
 	t.Cleanup(func() { afterStaplerCommandStartFn = previousStartHook })
 
@@ -1362,24 +1364,50 @@ func TestStaplerPreservesResolutionExitStatusWhenCancellationCleanupWinsRace(t *
 	defer cancel()
 	previousCommandContext := commandContextFn
 	commandContextFn = func(commandCtx context.Context, _ string, _ ...string) *exec.Cmd {
-		return exec.CommandContext(commandCtx, "/bin/sh", "-c", "sleep 0.1; exit 64")
+		return exec.CommandContext(commandCtx, "/bin/sh", "-c", "printf started; read _; exit 64")
 	}
 	t.Cleanup(func() { commandContextFn = previousCommandContext })
+	stdinReader, stdinWriter, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("create resolver stdin: %v", err)
+	}
+	stdoutReader, stdoutWriter, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("create resolver stdout: %v", err)
+	}
+	t.Cleanup(func() {
+		for _, file := range []*os.File{stdinReader, stdinWriter, stdoutReader, stdoutWriter} {
+			_ = file.Close()
+		}
+	})
 	previousHook := beforeStaplerResolutionRunFn
 	beforeStaplerResolutionRunFn = func(cmd *exec.Cmd) {
 		// Simulate CommandContext's cancellation callback reporting success for
 		// a process that has already exited, while Wait still returns its status.
-		cmd.Cancel = func() error { return nil }
+		// The child blocks on stdin until Cancel runs, and Cancel returns only
+		// after stdout reaches EOF, so the child has exited before WaitDelay
+		// starts and cancellation always lands before Wait returns.
+		cmd.Stdin = stdinReader
+		cmd.Stdout = stdoutWriter
+		cmd.Cancel = func() error {
+			_ = stdinWriter.Close()
+			_ = stdoutWriter.Close()
+			_, _ = io.Copy(io.Discard, stdoutReader)
+			return nil
+		}
 		go func() {
-			time.Sleep(20 * time.Millisecond)
+			_, _ = stdoutReader.Read(make([]byte, 1))
 			cancel()
 		}()
 	}
 	t.Cleanup(func() { beforeStaplerResolutionRunFn = previousHook })
 
-	_, err := Staple(ctx, "/tmp/MyApp.dmg", nil)
+	_, err = Staple(ctx, "/tmp/MyApp.dmg", nil)
 	if err == nil {
 		t.Fatal("Staple() error = nil, want resolver failure")
+	}
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("Staple() error = %v, want late cancellation alongside the resolver status", err)
 	}
 	if IsStaplerOperationAttemptedCancellation(err) {
 		t.Fatalf("Staple() error = %v, concrete resolver status must not be cancellation-marked", err)
@@ -2304,4 +2332,45 @@ func TestStapleKeepsValidationDiagnosticCopyFailureOutOfPartialMutation(t *testi
 		"xcrun|stapler|staple|" + target,
 		"xcrun|stapler|validate|" + target,
 	})
+}
+
+func TestStaplerDoesNotWaitForDescendantHoldingOutputPipes(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("requires /bin/sh job control")
+	}
+	pidPath := filepath.Join(t.TempDir(), "descendant.pid")
+	previousToolPath := trustedXcodeToolPathFn
+	trustedXcodeToolPathFn = func(context.Context, string, []string) (string, error) { return "/usr/bin/xcrun", nil }
+	t.Cleanup(func() { trustedXcodeToolPathFn = previousToolPath })
+	previousCommandContext := commandContextFn
+	commandContextFn = func(ctx context.Context, _ string, _ ...string) *exec.Cmd {
+		return exec.CommandContext(ctx, "/bin/sh", "-c", `sleep 3600 & echo $! > "$1"; exit 7`, "sh", pidPath)
+	}
+	t.Cleanup(func() { commandContextFn = previousCommandContext })
+	t.Cleanup(func() {
+		data, err := os.ReadFile(pidPath)
+		if err != nil {
+			return
+		}
+		if pid, err := strconv.Atoi(strings.TrimSpace(string(data))); err == nil {
+			if process, err := os.FindProcess(pid); err == nil {
+				_ = process.Kill()
+			}
+		}
+	})
+
+	done := make(chan error, 1)
+	go func() {
+		done <- runStaplerOperation(context.Background(), StaplerOperationStaple, "/tmp/MyApp.dmg", nil)
+	}()
+	var err error
+	select {
+	case err = <-done:
+	case <-time.After(10 * time.Second):
+		t.Fatal("stapler kept waiting for a descendant holding its output pipes after the child exited")
+	}
+	var exitErr *exec.ExitError
+	if !errors.As(err, &exitErr) || exitErr.ExitCode() != 7 {
+		t.Fatalf("runStaplerOperation() error = %T %v, want child exit 7", err, err)
+	}
 }

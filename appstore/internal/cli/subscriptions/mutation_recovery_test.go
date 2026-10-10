@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
@@ -164,17 +165,21 @@ func TestApplyEqualizedPricesDoesNotSleepOnUnhonoredRetryAfter(t *testing.T) {
 		t.Fatalf("NewClientFromPEM() error: %v", err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-	defer cancel()
-	succeeded, failures := applyEqualizedPrices(
-		ctx,
-		client,
-		"sub-1",
-		[]equalization{{Territory: "CAN", Price: "1.29", PricePointID: "price-point-can"}},
-		1,
-		asc.SubscriptionPriceCreateAttributes{},
-		time.Now().UTC(),
-	)
+	var succeeded int
+	var failures []equalizeAttemptFailure
+	synctest.Test(t, func(*testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+		defer cancel()
+		succeeded, failures = applyEqualizedPrices(
+			ctx,
+			client,
+			"sub-1",
+			[]equalization{{Territory: "CAN", Price: "1.29", PricePointID: "price-point-can"}},
+			1,
+			asc.SubscriptionPriceCreateAttributes{},
+			time.Now().UTC(),
+		)
+	})
 	if succeeded != 0 || len(failures) != 1 {
 		t.Fatalf("unexpected equalize result: succeeded=%d failures=%d", succeeded, len(failures))
 	}

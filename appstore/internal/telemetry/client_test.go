@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"testing"
+	"testing/synctest"
 	"time"
 )
 
@@ -190,6 +191,10 @@ func readDefaultSpool(t *testing.T) []spoolRecord {
 }
 
 func TestSendHTTPEventHonorsASCTimeout(t *testing.T) {
+	synctest.Test(t, testSendHTTPEventHonorsASCTimeout)
+}
+
+func testSendHTTPEventHonorsASCTimeout(t *testing.T) {
 	originalClient := http.DefaultClient
 	http.DefaultClient = &http.Client{
 		Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
@@ -220,6 +225,10 @@ func TestSendHTTPEventHonorsASCTimeout(t *testing.T) {
 }
 
 func TestSendHTTPEventHonorsConfiguredTimeoutBelowCap(t *testing.T) {
+	synctest.Test(t, testSendHTTPEventHonorsConfiguredTimeoutBelowCap)
+}
+
+func testSendHTTPEventHonorsConfiguredTimeoutBelowCap(t *testing.T) {
 	originalClient := http.DefaultClient
 	http.DefaultClient = &http.Client{
 		Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {

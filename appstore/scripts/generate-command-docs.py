@@ -230,6 +230,16 @@ def render(usage: str, flags: list[tuple[str, str]], groups: list[tuple[str, lis
     return "\n".join(lines)
 
 
+def check_generated(generated: str) -> int:
+    current = OUTPUT_PATH.read_text() if OUTPUT_PATH.exists() else ""
+    if current != generated:
+        print("docs/COMMANDS.md is out of date.")
+        print("Run: make generate-command-docs")
+        return 1
+    print("docs/COMMANDS.md is up to date.")
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Generate docs/COMMANDS.md from live CLI help")
     parser.add_argument(
@@ -243,13 +253,7 @@ def main() -> int:
     generated = render(usage, flags, groups)
 
     if args.check:
-        current = OUTPUT_PATH.read_text() if OUTPUT_PATH.exists() else ""
-        if current != generated:
-            print("docs/COMMANDS.md is out of date.")
-            print("Run: make generate-command-docs")
-            return 1
-        print("docs/COMMANDS.md is up to date.")
-        return 0
+        return check_generated(generated)
 
     OUTPUT_PATH.write_text(generated)
     print(f"Generated {OUTPUT_PATH.relative_to(REPO_ROOT)}")

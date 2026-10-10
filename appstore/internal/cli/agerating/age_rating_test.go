@@ -42,16 +42,6 @@ func TestAgeRatingCommandShape(t *testing.T) {
 	}
 }
 
-func TestAgeRatingAuditFlagsAreRegistered(t *testing.T) {
-	cmd := AgeRatingAuditCommand()
-	for _, name := range []string{"app", "paginate"} {
-		flag := cmd.FlagSet.Lookup(name)
-		if flag == nil {
-			t.Fatalf("expected --%s flag", name)
-		}
-	}
-}
-
 func TestAgeRatingValidationErrors(t *testing.T) {
 	t.Setenv("ASC_APP_ID", "")
 

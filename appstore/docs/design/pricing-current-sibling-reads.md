@@ -1,0 +1,9 @@
+# Concurrent current app pricing reads
+
+`asc pricing current --all-territories` and requests for non-base territories read independent manual and automatic schedule page chains serially. Once the schedule and base territory are known, the two chains can overlap with a maximum of two active requests. Base-only requests still fetch only manual prices.
+
+The change is confined to `pricing current`. Manual errors retain precedence even if automatic fails first. A manual failure cancels and joins the automatic chain before returning; caller cancellation reaches both chains. Each chain retains existing pagination, include/field query merging and fresh page timeouts. Result slices and maps remain separate until both succeed, then merge manual followed by automatic. Missing-schedule receipts and public flags/help are unchanged. Resolved schedule commands and readiness checks retain their existing implementations and request budgets.
+
+Validation uses an HTTP-transport barrier regression, blocked-peer cancellation, manual-first error precedence, caller cancellation and base-only request coverage, plus existing `TestPricingCurrent*` CLI tests for output, pagination, fields and expected-negative behavior. The baseline barrier failed with one request before implementation.
+
+The synthetic benchmark uses three pages per chain, six requests per operation and 10 ms delay per request. Matched before/after runs use `-count=3 -benchtime=3x`: three benchmark samples, each containing three timed iterations. Median elapsed time in this controlled fixture changed from 70.6 ms/op to 35.0 ms/op; both report six requests per operation. Raw logs and the serial baseline source are retained under ignored `build/performance/pricing-current/`. This fixture measures local request overlap; Apple latency is unverified.

@@ -2,26 +2,15 @@ package productpages
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
 func screenshotSetListResult(ctx context.Context, client *asc.Client, localizationID string, response *asc.AppScreenshotSetsResponse) (*asc.AppScreenshotSetListResult, error) {
-	result := &asc.AppScreenshotSetListResult{
-		LocalizationID: localizationID,
-		Sets:           make([]asc.AppScreenshotSetWithScreenshots, 0, len(response.Data)),
+	sets, err := client.AppScreenshotSetsWithScreenshots(ctx, response, shared.ContextWithTimeout)
+	if err != nil {
+		return nil, err
 	}
-	for _, set := range response.Data {
-		screenshots, err := client.GetAllAppScreenshots(ctx, set.ID, asc.WithAppScreenshotsRequestContext(shared.ContextWithTimeout))
-		if err != nil {
-			return nil, fmt.Errorf("failed to fetch screenshots for set %s: %w", set.ID, err)
-		}
-		result.Sets = append(result.Sets, asc.AppScreenshotSetWithScreenshots{
-			Set:         set,
-			Screenshots: screenshots.Data,
-		})
-	}
-	return result, nil
+	return &asc.AppScreenshotSetListResult{LocalizationID: localizationID, Sets: sets}, nil
 }

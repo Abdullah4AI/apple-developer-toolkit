@@ -29,14 +29,6 @@ func TestGameCenterAppVersionsListPaginateFromNextWithoutApp(t *testing.T) {
 	)
 }
 
-func TestGameCenterAppVersionCompatibilityListRejectsInvalidNextURL(t *testing.T) {
-	runGameCenterAchievementsInvalidNextURLCases(
-		t,
-		[]string{"game-center", "app-versions", "compatibility", "list"},
-		"game-center app-versions compatibility list: --next",
-	)
-}
-
 func TestGameCenterAppVersionCompatibilityListPaginateFromNextWithoutID(t *testing.T) {
 	const firstURL = "https://api.appstoreconnect.apple.com/v1/gameCenterAppVersions/gcav-1/compatibilityVersions?cursor=AQ&limit=200"
 	const secondURL = "https://api.appstoreconnect.apple.com/v1/gameCenterAppVersions/gcav-1/compatibilityVersions?cursor=BQ&limit=200"

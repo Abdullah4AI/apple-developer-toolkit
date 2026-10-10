@@ -3,8 +3,10 @@ package shared
 import (
 	"archive/zip"
 	"bytes"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -366,7 +368,8 @@ func writeTestIPA(t *testing.T, files map[string][]byte) string {
 	defer file.Close()
 
 	zipWriter := zip.NewWriter(file)
-	for name, data := range files {
+	for _, name := range slices.Sorted(maps.Keys(files)) {
+		data := files[name]
 		entry, err := zipWriter.Create(name)
 		if err != nil {
 			t.Fatalf("create zip entry %q: %v", name, err)

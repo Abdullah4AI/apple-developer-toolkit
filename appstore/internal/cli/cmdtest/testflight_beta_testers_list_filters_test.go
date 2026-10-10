@@ -364,20 +364,6 @@ func TestTestFlightBetaTestersListPaginateMergesIncludedBetaGroups(t *testing.T)
 	}
 }
 
-func TestTestFlightBetaTestersListQueryFlagsAreRegistered(t *testing.T) {
-	list := findSubcommand(RootCommand("1.2.3"), "testflight", "testers", "list")
-	if list == nil {
-		t.Fatal("testflight testers list command not found")
-	}
-
-	for _, name := range []string{"invite-type", "sort", "include"} {
-		flag := list.FlagSet.Lookup(name)
-		if flag == nil {
-			t.Fatalf("--%s flag not found", name)
-		}
-	}
-}
-
 func TestTestFlightBetaTestersListHelpExplainsIncludedRelationshipBounds(t *testing.T) {
 	list := findSubcommand(RootCommand("1.2.3"), "testflight", "testers", "list")
 	if list == nil {

@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/peterbourgon/ff/v3/ffcli"
@@ -170,10 +171,10 @@ Examples:
 				return fmt.Errorf("analytics compare: %w", err)
 			}
 
-			baselineMetrics, baselineCount, baselineErr := fetchAndAggregate(requestCtx, client, resolvedVendor, scope, baselineDates, salesType, subType, freq)
-			compMetrics, compCount, compErr := fetchAndAggregate(requestCtx, client, resolvedVendor, scope, compDates, salesType, subType, freq)
-			if baselineErr != nil || compErr != nil {
-				return fmt.Errorf("analytics compare: %s", joinCompareErrors(baselineErr, compErr))
+			periods := fetchAndAggregate(requestCtx, client, resolvedVendor, scope, [][]string{baselineDates, compDates}, salesType, subType, freq)
+			baseline, comparison := periods[0], periods[1]
+			if baseline.err != nil || comparison.err != nil {
+				return fmt.Errorf("analytics compare: %s", joinCompareErrors(baseline.err, comparison.err))
 			}
 
 			resp := &compareResponse{
@@ -186,9 +187,9 @@ Examples:
 					ReportSubType: string(subType),
 					Frequency:     string(freq),
 				},
-				Baseline:    comparePeriod{Start: baselineStart, End: baselineEnd, ReportsFound: baselineCount},
-				Comparison:  comparePeriod{Start: compStart, End: compEnd, ReportsFound: compCount},
-				Metrics:     buildCompareMetrics(baselineMetrics, compMetrics),
+				Baseline:    comparePeriod{Start: baselineStart, End: baselineEnd, ReportsFound: baseline.found},
+				Comparison:  comparePeriod{Start: compStart, End: compEnd, ReportsFound: comparison.found},
+				Metrics:     buildCompareMetrics(baseline.metrics, comparison.metrics),
 				GeneratedAt: time.Now().UTC().Format(time.RFC3339),
 			}
 
@@ -233,39 +234,120 @@ func normalizeAnalyticsCompareReportSubType(value string) (asc.SalesReportSubTyp
 	}
 }
 
-func fetchAndAggregate(ctx context.Context, client *asc.Client, vendor string, scope insights.SalesScope, dates []string, salesType asc.SalesReportType, subType asc.SalesReportSubType, freq asc.SalesReportFrequency) (insights.SalesMetrics, int, error) {
+const salesReportFetchConcurrency = 4
+
+type salesReportFetchResult struct {
+	metrics insights.SalesMetrics
+	err     error
+}
+
+type salesPeriodResult struct {
+	metrics insights.SalesMetrics
+	found   int
+	err     error
+}
+
+// fetchAndAggregate downloads every period's reports through one bounded pool
+// and reduces each period in date order. A period's error cancels only that
+// period's remaining downloads.
+func fetchAndAggregate(ctx context.Context, client *asc.Client, vendor string, scope insights.SalesScope, periods [][]string, salesType asc.SalesReportType, subType asc.SalesReportSubType, freq asc.SalesReportFrequency) []salesPeriodResult {
+	type job struct{ period, index int }
+	workCtx, cancel := context.WithCancel(ctx)
+	var workers sync.WaitGroup
+	defer func() {
+		cancel()
+		workers.Wait()
+	}()
+
+	periodCtxs := make([]context.Context, len(periods))
+	results := make([][]chan salesReportFetchResult, len(periods))
+	cancels := make([]context.CancelFunc, len(periods))
+	total := 0
+	for period, dates := range periods {
+		periodCtxs[period], cancels[period] = context.WithCancel(workCtx)
+		results[period] = make([]chan salesReportFetchResult, len(dates))
+		for index := range dates {
+			results[period][index] = make(chan salesReportFetchResult, 1)
+		}
+		total += len(dates)
+	}
+	jobs := make(chan job)
+	workers.Go(func() {
+		defer close(jobs)
+		for period, dates := range periods {
+			for index := range dates {
+				select {
+				case jobs <- job{period: period, index: index}:
+				case <-workCtx.Done():
+					return
+				}
+			}
+		}
+	})
+	for range min(salesReportFetchConcurrency, total) {
+		workers.Go(func() {
+			for job := range jobs {
+				periodCtx := periodCtxs[job.period]
+				if periodCtx.Err() != nil {
+					continue
+				}
+				date := periods[job.period][job.index]
+				download, err := client.GetSalesReport(periodCtx, asc.SalesReportParams{
+					VendorNumber:  vendor,
+					ReportType:    salesType,
+					ReportSubType: subType,
+					Frequency:     freq,
+					ReportDate:    date,
+					Version:       defaultSalesReportVersion(salesType, subType, freq),
+				})
+				if err != nil {
+					results[job.period][job.index] <- salesReportFetchResult{err: fmt.Errorf("download report %s: %w", date, err)}
+					continue
+				}
+				metrics, parseErr := insights.ParseSalesReportMetrics(download.Body, scope)
+				_ = download.Body.Close()
+				if parseErr != nil {
+					parseErr = fmt.Errorf("parse report %s: %w", date, parseErr)
+				}
+				results[job.period][job.index] <- salesReportFetchResult{metrics: metrics, err: parseErr}
+			}
+		})
+	}
+
+	reduced := make([]salesPeriodResult, len(periods))
+	for period, dates := range periods {
+		metrics, found, err := reduceSalesPeriod(ctx, dates, results[period])
+		cancels[period]()
+		reduced[period] = salesPeriodResult{metrics: metrics, found: found, err: err}
+	}
+	return reduced
+}
+
+func reduceSalesPeriod(ctx context.Context, dates []string, results []chan salesReportFetchResult) (insights.SalesMetrics, int, error) {
 	var aggregate insights.SalesMetrics
 	found := 0
 	missingDates := make([]string, 0)
-
-	for _, date := range dates {
-		download, err := client.GetSalesReport(ctx, asc.SalesReportParams{
-			VendorNumber:  vendor,
-			ReportType:    salesType,
-			ReportSubType: subType,
-			Frequency:     freq,
-			ReportDate:    date,
-			Version:       defaultSalesReportVersion(salesType, subType, freq),
-		})
-		if err != nil {
-			if asc.IsNotFound(err) {
+	// Reduce in date order so completion timing cannot change totals or errors.
+	for index, date := range dates {
+		var result salesReportFetchResult
+		select {
+		case result = <-results[index]:
+		case <-ctx.Done():
+			return aggregate, found, fmt.Errorf("download report %s: %w", date, ctx.Err())
+		}
+		if result.err != nil {
+			if asc.IsNotFound(result.err) {
 				missingDates = append(missingDates, date)
 				continue
 			}
-			return aggregate, found, fmt.Errorf("download report %s: %w", date, err)
-		}
-
-		metrics, parseErr := insights.ParseSalesReportMetrics(download.Body, scope)
-		_ = download.Body.Close()
-		if parseErr != nil {
-			return aggregate, found, fmt.Errorf("parse report %s: %w", date, parseErr)
+			return aggregate, found, result.err
 		}
 
 		// Seed from the first parsed report so availability flags reflect real coverage.
 		if found == 0 {
-			aggregate = metrics
+			aggregate = result.metrics
 		} else {
-			aggregate = aggregateSalesMetrics(aggregate, metrics)
+			aggregate = aggregateSalesMetrics(aggregate, result.metrics)
 		}
 		found++
 	}
