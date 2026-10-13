@@ -288,7 +288,7 @@ type activeInstallLock struct {
 }
 
 func acquireInstallLock(root *os.Root, path string) (*activeInstallLock, error) {
-	file, err := secureopen.OpenAppendNoFollowInRoot(root, installLockName, 0o600)
+	file, err := secureopen.OpenLockFileNoFollowInRoot(root, installLockName, 0o600)
 	if err != nil {
 		return nil, fmt.Errorf("create cross-process install lock %s: %w", path, err)
 	}

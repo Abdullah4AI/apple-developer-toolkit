@@ -38,10 +38,12 @@ func OpenNewFileNoFollowInRoot(root *os.Root, name string, perm os.FileMode) (*o
 	})
 }
 
-// OpenAppendNoFollowInRoot opens a file for appending relative to root without
-// following the final component or permitting parent traversal outside root.
-func OpenAppendNoFollowInRoot(root *os.Root, name string, perm os.FileMode) (*os.File, error) {
-	flags := os.O_WRONLY | os.O_APPEND | os.O_CREATE | unix.O_NOFOLLOW | unix.O_NONBLOCK
+// OpenLockFileNoFollowInRoot opens or creates a lock file relative to root
+// without following the final component. It neither truncates nor appends,
+// matching the Windows variant, whose LockFileEx needs a handle with write
+// access rather than append-only access.
+func OpenLockFileNoFollowInRoot(root *os.Root, name string, perm os.FileMode) (*os.File, error) {
+	flags := os.O_WRONLY | os.O_CREATE | unix.O_NOFOLLOW | unix.O_NONBLOCK
 	return openWritableFileNoFollowInRootBestEffort(root, name, func() (*os.File, error) {
 		return root.OpenFile(name, flags, perm)
 	})

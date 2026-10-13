@@ -9,7 +9,7 @@ import (
 
 func acquireBuildLock(root *os.Root) (*os.File, error) {
 	const name = ".asc-ios-build.lock"
-	file, err := secureopen.OpenAppendNoFollowInRoot(root, name, 0o600)
+	file, err := secureopen.OpenLockFileNoFollowInRoot(root, name, 0o600)
 	if err != nil {
 		return nil, err
 	}

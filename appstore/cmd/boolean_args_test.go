@@ -280,3 +280,53 @@ func TestRunVersionRootFlagNeverDispatchesTrailingCommand(t *testing.T) {
 		t.Fatalf("stderr = %q, want no nested-command output", stderr)
 	}
 }
+
+func TestRequestedHelpArgsRecognizesPositionalPayloadCommands(t *testing.T) {
+	resetReportFlags(t)
+	tests := []struct {
+		name     string
+		args     []string
+		wantArgs []string
+		wantHelp string
+	}{
+		{
+			name:     "signing run help after positional operand",
+			args:     []string{"signing", "run", "release", "--help"},
+			wantArgs: []string{"signing", "run", "--help", "release"},
+			wantHelp: "asc signing run",
+		},
+		{
+			name:     "workflow run help after positional operand",
+			args:     []string{"workflow", "run", "release", "--help"},
+			wantArgs: []string{"workflow", "run", "--help", "release"},
+			wantHelp: "asc workflow run",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			root := rootCommandForArgs("1.0.0", test.args)
+			gotArgs, gotOK := requestedHelpArgs(root, test.args)
+			if !gotOK {
+				t.Fatalf("requestedHelpArgs(%v) ok = false, want true", test.args)
+			}
+			if !reflect.DeepEqual(gotArgs, test.wantArgs) {
+				t.Fatalf("requestedHelpArgs(%v) = %#v, want %#v", test.args, gotArgs, test.wantArgs)
+			}
+
+			var code int
+			stdout, stderr := captureCommandOutput(t, func() {
+				code = Run(test.args, "1.0.0")
+			})
+			if code != ExitSuccess {
+				t.Fatalf("Run(%v) exit code = %d, want %d (stderr=%q)", test.args, code, ExitSuccess, stderr)
+			}
+			if !strings.Contains(stdout, test.wantHelp) {
+				t.Fatalf("Run(%v) stdout = %q, want %q", test.args, stdout, test.wantHelp)
+			}
+			if stderr != "" {
+				t.Fatalf("Run(%v) stderr = %q, want empty", test.args, stderr)
+			}
+		})
+	}
+}

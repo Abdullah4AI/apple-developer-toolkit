@@ -10,7 +10,7 @@ func TestPrintTable_EndUserLicenseAgreement(t *testing.T) {
 		Data: EndUserLicenseAgreementResource{
 			ID: "eula-1",
 			Attributes: EndUserLicenseAgreementAttributes{
-				AgreementText: "Terms and conditions",
+				AgreementText: strings.Repeat("Terms and conditions ", 8192) + "FINAL_CLAUSE",
 			},
 			Relationships: &EndUserLicenseAgreementRelationships{
 				App: &Relationship{
@@ -41,6 +41,9 @@ func TestPrintTable_EndUserLicenseAgreement(t *testing.T) {
 	}
 	if !strings.Contains(output, "USA,CAN") {
 		t.Fatalf("expected territories in output, got: %s", output)
+	}
+	if !strings.Contains(output, "FINAL_CLAUSE") {
+		t.Fatal("expected the end of the agreement in output")
 	}
 }
 

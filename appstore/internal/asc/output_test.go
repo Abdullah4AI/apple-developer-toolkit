@@ -18,6 +18,18 @@ func captureStdout(t *testing.T, fn func() error) string {
 	if err != nil {
 		t.Fatalf("pipe error: %v", err)
 	}
+	defer func() {
+		os.Stdout = orig
+		_ = w.Close()
+		_ = r.Close()
+	}()
+
+	var buf bytes.Buffer
+	readDone := make(chan error, 1)
+	go func() {
+		_, readErr := io.Copy(&buf, r)
+		readDone <- readErr
+	}()
 	os.Stdout = w
 
 	err = fn()
@@ -27,8 +39,7 @@ func captureStdout(t *testing.T, fn func() error) string {
 	}
 	os.Stdout = orig
 
-	var buf bytes.Buffer
-	if _, readErr := io.Copy(&buf, r); readErr != nil {
+	if readErr := <-readDone; readErr != nil {
 		t.Fatalf("read error: %v", readErr)
 	}
 	if err != nil {

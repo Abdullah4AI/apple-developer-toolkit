@@ -81,6 +81,45 @@ func TestRun_UnknownChildOffersSynonymSuggestions(t *testing.T) {
 				"  asc builds --help\n",
 		},
 		{
+			name: "builds view with valid build-id rewrites exact command",
+			args: []string{"builds", "view", "--build-id", "BUILD_ID"},
+			wantStderr: "Error: unknown command `asc builds view`\n" +
+				"Try:\n" +
+				"  asc builds info --build-id BUILD_ID\n" +
+				"For help:\n" +
+				"  asc builds --help\n",
+		},
+		{
+			name: "builds distribute points at publish testflight and builds add-groups",
+			args: []string{"builds", "distribute"},
+			wantStderr: "Error: unknown command `asc builds distribute`\n" +
+				"Try:\n" +
+				"  asc publish testflight --app APP_ID --ipa PATH --group GROUP_ID\n" +
+				"  asc builds add-groups --build-id BUILD_ID --group GROUP_ID\n" +
+				"For help:\n" +
+				"  asc builds --help\n",
+		},
+		{
+			name: "builds notes points at builds test-notes",
+			args: []string{"builds", "notes"},
+			wantStderr: "Error: unknown command `asc builds notes`\n" +
+				"Try:\n" +
+				"  asc builds test-notes list --build-id BUILD_ID\n" +
+				"  asc builds test-notes view --build-id BUILD_ID --locale en-US\n" +
+				"For help:\n" +
+				"  asc builds --help\n",
+		},
+		{
+			name: "builds delete points at builds expire",
+			args: []string{"builds", "delete"},
+			wantStderr: "Error: unknown command `asc builds delete`\n" +
+				"Try:\n" +
+				"  asc builds expire --build-id BUILD_ID --confirm\n" +
+				"  asc builds expire-all --app APP_ID --older-than 90d --confirm\n" +
+				"For help:\n" +
+				"  asc builds --help\n",
+		},
+		{
 			name: "agreements accept points at the web session command",
 			args: []string{"agreements", "accept"},
 			wantStderr: "Error: unknown command `asc agreements accept`\n" +
@@ -170,6 +209,16 @@ func TestRun_UnknownChildMapsLegacyAndAsymmetricPaths(t *testing.T) {
 		group string
 		want  []string
 	}{
+		{
+			args:  []string{"builds", "release-notes"},
+			group: "asc builds",
+			want:  []string{"asc build-localizations list --build-id BUILD_ID", "asc builds test-notes list --build-id BUILD_ID"},
+		},
+		{
+			args:  []string{"builds", "whats-new"},
+			group: "asc builds",
+			want:  []string{"asc build-localizations list --build-id BUILD_ID", "asc builds test-notes list --build-id BUILD_ID"},
+		},
 		{
 			args:  []string{"app-info"},
 			group: "asc",

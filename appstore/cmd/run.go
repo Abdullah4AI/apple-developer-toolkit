@@ -433,17 +433,8 @@ func normalizeSpacedBooleanFlags(root *ffcli.Command, args []string) []string {
 // word "true" or "false", so consuming it as a spaced boolean would break the
 // standard flag behavior these commands exposed before spaced bool recovery.
 func commandAcceptsPositionalPayload(commandPath []string) bool {
-	switch strings.Join(commandPath, " ") {
-	case "asc docs show",
-		"asc api",
-		"asc schema",
-		"asc search",
-		"asc snitch",
-		"asc workflow run":
-		return true
-	default:
-		return false
-	}
+	name := strings.Join(commandPath, " ")
+	return commandAcceptsOperandsPath(name) || name == "asc snitch"
 }
 
 // requestedHelpArgs reports whether the invocation explicitly asked for help with
