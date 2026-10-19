@@ -2665,10 +2665,15 @@ func TestTwoFactorSubmitFailureDistinguishesFinalizationFromVerification(t *test
 			err:  errors.New("trusted-device 2fa failed (status 400)"),
 			want: "2fa verification failed: trusted-device 2fa failed (status 400)",
 		},
+		{
+			name: "apple rejected trusted-device code",
+			err:  fmt.Errorf("trusted-device 2fa failed (status 400): %w", webcore.ErrTwoFactorCodeRejected),
+			want: "2fa verification failed: Apple rejected the verification code: trusted-device 2fa failed (status 400): two-factor code rejected",
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := twoFactorSubmitFailure(tc.err, tc.afterPhoneDelivery)
+			got := twoFactorSubmitFailure(tc.err, tc.afterPhoneDelivery, false)
 			if got.Error() != tc.want {
 				t.Fatalf("expected %q, got %q", tc.want, got.Error())
 			}

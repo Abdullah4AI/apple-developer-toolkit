@@ -17,6 +17,7 @@ type webSessionFlags struct {
 	flagSet              *flag.FlagSet
 	appleID              *string
 	twoFactorCodeCommand *string
+	twoFactorDelivery    twoFactorDeliveryFlags
 	providerID           *int64
 	publicProviderID     *string
 	sessionFromEnv       *bool
@@ -27,6 +28,7 @@ func bindWebSessionFlags(fs *flag.FlagSet) webSessionFlags {
 		flagSet:              fs,
 		appleID:              fs.String("apple-id", "", "Apple Account email used to scope a user-owned session cache (defaults to "+webAppleIDEnv+", then the last or only cached session)"),
 		twoFactorCodeCommand: fs.String("two-factor-code-command", "", "Shell command that prints the 2FA code to stdout if verification is required"),
+		twoFactorDelivery:    bindTwoFactorDeliveryFlags(fs),
 		providerID:           fs.Int64("provider-id", 0, "Numeric App Store Connect provider ID to select for this web session"),
 		publicProviderID:     fs.String("public-provider-id", "", "Public App Store Connect provider/team ID to select for this web session"),
 	}
@@ -60,9 +62,14 @@ func resolveWebSessionForCommand(ctx context.Context, flags webSessionFlags) (*w
 		requestCtx, cancel := newWebRequestContext(ctx)
 		return session, requestCtx, cancel, err
 	}
+	preference, err := flags.twoFactorDelivery.resolve()
+	if err != nil {
+		requestCtx, cancel := newWebRequestContext(ctx)
+		return nil, requestCtx, cancel, err
+	}
 	selection := providerSelectionFromFlags(flags)
 	session, _, err := callResolveSessionForProviderSelection(
-		ctx,
+		contextWithTwoFactorPreference(ctx, preference),
 		*flags.appleID,
 		"",
 		"",

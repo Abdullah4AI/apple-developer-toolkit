@@ -21,11 +21,13 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
 	"unicode/utf8"
 
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/appleauth"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
 )
 
@@ -544,6 +546,97 @@ func TestEnsureTwoFactorCodeRequestedRequestsPhoneCodeForSingleTrustedPhone(t *t
 	}
 	if !challenge.Requested {
 		t.Fatal("expected single trusted phone to trigger a code request before prompting")
+	}
+}
+
+func TestEnsureTwoFactorCodeRequestedRequestsSMSWhenPreferredOverTrustedDevices(t *testing.T) {
+	var phoneRequest map[string]any
+	session := &AuthSession{
+		Client: &http.Client{
+			Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+				switch {
+				case req.Method == http.MethodGet && req.URL.String() == authServiceURL:
+					return &http.Response{
+						StatusCode: http.StatusOK,
+						Header:     make(http.Header),
+						Body: io.NopCloser(strings.NewReader(`{
+							"noTrustedDevices": false,
+							"trustedDevices": [{"id": "device"}],
+							"trustedPhoneNumbers": [
+								{"id": 1, "pushMode": "sms", "numberWithDialCode": "+1 (•••) •••-••11"},
+								{"id": 2, "pushMode": "voice", "numberWithDialCode": "+1 (•••) •••-••22"}
+							]
+						}`)),
+					}, nil
+				case req.Method == http.MethodPut && req.URL.String() == authServiceURL+"/verify/phone":
+					if err := json.NewDecoder(req.Body).Decode(&phoneRequest); err != nil {
+						t.Fatalf("decode phone request: %v", err)
+					}
+					return &http.Response{
+						StatusCode: http.StatusOK,
+						Header:     make(http.Header),
+						Body:       io.NopCloser(strings.NewReader(`{}`)),
+					}, nil
+				default:
+					t.Fatalf("unexpected request %s %s", req.Method, req.URL.String())
+					return nil, nil
+				}
+			}),
+		},
+		ServiceKey:       "service-key",
+		AppleIDSessionID: "session-id",
+		SCNT:             "scnt-token",
+	}
+	session.SetTwoFactorPreference(appleauth.TwoFactorPreference{Delivery: appleauth.TwoFactorDeliverySMS, PhoneID: 2})
+
+	challenge, err := EnsureTwoFactorCodeRequested(context.Background(), session)
+	if err != nil {
+		t.Fatalf("EnsureTwoFactorCodeRequested returned error: %v", err)
+	}
+	if challenge.Method != twoFactorMethodPhone || !challenge.Requested {
+		t.Fatalf("expected a requested phone challenge, got %+v", challenge)
+	}
+	if challenge.Destination != "+1 (•••) •••-••22" {
+		t.Fatalf("expected selected phone destination, got %q", challenge.Destination)
+	}
+	want := map[string]any{"phoneNumber": map[string]any{"id": float64(2)}, "mode": "sms"}
+	if !reflect.DeepEqual(phoneRequest, want) {
+		t.Fatalf("unexpected phone request payload: %#v", phoneRequest)
+	}
+}
+
+func TestPrepareTwoFactorChallengeWrapsAmbiguousSMSPhoneSelection(t *testing.T) {
+	session := &AuthSession{
+		Client: &http.Client{
+			Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+				if req.Method != http.MethodGet || req.URL.String() != authServiceURL {
+					t.Fatalf("unexpected request %s %s", req.Method, req.URL.String())
+				}
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Header:     make(http.Header),
+					Body: io.NopCloser(strings.NewReader(`{
+						"trustedPhoneNumbers": [
+							{"id": 1, "numberWithDialCode": "+1 (•••) •••-••11"},
+							{"id": 2, "numberWithDialCode": "+1 (•••) •••-••22"}
+						]
+					}`)),
+				}, nil
+			}),
+		},
+		ServiceKey:       "service-key",
+		AppleIDSessionID: "session-id",
+		SCNT:             "scnt-token",
+	}
+	session.SetTwoFactorPreference(appleauth.TwoFactorPreference{Delivery: appleauth.TwoFactorDeliverySMS})
+
+	_, err := PrepareTwoFactorChallenge(context.Background(), session)
+	var selectionErr *appleauth.TrustedPhoneSelectionError
+	if !errors.As(err, &selectionErr) {
+		t.Fatalf("expected TrustedPhoneSelectionError, got %v", err)
+	}
+	if !strings.HasPrefix(err.Error(), "2fa failed: multiple trusted phone numbers are available") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 

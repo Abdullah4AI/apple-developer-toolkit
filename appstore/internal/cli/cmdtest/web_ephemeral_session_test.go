@@ -168,6 +168,8 @@ func TestEnvironmentSessionRejectsBeforeRequests(t *testing.T) {
 		{"zero provider flag", []string{"web", "removed-apps", "list", "--provider-id", "0"}, "", "", "--provider-id is unsupported"},
 		{"public provider flag", []string{"web", "removed-apps", "list", "--public-provider-id", "team-42"}, "", "", "--public-provider-id is unsupported"},
 		{"2fa command", []string{"web", "removed-apps", "list", "--two-factor-code-command", "echo override-secret"}, "", "", "--two-factor-code-command is unsupported"},
+		{"2fa method", []string{"web", "removed-apps", "list", "--two-factor-method", "sms"}, "", "", "--two-factor-method is unsupported"},
+		{"2fa phone id", []string{"web", "removed-apps", "list", "--two-factor-phone-id", "2"}, "", "", "--two-factor-phone-id is unsupported"},
 		{"apple id", []string{"web", "removed-apps", "list", "--apple-id", "other@example.com"}, "", "", "does not match --apple-id"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

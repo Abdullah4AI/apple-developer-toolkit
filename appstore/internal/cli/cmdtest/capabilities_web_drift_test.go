@@ -15,11 +15,12 @@ import (
 // product capabilities. Each reason is part of the inventory contract: a new
 // web leaf must gain a capability row or an explicit reason here.
 var webLeafExclusions = map[string]string{
-	"asc web auth login":  "Session authentication plumbing for other web commands.",
-	"asc web auth status": "Session status check, not a product workflow.",
-	"asc web auth logout": "Session cache cleanup, not a product workflow.",
-	"asc web auth export": "Session cache transfer plumbing for other machines and CI.",
-	"asc web auth import": "Session cache transfer plumbing for other machines and CI.",
+	"asc web auth login":         "Session authentication plumbing for other web commands.",
+	"asc web auth status":        "Session status check, not a product workflow.",
+	"asc web auth logout":        "Session cache cleanup, not a product workflow.",
+	"asc web auth export":        "Session cache transfer plumbing for other machines and CI.",
+	"asc web auth import":        "Session cache transfer plumbing for other machines and CI.",
+	"asc web auth messages-code": "2FA code helper for web auth login --two-factor-code-command, not a product workflow.",
 }
 
 func TestRun_CapabilitiesInventoryCoversWebLeaves(t *testing.T) {

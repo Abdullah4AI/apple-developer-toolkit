@@ -63,7 +63,7 @@ func TestRunWebAuthLoginFailuresAreClassified(t *testing.T) {
 			wantSignIn:    true,
 			wantSubmit:    true,
 			wantExit:      ExitAuth,
-			wantStderr:    "Error: web auth login failed: 2fa verification failed: trusted-device 2fa failed (status 400, codes=[-21669])\n",
+			wantStderr:    "Error: web auth login failed: 2fa verification failed: Apple rejected the verification code: trusted-device 2fa failed (status 400, codes=[-21669])\n",
 			wantOutcome:   telemetry.OutcomeAuthError,
 			wantDiagnosis: shared.DiagnosticAuthenticationRejected,
 		},

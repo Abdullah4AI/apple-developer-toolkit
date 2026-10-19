@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"testing"
 )
 
@@ -13,7 +14,10 @@ type stubSessionState struct {
 	phoneMode   string
 	destination string
 	requested   bool
+	preference  TwoFactorPreference
 }
+
+func (s *stubSessionState) TwoFactorPreference() TwoFactorPreference { return s.preference }
 
 func (s *stubSessionState) TwoFactorMethod() string { return s.method }
 
@@ -408,5 +412,118 @@ func TestSubmitTwoFactorCodeUsesVoicePushModeFromAuthOptions(t *testing.T) {
 	}
 	if session.phoneMode != "voice" {
 		t.Fatalf("expected session to remember voice mode, got %q", session.phoneMode)
+	}
+}
+
+func smsPreferenceAuthOptions(phones ...TrustedPhoneNumber) func(context.Context) (*AuthOptions, error) {
+	return func(context.Context) (*AuthOptions, error) {
+		return &AuthOptions{TrustedPhoneNumbers: phones}, nil
+	}
+}
+
+func TestPrepareTwoFactorChallengePrefersSMSWhenTrustedDevicesAreAvailable(t *testing.T) {
+	session := &stubSessionState{preference: TwoFactorPreference{Delivery: TwoFactorDeliverySMS}}
+
+	challenge, err := PrepareTwoFactorChallenge(context.Background(), session, smsPreferenceAuthOptions(
+		TrustedPhoneNumber{ID: 4, PushMode: "voice", NumberWithDialCode: "+1 (•••) •••-••44"},
+	))
+	if err != nil {
+		t.Fatalf("PrepareTwoFactorChallenge() error = %v", err)
+	}
+	if challenge.Method != TwoFactorMethodPhone {
+		t.Fatalf("expected phone method, got %q", challenge.Method)
+	}
+	if challenge.PhoneFallbackAvailable || challenge.Requested {
+		t.Fatalf("expected an unrequested direct phone challenge, got %+v", challenge)
+	}
+	if challenge.Destination != "+1 (•••) •••-••44" {
+		t.Fatalf("expected destination of the trusted phone, got %q", challenge.Destination)
+	}
+	if session.phoneID != 4 || session.phoneMode != "sms" {
+		t.Fatalf("expected phone 4 in sms mode, got id=%d mode=%q", session.phoneID, session.phoneMode)
+	}
+}
+
+func TestPrepareTwoFactorChallengeSelectsRequestedSMSPhone(t *testing.T) {
+	session := &stubSessionState{preference: TwoFactorPreference{Delivery: TwoFactorDeliverySMS, PhoneID: 2}}
+
+	challenge, err := PrepareTwoFactorChallenge(context.Background(), session, smsPreferenceAuthOptions(
+		TrustedPhoneNumber{ID: 1, PushMode: "sms", NumberWithDialCode: "+1 (•••) •••-••11"},
+		TrustedPhoneNumber{ID: 2, PushMode: "sms", NumberWithDialCode: "+44 ••••• •••222"},
+	))
+	if err != nil {
+		t.Fatalf("PrepareTwoFactorChallenge() error = %v", err)
+	}
+	if session.phoneID != 2 || challenge.Destination != "+44 ••••• •••222" {
+		t.Fatalf("expected phone 2, got id=%d destination=%q", session.phoneID, challenge.Destination)
+	}
+}
+
+func TestPrepareTwoFactorChallengeRejectsAmbiguousSMSPhone(t *testing.T) {
+	session := &stubSessionState{preference: TwoFactorPreference{Delivery: TwoFactorDeliverySMS}}
+
+	_, err := PrepareTwoFactorChallenge(context.Background(), session, smsPreferenceAuthOptions(
+		TrustedPhoneNumber{ID: 1, NumberWithDialCode: "+1 (•••) •••-••11"},
+		TrustedPhoneNumber{ID: 2, NumberWithDialCode: "+44 ••••• •••222"},
+	))
+	var selectionErr *TrustedPhoneSelectionError
+	if !errors.As(err, &selectionErr) {
+		t.Fatalf("expected TrustedPhoneSelectionError, got %v", err)
+	}
+	want := "multiple trusted phone numbers are available; select one by ID: 1 (+1 (•••) •••-••11), 2 (+44 ••••• •••222)"
+	if err.Error() != want {
+		t.Fatalf("unexpected error:\n got: %s\nwant: %s", err.Error(), want)
+	}
+	if session.method != "" {
+		t.Fatalf("expected no prepared state after selection failure, got %q", session.method)
+	}
+}
+
+func TestPrepareTwoFactorChallengeRejectsUnknownSMSPhoneID(t *testing.T) {
+	session := &stubSessionState{preference: TwoFactorPreference{Delivery: TwoFactorDeliverySMS, PhoneID: 9}}
+
+	_, err := PrepareTwoFactorChallenge(context.Background(), session, smsPreferenceAuthOptions(
+		TrustedPhoneNumber{ID: 1, NumberWithDialCode: "+1 (•••) •••-••11"},
+	))
+	var selectionErr *TrustedPhoneSelectionError
+	if !errors.As(err, &selectionErr) {
+		t.Fatalf("expected TrustedPhoneSelectionError, got %v", err)
+	}
+	want := "trusted phone number ID 9 is not available; select one by ID: 1 (+1 (•••) •••-••11)"
+	if err.Error() != want {
+		t.Fatalf("unexpected error:\n got: %s\nwant: %s", err.Error(), want)
+	}
+}
+
+func TestPrepareTwoFactorChallengeRejectsSMSWithoutTrustedPhones(t *testing.T) {
+	session := &stubSessionState{preference: TwoFactorPreference{Delivery: TwoFactorDeliverySMS}}
+
+	_, err := PrepareTwoFactorChallenge(context.Background(), session, smsPreferenceAuthOptions())
+	if !errors.Is(err, ErrNoTrustedPhoneNumbers) {
+		t.Fatalf("expected ErrNoTrustedPhoneNumbers, got %v", err)
+	}
+	if err.Error() != "sms verification is unavailable: no trusted phone numbers available" {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestEnsureTwoFactorCodeRequestedRequestsSMSForPreferredPhone(t *testing.T) {
+	session := &stubSessionState{preference: TwoFactorPreference{Delivery: TwoFactorDeliverySMS}}
+	var requests []string
+
+	challenge, err := EnsureTwoFactorCodeRequested(context.Background(), session, smsPreferenceAuthOptions(
+		TrustedPhoneNumber{ID: 3, PushMode: "voice", NumberWithDialCode: "+1 (•••) •••-••33"},
+	), func(_ context.Context, phoneID int, mode string) error {
+		requests = append(requests, fmt.Sprintf("%d:%s", phoneID, mode))
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("EnsureTwoFactorCodeRequested() error = %v", err)
+	}
+	if !challenge.Requested {
+		t.Fatal("expected the SMS code to be requested")
+	}
+	if len(requests) != 1 || requests[0] != "3:sms" {
+		t.Fatalf("expected one sms request for phone 3, got %v", requests)
 	}
 }

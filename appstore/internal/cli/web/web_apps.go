@@ -251,6 +251,7 @@ func WebAppsCreateCommand() *ffcli.Command {
 	appleID := fs.String("apple-id", "", "Apple Account email (defaults to "+webAppleIDEnv+", then the last or only cached session)")
 	password := fs.String("password", "", "Apple Account password (temporary compatibility flag; will prompt if not provided)")
 	twoFactorCodeCommand := fs.String("two-factor-code-command", "", "Shell command that prints the 2FA code to stdout if verification is required")
+	twoFactorDelivery := bindTwoFactorDeliveryFlags(fs)
 	autoRename := fs.Bool("auto-rename", true, "Retry with unique name suffix if app name is already taken")
 	ifExists := shared.BindIfExistsFlag(fs, webAppCreateIfExistsModes...)
 	access := fs.String("access", "", "App access after create: full or limited")
@@ -282,7 +283,8 @@ Authentication:
     - %s environment variable
     - temporary direct-password compatibility flag during the apps-create deprecation window
   Two-factor verification can use --two-factor-code-command
-  or %s if a fresh login is required.
+  or %s if a fresh login is required; add --two-factor-method sms
+  to have Apple text the code to a trusted phone number.
   If you already have a cached web session, --apple-id can be omitted.
 
 Bundle ID preflight:
@@ -319,7 +321,11 @@ Examples:
 			if err != nil {
 				return err
 			}
-			return RunAppsCreate(ctx, AppsCreateRunOptions{
+			preference, err := twoFactorDelivery.resolve()
+			if err != nil {
+				return err
+			}
+			return RunAppsCreate(contextWithTwoFactorPreference(ctx, preference), AppsCreateRunOptions{
 				Name:                 *name,
 				BundleID:             *bundleID,
 				SKU:                  *sku,

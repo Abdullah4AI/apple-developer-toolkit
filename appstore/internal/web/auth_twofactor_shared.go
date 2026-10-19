@@ -41,6 +41,22 @@ func (s *AuthSession) TwoFactorCodeRequested() bool {
 	return s != nil && s.twoFactorCodeRequested
 }
 
+func (s *AuthSession) TwoFactorPreference() appleauth.TwoFactorPreference {
+	if s == nil {
+		return appleauth.TwoFactorPreference{}
+	}
+	return s.twoFactorPreference
+}
+
+// SetTwoFactorPreference records the requested verification delivery for the
+// next challenge preparation.
+func (s *AuthSession) SetTwoFactorPreference(preference appleauth.TwoFactorPreference) {
+	if s == nil {
+		return
+	}
+	s.twoFactorPreference = preference
+}
+
 func (s *AuthSession) SetPreparedTwoFactorState(method string, phoneID int, phoneMode, destination string, requested bool) {
 	if s == nil {
 		return
@@ -67,7 +83,8 @@ func wrapWebTwoFactorFlowError(err error) error {
 		return fmt.Errorf("2fa failed: %w", err)
 	}
 	var unsupported *appleauth.UnsupportedTwoFactorMethodError
-	if errors.As(err, &unsupported) {
+	var phoneSelection *appleauth.TrustedPhoneSelectionError
+	if errors.As(err, &unsupported) || errors.As(err, &phoneSelection) {
 		return fmt.Errorf("2fa failed: %w", err)
 	}
 	return err

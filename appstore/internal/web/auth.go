@@ -143,6 +143,7 @@ type AuthSession struct {
 	twoFactorPhoneMode     string
 	twoFactorDestination   string
 	twoFactorCodeRequested bool
+	twoFactorPreference    appleauth.TwoFactorPreference
 }
 
 // ProviderSelection identifies the App Store Connect provider/team a web

@@ -343,3 +343,168 @@ func TestWebAuthLoginRejectsRemovedTwoFactorCodeFlagAsUnknown(t *testing.T) {
 		t.Fatalf("stderr still carries deprecation wording: %q", stderr)
 	}
 }
+
+func TestWebCommandsRegisterTwoFactorDeliveryFlags(t *testing.T) {
+	for _, path := range [][]string{
+		{"web", "auth", "login"},
+		{"web", "apps", "create"},
+	} {
+		t.Run(strings.Join(path, " "), func(t *testing.T) {
+			root := RootCommand("1.2.3")
+			cmd := findSubcommand(root, path...)
+			if cmd == nil {
+				t.Fatalf("expected %s command", strings.Join(path, " "))
+				return
+			}
+			for _, name := range []string{"two-factor-method", "two-factor-phone-id"} {
+				if cmd.FlagSet.Lookup(name) == nil {
+					t.Fatalf("expected --%s flag on %s", name, strings.Join(path, " "))
+				}
+			}
+		})
+	}
+}
+
+func TestWebAuthLoginRejectsInvalidTwoFactorDelivery(t *testing.T) {
+	tests := []struct {
+		name       string
+		args       []string
+		env        map[string]string
+		wantStderr string
+	}{
+		{
+			name:       "unsupported method flag",
+			args:       []string{"--two-factor-method", "email"},
+			wantStderr: "Error: --two-factor-method must be one of: auto, sms",
+		},
+		{
+			name:       "unsupported method env",
+			env:        map[string]string{"ASC_WEB_2FA_METHOD": "push"},
+			wantStderr: "Error: ASC_WEB_2FA_METHOD must be one of: auto, sms",
+		},
+		{
+			name:       "phone id without sms",
+			args:       []string{"--two-factor-phone-id", "2"},
+			wantStderr: "Error: --two-factor-phone-id requires --two-factor-method sms",
+		},
+		{
+			name:       "phone id with explicit auto overriding env sms",
+			args:       []string{"--two-factor-method", "auto", "--two-factor-phone-id", "2"},
+			env:        map[string]string{"ASC_WEB_2FA_METHOD": "sms"},
+			wantStderr: "Error: --two-factor-phone-id requires --two-factor-method sms",
+		},
+		{
+			name:       "explicit zero phone id",
+			args:       []string{"--two-factor-method", "sms", "--two-factor-phone-id", "0"},
+			env:        map[string]string{"ASC_WEB_2FA_PHONE_ID": "2"},
+			wantStderr: "Error: --two-factor-phone-id must be a positive trusted phone number ID",
+		},
+		{
+			name:       "negative phone id",
+			args:       []string{"--two-factor-method", "sms", "--two-factor-phone-id", "-1"},
+			wantStderr: "Error: --two-factor-phone-id must be a positive trusted phone number ID",
+		},
+		{
+			name:       "invalid phone id env",
+			env:        map[string]string{"ASC_WEB_2FA_METHOD": "sms", "ASC_WEB_2FA_PHONE_ID": "first"},
+			wantStderr: "Error: ASC_WEB_2FA_PHONE_ID must be a positive trusted phone number ID",
+		},
+		{
+			name:       "phone id env without sms",
+			env:        map[string]string{"ASC_WEB_2FA_PHONE_ID": "2"},
+			wantStderr: "Error: ASC_WEB_2FA_PHONE_ID requires --two-factor-method sms",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("ASC_WEB_2FA_METHOD", "")
+			t.Setenv("ASC_WEB_2FA_PHONE_ID", "")
+			for key, value := range tt.env {
+				t.Setenv(key, value)
+			}
+			args := append([]string{"web", "auth", "login", "--apple-id", "user@example.com"}, tt.args...)
+			var code int
+			stdout, stderr := captureOutput(t, func() {
+				code = rootcmd.Run(args, "1.2.3")
+			})
+			if code != rootcmd.ExitUsage {
+				t.Fatalf("exit code = %d, want %d; stderr=%q", code, rootcmd.ExitUsage, stderr)
+			}
+			if stdout != "" {
+				t.Fatalf("stdout = %q, want empty", stdout)
+			}
+			if !strings.Contains(stderr, tt.wantStderr) {
+				t.Fatalf("stderr = %q, want %q", stderr, tt.wantStderr)
+			}
+		})
+	}
+}
+
+func TestWebSessionCommandRejectsUnsupportedTwoFactorMethod(t *testing.T) {
+	t.Setenv("ASC_WEB_2FA_METHOD", "")
+	t.Setenv("ASC_WEB_2FA_PHONE_ID", "")
+	var code int
+	stdout, stderr := captureOutput(t, func() {
+		code = rootcmd.Run([]string{"web", "apps", "create", "--name", "Example", "--bundle-id", "com.example.app", "--sku", "EXAMPLE", "--two-factor-method", "voice"}, "1.2.3")
+	})
+	if code != rootcmd.ExitUsage {
+		t.Fatalf("exit code = %d, want %d; stderr=%q", code, rootcmd.ExitUsage, stderr)
+	}
+	if stdout != "" {
+		t.Fatalf("stdout = %q, want empty", stdout)
+	}
+	if !strings.Contains(stderr, "Error: --two-factor-method must be one of: auto, sms") {
+		t.Fatalf("stderr = %q, want unsupported method diagnostic", stderr)
+	}
+}
+
+func TestWebAuthMessagesCodeIsRegistered(t *testing.T) {
+	root := RootCommand("1.2.3")
+	cmd := findSubcommand(root, "web", "auth", "messages-code")
+	if cmd == nil {
+		t.Fatal("expected web auth messages-code command")
+		return
+	}
+	if cmd.UsageFunc == nil {
+		t.Fatal("expected messages-code to set a UsageFunc")
+	}
+	for _, name := range []string{"db", "since", "timeout"} {
+		if cmd.FlagSet.Lookup(name) == nil {
+			t.Fatalf("expected --%s flag on web auth messages-code", name)
+		}
+	}
+	if cmd.FlagSet.Lookup("output") != nil {
+		t.Fatal("messages-code prints a plain-text code and must not accept --output")
+	}
+}
+
+func TestWebAuthMessagesCodeInvalidFlagsExitUsage(t *testing.T) {
+	tests := []struct {
+		name    string
+		args    []string
+		wantErr string
+	}{
+		{name: "non-positive since", args: []string{"--since", "0s"}, wantErr: "Error: --since must be a positive duration"},
+		{name: "since too long", args: []string{"--since", "11m"}, wantErr: "Error: --since must be at most 10m0s"},
+		{name: "non-positive timeout", args: []string{"--timeout", "0s"}, wantErr: "Error: --timeout must be a positive duration"},
+		{name: "unparseable timeout", args: []string{"--timeout", "soon"}, wantErr: "invalid value"},
+		{name: "positional argument", args: []string{"now"}, wantErr: `Error: unexpected argument "now"`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var code int
+			stdout, stderr := captureOutput(t, func() {
+				code = rootcmd.Run(append([]string{"web", "auth", "messages-code"}, tt.args...), "1.2.3")
+			})
+			if code != rootcmd.ExitUsage {
+				t.Fatalf("exit code = %d, want %d; stderr=%q", code, rootcmd.ExitUsage, stderr)
+			}
+			if stdout != "" {
+				t.Fatalf("stdout = %q, want empty", stdout)
+			}
+			if !strings.Contains(stderr, tt.wantErr) {
+				t.Fatalf("stderr = %q, want %q", stderr, tt.wantErr)
+			}
+		})
+	}
+}
