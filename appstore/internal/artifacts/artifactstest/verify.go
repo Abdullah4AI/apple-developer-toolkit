@@ -79,6 +79,14 @@ func NewTrustChain(t testing.TB, notBefore, notAfter time.Time) TrustChain {
 // valid from notBefore to notAfter.
 func NewTrustChainWithLeaf(t testing.TB, leafType LeafType, notBefore, notAfter time.Time) TrustChain {
 	t.Helper()
+	return NewTrustChainWithAlgorithms(t, leafType, notBefore, notAfter, x509.ECDSAWithSHA256, x509.ECDSAWithSHA256)
+}
+
+// NewTrustChainWithAlgorithms selects the certificate signature algorithms for
+// the leaf and intermediate to exercise rejection of legacy SHA-1 chains.
+// Both issuers have ECDSA keys; the root always uses a modern signature.
+func NewTrustChainWithAlgorithms(t testing.TB, leafType LeafType, notBefore, notAfter time.Time, leafAlgorithm, intermediateAlgorithm x509.SignatureAlgorithm) TrustChain {
+	t.Helper()
 	rootKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
 		t.Fatal(err)
@@ -95,7 +103,8 @@ func NewTrustChainWithLeaf(t testing.TB, leafType LeafType, notBefore, notAfter 
 		t.Fatal(err)
 	}
 	intermediate := createCertificate(t, &x509.Certificate{
-		SerialNumber: big.NewInt(2), Subject: pkix.Name{CommonName: IssuerCommonName},
+		SignatureAlgorithm: intermediateAlgorithm,
+		SerialNumber:       big.NewInt(2), Subject: pkix.Name{CommonName: IssuerCommonName},
 		NotBefore: caStart, NotAfter: caEnd, IsCA: true, BasicConstraintsValid: true,
 		KeyUsage: x509.KeyUsageCertSign,
 	}, root, &intermediateKey.PublicKey, rootKey)
@@ -109,9 +118,10 @@ func NewTrustChainWithLeaf(t testing.TB, leafType LeafType, notBefore, notAfter 
 		extensions = append(extensions, pkix.Extension{Id: marker, Critical: true, Value: []byte{0x05, 0x00}})
 	}
 	leaf := createCertificate(t, &x509.Certificate{
-		SerialNumber: big.NewInt(3),
-		Subject:      pkix.Name{CommonName: SignerCommonName, OrganizationalUnit: []string{TeamID}, Organization: []string{"Example Corp"}},
-		NotBefore:    notBefore, NotAfter: notAfter,
+		SignatureAlgorithm: leafAlgorithm,
+		SerialNumber:       big.NewInt(3),
+		Subject:            pkix.Name{CommonName: SignerCommonName, OrganizationalUnit: []string{TeamID}, Organization: []string{"Example Corp"}},
+		NotBefore:          notBefore, NotAfter: notAfter,
 		KeyUsage:           x509.KeyUsageDigitalSignature,
 		ExtKeyUsage:        leafType.ExtKeyUsage,
 		UnknownExtKeyUsage: leafType.AppleEKU,
@@ -288,9 +298,12 @@ func codeSigningCMS(t testing.TB, chain TrustChain, directories [][]byte, hashTy
 		plist += `</array></dict></plist>`
 		config.ExtraSignedAttributes = []pkcs7.Attribute{{Type: oidAppleCDHashes, Value: []byte(plist)}}
 	}
-	if err := signed.AddSignerChain(chain.Leaf, chain.LeafKey, []*x509.Certificate{chain.Intermediate}, config); err != nil {
+	// Carry the intermediate without pre-validating its chain. Negative
+	// fixtures (including SHA-1 certificates) must reach the verifier under test.
+	if err := signed.AddSigner(chain.Leaf, chain.LeafKey, config); err != nil {
 		t.Fatal(err)
 	}
+	signed.AddCertificate(chain.Intermediate)
 	signed.Detach()
 	data, err := signed.Finish()
 	if err != nil {

@@ -170,6 +170,27 @@ func TestVerifyIPARejectsTampering(t *testing.T) {
 }
 
 func TestVerifyIPAClassifiesChainProblems(t *testing.T) {
+	// Legacy platform chains must remain untrusted even when the signer,
+	// integrity, root, and validity window are otherwise acceptable.
+	at := time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC)
+	for name, algorithms := range map[string][2]x509.SignatureAlgorithm{
+		"SHA-1 leaf":         {x509.ECDSAWithSHA1, x509.ECDSAWithSHA256},
+		"SHA-1 intermediate": {x509.ECDSAWithSHA256, x509.ECDSAWithSHA1},
+		"modern chain":       {x509.ECDSAWithSHA256, x509.ECDSAWithSHA256},
+	} {
+		t.Run(name, func(t *testing.T) {
+			chain := artifactstest.NewTrustChainWithAlgorithms(t, artifactstest.AppleSoftwareSigningLeaf, at.Add(-time.Hour), at.Add(time.Hour), algorithms[0], algorithms[1])
+			policy := testPolicy(chain)
+			policy.now = func() time.Time { return at }
+			ipa := verificationIPA(t, artifactstest.SignedMachO(t, sealedOptions(&chain)), zip.Deflate, nil)
+			want := VerificationUntrustedChain
+			if name == "modern chain" {
+				want = VerificationValid
+			}
+			expectVerification(t, verifyIPA(t, ipa, policy), want, "CMS signature and 1 code directory and 4 code pages verified")
+		})
+	}
+
 	chain := artifactstest.NewTrustChain(t, validFrom, validUntil)
 	ipa := verificationIPA(t, artifactstest.SignedMachO(t, sealedOptions(&chain)), zip.Deflate, nil)
 	apple := appleTrustPolicyForAnyOS(t)

@@ -53,11 +53,12 @@ type CreativePlacementSwapResult struct {
 	ImageID             string `json:"imageId,omitempty"`
 	VideoID             string `json:"videoId,omitempty"`
 	PlacementType       string `json:"placementType"`
+	PlacementGroup      string `json:"placementGroup,omitempty"`
 	State               string `json:"state,omitempty"`
 }
 
 func creativePlacementSwapResultRows(r *CreativePlacementSwapResult) ([]string, [][]string) {
-	return []string{"ID", "Swapped", "Previous Placement ID", "Localization ID", "Image ID", "Video ID", "Placement Type", "State"}, [][]string{{r.ID, strconv.FormatBool(r.Swapped), r.PreviousPlacementID, r.LocalizationID, r.ImageID, r.VideoID, r.PlacementType, r.State}}
+	return []string{"ID", "Swapped", "Previous Placement ID", "Localization ID", "Image ID", "Video ID", "Placement Type", "Placement Group", "State"}, [][]string{{r.ID, strconv.FormatBool(r.Swapped), r.PreviousPlacementID, r.LocalizationID, r.ImageID, r.VideoID, r.PlacementType, r.PlacementGroup, r.State}}
 }
 
 // CreativePlacementBulkDeleteResult records progress of sequential placement removals.

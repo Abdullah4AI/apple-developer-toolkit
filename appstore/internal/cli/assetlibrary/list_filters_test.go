@@ -10,8 +10,9 @@ func TestLibraryFiltersOnlyOnMediaLists(t *testing.T) {
 				if name == "id" && child.Name != "list" {
 					continue
 				}
-				// Upload --category selects a destination; it is not a list filter.
-				if name == "category" && child.Name == "upload" {
+				// Upload --category and --reference-name set attributes of the new
+				// asset; they are not list filters.
+				if (name == "category" || name == "reference-name") && child.Name == "upload" {
 					continue
 				}
 				got := child.FlagSet.Lookup(name) != nil

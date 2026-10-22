@@ -2,9 +2,12 @@ package artifacts
 
 import (
 	"bytes"
+	"crypto/x509"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -28,9 +31,55 @@ func codesignAccepts(t *testing.T, path string) bool {
 	return exec.Command(codesign, "--verify", "--strict", path).Run() == nil
 }
 
+// codesign uses macOS trust policy, whereas our offline verifier uses Go's
+// certificate policy. In particular, Go rejects SHA-1-signed certificates even
+// when codesign accepts the binary. Inspect the actual chain independently with
+// codesign so this exception cannot hide arbitrary untrusted-chain failures.
+func expectSystemBinaryVerification(t *testing.T, path string, result SignatureVerification) {
+	t.Helper()
+	prefix := filepath.Join(t.TempDir(), "certificate")
+	if output, err := exec.Command("codesign", "--display", "--extract-certificates="+prefix, path).CombinedOutput(); err != nil {
+		t.Fatalf("extract signing certificate: %v: %s", err, output)
+	}
+	usesSHA1 := false
+	for index := 0; ; index++ {
+		der, err := os.ReadFile(prefix + strconv.Itoa(index))
+		if index > 0 && errors.Is(err, os.ErrNotExist) {
+			break
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		certificate, err := x509.ParseCertificate(der)
+		if err != nil {
+			t.Fatal(err)
+		}
+		// A root's self-signature does not participate in chain validation.
+		if index > 0 && bytes.Equal(certificate.RawIssuer, certificate.RawSubject) {
+			continue
+		}
+		if certificate.SignatureAlgorithm == x509.SHA1WithRSA || certificate.SignatureAlgorithm == x509.ECDSAWithSHA1 {
+			usesSHA1 = true
+		}
+	}
+	if !strings.HasPrefix(result.Detail, "CMS signature and ") || !strings.Contains(result.Detail, "code pages verified") {
+		t.Fatalf("system binary integrity was not verified: %+v", result)
+	}
+	if usesSHA1 {
+		// The certificates select this expectation; the diagnostic must also
+		// identify SHA-1 so missing roots or other trust regressions fail.
+		sha1Rejection := strings.Contains(result.Detail, "insecure algorithm SHA1-RSA") || strings.Contains(result.Detail, "insecure algorithm ECDSA-SHA1")
+		if result.Status != VerificationUntrustedChain || !sha1Rejection {
+			t.Fatalf("certificate chain must be rejected specifically for SHA-1: %+v", result)
+		}
+	} else {
+		expectVerification(t, result, VerificationValid, "leaf is an Apple software signing certificate")
+	}
+}
+
 // Real Apple platform binaries exercise BER CMS, multiple code directories,
 // and CDHashes attributes that the synthetic fixtures only approximate.
-func TestVerifyMachOAgreesWithCodesignOnSystemBinary(t *testing.T) {
+func TestVerifyMachOChecksSystemBinaryIntegrityAndTrust(t *testing.T) {
 	data, err := os.ReadFile("/bin/ls")
 	if err != nil {
 		t.Skipf("system binary unavailable: %v", err)
@@ -44,9 +93,7 @@ func TestVerifyMachOAgreesWithCodesignOnSystemBinary(t *testing.T) {
 	if !codesignAccepts(t, copyPath) {
 		t.Skip("codesign does not accept the copied system binary")
 	}
-	if result.Status != VerificationValid || !strings.Contains(result.Detail, "leaf is an Apple software signing certificate") {
-		t.Fatalf("codesign accepts /bin/ls but verification=%+v", result)
-	}
+	expectSystemBinaryVerification(t, copyPath, result)
 
 	// Flip one byte of code inside the first slice's signed pages.
 	tampered := append([]byte(nil), data...)
@@ -169,7 +216,7 @@ func TestVerifyXarAcceptsEveryXcodePackage(t *testing.T) {
 
 // Platform binaries such as xpcproxy seal embedded launch-constraint blobs in
 // special slot 8, which the presence check must accept.
-func TestVerifyMachOAgreesWithCodesignOnLaunchConstrainedBinary(t *testing.T) {
+func TestVerifyMachOChecksLaunchConstrainedBinaryIntegrityAndTrust(t *testing.T) {
 	const path = "/usr/libexec/xpcproxy"
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -178,7 +225,5 @@ func TestVerifyMachOAgreesWithCodesignOnLaunchConstrainedBinary(t *testing.T) {
 	if !codesignAccepts(t, path) {
 		t.Skip("codesign does not accept the system binary")
 	}
-	if result := verifyMachOBytes(data, appleTrustPolicyForTest(t)); result.Status != VerificationValid {
-		t.Fatalf("codesign accepts %s but verification=%+v", path, result)
-	}
+	expectSystemBinaryVerification(t, path, verifyMachOBytes(data, appleTrustPolicyForTest(t)))
 }

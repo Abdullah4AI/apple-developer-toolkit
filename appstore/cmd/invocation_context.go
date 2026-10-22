@@ -12,6 +12,7 @@ import (
 
 	"github.com/peterbourgon/ff/v3/ffcli"
 
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/appleads"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/registry"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared/errfmt"
@@ -838,6 +839,11 @@ func runtimeFailureContext(analysis invocationAnalysis, err error, exitCode int)
 	}
 	if diagnostic, ok := shared.DiagnosticFromError(err); ok {
 		eventContext.FailureParameter = diagnostic.Parameter
+	} else if ambiguous, ok := errors.AsType[*shared.AmbiguousSelectionError](err); ok {
+		// An unwrapped ambiguity names the flag that picks one candidate. Paths
+		// that report it as a usage error keep their own classification above.
+		eventContext.DiagnosticCode = string(shared.DiagnosticInvalidInput)
+		eventContext.FailureParameter = strings.TrimSpace(ambiguous.Flag)
 	}
 	if shared.IsLocalProcessFailure(err) {
 		// A local child status never describes an API result, even when the
@@ -856,7 +862,7 @@ func runtimeFailureContext(analysis invocationAnalysis, err error, exitCode int)
 		return eventContext
 	}
 	switch {
-	case errors.Is(err, shared.ErrMissingAuth):
+	case errors.Is(err, shared.ErrMissingAuth), errors.Is(err, appleads.ErrMissingCredentials):
 		eventContext.FailureStage = telemetry.FailureStageValidation
 	case shared.IsValidationError(err), errors.Is(err, shared.ErrPending):
 		eventContext.FailureStage = telemetry.FailureStageValidation
@@ -887,7 +893,7 @@ func runtimeOutcomeKind(err error, exitCode int, eventContext telemetry.EventCon
 	switch {
 	case errors.Is(err, context.Canceled):
 		return telemetry.OutcomeCancelled
-	case errors.Is(err, shared.ErrMissingAuth), errors.Is(err, webcore.ErrInvalidAppleAccountCredentials), exitCode == ExitAuth:
+	case errors.Is(err, shared.ErrMissingAuth), errors.Is(err, appleads.ErrMissingCredentials), errors.Is(err, webcore.ErrInvalidAppleAccountCredentials), exitCode == ExitAuth:
 		return telemetry.OutcomeAuthError
 	case shared.IsValidationError(err), errors.Is(err, shared.ErrPending):
 		return telemetry.OutcomeExpectedNegative

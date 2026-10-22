@@ -277,7 +277,16 @@ func TestLibraryReuseAtomicSwapContexts(t *testing.T) {
 			if c.resource == "appEventLocalizations" {
 				kind = "EVENT_CARD_ASSET"
 			}
+			group := "IPHONE_67"
+			if c.resource == "appEventLocalizations" {
+				group = "DEFAULT_PROFILE"
+			}
+			calls := []string{}
 			http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+				calls = append(calls, req.Method+" "+req.URL.Path)
+				if req.Method == "GET" && req.URL.Path == "/v1/appAssetLibraryPlacements/old" {
+					return jsonResponse(200, `{"data":{"type":"appAssetLibraryPlacements","id":"old","attributes":{"placementType":"`+kind+`","placementGroup":"`+group+`"}}}`)
+				}
 				if req.Method != "POST" || req.URL.Path != "/v1/appAssetLibraryPlacements" {
 					t.Fatalf("request=%s %s", req.Method, req.URL)
 				}
@@ -285,7 +294,7 @@ func TestLibraryReuseAtomicSwapContexts(t *testing.T) {
 				if err := json.NewDecoder(req.Body).Decode(&got); err != nil {
 					t.Fatal(err)
 				}
-				want := map[string]any{"data": map[string]any{"type": "appAssetLibraryPlacements", "attributes": map[string]any{"placementType": kind}, "relationships": map[string]any{"video": map[string]any{"data": map[string]any{"type": "appAssetLibraryVideos", "id": "video"}}, c.relationship: map[string]any{"data": map[string]any{"type": c.resource, "id": "loc"}}, "placementToSwapOut": map[string]any{"data": map[string]any{"type": "appAssetLibraryPlacements", "id": "old"}}}}}
+				want := map[string]any{"data": map[string]any{"type": "appAssetLibraryPlacements", "attributes": map[string]any{"placementType": kind, "placementGroup": group}, "relationships": map[string]any{"video": map[string]any{"data": map[string]any{"type": "appAssetLibraryVideos", "id": "video"}}, c.relationship: map[string]any{"data": map[string]any{"type": c.resource, "id": "loc"}}, "placementToSwapOut": map[string]any{"data": map[string]any{"type": "appAssetLibraryPlacements", "id": "old"}}}}}
 				if !reflect.DeepEqual(got, want) {
 					t.Fatalf("swap payload=%v want=%v", got, want)
 				}
@@ -294,10 +303,29 @@ func TestLibraryReuseAtomicSwapContexts(t *testing.T) {
 			args := append(strings.Fields(c.path), "placements", "swap", "--localization-id", "loc", "--placement-id", "old", "--video-id", "video", "--placement-type", kind, "--confirm")
 			stdout, stderr, err := runLibraryReuse(t, args...)
 			var receipt map[string]any
-			if err != nil || stderr != "" || json.Unmarshal([]byte(stdout), &receipt) != nil || receipt["id"] != "new" || receipt["swapped"] != true || receipt["previousPlacementId"] != "old" || receipt["videoId"] != "video" {
+			if err != nil || stderr != "" || json.Unmarshal([]byte(stdout), &receipt) != nil || receipt["id"] != "new" || receipt["swapped"] != true || receipt["previousPlacementId"] != "old" || receipt["videoId"] != "video" || receipt["placementGroup"] != group {
 				t.Fatalf("swap receipt=%s %s %v", stdout, stderr, err)
 			}
+			if want := []string{"GET /v1/appAssetLibraryPlacements/old", "POST /v1/appAssetLibraryPlacements"}; !reflect.DeepEqual(calls, want) {
+				t.Fatalf("calls=%v want %v", calls, want)
+			}
 		})
+	}
+}
+
+func TestLibraryReuseSwapStopsWhenExistingPlacementCannotBeRead(t *testing.T) {
+	setupAuth(t)
+	original := http.DefaultTransport
+	t.Cleanup(func() { http.DefaultTransport = original })
+	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		if req.Method != "GET" || req.URL.Path != "/v1/appAssetLibraryPlacements/old" {
+			t.Fatalf("swap continued after failed lookup: %s %s", req.Method, req.URL)
+		}
+		return jsonResponse(404, `{"errors":[{"status":"404","code":"NOT_FOUND","detail":"missing"}]}`)
+	})
+	stdout, _, err := runLibraryReuse(t, "localizations", "placements", "swap", "--localization-id", "loc", "--placement-id", "old", "--image-id", "image", "--placement-type", "APP_SCREENSHOT", "--confirm")
+	if err == nil || stdout != "" || !strings.Contains(err.Error(), "placements swap: read placement old") {
+		t.Fatalf("stdout=%q err=%v", stdout, err)
 	}
 }
 
@@ -393,6 +421,10 @@ func TestLibraryReuseSwapBulkFailureDoesNotFallBack(t *testing.T) {
 		for _, response := range responses {
 			calls := 0
 			http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+				// Swap reads the existing placement's group before its one mutation.
+				if operation == "swap" && req.Method == "GET" && req.URL.Path == "/v1/appAssetLibraryPlacements/old" {
+					return jsonResponse(200, `{"data":{"type":"appAssetLibraryPlacements","id":"old","attributes":{"placementGroup":"DEFAULT_PROFILE"}}}`)
+				}
 				calls++
 				want := "POST"
 				if operation == "delete" {
@@ -433,6 +465,9 @@ func TestLibraryReuseSwapAndBulkHumanReceipts(t *testing.T) {
 	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		if req.URL.Path == "/v1/appAssetLibraryPlacements" {
 			return jsonResponse(201, `{"data":{"type":"appAssetLibraryPlacements","id":"new"}}`)
+		}
+		if req.Method == "GET" {
+			return jsonResponse(200, `{"data":{"type":"appAssetLibraryPlacements","id":"old","attributes":{"placementGroup":"DEFAULT_PROFILE"}}}`)
 		}
 		return jsonResponse(204, "")
 	})

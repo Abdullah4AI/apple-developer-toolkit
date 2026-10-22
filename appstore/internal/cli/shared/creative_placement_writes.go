@@ -49,7 +49,7 @@ func creativePlacementWriteCommand(resource, prefix, label string, swap bool) *f
 	if swap {
 		usage += " --placement-id ID --confirm"
 		shortHelp = "Replace an existing placement using one asset library swap request."
-		longHelp = "Replace an existing placement for " + label + " by linking placementToSwapOut in one POST request. This relationship is a live-verified extension absent from the published OpenAPI 4.5.1 create schema. Supply exactly one image or video ID and the replacement placement type. The replacement must have the same media type as the existing placement. Screenshots require images; previews require videos. No placement group is sent: Apple validates the existing placement, context, group, media compatibility, and editability. Replacement requires --confirm. This does not submit for review or promise publication. There is no separate delete or fallback removal if the request fails."
+		longHelp = "Replace an existing placement for " + label + " by linking placementToSwapOut in one POST request. This relationship is a live-verified extension absent from the published OpenAPI 4.5.1 create schema. Supply exactly one image or video ID and the replacement placement type. The replacement must have the same media type as the existing placement. Screenshots require images; previews require videos. The replacement keeps the existing placement's group: the command reads it from the existing placement and sends it with the request, because Apple requires the two groups to match. Apple validates the existing placement, context, media compatibility, and editability. Replacement requires --confirm. This does not submit for review or promise publication. There is no separate delete or fallback removal if the request fails."
 		exampleSuffix = " --placement-id OLD_PLACEMENT_ID --confirm"
 	} else {
 		usage += " [--placement-group GROUP]"
@@ -121,13 +121,24 @@ func creativePlacementWriteCommand(resource, prefix, label string, swap bool) *f
 			} else {
 				attributes["placementGroup"] = placementGroup
 			}
-			payload, err := json.Marshal(map[string]any{"data": map[string]any{"type": "appAssetLibraryPlacements", "attributes": attributes, "relationships": relationships}})
-			if err != nil {
-				return err
-			}
 			client, err := GetASCClient()
 			if err != nil {
 				return fmt.Errorf("placements "+operation+": %w", err)
+			}
+			if swap {
+				// Apple rejects a swap whose placementGroup differs from the
+				// placement being replaced, and requires it for screenshots.
+				placementGroup, err = existingPlacementGroup(ctx, client, previousID)
+				if err != nil {
+					return fmt.Errorf("placements swap: read placement %s: %w", previousID, err)
+				}
+				if placementGroup != "" {
+					attributes["placementGroup"] = placementGroup
+				}
+			}
+			payload, err := json.Marshal(map[string]any{"data": map[string]any{"type": "appAssetLibraryPlacements", "attributes": attributes, "relationships": relationships}})
+			if err != nil {
+				return err
 			}
 			requestCtx, cancel := ContextWithTimeout(ctx)
 			defer cancel()
@@ -151,11 +162,37 @@ func creativePlacementWriteCommand(resource, prefix, label string, swap bool) *f
 				return fmt.Errorf("placements %s: invalid placement response", operation)
 			}
 			if swap {
-				return PrintOutput(&asc.CreativePlacementSwapResult{ID: envelope.Data.ID, Swapped: true, PreviousPlacementID: previousID, LocalizationID: localizationID, ImageID: imageID, VideoID: videoID, PlacementType: placementType, State: envelope.Data.Attributes.State}, *output.Output, *output.Pretty)
+				return PrintOutput(&asc.CreativePlacementSwapResult{ID: envelope.Data.ID, Swapped: true, PreviousPlacementID: previousID, LocalizationID: localizationID, ImageID: imageID, VideoID: videoID, PlacementType: placementType, PlacementGroup: placementGroup, State: envelope.Data.Attributes.State}, *output.Output, *output.Pretty)
 			}
 			return PrintOutput(&asc.CreativePlacementCreateResult{ID: envelope.Data.ID, Created: true, LocalizationID: localizationID, ImageID: imageID, VideoID: videoID, PlacementType: placementType, PlacementGroup: placementGroup, State: envelope.Data.Attributes.State}, *output.Output, *output.Pretty)
 		},
 	}
+}
+
+// existingPlacementGroup reads the placement group of an existing placement.
+func existingPlacementGroup(ctx context.Context, client *asc.Client, placementID string) (string, error) {
+	requestCtx, cancel := ContextWithTimeout(ctx)
+	defer cancel()
+	response, err := client.RawRequest(requestCtx, "GET", "/v1/appAssetLibraryPlacements/"+url.PathEscape(placementID), nil)
+	if err != nil {
+		return "", err
+	}
+	var envelope struct {
+		Data struct {
+			ID         string `json:"id"`
+			Type       string `json:"type"`
+			Attributes struct {
+				PlacementGroup string `json:"placementGroup"`
+			} `json:"attributes"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(response, &envelope); err != nil {
+		return "", fmt.Errorf("invalid response: %w", err)
+	}
+	if envelope.Data.ID != placementID || envelope.Data.Type != "appAssetLibraryPlacements" {
+		return "", fmt.Errorf("invalid placement response")
+	}
+	return strings.TrimSpace(envelope.Data.Attributes.PlacementGroup), nil
 }
 
 func creativePlacementDeleteCommand(prefix string) *ffcli.Command {

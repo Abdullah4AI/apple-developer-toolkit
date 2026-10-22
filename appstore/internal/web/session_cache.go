@@ -1610,8 +1610,10 @@ func (temp *sessionTempFile) cleanup() {
 	}
 }
 
-func createAndWriteSessionTempFile(destination string, data []byte, perm os.FileMode) (*sessionTempFile, error) {
-	temp, err := createSessionTempFile(destination, perm)
+// createAndWriteSessionTempFile stages data in a private (0600) temporary file
+// beside destination.
+func createAndWriteSessionTempFile(destination string, data []byte) (*sessionTempFile, error) {
+	temp, err := createSessionTempFile(destination, 0o600)
 	if err != nil {
 		return nil, err
 	}
@@ -1822,7 +1824,7 @@ func writeSessionToFile(key string, sess persistedSession) error {
 		return cause
 	}
 
-	tmpSession, err := createAndWriteSessionTempFile(state.sessionPath, raw, 0o600)
+	tmpSession, err := createAndWriteSessionTempFile(state.sessionPath, raw)
 	if err != nil {
 		return fmt.Errorf("failed to write session cache: %w", err)
 	}
@@ -1836,7 +1838,7 @@ func writeSessionToFile(key string, sess persistedSession) error {
 	if err != nil {
 		return rollback(fmt.Errorf("failed to marshal last session pointer: %w", err))
 	}
-	tmpLast, err := createAndWriteSessionTempFile(state.lastPath, lastRaw, 0o600)
+	tmpLast, err := createAndWriteSessionTempFile(state.lastPath, lastRaw)
 	if err != nil {
 		return rollback(fmt.Errorf("failed to write last session pointer: %w", err))
 	}
@@ -1886,7 +1888,7 @@ func writeSessionToFileIfAbsent(key string, sess persistedSession) error {
 	if err != nil {
 		return rollback(fmt.Errorf("failed to marshal last session pointer: %w", err))
 	}
-	tmpLast, err := createAndWriteSessionTempFile(state.lastPath, lastRaw, 0o600)
+	tmpLast, err := createAndWriteSessionTempFile(state.lastPath, lastRaw)
 	if err != nil {
 		return rollback(fmt.Errorf("failed to write last session pointer: %w", err))
 	}

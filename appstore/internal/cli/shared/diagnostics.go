@@ -2,7 +2,9 @@ package shared
 
 import (
 	"errors"
+	"io/fs"
 	"strings"
+	"syscall"
 )
 
 // DiagnosticCode is a privacy-safe, low-cardinality reason for a command
@@ -66,6 +68,40 @@ func WithDiagnostic(err error, code DiagnosticCode, parameter string) error {
 			Parameter: strings.TrimSpace(parameter),
 		},
 	}
+}
+
+// LocalFileDiagnostic reports the diagnostic for a failure involving a local
+// file. A missing or unreadable file maps to file_not_found or
+// file_permission_denied. Any other filesystem failure, such as EIO, says
+// nothing about the file, so ok is false. Any other error is a problem with
+// the file's contents and maps to contentCode; an empty contentCode leaves
+// such errors unclassified.
+func LocalFileDiagnostic(err error, contentCode DiagnosticCode) (code DiagnosticCode, ok bool) {
+	var pathErr *fs.PathError
+	var errno syscall.Errno
+	switch {
+	case err == nil:
+		return "", false
+	case errors.Is(err, fs.ErrNotExist):
+		return DiagnosticFileNotFound, true
+	case errors.Is(err, fs.ErrPermission):
+		return DiagnosticFilePermissionDenied, true
+	case errors.As(err, &pathErr), errors.As(err, &errno), contentCode == "":
+		return "", false
+	}
+	return contentCode, true
+}
+
+// ClassifyLocalFileError applies LocalFileDiagnostic to a failure involving
+// the local file named by parameter. A classified failure becomes an
+// expected-negative validation error with its message and exit code
+// unchanged; any other error is returned as is.
+func ClassifyLocalFileError(err error, parameter string, contentCode DiagnosticCode) error {
+	code, ok := LocalFileDiagnostic(err, contentCode)
+	if !ok {
+		return err
+	}
+	return WithDiagnostic(NewValidationError(err), code, parameter)
 }
 
 // DiagnosticFromError returns the outermost allowlisted diagnostic annotation

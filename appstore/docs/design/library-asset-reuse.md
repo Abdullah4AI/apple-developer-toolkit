@@ -84,9 +84,11 @@ provider verification before publication.
 --placement-type TYPE --confirm` sends one POST to `/v1/appAssetLibraryPlacements`.
 It reuses creation's media/context validation and links `placementToSwapOut` to
 `appAssetLibraryPlacements`. The live-verified swap relationship is an undocumented extension to official
-OpenAPI 4.5.1. The captured swap contract sends placement type but
-omits placement group. There is no group flag and no separate deletion or fallback
-removal. Apple validates existing group/context compatibility and requires the
+OpenAPI 4.5.1. The swap sends placement type and the existing
+placement's group, read with `GET /v1/appAssetLibraryPlacements/{id}` first: Apple
+rejects screenshot swaps without a placementGroup matching the replaced placement
+(#3100). There is no group flag and no separate deletion or fallback
+removal. Apple validates existing context compatibility and requires the
 replacement to have the same media type as the existing placement. Image and video
 IDs are mutually exclusive; native screenshots require images, previews videos.
 A registered camelCase swap receipt includes the new ID and previousPlacementId.

@@ -303,6 +303,8 @@ Finance reports use Apple fiscal months (`YYYY-MM`), not calendar months.
 
 ## Offline signature verification: Apple leaf certificate types
 
+The offline verifier uses Go's certificate-chain policy, not macOS's platform trust policy. SHA-1-signed leaf or intermediate certificates report `untrusted-chain`, even when `codesign --verify --strict` accepts the binary. The receipt still reports successful CMS and code-page integrity checks when those checks pass. Recognizing an Apple leaf type does not override certificate-chain policy, expiry, or trust anchors.
+
 `asc ipa-info --verify-signature` accepts only code-signing leaves and `asc pkg-info --verify-signature` accepts only installer leaves (`internal/artifacts/verify_leaf.go`). Leaves are matched most-specific-first by Apple OID markers (`1.2.840.113635.100.…`, treated as handled critical extensions) and required EKU; unrecognized or dual-use leaves report `untrusted-chain`:
 
 | Type | Apple markers (`1.2.840.113635.100.…`) | EKU | Artifact | Observed on |

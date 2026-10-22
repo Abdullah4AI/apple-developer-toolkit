@@ -86,3 +86,50 @@ func TestWebAuthStatusIgnoresAppleIDEnvironmentFallback(t *testing.T) {
 		t.Fatalf("stdout = %q, did not expect the environment Apple Account", stdout)
 	}
 }
+
+// TestWebCommandsHonorNoAutoLoginEnvironment pins ASC_WEB_NO_AUTO_LOGIN at the
+// command level: a valid opt-in turns a missing session into the policy's
+// missing-session error, and an unrecognized value is a usage error instead of
+// being ignored.
+func TestWebCommandsHonorNoAutoLoginEnvironment(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		value      string
+		appleID    string
+		wantHint   string
+		wantStderr string
+	}{
+		{name: "opted in", value: "1", appleID: "user@example.com", wantHint: "ASC_WEB_NO_AUTO_LOGIN is set"},
+		{name: "opted in without an account", value: "1", wantHint: "ASC_WEB_NO_AUTO_LOGIN is set"},
+		{name: "invalid value", value: "maybe", appleID: "user@example.com", wantStderr: `Error: invalid ASC_WEB_NO_AUTO_LOGIN value "maybe"`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("HOME", t.TempDir())
+			t.Setenv("ASC_BYPASS_KEYCHAIN", "1")
+			t.Setenv("ASC_WEB_SESSION_CACHE_BACKEND", "file")
+			t.Setenv("ASC_WEB_SESSION_CACHE_DIR", t.TempDir())
+			t.Setenv("ASC_WEB_SESSION_CACHE", "1")
+			t.Setenv(webPasswordEnvNameForTest(), "")
+			t.Setenv(webAppleIDEnvNameForTest(), tc.appleID)
+			t.Setenv("ASC_WEB_NO_AUTO_LOGIN", tc.value)
+
+			stderr, runErr := runWebCommandForAppleIDDefault(t, "web", "review", "show", "--app", "123456789")
+			if tc.wantStderr != "" {
+				if !errors.Is(runErr, flag.ErrHelp) {
+					t.Fatalf("expected a usage error (exit 2), got %v", runErr)
+				}
+				if !strings.Contains(stderr, tc.wantStderr) {
+					t.Fatalf("stderr = %q, want %q", stderr, tc.wantStderr)
+				}
+				return
+			}
+			var missing *shared.MissingWebSessionError
+			if !errors.As(runErr, &missing) || errors.Is(runErr, flag.ErrHelp) {
+				t.Fatalf("expected the missing-session error without the usage page, got %v", runErr)
+			}
+			if !strings.Contains(missing.Hint, tc.wantHint) {
+				t.Fatalf("hint = %q, want %q", missing.Hint, tc.wantHint)
+			}
+		})
+	}
+}

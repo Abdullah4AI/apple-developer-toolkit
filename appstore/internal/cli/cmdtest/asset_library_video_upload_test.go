@@ -16,6 +16,10 @@ import (
 )
 
 func TestAssetLibraryVideoUpload(t *testing.T) { runLibraryVideoUploadCase(t, false, false, false) }
+func TestAssetLibraryVideoUploadSendsReferenceName(t *testing.T) {
+	runLibraryVideoUploadCaseWithReferenceName(t, false, false, false, "Hero · en-US · 3.14")
+}
+
 func TestAssetLibraryVideoUploadKeepsProcessingPartialReceipt(t *testing.T) {
 	runLibraryVideoUploadCase(t, true, false, false)
 }
@@ -29,6 +33,10 @@ func TestAssetLibraryVideoUploadRequestDeadlineKeepsRequestHint(t *testing.T) {
 }
 
 func runLibraryVideoUploadCase(t *testing.T, pending, objectSpec, requestDeadline bool) {
+	runLibraryVideoUploadCaseWithReferenceName(t, pending, objectSpec, requestDeadline, "")
+}
+
+func runLibraryVideoUploadCaseWithReferenceName(t *testing.T, pending, objectSpec, requestDeadline bool, referenceName string) {
 	if runtime.GOOS == "windows" {
 		t.Skip("POSIX ffprobe fixture")
 	}
@@ -77,6 +85,9 @@ printf '%s' '{"streams":[{"codec_type":"video","codec_name":"h264","width":1920,
 			if data["type"] != "appAssetLibraryVideos" || attrs["category"] != "CREATIVE_ASSETS" || attrs["fileName"] != "video.mp4" {
 				t.Fatalf("reservation %+v", body)
 			}
+			if got, ok := attrs["referenceName"]; ok != (referenceName != "") || (ok && got != referenceName) {
+				t.Fatalf("reservation referenceName = %v, want %q", got, referenceName)
+			}
 			return jsonResponse(201, `{"data":{"id":"video","type":"appAssetLibraryVideos","attributes":{"state":"AWAITING_UPLOAD","uploadOperations":[{"method":"PUT","url":"https://storage.example/video","offset":0,"length":21}]}}}`)
 		case "PUT /video":
 			bytes, err := io.ReadAll(req.Body)
@@ -100,7 +111,11 @@ printf '%s' '{"streams":[{"codec_type":"video","codec_name":"h264","width":1920,
 			return nil, context.Canceled
 		}
 	})
-	stdout, stderr, err := runAssetLibrary(t, "asset-library", "videos", "upload", "--library-id", "library", "--file", file, "--output", "json")
+	args := []string{"asset-library", "videos", "upload", "--library-id", "library", "--file", file, "--output", "json"}
+	if referenceName != "" {
+		args = append(args, "--reference-name", referenceName)
+	}
+	stdout, stderr, err := runAssetLibrary(t, args...)
 	if requestDeadline {
 		if !errors.Is(err, context.DeadlineExceeded) || errfmt.Classify(err).Hint != "Increase the request timeout (e.g. set `ASC_TIMEOUT=90s`)." {
 			t.Fatalf("request deadline uses wrong hint: err=%v hint=%q", err, errfmt.Classify(err).Hint)
@@ -108,7 +123,7 @@ printf '%s' '{"streams":[{"codec_type":"video","codec_name":"h264","width":1920,
 		return
 	}
 	if pending {
-		if !errors.Is(err, context.DeadlineExceeded) || errfmt.Classify(err).Hint != "Increase the upload timeout (e.g. set `ASC_UPLOAD_TIMEOUT=600s`)." {
+		if !errors.Is(err, context.DeadlineExceeded) || errfmt.Classify(err).Hint != "Increase the upload timeout (e.g. set `ASC_UPLOAD_TIMEOUT=45m`)." {
 			t.Fatalf("processing deadline uses wrong hint: err=%v hint=%q", err, errfmt.Classify(err).Hint)
 		}
 		if err == nil || !strings.Contains(stdout, `"uploaded":true`) || !strings.Contains(stdout, `"ready":false`) || !strings.Contains(stdout, `"videoId":"video"`) {
@@ -118,6 +133,9 @@ printf '%s' '{"streams":[{"codec_type":"video","codec_name":"h264","width":1920,
 	}
 	if err != nil {
 		t.Fatalf("error %v stdout %s stderr %s", err, stdout, stderr)
+	}
+	if referenceName != "" && !strings.Contains(stdout, `"referenceName":"`+referenceName+`"`) {
+		t.Fatalf("receipt missing referenceName: %s", stdout)
 	}
 	if !strings.Contains(stdout, `"videoId":"video"`) || !strings.Contains(stdout, `"ready":true`) {
 		t.Fatalf("receipt %s", stdout)

@@ -36,7 +36,7 @@ func creativeUploadFile(t *testing.T) (string, []byte) {
 }
 
 func TestAssetLibraryImageUpload(t *testing.T) {
-	for _, mode := range []string{"success", "standalone", "transient-processing", "table", "invalid-reservation", "upload-failure", "commit-failure", "processing-failed", "processing-timeout"} {
+	for _, mode := range []string{"success", "standalone", "transient-processing", "table", "invalid-reservation", "upload-failure", "commit-failure", "processing-failed", "processing-timeout", "reference-name"} {
 		t.Run(mode, func(t *testing.T) {
 			setupAuth(t)
 			t.Setenv("ASC_UPLOAD_TIMEOUT", "5s")
@@ -65,9 +65,10 @@ func TestAssetLibraryImageUpload(t *testing.T) {
 						Data struct {
 							Type       string
 							Attributes struct {
-								FileName string
-								FileSize int64
-								Category string
+								FileName      string
+								FileSize      int64
+								Category      string
+								ReferenceName *string
 							}
 							Relationships struct {
 								AssetLibrary struct{ Data struct{ Type, ID string } }
@@ -79,6 +80,9 @@ func TestAssetLibraryImageUpload(t *testing.T) {
 					}
 					if body.Data.Type != "appAssetLibraryImages" || body.Data.Attributes.FileName != "creative.png" || body.Data.Attributes.FileSize != int64(len(content)) || body.Data.Attributes.Category != category || body.Data.Relationships.AssetLibrary.Data.Type != "appAssetLibraries" || body.Data.Relationships.AssetLibrary.Data.ID != "lib" {
 						t.Fatalf("wrong reservation: %+v", body)
+					}
+					if got := body.Data.Attributes.ReferenceName; (mode == "reference-name") != (got != nil) || (got != nil && *got != imageReferenceName) {
+						t.Fatalf("wrong reservation referenceName: %v", got)
 					}
 					if mode == "invalid-reservation" {
 						return jsonResponse(201, `{"data":{"type":"appAssetLibraryImages","id":"image","attributes":{"uploadOperations":"invalid"}}}`)
@@ -147,7 +151,11 @@ func TestAssetLibraryImageUpload(t *testing.T) {
 			if mode == "table" {
 				output = "table"
 			}
-			stdout, stderr, err := runAssetLibrary(t, "asset-library", "images", "upload", "--library-id", "lib", "--file", path, "--output", output, "--category", category)
+			args := []string{"asset-library", "images", "upload", "--library-id", "lib", "--file", path, "--output", output, "--category", category}
+			if mode == "reference-name" {
+				args = append(args, "--reference-name", " "+imageReferenceName+" ")
+			}
+			stdout, stderr, err := runAssetLibrary(t, args...)
 			if mode == "table" {
 				if err != nil || !strings.Contains(stdout, "Image ID") || !strings.Contains(stdout, "creative.png") || !strings.Contains(stdout, "PREPARE_FOR_SUBMISSION") || !strings.Contains(stdout, "true") {
 					t.Fatalf("human output=%q err=%v", stdout, err)
@@ -155,15 +163,16 @@ func TestAssetLibraryImageUpload(t *testing.T) {
 				return
 			}
 			var receipt struct {
-				ImageID   string `json:"imageId"`
-				LibraryID string `json:"libraryId"`
-				FileName  string `json:"fileName"`
-				FileSize  int64  `json:"fileSize"`
-				State     string `json:"state"`
-				Uploaded  bool   `json:"uploaded"`
-				Ready     bool   `json:"ready"`
-				Width     int    `json:"width"`
-				Height    int    `json:"height"`
+				ImageID       string `json:"imageId"`
+				LibraryID     string `json:"libraryId"`
+				FileName      string `json:"fileName"`
+				FileSize      int64  `json:"fileSize"`
+				ReferenceName string `json:"referenceName"`
+				State         string `json:"state"`
+				Uploaded      bool   `json:"uploaded"`
+				Ready         bool   `json:"ready"`
+				Width         int    `json:"width"`
+				Height        int    `json:"height"`
 			}
 			if decodeErr := json.Unmarshal([]byte(stdout), &receipt); decodeErr != nil {
 				t.Fatalf("missing partial receipt: %s %v", stdout, decodeErr)
@@ -174,7 +183,10 @@ func TestAssetLibraryImageUpload(t *testing.T) {
 			if strings.Contains(stdout+stderr+stringError(err), "secret-signed") {
 				t.Fatal("signed URL leaked")
 			}
-			if mode == "success" || mode == "standalone" || mode == "transient-processing" {
+			if mode == "reference-name" && receipt.ReferenceName != imageReferenceName {
+				t.Fatalf("receipt referenceName = %q", receipt.ReferenceName)
+			}
+			if mode == "success" || mode == "standalone" || mode == "transient-processing" || mode == "reference-name" {
 				if err != nil || !receipt.Ready || !receipt.Uploaded || receipt.State != "PREPARE_FOR_SUBMISSION" || receipt.Width != 2 || receipt.Height != 2 || reads != 2 || uploaded != 2 {
 					t.Fatalf("receipt=%+v err=%v calls=%d", receipt, err, calls)
 				}
@@ -198,6 +210,8 @@ func TestAssetLibraryImageUpload(t *testing.T) {
 		})
 	}
 }
+
+const imageReferenceName = "Hero · en-US · 3.14"
 
 func jsonNumber(n int) string { data, _ := json.Marshal(n); return string(data) }
 func stringError(err error) string {
@@ -239,6 +253,30 @@ func TestAssetLibraryImageUploadRejectsInvalidImageBeforeHTTP(t *testing.T) {
 			http.DefaultTransport = roundTripFunc(func(*http.Request) (*http.Response, error) { t.Fatal("invalid image caused HTTP"); return nil, nil })
 			stdout, stderr, err := runAssetLibrary(t, "asset-library", "images", "upload", "--library-id", "lib", "--file", path)
 			if !isUsageClassError(err) || stdout != "" || stderr == "" {
+				t.Fatalf("err=%v stdout=%q stderr=%q", err, stdout, stderr)
+			}
+		})
+	}
+}
+
+func TestAssetLibraryUploadRejectsBlankReferenceNameBeforeHTTP(t *testing.T) {
+	setupAuth(t)
+	imagePath, _ := creativeUploadFile(t)
+	videoPath := filepath.Join(t.TempDir(), "video.mp4")
+	if err := os.WriteFile(videoPath, []byte("video"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	original := http.DefaultTransport
+	t.Cleanup(func() { http.DefaultTransport = original })
+	http.DefaultTransport = roundTripFunc(func(*http.Request) (*http.Response, error) {
+		t.Fatal("blank reference name caused HTTP")
+		return nil, nil
+	})
+	for _, tc := range []struct{ kind, file string }{{"images", imagePath}, {"videos", videoPath}} {
+		t.Run(tc.kind, func(t *testing.T) {
+			stdout, stderr, err := runAssetLibrary(t, "asset-library", tc.kind, "upload", "--library-id", "lib", "--file", tc.file, "--reference-name", "  ")
+			want := "asset-library " + tc.kind + " upload: --reference-name must not be blank"
+			if !isUsageClassError(err) || stdout != "" || !strings.Contains(stderr, want) {
 				t.Fatalf("err=%v stdout=%q stderr=%q", err, stdout, stderr)
 			}
 		})
