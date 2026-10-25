@@ -84,15 +84,15 @@ Examples:
 
 func GroupsCommand() *ffcli.Command {
 	return groupCommand("groups",
-		"Read multiseat customer groups and their members (sandbox only).",
+		"Read multiseat customer groups and their members.",
 		`Read multiseat customer groups and their members with the App Store Server API.
 
-Apple offers these endpoints only in the sandbox environment, so every
-command requires --environment sandbox. Group membership is separate from
+Production serves groups with a groupType of ORGANIZATION; sandbox also
+serves Apple's placeholder groups. Group membership is separate from
 entitlement: read transactions to decide what a customer can access.
 
 Examples:
-  asc storekit groups list --transaction-id 2000000000000001 --environment sandbox
+  asc storekit groups list --transaction-id 2000000000000001 --environment production
   asc storekit groups members --group-id 900000000000000000 --environment sandbox --paginate`,
 		groupsListCommand(), groupsMembersCommand())
 }
@@ -315,13 +315,11 @@ func notificationsTestStatusCommand() *ffcli.Command {
 		})
 }
 
-const groupsSandboxOnly = "customer groups require --environment sandbox (Apple offers Get Customer Groups and Get Group Members only in sandbox)"
-
 func groupsListCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("storekit groups list", flag.ExitOnError)
 	transactionID := fs.String("transaction-id", "", "Any transaction, original transaction, or app transaction ID for the customer")
 	flags := bindServerReadFlags(fs, false)
-	return documentedLeafCommand("list", "asc storekit groups list --transaction-id ID --environment sandbox [flags]",
+	return documentedLeafCommand("list", "asc storekit groups list --transaction-id ID --environment ENV [flags]",
 		"List the groups a customer belongs to (Get Customer Groups).",
 		`List the multiseat groups a customer belongs to, and their role for each
 product, with Apple's Get Customer Groups endpoint. In sandbox, a customer
@@ -329,12 +327,9 @@ without a CONSUMER group gets Apple's placeholder ORGANIZATION group
 900000000000000000.
 
 Examples:
-  asc storekit groups list --transaction-id 2000000000000001 --environment sandbox`, fs,
+  asc storekit groups list --transaction-id 2000000000000001 --environment production`, fs,
 		func(ctx context.Context, args []string) error {
 			if err := validateServerRead(args, flags, requiredFlag{"--transaction-id", *transactionID}); err != nil {
-				return err
-			}
-			if err := requireEnvironment(flags.common, storekitapi.Sandbox, groupsSandboxOnly); err != nil {
 				return err
 			}
 			raw, err := serverRead(ctx, fs.Name(), flags.common, func(ctx context.Context, client *storekitapi.Client) (json.RawMessage, error) {
@@ -354,7 +349,7 @@ func groupsMembersCommand() *ffcli.Command {
 	paginationToken := fs.String("pagination-token", "", "Pagination token from a previous response, to continue from that page")
 	paginate := fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")
 	flags := bindServerReadFlags(fs, false)
-	return documentedLeafCommand("members", "asc storekit groups members --group-id ID --environment sandbox [flags]",
+	return documentedLeafCommand("members", "asc storekit groups members --group-id ID --environment ENV [flags]",
 		"List the members of a group (Get Group Members).",
 		`List the customers in a multiseat group, by app transaction ID, with Apple's
 Get Group Members endpoint.
@@ -367,9 +362,6 @@ Examples:
 			}
 			if flagWasSet(fs, "limit") && (*limit < 1 || *limit > 100) {
 				return shared.UsageError("--limit must be between 1 and 100")
-			}
-			if err := requireEnvironment(flags.common, storekitapi.Sandbox, groupsSandboxOnly); err != nil {
-				return err
 			}
 			raw, err := serverRead(ctx, fs.Name(), flags.common, func(ctx context.Context, client *storekitapi.Client) (json.RawMessage, error) {
 				return fetchServerPages(func(token string) (json.RawMessage, error) {

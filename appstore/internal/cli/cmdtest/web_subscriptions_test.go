@@ -502,19 +502,18 @@ func TestWebSubscriptionsPricingMonthlyCommitmentBootstrapUsageExitCodes(t *test
 				"--monthly-price-point-id", "monthly",
 				"--confirm",
 			},
-			wantErr: "--territory cannot be USA or Singapore for monthly-commitment pricing",
+			wantErr: "--territory cannot be USA for monthly-commitment pricing",
 		},
 		{
-			name: "rejects Singapore",
+			name: "accepts Singapore",
 			args: []string{
 				"web", "subscriptions", "pricing", "monthly-commitment", "bootstrap",
 				"--subscription-id", "sub-1",
 				"--territory", "SGP",
 				"--upfront-price-point-id", "upfront",
 				"--monthly-price-point-id", "monthly",
-				"--confirm",
 			},
-			wantErr: "--territory cannot be USA or Singapore for monthly-commitment pricing",
+			wantErr: "--confirm is required",
 		},
 	}
 

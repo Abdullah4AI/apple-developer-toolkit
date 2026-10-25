@@ -783,7 +783,7 @@ func SubscriptionsUpdateCommand() *ffcli.Command {
 	fs.Var(&groupLevel, "group-level", "Subscription ordering level (positive integer)")
 	familySharable := fs.Bool("family-sharable", false, "Enable Family Sharing (cannot be undone)")
 	marketSettings := fs.String("market-settings", "", "Markets (comma-separated): APP_STORE, APPLE_SCHOOL, APPLE_BUSINESS")
-	multiSeatStatus := fs.String("multi-seat-status", "", "Multi-seat status: ENABLED, DISABLED")
+	multiSeatStatus := fs.String("multi-seat-status", "", "Multi-seat status: ENABLED, DISABLED (Apple default: ENABLED)")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
@@ -797,7 +797,8 @@ Examples:
   asc subscriptions update --id "SUB_ID" --review-note "Same paywall structure, design may differ"
   asc subscriptions update --id "SUB_ID" --subscription-period ONE_YEAR
   asc subscriptions update --id "SUB_ID" --group-level 3
-  asc subscriptions update --id "SUB_ID" --family-sharable`,
+  asc subscriptions update --id "SUB_ID" --family-sharable
+  asc subscriptions update --id "SUB_ID" --market-settings APP_STORE,APPLE_BUSINESS`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -1878,7 +1879,7 @@ Confirmation is required when --billing-mode monthly-commitment is selected.`,
 				}
 				territoryIDs, excluded := filterMonthlyCommitmentTerritories(territoryIDs)
 				if len(territoryIDs) == 0 {
-					return shared.UsageError("no eligible monthly-commitment territories remain after excluding USA and Singapore")
+					return shared.UsageError("no eligible monthly-commitment territories remain after excluding USA")
 				}
 				if !*confirm {
 					return shared.UsageError("--confirm is required for monthly-commitment availability changes")

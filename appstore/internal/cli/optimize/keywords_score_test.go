@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/ads"
@@ -390,7 +391,8 @@ func TestKeywordsScoreReportsIncompleteCompetitorMetadata(t *testing.T) {
 	failKeywordsAdsCollector(t)
 
 	stdout := captureSearchPlanStdout(t, func() error {
-		return KeywordsScoreCommand().ParseAndRun(context.Background(), []string{
+		command := keywordsScoreCommand(func() time.Time { return difficultyReferenceTime })
+		return command.ParseAndRun(context.Background(), []string{
 			"--keywords", "focus timer", "--output", "json",
 		})
 	})
@@ -418,13 +420,13 @@ func TestKeywordsScoreReportsIncompleteCompetitorMetadata(t *testing.T) {
 	if report.Rows[0].RawSignals[1].ReleaseDate != "" || report.Rows[0].RawSignals[1].CurrentVersionReleaseDate == "" {
 		t.Fatalf("partial metadata must preserve the valid update date: %+v", report.Rows[0].RawSignals[1])
 	}
-	if report.Rows[0].RawSignals[1].DaysSinceFirstRelease != keywordMissingDateDays || report.Rows[0].RawSignals[1].DaysSinceLastRelease >= keywordMissingDateDays {
+	if report.Rows[0].RawSignals[1].DaysSinceFirstRelease != keywordMissingDateDays || report.Rows[0].RawSignals[1].DaysSinceLastRelease != 20 {
 		t.Fatalf("partial metadata must use the valid update date while degrading the missing release date: %+v", report.Rows[0].RawSignals[1])
 	}
 	if report.Rows[0].RawSignals[2].ReleaseDate == "" || report.Rows[0].RawSignals[2].CurrentVersionReleaseDate != "" {
 		t.Fatalf("partial metadata must preserve the valid release date: %+v", report.Rows[0].RawSignals[2])
 	}
-	if report.Rows[0].RawSignals[2].DaysSinceFirstRelease >= keywordMissingDateDays || report.Rows[0].RawSignals[2].DaysSinceLastRelease != keywordMissingDateDays {
+	if report.Rows[0].RawSignals[2].DaysSinceFirstRelease != 300 || report.Rows[0].RawSignals[2].DaysSinceLastRelease != keywordMissingDateDays {
 		t.Fatalf("partial metadata must use the valid release date while degrading the missing update date: %+v", report.Rows[0].RawSignals[2])
 	}
 }

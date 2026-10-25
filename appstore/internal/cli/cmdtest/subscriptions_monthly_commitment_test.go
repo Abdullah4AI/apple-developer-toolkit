@@ -65,12 +65,17 @@ func TestSubscriptionsPricingMonthlyCommitmentValidationErrors(t *testing.T) {
 		{
 			name:    "enable rejects excluded price territory",
 			args:    []string{"subscriptions", "pricing", "monthly-commitment", "enable", "--subscription-id", "sub-1", "--price", "9.99", "--price-territory", "United States", "--territories", "Norway"},
-			wantErr: "--price-territory cannot be USA or Singapore",
+			wantErr: "--price-territory cannot be USA for monthly-commitment billing",
 		},
 		{
 			name:    "enable rejects excluded price territory with mixed flag order",
 			args:    []string{"subscriptions", "pricing", "monthly-commitment", "enable", "--territories", "Norway", "--price-territory", "USA", "--subscription-id", "sub-1", "--price", "9.99"},
-			wantErr: "--price-territory cannot be USA or Singapore",
+			wantErr: "--price-territory cannot be USA for monthly-commitment billing",
+		},
+		{
+			name:    "enable accepts Singapore price territory",
+			args:    []string{"subscriptions", "pricing", "monthly-commitment", "enable", "--subscription-id", "sub-1", "--price", "9.99", "--price-territory", "SGP", "--territories", "SGP"},
+			wantErr: "--confirm is required to enable monthly-commitment billing",
 		},
 		{
 			name:    "enable rejects available in new territories",
@@ -153,7 +158,7 @@ func TestSubscriptionsPricingMonthlyCommitmentUsageExitCodes(t *testing.T) {
 		{
 			name:    "mixed flag order invalid price territory returns usage",
 			args:    []string{"subscriptions", "pricing", "monthly-commitment", "enable", "--territories", "Norway", "--price-territory", "USA", "--subscription-id", "sub-1", "--price", "9.99"},
-			wantErr: "--price-territory cannot be USA or Singapore",
+			wantErr: "--price-territory cannot be USA for monthly-commitment billing",
 		},
 		{
 			name:    "flag value matching subcommand returns usage when invalid",
@@ -307,7 +312,7 @@ func TestSubscriptionsPricingMonthlyCommitmentDisableFiltersExcludedTerritories(
 				t.Fatalf("expected territory relationship limit 200, got %q", got)
 			}
 			return jsonResponse(http.StatusOK, `{
-				"data":[{"type":"territories","id":"NOR"},{"type":"territories","id":"DEU"}],
+				"data":[{"type":"territories","id":"NOR"},{"type":"territories","id":"SGP"},{"type":"territories","id":"DEU"}],
 				"links":{"next":"https://api.appstoreconnect.apple.com/v1/subscriptionPlanAvailabilities/plan-1/relationships/availableTerritories?cursor=page-2"}
 			}`)
 		case req.URL.Path == "/v1/subscriptionPlanAvailabilities/plan-1/relationships/availableTerritories" && req.Method == http.MethodGet && req.URL.Query().Get("cursor") == "page-2":
@@ -349,7 +354,7 @@ func TestSubscriptionsPricingMonthlyCommitmentDisableFiltersExcludedTerritories(
 	if !strings.Contains(stdout, `"id":"plan-1"`) {
 		t.Fatalf("expected plan availability response, got %q", stdout)
 	}
-	if !strings.Contains(stderr, "Warning: monthly-commitment billing is unavailable in USA,SGP") {
+	if !strings.Contains(stderr, "Warning: monthly-commitment billing is unavailable in USA;") {
 		t.Fatalf("expected excluded territory warning, got %q", stderr)
 	}
 }

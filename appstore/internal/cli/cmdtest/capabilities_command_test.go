@@ -50,7 +50,7 @@ func TestRun_CapabilitiesJSONReportsKnownGaps(t *testing.T) {
 	if resp.Summary.SchemaEndpointCount == 0 {
 		t.Fatalf("expected embedded schema endpoint count to be populated")
 	}
-	for _, status := range []string{"cli-supported", "web-session", "not-public-api"} {
+	for _, status := range []string{"cli-supported", "web-session"} {
 		if resp.Summary.Statuses[status] == 0 {
 			t.Fatalf("expected status %q to be represented in summary: %+v", status, resp.Summary.Statuses)
 		}
@@ -162,7 +162,7 @@ func TestRun_CapabilitiesFiltersByStatus(t *testing.T) {
 	t.Setenv("ASC_BYPASS_KEYCHAIN", "1")
 
 	stdout, stderr := captureOutput(t, func() {
-		code := cmd.Run([]string{"capabilities", "--status", "not-public-api", "--output", "json"}, "1.0.0")
+		code := cmd.Run([]string{"capabilities", "--status", "web-session", "--output", "json"}, "1.0.0")
 		if code != cmd.ExitSuccess {
 			t.Fatalf("expected exit code %d, got %d", cmd.ExitSuccess, code)
 		}
@@ -180,11 +180,11 @@ func TestRun_CapabilitiesFiltersByStatus(t *testing.T) {
 		t.Fatal("expected filtered capabilities")
 	}
 	for _, entry := range resp.Capabilities {
-		if entry.Status != "not-public-api" {
-			t.Fatalf("expected only not-public-api rows, got %+v", entry)
+		if entry.Status != "web-session" {
+			t.Fatalf("expected only web-session rows, got %+v", entry)
 		}
 	}
-	assertCapability(t, resp, "Direct REST build upload", "not-public-api", "")
+	assertCapability(t, resp, "App creation", "web-session", "asc web apps create")
 }
 
 func TestRun_CapabilitiesFiltersByAreaInMarkdown(t *testing.T) {

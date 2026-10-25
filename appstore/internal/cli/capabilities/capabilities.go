@@ -81,7 +81,7 @@ through web-session commands, or blocked by Apple's public API.
 
 Examples:
   asc capabilities
-  asc capabilities --status not-public-api --output table
+  asc capabilities --status web-session --output table
   asc capabilities --area release,monetization --output markdown
   asc capabilities --output json --pretty`,
 		FlagSet:   fs,
@@ -263,14 +263,7 @@ func capabilityRows() []Capability {
 				"builds",
 				"preReleaseVersions",
 			},
-			Notes: []string{"The CLI wraps Apple's supported upload tooling and build-processing APIs."},
-		},
-		{
-			Area:       "builds",
-			Capability: "Direct REST build upload",
-			Status:     statusNotPublicAPI,
-			Notes:      []string{"Apple does not expose direct IPA upload as a normal public App Store Connect REST endpoint."},
-			NextAction: "Use asc builds upload, Xcode, Transporter, or asc publish workflows.",
+			Notes: []string{"Uploads through the public buildUploads and buildUploadFiles REST APIs, then tracks build processing."},
 		},
 		{
 			Area:         "app-management",

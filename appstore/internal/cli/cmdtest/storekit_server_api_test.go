@@ -33,6 +33,25 @@ func TestStoreKitServerAPICommandTree(t *testing.T) {
 	}
 }
 
+func TestStoreKitGroupsListProduction(t *testing.T) {
+	setupStoreKitAuth(t)
+	stubStoreKitTransport(t, func(req *http.Request) string {
+		if req.Method != http.MethodGet || req.URL.Host != "api.storekit.apple.com" || req.URL.Path != "/groups/v1/currentGroups/2000000000000001" {
+			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.String())
+		}
+		return `{"groups":[{"groupId":"900000000000000000","groupType":"ORGANIZATION","roles":[]}]}`
+	})
+
+	stdout, stderr := runStoreKitCommand(t,
+		"storekit", "groups", "list", "--transaction-id", "2000000000000001", "--environment", "production", "--output", "json")
+	if stderr != "" {
+		t.Fatalf("stderr = %q", stderr)
+	}
+	if !strings.Contains(stdout, `"groupType":"ORGANIZATION"`) {
+		t.Fatalf("stdout = %q", stdout)
+	}
+}
+
 func TestStoreKitTransactionsHistoryPaginatesProduction(t *testing.T) {
 	setupStoreKitAuth(t)
 	var queries []string
@@ -155,7 +174,6 @@ func TestStoreKitServerAPIUsageErrors(t *testing.T) {
 		{"subtype without type", []string{"storekit", "notifications", "history", "--start", "2026-09-01", "--end", "2026-09-02", "--subtype", "INITIAL_BUY", "--environment", "sandbox"}, "--subtype requires --type"},
 		{"type and transaction", []string{"storekit", "notifications", "history", "--start", "2026-09-01", "--end", "2026-09-02", "--type", "REFUND", "--transaction-id", "1", "--environment", "sandbox"}, "--type and --transaction-id are mutually exclusive"},
 		{"test confirm", []string{"storekit", "notifications", "test", "--environment", "sandbox"}, "--confirm is required"},
-		{"groups production", []string{"storekit", "groups", "list", "--transaction-id", "1", "--environment", "production"}, "customer groups require --environment sandbox"},
 		{"members limit", []string{"storekit", "groups", "members", "--group-id", "900000000000000000", "--limit", "101", "--environment", "sandbox"}, "--limit must be between 1 and 100"},
 	}
 	for _, tt := range tests {

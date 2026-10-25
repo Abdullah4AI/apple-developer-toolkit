@@ -119,8 +119,8 @@ func TestSubscriptionsPricingPlanAvailabilityValidationErrors(t *testing.T) {
 		},
 		{
 			name:    "set rejects monthly territories that are all excluded",
-			args:    []string{"subscriptions", "pricing", "plan-availability", "set", "--subscription-id", "sub-1", "--plan-type", "MONTHLY", "--territories", "United States,Singapore", "--confirm"},
-			wantErr: "no eligible monthly-commitment territories remain after excluding USA and Singapore",
+			args:    []string{"subscriptions", "pricing", "plan-availability", "set", "--subscription-id", "sub-1", "--plan-type", "MONTHLY", "--territories", "United States", "--confirm"},
+			wantErr: "no eligible monthly-commitment territories remain after excluding USA",
 		},
 	}
 

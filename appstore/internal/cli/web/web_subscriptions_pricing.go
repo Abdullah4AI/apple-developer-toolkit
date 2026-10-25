@@ -139,8 +139,8 @@ resolution but does not mutate App Store Connect.
 				return shared.UsageError("--subscription-id is required")
 			case len(territoryID) != 3:
 				return shared.UsageError("--territory must be a three-letter territory ID")
-			case territoryID == "USA" || territoryID == "SGP":
-				return shared.UsageError("--territory cannot be USA or Singapore for monthly-commitment pricing")
+			case territoryID == "USA":
+				return shared.UsageError("--territory cannot be USA for monthly-commitment pricing")
 			case (upfrontID == "") == (upfrontAmount == ""):
 				return shared.UsageError("exactly one of --upfront-price or --upfront-price-point-id is required")
 			case (monthlyID == "") == (monthlyAmount == ""):

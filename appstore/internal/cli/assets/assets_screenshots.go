@@ -648,6 +648,10 @@ func AssetsScreenshotsSizesCommand() *ffcli.Command {
 By default this command focuses on common iOS submission slots:
 APP_IPHONE_65 and APP_IPAD_PRO_3GEN_129.
 
+Starting April 2027, App Store submissions of apps built with the iOS 27.1 SDK
+or later also need iPhone Duo screenshots (APP_IPHONE_DUO). List its sizes with
+--display-type "APP_IPHONE_DUO".
+
 Examples:
   asc screenshots sizes
   asc screenshots sizes --all

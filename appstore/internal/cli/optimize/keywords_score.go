@@ -34,6 +34,10 @@ var collectSearchPopularityForKeywords = ads.CollectSearchPopularity
 
 // KeywordsScoreCommand returns the composed keyword scoring command.
 func KeywordsScoreCommand() *ffcli.Command {
+	return keywordsScoreCommand(time.Now)
+}
+
+func keywordsScoreCommand(now func() time.Time) *ffcli.Command {
 	fs := flag.NewFlagSet("score", flag.ExitOnError)
 	keywords := shared.BindOnceCSVFlag(fs, "keywords", "Comma-separated keyword candidates to score (required)")
 	country := fs.String("country", "us", "ISO alpha-2 App Store storefront country or region")
@@ -134,13 +138,14 @@ Examples:
 				return err
 			}
 
+			reportTime := now().UTC()
 			report := buildKeywordScoreReport(keywordScoreBuildInput{
-				GeneratedAt: time.Now().UTC().Format(time.RFC3339),
+				GeneratedAt: reportTime.Format(time.RFC3339),
 				AppID:       resolvedAppID,
 				Country:     strings.ToUpper(normalizedCountry),
 				Genre:       normalizedGenre,
 				Workers:     effectiveWorkers,
-				Now:         time.Now().UTC(),
+				Now:         reportTime,
 				Sources:     sources,
 				Popularity:  popularity,
 				Competition: competition,

@@ -24,7 +24,6 @@ const (
 
 var monthlyCommitmentExcludedTerritories = map[string]struct{}{
 	"USA": {},
-	"SGP": {},
 }
 
 // SubscriptionsPricingMonthlyCommitmentCommand returns the monthly-commitment command group.
@@ -39,7 +38,7 @@ func SubscriptionsPricingMonthlyCommitmentCommand() *ffcli.Command {
 
 App Store Connect API 4.4 exposes subscriptionPlanAvailabilities for configuring
 monthly subscriptions with a 12-month commitment. The subscription must use
-subscriptionPeriod ONE_YEAR. USA and Singapore are excluded by Apple.
+subscriptionPeriod ONE_YEAR. USA is excluded by Apple.
 
 Examples:
   asc subscriptions pricing monthly-commitment enable --subscription-id "SUB_ID" --price "9.99" --price-territory "Norway" --territories "Norway,Germany,France" --confirm
@@ -66,7 +65,7 @@ func SubscriptionsPricingMonthlyCommitmentEnableCommand() *ffcli.Command {
 	appID := addSubscriptionLookupAppFlag(fs)
 	price := fs.String("price", "", "Monthly customer price; total commitment is price x 12")
 	priceTerritory := fs.String("price-territory", "", "Territory used to compare the upfront annual price")
-	territories := fs.String("territories", "", "Territories to enable, comma-separated; USA and Singapore are excluded")
+	territories := fs.String("territories", "", "Territories to enable, comma-separated; USA is excluded")
 	availableInNew := fs.Bool("available-in-new-territories", false, "Unsupported for MONTHLY plan availability")
 	confirm := fs.Bool("confirm", false, "Confirm enabling monthly-commitment prices and availability")
 	output := shared.BindOutputFlags(fs)
@@ -77,11 +76,11 @@ func SubscriptionsPricingMonthlyCommitmentEnableCommand() *ffcli.Command {
 		ShortHelp:  "Enable monthly-commitment availability.",
 		LongHelp: `Enable Monthly with 12-Month Commitment availability.
 
-The subscription must use subscriptionPeriod ONE_YEAR. USA and Singapore are
-removed from --territories because Apple excludes those storefronts. The CLI
-also checks that the 12-payment total is at least the upfront annual price and
-no more than 1.5x the upfront annual price when the current upfront price can be
-read from App Store Connect. The CLI configures MONTHLY plan availability before
+The subscription must use subscriptionPeriod ONE_YEAR. USA is removed from
+--territories because Apple excludes that storefront. The CLI also checks that
+the 12-payment total is at least the upfront annual price and no more than 1.5x
+the upfront annual price when the current upfront price can be read from App
+Store Connect. The CLI configures MONTHLY plan availability before
 creating MONTHLY subscriptionPrices because Apple rejects the reverse order.
 Each eligible territory must already have an UPFRONT subscription price.
 
@@ -116,7 +115,7 @@ Examples:
 				return shared.UsageError(err.Error())
 			}
 			if _, excluded := monthlyCommitmentExcludedTerritories[priceTerritoryID]; excluded {
-				return shared.UsageError("--price-territory cannot be USA or Singapore for monthly-commitment billing")
+				return shared.UsageError("--price-territory cannot be USA for monthly-commitment billing")
 			}
 
 			territoryIDs, err := shared.NormalizeASCTerritoryCSV(*territories)
@@ -129,7 +128,7 @@ Examples:
 			territoryIDs, excluded := filterMonthlyCommitmentTerritories(territoryIDs)
 			printMonthlyCommitmentTerritoryWarning(excluded)
 			if len(territoryIDs) == 0 {
-				return shared.UsageError("no eligible monthly-commitment territories remain after excluding USA and Singapore")
+				return shared.UsageError("no eligible monthly-commitment territories remain after excluding USA")
 			}
 			if !*confirm {
 				return shared.UsageError("--confirm is required to enable monthly-commitment billing")
@@ -233,7 +232,7 @@ func SubscriptionsPricingMonthlyCommitmentDisableCommand() *ffcli.Command {
 
 	subscriptionID := shared.BindResourceIDFlag(fs, "subscription-id", "subscriptions", "Subscription ID, product ID, or exact current name")
 	appID := addSubscriptionLookupAppFlag(fs)
-	territories := fs.String("territories", "", "Territories to disable, comma-separated; USA and Singapore are excluded")
+	territories := fs.String("territories", "", "Territories to disable, comma-separated; USA is excluded")
 	confirm := fs.Bool("confirm", false, "Confirm disabling monthly-commitment availability")
 	output := shared.BindOutputFlags(fs)
 
@@ -265,7 +264,7 @@ Examples:
 			territoryIDs, excluded := filterMonthlyCommitmentTerritories(territoryIDs)
 			printMonthlyCommitmentTerritoryWarning(excluded)
 			if len(territoryIDs) == 0 {
-				return shared.UsageError("no eligible monthly-commitment territories remain after excluding USA and Singapore")
+				return shared.UsageError("no eligible monthly-commitment territories remain after excluding USA")
 			}
 			if !*confirm {
 				return shared.UsageError("--confirm is required to disable monthly-commitment billing")

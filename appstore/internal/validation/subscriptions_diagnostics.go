@@ -171,9 +171,9 @@ func analyzeSubscriptionPlanAvailability(sub Subscription) subscriptionPlanAvail
 		if outside := missingValues(analysis.monthlyTerritories, analysis.upfrontTerritories); len(outside) > 0 {
 			analysis.monthlyIssues = append(analysis.monthlyIssues, "not in UPFRONT: "+formatList(outside))
 		}
-		forbidden := make([]string, 0, 2)
+		forbidden := make([]string, 0, 1)
 		for _, territory := range analysis.monthlyTerritories {
-			if territory == "USA" || territory == "SGP" {
+			if territory == "USA" {
 				forbidden = append(forbidden, territory)
 			}
 		}
@@ -273,7 +273,7 @@ func buildMonthlyPlanAvailabilityDiagnosticRow(sub Subscription) SubscriptionDia
 	if len(analysis.monthlyIssues) > 0 {
 		row.Status = DiagnosticStatusNo
 		row.Evidence = strings.Join(analysis.monthlyIssues, "; ")
-		row.Remediation = "Use MONTHLY only for ONE_YEAR subscriptions, only in UPFRONT territories, and exclude USA and SGP."
+		row.Remediation = "Use MONTHLY only for ONE_YEAR subscriptions, only in UPFRONT territories, and exclude USA."
 		return row
 	}
 	row.Status = DiagnosticStatusYes

@@ -142,8 +142,8 @@ availability is created when the subscription has none for --plan-type.
 Emptying availability is rejected here because it removes the subscription from
 sale; use "asc web subscriptions availability remove-from-sale" for that flow.
 
---available-in-new-territories applies to UPFRONT plans only. USA and Singapore
-are removed from MONTHLY requests because Apple excludes those storefronts.
+--available-in-new-territories applies to UPFRONT plans only. USA is removed
+from MONTHLY requests because Apple excludes that storefront.
 
 Examples:
   asc subscriptions pricing plan-availability set --subscription-id "SUB_ID" --plan-type UPFRONT --territories "United States,Canada" --confirm
@@ -190,7 +190,7 @@ Examples:
 			if normalizedPlanType == asc.SubscriptionPlanTypeMonthly {
 				territoryIDs, excludedTerritoryIDs = filterMonthlyCommitmentTerritories(territoryIDs)
 				if len(territoryIDs) == 0 {
-					return shared.UsageError("no eligible monthly-commitment territories remain after excluding USA and Singapore")
+					return shared.UsageError("no eligible monthly-commitment territories remain after excluding USA")
 				}
 			}
 			if !*confirm {

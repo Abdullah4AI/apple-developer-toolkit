@@ -2,7 +2,7 @@
 
 Status: Implemented as stable
 Research date: June 18, 2026
-Target API: Retention Messaging API 1.0
+Target API: Retention Messaging API 1.5
 Target command root: `asc storekit`
 
 ## Design

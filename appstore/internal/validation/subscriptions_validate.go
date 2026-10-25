@@ -616,7 +616,7 @@ func subscriptionMetadataDiagnostics(subs []Subscription) []CheckResult {
 				ID: "subscriptions.diagnostics.monthly_plan_invalid", Severity: SeverityWarning,
 				Field: "planAvailabilities", ResourceType: "subscription", ResourceID: strings.TrimSpace(sub.ID),
 				Message:     fmt.Sprintf("%s has invalid MONTHLY commitment availability: %s", label, strings.Join(planAnalysis.monthlyIssues, "; ")),
-				Remediation: "Use MONTHLY only for ONE_YEAR subscriptions, only in UPFRONT territories, and exclude USA and SGP",
+				Remediation: "Use MONTHLY only for ONE_YEAR subscriptions, only in UPFRONT territories, and exclude USA",
 			})
 		}
 

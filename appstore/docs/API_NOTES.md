@@ -221,7 +221,7 @@ Finance reports use Apple fiscal months (`YYYY-MM`), not calendar months.
 
 - Exposed via `subscriptionPlanAvailabilities` (`/v1/subscriptions/{id}/planAvailabilities`) with `planType=MONTHLY` (upfront availability stays on `subscriptionAvailability`).
 - `/v1/subscriptionPricePoints/{id}/adjustedEqualizations` accepts only `filter[planType]=MONTHLY` (rejects `UPFRONT`).
-- Unavailable in `USA` and `SGP`; the CLI strips both territories before writing monthly-commitment plan availability.
+- Unavailable in `USA`; the CLI strips that territory before writing monthly-commitment plan availability.
 
 ## Subscription Plan Availability
 
