@@ -437,7 +437,7 @@ func TestAssetsScreenshotsUploadCommandRequiresUploadMode(t *testing.T) {
 func TestAssetsScreenshotsUploadCommandRejectsInvalidConcurrency(t *testing.T) {
 	cmd := AssetsScreenshotsUploadCommand()
 	cmd.FlagSet.SetOutput(io.Discard)
-	if err := cmd.FlagSet.Parse([]string{"--concurrency", "9"}); err != nil {
+	if err := cmd.FlagSet.Parse([]string{"--concurrency", "11"}); err != nil {
 		t.Fatalf("parse error: %v", err)
 	}
 
@@ -449,10 +449,10 @@ func TestAssetsScreenshotsUploadCommandRejectsInvalidConcurrency(t *testing.T) {
 	if stdout != "" {
 		t.Fatalf("expected empty stdout, got %q", stdout)
 	}
-	if runErr == nil || !strings.Contains(runErr.Error(), "--concurrency must be between 1 and 8") {
+	if runErr == nil || !strings.Contains(runErr.Error(), "--concurrency must be between 1 and 10") {
 		t.Fatalf("expected invalid concurrency error, got %v", runErr)
 	}
-	if !strings.Contains(stderr, "--concurrency must be between 1 and 8") {
+	if !strings.Contains(stderr, "--concurrency must be between 1 and 10") {
 		t.Fatalf("expected invalid concurrency diagnostic, got %q", stderr)
 	}
 }
@@ -510,8 +510,8 @@ func TestExecuteScreenshotUploadCommandRejectsMoreThanTenScreenshotsBeforeAuth(t
 	if !strings.Contains(err.Error(), "allow at most 10 images") {
 		t.Fatalf("expected max screenshot guidance, got %v", err)
 	}
-	if !strings.Contains(err.Error(), "--max-screenshots 10") {
-		t.Fatalf("expected --max-screenshots guidance, got %v", err)
+	if !strings.Contains(err.Error(), "Reduce the selected screenshots to 10 or fewer") || strings.Contains(err.Error(), "--max-screenshots") {
+		t.Fatalf("expected screenshot selection guidance, got %v", err)
 	}
 	if clientCalled {
 		t.Fatal("expected local screenshot-count validation before auth/client creation")
@@ -589,11 +589,39 @@ func TestLimitScreenshotUploadFilesForFullSetRejectsExplicitLimitWithUsableRemed
 	if err == nil {
 		t.Fatal("expected full screenshot set error")
 	}
-	if strings.Contains(err.Error(), "choose a higher limit") || strings.Contains(err.Error(), "--max-screenshots 0") {
+	if strings.Contains(err.Error(), "choose a higher limit") || strings.Contains(err.Error(), "--max-screenshots") {
 		t.Fatalf("expected usable full-set remediation, got %v", err)
 	}
-	if !strings.Contains(err.Error(), "--max-screenshots cannot create capacity") {
+	if !strings.Contains(err.Error(), "no upload slots remain") {
 		t.Fatalf("expected explicit capacity guidance, got %v", err)
+	}
+}
+
+func TestUploadScreenshotsDryRunCapacityGuidance(t *testing.T) {
+	for _, existingCount := range []int{9, 10} {
+		t.Run(fmt.Sprintf("%d existing", existingCount), func(t *testing.T) {
+			filePath := writeAssetsTestPNG(t, t.TempDir(), "new.png")
+			client := newAssetsUploadTestHandlerClient(t, http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+				switch {
+				case req.Method == http.MethodGet && req.URL.Path == "/v1/appStoreVersionLocalizations/LOC_123/appScreenshotSets":
+					writeAssetsTestJSON(w, http.StatusOK, `{"data":[{"type":"appScreenshotSets","id":"set-1","attributes":{"screenshotDisplayType":"APP_IPHONE_65"}}],"links":{}}`)
+				case req.Method == http.MethodGet && req.URL.Path == "/v1/appScreenshotSets/set-1/appScreenshots":
+					existing := make([]asc.Resource[asc.AppScreenshotAttributes], existingCount)
+					if err := json.NewEncoder(w).Encode(asc.AppScreenshotsResponse{Data: existing}); err != nil {
+						t.Fatal(err)
+					}
+				default:
+					t.Fatalf("unexpected request: %s %s", req.Method, req.URL.String())
+				}
+			}))
+			_, err := uploadScreenshots(context.Background(), client, "LOC_123", "APP_IPHONE_65", []string{filePath, filePath}, false, false, true)
+			if err == nil {
+				t.Fatal("expected screenshot capacity error")
+			}
+			if !strings.Contains(err.Error(), "with --replace") || strings.Contains(err.Error(), "with --replace --confirm") || strings.Contains(err.Error(), "--max-screenshots") {
+				t.Fatalf("expected usable plan capacity guidance, got %v", err)
+			}
+		})
 	}
 }
 

@@ -1,82 +1,59 @@
 package cmdtest
 
 import (
-	"context"
-	"io"
 	"testing"
 
-	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/cmd"
 )
 
-func TestMigrateMetadataPullAliasDelegatesToMetadataCommand(t *testing.T) {
-	t.Setenv("ASC_APP_ID", "")
-
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	var runErr error
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"migrate", "metadata", "pull", "--version", "1.2.3", "--dir", "./metadata"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		runErr = root.Run(context.Background())
-	})
-
-	if !shared.IsReportedUsageError(runErr) {
-		t.Fatalf("expected reported usage error, got %v", runErr)
+func TestMigrateMetadataAliasesAreRemovedWithMigrationGuidance(t *testing.T) {
+	removed := findSubcommand(RootCommand("6.0.0"), "migrate", "metadata")
+	if removed == nil {
+		t.Fatal("asc migrate metadata is not registered")
 	}
-	if stdout != "" {
-		t.Fatalf("expected empty stdout, got %q", stdout)
-	}
-	if stderr != "Error: --app is required (or set ASC_APP_ID)\n" {
-		t.Fatalf("expected concise metadata pull validation error, got %q", stderr)
-	}
-}
+	usage := removed.UsageFunc(removed) + "\n"
 
-func TestMigrateMetadataPushAliasDelegatesToMetadataCommand(t *testing.T) {
-	t.Setenv("ASC_APP_ID", "")
-
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	var runErr error
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"migrate", "metadata", "push", "--version", "1.2.3", "--dir", "./metadata", "--dry-run"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		runErr = root.Run(context.Background())
-	})
-
-	if !shared.IsReportedUsageError(runErr) {
-		t.Fatalf("expected reported usage error, got %v", runErr)
+	tests := []struct {
+		name    string
+		args    []string
+		wantErr string
+	}{
+		{
+			name:    "pull",
+			args:    []string{"migrate", "metadata", "pull", "--app", "APP_ID", "--version", "1.2.3", "--dir", "./metadata"},
+			wantErr: "Error: `asc migrate metadata pull` was removed in 6.0.0; use `asc metadata pull` instead\n",
+		},
+		{
+			name:    "push",
+			args:    []string{"migrate", "metadata", "push", "--app", "APP_ID", "--version", "1.2.3", "--dir", "./metadata", "--dry-run"},
+			wantErr: "Error: `asc migrate metadata push` was removed in 6.0.0; use `asc metadata push` instead\n",
+		},
+		{
+			name:    "validate",
+			args:    []string{"migrate", "metadata", "validate", "--dir", "./metadata"},
+			wantErr: "Error: `asc migrate metadata validate` was removed in 6.0.0; use `asc metadata validate` instead\n",
+		},
+		{
+			name:    "group",
+			args:    []string{"migrate", "metadata"},
+			wantErr: "Error: `asc migrate metadata` was removed in 6.0.0; use `asc metadata` instead\n",
+		},
 	}
-	if stdout != "" {
-		t.Fatalf("expected empty stdout, got %q", stdout)
-	}
-	if stderr != "Error: --app is required (or set ASC_APP_ID)\n" {
-		t.Fatalf("expected concise metadata push validation error, got %q", stderr)
-	}
-}
 
-func TestMigrateMetadataValidateAliasDelegatesToMetadataCommand(t *testing.T) {
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			stdout, stderr := captureOutput(t, func() {
+				if code := cmd.Run(test.args, "6.0.0"); code != cmd.ExitUsage {
+					t.Fatalf("exit code = %d, want %d", code, cmd.ExitUsage)
+				}
+			})
 
-	var runErr error
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"migrate", "metadata", "validate"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		runErr = root.Run(context.Background())
-	})
-
-	if !shared.IsReportedUsageError(runErr) {
-		t.Fatalf("expected reported usage error, got %v", runErr)
-	}
-	if stdout != "" {
-		t.Fatalf("expected empty stdout, got %q", stdout)
-	}
-	if stderr != "Error: --dir is required\n" {
-		t.Fatalf("expected concise metadata validate validation error, got %q", stderr)
+			if stdout != "" {
+				t.Fatalf("expected empty stdout, got %q", stdout)
+			}
+			if want := test.wantErr + usage; stderr != want {
+				t.Fatalf("stderr = %q, want %q", stderr, want)
+			}
+		})
 	}
 }

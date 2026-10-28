@@ -10,6 +10,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"flag"
+	"fmt"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -19,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
 func TestBetaTestersAddCommand_CSVGroupsPassValidation(t *testing.T) {
@@ -236,4 +238,58 @@ func newBetaGroupResolutionClient(t *testing.T, server *httptest.Server) *asc.Cl
 		t.Fatalf("NewClientWithHTTPClient() error: %v", err)
 	}
 	return client
+}
+
+func TestBetaGroupNameResolvesAcrossUnicodeSpaces(t *testing.T) {
+	nbspInternal := asc.Resource[asc.BetaGroupAttributes]{ID: "group-internal", Attributes: asc.BetaGroupAttributes{Name: "App Store\u00a0Connect Users", IsInternalGroup: true}}
+	asciiExternal := asc.Resource[asc.BetaGroupAttributes]{ID: "group-external", Attributes: asc.BetaGroupAttributes{Name: "App Store Connect Users"}}
+
+	cases := []struct {
+		name   string
+		groups []asc.Resource[asc.BetaGroupAttributes]
+		input  string
+		want   string
+	}{
+		{"ASCII input matches NBSP name", []asc.Resource[asc.BetaGroupAttributes]{nbspInternal}, "app store connect users", "group-internal"},
+		{"exact name wins over NBSP name", []asc.Resource[asc.BetaGroupAttributes]{nbspInternal, asciiExternal}, "App Store Connect Users", "group-external"},
+	}
+	resolvers := []struct {
+		name    string
+		resolve func(*asc.BetaGroupsResponse, string) (string, error)
+	}{
+		{"testflight", matchBetaGroupID},
+		{"config export", func(groups *asc.BetaGroupsResponse, input string) (string, error) {
+			matched, err := filterBetaGroups(groups.Data, input)
+			if err != nil {
+				return "", err
+			}
+			if len(matched) != 1 {
+				return "", fmt.Errorf("matched %d groups, want 1", len(matched))
+			}
+			return matched[0].ID, nil
+		}},
+		{"shared", func(groups *asc.BetaGroupsResponse, input string) (string, error) {
+			resolved, err := shared.ResolveBetaGroupsFromList([]string{input}, groups, shared.ResolveBetaGroupsOptions{})
+			if err != nil {
+				return "", err
+			}
+			if len(resolved) != 1 {
+				return "", fmt.Errorf("resolved %d groups, want 1", len(resolved))
+			}
+			return resolved[0].ID, nil
+		}},
+	}
+	for _, resolver := range resolvers {
+		for _, tc := range cases {
+			t.Run(resolver.name+"/"+tc.name, func(t *testing.T) {
+				got, err := resolver.resolve(&asc.BetaGroupsResponse{Data: tc.groups}, tc.input)
+				if err != nil {
+					t.Fatalf("resolve error: %v", err)
+				}
+				if got != tc.want {
+					t.Fatalf("resolved %q, want %q", got, tc.want)
+				}
+			})
+		}
+	}
 }

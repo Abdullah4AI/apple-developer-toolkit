@@ -100,6 +100,7 @@ func BetaTestersListCommand() *ffcli.Command {
 	inviteType := fs.String("invite-type", "", "Filter by invite type(s), comma-separated: "+strings.Join(betaTesterInviteTypeValues, ", "))
 	sortBy := fs.String("sort", "", "Sort by: "+strings.Join(betaTesterSortValues, ", "))
 	include := fs.String("include", "", "Include related resources, comma-separated: "+strings.Join(betaTesterIncludeValues, ", "))
+	fields := fs.String("fields", "", "Fields to include for beta testers, comma-separated: "+strings.Join(betaGroupTesterFieldsValues, ", "))
 	output := shared.BindOutputFlags(fs)
 	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
 	next := fs.String("next", "", "Fetch next page using a links.next URL")
@@ -111,6 +112,9 @@ func BetaTestersListCommand() *ffcli.Command {
 		ShortHelp:  "List TestFlight beta testers for an app.",
 		LongHelp: `List TestFlight beta testers for an app.
 
+To list one group's testers without --app, run
+asc testflight groups testers list --group-id "GROUP_ID".
+
 --include adds the related resources to the response's top-level "included"
 array, which only JSON output renders. App Store Connect returns at most 50
 related resources per included relationship. --paginate pages the tester
@@ -119,7 +123,7 @@ asc testflight testers groups list --id "TESTER_ID" --paginate.
 A --next URL retains any include query from its original request; JSON output
 is still required to render those included resources.
 
-Filter, --sort, and --include flags cannot be combined with --next: a
+Filter, --fields, --sort, and --include flags cannot be combined with --next: a
 links.next URL already carries the query it was produced from, so those values
 would never reach the request. Invalid values and these incompatible flag
 combinations exit 2 before making a request.
@@ -132,6 +136,7 @@ Examples:
   asc testflight beta-testers list --app "APP_ID" --invite-type "PUBLIC_LINK"
   asc testflight beta-testers list --app "APP_ID" --sort "-lastName"
   asc testflight beta-testers list --app "APP_ID" --include "betaGroups" --paginate --output json
+  asc testflight beta-testers list --app "APP_ID" --fields "email,state"
   asc testflight beta-testers list --app "APP_ID" --limit 25
   asc testflight beta-testers list --app "APP_ID" --paginate`,
 		FlagSet:   fs,
@@ -155,6 +160,11 @@ Examples:
 				fmt.Fprintf(os.Stderr, "Error: %s\n", err.Error())
 				return shared.InvalidValueUsageError("--include")
 			}
+			fieldValues, err := shared.NormalizeSelection(*fields, betaGroupTesterFieldsValues, "--fields")
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %s\n", err.Error())
+				return shared.InvalidValueUsageError("--fields")
+			}
 			inviteTypes, err := normalizeBetaTesterInviteTypes(*inviteType)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error: %s\n", err.Error())
@@ -162,7 +172,7 @@ Examples:
 			}
 			// A links.next URL already carries the query it was produced from, so
 			// these flags would be accepted and silently dropped.
-			if err := rejectBetaTestersNextFlagConflicts(fs, *next, "build-id", "group", "email", "first-name", "last-name", "invite-type", "sort", "include"); err != nil {
+			if err := rejectBetaTestersNextFlagConflicts(fs, *next, "build-id", "group", "email", "first-name", "last-name", "invite-type", "sort", "include", "fields"); err != nil {
 				return err
 			}
 			if strings.TrimSpace(*group) != "" && strings.TrimSpace(*buildID) != "" {
@@ -214,6 +224,10 @@ Examples:
 
 			if strings.TrimSpace(*sortBy) != "" {
 				opts = append(opts, asc.WithBetaTestersSort(*sortBy))
+			}
+
+			if len(fieldValues) > 0 {
+				opts = append(opts, asc.WithBetaTestersFields(fieldValues))
 			}
 
 			includeValues := shared.SplitCSV(*include)

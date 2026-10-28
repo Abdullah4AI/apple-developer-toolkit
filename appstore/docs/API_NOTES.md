@@ -163,6 +163,14 @@ Finance reports use Apple fiscal months (`YYYY-MM`), not calendar months.
 - Contact fields: `details-create` with default `--if-exists fail` requires non-blank `--contact-first-name` and `--contact-phone` before `POST /v1/appStoreReviewDetails` (`--if-exists skip|update` and `details-update` are exempt).
 - `contactPhone`: `+1` numbers written with digits and standard separators must have exactly 10 digits after `+1`; other country codes and numbers without `+` are left to App Store Connect.
 
+## Web-session App Sandbox Information (`appSandboxEntitlementUsages`)
+
+- The App Sandbox Information rows of a macOS version are `appSandboxEntitlementUsages` resources related to the version's `appStoreReviewDetails`; the public API rejects both `/v1/appSandboxEntitlements` and the `appSandboxEntitlementUsages` relationship. `asc web review sandbox-entitlements` uses `/iris/v1` with the `X-CSRF-ITC: [asc-ui]` header App Store Connect's web client sends:
+  - `GET /iris/v1/appStoreVersions/{id}?fields[appStoreVersions]=platform,appStoreReviewDetail&include=appStoreReviewDetail` gives the platform and the review detail ID in one read (unknown version: 404 `NOT_FOUND`). Commands refuse non-`MAC_OS` versions and versions without review details.
+  - `catalog` reads `GET /iris/v1/appSandboxEntitlements?limit=200` (96 keys with an `optional` boolean when captured). `list` reads `GET /iris/v1/appStoreReviewDetails/{id}/appSandboxEntitlementUsages?include=appSandboxEntitlement&limit=200`; without the include, rows carry no entitlement linkage. Both reads fail closed when `links.next` or `meta.paging.total` reports another page.
+  - `set` sends `POST /iris/v1/appSandboxEntitlementUsages` with `attributes.justification` and `appStoreReviewDetail` plus `appSandboxEntitlement` relationships, or `PATCH /iris/v1/appSandboxEntitlementUsages/{id}` with `attributes.justification` only; `delete` sends `DELETE /iris/v1/appSandboxEntitlementUsages/{id}`. App Store Connect's server validation codes include `justification_empty`, `justification_length_not_met`, and `justification_length_exceeded`.
+  - Live-verified on 2026-10-27: a built-CLI canary read the catalog and rows, then created, left unchanged, updated, and deleted one row on a macOS version in `PREPARE_FOR_SUBMISSION`, verifying each step with a fresh read and restoring the original rows. A non-`MAC_OS` version is refused before any write.
+
 ## Game Center
 
 - Endpoints resolve Game Center detail via `/v1/apps/{id}/gameCenterDetail` (404 when disabled; `asc game-center details list` has no pagination flags).
@@ -172,11 +180,12 @@ Finance reports use Apple fiscal months (`YYYY-MM`), not calendar months.
 
 ## Apple Ads Platform API v1
 
-- Platform API v1 (`https://api.ads.apple.com/v1/`) is the primary `asc ads` surface (since 4.4.0). Legacy Campaign Management API v5 (retiring January 26, 2027) lives under `asc ads v5` with deprecation warnings (`asc ads v5 api request` stays v5; `asc ads api request` is v1).
+- Platform API v1 (`https://api.ads.apple.com/v1/`) is the only `asc ads` transport. Release 6.0.0 removes `asc ads v5` ahead of Apple's scheduled Campaign Management API v5 retirement on January 26, 2027; any `asc ads v5 ...` invocation exits 2 with a removal error that names the v1 replacement from the ledger in `internal/cli/ads/v5_removal.go` (see `docs/release-notes-apple-ads-v5-removal.md`).
 - Account-scoped v1 calls send `X-AP-Context: adAccountId=<AD_ACCOUNT_ID>;` resolved from `--ad-account`, `ASC_ADS_AD_ACCOUNT_ID`, profile `ad_account_id`, or root `ads.ad_account_id` when no profile is selected (`--org` / `ASC_ADS_ORG_ID` are never fallbacks).
 - `POST /v1/ad-accounts` omits `X-AP-Context`, whereas `GET`/`PUT /v1/ad-accounts/{id}` require `X-AP-Context: adAccountId=<id>;` matching `{id}`.
 - `asc ads auth login --network`, `asc ads auth status --validate`, and `asc ads auth discover` call `GET /v1/me` (and `GET /v1/acls` for `discover`) without `X-AP-Context` (`ASC_ADS_ACCESS_TOKEN` skips OAuth token exchange).
-- V1 report pagination belongs in the JSON request body (no `--paginate` flag). Negative keywords use a single v1 resource without bulk-delete; product-page countries/devices and custom impression-share report list/view have no one-command v1 replacement. The deprecated `asc ads v5 reports preset` warning follows `--level`: campaigns, ad groups, ads, keywords, and search terms point to their matching `asc ads reports apps` command; the two ad-group-specific keyword levels point to v1's consolidated `keywords` or `search-terms` report.
+- V1 report pagination belongs in the JSON request body (no `--paginate` flag). Negative keywords use a single v1 resource without bulk-delete; product-page countries/devices and custom impression-share report list/view have no one-command v1 replacement. The removed `asc ads v5 reports preset` maps to the `asc ads reports apps` command for its former `--level`; the two ad-group-specific keyword levels map to v1's consolidated `keywords` or `search-terms` report.
+- `--org`, `ASC_ADS_ORG_ID`, and profile `org_id` only feed the selected organization that `asc ads auth status` and `asc ads auth discover` report; no request sends an `orgId` context.
 
 ## Authentication & Rate Limiting
 

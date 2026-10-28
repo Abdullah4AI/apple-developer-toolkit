@@ -187,15 +187,15 @@ func TestRawPaginatedGETRejectsRelativeAuthorityBeforeTransport(t *testing.T) {
 func TestRawPaginatedGETMergesPagesAndDropsNext(t *testing.T) {
 	client := newTestClient(
 		t, nil,
-		jsonResponse(http.StatusOK, `{"data":[{"type":"apps","id":"1"}],"included":[{"type":"builds","id":"b1"}],"links":{"self":"https://api.appstoreconnect.apple.com/v1/apps?limit=1","next":"https://api.appstoreconnect.apple.com/v1/apps?cursor=two&limit=1"},"meta":{"paging":{"total":2}}}`),
-		jsonResponse(http.StatusOK, `{"data":[{"type":"apps","id":"2"}],"included":[{"type":"builds","id":"b1"},{"type":"builds","id":"b2"}],"links":{"self":"https://api.appstoreconnect.apple.com/v1/apps?cursor=two&limit=1"},"meta":{"paging":{"total":2}}}`),
+		jsonResponse(http.StatusOK, `{"data":[{"type":"apps","id":"1"}],"included":[{"type":"builds","id":"b1"}],"links":{"self":"https://api.appstoreconnect.apple.com/v1/apps?limit=1","next":"https://api.appstoreconnect.apple.com/v1/apps?cursor=two&limit=1"},"meta":{"paging":{"total":2,"nextCursor":"two","limit":1}}}`),
+		jsonResponse(http.StatusOK, `{"data":[{"type":"apps","id":"2"}],"included":[{"type":"builds","id":"b1"},{"type":"builds","id":"b2"}],"links":{"self":"https://api.appstoreconnect.apple.com/v1/apps?cursor=two&limit=1"},"meta":{"paging":{"total":2,"limit":1}}}`),
 	)
 
 	got, err := client.RawPaginatedGET(context.Background(), "/v1/apps?limit=1", nil)
 	if err != nil {
 		t.Fatalf("RawPaginatedGET() error: %v", err)
 	}
-	want := `{"data":[{"type":"apps","id":"1"},{"type":"apps","id":"2"}],"included":[{"type":"builds","id":"b1"},{"type":"builds","id":"b2"}],"links":{"self":"https://api.appstoreconnect.apple.com/v1/apps?limit=1"},"meta":{"paging":{"total":2}}}`
+	want := `{"data":[{"type":"apps","id":"1"},{"type":"apps","id":"2"}],"included":[{"type":"builds","id":"b1"},{"type":"builds","id":"b2"}],"links":{"self":"https://api.appstoreconnect.apple.com/v1/apps?limit=1"},"meta":{"paging":{"total":2,"limit":1}}}`
 	if string(got) != want {
 		t.Fatalf("RawPaginatedGET() = %s, want %s", got, want)
 	}

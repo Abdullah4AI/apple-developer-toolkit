@@ -67,6 +67,10 @@ func subscriptionLocalizationV2IncludeList() []string {
 	return []string{"version"}
 }
 
+func subscriptionIntroductoryOfferIncludeList() []string {
+	return []string{"subscription", "territory", "subscriptionPricePoint"}
+}
+
 func subscriptionIncludeList() []string {
 	return []string{
 		"subscriptionLocalizations",

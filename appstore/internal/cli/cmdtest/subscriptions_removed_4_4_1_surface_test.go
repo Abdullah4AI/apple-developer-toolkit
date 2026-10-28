@@ -26,6 +26,7 @@ func TestSubscriptionsRemoved441CommandsAreUnknown(t *testing.T) {
 		args     []string
 		wantErr  string
 		wantHelp string
+		wantTry  string
 	}{
 		{
 			name:     "localizations list",
@@ -62,12 +63,21 @@ func TestSubscriptionsRemoved441CommandsAreUnknown(t *testing.T) {
 			args:     []string{"subscriptions", "review", "submit", "--subscription-id", "SUB_ID", "--confirm"},
 			wantErr:  "Error: unknown command `asc subscriptions review submit`",
 			wantHelp: "asc subscriptions review --help",
+			wantTry:  "Try:\n  asc review submissions-create --app APP_ID --platform IOS\n  asc review items add --submission SUBMISSION_ID --item-type subscriptionVersions --item-id SUBSCRIPTION_VERSION_ID\n",
 		},
 		{
 			name:     "review submit-group",
 			args:     []string{"subscriptions", "review", "submit-group", "--group-id", "GROUP_ID", "--confirm"},
 			wantErr:  "Error: unknown command `asc subscriptions review submit-group`",
 			wantHelp: "asc subscriptions review --help",
+			wantTry:  "Try:\n  asc review submissions-create --app APP_ID --platform IOS\n  asc review items add --submission SUBMISSION_ID --item-type subscriptionGroupVersions --item-id GROUP_VERSION_ID\n",
+		},
+		{
+			name:     "iap submit",
+			args:     []string{"iap", "submit", "--iap-id", "IAP_ID", "--confirm"},
+			wantErr:  "Error: unknown command `asc iap submit`",
+			wantHelp: "asc iap --help",
+			wantTry:  "Try:\n  asc review submissions-create --app APP_ID --platform IOS\n  asc iap versions submit --version-id IAP_VERSION_ID --submission SUBMISSION_ID --confirm\n",
 		},
 	}
 
@@ -86,6 +96,9 @@ func TestSubscriptionsRemoved441CommandsAreUnknown(t *testing.T) {
 			}
 			if !strings.Contains(stderr, test.wantHelp) {
 				t.Fatalf("stderr = %q, want help pointer %q", stderr, test.wantHelp)
+			}
+			if !strings.Contains(stderr, test.wantTry) {
+				t.Fatalf("stderr = %q, want replacement hint %q", stderr, test.wantTry)
 			}
 			if strings.Contains(stderr, "deprecated") {
 				t.Fatalf("stderr = %q, want no deprecation guidance for a removed command", stderr)

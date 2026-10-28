@@ -28,9 +28,16 @@ func SummarizeDeepChecks(checks []DeepCheck) DeepSummary {
 // ApplyDeepValidation merges deep evidence into a public readiness report and
 // rebuilds all derived counts and remediation steps.
 func ApplyDeepValidation(report Report, deep DeepReport, findings []CheckResult) Report {
+	privacyVerified := false
+	for _, check := range deep.Checks {
+		if check.ID == DeepCheckPrivacyPublishState && (check.Status == DeepStatusPassed || check.Status == DeepStatusBlocked) {
+			privacyVerified = true
+			break
+		}
+	}
 	checks := make([]CheckResult, 0, len(report.Checks)+len(findings))
 	for _, check := range report.Checks {
-		if check.ID == privacyPublishStateUnverifiedID {
+		if check.ID == privacyPublishStateUnverifiedID && privacyVerified {
 			continue
 		}
 		checks = append(checks, check)

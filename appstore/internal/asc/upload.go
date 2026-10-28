@@ -295,6 +295,7 @@ func executeUploadOperation(ctx context.Context, file *os.File, task uploadTask,
 			return struct{}{}, requestErr
 		}
 		defer resp.Body.Close()
+		observeRequestStatus(ctx, resp.StatusCode)
 		_, _ = io.Copy(io.Discard, resp.Body)
 
 		if replaySafe && isRetryableHTTPStatus(resp.StatusCode) {

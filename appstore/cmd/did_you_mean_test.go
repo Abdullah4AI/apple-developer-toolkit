@@ -41,6 +41,16 @@ func TestRun_UnknownChildOffersSynonymSuggestions(t *testing.T) {
 				"  asc apps --help\n",
 		},
 		{
+			name: "localizations get points at the single-localization view",
+			args: []string{"localizations", "get"},
+			wantStderr: "Error: unknown command `asc localizations get`\n" +
+				"Try:\n" +
+				"  asc localizations view --id LOCALIZATION_ID\n" +
+				"  asc localizations list --version VERSION_ID\n" +
+				"For help:\n" +
+				"  asc localizations --help\n",
+		},
+		{
 			name: "age-rating set no longer dumps the group usage",
 			args: []string{"age-rating", "set"},
 			wantStderr: "Error: unknown command `asc age-rating set`\n" +
@@ -342,14 +352,6 @@ func TestRun_UnknownChildMapsLegacyAndAsymmetricPaths(t *testing.T) {
 			},
 		},
 		{
-			args:  []string{"testflight", "groups", "builds"},
-			group: "asc testflight groups",
-			want: []string{
-				"asc builds add-groups --build-id BUILD_ID --group GROUP_ID",
-				"asc testflight groups list --build-id BUILD_ID",
-			},
-		},
-		{
 			args:  []string{"pricing", "view"},
 			group: "asc pricing",
 			want:  []string{"asc pricing current --app APP_ID", "asc pricing availability view --app APP_ID"},
@@ -420,6 +422,7 @@ func TestUnknownChildSynonymsCoverTheTelemetryGroups(t *testing.T) {
 		"asc screenshots",
 		"asc subscriptions",
 		"asc subscriptions groups",
+		"asc subscriptions review",
 		"asc subscriptions review screenshots",
 		"asc testflight",
 		"asc testflight groups",

@@ -40,6 +40,7 @@ App Store workflow:
   asc screenshots list --version-localization "VERSION_LOCALIZATION_ID"
   asc screenshots list --version-id "VERSION_ID" --locale "en-US"
   asc screenshots list --app "123456789" --version "1.2.3"
+  asc screenshots list --set-id "SET_ID"
   asc screenshots sizes
   asc screenshots sizes --all
   asc screenshots validate --path "./screenshots/iphone" --device-type "IPHONE_65"
@@ -47,6 +48,7 @@ App Store workflow:
   asc screenshots upload --app "123456789" --version "1.2.3" --path "./screenshots" --device-type "IPHONE_65"
   asc screenshots upload --version-localization "VERSION_LOCALIZATION_ID" --path "./screenshots/ipad" --device-type "IPAD_PRO_3GEN_129"
   asc screenshots download --version-localization "VERSION_LOCALIZATION_ID" --output-dir "./screenshots/downloaded"
+  asc screenshots reorder --set-id "SET_ID" --ids "THIRD_ID,FIRST_ID,SECOND_ID"
   asc screenshots delete --id "SCREENSHOT_ID" --confirm
 
 For most iOS submissions, one iPhone set (IPHONE_65) and one iPad set
@@ -70,6 +72,7 @@ default; use --all only when you need the full matrix.`,
 			assets.AssetsScreenshotsValidateCommand(),
 			assets.AssetsScreenshotsUploadCommand(),
 			assets.AssetsScreenshotsDownloadCommand(),
+			assets.AssetsScreenshotsReorderCommand(),
 			assets.AssetsScreenshotsDeleteCommand(),
 		},
 		Exec: func(ctx context.Context, args []string) error {

@@ -5,6 +5,8 @@ type BuildBetaDetailAttributes struct {
 	AutoNotifyEnabled  bool   `json:"autoNotifyEnabled,omitempty"`
 	InternalBuildState string `json:"internalBuildState,omitempty"`
 	ExternalBuildState string `json:"externalBuildState,omitempty"`
+
+	api apiAttributes
 }
 
 // BuildBetaDetailsResponse is the response from build beta details list.

@@ -66,6 +66,8 @@ func SubscriptionsIntroductoryOffersListCommand() *ffcli.Command {
 	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
 	next := fs.String("next", "", "Fetch next page using a links.next URL")
 	paginate := fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")
+	territory := fs.String("territory", "", "Filter by territories (comma-separated; alpha-2, alpha-3, or English name, e.g. USA,GB)")
+	include := fs.String("include", "", "Relationships to include (comma-separated): "+strings.Join(subscriptionIntroductoryOfferIncludeList(), ", "))
 	subscriptionFields := fs.String("subscription-fields", "", "Included subscription fields (comma-separated)")
 	pricePointFields := fs.String("price-point-fields", "", "Included subscription price point fields (comma-separated)")
 	output := shared.BindOutputFlags(fs)
@@ -78,6 +80,7 @@ func SubscriptionsIntroductoryOffersListCommand() *ffcli.Command {
 
 Examples:
   asc subscriptions introductory-offers list --subscription-id "SUB_ID"
+  asc subscriptions introductory-offers list --subscription-id "SUB_ID" --territory USA,GBR --include territory
   asc subscriptions introductory-offers list --subscription-id "SUB_ID" --paginate`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
@@ -88,8 +91,16 @@ Examples:
 			if err := shared.ValidateNextURL(*next); err != nil {
 				return shared.UsageErrorfCtx(ctx, "subscriptions introductory-offers list: %v", err)
 			}
-			if err := validateNextExclusiveFlags(fs, *next, "subscription-id", "app", "limit", "subscription-fields", "price-point-fields"); err != nil {
+			if err := validateNextExclusiveFlags(fs, *next, "subscription-id", "app", "limit", "territory", "include", "subscription-fields", "price-point-fields"); err != nil {
 				return err
+			}
+			selectedTerritories, err := normalizeOptionalTerritoryFilter(fs, "territory", *territory)
+			if err != nil {
+				return shared.UsageError(err.Error())
+			}
+			selectedIncludes, err := normalizeOptionalSelection(fs, "include", *include, subscriptionIntroductoryOfferIncludeList())
+			if err != nil {
+				return shared.UsageError(err.Error())
 			}
 			selectedSubscriptionFields, err := normalizeSparseFieldsFlag(fs, *next, "subscription-fields", *subscriptionFields, subscriptionFieldsList())
 			if err != nil {
@@ -99,8 +110,8 @@ Examples:
 			if err != nil {
 				return err
 			}
-			include := includeRelationshipForFields(selectedSubscriptionFields, "subscription")
-			include = appendIncludeForFields(include, selectedPricePointFields, "subscriptionPricePoint")
+			selectedIncludes = appendIncludeForFields(selectedIncludes, selectedSubscriptionFields, "subscription")
+			selectedIncludes = appendIncludeForFields(selectedIncludes, selectedPricePointFields, "subscriptionPricePoint")
 
 			id := strings.TrimSpace(*subscriptionID)
 			if id == "" && strings.TrimSpace(*next) == "" {
@@ -126,9 +137,10 @@ Examples:
 			opts := []asc.SubscriptionIntroductoryOffersOption{
 				asc.WithSubscriptionIntroductoryOffersLimit(*limit),
 				asc.WithSubscriptionIntroductoryOffersNextURL(*next),
+				asc.WithSubscriptionIntroductoryOffersTerritories(selectedTerritories),
 				asc.WithSubscriptionIntroductoryOffersSubscriptionFields(selectedSubscriptionFields),
 				asc.WithSubscriptionIntroductoryOffersPricePointFields(selectedPricePointFields),
-				asc.WithSubscriptionIntroductoryOffersInclude(include),
+				asc.WithSubscriptionIntroductoryOffersInclude(selectedIncludes),
 			}
 
 			if *paginate {

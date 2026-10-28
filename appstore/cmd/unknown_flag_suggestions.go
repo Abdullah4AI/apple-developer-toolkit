@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
@@ -97,6 +98,9 @@ type unknownFlagSuggestionOptions struct {
 	// exclude lists flag names, without leading dashes, that the surrounding
 	// diagnostic already printed.
 	exclude []string
+	// passed lists flags already on the command line; the selector tier never
+	// suggests one of them.
+	passed []string
 }
 
 // unknownFlagSuggestions ranks up to maxUnknownFlagSuggestions defined flags of
@@ -163,7 +167,7 @@ func unknownFlagSuggestions(flags *flag.FlagSet, flagName string, options unknow
 		add(nearest)
 	}
 	if len(suggestions) == 0 && options.allowSelectorFallback {
-		if selector := identifierSelectorFlag(name, candidates); selector != "" {
+		if selector := identifierSelectorFlag(name, candidates); selector != "" && !slices.Contains(options.passed, selector) {
 			add(selector)
 		}
 	}

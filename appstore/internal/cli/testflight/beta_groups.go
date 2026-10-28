@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/peterbourgon/ff/v3/ffcli"
 
@@ -221,6 +222,8 @@ Examples:
   asc testflight beta-groups create --app "APP_ID" --name "Beta Testers"
   asc testflight beta-groups create --app "APP_ID" --name "Internal Testers" --internal
   asc testflight beta-groups app view --group-id "GROUP_ID"
+  asc testflight beta-groups builds list --group-id "GROUP_ID"
+  asc testflight beta-groups testers list --group-id "GROUP_ID"
   asc testflight beta-groups beta-recruitment-criteria view --group-id "GROUP_ID"
   asc testflight beta-groups beta-recruitment-criterion-compatible-build-check view --group-id "GROUP_ID"`,
 		FlagSet:   fs,
@@ -235,6 +238,8 @@ Examples:
 			BetaGroupsUpdateCommand(),
 			BetaGroupsAddTestersCommand(),
 			BetaGroupsRemoveTestersCommand(),
+			BetaGroupsBuildsCommand(),
+			BetaGroupsTestersCommand(),
 			BetaGroupsRelationshipsCommand(),
 			BetaGroupsDeleteCommand(),
 		},
@@ -302,7 +307,9 @@ GET /v1/apps/{id}/betaGroups accepts only limit and fields[betaGroups], so
 with filter[app]. Those filters are applied by App Store Connect. For ordinary
 one-page filtered and global listings, --limit is the page size. The stable
 app-scoped --internal/--external aggregate fetches with the maximum page size
-of 200 before applying --limit as the final cap. --name matches the exact group name.
+of 200 before applying --limit as the final cap. --name matches the exact group name;
+when an app-scoped name with spaces matches nothing, it is retried with the
+app's spelling, such as the default group's non-breaking space.
 The top-level endpoint also supports --id, --public-link-enabled,
 --public-link-limit-enabled, and --public-link filters. Use --include with
 --fields, --app-fields, --build-fields, --tester-fields, or
@@ -684,6 +691,20 @@ Examples:
 				}
 				return client.GetBetaGroups(ctx, resolvedAppID, pageOpts...)
 			}
+			// Apple's filter[name] matches exact spellings, but each app's default
+			// group name has a non-breaking space that users cannot type. When an
+			// app-scoped name with spaces finds nothing, retry with Apple's spelling.
+			firstPage := func(ctx context.Context, pageOpts ...asc.BetaGroupsOption) (asc.PaginatedResponse, error) {
+				page, err := listPage(ctx, pageOpts...)
+				if err != nil || *global || !strings.ContainsFunc(nameValue, unicode.IsSpace) || len(page.(*asc.BetaGroupsResponse).Data) > 0 {
+					return page, err
+				}
+				appleName, err := appleBetaGroupNameSpelling(ctx, client, resolvedAppID, nameValue)
+				if err != nil || appleName == "" {
+					return page, err
+				}
+				return listPage(ctx, append(slices.Clone(pageOpts), asc.WithBetaGroupsName(appleName))...)
+			}
 
 			// App-scoped internal/external filtering historically returned every
 			// matching page without requiring --paginate. Keep that stable behavior
@@ -717,7 +738,7 @@ Examples:
 				groups, err := shared.PaginateWithSpinner(
 					requestCtx,
 					func(ctx context.Context) (asc.PaginatedResponse, error) {
-						return listPage(ctx, paginateOpts...)
+						return firstPage(ctx, paginateOpts...)
 					},
 					func(ctx context.Context, nextURL string) (asc.PaginatedResponse, error) {
 						return listPage(ctx, asc.WithBetaGroupsNextURL(nextURL))
@@ -735,7 +756,7 @@ Examples:
 				return shared.PrintOutput(groups, *output.Output, *output.Pretty)
 			}
 
-			groups, err := listPage(requestCtx, opts...)
+			groups, err := firstPage(requestCtx, opts...)
 			if err != nil {
 				return fmt.Errorf("beta-groups list: failed to fetch: %w", err)
 			}
@@ -743,6 +764,33 @@ Examples:
 			return shared.PrintOutput(groups, *output.Output, *output.Pretty)
 		},
 	}
+}
+
+// appleBetaGroupNameSpelling returns the app's group names that equal name
+// after shared.NormalizeBetaGroupName, joined for filter[name], where a comma
+// means OR.
+func appleBetaGroupNameSpelling(ctx context.Context, client *asc.Client, appID, name string) (string, error) {
+	firstPage, err := client.GetBetaGroups(ctx, appID, asc.WithBetaGroupsLimit(200), asc.WithBetaGroupsFields([]string{"name"}))
+	if err != nil {
+		return "", err
+	}
+	all, err := asc.PaginateAll(ctx, firstPage, func(ctx context.Context, nextURL string) (asc.PaginatedResponse, error) {
+		return client.GetBetaGroups(ctx, appID, asc.WithBetaGroupsNextURL(nextURL))
+	})
+	if err != nil {
+		return "", err
+	}
+	want := strings.ToLower(shared.NormalizeBetaGroupName(name))
+	var matches []string
+	for _, group := range all.(*asc.BetaGroupsResponse).Data {
+		if strings.ToLower(shared.NormalizeBetaGroupName(group.Attributes.Name)) == want && !slices.Contains(matches, group.Attributes.Name) {
+			matches = append(matches, group.Attributes.Name)
+		}
+	}
+	if slices.ContainsFunc(matches, func(match string) bool { return strings.Contains(match, ",") }) {
+		return "", shared.UsageErrorf("beta-groups list: --name %q matches %q, and filter[name] reads a comma as OR; use --id", name, matches)
+	}
+	return strings.Join(matches, ","), nil
 }
 
 func preserveFilteredBetaGroupsLimit(groups asc.PaginatedResponse, limit int) error {

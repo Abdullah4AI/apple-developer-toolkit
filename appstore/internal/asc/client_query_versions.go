@@ -98,6 +98,7 @@ type appCustomProductPageVersionsQuery struct {
 
 type appCustomProductPageLocalizationsQuery struct {
 	listQuery
+	searchKeywordsLimit int
 }
 
 type appCustomProductPageLocalizationPreviewSetsQuery struct {
@@ -117,6 +118,7 @@ type appStoreVersionLocalizationPreviewSetsQuery struct {
 
 type appStoreVersionLocalizationScreenshotSetsQuery struct {
 	listQuery
+	includeMedia   bool
 	requestContext RequestContextFunc
 }
 
@@ -329,6 +331,10 @@ func buildAppCustomProductPageVersionsQuery(query *appCustomProductPageVersionsQ
 func buildAppCustomProductPageLocalizationsQuery(query *appCustomProductPageLocalizationsQuery) string {
 	values := url.Values{}
 	addLimit(values, query.limit)
+	if query.searchKeywordsLimit > 0 {
+		values.Set("include", "searchKeywords")
+		values.Set("limit[searchKeywords]", strconv.Itoa(query.searchKeywordsLimit))
+	}
 	return values.Encode()
 }
 
@@ -359,6 +365,9 @@ func buildAppStoreVersionLocalizationPreviewSetsQuery(query *appStoreVersionLoca
 func buildAppStoreVersionLocalizationScreenshotSetsQuery(query *appStoreVersionLocalizationScreenshotSetsQuery) string {
 	values := url.Values{}
 	addLimit(values, query.limit)
+	if query.includeMedia {
+		addIncludedSetMedia(values, "appScreenshots")
+	}
 	return values.Encode()
 }
 
@@ -1109,6 +1118,16 @@ func WithAppCustomProductPageLocalizationsLimit(limit int) AppCustomProductPageL
 	}
 }
 
+// WithAppCustomProductPageLocalizationsSearchKeywords includes up to limit
+// search keywords per localization in each localization's relationships.
+func WithAppCustomProductPageLocalizationsSearchKeywords(limit int) AppCustomProductPageLocalizationsOption {
+	return func(q *appCustomProductPageLocalizationsQuery) {
+		if limit > 0 {
+			q.searchKeywordsLimit = limit
+		}
+	}
+}
+
 // WithAppCustomProductPageLocalizationsNextURL uses a next page URL directly.
 func WithAppCustomProductPageLocalizationsNextURL(next string) AppCustomProductPageLocalizationsOption {
 	return func(q *appCustomProductPageLocalizationsQuery) {
@@ -1192,6 +1211,13 @@ func WithAppStoreVersionLocalizationScreenshotSetsLimit(limit int) AppStoreVersi
 		if limit > 0 {
 			q.limit = limit
 		}
+	}
+}
+
+// WithAppStoreVersionLocalizationScreenshotSetsIncludeScreenshots includes each set's screenshots.
+func WithAppStoreVersionLocalizationScreenshotSetsIncludeScreenshots() AppStoreVersionLocalizationScreenshotSetsOption {
+	return func(q *appStoreVersionLocalizationScreenshotSetsQuery) {
+		q.includeMedia = true
 	}
 }
 

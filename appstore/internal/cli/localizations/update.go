@@ -19,8 +19,9 @@ func LocalizationsUpdateCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("update", flag.ExitOnError)
 
 	localizationID := fs.String("id", "", "Localization resource ID (skips parent and locale lookup)")
-	versionID := shared.BindResourceIDFlag(fs, "version", "appStoreVersions", "App Store version ID (for version localizations)")
-	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID, for app-info localizations)")
+	versionID := shared.BindResourceIDFlag(fs, "version", "appStoreVersions", "App Store version ID, or a version string with --app (for version localizations)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID)")
+	platform := fs.String("platform", "", "Platform for version strings: IOS, MAC_OS, TV_OS, VISION_OS")
 	appInfoID := shared.BindResourceIDFlag(fs, "app-info", "appInfos", "App Info ID (optional override)")
 	locType := fs.String("type", shared.LocalizationTypeVersion, "Localization type: version (default) or app-info")
 	locale := fs.String("locale", "", "Locale to update when resolving by parent (reuse exact ASC locale like en-US, ar-SA, zh-Hans)")
@@ -55,6 +56,10 @@ func LocalizationsUpdateCommand() *ffcli.Command {
 Use --id to update a known localization resource directly. Otherwise, identify
 the parent version or app and pass the exact locale already stored in App Store
 Connect.
+
+For version localizations, --version accepts a version ID, or a version string
+such as 1.2.3 with --app (or ASC_APP_ID). Use --platform when the string exists
+on multiple platforms.
 
 Pass the exact locale value already stored in App Store Connect. Common accepted
 forms include en-US, de-DE, ja, ar-SA, zh-Hans, and zh-Hant.
@@ -92,13 +97,20 @@ At least one field flag must be provided.`,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			localizationIDValue := strings.TrimSpace(*localizationID)
-			if localizationIDValue != "" && (strings.TrimSpace(*versionID) != "" || strings.TrimSpace(*appID) != "" || strings.TrimSpace(*appInfoID) != "" || strings.TrimSpace(*locale) != "") {
-				fmt.Fprintln(os.Stderr, "Error: --id cannot be combined with --version, --app, --app-info, or --locale")
+			if localizationIDValue != "" && (strings.TrimSpace(*versionID) != "" || strings.TrimSpace(*appID) != "" || strings.TrimSpace(*appInfoID) != "" || strings.TrimSpace(*locale) != "" || flagProvided(fs, "platform")) {
+				fmt.Fprintln(os.Stderr, "Error: --id cannot be combined with --version, --app, --app-info, --locale, or --platform")
 				return flag.ErrHelp
 			}
 			normalizedType, err := shared.NormalizeLocalizationType(*locType)
 			if err != nil {
 				return fmt.Errorf("localizations update: %w", err)
+			}
+			if flagProvided(fs, "platform") && strings.TrimSpace(*platform) == "" {
+				return shared.UsageError("--platform must not be empty")
+			}
+
+			if normalizedType == shared.LocalizationTypeAppInfo && flagProvided(fs, "platform") {
+				return shared.UsageError("--platform requires --type version")
 			}
 			if err := validateClearFlags(fs, normalizedType); err != nil {
 				return err
@@ -140,6 +152,8 @@ At least one field flag must be provided.`,
 				return updateVersionLocalization(ctx, updateVersionParams{
 					localizationID:       localizationIDValue,
 					versionID:            *versionID,
+					appID:                *appID,
+					platform:             *platform,
 					locale:               localeValue,
 					description:          *description,
 					keywords:             *keywords,
@@ -257,7 +271,7 @@ func updateAppInfoLocalization(ctx context.Context, p updateAppInfoParams) error
 			}
 		}
 		if localizationID == "" {
-			return fmt.Errorf("localizations update: no existing localization found for locale %q", p.locale)
+			return fmt.Errorf("localizations update: no existing localization found for locale %q; create it with asc apps rename --app %q --app-info %q --locale %q --name \"APP_NAME\", then retry this update", p.locale, resolvedAppID, appInfo, p.locale)
 		}
 	}
 
@@ -329,7 +343,7 @@ func hasAnyAppInfoField(p updateAppInfoParams) bool {
 
 type updateVersionParams struct {
 	localizationID                                                             string
-	versionID, locale                                                          string
+	versionID, locale, appID, platform                                         string
 	description, keywords, whatsNew, promotionalText, supportURL, marketingURL string
 	clearPromotionalText                                                       bool
 	output                                                                     shared.OutputFlags
@@ -347,6 +361,11 @@ func updateVersionLocalization(ctx context.Context, p updateVersionParams) error
 		fmt.Fprintln(os.Stderr, "Error: --version is required for version localizations")
 		return shared.MissingRequiredUsageError("--version")
 	}
+	versionIsString, normalizedPlatform, err := normalizeLocalizationVersionSelector(vid, p.appID, p.platform)
+	if localizationID == "" && err != nil {
+		return err
+	}
+
 	attrs := asc.AppStoreVersionLocalizationAttributes{
 		Description:     p.description,
 		Keywords:        p.keywords,
@@ -368,6 +387,12 @@ func updateVersionLocalization(ctx context.Context, p updateVersionParams) error
 	defer cancel()
 
 	if localizationID == "" {
+		if versionIsString {
+			vid, err = resolveLocalizationsVersionString(requestCtx, client, shared.ResolveAppID(p.appID), vid, normalizedPlatform)
+			if err != nil {
+				return fmt.Errorf("localizations update: %w", err)
+			}
+		}
 		// Find existing localization ID for the locale
 		existing, err := client.GetAppStoreVersionLocalizations(requestCtx, vid, asc.WithAppStoreVersionLocalizationsLimit(200))
 		if err != nil {

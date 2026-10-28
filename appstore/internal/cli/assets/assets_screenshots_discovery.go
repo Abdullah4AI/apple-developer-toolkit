@@ -47,10 +47,9 @@ func limitScreenshotUploadFiles(files []string, maxScreenshots int, source strin
 
 	if len(files) > appScreenshotSetMaxScreenshots {
 		return nil, fmt.Errorf(
-			"%q contains %d screenshots for one screenshot set; App Store screenshot sets allow at most %d images. Remove extra files or pass --max-screenshots %d to upload the first %d sorted files",
+			"%q contains %d screenshots for one screenshot set; App Store screenshot sets allow at most %d images. Reduce the selected screenshots to %d or fewer before retrying",
 			source,
 			len(files),
-			appScreenshotSetMaxScreenshots,
 			appScreenshotSetMaxScreenshots,
 			appScreenshotSetMaxScreenshots,
 		)
@@ -106,7 +105,7 @@ func limitScreenshotUploadFilesForExistingSet(files []string, maxScreenshots int
 			inspectCommand = fmt.Sprintf("the localization listing containing screenshot set %q", setLabel)
 		}
 		return nil, fmt.Errorf(
-			"screenshot set %q already has %d screenshot(s), so no upload slots remain; --max-screenshots cannot create capacity, and no remote assets were changed for this screenshot set. Inspect the set with %s, then delete only an unwanted screenshot with asc screenshots delete --id %q --confirm, or rerun with %s",
+			"screenshot set %q already has %d screenshot(s), so no upload slots remain; no remote assets were changed for this screenshot set. Inspect the set with %s, then delete only an unwanted screenshot with asc screenshots delete --id %q --confirm, or rerun with %s",
 			setLabel,
 			len(existingScreenshots),
 			inspectCommand,
@@ -118,7 +117,7 @@ func limitScreenshotUploadFilesForExistingSet(files []string, maxScreenshots int
 		total := len(existingScreenshots) + len(files)
 		if total > appScreenshotSetMaxScreenshots {
 			return nil, fmt.Errorf(
-				"%s already has %d screenshot(s); uploading %d more would exceed App Store screenshot set limit %d. Pass %s to replace existing screenshots or --max-screenshots %d to upload only the remaining slot(s)",
+				"%s already has %d screenshot(s); uploading %d more would exceed App Store screenshot set limit %d. Rerun with %s to replace existing screenshots or reduce the selection to %d screenshot(s) to fit the remaining slots",
 				setLabel,
 				len(existingScreenshots),
 				len(files),

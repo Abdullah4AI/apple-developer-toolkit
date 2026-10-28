@@ -101,25 +101,108 @@ type AppStoreVersionsLatestResult struct {
 
 func appStoreVersionsRows(resp *AppStoreVersionsResponse) ([]string, [][]string) {
 	headers := []string{"ID", "Version", "Platform", "State", "Created"}
+	links := make([]appStoreVersionLinks, len(resp.Data))
+	showBuild, showSubmission := false, false
+	for i, item := range resp.Data {
+		links[i] = appStoreVersionLinkedIDs(item.Relationships)
+		showBuild = showBuild || links[i].buildRequested
+		showSubmission = showSubmission || links[i].submissionRequested
+	}
+	buildVersions := includedBuildVersions(resp.Included)
+	if showBuild {
+		headers = append(headers, "Build ID", "Build Version")
+	}
+	if showSubmission {
+		headers = append(headers, "Submission ID")
+	}
+
 	rows := make([][]string, 0, len(resp.Data))
-	for _, item := range resp.Data {
+	for i, item := range resp.Data {
 		state := item.Attributes.AppVersionState
 		if state == "" {
 			state = item.Attributes.AppStoreState
 		}
-		rows = append(rows, []string{
+		row := []string{
 			item.ID,
 			item.Attributes.VersionString,
 			displayPlatform(string(item.Attributes.Platform)),
 			state,
 			item.Attributes.CreatedDate,
-		})
+		}
+		if showBuild {
+			row = append(row, links[i].buildID, buildVersions[links[i].buildID])
+		}
+		if showSubmission {
+			row = append(row, links[i].submissionID)
+		}
+		rows = append(rows, row)
 	}
 	return headers, rows
 }
 
+// appStoreVersionLinks holds a version's build and submission linkages. Apple
+// returns a relationship's data only when the request included it, so the
+// requested flags tell an unlinked version apart from one not asked about.
+type appStoreVersionLinks struct {
+	buildID             string
+	buildRequested      bool
+	submissionID        string
+	submissionRequested bool
+}
+
+func appStoreVersionLinkedIDs(relationships json.RawMessage) appStoreVersionLinks {
+	var rels struct {
+		Build struct {
+			Data json.RawMessage `json:"data"`
+		} `json:"build"`
+		Submission struct {
+			Data json.RawMessage `json:"data"`
+		} `json:"appStoreVersionSubmission"`
+	}
+	if len(relationships) == 0 || json.Unmarshal(relationships, &rels) != nil {
+		return appStoreVersionLinks{}
+	}
+	return appStoreVersionLinks{
+		buildID:             linkageID(rels.Build.Data),
+		buildRequested:      rels.Build.Data != nil,
+		submissionID:        linkageID(rels.Submission.Data),
+		submissionRequested: rels.Submission.Data != nil,
+	}
+}
+
+func linkageID(data json.RawMessage) string {
+	var linkage struct {
+		ID string `json:"id"`
+	}
+	if json.Unmarshal(data, &linkage) != nil {
+		return ""
+	}
+	return linkage.ID
+}
+
+// includedBuildVersions maps included build IDs to their build numbers.
+func includedBuildVersions(included json.RawMessage) map[string]string {
+	var items []struct {
+		Type       string `json:"type"`
+		ID         string `json:"id"`
+		Attributes struct {
+			Version string `json:"version"`
+		} `json:"attributes"`
+	}
+	if len(included) == 0 || json.Unmarshal(included, &items) != nil {
+		return nil
+	}
+	versions := make(map[string]string)
+	for _, item := range items {
+		if item.Type == "builds" {
+			versions[item.ID] = item.Attributes.Version
+		}
+	}
+	return versions
+}
+
 func appStoreVersionsLatestRows(result *AppStoreVersionsLatestResult) ([]string, [][]string) {
-	return appStoreVersionsRows(&AppStoreVersionsResponse{Data: result.Items})
+	return appStoreVersionsRows(&AppStoreVersionsResponse{Data: result.Items, Included: result.Included})
 }
 
 func preReleaseVersionsRows(resp *PreReleaseVersionsResponse) ([]string, [][]string) {
@@ -184,6 +267,9 @@ func appStoreVersionDetailRows(result *AppStoreVersionDetailResult) ([]string, [
 
 func appStoreVersionPhasedReleaseRows(resp *AppStoreVersionPhasedReleaseResponse) ([]string, [][]string) {
 	headers := []string{"Phased Release ID", "State", "Start Date", "Current Day", "Progress", "Total Pause Duration"}
+	if resp.Data == nil {
+		return headers, nil
+	}
 	attrs := resp.Data.Attributes
 	rows := [][]string{{
 		resp.Data.ID,
@@ -192,6 +278,39 @@ func appStoreVersionPhasedReleaseRows(resp *AppStoreVersionPhasedReleaseResponse
 		fmt.Sprintf("%d", attrs.CurrentDayNumber),
 		FormatPhasedReleaseProgressBar(attrs.CurrentDayNumber),
 		fmt.Sprintf("%d", attrs.TotalPauseDuration),
+	}}
+	return headers, rows
+}
+
+// PhasedReleaseGuardCheck records one health check run by the phased-release guard.
+type PhasedReleaseGuardCheck struct {
+	CurrentDayNumber int    `json:"currentDayNumber"`
+	ExitCode         int    `json:"exitCode"`
+	TimedOut         bool   `json:"timedOut,omitempty"`
+	Action           string `json:"action"`
+}
+
+// PhasedReleaseGuardResult is the receipt for asc versions phased-release guard.
+type PhasedReleaseGuardResult struct {
+	VersionID          string                    `json:"versionId"`
+	PhasedReleaseID    string                    `json:"phasedReleaseId"`
+	DryRun             bool                      `json:"dryRun"`
+	Outcome            string                    `json:"outcome"`
+	PhasedReleaseState PhasedReleaseState        `json:"phasedReleaseState"`
+	CurrentDayNumber   int                       `json:"currentDayNumber"`
+	Checks             []PhasedReleaseGuardCheck `json:"checks"`
+}
+
+func phasedReleaseGuardResultRows(result *PhasedReleaseGuardResult) ([]string, [][]string) {
+	headers := []string{"Version ID", "Phased Release ID", "Outcome", "State", "Current Day", "Checks", "Dry Run"}
+	rows := [][]string{{
+		result.VersionID,
+		result.PhasedReleaseID,
+		result.Outcome,
+		string(result.PhasedReleaseState),
+		fmt.Sprintf("%d", result.CurrentDayNumber),
+		fmt.Sprintf("%d", len(result.Checks)),
+		fmt.Sprintf("%t", result.DryRun),
 	}}
 	return headers, rows
 }

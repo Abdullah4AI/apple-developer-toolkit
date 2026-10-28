@@ -240,6 +240,54 @@ func TestStatusDefaultJSONIncludesAllSections(t *testing.T) {
 	}
 }
 
+func TestStatusNullPhasedReleaseIsUnconfigured(t *testing.T) {
+	setupAuth(t)
+	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
+
+	var phasedReads lockedCounter
+	installDefaultTransport(t, roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		if req.Method != http.MethodGet {
+			t.Errorf("unexpected method: %s", req.Method)
+			return nil, fmt.Errorf("unexpected method: %s", req.Method)
+		}
+		switch req.URL.Path {
+		case "/v1/apps":
+			return statusJSONResponse(`{"data":[{"type":"apps","id":"app-1","attributes":{"name":"My App","bundleId":"app-1"}}]}`), nil
+		case "/v1/apps/app-1/appStoreVersions":
+			return statusJSONResponse(`{"data":[{"type":"appStoreVersions","id":"ver-1","attributes":{"platform":"IOS","versionString":"1.2.3","appVersionState":"READY_FOR_SALE"}}],"links":{}}`), nil
+		case "/v1/appStoreVersions/ver-1/appStoreVersionPhasedRelease":
+			phasedReads.Inc()
+			return statusJSONResponse(`{"data":null,"links":{}}`), nil
+		default:
+			t.Errorf("unexpected request: %s", req.URL.String())
+			return nil, fmt.Errorf("unexpected request: %s", req.URL.String())
+		}
+	}))
+
+	root := RootCommand("1.2.3")
+	root.FlagSet.SetOutput(io.Discard)
+	stdout, stderr := captureOutput(t, func() {
+		if err := root.Parse([]string{"status", "--app", "app-1", "--include", "phased-release", "--output", "json"}); err != nil {
+			t.Fatalf("parse error: %v", err)
+		}
+		if err := root.Run(context.Background()); err != nil {
+			t.Fatalf("run error: %v", err)
+		}
+	})
+	if stderr != "" || phasedReads.Load() != 1 {
+		t.Fatalf("stderr = %q, phased release reads = %d; want empty stderr and one read", stderr, phasedReads.Load())
+	}
+	var payload struct {
+		PhasedRelease map[string]any `json:"phasedRelease"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
+		t.Fatalf("decode output: %v", err)
+	}
+	if len(payload.PhasedRelease) != 1 || payload.PhasedRelease["configured"] != false {
+		t.Fatalf("phasedRelease = %v, want only configured:false", payload.PhasedRelease)
+	}
+}
+
 func TestStatusCorrelatesOlderBetaReviewSubmissionWithItsActualBuild(t *testing.T) {
 	setupAuth(t)
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))

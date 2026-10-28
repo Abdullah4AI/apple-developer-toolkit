@@ -27,7 +27,7 @@ var postUploadBuildPropagationBackoffs = []time.Duration{
 var addUploadedBuildBetaGroupsFn = addUploadedBuildBetaGroups
 
 type postUploadBuildDistributionClient interface {
-	GetBuild(ctx context.Context, buildID string) (*asc.BuildResponse, error)
+	GetBuild(ctx context.Context, buildID string, opts ...asc.BuildOption) (*asc.BuildResponse, error)
 	AddBetaGroupsToBuildWithNotify(ctx context.Context, buildID string, groupIDs []string, notify bool) (asc.BuildBetaGroupsNotificationAction, error)
 }
 

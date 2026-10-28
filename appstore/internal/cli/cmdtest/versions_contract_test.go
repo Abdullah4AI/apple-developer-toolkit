@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -39,46 +40,44 @@ func TestVersionsViewSendsExactSupportedIncludeQuery(t *testing.T) {
 	setupAuth(t)
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 
-	const include = "app,appStoreVersionLocalizations,build,appStoreVersionPhasedRelease"
-	stubTransport(t, func(req *http.Request) (*http.Response, error) {
-		if req.Method != http.MethodGet || req.URL.Path != "/v1/appStoreVersions/version-1" {
-			t.Fatalf("request = %s %s, want GET /v1/appStoreVersions/version-1", req.Method, req.URL.Path)
-		}
-		if got := req.URL.Query().Get("include"); got != include {
-			t.Fatalf("include query = %q, want %q", got, include)
-		}
-		return jsonResponse(http.StatusOK, `{"data":{"type":"appStoreVersions","id":"version-1","attributes":{"versionString":"1.0","platform":"IOS"}},"included":[]}`)
-	})
+	const body = `{"data":{"type":"appStoreVersions","id":"version-1","attributes":{"versionString":"1.0","platform":"IOS"},"relationships":{"build":{"data":null},"appStoreVersionSubmission":{"data":null}}},"links":{"self":"https://api.appstoreconnect.apple.com/v1/appStoreVersions/version-1"},"included":[]}`
+	tests := []struct {
+		name    string
+		flags   []string
+		include string
+	}{
+		{"explicit", []string{"--include", "app,appStoreVersionLocalizations,build,appStoreVersionPhasedRelease"}, "app,appStoreVersionLocalizations,build,appStoreVersionPhasedRelease"},
+		{"legacy flags", []string{"--include-build", "--include-submission"}, "build,appStoreVersionSubmission"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			include := test.include
+			stubTransport(t, func(req *http.Request) (*http.Response, error) {
+				if req.Method != http.MethodGet || req.URL.Path != "/v1/appStoreVersions/version-1" {
+					t.Fatalf("request = %s %s, want GET /v1/appStoreVersions/version-1", req.Method, req.URL.Path)
+				}
+				if got := req.URL.Query().Get("include"); got != include {
+					t.Fatalf("include query = %q, want %q", got, include)
+				}
+				return jsonResponse(http.StatusOK, body)
+			})
 
-	root := RootCommand("test")
-	root.FlagSet.SetOutput(io.Discard)
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{
-			"versions", "view",
-			"--version-id", "version-1",
-			"--include", include,
-			"--output", "json",
-		}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatalf("run error: %v", err)
-		}
-	})
+			root := RootCommand("test")
+			root.FlagSet.SetOutput(io.Discard)
+			stdout, stderr := captureOutput(t, func() {
+				if err := root.Parse(append([]string{"versions", "view", "--version-id", "version-1", "--output", "json"}, test.flags...)); err != nil {
+					t.Fatalf("parse error: %v", err)
+				}
+				if err := root.Run(context.Background()); err != nil {
+					t.Fatalf("run error: %v", err)
+				}
+			})
 
-	var payload struct {
-		Data struct {
-			ID string `json:"id"`
-		} `json:"data"`
-	}
-	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
-		t.Fatalf("unmarshal stdout: %v; stdout=%q", err, stdout)
-	}
-	if payload.Data.ID != "version-1" {
-		t.Fatalf("version id = %q, want version-1", payload.Data.ID)
-	}
-	if stderr != "" {
-		t.Fatalf("stderr = %q, want empty", stderr)
+			assertAnalyticsViewJSONEqual(t, stdout, body)
+			if stderr != "" {
+				t.Fatalf("stderr = %q, want empty", stderr)
+			}
+		})
 	}
 }
 
@@ -126,11 +125,11 @@ func TestVersionsViewResolvesVersionFromAppAndVersionString(t *testing.T) {
 		}
 	})
 
-	var result asc.AppStoreVersionDetailResult
+	var result asc.AppStoreVersionResponse
 	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
 		t.Fatalf("unmarshal stdout: %v; stdout=%q", err, stdout)
 	}
-	if result.ID != "version-1" || result.VersionString != "1.2.3" || result.Platform != "IOS" {
+	if result.Data.ID != "version-1" || result.Data.Attributes.VersionString != "1.2.3" || result.Data.Attributes.Platform != "IOS" {
 		t.Fatalf("unexpected result: %#v", result)
 	}
 	if stderr != "" {
@@ -408,11 +407,11 @@ func TestVersionsViewPreservesDownloadable(t *testing.T) {
 		name       string
 		attributes string
 		wantKey    bool
-		wantValue  bool
+		wantValue  any
 	}{
 		{name: "false", attributes: `"downloadable":false`, wantKey: true, wantValue: false},
 		{name: "true", attributes: `"downloadable":true`, wantKey: true, wantValue: true},
-		{name: "null", attributes: `"downloadable":null`},
+		{name: "null", attributes: `"downloadable":null`, wantKey: true},
 		{name: "absent", attributes: `"copyright":"2026 Example"`},
 	}
 
@@ -447,7 +446,15 @@ func TestVersionsViewPreservesDownloadable(t *testing.T) {
 			if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
 				t.Fatalf("unmarshal stdout: %v; stdout=%q", err, stdout)
 			}
-			value, ok := payload["downloadable"]
+			data, ok := payload["data"].(map[string]any)
+			if !ok {
+				t.Fatalf("missing data envelope: %s", stdout)
+			}
+			attributes, ok := data["attributes"].(map[string]any)
+			if !ok {
+				t.Fatalf("missing attributes: %s", stdout)
+			}
+			value, ok := attributes["downloadable"]
 			if ok != test.wantKey {
 				t.Fatalf("downloadable present = %v, want %v; stdout=%q", ok, test.wantKey, stdout)
 			}
@@ -458,5 +465,105 @@ func TestVersionsViewPreservesDownloadable(t *testing.T) {
 				t.Fatalf("downloadable = %v, want %v", value, test.wantValue)
 			}
 		})
+	}
+}
+
+func TestVersionsReadsPrintAppleEnvelope(t *testing.T) {
+	const attributes = `{"platform":"IOS","versionString":"2.5.1","appStoreState":"READY_FOR_SALE","appVersionState":"READY_FOR_DISTRIBUTION","copyright":"2026 Example","reviewType":"APP_STORE","releaseType":"AFTER_APPROVAL","earliestReleaseDate":null,"usesIdfa":null,"downloadable":true,"createdDate":"2026-10-24T05:58:07-07:00"}`
+	const resource = `{"type":"appStoreVersions","id":"version-1","attributes":` + attributes + `,"relationships":{"build":{"data":{"type":"builds","id":"build-1"}}}}`
+	tests := []struct {
+		name       string
+		args       []string
+		path       string
+		body       string
+		wantStdout string
+		wantStderr string
+	}{
+		{
+			name: "view without include",
+			args: []string{"versions", "view", "--version-id", "version-1", "--output", "json"},
+			path: "/v1/appStoreVersions/version-1",
+			body: `{"data":` + resource + `,"links":{"self":"https://example.test/v1/appStoreVersions/version-1"}}`,
+		},
+		{
+			name: "view with include",
+			args: []string{"versions", "view", "--version-id", "version-1", "--include", "build", "--output", "json"},
+			path: "/v1/appStoreVersions/version-1",
+			body: `{"data":` + resource + `,"included":[{"type":"builds","id":"build-1","attributes":{"version":"42"}}],"links":{"self":"https://example.test/v1/appStoreVersions/version-1"}}`,
+		},
+		{
+			name:       "view table output has no envelope warning",
+			args:       []string{"versions", "view", "--version-id", "version-1", "--output", "table"},
+			path:       "/v1/appStoreVersions/version-1",
+			body:       `{"data":` + resource + `}`,
+			wantStdout: "2.5.1",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			setupAuth(t)
+			t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
+			stubTransport(t, func(req *http.Request) (*http.Response, error) {
+				if req.Method != http.MethodGet || req.URL.Path != test.path {
+					t.Fatalf("request = %s %s, want GET %s", req.Method, req.URL.Path, test.path)
+				}
+				return jsonResponse(http.StatusOK, test.body)
+			})
+
+			root := RootCommand("test")
+			root.FlagSet.SetOutput(io.Discard)
+			stdout, stderr := captureOutput(t, func() {
+				if err := root.Parse(test.args); err != nil {
+					t.Fatalf("parse error: %v", err)
+				}
+				if err := root.Run(context.Background()); err != nil {
+					t.Fatalf("run error: %v", err)
+				}
+			})
+
+			switch {
+			case slices.Contains(test.args, "table"):
+				if !strings.Contains(stdout, test.wantStdout) {
+					t.Fatalf("stdout = %q, want table containing %q", stdout, test.wantStdout)
+				}
+			case test.wantStdout == "":
+				assertAnalyticsViewJSONEqual(t, stdout, test.body)
+			default:
+				assertAnalyticsViewJSONEqual(t, stdout, test.wantStdout)
+			}
+			if stderr != test.wantStderr {
+				t.Fatalf("stderr = %q, want %q", stderr, test.wantStderr)
+			}
+		})
+	}
+}
+
+func TestVersionsPhasedReleaseViewPrintsNullData(t *testing.T) {
+	setupAuth(t)
+	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
+
+	const body = `{"data":null,"links":{"self":"https://example.test/v1/appStoreVersions/version-1/appStoreVersionPhasedRelease"}}`
+	stubTransport(t, func(req *http.Request) (*http.Response, error) {
+		if req.Method != http.MethodGet || req.URL.Path != "/v1/appStoreVersions/version-1/appStoreVersionPhasedRelease" {
+			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.Path)
+		}
+		return jsonResponse(http.StatusOK, body)
+	})
+
+	root := RootCommand("test")
+	root.FlagSet.SetOutput(io.Discard)
+	stdout, stderr := captureOutput(t, func() {
+		if err := root.Parse([]string{"versions", "phased-release", "view", "--version-id", "version-1", "--output", "json"}); err != nil {
+			t.Fatalf("parse error: %v", err)
+		}
+		if err := root.Run(context.Background()); err != nil {
+			t.Fatalf("run error: %v", err)
+		}
+	})
+
+	assertAnalyticsViewJSONEqual(t, stdout, body)
+	if stderr != "" {
+		t.Fatalf("stderr = %q, want empty", stderr)
 	}
 }

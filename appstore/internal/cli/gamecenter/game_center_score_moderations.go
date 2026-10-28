@@ -2,6 +2,7 @@ package gamecenter
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"slices"
@@ -95,6 +96,10 @@ func gameCenterScoreModerationsListCommand() *ffcli.Command {
 		}
 		first, err := fetch(ctx, query)
 		if err != nil {
+			var apiErr *asc.APIError
+			if nextURL == "" && errors.As(err, &apiErr) && slices.Contains(apiErr.AllCodes, "PATH_ERROR") {
+				return fmt.Errorf("%s: %w (Apple documents this endpoint but does not serve it yet; to see a leaderboard's top scores and player nicknames, open App Store Connect > Apps > your app > Game Center > Manage Scores and Players)", command, err)
+			}
 			return fmt.Errorf("%s: %w", command, err)
 		}
 		if *paginate {

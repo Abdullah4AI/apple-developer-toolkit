@@ -46,6 +46,7 @@ func Validate(input Input, strict bool) Report {
 	checks = append(checks, legalChecks(input.Copyright, activeMonetization, reviewRelevantSubscriptions, input.VersionLocalizations, input.AppInfoLocalizations)...)
 	checks = append(checks, contentChecks(input.VersionLocalizations, input.AppInfoLocalizations)...)
 	checks = append(checks, MetadataQualityChecks(input.VersionLocalizations, input.AppInfoLocalizations)...)
+	checks = append(checks, customProductPageKeywordChecks(input.VersionLocalizations, input.CustomProductPageLocalizations, input.CustomProductPageKeywordsSkipReason)...)
 	checks = append(checks, privacyPublishStateChecks(input.AppID)...)
 
 	summary := summarize(checks, strict)

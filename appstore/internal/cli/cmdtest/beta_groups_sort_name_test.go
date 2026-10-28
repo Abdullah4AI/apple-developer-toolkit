@@ -67,29 +67,86 @@ func TestBetaGroupsListGlobalNameAndSortPropagate(t *testing.T) {
 }
 
 // TestBetaGroupsListNameFilterUsesTopLevelEndpoint proves --name routes the
-// app-scoped lookup through the endpoint that supports filter[name].
+// app-scoped lookup through the endpoint that supports filter[name], and that
+// a name typed with ASCII spaces finds Apple's default group, whose name has a
+// non-breaking space, with one extra lookup and no extra request on an exact match.
 func TestBetaGroupsListNameFilterUsesTopLevelEndpoint(t *testing.T) {
 	setupAuth(t)
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 
-	installDefaultTransport(t, roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		if req.URL.Path != "/v1/betaGroups" {
-			t.Errorf("expected path /v1/betaGroups, got %s", req.URL.Path)
-		}
-		query := req.URL.Query()
-		if got := query.Get("filter[app]"); got != "app-1" {
-			t.Errorf("filter[app] = %q, want app-1", got)
-		}
-		if got := query.Get("filter[name]"); got != "Beta Testers" {
-			t.Errorf("filter[name] = %q, want Beta Testers", got)
-		}
-		return betaGroupsJSONResponse(`{"data":[]}`), nil
-	}))
+	const appGroups = `{"data":[` +
+		`{"type":"betaGroups","id":"bg-default","attributes":{"name":"App\u00a0Store Connect Users"}},` +
+		`{"type":"betaGroups","id":"bg-qa","attributes":{"name":"QA"}}]}`
+	const nbspGroup = `{"data":[{"type":"betaGroups","id":"bg-default","attributes":{"name":"App\u00a0Store Connect Users"}}]}`
 
-	_, stderr := runBetaGroupsList(t, "--app", "app-1", "--name", "Beta Testers")
+	type request struct{ path, name, body string }
+	tests := []struct {
+		name       string
+		nameFlag   string
+		requests   []request
+		wantStdout string
+	}{
+		{
+			name:     "exact match makes no extra request",
+			nameFlag: "Beta Testers",
+			requests: []request{
+				{"/v1/betaGroups", "Beta Testers", `{"data":[{"type":"betaGroups","id":"bg-1","attributes":{"name":"Beta Testers"}}]}`},
+			},
+			wantStdout: `"id":"bg-1"`,
+		},
+		{
+			name:     "ASCII spaces resolve the NBSP-named group",
+			nameFlag: "app store connect users",
+			requests: []request{
+				{"/v1/betaGroups", "app store connect users", `{"data":[]}`},
+				{"/v1/apps/app-1/betaGroups", "", appGroups},
+				{"/v1/betaGroups", "App\u00a0Store Connect Users", nbspGroup},
+			},
+			wantStdout: `"id":"bg-default"`,
+		},
+		{
+			name:     "no match prints the empty envelope after one lookup",
+			nameFlag: "Missing Group",
+			requests: []request{
+				{"/v1/betaGroups", "Missing Group", `{"data":[]}`},
+				{"/v1/apps/app-1/betaGroups", "", appGroups},
+			},
+			wantStdout: `"data":[]`,
+		},
+	}
 
-	if stderr != "" {
-		t.Fatalf("expected empty stderr, got %q", stderr)
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var count int
+			installDefaultTransport(t, roundTripFunc(func(req *http.Request) (*http.Response, error) {
+				count++
+				if count > len(test.requests) {
+					t.Errorf("unexpected request %d: %s", count, req.URL.String())
+					return betaGroupsJSONResponse(`{"data":[]}`), nil
+				}
+				want := test.requests[count-1]
+				query := req.URL.Query()
+				if req.URL.Path != want.path || query.Get("filter[name]") != want.name {
+					t.Errorf("request %d = %s filter[name]=%q, want %s filter[name]=%q", count, req.URL.Path, query.Get("filter[name]"), want.path, want.name)
+				}
+				if want.path == "/v1/betaGroups" && query.Get("filter[app]") != "app-1" {
+					t.Errorf("request %d filter[app] = %q, want app-1", count, query.Get("filter[app]"))
+				}
+				return betaGroupsJSONResponse(want.body), nil
+			}))
+
+			stdout, stderr := runBetaGroupsList(t, "--app", "app-1", "--name", test.nameFlag, "--output", "json")
+
+			if stderr != "" {
+				t.Fatalf("expected empty stderr, got %q", stderr)
+			}
+			if count != len(test.requests) {
+				t.Fatalf("made %d requests, want %d", count, len(test.requests))
+			}
+			if !strings.Contains(stdout, test.wantStdout) {
+				t.Fatalf("stdout = %q, want %s", stdout, test.wantStdout)
+			}
+		})
 	}
 }
 

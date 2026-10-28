@@ -2,9 +2,11 @@ package assetlibrary
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -20,6 +22,7 @@ func imagesUploadCommand() *ffcli.Command {
 	path := fs.String("file", "", "Image file to upload")
 	category := fs.String("category", "CREATIVE_ASSETS", "Asset category: CREATIVE_ASSETS or APP_SCREENSHOTS_AND_PREVIEWS")
 	referenceName := bindUploadReferenceNameFlag(fs)
+	progress := fs.Bool("progress", false, "Emit structured upload progress as JSONL on stderr")
 	output := shared.BindOutputFlags(fs)
 	return &ffcli.Command{
 		Name: "upload", ShortUsage: "asc asset-library images upload --library-id ID --file image.png [flags]",
@@ -99,6 +102,9 @@ Examples:
 			}
 			uploadCtx, cancel := shared.ContextWithUploadTimeout(ctx)
 			defer cancel()
+			if *progress {
+				uploadCtx = asc.WithAssetLibraryImageUploadProgress(uploadCtx, func(event asc.AssetLibraryImageUploadEvent) { _ = json.NewEncoder(os.Stderr).Encode(event) })
+			}
 			result, uploadErr := client.UploadAssetLibraryImageWithCategory(uploadCtx, id, filepath.Base(filePath), file, info.Size(), selectedCategory, selectedReferenceName, shared.ContextWithTimeout)
 			if uploadErr == nil || result.ImageID != "" {
 				if err := shared.PrintOutput(&result, *output.Output, *output.Pretty); err != nil {

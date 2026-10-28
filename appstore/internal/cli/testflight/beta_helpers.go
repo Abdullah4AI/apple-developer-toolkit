@@ -94,15 +94,9 @@ func matchBetaGroupID(groups *asc.BetaGroupsResponse, group string) (string, err
 		}
 	}
 
-	matches := make([]shared.AmbiguousCandidate, 0, 1)
-	for _, item := range groups.Data {
-		if strings.EqualFold(strings.TrimSpace(item.Attributes.Name), group) {
-			kind := "external"
-			if item.Attributes.IsInternalGroup {
-				kind = "internal"
-			}
-			matches = append(matches, shared.AmbiguousCandidate{ID: strings.TrimSpace(item.ID), Label: strings.TrimSpace(item.Attributes.Name), Extra: kind})
-		}
+	matches := betaGroupNameMatches(groups, group, strings.TrimSpace)
+	if len(matches) == 0 {
+		matches = betaGroupNameMatches(groups, group, shared.NormalizeBetaGroupName)
 	}
 
 	switch len(matches) {
@@ -113,6 +107,21 @@ func matchBetaGroupID(groups *asc.BetaGroupsResponse, group string) (string, err
 	default:
 		return "", shared.AmbiguousError("beta group", "--group", group, matches)
 	}
+}
+
+func betaGroupNameMatches(groups *asc.BetaGroupsResponse, group string, normalize func(string) string) []shared.AmbiguousCandidate {
+	name := normalize(group)
+	matches := make([]shared.AmbiguousCandidate, 0, 1)
+	for _, item := range groups.Data {
+		if strings.EqualFold(normalize(item.Attributes.Name), name) {
+			kind := "external"
+			if item.Attributes.IsInternalGroup {
+				kind = "internal"
+			}
+			matches = append(matches, shared.AmbiguousCandidate{ID: strings.TrimSpace(item.ID), Label: strings.TrimSpace(item.Attributes.Name), Extra: kind})
+		}
+	}
+	return matches
 }
 
 func findBetaTesterIDByEmail(ctx context.Context, client *asc.Client, appID, email string) (string, error) {

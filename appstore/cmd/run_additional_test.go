@@ -336,7 +336,7 @@ func TestRun_ParseErrorWithoutFlagOutputReturnsUsage(t *testing.T) {
 	}
 
 	stdout, stderr := captureCommandOutput(t, func() {
-		if code := Run([]string{"ads", "v5", "geo"}, "1.0.0"); code != ExitUsage {
+		if code := Run([]string{"ads", "geo"}, "1.0.0"); code != ExitUsage {
 			t.Fatalf("Run() exit code = %d, want %d", code, ExitUsage)
 		}
 	})
@@ -1535,6 +1535,49 @@ func TestRun_MetadataValidateUnsupportedFlagsExplainDirectoryWorkflow(t *testing
 	}
 }
 
+func TestRun_GroupsBuildsListRecoversGroupsListFlags(t *testing.T) {
+	resetReportFlags(t)
+	t.Setenv("ASC_APP_ID", "")
+
+	const help = "For help:\n  asc testflight groups builds list --help\n"
+	tests := []struct {
+		name       string
+		args       []string
+		wantStderr string
+	}{
+		{
+			name:       "build id",
+			args:       []string{"testflight", "groups", "builds", "list", "--build-id", "BUILD_ID"},
+			wantStderr: "Error: unknown flag `--build-id` for `asc testflight groups builds list`\nTry:\n  asc testflight groups list --build-id BUILD_ID\n" + help,
+		},
+		{
+			name:       "app with empty optional next",
+			args:       []string{"testflight", "groups", "builds", "list", "--app", "APP_ID", "--next="},
+			wantStderr: "Error: unknown flag `--app` for `asc testflight groups builds list`\nTry:\n  asc testflight groups list --app APP_ID --next=\n" + help,
+		},
+		{
+			name:       "group id mixed with a groups list flag",
+			args:       []string{"testflight", "groups", "builds", "list", "--group-id", "GROUP_ID", "--app", "APP_ID"},
+			wantStderr: "Error: unknown flag `--app` for `asc testflight groups builds list`\n" + help,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			stdout, stderr := captureCommandOutput(t, func() {
+				if code := Run(test.args, "1.0.0"); code != ExitUsage {
+					t.Fatalf("exit code = %d, want %d", code, ExitUsage)
+				}
+			})
+			if stdout != "" {
+				t.Fatalf("stdout = %q, want empty", stdout)
+			}
+			if stderr != test.wantStderr {
+				t.Fatalf("stderr = %q, want %q", stderr, test.wantStderr)
+			}
+		})
+	}
+}
+
 func TestRun_MetadataValidateBareVersionPreservesGlobalFlagRecovery(t *testing.T) {
 	resetReportFlags(t)
 
@@ -1651,12 +1694,6 @@ func TestRun_CommonWrongCommandPathsRecoverInOneStep(t *testing.T) {
 			wantCommand: "asc",
 		},
 		{
-			name:        "groups builds list",
-			args:        []string{"testflight", "groups", "builds", "list", "--build-id", "BUILD_ID"},
-			wantStderr:  "Error: unknown command `asc testflight groups builds list`\nTry:\n  asc testflight groups list --build-id BUILD_ID\nFor help:\n  asc testflight groups --help\n",
-			wantCommand: "asc testflight groups",
-		},
-		{
 			name:        "version info help",
 			args:        []string{"versions", "info", "--help"},
 			wantStderr:  "Error: unknown command `asc versions info`\nTry:\n  asc versions view --help\nFor help:\n  asc versions --help\n",
@@ -1667,12 +1704,6 @@ func TestRun_CommonWrongCommandPathsRecoverInOneStep(t *testing.T) {
 			args:        []string{"reviewsubmissions", "list", "-h"},
 			wantStderr:  "Error: unknown command `asc reviewsubmissions list`\nTry:\n  asc review submissions list -h\nFor help:\n  asc --help\n",
 			wantCommand: "asc",
-		},
-		{
-			name:        "groups builds list help",
-			args:        []string{"testflight", "groups", "builds", "list", "--help"},
-			wantStderr:  "Error: unknown command `asc testflight groups builds list`\nTry:\n  asc testflight groups list --help\nFor help:\n  asc testflight groups --help\n",
-			wantCommand: "asc testflight groups",
 		},
 		{
 			name:        "version info with empty optional include",
@@ -1687,12 +1718,6 @@ func TestRun_CommonWrongCommandPathsRecoverInOneStep(t *testing.T) {
 			wantCommand: "asc",
 		},
 		{
-			name:        "groups builds list with empty optional next",
-			args:        []string{"testflight", "groups", "builds", "list", "--app", "APP_ID", "--next="},
-			wantStderr:  "Error: unknown command `asc testflight groups builds list`\nTry:\n  asc testflight groups list --app APP_ID --next=\nFor help:\n  asc testflight groups --help\n",
-			wantCommand: "asc testflight groups",
-		},
-		{
 			name:        "version info with spaced empty optional include",
 			args:        []string{"versions", "info", "--version-id", "VERSION_ID", "--include", ""},
 			wantStderr:  "Error: unknown command `asc versions info`\nTry:\n  asc versions view --version-id VERSION_ID --include ''\nFor help:\n  asc versions --help\n",
@@ -1703,12 +1728,6 @@ func TestRun_CommonWrongCommandPathsRecoverInOneStep(t *testing.T) {
 			args:        []string{"reviewsubmissions", "list", "--app", "APP_ID", "--platform", ""},
 			wantStderr:  "Error: unknown command `asc reviewsubmissions list`\nTry:\n  asc review submissions list --app APP_ID --platform ''\nFor help:\n  asc --help\n",
 			wantCommand: "asc",
-		},
-		{
-			name:        "groups builds list with spaced empty optional next",
-			args:        []string{"testflight", "groups", "builds", "list", "--app", "APP_ID", "--next", ""},
-			wantStderr:  "Error: unknown command `asc testflight groups builds list`\nTry:\n  asc testflight groups list --app APP_ID --next ''\nFor help:\n  asc testflight groups --help\n",
-			wantCommand: "asc testflight groups",
 		},
 	}
 

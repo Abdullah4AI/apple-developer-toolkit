@@ -24,9 +24,11 @@ func commandAcceptsOperandsPath(commandName string) bool {
 	switch commandName {
 	case "asc api",
 		"asc docs show",
+		"asc migrate metadata",
 		"asc schema",
 		"asc search",
 		"asc signing run",
+		"asc versions phased-release guard",
 		"asc workflow run":
 		return true
 	default:

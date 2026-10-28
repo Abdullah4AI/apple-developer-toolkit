@@ -365,8 +365,13 @@ Examples:
   asc versions view --version-id "VERSION_ID"
   asc versions view --app "123456789" --version "1.2.3"
   asc versions view --app "123456789" --version "1.2.3" --platform MAC_OS
+  asc versions view --version-id "VERSION_ID" --include build
   asc versions view --version-id "VERSION_ID" --include-build --include-submission
-  asc versions view --version-id "VERSION_ID" --include "ageRatingDeclaration,appStoreReviewDetail"`,
+  asc versions view --version-id "VERSION_ID" --include "ageRatingDeclaration,appStoreReviewDetail"
+
+View prints Apple's appStoreVersions envelope, including all returned attributes.
+--include-build is equivalent to --include build; --include-submission is
+equivalent to --include appStoreVersionSubmission.`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -416,6 +421,12 @@ Examples:
 			if len(includeValues) > 0 && (*includeBuild || *includeSubmission) {
 				return shared.UsageError("--include cannot be used with --include-build or --include-submission")
 			}
+			if *includeBuild {
+				includeValues = append(includeValues, "build")
+			}
+			if *includeSubmission {
+				includeValues = append(includeValues, "appStoreVersionSubmission")
+			}
 
 			client, err := shared.GetASCClient()
 			if err != nil {
@@ -431,74 +442,36 @@ Examples:
 				}
 			}
 
-			if len(includeValues) > 0 {
-				apiIncludes, includeAgeRating := splitCompatAppStoreVersionIncludes(includeValues)
-				var versionResp *asc.AppStoreVersionResponse
-				if len(apiIncludes) > 0 {
-					versionResp, err = client.GetAppStoreVersion(requestCtx, trimmedID, asc.WithAppStoreVersionInclude(apiIncludes))
-				} else {
-					versionResp, err = client.GetAppStoreVersion(requestCtx, trimmedID)
-				}
-				if err != nil {
-					return fmt.Errorf("versions view: %w", err)
-				}
-
-				if includeAgeRating {
-					ageRatingResp, err := client.GetAgeRatingDeclarationForAppStoreVersion(requestCtx, trimmedID)
-					if err != nil {
-						return fmt.Errorf("versions view: %w", err)
-					}
-					if err := appendAgeRatingDeclarationInclude(versionResp, ageRatingResp); err != nil {
-						return fmt.Errorf("versions view: %w", err)
-					}
-				}
-
-				if *includeSensitive {
-					shared.WarnIncludeSensitive(os.Stderr, true)
-					return shared.PrintOutput(versionResp, *output.Output, *output.Pretty)
-				}
-				safe, err := asc.RedactAppStoreReviewDetailIncludesInSingleResponse(versionResp)
-				if err != nil {
-					return fmt.Errorf("versions view: %w", err)
-				}
-				return shared.PrintOutput(safe, *output.Output, *output.Pretty)
+			apiIncludes, includeAgeRating := splitCompatAppStoreVersionIncludes(includeValues)
+			var versionResp *asc.AppStoreVersionResponse
+			if len(apiIncludes) > 0 {
+				versionResp, err = client.GetAppStoreVersion(requestCtx, trimmedID, asc.WithAppStoreVersionInclude(apiIncludes))
+			} else {
+				versionResp, err = client.GetAppStoreVersion(requestCtx, trimmedID)
 			}
-
-			versionResp, err := client.GetAppStoreVersion(requestCtx, trimmedID)
 			if err != nil {
 				return fmt.Errorf("versions view: %w", err)
 			}
 
-			result := &asc.AppStoreVersionDetailResult{
-				ID:            versionResp.Data.ID,
-				VersionString: versionResp.Data.Attributes.VersionString,
-				Platform:      string(versionResp.Data.Attributes.Platform),
-				State:         shared.ResolveAppStoreVersionState(versionResp.Data.Attributes),
-				Downloadable:  versionResp.Data.Attributes.Downloadable,
-			}
-
-			if *includeBuild {
-				buildResp, err := fetchOptionalBuild(requestCtx, trimmedID, client.GetAppStoreVersionBuild)
+			if includeAgeRating {
+				ageRatingResp, err := client.GetAgeRatingDeclarationForAppStoreVersion(requestCtx, trimmedID)
 				if err != nil {
 					return fmt.Errorf("versions view: %w", err)
 				}
-				if buildResp != nil {
-					result.BuildID = buildResp.Data.ID
-					result.BuildVersion = buildResp.Data.Attributes.Version
-				}
-			}
-
-			if *includeSubmission {
-				submissionResp, err := fetchOptionalSubmission(requestCtx, trimmedID, client.GetAppStoreVersionSubmissionForVersion)
-				if err != nil {
+				if err := appendAgeRatingDeclarationInclude(versionResp, ageRatingResp); err != nil {
 					return fmt.Errorf("versions view: %w", err)
 				}
-				if submissionResp != nil {
-					result.SubmissionID = submissionResp.Data.ID
-				}
 			}
 
-			return shared.PrintOutput(result, *output.Output, *output.Pretty)
+			if *includeSensitive {
+				shared.WarnIncludeSensitive(os.Stderr, true)
+				return shared.PrintOutput(versionResp, *output.Output, *output.Pretty)
+			}
+			safe, err := asc.RedactAppStoreReviewDetailIncludesInSingleResponse(versionResp)
+			if err != nil {
+				return fmt.Errorf("versions view: %w", err)
+			}
+			return shared.PrintOutput(safe, *output.Output, *output.Pretty)
 		},
 	}
 }
@@ -1061,17 +1034,6 @@ func resolveAttachBuildVersion(ctx context.Context, client *asc.Client, appInput
 	}, nil
 }
 
-func fetchOptionalBuild(ctx context.Context, versionID string, fetch func(context.Context, string) (*asc.BuildResponse, error)) (*asc.BuildResponse, error) {
-	resp, err := fetch(ctx, versionID)
-	if err != nil {
-		if asc.IsNotFound(err) {
-			return nil, nil
-		}
-		return nil, err
-	}
-	return resp, nil
-}
-
 func normalizeAppStoreVersionReleaseType(value string) (string, error) {
 	trimmed := strings.TrimSpace(value)
 	if value != "" && trimmed == "" {
@@ -1085,17 +1047,6 @@ func normalizeAppStoreVersionReleaseType(value string) (string, error) {
 	default:
 		return "", fmt.Errorf("--release-type must be one of: MANUAL, AFTER_APPROVAL, SCHEDULED")
 	}
-}
-
-func fetchOptionalSubmission(ctx context.Context, versionID string, fetch func(context.Context, string) (*asc.AppStoreVersionSubmissionResourceResponse, error)) (*asc.AppStoreVersionSubmissionResourceResponse, error) {
-	resp, err := fetch(ctx, versionID)
-	if err != nil {
-		if asc.IsNotFound(err) {
-			return nil, nil
-		}
-		return nil, err
-	}
-	return resp, nil
 }
 
 func splitCompatAppStoreVersionIncludes(values []string) ([]string, bool) {

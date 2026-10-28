@@ -172,6 +172,13 @@ func printConciseUnknownFlag(root *ffcli.Command, analysis invocationAnalysis, c
 	if printMetadataValidateFlagRecovery(flagName, commandName, analysis, args) {
 		return
 	}
+	// A recovery path that later became a real command, such as
+	// `testflight groups builds list`, still recovers when every flag belongs
+	// to the old destination.
+	if _, suggested, ok := commonCommandPathRecovery(root, invocationAnalysis{shape: telemetry.InvocationShapeUnknownChild}, args); ok {
+		fmt.Fprintf(os.Stderr, "Try:\n  %s\nFor help:\n  %s --help\n", suggested, commandName)
+		return
+	}
 	if name, ok := flagLookupName(flagName); ok && root != nil && root.FlagSet != nil && root.FlagSet.Lookup(name) != nil {
 		fmt.Fprintf(
 			os.Stderr,
@@ -195,7 +202,7 @@ func printConciseUnknownFlag(root *ffcli.Command, analysis invocationAnalysis, c
 	printFlagSuggestions(os.Stderr, unknownFlagSuggestions(
 		analysis.command.FlagSet,
 		flagName,
-		unknownFlagSuggestionOptions{allowSelectorFallback: true},
+		unknownFlagSuggestionOptions{allowSelectorFallback: true, passed: passedFlagNames(args)},
 	))
 	fmt.Fprintln(os.Stderr, "For help:")
 	fmt.Fprintf(os.Stderr, "  %s --help\n", commandName)
@@ -242,6 +249,20 @@ func isMetadataVersionValue(value string) bool {
 	}
 	_, boolErr := strconv.ParseBool(value)
 	return boolErr != nil
+}
+
+func passedFlagNames(args []string) []string {
+	var names []string
+	for _, arg := range args {
+		if arg == "--" {
+			break
+		}
+		if name, ok := flagLookupName(arg); ok {
+			name, _, _ = strings.Cut(name, "=")
+			names = append(names, name)
+		}
+	}
+	return names
 }
 
 func flagLookupName(token string) (string, bool) {
@@ -751,6 +772,8 @@ func shellSafeCommandArg(arg string) string {
 func preservesLegacyChild(analysis invocationAnalysis, commandName string) bool {
 	token := strings.TrimSpace(analysis.unknownToken)
 	switch commandName {
+	case "asc ads":
+		return token == "v5"
 	case "asc apps":
 		return token == "create"
 	case "asc review":

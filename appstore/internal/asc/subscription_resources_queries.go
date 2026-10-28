@@ -102,6 +102,7 @@ type subscriptionImagesQuery struct {
 
 type subscriptionIntroductoryOffersQuery struct {
 	listQuery
+	territories        []string
 	fields             []string
 	subscriptionFields []string
 	pricePointFields   []string
@@ -257,6 +258,13 @@ func WithSubscriptionIntroductoryOffersNextURL(next string) SubscriptionIntroduc
 		if strings.TrimSpace(next) != "" {
 			q.nextURL = strings.TrimSpace(next)
 		}
+	}
+}
+
+// WithSubscriptionIntroductoryOffersTerritories filters introductory offers by territory IDs.
+func WithSubscriptionIntroductoryOffersTerritories(territories []string) SubscriptionIntroductoryOffersOption {
+	return func(q *subscriptionIntroductoryOffersQuery) {
+		q.territories = normalizeUpperList(territories)
 	}
 }
 
@@ -697,6 +705,7 @@ func buildSubscriptionImagesQuery(query *subscriptionImagesQuery) string {
 
 func buildSubscriptionIntroductoryOffersQuery(query *subscriptionIntroductoryOffersQuery) string {
 	values := url.Values{}
+	addCSV(values, "filter[territory]", query.territories)
 	addCSV(values, "fields[subscriptionIntroductoryOffers]", query.fields)
 	addCSV(values, "fields[subscriptions]", query.subscriptionFields)
 	addCSV(values, "fields[subscriptionPricePoints]", query.pricePointFields)
@@ -818,7 +827,7 @@ func subscriptionImagesQueryHasModifiers(query *subscriptionImagesQuery) bool {
 }
 
 func subscriptionIntroductoryOffersQueryHasModifiers(query *subscriptionIntroductoryOffersQuery) bool {
-	return query.limit != 0 || len(query.fields) != 0 || len(query.subscriptionFields) != 0 ||
+	return query.limit != 0 || len(query.territories) != 0 || len(query.fields) != 0 || len(query.subscriptionFields) != 0 ||
 		len(query.pricePointFields) != 0 || len(query.include) != 0
 }
 

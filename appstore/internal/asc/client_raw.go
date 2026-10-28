@@ -80,9 +80,9 @@ func validateRawRequestTarget(target string) error {
 // RawPaginatedGET fetches a collection and follows links.next until the last
 // page, returning one merged envelope: data and included are concatenated (with
 // duplicate included resources removed), while links and meta come from the
-// first page with links.next dropped. Each next URL must stay on the App Store
-// Connect host over HTTPS, and a repeated URL stops the loop with
-// ErrRepeatedPaginationURL. requestContext, when non-nil, derives a fresh
+// first page with links.next and meta.paging.nextCursor dropped. Each next URL
+// must stay on the App Store Connect host over HTTPS, and a repeated URL stops
+// the loop with ErrRepeatedPaginationURL. requestContext, when non-nil, derives a fresh
 // context for every page request.
 func (c *Client) RawPaginatedGET(ctx context.Context, path string, requestContext RequestContextFunc) ([]byte, error) {
 	var merged *rawEnvelope
@@ -104,6 +104,7 @@ func (c *Client) RawPaginatedGET(ctx context.Context, path string, requestContex
 			merged = envelope
 		} else {
 			merged.absorb(envelope)
+			merged.dropNextCursor()
 		}
 
 		next, err := envelope.next()
@@ -199,6 +200,80 @@ func (e *rawEnvelope) absorb(page *rawEnvelope) {
 			e.addIncluded(item)
 		}
 	}
+}
+
+// dropNextCursor removes meta.paging.nextCursor, which points at a page the
+// merged envelope already contains. Other members keep Apple's order, and a
+// meta or paging member that is not a JSON object is left unchanged.
+func (e *rawEnvelope) dropNextCursor() {
+	meta, ok := parseRawObject(e.other["meta"])
+	if !ok {
+		return
+	}
+	for i, member := range meta {
+		if member.key != "paging" {
+			continue
+		}
+		paging, ok := parseRawObject(member.value)
+		if !ok {
+			return
+		}
+		kept := paging[:0]
+		for _, field := range paging {
+			if field.key != "nextCursor" {
+				kept = append(kept, field)
+			}
+		}
+		if len(kept) == len(paging) {
+			return
+		}
+		meta[i].value = encodeRawObject(kept)
+		e.other["meta"] = encodeRawObject(meta)
+		return
+	}
+}
+
+type rawObjectMember struct {
+	key   string
+	value json.RawMessage
+}
+
+// parseRawObject splits a JSON object into its members in document order.
+func parseRawObject(raw json.RawMessage) ([]rawObjectMember, bool) {
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	if token, err := decoder.Token(); err != nil || token != json.Delim('{') {
+		return nil, false
+	}
+	var members []rawObjectMember
+	for decoder.More() {
+		token, err := decoder.Token()
+		if err != nil {
+			return nil, false
+		}
+		key, _ := token.(string)
+		var value json.RawMessage
+		if err := decoder.Decode(&value); err != nil {
+			return nil, false
+		}
+		members = append(members, rawObjectMember{key: key, value: value})
+	}
+	return members, true
+}
+
+func encodeRawObject(members []rawObjectMember) json.RawMessage {
+	var buf bytes.Buffer
+	buf.WriteByte('{')
+	for i, member := range members {
+		if i > 0 {
+			buf.WriteByte(',')
+		}
+		key, _ := encodeRawJSON(member.key)
+		buf.Write(key)
+		buf.WriteByte(':')
+		buf.Write(member.value)
+	}
+	buf.WriteByte('}')
+	return buf.Bytes()
 }
 
 // next returns the links.next URL, or an empty string when the page is the

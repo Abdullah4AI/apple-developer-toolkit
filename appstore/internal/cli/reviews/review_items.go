@@ -74,6 +74,7 @@ func removedReviewItemDetailUsageError(command string) error {
 // ReviewItemsListCommand returns the review items list subcommand.
 func ReviewItemsListCommand() *ffcli.Command {
 	return reviewItemsListCommand("items-list", "review items-list", `asc review items-list [flags]`, `asc review items-list --submission "SUBMISSION_ID"
+  asc review items-list --submission "SUBMISSION_ID" --include appStoreVersion
   asc review items-list --submission "SUBMISSION_ID" --paginate`)
 }
 

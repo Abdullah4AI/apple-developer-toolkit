@@ -121,7 +121,7 @@ func TestSelfLinkVersionsViewUsesExtractedID(t *testing.T) {
 		"--output", "json",
 	)
 	if stderr != "" {
-		t.Fatalf("expected empty stderr, got %q", stderr)
+		t.Fatalf("stderr = %q, want empty", stderr)
 	}
 	if !strings.Contains(stdout, `"id":"version-1"`) {
 		t.Fatalf("stdout = %q, want version-1", stdout)

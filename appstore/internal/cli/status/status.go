@@ -1049,7 +1049,7 @@ func fillAppStoreAndPhasedRelease(ctx context.Context, client *asc.Client, appID
 			if !asc.IsNotFound(phaseErr) {
 				return phaseErr
 			}
-		} else {
+		} else if phaseResp.Data != nil {
 			phased.Configured = true
 			phased.ID = phaseResp.Data.ID
 			phased.State = string(phaseResp.Data.Attributes.PhasedReleaseState)

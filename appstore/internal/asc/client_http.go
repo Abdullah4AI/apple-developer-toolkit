@@ -378,6 +378,7 @@ func (c *Client) doOnce(ctx context.Context, method, path string, body io.Reader
 		return nil, requestErr
 	}
 	defer resp.Body.Close()
+	observeRequestStatus(ctx, resp.StatusCode)
 
 	if debugSettings.verboseHTTP {
 		debugLogger.Info(

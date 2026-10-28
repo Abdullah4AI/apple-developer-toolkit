@@ -108,6 +108,7 @@ func (c *Client) GetBetaAppLocalizationAppRelationship(ctx context.Context, loca
 
 // CreateBetaAppLocalization creates a beta app localization for an app.
 func (c *Client) CreateBetaAppLocalization(ctx context.Context, appID string, attrs BetaAppLocalizationAttributes) (*BetaAppLocalizationResponse, error) {
+	attrs.api = apiAttributes{}
 	appID = strings.TrimSpace(appID)
 	if appID == "" {
 		return nil, fmt.Errorf("appID is required")

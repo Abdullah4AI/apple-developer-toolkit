@@ -521,6 +521,7 @@ func TestSelfLinkCoverageRejectsWrongType(t *testing.T) {
 var selfLinkIDFlagExclusions = map[string]string{
 	// Type depends on another flag.
 	"asc localizations update --id":  "appStoreVersionLocalizations or appInfoLocalizations, chosen by --type",
+	"asc localizations view --id":    "appStoreVersionLocalizations or appInfoLocalizations, chosen by --type",
 	"asc review items add --item-id": "one of five collections, chosen by --item-type",
 	"asc review items-add --item-id": "one of five collections, chosen by --item-type",
 	// No single-resource /v<n>/<type>/<id> path exists.

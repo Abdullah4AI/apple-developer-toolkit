@@ -103,6 +103,13 @@ func BuildReadinessReport(ctx context.Context, opts ReadinessOptions) (validatio
 	subscriptionFetchSkipReason := ""
 	var iaps []validation.IAP
 	iapFetchSkipReason := ""
+	platform := strings.TrimSpace(opts.Platform)
+	if platform == "" {
+		platform = string(versionData.response.Data.Attributes.Platform)
+	}
+
+	var customProductPageLocalizations []validation.CustomProductPageLocalization
+	customProductPageKeywordsSkipReason := ""
 
 	if err := runReadinessTasks(
 		ctx,
@@ -218,6 +225,34 @@ func BuildReadinessReport(ctx context.Context, opts ReadinessOptions) (validatio
 			iaps = fetchedIAPs
 			return nil
 		},
+		func(taskCtx context.Context) error {
+			// Apple supports custom product pages only on iOS and iPadOS, which
+			// share the IOS version platform.
+			if !strings.EqualFold(platform, string(asc.PlatformIOS)) {
+				customProductPageKeywordsSkipReason = fmt.Sprintf("Custom product page keyword checks were skipped because custom product pages apply only to iOS and iPadOS, and this version's platform is %s", platform)
+				return nil
+			}
+			fetched, fetchErr := fetchCustomProductPageKeywords(taskCtx, client, opts.AppID)
+			if fetchErr != nil {
+				// The keyword check is advisory, so any failure other than
+				// cancellation reads as unverified instead of aborting validation.
+				switch {
+				case taskCtx.Err() != nil:
+					return taskCtx.Err()
+				case errors.Is(fetchErr, context.Canceled):
+					return fetchErr
+				case errors.Is(fetchErr, asc.ErrForbidden) || asc.IsUnauthorized(fetchErr):
+					customProductPageKeywordsSkipReason = "Custom product page keyword checks were skipped because this App Store Connect account cannot read custom product pages"
+				case asc.IsRetryable(fetchErr):
+					customProductPageKeywordsSkipReason = "Custom product page keyword checks were skipped because the App Store Connect custom product page endpoints were temporarily unavailable or rate limited"
+				default:
+					customProductPageKeywordsSkipReason = fmt.Sprintf("Custom product page keyword checks were skipped because App Store Connect custom product page data could not be read: %v", fetchErr)
+				}
+				return nil
+			}
+			customProductPageLocalizations = fetched
+			return nil
+		},
 	); err != nil {
 		return validation.Report{}, err
 	}
@@ -261,11 +296,6 @@ func BuildReadinessReport(ctx context.Context, opts ReadinessOptions) (validatio
 		}
 		return appInfoLocalizations[i].ID < appInfoLocalizations[j].ID
 	})
-
-	platform := strings.TrimSpace(opts.Platform)
-	if platform == "" {
-		platform = string(versionData.response.Data.Attributes.Platform)
-	}
 
 	var supportsIPad *bool
 	if opts.IPA != nil {
@@ -319,6 +349,9 @@ func BuildReadinessReport(ctx context.Context, opts ReadinessOptions) (validatio
 		Copyright:                   versionData.response.Data.Attributes.Copyright,
 		HasPaidAppPrice:             hasPaidAppPrice,
 		AppPricingKnown:             appPricingKnown,
+
+		CustomProductPageLocalizations:      customProductPageLocalizations,
+		CustomProductPageKeywordsSkipReason: customProductPageKeywordsSkipReason,
 	}, opts.Strict)
 	if opts.CheckURLs {
 		targets := validateURLTargets(versionLocalizations, appInfoLocalizations)

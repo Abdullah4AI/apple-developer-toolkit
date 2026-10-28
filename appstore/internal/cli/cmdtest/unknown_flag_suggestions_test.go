@@ -54,13 +54,6 @@ func TestUnknownFlagSuggestsTheIntendedFlag(t *testing.T) {
 				"For help:\n  asc bundle-ids capabilities list --help\n",
 		},
 		{
-			name: "pricing availability territory-availabilities --app",
-			args: []string{"pricing", "availability", "territory-availabilities", "--app", "PRIVATE_VALUE"},
-			want: "Error: unknown flag `--app` for `asc pricing availability territory-availabilities`\n" +
-				"Try:\n  --availability\n" +
-				"For help:\n  asc pricing availability territory-availabilities --help\n",
-		},
-		{
 			name: "builds upload --file",
 			args: []string{"builds", "upload", "--app", "app-1", "--file", "PRIVATE_VALUE"},
 			want: "Error: unknown flag `--file` for `asc builds upload`\n" +

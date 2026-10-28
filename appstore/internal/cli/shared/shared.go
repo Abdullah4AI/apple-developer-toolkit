@@ -1901,7 +1901,7 @@ func validateSort(value string, allowed ...string) error {
 func ValidateInclude(value string, allowed ...string) error {
 	for _, item := range SplitCSV(value) {
 		if !slices.Contains(allowed, item) {
-			return fmt.Errorf("--include must be a comma-separated list of: %s", strings.Join(allowed, ", "))
+			return fmt.Errorf("--include must be a comma-separated list of: %s (unknown value %q)", strings.Join(allowed, ", "), item)
 		}
 	}
 	return nil

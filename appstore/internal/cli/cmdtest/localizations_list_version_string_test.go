@@ -1,12 +1,14 @@
 package cmdtest
 
 import (
+	"encoding/json"
 	"net/http"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	rootcmd "github.com/Abdullah4AI/apple-developer-toolkit/appstore/cmd"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
 )
 
 const localizationsListVersionUUID = "3f0e8b8e-1c2d-4e5f-8a9b-0c1d2e3f4a5b"
@@ -151,5 +153,95 @@ func TestLocalizationsListVersionStringErrors(t *testing.T) {
 				t.Fatalf("expected empty stdout, got %q", stdout)
 			}
 		})
+	}
+}
+
+func TestLocalizationsMutationsResolveVersionStrings(t *testing.T) {
+	for _, command := range []string{"create", "update"} {
+		for _, scenario := range []struct {
+			name       string
+			ambiguous  bool
+			fromEnv    bool
+			resourceID bool
+			paddedApp  bool
+		}{{name: "resolved"}, {name: "padded app", paddedApp: true}, {name: "environment app", fromEnv: true}, {name: "resource ID with environment app", fromEnv: true, resourceID: true}, {name: "ambiguous", ambiguous: true}} {
+			t.Run(command+"/"+scenario.name, func(t *testing.T) {
+				ambiguous := scenario.ambiguous
+				setupAuth(t)
+				t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "missing.json"))
+				mutations := 0
+				stubTransport(t, func(req *http.Request) (*http.Response, error) {
+					switch req.Method + " " + req.URL.Path {
+					case "GET /v1/apps/app-1/appStoreVersions":
+						if scenario.resourceID && req.URL.Query().Get("filter[versionString]") != "" {
+							t.Fatal("resource ID must skip version-string discovery")
+						}
+						if req.URL.Query().Get("filter[versionString]") == "" {
+							return jsonResponse(http.StatusOK, `{"data":[]}`)
+						}
+						if req.URL.Query().Get("filter[versionString]") != "1.17.0" || req.URL.Query().Get("filter[platform]") != "MAC_OS" {
+							t.Fatalf("unexpected version query: %s", req.URL.RawQuery)
+						}
+						if ambiguous {
+							return jsonResponse(http.StatusOK, `{"data":[{"type":"appStoreVersions","id":"ver-1","attributes":{"platform":"MAC_OS"}},{"type":"appStoreVersions","id":"ver-2","attributes":{"platform":"MAC_OS"}}]}`)
+						}
+						return jsonResponse(http.StatusOK, `{"data":[{"type":"appStoreVersions","id":"ver-1","attributes":{"platform":"MAC_OS"}}]}`)
+					case "GET /v1/appStoreVersions/ver-1":
+						return jsonResponse(http.StatusOK, `{"data":{"type":"appStoreVersions","id":"ver-1","attributes":{"platform":"MAC_OS"},"relationships":{"app":{"data":{"type":"apps","id":"app-1"}}}}}`)
+					case "GET /v1/appStoreVersions/ver-1/appStoreVersionLocalizations":
+						return jsonResponse(http.StatusOK, `{"data":[{"type":"appStoreVersionLocalizations","id":"loc-1","attributes":{"locale":"en-US"}}]}`)
+					case "POST /v1/appStoreVersionLocalizations", "PATCH /v1/appStoreVersionLocalizations/loc-1":
+						mutations++
+						var body asc.AppStoreVersionLocalizationCreateRequest
+						if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
+							t.Fatal(err)
+						}
+						if body.Data.Attributes.Description != "Description" {
+							t.Fatalf("unexpected payload: %#v", body)
+						}
+						if command == "create" && (body.Data.Relationships == nil || body.Data.Relationships.AppStoreVersion == nil || body.Data.Relationships.AppStoreVersion.Data.ID != "ver-1") {
+							t.Fatalf("wrong version relationship: %#v", body)
+						}
+						return jsonResponse(http.StatusOK, `{"data":{"type":"appStoreVersionLocalizations","id":"loc-1","attributes":{"locale":"en-US","description":"Description"}}}`)
+					default:
+						t.Fatalf("unexpected request: %s %s", req.Method, req.URL.Path)
+						return nil, nil
+					}
+				})
+				args := []string{"localizations", command, "--locale", "en-US", "--description", "Description", "--output", "json"}
+				if scenario.fromEnv {
+					t.Setenv("ASC_APP_ID", "app-1")
+				} else {
+					appID := "app-1"
+					if scenario.paddedApp {
+						appID = " app-1 "
+					}
+					args = append(args, "--app", appID)
+				}
+				if scenario.resourceID {
+					args = append(args, "--version", "ver-1")
+				} else {
+					args = append(args, "--version", "1.17.0", "--platform", "mac_os")
+				}
+				stdout, stderr, err := runLocalizationsList(t, args...)
+				if ambiguous {
+					if rootcmd.ExitCodeFromError(err) != rootcmd.ExitUsage || mutations != 0 || stdout != "" || !strings.Contains(stderr+err.Error(), "--version") {
+						t.Fatalf("expected ambiguity before mutation: stdout=%q stderr=%q err=%v mutations=%d", stdout, stderr, err, mutations)
+					}
+				} else {
+					if err != nil || mutations != 1 {
+						t.Fatalf("err=%v stderr=%q mutations=%d", err, stderr, mutations)
+					}
+					var result struct {
+						Data struct {
+							ID string `json:"id"`
+						} `json:"data"`
+					}
+					if err := json.Unmarshal([]byte(stdout), &result); err != nil || result.Data.ID != "loc-1" {
+						t.Fatalf("unexpected stdout: %q, err=%v", stdout, err)
+					}
+				}
+			})
+		}
 	}
 }

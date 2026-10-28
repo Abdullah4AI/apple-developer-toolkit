@@ -63,6 +63,14 @@ func ResolveBetaGroups(ctx context.Context, client betaGroupsClient, appID strin
 	return ResolveBetaGroupsFromList(groups, allGroups, opts)
 }
 
+// NormalizeBetaGroupName collapses every Unicode space run to one ASCII space.
+// App Store Connect names each app's default internal group with a
+// non-breaking space, which users cannot type. Resolvers try exact names first
+// and fall back to normalized names.
+func NormalizeBetaGroupName(name string) string {
+	return strings.Join(strings.Fields(name), " ")
+}
+
 // ResolveBetaGroupsFromList resolves IDs or names against a provided beta-groups payload.
 func ResolveBetaGroupsFromList(inputGroups []string, groups *asc.BetaGroupsResponse, opts ResolveBetaGroupsOptions) ([]ResolvedBetaGroup, error) {
 	if groups == nil {
@@ -71,6 +79,7 @@ func ResolveBetaGroupsFromList(inputGroups []string, groups *asc.BetaGroupsRespo
 
 	groupIDs := make(map[string]struct{}, len(groups.Data))
 	groupNameToIDs := make(map[string][]string)
+	normalizedNameToIDs := make(map[string][]string)
 	groupInternal := make(map[string]bool, len(groups.Data))
 	groupsByID := make(map[string]asc.Resource[asc.BetaGroupAttributes], len(groups.Data))
 	for _, item := range groups.Data {
@@ -90,6 +99,10 @@ func ResolveBetaGroupsFromList(inputGroups []string, groups *asc.BetaGroupsRespo
 		if !slices.Contains(groupNameToIDs[key], id) {
 			groupNameToIDs[key] = append(groupNameToIDs[key], id)
 		}
+		normalizedKey := strings.ToLower(NormalizeBetaGroupName(name))
+		if !slices.Contains(normalizedNameToIDs[normalizedKey], id) {
+			normalizedNameToIDs[normalizedKey] = append(normalizedNameToIDs[normalizedKey], id)
+		}
 	}
 
 	resolvedIDs := make([]string, 0, len(inputGroups))
@@ -105,6 +118,9 @@ func ResolveBetaGroupsFromList(inputGroups []string, groups *asc.BetaGroupsRespo
 			resolvedID = group
 		} else {
 			matches := groupNameToIDs[strings.ToLower(group)]
+			if len(matches) == 0 {
+				matches = normalizedNameToIDs[strings.ToLower(NormalizeBetaGroupName(group))]
+			}
 			switch len(matches) {
 			case 0:
 				return nil, WithDiagnostic(NewValidationError(fmt.Errorf("beta group %q not found", group)), DiagnosticResourceNotFound, "--group")

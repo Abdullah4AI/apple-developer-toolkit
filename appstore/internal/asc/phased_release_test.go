@@ -10,7 +10,7 @@ import (
 
 func TestGetAppStoreVersionPhasedRelease(t *testing.T) {
 	resp := AppStoreVersionPhasedReleaseResponse{
-		Data: Resource[AppStoreVersionPhasedReleaseAttributes]{
+		Data: &Resource[AppStoreVersionPhasedReleaseAttributes]{
 			Type: "appStoreVersionPhasedReleases",
 			ID:   "phased-123",
 			Attributes: AppStoreVersionPhasedReleaseAttributes{
@@ -51,7 +51,7 @@ func TestGetAppStoreVersionPhasedRelease(t *testing.T) {
 
 func TestCreateAppStoreVersionPhasedRelease(t *testing.T) {
 	resp := AppStoreVersionPhasedReleaseResponse{
-		Data: Resource[AppStoreVersionPhasedReleaseAttributes]{
+		Data: &Resource[AppStoreVersionPhasedReleaseAttributes]{
 			Type: "appStoreVersionPhasedReleases",
 			ID:   "phased-new",
 			Attributes: AppStoreVersionPhasedReleaseAttributes{
@@ -102,7 +102,7 @@ func TestCreateAppStoreVersionPhasedRelease(t *testing.T) {
 
 func TestCreateAppStoreVersionPhasedRelease_WithState(t *testing.T) {
 	resp := AppStoreVersionPhasedReleaseResponse{
-		Data: Resource[AppStoreVersionPhasedReleaseAttributes]{
+		Data: &Resource[AppStoreVersionPhasedReleaseAttributes]{
 			Type: "appStoreVersionPhasedReleases",
 			ID:   "phased-new",
 			Attributes: AppStoreVersionPhasedReleaseAttributes{
@@ -140,7 +140,7 @@ func TestCreateAppStoreVersionPhasedRelease_WithState(t *testing.T) {
 
 func TestUpdateAppStoreVersionPhasedRelease(t *testing.T) {
 	resp := AppStoreVersionPhasedReleaseResponse{
-		Data: Resource[AppStoreVersionPhasedReleaseAttributes]{
+		Data: &Resource[AppStoreVersionPhasedReleaseAttributes]{
 			Type: "appStoreVersionPhasedReleases",
 			ID:   "phased-123",
 			Attributes: AppStoreVersionPhasedReleaseAttributes{

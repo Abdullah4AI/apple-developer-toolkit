@@ -247,7 +247,7 @@ carried past flag parsing on purpose, so callers keep a plain `*string`.
   `inAppPurchasePricePoints`, and `gameCenterEnabledVersions` are only
   reachable through a parent or nested path, so there is no
   `/v<n>/<type>/<id>` self-link to accept.
-- `asc localizations update --id` names an `appStoreVersionLocalizations` or
+- `asc localizations update --id` and `asc localizations view --id` name an `appStoreVersionLocalizations` or
   an `appInfoLocalizations` resource depending on `--type`, like the
   type-dependent flags above.
 - `asc versions rating-reset` runs against a web session, so it is excluded

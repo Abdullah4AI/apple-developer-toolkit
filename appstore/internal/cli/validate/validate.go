@@ -69,6 +69,8 @@ reported.
 Checks:
   - Metadata length limits
   - Placeholder copy in localized listing fields (warning; --strict to block)
+  - Other-platform and test/debug wording in listing fields (warning; --strict to block)
+  - Unfinished-feature wording in listing fields and stale copyright year ranges (info)
   - Deterministic metadata content and keyword hygiene warnings
   - Optional bounded checks for public metadata URL destinations (--check-urls)
   - Required fields and localizations
@@ -81,6 +83,7 @@ Checks:
   - Screenshot presence and size compatibility
   - Required iPad screenshots for builds that run on iPad (--ipa)
   - Subscription review readiness and promotional image guidance
+  - Custom product page search keywords missing from this version's keywords
   - Age rating completeness
 
 Deep validation:

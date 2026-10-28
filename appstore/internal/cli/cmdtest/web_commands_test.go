@@ -207,18 +207,6 @@ func TestWebAppsCreateMissingRequiredFlags(t *testing.T) {
 	}
 }
 
-func TestWebAppsCreateExposesPasswordCompatibilityFlag(t *testing.T) {
-	root := RootCommand("1.2.3")
-	cmd := findSubcommand(root, "web", "apps", "create")
-	if cmd == nil {
-		t.Fatal("expected web apps create command")
-		return
-	}
-	if cmd.FlagSet.Lookup("password") == nil {
-		t.Fatal("expected temporary password compatibility flag on web apps create")
-	}
-}
-
 func TestWebSandboxCreateMissingRequiredFlags(t *testing.T) {
 	root := RootCommand("1.2.3")
 	root.FlagSet.SetOutput(io.Discard)

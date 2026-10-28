@@ -32,6 +32,8 @@ type InAppPurchaseV2Attributes struct {
 	FamilySharable            bool   `json:"familySharable,omitempty"`
 	ContentHosting            bool   `json:"contentHosting,omitempty"`
 	AvailableInAllTerritories bool   `json:"availableInAllTerritories,omitempty"`
+
+	api apiAttributes
 }
 
 // InAppPurchaseAttributes represents a legacy in-app purchase resource.

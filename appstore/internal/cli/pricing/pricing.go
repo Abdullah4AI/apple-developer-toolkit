@@ -701,16 +701,19 @@ Examples:
 	}
 }
 
+const territoryAvailabilitiesLimitMax = 200
+
 // PricingAvailabilityTerritoryAvailabilitiesCommand returns the availability territory-availabilities subcommand.
 func PricingAvailabilityTerritoryAvailabilitiesCommand() *ffcli.Command {
 	cmd := shared.BuildPaginatedListCommand(shared.PaginatedListCommandConfig{
 		FlagSetName: "pricing availability territory-availabilities",
 		Name:        "territory-availabilities",
-		ShortUsage:  "asc pricing availability territory-availabilities --availability AVAILABILITY_ID [--limit N] [--next URL] [--paginate]",
+		ShortUsage:  "asc pricing availability territory-availabilities --app APP_ID | --availability AVAILABILITY_ID [--limit N] [--next URL] [--paginate]",
 		ShortHelp:   "List territory availabilities for an app availability.",
 		LongHelp: `List territory availabilities for an app availability.
 
 Examples:
+  asc pricing availability territory-availabilities --app "123456789"
   asc pricing availability territory-availabilities --availability "AVAILABILITY_ID"
   asc pricing availability territory-availabilities --availability "AVAILABILITY_ID" --limit 175
   asc pricing availability territory-availabilities --availability "AVAILABILITY_ID" --paginate
@@ -718,7 +721,7 @@ Examples:
 		ParentFlag:  "availability",
 		ParentUsage: "App availability ID",
 		ParentType:  "appAvailabilities",
-		LimitMax:    200,
+		LimitMax:    territoryAvailabilitiesLimitMax,
 		ErrorPrefix: "pricing availability territory-availabilities",
 		FetchPage: func(ctx context.Context, client *asc.Client, availabilityID string, limit int, next string) (asc.PaginatedResponse, error) {
 			opts := make([]asc.TerritoryAvailabilitiesOption, 0, 2)
@@ -732,8 +735,13 @@ Examples:
 		},
 	})
 
+	appID := cmd.FlagSet.String("app", "", "App Store Connect app ID (or ASC_APP_ID); lists its app availability's territories")
+
 	originalExec := cmd.Exec
 	cmd.Exec = func(ctx context.Context, args []string) error {
+		if err := resolveTerritoryAvailabilitiesAvailability(ctx, cmd.FlagSet, *appID); err != nil {
+			return err
+		}
 		err := originalExec(ctx, args)
 		if err == nil || errors.Is(err, flag.ErrHelp) {
 			return err
@@ -745,6 +753,53 @@ Examples:
 	}
 
 	return cmd
+}
+
+// resolveTerritoryAvailabilitiesAvailability sets --availability from the
+// app's v2 availability when the caller names an app instead.
+func resolveTerritoryAvailabilitiesAvailability(ctx context.Context, fs *flag.FlagSet, appFlag string) error {
+	availabilityID := strings.TrimSpace(fs.Lookup("availability").Value.String())
+	next := strings.TrimSpace(fs.Lookup("next").Value.String())
+	explicitApp := strings.TrimSpace(appFlag) != ""
+	if explicitApp && availabilityID != "" {
+		return shared.UsageError("--app and --availability are mutually exclusive")
+	}
+	if explicitApp && next != "" {
+		return shared.UsageError("--app and --next are mutually exclusive")
+	}
+	if availabilityID != "" || next != "" {
+		return nil
+	}
+	if limit, ok := fs.Lookup("limit").Value.(flag.Getter).Get().(int); ok && limit != 0 && (limit < 1 || limit > territoryAvailabilitiesLimitMax) {
+		return shared.UsageErrorf("pricing availability territory-availabilities: --limit must be between 1 and %d", territoryAvailabilitiesLimitMax)
+	}
+	appID := shared.ResolveAppID(appFlag)
+	if appID == "" {
+		return shared.UsageError("--app or --availability is required (or set ASC_APP_ID)")
+	}
+
+	client, err := pricingAvailabilityClientFactory()
+	if err != nil {
+		return fmt.Errorf("pricing availability territory-availabilities: %w", err)
+	}
+	requestCtx, cancel := shared.ContextWithTimeout(ctx)
+	defer cancel()
+
+	resp, err := client.GetAppAvailabilityV2(requestCtx, appID)
+	if err != nil {
+		if shared.IsAppAvailabilityMissing(err) {
+			return shared.NewErrorWithCause(
+				fmt.Errorf("pricing availability territory-availabilities: app availability not found for app %q: %w", appID, asc.ErrNotFound),
+				err,
+			)
+		}
+		return fmt.Errorf("pricing availability territory-availabilities: %w", err)
+	}
+	resolvedID := strings.TrimSpace(resp.Data.ID)
+	if resolvedID == "" {
+		return fmt.Errorf("pricing availability territory-availabilities: app availability not found for app %q: %w", appID, asc.ErrNotFound)
+	}
+	return fs.Set("availability", resolvedID)
 }
 
 func isPricingAvailabilityTerritoryAvailabilitiesUsageError(err error) bool {

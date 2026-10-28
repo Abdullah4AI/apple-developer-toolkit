@@ -107,7 +107,7 @@ func TestSubscriptionsPricingPricesListSendsQueryControls(t *testing.T) {
 		"--subscription-id", "8000000001",
 		"--price-point-id", "point-1, point-2",
 		"--plan-type", "monthly",
-		"--territory", "United States",
+		"--territory", "United States,gb",
 		"--fields", "startDate,preserved",
 		"--territory-fields", "currency",
 		"--price-point-fields", "customerPrice,proceeds",
@@ -127,7 +127,7 @@ func TestSubscriptionsPricingPricesListSendsQueryControls(t *testing.T) {
 	wantQuery := url.Values{
 		"filter[planType]":                {"MONTHLY"},
 		"filter[subscriptionPricePoint]":  {"point-1,point-2"},
-		"filter[territory]":               {"USA"},
+		"filter[territory]":               {"USA,GBR"},
 		"fields[subscriptionPrices]":      {"startDate,preserved,territory,subscriptionPricePoint"},
 		"fields[territories]":             {"currency"},
 		"fields[subscriptionPricePoints]": {"customerPrice,proceeds"},
@@ -275,6 +275,7 @@ func TestSubscriptionsPricingPricesListRejectsInvalidQuerySelections(t *testing.
 		{name: "subscription prices fields", flag: "fields", value: "name", want: "--fields must be one of"},
 		{name: "territory fields", flag: "territory-fields", value: "name", want: "--territory-fields must be one of"},
 		{name: "price point fields", flag: "price-point-fields", value: "name", want: "--price-point-fields must be one of"},
+		{name: "territory", flag: "territory", value: "USA,Narnia", want: `territory "Narnia" could not be mapped`},
 	}
 
 	for _, test := range tests {

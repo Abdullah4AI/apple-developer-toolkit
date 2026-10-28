@@ -526,7 +526,7 @@ func (c *Client) GetTerritoryAvailabilities(ctx context.Context, availabilityID 
 		path = query.nextURL
 	} else {
 		values := url.Values{}
-		values.Set("fields[territoryAvailabilities]", "available,releaseDate,preOrderEnabled,contentStatuses,territory")
+		values.Set("fields[territoryAvailabilities]", "available,releaseDate,preOrderEnabled,preOrderPublishDate,contentStatuses,territory")
 		values.Set("include", "territory")
 		addLimit(values, query.limit)
 		path += "?" + values.Encode()

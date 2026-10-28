@@ -1,6 +1,7 @@
 package asc
 
 import (
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
@@ -503,4 +504,14 @@ func assetDeleteResultRows(result *AssetDeleteResult) ([]string, [][]string) {
 	headers := []string{"ID", "Deleted"}
 	rows := [][]string{{SanitizeTerminalText(result.ID), fmt.Sprintf("%t", result.Deleted)}}
 	return headers, rows
+}
+
+// AppScreenshotRows renders table rows for a raw appScreenshots collection.
+func AppScreenshotRows(payload []byte) ([]string, [][]string, error) {
+	var resp AppScreenshotsResponse
+	if err := json.Unmarshal(payload, &resp); err != nil {
+		return nil, nil, fmt.Errorf("invalid appScreenshots response: %w", err)
+	}
+	headers, rows := appScreenshotsRows(&resp)
+	return headers, rows, nil
 }

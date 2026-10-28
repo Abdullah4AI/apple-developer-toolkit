@@ -36,7 +36,7 @@ func creativeUploadFile(t *testing.T) (string, []byte) {
 }
 
 func TestAssetLibraryImageUpload(t *testing.T) {
-	for _, mode := range []string{"success", "standalone", "transient-processing", "table", "invalid-reservation", "upload-failure", "commit-failure", "processing-failed", "processing-timeout", "reference-name"} {
+	for _, mode := range []string{"success", "progress", "standalone", "transient-processing", "table", "invalid-reservation", "upload-failure", "commit-failure", "processing-failed", "processing-timeout", "reference-name"} {
 		t.Run(mode, func(t *testing.T) {
 			setupAuth(t)
 			t.Setenv("ASC_UPLOAD_TIMEOUT", "5s")
@@ -155,7 +155,39 @@ func TestAssetLibraryImageUpload(t *testing.T) {
 			if mode == "reference-name" {
 				args = append(args, "--reference-name", " "+imageReferenceName+" ")
 			}
+			if mode == "progress" {
+				args = append(args, "--progress")
+			}
 			stdout, stderr, err := runAssetLibrary(t, args...)
+			if mode == "progress" {
+				lines := strings.Split(strings.TrimSpace(stderr), "\n")
+				if len(lines) != 9 {
+					t.Fatalf("progress lines = %d: %q", len(lines), stderr)
+				}
+				for i, line := range lines {
+					var event struct {
+						Event, Stage, Status   string
+						DurationMs, RetryCount int
+						HTTPStatus             int
+					}
+					if err := json.Unmarshal([]byte(line), &event); err != nil {
+						t.Fatalf("invalid JSONL: %v", err)
+					}
+					if event.Event != "assetLibraryImageUpload" || event.DurationMs < 0 || event.RetryCount != 0 {
+						t.Fatalf("invalid event %+v", event)
+					}
+					if i == 0 && (event.Stage != "reserve" || event.Status != "started") {
+						t.Fatalf("first event %+v", event)
+					}
+					if i == 8 && (event.Stage != "processing" || event.Status != "completed" || event.HTTPStatus != 200) {
+						t.Fatalf("last event %+v", event)
+					}
+				}
+				if strings.Contains(stderr, "creative.png") || strings.Contains(stderr, "storage.example") || strings.Contains(stderr, "imageId") {
+					t.Fatalf("identifying progress: %q", stderr)
+				}
+			}
+
 			if mode == "table" {
 				if err != nil || !strings.Contains(stdout, "Image ID") || !strings.Contains(stdout, "creative.png") || !strings.Contains(stdout, "PREPARE_FOR_SUBMISSION") || !strings.Contains(stdout, "true") {
 					t.Fatalf("human output=%q err=%v", stdout, err)
@@ -186,7 +218,7 @@ func TestAssetLibraryImageUpload(t *testing.T) {
 			if mode == "reference-name" && receipt.ReferenceName != imageReferenceName {
 				t.Fatalf("receipt referenceName = %q", receipt.ReferenceName)
 			}
-			if mode == "success" || mode == "standalone" || mode == "transient-processing" || mode == "reference-name" {
+			if mode == "progress" || mode == "success" || mode == "standalone" || mode == "transient-processing" || mode == "reference-name" {
 				if err != nil || !receipt.Ready || !receipt.Uploaded || receipt.State != "PREPARE_FOR_SUBMISSION" || receipt.Width != 2 || receipt.Height != 2 || reads != 2 || uploaded != 2 {
 					t.Fatalf("receipt=%+v err=%v calls=%d", receipt, err, calls)
 				}

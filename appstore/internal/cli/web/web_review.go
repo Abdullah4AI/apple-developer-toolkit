@@ -928,7 +928,8 @@ func WebReviewCommand() *ffcli.Command {
 		LongHelp: `WEB SESSION WORKFLOWS
 
 App-centric review workflows over Apple web-session /iris endpoints.
-Use --app to scope all operations to one app.
+Use --app to scope operations to one app; sandbox-entitlements takes the
+macOS version with --version-id instead.
 
 Subcommands:
   list  List review submissions for an app
@@ -938,6 +939,7 @@ Subcommands:
   drafts  Create, update, or delete an unsent Resolution Center draft
   subscriptions  Inspect and mutate next-version subscription review selection
   iaps  Attach non-renewing IAPs to the next app version review
+  sandbox-entitlements  Manage the App Sandbox Information of a macOS version
 
 `,
 		FlagSet:   fs,
@@ -950,6 +952,7 @@ Subcommands:
 			WebReviewDraftsCommand(),
 			WebReviewSubscriptionsCommand(),
 			WebReviewIAPsCommand(),
+			WebReviewSandboxEntitlementsCommand(),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp

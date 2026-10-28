@@ -46,6 +46,8 @@ type AgeRatingDeclarationAttributes struct {
 
 	// Deprecated fields (kept for backward compatibility with older API responses)
 	SeventeenPlus *bool `json:"seventeenPlus,omitempty"`
+
+	api apiAttributes
 }
 
 // AppStoreAgeRating represents an App Store age rating value.
@@ -132,6 +134,7 @@ func (c *Client) GetAgeRatingDeclarationForAppStoreVersion(ctx context.Context, 
 
 // UpdateAgeRatingDeclaration updates an age rating declaration by ID.
 func (c *Client) UpdateAgeRatingDeclaration(ctx context.Context, declarationID string, attributes AgeRatingDeclarationAttributes) (*AgeRatingDeclarationResponse, error) {
+	attributes.api = apiAttributes{}
 	request := AgeRatingDeclarationUpdateRequest{
 		Data: AgeRatingDeclarationUpdateData{
 			Type:       ResourceTypeAgeRatingDeclarations,

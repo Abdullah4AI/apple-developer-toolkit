@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"reflect"
 	"strconv"
 	"strings"
 )
@@ -26,6 +27,8 @@ type BuildAttributes struct {
 	UsesNonExemptEncryption    *bool             `json:"usesNonExemptEncryption,omitempty"`
 	Expired                    bool              `json:"-"`
 	expiredSet                 bool
+
+	api apiAttributes
 }
 
 // UnmarshalJSON records whether the API supplied expired so an explicit false
@@ -47,12 +50,25 @@ func (a *BuildAttributes) UnmarshalJSON(data []byte) error {
 	if aux.Expired != nil {
 		a.Expired = *aux.Expired
 	}
-	return nil
+	baseline, err := a.modeledJSON()
+	if err != nil {
+		return err
+	}
+	a.api, err = captureAPIAttributes(data, baseline, reflect.TypeFor[BuildAttributes](), "expired")
+	return err
 }
 
 // MarshalJSON preserves the distinction between an absent expired attribute
 // and an explicit false value returned by App Store Connect.
 func (a BuildAttributes) MarshalJSON() ([]byte, error) {
+	encoded, err := a.modeledJSON()
+	if err != nil {
+		return nil, err
+	}
+	return a.api.apply(encoded)
+}
+
+func (a BuildAttributes) modeledJSON() ([]byte, error) {
 	type buildAttributesAlias BuildAttributes
 	var expired *bool
 	if a.expiredSet || a.Expired {
@@ -355,8 +371,17 @@ func (c *Client) GetBuilds(ctx context.Context, appID string, opts ...BuildsOpti
 }
 
 // GetBuild retrieves a single build by ID.
-func (c *Client) GetBuild(ctx context.Context, buildID string) (*BuildResponse, error) {
+func (c *Client) GetBuild(ctx context.Context, buildID string, opts ...BuildOption) (*BuildResponse, error) {
+	query := &buildQuery{}
+	for _, opt := range opts {
+		opt(query)
+	}
 	path := fmt.Sprintf("/v1/builds/%s", buildID)
+	if len(query.include) > 0 {
+		values := url.Values{}
+		addCSV(values, "include", query.include)
+		path += "?" + values.Encode()
+	}
 	data, err := c.do(ctx, "GET", path, nil)
 	if err != nil {
 		return nil, err

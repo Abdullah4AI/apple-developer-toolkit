@@ -115,21 +115,33 @@ func AssetLibraryRows(payload []byte) ([]string, [][]string, error) {
 	return headers, rows, nil
 }
 
+// AssetLibraryImageUploadEvent contains only bounded, non-identifying diagnostics.
+type AssetLibraryImageUploadEvent struct {
+	Event      string `json:"event"`
+	Stage      string `json:"stage"`
+	Status     string `json:"status"`
+	DurationMs int64  `json:"durationMs"`
+	RetryCount int    `json:"retryCount"`
+	HTTPStatus int    `json:"httpStatus,omitempty"`
+	ErrorCode  string `json:"errorCode,omitempty"`
+}
+
 // AssetLibraryImageUploadResult reports upload and processing independently.
 // ImageID is retained in a partial result after reservation.
 type AssetLibraryImageUploadResult struct {
-	ImageID       string `json:"imageId"`
-	Category      string `json:"category,omitempty"`
-	LibraryID     string `json:"libraryId"`
-	FileName      string `json:"fileName"`
-	FileSize      int64  `json:"fileSize"`
-	ReferenceName string `json:"referenceName,omitempty"`
-	Uploaded      bool   `json:"uploaded"`
-	Ready         bool   `json:"ready"`
-	State         string `json:"state,omitempty"`
-	SpecID        string `json:"specId,omitempty"`
-	Width         int    `json:"width,omitempty"`
-	Height        int    `json:"height,omitempty"`
+	Diagnostics   []AssetLibraryImageUploadEvent `json:"diagnostics,omitempty"`
+	ImageID       string                         `json:"imageId"`
+	Category      string                         `json:"category,omitempty"`
+	LibraryID     string                         `json:"libraryId"`
+	FileName      string                         `json:"fileName"`
+	FileSize      int64                          `json:"fileSize"`
+	ReferenceName string                         `json:"referenceName,omitempty"`
+	Uploaded      bool                           `json:"uploaded"`
+	Ready         bool                           `json:"ready"`
+	State         string                         `json:"state,omitempty"`
+	SpecID        string                         `json:"specId,omitempty"`
+	Width         int                            `json:"width,omitempty"`
+	Height        int                            `json:"height,omitempty"`
 }
 
 func assetLibraryImageUploadRows(result *AssetLibraryImageUploadResult) ([]string, [][]string) {

@@ -25,6 +25,8 @@ type ReviewSubmissionAttributes struct {
 	Platform        Platform              `json:"platform,omitempty"`
 	SubmissionState ReviewSubmissionState `json:"state,omitempty"`
 	SubmittedDate   string                `json:"submittedDate,omitempty"`
+
+	api apiAttributes
 }
 
 // ReviewSubmissionRelationships describes review submission relationships.

@@ -199,6 +199,7 @@ func TestPricingScheduleCreateCommand_HelpMentionsFreeExample(t *testing.T) {
 }
 
 func TestPricingAvailabilityTerritoryAvailabilitiesCommand_MissingAvailability(t *testing.T) {
+	t.Setenv("ASC_APP_ID", "")
 	cmd := PricingAvailabilityTerritoryAvailabilitiesCommand()
 
 	if err := cmd.FlagSet.Parse([]string{}); err != nil {

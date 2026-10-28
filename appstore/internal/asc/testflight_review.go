@@ -10,6 +10,8 @@ type BetaAppReviewDetailAttributes struct {
 	DemoAccountPassword string `json:"demoAccountPassword,omitempty"`
 	DemoAccountRequired bool   `json:"demoAccountRequired,omitempty"`
 	Notes               string `json:"notes,omitempty"`
+
+	api apiAttributes
 }
 
 // BetaAppReviewSubmissionAttributes describes beta app review submission metadata.

@@ -24,6 +24,10 @@ type buildUploadQuery struct {
 	include []string
 }
 
+type buildQuery struct {
+	include []string
+}
+
 type buildUploadsQuery struct {
 	listQuery
 	cfBundleShortVersions []string
@@ -124,6 +128,9 @@ type BuildBundlesOption func(*buildBundlesQuery)
 
 // BuildBundleFileSizesOption is a functional option for GetBuildBundleFileSizes.
 type BuildBundleFileSizesOption func(*buildBundleFileSizesQuery)
+
+// BuildOption is a functional option for GetBuild.
+type BuildOption func(*buildQuery)
 
 // BuildUploadOption is a functional option for GetBuildUpload.
 type BuildUploadOption func(*buildUploadQuery)
@@ -268,6 +275,13 @@ func WithBuildsInclude(include []string) BuildsOption {
 		if len(normalized) > 0 {
 			q.include = normalized
 		}
+	}
+}
+
+// WithBuildInclude requests related resources for a single build.
+func WithBuildInclude(include []string) BuildOption {
+	return func(q *buildQuery) {
+		q.include = include
 	}
 }
 

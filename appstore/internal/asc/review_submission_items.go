@@ -32,6 +32,8 @@ const (
 // ReviewSubmissionItemAttributes describes review submission item attributes.
 type ReviewSubmissionItemAttributes struct {
 	State string `json:"state,omitempty"`
+
+	api apiAttributes
 }
 
 // ReviewSubmissionItemRelationships describes review submission item relationships.

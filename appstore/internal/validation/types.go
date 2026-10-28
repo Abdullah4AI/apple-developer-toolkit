@@ -171,6 +171,19 @@ type Input struct {
 	Copyright                   string
 	HasPaidAppPrice             bool
 	AppPricingKnown             bool
+	// CustomProductPageLocalizations lists the search keywords of the app's
+	// current custom product page localizations.
+	CustomProductPageLocalizations      []CustomProductPageLocalization
+	CustomProductPageKeywordsSkipReason string
+}
+
+// CustomProductPageLocalization is one custom product page localization and
+// its search keywords.
+type CustomProductPageLocalization struct {
+	PageName       string
+	LocalizationID string
+	Locale         string
+	SearchKeywords []string
 }
 
 // VersionLocalization represents version-level metadata.

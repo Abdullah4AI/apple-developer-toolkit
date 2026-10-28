@@ -32,7 +32,7 @@ const (
 )
 
 type buildBetaGroupPreflightClient interface {
-	GetBuild(ctx context.Context, buildID string) (*asc.BuildResponse, error)
+	GetBuild(ctx context.Context, buildID string, opts ...asc.BuildOption) (*asc.BuildResponse, error)
 	GetBuildBuildBetaDetail(ctx context.Context, buildID string) (*asc.BuildBetaDetailResponse, error)
 }
 

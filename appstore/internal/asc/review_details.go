@@ -17,6 +17,8 @@ type AppStoreReviewDetailAttributes struct {
 	DemoAccountPassword string `json:"demoAccountPassword,omitempty"`
 	DemoAccountRequired bool   `json:"demoAccountRequired,omitempty"`
 	Notes               string `json:"notes,omitempty"`
+
+	api apiAttributes
 }
 
 // AppStoreReviewDetailResponse is the response from review detail endpoints.

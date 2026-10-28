@@ -44,6 +44,10 @@ func TestIAPVersionsValidationErrors(t *testing.T) {
 		{"iap list validates parent fields before auth", []string{"iap", "list", "--app", "app-1", "--fields", "nope"}, "--fields must be one of"},
 		{"iap view validates parent fields before auth", []string{"iap", "view", "--id", "iap-1", "--fields", "nope"}, "--fields must be one of"},
 		{"iap list rejects parent fields on legacy endpoint", []string{"iap", "list", "--app", "app-1", "--legacy", "--fields", "name"}, "--fields requires the v2 endpoint"},
+		{"iap list rejects unknown include", []string{"iap", "list", "--app", "app-1", "--include", "pricePoints"}, "--include must be one of"},
+		{"iap view rejects unknown include", []string{"iap", "view", "--id", "iap-1", "--include", "nope"}, "--include must be one of"},
+		{"iap view rejects empty include on legacy endpoint", []string{"iap", "view", "--id", "iap-1", "--legacy", "--include", ""}, "--include requires the v2 endpoint"},
+		{"iap list rejects next with include", []string{"iap", "list", "--next", next, "--include", "images"}, "--next cannot be combined"},
 		{"version localization update rejects name and clear-name", []string{"iap", "versions", "localizations", "update", "--localization-id", "loc-1", "--name", "Name", "--clear-name"}, "--name and --clear-name are mutually exclusive"},
 		{"version localization update rejects description and clear-description", []string{"iap", "versions", "localizations", "update", "--localization-id", "loc-1", "--description", "Description", "--clear-description"}, "--description and --clear-description are mutually exclusive"},
 		{"version list rejects next with selectors", []string{"iap", "versions", "list", "--next", next, "--state", "READY_FOR_REVIEW"}, "--next cannot be combined"},
@@ -553,6 +557,7 @@ func TestIAPVersionPrincipalCLIFlowsUseExactHTTPContracts(t *testing.T) {
 		wantBody   string
 		statusCode int
 		response   string
+		wantOutput string
 	}{
 		{
 			name: "create version", args: []string{"iap", "versions", "create", "--iap-id", "iap-1", "--output", "json"},
@@ -589,6 +594,20 @@ func TestIAPVersionPrincipalCLIFlowsUseExactHTTPContracts(t *testing.T) {
 			method: http.MethodGet, path: "/v2/inAppPurchases/iap-1",
 			query:    map[string]string{"fields[inAppPurchaseVersions]": "version,state", "include": "versions", "limit[versions]": "5"},
 			response: `{"data":{"type":"inAppPurchases","id":"iap-1"}}`,
+		},
+		{
+			name: "IAP list sends include and passes included through", args: []string{"iap", "list", "--app", "app-1", "--include", "appStoreReviewScreenshot,inAppPurchaseLocalizations", "--include-versions", "--output", "json"},
+			method: http.MethodGet, path: "/v1/apps/app-1/inAppPurchasesV2",
+			query:      map[string]string{"include": "appStoreReviewScreenshot,inAppPurchaseLocalizations,versions"},
+			response:   `{"data":[{"type":"inAppPurchases","id":"iap-1"}],"included":[{"type":"inAppPurchaseAppStoreReviewScreenshots","id":"shot-1"},{"type":"inAppPurchaseLocalizations","id":"loc-1"}],"links":{"self":"s"}}`,
+			wantOutput: `{"data":[{"type":"inAppPurchases","id":"iap-1"}],"included":[{"type":"inAppPurchaseAppStoreReviewScreenshots","id":"shot-1"},{"type":"inAppPurchaseLocalizations","id":"loc-1"}],"links":{"self":"s"}}`,
+		},
+		{
+			name: "IAP view sends include and passes included through", args: []string{"iap", "view", "--id", "iap-1", "--include", "pricePoints,versions,iapPriceSchedule", "--include-versions", "--output", "json"},
+			method: http.MethodGet, path: "/v2/inAppPurchases/iap-1",
+			query:      map[string]string{"include": "pricePoints,versions,iapPriceSchedule"},
+			response:   `{"data":{"type":"inAppPurchases","id":"iap-1"},"included":[{"type":"inAppPurchasePriceSchedules","id":"sched-1"}],"links":{"self":"s"}}`,
+			wantOutput: `{"data":{"type":"inAppPurchases","id":"iap-1"},"included":[{"type":"inAppPurchasePriceSchedules","id":"sched-1"}],"links":{"self":"s"}}`,
 		},
 		{
 			name: "existing IAP view propagates parent fields", args: []string{"iap", "view", "--id", "iap-1", "--fields", "name,versions", "--output", "json"},
@@ -691,6 +710,15 @@ func TestIAPVersionPrincipalCLIFlowsUseExactHTTPContracts(t *testing.T) {
 			var output any
 			if err := json.Unmarshal([]byte(stdout), &output); err != nil {
 				t.Fatalf("invalid JSON output %q: %v", stdout, err)
+			}
+			if test.wantOutput != "" {
+				var want any
+				if err := json.Unmarshal([]byte(test.wantOutput), &want); err != nil {
+					t.Fatal(err)
+				}
+				if !reflect.DeepEqual(output, want) {
+					t.Fatalf("output = %s, want %s", stdout, test.wantOutput)
+				}
 			}
 			if requestCount != 1 {
 				t.Fatalf("request count = %d, want 1", requestCount)

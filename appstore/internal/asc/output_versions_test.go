@@ -1,6 +1,7 @@
 package asc
 
 import (
+	"encoding/json"
 	"reflect"
 	"slices"
 	"strings"
@@ -9,7 +10,7 @@ import (
 
 func TestPrintTable_AppStoreVersionPhasedReleaseIncludesProgress(t *testing.T) {
 	resp := &AppStoreVersionPhasedReleaseResponse{
-		Data: Resource[AppStoreVersionPhasedReleaseAttributes]{
+		Data: &Resource[AppStoreVersionPhasedReleaseAttributes]{
 			ID: "phase-1",
 			Attributes: AppStoreVersionPhasedReleaseAttributes{
 				PhasedReleaseState: PhasedReleaseStateActive,
@@ -94,6 +95,82 @@ func TestAppStoreVersionsRows_UsesDisplayPlatform(t *testing.T) {
 	}
 	if rows[1][2] != "CAR_OS" {
 		t.Fatalf("expected unknown platform passthrough CAR_OS, got %q", rows[1][2])
+	}
+}
+
+func TestAppStoreVersionsRows_ShowsIncludedBuildAndSubmission(t *testing.T) {
+	t.Parallel()
+
+	version := func(id, relationships string) Resource[AppStoreVersionAttributes] {
+		return Resource[AppStoreVersionAttributes]{
+			ID:            id,
+			Attributes:    AppStoreVersionAttributes{VersionString: "2.5.3", Platform: PlatformIOS},
+			Relationships: json.RawMessage(relationships),
+		}
+	}
+	tests := []struct {
+		name        string
+		resp        *AppStoreVersionsResponse
+		wantHeaders []string
+		wantExtra   [][]string
+	}{
+		{
+			name: "build and submission included",
+			resp: &AppStoreVersionsResponse{
+				Data: []Resource[AppStoreVersionAttributes]{
+					version("v1", `{"build":{"data":{"type":"builds","id":"b1"}},"appStoreVersionSubmission":{"data":{"type":"appStoreVersionSubmissions","id":"s1"}}}`),
+					version("v2", `{"build":{"data":null},"appStoreVersionSubmission":{"data":null}}`),
+				},
+				Included: json.RawMessage(`[{"type":"appStoreVersionSubmissions","id":"s1","attributes":{}},{"type":"builds","id":"b1","attributes":{"version":"12"}}]`),
+			},
+			wantHeaders: []string{"Build ID", "Build Version", "Submission ID"},
+			wantExtra:   [][]string{{"b1", "12", "s1"}, {"", "", ""}},
+		},
+		{
+			name: "only build included",
+			resp: &AppStoreVersionsResponse{
+				Data:     []Resource[AppStoreVersionAttributes]{version("v1", `{"build":{"data":{"type":"builds","id":"b1"}},"appStoreVersionSubmission":{"links":{"self":"x"}}}`)},
+				Included: json.RawMessage(`[{"type":"builds","id":"b1","attributes":{"version":"12"}}]`),
+			},
+			wantHeaders: []string{"Build ID", "Build Version"},
+			wantExtra:   [][]string{{"b1", "12"}},
+		},
+		{
+			name:      "nothing included",
+			resp:      &AppStoreVersionsResponse{Data: []Resource[AppStoreVersionAttributes]{version("v1", `{"build":{"links":{"self":"x"}}}`)}},
+			wantExtra: [][]string{nil},
+		},
+	}
+
+	base := []string{"ID", "Version", "Platform", "State", "Created"}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			headers, rows := appStoreVersionsRows(tt.resp)
+			if want := append(slices.Clone(base), tt.wantHeaders...); !slices.Equal(headers, want) {
+				t.Fatalf("headers = %v, want %v", headers, want)
+			}
+			for i, row := range rows {
+				if got := row[len(base):]; !slices.Equal(got, tt.wantExtra[i]) {
+					t.Fatalf("row %d extra columns = %v, want %v", i, got, tt.wantExtra[i])
+				}
+			}
+		})
+	}
+}
+
+func TestAppStoreVersionsLatestRows_ShowsIncludedBuild(t *testing.T) {
+	t.Parallel()
+
+	headers, rows := appStoreVersionsLatestRows(&AppStoreVersionsLatestResult{
+		Items: []Resource[AppStoreVersionAttributes]{{
+			ID:            "v1",
+			Relationships: json.RawMessage(`{"build":{"data":{"type":"builds","id":"b1"}}}`),
+		}},
+		Included: json.RawMessage(`[{"type":"builds","id":"b1","attributes":{"version":"12"}}]`),
+	})
+	if !slices.Contains(headers, "Build Version") || !slices.Contains(rows[0], "12") {
+		t.Fatalf("expected included build in latest rows, got headers %v rows %v", headers, rows)
 	}
 }
 

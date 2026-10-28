@@ -729,6 +729,19 @@ func capabilityRows() []Capability {
 			},
 			Notes: []string{"Reviewer-message and rejection-detail surfaces, plus next-version subscription and IAP attachment, are richer or only available in App Store Connect web-session flows. The reply path requires --confirm, has no attachment, and does not automatically retry an ambiguous send; the draft path provides unsent create/update/delete without attachments or automatic retries. Source capture has not proven provider acceptance."},
 		},
+		{
+			Area:       "review",
+			Capability: "macOS App Sandbox Information",
+			Status:     statusWebSession,
+			Commands: []string{
+				"asc web review sandbox-entitlements catalog",
+				"asc web review sandbox-entitlements list",
+				"asc web review sandbox-entitlements set",
+				"asc web review sandbox-entitlements delete",
+			},
+			APIResources: []string{"appSandboxEntitlements", "appSandboxEntitlementUsages"},
+			Notes:        []string{"Reads and writes the entitlement usage information of a macOS version's App Review details, which the public API does not expose. set and delete require --confirm, read the current rows first, and verify the result with a fresh read. Reads and writes were live-verified with a built-CLI canary on 2026-10-27."},
+		},
 	}
 }
 

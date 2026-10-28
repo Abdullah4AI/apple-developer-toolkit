@@ -27,6 +27,7 @@ func LocalizationsCommand() *ffcli.Command {
 
 Examples:
   asc localizations list --version "VERSION_ID"
+  asc localizations view --id "LOCALIZATION_ID"
   asc localizations create --version "VERSION_ID" --locale "ja"
   asc localizations supported-locales --version "VERSION_ID"
   asc localizations search-keywords list --localization-id "LOCALIZATION_ID"
@@ -40,6 +41,7 @@ Examples:
 		UsageFunc: shared.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
 			LocalizationsListCommand(),
+			LocalizationsViewCommand(),
 			LocalizationsCreateCommand(),
 			LocalizationsUpdateCommand(),
 			LocalizationsSupportedLocalesCommand(),
@@ -213,7 +215,7 @@ Examples:
 				if versionIsString {
 					resolvedVersionID = ""
 					if strings.TrimSpace(*next) == "" {
-						resolvedVersionID, err = resolveLocalizationsListVersionString(requestCtx, client, resolvedAppID, versionValue, normalizedPlatform)
+						resolvedVersionID, err = resolveLocalizationsVersionString(requestCtx, client, resolvedAppID, versionValue, normalizedPlatform)
 						if err != nil {
 							if errors.Is(err, flag.ErrHelp) {
 								return err
@@ -339,10 +341,11 @@ Examples:
 // never a version ID.
 var appStoreVersionStringPattern = regexp.MustCompile(`^[0-9]+(\.[0-9]+)*$`)
 
-// resolveLocalizationsListVersionString resolves a version string on the app.
+// resolveLocalizationsVersionString resolves a version string on the app.
 // Without a platform it searches every platform and asks for --platform when
 // the version string exists on more than one.
-func resolveLocalizationsListVersionString(ctx context.Context, client *asc.Client, appID, version, platform string) (string, error) {
+func resolveLocalizationsVersionString(ctx context.Context, client *asc.Client, appID, version, platform string) (string, error) {
+	appID = strings.TrimSpace(appID)
 	opts := []asc.AppStoreVersionsOption{
 		asc.WithAppStoreVersionsVersionStrings([]string{version}),
 		asc.WithAppStoreVersionsLimit(200),
@@ -739,4 +742,25 @@ func sharedVersionLocalizationValuesNeedUpdateContext(valuesByLocale map[string]
 		}
 	}
 	return false
+}
+
+func normalizeLocalizationVersionSelector(version, appID, platform string) (bool, string, error) {
+	isVersionString := appStoreVersionStringPattern.MatchString(version)
+	if !isVersionString && strings.TrimSpace(appID) != "" {
+		return false, "", shared.UsageError("--app only applies when --version is a version string")
+	}
+	if isVersionString && strings.TrimSpace(shared.ResolveAppID(appID)) == "" {
+		return false, "", shared.UsageError("--app is required (or set ASC_APP_ID) when --version is a version string; otherwise pass an App Store version ID from asc versions list --app APP_ID")
+	}
+	if strings.TrimSpace(platform) != "" {
+		if !isVersionString {
+			return false, "", shared.UsageError("--platform requires a version string with --app")
+		}
+		normalized, err := shared.NormalizeAppStoreVersionPlatform(platform)
+		if err != nil {
+			return false, "", shared.UsageError(err.Error())
+		}
+		return isVersionString, normalized, nil
+	}
+	return isVersionString, "", nil
 }

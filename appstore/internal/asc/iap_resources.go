@@ -38,6 +38,8 @@ type InAppPurchaseAppStoreReviewScreenshotAttributes struct {
 	AssetType          string              `json:"assetType,omitempty"`
 	UploadOperations   []UploadOperation   `json:"uploadOperations,omitempty"`
 	AssetDeliveryState *AppMediaAssetState `json:"assetDeliveryState,omitempty"`
+
+	api apiAttributes
 }
 
 type InAppPurchaseAppStoreReviewScreenshotResponse = SingleResponse[InAppPurchaseAppStoreReviewScreenshotAttributes]

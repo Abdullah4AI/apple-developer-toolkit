@@ -10,11 +10,12 @@ func TestAnalyticsRankedAmbiguousFlagsRemainRejected(t *testing.T) {
 	// subcommand, so treating them as spelling aliases would change semantics.
 	// screenshots upload --locale is intentionally absent: it is a real
 	// app-scoped selector that resolves the localization, not an alias.
+	// screenshots list --paginate is likewise a real flag scoped to --set-id;
+	// TestScreenshotsListBySetIDUsageErrors keeps it rejected without --set-id.
 	tests := []struct {
 		path []string
 		flag string
 	}{
-		{path: []string{"screenshots", "list"}, flag: "paginate"},
 		{path: []string{"localizations", "update"}, flag: "localization-id"},
 		{path: []string{"profiles", "list"}, flag: "bundle-id"},
 	}

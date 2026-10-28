@@ -66,6 +66,8 @@ type SubscriptionAttributes struct {
 	AvailableInAllTerritories bool      `json:"availableInAllTerritories,omitempty"`
 	MarketSettings            *[]string `json:"marketSettings,omitempty"`
 	MultiSeatStatus           *string   `json:"multiSeatStatus,omitempty"`
+
+	api apiAttributes
 }
 
 // SubscriptionCreateAttributes describes attributes for creating a subscription.

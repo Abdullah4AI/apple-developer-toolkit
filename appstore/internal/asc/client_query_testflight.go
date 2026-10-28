@@ -99,6 +99,7 @@ type betaTestersQuery struct {
 	inviteTypes  []string
 	sort         string
 	include      []string
+	fields       []string
 }
 
 type betaAppReviewDetailsQuery struct {
@@ -273,6 +274,11 @@ func buildBetaTestersQuery(appID string, query *betaTestersQuery) (string, error
 	addCSV(values, "filter[id]", query.ids)
 	addCSV(values, "filter[inviteType]", query.inviteTypes)
 	addCSV(values, "include", query.include)
+	if fields := normalizeList(query.fields); len(fields) > 0 {
+		// A sparse fieldset must keep every included relationship, or Apple
+		// returns no linkage to join the included resources to.
+		addCSV(values, "fields[betaTesters]", normalizeUniqueList(append(fields, query.include...)))
+	}
 	addValue(values, "sort", query.sort)
 	addLimit(values, query.limit)
 	return values.Encode(), nil
@@ -853,6 +859,13 @@ func WithBetaTestersInclude(include []string) BetaTestersOption {
 		if normalized := normalizeList(include); len(normalized) > 0 {
 			q.include = normalized
 		}
+	}
+}
+
+// WithBetaTestersFields sets fields[betaTesters].
+func WithBetaTestersFields(fields []string) BetaTestersOption {
+	return func(q *betaTestersQuery) {
+		q.fields = normalizeList(fields)
 	}
 }
 

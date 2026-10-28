@@ -30,7 +30,7 @@ func (f *postUploadBuildDistributionFake) AddBetaGroupsToBuildWithNotify(_ conte
 	return asc.BuildBetaGroupsNotificationActionNone, f.addErrors[index]
 }
 
-func (f *postUploadBuildDistributionFake) GetBuild(_ context.Context, buildID string) (*asc.BuildResponse, error) {
+func (f *postUploadBuildDistributionFake) GetBuild(_ context.Context, buildID string, _ ...asc.BuildOption) (*asc.BuildResponse, error) {
 	f.getCalls++
 	if len(f.getErrors) > 0 {
 		index := min(f.getCalls-1, len(f.getErrors)-1)

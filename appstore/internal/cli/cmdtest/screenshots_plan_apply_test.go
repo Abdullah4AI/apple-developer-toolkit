@@ -483,6 +483,20 @@ func TestScreenshotsApplyReportsCompletedGroupsWhenALaterGroupFails(t *testing.T
 	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
 		t.Fatalf("unmarshal output: %v\nstdout=%s", err, stdout)
 	}
+	if payload["errorCount"] != float64(1) {
+		t.Errorf("errorCount=%v, want 1", payload["errorCount"])
+	}
+	issues, ok := payload["issues"].([]any)
+	foundFailure := false
+	for _, raw := range issues {
+		issue := raw.(map[string]any)
+		if issue["severity"] == "error" && issue["displayType"] == "APP_IPHONE_65" && strings.Contains(fmt.Sprint(issue["message"]), "screenshot reservation failed") {
+			foundFailure = true
+		}
+	}
+	if !ok || !foundFailure {
+		t.Errorf("missing failed group issue: %v", payload["issues"])
+	}
 	groups, ok := payload["groups"].([]any)
 	if !ok || len(groups) != 1 {
 		t.Fatalf("expected the completed group to be reported, got %T %v", payload["groups"], payload["groups"])
@@ -494,6 +508,72 @@ func TestScreenshotsApplyReportsCompletedGroupsWhenALaterGroupFails(t *testing.T
 	results := group["result"].(map[string]any)["results"].([]any)
 	if results[0].(map[string]any)["assetId"] != "new-61" {
 		t.Fatalf("expected uploaded assetId new-61, got %v", results[0].(map[string]any)["assetId"])
+	}
+}
+
+func TestScreenshotsPlanReportsCapacityFailure(t *testing.T) {
+	setupAuth(t)
+	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
+	t.Setenv("ASC_APP_ID", "")
+	reviewDir, _ := writeScreenshotReviewArtifacts(t)
+	originalTransport := http.DefaultTransport
+	t.Cleanup(func() { http.DefaultTransport = originalTransport })
+	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		if req.Method != http.MethodGet {
+			t.Fatalf("plan mutated assets: %s %s", req.Method, req.URL)
+		}
+		switch req.URL.Path {
+		case "/v1/apps/123456789/appStoreVersions":
+			return statusJSONResponse(`{"data":[{"type":"appStoreVersions","id":"version-1","attributes":{"versionString":"1.2.3","platform":"IOS"}}]}`), nil
+		case "/v1/appStoreVersions/version-1/appStoreVersionLocalizations":
+			return statusJSONResponse(`{"data":[{"type":"appStoreVersionLocalizations","id":"LOC_123","attributes":{"locale":"en-US"}}]}`), nil
+		case "/v1/appStoreVersionLocalizations/LOC_123/appScreenshotSets":
+			return statusJSONResponse(`{"data":[{"type":"appScreenshotSets","id":"set-1","attributes":{"screenshotDisplayType":"APP_IPHONE_65"}}],"links":{}}`), nil
+		case "/v1/appScreenshotSets/set-1/appScreenshots":
+			screenshots := make([]map[string]string, 10)
+			for i := range screenshots {
+				screenshots[i] = map[string]string{"type": "appScreenshots", "id": fmt.Sprintf("existing-%d", i)}
+			}
+			body, err := json.Marshal(map[string]any{"data": screenshots, "links": map[string]any{}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			return statusJSONResponse(string(body)), nil
+		default:
+			t.Fatalf("unexpected request: %s %s", req.Method, req.URL)
+			return nil, nil
+		}
+	})
+	root := RootCommand("1.2.3")
+	root.FlagSet.SetOutput(io.Discard)
+	var runErr error
+	stdout, _ := captureOutput(t, func() {
+		if err := root.Parse([]string{"screenshots", "plan", "--app", "123456789", "--version", "1.2.3", "--review-output-dir", reviewDir, "--output", "json"}); err != nil {
+			t.Fatal(err)
+		}
+		runErr = root.Run(context.Background())
+	})
+	if runErr == nil {
+		t.Fatal("expected capacity failure")
+	}
+	var payload struct {
+		ErrorCount int                                                       `json:"errorCount"`
+		Issues     []struct{ Severity, Locale, DisplayType, Message string } `json:"issues"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
+		t.Fatalf("decode output: %v", err)
+	}
+	if payload.ErrorCount != 1 {
+		t.Errorf("errorCount=%d, want 1", payload.ErrorCount)
+	}
+	found := false
+	for _, issue := range payload.Issues {
+		if issue.Severity == "error" && issue.Locale == "en-US" && issue.DisplayType == "APP_IPHONE_65" && strings.Contains(issue.Message, "no upload slots remain") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("missing structured capacity failure: %+v", payload.Issues)
 	}
 }
 

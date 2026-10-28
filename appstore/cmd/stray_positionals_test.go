@@ -215,9 +215,11 @@ func TestLeafOperandContractMatchesDeclaredUsage(t *testing.T) {
 	wantAllowed := []string{
 		"asc api",
 		"asc docs show",
+		"asc migrate metadata",
 		"asc schema",
 		"asc search",
 		"asc signing run",
+		"asc versions phased-release guard",
 		"asc workflow run",
 	}
 	if strings.Join(sortedCopy(allowed), "\n") != strings.Join(wantAllowed, "\n") {

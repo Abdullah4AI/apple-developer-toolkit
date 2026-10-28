@@ -139,6 +139,9 @@ func uploadScreenshotsWithConfig[T any](ctx context.Context, cfg screenshotUploa
 	}
 	if strings.TrimSpace(cfg.ReplaceCommand) == "" {
 		cfg.ReplaceCommand = "--replace --confirm"
+		if cfg.DryRun {
+			cfg.ReplaceCommand = "--replace"
+		}
 	}
 
 	sourceRootPath := ""
@@ -525,7 +528,11 @@ func uploadScreenshotAssetFromFile(ctx context.Context, client *asc.Client, setI
 		return asc.AssetUploadResultItem{}, screenshotPendingAsset{}, err
 	}
 
+	if err := waitForScreenshotReservationTurn(ctx); err != nil {
+		return asc.AssetUploadResultItem{}, screenshotPendingAsset{}, err
+	}
 	created, err := client.CreateAppScreenshot(ctx, setID, info.Name(), info.Size())
+	releaseScreenshotReservationTurn(ctx)
 	if err != nil {
 		return asc.AssetUploadResultItem{}, screenshotPendingAsset{}, err
 	}

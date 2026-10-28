@@ -182,8 +182,8 @@ func LocalizationsScreenshotSetsDeleteCommand() *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "delete",
 		ShortUsage: "asc localizations screenshot-sets delete --id \"SCREENSHOT_SET_ID\" --confirm",
-		ShortHelp:  "Delete an empty screenshot set by ID.",
-		LongHelp: `Delete an empty screenshot set by ID.
+		ShortHelp:  "Delete a screenshot set by ID.",
+		LongHelp: `Delete a screenshot set by ID.
 
 Examples:
   asc localizations screenshot-sets delete --id "SCREENSHOT_SET_ID" --confirm`,
@@ -224,15 +224,20 @@ Examples:
 
 // LocalizationsScreenshotSetsListCommand returns the screenshot sets list subcommand.
 func LocalizationsScreenshotSetsListCommand() *ffcli.Command {
-	return shared.BuildPaginatedListCommand(shared.PaginatedListCommandConfig{
+	include := new(string)
+	cmd := shared.BuildPaginatedListCommand(shared.PaginatedListCommandConfig{
 		FlagSetName: "localizations screenshot-sets list",
 		Name:        "list",
-		ShortUsage:  "asc localizations screenshot-sets list --localization-id \"LOCALIZATION_ID\"",
+		ShortUsage:  "asc localizations screenshot-sets list --localization-id \"LOCALIZATION_ID\" [--include appScreenshots]",
 		ShortHelp:   "List screenshot sets for an App Store localization.",
 		LongHelp: `List screenshot sets for an App Store localization.
 
+--include appScreenshots adds each set's screenshots to the response's
+"included" array.
+
 Examples:
-  asc localizations screenshot-sets list --localization-id "LOCALIZATION_ID"`,
+  asc localizations screenshot-sets list --localization-id "LOCALIZATION_ID"
+  asc localizations screenshot-sets list --localization-id "LOCALIZATION_ID" --include appScreenshots`,
 		ParentFlag:  "localization-id",
 		ParentUsage: "App Store version localization ID",
 		ParentType:  "appStoreVersionLocalizations",
@@ -243,6 +248,9 @@ Examples:
 				asc.WithAppStoreVersionLocalizationScreenshotSetsLimit(limit),
 				asc.WithAppStoreVersionLocalizationScreenshotSetsNextURL(next),
 			}
+			if *include != "" {
+				opts = append(opts, asc.WithAppStoreVersionLocalizationScreenshotSetsIncludeScreenshots())
+			}
 			resp, err := client.GetAppStoreVersionLocalizationScreenshotSets(ctx, localizationID, opts...)
 			if err != nil {
 				return nil, fmt.Errorf("failed to fetch: %w", err)
@@ -250,6 +258,19 @@ Examples:
 			return resp, nil
 		},
 	})
+	cmd.FlagSet.StringVar(include, "include", "", "Include related resources: appScreenshots")
+	list := cmd.Exec
+	cmd.Exec = func(ctx context.Context, args []string) error {
+		*include = strings.TrimSpace(*include)
+		if *include != "" && *include != "appScreenshots" {
+			return shared.UsageError("localizations screenshot-sets list: --include must be appScreenshots")
+		}
+		if *include != "" && strings.TrimSpace(cmd.FlagSet.Lookup("next").Value.String()) != "" {
+			return shared.UsageError("localizations screenshot-sets list: --include cannot be combined with --next; the next URL keeps the original include")
+		}
+		return list(ctx, args)
+	}
+	return cmd
 }
 
 // LocalizationsScreenshotSetsRelationshipsCommand returns the screenshot sets links subcommand.

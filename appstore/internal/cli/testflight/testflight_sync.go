@@ -482,9 +482,14 @@ func filterBetaGroups(groups []asc.Resource[asc.BetaGroupAttributes], filter str
 	}
 
 	matches := make([]asc.Resource[asc.BetaGroupAttributes], 0, 1)
-	for _, group := range groups {
-		if strings.EqualFold(strings.TrimSpace(group.Attributes.Name), trimmed) {
-			matches = append(matches, group)
+	for _, normalize := range []func(string) string{strings.TrimSpace, shared.NormalizeBetaGroupName} {
+		for _, group := range groups {
+			if strings.EqualFold(normalize(group.Attributes.Name), normalize(trimmed)) {
+				matches = append(matches, group)
+			}
+		}
+		if len(matches) > 0 {
+			break
 		}
 	}
 

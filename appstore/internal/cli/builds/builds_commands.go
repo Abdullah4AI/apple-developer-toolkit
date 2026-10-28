@@ -833,6 +833,7 @@ func BuildsInfoCommand() *ffcli.Command {
 	processingState := fs.String("processing-state", "", "Optional processing state filter for --latest: VALID, PROCESSING, FAILED, INVALID, or all")
 	excludeExpired := fs.Bool("exclude-expired", false, "Exclude expired builds when resolving --latest")
 	notExpired := fs.Bool("not-expired", false, "Alias for --exclude-expired")
+	include := fs.String("include", "", "Include related resources, comma-separated ("+strings.Join(buildsListIncludeValues, ", ")+")")
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
@@ -854,7 +855,8 @@ Examples:
   asc builds info --app "123456789" --latest --version "1.2.3" --platform IOS
   asc builds info --app "123456789" --latest --processing-state "PROCESSING,VALID"
   asc builds info --app "123456789" --build-number "42" --platform IOS
-  asc builds info --app "123456789" --build-number "42" --version "1.2.3" --platform IOS`,
+  asc builds info --app "123456789" --build-number "42" --version "1.2.3" --platform IOS
+  asc builds info --build-id "BUILD_ID" --include buildBetaDetail,betaAppReviewSubmission,betaGroups`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -877,6 +879,13 @@ Examples:
 			if err := validateResolveBuildOptions(resolveOpts); err != nil {
 				return err
 			}
+			var includeValues []string
+			if strings.TrimSpace(*include) != "" {
+				includeValues, err = resolveBuildsListInclude(*include)
+				if err != nil {
+					return err
+				}
+			}
 
 			client, err := shared.GetASCClient()
 			if err != nil {
@@ -885,6 +894,22 @@ Examples:
 
 			requestCtx, cancel := shared.ContextWithTimeout(ctx)
 			defer cancel()
+
+			if len(includeValues) > 0 {
+				buildIDValue := resolveOpts.BuildID
+				if buildIDValue == "" {
+					resolved, err := ResolveBuild(requestCtx, client, resolveOpts)
+					if err != nil {
+						return fmt.Errorf("builds info: %w", err)
+					}
+					buildIDValue = resolved.Data.ID
+				}
+				build, err := client.GetBuild(requestCtx, buildIDValue, asc.WithBuildInclude(includeValues))
+				if err != nil {
+					return fmt.Errorf("builds info: failed to fetch build %s: %w", buildIDValue, err)
+				}
+				return shared.PrintOutput(build, *output.Output, *output.Pretty)
+			}
 
 			build, err := ResolveBuild(requestCtx, client, resolveOpts)
 			if err != nil {

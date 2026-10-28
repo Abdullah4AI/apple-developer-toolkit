@@ -209,6 +209,7 @@ func TestLocalizationsUpdateResourceIDRejectsDiscoverySelectorsBeforeAuth(t *tes
 	tests := [][]string{
 		{"--id", "loc-1", "--version", "ver-1", "--description", "Updated"},
 		{"--id", "loc-1", "--locale", "en-US", "--description", "Updated"},
+		{"--id", "loc-1", "--platform", "", "--description", "Updated"},
 		{"--type", "app-info", "--id", "loc-1", "--app", "123456789", "--name", "Updated"},
 		{"--type", "app-info", "--id", "loc-1", "--app-info", "info-1", "--name", "Updated"},
 	}
@@ -614,6 +615,28 @@ func TestLocalizationsUpdateVersionErrorIncludesAttemptedFields(t *testing.T) {
 	}
 }
 
+func TestLocalizationsUpdateMissingAppInfoLocaleSuggestsCreation(t *testing.T) {
+	setupLocUpdateAuth(t)
+	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "config.json"))
+	stubTransport(t, func(req *http.Request) (*http.Response, error) {
+		switch req.Method + " " + req.URL.Path {
+		case "GET /v1/appInfos/selected-info/appInfoLocalizations":
+			return locUpdateJSONResponse(`{"data":[],"links":{}}`)
+		default:
+			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.Path)
+			return nil, errors.New("unexpected request")
+		}
+	})
+	stdout, stderr := captureOutput(t, func() {
+		if code := cmd.Run([]string{"localizations", "update", "--type", "app-info", "--app", "app-1", "--app-info", "selected-info", "--locale", "fr-FR", "--subtitle", "Subtitle"}, "1.2.3"); code != cmd.ExitError {
+			t.Fatalf("exit code = %d, want %d", code, cmd.ExitError)
+		}
+	})
+	if stdout != "" || !strings.Contains(stderr, `no existing localization found for locale "fr-FR"`) || !strings.Contains(stderr, `asc apps rename --app "app-1" --app-info "selected-info" --locale "fr-FR" --name "APP_NAME"`) {
+		t.Fatalf("stdout=%q stderr=%q, want missing locale and creation command", stdout, stderr)
+	}
+}
+
 func TestLocalizationsUpdateAppInfoErrorIncludesResolvedEndpoint(t *testing.T) {
 	setupLocUpdateAuth(t)
 
@@ -673,5 +696,46 @@ func TestLocalizationsUpdateAppInfoErrorIncludesResolvedEndpoint(t *testing.T) {
 		if !strings.Contains(runErr.Error(), want) {
 			t.Fatalf("expected error to contain %q, got %v", want, runErr)
 		}
+	}
+}
+
+func TestLocalizationsMutationSelectorValidationBeforeAuth(t *testing.T) {
+	clientCalls := 0
+	t.Cleanup(shared.SetASCClientFactoryForTesting(func() (*asc.Client, error) {
+		clientCalls++
+		return nil, errors.New("unexpected client creation")
+	}))
+	t.Setenv("ASC_APP_ID", "")
+	for _, command := range []string{"create", "update"} {
+		for _, test := range []struct {
+			name   string
+			args   []string
+			want   string
+			appEnv string
+		}{
+			{"string needs app", []string{"--version", "1.17.0"}, "--app is required (or set ASC_APP_ID) when --version is a version string", ""},
+			{"blank app", []string{"--version", "1.17.0", "--app", " \t"}, "--app is required (or set ASC_APP_ID) when --version is a version string", ""},
+			{"blank app overrides environment", []string{"--version", "1.17.0", "--app", " \t"}, "--app is required (or set ASC_APP_ID) when --version is a version string", "app-1"},
+			{"ID rejects app", []string{"--version", "ver-1", "--app", "app-1"}, "--app only applies when --version is a version string", ""},
+			{"ID rejects platform", []string{"--version", "ver-1", "--platform", "IOS"}, "--platform requires a version string with --app", ""},
+			{"empty platform", []string{"--version", "ver-1", "--platform", ""}, "--platform must not be empty", ""},
+			{"invalid platform", []string{"--app", "app-1", "--version", "1.17.0", "--platform", "INVALID"}, "--platform must be one of: IOS, MAC_OS, TV_OS, VISION_OS", ""},
+		} {
+			t.Run(command+"/"+test.name, func(t *testing.T) {
+				t.Setenv("ASC_APP_ID", test.appEnv)
+				args := append([]string{"localizations", command, "--locale", "en-US", "--description", "Description"}, test.args...)
+				stdout, stderr := captureOutput(t, func() {
+					if code := cmd.Run(args, "test"); code != cmd.ExitUsage {
+						t.Fatalf("exit=%d, want usage; args=%v", code, args)
+					}
+				})
+				if stdout != "" || !strings.Contains(stderr, test.want) {
+					t.Fatalf("stdout=%q stderr=%q, want %q", stdout, stderr, test.want)
+				}
+			})
+		}
+	}
+	if clientCalls != 0 {
+		t.Fatalf("client calls=%d, want 0", clientCalls)
 	}
 }

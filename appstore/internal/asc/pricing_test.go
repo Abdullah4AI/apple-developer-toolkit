@@ -494,7 +494,7 @@ func TestGetTerritoryAvailabilities(t *testing.T) {
 		if query.Get("include") != "territory" {
 			t.Fatalf("expected include=territory, got %q", query.Get("include"))
 		}
-		if query.Get("fields[territoryAvailabilities]") != "available,releaseDate,preOrderEnabled,contentStatuses,territory" {
+		if query.Get("fields[territoryAvailabilities]") != "available,releaseDate,preOrderEnabled,preOrderPublishDate,contentStatuses,territory" {
 			t.Fatalf("expected territory availability fields, got %q", query.Get("fields[territoryAvailabilities]"))
 		}
 	}, jsonResponse(http.StatusOK, string(body)))

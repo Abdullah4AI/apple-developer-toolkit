@@ -444,6 +444,7 @@ func executeScreenshotReviewPlan(ctx context.Context, opts screenshotReviewPlanO
 		files := cloneSortedFiles(groupedFiles[key])
 		uploadResult, err := uploadScreenshots(uploadParentCtx, client, key.localizationID, key.displayType, files, opts.SkipExisting, opts.Replace, !opts.Apply)
 		if err != nil {
+			appendScreenshotReviewIssue(result, "error", "", key.locale, key.displayType, err.Error(), "")
 			return result, fmt.Errorf("screenshots %s: %w", reviewPlanVerb(opts.Apply), err)
 		}
 		result.Groups = append(result.Groups, screenshotReviewPlanGroup{

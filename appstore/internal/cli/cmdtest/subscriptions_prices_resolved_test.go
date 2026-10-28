@@ -310,8 +310,8 @@ func TestSubscriptionsPricingPricesListResolvedTerritoryFilter(t *testing.T) {
 			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.String())
 		}
 		query := req.URL.Query()
-		if got := query.Get("filter[territory]"); got != "USA" {
-			t.Fatalf("expected filter[territory]=USA, got %q", got)
+		if got := query.Get("filter[territory]"); got != "USA,GBR" {
+			t.Fatalf("expected filter[territory]=USA,GBR, got %q", got)
 		}
 		if got := query.Get("include"); got != "subscriptionPricePoint,territory" {
 			t.Fatalf("expected resolved includes, got %q", got)
@@ -343,7 +343,7 @@ func TestSubscriptionsPricingPricesListResolvedTerritoryFilter(t *testing.T) {
 			"subscriptions", "pricing", "prices", "list",
 			"--subscription-id", "8000000001",
 			"--resolved",
-			"--territory", "US",
+			"--territory", "US,GBR",
 		}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}

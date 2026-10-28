@@ -201,6 +201,11 @@ func TestTestFlightBetaTestersListRejectsInvalidFilterValues(t *testing.T) {
 			wantHint: "--include must be a comma-separated list of: apps, betaGroups, builds",
 		},
 		{
+			name:     "invalid fields",
+			args:     []string{"testflight", "testers", "list", "--app", "app-1", "--fields", "name"},
+			wantHint: "--fields must be one of: firstName, lastName, email",
+		},
+		{
 			name:     "invalid invite type",
 			args:     []string{"testflight", "testers", "list", "--app", "app-1", "--invite-type", "SMS"},
 			wantHint: "--invite-type must be a comma-separated list of: EMAIL, PUBLIC_LINK",
@@ -248,6 +253,11 @@ func TestTestFlightBetaTestersListRejectsFiltersWithNextURL(t *testing.T) {
 			name:    "include",
 			args:    []string{"testflight", "testers", "list", "--next", nextURL, "--include", "betaGroups"},
 			wantErr: "--next cannot be combined with --include",
+		},
+		{
+			name:    "fields",
+			args:    []string{"testflight", "testers", "list", "--next", nextURL, "--fields", "email"},
+			wantErr: "--next cannot be combined with --fields",
 		},
 		{
 			name:    "invite type",

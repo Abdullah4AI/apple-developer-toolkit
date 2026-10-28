@@ -31,6 +31,10 @@ var iapListStates = []string{
 	"REJECTED",
 }
 
+var iapListIncludes = []string{"inAppPurchaseLocalizations", "content", "appStoreReviewScreenshot", "promotedPurchase", "iapPriceSchedule", "inAppPurchaseAvailability", "images", "offerCodes", "versions"}
+
+var iapViewIncludes = []string{"inAppPurchaseLocalizations", "pricePoints", "content", "appStoreReviewScreenshot", "promotedPurchase", "iapPriceSchedule", "inAppPurchaseAvailability", "images", "offerCodes", "versions"}
+
 var iapListSortValues = []string{"name", "-name", "inAppPurchaseType", "-inAppPurchaseType"}
 
 // IAPCommand returns the in-app purchases command group.
@@ -95,6 +99,7 @@ func IAPListCommand() *ffcli.Command {
 	next := fs.String("next", "", "Fetch next page using a links.next URL")
 	paginate := fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")
 	legacy := fs.Bool("legacy", false, "Use legacy v1 in-app purchases endpoint")
+	include := fs.String("include", "", "Include relationships (comma-separated, v2 only): "+strings.Join(iapListIncludes, ", "))
 	includeVersions := fs.Bool("include-versions", false, "Include related in-app purchase versions (v2 only)")
 	versionsLimit := fs.Int("versions-limit", 0, "Maximum included versions (1-50, v2 only)")
 	fields := fs.String("fields", "", "fields[inAppPurchases] (comma-separated, v2 only)")
@@ -114,6 +119,7 @@ Examples:
   asc iap list --app "APP_ID" --limit 50
   asc iap list --app "APP_ID" --paginate
   asc iap list --app "APP_ID" --include-versions --versions-limit 10
+  asc iap list --app "APP_ID" --include appStoreReviewScreenshot,inAppPurchaseLocalizations
   asc iap list --app "APP_ID" --fields name,versions
   asc iap list --app "APP_ID" --legacy`,
 		FlagSet:   fs,
@@ -125,7 +131,7 @@ Examples:
 			if err := shared.ValidateNextURL(*next); err != nil {
 				return shared.UsageErrorf("iap list: %v", err)
 			}
-			if err := rejectIAPVersionNextFlagConflicts(fs, *next, "iap list", "app", "product-id", "name", "state", "type", "sort", "limit", "include-versions", "versions-limit", "fields", "version-fields"); err != nil {
+			if err := rejectIAPVersionNextFlagConflicts(fs, *next, "iap list", "app", "product-id", "name", "state", "type", "sort", "limit", "include", "include-versions", "versions-limit", "fields", "version-fields"); err != nil {
 				return err
 			}
 			if *limit != 0 && (*limit < 1 || *limit > 200) {
@@ -136,6 +142,9 @@ Examples:
 			}
 			if *legacy && strings.TrimSpace(*fields) != "" {
 				return shared.UsageError("iap list: --fields requires the v2 endpoint")
+			}
+			if *legacy && flagSet(fs, "include") {
+				return shared.UsageError("iap list: --include requires the v2 endpoint")
 			}
 			if *legacy && (*includeVersions || *versionsLimit != 0 || strings.TrimSpace(*versionFields) != "") {
 				return shared.UsageError("iap list: --include-versions, --versions-limit, and --version-fields require the v2 endpoint")
@@ -184,6 +193,13 @@ Examples:
 			if err != nil {
 				return shared.UsageError("iap list: " + err.Error())
 			}
+			includeValues, err := shared.NormalizeSelection(*include, iapListIncludes, "--include")
+			if err != nil {
+				return shared.UsageError("iap list: " + err.Error())
+			}
+			if *includeVersions {
+				includeValues = append(includeValues, "versions")
+			}
 			versionFieldValues, err := shared.NormalizeSelection(*versionFields, iapVersionFields, "--version-fields")
 			if err != nil {
 				return shared.UsageError("iap list: " + err.Error())
@@ -213,9 +229,7 @@ Examples:
 				asc.WithIAPFields(fieldValues),
 				asc.WithIAPNestedVersionsLimit(*versionsLimit),
 				asc.WithIAPVersionFields(versionFieldValues),
-			}
-			if *includeVersions {
-				opts = append(opts, asc.WithIAPInclude([]string{"versions"}))
+				asc.WithIAPInclude(includeValues),
 			}
 
 			if *paginate {
@@ -276,6 +290,7 @@ func IAPGetCommand() *ffcli.Command {
 
 	iapID := shared.BindResourceIDFlag(fs, "id", "inAppPurchases", "In-app purchase ID")
 	legacy := fs.Bool("legacy", false, "Use legacy v1 in-app purchase endpoint")
+	include := fs.String("include", "", "Include relationships (comma-separated, v2 only): "+strings.Join(iapViewIncludes, ", "))
 	includeVersions := fs.Bool("include-versions", false, "Include related in-app purchase versions (v2 only)")
 	versionsLimit := fs.Int("versions-limit", 0, "Maximum included versions (1-50, v2 only)")
 	fields := fs.String("fields", "", "fields[inAppPurchases] (comma-separated, v2 only)")
@@ -291,6 +306,7 @@ func IAPGetCommand() *ffcli.Command {
 Examples:
   asc iap view --id "IAP_ID"
   asc iap view --id "IAP_ID" --include-versions --versions-limit 10
+  asc iap view --id "IAP_ID" --include appStoreReviewScreenshot,inAppPurchaseLocalizations
   asc iap view --id "IAP_ID" --fields name,versions
   asc iap view --id "IAP_ID" --legacy`,
 		FlagSet:   fs,
@@ -310,12 +326,22 @@ Examples:
 			if *legacy && strings.TrimSpace(*fields) != "" {
 				return shared.UsageError("iap view: --fields requires the v2 endpoint")
 			}
+			if *legacy && flagSet(fs, "include") {
+				return shared.UsageError("iap view: --include requires the v2 endpoint")
+			}
 			if *legacy && (*includeVersions || *versionsLimit != 0 || strings.TrimSpace(*versionFields) != "") {
 				return shared.UsageError("iap view: --include-versions, --versions-limit, and --version-fields require the v2 endpoint")
 			}
 			fieldValues, err := shared.NormalizeSelection(*fields, iapVersionIAPFields, "--fields")
 			if err != nil {
 				return shared.UsageError("iap view: " + err.Error())
+			}
+			includeValues, err := shared.NormalizeSelection(*include, iapViewIncludes, "--include")
+			if err != nil {
+				return shared.UsageError("iap view: " + err.Error())
+			}
+			if *includeVersions {
+				includeValues = append(includeValues, "versions")
 			}
 			versionFieldValues, err := shared.NormalizeSelection(*versionFields, iapVersionFields, "--version-fields")
 			if err != nil {
@@ -343,9 +369,7 @@ Examples:
 				asc.WithIAPGetFields(fieldValues),
 				asc.WithIAPGetNestedVersionsLimit(*versionsLimit),
 				asc.WithIAPGetVersionFields(versionFieldValues),
-			}
-			if *includeVersions {
-				opts = append(opts, asc.WithIAPGetInclude([]string{"versions"}))
+				asc.WithIAPGetInclude(includeValues),
 			}
 			resp, err := client.GetInAppPurchaseV2(requestCtx, id, opts...)
 			if err != nil {

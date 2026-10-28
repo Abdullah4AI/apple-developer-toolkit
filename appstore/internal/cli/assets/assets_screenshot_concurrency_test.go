@@ -2,10 +2,15 @@ package assets
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
+	"os"
+	"reflect"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"testing/synctest"
@@ -169,5 +174,86 @@ func TestCleanupScreenshotAssetsUsesBoundedTimeout(t *testing.T) {
 	case <-requestCanceled:
 	default:
 		t.Fatal("server request did not observe cleanup cancellation")
+	}
+}
+
+func TestConcurrentScreenshotUploadReservesScreenshotsInFileOrder(t *testing.T) {
+	sourceRoot := t.TempDir()
+	files := make([]string, 4)
+	for i := range files {
+		files[i] = writeAssetsTestPNG(t, sourceRoot, fmt.Sprintf("%02d.png", i+1))
+	}
+	size := fileSize(t, files[0])
+	var mu sync.Mutex
+	var created []string
+
+	origTransport := http.DefaultTransport
+	http.DefaultTransport = assetsUploadRoundTripFunc(func(req *http.Request) (*http.Response, error) {
+		switch {
+		case req.Method == http.MethodPost && req.URL.Path == "/v1/appScreenshots":
+			body, err := io.ReadAll(req.Body)
+			if err != nil {
+				t.Fatalf("read create screenshot body: %v", err)
+			}
+			var payload struct {
+				Data struct {
+					Attributes struct {
+						FileName string `json:"fileName"`
+					} `json:"attributes"`
+				} `json:"data"`
+			}
+			if err := json.Unmarshal(body, &payload); err != nil {
+				t.Fatalf("decode create screenshot body: %v", err)
+			}
+			name := payload.Data.Attributes.FileName
+			// App Store Connect appends screenshots in creation order, so a slow first
+			// reservation must not let later files claim earlier positions.
+			if name == "01.png" {
+				synctest.Wait()
+			}
+			mu.Lock()
+			created = append(created, name)
+			mu.Unlock()
+			return assetsJSONResponse(http.StatusCreated, fmt.Sprintf(`{"data":{"type":"appScreenshots","id":"%s","attributes":{"uploadOperations":[{"method":"PUT","url":"https://upload.example/%s","length":%d,"offset":0}]}}}`, name, name, size))
+		case req.Method == http.MethodPut && req.URL.Host == "upload.example":
+			return assetsJSONResponse(http.StatusOK, `{}`)
+		case req.Method == http.MethodPatch && strings.HasPrefix(req.URL.Path, "/v1/appScreenshots/"):
+			id := strings.TrimPrefix(req.URL.Path, "/v1/appScreenshots/")
+			return assetsJSONResponse(http.StatusOK, fmt.Sprintf(`{"data":{"type":"appScreenshots","id":"%s","attributes":{"uploaded":true}}}`, id))
+		case req.Method == http.MethodGet && strings.HasPrefix(req.URL.Path, "/v1/appScreenshots/"):
+			id := strings.TrimPrefix(req.URL.Path, "/v1/appScreenshots/")
+			return assetsJSONResponse(http.StatusOK, fmt.Sprintf(`{"data":{"type":"appScreenshots","id":"%s","attributes":{"sourceFileChecksum":"settled","assetDeliveryState":{"state":"COMPLETE"}}}}`, id))
+		default:
+			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.String())
+			return nil, nil
+		}
+	})
+	t.Cleanup(func() { http.DefaultTransport = origTransport })
+
+	uploads := map[string]func(context.Context, *asc.Client) error{
+		"upload": func(ctx context.Context, client *asc.Client) error {
+			_, err := uploadScreenshotsWithOrderStateWithOpenedFiles(withScreenshotUploadConcurrency(ctx, 4), client, "set", nil, files, sourceRoot, false, false, nil)
+			return err
+		},
+		// migrate rebuilds each upload context from a parent without the reservation turn.
+		"migrate": func(ctx context.Context, client *asc.Client) error {
+			_, _, err := UploadScreenshotAssetsConcurrently(ctx, client, "set", files, func(context.Context) (context.Context, context.CancelFunc) {
+				return context.WithCancel(context.Background())
+			}, func(string) (*os.File, error) { return nil, nil })
+			return err
+		},
+	}
+	for name, upload := range uploads {
+		t.Run(name, func(t *testing.T) {
+			created = nil
+			var err error
+			synctest.Test(t, func(t *testing.T) { err = upload(context.Background(), newAssetsUploadTestClient(t)) })
+			if err != nil {
+				t.Fatal(err)
+			}
+			if want := []string{"01.png", "02.png", "03.png", "04.png"}; !reflect.DeepEqual(created, want) {
+				t.Fatalf("creation order = %v, want %v", created, want)
+			}
+		})
 	}
 }

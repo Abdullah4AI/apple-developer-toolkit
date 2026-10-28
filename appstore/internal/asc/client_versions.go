@@ -20,6 +20,8 @@ type AppStoreVersionAttributes struct {
 	// Downloadable is nullable in the App Store Connect API. A pointer keeps
 	// false distinct from an omitted or null attribute in sparse responses.
 	Downloadable *bool `json:"downloadable,omitempty"`
+
+	api apiAttributes
 }
 
 // AppStoreVersionCreateAttributes describes app store version create payload attributes.

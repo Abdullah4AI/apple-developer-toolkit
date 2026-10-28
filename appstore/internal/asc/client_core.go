@@ -540,6 +540,7 @@ func withRetry[T any](ctx context.Context, fn func() (T, error), opts RetryOptio
 			)
 		}
 
+		observeRequestRetry(ctx, err)
 		retryCount++
 
 		// Wait with context cancellation support
