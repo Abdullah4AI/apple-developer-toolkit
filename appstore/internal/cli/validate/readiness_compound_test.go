@@ -123,6 +123,17 @@ func TestBuildReadinessReport_UsesCompoundReadsWithoutFallbacks(t *testing.T) {
 	if err != nil {
 		t.Fatalf("BuildReadinessReport() error = %v", err)
 	}
+	if report.Deep == nil {
+		t.Fatal("deep readiness omitted public IAP attachment evidence")
+	}
+	check := deepCheckByID(t, *report.Deep, "iap.first_type_app_version_attachment")
+	if check.Status != validation.DeepStatusNotApplicable || check.Source != validation.DeepSourcePublicAPI {
+		t.Fatalf("IAP evidence = %#v", check)
+	}
+	deep, _ := buildDeepValidation(context.Background(), report, nil, validation.DeepSessionUnavailable)
+	if got := deepCheckByID(t, deep, check.ID); got.Status != check.Status {
+		t.Fatalf("lost public IAP evidence: %#v", got)
+	}
 	if !report.AppPricingKnown || !report.HasPaidAppPrice {
 		t.Fatalf("app pricing evidence = known %t paid %t, want known paid pricing", report.AppPricingKnown, report.HasPaidAppPrice)
 	}

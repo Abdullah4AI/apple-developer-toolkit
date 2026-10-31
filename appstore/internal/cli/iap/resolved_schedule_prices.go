@@ -15,10 +15,12 @@ import (
 type resolvedIAPPriceCandidate struct {
 	entry iapPriceEntry
 	row   shared.ResolvedPriceRow
+	err   error
 }
 
 type iapSchedulePriceFetcher func(context.Context, string, ...asc.IAPPriceSchedulePricesOption) (*asc.InAppPurchasePricesResponse, error)
 
+// requireComplete rejects unresolved active rows before a full schedule replacement.
 func fetchResolvedIAPSchedulePrices(
 	ctx context.Context,
 	client *asc.Client,
@@ -27,6 +29,7 @@ func fetchResolvedIAPSchedulePrices(
 	limit int,
 	nextURL string,
 	now time.Time,
+	requireComplete bool,
 ) (*shared.ResolvedPricesResult, error) {
 	if limit <= 0 {
 		limit = 200
@@ -46,6 +49,7 @@ func fetchResolvedIAPSchedulePrices(
 			now,
 			candidates,
 			client.GetInAppPurchasePriceScheduleManualPrices,
+			requireComplete,
 		); err != nil {
 			return nil, fmt.Errorf("fetch manual prices: %w", err)
 		}
@@ -58,6 +62,7 @@ func fetchResolvedIAPSchedulePrices(
 				now,
 				candidates,
 				client.GetInAppPurchasePriceScheduleAutomaticPrices,
+				requireComplete,
 			); err != nil {
 				return nil, fmt.Errorf("fetch automatic prices: %w", err)
 			}
@@ -71,6 +76,7 @@ func fetchResolvedIAPSchedulePrices(
 			now,
 			candidates,
 			client.GetInAppPurchasePriceScheduleAutomaticPrices,
+			requireComplete,
 		); err != nil {
 			return nil, fmt.Errorf("fetch automatic prices: %w", err)
 		}
@@ -83,6 +89,7 @@ func fetchResolvedIAPSchedulePrices(
 				now,
 				candidates,
 				client.GetInAppPurchasePriceScheduleManualPrices,
+				requireComplete,
 			); err != nil {
 				return nil, fmt.Errorf("fetch manual prices: %w", err)
 			}
@@ -93,6 +100,9 @@ func fetchResolvedIAPSchedulePrices(
 
 	rows := make([]shared.ResolvedPriceRow, 0, len(candidates))
 	for _, candidate := range candidates {
+		if candidate.err != nil {
+			return nil, candidate.err
+		}
 		rows = append(rows, candidate.row)
 	}
 	shared.SortResolvedPrices(rows)
@@ -107,6 +117,7 @@ func consumeResolvedIAPSchedulePrices(
 	now time.Time,
 	candidates map[string]resolvedIAPPriceCandidate,
 	fetch iapSchedulePriceFetcher,
+	requireComplete bool,
 ) error {
 	opts := []asc.IAPPriceSchedulePricesOption{
 		asc.WithIAPPriceSchedulePricesLimit(limit),
@@ -133,7 +144,7 @@ func consumeResolvedIAPSchedulePrices(
 		if !ok {
 			return fmt.Errorf("unexpected in-app purchase prices response type %T", page)
 		}
-		return consumeResolvedIAPPricePage(candidates, resp, now)
+		return consumeResolvedIAPPricePage(candidates, resp, now, requireComplete)
 	})
 }
 
@@ -153,6 +164,7 @@ func consumeResolvedIAPPricePage(
 	candidates map[string]resolvedIAPPriceCandidate,
 	page *asc.InAppPurchasePricesResponse,
 	now time.Time,
+	requireComplete bool,
 ) error {
 	if page == nil {
 		return nil
@@ -166,13 +178,23 @@ func consumeResolvedIAPPricePage(
 	asOf := shared.PricingDate(now)
 	for _, item := range page.Data {
 		entry, row, ok := resolvedIAPPriceCandidateFromResource(item, values, currencies)
-		if !ok || !entryActiveOn(entry, asOf) {
+		if !entryActiveOn(entry, asOf) {
 			continue
+		}
+		candidate := resolvedIAPPriceCandidate{entry: entry, row: row}
+		if !ok {
+			if !requireComplete {
+				continue
+			}
+			candidate.err = fmt.Errorf("cannot resolve active price %q (territory %q, price point %q)", item.ID, entry.TerritoryID, entry.PricePointID)
+			if entry.TerritoryID == "" || entry.PricePointID == "" {
+				return candidate.err
+			}
 		}
 
 		existing, exists := candidates[entry.TerritoryID]
 		if !exists || iapPriceEntryIsNewer(entry, existing.entry) {
-			candidates[entry.TerritoryID] = resolvedIAPPriceCandidate{entry: entry, row: row}
+			candidates[entry.TerritoryID] = candidate
 		}
 	}
 
@@ -256,15 +278,6 @@ func resolvedIAPPriceCandidateFromResource(
 
 	territoryID = strings.ToUpper(strings.TrimSpace(territoryID))
 	pricePointID = strings.TrimSpace(pricePointID)
-	if territoryID == "" || pricePointID == "" {
-		return iapPriceEntry{}, shared.ResolvedPriceRow{}, false
-	}
-
-	value, ok := values[pricePointID]
-	if !ok {
-		return iapPriceEntry{}, shared.ResolvedPriceRow{}, false
-	}
-
 	startDate := strings.TrimSpace(item.Attributes.StartDate)
 	endDate := strings.TrimSpace(item.Attributes.EndDate)
 	if decodedOK {
@@ -277,6 +290,15 @@ func resolvedIAPPriceCandidateFromResource(
 	}
 
 	entry := newIAPPriceEntry(territoryID, pricePointID, startDate, endDate, item.Attributes.Manual)
+	if territoryID == "" || pricePointID == "" {
+		return entry, shared.ResolvedPriceRow{}, false
+	}
+
+	value, ok := values[pricePointID]
+	if !ok {
+		return entry, shared.ResolvedPriceRow{}, false
+	}
+
 	currency := currencies[territoryID]
 	if currency == "" {
 		currency = territoryID

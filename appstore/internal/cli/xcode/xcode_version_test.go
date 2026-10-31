@@ -369,6 +369,7 @@ func TestXcodeVersionEditResolvesAndAppliesRemoteSafeBuildNumber(t *testing.T) {
 	})
 	runValidateSetVersion = func(context.Context, localxcode.SetVersionOptions) error { return nil }
 
+	expectedFilter := "2.4.0"
 	runGetConsistentMarketingVersion = func(ctx context.Context, opts localxcode.GetVersionOptions) (string, error) {
 		if opts.BuildSettingsLookup != localxcode.BuildSettingsLookupNever || opts.BuildSettingsDiagnostic == nil {
 			t.Fatalf("unexpected lookup policy options: %#v", opts)
@@ -376,7 +377,7 @@ func TestXcodeVersionEditResolvesAndAppliesRemoteSafeBuildNumber(t *testing.T) {
 		return "2.4.0", nil
 	}
 	runResolveXcodeNextBuildNumber = func(ctx context.Context, opts xcodeRemoteBuildNumberOptions) (string, error) {
-		if opts.AppID != "com.example.demo" || opts.Version != "2.4.0" || opts.Platform != "IOS" {
+		if opts.AppID != "com.example.demo" || opts.Version != expectedFilter || opts.Platform != "IOS" {
 			t.Fatalf("unexpected remote selection options: %#v", opts)
 		}
 		return "108", nil
@@ -403,8 +404,31 @@ func TestXcodeVersionEditResolvesAndAppliesRemoteSafeBuildNumber(t *testing.T) {
 	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
 		t.Fatalf("decode structured output: %v; output=%q", err, stdout)
 	}
+	var receipt map[string]any
+	if err := json.Unmarshal([]byte(stdout), &receipt); err != nil {
+		t.Fatal(err)
+	}
+	if receipt["versionFilter"] != "2.4.0" {
+		t.Fatalf("versionFilter = %#v", receipt["versionFilter"])
+	}
 	if result.BuildNumber != "108" || result.Target != "App" || result.Configuration != "Release" {
 		t.Fatalf("unexpected structured output: %#v", result)
+	}
+
+	expectedFilter = "4.0.0"
+	runGetConsistentMarketingVersion = func(context.Context, localxcode.GetVersionOptions) (string, error) {
+		t.Fatal("explicit version must supply the filter")
+		return "", nil
+	}
+	stdout, stderr, err = runXcodeVersionCommand(t, []string{"edit", "--target", "App", "--configuration", "Release", "--version", expectedFilter, "--next-build-number", "--app", "com.example.demo", "--platform", "IOS", "--output", "json"})
+	if err != nil || stderr != "" {
+		t.Fatalf("explicit version edit: err=%v stderr=%q", err, stderr)
+	}
+	if err := json.Unmarshal([]byte(stdout), &receipt); err != nil {
+		t.Fatal(err)
+	}
+	if receipt["versionFilter"] != expectedFilter || receipt["buildNumber"] != "108" {
+		t.Fatalf("explicit version receipt=%s", stdout)
 	}
 }
 
@@ -593,6 +617,13 @@ func TestXcodeVersionBumpResolvesAndAppliesRemoteSafeBuildNumber(t *testing.T) {
 	var result localxcode.BumpVersionResult
 	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
 		t.Fatalf("decode structured output: %v; output=%q", err, stdout)
+	}
+	var receipt map[string]any
+	if err := json.Unmarshal([]byte(stdout), &receipt); err != nil {
+		t.Fatal(err)
+	}
+	if receipt["versionFilter"] != "3.0.0" {
+		t.Fatalf("versionFilter = %#v", receipt["versionFilter"])
 	}
 	if result.NewBuild != "301" || result.Target != "Widget" || result.Configuration != "Debug" {
 		t.Fatalf("unexpected structured output: %#v", result)

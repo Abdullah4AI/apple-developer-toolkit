@@ -31,11 +31,32 @@ type ReviewSubmissionAttributes struct {
 
 // ReviewSubmissionRelationships describes review submission relationships.
 type ReviewSubmissionRelationships struct {
+	versionLinkageKnown      bool              `json:"-"`
 	App                      *Relationship     `json:"app,omitempty"`
 	Items                    *RelationshipList `json:"items,omitempty"`
 	AppStoreVersionForReview *Relationship     `json:"appStoreVersionForReview,omitempty"`
 	SubmittedByActor         *Relationship     `json:"submittedByActor,omitempty"`
 	LastUpdatedByActor       *Relationship     `json:"lastUpdatedByActor,omitempty"`
+}
+
+// AppStoreVersionLinkageKnown distinguishes explicit null linkage from an omitted field.
+func (r *ReviewSubmissionRelationships) AppStoreVersionLinkageKnown() bool {
+	return r != nil && r.versionLinkageKnown
+}
+
+func (r *ReviewSubmissionRelationships) UnmarshalJSON(data []byte) error {
+	type plain ReviewSubmissionRelationships
+	if err := json.Unmarshal(data, (*plain)(r)); err != nil {
+		return err
+	}
+	var raw map[string]struct {
+		Data json.RawMessage `json:"data"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	r.versionLinkageKnown = len(raw["appStoreVersionForReview"].Data) > 0
+	return nil
 }
 
 // ReviewSubmissionResource represents a review submission resource.

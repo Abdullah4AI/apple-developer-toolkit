@@ -32,6 +32,12 @@ func TestResourceIDFromValue(t *testing.T) {
 			want:         "2f1a3c4d",
 		},
 		{
+			name:         "enterprise self link",
+			value:        "https://api.enterprise.developer.apple.com/v1/certificates/2f1a3c4d",
+			resourceType: "certificates",
+			want:         "2f1a3c4d",
+		},
+		{
 			name:         "self link any type",
 			value:        "https://api.appstoreconnect.apple.com/v2/appStoreVersions/abc",
 			resourceType: "",

@@ -147,9 +147,21 @@ type phasedReleaseGuard struct {
 
 func (g *phasedReleaseGuard) run(ctx context.Context) error {
 	polls := 0
+	var nextReadAt time.Time
 	_, err := asc.PollUntilTolerant(ctx, g.pollInterval, func(ctx context.Context) (struct{}, bool, error) {
+		if delay := time.Until(nextReadAt); delay > 0 {
+			timer := time.NewTimer(delay)
+			defer timer.Stop()
+			select {
+			case <-ctx.Done():
+				return struct{}{}, false, ctx.Err()
+			case <-timer.C:
+			}
+		}
+		nextReadAt = time.Now().Add(g.pollInterval)
 		resp, err := g.fetch(ctx)
 		if err != nil {
+			nextReadAt = time.Now().Add(max(g.pollInterval, asc.GetRetryAfter(err)))
 			return struct{}{}, false, phasedReleaseFetchError{err}
 		}
 		done, err := g.step(ctx, resp)

@@ -18,6 +18,7 @@ import (
 
 const (
 	developerPortalAgreementHistoryPath = "/services-account/QH65B2/account/getAgreementHistory"
+	developerPortalNotificationsPath    = "/services-account/QH65B2/account/getNotifications"
 	developerPortalAcceptAgreementsPath = "/services-account/QH65B2/account/acceptAgreements"
 	olympusContractMessagesPath         = "/contractMessages"
 )
@@ -31,10 +32,13 @@ type AgreementsAcceptRequest struct {
 // These endpoints answer HTTP 200 even for failures; resultCode carries the
 // outcome (0 success; for example 3050 missing team, 3100 unknown team).
 type developerAgreementsEnvelope struct {
-	ResultCode   *int                       `json:"resultCode"`
-	ResultString string                     `json:"resultString"`
-	UserString   string                     `json:"userString"`
-	Agreements   []developerAgreementRecord `json:"agreements"`
+	ResultCode    *int                       `json:"resultCode"`
+	ResultString  string                     `json:"resultString"`
+	UserString    string                     `json:"userString"`
+	Agreements    []developerAgreementRecord `json:"agreements"`
+	Notifications *struct {
+		AgreementsOutstanding []developerAgreementRecord `json:"agreementsOutstanding"`
+	} `json:"notifications"`
 }
 
 type developerAgreementRecord struct {
@@ -45,7 +49,7 @@ type developerAgreementRecord struct {
 	DateEffective        int64  `json:"dateEffective"`
 	DateAccepted         int64  `json:"dateAccepted"`
 	DateAgreeBy          int64  `json:"dateAgreeBy"`
-	IsAgreementPLA       bool   `json:"isAgreementPLA"`
+	IsAgreementPLA       *bool  `json:"isAgreementPLA"`
 	AgreementDownloadURL string `json:"agreementDownloadUrl"`
 }
 
@@ -76,7 +80,7 @@ type AgreementDownload struct {
 const maxAgreementDownloadBytes int64 = 64 << 20
 
 // GetAgreementsStatus reports the App Store Connect agreement banner and the
-// team's Developer Portal agreement history in one pending-aware summary.
+// team's Developer Portal agreement history and outstanding notifications.
 func (c *Client) GetAgreementsStatus(ctx context.Context) (*asc.WebAgreementsStatusResult, error) {
 	messages, err := c.getContractMessages(ctx)
 	if err != nil {
@@ -91,8 +95,9 @@ func (c *Client) GetAgreementsStatus(ctx context.Context) (*asc.WebAgreementsSta
 	if err != nil {
 		return result, err
 	}
-	c.applyAgreementHistory(result, envelope)
-	return result, nil
+	outstanding, err := c.fetchOutstandingAgreements(ctx, teamID)
+	c.applyAgreementHistory(result, envelope, outstanding)
+	return result, err
 }
 
 // GetAgreementHistory reads only the team's Developer Portal agreement history.
@@ -108,20 +113,66 @@ func (c *Client) GetAgreementHistory(ctx context.Context) (*asc.WebAgreementsSta
 		TeamID:           teamID,
 		ContractMessages: []asc.WebAgreementContractMessage{},
 	}
-	c.applyAgreementHistory(result, envelope)
+	c.applyAgreementHistory(result, envelope, nil)
 	return result, nil
 }
 
-func (c *Client) applyAgreementHistory(result *asc.WebAgreementsStatusResult, envelope *developerAgreementsEnvelope) {
+func (c *Client) applyAgreementHistory(result *asc.WebAgreementsStatusResult, envelope *developerAgreementsEnvelope, outstanding []developerAgreementRecord) {
 	agreements := make([]asc.WebAgreement, 0, len(envelope.Agreements))
+	byID := make(map[string]int, len(envelope.Agreements))
+	classificationKnown := make(map[string]bool, len(envelope.Agreements))
 	for _, record := range envelope.Agreements {
 		agreement := c.newAgreement(record)
-		if agreement.Pending {
-			result.Pending = true
-		}
+		byID[agreement.AgreementID] = len(agreements)
+		classificationKnown[agreement.AgreementID] = record.IsAgreementPLA != nil
 		agreements = append(agreements, agreement)
 	}
+	for _, record := range outstanding {
+		id := strings.TrimSpace(record.AgreementID)
+		index, found := byID[id]
+		if !found || id == "" {
+			index = len(agreements)
+			byID[id] = index
+			agreements = append(agreements, c.newAgreement(record))
+			classificationKnown[id] = record.IsAgreementPLA != nil
+		}
+		if !classificationKnown[id] && record.IsAgreementPLA != nil {
+			agreements[index].IsProgramLicenseAgreement = *record.IsAgreementPLA
+			classificationKnown[id] = true
+		}
+		agreements[index].ProgramLicenseClassificationUnknown = !classificationKnown[id]
+		// Outstanding membership is pending evidence even without dates.
+		agreements[index].Pending = true
+	}
+	result.PendingAgreementIDs = []string{}
+	result.Warnings = []string{}
+	hasPending := false
+	seenIDs := make(map[string]bool)
+	for _, agreement := range agreements {
+		if agreement.Pending {
+			hasPending = true
+			if id := agreement.AgreementID; id != "" && !seenIDs[id] {
+				result.PendingAgreementIDs = append(result.PendingAgreementIDs, id)
+				seenIDs[id] = true
+			}
+			result.Pending = true
+		}
+	}
 	result.Agreements = agreements
+	if len(result.ContractMessages) > 0 && !hasPending {
+		result.Warnings = append(result.Warnings, "App Store Connect reports an agreement alert, but the available Developer Portal history and notification evidence does not identify a pending agreement. Review the alert in App Store Connect.")
+	}
+}
+
+func (c *Client) fetchOutstandingAgreements(ctx context.Context, teamID string) ([]developerAgreementRecord, error) {
+	envelope, err := c.doDeveloperPortalAgreementsRequest(readonly.WithReadIntent(ctx), developerPortalNotificationsPath, map[string]string{"teamId": teamID})
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch Developer Portal agreement notifications: %w", err)
+	}
+	if envelope.Notifications == nil {
+		return nil, fmt.Errorf("developer portal agreement response is missing notifications")
+	}
+	return envelope.Notifications.AgreementsOutstanding, nil
 }
 
 // fetchAgreementHistory bootstraps the Developer Portal session and returns the
@@ -390,12 +441,14 @@ func (c *Client) newAgreement(record developerAgreementRecord) asc.WebAgreement 
 		Title:                     strings.TrimSpace(record.Title),
 		Status:                    strings.TrimSpace(record.Status),
 		Version:                   strings.TrimSpace(record.Version),
-		IsProgramLicenseAgreement: record.IsAgreementPLA,
+		IsProgramLicenseAgreement: record.IsAgreementPLA != nil && *record.IsAgreementPLA,
 		Pending:                   record.DateAccepted < record.DateEffective,
 		DateEffective:             formatAgreementDate(record.DateEffective),
 		DateAccepted:              formatAgreementDate(record.DateAccepted),
 		DateAgreeBy:               formatAgreementDate(record.DateAgreeBy),
 		DownloadURL:               downloadURL,
+
+		ProgramLicenseClassificationUnknown: record.DateAccepted < record.DateEffective && record.IsAgreementPLA == nil,
 	}
 }
 

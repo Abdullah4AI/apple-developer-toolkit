@@ -6,7 +6,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"regexp"
 	"strings"
 
 	"github.com/peterbourgon/ff/v3/ffcli"
@@ -137,7 +136,7 @@ Examples:
 			versionIsString := normalizedType == shared.LocalizationTypeVersion &&
 				versionValue != "" &&
 				shared.ResolveAppID(*appID) != "" &&
-				appStoreVersionStringPattern.MatchString(versionValue)
+				shared.IsAppStoreVersionString(versionValue)
 			normalizedPlatform := ""
 			if platformProvided {
 				if normalizedType != shared.LocalizationTypeVersion {
@@ -335,11 +334,6 @@ Examples:
 		},
 	}
 }
-
-// appStoreVersionStringPattern matches numeric dotted version strings such as
-// 1, 1.0, or 1.2.3. App Store version resource IDs are UUIDs, so a match is
-// never a version ID.
-var appStoreVersionStringPattern = regexp.MustCompile(`^[0-9]+(\.[0-9]+)*$`)
 
 // resolveLocalizationsVersionString resolves a version string on the app.
 // Without a platform it searches every platform and asks for --platform when
@@ -745,7 +739,7 @@ func sharedVersionLocalizationValuesNeedUpdateContext(valuesByLocale map[string]
 }
 
 func normalizeLocalizationVersionSelector(version, appID, platform string) (bool, string, error) {
-	isVersionString := appStoreVersionStringPattern.MatchString(version)
+	isVersionString := shared.IsAppStoreVersionString(version)
 	if !isVersionString && strings.TrimSpace(appID) != "" {
 		return false, "", shared.UsageError("--app only applies when --version is a version string")
 	}

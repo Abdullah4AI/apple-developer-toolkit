@@ -26,25 +26,31 @@ var historyProductTypes = []string{"AUTO_RENEWABLE", "NON_RENEWABLE", "CONSUMABL
 
 func TransactionsCommand() *ffcli.Command {
 	return groupCommand("transactions",
-		"Read In-App Purchase transactions with the App Store Server API.",
-		`Read In-App Purchase transactions with the App Store Server API.
+		"Read and manage In-App Purchase transactions with the App Store Server API.",
+		`Read and manage In-App Purchase transactions with the App Store Server API.
 
 Examples:
   asc storekit transactions view --transaction-id 2000000000000001 --environment sandbox
   asc storekit transactions history --transaction-id 2000000000000001 --environment production --paginate
-  asc storekit transactions history --transaction-id 2000000000000001 --product-type AUTO_RENEWABLE --sort DESCENDING --environment production`,
-		transactionsViewCommand(), transactionsHistoryCommand())
+  asc storekit transactions history --transaction-id 2000000000000001 --product-type AUTO_RENEWABLE --sort DESCENDING --environment production
+  asc storekit transactions set-account-token --original-transaction-id 2000000000000001 --app-account-token 11111111-2222-4333-8444-555555555555 --environment sandbox --confirm
+  asc storekit transactions send-consumption --transaction-id 2000000000000001 --customer-consented true --delivery-status DELIVERED --sample-content-provided false --environment production --confirm
+  asc storekit transactions finish --transaction-id 2000000000000001 --environment production --confirm`,
+		transactionsViewCommand(), transactionsHistoryCommand(), setAccountTokenCommand(), sendConsumptionCommand(), finishTransactionCommand())
 }
 
 func SubscriptionsCommand() *ffcli.Command {
 	return groupCommand("subscriptions",
-		"Read auto-renewable subscription statuses with the App Store Server API.",
-		`Read auto-renewable subscription statuses with the App Store Server API.
+		"Read subscription status and extend renewal dates with the App Store Server API.",
+		`Read auto-renewable subscription statuses and extend renewal dates with the
+App Store Server API.
 
 Examples:
   asc storekit subscriptions status --transaction-id 2000000000000001 --environment production
-  asc storekit subscriptions status --transaction-id 2000000000000001 --status 1,4 --environment sandbox`,
-		subscriptionsStatusCommand())
+  asc storekit subscriptions status --transaction-id 2000000000000001 --status 1,4 --environment sandbox
+  asc storekit subscriptions extend --original-transaction-id 2000000000000001 --days 7 --reason 3 --request-id outage-2026-10-01 --environment production --confirm
+  asc storekit subscriptions extension-status --product-id com.example.monthly --request-id 11111111-2222-4333-8444-555555555555 --environment production`,
+		subscriptionsStatusCommand(), extendSubscriptionCommand(), extendAllSubscriptionsCommand(), extensionStatusCommand())
 }
 
 func RefundsCommand() *ffcli.Command {
@@ -108,7 +114,7 @@ func transactionsViewCommand() *ffcli.Command {
 			if err := validateServerRead(args, flags, requiredFlag{"--transaction-id", *transactionID}); err != nil {
 				return err
 			}
-			raw, err := serverRead(ctx, fs.Name(), flags.common, func(ctx context.Context, client *storekitapi.Client) (json.RawMessage, error) {
+			raw, err := serverRequest(ctx, fs.Name(), flags.common, func(ctx context.Context, client *storekitapi.Client) (json.RawMessage, error) {
 				return client.GetTransactionInfo(ctx, *transactionID)
 			})
 			if err != nil {
@@ -142,7 +148,7 @@ func transactionsHistoryCommand() *ffcli.Command {
 			if err != nil {
 				return err
 			}
-			raw, err := serverRead(ctx, fs.Name(), flags.common, func(ctx context.Context, client *storekitapi.Client) (json.RawMessage, error) {
+			raw, err := serverRequest(ctx, fs.Name(), flags.common, func(ctx context.Context, client *storekitapi.Client) (json.RawMessage, error) {
 				return fetchServerPages(func(token string) (json.RawMessage, error) {
 					return client.GetTransactionHistory(ctx, *transactionID, query, token)
 				}, *revision, *paginate, storekitapi.SignedTransactionPages)
@@ -170,7 +176,7 @@ func subscriptionsStatusCommand() *ffcli.Command {
 			if err != nil {
 				return err
 			}
-			raw, err := serverRead(ctx, fs.Name(), flags.common, func(ctx context.Context, client *storekitapi.Client) (json.RawMessage, error) {
+			raw, err := serverRequest(ctx, fs.Name(), flags.common, func(ctx context.Context, client *storekitapi.Client) (json.RawMessage, error) {
 				return client.GetAllSubscriptionStatuses(ctx, *transactionID, statuses)
 			})
 			if err != nil {
@@ -193,7 +199,7 @@ func refundsHistoryCommand() *ffcli.Command {
 			if err := validateServerRead(args, flags, requiredFlag{"--transaction-id", *transactionID}); err != nil {
 				return err
 			}
-			raw, err := serverRead(ctx, fs.Name(), flags.common, func(ctx context.Context, client *storekitapi.Client) (json.RawMessage, error) {
+			raw, err := serverRequest(ctx, fs.Name(), flags.common, func(ctx context.Context, client *storekitapi.Client) (json.RawMessage, error) {
 				return fetchServerPages(func(token string) (json.RawMessage, error) {
 					return client.GetRefundHistory(ctx, *transactionID, token)
 				}, *revision, *paginate, storekitapi.SignedTransactionPages)
@@ -220,7 +226,7 @@ func ordersLookupCommand() *ffcli.Command {
 				"orders lookup requires --environment production (Apple doesn't offer Look Up Order ID in sandbox)"); err != nil {
 				return err
 			}
-			raw, err := serverRead(ctx, fs.Name(), flags.common, func(ctx context.Context, client *storekitapi.Client) (json.RawMessage, error) {
+			raw, err := serverRequest(ctx, fs.Name(), flags.common, func(ctx context.Context, client *storekitapi.Client) (json.RawMessage, error) {
 				return client.LookUpOrderID(ctx, *orderID)
 			})
 			if err != nil {
@@ -252,7 +258,7 @@ func notificationsHistoryCommand() *ffcli.Command {
 			if err != nil {
 				return err
 			}
-			raw, err := serverRead(ctx, fs.Name(), flags.common, func(ctx context.Context, client *storekitapi.Client) (json.RawMessage, error) {
+			raw, err := serverRequest(ctx, fs.Name(), flags.common, func(ctx context.Context, client *storekitapi.Client) (json.RawMessage, error) {
 				return fetchServerPages(func(token string) (json.RawMessage, error) {
 					return client.GetNotificationHistory(ctx, request, token)
 				}, *paginationToken, *paginate, storekitapi.NotificationHistoryPages)
@@ -284,7 +290,7 @@ Examples:
 			if !*confirm {
 				return shared.UsageError("--confirm is required")
 			}
-			raw, err := serverRead(ctx, fs.Name(), flags.common, func(ctx context.Context, client *storekitapi.Client) (json.RawMessage, error) {
+			raw, err := serverRequest(ctx, fs.Name(), flags.common, func(ctx context.Context, client *storekitapi.Client) (json.RawMessage, error) {
 				return client.RequestTestNotification(ctx)
 			})
 			if err != nil {
@@ -305,7 +311,7 @@ func notificationsTestStatusCommand() *ffcli.Command {
 			if err := validateServerRead(args, flags, requiredFlag{"--token", *token}); err != nil {
 				return err
 			}
-			raw, err := serverRead(ctx, fs.Name(), flags.common, func(ctx context.Context, client *storekitapi.Client) (json.RawMessage, error) {
+			raw, err := serverRequest(ctx, fs.Name(), flags.common, func(ctx context.Context, client *storekitapi.Client) (json.RawMessage, error) {
 				return client.GetTestNotificationStatus(ctx, *token)
 			})
 			if err != nil {
@@ -332,7 +338,7 @@ Examples:
 			if err := validateServerRead(args, flags, requiredFlag{"--transaction-id", *transactionID}); err != nil {
 				return err
 			}
-			raw, err := serverRead(ctx, fs.Name(), flags.common, func(ctx context.Context, client *storekitapi.Client) (json.RawMessage, error) {
+			raw, err := serverRequest(ctx, fs.Name(), flags.common, func(ctx context.Context, client *storekitapi.Client) (json.RawMessage, error) {
 				return client.GetCustomerGroups(ctx, *transactionID)
 			})
 			if err != nil {
@@ -363,7 +369,7 @@ Examples:
 			if flagWasSet(fs, "limit") && (*limit < 1 || *limit > 100) {
 				return shared.UsageError("--limit must be between 1 and 100")
 			}
-			raw, err := serverRead(ctx, fs.Name(), flags.common, func(ctx context.Context, client *storekitapi.Client) (json.RawMessage, error) {
+			raw, err := serverRequest(ctx, fs.Name(), flags.common, func(ctx context.Context, client *storekitapi.Client) (json.RawMessage, error) {
 				return fetchServerPages(func(token string) (json.RawMessage, error) {
 					return client.GetGroupMembers(ctx, *groupID, *limit, token)
 				}, *paginationToken, *paginate, storekitapi.GroupMemberPages)
@@ -427,7 +433,7 @@ func requireEnvironment(common commonFlags, want storekitapi.Environment, messag
 	return nil
 }
 
-func serverRead(ctx context.Context, command string, common commonFlags, call func(context.Context, *storekitapi.Client) (json.RawMessage, error)) (json.RawMessage, error) {
+func serverRequest(ctx context.Context, command string, common commonFlags, call func(context.Context, *storekitapi.Client) (json.RawMessage, error)) (json.RawMessage, error) {
 	client, _, err := resolveClient(ctx, common)
 	if err != nil {
 		return nil, usageOrWrap(command, err)

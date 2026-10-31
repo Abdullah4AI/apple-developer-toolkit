@@ -2,7 +2,6 @@ package web
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -440,199 +439,51 @@ func TestFindReviewIAPRejectsEmptyIAPID(t *testing.T) {
 	}
 }
 
-func TestCreateInAppPurchaseSubmissionSendsHiddenAttachPayload(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/inAppPurchaseSubmissions" {
-			t.Fatalf("unexpected path: %s", r.URL.Path)
-		}
-		if r.Method != http.MethodPost {
-			t.Fatalf("unexpected method: %s", r.Method)
-		}
-		var payload struct {
-			Data struct {
-				Type          string `json:"type"`
-				Attributes    map[string]bool
-				Relationships map[string]struct {
-					Data struct {
-						Type string `json:"type"`
-						ID   string `json:"id"`
-					} `json:"data"`
-				} `json:"relationships"`
-			} `json:"data"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-			t.Fatalf("failed to decode body: %v", err)
-		}
-		if payload.Data.Type != "inAppPurchaseSubmissions" {
-			t.Fatalf("expected type inAppPurchaseSubmissions, got %q", payload.Data.Type)
-		}
-		if !payload.Data.Attributes["submitWithNextAppStoreVersion"] {
-			t.Fatalf("expected hidden attach flag to be true, got %#v", payload.Data.Attributes)
-		}
-		relationship := payload.Data.Relationships["inAppPurchaseV2"].Data
-		if relationship.Type != "inAppPurchases" || relationship.ID != "iap-1" {
-			t.Fatalf("unexpected inAppPurchaseV2 relationship: %#v", relationship)
-		}
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{
-			"data": {
-				"id": "submission-1",
-				"type": "inAppPurchaseSubmissions",
-				"attributes": {"submitWithNextAppStoreVersion": true},
-				"relationships": {
-					"inAppPurchaseV2": {"data": {"type": "inAppPurchases", "id": "iap-1"}}
-				}
-			}
-		}`))
-	}))
-	defer server.Close()
-
-	client := testWebClient(server)
-	got, err := client.CreateInAppPurchaseSubmission(context.Background(), "iap-1")
-	if err != nil {
-		t.Fatalf("CreateInAppPurchaseSubmission() error = %v", err)
+func TestCreateReviewIAPSubmissionItemValidatesResponse(t *testing.T) {
+	tests := []struct{ name, body, wantErr string }{
+		{"valid", `{"data":{"type":"reviewSubmissionItems","id":"item-1","relationships":{"inAppPurchaseVersion":{"data":{"type":"inAppPurchaseVersions","id":"version-1"}}}}}`, ""},
+		{"relationship omitted", `{"data":{"type":"reviewSubmissionItems","id":"item-1"}}`, ""},
+		{"missing id", `{"data":{"type":"reviewSubmissionItems"}}`, "resource id"},
+		{"wrong resource type", `{"data":{"type":"inAppPurchaseSubmissions","id":"item-1"}}`, "unexpected resource type"},
+		{"missing resource type", `{"data":{"id":"item-1"}}`, "unexpected resource type"},
+		{"wrong version", `{"data":{"type":"reviewSubmissionItems","id":"item-1","relationships":{"inAppPurchaseVersion":{"data":{"type":"inAppPurchaseVersions","id":"version-other"}}}}}`, "version-other"},
+		{"null version", `{"data":{"type":"reviewSubmissionItems","id":"item-1","relationships":{"inAppPurchaseVersion":{"data":null}}}}`, "no resource data"},
+		{"wrong draft", `{"data":{"type":"reviewSubmissionItems","id":"item-1","relationships":{"reviewSubmission":{"data":{"type":"reviewSubmissions","id":"draft-other"}}}}}`, "draft-other"},
 	}
-	if got.ID != "submission-1" || got.InAppPurchaseID != "iap-1" || !got.SubmitWithNextAppStoreVersion {
-		t.Fatalf("unexpected submission payload: %#v", got)
-	}
-}
-
-func TestCreateInAppPurchaseSubmissionFallsBackToRequestedIDWhenRelationshipMissing(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{
-			"data": {
-				"id": "submission-2",
-				"type": "inAppPurchaseSubmissions",
-				"attributes": {"submitWithNextAppStoreVersion": true}
-			}
-		}`))
-	}))
-	defer server.Close()
-
-	client := testWebClient(server)
-	got, err := client.CreateInAppPurchaseSubmission(context.Background(), "iap-fallback")
-	if err != nil {
-		t.Fatalf("CreateInAppPurchaseSubmission() error = %v", err)
-	}
-	if got.InAppPurchaseID != "iap-fallback" {
-		t.Fatalf("expected fallback InAppPurchaseID, got %q", got.InAppPurchaseID)
-	}
-	if got.ID != "submission-2" || !got.SubmitWithNextAppStoreVersion {
-		t.Fatalf("unexpected payload: %#v", got)
-	}
-}
-
-func TestCreateInAppPurchaseSubmissionRejectsMissingSubmissionID(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{
-			"data": {
-				"type": "inAppPurchaseSubmissions",
-				"attributes": {"submitWithNextAppStoreVersion": true}
-			}
-		}`))
-	}))
-	defer server.Close()
-
-	client := testWebClient(server)
-	if _, err := client.CreateInAppPurchaseSubmission(context.Background(), "iap-1"); err == nil {
-		t.Fatal("expected error for missing submission id, got nil")
-	}
-}
-
-func TestCreateInAppPurchaseSubmissionRejectsUnexpectedResourceType(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{
-			"data": {
-				"id": "submission-1",
-				"type": "unexpectedResources",
-				"attributes": {"submitWithNextAppStoreVersion": true}
-			}
-		}`))
-	}))
-	defer server.Close()
-
-	client := testWebClient(server)
-	if _, err := client.CreateInAppPurchaseSubmission(context.Background(), "iap-1"); err == nil {
-		t.Fatal("expected error for unexpected resource type, got nil")
-	}
-}
-
-func TestCreateInAppPurchaseSubmissionRejectsMissingOrEmptyResourceType(t *testing.T) {
-	cases := []struct {
-		name string
-		body string
-	}{
-		{name: "missing", body: `{"data":{"id":"submission-1"}}`},
-		{name: "empty", body: `{"data":{"id":"submission-1","type":""}}`},
-	}
-	for _, tc := range cases {
+	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodPost || r.URL.Path != "/reviewSubmissionItems" {
+					t.Fatalf("unexpected request %s %s", r.Method, r.URL)
+				}
 				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusCreated)
 				_, _ = w.Write([]byte(tc.body))
 			}))
 			defer server.Close()
-
-			if _, err := testWebClient(server).CreateInAppPurchaseSubmission(context.Background(), "iap-1"); err == nil || !strings.Contains(err.Error(), "missing submission resource type") {
-				t.Fatalf("expected missing-resource-type error, got %v", err)
+			id, err := testWebClient(server).CreateReviewIAPSubmissionItem(context.Background(), "draft-1", "version-1")
+			if tc.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), tc.wantErr) || !strings.Contains(err.Error(), "before retrying") {
+					t.Fatalf("error=%v, want uncertain-write warning and %q", err, tc.wantErr)
+				}
+				return
+			}
+			if err != nil || id != "item-1" {
+				t.Fatalf("id=%q error=%v", id, err)
 			}
 		})
 	}
 }
 
-func TestCreateInAppPurchaseSubmissionRejectsMismatchedRelationship(t *testing.T) {
-	cases := []struct {
-		name string
-		data string
-	}{
-		{name: "wrong type", data: `{"type":"subscriptions","id":"iap-1"}`},
-		{name: "wrong id", data: `{"type":"inAppPurchases","id":"iap-2"}`},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				w.Header().Set("Content-Type", "application/json")
-				body := `{"data":{"id":"submission-1","type":"inAppPurchaseSubmissions","relationships":{"inAppPurchaseV2":{"data":` + tc.data + `}}}}`
-				_, _ = w.Write([]byte(body))
-			}))
-			defer server.Close()
-
-			if _, err := testWebClient(server).CreateInAppPurchaseSubmission(context.Background(), "iap-1"); err == nil || !strings.Contains(err.Error(), "inAppPurchaseV2 relationship") {
-				t.Fatalf("expected inAppPurchaseV2-relationship error, got %v", err)
-			}
-		})
-	}
-}
-
-func TestCreateInAppPurchaseSubmissionRejectsEmptyID(t *testing.T) {
-	client := &Client{}
-	if _, err := client.CreateInAppPurchaseSubmission(context.Background(), "  "); err == nil {
-		t.Fatal("expected error for empty iap id, got nil")
-	}
-}
-
-func TestCreateInAppPurchaseSubmissionPreservesSanitizedPortalReason(t *testing.T) {
+func TestCreateReviewIAPSubmissionItemPreservesSanitizedPortalReason(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusUnprocessableEntity)
 		_, _ = w.Write([]byte(`{"errors":[{"code":"STATE_ERROR","title":"Attachment refused","detail":"The IAP is not ready\u001b[31m"}]}`))
 	}))
 	defer server.Close()
-
-	_, err := testWebClient(server).CreateInAppPurchaseSubmission(context.Background(), "iap-1")
-	if err == nil {
-		t.Fatal("expected attachment refusal")
-	}
-	if !strings.Contains(err.Error(), "status 422") {
-		t.Fatalf("expected portal status in error, got %q", err)
-	}
-	if !strings.Contains(err.Error(), "Attachment refused: The IAP is not ready[31m") {
-		t.Fatalf("expected sanitized portal reason in error, got %q", err)
-	}
-	if strings.Contains(err.Error(), "\x1b") {
-		t.Fatalf("portal reason contains terminal escape sequence: %q", err)
+	_, err := testWebClient(server).CreateReviewIAPSubmissionItem(context.Background(), "draft-1", "version-1")
+	if err == nil || !strings.Contains(err.Error(), "status 422") || !strings.Contains(err.Error(), "Attachment refused: The IAP is not ready[31m") || strings.Contains(err.Error(), "\x1b") {
+		t.Fatalf("expected status and sanitized portal reason, got %v", err)
 	}
 }

@@ -774,8 +774,9 @@ func TestWebAgreementsStatusNonJSONOutputIncludesBannerOnlyPendingState(t *testi
 	t.Cleanup(func() { getAgreementsStatusFn = origStatus })
 	getAgreementsStatusFn = func(ctx context.Context, client *webcore.Client) (*asc.WebAgreementsStatusResult, error) {
 		return &asc.WebAgreementsStatusResult{
-			TeamID:  "TEAM123456",
-			Pending: true,
+			TeamID:   "TEAM123456",
+			Pending:  true,
+			Warnings: []string{"Review the unresolved agreement alert."},
 			ContractMessages: []asc.WebAgreementContractMessage{{
 				ID:      "contract_message",
 				Group:   "Alert",
@@ -795,7 +796,7 @@ func TestWebAgreementsStatusNonJSONOutputIncludesBannerOnlyPendingState(t *testi
 					t.Fatalf("Exec() error: %v", err)
 				}
 			})
-			for _, want := range []string{"TEAM123456", "true", "Apple Developer Program License Agreement Updated"} {
+			for _, want := range []string{"TEAM123456", "true", "Apple Developer Program License Agreement Updated", "Pending or alert", "Pending Agreement IDs", "none", "Review the unresolved agreement alert."} {
 				if !strings.Contains(stdout, want) {
 					t.Fatalf("%s output missing %q: %q", format, want, stdout)
 				}

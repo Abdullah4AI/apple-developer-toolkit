@@ -11,7 +11,7 @@ asc validate --app "APP_ID" --version-id "VERSION_ID" --deep --apple-id "user@ex
 ```
 
 Default `asc validate` remains public-API-only. `--deep` first builds that same
-report, then uses an existing file-backed Apple web session to replace web-only
+report and verifies first-of-type IAP attachment through the public API, then uses an existing file-backed Apple web session to replace web-only
 uncertainty with live evidence. It never starts an interactive login or opens
 Keychain. When no usable cached session exists, the report remains available
 but contains a warning-severity deep-validation finding. It includes an exact
@@ -66,6 +66,30 @@ attachment, agreements, availability, and review information. Status is one of
 `publicApi`, `webSession`, or `manual`. Availability and review information are
 derived from the existing public checks, so their presence in this section does
 not trigger duplicate requests or duplicate root findings.
+
+## First-of-type IAP attachment
+
+`iap.first_type_app_version_attachment` evaluates consumables, non-consumables,
+and non-renewing subscriptions independently when the catalog contains a
+`READY_TO_SUBMIT` product. Explicit prior approval exempts that type. Otherwise,
+one exact current version of that type must share a non-removed App Review
+submission with the selected app version and platform. Unused ready products do
+not each need attachment. A removed-from-sale or replaced version alone cannot
+prove prior approval.
+
+Deep mode reuses the catalog and public client, fully paginating product versions,
+review submissions, and submission items. Missing or malformed evidence is
+`unverified` (warning; `--strict` blocks). Proven missing attachment is `blocked`.
+This public check survives an unavailable cached web session. An exact editable
+app-version draft and one unambiguous editable product may produce an existing
+`asc web review iaps attach --submission ... --confirm` recovery command; validation
+never runs it. Ambiguous or already submitted cases require manual inspection.
+
+The additional public reads are `GET /v2/inAppPurchases/{id}/versions`,
+`GET /v1/apps/{id}/reviewSubmissions` with `appStoreVersionForReview`, and
+`GET /v1/reviewSubmissions/{id}/items` with `state`, `appStoreVersion`, and
+`inAppPurchaseVersion`. Catalog and version collection envelopes are validated
+strictly only for deep readiness; ordinary IAP readiness behavior is unchanged.
 
 ## Endpoint and response contracts
 

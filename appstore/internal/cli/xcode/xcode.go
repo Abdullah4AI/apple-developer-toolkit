@@ -14,6 +14,7 @@ import (
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/config"
 	localxcode "github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/xcode"
 )
 
@@ -598,6 +599,9 @@ func resolveAltoolCredentials() (keyID, issuerID, p8FilePath string, err error) 
 	creds, err := shared.ResolveAuthCredentials("")
 	if err != nil {
 		return "", "", "", err
+	}
+	if config.IsEnterpriseCredentialKeyType(creds.KeyType) {
+		return "", "", "", fmt.Errorf("altool: %w", asc.ErrEnterpriseProgramAPIUnsupported)
 	}
 	p8FilePath, err = shared.AltoolPrivateKeyPath(creds)
 	if err != nil {

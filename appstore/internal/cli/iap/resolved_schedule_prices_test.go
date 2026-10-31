@@ -35,7 +35,7 @@ func TestConsumeResolvedIAPPricePage_DateBoundaries(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.now.Format(time.RFC3339), func(t *testing.T) {
 			candidates := make(map[string]resolvedIAPPriceCandidate)
-			if err := consumeResolvedIAPPricePage(candidates, page, test.now); err != nil {
+			if err := consumeResolvedIAPPricePage(candidates, page, test.now, false); err != nil {
 				t.Fatalf("consumeResolvedIAPPricePage() error = %v", err)
 			}
 			if got := candidates["USA"].row.CustomerPrice; got != test.want {
@@ -61,7 +61,7 @@ func TestConsumeResolvedIAPPricePage_PrefersManualSameDay(t *testing.T) {
 	}
 
 	candidates := make(map[string]resolvedIAPPriceCandidate)
-	if err := consumeResolvedIAPPricePage(candidates, page, now); err != nil {
+	if err := consumeResolvedIAPPricePage(candidates, page, now, false); err != nil {
 		t.Fatalf("consumeResolvedIAPPricePage() error = %v", err)
 	}
 
@@ -89,13 +89,16 @@ func TestConsumeResolvedIAPPricePage_SkipsFutureAndExpiredRows(t *testing.T) {
 		}),
 	}
 
-	candidates := make(map[string]resolvedIAPPriceCandidate)
-	if err := consumeResolvedIAPPricePage(candidates, page, now); err != nil {
-		t.Fatalf("consumeResolvedIAPPricePage() error = %v", err)
-	}
+	for _, included := range []json.RawMessage{page.Included, nil} {
+		page.Included = included
+		candidates := make(map[string]resolvedIAPPriceCandidate)
+		if err := consumeResolvedIAPPricePage(candidates, page, now, true); err != nil {
+			t.Fatalf("consumeResolvedIAPPricePage() error = %v", err)
+		}
 
-	if len(candidates) != 0 {
-		t.Fatalf("expected no resolved rows, got %+v", candidates)
+		if len(candidates) != 0 {
+			t.Fatalf("expected no resolved rows, got %+v", candidates)
+		}
 	}
 }
 

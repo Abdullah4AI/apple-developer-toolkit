@@ -45,6 +45,7 @@ type linkagesQuery struct {
 type pricePointsQuery struct {
 	listQuery
 	territory string
+	include   []string
 }
 
 type appPriceSchedulePricesQuery struct {
@@ -109,6 +110,7 @@ func buildPricePointsQuery(query *pricePointsQuery) string {
 	if strings.TrimSpace(query.territory) != "" {
 		values.Set("filter[territory]", strings.TrimSpace(query.territory))
 	}
+	addCSV(values, "include", query.include)
 	addLimit(values, query.limit)
 	return values.Encode()
 }
@@ -368,6 +370,13 @@ func WithPricePointsTerritory(territory string) PricePointsOption {
 		if strings.TrimSpace(territory) != "" {
 			q.territory = strings.ToUpper(strings.TrimSpace(territory))
 		}
+	}
+}
+
+// WithPricePointsInclude sets app price point relationships to include.
+func WithPricePointsInclude(include []string) PricePointsOption {
+	return func(q *pricePointsQuery) {
+		q.include = normalizeList(include)
 	}
 }
 

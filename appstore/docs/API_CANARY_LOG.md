@@ -59,6 +59,10 @@ Dated live-canary transcripts, authenticated browser/source captures, disposable
 - Captured live on 2026-09-29 against disposable app `6759231657`: re-running `asc web apps create --name "ASC Test 20260216074703" --bundle-id com.rudrank.asc.throwaway20260216074703 --sku asc-test-20260216074703 --auto-rename=false` returned HTTP 409 with three `errors[]` entries whose codes are, in order, `ENTITY_ERROR.ATTRIBUTE.INVALID.DUPLICATE`, `ENTITY_ERROR.ATTRIBUTE.INVALID.DUPLICATE`, and `ENTITY_ERROR.ATTRIBUTE.INVALID.DUPLICATE.SAME_ACCOUNT`. The CLI exited 5 with `web apps create failed: web api error (status 409) ... codes=[...]`.
 - Only the status and the codes were captured. The `detail`, `title`, and `source` of each entry were not printed, so which attribute (name, SKU, or bundle ID) each entry refers to is unknown. The captured-shape test fixture carries codes only. A second fixture adds an app-name `detail` and `source` pointers to exercise the `--auto-rename` interaction; those fields are **synthetic** (inferred, not captured) and are labeled as such in `internal/cli/web/web_apps_create_if_exists_test.go`.
 
+## Provisioning profile name uniqueness (`POST /v1/profiles`)
+
+- Live probe on 2026-10-30 on the bundle ID of disposable app `6759231657`, all `IOS_APP_STORE` with one `IOS_DISTRIBUTION` certificate: a new name returned a profile, repeating it was rejected, and reusing the name of an `INVALID` profile from another bundle ID in the account was rejected. Both rejections read "There is a problem with the request entity: Multiple profiles found with the name '...'.  Please remove the duplicate profiles and try again." and exited 5. The CLI did not surface the HTTP status or error code. The one created profile was deleted and the readback showed nothing left behind; the `INVALID` profile was not touched.
+
 ## Web-session app distribution method
 
 - The current Apple frontend's pricing action supplies an inner `apps` resource to its request action. The shared Iris transport serializer (`module 60285`, helper `Oe`) converts that resource to `JSON.stringify({data: resource})` before `fetch` (`it`), so the wire request is JSON:API.

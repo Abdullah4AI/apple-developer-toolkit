@@ -19,6 +19,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -1342,7 +1343,7 @@ func TestResolveSigningAssetsPreflightsBeforeCreatingProfile(t *testing.T) {
 			CreateMissing:      true,
 			BeforeCreate: func(plan profileCreatePlan) error {
 				events = append(events, "repository preflight")
-				if plan.ProfileName != profileCreateName("IOS_APP_STORE", time.Now()) {
+				if plan.ProfileName != profileCreateNameForTarget("IOS_APP_STORE", "com.example.signing.profile", time.Now()) {
 					t.Errorf("preflight profile name = %q, want the name used to create the profile", plan.ProfileName)
 				}
 				if got := extractIDs(plan.Certificates); len(got) != 1 || got[0] != "cert-1" {
@@ -1542,6 +1543,78 @@ func TestResolveSigningCertificateTypesCanonicalizesSeparators(t *testing.T) {
 			}
 			if got != tt.want {
 				t.Fatalf("resolveSigningCertificateTypes() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestResolveSigningAssetsWalksActiveProfilesByLatestExpiry(t *testing.T) {
+	profile := func(id, expiration string) string {
+		return fmt.Sprintf(`{"type":"profiles","id":%q,"attributes":{"profileType":"IOS_APP_INHOUSE","profileState":"ACTIVE","expirationDate":%q}}`, id, expiration)
+	}
+	firstPage := strings.Join([]string{
+		profile("profile-renewing", "2096-11-29T12:00:00.000+00:00"),
+		profile("profile-no-expiry", ""),
+		profile("profile-successor-b", "2097-10-30T12:00:00.000+00:00"),
+	}, ",")
+	secondPage := profile("profile-successor-a", "2097-10-30T11:00:00-01:00")
+
+	tests := []struct {
+		name        string
+		matching    string
+		wantLookups []string
+	}{
+		{
+			name:        "successor replaces the older profile listed first",
+			matching:    "profile-successor-a",
+			wantLookups: []string{"profile-successor-a"},
+		},
+		{
+			name:        "profiles without the certificate are skipped latest first",
+			matching:    "profile-no-expiry",
+			wantLookups: []string{"profile-successor-a", "profile-successor-b", "profile-renewing", "profile-no-expiry"},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			lookups := []string{}
+			client := newSigningFetchTestClient(t, func(req *http.Request) *http.Response {
+				switch {
+				case req.URL.Path == "/v1/bundleIds/bundle-main/profiles" && req.URL.Query().Get("cursor") == "":
+					return signingFetchJSONResponse(http.StatusOK, fmt.Sprintf(`{"data":[%s],"links":{"next":"https://api.appstoreconnect.apple.com/v1/bundleIds/bundle-main/profiles?cursor=2"}}`, firstPage))
+				case req.URL.Path == "/v1/bundleIds/bundle-main/profiles":
+					return signingFetchJSONResponse(http.StatusOK, fmt.Sprintf(`{"data":[%s]}`, secondPage))
+				case strings.HasSuffix(req.URL.Path, "/certificates"):
+					id := strings.TrimSuffix(strings.TrimPrefix(req.URL.Path, "/v1/profiles/"), "/certificates")
+					lookups = append(lookups, id)
+					if id != test.matching {
+						return signingFetchJSONResponse(http.StatusOK, `{"data":[]}`)
+					}
+					return signingFetchJSONResponse(http.StatusOK, `{"data":[{"type":"certificates","id":"cert-enterprise","attributes":{"certificateType":"IOS_DISTRIBUTION"}}]}`)
+				default:
+					t.Fatalf("unexpected request: %s %s", req.Method, req.URL.String())
+					return signingFetchJSONResponse(http.StatusInternalServerError, `{}`)
+				}
+			})
+
+			selected, _, created, err := resolveSigningAssets(
+				context.Background(),
+				client,
+				signingAssetsOptions{
+					BundleIDResourceID: "bundle-main",
+					BundleIdentifier:   "com.example.app",
+					ProfileType:        "IOS_APP_INHOUSE",
+				},
+			)
+			if err != nil {
+				t.Fatalf("resolveSigningAssets() error: %v", err)
+			}
+			if created || selected.Data.ID != test.matching {
+				t.Fatalf("expected %s, got created=%v profile=%#v", test.matching, created, selected)
+			}
+			if !reflect.DeepEqual(lookups, test.wantLookups) {
+				t.Fatalf("certificate lookups = %v, want %v", lookups, test.wantLookups)
 			}
 		})
 	}

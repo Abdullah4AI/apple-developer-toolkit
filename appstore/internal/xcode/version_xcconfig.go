@@ -369,11 +369,15 @@ func collectXCConfigFiles(root string) ([]string, error) {
 // case-sensitive directory must not collapse two case-distinct include paths
 // into one traversal key.
 func collectStableXCConfigFiles(root string) ([]string, error) {
+	return collectStableXCConfigFilesWithObserver(root, nil)
+}
+
+func collectStableXCConfigFilesWithObserver(root string, onPath func(string)) ([]string, error) {
 	var identify func(string) (os.FileInfo, error)
 	if xcconfigUsesIdentityTraversal() {
 		identify = os.Stat
 	}
-	return collectXCConfigFilesWithHooksAndIdentity(root, os.ReadFile, identify)
+	return collectXCConfigFilesWithHooksAndIdentityAndOptionalMissing(root, os.ReadFile, nil, onPath, nil, identify, nil)
 }
 
 // collectXCConfigFilesWithReader walks an xcconfig include graph using the

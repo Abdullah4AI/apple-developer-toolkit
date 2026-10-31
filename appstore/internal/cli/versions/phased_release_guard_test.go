@@ -513,6 +513,8 @@ func TestPhasedReleaseGuardTransientReadFailures(t *testing.T) {
 		{"safety read exhausts tolerance", 2, 100, 500, 0, 7, 1, "giving up after 6 consecutive transient App Store Connect errors", 0, 0},
 		{"safety read is forbidden", 2, 1, 403, 0, 2, 1, "Forbidden", 0, 0},
 		{"canceled during safety read", 2, 1, 500, 2, 2, 1, "context canceled", 0, 0},
+		{"initial read honors exhausted client retry after", 1, 2, 429, 0, 4, 1, "", 10 * time.Second, 0},
+		{"canceled while initial read honors retry after", 1, 2, 429, 2, 2, 0, "context canceled", 10 * time.Second, 2 * time.Second},
 		{"safety read honors exhausted client retry after", 2, 2, 429, 0, 4, 1, "", 10 * time.Second, 0},
 		{"canceled while honoring retry after", 2, 2, 429, 3, 3, 1, "context canceled", 10 * time.Second, 2 * time.Second},
 	} {
@@ -526,7 +528,11 @@ func TestPhasedReleaseGuardTransientReadFailures(t *testing.T) {
 				t.Setenv("ASC_MAX_RETRIES", "1")
 			}
 
-			stdout, stderr, err := h.run(guardArgs("--confirm", "--max-polls", "1", "--poll-interval", "15m")...)
+			pollInterval := "15m"
+			if test.start == 1 {
+				pollInterval = "1s"
+			}
+			stdout, stderr, err := h.run(guardArgs("--confirm", "--max-polls", "1", "--poll-interval", pollInterval)...)
 			if h.gets != test.wantGets || len(h.checks) != test.wantChecks {
 				t.Fatalf("reads = %d checks = %d, want %d reads and %d checks; error = %v", h.gets, len(h.checks), test.wantGets, test.wantChecks, err)
 			}
@@ -550,8 +556,12 @@ func TestPhasedReleaseGuardTransientReadFailures(t *testing.T) {
 				if test.start == 2 && h.getTimes[2].Sub(h.getTimes[1]) >= time.Minute {
 					t.Fatalf("safety retry took %s, want less than a minute despite 15m health-check interval", h.getTimes[2].Sub(h.getTimes[1]))
 				}
-				if delay := h.getTimes[len(h.getTimes)-1].Sub(h.getTimes[len(h.getTimes)-2]); delay < test.retryAfter {
-					t.Fatalf("last safety retry took %s, must honor Retry-After %s after the client retry budget is exhausted", delay, test.retryAfter)
+				recoveryRead := len(h.getTimes) - 1
+				if test.start == 1 {
+					recoveryRead = test.failures
+				}
+				if delay := h.getTimes[recoveryRead].Sub(h.getTimes[recoveryRead-1]); delay < test.retryAfter {
+					t.Fatalf("recovery read took %s, must honor Retry-After %s after the client retry budget is exhausted", delay, test.retryAfter)
 				}
 			}
 			if test.status != 403 && test.cancelGet == 0 && !strings.Contains(stderr, "transient App Store Connect error while waiting (1/5)") {

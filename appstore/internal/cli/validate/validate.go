@@ -45,7 +45,7 @@ func ValidateCommand() *ffcli.Command {
 	versionID := shared.BindResourceIDFlag(fs, "version-id", "appStoreVersions", "App Store version ID")
 	platform := fs.String("platform", "", "Platform: IOS, MAC_OS, TV_OS, VISION_OS")
 	strict := fs.Bool("strict", false, "Treat warnings as errors (exit non-zero)")
-	deep := fs.Bool("deep", false, "Verify blockers that require a cached Apple web session")
+	deep := fs.Bool("deep", false, "Verify IAP attachment through the public API and blockers through a cached Apple web session")
 	checkURLs := fs.Bool("check-urls", false, "Check metadata URL destinations with bounded public HTTP requests")
 	appleID := fs.String("apple-id", "", "Cached Apple web session to use with --deep")
 	ipaPath := fs.String("ipa", "", "Path to the version's .ipa; its UIDeviceFamily decides whether iPad screenshots are required")
@@ -87,7 +87,10 @@ Checks:
   - Age rating completeness
 
 Deep validation:
-  --deep adds read-only checks from an existing cached Apple web session for
+  --deep verifies first-of-type consumable, non-consumable, and non-renewing
+  IAP attachment to the selected app version through the public API. Missing
+  required attachment blocks; incomplete evidence remains unverified. It also
+  adds read-only checks from an existing cached Apple web session for
   App Privacy publication, required agreements, and first-of-type subscription
   attachment. It also classifies every actionable finding as api-fixable,
   web-fixable, or manual and returns exact available commands and App Store
@@ -288,7 +291,7 @@ func requiredAgreementFallbackReport(opts validateOptions) validation.Report {
 			ResourceID:   strings.TrimSpace(opts.VersionID),
 		},
 	}
-	return validation.Report{
+	report := validation.Report{
 		AppID:         strings.TrimSpace(opts.AppID),
 		VersionID:     strings.TrimSpace(opts.VersionID),
 		VersionString: strings.TrimSpace(opts.Version),
@@ -298,6 +301,8 @@ func requiredAgreementFallbackReport(opts validateOptions) validation.Report {
 		Checks:        checks,
 		Strict:        opts.Strict,
 	}
+	iapCheck, iapFinding := collectIAPAttachmentDeepCheck(context.Background(), nil, report, nil, "First-of-type IAP attachment could not be verified because required agreements block public API access")
+	return validation.ApplyDeepValidation(report, validation.DeepReport{Checks: []validation.DeepCheck{iapCheck}}, []validation.CheckResult{*iapFinding})
 }
 
 func resolveVersionID(ctx context.Context, client *asc.Client, appID, version, platform string) (string, error) {

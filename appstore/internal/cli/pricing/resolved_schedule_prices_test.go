@@ -24,7 +24,7 @@ func TestConsumeResolvedAppPricePage_PrefersManualSameDay(t *testing.T) {
 	}
 
 	candidates := make(map[string]resolvedAppPriceCandidate)
-	if err := consumeResolvedAppPricePage(candidates, page, now); err != nil {
+	if err := consumeResolvedAppPricePage(candidates, page, now, false); err != nil {
 		t.Fatalf("consumeResolvedAppPricePage() error = %v", err)
 	}
 
@@ -52,13 +52,16 @@ func TestConsumeResolvedAppPricePage_SkipsFutureAndExpiredRows(t *testing.T) {
 		}),
 	}
 
-	candidates := make(map[string]resolvedAppPriceCandidate)
-	if err := consumeResolvedAppPricePage(candidates, page, now); err != nil {
-		t.Fatalf("consumeResolvedAppPricePage() error = %v", err)
-	}
+	for _, included := range []json.RawMessage{page.Included, nil} {
+		page.Included = included
+		candidates := make(map[string]resolvedAppPriceCandidate)
+		if err := consumeResolvedAppPricePage(candidates, page, now, true); err != nil {
+			t.Fatalf("consumeResolvedAppPricePage() error = %v", err)
+		}
 
-	if len(candidates) != 0 {
-		t.Fatalf("expected no resolved rows, got %+v", candidates)
+		if len(candidates) != 0 {
+			t.Fatalf("expected no resolved rows, got %+v", candidates)
+		}
 	}
 }
 
@@ -86,7 +89,7 @@ func TestConsumeResolvedAppPricePage_DateBoundaries(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.now.Format(time.RFC3339), func(t *testing.T) {
 			candidates := make(map[string]resolvedAppPriceCandidate)
-			if err := consumeResolvedAppPricePage(candidates, page, test.now); err != nil {
+			if err := consumeResolvedAppPricePage(candidates, page, test.now, false); err != nil {
 				t.Fatalf("consumeResolvedAppPricePage() error = %v", err)
 			}
 			if got := candidates["USA"].row.CustomerPrice; got != test.want {
@@ -107,7 +110,7 @@ func TestConsumeResolvedAppPricePage_SkipsPriceOnItsEndDate(t *testing.T) {
 	}
 
 	candidates := make(map[string]resolvedAppPriceCandidate)
-	if err := consumeResolvedAppPricePage(candidates, page, time.Date(2026, time.September, 30, 20, 0, 0, 0, time.UTC)); err != nil {
+	if err := consumeResolvedAppPricePage(candidates, page, time.Date(2026, time.September, 30, 20, 0, 0, 0, time.UTC), false); err != nil {
 		t.Fatalf("consumeResolvedAppPricePage() error = %v", err)
 	}
 	if len(candidates) != 0 {

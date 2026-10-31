@@ -83,6 +83,9 @@ func buildDeepValidation(ctx context.Context, report validation.Report, client d
 		SessionStatus: sessionStatus,
 		Checks:        make([]validation.DeepCheck, 0, 5),
 	}
+	if report.Deep != nil {
+		deep.Checks = append(deep.Checks, report.Deep.Checks...)
+	}
 	findings := make([]validation.CheckResult, 0, 4)
 
 	if client == nil || sessionStatus != validation.DeepSessionCached {
@@ -181,7 +184,7 @@ func scopeResolutionCommands(resolution *validation.Resolution, appleID string) 
 	}
 	selector := fmt.Sprintf(" --apple-id %q", strings.TrimSpace(appleID))
 	for i, command := range resolution.Commands {
-		if strings.Contains(command, "--apple-id") {
+		if !strings.HasPrefix(command, "asc web ") || strings.Contains(command, "--apple-id") {
 			continue
 		}
 		if confirmIndex := strings.Index(command, " --confirm"); confirmIndex >= 0 {
@@ -397,6 +400,7 @@ func collectAgreementsDeepCheck(ctx context.Context, client deepWebClient, requi
 	}
 	acceptIDs := make([]string, 0, len(status.Agreements))
 	hasPending := false
+	hasAlert := false
 	hasManualBlocker := false
 	hasUnknown := false
 	hasRelevantEvidence := false
@@ -414,14 +418,22 @@ func collectAgreementsDeepCheck(ctx context.Context, client deepWebClient, requi
 		}
 		if strings.Contains(messageText, "agreement") || strings.Contains(messageText, "contract") {
 			hasRelevantEvidence = true
-			hasPending = true
+			hasAlert = true
 			hasManualBlocker = true
 			continue
 		}
 		hasUnknown = true
 	}
 	seenIDs := map[string]struct{}{}
-	for _, agreement := range currentAgreementHistory(status.Agreements) {
+	agreements := make([]asc.WebAgreement, 0, len(status.Agreements))
+	for _, agreement := range status.Agreements {
+		if agreement.Pending && agreement.ProgramLicenseClassificationUnknown {
+			hasUnknown = true
+			continue
+		}
+		agreements = append(agreements, agreement)
+	}
+	for _, agreement := range currentAgreementHistory(agreements) {
 		if !agreement.IsProgramLicenseAgreement {
 			switch {
 			case paidAgreementRelevanceKnown && !requiresPaidAgreement:
@@ -464,7 +476,7 @@ func collectAgreementsDeepCheck(ctx context.Context, client deepWebClient, requi
 	if err != nil {
 		hasUnknown = true
 	}
-	if !hasPending && !hasUnknown {
+	if !hasPending && !hasAlert && !hasUnknown {
 		return validation.DeepCheck{
 			ID:      validation.DeepCheckAgreementsActive,
 			Status:  validation.DeepStatusPassed,
@@ -472,7 +484,7 @@ func collectAgreementsDeepCheck(ctx context.Context, client deepWebClient, requi
 			Message: "Required agreements are active",
 		}, nil
 	}
-	if !hasPending {
+	if !hasPending && !hasAlert {
 		check := unverifiedWebCheck(validation.DeepCheckAgreementsActive, "Apple returned an empty or unknown agreement status", agreementsAppStoreConnectURL)
 		return check, unverifiedFinding("deep.agreements.active.unverified", check.Message, "Inspect current agreement status with `asc web agreements status`", "agreement", "", check.Resolution)
 	}
@@ -482,7 +494,7 @@ func collectAgreementsDeepCheck(ctx context.Context, client deepWebClient, requi
 		commands = append(commands, fmt.Sprintf("asc web agreements accept --agreement-id %q --confirm", agreementID))
 	}
 	fixability := validation.FixabilityManual
-	if len(commands) > 0 && !hasManualBlocker {
+	if len(commands) > 0 && !hasManualBlocker && !hasUnknown {
 		fixability = validation.FixabilityWebFixable
 	}
 	resolution := &validation.Resolution{
@@ -497,11 +509,18 @@ func collectAgreementsDeepCheck(ctx context.Context, client deepWebClient, requi
 		Message:    "A required agreement is pending",
 		Resolution: resolution,
 	}
+	findingID := "agreements.pending"
+	remediation := "Have the Account Holder review and accept the pending agreement"
+	if !hasPending {
+		check.Message = "App Store Connect reports an agreement alert that needs review"
+		findingID = "agreements.alert"
+		remediation = "Inspect the alert in App Store Connect and review the Apple Developer account; agreement history does not confirm a pending agreement"
+	}
 	return check, &validation.CheckResult{
-		ID:           "agreements.pending",
+		ID:           findingID,
 		Severity:     validation.SeverityError,
 		Message:      check.Message,
-		Remediation:  "Have the Account Holder review and accept the pending agreement",
+		Remediation:  remediation,
 		ResourceType: "agreement",
 		Resolution:   resolution,
 	}
@@ -514,6 +533,10 @@ func currentAgreementHistory(agreements []asc.WebAgreement) []asc.WebAgreement {
 		key := strings.ToLower(strings.TrimSpace(agreement.Title))
 		if agreement.IsProgramLicenseAgreement {
 			key = "program-license-agreement"
+		}
+		if agreement.Pending && strings.TrimSpace(agreement.DateEffective) == "" {
+			// Dated history cannot supersede an undated outstanding agreement.
+			key = ""
 		}
 		if key == "" {
 			agreementID := strings.TrimSpace(agreement.AgreementID)

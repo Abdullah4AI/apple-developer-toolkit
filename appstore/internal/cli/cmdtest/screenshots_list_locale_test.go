@@ -118,9 +118,23 @@ func TestScreenshotsListWithoutLocaleListsEveryLocalization(t *testing.T) {
 }
 
 func TestScreenshotsListWithoutLocaleTableOutputIncludesLocaleColumn(t *testing.T) {
+	for _, test := range []struct{ flag, value, id string }{
+		{"--version-id", "version-1", "version-1"},
+		{"--version", "version-1", "version-1"},
+		{"--version", "https://api.appstoreconnect.apple.com/v1/appStoreVersions/123", "123"},
+		{"--version-id", "123", "123"},
+	} {
+		t.Run(test.flag+"/"+test.value, func(t *testing.T) {
+			testScreenshotListVersionSelector(t, test.flag, test.value, test.id)
+		})
+	}
+}
+
+func testScreenshotListVersionSelector(t *testing.T, selector, value, id string) {
+	t.Helper()
 	installScreenshotsListTestClient(t, func(w http.ResponseWriter, req *http.Request) {
 		switch req.URL.Path {
-		case "/v1/appStoreVersions/version-1/appStoreVersionLocalizations":
+		case "/v1/appStoreVersions/" + id + "/appStoreVersionLocalizations":
 			writeScreenshotsListJSON(t, w, `{"data":[{"type":"appStoreVersionLocalizations","id":"loc-en","attributes":{"locale":"en-US"}}],"links":{}}`)
 		case "/v1/appStoreVersionLocalizations/loc-en/appScreenshotSets":
 			writeScreenshotsListJSON(t, w, `{"data":[{"type":"appScreenshotSets","id":"set-en","attributes":{"screenshotDisplayType":"APP_IPHONE_65"}}],"links":{}}`)
@@ -134,9 +148,10 @@ func TestScreenshotsListWithoutLocaleTableOutputIncludesLocaleColumn(t *testing.
 		}
 	})
 
+	t.Setenv("ASC_APP_ID", "ambient-app-must-not-be-used")
 	stdout, stderr, runErr := runRootCommand(t, []string{
 		"screenshots", "list",
-		"--version-id", "version-1",
+		selector, value,
 		"--output", "table",
 	})
 	if runErr != nil {

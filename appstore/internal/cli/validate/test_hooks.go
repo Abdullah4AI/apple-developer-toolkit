@@ -72,7 +72,9 @@ func SetFetchIAPsFunc(fn func(context.Context, *asc.Client, string) ([]validatio
 	if fn == nil {
 		fetchIAPsFn = fetchIAPs
 	} else {
-		fetchIAPsFn = fn
+		fetchIAPsFn = func(ctx context.Context, client *asc.Client, appID string, _ bool) ([]validation.IAP, error) {
+			return fn(ctx, client, appID)
+		}
 	}
 	return func() {
 		fetchIAPsFn = previous

@@ -12,25 +12,49 @@ import (
 
 var fetchIAPsFn = fetchIAPs
 
-func fetchIAPs(ctx context.Context, client *asc.Client, appID string) ([]validation.IAP, error) {
+func fetchIAPs(ctx context.Context, client *asc.Client, appID string, strict bool) ([]validation.IAP, error) {
 	ctx = withReadinessRequestGate(ctx)
+	get := client.GetInAppPurchasesV2
+	if strict {
+		get = client.GetInAppPurchasesV2Strict
+	}
 	firstPage, err := doReadinessRequest(ctx, func(requestCtx context.Context) (*asc.InAppPurchasesV2Response, error) {
-		return client.GetInAppPurchasesV2(requestCtx, strings.TrimSpace(appID), asc.WithIAPLimit(200))
+		return get(requestCtx, strings.TrimSpace(appID), asc.WithIAPLimit(200))
 	})
 	if err != nil {
 		return nil, err
 	}
 
+	total, hasTotal := asc.ParsePagingTotalOK(firstPage.Meta)
 	paginated, err := asc.PaginateAll(ctx, firstPage, func(_ context.Context, nextURL string) (asc.PaginatedResponse, error) {
 		return doReadinessRequest(ctx, func(requestCtx context.Context) (asc.PaginatedResponse, error) {
-			return client.GetInAppPurchasesV2(requestCtx, strings.TrimSpace(appID), asc.WithIAPNextURL(nextURL))
+			page, err := get(requestCtx, strings.TrimSpace(appID), asc.WithIAPNextURL(nextURL))
+			if page != nil {
+				if n, ok := asc.ParsePagingTotalOK(page.Meta); ok && (!hasTotal || n > total) {
+					total, hasTotal = n, true
+				}
+			}
+			return page, err
 		})
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	return mapIAPsResponse(paginated)
+	iaps, err := mapIAPsResponse(paginated)
+	if strict {
+		ids := map[string]validation.IAP{}
+		for _, iap := range iaps {
+			if previous, ok := ids[iap.ID]; ok && previous != iap {
+				return nil, fmt.Errorf("conflicting IAP catalog identity")
+			}
+			ids[iap.ID] = iap
+		}
+		if hasTotal && total > len(ids) {
+			return nil, fmt.Errorf("incomplete IAP catalog")
+		}
+	}
+	return iaps, err
 }
 
 func mapIAPsResponse(paginated asc.PaginatedResponse) ([]validation.IAP, error) {

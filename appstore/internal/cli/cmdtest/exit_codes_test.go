@@ -244,7 +244,7 @@ func TestRun_UsageValidationErrorsReturnExitUsage(t *testing.T) {
 				"--key-type", "personal",
 				"--private-key", "/tmp/AuthKey.p8",
 			},
-			wantErr: "--key-type must be one of: team, individual",
+			wantErr: "--key-type must be one of: team, individual, enterprise",
 		},
 		{
 			name:    "apps info view conflicting version flags",

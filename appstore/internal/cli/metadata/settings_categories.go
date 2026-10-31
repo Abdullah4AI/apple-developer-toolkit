@@ -104,7 +104,7 @@ func fetchAppInfoCategories(ctx context.Context, client *asc.Client, target meta
 	return values, nil
 }
 
-func updateAppInfoCategories(ctx context.Context, client *asc.Client, target metadataSettingTarget, changed map[string]string) error {
+func updateAppInfoCategories(ctx context.Context, client *asc.Client, target metadataSettingTarget, changed map[string]string) (string, error) {
 	_, err := client.UpdateAppInfoCategories(
 		ctx,
 		target.appInfoID,
@@ -115,5 +115,5 @@ func updateAppInfoCategories(ctx context.Context, client *asc.Client, target met
 		changed["secondarySubcategoryOne"],
 		changed["secondarySubcategoryTwo"],
 	)
-	return err
+	return "update", err
 }

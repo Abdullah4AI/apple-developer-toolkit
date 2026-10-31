@@ -864,9 +864,13 @@ func TestBindMetadataOutputFlagsParsesValues(t *testing.T) {
 }
 
 func TestValidateNextURL_ValidAppStoreConnectURL(t *testing.T) {
-	err := validateNextURL("https://api.appstoreconnect.apple.com/v1/apps?cursor=abc")
-	if err != nil {
-		t.Fatalf("validateNextURL() error = %v", err)
+	for _, next := range []string{
+		"https://api.appstoreconnect.apple.com/v1/apps?cursor=abc",
+		"https://api.enterprise.developer.apple.com/v1/certificates?cursor=abc",
+	} {
+		if err := validateNextURL(next); err != nil {
+			t.Fatalf("validateNextURL(%q) error = %v", next, err)
+		}
 	}
 }
 

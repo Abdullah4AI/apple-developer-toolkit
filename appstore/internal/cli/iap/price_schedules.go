@@ -413,7 +413,7 @@ Examples:
 			defer cancel()
 
 			if *resolved {
-				resp, err := fetchResolvedIAPSchedulePrices(requestCtx, client, id, "manual", *limit, *next, shared.PricingNow())
+				resp, err := fetchResolvedIAPSchedulePrices(requestCtx, client, id, "manual", *limit, *next, shared.PricingNow(), false)
 				if err != nil {
 					return fmt.Errorf("iap pricing schedules manual-prices: failed to resolve: %w", err)
 				}
@@ -502,7 +502,7 @@ Examples:
 			defer cancel()
 
 			if *resolved {
-				resp, err := fetchResolvedIAPSchedulePrices(requestCtx, client, id, "automatic", *limit, *next, shared.PricingNow())
+				resp, err := fetchResolvedIAPSchedulePrices(requestCtx, client, id, "automatic", *limit, *next, shared.PricingNow(), false)
 				if err != nil {
 					return fmt.Errorf("iap pricing schedules automatic-prices: failed to resolve: %w", err)
 				}

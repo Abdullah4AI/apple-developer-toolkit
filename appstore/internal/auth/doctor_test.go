@@ -547,7 +547,7 @@ func TestDoctorEnvironmentSkipsIgnoredPrivateKeys(t *testing.T) {
 
 		report := Doctor(DoctorOptions{Profile: "doctor-selected-invalid-key-type"})
 		section := findDoctorSection(t, report, "Environment")
-		if !sectionHasStatus(section, DoctorFail, "Selected profile \"doctor-selected-invalid-key-type\" cannot use environment fallback: ASC_KEY_TYPE must be team or individual") {
+		if !sectionHasStatus(section, DoctorFail, "Selected profile \"doctor-selected-invalid-key-type\" cannot use environment fallback: ASC_KEY_TYPE must be team, individual, or enterprise") {
 			t.Fatalf("expected invalid fallback key type failure, got %#v", section.Checks)
 		}
 	})
@@ -670,7 +670,7 @@ func TestDoctorEnvironmentSkipsIgnoredPrivateKeys(t *testing.T) {
 
 		report := Doctor(DoctorOptions{})
 		section := findDoctorSection(t, report, "Environment")
-		if !sectionHasStatus(section, DoctorFail, "Default stored credentials cannot use environment fallback: ASC_KEY_TYPE must be team or individual") {
+		if !sectionHasStatus(section, DoctorFail, "Default stored credentials cannot use environment fallback: ASC_KEY_TYPE must be team, individual, or enterprise") {
 			t.Fatalf("expected invalid default fallback key type failure, got %#v", section.Checks)
 		}
 	})

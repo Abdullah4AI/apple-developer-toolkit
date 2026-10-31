@@ -688,6 +688,14 @@ func capabilityRows() []Capability {
 		},
 		{
 			Area:       "access",
+			Capability: "App Store Connect Business agreements",
+			Status:     statusWebSession,
+			Commands:   []string{"asc web business agreements"},
+			Notes:      []string{"Lists Business contracts and accepts an explicitly selected updated configuration, including the Paid Applications Schedule. Active contracts can still have updated terms pending. Developer Program licenses use asc web agreements instead."},
+			NextAction: "Use asc web business agreements list, review updated terms in Business, then accept with --contract-config-id and --confirm.",
+		},
+		{
+			Area:       "access",
 			Capability: "App Store Connect API key web-session management",
 			Status:     statusWebSession,
 			Commands:   []string{"asc web api-keys"},

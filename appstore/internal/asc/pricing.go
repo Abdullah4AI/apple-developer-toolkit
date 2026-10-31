@@ -54,6 +54,16 @@ type AppPriceScheduleCreateAttributes struct {
 	PricePointID    string `json:"-"`
 	StartDate       string `json:"-"`
 	BaseTerritoryID string `json:"-"`
+	// Prices, when set, replaces PricePointID and StartDate with one manual
+	// price per entry, so the schedule can price several territories.
+	Prices []AppPriceSchedulePrice `json:"-"`
+}
+
+// AppPriceSchedulePrice is one manual price in a schedule create request.
+type AppPriceSchedulePrice struct {
+	PricePointID string
+	StartDate    string
+	EndDate      string
 }
 
 // AppPriceScheduleCreateRequest is a request to create a price schedule.

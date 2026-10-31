@@ -323,6 +323,9 @@ Examples:
 			if err != nil {
 				return fmt.Errorf("users update: %w", err)
 			}
+			if len(visibleAppIDs) > 0 && client.IsEnterpriseProgramAPI() {
+				return shared.UsageError("users update: --visible-app is not available on the Enterprise Program API")
+			}
 
 			requestCtx, cancel := shared.ContextWithTimeout(ctx)
 			defer cancel()
@@ -456,14 +459,19 @@ Examples:
 
 			visibleAppIDs := shared.SplitCSV(visibleApps.String())
 
-			if !*allApps && len(visibleAppIDs) == 0 {
+			// Whether the flags apply depends on the key, so a missing-credentials
+			// error waits until the flags have been checked.
+			client, clientErr := shared.GetASCClient()
+			enterprise := clientErr == nil && client.IsEnterpriseProgramAPI()
+			if enterprise && (*allApps || len(visibleAppIDs) > 0) {
+				return shared.UsageError("users invite: --all-apps and --visible-app are not available on the Enterprise Program API")
+			}
+			if !enterprise && !*allApps && len(visibleAppIDs) == 0 {
 				fmt.Fprintln(os.Stderr, "Error: --all-apps or --visible-app is required")
 				return shared.MissingRequiredUsageError("")
 			}
-
-			client, err := shared.GetASCClient()
-			if err != nil {
-				return fmt.Errorf("users invite: %w", err)
+			if clientErr != nil {
+				return fmt.Errorf("users invite: %w", clientErr)
 			}
 
 			requestCtx, cancel := shared.ContextWithTimeout(ctx)
@@ -475,11 +483,8 @@ Examples:
 				LastName:  lastNameValue,
 				Roles:     roleValues,
 			}
-			if *allApps {
-				allAppsVisible := true
-				attrs.AllAppsVisible = &allAppsVisible
-			} else {
-				allAppsVisible := false
+			if !enterprise {
+				allAppsVisible := *allApps
 				attrs.AllAppsVisible = &allAppsVisible
 			}
 

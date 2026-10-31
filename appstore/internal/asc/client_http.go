@@ -31,6 +31,13 @@ func (c *Client) newRequest(ctx context.Context, method, path string, body io.Re
 		return nil, err
 	}
 
+	if err := c.validateRequestHost(path); err != nil {
+		return nil, err
+	}
+	if err := c.validateEnterpriseOperation(ctx, method, path); err != nil {
+		return nil, err
+	}
+
 	// Generate JWT token
 	token, err := c.generateJWT()
 	if err != nil {
@@ -39,7 +46,7 @@ func (c *Client) newRequest(ctx context.Context, method, path string, body io.Re
 
 	url := path
 	if !strings.HasPrefix(path, "http://") && !strings.HasPrefix(path, "https://") {
-		url = BaseURL + path
+		url = c.apiBaseURL() + path
 	}
 	req, err := http.NewRequestWithContext(ctx, method, url, body)
 	if err != nil {
@@ -53,7 +60,35 @@ func (c *Client) newRequest(ctx context.Context, method, path string, body io.Re
 	return req, nil
 }
 
-// generateJWT generates a JWT for ASC API authentication
+// validateRequestHost keeps an absolute URL from carrying a token to the API it
+// was not signed for.
+func (c *Client) validateRequestHost(target string) error {
+	if !strings.HasPrefix(target, "http://") && !strings.HasPrefix(target, "https://") {
+		return nil
+	}
+	parsedURL, err := url.Parse(target)
+	if err != nil {
+		return fmt.Errorf("invalid request URL: %w", err)
+	}
+	if parsedURL.User != nil {
+		return fmt.Errorf("rejected request URL containing userinfo")
+	}
+
+	expectedHost := ascAPIHost
+	if c.enterprise {
+		expectedHost = enterpriseAPIHost
+	}
+	host := strings.TrimSuffix(strings.ToLower(parsedURL.Hostname()), ".")
+	if host != expectedHost && (c.enterprise || IsAPIHost(host)) {
+		return fmt.Errorf("rejected request URL from host %q (expected %q)", parsedURL.Host, expectedHost)
+	}
+	if c.enterprise && (parsedURL.Scheme != "https" || parsedURL.Host != expectedHost) {
+		return fmt.Errorf("rejected request URL %q (expected https://%s)", parsedURL.Scheme+"://"+parsedURL.Host, expectedHost)
+	}
+	return nil
+}
+
+// generateJWT generates a JWT for the client's API
 func (c *Client) generateJWT() (string, error) {
 	now := time.Now()
 
@@ -64,7 +99,11 @@ func (c *Client) generateJWT() (string, error) {
 		return c.cachedJWT, nil
 	}
 
-	signedToken, err := GenerateJWT(c.keyID, c.issuerID, c.privateKey)
+	generate := GenerateJWT
+	if c.enterprise {
+		generate = GenerateEnterpriseJWT
+	}
+	signedToken, err := generate(c.keyID, c.issuerID, c.privateKey)
 	if err != nil {
 		return "", err
 	}
@@ -76,6 +115,15 @@ func (c *Client) generateJWT() (string, error) {
 
 // GenerateJWT generates a JWT for ASC API authentication.
 func GenerateJWT(keyID, issuerID string, privateKey *ecdsa.PrivateKey) (string, error) {
+	return generateJWTForAudience(keyID, issuerID, privateKey, ascJWTAudience)
+}
+
+// GenerateEnterpriseJWT generates a JWT for Enterprise Program API authentication.
+func GenerateEnterpriseJWT(keyID, issuerID string, privateKey *ecdsa.PrivateKey) (string, error) {
+	return generateJWTForAudience(keyID, issuerID, privateKey, enterpriseJWTAudience)
+}
+
+func generateJWTForAudience(keyID, issuerID string, privateKey *ecdsa.PrivateKey, audience string) (string, error) {
 	keyID = strings.TrimSpace(keyID)
 	if keyID == "" {
 		return "", ErrMissingKeyID
@@ -84,7 +132,7 @@ func GenerateJWT(keyID, issuerID string, privateKey *ecdsa.PrivateKey) (string, 
 
 	now := time.Now()
 	claims := jwt.RegisteredClaims{
-		Audience:  jwt.ClaimStrings{"appstoreconnect-v1"},
+		Audience:  jwt.ClaimStrings{audience},
 		IssuedAt:  jwt.NewNumericDate(now.Add(-jwtIssuedAtSkew)),
 		ExpiresAt: jwt.NewNumericDate(now.Add(tokenLifetime)),
 	}
@@ -689,7 +737,7 @@ func isPositiveDecimal(value string) bool {
 }
 
 // validateNextURL validates that a pagination URL is safe to use.
-// It ensures the URL is on the same host as BaseURL and uses HTTPS.
+// It ensures the URL is on an API host and uses HTTPS.
 func validateNextURL(nextURL string) error {
 	if nextURL == "" {
 		return nil
@@ -706,14 +754,8 @@ func validateNextURL(nextURL string) error {
 		return fmt.Errorf("invalid pagination URL: %w", err)
 	}
 
-	baseURL, err := url.Parse(BaseURL)
-	if err != nil {
-		return fmt.Errorf("invalid base URL: %w", err)
-	}
-
-	// Allow URLs on the same host as BaseURL
-	if parsedURL.Host != baseURL.Host {
-		return fmt.Errorf("rejected pagination URL from untrusted host %q (expected %q)", parsedURL.Host, baseURL.Host)
+	if !IsAPIHost(parsedURL.Host) {
+		return fmt.Errorf("rejected pagination URL from untrusted host %q (expected %q)", parsedURL.Host, ascAPIHost)
 	}
 
 	// Require HTTPS for authentication endpoints

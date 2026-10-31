@@ -15,10 +15,12 @@ import (
 type resolvedAppPriceCandidate struct {
 	entry appPriceEntry
 	row   shared.ResolvedPriceRow
+	err   error
 }
 
 type appSchedulePriceFetcher func(context.Context, string, ...asc.AppPriceSchedulePricesOption) (*asc.AppPricesResponse, error)
 
+// requireComplete rejects unresolved active rows before a full schedule replacement.
 func fetchResolvedAppSchedulePrices(
 	ctx context.Context,
 	client *asc.Client,
@@ -27,6 +29,7 @@ func fetchResolvedAppSchedulePrices(
 	limit int,
 	nextURL string,
 	now time.Time,
+	requireComplete bool,
 ) (*shared.ResolvedPricesResult, error) {
 	if limit <= 0 {
 		limit = 200
@@ -38,20 +41,20 @@ func fetchResolvedAppSchedulePrices(
 
 	switch surface {
 	case "manual":
-		if err := consumeResolvedAppSchedulePrices(ctx, scheduleID, nextURL, limit, now, candidates, client.GetAppPriceScheduleManualPrices); err != nil {
+		if err := consumeResolvedAppSchedulePrices(ctx, scheduleID, nextURL, limit, now, candidates, client.GetAppPriceScheduleManualPrices, requireComplete); err != nil {
 			return nil, fmt.Errorf("fetch manual prices: %w", err)
 		}
 		if includeSibling {
-			if err := consumeResolvedAppSchedulePrices(ctx, scheduleID, "", limit, now, candidates, client.GetAppPriceScheduleAutomaticPrices); err != nil {
+			if err := consumeResolvedAppSchedulePrices(ctx, scheduleID, "", limit, now, candidates, client.GetAppPriceScheduleAutomaticPrices, requireComplete); err != nil {
 				return nil, fmt.Errorf("fetch automatic prices: %w", err)
 			}
 		}
 	case "automatic":
-		if err := consumeResolvedAppSchedulePrices(ctx, scheduleID, nextURL, limit, now, candidates, client.GetAppPriceScheduleAutomaticPrices); err != nil {
+		if err := consumeResolvedAppSchedulePrices(ctx, scheduleID, nextURL, limit, now, candidates, client.GetAppPriceScheduleAutomaticPrices, requireComplete); err != nil {
 			return nil, fmt.Errorf("fetch automatic prices: %w", err)
 		}
 		if includeSibling {
-			if err := consumeResolvedAppSchedulePrices(ctx, scheduleID, "", limit, now, candidates, client.GetAppPriceScheduleManualPrices); err != nil {
+			if err := consumeResolvedAppSchedulePrices(ctx, scheduleID, "", limit, now, candidates, client.GetAppPriceScheduleManualPrices, requireComplete); err != nil {
 				return nil, fmt.Errorf("fetch manual prices: %w", err)
 			}
 		}
@@ -61,6 +64,9 @@ func fetchResolvedAppSchedulePrices(
 
 	rows := make([]shared.ResolvedPriceRow, 0, len(candidates))
 	for _, candidate := range candidates {
+		if candidate.err != nil {
+			return nil, candidate.err
+		}
 		rows = append(rows, candidate.row)
 	}
 	shared.SortResolvedPrices(rows)
@@ -75,6 +81,7 @@ func consumeResolvedAppSchedulePrices(
 	now time.Time,
 	candidates map[string]resolvedAppPriceCandidate,
 	fetch appSchedulePriceFetcher,
+	requireComplete bool,
 ) error {
 	opts := []asc.AppPriceSchedulePricesOption{
 		asc.WithAppPriceSchedulePricesLimit(limit),
@@ -101,7 +108,7 @@ func consumeResolvedAppSchedulePrices(
 		if !ok {
 			return fmt.Errorf("unexpected app prices response type %T", page)
 		}
-		return consumeResolvedAppPricePage(candidates, resp, now)
+		return consumeResolvedAppPricePage(candidates, resp, now, requireComplete)
 	})
 }
 
@@ -121,6 +128,7 @@ func consumeResolvedAppPricePage(
 	candidates map[string]resolvedAppPriceCandidate,
 	page *asc.AppPricesResponse,
 	now time.Time,
+	requireComplete bool,
 ) error {
 	if page == nil {
 		return nil
@@ -134,13 +142,23 @@ func consumeResolvedAppPricePage(
 	asOf := shared.PricingDate(now)
 	for _, item := range page.Data {
 		entry, row, ok := resolvedAppPriceCandidateFromResource(item, values, currencies)
-		if !ok || !appPriceEntryActiveOn(entry, asOf) {
+		if !appPriceEntryActiveOn(entry, asOf) {
 			continue
+		}
+		candidate := resolvedAppPriceCandidate{entry: entry, row: row}
+		if !ok {
+			if !requireComplete {
+				continue
+			}
+			candidate.err = fmt.Errorf("cannot resolve active price %q (territory %q, price point %q)", item.ID, entry.TerritoryID, entry.PricePointID)
+			if entry.TerritoryID == "" || entry.PricePointID == "" {
+				return candidate.err
+			}
 		}
 
 		existing, exists := candidates[entry.TerritoryID]
 		if !exists || appPriceEntryIsNewer(entry, existing.entry) {
-			candidates[entry.TerritoryID] = resolvedAppPriceCandidate{entry: entry, row: row}
+			candidates[entry.TerritoryID] = candidate
 		}
 	}
 
@@ -194,15 +212,6 @@ func resolvedAppPriceCandidateFromResource(
 ) (appPriceEntry, shared.ResolvedPriceRow, bool) {
 	territoryID := strings.ToUpper(strings.TrimSpace(appPriceRelationshipID(item.Relationships, "territory")))
 	pricePointID := strings.TrimSpace(appPriceRelationshipID(item.Relationships, "appPricePoint"))
-	if territoryID == "" || pricePointID == "" {
-		return appPriceEntry{}, shared.ResolvedPriceRow{}, false
-	}
-
-	value, ok := values[pricePointID]
-	if !ok {
-		return appPriceEntry{}, shared.ResolvedPriceRow{}, false
-	}
-
 	entry := newAppPriceEntry(
 		territoryID,
 		pricePointID,
@@ -210,6 +219,15 @@ func resolvedAppPriceCandidateFromResource(
 		strings.TrimSpace(item.Attributes.EndDate),
 		item.Attributes.Manual,
 	)
+	if territoryID == "" || pricePointID == "" {
+		return entry, shared.ResolvedPriceRow{}, false
+	}
+
+	value, ok := values[pricePointID]
+	if !ok {
+		return entry, shared.ResolvedPriceRow{}, false
+	}
+
 	currency := currencies[territoryID]
 	if currency == "" {
 		currency = territoryID

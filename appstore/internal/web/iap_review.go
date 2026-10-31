@@ -3,32 +3,17 @@ package web
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
 )
 
-// reviewIAPFields is the set of `fields[inAppPurchases]` keys Apple's iris
-// `/apps/{APP_ID}/inAppPurchases` endpoint accepts.
-//
-// The iris flavor of this resource is narrower than the public REST API:
-// `name`, `inAppPurchaseType`, `isAppStoreReviewInProgress`, and
-// `submitWithNextAppStoreVersion` all return `PARAMETER_ERROR.INVALID`
-// here. Apple uses `referenceName` for the human-readable label on this
-// endpoint. The post-attach response from `/inAppPurchaseSubmissions`
-// carries `submitWithNextAppStoreVersion`, so the listing only needs the
-// fields below to scope the IAP being attached.
+// reviewIAPFields contains the fields accepted by the legacy Iris IAP listing.
 const reviewIAPFields = "productId,referenceName,state"
 
-// ReviewIAP summarizes a non-subscription IAP returned by the iris listing
-// used during the next app version review attach flow.
-//
-// `SubmitWithNextAppStoreVersion` is retained on the struct for API
-// compatibility but is never populated from the iris listing — Apple's
-// `/apps/{APP_ID}/inAppPurchases` rejects it as an invalid field. The
-// post-attach response from `/inAppPurchaseSubmissions` carries the same
-// flag; see ReviewIAPSubmission for the populated version.
+// ReviewIAP identifies a non-subscription IAP in the app-scoped Iris listing.
 type ReviewIAP struct {
 	ID                            string `json:"id"`
 	ProductID                     string `json:"productId,omitempty"`
@@ -37,25 +22,23 @@ type ReviewIAP struct {
 	SubmitWithNextAppStoreVersion bool   `json:"submitWithNextAppStoreVersion"`
 }
 
-// ReviewIAPSubmission captures the hidden submission resource returned by the
-// web flow that attaches a non-renewing in-app purchase to the next app version
-// review. Mirrors ReviewSubscriptionSubmission but for non-subscription IAPs.
+// ReviewIAPSubmission is the receipt for an IAP version added to a review draft.
 type ReviewIAPSubmission struct {
+	// ID is the legacy inAppPurchaseSubmissions ID, empty for review-item attachment.
 	ID                            string `json:"id"`
+	ReviewSubmissionItemID        string `json:"reviewSubmissionItemId,omitempty"`
 	InAppPurchaseID               string `json:"inAppPurchaseId,omitempty"`
+	ReviewSubmissionID            string `json:"reviewSubmissionId,omitempty"`
+	InAppPurchaseVersionID        string `json:"inAppPurchaseVersionId,omitempty"`
 	SubmitWithNextAppStoreVersion bool   `json:"submitWithNextAppStoreVersion"`
 }
 
 func decodeReviewIAP(resource jsonAPIResource) ReviewIAP {
 	return ReviewIAP{
-		ID:            strings.TrimSpace(resource.ID),
-		ProductID:     stringAttr(resource.Attributes, "productId"),
-		ReferenceName: stringAttr(resource.Attributes, "referenceName"),
-		State:         stringAttr(resource.Attributes, "state"),
-		// Decoded defensively — Apple's iris listing doesn't currently include
-		// it (the field is not in reviewIAPFields), but if Apple starts
-		// returning it the idempotency short-circuit in the attach command
-		// will pick it up without further code changes.
+		ID:                            strings.TrimSpace(resource.ID),
+		ProductID:                     stringAttr(resource.Attributes, "productId"),
+		ReferenceName:                 stringAttr(resource.Attributes, "referenceName"),
+		State:                         stringAttr(resource.Attributes, "state"),
 		SubmitWithNextAppStoreVersion: boolAttr(resource.Attributes, "submitWithNextAppStoreVersion"),
 	}
 }
@@ -148,6 +131,45 @@ func (c *Client) FindReviewIAP(ctx context.Context, appID, iapID string) (Review
 	return ReviewIAP{}, false, nil
 }
 
+// ResolveReviewIAPV2ID resolves the selected legacy IAP to its app-scoped V2 ID.
+func (c *Client) ResolveReviewIAPV2ID(ctx context.Context, appID, productID string) (string, error) {
+	appID = strings.TrimSpace(appID)
+	if appID == "" {
+		return "", fmt.Errorf("app id is required")
+	}
+	if productID == "" {
+		return "", fmt.Errorf("selected in-app purchase is missing a product ID; refusing to attach")
+	}
+	query := url.Values{}
+	query.Set("fields[inAppPurchases]", "productId")
+	query.Set("limit", "300")
+	payload, err := c.fetchJSONAPIPages(ctx, queryPath("/apps/"+url.PathEscape(appID)+"/inAppPurchasesV2", query), "review IAP V2 catalog")
+	if err != nil {
+		return "", err
+	}
+	resolvedID := ""
+	for _, resource := range payload.Data {
+		if resource.Type != "inAppPurchases" {
+			return "", fmt.Errorf("review IAP V2 catalog: unexpected resource type %q", resource.Type)
+		}
+		if stringAttrPreserveWhitespace(resource.Attributes, "productId") != productID {
+			continue
+		}
+		id := strings.TrimSpace(resource.ID)
+		if id == "" {
+			return "", fmt.Errorf("review IAP V2 catalog: missing resource id for product ID %q; refusing to attach", productID)
+		}
+		if resolvedID != "" && resolvedID != id {
+			return "", fmt.Errorf("multiple V2 in-app purchases for product ID %q under app %q; refusing to attach", productID, appID)
+		}
+		resolvedID = id
+	}
+	if resolvedID == "" {
+		return "", fmt.Errorf("no V2 in-app purchase for product ID %q under app %q; refusing to attach", productID, appID)
+	}
+	return resolvedID, nil
+}
+
 func appendUniqueReviewIAPMatch(matches *[]ReviewIAP, candidate ReviewIAP) {
 	for _, existing := range *matches {
 		if strings.TrimSpace(existing.ID) == strings.TrimSpace(candidate.ID) {
@@ -183,69 +205,69 @@ func ambiguousReviewIAPSelectorError(selector, field string, matches []ReviewIAP
 	}
 }
 
-// CreateInAppPurchaseSubmission attaches a non-renewing in-app purchase to the
-// next app version review via the private web flow.
-//
-// This is the iris-API equivalent of clicking the IAP checkbox in
-// "Add App In-App Purchase or Subscription" on the version submission page
-// in App Store Connect. POST /iris/v1/inAppPurchaseSubmissions with the
-// `submitWithNextAppStoreVersion` attribute set; the public ASC REST API
-// has no equivalent for non-subscription IAPs.
-func (c *Client) CreateInAppPurchaseSubmission(ctx context.Context, iapID string) (ReviewIAPSubmission, error) {
+// ResolveReviewIAPVersionID finds the single editable version of an app-scoped IAP.
+func (c *Client) ResolveReviewIAPVersionID(ctx context.Context, iapID string) (string, error) {
 	iapID = strings.TrimSpace(iapID)
 	if iapID == "" {
-		return ReviewIAPSubmission{}, fmt.Errorf("iap id is required")
+		return "", fmt.Errorf("iap id is required")
 	}
+	payload, err := c.fetchJSONAPIPagesFrom(ctx, c.webIrisV2BaseURL(), "/inAppPurchases/"+url.PathEscape(iapID)+"/versions?limit=200", "review IAP versions")
+	if err != nil {
+		return "", err
+	}
+	selected := ""
+	for _, version := range payload.Data {
+		if version.Type != "inAppPurchaseVersions" || strings.TrimSpace(version.ID) == "" {
+			return "", fmt.Errorf("review IAP versions: invalid resource identity; refusing to attach")
+		}
+		switch stringAttr(version.Attributes, "state") {
+		case "PREPARE_FOR_SUBMISSION", "READY_FOR_REVIEW", "REJECTED", "DEVELOPER_REJECTED":
+			if selected != "" && selected != version.ID {
+				return "", fmt.Errorf("multiple editable versions for in-app purchase %q; refusing to attach", iapID)
+			}
+			selected = version.ID
+		}
+	}
+	if selected == "" {
+		return "", fmt.Errorf("no editable version for in-app purchase %q; refusing to attach", iapID)
+	}
+	return selected, nil
+}
 
+// CreateReviewIAPSubmissionItem adds an IAP version to an existing review draft.
+func (c *Client) CreateReviewIAPSubmissionItem(ctx context.Context, submissionID, versionID string) (string, error) {
+	submissionID, versionID = strings.TrimSpace(submissionID), strings.TrimSpace(versionID)
+	if submissionID == "" || versionID == "" {
+		return "", fmt.Errorf("review submission id and IAP version id are required")
+	}
 	body := map[string]any{
 		"data": map[string]any{
-			"type": "inAppPurchaseSubmissions",
-			"attributes": map[string]any{
-				"submitWithNextAppStoreVersion": true,
-			},
+			"type": "reviewSubmissionItems",
 			"relationships": map[string]any{
-				"inAppPurchaseV2": map[string]any{
-					"data": map[string]string{
-						"type": "inAppPurchases",
-						"id":   iapID,
-					},
-				},
+				"reviewSubmission":     map[string]any{"data": resourceRef{Type: "reviewSubmissions", ID: submissionID}},
+				"inAppPurchaseVersion": map[string]any{"data": resourceRef{Type: "inAppPurchaseVersions", ID: versionID}},
 			},
 		},
 	}
-
-	responseBody, err := c.doRequest(ctx, http.MethodPost, "/inAppPurchaseSubmissions", body)
+	response, err := c.doRequest(ctx, http.MethodPost, "/reviewSubmissionItems", body)
 	if err != nil {
-		return ReviewIAPSubmission{}, fmt.Errorf("iris POST /inAppPurchaseSubmissions: %w", err)
+		var apiErr *APIError
+		if !errors.As(err, &apiErr) || apiErr.Status >= http.StatusInternalServerError {
+			return "", fmt.Errorf("review item may have been created; verify submission %q before retrying: %w", submissionID, err)
+		}
+		return "", fmt.Errorf("iris POST /reviewSubmissionItems: %w", err)
 	}
-
-	var payload struct {
-		Data jsonAPIResource `json:"data"`
-	}
-	if err := json.Unmarshal(responseBody, &payload); err != nil {
-		return ReviewIAPSubmission{}, fmt.Errorf("failed to parse iap submission response: %w", err)
-	}
-	if strings.TrimSpace(payload.Data.ID) == "" {
-		return ReviewIAPSubmission{}, fmt.Errorf("failed to parse iap submission response: missing submission id")
-	}
-	if submissionType := strings.TrimSpace(payload.Data.Type); submissionType == "" {
-		return ReviewIAPSubmission{}, fmt.Errorf("failed to parse iap submission response: missing submission resource type")
-	} else if submissionType != "inAppPurchaseSubmissions" {
-		return ReviewIAPSubmission{}, fmt.Errorf("failed to parse iap submission response: unexpected resource type %q", payload.Data.Type)
-	}
-
-	result := ReviewIAPSubmission{
-		ID:                            strings.TrimSpace(payload.Data.ID),
-		SubmitWithNextAppStoreVersion: boolAttr(payload.Data.Attributes, "submitWithNextAppStoreVersion"),
-	}
-	relationshipID, relationshipPresent, err := validateReviewSubmissionRelationship(payload.Data, "inAppPurchaseV2", "inAppPurchases", iapID)
+	resource, _, err := decodeResolutionCenterWriteResource(response, "review submission item create", "reviewSubmissionItems")
 	if err != nil {
-		return ReviewIAPSubmission{}, fmt.Errorf("failed to parse iap submission response: %w", err)
+		return "", fmt.Errorf("review item may have been created; verify submission %q before retrying: %w", submissionID, err)
 	}
-	if relationshipPresent {
-		result.InAppPurchaseID = relationshipID
-	} else {
-		result.InAppPurchaseID = iapID
+	for _, target := range []struct{ name, kind, id string }{
+		{"inAppPurchaseVersion", "inAppPurchaseVersions", versionID},
+		{"reviewSubmission", "reviewSubmissions", submissionID},
+	} {
+		if _, _, err := validateReviewSubmissionRelationship(resource, target.name, target.kind, target.id); err != nil {
+			return "", fmt.Errorf("review item %q may have been created; verify submission %q before retrying: %w", resource.ID, submissionID, err)
+		}
 	}
-	return result, nil
+	return strings.TrimSpace(resource.ID), nil
 }

@@ -8,8 +8,6 @@ import (
 	"strings"
 )
 
-const appPriceScheduleManualPriceID = "${local-manual-price-1}"
-
 // GetTerritories retrieves available territories.
 func (c *Client) GetTerritories(ctx context.Context, opts ...TerritoriesOption) (*TerritoriesResponse, error) {
 	query := &territoriesQuery{}
@@ -205,23 +203,54 @@ func (c *Client) GetAppPriceScheduleByID(ctx context.Context, scheduleID string)
 	return &response, nil
 }
 
-// CreateAppPriceSchedule creates an app price schedule with a manual price.
+// CreateAppPriceSchedule creates an app price schedule with manual prices.
 func (c *Client) CreateAppPriceSchedule(ctx context.Context, appID string, attrs AppPriceScheduleCreateAttributes) (*AppPriceScheduleResponse, error) {
 	appID = strings.TrimSpace(appID)
-	pricePointID := strings.TrimSpace(attrs.PricePointID)
-	startDate := strings.TrimSpace(attrs.StartDate)
 	baseTerritoryID := strings.ToUpper(strings.TrimSpace(attrs.BaseTerritoryID))
 	if appID == "" {
 		return nil, fmt.Errorf("app ID is required")
 	}
-	if pricePointID == "" {
-		return nil, fmt.Errorf("price point ID is required")
-	}
-	if startDate == "" {
-		return nil, fmt.Errorf("start date is required")
+	prices := attrs.Prices
+	if len(prices) == 0 {
+		pricePointID := strings.TrimSpace(attrs.PricePointID)
+		startDate := strings.TrimSpace(attrs.StartDate)
+		if pricePointID == "" {
+			return nil, fmt.Errorf("price point ID is required")
+		}
+		if startDate == "" {
+			return nil, fmt.Errorf("start date is required")
+		}
+		prices = []AppPriceSchedulePrice{{PricePointID: pricePointID, StartDate: startDate}}
 	}
 	if baseTerritoryID == "" {
 		return nil, fmt.Errorf("base territory ID is required")
+	}
+
+	manualPrices := make([]ResourceData, 0, len(prices))
+	included := make([]AppPriceCreateResource, 0, len(prices))
+	for index, price := range prices {
+		pricePointID := strings.TrimSpace(price.PricePointID)
+		if pricePointID == "" {
+			return nil, fmt.Errorf("price point ID is required")
+		}
+		localID := fmt.Sprintf("${local-manual-price-%d}", index+1)
+		manualPrices = append(manualPrices, ResourceData{Type: ResourceTypeAppPrices, ID: localID})
+		included = append(included, AppPriceCreateResource{
+			Type: ResourceTypeAppPrices,
+			ID:   localID,
+			Attributes: AppPriceAttributes{
+				StartDate: strings.TrimSpace(price.StartDate),
+				EndDate:   strings.TrimSpace(price.EndDate),
+			},
+			Relationships: AppPriceRelationships{
+				AppPricePoint: Relationship{
+					Data: ResourceData{
+						Type: ResourceTypeAppPricePoints,
+						ID:   pricePointID,
+					},
+				},
+			},
+		})
 	}
 
 	payload := AppPriceScheduleCreateRequest{
@@ -240,31 +269,10 @@ func (c *Client) CreateAppPriceSchedule(ctx context.Context, appID string, attrs
 						ID:   baseTerritoryID,
 					},
 				},
-				ManualPrices: RelationshipList{
-					Data: []ResourceData{
-						{
-							Type: ResourceTypeAppPrices,
-							ID:   appPriceScheduleManualPriceID,
-						},
-					},
-				},
+				ManualPrices: RelationshipList{Data: manualPrices},
 			},
 		},
-		Included: []AppPriceCreateResource{
-			{
-				Type:       ResourceTypeAppPrices,
-				ID:         appPriceScheduleManualPriceID,
-				Attributes: AppPriceAttributes{StartDate: startDate},
-				Relationships: AppPriceRelationships{
-					AppPricePoint: Relationship{
-						Data: ResourceData{
-							Type: ResourceTypeAppPricePoints,
-							ID:   pricePointID,
-						},
-					},
-				},
-			},
-		},
+		Included: included,
 	}
 
 	body, err := BuildRequestBody(payload)

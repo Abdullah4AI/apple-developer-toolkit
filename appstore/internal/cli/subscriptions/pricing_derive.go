@@ -18,26 +18,6 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
-type subscriptionPriceDeriveRounding string
-
-const (
-	subscriptionPriceDeriveExact   subscriptionPriceDeriveRounding = "exact"
-	subscriptionPriceDeriveNearest subscriptionPriceDeriveRounding = "nearest"
-	subscriptionPriceDeriveUp      subscriptionPriceDeriveRounding = "up"
-	subscriptionPriceDeriveDown    subscriptionPriceDeriveRounding = "down"
-)
-
-type subscriptionPriceDeriveCandidate struct {
-	PricePointID  string
-	CustomerPrice string
-}
-
-type subscriptionPriceDeriveResolution struct {
-	PricePointID  string
-	CustomerPrice string
-	price         *big.Rat
-}
-
 // SubscriptionsPricingDeriveCommand returns the derive subcommand.
 func SubscriptionsPricingDeriveCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("subscriptions pricing derive", flag.ExitOnError)
@@ -46,7 +26,7 @@ func SubscriptionsPricingDeriveCommand() *ffcli.Command {
 	targetSubscriptionID := shared.BindResourceIDFlag(fs, "target-subscription-id", "subscriptions", "Target subscription ID, product ID, or exact current name (required)")
 	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env; required when either subscription selector is a product ID or name)")
 	multiplier := fs.String("multiplier", "", "Positive decimal multiplied by each source territory price (required)")
-	rounding := fs.String("round", string(subscriptionPriceDeriveNearest), "Price-point resolution: exact, nearest, up, or down")
+	rounding := fs.String("round", string(shared.PriceRoundingNearest), "Price-point resolution: exact, nearest, up, or down")
 	territory := fs.String("territory", "", "Limit derivation to one territory ID, 2-letter code, or name")
 	startDate := fs.String("start-date", "", "Start date (YYYY-MM-DD) for scheduled target price changes")
 	preserved := fs.Bool("preserved", false, "Preserve current target prices for existing subscribers")
@@ -109,7 +89,7 @@ Examples:
 			if err != nil {
 				return err
 			}
-			roundMode, err := normalizeSubscriptionPriceDeriveRounding(*rounding)
+			roundMode, err := shared.ParsePriceRounding(*rounding)
 			if err != nil {
 				return err
 			}
@@ -211,14 +191,14 @@ Examples:
 				targetID,
 				sourcePrices,
 				targetPrices,
-				multiplierValue,
+				func(string) (*big.Rat, bool) { return multiplierValue, true },
 				roundMode,
 				*workers,
 			)
 			result := &asc.SubscriptionPricingDeriveResult{
 				SourceSubscriptionID: sourceID,
 				TargetSubscriptionID: targetID,
-				Multiplier:           formatSubscriptionPriceDeriveExactDecimal(multiplierValue),
+				Multiplier:           shared.FormatExactPriceDecimal(multiplierValue),
 				Rounding:             string(roundMode),
 				StartDate:            resolvedStartDate,
 				AutoScheduled:        autoScheduled,
@@ -230,7 +210,7 @@ Examples:
 					Status: "skipped",
 				},
 			}
-			result.Summary = summarizeSubscriptionPriceDeriveRows(rows)
+			result.Summary = shared.SummarizePriceLadderRows(rows)
 
 			if result.Summary.Unresolved > 0 {
 				if err := shared.PrintOutput(result, *output.Output, *output.Pretty); err != nil {
@@ -246,18 +226,6 @@ Examples:
 				return shared.PrintOutput(result, *output.Output, *output.Pretty)
 			}
 
-			changes := make([]equalization, 0, result.Summary.Planned)
-			for _, row := range result.Rows {
-				if row.Status != "planned" {
-					continue
-				}
-				changes = append(changes, equalization{
-					Territory:    row.Territory,
-					Price:        row.TargetPrice,
-					PricePointID: row.TargetPricePointID,
-				})
-			}
-
 			attrs := asc.SubscriptionPriceCreateAttributes{
 				StartDate: result.StartDate,
 				PlanType:  asc.SubscriptionPlanTypeUpfront,
@@ -265,31 +233,10 @@ Examples:
 			if *preserved {
 				attrs.Preserved = preserved
 			}
-			fmt.Fprintf(os.Stderr, "Setting %d derived territory price%s (%d worker%s)...\n", len(changes), pluralizeSubscriptionPriceDeriveCount(len(changes)), *workers, pluralizeSubscriptionPriceDeriveCount(*workers))
-			_, failures := applyEqualizedPrices(ctx, client, targetID, changes, *workers, attrs, effectiveAt)
-			failureByTerritory := make(map[string]error, len(failures))
-			for _, failure := range failures {
-				failureByTerritory[strings.ToUpper(strings.TrimSpace(failure.Target.Territory))] = failure.Err
-			}
-			for index := range result.Rows {
-				row := &result.Rows[index]
-				if row.Status != "planned" {
-					continue
-				}
-				if failure := failureByTerritory[row.Territory]; failure != nil {
-					row.Status = "failed"
-					row.Error = failure.Error()
-					continue
-				}
-				row.Status = "applied"
-			}
-			result.Summary = summarizeSubscriptionPriceDeriveRows(result.Rows)
-			appliedCount := result.Summary.Applied
-
-			fmt.Fprintln(os.Stderr, "Verifying derived target prices...")
-			verificationErr := verifySubscriptionPriceDeriveResult(ctx, client, targetID, effectiveAt, territoryID, result)
-			result.Summary = summarizeSubscriptionPriceDeriveRows(result.Rows)
-			result.Summary.Applied = appliedCount
+			var verificationErr error
+			result.Summary, result.Verification, verificationErr = applyAndVerifySubscriptionPriceDeriveRows(
+				ctx, client, targetID, result.Rows, *workers, attrs, effectiveAt, territoryID, "derived territory price", "derived target prices",
+			)
 			if err := shared.PrintOutput(result, *output.Output, *output.Pretty); err != nil {
 				return err
 			}
@@ -325,28 +272,91 @@ func resolveSubscriptionPriceDeriveLookupID(
 	return resolved, nil
 }
 
-func verifySubscriptionPriceDeriveResult(
+func applyAndVerifySubscriptionPriceDeriveRows(
+	ctx context.Context,
+	client *asc.Client,
+	targetSubscriptionID string,
+	rows []asc.SubscriptionPricingDeriveRow,
+	workers int,
+	attrs asc.SubscriptionPriceCreateAttributes,
+	effectiveAt time.Time,
+	territory string,
+	changeNoun string,
+	verifyNoun string,
+) (asc.SubscriptionPricingDeriveSummary, asc.SubscriptionPricingDeriveVerification, error) {
+	planned := countSubscriptionPriceDeriveRows(rows, "planned")
+	fmt.Fprintf(os.Stderr, "Setting %d %s%s (%d worker%s)...\n", planned, changeNoun, pluralizeSubscriptionPriceDeriveCount(planned), workers, pluralizeSubscriptionPriceDeriveCount(workers))
+	applySubscriptionPriceDeriveRows(ctx, client, targetSubscriptionID, rows, workers, attrs, effectiveAt)
+	appliedCount := countSubscriptionPriceDeriveRows(rows, "applied")
+
+	fmt.Fprintf(os.Stderr, "Verifying %s...\n", verifyNoun)
+	verification, err := verifySubscriptionPriceDeriveRows(ctx, client, targetSubscriptionID, effectiveAt, territory, rows)
+	summary := shared.SummarizePriceLadderRows(rows)
+	summary.Applied = appliedCount
+	return summary, verification, err
+}
+
+func applySubscriptionPriceDeriveRows(
+	ctx context.Context,
+	client *asc.Client,
+	targetSubscriptionID string,
+	rows []asc.SubscriptionPricingDeriveRow,
+	workers int,
+	attrs asc.SubscriptionPriceCreateAttributes,
+	effectiveAt time.Time,
+) {
+	changes := make([]equalization, 0, len(rows))
+	for _, row := range rows {
+		if row.Status != "planned" {
+			continue
+		}
+		changes = append(changes, equalization{
+			Territory:    row.Territory,
+			Price:        row.TargetPrice,
+			PricePointID: row.TargetPricePointID,
+		})
+	}
+	_, failures := applyEqualizedPrices(ctx, client, targetSubscriptionID, changes, workers, attrs, effectiveAt)
+	failureByTerritory := make(map[string]error, len(failures))
+	for _, failure := range failures {
+		failureByTerritory[strings.ToUpper(strings.TrimSpace(failure.Target.Territory))] = failure.Err
+	}
+	for index := range rows {
+		row := &rows[index]
+		if row.Status != "planned" {
+			continue
+		}
+		if failure := failureByTerritory[row.Territory]; failure != nil {
+			row.Status = "failed"
+			row.Error = failure.Error()
+			continue
+		}
+		row.Status = "applied"
+	}
+}
+
+func verifySubscriptionPriceDeriveRows(
 	ctx context.Context,
 	client *asc.Client,
 	targetSubscriptionID string,
 	effectiveAt time.Time,
 	territory string,
-	result *asc.SubscriptionPricingDeriveResult,
-) error {
-	preexistingFailed := countSubscriptionPriceDeriveRows(result.Rows, "failed")
-	if countSubscriptionPriceDeriveRows(result.Rows, "applied") == 0 {
+	rows []asc.SubscriptionPricingDeriveRow,
+) (asc.SubscriptionPricingDeriveVerification, error) {
+	preexistingFailed := countSubscriptionPriceDeriveRows(rows, "failed")
+	if countSubscriptionPriceDeriveRows(rows, "applied") == 0 {
 		status := "completed"
 		if preexistingFailed > 0 {
 			status = "failed"
 		}
-		result.Verification = asc.SubscriptionPricingDeriveVerification{
+		verification := asc.SubscriptionPricingDeriveVerification{
 			Status: status,
 			Failed: preexistingFailed,
 		}
 		if preexistingFailed > 0 {
-			return fmt.Errorf("%d territory update(s) failed before verification", preexistingFailed)
+			return verification, fmt.Errorf("%d territory update(s) failed before verification", preexistingFailed)
 		}
-		return nil
+		return verification, nil
 	}
 
 	resolved, err := fetchResolvedSubscriptionPrices(
@@ -360,17 +370,16 @@ func verifySubscriptionPriceDeriveResult(
 		territory,
 	)
 	if err != nil {
-		for index := range result.Rows {
-			if result.Rows[index].Status == "applied" {
-				result.Rows[index].Status = "failed"
-				result.Rows[index].Error = fmt.Sprintf("verification readback failed: %v", err)
+		for index := range rows {
+			if rows[index].Status == "applied" {
+				rows[index].Status = "failed"
+				rows[index].Error = fmt.Sprintf("verification readback failed: %v", err)
 			}
 		}
-		result.Verification = asc.SubscriptionPricingDeriveVerification{
+		return asc.SubscriptionPricingDeriveVerification{
 			Status: "failed",
-			Failed: countSubscriptionPriceDeriveRows(result.Rows, "failed"),
-		}
-		return fmt.Errorf("verification readback failed: %w", err)
+			Failed: countSubscriptionPriceDeriveRows(rows, "failed"),
+		}, fmt.Errorf("verification readback failed: %w", err)
 	}
 	currentByTerritory := make(map[string]string, len(resolved.Prices))
 	for _, row := range resolved.Prices {
@@ -381,8 +390,8 @@ func verifySubscriptionPriceDeriveResult(
 	}
 	verified := 0
 	failed := preexistingFailed
-	for index := range result.Rows {
-		row := &result.Rows[index]
+	for index := range rows {
+		row := &rows[index]
 		if row.Status != "applied" {
 			continue
 		}
@@ -403,15 +412,15 @@ func verifySubscriptionPriceDeriveResult(
 	if failed > 0 {
 		status = "failed"
 	}
-	result.Verification = asc.SubscriptionPricingDeriveVerification{
+	verification := asc.SubscriptionPricingDeriveVerification{
 		Status:   status,
 		Verified: verified,
 		Failed:   failed,
 	}
 	if failed > 0 {
-		return fmt.Errorf("verification failed for %d territory update(s)", failed)
+		return verification, fmt.Errorf("verification failed for %d territory update(s)", failed)
 	}
-	return nil
+	return verification, nil
 }
 
 func countSubscriptionPriceDeriveRows(rows []asc.SubscriptionPricingDeriveRow, status string) int {
@@ -437,8 +446,8 @@ func buildSubscriptionPriceDerivePlan(
 	targetSubscriptionID string,
 	sourcePrices *shared.ResolvedPricesResult,
 	targetPrices *shared.ResolvedPricesResult,
-	multiplier *big.Rat,
-	rounding subscriptionPriceDeriveRounding,
+	multiplierFor func(territory string) (*big.Rat, bool),
+	rounding shared.PriceRounding,
 	workers int,
 ) []asc.SubscriptionPricingDeriveRow {
 	if sourcePrices == nil {
@@ -483,55 +492,12 @@ func buildSubscriptionPriceDerivePlan(
 			for index := range jobs {
 				source := sourcePrices.Prices[index]
 				territory := strings.ToUpper(strings.TrimSpace(source.Territory))
-				row := asc.SubscriptionPricingDeriveRow{
-					Territory:          territory,
-					Currency:           strings.TrimSpace(source.Currency),
-					SourcePrice:        strings.TrimSpace(source.CustomerPrice),
-					SourcePricePointID: strings.TrimSpace(source.PricePointID),
-					RequestedMultiple:  formatSubscriptionPriceDeriveExactDecimal(multiplier),
-					Action:             "error",
-					Status:             "unresolved",
+				var current *shared.ResolvedPriceRow
+				if row, ok := targetByTerritory[territory]; ok {
+					current = &row
 				}
-				if current, ok := targetByTerritory[territory]; ok {
-					row.CurrentTargetPrice = strings.TrimSpace(current.CustomerPrice)
-					row.CurrentTargetPointID = strings.TrimSpace(current.PricePointID)
-				}
-
-				sourcePrice := new(big.Rat)
-				if _, ok := sourcePrice.SetString(row.SourcePrice); !ok || sourcePrice.Sign() <= 0 {
-					row.Error = fmt.Sprintf("source territory %s has invalid customer price %q", territory, row.SourcePrice)
-					rows[index] = row
-					continue
-				}
-				desired := new(big.Rat).Mul(sourcePrice, multiplier)
-				row.DesiredPrice = formatSubscriptionPriceDeriveExactDecimal(desired)
-
-				if candidatesErr != nil {
-					row.Error = candidatesErr.Error()
-					rows[index] = row
-					continue
-				}
-				resolution, err := resolveSubscriptionPriceDerivePoint(candidatesByTerritory[territory], desired, rounding)
-				if err != nil {
-					row.Error = fmt.Sprintf("%s: %v", territory, err)
-					rows[index] = row
-					continue
-				}
-
-				row.TargetPrice = resolution.CustomerPrice
-				row.TargetPricePointID = resolution.PricePointID
-				achieved := new(big.Rat).Quo(resolution.price, sourcePrice)
-				row.AchievedMultiple = formatSubscriptionPriceDeriveDecimal(achieved, 6)
-				delta := new(big.Rat).Sub(achieved, multiplier)
-				row.MultipleDelta = formatSubscriptionPriceDeriveDecimal(delta, 6)
-				if row.CurrentTargetPointID == row.TargetPricePointID {
-					row.Action = "noop"
-					row.Status = "noop"
-				} else {
-					row.Action = "update"
-					row.Status = "planned"
-				}
-				rows[index] = row
+				multiplier, _ := multiplierFor(territory)
+				rows[index] = shared.PlanPriceLadderRow(source, current, multiplier, candidatesByTerritory[territory], candidatesErr, rounding)
 			}
 		}()
 	}
@@ -552,7 +518,7 @@ func fetchSubscriptionPriceDeriveCandidatesByTerritory(
 	client *asc.Client,
 	targetSubscriptionID string,
 	territories []string,
-) (map[string][]subscriptionPriceDeriveCandidate, error) {
+) (map[string][]shared.PriceLadderCandidate, error) {
 	normalizedTerritories := make([]string, 0, len(territories))
 	wantedTerritories := make(map[string]struct{}, len(territories))
 	for _, rawTerritory := range territories {
@@ -567,7 +533,7 @@ func fetchSubscriptionPriceDeriveCandidatesByTerritory(
 		normalizedTerritories = append(normalizedTerritories, territory)
 	}
 	if len(normalizedTerritories) == 0 {
-		return map[string][]subscriptionPriceDeriveCandidate{}, nil
+		return map[string][]shared.PriceLadderCandidate{}, nil
 	}
 	sort.Strings(normalizedTerritories)
 
@@ -598,7 +564,7 @@ func fetchSubscriptionPriceDeriveCandidatesByTerritory(
 	if err != nil {
 		return nil, fmt.Errorf("resolve target price points: %w", err)
 	}
-	candidates := make(map[string][]subscriptionPriceDeriveCandidate, len(normalizedTerritories))
+	candidates := make(map[string][]shared.PriceLadderCandidate, len(normalizedTerritories))
 	if err := asc.PaginateEach(
 		ctx,
 		firstPage,
@@ -611,14 +577,14 @@ func fetchSubscriptionPriceDeriveCandidatesByTerritory(
 				return fmt.Errorf("unexpected target price-points response type %T", page)
 			}
 			for _, pricePoint := range response.Data {
-				territory := territoryFromPricePointRelationships(pricePoint.Relationships)
+				territory := shared.PricePointTerritoryID(pricePoint.Relationships)
 				if territory == "" {
 					return fmt.Errorf("target price point %q is missing its territory relationship", pricePoint.ID)
 				}
 				if _, wanted := wantedTerritories[territory]; !wanted {
 					return fmt.Errorf("target price point %q returned unexpected territory %s", pricePoint.ID, territory)
 				}
-				candidates[territory] = append(candidates[territory], subscriptionPriceDeriveCandidate{
+				candidates[territory] = append(candidates[territory], shared.PriceLadderCandidate{
 					PricePointID:  strings.TrimSpace(pricePoint.ID),
 					CustomerPrice: strings.TrimSpace(pricePoint.Attributes.CustomerPrice),
 				})
@@ -631,34 +597,13 @@ func fetchSubscriptionPriceDeriveCandidatesByTerritory(
 	return candidates, nil
 }
 
-func summarizeSubscriptionPriceDeriveRows(rows []asc.SubscriptionPricingDeriveRow) asc.SubscriptionPricingDeriveSummary {
-	summary := asc.SubscriptionPricingDeriveSummary{Total: len(rows)}
-	for _, row := range rows {
-		switch row.Status {
-		case "planned":
-			summary.Planned++
-		case "noop":
-			summary.Noop++
-		case "applied":
-			summary.Applied++
-		case "verified":
-			summary.Verified++
-		case "unresolved":
-			summary.Unresolved++
-		case "failed":
-			summary.Failed++
-		}
-	}
-	return summary
-}
-
 func parseSubscriptionPriceDeriveMultiplier(value string) (*big.Rat, error) {
 	trimmed := strings.TrimSpace(value)
 	if trimmed == "" {
 		fmt.Fprintln(os.Stderr, "Error: --multiplier is required")
 		return nil, shared.MissingRequiredUsageError("--multiplier")
 	}
-	if !isSubscriptionPriceDeriveDecimal(trimmed) {
+	if !shared.IsPriceDecimal(trimmed) {
 		return nil, shared.UsageError("--multiplier must be a positive decimal")
 	}
 	multiplier := new(big.Rat)
@@ -666,212 +611,4 @@ func parseSubscriptionPriceDeriveMultiplier(value string) (*big.Rat, error) {
 		return nil, shared.UsageError("--multiplier must be a positive decimal")
 	}
 	return multiplier, nil
-}
-
-func isSubscriptionPriceDeriveDecimal(value string) bool {
-	digits := 0
-	dots := 0
-	for _, character := range value {
-		switch {
-		case character >= '0' && character <= '9':
-			digits++
-		case character == '.':
-			dots++
-			if dots > 1 {
-				return false
-			}
-		default:
-			return false
-		}
-	}
-	return digits > 0
-}
-
-func normalizeSubscriptionPriceDeriveRounding(value string) (subscriptionPriceDeriveRounding, error) {
-	normalized := subscriptionPriceDeriveRounding(strings.ToLower(strings.TrimSpace(value)))
-	switch normalized {
-	case subscriptionPriceDeriveExact,
-		subscriptionPriceDeriveNearest,
-		subscriptionPriceDeriveUp,
-		subscriptionPriceDeriveDown:
-		return normalized, nil
-	default:
-		return "", shared.UsageError("--round must be one of: exact, nearest, up, down")
-	}
-}
-
-func resolveSubscriptionPriceDerivePoint(
-	candidates []subscriptionPriceDeriveCandidate,
-	desired *big.Rat,
-	rounding subscriptionPriceDeriveRounding,
-) (subscriptionPriceDeriveResolution, error) {
-	if desired == nil || desired.Sign() <= 0 {
-		return subscriptionPriceDeriveResolution{}, fmt.Errorf("desired target price must be positive")
-	}
-	if len(candidates) == 0 {
-		return subscriptionPriceDeriveResolution{}, fmt.Errorf("target price-point ladder is empty")
-	}
-
-	type parsedCandidate struct {
-		resolution subscriptionPriceDeriveResolution
-		key        string
-	}
-	parsed := make([]parsedCandidate, 0, len(candidates))
-	byPrice := make(map[string][]parsedCandidate)
-	priceByID := make(map[string]string, len(candidates))
-	for _, candidate := range candidates {
-		id := strings.TrimSpace(candidate.PricePointID)
-		if id == "" {
-			return subscriptionPriceDeriveResolution{}, fmt.Errorf("target price point has an empty id")
-		}
-
-		price := new(big.Rat)
-		if _, ok := price.SetString(strings.TrimSpace(candidate.CustomerPrice)); !ok || price.Sign() <= 0 {
-			return subscriptionPriceDeriveResolution{}, fmt.Errorf("target price point %q has invalid customer price %q", id, candidate.CustomerPrice)
-		}
-		priceKey := price.RatString()
-		if existingPrice, seen := priceByID[id]; seen {
-			if existingPrice != priceKey {
-				return subscriptionPriceDeriveResolution{}, fmt.Errorf("target price point %q has conflicting customer prices", id)
-			}
-			continue
-		}
-		priceByID[id] = priceKey
-		item := parsedCandidate{
-			resolution: subscriptionPriceDeriveResolution{
-				PricePointID:  id,
-				CustomerPrice: strings.TrimSpace(candidate.CustomerPrice),
-				price:         price,
-			},
-			key: priceKey,
-		}
-		parsed = append(parsed, item)
-		byPrice[item.key] = append(byPrice[item.key], item)
-	}
-	if len(parsed) == 0 {
-		return subscriptionPriceDeriveResolution{}, fmt.Errorf("target price-point ladder is empty")
-	}
-
-	var selected *parsedCandidate
-	for i := range parsed {
-		candidate := &parsed[i]
-		cmp := candidate.resolution.price.Cmp(desired)
-		switch rounding {
-		case subscriptionPriceDeriveExact:
-			if cmp == 0 {
-				selected = candidate
-			}
-		case subscriptionPriceDeriveUp:
-			if cmp >= 0 && (selected == nil || candidate.resolution.price.Cmp(selected.resolution.price) < 0) {
-				selected = candidate
-			}
-		case subscriptionPriceDeriveDown:
-			if cmp <= 0 && (selected == nil || candidate.resolution.price.Cmp(selected.resolution.price) > 0) {
-				selected = candidate
-			}
-		case subscriptionPriceDeriveNearest:
-			if selected == nil || subscriptionPriceDeriveCandidateIsNearer(candidate.resolution.price, selected.resolution.price, desired) {
-				selected = candidate
-			}
-		default:
-			return subscriptionPriceDeriveResolution{}, fmt.Errorf("unsupported rounding mode %q", rounding)
-		}
-	}
-
-	desiredText := formatSubscriptionPriceDeriveExactDecimal(desired)
-	if selected == nil {
-		switch rounding {
-		case subscriptionPriceDeriveExact:
-			return subscriptionPriceDeriveResolution{}, fmt.Errorf("no exact target price point for %s", desiredText)
-		case subscriptionPriceDeriveUp:
-			return subscriptionPriceDeriveResolution{}, fmt.Errorf("no target price point at or above %s", desiredText)
-		case subscriptionPriceDeriveDown:
-			return subscriptionPriceDeriveResolution{}, fmt.Errorf("no target price point at or below %s", desiredText)
-		default:
-			return subscriptionPriceDeriveResolution{}, fmt.Errorf("no target price point for %s", desiredText)
-		}
-	}
-	if duplicates := byPrice[selected.key]; len(duplicates) > 1 {
-		return subscriptionPriceDeriveResolution{}, fmt.Errorf(
-			"multiple target price points match selected price %s",
-			formatSubscriptionPriceDeriveExactDecimal(selected.resolution.price),
-		)
-	}
-	return selected.resolution, nil
-}
-
-func subscriptionPriceDeriveCandidateIsNearer(candidate, selected, desired *big.Rat) bool {
-	candidateDistance := new(big.Rat).Sub(candidate, desired)
-	candidateDistance.Abs(candidateDistance)
-	selectedDistance := new(big.Rat).Sub(selected, desired)
-	selectedDistance.Abs(selectedDistance)
-	comparison := candidateDistance.Cmp(selectedDistance)
-	if comparison != 0 {
-		return comparison < 0
-	}
-	return candidate.Cmp(selected) < 0
-}
-
-func formatSubscriptionPriceDeriveDecimal(value *big.Rat, precision int) string {
-	if value == nil {
-		return ""
-	}
-	if value.IsInt() {
-		return value.Num().String()
-	}
-	if precision < 0 {
-		precision = 0
-	}
-	if value.Sign() != 0 {
-		absoluteNumerator := new(big.Int).Abs(new(big.Int).Set(value.Num()))
-		denominator := new(big.Int).Abs(new(big.Int).Set(value.Denom()))
-		digitEstimate := len(denominator.String()) - len(absoluteNumerator.String()) - 1
-		if digitEstimate > precision {
-			precision = digitEstimate
-		}
-		scaledTwice := new(big.Int).Mul(absoluteNumerator, big.NewInt(2))
-		if precision > 0 {
-			scaledTwice.Mul(scaledTwice, new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(precision)), nil))
-		}
-		for scaledTwice.Cmp(denominator) < 0 {
-			precision++
-			scaledTwice.Mul(scaledTwice, big.NewInt(10))
-		}
-	}
-	formatted := value.FloatString(precision)
-	formatted = strings.TrimRight(formatted, "0")
-	formatted = strings.TrimRight(formatted, ".")
-	if formatted == "-0" {
-		return "0"
-	}
-	return formatted
-}
-
-func formatSubscriptionPriceDeriveExactDecimal(value *big.Rat) string {
-	if value == nil {
-		return ""
-	}
-	denominator := new(big.Int).Abs(new(big.Int).Set(value.Denom()))
-	two := big.NewInt(2)
-	five := big.NewInt(5)
-	one := big.NewInt(1)
-	remainder := new(big.Int)
-	twos := 0
-	for remainder.Mod(denominator, two).Sign() == 0 {
-		denominator.Quo(denominator, two)
-		twos++
-	}
-	fives := 0
-	for remainder.Mod(denominator, five).Sign() == 0 {
-		denominator.Quo(denominator, five)
-		fives++
-	}
-	if denominator.Cmp(one) != 0 {
-		return value.RatString()
-	}
-	precision := twos
-	if fives > precision {
-		precision = fives
-	}
-	return formatSubscriptionPriceDeriveDecimal(value, precision)
 }

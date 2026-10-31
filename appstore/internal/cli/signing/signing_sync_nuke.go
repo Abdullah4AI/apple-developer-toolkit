@@ -112,6 +112,7 @@ Examples:
 			if err != nil {
 				return fmt.Errorf("signing sync nuke: %w", err)
 			}
+			certificateTypes = signingCertificateTypesForClient(client, *certType, certificateTypes)
 
 			result := SyncNukeResult{
 				Operation:        "nuke",

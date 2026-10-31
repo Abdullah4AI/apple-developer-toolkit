@@ -67,6 +67,9 @@ func TestFormatAppNameWithSuffixCountsCharacters(t *testing.T) {
 }
 
 func TestRunAppsCreateAutoRenamePreservesUnicode(t *testing.T) {
+	guardAppCreatePreflightHTTP(t)
+	stubBundleIDPreflight(t)
+
 	origResolveAppCreateSession := resolveAppCreateSessionFn
 	t.Cleanup(func() {
 		resolveAppCreateSessionFn = origResolveAppCreateSession

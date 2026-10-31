@@ -2,7 +2,6 @@ package subscriptions
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -887,27 +886,10 @@ func summarizeEqualizeTerritories(territories []string, limit int) string {
 }
 
 func equalizationTerritoryID(pricePoint asc.Resource[asc.SubscriptionPricePointAttributes]) (string, error) {
-	if territory := territoryFromPricePointRelationships(pricePoint.Relationships); territory != "" {
+	if territory := shared.PricePointTerritoryID(pricePoint.Relationships); territory != "" {
 		return territory, nil
 	}
 	return "", fmt.Errorf("failed to resolve territory for equalized price point %q; ensure include=territory is set", pricePoint.ID)
-}
-
-func territoryFromPricePointRelationships(raw json.RawMessage) string {
-	if len(raw) == 0 {
-		return ""
-	}
-
-	var relationships struct {
-		Territory *asc.Relationship `json:"territory"`
-	}
-	if err := json.Unmarshal(raw, &relationships); err != nil {
-		return ""
-	}
-	if relationships.Territory == nil {
-		return ""
-	}
-	return strings.ToUpper(strings.TrimSpace(relationships.Territory.Data.ID))
 }
 
 func printEqualizeResult(result *equalizeResult, format string, pretty bool) error {

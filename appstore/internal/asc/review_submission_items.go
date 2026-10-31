@@ -38,6 +38,9 @@ type ReviewSubmissionItemAttributes struct {
 
 // ReviewSubmissionItemRelationships describes review submission item relationships.
 type ReviewSubmissionItemRelationships struct {
+	contentLinkages                 int           `json:"-"`
+	appVersionLinkageKnown          bool          `json:"-"`
+	iapVersionLinkageKnown          bool          `json:"-"`
 	AppStoreVersion                 *Relationship `json:"appStoreVersion,omitempty"`
 	AppCustomProductPageVersion     *Relationship `json:"appCustomProductPageVersion,omitempty"`
 	AppAssetLibraryImage            *Relationship `json:"appAssetLibraryImage,omitempty"`
@@ -54,6 +57,38 @@ type ReviewSubmissionItemRelationships struct {
 	InAppPurchaseVersion            *Relationship `json:"inAppPurchaseVersion,omitempty"`
 	SubscriptionVersion             *Relationship `json:"subscriptionVersion,omitempty"`
 	SubscriptionGroupVersion        *Relationship `json:"subscriptionGroupVersion,omitempty"`
+}
+
+// VersionLinkagesKnown reports whether both requested version linkages were returned.
+func (r *ReviewSubmissionItemRelationships) VersionLinkagesKnown() bool {
+	return r != nil && r.appVersionLinkageKnown && r.iapVersionLinkageKnown
+}
+
+// HasConflictingContentLinkages reports contradictory item content identities.
+func (r *ReviewSubmissionItemRelationships) HasConflictingContentLinkages() bool {
+	return r != nil && r.contentLinkages > 1
+}
+
+func (r *ReviewSubmissionItemRelationships) UnmarshalJSON(data []byte) error {
+	type plain ReviewSubmissionItemRelationships
+	if err := json.Unmarshal(data, (*plain)(r)); err != nil {
+		return err
+	}
+	var raw map[string]struct {
+		Data json.RawMessage `json:"data"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	r.contentLinkages = 0
+	for _, relationship := range raw {
+		if len(relationship.Data) > 0 && strings.TrimSpace(string(relationship.Data)) != "null" {
+			r.contentLinkages++
+		}
+	}
+	r.appVersionLinkageKnown = len(raw["appStoreVersion"].Data) > 0
+	r.iapVersionLinkageKnown = len(raw["inAppPurchaseVersion"].Data) > 0
+	return nil
 }
 
 // ReviewSubmissionItemResource represents a review submission item resource.

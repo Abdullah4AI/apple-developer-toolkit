@@ -240,10 +240,11 @@ func uploadScreenshotsWithConfig[T any](ctx context.Context, cfg screenshotUploa
 	results := make([]asc.AssetUploadResultItem, 0, len(skippedResults)+len(files))
 	if len(files) > 0 {
 		uploadedResults, err := uploadScreenshotsToSetFromRootWithOpenedFiles(uploadCtx, cfg.Client, set.ID, files, sourceRootPath, !cfg.Replace, openedFiles)
-		if err != nil {
-			return zero, err
-		}
 		results = append(results, uploadedResults...)
+		if err != nil {
+			results = append(skippedResults, results...)
+			return cfg.BuildResult(cfg.LocalizationID, set, false, results), err
+		}
 	}
 	if cfg.SkipExisting && len(skippedResults) > 0 {
 		if _, err := syncSkippedScreenshotOrder(uploadCtx, cfg.Client, set.ID, cfg.Files, skippedResults, results); err != nil {

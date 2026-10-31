@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
 )
 
 // BumpType represents the version component to increment.
@@ -152,26 +154,10 @@ type SetVersionOptions struct {
 }
 
 // VersionChange describes one concrete build-setting mutation.
-type VersionChange struct {
-	Setting       string `json:"setting"`
-	OldValue      string `json:"oldValue,omitempty"`
-	NewValue      string `json:"newValue"`
-	Target        string `json:"target,omitempty"`
-	Configuration string `json:"configuration,omitempty"`
-	Path          string `json:"path"`
-	Source        string `json:"source"`
-}
+type VersionChange = asc.XcodeVersionChange
 
 // SetVersionResult holds the result of a set operation.
-type SetVersionResult struct {
-	Version       string          `json:"version,omitempty"`
-	BuildNumber   string          `json:"buildNumber,omitempty"`
-	ProjectDir    string          `json:"projectDir"`
-	Target        string          `json:"target,omitempty"`
-	Configuration string          `json:"configuration,omitempty"`
-	ChangedFiles  []string        `json:"changedFiles"`
-	Changes       []VersionChange `json:"changes"`
-}
+type SetVersionResult = asc.XcodeSetVersionResult
 
 // BumpVersionOptions configures the bump operation.
 type BumpVersionOptions struct {
@@ -189,18 +175,7 @@ type BumpVersionOptions struct {
 }
 
 // BumpVersionResult holds the result of a bump operation.
-type BumpVersionResult struct {
-	BumpType      string          `json:"bumpType"`
-	OldVersion    string          `json:"oldVersion,omitempty"`
-	NewVersion    string          `json:"newVersion,omitempty"`
-	OldBuild      string          `json:"oldBuild,omitempty"`
-	NewBuild      string          `json:"newBuild,omitempty"`
-	ProjectDir    string          `json:"projectDir"`
-	Target        string          `json:"target,omitempty"`
-	Configuration string          `json:"configuration,omitempty"`
-	ChangedFiles  []string        `json:"changedFiles"`
-	Changes       []VersionChange `json:"changes"`
-}
+type BumpVersionResult = asc.XcodeBumpVersionResult
 
 func resolvedProjectDir(projectDir string) string {
 	projectDir = trimTrailingPathSeparators(projectDir)
@@ -406,6 +381,7 @@ func BumpVersion(ctx context.Context, opts BumpVersionOptions) (*BumpVersionResu
 		}
 		result.ChangedFiles = updated.ChangedFiles
 		result.Changes = updated.Changes
+		result.ComputedWarnings = updated.ComputedWarnings
 		return result, nil
 	}
 	err = fmt.Errorf("%w: selected Xcode configurations do not resolve both MARKETING_VERSION and CURRENT_PROJECT_VERSION", errStructuredVersionUnavailable)

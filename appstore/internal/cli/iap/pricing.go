@@ -24,6 +24,7 @@ Examples:
   asc iap pricing summary --iap-id "IAP_ID"
   asc iap pricing price-points list --iap-id "IAP_ID"
   asc iap pricing schedules view --iap-id "IAP_ID"
+  asc iap pricing ppp --iap-id "IAP_ID" --base-price "4.99" --dry-run
   asc iap pricing availability view --iap-id "IAP_ID"
   asc iap pricing availabilities view --id "AVAILABILITY_ID"`,
 		FlagSet:   fs,
@@ -32,6 +33,7 @@ Examples:
 			IAPPricesCommand(),
 			IAPPricePointsCommand(),
 			IAPPriceSchedulesCommand(),
+			IAPPricingPPPCommand(),
 			IAPAvailabilityCommand(),
 			IAPAvailabilitiesCommand(),
 		},

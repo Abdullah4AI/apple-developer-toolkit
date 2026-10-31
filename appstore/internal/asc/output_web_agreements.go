@@ -1,6 +1,9 @@
 package asc
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // WebAgreementContractMessage is an App Store Connect alert banner entry.
 type WebAgreementContractMessage struct {
@@ -22,14 +25,18 @@ type WebAgreement struct {
 	DateAccepted              string `json:"dateAccepted,omitempty"`
 	DateAgreeBy               string `json:"dateAgreeBy,omitempty"`
 	DownloadURL               string `json:"downloadUrl,omitempty"`
+
+	ProgramLicenseClassificationUnknown bool `json:"programLicenseClassificationUnknown,omitempty"`
 }
 
 // WebAgreementsStatusResult reports agreement state for a web session team.
 type WebAgreementsStatusResult struct {
-	TeamID           string                        `json:"teamId"`
-	Pending          bool                          `json:"pending"`
-	ContractMessages []WebAgreementContractMessage `json:"contractMessages"`
-	Agreements       []WebAgreement                `json:"agreements"`
+	TeamID              string                        `json:"teamId"`
+	Pending             bool                          `json:"pending"`
+	PendingAgreementIDs []string                      `json:"pendingAgreementIds"`
+	Warnings            []string                      `json:"warnings"`
+	ContractMessages    []WebAgreementContractMessage `json:"contractMessages"`
+	Agreements          []WebAgreement                `json:"agreements"`
 }
 
 // WebAgreementsAcceptResult summarizes an agreement acceptance. When Verified
@@ -68,16 +75,24 @@ func webAgreementDownloadRows(result *WebAgreementDownloadResult) ([]string, [][
 }
 
 func webAgreementsStatusTables(result *WebAgreementsStatusResult, render func([]string, [][]string)) error {
+	pendingIDs := strings.Join(result.PendingAgreementIDs, ", ")
+	if pendingIDs == "" {
+		pendingIDs = "none"
+	}
 	render(
-		[]string{"Team ID", "Pending", "Contract Messages", "Agreements"},
+		[]string{"Team ID", "Pending or alert", "Pending Agreement IDs", "Contract Messages", "Agreements"},
 		[][]string{{
 			result.TeamID,
 			fmt.Sprintf("%t", result.Pending),
+			pendingIDs,
 			fmt.Sprintf("%d", len(result.ContractMessages)),
 			fmt.Sprintf("%d", len(result.Agreements)),
 		}},
 	)
 
+	for _, warning := range result.Warnings {
+		render([]string{"Warning"}, [][]string{{warning}})
+	}
 	if len(result.ContractMessages) > 0 {
 		rows := make([][]string, 0, len(result.ContractMessages))
 		for _, message := range result.ContractMessages {

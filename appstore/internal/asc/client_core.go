@@ -19,8 +19,17 @@ import (
 )
 
 const (
+	ascAPIHost        = "api.appstoreconnect.apple.com"
+	enterpriseAPIHost = "api.enterprise.developer.apple.com"
+
 	// BaseURL is the App Store Connect API base URL
-	BaseURL = "https://api.appstoreconnect.apple.com"
+	BaseURL = "https://" + ascAPIHost
+	// EnterpriseBaseURL is the Apple Developer Enterprise Program API base URL
+	EnterpriseBaseURL = "https://" + enterpriseAPIHost
+
+	ascJWTAudience        = "appstoreconnect-v1"
+	enterpriseJWTAudience = "apple-developer-enterprise-v1"
+
 	// DefaultTimeout is the default request timeout
 	DefaultTimeout = 30 * time.Second
 	// DefaultUploadTimeout is the default timeout for upload operations.
@@ -649,6 +658,7 @@ type Client struct {
 	keyID         string
 	issuerID      string
 	privateKey    *ecdsa.PrivateKey
+	enterprise    bool
 	notaryBaseURL string // override for testing; empty uses NotaryBaseURL constant
 
 	jwtMu              sync.Mutex
@@ -742,6 +752,26 @@ func newClientWithPrivateKey(keyID, issuerID string, privateKey *ecdsa.PrivateKe
 		issuerID:   issuerID,
 		privateKey: privateKey,
 	}
+}
+
+// UseEnterpriseProgramAPI points the client at the Enterprise Program API, which
+// takes its own host and token audience. Call it before the first request.
+func (c *Client) UseEnterpriseProgramAPI() {
+	c.enterprise = true
+	c.httpClient = clientWithoutRedirects(c.httpClient)
+}
+
+// IsAPIHost reports whether host serves the App Store Connect or Enterprise
+// Program API. A *Client still only sends requests to its own host.
+func IsAPIHost(host string) bool {
+	return host == ascAPIHost || host == enterpriseAPIHost
+}
+
+func (c *Client) apiBaseURL() string {
+	if c.enterprise {
+		return EnterpriseBaseURL
+	}
+	return BaseURL
 }
 
 func (c *Client) getMutatingRequestLimiter() chan struct{} {

@@ -78,8 +78,10 @@ Error codes keyed on, per command:
 Other Apple existence codes seen in this repository's fixtures, kept for
 reference when a later command needs them: bare `ENTITY_ERROR` with detail
 "A device with number ... already exists on this team." (device registration),
-and `ENTITY_ERROR.ATTRIBUTE.INVALID.ALREADY_EXISTS` on
-`POST /iris/v1/inAppPurchaseSubmissions`.
+and `ENTITY_ERROR.ATTRIBUTE.INVALID.ALREADY_EXISTS` in web review attachment
+fixtures. The IAP attach command uses `POST /iris/v1/reviewSubmissionItems`
+and verifies a matching, non-removed IAP version item in the selected draft
+before treating that conflict as an idempotent success.
 
 The shared helper `shared.ResolveIfExistsConflict` implements the rule: it
 requires `errors.Is(err, asc.ErrConflict)`, an `*asc.APIError` **any** of whose

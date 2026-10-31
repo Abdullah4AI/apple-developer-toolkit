@@ -76,219 +76,6 @@ func TestWebReviewIAPsAttachRejectsNonNumericAppID(t *testing.T) {
 	}
 }
 
-// TestWebReviewIAPsAttachPostsIrisResourceIDWhenSelectorWasProductID guards
-// the subtle correctness property requested in PR review: when --iap-id is a
-// bundle-style productId (matched against attributes.productId), the
-// /iris/v1/inAppPurchaseSubmissions POST must still carry the iris resource
-// id in the relationship, not the productId selector.
-func TestWebReviewIAPsAttachPostsIrisResourceIDWhenSelectorWasProductID(t *testing.T) {
-	_ = stubWebProgressLabels(t)
-
-	origResolveSession := resolveSessionFn
-	t.Cleanup(func() {
-		resolveSessionFn = origResolveSession
-	})
-
-	const (
-		irisResourceID = "ae6d89d7-15c5-4a3d-9041-663a4d40638e"
-		productID      = "com.example.lifetime"
-	)
-
-	resolveSessionFn = func(ctx context.Context, appleID, password, twoFactorCode string) (*webcore.AuthSession, string, error) {
-		return &webcore.AuthSession{
-			Client: &http.Client{
-				Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
-					switch {
-					case req.Method == http.MethodGet && req.URL.Path == "/iris/v1/apps/123456789/inAppPurchases":
-						return &http.Response{
-							StatusCode: http.StatusOK,
-							Header:     http.Header{"Content-Type": []string{"application/json"}},
-							Body: io.NopCloser(strings.NewReader(`{
-								"data": [{
-									"type": "inAppPurchases",
-									"id": "` + irisResourceID + `",
-									"attributes": {
-										"productId": "` + productID + `",
-										"referenceName": "Lifetime",
-										"state": "READY_TO_SUBMIT"
-									}
-								}]
-							}`)),
-							Request: req,
-						}, nil
-					case req.Method == http.MethodPost && req.URL.Path == "/iris/v1/inAppPurchaseSubmissions":
-						body, err := io.ReadAll(req.Body)
-						if err != nil {
-							t.Fatalf("read POST body: %v", err)
-						}
-						var post struct {
-							Data struct {
-								Relationships struct {
-									InAppPurchaseV2 struct {
-										Data struct {
-											ID string `json:"id"`
-										} `json:"data"`
-									} `json:"inAppPurchaseV2"`
-								} `json:"relationships"`
-							} `json:"data"`
-						}
-						if err := json.Unmarshal(body, &post); err != nil {
-							t.Fatalf("decode POST body: %v; body=%s", err, body)
-						}
-						gotID := post.Data.Relationships.InAppPurchaseV2.Data.ID
-						if gotID != irisResourceID {
-							t.Fatalf("expected attach POST to carry iris resource id %q, got %q", irisResourceID, gotID)
-						}
-						if gotID == productID {
-							t.Fatalf("attach POST must not carry productId as relationship id; body=%s", body)
-						}
-						return &http.Response{
-							StatusCode: http.StatusCreated,
-							Header:     http.Header{"Content-Type": []string{"application/json"}},
-							Body: io.NopCloser(strings.NewReader(`{
-								"data": {
-									"type": "inAppPurchaseSubmissions",
-									"id": "submission-1",
-									"attributes": {"submitWithNextAppStoreVersion": true},
-									"relationships": {
-										"inAppPurchaseV2": {
-											"data": {"type": "inAppPurchases", "id": "` + irisResourceID + `"}
-										}
-									}
-								}
-							}`)),
-							Request: req,
-						}, nil
-					default:
-						t.Fatalf("unexpected request: %s %s", req.Method, req.URL.Path)
-						return nil, nil
-					}
-				}),
-			},
-		}, "cache", nil
-	}
-
-	cmd := WebReviewIAPsAttachCommand()
-	if err := cmd.FlagSet.Parse([]string{
-		"--app", "123456789",
-		"--iap-id", productID,
-		"--confirm",
-		"--output", "json",
-	}); err != nil {
-		t.Fatalf("parse error: %v", err)
-	}
-
-	stdout, _ := captureOutput(t, func() {
-		if err := cmd.Exec(context.Background(), nil); err != nil {
-			t.Fatalf("exec error: %v", err)
-		}
-	})
-
-	var payload reviewIAPMutationOutput
-	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
-		t.Fatalf("failed to parse stdout JSON: %v\nstdout=%s", err, stdout)
-	}
-	// IAPID in the output preserves what the caller passed (the selector).
-	if payload.IAPID != productID {
-		t.Fatalf("expected IAPID to echo caller selector %q, got %q", productID, payload.IAPID)
-	}
-	// Submission.InAppPurchaseID is the iris-resolved id (from the POST response relationship).
-	if payload.Submission.InAppPurchaseID != irisResourceID {
-		t.Fatalf("expected Submission.InAppPurchaseID = %q, got %q", irisResourceID, payload.Submission.InAppPurchaseID)
-	}
-}
-
-func TestWebReviewIAPsAttachTreatsAlreadyAttachedConflictAsNoChange(t *testing.T) {
-	_ = stubWebProgressLabels(t)
-
-	origResolveSession := resolveSessionFn
-	t.Cleanup(func() {
-		resolveSessionFn = origResolveSession
-	})
-
-	const (
-		irisResourceID = "ae6d89d7-15c5-4a3d-9041-663a4d40638e"
-		productID      = "com.example.lifetime"
-	)
-
-	resolveSessionFn = func(ctx context.Context, appleID, password, twoFactorCode string) (*webcore.AuthSession, string, error) {
-		return &webcore.AuthSession{
-			Client: &http.Client{
-				Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
-					switch {
-					case req.Method == http.MethodGet && req.URL.Path == "/iris/v1/apps/123456789/inAppPurchases":
-						return &http.Response{
-							StatusCode: http.StatusOK,
-							Header:     http.Header{"Content-Type": []string{"application/json"}},
-							Body: io.NopCloser(strings.NewReader(`{
-								"data": [{
-									"type": "inAppPurchases",
-									"id": "` + irisResourceID + `",
-									"attributes": {
-										"productId": "` + productID + `",
-										"referenceName": "Lifetime",
-										"state": "READY_TO_SUBMIT"
-									}
-								}]
-							}`)),
-							Request: req,
-						}, nil
-					case req.Method == http.MethodPost && req.URL.Path == "/iris/v1/inAppPurchaseSubmissions":
-						return &http.Response{
-							StatusCode: http.StatusConflict,
-							Header:     http.Header{"Content-Type": []string{"application/json"}},
-							Body: io.NopCloser(strings.NewReader(`{
-								"errors": [{
-									"status": "409",
-									"code": "ENTITY_ERROR.ATTRIBUTE.INVALID.ALREADY_EXISTS",
-									"title": "The request entity conflicts with the current state."
-								}]
-							}`)),
-							Request: req,
-						}, nil
-					default:
-						t.Fatalf("unexpected request: %s %s", req.Method, req.URL.Path)
-						return nil, nil
-					}
-				}),
-			},
-		}, "cache", nil
-	}
-
-	cmd := WebReviewIAPsAttachCommand()
-	if err := cmd.FlagSet.Parse([]string{
-		"--app", "123456789",
-		"--iap-id", productID,
-		"--confirm",
-		"--output", "json",
-	}); err != nil {
-		t.Fatalf("parse error: %v", err)
-	}
-
-	stdout, _ := captureOutput(t, func() {
-		if err := cmd.Exec(context.Background(), nil); err != nil {
-			t.Fatalf("exec error: %v", err)
-		}
-	})
-
-	var payload reviewIAPMutationOutput
-	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
-		t.Fatalf("failed to parse stdout JSON: %v\nstdout=%s", err, stdout)
-	}
-	if payload.IAPID != productID {
-		t.Fatalf("expected IAPID to echo caller selector %q, got %q", productID, payload.IAPID)
-	}
-	if payload.Changed {
-		t.Fatalf("expected already-attached conflict to report changed=false, got %#v", payload)
-	}
-	if payload.Submission.ID != "" {
-		t.Fatalf("expected no submission id for idempotent conflict, got %#v", payload.Submission)
-	}
-	if payload.Submission.InAppPurchaseID != irisResourceID || !payload.Submission.SubmitWithNextAppStoreVersion {
-		t.Fatalf("unexpected idempotent submission output: %#v", payload.Submission)
-	}
-}
-
 func TestWebReviewIAPsAttachRejectsMatchedIAPWithoutIrisResourceID(t *testing.T) {
 	_ = stubWebProgressLabels(t)
 
@@ -319,7 +106,7 @@ func TestWebReviewIAPsAttachRejectsMatchedIAPWithoutIrisResourceID(t *testing.T)
 							}`)),
 							Request: req,
 						}, nil
-					case req.Method == http.MethodPost && req.URL.Path == "/iris/v1/inAppPurchaseSubmissions":
+					case req.Method == http.MethodPost:
 						t.Fatal("attach POST must not run when the matched IAP has no iris resource id")
 						return nil, nil
 					default:
@@ -351,295 +138,6 @@ func TestWebReviewIAPsAttachRejectsMatchedIAPWithoutIrisResourceID(t *testing.T)
 	})
 	if stderr != "" {
 		t.Fatalf("expected empty stderr, got %q", stderr)
-	}
-}
-
-func TestWebReviewIAPsAttachVerifiesIAPBelongsToAppBeforeMutating(t *testing.T) {
-	_ = stubWebProgressLabels(t)
-
-	origResolveSession := resolveSessionFn
-	t.Cleanup(func() {
-		resolveSessionFn = origResolveSession
-	})
-
-	verified := false
-	resolveSessionFn = func(ctx context.Context, appleID, password, twoFactorCode string) (*webcore.AuthSession, string, error) {
-		return &webcore.AuthSession{
-			Client: &http.Client{
-				Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
-					switch {
-					case req.Method == http.MethodGet && req.URL.Path == "/iris/v1/apps/123456789/inAppPurchases":
-						verified = true
-						return &http.Response{
-							StatusCode: http.StatusOK,
-							Header:     http.Header{"Content-Type": []string{"application/json"}},
-							Body: io.NopCloser(strings.NewReader(`{
-								"data": [{
-									"type": "inAppPurchases",
-									"id": "9000000001",
-									"attributes": {
-										"name": "Remove Ads",
-										"productId": "com.example.removeads",
-										"inAppPurchaseType": "NON_CONSUMABLE",
-										"state": "READY_TO_SUBMIT",
-										"submitWithNextAppStoreVersion": false
-									}
-								}]
-							}`)),
-							Request: req,
-						}, nil
-					case req.Method == http.MethodPost && req.URL.Path == "/iris/v1/inAppPurchaseSubmissions":
-						if !verified {
-							t.Fatal("expected app-scoped IAP verification before web mutation")
-						}
-					default:
-						t.Fatalf("unexpected request: %s %s", req.Method, req.URL.Path)
-					}
-					requestBody, err := io.ReadAll(req.Body)
-					if err != nil {
-						t.Fatalf("read request body: %v", err)
-					}
-					body := string(requestBody)
-					for _, want := range []string{
-						`"id":"9000000001"`,
-						`"submitWithNextAppStoreVersion":true`,
-						`"inAppPurchaseV2"`,
-					} {
-						if !strings.Contains(body, want) {
-							t.Fatalf("expected request body to contain %q, got %s", want, body)
-						}
-					}
-					return &http.Response{
-						StatusCode: http.StatusCreated,
-						Header:     http.Header{"Content-Type": []string{"application/json"}},
-						Body: io.NopCloser(strings.NewReader(`{
-							"data": {
-								"type": "inAppPurchaseSubmissions",
-								"id": "submission-1",
-								"attributes": {
-									"submitWithNextAppStoreVersion": true
-								},
-								"relationships": {
-									"inAppPurchaseV2": {
-										"data": {"type": "inAppPurchases", "id": "9000000001"}
-									}
-								}
-							}
-						}`)),
-						Request: req,
-					}, nil
-				}),
-			},
-		}, "cache", nil
-	}
-
-	cmd := WebReviewIAPsAttachCommand()
-	if err := cmd.FlagSet.Parse([]string{
-		"--app", "123456789",
-		"--iap-id", "9000000001",
-		"--confirm",
-		"--output", "json",
-	}); err != nil {
-		t.Fatalf("parse error: %v", err)
-	}
-
-	stdout, _ := captureOutput(t, func() {
-		if err := cmd.Exec(context.Background(), nil); err != nil {
-			t.Fatalf("exec error: %v", err)
-		}
-	})
-
-	var payload reviewIAPMutationOutput
-	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
-		t.Fatalf("failed to parse stdout JSON: %v\nstdout=%s", err, stdout)
-	}
-	if payload.AppID != "123456789" || payload.IAPID != "9000000001" || payload.Operation != "attach" || !payload.Changed {
-		t.Fatalf("unexpected mutation output: %#v", payload)
-	}
-	if payload.Submission.ID != "submission-1" || payload.Submission.InAppPurchaseID != "9000000001" {
-		t.Fatalf("unexpected submission output: %#v", payload.Submission)
-	}
-}
-
-func TestWebReviewIAPsAttachSkipsAlreadyAttachedIAP(t *testing.T) {
-	_ = stubWebProgressLabels(t)
-
-	origResolveSession := resolveSessionFn
-	t.Cleanup(func() {
-		resolveSessionFn = origResolveSession
-	})
-
-	resolveSessionFn = func(ctx context.Context, appleID, password, twoFactorCode string) (*webcore.AuthSession, string, error) {
-		return &webcore.AuthSession{
-			Client: &http.Client{
-				Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
-					if req.Method != http.MethodGet || req.URL.Path != "/iris/v1/apps/123456789/inAppPurchases" {
-						t.Fatalf("unexpected request for already-attached IAP: %s %s", req.Method, req.URL.Path)
-					}
-					return &http.Response{
-						StatusCode: http.StatusOK,
-						Header:     http.Header{"Content-Type": []string{"application/json"}},
-						Body: io.NopCloser(strings.NewReader(`{
-							"data": [{
-								"type": "inAppPurchases",
-								"id": "9000000001",
-								"attributes": {
-									"name": "Remove Ads",
-									"productId": "com.example.removeads",
-									"inAppPurchaseType": "NON_CONSUMABLE",
-									"state": "READY_TO_SUBMIT",
-									"submitWithNextAppStoreVersion": true
-								}
-							}]
-						}`)),
-						Request: req,
-					}, nil
-				}),
-			},
-		}, "cache", nil
-	}
-
-	cmd := WebReviewIAPsAttachCommand()
-	if err := cmd.FlagSet.Parse([]string{
-		"--app", "123456789",
-		"--iap-id", "9000000001",
-		"--confirm",
-		"--output", "json",
-	}); err != nil {
-		t.Fatalf("parse error: %v", err)
-	}
-
-	stdout, _ := captureOutput(t, func() {
-		if err := cmd.Exec(context.Background(), nil); err != nil {
-			t.Fatalf("exec error: %v", err)
-		}
-	})
-
-	var payload reviewIAPMutationOutput
-	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
-		t.Fatalf("failed to parse stdout JSON: %v\nstdout=%s", err, stdout)
-	}
-	if payload.AppID != "123456789" || payload.IAPID != "9000000001" || payload.Operation != "attach" {
-		t.Fatalf("unexpected mutation output: %#v", payload)
-	}
-	if payload.Changed {
-		t.Fatalf("expected already-attached IAP to report changed=false, got %#v", payload)
-	}
-	if payload.Submission.ID != "" || payload.Submission.InAppPurchaseID != "9000000001" || !payload.Submission.SubmitWithNextAppStoreVersion {
-		t.Fatalf("unexpected idempotent submission output: %#v", payload.Submission)
-	}
-}
-
-// In production, iris never returns `submitWithNextAppStoreVersion` in the
-// listing (it is filtered out via `reviewIAPFields`), so the existing
-// short-circuit above never fires. The fallback signal is `state`, which iris
-// does return. When state is one of the in-flight values, the IAP is already
-// enrolled in the next app version review and the CLI must short-circuit
-// before POSTing — otherwise iris answers a re-attach with
-// `ENTITY_ERROR.RELATIONSHIP.INVALID` (UUID form) or
-// `ENTITY_ERROR.ATTRIBUTE.INVALID.UNMODIFIABLE` (numeric form). This test
-// asserts no POST is made.
-func TestWebReviewIAPsAttachShortCircuitsWhenStateIsWaitingForReview(t *testing.T) {
-	_ = stubWebProgressLabels(t)
-
-	origResolveSession := resolveSessionFn
-	t.Cleanup(func() {
-		resolveSessionFn = origResolveSession
-	})
-
-	const (
-		irisResourceID = "ae6d89d7-15c5-4a3d-9041-663a4d40638e"
-		productID      = "com.example.lifetime"
-	)
-
-	resolveSessionFn = func(ctx context.Context, appleID, password, twoFactorCode string) (*webcore.AuthSession, string, error) {
-		return &webcore.AuthSession{
-			Client: &http.Client{
-				Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
-					if req.Method == http.MethodPost {
-						t.Fatalf("unexpected POST while IAP is already in flight: %s %s", req.Method, req.URL.Path)
-					}
-					if req.Method != http.MethodGet || req.URL.Path != "/iris/v1/apps/123456789/inAppPurchases" {
-						t.Fatalf("unexpected request: %s %s", req.Method, req.URL.Path)
-					}
-					return &http.Response{
-						StatusCode: http.StatusOK,
-						Header:     http.Header{"Content-Type": []string{"application/json"}},
-						Body: io.NopCloser(strings.NewReader(`{
-							"data": [{
-								"type": "inAppPurchases",
-								"id": "` + irisResourceID + `",
-								"attributes": {
-									"productId": "` + productID + `",
-									"referenceName": "Lifetime",
-									"state": "WAITING_FOR_REVIEW"
-								}
-							}]
-						}`)),
-						Request: req,
-					}, nil
-				}),
-			},
-		}, "cache", nil
-	}
-
-	cmd := WebReviewIAPsAttachCommand()
-	if err := cmd.FlagSet.Parse([]string{
-		"--app", "123456789",
-		"--iap-id", productID,
-		"--confirm",
-		"--output", "json",
-	}); err != nil {
-		t.Fatalf("parse error: %v", err)
-	}
-
-	stdout, _ := captureOutput(t, func() {
-		if err := cmd.Exec(context.Background(), nil); err != nil {
-			t.Fatalf("exec error: %v", err)
-		}
-	})
-
-	var payload reviewIAPMutationOutput
-	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
-		t.Fatalf("failed to parse stdout JSON: %v\nstdout=%s", err, stdout)
-	}
-	if payload.IAPID != productID {
-		t.Fatalf("expected IAPID to echo caller selector %q, got %q", productID, payload.IAPID)
-	}
-	if payload.Changed {
-		t.Fatalf("expected in-flight IAP to report changed=false, got %#v", payload)
-	}
-	if payload.Submission.ID != "" {
-		t.Fatalf("expected no submission id when short-circuiting, got %#v", payload.Submission)
-	}
-	if payload.Submission.InAppPurchaseID != irisResourceID || !payload.Submission.SubmitWithNextAppStoreVersion {
-		t.Fatalf("unexpected idempotent submission output: %#v", payload.Submission)
-	}
-}
-
-func TestIAPStateIndicatesAlreadyAttached(t *testing.T) {
-	cases := []struct {
-		state string
-		want  bool
-	}{
-		{"WAITING_FOR_REVIEW", true},
-		{"IN_REVIEW", true},
-		{"PENDING_BINARY_APPROVAL", true},
-		{"waiting_for_review", true},     // case-insensitive
-		{"  WAITING_FOR_REVIEW  ", true}, // trimmed
-		{"READY_TO_SUBMIT", false},
-		{"MISSING_METADATA", false},
-		{"REJECTED", false},
-		{"DEVELOPER_ACTION_NEEDED", false},
-		{"APPROVED", false},
-		{"", false},
-	}
-	for _, tc := range cases {
-		t.Run(tc.state, func(t *testing.T) {
-			if got := iapStateIndicatesAlreadyAttached(tc.state); got != tc.want {
-				t.Fatalf("iapStateIndicatesAlreadyAttached(%q)=%v want %v", tc.state, got, tc.want)
-			}
-		})
 	}
 }
 
@@ -783,9 +281,11 @@ func TestWebReviewIAPsAttachRejectsMissingOrWrongTypeBeforeMutation(t *testing.T
 	_ = stubWebProgressLabels(t)
 
 	cases := []struct {
-		name string
-		body string
-		want string
+		name    string
+		body    string
+		v2Body  string
+		v2Error bool
+		want    string
 	}{
 		{
 			name: "missing",
@@ -797,6 +297,12 @@ func TestWebReviewIAPsAttachRejectsMissingOrWrongTypeBeforeMutation(t *testing.T
 			body: `{"data":[{"id":"sub-1","type":"subscriptions","attributes":{"productId":"com.example.wrong"}}],"links":{"next":""}}`,
 			want: `unexpected resource type`,
 		},
+		{name: "v2 empty", v2Body: `{"data":[]}`, want: "no V2 in-app purchase"},
+		{name: "v2 product mismatch", v2Body: `{"data":[{"type":"inAppPurchases","id":"9000000001","attributes":{"productId":"com.example.other"}}]}`, want: "no V2 in-app purchase"},
+		{name: "v2 ambiguous", v2Body: `{"data":[{"type":"inAppPurchases","id":"9000000001","attributes":{"productId":"com.example.selected"}},{"type":"inAppPurchases","id":"9000000002","attributes":{"productId":"com.example.selected"}}]}`, want: "multiple V2 in-app purchases"},
+		{name: "v2 wrong type", v2Body: `{"data":[{"type":"subscriptions","id":"9000000001","attributes":{"productId":"com.example.selected"}}]}`, want: "unexpected resource type"},
+		{name: "v2 missing id", v2Body: `{"data":[{"type":"inAppPurchases","attributes":{"productId":"com.example.selected"}}]}`, want: "missing resource id"},
+		{name: "v2 read error", v2Error: true, want: "V2 catalog unavailable"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -811,21 +317,39 @@ func TestWebReviewIAPsAttachRejectsMissingOrWrongTypeBeforeMutation(t *testing.T
 							postCalls++
 							t.Fatalf("%s selector must not attach: %s", tc.name, req.URL.Path)
 						}
-						if req.Method != http.MethodGet || req.URL.Path != "/iris/v1/apps/123456789/inAppPurchases" {
+						body := tc.body
+						if req.Method != http.MethodGet {
+							t.Fatalf("unexpected request: %s %s", req.Method, req.URL.Path)
+						}
+						switch req.URL.Path {
+						case "/iris/v1/apps/123456789/inAppPurchases":
+							if tc.v2Body != "" || tc.v2Error {
+								body = `{"data":[{"type":"inAppPurchases","id":"legacy-id","attributes":{"productId":"com.example.selected"}}]}`
+							}
+						case "/iris/v1/apps/123456789/inAppPurchasesV2":
+							if tc.v2Error {
+								return nil, errors.New("V2 catalog unavailable")
+							}
+							body = tc.v2Body
+						default:
 							t.Fatalf("unexpected request: %s %s", req.Method, req.URL.Path)
 						}
 						return &http.Response{
 							StatusCode: http.StatusOK,
 							Header:     http.Header{"Content-Type": []string{"application/json"}},
-							Body:       io.NopCloser(strings.NewReader(tc.body)),
+							Body:       io.NopCloser(strings.NewReader(body)),
 							Request:    req,
 						}, nil
 					})},
 				}, "cache", nil
 			}
 
+			selector := tc.name
+			if tc.v2Body != "" || tc.v2Error {
+				selector = "legacy-id"
+			}
 			cmd := WebReviewIAPsAttachCommand()
-			if err := cmd.FlagSet.Parse([]string{"--app", "123456789", "--iap-id", tc.name, "--confirm"}); err != nil {
+			if err := cmd.FlagSet.Parse([]string{"--app", "123456789", "--iap-id", selector, "--confirm"}); err != nil {
 				t.Fatalf("parse error: %v", err)
 			}
 			err := cmd.Exec(context.Background(), nil)
@@ -847,5 +371,121 @@ func TestWebReviewIAPsGroupCommandReturnsHelpWhenNoSubcommand(t *testing.T) {
 	err := cmd.Exec(context.Background(), nil)
 	if !errors.Is(err, flag.ErrHelp) {
 		t.Fatalf("expected flag.ErrHelp from group Exec with no subcommand, got %v", err)
+	}
+}
+
+func TestWebReviewIAPsAttachDraftSelectionAndMembership(t *testing.T) {
+	const drafts = `[{"type":"reviewSubmissions","id":"draft-1","attributes":{"state":"READY_FOR_REVIEW"}}]`
+	const twoDrafts = `[{"type":"reviewSubmissions","id":"draft-1","attributes":{"state":"READY_FOR_REVIEW"}},{"type":"reviewSubmissions","id":"draft-2","attributes":{"state":"READY_FOR_REVIEW"}}]`
+	const versions = `[{"type":"inAppPurchaseVersions","id":"version-1","attributes":{"state":"PREPARE_FOR_SUBMISSION","version":1}}]`
+	const item = `{"type":"reviewSubmissionItems","id":"item-1","attributes":{"state":"READY_FOR_REVIEW"},"relationships":{"inAppPurchaseVersion":{"data":{"type":"inAppPurchaseVersions","id":"version-1"}}}}`
+	const alreadyExists = `{"errors":[{"code":"ENTITY_ERROR.ATTRIBUTE.INVALID.ALREADY_EXISTS","title":"Already exists"}]}`
+	tests := []struct {
+		name, drafts, versions, items, afterItems, submission, postError, wantErr string
+		wantPosts                                                                 int
+		wantChanged                                                               bool
+	}{
+		{name: "explicit draft among several", drafts: twoDrafts, submission: "draft-1", wantPosts: 1, wantChanged: true},
+		{name: "ambiguous drafts", drafts: twoDrafts, wantErr: "multiple READY_FOR_REVIEW drafts; select one with --submission"},
+		{name: "wrong app draft", submission: "other-app-draft", wantErr: "--submission must identify a READY_FOR_REVIEW draft under --app"},
+		{name: "noneditable draft", drafts: strings.ReplaceAll(drafts, "READY_FOR_REVIEW", "IN_REVIEW"), submission: "draft-1", wantErr: "--submission must identify a READY_FOR_REVIEW draft under --app"},
+		{name: "no draft", drafts: "[]", wantErr: "no READY_FOR_REVIEW draft"},
+		{name: "no editable version", versions: strings.ReplaceAll(versions, "PREPARE_FOR_SUBMISSION", "APPROVED"), wantErr: "no editable version"},
+		{name: "ambiguous versions", versions: strings.TrimSuffix(versions, "]") + `,` + strings.TrimPrefix(strings.ReplaceAll(versions, "version-1", "version-2"), "["), wantErr: "multiple editable versions"},
+		{name: "invalid version identity", versions: strings.ReplaceAll(versions, "inAppPurchaseVersions", "inAppPurchases"), wantErr: "invalid resource identity"},
+		{name: "already in selected draft", versions: strings.ReplaceAll(versions, "PREPARE_FOR_SUBMISSION", "READY_FOR_REVIEW"), items: "[" + item + "]"},
+		{name: "removed item is not attached", items: "[" + strings.ReplaceAll(item, "READY_FOR_REVIEW", "REMOVED") + "]", wantPosts: 1, wantChanged: true},
+		{name: "unrelated item is not attached", items: "[" + strings.ReplaceAll(item, "inAppPurchaseVersion", "subscriptionVersion") + "]", wantPosts: 1, wantChanged: true},
+		{name: "matching item missing state", items: "[" + strings.ReplaceAll(item, `"state":"READY_FOR_REVIEW"`, `"state":""`) + "]", wantErr: "incomplete identity or state"},
+		{name: "duplicate conflict verified", postError: alreadyExists, wantPosts: 1},
+		{name: "duplicate conflict not verified", postError: alreadyExists, afterItems: "[]", wantPosts: 1, wantErr: "status 409"},
+		{name: "unknown conflict remains error", postError: `{"errors":[{"code":"STATE_ERROR.FIRST_NON_CONSUMABLE_MUST_BE_SUBMITTED_ON_VERSION","title":"First IAP requires app version"}]}`, wantPosts: 1, wantErr: "FIRST_NON_CONSUMABLE_MUST_BE_SUBMITTED_ON_VERSION"},
+		{name: "created item missing on readback", afterItems: "[]", wantPosts: 1, wantErr: "was created but is absent"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			_ = stubWebProgressLabels(t)
+			original := resolveSessionFn
+			t.Cleanup(func() { resolveSessionFn = original })
+			posts := 0
+			resolveSessionFn = func(context.Context, string, string, string) (*webcore.AuthSession, string, error) {
+				return &webcore.AuthSession{Client: &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+					status, body := http.StatusOK, ""
+					switch req.Method + " " + req.URL.Path {
+					case "GET /iris/v1/apps/123456789/inAppPurchases":
+						body = `{"data":[{"type":"inAppPurchases","id":"legacy-1","attributes":{"productId":"com.example.pro","state":"WAITING_FOR_REVIEW"}}]}`
+					case "GET /iris/v1/apps/123456789/inAppPurchasesV2":
+						body = `{"data":[{"type":"inAppPurchases","id":"9000000001","attributes":{"productId":"com.example.pro"}}]}`
+					case "GET /iris/v2/inAppPurchases/9000000001/versions":
+						data := tc.versions
+						if data == "" {
+							data = versions
+						}
+						body = `{"data":` + data + `}`
+					case "GET /iris/v1/apps/123456789/reviewSubmissions":
+						data := tc.drafts
+						if data == "" {
+							data = drafts
+						}
+						body = `{"data":` + data + `}`
+					case "GET /iris/v1/reviewSubmissions/draft-1/items":
+						data := tc.items
+						if data == "" {
+							data = "[]"
+						}
+						if posts > 0 {
+							data = tc.afterItems
+							if data == "" {
+								data = "[" + item + "]"
+							}
+						}
+						body = `{"data":` + data + `}`
+					case "POST /iris/v1/reviewSubmissionItems":
+						posts++
+						status = http.StatusCreated
+						body = `{"data":` + item + `}`
+						if tc.postError != "" {
+							status = http.StatusConflict
+							body = tc.postError
+						}
+					default:
+						t.Fatalf("unexpected request: %s %s", req.Method, req.URL)
+					}
+					return &http.Response{StatusCode: status, Header: http.Header{"Content-Type": []string{"application/json"}}, Body: io.NopCloser(strings.NewReader(body)), Request: req}, nil
+				})}}, "cache", nil
+			}
+			cmd := WebReviewIAPsAttachCommand()
+			args := []string{"--app", "123456789", "--iap-id", "com.example.pro", "--confirm", "--output", "json"}
+			if tc.submission != "" {
+				args = append(args, "--submission", tc.submission)
+			}
+			if err := cmd.FlagSet.Parse(args); err != nil {
+				t.Fatal(err)
+			}
+			var runErr error
+			stdout, _ := captureOutput(t, func() { runErr = cmd.Exec(context.Background(), nil) })
+			if posts != tc.wantPosts {
+				t.Fatalf("POST count=%d, want %d", posts, tc.wantPosts)
+			}
+			if tc.wantErr != "" {
+				if runErr == nil || !strings.Contains(runErr.Error(), tc.wantErr) {
+					t.Fatalf("error=%v, want %q", runErr, tc.wantErr)
+				}
+				if stdout != "" {
+					t.Fatalf("failure emitted receipt: %s", stdout)
+				}
+				return
+			}
+			if runErr != nil {
+				t.Fatal(runErr)
+			}
+			var result reviewIAPMutationOutput
+			if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+				t.Fatal(err)
+			}
+			if result.Changed != tc.wantChanged || result.Submission.ID != "" || result.Submission.ReviewSubmissionItemID != "item-1" || result.Submission.ReviewSubmissionID != "draft-1" || result.Submission.InAppPurchaseVersionID != "version-1" || result.Submission.SubmitWithNextAppStoreVersion {
+				t.Fatalf("unexpected receipt: %#v", result)
+			}
+		})
 	}
 }

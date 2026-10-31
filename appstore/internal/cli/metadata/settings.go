@@ -13,6 +13,7 @@ import (
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/rootfs"
 )
 
 type metadataSettingFieldKind int
@@ -22,11 +23,22 @@ const (
 	metadataSettingBool
 )
 
+// A secret field is never written in clear text: pull writes
+// "@env:<secretEnv>" in its place, the local file must reference the value
+// with @env:NAME or @file:PATH, and plan output and receipts redact it.
 type metadataSettingField struct {
-	name   string
-	kind   metadataSettingFieldKind
-	values []string
+	name      string
+	kind      metadataSettingFieldKind
+	values    []string
+	secretEnv string
 }
+
+const metadataRedactedValue = "<redacted>"
+
+// metadataSecretReferenceSuffix keys the @env:/@file: reference of a secret
+// field in the local values, so the plan and its approval bind the reference
+// without exposing the resolved secret.
+const metadataSecretReferenceSuffix = ":reference"
 
 type metadataSettingTarget struct {
 	appInfoID string
@@ -41,18 +53,20 @@ type metadataSettingScope struct {
 	fields       []metadataSettingField
 	needsAppInfo bool
 	validate     func(map[string]string, bool) error
-	fetch        func(ctx context.Context, client *asc.Client, target metadataSettingTarget) (map[string]string, error)
-	update       func(ctx context.Context, client *asc.Client, target metadataSettingTarget, changed map[string]string) error
+	// fetch returns nil values only when the resource does not exist.
+	fetch  func(ctx context.Context, client *asc.Client, target metadataSettingTarget) (map[string]string, error)
+	update func(ctx context.Context, client *asc.Client, target metadataSettingTarget, changed map[string]string) (string, error)
 }
 
 type metadataSettingPlan struct {
+	action  string
 	scope   metadataSettingScope
 	local   map[string]string
 	changed map[string]string
 }
 
 func metadataSettingScopes() []metadataSettingScope {
-	return []metadataSettingScope{categoriesSettingScope, ageRatingSettingScope}
+	return []metadataSettingScope{categoriesSettingScope, ageRatingSettingScope, reviewInformationSettingScope}
 }
 
 func metadataSettingScopeNames() []string {
@@ -139,11 +153,16 @@ func readMetadataSettingFile(dir string, scope metadataSettingScope) (map[string
 		if !ok {
 			return nil, shared.UsageErrorf("invalid metadata schema in %s: unknown field %q", path, key)
 		}
-		value, err := decodeMetadataSettingValue(field, rawValue)
+		value, err := decodeMetadataSettingValue(dir, field, rawValue)
 		if err != nil {
 			return nil, shared.UsageErrorf("invalid metadata schema in %s: %v", path, err)
 		}
 		values[field.name] = value
+		if field.secretEnv != "" {
+			var reference string
+			_ = json.Unmarshal(rawValue, &reference)
+			values[field.name+metadataSecretReferenceSuffix] = reference
+		}
 	}
 	if scope.validate != nil {
 		if err := scope.validate(values, false); err != nil {
@@ -162,7 +181,7 @@ func (scope metadataSettingScope) field(name string) (metadataSettingField, bool
 	return metadataSettingField{}, false
 }
 
-func decodeMetadataSettingValue(field metadataSettingField, raw json.RawMessage) (string, error) {
+func decodeMetadataSettingValue(dir string, field metadataSettingField, raw json.RawMessage) (string, error) {
 	if isJSONNull(raw) {
 		return "", fmt.Errorf("%s cannot be null; omit it to leave the value unchanged", field.name)
 	}
@@ -178,6 +197,9 @@ func decodeMetadataSettingValue(field metadataSettingField, raw json.RawMessage)
 		if err := json.Unmarshal(raw, &value); err != nil {
 			return "", fmt.Errorf("%s must be a string", field.name)
 		}
+		if field.secretEnv != "" {
+			return resolveMetadataSecretValue(dir, field, value)
+		}
 		value = strings.TrimSpace(value)
 		if value == "" {
 			return "", fmt.Errorf("%s cannot be empty; omit it to leave the value unchanged", field.name)
@@ -189,9 +211,43 @@ func decodeMetadataSettingValue(field metadataSettingField, raw json.RawMessage)
 	}
 }
 
-func encodeMetadataSettingFile(scope metadataSettingScope, values map[string]string) ([]byte, error) {
+func resolveMetadataSecretValue(dir string, field metadataSettingField, value string) (string, error) {
+	var resolved string
+	switch {
+	case strings.HasPrefix(value, "@env:"):
+		envValue, err := shared.ResolveFlagValueIndirection(field.name, value)
+		if err != nil {
+			return "", err
+		}
+		resolved = envValue
+	case strings.HasPrefix(value, "@file:"):
+		root, err := rootfs.New(dir)
+		if err != nil {
+			return "", err
+		}
+		defer root.Close()
+		data, err := root.ReadFileLimited(strings.TrimPrefix(value, "@file:"), shared.MaxIndirectFileValueSize)
+		if err != nil {
+			return "", fmt.Errorf("%s: cannot read the referenced file below --dir: %w", field.name, err)
+		}
+		resolved = string(data)
+		if strings.HasSuffix(resolved, "\r\n") {
+			resolved = strings.TrimSuffix(resolved, "\r\n")
+		} else {
+			resolved = strings.TrimSuffix(resolved, "\n")
+		}
+	default:
+		return "", fmt.Errorf("%s must reference the secret with @env:NAME or @file:PATH instead of storing it in the file", field.name)
+	}
+	if strings.TrimSpace(resolved) == "" {
+		return "", fmt.Errorf("%s resolved to an empty value", field.name)
+	}
+	return resolved, nil
+}
+
+func metadataSettingObject(fields []metadataSettingField, values map[string]string) map[string]any {
 	object := make(map[string]any, len(values))
-	for _, field := range scope.fields {
+	for _, field := range fields {
 		value, ok := values[field.name]
 		if !ok {
 			continue
@@ -202,6 +258,16 @@ func encodeMetadataSettingFile(scope metadataSettingScope, values map[string]str
 		}
 		object[field.name] = value
 	}
+	return object
+}
+
+func encodeMetadataSettingFile(scope metadataSettingScope, values map[string]string) ([]byte, error) {
+	object := metadataSettingObject(scope.fields, values)
+	for _, field := range scope.fields {
+		if _, ok := object[field.name]; ok && field.secretEnv != "" {
+			object[field.name] = "@env:" + field.secretEnv
+		}
+	}
 	data, err := json.MarshalIndent(object, "", "  ")
 	if err != nil {
 		return nil, err
@@ -210,7 +276,10 @@ func encodeMetadataSettingFile(scope metadataSettingScope, values map[string]str
 }
 
 func buildMetadataSettingPlan(scope metadataSettingScope, local, remote map[string]string) (metadataSettingPlan, []PlanItem, []PlanItem) {
-	plan := metadataSettingPlan{scope: scope, local: local, changed: map[string]string{}}
+	plan := metadataSettingPlan{action: "update", scope: scope, local: local, changed: map[string]string{}}
+	if remote == nil {
+		plan.action = "create"
+	}
 	adds := []PlanItem{}
 	updates := []PlanItem{}
 	for _, field := range scope.fields {
@@ -219,6 +288,9 @@ func buildMetadataSettingPlan(scope metadataSettingScope, local, remote map[stri
 			continue
 		}
 		item := PlanItem{Key: scope.name + ":" + field.name, Scope: scope.name, Field: field.name, To: value}
+		if field.secretEnv != "" {
+			item.To = metadataRedactedValue + " " + local[field.name+metadataSecretReferenceSuffix]
+		}
 		remoteValue, remoteOK := remote[field.name]
 		switch {
 		case !remoteOK:
@@ -226,7 +298,7 @@ func buildMetadataSettingPlan(scope metadataSettingScope, local, remote map[stri
 			adds = append(adds, item)
 		case remoteValue != value:
 			item.Reason = "field value differs"
-			item.From = remoteValue
+			item.From = redactMetadataSetting(field, remoteValue)
 			updates = append(updates, item)
 		default:
 			continue
@@ -238,8 +310,13 @@ func buildMetadataSettingPlan(scope metadataSettingScope, local, remote map[stri
 
 func applyMetadataSettingPlan(ctx context.Context, client *asc.Client, target metadataSettingTarget, plan metadataSettingPlan) (ApplyAction, error) {
 	scope := plan.scope
+	action := plan.action
 	_, _, err := shared.RunReconciledMutation(ctx, func(requestCtx context.Context) (struct{}, error) {
-		return struct{}{}, scope.update(requestCtx, client, target, plan.changed)
+		actualAction, err := scope.update(requestCtx, client, target, plan.changed)
+		if actualAction != "" {
+			action = actualAction
+		}
+		return struct{}{}, err
 	}, func(readCtx context.Context) (struct{}, bool, error) {
 		remote, err := scope.fetch(readCtx, client, target)
 		return struct{}{}, err == nil && metadataFieldsMatch(remote, plan.changed), err
@@ -248,10 +325,16 @@ func applyMetadataSettingPlan(ctx context.Context, client *asc.Client, target me
 		err = verifyMetadataSetting(ctx, client, target, plan)
 	}
 	if err != nil {
-		err = newMetadataMutationActionError(fmt.Errorf("update %s: %w", scope.name, err))
-		return failedMetadataAction(scope.name, "", "", "update", "", plan.changed, err), err
+		err = newMetadataMutationActionError(fmt.Errorf("%s %s: %w", action, scope.name, err))
+		desired := make(map[string]string, len(plan.changed))
+		for _, field := range scope.fields {
+			if value, ok := plan.changed[field.name]; ok {
+				desired[field.name] = redactMetadataSetting(field, value)
+			}
+		}
+		return failedMetadataAction(scope.name, "", "", action, "", desired, err), err
 	}
-	return successfulMetadataAction(scope.name, "", "", "update", ""), nil
+	return successfulMetadataAction(scope.name, "", "", action, ""), nil
 }
 
 func verifyMetadataSetting(ctx context.Context, client *asc.Client, target metadataSettingTarget, plan metadataSettingPlan) error {
@@ -265,10 +348,21 @@ func verifyMetadataSetting(ctx context.Context, client *asc.Client, target metad
 		if !ok || remote[field.name] == want {
 			continue
 		}
+		if field.secretEnv != "" {
+			mismatches = append(mismatches, field.name+" differs")
+			continue
+		}
 		mismatches = append(mismatches, fmt.Sprintf("%s=%q (want %q)", field.name, remote[field.name], want))
 	}
 	if len(mismatches) > 0 {
 		return fmt.Errorf("read back differs: %s", strings.Join(mismatches, ", "))
 	}
 	return nil
+}
+
+func redactMetadataSetting(field metadataSettingField, value string) string {
+	if field.secretEnv != "" {
+		return metadataRedactedValue
+	}
+	return value
 }

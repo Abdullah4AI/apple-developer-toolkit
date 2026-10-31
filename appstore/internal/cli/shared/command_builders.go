@@ -223,7 +223,9 @@ type PricePointEqualizationsCommandConfig struct {
 	ErrorPrefix string
 
 	ContextTimeout func(context.Context) (context.Context, context.CancelFunc)
-	FetchPage      func(context.Context, *asc.Client, string, int, string) (asc.PaginatedResponse, error)
+	// FetchPage receives the --include values for a first page and nil for a
+	// links.next page, which already carries them.
+	FetchPage func(context.Context, *asc.Client, string, int, string, []string) (asc.PaginatedResponse, error)
 }
 
 // BuildPricePointEqualizationsCommand builds a standard equalizations list
@@ -249,26 +251,54 @@ func BuildPricePointEqualizationsCommand(config PricePointEqualizationsCommandCo
 		subject = "a price point"
 	}
 
-	return BuildPaginatedListCommand(PaginatedListCommandConfig{
+	var include *string
+	cmd := BuildPaginatedListCommand(PaginatedListCommandConfig{
 		FlagSetName: config.FlagSetName,
 		Name:        config.Name,
 		ShortUsage:  baseUsage + " [--limit N] [--next URL] [--paginate]",
 		ShortHelp:   fmt.Sprintf("List equalized price points for %s.", subject),
 		LongHelp: fmt.Sprintf(`List equalized price points for %s.
 
+Use --include territory to return each price point's territory and currency.
+
 Examples:
   %s
+  %s --include territory
   %s --limit 175
   %s --paginate
-  %s --next "NEXT_URL"`, subject, baseExample, baseExample, baseExample, commandPath),
+  %s --next "NEXT_URL"`, subject, baseExample, baseExample, baseExample, baseExample, commandPath),
 		ParentFlag:     config.ParentFlag,
 		ParentUsage:    config.ParentUsage,
 		ParentType:     config.ParentType,
 		LimitMax:       config.LimitMax,
 		ErrorPrefix:    config.ErrorPrefix,
 		ContextTimeout: config.ContextTimeout,
-		FetchPage:      config.FetchPage,
+		FetchPage: func(ctx context.Context, client *asc.Client, parentID string, limit int, next string) (asc.PaginatedResponse, error) {
+			var values []string
+			if strings.TrimSpace(next) == "" {
+				values = SplitCSV(*include)
+			}
+			return config.FetchPage(ctx, client, parentID, limit, next, values)
+		},
 	})
+	include = cmd.FlagSet.String("include", "", "Relationships to include (comma-separated): territory")
+	exec := cmd.Exec
+	cmd.Exec = func(ctx context.Context, args []string) error {
+		for _, value := range SplitCSV(*include) {
+			if value != "territory" {
+				return UsageError("--include must be: territory")
+			}
+		}
+		prefix := commandErrorPrefixFromUsage(cmd.ShortUsage)
+		if prefix == "" {
+			prefix = config.ErrorPrefix
+		}
+		if err := RejectNextFlagConflicts(cmd.FlagSet, cmd.FlagSet.Lookup("next").Value.String(), prefix, "include"); err != nil {
+			return err
+		}
+		return exec(ctx, args)
+	}
+	return cmd
 }
 
 // ConfirmDeleteCommandConfig configures a standard delete command requiring

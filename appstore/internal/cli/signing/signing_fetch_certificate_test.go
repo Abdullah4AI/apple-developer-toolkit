@@ -418,7 +418,7 @@ func TestSigningFetchPreflightsGeneratedOutputStructureBeforeCertificatePOST(t *
 		{
 			name: "identity path aliases planned profile",
 			pathArgs: func(output string) []string {
-				plannedProfile := profileOutputPath(output, profileCreateName("IOS_APP_STORE", fixedProfileTime), "", "IOS_APP_STORE")
+				plannedProfile := profileOutputPath(output, profileCreateNameForTarget("IOS_APP_STORE", "com.example.app", fixedProfileTime), "", "IOS_APP_STORE")
 				return []string{"--key-out", plannedProfile}
 			},
 			wantError: "output paths must be distinct",

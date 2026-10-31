@@ -56,6 +56,7 @@ const (
 
 const (
 	DeepCheckPrivacyPublishState       = "privacy.publish_state"
+	DeepCheckIAPAttachment             = "iap.first_type_app_version_attachment"
 	DeepCheckSubscriptionAttachment    = "subscriptions.first_type_app_version_attachment"
 	DeepCheckAgreementsActive          = "agreements.active"
 	DeepCheckAvailabilityConfigured    = "availability.configured"

@@ -64,12 +64,8 @@ func validateRawRequestTarget(target string) error {
 		return fmt.Errorf("rejected absolute request URL containing a fragment")
 	}
 
-	baseURL, err := url.Parse(BaseURL)
-	if err != nil {
-		return fmt.Errorf("invalid App Store Connect base URL")
-	}
-	if parsedURL.Host != baseURL.Host {
-		return fmt.Errorf("rejected request URL from untrusted host %q (expected %q)", parsedURL.Host, baseURL.Host)
+	if !IsAPIHost(parsedURL.Host) {
+		return fmt.Errorf("rejected request URL from untrusted host %q (expected %q)", parsedURL.Host, ascAPIHost)
 	}
 	if err := validateAPIPath(parsedURL.EscapedPath()); err != nil {
 		return fmt.Errorf("invalid API path in absolute request URL: %w", err)

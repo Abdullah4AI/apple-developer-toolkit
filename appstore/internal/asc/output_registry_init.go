@@ -6,6 +6,9 @@ package asc
 // commands that never render registry output (for example `asc --version`)
 // do not pay the ~450-type registration cost at process start.
 func registerAllOutputRenderers() {
+	registerRows(storeKitAccountTokenRows)
+	registerRows(storeKitConsumptionRows)
+	registerRows(storeKitFinishRows)
 	registerRows(assetLibraryImageUploadRows)
 	registerRows(assetLibraryVideoUploadRows)
 	registerRows(assetLibraryMutationRows)
@@ -25,8 +28,11 @@ func registerAllOutputRenderers() {
 		return nil
 	})
 	registerRows(xcodeInstallResultRows)
+	registerRows(xcodeSetVersionRows)
+	registerRows(xcodeBumpVersionRows)
 	registerDirect(webAgreementsStatusTables)
 	registerRows(webAgreementsAcceptRows)
+	registerRows(webBusinessAgreementAcceptRows)
 	registerRows(webAgreementDownloadRows)
 	registerRows(webTransactionTaxDownloadRows)
 	registerRows(webAppDeleteRows)
@@ -81,6 +87,7 @@ func registerAllOutputRenderers() {
 	registerRows(betaCrashLogRows)
 	registerRowsWithSingleResourceAdapter(reviewsRows)
 	registerRows(customerReviewSummarizationsRows)
+	registerDirect(customerReviewDigestTables)
 	registerRowsWithSingleResourceAdapter(appsRows)
 	registerDirect(appsPublishedReportTables)
 	registerRows(appRenameResultRows)
@@ -209,6 +216,24 @@ func registerAllOutputRenderers() {
 		render(h, r)
 		if len(v.Rows) > 0 {
 			rh, rr := subscriptionPricingDeriveRowRows(v)
+			render(rh, rr)
+		}
+		return nil
+	})
+	registerDirect(func(v *SubscriptionPricingPPPResult, render func([]string, [][]string)) error {
+		h, r := subscriptionPricingPPPSummaryRows(v)
+		render(h, r)
+		if len(v.Rows) > 0 {
+			rh, rr := subscriptionPricingPPPRowRows(v)
+			render(rh, rr)
+		}
+		return nil
+	})
+	registerDirect(func(v *PriceSchedulePPPResult, render func([]string, [][]string)) error {
+		h, r := priceSchedulePPPSummaryRows(v)
+		render(h, r)
+		if len(v.Rows) > 0 {
+			rh, rr := subscriptionPricingPPPRowRows(&SubscriptionPricingPPPResult{Rows: v.Rows})
 			render(rh, rr)
 		}
 		return nil
@@ -649,6 +674,7 @@ func registerAllOutputRenderers() {
 	registerRows(capabilityReconcilePlanRows)
 	registerRows(signingSyncRows)
 	registerRows(signingSyncNukeRows)
+	registerRows(signingSyncImportRows)
 	registerRows(signingKeychainInstallRows)
 	registerRows(signingKeychainActionRows)
 	registerRows(signingKeychainListRows)

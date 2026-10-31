@@ -4,12 +4,16 @@
 `asc migrate metadata validate` were removed in 6.0.0. They were aliases for
 `asc metadata pull`, `asc metadata push`, and `asc metadata validate`.
 
-Any `asc migrate metadata` invocation now exits with status 2 and names the
-command to use instead:
+Running a removed alias with its former subcommand first exits with status 2
+and names the command to use instead:
 
 ```text
 Error: `asc migrate metadata pull` was removed in 6.0.0; use `asc metadata pull` instead
 ```
+
+Help still exits 0: `asc migrate metadata pull --help` prints the removal
+stub's help. Flags before the former subcommand, such as
+`asc migrate metadata --app APP_ID pull`, still report an unknown flag.
 
 ## Migration
 

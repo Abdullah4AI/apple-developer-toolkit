@@ -65,6 +65,8 @@ func TestGetAgreementsStatusReportsPendingAgreement(t *testing.T) {
 				t.Fatalf("agreement history teamId = %v, want TEAM123456", payload["teamId"])
 			}
 			return developerPortalTestResponse(http.StatusOK, agreementHistoryFixture(false), nil), nil
+		case 4:
+			return developerPortalTestResponse(http.StatusOK, `{"resultCode":0,"notifications":{}}`, nil), nil
 		default:
 			t.Fatalf("unexpected extra request %s %s", r.Method, r.URL.String())
 			return nil, nil
@@ -75,8 +77,8 @@ func TestGetAgreementsStatusReportsPendingAgreement(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetAgreementsStatus() error: %v", err)
 	}
-	if requestCount != 3 {
-		t.Fatalf("request count = %d, want 3", requestCount)
+	if requestCount != 4 {
+		t.Fatalf("request count = %d, want 4", requestCount)
 	}
 	if result.TeamID != "TEAM123456" {
 		t.Fatalf("TeamID = %q, want TEAM123456", result.TeamID)
@@ -100,6 +102,10 @@ func TestGetAgreementsStatusReportsPendingAgreement(t *testing.T) {
 	if !agreement.Pending {
 		t.Fatal("agreement Pending = false, want true")
 	}
+	if len(result.PendingAgreementIDs) != 1 || result.PendingAgreementIDs[0] != agreement.AgreementID || len(result.Warnings) != 0 {
+		t.Fatalf("pending IDs/warnings = %v/%v, want only pending history ID", result.PendingAgreementIDs, result.Warnings)
+	}
+
 	if agreement.Version != "5031" || agreement.Status != "active" {
 		t.Fatalf("agreement version/status = %q/%q, want 5031/active", agreement.Version, agreement.Status)
 	}
@@ -119,38 +125,142 @@ func TestGetAgreementsStatusReportsPendingAgreement(t *testing.T) {
 	}
 }
 
-func TestGetAgreementsStatusNotPendingWhenAccepted(t *testing.T) {
-	requestCount := 0
-	client := agreementsTestClient(t, func(r *http.Request) (*http.Response, error) {
-		requestCount++
-		switch requestCount {
-		case 1:
-			return developerPortalTestResponse(http.StatusOK, `[ ]`, nil), nil
-		case 2:
-			return developerPortalTestResponse(http.StatusOK, developerPortalTeamsFixture(), nil), nil
-		case 3:
-			return developerPortalTestResponse(http.StatusOK, agreementHistoryFixture(true), nil), nil
-		default:
-			t.Fatalf("unexpected extra request %s %s", r.Method, r.URL.String())
-			return nil, nil
-		}
-	})
+func TestGetAgreementsStatusHistoryEvidence(t *testing.T) {
+	t.Setenv("ASC_READ_ONLY", "1")
+	history := strings.ReplaceAll(agreementHistoryFixture(true), "XG8DNV4HYY", "OLDPLA1234")
+	for _, test := range []struct {
+		name                         string
+		banner                       bool
+		history                      string
+		pending                      bool
+		count                        int
+		warning                      bool
+		notifications                string
+		pendingIDs                   string
+		dateEffective                string
+		unknownClassification        bool
+		historyClassificationMissing bool
+		wantErr                      string
+	}{
+		{name: "accepted", history: history, count: 1},
+		{name: "alert with accepted history", banner: true, history: history, pending: true, count: 1, warning: true},
+		{name: "alert with empty history", banner: true, history: `{"resultCode":0,"agreements":[]}`, pending: true, warning: true},
+		{name: "pending without ID", banner: true, history: strings.ReplaceAll(agreementHistoryFixture(false), "XG8DNV4HYY", ""), pending: true, count: 1},
+		{name: "pending history without classification", history: strings.NewReplacer(`"isAgreementPLA":true,`, "", `"dateAccepted":1787158607000`, `"dateAccepted":1700000000000`).Replace(history), pending: true, count: 1, pendingIDs: `["OLDPLA1234"]`, unknownClassification: true, historyClassificationMissing: true},
+		{name: "outstanding absent from history", history: history, pending: true, count: 2, notifications: `{"resultCode":0,"notifications":{"agreementsOutstanding":[{"agreementId":"NEWPLA5678"}]}}`, pendingIDs: `["NEWPLA5678"]`, unknownClassification: true},
+		{name: "dated outstanding without classification", history: history, pending: true, count: 2, notifications: `{"resultCode":0,"notifications":{"agreementsOutstanding":[{"agreementId":"NEWPLA5678","dateEffective":1700000000000}]}}`, pendingIDs: `["NEWPLA5678"]`, dateEffective: "2023-11-14T22:13:20Z", unknownClassification: true},
+		{name: "dated outstanding with explicit nonPLA classification", history: history, pending: true, count: 2, notifications: `{"resultCode":0,"notifications":{"agreementsOutstanding":[{"agreementId":"NEWPLA5678","dateEffective":1700000000000,"isAgreementPLA":false}]}}`, pendingIDs: `["NEWPLA5678"]`, dateEffective: "2023-11-14T22:13:20Z"},
+		{name: "outstanding duplicates history", banner: true, history: history, pending: true, count: 1, notifications: `{"resultCode":0,"notifications":{"agreementsOutstanding":[{"agreementId":"OLDPLA1234"},{"agreementId":"OLDPLA1234"}]}}`, pendingIDs: `["OLDPLA1234"]`},
+		{name: "outstanding duplicate lacks classification in both sources", history: strings.ReplaceAll(history, `"isAgreementPLA":true,`, ""), pending: true, count: 1, notifications: `{"resultCode":0,"notifications":{"agreementsOutstanding":[{"agreementId":"OLDPLA1234"}]}}`, pendingIDs: `["OLDPLA1234"]`, unknownClassification: true, historyClassificationMissing: true},
+		{name: "outstanding supplies missing history classification", history: strings.ReplaceAll(history, `"isAgreementPLA":true,`, ""), pending: true, count: 1, notifications: `{"resultCode":0,"notifications":{"agreementsOutstanding":[{"agreementId":"OLDPLA1234","isAgreementPLA":true}]}}`, pendingIDs: `["OLDPLA1234"]`},
+		{name: "missing notifications", history: history, notifications: `{"resultCode":0}`, wantErr: "missing notifications"},
+		{name: "malformed notifications", history: history, notifications: `{"resultCode":0,"notifications":{"agreementsOutstanding":{}}}`, wantErr: "failed to parse Developer Portal agreements response"},
+		{name: "notifications failure", history: history, notifications: `{"resultCode":3050,"userString":"Please select a team."}`, wantErr: "resultCode 3050"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			requestCount := 0
+			client := agreementsTestClient(t, func(r *http.Request) (*http.Response, error) {
+				requestCount++
+				switch requestCount {
+				case 1:
+					if test.banner {
+						return developerPortalTestResponse(http.StatusOK, contractMessagesFixture(), nil), nil
+					}
+					return developerPortalTestResponse(http.StatusOK, `[ ]`, nil), nil
+				case 2:
+					return developerPortalTestResponse(http.StatusOK, developerPortalTeamsFixture(), nil), nil
+				case 3:
+					return developerPortalTestResponse(http.StatusOK, test.history, nil), nil
+				case 4:
+					if r.Method != http.MethodPost || r.URL.String() != "https://developer.apple.com/services-account/QH65B2/account/getNotifications" {
+						t.Fatalf("unexpected notifications request %s %s", r.Method, r.URL.String())
+					}
+					var payload map[string]string
+					if err := json.NewDecoder(r.Body).Decode(&payload); err != nil || payload["teamId"] != "TEAM123456" {
+						t.Fatalf("notifications payload = %v, error = %v", payload, err)
+					}
+					body := test.notifications
+					if body == "" {
+						body = `{"resultCode":0,"notifications":{}}`
+					}
+					return developerPortalTestResponse(http.StatusOK, body, nil), nil
+				default:
+					t.Fatalf("unexpected extra request %s %s", r.Method, r.URL.String())
+					return nil, nil
+				}
+			})
 
-	result, err := client.GetAgreementsStatus(context.Background())
-	if err != nil {
-		t.Fatalf("GetAgreementsStatus() error: %v", err)
-	}
-	if result.Pending {
-		t.Fatal("Pending = true, want false")
-	}
-	if len(result.ContractMessages) != 0 {
-		t.Fatalf("ContractMessages = %+v, want empty", result.ContractMessages)
-	}
-	if len(result.Agreements) != 1 || result.Agreements[0].Pending {
-		t.Fatalf("Agreements = %+v, want one accepted agreement", result.Agreements)
-	}
-	if result.Agreements[0].DateAccepted == "" {
-		t.Fatal("DateAccepted is empty, want RFC3339 timestamp")
+			result, err := client.GetAgreementsStatus(context.Background())
+			if test.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), test.wantErr) {
+					t.Fatalf("GetAgreementsStatus() error = %v, want %q", err, test.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("GetAgreementsStatus() error: %v", err)
+			}
+			if result.Pending != test.pending {
+				t.Fatalf("Pending = %t, want %t", result.Pending, test.pending)
+			}
+			if (len(result.ContractMessages) > 0) != test.banner {
+				t.Fatalf("ContractMessages = %+v, want banner=%t", result.ContractMessages, test.banner)
+			}
+			if len(result.Agreements) != test.count {
+				t.Fatalf("Agreements = %+v, want %d rows", result.Agreements, test.count)
+			}
+			if !test.pending && (result.Agreements[0].Pending || result.Agreements[0].DateAccepted == "") {
+				t.Fatalf("Agreements = %+v, want accepted row", result.Agreements)
+			}
+
+			data, err := json.Marshal(result)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var payload map[string]json.RawMessage
+			if err := json.Unmarshal(data, &payload); err != nil {
+				t.Fatal(err)
+			}
+			wantIDs := test.pendingIDs
+			if wantIDs == "" {
+				wantIDs = "[]"
+			}
+			if string(payload["pendingAgreementIds"]) != wantIDs {
+				t.Fatalf("pendingAgreementIds = %s, want %s", payload["pendingAgreementIds"], wantIDs)
+			}
+			if test.pendingIDs != "" {
+				old := result.Agreements[0]
+				if old.AgreementID != "OLDPLA1234" || old.Version != "5031" || old.DateAccepted == "" || old.IsProgramLicenseAgreement == test.historyClassificationMissing {
+					t.Fatalf("history metadata was lost: %+v", old)
+				}
+				pending := result.Agreements[len(result.Agreements)-1]
+				if !pending.Pending {
+					t.Fatalf("outstanding agreement is not pending: %+v", pending)
+				}
+				if test.count == 2 && (old.Pending || pending.DateEffective != test.dateEffective || pending.DateAccepted != "" || pending.IsProgramLicenseAgreement) {
+					t.Fatalf("notification must preserve history and omit unknown metadata: %+v", result.Agreements)
+				}
+				var agreementRows []map[string]json.RawMessage
+				if err := json.Unmarshal(payload["agreements"], &agreementRows); err != nil {
+					t.Fatal(err)
+				}
+				unknown := string(agreementRows[len(agreementRows)-1]["programLicenseClassificationUnknown"])
+				if (test.unknownClassification && unknown != "true") || (!test.unknownClassification && unknown != "") {
+					t.Fatalf("programLicenseClassificationUnknown = %q, want present only for unknown classification", unknown)
+				}
+			}
+			var warnings []string
+			if err := json.Unmarshal(payload["warnings"], &warnings); err != nil {
+				t.Fatal(err)
+			}
+			if test.warning {
+				if len(warnings) != 1 || !strings.Contains(warnings[0], "does not identify a pending agreement") {
+					t.Fatalf("warnings = %v, want unresolved alert warning", warnings)
+				}
+			} else if string(payload["warnings"]) != "[]" {
+				t.Fatalf("warnings = %s, want []", payload["warnings"])
+			}
+		})
 	}
 }
 

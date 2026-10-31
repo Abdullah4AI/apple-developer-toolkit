@@ -2906,3 +2906,141 @@ func TestStructuredVersion_RollsBackLargeXCConfigAfterLaterWriteFailure(t *testi
 		t.Fatalf("later failed file changed: %q", got)
 	}
 }
+
+func TestStructuredVersionReportsLiteralInfoPlist(t *testing.T) {
+	for _, bump := range []bool{false, true} {
+		t.Run(fmt.Sprint("bump=", bump), func(t *testing.T) {
+			project := writeStructuredVersionProject(t, false)
+			pbx := filepath.Join(project, "project.pbxproj")
+			original := mustReadVersionTestFile(t, pbx)
+			original = strings.ReplaceAll(original, "MARKETING_VERSION = 1.2.3; CURRENT_PROJECT_VERSION = 42;", `INFOPLIST_FILE = "$(SRCROOT)/$(TARGET_NAME)/Info.plist"; MARKETING_VERSION = 1.2.3; CURRENT_PROJECT_VERSION = 42;`)
+			if err := os.WriteFile(pbx, []byte(original), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			path := filepath.Join(filepath.Dir(project), "App", "Info.plist")
+			if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			contents := `<?xml version="1.0"?><plist version="1.0"><dict><key>CFBundleVersion</key><string>42</string><key>CFBundleShortVersionString</key><string>1.2.3</string></dict></plist>`
+			if err := os.WriteFile(path, []byte(contents), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			var warnings []string
+			if bump {
+				result, err := BumpVersion(context.Background(), BumpVersionOptions{ProjectDir: project, Target: "App", Configuration: "Release", BumpType: BumpBuild})
+				if err != nil {
+					t.Fatal(err)
+				}
+				warnings = result.ComputedWarnings
+			} else {
+				result, err := SetVersion(context.Background(), SetVersionOptions{ProjectDir: project, Target: "App", Configuration: "Release", Version: "2.0.0", BuildNumber: "50"})
+				if err != nil {
+					t.Fatal(err)
+				}
+				warnings = result.ComputedWarnings
+			}
+
+			want := 2
+			if bump {
+				want = 1
+			}
+			if len(warnings) != want {
+				t.Fatalf("computedWarnings = %#v, want %d scoped literal warnings", warnings, want)
+			}
+			for _, warning := range warnings {
+				for _, expected := range []string{`target "App"`, `configuration "Release"`, "Info.plist", "CFBundle"} {
+					if !strings.Contains(warning, expected) {
+						t.Errorf("warning %q missing %q", warning, expected)
+					}
+				}
+			}
+			if got := mustReadVersionTestFile(t, path); got != contents {
+				t.Fatal("Info.plist was changed")
+			}
+			updated, err := GetVersionScoped(context.Background(), GetVersionOptions{ProjectDir: project, Target: "App", Configuration: "Release"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			expectedBuild := "50"
+			if bump {
+				expectedBuild = "43"
+			}
+			if updated.BuildNumber != expectedBuild {
+				t.Fatalf("build=%q want %q", updated.BuildNumber, expectedBuild)
+			}
+		})
+	}
+}
+
+func TestStructuredVersionInfoPlistInspectionScopeAndSafety(t *testing.T) {
+	for _, tc := range []struct {
+		name, path, build                             string
+		xcconfig, generated, symlink, missingOptional bool
+		warnings                                      int
+		contains                                      string
+	}{
+		{name: "parentheses reference", path: "App/Info.plist", build: "$(CURRENT_PROJECT_VERSION)"},
+		{name: "braces reference", path: "App/Info.plist", build: "${CURRENT_PROJECT_VERSION}"},
+		{name: "xcconfig path", path: "$(PROJECT_DIR)/$(TARGET_NAME)/Info.plist", build: "42", xcconfig: true, warnings: 1, contains: `CFBundleVersion="42"`},
+		{name: "xcconfig missing optional include", path: "App/Info.plist", build: "42", xcconfig: true, missingOptional: true, warnings: 1, contains: `CFBundleVersion="42"`},
+		{name: "generated merge source", path: "App/Info.plist", build: "42", generated: true, warnings: 1, contains: "Verify the final archive"},
+		{name: "external", path: "../outside.plist", build: "42", warnings: 1, contains: "could not verify Info.plist"},
+		{name: "symlink", path: "App/Info.plist", build: "42", symlink: true, warnings: 1, contains: "could not verify Info.plist"},
+		{name: "unresolved", path: "$(UNKNOWN)/Info.plist", build: "42", warnings: 1, contains: "could not verify Info.plist"},
+		{name: "generated without source", generated: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			project := writeStructuredVersionProject(t, tc.xcconfig)
+			path := filepath.Join(filepath.Dir(project), "App", "Info.plist")
+			if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			data := `<?xml version="1.0"?><plist version="1.0"><dict><key>CFBundleVersion</key><string>` + tc.build + `</string></dict></plist>`
+			if tc.symlink {
+				outside := filepath.Join(t.TempDir(), "Info.plist")
+				if err := os.WriteFile(outside, []byte(data), 0o600); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.Symlink(outside, path); err != nil {
+					t.Fatal(err)
+				}
+			} else if err := os.WriteFile(path, []byte(data), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			settings := ""
+			if tc.path != "" {
+				settings = fmt.Sprintf("INFOPLIST_FILE = %q; ", tc.path)
+			}
+			if tc.generated {
+				settings += "GENERATE_INFOPLIST_FILE = YES; "
+			}
+			if tc.xcconfig {
+				config := filepath.Join(filepath.Dir(project), "Configs", "App.xcconfig")
+				existing := mustReadVersionTestFile(t, config)
+				if tc.missingOptional {
+					existing += "\n#include? \"Local.xcconfig\"\n"
+				}
+				if err := os.WriteFile(config, []byte(existing+"\nINFOPLIST_FILE = "+tc.path+"\n"), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				pbx := filepath.Join(project, "project.pbxproj")
+				old := mustReadVersionTestFile(t, pbx)
+				old = strings.ReplaceAll(old, "MARKETING_VERSION = 1.2.3;", settings+"MARKETING_VERSION = 1.2.3;")
+				if err := os.WriteFile(pbx, []byte(old), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			result, err := SetVersion(context.Background(), SetVersionOptions{ProjectDir: project, Target: "App", Configuration: "Release", BuildNumber: "50", AllowExternalXCConfig: true})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(result.ComputedWarnings) != tc.warnings {
+				t.Fatalf("warnings=%#v, want %d", result.ComputedWarnings, tc.warnings)
+			}
+			if tc.contains != "" && !strings.Contains(strings.Join(result.ComputedWarnings, "\n"), tc.contains) {
+				t.Fatalf("warnings=%#v missing %q", result.ComputedWarnings, tc.contains)
+			}
+		})
+	}
+}

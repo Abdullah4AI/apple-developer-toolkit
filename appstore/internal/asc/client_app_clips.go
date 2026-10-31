@@ -107,8 +107,9 @@ type AppClipDefaultExperienceLocalizationAttributes struct {
 
 // AppClipAdvancedExperienceAttributes describes advanced experience attributes.
 type AppClipAdvancedExperienceAttributes struct {
-	Link             string                                    `json:"link,omitempty"`
-	Version          string                                    `json:"version,omitempty"`
+	Link string `json:"link,omitempty"`
+	// Apple defines version as an integer; retain string responses and exact JSON values too.
+	Version          json.RawMessage                           `json:"version,omitempty"`
 	Status           string                                    `json:"status,omitempty"`
 	Action           AppClipAction                             `json:"action,omitempty"`
 	IsPoweredBy      bool                                      `json:"isPoweredBy,omitempty"`

@@ -827,6 +827,7 @@ type setVersionValidation struct {
 	fileConsumers              map[string]map[string]bool
 	fileIdentities             map[string]string
 	configFiles                map[string][]string
+	lexicalConfigPaths         map[string][]string
 	uncertainXCConfigConsumers bool
 }
 
@@ -846,7 +847,7 @@ func (project *structuredVersionProject) validateSetVersion(opts SetVersionOptio
 		selectedIDs[configuration.id] = true
 	}
 
-	fileConsumers, configFiles, fileIdentities, uncertainXCConfigConsumers, err := project.xcconfigConsumers(selectedIDs)
+	fileConsumers, configFiles, fileIdentities, uncertainXCConfigConsumers, lexicalConfigPaths, err := project.xcconfigConsumers(selectedIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -897,6 +898,7 @@ func (project *structuredVersionProject) validateSetVersion(opts SetVersionOptio
 		fileConsumers:              fileConsumers,
 		fileIdentities:             fileIdentities,
 		configFiles:                configFiles,
+		lexicalConfigPaths:         lexicalConfigPaths,
 		uncertainXCConfigConsumers: uncertainXCConfigConsumers,
 	}, nil
 }
@@ -1171,13 +1173,14 @@ func (project *structuredVersionProject) setVersion(opts SetVersionOptions) (*Se
 	}
 	sort.Strings(changedFiles)
 	return &SetVersionResult{
-		Version:       strings.TrimSpace(opts.Version),
-		BuildNumber:   strings.TrimSpace(opts.BuildNumber),
-		ProjectDir:    project.rootDir,
-		Target:        strings.TrimSpace(opts.Target),
-		Configuration: strings.TrimSpace(opts.Configuration),
-		ChangedFiles:  changedFiles,
-		Changes:       changes,
+		Version:          strings.TrimSpace(opts.Version),
+		BuildNumber:      strings.TrimSpace(opts.BuildNumber),
+		ProjectDir:       project.rootDir,
+		Target:           strings.TrimSpace(opts.Target),
+		Configuration:    strings.TrimSpace(opts.Configuration),
+		ChangedFiles:     changedFiles,
+		Changes:          changes,
+		ComputedWarnings: project.versionInfoPlistWarnings(opts, selected, configFiles, validation.lexicalConfigPaths),
 	}, nil
 }
 
@@ -1350,8 +1353,26 @@ func (index *xcconfigFileIdentityIndex) identity(
 	return key, nil
 }
 
-func (project *structuredVersionProject) xcconfigConsumers(selectedIDs map[string]bool) (map[string]map[string]bool, map[string][]string, map[string]string, bool, error) {
-	return project.xcconfigConsumersWithCollectorAndIdentity(selectedIDs, collectStableXCConfigFiles, os.Stat)
+func (project *structuredVersionProject) xcconfigConsumers(selectedIDs map[string]bool) (map[string]map[string]bool, map[string][]string, map[string]string, bool, map[string][]string, error) {
+	observedByRoot := make(map[string][]string)
+	collect := func(path string) ([]string, error) {
+		var observed []string
+		files, err := collectStableXCConfigFilesWithObserver(path, func(path string) { observed = append(observed, path) })
+		observedByRoot[normalizeSigningLexicalPath(path)] = observed
+		return files, err
+	}
+	consumers, files, identities, uncertain, err := project.xcconfigConsumersWithCollectorAndIdentity(selectedIDs, collect, os.Stat)
+	lexicalPaths := make(map[string][]string)
+	for _, configuration := range project.configurations {
+		if configuration.baseReferenceID == "" {
+			continue
+		}
+		path, pathErr := project.fileReferencePath(configuration.baseReferenceID)
+		if pathErr == nil {
+			lexicalPaths[configuration.id] = observedByRoot[normalizeSigningLexicalPath(path)]
+		}
+	}
+	return consumers, files, identities, uncertain, lexicalPaths, err
 }
 
 func (project *structuredVersionProject) signingXCConfigConsumers(selectedIDs map[string]bool, allowExternal bool) (map[string]map[string]bool, map[string][]string, map[string]string, bool, []string, []string, map[string][]string, bool, error) {

@@ -124,6 +124,7 @@ type ReviewSubmissionItemRelation struct {
 type ReviewSubmissionItem struct {
 	ID      string                         `json:"id"`
 	Type    string                         `json:"type"`
+	State   string                         `json:"state,omitempty"`
 	Related []ReviewSubmissionItemRelation `json:"related,omitempty"`
 }
 
@@ -577,8 +578,9 @@ func (c *Client) ListReviewSubmissionItems(ctx context.Context, reviewSubmission
 	items := make([]ReviewSubmissionItem, 0, len(payload.Data))
 	for _, resource := range payload.Data {
 		item := ReviewSubmissionItem{
-			ID:   strings.TrimSpace(resource.ID),
-			Type: strings.TrimSpace(resource.Type),
+			ID:    strings.TrimSpace(resource.ID),
+			Type:  strings.TrimSpace(resource.Type),
+			State: stringAttr(resource.Attributes, "state"),
 		}
 		names := make([]string, 0, len(resource.Relationships))
 		for relationshipName := range resource.Relationships {

@@ -46,6 +46,7 @@ Examples:
 		Subcommands: []*ffcli.Command{
 			WebAuthCommand(),
 			WebAgreementsCommand(),
+			WebBusinessCommand(),
 			WebFinanceCommand(),
 			WebIAPCommand(),
 			WebAPIKeysCommand(),

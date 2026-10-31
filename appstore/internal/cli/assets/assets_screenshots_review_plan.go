@@ -83,9 +83,9 @@ func AssetsScreenshotsPlanCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("plan", flag.ExitOnError)
 
 	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
-	version := fs.String("version", "", "App Store version string")
+	version := fs.String("version", "", "App Store version ID or numeric version string")
 	versionID := shared.BindResourceIDFlag(fs, "version-id", "appStoreVersions", "App Store version ID")
-	platform := fs.String("platform", "", "Platform for --version lookups: IOS, MAC_OS, TV_OS, VISION_OS (defaults to IOS with --version)")
+	platform := fs.String("platform", "", "Platform: IOS, MAC_OS, TV_OS, VISION_OS (defaults to IOS for version strings; IDs use their actual platform)")
 	reviewOutputDir := fs.String("review-output-dir", defaultReviewOutputDir, "Directory containing review artifacts")
 	manifestPath := fs.String("manifest-path", "", "Optional manifest path (default: <review-output-dir>/manifest.json)")
 	approvalPath := fs.String("approval-path", "", "Optional approvals path (default: <review-output-dir>/approved.json)")
@@ -105,7 +105,7 @@ version localizations, and previews grouped upload intent per display type.
 Examples:
   asc screenshots plan --app "123456789" --version "1.2.3"
   asc screenshots plan --app "123456789" --version "1.2.3" --skip-existing
-  asc screenshots plan --app "123456789" --version-id "VERSION_ID" --replace`,
+  asc screenshots plan --app "123456789" --version "VERSION_ID" --replace`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -143,9 +143,9 @@ func AssetsScreenshotsApplyCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("apply", flag.ExitOnError)
 
 	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
-	version := fs.String("version", "", "App Store version string")
+	version := fs.String("version", "", "App Store version ID or numeric version string")
 	versionID := shared.BindResourceIDFlag(fs, "version-id", "appStoreVersions", "App Store version ID")
-	platform := fs.String("platform", "", "Platform for --version lookups: IOS, MAC_OS, TV_OS, VISION_OS (defaults to IOS with --version)")
+	platform := fs.String("platform", "", "Platform: IOS, MAC_OS, TV_OS, VISION_OS (defaults to IOS for version strings; IDs use their actual platform)")
 	reviewOutputDir := fs.String("review-output-dir", defaultReviewOutputDir, "Directory containing review artifacts")
 	manifestPath := fs.String("manifest-path", "", "Optional manifest path (default: <review-output-dir>/manifest.json)")
 	approvalPath := fs.String("approval-path", "", "Optional approvals path (default: <review-output-dir>/approved.json)")
@@ -163,7 +163,7 @@ func AssetsScreenshotsApplyCommand() *ffcli.Command {
 Examples:
   asc screenshots apply --app "123456789" --version "1.2.3" --confirm
   asc screenshots apply --app "123456789" --version "1.2.3" --skip-existing --confirm
-  asc screenshots apply --app "123456789" --version-id "VERSION_ID" --replace --confirm`,
+  asc screenshots apply --app "123456789" --version "VERSION_ID" --replace --confirm`,
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
@@ -221,6 +221,11 @@ func executeScreenshotReviewPlan(ctx context.Context, opts screenshotReviewPlanO
 		return nil, flag.ErrHelp
 	}
 
+	versionValue, versionIDValue, err := normalizeScreenshotVersionSelector(versionValue, versionIDValue)
+	if err != nil {
+		return nil, shared.UsageError(err.Error())
+	}
+
 	normalizedPlatform, err := resolveAppScopedScreenshotPlatform(versionValue, opts.Platform)
 	if err != nil {
 		return nil, shared.UsageError(err.Error())
@@ -255,7 +260,7 @@ func executeScreenshotReviewPlan(ctx context.Context, opts screenshotReviewPlanO
 
 	resolvedVersionID, resolvedVersion, resolvedPlatform, err := resolveScreenshotPlanVersion(requestCtx, client, resolvedAppID, versionValue, versionIDValue, normalizedPlatform)
 	if err != nil {
-		return nil, fmt.Errorf("screenshots %s: %w", reviewPlanVerb(opts.Apply), err)
+		return nil, fmt.Errorf("screenshots %s: %w", reviewPlanVerb(opts.Apply), screenshotVersionSelectorError(err, opts.Version))
 	}
 
 	localizationsResp, err := client.GetAppStoreVersionLocalizations(requestCtx, resolvedVersionID, asc.WithAppStoreVersionLocalizationsLimit(200))
@@ -443,24 +448,26 @@ func executeScreenshotReviewPlan(ctx context.Context, opts screenshotReviewPlanO
 	for _, key := range groupKeys {
 		files := cloneSortedFiles(groupedFiles[key])
 		uploadResult, err := uploadScreenshots(uploadParentCtx, client, key.localizationID, key.displayType, files, opts.SkipExisting, opts.Replace, !opts.Apply)
+		if err == nil || len(uploadResult.Results) > 0 {
+			result.Groups = append(result.Groups, screenshotReviewPlanGroup{
+				Locale:                key.locale,
+				VersionLocalizationID: key.localizationID,
+				DisplayType:           key.displayType,
+				Files:                 files,
+				Result:                uploadResult,
+			})
+		}
 		if err != nil {
 			appendScreenshotReviewIssue(result, "error", "", key.locale, key.displayType, err.Error(), "")
 			return result, fmt.Errorf("screenshots %s: %w", reviewPlanVerb(opts.Apply), err)
 		}
-		result.Groups = append(result.Groups, screenshotReviewPlanGroup{
-			Locale:                key.locale,
-			VersionLocalizationID: key.localizationID,
-			DisplayType:           key.displayType,
-			Files:                 files,
-			Result:                uploadResult,
-		})
 	}
 
 	return result, nil
 }
 
 // printScreenshotReviewPlanResult renders whatever the run produced, including
-// the groups that completed before a failing group aborted the run.
+// completed screenshot receipts from a group that failed partway through.
 func printScreenshotReviewPlanResult(result *screenshotReviewPlanResult, output shared.OutputFlags) error {
 	if result == nil {
 		return nil
@@ -538,7 +545,24 @@ func renderScreenshotReviewPlanResult(result *screenshotReviewPlanResult, markdo
 		return fmt.Errorf("result is nil")
 	}
 
-	shared.RenderSection("Summary", []string{"field", "value"}, [][]string{
+	renderSection := func(title string, headers []string, rows [][]string) error {
+		heading := shared.Bold(strings.ToUpper(title)) + "\n"
+		renderRows := asc.WriteTable
+		if markdown {
+			heading = fmt.Sprintf("### %s\n\n", title)
+			renderRows = asc.WriteMarkdown
+		}
+		if _, err := fmt.Fprint(os.Stdout, heading); err != nil {
+			return err
+		}
+		if err := renderRows(headers, rows); err != nil {
+			return err
+		}
+		_, err := fmt.Fprintln(os.Stdout)
+		return err
+	}
+
+	if err := renderSection("Summary", []string{"field", "value"}, [][]string{
 		{"appId", result.AppID},
 		{"version", result.Version},
 		{"versionId", result.VersionID},
@@ -551,7 +575,9 @@ func renderScreenshotReviewPlanResult(result *screenshotReviewPlanResult, markdo
 		{"plannedGroups", fmt.Sprintf("%d", result.PlannedGroups)},
 		{"errorCount", fmt.Sprintf("%d", result.ErrorCount)},
 		{"warningCount", fmt.Sprintf("%d", result.WarningCount)},
-	}, markdown)
+	}); err != nil {
+		return err
+	}
 
 	if len(result.Groups) > 0 {
 		rows := make([][]string, 0, len(result.Groups))
@@ -564,7 +590,9 @@ func renderScreenshotReviewPlanResult(result *screenshotReviewPlanResult, markdo
 				summarizeUploadStates(group.Result.Results),
 			})
 		}
-		shared.RenderSection("Groups", []string{"locale", "displayType", "versionLocalizationId", "files", "result"}, rows, markdown)
+		if err := renderSection("Groups", []string{"locale", "displayType", "versionLocalizationId", "files", "result"}, rows); err != nil {
+			return err
+		}
 	}
 
 	if len(result.Issues) > 0 {
@@ -578,7 +606,9 @@ func renderScreenshotReviewPlanResult(result *screenshotReviewPlanResult, markdo
 				shared.OrNA(issue.Remediation),
 			})
 		}
-		shared.RenderSection("Issues", []string{"severity", "locale", "displayType", "message", "remediation"}, rows, markdown)
+		if err := renderSection("Issues", []string{"severity", "locale", "displayType", "message", "remediation"}, rows); err != nil {
+			return err
+		}
 	}
 
 	return nil

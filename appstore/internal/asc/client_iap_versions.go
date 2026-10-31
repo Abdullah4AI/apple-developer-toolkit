@@ -325,6 +325,15 @@ func (c *Client) GetInAppPurchaseVersion(ctx context.Context, versionID string, 
 }
 
 func (c *Client) GetInAppPurchaseVersions(ctx context.Context, iapID string, opts ...IAPVersionsOption) (*InAppPurchaseVersionsResponse, error) {
+	return c.getInAppPurchaseVersions(ctx, iapID, false, opts...)
+}
+
+// GetInAppPurchaseVersionsStrict validates collection envelopes before using them as evidence.
+func (c *Client) GetInAppPurchaseVersionsStrict(ctx context.Context, iapID string, opts ...IAPVersionsOption) (*InAppPurchaseVersionsResponse, error) {
+	return c.getInAppPurchaseVersions(ctx, iapID, true, opts...)
+}
+
+func (c *Client) getInAppPurchaseVersions(ctx context.Context, iapID string, strict bool, opts ...IAPVersionsOption) (*InAppPurchaseVersionsResponse, error) {
 	q := &iapVersionsQuery{}
 	for _, opt := range opts {
 		opt(q)
@@ -345,6 +354,11 @@ func (c *Client) GetInAppPurchaseVersions(ctx context.Context, iapID string, opt
 	data, err := c.do(ctx, http.MethodGet, path, nil)
 	if err != nil {
 		return nil, err
+	}
+	if strict {
+		if err := validateReviewSubmissionCollectionEnvelope(data, "in-app purchases", reviewCollectionResourceSpec{resourceType: ResourceTypeInAppPurchaseVersions}); err != nil {
+			return nil, err
+		}
 	}
 	var response InAppPurchaseVersionsResponse
 	if err := json.Unmarshal(data, &response); err != nil {

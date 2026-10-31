@@ -33,10 +33,7 @@ func uploadScreenshotsToSetFromRootWithOpenedFiles(ctx context.Context, client *
 	}
 
 	progress, err := uploadScreenshotsWithOrderStateWithOpenedFiles(ctx, client, setID, orderedIDs, files, sourceRootPath, false, true, openedFiles)
-	if err != nil {
-		return nil, err
-	}
-	return progress.Results, nil
+	return progress.Results, err
 }
 
 func uploadScreenshotsWithOrderState(ctx context.Context, client *asc.Client, setID string, orderedIDs, files []string, sourceRootPath string, syncIfNoNew, syncAfterUpload bool) (screenshotUploadProgress, error) {

@@ -603,3 +603,30 @@ func TestAPIRendersAppleErrorsWithStatusExitCode(t *testing.T) {
 		t.Fatalf("stderr = %q, want Apple error detail", stderr)
 	}
 }
+
+func TestAPIFullURLStaysOnItsHost(t *testing.T) {
+	setupAuth(t)
+
+	requests := newRequestLog(1)
+	installDefaultTransport(t, roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		requests.Add(req.Method + " " + req.URL.String())
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(strings.NewReader(`{"data":[]}`)),
+			Header:     http.Header{"Content-Type": []string{"application/json"}},
+		}, nil
+	}))
+
+	_, stderr := captureOutput(t, func() {
+		args := []string{"api", "get", "https://api.enterprise.developer.apple.com/v1/certificates"}
+		if code := rootcmd.Run(args, "1.2.3"); code == rootcmd.ExitSuccess {
+			t.Fatal("api get succeeded with a URL for the other API")
+		}
+	})
+	if !strings.Contains(stderr, "rejected request URL") {
+		t.Fatalf("stderr = %q", stderr)
+	}
+	if got := requests.Snapshot(); len(got) != 0 {
+		t.Fatalf("requests = %v, want none", got)
+	}
+}

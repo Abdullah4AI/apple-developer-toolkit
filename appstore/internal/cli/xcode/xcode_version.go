@@ -281,6 +281,7 @@ Examples:
 			}
 
 			projectInput := selectedProjectInput(*projectDir, *project)
+			versionFilter := ""
 			if *allowExternalXCConfig {
 				warnExternalXCConfigAuthorized()
 			}
@@ -298,7 +299,7 @@ Examples:
 				}); err != nil {
 					return classifyXcodeLocalFailure(fmt.Errorf("xcode version edit: validate local mutation: %w", err))
 				}
-				versionFilter := v
+				versionFilter = v
 				if versionFilter == "" {
 					resolvedVersion, err := runGetConsistentMarketingVersion(ctx, localxcode.GetVersionOptions{
 						ProjectDir:              projectInput,
@@ -332,9 +333,11 @@ Examples:
 				return classifyXcodeLocalFailure(fmt.Errorf("xcode version edit: %w", err))
 			}
 
-			return shared.PrintOutputRows(result, *output.Output, *output.Pretty,
-				[]string{"Version", "Build", "Target", "Configuration", "Changed Files"},
-				[][]string{{result.Version, result.BuildNumber, result.Target, result.Configuration, strings.Join(result.ChangedFiles, ", ")}})
+			result.VersionFilter = versionFilter
+			for _, warning := range result.ComputedWarnings {
+				fmt.Fprintln(os.Stderr, "Warning: "+warning)
+			}
+			return shared.PrintOutput(result, *output.Output, *output.Pretty)
 		},
 	}
 }
@@ -409,6 +412,7 @@ Examples:
 				warnExternalXCConfigAuthorized()
 			}
 			remoteBuildNumber := ""
+			versionFilter := ""
 			if *remote.next {
 				if err := validateXcodeRemoteBuildNumberOptions(remote.options("")); err != nil {
 					return err
@@ -426,7 +430,7 @@ Examples:
 				}); err != nil {
 					return classifyXcodeLocalFailure(fmt.Errorf("xcode version bump: validate local mutation: %w", err))
 				}
-				versionFilter, err := runGetConsistentMarketingVersion(ctx, localxcode.GetVersionOptions{
+				versionFilter, err = runGetConsistentMarketingVersion(ctx, localxcode.GetVersionOptions{
 					ProjectDir:              projectInput,
 					Target:                  strings.TrimSpace(*target),
 					Configuration:           strings.TrimSpace(*configuration),
@@ -458,9 +462,11 @@ Examples:
 				return classifyXcodeLocalFailure(fmt.Errorf("xcode version bump: %w", err))
 			}
 
-			return shared.PrintOutputRows(result, *output.Output, *output.Pretty,
-				[]string{"Bump Type", "Old Version", "New Version", "Old Build", "New Build", "Changed Files"},
-				[][]string{{result.BumpType, result.OldVersion, result.NewVersion, result.OldBuild, result.NewBuild, strings.Join(result.ChangedFiles, ", ")}})
+			result.VersionFilter = versionFilter
+			for _, warning := range result.ComputedWarnings {
+				fmt.Fprintln(os.Stderr, "Warning: "+warning)
+			}
+			return shared.PrintOutput(result, *output.Output, *output.Pretty)
 		},
 	}
 }

@@ -123,19 +123,19 @@ func fetchAgeRatingSetting(ctx context.Context, client *asc.Client, target metad
 	return values, nil
 }
 
-func updateAgeRatingSetting(ctx context.Context, client *asc.Client, target metadataSettingTarget, changed map[string]string) error {
+func updateAgeRatingSetting(ctx context.Context, client *asc.Client, target metadataSettingTarget, changed map[string]string) (string, error) {
 	resp, err := fetchAgeRatingDeclaration(ctx, client, target.appInfoID)
 	if err != nil {
-		return err
+		return "", err
 	}
 	data, err := encodeMetadataSettingFile(metadataSettingScope{fields: ageRatingFields}, changed)
 	if err != nil {
-		return err
+		return "", err
 	}
 	var attributes asc.AgeRatingDeclarationAttributes
 	if err := json.Unmarshal(data, &attributes); err != nil {
-		return err
+		return "", err
 	}
 	_, err = client.UpdateAgeRatingDeclaration(ctx, resp.Data.ID, attributes)
-	return err
+	return "update", err
 }

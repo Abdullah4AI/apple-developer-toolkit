@@ -210,9 +210,13 @@ func BuildReadinessReport(ctx context.Context, opts ReadinessOptions) (validatio
 			return nil
 		},
 		func(taskCtx context.Context) error {
-			fetchedIAPs, fetchErr := fetchIAPsFn(taskCtx, client, opts.AppID)
+			fetchedIAPs, fetchErr := fetchIAPsFn(taskCtx, client, opts.AppID, opts.Deep)
 			if fetchErr != nil {
 				switch {
+				case taskCtx.Err() != nil:
+					return taskCtx.Err()
+				case opts.Deep:
+					iapFetchSkipReason = "The complete IAP catalog could not be verified through the public API"
 				case errors.Is(fetchErr, asc.ErrForbidden) || asc.IsUnauthorized(fetchErr):
 					iapFetchSkipReason = "IAP readiness checks were skipped because this App Store Connect account cannot read in-app purchase resources"
 				case asc.IsRetryable(fetchErr):
@@ -353,6 +357,17 @@ func BuildReadinessReport(ctx context.Context, opts ReadinessOptions) (validatio
 		CustomProductPageLocalizations:      customProductPageLocalizations,
 		CustomProductPageKeywordsSkipReason: customProductPageKeywordsSkipReason,
 	}, opts.Strict)
+	if opts.Deep {
+		check, finding := collectIAPAttachmentDeepCheck(ctx, client, report, iaps, iapFetchSkipReason)
+		if ctx.Err() != nil {
+			return validation.Report{}, ctx.Err()
+		}
+		findings := []validation.CheckResult{}
+		if finding != nil {
+			findings = append(findings, *finding)
+		}
+		report = validation.ApplyDeepValidation(report, validation.DeepReport{Checks: []validation.DeepCheck{check}}, findings)
+	}
 	if opts.CheckURLs {
 		targets := validateURLTargets(versionLocalizations, appInfoLocalizations)
 		if len(targets) > 0 {

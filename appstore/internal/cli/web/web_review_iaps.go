@@ -41,7 +41,9 @@ func buildReviewIAPMutationRows(payload reviewIAPMutationOutput) [][]string {
 		{"Mutation", "IAP ID", reviewIAPValue(payload.IAPID)},
 		{"Mutation", "Operation", reviewIAPValue(payload.Operation)},
 		{"Mutation", "Changed", strconv.FormatBool(payload.Changed)},
-		{"Submission", "Submission ID", reviewIAPValue(payload.Submission.ID)},
+		{"Submission", "Item ID", reviewIAPValue(payload.Submission.ReviewSubmissionItemID)},
+		{"Submission", "Review Draft ID", reviewIAPValue(payload.Submission.ReviewSubmissionID)},
+		{"Submission", "IAP Version ID", reviewIAPValue(payload.Submission.InAppPurchaseVersionID)},
 		{"Submission", "Next Version", strconv.FormatBool(payload.Submission.SubmitWithNextAppStoreVersion)},
 	}
 }
@@ -96,27 +98,51 @@ func reviewIAPAmbiguousSelectionError(err error) *shared.AmbiguousSelectionError
 	}
 }
 
-// iapStateIndicatesAlreadyAttached reports whether the IAP's current ASC
-// state implies it is already enrolled in the next app version review.
-//
-// The iris listing returns `state` (per `reviewIAPFields`) but does not
-// return the otherwise-authoritative `submitWithNextAppStoreVersion` field,
-// so state is the only signal available pre-POST. When the IAP is in one
-// of these states, iris POST `/inAppPurchaseSubmissions` returns a 409
-// whose error code varies with the IAP-id form used: a re-attach with the
-// iris resource UUID surfaces `ENTITY_ERROR.RELATIONSHIP.INVALID` because
-// iris's internal UUID→numeric-id translation fails for in-flight IAPs,
-// while a re-attach with the public numeric id surfaces
-// `ENTITY_ERROR.ATTRIBUTE.INVALID.UNMODIFIABLE` on
-// `/data/attributes/submitWithNextAppStoreVersion`. Short-circuiting before
-// the POST avoids both error shapes and keeps the CLI's exit semantics
-// stable across the two id-form code paths.
-func iapStateIndicatesAlreadyAttached(state string) bool {
-	switch strings.ToUpper(strings.TrimSpace(state)) {
-	case "WAITING_FOR_REVIEW", "IN_REVIEW", "PENDING_BINARY_APPROVAL":
-		return true
+func selectReviewIAPSubmission(submissions []webcore.ReviewSubmission, selectedID string) (webcore.ReviewSubmission, error) {
+	var candidates []webcore.ReviewSubmission
+	for _, submission := range submissions {
+		if selectedID != "" && submission.ID != selectedID {
+			continue
+		}
+		if submission.State == "READY_FOR_REVIEW" && submission.ID != "" {
+			candidates = append(candidates, submission)
+		}
 	}
-	return false
+	if len(candidates) == 1 {
+		return candidates[0], nil
+	}
+	if selectedID != "" {
+		return webcore.ReviewSubmission{}, shared.UsageError("--submission must identify a READY_FOR_REVIEW draft under --app")
+	}
+	if len(candidates) == 0 {
+		return webcore.ReviewSubmission{}, fmt.Errorf("no READY_FOR_REVIEW draft under this app; create a review submission before attaching the IAP")
+	}
+	ids := make([]string, 0, len(candidates))
+	for _, candidate := range candidates {
+		ids = append(ids, candidate.ID)
+	}
+	return webcore.ReviewSubmission{}, shared.UsageErrorf("multiple READY_FOR_REVIEW drafts; select one with --submission: %s", strings.Join(ids, ", "))
+}
+
+func findReviewIAPItem(ctx context.Context, client *webcore.Client, submissionID, versionID string) (string, error) {
+	items, err := client.ListReviewSubmissionItems(ctx, submissionID)
+	if err != nil {
+		return "", err
+	}
+	for _, item := range items {
+		if item.State == "REMOVED" {
+			continue
+		}
+		for _, related := range item.Related {
+			if related.Relationship == "inAppPurchaseVersion" && related.Type == "inAppPurchaseVersions" && related.ID == versionID {
+				if item.Type != "reviewSubmissionItems" || item.ID == "" || item.State == "" {
+					return "", fmt.Errorf("matching review item has incomplete identity or state; refusing to attach")
+				}
+				return item.ID, nil
+			}
+		}
+	}
+	return "", nil
 }
 
 func verifyReviewIAPBelongsToApp(ctx context.Context, client reviewIAPFinder, appID, iapID string) (webcore.ReviewIAP, error) {
@@ -140,28 +166,17 @@ func verifyReviewIAPBelongsToApp(ctx context.Context, client reviewIAPFinder, ap
 	return iap, nil
 }
 
-// WebReviewIAPsCommand groups iris-API operations that attach a non-renewing
-// in-app purchase to the next app version review. Mirrors
-// `asc web review subscriptions` but routes to the IAP iris endpoint.
+// WebReviewIAPsCommand groups web operations for staging non-renewing IAPs for review.
 func WebReviewIAPsCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("web review iaps", flag.ExitOnError)
 	return &ffcli.Command{
 		Name:       "iaps",
 		ShortUsage: "asc web review iaps <subcommand> [flags]",
-		ShortHelp:  "Attach non-renewing IAPs to the next app version review.",
+		ShortHelp:  "Add non-renewing IAP versions to a review draft.",
 		LongHelp: `WEB SESSION WORKFLOWS
 
-Attach a non-renewing in-app purchase to the next app version review.
-
-Subcommands:
-  attach  Attach one non-renewing IAP to the next app version review
-
-Apple's public REST API does not expose this flow for non-renewing purchases:
-POST /v1/reviewSubmissionItems rejects all IAP relationship variants, and a
-standalone POST /v1/inAppPurchaseSubmissions returns
-FIRST_IAP_MUST_BE_SUBMITTED_ON_VERSION. The web UI's "Add App In-App Purchase
-or Subscription" dialog posts to /iris/v1/inAppPurchaseSubmissions with
-submitWithNextAppStoreVersion=true; this command exposes that same call.
+Add a non-renewing in-app purchase version to an existing App Review draft.
+This stages the IAP for review; it does not submit the draft to Apple.
 
 `,
 		FlagSet:   fs,
@@ -175,24 +190,31 @@ submitWithNextAppStoreVersion=true; this command exposes that same call.
 	}
 }
 
-// WebReviewIAPsAttachCommand attaches a non-renewing IAP to the next app
-// version review via the iris endpoint.
+// WebReviewIAPsAttachCommand adds an IAP version to an existing review draft.
 func WebReviewIAPsAttachCommand() *ffcli.Command {
 	fs := flag.NewFlagSet("web review iaps attach", flag.ExitOnError)
 
 	appID := fs.String("app", "", "App ID (or ASC_APP_ID env)")
 	iapID := fs.String("iap-id", "", "Iris IAP resource ID, product ID, or exact reference name")
+	submissionID := fs.String("submission", "", "Review draft ID (required when multiple READY_FOR_REVIEW drafts exist)")
 	confirm := fs.Bool("confirm", false, "Confirm the attach operation")
 	authFlags := bindWebSessionFlags(fs)
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "attach",
-		ShortUsage: "asc web review iaps attach --app APP_ID --iap-id IAP_SELECTOR --confirm [flags]",
-		ShortHelp:  "Attach a non-renewing IAP to the next app version review.",
+		ShortUsage: "asc web review iaps attach --app APP_ID --iap-id IAP_SELECTOR [--submission SUBMISSION_ID] --confirm [flags]",
+		ShortHelp:  "Add a non-renewing IAP version to a review draft.",
 		LongHelp: `WEB SESSION WORKFLOWS
 
-Attach a non-renewing in-app purchase to the next app version review.
+Add the single editable IAP version to an existing READY_FOR_REVIEW draft.
+When several drafts exist, choose one with --submission. No draft is created.
+This stages the IAP for review; it does not submit the draft to Apple.
+The receipt includes the review draft and IAP version IDs. Its legacy
+submission.id is empty because this flow creates no legacy IAP submission;
+submission.reviewSubmissionItemId identifies the actual draft item.
+The legacy submitWithNextAppStoreVersion field is true only when the selected draft
+already has an App Store version associated with it.
 
 The --iap-id selector accepts the Iris resource id, the bundle-style productId,
 or the exact current referenceName from ` + "`asc iap list`" + `. Apple's Iris listing does not
@@ -204,6 +226,10 @@ expose the public numeric ASC IAP id, so that numeric id is not resolved by this
 		Exec: func(ctx context.Context, args []string) error {
 			trimmedAppID := strings.TrimSpace(shared.ResolveAppID(*appID))
 			trimmedIAPID := strings.TrimSpace(*iapID)
+			trimmedSubmissionID := strings.TrimSpace(*submissionID)
+			if *submissionID != "" && trimmedSubmissionID == "" {
+				return shared.UsageError("--submission must not be blank")
+			}
 			if err := validateReviewIAPAttachInputs(trimmedAppID, trimmedIAPID, *confirm); err != nil {
 				return err
 			}
@@ -219,67 +245,61 @@ expose the public numeric ASC IAP id, so that numeric id is not resolved by this
 			if err != nil {
 				return fmt.Errorf("web review iaps attach: %w", withReviewSelectorDiagnostic(err, "--iap-id"))
 			}
-			// The iris attach POST takes the iris resource id, not the
-			// caller's selector — `--iap-id` may have been a bundle-style
-			// productId that matched via `attributes.productId`, in which
-			// case posting the selector as the relationship id would be
-			// wrong. Always use the resolved iris UUID.
-			resolvedIrisID := strings.TrimSpace(reviewIAP.ID)
-			if reviewIAP.SubmitWithNextAppStoreVersion || iapStateIndicatesAlreadyAttached(reviewIAP.State) {
-				payload := reviewIAPMutationOutput{
-					AppID:     trimmedAppID,
-					IAPID:     trimmedIAPID,
-					Operation: "attach",
-					Changed:   false,
-					Submission: webcore.ReviewIAPSubmission{
-						InAppPurchaseID:               resolvedIrisID,
-						SubmitWithNextAppStoreVersion: true,
-					},
-				}
-				return shared.PrintOutputWithRenderers(
-					payload,
-					*output.Output,
-					*output.Pretty,
-					func() error { return renderReviewIAPMutationTable(payload) },
-					func() error { return renderReviewIAPMutationMarkdown(payload) },
-				)
-			}
-
-			submission, err := withWebSpinnerValue("Attaching IAP to next app version", func() (webcore.ReviewIAPSubmission, error) {
-				return client.CreateInAppPurchaseSubmission(requestCtx, resolvedIrisID)
-			})
+			resolvedV2ID, err := client.ResolveReviewIAPV2ID(requestCtx, trimmedAppID, reviewIAP.ProductID)
 			if err != nil {
-				if webcore.IsAlreadyExistsConflict(err) {
-					payload := reviewIAPMutationOutput{
-						AppID:     trimmedAppID,
-						IAPID:     trimmedIAPID,
-						Operation: "attach",
-						Changed:   false,
-						Submission: webcore.ReviewIAPSubmission{
-							InAppPurchaseID:               resolvedIrisID,
-							SubmitWithNextAppStoreVersion: true,
-						},
-					}
-					return shared.PrintOutputWithRenderers(
-						payload,
-						*output.Output,
-						*output.Pretty,
-						func() error { return renderReviewIAPMutationTable(payload) },
-						func() error { return renderReviewIAPMutationMarkdown(payload) },
-					)
-				}
-				return withWebAuthHint(
-					fmt.Errorf("web review iaps attach for app %q, iap %q: %w", trimmedAppID, trimmedIAPID, err),
-					"web review iaps attach",
-				)
+				return withWebAuthHint(fmt.Errorf("web review iaps attach: resolve V2 in-app purchase: %w", err), "web review iaps attach")
 			}
-
+			versionID, err := client.ResolveReviewIAPVersionID(requestCtx, resolvedV2ID)
+			if err != nil {
+				return withWebAuthHint(fmt.Errorf("web review iaps attach: %w", err), "web review iaps attach")
+			}
+			submissions, err := client.ListReviewSubmissions(requestCtx, trimmedAppID)
+			if err != nil {
+				return withWebAuthHint(err, "web review iaps attach")
+			}
+			draft, err := selectReviewIAPSubmission(submissions, trimmedSubmissionID)
+			if err != nil {
+				return err
+			}
+			itemID, err := findReviewIAPItem(requestCtx, client, draft.ID, versionID)
+			if err != nil {
+				return withWebAuthHint(err, "web review iaps attach")
+			}
+			changed := false
+			if itemID == "" {
+				createdID, createErr := withWebSpinnerValue("Adding IAP version to review draft", func() (string, error) {
+					return client.CreateReviewIAPSubmissionItem(requestCtx, draft.ID, versionID)
+				})
+				if createErr != nil && !webcore.IsAlreadyExistsConflict(createErr) {
+					return withWebAuthHint(createErr, "web review iaps attach")
+				}
+				itemID, err = findReviewIAPItem(requestCtx, client, draft.ID, versionID)
+				if createErr != nil {
+					if err != nil || itemID == "" {
+						return withWebAuthHint(createErr, "web review iaps attach")
+					}
+				} else {
+					if err != nil {
+						return fmt.Errorf("review item %q was created but could not be verified; inspect submission %q before retrying: %w", createdID, draft.ID, err)
+					}
+					if itemID != createdID {
+						return fmt.Errorf("review item %q was created but is absent from submission %q; inspect it before retrying", createdID, draft.ID)
+					}
+					changed = true
+				}
+			}
 			payload := reviewIAPMutationOutput{
-				AppID:      trimmedAppID,
-				IAPID:      trimmedIAPID,
-				Operation:  "attach",
-				Changed:    submission.SubmitWithNextAppStoreVersion,
-				Submission: submission,
+				AppID:     trimmedAppID,
+				IAPID:     trimmedIAPID,
+				Operation: "attach",
+				Changed:   changed,
+				Submission: webcore.ReviewIAPSubmission{
+					ReviewSubmissionItemID:        itemID,
+					InAppPurchaseID:               resolvedV2ID,
+					ReviewSubmissionID:            draft.ID,
+					InAppPurchaseVersionID:        versionID,
+					SubmitWithNextAppStoreVersion: draft.AppStoreVersionForReview != nil && draft.AppStoreVersionForReview.ID != "",
+				},
 			}
 			return shared.PrintOutputWithRenderers(
 				payload,

@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	rootcmd "github.com/Abdullah4AI/apple-developer-toolkit/appstore/cmd"
@@ -82,6 +83,8 @@ type validateFixture struct {
 	subscriptionGroupsStatus   int
 	iaps                       string
 	iapsStatus                 int
+	iapVersions                string
+	iapReviewSubmissions       string
 	customProductPages         string
 	customPageVersionsByPage   map[string]string
 	customPageLocsByVersion    map[string]string
@@ -271,6 +274,10 @@ func newValidateTestClient(t *testing.T, fixture validateFixture) *asc.Client {
 				return jsonResponse(http.StatusOK, body)
 			}
 			return jsonResponse(http.StatusOK, `{"data":[]}`)
+		case path == "/v2/inAppPurchases/iap-1/versions":
+			return jsonResponse(http.StatusOK, fixture.iapVersions)
+		case path == "/v1/apps/app-1/reviewSubmissions":
+			return jsonResponse(http.StatusOK, fixture.iapReviewSubmissions)
 		case path == "/v1/apps/app-1/inAppPurchasesV2":
 			if fixture.iapsStatus != 0 {
 				return jsonResponse(fixture.iapsStatus, apiErrorJSONForStatus(fixture.iapsStatus))
@@ -278,7 +285,7 @@ func newValidateTestClient(t *testing.T, fixture validateFixture) *asc.Client {
 			if fixture.iaps != "" {
 				return jsonResponse(http.StatusOK, fixture.iaps)
 			}
-			return jsonResponse(http.StatusOK, `{"data":[]}`)
+			return jsonResponse(http.StatusOK, `{"data":[],"links":{"self":"https://api.appstoreconnect.apple.com/v1/apps/app-1/inAppPurchasesV2"}}`)
 		case path == "/v1/apps/app-1/appCustomProductPages":
 			if fixture.customProductPages != "" {
 				return jsonResponse(http.StatusOK, fixture.customProductPages)
@@ -928,7 +935,7 @@ func TestValidateDeepWithoutCachedSessionReturnsStructuredUnverifiedResults(t *t
 	if err := json.Unmarshal([]byte(stdout), &report); err != nil {
 		t.Fatalf("failed to decode deep report: %v; stdout=%q", err, stdout)
 	}
-	if report.Deep == nil || report.Deep.SessionStatus != validation.DeepSessionUnavailable || len(report.Deep.Checks) != 5 {
+	if report.Deep == nil || report.Deep.SessionStatus != validation.DeepSessionUnavailable || len(report.Deep.Checks) != 6 {
 		t.Fatalf("deep report = %#v", report.Deep)
 	}
 	if report.Deep.Summary.Unverified != 3 || report.Deep.Summary.Passed != 2 {
@@ -1006,10 +1013,10 @@ func TestValidateDeepCachedSessionRunsAllFiveChecksThroughCommand(t *testing.T) 
 	if err := json.Unmarshal([]byte(stdout), &report); err != nil {
 		t.Fatalf("decode deep report: %v; stdout=%q", err, stdout)
 	}
-	if report.Deep == nil || report.Deep.SessionStatus != validation.DeepSessionCached || len(report.Deep.Checks) != 5 {
+	if report.Deep == nil || report.Deep.SessionStatus != validation.DeepSessionCached || len(report.Deep.Checks) != 6 {
 		t.Fatalf("deep report = %#v", report.Deep)
 	}
-	if report.Deep.Summary.Passed != 4 || report.Deep.Summary.NotApplicable != 1 {
+	if report.Deep.Summary.Passed != 4 || report.Deep.Summary.NotApplicable != 2 {
 		t.Fatalf("deep summary = %#v", report.Deep.Summary)
 	}
 	for _, check := range report.Deep.Checks {
@@ -1082,8 +1089,17 @@ func TestValidateDeepReturnsStructuredFallbackWhenRequiredAgreementBlocksPublicA
 	if err := json.Unmarshal([]byte(stdout), &report); err != nil {
 		t.Fatalf("decode fallback report: %v; stdout=%q", err, stdout)
 	}
-	if report.Deep == nil || report.Deep.SessionStatus != validation.DeepSessionUnavailable || len(report.Deep.Checks) != 5 {
+	if report.Deep == nil || report.Deep.SessionStatus != validation.DeepSessionUnavailable || len(report.Deep.Checks) != 6 {
 		t.Fatalf("deep fallback = %#v", report.Deep)
+	}
+	iapFound := false
+	for _, check := range report.Deep.Checks {
+		if check.ID == validation.DeepCheckIAPAttachment {
+			iapFound = check.Status == validation.DeepStatusUnverified && check.Source == validation.DeepSourcePublicAPI
+		}
+	}
+	if !iapFound {
+		t.Fatal("missing unverified public IAP evidence")
 	}
 	for _, id := range []string{"agreements.public_api.blocked", "availability.unverified", "review_details.unverified", "deep.web_session.unavailable"} {
 		if !hasCheckWithID(report.Checks, id) {
@@ -3212,5 +3228,71 @@ func TestValidateShowsManualReleaseInfo(t *testing.T) {
 	}
 	if !hasCheckWithID(report.Checks, "release.type_manual") {
 		t.Fatalf("expected release.type_manual info check, got %+v", report.Checks)
+	}
+}
+
+func TestValidateDeepIAPAttachmentPublicEvidenceSurvivesUnavailableSession(t *testing.T) {
+	t.Setenv("ASC_WEB_SESSION_CACHE_BACKEND", "off")
+	for _, tc := range []struct {
+		name              string
+		malformed, strict bool
+		wantExit          int
+		wantStatus        validation.DeepStatus
+	}{
+		{name: "missing blocks", wantExit: rootcmd.ExitError, wantStatus: validation.DeepStatusBlocked},
+		{name: "incomplete warns", malformed: true, wantExit: rootcmd.ExitSuccess, wantStatus: validation.DeepStatusUnverified},
+		{name: "strict incomplete blocks", malformed: true, strict: true, wantExit: rootcmd.ExitError, wantStatus: validation.DeepStatusUnverified},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			fixture := validValidateFixture()
+			fixture.iaps = `{"data":[{"type":"inAppPurchases","id":"iap-1","attributes":{"productId":"com.example.item","inAppPurchaseType":"NON_CONSUMABLE","state":"READY_TO_SUBMIT"}}],"links":{"self":"https://api.appstoreconnect.apple.com/catalog"}}`
+			fixture.iapVersions = `{"data":[{"type":"inAppPurchaseVersions","id":"iap-v1","attributes":{"version":1,"state":"PREPARE_FOR_SUBMISSION"}}],"links":{"self":"https://api.appstoreconnect.apple.com/versions"}}`
+			fixture.iapReviewSubmissions = `{"data":[],"links":{"self":"https://api.appstoreconnect.apple.com/submissions"}}`
+			if tc.malformed {
+				fixture.iapVersions = `{"links":{"self":"https://api.appstoreconnect.apple.com/versions"}}`
+			}
+			var mu sync.Mutex
+			catalogReads := 0
+			fixture.requestObserver = func(req *http.Request) {
+				if req.Method != http.MethodGet {
+					t.Errorf("validation made %s request", req.Method)
+				}
+				if req.URL.Path == "/v1/apps/app-1/inAppPurchasesV2" {
+					mu.Lock()
+					catalogReads++
+					mu.Unlock()
+				}
+			}
+			args := []string{"validate", "--app", "app-1", "--version-id", "ver-1", "--deep", "--output", "json"}
+			if tc.strict {
+				args = append(args, "--strict")
+			}
+			stdout, _, err := runValidateWithFixture(t, fixture, args...)
+			if got := rootcmd.ExitCodeFromError(err); got != tc.wantExit {
+				t.Fatalf("exit=%d want %d: %v", got, tc.wantExit, err)
+			}
+			var report validation.Report
+			if err := json.Unmarshal([]byte(stdout), &report); err != nil {
+				t.Fatal(err)
+			}
+			if report.Deep == nil {
+				t.Fatal("missing deep report")
+			}
+			found := 0
+			for _, check := range report.Deep.Checks {
+				if check.ID == validation.DeepCheckIAPAttachment {
+					found++
+					if check.Status != tc.wantStatus || check.Source != validation.DeepSourcePublicAPI {
+						t.Fatalf("check=%#v", check)
+					}
+				}
+			}
+			if found != 1 || catalogReads != 1 {
+				t.Fatalf("checks=%d catalog reads=%d", found, catalogReads)
+			}
+			if !tc.malformed && (report.Summary.Blocking != 1 || report.Deep.Summary.Blocked != 1) {
+				t.Fatalf("summary=%#v deep=%#v", report.Summary, report.Deep.Summary)
+			}
+		})
 	}
 }

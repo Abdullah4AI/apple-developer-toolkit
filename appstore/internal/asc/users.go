@@ -52,6 +52,16 @@ func (a *UserAttributes) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// hasField reports whether a decoded response carried the named attribute.
+// Attributes built in code count as present.
+func (a UserAttributes) hasField(name string) bool {
+	if a.sparseFields == nil {
+		return true
+	}
+	_, ok := a.sparseFields[name]
+	return ok
+}
+
 // MarshalJSON keeps sparse user responses sparse while retaining the existing
 // full struct shape for callers that construct UserAttributes directly.
 func (a UserAttributes) MarshalJSON() ([]byte, error) {
@@ -105,8 +115,8 @@ type UserInvitationAttributes struct {
 	FirstName           string   `json:"firstName"`
 	LastName            string   `json:"lastName"`
 	Roles               []string `json:"roles"`
-	AllAppsVisible      bool     `json:"allAppsVisible"`
-	ProvisioningAllowed bool     `json:"provisioningAllowed"`
+	AllAppsVisible      *bool    `json:"allAppsVisible,omitempty"`
+	ProvisioningAllowed *bool    `json:"provisioningAllowed,omitempty"`
 	ExpirationDate      string   `json:"expirationDate,omitempty"`
 }
 

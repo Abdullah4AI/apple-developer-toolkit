@@ -415,7 +415,7 @@ func TestAuthStatusInvalidEnvKeyTypeMarksEnvironmentIncomplete(t *testing.T) {
 	if payload.EnvironmentCredentialsComplete {
 		t.Fatalf("expected environmentCredentialsComplete=false, got true; stdout=%q", stdout)
 	}
-	if !strings.Contains(payload.EnvironmentNote, "ASC_KEY_TYPE must be one of: team, individual") {
+	if !strings.Contains(payload.EnvironmentNote, "ASC_KEY_TYPE must be one of: team, individual, enterprise") {
 		t.Fatalf("expected invalid key type environment note, got %q", payload.EnvironmentNote)
 	}
 }

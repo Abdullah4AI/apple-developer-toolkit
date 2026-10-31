@@ -46,6 +46,8 @@ func TestScreenshotsListBySetIDUsageErrors(t *testing.T) {
 		{[]string{"--version-localization", "loc-1", "--fields", "fileName"}, "Error: screenshots list: --fields, --limit, and --paginate require --set-id"},
 		{[]string{"--version-localization", "loc-1", "--limit", "5"}, "Error: screenshots list: --fields, --limit, and --paginate require --set-id"},
 		{[]string{"--version-localization", "loc-1", "--paginate"}, "Error: screenshots list: --fields, --limit, and --paginate require --set-id"},
+		{[]string{"--version", "version-1", "--platform", "IOS"}, "Error: --platform with --version requires --app or ASC_APP_ID so ownership and platform can be verified"},
+		{[]string{"--version-id", "version-1", "--platform", "IOS"}, "Error: --platform with --version-id requires --app or ASC_APP_ID so ownership and platform can be verified"},
 	}
 	for _, tt := range tests {
 		args := tt.args
@@ -54,6 +56,7 @@ func TestScreenshotsListBySetIDUsageErrors(t *testing.T) {
 			installScreenshotsListTestClient(t, func(w http.ResponseWriter, req *http.Request) {
 				t.Errorf("unexpected request: %s %s", req.Method, req.URL)
 			})
+			t.Setenv("ASC_APP_ID", "")
 			stdout, stderr, err := runRootCommand(t, append([]string{"screenshots", "list"}, args...))
 			if !isUsageClassError(err) || stdout != "" || !strings.HasPrefix(stderr, tt.wantErr) {
 				t.Fatalf("expected usage error, got err=%v stdout=%q stderr=%q", err, stdout, stderr)

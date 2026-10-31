@@ -186,6 +186,10 @@ func TestExecuteScreenshotListCommandValidatesSelectorModesBeforeAuth(t *testing
 		wantErr string
 	}{
 		{name: "missing selector", wantErr: "choose a localization selector"},
+		{name: "canonical and legacy IDs conflict", opts: screenshotListCommandOptions{Version: "version-1", VersionID: "version-1"}, wantErr: "--version and --version-id are mutually exclusive"},
+		{name: "foreign URL", opts: screenshotListCommandOptions{Version: "https://example.com/v1/appStoreVersions/123"}, wantErr: "only App Store Connect API self-links"},
+		{name: "wrong resource URL", opts: screenshotListCommandOptions{Version: "https://api.appstoreconnect.apple.com/v1/apps/123"}, wantErr: "expected a self-link of type appStoreVersions"},
+		{name: "relationship URL", opts: screenshotListCommandOptions{Version: "https://api.appstoreconnect.apple.com/v1/appStoreVersions/123/app"}, wantErr: "self-link must point at a single resource"},
 		{
 			name:    "direct and version selector",
 			opts:    screenshotListCommandOptions{VersionLocalizationID: "loc-1", VersionID: "version-1", Locale: "en-US"},
@@ -288,7 +292,7 @@ func TestAssetsScreenshotsListPlatformHelpExplainsSelectorSpecificAppRequirement
 	if platformFlag == nil {
 		t.Fatal("--platform flag not found")
 	}
-	for _, want := range []string{"defaults to IOS with --version", "--version-id requires --app or ASC_APP_ID"} {
+	for _, want := range []string{"defaults to IOS with version strings", "version IDs requires --app or ASC_APP_ID"} {
 		if !strings.Contains(platformFlag.Usage, want) {
 			t.Fatalf("--platform help = %q, want substring %q", platformFlag.Usage, want)
 		}

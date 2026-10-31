@@ -7,9 +7,12 @@ import (
 	"os"
 	"regexp"
 	"strings"
+
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
 )
 
-// selfLinkHost is the only host whose URLs are treated as resource self-links.
+// selfLinkHost names the API host in errors; asc.IsAPIHost decides which URLs
+// are treated as resource self-links.
 const selfLinkHost = "api.appstoreconnect.apple.com"
 
 var selfLinkVersionSegment = regexp.MustCompile(`^v[0-9]+$`)
@@ -18,7 +21,7 @@ var selfLinkVersionSegment = regexp.MustCompile(`^v[0-9]+$`)
 // resource's API self-link (for example the links.self value from JSON output
 // or a webhook delivery) and returns the bare ID.
 //
-// Only URLs on api.appstoreconnect.apple.com whose path is exactly
+// Only URLs on an API host whose path is exactly
 // /v<n>/<type>/<id> are accepted. When resourceType is non-empty the <type>
 // segment must match it. Values that are not http(s) URLs are returned
 // trimmed and otherwise unchanged so bundle identifiers, product IDs, names,
@@ -33,7 +36,7 @@ func ResourceIDFromValue(value, resourceType string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("invalid resource URL: %w", err)
 	}
-	if !strings.EqualFold(parsed.Hostname(), selfLinkHost) {
+	if !asc.IsAPIHost(strings.ToLower(parsed.Hostname())) {
 		return "", fmt.Errorf("only App Store Connect API self-links on %s are accepted as resource IDs", selfLinkHost)
 	}
 

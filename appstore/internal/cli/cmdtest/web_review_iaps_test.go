@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -19,155 +20,97 @@ import (
 
 func TestWebReviewIAPsAttachRootSuccess(t *testing.T) {
 	setupCachedWebReviewIAPSession(t, "user@example.com")
-
-	const (
-		irisResourceID = "11111111-2222-3333-4444-555555555555"
-		productID      = "com.example.removeads"
-	)
-
-	requests := newRequestLog(3)
+	requests := newRequestLog(10)
+	attached := false
 	installDefaultTransport(t, roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		requests.Add(req.Method + " " + req.URL.Host + req.URL.Path)
-		switch {
-		case req.Method == http.MethodGet &&
-			req.URL.Host == "appstoreconnect.apple.com" &&
-			req.URL.Path == "/olympus/v1/session":
-			return webReviewIAPJSONResponse(http.StatusOK, `{
-				"provider": {
-					"providerId": 123456,
-					"publicProviderId": "team-1",
-					"name": "Team"
-				},
-				"user": {
-					"emailAddress": "user@example.com"
+		requests.Add(req.Method + " " + req.URL.Path)
+		body := ""
+		status := http.StatusOK
+		switch req.Method + " " + req.URL.Path {
+		case "GET /olympus/v1/session":
+			body = `{"provider":{"providerId":123456,"publicProviderId":"team-1","name":"Team"},"user":{"emailAddress":"user@example.com"}}`
+		case "GET /iris/v1/apps/123456789/inAppPurchases":
+			body = `{"data":[{"type":"inAppPurchases","id":"legacy-iap","attributes":{"productId":"com.example.removeads","referenceName":"Remove Ads","state":"READY_TO_SUBMIT"}}]}`
+		case "GET /iris/v1/apps/123456789/inAppPurchasesV2":
+			if req.URL.Query().Get("page[cursor]") == "next" {
+				body = `{"data":[{"type":"inAppPurchases","id":"9000000001","attributes":{"productId":"com.example.removeads"}}]}`
+			} else {
+				body = `{"data":[],"links":{"next":"/iris/v1/apps/123456789/inAppPurchasesV2?page%5Bcursor%5D=next"}}`
+			}
+		case "GET /iris/v2/inAppPurchases/9000000001/versions":
+			if req.URL.Query().Get("page[cursor]") == "next" {
+				body = `{"data":[{"type":"inAppPurchaseVersions","id":"iap-version","attributes":{"state":"PREPARE_FOR_SUBMISSION","version":2}}]}`
+			} else {
+				if req.URL.Query().Get("limit") != "200" {
+					t.Fatalf("unexpected versions query: %s", req.URL.RawQuery)
 				}
-			}`, req), nil
-		case req.Method == http.MethodGet &&
-			req.URL.Host == "appstoreconnect.apple.com" &&
-			req.URL.Path == "/iris/v1/apps/123456789/inAppPurchases":
-			if got := req.URL.Query().Get("limit"); got != "300" {
-				t.Fatalf("expected web IAP lookup limit=300, got %q", got)
+				body = `{"data":[{"type":"inAppPurchaseVersions","id":"old-version","attributes":{"state":"APPROVED","version":1}}],"links":{"next":"https://appstoreconnect.apple.com/iris/v2/inAppPurchases/9000000001/versions?page%5Bcursor%5D=next"}}`
 			}
-			return webReviewIAPJSONResponse(http.StatusOK, `{
-					"data": [{
-						"type": "inAppPurchases",
-						"id": "`+irisResourceID+`",
-						"attributes": {
-							"productId": "`+productID+`",
-							"referenceName": "Remove Ads",
-							"state": "READY_TO_SUBMIT"
-						}
-					}]
-				}`, req), nil
-		case req.Method == http.MethodPost &&
-			req.URL.Host == "appstoreconnect.apple.com" &&
-			req.URL.Path == "/iris/v1/inAppPurchaseSubmissions":
-			bodyBytes, err := io.ReadAll(req.Body)
-			if err != nil {
-				t.Fatalf("read request body: %v", err)
+		case "GET /iris/v1/apps/123456789/reviewSubmissions":
+			body = `{"data":[{"type":"reviewSubmissions","id":"draft-1","attributes":{"state":"READY_FOR_REVIEW"},"relationships":{"appStoreVersionForReview":{"data":null}}}]}`
+		case "GET /iris/v1/reviewSubmissions/draft-1/items":
+			body = `{"data":[]}`
+			if attached {
+				body = `{"data":[{"type":"reviewSubmissionItems","id":"item-1","attributes":{"state":"READY_FOR_REVIEW"},"relationships":{"inAppPurchaseVersion":{"data":{"type":"inAppPurchaseVersions","id":"iap-version"}}}}]}`
 			}
-			var post struct {
-				Data struct {
-					Attributes struct {
-						SubmitWithNextAppStoreVersion bool `json:"submitWithNextAppStoreVersion"`
-					} `json:"attributes"`
-					Relationships struct {
-						InAppPurchaseV2 struct {
-							Data struct {
-								ID string `json:"id"`
-							} `json:"data"`
-						} `json:"inAppPurchaseV2"`
-					} `json:"relationships"`
-				} `json:"data"`
+		case "POST /iris/v1/reviewSubmissionItems":
+			var got map[string]any
+			if err := json.NewDecoder(req.Body).Decode(&got); err != nil {
+				t.Fatal(err)
 			}
-			if err := json.Unmarshal(bodyBytes, &post); err != nil {
-				t.Fatalf("decode request body: %v; body=%s", err, bodyBytes)
+			var want map[string]any
+			if err := json.Unmarshal([]byte(`{"data":{"type":"reviewSubmissionItems","relationships":{"reviewSubmission":{"data":{"type":"reviewSubmissions","id":"draft-1"}},"inAppPurchaseVersion":{"data":{"type":"inAppPurchaseVersions","id":"iap-version"}}}}}`), &want); err != nil {
+				t.Fatal(err)
 			}
-			if got := post.Data.Relationships.InAppPurchaseV2.Data.ID; got != irisResourceID {
-				t.Fatalf("expected request body relationship id %q, got %q", irisResourceID, got)
+			if !reflect.DeepEqual(got, want) {
+				t.Fatalf("attach payload = %#v, want %#v", got, want)
 			}
-			if got := post.Data.Relationships.InAppPurchaseV2.Data.ID; got == productID {
-				t.Fatalf("request body must not use productId as relationship id; body=%s", bodyBytes)
-			}
-			if !post.Data.Attributes.SubmitWithNextAppStoreVersion {
-				t.Fatalf("expected request body to submit with next app store version; body=%s", bodyBytes)
-			}
-			return webReviewIAPJSONResponse(http.StatusCreated, `{
-					"data": {
-					"type": "inAppPurchaseSubmissions",
-					"id": "submission-1",
-					"attributes": {
-						"submitWithNextAppStoreVersion": true
-						},
-						"relationships": {
-							"inAppPurchaseV2": {
-								"data": {"type": "inAppPurchases", "id": "`+irisResourceID+`"}
-							}
-						}
-					}
-			}`, req), nil
+			attached = true
+			status = http.StatusCreated
+			body = `{"data":{"type":"reviewSubmissionItems","id":"item-1","attributes":{"state":"READY_FOR_REVIEW"},"relationships":{"inAppPurchaseVersion":{"data":{"type":"inAppPurchaseVersions","id":"iap-version"}}}}}`
 		default:
-			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.String())
-			return nil, nil
+			t.Fatalf("unexpected request: %s %s", req.Method, req.URL)
 		}
+		return webReviewIAPJSONResponse(status, body, req), nil
 	}))
-
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	var runErr error
+	var code int
 	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{
-			"web", "review", "iaps", "attach",
-			"--app", "123456789",
-			"--iap-id", productID,
-			"--confirm",
-			"--apple-id", "user@example.com",
-			"--output", "json",
-		}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		runErr = root.Run(context.Background())
+		code = rootcmd.Run([]string{"web", "review", "iaps", "attach", "--app", "123456789", "--iap-id", "com.example.removeads", "--confirm", "--apple-id", "user@example.com", "--output", "json"}, "1.2.3")
 	})
-
-	if runErr != nil {
-		t.Fatalf("run error: %v\nstderr=%s", runErr, stderr)
+	if code != rootcmd.ExitSuccess || stderr != "" {
+		t.Fatalf("exit=%d stderr=%q stdout=%q", code, stderr, stdout)
 	}
-	if stderr != "" {
-		t.Fatalf("expected empty stderr, got %q", stderr)
+	var got map[string]any
+	if err := json.Unmarshal([]byte(stdout), &got); err != nil {
+		t.Fatal(err)
 	}
-
-	var payload struct {
-		AppID      string `json:"appId"`
-		IAPID      string `json:"iapId"`
-		Operation  string `json:"operation"`
-		Changed    bool   `json:"changed"`
-		Submission struct {
-			ID              string `json:"id"`
-			InAppPurchaseID string `json:"inAppPurchaseId"`
-		} `json:"submission"`
+	var want map[string]any
+	if err := json.Unmarshal([]byte(`{"appId":"123456789","iapId":"com.example.removeads","operation":"attach","changed":true,"submission":{"id":"","reviewSubmissionItemId":"item-1","inAppPurchaseId":"9000000001","reviewSubmissionId":"draft-1","inAppPurchaseVersionId":"iap-version","submitWithNextAppStoreVersion":false}}`), &want); err != nil {
+		t.Fatal(err)
 	}
-	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
-		t.Fatalf("failed to parse stdout JSON: %v\nstdout=%s", err, stdout)
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("receipt = %#v, want %#v", got, want)
 	}
-	if payload.AppID != "123456789" || payload.IAPID != productID || payload.Operation != "attach" || !payload.Changed {
-		t.Fatalf("unexpected payload: %#v", payload)
-	}
-	if payload.Submission.ID != "submission-1" || payload.Submission.InAppPurchaseID != irisResourceID {
-		t.Fatalf("unexpected submission: %#v", payload.Submission)
-	}
-
 	wantRequests := []string{
-		"GET appstoreconnect.apple.com/olympus/v1/session",
-		"GET appstoreconnect.apple.com/iris/v1/apps/123456789/inAppPurchases",
-		"POST appstoreconnect.apple.com/iris/v1/inAppPurchaseSubmissions",
+		"GET /olympus/v1/session",
+		"GET /iris/v1/apps/123456789/inAppPurchases",
+		"GET /iris/v1/apps/123456789/inAppPurchasesV2",
+		"GET /iris/v1/apps/123456789/inAppPurchasesV2",
+		"GET /iris/v2/inAppPurchases/9000000001/versions",
+		"GET /iris/v2/inAppPurchases/9000000001/versions",
+		"GET /iris/v1/apps/123456789/reviewSubmissions",
+		"GET /iris/v1/reviewSubmissions/draft-1/items",
+		"POST /iris/v1/reviewSubmissionItems",
+		"GET /iris/v1/reviewSubmissions/draft-1/items",
 	}
-	if got := requests.Snapshot(); strings.Join(got, "\n") != strings.Join(wantRequests, "\n") {
-		t.Fatalf("unexpected requests:\nwant=%v\ngot=%v", wantRequests, got)
+	if got := requests.Snapshot(); !reflect.DeepEqual(got, wantRequests) {
+		t.Fatalf("requests = %v, want %v", got, wantRequests)
 	}
 }
 
 func TestWebReviewIAPsAttachValidationErrors(t *testing.T) {
+	t.Setenv("ASC_APP_ID", "")
+	t.Setenv("ASC_CONFIG_PATH", t.TempDir()+"/config.json")
 	tests := []struct {
 		name       string
 		args       []string
@@ -234,6 +177,7 @@ func TestWebReviewIAPsAttachArgumentParsingEdges(t *testing.T) {
 				"--app", "123456789",
 				"--iap-id", "9000000001",
 				"--apple-id", "attach",
+				"--submission", "draft-1",
 				"--confirm",
 			},
 		},
@@ -254,6 +198,7 @@ func TestWebReviewIAPsAttachArgumentParsingEdges(t *testing.T) {
 				"--app", "123456789",
 				"--iap-id", "9000000001",
 				"--apple-id", "attach",
+				"--submission", "draft-1",
 				"--confirm",
 			},
 		},
@@ -299,6 +244,11 @@ func TestWebReviewIAPsAttachInvalidValueExitCodes(t *testing.T) {
 			wantStderr: "--app must be a numeric App Store Connect app ID",
 		},
 		{
+			name:       "blank explicit submission",
+			args:       []string{"web", "review", "iaps", "attach", "--app", "123456789", "--iap-id", "iap-1", "--submission", "   ", "--confirm"},
+			wantStderr: "--submission must not be blank",
+		},
+		{
 			name:       "invalid confirm value",
 			args:       []string{"web", "review", "iaps", "attach", "--app", "123456789", "--iap-id", "9000000001", "--confirm=maybe"},
 			wantStderr: `invalid boolean value "maybe" for -confirm`,
@@ -324,6 +274,8 @@ func TestWebReviewIAPsAttachInvalidValueExitCodes(t *testing.T) {
 
 func setupCachedWebReviewIAPSession(t *testing.T, email string) {
 	t.Helper()
+	t.Setenv("ASC_APP_ID", "")
+	t.Setenv("ASC_CONFIG_PATH", t.TempDir()+"/config.json")
 
 	t.Setenv("ASC_BYPASS_KEYCHAIN", "1")
 	t.Setenv("ASC_PROFILE", "")
@@ -364,58 +316,32 @@ func setupCachedWebReviewIAPSession(t *testing.T, email string) {
 
 func installSuccessfulWebReviewIAPAttachTransport(t *testing.T, email string) {
 	t.Helper()
-
+	attached := false
+	const item = `{"type":"reviewSubmissionItems","id":"item-1","attributes":{"state":"READY_FOR_REVIEW"},"relationships":{"inAppPurchaseVersion":{"data":{"type":"inAppPurchaseVersions","id":"version-1"}}}}`
 	installDefaultTransport(t, roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		switch {
-		case req.Method == http.MethodGet &&
-			req.URL.Host == "appstoreconnect.apple.com" &&
-			req.URL.Path == "/olympus/v1/session":
-			return webReviewIAPJSONResponse(http.StatusOK, `{
-				"provider": {
-					"providerId": 123456,
-					"publicProviderId": "team-1",
-					"name": "Team"
-				},
-				"user": {
-					"emailAddress": "`+email+`"
-				}
-			}`, req), nil
-		case req.Method == http.MethodGet &&
-			req.URL.Host == "appstoreconnect.apple.com" &&
-			req.URL.Path == "/iris/v1/apps/123456789/inAppPurchases":
-			return webReviewIAPJSONResponse(http.StatusOK, `{
-				"data": [{
-					"type": "inAppPurchases",
-					"id": "9000000001",
-					"attributes": {
-						"name": "Remove Ads",
-						"productId": "com.example.removeads",
-						"inAppPurchaseType": "NON_CONSUMABLE",
-						"state": "READY_TO_SUBMIT"
-					}
-				}]
-			}`, req), nil
-		case req.Method == http.MethodPost &&
-			req.URL.Host == "appstoreconnect.apple.com" &&
-			req.URL.Path == "/iris/v1/inAppPurchaseSubmissions":
-			return webReviewIAPJSONResponse(http.StatusCreated, `{
-				"data": {
-					"type": "inAppPurchaseSubmissions",
-					"id": "submission-1",
-					"attributes": {
-						"submitWithNextAppStoreVersion": true
-					},
-					"relationships": {
-						"inAppPurchaseV2": {
-							"data": {"type": "inAppPurchases", "id": "9000000001"}
-						}
-					}
-				}
-			}`, req), nil
+		body, status := "", http.StatusOK
+		switch req.Method + " " + req.URL.Path {
+		case "GET /olympus/v1/session":
+			body = `{"provider":{"providerId":123456,"publicProviderId":"team-1","name":"Team"},"user":{"emailAddress":"` + email + `"}}`
+		case "GET /iris/v1/apps/123456789/inAppPurchases":
+			body = `{"data":[{"type":"inAppPurchases","id":"9000000001","attributes":{"productId":"com.example.removeads","referenceName":"Remove Ads","state":"READY_TO_SUBMIT"}}]}`
+		case "GET /iris/v1/apps/123456789/inAppPurchasesV2":
+			body = `{"data":[{"type":"inAppPurchases","id":"9000000001","attributes":{"productId":"com.example.removeads"}}]}`
+		case "GET /iris/v2/inAppPurchases/9000000001/versions":
+			body = `{"data":[{"type":"inAppPurchaseVersions","id":"version-1","attributes":{"state":"PREPARE_FOR_SUBMISSION","version":1}}]}`
+		case "GET /iris/v1/apps/123456789/reviewSubmissions":
+			body = `{"data":[{"type":"reviewSubmissions","id":"draft-1","attributes":{"state":"READY_FOR_REVIEW"}}]}`
+		case "GET /iris/v1/reviewSubmissions/draft-1/items":
+			body = `{"data":[]}`
+			if attached {
+				body = `{"data":[` + item + `]}`
+			}
+		case "POST /iris/v1/reviewSubmissionItems":
+			attached, status, body = true, http.StatusCreated, `{"data":`+item+`}`
 		default:
-			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.String())
-			return nil, nil
+			t.Fatalf("unexpected request: %s %s", req.Method, req.URL)
 		}
+		return webReviewIAPJSONResponse(status, body, req), nil
 	}))
 }
 

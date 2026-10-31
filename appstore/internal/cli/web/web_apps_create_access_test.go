@@ -8,6 +8,7 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -348,6 +349,9 @@ func TestRunAppsCreateFullAccessUnauthorizedMakesNoCreate(t *testing.T) {
 }
 
 func TestRunAppsCreateOmittingAccessFlagsKeepsCreateBody(t *testing.T) {
+	guardAppCreatePreflightHTTP(t)
+	stubBundleIDPreflight(t)
+
 	origResolve := resolveAppCreateSessionFn
 	t.Cleanup(func() {
 		resolveAppCreateSessionFn = origResolve
@@ -726,6 +730,36 @@ func setAppCreateASCClient(t *testing.T, server *httptest.Server) {
 	t.Cleanup(shared.SetASCClientFactoryForTesting(func() (*asc.Client, error) {
 		return client, nil
 	}))
+}
+
+func guardAppCreatePreflightHTTP(t *testing.T) {
+	t.Helper()
+	keyPath := filepath.Join(t.TempDir(), "AuthKey.p8")
+	writeAppCreateTestPEM(t, keyPath)
+	for name, value := range map[string]string{
+		"ASC_BYPASS_KEYCHAIN":  "1",
+		"ASC_CONFIG_PATH":      filepath.Join(t.TempDir(), "config.json"),
+		"ASC_PROFILE":          "",
+		"ASC_KEY_ID":           "TEST_KEY",
+		"ASC_ISSUER_ID":        "TEST_ISSUER",
+		"ASC_KEY_TYPE":         "team",
+		"ASC_PRIVATE_KEY_PATH": keyPath,
+		"ASC_PRIVATE_KEY":      "",
+		"ASC_PRIVATE_KEY_B64":  "",
+		"ASC_STRICT_AUTH":      "0",
+		"ASC_MAX_RETRIES":      "0",
+	} {
+		t.Setenv(name, value)
+	}
+
+	// Even with usable environment credentials, these web-only tests must not
+	// reach Apple's public API. Intercept every destination before any network IO.
+	originalTransport := http.DefaultTransport
+	t.Cleanup(func() { http.DefaultTransport = originalTransport })
+	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		t.Errorf("unexpected public ASC preflight HTTP: %s %s", req.Method, req.URL.Path)
+		return nil, errors.New("public ASC preflight blocked by test transport")
+	})
 }
 
 func stubBundleIDPreflight(t *testing.T) {

@@ -427,7 +427,7 @@ func TestGetAppClipAdvancedExperiences_WithFilters(t *testing.T) {
 }
 
 func TestCreateAppClipAdvancedExperience(t *testing.T) {
-	response := jsonResponse(http.StatusCreated, `{"data":{"type":"appClipAdvancedExperiences","id":"adv-1","attributes":{"link":"https://example.com"}}}`)
+	response := jsonResponse(http.StatusCreated, `{"data":{"type":"appClipAdvancedExperiences","id":"adv-1","attributes":{"link":"https://example.com","version":1793204321770}}}`)
 	client := newTestClient(t, func(req *http.Request) {
 		if req.Method != http.MethodPost {
 			t.Fatalf("expected POST, got %s", req.Method)
@@ -592,7 +592,7 @@ func TestCreateAppClipAdvancedExperienceRequiresCreateRelationships(t *testing.T
 
 func TestUpdateAppClipAdvancedExperience(t *testing.T) {
 	action := AppClipActionPlay
-	response := jsonResponse(http.StatusOK, `{"data":{"type":"appClipAdvancedExperiences","id":"adv-1","attributes":{"action":"PLAY"}}}`)
+	response := jsonResponse(http.StatusOK, `{"data":{"type":"appClipAdvancedExperiences","id":"adv-1","attributes":{"action":"PLAY","version":1793204321770}}}`)
 	client := newTestClient(t, func(req *http.Request) {
 		if req.Method != http.MethodPatch {
 			t.Fatalf("expected PATCH, got %s", req.Method)

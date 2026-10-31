@@ -26,6 +26,8 @@ const (
 	CredentialKeyTypeTeam = "team"
 	// CredentialKeyTypeIndividual signs JWTs with sub:"user" and no issuer.
 	CredentialKeyTypeIndividual = "individual"
+	// CredentialKeyTypeEnterprise is an Enterprise Program API team key.
+	CredentialKeyTypeEnterprise = "enterprise"
 )
 
 // NormalizeCredentialKeyType returns the canonical credential key type.
@@ -40,7 +42,7 @@ func NormalizeCredentialKeyType(value string) string {
 // IsValidCredentialKeyType reports whether value names a supported key type.
 func IsValidCredentialKeyType(value string) bool {
 	switch NormalizeCredentialKeyType(value) {
-	case CredentialKeyTypeTeam, CredentialKeyTypeIndividual:
+	case CredentialKeyTypeTeam, CredentialKeyTypeIndividual, CredentialKeyTypeEnterprise:
 		return true
 	default:
 		return false
@@ -50,6 +52,12 @@ func IsValidCredentialKeyType(value string) bool {
 // IsIndividualCredentialKeyType reports whether value names an individual key.
 func IsIndividualCredentialKeyType(value string) bool {
 	return NormalizeCredentialKeyType(value) == CredentialKeyTypeIndividual
+}
+
+// IsEnterpriseCredentialKeyType reports whether value names an Enterprise
+// Program API key.
+func IsEnterpriseCredentialKeyType(value string) bool {
+	return NormalizeCredentialKeyType(value) == CredentialKeyTypeEnterprise
 }
 
 // DurationValue stores a duration with its raw string representation.

@@ -16,6 +16,7 @@ import (
 
 	"github.com/peterbourgon/ff/v3/ffcli"
 
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/schema"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
@@ -93,6 +94,7 @@ Examples:
 				return fmt.Errorf("api: %w", err)
 			}
 
+			ctx = asc.WithUnlistedOperations(ctx)
 			var response []byte
 			if request.paginate {
 				response, err = client.RawPaginatedGET(ctx, request.target, shared.ContextWithTimeout)
@@ -206,6 +208,10 @@ func parseRequest(positional []string, query []string, body, bodyFile string, bo
 	if len(values) > 0 {
 		target += "?" + values.Encode()
 	}
+	// Keep a full URL's host so the client refuses one meant for the other API.
+	if parsed, err := url.Parse(strings.TrimSpace(positional[1])); err == nil && parsed.Host != "" {
+		target = "https://" + parsed.Host + target
+	}
 	return rawRequest{method: method, target: target, body: payload, paginate: paginate}, nil
 }
 
@@ -241,7 +247,7 @@ func normalizePath(raw string) (string, url.Values, error) {
 		if strings.Contains(trimmed, "#") {
 			return "", nil, shared.UsageError("api: PATH must not include a fragment")
 		}
-		if parsed.Scheme != "https" || parsed.Host != apiHost {
+		if parsed.Scheme != "https" || !asc.IsAPIHost(parsed.Host) {
 			return "", nil, shared.UsageErrorf("api: PATH must be an App Store Connect URL (https://%s/...)", apiHost)
 		}
 		// Validate the escaped form. Parsed.Path decodes %2F and %3F before the

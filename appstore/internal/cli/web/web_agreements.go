@@ -82,12 +82,16 @@ func WebAgreementsStatusCommand() *ffcli.Command {
 		LongHelp: `WEB SESSION WORKFLOWS
 
 Show the App Store Connect agreement alert banner and the team's Apple
-Developer Program agreement history, including whether an updated agreement
-is waiting for the Account Holder.
+Developer Program agreement history and outstanding agreement notifications,
+including updates that do not yet appear in accepted history.
 
-An agreement is reported as pending when App Store Connect shows an agreement
-alert banner or when the agreement's accepted date is older than its
-effective date.
+The compatibility field pending is true when App Store Connect shows an
+agreement alert, an agreement's accepted date is older than its effective
+date, or Developer Portal reports an outstanding agreement. pendingAgreementIds
+lists IDs identified as pending in history or outstanding notifications.
+An alert alone does not identify an agreement to accept. Review warnings and
+the Apple account before choosing an ID; do not reaccept an accepted row
+solely because pending is true.
 
 Example:
   asc web agreements status
@@ -150,6 +154,10 @@ Download the content of an Apple Developer Program agreement, such as the
 Apple Developer Program License Agreement PDF, so it can be reviewed before
 it is accepted. The file is fetched with the web session from the Developer
 Portal origin only; redirects to other origins or to plain HTTP are rejected.
+
+Download requires the agreement to appear in Developer Portal history with a
+download URL. Outstanding IDs reported only by notifications may need to be
+reviewed in the Apple Developer account before acceptance.
 
 The complete content is staged in a temporary file and renamed into --out
 with mode 0600, so a partial or empty download never lands at --out; on

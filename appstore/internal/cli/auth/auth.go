@@ -380,7 +380,7 @@ func validateStoredCredential(ctx context.Context, cred authsvc.Credential) erro
 	if _, err := asc.GenerateJWT(cred.KeyID, signingIssuerID, privateKey); err != nil {
 		return fmt.Errorf("failed to generate JWT: %w", err)
 	}
-	if _, err := client.GetApps(ctx, asc.WithAppsLimit(1)); err != nil {
+	if err := probeCredential(ctx, client, cred.KeyType); err != nil {
 		if errors.Is(err, asc.ErrForbidden) {
 			return &permissionWarning{err: err}
 		}
@@ -396,7 +396,25 @@ func credentialSigningIssuerID(cred authsvc.Credential) string {
 	return cred.IssuerID
 }
 
-func validateLoginCredentials(ctx context.Context, keyID, issuerID, keyPath string, network bool) error {
+func credentialProbeName(keyType string) string {
+	if config.IsEnterpriseCredentialKeyType(keyType) {
+		return "bundle IDs list"
+	}
+	return "apps list"
+}
+
+// probeCredential makes one cheap authenticated read on the key's API.
+func probeCredential(ctx context.Context, client *asc.Client, keyType string) error {
+	if config.IsEnterpriseCredentialKeyType(keyType) {
+		client.UseEnterpriseProgramAPI()
+		_, err := client.GetBundleIDs(ctx, asc.WithBundleIDsLimit(1))
+		return err
+	}
+	_, err := client.GetApps(ctx, asc.WithAppsLimit(1))
+	return err
+}
+
+func validateLoginCredentials(ctx context.Context, keyID, issuerID, keyPath, keyType string, network bool) error {
 	privateKey, err := authsvc.LoadPrivateKey(keyPath)
 	if err != nil {
 		return shared.WithPrivateKeyDiagnostic(fmt.Errorf("failed to load private key: %w", err), err)
@@ -405,7 +423,7 @@ func validateLoginCredentials(ctx context.Context, keyID, issuerID, keyPath stri
 		return shared.WithDiagnostic(fmt.Errorf("failed to generate JWT: %w", err), shared.DiagnosticInternalError, "--private-key")
 	}
 	if network {
-		if err := loginNetworkValidate(ctx, keyID, issuerID, keyPath); err != nil {
+		if err := loginNetworkValidate(ctx, keyID, issuerID, keyPath, keyType); err != nil {
 			return withNetworkDiagnostic(fmt.Errorf("network validation failed: %w", err), err)
 		}
 	}
@@ -439,13 +457,12 @@ func printPrivateKeyPermissionRemediation(cause error, keyPath string) {
 	fmt.Fprintln(os.Stderr, "Re-run with --fix-permissions to let asc change the file to 0600.")
 }
 
-func validateLoginNetwork(ctx context.Context, keyID, issuerID, keyPath string) error {
+func validateLoginNetwork(ctx context.Context, keyID, issuerID, keyPath, keyType string) error {
 	client, err := asc.NewClient(keyID, issuerID, keyPath)
 	if err != nil {
 		return err
 	}
-	_, err = client.GetApps(ctx, asc.WithAppsLimit(1))
-	return err
+	return probeCredential(ctx, client, keyType)
 }
 
 // loginConfigPath returns the config file a keychain-bypassing login writes:
@@ -570,7 +587,7 @@ func AuthLoginCommand() *ffcli.Command {
 	name := fs.String("name", "", "Friendly name for this key (optional on first login: defaults to \"default\" when no profiles are stored)")
 	keyID := fs.String("key-id", "", "App Store Connect API Key ID")
 	issuerID := fs.String("issuer-id", "", "App Store Connect Issuer ID")
-	keyType := fs.String("key-type", config.CredentialKeyTypeTeam, "App Store Connect API key type: team or individual")
+	keyType := fs.String("key-type", config.CredentialKeyTypeTeam, "API key type: team, individual, or enterprise (Enterprise Program API)")
 	keyPath := fs.String("private-key", "", "Path to private key (.p8) file")
 	bypassKeychain := fs.Bool("bypass-keychain", false, "Store credentials in config.json instead of keychain")
 	local := fs.Bool("local", false, "When bypassing keychain, write to ./.asc/config.json")
@@ -603,6 +620,7 @@ Examples:
   asc auth login --name "MyKey" --key-id "ABC123" --issuer-id "DEF456" --private-key /path/to/AuthKey.p8
   asc auth login --name "MyIndividualKey" --key-id "ABC123" --key-type individual --private-key /path/to/AuthKey.p8
   asc auth login --bypass-keychain --local --name "MyKey" --key-id "ABC123" --issuer-id "DEF456" --private-key /path/to/AuthKey.p8
+  asc auth login --name "MyEnterpriseKey" --key-id "ABC123" --issuer-id "DEF456" --key-type enterprise --private-key /path/to/AuthKey.p8
   asc auth login --network --name "MyKey" --key-id "ABC123" --issuer-id "DEF456" --private-key /path/to/AuthKey.p8
   asc auth login --skip-validation --name "MyKey" --key-id "ABC123" --issuer-id "DEF456" --private-key /path/to/AuthKey.p8
   asc auth login --fix-permissions --name "MyKey" --key-id "ABC123" --issuer-id "DEF456" --private-key /path/to/AuthKey.p8
@@ -639,10 +657,10 @@ so commands continue to work even if the original .p8 file is removed.`,
 			*keyID = trimmedKeyID
 			normalizedKeyType := config.NormalizeCredentialKeyType(*keyType)
 			if !config.IsValidCredentialKeyType(normalizedKeyType) {
-				return shared.WithDiagnostic(shared.UsageError("--key-type must be one of: team, individual"), shared.DiagnosticInvalidInput, "--key-type")
+				return shared.WithDiagnostic(shared.UsageError("--key-type must be one of: team, individual, enterprise"), shared.DiagnosticInvalidInput, "--key-type")
 			}
 			trimmedIssuerID := strings.TrimSpace(*issuerID)
-			if normalizedKeyType == config.CredentialKeyTypeTeam && trimmedIssuerID == "" {
+			if normalizedKeyType != config.CredentialKeyTypeIndividual && trimmedIssuerID == "" {
 				fmt.Fprintln(os.Stderr, "Error: --issuer-id is required")
 				return shared.MissingRequiredUsageError("--issuer-id")
 			}
@@ -681,7 +699,7 @@ so commands continue to work even if the original .p8 file is removed.`,
 			}
 
 			if !*skipValidation {
-				if err := validateLoginCredentials(ctx, *keyID, *issuerID, *keyPath, *network); err != nil {
+				if err := validateLoginCredentials(ctx, *keyID, *issuerID, *keyPath, normalizedKeyType, *network); err != nil {
 					return fmt.Errorf("auth login: %w", err)
 				}
 			}
@@ -1231,9 +1249,9 @@ Examples:
 						if err := statusValidateCredential(ctx, cred); err != nil {
 							if _, ok := errors.AsType[*permissionWarning](err); ok {
 								credentialEntry.Validation = "works"
-								credentialEntry.ValidationDetail = "insufficient permissions for apps list"
+								credentialEntry.ValidationDetail = "insufficient permissions for " + credentialProbeName(cred.KeyType)
 								if normalizedOutput == "table" {
-									fmt.Printf("    %s (Key ID: %s): works (insufficient permissions for apps list)\n", cred.Name, cred.KeyID)
+									fmt.Printf("    %s (Key ID: %s): works (%s)\n", cred.Name, cred.KeyID, credentialEntry.ValidationDetail)
 								}
 							} else {
 								validationFailures++
@@ -1379,7 +1397,7 @@ func authStatusEnvironmentNote(profile string, bypassKeychain, envProvided, envC
 		return ""
 	}
 	if !envKeyTypeValid {
-		return "Environment credentials are incomplete. ASC_KEY_TYPE must be one of: team, individual."
+		return "Environment credentials are incomplete. ASC_KEY_TYPE must be one of: team, individual, enterprise."
 	}
 	if !envComplete {
 		return "Environment credentials are incomplete. Set ASC_KEY_ID, ASC_ISSUER_ID (unless ASC_KEY_TYPE=individual), and one of ASC_PRIVATE_KEY_PATH/ASC_PRIVATE_KEY/ASC_PRIVATE_KEY_B64."
@@ -1556,7 +1574,11 @@ Examples:
 				return fmt.Errorf("auth token: %w", err)
 			}
 
-			token, err := asc.GenerateJWT(cred.KeyID, cred.IssuerID, privateKey)
+			generateToken := asc.GenerateJWT
+			if config.IsEnterpriseCredentialKeyType(cred.KeyType) {
+				generateToken = asc.GenerateEnterpriseJWT
+			}
+			token, err := generateToken(cred.KeyID, cred.IssuerID, privateKey)
 			if err != nil {
 				return fmt.Errorf("auth token: failed to generate JWT: %w", err)
 			}

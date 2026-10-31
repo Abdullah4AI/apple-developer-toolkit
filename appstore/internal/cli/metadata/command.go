@@ -31,9 +31,13 @@ Keyword workflow:
 
 Opt-in scopes (add to --include for pull, plan, and apply):
 ` + metadataSettingsHelp("  ", true) + `
+  review-information never stores demoAccountPassword in clear text: pull writes
+  "@env:ASC_DEMO_ACCOUNT_PASSWORD", and the file must use @env:NAME or @file:PATH
+  (relative to --dir). Plans show <redacted> plus the reference, so an approval
+  binds the reference, not the secret value. Attachments are not managed.
 
 Not yet included in this group:
-  - review information, screenshots
+  - screenshots
 
 Note: copyright is managed via "asc versions create --copyright" or "asc versions update --copyright".
 

@@ -243,8 +243,7 @@ func PaginationURLIdentity(nextURL string) string {
 		return nextURL
 	}
 
-	baseURL, err := url.Parse(BaseURL)
-	if err != nil || parsed.Scheme != baseURL.Scheme || parsed.Host != baseURL.Host || parsed.User != nil {
+	if !IsAPIHost(parsed.Host) || parsed.User != nil {
 		return nextURL
 	}
 	return canonicalPaginationRequestURI(parsed, nextURL)

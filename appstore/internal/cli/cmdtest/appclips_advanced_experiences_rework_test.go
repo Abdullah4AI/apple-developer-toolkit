@@ -17,7 +17,79 @@ import (
 	rootcmd "github.com/Abdullah4AI/apple-developer-toolkit/appstore/cmd"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
 	appclipscli "github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/appclips"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
+
+// Both read paths must decode numeric versions without losing integer precision.
+func TestAppClipsAdvancedExperiencesPreserveVersionJSON(t *testing.T) {
+	const version = `9007199254740993`
+	for _, command := range []struct {
+		name     string
+		selector string
+		id       string
+		path     string
+	}{
+		{"list", "--app-clip-id", "clip-1", "/v1/appClips/clip-1/appClipAdvancedExperiences"},
+		{"view", "--experience-id", "adv-1", "/v1/appClipAdvancedExperiences/adv-1"},
+	} {
+		t.Run(command.name, func(t *testing.T) {
+			data := `{"type":"appClipAdvancedExperiences","id":"adv-1","attributes":{"link":"https://example.com","version":` + version + `}}`
+			if command.name == "list" {
+				data = "[" + data + "]"
+			}
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodGet || r.URL.Path != command.path {
+					t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
+					w.WriteHeader(http.StatusInternalServerError)
+					return
+				}
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = io.WriteString(w, `{"data":`+data+`,"links":{}}`)
+			}))
+			t.Cleanup(server.Close)
+			t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "missing.json"))
+			keyPath := filepath.Join(t.TempDir(), "key.p8")
+			writeECDSAPEM(t, keyPath)
+			client, err := newAppClipsTestServerClient(t, server, keyPath)
+			if err != nil {
+				t.Fatalf("new client: %v", err)
+			}
+			t.Cleanup(shared.SetASCClientFactoryForTesting(func() (*asc.Client, error) { return client, nil }))
+
+			stdout, stderr := captureOutput(t, func() {
+				if code := rootcmd.Run([]string{"app-clips", "advanced-experiences", command.name, command.selector, command.id, "--output", "json"}, "1.2.3"); code != 0 {
+					t.Errorf("exit code = %d, want 0", code)
+				}
+			})
+			if stderr != "" {
+				t.Fatalf("expected empty stderr, got %q", stderr)
+			}
+			var response struct {
+				Data json.RawMessage `json:"data"`
+			}
+			if err := json.Unmarshal([]byte(stdout), &response); err != nil {
+				t.Fatalf("unmarshal stdout: %v\nstdout=%q", err, stdout)
+			}
+			if command.name == "list" {
+				var items []json.RawMessage
+				if err := json.Unmarshal(response.Data, &items); err != nil || len(items) != 1 {
+					t.Fatalf("expected one resource, got %s (error: %v)", response.Data, err)
+				}
+				response.Data = items[0]
+			}
+			var item struct {
+				ID         string                     `json:"id"`
+				Attributes map[string]json.RawMessage `json:"attributes"`
+			}
+			if err := json.Unmarshal(response.Data, &item); err != nil {
+				t.Fatalf("unmarshal resource: %v", err)
+			}
+			if item.ID != "adv-1" || string(item.Attributes["version"]) != version {
+				t.Fatalf("resource = %s, want id adv-1 and version %q", response.Data, version)
+			}
+		})
+	}
+}
 
 func TestAppClipsAdvancedExperiencesCreateSupportsMultipleInlineLocalizations(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
