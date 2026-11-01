@@ -74,6 +74,10 @@ type AppStoreVersionAttachBuildResult struct {
 type AppStoreVersionReleaseRequestResult struct {
 	ReleaseRequestID string `json:"releaseRequestId"`
 	VersionID        string `json:"versionId"`
+	// Reconciled is true when Apple answered with an error but the version
+	// readback showed the release was accepted, so no request ID is known.
+	Reconciled   bool   `json:"reconciled,omitempty"`
+	VersionState string `json:"versionState,omitempty"`
 }
 
 // AppStoreVersionRatingResetCreateResult represents CLI output for scheduling a rating reset.
@@ -328,6 +332,9 @@ func appStoreVersionAttachBuildRows(result *AppStoreVersionAttachBuildResult) ([
 }
 
 func appStoreVersionReleaseRequestRows(result *AppStoreVersionReleaseRequestResult) ([]string, [][]string) {
+	if result.Reconciled {
+		return []string{"Version ID", "Version State", "Reconciled"}, [][]string{{result.VersionID, result.VersionState, "true"}}
+	}
 	headers := []string{"Release Request ID", "Version ID"}
 	rows := [][]string{{result.ReleaseRequestID, result.VersionID}}
 	return headers, rows

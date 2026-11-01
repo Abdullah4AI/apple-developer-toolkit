@@ -1138,7 +1138,7 @@ func decodeBase64Secret(value string) ([]byte, error) {
 }
 
 func normalizePrivateKeyValue(value string) string {
-	return strings.ReplaceAll(value, "\\n", "\n")
+	return auth.NormalizePrivateKeyPEM(value)
 }
 
 func writeTempPrivateKey(data []byte, cacheKey string) (string, error) {

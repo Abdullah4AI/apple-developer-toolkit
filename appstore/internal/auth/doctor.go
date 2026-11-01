@@ -732,7 +732,7 @@ func completeEnvironmentCredentialsPreemptStored() bool {
 		decoded, err := base64.StdEncoding.DecodeString(compact)
 		return err == nil && len(decoded) > 0 && environmentPrivateKeyCanMaterialize(len(decoded))
 	case strings.TrimSpace(os.Getenv("ASC_PRIVATE_KEY")) != "":
-		normalized := strings.ReplaceAll(strings.TrimSpace(os.Getenv("ASC_PRIVATE_KEY")), `\n`, "\n")
+		normalized := NormalizePrivateKeyPEM(strings.TrimSpace(os.Getenv("ASC_PRIVATE_KEY")))
 		return environmentPrivateKeyCanMaterialize(len(normalized))
 	default:
 		return false
@@ -796,7 +796,7 @@ func inspectEnvironmentPrivateKey(options DoctorOptions) *DoctorCheck {
 	}
 
 	if value := strings.TrimSpace(os.Getenv("ASC_PRIVATE_KEY")); value != "" {
-		value = strings.ReplaceAll(value, `\n`, "\n")
+		value = NormalizePrivateKeyPEM(value)
 		if _, err := LoadPrivateKeyFromPEM([]byte(value)); err != nil {
 			return &DoctorCheck{
 				Status:         DoctorFail,

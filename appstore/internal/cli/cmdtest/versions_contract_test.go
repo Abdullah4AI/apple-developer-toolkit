@@ -567,3 +567,97 @@ func TestVersionsPhasedReleaseViewPrintsNullData(t *testing.T) {
 		t.Fatalf("stderr = %q, want empty", stderr)
 	}
 }
+
+func TestVersionsReleaseReadsStateAfterAmbiguousFailure(t *testing.T) {
+	tests := []struct {
+		name         string
+		status       int
+		attributes   string
+		wantReads    int
+		wantJSON     string
+		wantStateErr bool
+	}{
+		{
+			name:       "accepted release behind a 500",
+			status:     http.StatusInternalServerError,
+			attributes: `{"appVersionState":"PROCESSING_FOR_DISTRIBUTION"}`,
+			wantReads:  1,
+			wantJSON:   `{"releaseRequestId":"","versionId":"ver-1","reconciled":true,"versionState":"PROCESSING_FOR_DISTRIBUTION"}`,
+		},
+		{
+			name:       "accepted release behind a 504 in the legacy state",
+			status:     http.StatusGatewayTimeout,
+			attributes: `{"appStoreState":"READY_FOR_SALE"}`,
+			wantReads:  1,
+			wantJSON:   `{"releaseRequestId":"","versionId":"ver-1","reconciled":true,"versionState":"READY_FOR_SALE"}`,
+		},
+		{
+			name:         "pre-order awaiting release keeps the failure",
+			status:       http.StatusInternalServerError,
+			attributes:   `{"appVersionState":"PENDING_DEVELOPER_RELEASE","appStoreState":"PREORDER_READY_FOR_SALE"}`,
+			wantReads:    2,
+			wantStateErr: true,
+		},
+		{
+			name:         "legacy pre-order listing keeps the failure",
+			status:       http.StatusInternalServerError,
+			attributes:   `{"appStoreState":"PREORDER_READY_FOR_SALE"}`,
+			wantReads:    2,
+			wantStateErr: true,
+		},
+		{
+			name:         "unreleased version keeps the failure and is not resent",
+			status:       http.StatusInternalServerError,
+			attributes:   `{"appVersionState":"PENDING_DEVELOPER_RELEASE"}`,
+			wantReads:    2,
+			wantStateErr: true,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			setupAuth(t)
+			t.Setenv("ASC_MAX_RETRIES", "1")
+			t.Setenv("ASC_BASE_DELAY", "1ms")
+			t.Setenv("ASC_MAX_DELAY", "1ms")
+
+			posts, reads := 0, 0
+			installDefaultTransport(t, roundTripFunc(func(req *http.Request) (*http.Response, error) {
+				switch {
+				case req.Method == http.MethodPost && req.URL.Path == "/v1/appStoreVersionReleaseRequests":
+					posts++
+					return jsonResponse(test.status, `{"errors":[{"status":"500","code":"UNEXPECTED_ERROR","title":"An unexpected error occurred."}]}`)
+				case req.Method == http.MethodGet && req.URL.Path == "/v1/appStoreVersions/ver-1":
+					reads++
+					return jsonResponse(http.StatusOK, fmt.Sprintf(`{"data":{"type":"appStoreVersions","id":"ver-1","attributes":%s}}`, test.attributes))
+				default:
+					t.Fatalf("unexpected request: %s %s", req.Method, req.URL.String())
+					return nil, nil
+				}
+			}))
+
+			stdout, stderr, err := runRootCommand(t, []string{"versions", "release", "--version-id", "ver-1", "--confirm", "--output", "json"})
+			if posts != 1 || reads != test.wantReads {
+				t.Fatalf("posts = %d, reads = %d; want 1 and %d", posts, reads, test.wantReads)
+			}
+			if test.wantStateErr {
+				if err == nil || !strings.Contains(err.Error(), "versions release:") {
+					t.Fatalf("expected the release failure, got %v", err)
+				}
+				if stdout != "" {
+					t.Fatalf("expected no result on stdout, got %q", stdout)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("expected the accepted release to succeed: %v", err)
+			}
+			if strings.TrimSpace(stdout) != test.wantJSON {
+				t.Fatalf("stdout = %q, want %q", stdout, test.wantJSON)
+			}
+			if !strings.Contains(stderr, "ver-1") || !strings.Contains(stderr, "the release was accepted") {
+				t.Fatalf("expected a stderr note about the failed response, got %q", stderr)
+			}
+		})
+	}
+}

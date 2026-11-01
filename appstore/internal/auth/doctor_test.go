@@ -217,6 +217,12 @@ func TestDoctorEnvironmentValidatesSelectedPrivateKey(t *testing.T) {
 			forbiddenSecret: "not-a-private-key-secret",
 		},
 		{
+			name:        "flattened onto one line",
+			privateKey:  strings.ReplaceAll(strings.TrimSpace(string(validKey)), "\n", " "),
+			wantStatus:  DoctorOK,
+			wantMessage: "ASC_PRIVATE_KEY contains a valid ECDSA private key",
+		},
+		{
 			name:        "mixed escaped and real newlines",
 			privateKey:  strings.Replace(string(validKey), "\n", `\n`, 1),
 			wantStatus:  DoctorOK,
