@@ -525,7 +525,7 @@ func createSigningRunKeychain(ctx context.Context, keychainPath string, password
 }
 
 func importSigningRunIdentity(ctx context.Context, keychainPath string, keychainPassword, identityData, importPassword []byte, expectedSHA1 string) error {
-	if err := importPKCS12WithSecurityFramework(keychainPath, identityData, importPassword); err != nil {
+	if err := importLegacyPKCS12WithSecurityFramework(keychainPath, identityData, importPassword); err != nil {
 		return fmt.Errorf("import identity: %w", err)
 	}
 	if err := withSigningRunPartitionPasswordInput(keychainPassword, func(stdin []byte) error {
@@ -1243,6 +1243,8 @@ func runSigningUtility(ctx context.Context, stdin []byte, args ...string) ([]byt
 	cmd := exec.CommandContext(ctx, "/usr/bin/security", args...)
 	cmd.Env = SanitizedChildEnvironment(os.Environ())
 	cmd.Stdin = bytes.NewReader(stdin)
+	// security prompts on a controlling terminal and ignores stdin if it has one.
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 	stdout := &limitedSigningBuffer{limit: signingRunDiagnosticLimit}
 	stderr := &limitedSigningBuffer{limit: signingRunDiagnosticLimit}
 	cmd.Stdout = stdout

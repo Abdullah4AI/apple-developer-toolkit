@@ -14,6 +14,7 @@ import (
 const (
 	TwoFactorMethodTrustedDevice = "trusted-device"
 	TwoFactorMethodPhone         = "phone"
+	TwoFactorMethodSecurityKey   = "security-key"
 )
 
 // TwoFactorDeliverySMS asks Apple to text the verification code to a trusted
@@ -21,6 +22,9 @@ const (
 const TwoFactorDeliverySMS = "sms"
 
 var ErrNoTrustedPhoneNumbers = errors.New("no trusted phone numbers available")
+
+// ErrTwoFactorCodeRejected reports a verification code Apple refused.
+var ErrTwoFactorCodeRejected = errors.New("two-factor code rejected")
 
 // TwoFactorPreference is the caller's requested verification delivery. The
 // zero value keeps Apple's default: trusted devices first, phone fallback after.
@@ -103,6 +107,7 @@ type TwoFactorChallenge struct {
 	Destination            string
 	Requested              bool
 	PhoneFallbackAvailable bool
+	SecurityKey            *SecurityKeyChallenge
 }
 
 // IsPhoneMethod reports whether the challenge uses Apple phone-code delivery.
@@ -119,9 +124,11 @@ type TrustedPhoneNumber struct {
 type AuthOptions struct {
 	NoTrustedDevices    bool
 	TrustedPhoneNumbers []TrustedPhoneNumber
+	SecurityKey         *SecurityKeyChallenge
 }
 
 type AuthOptionsResponse struct {
+	FSAChallenge        json.RawMessage      `json:"fsaChallenge"`
 	NoTrustedDevices    bool                 `json:"noTrustedDevices"`
 	TrustedDevices      []map[string]any     `json:"trustedDevices"`
 	TrustedPhoneNumbers []TrustedPhoneNumber `json:"trustedPhoneNumbers"`
@@ -136,6 +143,7 @@ func (opts *AuthOptionsResponse) AuthOptions() *AuthOptions {
 	}
 	shared := &AuthOptions{
 		NoTrustedDevices: opts.NoTrustedDevices,
+		SecurityKey:      parseSecurityKeyChallenge(opts.FSAChallenge),
 	}
 	if len(opts.TrustedPhoneNumbers) == 0 {
 		return shared
@@ -214,6 +222,14 @@ func PrepareTwoFactorChallenge(ctx context.Context, session SessionState, getAut
 	if err != nil {
 		return nil, err
 	}
+	if session.TwoFactorPreference().Delivery == TwoFactorMethodSecurityKey {
+		if opts.SecurityKey == nil {
+			return nil, fmt.Errorf("security-key challenge not offered by Apple for this account")
+		}
+		if opts.NoTrustedDevices {
+			return nil, fmt.Errorf("security-key verification is unavailable because Apple auth options prioritize phone verification; use auto or sms")
+		}
+	}
 
 	if session.TwoFactorPreference().Delivery == TwoFactorDeliverySMS {
 		phone, err := selectSMSPhone(opts.TrustedPhoneNumbers, session.TwoFactorPreference().PhoneID)
@@ -252,6 +268,11 @@ func PrepareTwoFactorChallenge(ctx context.Context, session SessionState, getAut
 			Requested:              false,
 			PhoneFallbackAvailable: false,
 		}, nil
+	}
+
+	// Preserve SMS-first routing before choosing a security-key challenge.
+	if opts.SecurityKey != nil {
+		return &TwoFactorChallenge{Method: TwoFactorMethodSecurityKey, SecurityKey: opts.SecurityKey}, nil
 	}
 
 	session.SetPreparedTwoFactorState(TwoFactorMethodTrustedDevice, phoneID, phoneMode, destination, false)
@@ -339,7 +360,7 @@ func SubmitTwoFactorCode(ctx context.Context, session SessionState, code string,
 	case TwoFactorMethodTrustedDevice:
 		if err := submitTrustedDeviceCode(ctx, code); err != nil {
 			phoneID := session.TwoFactorPhoneID()
-			if phoneID == 0 {
+			if phoneID == 0 || !errors.Is(err, ErrTwoFactorCodeRejected) {
 				return err
 			}
 			phoneMode := session.TwoFactorPhoneMode()
