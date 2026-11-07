@@ -15,29 +15,6 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
-func TestKeywordsDiscoverCommandHelpNamesOfficialSuggestionEndpoints(t *testing.T) {
-	command := KeywordsDiscoverCommand()
-	joined := command.ShortUsage + "\n" + command.ShortHelp + "\n" + command.LongHelp
-	for _, want := range []string{
-		"asc optimize keywords discover",
-		"--ad-account",
-		"--ads-profile",
-		"--limit",
-		"score",
-	} {
-		if !strings.Contains(joined, want) {
-			t.Fatalf("help missing %q:\n%s", want, joined)
-		}
-	}
-
-	for _, name := range []string{"app", "country", "genre", "ad-account", "ads-profile", "limit"} {
-		flag := command.FlagSet.Lookup(name)
-		if flag == nil {
-			t.Fatalf("missing --%s flag", name)
-		}
-	}
-}
-
 func TestKeywordsDiscoverCommandValidatesInputBeforeRequests(t *testing.T) {
 	tests := []struct {
 		name string

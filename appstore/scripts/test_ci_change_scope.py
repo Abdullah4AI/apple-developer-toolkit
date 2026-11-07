@@ -18,13 +18,18 @@ class ChangeScopeTest(unittest.TestCase):
         )
 
     def test_repository_documentation_uses_docs_scope(self) -> None:
-        self.assertEqual(
-            ci_change_scope.classify(["README.md", "docs/TESTING.md"]),
-            "docs",
-        )
+        for paths in (
+            ["README.md", "docs/TESTING.md"],
+            [".agents/skills/develop-asc-change/SKILL.md"],
+            [".agents/skills/develop-asc-change/references/test-matrix.md"],
+            [".agents/skills/develop-asc-change/agents/openai.yaml"],
+            [".agents/skills/develop-asc-change/SKILL.md", "docs/TESTING.md"],
+        ):
+            with self.subTest(paths=paths):
+                self.assertEqual(ci_change_scope.classify(paths), "docs")
 
     def test_go_source_under_documentation_requires_full_suite(self) -> None:
-        for path in ("docs/embed.go", "guides/example.go"):
+        for path in ("docs/embed.go", "guides/example.go", ".agents/skills/example/nested/main.go"):
             with self.subTest(path=path):
                 self.assertEqual(ci_change_scope.classify([path]), "full")
 
@@ -39,9 +44,11 @@ class ChangeScopeTest(unittest.TestCase):
             with self.subTest(path=path):
                 self.assertEqual(ci_change_scope.classify([path]), "full")
 
-    def test_mintlify_content_uses_website_scope(self) -> None:
+    def test_website_content_uses_website_scope(self) -> None:
         self.assertEqual(
-            ci_change_scope.classify(["docs.json", "guides/getting-started.mdx"]),
+            ci_change_scope.classify(
+                ["website/navigation.json", "website/src/content/docs/guides/testflight.mdx"]
+            ),
             "website",
         )
 
@@ -52,7 +59,7 @@ class ChangeScopeTest(unittest.TestCase):
         )
         self.assertEqual(
             ci_change_scope.classify(
-                ["internal/telemetry/client.go", "commands/telemetry.mdx"]
+                ["internal/telemetry/client.go", "website/src/content/docs/commands/telemetry.mdx"]
             ),
             "full",
         )
@@ -72,17 +79,25 @@ class ChangeScopeTest(unittest.TestCase):
         )
 
     def test_general_go_and_ci_changes_require_full_suite(self) -> None:
-        for path in ("main.go", "internal/asc/client.go", ".github/workflows/pr-checks.yml", "docs/THIRD_PARTY_NOTICES.md"):
+        for path in (
+            "main.go", "internal/asc/client.go", ".github/workflows/pr-checks.yml", "docs/THIRD_PARTY_NOTICES.md",
+            ".agents/example.py",
+            ".agents/skills/example/scripts/check.py",
+            ".agents/skills/example/SKILL.md.py",
+            ".agents/skills/example/agents/openai.yaml.py",
+            ".agents/skills/example/config.yaml",
+            ".agents/skills-extra/example/SKILL.md",
+        ):
             with self.subTest(path=path):
                 self.assertEqual(ci_change_scope.classify([path]), "full")
 
     def test_renamed_code_keeps_source_and_destination_in_full_scope(self) -> None:
-        self.assertEqual(
-            ci_change_scope.classify(
-                ["internal/asc/removed.go", "docs/removed.md"]
-            ),
-            "full",
-        )
+        for paths in (
+            ["internal/asc/removed.go", "docs/removed.md"],
+            ["internal/asc/client.go", ".agents/skills/example/SKILL.md"],
+        ):
+            with self.subTest(paths=paths):
+                self.assertEqual(ci_change_scope.classify(paths), "full")
 
     def test_ci_bootstrap_files_require_full_scope(self) -> None:
         for path in (
@@ -95,7 +110,7 @@ class ChangeScopeTest(unittest.TestCase):
                 self.assertEqual(ci_change_scope.classify([path]), "full")
 
     def test_dedicated_workflow_impact_matches_owned_paths(self) -> None:
-        self.assertTrue(ci_change_scope.affects_website(["guides/testflight.mdx"]))
+        self.assertTrue(ci_change_scope.affects_website(["website/src/content/docs/guides/testflight.mdx"]))
         self.assertFalse(ci_change_scope.affects_website(["docs/TESTING.md"]))
 
 

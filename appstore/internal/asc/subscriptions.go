@@ -98,21 +98,6 @@ type SubscriptionRelationships struct {
 	Group *Relationship `json:"group"`
 }
 
-// SubscriptionResponseRelationships describes relationships returned with a
-// subscription resource. It is intentionally separate from
-// SubscriptionRelationships, which models the narrower create request shape.
-type SubscriptionResponseRelationships struct {
-	Versions *SubscriptionVersionsRelationship `json:"versions,omitempty"`
-}
-
-// SubscriptionVersionsRelationship describes the version linkages attached to
-// a subscription response in App Store Connect API 4.4.1.
-type SubscriptionVersionsRelationship struct {
-	Data  []ResourceData    `json:"data"`
-	Links RelationshipLinks `json:"links,omitempty"`
-	Meta  json.RawMessage   `json:"meta,omitempty"`
-}
-
 // RelationshipLinks describes links returned for a JSON:API relationship.
 type RelationshipLinks struct {
 	Self    string `json:"self,omitempty"`
@@ -242,14 +227,6 @@ type SubscriptionPriceRelationships struct {
 	Territory              *Relationship `json:"territory,omitempty"`
 }
 
-// SubscriptionPricePointResponseRelationships describes relationships returned
-// with a subscription price point resource.
-type SubscriptionPricePointResponseRelationships struct {
-	AdjustedEqualizations *SubscriptionPricePointLinkRelationship `json:"adjustedEqualizations,omitempty"`
-	Equalizations         *SubscriptionPricePointLinkRelationship `json:"equalizations,omitempty"`
-	Territory             *Relationship                           `json:"territory,omitempty"`
-}
-
 // SubscriptionPricePointLinkRelationship describes a price-point relationship
 // whose response contains links but no resource linkage data.
 type SubscriptionPricePointLinkRelationship struct {
@@ -349,6 +326,8 @@ type SubscriptionRelatedFields struct {
 	WinBackOffers      []string
 	Images             []string
 	PlanAvailabilities []string
+	RetentionOffers    []string
+	RetentionMessages  []string
 }
 
 type subscriptionsQuery struct {
@@ -564,6 +543,8 @@ func (f SubscriptionRelatedFields) sparseFields() []relatedSparseField {
 		{"fields[winBackOffers]", "winBackOffers", f.WinBackOffers},
 		{"fields[subscriptionImages]", "images", f.Images},
 		{"fields[subscriptionPlanAvailabilities]", "planAvailabilities", f.PlanAvailabilities},
+		{"fields[retentionOffers]", "retentionOffers", f.RetentionOffers},
+		{"fields[retentionMessages]", "retentionMessage", f.RetentionMessages},
 	}
 }
 

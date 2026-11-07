@@ -78,8 +78,8 @@ these commands in one shell step:
 
 The first-run commands look like this. The full script, including the
 password files, cleanup trap, and later-run variant, is in the
-[code signing guide](../guides/code-signing.mdx) and the
-[signing command reference](../commands/signing.mdx).
+[code signing guide](../website/src/content/docs/guides/code-signing.mdx) and the
+[signing command reference](../website/src/content/docs/commands/signing.mdx).
 
 ```bash
 asc signing fetch --bundle-id com.example.app --profile-type IOS_APP_STORE --create-missing --create-missing-certificate --identity-password-file "$p12_password_file" --output .asc/signing/bootstrap --format json > .asc/signing/fetch-result.json
@@ -97,14 +97,13 @@ asc signing keychain delete --keychain "$keychain_path" --confirm
 of the fetch receipt. `xcode signing plan` exits 0 with `ready: false` when a
 target has no matching profile; check `ready` before applying.
 
-Expired or invalid profiles can already be removed with
-`asc signing fetch --delete-stale-profiles`, and certificates can be
-deactivated or revoked with `asc certificates`. With Git storage,
-`asc signing sync push --renew-expired` replaces an expired synced profile,
-`--force-for-new-devices` (optionally with `--include-mac-in-profiles`)
+`asc signing fetch --delete-stale-profiles` removes expired or invalid
+profiles, and `asc certificates` deactivates or revokes certificates. With Git
+storage only, `asc signing sync push --renew-expired` replaces an expired synced
+profile, `--force-for-new-devices` (optionally with `--include-mac-in-profiles`)
 recreates a development or ad hoc profile when its devices change, and
 `asc signing sync nuke` removes one profile type with its certificates and
-encrypted files. These lifecycle options require Git storage.
+encrypted files.
 
 ### Signing assets in object storage with workload identity
 

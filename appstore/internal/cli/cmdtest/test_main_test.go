@@ -8,6 +8,7 @@ import (
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
 	webcli "github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/web"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/uploadlock"
 	webcore "github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/web"
 )
 
@@ -28,7 +29,9 @@ func TestMain(m *testing.M) {
 	restoreControllingTTY := webcli.DisableControllingTTYForTesting()
 	// The core web package tests the default and rate-limit behavior.
 	restorePacing := webcore.DisableRequestPacingForTesting()
-	restoreAssetLibraryPoll := asc.SetAssetLibraryProcessingPollIntervalForTest(time.Millisecond)
+	restoreAssetLibraryPoll := asc.SetMediaPollIntervalsForTest(time.Millisecond, time.Millisecond)
+	// The upload lock lives under the OS account's home, not HOME.
+	restoreUploadLockDir := uploadlock.SetDirForTest(filepath.Join(tempDir, "upload-lock"))
 
 	_ = os.Setenv("ASC_CONFIG_PATH", testConfigPath)
 	_ = os.Setenv("ASC_BYPASS_KEYCHAIN", "1")
@@ -43,6 +46,7 @@ func TestMain(m *testing.M) {
 
 	code := m.Run()
 
+	restoreUploadLockDir()
 	restoreAssetLibraryPoll()
 	restorePacing()
 	restoreControllingTTY()

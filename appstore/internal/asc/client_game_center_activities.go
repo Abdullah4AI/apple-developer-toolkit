@@ -57,7 +57,7 @@ func (c *Client) GetGameCenterActivity(ctx context.Context, activityID string) (
 
 // CreateGameCenterActivity creates a new Game Center activity.
 func (c *Client) CreateGameCenterActivity(ctx context.Context, gcDetailID string, attrs GameCenterActivityCreateAttributes, groupID string, initialVersion *GameCenterActivityVersionCreateAttributes) (*GameCenterActivityResponse, error) {
-	const initialVersionID = "initial-version"
+	const initialVersionID = "${activityVer1}"
 
 	relationships := &GameCenterActivityRelationships{}
 	hasRelationship := false
@@ -465,14 +465,14 @@ func (c *Client) GetGameCenterActivityLocalizationImage(ctx context.Context, loc
 }
 
 // GetGameCenterActivityVersionDefaultImage retrieves the default image for an activity version.
-func (c *Client) GetGameCenterActivityVersionDefaultImage(ctx context.Context, versionID string) (*GameCenterActivityImageResponse, error) {
+func (c *Client) GetGameCenterActivityVersionDefaultImage(ctx context.Context, versionID string) (*GameCenterActivityVersionDefaultImageResponse, error) {
 	path := fmt.Sprintf("/v1/gameCenterActivityVersions/%s/defaultImage", strings.TrimSpace(versionID))
 	data, err := c.do(ctx, http.MethodGet, path, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	var response GameCenterActivityImageResponse
+	var response GameCenterActivityVersionDefaultImageResponse
 	if err := json.Unmarshal(data, &response); err != nil {
 		return nil, fmt.Errorf("failed to parse response: %w", err)
 	}

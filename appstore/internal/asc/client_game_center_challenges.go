@@ -57,7 +57,7 @@ func (c *Client) GetGameCenterChallenge(ctx context.Context, challengeID string)
 
 // CreateGameCenterChallenge creates a new Game Center challenge.
 func (c *Client) CreateGameCenterChallenge(ctx context.Context, gcDetailID string, attrs GameCenterChallengeCreateAttributes, leaderboardID string, groupID string, createInitialVersion bool) (*GameCenterChallengeResponse, error) {
-	const initialVersionID = "initial-version"
+	const initialVersionID = "${challengeVer1}"
 
 	relationships := &GameCenterChallengeRelationships{}
 	hasRelationship := false
@@ -326,14 +326,14 @@ func (c *Client) GetGameCenterChallengeLocalizationImage(ctx context.Context, lo
 }
 
 // GetGameCenterChallengeVersionDefaultImage retrieves the default image for a challenge version.
-func (c *Client) GetGameCenterChallengeVersionDefaultImage(ctx context.Context, versionID string) (*GameCenterChallengeImageResponse, error) {
+func (c *Client) GetGameCenterChallengeVersionDefaultImage(ctx context.Context, versionID string) (*GameCenterChallengeVersionDefaultImageResponse, error) {
 	path := fmt.Sprintf("/v1/gameCenterChallengeVersions/%s/defaultImage", strings.TrimSpace(versionID))
 	data, err := c.do(ctx, http.MethodGet, path, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	var response GameCenterChallengeImageResponse
+	var response GameCenterChallengeVersionDefaultImageResponse
 	if err := json.Unmarshal(data, &response); err != nil {
 		return nil, fmt.Errorf("failed to parse response: %w", err)
 	}

@@ -117,6 +117,9 @@ type screenshotUploadDependencies struct {
 	RequestContext   func(context.Context) (context.Context, context.CancelFunc)
 	UploadScreenshot func(context.Context, *asc.Client, string, string, []string, bool, bool, bool) (asc.AppScreenshotUploadResult, error)
 	ExecuteUpload    func(context.Context, screenshotUploadConfig[asc.AppScreenshotUploadResult], string) (asc.AppScreenshotUploadResult, error)
+	// AcquireUploadLock waits for other asc uploads on this machine; nil
+	// uploads without waiting.
+	AcquireUploadLock func(context.Context) (func(), error)
 }
 
 type screenshotUploadFanoutConfig struct {
@@ -762,6 +765,7 @@ func AssetsScreenshotsUploadCommand() *ffcli.Command {
 	concurrency := fs.Int("concurrency", defaultScreenshotUploadConcurrency, "Parallel screenshot uploads within a set (1-10)")
 	assetLibrary := fs.Bool("asset-library", false, "Upload to the Asset Library and place on the localization instead of using a screenshot set (requires --version-localization)")
 	placementGroup := fs.String("placement-group", "", "Placement group to use with --asset-library (defaults to the group Apple publishes for --device-type)")
+	pollInterval := shared.BindMediaPollIntervalFlag(fs)
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
@@ -809,6 +813,10 @@ command exits non-zero and prints a receipt with each file's asset and placement
 ID. Nothing is deleted automatically; inspect the placements before retrying.
 Use --dry-run to see the library, group and capacity without changing anything.
 
+Only one asc upload runs at a time on a machine. While another screenshots or
+video-previews upload is running, this command waits up to 30 minutes before
+it sends any request; ASC_UPLOAD_LOCK=0 skips the wait.
+
 Examples:
   asc screenshots upload --app "123456789" --version "1.2.3" --locale "en-US" --path "./screenshots/en-US" --device-type "IPHONE_65"
   asc screenshots upload --version-localization "VERSION_LOCALIZATION_ID" --path "./screenshots/duo" --device-type "IPHONE_DUO" --asset-library --dry-run
@@ -829,6 +837,10 @@ Examples:
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
+			ctx, pollErr := pollInterval.Apply(ctx)
+			if pollErr != nil {
+				return pollErr
+			}
 			if *concurrency < 1 || *concurrency > maxScreenshotUploadConcurrency {
 				return shared.UsageError(fmt.Sprintf("screenshots upload: --concurrency must be between 1 and %d", maxScreenshotUploadConcurrency))
 			}
@@ -864,7 +876,7 @@ Examples:
 
 				defer client.CloseUploadConnections()
 
-				result, err := resumeAppScreenshotUpload(ctx, client, resumePath)
+				result, err := resumeAppScreenshotUpload(ctx, client, resumePath, acquireAssetUploadLock)
 				if hasAppScreenshotUploadResultOutput(result) {
 					if printErr := shared.PrintOutput(&result, *output.Output, *output.Pretty); printErr != nil {
 						return printErr
@@ -890,10 +902,11 @@ Examples:
 				AssetLibrary:          *assetLibrary,
 				PlacementGroup:        strings.TrimSpace(*placementGroup),
 			}, screenshotUploadDependencies{
-				GetClient:        shared.GetASCClient,
-				RequestContext:   shared.ContextWithTimeout,
-				UploadScreenshot: uploadScreenshots,
-				ExecuteUpload:    executeAppScreenshotUpload,
+				GetClient:         shared.GetASCClient,
+				RequestContext:    shared.ContextWithTimeout,
+				UploadScreenshot:  uploadScreenshots,
+				ExecuteUpload:     executeAppScreenshotUpload,
+				AcquireUploadLock: acquireAssetUploadLock,
 			})
 			if result != nil {
 				shouldPrint := err == nil
@@ -934,6 +947,12 @@ func executeScreenshotUploadCommand(ctx context.Context, opts screenshotUploadCo
 		deps.RequestContext = shared.ContextWithTimeout
 	}
 	deps.ExecuteUpload = resolveScreenshotUploadExecutor(deps.ExecuteUpload, deps.UploadScreenshot)
+	lockUploads := func() (func(), error) {
+		if opts.DryRun || deps.AcquireUploadLock == nil {
+			return func() {}, nil
+		}
+		return deps.AcquireUploadLock(ctx)
+	}
 
 	locID := strings.TrimSpace(opts.VersionLocalizationID)
 	appFlagValue := strings.TrimSpace(opts.AppID)
@@ -1048,6 +1067,11 @@ func executeScreenshotUploadCommand(ctx context.Context, opts screenshotUploadCo
 			return nil, err
 		}
 		defer client.CloseUploadConnections()
+		release, err := lockUploads()
+		if err != nil {
+			return nil, err
+		}
+		defer release()
 
 		if opts.AssetLibrary {
 			placementType := "APP_SCREENSHOT"
@@ -1115,6 +1139,11 @@ func executeScreenshotUploadCommand(ctx context.Context, opts screenshotUploadCo
 	}
 
 	defer client.CloseUploadConnections()
+	release, err := lockUploads()
+	if err != nil {
+		return nil, err
+	}
+	defer release()
 
 	requestCtx, cancel := deps.RequestContext(ctx)
 	defer cancel()

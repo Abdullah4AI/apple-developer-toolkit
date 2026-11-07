@@ -99,6 +99,7 @@ func TestCommandOutputTypesHaveTableRenderers(t *testing.T) {
 		typeKey[CertificatePassTypeIDLinkageResponse](),
 		typeKey[ProfileBundleIDLinkageResponse](),
 		typeKey[AppStoreVersionDeleteResult](),
+		typeKey[AppPriceScheduleNotConfiguredResult](),
 		typeKey[GameCenterAchievementImageResponse](),
 		typeKey[GameCenterLeaderboardImageResponse](),
 		typeKey[GameCenterLeaderboardSetImageResponse](),
@@ -106,6 +107,12 @@ func TestCommandOutputTypesHaveTableRenderers(t *testing.T) {
 		typeKey[GameCenterLeaderboardSetMemberLocalizationResponse](),
 		typeKey[GameCenterLeaderboardSetMemberLocalizationDeleteResult](),
 		typeKey[GameCenterLeaderboardSetMembersUpdateResult](),
+		typeKey[RetentionMessagesResponse](),
+		typeKey[RetentionMessageVersionResponse](),
+		typeKey[RetentionMessageLocalizationsResponse](),
+		typeKey[RetentionMessageLinkageResponse](),
+		typeKey[RetentionMessageAssignResult](),
+		typeKey[RetentionMessagePlacementCreateResult](),
 	} {
 		if !isRegistryTypeRegistered(typ) {
 			t.Errorf("no table renderer registered for %s", typ)

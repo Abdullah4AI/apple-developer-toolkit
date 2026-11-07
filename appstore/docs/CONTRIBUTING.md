@@ -9,15 +9,15 @@ This file covers patterns for AI agents working on the codebase.
 - Branch from `main` and keep one logical change per branch
 - Do not commit directly to `main` unless explicitly instructed; prefer PRs
 - Prefer `git worktree add` for parallel tasks; remove with `git worktree remove` when done
-- Compare the branch with current `main` before merging. Do not rebase or merge `main` into a clean branch merely because `main` advanced; update only when GitHub reports an actual merge conflict or refuses an explicitly authorized merge attempt made after every readiness gate passes under strict up-to-date branch protection, and never bypass protection with an admin merge
+- Follow `AGENTS.md` for the final review and merge gates. A newer `main` alone does not require another local review, test run, or branch update. Update only to resolve an actual merge conflict or a demonstrated integration defect; keep required checks passing and never bypass branch protection with an admin merge
 - Preserve additive PR commits. Do not force-push, rebase, squash, or otherwise rewrite shared history unless the user explicitly requests it. When merging, use a regular merge commit by default
 - Commit small, coherent changes; no WIP commits on shared branches
 - Use concise, present-tense commit messages that match repo style
 - Never commit secrets or local config files (keys, `.env`, `.asc/config.json`)
 
-## Before Committing
+## Validation
 
-For substantive behavior changes, run:
+For substantive behavior changes, satisfy the following local checks under `AGENTS.md`. Format before committing, count successful hook results toward matching checks, and run only missing or invalidated checks afterwards. The hook's affected short suite does not replace the full test suite.
 
 ```bash
 make build      # Build the CLI
@@ -28,7 +28,7 @@ ASC_BYPASS_KEYCHAIN=1 make test  # Run all tests without keychain prompts
 git diff        # Review changes before staging
 ```
 
-For a narrowly scoped documentation or skill change, run `make check-docs`; it includes the repository and skill validators. Use broader checks when the changed surface or repository policy requires them.
+For changes limited to `AGENTS.md` and skill Markdown or `agents/openai.yaml` under `.agents/skills`, use `make check-repo-docs` and `make check-agent-skills`; successful hook results satisfy both. For other narrowly scoped documentation changes, run `make check-docs`. Use broader checks when the changed surface requires them.
 
 If `docs/wall-of-apps.json` is the only staged change, the local hook skips the full Go pipeline and only runs:
 
@@ -52,9 +52,9 @@ make check-agent-skills
 
 - Command implementations live in `internal/cli/<domain>` packages
 - Each domain exposes a top-level `XCommand() *ffcli.Command`
-- `cmd/` only contains the root entry point; do not add wrapper files
+- `cmd/` holds the root command and root-level dispatch (exit codes, root flag handling); do not add per-command wrapper files there
 - Register top-level commands in `internal/cli/registry/registry.go` (order matters)
-- Shared CLI helpers go in `internal/cli/shared` (use `shared_wrappers.go` as needed)
+- Shared CLI helpers go in `internal/cli/shared`
 
 ## Adding a New Command
 
@@ -66,9 +66,9 @@ make check-agent-skills
 
 ## Adding a New API Endpoint
 
-1. Add method to `internal/asc/client.go`
+1. Add the method to the resource's `internal/asc/client_*.go` file
 2. Add types for request/response structs
-3. Add helper functions for table/markdown output
+3. Register table/markdown rows in the matching `internal/asc/output_*.go` file
 4. Create command in `internal/cli/<domain>` to expose the endpoint
 5. Write HTTP client tests with mocked responses
 6. If endpoint tests are repetitive, group the request-wiring cases, but keep at least one representative non-empty decode assertion and one representative output-structure assertion where formatting is user-facing
@@ -94,8 +94,7 @@ ASC_BYPASS_KEYCHAIN=1 make test
 
 # 4. Audit help output for all parent commands
 for cmd in auth analytics finance apps app-tags testflight builds versions \
-           feedback crashes localizations \
-           build-localizations sandbox submit xcode-cloud reviews; do
+           localizations build-localizations sandbox submit xcode-cloud reviews; do
   echo "=== $cmd ===" && ./asc $cmd --help 2>&1
 done
 

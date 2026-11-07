@@ -105,6 +105,7 @@ func XcodeCloudProductsAppCommand() *ffcli.Command {
 	appInfoFields := fs.String("app-info-fields", "", "Sparse fields for included app info records: "+strings.Join(shared.AppInfoSparseFields, ", ")+" (deprecated; removed from API 4.5; prefer age-rating data)")
 	iapFields := fs.String("iap-fields", "", "Sparse fields for included in-app purchases: "+strings.Join(shared.AppInAppPurchaseSparseFields, ", "))
 	subscriptionGroupFields := fs.String("subscription-group-fields", "", "Sparse fields for included subscription groups: "+strings.Join(shared.SubscriptionGroupSparseFields, ", "))
+	retentionMessageFields := fs.String("retention-message-fields", "", "Sparse fields for included retention messages: "+strings.Join(shared.RetentionMessageSparseFields, ", "))
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
@@ -136,6 +137,10 @@ Examples:
 			if err != nil {
 				return shared.UsageError(err.Error())
 			}
+			retentionMessageFieldValues, err := normalizeCiProductAppSparseField(fs, *retentionMessageFields, shared.RetentionMessageSparseFields, "--retention-message-fields")
+			if err != nil {
+				return shared.UsageError(err.Error())
+			}
 
 			shared.WarnDeprecatedAppInfoFields(appInfoFieldValues, "")
 
@@ -156,11 +161,15 @@ Examples:
 			if len(groupFieldValues) > 0 {
 				includeValues = addCiProductAppInclude(includeValues, "subscriptionGroups")
 			}
+			if len(retentionMessageFieldValues) > 0 {
+				includeValues = addCiProductAppInclude(includeValues, "retentionMessages")
+			}
 			resp, err := client.GetCiProductApp(
 				requestCtx, idValue,
 				asc.WithCiProductAppAppInfoFields(appInfoFieldValues),
 				asc.WithCiProductAppInAppPurchaseFields(iapFieldValues),
 				asc.WithCiProductAppSubscriptionGroupFields(groupFieldValues),
+				asc.WithCiProductAppRetentionMessageFields(retentionMessageFieldValues),
 				asc.WithCiProductAppInclude(includeValues),
 			)
 			if err != nil {
@@ -369,7 +378,7 @@ func xcodeCloudProductsList(ctx context.Context, flags ciProductsListFlags) erro
 	if err != nil {
 		return shared.UsageErrorf("xcode-cloud products: %v", err)
 	}
-	if ciProductsFlagProvided(flags.flagSet, "primary-repositories-limit") && (*flags.primaryRepositoriesLimit < 1 || *flags.primaryRepositoriesLimit > 50) {
+	if flagProvided(flags.flagSet, "primary-repositories-limit") && (*flags.primaryRepositoriesLimit < 1 || *flags.primaryRepositoriesLimit > 50) {
 		return shared.UsageError("xcode-cloud products: --primary-repositories-limit must be between 1 and 50")
 	}
 	if len(appFields) > 0 && !shared.HasInclude(include, "app") {

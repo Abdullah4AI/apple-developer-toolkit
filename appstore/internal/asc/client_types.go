@@ -147,6 +147,10 @@ const (
 	ResourceTypeSubscriptionGroupLocalizations                  = types.ResourceTypeSubscriptionGroupLocalizations
 	ResourceTypeSubscriptionGroupVersions                       = types.ResourceTypeSubscriptionGroupVersions
 	ResourceTypeSubscriptionGroupSubmissions                    = types.ResourceTypeSubscriptionGroupSubmissions
+	ResourceTypeRetentionMessages                               = types.ResourceTypeRetentionMessages
+	ResourceTypeRetentionMessageVersions                        = types.ResourceTypeRetentionMessageVersions
+	ResourceTypeRetentionMessageLocalizations                   = types.ResourceTypeRetentionMessageLocalizations
+	ResourceTypeAppAssetLibraryPlacements                       = types.ResourceTypeAppAssetLibraryPlacements
 	ResourceTypeSubscriptions                                   = types.ResourceTypeSubscriptions
 	ResourceTypeSubscriptionVersions                            = types.ResourceTypeSubscriptionVersions
 	ResourceTypeSubscriptionLocalizations                       = types.ResourceTypeSubscriptionLocalizations
@@ -180,6 +184,8 @@ const (
 	ResourceTypeSubscriptionOfferCodeOneTimeUseCodes            = types.ResourceTypeSubscriptionOfferCodeOneTimeUseCodes
 	ResourceTypeWinBackOffers                                   = types.ResourceTypeWinBackOffers
 	ResourceTypeWinBackOfferPrices                              = types.ResourceTypeWinBackOfferPrices
+	ResourceTypeRetentionOffers                                 = types.ResourceTypeRetentionOffers
+	ResourceTypeRetentionOfferPrices                            = types.ResourceTypeRetentionOfferPrices
 	ResourceTypeNominations                                     = types.ResourceTypeNominations
 	ResourceTypeMarketplaceSearchDetails                        = types.ResourceTypeMarketplaceSearchDetails
 	ResourceTypeMarketplaceWebhooks                             = types.ResourceTypeMarketplaceWebhooks

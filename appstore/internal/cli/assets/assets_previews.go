@@ -86,6 +86,9 @@ Examples:
 
 type previewUploadDependencies struct {
 	GetClient func() (*asc.Client, error)
+	// AcquireUploadLock waits for other asc uploads on this machine; nil
+	// uploads without waiting.
+	AcquireUploadLock func(context.Context) (func(), error)
 }
 
 const maxPreviewsPerSet = 3
@@ -93,7 +96,8 @@ const maxPreviewsPerSet = 3
 // AssetsPreviewsUploadCommand returns the previews upload subcommand.
 func AssetsPreviewsUploadCommand() *ffcli.Command {
 	return assetsPreviewsUploadCommandWithDependencies(previewUploadDependencies{
-		GetClient: shared.GetASCClient,
+		GetClient:         shared.GetASCClient,
+		AcquireUploadLock: acquireAssetUploadLock,
 	})
 }
 
@@ -114,6 +118,7 @@ func assetsPreviewsUploadCommandWithDependencies(deps previewUploadDependencies)
 	assetLibrary := fs.Bool("asset-library", false, "Upload to the Asset Library and place on the localization instead of using a preview set")
 	placementGroup := fs.String("placement-group", "", "Placement group to use with --asset-library (defaults to the group Apple publishes for --device-type)")
 	timeCode := fs.String("time-code", "", "Poster frame timecode, set after Apple finishes processing each video (e.g., 00:00:05:00 or 00:00:05.000); not available with --asset-library")
+	pollInterval := shared.BindMediaPollIntervalFlag(fs)
 	output := shared.BindOutputFlags(fs)
 
 	return &ffcli.Command{
@@ -147,6 +152,10 @@ exits non-zero with a failure in the receipt, but the delivered preview is
 kept; retry with asc video-previews set-poster-frame. Files skipped by
 --skip-existing keep their poster frame. --asset-library does not support it.
 
+Only one asc upload runs at a time on a machine. While another screenshots or
+video-previews upload is running, this command waits up to 30 minutes before
+it sends any request; ASC_UPLOAD_LOCK=0 skips the wait.
+
 Examples:
   asc video-previews upload --version-localization "VERSION_LOCALIZATION_ID" --path "./previews/duo.mp4" --device-type "IPHONE_DUO" --asset-library --dry-run
   asc video-previews upload --version-localization "VERSION_LOCALIZATION_ID" --path "./previews/duo.mp4" --device-type "IPHONE_DUO" --asset-library
@@ -161,6 +170,10 @@ Examples:
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
+			ctx, pollErr := pollInterval.Apply(ctx)
+			if pollErr != nil {
+				return pollErr
+			}
 			locID := strings.TrimSpace(*localizationID)
 			if locID == "" {
 				fmt.Fprintln(os.Stderr, "Error: --version-localization is required")
@@ -219,6 +232,13 @@ Examples:
 			}
 
 			defer client.CloseUploadConnections()
+			if !*dryRun && deps.AcquireUploadLock != nil {
+				release, err := deps.AcquireUploadLock(ctx)
+				if err != nil {
+					return fmt.Errorf("video-previews upload: %w", err)
+				}
+				defer release()
+			}
 
 			if *assetLibrary {
 				result, err := assetlibrary.UploadToLocalization(ctx, client, assetlibrary.LocalizationUpload{
@@ -1044,7 +1064,7 @@ func uploadPreviews(ctx context.Context, client *asc.Client, localizationID, pre
 		}
 	}
 
-	uploadCtx, cancel := contextWithAssetUploadTimeout(ctx)
+	uploadCtx, cancel := contextWithAssetUploadTimeout(withAssetUploadWork(ctx, files))
 	defer cancel()
 
 	if replace {
