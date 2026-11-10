@@ -3,6 +3,7 @@ package asc
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -15,11 +16,12 @@ import (
 )
 
 func TestAssetLibraryImageProgress(t *testing.T) {
-	for _, outcome := range []string{"ready", "failed", "canceled"} {
+	for _, outcome := range []string{"ready", "failed", "canceled", "ready-on-commit", "commit-reply-lost", "commit-still-awaiting", "commit-rejected"} {
 		t.Run(outcome, func(t *testing.T) {
 			setFastAssetUploadRetries(t, "1")
 			t.Cleanup(SetMediaPollIntervalsForTest(time.Nanosecond, time.Nanosecond))
-			attempts, polls := 0, 0
+			attempts, commits, polls := 0, 0, 0
+			commitReplyLost := outcome == "commit-reply-lost" || outcome == "commit-still-awaiting"
 			var server *httptest.Server
 			server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "application/json")
@@ -36,12 +38,39 @@ func TestAssetLibraryImageProgress(t *testing.T) {
 					}
 					w.WriteHeader(204)
 				case "PATCH":
+					commits++
+					if commitReplyLost {
+						w.Header().Set("Content-Length", "128")
+						_, _ = fmt.Fprint(w, `{"data":`)
+						return
+					}
+					if outcome == "commit-rejected" {
+						w.WriteHeader(http.StatusConflict)
+						fmt.Fprint(w, `{"errors":[{"status":"409","code":"STATE_ERROR","title":"Image commit rejected"}]}`)
+						return
+					}
+					if outcome == "ready-on-commit" {
+						fmt.Fprint(w, `{"data":{"id":"secret-image","type":"appAssetLibraryImages","attributes":{"state":"PREPARE_FOR_SUBMISSION","specId":"fixture-spec","imageAsset":{"width":10,"height":20}}}}`)
+						return
+					}
 					fmt.Fprint(w, `{"data":{"id":"secret-image"}}`)
 				case "GET":
 					polls++
+					if outcome == "ready-on-commit" {
+						w.WriteHeader(http.StatusNotFound)
+						fmt.Fprint(w, `{"errors":[{"status":"404","code":"NOT_FOUND","title":"Resource not found"}]}`)
+						return
+					}
+					if outcome == "commit-still-awaiting" {
+						fmt.Fprint(w, `{"data":{"id":"secret-image","type":"appAssetLibraryImages","attributes":{"state":"AWAITING_UPLOAD"}}}`)
+						return
+					}
 					state := "PROCESSING"
+					if outcome == "commit-reply-lost" {
+						state = "UPLOAD_COMPLETE"
+					}
 					asset := ""
-					if polls > 1 {
+					if polls > 1 && (outcome != "commit-reply-lost" || polls > 2) {
 						if outcome == "failed" {
 							state = "FAILED"
 						} else {
@@ -76,10 +105,29 @@ func TestAssetLibraryImageProgress(t *testing.T) {
 			file := createTempAssetFile(t, []byte("abc"))
 			defer file.Close()
 			result, err := client.UploadAssetLibraryImage(ctx, "secret-library", "secret-name.png", file, 3, nil)
-			if (err == nil) != (outcome == "ready") {
+			if outcome == "commit-still-awaiting" || outcome == "commit-rejected" {
+				wantPolls := 0
+				if outcome == "commit-still-awaiting" {
+					wantPolls = 1
+					if !errors.Is(err, io.ErrUnexpectedEOF) {
+						t.Fatalf("inconclusive readback lost original transport error: %v", err)
+					}
+				} else {
+					var statusErr interface{ HTTPStatusCode() int }
+					if !errors.As(err, &statusErr) || statusErr.HTTPStatusCode() != http.StatusConflict {
+						t.Fatalf("definite rejection lost HTTP 409: %v", err)
+					}
+				}
+				if commits != 1 || polls != wantPolls || result.ImageID != "secret-image" || result.Uploaded || result.Ready {
+					t.Fatalf("commits=%d reads=%d result=%+v, want one commit, %d reads and only the reserved ID", commits, polls, result, wantPolls)
+				}
+				return
+			}
+			ready := outcome == "ready" || outcome == "ready-on-commit" || outcome == "commit-reply-lost"
+			if (err == nil) != ready {
 				t.Fatalf("outcome %s error %v", outcome, err)
 			}
-			if !result.Uploaded || result.Ready != (outcome == "ready") {
+			if !result.Uploaded || result.Ready != ready {
 				t.Fatalf("incorrect uploaded/ready: %+v", result)
 			}
 			if len(result.Diagnostics) != 4 {
@@ -99,6 +147,9 @@ func TestAssetLibraryImageProgress(t *testing.T) {
 			if final.Stage != "processing" || final.Status != wantStatus || final.ErrorCode != wantCode {
 				t.Fatalf("final = %+v", final)
 			}
+			if outcome == "commit-reply-lost" && (commits != 1 || polls != 3) {
+				t.Fatalf("commit reply lost: %d commits, %d readbacks, want 1 commit and 3 reads", commits, polls)
+			}
 			if result.Diagnostics[1].RetryCount != 1 || attempts != 2 {
 				t.Fatalf("retry diagnostics %+v attempts %d", result.Diagnostics[1], attempts)
 			}
@@ -111,7 +162,12 @@ func TestAssetLibraryImageProgress(t *testing.T) {
 					sawWait = true
 				}
 			}
-			if !sawRetry || !sawWait {
+			if outcome == "ready-on-commit" {
+				if polls != 0 || result.SpecID != "fixture-spec" || result.Width != 10 || result.Height != 20 {
+					t.Fatalf("ready commit issued %d reads or lost processed image metadata: %+v", polls, result)
+				}
+			}
+			if !sawRetry || (outcome != "ready-on-commit" && !sawWait) {
 				t.Fatalf("missing retry/wait events: %+v", events)
 			}
 			encoded, _ := json.Marshal(events)

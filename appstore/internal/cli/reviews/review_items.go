@@ -128,7 +128,14 @@ Examples:
 				return err
 			}
 			opts = append(opts, asc.WithIncludedFields[asc.ReviewSubmissionItemsOption](included))
-			if strings.TrimSpace(*submissionID) == "" && strings.TrimSpace(*next) == "" {
+			submissionValue := strings.TrimSpace(*submissionID)
+			if strings.TrimSpace(*next) != "" {
+				submissionValue, err = asc.ReviewSubmissionItemsCursorSubmissionID(*next)
+				if err != nil {
+					return shared.WithDiagnostic(shared.NewValidationError(shared.UsageErrorf("%s: %v", errorPrefix, err)), shared.DiagnosticInvalidInput, "--next")
+				}
+			}
+			if submissionValue == "" {
 				fmt.Fprintln(os.Stderr, "Error: --submission is required")
 				return shared.MissingRequiredUsageError("--submission")
 			}
@@ -146,10 +153,10 @@ Examples:
 				resp, err := shared.PaginateWithSpinner(
 					requestCtx,
 					func(ctx context.Context) (asc.PaginatedResponse, error) {
-						return client.GetReviewSubmissionItems(ctx, strings.TrimSpace(*submissionID), paginateOpts...)
+						return client.GetReviewSubmissionItems(ctx, submissionValue, paginateOpts...)
 					},
 					func(ctx context.Context, nextURL string) (asc.PaginatedResponse, error) {
-						return client.GetReviewSubmissionItems(ctx, strings.TrimSpace(*submissionID), asc.WithReviewSubmissionItemsNextURL(nextURL))
+						return client.GetReviewSubmissionItems(ctx, submissionValue, asc.WithReviewSubmissionItemsNextURL(nextURL))
 					},
 				)
 				if err != nil {
@@ -159,7 +166,7 @@ Examples:
 				return shared.PrintOutput(resp, *output.Output, *output.Pretty)
 			}
 
-			resp, err := client.GetReviewSubmissionItems(requestCtx, strings.TrimSpace(*submissionID), opts...)
+			resp, err := client.GetReviewSubmissionItems(requestCtx, submissionValue, opts...)
 			if err != nil {
 				return fmt.Errorf("%s: %w", errorPrefix, err)
 			}
@@ -358,7 +365,11 @@ Examples:
 			itemValue := strings.TrimSpace(*itemID)
 			resp, err := client.CreateReviewSubmissionItem(requestCtx, submissionValue, normalizedType, itemValue)
 			if err != nil {
-				existing, handled, resolveErr := shared.ResolveIfExistsConflict(ifExistsMode, err, reviewItemsAddExistsCodes, func() (*asc.ReviewSubmissionItemResponse, bool, error) {
+				codes := reviewItemsAddExistsCodes
+				if isReviewItemAlreadyAddedConflict(err, normalizedType, itemValue) {
+					codes = []string{reviewItemAlreadyAddedCode}
+				}
+				existing, handled, resolveErr := shared.ResolveIfExistsConflict(ifExistsMode, err, codes, func() (*asc.ReviewSubmissionItemResponse, bool, error) {
 					return findExistingReviewSubmissionItem(requestCtx, client, submissionValue, normalizedType, itemValue)
 				})
 				if resolveErr != nil {
@@ -603,6 +614,19 @@ var reviewItemsAddExistsCodes = []string{
 	"ENTITY_ERROR.ATTRIBUTE.INVALID.DUPLICATE",
 }
 
+const reviewItemAlreadyAddedCode = "ENTITY_ERROR.RELATIONSHIP.INVALID.NOT_ALLOWED"
+
+func isReviewItemAlreadyAddedConflict(err error, itemType asc.ReviewSubmissionItemType, itemID string) bool {
+	apiErr, ok := errors.AsType[*asc.APIError](err)
+	if !ok || apiErr.Code != reviewItemAlreadyAddedCode {
+		return false
+	}
+	// Apple uses this code for other relationship failures too. Require its
+	// specific duplicate message before attempting the existing-item read-back.
+	message := fmt.Sprintf("%s with id %s was already added to this reviewSubmission.", reviewSubmissionItemRelationshipName(itemType), itemID)
+	return strings.TrimSpace(apiErr.Title) == message || strings.TrimSpace(apiErr.Detail) == message
+}
+
 // reviewSubmissionItemRelationshipName maps an item type to the relationship
 // name the items endpoint uses for it. include= (not fields=) is what makes
 // App Store Connect materialise the linkage, so the caller needs this name.
@@ -727,31 +751,27 @@ func findExistingReviewSubmissionItem(
 	if err != nil {
 		return nil, false, err
 	}
-	allPages, err := asc.PaginateAll(ctx, firstPage, func(ctx context.Context, nextURL string) (asc.PaginatedResponse, error) {
+	var found *asc.ReviewSubmissionItemResponse
+	itemFound := errors.New("review submission item found")
+	err = asc.PaginateEach(ctx, firstPage, func(ctx context.Context, nextURL string) (asc.PaginatedResponse, error) {
 		return client.GetReviewSubmissionItemsStrict(ctx, submissionID, asc.WithReviewSubmissionItemsNextURL(nextURL))
+	}, func(page asc.PaginatedResponse) error {
+		items := page.(*asc.ReviewSubmissionItemsResponse)
+		for _, candidate := range items.Data {
+			// A REMOVED item is historical and no longer attached.
+			if strings.EqualFold(strings.TrimSpace(candidate.Attributes.State), "REMOVED") {
+				continue
+			}
+			if reviewSubmissionItemLinkedID(candidate, itemType) == itemID {
+				// The collection item is the only available representation.
+				found = &asc.ReviewSubmissionItemResponse{Data: candidate}
+				return itemFound
+			}
+		}
+		return nil
 	})
-	if err != nil {
-		return nil, false, err
+	if errors.Is(err, itemFound) {
+		return found, true, nil
 	}
-	items, ok := allPages.(*asc.ReviewSubmissionItemsResponse)
-	if !ok {
-		return nil, false, fmt.Errorf("unexpected review submission items response type: %T", allPages)
-	}
-	for _, candidate := range items.Data {
-		// A REMOVED item is historical: the resource is detached from the
-		// submission, so it is not proof the requested item is present. The
-		// same exclusion is applied in background_assets_submit.go when it
-		// decides which versions are already attached.
-		if strings.EqualFold(strings.TrimSpace(candidate.Attributes.State), "REMOVED") {
-			continue
-		}
-		if reviewSubmissionItemLinkedID(candidate, itemType) == itemID {
-			// Apple exposes no GET /v1/reviewSubmissionItems/{id} (only POST,
-			// PATCH and DELETE), so the collection item is the only
-			// representation available and the single-resource envelope has to
-			// be built from it. The resource object itself is Apple's, verbatim.
-			return &asc.ReviewSubmissionItemResponse{Data: candidate}, true, nil
-		}
-	}
-	return nil, false, nil
+	return nil, false, err
 }

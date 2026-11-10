@@ -35,9 +35,21 @@ func (e *responseBodyReadError) Unwrap() error {
 	return e.err
 }
 
-func isResponseBodyReadError(err error) bool {
+// IsResponseBodyReadError reports whether a successful API response body could not be read.
+func IsResponseBodyReadError(err error) bool {
 	var readErr *responseBodyReadError
 	return errors.As(err, &readErr)
+}
+
+type screenshotCommitDecodeError struct{ error }
+
+func (e *screenshotCommitDecodeError) Unwrap() error { return e.error }
+
+// IsScreenshotCommitResponseError reports whether a successful screenshot
+// commit response could not be read or decoded.
+func IsScreenshotCommitResponseError(err error) bool {
+	var decodeErr *screenshotCommitDecodeError
+	return IsResponseBodyReadError(err) || errors.As(err, &decodeErr)
 }
 
 type buildUploadFileCommitResponseError struct {
@@ -92,6 +104,8 @@ type APIError struct {
 	// account-level state that no API key permission can satisfy. It is
 	// appended to Error() so the guidance travels with the error itself.
 	Remediation string
+
+	bearerTokenRejected bool
 }
 
 // requiredAgreementRemediation explains a 403 that no key permission can fix.
@@ -270,6 +284,8 @@ func formatAssociatedErrors(values map[string][]APIAssociatedError) string {
 
 func (e *APIError) Is(target error) bool {
 	switch target {
+	case ErrInvalidBearerToken:
+		return e.bearerTokenRejected
 	case ErrNotFound:
 		return strings.EqualFold(e.Code, "NOT_FOUND") || e.StatusCode == 404
 	case ErrUnauthorized:

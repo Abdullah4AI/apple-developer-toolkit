@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"image"
 	"io"
 	"os"
 	"path/filepath"
@@ -219,7 +220,7 @@ func uploadScreenshotsWithConfig[T any](ctx context.Context, cfg screenshotUploa
 
 	var openedFiles openedScreenshotFiles
 	if cfg.Replace && len(files) > 0 {
-		openedFiles, err = openAndValidateScreenshotFiles(sourceRootPath, files)
+		openedFiles, err = openAndValidateScreenshotFiles(sourceRootPath, cfg.DisplayType, files)
 		if err != nil {
 			return zero, err
 		}
@@ -364,7 +365,7 @@ func settleExistingScreenshotChecksums(ctx context.Context, client *asc.Client, 
 		if assetID == "" {
 			return nil, fmt.Errorf("cannot settle screenshot checksum: existing screenshot is missing its asset ID")
 		}
-		remote, err := waitForScreenshotSettlement(ctx, client, assetID)
+		remote, err := waitForScreenshotSettlement(ctx, client, assetID, "")
 		if err != nil {
 			return nil, err
 		}
@@ -438,7 +439,7 @@ func uploadScreenshotAsset(ctx context.Context, client *asc.Client, setID, sourc
 
 type openedScreenshotFiles map[string]*os.File
 
-func openAndValidateScreenshotFiles(sourceRootPath string, filePaths []string) (openedScreenshotFiles, error) {
+func openAndValidateScreenshotFiles(sourceRootPath, displayType string, filePaths []string) (openedScreenshotFiles, error) {
 	if len(filePaths) == 0 {
 		return nil, nil
 	}
@@ -462,7 +463,7 @@ func openAndValidateScreenshotFiles(sourceRootPath string, filePaths []string) (
 			closeOpened()
 			return nil, err
 		}
-		if err := validateOpenedScreenshotFileFormat(filePath, file); err != nil {
+		if err := validateOpenedScreenshotReplacement(filePath, displayType, file); err != nil {
 			_ = file.Close()
 			closeOpened()
 			return nil, err
@@ -476,6 +477,21 @@ func openAndValidateScreenshotFiles(sourceRootPath string, filePaths []string) (
 		opened[key] = file
 	}
 	return opened, nil
+}
+
+func validateOpenedScreenshotReplacement(filePath, displayType string, file *os.File) error {
+	if err := validateOpenedScreenshotFileFormat(filePath, file); err != nil {
+		return err
+	}
+	config, _, err := image.DecodeConfig(file)
+	if err != nil {
+		return markMediaInput(fmt.Errorf("%q: %w", filePath, err), shared.DiagnosticFileInvalidFormat)
+	}
+	if err := asc.ValidateScreenshotDimensionsForSize(filePath, config.Width, config.Height, displayType); err != nil {
+		return markMediaInput(err, shared.DiagnosticInvalidInput)
+	}
+	_, err = file.Seek(0, io.SeekStart)
+	return err
 }
 
 func closeOpenedScreenshotFiles(files openedScreenshotFiles) {
@@ -551,16 +567,7 @@ func uploadScreenshotAssetFromFile(ctx context.Context, client *asc.Client, setI
 	}
 	pending.State = "UPLOADED"
 
-	updated, err := client.UpdateAppScreenshot(ctx, created.Data.ID, true, checksum.Hash)
-	if err != nil {
-		return asc.AssetUploadResultItem{}, pending, err
-	}
-	pending.State = "UPLOAD_COMPLETE"
-	if updated.Data.Attributes.AssetDeliveryState != nil && strings.TrimSpace(updated.Data.Attributes.AssetDeliveryState.State) != "" {
-		pending.State = strings.ToUpper(strings.TrimSpace(updated.Data.Attributes.AssetDeliveryState.State))
-	}
-
-	state, err := waitForScreenshotDelivery(ctx, client, created.Data.ID)
+	state, err := commitAndWaitForScreenshotDelivery(ctx, client, pending, false)
 	if strings.TrimSpace(state) != "" {
 		pending.State = strings.ToUpper(strings.TrimSpace(state))
 	}
@@ -593,8 +600,54 @@ func validateOpenedScreenshotFileFormat(filePath string, file *os.File) error {
 	return nil
 }
 
-func waitForScreenshotDelivery(ctx context.Context, client *asc.Client, screenshotID string) (string, error) {
-	settled, err := waitForScreenshotSettlement(ctx, client, screenshotID)
+func commitAndWaitForScreenshotDelivery(ctx context.Context, client *asc.Client, pending screenshotPendingAsset, verifyChecksum bool) (string, error) {
+	updated, err := client.UpdateAppScreenshot(ctx, pending.AssetID, true, pending.Checksum)
+	if err != nil {
+		if !asc.IsScreenshotCommitResponseError(err) || ctx.Err() != nil {
+			return "", err
+		}
+		// The commit returned success without a usable receipt. Verify
+		// the reserved asset with a read instead of replaying the mutation.
+		remote, readErr := client.GetAppScreenshot(ctx, pending.AssetID)
+		if readErr != nil || remote.Data.ID != pending.AssetID || remote.Data.Type != asc.ResourceTypeAppScreenshots {
+			return "", err
+		}
+		delivery := remote.Data.Attributes.AssetDeliveryState
+		checksum := strings.TrimSpace(remote.Data.Attributes.SourceFileChecksum)
+		if delivery == nil || (checksum != "" && !strings.EqualFold(checksum, pending.Checksum)) {
+			return "", err
+		}
+		state := strings.ToUpper(strings.TrimSpace(delivery.State))
+		if state != "UPLOAD_COMPLETE" && state != "COMPLETE" {
+			return "", err
+		}
+		if screenshotNoWaitFromContext(ctx) || (state == "COMPLETE" && checksum != "") {
+			return state, nil
+		}
+		updated = remote
+		verifyChecksum = true
+	}
+
+	state := "UPLOAD_COMPLETE"
+	if delivery := updated.Data.Attributes.AssetDeliveryState; delivery != nil && strings.TrimSpace(delivery.State) != "" {
+		state = strings.ToUpper(strings.TrimSpace(delivery.State))
+	}
+	var expectedChecksum string
+	if verifyChecksum {
+		expectedChecksum = pending.Checksum
+	}
+	settledState, err := waitForScreenshotDelivery(ctx, client, pending.AssetID, expectedChecksum)
+	if strings.TrimSpace(settledState) != "" {
+		return settledState, err
+	}
+	return state, err
+}
+
+func waitForScreenshotDelivery(ctx context.Context, client *asc.Client, screenshotID, expectedChecksum string) (string, error) {
+	if screenshotNoWaitFromContext(ctx) {
+		return currentScreenshotDeliveryState(ctx, client, screenshotID, expectedChecksum)
+	}
+	settled, err := waitForScreenshotSettlement(ctx, client, screenshotID, expectedChecksum)
 	state := ""
 	if settled.Attributes.AssetDeliveryState != nil {
 		state = settled.Attributes.AssetDeliveryState.State
@@ -602,7 +655,31 @@ func waitForScreenshotDelivery(ctx context.Context, client *asc.Client, screensh
 	return state, err
 }
 
-func waitForScreenshotSettlement(ctx context.Context, client *asc.Client, screenshotID string) (asc.Resource[asc.AppScreenshotAttributes], error) {
+// currentScreenshotDeliveryState checks once for a committed upload. An
+// inconclusive read leaves the last known upload stage intact for resume.
+func currentScreenshotDeliveryState(ctx context.Context, client *asc.Client, screenshotID, expectedChecksum string) (string, error) {
+	resp, err := client.GetAppScreenshot(ctx, strings.TrimSpace(screenshotID))
+	if err != nil {
+		return "", fmt.Errorf("fetch screenshot %s: %w", screenshotID, err)
+	}
+	delivery := resp.Data.Attributes.AssetDeliveryState
+	state := ""
+	if delivery != nil {
+		state = strings.ToUpper(strings.TrimSpace(delivery.State))
+	}
+	switch state {
+	case "UPLOAD_COMPLETE", "COMPLETE":
+		return state, validatePendingScreenshotRemoteChecksum(screenshotID, resp.Data.Attributes.SourceFileChecksum, expectedChecksum)
+	case "FAILED":
+		return state, fmt.Errorf("screenshot %s delivery failed: %s", screenshotID, formatAssetErrors(delivery.Errors))
+	case "":
+		return "", fmt.Errorf("screenshot %s upload commit not confirmed: missing delivery state", screenshotID)
+	default:
+		return "", fmt.Errorf("screenshot %s upload commit not confirmed: delivery state %q", screenshotID, state)
+	}
+}
+
+func waitForScreenshotSettlement(ctx context.Context, client *asc.Client, screenshotID, expectedChecksum string) (asc.Resource[asc.AppScreenshotAttributes], error) {
 	assetID := strings.TrimSpace(screenshotID)
 	if assetID == "" {
 		return asc.Resource[asc.AppScreenshotAttributes]{}, fmt.Errorf("screenshot asset ID is required for checksum settlement")
@@ -625,12 +702,15 @@ func waitForScreenshotSettlement(ctx context.Context, client *asc.Client, screen
 		case "FAILED":
 			return asc.Resource[asc.AppScreenshotAttributes]{}, false, fmt.Errorf("screenshot %s delivery failed: %s", assetID, formatAssetErrors(resp.Data.Attributes.AssetDeliveryState.Errors))
 		case "COMPLETE":
-			if strings.TrimSpace(resp.Data.Attributes.SourceFileChecksum) != "" {
+			if checksum := strings.TrimSpace(resp.Data.Attributes.SourceFileChecksum); checksum != "" {
+				if err := validatePendingScreenshotRemoteChecksum(assetID, checksum, expectedChecksum); err != nil {
+					return resp.Data, false, err
+				}
 				return resp.Data, true, nil
 			}
 		}
 		return resp.Data, false, nil
-	}, asc.PollOptions{})
+	}, asc.PollOptions{Tolerate: asc.IsTransientWaitError})
 	if err == nil {
 		return settled, nil
 	}
@@ -642,7 +722,11 @@ func waitForScreenshotSettlement(ctx context.Context, client *asc.Client, screen
 		return lastRemote, fmt.Errorf("canceled waiting for screenshot %s checksum settlement%s: %w", assetID, stateDetail, err)
 	}
 	if errors.Is(err, context.DeadlineExceeded) {
-		return lastRemote, fmt.Errorf("timed out waiting for screenshot %s checksum settlement%s: %w", assetID, stateDetail, err)
+		err = fmt.Errorf("timed out waiting for screenshot %s checksum settlement%s: %w", assetID, stateDetail, err)
+		if errors.Is(context.Cause(ctx), errAssetUploadDeadline) {
+			err = fmt.Errorf("screenshot upload failed: %w", err)
+		}
+		return lastRemote, err
 	}
 	return lastRemote, err
 }

@@ -162,16 +162,15 @@ func generateJWTForAudience(keyID, issuerID string, privateKey *ecdsa.PrivateKey
 // Mutating requests are throttled and retried only when App Store Connect
 // rejects them with 429; see isRateLimitRejection.
 func (c *Client) do(ctx context.Context, method, path string, body io.Reader) ([]byte, error) {
-	return c.doWithHTTPClient(ctx, method, path, body, c.httpClient)
-}
-
-// doWithHTTPClient preserves the shared request/retry behavior while allowing
-// narrowly scoped callers to override only the HTTP client's redirect policy.
-func (c *Client) doWithHTTPClient(ctx context.Context, method, path string, body io.Reader, httpClient *http.Client) ([]byte, error) {
 	if err := validateMutatingRequestTarget(method, path); err != nil {
 		return nil, err
 	}
+	return c.doWithHTTPClient(ctx, method, path, body, c.httpClient)
+}
 
+// doWithHTTPClient shares retry and rate-limit behavior after callers
+// validate the request target.
+func (c *Client) doWithHTTPClient(ctx context.Context, method, path string, body io.Reader, httpClient *http.Client) ([]byte, error) {
 	request, err := c.replayableRequestWithHTTPClient(method, path, body, httpClient)
 	if err != nil {
 		return nil, err
@@ -453,7 +452,7 @@ func (c *Client) doOnce(ctx context.Context, method, path string, body io.Reader
 			}
 		}
 
-		if err := ParseErrorWithStatus(respBody, resp.StatusCode); err != nil {
+		if err := c.parseAuthenticatedResponseError(respBody, resp); err != nil {
 			if isIntermittentBuildUploadsNotFound(method, path, err) {
 				// No Retry-After accompanies the flake; the shared exponential
 				// backoff (1s/2s/4s by default) and retry budget apply.
@@ -875,7 +874,7 @@ func (c *Client) doStream(ctx context.Context, path string, accept string) (*htt
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		respBody, _ := io.ReadAll(resp.Body)
 		_ = resp.Body.Close()
-		if err := ParseErrorWithStatus(respBody, resp.StatusCode); err != nil {
+		if err := c.parseAuthenticatedResponseError(respBody, resp); err != nil {
 			return nil, err
 		}
 		return nil, fmt.Errorf("API request failed with status %d", resp.StatusCode)
@@ -921,6 +920,21 @@ func BuildRequestBody(data any) (io.Reader, error) {
 		return nil, fmt.Errorf("failed to encode request: %w", err)
 	}
 	return &buf, nil
+}
+
+func (c *Client) parseAuthenticatedResponseError(body []byte, resp *http.Response) error {
+	err := ParseErrorWithStatus(body, resp.StatusCode)
+	if resp.StatusCode != http.StatusUnauthorized || c.bearerToken == "" {
+		return err
+	}
+	// A redirect can drop the Authorization header before the final response.
+	if resp.Request != nil && resp.Request.Header.Get("Authorization") != "Bearer "+c.bearerToken {
+		return err
+	}
+	if apiErr, ok := errors.AsType[*APIError](err); ok {
+		apiErr.bearerTokenRejected = true
+	}
+	return err
 }
 
 // ParseError parses an error response (status code unknown)

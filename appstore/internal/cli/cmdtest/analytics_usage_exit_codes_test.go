@@ -24,6 +24,7 @@ func TestAnalyticsInputValidationReturnsUsageExitCode(t *testing.T) {
 		name    string
 		args    []string
 		wantErr string
+		appEnv  string
 	}{
 		{
 			name:    "requests limit above maximum",
@@ -39,6 +40,27 @@ func TestAnalyticsInputValidationReturnsUsageExitCode(t *testing.T) {
 			name:    "requests invalid next",
 			args:    []string{"analytics", "requests", "--next", "http://api.appstoreconnect.apple.com/v1/analyticsReportRequests"},
 			wantErr: "analytics requests: --next must be an App Store Connect URL",
+		},
+		{
+			name:    "requests next uses unsupported top-level collection",
+			args:    []string{"analytics", "requests", "--next", "https://api.appstoreconnect.apple.com/v1/analyticsReportRequests?limit=1"},
+			wantErr: "analytics requests: --next must point to an app's analytics report requests",
+		},
+		{
+			name:    "requests next points at unrelated resource",
+			args:    []string{"analytics", "requests", "--next", "https://api.appstoreconnect.apple.com/v1/apps?limit=1"},
+			wantErr: "analytics requests: --next must point to an app's analytics report requests",
+		},
+		{
+			name:    "requests app differs from cursor",
+			args:    []string{"analytics", "requests", "--app", "123456789", "--next", "https://api.appstoreconnect.apple.com/v1/apps/6759231657/analyticsReportRequests?limit=1"},
+			wantErr: "analytics requests: the selected app must match the app in --next",
+		},
+		{
+			name:    "requests environment app differs from cursor",
+			args:    []string{"analytics", "requests", "--next", "https://api.appstoreconnect.apple.com/v1/apps/6759231657/analyticsReportRequests?limit=1"},
+			wantErr: "analytics requests: the selected app must match the app in --next",
+			appEnv:  "123456789",
 		},
 		{
 			name:    "requests invalid request id",
@@ -69,6 +91,16 @@ func TestAnalyticsInputValidationReturnsUsageExitCode(t *testing.T) {
 			name:    "view invalid next",
 			args:    []string{"analytics", "view", "--next", "http://api.appstoreconnect.apple.com/v1/analyticsReportRequests/x/reports"},
 			wantErr: "analytics view: --next must be an App Store Connect URL",
+		},
+		{
+			name:    "view request id differs from cursor",
+			args:    []string{"analytics", "view", "--request-id", analyticsUsageExitRequestID, "--next", "https://api.appstoreconnect.apple.com/v1/analyticsReportRequests/22222222-2222-2222-2222-222222222222/reports?cursor=AQ"},
+			wantErr: "analytics view: --request-id must match the report request in --next",
+		},
+		{
+			name:    "view next points at request list",
+			args:    []string{"analytics", "view", "--next", "https://api.appstoreconnect.apple.com/v1/apps/6759231657/analyticsReportRequests?limit=1"},
+			wantErr: "analytics view: --next must point to an analytics report request's reports",
 		},
 		{
 			name:    "download invalid request id",
@@ -129,6 +161,9 @@ func TestAnalyticsInputValidationReturnsUsageExitCode(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			if test.appEnv != "" {
+				t.Setenv("ASC_APP_ID", test.appEnv)
+			}
 			stdout, stderr, runErr := runCommand(t, test.args)
 
 			if runErr == nil {

@@ -162,6 +162,13 @@ func TestIfExistsConflictsWithoutAMatchKeepFailing(t *testing.T) {
 			wantRequests: []string{reviewItemsPost},
 		},
 		{
+			name:         "review items-add skip preserves unrelated relationship rejection",
+			args:         with(reviewItemArgs, "--if-exists", "skip"),
+			replies:      map[string]ifExistsReply{reviewItemsPost: {http.StatusConflict, `{"errors":[{"status":"409","code":"ENTITY_ERROR.RELATIONSHIP.INVALID.NOT_ALLOWED","title":"This relationship cannot be changed."}]}`}},
+			wantErr:      "This relationship cannot be changed.",
+			wantRequests: []string{reviewItemsPost},
+		},
+		{
 			name: "review items-add skip ignores a REMOVED item",
 			args: with(reviewItemArgs, "--if-exists", "skip"),
 			replies: map[string]ifExistsReply{
@@ -857,6 +864,52 @@ func TestVersionsCreateIfExistsUpdateFailsWhenAttachFails(t *testing.T) {
 	}
 	if stdout != "" {
 		t.Fatalf("stdout = %q, want no receipt", stdout)
+	}
+}
+
+func TestVersionsCreateIfExistsUpdateCombinesAttributesAndBuild(t *testing.T) {
+	var savedCopyright string
+	stdout, _, seen, runErr := runIfExistsCommand(t, []string{
+		"versions", "create", "--app", "app-1", "--version", "2.0.0", "--build-id", "build-1",
+		"--copyright", "2026 Example", "--if-exists", "update", "--output", "json",
+	}, func(req ifExistsRequest) (*http.Response, error) {
+		switch req.Method + " " + req.Path {
+		case "POST /v1/appStoreVersions":
+			return jsonResponse(http.StatusConflict, versionsDuplicate409)
+		case "GET /v1/apps/app-1/appStoreVersions":
+			return jsonResponse(http.StatusOK, existingVersionsList)
+		case "PATCH /v1/appStoreVersions/version-existing":
+			var payload struct {
+				Data struct {
+					Attributes struct {
+						Copyright string `json:"copyright"`
+					} `json:"attributes"`
+					Relationships struct {
+						Build asc.Relationship `json:"build"`
+					} `json:"relationships"`
+				} `json:"data"`
+			}
+			if err := json.Unmarshal([]byte(req.Body), &payload); err != nil {
+				t.Fatal(err)
+			}
+			build := payload.Data.Relationships.Build.Data
+			if build.Type == "builds" && build.ID == "build-1" && payload.Data.Attributes.Copyright == "2026 Example" {
+				return jsonResponse(http.StatusConflict, versionsBadBuild409)
+			}
+			savedCopyright = payload.Data.Attributes.Copyright
+			return jsonResponse(http.StatusOK, `{"data":{"type":"appStoreVersions","id":"version-existing","attributes":{"versionString":"2.0.0","platform":"IOS"}}}`)
+		case "PATCH /v1/appStoreVersions/version-existing/relationships/build":
+			return jsonResponse(http.StatusConflict, versionsBadBuild409)
+		default:
+			t.Fatalf("unexpected request %s %s", req.Method, req.Path)
+			return nil, nil
+		}
+	})
+	if runErr == nil || !strings.Contains(runErr.Error(), "The build relationship is invalid.") || stdout != "" {
+		t.Errorf("expected the update conflict with no receipt, got stdout=%q err=%v", stdout, runErr)
+	}
+	if savedCopyright != "" || len(seen) != 3 {
+		t.Errorf("build rejection must not leave a copyright update, saved=%q requests=%d", savedCopyright, len(seen))
 	}
 }
 

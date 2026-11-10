@@ -112,6 +112,12 @@ At least one field flag must be provided.`,
 			if normalizedType == shared.LocalizationTypeAppInfo && flagProvided(fs, "platform") {
 				return shared.UsageError("--platform requires --type version")
 			}
+			if normalizedType == shared.LocalizationTypeAppInfo && flagProvided(fs, "version") {
+				return shared.UsageError("--version requires --type version")
+			}
+			if normalizedType == shared.LocalizationTypeVersion && flagProvided(fs, "app-info") {
+				return shared.UsageError("--app-info requires --type app-info")
+			}
 			if err := validateClearFlags(fs, normalizedType); err != nil {
 				return err
 			}
@@ -253,7 +259,7 @@ func updateAppInfoLocalization(ctx context.Context, p updateAppInfoParams) error
 	defer cancel()
 
 	if localizationID == "" {
-		appInfo, err := shared.ResolveAppInfoID(requestCtx, client, resolvedAppID, strings.TrimSpace(p.appInfoID))
+		appInfo, err := shared.ResolveOwnedAppInfoID(requestCtx, client, resolvedAppID, strings.TrimSpace(p.appInfoID))
 		if err != nil {
 			return fmt.Errorf("localizations update: %w", err)
 		}

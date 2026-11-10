@@ -123,6 +123,12 @@ Examples:
 			if err != nil {
 				return fmt.Errorf("localizations list: %w", err)
 			}
+			if normalizedType == shared.LocalizationTypeAppInfo && flagProvided(fs, "version") {
+				return shared.UsageError("--version requires --type version")
+			}
+			if normalizedType == shared.LocalizationTypeVersion && flagProvided(fs, "app-info") {
+				return shared.UsageError("--app-info requires --type app-info")
+			}
 			appInfoFieldsProvided := false
 			includeProvided := false
 			platformProvided := false
@@ -682,7 +688,7 @@ Examples:
 				}
 
 				appInfo, err := shared.RetryReadWithFreshTimeout(ctx, func(resolveCtx context.Context) (string, error) {
-					return shared.ResolveAppInfoID(resolveCtx, client, resolvedAppID, strings.TrimSpace(*appInfoID))
+					return shared.ResolveOwnedAppInfoID(resolveCtx, client, resolvedAppID, strings.TrimSpace(*appInfoID))
 				})
 				if err != nil {
 					return fmt.Errorf("localizations upload: %w", err)

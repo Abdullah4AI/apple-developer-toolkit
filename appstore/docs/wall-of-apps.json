@@ -604,6 +604,11 @@
     "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/a0/5e/d3/a05ed356-a8d1-47ec-b464-f1422a717a75/AppIcon-0-0-1x_U007epad-0-0-0-1-0-85-220.png/512x512bb.jpg"
   },
   {
+    "app": "Dictate Bar",
+    "link": "https://apps.apple.com/us/app/dictate-bar/id6761782651?mt=12&uo=4",
+    "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/d3/02/0e/d3020e49-b4db-8036-ed85-839a01cdc4de/AppIcon-0-0-85-220-0-6-0-2x-sRGB.png/512x512bb.png"
+  },
+  {
     "app": "Dither By Eyed™ - Photo Editor",
     "link": "https://apps.apple.com/us/app/dither-by-eyed-photo-editor/id6751736178?uo=4",
     "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/75/0a/23/750a23f4-cd91-8ec7-1155-fa2127042e4b/AppIcon-0-0-1x_U007epad-0-1-85-220.png/512x512bb.jpg"
@@ -1576,6 +1581,11 @@
     "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/59/57/b4/5957b419-040d-763a-3c16-cf799bdaaa76/AppIcon-0-0-1x_U007emarketing-0-8-0-85-220.png/512x512bb.jpg"
   },
   {
+    "app": "Now Planner",
+    "link": "https://apps.apple.com/us/app/now-planner/id6825132781?uo=4",
+    "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/39/01/09/39010951-a2ee-44cb-5b1d-db7cb20f24ac/AppIcon-0-0-1x_U007epad-0-1-85-220.png/512x512bb.jpg"
+  },
+  {
     "app": "NullVault: Secret Photo Vault",
     "link": "https://apps.apple.com/us/app/nullvault-secret-photo-vault/id6793223535?uo=4",
     "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/3b/ff/0b/3bff0b2c-52c3-e5e3-5710-e8cff0da6800/NullVault-0-0-1x_U007ephone-0-1-sRGB-85-220.png/512x512bb.jpg"
@@ -1900,9 +1910,19 @@
     "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/38/1c/5b/381c5b87-8ab7-7351-138b-0cef5c4d5084/AppIcon-1x_U007ephone-0-1-85-220-0.jpeg/512x512bb.jpg"
   },
   {
+    "app": "Provider of Things",
+    "link": "https://apps.apple.com/us/app/provider-of-things/id6813267785?uo=4",
+    "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/e7/af/e3/e7afe361-bf65-cab6-0a0d-c6436ecbf0ac/AppIcon-0-0-1x_U007epad-0-1-85-220.png/512x512bb.jpg"
+  },
+  {
     "app": "Public Toilet Finder - Phoo",
     "link": "https://apps.apple.com/us/app/public-toilet-finder-phoo/id6804638882?uo=4",
     "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/66/93/26/66932699-6d97-3ea6-1638-157ad93bcc85/AppIcon-0-0-1x_U007ephone-0-1-85-220.png/512x512bb.jpg"
+  },
+  {
+    "app": "Pueblo CRM",
+    "link": "https://apps.apple.com/us/app/pueblo-crm/id6759603564?uo=4",
+    "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/64/a9/d8/64a9d877-8667-b189-628d-19d8eff51d3d/AppIcon-0-0-1x_U007epad-0-1-85-220.png/512x512bb.jpg"
   },
   {
     "app": "QELM",
@@ -1913,6 +1933,11 @@
     "app": "QontactR",
     "link": "https://apps.apple.com/us/app/qontactr/id1169525139?uo=4",
     "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/dd/e8/78/dde87816-0e87-d38d-9b0a-a0fc93dfd60e/AppIcon-0-0-1x_U007emarketing-0-8-0-85-220.png/512x512bb.jpg"
+  },
+  {
+    "app": "Quick Commit for Git",
+    "link": "https://apps.apple.com/us/app/quick-commit-for-git/id6813170588?mt=12&uo=4",
+    "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/b5/d3/2f/b5d32f33-b644-9071-3fd5-4a0e5af5dd4e/AppIcon-0-0-85-220-0-1-0-2x-P3.png/512x512bb.png"
   },
   {
     "app": "Quick RSS - RSS Reader",
@@ -2475,6 +2500,11 @@
     "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/eb/ba/d4/ebbad4d9-6a72-5d73-9a18-cf2719e6b8f3/telescopo-icon-0-0-85-220-0-6-0-2x-0-0-0.png/512x512bb.png"
   },
   {
+    "app": "Ten Three",
+    "link": "https://apps.apple.com/us/app/ten-three/id6761611521?uo=4",
+    "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/32/e8/cc/32e8cc53-96a9-7d82-fb87-b2c81710fbe9/AppIcon-0-0-1x_U007epad-0-1-sRGB-85-220.png/512x512bb.jpg"
+  },
+  {
     "app": "Terraforge: Alchemy Craft Game",
     "link": "https://apps.apple.com/us/app/terraforge-alchemy-craft-game/id6759879809?uo=4",
     "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/f4/f1/65/f4f165e3-9826-8ced-d9be-d33b8a8e154c/AppIcon-0-0-1x_U007epad-0-1-85-220.png/512x512bb.jpg"
@@ -2733,6 +2763,11 @@
     "app": "Weather mini - Trip Forecasts",
     "link": "https://apps.apple.com/us/app/weather-mini-trip-forecasts/id892589817",
     "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/3c/c6/c1/3cc6c19c-acec-fb4d-ee88-63a1bfc422c4/AppIcon-0-0-1x_U007epad-0-1-0-sRGB-85-220.png/512x512bb.jpg"
+  },
+  {
+    "app": "Within Reason",
+    "link": "https://apps.apple.com/us/app/within-reason/id6814664200?uo=4",
+    "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/2d/f4/e0/2df4e052-b159-5422-ed30-da5eda2539d0/AppIcon-0-0-1x_U007epad-0-1-P3-85-220.png/512x512bb.jpg"
   },
   {
     "app": "Woofdoku: Sudoku with Dogs",

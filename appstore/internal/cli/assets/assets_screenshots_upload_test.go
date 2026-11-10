@@ -18,23 +18,44 @@ import (
 	"time"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared/errfmt"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/rootfs"
 )
 
 func TestUploadScreenshotsReplaceValidatesOpenedFileBeforeDeletingExistingScreenshots(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		want []string
+	}{
+		{name: "format changed", want: []string{"01-home.png", "JPEG", ".png"}},
+		{name: "dimensions changed", want: []string{"01-home.png", "unsupported size 8x8", "APP_IPHONE_65"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			testReplacementScreenshotValidation(t, tc.name == "dimensions changed", tc.want)
+		})
+	}
+}
+
+func testReplacementScreenshotValidation(t *testing.T, resize bool, wantErrors []string) {
+	t.Helper()
 	dir := t.TempDir()
 	filePath := writeAssetsTestPNGWithSize(t, dir, "01-home.png", 1242, 2688)
-	replacementPath := filepath.Join(dir, "replacement.jpg")
-	replacement, err := os.Create(replacementPath)
-	if err != nil {
-		t.Fatalf("create replacement: %v", err)
-	}
-	if err := jpeg.Encode(replacement, image.NewRGBA(image.Rect(0, 0, 8, 8)), nil); err != nil {
-		replacement.Close()
-		t.Fatalf("encode replacement: %v", err)
-	}
-	if err := replacement.Close(); err != nil {
-		t.Fatalf("close replacement: %v", err)
+	var replacementPath string
+	if resize {
+		replacementPath = writeAssetsTestPNGWithSize(t, dir, "replacement.png", 8, 8)
+	} else {
+		replacementPath = filepath.Join(dir, "replacement.jpg")
+		replacement, err := os.Create(replacementPath)
+		if err != nil {
+			t.Fatalf("create replacement: %v", err)
+		}
+		if err := jpeg.Encode(replacement, image.NewRGBA(image.Rect(0, 0, 8, 8)), nil); err != nil {
+			replacement.Close()
+			t.Fatalf("encode replacement: %v", err)
+		}
+		if err := replacement.Close(); err != nil {
+			t.Fatalf("close replacement: %v", err)
+		}
 	}
 
 	if err := validateScreenshotDimensions([]string{filePath}, "APP_IPHONE_65"); err != nil {
@@ -67,23 +88,24 @@ func TestUploadScreenshotsReplaceValidatesOpenedFileBeforeDeletingExistingScreen
 		}
 	}))
 
-	_, err = uploadScreenshots(context.Background(), client, "LOC_123", "APP_IPHONE_65", []string{filePath}, false, true, false)
+	_, err := uploadScreenshots(context.Background(), client, "LOC_123", "APP_IPHONE_65", []string{filePath}, false, true, false)
 	if replacementErr != nil {
 		t.Fatalf("replace validated screenshot: %v", replacementErr)
 	}
 	if err == nil {
-		t.Fatal("uploadScreenshots() error = nil, want format mismatch")
+		t.Fatal("uploadScreenshots() error = nil, want invalid replacement")
 	}
-	for _, want := range []string{"01-home.png", "JPEG", ".png"} {
+	for _, want := range wantErrors {
 		if !strings.Contains(err.Error(), want) {
-			t.Fatalf("uploadScreenshots() error = %q, want %q", err, want)
+			t.Errorf("uploadScreenshots() error = %q, want %q", err, want)
+			break
 		}
 	}
 	if deleted {
-		t.Fatal("existing screenshot was deleted before the replacement mismatch was rejected")
+		t.Error("existing screenshot was deleted before the replacement mismatch was rejected")
 	}
 	if reserved {
-		t.Fatal("replacement screenshot reached asset reservation")
+		t.Error("replacement screenshot reached asset reservation")
 	}
 }
 
@@ -445,7 +467,7 @@ func TestWaitForScreenshotSettlementReportsCallerCancellation(t *testing.T) {
 		writeAssetsTestJSON(w, http.StatusOK, `{"data":{"type":"appScreenshots","id":"canceled-1","attributes":{"assetDeliveryState":{"state":"COMPLETE"}}}}`)
 	}))
 
-	_, err := waitForScreenshotSettlement(ctx, client, "canceled-1")
+	_, err := waitForScreenshotSettlement(ctx, client, "canceled-1", "")
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("waitForScreenshotSettlement() error = %v, want context.Canceled", err)
 	}
@@ -454,6 +476,38 @@ func TestWaitForScreenshotSettlementReportsCallerCancellation(t *testing.T) {
 	}
 	if strings.Contains(err.Error(), "timed out") {
 		t.Fatalf("caller cancellation must not be reported as a timeout: %v", err)
+	}
+}
+
+func TestScreenshotSettlementTimeoutHintMatchesDeadline(t *testing.T) {
+	t.Setenv("ASC_UPLOAD_TIMEOUT", "2ms")
+	t.Cleanup(asc.SetMediaPollIntervalsForTest(time.Millisecond, time.Millisecond))
+	client := newAssetsUploadTestHandlerClient(t, http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if req.Method != http.MethodGet || req.URL.Path != "/v1/appScreenshots/unsettled-1" {
+			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.Path)
+		}
+		writeAssetsTestJSON(w, http.StatusOK, `{"data":{"type":"appScreenshots","id":"unsettled-1","attributes":{"assetDeliveryState":{"state":"UPLOAD_COMPLETE"}}}}`)
+	}))
+	for _, tc := range []struct {
+		name    string
+		context func(context.Context) (context.Context, context.CancelFunc)
+		want    string
+	}{
+		{"upload deadline", contextWithAssetUploadTimeout, "Increase the upload timeout (e.g. set `ASC_UPLOAD_TIMEOUT=45m`)."},
+		{"request deadline", func(ctx context.Context) (context.Context, context.CancelFunc) {
+			return context.WithTimeout(ctx, 2*time.Millisecond)
+		}, "Increase the request timeout (e.g. set `ASC_TIMEOUT=90s`)."},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				ctx, cancel := tc.context(context.Background())
+				defer cancel()
+				_, err := waitForScreenshotSettlement(ctx, client, "unsettled-1", "")
+				if !errors.Is(err, context.DeadlineExceeded) || errfmt.Classify(err).Hint != tc.want {
+					t.Fatalf("settlement error = %v, hint = %q, want deadline and %q", err, errfmt.Classify(err).Hint, tc.want)
+				}
+			})
+		})
 	}
 }
 

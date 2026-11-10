@@ -38,6 +38,11 @@ func TestCommandGroupInputValidationReturnsUsageExitCode(t *testing.T) {
 			wantErr: "accessibility list: --next must be an App Store Connect URL",
 		},
 		{
+			name:    "apps list next for builds",
+			args:    []string{"apps", "list", "--next", "https://api.appstoreconnect.apple.com/v1/apps/app-1/builds?cursor=AQ"},
+			wantErr: "apps: --next must point to /v1/apps",
+		},
+		{
 			name:    "app-clips advanced-experiences list limit",
 			args:    []string{"app-clips", "advanced-experiences", "list", "--limit", "201"},
 			wantErr: "app-clips advanced-experiences list: --limit must be between 1 and 200",
@@ -383,6 +388,11 @@ func TestCommandGroupInputValidationReturnsUsageExitCode(t *testing.T) {
 			wantErr: "builds uploads list: --next must be an App Store Connect URL",
 		},
 		{
+			name:    "builds uploads list owner with next",
+			args:    []string{"builds", "uploads", "list", "--app", "APP_A", "--next", "https://api.appstoreconnect.apple.com/v1/apps/APP_B/buildUploads?cursor=next"},
+			wantErr: "builds uploads list: --next cannot be combined with --app",
+		},
+		{
 			name:    "localizations download limit",
 			args:    []string{"localizations", "download", "--limit", "201"},
 			wantErr: "localizations download: --limit must be between 1 and 200",
@@ -393,6 +403,26 @@ func TestCommandGroupInputValidationReturnsUsageExitCode(t *testing.T) {
 			wantErr: "localizations download: --next must be an App Store Connect URL",
 		},
 		{
+			name:    "localizations update app info rejects version",
+			args:    []string{"localizations", "update", "--type", "app-info", "--app", "app-a", "--version", "version-b", "--locale", "en-US", "--subtitle", "New"},
+			wantErr: "--version requires --type version",
+		},
+		{
+			name:    "localizations update version rejects app info",
+			args:    []string{"localizations", "update", "--version", "version-a", "--app-info", "info-b", "--locale", "en-US", "--description", "New"},
+			wantErr: "--app-info requires --type app-info",
+		},
+		{
+			name:    "localizations list app info rejects version",
+			args:    []string{"localizations", "list", "--type", "app-info", "--app", "app-a", "--version", "version-b"},
+			wantErr: "--version requires --type version",
+		},
+		{
+			name:    "localizations list version rejects app info",
+			args:    []string{"localizations", "list", "--version", "version-a", "--app-info", "info-b"},
+			wantErr: "--app-info requires --type app-info",
+		},
+		{
 			name:    "localizations list limit",
 			args:    []string{"localizations", "list", "--limit", "201"},
 			wantErr: "localizations list: --limit must be between 1 and 200",
@@ -401,6 +431,16 @@ func TestCommandGroupInputValidationReturnsUsageExitCode(t *testing.T) {
 			name:    "localizations list next",
 			args:    []string{"localizations", "list", "--next", "http://api.appstoreconnect.apple.com/v1/apps"},
 			wantErr: "localizations list: --next must be an App Store Connect URL",
+		},
+		{
+			name:    "performance diagnostics rejects unrelated cursor",
+			args:    []string{"performance", "diagnostics", "list", "--build-id", "build-a", "--next", "https://api.appstoreconnect.apple.com/v1/apps/6759231657/appInfos?limit=1"},
+			wantErr: "performance diagnostics list: --next must point to a build's diagnostic signatures",
+		},
+		{
+			name:    "performance diagnostics rejects a cursor for another build",
+			args:    []string{"performance", "diagnostics", "list", "--build-id", "build-a", "--next", "https://api.appstoreconnect.apple.com/v1/builds/build-b/diagnosticSignatures?cursor=AQ"},
+			wantErr: "performance diagnostics list: --build-id must match the build in --next",
 		},
 		{
 			name:    "performance diagnostics list limit",
@@ -533,6 +573,11 @@ func TestCommandGroupInputValidationReturnsUsageExitCode(t *testing.T) {
 			wantErr: "review items list: --next must be an App Store Connect URL",
 		},
 		{
+			name:    "review items rejects a cursor for another resource",
+			args:    []string{"review", "items", "list", "--next", "https://api.appstoreconnect.apple.com/v1/apps/6759231657/appInfos?limit=1"},
+			wantErr: "review items list: pagination URL must point to a review submission's items",
+		},
+		{
 			name:    "review items-list next",
 			args:    []string{"review", "items-list", "--submission", "SUBMISSION_ID", "--next", "http://api.appstoreconnect.apple.com/v1/apps"},
 			wantErr: "review items-list: --next must be an App Store Connect URL",
@@ -606,6 +651,11 @@ func TestCommandGroupInputValidationReturnsUsageExitCode(t *testing.T) {
 			name:    "versions list next",
 			args:    []string{"versions", "list", "--next", "http://api.appstoreconnect.apple.com/v1/apps"},
 			wantErr: "versions list: --next must be an App Store Connect URL",
+		},
+		{
+			name:    "versions list owner with next",
+			args:    []string{"versions", "list", "--app", "APP_A", "--next", "https://api.appstoreconnect.apple.com/v1/apps/APP_B/appStoreVersions?cursor=next"},
+			wantErr: "versions list: --next cannot be combined with --app",
 		},
 		{
 			name:    "web apps compatibility view without app",

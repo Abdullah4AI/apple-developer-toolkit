@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -298,11 +299,41 @@ func normalizeAnalyticsGranularities(value string) ([]string, error) {
 }
 
 func fetchAnalyticsReports(ctx context.Context, client *asc.Client, requestID string, limit int, next string, paginate bool) ([]asc.Resource[asc.AnalyticsReportAttributes], asc.Links, error) {
-	var (
-		all   []asc.Resource[asc.AnalyticsReportAttributes]
-		links asc.Links
-		seen  = make(map[string]bool)
-	)
+	var reports []asc.Resource[asc.AnalyticsReportAttributes]
+	links, err := visitAnalyticsReports(ctx, client, requestID, limit, next, paginate, func(report asc.Resource[asc.AnalyticsReportAttributes]) (bool, error) {
+		reports = append(reports, report)
+		return false, nil
+	})
+	if err != nil {
+		return nil, asc.Links{}, err
+	}
+	return reports, links, nil
+}
+
+func findAnalyticsReportInstance(ctx context.Context, client *asc.Client, requestID, instanceID string, limit int, next string, paginate bool, opts ...asc.AnalyticsReportInstancesOption) (asc.Resource[asc.AnalyticsReportAttributes], []asc.Resource[asc.AnalyticsReportInstanceAttributes], asc.Links, error) {
+	var report asc.Resource[asc.AnalyticsReportAttributes]
+	var instances []asc.Resource[asc.AnalyticsReportInstanceAttributes]
+	links, err := visitAnalyticsReports(ctx, client, requestID, limit, next, paginate, func(candidate asc.Resource[asc.AnalyticsReportAttributes]) (bool, error) {
+		matches, err := fetchAnalyticsReportInstancesMatchingID(ctx, client, candidate.ID, instanceID, opts...)
+		if err != nil {
+			return false, fmt.Errorf("failed to fetch instances: %w", err)
+		}
+		if len(matches) == 0 {
+			return false, nil
+		}
+		report, instances = candidate, matches
+		return true, nil
+	})
+	// A completed paginated search has no more matching results to fetch.
+	if paginate && len(instances) > 0 {
+		links.Next = ""
+	}
+	return report, instances, links, err
+}
+
+func visitAnalyticsReports(ctx context.Context, client *asc.Client, requestID string, limit int, next string, paginate bool, visit func(asc.Resource[asc.AnalyticsReportAttributes]) (bool, error)) (asc.Links, error) {
+	var links asc.Links
+	seen := make(map[string]bool)
 
 	if limit <= 0 {
 		limit = analyticsMaxLimit
@@ -314,7 +345,7 @@ func fetchAnalyticsReports(ctx context.Context, client *asc.Client, requestID st
 		var err error
 		if nextURL != "" {
 			if seen[nextURL] {
-				return nil, asc.Links{}, fmt.Errorf("analytics view: detected repeated pagination URL")
+				return asc.Links{}, fmt.Errorf("failed to fetch reports: detected repeated pagination URL")
 			}
 			seen[nextURL] = true
 			resp, err = getAnalyticsReportsPage(ctx, client, requestID, asc.WithAnalyticsReportsNextURL(nextURL))
@@ -322,25 +353,37 @@ func fetchAnalyticsReports(ctx context.Context, client *asc.Client, requestID st
 			resp, err = getAnalyticsReportsPage(ctx, client, requestID, asc.WithAnalyticsReportsLimit(limit))
 		}
 		if err != nil {
-			return nil, asc.Links{}, err
+			return asc.Links{}, fmt.Errorf("failed to fetch reports: %w", err)
 		}
 		if firstPage && nextURL != "" {
 			links = resp.Links
 		} else if links.Self == "" {
 			links.Self = resp.Links.Self
 		}
-		all = append(all, resp.Data...)
 		links.Next = resp.Links.Next
+		for _, report := range resp.Data {
+			done, err := visit(report)
+			if err != nil {
+				return asc.Links{}, err
+			}
+			if done {
+				return links, nil
+			}
+		}
 		firstPage = false
 		if !paginate || resp.Links.Next == "" {
-			break
+			return links, nil
 		}
 		nextURL = resp.Links.Next
 	}
-	return all, links, nil
 }
 
 func fetchAnalyticsReportInstances(ctx context.Context, client *asc.Client, reportID string, opts ...asc.AnalyticsReportInstancesOption) ([]asc.Resource[asc.AnalyticsReportInstanceAttributes], error) {
+	return fetchAnalyticsReportInstancesMatchingID(ctx, client, reportID, "", opts...)
+}
+
+// fetchAnalyticsReportInstancesMatchingID stops at an exact match when instanceID is set.
+func fetchAnalyticsReportInstancesMatchingID(ctx context.Context, client *asc.Client, reportID, instanceID string, opts ...asc.AnalyticsReportInstancesOption) ([]asc.Resource[asc.AnalyticsReportInstanceAttributes], error) {
 	var (
 		all  []asc.Resource[asc.AnalyticsReportInstanceAttributes]
 		next string
@@ -364,7 +407,15 @@ func fetchAnalyticsReportInstances(ctx context.Context, client *asc.Client, repo
 		if err != nil {
 			return nil, err
 		}
-		all = append(all, resp.Data...)
+		if instanceID == "" {
+			all = append(all, resp.Data...)
+		} else {
+			for _, instance := range resp.Data {
+				if instance.ID == instanceID {
+					return []asc.Resource[asc.AnalyticsReportInstanceAttributes]{instance}, nil
+				}
+			}
+		}
 		if resp.Links.Next == "" {
 			break
 		}
@@ -516,6 +567,12 @@ func generateReportDates(start, end string, freq asc.SalesReportFrequency) ([]st
 }
 
 func fetchAnalyticsReportSegments(ctx context.Context, client *asc.Client, instanceID string) ([]asc.Resource[asc.AnalyticsReportSegmentAttributes], error) {
+	return fetchAnalyticsReportSegmentsUntilMatch(ctx, client, instanceID, "")
+}
+
+// fetchAnalyticsReportSegmentsUntilMatch keeps the visited pages for ambiguity and
+// not-ready handling, but stops paging once the requested segment has been seen.
+func fetchAnalyticsReportSegmentsUntilMatch(ctx context.Context, client *asc.Client, instanceID, segmentID string) ([]asc.Resource[asc.AnalyticsReportSegmentAttributes], error) {
 	var (
 		all  []asc.Resource[asc.AnalyticsReportSegmentAttributes]
 		next string
@@ -537,6 +594,11 @@ func fetchAnalyticsReportSegments(ctx context.Context, client *asc.Client, insta
 			return nil, err
 		}
 		all = append(all, resp.Data...)
+		if segmentID != "" && slices.ContainsFunc(resp.Data, func(segment asc.Resource[asc.AnalyticsReportSegmentAttributes]) bool {
+			return segment.ID == segmentID
+		}) {
+			break
+		}
 		if resp.Links.Next == "" {
 			break
 		}

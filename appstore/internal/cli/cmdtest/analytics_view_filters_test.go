@@ -198,12 +198,16 @@ func TestAnalyticsViewAcceptsPrefixedInstanceAndPreservesSegmentBehavior(t *test
 	setupAnalyticsResourceIDAuth(t)
 
 	const instanceID = "r39-example-instance"
+	const reportsNextURL = "https://api.appstoreconnect.apple.com/v1/analyticsReportRequests/" + analyticsViewRequestID + "/reports?cursor=unused-report"
 	originalTransport := http.DefaultTransport
 	t.Cleanup(func() { http.DefaultTransport = originalTransport })
 
 	requestCount := 0
 	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		requestCount++
+		if req.URL.String() == reportsNextURL {
+			return nil, io.ErrUnexpectedEOF
+		}
 		if req.Header.Get("Authorization") == "" {
 			t.Fatal("expected Authorization header")
 		}
@@ -214,7 +218,7 @@ func TestAnalyticsViewAcceptsPrefixedInstanceAndPreservesSegmentBehavior(t *test
 			}
 			return analyticsViewJSONResponse(`{
 				"data":[{"type":"analyticsReports","id":"report-1","attributes":{"name":"App Sessions","granularity":"DAILY"}}],
-				"links":{}
+				"links":{"next":"` + reportsNextURL + `"}
 			}`), nil
 		case 2:
 			if req.URL.Path != "/v1/analyticsReports/report-1/instances" || req.URL.RawQuery != "limit=200" {
@@ -225,9 +229,14 @@ func TestAnalyticsViewAcceptsPrefixedInstanceAndPreservesSegmentBehavior(t *test
 					{"type":"analyticsReportInstances","id":"ignored-instance","attributes":{"processingDate":"2024-01-19"}},
 					{"type":"analyticsReportInstances","id":"` + instanceID + `","attributes":{"reportDate":"2024-01-19","processingDate":"2024-01-20","granularity":"DAILY","version":"1.0"}}
 				],
-				"links":{}
+				"links":{"next":"https://api.appstoreconnect.apple.com/v1/analyticsReports/report-1/instances?cursor=unused"}
 			}`), nil
 		case 3:
+			if req.URL.Query().Get("cursor") == "unused" {
+				resp := analyticsViewJSONResponse(`{"errors":[{"code":"NOT_FOUND"}]}`)
+				resp.StatusCode = http.StatusNotFound
+				return resp, nil
+			}
 			if req.URL.Path != "/v1/analyticsReportInstances/"+instanceID+"/segments" || req.URL.RawQuery != "limit=200" {
 				t.Fatalf("unexpected segments request: %s", req.URL.String())
 			}
