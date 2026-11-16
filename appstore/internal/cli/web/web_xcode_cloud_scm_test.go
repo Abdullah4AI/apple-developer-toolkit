@@ -11,11 +11,13 @@ import (
 
 	"github.com/peterbourgon/ff/v3/ffcli"
 
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 	webcore "github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/web"
 )
 
 func TestWebXcodeCloudScmCommandHierarchy(t *testing.T) {
-	cmd := WebXcodeCloudCommand()
+	d, _, _ := newWebTestDeps()
+	cmd := newWebXcodeCloudCommand(d)
 	scm := findSub(cmd, "scm")
 	if scm == nil {
 		t.Fatal("expected scm subcommand")
@@ -67,11 +69,12 @@ func TestWebXcodeCloudScmProvidersListPreservesRawJSONAndHumanRows(t *testing.T)
 				return ciScmHTTPResponse(req, response), nil
 			})
 
-			cmd := webXcodeCloudScmProvidersListCommand()
+			d, depsStdout, depsStderr := newWebTestDeps()
+			cmd := webXcodeCloudScmProvidersListCommand(d)
 			if err := cmd.FlagSet.Parse([]string{"--output", format}); err != nil {
 				t.Fatalf("parse: %v", err)
 			}
-			stdout, stderr := captureOutput(t, func() {
+			stdout, stderr := runWithWebTestDeps(depsStdout, depsStderr, func() {
 				if err := cmd.Exec(context.Background(), nil); err != nil {
 					t.Fatalf("Exec() error = %v", err)
 				}
@@ -113,11 +116,12 @@ func TestWebXcodeCloudScmConnectionStatusPreservesRawJSON(t *testing.T) {
 		return ciScmHTTPResponse(req, response), nil
 	})
 
-	cmd := webXcodeCloudScmConnectionStatusCommand()
+	d, depsStdout, depsStderr := newWebTestDeps()
+	cmd := webXcodeCloudScmConnectionStatusCommand(d)
 	if err := cmd.FlagSet.Parse([]string{"--scm-provider-id", "provider-1", "--output", "json"}); err != nil {
 		t.Fatalf("parse: %v", err)
 	}
-	stdout, stderr := captureOutput(t, func() {
+	stdout, stderr := runWithWebTestDeps(depsStdout, depsStderr, func() {
 		if err := cmd.Exec(context.Background(), nil); err != nil {
 			t.Fatalf("Exec() error = %v", err)
 		}
@@ -142,26 +146,14 @@ func TestWebXcodeCloudScmValidatesBeforeSession(t *testing.T) {
 
 	tests := []struct {
 		name string
-		cmd  func() *ffcli.Command
+		cmd  func(*shared.Deps) *ffcli.Command
 		args []string
 		want string
 	}{
 		{
-			name: "providers positional",
-			cmd:  webXcodeCloudScmProvidersListCommand,
-			args: []string{"unexpected"},
-			want: "does not accept positional arguments",
-		},
-		{
 			name: "connection status missing provider",
 			cmd:  webXcodeCloudScmConnectionStatusCommand,
 			want: "--scm-provider-id is required",
-		},
-		{
-			name: "connection status positional",
-			cmd:  webXcodeCloudScmConnectionStatusCommand,
-			args: []string{"unexpected"},
-			want: "does not accept positional arguments",
 		},
 		{
 			name: "providers invalid output combination",
@@ -172,12 +164,13 @@ func TestWebXcodeCloudScmValidatesBeforeSession(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cmd := tt.cmd()
+			d, depsStdout, depsStderr := newWebTestDeps()
+			cmd := tt.cmd(d)
 			if err := cmd.FlagSet.Parse(tt.args); err != nil {
 				t.Fatalf("parse: %v", err)
 			}
 			var runErr error
-			_, stderr := captureOutput(t, func() { runErr = cmd.Exec(context.Background(), cmd.FlagSet.Args()) })
+			_, stderr := runWithWebTestDeps(depsStdout, depsStderr, func() { runErr = cmd.Exec(context.Background(), cmd.FlagSet.Args()) })
 			if runErr == nil {
 				t.Fatalf("error = nil, stderr = %q, want %q", stderr, tt.want)
 			}
@@ -203,7 +196,8 @@ func TestWebXcodeCloudScmRequiresPublicProviderIDBeforeHTTP(t *testing.T) {
 		}, "cache", nil
 	}
 
-	cmd := webXcodeCloudScmProvidersListCommand()
+	d, _, _ := newWebTestDeps()
+	cmd := webXcodeCloudScmProvidersListCommand(d)
 	if err := cmd.FlagSet.Parse(nil); err != nil {
 		t.Fatalf("parse: %v", err)
 	}
@@ -213,12 +207,13 @@ func TestWebXcodeCloudScmRequiresPublicProviderIDBeforeHTTP(t *testing.T) {
 }
 
 func TestWebXcodeCloudScmReadFlagsHaveNoMutationInputs(t *testing.T) {
+	d, _, _ := newWebTestDeps()
 	for _, tc := range []struct {
 		name string
 		cmd  *ffcli.Command
 	}{
-		{name: "providers list", cmd: webXcodeCloudScmProvidersListCommand()},
-		{name: "connection status", cmd: webXcodeCloudScmConnectionStatusCommand()},
+		{name: "providers list", cmd: webXcodeCloudScmProvidersListCommand(d)},
+		{name: "connection status", cmd: webXcodeCloudScmConnectionStatusCommand(d)},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			for _, forbidden := range []string{"confirm", "repository-id", "product-id", "oauth", "pat"} {

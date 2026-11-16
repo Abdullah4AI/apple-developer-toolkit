@@ -5,7 +5,6 @@ import (
 	"flag"
 	"fmt"
 	"net/url"
-	"os"
 	"strings"
 
 	"github.com/peterbourgon/ff/v3/ffcli"
@@ -14,9 +13,9 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
-// UsersInvitesVisibleAppsCommand returns the invites visible apps command group.
-func UsersInvitesVisibleAppsCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("visible-apps", flag.ExitOnError)
+// newUsersInvitesVisibleAppsCommand returns the invites visible apps command group.
+func newUsersInvitesVisibleAppsCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("visible-apps", flag.ExitOnError)
 
 	return &ffcli.Command{
 		Name:       "visible-apps",
@@ -27,9 +26,9 @@ func UsersInvitesVisibleAppsCommand() *ffcli.Command {
 Examples:
   asc users invites visible-apps list --id "INVITE_ID"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
-			UsersInvitesVisibleAppsListCommand(),
+			newUsersInvitesVisibleAppsListCommand(d),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp
@@ -37,89 +36,44 @@ Examples:
 	}
 }
 
-// UsersInvitesVisibleAppsListCommand returns the invites visible apps list subcommand.
-func UsersInvitesVisibleAppsListCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("visible-apps list", flag.ExitOnError)
-
-	id := shared.BindResourceIDFlag(fs, "id", "userInvitations", "Invitation ID")
-	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
-	next := fs.String("next", "", "Fetch next page using a links.next URL")
-	paginate := fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")
-	output := shared.BindOutputFlags(fs)
-
-	return &ffcli.Command{
-		Name:       "list",
-		ShortUsage: "asc users invites visible-apps list --id \"INVITE_ID\" [flags]",
-		ShortHelp:  "List visible apps for a user invitation.",
+// newUsersInvitesVisibleAppsListCommand returns the invites visible apps list subcommand.
+func newUsersInvitesVisibleAppsListCommand(d *shared.Deps) *ffcli.Command {
+	return shared.BuildPaginatedListCommand(shared.PaginatedListCommandConfig{
+		FlagSetName: "visible-apps list",
+		Name:        "list",
+		ShortUsage:  "asc users invites visible-apps list --id \"INVITE_ID\" [flags]",
+		ShortHelp:   "List visible apps for a user invitation.",
 		LongHelp: `List visible apps for a user invitation.
 
 Examples:
   asc users invites visible-apps list --id "INVITE_ID"
   asc users invites visible-apps list --id "INVITE_ID" --paginate`,
-		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
-		Exec: func(ctx context.Context, args []string) error {
-			idValue := strings.TrimSpace(*id)
-			if idValue == "" && strings.TrimSpace(*next) == "" {
-				fmt.Fprintln(os.Stderr, "Error: --id is required")
-				return shared.MissingRequiredUsageError("--id")
-			}
-			if *limit != 0 && (*limit < 1 || *limit > 200) {
-				return shared.UsageError("users invites visible-apps list: --limit must be between 1 and 200")
-			}
-			if err := shared.ValidateNextURL(*next); err != nil {
-				return shared.UsageErrorf("users invites visible-apps list: %v", err)
-			}
-			if idValue == "" && strings.TrimSpace(*next) != "" {
-				derivedID, err := extractUserInvitationIDFromNextURL(*next)
-				if err != nil {
-					return shared.UsageErrorf("users invites visible-apps list: %v", err)
+		ParentFlag:           "id",
+		ParentUsage:          "Invitation ID",
+		ParentType:           "userInvitations",
+		RequiredDiagnostic:   true,
+		PaginateIgnoresLimit: true,
+		NoSpinner:            true,
+		Deps:                 d,
+		Flags: func(fs *flag.FlagSet) func() error {
+			id, next := fs.Lookup("id").Value, fs.Lookup("next").Value
+			return func() error {
+				if strings.TrimSpace(id.String()) != "" || strings.TrimSpace(next.String()) == "" {
+					return nil
 				}
-				idValue = derivedID
-			}
-
-			client, err := shared.GetASCClient()
-			if err != nil {
-				return fmt.Errorf("users invites visible-apps list: %w", err)
-			}
-
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
-			defer cancel()
-
-			opts := []asc.UserInvitationVisibleAppsOption{
-				asc.WithUserInvitationVisibleAppsLimit(*limit),
-				asc.WithUserInvitationVisibleAppsNextURL(*next),
-			}
-
-			if *paginate {
-				if idValue == "" {
-					fmt.Fprintln(os.Stderr, "Error: --id is required")
-					return shared.MissingRequiredUsageError("--id")
+				if _, err := extractUserInvitationIDFromNextURL(next.String()); err != nil {
+					return d.UsageErrorf("users invites visible-apps list: %v", err)
 				}
-				paginateOpts := append(opts, asc.WithUserInvitationVisibleAppsLimit(200))
-				firstPage, err := client.GetUserInvitationVisibleApps(requestCtx, idValue, paginateOpts...)
-				if err != nil {
-					return fmt.Errorf("users invites visible-apps list: failed to fetch: %w", err)
-				}
-
-				paginated, err := asc.PaginateAll(requestCtx, firstPage, func(ctx context.Context, nextURL string) (asc.PaginatedResponse, error) {
-					return client.GetUserInvitationVisibleApps(ctx, idValue, asc.WithUserInvitationVisibleAppsNextURL(nextURL))
-				})
-				if err != nil {
-					return fmt.Errorf("users invites visible-apps list: %w", err)
-				}
-
-				return shared.PrintOutput(paginated, *output.Output, *output.Pretty)
+				return nil
 			}
-
-			resp, err := client.GetUserInvitationVisibleApps(requestCtx, idValue, opts...)
-			if err != nil {
-				return fmt.Errorf("users invites visible-apps list: failed to fetch: %w", err)
-			}
-
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
 		},
-	}
+		FetchPage: func(ctx context.Context, client *asc.Client, id string, limit int, next string) (asc.PaginatedResponse, error) {
+			return client.GetUserInvitationVisibleApps(ctx, id,
+				asc.Limit[asc.UserInvitationVisibleAppsOption](limit),
+				asc.NextURL[asc.UserInvitationVisibleAppsOption](next),
+			)
+		},
+	})
 }
 
 func extractUserInvitationIDFromNextURL(nextURL string) (string, error) {

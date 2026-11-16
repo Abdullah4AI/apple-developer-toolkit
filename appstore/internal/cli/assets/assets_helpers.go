@@ -16,15 +16,6 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/uploadlock"
 )
 
-// The default upload deadline grows with the files it covers, from the
-// base for no recorded work up to the maximum. ASC_UPLOAD_TIMEOUT replaces it.
-const (
-	assetUploadDefaultTimeout = 10 * time.Minute
-	assetUploadTimeoutPerFile = time.Minute
-	assetUploadTimeoutPerMiB  = 30 * time.Second
-	assetUploadMaxTimeout     = time.Hour
-)
-
 var errAssetUploadDeadline = errors.New("asset upload deadline reached")
 
 type assetUploadWorkKey struct{}
@@ -46,32 +37,43 @@ func withAssetUploadWork(ctx context.Context, files []string) context.Context {
 	return context.WithValue(ctx, assetUploadWorkKey{}, work)
 }
 
-func assetUploadTimeoutForWork(work assetUploadWork) time.Duration {
-	mib := (work.bytes + 1<<20 - 1) >> 20
-	timeout := assetUploadDefaultTimeout +
-		time.Duration(work.files)*assetUploadTimeoutPerFile +
-		time.Duration(mib)*assetUploadTimeoutPerMiB
-	return min(timeout, assetUploadMaxTimeout)
+func contextWithAssetUploadTimeout(ctx context.Context) (context.Context, context.CancelFunc) {
+	return contextWithAssetUploadTimeoutResolved(ctx, shared.ResolveTimeoutSetting)
 }
 
-func contextWithAssetUploadTimeout(ctx context.Context) (context.Context, context.CancelFunc) {
+func contextWithAssetUploadTimeoutResolved(ctx context.Context, resolve func(shared.TimeoutSetting, time.Duration) time.Duration) (context.Context, context.CancelFunc) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
 	work, _ := ctx.Value(assetUploadWorkKey{}).(assetUploadWork)
-	return context.WithTimeoutCause(ctx, asc.ResolveUploadTimeoutWithDefault(assetUploadTimeoutForWork(work)), errAssetUploadDeadline)
+	return context.WithTimeoutCause(ctx, resolve(shared.UploadTimeoutSetting, shared.MediaUploadTimeoutForWork(work.files, work.bytes)), errAssetUploadDeadline)
+}
+
+// assetUploadContext returns ContextWithAssetUploadTimeoutWith bound to d.
+func assetUploadContext(d *shared.Deps) func(context.Context) (context.Context, context.CancelFunc) {
+	return func(ctx context.Context) (context.Context, context.CancelFunc) {
+		return ContextWithAssetUploadTimeoutWith(ctx, d)
+	}
 }
 
 // acquireAssetUploadLock waits for any other asc upload on this machine to
 // finish. Upload commands take it after validating their input and before
 // they start an upload deadline, so the wait is not charged to the upload.
-func acquireAssetUploadLock(ctx context.Context) (func(), error) {
-	return uploadlock.Acquire(ctx, os.Stderr)
+func acquireAssetUploadLock(d *shared.Deps) func(context.Context) (func(), error) {
+	return func(ctx context.Context) (func(), error) {
+		return uploadlock.Acquire(ctx, d.IO.ErrOut)
+	}
 }
 
 // ContextWithAssetUploadTimeout returns a context with the asset upload timeout.
 func ContextWithAssetUploadTimeout(ctx context.Context) (context.Context, context.CancelFunc) {
 	return contextWithAssetUploadTimeout(ctx)
+}
+
+// ContextWithAssetUploadTimeoutWith is ContextWithAssetUploadTimeout with the
+// upload timeout setting resolved through d.
+func ContextWithAssetUploadTimeoutWith(ctx context.Context, d *shared.Deps) (context.Context, context.CancelFunc) {
+	return contextWithAssetUploadTimeoutResolved(ctx, d.ResolveTimeout)
 }
 
 // CollectAssetFiles validates and collects files from a path.
@@ -122,18 +124,18 @@ func collectAssetFiles(path string) ([]string, error) {
 }
 
 // validateLibraryUploadFlags rejects set-only flags on the Asset Library path.
-func validateLibraryUploadFlags(assetLibrary bool, placementGroup string, skipExisting, replace bool) error {
+func validateLibraryUploadFlags(d *shared.Deps, assetLibrary bool, placementGroup string, skipExisting, replace bool) error {
 	if !assetLibrary {
 		if strings.TrimSpace(placementGroup) != "" {
-			return shared.UsageError("--placement-group requires --asset-library")
+			return d.UsageError("--placement-group requires --asset-library")
 		}
 		return nil
 	}
 	if skipExisting {
-		return shared.UsageError("--asset-library cannot be combined with --skip-existing")
+		return d.UsageError("--asset-library cannot be combined with --skip-existing")
 	}
 	if replace {
-		return shared.UsageError("--asset-library cannot be combined with --replace; remove placements with asc localizations placements delete")
+		return d.UsageError("--asset-library cannot be combined with --replace; remove placements with asc localizations placements delete")
 	}
 	return nil
 }

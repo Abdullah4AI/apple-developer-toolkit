@@ -4,16 +4,15 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/peterbourgon/ff/v3/ffcli"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
-// BetaGroupsAppCommand returns the beta-groups app command group.
-func BetaGroupsAppCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("app", flag.ExitOnError)
+// newBetaGroupsAppCommand returns the beta-groups app command group built on d.
+func newBetaGroupsAppCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("app", flag.ExitOnError)
 
 	return &ffcli.Command{
 		Name:       "app",
@@ -24,9 +23,9 @@ func BetaGroupsAppCommand() *ffcli.Command {
 Examples:
   asc testflight beta-groups app view --group-id "GROUP_ID"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
-			BetaGroupsAppGetCommand(),
+			newBetaGroupsAppGetCommand(d),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp
@@ -34,13 +33,13 @@ Examples:
 	}
 }
 
-// BetaGroupsAppGetCommand returns the beta-groups app get subcommand.
-func BetaGroupsAppGetCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("app view", flag.ExitOnError)
+// newBetaGroupsAppGetCommand returns the beta-groups app get subcommand built on d.
+func newBetaGroupsAppGetCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("app view", flag.ExitOnError)
 
 	groupID := shared.BindResourceIDFlag(fs, "group-id", "betaGroups", "Beta group ID")
 	aliasID := shared.BindResourceIDFlag(fs, "id", "betaGroups", "Beta group ID (alias of --group-id)")
-	output := shared.BindOutputFlags(fs)
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "view",
@@ -51,7 +50,7 @@ func BetaGroupsAppGetCommand() *ffcli.Command {
 Examples:
   asc testflight beta-groups app view --group-id "GROUP_ID"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			groupValue := strings.TrimSpace(*groupID)
 			aliasValue := strings.TrimSpace(*aliasID)
@@ -59,22 +58,21 @@ Examples:
 				groupValue = aliasValue
 			} else if aliasValue != "" && aliasValue != groupValue {
 				return shared.WithDiagnostic(
-					shared.NewValidationError(fmt.Errorf("testflight beta-groups app view: --group-id and --id must match")),
+					d.UsageErrorCtx(ctx, "testflight beta-groups app view: --group-id and --id must match"),
 					shared.DiagnosticConflictingInput,
 					"",
 				)
 			}
 			if groupValue == "" {
-				fmt.Fprintln(os.Stderr, "Error: --group-id is required")
-				return shared.MissingRequiredUsageError("--group-id")
+				return d.RequiredFlag("--group-id")
 			}
 
-			client, err := shared.GetASCClient()
+			client, err := d.Client()
 			if err != nil {
 				return fmt.Errorf("testflight beta-groups app view: %w", err)
 			}
 
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
+			requestCtx, cancel := d.Timeout(ctx)
 			defer cancel()
 
 			resp, err := client.GetBetaGroupApp(requestCtx, groupValue)
@@ -82,14 +80,14 @@ Examples:
 				return fmt.Errorf("testflight beta-groups app view: failed to fetch: %w", err)
 			}
 
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+			return d.PrintOutput(resp, *output.Output, *output.Pretty)
 		},
 	}
 }
 
-// BetaGroupsRecruitmentCriteriaCommand returns the beta-groups beta-recruitment-criteria command group.
-func BetaGroupsRecruitmentCriteriaCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("beta-recruitment-criteria", flag.ExitOnError)
+// newBetaGroupsRecruitmentCriteriaCommand returns the beta-groups beta-recruitment-criteria command group built on d.
+func newBetaGroupsRecruitmentCriteriaCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("beta-recruitment-criteria", flag.ExitOnError)
 
 	return &ffcli.Command{
 		Name:       "beta-recruitment-criteria",
@@ -100,9 +98,9 @@ func BetaGroupsRecruitmentCriteriaCommand() *ffcli.Command {
 Examples:
   asc testflight beta-groups beta-recruitment-criteria view --group-id "GROUP_ID"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
-			BetaGroupsRecruitmentCriteriaGetCommand(),
+			newBetaGroupsRecruitmentCriteriaGetCommand(d),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp
@@ -110,13 +108,13 @@ Examples:
 	}
 }
 
-// BetaGroupsRecruitmentCriteriaGetCommand returns the beta-recruitment-criteria get subcommand.
-func BetaGroupsRecruitmentCriteriaGetCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("beta-recruitment-criteria view", flag.ExitOnError)
+// newBetaGroupsRecruitmentCriteriaGetCommand returns the beta-recruitment-criteria get subcommand built on d.
+func newBetaGroupsRecruitmentCriteriaGetCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("beta-recruitment-criteria view", flag.ExitOnError)
 
 	groupID := shared.BindResourceIDFlag(fs, "group-id", "betaGroups", "Beta group ID")
 	aliasID := shared.BindResourceIDFlag(fs, "id", "betaGroups", "Beta group ID (alias of --group-id)")
-	output := shared.BindOutputFlags(fs)
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "view",
@@ -127,7 +125,7 @@ func BetaGroupsRecruitmentCriteriaGetCommand() *ffcli.Command {
 Examples:
   asc testflight beta-groups beta-recruitment-criteria view --group-id "GROUP_ID"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			groupValue := strings.TrimSpace(*groupID)
 			aliasValue := strings.TrimSpace(*aliasID)
@@ -135,22 +133,21 @@ Examples:
 				groupValue = aliasValue
 			} else if aliasValue != "" && aliasValue != groupValue {
 				return shared.WithDiagnostic(
-					shared.NewValidationError(fmt.Errorf("testflight beta-groups beta-recruitment-criteria view: --group-id and --id must match")),
+					d.UsageErrorCtx(ctx, "testflight beta-groups beta-recruitment-criteria view: --group-id and --id must match"),
 					shared.DiagnosticConflictingInput,
 					"",
 				)
 			}
 			if groupValue == "" {
-				fmt.Fprintln(os.Stderr, "Error: --group-id is required")
-				return shared.MissingRequiredUsageError("--group-id")
+				return d.RequiredFlag("--group-id")
 			}
 
-			client, err := shared.GetASCClient()
+			client, err := d.Client()
 			if err != nil {
 				return fmt.Errorf("testflight beta-groups beta-recruitment-criteria view: %w", err)
 			}
 
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
+			requestCtx, cancel := d.Timeout(ctx)
 			defer cancel()
 
 			resp, err := client.GetBetaGroupBetaRecruitmentCriteria(requestCtx, groupValue)
@@ -158,14 +155,14 @@ Examples:
 				return fmt.Errorf("testflight beta-groups beta-recruitment-criteria view: failed to fetch: %w", err)
 			}
 
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+			return d.PrintOutput(resp, *output.Output, *output.Pretty)
 		},
 	}
 }
 
-// BetaGroupsRecruitmentCriterionCompatibleBuildCheckCommand returns the compatible-build-check command group.
-func BetaGroupsRecruitmentCriterionCompatibleBuildCheckCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("beta-recruitment-criterion-compatible-build-check", flag.ExitOnError)
+// newBetaGroupsRecruitmentCriterionCompatibleBuildCheckCommand returns the compatible-build-check command group built on d.
+func newBetaGroupsRecruitmentCriterionCompatibleBuildCheckCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("beta-recruitment-criterion-compatible-build-check", flag.ExitOnError)
 
 	return &ffcli.Command{
 		Name:       "beta-recruitment-criterion-compatible-build-check",
@@ -176,9 +173,9 @@ func BetaGroupsRecruitmentCriterionCompatibleBuildCheckCommand() *ffcli.Command 
 Examples:
   asc testflight beta-groups beta-recruitment-criterion-compatible-build-check view --group-id "GROUP_ID"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
-			BetaGroupsRecruitmentCriterionCompatibleBuildCheckGetCommand(),
+			newBetaGroupsRecruitmentCriterionCompatibleBuildCheckGetCommand(d),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp
@@ -186,13 +183,13 @@ Examples:
 	}
 }
 
-// BetaGroupsRecruitmentCriterionCompatibleBuildCheckGetCommand returns the compatible-build-check get subcommand.
-func BetaGroupsRecruitmentCriterionCompatibleBuildCheckGetCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("beta-recruitment-criterion-compatible-build-check view", flag.ExitOnError)
+// newBetaGroupsRecruitmentCriterionCompatibleBuildCheckGetCommand returns the compatible-build-check get subcommand built on d.
+func newBetaGroupsRecruitmentCriterionCompatibleBuildCheckGetCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("beta-recruitment-criterion-compatible-build-check view", flag.ExitOnError)
 
 	groupID := shared.BindResourceIDFlag(fs, "group-id", "betaGroups", "Beta group ID")
 	aliasID := shared.BindResourceIDFlag(fs, "id", "betaGroups", "Beta group ID (alias of --group-id)")
-	output := shared.BindOutputFlags(fs)
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "view",
@@ -203,7 +200,7 @@ func BetaGroupsRecruitmentCriterionCompatibleBuildCheckGetCommand() *ffcli.Comma
 Examples:
   asc testflight beta-groups beta-recruitment-criterion-compatible-build-check view --group-id "GROUP_ID"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			groupValue := strings.TrimSpace(*groupID)
 			aliasValue := strings.TrimSpace(*aliasID)
@@ -211,22 +208,21 @@ Examples:
 				groupValue = aliasValue
 			} else if aliasValue != "" && aliasValue != groupValue {
 				return shared.WithDiagnostic(
-					shared.NewValidationError(fmt.Errorf("testflight beta-groups beta-recruitment-criterion-compatible-build-check view: --group-id and --id must match")),
+					d.UsageErrorCtx(ctx, "testflight beta-groups beta-recruitment-criterion-compatible-build-check view: --group-id and --id must match"),
 					shared.DiagnosticConflictingInput,
 					"",
 				)
 			}
 			if groupValue == "" {
-				fmt.Fprintln(os.Stderr, "Error: --group-id is required")
-				return shared.MissingRequiredUsageError("--group-id")
+				return d.RequiredFlag("--group-id")
 			}
 
-			client, err := shared.GetASCClient()
+			client, err := d.Client()
 			if err != nil {
 				return fmt.Errorf("testflight beta-groups beta-recruitment-criterion-compatible-build-check view: %w", err)
 			}
 
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
+			requestCtx, cancel := d.Timeout(ctx)
 			defer cancel()
 
 			resp, err := client.GetBetaGroupBetaRecruitmentCriterionCompatibleBuildCheck(requestCtx, groupValue)
@@ -234,7 +230,7 @@ Examples:
 				return fmt.Errorf("testflight beta-groups beta-recruitment-criterion-compatible-build-check view: failed to fetch: %w", err)
 			}
 
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+			return d.PrintOutput(resp, *output.Output, *output.Pretty)
 		},
 	}
 }

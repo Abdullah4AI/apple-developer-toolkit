@@ -7,7 +7,7 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
-func resolvePublishBetaGroups(ctx context.Context, client *asc.Client, appID string, groups []string) ([]shared.ResolvedBetaGroup, error) {
+func resolvePublishBetaGroups(ctx context.Context, client *asc.Client, appID, groups string) ([]shared.ResolvedBetaGroup, error) {
 	return shared.ResolveBetaGroups(ctx, client, appID, groups, shared.ResolveBetaGroupsOptions{})
 }
 

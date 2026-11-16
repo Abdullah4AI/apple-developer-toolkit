@@ -181,7 +181,7 @@ func TestGetSubscriptionPlanAvailabilitiesForSubscriptionSupportsPaginationOptio
 		if _, err := client.GetSubscriptionPlanAvailabilitiesForSubscription(
 			context.Background(),
 			"sub-1",
-			WithSubscriptionPlanAvailabilitiesLimit(200),
+			Limit[SubscriptionPlanAvailabilitiesOption](200),
 		); err != nil {
 			t.Fatalf("GetSubscriptionPlanAvailabilitiesForSubscription() error: %v", err)
 		}
@@ -198,35 +198,11 @@ func TestGetSubscriptionPlanAvailabilitiesForSubscriptionSupportsPaginationOptio
 		if _, err := client.GetSubscriptionPlanAvailabilitiesForSubscription(
 			context.Background(),
 			"sub-1",
-			WithSubscriptionPlanAvailabilitiesNextURL(next),
+			NextURL[SubscriptionPlanAvailabilitiesOption](next),
 		); err != nil {
 			t.Fatalf("GetSubscriptionPlanAvailabilitiesForSubscription() error: %v", err)
 		}
 	})
-}
-
-func TestGetSubscriptionPlanAvailability(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":{"type":"subscriptionPlanAvailabilities","id":"plan-1","attributes":{"planType":"UPFRONT","availableInNewTerritories":true}}}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/subscriptionPlanAvailabilities/plan-1" {
-			t.Fatalf("expected path /v1/subscriptionPlanAvailabilities/plan-1, got %s", req.URL.Path)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	resp, err := client.GetSubscriptionPlanAvailability(context.Background(), "plan-1")
-	if err != nil {
-		t.Fatalf("GetSubscriptionPlanAvailability() error: %v", err)
-	}
-	if resp.Data.ID != "plan-1" || resp.Data.Attributes.PlanType != SubscriptionPlanTypeUpfront {
-		t.Fatalf("unexpected plan availability: %#v", resp.Data)
-	}
-	if resp.Data.Attributes.AvailableInNewTerritories == nil || !*resp.Data.Attributes.AvailableInNewTerritories {
-		t.Fatalf("expected availableInNewTerritories=true, got %#v", resp.Data.Attributes.AvailableInNewTerritories)
-	}
 }
 
 func TestGetSubscriptionPlanAvailabilityAvailableTerritoriesRelationships(t *testing.T) {
@@ -247,7 +223,7 @@ func TestGetSubscriptionPlanAvailabilityAvailableTerritoriesRelationships(t *tes
 	resp, err := client.GetSubscriptionPlanAvailabilityAvailableTerritoriesRelationships(
 		context.Background(),
 		"plan-1",
-		WithLinkagesLimit(200),
+		Limit[LinkagesOption](200),
 	)
 	if err != nil {
 		t.Fatalf("GetSubscriptionPlanAvailabilityAvailableTerritoriesRelationships() error: %v", err)
@@ -301,7 +277,7 @@ func TestGetSubscriptionPlanAvailabilitiesForSubscriptionIgnoresIncludeWithNextU
 	if _, err := client.GetSubscriptionPlanAvailabilitiesForSubscription(
 		context.Background(),
 		"sub-1",
-		WithSubscriptionPlanAvailabilitiesNextURL(next),
+		NextURL[SubscriptionPlanAvailabilitiesOption](next),
 		WithSubscriptionPlanAvailabilitiesIncludeAvailableTerritories(),
 	); err != nil {
 		t.Fatalf("GetSubscriptionPlanAvailabilitiesForSubscription() error: %v", err)

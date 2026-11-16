@@ -1,12 +1,11 @@
 package cmdtest
 
 import (
-	"errors"
-	"net/http"
 	"strings"
 	"testing"
 
 	rootcmd "github.com/Abdullah4AI/apple-developer-toolkit/appstore/cmd"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asctest"
 )
 
 // TestRemovedFlagAliasesNameTheirReplacement locks the 5.3.2 unknown-flag
@@ -16,65 +15,73 @@ import (
 // generic edit-distance suggestion.
 func TestRemovedFlagAliasesNameTheirReplacement(t *testing.T) {
 	setupUsageExitCodeEnv(t)
-	installDefaultTransport(t, roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		t.Fatalf("removed aliases must fail before HTTP: %s %s", req.Method, req.URL.String())
-		return nil, errors.New("unexpected request")
-	}))
+	asctest.NewRegistry(t).Install()
 
 	tests := []struct {
 		name string
 		args []string
 		want string
+		deps bool // the command is built on shared.Deps: run it on test deps
 	}{
 		{
 			name: "localizations list --version-id",
 			args: []string{"localizations", "list", "--version-id", "PRIVATE_VALUE"},
 			want: "Error: `--version-id` was removed in 5.0.0; use `--version` (see migrate-to-5-0)\nFor help:\n  asc localizations list --help\n",
+			deps: true,
 		},
 		{
 			name: "versions view --id",
 			args: []string{"versions", "view", "--id=PRIVATE_VALUE"},
 			want: "Error: `--id` was removed in 5.0.0; use `--version-id` (see migrate-to-5-0)\nFor help:\n  asc versions view --help\n",
+			deps: true,
 		},
 		{
 			name: "apps view --app",
 			args: []string{"apps", "view", "--app", "PRIVATE_VALUE"},
 			want: "Error: `--app` was removed in 5.0.0; use `--id` (see migrate-to-5-0)\nFor help:\n  asc apps view --help\n",
+			deps: true,
 		},
 		{
 			name: "review submit --build",
 			args: []string{"review", "submit", "--app", "app-1", "--version-id", "version-1", "--build", "PRIVATE_VALUE"},
+			deps: true,
 			want: "Error: `--build` was removed in 5.0.0; use `--build-id` or `--build-number` (see migrate-to-5-0)\nFor help:\n  asc review submit --help\n",
 		},
 		{
 			name: "testflight groups view --group-id",
 			args: []string{"testflight", "groups", "view", "--group-id", "PRIVATE_VALUE"},
+			deps: true,
 			want: "Error: `--group-id` was removed in 5.0.0; use `--id` (see migrate-to-5-0)\nFor help:\n  asc testflight groups view --help\n",
 		},
 		{
 			name: "subscriptions view --subscription-id",
 			args: []string{"subscriptions", "view", "--subscription-id", "PRIVATE_VALUE"},
 			want: "Error: `--subscription-id` was removed in 5.0.0; use `--id` (see migrate-to-5-0)\nFor help:\n  asc subscriptions view --help\n",
+			deps: true,
 		},
 		{
 			name: "builds info --build",
 			args: []string{"builds", "info", "--build", "PRIVATE_VALUE"},
 			want: "Error: `--build` was removed in 5.0.0; use `--build-id` or `--build-number` (see migrate-to-5-0)\nFor help:\n  asc builds info --help\n",
+			deps: true,
 		},
 		{
 			name: "release stage --build",
 			args: []string{"release", "stage", "--app", "app-1", "--build", "PRIVATE_VALUE"},
 			want: "Error: `--build` was removed in 5.0.0; use `--build-id` (see migrate-to-5-0)\nFor help:\n  asc release stage --help\n",
+			deps: true,
 		},
 		{
 			name: "single-dash spelling",
 			args: []string{"builds", "info", "-build", "PRIVATE_VALUE"},
 			want: "Error: `--build` was removed in 5.0.0; use `--build-id` or `--build-number` (see migrate-to-5-0)\nFor help:\n  asc builds info --help\n",
+			deps: true,
 		},
 		{
 			name: "pre-orders enable --available-in-new-territories has no replacement",
 			args: []string{"pre-orders", "enable", "--app", "app-1", "--territory", "USA", "--release-date", "2026-06-01", "--available-in-new-territories", "true"},
 			want: "Error: `--available-in-new-territories` was removed in 5.0.0; pre-orders are enabled by patching territory availabilities (see migrate-to-5-0)\nFor help:\n  asc pre-orders enable --help\n",
+			deps: true,
 		},
 		{
 			name: "web --two-factor-code matches a historical web command",
@@ -86,9 +93,14 @@ func TestRemovedFlagAliasesNameTheirReplacement(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			var code int
-			stdout, stderr := captureOutput(t, func() {
-				code = rootcmd.Run(test.args, "5.3.2")
-			})
+			var stdout, stderr string
+			if test.deps {
+				stdout, stderr, code = runWithDeps(t, nil, test.args...)
+			} else {
+				stdout, stderr = captureOutput(t, func() {
+					code = rootcmd.Run(test.args, "5.3.2")
+				})
+			}
 			if code != rootcmd.ExitUsage {
 				t.Fatalf("exit code = %d, want %d; stderr=%q", code, rootcmd.ExitUsage, stderr)
 			}

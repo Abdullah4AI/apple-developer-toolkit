@@ -36,27 +36,6 @@ type RetentionOfferCreateAttributes struct {
 	TargetSubscriptionPlanType                          SubscriptionPlanType      `json:"targetSubscriptionPlanType,omitempty"`
 }
 
-// RetentionOfferUpdateAttributes describes the eligibility attributes a
-// retention offer update can change. The spec marks both nullable, but Apple
-// returns HTTP 500 for null, so clearing is not offered.
-type RetentionOfferUpdateAttributes struct {
-	CustomerEligibilityPaidSubscriptionDurationInMonths *int `json:"customerEligibilityPaidSubscriptionDurationInMonths,omitempty"`
-	CustomerEligibilityWaitBetweenOffersInMonths        *int `json:"customerEligibilityWaitBetweenOffersInMonths,omitempty"`
-}
-
-// RetentionOfferCreateRelationships describes relationships for creating a retention offer.
-type RetentionOfferCreateRelationships struct {
-	Subscription Relationship     `json:"subscription"`
-	Prices       RelationshipList `json:"prices"`
-}
-
-// RetentionOfferCreateData is the data portion of a create request.
-type RetentionOfferCreateData struct {
-	Type          ResourceType                      `json:"type"`
-	Attributes    RetentionOfferCreateAttributes    `json:"attributes"`
-	Relationships RetentionOfferCreateRelationships `json:"relationships"`
-}
-
 // RetentionOfferCreateRequest is a request to create a retention offer.
 type RetentionOfferCreateRequest struct {
 	Data     RetentionOfferCreateData          `json:"data"`
@@ -83,9 +62,6 @@ type RetentionOfferPriceAttributes struct{}
 
 // RetentionOffersResponse is the response from retention offer list endpoints.
 type RetentionOffersResponse = Response[RetentionOfferAttributes]
-
-// RetentionOfferResponse is the response from retention offer detail endpoints.
-type RetentionOfferResponse = SingleResponse[RetentionOfferAttributes]
 
 // RetentionOfferPricesResponse is the response from the retention offer prices endpoint.
 type RetentionOfferPricesResponse = Response[RetentionOfferPriceAttributes]
@@ -254,25 +230,12 @@ func (c *Client) UpdateRetentionOffer(ctx context.Context, offerID string, attrs
 }
 
 func (c *Client) sendRetentionOffer(ctx context.Context, method, path string, payload any) (*RetentionOfferResponse, error) {
-	body, err := BuildRequestBody(payload)
-	if err != nil {
-		return nil, err
-	}
-	data, err := c.do(ctx, method, path, body)
-	if err != nil {
-		return nil, err
-	}
-	var response RetentionOfferResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-	return &response, nil
+	return sendJSON[RetentionOfferResponse](ctx, c, writeRequest{Method: method, Path: path, Payload: payload})
 }
 
 // DeleteRetentionOffer deletes a retention offer.
 func (c *Client) DeleteRetentionOffer(ctx context.Context, offerID string) error {
-	_, err := c.do(ctx, http.MethodDelete, "/v1/retentionOffers/"+strings.TrimSpace(offerID), nil)
-	return err
+	return sendNoContent(ctx, c, http.MethodDelete, "/v1/retentionOffers/"+strings.TrimSpace(offerID), nil)
 }
 
 // GetRetentionOfferPrices lists the prices of a retention offer.
@@ -297,22 +260,6 @@ func (c *Client) GetRetentionOfferPrices(ctx context.Context, offerID string, op
 	return &response, nil
 }
 
-// GetRetentionOfferPricesRelationships lists the price linkages of a retention offer.
-func (c *Client) GetRetentionOfferPricesRelationships(ctx context.Context, offerID string, opts ...LinkagesOption) (*LinkagesResponse, error) {
-	return c.getResourceLinkages(ctx, offerID, "prices", "offerID", "/v1/retentionOffers/%s/relationships/%s", "retentionOfferPrices relationships", opts...)
-}
-
-// GetSubscriptionRetentionOffersRelationships lists the retention offer linkages of a subscription.
-func (c *Client) GetSubscriptionRetentionOffersRelationships(ctx context.Context, subscriptionID string, opts ...LinkagesOption) (*LinkagesResponse, error) {
-	return c.getResourceLinkages(ctx, subscriptionID, "retentionOffers", "subscriptionID", "/v1/subscriptions/%s/relationships/%s", "retentionOffers relationships", opts...)
-}
-
-// GetSubscriptionRetentionMessageOffersRelationships lists the linkages of the
-// retention offers presented with a subscription's retention message.
-func (c *Client) GetSubscriptionRetentionMessageOffersRelationships(ctx context.Context, subscriptionID string, opts ...LinkagesOption) (*LinkagesResponse, error) {
-	return c.getResourceLinkages(ctx, subscriptionID, "retentionMessageOffers", "subscriptionID", "/v1/subscriptions/%s/relationships/%s", "retentionMessageOffers relationships", opts...)
-}
-
 // AddSubscriptionRetentionMessageOffers presents retention offers with a
 // subscription's retention message.
 func (c *Client) AddSubscriptionRetentionMessageOffers(ctx context.Context, subscriptionID string, offerIDs []string) error {
@@ -326,13 +273,7 @@ func (c *Client) RemoveSubscriptionRetentionMessageOffers(ctx context.Context, s
 }
 
 func (c *Client) changeSubscriptionRetentionMessageOffers(ctx context.Context, method, subscriptionID string, offerIDs []string) error {
-	body, err := BuildRequestBody(RelationshipRequest{Data: buildRelationshipData(ResourceTypeRetentionOffers, offerIDs)})
-	if err != nil {
-		return err
-	}
-	path := fmt.Sprintf("/v1/subscriptions/%s/relationships/retentionMessageOffers", strings.TrimSpace(subscriptionID))
-	_, err = c.do(ctx, method, path, body)
-	return err
+	return sendNoContent(ctx, c, method, fmt.Sprintf("/v1/subscriptions/%s/relationships/retentionMessageOffers", strings.TrimSpace(subscriptionID)), RelationshipRequest{Data: buildRelationshipData(ResourceTypeRetentionOffers, offerIDs)})
 }
 
 func (c *Client) getRetentionResource(ctx context.Context, path string, out any) error {

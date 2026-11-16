@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"net/url"
 	"sort"
 	"strings"
@@ -29,16 +30,16 @@ var (
 	}
 )
 
-func loadDeepSession(ctx context.Context, appleID string) (*webcore.AuthSession, bool, error) {
-	requestCtx, cancel := shared.ContextWithTimeout(ctx)
+func loadDeepSession(ctx context.Context, transport http.RoundTripper, appleID string) (*webcore.AuthSession, bool, error) {
+	requestCtx, cancel := readinessRequestContext(ctx)
 	defer cancel()
 	var session *webcore.AuthSession
 	var ok bool
 	var err error
 	if strings.TrimSpace(appleID) != "" {
-		session, ok, err = webcore.ResumeCachedSessionWithoutPersist(requestCtx, strings.TrimSpace(appleID))
+		session, ok, err = webcore.ResumeCachedSessionWithoutPersist(requestCtx, strings.TrimSpace(appleID), transport)
 	} else {
-		session, ok, err = webcore.ResumeLastCachedSessionWithoutPersist(requestCtx)
+		session, ok, err = webcore.ResumeLastCachedSessionWithoutPersist(requestCtx, transport)
 	}
 	if errors.Is(err, context.DeadlineExceeded) && ctx.Err() == nil {
 		return session, false, webcore.ErrCachedSessionValidationFailed
@@ -46,8 +47,8 @@ func loadDeepSession(ctx context.Context, appleID string) (*webcore.AuthSession,
 	return session, ok, err
 }
 
-func collectDeepValidation(ctx context.Context, report validation.Report, appleID string) (validation.DeepReport, []validation.CheckResult, error) {
-	session, ok, err := loadDeepSessionFn(ctx, strings.TrimSpace(appleID))
+func collectDeepValidation(ctx context.Context, d *shared.Deps, report validation.Report, appleID string) (validation.DeepReport, []validation.CheckResult, error) {
+	session, ok, err := loadDeepSessionFn(ctx, d.HTTPTransport(), strings.TrimSpace(appleID))
 	selectedAppleID := strings.TrimSpace(appleID)
 	if session != nil && strings.TrimSpace(session.UserEmail) != "" {
 		selectedAppleID = strings.TrimSpace(session.UserEmail)
@@ -196,7 +197,7 @@ func scopeResolutionCommands(resolution *validation.Resolution, appleID string) 
 }
 
 func collectPrivacyDeepCheck(ctx context.Context, client deepWebClient, appID string) (validation.DeepCheck, *validation.CheckResult) {
-	requestCtx, cancel := shared.ContextWithTimeout(ctx)
+	requestCtx, cancel := readinessRequestContext(ctx)
 	defer cancel()
 	state, err := client.GetAppDataUsagesPublishState(requestCtx, strings.TrimSpace(appID))
 	link := appStoreConnectURL(appID, "appPrivacy")
@@ -251,7 +252,7 @@ func collectSubscriptionDeepCheck(ctx context.Context, client deepWebClient, app
 		}, nil
 	}
 
-	requestCtx, cancel := shared.ContextWithTimeout(ctx)
+	requestCtx, cancel := readinessRequestContext(ctx)
 	defer cancel()
 	subscriptions, err := client.ListReviewSubscriptions(requestCtx, strings.TrimSpace(appID))
 	if err != nil {
@@ -391,7 +392,7 @@ func isSubscriptionAttachmentEditableVersionState(state string) bool {
 }
 
 func collectAgreementsDeepCheck(ctx context.Context, client deepWebClient, requiresPaidAgreement, paidAgreementRelevanceKnown bool) (validation.DeepCheck, *validation.CheckResult) {
-	requestCtx, cancel := shared.ContextWithTimeout(ctx)
+	requestCtx, cancel := readinessRequestContext(ctx)
 	defer cancel()
 	status, err := client.GetAgreementsStatus(requestCtx)
 	if status == nil {

@@ -40,8 +40,8 @@ type InitResult struct {
 }
 
 // NewInitReferenceCommand builds an init-style command that writes ASC.md references.
-func NewInitReferenceCommand(flagSetName, commandName, shortUsage, shortHelp, longHelp, errorPrefix string) *ffcli.Command {
-	fs := flag.NewFlagSet(flagSetName, flag.ExitOnError)
+func NewInitReferenceCommand(d *shared.Deps, flagSetName, commandName, shortUsage, shortHelp, longHelp, errorPrefix string) *ffcli.Command {
+	fs := d.NewFlagSet(flagSetName, flag.ExitOnError)
 
 	path := fs.String("path", "", "Output path for ASC.md (default: repo root or current directory)")
 	force := fs.Bool("force", false, "Overwrite existing ASC.md")
@@ -53,9 +53,9 @@ func NewInitReferenceCommand(flagSetName, commandName, shortUsage, shortHelp, lo
 		ShortHelp:  shortHelp,
 		LongHelp:   longHelp,
 		FlagSet:    fs,
-		UsageFunc:  shared.DefaultUsageFunc,
+		UsageFunc:  d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
-			result, err := InitReference(InitOptions{
+			result, err := initReference(d, InitOptions{
 				Path:  *path,
 				Force: *force,
 				Link:  *link,
@@ -63,14 +63,14 @@ func NewInitReferenceCommand(flagSetName, commandName, shortUsage, shortHelp, lo
 			if err != nil {
 				return fmt.Errorf("%s: %w", errorPrefix, err)
 			}
-			return shared.PrintOutput(result, "json", false)
+			return d.PrintOutput(result, "json", false)
 		},
 	}
 }
 
-// DocsInitCommand returns the docs init subcommand.
-func DocsInitCommand() *ffcli.Command {
+func newInitCommand(d *shared.Deps) *ffcli.Command {
 	return NewInitReferenceCommand(
+		d,
 		"docs init",
 		"init",
 		"asc docs init [flags]",
@@ -90,7 +90,11 @@ Examples:
 // destination and the agent files, runs before the first write, so a failed
 // init leaves the repository untouched.
 func InitReference(opts InitOptions) (InitResult, error) {
-	targetPath, linkRoot, err := resolveOutputPath(opts.Path)
+	return initReference(shared.DefaultDeps(), opts)
+}
+
+func initReference(d *shared.Deps, opts InitOptions) (InitResult, error) {
+	targetPath, linkRoot, err := resolveOutputPath(d, opts.Path)
 	if err != nil {
 		return InitResult{}, err
 	}
@@ -134,9 +138,11 @@ func InitReference(opts InitOptions) (InitResult, error) {
 	}, nil
 }
 
-func resolveOutputPath(path string) (string, string, error) {
+// resolveOutputPath resolves --path against d's working directory, or finds
+// the repository root above that directory when --path is empty.
+func resolveOutputPath(d *shared.Deps, path string) (string, string, error) {
 	if path != "" {
-		abs, err := filepath.Abs(path)
+		abs, err := d.Abs(path)
 		if err != nil {
 			return "", "", err
 		}
@@ -177,7 +183,7 @@ func resolveOutputPath(path string) (string, string, error) {
 		return targetPath, root, nil
 	}
 
-	cwd, err := os.Getwd()
+	cwd, err := d.Getwd()
 	if err != nil {
 		return "", "", err
 	}

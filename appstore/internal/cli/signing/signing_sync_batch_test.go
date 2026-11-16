@@ -21,6 +21,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
@@ -82,7 +83,7 @@ func TestPrepareSigningSyncBatchFilesReusesLegacyMacOSProfilePath(t *testing.T) 
 		}},
 	}}
 
-	files, _, err := prepareSigningSyncBatchFiles(store, targets, nil, password)
+	files, _, err := prepareSigningSyncBatchFiles(testSigningDeps(), store, targets, nil, password)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -165,10 +166,6 @@ func TestSyncResultOmitsSingularBundleIDOnlyForBatchJSON(t *testing.T) {
 func TestSigningSyncPushRejectsInvalidOutputBeforeSideEffects(t *testing.T) {
 	missingDir := t.TempDir()
 	clientCalls := 0
-	t.Cleanup(shared.SetASCClientFactoryForTesting(func() (*asc.Client, error) {
-		clientCalls++
-		return nil, errors.New("client must not be created")
-	}))
 
 	tests := []struct {
 		name string
@@ -206,15 +203,19 @@ func TestSigningSyncPushRejectsInvalidOutputBeforeSideEffects(t *testing.T) {
 
 	for _, testCase := range tests {
 		t.Run(testCase.name, func(t *testing.T) {
-			cmd := syncPushCommand()
+			d, depsStdout, depsStderr := newSigningTestDeps()
+			d.Client = func() (*asc.Client, error) {
+				clientCalls++
+				return nil, errors.New("client must not be created")
+			}
+			cmd := syncPushCommand(d)
 			cmd.FlagSet.SetOutput(io.Discard)
 			if err := cmd.Parse(testCase.args); err != nil {
 				t.Fatal(err)
 			}
-			var runErr error
-			stdout, stderr := captureOutput(t, func() {
-				runErr = cmd.Run(context.Background())
-			})
+			runErr := cmd.Run(context.Background())
+			stdout := depsStdout.String()
+			stderr := depsStderr.String()
 			if runErr == nil || !errors.Is(runErr, flag.ErrHelp) || !strings.Contains(runErr.Error(), testCase.want) {
 				t.Fatalf("error = %v, want usage error containing %q", runErr, testCase.want)
 			}
@@ -237,12 +238,13 @@ func TestSigningSyncPushTargetsFileValidationPrecedesPasswordAndClient(t *testin
 	writeSigningSyncTargetsFile(t, manifest, `{"schemaVersion":1,"targets":[{"bundleId":"com.example.app"}],"unexpected":true}`, 0o644)
 	t.Chdir(dir)
 	clientCalls := 0
-	t.Cleanup(shared.SetASCClientFactoryForTesting(func() (*asc.Client, error) {
+
+	d, depsStdout, depsStderr := newSigningTestDeps()
+	d.Client = func() (*asc.Client, error) {
 		clientCalls++
 		return nil, errors.New("client must not be created")
-	}))
-
-	cmd := syncPushCommand()
+	}
+	cmd := syncPushCommand(d)
 	cmd.FlagSet.SetOutput(io.Discard)
 	if err := cmd.Parse([]string{
 		"--targets-file", "targets.json",
@@ -251,10 +253,9 @@ func TestSigningSyncPushTargetsFileValidationPrecedesPasswordAndClient(t *testin
 	}); err != nil {
 		t.Fatal(err)
 	}
-	var runErr error
-	stdout, stderr := captureOutput(t, func() {
-		runErr = cmd.Run(context.Background())
-	})
+	runErr := cmd.Run(context.Background())
+	stdout := depsStdout.String()
+	stderr := depsStderr.String()
 	if runErr == nil || !errors.Is(runErr, flag.ErrHelp) || !strings.Contains(runErr.Error(), "unknown field") {
 		t.Fatalf("targets manifest error = %v, want usage unknown-field error", runErr)
 	}
@@ -280,12 +281,9 @@ func runSigningSyncPushBatchForContext(t *testing.T, commandCtx context.Context)
 	t.Setenv("ASC_TIMEOUT", "40ms")
 
 	client := &asc.Client{}
-	t.Cleanup(shared.SetASCClientFactoryForTesting(func() (*asc.Client, error) {
-		return client, nil
-	}))
 	originalRunner := runSigningSyncBatchForCommand
 	var received context.Context
-	runSigningSyncBatchForCommand = func(ctx context.Context, gotClient *asc.Client, options signingSyncBatchOptions) (SyncResult, error) {
+	runSigningSyncBatchForCommand = func(ctx context.Context, _ *shared.Deps, gotClient *asc.Client, options signingSyncBatchOptions) (SyncResult, error) {
 		received = ctx
 		if gotClient != client {
 			t.Errorf("batch client = %p, want %p", gotClient, client)
@@ -294,7 +292,11 @@ func runSigningSyncPushBatchForContext(t *testing.T, commandCtx context.Context)
 	}
 	t.Cleanup(func() { runSigningSyncBatchForCommand = originalRunner })
 
-	cmd := syncPushCommand()
+	d, depsStdout, _ := newSigningTestDeps()
+	d.Client = func() (*asc.Client, error) {
+		return client, nil
+	}
+	cmd := syncPushCommand(d)
 	cmd.FlagSet.SetOutput(io.Discard)
 	if err := cmd.Parse([]string{
 		"--targets-file", "targets.json",
@@ -303,10 +305,8 @@ func runSigningSyncPushBatchForContext(t *testing.T, commandCtx context.Context)
 	}); err != nil {
 		t.Fatal(err)
 	}
-	var runErr error
-	stdout, _ := captureOutput(t, func() {
-		runErr = cmd.Run(commandCtx)
-	})
+	runErr := cmd.Run(commandCtx)
+	stdout := depsStdout.String()
 	if runErr == nil || runErr.Error() != "signing sync push: context canceled" {
 		t.Fatalf("error = %v, want wrapped batch cancellation", runErr)
 	}
@@ -365,10 +365,9 @@ func TestSigningSyncPushBatchPropagatesCertificateCreationOptions(t *testing.T) 
 	t.Setenv(signingSyncPasswordEnvVar, "repository-password")
 
 	client := &asc.Client{}
-	t.Cleanup(shared.SetASCClientFactoryForTesting(func() (*asc.Client, error) { return client, nil }))
 	originalRunner := runSigningSyncBatchForCommand
 	var received signingSyncBatchOptions
-	runSigningSyncBatchForCommand = func(_ context.Context, gotClient *asc.Client, options signingSyncBatchOptions) (SyncResult, error) {
+	runSigningSyncBatchForCommand = func(_ context.Context, _ *shared.Deps, gotClient *asc.Client, options signingSyncBatchOptions) (SyncResult, error) {
 		if gotClient != client {
 			t.Errorf("batch client = %p, want %p", gotClient, client)
 		}
@@ -378,7 +377,9 @@ func TestSigningSyncPushBatchPropagatesCertificateCreationOptions(t *testing.T) 
 	}
 	t.Cleanup(func() { runSigningSyncBatchForCommand = originalRunner })
 
-	cmd := syncPushCommand()
+	d, _, _ := newSigningTestDeps()
+	d.Client = func() (*asc.Client, error) { return client, nil }
+	cmd := syncPushCommand(d)
 	cmd.FlagSet.SetOutput(io.Discard)
 	if err := cmd.Parse([]string{
 		"--targets-file", "targets.json",
@@ -390,8 +391,7 @@ func TestSigningSyncPushBatchPropagatesCertificateCreationOptions(t *testing.T) 
 	}); err != nil {
 		t.Fatal(err)
 	}
-	var runErr error
-	_, _ = captureOutput(t, func() { runErr = cmd.Run(context.Background()) })
+	runErr := cmd.Run(context.Background())
 	if runErr == nil || runErr.Error() != "signing sync push: context canceled" {
 		t.Fatalf("error = %v, want wrapped batch cancellation", runErr)
 	}
@@ -406,7 +406,8 @@ func TestSigningSyncPushBatchPropagatesCertificateCreationOptions(t *testing.T) 
 func TestSigningSyncPushRejectsBundleIDAndTargetsFileTogether(t *testing.T) {
 	manifest := filepath.Join(t.TempDir(), "targets.json")
 	writeSigningSyncTargetsFile(t, manifest, `{"schemaVersion":1,"targets":[{"bundleId":"com.example.app"}]}`, 0o644)
-	cmd := syncPushCommand()
+	d, _, _ := newSigningTestDeps()
+	cmd := syncPushCommand(d)
 	if err := cmd.Parse([]string{
 		"--bundle-id", "com.example.other",
 		"--targets-file", manifest,
@@ -496,9 +497,9 @@ func TestPrepareSigningSyncBatchFilesDeduplicatesCertificates(t *testing.T) {
 			Certificates: []asc.Resource[asc.CertificateAttributes]{certificate},
 		},
 	}
-	files, _, err := prepareSigningSyncBatchFiles(store, targets, nil, "password")
+	files, _, err := prepareSigningSyncBatchFiles(testSigningDeps(), store, targets, nil, "password")
 	if err != nil {
-		t.Fatalf("prepareSigningSyncBatchFiles() error = %v", err)
+		t.Fatalf("prepareSigningSyncBatchFiles(testSigningDeps()) error = %v", err)
 	}
 	if len(files) != 3 {
 		t.Fatalf("planned legacy files = %d, want two profiles and one certificate: %#v", len(files), files)
@@ -557,9 +558,9 @@ func TestPrepareSigningSyncBatchFilesBindsIdentityContextsToTargetScopedProfiles
 	}
 
 	store := &signingpkg.GitStore{LocalDir: t.TempDir()}
-	legacyFiles, identityCore, err := prepareSigningSyncBatchFiles(store, targets, identity, "repository-password")
+	legacyFiles, identityCore, err := prepareSigningSyncBatchFiles(testSigningDeps(), store, targets, identity, "repository-password")
 	if err != nil {
-		t.Fatalf("prepareSigningSyncBatchFiles() error = %v", err)
+		t.Fatalf("prepareSigningSyncBatchFiles(testSigningDeps()) error = %v", err)
 	}
 	if identityCore == "" || len(legacyFiles) != 3 {
 		t.Fatalf("identity core=%q legacy files=%d, want one core and three public files", identityCore, len(legacyFiles))
@@ -607,9 +608,9 @@ func TestPrepareSigningSyncBatchFilesRejectsConflictingCertificateBytes(t *testi
 		}
 	}
 
-	_, _, err := prepareSigningSyncBatchFiles(store, targets, nil, "repository-password")
+	_, _, err := prepareSigningSyncBatchFiles(testSigningDeps(), store, targets, nil, "repository-password")
 	if err == nil || !strings.Contains(err.Error(), "certificate certificate-shared returned conflicting content") {
-		t.Fatalf("prepareSigningSyncBatchFiles() error = %v, want conflicting certificate content", err)
+		t.Fatalf("prepareSigningSyncBatchFiles(testSigningDeps()) error = %v, want conflicting certificate content", err)
 	}
 }
 
@@ -648,14 +649,16 @@ func TestRunSigningSyncBatchCreatesOneCommitAndIsIdempotent(t *testing.T) {
 	bundleIDs := []string{"com.example.a", "com.example.b"}
 	var result SyncResult
 	var err error
-	_, firstStderr := captureOutput(t, func() {
-		result, err = runSigningSyncBatch(context.Background(), client, signingSyncBatchOptions{
+	firstStderrDeps, _, firstStderrDepsStderr := newSigningTestDeps()
+	_, _ = captureOutput(t, func() {
+		result, err = runSigningSyncBatch(context.Background(), firstStderrDeps, client, signingSyncBatchOptions{
 			RepoURL:     remoteURL,
 			Password:    password,
 			ProfileType: "IOS_APP_STORE",
 			BundleIDs:   bundleIDs,
 		})
 	})
+	firstStderr := firstStderrDepsStderr.String()
 	if err != nil {
 		t.Fatalf("first batch push error = %v", err)
 	}
@@ -682,14 +685,16 @@ func TestRunSigningSyncBatchCreatesOneCommitAndIsIdempotent(t *testing.T) {
 	}
 
 	var second SyncResult
-	_, secondStderr := captureOutput(t, func() {
-		second, err = runSigningSyncBatch(context.Background(), client, signingSyncBatchOptions{
+	secondStderrDeps, _, secondStderrDepsStderr := newSigningTestDeps()
+	_, _ = captureOutput(t, func() {
+		second, err = runSigningSyncBatch(context.Background(), secondStderrDeps, client, signingSyncBatchOptions{
 			RepoURL:     remoteURL,
 			Password:    password,
 			ProfileType: "IOS_APP_STORE",
 			BundleIDs:   bundleIDs,
 		})
 	})
+	secondStderr := secondStderrDepsStderr.String()
 	if err != nil {
 		t.Fatalf("second batch push error = %v", err)
 	}
@@ -764,8 +769,9 @@ func TestRunSigningSyncBatchCreatesMissingProfileAfterPreflight(t *testing.T) {
 	var result SyncResult
 	var err error
 	profileNameWindowStart := time.Now()
-	_, stderr := captureOutput(t, func() {
-		result, err = runSigningSyncBatch(context.Background(), client, signingSyncBatchOptions{
+	stderrDeps, _, stderrDepsStderr := newSigningTestDeps()
+	_, _ = captureOutput(t, func() {
+		result, err = runSigningSyncBatch(context.Background(), stderrDeps, client, signingSyncBatchOptions{
 			RepoURL:       remoteURL,
 			Password:      "repository-password",
 			ProfileType:   "IOS_APP_DEVELOPMENT",
@@ -774,6 +780,7 @@ func TestRunSigningSyncBatchCreatesMissingProfileAfterPreflight(t *testing.T) {
 			BundleIDs:     []string{"com.example.new"},
 		})
 	})
+	stderr := stderrDepsStderr.String()
 	profileNameWindowEnd := time.Now()
 	if err != nil {
 		t.Fatalf("missing-profile batch push error = %v", err)
@@ -899,7 +906,7 @@ func TestRunSigningSyncBatchPropagatesCreatedCertificateIntoIdentityPlanning(t *
 	var result SyncResult
 	var err error
 	_, _ = captureOutput(t, func() {
-		result, err = runSigningSyncBatch(context.Background(), client, signingSyncBatchOptions{
+		result, err = runSigningSyncBatch(context.Background(), testSigningDeps(), client, signingSyncBatchOptions{
 			RepoURL:                  remoteURL,
 			Password:                 "repository-password",
 			ProfileType:              "IOS_APP_STORE",
@@ -1033,7 +1040,7 @@ func TestRunSigningSyncBatchReusesCreatedCertificateWhenLookupLags(t *testing.T)
 	var result SyncResult
 	var err error
 	_, _ = captureOutput(t, func() {
-		result, err = runSigningSyncBatch(context.Background(), client, signingSyncBatchOptions{
+		result, err = runSigningSyncBatch(context.Background(), testSigningDeps(), client, signingSyncBatchOptions{
 			RepoURL:                  remoteURL,
 			Password:                 "repository-password",
 			ProfileType:              "IOS_APP_STORE",
@@ -1085,7 +1092,7 @@ func TestRunSigningSyncBatchPreservesUnknownCertificateReceipt(t *testing.T) {
 	var result SyncResult
 	var err error
 	_, _ = captureOutput(t, func() {
-		result, err = runSigningSyncBatch(context.Background(), client, signingSyncBatchOptions{
+		result, err = runSigningSyncBatch(context.Background(), testSigningDeps(), client, signingSyncBatchOptions{
 			RepoURL:                  remoteURL,
 			Password:                 "repository-password",
 			ProfileType:              "IOS_APP_STORE",
@@ -1192,7 +1199,7 @@ func TestRunSigningSyncBatchCreatesTargetSpecificProfilesAndRetriesWithoutRecrea
 	var first SyncResult
 	var err error
 	_, _ = captureOutput(t, func() {
-		first, err = runSigningSyncBatch(context.Background(), client, options)
+		first, err = runSigningSyncBatch(context.Background(), testSigningDeps(), client, options)
 	})
 	if err != nil {
 		t.Fatalf("first batch push error = %v", err)
@@ -1215,7 +1222,7 @@ func TestRunSigningSyncBatchCreatesTargetSpecificProfilesAndRetriesWithoutRecrea
 
 	var second SyncResult
 	_, _ = captureOutput(t, func() {
-		second, err = runSigningSyncBatch(context.Background(), client, options)
+		second, err = runSigningSyncBatch(context.Background(), testSigningDeps(), client, options)
 	})
 	if err != nil {
 		t.Fatalf("retry batch push error = %v", err)
@@ -1265,7 +1272,7 @@ func TestRunSigningSyncBatchLaterTargetFailureDoesNotPublishPartialRepository(t 
 
 	var err error
 	_, _ = captureOutput(t, func() {
-		_, err = runSigningSyncBatch(context.Background(), client, signingSyncBatchOptions{
+		_, err = runSigningSyncBatch(context.Background(), testSigningDeps(), client, signingSyncBatchOptions{
 			RepoURL:       remoteURL,
 			Password:      "repository-password",
 			ProfileType:   "IOS_APP_STORE",
@@ -1328,7 +1335,7 @@ func TestRunSigningSyncBatchUnknownProfileStateDominatesEarlierCreatedTarget(t *
 	var result SyncResult
 	var err error
 	_, _ = captureOutput(t, func() {
-		result, err = runSigningSyncBatch(context.Background(), client, signingSyncBatchOptions{
+		result, err = runSigningSyncBatch(context.Background(), testSigningDeps(), client, signingSyncBatchOptions{
 			RepoURL:       remoteURL,
 			Password:      "repository-password",
 			ProfileType:   "IOS_APP_STORE",
@@ -1375,7 +1382,7 @@ func TestRunSigningSyncBatchUsesFreshTimeoutForEachTarget(t *testing.T) {
 	profileContent := base64.StdEncoding.EncodeToString([]byte("profile-content"))
 	profileIDs := map[string]string{"bundle-a": "profile-a", "bundle-b": "profile-b"}
 	timeoutCalls := 0
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		switch {
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/bundleIds":
 			identifier := req.URL.Query().Get("filter[identifier]")
@@ -1400,25 +1407,31 @@ func TestRunSigningSyncBatchUsesFreshTimeoutForEachTarget(t *testing.T) {
 			t.Fatalf("unexpected request %s %s", req.Method, req.URL.String())
 			signingFetchWriteJSON(t, w, http.StatusInternalServerError, `{}`)
 		}
-	}))
-	defer server.Close()
-	client := newSigningFetchServerTestClient(t, server)
+	})
+	client := newSigningFetchHTTPClient(t, &http.Client{Transport: signingFetchServerRoundTripFunc(func(req *http.Request) (*http.Response, error) {
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, req)
+		return response.Result(), nil
+	})})
 
 	var result SyncResult
 	var err error
+	d := testSigningDeps()
+	d.Timeout = func(parent context.Context) (context.Context, context.CancelFunc) {
+		timeoutCalls++
+		if timeoutCalls == 1 {
+			return context.WithTimeout(parent, 200*time.Millisecond)
+		}
+		return context.WithTimeout(parent, time.Second)
+	}
 	_, _ = captureOutput(t, func() {
-		result, err = runSigningSyncBatch(context.Background(), client, signingSyncBatchOptions{
-			RepoURL:     remoteURL,
-			Password:    "repository-password",
-			ProfileType: "IOS_APP_STORE",
-			BundleIDs:   []string{"com.example.a", "com.example.b"},
-			ContextWithTimeout: func(parent context.Context) (context.Context, context.CancelFunc) {
-				timeoutCalls++
-				if timeoutCalls == 1 {
-					return context.WithTimeout(parent, 200*time.Millisecond)
-				}
-				return context.WithTimeout(parent, time.Second)
-			},
+		synctest.Test(t, func(*testing.T) {
+			result, err = runSigningSyncBatch(context.Background(), d, client, signingSyncBatchOptions{
+				RepoURL:     remoteURL,
+				Password:    "repository-password",
+				ProfileType: "IOS_APP_STORE",
+				BundleIDs:   []string{"com.example.a", "com.example.b"},
+			})
 		})
 	})
 	if err != nil {
@@ -1457,7 +1470,7 @@ func TestRunSigningSyncBatchCancellationReachesHTTPAndDoesNotPublish(t *testing.
 
 	resultDone := make(chan error, 1)
 	go func() {
-		_, err := runSigningSyncBatch(ctx, client, signingSyncBatchOptions{
+		_, err := runSigningSyncBatch(ctx, testSigningDeps(), client, signingSyncBatchOptions{
 			RepoURL:     remoteURL,
 			Password:    "repository-password",
 			ProfileType: "IOS_APP_STORE",

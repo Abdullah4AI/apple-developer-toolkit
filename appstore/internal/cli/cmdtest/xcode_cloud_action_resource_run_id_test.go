@@ -1,323 +1,104 @@
 package cmdtest
 
 import (
-	"context"
-	"errors"
-	"flag"
-	"io"
 	"net/http"
 	"strings"
 	"testing"
+
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asctest"
 )
 
-func TestXcodeCloudIssuesListAggregatesIssuesFromRunID(t *testing.T) {
-	setupAuth(t)
-
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() {
-		http.DefaultTransport = originalTransport
-	})
-
-	callCount := 0
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		callCount++
-		switch callCount {
-		case 1:
-			if req.Method != http.MethodGet || req.URL.Path != "/v1/ciBuildRuns/run-1/actions" {
-				t.Fatalf("unexpected first request: %s %s", req.Method, req.URL.String())
-			}
-			if req.URL.Query().Get("limit") != "200" {
-				t.Fatalf("expected limit=200, got %q", req.URL.Query().Get("limit"))
-			}
-			body := `{"data":[{"type":"ciBuildActions","id":"act-1","attributes":{"name":"Archive","actionType":"ARCHIVE"}},{"type":"ciBuildActions","id":"act-2","attributes":{"name":"Test","actionType":"TEST"}}]}`
-			return &http.Response{
-				StatusCode: http.StatusOK,
-				Body:       io.NopCloser(strings.NewReader(body)),
-				Header:     http.Header{"Content-Type": []string{"application/json"}},
-			}, nil
-		case 2:
-			if req.Method != http.MethodGet || req.URL.Path != "/v1/ciBuildActions/act-1/issues" {
-				t.Fatalf("unexpected second request: %s %s", req.Method, req.URL.String())
-			}
-			if req.URL.Query().Get("limit") != "200" {
-				t.Fatalf("expected limit=200, got %q", req.URL.Query().Get("limit"))
-			}
-			body := `{"data":[]}`
-			return &http.Response{
-				StatusCode: http.StatusOK,
-				Body:       io.NopCloser(strings.NewReader(body)),
-				Header:     http.Header{"Content-Type": []string{"application/json"}},
-			}, nil
-		case 3:
-			if req.Method != http.MethodGet || req.URL.Path != "/v1/ciBuildActions/act-2/issues" {
-				t.Fatalf("unexpected third request: %s %s", req.Method, req.URL.String())
-			}
-			if req.URL.Query().Get("limit") != "200" {
-				t.Fatalf("expected limit=200, got %q", req.URL.Query().Get("limit"))
-			}
-			body := `{"data":[{"type":"ciIssues","id":"issue-1"}]}`
-			return &http.Response{
-				StatusCode: http.StatusOK,
-				Body:       io.NopCloser(strings.NewReader(body)),
-				Header:     http.Header{"Content-Type": []string{"application/json"}},
-			}, nil
-		default:
-			t.Fatalf("unexpected request count %d", callCount)
-			return nil, nil
-		}
-	})
-
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"xcode-cloud", "issues", "list", "--run-id", "run-1", "--paginate"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatalf("run error: %v", err)
-		}
-	})
-
-	if stderr != "" {
-		t.Fatalf("expected empty stderr, got %q", stderr)
+func TestXcodeCloudActionResourcesAggregateFromRunID(t *testing.T) {
+	type step struct {
+		path string
+		body string
 	}
-	if !strings.Contains(stdout, `"id":"issue-1"`) {
-		t.Fatalf("expected issue output, got %q", stdout)
+	tests := []struct {
+		name       string
+		args       []string
+		steps      []step
+		wantStdout []string
+	}{
+		{
+			name: "issues",
+			args: []string{"xcode-cloud", "issues", "list", "--run-id", "run-1", "--paginate"},
+			steps: []step{
+				{"/v1/ciBuildRuns/run-1/actions", `{"data":[{"type":"ciBuildActions","id":"act-1","attributes":{"name":"Archive","actionType":"ARCHIVE"}},{"type":"ciBuildActions","id":"act-2","attributes":{"name":"Test","actionType":"TEST"}}]}`},
+				{"/v1/ciBuildActions/act-1/issues", `{"data":[]}`},
+				{"/v1/ciBuildActions/act-2/issues", `{"data":[{"type":"ciIssues","id":"issue-1"}]}`},
+			},
+			wantStdout: []string{`"id":"issue-1"`},
+		},
+		{
+			name: "artifacts from all actions",
+			args: []string{"xcode-cloud", "artifacts", "list", "--run-id", "run-1", "--paginate"},
+			steps: []step{
+				{"/v1/ciBuildRuns/run-1/actions", `{"data":[{"type":"ciBuildActions","id":"act-1","attributes":{"name":"Archive iOS","actionType":"ARCHIVE"}},{"type":"ciBuildActions","id":"act-2","attributes":{"name":"Test iOS","actionType":"TEST"}},{"type":"ciBuildActions","id":"act-3","attributes":{"name":"Archive macOS","actionType":"ARCHIVE"}}]}`},
+				{"/v1/ciBuildActions/act-1/artifacts", `{"data":[{"type":"ciArtifacts","id":"artifact-1"}]}`},
+				{"/v1/ciBuildActions/act-2/artifacts", `{"data":[{"type":"ciArtifacts","id":"test-log-bundle","attributes":{"fileType":"LOG_BUNDLE"}}]}`},
+				{"/v1/ciBuildActions/act-3/artifacts", `{"data":[{"type":"ciArtifacts","id":"artifact-2"}]}`},
+			},
+			wantStdout: []string{`"id":"artifact-1"`, `"id":"artifact-2"`, `"id":"test-log-bundle"`},
+		},
+		{
+			name: "test results from test actions only",
+			args: []string{"xcode-cloud", "test-results", "list", "--run-id", "run-1", "--paginate"},
+			steps: []step{
+				{"/v1/ciBuildRuns/run-1/actions", `{"data":[{"type":"ciBuildActions","id":"act-1","attributes":{"name":"Archive","actionType":"ARCHIVE"}},{"type":"ciBuildActions","id":"act-2","attributes":{"name":"Test iOS","actionType":"TEST"}},{"type":"ciBuildActions","id":"act-3","attributes":{"name":"Test macOS","actionType":"TEST"}}]}`},
+				{"/v1/ciBuildActions/act-2/testResults", `{"data":[{"type":"ciTestResults","id":"result-1"}]}`},
+				{"/v1/ciBuildActions/act-3/testResults", `{"data":[{"type":"ciTestResults","id":"result-2"}]}`},
+			},
+			wantStdout: []string{`"id":"result-1"`, `"id":"result-2"`},
+		},
 	}
-	if callCount != 3 {
-		t.Fatalf("expected 3 requests, got %d", callCount)
-	}
-}
 
-func TestXcodeCloudArtifactsListAggregatesAllActionsFromRunID(t *testing.T) {
-	setupAuth(t)
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			setupAuth(t)
 
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() {
-		http.DefaultTransport = originalTransport
-	})
+			reg := asctest.NewRegistry(t)
+			for _, step := range test.steps {
+				reg.Register(asctest.GET(step.path, "limit=200"), asctest.JSON(http.StatusOK, step.body))
+			}
 
-	callCount := 0
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		callCount++
-		switch callCount {
-		case 1:
-			if req.Method != http.MethodGet || req.URL.Path != "/v1/ciBuildRuns/run-1/actions" {
-				t.Fatalf("unexpected first request: %s %s", req.Method, req.URL.String())
+			stdout, stderr, err := runRootWithDeps(t, stubClient(t, reg), test.args...)
+			if err != nil {
+				t.Fatalf("run error: %v", err)
 			}
-			if req.URL.Query().Get("limit") != "200" {
-				t.Fatalf("expected limit=200, got %q", req.URL.Query().Get("limit"))
-			}
-			body := `{"data":[{"type":"ciBuildActions","id":"act-1","attributes":{"name":"Archive iOS","actionType":"ARCHIVE"}},{"type":"ciBuildActions","id":"act-2","attributes":{"name":"Test iOS","actionType":"TEST"}},{"type":"ciBuildActions","id":"act-3","attributes":{"name":"Archive macOS","actionType":"ARCHIVE"}}]}`
-			return &http.Response{
-				StatusCode: http.StatusOK,
-				Body:       io.NopCloser(strings.NewReader(body)),
-				Header:     http.Header{"Content-Type": []string{"application/json"}},
-			}, nil
-		case 2:
-			if req.Method != http.MethodGet || req.URL.Path != "/v1/ciBuildActions/act-1/artifacts" {
-				t.Fatalf("unexpected second request: %s %s", req.Method, req.URL.String())
-			}
-			if req.URL.Query().Get("limit") != "200" {
-				t.Fatalf("expected limit=200, got %q", req.URL.Query().Get("limit"))
-			}
-			body := `{"data":[{"type":"ciArtifacts","id":"artifact-1"}]}`
-			return &http.Response{
-				StatusCode: http.StatusOK,
-				Body:       io.NopCloser(strings.NewReader(body)),
-				Header:     http.Header{"Content-Type": []string{"application/json"}},
-			}, nil
-		case 3:
-			if req.Method != http.MethodGet || req.URL.Path != "/v1/ciBuildActions/act-2/artifacts" {
-				t.Fatalf("unexpected third request: %s %s", req.Method, req.URL.String())
-			}
-			if req.URL.Query().Get("limit") != "200" {
-				t.Fatalf("expected limit=200, got %q", req.URL.Query().Get("limit"))
-			}
-			body := `{"data":[{"type":"ciArtifacts","id":"test-log-bundle","attributes":{"fileType":"LOG_BUNDLE"}}]}`
-			return &http.Response{
-				StatusCode: http.StatusOK,
-				Body:       io.NopCloser(strings.NewReader(body)),
-				Header:     http.Header{"Content-Type": []string{"application/json"}},
-			}, nil
-		case 4:
-			if req.Method != http.MethodGet || req.URL.Path != "/v1/ciBuildActions/act-3/artifacts" {
-				t.Fatalf("unexpected fourth request: %s %s", req.Method, req.URL.String())
-			}
-			if req.URL.Query().Get("limit") != "200" {
-				t.Fatalf("expected limit=200, got %q", req.URL.Query().Get("limit"))
-			}
-			body := `{"data":[{"type":"ciArtifacts","id":"artifact-2"}]}`
-			return &http.Response{
-				StatusCode: http.StatusOK,
-				Body:       io.NopCloser(strings.NewReader(body)),
-				Header:     http.Header{"Content-Type": []string{"application/json"}},
-			}, nil
-		default:
-			t.Fatalf("unexpected request count %d", callCount)
-			return nil, nil
-		}
-	})
 
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"xcode-cloud", "artifacts", "list", "--run-id", "run-1", "--paginate"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatalf("run error: %v", err)
-		}
-	})
-
-	if stderr != "" {
-		t.Fatalf("expected empty stderr, got %q", stderr)
-	}
-	if !strings.Contains(stdout, `"id":"artifact-1"`) {
-		t.Fatalf("expected artifact output, got %q", stdout)
-	}
-	if !strings.Contains(stdout, `"id":"artifact-2"`) {
-		t.Fatalf("expected second artifact output, got %q", stdout)
-	}
-	if !strings.Contains(stdout, `"id":"test-log-bundle"`) {
-		t.Fatalf("expected test action log bundle output, got %q", stdout)
-	}
-	if callCount != 4 {
-		t.Fatalf("expected 4 requests, got %d", callCount)
-	}
-}
-
-func TestXcodeCloudTestResultsListAggregatesTestActionsFromRunID(t *testing.T) {
-	setupAuth(t)
-
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() {
-		http.DefaultTransport = originalTransport
-	})
-
-	callCount := 0
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		callCount++
-		switch callCount {
-		case 1:
-			if req.Method != http.MethodGet || req.URL.Path != "/v1/ciBuildRuns/run-1/actions" {
-				t.Fatalf("unexpected first request: %s %s", req.Method, req.URL.String())
+			if stderr != "" {
+				t.Fatalf("expected empty stderr, got %q", stderr)
 			}
-			if req.URL.Query().Get("limit") != "200" {
-				t.Fatalf("expected limit=200, got %q", req.URL.Query().Get("limit"))
+			for _, want := range test.wantStdout {
+				if !strings.Contains(stdout, want) {
+					t.Fatalf("expected %s in output, got %q", want, stdout)
+				}
 			}
-			body := `{"data":[{"type":"ciBuildActions","id":"act-1","attributes":{"name":"Archive","actionType":"ARCHIVE"}},{"type":"ciBuildActions","id":"act-2","attributes":{"name":"Test iOS","actionType":"TEST"}},{"type":"ciBuildActions","id":"act-3","attributes":{"name":"Test macOS","actionType":"TEST"}}]}`
-			return &http.Response{
-				StatusCode: http.StatusOK,
-				Body:       io.NopCloser(strings.NewReader(body)),
-				Header:     http.Header{"Content-Type": []string{"application/json"}},
-			}, nil
-		case 2:
-			if req.Method != http.MethodGet || req.URL.Path != "/v1/ciBuildActions/act-2/testResults" {
-				t.Fatalf("unexpected second request: %s %s", req.Method, req.URL.String())
+			requests := reg.Requests()
+			if callCount := len(requests); callCount != len(test.steps) {
+				t.Fatalf("expected %d requests, got %d", len(test.steps), callCount)
 			}
-			if req.URL.Query().Get("limit") != "200" {
-				t.Fatalf("expected limit=200, got %q", req.URL.Query().Get("limit"))
+			for i, req := range requests {
+				if want := test.steps[i]; req.URL.Path != want.path {
+					t.Fatalf("request %d = %s %s, want GET %s", i+1, req.Method, req.URL.String(), want.path)
+				}
 			}
-			body := `{"data":[{"type":"ciTestResults","id":"result-1"}]}`
-			return &http.Response{
-				StatusCode: http.StatusOK,
-				Body:       io.NopCloser(strings.NewReader(body)),
-				Header:     http.Header{"Content-Type": []string{"application/json"}},
-			}, nil
-		case 3:
-			if req.Method != http.MethodGet || req.URL.Path != "/v1/ciBuildActions/act-3/testResults" {
-				t.Fatalf("unexpected third request: %s %s", req.Method, req.URL.String())
-			}
-			if req.URL.Query().Get("limit") != "200" {
-				t.Fatalf("expected limit=200, got %q", req.URL.Query().Get("limit"))
-			}
-			body := `{"data":[{"type":"ciTestResults","id":"result-2"}]}`
-			return &http.Response{
-				StatusCode: http.StatusOK,
-				Body:       io.NopCloser(strings.NewReader(body)),
-				Header:     http.Header{"Content-Type": []string{"application/json"}},
-			}, nil
-		default:
-			t.Fatalf("unexpected request count %d", callCount)
-			return nil, nil
-		}
-	})
-
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"xcode-cloud", "test-results", "list", "--run-id", "run-1", "--paginate"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatalf("run error: %v", err)
-		}
-	})
-
-	if stderr != "" {
-		t.Fatalf("expected empty stderr, got %q", stderr)
-	}
-	if !strings.Contains(stdout, `"id":"result-1"`) || !strings.Contains(stdout, `"id":"result-2"`) {
-		t.Fatalf("expected aggregated test results, got %q", stdout)
-	}
-	if callCount != 3 {
-		t.Fatalf("expected 3 requests, got %d", callCount)
+		})
 	}
 }
 
 func TestXcodeCloudTestResultsListRunIDEmptyResultsStayArray(t *testing.T) {
 	setupAuth(t)
 
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() {
-		http.DefaultTransport = originalTransport
-	})
+	reg := asctest.NewRegistry(t)
+	reg.Register(asctest.GET("/v1/ciBuildRuns/run-1/actions", "limit=200"),
+		asctest.JSON(http.StatusOK, `{"data":[{"type":"ciBuildActions","id":"act-1","attributes":{"name":"Test iOS","actionType":"TEST"}}]}`))
+	reg.Register(asctest.GET("/v1/ciBuildActions/act-1/testResults"), asctest.JSON(http.StatusOK, `{"data":[]}`))
 
-	callCount := 0
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		callCount++
-		switch callCount {
-		case 1:
-			if req.Method != http.MethodGet || req.URL.Path != "/v1/ciBuildRuns/run-1/actions" {
-				t.Fatalf("unexpected first request: %s %s", req.Method, req.URL.String())
-			}
-			body := `{"data":[{"type":"ciBuildActions","id":"act-1","attributes":{"name":"Test iOS","actionType":"TEST"}}]}`
-			return &http.Response{
-				StatusCode: http.StatusOK,
-				Body:       io.NopCloser(strings.NewReader(body)),
-				Header:     http.Header{"Content-Type": []string{"application/json"}},
-			}, nil
-		case 2:
-			if req.Method != http.MethodGet || req.URL.Path != "/v1/ciBuildActions/act-1/testResults" {
-				t.Fatalf("unexpected second request: %s %s", req.Method, req.URL.String())
-			}
-			body := `{"data":[]}`
-			return &http.Response{
-				StatusCode: http.StatusOK,
-				Body:       io.NopCloser(strings.NewReader(body)),
-				Header:     http.Header{"Content-Type": []string{"application/json"}},
-			}, nil
-		default:
-			t.Fatalf("unexpected request count %d", callCount)
-			return nil, nil
-		}
-	})
-
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"xcode-cloud", "test-results", "list", "--run-id", "run-1"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatalf("run error: %v", err)
-		}
-	})
+	stdout, stderr, err := runRootWithDeps(t, stubClient(t, reg), "xcode-cloud", "test-results", "list", "--run-id", "run-1")
+	if err != nil {
+		t.Fatalf("run error: %v", err)
+	}
 
 	if stderr != "" {
 		t.Fatalf("expected empty stderr, got %q", stderr)
@@ -327,65 +108,27 @@ func TestXcodeCloudTestResultsListRunIDEmptyResultsStayArray(t *testing.T) {
 	}
 }
 
-func TestXcodeCloudIssuesListRejectsNextWithRunID(t *testing.T) {
+func TestXcodeCloudActionResourceUsageErrors(t *testing.T) {
 	setupAuth(t)
 
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	_, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"xcode-cloud", "issues", "list", "--run-id", "run-1", "--next", "https://api.appstoreconnect.apple.com/v1/ciBuildActions/act-1/issues?cursor=abc"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		err := root.Run(context.Background())
-		if !errors.Is(err, flag.ErrHelp) {
-			t.Fatalf("expected ErrHelp, got %v", err)
-		}
+	runUsageExitCases(t, []usageExitCase{
+		{
+			name:    "issues list rejects next with run id",
+			args:    []string{"xcode-cloud", "issues", "list", "--run-id", "run-1", "--next", "https://api.appstoreconnect.apple.com/v1/ciBuildActions/act-1/issues?cursor=abc"},
+			wantErr: "--next is not supported with --run-id",
+			deps:    true,
+		},
+		{
+			name:    "issues list rejects conflicting selectors",
+			args:    []string{"xcode-cloud", "issues", "list", "--action-id", "act-1", "--run-id", "run-1"},
+			wantErr: "--action-id and --run-id are mutually exclusive",
+			deps:    true,
+		},
+		{
+			name:    "artifacts list rejects conflicting selectors",
+			args:    []string{"xcode-cloud", "artifacts", "list", "--action-id", "act-1", "--run-id", "run-1"},
+			wantErr: "--action-id and --run-id are mutually exclusive",
+			deps:    true,
+		},
 	})
-
-	if !strings.Contains(stderr, "--next is not supported with --run-id") {
-		t.Fatalf("expected next/run-id validation error, got %q", stderr)
-	}
-}
-
-func TestXcodeCloudIssuesListRejectsConflictingSelectors(t *testing.T) {
-	setupAuth(t)
-
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	_, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"xcode-cloud", "issues", "list", "--action-id", "act-1", "--run-id", "run-1"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		err := root.Run(context.Background())
-		if !errors.Is(err, flag.ErrHelp) {
-			t.Fatalf("expected ErrHelp, got %v", err)
-		}
-	})
-
-	if !strings.Contains(stderr, "--action-id and --run-id are mutually exclusive") {
-		t.Fatalf("expected mutually exclusive error, got %q", stderr)
-	}
-}
-
-func TestXcodeCloudArtifactsListRejectsConflictingSelectors(t *testing.T) {
-	setupAuth(t)
-
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	_, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"xcode-cloud", "artifacts", "list", "--action-id", "act-1", "--run-id", "run-1"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		err := root.Run(context.Background())
-		if !errors.Is(err, flag.ErrHelp) {
-			t.Fatalf("expected ErrHelp, got %v", err)
-		}
-	})
-
-	if !strings.Contains(stderr, "--action-id and --run-id are mutually exclusive") {
-		t.Fatalf("expected mutually exclusive error, got %q", stderr)
-	}
 }

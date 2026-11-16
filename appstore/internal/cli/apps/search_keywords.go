@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/peterbourgon/ff/v3/ffcli"
@@ -13,9 +12,9 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
-// AppsSearchKeywordsCommand returns the search keywords command group.
-func AppsSearchKeywordsCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("search-keywords", flag.ExitOnError)
+// newAppsSearchKeywordsCommand returns the search keywords command group.
+func newAppsSearchKeywordsCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("search-keywords", flag.ExitOnError)
 
 	return &ffcli.Command{
 		Name:       "search-keywords",
@@ -32,10 +31,10 @@ Examples:
   asc apps search-keywords list --app "APP_ID" --platform IOS --locale "en-US"
   asc apps search-keywords set --app "APP_ID" --version "1.2.3" --locale "en-US" --platform IOS --keywords "kw1,kw2" --confirm`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
-			AppsSearchKeywordsListCommand(),
-			AppsSearchKeywordsSetCommand(),
+			newAppsSearchKeywordsListCommand(d),
+			newAppsSearchKeywordsSetCommand(d),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp
@@ -43,9 +42,9 @@ Examples:
 	}
 }
 
-// AppsSearchKeywordsSetCommand returns the search keywords set subcommand.
-func AppsSearchKeywordsSetCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("apps search-keywords set", flag.ExitOnError)
+// newAppsSearchKeywordsSetCommand returns the search keywords set subcommand.
+func newAppsSearchKeywordsSetCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("apps search-keywords set", flag.ExitOnError)
 
 	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
 	version := fs.String("version", "", "App Store version string (required)")
@@ -53,7 +52,7 @@ func AppsSearchKeywordsSetCommand() *ffcli.Command {
 	platform := fs.String("platform", "", "App Store version platform: IOS, MAC_OS, TV_OS, VISION_OS (required only when ambiguous)")
 	keywords := shared.BindOnceCSVFlag(fs, "keywords", "Version-localized keywords (comma-separated)")
 	confirm := fs.Bool("confirm", false, "Confirm replacing the localization's keywords")
-	output := shared.BindOutputFlags(fs)
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "set",
@@ -72,62 +71,55 @@ Examples:
   asc apps search-keywords set --app "APP_ID" --version "1.2.3" --locale "en-US" --keywords "kw1,kw2" --confirm
   asc apps search-keywords set --app "APP_ID" --version "1.2.3" --locale "en-US" --platform IOS --keywords "kw1,kw2" --confirm`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
-			if len(args) > 0 {
-				return shared.UsageError("apps search-keywords set does not accept positional arguments")
-			}
-
-			resolvedAppID := shared.ResolveAppID(*appID)
+			resolvedAppID := d.ResolveAppID(*appID)
 			if resolvedAppID == "" {
-				fmt.Fprintln(os.Stderr, "Error: --app is required (or set ASC_APP_ID)")
+				fmt.Fprintln(d.IO.ErrOut, "Error: --app is required (or set ASC_APP_ID)")
 				return shared.MissingRequiredUsageError("--app")
 			}
 
 			versionValue := strings.TrimSpace(*version)
 			if versionValue == "" {
-				fmt.Fprintln(os.Stderr, "Error: --version is required to select an App Store version; existing invocations must add --version and --locale")
+				fmt.Fprintln(d.IO.ErrOut, "Error: --version is required to select an App Store version; existing invocations must add --version and --locale")
 				return shared.MissingRequiredUsageError("--version")
 			}
 
 			localeValue := strings.TrimSpace(*locale)
 			if localeValue == "" {
-				fmt.Fprintln(os.Stderr, "Error: --locale is required to select a version localization; existing invocations must add --version and --locale")
+				fmt.Fprintln(d.IO.ErrOut, "Error: --locale is required to select a version localization; existing invocations must add --version and --locale")
 				return shared.MissingRequiredUsageError("--locale")
 			}
 			canonicalLocale, err := shared.CanonicalizeAppStoreLocalizationLocale(localeValue)
 			if err != nil {
-				return shared.UsageError(err.Error())
+				return d.UsageError(err.Error())
 			}
 
 			platformValue := strings.TrimSpace(*platform)
 			if platformValue != "" {
 				platformValue, err = shared.NormalizeAppStoreVersionPlatform(platformValue)
 				if err != nil {
-					return shared.UsageError(err.Error())
+					return d.UsageError(err.Error())
 				}
-			}
-
-			if !*confirm {
-				fmt.Fprintln(os.Stderr, "Error: --confirm is required")
-				return shared.MissingRequiredUsageError("--confirm")
 			}
 
 			keywordValue := strings.TrimSpace(keywords.String())
 			if keywordValue == "" {
-				fmt.Fprintln(os.Stderr, "Error: --keywords is required")
-				return shared.MissingRequiredUsageError("--keywords")
+				return d.RequiredFlag("--keywords")
+			}
+			if err := d.RequireConfirm(*confirm); err != nil {
+				return err
 			}
 			if err := shared.ValidateVersionLocalizationAttributes(asc.AppStoreVersionLocalizationAttributes{Keywords: keywordValue}); err != nil {
-				return shared.UsageError(err.Error())
+				return d.UsageError(err.Error())
 			}
 
-			client, err := shared.GetASCClient()
+			client, err := d.Client()
 			if err != nil {
 				return fmt.Errorf("apps search-keywords set: %w", err)
 			}
 
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
+			requestCtx, cancel := d.Timeout(ctx)
 			defer cancel()
 
 			versionID, err := resolveSearchKeywordsVersionID(requestCtx, client, resolvedAppID, versionValue, platformValue)
@@ -147,7 +139,7 @@ Examples:
 				return fmt.Errorf("apps search-keywords set: failed to update locale %q: %w", canonicalLocale, err)
 			}
 
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+			return d.PrintOutput(resp, *output.Output, *output.Pretty)
 		},
 	}
 }
@@ -155,7 +147,7 @@ Examples:
 func resolveSearchKeywordsVersionID(ctx context.Context, client *asc.Client, appID, version, platform string) (string, error) {
 	opts := []asc.AppStoreVersionsOption{
 		asc.WithAppStoreVersionsVersionStrings([]string{version}),
-		asc.WithAppStoreVersionsLimit(200),
+		asc.Limit[asc.AppStoreVersionsOption](200),
 	}
 	if platform != "" {
 		opts = append(opts, asc.WithAppStoreVersionsPlatforms([]string{platform}))
@@ -166,7 +158,7 @@ func resolveSearchKeywordsVersionID(ctx context.Context, client *asc.Client, app
 		return "", fmt.Errorf("failed to resolve App Store version: %w", err)
 	}
 	allPages, err := asc.PaginateAll(ctx, firstPage, func(pageCtx context.Context, nextURL string) (asc.PaginatedResponse, error) {
-		return client.GetAppStoreVersions(pageCtx, appID, asc.WithAppStoreVersionsNextURL(nextURL))
+		return client.GetAppStoreVersions(pageCtx, appID, asc.NextURL[asc.AppStoreVersionsOption](nextURL))
 	})
 	if err != nil {
 		return "", fmt.Errorf("failed to resolve App Store version: %w", err)
@@ -206,13 +198,13 @@ func resolveSearchKeywordsLocalizationID(ctx context.Context, client *asc.Client
 		ctx,
 		versionID,
 		asc.WithAppStoreVersionLocalizationLocales([]string{locale}),
-		asc.WithAppStoreVersionLocalizationsLimit(200),
+		asc.Limit[asc.AppStoreVersionLocalizationsOption](200),
 	)
 	if err != nil {
 		return "", fmt.Errorf("failed to resolve version localization: %w", err)
 	}
 	allPages, err := asc.PaginateAll(ctx, firstPage, func(pageCtx context.Context, nextURL string) (asc.PaginatedResponse, error) {
-		return client.GetAppStoreVersionLocalizations(pageCtx, versionID, asc.WithAppStoreVersionLocalizationsNextURL(nextURL))
+		return client.GetAppStoreVersionLocalizations(pageCtx, versionID, asc.NextURL[asc.AppStoreVersionLocalizationsOption](nextURL))
 	})
 	if err != nil {
 		return "", fmt.Errorf("failed to resolve version localization: %w", err)
@@ -239,67 +231,46 @@ func resolveSearchKeywordsLocalizationID(ctx context.Context, client *asc.Client
 	}
 }
 
-// AppsSearchKeywordsListCommand returns the search keywords list subcommand.
-func AppsSearchKeywordsListCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("apps search-keywords list", flag.ExitOnError)
+// newAppsSearchKeywordsListCommand returns the search keywords list subcommand.
+func newAppsSearchKeywordsListCommand(d *shared.Deps) *ffcli.Command {
+	var platforms, locales []string
 
-	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
-	platform := fs.String("platform", "", "Filter by platform: IOS, MAC_OS, TV_OS, VISION_OS (comma-separated)")
-	locale := fs.String("locale", "", "Filter by locale(s), comma-separated")
-	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
-	next := fs.String("next", "", "Fetch next page using a links.next URL")
-	paginate := fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")
-	output := shared.BindOutputFlags(fs)
-
-	return &ffcli.Command{
-		Name:       "list",
-		ShortUsage: "asc apps search-keywords list --app \"APP_ID\"",
-		ShortHelp:  "List search keywords for an app.",
+	return shared.BuildPaginatedListCommand(shared.PaginatedListCommandConfig{
+		Deps:        d,
+		FlagSetName: "apps search-keywords list",
+		Name:        "list",
+		ShortUsage:  "asc apps search-keywords list --app \"APP_ID\"",
+		ShortHelp:   "List search keywords for an app.",
 		LongHelp: `List search keywords for an app.
 
 Examples:
   asc apps search-keywords list --app "APP_ID"
   asc apps search-keywords list --app "APP_ID" --platform IOS --locale "en-US"`,
-		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
-		Exec: func(ctx context.Context, args []string) error {
-			if *limit != 0 && (*limit < 1 || *limit > 200) {
-				return shared.UsageError("apps search-keywords list: --limit must be between 1 and 200")
+		ParentFlag:           "app",
+		ParentUsage:          "App Store Connect app ID (or ASC_APP_ID env)",
+		ResolveApp:           true,
+		RequiredDiagnostic:   true,
+		PaginateIgnoresLimit: true,
+		NoSpinner:            true,
+		NextConflicts:        []string{"platform", "locale"},
+		Flags: func(fs *flag.FlagSet) func() error {
+			platform := fs.String("platform", "", "Filter by platform: IOS, MAC_OS, TV_OS, VISION_OS (comma-separated)")
+			locale := fs.String("locale", "", "Filter by locale(s), comma-separated")
+			return func() (err error) {
+				if platforms, err = shared.NormalizeAppStoreVersionPlatforms(shared.SplitCSVUpper(*platform)); err != nil {
+					return d.UsageErrorf("apps search-keywords list: %v", err)
+				}
+				locales = shared.SplitCSV(*locale)
+				if err := shared.ValidateBuildLocalizationLocales(locales); err != nil {
+					return d.UsageErrorf("apps search-keywords list: %v", err)
+				}
+				return nil
 			}
-			if err := shared.ValidateNextURL(*next); err != nil {
-				return shared.UsageErrorf("apps search-keywords list: %v", err)
-			}
-			if err := shared.RejectNextFlagConflicts(fs, *next, "apps search-keywords list", "platform", "locale"); err != nil {
-				return err
-			}
-
-			resolvedAppID := shared.ResolveAppID(*appID)
-			if resolvedAppID == "" && strings.TrimSpace(*next) == "" {
-				fmt.Fprintln(os.Stderr, "Error: --app is required (or set ASC_APP_ID)")
-				return shared.MissingRequiredUsageError("--app")
-			}
-
-			platforms, err := shared.NormalizeAppStoreVersionPlatforms(shared.SplitCSVUpper(*platform))
-			if err != nil {
-				return fmt.Errorf("apps search-keywords list: %w", err)
-			}
-
-			locales := shared.SplitCSV(*locale)
-			if err := shared.ValidateBuildLocalizationLocales(locales); err != nil {
-				return fmt.Errorf("apps search-keywords list: %w", err)
-			}
-
-			client, err := shared.GetASCClient()
-			if err != nil {
-				return fmt.Errorf("apps search-keywords list: %w", err)
-			}
-
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
-			defer cancel()
-
+		},
+		FetchPage: func(ctx context.Context, client *asc.Client, appID string, limit int, next string) (asc.PaginatedResponse, error) {
 			opts := []asc.AppSearchKeywordsOption{
-				asc.WithAppSearchKeywordsLimit(*limit),
-				asc.WithAppSearchKeywordsNextURL(*next),
+				asc.Limit[asc.AppSearchKeywordsOption](limit),
+				asc.NextURL[asc.AppSearchKeywordsOption](next),
 			}
 			if len(platforms) > 0 {
 				opts = append(opts, asc.WithAppSearchKeywordsPlatforms(platforms))
@@ -307,29 +278,7 @@ Examples:
 			if len(locales) > 0 {
 				opts = append(opts, asc.WithAppSearchKeywordsLocales(locales))
 			}
-
-			if *paginate {
-				paginateOpts := append(opts, asc.WithAppSearchKeywordsLimit(200))
-				firstPage, err := client.GetAppSearchKeywords(requestCtx, resolvedAppID, paginateOpts...)
-				if err != nil {
-					return fmt.Errorf("apps search-keywords list: failed to fetch: %w", err)
-				}
-
-				resp, err := asc.PaginateAll(requestCtx, firstPage, func(ctx context.Context, nextURL string) (asc.PaginatedResponse, error) {
-					return client.GetAppSearchKeywords(ctx, resolvedAppID, asc.WithAppSearchKeywordsNextURL(nextURL))
-				})
-				if err != nil {
-					return fmt.Errorf("apps search-keywords list: %w", err)
-				}
-				return shared.PrintOutput(resp, *output.Output, *output.Pretty)
-			}
-
-			resp, err := client.GetAppSearchKeywords(requestCtx, resolvedAppID, opts...)
-			if err != nil {
-				return fmt.Errorf("apps search-keywords list: failed to fetch: %w", err)
-			}
-
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+			return client.GetAppSearchKeywords(ctx, appID, opts...)
 		},
-	}
+	})
 }

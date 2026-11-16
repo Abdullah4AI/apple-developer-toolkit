@@ -1,6 +1,7 @@
 package schema
 
 import (
+	"bytes"
 	"context"
 	"flag"
 	"strings"
@@ -17,7 +18,7 @@ func TestParseInterspersedSchemaFlagsPreservesErrorPrecedence(t *testing.T) {
 		_, err := shared.ParseInterspersedFlags(fs, []string{
 			"apps", "--bogus", "--profile", "staging",
 		})
-		if err == nil || !strings.Contains(err.Error(), "flag provided but not defined: -bogus") {
+		if err == nil || !strings.Contains(err.Error(), "flag provided but not defined: --bogus") {
 			t.Fatalf("ParseInterspersedFlags() error = %v, want the unknown-flag error", err)
 		}
 	})
@@ -34,9 +35,19 @@ func TestParseInterspersedSchemaFlagsPreservesErrorPrecedence(t *testing.T) {
 }
 
 func TestSchemaCommandExecRejectsMisplacedProfileAfterQuery(t *testing.T) {
-	err := SchemaCommand().Exec(context.Background(), []string{"apps", "--profile", "work"})
+	t.Parallel()
+
+	var stdout, stderr bytes.Buffer
+	d := &shared.Deps{IO: &shared.IO{Out: &stdout, ErrOut: &stderr}}
+	err := NewSchemaCommand(d).Exec(context.Background(), []string{"apps", "--profile", "work"})
 	if err == nil || err.Error() != "`--profile` must appear before positional arguments" {
 		t.Fatalf("SchemaCommand().Exec() error = %v, want the profile-placement usage error", err)
+	}
+	if got, want := stderr.String(), "Error: `--profile` must appear before positional arguments\n"; got != want {
+		t.Fatalf("stderr = %q, want %q", got, want)
+	}
+	if stdout.Len() != 0 {
+		t.Fatalf("stdout = %q, want empty", stdout.String())
 	}
 }
 
@@ -389,15 +400,23 @@ func TestNormalizeMethodFilter(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := normalizeMethodFilter(tt.input)
+			var stderr bytes.Buffer
+			d := &shared.Deps{IO: &shared.IO{ErrOut: &stderr}}
+			got, err := normalizeMethodFilter(d, tt.input)
 			if tt.wantErr {
 				if err == nil {
 					t.Fatalf("normalizeMethodFilter(%q) = nil error, want error", tt.input)
+				}
+				if want := "Error: invalid --method \"" + tt.input + "\" (allowed: GET, POST, PATCH, DELETE)\n"; stderr.String() != want {
+					t.Fatalf("stderr = %q, want %q", stderr.String(), want)
 				}
 				return
 			}
 			if err != nil {
 				t.Fatalf("normalizeMethodFilter(%q) error: %v", tt.input, err)
+			}
+			if stderr.Len() != 0 {
+				t.Fatalf("stderr = %q, want empty", stderr.String())
 			}
 			if got != tt.want {
 				t.Fatalf("normalizeMethodFilter(%q) = %q, want %q", tt.input, got, tt.want)

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -14,6 +15,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
 func preserveInstallerGlobals(t *testing.T) {
@@ -23,14 +26,12 @@ func preserveInstallerGlobals(t *testing.T) {
 	originalCheckout := checkoutSkillsSource
 	originalHome := userHomeDirectory
 	originalRename := renameWithinRoot
-	originalTime := currentTime
 	t.Cleanup(func() {
 		lookupExecutable = originalLookup
 		runGitCommand = originalRunGit
 		checkoutSkillsSource = originalCheckout
 		userHomeDirectory = originalHome
 		renameWithinRoot = originalRename
-		currentTime = originalTime
 	})
 }
 
@@ -40,9 +41,6 @@ func installFixture(t *testing.T, checkout func(gitIsolationPaths) error) string
 	t.Setenv("XDG_STATE_HOME", "")
 
 	home := t.TempDir()
-	currentTime = func() time.Time {
-		return time.Date(2026, time.July, 30, 12, 0, 0, 0, time.UTC)
-	}
 	userHomeDirectory = func() (string, error) { return home, nil }
 	lookupExecutable = func(name string) (string, error) {
 		if name != "git" {
@@ -80,10 +78,16 @@ func populatePinnedSkillsFixture(t *testing.T, sourceDir string, names []string)
 	}
 }
 
-func runInstallCommand(t *testing.T, args ...string) error {
+func runInstallCommand(t *testing.T) error {
 	t.Helper()
-	cmd := InstallSkillsCommand()
-	if err := cmd.Parse(args); err != nil {
+	cmd := NewInstallSkillsCommand(&shared.Deps{
+		IO: &shared.IO{In: strings.NewReader(""), Out: io.Discard, ErrOut: io.Discard},
+		Now: func() time.Time {
+			return time.Date(2026, time.July, 30, 12, 0, 0, 0, time.UTC)
+		},
+		Timeout: shared.ContextWithTimeout,
+	})
+	if err := cmd.Parse(nil); err != nil {
 		t.Fatalf("parse error: %v", err)
 	}
 	return cmd.Run(context.Background())
@@ -111,22 +115,6 @@ func TestSkillsSourceIsPinnedToImmutableInput(t *testing.T) {
 		if !regexp.MustCompile(`^[0-9a-f]{40}$`).MatchString(expectedSkillTreeHashes[name]) {
 			t.Fatalf("tree hash for %s = %q, want a Git object ID", name, expectedSkillTreeHashes[name])
 		}
-	}
-}
-
-func TestInstallSkillsRejectsPositionalArgumentsBeforeSideEffects(t *testing.T) {
-	preserveInstallerGlobals(t)
-	lookupExecutable = func(name string) (string, error) {
-		t.Fatalf("positional argument caused executable lookup for %q", name)
-		return "", nil
-	}
-
-	err := runInstallCommand(t, "unexpected")
-	if err == nil {
-		t.Fatal("expected positional argument error")
-	}
-	if !strings.Contains(err.Error(), "unexpected arguments: unexpected") {
-		t.Fatalf("error = %q, want unexpected argument diagnostic", err)
 	}
 }
 

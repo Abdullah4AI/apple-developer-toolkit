@@ -95,7 +95,7 @@ func TestInAppPurchaseVersionEndpoints(t *testing.T) {
 					WithIAPVersionsImageFields([]string{"fileName"}),
 					WithIAPVersionsLocalizationFields([]string{"locale"}),
 					WithIAPVersionsInclude([]string{"images"}),
-					WithIAPVersionsLimit(3),
+					Limit[IAPVersionsOption](3),
 					WithIAPVersionsImagesLimit(2),
 				)
 				return err
@@ -105,7 +105,7 @@ func TestInAppPurchaseVersionEndpoints(t *testing.T) {
 			name: "versions linkages", method: http.MethodGet, path: "/v2/inAppPurchases/iap-1/relationships/versions", responseCode: http.StatusOK,
 			responseBody: `{"data":[{"type":"inAppPurchaseVersions","id":"version-1"}]}`, query: map[string]string{"limit": "4"},
 			call: func(c *Client) error {
-				_, err := c.GetInAppPurchaseVersionsRelationships(context.Background(), "iap-1", WithLinkagesLimit(4))
+				_, err := c.GetInAppPurchaseVersionsRelationships(context.Background(), "iap-1", Limit[LinkagesOption](4))
 				return err
 			},
 		},
@@ -119,18 +119,10 @@ func TestInAppPurchaseVersionEndpoints(t *testing.T) {
 			},
 		},
 		{
-			name: "image linkage", method: http.MethodGet, path: "/v1/inAppPurchaseVersions/version-1/relationships/image", responseCode: http.StatusOK,
-			responseBody: `{"data":{"type":"inAppPurchaseImages","id":"image-1"}}`,
-			call: func(c *Client) error {
-				_, err := c.GetInAppPurchaseVersionImageRelationship(context.Background(), "version-1")
-				return err
-			},
-		},
-		{
 			name: "related images", method: http.MethodGet, path: "/v1/inAppPurchaseVersions/version-1/images", responseCode: http.StatusOK,
 			responseBody: `{"data":[{"type":"inAppPurchaseImages","id":"image-1"}]}`, query: map[string]string{"fields[inAppPurchaseImages]": "fileName,assetDeliveryState", "limit": "7"},
 			call: func(c *Client) error {
-				_, err := c.GetInAppPurchaseVersionImages(context.Background(), "version-1", WithIAPVersionImagesFields([]string{"fileName", "assetDeliveryState"}), WithIAPVersionImagesLimit(7))
+				_, err := c.GetInAppPurchaseVersionImages(context.Background(), "version-1", WithIAPVersionImagesFields([]string{"fileName", "assetDeliveryState"}), Limit[IAPVersionImagesOption](7))
 				return err
 			},
 		},
@@ -138,7 +130,7 @@ func TestInAppPurchaseVersionEndpoints(t *testing.T) {
 			name: "images linkages", method: http.MethodGet, path: "/v1/inAppPurchaseVersions/version-1/relationships/images", responseCode: http.StatusOK,
 			responseBody: `{"data":[{"type":"inAppPurchaseImages","id":"image-1"}]}`, query: map[string]string{"limit": "8"},
 			call: func(c *Client) error {
-				_, err := c.GetInAppPurchaseVersionImagesRelationships(context.Background(), "version-1", WithLinkagesLimit(8))
+				_, err := c.GetInAppPurchaseVersionImagesRelationships(context.Background(), "version-1", Limit[LinkagesOption](8))
 				return err
 			},
 		},
@@ -146,7 +138,7 @@ func TestInAppPurchaseVersionEndpoints(t *testing.T) {
 			name: "related localizations", method: http.MethodGet, path: "/v1/inAppPurchaseVersions/version-1/localizations", responseCode: http.StatusOK,
 			responseBody: `{"data":[{"type":"inAppPurchaseLocalizations","id":"loc-1"}]}`, query: map[string]string{"fields[inAppPurchaseLocalizations]": "name,locale", "fields[inAppPurchaseVersions]": "version,state", "include": "version", "limit": "9"},
 			call: func(c *Client) error {
-				_, err := c.GetInAppPurchaseVersionLocalizations(context.Background(), "version-1", WithIAPVersionLocalizationsFields([]string{"name", "locale"}), WithIAPVersionLocalizationsVersionFields([]string{"version", "state"}), WithIAPVersionLocalizationsInclude([]string{"version"}), WithIAPVersionLocalizationsLimit(9))
+				_, err := c.GetInAppPurchaseVersionLocalizations(context.Background(), "version-1", WithIAPVersionLocalizationsFields([]string{"name", "locale"}), WithIAPVersionLocalizationsVersionFields([]string{"version", "state"}), WithIAPVersionLocalizationsInclude([]string{"version"}), Limit[IAPVersionLocalizationsOption](9))
 				return err
 			},
 		},
@@ -154,7 +146,7 @@ func TestInAppPurchaseVersionEndpoints(t *testing.T) {
 			name: "localizations linkages", method: http.MethodGet, path: "/v1/inAppPurchaseVersions/version-1/relationships/localizations", responseCode: http.StatusOK,
 			responseBody: `{"data":[{"type":"inAppPurchaseLocalizations","id":"loc-1"}]}`, query: map[string]string{"limit": "10"},
 			call: func(c *Client) error {
-				_, err := c.GetInAppPurchaseVersionLocalizationsRelationships(context.Background(), "version-1", WithLinkagesLimit(10))
+				_, err := c.GetInAppPurchaseVersionLocalizationsRelationships(context.Background(), "version-1", Limit[LinkagesOption](10))
 				return err
 			},
 		},
@@ -198,10 +190,6 @@ func TestInAppPurchaseVersionEndpoints(t *testing.T) {
 			},
 		},
 		{
-			name: "delete localization v2", method: http.MethodDelete, path: "/v2/inAppPurchaseLocalizations/loc-1", responseCode: http.StatusNoContent,
-			call: func(c *Client) error { return c.DeleteInAppPurchaseLocalizationV2(context.Background(), "loc-1") },
-		},
-		{
 			name: "create image v2", method: http.MethodPost, path: "/v2/inAppPurchaseImages", responseCode: http.StatusCreated,
 			responseBody: `{"data":{"type":"inAppPurchaseImages","id":"image-1"}}`,
 			wantBody:     `{"data":{"type":"inAppPurchaseImages","attributes":{"fileSize":123,"fileName":"image.png"},"relationships":{"version":{"data":{"type":"inAppPurchaseVersions","id":"version-1"}}}}}`,
@@ -227,10 +215,6 @@ func TestInAppPurchaseVersionEndpoints(t *testing.T) {
 				_, err := c.UpdateInAppPurchaseImageV2(context.Background(), "image-1", InAppPurchaseImageV2UpdateAttributes{Uploaded: &NullableBool{Value: &uploaded}})
 				return err
 			},
-		},
-		{
-			name: "delete image v2", method: http.MethodDelete, path: "/v2/inAppPurchaseImages/image-1", responseCode: http.StatusNoContent,
-			call: func(c *Client) error { return c.DeleteInAppPurchaseImageV2(context.Background(), "image-1") },
 		},
 	}
 

@@ -1,0 +1,24 @@
+{
+  "tag": "Certificates",
+  "file": "certificates_gen.go",
+  "types": [
+    "CertificateCreateData",
+    "CertificateCreateRelationships",
+    "CertificateCreateRequest",
+    "CertificateResponse",
+    "CertificateUpdateAttributes",
+    "CertificateUpdateData",
+    "CertificateUpdateRequest",
+    "CertificatesResponse"
+  ],
+  "relationships": [
+    {"data":"CertificateCreateData","type":"*CertificateCreateRelationships","omitempty":true}
+  ],
+  "operations": [
+    {"operation":"certificates_deleteInstance","name":"RevokeCertificate","params":["id"],"check":"trim"},
+    {"operation":"certificates_getCollection","name":"GetCertificates","options":"CertificatesOption","query":"buildCertificatesQuery","nextContext":"certificates"},
+    {"operation":"certificates_passTypeId_getToOneRelated","name":"GetCertificatePassTypeID","params":["certificateID"],"check":"trim"},
+    {"operation":"certificates_passTypeId_getToOneRelationship","name":"GetCertificatePassTypeIDRelationship","params":["certificateID"],"check":"trim"},
+    {"operation":"certificates_updateInstance","name":"UpdateCertificate","params":["id"],"check":"trim"}
+  ]
+}

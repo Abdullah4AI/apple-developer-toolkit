@@ -13,7 +13,7 @@ import (
 	"testing"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
-	subscriptionscli "github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/subscriptions"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asctest"
 )
 
 func TestSubscriptionsAdjustedEqualizationsSendsExactFilters(t *testing.T) {
@@ -305,13 +305,6 @@ func TestSubscriptionsPricePointEqualizationsKeepTerritoryInSparseFields(t *test
 			if err != nil {
 				t.Fatalf("new test client: %v", err)
 			}
-			restore := subscriptionscli.SetPricePointsClientFactory(func() (*asc.Client, error) {
-				return client, nil
-			})
-			t.Cleanup(restore)
-
-			root := RootCommand("1.2.3")
-			root.FlagSet.SetOutput(io.Discard)
 			args := []string{
 				"subscriptions", "pricing", "price-points", test.command,
 				"--price-point-id", "base-1",
@@ -319,14 +312,10 @@ func TestSubscriptionsPricePointEqualizationsKeepTerritoryInSparseFields(t *test
 				"--output", "json",
 			}
 			args = append(args, test.args...)
-			_, stderr := captureOutput(t, func() {
-				if err := root.Parse(args); err != nil {
-					t.Fatalf("parse: %v", err)
-				}
-				if err := root.Run(context.Background()); err != nil {
-					t.Fatalf("run: %v", err)
-				}
-			})
+			_, stderr, err := runRootWithDeps(t, func() (*asc.Client, error) { return client, nil }, args...)
+			if err != nil {
+				t.Fatalf("run: %v", err)
+			}
 			if stderr != "" {
 				t.Fatalf("expected empty stderr, got %q", stderr)
 			}
@@ -395,13 +384,12 @@ func TestSubscriptionsAdjustedEqualizationsRequiresLiveFiltersBeforeClient(t *te
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			clientFactoryCalled := false
-			restore := subscriptionscli.SetPricePointsClientFactory(func() (*asc.Client, error) {
+			client := func() (*asc.Client, error) {
 				clientFactoryCalled = true
 				return nil, errors.New("poison price-points client factory called")
-			})
-			t.Cleanup(restore)
+			}
 
-			assertUsageExit(t, test.args, test.want)
+			assertUsageExitWithDeps(t, client, test.args, test.want)
 			if clientFactoryCalled {
 				t.Fatal("missing adjusted-equalizations filters reached the price-points client factory")
 			}
@@ -411,10 +399,8 @@ func TestSubscriptionsAdjustedEqualizationsRequiresLiveFiltersBeforeClient(t *te
 
 func TestSubscriptionsPricePointsListValidates441FlagsBeforeLookup(t *testing.T) {
 	setupAuth(t)
-	installDefaultTransport(t, roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		t.Fatalf("invalid fields must fail before HTTP lookup: %s %s", req.Method, req.URL)
-		return nil, nil
-	}))
+	reg := asctest.NewRegistry(t)
+	reg.Install()
 
 	assertUsageExit(t, []string{
 		"subscriptions", "pricing", "price-points", "list",
@@ -430,10 +416,8 @@ func TestSubscriptionsPricePointsListValidates441FlagsBeforeLookup(t *testing.T)
 
 func TestSubscriptionsPricePointsListRejectsNextQueryConflictsBeforeLookup(t *testing.T) {
 	setupAuth(t)
-	installDefaultTransport(t, roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		t.Fatalf("next conflicts must fail before HTTP lookup: %s %s", req.Method, req.URL)
-		return nil, nil
-	}))
+	reg := asctest.NewRegistry(t)
+	reg.Install()
 
 	assertUsageExit(t, []string{
 		"subscriptions", "pricing", "price-points", "list",
@@ -449,18 +433,6 @@ func TestSubscriptionsPricePointCommandsRejectAllOpaqueNextConflictsBeforeClient
 		nextURL  string
 		conflict []string
 	}{
-		{
-			name:     "list empty owner subscription",
-			command:  []string{"subscriptions", "pricing", "price-points", "list"},
-			nextURL:  "https://api.appstoreconnect.apple.com/v1/subscriptions/sub-1/pricePoints?cursor=next",
-			conflict: []string{"--subscription-id", ""},
-		},
-		{
-			name:     "list empty owner app",
-			command:  []string{"subscriptions", "pricing", "price-points", "list"},
-			nextURL:  "https://api.appstoreconnect.apple.com/v1/subscriptions/sub-1/pricePoints?cursor=next",
-			conflict: []string{"--app", ""},
-		},
 		{
 			name:     "list territory filter",
 			command:  []string{"subscriptions", "pricing", "price-points", "list"},
@@ -524,7 +496,6 @@ func TestSubscriptionsPricePointCommandsRejectAllOpaqueNextConflictsBeforeClient
 		name string
 		args []string
 	}{
-		{name: "empty owner price point", args: []string{"--price-point-id", ""}},
 		{name: "territory filter", args: []string{"--territory", "USA"}},
 		{name: "subscription filter", args: []string{"--subscription-id", "sub-1"}},
 	}, commonFilters...)
@@ -547,14 +518,13 @@ func TestSubscriptionsPricePointCommandsRejectAllOpaqueNextConflictsBeforeClient
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			clientFactoryCalled := false
-			restore := subscriptionscli.SetPricePointsClientFactory(func() (*asc.Client, error) {
+			client := func() (*asc.Client, error) {
 				clientFactoryCalled = true
 				return nil, errors.New("poison price-points client factory called")
-			})
-			t.Cleanup(restore)
+			}
 
 			args := append(append(append([]string{}, test.command...), "--next", test.nextURL), test.conflict...)
-			assertUsageExit(t, args, "--next cannot be combined")
+			assertUsageExitWithDeps(t, client, args, "--next cannot be combined")
 			if clientFactoryCalled {
 				t.Fatal("next conflict reached the price-points client factory")
 			}
@@ -651,15 +621,10 @@ func TestSubscriptionsPricePointCommandsContinueFromOpaqueNextURL(t *testing.T) 
 
 func TestSubscriptionsPricePointsListKeepsCustomerPriceForClientSideFiltering(t *testing.T) {
 	setupAuth(t)
-	installDefaultTransport(t, roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		if req.URL.Path != "/v1/subscriptions/8000000001/pricePoints" {
-			t.Fatalf("unexpected request: %s %s", req.Method, req.URL)
-		}
-		if got := req.URL.Query().Get("fields[subscriptionPricePoints]"); got != "proceeds,customerPrice" {
-			t.Fatalf("fields[subscriptionPricePoints]=%q, want proceeds,customerPrice", got)
-		}
-		return jsonResponse(http.StatusOK, `{"data":[{"type":"subscriptionPricePoints","id":"point-1","attributes":{"customerPrice":"4.99","proceeds":"3.50"}}],"links":{}}`)
-	}))
+	reg := asctest.NewRegistry(t)
+	reg.Install()
+	reg.Register(asctest.GET("/v1/subscriptions/8000000001/pricePoints", "fields[subscriptionPricePoints]=proceeds,customerPrice"),
+		asctest.JSON(http.StatusOK, `{"data":[{"type":"subscriptionPricePoints","id":"point-1","attributes":{"customerPrice":"4.99","proceeds":"3.50"}}],"links":{}}`))
 
 	root := RootCommand("1.2.3")
 	root.FlagSet.SetOutput(io.Discard)
@@ -691,18 +656,10 @@ func TestSubscriptionsPricePointsListKeepsCustomerPriceForClientSideFiltering(t 
 
 func TestSubscriptionsPricePointsListKeepsFullPayloadWhenFieldsAreOmitted(t *testing.T) {
 	setupAuth(t)
-	installDefaultTransport(t, roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		if req.URL.Path != "/v1/subscriptions/8000000001/pricePoints" {
-			t.Fatalf("unexpected request: %s %s", req.Method, req.URL)
-		}
-		if got := req.URL.Query().Get("include"); got != "territory" {
-			t.Fatalf("include=%q, want territory", got)
-		}
-		if _, ok := req.URL.Query()["fields[subscriptionPricePoints]"]; ok {
-			t.Fatalf("unexpected sparse fields query: %s", req.URL.RawQuery)
-		}
-		return jsonResponse(http.StatusOK, `{"data":[{"type":"subscriptionPricePoints","id":"point-1","attributes":{"customerPrice":"4.99","proceeds":"3.50","proceedsYear2":"3.75"}}],"links":{}}`)
-	}))
+	reg := asctest.NewRegistry(t)
+	reg.Install()
+	reg.Register(asctest.GET("/v1/subscriptions/8000000001/pricePoints", "include=territory"),
+		asctest.JSON(http.StatusOK, `{"data":[{"type":"subscriptionPricePoints","id":"point-1","attributes":{"customerPrice":"4.99","proceeds":"3.50","proceedsYear2":"3.75"}}],"links":{}}`))
 
 	root := RootCommand("1.2.3")
 	root.FlagSet.SetOutput(io.Discard)

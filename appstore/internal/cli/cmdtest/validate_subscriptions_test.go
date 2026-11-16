@@ -5,15 +5,16 @@ import (
 	"encoding/json"
 	"errors"
 	"flag"
-	"io"
 	"net"
 	"net/http"
 	"net/url"
 	"path/filepath"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
+	rootcmd "github.com/Abdullah4AI/apple-developer-toolkit/appstore/cmd"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/validate"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/validation"
@@ -264,18 +265,10 @@ func validValidateSubscriptionsFixture() validateSubscriptionsFixture {
 func TestValidateSubscriptionsRequiresApp(t *testing.T) {
 	t.Setenv("ASC_APP_ID", "")
 
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"validate", "subscriptions"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		err := root.Run(context.Background())
-		if !errors.Is(err, flag.ErrHelp) {
-			t.Fatalf("expected ErrHelp, got %v", err)
-		}
-	})
+	stdout, stderr, err := runRootWithDeps(t, nil, "validate", "subscriptions")
+	if !errors.Is(err, flag.ErrHelp) {
+		t.Fatalf("expected ErrHelp, got %v", err)
+	}
 
 	if stdout != "" {
 		t.Fatalf("expected empty stdout, got %q", stdout)
@@ -288,20 +281,10 @@ func TestValidateSubscriptionsRequiresApp(t *testing.T) {
 func TestValidateSubscriptionsOutputsJSONAndTable(t *testing.T) {
 	fixture := validValidateSubscriptionsFixture()
 	client := newValidateSubscriptionsClient(t, fixture)
-	restore := validate.SetClientFactory(func() (*asc.Client, error) {
-		return client, nil
-	})
-	defer restore()
-
-	root := RootCommand("1.2.3")
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"validate", "subscriptions", "--app", "app-1"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatalf("run error: %v", err)
-		}
-	})
+	stdout, stderr, err := runRootWithDeps(t, func() (*asc.Client, error) { return client, nil }, "validate", "subscriptions", "--app", "app-1")
+	if err != nil {
+		t.Fatalf("run error: %v", err)
+	}
 
 	if stderr != "" {
 		t.Fatalf("expected empty stderr, got %q", stderr)
@@ -315,15 +298,10 @@ func TestValidateSubscriptionsOutputsJSONAndTable(t *testing.T) {
 		t.Fatalf("expected no issues, got %+v", report.Summary)
 	}
 
-	root = RootCommand("1.2.3")
-	stdout, _ = captureOutput(t, func() {
-		if err := root.Parse([]string{"validate", "subscriptions", "--app", "app-1", "--output", "table"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatalf("run error: %v", err)
-		}
-	})
+	stdout, _, err = runRootWithDeps(t, func() (*asc.Client, error) { return client, nil }, "validate", "subscriptions", "--app", "app-1", "--output", "table")
+	if err != nil {
+		t.Fatalf("run error: %v", err)
+	}
 
 	if !strings.Contains(stdout, "Severity") {
 		t.Fatalf("expected table output to include headers, got %q", stdout)
@@ -347,20 +325,10 @@ func TestValidateSubscriptionsWarnsPartialSubscriptionPricingCoverage(t *testing
 	}
 
 	client := newValidateSubscriptionsClient(t, fixture)
-	restore := validate.SetClientFactory(func() (*asc.Client, error) {
-		return client, nil
-	})
-	defer restore()
-
-	root := RootCommand("1.2.3")
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"validate", "subscriptions", "--app", "app-1"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatalf("expected warning-only validate subscriptions run, got %v", err)
-		}
-	})
+	stdout, stderr, err := runRootWithDeps(t, func() (*asc.Client, error) { return client, nil }, "validate", "subscriptions", "--app", "app-1")
+	if err != nil {
+		t.Fatalf("expected warning-only validate subscriptions run, got %v", err)
+	}
 	if stderr != "" {
 		t.Fatalf("expected empty stderr, got %q", stderr)
 	}
@@ -388,20 +356,10 @@ func TestValidateSubscriptionsCountsAvailableTerritoriesAcrossPages(t *testing.T
 	}
 
 	client := newValidateSubscriptionsClient(t, fixture)
-	restore := validate.SetClientFactory(func() (*asc.Client, error) {
-		return client, nil
-	})
-	defer restore()
-
-	root := RootCommand("1.2.3")
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"validate", "subscriptions", "--app", "app-1"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatalf("expected warning-only validate subscriptions run, got %v", err)
-		}
-	})
+	stdout, stderr, err := runRootWithDeps(t, func() (*asc.Client, error) { return client, nil }, "validate", "subscriptions", "--app", "app-1")
+	if err != nil {
+		t.Fatalf("expected warning-only validate subscriptions run, got %v", err)
+	}
 	if stderr != "" {
 		t.Fatalf("expected empty stderr, got %q", stderr)
 	}
@@ -429,20 +387,10 @@ func TestValidateSubscriptionsFallsBackToCountWhenAppTerritoryIDsAreIncomplete(t
 	}
 
 	client := newValidateSubscriptionsClient(t, fixture)
-	restore := validate.SetClientFactory(func() (*asc.Client, error) {
-		return client, nil
-	})
-	defer restore()
-
-	root := RootCommand("1.2.3")
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"validate", "subscriptions", "--app", "app-1"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatalf("expected warning-only validate subscriptions run, got %v", err)
-		}
-	})
+	stdout, stderr, err := runRootWithDeps(t, func() (*asc.Client, error) { return client, nil }, "validate", "subscriptions", "--app", "app-1")
+	if err != nil {
+		t.Fatalf("expected warning-only validate subscriptions run, got %v", err)
+	}
 	if stderr != "" {
 		t.Fatalf("expected empty stderr, got %q", stderr)
 	}
@@ -468,72 +416,77 @@ func TestValidateSubscriptionsFallsBackToCountWhenAppTerritoryIDsAreIncomplete(t
 	}
 }
 
-func TestValidateSubscriptionsChecksPricingMatrixWhenAvailabilityForbidden(t *testing.T) {
-	fixture := validValidateSubscriptionsFixture()
-	fixture.availabilityV2Status = http.StatusForbidden
-	fixture.availabilityV2 = apiErrorJSONForStatus(http.StatusForbidden)
-	fixture.pricingTerritories = `{"data":[{"type":"territories","id":"USA"},{"type":"territories","id":"CAN"}],"links":{}}`
-	fixture.expectedPriceInclude = "territory"
-	fixture.pricesBySubscription = map[string]string{
-		"sub-1": `{"data":[{"type":"subscriptionPrices","id":"price-1","attributes":{"startDate":"2026-01-01"},"relationships":{"territory":{"data":{"type":"territories","id":"USA"}}}}]}`,
+func TestValidateSubscriptionsChecksPricingMatrixWhenAppAvailabilityIsIncomplete(t *testing.T) {
+	const paginatedAvailability = `{"data":{"type":"appAvailabilities","id":"avail-1","attributes":{"availableInNewTerritories":true}}}`
+	const nextPage = `"links":{"next":"https://api.appstoreconnect.apple.com/v2/appAvailabilities/avail-1/territoryAvailabilities?cursor=page-2"}}`
+	tests := []struct {
+		name   string
+		mutate func(*validateSubscriptionsFixture)
+	}{
+		{
+			name: "availability forbidden",
+			mutate: func(fixture *validateSubscriptionsFixture) {
+				fixture.availabilityV2Status = http.StatusForbidden
+				fixture.availabilityV2 = apiErrorJSONForStatus(http.StatusForbidden)
+			},
+		},
+		{
+			name: "availability rate limited",
+			mutate: func(fixture *validateSubscriptionsFixture) {
+				fixture.availabilityV2Status = http.StatusTooManyRequests
+				fixture.availabilityV2 = apiErrorJSONForStatus(http.StatusTooManyRequests)
+			},
+		},
+		{
+			name: "paginated availability rate limited",
+			mutate: func(fixture *validateSubscriptionsFixture) {
+				fixture.availabilityV2 = paginatedAvailability
+				fixture.territories = `{"data":[{"type":"territoryAvailabilities","id":"ta-1","attributes":{"available":true}}],` + nextPage
+				fixture.territoryStatusByQuery = map[string]int{"cursor=page-2": http.StatusTooManyRequests}
+			},
+		},
+		{
+			name: "paginated availability has partial count",
+			mutate: func(fixture *validateSubscriptionsFixture) {
+				fixture.availabilityV2 = paginatedAvailability
+				fixture.territories = `{"data":[
+					{"type":"territoryAvailabilities","id":"ta-1","attributes":{"available":true}},
+					{"type":"territoryAvailabilities","id":"ta-2","attributes":{"available":true}}
+				],` + nextPage
+				fixture.territoryStatusByQuery = map[string]int{"cursor=page-2": http.StatusTooManyRequests}
+			},
+		},
 	}
 
-	client := newValidateSubscriptionsClient(t, fixture)
-	restore := validate.SetClientFactory(func() (*asc.Client, error) {
-		return client, nil
-	})
-	defer restore()
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			fixture := validValidateSubscriptionsFixture()
+			fixture.pricingTerritories = `{"data":[{"type":"territories","id":"USA"},{"type":"territories","id":"CAN"}],"links":{}}`
+			fixture.expectedPriceInclude = "territory"
+			fixture.pricesBySubscription = map[string]string{
+				"sub-1": `{"data":[{"type":"subscriptionPrices","id":"price-1","attributes":{"startDate":"2026-01-01"},"relationships":{"territory":{"data":{"type":"territories","id":"USA"}}}}]}`,
+			}
+			test.mutate(&fixture)
 
-	root := RootCommand("1.2.3")
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"validate", "subscriptions", "--app", "app-1"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatalf("expected availability permission failure to be non-blocking, got %v", err)
-		}
-	})
-	if stderr != "" {
-		t.Fatalf("expected empty stderr, got %q", stderr)
-	}
-
-	var report validation.SubscriptionsReport
-	if err := json.Unmarshal([]byte(stdout), &report); err != nil {
-		t.Fatalf("failed to parse JSON output: %v", err)
-	}
-	if hasCheckWithID(report.Checks, "subscriptions.pricing_coverage.unverified") {
-		t.Fatalf("did not expect app availability failure to suppress pricing-matrix validation, got %+v", report.Checks)
-	}
-	if !hasCheckWithID(report.Checks, "subscriptions.pricing.partial_territory_coverage") {
-		t.Fatalf("expected missing canonical pricing territory to be reported, got %+v", report.Checks)
+			report := runValidateSubscriptionsReport(t, fixture)
+			if hasCheckWithID(report.Checks, "subscriptions.pricing_coverage.unverified") {
+				t.Fatalf("did not expect app availability failure to suppress pricing-matrix validation, got %+v", report.Checks)
+			}
+			if !hasCheckWithID(report.Checks, "subscriptions.pricing.partial_territory_coverage") {
+				t.Fatalf("expected missing canonical pricing territory to be reported, got %+v", report.Checks)
+			}
+		})
 	}
 }
 
-func TestValidateSubscriptionsChecksPricingMatrixWhenAvailabilityRateLimited(t *testing.T) {
-	fixture := validValidateSubscriptionsFixture()
-	fixture.availabilityV2Status = http.StatusTooManyRequests
-	fixture.availabilityV2 = apiErrorJSONForStatus(http.StatusTooManyRequests)
-	fixture.pricingTerritories = `{"data":[{"type":"territories","id":"USA"},{"type":"territories","id":"CAN"}],"links":{}}`
-	fixture.expectedPriceInclude = "territory"
-	fixture.pricesBySubscription = map[string]string{
-		"sub-1": `{"data":[{"type":"subscriptionPrices","id":"price-1","attributes":{"startDate":"2026-01-01"},"relationships":{"territory":{"data":{"type":"territories","id":"USA"}}}}]}`,
-	}
+func runValidateSubscriptionsReport(t *testing.T, fixture validateSubscriptionsFixture) validation.SubscriptionsReport {
+	t.Helper()
 
 	client := newValidateSubscriptionsClient(t, fixture)
-	restore := validate.SetClientFactory(func() (*asc.Client, error) {
-		return client, nil
-	})
-	defer restore()
-
-	root := RootCommand("1.2.3")
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"validate", "subscriptions", "--app", "app-1"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatalf("expected availability rate-limit to be non-blocking, got %v", err)
-		}
-	})
+	stdout, stderr, err := runRootWithDeps(t, func() (*asc.Client, error) { return client, nil }, "validate", "subscriptions", "--app", "app-1")
+	if err != nil {
+		t.Fatalf("expected non-blocking validation, got %v", err)
+	}
 	if stderr != "" {
 		t.Fatalf("expected empty stderr, got %q", stderr)
 	}
@@ -542,115 +495,13 @@ func TestValidateSubscriptionsChecksPricingMatrixWhenAvailabilityRateLimited(t *
 	if err := json.Unmarshal([]byte(stdout), &report); err != nil {
 		t.Fatalf("failed to parse JSON output: %v", err)
 	}
-
-	if hasCheckWithID(report.Checks, "subscriptions.pricing_coverage.unverified") {
-		t.Fatalf("did not expect app availability rate limit to suppress pricing-matrix validation, got %+v", report.Checks)
-	}
-	if !hasCheckWithID(report.Checks, "subscriptions.pricing.partial_territory_coverage") {
-		t.Fatalf("expected missing canonical pricing territory to be reported, got %+v", report.Checks)
-	}
-}
-
-func TestValidateSubscriptionsChecksPricingMatrixWhenPaginatedAvailabilityRateLimited(t *testing.T) {
-	fixture := validValidateSubscriptionsFixture()
-	fixture.availabilityV2 = `{"data":{"type":"appAvailabilities","id":"avail-1","attributes":{"availableInNewTerritories":true}}}`
-	fixture.territories = `{"data":[{"type":"territoryAvailabilities","id":"ta-1","attributes":{"available":true}}],"links":{"next":"https://api.appstoreconnect.apple.com/v2/appAvailabilities/avail-1/territoryAvailabilities?cursor=page-2"}}`
-	fixture.territoryStatusByQuery = map[string]int{
-		"cursor=page-2": http.StatusTooManyRequests,
-	}
-	fixture.expectedPriceInclude = "territory"
-	fixture.pricesBySubscription = map[string]string{
-		"sub-1": `{"data":[{"type":"subscriptionPrices","id":"price-1","attributes":{"startDate":"2026-01-01"},"relationships":{"territory":{"data":{"type":"territories","id":"USA"}}}}]}`,
-	}
-	fixture.pricingTerritories = `{"data":[{"type":"territories","id":"USA"},{"type":"territories","id":"CAN"}],"links":{}}`
-
-	client := newValidateSubscriptionsClient(t, fixture)
-	restore := validate.SetClientFactory(func() (*asc.Client, error) {
-		return client, nil
-	})
-	defer restore()
-
-	root := RootCommand("1.2.3")
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"validate", "subscriptions", "--app", "app-1"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatalf("expected paginated availability rate-limit to be non-blocking, got %v", err)
-		}
-	})
-	if stderr != "" {
-		t.Fatalf("expected empty stderr, got %q", stderr)
-	}
-
-	var report validation.SubscriptionsReport
-	if err := json.Unmarshal([]byte(stdout), &report); err != nil {
-		t.Fatalf("failed to parse JSON output: %v", err)
-	}
-
-	if hasCheckWithID(report.Checks, "subscriptions.pricing_coverage.unverified") {
-		t.Fatalf("did not expect paginated app availability failure to suppress pricing-matrix validation, got %+v", report.Checks)
-	}
-	if !hasCheckWithID(report.Checks, "subscriptions.pricing.partial_territory_coverage") {
-		t.Fatalf("expected missing canonical pricing territory to be reported, got %+v", report.Checks)
-	}
-}
-
-func TestValidateSubscriptionsChecksPricingMatrixWhenPaginatedAvailabilityHasPartialCount(t *testing.T) {
-	fixture := validValidateSubscriptionsFixture()
-	fixture.availabilityV2 = `{"data":{"type":"appAvailabilities","id":"avail-1","attributes":{"availableInNewTerritories":true}}}`
-	fixture.territories = `{"data":[
-		{"type":"territoryAvailabilities","id":"ta-1","attributes":{"available":true}},
-		{"type":"territoryAvailabilities","id":"ta-2","attributes":{"available":true}}
-	],"links":{"next":"https://api.appstoreconnect.apple.com/v2/appAvailabilities/avail-1/territoryAvailabilities?cursor=page-2"}}`
-	fixture.territoryStatusByQuery = map[string]int{
-		"cursor=page-2": http.StatusTooManyRequests,
-	}
-	fixture.expectedPriceInclude = "territory"
-	fixture.pricesBySubscription = map[string]string{
-		"sub-1": `{"data":[{"type":"subscriptionPrices","id":"price-1","attributes":{"startDate":"2026-01-01"},"relationships":{"territory":{"data":{"type":"territories","id":"USA"}}}}]}`,
-	}
-	fixture.pricingTerritories = `{"data":[{"type":"territories","id":"USA"},{"type":"territories","id":"CAN"}],"links":{}}`
-
-	client := newValidateSubscriptionsClient(t, fixture)
-	restore := validate.SetClientFactory(func() (*asc.Client, error) {
-		return client, nil
-	})
-	defer restore()
-
-	root := RootCommand("1.2.3")
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"validate", "subscriptions", "--app", "app-1"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatalf("expected paginated availability timeout/rate-limit downgrade to stay non-blocking, got %v", err)
-		}
-	})
-	if stderr != "" {
-		t.Fatalf("expected empty stderr, got %q", stderr)
-	}
-
-	var report validation.SubscriptionsReport
-	if err := json.Unmarshal([]byte(stdout), &report); err != nil {
-		t.Fatalf("failed to parse JSON output: %v", err)
-	}
-	if hasCheckWithID(report.Checks, "subscriptions.pricing_coverage.unverified") {
-		t.Fatalf("did not expect partial app availability to suppress pricing-matrix validation, got %+v", report.Checks)
-	}
-	if !hasCheckWithID(report.Checks, "subscriptions.pricing.partial_territory_coverage") {
-		t.Fatalf("expected missing canonical pricing territory to be reported, got %+v", report.Checks)
-	}
+	return report
 }
 
 func TestValidateSubscriptionsRefreshesContextBeforeBuildProbeAfterAvailabilityTimeout(t *testing.T) {
 	fixture := validValidateSubscriptionsFixture()
 
 	client := newValidateSubscriptionsClient(t, fixture)
-	restoreClient := validate.SetClientFactory(func() (*asc.Client, error) {
-		return client, nil
-	})
-	defer restoreClient()
 
 	t.Setenv("ASC_TIMEOUT", "40ms")
 
@@ -695,15 +546,10 @@ func TestValidateSubscriptionsRefreshesContextBeforeBuildProbeAfterAvailabilityT
 	})
 	defer restoreSubscriptions()
 
-	root := RootCommand("1.2.3")
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"validate", "subscriptions", "--app", "app-1"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatalf("expected availability timeout downgrade to keep validate subscriptions running, got %v", err)
-		}
-	})
+	stdout, stderr, err := runRootWithDeps(t, func() (*asc.Client, error) { return client, nil }, "validate", "subscriptions", "--app", "app-1")
+	if err != nil {
+		t.Fatalf("expected availability timeout downgrade to keep validate subscriptions running, got %v", err)
+	}
 	if stderr != "" {
 		t.Fatalf("expected empty stderr, got %q", stderr)
 	}
@@ -734,10 +580,6 @@ func TestValidateSubscriptionsRefreshesContextBeforeBuildProbeAfterSlowSubscript
 	fixture := validValidateSubscriptionsFixture()
 
 	client := newValidateSubscriptionsClient(t, fixture)
-	restoreClient := validate.SetClientFactory(func() (*asc.Client, error) {
-		return client, nil
-	})
-	defer restoreClient()
 
 	t.Setenv("ASC_TIMEOUT", "40ms")
 
@@ -783,15 +625,17 @@ func TestValidateSubscriptionsRefreshesContextBeforeBuildProbeAfterSlowSubscript
 	})
 	defer restoreSubscriptions()
 
-	root := RootCommand("1.2.3")
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"validate", "subscriptions", "--app", "app-1"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatalf("expected slow subscription fetch to still allow build probing, got %v", err)
-		}
-	})
+	d, stdoutBuf, stderrBuf := newTestDeps(t, func() (*asc.Client, error) { return client, nil })
+	root := rootcmd.RootCommandWithDeps("1.2.3", d)
+	if err := root.Parse([]string{"validate", "subscriptions", "--app", "app-1"}); err != nil {
+		t.Fatalf("parse error: %v", err)
+	}
+	var runErr error
+	synctest.Test(t, func(*testing.T) { runErr = root.Run(context.Background()) })
+	if runErr != nil {
+		t.Fatalf("expected slow subscription fetch to still allow build probing, got %v", runErr)
+	}
+	stdout, stderr := stdoutBuf.String(), stderrBuf.String()
 	if stderr != "" {
 		t.Fatalf("expected empty stderr, got %q", stderr)
 	}
@@ -822,25 +666,16 @@ func TestValidateSubscriptionsSkipsBuildProbeWhenNoMissingMetadataDiagnosticsNee
 	fixture := validValidateSubscriptionsFixture()
 
 	client := newValidateSubscriptionsClient(t, fixture)
-	restoreClient := validate.SetClientFactory(func() (*asc.Client, error) {
-		return client, nil
-	})
-	defer restoreClient()
 
 	restoreBuilds := validate.SetFetchAppBuildCountFunc(func(context.Context, *asc.Client, string) (int, bool, string, error) {
 		return 0, false, "", errors.New("unexpected build probe")
 	})
 	defer restoreBuilds()
 
-	root := RootCommand("1.2.3")
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"validate", "subscriptions", "--app", "app-1"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatalf("expected validate subscriptions to skip build probing for healthy subscriptions, got %v", err)
-		}
-	})
+	stdout, stderr, err := runRootWithDeps(t, func() (*asc.Client, error) { return client, nil }, "validate", "subscriptions", "--app", "app-1")
+	if err != nil {
+		t.Fatalf("expected validate subscriptions to skip build probing for healthy subscriptions, got %v", err)
+	}
 	if stderr != "" {
 		t.Fatalf("expected empty stderr, got %q", stderr)
 	}
@@ -862,20 +697,10 @@ func TestValidateSubscriptionsSurfacesSkippedPricingVerificationForApprovedSubsc
 	}
 
 	client := newValidateSubscriptionsClient(t, fixture)
-	restore := validate.SetClientFactory(func() (*asc.Client, error) {
-		return client, nil
-	})
-	defer restore()
-
-	root := RootCommand("1.2.3")
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"validate", "subscriptions", "--app", "app-1"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatalf("expected skipped pricing verification to stay non-blocking, got %v", err)
-		}
-	})
+	stdout, stderr, err := runRootWithDeps(t, func() (*asc.Client, error) { return client, nil }, "validate", "subscriptions", "--app", "app-1")
+	if err != nil {
+		t.Fatalf("expected skipped pricing verification to stay non-blocking, got %v", err)
+	}
 	if stderr != "" {
 		t.Fatalf("expected empty stderr, got %q", stderr)
 	}
@@ -899,20 +724,10 @@ func TestValidateSubscriptionsSkipsGroupLocalizationProbeForHealthySubscriptions
 	}
 
 	client := newValidateSubscriptionsClient(t, fixture)
-	restore := validate.SetClientFactory(func() (*asc.Client, error) {
-		return client, nil
-	})
-	defer restore()
-
-	root := RootCommand("1.2.3")
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"validate", "subscriptions", "--app", "app-1"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatalf("run error: %v", err)
-		}
-	})
+	stdout, stderr, err := runRootWithDeps(t, func() (*asc.Client, error) { return client, nil }, "validate", "subscriptions", "--app", "app-1")
+	if err != nil {
+		t.Fatalf("run error: %v", err)
+	}
 
 	if stderr != "" {
 		t.Fatalf("expected empty stderr, got %q", stderr)
@@ -932,20 +747,10 @@ func TestValidateSubscriptionsWarnsAndStrictFails(t *testing.T) {
 	fixture.subscriptionsByGroup["group-1"] = `{"data":[{"type":"subscriptions","id":"sub-1","attributes":{"name":"Monthly","productId":"com.example.monthly","state":"READY_TO_SUBMIT"}}]}`
 
 	client := newValidateSubscriptionsClient(t, fixture)
-	restore := validate.SetClientFactory(func() (*asc.Client, error) {
-		return client, nil
-	})
-	defer restore()
-
-	root := RootCommand("1.2.3")
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"validate", "subscriptions", "--app", "app-1"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatalf("expected no error (warning-only), got %v", err)
-		}
-	})
+	stdout, stderr, err := runRootWithDeps(t, func() (*asc.Client, error) { return client, nil }, "validate", "subscriptions", "--app", "app-1")
+	if err != nil {
+		t.Fatalf("expected no error (warning-only), got %v", err)
+	}
 	if stderr != "" {
 		t.Fatalf("expected empty stderr, got %q", stderr)
 	}
@@ -958,14 +763,7 @@ func TestValidateSubscriptionsWarnsAndStrictFails(t *testing.T) {
 		t.Fatalf("expected warnings, got %+v", report.Summary)
 	}
 
-	root = RootCommand("1.2.3")
-	var runErr error
-	stdout, _ = captureOutput(t, func() {
-		if err := root.Parse([]string{"validate", "subscriptions", "--app", "app-1", "--strict"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		runErr = root.Run(context.Background())
-	})
+	stdout, _, runErr := runRootWithDeps(t, func() (*asc.Client, error) { return client, nil }, "validate", "subscriptions", "--app", "app-1", "--strict")
 	if runErr == nil {
 		t.Fatalf("expected error with --strict")
 	}
@@ -994,20 +792,10 @@ func TestValidateSubscriptionsMissingMetadataDiagnosticsWarnByDefault(t *testing
 	fixture.subscriptionsByGroup["group-1"] = `{"data":[{"type":"subscriptions","id":"sub-1","attributes":{"name":"Monthly","productId":"com.example.monthly","state":"MISSING_METADATA"}}]}`
 
 	client := newValidateSubscriptionsClient(t, fixture)
-	restore := validate.SetClientFactory(func() (*asc.Client, error) {
-		return client, nil
-	})
-	defer restore()
-
-	root := RootCommand("1.2.3")
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"validate", "subscriptions", "--app", "app-1"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatalf("expected MISSING_METADATA diagnostics to stay warning-only by default, got %v", err)
-		}
-	})
+	stdout, stderr, err := runRootWithDeps(t, func() (*asc.Client, error) { return client, nil }, "validate", "subscriptions", "--app", "app-1")
+	if err != nil {
+		t.Fatalf("expected MISSING_METADATA diagnostics to stay warning-only by default, got %v", err)
+	}
 	if stderr != "" {
 		t.Fatalf("expected empty stderr, got %q", stderr)
 	}
@@ -1026,14 +814,7 @@ func TestValidateSubscriptionsMissingMetadataDiagnosticsWarnByDefault(t *testing
 		}
 	}
 
-	root = RootCommand("1.2.3")
-	var runErr error
-	_, _ = captureOutput(t, func() {
-		if err := root.Parse([]string{"validate", "subscriptions", "--app", "app-1", "--strict"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		runErr = root.Run(context.Background())
-	})
+	_, _, runErr := runRootWithDeps(t, func() (*asc.Client, error) { return client, nil }, "validate", "subscriptions", "--app", "app-1", "--strict")
 	if runErr == nil {
 		t.Fatal("expected warning-only missing-metadata diagnostics to fail under --strict")
 	}
@@ -1081,20 +862,10 @@ func TestValidateSubscriptionsIncludesDiagnosticsMatrixForOpaqueMissingMetadata(
 	}
 
 	client := newValidateSubscriptionsClient(t, fixture)
-	restore := validate.SetClientFactory(func() (*asc.Client, error) {
-		return client, nil
-	})
-	defer restore()
-
-	root := RootCommand("1.2.3")
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"validate", "subscriptions", "--app", "app-1"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatalf("expected opaque missing metadata diagnostics to stay warning-only, got %v", err)
-		}
-	})
+	stdout, stderr, err := runRootWithDeps(t, func() (*asc.Client, error) { return client, nil }, "validate", "subscriptions", "--app", "app-1")
+	if err != nil {
+		t.Fatalf("expected opaque missing metadata diagnostics to stay warning-only, got %v", err)
+	}
 	if stderr != "" {
 		t.Fatalf("expected empty stderr, got %q", stderr)
 	}
@@ -1145,15 +916,10 @@ func TestValidateSubscriptionsIncludesDiagnosticsMatrixForOpaqueMissingMetadata(
 		t.Fatalf("expected app_has_build=yes when app build count is non-zero, got %+v", buildRow)
 	}
 
-	root = RootCommand("1.2.3")
-	stdout, _ = captureOutput(t, func() {
-		if err := root.Parse([]string{"validate", "subscriptions", "--app", "app-1", "--output", "table"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatalf("expected table render to succeed, got %v", err)
-		}
-	})
+	stdout, _, err = runRootWithDeps(t, func() (*asc.Client, error) { return client, nil }, "validate", "subscriptions", "--app", "app-1", "--output", "table")
+	if err != nil {
+		t.Fatalf("expected table render to succeed, got %v", err)
+	}
 	if !strings.Contains(stdout, "Conclusion") || !strings.Contains(stdout, "opaque_apple_state") || !strings.Contains(stdout, "review_screenshot") {
 		t.Fatalf("expected table output to include diagnostics rows, got %q", stdout)
 	}
@@ -1199,20 +965,10 @@ func TestValidateSubscriptionsReportsOpaqueAppleStateWhenOnlyAdvisoriesRemain(t 
 	fixture.imagesBySubscription["sub-1"] = `{"data":[]}`
 
 	client := newValidateSubscriptionsClient(t, fixture)
-	restore := validate.SetClientFactory(func() (*asc.Client, error) {
-		return client, nil
-	})
-	defer restore()
-
-	root := RootCommand("1.2.3")
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"validate", "subscriptions", "--app", "app-1"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatalf("expected advisory-only diagnostics to stay warning-only, got %v", err)
-		}
-	})
+	stdout, stderr, err := runRootWithDeps(t, func() (*asc.Client, error) { return client, nil }, "validate", "subscriptions", "--app", "app-1")
+	if err != nil {
+		t.Fatalf("expected advisory-only diagnostics to stay warning-only, got %v", err)
+	}
 	if stderr != "" {
 		t.Fatalf("expected empty stderr, got %q", stderr)
 	}
@@ -1247,19 +1003,7 @@ func TestValidateSubscriptionsWarnsWhenSubscriptionImageMissing(t *testing.T) {
 	fixture.imagesBySubscription["sub-1"] = `{"data":[]}`
 
 	client := newValidateSubscriptionsClient(t, fixture)
-	restore := validate.SetClientFactory(func() (*asc.Client, error) {
-		return client, nil
-	})
-	defer restore()
-
-	root := RootCommand("1.2.3")
-	var runErr error
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"validate", "subscriptions", "--app", "app-1"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		runErr = root.Run(context.Background())
-	})
+	stdout, stderr, runErr := runRootWithDeps(t, func() (*asc.Client, error) { return client, nil }, "validate", "subscriptions", "--app", "app-1")
 	if stderr != "" {
 		t.Fatalf("expected empty stderr, got %q", stderr)
 	}
@@ -1288,13 +1032,7 @@ func TestValidateSubscriptionsWarnsWhenSubscriptionImageMissing(t *testing.T) {
 		t.Fatalf("expected subscriptions.images.recommended check, got %+v", report.Checks)
 	}
 
-	root = RootCommand("1.2.3")
-	_, _ = captureOutput(t, func() {
-		if err := root.Parse([]string{"validate", "subscriptions", "--app", "app-1", "--strict"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		runErr = root.Run(context.Background())
-	})
+	_, _, runErr = runRootWithDeps(t, func() (*asc.Client, error) { return client, nil }, "validate", "subscriptions", "--app", "app-1", "--strict")
 	if runErr == nil {
 		t.Fatal("expected warning to become blocking with --strict")
 	}
@@ -1303,186 +1041,57 @@ func TestValidateSubscriptionsWarnsWhenSubscriptionImageMissing(t *testing.T) {
 	}
 }
 
-func TestValidateSubscriptionsSkipsImageWarningWhenImageEndpointForbidden(t *testing.T) {
-	fixture := validValidateSubscriptionsFixture()
-	fixture.imageStatusBySubscription = map[string]int{
-		"sub-1": http.StatusForbidden,
-	}
-
-	client := newValidateSubscriptionsClient(t, fixture)
-	restore := validate.SetClientFactory(func() (*asc.Client, error) {
-		return client, nil
-	})
-	defer restore()
-
-	root := RootCommand("1.2.3")
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"validate", "subscriptions", "--app", "app-1"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatalf("expected image probe failure to be non-blocking, got %v", err)
-		}
-	})
-	if stderr != "" {
-		t.Fatalf("expected empty stderr, got %q", stderr)
-	}
-
-	var report validation.SubscriptionsReport
-	if err := json.Unmarshal([]byte(stdout), &report); err != nil {
-		t.Fatalf("failed to parse JSON output: %v", err)
-	}
-	if report.Summary.Errors != 0 || report.Summary.Warnings != 0 || report.Summary.Infos == 0 {
-		t.Fatalf("expected informational skipped-image check only, got %+v", report.Summary)
-	}
-	if hasCheckWithID(report.Checks, "subscriptions.images.recommended") {
-		t.Fatalf("expected no promotional-image recommendation when probe is skipped, got %+v", report.Checks)
-	}
-	if !hasCheckWithID(report.Checks, "subscriptions.images.unverified") {
-		t.Fatalf("expected subscriptions.images.unverified check, got %+v", report.Checks)
-	}
-}
-
-func TestValidateSubscriptionsSkipsImageWarningWhenImageEndpointTimesOut(t *testing.T) {
-	fixture := validValidateSubscriptionsFixture()
-	fixture.imageErrorBySubscription = map[string]error{
-		"sub-1": &url.Error{Op: "Get", URL: "https://api.appstoreconnect.apple.com/v1/subscriptions/sub-1/images", Err: context.DeadlineExceeded},
-	}
-
-	client := newValidateSubscriptionsClient(t, fixture)
-	restore := validate.SetClientFactory(func() (*asc.Client, error) {
-		return client, nil
-	})
-	defer restore()
-
-	root := RootCommand("1.2.3")
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"validate", "subscriptions", "--app", "app-1"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatalf("expected image probe timeout to be non-blocking, got %v", err)
-		}
-	})
-	if stderr != "" {
-		t.Fatalf("expected empty stderr, got %q", stderr)
-	}
-
-	var report validation.SubscriptionsReport
-	if err := json.Unmarshal([]byte(stdout), &report); err != nil {
-		t.Fatalf("failed to parse JSON output: %v", err)
-	}
-	if report.Summary.Errors != 0 || report.Summary.Warnings != 0 || report.Summary.Infos == 0 {
-		t.Fatalf("expected informational skipped-image check only, got %+v", report.Summary)
-	}
-	if !hasCheckWithID(report.Checks, "subscriptions.images.unverified") {
-		t.Fatalf("expected subscriptions.images.unverified check, got %+v", report.Checks)
-	}
-}
-
-func TestValidateSubscriptionsSkipsImageWarningWhenImageEndpointIsRetryable(t *testing.T) {
-	fixture := validValidateSubscriptionsFixture()
-	fixture.imageStatusBySubscription = map[string]int{
-		"sub-1": http.StatusTooManyRequests,
-	}
-
-	client := newValidateSubscriptionsClient(t, fixture)
-	restore := validate.SetClientFactory(func() (*asc.Client, error) {
-		return client, nil
-	})
-	defer restore()
-
-	root := RootCommand("1.2.3")
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"validate", "subscriptions", "--app", "app-1"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatalf("expected retryable image probe failure to be non-blocking, got %v", err)
-		}
-	})
-	if stderr != "" {
-		t.Fatalf("expected empty stderr, got %q", stderr)
-	}
-
-	var report validation.SubscriptionsReport
-	if err := json.Unmarshal([]byte(stdout), &report); err != nil {
-		t.Fatalf("failed to parse JSON output: %v", err)
-	}
-	if report.Summary.Errors != 0 || report.Summary.Warnings != 0 || report.Summary.Infos == 0 {
-		t.Fatalf("expected informational skipped-image check only, got %+v", report.Summary)
-	}
-	if hasCheckWithID(report.Checks, "subscriptions.images.recommended") {
-		t.Fatalf("expected no promotional-image recommendation when probe is skipped, got %+v", report.Checks)
-	}
-	foundUnverified := false
-	for _, check := range report.Checks {
-		if check.ID == "subscriptions.images.unverified" {
-			foundUnverified = true
-			if !strings.Contains(strings.ToLower(check.Remediation), "rate limited") {
-				t.Fatalf("expected retryable remediation to mention rate limiting, got %+v", check)
-			}
-		}
-	}
-	if !foundUnverified {
-		t.Fatalf("expected subscriptions.images.unverified check, got %+v", report.Checks)
-	}
-}
-
-func TestValidateSubscriptionsSkipsImageWarningWhenImageEndpointTransportFails(t *testing.T) {
-	fixture := validValidateSubscriptionsFixture()
-	fixture.imageErrorBySubscription = map[string]error{
-		"sub-1": &url.Error{
-			Op:  "Get",
-			URL: "https://api.appstoreconnect.apple.com/v1/subscriptions/sub-1/images",
-			Err: &net.DNSError{
-				Err:       "dial tcp: i/o timeout",
-				Name:      "api.appstoreconnect.apple.com",
-				IsTimeout: true,
+func TestValidateSubscriptionsSkipsImageWarningWhenImageEndpointFails(t *testing.T) {
+	const imagesURL = "https://api.appstoreconnect.apple.com/v1/subscriptions/sub-1/images"
+	tests := []struct {
+		name            string
+		status          int
+		err             error
+		wantRemediation string
+	}{
+		{name: "forbidden", status: http.StatusForbidden},
+		{name: "timeout", err: &url.Error{Op: "Get", URL: imagesURL, Err: context.DeadlineExceeded}},
+		{name: "retryable", status: http.StatusTooManyRequests, wantRemediation: "rate limited"},
+		{
+			name: "transport failure",
+			err: &url.Error{
+				Op:  "Get",
+				URL: imagesURL,
+				Err: &net.DNSError{
+					Err:       "dial tcp: i/o timeout",
+					Name:      "api.appstoreconnect.apple.com",
+					IsTimeout: true,
+				},
 			},
+			wantRemediation: "could not be reached",
 		},
 	}
 
-	client := newValidateSubscriptionsClient(t, fixture)
-	restore := validate.SetClientFactory(func() (*asc.Client, error) {
-		return client, nil
-	})
-	defer restore()
-
-	root := RootCommand("1.2.3")
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"validate", "subscriptions", "--app", "app-1"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatalf("expected transport image probe failure to be non-blocking, got %v", err)
-		}
-	})
-	if stderr != "" {
-		t.Fatalf("expected empty stderr, got %q", stderr)
-	}
-
-	var report validation.SubscriptionsReport
-	if err := json.Unmarshal([]byte(stdout), &report); err != nil {
-		t.Fatalf("failed to parse JSON output: %v", err)
-	}
-	if report.Summary.Errors != 0 || report.Summary.Warnings != 0 || report.Summary.Infos == 0 {
-		t.Fatalf("expected informational skipped-image check only, got %+v", report.Summary)
-	}
-	if hasCheckWithID(report.Checks, "subscriptions.images.recommended") {
-		t.Fatalf("expected no promotional-image recommendation when probe is skipped, got %+v", report.Checks)
-	}
-	foundUnverified := false
-	for _, check := range report.Checks {
-		if check.ID == "subscriptions.images.unverified" {
-			foundUnverified = true
-			if !strings.Contains(strings.ToLower(check.Remediation), "could not be reached") {
-				t.Fatalf("expected transport remediation to mention endpoint reachability, got %+v", check)
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			fixture := validValidateSubscriptionsFixture()
+			if test.status != 0 {
+				fixture.imageStatusBySubscription = map[string]int{"sub-1": test.status}
 			}
-		}
-	}
-	if !foundUnverified {
-		t.Fatalf("expected subscriptions.images.unverified check, got %+v", report.Checks)
+			if test.err != nil {
+				fixture.imageErrorBySubscription = map[string]error{"sub-1": test.err}
+			}
+
+			report := runValidateSubscriptionsReport(t, fixture)
+			if report.Summary.Errors != 0 || report.Summary.Warnings != 0 || report.Summary.Infos == 0 {
+				t.Fatalf("expected informational skipped-image check only, got %+v", report.Summary)
+			}
+			if hasCheckWithID(report.Checks, "subscriptions.images.recommended") {
+				t.Fatalf("expected no promotional-image recommendation when probe is skipped, got %+v", report.Checks)
+			}
+			check, ok := findCheck(report.Checks, "subscriptions.images.unverified")
+			if !ok {
+				t.Fatalf("expected subscriptions.images.unverified check, got %+v", report.Checks)
+			}
+			if !strings.Contains(strings.ToLower(check.Remediation), test.wantRemediation) {
+				t.Fatalf("expected remediation to mention %q, got %+v", test.wantRemediation, check)
+			}
+		})
 	}
 }
 
@@ -1500,20 +1109,10 @@ func TestValidateSubscriptionsTreatsMetadataProbeFailuresAsInformational(t *test
 	}
 
 	client := newValidateSubscriptionsClient(t, fixture)
-	restore := validate.SetClientFactory(func() (*asc.Client, error) {
-		return client, nil
-	})
-	defer restore()
-
-	root := RootCommand("1.2.3")
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"validate", "subscriptions", "--app", "app-1"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatalf("expected metadata probe failures to stay non-blocking, got %v", err)
-		}
-	})
+	stdout, stderr, err := runRootWithDeps(t, func() (*asc.Client, error) { return client, nil }, "validate", "subscriptions", "--app", "app-1")
+	if err != nil {
+		t.Fatalf("expected metadata probe failures to stay non-blocking, got %v", err)
+	}
 	if stderr != "" {
 		t.Fatalf("expected empty stderr, got %q", stderr)
 	}
@@ -1550,19 +1149,7 @@ func TestValidateSubscriptionsPropagatesCanceledPriceProbe(t *testing.T) {
 	}
 
 	client := newValidateSubscriptionsClient(t, fixture)
-	restore := validate.SetClientFactory(func() (*asc.Client, error) {
-		return client, nil
-	})
-	defer restore()
-
-	root := RootCommand("1.2.3")
-	var runErr error
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"validate", "subscriptions", "--app", "app-1"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		runErr = root.Run(context.Background())
-	})
+	stdout, stderr, runErr := runRootWithDeps(t, func() (*asc.Client, error) { return client, nil }, "validate", "subscriptions", "--app", "app-1")
 	if stderr != "" {
 		t.Fatalf("expected empty stderr, got %q", stderr)
 	}
@@ -1582,19 +1169,7 @@ func TestValidateSubscriptionsFailsWhenSubscriptionGroupsForbidden(t *testing.T)
 	fixture.subscriptionGroupsStatus = http.StatusForbidden
 
 	client := newValidateSubscriptionsClient(t, fixture)
-	restore := validate.SetClientFactory(func() (*asc.Client, error) {
-		return client, nil
-	})
-	defer restore()
-
-	root := RootCommand("1.2.3")
-	var runErr error
-	_, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"validate", "subscriptions", "--app", "app-1"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		runErr = root.Run(context.Background())
-	})
+	_, stderr, runErr := runRootWithDeps(t, func() (*asc.Client, error) { return client, nil }, "validate", "subscriptions", "--app", "app-1")
 	if stderr != "" {
 		t.Fatalf("expected empty stderr, got %q", stderr)
 	}

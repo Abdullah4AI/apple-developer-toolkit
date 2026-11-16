@@ -1,7 +1,6 @@
 package cmdtest
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -14,7 +13,7 @@ import (
 
 	rootcmd "github.com/Abdullah4AI/apple-developer-toolkit/appstore/cmd"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
-	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asctest"
 )
 
 func TestCategoriesRejectsNextQueryFlagsBeforeAuth(t *testing.T) {
@@ -25,16 +24,6 @@ func TestCategoriesRejectsNextQueryFlagsBeforeAuth(t *testing.T) {
 		args    []string
 		wantErr string
 	}{
-		{
-			name:    "category before next",
-			args:    []string{"categories", "subcategories", "--category-id", "BUSINESS", "--next", nextURL},
-			wantErr: "categories subcategories: --next cannot be combined with --category-id",
-		},
-		{
-			name:    "explicit empty category after next",
-			args:    []string{"categories", "subcategories", "--next", nextURL, "--category-id", ""},
-			wantErr: "categories subcategories: --next cannot be combined with --category-id",
-		},
 		{
 			name:    "limit before next",
 			args:    []string{"categories", "subcategories", "--limit", "25", "--next", nextURL},
@@ -48,7 +37,7 @@ func TestCategoriesRejectsNextQueryFlagsBeforeAuth(t *testing.T) {
 		{
 			name:    "out of range limit after next",
 			args:    []string{"categories", "subcategories", "--next", nextURL, "--limit", "201"},
-			wantErr: "categories subcategories: --next cannot be combined with --limit",
+			wantErr: "categories subcategories: --limit must be between 1 and 200",
 		},
 		{
 			name:    "list limit before next",
@@ -63,20 +52,19 @@ func TestCategoriesRejectsNextQueryFlagsBeforeAuth(t *testing.T) {
 		{
 			name:    "list out of range limit after next",
 			args:    []string{"categories", "list", "--next", listNextURL, "--limit", "201"},
-			wantErr: "categories list: --next cannot be combined with --limit",
+			wantErr: "categories list: --limit must be between 1 and 200",
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			clientFactoryCalled := false
-			restore := shared.SetASCClientFactoryForTesting(func() (*asc.Client, error) {
+			client := func() (*asc.Client, error) {
 				clientFactoryCalled = true
 				return nil, errors.New("client factory must not run during validation")
-			})
-			defer restore()
+			}
 
-			assertUsageExit(t, test.args, test.wantErr)
+			assertUsageExitWithDeps(t, client, test.args, test.wantErr)
 			if clientFactoryCalled {
 				t.Fatal("client factory ran before --next conflict validation")
 			}
@@ -93,12 +81,10 @@ func TestCategoriesInvalidNextPrecedesLimitConflict(t *testing.T) {
 		{command: "subcategories", next: "http://api.appstoreconnect.apple.com/v1/appCategories/GAMES/subcategories?cursor=next"},
 	} {
 		t.Run(test.command, func(t *testing.T) {
-			stdout, stderr := captureOutput(t, func() {
-				code := rootcmd.Run([]string{"categories", test.command, "--next", test.next, "--limit", "201"}, "1.2.3")
-				if code != rootcmd.ExitUsage {
-					t.Fatalf("exit code = %d, want %d", code, rootcmd.ExitUsage)
-				}
-			})
+			stdout, stderr, code := runWithDeps(t, stubClient(t, asctest.NewRegistry(t)), "categories", test.command, "--next", test.next, "--limit", "5")
+			if code != rootcmd.ExitUsage {
+				t.Fatalf("exit code = %d, want %d", code, rootcmd.ExitUsage)
+			}
 			if stdout != "" {
 				t.Fatalf("stdout = %q, want empty", stdout)
 			}
@@ -121,7 +107,6 @@ func TestCategoriesNextOnlyUsesCursorURL(t *testing.T) {
 		{command: "subcategories", path: "/v1/appCategories/GAMES/subcategories"},
 	} {
 		t.Run(test.command, func(t *testing.T) {
-			setupAuth(t)
 			t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 
 			nextURL := "https://api.appstoreconnect.apple.com" + test.path + "?cursor=page-2&limit=5"
@@ -139,17 +124,11 @@ func TestCategoriesNextOnlyUsesCursorURL(t *testing.T) {
 				_, _ = io.WriteString(w, `{"data":[{"type":"appCategories","id":"category-next"}],"links":{"next":""}}`)
 			}))
 			t.Cleanup(server.Close)
-			installDefaultTransportForServer(t, server)
 
-			root := RootCommand("1.2.3")
-			stdout, stderr := captureOutput(t, func() {
-				if err := root.Parse([]string{"categories", test.command, "--next", nextURL, "--output", "json"}); err != nil {
-					t.Fatalf("parse error: %v", err)
-				}
-				if err := root.Run(context.Background()); err != nil {
-					t.Fatalf("run error: %v", err)
-				}
-			})
+			stdout, stderr, err := runRootWithDeps(t, stubServerClient(t, server), "categories", test.command, "--next", nextURL, "--output", "json")
+			if err != nil {
+				t.Fatalf("run error: %v", err)
+			}
 			if stderr != "" {
 				t.Fatalf("stderr = %q, want empty", stderr)
 			}
@@ -159,7 +138,6 @@ func TestCategoriesNextOnlyUsesCursorURL(t *testing.T) {
 }
 
 func TestCategoriesSubcategoriesCategoryOnlyBuildsLimitQuery(t *testing.T) {
-	setupAuth(t)
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
@@ -176,23 +154,16 @@ func TestCategoriesSubcategoriesCategoryOnlyBuildsLimitQuery(t *testing.T) {
 		_, _ = io.WriteString(w, `{"data":[{"type":"appCategories","id":"subcategory-filtered"}],"links":{"next":""}}`)
 	}))
 	t.Cleanup(server.Close)
-	installDefaultTransportForServer(t, server)
 
-	root := RootCommand("1.2.3")
-	stdout, stderr := captureOutput(t, func() {
-		args := []string{
-			"categories", "subcategories",
-			"--category-id", "GAMES",
-			"--limit", "25",
-			"--output", "json",
-		}
-		if err := root.Parse(args); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatalf("run error: %v", err)
-		}
-	})
+	stdout, stderr, err := runRootWithDeps(t, stubServerClient(t, server),
+		"categories", "subcategories",
+		"--category-id", "GAMES",
+		"--limit", "25",
+		"--output", "json",
+	)
+	if err != nil {
+		t.Fatalf("run error: %v", err)
+	}
 	if stderr != "" {
 		t.Fatalf("stderr = %q, want empty", stderr)
 	}

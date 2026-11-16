@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/peterbourgon/ff/v3/ffcli"
@@ -13,9 +12,9 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
-// GameCenterChallengesCommand returns the challenges command group.
-func GameCenterChallengesCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("challenges", flag.ExitOnError)
+// newGameCenterChallengesCommand returns the challenges command group.
+func newGameCenterChallengesCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("challenges", flag.ExitOnError)
 
 	return &ffcli.Command{
 		Name:       "challenges",
@@ -36,17 +35,17 @@ Examples:
   asc game-center challenges images upload --localization-id "LOCALIZATION_ID" --file path/to/image.png
   asc game-center challenges releases list --app "APP_ID"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
-			GameCenterChallengesListCommand(),
-			GameCenterChallengesGetCommand(),
-			GameCenterChallengesCreateCommand(),
-			GameCenterChallengesUpdateCommand(),
-			GameCenterChallengesDeleteCommand(),
-			GameCenterChallengeVersionsCommand(),
-			GameCenterChallengeLocalizationsCommand(),
-			GameCenterChallengeImagesCommand(),
-			GameCenterChallengeReleasesCommand(),
+			newGameCenterChallengesListCommand(d),
+			newGameCenterChallengesGetCommand(d),
+			newGameCenterChallengesCreateCommand(d),
+			newGameCenterChallengesUpdateCommand(d),
+			newGameCenterChallengesDeleteCommand(d),
+			newGameCenterChallengeVersionsCommand(d),
+			newGameCenterChallengeLocalizationsCommand(d),
+			newGameCenterChallengeImagesCommand(d),
+			newGameCenterChallengeReleasesCommand(d),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp
@@ -54,17 +53,9 @@ Examples:
 	}
 }
 
-// GameCenterChallengesListCommand returns the challenges list subcommand.
-func GameCenterChallengesListCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("list", flag.ExitOnError)
-
-	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
-	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
-	next := fs.String("next", "", "Fetch next page using a links.next URL")
-	paginate := fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")
-	output := shared.BindOutputFlags(fs)
-
-	return &ffcli.Command{
+// newGameCenterChallengesListCommand returns the challenges list subcommand.
+func newGameCenterChallengesListCommand(d *shared.Deps) *ffcli.Command {
+	return shared.BuildPaginatedListCommand(shared.PaginatedListCommandConfig{
 		Name:       "list",
 		ShortUsage: "asc game-center challenges list [flags]",
 		ShortHelp:  "List Game Center challenges for an app.",
@@ -74,80 +65,23 @@ Examples:
   asc game-center challenges list --app "APP_ID"
   asc game-center challenges list --app "APP_ID" --limit 50
   asc game-center challenges list --app "APP_ID" --paginate`,
-		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
-		Exec: func(ctx context.Context, args []string) error {
-			if *limit != 0 && (*limit < 1 || *limit > 200) {
-				return shared.UsageError("game-center challenges list: --limit must be between 1 and 200")
-			}
-			if err := shared.ValidateNextURL(*next); err != nil {
-				return shared.UsageErrorf("game-center challenges list: %v", err)
-			}
-
-			resolvedAppID := shared.ResolveAppID(*appID)
-			nextURL := strings.TrimSpace(*next)
-			if resolvedAppID == "" && nextURL == "" {
-				fmt.Fprintln(os.Stderr, "Error: --app is required (or set ASC_APP_ID)")
-				return shared.MissingRequiredUsageError("--app")
-			}
-
-			client, err := shared.GetASCClient()
-			if err != nil {
-				return fmt.Errorf("game-center challenges list: %w", err)
-			}
-
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
-			defer cancel()
-
-			gcDetailID := ""
-			if nextURL == "" {
-				var err error
-				gcDetailID, err = client.GetGameCenterDetailID(requestCtx, resolvedAppID)
-				if err != nil {
-					return fmt.Errorf("game-center challenges list: failed to get Game Center detail: %w", err)
-				}
-			}
-
-			opts := []asc.GCChallengesOption{
-				asc.WithGCChallengesLimit(*limit),
-				asc.WithGCChallengesNextURL(*next),
-			}
-
-			if *paginate {
-				paginateOpts := append(opts, asc.WithGCChallengesLimit(200))
-				firstPage, err := client.GetGameCenterChallenges(requestCtx, gcDetailID, paginateOpts...)
-				if err != nil {
-					return fmt.Errorf("game-center challenges list: failed to fetch: %w", err)
-				}
-
-				resp, err := asc.PaginateAll(requestCtx, firstPage, func(ctx context.Context, nextURL string) (asc.PaginatedResponse, error) {
-					return client.GetGameCenterChallenges(ctx, gcDetailID, asc.WithGCChallengesNextURL(nextURL))
-				})
-				if err != nil {
-					return fmt.Errorf("game-center challenges list: %w", err)
-				}
-
-				return shared.PrintOutput(resp, *output.Output, *output.Pretty)
-			}
-
-			resp, err := client.GetGameCenterChallenges(requestCtx, gcDetailID, opts...)
-			if err != nil {
-				return fmt.Errorf("game-center challenges list: failed to fetch: %w", err)
-			}
-
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+		ParentFlag:           "app",
+		ParentUsage:          "App Store Connect app ID (or ASC_APP_ID env)",
+		ResolveApp:           true,
+		RequiredDiagnostic:   true,
+		PaginateIgnoresLimit: true,
+		NoSpinner:            true,
+		LookupParent:         gameCenterDetailParent("game-center challenges list"),
+		FetchPage: func(ctx context.Context, client *asc.Client, gcDetailID string, limit int, next string) (asc.PaginatedResponse, error) {
+			return client.GetGameCenterChallenges(ctx, gcDetailID, asc.Limit[asc.GCChallengesOption](limit), asc.NextURL[asc.GCChallengesOption](next))
 		},
-	}
+		Deps: d,
+	})
 }
 
-// GameCenterChallengesGetCommand returns the challenges get subcommand.
-func GameCenterChallengesGetCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("view", flag.ExitOnError)
-
-	challengeID := shared.BindResourceIDFlag(fs, "id", "gameCenterChallenges", "Game Center challenge ID")
-	output := shared.BindOutputFlags(fs)
-
-	return &ffcli.Command{
+// newGameCenterChallengesGetCommand returns the challenges get subcommand.
+func newGameCenterChallengesGetCommand(d *shared.Deps) *ffcli.Command {
+	return shared.BuildIDGetCommand(shared.IDGetCommandConfig{
 		Name:       "view",
 		ShortUsage: "asc game-center challenges view --id \"CHALLENGE_ID\"",
 		ShortHelp:  "View a Game Center challenge by ID.",
@@ -155,36 +89,19 @@ func GameCenterChallengesGetCommand() *ffcli.Command {
 
 Examples:
   asc game-center challenges view --id "CHALLENGE_ID"`,
-		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
-		Exec: func(ctx context.Context, args []string) error {
-			id := strings.TrimSpace(*challengeID)
-			if id == "" {
-				fmt.Fprintln(os.Stderr, "Error: --id is required")
-				return shared.MissingRequiredUsageError("--id")
-			}
-
-			client, err := shared.GetASCClient()
-			if err != nil {
-				return fmt.Errorf("game-center challenges view: %w", err)
-			}
-
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
-			defer cancel()
-
-			resp, err := client.GetGameCenterChallenge(requestCtx, id)
-			if err != nil {
-				return fmt.Errorf("game-center challenges view: failed to fetch: %w", err)
-			}
-
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+		IDUsage:            "Game Center challenge ID",
+		IDType:             "gameCenterChallenges",
+		RequiredDiagnostic: true,
+		Fetch: func(ctx context.Context, client *asc.Client, id string) (any, error) {
+			return client.GetGameCenterChallenge(ctx, id)
 		},
-	}
+		Deps: d,
+	})
 }
 
-// GameCenterChallengesCreateCommand returns the challenges create subcommand.
-func GameCenterChallengesCreateCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("create", flag.ExitOnError)
+// newGameCenterChallengesCreateCommand returns the challenges create subcommand.
+func newGameCenterChallengesCreateCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("create", flag.ExitOnError)
 
 	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
 	referenceName := fs.String("reference-name", "", "Reference name for the challenge")
@@ -193,7 +110,7 @@ func GameCenterChallengesCreateCommand() *ffcli.Command {
 	createInitialVersion := fs.String("create-initial-version", "", "Create an initial challenge version inline (true/false)")
 	leaderboardID := shared.BindResourceIDFlag(fs, "leaderboard-id", "gameCenterLeaderboards", "Leaderboard ID for the challenge")
 	groupID := shared.BindResourceIDFlag(fs, "group-id", "gameCenterGroups", "Game Center group ID")
-	output := shared.BindOutputFlags(fs)
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "create",
@@ -206,33 +123,31 @@ Examples:
   asc game-center challenges create --app "APP_ID" --reference-name "Weekly" --vendor-id "com.example.weekly" --leaderboard-id "LEADERBOARD_ID" --create-initial-version true
   asc game-center challenges create --group-id "GROUP_ID" --reference-name "Weekly" --vendor-id "grp.com.example.weekly" --leaderboard-id "LEADERBOARD_ID"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			group := strings.TrimSpace(*groupID)
 			if group != "" && strings.TrimSpace(*appID) != "" {
-				fmt.Fprintln(os.Stderr, "Error: --app cannot be used with --group-id")
+				fmt.Fprintln(d.IO.ErrOut, "Error: --app cannot be used with --group-id")
 				return flag.ErrHelp
 			}
 
-			resolvedAppID := shared.ResolveAppID(*appID)
+			resolvedAppID := d.ResolveAppID(*appID)
 			if group == "" && resolvedAppID == "" {
-				fmt.Fprintln(os.Stderr, "Error: --app is required (or set ASC_APP_ID)")
+				fmt.Fprintln(d.IO.ErrOut, "Error: --app is required (or set ASC_APP_ID)")
 				return shared.MissingRequiredUsageError("--app")
 			}
 
 			name := strings.TrimSpace(*referenceName)
 			if name == "" {
-				fmt.Fprintln(os.Stderr, "Error: --reference-name is required")
-				return shared.MissingRequiredUsageError("--reference-name")
+				return d.RequiredFlag("--reference-name")
 			}
 
 			vendor := strings.TrimSpace(*vendorID)
 			if vendor == "" {
-				fmt.Fprintln(os.Stderr, "Error: --vendor-id is required")
-				return shared.MissingRequiredUsageError("--vendor-id")
+				return d.RequiredFlag("--vendor-id")
 			}
 			if group != "" && !strings.HasPrefix(vendor, "grp.") {
-				fmt.Fprintln(os.Stderr, "Error: --vendor-id must start with \"grp.\" when using --group-id")
+				fmt.Fprintln(d.IO.ErrOut, "Error: --vendor-id must start with \"grp.\" when using --group-id")
 				return flag.ErrHelp
 			}
 
@@ -240,7 +155,7 @@ Examples:
 			if strings.TrimSpace(*createInitialVersion) != "" {
 				value, err := shared.ParseBoolFlag(*createInitialVersion, "--create-initial-version")
 				if err != nil {
-					fmt.Fprintln(os.Stderr, "Error:", err.Error())
+					fmt.Fprintln(d.IO.ErrOut, "Error:", err.Error())
 					return flag.ErrHelp
 				}
 				createInitialVersionValue = value
@@ -255,18 +170,18 @@ Examples:
 			if strings.TrimSpace(*repeatable) != "" {
 				val, err := shared.ParseBoolFlag(*repeatable, "--repeatable")
 				if err != nil {
-					fmt.Fprintln(os.Stderr, "Error:", err.Error())
+					fmt.Fprintln(d.IO.ErrOut, "Error:", err.Error())
 					return flag.ErrHelp
 				}
 				attrs.Repeatable = &val
 			}
 
-			client, err := shared.GetASCClient()
+			client, err := d.Client()
 			if err != nil {
 				return fmt.Errorf("game-center challenges create: %w", err)
 			}
 
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
+			requestCtx, cancel := d.Timeout(ctx)
 			defer cancel()
 
 			gcDetailID := ""
@@ -283,21 +198,21 @@ Examples:
 				return fmt.Errorf("game-center challenges create: failed to create: %w", err)
 			}
 
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+			return d.PrintOutput(resp, *output.Output, *output.Pretty)
 		},
 	}
 }
 
-// GameCenterChallengesUpdateCommand returns the challenges update subcommand.
-func GameCenterChallengesUpdateCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("update", flag.ExitOnError)
+// newGameCenterChallengesUpdateCommand returns the challenges update subcommand.
+func newGameCenterChallengesUpdateCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("update", flag.ExitOnError)
 
 	challengeID := shared.BindResourceIDFlag(fs, "id", "gameCenterChallenges", "Game Center challenge ID")
 	referenceName := fs.String("reference-name", "", "Reference name for the challenge")
 	repeatable := fs.String("repeatable", "", "Challenge can be earned multiple times (true/false)")
 	archived := fs.String("archived", "", "Archive the challenge (true/false)")
 	leaderboardID := shared.BindResourceIDFlag(fs, "leaderboard-id", "gameCenterLeaderboards", "Leaderboard ID for the challenge")
-	output := shared.BindOutputFlags(fs)
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "update",
@@ -309,12 +224,11 @@ Examples:
   asc game-center challenges update --id "CHALLENGE_ID" --reference-name "New Name"
   asc game-center challenges update --id "CHALLENGE_ID" --archived true`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			id := strings.TrimSpace(*challengeID)
 			if id == "" {
-				fmt.Fprintln(os.Stderr, "Error: --id is required")
-				return shared.MissingRequiredUsageError("--id")
+				return d.RequiredFlag("--id")
 			}
 
 			attrs := asc.GameCenterChallengeUpdateAttributes{}
@@ -329,7 +243,7 @@ Examples:
 			if strings.TrimSpace(*repeatable) != "" {
 				val, err := shared.ParseBoolFlag(*repeatable, "--repeatable")
 				if err != nil {
-					fmt.Fprintln(os.Stderr, "Error:", err.Error())
+					fmt.Fprintln(d.IO.ErrOut, "Error:", err.Error())
 					return flag.ErrHelp
 				}
 				attrs.Repeatable = &val
@@ -339,7 +253,7 @@ Examples:
 			if strings.TrimSpace(*archived) != "" {
 				val, err := shared.ParseBoolFlag(*archived, "--archived")
 				if err != nil {
-					fmt.Fprintln(os.Stderr, "Error:", err.Error())
+					fmt.Fprintln(d.IO.ErrOut, "Error:", err.Error())
 					return flag.ErrHelp
 				}
 				attrs.Archived = &val
@@ -347,16 +261,15 @@ Examples:
 			}
 
 			if !hasUpdate && strings.TrimSpace(*leaderboardID) == "" {
-				fmt.Fprintln(os.Stderr, "Error: at least one update flag is required")
-				return shared.MissingRequiredUsageError("")
+				return d.UpdateFlagRequired(fs, referenceName, repeatable, archived, leaderboardID)
 			}
 
-			client, err := shared.GetASCClient()
+			client, err := d.Client()
 			if err != nil {
 				return fmt.Errorf("game-center challenges update: %w", err)
 			}
 
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
+			requestCtx, cancel := d.Timeout(ctx)
 			defer cancel()
 
 			resp, err := client.UpdateGameCenterChallenge(requestCtx, id, attrs, strings.TrimSpace(*leaderboardID))
@@ -364,20 +277,14 @@ Examples:
 				return fmt.Errorf("game-center challenges update: failed to update: %w", err)
 			}
 
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+			return d.PrintOutput(resp, *output.Output, *output.Pretty)
 		},
 	}
 }
 
-// GameCenterChallengesDeleteCommand returns the challenges delete subcommand.
-func GameCenterChallengesDeleteCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("delete", flag.ExitOnError)
-
-	challengeID := shared.BindResourceIDFlag(fs, "id", "gameCenterChallenges", "Game Center challenge ID")
-	confirm := fs.Bool("confirm", false, "Confirm deletion")
-	output := shared.BindOutputFlags(fs)
-
-	return &ffcli.Command{
+// newGameCenterChallengesDeleteCommand returns the challenges delete subcommand.
+func newGameCenterChallengesDeleteCommand(d *shared.Deps) *ffcli.Command {
+	return shared.BuildConfirmDeleteCommand(shared.ConfirmDeleteCommandConfig{
 		Name:       "delete",
 		ShortUsage: "asc game-center challenges delete --id \"CHALLENGE_ID\" --confirm",
 		ShortHelp:  "Delete a Game Center challenge.",
@@ -385,44 +292,23 @@ func GameCenterChallengesDeleteCommand() *ffcli.Command {
 
 Examples:
   asc game-center challenges delete --id "CHALLENGE_ID" --confirm`,
-		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
-		Exec: func(ctx context.Context, args []string) error {
-			id := strings.TrimSpace(*challengeID)
-			if id == "" {
-				fmt.Fprintln(os.Stderr, "Error: --id is required")
-				return shared.MissingRequiredUsageError("--id")
-			}
-			if !*confirm {
-				fmt.Fprintln(os.Stderr, "Error: --confirm is required")
-				return shared.MissingRequiredUsageError("--confirm")
-			}
-
-			client, err := shared.GetASCClient()
-			if err != nil {
-				return fmt.Errorf("game-center challenges delete: %w", err)
-			}
-
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
-			defer cancel()
-
-			if err := client.DeleteGameCenterChallenge(requestCtx, id); err != nil {
-				return fmt.Errorf("game-center challenges delete: failed to delete: %w", err)
-			}
-
-			result := &asc.GameCenterChallengeDeleteResult{
-				ID:      id,
-				Deleted: true,
-			}
-
-			return shared.PrintOutput(result, *output.Output, *output.Pretty)
+		IDFlag:             "id",
+		IDUsage:            "Game Center challenge ID",
+		IDType:             "gameCenterChallenges",
+		RequiredDiagnostic: true,
+		Delete: func(ctx context.Context, client *asc.Client, id string) error {
+			return client.DeleteGameCenterChallenge(ctx, id)
 		},
-	}
+		Result: func(id string) any {
+			return &asc.DeleteResult{ID: id, Deleted: true}
+		},
+		Deps: d,
+	})
 }
 
-// GameCenterChallengeVersionsCommand returns the challenge versions command group.
-func GameCenterChallengeVersionsCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("versions", flag.ExitOnError)
+// newGameCenterChallengeVersionsCommand returns the challenge versions command group.
+func newGameCenterChallengeVersionsCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("versions", flag.ExitOnError)
 
 	return &ffcli.Command{
 		Name:       "versions",
@@ -436,12 +322,12 @@ Examples:
   asc game-center challenges versions create --challenge-id "CHALLENGE_ID"
   asc game-center challenges versions default-image view --id "VERSION_ID"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
-			GameCenterChallengeVersionsListCommand(),
-			GameCenterChallengeVersionsGetCommand(),
-			GameCenterChallengeVersionsCreateCommand(),
-			GameCenterChallengeVersionDefaultImageCommand(),
+			newGameCenterChallengeVersionsListCommand(d),
+			newGameCenterChallengeVersionsGetCommand(d),
+			newGameCenterChallengeVersionsCreateCommand(d),
+			newGameCenterChallengeVersionDefaultImageCommand(d),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp
@@ -449,17 +335,9 @@ Examples:
 	}
 }
 
-// GameCenterChallengeVersionsListCommand returns the challenge versions list subcommand.
-func GameCenterChallengeVersionsListCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("list", flag.ExitOnError)
-
-	challengeID := shared.BindResourceIDFlag(fs, "challenge-id", "gameCenterChallenges", "Game Center challenge ID")
-	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
-	next := fs.String("next", "", "Fetch next page using a links.next URL")
-	paginate := fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")
-	output := shared.BindOutputFlags(fs)
-
-	return &ffcli.Command{
+// newGameCenterChallengeVersionsListCommand returns the challenge versions list subcommand.
+func newGameCenterChallengeVersionsListCommand(d *shared.Deps) *ffcli.Command {
+	return shared.BuildPaginatedListCommand(shared.PaginatedListCommandConfig{
 		Name:       "list",
 		ShortUsage: "asc game-center challenges versions list --challenge-id \"CHALLENGE_ID\"",
 		ShortHelp:  "List versions for a Game Center challenge.",
@@ -469,70 +347,22 @@ Examples:
   asc game-center challenges versions list --challenge-id "CHALLENGE_ID"
   asc game-center challenges versions list --challenge-id "CHALLENGE_ID" --limit 50
   asc game-center challenges versions list --challenge-id "CHALLENGE_ID" --paginate`,
-		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
-		Exec: func(ctx context.Context, args []string) error {
-			if *limit != 0 && (*limit < 1 || *limit > 200) {
-				return shared.UsageError("game-center challenges versions list: --limit must be between 1 and 200")
-			}
-			if err := shared.ValidateNextURL(*next); err != nil {
-				return shared.UsageErrorf("game-center challenges versions list: %v", err)
-			}
-
-			id := strings.TrimSpace(*challengeID)
-			if id == "" && strings.TrimSpace(*next) == "" {
-				fmt.Fprintln(os.Stderr, "Error: --challenge-id is required")
-				return shared.MissingRequiredUsageError("--challenge-id")
-			}
-
-			client, err := shared.GetASCClient()
-			if err != nil {
-				return fmt.Errorf("game-center challenges versions list: %w", err)
-			}
-
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
-			defer cancel()
-
-			opts := []asc.GCChallengeVersionsOption{
-				asc.WithGCChallengeVersionsLimit(*limit),
-				asc.WithGCChallengeVersionsNextURL(*next),
-			}
-
-			if *paginate {
-				paginateOpts := append(opts, asc.WithGCChallengeVersionsLimit(200))
-				firstPage, err := client.GetGameCenterChallengeVersions(requestCtx, id, paginateOpts...)
-				if err != nil {
-					return fmt.Errorf("game-center challenges versions list: failed to fetch: %w", err)
-				}
-
-				resp, err := asc.PaginateAll(requestCtx, firstPage, func(ctx context.Context, nextURL string) (asc.PaginatedResponse, error) {
-					return client.GetGameCenterChallengeVersions(ctx, id, asc.WithGCChallengeVersionsNextURL(nextURL))
-				})
-				if err != nil {
-					return fmt.Errorf("game-center challenges versions list: %w", err)
-				}
-
-				return shared.PrintOutput(resp, *output.Output, *output.Pretty)
-			}
-
-			resp, err := client.GetGameCenterChallengeVersions(requestCtx, id, opts...)
-			if err != nil {
-				return fmt.Errorf("game-center challenges versions list: failed to fetch: %w", err)
-			}
-
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+		ParentFlag:           "challenge-id",
+		ParentUsage:          "Game Center challenge ID",
+		ParentType:           "gameCenterChallenges",
+		RequiredDiagnostic:   true,
+		PaginateIgnoresLimit: true,
+		NoSpinner:            true,
+		FetchPage: func(ctx context.Context, client *asc.Client, challengeId string, limit int, next string) (asc.PaginatedResponse, error) {
+			return client.GetGameCenterChallengeVersions(ctx, challengeId, asc.Limit[asc.GCChallengeVersionsOption](limit), asc.NextURL[asc.GCChallengeVersionsOption](next))
 		},
-	}
+		Deps: d,
+	})
 }
 
-// GameCenterChallengeVersionsGetCommand returns the challenge versions get subcommand.
-func GameCenterChallengeVersionsGetCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("view", flag.ExitOnError)
-
-	versionID := shared.BindResourceIDFlag(fs, "id", "gameCenterChallengeVersions", "Game Center challenge version ID")
-	output := shared.BindOutputFlags(fs)
-
-	return &ffcli.Command{
+// newGameCenterChallengeVersionsGetCommand returns the challenge versions get subcommand.
+func newGameCenterChallengeVersionsGetCommand(d *shared.Deps) *ffcli.Command {
+	return shared.BuildIDGetCommand(shared.IDGetCommandConfig{
 		Name:       "view",
 		ShortUsage: "asc game-center challenges versions view --id \"VERSION_ID\"",
 		ShortHelp:  "View a Game Center challenge version by ID.",
@@ -540,41 +370,19 @@ func GameCenterChallengeVersionsGetCommand() *ffcli.Command {
 
 Examples:
   asc game-center challenges versions view --id "VERSION_ID"`,
-		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
-		Exec: func(ctx context.Context, args []string) error {
-			id := strings.TrimSpace(*versionID)
-			if id == "" {
-				fmt.Fprintln(os.Stderr, "Error: --id is required")
-				return shared.MissingRequiredUsageError("--id")
-			}
-
-			client, err := shared.GetASCClient()
-			if err != nil {
-				return fmt.Errorf("game-center challenges versions view: %w", err)
-			}
-
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
-			defer cancel()
-
-			resp, err := client.GetGameCenterChallengeVersion(requestCtx, id)
-			if err != nil {
-				return fmt.Errorf("game-center challenges versions view: failed to fetch: %w", err)
-			}
-
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+		IDUsage:            "Game Center challenge version ID",
+		IDType:             "gameCenterChallengeVersions",
+		RequiredDiagnostic: true,
+		Fetch: func(ctx context.Context, client *asc.Client, id string) (any, error) {
+			return client.GetGameCenterChallengeVersion(ctx, id)
 		},
-	}
+		Deps: d,
+	})
 }
 
-// GameCenterChallengeVersionsCreateCommand returns the challenge versions create subcommand.
-func GameCenterChallengeVersionsCreateCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("create", flag.ExitOnError)
-
-	challengeID := shared.BindResourceIDFlag(fs, "challenge-id", "gameCenterChallenges", "Game Center challenge ID")
-	output := shared.BindOutputFlags(fs)
-
-	return &ffcli.Command{
+// newGameCenterChallengeVersionsCreateCommand returns the challenge versions create subcommand.
+func newGameCenterChallengeVersionsCreateCommand(d *shared.Deps) *ffcli.Command {
+	return shared.BuildCreateCommand(shared.WriteCommandConfig{
 		Name:       "create",
 		ShortUsage: "asc game-center challenges versions create --challenge-id \"CHALLENGE_ID\"",
 		ShortHelp:  "Create a Game Center challenge version.",
@@ -582,36 +390,19 @@ func GameCenterChallengeVersionsCreateCommand() *ffcli.Command {
 
 Examples:
   asc game-center challenges versions create --challenge-id "CHALLENGE_ID"`,
-		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
-		Exec: func(ctx context.Context, args []string) error {
-			id := strings.TrimSpace(*challengeID)
-			if id == "" {
-				fmt.Fprintln(os.Stderr, "Error: --challenge-id is required")
-				return shared.MissingRequiredUsageError("--challenge-id")
-			}
-
-			client, err := shared.GetASCClient()
-			if err != nil {
-				return fmt.Errorf("game-center challenges versions create: %w", err)
-			}
-
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
-			defer cancel()
-
-			resp, err := client.CreateGameCenterChallengeVersion(requestCtx, id)
-			if err != nil {
-				return fmt.Errorf("game-center challenges versions create: failed to create: %w", err)
-			}
-
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+		IDFlag:  "challenge-id",
+		IDUsage: "Game Center challenge ID",
+		IDType:  "gameCenterChallenges",
+		Send: func(ctx context.Context, client *asc.Client, id string) (any, error) {
+			return client.CreateGameCenterChallengeVersion(ctx, id)
 		},
-	}
+		Deps: d,
+	})
 }
 
-// GameCenterChallengeLocalizationsCommand returns the challenge localizations command group.
-func GameCenterChallengeLocalizationsCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("localizations", flag.ExitOnError)
+// newGameCenterChallengeLocalizationsCommand returns the challenge localizations command group.
+func newGameCenterChallengeLocalizationsCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("localizations", flag.ExitOnError)
 
 	return &ffcli.Command{
 		Name:       "localizations",
@@ -626,14 +417,14 @@ Examples:
   asc game-center challenges localizations delete --id "LOC_ID" --confirm
   asc game-center challenges localizations image view --id "LOC_ID"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
-			GameCenterChallengeLocalizationsListCommand(),
-			GameCenterChallengeLocalizationsGetCommand(),
-			GameCenterChallengeLocalizationsCreateCommand(),
-			GameCenterChallengeLocalizationsUpdateCommand(),
-			GameCenterChallengeLocalizationsDeleteCommand(),
-			GameCenterChallengeLocalizationImageCommand(),
+			newGameCenterChallengeLocalizationsListCommand(d),
+			newGameCenterChallengeLocalizationsGetCommand(d),
+			newGameCenterChallengeLocalizationsCreateCommand(d),
+			newGameCenterChallengeLocalizationsUpdateCommand(d),
+			newGameCenterChallengeLocalizationsDeleteCommand(d),
+			newGameCenterChallengeLocalizationImageCommand(d),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp
@@ -641,17 +432,9 @@ Examples:
 	}
 }
 
-// GameCenterChallengeLocalizationsListCommand returns the challenge localizations list subcommand.
-func GameCenterChallengeLocalizationsListCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("list", flag.ExitOnError)
-
-	versionID := shared.BindResourceIDFlag(fs, "version-id", "gameCenterChallengeVersions", "Game Center challenge version ID")
-	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
-	next := fs.String("next", "", "Fetch next page using a links.next URL")
-	paginate := fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")
-	output := shared.BindOutputFlags(fs)
-
-	return &ffcli.Command{
+// newGameCenterChallengeLocalizationsListCommand returns the challenge localizations list subcommand.
+func newGameCenterChallengeLocalizationsListCommand(d *shared.Deps) *ffcli.Command {
+	return shared.BuildPaginatedListCommand(shared.PaginatedListCommandConfig{
 		Name:       "list",
 		ShortUsage: "asc game-center challenges localizations list --version-id \"VERSION_ID\"",
 		ShortHelp:  "List localizations for a challenge version.",
@@ -661,70 +444,22 @@ Examples:
   asc game-center challenges localizations list --version-id "VERSION_ID"
   asc game-center challenges localizations list --version-id "VERSION_ID" --limit 50
   asc game-center challenges localizations list --version-id "VERSION_ID" --paginate`,
-		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
-		Exec: func(ctx context.Context, args []string) error {
-			if *limit != 0 && (*limit < 1 || *limit > 200) {
-				return shared.UsageError("game-center challenges localizations list: --limit must be between 1 and 200")
-			}
-			if err := shared.ValidateNextURL(*next); err != nil {
-				return shared.UsageErrorf("game-center challenges localizations list: %v", err)
-			}
-
-			id := strings.TrimSpace(*versionID)
-			if id == "" && strings.TrimSpace(*next) == "" {
-				fmt.Fprintln(os.Stderr, "Error: --version-id is required")
-				return shared.MissingRequiredUsageError("--version-id")
-			}
-
-			client, err := shared.GetASCClient()
-			if err != nil {
-				return fmt.Errorf("game-center challenges localizations list: %w", err)
-			}
-
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
-			defer cancel()
-
-			opts := []asc.GCChallengeLocalizationsOption{
-				asc.WithGCChallengeLocalizationsLimit(*limit),
-				asc.WithGCChallengeLocalizationsNextURL(*next),
-			}
-
-			if *paginate {
-				paginateOpts := append(opts, asc.WithGCChallengeLocalizationsLimit(200))
-				firstPage, err := client.GetGameCenterChallengeLocalizations(requestCtx, id, paginateOpts...)
-				if err != nil {
-					return fmt.Errorf("game-center challenges localizations list: failed to fetch: %w", err)
-				}
-
-				resp, err := asc.PaginateAll(requestCtx, firstPage, func(ctx context.Context, nextURL string) (asc.PaginatedResponse, error) {
-					return client.GetGameCenterChallengeLocalizations(ctx, id, asc.WithGCChallengeLocalizationsNextURL(nextURL))
-				})
-				if err != nil {
-					return fmt.Errorf("game-center challenges localizations list: %w", err)
-				}
-
-				return shared.PrintOutput(resp, *output.Output, *output.Pretty)
-			}
-
-			resp, err := client.GetGameCenterChallengeLocalizations(requestCtx, id, opts...)
-			if err != nil {
-				return fmt.Errorf("game-center challenges localizations list: failed to fetch: %w", err)
-			}
-
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+		ParentFlag:           "version-id",
+		ParentUsage:          "Game Center challenge version ID",
+		ParentType:           "gameCenterChallengeVersions",
+		RequiredDiagnostic:   true,
+		PaginateIgnoresLimit: true,
+		NoSpinner:            true,
+		FetchPage: func(ctx context.Context, client *asc.Client, versionId string, limit int, next string) (asc.PaginatedResponse, error) {
+			return client.GetGameCenterChallengeLocalizations(ctx, versionId, asc.Limit[asc.GCChallengeLocalizationsOption](limit), asc.NextURL[asc.GCChallengeLocalizationsOption](next))
 		},
-	}
+		Deps: d,
+	})
 }
 
-// GameCenterChallengeLocalizationsGetCommand returns the challenge localizations get subcommand.
-func GameCenterChallengeLocalizationsGetCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("view", flag.ExitOnError)
-
-	localizationID := shared.BindResourceIDFlag(fs, "id", "gameCenterChallengeLocalizations", "Game Center challenge localization ID")
-	output := shared.BindOutputFlags(fs)
-
-	return &ffcli.Command{
+// newGameCenterChallengeLocalizationsGetCommand returns the challenge localizations get subcommand.
+func newGameCenterChallengeLocalizationsGetCommand(d *shared.Deps) *ffcli.Command {
+	return shared.BuildIDGetCommand(shared.IDGetCommandConfig{
 		Name:       "view",
 		ShortUsage: "asc game-center challenges localizations view --id \"LOCALIZATION_ID\"",
 		ShortHelp:  "View a challenge localization by ID.",
@@ -732,44 +467,20 @@ func GameCenterChallengeLocalizationsGetCommand() *ffcli.Command {
 
 Examples:
   asc game-center challenges localizations view --id "LOCALIZATION_ID"`,
-		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
-		Exec: func(ctx context.Context, args []string) error {
-			id := strings.TrimSpace(*localizationID)
-			if id == "" {
-				fmt.Fprintln(os.Stderr, "Error: --id is required")
-				return shared.MissingRequiredUsageError("--id")
-			}
-
-			client, err := shared.GetASCClient()
-			if err != nil {
-				return fmt.Errorf("game-center challenges localizations view: %w", err)
-			}
-
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
-			defer cancel()
-
-			resp, err := client.GetGameCenterChallengeLocalization(requestCtx, id)
-			if err != nil {
-				return fmt.Errorf("game-center challenges localizations view: failed to fetch: %w", err)
-			}
-
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+		IDUsage:            "Game Center challenge localization ID",
+		IDType:             "gameCenterChallengeLocalizations",
+		RequiredDiagnostic: true,
+		Fetch: func(ctx context.Context, client *asc.Client, id string) (any, error) {
+			return client.GetGameCenterChallengeLocalization(ctx, id)
 		},
-	}
+		Deps: d,
+	})
 }
 
-// GameCenterChallengeLocalizationsCreateCommand returns the challenge localizations create subcommand.
-func GameCenterChallengeLocalizationsCreateCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("create", flag.ExitOnError)
-
-	versionID := shared.BindResourceIDFlag(fs, "version-id", "gameCenterChallengeVersions", "Game Center challenge version ID")
-	locale := fs.String("locale", "", "Localization locale (e.g., en-US)")
-	name := fs.String("name", "", "Localized name")
-	description := fs.String("description", "", "Localized description")
-	output := shared.BindOutputFlags(fs)
-
-	return &ffcli.Command{
+// newGameCenterChallengeLocalizationsCreateCommand returns the challenge localizations create subcommand.
+func newGameCenterChallengeLocalizationsCreateCommand(d *shared.Deps) *ffcli.Command {
+	var attrs asc.GameCenterChallengeLocalizationCreateAttributes
+	return shared.BuildCreateCommand(shared.WriteCommandConfig{
 		Name:       "create",
 		ShortUsage: "asc game-center challenges localizations create --version-id \"VERSION_ID\" --locale en-US --name \"Weekly\" --description \"Win weekly\"",
 		ShortHelp:  "Create a challenge localization.",
@@ -777,64 +488,25 @@ func GameCenterChallengeLocalizationsCreateCommand() *ffcli.Command {
 
 Examples:
   asc game-center challenges localizations create --version-id "VERSION_ID" --locale en-US --name "Weekly" --description "Win weekly"`,
-		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
-		Exec: func(ctx context.Context, args []string) error {
-			id := strings.TrimSpace(*versionID)
-			if id == "" {
-				fmt.Fprintln(os.Stderr, "Error: --version-id is required")
-				return shared.MissingRequiredUsageError("--version-id")
-			}
-			loc := strings.TrimSpace(*locale)
-			if loc == "" {
-				fmt.Fprintln(os.Stderr, "Error: --locale is required")
-				return shared.MissingRequiredUsageError("--locale")
-			}
-			nameValue := strings.TrimSpace(*name)
-			if nameValue == "" {
-				fmt.Fprintln(os.Stderr, "Error: --name is required")
-				return shared.MissingRequiredUsageError("--name")
-			}
-			descriptionValue := strings.TrimSpace(*description)
-			if descriptionValue == "" {
-				fmt.Fprintln(os.Stderr, "Error: --description is required")
-				return shared.MissingRequiredUsageError("--description")
-			}
-
-			attrs := asc.GameCenterChallengeLocalizationCreateAttributes{
-				Locale:      loc,
-				Name:        nameValue,
-				Description: descriptionValue,
-			}
-
-			client, err := shared.GetASCClient()
-			if err != nil {
-				return fmt.Errorf("game-center challenges localizations create: %w", err)
-			}
-
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
-			defer cancel()
-
-			resp, err := client.CreateGameCenterChallengeLocalization(requestCtx, id, attrs)
-			if err != nil {
-				return fmt.Errorf("game-center challenges localizations create: failed to create: %w", err)
-			}
-
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+		IDFlag:  "version-id",
+		IDUsage: "Game Center challenge version ID",
+		IDType:  "gameCenterChallengeVersions",
+		Fields: []shared.AttributeFlag{
+			shared.RequiredStringFlag(&attrs.Locale, "locale", "Localization locale (e.g., en-US)"),
+			shared.RequiredStringFlag(&attrs.Name, "name", "Localized name"),
+			shared.RequiredStringFlag(&attrs.Description, "description", "Localized description"),
 		},
-	}
+		Send: func(ctx context.Context, client *asc.Client, id string) (any, error) {
+			return client.CreateGameCenterChallengeLocalization(ctx, id, attrs)
+		},
+		Deps: d,
+	})
 }
 
-// GameCenterChallengeLocalizationsUpdateCommand returns the challenge localizations update subcommand.
-func GameCenterChallengeLocalizationsUpdateCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("update", flag.ExitOnError)
-
-	localizationID := shared.BindResourceIDFlag(fs, "id", "gameCenterChallengeLocalizations", "Game Center challenge localization ID")
-	name := fs.String("name", "", "Localized name")
-	description := fs.String("description", "", "Localized description")
-	output := shared.BindOutputFlags(fs)
-
-	return &ffcli.Command{
+// newGameCenterChallengeLocalizationsUpdateCommand returns the challenge localizations update subcommand.
+func newGameCenterChallengeLocalizationsUpdateCommand(d *shared.Deps) *ffcli.Command {
+	var attrs asc.GameCenterChallengeLocalizationUpdateAttributes
+	return shared.BuildUpdateCommand(shared.WriteCommandConfig{
 		Name:       "update",
 		ShortUsage: "asc game-center challenges localizations update --id \"LOCALIZATION_ID\" [flags]",
 		ShortHelp:  "Update a challenge localization.",
@@ -842,61 +514,22 @@ func GameCenterChallengeLocalizationsUpdateCommand() *ffcli.Command {
 
 Examples:
   asc game-center challenges localizations update --id "LOCALIZATION_ID" --name "New Name"`,
-		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
-		Exec: func(ctx context.Context, args []string) error {
-			id := strings.TrimSpace(*localizationID)
-			if id == "" {
-				fmt.Fprintln(os.Stderr, "Error: --id is required")
-				return shared.MissingRequiredUsageError("--id")
-			}
-
-			attrs := asc.GameCenterChallengeLocalizationUpdateAttributes{}
-			hasUpdate := false
-
-			if strings.TrimSpace(*name) != "" {
-				value := strings.TrimSpace(*name)
-				attrs.Name = &value
-				hasUpdate = true
-			}
-			if strings.TrimSpace(*description) != "" {
-				value := strings.TrimSpace(*description)
-				attrs.Description = &value
-				hasUpdate = true
-			}
-
-			if !hasUpdate {
-				fmt.Fprintln(os.Stderr, "Error: at least one update flag is required")
-				return shared.MissingRequiredUsageError("")
-			}
-
-			client, err := shared.GetASCClient()
-			if err != nil {
-				return fmt.Errorf("game-center challenges localizations update: %w", err)
-			}
-
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
-			defer cancel()
-
-			resp, err := client.UpdateGameCenterChallengeLocalization(requestCtx, id, attrs)
-			if err != nil {
-				return fmt.Errorf("game-center challenges localizations update: failed to update: %w", err)
-			}
-
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+		IDUsage: "Game Center challenge localization ID",
+		IDType:  "gameCenterChallengeLocalizations",
+		Fields: []shared.AttributeFlag{
+			shared.OptionalStringFlag(&attrs.Name, "name", "Localized name"),
+			shared.OptionalStringFlag(&attrs.Description, "description", "Localized description"),
 		},
-	}
+		Send: func(ctx context.Context, client *asc.Client, id string) (any, error) {
+			return client.UpdateGameCenterChallengeLocalization(ctx, id, attrs)
+		},
+		Deps: d,
+	})
 }
 
-// GameCenterChallengeLocalizationsDeleteCommand returns the challenge localizations delete subcommand.
-func GameCenterChallengeLocalizationsDeleteCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("delete", flag.ExitOnError)
-
-	localizationID := shared.BindResourceIDFlag(fs, "id", "gameCenterChallengeLocalizations", "Game Center challenge localization ID")
-	confirm := fs.Bool("confirm", false, "Confirm deletion")
-	output := shared.BindOutputFlags(fs)
-
-	return &ffcli.Command{
+// newGameCenterChallengeLocalizationsDeleteCommand returns the challenge localizations delete subcommand.
+func newGameCenterChallengeLocalizationsDeleteCommand(d *shared.Deps) *ffcli.Command {
+	return shared.BuildConfirmDeleteCommand(shared.ConfirmDeleteCommandConfig{
 		Name:       "delete",
 		ShortUsage: "asc game-center challenges localizations delete --id \"LOCALIZATION_ID\" --confirm",
 		ShortHelp:  "Delete a challenge localization.",
@@ -904,44 +537,23 @@ func GameCenterChallengeLocalizationsDeleteCommand() *ffcli.Command {
 
 Examples:
   asc game-center challenges localizations delete --id "LOCALIZATION_ID" --confirm`,
-		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
-		Exec: func(ctx context.Context, args []string) error {
-			id := strings.TrimSpace(*localizationID)
-			if id == "" {
-				fmt.Fprintln(os.Stderr, "Error: --id is required")
-				return shared.MissingRequiredUsageError("--id")
-			}
-			if !*confirm {
-				fmt.Fprintln(os.Stderr, "Error: --confirm is required")
-				return shared.MissingRequiredUsageError("--confirm")
-			}
-
-			client, err := shared.GetASCClient()
-			if err != nil {
-				return fmt.Errorf("game-center challenges localizations delete: %w", err)
-			}
-
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
-			defer cancel()
-
-			if err := client.DeleteGameCenterChallengeLocalization(requestCtx, id); err != nil {
-				return fmt.Errorf("game-center challenges localizations delete: failed to delete: %w", err)
-			}
-
-			result := &asc.GameCenterChallengeLocalizationDeleteResult{
-				ID:      id,
-				Deleted: true,
-			}
-
-			return shared.PrintOutput(result, *output.Output, *output.Pretty)
+		IDFlag:             "id",
+		IDUsage:            "Game Center challenge localization ID",
+		IDType:             "gameCenterChallengeLocalizations",
+		RequiredDiagnostic: true,
+		Delete: func(ctx context.Context, client *asc.Client, id string) error {
+			return client.DeleteGameCenterChallengeLocalization(ctx, id)
 		},
-	}
+		Result: func(id string) any {
+			return &asc.DeleteResult{ID: id, Deleted: true}
+		},
+		Deps: d,
+	})
 }
 
-// GameCenterChallengeImagesCommand returns the challenge images command group.
-func GameCenterChallengeImagesCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("images", flag.ExitOnError)
+// newGameCenterChallengeImagesCommand returns the challenge images command group.
+func newGameCenterChallengeImagesCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("images", flag.ExitOnError)
 
 	return &ffcli.Command{
 		Name:       "images",
@@ -955,11 +567,11 @@ Examples:
   asc game-center challenges images view --id "IMAGE_ID"
   asc game-center challenges images delete --id "IMAGE_ID" --confirm`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
-			GameCenterChallengeImagesUploadCommand(),
-			GameCenterChallengeImagesGetCommand(),
-			GameCenterChallengeImagesDeleteCommand(),
+			newGameCenterChallengeImagesUploadCommand(d),
+			newGameCenterChallengeImagesGetCommand(d),
+			newGameCenterChallengeImagesDeleteCommand(d),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp
@@ -967,14 +579,14 @@ Examples:
 	}
 }
 
-// GameCenterChallengeImagesUploadCommand returns the challenge images upload subcommand.
-func GameCenterChallengeImagesUploadCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("upload", flag.ExitOnError)
+// newGameCenterChallengeImagesUploadCommand returns the challenge images upload subcommand.
+func newGameCenterChallengeImagesUploadCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("upload", flag.ExitOnError)
 
 	localizationID := shared.BindResourceIDFlag(fs, "localization-id", "gameCenterChallengeLocalizations", "Challenge localization ID (exactly one of --localization-id or --version-id)")
 	versionID := shared.BindResourceIDFlag(fs, "version-id", "gameCenterChallengeVersions", "Challenge version ID, to set the version's default image (exactly one of --localization-id or --version-id)")
 	filePath := fs.String("file", "", "Path to image file (PNG)")
-	output := shared.BindOutputFlags(fs)
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "upload",
@@ -988,26 +600,25 @@ Examples:
   asc game-center challenges images upload --localization-id "LOCALIZATION_ID" --file path/to/image.png
   asc game-center challenges images upload --version-id "VERSION_ID" --file path/to/image.png`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			locID := strings.TrimSpace(*localizationID)
 			verID := strings.TrimSpace(*versionID)
 			if (locID == "") == (verID == "") {
-				return shared.UsageError("exactly one of --localization-id or --version-id is required")
+				return d.UsageError("exactly one of --localization-id or --version-id is required")
 			}
 
 			file := strings.TrimSpace(*filePath)
 			if file == "" {
-				fmt.Fprintln(os.Stderr, "Error: --file is required")
-				return shared.MissingRequiredUsageError("--file")
+				return d.RequiredFlag("--file")
 			}
 
-			client, err := shared.GetASCClient()
+			client, err := d.Client()
 			if err != nil {
 				return fmt.Errorf("game-center challenges images upload: %w", err)
 			}
 
-			requestCtx, cancel := shared.ContextWithUploadTimeout(ctx)
+			requestCtx, cancel := d.UploadTimeout(ctx)
 			defer cancel()
 
 			result, err := client.UploadGameCenterChallengeImage(requestCtx, locID, verID, file)
@@ -1015,19 +626,14 @@ Examples:
 				return fmt.Errorf("game-center challenges images upload: %w", err)
 			}
 
-			return shared.PrintOutput(result, *output.Output, *output.Pretty)
+			return d.PrintOutput(result, *output.Output, *output.Pretty)
 		},
 	}
 }
 
-// GameCenterChallengeImagesGetCommand returns the challenge images get subcommand.
-func GameCenterChallengeImagesGetCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("view", flag.ExitOnError)
-
-	imageID := shared.BindResourceIDFlag(fs, "id", "gameCenterChallengeImages", "Challenge image ID")
-	output := shared.BindOutputFlags(fs)
-
-	return &ffcli.Command{
+// newGameCenterChallengeImagesGetCommand returns the challenge images get subcommand.
+func newGameCenterChallengeImagesGetCommand(d *shared.Deps) *ffcli.Command {
+	return shared.BuildIDGetCommand(shared.IDGetCommandConfig{
 		Name:       "view",
 		ShortUsage: "asc game-center challenges images view --id \"IMAGE_ID\"",
 		ShortHelp:  "View a challenge image by ID.",
@@ -1035,42 +641,19 @@ func GameCenterChallengeImagesGetCommand() *ffcli.Command {
 
 Examples:
   asc game-center challenges images view --id "IMAGE_ID"`,
-		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
-		Exec: func(ctx context.Context, args []string) error {
-			id := strings.TrimSpace(*imageID)
-			if id == "" {
-				fmt.Fprintln(os.Stderr, "Error: --id is required")
-				return shared.MissingRequiredUsageError("--id")
-			}
-
-			client, err := shared.GetASCClient()
-			if err != nil {
-				return fmt.Errorf("game-center challenges images view: %w", err)
-			}
-
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
-			defer cancel()
-
-			resp, err := client.GetGameCenterChallengeImage(requestCtx, id)
-			if err != nil {
-				return fmt.Errorf("game-center challenges images view: failed to fetch: %w", err)
-			}
-
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+		IDUsage:            "Challenge image ID",
+		IDType:             "gameCenterChallengeImages",
+		RequiredDiagnostic: true,
+		Fetch: func(ctx context.Context, client *asc.Client, id string) (any, error) {
+			return client.GetGameCenterChallengeImage(ctx, id)
 		},
-	}
+		Deps: d,
+	})
 }
 
-// GameCenterChallengeImagesDeleteCommand returns the challenge images delete subcommand.
-func GameCenterChallengeImagesDeleteCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("delete", flag.ExitOnError)
-
-	imageID := shared.BindResourceIDFlag(fs, "id", "gameCenterChallengeImages", "Challenge image ID")
-	confirm := fs.Bool("confirm", false, "Confirm deletion")
-	output := shared.BindOutputFlags(fs)
-
-	return &ffcli.Command{
+// newGameCenterChallengeImagesDeleteCommand returns the challenge images delete subcommand.
+func newGameCenterChallengeImagesDeleteCommand(d *shared.Deps) *ffcli.Command {
+	return shared.BuildConfirmDeleteCommand(shared.ConfirmDeleteCommandConfig{
 		Name:       "delete",
 		ShortUsage: "asc game-center challenges images delete --id \"IMAGE_ID\" --confirm",
 		ShortHelp:  "Delete a challenge image.",
@@ -1078,44 +661,23 @@ func GameCenterChallengeImagesDeleteCommand() *ffcli.Command {
 
 Examples:
   asc game-center challenges images delete --id "IMAGE_ID" --confirm`,
-		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
-		Exec: func(ctx context.Context, args []string) error {
-			id := strings.TrimSpace(*imageID)
-			if id == "" {
-				fmt.Fprintln(os.Stderr, "Error: --id is required")
-				return shared.MissingRequiredUsageError("--id")
-			}
-			if !*confirm {
-				fmt.Fprintln(os.Stderr, "Error: --confirm is required")
-				return shared.MissingRequiredUsageError("--confirm")
-			}
-
-			client, err := shared.GetASCClient()
-			if err != nil {
-				return fmt.Errorf("game-center challenges images delete: %w", err)
-			}
-
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
-			defer cancel()
-
-			if err := client.DeleteGameCenterChallengeImage(requestCtx, id); err != nil {
-				return fmt.Errorf("game-center challenges images delete: failed to delete: %w", err)
-			}
-
-			result := &asc.GameCenterChallengeImageDeleteResult{
-				ID:      id,
-				Deleted: true,
-			}
-
-			return shared.PrintOutput(result, *output.Output, *output.Pretty)
+		IDFlag:             "id",
+		IDUsage:            "Challenge image ID",
+		IDType:             "gameCenterChallengeImages",
+		RequiredDiagnostic: true,
+		Delete: func(ctx context.Context, client *asc.Client, id string) error {
+			return client.DeleteGameCenterChallengeImage(ctx, id)
 		},
-	}
+		Result: func(id string) any {
+			return &asc.DeleteResult{ID: id, Deleted: true}
+		},
+		Deps: d,
+	})
 }
 
-// GameCenterChallengeReleasesCommand returns the challenge releases command group.
-func GameCenterChallengeReleasesCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("releases", flag.ExitOnError)
+// newGameCenterChallengeReleasesCommand returns the challenge releases command group.
+func newGameCenterChallengeReleasesCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("releases", flag.ExitOnError)
 
 	return &ffcli.Command{
 		Name:       "releases",
@@ -1128,11 +690,11 @@ Examples:
   asc game-center challenges releases create --version-id "VERSION_ID"
   asc game-center challenges releases delete --id "RELEASE_ID" --confirm`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
-			GameCenterChallengeReleasesListCommand(),
-			GameCenterChallengeReleasesCreateCommand(),
-			GameCenterChallengeReleasesDeleteCommand(),
+			newGameCenterChallengeReleasesListCommand(d),
+			newGameCenterChallengeReleasesCreateCommand(d),
+			newGameCenterChallengeReleasesDeleteCommand(d),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp
@@ -1140,17 +702,9 @@ Examples:
 	}
 }
 
-// GameCenterChallengeReleasesListCommand returns the challenge releases list subcommand.
-func GameCenterChallengeReleasesListCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("list", flag.ExitOnError)
-
-	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
-	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
-	next := fs.String("next", "", "Fetch next page using a links.next URL")
-	paginate := fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")
-	output := shared.BindOutputFlags(fs)
-
-	return &ffcli.Command{
+// newGameCenterChallengeReleasesListCommand returns the challenge releases list subcommand.
+func newGameCenterChallengeReleasesListCommand(d *shared.Deps) *ffcli.Command {
+	return shared.BuildPaginatedListCommand(shared.PaginatedListCommandConfig{
 		Name:       "list",
 		ShortUsage: "asc game-center challenges releases list --app \"APP_ID\"",
 		ShortHelp:  "List releases for Game Center challenges.",
@@ -1160,80 +714,23 @@ Examples:
   asc game-center challenges releases list --app "APP_ID"
   asc game-center challenges releases list --app "APP_ID" --limit 50
   asc game-center challenges releases list --app "APP_ID" --paginate`,
-		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
-		Exec: func(ctx context.Context, args []string) error {
-			if *limit != 0 && (*limit < 1 || *limit > 200) {
-				return shared.UsageError("game-center challenges releases list: --limit must be between 1 and 200")
-			}
-			if err := shared.ValidateNextURL(*next); err != nil {
-				return shared.UsageErrorf("game-center challenges releases list: %v", err)
-			}
-
-			resolvedAppID := shared.ResolveAppID(*appID)
-			nextURL := strings.TrimSpace(*next)
-			if resolvedAppID == "" && nextURL == "" {
-				fmt.Fprintln(os.Stderr, "Error: --app is required (or set ASC_APP_ID)")
-				return shared.MissingRequiredUsageError("--app")
-			}
-
-			client, err := shared.GetASCClient()
-			if err != nil {
-				return fmt.Errorf("game-center challenges releases list: %w", err)
-			}
-
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
-			defer cancel()
-
-			gcDetailID := ""
-			if nextURL == "" {
-				var err error
-				gcDetailID, err = client.GetGameCenterDetailID(requestCtx, resolvedAppID)
-				if err != nil {
-					return fmt.Errorf("game-center challenges releases list: failed to get Game Center detail: %w", err)
-				}
-			}
-
-			opts := []asc.GCChallengeVersionReleasesOption{
-				asc.WithGCChallengeVersionReleasesLimit(*limit),
-				asc.WithGCChallengeVersionReleasesNextURL(*next),
-			}
-
-			if *paginate {
-				paginateOpts := append(opts, asc.WithGCChallengeVersionReleasesLimit(200))
-				firstPage, err := client.GetGameCenterChallengeVersionReleases(requestCtx, gcDetailID, paginateOpts...)
-				if err != nil {
-					return fmt.Errorf("game-center challenges releases list: failed to fetch: %w", err)
-				}
-
-				resp, err := asc.PaginateAll(requestCtx, firstPage, func(ctx context.Context, nextURL string) (asc.PaginatedResponse, error) {
-					return client.GetGameCenterChallengeVersionReleases(ctx, gcDetailID, asc.WithGCChallengeVersionReleasesNextURL(nextURL))
-				})
-				if err != nil {
-					return fmt.Errorf("game-center challenges releases list: %w", err)
-				}
-
-				return shared.PrintOutput(resp, *output.Output, *output.Pretty)
-			}
-
-			resp, err := client.GetGameCenterChallengeVersionReleases(requestCtx, gcDetailID, opts...)
-			if err != nil {
-				return fmt.Errorf("game-center challenges releases list: failed to fetch: %w", err)
-			}
-
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+		ParentFlag:           "app",
+		ParentUsage:          "App Store Connect app ID (or ASC_APP_ID env)",
+		ResolveApp:           true,
+		RequiredDiagnostic:   true,
+		PaginateIgnoresLimit: true,
+		NoSpinner:            true,
+		LookupParent:         gameCenterDetailParent("game-center challenges releases list"),
+		FetchPage: func(ctx context.Context, client *asc.Client, gcDetailID string, limit int, next string) (asc.PaginatedResponse, error) {
+			return client.GetGameCenterChallengeVersionReleases(ctx, gcDetailID, asc.Limit[asc.GCChallengeVersionReleasesOption](limit), asc.NextURL[asc.GCChallengeVersionReleasesOption](next))
 		},
-	}
+		Deps: d,
+	})
 }
 
-// GameCenterChallengeReleasesCreateCommand returns the challenge releases create subcommand.
-func GameCenterChallengeReleasesCreateCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("create", flag.ExitOnError)
-
-	versionID := shared.BindResourceIDFlag(fs, "version-id", "gameCenterChallengeVersions", "Game Center challenge version ID")
-	output := shared.BindOutputFlags(fs)
-
-	return &ffcli.Command{
+// newGameCenterChallengeReleasesCreateCommand returns the challenge releases create subcommand.
+func newGameCenterChallengeReleasesCreateCommand(d *shared.Deps) *ffcli.Command {
+	return shared.BuildCreateCommand(shared.WriteCommandConfig{
 		Name:       "create",
 		ShortUsage: "asc game-center challenges releases create --version-id \"VERSION_ID\"",
 		ShortHelp:  "Create a Game Center challenge release.",
@@ -1241,42 +738,19 @@ func GameCenterChallengeReleasesCreateCommand() *ffcli.Command {
 
 Examples:
   asc game-center challenges releases create --version-id "VERSION_ID"`,
-		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
-		Exec: func(ctx context.Context, args []string) error {
-			id := strings.TrimSpace(*versionID)
-			if id == "" {
-				fmt.Fprintln(os.Stderr, "Error: --version-id is required")
-				return shared.MissingRequiredUsageError("--version-id")
-			}
-
-			client, err := shared.GetASCClient()
-			if err != nil {
-				return fmt.Errorf("game-center challenges releases create: %w", err)
-			}
-
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
-			defer cancel()
-
-			resp, err := client.CreateGameCenterChallengeVersionRelease(requestCtx, id)
-			if err != nil {
-				return fmt.Errorf("game-center challenges releases create: failed to create: %w", err)
-			}
-
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+		IDFlag:  "version-id",
+		IDUsage: "Game Center challenge version ID",
+		IDType:  "gameCenterChallengeVersions",
+		Send: func(ctx context.Context, client *asc.Client, id string) (any, error) {
+			return client.CreateGameCenterChallengeVersionRelease(ctx, id)
 		},
-	}
+		Deps: d,
+	})
 }
 
-// GameCenterChallengeReleasesDeleteCommand returns the challenge releases delete subcommand.
-func GameCenterChallengeReleasesDeleteCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("delete", flag.ExitOnError)
-
-	releaseID := shared.BindResourceIDFlag(fs, "id", "gameCenterChallengeVersionReleases", "Game Center challenge release ID")
-	confirm := fs.Bool("confirm", false, "Confirm deletion")
-	output := shared.BindOutputFlags(fs)
-
-	return &ffcli.Command{
+// newGameCenterChallengeReleasesDeleteCommand returns the challenge releases delete subcommand.
+func newGameCenterChallengeReleasesDeleteCommand(d *shared.Deps) *ffcli.Command {
+	return shared.BuildConfirmDeleteCommand(shared.ConfirmDeleteCommandConfig{
 		Name:       "delete",
 		ShortUsage: "asc game-center challenges releases delete --id \"RELEASE_ID\" --confirm",
 		ShortHelp:  "Delete a Game Center challenge release.",
@@ -1284,44 +758,23 @@ func GameCenterChallengeReleasesDeleteCommand() *ffcli.Command {
 
 Examples:
   asc game-center challenges releases delete --id "RELEASE_ID" --confirm`,
-		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
-		Exec: func(ctx context.Context, args []string) error {
-			id := strings.TrimSpace(*releaseID)
-			if id == "" {
-				fmt.Fprintln(os.Stderr, "Error: --id is required")
-				return shared.MissingRequiredUsageError("--id")
-			}
-			if !*confirm {
-				fmt.Fprintln(os.Stderr, "Error: --confirm is required")
-				return shared.MissingRequiredUsageError("--confirm")
-			}
-
-			client, err := shared.GetASCClient()
-			if err != nil {
-				return fmt.Errorf("game-center challenges releases delete: %w", err)
-			}
-
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
-			defer cancel()
-
-			if err := client.DeleteGameCenterChallengeVersionRelease(requestCtx, id); err != nil {
-				return fmt.Errorf("game-center challenges releases delete: failed to delete: %w", err)
-			}
-
-			result := &asc.GameCenterChallengeVersionReleaseDeleteResult{
-				ID:      id,
-				Deleted: true,
-			}
-
-			return shared.PrintOutput(result, *output.Output, *output.Pretty)
+		IDFlag:             "id",
+		IDUsage:            "Game Center challenge release ID",
+		IDType:             "gameCenterChallengeVersionReleases",
+		RequiredDiagnostic: true,
+		Delete: func(ctx context.Context, client *asc.Client, id string) error {
+			return client.DeleteGameCenterChallengeVersionRelease(ctx, id)
 		},
-	}
+		Result: func(id string) any {
+			return &asc.DeleteResult{ID: id, Deleted: true}
+		},
+		Deps: d,
+	})
 }
 
-// GameCenterChallengeLocalizationImageCommand returns the challenge localization image command group.
-func GameCenterChallengeLocalizationImageCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("image", flag.ExitOnError)
+// newGameCenterChallengeLocalizationImageCommand returns the challenge localization image command group.
+func newGameCenterChallengeLocalizationImageCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("image", flag.ExitOnError)
 
 	return &ffcli.Command{
 		Name:       "image",
@@ -1332,9 +785,9 @@ func GameCenterChallengeLocalizationImageCommand() *ffcli.Command {
 Examples:
   asc game-center challenges localizations image view --id "LOC_ID"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
-			GameCenterChallengeLocalizationImageGetCommand(),
+			newGameCenterChallengeLocalizationImageGetCommand(d),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp
@@ -1342,14 +795,9 @@ Examples:
 	}
 }
 
-// GameCenterChallengeLocalizationImageGetCommand returns the challenge localization image get subcommand.
-func GameCenterChallengeLocalizationImageGetCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("view", flag.ExitOnError)
-
-	localizationID := shared.BindResourceIDFlag(fs, "id", "gameCenterChallengeLocalizations", "Game Center challenge localization ID")
-	output := shared.BindOutputFlags(fs)
-
-	return &ffcli.Command{
+// newGameCenterChallengeLocalizationImageGetCommand returns the challenge localization image get subcommand.
+func newGameCenterChallengeLocalizationImageGetCommand(d *shared.Deps) *ffcli.Command {
+	return shared.BuildIDGetCommand(shared.IDGetCommandConfig{
 		Name:       "view",
 		ShortUsage: "asc game-center challenges localizations image view --id \"LOC_ID\"",
 		ShortHelp:  "View a challenge localization image.",
@@ -1357,36 +805,19 @@ func GameCenterChallengeLocalizationImageGetCommand() *ffcli.Command {
 
 Examples:
   asc game-center challenges localizations image view --id "LOC_ID"`,
-		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
-		Exec: func(ctx context.Context, args []string) error {
-			id := strings.TrimSpace(*localizationID)
-			if id == "" {
-				fmt.Fprintln(os.Stderr, "Error: --id is required")
-				return shared.MissingRequiredUsageError("--id")
-			}
-
-			client, err := shared.GetASCClient()
-			if err != nil {
-				return fmt.Errorf("game-center challenges localizations image view: %w", err)
-			}
-
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
-			defer cancel()
-
-			resp, err := client.GetGameCenterChallengeLocalizationImage(requestCtx, id)
-			if err != nil {
-				return fmt.Errorf("game-center challenges localizations image view: failed to fetch: %w", err)
-			}
-
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+		IDUsage:            "Game Center challenge localization ID",
+		IDType:             "gameCenterChallengeLocalizations",
+		RequiredDiagnostic: true,
+		Fetch: func(ctx context.Context, client *asc.Client, id string) (any, error) {
+			return client.GetGameCenterChallengeLocalizationImage(ctx, id)
 		},
-	}
+		Deps: d,
+	})
 }
 
-// GameCenterChallengeVersionDefaultImageCommand returns the challenge version default image command group.
-func GameCenterChallengeVersionDefaultImageCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("default-image", flag.ExitOnError)
+// newGameCenterChallengeVersionDefaultImageCommand returns the challenge version default image command group.
+func newGameCenterChallengeVersionDefaultImageCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("default-image", flag.ExitOnError)
 
 	return &ffcli.Command{
 		Name:       "default-image",
@@ -1397,9 +828,9 @@ func GameCenterChallengeVersionDefaultImageCommand() *ffcli.Command {
 Examples:
   asc game-center challenges versions default-image view --id "VERSION_ID"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
-			GameCenterChallengeVersionDefaultImageGetCommand(),
+			newGameCenterChallengeVersionDefaultImageGetCommand(d),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp
@@ -1407,14 +838,9 @@ Examples:
 	}
 }
 
-// GameCenterChallengeVersionDefaultImageGetCommand returns the challenge version default image get subcommand.
-func GameCenterChallengeVersionDefaultImageGetCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("view", flag.ExitOnError)
-
-	versionID := shared.BindResourceIDFlag(fs, "id", "gameCenterChallengeVersions", "Game Center challenge version ID")
-	output := shared.BindOutputFlags(fs)
-
-	return &ffcli.Command{
+// newGameCenterChallengeVersionDefaultImageGetCommand returns the challenge version default image get subcommand.
+func newGameCenterChallengeVersionDefaultImageGetCommand(d *shared.Deps) *ffcli.Command {
+	return shared.BuildIDGetCommand(shared.IDGetCommandConfig{
 		Name:       "view",
 		ShortUsage: "asc game-center challenges versions default-image view --id \"VERSION_ID\"",
 		ShortHelp:  "View a default image for a challenge version.",
@@ -1422,29 +848,12 @@ func GameCenterChallengeVersionDefaultImageGetCommand() *ffcli.Command {
 
 Examples:
   asc game-center challenges versions default-image view --id "VERSION_ID"`,
-		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
-		Exec: func(ctx context.Context, args []string) error {
-			id := strings.TrimSpace(*versionID)
-			if id == "" {
-				fmt.Fprintln(os.Stderr, "Error: --id is required")
-				return shared.MissingRequiredUsageError("--id")
-			}
-
-			client, err := shared.GetASCClient()
-			if err != nil {
-				return fmt.Errorf("game-center challenges versions default-image view: %w", err)
-			}
-
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
-			defer cancel()
-
-			resp, err := client.GetGameCenterChallengeVersionDefaultImage(requestCtx, id)
-			if err != nil {
-				return fmt.Errorf("game-center challenges versions default-image view: failed to fetch: %w", err)
-			}
-
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+		IDUsage:            "Game Center challenge version ID",
+		IDType:             "gameCenterChallengeVersions",
+		RequiredDiagnostic: true,
+		Fetch: func(ctx context.Context, client *asc.Client, id string) (any, error) {
+			return client.GetGameCenterChallengeVersionDefaultImage(ctx, id)
 		},
-	}
+		Deps: d,
+	})
 }

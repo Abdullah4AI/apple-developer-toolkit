@@ -34,10 +34,6 @@ func isPermanentDeliveryError(err error) bool {
 	return errors.As(err, &permanentError)
 }
 
-func Emit(commandName, version string, duration time.Duration, exitCode int) {
-	EmitWithContext(commandName, version, duration, exitCode, EventContext{InvocationShape: InvocationShapeLeaf})
-}
-
 func EmitWithContext(
 	commandName, version string,
 	duration time.Duration,
@@ -185,6 +181,9 @@ func debugf(format string, args ...any) {
 }
 
 func debugEnabled() bool {
-	debug := strings.ToLower(strings.TrimSpace(os.Getenv("ASC_DEBUG")))
-	return debug != "" && debug != "0" && debug != "false" && debug != "off"
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("ASC_DEBUG"))) {
+	case "", "0", "f", "false", "no", "n", "off":
+		return false
+	}
+	return true
 }

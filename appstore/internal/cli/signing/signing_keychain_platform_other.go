@@ -2,6 +2,8 @@
 
 package signing
 
-func platformSigningKeychainInstallDeps() signingKeychainInstallDeps {
+import "github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
+
+func platformSigningKeychainInstallDeps(*shared.Deps, bool) signingKeychainInstallDeps {
 	return signingKeychainInstallDeps{GOOS: "unsupported"}
 }

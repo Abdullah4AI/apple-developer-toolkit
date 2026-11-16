@@ -23,6 +23,7 @@ import (
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/config"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/rootfs"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/testguard"
 )
 
 // ErrKeychainAccessDenied is returned when a keychain backend is available but
@@ -287,11 +288,11 @@ func KeychainAvailable() (bool, error) {
 }
 
 var keyringOpener = func() (keyring.Keyring, error) {
-	return keyring.Open(keyringConfig(""))
+	return testguard.OpenKeyring(keyringConfig(""))
 }
 
 var legacyKeyringOpener = func() (keyring.Keyring, error) {
-	return openLegacyKeyringForOS(runtime.GOOS, keyring.Open)
+	return openLegacyKeyringForOS(runtime.GOOS, testguard.OpenKeyring)
 }
 
 func openLegacyKeyringForOS(goos string, open func(keyring.Config) (keyring.Keyring, error)) (keyring.Keyring, error) {
@@ -305,61 +306,56 @@ func openLegacyKeyringForOS(goos string, open func(keyring.Config) (keyring.Keyr
 
 // ValidateKeyFile validates that the private key file exists and is valid
 func ValidateKeyFile(path string) error {
-	return validateKeyFileForOS(path, runtime.GOOS)
+	_, err := loadValidatedPrivateKeyForOS(path, runtime.GOOS)
+	return err
 }
 
-func validateKeyFileForOS(path, goos string) error {
+// LoadValidatedPrivateKey checks the key file's permissions and parses the
+// key from the same open file.
+func LoadValidatedPrivateKey(path string) (*ecdsa.PrivateKey, error) {
+	return loadValidatedPrivateKeyForOS(path, runtime.GOOS)
+}
+
+func loadValidatedPrivateKeyForOS(path, goos string) (*ecdsa.PrivateKey, error) {
+	data, err := readValidatedKeyFileForOS(path, goos)
+	if err != nil {
+		return nil, err
+	}
+	return LoadPrivateKeyFromPEM(data)
+}
+
+// ReadValidatedKeyFile reads a file holding private key material after the
+// same checks ValidateKeyFile applies before it parses a key file.
+func ReadValidatedKeyFile(path string) ([]byte, error) {
+	return readValidatedKeyFileForOS(path, runtime.GOOS)
+}
+
+func readValidatedKeyFileForOS(path, goos string) ([]byte, error) {
 	if info, err := os.Lstat(path); err == nil && info.IsDir() {
-		return newPrivateKeyError(PrivateKeyInvalidFormat, errors.New("private key path is a directory"))
+		return nil, newPrivateKeyError(PrivateKeyInvalidFormat, errors.New("private key path is a directory"))
 	}
 	file, err := rootfs.OpenFile(path)
 	if err != nil {
-		return privateKeyOpenError(path, "failed to open key file", err)
+		return nil, privateKeyOpenError(path, "failed to open key file", err)
 	}
 	defer file.Close()
 
 	info, err := file.Stat()
 	if err != nil {
-		return newPrivateKeyError(privateKeyAccessErrorKind(err), fmt.Errorf("failed to stat key file: %w", err))
+		return nil, newPrivateKeyError(privateKeyAccessErrorKind(err), fmt.Errorf("failed to stat key file: %w", err))
 	}
 	if filePermissionsTooPermissiveForOS(info.Mode(), goos) {
 		if command, safe := FilePermissionRemediationCommand(path); safe {
-			return newPrivateKeyError(PrivateKeyPermissionsInsecure, fmt.Errorf("private key file is too permissive; run: %s", command))
+			return nil, newPrivateKeyError(PrivateKeyPermissionsInsecure, fmt.Errorf("private key file is too permissive; run: %s", command))
 		}
-		return newPrivateKeyError(PrivateKeyPermissionsInsecure, errors.New("private key file is too permissive; use auth login --fix-permissions or auth doctor --fix --confirm"))
+		return nil, newPrivateKeyError(PrivateKeyPermissionsInsecure, errors.New("private key file is too permissive; use auth login --fix-permissions or auth doctor --fix --confirm"))
 	}
 
 	data, err := io.ReadAll(file)
 	if err != nil {
-		return newPrivateKeyError(privateKeyAccessErrorKind(err), fmt.Errorf("failed to read key file: %w", err))
+		return nil, newPrivateKeyError(privateKeyAccessErrorKind(err), fmt.Errorf("failed to read key file: %w", err))
 	}
-
-	block, _ := pem.Decode(data)
-	if block == nil {
-		return newPrivateKeyError(PrivateKeyInvalidFormat, errors.New("invalid PEM data"))
-	}
-
-	var privateKey *ecdsa.PrivateKey
-	if key, err := x509.ParsePKCS8PrivateKey(block.Bytes); err == nil {
-		var ok bool
-		privateKey, ok = key.(*ecdsa.PrivateKey)
-		if !ok {
-			return newPrivateKeyError(PrivateKeyUnsupportedAlgorithm, errors.New("private key is not ECDSA"))
-		}
-	} else {
-		privateKey, err = x509.ParseECPrivateKey(block.Bytes)
-		if err != nil {
-			if _, rsaErr := x509.ParsePKCS1PrivateKey(block.Bytes); rsaErr == nil {
-				return newPrivateKeyError(PrivateKeyUnsupportedAlgorithm, errors.New("private key is not ECDSA"))
-			}
-			return newPrivateKeyError(PrivateKeyInvalidFormat, fmt.Errorf("invalid private key format: %w", err))
-		}
-	}
-	if privateKey.Curve != elliptic.P256() {
-		return newPrivateKeyError(PrivateKeyUnsupportedAlgorithm, errors.New("private key must use the P-256 curve"))
-	}
-
-	return nil
+	return data, nil
 }
 
 // LoadPrivateKey loads the private key from the file
@@ -405,7 +401,7 @@ func LoadPrivateKeyFromPEM(data []byte) (*ecdsa.PrivateKey, error) {
 		if _, rsaErr := x509.ParsePKCS1PrivateKey(block.Bytes); rsaErr == nil {
 			return nil, newPrivateKeyError(PrivateKeyUnsupportedAlgorithm, errors.New("private key is not ECDSA"))
 		}
-		return nil, newPrivateKeyError(PrivateKeyInvalidFormat, fmt.Errorf("invalid private key: %w", err))
+		return nil, newPrivateKeyError(PrivateKeyInvalidFormat, fmt.Errorf("invalid private key format: %w", err))
 	}
 	if ecdsaKey.Curve != elliptic.P256() {
 		return nil, newPrivateKeyError(PrivateKeyUnsupportedAlgorithm, errors.New("private key must use the P-256 curve"))
@@ -414,18 +410,8 @@ func LoadPrivateKeyFromPEM(data []byte) (*ecdsa.PrivateKey, error) {
 	return ecdsaKey, nil
 }
 
-// StoreCredentials stores credentials in the keychain when available.
-func StoreCredentials(name, keyID, issuerID, keyPath string) error {
-	return StoreCredentialsWithKeyType(name, keyID, issuerID, keyPath, config.CredentialKeyTypeTeam)
-}
-
 // StoreCredentialsWithKeyType stores credentials with an explicit App Store Connect key type.
 func StoreCredentialsWithKeyType(name, keyID, issuerID, keyPath, keyType string) error {
-	originalName := name
-	name = strings.TrimSpace(name)
-	if name == "" {
-		return fmt.Errorf("credential name is required")
-	}
 	payload := credentialPayload{
 		KeyID:          keyID,
 		IssuerID:       issuerID,
@@ -435,17 +421,102 @@ func StoreCredentialsWithKeyType(name, keyID, issuerID, keyPath, keyType string)
 	if privateKeyPEM, err := loadPrivateKeyPEMForStorage(keyPath); err == nil && strings.TrimSpace(privateKeyPEM) != "" {
 		payload.PrivateKeyPEM = privateKeyPEM
 	}
+	return storeCredentialPayload(name, payload, storeInConfig)
+}
+
+// StoreCredentialsPEMWithKeyType stores credentials whose private key is PEM
+// text rather than a file. The keychain keeps the PEM itself. When the
+// credentials go to a config file instead, the PEM is written to the keys
+// directory beside it and its path is returned; otherwise the path is empty.
+func StoreCredentialsPEMWithKeyType(name, keyID, issuerID, privateKeyPEM, keyType string) (string, error) {
+	payload := credentialPayload{
+		KeyID:         keyID,
+		IssuerID:      issuerID,
+		PrivateKeyPEM: privateKeyPEM,
+		KeyType:       normalizedStoredKeyType(keyType),
+	}
+	writtenPath := ""
+	err := storeCredentialPayload(name, payload, func(name string, payload credentialPayload) error {
+		_, configPath, err := loadDefaultNameConfig()
+		if err != nil && !errors.Is(err, config.ErrNotFound) {
+			return err
+		}
+		writtenPath, err = storePEMInConfigAt(name, payload, configPath)
+		return err
+	})
+	return writtenPath, err
+}
+
+// StoreCredentialsPEMConfigAtWithKeyType stores credentials whose private key
+// is PEM text in the specified config file, writing the PEM to the keys
+// directory beside it, and returns the path of that key file.
+func StoreCredentialsPEMConfigAtWithKeyType(name, keyID, issuerID, privateKeyPEM, configPath, keyType string) (string, error) {
+	return storePEMInConfigAt(name, credentialPayload{
+		KeyID:         keyID,
+		IssuerID:      issuerID,
+		PrivateKeyPEM: privateKeyPEM,
+		KeyType:       normalizedStoredKeyType(keyType),
+	}, configPath)
+}
+
+// storePEMInConfigAt writes the payload's PEM to the directory auth
+// export-to-config uses by default and stores that path in configPath. A key
+// file this call created is removed again when the config cannot be saved.
+func storePEMInConfigAt(name string, payload credentialPayload, configPath string) (string, error) {
+	keyDir, err := resolveMigrationPrivateKeyDir("", configPath)
+	if err != nil {
+		return "", err
+	}
+	fileName := migrationPrivateKeyFilename(strings.TrimSpace(name), payload.KeyID)
+	keyPath := filepath.Join(keyDir, fileName)
+	existed := false
+	if file, err := rootfs.OpenFile(keyPath); err == nil {
+		existed = true
+		_ = file.Close()
+	}
+	if err := writePrivateKeyPEMFile(keyDir, fileName, payload.PrivateKeyPEM); err != nil {
+		return "", err
+	}
+	payload.PrivateKeyPath = keyPath
+	if err := storeInConfigAt(name, payload, configPath); err != nil {
+		if !existed {
+			err = errors.Join(err, removeCreatedPrivateKeyFile(keyDir, fileName))
+		}
+		return "", err
+	}
+	return keyPath, nil
+}
+
+func removeCreatedPrivateKeyFile(keyDir, fileName string) error {
+	root, err := rootfs.New(keyDir)
+	if err != nil {
+		return err
+	}
+	defer root.Close()
+	identity, err := root.CaptureFile(fileName)
+	if err != nil {
+		return err
+	}
+	return root.RemoveFileIfSameIdentity(fileName, identity)
+}
+
+func storeCredentialPayload(name string, payload credentialPayload, storeConfig func(string, credentialPayload) error) error {
+	originalName := name
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return fmt.Errorf("credential name is required")
+	}
 	currentAvailable, legacyAvailable, err := rejectNormalizedCredentialCollision(originalName, name)
 	if err != nil {
 		return err
 	}
 	if !currentAvailable {
-		return storeInConfig(name, payload)
+		return storeConfig(name, payload)
 	}
 	previousCanonical, previousCanonicalFound, err := currentKeychainItem(name)
 	if err != nil {
 		if isKeyringUnavailable(err) {
-			return storeInConfig(name, payload)
+			return storeConfig(name, payload)
 		}
 		return err
 	}
@@ -467,7 +538,7 @@ func StoreCredentialsWithKeyType(name, keyID, issuerID, keyPath, keyType string)
 		return err
 	}
 
-	return storeInConfig(name, payload)
+	return storeConfig(name, payload)
 }
 
 func currentKeychainItem(name string) (keyring.Item, bool, error) {
@@ -790,11 +861,6 @@ func loadPrivateKeyPEMForStorage(path string) (string, error) {
 		return "", closeErr
 	}
 	return string(data), nil
-}
-
-// StoreCredentialsConfig stores credentials in the config file only.
-func StoreCredentialsConfig(name, keyID, issuerID, keyPath string) error {
-	return StoreCredentialsConfigWithKeyType(name, keyID, issuerID, keyPath, config.CredentialKeyTypeTeam)
 }
 
 // StoreCredentialsConfigWithKeyType stores credentials in the config file only
@@ -1296,12 +1362,6 @@ type RemoveOptions struct {
 	IncludeGlobalConfig bool
 }
 
-// RemoveCredentials removes a named credential from the keychain and the
-// config files selected by the default RemoveOptions.
-func RemoveCredentials(name string) error {
-	return RemoveCredentialsWithOptions(name, RemoveOptions{})
-}
-
 // RemoveCredentialsWithOptions removes a named credential from the keychain
 // and the config files that opts selects.
 func RemoveCredentialsWithOptions(name string, opts RemoveOptions) error {
@@ -1338,12 +1398,6 @@ func RemoveCredentialsWithOptions(name string, opts RemoveOptions) error {
 		return clearDefaultNameIf(name)
 	}
 	return configErr
-}
-
-// RemoveAllCredentials removes all stored credentials from the keychain and
-// the config files selected by the default RemoveOptions.
-func RemoveAllCredentials() error {
-	return RemoveAllCredentialsWithOptions(RemoveOptions{})
 }
 
 // RemoveAllCredentialsWithOptions removes all stored credentials from the

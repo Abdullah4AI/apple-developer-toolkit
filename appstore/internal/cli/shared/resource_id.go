@@ -3,6 +3,7 @@ package shared
 import (
 	"flag"
 	"fmt"
+	"io"
 	"net/url"
 	"os"
 	"regexp"
@@ -77,6 +78,10 @@ func BindResourceIDFlag(fs *flag.FlagSet, name, resourceType, usage string) *str
 	return target
 }
 
+func (v *resourceIDValue) storage() any {
+	return v.target
+}
+
 func (v *resourceIDValue) String() string {
 	if v == nil || v.target == nil {
 		return ""
@@ -105,10 +110,20 @@ func (v *resourceIDValue) Get() any {
 // apps self-link and reports a link of another type as a concise usage error
 // with the same message as a flag-parse failure.
 func AppIDFlagValue(value string) (string, error) {
+	return appIDFlagValueTo(os.Stderr, value)
+}
+
+// AppIDFlagValue is AppIDFlagValue with the "Error:" line written to d's
+// stderr.
+func (d *Deps) AppIDFlagValue(value string) (string, error) {
+	return appIDFlagValueTo(d.IO.ErrOut, value)
+}
+
+func appIDFlagValueTo(stderr io.Writer, value string) (string, error) {
 	id, err := ResourceIDFromValue(value, "apps")
 	if err != nil {
-		message := SanitizeTerminal(fmt.Sprintf("invalid value %q for flag -app: %v", strings.TrimSpace(value), err))
-		fmt.Fprintf(os.Stderr, "Error: %s\n", message)
+		message := SanitizeTerminal(fmt.Sprintf("invalid value %q for flag --app: %v", strings.TrimSpace(value), err))
+		fmt.Fprintf(stderr, "Error: %s\n", message)
 		return "", NewReportedUsageError(UsageErrorInvalidValue, message)
 	}
 	return id, nil

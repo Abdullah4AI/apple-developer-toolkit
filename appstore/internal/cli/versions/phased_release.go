@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/peterbourgon/ff/v3/ffcli"
@@ -26,8 +25,8 @@ var validCreateStates = []string{"INACTIVE", "ACTIVE"}
 // validUpdateStates are states allowed when updating a phased release
 var validUpdateStates = []string{"ACTIVE", "PAUSED", "COMPLETE"}
 
-// PhasedReleaseCommand returns the phased-release command group.
-func PhasedReleaseCommand() *ffcli.Command {
+// newPhasedReleaseCommand returns the phased-release command group.
+func newPhasedReleaseCommand(d *shared.Deps) *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "phased-release",
 		ShortUsage: "asc versions phased-release <subcommand> [flags]",
@@ -45,13 +44,13 @@ Examples:
   asc versions phased-release update --id "PHASED_ID" --state PAUSED
   asc versions phased-release delete --id "PHASED_ID" --confirm
   asc versions phased-release guard --version-id "VERSION_ID" --confirm -- ./scripts/health-check.sh`,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
-			PhasedReleaseGetCommand(),
-			PhasedReleaseCreateCommand(),
-			PhasedReleaseUpdateCommand(),
-			PhasedReleaseDeleteCommand(),
-			PhasedReleaseGuardCommand(),
+			newPhasedReleaseGetCommand(d),
+			newPhasedReleaseCreateCommand(d),
+			newPhasedReleaseUpdateCommand(d),
+			newPhasedReleaseDeleteCommand(d),
+			newPhasedReleaseGuardCommand(d),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp
@@ -59,55 +58,37 @@ Examples:
 	}
 }
 
-// PhasedReleaseGetCommand returns the get subcommand.
-func PhasedReleaseGetCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("phased-release view", flag.ExitOnError)
-
-	versionID := shared.BindResourceIDFlag(fs, "version-id", "appStoreVersions", "App Store version ID (required)")
-	output := shared.BindOutputFlags(fs)
-
-	return &ffcli.Command{
-		Name:       "view",
-		ShortUsage: "asc versions phased-release view [flags]",
-		ShortHelp:  "View phased release status for an app store version.",
+// newPhasedReleaseGetCommand returns the get subcommand.
+func newPhasedReleaseGetCommand(d *shared.Deps) *ffcli.Command {
+	return shared.BuildIDGetCommand(shared.IDGetCommandConfig{
+		Deps:        d,
+		FlagSetName: "phased-release view",
+		Name:        "view",
+		ShortUsage:  "asc versions phased-release view [flags]",
+		ShortHelp:   "View phased release status for an app store version.",
 		LongHelp: `View phased release status for an app store version.
 
 Examples:
   asc versions phased-release view --version-id "VERSION_ID"`,
-		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
-		Exec: func(ctx context.Context, args []string) error {
-			version := strings.TrimSpace(*versionID)
-			if version == "" {
-				fmt.Fprintln(os.Stderr, "Error: --version-id is required")
-				return shared.MissingRequiredUsageError("--version-id")
-			}
-
-			client, err := shared.GetASCClient()
-			if err != nil {
-				return fmt.Errorf("phased-release view: %w", err)
-			}
-
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
-			defer cancel()
-
-			resp, err := client.GetAppStoreVersionPhasedRelease(requestCtx, version)
-			if err != nil {
-				return fmt.Errorf("phased-release view: %w", err)
-			}
-
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+		IDFlag:             "version-id",
+		IDUsage:            "App Store version ID (required)",
+		IDType:             "appStoreVersions",
+		RequiredDiagnostic: true,
+		ErrorPrefix:        "phased-release view",
+		FetchErrorPrefix:   "phased-release view",
+		Fetch: func(ctx context.Context, client *asc.Client, id string) (any, error) {
+			return client.GetAppStoreVersionPhasedRelease(ctx, id)
 		},
-	}
+	})
 }
 
-// PhasedReleaseCreateCommand returns the create subcommand.
-func PhasedReleaseCreateCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("phased-release create", flag.ExitOnError)
+// newPhasedReleaseCreateCommand returns the create subcommand.
+func newPhasedReleaseCreateCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("phased-release create", flag.ExitOnError)
 
 	versionID := shared.BindResourceIDFlag(fs, "version-id", "appStoreVersions", "App Store version ID (required)")
 	state := fs.String("state", "", "Initial state: INACTIVE, ACTIVE (optional, defaults to INACTIVE)")
-	output := shared.BindOutputFlags(fs)
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "create",
@@ -122,12 +103,11 @@ Examples:
   asc versions phased-release create --version-id "VERSION_ID"
   asc versions phased-release create --version-id "VERSION_ID" --state ACTIVE`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			version := strings.TrimSpace(*versionID)
 			if version == "" {
-				fmt.Fprintln(os.Stderr, "Error: --version-id is required")
-				return shared.MissingRequiredUsageError("--version-id")
+				return d.RequiredFlag("--version-id")
 			}
 
 			var phasedState asc.PhasedReleaseState
@@ -136,17 +116,17 @@ Examples:
 				var ok bool
 				phasedState, ok = validPhasedReleaseStates[stateValue]
 				if !ok || (stateValue != "INACTIVE" && stateValue != "ACTIVE") {
-					fmt.Fprintf(os.Stderr, "Error: --state must be one of: %s\n", strings.Join(validCreateStates, ", "))
+					fmt.Fprintf(d.IO.ErrOut, "Error: --state must be one of: %s\n", strings.Join(validCreateStates, ", "))
 					return flag.ErrHelp
 				}
 			}
 
-			client, err := shared.GetASCClient()
+			client, err := d.Client()
 			if err != nil {
 				return fmt.Errorf("phased-release create: %w", err)
 			}
 
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
+			requestCtx, cancel := d.Timeout(ctx)
 			defer cancel()
 
 			resp, err := client.CreateAppStoreVersionPhasedRelease(requestCtx, version, phasedState)
@@ -154,19 +134,19 @@ Examples:
 				return fmt.Errorf("phased-release create: %w", err)
 			}
 
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+			return d.PrintOutput(resp, *output.Output, *output.Pretty)
 		},
 	}
 }
 
-// PhasedReleaseUpdateCommand returns the update subcommand.
-func PhasedReleaseUpdateCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("phased-release update", flag.ExitOnError)
+// newPhasedReleaseUpdateCommand returns the update subcommand.
+func newPhasedReleaseUpdateCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("phased-release update", flag.ExitOnError)
 
 	phasedID := shared.BindResourceIDFlag(fs, "id", "appStoreVersionPhasedReleases", "Phased release ID (required)")
 	state := fs.String("state", "", "New state: ACTIVE, PAUSED, COMPLETE (required)")
 	confirm := fs.Bool("confirm", false, "Confirm COMPLETE, which releases the update to all users immediately")
-	output := shared.BindOutputFlags(fs)
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "update",
@@ -184,36 +164,34 @@ Examples:
   asc versions phased-release update --id "PHASED_ID" --state ACTIVE
   asc versions phased-release update --id "PHASED_ID" --state COMPLETE --confirm`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			id := strings.TrimSpace(*phasedID)
 			if id == "" {
-				fmt.Fprintln(os.Stderr, "Error: --id is required")
-				return shared.MissingRequiredUsageError("--id")
+				return d.RequiredFlag("--id")
 			}
 
 			stateValue := strings.TrimSpace(strings.ToUpper(*state))
 			if stateValue == "" {
-				fmt.Fprintln(os.Stderr, "Error: --state is required")
-				return shared.MissingRequiredUsageError("--state")
+				return d.RequiredFlag("--state")
 			}
 
 			phasedState, ok := validPhasedReleaseStates[stateValue]
 			if !ok || stateValue == "INACTIVE" {
-				fmt.Fprintf(os.Stderr, "Error: --state must be one of: %s\n", strings.Join(validUpdateStates, ", "))
+				fmt.Fprintf(d.IO.ErrOut, "Error: --state must be one of: %s\n", strings.Join(validUpdateStates, ", "))
 				return flag.ErrHelp
 			}
 			if stateValue == "COMPLETE" && !*confirm {
-				fmt.Fprintln(os.Stderr, "Error: --confirm is required to set phased release state COMPLETE")
+				fmt.Fprintln(d.IO.ErrOut, "Error: --confirm is required to set phased release state COMPLETE")
 				return shared.MissingRequiredUsageError("--confirm")
 			}
 
-			client, err := shared.GetASCClient()
+			client, err := d.Client()
 			if err != nil {
 				return fmt.Errorf("phased-release update: %w", err)
 			}
 
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
+			requestCtx, cancel := d.Timeout(ctx)
 			defer cancel()
 
 			resp, err := client.UpdateAppStoreVersionPhasedRelease(requestCtx, id, phasedState)
@@ -221,23 +199,19 @@ Examples:
 				return fmt.Errorf("phased-release update: %w", err)
 			}
 
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+			return d.PrintOutput(resp, *output.Output, *output.Pretty)
 		},
 	}
 }
 
-// PhasedReleaseDeleteCommand returns the delete subcommand.
-func PhasedReleaseDeleteCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("phased-release delete", flag.ExitOnError)
-
-	phasedID := shared.BindResourceIDFlag(fs, "id", "appStoreVersionPhasedReleases", "Phased release ID (required)")
-	confirm := fs.Bool("confirm", false, "Confirm deletion (required)")
-	output := shared.BindOutputFlags(fs)
-
-	return &ffcli.Command{
-		Name:       "delete",
-		ShortUsage: "asc versions phased-release delete [flags]",
-		ShortHelp:  "Delete a phased release.",
+// newPhasedReleaseDeleteCommand returns the delete subcommand.
+func newPhasedReleaseDeleteCommand(d *shared.Deps) *ffcli.Command {
+	return shared.BuildConfirmDeleteCommand(shared.ConfirmDeleteCommandConfig{
+		Deps:        d,
+		FlagSetName: "phased-release delete",
+		Name:        "delete",
+		ShortUsage:  "asc versions phased-release delete [flags]",
+		ShortHelp:   "Delete a phased release.",
 		LongHelp: `Delete a phased release.
 
 This removes the phased release configuration. The app will release to all users
@@ -245,38 +219,18 @@ immediately when it goes live (no gradual rollout).
 
 Examples:
   asc versions phased-release delete --id "PHASED_ID" --confirm`,
-		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
-		Exec: func(ctx context.Context, args []string) error {
-			id := strings.TrimSpace(*phasedID)
-			if id == "" {
-				fmt.Fprintln(os.Stderr, "Error: --id is required")
-				return shared.MissingRequiredUsageError("--id")
-			}
-
-			if !*confirm {
-				fmt.Fprintln(os.Stderr, "Error: --confirm is required")
-				return shared.MissingRequiredUsageError("--confirm")
-			}
-
-			client, err := shared.GetASCClient()
-			if err != nil {
-				return fmt.Errorf("phased-release delete: %w", err)
-			}
-
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
-			defer cancel()
-
-			if err := client.DeleteAppStoreVersionPhasedRelease(requestCtx, id); err != nil {
-				return fmt.Errorf("phased-release delete: %w", err)
-			}
-
-			result := &asc.AppStoreVersionPhasedReleaseDeleteResult{
-				ID:      id,
-				Deleted: true,
-			}
-
-			return shared.PrintOutput(result, *output.Output, *output.Pretty)
+		IDFlag:             "id",
+		IDUsage:            "Phased release ID (required)",
+		IDType:             "appStoreVersionPhasedReleases",
+		RequiredDiagnostic: true,
+		ConfirmUsage:       "Confirm deletion (required)",
+		ErrorPrefix:        "phased-release delete",
+		DeleteErrorPrefix:  "phased-release delete",
+		Delete: func(ctx context.Context, client *asc.Client, id string) error {
+			return client.DeleteAppStoreVersionPhasedRelease(ctx, id)
 		},
-	}
+		Result: func(id string) any {
+			return &asc.AppStoreVersionPhasedReleaseDeleteResult{ID: id, Deleted: true}
+		},
+	})
 }

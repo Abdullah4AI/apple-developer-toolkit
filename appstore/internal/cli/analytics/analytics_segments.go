@@ -3,8 +3,6 @@ package analytics
 import (
 	"context"
 	"flag"
-	"fmt"
-	"os"
 	"strings"
 
 	"github.com/peterbourgon/ff/v3/ffcli"
@@ -13,9 +11,9 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
-// AnalyticsSegmentsCommand returns the analytics segments command group.
-func AnalyticsSegmentsCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("segments", flag.ExitOnError)
+// newAnalyticsSegmentsCommand returns the analytics segments command group.
+func newAnalyticsSegmentsCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("segments", flag.ExitOnError)
 
 	return &ffcli.Command{
 		Name:       "segments",
@@ -26,9 +24,9 @@ func AnalyticsSegmentsCommand() *ffcli.Command {
 Examples:
   asc analytics segments view --segment-id "SEGMENT_ID"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
-			AnalyticsSegmentsGetCommand(),
+			newAnalyticsSegmentsGetCommand(d),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp
@@ -36,14 +34,10 @@ Examples:
 	}
 }
 
-// AnalyticsSegmentsGetCommand retrieves a specific analytics report segment.
-func AnalyticsSegmentsGetCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("view", flag.ExitOnError)
-
-	segmentID := shared.BindResourceIDFlag(fs, "segment-id", "analyticsReportSegments", "Analytics report segment ID")
-	output := shared.BindOutputFlags(fs)
-
-	return &ffcli.Command{
+// newAnalyticsSegmentsGetCommand retrieves a specific analytics report segment.
+func newAnalyticsSegmentsGetCommand(d *shared.Deps) *ffcli.Command {
+	return shared.BuildIDGetCommand(shared.IDGetCommandConfig{
+		Deps:       d,
 		Name:       "view",
 		ShortUsage: "asc analytics segments view --segment-id \"SEGMENT_ID\" [flags]",
 		ShortHelp:  "View an analytics report segment by ID.",
@@ -51,34 +45,21 @@ func AnalyticsSegmentsGetCommand() *ffcli.Command {
 
 Examples:
   asc analytics segments view --segment-id "SEGMENT_ID"`,
-		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
-		Exec: func(ctx context.Context, args []string) error {
-			id := strings.TrimSpace(*segmentID)
-			if id == "" {
-				fmt.Fprintln(os.Stderr, "Error: --segment-id is required")
-				return shared.MissingRequiredUsageError("--segment-id")
+		IDFlag:             "segment-id",
+		IDUsage:            "Analytics report segment ID",
+		IDType:             "analyticsReportSegments",
+		RequiredDiagnostic: true,
+		Flags: func(fs *flag.FlagSet) func() error {
+			segmentID := fs.Lookup("segment-id").Value
+			return func() error {
+				if _, err := asc.ValidateResourcePathSegment(strings.TrimSpace(segmentID.String())); err != nil {
+					return d.UsageErrorf("analytics segments view: --segment-id: %v", err)
+				}
+				return nil
 			}
-			var err error
-			id, err = asc.ValidateResourcePathSegment(id)
-			if err != nil {
-				return shared.UsageErrorf("analytics segments view: --segment-id: %v", err)
-			}
-
-			client, err := shared.GetASCClient()
-			if err != nil {
-				return fmt.Errorf("analytics segments view: %w", err)
-			}
-
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
-			defer cancel()
-
-			resp, err := client.GetAnalyticsReportSegment(requestCtx, id)
-			if err != nil {
-				return fmt.Errorf("analytics segments view: failed to fetch: %w", err)
-			}
-
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
 		},
-	}
+		Fetch: func(ctx context.Context, client *asc.Client, id string) (any, error) {
+			return client.GetAnalyticsReportSegment(ctx, id)
+		},
+	})
 }

@@ -119,37 +119,8 @@ type BundleIDUpdateAttributes struct {
 	Name string `json:"name,omitempty"`
 }
 
-// BundleIDCreateData is the data portion of a bundle ID create request.
-type BundleIDCreateData struct {
-	Type       ResourceType             `json:"type"`
-	Attributes BundleIDCreateAttributes `json:"attributes"`
-}
-
-// BundleIDCreateRequest is a request to create a bundle ID.
-type BundleIDCreateRequest struct {
-	Data BundleIDCreateData `json:"data"`
-}
-
-// BundleIDUpdateData is the data portion of a bundle ID update request.
-type BundleIDUpdateData struct {
-	Type       ResourceType              `json:"type"`
-	ID         string                    `json:"id"`
-	Attributes *BundleIDUpdateAttributes `json:"attributes,omitempty"`
-}
-
-// BundleIDUpdateRequest is a request to update a bundle ID.
-type BundleIDUpdateRequest struct {
-	Data BundleIDUpdateData `json:"data"`
-}
-
 // BundleIDCapabilityAttributes describes a bundle ID capability resource.
 type BundleIDCapabilityAttributes struct {
-	CapabilityType string              `json:"capabilityType"`
-	Settings       []CapabilitySetting `json:"settings,omitempty"`
-}
-
-// BundleIDCapabilityCreateAttributes describes attributes for creating a capability.
-type BundleIDCapabilityCreateAttributes struct {
 	CapabilityType string              `json:"capabilityType"`
 	Settings       []CapabilitySetting `json:"settings,omitempty"`
 }
@@ -176,52 +147,14 @@ type CapabilityOption struct {
 	SupportsWildcard *bool  `json:"supportsWildcard,omitempty"`
 }
 
-// BundleIDCapabilityRelationships describes relationships for bundle ID capabilities.
-type BundleIDCapabilityRelationships struct {
-	BundleID *Relationship `json:"bundleId"`
-}
-
-// BundleIDCapabilityCreateData is the data portion of a capability create request.
-type BundleIDCapabilityCreateData struct {
-	Type          ResourceType                       `json:"type"`
-	Attributes    BundleIDCapabilityCreateAttributes `json:"attributes"`
-	Relationships *BundleIDCapabilityRelationships   `json:"relationships"`
-}
-
-// BundleIDCapabilityCreateRequest is a request to create a bundle ID capability.
-type BundleIDCapabilityCreateRequest struct {
-	Data BundleIDCapabilityCreateData `json:"data"`
-}
-
 // BundleIDCapabilityUpdateAttributes describes attributes for updating a capability.
 type BundleIDCapabilityUpdateAttributes struct {
 	CapabilityType string              `json:"capabilityType,omitempty"`
 	Settings       []CapabilitySetting `json:"settings,omitempty"`
 }
 
-// BundleIDCapabilityUpdateData is the data portion of a capability update request.
-type BundleIDCapabilityUpdateData struct {
-	Type       ResourceType                        `json:"type"`
-	ID         string                              `json:"id"`
-	Attributes *BundleIDCapabilityUpdateAttributes `json:"attributes,omitempty"`
-}
-
-// BundleIDCapabilityUpdateRequest is a request to update a bundle ID capability.
-type BundleIDCapabilityUpdateRequest struct {
-	Data BundleIDCapabilityUpdateData `json:"data"`
-}
-
-// BundleIDsResponse is the response from bundle IDs list endpoint.
-type BundleIDsResponse = Response[BundleIDAttributes]
-
-// BundleIDResponse is the response from bundle ID detail endpoint.
-type BundleIDResponse = SingleResponse[BundleIDAttributes]
-
 // BundleIDCapabilitiesResponse is the response from bundle ID capabilities endpoint.
 type BundleIDCapabilitiesResponse = Response[BundleIDCapabilityAttributes]
-
-// BundleIDCapabilityResponse is the response from bundle ID capability detail endpoint.
-type BundleIDCapabilityResponse = SingleResponse[BundleIDCapabilityAttributes]
 
 // CertificateAttributes describes a certificate resource.
 type CertificateAttributes struct {
@@ -381,47 +314,6 @@ type CertificateCreateAttributes struct {
 	CSRContent      string `json:"csrContent"`
 }
 
-// CertificateCreateRelationships describes relationships for certificate creation.
-type CertificateCreateRelationships struct {
-	MerchantID *Relationship `json:"merchantId,omitempty"`
-	PassTypeID *Relationship `json:"passTypeId,omitempty"`
-}
-
-// CertificateCreateData is the data portion of a certificate create request.
-type CertificateCreateData struct {
-	Type          ResourceType                    `json:"type"`
-	Attributes    CertificateCreateAttributes     `json:"attributes"`
-	Relationships *CertificateCreateRelationships `json:"relationships,omitempty"`
-}
-
-// CertificateCreateRequest is a request to create a certificate.
-type CertificateCreateRequest struct {
-	Data CertificateCreateData `json:"data"`
-}
-
-// CertificateUpdateAttributes describes attributes for updating a certificate.
-type CertificateUpdateAttributes struct {
-	Activated *bool `json:"activated,omitempty"`
-}
-
-// CertificateUpdateData is the data portion of a certificate update request.
-type CertificateUpdateData struct {
-	Type       ResourceType                 `json:"type"`
-	ID         string                       `json:"id"`
-	Attributes *CertificateUpdateAttributes `json:"attributes,omitempty"`
-}
-
-// CertificateUpdateRequest is a request to update a certificate.
-type CertificateUpdateRequest struct {
-	Data CertificateUpdateData `json:"data"`
-}
-
-// CertificatesResponse is the response from certificates list endpoint.
-type CertificatesResponse = Response[CertificateAttributes]
-
-// CertificateResponse is the response from certificate detail endpoint.
-type CertificateResponse = SingleResponse[CertificateAttributes]
-
 // ProfileState represents profile state values.
 type ProfileState string
 
@@ -474,23 +366,8 @@ type ProfileCreateRelationships struct {
 	Devices      *RelationshipList `json:"devices,omitempty"`
 }
 
-// ProfileCreateData is the data portion of a profile create request.
-type ProfileCreateData struct {
-	Type          ResourceType                `json:"type"`
-	Attributes    ProfileCreateAttributes     `json:"attributes"`
-	Relationships *ProfileCreateRelationships `json:"relationships"`
-}
-
-// ProfileCreateRequest is a request to create a profile.
-type ProfileCreateRequest struct {
-	Data ProfileCreateData `json:"data"`
-}
-
 // ProfilesResponse is the response from profiles list endpoint.
 type ProfilesResponse Response[ProfileAttributes]
-
-// ProfileResponse is the response from profile detail endpoint.
-type ProfileResponse = SingleResponse[ProfileAttributes]
 
 // ProfileCertificatesLinkagesResponse is the response from profile certificates linkage endpoint.
 type ProfileCertificatesLinkagesResponse = LinkagesResponse

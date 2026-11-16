@@ -8,7 +8,6 @@ import (
 	"flag"
 	"fmt"
 	"net/url"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -19,9 +18,9 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
-// SubscriptionsIntroductoryOffersImportCommand returns the introductory offers import subcommand.
-func SubscriptionsIntroductoryOffersImportCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("introductory-offers import", flag.ExitOnError)
+// newSubscriptionsIntroductoryOffersImportCommand returns the introductory offers import subcommand.
+func newSubscriptionsIntroductoryOffersImportCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("introductory-offers import", flag.ExitOnError)
 
 	subscriptionID := shared.BindResourceIDFlag(fs, "subscription-id", "subscriptions", "Subscription ID, product ID, or exact current name")
 	appID := addSubscriptionLookupAppFlag(fs)
@@ -31,11 +30,11 @@ func SubscriptionsIntroductoryOffersImportCommand() *ffcli.Command {
 	numberOfPeriods := fs.Int("number-of-periods", 0, "Default number of periods")
 	startDate := fs.String("start-date", "", "Default start date (YYYY-MM-DD)")
 	endDate := fs.String("end-date", "", "Default end date (YYYY-MM-DD)")
-	targetPlanType := shared.BindTargetSubscriptionPlanTypeFlag(fs)
+	targetPlanType := d.BindTargetSubscriptionPlanTypeFlag(fs)
 	dryRun := fs.Bool("dry-run", false, "Validate input and print summary without creating offers")
 	confirm := fs.Bool("confirm", false, "Confirm creating introductory offers (required unless --dry-run)")
 	continueOnError := fs.Bool("continue-on-error", true, "Continue processing rows after runtime failures (default true)")
-	output := shared.BindOutputFlags(fs)
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "import",
@@ -67,21 +66,19 @@ Examples:
   asc subscriptions introductory-offers import --subscription-id "SUB_ID" --input "./offers.csv" --offer-duration ONE_WEEK --offer-mode FREE_TRIAL --number-of-periods 1 --confirm
   asc subscriptions introductory-offers import --subscription-id "SUB_ID" --input "./offers.csv" --dry-run --offer-duration ONE_WEEK --offer-mode FREE_TRIAL --number-of-periods 1`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			if strings.TrimSpace(*subscriptionID) == "" {
-				fmt.Fprintln(os.Stderr, "Error: --subscription-id is required")
-				return shared.MissingRequiredUsageError("--subscription-id")
+				return d.RequiredFlag("--subscription-id")
 			}
 			if strings.TrimSpace(*inputPath) == "" {
-				fmt.Fprintln(os.Stderr, "Error: --input is required")
-				return shared.MissingRequiredUsageError("--input")
+				return d.RequiredFlag("--input")
 			}
 			normalizedOfferDuration := ""
 			if strings.TrimSpace(*offerDuration) != "" {
 				duration, err := normalizeSubscriptionOfferDuration(*offerDuration)
 				if err != nil {
-					fmt.Fprintln(os.Stderr, "Error:", err.Error())
+					fmt.Fprintln(d.IO.ErrOut, "Error:", err.Error())
 					return flag.ErrHelp
 				}
 				normalizedOfferDuration = string(duration)
@@ -90,20 +87,20 @@ Examples:
 			if strings.TrimSpace(*offerMode) != "" {
 				mode, err := normalizeSubscriptionOfferMode(*offerMode)
 				if err != nil {
-					fmt.Fprintln(os.Stderr, "Error:", err.Error())
+					fmt.Fprintln(d.IO.ErrOut, "Error:", err.Error())
 					return flag.ErrHelp
 				}
 				normalizedOfferMode = string(mode)
 			}
 			if *numberOfPeriods < 0 {
-				fmt.Fprintln(os.Stderr, "Error: --number-of-periods must be greater than or equal to 0")
+				fmt.Fprintln(d.IO.ErrOut, "Error: --number-of-periods must be greater than or equal to 0")
 				return flag.ErrHelp
 			}
 			normalizedStartDate := ""
 			if strings.TrimSpace(*startDate) != "" {
 				date, err := shared.NormalizeDate(*startDate, "--start-date")
 				if err != nil {
-					fmt.Fprintln(os.Stderr, "Error:", err.Error())
+					fmt.Fprintln(d.IO.ErrOut, "Error:", err.Error())
 					return flag.ErrHelp
 				}
 				normalizedStartDate = date
@@ -112,7 +109,7 @@ Examples:
 			if strings.TrimSpace(*endDate) != "" {
 				date, err := shared.NormalizeDate(*endDate, "--end-date")
 				if err != nil {
-					fmt.Fprintln(os.Stderr, "Error:", err.Error())
+					fmt.Fprintln(d.IO.ErrOut, "Error:", err.Error())
 					return flag.ErrHelp
 				}
 				normalizedEndDate = date
@@ -121,10 +118,10 @@ Examples:
 			if err != nil {
 				return err
 			}
-			if err := shared.RequireConfirmUnlessDryRun(*dryRun, *confirm); err != nil {
+			if err := d.RequireConfirmUnlessDryRun(*dryRun, *confirm); err != nil {
 				return err
 			}
-			rows, err := readSubscriptionIntroductoryOffersImportCSV(*inputPath)
+			rows, err := readSubscriptionIntroductoryOffersImportCSV(d, *inputPath)
 			if err != nil {
 				return fmt.Errorf("subscriptions introductory-offers import: %w", err)
 			}
@@ -136,7 +133,7 @@ Examples:
 				normalizedEndDate,
 				normalizedPlanType,
 			)
-			resolvedRows, err := resolveSubscriptionIntroductoryOfferImportRows(rows, defaults)
+			resolvedRows, err := resolveSubscriptionIntroductoryOfferImportRows(d, rows, defaults)
 			if err != nil {
 				return fmt.Errorf("subscriptions introductory-offers import: %w", err)
 			}
@@ -164,27 +161,27 @@ Examples:
 						Status:          "planned",
 					})
 				}
-				return shared.PrintOutputWithRenderers(
+				return d.PrintOutputWithRenderers(
 					summary,
 					*output.Output,
 					*output.Pretty,
-					func() error { return renderSubscriptionIntroductoryOfferImportSummary(summary, false) },
-					func() error { return renderSubscriptionIntroductoryOfferImportSummary(summary, true) },
+					func() error { return renderSubscriptionIntroductoryOfferImportSummary(d, summary, false) },
+					func() error { return renderSubscriptionIntroductoryOfferImportSummary(d, summary, true) },
 				)
 			}
 
-			client, err := shared.GetASCClient()
+			client, err := d.Client()
 			if err != nil {
 				return fmt.Errorf("subscriptions introductory-offers import: %w", err)
 			}
 
-			summary.SubscriptionID, err = shared.RetryReadWithFreshTimeout(ctx, func(requestCtx context.Context) (string, error) {
-				return resolveSubscriptionLookupID(requestCtx, client, *appID, summary.SubscriptionID)
+			summary.SubscriptionID, err = shared.RetryReadWithFreshTimeoutWith(ctx, d, func(requestCtx context.Context) (string, error) {
+				return resolveSubscriptionLookupID(requestCtx, d, client, *appID, summary.SubscriptionID)
 			})
 			if err != nil {
 				return err
 			}
-			stateIndex, err := fetchSubscriptionIntroductoryOfferImportState(ctx, client, summary.SubscriptionID)
+			stateIndex, err := fetchSubscriptionIntroductoryOfferImportState(ctx, d, client, summary.SubscriptionID)
 			if err != nil {
 				return fmt.Errorf("subscriptions introductory-offers import: fetch existing offers: %w", err)
 			}
@@ -208,8 +205,9 @@ Examples:
 				if !stateIndex.matches(row) {
 					status, rowErr = runReconciledMutation(
 						ctx,
+						d,
 						func(readbackCtx context.Context) (bool, error) {
-							refreshed, err := fetchSubscriptionIntroductoryOfferImportState(readbackCtx, client, summary.SubscriptionID)
+							refreshed, err := fetchSubscriptionIntroductoryOfferImportState(readbackCtx, d, client, summary.SubscriptionID)
 							if err != nil {
 								return false, err
 							}
@@ -256,7 +254,7 @@ Examples:
 			}
 
 			if summary.Failed > 0 {
-				artifactPath, artifactErr := writeSubscriptionIntroductoryOfferImportFailureArtifact(summary)
+				artifactPath, artifactErr := writeSubscriptionIntroductoryOfferImportFailureArtifact(d, summary)
 				if artifactErr != nil {
 					summary.FailureArtifactError = artifactErr.Error()
 				} else {
@@ -264,12 +262,12 @@ Examples:
 				}
 			}
 
-			if err := shared.PrintOutputWithRenderers(
+			if err := d.PrintOutputWithRenderers(
 				summary,
 				*output.Output,
 				*output.Pretty,
-				func() error { return renderSubscriptionIntroductoryOfferImportSummary(summary, false) },
-				func() error { return renderSubscriptionIntroductoryOfferImportSummary(summary, true) },
+				func() error { return renderSubscriptionIntroductoryOfferImportSummary(d, summary, false) },
+				func() error { return renderSubscriptionIntroductoryOfferImportSummary(d, summary, true) },
 			); err != nil {
 				return err
 			}
@@ -338,17 +336,18 @@ type subscriptionIntroductoryOfferImportFailureArtifact struct {
 	Results        []subscriptionIntroductoryOfferImportResultItem `json:"results"`
 }
 
-func renderSubscriptionIntroductoryOfferImportSummary(summary *subscriptionIntroductoryOfferImportSummary, markdown bool) error {
+func renderSubscriptionIntroductoryOfferImportSummary(d *shared.Deps, summary *subscriptionIntroductoryOfferImportSummary, markdown bool) error {
 	if summary == nil {
 		return fmt.Errorf("summary is nil")
 	}
 
-	render := asc.RenderTable
+	render := asc.RenderTableTo
 	if markdown {
-		render = asc.RenderMarkdown
+		render = asc.RenderMarkdownTo
 	}
 
 	render(
+		d.IO.Out,
 		[]string{"Subscription ID", "Input File", "Dry Run", "Total", "Created", "Skipped", "Reconciled", "Failed", "Failure Artifact", "Failure Artifact Error"},
 		[][]string{{
 			summary.SubscriptionID,
@@ -373,7 +372,7 @@ func renderSubscriptionIntroductoryOfferImportSummary(summary *subscriptionIntro
 				failure.Error,
 			})
 		}
-		render([]string{"Row", "Territory", "Error"}, rows)
+		render(d.IO.Out, []string{"Row", "Territory", "Error"}, rows)
 	}
 
 	return nil
@@ -405,7 +404,7 @@ func appendSubscriptionIntroductoryOfferImportFailure(summary *subscriptionIntro
 	})
 }
 
-func fetchSubscriptionIntroductoryOfferImportState(ctx context.Context, client *asc.Client, subscriptionID string) (*subscriptionIntroductoryOfferImportStateIndex, error) {
+func fetchSubscriptionIntroductoryOfferImportState(ctx context.Context, d *shared.Deps, client *asc.Client, subscriptionID string) (*subscriptionIntroductoryOfferImportStateIndex, error) {
 	query := url.Values{
 		"fields[subscriptionIntroductoryOffers]": []string{"startDate,endDate,duration,offerMode,numberOfPeriods,targetSubscriptionPlanType,territory,subscriptionPricePoint"},
 		"include":                                []string{"territory,subscriptionPricePoint"},
@@ -417,15 +416,15 @@ func fetchSubscriptionIntroductoryOfferImportState(ctx context.Context, client *
 			if err != nil {
 				return nil, err
 			}
-			return shared.RetryReadWithFreshTimeout(ctx, func(requestCtx context.Context) (*asc.SubscriptionIntroductoryOffersResponse, error) {
-				return client.GetSubscriptionIntroductoryOffers(requestCtx, subscriptionID, asc.WithSubscriptionIntroductoryOffersNextURL(mergedNext))
+			return shared.RetryReadWithFreshTimeoutWith(ctx, d, func(requestCtx context.Context) (*asc.SubscriptionIntroductoryOffersResponse, error) {
+				return client.GetSubscriptionIntroductoryOffers(requestCtx, subscriptionID, asc.NextURL[asc.SubscriptionIntroductoryOffersOption](mergedNext))
 			})
 		}
-		return shared.RetryReadWithFreshTimeout(ctx, func(requestCtx context.Context) (*asc.SubscriptionIntroductoryOffersResponse, error) {
+		return shared.RetryReadWithFreshTimeoutWith(ctx, d, func(requestCtx context.Context) (*asc.SubscriptionIntroductoryOffersResponse, error) {
 			return client.GetSubscriptionIntroductoryOffers(
 				requestCtx,
 				subscriptionID,
-				asc.WithSubscriptionIntroductoryOffersLimit(200),
+				asc.Limit[asc.SubscriptionIntroductoryOffersOption](200),
 				asc.WithSubscriptionIntroductoryOffersFields([]string{"startDate", "endDate", "duration", "offerMode", "numberOfPeriods", "targetSubscriptionPlanType", "territory", "subscriptionPricePoint"}),
 				asc.WithSubscriptionIntroductoryOffersInclude([]string{"territory", "subscriptionPricePoint"}),
 			)
@@ -462,7 +461,7 @@ func fetchSubscriptionIntroductoryOfferImportState(ctx context.Context, client *
 	if err != nil {
 		return nil, err
 	}
-	index.now = shared.PricingNow()
+	index.now = d.Now()
 	return index, nil
 }
 
@@ -530,7 +529,7 @@ func extractResourceRelationshipID(relationships json.RawMessage, key string) st
 	return strings.TrimSpace(relationship.Data.ID)
 }
 
-func writeSubscriptionIntroductoryOfferImportFailureArtifact(summary *subscriptionIntroductoryOfferImportSummary) (string, error) {
+func writeSubscriptionIntroductoryOfferImportFailureArtifact(d *shared.Deps, summary *subscriptionIntroductoryOfferImportSummary) (string, error) {
 	failures := make([]subscriptionIntroductoryOfferImportResultItem, 0, summary.Failed)
 	for _, result := range summary.Results {
 		if result.Status == "failed" {
@@ -543,15 +542,15 @@ func writeSubscriptionIntroductoryOfferImportFailureArtifact(summary *subscripti
 		SubscriptionID: summary.SubscriptionID,
 		InputFile:      summary.InputFile,
 		Failed:         summary.Failed,
-		GeneratedAt:    time.Now().UTC().Format(time.RFC3339),
+		GeneratedAt:    d.Now().UTC().Format(time.RFC3339),
 		Results:        failures,
 	}
 	data, err := json.MarshalIndent(artifact, "", "  ")
 	if err != nil {
 		return "", err
 	}
-	path := filepath.Join(".asc", "reports", "subscription-introductory-offers-import", fmt.Sprintf("failures-%d.json", time.Now().UTC().UnixNano()))
-	if _, err := shared.WriteStreamToFile(path, bytes.NewReader(data)); err != nil {
+	path := filepath.Join(".asc", "reports", "subscription-introductory-offers-import", fmt.Sprintf("failures-%d.json", d.Now().UTC().UnixNano()))
+	if _, err := d.WriteStreamToFile(path, bytes.NewReader(data)); err != nil {
 		return "", err
 	}
 	return path, nil

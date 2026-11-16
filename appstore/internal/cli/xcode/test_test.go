@@ -36,6 +36,9 @@ func TestXcodeTestPassesTypedOptionsAndPrintsJSON(t *testing.T) {
 			TestPlan:         opts.TestPlan,
 			DerivedDataPath:  opts.DerivedDataPath,
 			ResultBundlePath: opts.ResultBundlePath,
+			Coverage: &localxcode.Coverage{LineCoverage: 0.75, CoveredLines: 30, ExecutableLines: 40, Targets: []localxcode.Coverage{
+				{Name: "Demo.app", LineCoverage: 0.75, CoveredLines: 30, ExecutableLines: 40},
+			}},
 			Tests: &localxcode.TestSummary{
 				Total:      2,
 				Passed:     1,
@@ -52,7 +55,8 @@ func TestXcodeTestPassesTypedOptionsAndPrintsJSON(t *testing.T) {
 		}, nil
 	}
 
-	cmd := XcodeTestCommand()
+	d := newXcodeTestDeps(nil)
+	cmd := newXcodeTestCommand(d)
 	cmd.FlagSet.SetOutput(io.Discard)
 	if err := cmd.FlagSet.Parse([]string{
 		"--project", "Demo App.xcodeproj",
@@ -68,6 +72,7 @@ func TestXcodeTestPassesTypedOptionsAndPrintsJSON(t *testing.T) {
 		"--result-bundle-path", "/tmp/Results/Demo.xcresult",
 		"--clean",
 		"--no-code-signing",
+		"--code-coverage",
 		"--xcodebuild-flag=-quiet",
 		"--xcodebuild-flag=OTHER_SWIFT_FLAGS=-D ASC_TEST",
 		"--output", "json",
@@ -76,7 +81,7 @@ func TestXcodeTestPassesTypedOptionsAndPrintsJSON(t *testing.T) {
 	}
 
 	var runErr error
-	stdout, stderr := captureCommandOutput(t, func() error {
+	stdout, stderr := captureCommandOutput(t, d, func() error {
 		runErr = cmd.Exec(context.Background(), nil)
 		return runErr
 	})
@@ -98,8 +103,8 @@ func TestXcodeTestPassesTypedOptionsAndPrintsJSON(t *testing.T) {
 	if len(gotOpts.OnlyTesting) != 1 || gotOpts.OnlyTesting[0] != "DemoTests/LoginTests" || len(gotOpts.SkipTesting) != 1 {
 		t.Fatalf("unexpected test filters: %+v", gotOpts)
 	}
-	if !gotOpts.Clean || !gotOpts.NoCodeSigning {
-		t.Fatalf("expected clean and no-code-signing: %+v", gotOpts)
+	if !gotOpts.Clean || !gotOpts.NoCodeSigning || !gotOpts.CodeCoverage {
+		t.Fatalf("expected clean, no-code-signing, and code-coverage: %+v", gotOpts)
 	}
 	wantRaw := []string{"-quiet", "OTHER_SWIFT_FLAGS=-D ASC_TEST"}
 	if len(gotOpts.XcodebuildArgs) != len(wantRaw) || gotOpts.XcodebuildArgs[0] != wantRaw[0] || gotOpts.XcodebuildArgs[1] != wantRaw[1] {
@@ -112,6 +117,9 @@ func TestXcodeTestPassesTypedOptionsAndPrintsJSON(t *testing.T) {
 	}
 	if payload.Action != "test" || payload.Tests == nil || payload.Tests.Total != 2 || payload.Tests.Failed != 1 || payload.DurationMs != 1400 {
 		t.Fatalf("unexpected JSON payload: %+v", payload)
+	}
+	if !strings.Contains(stdout, `"coverage":{"lineCoverage":0.75,"coveredLines":30,"executableLines":40,"targets":[{"name":"Demo.app","lineCoverage":0.75,"coveredLines":30,"executableLines":40}]}`) {
+		t.Fatalf("JSON output missing coverage: %s", stdout)
 	}
 	if strings.Contains(stdout, "duration_ms") || strings.Contains(stdout, "no_code_signing") {
 		t.Fatalf("JSON output used legacy snake_case keys: %s", stdout)
@@ -131,7 +139,8 @@ func TestXcodeTestPreservesSelectorWhitespace(t *testing.T) {
 	wantOnlyTesting := " DemoTests/Smoke "
 	wantSkipTesting := " DemoTests/Flaky "
 	wantRawFlag := "  OTHER_SWIFT_FLAGS=-D ASC_TEST  "
-	cmd := XcodeTestCommand()
+	d := newXcodeTestDeps(nil)
+	cmd := newXcodeTestCommand(d)
 	cmd.FlagSet.SetOutput(io.Discard)
 	if err := cmd.FlagSet.Parse([]string{
 		"--project", "Demo.xcodeproj",
@@ -145,7 +154,7 @@ func TestXcodeTestPreservesSelectorWhitespace(t *testing.T) {
 		t.Fatalf("FlagSet.Parse() error = %v", err)
 	}
 	var runErr error
-	_, stderr := captureCommandOutput(t, func() error {
+	_, stderr := captureCommandOutput(t, d, func() error {
 		runErr = cmd.Exec(context.Background(), nil)
 		return runErr
 	})
@@ -177,31 +186,36 @@ func TestXcodeTestValidationErrorsAreUsageErrors(t *testing.T) {
 		return nil, nil
 	}
 
+	packageWithoutManifest := t.TempDir()
 	tests := []struct {
 		name string
 		args []string
 		want string
 	}{
-		{name: "missing selector", args: []string{"--scheme", "Demo", "--destination", "generic/platform=iOS"}, want: "exactly one of --workspace or --project"},
-		{name: "both selectors", args: []string{"--project", "Demo.xcodeproj", "--workspace", "Demo.xcworkspace", "--scheme", "Demo", "--destination", "generic/platform=iOS"}, want: "exactly one of --workspace or --project"},
+		{name: "missing selector", args: []string{"--scheme", "Demo", "--destination", "generic/platform=iOS"}, want: "exactly one of --workspace, --project, or --package-path"},
+		{name: "both selectors", args: []string{"--project", "Demo.xcodeproj", "--workspace", "Demo.xcworkspace", "--scheme", "Demo", "--destination", "generic/platform=iOS"}, want: "exactly one of --workspace, --project, or --package-path"},
+		{name: "package and project", args: []string{"--package-path", "DemoPackage", "--project", "Demo.xcodeproj", "--scheme", "Demo", "--destination", "generic/platform=iOS"}, want: "exactly one of --workspace, --project, or --package-path"},
+		{name: "package without manifest", args: []string{"--package-path", packageWithoutManifest, "--scheme", "Demo", "--destination", "generic/platform=iOS"}, want: "--package-path must contain a Package.swift file"},
 		{name: "missing scheme", args: []string{"--project", "Demo.xcodeproj", "--destination", "generic/platform=iOS"}, want: "--scheme is required"},
 		{name: "missing destination", args: []string{"--project", "Demo.xcodeproj", "--scheme", "Demo"}, want: "--destination is required"},
 		{name: "invalid action", args: []string{"--project", "Demo.xcodeproj", "--scheme", "Demo", "--destination", "generic/platform=iOS", "--action", "archive"}, want: "--action must be one of"},
 		{name: "without building missing xctestrun", args: []string{"--action", "test-without-building", "--destination", "generic/platform=iOS"}, want: "--xctestrun is required"},
 		{name: "without building rejects configuration", args: []string{"--action", "test-without-building", "--xctestrun", "Demo.xctestrun", "--destination", "generic/platform=iOS", "--configuration", "Debug"}, want: "--configuration cannot be used"},
 		{name: "without building rejects derived data path", args: []string{"--action", "test-without-building", "--xctestrun", "Demo.xctestrun", "--destination", "generic/platform=iOS", "--derived-data-path", "/tmp/DerivedData"}, want: "--derived-data-path cannot be used"},
+		{name: "code coverage conflicts with raw flag", args: []string{"--project", "Demo.xcodeproj", "--scheme", "Demo", "--destination", "generic/platform=iOS", "--code-coverage", "--xcodebuild-flag=-enableCodeCoverage", "--xcodebuild-flag=YES"}, want: `--code-coverage conflicts with --xcodebuild-flag "-enableCodeCoverage"; use one`},
 		{name: "reserved raw action", args: []string{"--project", "Demo.xcodeproj", "--scheme", "Demo", "--destination", "generic/platform=iOS", "--xcodebuild-flag=test"}, want: "cannot override asc-managed argument"},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			cmd := XcodeTestCommand()
+			d := newXcodeTestDeps(nil)
+			cmd := newXcodeTestCommand(d)
 			cmd.FlagSet.SetOutput(io.Discard)
 			if err := cmd.FlagSet.Parse(test.args); err != nil {
 				t.Fatalf("FlagSet.Parse() error = %v", err)
 			}
 			var runErr error
-			stdout, stderr := captureCommandOutput(t, func() error {
+			stdout, stderr := captureCommandOutput(t, d, func() error {
 				runErr = cmd.Exec(context.Background(), nil)
 				return runErr
 			})
@@ -274,7 +288,8 @@ func TestXcodeTestRejectsAuthenticationPassthroughUsageErrorsBeforeChild(t *test
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			cmd := XcodeTestCommand()
+			d := newXcodeTestDeps(nil)
+			cmd := newXcodeTestCommand(d)
 			cmd.FlagSet.SetOutput(io.Discard)
 			args := append([]string(nil), baseArgs...)
 			for _, raw := range test.raw {
@@ -285,7 +300,7 @@ func TestXcodeTestRejectsAuthenticationPassthroughUsageErrorsBeforeChild(t *test
 			}
 
 			var runErr error
-			stdout, stderr := captureCommandOutput(t, func() error {
+			stdout, stderr := captureCommandOutput(t, d, func() error {
 				runErr = cmd.Exec(context.Background(), nil)
 				return runErr
 			})
@@ -321,7 +336,8 @@ func TestXcodeTestPreservesAuthenticationPassthroughPairs(t *testing.T) {
 		"-authenticationKeyIssuerID", "Issuer ID 456",
 		"-quiet",
 	}
-	cmd := XcodeTestCommand()
+	d := newXcodeTestDeps(nil)
+	cmd := newXcodeTestCommand(d)
 	cmd.FlagSet.SetOutput(io.Discard)
 	args := []string{
 		"--project", "Demo.xcodeproj",
@@ -339,7 +355,7 @@ func TestXcodeTestPreservesAuthenticationPassthroughPairs(t *testing.T) {
 	}
 
 	var runErr error
-	stdout, stderr := captureCommandOutput(t, func() error {
+	stdout, stderr := captureCommandOutput(t, d, func() error {
 		runErr = cmd.Exec(context.Background(), nil)
 		return runErr
 	})
@@ -375,7 +391,8 @@ func TestXcodeTestRendersTableAndMarkdown(t *testing.T) {
 
 	for _, format := range []string{"table", "markdown"} {
 		t.Run(format, func(t *testing.T) {
-			cmd := XcodeTestCommand()
+			d := newXcodeTestDeps(nil)
+			cmd := newXcodeTestCommand(d)
 			cmd.FlagSet.SetOutput(io.Discard)
 			if err := cmd.FlagSet.Parse([]string{
 				"--workspace", "Demo.xcworkspace", "--scheme", "Demo",
@@ -384,7 +401,7 @@ func TestXcodeTestRendersTableAndMarkdown(t *testing.T) {
 				t.Fatalf("FlagSet.Parse() error = %v", err)
 			}
 			var runErr error
-			stdout, stderr := captureCommandOutput(t, func() error {
+			stdout, stderr := captureCommandOutput(t, d, func() error {
 				runErr = cmd.Exec(context.Background(), nil)
 				return runErr
 			})
@@ -421,7 +438,8 @@ func TestXcodeTestPrintsStructuredFailureBeforeReturningError(t *testing.T) {
 		}, errors.New("xcodebuild test failed: test failed")
 	}
 
-	cmd := XcodeTestCommand()
+	d := newXcodeTestDeps(nil)
+	cmd := newXcodeTestCommand(d)
 	cmd.FlagSet.SetOutput(io.Discard)
 	if err := cmd.FlagSet.Parse([]string{
 		"--project", "Demo.xcodeproj", "--scheme", "Demo",
@@ -430,7 +448,7 @@ func TestXcodeTestPrintsStructuredFailureBeforeReturningError(t *testing.T) {
 		t.Fatalf("FlagSet.Parse() error = %v", err)
 	}
 	var runErr error
-	stdout, stderr := captureCommandOutput(t, func() error {
+	stdout, stderr := captureCommandOutput(t, d, func() error {
 		runErr = cmd.Exec(context.Background(), nil)
 		return runErr
 	})
@@ -457,7 +475,7 @@ func TestXcodeTestPrintsStructuredFailureBeforeReturningError(t *testing.T) {
 }
 
 func TestXcodeTestJUnitIncludesStructuredCases(t *testing.T) {
-	report := testResultJUnitReport(&localxcode.TestResult{
+	report := testResultJUnitReport(newXcodeTestDeps(nil), &localxcode.TestResult{
 		Success: true,
 		Tests: &localxcode.TestSummary{
 			Total:   3,
@@ -486,7 +504,7 @@ func TestXcodeTestJUnitIncludesStructuredCases(t *testing.T) {
 }
 
 func TestXcodeTestJUnitReconcilesSummaryCountsWithoutDroppingCases(t *testing.T) {
-	report := testResultJUnitReport(&localxcode.TestResult{
+	report := testResultJUnitReport(newXcodeTestDeps(nil), &localxcode.TestResult{
 		Success: true,
 		Tests: &localxcode.TestSummary{
 			Total:   3,
@@ -514,7 +532,7 @@ func TestXcodeTestJUnitReconcilesSummaryCountsWithoutDroppingCases(t *testing.T)
 }
 
 func TestXcodeTestJUnitPreservesAggregateDurationWithFlattenedCases(t *testing.T) {
-	report := testResultJUnitReport(&localxcode.TestResult{
+	report := testResultJUnitReport(newXcodeTestDeps(nil), &localxcode.TestResult{
 		Success: true,
 		Tests: &localxcode.TestSummary{
 			Total:      3,
@@ -540,7 +558,7 @@ func TestXcodeTestJUnitSynthesizesAggregateFailuresBeforeFillingCap(t *testing.T
 	// than flattened cases. Unrepresented passes must never consume the cap
 	// ahead of unrepresented failures, or a failing run marshals as a passing
 	// JUnit suite.
-	report := testResultJUnitReport(&localxcode.TestResult{
+	report := testResultJUnitReport(newXcodeTestDeps(nil), &localxcode.TestResult{
 		Success: false,
 		Tests: &localxcode.TestSummary{
 			Total:  maxJUnitAggregateCases + 1,
@@ -572,7 +590,7 @@ func TestXcodeTestJUnitKeepsInfrastructureRowWhenReportHasNoFailure(t *testing.T
 			Status:     "passed",
 		}
 	}
-	report := testResultJUnitReport(&localxcode.TestResult{
+	report := testResultJUnitReport(newXcodeTestDeps(nil), &localxcode.TestResult{
 		Success: false,
 		Tests: &localxcode.TestSummary{
 			Total:  maxJUnitAggregateCases + 1,
@@ -594,7 +612,7 @@ func TestXcodeTestJUnitPreservesAggregateDurationWithoutSyntheticCases(t *testin
 	// Every aggregate test has a parsed case, so reconciliation adds no row.
 	// The leaf durations still sum to less than the aggregate, and the suite
 	// time must reflect the aggregate rather than the leaf sum.
-	report := testResultJUnitReport(&localxcode.TestResult{
+	report := testResultJUnitReport(newXcodeTestDeps(nil), &localxcode.TestResult{
 		Success: true,
 		Tests: &localxcode.TestSummary{
 			Total:      2,
@@ -619,7 +637,7 @@ func TestXcodeTestJUnitPreservesAggregateDurationWithoutSyntheticCases(t *testin
 }
 
 func TestXcodeTestJUnitZeroSummaryProducesNoSyntheticCase(t *testing.T) {
-	report := testResultJUnitReport(&localxcode.TestResult{
+	report := testResultJUnitReport(newXcodeTestDeps(nil), &localxcode.TestResult{
 		Success: true,
 		Tests:   &localxcode.TestSummary{},
 	}, nil)
@@ -637,7 +655,7 @@ func TestXcodeTestJUnitZeroSummaryProducesNoSyntheticCase(t *testing.T) {
 
 func TestXcodeTestJUnitPreservesInfrastructureFailureWithPassingCases(t *testing.T) {
 	exitStatus := 65
-	report := testResultJUnitReport(&localxcode.TestResult{
+	report := testResultJUnitReport(newXcodeTestDeps(nil), &localxcode.TestResult{
 		Success:    false,
 		ExitStatus: &exitStatus,
 		Tests: &localxcode.TestSummary{
@@ -669,7 +687,7 @@ func TestXcodeTestJUnitPreservesInfrastructureFailureWithFailedCases(t *testing.
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			report := testResultJUnitReport(&localxcode.TestResult{
+			report := testResultJUnitReport(newXcodeTestDeps(nil), &localxcode.TestResult{
 				Success:    false,
 				ExitStatus: test.exitStatus,
 				Tests: &localxcode.TestSummary{
@@ -699,7 +717,7 @@ func TestXcodeTestJUnitDoesNotDuplicateOrdinaryExitErrorForRepresentedFailures(t
 		t.Fatalf("command error = %T %v, want *exec.ExitError", err, err)
 	}
 	exitStatus := exitErr.ExitCode()
-	report := testResultJUnitReport(&localxcode.TestResult{
+	report := testResultJUnitReport(newXcodeTestDeps(nil), &localxcode.TestResult{
 		Success:    false,
 		ExitStatus: &exitStatus,
 		Tests: &localxcode.TestSummary{
@@ -729,7 +747,7 @@ func TestXcodeTestJUnitDoesNotDuplicateReportedFailuresAfterZeroExit(t *testing.
 	// xcodebuild can exit zero while the parsed xcresult still reports failing
 	// tests. Test() surfaces that as a typed post-processing error rather than
 	// an *exec.ExitError, and those failures are already represented.
-	report := testResultJUnitReport(&localxcode.TestResult{
+	report := testResultJUnitReport(newXcodeTestDeps(nil), &localxcode.TestResult{
 		Success: false,
 		Tests: &localxcode.TestSummary{
 			Total:  1,
@@ -757,7 +775,7 @@ func TestXcodeTestJUnitDoesNotDuplicateReportedFailuresAfterZeroExit(t *testing.
 func TestXcodeTestJUnitPreservesReportedFailuresErrorWithoutRepresentedFailures(t *testing.T) {
 	// Defensive: if the typed error ever disagrees with the summary, keep the
 	// synthetic row rather than silently dropping the failure signal.
-	report := testResultJUnitReport(&localxcode.TestResult{
+	report := testResultJUnitReport(newXcodeTestDeps(nil), &localxcode.TestResult{
 		Success: false,
 		Tests: &localxcode.TestSummary{
 			Total:  1,
@@ -775,7 +793,7 @@ func TestXcodeTestJUnitPreservesReportedFailuresErrorWithoutRepresentedFailures(
 }
 
 func TestXcodeTestJUnitFallbackMarksSummaryFailure(t *testing.T) {
-	report := testResultJUnitReport(&localxcode.TestResult{
+	report := testResultJUnitReport(newXcodeTestDeps(nil), &localxcode.TestResult{
 		Success: true,
 		Tests:   &localxcode.TestSummary{Total: 1, Failed: 1, DurationMS: 600},
 	}, nil)
@@ -791,7 +809,7 @@ func TestXcodeTestJUnitFallbackMarksSummaryFailure(t *testing.T) {
 func TestXcodeTestJUnitPreservesPreflightCause(t *testing.T) {
 	result := &localxcode.TestResult{}
 	cause := errors.New("project path does not exist")
-	report := testResultJUnitReport(result, cause)
+	report := testResultJUnitReport(newXcodeTestDeps(nil), result, cause)
 	data, err := report.Marshal()
 	if err != nil {
 		t.Fatalf("JUnit Marshal() error = %v", err)
@@ -810,7 +828,7 @@ func TestXcodeTestJUnitFailureTruncationPreservesUTF8(t *testing.T) {
 }
 
 func TestXcodeTestJUnitTreatsExpectedFailuresAsNonfailing(t *testing.T) {
-	report := testResultJUnitReport(&localxcode.TestResult{
+	report := testResultJUnitReport(newXcodeTestDeps(nil), &localxcode.TestResult{
 		Success: true,
 		Tests: &localxcode.TestSummary{
 			Total:            2,

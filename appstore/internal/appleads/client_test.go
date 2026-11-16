@@ -224,8 +224,8 @@ func TestRequestForVersionRoutesPlatformAPIAndAdAccountContext(t *testing.T) {
 	if strings.Join(seen, "\n") != strings.Join(want, "\n") {
 		t.Fatalf("requests:\n%s\nwant:\n%s", strings.Join(seen, "\n"), strings.Join(want, "\n"))
 	}
-	if rate := client.LastRateLimit(); rate.Limit != "100" || rate.Remaining != "99" {
-		t.Fatalf("LastRateLimit() = %+v", rate)
+	if rate := client.lastRateLimit; rate.Limit != "100" || rate.Remaining != "99" {
+		t.Fatalf("lastRateLimit = %+v", rate)
 	}
 }
 
@@ -678,5 +678,24 @@ func assertClaim(t *testing.T, claims jwt.MapClaims, name, want string) {
 	t.Helper()
 	if got := claims[name]; got != want {
 		t.Fatalf("%s = %v, want %s", name, got, want)
+	}
+}
+
+func TestWithTransportKeepsTheRequestTimeout(t *testing.T) {
+	t.Setenv("ASC_TIMEOUT", "17s")
+	transport := &http.Transport{}
+	withDefault, err := NewClient(Credentials{AccessToken: "ACCESS"})
+	if err != nil {
+		t.Fatalf("NewClient() error: %v", err)
+	}
+	client, err := NewClient(Credentials{AccessToken: "ACCESS"}, WithTransport(transport))
+	if err != nil {
+		t.Fatalf("NewClient(WithTransport) error: %v", err)
+	}
+	if client.httpClient.Transport != transport {
+		t.Fatalf("transport = %v, want the injected transport", client.httpClient.Transport)
+	}
+	if client.httpClient.Timeout != 17*time.Second || withDefault.httpClient.Timeout != 17*time.Second {
+		t.Fatalf("timeout = %v, default client timeout = %v, want 17s for both", client.httpClient.Timeout, withDefault.httpClient.Timeout)
 	}
 }

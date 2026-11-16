@@ -43,81 +43,6 @@ func gcAchievementReleaseJSONResponse(status int, body string) *http.Response {
 	}
 }
 
-func TestGetGameCenterAchievementReleases(t *testing.T) {
-	response := gcAchievementReleaseJSONResponse(http.StatusOK, `{
-		"data": [{
-			"type": "gameCenterAchievementReleases",
-			"id": "release-123",
-			"attributes": {
-				"live": true
-			}
-		}],
-		"links": {
-			"self": "https://api.appstoreconnect.apple.com/v1/gameCenterAchievements/ach-123/releases"
-		}
-	}`)
-
-	client := newGCAchievementReleaseTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/gameCenterAchievements/ach-123/releases" {
-			t.Fatalf("expected path /v1/gameCenterAchievements/ach-123/releases, got %s", req.URL.Path)
-		}
-	}, response)
-
-	resp, err := client.GetGameCenterAchievementReleases(context.Background(), "ach-123")
-	if err != nil {
-		t.Fatalf("GetGameCenterAchievementReleases() error: %v", err)
-	}
-
-	if len(resp.Data) != 1 {
-		t.Fatalf("expected 1 release, got %d", len(resp.Data))
-	}
-	if resp.Data[0].ID != "release-123" {
-		t.Fatalf("expected ID release-123, got %s", resp.Data[0].ID)
-	}
-	if !resp.Data[0].Attributes.Live {
-		t.Fatalf("expected live to be true")
-	}
-}
-
-func TestGetGameCenterAchievementReleases_WithLimit(t *testing.T) {
-	response := gcAchievementReleaseJSONResponse(http.StatusOK, `{
-		"data": [],
-		"links": {
-			"self": "https://api.appstoreconnect.apple.com/v1/gameCenterAchievements/ach-123/releases?limit=50"
-		}
-	}`)
-
-	client := newGCAchievementReleaseTestClient(t, func(req *http.Request) {
-		if req.URL.Query().Get("limit") != "50" {
-			t.Fatalf("expected limit=50, got %s", req.URL.Query().Get("limit"))
-		}
-	}, response)
-
-	_, err := client.GetGameCenterAchievementReleases(context.Background(), "ach-123", WithGCAchievementReleasesLimit(50))
-	if err != nil {
-		t.Fatalf("GetGameCenterAchievementReleases() error: %v", err)
-	}
-}
-
-func TestGetGameCenterAchievementReleases_WithNextURL(t *testing.T) {
-	nextURL := "https://api.appstoreconnect.apple.com/v1/gameCenterAchievements/ach-123/releases?cursor=abc"
-	response := gcAchievementReleaseJSONResponse(http.StatusOK, `{"data": []}`)
-
-	client := newGCAchievementReleaseTestClient(t, func(req *http.Request) {
-		if req.URL.String() != nextURL {
-			t.Fatalf("expected URL %s, got %s", nextURL, req.URL.String())
-		}
-	}, response)
-
-	_, err := client.GetGameCenterAchievementReleases(context.Background(), "ach-123", WithGCAchievementReleasesNextURL(nextURL))
-	if err != nil {
-		t.Fatalf("GetGameCenterAchievementReleases() error: %v", err)
-	}
-}
-
 func TestCreateGameCenterAchievementRelease(t *testing.T) {
 	response := gcAchievementReleaseJSONResponse(http.StatusCreated, `{
 		"data": {
@@ -171,64 +96,25 @@ func TestCreateGameCenterAchievementRelease(t *testing.T) {
 	}
 }
 
-func TestDeleteGameCenterAchievementRelease(t *testing.T) {
-	response := &http.Response{
-		StatusCode: http.StatusNoContent,
-		Header:     http.Header{"Content-Type": []string{"application/json"}},
-		Body:       io.NopCloser(strings.NewReader("")),
-	}
-
-	client := newGCAchievementReleaseTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodDelete {
-			t.Fatalf("expected DELETE, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/gameCenterAchievementReleases/release-123" {
-			t.Fatalf("expected path /v1/gameCenterAchievementReleases/release-123, got %s", req.URL.Path)
-		}
-	}, response)
-
-	err := client.DeleteGameCenterAchievementRelease(context.Background(), "release-123")
-	if err != nil {
-		t.Fatalf("DeleteGameCenterAchievementRelease() error: %v", err)
-	}
-}
-
-func TestBuildGCAchievementReleasesQuery(t *testing.T) {
-	query := &gcAchievementReleasesQuery{}
-
-	// Test empty query
-	result := buildGCAchievementReleasesQuery(query)
-	if result != "" {
-		t.Fatalf("expected empty query string, got %s", result)
-	}
-
-	// Test with limit
-	query.limit = 25
-	result = buildGCAchievementReleasesQuery(query)
-	if result != "limit=25" {
-		t.Fatalf("expected limit=25, got %s", result)
-	}
-}
-
 func TestWithGCAchievementReleasesLimit(t *testing.T) {
 	query := &gcAchievementReleasesQuery{}
 
 	// Valid limit
-	WithGCAchievementReleasesLimit(100)(query)
+	Limit[GCAchievementReleasesOption](100)(query)
 	if query.limit != 100 {
 		t.Fatalf("expected limit 100, got %d", query.limit)
 	}
 
 	// Invalid limit (0) should not change
 	query2 := &gcAchievementReleasesQuery{}
-	WithGCAchievementReleasesLimit(0)(query2)
+	Limit[GCAchievementReleasesOption](0)(query2)
 	if query2.limit != 0 {
 		t.Fatalf("expected limit 0 (unchanged), got %d", query2.limit)
 	}
 
 	// Negative limit should not change
 	query3 := &gcAchievementReleasesQuery{}
-	WithGCAchievementReleasesLimit(-5)(query3)
+	Limit[GCAchievementReleasesOption](-5)(query3)
 	if query3.limit != 0 {
 		t.Fatalf("expected limit 0 (unchanged), got %d", query3.limit)
 	}
@@ -239,21 +125,21 @@ func TestWithGCAchievementReleasesNextURL(t *testing.T) {
 
 	// Valid URL
 	url := "https://api.appstoreconnect.apple.com/v1/gameCenterAchievements/ach-123/releases?cursor=xyz"
-	WithGCAchievementReleasesNextURL(url)(query)
+	NextURL[GCAchievementReleasesOption](url)(query)
 	if query.nextURL != url {
 		t.Fatalf("expected nextURL %s, got %s", url, query.nextURL)
 	}
 
 	// Empty URL should not set
 	query2 := &gcAchievementReleasesQuery{}
-	WithGCAchievementReleasesNextURL("")(query2)
+	NextURL[GCAchievementReleasesOption]("")(query2)
 	if query2.nextURL != "" {
 		t.Fatalf("expected empty nextURL, got %s", query2.nextURL)
 	}
 
 	// Whitespace URL should not set
 	query3 := &gcAchievementReleasesQuery{}
-	WithGCAchievementReleasesNextURL("   ")(query3)
+	NextURL[GCAchievementReleasesOption]("   ")(query3)
 	if query3.nextURL != "" {
 		t.Fatalf("expected empty nextURL, got %s", query3.nextURL)
 	}

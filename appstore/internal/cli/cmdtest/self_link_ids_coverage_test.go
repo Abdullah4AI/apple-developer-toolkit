@@ -16,6 +16,7 @@ import (
 	"github.com/peterbourgon/ff/v3/ffcli"
 
 	rootcmd "github.com/Abdullah4AI/apple-developer-toolkit/appstore/cmd"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asctest"
 )
 
 // These tests close the gaps left after the first two self-link passes: the
@@ -31,6 +32,7 @@ func TestSelfLinkCoverageSendsExtractedID(t *testing.T) {
 		wantPath string
 		wantID   string
 		bodies   map[string]string
+		deps     bool // the command is built on shared.Deps: stub its client and read its deps streams
 	}{
 		{
 			name:     "builds info",
@@ -41,6 +43,7 @@ func TestSelfLinkCoverageSendsExtractedID(t *testing.T) {
 				"/v1/builds/build-1":                   `{"data":{"type":"builds","id":"build-1","attributes":{"version":"9","processingState":"VALID","expired":false}}}`,
 				"/v1/builds/build-1/preReleaseVersion": `{"data":{"type":"preReleaseVersions","id":"prv-1","attributes":{"version":"1.2.3","platform":"IOS"}}}`,
 			},
+			deps: true,
 		},
 		{
 			name:     "versions view with query string",
@@ -50,10 +53,12 @@ func TestSelfLinkCoverageSendsExtractedID(t *testing.T) {
 			bodies: map[string]string{
 				"/v1/appStoreVersions/version-1": `{"data":{"type":"appStoreVersions","id":"version-1","attributes":{"versionString":"1.0","platform":"IOS"}}}`,
 			},
+			deps: true,
 		},
 		{
 			name:     "testflight crashes view",
 			args:     []string{"testflight", "crashes", "view", "--submission-id", selfLinkTestBase + "/v1/betaFeedbackCrashSubmissions/crash-1"},
+			deps:     true,
 			wantPath: "GET /v1/betaFeedbackCrashSubmissions/crash-1",
 			wantID:   "crash-1",
 			bodies: map[string]string{
@@ -68,6 +73,7 @@ func TestSelfLinkCoverageSendsExtractedID(t *testing.T) {
 			bodies: map[string]string{
 				"/v1/appStoreVersionLocalizations/loc-1/appPreviewSets": `{"data":[{"type":"appPreviewSets","id":"preview-set-1","attributes":{"previewType":"IPHONE_67"}}],"links":{}}`,
 			},
+			deps: true,
 		},
 		{
 			name:     "localizations preview-sets links",
@@ -77,6 +83,7 @@ func TestSelfLinkCoverageSendsExtractedID(t *testing.T) {
 			bodies: map[string]string{
 				"/v1/appStoreVersionLocalizations/loc-1/relationships/appPreviewSets": `{"data":[{"type":"appPreviewSets","id":"preview-set-1"}],"links":{}}`,
 			},
+			deps: true,
 		},
 		{
 			name:     "localizations preview-sets view",
@@ -86,6 +93,7 @@ func TestSelfLinkCoverageSendsExtractedID(t *testing.T) {
 			bodies: map[string]string{
 				"/v1/appPreviewSets/preview-set-1": `{"data":{"type":"appPreviewSets","id":"preview-set-1","attributes":{"previewType":"IPHONE_67"}}}`,
 			},
+			deps: true,
 		},
 		{
 			name:     "localizations screenshot-sets list",
@@ -95,6 +103,7 @@ func TestSelfLinkCoverageSendsExtractedID(t *testing.T) {
 			bodies: map[string]string{
 				"/v1/appStoreVersionLocalizations/loc-1/appScreenshotSets": `{"data":[{"type":"appScreenshotSets","id":"screenshot-set-1","attributes":{"screenshotDisplayType":"APP_IPHONE_67"}}],"links":{}}`,
 			},
+			deps: true,
 		},
 		{
 			name:     "localizations screenshot-sets view",
@@ -104,6 +113,7 @@ func TestSelfLinkCoverageSendsExtractedID(t *testing.T) {
 			bodies: map[string]string{
 				"/v1/appScreenshotSets/screenshot-set-1": `{"data":{"type":"appScreenshotSets","id":"screenshot-set-1","attributes":{"screenshotDisplayType":"APP_IPHONE_67"}}}`,
 			},
+			deps: true,
 		},
 		{
 			name:     "localizations screenshot-sets delete",
@@ -113,6 +123,7 @@ func TestSelfLinkCoverageSendsExtractedID(t *testing.T) {
 			bodies: map[string]string{
 				"/v1/appScreenshotSets/screenshot-set-1": ``,
 			},
+			deps: true,
 		},
 		{
 			name:     "video-previews list",
@@ -124,6 +135,7 @@ func TestSelfLinkCoverageSendsExtractedID(t *testing.T) {
 				"/v1/appPreviewSets/preview-set-1/appPreviews":               `{"data":[],"links":{}}`,
 				"/v1/appPreviewSets/preview-set-1/relationships/appPreviews": `{"data":[],"links":{}}`,
 			},
+			deps: true,
 		},
 		{
 			name:     "screenshots list",
@@ -135,6 +147,7 @@ func TestSelfLinkCoverageSendsExtractedID(t *testing.T) {
 				"/v1/appScreenshotSets/screenshot-set-1/appScreenshots":               `{"data":[],"links":{}}`,
 				"/v1/appScreenshotSets/screenshot-set-1/relationships/appScreenshots": `{"data":[],"links":{}}`,
 			},
+			deps: true,
 		},
 		{
 			name:     "localizations supported-locales",
@@ -144,12 +157,14 @@ func TestSelfLinkCoverageSendsExtractedID(t *testing.T) {
 			bodies: map[string]string{
 				"/v1/appStoreVersions/version-1/appStoreVersionLocalizations": `{"data":[{"type":"appStoreVersionLocalizations","id":"loc-1","attributes":{"locale":"en-US"}}],"links":{}}`,
 			},
+			deps: true,
 		},
 		{
 			name:     "subscriptions groups view",
 			args:     []string{"subscriptions", "groups", "view", "--id", selfLinkTestBase + "/v1/subscriptionGroups/group-1"},
 			wantPath: "GET /v1/subscriptionGroups/group-1",
 			wantID:   "group-1",
+			deps:     true,
 			bodies: map[string]string{
 				"/v1/subscriptionGroups/group-1": `{"data":{"type":"subscriptionGroups","id":"group-1","attributes":{"referenceName":"Pro"}}}`,
 			},
@@ -162,6 +177,7 @@ func TestSelfLinkCoverageSendsExtractedID(t *testing.T) {
 			bodies: map[string]string{
 				"/v1/gameCenterLeaderboards/leaderboard-1": `{"data":{"type":"gameCenterLeaderboards","id":"leaderboard-1","attributes":{"referenceName":"High score"}}}`,
 			},
+			deps: true,
 		},
 		{
 			name:     "xcode-cloud products view",
@@ -171,6 +187,7 @@ func TestSelfLinkCoverageSendsExtractedID(t *testing.T) {
 			bodies: map[string]string{
 				"/v1/ciProducts/product-1": `{"data":{"type":"ciProducts","id":"product-1","attributes":{"name":"App"}}}`,
 			},
+			deps: true,
 		},
 		{
 			name:     "xcode-cloud scm providers view",
@@ -180,6 +197,7 @@ func TestSelfLinkCoverageSendsExtractedID(t *testing.T) {
 			bodies: map[string]string{
 				"/v1/scmProviders/provider-1": `{"data":{"type":"scmProviders","id":"provider-1","attributes":{}}}`,
 			},
+			deps: true,
 		},
 		{
 			name:     "subscriptions offers offer-codes custom-codes view",
@@ -189,6 +207,7 @@ func TestSelfLinkCoverageSendsExtractedID(t *testing.T) {
 			bodies: map[string]string{
 				"/v1/subscriptionOfferCodeCustomCodes/custom-1": `{"data":{"type":"subscriptionOfferCodeCustomCodes","id":"custom-1","attributes":{"customCode":"SPRING"}}}`,
 			},
+			deps: true,
 		},
 		{
 			name:     "users view",
@@ -198,10 +217,12 @@ func TestSelfLinkCoverageSendsExtractedID(t *testing.T) {
 			bodies: map[string]string{
 				"/v1/users/user-1": `{"data":{"type":"users","id":"user-1","attributes":{"username":"dev@example.com"}}}`,
 			},
+			deps: true,
 		},
 		{
 			name:     "reviews view",
 			args:     []string{"reviews", "view", "--id", selfLinkTestBase + "/v1/customerReviews/review-1"},
+			deps:     true,
 			wantPath: "GET /v1/customerReviews/review-1",
 			wantID:   "review-1",
 			bodies: map[string]string{
@@ -211,6 +232,7 @@ func TestSelfLinkCoverageSendsExtractedID(t *testing.T) {
 		{
 			name:     "testflight testers view",
 			args:     []string{"testflight", "testers", "view", "--id", selfLinkTestBase + "/v1/betaTesters/tester-1"},
+			deps:     true,
 			wantPath: "GET /v1/betaTesters/tester-1",
 			wantID:   "tester-1",
 			bodies: map[string]string{
@@ -225,6 +247,7 @@ func TestSelfLinkCoverageSendsExtractedID(t *testing.T) {
 			bodies: map[string]string{
 				"/v1/profiles/profile-1": `{"data":{"type":"profiles","id":"profile-1","attributes":{"name":"Dev"}}}`,
 			},
+			deps: true,
 		},
 	}
 
@@ -251,19 +274,26 @@ func TestSelfLinkCoverageSendsExtractedID(t *testing.T) {
 				_, _ = io.WriteString(w, body)
 			}))
 			t.Cleanup(server.Close)
-			installDefaultTransportForServer(t, server)
 
-			root := RootCommand("1.2.3")
-			root.FlagSet.SetOutput(io.Discard)
 			args := append(append([]string(nil), test.args...), "--output", "json")
-			stdout, stderr := captureOutput(t, func() {
-				if err := root.Parse(args); err != nil {
-					t.Fatalf("parse error: %v", err)
-				}
-				if err := root.Run(context.Background()); err != nil {
-					t.Fatalf("run error: %v (requests %q)", err, recorder.requested())
-				}
-			})
+			var stdout, stderr string
+			var err error
+			if test.deps {
+				stdout, stderr, err = runRootWithDeps(t, stubServerClient(t, server), args...)
+			} else {
+				installDefaultTransportForServer(t, server)
+				root := RootCommand("1.2.3")
+				root.FlagSet.SetOutput(io.Discard)
+				stdout, stderr = captureOutput(t, func() {
+					if parseErr := root.Parse(args); parseErr != nil {
+						t.Fatalf("parse error: %v", parseErr)
+					}
+					err = root.Run(context.Background())
+				})
+			}
+			if err != nil {
+				t.Fatalf("run error: %v (requests %q)", err, recorder.requested())
+			}
 			if stderr != "" {
 				t.Fatalf("expected empty stderr, got %q", stderr)
 			}
@@ -296,57 +326,70 @@ func TestSelfLinkCoverageAppFlagsSendExtractedID(t *testing.T) {
 	tests := []struct {
 		name     string
 		args     []string
+		request  asctest.Matcher
 		wantPath string
+		deps     bool // the command is built on shared.Deps: run it through RunWithDeps
 	}{
 		{
 			name:     "performance download",
 			args:     []string{"performance", "download", "--app", appLink, "--output", "metrics.json"},
+			request:  asctest.GET("/v1/apps/123456789/perfPowerMetrics"),
 			wantPath: "GET /v1/apps/123456789/perfPowerMetrics",
+			deps:     true,
 		},
 		{
 			name:     "signing fetch",
 			args:     []string{"signing", "fetch", "--app", appLink, "--bundle-id", "com.example.app", "--profile-type", "IOS_APP_STORE"},
+			request:  asctest.GET("/v1/apps/123456789"),
 			wantPath: "GET /v1/apps/123456789",
+			deps:     true,
 		},
 		{
 			name:     "app-setup info set",
 			args:     []string{"app-setup", "info", "set", "--app", appLink, "--primary-locale", "en-US"},
+			request:  asctest.PATCH("/v1/apps/123456789").JSONBody(`{"data":{"type":"apps","id":"123456789","attributes":{"primaryLocale":"en-US"}}}`),
 			wantPath: "PATCH /v1/apps/123456789",
+			deps:     true,
 		},
 		{
 			name:     "app-setup categories set",
 			args:     []string{"app-setup", "categories", "set", "--app", appLink, "--primary", "GAMES"},
+			request:  asctest.GET("/v1/apps/123456789/appInfos"),
 			wantPath: "GET /v1/apps/123456789/appInfos",
 		},
 		{
 			name:     "categories set",
 			args:     []string{"categories", "set", "--app", appLink, "--primary", "GAMES"},
+			request:  asctest.GET("/v1/apps/123456789/appInfos"),
 			wantPath: "GET /v1/apps/123456789/appInfos",
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			setupAuth(t)
+			if !test.deps {
+				setupAuth(t)
+			}
 			t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 			t.Setenv("ASC_APP_ID", "")
 			t.Chdir(t.TempDir())
 
-			recorder := &selfLinkRemainingServer{}
-			stubTransport(t, func(req *http.Request) (*http.Response, error) {
-				recorder.record(req.Method + " " + req.URL.Path)
-				return &http.Response{
-					StatusCode: http.StatusNotFound,
-					Header:     http.Header{"Content-Type": []string{"application/json"}},
-					Body:       io.NopCloser(strings.NewReader(`{"errors":[{"status":"404","code":"NOT_FOUND","title":"not found"}]}`)),
-					Request:    req,
-				}, nil
-			})
+			reg := asctest.NewRegistry(t)
+			reg.Register(test.request, asctest.JSON(http.StatusNotFound, `{"errors":[{"status":"404","code":"NOT_FOUND","title":"not found"}]}`))
 
-			_, stderr := captureOutput(t, func() {
-				_ = rootcmd.Run(test.args, "1.2.3")
-			})
-			requested := recorder.requested()
+			var stderr string
+			if test.deps {
+				_, stderr, _ = runWithDeps(t, stubClient(t, reg), test.args...)
+			} else {
+				reg.Install()
+				_, stderr = captureOutput(t, func() {
+					_ = rootcmd.Run(test.args, "1.2.3")
+				})
+			}
+			var requested []string
+			for _, req := range reg.Requests() {
+				requested = append(requested, req.Method+" "+req.URL.Path)
+			}
 			if len(requested) == 0 {
 				t.Fatalf("expected a request, got none (stderr %q)", stderr)
 			}
@@ -367,151 +410,149 @@ func TestSelfLinkCoverageRejectsWrongType(t *testing.T) {
 	setCmdtestHome(t)
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 	t.Setenv("ASC_APP_ID", "")
-	stubTransport(t, func(req *http.Request) (*http.Response, error) {
-		t.Fatalf("unexpected request %s %s", req.Method, req.URL.Path)
-		return nil, nil
-	})
+	asctest.NewRegistry(t).Install()
 
 	appsLink := selfLinkTestBase + "/v1/apps/123"
 	tests := []struct {
 		args     []string
 		flag     string
 		wantType string
+		deps     bool // the command is built on shared.Deps: run it through RunWithDeps
 	}{
 		// Localization media sets and the asset commands that read them.
-		{args: []string{"localizations", "preview-sets", "list"}, flag: "localization-id", wantType: "appStoreVersionLocalizations"},
-		{args: []string{"localizations", "preview-sets", "links"}, flag: "localization-id", wantType: "appStoreVersionLocalizations"},
-		{args: []string{"localizations", "preview-sets", "view"}, flag: "id", wantType: "appPreviewSets"},
-		{args: []string{"localizations", "screenshot-sets", "list"}, flag: "localization-id", wantType: "appStoreVersionLocalizations"},
-		{args: []string{"localizations", "screenshot-sets", "links"}, flag: "localization-id", wantType: "appStoreVersionLocalizations"},
-		{args: []string{"localizations", "screenshot-sets", "view"}, flag: "id", wantType: "appScreenshotSets"},
-		{args: []string{"localizations", "screenshot-sets", "delete"}, flag: "id", wantType: "appScreenshotSets"},
-		{args: []string{"localizations", "create"}, flag: "version", wantType: "appStoreVersions"},
-		{args: []string{"localizations", "update"}, flag: "version", wantType: "appStoreVersions"},
-		{args: []string{"localizations", "update"}, flag: "app-info", wantType: "appInfos"},
-		{args: []string{"localizations", "supported-locales"}, flag: "version", wantType: "appStoreVersions"},
-		{args: []string{"screenshots", "list"}, flag: "version-localization", wantType: "appStoreVersionLocalizations"},
-		{args: []string{"screenshots", "upload"}, flag: "version-localization", wantType: "appStoreVersionLocalizations"},
-		{args: []string{"screenshots", "download"}, flag: "version-localization", wantType: "appStoreVersionLocalizations"},
-		{args: []string{"screenshots", "download"}, flag: "id", wantType: "appScreenshots"},
-		{args: []string{"screenshots", "delete"}, flag: "id", wantType: "appScreenshots"},
-		{args: []string{"video-previews", "list"}, flag: "version-localization", wantType: "appStoreVersionLocalizations"},
-		{args: []string{"video-previews", "upload"}, flag: "version-localization", wantType: "appStoreVersionLocalizations"},
-		{args: []string{"video-previews", "download"}, flag: "id", wantType: "appPreviews"},
-		{args: []string{"video-previews", "delete"}, flag: "id", wantType: "appPreviews"},
-		{args: []string{"video-previews", "set-poster-frame"}, flag: "id", wantType: "appPreviews"},
-		{args: []string{"build-localizations", "view"}, flag: "id", wantType: "appStoreVersionLocalizations"},
-		{args: []string{"diff", "localizations"}, flag: "from-version", wantType: "appStoreVersions"},
-		{args: []string{"diff", "localizations"}, flag: "to-version", wantType: "appStoreVersions"},
-		{args: []string{"app-setup", "localizations", "upload"}, flag: "version", wantType: "appStoreVersions"},
-		{args: []string{"app-setup", "categories", "set"}, flag: "app-info", wantType: "appInfos"},
-		{args: []string{"app-setup", "categories", "set"}, flag: "primary", wantType: "appCategories"},
-		{args: []string{"categories", "set"}, flag: "secondary-subcategory-two", wantType: "appCategories"},
-		{args: []string{"metadata", "keywords", "audit"}, flag: "app-info", wantType: "appInfos"},
+		{args: []string{"localizations", "preview-sets", "list"}, flag: "localization-id", wantType: "appStoreVersionLocalizations", deps: true},
+		{args: []string{"localizations", "preview-sets", "links"}, flag: "localization-id", wantType: "appStoreVersionLocalizations", deps: true},
+		{args: []string{"localizations", "preview-sets", "view"}, flag: "id", wantType: "appPreviewSets", deps: true},
+		{args: []string{"localizations", "screenshot-sets", "list"}, flag: "localization-id", wantType: "appStoreVersionLocalizations", deps: true},
+		{args: []string{"localizations", "screenshot-sets", "links"}, flag: "localization-id", wantType: "appStoreVersionLocalizations", deps: true},
+		{args: []string{"localizations", "screenshot-sets", "view"}, flag: "id", wantType: "appScreenshotSets", deps: true},
+		{args: []string{"localizations", "screenshot-sets", "delete"}, flag: "id", wantType: "appScreenshotSets", deps: true},
+		{args: []string{"localizations", "create"}, flag: "version", wantType: "appStoreVersions", deps: true},
+		{args: []string{"localizations", "update"}, flag: "version", wantType: "appStoreVersions", deps: true},
+		{args: []string{"localizations", "update"}, flag: "app-info", wantType: "appInfos", deps: true},
+		{args: []string{"localizations", "supported-locales"}, flag: "version", wantType: "appStoreVersions", deps: true},
+		{args: []string{"screenshots", "list"}, flag: "version-localization", wantType: "appStoreVersionLocalizations", deps: true},
+		{args: []string{"screenshots", "upload"}, flag: "version-localization", wantType: "appStoreVersionLocalizations", deps: true},
+		{args: []string{"screenshots", "download"}, flag: "version-localization", wantType: "appStoreVersionLocalizations", deps: true},
+		{args: []string{"screenshots", "download"}, flag: "id", wantType: "appScreenshots", deps: true},
+		{args: []string{"screenshots", "delete"}, flag: "id", wantType: "appScreenshots", deps: true},
+		{args: []string{"video-previews", "list"}, flag: "version-localization", wantType: "appStoreVersionLocalizations", deps: true},
+		{args: []string{"video-previews", "upload"}, flag: "version-localization", wantType: "appStoreVersionLocalizations", deps: true},
+		{args: []string{"video-previews", "download"}, flag: "id", wantType: "appPreviews", deps: true},
+		{args: []string{"video-previews", "delete"}, flag: "id", wantType: "appPreviews", deps: true},
+		{args: []string{"video-previews", "set-poster-frame"}, flag: "id", wantType: "appPreviews", deps: true},
+		{args: []string{"build-localizations", "view"}, flag: "id", wantType: "appStoreVersionLocalizations", deps: true},
+		{args: []string{"diff", "localizations"}, flag: "from-version", wantType: "appStoreVersions", deps: true},
+		{args: []string{"diff", "localizations"}, flag: "to-version", wantType: "appStoreVersions", deps: true},
+		{args: []string{"app-setup", "localizations", "upload"}, flag: "version", wantType: "appStoreVersions", deps: true},
+		{args: []string{"app-setup", "categories", "set"}, flag: "app-info", wantType: "appInfos", deps: true},
+		{args: []string{"app-setup", "categories", "set"}, flag: "primary", wantType: "appCategories", deps: true},
+		{args: []string{"categories", "set"}, flag: "secondary-subcategory-two", wantType: "appCategories", deps: true},
+		{args: []string{"metadata", "keywords", "audit"}, flag: "app-info", wantType: "appInfos", deps: true},
 		// Shared command builders.
-		{args: []string{"xcode-cloud", "products", "view"}, flag: "id", wantType: "ciProducts"},
-		{args: []string{"xcode-cloud", "products", "workflows"}, flag: "id", wantType: "ciProducts"},
-		{args: []string{"xcode-cloud", "workflows", "delete"}, flag: "id", wantType: "ciWorkflows"},
-		{args: []string{"xcode-cloud", "actions", "view"}, flag: "id", wantType: "ciBuildActions"},
-		{args: []string{"xcode-cloud", "build-runs", "view"}, flag: "id", wantType: "ciBuildRuns"},
-		{args: []string{"xcode-cloud", "artifacts", "view"}, flag: "id", wantType: "ciArtifacts"},
-		{args: []string{"xcode-cloud", "issues", "view"}, flag: "id", wantType: "ciIssues"},
-		{args: []string{"xcode-cloud", "test-results", "view"}, flag: "id", wantType: "ciTestResults"},
-		{args: []string{"xcode-cloud", "macos-versions", "view"}, flag: "id", wantType: "ciMacOsVersions"},
-		{args: []string{"xcode-cloud", "xcode-versions", "view"}, flag: "id", wantType: "ciXcodeVersions"},
-		{args: []string{"xcode-cloud", "scm", "providers", "view"}, flag: "provider-id", wantType: "scmProviders"},
-		{args: []string{"xcode-cloud", "scm", "repositories", "git-references"}, flag: "repo-id", wantType: "scmRepositories"},
-		{args: []string{"xcode-cloud", "scm", "git-references", "view"}, flag: "id", wantType: "scmGitReferences"},
-		{args: []string{"xcode-cloud", "scm", "pull-requests", "view"}, flag: "id", wantType: "scmPullRequests"},
-		{args: []string{"subscriptions", "offers", "offer-codes", "custom-codes", "list"}, flag: "offer-code-id", wantType: "subscriptionOfferCodes"},
-		{args: []string{"subscriptions", "offers", "offer-codes", "custom-codes", "view"}, flag: "custom-code-id", wantType: "subscriptionOfferCodeCustomCodes"},
-		{args: []string{"subscriptions", "offers", "win-back", "view"}, flag: "id", wantType: "winBackOffers"},
-		{args: []string{"pricing", "schedule", "automatic-prices"}, flag: "schedule", wantType: "appPriceSchedules"},
-		{args: []string{"pre-orders", "list"}, flag: "availability", wantType: "appAvailabilities"},
+		{args: []string{"xcode-cloud", "products", "view"}, flag: "id", wantType: "ciProducts", deps: true},
+		{args: []string{"xcode-cloud", "products", "workflows"}, flag: "id", wantType: "ciProducts", deps: true},
+		{args: []string{"xcode-cloud", "workflows", "delete"}, flag: "id", wantType: "ciWorkflows", deps: true},
+		{args: []string{"xcode-cloud", "actions", "view"}, flag: "id", wantType: "ciBuildActions", deps: true},
+		{args: []string{"xcode-cloud", "build-runs", "view"}, flag: "id", wantType: "ciBuildRuns", deps: true},
+		{args: []string{"xcode-cloud", "artifacts", "view"}, flag: "id", wantType: "ciArtifacts", deps: true},
+		{args: []string{"xcode-cloud", "issues", "view"}, flag: "id", wantType: "ciIssues", deps: true},
+		{args: []string{"xcode-cloud", "test-results", "view"}, flag: "id", wantType: "ciTestResults", deps: true},
+		{args: []string{"xcode-cloud", "macos-versions", "view"}, flag: "id", wantType: "ciMacOsVersions", deps: true},
+		{args: []string{"xcode-cloud", "xcode-versions", "view"}, flag: "id", wantType: "ciXcodeVersions", deps: true},
+		{args: []string{"xcode-cloud", "scm", "providers", "view"}, flag: "provider-id", wantType: "scmProviders", deps: true},
+		{args: []string{"xcode-cloud", "scm", "repositories", "git-references"}, flag: "repo-id", wantType: "scmRepositories", deps: true},
+		{args: []string{"xcode-cloud", "scm", "git-references", "view"}, flag: "id", wantType: "scmGitReferences", deps: true},
+		{args: []string{"xcode-cloud", "scm", "pull-requests", "view"}, flag: "id", wantType: "scmPullRequests", deps: true},
+		{args: []string{"subscriptions", "offers", "offer-codes", "custom-codes", "list"}, flag: "offer-code-id", wantType: "subscriptionOfferCodes", deps: true},
+		{args: []string{"subscriptions", "offers", "offer-codes", "custom-codes", "view"}, flag: "custom-code-id", wantType: "subscriptionOfferCodeCustomCodes", deps: true},
+		{args: []string{"subscriptions", "offers", "win-back", "view"}, flag: "id", wantType: "winBackOffers", deps: true},
+		{args: []string{"pricing", "schedule", "automatic-prices"}, flag: "schedule", wantType: "appPriceSchedules", deps: true},
+		{args: []string{"pre-orders", "list"}, flag: "availability", wantType: "appAvailabilities", deps: true},
 		// Bare --id flags and other single-resource flags.
-		{args: []string{"accessibility", "view"}, flag: "id", wantType: "accessibilityDeclarations"},
-		{args: []string{"actors", "view"}, flag: "id", wantType: "actors"},
-		{args: []string{"age-rating", "edit"}, flag: "id", wantType: "ageRatingDeclarations"},
-		{args: []string{"agreements", "territories", "list"}, flag: "id", wantType: "endUserLicenseAgreements"},
-		{args: []string{"app-clips", "view"}, flag: "id", wantType: "appClips"},
-		{args: []string{"app-clips", "header-images", "view"}, flag: "id", wantType: "appClipHeaderImages"},
-		{args: []string{"app-clips", "review-details", "view"}, flag: "id", wantType: "appClipAppStoreReviewDetails"},
-		{args: []string{"app-clips", "advanced-experiences", "images", "view"}, flag: "id", wantType: "appClipAdvancedExperienceImages"},
-		{args: []string{"app-tags", "view"}, flag: "id", wantType: "appTags"},
-		{args: []string{"apps", "ci-product", "view"}, flag: "id", wantType: "apps"},
-		{args: []string{"background-assets", "view"}, flag: "id", wantType: "backgroundAssets"},
-		{args: []string{"background-assets", "app-store-releases", "view"}, flag: "id", wantType: "backgroundAssetVersionAppStoreReleases"},
-		{args: []string{"background-assets", "external-beta-releases", "view"}, flag: "id", wantType: "backgroundAssetVersionExternalBetaReleases"},
-		{args: []string{"background-assets", "internal-beta-releases", "view"}, flag: "id", wantType: "backgroundAssetVersionInternalBetaReleases"},
-		{args: []string{"builds", "uploads", "view"}, flag: "id", wantType: "buildUploads"},
-		{args: []string{"builds", "uploads", "files", "view"}, flag: "id", wantType: "buildUploadFiles"},
-		{args: []string{"builds", "uploads", "files", "list"}, flag: "upload", wantType: "buildUploads"},
-		{args: []string{"bundle-ids", "capabilities", "update"}, flag: "id", wantType: "bundleIdCapabilities"},
-		{args: []string{"bundle-ids", "capabilities", "reconcile", "plan"}, flag: "bundle", wantType: "bundleIds"},
-		{args: []string{"certificates", "view"}, flag: "id", wantType: "certificates"},
-		{args: []string{"devices", "view"}, flag: "id", wantType: "devices"},
-		{args: []string{"encryption", "declarations", "view"}, flag: "id", wantType: "appEncryptionDeclarations"},
-		{args: []string{"encryption", "documents", "view"}, flag: "id", wantType: "appEncryptionDeclarationDocuments"},
-		{args: []string{"encryption", "documents", "upload"}, flag: "declaration", wantType: "appEncryptionDeclarations"},
-		{args: []string{"eula", "view"}, flag: "id", wantType: "endUserLicenseAgreements"},
-		{args: []string{"game-center", "achievements", "view"}, flag: "id", wantType: "gameCenterAchievements"},
-		{args: []string{"game-center", "achievements", "v2", "localizations", "view"}, flag: "id", wantType: "gameCenterAchievementLocalizations"},
-		{args: []string{"game-center", "activities", "releases", "delete"}, flag: "id", wantType: "gameCenterActivityVersionReleases"},
-		{args: []string{"game-center", "app-versions", "view"}, flag: "id", wantType: "gameCenterAppVersions"},
-		{args: []string{"game-center", "challenges", "images", "view"}, flag: "id", wantType: "gameCenterChallengeImages"},
-		{args: []string{"game-center", "details", "view"}, flag: "id", wantType: "gameCenterDetails"},
-		{args: []string{"game-center", "groups", "view"}, flag: "id", wantType: "gameCenterGroups"},
-		{args: []string{"game-center", "leaderboard-sets", "member-localizations", "view"}, flag: "id", wantType: "gameCenterLeaderboardSetMemberLocalizations"},
-		{args: []string{"game-center", "leaderboards", "view"}, flag: "id", wantType: "gameCenterLeaderboards"},
-		{args: []string{"game-center", "matchmaking", "teams", "update"}, flag: "id", wantType: "gameCenterMatchmakingTeams"},
-		{args: []string{"iap", "pricing", "availabilities", "view"}, flag: "id", wantType: "inAppPurchaseAvailabilities"},
-		{args: []string{"iap", "versions", "submit"}, flag: "submission", wantType: "reviewSubmissions"},
-		{args: []string{"nominations", "view"}, flag: "id", wantType: "nominations"},
-		{args: []string{"pricing", "availability", "view"}, flag: "id", wantType: "appAvailabilities"},
-		{args: []string{"pricing", "schedule", "view"}, flag: "id", wantType: "appPriceSchedules"},
-		{args: []string{"profiles", "view"}, flag: "id", wantType: "profiles"},
-		{args: []string{"profiles", "create"}, flag: "bundle", wantType: "bundleIds"},
-		{args: []string{"review", "submissions-get"}, flag: "id", wantType: "reviewSubmissions"},
-		{args: []string{"review", "details-get"}, flag: "id", wantType: "appStoreReviewDetails"},
-		{args: []string{"review", "attachments-get"}, flag: "id", wantType: "appStoreReviewAttachments"},
-		{args: []string{"review", "attachments-list"}, flag: "review-detail", wantType: "appStoreReviewDetails"},
-		{args: []string{"review", "items", "update"}, flag: "id", wantType: "reviewSubmissionItems"},
-		{args: []string{"review", "items", "add"}, flag: "submission", wantType: "reviewSubmissions"},
-		{args: []string{"reviews", "view"}, flag: "id", wantType: "customerReviews"},
-		{args: []string{"reviews", "response", "view"}, flag: "id", wantType: "customerReviewResponses"},
-		{args: []string{"routing-coverage", "info"}, flag: "id", wantType: "routingAppCoverages"},
-		{args: []string{"sandbox", "view"}, flag: "id", wantType: "sandboxTesters"},
-		{args: []string{"submit", "status"}, flag: "id", wantType: "reviewSubmissions"},
-		{args: []string{"subscriptions", "groups", "view"}, flag: "id", wantType: "subscriptionGroups"},
-		{args: []string{"subscriptions", "groups", "versions", "localizations", "view"}, flag: "id", wantType: "subscriptionGroupLocalizations"},
-		{args: []string{"subscriptions", "grace-periods", "view"}, flag: "id", wantType: "subscriptionGracePeriods"},
-		{args: []string{"subscriptions", "offers", "introductory", "view"}, flag: "id", wantType: "subscriptionIntroductoryOffers"},
-		{args: []string{"subscriptions", "offers", "introductory", "create"}, flag: "price-point", wantType: "subscriptionPricePoints"},
-		{args: []string{"subscriptions", "offers", "promotional", "view"}, flag: "id", wantType: "subscriptionPromotionalOffers"},
-		{args: []string{"subscriptions", "versions", "view"}, flag: "id", wantType: "subscriptionVersions"},
-		{args: []string{"subscriptions", "versions", "images", "view"}, flag: "id", wantType: "subscriptionImages"},
-		{args: []string{"subscriptions", "versions", "localizations", "view"}, flag: "id", wantType: "subscriptionLocalizations"},
-		{args: []string{"testflight", "agreements", "view"}, flag: "id", wantType: "betaLicenseAgreements"},
-		{args: []string{"testflight", "app-localizations", "view"}, flag: "id", wantType: "betaAppLocalizations"},
-		{args: []string{"testflight", "distribution", "edit"}, flag: "id", wantType: "buildBetaDetails"},
-		{args: []string{"testflight", "metrics", "public-link"}, flag: "group", wantType: "betaGroups"},
-		{args: []string{"testflight", "metrics", "app-testers"}, flag: "filter-tester", wantType: "betaTesters"},
-		{args: []string{"testflight", "pre-release", "view"}, flag: "id", wantType: "preReleaseVersions"},
-		{args: []string{"testflight", "recruitment", "delete"}, flag: "id", wantType: "betaRecruitmentCriteria"},
-		{args: []string{"testflight", "recruitment", "set"}, flag: "group", wantType: "betaGroups"},
-		{args: []string{"testflight", "review", "edit"}, flag: "id", wantType: "betaAppReviewDetails"},
-		{args: []string{"testflight", "review", "submissions", "view"}, flag: "id", wantType: "betaAppReviewSubmissions"},
-		{args: []string{"testflight", "testers", "view"}, flag: "id", wantType: "betaTesters"},
-		{args: []string{"testflight", "testers", "list"}, flag: "group", wantType: "betaGroups"},
-		{args: []string{"users", "view"}, flag: "id", wantType: "users"},
-		{args: []string{"users", "invites", "view"}, flag: "id", wantType: "userInvitations"},
-		{args: []string{"versions", "phased-release", "update"}, flag: "id", wantType: "appStoreVersionPhasedReleases"},
+		{args: []string{"accessibility", "view"}, flag: "id", wantType: "accessibilityDeclarations", deps: true},
+		{args: []string{"actors", "view"}, flag: "id", wantType: "actors", deps: true},
+		{args: []string{"age-rating", "edit"}, flag: "id", wantType: "ageRatingDeclarations", deps: true},
+		{args: []string{"agreements", "territories", "list"}, flag: "id", wantType: "endUserLicenseAgreements", deps: true},
+		{args: []string{"app-clips", "view"}, flag: "id", wantType: "appClips", deps: true},
+		{args: []string{"app-clips", "header-images", "view"}, flag: "id", wantType: "appClipHeaderImages", deps: true},
+		{args: []string{"app-clips", "review-details", "view"}, flag: "id", wantType: "appClipAppStoreReviewDetails", deps: true},
+		{args: []string{"app-clips", "advanced-experiences", "images", "view"}, flag: "id", wantType: "appClipAdvancedExperienceImages", deps: true},
+		{args: []string{"app-tags", "view"}, flag: "id", wantType: "appTags", deps: true},
+		{args: []string{"apps", "ci-product", "view"}, flag: "id", wantType: "apps", deps: true},
+		{args: []string{"background-assets", "view"}, flag: "id", wantType: "backgroundAssets", deps: true},
+		{args: []string{"background-assets", "app-store-releases", "view"}, flag: "id", wantType: "backgroundAssetVersionAppStoreReleases", deps: true},
+		{args: []string{"background-assets", "external-beta-releases", "view"}, flag: "id", wantType: "backgroundAssetVersionExternalBetaReleases", deps: true},
+		{args: []string{"background-assets", "internal-beta-releases", "view"}, flag: "id", wantType: "backgroundAssetVersionInternalBetaReleases", deps: true},
+		{args: []string{"builds", "uploads", "view"}, flag: "id", wantType: "buildUploads", deps: true},
+		{args: []string{"builds", "uploads", "files", "view"}, flag: "id", wantType: "buildUploadFiles", deps: true},
+		{args: []string{"builds", "uploads", "files", "list"}, flag: "upload", wantType: "buildUploads", deps: true},
+		{args: []string{"bundle-ids", "capabilities", "update"}, flag: "id", wantType: "bundleIdCapabilities", deps: true},
+		{args: []string{"bundle-ids", "capabilities", "reconcile", "plan"}, flag: "bundle", wantType: "bundleIds", deps: true},
+		{args: []string{"certificates", "view"}, flag: "id", wantType: "certificates", deps: true},
+		{args: []string{"devices", "view"}, flag: "id", wantType: "devices", deps: true},
+		{args: []string{"encryption", "declarations", "view"}, flag: "id", wantType: "appEncryptionDeclarations", deps: true},
+		{args: []string{"encryption", "documents", "view"}, flag: "id", wantType: "appEncryptionDeclarationDocuments", deps: true},
+		{args: []string{"encryption", "documents", "upload"}, flag: "declaration", wantType: "appEncryptionDeclarations", deps: true},
+		{args: []string{"eula", "view"}, flag: "id", wantType: "endUserLicenseAgreements", deps: true},
+		{args: []string{"game-center", "achievements", "view"}, flag: "id", wantType: "gameCenterAchievements", deps: true},
+		{args: []string{"game-center", "achievements", "v2", "localizations", "view"}, flag: "id", wantType: "gameCenterAchievementLocalizations", deps: true},
+		{args: []string{"game-center", "activities", "releases", "delete"}, flag: "id", wantType: "gameCenterActivityVersionReleases", deps: true},
+		{args: []string{"game-center", "app-versions", "view"}, flag: "id", wantType: "gameCenterAppVersions", deps: true},
+		{args: []string{"game-center", "challenges", "images", "view"}, flag: "id", wantType: "gameCenterChallengeImages", deps: true},
+		{args: []string{"game-center", "details", "view"}, flag: "id", wantType: "gameCenterDetails", deps: true},
+		{args: []string{"game-center", "groups", "view"}, flag: "id", wantType: "gameCenterGroups", deps: true},
+		{args: []string{"game-center", "leaderboard-sets", "member-localizations", "view"}, flag: "id", wantType: "gameCenterLeaderboardSetMemberLocalizations", deps: true},
+		{args: []string{"game-center", "leaderboards", "view"}, flag: "id", wantType: "gameCenterLeaderboards", deps: true},
+		{args: []string{"game-center", "matchmaking", "teams", "update"}, flag: "id", wantType: "gameCenterMatchmakingTeams", deps: true},
+		{args: []string{"iap", "pricing", "availabilities", "view"}, flag: "id", wantType: "inAppPurchaseAvailabilities", deps: true},
+		{args: []string{"iap", "versions", "submit"}, flag: "submission", wantType: "reviewSubmissions", deps: true},
+		{args: []string{"nominations", "view"}, flag: "id", wantType: "nominations", deps: true},
+		{args: []string{"pricing", "availability", "view"}, flag: "id", wantType: "appAvailabilities", deps: true},
+		{args: []string{"pricing", "schedule", "view"}, flag: "id", wantType: "appPriceSchedules", deps: true},
+		{args: []string{"profiles", "view"}, flag: "id", wantType: "profiles", deps: true},
+		{args: []string{"profiles", "create"}, flag: "bundle", wantType: "bundleIds", deps: true},
+		{args: []string{"review", "submissions-get"}, flag: "id", wantType: "reviewSubmissions", deps: true},
+		{args: []string{"review", "details-get"}, flag: "id", wantType: "appStoreReviewDetails", deps: true},
+		{args: []string{"review", "attachments-get"}, flag: "id", wantType: "appStoreReviewAttachments", deps: true},
+		{args: []string{"review", "attachments-list"}, flag: "review-detail", wantType: "appStoreReviewDetails", deps: true},
+		{args: []string{"review", "items", "update"}, flag: "id", wantType: "reviewSubmissionItems", deps: true},
+		{args: []string{"review", "items", "add"}, flag: "submission", wantType: "reviewSubmissions", deps: true},
+		{args: []string{"reviews", "view"}, flag: "id", wantType: "customerReviews", deps: true},
+		{args: []string{"reviews", "response", "view"}, flag: "id", wantType: "customerReviewResponses", deps: true},
+		{args: []string{"routing-coverage", "info"}, flag: "id", wantType: "routingAppCoverages", deps: true},
+		{args: []string{"sandbox", "view"}, flag: "id", wantType: "sandboxTesters", deps: true},
+		{args: []string{"submit", "status"}, flag: "id", wantType: "reviewSubmissions", deps: true},
+		{args: []string{"subscriptions", "groups", "view"}, flag: "id", wantType: "subscriptionGroups", deps: true},
+		{args: []string{"subscriptions", "groups", "versions", "localizations", "view"}, flag: "id", wantType: "subscriptionGroupLocalizations", deps: true},
+		{args: []string{"subscriptions", "grace-periods", "view"}, flag: "id", wantType: "subscriptionGracePeriods", deps: true},
+		{args: []string{"subscriptions", "offers", "introductory", "view"}, flag: "id", wantType: "subscriptionIntroductoryOffers", deps: true},
+		{args: []string{"subscriptions", "offers", "introductory", "create"}, flag: "price-point", wantType: "subscriptionPricePoints", deps: true},
+		{args: []string{"subscriptions", "offers", "promotional", "view"}, flag: "id", wantType: "subscriptionPromotionalOffers", deps: true},
+		{args: []string{"subscriptions", "versions", "view"}, flag: "id", wantType: "subscriptionVersions", deps: true},
+		{args: []string{"subscriptions", "versions", "images", "view"}, flag: "id", wantType: "subscriptionImages", deps: true},
+		{args: []string{"subscriptions", "versions", "localizations", "view"}, flag: "id", wantType: "subscriptionLocalizations", deps: true},
+		{args: []string{"testflight", "agreements", "view"}, flag: "id", wantType: "betaLicenseAgreements", deps: true},
+		{args: []string{"testflight", "app-localizations", "view"}, flag: "id", wantType: "betaAppLocalizations", deps: true},
+		{args: []string{"testflight", "distribution", "edit"}, flag: "id", wantType: "buildBetaDetails", deps: true},
+		{args: []string{"testflight", "metrics", "public-link"}, flag: "group", wantType: "betaGroups", deps: true},
+		{args: []string{"testflight", "metrics", "app-testers"}, flag: "filter-tester", wantType: "betaTesters", deps: true},
+		{args: []string{"testflight", "pre-release", "view"}, flag: "id", wantType: "preReleaseVersions", deps: true},
+		{args: []string{"testflight", "recruitment", "delete"}, flag: "id", wantType: "betaRecruitmentCriteria", deps: true},
+		{args: []string{"testflight", "recruitment", "set"}, flag: "group", wantType: "betaGroups", deps: true},
+		{args: []string{"testflight", "review", "edit"}, flag: "id", wantType: "betaAppReviewDetails", deps: true},
+		{args: []string{"testflight", "review", "submissions", "view"}, flag: "id", wantType: "betaAppReviewSubmissions", deps: true},
+		{args: []string{"testflight", "testers", "view"}, flag: "id", wantType: "betaTesters", deps: true},
+		{args: []string{"testflight", "testers", "list"}, flag: "group", wantType: "betaGroups", deps: true},
+		{args: []string{"users", "view"}, flag: "id", wantType: "users", deps: true},
+		{args: []string{"users", "invites", "view"}, flag: "id", wantType: "userInvitations", deps: true},
+		{args: []string{"versions", "phased-release", "update"}, flag: "id", wantType: "appStoreVersionPhasedReleases", deps: true},
 		// --app flags that bypassed the shared app resolver.
-		{args: []string{"performance", "download"}, flag: "app", wantType: "apps"},
-		{args: []string{"signing", "fetch"}, flag: "app", wantType: "apps"},
-		{args: []string{"app-setup", "info", "set"}, flag: "app", wantType: "apps"},
-		{args: []string{"app-setup", "categories", "set"}, flag: "app", wantType: "apps"},
-		{args: []string{"categories", "set"}, flag: "app", wantType: "apps"},
+		{args: []string{"performance", "download"}, flag: "app", wantType: "apps", deps: true},
+		{args: []string{"signing", "fetch"}, flag: "app", wantType: "apps", deps: true},
+		{args: []string{"app-setup", "info", "set"}, flag: "app", wantType: "apps", deps: true},
+		{args: []string{"app-setup", "categories", "set"}, flag: "app", wantType: "apps", deps: true},
+		{args: []string{"categories", "set"}, flag: "app", wantType: "apps", deps: true},
 	}
 
 	for _, test := range tests {
@@ -524,17 +565,26 @@ func TestSelfLinkCoverageRejectsWrongType(t *testing.T) {
 				wantErr = "expected a self-link of type apps, got builds"
 			}
 			args := append(append([]string(nil), test.args...), "--"+test.flag, value)
-			stdout, stderr := captureOutput(t, func() {
-				code := rootcmd.Run(args, "1.2.3")
+			var stdout, stderr string
+			if test.deps {
+				var code int
+				stdout, stderr, code = runWithDeps(t, nil, args...)
 				if code != rootcmd.ExitUsage {
 					t.Fatalf("exit code = %d, want %d", code, rootcmd.ExitUsage)
 				}
-			})
+			} else {
+				stdout, stderr = captureOutput(t, func() {
+					code := rootcmd.Run(args, "1.2.3")
+					if code != rootcmd.ExitUsage {
+						t.Fatalf("exit code = %d, want %d", code, rootcmd.ExitUsage)
+					}
+				})
+			}
 			if stdout != "" {
 				t.Fatalf("expected empty stdout, got %q", stdout)
 			}
 			firstLine, _, _ := strings.Cut(stderr, "\n")
-			wantPrefix := fmt.Sprintf("Error: invalid value %q for flag -%s: ", value, test.flag)
+			wantPrefix := fmt.Sprintf("Error: invalid value %q for flag --%s: ", value, test.flag)
 			if !strings.HasPrefix(firstLine, wantPrefix) || !strings.Contains(firstLine, wantErr) {
 				t.Fatalf("first stderr line = %q, want prefix %q containing %q", firstLine, wantPrefix, wantErr)
 			}

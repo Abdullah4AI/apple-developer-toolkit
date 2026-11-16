@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/peterbourgon/ff/v3/ffcli"
@@ -13,9 +12,9 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
-// MarketplaceWebhooksCommand returns the marketplace webhooks command group.
-func MarketplaceWebhooksCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("webhooks", flag.ExitOnError)
+// newMarketplaceWebhooksCommand returns the marketplace webhooks command group.
+func newMarketplaceWebhooksCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("webhooks", flag.ExitOnError)
 
 	return &ffcli.Command{
 		Name:       "webhooks",
@@ -27,13 +26,13 @@ Examples:
   asc marketplace webhooks list
   asc marketplace webhooks view --webhook-id "WEBHOOK_ID"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
-			MarketplaceWebhooksListCommand(),
-			MarketplaceWebhooksGetCommand(),
-			MarketplaceWebhooksCreateCommand(),
-			MarketplaceWebhooksUpdateCommand(),
-			MarketplaceWebhooksDeleteCommand(),
+			newMarketplaceWebhooksListCommand(d),
+			newMarketplaceWebhooksGetCommand(d),
+			newMarketplaceWebhooksCreateCommand(d),
+			newMarketplaceWebhooksUpdateCommand(d),
+			newMarketplaceWebhooksDeleteCommand(d),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp
@@ -41,17 +40,10 @@ Examples:
 	}
 }
 
-// MarketplaceWebhooksListCommand returns the webhooks list subcommand.
-func MarketplaceWebhooksListCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("list", flag.ExitOnError)
-
-	fields := fs.String("fields", "", "Fields to include: "+strings.Join(marketplaceWebhookFieldsList(), ", "))
-	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
-	next := fs.String("next", "", "Fetch next page using a links.next URL")
-	paginate := fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")
-	output := shared.BindOutputFlags(fs)
-
-	return &ffcli.Command{
+// newMarketplaceWebhooksListCommand returns the webhooks list subcommand.
+func newMarketplaceWebhooksListCommand(d *shared.Deps) *ffcli.Command {
+	var fieldsValue []string
+	cmd := shared.BuildPaginatedListCommand(shared.PaginatedListCommandConfig{
 		Name:       "list",
 		ShortUsage: "asc marketplace webhooks list [flags]",
 		ShortHelp:  "List marketplace webhooks.",
@@ -61,77 +53,37 @@ Examples:
   asc marketplace webhooks list
   asc marketplace webhooks list --limit 10
   asc marketplace webhooks list --paginate`,
-		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
-		Exec: func(ctx context.Context, args []string) error {
-			warnMarketplaceWebhooksDeprecated()
-
-			if *limit != 0 && (*limit < 1 || *limit > 200) {
-				return shared.UsageError("marketplace webhooks list: --limit must be between 1 and 200")
+		TopLevel:             true,
+		PaginateIgnoresLimit: true,
+		NoSpinner:            true,
+		NextConflicts:        []string{"fields"},
+		Flags: func(fs *flag.FlagSet) func() error {
+			fields := fs.String("fields", "", "Fields to include: "+strings.Join(marketplaceWebhookFieldsList(), ", "))
+			return func() (err error) {
+				if fieldsValue, err = normalizeMarketplaceWebhookFields(*fields); err != nil {
+					return d.UsageErrorf("marketplace webhooks list: %v", err)
+				}
+				return nil
 			}
-			if err := shared.ValidateNextURL(*next); err != nil {
-				return shared.UsageErrorf("marketplace webhooks list: %v", err)
-			}
-			if err := shared.RejectNextFlagConflicts(fs, *next, "marketplace webhooks list", "fields"); err != nil {
-				return err
-			}
-
-			fieldsValue, err := normalizeMarketplaceWebhookFields(*fields)
-			if err != nil {
-				return fmt.Errorf("marketplace webhooks list: %w", err)
-			}
-
-			client, err := shared.GetASCClient()
-			if err != nil {
-				return fmt.Errorf("marketplace webhooks list: %w", err)
-			}
-
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
-			defer cancel()
-
+		},
+		Deps: d,
+		FetchPage: func(ctx context.Context, client *asc.Client, _ string, limit int, next string) (asc.PaginatedResponse, error) {
 			opts := []asc.MarketplaceWebhooksOption{
-				asc.WithMarketplaceWebhooksLimit(*limit),
-				asc.WithMarketplaceWebhooksNextURL(*next),
+				asc.Limit[asc.MarketplaceWebhooksOption](limit),
+				asc.NextURL[asc.MarketplaceWebhooksOption](next),
 			}
 			if len(fieldsValue) > 0 {
 				opts = append(opts, asc.WithMarketplaceWebhooksFields(fieldsValue))
 			}
-
-			if *paginate {
-				paginateOpts := append(opts, asc.WithMarketplaceWebhooksLimit(200))
-				firstPage, err := client.GetMarketplaceWebhooks(requestCtx, paginateOpts...)
-				if err != nil {
-					return fmt.Errorf("marketplace webhooks list: failed to fetch: %w", err)
-				}
-
-				webhooks, err := asc.PaginateAll(requestCtx, firstPage, func(ctx context.Context, nextURL string) (asc.PaginatedResponse, error) {
-					return client.GetMarketplaceWebhooks(ctx, asc.WithMarketplaceWebhooksNextURL(nextURL))
-				})
-				if err != nil {
-					return fmt.Errorf("marketplace webhooks list: %w", err)
-				}
-
-				return shared.PrintOutput(webhooks, *output.Output, *output.Pretty)
-			}
-
-			webhooks, err := client.GetMarketplaceWebhooks(requestCtx, opts...)
-			if err != nil {
-				return fmt.Errorf("marketplace webhooks list: failed to fetch: %w", err)
-			}
-
-			return shared.PrintOutput(webhooks, *output.Output, *output.Pretty)
+			return client.GetMarketplaceWebhooks(ctx, opts...)
 		},
-	}
+	})
+	return withMarketplaceWebhooksDeprecationWarning(d, cmd)
 }
 
-// MarketplaceWebhooksGetCommand returns the webhooks view subcommand.
-func MarketplaceWebhooksGetCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("view", flag.ExitOnError)
-
-	webhookID := shared.BindResourceIDFlag(fs, "webhook-id", "marketplaceWebhooks", "Marketplace webhook ID")
-	output := shared.BindOutputFlags(fs)
-
-	return &ffcli.Command{
+// newMarketplaceWebhooksGetCommand returns the webhooks view subcommand.
+func newMarketplaceWebhooksGetCommand(d *shared.Deps) *ffcli.Command {
+	cmd := shared.BuildIDGetCommand(shared.IDGetCommandConfig{
 		Name:       "view",
 		ShortUsage: "asc marketplace webhooks view --webhook-id \"WEBHOOK_ID\" [flags]",
 		ShortHelp:  "View a marketplace webhook by ID.",
@@ -139,42 +91,25 @@ func MarketplaceWebhooksGetCommand() *ffcli.Command {
 
 Examples:
   asc marketplace webhooks view --webhook-id "WEBHOOK_ID"`,
-		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
-		Exec: func(ctx context.Context, args []string) error {
-			warnMarketplaceWebhooksDeprecated()
-
-			trimmedID := strings.TrimSpace(*webhookID)
-			if trimmedID == "" {
-				fmt.Fprintln(os.Stderr, "Error: --webhook-id is required")
-				return shared.MissingRequiredUsageError("--webhook-id")
-			}
-
-			client, err := shared.GetASCClient()
-			if err != nil {
-				return fmt.Errorf("marketplace webhooks view: %w", err)
-			}
-
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
-			defer cancel()
-
-			webhook, err := client.GetMarketplaceWebhook(requestCtx, trimmedID)
-			if err != nil {
-				return fmt.Errorf("marketplace webhooks view: failed to fetch: %w", err)
-			}
-
-			return shared.PrintOutput(webhook, *output.Output, *output.Pretty)
+		IDFlag:             "webhook-id",
+		IDUsage:            "Marketplace webhook ID",
+		IDType:             "marketplaceWebhooks",
+		RequiredDiagnostic: true,
+		Deps:               d,
+		Fetch: func(ctx context.Context, client *asc.Client, id string) (any, error) {
+			return client.GetMarketplaceWebhook(ctx, id)
 		},
-	}
+	})
+	return withMarketplaceWebhooksDeprecationWarning(d, cmd)
 }
 
-// MarketplaceWebhooksCreateCommand returns the webhooks create subcommand.
-func MarketplaceWebhooksCreateCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("create", flag.ExitOnError)
+// newMarketplaceWebhooksCreateCommand returns the webhooks create subcommand.
+func newMarketplaceWebhooksCreateCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("create", flag.ExitOnError)
 
 	url := fs.String("url", "", "Webhook endpoint URL")
 	secret := fs.String("secret", "", "Webhook secret")
-	output := shared.BindOutputFlags(fs)
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "create",
@@ -185,27 +120,25 @@ func MarketplaceWebhooksCreateCommand() *ffcli.Command {
 Examples:
   asc marketplace webhooks create --url "https://example.com/webhook" --secret "placeholder123"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
-			warnMarketplaceWebhooksDeprecated()
+			warnMarketplaceWebhooksDeprecated(d)
 
 			endpointURL := strings.TrimSpace(*url)
 			if endpointURL == "" {
-				fmt.Fprintln(os.Stderr, "Error: --url is required")
-				return shared.MissingRequiredUsageError("--url")
+				return d.RequiredFlag("--url")
 			}
 			secretValue := strings.TrimSpace(*secret)
 			if secretValue == "" {
-				fmt.Fprintln(os.Stderr, "Error: --secret is required")
-				return shared.MissingRequiredUsageError("--secret")
+				return d.RequiredFlag("--secret")
 			}
 
-			client, err := shared.GetASCClient()
+			client, err := d.Client()
 			if err != nil {
 				return fmt.Errorf("marketplace webhooks create: %w", err)
 			}
 
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
+			requestCtx, cancel := d.Timeout(ctx)
 			defer cancel()
 
 			webhook, err := client.CreateMarketplaceWebhook(requestCtx, endpointURL, secretValue)
@@ -213,19 +146,19 @@ Examples:
 				return fmt.Errorf("marketplace webhooks create: failed to create: %w", err)
 			}
 
-			return shared.PrintOutput(webhook, *output.Output, *output.Pretty)
+			return d.PrintOutput(webhook, *output.Output, *output.Pretty)
 		},
 	}
 }
 
-// MarketplaceWebhooksUpdateCommand returns the webhooks update subcommand.
-func MarketplaceWebhooksUpdateCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("update", flag.ExitOnError)
+// newMarketplaceWebhooksUpdateCommand returns the webhooks update subcommand.
+func newMarketplaceWebhooksUpdateCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("update", flag.ExitOnError)
 
 	webhookID := shared.BindResourceIDFlag(fs, "webhook-id", "marketplaceWebhooks", "Marketplace webhook ID")
 	url := fs.String("url", "", "Webhook endpoint URL")
 	secret := fs.String("secret", "", "Webhook secret")
-	output := shared.BindOutputFlags(fs)
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "update",
@@ -237,14 +170,13 @@ Examples:
   asc marketplace webhooks update --webhook-id "WEBHOOK_ID" --url "https://example.com/webhook"
   asc marketplace webhooks update --webhook-id "WEBHOOK_ID" --secret "new-secret"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
-			warnMarketplaceWebhooksDeprecated()
+			warnMarketplaceWebhooksDeprecated(d)
 
 			trimmedID := strings.TrimSpace(*webhookID)
 			if trimmedID == "" {
-				fmt.Fprintln(os.Stderr, "Error: --webhook-id is required")
-				return shared.MissingRequiredUsageError("--webhook-id")
+				return d.RequiredFlag("--webhook-id")
 			}
 
 			visited := map[string]bool{}
@@ -253,8 +185,7 @@ Examples:
 			})
 
 			if !visited["url"] && !visited["secret"] {
-				fmt.Fprintln(os.Stderr, "Error: at least one update flag is required")
-				return shared.MissingRequiredUsageError("")
+				return d.UpdateFlagRequired(fs, url, secret)
 			}
 
 			attrs := asc.MarketplaceWebhookUpdateAttributes{}
@@ -267,12 +198,12 @@ Examples:
 				attrs.Secret = &value
 			}
 
-			client, err := shared.GetASCClient()
+			client, err := d.Client()
 			if err != nil {
 				return fmt.Errorf("marketplace webhooks update: %w", err)
 			}
 
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
+			requestCtx, cancel := d.Timeout(ctx)
 			defer cancel()
 
 			webhook, err := client.UpdateMarketplaceWebhook(requestCtx, trimmedID, attrs)
@@ -280,18 +211,18 @@ Examples:
 				return fmt.Errorf("marketplace webhooks update: failed to update: %w", err)
 			}
 
-			return shared.PrintOutput(webhook, *output.Output, *output.Pretty)
+			return d.PrintOutput(webhook, *output.Output, *output.Pretty)
 		},
 	}
 }
 
-// MarketplaceWebhooksDeleteCommand returns the webhooks delete subcommand.
-func MarketplaceWebhooksDeleteCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("delete", flag.ExitOnError)
+// newMarketplaceWebhooksDeleteCommand returns the webhooks delete subcommand.
+func newMarketplaceWebhooksDeleteCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("delete", flag.ExitOnError)
 
 	webhookID := shared.BindResourceIDFlag(fs, "webhook-id", "marketplaceWebhooks", "Marketplace webhook ID")
 	confirm := fs.Bool("confirm", false, "Confirm deletion")
-	output := shared.BindOutputFlags(fs)
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "delete",
@@ -302,38 +233,36 @@ func MarketplaceWebhooksDeleteCommand() *ffcli.Command {
 Examples:
   asc marketplace webhooks delete --webhook-id "WEBHOOK_ID" --confirm`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
-			warnMarketplaceWebhooksDeprecated()
+			warnMarketplaceWebhooksDeprecated(d)
 
 			trimmedID := strings.TrimSpace(*webhookID)
 			if trimmedID == "" {
-				fmt.Fprintln(os.Stderr, "Error: --webhook-id is required")
-				return shared.MissingRequiredUsageError("--webhook-id")
+				return d.RequiredFlag("--webhook-id")
 			}
-			if !*confirm {
-				fmt.Fprintln(os.Stderr, "Error: --confirm is required")
-				return shared.MissingRequiredUsageError("--confirm")
+			if err := d.RequireConfirm(*confirm); err != nil {
+				return err
 			}
 
-			client, err := shared.GetASCClient()
+			client, err := d.Client()
 			if err != nil {
 				return fmt.Errorf("marketplace webhooks delete: %w", err)
 			}
 
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
+			requestCtx, cancel := d.Timeout(ctx)
 			defer cancel()
 
 			if err := client.DeleteMarketplaceWebhook(requestCtx, trimmedID); err != nil {
 				return fmt.Errorf("marketplace webhooks delete: failed to delete: %w", err)
 			}
 
-			result := &asc.MarketplaceWebhookDeleteResult{
+			result := &asc.DeleteResult{
 				ID:      trimmedID,
 				Deleted: true,
 			}
 
-			return shared.PrintOutput(result, *output.Output, *output.Pretty)
+			return d.PrintOutput(result, *output.Output, *output.Pretty)
 		},
 	}
 }
@@ -359,6 +288,17 @@ func marketplaceWebhookFieldsList() []string {
 	return []string{"endpointUrl"}
 }
 
-func warnMarketplaceWebhooksDeprecated() {
-	fmt.Fprintln(os.Stderr, "Warning: marketplace webhooks endpoints are deprecated in App Store Connect API.")
+func warnMarketplaceWebhooksDeprecated(d *shared.Deps) {
+	fmt.Fprintln(d.IO.ErrOut, "Warning: marketplace webhooks endpoints are deprecated in App Store Connect API.")
+}
+
+// withMarketplaceWebhooksDeprecationWarning prints the deprecation warning before
+// any of cmd's own checks run.
+func withMarketplaceWebhooksDeprecationWarning(d *shared.Deps, cmd *ffcli.Command) *ffcli.Command {
+	exec := cmd.Exec
+	cmd.Exec = func(ctx context.Context, args []string) error {
+		warnMarketplaceWebhooksDeprecated(d)
+		return exec(ctx, args)
+	}
+	return cmd
 }

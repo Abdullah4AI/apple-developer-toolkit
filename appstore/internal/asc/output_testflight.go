@@ -82,14 +82,8 @@ func betaRecruitmentCriteriaRows(resp *BetaRecruitmentCriteriaResponse) ([]strin
 	rows := [][]string{{
 		resp.Data.ID,
 		compactWhitespace(resp.Data.Attributes.LastModifiedDate),
-		compactWhitespace(formatDeviceFamilyOsVersionFilters(resp.Data.Attributes.DeviceFamilyOsVersionFilters)),
+		compactWhitespace(formatDeviceFamilyOsVersionFilters(resp.Data.Attributes.DeviceFamilyOSVersionFilters)),
 	}}
-	return headers, rows
-}
-
-func betaRecruitmentCriteriaDeleteResultRows(result *BetaRecruitmentCriteriaDeleteResult) ([]string, [][]string) {
-	headers := []string{"ID", "Deleted"}
-	rows := [][]string{{result.ID, fmt.Sprintf("%t", result.Deleted)}}
 	return headers, rows
 }
 

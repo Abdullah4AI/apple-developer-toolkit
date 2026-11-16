@@ -3,20 +3,15 @@ package cmdtest
 import (
 	"context"
 	"encoding/json"
-	"errors"
-	"flag"
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	rootcmd "github.com/Abdullah4AI/apple-developer-toolkit/appstore/cmd"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
-	subscriptionscli "github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/subscriptions"
 )
 
 type subscriptionsSetupOutput struct {
@@ -223,25 +218,7 @@ func TestSubscriptionsSetupValidationErrors(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			root := RootCommand("1.2.3")
-			root.FlagSet.SetOutput(io.Discard)
-
-			stdout, stderr := captureOutput(t, func() {
-				if err := root.Parse(test.args); err != nil {
-					t.Fatalf("parse error: %v", err)
-				}
-				err := root.Run(context.Background())
-				if !errors.Is(err, flag.ErrHelp) {
-					t.Fatalf("expected ErrHelp, got %v", err)
-				}
-			})
-
-			if stdout != "" {
-				t.Fatalf("expected empty stdout, got %q", stdout)
-			}
-			if !strings.Contains(stderr, test.wantErr) {
-				t.Fatalf("expected error %q, got %q", test.wantErr, stderr)
-			}
+			assertUsageExit(t, test.args, test.wantErr)
 		})
 	}
 }
@@ -1081,52 +1058,22 @@ func TestSubscriptionsSetupRepairReplacesMismatchedPrice(t *testing.T) {
 	}))
 	t.Cleanup(server.Close)
 
-	serverURL, err := url.Parse(server.URL)
-	if err != nil {
-		t.Fatalf("parse test server URL: %v", err)
-	}
-	transport := roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		cloned := req.Clone(req.Context())
-		cloned.URL.Scheme = serverURL.Scheme
-		cloned.URL.Host = serverURL.Host
-		return server.Client().Transport.RoundTrip(cloned)
-	})
-	client, err := asc.NewClientWithHTTPClient(
-		os.Getenv("ASC_KEY_ID"),
-		os.Getenv("ASC_ISSUER_ID"),
-		os.Getenv("ASC_PRIVATE_KEY_PATH"),
-		&http.Client{Transport: transport},
+	var result subscriptionsSetupOutput
+	stdout, _, err := runRootWithDeps(t, stubServerClient(t, server),
+		"subscriptions", "setup",
+		"--group-id", "group-1",
+		"--reference-name", "Pro Monthly",
+		"--product-id", "com.example.pro.monthly",
+		"--subscription-period", "ONE_MONTH",
+		"--price-point-id", "price-point-1",
+		"--price-territory", "USA",
+		"--repair",
+		"--no-verify",
+		"--output", "json",
 	)
 	if err != nil {
-		t.Fatalf("create setup test client: %v", err)
+		t.Fatalf("run error: %v", err)
 	}
-	restoreClient := subscriptionscli.SetSetupClientFactory(func() (*asc.Client, error) {
-		return client, nil
-	})
-	t.Cleanup(restoreClient)
-
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-	var result subscriptionsSetupOutput
-	stdout, _ := captureOutput(t, func() {
-		if err := root.Parse([]string{
-			"subscriptions", "setup",
-			"--group-id", "group-1",
-			"--reference-name", "Pro Monthly",
-			"--product-id", "com.example.pro.monthly",
-			"--subscription-period", "ONE_MONTH",
-			"--price-point-id", "price-point-1",
-			"--price-territory", "USA",
-			"--repair",
-			"--no-verify",
-			"--output", "json",
-		}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatalf("run error: %v", err)
-		}
-	})
 	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
 		t.Fatalf("parse setup result: %v", err)
 	}
@@ -1896,31 +1843,6 @@ func runSubscriptionsSetupPriceFailureCase(t *testing.T, mode subscriptionsSetup
 	}))
 	t.Cleanup(server.Close)
 
-	serverURL, err := url.Parse(server.URL)
-	if err != nil {
-		t.Fatalf("parse test server URL: %v", err)
-	}
-	transport := roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		cloned := req.Clone(req.Context())
-		cloned.URL.Scheme = serverURL.Scheme
-		cloned.URL.Host = serverURL.Host
-		return server.Client().Transport.RoundTrip(cloned)
-	})
-	client, err := asc.NewClientWithHTTPClient(
-		os.Getenv("ASC_KEY_ID"),
-		os.Getenv("ASC_ISSUER_ID"),
-		os.Getenv("ASC_PRIVATE_KEY_PATH"),
-		&http.Client{Transport: transport},
-	)
-	if err != nil {
-		t.Fatalf("create setup test client: %v", err)
-	}
-	t.Cleanup(subscriptionscli.SetSetupClientFactory(func() (*asc.Client, error) {
-		return client, nil
-	}))
-
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
 	args := []string{
 		"subscriptions", "setup",
 		"--group-id", "group-1",
@@ -1939,14 +1861,8 @@ func runSubscriptionsSetupPriceFailureCase(t *testing.T, mode subscriptionsSetup
 		args = append(args, "--repair")
 	}
 
-	var runErr error
 	var result subscriptionsSetupOutput
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse(args); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		runErr = root.Run(context.Background())
-	})
+	stdout, stderr, runErr := runRootWithDeps(t, stubServerClient(t, server), args...)
 	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
 		t.Fatalf("parse setup result: %v\nstdout=%q", err, stdout)
 	}

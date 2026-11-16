@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/peterbourgon/ff/v3/ffcli"
@@ -13,9 +12,8 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
-// ReviewsSummarizationsCommand returns the review summarizations command.
-func ReviewsSummarizationsCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("summarizations", flag.ExitOnError)
+func newReviewsSummarizationsCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("summarizations", flag.ExitOnError)
 
 	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
 	platforms := fs.String("platform", "", "Filter by platform(s), comma-separated: "+strings.Join(reviewSummarizationPlatformList(), ", "))
@@ -23,10 +21,10 @@ func ReviewsSummarizationsCommand() *ffcli.Command {
 	fields := fs.String("fields", "", "Fields to include: "+strings.Join(reviewSummarizationFieldsList(), ", "))
 	territoryFields := fs.String("territory-fields", "", "Territory fields to include, comma-separated")
 	include := fs.String("include", "", "Include related resources (e.g., territory), comma-separated")
-	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
-	next := fs.String("next", "", "Fetch next page using a links.next URL")
-	paginate := fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")
-	output := shared.BindOutputFlags(fs)
+	limit := fs.Int("limit", 0, shared.LimitFlagUsage(200))
+	next := fs.String("next", "", shared.NextFlagUsage)
+	paginate := fs.Bool("paginate", false, shared.PaginateFlagUsage)
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "summarizations",
@@ -40,25 +38,16 @@ Examples:
   asc reviews summarizations --app "APP_ID" --platform IOS --limit 50
   asc reviews summarizations --next "<links.next>"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
-			nextValue := strings.TrimSpace(*next)
-			if err := shared.ValidateNextURL(*next); err != nil {
-				return shared.WithDiagnostic(shared.NewValidationError(shared.UsageErrorf("reviews summarizations: %v", err)), shared.DiagnosticInvalidInput, "--next")
-			}
-			if err := rejectReviewNextFlagConflicts(
-				fs, *next, "reviews summarizations",
-				"app", "platform", "territory", "fields", "territory-fields", "include", "limit",
-			); err != nil {
+			if err := d.ValidatePaginationFlags(ctx, fs, "reviews summarizations", 200, "platform", "territory", "fields", "territory-fields", "include", "limit"); err != nil {
 				return err
 			}
-			if *limit != 0 && (*limit < 1 || *limit > 200) {
-				return shared.WithDiagnostic(shared.NewValidationError(shared.UsageError("reviews summarizations: --limit must be between 1 and 200")), shared.DiagnosticInvalidInput, "--limit")
-			}
+			nextValue := strings.TrimSpace(*next)
 
-			resolvedAppID := shared.ResolveAppID(*appID)
+			resolvedAppID := d.ResolveAppID(*appID)
 			if resolvedAppID == "" && nextValue == "" {
-				fmt.Fprintln(os.Stderr, "Error: --app is required (or set ASC_APP_ID)")
+				fmt.Fprintln(d.IO.ErrOut, "Error: --app is required (or set ASC_APP_ID)")
 				return shared.MissingRequiredUsageError("--app")
 			}
 			if nextValue != "" {
@@ -67,24 +56,23 @@ Examples:
 
 			fieldsValue, err := normalizeReviewSummarizationFields(*fields)
 			if err != nil {
-				return shared.WithDiagnostic(shared.NewValidationError(fmt.Errorf("reviews summarizations: %w", err)), shared.DiagnosticInvalidInput, "--fields")
+				return shared.WithDiagnostic(d.UsageErrorf("reviews summarizations: %v", err), shared.DiagnosticInvalidInput, "--fields")
 			}
 
 			platformValues, err := shared.NormalizeAppStoreVersionPlatforms(shared.SplitCSVUpper(*platforms))
 			if err != nil {
-				return shared.WithDiagnostic(shared.NewValidationError(fmt.Errorf("reviews summarizations: %w", err)), shared.DiagnosticInvalidInput, "--platform")
+				return shared.WithDiagnostic(d.UsageErrorf("reviews summarizations: %v", err), shared.DiagnosticInvalidInput, "--platform")
 			}
 			if len(platformValues) == 0 && nextValue == "" {
-				fmt.Fprintln(os.Stderr, "Error: --platform is required")
-				return shared.MissingRequiredUsageError("--platform")
+				return d.RequiredFlag("--platform")
 			}
 
-			client, err := shared.GetASCClient()
+			client, err := d.Client()
 			if err != nil {
 				return fmt.Errorf("reviews summarizations: %w", err)
 			}
 
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
+			requestCtx, cancel := d.Timeout(ctx)
 			defer cancel()
 
 			opts := []asc.CustomerReviewSummarizationsOption{
@@ -93,28 +81,28 @@ Examples:
 				asc.WithCustomerReviewSummarizationsFields(fieldsValue),
 				asc.WithCustomerReviewSummarizationsTerritoryFields(shared.SplitCSV(*territoryFields)),
 				asc.WithCustomerReviewSummarizationsInclude(shared.SplitCSV(*include)),
-				asc.WithCustomerReviewSummarizationsLimit(*limit),
-				asc.WithCustomerReviewSummarizationsNextURL(*next),
+				asc.Limit[asc.CustomerReviewSummarizationsOption](*limit),
+				asc.NextURL[asc.CustomerReviewSummarizationsOption](*next),
 			}
 
 			if *paginate {
 				paginateOpts := opts
 				if nextValue == "" {
-					paginateOpts = append(paginateOpts, asc.WithCustomerReviewSummarizationsLimit(200))
+					paginateOpts = append(paginateOpts, asc.Limit[asc.CustomerReviewSummarizationsOption](200))
 				}
-				summaries, err := shared.PaginateWithSpinner(
+				summaries, err := d.PaginateWithSpinner(
 					requestCtx,
 					func(ctx context.Context) (asc.PaginatedResponse, error) {
 						return client.GetCustomerReviewSummarizations(ctx, resolvedAppID, paginateOpts...)
 					},
 					func(ctx context.Context, nextURL string) (asc.PaginatedResponse, error) {
-						return client.GetCustomerReviewSummarizations(ctx, "", asc.WithCustomerReviewSummarizationsNextURL(nextURL))
+						return client.GetCustomerReviewSummarizations(ctx, "", asc.NextURL[asc.CustomerReviewSummarizationsOption](nextURL))
 					},
 				)
 				if err != nil {
 					return fmt.Errorf("reviews summarizations: %w", err)
 				}
-				return shared.PrintOutput(summaries, *output.Output, *output.Pretty)
+				return d.PrintOutput(summaries, *output.Output, *output.Pretty)
 			}
 
 			resp, err := client.GetCustomerReviewSummarizations(requestCtx, resolvedAppID, opts...)
@@ -122,7 +110,7 @@ Examples:
 				return fmt.Errorf("reviews summarizations: failed to fetch: %w", err)
 			}
 
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+			return d.PrintOutput(resp, *output.Output, *output.Pretty)
 		},
 	}
 }

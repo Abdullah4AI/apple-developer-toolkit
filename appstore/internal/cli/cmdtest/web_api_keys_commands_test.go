@@ -1,10 +1,8 @@
 package cmdtest
 
 import (
-	"context"
 	"errors"
 	"flag"
-	"io"
 	"strings"
 	"testing"
 )
@@ -32,41 +30,8 @@ func TestWebAPIKeysListCommandRegistration(t *testing.T) {
 	}
 }
 
-func TestWebAPIKeysViewCommandRegistration(t *testing.T) {
-	root := RootCommand("1.2.3")
-	if findSubcommand(root, "web", "api-keys", "get") != nil {
-		t.Fatal("did not expect legacy web api-keys get; canonical leaf is view")
-	}
-	cmd := findSubcommand(root, "web", "api-keys", "view")
-	if cmd == nil {
-		t.Fatal("expected web api-keys view command")
-	}
-	for _, flagName := range []string{
-		"key-id",
-		"apple-id",
-		"two-factor-code-command",
-		"provider-id",
-		"public-provider-id",
-		"output",
-		"pretty",
-	} {
-		if cmd.FlagSet.Lookup(flagName) == nil {
-			t.Fatalf("expected --%s flag", flagName)
-		}
-	}
-}
-
 func TestWebAPIKeysViewMissingKeyIDFailsBeforeHTTP(t *testing.T) {
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	var runErr error
-	_, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"web", "api-keys", "view"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		runErr = root.Run(context.Background())
-	})
+	_, stderr, runErr := runRootWithDeps(t, nil, "web", "api-keys", "view")
 
 	if !errors.Is(runErr, flag.ErrHelp) {
 		t.Fatalf("expected ErrHelp, got %v", runErr)

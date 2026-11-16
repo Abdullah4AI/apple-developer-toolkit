@@ -12,6 +12,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/metadataurl"
 )
 
@@ -63,7 +64,7 @@ func TestValidateDirCheckURLsWarnsForRedirectedHostAndSiteRoot(t *testing.T) {
 		},
 	}}
 
-	result, err := validateDirWithOptions(context.Background(), dir, validateDirOptions{
+	result, err := validateDirWithOptions(context.Background(), metadataTestDeps(), dir, validateDirOptions{
 		checkURLs:  true,
 		urlChecker: checker,
 	})
@@ -127,7 +128,7 @@ func TestValidateDirCheckURLsWarnsForStatusAndRequestFailure(t *testing.T) {
 		},
 	}
 
-	result, err := validateDirWithOptions(context.Background(), dir, validateDirOptions{
+	result, err := validateDirWithOptions(context.Background(), metadataTestDeps(), dir, validateDirOptions{
 		checkURLs:  true,
 		urlChecker: checker,
 	})
@@ -166,7 +167,7 @@ func TestValidateDirCheckURLsCachesDuplicateURLs(t *testing.T) {
 		},
 	}}
 
-	result, err := validateDirWithOptions(context.Background(), dir, validateDirOptions{
+	result, err := validateDirWithOptions(context.Background(), metadataTestDeps(), dir, validateDirOptions{
 		checkURLs:  true,
 		urlChecker: checker,
 	})
@@ -193,7 +194,7 @@ func TestValidateDirRemainsOfflineWithoutCheckURLs(t *testing.T) {
 		},
 	}}
 
-	result, err := validateDirWithOptions(context.Background(), dir, validateDirOptions{
+	result, err := validateDirWithOptions(context.Background(), metadataTestDeps(), dir, validateDirOptions{
 		urlChecker: checker,
 	})
 	if err != nil {
@@ -218,7 +219,7 @@ func TestValidateDirCheckURLsPreservesContextCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	_, err := validateDirWithOptions(ctx, dir, validateDirOptions{
+	_, err := validateDirWithOptions(ctx, metadataTestDeps(), dir, validateDirOptions{
 		checkURLs:  true,
 		urlChecker: checker,
 	})
@@ -238,13 +239,19 @@ func TestMetadataValidateCommandPrintsWarningsAndExitsSuccessfully(t *testing.T)
 			StatusCode: 200,
 		},
 	}}
+	transport := &http.Transport{}
+	var checkerTransport http.RoundTripper
 	originalFactory := newMetadataURLChecker
-	newMetadataURLChecker = func() metadataurl.Checker { return checker }
+	newMetadataURLChecker = func(rt http.RoundTripper) metadataurl.Checker {
+		checkerTransport = rt
+		return checker
+	}
 	t.Cleanup(func() { newMetadataURLChecker = originalFactory })
 
 	var runErr error
-	stdout := captureStdout(t, func() {
-		runErr = MetadataValidateCommand().ParseAndRun(context.Background(), []string{
+	stdout := captureStdout(t, func(d *shared.Deps) {
+		d.HTTPTransport = func() http.RoundTripper { return transport }
+		runErr = newMetadataValidateCommand(d).ParseAndRun(context.Background(), []string{
 			"--dir", dir,
 			"--check-urls",
 			"--output", "json",
@@ -259,6 +266,9 @@ func TestMetadataValidateCommandPrintsWarningsAndExitsSuccessfully(t *testing.T)
 	}
 	if !result.Valid || result.ErrorCount != 0 || result.WarningCount != 1 {
 		t.Fatalf("expected warning-only successful output, got %+v", result)
+	}
+	if checkerTransport != transport {
+		t.Fatalf("URL checker transport = %v, want the deps transport", checkerTransport)
 	}
 }
 

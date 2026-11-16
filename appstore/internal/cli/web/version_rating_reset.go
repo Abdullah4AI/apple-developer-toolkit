@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/peterbourgon/ff/v3/ffcli"
@@ -83,14 +82,9 @@ Examples:
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
-			if len(args) > 0 {
-				return shared.UsageErrorf("unexpected arguments: %s", strings.Join(args, " "))
-			}
-
 			version := strings.TrimSpace(*versionID)
 			if version == "" {
-				fmt.Fprintln(os.Stderr, "Error: --version-id is required")
-				return shared.MissingRequiredUsageError("--version-id")
+				return shared.RequiredFlag("--version-id")
 			}
 
 			session, requestCtx, cancel, err := resolveWebSessionForCommand(ctx, authFlags)
@@ -152,18 +146,12 @@ Examples:
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
-			if len(args) > 0 {
-				return shared.UsageErrorf("unexpected arguments: %s", strings.Join(args, " "))
-			}
-
 			version := strings.TrimSpace(*versionID)
 			if version == "" {
-				fmt.Fprintln(os.Stderr, "Error: --version-id is required")
-				return shared.MissingRequiredUsageError("--version-id")
+				return shared.RequiredFlag("--version-id")
 			}
-			if !*confirm {
-				fmt.Fprintln(os.Stderr, "Error: --confirm is required")
-				return shared.MissingRequiredUsageError("--confirm")
+			if err := shared.RequireConfirm(*confirm); err != nil {
+				return err
 			}
 
 			session, requestCtx, cancel, err := resolveWebSessionForCommand(ctx, authFlags)
@@ -218,18 +206,12 @@ Examples:
 		FlagSet:   fs,
 		UsageFunc: shared.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
-			if len(args) > 0 {
-				return shared.UsageErrorf("unexpected arguments: %s", strings.Join(args, " "))
-			}
-
 			id := strings.TrimSpace(*requestID)
 			if id == "" {
-				fmt.Fprintln(os.Stderr, "Error: --id is required")
-				return shared.MissingRequiredUsageError("--id")
+				return shared.RequiredFlag("--id")
 			}
-			if !*confirm {
-				fmt.Fprintln(os.Stderr, "Error: --confirm is required")
-				return shared.MissingRequiredUsageError("--confirm")
+			if err := shared.RequireConfirm(*confirm); err != nil {
+				return err
 			}
 
 			session, requestCtx, cancel, err := resolveWebSessionForCommand(ctx, authFlags)

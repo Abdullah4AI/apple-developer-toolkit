@@ -1,0 +1,16 @@
+{
+  "tag": "AppTags",
+  "file": "app_tags_gen.go",
+  "types": [
+    "AppTagAttributes",
+    "AppTagResponse",
+    "AppTagUpdateAttributes",
+    "AppTagUpdateData",
+    "AppTagUpdateRequest"
+  ],
+  "operations": [
+    {"operation":"appTags_territories_getToManyRelated","name":"GetAppTagTerritories","params":["tagID"],"check":"trim","options":"TerritoriesOption","query":"buildTerritoriesQuery","nextContext":"appTagTerritories"},
+    {"operation":"appTags_territories_getToManyRelationship","name":"GetAppTagTerritoriesRelationships","params":["tagID"],"check":"require","messages":["app tag ID is required"],"options":"LinkagesOption","query":"buildLinkagesQuery","nextContext":"appTagTerritoriesRelationships","parseErr":"failed to parse territories relationship response"},
+    {"operation":"appTags_updateInstance","name":"UpdateAppTag","params":["tagID"],"check":"trim","skipEmptyAttributes":true}
+  ]
+}

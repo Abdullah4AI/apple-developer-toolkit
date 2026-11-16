@@ -2,7 +2,6 @@ package asc
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
@@ -38,18 +37,6 @@ type AppStoreVersionPhasedReleaseResponse struct {
 	Links Links                                             `json:"links"`
 }
 
-// AppStoreVersionPhasedReleaseCreateRequest represents a request to create a phased release.
-type AppStoreVersionPhasedReleaseCreateRequest struct {
-	Data AppStoreVersionPhasedReleaseCreateData `json:"data"`
-}
-
-// AppStoreVersionPhasedReleaseCreateData represents the data for creating a phased release.
-type AppStoreVersionPhasedReleaseCreateData struct {
-	Type          ResourceType                                  `json:"type"`
-	Attributes    *AppStoreVersionPhasedReleaseCreateAttributes `json:"attributes,omitempty"`
-	Relationships AppStoreVersionPhasedReleaseRelationships     `json:"relationships"`
-}
-
 // AppStoreVersionPhasedReleaseCreateAttributes represents attributes for creating a phased release.
 type AppStoreVersionPhasedReleaseCreateAttributes struct {
 	PhasedReleaseState PhasedReleaseState `json:"phasedReleaseState,omitempty"`
@@ -58,18 +45,6 @@ type AppStoreVersionPhasedReleaseCreateAttributes struct {
 // AppStoreVersionPhasedReleaseRelationships represents the relationships for a phased release.
 type AppStoreVersionPhasedReleaseRelationships struct {
 	AppStoreVersion *Relationship `json:"appStoreVersion"`
-}
-
-// AppStoreVersionPhasedReleaseUpdateRequest represents a request to update a phased release.
-type AppStoreVersionPhasedReleaseUpdateRequest struct {
-	Data AppStoreVersionPhasedReleaseUpdateData `json:"data"`
-}
-
-// AppStoreVersionPhasedReleaseUpdateData represents the data for updating a phased release.
-type AppStoreVersionPhasedReleaseUpdateData struct {
-	Type       ResourceType                                  `json:"type"`
-	ID         string                                        `json:"id"`
-	Attributes *AppStoreVersionPhasedReleaseUpdateAttributes `json:"attributes,omitempty"`
 }
 
 // AppStoreVersionPhasedReleaseUpdateAttributes represents attributes for updating a phased release.
@@ -106,23 +81,6 @@ func FormatPhasedReleaseProgressBar(currentDayNumber int) string {
 	return fmt.Sprintf("[%s%s] %d/7", strings.Repeat("#", filled), strings.Repeat("-", barWidth-filled), day)
 }
 
-// GetAppStoreVersionPhasedRelease fetches the phased release for an app store version.
-func (c *Client) GetAppStoreVersionPhasedRelease(ctx context.Context, versionID string) (*AppStoreVersionPhasedReleaseResponse, error) {
-	path := fmt.Sprintf("/v1/appStoreVersions/%s/appStoreVersionPhasedRelease", versionID)
-
-	data, err := c.do(ctx, http.MethodGet, path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var response AppStoreVersionPhasedReleaseResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
 // CreateAppStoreVersionPhasedRelease creates a phased release for an app store version.
 // If state is empty, defaults to INACTIVE per API spec.
 func (c *Client) CreateAppStoreVersionPhasedRelease(ctx context.Context, versionID string, state PhasedReleaseState) (*AppStoreVersionPhasedReleaseResponse, error) {
@@ -148,22 +106,7 @@ func (c *Client) CreateAppStoreVersionPhasedRelease(ctx context.Context, version
 		},
 	}
 
-	body, err := BuildRequestBody(payload)
-	if err != nil {
-		return nil, err
-	}
-
-	data, err := c.do(ctx, http.MethodPost, "/v1/appStoreVersionPhasedReleases", body)
-	if err != nil {
-		return nil, err
-	}
-
-	var response AppStoreVersionPhasedReleaseResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
+	return sendJSON[AppStoreVersionPhasedReleaseResponse](ctx, c, writeRequest{Method: http.MethodPost, Path: "/v1/appStoreVersionPhasedReleases", Payload: payload})
 }
 
 // UpdateAppStoreVersionPhasedRelease updates a phased release.
@@ -183,30 +126,5 @@ func (c *Client) UpdateAppStoreVersionPhasedRelease(ctx context.Context, phasedR
 		},
 	}
 
-	body, err := BuildRequestBody(payload)
-	if err != nil {
-		return nil, err
-	}
-
-	path := fmt.Sprintf("/v1/appStoreVersionPhasedReleases/%s", phasedReleaseID)
-
-	data, err := c.do(ctx, http.MethodPatch, path, body)
-	if err != nil {
-		return nil, err
-	}
-
-	var response AppStoreVersionPhasedReleaseResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
-// DeleteAppStoreVersionPhasedRelease deletes a phased release.
-func (c *Client) DeleteAppStoreVersionPhasedRelease(ctx context.Context, phasedReleaseID string) error {
-	path := fmt.Sprintf("/v1/appStoreVersionPhasedReleases/%s", phasedReleaseID)
-
-	_, err := c.do(ctx, http.MethodDelete, path, nil)
-	return err
+	return sendJSON[AppStoreVersionPhasedReleaseResponse](ctx, c, writeRequest{Method: http.MethodPatch, Path: fmt.Sprintf("/v1/appStoreVersionPhasedReleases/%s", phasedReleaseID), Payload: payload})
 }

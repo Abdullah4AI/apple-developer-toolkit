@@ -34,9 +34,9 @@ const (
 // the processing-date filter alone decides which instances count for a week.
 var analyticsInstanceGranularities = []string{"DAILY", "WEEKLY", "MONTHLY"}
 
-// InsightsCommand returns the insights command group.
-func InsightsCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("insights", flag.ExitOnError)
+// NewInsightsCommand returns the insights command group built on d.
+func NewInsightsCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("insights", flag.ExitOnError)
 
 	return &ffcli.Command{
 		Name:       "insights",
@@ -49,10 +49,10 @@ Examples:
   asc insights weekly --app "123456789" --source sales --week "2026-02-16" --vendor "12345678"
   asc insights daily --app "123456789" --vendor "12345678" --date "2026-02-20"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
-			insightsWeeklyCommand(),
-			insightsDailyCommand(),
+			newInsightsWeeklyCommand(d),
+			newInsightsDailyCommand(d),
 		},
 		Exec: func(_ context.Context, _ []string) error {
 			return flag.ErrHelp
@@ -60,14 +60,14 @@ Examples:
 	}
 }
 
-func insightsWeeklyCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("insights weekly", flag.ExitOnError)
+func newInsightsWeeklyCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("insights weekly", flag.ExitOnError)
 
 	appID := fs.String("app", "", "App Store Connect app ID (required, or ASC_APP_ID env)")
 	source := fs.String("source", "", "Insights source: analytics or sales")
 	week := fs.String("week", "", "Week start date (YYYY-MM-DD)")
 	vendor := fs.String("vendor", "", "Vendor number for sales source (or ASC_VENDOR_NUMBER)")
-	output := shared.BindOutputFlags(fs)
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "weekly",
@@ -85,69 +85,65 @@ Examples:
   asc insights weekly --app "123456789" --source sales --week "2026-02-16" --vendor "12345678"
   asc insights weekly --app "123456789" --source sales --week "2026-02-16" --output table`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
-			if len(args) > 0 {
-				return shared.UsageErrorf("unexpected argument(s): %s", strings.Join(args, " "))
-			}
-
-			resolvedAppID := shared.ResolveAppID(*appID)
+			resolvedAppID := d.ResolveAppID(*appID)
 			if resolvedAppID == "" {
-				return shared.UsageError("--app is required (or set ASC_APP_ID)")
+				return d.UsageError("--app is required (or set ASC_APP_ID)")
 			}
 
 			sourceName := strings.ToLower(strings.TrimSpace(*source))
 			if sourceName == "" {
-				return shared.UsageError("--source is required")
+				return d.UsageError("--source is required")
 			}
 			if !isAllowedSource(sourceName) {
-				return shared.UsageErrorf("--source must be one of: %s, %s", sourceAnalytics, sourceSales)
+				return d.UsageErrorf("--source must be one of: %s, %s", sourceAnalytics, sourceSales)
 			}
 
 			weekStart, err := normalizeWeekStart(*week)
 			if err != nil {
-				return shared.UsageError(err.Error())
+				return d.UsageError(err.Error())
 			}
 
 			resolvedVendor := ""
 			if sourceName == sourceSales {
 				resolvedVendor = shared.ResolveVendorNumber(*vendor)
 				if resolvedVendor == "" {
-					return shared.UsageError("--vendor is required for --source sales (or set ASC_VENDOR_NUMBER)")
+					return d.UsageError("--vendor is required for --source sales (or set ASC_VENDOR_NUMBER)")
 				}
 			}
 
-			client, err := shared.GetASCClient()
+			client, err := d.Client()
 			if err != nil {
 				return fmt.Errorf("insights weekly: %w", err)
 			}
 
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
+			requestCtx, cancel := d.Timeout(ctx)
 			defer cancel()
 
-			resp, err := collectWeeklyInsights(requestCtx, client, resolvedAppID, sourceName, resolvedVendor, weekStart)
+			resp, err := collectWeeklyInsights(requestCtx, client, d.Now, resolvedAppID, sourceName, resolvedVendor, weekStart)
 			if err != nil {
 				return fmt.Errorf("insights weekly: %w", err)
 			}
 
-			return shared.PrintOutputWithRenderers(
+			return d.PrintOutputWithRenderers(
 				resp,
 				*output.Output,
 				*output.Pretty,
-				func() error { renderWeeklyInsights(resp, false); return nil },
-				func() error { renderWeeklyInsights(resp, true); return nil },
+				func() error { renderWeeklyInsights(d, resp, false); return nil },
+				func() error { renderWeeklyInsights(d, resp, true); return nil },
 			)
 		},
 	}
 }
 
-func insightsDailyCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("insights daily", flag.ExitOnError)
+func newInsightsDailyCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("insights daily", flag.ExitOnError)
 
 	appID := fs.String("app", "", "App Store Connect app ID (required, or ASC_APP_ID env)")
 	vendor := fs.String("vendor", "", "Vendor number for sales source (or ASC_VENDOR_NUMBER)")
 	date := fs.String("date", "", "Report date (YYYY-MM-DD)")
-	output := shared.BindOutputFlags(fs)
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "daily",
@@ -162,46 +158,42 @@ Examples:
   asc insights daily --app "123456789" --vendor "12345678" --date "2026-02-20"
   asc insights daily --app "123456789" --vendor "12345678" --date "2026-02-20" --output table`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
-			if len(args) > 0 {
-				return shared.UsageErrorf("unexpected argument(s): %s", strings.Join(args, " "))
-			}
-
-			resolvedAppID := shared.ResolveAppID(*appID)
+			resolvedAppID := d.ResolveAppID(*appID)
 			if resolvedAppID == "" {
-				return shared.UsageError("--app is required (or set ASC_APP_ID)")
+				return d.UsageError("--app is required (or set ASC_APP_ID)")
 			}
 
 			resolvedVendor := shared.ResolveVendorNumber(*vendor)
 			if resolvedVendor == "" {
-				return shared.UsageError("--vendor is required (or set ASC_VENDOR_NUMBER)")
+				return d.UsageError("--vendor is required (or set ASC_VENDOR_NUMBER)")
 			}
 
 			reportDate, err := normalizeInsightsDate(*date, "--date")
 			if err != nil {
-				return shared.UsageError(err.Error())
+				return d.UsageError(err.Error())
 			}
 
-			client, err := shared.GetASCClient()
+			client, err := d.Client()
 			if err != nil {
 				return fmt.Errorf("insights daily: %w", err)
 			}
 
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
+			requestCtx, cancel := d.Timeout(ctx)
 			defer cancel()
 
-			resp, err := collectDailyInsights(requestCtx, client, resolvedAppID, resolvedVendor, reportDate)
+			resp, err := collectDailyInsights(requestCtx, client, d.Now, resolvedAppID, resolvedVendor, reportDate)
 			if err != nil {
 				return fmt.Errorf("insights daily: %w", err)
 			}
 
-			return shared.PrintOutputWithRenderers(
+			return d.PrintOutputWithRenderers(
 				resp,
 				*output.Output,
 				*output.Pretty,
-				func() error { renderDailyInsights(resp, false); return nil },
-				func() error { renderDailyInsights(resp, true); return nil },
+				func() error { renderDailyInsights(d, resp, false); return nil },
+				func() error { renderDailyInsights(d, resp, true); return nil },
 			)
 		},
 	}
@@ -308,7 +300,7 @@ type SalesScope struct {
 
 type salesScope = SalesScope
 
-func collectWeeklyInsights(ctx context.Context, client *asc.Client, appID, sourceName, vendor string, weekStart time.Time) (*weeklyInsightsResponse, error) {
+func collectWeeklyInsights(ctx context.Context, client *asc.Client, now func() time.Time, appID, sourceName, vendor string, weekStart time.Time) (*weeklyInsightsResponse, error) {
 	thisWeek := weekWindowFromStart(weekStart)
 	previousWeek := weekWindowFromStart(weekStart.AddDate(0, 0, -7))
 
@@ -325,7 +317,7 @@ func collectWeeklyInsights(ctx context.Context, client *asc.Client, appID, sourc
 			Start: previousWeek.start.Format("2006-01-02"),
 			End:   previousWeek.end.Format("2006-01-02"),
 		},
-		GeneratedAt: time.Now().UTC().Format(time.RFC3339),
+		GeneratedAt: now().UTC().Format(time.RFC3339),
 	}
 
 	switch sourceName {
@@ -354,7 +346,7 @@ func collectWeeklyInsights(ctx context.Context, client *asc.Client, appID, sourc
 	return resp, nil
 }
 
-func collectDailyInsights(ctx context.Context, client *asc.Client, appID, vendor string, reportDate time.Time) (*dailyInsightsResponse, error) {
+func collectDailyInsights(ctx context.Context, client *asc.Client, now func() time.Time, appID, vendor string, reportDate time.Time) (*dailyInsightsResponse, error) {
 	thisDay := reportDate.Format("2006-01-02")
 	previousDay := reportDate.AddDate(0, 0, -1).Format("2006-01-02")
 
@@ -393,7 +385,7 @@ func collectDailyInsights(ctx context.Context, client *asc.Client, appID, vendor
 		},
 		Date:         thisDay,
 		PreviousDate: previousDay,
-		GeneratedAt:  time.Now().UTC().Format(time.RFC3339),
+		GeneratedAt:  now().UTC().Format(time.RFC3339),
 	}
 
 	metrics := make([]dailyMetric, 0, 8)
@@ -918,13 +910,13 @@ func collectAnalyticsMetrics(ctx context.Context, client *asc.Client, appID stri
 }
 
 func fetchAllAnalyticsReportRequests(ctx context.Context, client *asc.Client, appID string) (*asc.AnalyticsReportRequestsResponse, error) {
-	first, err := client.GetAnalyticsReportRequests(ctx, appID, asc.WithAnalyticsReportRequestsLimit(200))
+	first, err := client.GetAnalyticsReportRequests(ctx, appID, asc.Limit[asc.AnalyticsReportRequestsOption](200))
 	if err != nil {
 		return nil, err
 	}
 
 	paginated, err := asc.PaginateAll(ctx, first, func(ctx context.Context, nextURL string) (asc.PaginatedResponse, error) {
-		return client.GetAnalyticsReportRequests(ctx, appID, asc.WithAnalyticsReportRequestsNextURL(nextURL))
+		return client.GetAnalyticsReportRequests(ctx, appID, asc.NextURL[asc.AnalyticsReportRequestsOption](nextURL))
 	})
 	if err != nil {
 		return nil, err
@@ -937,13 +929,13 @@ func fetchAllAnalyticsReportRequests(ctx context.Context, client *asc.Client, ap
 }
 
 func fetchAllAnalyticsReports(ctx context.Context, client *asc.Client, requestID string) (*asc.AnalyticsReportsResponse, error) {
-	first, err := client.GetAnalyticsReports(ctx, requestID, asc.WithAnalyticsReportsLimit(200))
+	first, err := client.GetAnalyticsReports(ctx, requestID, asc.Limit[asc.AnalyticsReportsOption](200))
 	if err != nil {
 		return nil, err
 	}
 
 	paginated, err := asc.PaginateAll(ctx, first, func(ctx context.Context, nextURL string) (asc.PaginatedResponse, error) {
-		return client.GetAnalyticsReports(ctx, requestID, asc.WithAnalyticsReportsNextURL(nextURL))
+		return client.GetAnalyticsReports(ctx, requestID, asc.NextURL[asc.AnalyticsReportsOption](nextURL))
 	})
 	if err != nil {
 		return nil, err
@@ -1048,7 +1040,7 @@ func fetchAnalyticsReportInstances(
 		)
 		if next == "" {
 			pageOpts := make([]asc.AnalyticsReportInstancesOption, 0, len(opts)+1)
-			pageOpts = append(pageOpts, asc.WithAnalyticsReportInstancesLimit(analyticsInstancePageLimit))
+			pageOpts = append(pageOpts, asc.Limit[asc.AnalyticsReportInstancesOption](analyticsInstancePageLimit))
 			pageOpts = append(pageOpts, opts...)
 			resp, err = client.GetAnalyticsReportInstances(ctx, reportID, pageOpts...)
 		} else {
@@ -1057,7 +1049,7 @@ func fetchAnalyticsReportInstances(
 				return nil, fmt.Errorf("insights: detected repeated analytics report instance pagination URL")
 			}
 			seen[identity] = struct{}{}
-			resp, err = client.GetAnalyticsReportInstances(ctx, reportID, asc.WithAnalyticsReportInstancesNextURL(next))
+			resp, err = client.GetAnalyticsReportInstances(ctx, reportID, asc.NextURL[asc.AnalyticsReportInstancesOption](next))
 		}
 		if err != nil {
 			return nil, err
@@ -1329,7 +1321,7 @@ func isAllowedSource(name string) bool {
 	return slices.Contains([]string{sourceAnalytics, sourceSales}, name)
 }
 
-func renderWeeklyInsights(resp *weeklyInsightsResponse, markdown bool) {
+func renderWeeklyInsights(d *shared.Deps, resp *weeklyInsightsResponse, markdown bool) {
 	contextRows := [][]string{
 		{"appId", resp.AppID},
 		{"source", resp.Source.Name},
@@ -1343,7 +1335,7 @@ func renderWeeklyInsights(resp *weeklyInsightsResponse, markdown bool) {
 	if resp.Source.RequestsScanned > 0 {
 		contextRows = append(contextRows, []string{"requestsScanned", strconv.Itoa(resp.Source.RequestsScanned)})
 	}
-	shared.RenderSection("Context", []string{"field", "value"}, contextRows, markdown)
+	d.RenderSection("Context", []string{"field", "value"}, contextRows, markdown)
 
 	metricRows := make([][]string, 0, len(resp.Metrics))
 	for _, metric := range resp.Metrics {
@@ -1358,10 +1350,10 @@ func renderWeeklyInsights(resp *weeklyInsightsResponse, markdown bool) {
 			shared.OrNA(metric.Reason),
 		})
 	}
-	shared.RenderSection("Metrics", []string{"metric", "unit", "thisWeek", "lastWeek", "delta", "deltaPercent", "status", "reason"}, metricRows, markdown)
+	d.RenderSection("Metrics", []string{"metric", "unit", "thisWeek", "lastWeek", "delta", "deltaPercent", "status", "reason"}, metricRows, markdown)
 }
 
-func renderDailyInsights(resp *dailyInsightsResponse, markdown bool) {
+func renderDailyInsights(d *shared.Deps, resp *dailyInsightsResponse, markdown bool) {
 	contextRows := [][]string{
 		{"appId", resp.AppID},
 		{"source", resp.Source.Name},
@@ -1387,7 +1379,7 @@ func renderDailyInsights(resp *dailyInsightsResponse, markdown bool) {
 	if strings.TrimSpace(resp.Source.Version) != "" {
 		contextRows = append(contextRows, []string{"version", resp.Source.Version})
 	}
-	shared.RenderSection("Context", []string{"field", "value"}, contextRows, markdown)
+	d.RenderSection("Context", []string{"field", "value"}, contextRows, markdown)
 
 	metricRows := make([][]string, 0, len(resp.Metrics))
 	for _, metric := range resp.Metrics {
@@ -1402,7 +1394,7 @@ func renderDailyInsights(resp *dailyInsightsResponse, markdown bool) {
 			shared.OrNA(metric.Reason),
 		})
 	}
-	shared.RenderSection("Metrics", []string{"metric", "unit", "thisDay", "previousDay", "delta", "deltaPercent", "status", "reason"}, metricRows, markdown)
+	d.RenderSection("Metrics", []string{"metric", "unit", "thisDay", "previousDay", "delta", "deltaPercent", "status", "reason"}, metricRows, markdown)
 }
 
 func formatOptionalNumber(value *float64) string {

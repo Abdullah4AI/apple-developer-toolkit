@@ -1,0 +1,23 @@
+{
+  "tag": "MarketplaceSearchDetails",
+  "file": "marketplace_search_details_gen.go",
+  "types": [
+    "MarketplaceSearchDetailAttributes",
+    "MarketplaceSearchDetailCreateAttributes",
+    "MarketplaceSearchDetailCreateData",
+    "MarketplaceSearchDetailCreateRelationships",
+    "MarketplaceSearchDetailCreateRequest",
+    "MarketplaceSearchDetailResponse",
+    "MarketplaceSearchDetailUpdateAttributes",
+    "MarketplaceSearchDetailUpdateData",
+    "MarketplaceSearchDetailUpdateRequest"
+  ],
+  "relationships": [
+    {"data":"MarketplaceSearchDetailCreateData","type":"*MarketplaceSearchDetailCreateRelationships"}
+  ],
+  "operations": [
+    {"operation":"marketplaceSearchDetails_createInstance","name":"CreateMarketplaceSearchDetail","params":["appID"],"check":"require","parseErr":"failed to parse marketplace search detail response","links":["app"],"args":[{"name":"catalogURL","attribute":"catalogUrl","param":true}]},
+    {"operation":"marketplaceSearchDetails_deleteInstance","name":"DeleteMarketplaceSearchDetail","params":["detailID"],"check":"require"},
+    {"operation":"marketplaceSearchDetails_updateInstance","name":"UpdateMarketplaceSearchDetail","params":["detailID"],"check":"require","parseErr":"failed to parse marketplace search detail response","skipEmptyAttributes":true}
+  ]
+}

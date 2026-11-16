@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"os"
 	"strconv"
 	"strings"
 
@@ -14,9 +13,9 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
-// ExperimentsCommand returns the experiments command group.
-func ExperimentsCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("experiments", flag.ExitOnError)
+// newExperimentsCommand returns the experiments command group.
+func newExperimentsCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("experiments", flag.ExitOnError)
 
 	return &ffcli.Command{
 		Name:       "experiments",
@@ -30,14 +29,14 @@ Examples:
   asc product-pages experiments create --version-id "VERSION_ID" --name "Icon Test" --traffic-proportion 25
   asc product-pages experiments create --v2 --app "APP_ID" --platform IOS --name "Icon Test" --traffic-proportion 25`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
-			ExperimentsListCommand(),
-			ExperimentsGetCommand(),
-			ExperimentsCreateCommand(),
-			ExperimentsUpdateCommand(),
-			ExperimentsDeleteCommand(),
-			ExperimentTreatmentsCommand(),
+			newExperimentsListCommand(d),
+			newExperimentsGetCommand(d),
+			newExperimentsCreateCommand(d),
+			newExperimentsUpdateCommand(d),
+			newExperimentsDeleteCommand(d),
+			newExperimentTreatmentsCommand(d),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp
@@ -45,17 +44,17 @@ Examples:
 	}
 }
 
-// ExperimentsListCommand returns the experiments list subcommand.
-func ExperimentsListCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("experiments list", flag.ExitOnError)
+// newExperimentsListCommand returns the experiments list subcommand.
+func newExperimentsListCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("experiments list", flag.ExitOnError)
 
 	versionID := shared.BindResourceIDFlag(fs, "version-id", "appStoreVersions", "App Store version ID (v1 experiments)")
 	appID := fs.String("app", "", "App Store Connect app ID (v2 experiments)")
 	state := fs.String("state", "", "Filter by state(s), comma-separated")
-	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
-	next := fs.String("next", "", "Fetch next page using a links.next URL")
-	paginate := fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")
-	output := shared.BindOutputFlags(fs)
+	limit := fs.Int("limit", 0, shared.LimitFlagUsage(200))
+	next := fs.String("next", "", shared.NextFlagUsage)
+	paginate := fs.Bool("paginate", false, shared.PaginateFlagUsage)
+	output := d.BindOutputFlags(fs)
 	v2 := fs.Bool("v2", false, "Use v2 experiments endpoint")
 
 	return &ffcli.Command{
@@ -70,60 +69,59 @@ Examples:
   asc product-pages experiments list --version-id "VERSION_ID" --state IN_REVIEW
   asc product-pages experiments list --v2 --app "APP_ID" --paginate`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
-			if *limit != 0 && (*limit < 1 || *limit > productPagesMaxLimit) {
-				return shared.UsageErrorf("experiments list: --limit must be between 1 and %d", productPagesMaxLimit)
-			}
-			if err := shared.ValidateNextURL(*next); err != nil {
-				return shared.UsageErrorf("experiments list: %v", err)
-			}
-			if err := shared.RejectNextFlagConflicts(fs, *next, "product-pages experiments list", "state"); err != nil {
+			if err := d.ValidatePaginationFlags(ctx, fs, "product-pages experiments list", productPagesMaxLimit, "state"); err != nil {
 				return err
+			}
+
+			if *v2 {
+				if d.ResolveAppID(*appID) == "" && strings.TrimSpace(*next) == "" {
+					fmt.Fprintln(d.IO.ErrOut, "Error: --app is required (or set ASC_APP_ID)")
+					return shared.MissingRequiredUsageError("--app")
+				}
+			} else if strings.TrimSpace(*versionID) == "" && strings.TrimSpace(*next) == "" {
+				return d.RequiredFlag("--version-id")
 			}
 
 			stateValues, err := normalizeExperimentStates(shared.SplitCSVUpper(*state))
 			if err != nil {
-				fmt.Fprintln(os.Stderr, "Error:", err)
+				fmt.Fprintln(d.IO.ErrOut, "Error:", err)
 				return flag.ErrHelp
 			}
 
 			if *v2 {
-				resolvedAppID := shared.ResolveAppID(*appID)
-				if resolvedAppID == "" {
-					fmt.Fprintln(os.Stderr, "Error: --app is required (or set ASC_APP_ID)")
-					return shared.MissingRequiredUsageError("--app")
-				}
+				resolvedAppID := d.ResolveAppID(*appID)
 
-				client, err := shared.GetASCClient()
+				client, err := d.Client()
 				if err != nil {
 					return fmt.Errorf("experiments list: %w", err)
 				}
 
-				requestCtx, cancel := shared.ContextWithTimeout(ctx)
+				requestCtx, cancel := d.Timeout(ctx)
 				defer cancel()
 
 				opts := []asc.AppStoreVersionExperimentsV2Option{
-					asc.WithAppStoreVersionExperimentsV2Limit(*limit),
-					asc.WithAppStoreVersionExperimentsV2NextURL(*next),
+					asc.Limit[asc.AppStoreVersionExperimentsV2Option](*limit),
+					asc.NextURL[asc.AppStoreVersionExperimentsV2Option](*next),
 					asc.WithAppStoreVersionExperimentsV2State(stateValues),
 				}
 
 				if *paginate {
-					paginateOpts := append(opts, asc.WithAppStoreVersionExperimentsV2Limit(productPagesMaxLimit))
+					paginateOpts := append(opts, asc.Limit[asc.AppStoreVersionExperimentsV2Option](productPagesMaxLimit))
 					firstPage, err := client.GetAppStoreVersionExperimentsV2(requestCtx, resolvedAppID, paginateOpts...)
 					if err != nil {
 						return fmt.Errorf("experiments list: failed to fetch: %w", err)
 					}
 
 					paginated, err := asc.PaginateAll(requestCtx, firstPage, func(ctx context.Context, nextURL string) (asc.PaginatedResponse, error) {
-						return client.GetAppStoreVersionExperimentsV2(ctx, resolvedAppID, asc.WithAppStoreVersionExperimentsV2NextURL(nextURL))
+						return client.GetAppStoreVersionExperimentsV2(ctx, resolvedAppID, asc.NextURL[asc.AppStoreVersionExperimentsV2Option](nextURL))
 					})
 					if err != nil {
 						return fmt.Errorf("experiments list: %w", err)
 					}
 
-					return shared.PrintOutput(paginated, *output.Output, *output.Pretty)
+					return d.PrintOutput(paginated, *output.Output, *output.Pretty)
 				}
 
 				resp, err := client.GetAppStoreVersionExperimentsV2(requestCtx, resolvedAppID, opts...)
@@ -131,44 +129,40 @@ Examples:
 					return fmt.Errorf("experiments list: failed to fetch: %w", err)
 				}
 
-				return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+				return d.PrintOutput(resp, *output.Output, *output.Pretty)
 			}
 
 			trimmedVersionID := strings.TrimSpace(*versionID)
-			if trimmedVersionID == "" {
-				fmt.Fprintln(os.Stderr, "Error: --version-id is required")
-				return shared.MissingRequiredUsageError("--version-id")
-			}
 
-			client, err := shared.GetASCClient()
+			client, err := d.Client()
 			if err != nil {
 				return fmt.Errorf("experiments list: %w", err)
 			}
 
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
+			requestCtx, cancel := d.Timeout(ctx)
 			defer cancel()
 
 			opts := []asc.AppStoreVersionExperimentsOption{
-				asc.WithAppStoreVersionExperimentsLimit(*limit),
-				asc.WithAppStoreVersionExperimentsNextURL(*next),
+				asc.Limit[asc.AppStoreVersionExperimentsOption](*limit),
+				asc.NextURL[asc.AppStoreVersionExperimentsOption](*next),
 				asc.WithAppStoreVersionExperimentsState(stateValues),
 			}
 
 			if *paginate {
-				paginateOpts := append(opts, asc.WithAppStoreVersionExperimentsLimit(productPagesMaxLimit))
+				paginateOpts := append(opts, asc.Limit[asc.AppStoreVersionExperimentsOption](productPagesMaxLimit))
 				firstPage, err := client.GetAppStoreVersionExperiments(requestCtx, trimmedVersionID, paginateOpts...)
 				if err != nil {
 					return fmt.Errorf("experiments list: failed to fetch: %w", err)
 				}
 
 				paginated, err := asc.PaginateAll(requestCtx, firstPage, func(ctx context.Context, nextURL string) (asc.PaginatedResponse, error) {
-					return client.GetAppStoreVersionExperiments(ctx, trimmedVersionID, asc.WithAppStoreVersionExperimentsNextURL(nextURL))
+					return client.GetAppStoreVersionExperiments(ctx, trimmedVersionID, asc.NextURL[asc.AppStoreVersionExperimentsOption](nextURL))
 				})
 				if err != nil {
 					return fmt.Errorf("experiments list: %w", err)
 				}
 
-				return shared.PrintOutput(paginated, *output.Output, *output.Pretty)
+				return d.PrintOutput(paginated, *output.Output, *output.Pretty)
 			}
 
 			resp, err := client.GetAppStoreVersionExperiments(requestCtx, trimmedVersionID, opts...)
@@ -176,73 +170,54 @@ Examples:
 				return fmt.Errorf("experiments list: failed to fetch: %w", err)
 			}
 
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+			return d.PrintOutput(resp, *output.Output, *output.Pretty)
 		},
 	}
 }
 
-// ExperimentsGetCommand returns the experiments view subcommand.
-func ExperimentsGetCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("experiments view", flag.ExitOnError)
+// newExperimentsGetCommand returns the experiments view subcommand.
+func newExperimentsGetCommand(d *shared.Deps) *ffcli.Command {
+	var v2 *bool
 
-	experimentID := shared.BindResourceIDFlag(fs, "experiment-id", "appStoreVersionExperiments", "Experiment ID")
-	output := shared.BindOutputFlags(fs)
-	v2 := fs.Bool("v2", false, "Use v2 experiments endpoint")
-
-	return &ffcli.Command{
-		Name:       "view",
-		ShortUsage: "asc product-pages experiments view --experiment-id \"EXPERIMENT_ID\" [--v2]",
-		ShortHelp:  "View an experiment by ID.",
+	return shared.BuildIDGetCommand(shared.IDGetCommandConfig{
+		FlagSetName: "experiments view",
+		Name:        "view",
+		ShortUsage:  "asc product-pages experiments view --experiment-id \"EXPERIMENT_ID\" [--v2]",
+		ShortHelp:   "View an experiment by ID.",
 		LongHelp: `View an experiment by ID.
 
 Examples:
   asc product-pages experiments view --experiment-id "EXPERIMENT_ID"
   asc product-pages experiments view --experiment-id "EXPERIMENT_ID" --v2`,
-		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
-		Exec: func(ctx context.Context, args []string) error {
-			trimmedID := strings.TrimSpace(*experimentID)
-			if trimmedID == "" {
-				fmt.Fprintln(os.Stderr, "Error: --experiment-id is required")
-				return shared.MissingRequiredUsageError("--experiment-id")
-			}
-
-			client, err := shared.GetASCClient()
-			if err != nil {
-				return fmt.Errorf("experiments view: %w", err)
-			}
-
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
-			defer cancel()
-
-			if *v2 {
-				resp, err := client.GetAppStoreVersionExperimentV2(requestCtx, trimmedID)
-				if err != nil {
-					return fmt.Errorf("experiments view: failed to fetch: %w", err)
-				}
-				return shared.PrintOutput(resp, *output.Output, *output.Pretty)
-			}
-
-			resp, err := client.GetAppStoreVersionExperiment(requestCtx, trimmedID)
-			if err != nil {
-				return fmt.Errorf("experiments view: failed to fetch: %w", err)
-			}
-
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+		IDFlag:             "experiment-id",
+		IDUsage:            "Experiment ID",
+		IDType:             "appStoreVersionExperiments",
+		RequiredDiagnostic: true,
+		ErrorPrefix:        "experiments view",
+		Deps:               d,
+		Flags: func(fs *flag.FlagSet) func() error {
+			v2 = fs.Bool("v2", false, "Use v2 experiments endpoint")
+			return nil
 		},
-	}
+		Fetch: func(ctx context.Context, client *asc.Client, id string) (any, error) {
+			if *v2 {
+				return client.GetAppStoreVersionExperimentV2(ctx, id)
+			}
+			return client.GetAppStoreVersionExperiment(ctx, id)
+		},
+	})
 }
 
-// ExperimentsCreateCommand returns the experiments create subcommand.
-func ExperimentsCreateCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("experiments create", flag.ExitOnError)
+// newExperimentsCreateCommand returns the experiments create subcommand.
+func newExperimentsCreateCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("experiments create", flag.ExitOnError)
 
 	versionID := shared.BindResourceIDFlag(fs, "version-id", "appStoreVersions", "App Store version ID (v1 experiments)")
 	appID := fs.String("app", "", "App Store Connect app ID (v2 experiments)")
 	platform := fs.String("platform", "", "Platform: IOS, MAC_OS, TV_OS, VISION_OS (v2 experiments)")
 	name := fs.String("name", "", "Experiment name")
 	trafficProportion := fs.String("traffic-proportion", "", "Traffic proportion (integer)")
-	output := shared.BindOutputFlags(fs)
+	output := d.BindOutputFlags(fs)
 	v2 := fs.Bool("v2", false, "Use v2 experiments endpoint")
 
 	return &ffcli.Command{
@@ -255,39 +230,38 @@ Examples:
   asc product-pages experiments create --version-id "VERSION_ID" --name "Icon Test" --traffic-proportion 25
   asc product-pages experiments create --v2 --app "APP_ID" --platform IOS --name "Icon Test" --traffic-proportion 25`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			nameValue := strings.TrimSpace(*name)
 			if nameValue == "" {
-				fmt.Fprintln(os.Stderr, "Error: --name is required")
-				return shared.MissingRequiredUsageError("--name")
+				return d.RequiredFlag("--name")
 			}
 
 			trafficValue, err := parseTrafficProportion(*trafficProportion)
 			if err != nil {
-				fmt.Fprintln(os.Stderr, "Error:", err)
+				fmt.Fprintln(d.IO.ErrOut, "Error:", err)
 				return flag.ErrHelp
 			}
 
 			if *v2 {
-				resolvedAppID := shared.ResolveAppID(*appID)
+				resolvedAppID := d.ResolveAppID(*appID)
 				if resolvedAppID == "" {
-					fmt.Fprintln(os.Stderr, "Error: --app is required (or set ASC_APP_ID)")
+					fmt.Fprintln(d.IO.ErrOut, "Error: --app is required (or set ASC_APP_ID)")
 					return shared.MissingRequiredUsageError("--app")
 				}
 
 				platformValue, err := shared.NormalizePlatform(*platform)
 				if err != nil {
-					fmt.Fprintln(os.Stderr, "Error:", err)
+					fmt.Fprintln(d.IO.ErrOut, "Error:", err)
 					return flag.ErrHelp
 				}
 
-				client, err := shared.GetASCClient()
+				client, err := d.Client()
 				if err != nil {
 					return fmt.Errorf("experiments create: %w", err)
 				}
 
-				requestCtx, cancel := shared.ContextWithTimeout(ctx)
+				requestCtx, cancel := d.Timeout(ctx)
 				defer cancel()
 
 				resp, err := client.CreateAppStoreVersionExperimentV2(requestCtx, resolvedAppID, platformValue, nameValue, trafficValue)
@@ -295,21 +269,20 @@ Examples:
 					return fmt.Errorf("experiments create: failed to create: %w", err)
 				}
 
-				return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+				return d.PrintOutput(resp, *output.Output, *output.Pretty)
 			}
 
 			trimmedVersionID := strings.TrimSpace(*versionID)
 			if trimmedVersionID == "" {
-				fmt.Fprintln(os.Stderr, "Error: --version-id is required")
-				return shared.MissingRequiredUsageError("--version-id")
+				return d.RequiredFlag("--version-id")
 			}
 
-			client, err := shared.GetASCClient()
+			client, err := d.Client()
 			if err != nil {
 				return fmt.Errorf("experiments create: %w", err)
 			}
 
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
+			requestCtx, cancel := d.Timeout(ctx)
 			defer cancel()
 
 			resp, err := client.CreateAppStoreVersionExperiment(requestCtx, trimmedVersionID, nameValue, trafficValue)
@@ -317,21 +290,21 @@ Examples:
 				return fmt.Errorf("experiments create: failed to create: %w", err)
 			}
 
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+			return d.PrintOutput(resp, *output.Output, *output.Pretty)
 		},
 	}
 }
 
-// ExperimentsUpdateCommand returns the experiments update subcommand.
-func ExperimentsUpdateCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("experiments update", flag.ExitOnError)
+// newExperimentsUpdateCommand returns the experiments update subcommand.
+func newExperimentsUpdateCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("experiments update", flag.ExitOnError)
 
 	experimentID := shared.BindResourceIDFlag(fs, "experiment-id", "appStoreVersionExperiments", "Experiment ID")
 	name := fs.String("name", "", "Update experiment name")
 	trafficProportion := fs.String("traffic-proportion", "", "Update traffic proportion (integer)")
 	var started shared.OptionalBool
 	fs.Var(&started, "started", "Start or stop the experiment: true or false")
-	output := shared.BindOutputFlags(fs)
+	output := d.BindOutputFlags(fs)
 	v2 := fs.Bool("v2", false, "Use v2 experiments endpoint")
 
 	return &ffcli.Command{
@@ -346,12 +319,11 @@ Examples:
   asc product-pages experiments update --experiment-id "EXPERIMENT_ID" --started true
   asc product-pages experiments update --experiment-id "EXPERIMENT_ID" --v2 --name "Updated"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			trimmedID := strings.TrimSpace(*experimentID)
 			if trimmedID == "" {
-				fmt.Fprintln(os.Stderr, "Error: --experiment-id is required")
-				return shared.MissingRequiredUsageError("--experiment-id")
+				return d.RequiredFlag("--experiment-id")
 			}
 
 			attrsName := strings.TrimSpace(*name)
@@ -359,23 +331,22 @@ Examples:
 			if strings.TrimSpace(*trafficProportion) != "" {
 				value, err := parseTrafficProportion(*trafficProportion)
 				if err != nil {
-					fmt.Fprintln(os.Stderr, "Error:", err)
+					fmt.Fprintln(d.IO.ErrOut, "Error:", err)
 					return flag.ErrHelp
 				}
 				trafficPtr = &value
 			}
 
 			if attrsName == "" && trafficPtr == nil && !started.IsSet() {
-				fmt.Fprintln(os.Stderr, "Error: --name, --traffic-proportion, or --started is required")
-				return shared.MissingRequiredUsageError("")
+				return d.UpdateFlagRequired(fs, name, trafficProportion, &started)
 			}
 
-			client, err := shared.GetASCClient()
+			client, err := d.Client()
 			if err != nil {
 				return fmt.Errorf("experiments update: %w", err)
 			}
 
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
+			requestCtx, cancel := d.Timeout(ctx)
 			defer cancel()
 
 			if *v2 {
@@ -396,7 +367,7 @@ Examples:
 					return fmt.Errorf("experiments update: failed to update: %w", err)
 				}
 
-				return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+				return d.PrintOutput(resp, *output.Output, *output.Pretty)
 			}
 
 			attrs := asc.AppStoreVersionExperimentUpdateAttributes{}
@@ -416,18 +387,18 @@ Examples:
 				return fmt.Errorf("experiments update: failed to update: %w", err)
 			}
 
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+			return d.PrintOutput(resp, *output.Output, *output.Pretty)
 		},
 	}
 }
 
-// ExperimentsDeleteCommand returns the experiments delete subcommand.
-func ExperimentsDeleteCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("experiments delete", flag.ExitOnError)
+// newExperimentsDeleteCommand returns the experiments delete subcommand.
+func newExperimentsDeleteCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("experiments delete", flag.ExitOnError)
 
 	experimentID := shared.BindResourceIDFlag(fs, "experiment-id", "appStoreVersionExperiments", "Experiment ID")
 	confirm := fs.Bool("confirm", false, "Confirm deletion")
-	output := shared.BindOutputFlags(fs)
+	output := d.BindOutputFlags(fs)
 	v2 := fs.Bool("v2", false, "Use v2 experiments endpoint")
 
 	return &ffcli.Command{
@@ -440,24 +411,22 @@ Examples:
   asc product-pages experiments delete --experiment-id "EXPERIMENT_ID" --confirm
   asc product-pages experiments delete --experiment-id "EXPERIMENT_ID" --confirm --v2`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			trimmedID := strings.TrimSpace(*experimentID)
 			if trimmedID == "" {
-				fmt.Fprintln(os.Stderr, "Error: --experiment-id is required")
-				return shared.MissingRequiredUsageError("--experiment-id")
+				return d.RequiredFlag("--experiment-id")
 			}
-			if !*confirm {
-				fmt.Fprintln(os.Stderr, "Error: --confirm is required")
-				return shared.MissingRequiredUsageError("--confirm")
+			if err := d.RequireConfirm(*confirm); err != nil {
+				return err
 			}
 
-			client, err := shared.GetASCClient()
+			client, err := d.Client()
 			if err != nil {
 				return fmt.Errorf("experiments delete: %w", err)
 			}
 
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
+			requestCtx, cancel := d.Timeout(ctx)
 			defer cancel()
 
 			if *v2 {
@@ -470,8 +439,8 @@ Examples:
 				}
 			}
 
-			result := &asc.AppStoreVersionExperimentDeleteResult{ID: trimmedID, Deleted: true}
-			return shared.PrintOutput(result, *output.Output, *output.Pretty)
+			result := &asc.DeleteResult{ID: trimmedID, Deleted: true}
+			return d.PrintOutput(result, *output.Output, *output.Pretty)
 		},
 	}
 }

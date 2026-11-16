@@ -1,0 +1,26 @@
+{
+  "tag": "PassTypeIds",
+  "file": "pass_type_ids_gen.go",
+  "types": [
+    "PassTypeIdCreateAttributes",
+    "PassTypeIdCreateData",
+    "PassTypeIdCreateRequest",
+    "PassTypeIdResponse",
+    "PassTypeIdUpdateData",
+    "PassTypeIdUpdateRequest",
+    "PassTypeIdsResponse"
+  ],
+  "operations": [
+    {"operation":"passTypeIds_certificates_getToManyRelated","name":"GetPassTypeIDCertificates","params":["passTypeID"],"check":"trim","checkFirst":true,"options":"PassTypeIDCertificatesOption","query":"buildPassTypeIDCertificatesQuery","nextContext":"passTypeIdCertificates"},
+    {"operation":"passTypeIds_certificates_getToManyRelationship","name":"GetPassTypeIDCertificatesRelationships","params":["passTypeID"],"check":"require","messages":["pass type ID is required"],"options":"LinkagesOption","query":"buildLinkagesQuery","nextContext":"passTypeIdCertificatesRelationships","parseErr":"failed to parse certificates relationship response"},
+    {"operation":"passTypeIds_createInstance","name":"CreatePassTypeID"},
+    {"operation":"passTypeIds_deleteInstance","name":"DeletePassTypeID","params":["id"],"check":"trim"},
+    {"operation":"passTypeIds_getCollection","name":"GetPassTypeIDs","options":"PassTypeIDsOption","query":"buildPassTypeIDsQuery","nextContext":"passTypeIds"},
+    {"operation":"passTypeIds_getInstance","name":"GetPassTypeID","params":["id"],"check":"trim","checkFirst":true,"options":"PassTypeIDOption","query":"buildPassTypeIDQuery","single":true},
+    {"operation":"passTypeIds_updateInstance","name":"UpdatePassTypeID","params":["id"],"check":"trim"}
+  ],
+  "queries": [
+    {"operation":"passTypeIds_getCollection","name":"PassTypeIDs","params":[{"name":"filter[id]","field":"ids","with":"WithPassTypeIDsFilterIDs","type":"csvList"},{"name":"filter[identifier]","field":"identifier","with":"WithPassTypeIDsFilterIdentifier","type":"csv"},{"name":"filter[name]","field":"name","with":"WithPassTypeIDsFilterName","type":"csv"},{"name":"sort","field":"sort","type":"string"},{"name":"fields[passTypeIds]"},{"name":"fields[certificates]","arg":"fields"},{"name":"include"},{"name":"limit[certificates]","field":"certificatesLimit","arg":"limit","type":"int"}]},
+    {"operation":"passTypeIds_getInstance","name":"PassTypeID","params":[{"name":"fields[passTypeIds]"},{"name":"fields[certificates]","arg":"fields"},{"name":"include"},{"name":"limit[certificates]","field":"certificatesLimit","with":"WithPassTypeIDCertificatesIncludeLimit","arg":"limit","type":"int"}]}
+  ]
+}

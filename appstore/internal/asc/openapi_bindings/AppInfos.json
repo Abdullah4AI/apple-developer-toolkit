@@ -1,0 +1,31 @@
+{
+  "tag": "AppInfos",
+  "file": "app_infos_gen.go",
+  "types": [
+    "AppInfoResponse"
+  ],
+  "operations": [
+    {"operation":"appInfos_ageRatingDeclaration_getToOneRelated","name":"GetAgeRatingDeclarationForAppInfo","params":["appInfoID"],"check":"raw","options":"AgeRatingDeclarationOption","query":"buildAgeRatingDeclarationQuery","single":true},
+    {"operation":"appInfos_ageRatingDeclaration_getToOneRelationship","name":"GetAppInfoAgeRatingDeclarationRelationship","params":["appInfoID"],"check":"require","parseErr":"failed to parse ageRatingDeclaration relationship response"},
+    {"operation":"appInfos_appInfoLocalizations_getToManyRelated","name":"GetAppInfoLocalizations","params":["appInfoID"],"check":"raw","options":"AppInfoLocalizationsOption","query":"buildAppInfoLocalizationsQuery","nextContext":"appInfoLocalizations"},
+    {"operation":"appInfos_getInstance","name":"GetAppInfo","params":["appInfoID"],"check":"require","options":"AppInfoOption","query":"buildAppInfoQuery","single":true,"deviations":[{"problem":"sent query parameters [limit] that the operation does not define","reason":"Shares its option type and query builder with GetAppInfos (GET /v1/apps/{id}/appInfos), which pages with limit. asc apps info view sets fields, include and included fields, the shared app info lookup sets include, and the metadata category settings read passes no options; none sets a limit."}]},
+    {"operation":"appInfos_primaryCategory_getToOneRelated","name":"GetAppInfoPrimaryCategory","params":["appInfoID"],"check":"require"},
+    {"operation":"appInfos_primaryCategory_getToOneRelationship","name":"GetAppInfoPrimaryCategoryRelationship","params":["appInfoID"],"check":"require","parseErr":"failed to parse primaryCategory relationship response"},
+    {"operation":"appInfos_primarySubcategoryOne_getToOneRelated","name":"GetAppInfoPrimarySubcategoryOne","params":["appInfoID"],"check":"require"},
+    {"operation":"appInfos_primarySubcategoryOne_getToOneRelationship","name":"GetAppInfoPrimarySubcategoryOneRelationship","params":["appInfoID"],"check":"require","parseErr":"failed to parse primarySubcategoryOne relationship response"},
+    {"operation":"appInfos_primarySubcategoryTwo_getToOneRelated","name":"GetAppInfoPrimarySubcategoryTwo","params":["appInfoID"],"check":"require"},
+    {"operation":"appInfos_primarySubcategoryTwo_getToOneRelationship","name":"GetAppInfoPrimarySubcategoryTwoRelationship","params":["appInfoID"],"check":"require","parseErr":"failed to parse primarySubcategoryTwo relationship response"},
+    {"operation":"appInfos_secondaryCategory_getToOneRelated","name":"GetAppInfoSecondaryCategory","params":["appInfoID"],"check":"require"},
+    {"operation":"appInfos_secondaryCategory_getToOneRelationship","name":"GetAppInfoSecondaryCategoryRelationship","params":["appInfoID"],"check":"require","parseErr":"failed to parse secondaryCategory relationship response"},
+    {"operation":"appInfos_secondarySubcategoryOne_getToOneRelated","name":"GetAppInfoSecondarySubcategoryOne","params":["appInfoID"],"check":"require"},
+    {"operation":"appInfos_secondarySubcategoryOne_getToOneRelationship","name":"GetAppInfoSecondarySubcategoryOneRelationship","params":["appInfoID"],"check":"require","parseErr":"failed to parse secondarySubcategoryOne relationship response"},
+    {"operation":"appInfos_secondarySubcategoryTwo_getToOneRelated","name":"GetAppInfoSecondarySubcategoryTwo","params":["appInfoID"],"check":"require"},
+    {"operation":"appInfos_secondarySubcategoryTwo_getToOneRelationship","name":"GetAppInfoSecondarySubcategoryTwoRelationship","params":["appInfoID"],"check":"require","parseErr":"failed to parse secondarySubcategoryTwo relationship response"},
+    {"operation":"appInfos_territoryAgeRatings_getToManyRelated","name":"GetAppInfoTerritoryAgeRatings","params":["appInfoID"],"check":"require","options":"TerritoryAgeRatingsOption","query":"buildTerritoryAgeRatingsQuery","nextContext":"territoryAgeRatings"}
+  ],
+  "queries": [
+    {"operation":"appInfos_ageRatingDeclaration_getToOneRelated","name":"AgeRatingDeclaration","params":[{"name":"fields[ageRatingDeclarations]"}]},
+    {"operation":"appInfos_appInfoLocalizations_getToManyRelated","name":"AppInfoLocalizations","params":[{"name":"filter[locale]","field":"locales","with":"WithAppInfoLocalizationLocales"},{"name":"fields[appInfos]","arg":"fields"},{"name":"include"}],"deviations":[{"problem":"query parameters [fields[appInfoLocalizations]] have no option","reason":"The option type has options only for the parameters commands send today; an option for another parameter is added with the command that needs it."}]},
+    {"operation":"appInfos_territoryAgeRatings_getToManyRelated","name":"TerritoryAgeRatings","params":[{"name":"fields[territoryAgeRatings]"},{"name":"fields[territories]","arg":"fields"},{"name":"include"}]}
+  ]
+}

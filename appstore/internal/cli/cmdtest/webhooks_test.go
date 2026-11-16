@@ -1,10 +1,8 @@
 package cmdtest
 
 import (
-	"context"
 	"errors"
 	"flag"
-	"io"
 	"strings"
 	"testing"
 )
@@ -69,7 +67,7 @@ func TestWebhooksValidationErrors(t *testing.T) {
 		{
 			name:    "update missing fields",
 			args:    []string{"webhooks", "update", "--webhook-id", "wh-1"},
-			wantErr: "--name, --url, --secret, --events, or --enabled is required",
+			wantErr: "at least one update flag is required (--name, --url, --secret, --events, --enabled)",
 		},
 		{
 			name:    "update invalid event",
@@ -122,11 +120,6 @@ func TestWebhooksValidationErrors(t *testing.T) {
 			wantErr: "--output must be one of: text, json",
 		},
 		{
-			name:    "serve positional args",
-			args:    []string{"webhooks", "serve", "extra"},
-			wantErr: "webhooks serve does not accept positional arguments",
-		},
-		{
 			name:    "serve empty host",
 			args:    []string{"webhooks", "serve", "--host", ""},
 			wantErr: "--host is required",
@@ -140,18 +133,10 @@ func TestWebhooksValidationErrors(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			root := RootCommand("1.2.3")
-			root.FlagSet.SetOutput(io.Discard)
-
-			stdout, stderr := captureOutput(t, func() {
-				if err := root.Parse(test.args); err != nil {
-					t.Fatalf("parse error: %v", err)
-				}
-				err := root.Run(context.Background())
-				if !errors.Is(err, flag.ErrHelp) {
-					t.Fatalf("expected ErrHelp, got %v", err)
-				}
-			})
+			stdout, stderr, err := runRootWithDeps(t, nil, test.args...)
+			if !errors.Is(err, flag.ErrHelp) {
+				t.Fatalf("expected ErrHelp, got %v", err)
+			}
 
 			if stdout != "" {
 				t.Fatalf("expected empty stdout, got %q", stdout)

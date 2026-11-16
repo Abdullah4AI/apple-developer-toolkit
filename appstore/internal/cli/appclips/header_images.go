@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/peterbourgon/ff/v3/ffcli"
@@ -13,9 +12,9 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
-// AppClipHeaderImagesCommand returns the header images command group.
-func AppClipHeaderImagesCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("header-images", flag.ExitOnError)
+// newAppClipHeaderImagesCommand returns the header images command group.
+func newAppClipHeaderImagesCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("header-images", flag.ExitOnError)
 
 	return &ffcli.Command{
 		Name:       "header-images",
@@ -28,11 +27,11 @@ Examples:
   asc app-clips header-images create --localization-id "LOC_ID" --file path/to/image.png
   asc app-clips header-images delete --id "IMAGE_ID" --confirm`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
-			AppClipHeaderImagesGetCommand(),
-			AppClipHeaderImagesCreateCommand(),
-			AppClipHeaderImagesDeleteCommand(),
+			newAppClipHeaderImagesGetCommand(d),
+			newAppClipHeaderImagesCreateCommand(d),
+			newAppClipHeaderImagesDeleteCommand(d),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp
@@ -40,14 +39,9 @@ Examples:
 	}
 }
 
-// AppClipHeaderImagesGetCommand retrieves a header image by ID.
-func AppClipHeaderImagesGetCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("view", flag.ExitOnError)
-
-	imageID := shared.BindResourceIDFlag(fs, "id", "appClipHeaderImages", "Header image ID")
-	output := shared.BindOutputFlags(fs)
-
-	return &ffcli.Command{
+// newAppClipHeaderImagesGetCommand retrieves a header image by ID.
+func newAppClipHeaderImagesGetCommand(d *shared.Deps) *ffcli.Command {
+	return shared.BuildIDGetCommand(shared.IDGetCommandConfig{
 		Name:       "view",
 		ShortUsage: "asc app-clips header-images view --id \"IMAGE_ID\"",
 		ShortHelp:  "View a header image by ID.",
@@ -55,40 +49,23 @@ func AppClipHeaderImagesGetCommand() *ffcli.Command {
 
 Examples:
   asc app-clips header-images view --id "IMAGE_ID"`,
-		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
-		Exec: func(ctx context.Context, args []string) error {
-			idValue := strings.TrimSpace(*imageID)
-			if idValue == "" {
-				fmt.Fprintln(os.Stderr, "Error: --id is required")
-				return shared.MissingRequiredUsageError("--id")
-			}
-
-			client, err := shared.GetASCClient()
-			if err != nil {
-				return fmt.Errorf("app-clips header-images view: %w", err)
-			}
-
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
-			defer cancel()
-
-			resp, err := client.GetAppClipHeaderImage(requestCtx, idValue)
-			if err != nil {
-				return fmt.Errorf("app-clips header-images view: failed to fetch: %w", err)
-			}
-
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+		IDUsage:            "Header image ID",
+		IDType:             "appClipHeaderImages",
+		RequiredDiagnostic: true,
+		Deps:               d,
+		Fetch: func(ctx context.Context, client *asc.Client, id string) (any, error) {
+			return client.GetAppClipHeaderImage(ctx, id)
 		},
-	}
+	})
 }
 
-// AppClipHeaderImagesCreateCommand uploads a header image.
-func AppClipHeaderImagesCreateCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("create", flag.ExitOnError)
+// newAppClipHeaderImagesCreateCommand uploads a header image.
+func newAppClipHeaderImagesCreateCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("create", flag.ExitOnError)
 
 	localizationID := shared.BindResourceIDFlag(fs, "localization-id", "appClipDefaultExperienceLocalizations", "Default experience localization ID")
 	filePath := fs.String("file", "", "Path to image file (PNG)")
-	output := shared.BindOutputFlags(fs)
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "create",
@@ -101,26 +78,24 @@ The upload process reserves an upload slot, uploads the image, and commits the u
 Examples:
   asc app-clips header-images create --localization-id "LOC_ID" --file path/to/image.png`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			locValue := strings.TrimSpace(*localizationID)
 			if locValue == "" {
-				fmt.Fprintln(os.Stderr, "Error: --localization-id is required")
-				return shared.MissingRequiredUsageError("--localization-id")
+				return d.RequiredFlag("--localization-id")
 			}
 
 			fileValue := strings.TrimSpace(*filePath)
 			if fileValue == "" {
-				fmt.Fprintln(os.Stderr, "Error: --file is required")
-				return shared.MissingRequiredUsageError("--file")
+				return d.RequiredFlag("--file")
 			}
 
-			client, err := shared.GetASCClient()
+			client, err := d.Client()
 			if err != nil {
 				return fmt.Errorf("app-clips header-images create: %w", err)
 			}
 
-			requestCtx, cancel := shared.ContextWithUploadTimeout(ctx)
+			requestCtx, cancel := d.UploadTimeout(ctx)
 			defer cancel()
 
 			result, err := client.UploadAppClipHeaderImage(requestCtx, locValue, fileValue)
@@ -128,20 +103,14 @@ Examples:
 				return fmt.Errorf("app-clips header-images create: %w", err)
 			}
 
-			return shared.PrintOutput(result, *output.Output, *output.Pretty)
+			return d.PrintOutput(result, *output.Output, *output.Pretty)
 		},
 	}
 }
 
-// AppClipHeaderImagesDeleteCommand deletes a header image.
-func AppClipHeaderImagesDeleteCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("delete", flag.ExitOnError)
-
-	imageID := shared.BindResourceIDFlag(fs, "id", "appClipHeaderImages", "Header image ID")
-	confirm := fs.Bool("confirm", false, "Confirm deletion")
-	output := shared.BindOutputFlags(fs)
-
-	return &ffcli.Command{
+// newAppClipHeaderImagesDeleteCommand deletes a header image.
+func newAppClipHeaderImagesDeleteCommand(d *shared.Deps) *ffcli.Command {
+	return shared.BuildConfirmDeleteCommand(shared.ConfirmDeleteCommandConfig{
 		Name:       "delete",
 		ShortUsage: "asc app-clips header-images delete --id \"IMAGE_ID\" --confirm",
 		ShortHelp:  "Delete a header image.",
@@ -149,37 +118,16 @@ func AppClipHeaderImagesDeleteCommand() *ffcli.Command {
 
 Examples:
   asc app-clips header-images delete --id "IMAGE_ID" --confirm`,
-		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
-		Exec: func(ctx context.Context, args []string) error {
-			idValue := strings.TrimSpace(*imageID)
-			if idValue == "" {
-				fmt.Fprintln(os.Stderr, "Error: --id is required")
-				return shared.MissingRequiredUsageError("--id")
-			}
-			if !*confirm {
-				fmt.Fprintln(os.Stderr, "Error: --confirm is required to delete")
-				return shared.MissingRequiredUsageError("--confirm")
-			}
-
-			client, err := shared.GetASCClient()
-			if err != nil {
-				return fmt.Errorf("app-clips header-images delete: %w", err)
-			}
-
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
-			defer cancel()
-
-			if err := client.DeleteAppClipHeaderImage(requestCtx, idValue); err != nil {
-				return fmt.Errorf("app-clips header-images delete: failed to delete: %w", err)
-			}
-
-			result := &asc.AppClipHeaderImageDeleteResult{
-				ID:      idValue,
-				Deleted: true,
-			}
-
-			return shared.PrintOutput(result, *output.Output, *output.Pretty)
+		IDFlag:             "id",
+		IDUsage:            "Header image ID",
+		IDType:             "appClipHeaderImages",
+		RequiredDiagnostic: true,
+		Deps:               d,
+		Delete: func(ctx context.Context, client *asc.Client, id string) error {
+			return client.DeleteAppClipHeaderImage(ctx, id)
 		},
-	}
+		Result: func(id string) any {
+			return &asc.DeleteResult{ID: id, Deleted: true}
+		},
+	})
 }

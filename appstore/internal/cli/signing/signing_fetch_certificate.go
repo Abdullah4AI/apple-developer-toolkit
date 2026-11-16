@@ -18,9 +18,8 @@ import (
 	"strings"
 	"time"
 
-	modernpkcs12 "software.sslmate.com/src/go-pkcs12"
-
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/rootfs"
 )
 
@@ -40,11 +39,12 @@ type signingCertificateCreateRequest struct {
 	KeyPath         string
 	CSRPath         string
 	P12Path         string
+	P12Encoding     shared.PKCS12Encoding
 	Password        []byte
 	Force           bool
 }
 
-func createMissingSigningCertificate(ctx context.Context, client *asc.Client, request signingCertificateCreateRequest) (asc.Resource[asc.CertificateAttributes], createdSigningIdentity, error) {
+func createMissingSigningCertificate(ctx context.Context, client *asc.Client, request signingCertificateCreateRequest, clock func() time.Time) (asc.Resource[asc.CertificateAttributes], createdSigningIdentity, error) {
 	certificateType := strings.TrimSpace(request.CertificateType)
 	if certificateType == "" {
 		return asc.Resource[asc.CertificateAttributes]{}, createdSigningIdentity{}, fmt.Errorf("certificate type is required")
@@ -116,7 +116,7 @@ func createMissingSigningCertificate(ctx context.Context, client *asc.Client, re
 	if err := signingCertificateMatchesKey(certificate, privateKey); err != nil {
 		return created.Data, identity, err
 	}
-	p12, err := modernpkcs12.Modern2023.WithRand(rand.Reader).Encode(privateKey, certificate, nil, string(request.Password))
+	p12, err := shared.EncodePKCS12Identity(request.P12Encoding, privateKey, certificate, string(request.Password))
 	if err != nil {
 		return created.Data, identity, fmt.Errorf("encode p12: %w", err)
 	}
@@ -127,7 +127,7 @@ func createMissingSigningCertificate(ctx context.Context, client *asc.Client, re
 	identity.CertificateSHA256 = hex.EncodeToString(sum[:])
 	identity.P12Path = request.P12Path
 	if created.Data.Attributes.ExpirationDate == "" {
-		created.Data.Attributes.ExpirationDate = time.Now().Add(24 * time.Hour).UTC().Format(time.RFC3339)
+		created.Data.Attributes.ExpirationDate = clock().Add(24 * time.Hour).UTC().Format(time.RFC3339)
 	}
 	return created.Data, identity, nil
 }

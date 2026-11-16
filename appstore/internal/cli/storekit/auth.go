@@ -5,7 +5,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/99designs/keyring"
@@ -17,8 +16,8 @@ import (
 	storekitapi "github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/storekit"
 )
 
-func AuthCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("storekit auth", flag.ExitOnError)
+func authCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("storekit auth", flag.ExitOnError)
 	return &ffcli.Command{
 		Name:       "auth",
 		ShortUsage: "asc storekit auth <subcommand> [flags]",
@@ -33,19 +32,19 @@ Examples:
   asc storekit auth doctor --environment sandbox --network`,
 		FlagSet: fs,
 		Subcommands: []*ffcli.Command{
-			authLoginCommand(),
-			authStatusCommand(),
-			authSwitchCommand(),
-			authDoctorCommand(),
-			authLogoutCommand(),
+			authLoginCommand(d),
+			authStatusCommand(d),
+			authSwitchCommand(d),
+			authDoctorCommand(d),
+			authLogoutCommand(d),
 		},
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec:      func(ctx context.Context, args []string) error { return flag.ErrHelp },
 	}
 }
 
-func authLoginCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("storekit auth login", flag.ExitOnError)
+func authLoginCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("storekit auth login", flag.ExitOnError)
 	name := fs.String("name", "", "Friendly name for this StoreKit key")
 	keyID := fs.String("key-id", "", "In-App Purchase API key ID")
 	issuerID := fs.String("issuer-id", "", "In-App Purchase API issuer ID")
@@ -66,11 +65,8 @@ Examples:
   asc storekit auth login --name Production --key-id KEY_ID --issuer-id ISSUER_ID --private-key ./SubscriptionKey.p8 --bundle-id com.example.app
   asc storekit auth login --network --environment sandbox --name Sandbox --key-id KEY_ID --issuer-id ISSUER_ID --private-key ./SubscriptionKey.p8 --bundle-id com.example.app`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
-			if err := shared.RejectPositionalArgs(args); err != nil {
-				return err
-			}
 			cleanName := strings.TrimSpace(*name)
 			cleanKeyID := strings.TrimSpace(*keyID)
 			cleanIssuerID := strings.TrimSpace(*issuerID)
@@ -85,28 +81,28 @@ Examples:
 			}
 			for _, item := range required {
 				if strings.TrimSpace(item.value) == "" {
-					return shared.UsageError(item.name + " is required")
+					return d.UsageError(item.name + " is required")
 				}
 			}
 			if *skipValidation && *network {
-				return shared.UsageError("--skip-validation and --network are mutually exclusive")
+				return d.UsageError("--skip-validation and --network are mutually exclusive")
 			}
 			if flagWasSet(fs, "environment") && !*network {
-				return shared.UsageError("--environment requires --network")
+				return d.UsageError("--environment requires --network")
 			}
 			if *local && !*bypassKeychain && !storekitapi.ShouldBypassKeychain() {
-				return shared.UsageError("--local requires --bypass-keychain or ASC_STOREKIT_BYPASS_KEYCHAIN")
+				return d.UsageError("--local requires --bypass-keychain or ASC_STOREKIT_BYPASS_KEYCHAIN")
 			}
 			if !*skipValidation {
 				if err := authsvc.ValidateKeyFile(cleanPrivateKey); err != nil {
-					return shared.UsageErrorf("storekit auth login: invalid private key: %v", err)
+					return d.UsageErrorf("storekit auth login: invalid private key: %v", err)
 				}
 			}
 			credentials := storekitapi.Credentials{
 				KeyID: cleanKeyID, IssuerID: cleanIssuerID, PrivateKeyPath: cleanPrivateKey, BundleID: cleanBundleID,
 			}
 			if !*skipValidation {
-				localClient, err := storekitapi.NewClient(credentials, storekitapi.Sandbox)
+				localClient, err := storekitapi.NewClient(credentials, storekitapi.Sandbox, storekitapi.WithTransport(d.HTTPTransport()))
 				if err != nil {
 					return fmt.Errorf("storekit auth login: %w", err)
 				}
@@ -117,13 +113,13 @@ Examples:
 			if *network {
 				target, err := resolveEnvironment(environment)
 				if err != nil {
-					return shared.UsageError(err.Error())
+					return d.UsageError(err.Error())
 				}
-				client, err := storekitapi.NewClient(credentials, target)
+				client, err := storekitapi.NewClient(credentials, target, storekitapi.WithTransport(d.HTTPTransport()))
 				if err != nil {
 					return fmt.Errorf("storekit auth login: %w", err)
 				}
-				requestCtx, cancel := shared.ContextWithTimeout(ctx)
+				requestCtx, cancel := d.Timeout(ctx)
 				defer cancel()
 				if _, err := client.ListMessages(requestCtx); err != nil {
 					return fmt.Errorf("storekit auth login: network validation failed: %w", err)
@@ -144,7 +140,7 @@ Examples:
 			} else if err := storekitapi.StoreCredentials(cleanName, credentials); err != nil {
 				return fmt.Errorf("storekit auth login: store credentials: %w", err)
 			}
-			fmt.Printf("Successfully registered StoreKit API key %q for %s\n", cleanName, cleanBundleID)
+			fmt.Fprintf(d.IO.Out, "Successfully registered StoreKit API key %q for %s\n", cleanName, cleanBundleID)
 			return nil
 		},
 	}
@@ -166,9 +162,9 @@ type authStatusRow struct {
 	Source    string `json:"source"`
 }
 
-func authStatusCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("storekit auth status", flag.ExitOnError)
-	output := shared.BindOutputFlags(fs)
+func authStatusCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("storekit auth status", flag.ExitOnError)
+	output := d.BindOutputFlags(fs)
 	validate := fs.Bool("validate", false, "Validate every stored credential via network")
 	environment := fs.String("environment", "", "Validation environment: production or sandbox")
 	return &ffcli.Command{
@@ -181,13 +177,10 @@ Examples:
   asc storekit auth status
   asc storekit auth status --validate --environment sandbox --output json`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
-			if err := shared.RejectPositionalArgs(args); err != nil {
-				return err
-			}
 			if flagWasSet(fs, "environment") && !*validate {
-				return shared.UsageError("--environment requires --validate")
+				return d.UsageError("--environment requires --validate")
 			}
 			credentials, err := storekitapi.ListCredentials()
 			if err != nil && !errors.Is(err, config.ErrNotFound) {
@@ -212,7 +205,7 @@ Examples:
 			result := authStatusOutput{Credentials: rows, ActiveSource: activeSource}
 			if activeErr != nil {
 				result.ActiveError = activeErr.Error()
-				fmt.Fprintf(os.Stderr, "Warning: active StoreKit authentication could not be resolved: %v\n", activeErr)
+				fmt.Fprintf(d.IO.ErrOut, "Warning: active StoreKit authentication could not be resolved: %v\n", activeErr)
 			}
 			if *validate {
 				if len(credentials) == 0 {
@@ -220,20 +213,20 @@ Examples:
 				}
 				target, err := resolveEnvironment(environment)
 				if err != nil {
-					return shared.UsageError(err.Error())
+					return d.UsageError(err.Error())
 				}
 				result.Environment = string(target)
 				failures := 0
 				for _, credential := range credentials {
-					client, clientErr := storekitapi.NewClient(credential.Credentials, target)
+					client, clientErr := storekitapi.NewClient(credential.Credentials, target, storekitapi.WithTransport(d.HTTPTransport()))
 					if clientErr == nil {
-						requestCtx, cancel := shared.ContextWithTimeout(ctx)
+						requestCtx, cancel := d.Timeout(ctx)
 						_, clientErr = client.ListMessages(requestCtx)
 						cancel()
 					}
 					if clientErr != nil {
 						failures++
-						fmt.Fprintf(os.Stderr, "StoreKit profile %q validation failed: %v\n", credential.Name, clientErr)
+						fmt.Fprintf(d.IO.ErrOut, "StoreKit profile %q validation failed: %v\n", credential.Name, clientErr)
 					}
 				}
 				if failures > 0 {
@@ -244,40 +237,37 @@ Examples:
 			for _, credential := range rows {
 				tableRows = append(tableRows, []string{credential.Name, credential.KeyID, credential.IssuerID, credential.BundleID, boolString(credential.IsDefault), credential.Source})
 			}
-			return printOutput(result, *output.Output, *output.Pretty,
+			return printOutput(d, result, *output.Output, *output.Pretty,
 				[]string{"Name", "Key ID", "Issuer ID", "Bundle ID", "Default", "Source"}, tableRows)
 		},
 	}
 }
 
-func authSwitchCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("storekit auth switch", flag.ExitOnError)
+func authSwitchCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("storekit auth switch", flag.ExitOnError)
 	name := fs.String("name", "", "StoreKit credential name")
 	return &ffcli.Command{
 		Name:       "switch",
 		ShortUsage: "asc storekit auth switch --name NAME",
 		ShortHelp:  "Set the default StoreKit credential.",
 		FlagSet:    fs,
-		UsageFunc:  shared.DefaultUsageFunc,
+		UsageFunc:  d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
-			if err := shared.RejectPositionalArgs(args); err != nil {
-				return err
-			}
 			cleanName := strings.TrimSpace(*name)
 			if cleanName == "" {
-				return shared.UsageError("--name is required")
+				return d.UsageError("--name is required")
 			}
 			if err := storekitapi.SetDefaultCredentials(cleanName); err != nil {
 				return fmt.Errorf("storekit auth switch: %w", err)
 			}
-			fmt.Printf("Default StoreKit profile set to %q\n", cleanName)
+			fmt.Fprintf(d.IO.Out, "Default StoreKit profile set to %q\n", cleanName)
 			return nil
 		},
 	}
 }
 
-func authDoctorCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("storekit auth doctor", flag.ExitOnError)
+func authDoctorCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("storekit auth doctor", flag.ExitOnError)
 	common := bindCommonFlags(fs)
 	network := fs.Bool("network", false, "Validate credentials with the Retention Messaging API")
 	return &ffcli.Command{
@@ -290,33 +280,30 @@ Examples:
   asc storekit auth doctor --environment sandbox
   asc storekit auth doctor --environment sandbox --network`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
-			if err := shared.RejectPositionalArgs(args); err != nil {
-				return err
-			}
-			client, environment, err := resolveClient(ctx, common)
+			client, environment, err := resolveClient(ctx, d, common)
 			if err != nil {
-				return usageOrWrap("storekit auth doctor", err)
+				return usageOrWrap(d, "storekit auth doctor", err)
 			}
 			if err := client.Validate(); err != nil {
 				return fmt.Errorf("storekit auth doctor: JWT signing failed: %w", err)
 			}
 			if *network {
-				requestCtx, cancel := shared.ContextWithTimeout(ctx)
+				requestCtx, cancel := d.Timeout(ctx)
 				defer cancel()
 				if _, err := client.ListMessages(requestCtx); err != nil {
 					return fmt.Errorf("storekit auth doctor: network validation failed: %w", err)
 				}
 			}
-			fmt.Printf("StoreKit credentials are valid for %s%s\n", environment, map[bool]string{true: " (network verified)", false: ""}[*network])
+			fmt.Fprintf(d.IO.Out, "StoreKit credentials are valid for %s%s\n", environment, map[bool]string{true: " (network verified)", false: ""}[*network])
 			return nil
 		},
 	}
 }
 
-func authLogoutCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("storekit auth logout", flag.ExitOnError)
+func authLogoutCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("storekit auth logout", flag.ExitOnError)
 	name := fs.String("name", "", "StoreKit credential name")
 	all := fs.Bool("all", false, "Remove all StoreKit credentials")
 	confirm := fs.Bool("confirm", false, "Confirm credential removal")
@@ -325,23 +312,20 @@ func authLogoutCommand() *ffcli.Command {
 		ShortUsage: "asc storekit auth logout (--name NAME | --all) --confirm",
 		ShortHelp:  "Remove StoreKit credentials.",
 		FlagSet:    fs,
-		UsageFunc:  shared.DefaultUsageFunc,
+		UsageFunc:  d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
-			if err := shared.RejectPositionalArgs(args); err != nil {
-				return err
-			}
-			if !*confirm {
-				return shared.UsageError("--confirm is required")
-			}
 			cleanName := strings.TrimSpace(*name)
 			if *all == (cleanName != "") {
-				return shared.UsageError("exactly one of --name or --all is required")
+				return d.UsageError("exactly one of --name or --all is required")
+			}
+			if err := d.RequireConfirm(*confirm); err != nil {
+				return err
 			}
 			if *all {
 				if err := storekitapi.RemoveAllCredentials(); err != nil {
 					return fmt.Errorf("storekit auth logout: %w", err)
 				}
-				fmt.Println("Removed all StoreKit credentials")
+				fmt.Fprintln(d.IO.Out, "Removed all StoreKit credentials")
 				return nil
 			}
 			if err := storekitapi.RemoveCredentials(cleanName); err != nil {
@@ -350,7 +334,7 @@ func authLogoutCommand() *ffcli.Command {
 				}
 				return fmt.Errorf("storekit auth logout: %w", err)
 			}
-			fmt.Printf("Removed StoreKit profile %q\n", cleanName)
+			fmt.Fprintf(d.IO.Out, "Removed StoreKit profile %q\n", cleanName)
 			return nil
 		},
 	}

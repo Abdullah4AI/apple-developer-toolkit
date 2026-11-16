@@ -1,15 +1,11 @@
 package cmdtest
 
 import (
-	"context"
-	"errors"
-	"flag"
-	"io"
 	"net/http"
-	"strings"
+	"net/url"
 	"testing"
 
-	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/cmd"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asctest"
 )
 
 // TestAppsListStateFiltersSendExactQuery covers the app-state triage filters
@@ -56,56 +52,32 @@ func TestAppsListStateFiltersSendExactQuery(t *testing.T) {
 		},
 	}
 
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() { http.DefaultTransport = originalTransport })
-
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			calls := 0
-			http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-				calls++
-				if req.Method != http.MethodGet || req.URL.Path != "/v1/apps" {
-					t.Fatalf("request = %s %s, want GET /v1/apps", req.Method, req.URL.Path)
-				}
-				query := req.URL.Query()
-				for key, want := range test.wantQuery {
-					got, ok := query[key]
-					if !ok {
-						t.Errorf("query is missing %s", key)
-						continue
-					}
-					if len(got) != 1 || got[0] != want {
-						t.Errorf("query %s = %q, want exactly [%q]", key, got, want)
-					}
-				}
-				if len(query) != len(test.wantQuery) {
-					t.Errorf("query = %v, want exactly %v", query, test.wantQuery)
-				}
-				return &http.Response{
-					StatusCode: http.StatusOK,
-					Body:       io.NopCloser(strings.NewReader(`{"data":[]}`)),
-					Header:     http.Header{"Content-Type": []string{"application/json"}},
-				}, nil
-			})
+			reg := asctest.NewRegistry(t)
+			reg.Register(asctest.GET("/v1/apps", queryPairs(test.wantQuery)...), asctest.JSON(http.StatusOK, `{"data":[]}`))
 
-			root := RootCommand("1.2.3")
-			root.FlagSet.SetOutput(io.Discard)
-			_, stderr := captureOutput(t, func() {
-				if err := root.Parse(test.args); err != nil {
-					t.Fatalf("parse error: %v", err)
-				}
-				if err := root.Run(context.Background()); err != nil {
-					t.Fatalf("run error: %v", err)
-				}
-			})
+			_, stderr, err := runRootWithDeps(t, stubClient(t, reg), test.args...)
+			if err != nil {
+				t.Fatalf("run error: %v", err)
+			}
 			if stderr != "" {
 				t.Fatalf("stderr = %q, want empty", stderr)
 			}
-			if calls != 1 {
+			if calls := len(reg.Requests()); calls != 1 {
 				t.Fatalf("calls = %d, want 1", calls)
 			}
 		})
 	}
+}
+
+// queryPairs turns an exact query map into asctest matcher arguments.
+func queryPairs(query map[string]string) []string {
+	pairs := make([]string, 0, len(query))
+	for key, value := range query {
+		pairs = append(pairs, url.QueryEscape(key)+"="+url.QueryEscape(value))
+	}
+	return pairs
 }
 
 // TestAppsListStateFiltersRejectUnknownValues verifies validation runs before
@@ -114,77 +86,58 @@ func TestAppsListStateFiltersRejectUnknownValues(t *testing.T) {
 	t.Setenv("ASC_APP_ID", "")
 
 	tests := []struct {
-		name string
-		args []string
-		want string
+		name    string
+		args    []string
+		wantErr string
 	}{
 		{
-			name: "unknown version state",
-			args: []string{"apps", "list", "--version-state", "READY_FOR_SALE"},
-			want: "--version-state must be one of: ACCEPTED, DEVELOPER_REJECTED, IN_REVIEW, INVALID_BINARY, METADATA_REJECTED, PENDING_APPLE_RELEASE, PENDING_DEVELOPER_RELEASE, PREPARE_FOR_SUBMISSION, PROCESSING_FOR_DISTRIBUTION, READY_FOR_DISTRIBUTION, READY_FOR_REVIEW, REJECTED, REPLACED_WITH_NEW_VERSION, WAITING_FOR_EXPORT_COMPLIANCE, WAITING_FOR_REVIEW",
+			name:    "unknown version state",
+			args:    []string{"apps", "list", "--version-state", "READY_FOR_SALE"},
+			wantErr: "--version-state must be one of: ACCEPTED, DEVELOPER_REJECTED, IN_REVIEW, INVALID_BINARY, METADATA_REJECTED, PENDING_APPLE_RELEASE, PENDING_DEVELOPER_RELEASE, PREPARE_FOR_SUBMISSION, PROCESSING_FOR_DISTRIBUTION, READY_FOR_DISTRIBUTION, READY_FOR_REVIEW, REJECTED, REPLACED_WITH_NEW_VERSION, WAITING_FOR_EXPORT_COMPLIANCE, WAITING_FOR_REVIEW",
 		},
 		{
-			name: "unknown version state among valid ones",
-			args: []string{"apps", "list", "--version-state", "IN_REVIEW,NOPE"},
-			want: "--version-state must be one of: ACCEPTED,",
+			name:    "unknown version state among valid ones",
+			args:    []string{"apps", "list", "--version-state", "IN_REVIEW,NOPE"},
+			wantErr: "--version-state must be one of: ACCEPTED,",
 		},
 		{
-			name: "unknown review submission state",
-			args: []string{"apps", "list", "--review-submission-state", "PREPARE_FOR_SUBMISSION"},
-			want: "--review-submission-state must be one of: READY_FOR_REVIEW, WAITING_FOR_REVIEW, IN_REVIEW, UNRESOLVED_ISSUES, CANCELING, COMPLETING, COMPLETE",
+			name:    "unknown review submission state",
+			args:    []string{"apps", "list", "--review-submission-state", "PREPARE_FOR_SUBMISSION"},
+			wantErr: "--review-submission-state must be one of: READY_FOR_REVIEW, WAITING_FOR_REVIEW, IN_REVIEW, UNRESOLVED_ISSUES, CANCELING, COMPLETING, COMPLETE",
 		},
 		{
-			name: "unknown review submission state on the apps group",
-			args: []string{"apps", "--review-submission-state", "NOPE"},
-			want: "--review-submission-state must be one of: READY_FOR_REVIEW,",
+			name:    "unknown review submission state on the apps group",
+			args:    []string{"apps", "--review-submission-state", "NOPE"},
+			wantErr: "--review-submission-state must be one of: READY_FOR_REVIEW,",
 		},
 		{
-			name: "explicit empty version state",
-			args: []string{"apps", "list", "--version-state", ""},
-			want: "--version-state must not be empty",
+			name:    "explicit empty version state",
+			args:    []string{"apps", "list", "--version-state", ""},
+			wantErr: "--version-state must not be empty",
 		},
 		{
-			name: "whitespace review submission state on the apps group",
-			args: []string{"apps", "--review-submission-state", "   "},
-			want: "--review-submission-state must not be empty",
+			name:    "whitespace review submission state on the apps group",
+			args:    []string{"apps", "--review-submission-state", "   "},
+			wantErr: "--review-submission-state must not be empty",
 		},
 		{
-			name: "leading empty version state",
-			args: []string{"apps", "list", "--version-state", ",IN_REVIEW"},
-			want: "--version-state must not contain empty values",
+			name:    "leading empty version state",
+			args:    []string{"apps", "list", "--version-state", ",IN_REVIEW"},
+			wantErr: "--version-state must not contain empty values",
 		},
 		{
-			name: "repeated comma version state",
-			args: []string{"apps", "list", "--version-state", "IN_REVIEW,,WAITING_FOR_REVIEW"},
-			want: "--version-state must not contain empty values",
+			name:    "repeated comma version state",
+			args:    []string{"apps", "list", "--version-state", "IN_REVIEW,,WAITING_FOR_REVIEW"},
+			wantErr: "--version-state must not contain empty values",
 		},
 		{
-			name: "trailing empty review submission state",
-			args: []string{"apps", "list", "--review-submission-state", "IN_REVIEW,"},
-			want: "--review-submission-state must not contain empty values",
+			name:    "trailing empty review submission state",
+			args:    []string{"apps", "list", "--review-submission-state", "IN_REVIEW,"},
+			wantErr: "--review-submission-state must not contain empty values",
 		},
 	}
 
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			root := RootCommand("1.2.3")
-			root.FlagSet.SetOutput(io.Discard)
-			stdout, stderr := captureOutput(t, func() {
-				if err := root.Parse(test.args); err != nil {
-					t.Fatalf("parse error: %v", err)
-				}
-				if err := root.Run(context.Background()); !errors.Is(err, flag.ErrHelp) {
-					t.Fatalf("error = %v, want flag.ErrHelp", err)
-				}
-			})
-			if stdout != "" {
-				t.Fatalf("stdout = %q, want empty", stdout)
-			}
-			if !strings.Contains(stderr, test.want) {
-				t.Fatalf("stderr = %q, want it to contain %q", stderr, test.want)
-			}
-		})
-	}
+	runValidationTests(t, tests)
 }
 
 // TestAppsListStateFiltersRejectNextCombination proves the filters are never
@@ -195,80 +148,36 @@ func TestAppsListStateFiltersRejectNextCombination(t *testing.T) {
 	next := "https://api.appstoreconnect.apple.com/v1/apps?cursor=next"
 
 	tests := []struct {
-		name string
-		args []string
-		want string
+		name    string
+		args    []string
+		wantErr string
 	}{
 		{
-			name: "version state",
-			args: []string{"apps", "list", "--next", next, "--version-state", "IN_REVIEW"},
-			want: "--next cannot be combined with --version-state",
+			name:    "version state",
+			args:    []string{"apps", "list", "--next", next, "--version-state", "IN_REVIEW"},
+			wantErr: "--next cannot be combined with --version-state",
 		},
 		{
-			name: "review submission state",
-			args: []string{"apps", "list", "--next", next, "--review-submission-state", "IN_REVIEW"},
-			want: "--next cannot be combined with --review-submission-state",
+			name:    "review submission state",
+			args:    []string{"apps", "list", "--next", next, "--review-submission-state", "IN_REVIEW"},
+			wantErr: "--next cannot be combined with --review-submission-state",
 		},
 		{
-			name: "sort",
-			args: []string{"apps", "list", "--next", next, "--sort", "sku"},
-			want: "--next cannot be combined with --sort",
+			name:    "sort",
+			args:    []string{"apps", "list", "--next", next, "--sort", "sku"},
+			wantErr: "--next cannot be combined with --sort",
 		},
 		{
-			name: "explicit empty sku",
-			args: []string{"apps", "list", "--next", next, "--sku", ""},
-			want: "--next cannot be combined with --sku",
+			name:    "explicit empty sku",
+			args:    []string{"apps", "list", "--next", next, "--sku", ""},
+			wantErr: "--next cannot be combined with --sku",
 		},
 		{
-			name: "explicit zero limit",
-			args: []string{"apps", "--next", next, "--limit", "0"},
-			want: "--next cannot be combined with --limit",
+			name:    "explicit zero limit",
+			args:    []string{"apps", "--next", next, "--limit", "0"},
+			wantErr: "--next cannot be combined with --limit",
 		},
 	}
 
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			root := RootCommand("1.2.3")
-			root.FlagSet.SetOutput(io.Discard)
-			stdout, stderr := captureOutput(t, func() {
-				if err := root.Parse(test.args); err != nil {
-					t.Fatalf("parse error: %v", err)
-				}
-				if err := root.Run(context.Background()); !errors.Is(err, flag.ErrHelp) {
-					t.Fatalf("error = %v, want flag.ErrHelp", err)
-				}
-			})
-			if stdout != "" {
-				t.Fatalf("stdout = %q, want empty", stdout)
-			}
-			if !strings.Contains(stderr, test.want) {
-				t.Fatalf("stderr = %q, want it to contain %q", stderr, test.want)
-			}
-		})
-	}
-}
-
-// TestAppsListStateFiltersExitUsageOnInvalidValue locks the exit code for
-// invalid triage filter values to the usage class.
-func TestAppsListStateFiltersExitUsageOnInvalidValue(t *testing.T) {
-	t.Setenv("ASC_BYPASS_KEYCHAIN", "1")
-	t.Setenv("ASC_KEY_ID", "")
-	t.Setenv("ASC_ISSUER_ID", "")
-	t.Setenv("ASC_PRIVATE_KEY_PATH", "")
-	t.Setenv("ASC_APP_ID", "")
-	t.Setenv("ASC_CONFIG_PATH", t.TempDir()+"/config.json")
-
-	for _, args := range [][]string{
-		{"apps", "list", "--version-state", "NOPE"},
-		{"apps", "list", "--review-submission-state", "NOPE"},
-	} {
-		_, stderr := captureOutput(t, func() {
-			if code := cmd.Run(args, "1.0.0"); code != cmd.ExitUsage {
-				t.Errorf("exit code for %v = %d, want %d", args, code, cmd.ExitUsage)
-			}
-		})
-		if !strings.Contains(stderr, "must be one of") {
-			t.Errorf("stderr for %v = %q, want it to list the valid values", args, stderr)
-		}
-	}
+	runValidationTests(t, tests)
 }

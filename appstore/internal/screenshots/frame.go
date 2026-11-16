@@ -87,10 +87,6 @@ type FrameRequest struct {
 	FrameColor string         // frame color variant; empty selects the device default
 	ConfigPath string         // optional Koubou YAML config path
 	Canvas     *CanvasOptions // optional text overlays and background
-
-	// Kept for backwards compatibility; ignored in Koubou mode.
-	FrameRoot   string
-	ScreenBleed int
 }
 
 // matrixFrameRootBeforePublishForTest is a narrow test seam for replacing the
@@ -769,19 +765,6 @@ func frame(ctx context.Context, req FrameRequest, rootedOutput *rootfs.Root, pin
 
 // boolPtr returns a pointer to b. Used for YAML fields that require *bool for omitempty.
 func boolPtr(b bool) *bool { return &b }
-
-// createDefaultKoubouConfigAt writes the generated config beneath a caller-
-// owned work directory. Matrix callers supply a private attempt root whose
-// parent remains locked for the entire external Koubou invocation, so the
-// path handed to Koubou cannot be renamed into an attacker-controlled tree.
-func createDefaultKoubouConfigAt(
-	absInputPath string,
-	spec frameDeviceKoubouSpec,
-	canvas *CanvasOptions,
-	workDir string,
-) (string, frameExecutionMetadata, error) {
-	return createDefaultKoubouConfigAtRoot(absInputPath, spec, canvas, workDir, nil)
-}
 
 // createDefaultKoubouConfigAtRoot creates generated directories and files
 // relative to the already-pinned attempt root. The path arguments remain only

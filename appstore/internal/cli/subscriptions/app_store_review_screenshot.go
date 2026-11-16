@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/peterbourgon/ff/v3/ffcli"
@@ -12,9 +11,9 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
-// SubscriptionsAppStoreReviewScreenshotCommand returns the app store review screenshot command group.
-func SubscriptionsAppStoreReviewScreenshotCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("app-store-review-screenshot", flag.ExitOnError)
+// newSubscriptionsAppStoreReviewScreenshotCommand returns the app store review screenshot command group.
+func newSubscriptionsAppStoreReviewScreenshotCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("app-store-review-screenshot", flag.ExitOnError)
 
 	return &ffcli.Command{
 		Name:       "app-store-review-screenshot",
@@ -25,9 +24,9 @@ func SubscriptionsAppStoreReviewScreenshotCommand() *ffcli.Command {
 Examples:
   asc subscriptions app-store-review-screenshot view --subscription-id "SUBSCRIPTION_ID"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
-			SubscriptionsAppStoreReviewScreenshotGetCommand(),
+			newSubscriptionsAppStoreReviewScreenshotGetCommand(d),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp
@@ -35,14 +34,14 @@ Examples:
 	}
 }
 
-// SubscriptionsAppStoreReviewScreenshotGetCommand returns the get subcommand.
-func SubscriptionsAppStoreReviewScreenshotGetCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("app-store-review-screenshot view", flag.ExitOnError)
+// newSubscriptionsAppStoreReviewScreenshotGetCommand returns the get subcommand.
+func newSubscriptionsAppStoreReviewScreenshotGetCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("app-store-review-screenshot view", flag.ExitOnError)
 
 	subscriptionID := shared.BindResourceIDFlag(fs, "subscription-id", "subscriptions", "Subscription ID, product ID, or exact current name")
 	appID := addSubscriptionLookupAppFlag(fs)
 	subscriptionFields := fs.String("subscription-fields", "", "Included subscription fields (comma-separated)")
-	output := shared.BindOutputFlags(fs)
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "view",
@@ -53,29 +52,28 @@ func SubscriptionsAppStoreReviewScreenshotGetCommand() *ffcli.Command {
 Examples:
   asc subscriptions app-store-review-screenshot view --subscription-id "SUBSCRIPTION_ID"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
-			selectedSubscriptionFields, err := normalizeSparseFieldsFlag(fs, "", "subscription-fields", *subscriptionFields, subscriptionFieldsList())
+			selectedSubscriptionFields, err := normalizeSparseFieldsFlag(d, fs, "", "subscription-fields", *subscriptionFields, subscriptionFieldsList())
 			if err != nil {
 				return err
 			}
 			id := strings.TrimSpace(*subscriptionID)
 			if id == "" {
-				fmt.Fprintln(os.Stderr, "Error: --subscription-id is required")
-				return shared.MissingRequiredUsageError("--subscription-id")
+				return d.RequiredFlag("--subscription-id")
 			}
 
-			client, err := shared.GetASCClient()
+			client, err := d.Client()
 			if err != nil {
 				return fmt.Errorf("subscriptions app-store-review-screenshot view: %w", err)
 			}
 
-			id, err = resolveSubscriptionLookupIDWithTimeout(ctx, client, *appID, id)
+			id, err = resolveSubscriptionLookupIDWithTimeout(ctx, d, client, *appID, id)
 			if err != nil {
 				return err
 			}
 
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
+			requestCtx, cancel := d.Timeout(ctx)
 			defer cancel()
 
 			resp, err := client.GetSubscriptionAppStoreReviewScreenshotForSubscription(
@@ -90,7 +88,7 @@ Examples:
 				return fmt.Errorf("subscriptions app-store-review-screenshot view: no App Store review screenshot found for subscription %q: %w", id, asc.ErrNotFound)
 			}
 
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+			return d.PrintOutput(resp, *output.Output, *output.Pretty)
 		},
 	}
 }

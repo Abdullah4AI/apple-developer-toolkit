@@ -10,8 +10,8 @@ import (
 	"strings"
 )
 
-// FeedbackAttributes describes beta feedback screenshot submissions.
-type FeedbackAttributes struct {
+// BetaFeedbackScreenshotSubmissionAttributes describes beta feedback screenshot submissions.
+type BetaFeedbackScreenshotSubmissionAttributes struct {
 	CreatedDate             string                    `json:"createdDate"`
 	Comment                 string                    `json:"comment"`
 	Email                   string                    `json:"email"`
@@ -43,8 +43,8 @@ type FeedbackScreenshotImage struct {
 	ExpirationDate string `json:"expirationDate,omitempty"`
 }
 
-// CrashAttributes describes beta feedback crash submissions.
-type CrashAttributes struct {
+// BetaFeedbackCrashSubmissionAttributes describes beta feedback crash submissions.
+type BetaFeedbackCrashSubmissionAttributes struct {
 	CreatedDate             string               `json:"createdDate"`
 	Comment                 string               `json:"comment"`
 	Email                   string               `json:"email"`
@@ -68,8 +68,8 @@ type CrashAttributes struct {
 	CrashLog                string               `json:"crashLog,omitempty"`
 }
 
-// ReviewAttributes describes App Store customer reviews.
-type ReviewAttributes struct {
+// CustomerReviewAttributes describes App Store customer reviews.
+type CustomerReviewAttributes struct {
 	Rating           int    `json:"rating"`
 	Title            string `json:"title"`
 	Body             string `json:"body"`
@@ -81,58 +81,22 @@ type ReviewAttributes struct {
 }
 
 // FeedbackResponse is the response from beta feedback screenshots endpoint.
-type FeedbackResponse = Response[FeedbackAttributes]
+type FeedbackResponse = Response[BetaFeedbackScreenshotSubmissionAttributes]
 
 // CrashesResponse is the response from beta feedback crashes endpoint.
-type CrashesResponse = Response[CrashAttributes]
+type CrashesResponse = Response[BetaFeedbackCrashSubmissionAttributes]
 
 // ReviewsResponse is the response from customer reviews endpoint.
-type ReviewsResponse = Response[ReviewAttributes]
-
-// CustomerReviewResponse is the response from customer review detail endpoint.
-type CustomerReviewResponse = SingleResponse[ReviewAttributes]
+type ReviewsResponse = Response[CustomerReviewAttributes]
 
 // AppStoreVersionLocalizationsResponse is the response from app store version localizations endpoints.
 type AppStoreVersionLocalizationsResponse = Response[AppStoreVersionLocalizationAttributes]
 
-// AppStoreVersionLocalizationResponse is the response from app store version localization detail/creates.
-type AppStoreVersionLocalizationResponse = SingleResponse[AppStoreVersionLocalizationAttributes]
-
-// BetaAppLocalizationsResponse is the response from beta app localization endpoints.
-type BetaAppLocalizationsResponse = Response[BetaAppLocalizationAttributes]
-
-// BetaAppLocalizationResponse is the response from beta app localization detail/creates.
-type BetaAppLocalizationResponse = SingleResponse[BetaAppLocalizationAttributes]
-
-// BetaBuildLocalizationsResponse is the response from beta build localization endpoints.
-type BetaBuildLocalizationsResponse = Response[BetaBuildLocalizationAttributes]
-
-// BetaBuildLocalizationResponse is the response from beta build localization detail/creates.
-type BetaBuildLocalizationResponse = SingleResponse[BetaBuildLocalizationAttributes]
-
 // AppInfoLocalizationsResponse is the response from app info localizations endpoints.
 type AppInfoLocalizationsResponse = Response[AppInfoLocalizationAttributes]
 
-// AppInfoLocalizationResponse is the response from app info localization detail/creates.
-type AppInfoLocalizationResponse = SingleResponse[AppInfoLocalizationAttributes]
-
 // AppInfosResponse is the response from app info endpoints.
 type AppInfosResponse = Response[AppInfoAttributes]
-
-// AppInfoResponse is the response from app info detail endpoints.
-type AppInfoResponse = SingleResponse[AppInfoAttributes]
-
-// BetaGroupsResponse is the response from beta groups endpoints.
-type BetaGroupsResponse = Response[BetaGroupAttributes]
-
-// BetaGroupResponse is the response from beta group detail/creates.
-type BetaGroupResponse = SingleResponse[BetaGroupAttributes]
-
-// BetaTestersResponse is the response from beta testers endpoints.
-type BetaTestersResponse = Response[BetaTesterAttributes]
-
-// BetaTesterResponse is the response from beta tester detail/creates.
-type BetaTesterResponse = SingleResponse[BetaTesterAttributes]
 
 // BetaTesterInvitationResponse is the response from beta tester invitations.
 type BetaTesterInvitationResponse = SingleResponse[struct{}]
@@ -155,7 +119,7 @@ type BetaAppLocalizationAttributes struct {
 	FeedbackEmail     string `json:"feedbackEmail,omitempty"`
 	MarketingURL      string `json:"marketingUrl,omitempty"`
 	PrivacyPolicyURL  string `json:"privacyPolicyUrl,omitempty"`
-	TvOsPrivacyPolicy string `json:"tvOsPrivacyPolicy,omitempty"`
+	TvOSPrivacyPolicy string `json:"tvOsPrivacyPolicy,omitempty"`
 	Description       string `json:"description,omitempty"`
 	Locale            string `json:"locale,omitempty"`
 
@@ -487,21 +451,11 @@ type AppStoreVersionLocalizationCreateData struct {
 	Relationships *AppStoreVersionLocalizationRelationships `json:"relationships"`
 }
 
-// AppStoreVersionLocalizationCreateRequest is a request to create a version localization.
-type AppStoreVersionLocalizationCreateRequest struct {
-	Data AppStoreVersionLocalizationCreateData `json:"data"`
-}
-
 // AppStoreVersionLocalizationUpdateData is the data portion of a version localization update request.
 type AppStoreVersionLocalizationUpdateData struct {
 	Type       ResourceType                          `json:"type"`
 	ID         string                                `json:"id"`
 	Attributes AppStoreVersionLocalizationAttributes `json:"attributes"`
-}
-
-// AppStoreVersionLocalizationUpdateRequest is a request to update a version localization.
-type AppStoreVersionLocalizationUpdateRequest struct {
-	Data AppStoreVersionLocalizationUpdateData `json:"data"`
 }
 
 // AppStoreVersionLocalizationRelationships describes relationships for version localizations.
@@ -516,47 +470,11 @@ type BetaAppLocalizationCreateData struct {
 	Relationships *BetaAppLocalizationRelationships `json:"relationships"`
 }
 
-// BetaAppLocalizationCreateRequest is a request to create a beta app localization.
-type BetaAppLocalizationCreateRequest struct {
-	Data BetaAppLocalizationCreateData `json:"data"`
-}
-
-// BetaAppLocalizationUpdateAttributes describes attributes for updating beta app localizations.
-type BetaAppLocalizationUpdateAttributes struct {
-	FeedbackEmail     *string `json:"feedbackEmail,omitempty"`
-	MarketingURL      *string `json:"marketingUrl,omitempty"`
-	PrivacyPolicyURL  *string `json:"privacyPolicyUrl,omitempty"`
-	TvOsPrivacyPolicy *string `json:"tvOsPrivacyPolicy,omitempty"`
-	Description       *string `json:"description,omitempty"`
-}
-
-// BetaAppLocalizationUpdateData is the data portion of a beta app localization update request.
-type BetaAppLocalizationUpdateData struct {
-	Type       ResourceType                         `json:"type"`
-	ID         string                               `json:"id"`
-	Attributes *BetaAppLocalizationUpdateAttributes `json:"attributes,omitempty"`
-}
-
-// BetaAppLocalizationUpdateRequest is a request to update a beta app localization.
-type BetaAppLocalizationUpdateRequest struct {
-	Data BetaAppLocalizationUpdateData `json:"data"`
-}
-
-// BetaAppLocalizationRelationships describes relationships for beta app localizations.
-type BetaAppLocalizationRelationships struct {
-	App *Relationship `json:"app"`
-}
-
 // BetaBuildLocalizationCreateData is the data portion of a beta build localization create request.
 type BetaBuildLocalizationCreateData struct {
 	Type          ResourceType                        `json:"type"`
 	Attributes    BetaBuildLocalizationAttributes     `json:"attributes"`
 	Relationships *BetaBuildLocalizationRelationships `json:"relationships"`
-}
-
-// BetaBuildLocalizationCreateRequest is a request to create a beta build localization.
-type BetaBuildLocalizationCreateRequest struct {
-	Data BetaBuildLocalizationCreateData `json:"data"`
 }
 
 // BetaBuildLocalizationUpdateData is the data portion of a beta build localization update request.
@@ -566,16 +484,6 @@ type BetaBuildLocalizationUpdateData struct {
 	Attributes BetaBuildLocalizationAttributes `json:"attributes"`
 }
 
-// BetaBuildLocalizationUpdateRequest is a request to update a beta build localization.
-type BetaBuildLocalizationUpdateRequest struct {
-	Data BetaBuildLocalizationUpdateData `json:"data"`
-}
-
-// BetaBuildLocalizationRelationships describes relationships for beta build localizations.
-type BetaBuildLocalizationRelationships struct {
-	Build *Relationship `json:"build"`
-}
-
 // AppInfoLocalizationCreateData is the data portion of an app info localization create request.
 type AppInfoLocalizationCreateData struct {
 	Type          ResourceType                      `json:"type"`
@@ -583,49 +491,11 @@ type AppInfoLocalizationCreateData struct {
 	Relationships *AppInfoLocalizationRelationships `json:"relationships"`
 }
 
-// AppInfoLocalizationCreateRequest is a request to create an app info localization.
-type AppInfoLocalizationCreateRequest struct {
-	Data AppInfoLocalizationCreateData `json:"data"`
-}
-
 // AppInfoLocalizationUpdateData is the data portion of an app info localization update request.
 type AppInfoLocalizationUpdateData struct {
 	Type       ResourceType                  `json:"type"`
 	ID         string                        `json:"id"`
 	Attributes AppInfoLocalizationAttributes `json:"attributes"`
-}
-
-// AppInfoLocalizationUpdateRequest is a request to update an app info localization.
-type AppInfoLocalizationUpdateRequest struct {
-	Data AppInfoLocalizationUpdateData `json:"data"`
-}
-
-// AppInfoLocalizationRelationships describes relationships for app info localizations.
-type AppInfoLocalizationRelationships struct {
-	AppInfo *Relationship `json:"appInfo"`
-}
-
-// BetaGroupCreateData is the data portion of a beta group create request.
-type BetaGroupCreateData struct {
-	Type          ResourceType              `json:"type"`
-	Attributes    BetaGroupCreateAttributes `json:"attributes"`
-	Relationships *BetaGroupRelationships   `json:"relationships"`
-}
-
-// BetaGroupCreateAttributes describes attributes accepted when creating a beta group.
-type BetaGroupCreateAttributes struct {
-	Name                   string `json:"name"`
-	IsInternalGroup        *bool  `json:"isInternalGroup,omitempty"`
-	HasAccessToAllBuilds   *bool  `json:"hasAccessToAllBuilds,omitempty"`
-	PublicLinkEnabled      *bool  `json:"publicLinkEnabled,omitempty"`
-	PublicLinkLimitEnabled *bool  `json:"publicLinkLimitEnabled,omitempty"`
-	PublicLinkLimit        *int   `json:"publicLinkLimit,omitempty"`
-	FeedbackEnabled        *bool  `json:"feedbackEnabled,omitempty"`
-}
-
-// BetaGroupCreateRequest is a request to create a beta group.
-type BetaGroupCreateRequest struct {
-	Data BetaGroupCreateData `json:"data"`
 }
 
 // BetaGroupUpdateAttributes describes attributes for updating a beta group.
@@ -639,48 +509,11 @@ type BetaGroupUpdateAttributes struct {
 	IOSBuildsAvailableForAppleVision     *bool  `json:"iosBuildsAvailableForAppleVision,omitempty"`
 }
 
-// BetaGroupUpdateData is the data portion of a beta group update request.
-type BetaGroupUpdateData struct {
-	Type       ResourceType               `json:"type"`
-	ID         string                     `json:"id"`
-	Attributes *BetaGroupUpdateAttributes `json:"attributes,omitempty"`
-}
-
-// BetaGroupUpdateRequest is a request to update a beta group.
-type BetaGroupUpdateRequest struct {
-	Data BetaGroupUpdateData `json:"data"`
-}
-
-// BetaGroupRelationships describes relationships for beta groups.
-type BetaGroupRelationships struct {
-	App         *Relationship     `json:"app"`
-	Builds      *RelationshipList `json:"builds,omitempty"`
-	BetaTesters *RelationshipList `json:"betaTesters,omitempty"`
-}
-
 // BetaTesterCreateAttributes describes attributes for creating a beta tester.
 type BetaTesterCreateAttributes struct {
 	FirstName string `json:"firstName,omitempty"`
 	LastName  string `json:"lastName,omitempty"`
 	Email     string `json:"email"`
-}
-
-// BetaTesterCreateRelationships describes relationships for beta tester creation.
-type BetaTesterCreateRelationships struct {
-	BetaGroups *RelationshipList `json:"betaGroups,omitempty"`
-	Builds     *RelationshipList `json:"builds,omitempty"`
-}
-
-// BetaTesterCreateData is the data portion of a beta tester create request.
-type BetaTesterCreateData struct {
-	Type          ResourceType                   `json:"type"`
-	Attributes    BetaTesterCreateAttributes     `json:"attributes"`
-	Relationships *BetaTesterCreateRelationships `json:"relationships,omitempty"`
-}
-
-// BetaTesterCreateRequest is a request to create a beta tester.
-type BetaTesterCreateRequest struct {
-	Data BetaTesterCreateData `json:"data"`
 }
 
 // BetaTesterInvitationCreateRelationships describes relationships for invitations.
@@ -689,108 +522,15 @@ type BetaTesterInvitationCreateRelationships struct {
 	BetaTester *Relationship `json:"betaTester,omitempty"`
 }
 
-// BetaTesterInvitationCreateData is the data portion of an invitation create request.
-type BetaTesterInvitationCreateData struct {
-	Type          ResourceType                             `json:"type"`
-	Relationships *BetaTesterInvitationCreateRelationships `json:"relationships"`
-}
-
-// BetaTesterInvitationCreateRequest is a request to create a beta tester invitation.
-type BetaTesterInvitationCreateRequest struct {
-	Data BetaTesterInvitationCreateData `json:"data"`
-}
-
-// GetFeedback retrieves TestFlight feedback
-func (c *Client) GetFeedback(ctx context.Context, appID string, opts ...FeedbackOption) (*FeedbackResponse, error) {
-	query := &feedbackQuery{}
-	for _, opt := range opts {
-		opt(query)
-	}
-
-	path := fmt.Sprintf("/v1/apps/%s/betaFeedbackScreenshotSubmissions", appID)
-	if query.nextURL != "" {
-		// Validate nextURL to prevent credential exfiltration
-		if err := validateNextURL(query.nextURL); err != nil {
-			return nil, fmt.Errorf("feedback: %w", err)
-		}
-		path = query.nextURL
-	} else if queryString := buildFeedbackQuery(query); queryString != "" {
-		path += "?" + queryString
-	}
-
-	data, err := c.do(ctx, "GET", path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var response FeedbackResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
-// GetCrashes retrieves TestFlight crash reports
-func (c *Client) GetCrashes(ctx context.Context, appID string, opts ...CrashOption) (*CrashesResponse, error) {
-	query := &crashQuery{}
-	for _, opt := range opts {
-		opt(query)
-	}
-
-	path := fmt.Sprintf("/v1/apps/%s/betaFeedbackCrashSubmissions", appID)
-	if query.nextURL != "" {
-		// Validate nextURL to prevent credential exfiltration
-		if err := validateNextURL(query.nextURL); err != nil {
-			return nil, fmt.Errorf("crashes: %w", err)
-		}
-		path = query.nextURL
-	} else if queryString := buildCrashQuery(query); queryString != "" {
-		path += "?" + queryString
-	}
-
-	data, err := c.do(ctx, "GET", path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var response CrashesResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
 // GetReviews retrieves App Store reviews
 func (c *Client) GetReviews(ctx context.Context, appID string, opts ...ReviewOption) (*ReviewsResponse, error) {
-	query := &reviewQuery{}
-	for _, opt := range opts {
-		opt(query)
-	}
-
-	path := fmt.Sprintf("/v1/apps/%s/customerReviews", appID)
-	if query.nextURL != "" {
-		// Validate nextURL to prevent credential exfiltration
-		if err := validateNextURL(query.nextURL); err != nil {
-			return nil, fmt.Errorf("reviews: %w", err)
-		}
-		path = query.nextURL
-	} else if queryString := buildReviewQuery(opts); queryString != "" {
-		path += "?" + queryString
-	}
-
-	data, err := c.do(ctx, "GET", path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var response ReviewsResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
+	query := applyOptions(opts)
+	return getJSON[ReviewsResponse](ctx, c, readRequest{
+		Path:        fmt.Sprintf("/v1/apps/%s/customerReviews", appID),
+		Query:       buildReviewQuery(opts),
+		Next:        query.nextURL,
+		NextContext: "reviews",
+	})
 }
 
 // GetCustomerReview retrieves a customer review by ID. Only include and fields
@@ -800,153 +540,10 @@ func (c *Client) GetCustomerReview(ctx context.Context, reviewID string, opts ..
 	if reviewID == "" {
 		return nil, fmt.Errorf("reviewID is required")
 	}
-
-	path := fmt.Sprintf("/v1/customerReviews/%s", reviewID)
-	if queryString := buildCustomerReviewQuery(opts); queryString != "" {
-		path += "?" + queryString
-	}
-
-	data, err := c.do(ctx, "GET", path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var response CustomerReviewResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
-// GetBetaGroups retrieves the list of beta groups for an app.
-func (c *Client) GetBetaGroups(ctx context.Context, appID string, opts ...BetaGroupsOption) (*BetaGroupsResponse, error) {
-	query := &betaGroupsQuery{}
-	for _, opt := range opts {
-		opt(query)
-	}
-
-	path := fmt.Sprintf("/v1/apps/%s/betaGroups", appID)
-	if query.nextURL != "" {
-		// Validate nextURL to prevent credential exfiltration
-		if err := validateNextURL(query.nextURL); err != nil {
-			return nil, fmt.Errorf("betaGroups: %w", err)
-		}
-		path = query.nextURL
-	} else if queryString := buildBetaGroupsQuery(query); queryString != "" {
-		path += "?" + queryString
-	}
-
-	data, err := c.do(ctx, "GET", path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var response BetaGroupsResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
-// ListBetaGroups retrieves beta groups using the top-level /v1/betaGroups endpoint (global list).
-func (c *Client) ListBetaGroups(ctx context.Context, opts ...BetaGroupsOption) (*BetaGroupsResponse, error) {
-	query := &betaGroupsQuery{}
-	for _, opt := range opts {
-		opt(query)
-	}
-
-	path := "/v1/betaGroups"
-	if query.nextURL != "" {
-		if err := validateNextURL(query.nextURL); err != nil {
-			return nil, fmt.Errorf("betaGroups: %w", err)
-		}
-		path = query.nextURL
-	} else if queryString := buildBetaGroupsQuery(query); queryString != "" {
-		path += "?" + queryString
-	}
-
-	data, err := c.do(ctx, "GET", path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var response BetaGroupsResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
-// GetBetaGroupBuilds retrieves builds assigned to a beta group.
-func (c *Client) GetBetaGroupBuilds(ctx context.Context, groupID string, opts ...BetaGroupBuildsOption) (*BuildsResponse, error) {
-	query := &betaGroupBuildsQuery{}
-	for _, opt := range opts {
-		opt(query)
-	}
-
-	path := fmt.Sprintf("/v1/betaGroups/%s/builds", groupID)
-	if query.nextURL != "" {
-		// Validate nextURL to prevent credential exfiltration
-		if err := validateNextURL(query.nextURL); err != nil {
-			return nil, fmt.Errorf("betaGroupBuilds: %w", err)
-		}
-		path = query.nextURL
-	} else if queryString := buildBetaGroupBuildsQuery(query); queryString != "" {
-		path += "?" + queryString
-	}
-
-	data, err := c.do(ctx, "GET", path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var response BuildsResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
-// GetBetaGroupTesters retrieves beta testers assigned to a beta group.
-func (c *Client) GetBetaGroupTesters(ctx context.Context, groupID string, opts ...BetaGroupTestersOption) (*BetaTestersResponse, error) {
-	query := &betaGroupTestersQuery{}
-	for _, opt := range opts {
-		opt(query)
-	}
-
-	path := fmt.Sprintf("/v1/betaGroups/%s/betaTesters", groupID)
-	if query.nextURL != "" {
-		// Validate nextURL to prevent credential exfiltration
-		if err := validateNextURL(query.nextURL); err != nil {
-			return nil, fmt.Errorf("betaGroupTesters: %w", err)
-		}
-		path = query.nextURL
-	} else if queryString := buildBetaGroupTestersQuery(query); queryString != "" {
-		path += "?" + queryString
-	}
-
-	data, err := c.do(ctx, "GET", path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var response BetaTestersResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
-// CreateBetaGroup creates a beta group for an app.
-func (c *Client) CreateBetaGroup(ctx context.Context, appID, name string) (*BetaGroupResponse, error) {
-	return c.CreateBetaGroupWithAttributes(ctx, appID, BetaGroupCreateAttributes{
-		Name: name,
-	}, nil, nil)
+	return getJSON[CustomerReviewResponse](ctx, c, readRequest{
+		Path:  fmt.Sprintf("/v1/customerReviews/%s", reviewID),
+		Query: buildCustomerReviewQuery(opts),
+	})
 }
 
 // CreateBetaGroupWithAttributes creates a beta group for an app with explicit
@@ -969,143 +566,19 @@ func (c *Client) CreateBetaGroupWithAttributes(ctx context.Context, appID string
 			},
 		},
 	}
-
-	body, err := BuildRequestBody(payload)
-	if err != nil {
-		return nil, err
-	}
-
-	data, err := c.do(ctx, "POST", "/v1/betaGroups", body)
-	if err != nil {
-		return nil, err
-	}
-
-	var response BetaGroupResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
-// GetBetaGroup retrieves a beta group by ID.
-func (c *Client) GetBetaGroup(ctx context.Context, groupID string) (*BetaGroupResponse, error) {
-	path := fmt.Sprintf("/v1/betaGroups/%s", groupID)
-	data, err := c.do(ctx, "GET", path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var response BetaGroupResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
+	return sendJSON[BetaGroupResponse](ctx, c, writeRequest{Method: "POST", Path: "/v1/betaGroups", Payload: payload})
 }
 
 // UpdateBetaGroup updates a beta group by ID.
 func (c *Client) UpdateBetaGroup(ctx context.Context, groupID string, req BetaGroupUpdateRequest) (*BetaGroupResponse, error) {
-	body, err := BuildRequestBody(req)
-	if err != nil {
-		return nil, err
-	}
-
-	data, err := c.do(ctx, "PATCH", fmt.Sprintf("/v1/betaGroups/%s", groupID), body)
-	if err != nil {
-		return nil, err
-	}
-
-	var response BetaGroupResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
-// DeleteBetaGroup deletes a beta group by ID.
-func (c *Client) DeleteBetaGroup(ctx context.Context, groupID string) error {
-	path := fmt.Sprintf("/v1/betaGroups/%s", groupID)
-	_, err := c.do(ctx, "DELETE", path, nil)
-	return err
-}
-
-// AddBetaTestersToGroup adds testers to a beta group.
-func (c *Client) AddBetaTestersToGroup(ctx context.Context, groupID string, testerIDs []string) error {
-	groupID = strings.TrimSpace(groupID)
-	testerIDs = normalizeList(testerIDs)
-	if groupID == "" {
-		return fmt.Errorf("groupID is required")
-	}
-	if len(testerIDs) == 0 {
-		return fmt.Errorf("testerIDs are required")
-	}
-	payload := RelationshipRequest{
-		Data: make([]RelationshipData, 0, len(testerIDs)),
-	}
-	for _, testerID := range testerIDs {
-		payload.Data = append(payload.Data, RelationshipData{
-			Type: ResourceTypeBetaTesters,
-			ID:   testerID,
-		})
-	}
-
-	body, err := BuildRequestBody(payload)
-	if err != nil {
-		return err
-	}
-
-	path := fmt.Sprintf("/v1/betaGroups/%s/relationships/betaTesters", groupID)
-	_, err = c.do(ctx, "POST", path, body)
-	return err
-}
-
-// RemoveBetaTestersFromGroup removes testers from a beta group.
-func (c *Client) RemoveBetaTestersFromGroup(ctx context.Context, groupID string, testerIDs []string) error {
-	groupID = strings.TrimSpace(groupID)
-	testerIDs = normalizeList(testerIDs)
-	if groupID == "" {
-		return fmt.Errorf("groupID is required")
-	}
-	if len(testerIDs) == 0 {
-		return fmt.Errorf("testerIDs are required")
-	}
-	payload := RelationshipRequest{
-		Data: make([]RelationshipData, 0, len(testerIDs)),
-	}
-	for _, testerID := range testerIDs {
-		payload.Data = append(payload.Data, RelationshipData{
-			Type: ResourceTypeBetaTesters,
-			ID:   testerID,
-		})
-	}
-
-	body, err := BuildRequestBody(payload)
-	if err != nil {
-		return err
-	}
-
-	path := fmt.Sprintf("/v1/betaGroups/%s/relationships/betaTesters", groupID)
-	_, err = c.do(ctx, "DELETE", path, body)
-	return err
+	return sendJSON[BetaGroupResponse](ctx, c, writeRequest{Method: "PATCH", Path: fmt.Sprintf("/v1/betaGroups/%s", groupID), Payload: req})
 }
 
 // GetBetaTesters retrieves beta testers for an app.
 func (c *Client) GetBetaTesters(ctx context.Context, appID string, opts ...BetaTestersOption) (*BetaTestersResponse, error) {
-	query := &betaTestersQuery{}
-	for _, opt := range opts {
-		opt(query)
-	}
-
+	query := applyOptions(opts)
 	path := "/v1/betaTesters"
-	if query.nextURL != "" {
-		// Validate nextURL to prevent credential exfiltration
-		if err := validateNextURL(query.nextURL); err != nil {
-			return nil, fmt.Errorf("betaTesters: %w", err)
-		}
-		path = query.nextURL
-	} else {
+	if query.nextURL == "" {
 		queryString, err := buildBetaTestersQuery(appID, query)
 		if err != nil {
 			return nil, fmt.Errorf("betaTesters: %w", err)
@@ -1114,34 +587,7 @@ func (c *Client) GetBetaTesters(ctx context.Context, appID string, opts ...BetaT
 			path += "?" + queryString
 		}
 	}
-
-	data, err := c.do(ctx, "GET", path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var response BetaTestersResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
-// GetBetaTester retrieves a beta tester by ID.
-func (c *Client) GetBetaTester(ctx context.Context, testerID string) (*BetaTesterResponse, error) {
-	path := fmt.Sprintf("/v1/betaTesters/%s", testerID)
-	data, err := c.do(ctx, "GET", path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var response BetaTesterResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
+	return getJSON[BetaTestersResponse](ctx, c, readRequest{Path: path, Next: query.nextURL, NextContext: "betaTesters"})
 }
 
 // CreateBetaTester creates a beta tester, attaching any beta groups and builds
@@ -1165,310 +611,7 @@ func (c *Client) CreateBetaTester(ctx context.Context, email, firstName, lastNam
 			Relationships: relationships,
 		},
 	}
-
-	body, err := BuildRequestBody(payload)
-	if err != nil {
-		return nil, err
-	}
-
-	data, err := c.do(ctx, "POST", "/v1/betaTesters", body)
-	if err != nil {
-		return nil, err
-	}
-
-	var response BetaTesterResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
-// AddBetaTesterToGroups adds a tester to multiple beta groups.
-func (c *Client) AddBetaTesterToGroups(ctx context.Context, testerID string, groupIDs []string) error {
-	testerID = strings.TrimSpace(testerID)
-	groupIDs = normalizeList(groupIDs)
-	if testerID == "" {
-		return fmt.Errorf("tester ID is required")
-	}
-	if len(groupIDs) == 0 {
-		return fmt.Errorf("group IDs are required")
-	}
-
-	relData := make([]ResourceData, 0, len(groupIDs))
-	for _, groupID := range groupIDs {
-		relData = append(relData, ResourceData{
-			Type: ResourceTypeBetaGroups,
-			ID:   groupID,
-		})
-	}
-
-	payload := RelationshipList{Data: relData}
-	body, err := BuildRequestBody(payload)
-	if err != nil {
-		return err
-	}
-
-	path := fmt.Sprintf("/v1/betaTesters/%s/relationships/betaGroups", testerID)
-	if _, err := c.do(ctx, "POST", path, body); err != nil {
-		return err
-	}
-	return nil
-}
-
-// RemoveBetaTesterFromGroups removes a tester from multiple beta groups.
-func (c *Client) RemoveBetaTesterFromGroups(ctx context.Context, testerID string, groupIDs []string) error {
-	testerID = strings.TrimSpace(testerID)
-	groupIDs = normalizeList(groupIDs)
-	if testerID == "" {
-		return fmt.Errorf("tester ID is required")
-	}
-	if len(groupIDs) == 0 {
-		return fmt.Errorf("group IDs are required")
-	}
-
-	relData := make([]ResourceData, 0, len(groupIDs))
-	for _, groupID := range groupIDs {
-		relData = append(relData, ResourceData{
-			Type: ResourceTypeBetaGroups,
-			ID:   groupID,
-		})
-	}
-
-	payload := RelationshipList{Data: relData}
-	body, err := BuildRequestBody(payload)
-	if err != nil {
-		return err
-	}
-
-	path := fmt.Sprintf("/v1/betaTesters/%s/relationships/betaGroups", testerID)
-	if _, err := c.do(ctx, "DELETE", path, body); err != nil {
-		return err
-	}
-	return nil
-}
-
-// RemoveBetaTesterFromApps removes a tester from multiple apps.
-func (c *Client) RemoveBetaTesterFromApps(ctx context.Context, testerID string, appIDs []string) error {
-	testerID = strings.TrimSpace(testerID)
-	appIDs = normalizeList(appIDs)
-	if testerID == "" {
-		return fmt.Errorf("tester ID is required")
-	}
-	if len(appIDs) == 0 {
-		return fmt.Errorf("app IDs are required")
-	}
-
-	relData := make([]ResourceData, 0, len(appIDs))
-	for _, appID := range appIDs {
-		relData = append(relData, ResourceData{
-			Type: ResourceTypeApps,
-			ID:   appID,
-		})
-	}
-
-	payload := RelationshipList{Data: relData}
-	body, err := BuildRequestBody(payload)
-	if err != nil {
-		return err
-	}
-
-	path := fmt.Sprintf("/v1/betaTesters/%s/relationships/apps", testerID)
-	if _, err := c.do(ctx, "DELETE", path, body); err != nil {
-		return err
-	}
-	return nil
-}
-
-// AddBuildsToBetaTester adds builds to a beta tester.
-func (c *Client) AddBuildsToBetaTester(ctx context.Context, testerID string, buildIDs []string) error {
-	testerID = strings.TrimSpace(testerID)
-	buildIDs = normalizeList(buildIDs)
-	if testerID == "" {
-		return fmt.Errorf("tester ID is required")
-	}
-	if len(buildIDs) == 0 {
-		return fmt.Errorf("build IDs are required")
-	}
-
-	relData := make([]ResourceData, 0, len(buildIDs))
-	for _, buildID := range buildIDs {
-		relData = append(relData, ResourceData{
-			Type: ResourceTypeBuilds,
-			ID:   buildID,
-		})
-	}
-
-	payload := RelationshipList{Data: relData}
-	body, err := BuildRequestBody(payload)
-	if err != nil {
-		return err
-	}
-
-	path := fmt.Sprintf("/v1/betaTesters/%s/relationships/builds", testerID)
-	if _, err := c.do(ctx, "POST", path, body); err != nil {
-		return err
-	}
-	return nil
-}
-
-// RemoveBuildsFromBetaTester removes builds from a beta tester.
-func (c *Client) RemoveBuildsFromBetaTester(ctx context.Context, testerID string, buildIDs []string) error {
-	testerID = strings.TrimSpace(testerID)
-	buildIDs = normalizeList(buildIDs)
-	if testerID == "" {
-		return fmt.Errorf("tester ID is required")
-	}
-	if len(buildIDs) == 0 {
-		return fmt.Errorf("build IDs are required")
-	}
-
-	relData := make([]ResourceData, 0, len(buildIDs))
-	for _, buildID := range buildIDs {
-		relData = append(relData, ResourceData{
-			Type: ResourceTypeBuilds,
-			ID:   buildID,
-		})
-	}
-
-	payload := RelationshipList{Data: relData}
-	body, err := BuildRequestBody(payload)
-	if err != nil {
-		return err
-	}
-
-	path := fmt.Sprintf("/v1/betaTesters/%s/relationships/builds", testerID)
-	if _, err := c.do(ctx, "DELETE", path, body); err != nil {
-		return err
-	}
-	return nil
-}
-
-// RemoveBetaTestersFromApp removes beta testers from an app.
-func (c *Client) RemoveBetaTestersFromApp(ctx context.Context, appID string, testerIDs []string) error {
-	appID = strings.TrimSpace(appID)
-	testerIDs = normalizeList(testerIDs)
-	if appID == "" {
-		return fmt.Errorf("app ID is required")
-	}
-	if len(testerIDs) == 0 {
-		return fmt.Errorf("tester IDs are required")
-	}
-
-	payload := RelationshipRequest{
-		Data: make([]RelationshipData, 0, len(testerIDs)),
-	}
-	for _, testerID := range testerIDs {
-		payload.Data = append(payload.Data, RelationshipData{
-			Type: ResourceTypeBetaTesters,
-			ID:   testerID,
-		})
-	}
-
-	body, err := BuildRequestBody(payload)
-	if err != nil {
-		return err
-	}
-
-	path := fmt.Sprintf("/v1/apps/%s/relationships/betaTesters", appID)
-	if _, err := c.do(ctx, "DELETE", path, body); err != nil {
-		return err
-	}
-	return nil
-}
-
-// DeleteBetaTester deletes a beta tester by ID.
-func (c *Client) DeleteBetaTester(ctx context.Context, testerID string) error {
-	path := fmt.Sprintf("/v1/betaTesters/%s", testerID)
-	_, err := c.do(ctx, "DELETE", path, nil)
-	return err
-}
-
-// CreateBetaTesterInvitation creates a beta tester invitation.
-func (c *Client) CreateBetaTesterInvitation(ctx context.Context, appID, testerID string) (*BetaTesterInvitationResponse, error) {
-	payload := BetaTesterInvitationCreateRequest{
-		Data: BetaTesterInvitationCreateData{
-			Type: ResourceTypeBetaTesterInvitations,
-			Relationships: &BetaTesterInvitationCreateRelationships{
-				App: &Relationship{
-					Data: ResourceData{
-						Type: ResourceTypeApps,
-						ID:   appID,
-					},
-				},
-				BetaTester: &Relationship{
-					Data: ResourceData{
-						Type: ResourceTypeBetaTesters,
-						ID:   testerID,
-					},
-				},
-			},
-		},
-	}
-
-	body, err := BuildRequestBody(payload)
-	if err != nil {
-		return nil, err
-	}
-
-	data, err := c.do(ctx, "POST", "/v1/betaTesterInvitations", body)
-	if err != nil {
-		return nil, err
-	}
-
-	var response BetaTesterInvitationResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
-// GetAppStoreVersionLocalizations retrieves localizations for an app store version.
-func (c *Client) GetAppStoreVersionLocalizations(ctx context.Context, versionID string, opts ...AppStoreVersionLocalizationsOption) (*AppStoreVersionLocalizationsResponse, error) {
-	query := &appStoreVersionLocalizationsQuery{}
-	for _, opt := range opts {
-		opt(query)
-	}
-
-	path := fmt.Sprintf("/v1/appStoreVersions/%s/appStoreVersionLocalizations", versionID)
-	if query.nextURL != "" {
-		// Validate nextURL to prevent credential exfiltration
-		if err := validateNextURL(query.nextURL); err != nil {
-			return nil, fmt.Errorf("appStoreVersionLocalizations: %w", err)
-		}
-		path = query.nextURL
-	} else if queryString := buildAppStoreVersionLocalizationsQuery(query); queryString != "" {
-		path += "?" + queryString
-	}
-
-	data, err := c.do(ctx, "GET", path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var response AppStoreVersionLocalizationsResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
-// GetAppStoreVersionLocalization retrieves a single app store version localization by ID.
-func (c *Client) GetAppStoreVersionLocalization(ctx context.Context, localizationID string) (*AppStoreVersionLocalizationResponse, error) {
-	path := fmt.Sprintf("/v1/appStoreVersionLocalizations/%s", localizationID)
-	data, err := c.do(ctx, "GET", path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var response AppStoreVersionLocalizationResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
+	return sendJSON[BetaTesterResponse](ctx, c, writeRequest{Method: "POST", Path: "/v1/betaTesters", Payload: payload})
 }
 
 // CreateAppStoreVersionLocalization creates a localization for an app store version.
@@ -1488,23 +631,7 @@ func (c *Client) CreateAppStoreVersionLocalization(ctx context.Context, versionI
 			},
 		},
 	}
-
-	body, err := BuildRequestBody(payload)
-	if err != nil {
-		return nil, err
-	}
-
-	data, err := c.do(ctx, "POST", "/v1/appStoreVersionLocalizations", body)
-	if err != nil {
-		return nil, err
-	}
-
-	var response AppStoreVersionLocalizationResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
+	return sendJSON[AppStoreVersionLocalizationResponse](ctx, c, writeRequest{Method: "POST", Path: "/v1/appStoreVersionLocalizations", Payload: payload})
 }
 
 // UpdateAppStoreVersionLocalization updates a localization for an app store version.
@@ -1519,24 +646,7 @@ func (c *Client) UpdateAppStoreVersionLocalization(ctx context.Context, localiza
 			Attributes: attributes,
 		},
 	}
-
-	body, err := BuildRequestBody(payload)
-	if err != nil {
-		return nil, err
-	}
-
-	path := fmt.Sprintf("/v1/appStoreVersionLocalizations/%s", localizationID)
-	data, err := c.do(ctx, "PATCH", path, body)
-	if err != nil {
-		return nil, err
-	}
-
-	var response AppStoreVersionLocalizationResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
+	return sendJSON[AppStoreVersionLocalizationResponse](ctx, c, writeRequest{Method: "PATCH", Path: fmt.Sprintf("/v1/appStoreVersionLocalizations/%s", localizationID), Payload: payload})
 }
 
 // UpdateAppStoreVersionLocalizationFields updates exactly the supplied fields,
@@ -1554,153 +664,7 @@ func (c *Client) UpdateAppStoreVersionLocalizationNullableFields(ctx context.Con
 		ID:         localizationID,
 		Attributes: fields,
 	}}
-	body, err := BuildRequestBody(payload)
-	if err != nil {
-		return nil, err
-	}
-	path := fmt.Sprintf("/v1/appStoreVersionLocalizations/%s", localizationID)
-	data, err := c.do(ctx, http.MethodPatch, path, body)
-	if err != nil {
-		return nil, err
-	}
-	var response AppStoreVersionLocalizationResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-	return &response, nil
-}
-
-// DeleteAppStoreVersionLocalization deletes a localization by ID.
-func (c *Client) DeleteAppStoreVersionLocalization(ctx context.Context, localizationID string) error {
-	path := fmt.Sprintf("/v1/appStoreVersionLocalizations/%s", localizationID)
-	if _, err := c.do(ctx, "DELETE", path, nil); err != nil {
-		return err
-	}
-	return nil
-}
-
-// GetBetaBuildLocalizations retrieves beta build localizations for a build.
-func (c *Client) GetBetaBuildLocalizations(ctx context.Context, buildID string, opts ...BetaBuildLocalizationsOption) (*BetaBuildLocalizationsResponse, error) {
-	query := &betaBuildLocalizationsQuery{}
-	for _, opt := range opts {
-		opt(query)
-	}
-
-	path := fmt.Sprintf("/v1/builds/%s/betaBuildLocalizations", buildID)
-	if query.nextURL != "" {
-		if err := validateNextURL(query.nextURL); err != nil {
-			return nil, fmt.Errorf("betaBuildLocalizations: %w", err)
-		}
-		path = query.nextURL
-	} else if queryString := buildBetaBuildLocalizationsQuery(query); queryString != "" {
-		path += "?" + queryString
-	}
-
-	data, err := c.do(ctx, "GET", path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var response BetaBuildLocalizationsResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
-// ListBetaBuildLocalizations retrieves beta build localizations using the top-level /v1/betaBuildLocalizations endpoint (global list).
-func (c *Client) ListBetaBuildLocalizations(ctx context.Context, opts ...BetaBuildLocalizationsOption) (*BetaBuildLocalizationsResponse, error) {
-	query := &betaBuildLocalizationsQuery{}
-	for _, opt := range opts {
-		opt(query)
-	}
-
-	path := "/v1/betaBuildLocalizations"
-	if query.nextURL != "" {
-		if err := validateNextURL(query.nextURL); err != nil {
-			return nil, fmt.Errorf("betaBuildLocalizations: %w", err)
-		}
-		path = query.nextURL
-	} else if queryString := buildBetaBuildLocalizationsQuery(query); queryString != "" {
-		path += "?" + queryString
-	}
-
-	data, err := c.do(ctx, "GET", path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var response BetaBuildLocalizationsResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
-// GetBetaBuildLocalization retrieves a single beta build localization by ID.
-func (c *Client) GetBetaBuildLocalization(ctx context.Context, localizationID string) (*BetaBuildLocalizationResponse, error) {
-	path := fmt.Sprintf("/v1/betaBuildLocalizations/%s", localizationID)
-	data, err := c.do(ctx, "GET", path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var response BetaBuildLocalizationResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
-// GetBetaBuildLocalizationBuild retrieves the build for a beta build localization.
-func (c *Client) GetBetaBuildLocalizationBuild(ctx context.Context, localizationID string) (*BuildResponse, error) {
-	localizationID = strings.TrimSpace(localizationID)
-	if localizationID == "" {
-		return nil, fmt.Errorf("localizationID is required")
-	}
-
-	path := fmt.Sprintf("/v1/betaBuildLocalizations/%s/build", localizationID)
-	data, err := c.do(ctx, "GET", path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var response BuildResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
-// BetaBuildLocalizationBuildLinkageResponse is the response for beta build localization build relationships.
-type BetaBuildLocalizationBuildLinkageResponse struct {
-	Data  ResourceData `json:"data"`
-	Links Links        `json:"links"`
-}
-
-// GetBetaBuildLocalizationBuildRelationship retrieves the build linkage for a beta build localization.
-func (c *Client) GetBetaBuildLocalizationBuildRelationship(ctx context.Context, localizationID string) (*BetaBuildLocalizationBuildLinkageResponse, error) {
-	localizationID = strings.TrimSpace(localizationID)
-	if localizationID == "" {
-		return nil, fmt.Errorf("localizationID is required")
-	}
-
-	path := fmt.Sprintf("/v1/betaBuildLocalizations/%s/relationships/build", localizationID)
-	data, err := c.do(ctx, "GET", path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var response BetaBuildLocalizationBuildLinkageResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
+	return sendJSON[AppStoreVersionLocalizationResponse](ctx, c, writeRequest{Method: http.MethodPatch, Path: fmt.Sprintf("/v1/appStoreVersionLocalizations/%s", localizationID), Payload: payload})
 }
 
 // CreateBetaBuildLocalization creates a beta build localization for a build.
@@ -1720,23 +684,7 @@ func (c *Client) CreateBetaBuildLocalization(ctx context.Context, buildID string
 			},
 		},
 	}
-
-	body, err := BuildRequestBody(payload)
-	if err != nil {
-		return nil, err
-	}
-
-	data, err := c.do(ctx, "POST", "/v1/betaBuildLocalizations", body)
-	if err != nil {
-		return nil, err
-	}
-
-	var response BetaBuildLocalizationResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
+	return sendJSON[BetaBuildLocalizationResponse](ctx, c, writeRequest{Method: "POST", Path: "/v1/betaBuildLocalizations", Payload: payload})
 }
 
 // UpdateBetaBuildLocalization updates a beta build localization by ID.
@@ -1749,64 +697,7 @@ func (c *Client) UpdateBetaBuildLocalization(ctx context.Context, localizationID
 			Attributes: attributes,
 		},
 	}
-
-	body, err := BuildRequestBody(payload)
-	if err != nil {
-		return nil, err
-	}
-
-	path := fmt.Sprintf("/v1/betaBuildLocalizations/%s", localizationID)
-	data, err := c.do(ctx, "PATCH", path, body)
-	if err != nil {
-		return nil, err
-	}
-
-	var response BetaBuildLocalizationResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
-// DeleteBetaBuildLocalization deletes a beta build localization by ID.
-func (c *Client) DeleteBetaBuildLocalization(ctx context.Context, localizationID string) error {
-	path := fmt.Sprintf("/v1/betaBuildLocalizations/%s", localizationID)
-	if _, err := c.do(ctx, "DELETE", path, nil); err != nil {
-		return err
-	}
-	return nil
-}
-
-// GetAppInfoLocalizations retrieves localizations for an app info resource.
-func (c *Client) GetAppInfoLocalizations(ctx context.Context, appInfoID string, opts ...AppInfoLocalizationsOption) (*AppInfoLocalizationsResponse, error) {
-	query := &appInfoLocalizationsQuery{}
-	for _, opt := range opts {
-		opt(query)
-	}
-
-	path := fmt.Sprintf("/v1/appInfos/%s/appInfoLocalizations", appInfoID)
-	if query.nextURL != "" {
-		// Validate nextURL to prevent credential exfiltration
-		if err := validateNextURL(query.nextURL); err != nil {
-			return nil, fmt.Errorf("appInfoLocalizations: %w", err)
-		}
-		path = query.nextURL
-	} else if queryString := buildAppInfoLocalizationsQuery(query); queryString != "" {
-		path += "?" + queryString
-	}
-
-	data, err := c.do(ctx, "GET", path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var response AppInfoLocalizationsResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
+	return sendJSON[BetaBuildLocalizationResponse](ctx, c, writeRequest{Method: "PATCH", Path: fmt.Sprintf("/v1/betaBuildLocalizations/%s", localizationID), Payload: payload})
 }
 
 // CreateAppInfoLocalization creates a localization for an app info resource.
@@ -1826,23 +717,7 @@ func (c *Client) CreateAppInfoLocalization(ctx context.Context, appInfoID string
 			},
 		},
 	}
-
-	body, err := BuildRequestBody(payload)
-	if err != nil {
-		return nil, err
-	}
-
-	data, err := c.do(ctx, "POST", "/v1/appInfoLocalizations", body)
-	if err != nil {
-		return nil, err
-	}
-
-	var response AppInfoLocalizationResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
+	return sendJSON[AppInfoLocalizationResponse](ctx, c, writeRequest{Method: "POST", Path: "/v1/appInfoLocalizations", Payload: payload})
 }
 
 // UpdateAppInfoLocalization updates a localization for an app info resource.
@@ -1857,24 +732,7 @@ func (c *Client) UpdateAppInfoLocalization(ctx context.Context, localizationID s
 			Attributes: attributes,
 		},
 	}
-
-	body, err := BuildRequestBody(payload)
-	if err != nil {
-		return nil, err
-	}
-
-	path := fmt.Sprintf("/v1/appInfoLocalizations/%s", localizationID)
-	data, err := c.do(ctx, "PATCH", path, body)
-	if err != nil {
-		return nil, err
-	}
-
-	var response AppInfoLocalizationResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
+	return sendJSON[AppInfoLocalizationResponse](ctx, c, writeRequest{Method: "PATCH", Path: fmt.Sprintf("/v1/appInfoLocalizations/%s", localizationID), Payload: payload})
 }
 
 // UpdateAppInfoLocalizationFields updates exactly the supplied fields,
@@ -1892,117 +750,5 @@ func (c *Client) UpdateAppInfoLocalizationNullableFields(ctx context.Context, lo
 		ID:         localizationID,
 		Attributes: fields,
 	}}
-	body, err := BuildRequestBody(payload)
-	if err != nil {
-		return nil, err
-	}
-	path := fmt.Sprintf("/v1/appInfoLocalizations/%s", localizationID)
-	data, err := c.do(ctx, http.MethodPatch, path, body)
-	if err != nil {
-		return nil, err
-	}
-	var response AppInfoLocalizationResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-	return &response, nil
-}
-
-// GetAppInfoLocalization retrieves an app info localization by ID.
-func (c *Client) GetAppInfoLocalization(ctx context.Context, localizationID string, opts ...AppInfoLocalizationOption) (*AppInfoLocalizationResponse, error) {
-	query := &appInfoLocalizationQuery{}
-	for _, opt := range opts {
-		opt(query)
-	}
-
-	localizationID = strings.TrimSpace(localizationID)
-	if localizationID == "" {
-		return nil, fmt.Errorf("localizationID is required")
-	}
-
-	path := fmt.Sprintf("/v1/appInfoLocalizations/%s", localizationID)
-	if queryString := buildAppInfoLocalizationQuery(query); queryString != "" {
-		path += "?" + queryString
-	}
-	data, err := c.do(ctx, "GET", path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var response AppInfoLocalizationResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
-// DeleteAppInfoLocalization deletes an app info localization by ID.
-func (c *Client) DeleteAppInfoLocalization(ctx context.Context, localizationID string) error {
-	localizationID = strings.TrimSpace(localizationID)
-	if localizationID == "" {
-		return fmt.Errorf("localizationID is required")
-	}
-
-	path := fmt.Sprintf("/v1/appInfoLocalizations/%s", localizationID)
-	_, err := c.do(ctx, "DELETE", path, nil)
-	return err
-}
-
-// GetAppInfos retrieves app info records for an app.
-func (c *Client) GetAppInfos(ctx context.Context, appID string, opts ...AppInfoOption) (*AppInfosResponse, error) {
-	query := &appInfoQuery{}
-	for _, opt := range opts {
-		opt(query)
-	}
-
-	path := fmt.Sprintf("/v1/apps/%s/appInfos", appID)
-	if query.nextURL != "" {
-		if err := validateNextURL(query.nextURL); err != nil {
-			return nil, fmt.Errorf("appInfos: %w", err)
-		}
-		path = query.nextURL
-	} else if queryString := buildAppInfoQuery(query); queryString != "" {
-		path += "?" + queryString
-	}
-	data, err := c.do(ctx, "GET", path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var response AppInfosResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
-// GetAppInfo retrieves an app info record by ID.
-func (c *Client) GetAppInfo(ctx context.Context, appInfoID string, opts ...AppInfoOption) (*AppInfoResponse, error) {
-	query := &appInfoQuery{}
-	for _, opt := range opts {
-		opt(query)
-	}
-
-	appInfoID = strings.TrimSpace(appInfoID)
-	if appInfoID == "" {
-		return nil, fmt.Errorf("appInfoID is required")
-	}
-
-	path := fmt.Sprintf("/v1/appInfos/%s", appInfoID)
-	if queryString := buildAppInfoQuery(query); queryString != "" {
-		path += "?" + queryString
-	}
-	data, err := c.do(ctx, "GET", path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var response AppInfoResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
+	return sendJSON[AppInfoLocalizationResponse](ctx, c, writeRequest{Method: http.MethodPatch, Path: fmt.Sprintf("/v1/appInfoLocalizations/%s", localizationID), Payload: payload})
 }

@@ -2,7 +2,6 @@ package asc
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 )
@@ -36,11 +35,6 @@ type GameCenterLeaderboardEntrySubmissionResponse struct {
 type GameCenterLeaderboardEntrySubmissionCreateData struct {
 	Type       ResourceType                                   `json:"type"`
 	Attributes GameCenterLeaderboardEntrySubmissionAttributes `json:"attributes"`
-}
-
-// GameCenterLeaderboardEntrySubmissionCreateRequest is a request to submit a leaderboard entry.
-type GameCenterLeaderboardEntrySubmissionCreateRequest struct {
-	Data GameCenterLeaderboardEntrySubmissionCreateData `json:"data"`
 }
 
 // CreateGameCenterLeaderboardEntrySubmission submits a leaderboard entry.
@@ -90,22 +84,7 @@ func (c *Client) CreateGameCenterLeaderboardEntrySubmission(ctx context.Context,
 		},
 	}
 
-	body, err := BuildRequestBody(payload)
-	if err != nil {
-		return nil, err
-	}
-
-	data, err := c.do(ctx, "POST", "/v1/gameCenterLeaderboardEntrySubmissions", body)
-	if err != nil {
-		return nil, err
-	}
-
-	var response GameCenterLeaderboardEntrySubmissionResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
+	return sendJSON[GameCenterLeaderboardEntrySubmissionResponse](ctx, c, writeRequest{Method: "POST", Path: "/v1/gameCenterLeaderboardEntrySubmissions", Payload: payload})
 }
 
 // GameCenterPlayerAchievementSubmissionAttributes describes a player achievement submission.
@@ -136,11 +115,6 @@ type GameCenterPlayerAchievementSubmissionResponse struct {
 type GameCenterPlayerAchievementSubmissionCreateData struct {
 	Type       ResourceType                                    `json:"type"`
 	Attributes GameCenterPlayerAchievementSubmissionAttributes `json:"attributes"`
-}
-
-// GameCenterPlayerAchievementSubmissionCreateRequest is a request to submit player achievements.
-type GameCenterPlayerAchievementSubmissionCreateRequest struct {
-	Data GameCenterPlayerAchievementSubmissionCreateData `json:"data"`
 }
 
 // CreateGameCenterPlayerAchievementSubmission submits a player achievement.
@@ -178,20 +152,5 @@ func (c *Client) CreateGameCenterPlayerAchievementSubmission(ctx context.Context
 		},
 	}
 
-	body, err := BuildRequestBody(payload)
-	if err != nil {
-		return nil, err
-	}
-
-	data, err := c.do(ctx, "POST", "/v1/gameCenterPlayerAchievementSubmissions", body)
-	if err != nil {
-		return nil, err
-	}
-
-	var response GameCenterPlayerAchievementSubmissionResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
+	return sendJSON[GameCenterPlayerAchievementSubmissionResponse](ctx, c, writeRequest{Method: "POST", Path: "/v1/gameCenterPlayerAchievementSubmissions", Payload: payload})
 }

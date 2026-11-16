@@ -10,6 +10,7 @@ import (
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/cmd"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asctest"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
@@ -422,8 +423,8 @@ func TestIAPRelatedSparseFieldValidationPrecedesHTTP441(t *testing.T) {
 		{name: "invalid subscription fields", args: []string{"subscriptions", "promoted-purchases", "list", "--app", "app-1", "--subscription-fields", "notAField"}, want: "--subscription-fields must be one of"},
 		{name: "invalid cross-scope iap fields", args: []string{"subscriptions", "promoted-purchases", "view", "--promoted-purchase-id", "promo-1", "--iap-fields", "notAField"}, want: "--iap-fields must be one of"},
 		{name: "invalid cross-scope subscription fields", args: []string{"iap", "promoted-purchases", "view", "--promoted-purchase-id", "promo-1", "--subscription-fields", "notAField"}, want: "--subscription-fields must be one of"},
-		{name: "iap promoted next conflict", args: []string{"iap", "promoted-purchases", "list", "--next", next, "--subscription-fields", "versions"}, want: "--next cannot be combined with --iap-fields or --subscription-fields"},
-		{name: "subscription promoted next conflict", args: []string{"subscriptions", "promoted-purchases", "list", "--next", next, "--iap-fields", "versions"}, want: "--next cannot be combined with --iap-fields or --subscription-fields"},
+		{name: "iap promoted next conflict", args: []string{"iap", "promoted-purchases", "list", "--next", next, "--subscription-fields", "versions"}, want: "iap promoted-purchases list: --next cannot be combined with --subscription-fields"},
+		{name: "subscription promoted next conflict", args: []string{"subscriptions", "promoted-purchases", "list", "--next", next, "--iap-fields", "versions"}, want: "subscriptions promoted-purchases list: --next cannot be combined with --iap-fields"},
 		{name: "promoted view missing selector", args: []string{"iap", "promoted-purchases", "view"}, want: "--promoted-purchase-id or --iap-id is required"},
 		{name: "promoted view selector conflict", args: []string{"iap", "promoted-purchases", "view", "--promoted-purchase-id", "promo-1", "--iap-id", "123"}, want: "--promoted-purchase-id and --iap-id are mutually exclusive"},
 	}
@@ -472,14 +473,8 @@ func TestScopedPromotedPurchaseExplicitEmptyFieldsFailBeforeAuth441(t *testing.T
 			t.Setenv("ASC_BYPASS_KEYCHAIN", "1")
 			t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "missing.json"))
 
-			requests := 0
-			originalTransport := http.DefaultTransport
-			http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-				requests++
-				t.Fatalf("unexpected request: %s %s", req.Method, req.URL.String())
-				return nil, nil
-			})
-			t.Cleanup(func() { http.DefaultTransport = originalTransport })
+			reg := asctest.NewRegistry(t)
+			reg.Install()
 
 			stdout, stderr := captureOutput(t, func() {
 				if code := cmd.Run(tt.args, "1.2.3"); code != cmd.ExitUsage {
@@ -489,7 +484,7 @@ func TestScopedPromotedPurchaseExplicitEmptyFieldsFailBeforeAuth441(t *testing.T
 			if strings.TrimSpace(stdout) != "" {
 				t.Fatalf("stdout = %q, want empty", stdout)
 			}
-			if requests != 0 {
+			if requests := len(reg.Requests()); requests != 0 {
 				t.Fatalf("requests = %d, want 0", requests)
 			}
 			if want := tt.flag + " must not be empty"; !strings.Contains(stderr, want) {

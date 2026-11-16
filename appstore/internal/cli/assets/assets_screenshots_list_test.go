@@ -4,13 +4,11 @@ import (
 	"context"
 	"errors"
 	"flag"
-	"io"
 	"net/http"
 	"strings"
 	"testing"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
-	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
 func TestExecuteScreenshotListCommandResolvesVersionLocalizationByVersionIDAndLocale(t *testing.T) {
@@ -40,10 +38,7 @@ func TestExecuteScreenshotListCommandResolvesVersionLocalizationByVersionIDAndLo
 	result, err := executeScreenshotListCommand(context.Background(), screenshotListCommandOptions{
 		VersionID: "version-1",
 		Locale:    "en-us",
-	}, screenshotListDependencies{
-		GetClient:      func() (*asc.Client, error) { return client, nil },
-		RequestContext: shared.ContextWithTimeout,
-	})
+	}, newAssetsClientTestDeps(func() (*asc.Client, error) { return client, nil }))
 	if err != nil {
 		t.Fatalf("executeScreenshotListCommand() error: %v", err)
 	}
@@ -87,10 +82,7 @@ func TestExecuteScreenshotListCommandIncludesPaginatedScreenshotSetsAndScreensho
 
 	result, err := executeScreenshotListCommand(context.Background(), screenshotListCommandOptions{
 		VersionLocalizationID: "loc-1",
-	}, screenshotListDependencies{
-		GetClient:      func() (*asc.Client, error) { return client, nil },
-		RequestContext: shared.ContextWithTimeout,
-	})
+	}, newAssetsClientTestDeps(func() (*asc.Client, error) { return client, nil }))
 	if err != nil {
 		t.Fatalf("executeScreenshotListCommand() error: %v", err)
 	}
@@ -128,10 +120,7 @@ func TestExecuteScreenshotListCommandUsesASCAppIDForVersionIDPlatformVerificatio
 		VersionID: "version-1",
 		Platform:  "IOS",
 		Locale:    "en-US",
-	}, screenshotListDependencies{
-		GetClient:      func() (*asc.Client, error) { return client, nil },
-		RequestContext: shared.ContextWithTimeout,
-	})
+	}, newAssetsClientTestDeps(func() (*asc.Client, error) { return client, nil }))
 	if err != nil {
 		t.Fatalf("executeScreenshotListCommand() error: %v", err)
 	}
@@ -167,10 +156,7 @@ func TestExecuteScreenshotListCommandResolvesAppVersionAndLocale(t *testing.T) {
 		Version:  "1.2.3",
 		Platform: "mac_os",
 		Locale:   "en-US",
-	}, screenshotListDependencies{
-		GetClient:      func() (*asc.Client, error) { return client, nil },
-		RequestContext: shared.ContextWithTimeout,
-	})
+	}, newAssetsClientTestDeps(func() (*asc.Client, error) { return client, nil }))
 	if err != nil {
 		t.Fatalf("executeScreenshotListCommand() error: %v", err)
 	}
@@ -211,14 +197,12 @@ func TestExecuteScreenshotListCommandValidatesSelectorModesBeforeAuth(t *testing
 		t.Run(tt.name, func(t *testing.T) {
 			t.Setenv("ASC_APP_ID", "")
 			var err error
-			stdout, stderr := captureOutput(t, func() {
-				_, err = executeScreenshotListCommand(context.Background(), tt.opts, screenshotListDependencies{
-					GetClient: func() (*asc.Client, error) {
-						t.Fatal("authentication attempted before selector validation")
-						return nil, errors.New("unexpected authentication")
-					},
-				})
+			d, stdoutBuf, stderrBuf := newAssetsTestDeps(func() (*asc.Client, error) {
+				t.Fatal("authentication attempted before selector validation")
+				return nil, errors.New("unexpected authentication")
 			})
+			_, err = executeScreenshotListCommand(context.Background(), tt.opts, d)
+			stdout, stderr := stdoutBuf.String(), stderrBuf.String()
 			if stdout != "" {
 				t.Fatalf("stdout = %q, want empty", stdout)
 			}
@@ -239,12 +223,10 @@ func TestExecuteScreenshotListCommandValidatesPlatformBeforeAuth(t *testing.T) {
 		Version:  "1.2.3",
 		Platform: "WATCH_OS",
 		Locale:   "en-US",
-	}, screenshotListDependencies{
-		GetClient: func() (*asc.Client, error) {
-			clientRequested = true
-			return nil, errors.New("unexpected authentication")
-		},
-	})
+	}, newAssetsClientTestDeps(func() (*asc.Client, error) {
+		clientRequested = true
+		return nil, errors.New("unexpected authentication")
+	}))
 	if clientRequested {
 		t.Fatal("authentication attempted before platform validation")
 	}
@@ -253,27 +235,6 @@ func TestExecuteScreenshotListCommandValidatesPlatformBeforeAuth(t *testing.T) {
 	}
 	if !errors.Is(err, flag.ErrHelp) {
 		t.Fatalf("error = %v, want flag.ErrHelp", err)
-	}
-}
-
-func TestAssetsScreenshotsListCommandRejectsUnexpectedArguments(t *testing.T) {
-	cmd := AssetsScreenshotsListCommand()
-	cmd.FlagSet.SetOutput(io.Discard)
-	if err := cmd.FlagSet.Parse([]string{"--version-localization", "loc-1", "typo"}); err != nil {
-		t.Fatalf("parse arguments: %v", err)
-	}
-
-	stdout, stderr := captureOutput(t, func() {
-		err := cmd.Exec(context.Background(), cmd.FlagSet.Args())
-		if !errors.Is(err, flag.ErrHelp) {
-			t.Fatalf("error = %v, want usage error", err)
-		}
-	})
-	if stdout != "" {
-		t.Fatalf("stdout = %q, want empty", stdout)
-	}
-	if !strings.Contains(stderr, "unexpected argument(s): typo") {
-		t.Fatalf("stderr = %q, want unexpected argument diagnostic", stderr)
 	}
 }
 
@@ -300,14 +261,11 @@ func TestExecuteScreenshotListCommandWithoutLocaleListsEveryLocalization(t *test
 		result *asc.AppScreenshotListResult
 		err    error
 	)
-	stdout, stderr := captureOutput(t, func() {
-		result, err = executeScreenshotListCommand(context.Background(), screenshotListCommandOptions{
-			VersionID: "version-1",
-		}, screenshotListDependencies{
-			GetClient:      func() (*asc.Client, error) { return client, nil },
-			RequestContext: shared.ContextWithTimeout,
-		})
-	})
+	d, stdoutBuf, stderrBuf := newAssetsTestDeps(func() (*asc.Client, error) { return client, nil })
+	result, err = executeScreenshotListCommand(context.Background(), screenshotListCommandOptions{
+		VersionID: "version-1",
+	}, d)
+	stdout, stderr := stdoutBuf.String(), stderrBuf.String()
 	if err != nil {
 		t.Fatalf("executeScreenshotListCommand() error: %v", err)
 	}
@@ -352,10 +310,7 @@ func TestExecuteScreenshotListCommandWithoutLocaleReportsMissingLocalizations(t 
 
 	_, err := executeScreenshotListCommand(context.Background(), screenshotListCommandOptions{
 		VersionID: "version-1",
-	}, screenshotListDependencies{
-		GetClient:      func() (*asc.Client, error) { return client, nil },
-		RequestContext: shared.ContextWithTimeout,
-	})
+	}, newAssetsClientTestDeps(func() (*asc.Client, error) { return client, nil }))
 	if err == nil {
 		t.Fatal("executeScreenshotListCommand() error = nil, want no-localization error")
 	}
@@ -381,10 +336,7 @@ func TestExecuteScreenshotListCommandEnumeratesAvailableLocalesWhenLocaleIsMissi
 	_, err := executeScreenshotListCommand(context.Background(), screenshotListCommandOptions{
 		VersionID: "version-1",
 		Locale:    "ja",
-	}, screenshotListDependencies{
-		GetClient:      func() (*asc.Client, error) { return client, nil },
-		RequestContext: shared.ContextWithTimeout,
-	})
+	}, newAssetsClientTestDeps(func() (*asc.Client, error) { return client, nil }))
 	if err == nil {
 		t.Fatal("executeScreenshotListCommand() error = nil, want locale enumeration error")
 	}

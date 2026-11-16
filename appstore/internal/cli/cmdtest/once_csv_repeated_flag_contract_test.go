@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	rootcmd "github.com/Abdullah4AI/apple-developer-toolkit/appstore/cmd"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asctest"
 )
 
 // Comma-separated list flags bound with shared.BindOnceCSVFlag must reject a
@@ -44,7 +45,7 @@ func TestRepeatedCSVFlagRejectedEndToEnd(t *testing.T) {
 	// 0 and starts with the usage banner, so the first stderr line has to be the
 	// concise flag error itself.
 	firstLine, _, _ := strings.Cut(stderr, "\n")
-	wantFirstLine := fmt.Sprintf("Error: invalid value %q for flag -certificate: %s", "CERT_B", wantMessage)
+	wantFirstLine := fmt.Sprintf("Error: invalid value %q for flag --certificate: %s", "CERT_B", wantMessage)
 	if firstLine != wantFirstLine {
 		t.Fatalf("first stderr line = %q, want %q", firstLine, wantFirstLine)
 	}
@@ -55,23 +56,24 @@ func TestRepeatedCSVFlagRejectedAcrossConvertedCommands(t *testing.T) {
 		name    string
 		command []string
 		flag    string
+		deps    bool // the command is built on shared.Deps: run it on test deps
 	}{
-		{name: "nominations create app", command: []string{"nominations", "create"}, flag: "app"},
-		{name: "nominations create device families", command: []string{"nominations", "create"}, flag: "device-families"},
-		{name: "nominations create locales", command: []string{"nominations", "create"}, flag: "locales"},
-		{name: "nominations create supplemental materials uris", command: []string{"nominations", "create"}, flag: "supplemental-materials-uris"},
-		{name: "nominations create in-app events", command: []string{"nominations", "create"}, flag: "in-app-events"},
-		{name: "nominations create supported territories", command: []string{"nominations", "create"}, flag: "supported-territories"},
-		{name: "nominations update app", command: []string{"nominations", "update"}, flag: "app"},
-		{name: "nominations update device families", command: []string{"nominations", "update"}, flag: "device-families"},
-		{name: "nominations update locales", command: []string{"nominations", "update"}, flag: "locales"},
-		{name: "nominations update supplemental materials uris", command: []string{"nominations", "update"}, flag: "supplemental-materials-uris"},
-		{name: "nominations update in-app events", command: []string{"nominations", "update"}, flag: "in-app-events"},
-		{name: "nominations update supported territories", command: []string{"nominations", "update"}, flag: "supported-territories"},
+		{name: "nominations create app", command: []string{"nominations", "create"}, flag: "app", deps: true},
+		{name: "nominations create device families", command: []string{"nominations", "create"}, flag: "device-families", deps: true},
+		{name: "nominations create locales", command: []string{"nominations", "create"}, flag: "locales", deps: true},
+		{name: "nominations create supplemental materials uris", command: []string{"nominations", "create"}, flag: "supplemental-materials-uris", deps: true},
+		{name: "nominations create in-app events", command: []string{"nominations", "create"}, flag: "in-app-events", deps: true},
+		{name: "nominations create supported territories", command: []string{"nominations", "create"}, flag: "supported-territories", deps: true},
+		{name: "nominations update app", command: []string{"nominations", "update"}, flag: "app", deps: true},
+		{name: "nominations update device families", command: []string{"nominations", "update"}, flag: "device-families", deps: true},
+		{name: "nominations update locales", command: []string{"nominations", "update"}, flag: "locales", deps: true},
+		{name: "nominations update supplemental materials uris", command: []string{"nominations", "update"}, flag: "supplemental-materials-uris", deps: true},
+		{name: "nominations update in-app events", command: []string{"nominations", "update"}, flag: "in-app-events", deps: true},
+		{name: "nominations update supported territories", command: []string{"nominations", "update"}, flag: "supported-territories", deps: true},
 		{name: "profiles create certificate", command: []string{"profiles", "create"}, flag: "certificate"},
 		{name: "profiles create device", command: []string{"profiles", "create"}, flag: "device"},
-		{name: "win-back offers create price", command: []string{"subscriptions", "offers", "win-back", "create"}, flag: "price"},
-		{name: "win-back offers create territory", command: []string{"subscriptions", "offers", "win-back", "create"}, flag: "territory"},
+		{name: "win-back offers create price", command: []string{"subscriptions", "offers", "win-back", "create"}, flag: "price", deps: true},
+		{name: "win-back offers create territory", command: []string{"subscriptions", "offers", "win-back", "create"}, flag: "territory", deps: true},
 	}
 
 	for _, test := range tests {
@@ -81,7 +83,11 @@ func TestRepeatedCSVFlagRejectedAcrossConvertedCommands(t *testing.T) {
 			args := append([]string{}, test.command...)
 			args = append(args, "--"+test.flag, "ONE", "--"+test.flag, "TWO")
 
-			assertUsageExit(t, args, repeatedCSVFlagMessage(test.flag, "ONE", "TWO"))
+			if test.deps {
+				assertUsageExitWithDeps(t, stubClient(t, asctest.NewRegistry(t)), args, repeatedCSVFlagMessage(test.flag, "ONE", "TWO"))
+			} else {
+				assertUsageExit(t, args, repeatedCSVFlagMessage(test.flag, "ONE", "TWO"))
+			}
 		})
 	}
 }
@@ -105,24 +111,12 @@ func TestExplicitEmptyCSVFlagKeepsExistingValidation(t *testing.T) {
 	t.Run("empty update flag stays a visited flag", func(t *testing.T) {
 		isolateRepeatedCSVFlagEnv(t)
 
-		stdout, stderr := captureOutput(t, func() {
-			code := rootcmd.Run([]string{
-				"nominations", "update",
-				"--id", "NOMINATION_ID",
-				"--submitted=false",
-				"--locales", "",
-			}, "1.2.3")
-			if code != rootcmd.ExitError {
-				t.Fatalf("exit code = %d, want %d", code, rootcmd.ExitError)
-			}
-		})
-
-		if stdout != "" {
-			t.Fatalf("expected empty stdout, got %q", stdout)
-		}
-		if want := "Error: nominations update: --locales is required"; !strings.Contains(stderr, want) {
-			t.Fatalf("stderr = %q, want it to contain %q", stderr, want)
-		}
+		assertUsageExitWithDeps(t, stubClient(t, asctest.NewRegistry(t)), []string{
+			"nominations", "update",
+			"--id", "NOMINATION_ID",
+			"--submitted=false",
+			"--locales", "",
+		}, "Error: nominations update: --locales is required")
 	})
 }
 

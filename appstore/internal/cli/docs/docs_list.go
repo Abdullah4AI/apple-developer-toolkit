@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"os"
 
 	"github.com/peterbourgon/ff/v3/ffcli"
 
@@ -12,10 +11,9 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
-// DocsListCommand returns the docs list subcommand.
-func DocsListCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("docs list", flag.ExitOnError)
-	output := shared.BindOutputFlags(fs)
+func newListCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("docs list", flag.ExitOnError)
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "list",
@@ -27,23 +25,19 @@ Examples:
   asc docs list
   asc docs list --output table`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			_ = ctx
-			if len(args) > 0 {
-				fmt.Fprintln(os.Stderr, "Error: docs list does not accept positional arguments")
-				return flag.ErrHelp
-			}
-			if err := shared.PrintOutputWithRenderers(
+			if err := d.PrintOutputWithRenderers(
 				listGuideSummaries(),
 				*output.Output,
 				*output.Pretty,
 				func() error {
-					asc.RenderTable([]string{"slug", "description"}, guideRows())
+					asc.RenderTableTo(d.IO.Out, []string{"slug", "description"}, guideRows())
 					return nil
 				},
 				func() error {
-					asc.RenderMarkdown([]string{"slug", "description"}, guideRows())
+					asc.RenderMarkdownTo(d.IO.Out, []string{"slug", "description"}, guideRows())
 					return nil
 				},
 			); err != nil {

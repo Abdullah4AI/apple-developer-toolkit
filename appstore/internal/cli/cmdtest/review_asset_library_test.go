@@ -10,12 +10,12 @@ import (
 	"testing"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/cmd"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asctest"
 )
 
 func TestAssetLibraryReviewItemsAdd(t *testing.T) {
 	for _, kind := range []string{"Image", "Video"} {
 		t.Run(kind, func(t *testing.T) {
-			setupSubmitCreateAuth(t)
 			key := "appAssetLibrary" + kind
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if r.Method != "POST" || r.URL.Path != "/v1/reviewSubmissionItems" {
@@ -29,12 +29,10 @@ func TestAssetLibraryReviewItemsAdd(t *testing.T) {
 				fmt.Fprintf(w, `{"data":{"type":"reviewSubmissionItems","id":"item-1","relationships":{%q:{"data":{"type":%q,"id":"asset-1"}}}}}`, key, key+"s")
 			}))
 			defer server.Close()
-			setReviewItemsTestServerClient(t, server)
-			out, errout := captureOutput(t, func() {
-				if code := cmd.Run([]string{"review", "items", "add", "--submission", "sub-1", "--item-type", key + "s", "--item-id", "asset-1", "--output", "json"}, "dev"); code != cmd.ExitSuccess {
-					t.Errorf("exit=%d", code)
-				}
-			})
+			out, errout, code := runWithDeps(t, stubServerClient(t, server), "review", "items", "add", "--submission", "sub-1", "--item-type", key+"s", "--item-id", "asset-1", "--output", "json")
+			if code != cmd.ExitSuccess {
+				t.Errorf("exit=%d", code)
+			}
 			if errout != "" || !strings.Contains(out, key) || !strings.Contains(out, `"id":"item-1"`) {
 				t.Fatalf("stdout=%s stderr=%s", out, errout)
 			}
@@ -45,35 +43,27 @@ func TestAssetLibraryReviewItemsAdd(t *testing.T) {
 func TestAssetLibraryReviewItemsListAndHistory(t *testing.T) {
 	for _, mode := range []string{"json", "table", "markdown", "history"} {
 		t.Run(mode, func(t *testing.T) {
-			setupSubmitCreateAuth(t)
-			old := http.DefaultTransport
-			t.Cleanup(func() { http.DefaultTransport = old })
-			http.DefaultTransport = roundTripFunc(func(r *http.Request) (*http.Response, error) {
-				if r.Method != "GET" {
-					t.Fatalf("unexpected method %s", r.Method)
+			reg := asctest.NewRegistry(t)
+			itemsQuery := []string{"fields[reviewSubmissionItems]=state,appAssetLibraryImage,appAssetLibraryVideo", "include=appAssetLibraryImage,appAssetLibraryVideo"}
+			if mode == "history" {
+				reg.Register(asctest.GET("/v1/apps/app-1/reviewSubmissions", "include=appStoreVersionForReview"),
+					asctest.JSON(200, `{"data":[{"type":"reviewSubmissions","id":"sub-1","attributes":{"state":"COMPLETE","platform":"IOS","submittedDate":"2026-10-01T12:00:00Z"}}],"links":{}}`))
+				itemsQuery = []string{
+					"fields[reviewSubmissionItems]=state,appStoreVersion,appCustomProductPageVersion,appAssetLibraryImage,appAssetLibraryVideo,appStoreVersionExperiment,appStoreVersionExperimentV2,appEvent,backgroundAssetVersion,gameCenterAchievementVersion,gameCenterActivityVersion,gameCenterChallengeVersion,gameCenterLeaderboardSetVersion,gameCenterLeaderboardVersion,inAppPurchaseVersion,subscriptionVersion,subscriptionGroupVersion,retentionMessageVersion",
+					"include=appStoreVersion,appCustomProductPageVersion,appAssetLibraryImage,appAssetLibraryVideo,appStoreVersionExperiment,appEvent,backgroundAssetVersion,gameCenterAchievementVersion,gameCenterActivityVersion,gameCenterChallengeVersion,gameCenterLeaderboardSetVersion,gameCenterLeaderboardVersion,inAppPurchaseVersion,subscriptionVersion,subscriptionGroupVersion,retentionMessageVersion",
+					"limit=200",
 				}
-				if r.URL.Path == "/v1/apps/app-1/reviewSubmissions" {
-					return jsonResponse(200, `{"data":[{"type":"reviewSubmissions","id":"sub-1","attributes":{"state":"COMPLETE","platform":"IOS","submittedDate":"2026-10-01T12:00:00Z"}}],"links":{}}`)
-				}
-				if r.URL.Path != "/v1/reviewSubmissions/sub-1/items" {
-					t.Fatalf("unexpected request %s", r.URL)
-				}
-				for _, key := range []string{"appAssetLibraryImage", "appAssetLibraryVideo"} {
-					if !strings.Contains(r.URL.Query().Get("include"), key) || !strings.Contains(r.URL.Query().Get("fields[reviewSubmissionItems]"), key) {
-						t.Errorf("query lacks %s: %s", key, r.URL)
-					}
-				}
-				return jsonResponse(200, `{"data":[{"type":"reviewSubmissionItems","id":"item-1","attributes":{"state":"ACCEPTED"},"relationships":{"appAssetLibraryImage":{"data":{"type":"appAssetLibraryImages","id":"image-1"}}}},{"type":"reviewSubmissionItems","id":"item-2","attributes":{"state":"ACCEPTED"},"relationships":{"appAssetLibraryVideo":{"data":{"type":"appAssetLibraryVideos","id":"video-1"}}}}],"links":{},"included":[{"type":"appAssetLibraryImages","id":"image-1","attributes":{"future":"preserved"}}]}`)
-			})
+			}
+			reg.Register(asctest.GET("/v1/reviewSubmissions/sub-1/items", itemsQuery...),
+				asctest.JSON(200, `{"data":[{"type":"reviewSubmissionItems","id":"item-1","attributes":{"state":"ACCEPTED"},"relationships":{"appAssetLibraryImage":{"data":{"type":"appAssetLibraryImages","id":"image-1"}}}},{"type":"reviewSubmissionItems","id":"item-2","attributes":{"state":"ACCEPTED"},"relationships":{"appAssetLibraryVideo":{"data":{"type":"appAssetLibraryVideos","id":"video-1"}}}}],"links":{},"included":[{"type":"appAssetLibraryImages","id":"image-1","attributes":{"future":"preserved"}}]}`))
 			args := []string{"review", "items-list", "--submission", "sub-1", "--fields", "state,appAssetLibraryImage,appAssetLibraryVideo", "--include", "appAssetLibraryImage,appAssetLibraryVideo", "--output", mode}
 			if mode == "history" {
 				args = []string{"review", "history", "--app", "app-1", "--output", "json"}
 			}
-			out, errout := captureOutput(t, func() {
-				if code := cmd.Run(args, "dev"); code != cmd.ExitSuccess {
-					t.Errorf("exit=%d", code)
-				}
-			})
+			out, errout, code := runWithDeps(t, stubClient(t, reg), args...)
+			if code != cmd.ExitSuccess {
+				t.Errorf("exit=%d", code)
+			}
 			if errout != "" || !strings.Contains(out, "image-1") || !strings.Contains(out, "video-1") {
 				t.Fatalf("stdout=%s stderr=%s", out, errout)
 			}
@@ -98,7 +88,7 @@ func TestAssetLibraryReviewItemsSkipRequiresValidLinkage(t *testing.T) {
 		for _, linkage := range []string{"valid", "wrong-type", "wrong-id", "null", "removed"} {
 			t.Run(kind+"/"+linkage, func(t *testing.T) {
 				key := "appAssetLibrary" + kind
-				out, _, seen, err := runIfExistsCommand(t, []string{"review", "items-add", "--submission", "sub-1", "--item-type", key + "s", "--item-id", "asset-1", "--if-exists", "skip", "--output", "json"}, func(r ifExistsRequest) (*http.Response, error) {
+				out, _, seen, err := runIfExistsCommandWithDeps(t, []string{"review", "items-add", "--submission", "sub-1", "--item-type", key + "s", "--item-id", "asset-1", "--if-exists", "skip", "--output", "json"}, func(r ifExistsRequest) (*http.Response, error) {
 					if r.Method == "POST" {
 						return jsonResponse(409, reviewItemExists409)
 					}
@@ -140,5 +130,5 @@ func TestAssetLibraryReviewItemsSkipRequiresValidLinkage(t *testing.T) {
 }
 
 func TestAssetLibraryReviewUnknownTypeBeforeAuth(t *testing.T) {
-	assertUsageExit(t, []string{"review", "items-add", "--submission", "sub-1", "--item-type", "appAssetLibraryMedia", "--item-id", "asset-1"}, "--item-type must be one of")
+	assertUsageExitWithDeps(t, nil, []string{"review", "items-add", "--submission", "sub-1", "--item-type", "appAssetLibraryMedia", "--item-id", "asset-1"}, "--item-type must be one of")
 }

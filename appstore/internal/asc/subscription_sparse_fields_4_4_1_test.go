@@ -80,22 +80,6 @@ func TestSubscriptionSparseFields441ExactQueries(t *testing.T) {
 			},
 		},
 		{
-			name: "group localizations group versions",
-			path: "/v1/subscriptionGroups/group-1/subscriptionGroupLocalizations",
-			wantQuery: url.Values{
-				"fields[subscriptionGroups]": {"versions"},
-				"include":                    {"subscriptionGroup"},
-			},
-			call: func(c *Client) error {
-				_, err := c.GetSubscriptionGroupLocalizations(
-					context.Background(), "group-1",
-					WithSubscriptionGroupLocalizationsGroupFields([]string{"versions"}),
-					WithSubscriptionGroupLocalizationsInclude([]string{"subscriptionGroup"}),
-				)
-				return err
-			},
-		},
-		{
 			name: "offer code prices adjusted equalizations",
 			path: "/v1/subscriptionOfferCodes/code-1/prices",
 			wantQuery: url.Values{
@@ -139,22 +123,6 @@ func TestSubscriptionSparseFields441ExactQueries(t *testing.T) {
 					context.Background(), "sub-1",
 					WithSubscriptionAppStoreReviewScreenshotSubscriptionFields([]string{"versions"}),
 					WithSubscriptionAppStoreReviewScreenshotInclude([]string{"subscription"}),
-				)
-				return err
-			},
-		},
-		{
-			name: "subscription images subscription versions",
-			path: "/v1/subscriptions/sub-1/images",
-			wantQuery: url.Values{
-				"fields[subscriptions]": {"versions"},
-				"include":               {"subscription"},
-			},
-			call: func(c *Client) error {
-				_, err := c.GetSubscriptionImages(
-					context.Background(), "sub-1",
-					WithSubscriptionImagesSubscriptionFields([]string{"versions"}),
-					WithSubscriptionImagesInclude([]string{"subscription"}),
 				)
 				return err
 			},
@@ -226,22 +194,6 @@ func TestSubscriptionSparseFields441ExactQueries(t *testing.T) {
 				return err
 			},
 		},
-		{
-			name: "subscription localizations subscription versions",
-			path: "/v1/subscriptions/sub-1/subscriptionLocalizations",
-			wantQuery: url.Values{
-				"fields[subscriptions]": {"versions"},
-				"include":               {"subscription"},
-			},
-			call: func(c *Client) error {
-				_, err := c.GetSubscriptionLocalizations(
-					context.Background(), "sub-1",
-					WithSubscriptionLocalizationsSubscriptionFields([]string{"versions"}),
-					WithSubscriptionLocalizationsInclude([]string{"subscription"}),
-				)
-				return err
-			},
-		},
 	}
 
 	for _, test := range tests {
@@ -276,56 +228,56 @@ func TestSubscriptionSparseFields441NextURLConflictsBeforeHTTP(t *testing.T) {
 		{
 			name: "localizations",
 			call: func(c *Client) error {
-				_, err := c.GetSubscriptionLocalizations(context.Background(), "sub-1", WithSubscriptionLocalizationsNextURL(next), WithSubscriptionLocalizationsSubscriptionFields([]string{"versions"}))
+				_, err := c.GetSubscriptionLocalizations(context.Background(), "sub-1", NextURL[SubscriptionLocalizationsOption](next), Limit[SubscriptionLocalizationsOption](1))
 				return err
 			},
 		},
 		{
 			name: "images",
 			call: func(c *Client) error {
-				_, err := c.GetSubscriptionImages(context.Background(), "sub-1", WithSubscriptionImagesNextURL(next), WithSubscriptionImagesSubscriptionFields([]string{"versions"}))
+				_, err := c.GetSubscriptionImages(context.Background(), "sub-1", NextURL[SubscriptionImagesOption](next), Limit[SubscriptionImagesOption](1))
 				return err
 			},
 		},
 		{
 			name: "introductory offers",
 			call: func(c *Client) error {
-				_, err := c.GetSubscriptionIntroductoryOffers(context.Background(), "sub-1", WithSubscriptionIntroductoryOffersNextURL(next), WithSubscriptionIntroductoryOffersPricePointFields([]string{"adjustedEqualizations"}))
+				_, err := c.GetSubscriptionIntroductoryOffers(context.Background(), "sub-1", NextURL[SubscriptionIntroductoryOffersOption](next), WithSubscriptionIntroductoryOffersPricePointFields([]string{"adjustedEqualizations"}))
 				return err
 			},
 		},
 		{
 			name: "promotional offers",
 			call: func(c *Client) error {
-				_, err := c.GetSubscriptionPromotionalOffers(context.Background(), "sub-1", WithSubscriptionPromotionalOffersNextURL(next), WithSubscriptionPromotionalOffersSubscriptionFields([]string{"versions"}))
+				_, err := c.GetSubscriptionPromotionalOffers(context.Background(), "sub-1", NextURL[SubscriptionPromotionalOffersOption](next), WithSubscriptionPromotionalOffersSubscriptionFields([]string{"versions"}))
 				return err
 			},
 		},
 		{
 			name: "promotional offer prices",
 			call: func(c *Client) error {
-				_, err := c.GetSubscriptionPromotionalOfferPrices(context.Background(), "promo-1", WithSubscriptionPromotionalOfferPricesNextURL(next), WithSubscriptionPromotionalOfferPricesPricePointFields([]string{"adjustedEqualizations"}))
+				_, err := c.GetSubscriptionPromotionalOfferPrices(context.Background(), "promo-1", NextURL[SubscriptionPromotionalOfferPricesOption](next), WithSubscriptionPromotionalOfferPricesPricePointFields([]string{"adjustedEqualizations"}))
 				return err
 			},
 		},
 		{
 			name: "offer codes",
 			call: func(c *Client) error {
-				_, err := c.GetSubscriptionOfferCodes(context.Background(), "sub-1", WithSubscriptionOfferCodesNextURL(next), WithSubscriptionOfferCodesSubscriptionFields([]string{"versions"}))
+				_, err := c.GetSubscriptionOfferCodes(context.Background(), "sub-1", NextURL[SubscriptionOfferCodesOption](next), WithSubscriptionOfferCodesSubscriptionFields([]string{"versions"}))
 				return err
 			},
 		},
 		{
 			name: "offer code prices",
 			call: func(c *Client) error {
-				_, err := c.GetSubscriptionOfferCodePrices(context.Background(), "code-1", WithSubscriptionOfferCodePricesNextURL(next), WithSubscriptionOfferCodePricesPricePointFields([]string{"adjustedEqualizations"}))
+				_, err := c.GetSubscriptionOfferCodePrices(context.Background(), "code-1", NextURL[SubscriptionOfferCodePricesOption](next), WithSubscriptionOfferCodePricesPricePointFields([]string{"adjustedEqualizations"}))
 				return err
 			},
 		},
 		{
 			name: "group localizations",
 			call: func(c *Client) error {
-				_, err := c.GetSubscriptionGroupLocalizations(context.Background(), "group-1", WithSubscriptionGroupLocalizationsNextURL(next), WithSubscriptionGroupLocalizationsGroupFields([]string{"versions"}))
+				_, err := c.GetSubscriptionGroupLocalizations(context.Background(), "group-1", NextURL[SubscriptionGroupLocalizationsOption](next), Limit[SubscriptionGroupLocalizationsOption](1))
 				return err
 			},
 		},

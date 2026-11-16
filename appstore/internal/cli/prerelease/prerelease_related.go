@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/peterbourgon/ff/v3/ffcli"
@@ -13,9 +12,9 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
-// PreReleaseVersionsAppCommand returns the app command group.
-func PreReleaseVersionsAppCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("app", flag.ExitOnError)
+// newPreReleaseVersionsAppCommand returns the app command group built on d.
+func newPreReleaseVersionsAppCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("app", flag.ExitOnError)
 
 	return &ffcli.Command{
 		Name:       "app",
@@ -26,9 +25,9 @@ func PreReleaseVersionsAppCommand() *ffcli.Command {
 Examples:
   asc pre-release-versions app view --id "PR_ID"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
-			PreReleaseVersionsAppGetCommand(),
+			newPreReleaseVersionsAppGetCommand(d),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp
@@ -36,51 +35,30 @@ Examples:
 	}
 }
 
-// PreReleaseVersionsAppGetCommand returns the app get subcommand.
-func PreReleaseVersionsAppGetCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("app view", flag.ExitOnError)
-
-	id := shared.BindResourceIDFlag(fs, "id", "preReleaseVersions", "Pre-release version ID")
-	output := shared.BindOutputFlags(fs)
-
-	return &ffcli.Command{
-		Name:       "view",
-		ShortUsage: "asc pre-release-versions app view --id \"PR_ID\"",
-		ShortHelp:  "View the app for a pre-release version.",
+// newPreReleaseVersionsAppGetCommand returns the app get subcommand built on d.
+func newPreReleaseVersionsAppGetCommand(d *shared.Deps) *ffcli.Command {
+	return shared.BuildIDGetCommand(shared.IDGetCommandConfig{
+		Deps:        d,
+		FlagSetName: "app view",
+		Name:        "view",
+		ShortUsage:  "asc pre-release-versions app view --id \"PR_ID\"",
+		ShortHelp:   "View the app for a pre-release version.",
 		LongHelp: `View the app for a pre-release version.
 
 Examples:
   asc pre-release-versions app view --id "PR_ID"`,
-		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
-		Exec: func(ctx context.Context, args []string) error {
-			idValue := strings.TrimSpace(*id)
-			if idValue == "" {
-				fmt.Fprintln(os.Stderr, "Error: --id is required")
-				return shared.MissingRequiredUsageError("--id")
-			}
-
-			client, err := shared.GetASCClient()
-			if err != nil {
-				return fmt.Errorf("pre-release-versions app view: %w", err)
-			}
-
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
-			defer cancel()
-
-			resp, err := client.GetPreReleaseVersionApp(requestCtx, idValue)
-			if err != nil {
-				return fmt.Errorf("pre-release-versions app view: failed to fetch: %w", err)
-			}
-
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+		IDUsage:            "Pre-release version ID",
+		IDType:             "preReleaseVersions",
+		RequiredDiagnostic: true,
+		Fetch: func(ctx context.Context, client *asc.Client, id string) (any, error) {
+			return client.GetPreReleaseVersionApp(ctx, id)
 		},
-	}
+	})
 }
 
-// PreReleaseVersionsBuildsCommand returns the builds command group.
-func PreReleaseVersionsBuildsCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("builds", flag.ExitOnError)
+// newPreReleaseVersionsBuildsCommand returns the builds command group built on d.
+func newPreReleaseVersionsBuildsCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("builds", flag.ExitOnError)
 
 	return &ffcli.Command{
 		Name:       "builds",
@@ -91,9 +69,9 @@ func PreReleaseVersionsBuildsCommand() *ffcli.Command {
 Examples:
   asc pre-release-versions builds list --id "PR_ID"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
-			PreReleaseVersionsBuildsListCommand(),
+			newPreReleaseVersionsBuildsListCommand(d),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp
@@ -101,15 +79,15 @@ Examples:
 	}
 }
 
-// PreReleaseVersionsBuildsListCommand returns the builds list subcommand.
-func PreReleaseVersionsBuildsListCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("builds list", flag.ExitOnError)
+// newPreReleaseVersionsBuildsListCommand returns the builds list subcommand built on d.
+func newPreReleaseVersionsBuildsListCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("builds list", flag.ExitOnError)
 
 	id := shared.BindResourceIDFlag(fs, "id", "preReleaseVersions", "Pre-release version ID")
-	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
-	next := fs.String("next", "", "Fetch next page using a links.next URL")
-	paginate := fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")
-	output := shared.BindOutputFlags(fs)
+	limit := fs.Int("limit", 0, shared.LimitFlagUsage(200))
+	next := fs.String("next", "", shared.NextFlagUsage)
+	paginate := fs.Bool("paginate", false, shared.PaginateFlagUsage)
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "list",
@@ -121,51 +99,46 @@ Examples:
   asc pre-release-versions builds list --id "PR_ID"
   asc pre-release-versions builds list --id "PR_ID" --paginate`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
-			if *limit != 0 && (*limit < 1 || *limit > 200) {
-				return fmt.Errorf("pre-release-versions builds list: --limit must be between 1 and 200")
-			}
-			if err := shared.ValidateNextURL(*next); err != nil {
-				return fmt.Errorf("pre-release-versions builds list: %w", err)
+			if err := d.ValidatePaginationFlags(ctx, fs, "pre-release-versions builds list", 200); err != nil {
+				return err
 			}
 
 			idValue := strings.TrimSpace(*id)
 			if idValue == "" && strings.TrimSpace(*next) == "" {
-				fmt.Fprintln(os.Stderr, "Error: --id is required")
-				return shared.MissingRequiredUsageError("--id")
+				return d.RequiredFlag("--id")
 			}
 
-			client, err := shared.GetASCClient()
+			client, err := d.Client()
 			if err != nil {
 				return fmt.Errorf("pre-release-versions builds list: %w", err)
 			}
 
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
+			requestCtx, cancel := d.Timeout(ctx)
 			defer cancel()
 
 			opts := []asc.PreReleaseVersionBuildsOption{
-				asc.WithPreReleaseVersionBuildsLimit(*limit),
-				asc.WithPreReleaseVersionBuildsNextURL(*next),
+				asc.Limit[asc.PreReleaseVersionBuildsOption](*limit),
+				asc.NextURL[asc.PreReleaseVersionBuildsOption](*next),
 			}
 
 			if *paginate {
 				if idValue == "" {
-					fmt.Fprintln(os.Stderr, "Error: --id is required")
-					return shared.MissingRequiredUsageError("--id")
+					return d.RequiredFlag("--id")
 				}
-				paginateOpts := append(opts, asc.WithPreReleaseVersionBuildsLimit(200))
+				paginateOpts := append(opts, asc.Limit[asc.PreReleaseVersionBuildsOption](200))
 				firstPage, err := client.GetPreReleaseVersionBuilds(requestCtx, idValue, paginateOpts...)
 				if err != nil {
 					return fmt.Errorf("pre-release-versions builds list: failed to fetch: %w", err)
 				}
 				resp, err := asc.PaginateAll(requestCtx, firstPage, func(ctx context.Context, nextURL string) (asc.PaginatedResponse, error) {
-					return client.GetPreReleaseVersionBuilds(ctx, idValue, asc.WithPreReleaseVersionBuildsNextURL(nextURL))
+					return client.GetPreReleaseVersionBuilds(ctx, idValue, asc.NextURL[asc.PreReleaseVersionBuildsOption](nextURL))
 				})
 				if err != nil {
 					return fmt.Errorf("pre-release-versions builds list: %w", err)
 				}
-				return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+				return d.PrintOutput(resp, *output.Output, *output.Pretty)
 			}
 
 			resp, err := client.GetPreReleaseVersionBuilds(requestCtx, idValue, opts...)
@@ -173,7 +146,7 @@ Examples:
 				return fmt.Errorf("pre-release-versions builds list: failed to fetch: %w", err)
 			}
 
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+			return d.PrintOutput(resp, *output.Output, *output.Pretty)
 		},
 	}
 }

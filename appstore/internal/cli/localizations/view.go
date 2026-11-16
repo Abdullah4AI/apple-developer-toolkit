@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"net/url"
-	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -18,14 +18,14 @@ import (
 )
 
 // LocalizationsViewCommand returns the view localizations subcommand.
-func LocalizationsViewCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("view", flag.ExitOnError)
+func newLocalizationsViewCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("view", flag.ExitOnError)
 
 	localizationID := fs.String("id", "", "Localization resource ID")
 	locType := fs.String("type", shared.LocalizationTypeVersion, "Localization type: version (default) or app-info")
 	fields := fs.String("fields", "", "Fields to return, comma-separated. version: "+strings.Join(versionLocalizationFieldList(), ", ")+"; app-info: "+strings.Join(appInfoLocalizationFieldList(), ", "))
 	include := shared.BindLocalizationIncludeFlags(fs, "Include related resources for version localizations", versionLocalizationIncludeList())
-	output := shared.BindOutputFlags(fs)
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "view",
@@ -41,11 +41,11 @@ Examples:
   asc localizations view --id "LOCALIZATION_ID" --include placements --placements-limit 50
   asc localizations view --type app-info --id "LOCALIZATION_ID" --fields "name,subtitle"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			normalizedType, err := shared.NormalizeLocalizationType(*locType)
 			if err != nil {
-				return shared.UsageError(err.Error())
+				return d.UsageError(err.Error())
 			}
 			resourceType, allowedFields := "appStoreVersionLocalizations", versionLocalizationFieldList()
 			if normalizedType == shared.LocalizationTypeAppInfo {
@@ -53,26 +53,25 @@ Examples:
 			}
 			fieldValues, err := shared.NormalizeSelection(*fields, allowedFields, "--fields")
 			if err != nil {
-				return shared.UsageError(err.Error())
+				return d.UsageError(err.Error())
 			}
 			fieldsProvided := false
 			fs.Visit(func(f *flag.Flag) {
 				fieldsProvided = fieldsProvided || f.Name == "fields"
 			})
 			if fieldsProvided && len(fieldValues) == 0 {
-				return shared.UsageError("--fields must not be empty")
+				return d.UsageError("--fields must not be empty")
 			}
 			if include.Provided() && normalizedType != shared.LocalizationTypeVersion {
-				return shared.UsageError("--include requires --type version")
+				return d.UsageError("--include requires --type version")
 			}
-			includeValues, placementsLimit, err := include.Resolve()
+			includeValues, placementsLimit, err := include.ResolveWith(d)
 			if err != nil {
 				return err
 			}
 			id := strings.TrimSpace(*localizationID)
 			if id == "" {
-				fmt.Fprintln(os.Stderr, "Error: --id is required")
-				return shared.MissingRequiredUsageError("--id")
+				return d.RequiredFlag("--id")
 			}
 
 			path := "/v1/" + resourceType + "/" + url.PathEscape(id)
@@ -90,11 +89,11 @@ Examples:
 				path += "?" + query.Encode()
 			}
 
-			client, err := shared.GetASCClient()
+			client, err := d.Client()
 			if err != nil {
 				return fmt.Errorf("localizations view: %w", err)
 			}
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
+			requestCtx, cancel := d.Timeout(ctx)
 			defer cancel()
 
 			response, err := client.RawRequest(requestCtx, "GET", path, nil)
@@ -102,16 +101,16 @@ Examples:
 				return fmt.Errorf("localizations view: %w", err)
 			}
 
-			render := func(write func([]string, [][]string) error) func() error {
+			render := func(write func(io.Writer, []string, [][]string) error) func() error {
 				return func() error {
 					headers, rows, err := localizationViewRows(response)
 					if err != nil {
 						return fmt.Errorf("localizations view: %w", err)
 					}
-					return write(headers, rows)
+					return write(d.IO.Out, headers, rows)
 				}
 			}
-			return shared.PrintOutputWithRenderers(json.RawMessage(response), *output.Output, *output.Pretty, render(asc.WriteTable), render(asc.WriteMarkdown))
+			return d.PrintOutputWithRenderers(json.RawMessage(response), *output.Output, *output.Pretty, render(asc.WriteTableTo), render(asc.WriteMarkdownTo))
 		},
 	}
 }

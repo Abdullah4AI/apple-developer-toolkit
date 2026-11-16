@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/peterbourgon/ff/v3/ffcli"
@@ -13,9 +12,9 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
-// ActorsCommand returns the actors command with subcommands.
-func ActorsCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("actors", flag.ExitOnError)
+// NewActorsCommand returns the actors command with subcommands built on d.
+func NewActorsCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("actors", flag.ExitOnError)
 
 	return &ffcli.Command{
 		Name:       "actors",
@@ -27,10 +26,10 @@ Examples:
   asc actors list --id "ACTOR_ID"
   asc actors view --id "ACTOR_ID"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
-			ActorsListCommand(),
-			ActorsGetCommand(),
+			newActorsListCommand(d),
+			newActorsViewCommand(d),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp
@@ -38,18 +37,11 @@ Examples:
 	}
 }
 
-// ActorsListCommand returns the actors list subcommand.
-func ActorsListCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("list", flag.ExitOnError)
+// newActorsListCommand returns the actors list subcommand built on d.
+func newActorsListCommand(d *shared.Deps) *ffcli.Command {
+	var fieldsValue []string
 
-	ids := fs.String("id", "", "Actor ID(s), comma-separated")
-	fields := fs.String("fields", "", "Fields to include: "+strings.Join(actorFieldsList(), ", "))
-	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
-	next := fs.String("next", "", "Fetch next page using a links.next URL")
-	paginate := fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")
-	output := shared.BindOutputFlags(fs)
-
-	return &ffcli.Command{
+	return shared.BuildPaginatedListCommand(shared.PaginatedListCommandConfig{
 		Name:       "list",
 		ShortUsage: "asc actors list --id ACTOR_ID[,ACTOR_ID...] [flags]",
 		ShortHelp:  "List actors by ID.",
@@ -59,81 +51,40 @@ Examples:
   asc actors list --id "ACTOR_ID"
   asc actors list --id "ID1,ID2" --fields "actorType,userEmail"
   asc actors list --id "ID1,ID2" --paginate`,
-		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
-		Exec: func(ctx context.Context, args []string) error {
-			if err := shared.ValidateNextURL(*next); err != nil {
-				return shared.UsageErrorf("actors list: %v", err)
+		ParentUsage:          "Actor ID(s), comma-separated",
+		RequiredDiagnostic:   true,
+		PaginateIgnoresLimit: true,
+		NoSpinner:            true,
+		NextConflicts:        []string{"id", "fields", "limit"},
+		Flags: func(fs *flag.FlagSet) func() error {
+			fields := fs.String("fields", "", "Fields to include: "+strings.Join(actorFieldsList(), ", "))
+			return func() (err error) {
+				if fieldsValue, err = normalizeActorFields(*fields); err != nil {
+					return d.UsageErrorf("actors list: %v", err)
+				}
+				return nil
 			}
-			if err := shared.RejectNextFlagConflicts(fs, *next, "actors list", "id", "fields", "limit"); err != nil {
-				return err
-			}
-			if *limit != 0 && (*limit < 1 || *limit > 200) {
-				return shared.UsageError("actors list: --limit must be between 1 and 200")
-			}
-			if strings.TrimSpace(*ids) == "" && strings.TrimSpace(*next) == "" {
-				fmt.Fprintln(os.Stderr, "Error: --id is required")
-				return shared.MissingRequiredUsageError("--id")
-			}
-
-			fieldsValue, err := normalizeActorFields(*fields)
-			if err != nil {
-				return fmt.Errorf("actors list: %w", err)
-			}
-
-			client, err := shared.GetASCClient()
-			if err != nil {
-				return fmt.Errorf("actors list: %w", err)
-			}
-
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
-			defer cancel()
-
+		},
+		Deps: d,
+		FetchPage: func(ctx context.Context, client *asc.Client, ids string, limit int, next string) (asc.PaginatedResponse, error) {
 			opts := []asc.ActorsOption{
-				asc.WithActorsIDs(shared.SplitCSV(*ids)),
-				asc.WithActorsLimit(*limit),
-				asc.WithActorsNextURL(*next),
+				asc.WithActorsIDs(shared.SplitCSV(ids)),
+				asc.Limit[asc.ActorsOption](limit),
+				asc.NextURL[asc.ActorsOption](next),
 			}
 			if len(fieldsValue) > 0 {
 				opts = append(opts, asc.WithActorsFields(fieldsValue))
 			}
-
-			if *paginate {
-				paginateOpts := append(opts, asc.WithActorsLimit(200))
-				firstPage, err := client.GetActors(requestCtx, paginateOpts...)
-				if err != nil {
-					return fmt.Errorf("actors list: failed to fetch: %w", err)
-				}
-
-				actors, err := asc.PaginateAll(requestCtx, firstPage, func(ctx context.Context, nextURL string) (asc.PaginatedResponse, error) {
-					return client.GetActors(ctx, asc.WithActorsNextURL(nextURL))
-				})
-				if err != nil {
-					return fmt.Errorf("actors list: %w", err)
-				}
-
-				return shared.PrintOutput(actors, *output.Output, *output.Pretty)
-			}
-
-			actors, err := client.GetActors(requestCtx, opts...)
-			if err != nil {
-				return fmt.Errorf("actors list: failed to fetch: %w", err)
-			}
-
-			return shared.PrintOutput(actors, *output.Output, *output.Pretty)
+			return client.GetActors(ctx, opts...)
 		},
-	}
+	})
 }
 
-// ActorsGetCommand returns the actors view subcommand.
-func ActorsGetCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("view", flag.ExitOnError)
+// newActorsViewCommand returns the actors view subcommand built on d.
+func newActorsViewCommand(d *shared.Deps) *ffcli.Command {
+	var fieldsValue []string
 
-	id := shared.BindResourceIDFlag(fs, "id", "actors", "Actor ID")
-	fields := fs.String("fields", "", "Fields to include: "+strings.Join(actorFieldsList(), ", "))
-	output := shared.BindOutputFlags(fs)
-
-	return &ffcli.Command{
+	return shared.BuildIDGetCommand(shared.IDGetCommandConfig{
 		Name:       "view",
 		ShortUsage: "asc actors view --id ACTOR_ID [flags]",
 		ShortHelp:  "View an actor by ID.",
@@ -142,36 +93,23 @@ func ActorsGetCommand() *ffcli.Command {
 Examples:
   asc actors view --id "ACTOR_ID"
   asc actors view --id "ACTOR_ID" --fields "actorType,userEmail"`,
-		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
-		Exec: func(ctx context.Context, args []string) error {
-			idValue := strings.TrimSpace(*id)
-			if idValue == "" {
-				fmt.Fprintln(os.Stderr, "Error: --id is required")
-				return shared.MissingRequiredUsageError("--id")
+		IDUsage:            "Actor ID",
+		IDType:             "actors",
+		RequiredDiagnostic: true,
+		Flags: func(fs *flag.FlagSet) func() error {
+			fields := fs.String("fields", "", "Fields to include: "+strings.Join(actorFieldsList(), ", "))
+			return func() (err error) {
+				if fieldsValue, err = normalizeActorFields(*fields); err != nil {
+					return d.UsageErrorf("actors view: %v", err)
+				}
+				return nil
 			}
-
-			fieldsValue, err := normalizeActorFields(*fields)
-			if err != nil {
-				return fmt.Errorf("actors view: %w", err)
-			}
-
-			client, err := shared.GetASCClient()
-			if err != nil {
-				return fmt.Errorf("actors view: %w", err)
-			}
-
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
-			defer cancel()
-
-			actor, err := client.GetActor(requestCtx, idValue, fieldsValue)
-			if err != nil {
-				return fmt.Errorf("actors view: failed to fetch: %w", err)
-			}
-
-			return shared.PrintOutput(actor, *output.Output, *output.Pretty)
 		},
-	}
+		Deps: d,
+		Fetch: func(ctx context.Context, client *asc.Client, id string) (any, error) {
+			return client.GetActor(ctx, id, fieldsValue)
+		},
+	})
 }
 
 func normalizeActorFields(value string) ([]string, error) {

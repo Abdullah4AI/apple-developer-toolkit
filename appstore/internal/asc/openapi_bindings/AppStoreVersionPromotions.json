@@ -1,0 +1,14 @@
+{
+  "tag": "AppStoreVersionPromotions",
+  "file": "app_store_version_promotions_gen.go",
+  "types": [
+    "AppStoreVersionPromotionCreateData",
+    "AppStoreVersionPromotionCreateRequest"
+  ],
+  "relationships": [
+    {"data":"AppStoreVersionPromotionCreateData","type":"AppStoreVersionPromotionRelationships"}
+  ],
+  "operations": [
+    {"operation":"appStoreVersionPromotions_createInstance","name":"CreateAppStoreVersionPromotion","params":["versionID","treatmentID"],"check":"require","messages":["version ID is required","treatment ID is required"],"links":["appStoreVersion","appStoreVersionExperimentTreatment"]}
+  ]
+}

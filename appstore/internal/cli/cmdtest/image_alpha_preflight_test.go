@@ -7,11 +7,12 @@ import (
 	"hash/crc32"
 	"image"
 	"image/png"
-	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asctest"
 )
 
 func TestImagePreflightsRejectAlphaBeforeNetwork(t *testing.T) {
@@ -41,13 +42,7 @@ func TestImagePreflightsRejectAlphaBeforeNetwork(t *testing.T) {
 				if err := os.WriteFile(path, content, 0o600); err != nil {
 					t.Fatal(err)
 				}
-				old := http.DefaultTransport
-				t.Cleanup(func() { http.DefaultTransport = old })
-				calls := 0
-				http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-					calls++
-					return statusJSONResponse(`{"data":[],"links":{}}`), nil
-				})
+				reg := asctest.NewRegistry(t)
 				args := []string{"screenshots", "upload", "--version-localization", "LOC", "--path", path, "--device-type", "IPHONE_35"}
 				switch command {
 				case "creative":
@@ -55,13 +50,13 @@ func TestImagePreflightsRejectAlphaBeforeNetwork(t *testing.T) {
 				case "validate":
 					args = []string{"screenshots", "validate", "--path", path, "--device-type", "IPHONE_35", "--output", "json"}
 				}
-				stdout, stderr, err := runRootCommand(t, args)
+				stdout, stderr, err := runRootWithDeps(t, stubClient(t, reg), args...)
 				if command == "validate" {
 					assertValidateReportsAlpha(t, stdout, stderr, err, path)
 				} else if err == nil || !strings.Contains(err.Error(), "alpha channel or transparency") {
 					t.Fatalf("expected alpha rejection, got %v; stdout=%s; stderr=%s", err, stdout, stderr)
 				}
-				if calls != 0 {
+				if calls := len(reg.Requests()); calls != 0 {
 					t.Fatalf("made %d network calls before alpha rejection", calls)
 				}
 			})

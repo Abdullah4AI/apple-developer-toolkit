@@ -2,58 +2,11 @@ package asc
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
 	"strings"
 )
-
-// GetGameCenterActivities retrieves the list of Game Center activities for a Game Center detail.
-func (c *Client) GetGameCenterActivities(ctx context.Context, gcDetailID string, opts ...GCActivitiesOption) (*GameCenterActivitiesResponse, error) {
-	query := &gcActivitiesQuery{}
-	for _, opt := range opts {
-		opt(query)
-	}
-
-	path := fmt.Sprintf("/v1/gameCenterDetails/%s/gameCenterActivities", strings.TrimSpace(gcDetailID))
-	if query.nextURL != "" {
-		if err := validateNextURL(query.nextURL); err != nil {
-			return nil, fmt.Errorf("game-center-activities: %w", err)
-		}
-		path = query.nextURL
-	} else if queryString := buildGCActivitiesQuery(query); queryString != "" {
-		path += "?" + queryString
-	}
-
-	data, err := c.do(ctx, http.MethodGet, path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var response GameCenterActivitiesResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
-// GetGameCenterActivity retrieves a Game Center activity by ID.
-func (c *Client) GetGameCenterActivity(ctx context.Context, activityID string) (*GameCenterActivityResponse, error) {
-	path := fmt.Sprintf("/v1/gameCenterActivities/%s", strings.TrimSpace(activityID))
-	data, err := c.do(ctx, http.MethodGet, path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var response GameCenterActivityResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
 
 // CreateGameCenterActivity creates a new Game Center activity.
 func (c *Client) CreateGameCenterActivity(ctx context.Context, gcDetailID string, attrs GameCenterActivityCreateAttributes, groupID string, initialVersion *GameCenterActivityVersionCreateAttributes) (*GameCenterActivityResponse, error) {
@@ -111,58 +64,7 @@ func (c *Client) CreateGameCenterActivity(ctx context.Context, gcDetailID string
 		payload.Included = []GameCenterActivityVersionInlineCreate{inline}
 	}
 
-	body, err := BuildRequestBody(payload)
-	if err != nil {
-		return nil, err
-	}
-
-	data, err := c.do(ctx, http.MethodPost, "/v1/gameCenterActivities", body)
-	if err != nil {
-		return nil, err
-	}
-
-	var response GameCenterActivityResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
-// UpdateGameCenterActivity updates an existing Game Center activity.
-func (c *Client) UpdateGameCenterActivity(ctx context.Context, activityID string, attrs GameCenterActivityUpdateAttributes) (*GameCenterActivityResponse, error) {
-	payload := GameCenterActivityUpdateRequest{
-		Data: GameCenterActivityUpdateData{
-			Type:       ResourceTypeGameCenterActivities,
-			ID:         strings.TrimSpace(activityID),
-			Attributes: &attrs,
-		},
-	}
-
-	body, err := BuildRequestBody(payload)
-	if err != nil {
-		return nil, err
-	}
-
-	path := fmt.Sprintf("/v1/gameCenterActivities/%s", strings.TrimSpace(activityID))
-	data, err := c.do(ctx, http.MethodPatch, path, body)
-	if err != nil {
-		return nil, err
-	}
-
-	var response GameCenterActivityResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
-// DeleteGameCenterActivity deletes a Game Center activity.
-func (c *Client) DeleteGameCenterActivity(ctx context.Context, activityID string) error {
-	path := fmt.Sprintf("/v1/gameCenterActivities/%s", strings.TrimSpace(activityID))
-	_, err := c.do(ctx, http.MethodDelete, path, nil)
-	return err
+	return sendJSON[GameCenterActivityResponse](ctx, c, writeRequest{Method: http.MethodPost, Path: "/v1/gameCenterActivities", Payload: payload})
 }
 
 // AddGameCenterActivityAchievements adds achievements to an activity.
@@ -277,52 +179,6 @@ func (c *Client) RemoveGameCenterActivityLeaderboards(ctx context.Context, activ
 	return err
 }
 
-// GetGameCenterActivityVersions retrieves the list of activity versions for an activity.
-func (c *Client) GetGameCenterActivityVersions(ctx context.Context, activityID string, opts ...GCActivityVersionsOption) (*GameCenterActivityVersionsResponse, error) {
-	query := &gcActivityVersionsQuery{}
-	for _, opt := range opts {
-		opt(query)
-	}
-
-	path := fmt.Sprintf("/v1/gameCenterActivities/%s/versions", strings.TrimSpace(activityID))
-	if query.nextURL != "" {
-		if err := validateNextURL(query.nextURL); err != nil {
-			return nil, fmt.Errorf("game-center-activity-versions: %w", err)
-		}
-		path = query.nextURL
-	} else if queryString := buildGCActivityVersionsQuery(query); queryString != "" {
-		path += "?" + queryString
-	}
-
-	data, err := c.do(ctx, http.MethodGet, path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var response GameCenterActivityVersionsResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
-// GetGameCenterActivityVersion retrieves an activity version by ID.
-func (c *Client) GetGameCenterActivityVersion(ctx context.Context, versionID string) (*GameCenterActivityVersionResponse, error) {
-	path := fmt.Sprintf("/v1/gameCenterActivityVersions/%s", strings.TrimSpace(versionID))
-	data, err := c.do(ctx, http.MethodGet, path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var response GameCenterActivityVersionResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
 // CreateGameCenterActivityVersion creates a new activity version.
 func (c *Client) CreateGameCenterActivityVersion(ctx context.Context, activityID string, fallbackURL string) (*GameCenterActivityVersionResponse, error) {
 	var attrs *GameCenterActivityVersionCreateAttributes
@@ -348,22 +204,7 @@ func (c *Client) CreateGameCenterActivityVersion(ctx context.Context, activityID
 		},
 	}
 
-	body, err := BuildRequestBody(payload)
-	if err != nil {
-		return nil, err
-	}
-
-	data, err := c.do(ctx, http.MethodPost, "/v1/gameCenterActivityVersions", body)
-	if err != nil {
-		return nil, err
-	}
-
-	var response GameCenterActivityVersionResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
+	return sendJSON[GameCenterActivityVersionResponse](ctx, c, writeRequest{Method: http.MethodPost, Path: "/v1/gameCenterActivityVersions", Payload: payload})
 }
 
 // UpdateGameCenterActivityVersion updates an activity version.
@@ -383,188 +224,7 @@ func (c *Client) UpdateGameCenterActivityVersion(ctx context.Context, versionID 
 		},
 	}
 
-	body, err := BuildRequestBody(payload)
-	if err != nil {
-		return nil, err
-	}
-
-	path := fmt.Sprintf("/v1/gameCenterActivityVersions/%s", strings.TrimSpace(versionID))
-	data, err := c.do(ctx, http.MethodPatch, path, body)
-	if err != nil {
-		return nil, err
-	}
-
-	var response GameCenterActivityVersionResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
-// GetGameCenterActivityLocalizations retrieves the list of localizations for an activity version.
-func (c *Client) GetGameCenterActivityLocalizations(ctx context.Context, versionID string, opts ...GCActivityLocalizationsOption) (*GameCenterActivityLocalizationsResponse, error) {
-	query := &gcActivityLocalizationsQuery{}
-	for _, opt := range opts {
-		opt(query)
-	}
-
-	path := fmt.Sprintf("/v1/gameCenterActivityVersions/%s/localizations", strings.TrimSpace(versionID))
-	if query.nextURL != "" {
-		if err := validateNextURL(query.nextURL); err != nil {
-			return nil, fmt.Errorf("game-center-activity-localizations: %w", err)
-		}
-		path = query.nextURL
-	} else if queryString := buildGCActivityLocalizationsQuery(query); queryString != "" {
-		path += "?" + queryString
-	}
-
-	data, err := c.do(ctx, http.MethodGet, path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var response GameCenterActivityLocalizationsResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
-// GetGameCenterActivityLocalization retrieves an activity localization by ID.
-func (c *Client) GetGameCenterActivityLocalization(ctx context.Context, localizationID string) (*GameCenterActivityLocalizationResponse, error) {
-	path := fmt.Sprintf("/v1/gameCenterActivityLocalizations/%s", strings.TrimSpace(localizationID))
-	data, err := c.do(ctx, http.MethodGet, path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var response GameCenterActivityLocalizationResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
-// GetGameCenterActivityLocalizationImage retrieves the image for an activity localization.
-func (c *Client) GetGameCenterActivityLocalizationImage(ctx context.Context, localizationID string) (*GameCenterActivityImageResponse, error) {
-	path := fmt.Sprintf("/v1/gameCenterActivityLocalizations/%s/image", strings.TrimSpace(localizationID))
-	data, err := c.do(ctx, http.MethodGet, path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var response GameCenterActivityImageResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
-// GetGameCenterActivityVersionDefaultImage retrieves the default image for an activity version.
-func (c *Client) GetGameCenterActivityVersionDefaultImage(ctx context.Context, versionID string) (*GameCenterActivityVersionDefaultImageResponse, error) {
-	path := fmt.Sprintf("/v1/gameCenterActivityVersions/%s/defaultImage", strings.TrimSpace(versionID))
-	data, err := c.do(ctx, http.MethodGet, path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var response GameCenterActivityVersionDefaultImageResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
-// CreateGameCenterActivityLocalization creates a new activity localization.
-func (c *Client) CreateGameCenterActivityLocalization(ctx context.Context, versionID string, attrs GameCenterActivityLocalizationCreateAttributes) (*GameCenterActivityLocalizationResponse, error) {
-	payload := GameCenterActivityLocalizationCreateRequest{
-		Data: GameCenterActivityLocalizationCreateData{
-			Type:       ResourceTypeGameCenterActivityLocalizations,
-			Attributes: attrs,
-			Relationships: &GameCenterActivityLocalizationRelationships{
-				Version: &Relationship{
-					Data: ResourceData{
-						Type: ResourceTypeGameCenterActivityVersions,
-						ID:   strings.TrimSpace(versionID),
-					},
-				},
-			},
-		},
-	}
-
-	body, err := BuildRequestBody(payload)
-	if err != nil {
-		return nil, err
-	}
-
-	data, err := c.do(ctx, http.MethodPost, "/v1/gameCenterActivityLocalizations", body)
-	if err != nil {
-		return nil, err
-	}
-
-	var response GameCenterActivityLocalizationResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
-// UpdateGameCenterActivityLocalization updates an activity localization.
-func (c *Client) UpdateGameCenterActivityLocalization(ctx context.Context, localizationID string, attrs GameCenterActivityLocalizationUpdateAttributes) (*GameCenterActivityLocalizationResponse, error) {
-	payload := GameCenterActivityLocalizationUpdateRequest{
-		Data: GameCenterActivityLocalizationUpdateData{
-			Type:       ResourceTypeGameCenterActivityLocalizations,
-			ID:         strings.TrimSpace(localizationID),
-			Attributes: &attrs,
-		},
-	}
-
-	body, err := BuildRequestBody(payload)
-	if err != nil {
-		return nil, err
-	}
-
-	path := fmt.Sprintf("/v1/gameCenterActivityLocalizations/%s", strings.TrimSpace(localizationID))
-	data, err := c.do(ctx, http.MethodPatch, path, body)
-	if err != nil {
-		return nil, err
-	}
-
-	var response GameCenterActivityLocalizationResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
-// DeleteGameCenterActivityLocalization deletes an activity localization.
-func (c *Client) DeleteGameCenterActivityLocalization(ctx context.Context, localizationID string) error {
-	path := fmt.Sprintf("/v1/gameCenterActivityLocalizations/%s", strings.TrimSpace(localizationID))
-	_, err := c.do(ctx, http.MethodDelete, path, nil)
-	return err
-}
-
-// GetGameCenterActivityImage retrieves an activity image by ID.
-func (c *Client) GetGameCenterActivityImage(ctx context.Context, imageID string) (*GameCenterActivityImageResponse, error) {
-	path := fmt.Sprintf("/v1/gameCenterActivityImages/%s", strings.TrimSpace(imageID))
-	data, err := c.do(ctx, http.MethodGet, path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var response GameCenterActivityImageResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
+	return sendJSON[GameCenterActivityVersionResponse](ctx, c, writeRequest{Method: http.MethodPatch, Path: fmt.Sprintf("/v1/gameCenterActivityVersions/%s", strings.TrimSpace(versionID)), Payload: payload})
 }
 
 // CreateGameCenterActivityImage reserves an activity image upload.
@@ -593,60 +253,7 @@ func (c *Client) CreateGameCenterActivityImage(ctx context.Context, localization
 		},
 	}
 
-	body, err := BuildRequestBody(payload)
-	if err != nil {
-		return nil, err
-	}
-
-	data, err := c.do(ctx, http.MethodPost, "/v1/gameCenterActivityImages", body)
-	if err != nil {
-		return nil, err
-	}
-
-	var response GameCenterActivityImageResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
-// UpdateGameCenterActivityImage commits an activity image upload.
-func (c *Client) UpdateGameCenterActivityImage(ctx context.Context, imageID string, uploaded bool) (*GameCenterActivityImageResponse, error) {
-	payload := GameCenterActivityImageUpdateRequest{
-		Data: GameCenterActivityImageUpdateData{
-			Type: ResourceTypeGameCenterActivityImages,
-			ID:   strings.TrimSpace(imageID),
-			Attributes: &GameCenterActivityImageUpdateAttributes{
-				Uploaded: &uploaded,
-			},
-		},
-	}
-
-	body, err := BuildRequestBody(payload)
-	if err != nil {
-		return nil, err
-	}
-
-	path := fmt.Sprintf("/v1/gameCenterActivityImages/%s", strings.TrimSpace(imageID))
-	data, err := c.do(ctx, http.MethodPatch, path, body)
-	if err != nil {
-		return nil, err
-	}
-
-	var response GameCenterActivityImageResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
-// DeleteGameCenterActivityImage deletes an activity image.
-func (c *Client) DeleteGameCenterActivityImage(ctx context.Context, imageID string) error {
-	path := fmt.Sprintf("/v1/gameCenterActivityImages/%s", strings.TrimSpace(imageID))
-	_, err := c.do(ctx, http.MethodDelete, path, nil)
-	return err
+	return sendJSON[GameCenterActivityImageResponse](ctx, c, writeRequest{Method: http.MethodPost, Path: "/v1/gameCenterActivityImages", Payload: payload})
 }
 
 // UploadGameCenterActivityImage performs the full upload flow for an activity image.
@@ -697,52 +304,6 @@ func (c *Client) UploadGameCenterActivityImage(ctx context.Context, localization
 	return result, nil
 }
 
-// GetGameCenterActivityVersionRelease retrieves an activity version release by ID.
-func (c *Client) GetGameCenterActivityVersionRelease(ctx context.Context, releaseID string) (*GameCenterActivityVersionReleaseResponse, error) {
-	path := fmt.Sprintf("/v1/gameCenterActivityVersionReleases/%s", strings.TrimSpace(releaseID))
-	data, err := c.do(ctx, http.MethodGet, path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var response GameCenterActivityVersionReleaseResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
-// GetGameCenterActivityVersionReleases retrieves activity releases for a Game Center detail.
-func (c *Client) GetGameCenterActivityVersionReleases(ctx context.Context, gcDetailID string, opts ...GCActivityVersionReleasesOption) (*GameCenterActivityVersionReleasesResponse, error) {
-	query := &gcActivityVersionReleasesQuery{}
-	for _, opt := range opts {
-		opt(query)
-	}
-
-	path := fmt.Sprintf("/v1/gameCenterDetails/%s/activityReleases", strings.TrimSpace(gcDetailID))
-	if query.nextURL != "" {
-		if err := validateNextURL(query.nextURL); err != nil {
-			return nil, fmt.Errorf("game-center-activity-releases: %w", err)
-		}
-		path = query.nextURL
-	} else if queryString := buildGCActivityVersionReleasesQuery(query); queryString != "" {
-		path += "?" + queryString
-	}
-
-	data, err := c.do(ctx, http.MethodGet, path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var response GameCenterActivityVersionReleasesResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
 // CreateGameCenterActivityVersionRelease creates a new activity version release.
 func (c *Client) CreateGameCenterActivityVersionRelease(ctx context.Context, versionID string) (*GameCenterActivityVersionReleaseResponse, error) {
 	payload := GameCenterActivityVersionReleaseCreateRequest{
@@ -759,29 +320,7 @@ func (c *Client) CreateGameCenterActivityVersionRelease(ctx context.Context, ver
 		},
 	}
 
-	body, err := BuildRequestBody(payload)
-	if err != nil {
-		return nil, err
-	}
-
-	data, err := c.do(ctx, http.MethodPost, "/v1/gameCenterActivityVersionReleases", body)
-	if err != nil {
-		return nil, err
-	}
-
-	var response GameCenterActivityVersionReleaseResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
-// DeleteGameCenterActivityVersionRelease deletes an activity version release.
-func (c *Client) DeleteGameCenterActivityVersionRelease(ctx context.Context, releaseID string) error {
-	path := fmt.Sprintf("/v1/gameCenterActivityVersionReleases/%s", strings.TrimSpace(releaseID))
-	_, err := c.do(ctx, http.MethodDelete, path, nil)
-	return err
+	return sendJSON[GameCenterActivityVersionReleaseResponse](ctx, c, writeRequest{Method: http.MethodPost, Path: "/v1/gameCenterActivityVersionReleases", Payload: payload})
 }
 
 func buildRelationshipData(resourceType ResourceType, ids []string) []RelationshipData {

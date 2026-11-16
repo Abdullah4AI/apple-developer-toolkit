@@ -1,14 +1,12 @@
 package cmdtest
 
 import (
-	"context"
-	"errors"
-	"flag"
-	"io"
 	"net/http"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asctest"
 )
 
 func TestAppsRemoveBetaTestersValidationErrors(t *testing.T) {
@@ -36,72 +34,21 @@ func TestAppsRemoveBetaTestersValidationErrors(t *testing.T) {
 		},
 	}
 
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			root := RootCommand("1.2.3")
-			root.FlagSet.SetOutput(io.Discard)
-
-			stdout, stderr := captureOutput(t, func() {
-				if err := root.Parse(test.args); err != nil {
-					t.Fatalf("parse error: %v", err)
-				}
-				err := root.Run(context.Background())
-				if !errors.Is(err, flag.ErrHelp) {
-					t.Fatalf("expected ErrHelp, got %v", err)
-				}
-			})
-
-			if stdout != "" {
-				t.Fatalf("expected empty stdout, got %q", stdout)
-			}
-			if !strings.Contains(stderr, test.wantErr) {
-				t.Fatalf("expected error %q, got %q", test.wantErr, stderr)
-			}
-		})
-	}
+	runValidationTests(t, tests)
 }
 
 func TestAppsRemoveBetaTestersOutput(t *testing.T) {
 	setupAuth(t)
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() {
-		http.DefaultTransport = originalTransport
-	})
+	reg := asctest.NewRegistry(t)
+	reg.Register(asctest.DELETE("/v1/apps/app-1/relationships/betaTesters").JSONBody(`{"data":[{"type":"betaTesters","id":"tester-1"},{"type":"betaTesters","id":"tester-2"}]}`),
+		asctest.JSON(http.StatusNoContent, ""))
 
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		if req.Method != http.MethodDelete {
-			t.Fatalf("expected DELETE, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/apps/app-1/relationships/betaTesters" {
-			t.Fatalf("expected path /v1/apps/app-1/relationships/betaTesters, got %s", req.URL.Path)
-		}
-		body, err := io.ReadAll(req.Body)
-		if err != nil {
-			t.Fatalf("read body error: %v", err)
-		}
-		if !strings.Contains(string(body), `"id":"tester-1"`) {
-			t.Fatalf("expected tester-1 in body, got %s", string(body))
-		}
-		return &http.Response{
-			StatusCode: http.StatusNoContent,
-			Body:       io.NopCloser(strings.NewReader("")),
-			Header:     http.Header{"Content-Type": []string{"application/json"}},
-		}, nil
-	})
-
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"apps", "remove-beta-testers", "--app", "app-1", "--tester", "tester-1,tester-2", "--confirm"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatalf("run error: %v", err)
-		}
-	})
+	stdout, stderr, err := runRootWithDeps(t, stubClient(t, reg), "apps", "remove-beta-testers", "--app", "app-1", "--tester", "tester-1,tester-2", "--confirm")
+	if err != nil {
+		t.Fatalf("run error: %v", err)
+	}
 
 	if stderr != "" {
 		t.Fatalf("expected empty stderr, got %q", stderr)

@@ -40,6 +40,8 @@ type signingResignTarget struct {
 	Kind                 string
 	RelativePath         string
 	BundleID             string
+	SourceBundleID       string
+	InfoPlistData        []byte
 	Executable           string
 	ProfileMode          os.FileMode
 	ExistingEntitlements map[string]any
@@ -621,10 +623,6 @@ func discoverSigningResignArchiveWithEntitlements(ctx context.Context, reader *z
 		archive.Targets = append(archive.Targets, target)
 	}
 	return archive, nil
-}
-
-func inspectSigningResignTarget(ctx context.Context, tree rootfs.Root, relativePath, kind string) (signingResignTarget, error) {
-	return inspectSigningResignTargetWithEntitlements(ctx, tree, relativePath, kind, true)
 }
 
 func inspectSigningResignTargetWithEntitlements(ctx context.Context, tree rootfs.Root, relativePath, kind string, readEntitlements bool) (signingResignTarget, error) {

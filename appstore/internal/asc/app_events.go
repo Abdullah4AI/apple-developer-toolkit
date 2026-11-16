@@ -2,8 +2,6 @@ package asc
 
 import (
 	"net/url"
-	"strconv"
-	"strings"
 )
 
 // AppEventBadge represents the app event badge/event type.
@@ -139,27 +137,12 @@ type AppEventUpdateAttributes struct {
 	TerritorySchedules  []AppEventTerritorySchedule `json:"territorySchedules,omitempty"`
 }
 
-// AppEventLocalizationAttributes represents app event localization attributes.
-type AppEventLocalizationAttributes struct {
-	Locale           string `json:"locale,omitempty"`
-	Name             string `json:"name,omitempty"`
-	ShortDescription string `json:"shortDescription,omitempty"`
-	LongDescription  string `json:"longDescription,omitempty"`
-}
-
 // AppEventLocalizationCreateAttributes describes attributes for creating localizations.
 type AppEventLocalizationCreateAttributes struct {
 	Locale           string `json:"locale"`
 	Name             string `json:"name,omitempty"`
 	ShortDescription string `json:"shortDescription,omitempty"`
 	LongDescription  string `json:"longDescription,omitempty"`
-}
-
-// AppEventLocalizationUpdateAttributes describes attributes for updating localizations.
-type AppEventLocalizationUpdateAttributes struct {
-	Name             *string `json:"name,omitempty"`
-	ShortDescription *string `json:"shortDescription,omitempty"`
-	LongDescription  *string `json:"longDescription,omitempty"`
 }
 
 // AppEventScreenshotAttributes represents app event screenshot attributes.
@@ -222,110 +205,12 @@ type (
 	AppEventLocalizationVideoClipsLinkagesResponse  = LinkagesResponse
 )
 
-// AppEventsOption is a functional option for app event list endpoints.
-type AppEventsOption func(*appEventsQuery)
-
 // AppEventLocalizationsOption is a functional option for app event localizations list.
 type AppEventLocalizationsOption func(*appEventLocalizationsQuery)
-
-// AppEventScreenshotsOption is a functional option for app event screenshots list.
-type AppEventScreenshotsOption func(*appEventScreenshotsQuery)
-
-// AppEventVideoClipsOption is a functional option for app event video clips list.
-type AppEventVideoClipsOption func(*appEventVideoClipsQuery)
-
-type appEventsQuery struct {
-	listQuery
-	states             []string
-	ids                []string
-	fields             []string
-	localizationFields []string
-	include            []string
-	localizationsLimit int
-}
 
 type appEventLocalizationsQuery struct {
 	listQuery
 	localizationRelatedQuery
-}
-
-type appEventScreenshotsQuery struct {
-	listQuery
-}
-
-type appEventVideoClipsQuery struct {
-	listQuery
-}
-
-// WithAppEventsLimit sets the max number of app events to return.
-func WithAppEventsLimit(limit int) AppEventsOption {
-	return func(q *appEventsQuery) {
-		if limit > 0 {
-			q.limit = limit
-		}
-	}
-}
-
-// WithAppEventsNextURL uses a next page URL directly.
-func WithAppEventsNextURL(next string) AppEventsOption {
-	return func(q *appEventsQuery) {
-		if strings.TrimSpace(next) != "" {
-			q.nextURL = strings.TrimSpace(next)
-		}
-	}
-}
-
-// WithAppEventsStates filters app events by lifecycle state(s).
-func WithAppEventsStates(states []string) AppEventsOption {
-	return func(q *appEventsQuery) {
-		q.states = normalizeUpperList(states)
-	}
-}
-
-// WithAppEventsIDs filters app events by ID(s).
-func WithAppEventsIDs(ids []string) AppEventsOption {
-	return func(q *appEventsQuery) {
-		q.ids = normalizeList(ids)
-	}
-}
-
-// WithAppEventsFields sets fields[appEvents] for app event responses.
-func WithAppEventsFields(fields []string) AppEventsOption {
-	return func(q *appEventsQuery) {
-		q.fields = normalizeList(fields)
-	}
-}
-
-// WithAppEventsLocalizationFields sets fields[appEventLocalizations] for included localizations.
-func WithAppEventsLocalizationFields(fields []string) AppEventsOption {
-	return func(q *appEventsQuery) {
-		q.localizationFields = normalizeList(fields)
-	}
-}
-
-// WithAppEventsInclude includes related resources in app event responses.
-func WithAppEventsInclude(include []string) AppEventsOption {
-	return func(q *appEventsQuery) {
-		q.include = normalizeList(include)
-	}
-}
-
-// WithAppEventsLocalizationsLimit sets the maximum number of included localizations.
-func WithAppEventsLocalizationsLimit(limit int) AppEventsOption {
-	return func(q *appEventsQuery) {
-		if limit > 0 {
-			q.localizationsLimit = limit
-		}
-	}
-}
-
-// WithAppEventLocalizationsLimit sets the max number of localizations to return.
-func WithAppEventLocalizationsLimit(limit int) AppEventLocalizationsOption {
-	return func(q *appEventLocalizationsQuery) {
-		if limit > 0 {
-			q.limit = limit
-		}
-	}
 }
 
 // WithAppEventLocalizationsInclude includes related resources.
@@ -342,80 +227,9 @@ func WithAppEventLocalizationsPlacementsLimit(limit int) AppEventLocalizationsOp
 	}
 }
 
-// WithAppEventLocalizationsNextURL uses a next page URL directly.
-func WithAppEventLocalizationsNextURL(next string) AppEventLocalizationsOption {
-	return func(q *appEventLocalizationsQuery) {
-		if strings.TrimSpace(next) != "" {
-			q.nextURL = strings.TrimSpace(next)
-		}
-	}
-}
-
-// WithAppEventScreenshotsLimit sets the max number of screenshots to return.
-func WithAppEventScreenshotsLimit(limit int) AppEventScreenshotsOption {
-	return func(q *appEventScreenshotsQuery) {
-		if limit > 0 {
-			q.limit = limit
-		}
-	}
-}
-
-// WithAppEventScreenshotsNextURL uses a next page URL directly.
-func WithAppEventScreenshotsNextURL(next string) AppEventScreenshotsOption {
-	return func(q *appEventScreenshotsQuery) {
-		if strings.TrimSpace(next) != "" {
-			q.nextURL = strings.TrimSpace(next)
-		}
-	}
-}
-
-// WithAppEventVideoClipsLimit sets the max number of video clips to return.
-func WithAppEventVideoClipsLimit(limit int) AppEventVideoClipsOption {
-	return func(q *appEventVideoClipsQuery) {
-		if limit > 0 {
-			q.limit = limit
-		}
-	}
-}
-
-// WithAppEventVideoClipsNextURL uses a next page URL directly.
-func WithAppEventVideoClipsNextURL(next string) AppEventVideoClipsOption {
-	return func(q *appEventVideoClipsQuery) {
-		if strings.TrimSpace(next) != "" {
-			q.nextURL = strings.TrimSpace(next)
-		}
-	}
-}
-
-func buildAppEventsQuery(query *appEventsQuery) string {
-	values := url.Values{}
-	addCSV(values, "filter[eventState]", query.states)
-	addCSV(values, "filter[id]", query.ids)
-	addCSV(values, "fields[appEvents]", query.fields)
-	addCSV(values, "fields[appEventLocalizations]", query.localizationFields)
-	addCSV(values, "include", query.include)
-	addLimit(values, query.limit)
-	if query.localizationsLimit > 0 {
-		values.Set("limit[localizations]", strconv.Itoa(query.localizationsLimit))
-	}
-	return values.Encode()
-}
-
 func buildAppEventLocalizationsQuery(query *appEventLocalizationsQuery) string {
 	values := url.Values{}
 	addLimit(values, query.limit)
 	query.addTo(values)
-	return values.Encode()
-}
-
-func buildAppEventScreenshotsQuery(query *appEventScreenshotsQuery) string {
-	values := url.Values{}
-	addLimit(values, query.limit)
-	return values.Encode()
-}
-
-func buildAppEventVideoClipsQuery(query *appEventVideoClipsQuery) string {
-	values := url.Values{}
-	addLimit(values, query.limit)
 	return values.Encode()
 }

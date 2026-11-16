@@ -1,0 +1,44 @@
+{
+  "tag": "GameCenterLeaderboardLocalizations",
+  "file": "game_center_leaderboard_localizations_gen.go",
+  "types": [
+    "GameCenterLeaderboardLocalizationCreateAttributes",
+    "GameCenterLeaderboardLocalizationCreateData",
+    "GameCenterLeaderboardLocalizationCreateRequest",
+    "GameCenterLeaderboardLocalizationRelationships",
+    "GameCenterLeaderboardLocalizationResponse",
+    "GameCenterLeaderboardLocalizationUpdateAttributes",
+    "GameCenterLeaderboardLocalizationUpdateData",
+    "GameCenterLeaderboardLocalizationUpdateRequest",
+    "GameCenterLeaderboardLocalizationV2CreateData",
+    "GameCenterLeaderboardLocalizationV2CreateRequest",
+    "GameCenterLeaderboardLocalizationV2Relationships"
+  ],
+  "relationships": [
+    {"data":"GameCenterLeaderboardLocalizationCreateData","type":"*GameCenterLeaderboardLocalizationRelationships","omitempty":true},
+    {"data":"GameCenterLeaderboardLocalizationV2CreateData","type":"*GameCenterLeaderboardLocalizationV2Relationships","omitempty":true}
+  ],
+  "operations": [
+    {"operation":"gameCenterLeaderboardLocalizationsV2_createInstance","name":"CreateGameCenterLeaderboardLocalizationV2","params":["versionID"],"response":"GameCenterLeaderboardLocalizationResponse","links":["version"]},
+    {"operation":"gameCenterLeaderboardLocalizationsV2_deleteInstance","name":"DeleteGameCenterLeaderboardLocalizationV2","params":["localizationID"]},
+    {"operation":"gameCenterLeaderboardLocalizationsV2_getInstance","name":"GetGameCenterLeaderboardLocalizationV2","params":["localizationID"],"response":"GameCenterLeaderboardLocalizationResponse"},
+    {"operation":"gameCenterLeaderboardLocalizationsV2_image_getToOneRelated","name":"GetGameCenterLeaderboardLocalizationImageV2","params":["localizationID"],"response":"GameCenterLeaderboardImageResponse"},
+    {"operation":"gameCenterLeaderboardLocalizationsV2_updateInstance","name":"UpdateGameCenterLeaderboardLocalizationV2","params":["localizationID"],"response":"GameCenterLeaderboardLocalizationResponse"},
+    {"operation":"gameCenterLeaderboardLocalizations_createInstance","name":"CreateGameCenterLeaderboardLocalization","params":["leaderboardID"],"links":["gameCenterLeaderboard"]},
+    {"operation":"gameCenterLeaderboardLocalizations_deleteInstance","name":"DeleteGameCenterLeaderboardLocalization","params":["localizationID"]},
+    {"operation":"gameCenterLeaderboardLocalizations_gameCenterLeaderboardImage_getToOneRelated","name":"GetGameCenterLeaderboardLocalizationImage","params":["localizationID"]},
+    {"operation":"gameCenterLeaderboardLocalizations_getInstance","name":"GetGameCenterLeaderboardLocalization","params":["localizationID"]},
+    {"operation":"gameCenterLeaderboardLocalizations_updateInstance","name":"UpdateGameCenterLeaderboardLocalization","params":["localizationID"]}
+  ],
+  "refTypes": [
+    {"schema":"GameCenterLeaderboardFormatter","type":"string"}
+  ],
+  "goTypes": [
+    {"schema":"GameCenterLeaderboardImageV2Attributes","type":"GameCenterLeaderboardImageAttributes"},
+    {"schema":"GameCenterLeaderboardLocalizationV2Attributes","type":"GameCenterLeaderboardLocalizationAttributes"},
+    {"schema":"GameCenterLeaderboardLocalizationV2CreateAttributes","type":"GameCenterLeaderboardLocalizationCreateAttributes"},
+    {"schema":"GameCenterLeaderboardLocalizationV2UpdateAttributes","type":"GameCenterLeaderboardLocalizationUpdateAttributes"},
+    {"schema":"GameCenterLeaderboardLocalizationV2UpdateData","type":"GameCenterLeaderboardLocalizationUpdateData"},
+    {"schema":"GameCenterLeaderboardLocalizationV2UpdateRequest","type":"GameCenterLeaderboardLocalizationUpdateRequest"}
+  ]
+}

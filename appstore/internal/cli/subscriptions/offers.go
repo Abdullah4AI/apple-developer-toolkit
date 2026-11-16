@@ -9,9 +9,9 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
-// SubscriptionsOffersCommand returns the canonical offers family.
-func SubscriptionsOffersCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("offers", flag.ExitOnError)
+// newSubscriptionsOffersCommand returns the canonical offers family.
+func newSubscriptionsOffersCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("offers", flag.ExitOnError)
 
 	return &ffcli.Command{
 		Name:       "offers",
@@ -27,37 +27,37 @@ Examples:
   asc subscriptions offers win-back list --subscription-id "SUB_ID"
   asc subscriptions offers retention list --subscription-id "SUB_ID"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
 			wrapSubscriptionsCommand(
-				SubscriptionsIntroductoryOffersCommand(),
+				newSubscriptionsIntroductoryOffersCommand(d),
 				"asc subscriptions introductory-offers",
 				"asc subscriptions offers introductory",
 				"introductory",
 				"Manage subscription introductory offers.",
 			),
 			wrapSubscriptionsCommand(
-				SubscriptionsPromotionalOffersCommand(),
+				newSubscriptionsPromotionalOffersCommand(d),
 				"asc subscriptions promotional-offers",
 				"asc subscriptions offers promotional",
 				"promotional",
 				"Manage subscription promotional offers.",
 			),
 			wrapSubscriptionsCommand(
-				SubscriptionsOfferCodesCommand(),
+				newSubscriptionsOfferCodesCommand(d),
 				"asc subscriptions offer-codes",
 				"asc subscriptions offers offer-codes",
 				"offer-codes",
 				"Manage subscription offer codes.",
 			),
 			wrapSubscriptionsCommand(
-				SubscriptionsWinBackOffersCommand(),
+				newSubscriptionsWinBackOffersCommand(d),
 				"asc subscriptions win-back-offers",
 				"asc subscriptions offers win-back",
 				"win-back",
 				"Manage subscription win-back offers.",
 			),
-			SubscriptionsRetentionOffersCommand(),
+			newSubscriptionsRetentionOffersCommand(d),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp

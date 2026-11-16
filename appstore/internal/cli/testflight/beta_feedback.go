@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/peterbourgon/ff/v3/ffcli"
@@ -15,8 +14,8 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
-func TestFlightFeedbackCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("feedback", flag.ExitOnError)
+func newTestFlightFeedbackCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("feedback", flag.ExitOnError)
 
 	return &ffcli.Command{
 		Name:       "feedback",
@@ -29,11 +28,11 @@ Examples:
   asc testflight feedback view --submission-id "SUBMISSION_ID"
   asc testflight feedback delete --submission-id "SUBMISSION_ID" --confirm`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
-			TestFlightFeedbackListCommand(),
-			TestFlightFeedbackViewCommand(),
-			TestFlightFeedbackDeleteCommand(),
+			newTestFlightFeedbackListCommand(d),
+			newTestFlightFeedbackViewCommand(d),
+			newTestFlightFeedbackDeleteCommand(d),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp
@@ -41,8 +40,8 @@ Examples:
 	}
 }
 
-func TestFlightFeedbackListCommand() *ffcli.Command {
-	return feedbackcmd.NewListCommand(shared.ListCommandConfig{
+func newTestFlightFeedbackListCommand(d *shared.Deps) *ffcli.Command {
+	return feedbackcmd.NewListCommand(d, shared.ListCommandConfig{
 		Name:       "list",
 		ShortUsage: "asc testflight feedback list [flags]",
 		ShortHelp:  "List TestFlight feedback.",
@@ -58,13 +57,9 @@ Examples:
 	})
 }
 
-func TestFlightFeedbackViewCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("view", flag.ExitOnError)
-
-	submissionID := shared.BindResourceIDFlag(fs, "submission-id", "betaFeedbackScreenshotSubmissions", "Feedback submission ID")
-	output := shared.BindOutputFlags(fs)
-
-	return &ffcli.Command{
+func newTestFlightFeedbackViewCommand(d *shared.Deps) *ffcli.Command {
+	return shared.BuildIDGetCommand(shared.IDGetCommandConfig{
+		Deps:       d,
 		Name:       "view",
 		ShortUsage: "asc testflight feedback view --submission-id \"SUBMISSION_ID\"",
 		ShortHelp:  "View a feedback submission by ID.",
@@ -72,27 +67,19 @@ func TestFlightFeedbackViewCommand() *ffcli.Command {
 
 Examples:
   asc testflight feedback view --submission-id "SUBMISSION_ID"`,
-		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
-		Exec: func(ctx context.Context, args []string) error {
-			submissionIDValue := strings.TrimSpace(*submissionID)
-			if submissionIDValue == "" {
-				fmt.Fprintln(os.Stderr, "Error: --submission-id is required")
-				return shared.MissingRequiredUsageError("--submission-id")
-			}
-			return runFeedbackSubmissionView(ctx, submissionIDValue, output)
+		IDFlag:             "submission-id",
+		IDUsage:            "Feedback submission ID",
+		IDType:             "betaFeedbackScreenshotSubmissions",
+		RequiredDiagnostic: true,
+		Fetch: func(ctx context.Context, client *asc.Client, id string) (any, error) {
+			return client.GetBetaFeedbackScreenshotSubmission(ctx, id)
 		},
-	}
+	})
 }
 
-func TestFlightFeedbackDeleteCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("delete", flag.ExitOnError)
-
-	submissionID := shared.BindResourceIDFlag(fs, "submission-id", "betaFeedbackScreenshotSubmissions", "Feedback submission ID")
-	confirm := fs.Bool("confirm", false, "Confirm deletion")
-	output := shared.BindOutputFlags(fs)
-
-	return &ffcli.Command{
+func newTestFlightFeedbackDeleteCommand(d *shared.Deps) *ffcli.Command {
+	return shared.BuildConfirmDeleteCommand(shared.ConfirmDeleteCommandConfig{
+		Deps:       d,
 		Name:       "delete",
 		ShortUsage: "asc testflight feedback delete --submission-id \"SUBMISSION_ID\" --confirm",
 		ShortHelp:  "Delete a feedback submission by ID.",
@@ -100,25 +87,21 @@ func TestFlightFeedbackDeleteCommand() *ffcli.Command {
 
 Examples:
   asc testflight feedback delete --submission-id "SUBMISSION_ID" --confirm`,
-		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
-		Exec: func(ctx context.Context, args []string) error {
-			submissionIDValue := strings.TrimSpace(*submissionID)
-			if submissionIDValue == "" {
-				fmt.Fprintln(os.Stderr, "Error: --submission-id is required")
-				return shared.MissingRequiredUsageError("--submission-id")
-			}
-			if !*confirm {
-				fmt.Fprintln(os.Stderr, "Error: --confirm is required")
-				return shared.MissingRequiredUsageError("--confirm")
-			}
-			return runFeedbackSubmissionDelete(ctx, submissionIDValue, output)
+		IDFlag:             "submission-id",
+		IDUsage:            "Feedback submission ID",
+		IDType:             "betaFeedbackScreenshotSubmissions",
+		RequiredDiagnostic: true,
+		Delete: func(ctx context.Context, client *asc.Client, id string) error {
+			return client.DeleteBetaFeedbackScreenshotSubmission(ctx, id)
 		},
-	}
+		Result: func(id string) any {
+			return &asc.DeleteResult{ID: id, Deleted: true}
+		},
+	})
 }
 
-func TestFlightCrashesCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("crashes", flag.ExitOnError)
+func newTestFlightCrashesCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("crashes", flag.ExitOnError)
 
 	return &ffcli.Command{
 		Name:       "crashes",
@@ -133,12 +116,12 @@ Examples:
   asc testflight crashes log --submission-id "SUBMISSION_ID"
   asc testflight crashes log --crash-log-id "CRASH_LOG_ID"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
-			TestFlightCrashesListCommand(),
-			TestFlightCrashesViewCommand(),
-			TestFlightCrashesDeleteCommand(),
-			TestFlightCrashesLogCommand(),
+			newTestFlightCrashesListCommand(d),
+			newTestFlightCrashesViewCommand(d),
+			newTestFlightCrashesDeleteCommand(d),
+			newTestFlightCrashesLogCommand(d),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp
@@ -146,8 +129,8 @@ Examples:
 	}
 }
 
-func TestFlightCrashesListCommand() *ffcli.Command {
-	return crashescmd.NewListCommand(shared.ListCommandConfig{
+func newTestFlightCrashesListCommand(d *shared.Deps) *ffcli.Command {
+	return crashescmd.NewListCommand(d, shared.ListCommandConfig{
 		Name:       "list",
 		ShortUsage: "asc testflight crashes list [flags]",
 		ShortHelp:  "List TestFlight crash submissions.",
@@ -162,13 +145,9 @@ Examples:
 	})
 }
 
-func TestFlightCrashesViewCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("view", flag.ExitOnError)
-
-	submissionID := shared.BindResourceIDFlag(fs, "submission-id", "betaFeedbackCrashSubmissions", "Crash submission ID")
-	output := shared.BindOutputFlags(fs)
-
-	return &ffcli.Command{
+func newTestFlightCrashesViewCommand(d *shared.Deps) *ffcli.Command {
+	return shared.BuildIDGetCommand(shared.IDGetCommandConfig{
+		Deps:       d,
 		Name:       "view",
 		ShortUsage: "asc testflight crashes view --submission-id \"SUBMISSION_ID\"",
 		ShortHelp:  "View a crash submission by ID.",
@@ -176,27 +155,19 @@ func TestFlightCrashesViewCommand() *ffcli.Command {
 
 Examples:
   asc testflight crashes view --submission-id "SUBMISSION_ID"`,
-		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
-		Exec: func(ctx context.Context, args []string) error {
-			submissionIDValue := strings.TrimSpace(*submissionID)
-			if submissionIDValue == "" {
-				fmt.Fprintln(os.Stderr, "Error: --submission-id is required")
-				return shared.MissingRequiredUsageError("--submission-id")
-			}
-			return runCrashSubmissionView(ctx, submissionIDValue, output)
+		IDFlag:             "submission-id",
+		IDUsage:            "Crash submission ID",
+		IDType:             "betaFeedbackCrashSubmissions",
+		RequiredDiagnostic: true,
+		Fetch: func(ctx context.Context, client *asc.Client, id string) (any, error) {
+			return client.GetBetaFeedbackCrashSubmission(ctx, id)
 		},
-	}
+	})
 }
 
-func TestFlightCrashesDeleteCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("delete", flag.ExitOnError)
-
-	submissionID := shared.BindResourceIDFlag(fs, "submission-id", "betaFeedbackCrashSubmissions", "Crash submission ID")
-	confirm := fs.Bool("confirm", false, "Confirm deletion")
-	output := shared.BindOutputFlags(fs)
-
-	return &ffcli.Command{
+func newTestFlightCrashesDeleteCommand(d *shared.Deps) *ffcli.Command {
+	return shared.BuildConfirmDeleteCommand(shared.ConfirmDeleteCommandConfig{
+		Deps:       d,
 		Name:       "delete",
 		ShortUsage: "asc testflight crashes delete --submission-id \"SUBMISSION_ID\" --confirm",
 		ShortHelp:  "Delete a crash submission by ID.",
@@ -204,29 +175,25 @@ func TestFlightCrashesDeleteCommand() *ffcli.Command {
 
 Examples:
   asc testflight crashes delete --submission-id "SUBMISSION_ID" --confirm`,
-		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
-		Exec: func(ctx context.Context, args []string) error {
-			submissionIDValue := strings.TrimSpace(*submissionID)
-			if submissionIDValue == "" {
-				fmt.Fprintln(os.Stderr, "Error: --submission-id is required")
-				return shared.MissingRequiredUsageError("--submission-id")
-			}
-			if !*confirm {
-				fmt.Fprintln(os.Stderr, "Error: --confirm is required")
-				return shared.MissingRequiredUsageError("--confirm")
-			}
-			return runCrashSubmissionDelete(ctx, submissionIDValue, output)
+		IDFlag:             "submission-id",
+		IDUsage:            "Crash submission ID",
+		IDType:             "betaFeedbackCrashSubmissions",
+		RequiredDiagnostic: true,
+		Delete: func(ctx context.Context, client *asc.Client, id string) error {
+			return client.DeleteBetaFeedbackCrashSubmission(ctx, id)
 		},
-	}
+		Result: func(id string) any {
+			return &asc.DeleteResult{ID: id, Deleted: true}
+		},
+	})
 }
 
-func TestFlightCrashesLogCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("log", flag.ExitOnError)
+func newTestFlightCrashesLogCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("log", flag.ExitOnError)
 
 	submissionID := shared.BindResourceIDFlag(fs, "submission-id", "betaFeedbackCrashSubmissions", "Crash submission ID")
 	crashLogID := shared.BindResourceIDFlag(fs, "crash-log-id", "betaCrashLogs", "Crash log ID")
-	output := shared.BindOutputFlags(fs)
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "log",
@@ -238,115 +205,39 @@ Examples:
   asc testflight crashes log --submission-id "SUBMISSION_ID"
   asc testflight crashes log --crash-log-id "CRASH_LOG_ID"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			submissionIDValue := strings.TrimSpace(*submissionID)
 			crashLogIDValue := strings.TrimSpace(*crashLogID)
 			if submissionIDValue == "" && crashLogIDValue == "" {
-				fmt.Fprintln(os.Stderr, "Error: exactly one of --submission-id or --crash-log-id is required")
+				fmt.Fprintln(d.IO.ErrOut, "Error: exactly one of --submission-id or --crash-log-id is required")
 				return shared.MissingRequiredUsageError("")
 			}
 			if submissionIDValue != "" && crashLogIDValue != "" {
-				fmt.Fprintln(os.Stderr, "Error: exactly one of --submission-id or --crash-log-id is required")
+				fmt.Fprintln(d.IO.ErrOut, "Error: exactly one of --submission-id or --crash-log-id is required")
 				return shared.WithDiagnostic(flag.ErrHelp, shared.DiagnosticConflictingInput, "")
 			}
 			if submissionIDValue != "" {
-				return runCrashLogBySubmissionID(ctx, submissionIDValue, output)
+				return runCrashLogBySubmissionID(ctx, d, submissionIDValue, output)
 			}
-			return runCrashLogByCrashLogID(ctx, crashLogIDValue, output)
+			return runCrashLogByCrashLogID(ctx, d, crashLogIDValue, output)
 		},
 	}
 }
 
-func runFeedbackSubmissionView(ctx context.Context, submissionID string, output shared.OutputFlags) error {
-	client, err := shared.GetASCClient()
-	if err != nil {
-		return fmt.Errorf("testflight feedback view: %w", err)
-	}
-
-	requestCtx, cancel := shared.ContextWithTimeout(ctx)
-	defer cancel()
-
-	resp, err := client.GetBetaFeedbackScreenshotSubmission(requestCtx, submissionID)
-	if err != nil {
-		return fmt.Errorf("testflight feedback view: failed to fetch: %w", err)
-	}
-
-	return shared.PrintOutput(resp, *output.Output, *output.Pretty)
-}
-
-func runFeedbackSubmissionDelete(ctx context.Context, submissionID string, output shared.OutputFlags) error {
-	client, err := shared.GetASCClient()
-	if err != nil {
-		return fmt.Errorf("testflight feedback delete: %w", err)
-	}
-
-	requestCtx, cancel := shared.ContextWithTimeout(ctx)
-	defer cancel()
-
-	if err := client.DeleteBetaFeedbackScreenshotSubmission(requestCtx, submissionID); err != nil {
-		return fmt.Errorf("testflight feedback delete: failed to delete: %w", err)
-	}
-
-	result := &asc.BetaFeedbackSubmissionDeleteResult{
-		ID:      submissionID,
-		Deleted: true,
-	}
-
-	return shared.PrintOutput(result, *output.Output, *output.Pretty)
-}
-
-func runCrashSubmissionView(ctx context.Context, submissionID string, output shared.OutputFlags) error {
-	client, err := shared.GetASCClient()
-	if err != nil {
-		return fmt.Errorf("testflight crashes view: %w", err)
-	}
-
-	requestCtx, cancel := shared.ContextWithTimeout(ctx)
-	defer cancel()
-
-	resp, err := client.GetBetaFeedbackCrashSubmission(requestCtx, submissionID)
-	if err != nil {
-		return fmt.Errorf("testflight crashes view: failed to fetch: %w", err)
-	}
-
-	return shared.PrintOutput(resp, *output.Output, *output.Pretty)
-}
-
-func runCrashSubmissionDelete(ctx context.Context, submissionID string, output shared.OutputFlags) error {
-	client, err := shared.GetASCClient()
-	if err != nil {
-		return fmt.Errorf("testflight crashes delete: %w", err)
-	}
-
-	requestCtx, cancel := shared.ContextWithTimeout(ctx)
-	defer cancel()
-
-	if err := client.DeleteBetaFeedbackCrashSubmission(requestCtx, submissionID); err != nil {
-		return fmt.Errorf("testflight crashes delete: failed to delete: %w", err)
-	}
-
-	result := &asc.BetaFeedbackSubmissionDeleteResult{
-		ID:      submissionID,
-		Deleted: true,
-	}
-
-	return shared.PrintOutput(result, *output.Output, *output.Pretty)
-}
-
-func runCrashLogBySubmissionID(ctx context.Context, submissionID string, output shared.OutputFlags) error {
-	client, err := shared.GetASCClient()
+func runCrashLogBySubmissionID(ctx context.Context, d *shared.Deps, submissionID string, output shared.OutputFlags) error {
+	client, err := d.Client()
 	if err != nil {
 		return fmt.Errorf("testflight crashes log: %w", err)
 	}
 
-	requestCtx, cancel := shared.ContextWithTimeout(ctx)
+	requestCtx, cancel := d.Timeout(ctx)
 	defer cancel()
 
 	resp, err := client.GetBetaFeedbackCrashSubmissionCrashLog(requestCtx, submissionID)
 	if err != nil {
-		return fmt.Errorf("testflight crashes log: failed to fetch: %w", err)
+		return crashLogFetchError(err)
 	}
 
-	return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+	return d.PrintOutput(resp, *output.Output, *output.Pretty)
 }

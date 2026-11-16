@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
@@ -51,19 +50,19 @@ type statusFeedEvent struct {
 	AffectedServices json.RawMessage `json:"affectedServices"`
 }
 
-// Command returns the unauthenticated Apple Developer system status command.
-func Command() *ffcli.Command {
-	return commandWithClient(http.DefaultClient, statusDataURL)
+// NewCommand returns the unauthenticated Apple Developer system status command.
+func NewCommand(d *shared.Deps) *ffcli.Command {
+	return commandWithEndpoint(d, statusDataURL)
 }
 
-func commandWithClient(client *http.Client, endpoint string) *ffcli.Command {
-	fs := flag.NewFlagSet("system-status", flag.ExitOnError)
+func commandWithEndpoint(d *shared.Deps, endpoint string) *ffcli.Command {
+	fs := d.NewFlagSet("system-status", flag.ExitOnError)
 	services := shared.BindOnceCSVFlag(fs, "service", "Filter by service name substring(s), comma-separated")
 	issuesOnly := fs.Bool("issues-only", false, "Show only services with active incidents")
 	watch := fs.Bool("watch", false, "Poll and emit snapshots when the selected report changes")
 	pollInterval := fs.Duration("poll-interval", 30*time.Second, "Polling interval for --watch")
 	maxPolls := fs.Int("max-polls", 0, "Maximum polls for --watch (0 = unlimited)")
-	output := shared.BindOutputFlags(fs)
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "system-status",
@@ -82,19 +81,16 @@ Examples:
   asc system-status --watch --poll-interval 30s
   asc system-status --output json`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
-			if len(args) > 0 {
-				return shared.UsageError("system-status does not accept positional arguments")
-			}
 			if *pollInterval <= 0 {
-				return shared.UsageError("--poll-interval must be greater than 0")
+				return d.UsageError("--poll-interval must be greater than 0")
 			}
 			if *maxPolls < 0 {
-				return shared.UsageError("--max-polls must be greater than or equal to 0")
+				return d.UsageError("--max-polls must be greater than or equal to 0")
 			}
 			if *maxPolls > 0 && !*watch {
-				return shared.UsageError("--max-polls requires --watch")
+				return d.UsageError("--max-polls requires --watch")
 			}
 			pollIntervalSet := false
 			fs.Visit(func(current *flag.Flag) {
@@ -103,14 +99,14 @@ Examples:
 				}
 			})
 			if pollIntervalSet && !*watch {
-				return shared.UsageError("--poll-interval requires --watch")
+				return d.UsageError("--poll-interval requires --watch")
 			}
 			normalizedOutput, err := shared.ValidateOutputFormat(*output.Output, *output.Pretty)
 			if err != nil {
-				return shared.UsageError(err.Error())
+				return d.UsageError(err.Error())
 			}
 			if *watch && *output.Pretty && normalizedOutput == "json" {
-				return shared.UsageError("--pretty is not supported with --watch JSON output")
+				return d.UsageError("--pretty is not supported with --watch JSON output")
 			}
 
 			serviceFilterSet := false
@@ -122,27 +118,28 @@ Examples:
 			if serviceFilterSet {
 				for _, service := range strings.Split(services.String(), ",") {
 					if strings.TrimSpace(service) == "" {
-						return shared.UsageError("--service must not contain empty service names")
+						return d.UsageError("--service must not contain empty service names")
 					}
 				}
 			}
 			filters := shared.SplitCSV(services.String())
+			client := &http.Client{Transport: d.HTTPTransport()}
 
 			if *watch {
-				return watchDeveloperSystemStatus(ctx, client, endpoint, filters, *issuesOnly, *output.Output, *output.Pretty, *pollInterval, *maxPolls)
+				return watchDeveloperSystemStatus(ctx, d, client, endpoint, filters, *issuesOnly, *output.Output, *output.Pretty, *pollInterval, *maxPolls)
 			}
 
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
+			requestCtx, cancel := d.Timeout(ctx)
 			report, err := fetchDeveloperSystemStatus(requestCtx, client, endpoint)
 			cancel()
 			if err != nil {
 				return fmt.Errorf("system-status: %w", err)
 			}
-			report, err = selectDeveloperSystemStatus(report, filters, *issuesOnly)
+			report, err = selectDeveloperSystemStatus(d, report, filters, *issuesOnly)
 			if err != nil {
 				return fmt.Errorf("system-status: %w", err)
 			}
-			return shared.PrintOutput(report, *output.Output, *output.Pretty)
+			return d.PrintOutput(report, *output.Output, *output.Pretty)
 		},
 	}
 }
@@ -292,7 +289,7 @@ func normalizeAffectedServices(raw json.RawMessage) string {
 	return strings.TrimSpace(string(raw))
 }
 
-func selectDeveloperSystemStatus(report *asc.DeveloperSystemStatusReport, filters []string, issuesOnly bool) (*asc.DeveloperSystemStatusReport, error) {
+func selectDeveloperSystemStatus(d *shared.Deps, report *asc.DeveloperSystemStatusReport, filters []string, issuesOnly bool) (*asc.DeveloperSystemStatusReport, error) {
 	for _, filter := range filters {
 		filterMatched := false
 		for _, service := range report.Services {
@@ -302,7 +299,7 @@ func selectDeveloperSystemStatus(report *asc.DeveloperSystemStatusReport, filter
 			}
 		}
 		if !filterMatched {
-			return nil, shared.UsageErrorf("no services matched --service %q", filter)
+			return nil, d.UsageErrorf("no services matched --service %q", filter)
 		}
 	}
 
@@ -313,7 +310,7 @@ func selectDeveloperSystemStatus(report *asc.DeveloperSystemStatusReport, filter
 		}
 	}
 	if len(matched) == 0 && len(filters) > 0 {
-		return nil, shared.UsageErrorf("no services matched --service %q", strings.Join(filters, ","))
+		return nil, d.UsageErrorf("no services matched --service %q", strings.Join(filters, ","))
 	}
 
 	selected := matched
@@ -371,11 +368,11 @@ func summarizeDeveloperSystemStatus(services []asc.DeveloperSystemStatusService,
 	return summary
 }
 
-func watchDeveloperSystemStatus(ctx context.Context, client *http.Client, endpoint string, filters []string, issuesOnly bool, output string, pretty bool, pollInterval time.Duration, maxPolls int) error {
+func watchDeveloperSystemStatus(ctx context.Context, d *shared.Deps, client *http.Client, endpoint string, filters []string, issuesOnly bool, output string, pretty bool, pollInterval time.Duration, maxPolls int) error {
 	previous := ""
 	consecutiveFailures := 0
 	for poll := 1; maxPolls == 0 || poll <= maxPolls; poll++ {
-		requestCtx, cancel := shared.ContextWithTimeout(ctx)
+		requestCtx, cancel := d.Timeout(ctx)
 		report, err := fetchDeveloperSystemStatus(requestCtx, client, endpoint)
 		cancel()
 		if err != nil {
@@ -386,8 +383,8 @@ func watchDeveloperSystemStatus(ctx context.Context, client *http.Client, endpoi
 			if consecutiveFailures >= maxWatchFailures || (maxPolls > 0 && poll >= maxPolls) {
 				return fmt.Errorf("system-status: %w", err)
 			}
-			fmt.Fprintf(os.Stderr, "Warning: system-status poll %d failed (%v); retrying in %s\n", poll, err, pollInterval)
-			if err := waitForPoll(ctx, pollInterval); err != nil {
+			fmt.Fprintf(d.IO.ErrOut, "Warning: system-status poll %d failed (%v); retrying in %s\n", poll, err, pollInterval)
+			if err := waitForPoll(ctx, d, pollInterval); err != nil {
 				if contextDone(ctx) {
 					return nil
 				}
@@ -396,7 +393,7 @@ func watchDeveloperSystemStatus(ctx context.Context, client *http.Client, endpoi
 			continue
 		}
 		consecutiveFailures = 0
-		report, err = selectDeveloperSystemStatus(report, filters, issuesOnly)
+		report, err = selectDeveloperSystemStatus(d, report, filters, issuesOnly)
 		if err != nil {
 			return fmt.Errorf("system-status: %w", err)
 		}
@@ -406,7 +403,7 @@ func watchDeveloperSystemStatus(ctx context.Context, client *http.Client, endpoi
 			return fmt.Errorf("system-status: encode watch snapshot: %w", err)
 		}
 		if string(snapshot) != previous {
-			if err := printWatchSnapshot(report, output, pretty, previous != ""); err != nil {
+			if err := printWatchSnapshot(d, report, output, pretty, previous != ""); err != nil {
 				return err
 			}
 			previous = string(snapshot)
@@ -414,7 +411,7 @@ func watchDeveloperSystemStatus(ctx context.Context, client *http.Client, endpoi
 		if maxPolls > 0 && poll >= maxPolls {
 			return nil
 		}
-		if err := waitForPoll(ctx, pollInterval); err != nil {
+		if err := waitForPoll(ctx, d, pollInterval); err != nil {
 			if contextDone(ctx) {
 				return nil
 			}
@@ -424,31 +421,29 @@ func watchDeveloperSystemStatus(ctx context.Context, client *http.Client, endpoi
 	return nil
 }
 
-func printWatchSnapshot(report *asc.DeveloperSystemStatusReport, output string, pretty bool, separator bool) error {
+func printWatchSnapshot(d *shared.Deps, report *asc.DeveloperSystemStatusReport, output string, pretty bool, separator bool) error {
 	format := strings.ToLower(strings.TrimSpace(output))
 	if format == "" {
-		format = shared.DefaultOutputFormat()
+		format = d.DefaultOutputFormat()
 	}
 	if format == "json" {
-		return shared.PrintOutput(report, format, pretty)
+		return d.PrintOutput(report, format, pretty)
 	}
 	if separator {
 		if format == "markdown" || format == "md" {
-			fmt.Fprintln(os.Stdout, "\n---")
+			fmt.Fprintln(d.IO.Out, "\n---")
 		} else {
-			fmt.Fprintln(os.Stdout)
+			fmt.Fprintln(d.IO.Out)
 		}
 	}
-	return shared.PrintOutput(report, output, pretty)
+	return d.PrintOutput(report, output, pretty)
 }
 
-func waitForPoll(ctx context.Context, interval time.Duration) error {
-	timer := time.NewTimer(interval)
-	defer timer.Stop()
+func waitForPoll(ctx context.Context, d *shared.Deps, interval time.Duration) error {
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
-	case <-timer.C:
+	case <-d.After(interval):
 		return nil
 	}
 }

@@ -9,17 +9,19 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asctest"
 )
 
 func TestBuildsRejectsInvalidNextURL(t *testing.T) {
 	runInvalidNextURLCases(t, []invalidNextURLCase{
-		{args: []string{"builds", "icons", "list"}, wantErr: "builds icons list: --next"},
-		{args: []string{"builds", "individual-testers", "list"}, wantErr: "builds individual-testers list: --next"},
-		{args: []string{"builds", "metrics", "beta-usages"}, wantErr: "builds metrics beta-usages: --next"},
-		{args: []string{"builds", "links", "view", "--type", "icons"}, wantErr: "builds links view: --next"},
-		{args: []string{"builds", "test-notes", "list", "--build-id", "build-1"}, wantErr: "builds test-notes list: --next"},
-		{args: []string{"builds", "uploads", "files", "list"}, wantErr: "builds uploads files list: --next"},
-		{args: []string{"builds", "uploads", "list"}, wantErr: "builds uploads list: --next"},
+		{args: []string{"builds", "icons", "list"}, wantErr: "builds icons list: --next", deps: true},
+		{args: []string{"builds", "individual-testers", "list"}, wantErr: "builds individual-testers list: --next", deps: true},
+		{args: []string{"builds", "metrics", "beta-usages"}, wantErr: "builds metrics beta-usages: --next", deps: true},
+		{args: []string{"builds", "links", "view", "--type", "icons"}, wantErr: "builds links view: --next", deps: true},
+		{args: []string{"builds", "test-notes", "list", "--build-id", "build-1"}, wantErr: "builds test-notes list: --next", deps: true},
+		{args: []string{"builds", "uploads", "files", "list"}, wantErr: "builds uploads files list: --next", deps: true},
+		{args: []string{"builds", "uploads", "list"}, wantErr: "builds uploads list: --next", deps: true},
 	})
 }
 
@@ -29,96 +31,51 @@ func TestBuildsPaginateFromNext(t *testing.T) {
 			args:     []string{"builds", "icons", "list", "--build-id", "build-1"},
 			firstURL: "https://api.appstoreconnect.apple.com/v1/builds/build-1/icons?cursor=AQ&limit=200",
 			dataType: "buildIcons",
+			deps:     true,
 		},
 		{
 			args:     []string{"builds", "icons", "list"},
 			firstURL: "https://api.appstoreconnect.apple.com/v1/builds/build-1/icons?cursor=AQ&limit=200",
 			dataType: "buildIcons",
+			deps:     true,
 		},
 		{
 			args:     []string{"builds", "individual-testers", "list", "--build-id", "build-1"},
 			firstURL: "https://api.appstoreconnect.apple.com/v1/builds/build-1/individualTesters?cursor=AQ&limit=200",
 			dataType: "betaTesters",
+			deps:     true,
 		},
 		{
 			args:     []string{"builds", "individual-testers", "list"},
 			firstURL: "https://api.appstoreconnect.apple.com/v1/builds/build-1/individualTesters?cursor=AQ&limit=200",
 			dataType: "betaTesters",
+			deps:     true,
 		},
 		{
 			args:     []string{"builds", "links", "view", "--type", "icons"},
 			firstURL: "https://api.appstoreconnect.apple.com/v1/builds/build-1/relationships/icons?cursor=AQ&limit=200",
 			dataType: "buildIcons",
+			deps:     true,
 		},
 		{
 			args:     []string{"builds", "test-notes", "list", "--build-id", "build-1"},
 			firstURL: "https://api.appstoreconnect.apple.com/v1/betaBuildLocalizations?cursor=AQ&limit=200",
 			dataType: "betaBuildLocalizations",
+			deps:     true,
 		},
 		{
 			args:     []string{"builds", "uploads", "files", "list", "--upload", "upload-1"},
 			firstURL: "https://api.appstoreconnect.apple.com/v1/buildUploads/upload-1/buildUploadFiles?cursor=AQ&limit=200",
 			dataType: "buildUploadFiles",
+			deps:     true,
 		},
 		{
 			args:     []string{"builds", "uploads", "list"},
 			firstURL: "https://api.appstoreconnect.apple.com/v1/apps/app-1/buildUploads?cursor=AQ&limit=200",
 			dataType: "buildUploads",
+			deps:     true,
 		},
 	})
-}
-
-func runBuildsFetchFromNext(
-	t *testing.T,
-	args []string,
-	nextURL string,
-	body string,
-	wantContains string,
-) {
-	t.Helper()
-
-	setupAuth(t)
-	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
-
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() {
-		http.DefaultTransport = originalTransport
-	})
-
-	requestCount := 0
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		requestCount++
-		if requestCount != 1 {
-			t.Fatalf("unexpected extra request: %s %s", req.Method, req.URL.String())
-		}
-		if req.Method != http.MethodGet || req.URL.String() != nextURL {
-			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.String())
-		}
-		return &http.Response{
-			StatusCode: http.StatusOK,
-			Body:       io.NopCloser(strings.NewReader(body)),
-			Header:     http.Header{"Content-Type": []string{"application/json"}},
-		}, nil
-	})
-
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse(args); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatalf("run error: %v", err)
-		}
-	})
-
-	if stderr != "" {
-		t.Fatalf("expected empty stderr, got %q", stderr)
-	}
-	if !strings.Contains(stdout, wantContains) {
-		t.Fatalf("expected output to contain %q, got %q", wantContains, stdout)
-	}
 }
 
 func TestBuildsRejectsExpiredFilterFromNextWithoutLatest(t *testing.T) {
@@ -164,13 +121,25 @@ func TestBuildsRejectsExpiredFilterFromNextWithoutLatest(t *testing.T) {
 
 func TestBuildsMetricsBetaUsagesFetchFromNextWithoutBuild(t *testing.T) {
 	const nextURL = "https://api.appstoreconnect.apple.com/v1/builds/build-1/metrics/betaBuildUsages?cursor=AQ&limit=50"
-	body := `{"data":[{"date":"2026-02-01","sessions":5}],"links":{"next":""}}`
+	const body = `{"data":[{"date":"2026-02-01","sessions":5}],"links":{"next":""}}`
 
-	runBuildsFetchFromNext(
-		t,
-		[]string{"builds", "metrics", "beta-usages", "--next", nextURL},
-		nextURL,
-		body,
-		`"date":"2026-02-01"`,
-	)
+	setupAuth(t)
+	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
+
+	reg := asctest.NewRegistry(t)
+	reg.Install()
+	reg.Register(asctest.GET("/v1/builds/build-1/metrics/betaBuildUsages", "cursor=AQ", "limit=50"),
+		asctest.JSON(http.StatusOK, body))
+
+	stdout, stderr, err := runCommand(t, []string{"builds", "metrics", "beta-usages", "--next", nextURL})
+	if err != nil {
+		t.Fatalf("run error: %v", err)
+	}
+
+	if stderr != "" {
+		t.Fatalf("expected empty stderr, got %q", stderr)
+	}
+	if !strings.Contains(stdout, `"date":"2026-02-01"`) {
+		t.Fatalf("expected beta usage in output, got %q", stdout)
+	}
 }

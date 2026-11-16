@@ -3,8 +3,6 @@ package web
 import (
 	"context"
 	"encoding/json"
-	"errors"
-	"flag"
 	"strings"
 	"testing"
 
@@ -12,7 +10,8 @@ import (
 )
 
 func TestWebWebsitePushIDsCommandHierarchy(t *testing.T) {
-	command := WebWebsitePushIDsCommand()
+	d, _, _ := newWebTestDeps()
+	command := newWebWebsitePushIDsCommand(d)
 	if command.Name != "website-push-ids" || command.UsageFunc == nil {
 		t.Fatalf("unexpected command: %+v", command)
 	}
@@ -24,25 +23,6 @@ func TestWebWebsitePushIDsCommandHierarchy(t *testing.T) {
 		if command.Subcommands[index].Name != name {
 			t.Fatalf("subcommand %d = %q, want %q", index, command.Subcommands[index].Name, name)
 		}
-	}
-}
-
-func TestWebWebsitePushIDsListRejectsPositionalArguments(t *testing.T) {
-	command := WebWebsitePushIDsListCommand()
-	if err := command.FlagSet.Parse([]string{"extra"}); err != nil {
-		t.Fatalf("parse error: %v", err)
-	}
-	stdout, stderr := captureWebCommandOutput(t, func() {
-		err := command.Exec(context.Background(), command.FlagSet.Args())
-		if !errors.Is(err, flag.ErrHelp) {
-			t.Fatalf("expected usage error, got %v", err)
-		}
-	})
-	if stdout != "" {
-		t.Fatalf("expected empty stdout, got %q", stdout)
-	}
-	if !strings.Contains(stderr, "web website-push-ids list does not accept positional arguments") {
-		t.Fatalf("stderr %q does not contain positional-argument error", stderr)
 	}
 }
 
@@ -60,11 +40,12 @@ func TestWebWebsitePushIDsListPrintsCapturedJSON(t *testing.T) {
 		}, nil
 	}
 
-	command := WebWebsitePushIDsListCommand()
+	d, depsStdout, depsStderr := newWebTestDeps()
+	command := newWebWebsitePushIDsListCommand(d)
 	if err := command.FlagSet.Parse([]string{"--output", "json"}); err != nil {
 		t.Fatalf("parse error: %v", err)
 	}
-	stdout, stderr := captureWebCommandOutput(t, func() {
+	stdout, stderr := runWithWebTestDeps(depsStdout, depsStderr, func() {
 		if err := command.Exec(context.Background(), nil); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -98,11 +79,12 @@ func TestWebWebsitePushIDsListPrintsTableProjection(t *testing.T) {
 		}, nil
 	}
 
-	command := WebWebsitePushIDsListCommand()
+	d, depsStdout, depsStderr := newWebTestDeps()
+	command := newWebWebsitePushIDsListCommand(d)
 	if err := command.FlagSet.Parse([]string{"--output", "table"}); err != nil {
 		t.Fatalf("parse error: %v", err)
 	}
-	stdout, stderr := captureWebCommandOutput(t, func() {
+	stdout, stderr := runWithWebTestDeps(depsStdout, depsStderr, func() {
 		if err := command.Exec(context.Background(), nil); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}

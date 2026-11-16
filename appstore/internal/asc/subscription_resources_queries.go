@@ -5,30 +5,6 @@ import (
 	"strings"
 )
 
-// SubscriptionLocalizationsOption is a functional option for subscription localizations list endpoints.
-type SubscriptionLocalizationsOption func(*subscriptionLocalizationsQuery)
-
-// SubscriptionImagesOption is a functional option for subscription images list endpoints.
-type SubscriptionImagesOption func(*subscriptionImagesQuery)
-
-// SubscriptionIntroductoryOffersOption is a functional option for introductory offers list endpoints.
-type SubscriptionIntroductoryOffersOption func(*subscriptionIntroductoryOffersQuery)
-
-// SubscriptionPromotionalOffersOption is a functional option for promotional offers list endpoints.
-type SubscriptionPromotionalOffersOption func(*subscriptionPromotionalOffersQuery)
-
-// SubscriptionPromotionalOfferPricesOption is a functional option for promotional offer prices list endpoints.
-type SubscriptionPromotionalOfferPricesOption func(*subscriptionPromotionalOfferPricesQuery)
-
-// SubscriptionOfferCodesOption is a functional option for offer codes list endpoints.
-type SubscriptionOfferCodesOption func(*subscriptionOfferCodesQuery)
-
-// SubscriptionOfferCodeCustomCodesOption is a functional option for offer code custom codes list endpoints.
-type SubscriptionOfferCodeCustomCodesOption func(*subscriptionOfferCodeCustomCodesQuery)
-
-// SubscriptionOfferCodePricesOption is a functional option for offer code prices list endpoints.
-type SubscriptionOfferCodePricesOption func(*subscriptionOfferCodePricesQuery)
-
 // SubscriptionPricePointsOption configures the subscription-scoped price-points endpoint.
 // It intentionally excludes equalization-only filters such as filter[subscription].
 type SubscriptionPricePointsOption interface {
@@ -63,78 +39,15 @@ func (subscriptionPricePointEqualizationsOnlyOption) subscriptionPricePointEqual
 // SubscriptionPricesOption is a functional option for subscription price list endpoints.
 type SubscriptionPricesOption func(*subscriptionPricesQuery)
 
-// SubscriptionGroupLocalizationsOption is a functional option for subscription group localization list endpoints.
-type SubscriptionGroupLocalizationsOption func(*subscriptionGroupLocalizationsQuery)
-
-// SubscriptionAppStoreReviewScreenshotOption configures the subscription screenshot relationship endpoint.
-type SubscriptionAppStoreReviewScreenshotOption func(*subscriptionAppStoreReviewScreenshotQuery)
-
 // SubscriptionOfferCodeOption configures a subscription offer code detail read.
 type SubscriptionOfferCodeOption func(*subscriptionRelatedFieldsQuery)
 
 // SubscriptionPromotionalOfferOption configures a subscription promotional offer detail read.
 type SubscriptionPromotionalOfferOption func(*subscriptionRelatedFieldsQuery)
 
-// SubscriptionPricePointOption configures a subscription price point detail read.
-type SubscriptionPricePointOption func(*subscriptionPricePointDetailQuery)
-
 type subscriptionRelatedFieldsQuery struct {
 	parentFields []string
 	include      []string
-}
-
-type subscriptionPricePointDetailQuery struct {
-	fields []string
-}
-
-type subscriptionLocalizationsQuery struct {
-	listQuery
-	fields             []string
-	subscriptionFields []string
-	include            []string
-}
-
-type subscriptionImagesQuery struct {
-	listQuery
-	subscriptionFields []string
-	include            []string
-}
-
-type subscriptionIntroductoryOffersQuery struct {
-	listQuery
-	territories        []string
-	fields             []string
-	subscriptionFields []string
-	pricePointFields   []string
-	include            []string
-}
-
-type subscriptionPromotionalOffersQuery struct {
-	listQuery
-	subscriptionFields []string
-	include            []string
-}
-
-type subscriptionPromotionalOfferPricesQuery struct {
-	listQuery
-	pricePointFields []string
-	include          []string
-}
-
-type subscriptionOfferCodesQuery struct {
-	listQuery
-	subscriptionFields []string
-	include            []string
-}
-
-type subscriptionOfferCodeCustomCodesQuery struct {
-	listQuery
-}
-
-type subscriptionOfferCodePricesQuery struct {
-	listQuery
-	pricePointFields []string
-	include          []string
 }
 
 type subscriptionPricePointsQuery struct {
@@ -157,289 +70,6 @@ type subscriptionPricesQuery struct {
 	priceFields      []string
 	pricePointFields []string
 	territoryFields  []string
-}
-
-type subscriptionGroupLocalizationsQuery struct {
-	listQuery
-	fields      []string
-	groupFields []string
-	include     []string
-}
-
-type subscriptionAppStoreReviewScreenshotQuery struct {
-	fields             []string
-	subscriptionFields []string
-	include            []string
-}
-
-// WithSubscriptionLocalizationsLimit sets the max number of localizations to return.
-func WithSubscriptionLocalizationsLimit(limit int) SubscriptionLocalizationsOption {
-	return func(q *subscriptionLocalizationsQuery) {
-		if limit > 0 {
-			q.limit = limit
-		}
-	}
-}
-
-// WithSubscriptionLocalizationsNextURL uses a next page URL directly.
-func WithSubscriptionLocalizationsNextURL(next string) SubscriptionLocalizationsOption {
-	return func(q *subscriptionLocalizationsQuery) {
-		if strings.TrimSpace(next) != "" {
-			q.nextURL = strings.TrimSpace(next)
-		}
-	}
-}
-
-// WithSubscriptionLocalizationsFields sets fields for returned subscription localizations.
-func WithSubscriptionLocalizationsFields(fields []string) SubscriptionLocalizationsOption {
-	return func(q *subscriptionLocalizationsQuery) {
-		q.fields = normalizeList(fields)
-	}
-}
-
-// WithSubscriptionLocalizationsSubscriptionFields sets fields[subscriptions] for included subscriptions.
-func WithSubscriptionLocalizationsSubscriptionFields(fields []string) SubscriptionLocalizationsOption {
-	return func(q *subscriptionLocalizationsQuery) {
-		q.subscriptionFields = normalizeList(fields)
-	}
-}
-
-// WithSubscriptionLocalizationsInclude sets relationships to include.
-func WithSubscriptionLocalizationsInclude(include []string) SubscriptionLocalizationsOption {
-	return func(q *subscriptionLocalizationsQuery) {
-		q.include = normalizeList(include)
-	}
-}
-
-// WithSubscriptionImagesLimit sets the max number of images to return.
-func WithSubscriptionImagesLimit(limit int) SubscriptionImagesOption {
-	return func(q *subscriptionImagesQuery) {
-		if limit > 0 {
-			q.limit = limit
-		}
-	}
-}
-
-// WithSubscriptionImagesNextURL uses a next page URL directly.
-func WithSubscriptionImagesNextURL(next string) SubscriptionImagesOption {
-	return func(q *subscriptionImagesQuery) {
-		if strings.TrimSpace(next) != "" {
-			q.nextURL = strings.TrimSpace(next)
-		}
-	}
-}
-
-// WithSubscriptionImagesSubscriptionFields sets fields[subscriptions] for included subscriptions.
-func WithSubscriptionImagesSubscriptionFields(fields []string) SubscriptionImagesOption {
-	return func(q *subscriptionImagesQuery) {
-		q.subscriptionFields = normalizeList(fields)
-	}
-}
-
-// WithSubscriptionImagesInclude sets relationships to include.
-func WithSubscriptionImagesInclude(include []string) SubscriptionImagesOption {
-	return func(q *subscriptionImagesQuery) {
-		q.include = normalizeList(include)
-	}
-}
-
-// WithSubscriptionIntroductoryOffersLimit sets the max number of offers to return.
-func WithSubscriptionIntroductoryOffersLimit(limit int) SubscriptionIntroductoryOffersOption {
-	return func(q *subscriptionIntroductoryOffersQuery) {
-		if limit > 0 {
-			q.limit = limit
-		}
-	}
-}
-
-// WithSubscriptionIntroductoryOffersNextURL uses a next page URL directly.
-func WithSubscriptionIntroductoryOffersNextURL(next string) SubscriptionIntroductoryOffersOption {
-	return func(q *subscriptionIntroductoryOffersQuery) {
-		if strings.TrimSpace(next) != "" {
-			q.nextURL = strings.TrimSpace(next)
-		}
-	}
-}
-
-// WithSubscriptionIntroductoryOffersTerritories filters introductory offers by territory IDs.
-func WithSubscriptionIntroductoryOffersTerritories(territories []string) SubscriptionIntroductoryOffersOption {
-	return func(q *subscriptionIntroductoryOffersQuery) {
-		q.territories = normalizeUpperList(territories)
-	}
-}
-
-// WithSubscriptionIntroductoryOffersFields sets fields for returned introductory offers.
-func WithSubscriptionIntroductoryOffersFields(fields []string) SubscriptionIntroductoryOffersOption {
-	return func(q *subscriptionIntroductoryOffersQuery) {
-		q.fields = normalizeList(fields)
-	}
-}
-
-// WithSubscriptionIntroductoryOffersInclude sets introductory offer relationships to include.
-func WithSubscriptionIntroductoryOffersInclude(include []string) SubscriptionIntroductoryOffersOption {
-	return func(q *subscriptionIntroductoryOffersQuery) {
-		q.include = normalizeList(include)
-	}
-}
-
-// WithSubscriptionIntroductoryOffersSubscriptionFields sets fields[subscriptions] for included subscriptions.
-func WithSubscriptionIntroductoryOffersSubscriptionFields(fields []string) SubscriptionIntroductoryOffersOption {
-	return func(q *subscriptionIntroductoryOffersQuery) {
-		q.subscriptionFields = normalizeList(fields)
-	}
-}
-
-// WithSubscriptionIntroductoryOffersPricePointFields sets fields[subscriptionPricePoints] for included price points.
-func WithSubscriptionIntroductoryOffersPricePointFields(fields []string) SubscriptionIntroductoryOffersOption {
-	return func(q *subscriptionIntroductoryOffersQuery) {
-		q.pricePointFields = normalizeList(fields)
-	}
-}
-
-// WithSubscriptionPromotionalOffersLimit sets the max number of offers to return.
-func WithSubscriptionPromotionalOffersLimit(limit int) SubscriptionPromotionalOffersOption {
-	return func(q *subscriptionPromotionalOffersQuery) {
-		if limit > 0 {
-			q.limit = limit
-		}
-	}
-}
-
-// WithSubscriptionPromotionalOffersNextURL uses a next page URL directly.
-func WithSubscriptionPromotionalOffersNextURL(next string) SubscriptionPromotionalOffersOption {
-	return func(q *subscriptionPromotionalOffersQuery) {
-		if strings.TrimSpace(next) != "" {
-			q.nextURL = strings.TrimSpace(next)
-		}
-	}
-}
-
-// WithSubscriptionPromotionalOffersSubscriptionFields sets fields[subscriptions] for included subscriptions.
-func WithSubscriptionPromotionalOffersSubscriptionFields(fields []string) SubscriptionPromotionalOffersOption {
-	return func(q *subscriptionPromotionalOffersQuery) {
-		q.subscriptionFields = normalizeList(fields)
-	}
-}
-
-// WithSubscriptionPromotionalOffersInclude sets relationships to include.
-func WithSubscriptionPromotionalOffersInclude(include []string) SubscriptionPromotionalOffersOption {
-	return func(q *subscriptionPromotionalOffersQuery) {
-		q.include = normalizeList(include)
-	}
-}
-
-// WithSubscriptionPromotionalOfferPricesLimit sets the max number of prices to return.
-func WithSubscriptionPromotionalOfferPricesLimit(limit int) SubscriptionPromotionalOfferPricesOption {
-	return func(q *subscriptionPromotionalOfferPricesQuery) {
-		if limit > 0 {
-			q.limit = limit
-		}
-	}
-}
-
-// WithSubscriptionPromotionalOfferPricesNextURL uses a next page URL directly.
-func WithSubscriptionPromotionalOfferPricesNextURL(next string) SubscriptionPromotionalOfferPricesOption {
-	return func(q *subscriptionPromotionalOfferPricesQuery) {
-		if strings.TrimSpace(next) != "" {
-			q.nextURL = strings.TrimSpace(next)
-		}
-	}
-}
-
-// WithSubscriptionPromotionalOfferPricesPricePointFields sets fields[subscriptionPricePoints] for included price points.
-func WithSubscriptionPromotionalOfferPricesPricePointFields(fields []string) SubscriptionPromotionalOfferPricesOption {
-	return func(q *subscriptionPromotionalOfferPricesQuery) {
-		q.pricePointFields = normalizeList(fields)
-	}
-}
-
-// WithSubscriptionPromotionalOfferPricesInclude sets relationships to include.
-func WithSubscriptionPromotionalOfferPricesInclude(include []string) SubscriptionPromotionalOfferPricesOption {
-	return func(q *subscriptionPromotionalOfferPricesQuery) {
-		q.include = normalizeList(include)
-	}
-}
-
-// WithSubscriptionOfferCodesLimit sets the max number of offer codes to return.
-func WithSubscriptionOfferCodesLimit(limit int) SubscriptionOfferCodesOption {
-	return func(q *subscriptionOfferCodesQuery) {
-		if limit > 0 {
-			q.limit = limit
-		}
-	}
-}
-
-// WithSubscriptionOfferCodesNextURL uses a next page URL directly.
-func WithSubscriptionOfferCodesNextURL(next string) SubscriptionOfferCodesOption {
-	return func(q *subscriptionOfferCodesQuery) {
-		if strings.TrimSpace(next) != "" {
-			q.nextURL = strings.TrimSpace(next)
-		}
-	}
-}
-
-// WithSubscriptionOfferCodesSubscriptionFields sets fields[subscriptions] for included subscriptions.
-func WithSubscriptionOfferCodesSubscriptionFields(fields []string) SubscriptionOfferCodesOption {
-	return func(q *subscriptionOfferCodesQuery) {
-		q.subscriptionFields = normalizeList(fields)
-	}
-}
-
-// WithSubscriptionOfferCodesInclude sets relationships to include.
-func WithSubscriptionOfferCodesInclude(include []string) SubscriptionOfferCodesOption {
-	return func(q *subscriptionOfferCodesQuery) {
-		q.include = normalizeList(include)
-	}
-}
-
-// WithSubscriptionOfferCodeCustomCodesLimit sets the max number of custom codes to return.
-func WithSubscriptionOfferCodeCustomCodesLimit(limit int) SubscriptionOfferCodeCustomCodesOption {
-	return func(q *subscriptionOfferCodeCustomCodesQuery) {
-		if limit > 0 {
-			q.limit = limit
-		}
-	}
-}
-
-// WithSubscriptionOfferCodeCustomCodesNextURL uses a next page URL directly.
-func WithSubscriptionOfferCodeCustomCodesNextURL(next string) SubscriptionOfferCodeCustomCodesOption {
-	return func(q *subscriptionOfferCodeCustomCodesQuery) {
-		if strings.TrimSpace(next) != "" {
-			q.nextURL = strings.TrimSpace(next)
-		}
-	}
-}
-
-// WithSubscriptionOfferCodePricesLimit sets the max number of prices to return.
-func WithSubscriptionOfferCodePricesLimit(limit int) SubscriptionOfferCodePricesOption {
-	return func(q *subscriptionOfferCodePricesQuery) {
-		if limit > 0 {
-			q.limit = limit
-		}
-	}
-}
-
-// WithSubscriptionOfferCodePricesNextURL uses a next page URL directly.
-func WithSubscriptionOfferCodePricesNextURL(next string) SubscriptionOfferCodePricesOption {
-	return func(q *subscriptionOfferCodePricesQuery) {
-		if strings.TrimSpace(next) != "" {
-			q.nextURL = strings.TrimSpace(next)
-		}
-	}
-}
-
-// WithSubscriptionOfferCodePricesPricePointFields sets fields[subscriptionPricePoints] for included price points.
-func WithSubscriptionOfferCodePricesPricePointFields(fields []string) SubscriptionOfferCodePricesOption {
-	return func(q *subscriptionOfferCodePricesQuery) {
-		q.pricePointFields = normalizeList(fields)
-	}
-}
-
-// WithSubscriptionOfferCodePricesInclude sets relationships to include.
-func WithSubscriptionOfferCodePricesInclude(include []string) SubscriptionOfferCodePricesOption {
-	return func(q *subscriptionOfferCodePricesQuery) {
-		q.include = normalizeList(include)
-	}
 }
 
 // WithSubscriptionPricePointsLimit sets the max number of price points to return.
@@ -518,24 +148,6 @@ func WithSubscriptionPricePointsTerritoryFields(fields []string) SubscriptionPri
 	})
 }
 
-// WithSubscriptionPricesLimit sets the max number of prices to return.
-func WithSubscriptionPricesLimit(limit int) SubscriptionPricesOption {
-	return func(q *subscriptionPricesQuery) {
-		if limit > 0 {
-			q.limit = limit
-		}
-	}
-}
-
-// WithSubscriptionPricesNextURL uses a next page URL directly.
-func WithSubscriptionPricesNextURL(next string) SubscriptionPricesOption {
-	return func(q *subscriptionPricesQuery) {
-		if strings.TrimSpace(next) != "" {
-			q.nextURL = strings.TrimSpace(next)
-		}
-	}
-}
-
 // WithSubscriptionPricesTerritory filters subscription prices by territory (e.g., "USA").
 func WithSubscriptionPricesTerritory(territory string) SubscriptionPricesOption {
 	return func(q *subscriptionPricesQuery) {
@@ -589,68 +201,6 @@ func WithSubscriptionPricesTerritoryFields(fields []string) SubscriptionPricesOp
 	}
 }
 
-// WithSubscriptionGroupLocalizationsLimit sets the max number of group localizations to return.
-func WithSubscriptionGroupLocalizationsLimit(limit int) SubscriptionGroupLocalizationsOption {
-	return func(q *subscriptionGroupLocalizationsQuery) {
-		if limit > 0 {
-			q.limit = limit
-		}
-	}
-}
-
-// WithSubscriptionGroupLocalizationsNextURL uses a next page URL directly.
-func WithSubscriptionGroupLocalizationsNextURL(next string) SubscriptionGroupLocalizationsOption {
-	return func(q *subscriptionGroupLocalizationsQuery) {
-		if strings.TrimSpace(next) != "" {
-			q.nextURL = strings.TrimSpace(next)
-		}
-	}
-}
-
-// WithSubscriptionGroupLocalizationsFields sets fields for returned subscription group localizations.
-func WithSubscriptionGroupLocalizationsFields(fields []string) SubscriptionGroupLocalizationsOption {
-	return func(q *subscriptionGroupLocalizationsQuery) {
-		q.fields = normalizeList(fields)
-	}
-}
-
-// WithSubscriptionGroupLocalizationsGroupFields sets fields[subscriptionGroups] for included groups.
-func WithSubscriptionGroupLocalizationsGroupFields(fields []string) SubscriptionGroupLocalizationsOption {
-	return func(q *subscriptionGroupLocalizationsQuery) {
-		q.groupFields = normalizeList(fields)
-	}
-}
-
-// WithSubscriptionGroupLocalizationsInclude sets relationships to include.
-func WithSubscriptionGroupLocalizationsInclude(include []string) SubscriptionGroupLocalizationsOption {
-	return func(q *subscriptionGroupLocalizationsQuery) {
-		q.include = normalizeList(include)
-	}
-}
-
-// WithSubscriptionAppStoreReviewScreenshotFields limits returned screenshot fields.
-func WithSubscriptionAppStoreReviewScreenshotFields(fields []string) SubscriptionAppStoreReviewScreenshotOption {
-	return func(q *subscriptionAppStoreReviewScreenshotQuery) {
-		q.fields = normalizeList(fields)
-	}
-}
-
-// WithSubscriptionAppStoreReviewScreenshotSubscriptionFields sets fields[subscriptions] for included subscriptions.
-// It is accepted by both screenshot detail and subscription relationship reads.
-func WithSubscriptionAppStoreReviewScreenshotSubscriptionFields(fields []string) SubscriptionAppStoreReviewScreenshotOption {
-	return func(q *subscriptionAppStoreReviewScreenshotQuery) {
-		q.subscriptionFields = normalizeList(fields)
-	}
-}
-
-// WithSubscriptionAppStoreReviewScreenshotInclude sets relationships to include.
-// It is accepted by both screenshot detail and subscription relationship reads.
-func WithSubscriptionAppStoreReviewScreenshotInclude(include []string) SubscriptionAppStoreReviewScreenshotOption {
-	return func(q *subscriptionAppStoreReviewScreenshotQuery) {
-		q.include = normalizeList(include)
-	}
-}
-
 // WithSubscriptionOfferCodeSubscriptionFields sets fields[subscriptions] on an offer code detail read.
 func WithSubscriptionOfferCodeSubscriptionFields(fields []string) SubscriptionOfferCodeOption {
 	return func(q *subscriptionRelatedFieldsQuery) {
@@ -677,79 +227,6 @@ func WithSubscriptionPromotionalOfferInclude(include []string) SubscriptionPromo
 	return func(q *subscriptionRelatedFieldsQuery) {
 		q.include = normalizeList(include)
 	}
-}
-
-// WithSubscriptionPricePointFields sets fields[subscriptionPricePoints] on a price point detail read.
-func WithSubscriptionPricePointFields(fields []string) SubscriptionPricePointOption {
-	return func(q *subscriptionPricePointDetailQuery) {
-		q.fields = normalizeList(fields)
-	}
-}
-
-func buildSubscriptionLocalizationsQuery(query *subscriptionLocalizationsQuery) string {
-	values := url.Values{}
-	addCSV(values, "fields[subscriptionLocalizations]", query.fields)
-	addCSV(values, "fields[subscriptions]", query.subscriptionFields)
-	addCSV(values, "include", query.include)
-	addLimit(values, query.limit)
-	return values.Encode()
-}
-
-func buildSubscriptionImagesQuery(query *subscriptionImagesQuery) string {
-	values := url.Values{}
-	addCSV(values, "fields[subscriptions]", query.subscriptionFields)
-	addCSV(values, "include", query.include)
-	addLimit(values, query.limit)
-	return values.Encode()
-}
-
-func buildSubscriptionIntroductoryOffersQuery(query *subscriptionIntroductoryOffersQuery) string {
-	values := url.Values{}
-	addCSV(values, "filter[territory]", query.territories)
-	addCSV(values, "fields[subscriptionIntroductoryOffers]", query.fields)
-	addCSV(values, "fields[subscriptions]", query.subscriptionFields)
-	addCSV(values, "fields[subscriptionPricePoints]", query.pricePointFields)
-	addCSV(values, "include", query.include)
-	addLimit(values, query.limit)
-	return values.Encode()
-}
-
-func buildSubscriptionPromotionalOffersQuery(query *subscriptionPromotionalOffersQuery) string {
-	values := url.Values{}
-	addCSV(values, "fields[subscriptions]", query.subscriptionFields)
-	addCSV(values, "include", query.include)
-	addLimit(values, query.limit)
-	return values.Encode()
-}
-
-func buildSubscriptionPromotionalOfferPricesQuery(query *subscriptionPromotionalOfferPricesQuery) string {
-	values := url.Values{}
-	addCSV(values, "fields[subscriptionPricePoints]", query.pricePointFields)
-	addCSV(values, "include", query.include)
-	addLimit(values, query.limit)
-	return values.Encode()
-}
-
-func buildSubscriptionOfferCodesQuery(query *subscriptionOfferCodesQuery) string {
-	values := url.Values{}
-	addCSV(values, "fields[subscriptions]", query.subscriptionFields)
-	addCSV(values, "include", query.include)
-	addLimit(values, query.limit)
-	return values.Encode()
-}
-
-func buildSubscriptionOfferCodeCustomCodesQuery(query *subscriptionOfferCodeCustomCodesQuery) string {
-	values := url.Values{}
-	addLimit(values, query.limit)
-	return values.Encode()
-}
-
-func buildSubscriptionOfferCodePricesQuery(query *subscriptionOfferCodePricesQuery) string {
-	values := url.Values{}
-	addCSV(values, "fields[subscriptionPricePoints]", query.pricePointFields)
-	addCSV(values, "include", query.include)
-	addLimit(values, query.limit)
-	return values.Encode()
 }
 
 func buildSubscriptionPricePointsQuery(query *subscriptionPricePointsQuery) string {
@@ -788,23 +265,6 @@ func buildSubscriptionPricesQuery(query *subscriptionPricesQuery) string {
 	return values.Encode()
 }
 
-func buildSubscriptionGroupLocalizationsQuery(query *subscriptionGroupLocalizationsQuery) string {
-	values := url.Values{}
-	addCSV(values, "fields[subscriptionGroupLocalizations]", query.fields)
-	addCSV(values, "fields[subscriptionGroups]", query.groupFields)
-	addCSV(values, "include", query.include)
-	addLimit(values, query.limit)
-	return values.Encode()
-}
-
-func buildSubscriptionAppStoreReviewScreenshotQuery(query *subscriptionAppStoreReviewScreenshotQuery) string {
-	values := url.Values{}
-	addCSV(values, "fields[subscriptionAppStoreReviewScreenshots]", query.fields)
-	addCSV(values, "fields[subscriptions]", query.subscriptionFields)
-	addCSV(values, "include", query.include)
-	return values.Encode()
-}
-
 func buildSubscriptionRelatedFieldsQuery(parentResource string, query *subscriptionRelatedFieldsQuery) string {
 	values := url.Values{}
 	addCSV(values, "fields["+parentResource+"]", query.parentFields)
@@ -812,18 +272,12 @@ func buildSubscriptionRelatedFieldsQuery(parentResource string, query *subscript
 	return values.Encode()
 }
 
-func buildSubscriptionPricePointDetailQuery(query *subscriptionPricePointDetailQuery) string {
-	values := url.Values{}
-	addCSV(values, "fields[subscriptionPricePoints]", query.fields)
-	return values.Encode()
-}
-
 func subscriptionLocalizationsQueryHasModifiers(query *subscriptionLocalizationsQuery) bool {
-	return query.limit != 0 || len(query.fields) != 0 || len(query.subscriptionFields) != 0 || len(query.include) != 0
+	return query.limit != 0
 }
 
 func subscriptionImagesQueryHasModifiers(query *subscriptionImagesQuery) bool {
-	return query.limit != 0 || len(query.subscriptionFields) != 0 || len(query.include) != 0
+	return query.limit != 0
 }
 
 func subscriptionIntroductoryOffersQueryHasModifiers(query *subscriptionIntroductoryOffersQuery) bool {
@@ -848,5 +302,5 @@ func subscriptionOfferCodePricesQueryHasModifiers(query *subscriptionOfferCodePr
 }
 
 func subscriptionGroupLocalizationsQueryHasModifiers(query *subscriptionGroupLocalizationsQuery) bool {
-	return query.limit != 0 || len(query.fields) != 0 || len(query.groupFields) != 0 || len(query.include) != 0
+	return query.limit != 0
 }

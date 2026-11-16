@@ -3,10 +3,15 @@ package web
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/readonly"
 )
 
 const (
@@ -272,6 +277,35 @@ func TestDeveloperPortalForbiddenKeepsAppleCodesAndNeverSuggestsLogout(t *testin
 	}
 }
 
+func TestEnsureDeveloperPortalSessionReportsTeamsResultCodeInsteadOfNoTeam(t *testing.T) {
+	var portalHits int
+	client := developerPortalTestClient(t, func(r *http.Request) (*http.Response, error) {
+		if r.URL.Path == developerPortalTeamsPath {
+			return developerPortalTestResponse(http.StatusOK, `{"resultCode":1100,"resultString":"Your session has expired.  Please log in.","userString":"Your session has expired.  Please log in.","requestId":"req-1"}`, nil), nil
+		}
+		portalHits++
+		return developerPortalTestResponse(http.StatusInternalServerError, `{}`, nil), nil
+	})
+
+	_, err := client.EnableDeveloperBundleIDCapability(context.Background(), DeveloperBundleIDCapabilityEnableRequest{
+		BundleID:   "bundle-1",
+		Capability: "PRIVATE_CLOUD_COMPUTE",
+	})
+	var resultErr *DeveloperPortalResultError
+	if !errors.As(err, &resultErr) || resultErr.ResultCode != 1100 {
+		t.Fatalf("error = %v, want DeveloperPortalResultError with result code 1100", err)
+	}
+	if !strings.Contains(err.Error(), "Your session has expired") {
+		t.Fatalf("error %q does not carry Apple's message", err)
+	}
+	if strings.Contains(err.Error(), "no Developer Portal team") {
+		t.Fatalf("error %q misreports a refused teams request as a missing team", err)
+	}
+	if portalHits != 0 {
+		t.Fatalf("portal requests after refused teams request = %d, want 0", portalHits)
+	}
+}
+
 func selectDeveloperPortalTeam(teams []developerPortalTeam, publicProviderID, providerName string) (developerPortalTeam, error) {
 	return resolveDeveloperPortalTeam(teams, developerPortalTeamSelection{
 		PublicProviderID: publicProviderID,
@@ -351,5 +385,31 @@ func assertDeveloperPortalErrorHasNoSecrets(t *testing.T, err error) {
 		if strings.Contains(message, secret) {
 			t.Fatalf("error %q leaked secret %q", message, secret)
 		}
+	}
+}
+
+func TestListDeveloperPortalTeamsReturnsEveryTeamWithoutSelecting(t *testing.T) {
+	t.Setenv(readonly.EnvVar, "1")
+
+	var requests []string
+	client := developerPortalTestClient(t, func(r *http.Request) (*http.Response, error) {
+		requests = append(requests, r.Method+" "+r.URL.Path)
+		return developerPortalTestResponse(http.StatusOK, `{"teams":[{"teamId":" TEAMTWO456 ","name":" Example Two ","status":"active"},{"teamId":" ","name":"No ID"},{"teamId":"TEAMONE123","name":"Example One","status":"expired"}]}`, nil), nil
+	})
+	client.SetDeveloperTeamSelector("UNKNOWN")
+
+	result, err := client.ListDeveloperPortalTeams(context.Background())
+	if err != nil {
+		t.Fatalf("ListDeveloperPortalTeams() error: %v", err)
+	}
+	want := []asc.WebDeveloperTeam{
+		{TeamID: "TEAMTWO456", Name: "Example Two", Status: "active"},
+		{TeamID: "TEAMONE123", Name: "Example One", Status: "expired"},
+	}
+	if result == nil || !reflect.DeepEqual(result.Teams, want) {
+		t.Fatalf("teams = %+v, want %+v", result, want)
+	}
+	if got := strings.Join(requests, ","); got != "POST "+developerPortalTeamsPath {
+		t.Fatalf("requests = %q, want one teams POST", got)
 	}
 }

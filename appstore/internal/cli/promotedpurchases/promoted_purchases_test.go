@@ -1,20 +1,24 @@
 package promotedpurchases
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"flag"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/peterbourgon/ff/v3/ffcli"
+
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
 func TestPromotedPurchasesListValidation(t *testing.T) {
 	t.Setenv("ASC_APP_ID", "")
-	cmd := PromotedPurchasesListCommand()
+	cmd := newPromotedPurchasesListCommand(&shared.Deps{IO: &shared.IO{Out: &bytes.Buffer{}, ErrOut: &bytes.Buffer{}}, LookupEnv: os.LookupEnv})
 	if err := cmd.FlagSet.Parse([]string{}); err != nil {
 		t.Fatalf("parse error: %v", err)
 	}

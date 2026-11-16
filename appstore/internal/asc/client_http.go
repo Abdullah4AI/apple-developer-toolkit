@@ -39,7 +39,7 @@ func (c *Client) newRequest(ctx context.Context, method, path string, body io.Re
 	}
 
 	// Generate JWT token
-	token, err := c.generateJWT()
+	token, err := c.generateJWT(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate JWT: %w", err)
 	}
@@ -89,10 +89,10 @@ func (c *Client) validateRequestHost(target string) error {
 }
 
 // generateJWT generates a JWT for the client's API
-func (c *Client) generateJWT() (string, error) {
+func (c *Client) generateJWT(ctx context.Context) (string, error) {
 	now := time.Now()
-	if c.bearerToken != "" {
-		return c.bearerJWT(now)
+	if c.bearer != nil {
+		return c.bearer.current(ctx, now)
 	}
 
 	c.jwtMu.Lock()
@@ -193,16 +193,16 @@ func (c *Client) doWithHTTPClient(ctx context.Context, method, path string, body
 // separate app read proves that the parent exists. Apple returns the same 404
 // shape for a transient build-upload propagation failure and a permanently
 // invalid app ID, so status and error detail alone cannot classify it safely.
-func (c *Client) doAppBuildUploadsRead(ctx context.Context, appID, path string) ([]byte, error) {
+func (c *Client) doAppBuildUploadsRead(ctx context.Context, path string) ([]byte, error) {
 	request, err := c.replayableRequest(http.MethodGet, path, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	// The request path, not the caller's original appID, determines whether
-	// this is an app-scoped endpoint. A top-level continuation URL must keep
-	// the normal detail-based classification for missing upload resources.
-	appID = appIDFromBuildUploadsPath(path)
+	// The request path determines whether this is an app-scoped endpoint. A
+	// top-level continuation URL must keep the normal detail-based
+	// classification for missing upload resources.
+	appID := appIDFromBuildUploadsPath(path)
 	retryOpts := ResolveRetryOptions()
 	appVerified := false
 	return withRetry(ctx, func() ([]byte, error) {
@@ -446,8 +446,12 @@ func (c *Client) doOnce(ctx context.Context, method, path string, body io.Reader
 
 		if isRetryableHTTPStatus(resp.StatusCode) {
 			retryAfter := parseRetryAfterHeader(resp.Header.Get("Retry-After"))
+			statusErr := buildRetryableError(resp.StatusCode, retryAfter, respBody)
+			if limit, ok := exhaustedHourlyRequestLimit(resp.Header.Get("X-Rate-Limit")); ok && resp.StatusCode == http.StatusTooManyRequests {
+				statusErr.message += fmt.Sprintf(" (hourly request limit of %s is used up; requests free up over the next hour, so wait before retrying)", limit)
+			}
 			return nil, &RetryableError{
-				Err:        buildRetryableError(resp.StatusCode, retryAfter, respBody),
+				Err:        statusErr,
 				RetryAfter: retryAfter,
 			}
 		}
@@ -615,11 +619,30 @@ func shouldLimitMutatingMethod(method string) bool {
 	}
 }
 
-func buildRetryableError(statusCode int, retryAfter time.Duration, respBody []byte) error {
+func buildRetryableError(statusCode int, retryAfter time.Duration, respBody []byte) *retryableStatusError {
 	return buildRetryableErrorWithSource(statusCode, retryAfter, respBody, "App Store Connect")
 }
 
-func buildRetryableErrorWithSource(statusCode int, retryAfter time.Duration, respBody []byte, source string) error {
+// exhaustedHourlyRequestLimit returns the hourly limit from an X-Rate-Limit
+// value such as "user-hour-lim:3500;user-hour-rem:0;" when none remain.
+func exhaustedHourlyRequestLimit(header string) (string, bool) {
+	var limit, remaining string
+	for part := range strings.SplitSeq(header, ";") {
+		key, value, ok := strings.Cut(part, ":")
+		if !ok {
+			continue
+		}
+		switch strings.TrimSpace(key) {
+		case "user-hour-lim":
+			limit = strings.TrimSpace(value)
+		case "user-hour-rem":
+			remaining = strings.TrimSpace(value)
+		}
+	}
+	return limit, limit != "" && remaining == "0"
+}
+
+func buildRetryableErrorWithSource(statusCode int, retryAfter time.Duration, respBody []byte, source string) *retryableStatusError {
 	base := "API request failed"
 	switch statusCode {
 	case http.StatusRequestTimeout:
@@ -815,11 +838,6 @@ func isAllowedAnalyticsCDNHost(host string) bool {
 	return false
 }
 
-// hasSignedAnalyticsQuery checks for common signed URL query parameters.
-func hasSignedAnalyticsQuery(values url.Values) bool {
-	return hasSignedQuery(values)
-}
-
 func hasSignedQuery(values url.Values) bool {
 	return urlsanitize.HasSignedQuery(values, signedQueryKeys)
 }
@@ -833,7 +851,8 @@ func validateAnalyticsDownloadURL(downloadURL string) error {
 
 	parsedURL, err := url.Parse(downloadURL)
 	if err != nil {
-		return fmt.Errorf("invalid analytics download URL: %w", err)
+		// url.Error repeats the whole URL, so the cause is dropped.
+		return errors.New("invalid analytics download URL")
 	}
 
 	// Require HTTPS for all analytics downloads
@@ -847,7 +866,7 @@ func validateAnalyticsDownloadURL(downloadURL string) error {
 		return nil
 	}
 	if isAllowedAnalyticsCDNHost(host) {
-		if !hasSignedAnalyticsQuery(parsedURL.Query()) {
+		if !hasSignedQuery(parsedURL.Query()) {
 			return fmt.Errorf("rejected analytics download URL from CDN host %q without signed query", parsedURL.Host)
 		}
 		return nil
@@ -924,22 +943,17 @@ func BuildRequestBody(data any) (io.Reader, error) {
 
 func (c *Client) parseAuthenticatedResponseError(body []byte, resp *http.Response) error {
 	err := ParseErrorWithStatus(body, resp.StatusCode)
-	if resp.StatusCode != http.StatusUnauthorized || c.bearerToken == "" {
+	if resp.StatusCode != http.StatusUnauthorized || c.bearer == nil {
 		return err
 	}
 	// A redirect can drop the Authorization header before the final response.
-	if resp.Request != nil && resp.Request.Header.Get("Authorization") != "Bearer "+c.bearerToken {
+	if resp.Request != nil && !strings.HasPrefix(resp.Request.Header.Get("Authorization"), "Bearer ") {
 		return err
 	}
 	if apiErr, ok := errors.AsType[*APIError](err); ok {
 		apiErr.bearerTokenRejected = true
 	}
 	return err
-}
-
-// ParseError parses an error response (status code unknown)
-func ParseError(body []byte) error {
-	return ParseErrorWithStatus(body, 0)
 }
 
 // ParseErrorWithStatus parses an error response and includes the HTTP status code

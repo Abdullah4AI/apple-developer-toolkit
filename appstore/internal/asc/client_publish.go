@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 	"time"
 )
@@ -26,6 +27,12 @@ func IsBuildProcessingFailure(err error) bool {
 
 // WaitForBuildProcessing polls a build until processing completes.
 func (c *Client) WaitForBuildProcessing(ctx context.Context, buildID string, pollInterval time.Duration) (*BuildResponse, error) {
+	return c.WaitForBuildProcessingTo(ctx, nil, buildID, pollInterval)
+}
+
+// WaitForBuildProcessingTo is WaitForBuildProcessing with transient-error
+// notices written to stderr; nil means the process stderr.
+func (c *Client) WaitForBuildProcessingTo(ctx context.Context, stderr io.Writer, buildID string, pollInterval time.Duration) (*BuildResponse, error) {
 	buildID = strings.TrimSpace(buildID)
 	if buildID == "" {
 		return nil, fmt.Errorf("build ID is required")
@@ -50,42 +57,10 @@ func (c *Client) WaitForBuildProcessing(ctx context.Context, buildID string, pol
 			return nil, false, &buildProcessingFailure{build: build, state: state}
 		}
 		return nil, false, nil
-	}, PollOptions{Tolerate: IsTransientWaitError})
+	}, PollOptions{Tolerate: IsTransientWaitError, Stderr: stderr})
 	var processingFailure *buildProcessingFailure
 	if errors.As(err, &processingFailure) {
 		return processingFailure.build, err
 	}
 	return build, err
-}
-
-// FindOrCreateAppStoreVersion finds an existing app store version or creates one.
-func (c *Client) FindOrCreateAppStoreVersion(ctx context.Context, appID, version string, platform Platform) (*AppStoreVersionResponse, error) {
-	appID = strings.TrimSpace(appID)
-	version = strings.TrimSpace(version)
-	platformValue := strings.ToUpper(strings.TrimSpace(string(platform)))
-	if appID == "" || version == "" || platformValue == "" {
-		return nil, fmt.Errorf("app ID, version, and platform are required")
-	}
-
-	versions, err := c.GetAppStoreVersions(
-		ctx, appID,
-		WithAppStoreVersionsVersionStrings([]string{version}),
-		WithAppStoreVersionsPlatforms([]string{platformValue}),
-		WithAppStoreVersionsLimit(10),
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	switch len(versions.Data) {
-	case 0:
-		return c.CreateAppStoreVersion(ctx, appID, AppStoreVersionCreateAttributes{
-			Platform:      Platform(platformValue),
-			VersionString: version,
-		})
-	case 1:
-		return &AppStoreVersionResponse{Data: versions.Data[0]}, nil
-	default:
-		return nil, fmt.Errorf("multiple app store versions found for version %q and platform %q", version, platformValue)
-	}
 }

@@ -6,30 +6,18 @@ import (
 	"fmt"
 )
 
-// BetaRecruitmentCriteriaAttributes describes beta recruitment criteria metadata.
-type BetaRecruitmentCriteriaAttributes struct {
-	LastModifiedDate             string                        `json:"lastModifiedDate,omitempty"`
-	DeviceFamilyOsVersionFilters []DeviceFamilyOsVersionFilter `json:"deviceFamilyOsVersionFilters,omitempty"`
-}
-
 // BetaRecruitmentCriteriaCreateAttributes describes create attributes.
 type BetaRecruitmentCriteriaCreateAttributes struct {
-	DeviceFamilyOsVersionFilters []DeviceFamilyOsVersionFilter `json:"deviceFamilyOsVersionFilters"`
+	DeviceFamilyOSVersionFilters []DeviceFamilyOsVersionFilter `json:"deviceFamilyOsVersionFilters"`
 }
 
 // BetaRecruitmentCriteriaUpdateAttributes describes update attributes.
 type BetaRecruitmentCriteriaUpdateAttributes struct {
-	DeviceFamilyOsVersionFilters []DeviceFamilyOsVersionFilter `json:"deviceFamilyOsVersionFilters,omitempty"`
+	DeviceFamilyOSVersionFilters []DeviceFamilyOsVersionFilter `json:"deviceFamilyOsVersionFilters,omitempty"`
 }
 
 // BetaRecruitmentCriteriaResponse is the response from beta recruitment criteria endpoints.
-type BetaRecruitmentCriteriaResponse = SingleResponse[BetaRecruitmentCriteriaAttributes]
-
-// BetaRecruitmentCriteriaDeleteResult represents CLI output for deletions.
-type BetaRecruitmentCriteriaDeleteResult struct {
-	ID      string `json:"id"`
-	Deleted bool   `json:"deleted"`
-}
+type BetaRecruitmentCriteriaResponse = SingleResponse[BetaRecruitmentCriterionAttributes]
 
 // BetaRecruitmentCriterionCompatibleBuildCheckAttributes describes compatible build check attributes.
 type BetaRecruitmentCriterionCompatibleBuildCheckAttributes struct {
@@ -81,9 +69,6 @@ type BetaRecruitmentCriterionOptionDeviceFamily struct {
 	DeviceFamily DeviceFamily `json:"deviceFamily,omitempty"`
 	OSVersions   []string     `json:"osVersions,omitempty"`
 }
-
-// BetaRecruitmentCriterionOptionsResponse is the response from recruitment criteria options list.
-type BetaRecruitmentCriterionOptionsResponse = Response[BetaRecruitmentCriterionOptionAttributes]
 
 // BetaGroupPublicLinkUsagesResponse is the response from public link usage metrics.
 // The metric endpoint returns data-point objects rather than JSON:API resource

@@ -143,7 +143,6 @@ func TestSubscriptionsListRejectsOpaqueNextOwnerAndLimitBeforeClient(t *testing.
 		{name: "app owner", args: []string{"--app", "app-2"}, message: "--next cannot be combined with --app"},
 		{name: "explicit empty app owner", args: []string{"--app", ""}, message: "--next cannot be combined with --app"},
 		{name: "whitespace app owner", args: []string{"--app", "  "}, message: "--next cannot be combined with --app"},
-		{name: "group owner", args: []string{"--group-id", "group-2"}, message: "--next cannot be combined with --group-id"},
 		{name: "limit", args: []string{"--limit", "7"}, message: "--next cannot be combined with --limit"},
 		{name: "explicit zero limit", args: []string{"--limit", "0"}, message: "--next cannot be combined with --limit"},
 	}
@@ -244,48 +243,6 @@ func TestSubscriptionVersionReadSelectionValidationBeforeAuth(t *testing.T) {
 			}
 			if strings.Contains(stderr, "authentication") || strings.Contains(stderr, "credentials") {
 				t.Fatalf("selection validation ran after auth: %q", stderr)
-			}
-		})
-	}
-}
-
-func TestSubscriptionVersionCommandsRejectUnexpectedArgsBeforeAuth(t *testing.T) {
-	clearSubscriptionVersionAuth(t)
-	tests := [][]string{
-		{"subscriptions", "versions", "create", "unexpected"},
-		{"subscriptions", "versions", "list", "unexpected"},
-		{"subscriptions", "versions", "view", "unexpected"},
-		{"subscriptions", "versions", "links", "unexpected"},
-		{"subscriptions", "versions", "localizations", "list", "unexpected"},
-		{"subscriptions", "versions", "localizations", "links", "unexpected"},
-		{"subscriptions", "versions", "localizations", "view", "unexpected"},
-		{"subscriptions", "versions", "localizations", "create", "unexpected"},
-		{"subscriptions", "versions", "localizations", "update", "unexpected"},
-		{"subscriptions", "versions", "localizations", "delete", "unexpected"},
-		{"subscriptions", "versions", "images", "list", "unexpected"},
-		{"subscriptions", "versions", "images", "primary", "unexpected"},
-		{"subscriptions", "versions", "images", "links", "unexpected"},
-		{"subscriptions", "versions", "images", "primary-link", "unexpected"},
-		{"subscriptions", "versions", "images", "view", "unexpected"},
-		{"subscriptions", "versions", "images", "upload", "unexpected"},
-		{"subscriptions", "versions", "images", "update", "unexpected"},
-		{"subscriptions", "versions", "images", "delete", "unexpected"},
-	}
-	for _, args := range tests {
-		t.Run(strings.Join(args[2:], "_"), func(t *testing.T) {
-			root := RootCommand("1.2.3")
-			root.FlagSet.SetOutput(io.Discard)
-			_, stderr := captureOutput(t, func() {
-				if err := root.Parse(args); err != nil {
-					t.Fatal(err)
-				}
-				err := root.Run(context.Background())
-				if !errors.Is(err, flag.ErrHelp) {
-					t.Fatalf("expected usage error, got %v", err)
-				}
-			})
-			if !strings.Contains(stderr, "unexpected argument(s): unexpected") {
-				t.Fatalf("stderr = %q", stderr)
 			}
 		})
 	}

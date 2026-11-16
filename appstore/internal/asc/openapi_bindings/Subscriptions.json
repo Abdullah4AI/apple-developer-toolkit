@@ -1,0 +1,37 @@
+{
+  "tag": "Subscriptions",
+  "file": "subscriptions_gen.go",
+  "types": [
+    "SubscriptionCreateData",
+    "SubscriptionCreateRequest",
+    "SubscriptionRelationships",
+    "SubscriptionResponse"
+  ],
+  "relationships": [
+    {"data":"SubscriptionCreateData","type":"*SubscriptionRelationships","omitempty":true}
+  ],
+  "operations": [
+    {"operation":"subscriptions_appStoreReviewScreenshot_getToOneRelated","name":"GetSubscriptionAppStoreReviewScreenshotForSubscription","params":["subID"],"check":"require","checkFirst":true,"messages":["subscription ID is required"],"options":"SubscriptionAppStoreReviewScreenshotOption","query":"buildSubscriptionAppStoreReviewScreenshotQuery","single":true},
+    {"operation":"subscriptions_createInstance","name":"CreateSubscription","params":["groupID"],"links":["group"],"deviations":[{"problem":"data.attributes has [availableInAllTerritories], which the schema does not define","reason":"the hand-written SubscriptionCreateAttributes has an optional field the create request does not define; asc subscriptions create and setup never set it, so omitempty keeps it out of every request"}]},
+    {"operation":"subscriptions_deleteInstance","name":"DeleteSubscription","params":["subID"]},
+    {"operation":"subscriptions_getInstance","name":"GetSubscription","params":["subID"],"check":"require","checkFirst":true,"messages":["subscription ID is required"],"options":"SubscriptionOption","query":"buildSubscriptionQuery","single":true},
+    {"operation":"subscriptions_prices_getToManyRelated","name":"GetSubscriptionPrices","params":["subscriptionID"],"options":"SubscriptionPricesOption","query":"buildSubscriptionPricesQuery","nextContext":"subscriptionPrices"},
+    {"operation":"subscriptions_prices_getToManyRelationship","name":"GetSubscriptionPricesRelationships","params":["subID"],"check":"require","messages":["subscription ID is required"],"options":"LinkagesOption","query":"buildLinkagesQuery","nextContext":"subscriptionPricesRelationships","response":"LinkagesResponse"},
+    {"operation":"subscriptions_promotedPurchase_getToOneRelated","name":"GetSubscriptionPromotedPurchase","params":["subID"],"check":"require","checkFirst":true,"messages":["subscription ID is required"],"options":"PromotedPurchaseGetOption","query":"buildPromotedPurchaseGetQuery","single":true},
+    {"operation":"subscriptions_retentionMessageOffers_getToManyRelationship","name":"GetSubscriptionRetentionMessageOffersRelationships","params":["subscriptionID"],"check":"require","options":"LinkagesOption","query":"buildLinkagesQuery","nextContext":"retentionMessageOffers relationships","parseErr":"failed to parse retentionMessageOffers relationship response","response":"LinkagesResponse"},
+    {"operation":"subscriptions_retentionOffers_getToManyRelationship","name":"GetSubscriptionRetentionOffersRelationships","params":["subscriptionID"],"check":"require","options":"LinkagesOption","query":"buildLinkagesQuery","nextContext":"retentionOffers relationships","parseErr":"failed to parse retentionOffers relationship response","response":"LinkagesResponse"},
+    {"operation":"subscriptions_subscriptionAvailability_getToOneRelated","name":"GetSubscriptionAvailabilityForSubscription","params":["subID"],"check":"require","messages":["subscription ID is required"]},
+    {"operation":"subscriptions_versions_getToManyRelated","name":"GetSubscriptionVersions","params":["subscriptionID"],"check":"require","messages":["subscription ID is required"],"options":"SubscriptionVersionsOption","query":"buildSubscriptionVersionsQuery","nextContext":"subscriptionVersions"},
+    {"operation":"subscriptions_versions_getToManyRelationship","name":"GetSubscriptionVersionsRelationships","params":["subscriptionID"],"check":"require","messages":["owner ID is required"],"options":"LinkagesOption","query":"buildLinkagesQuery","nextContext":"subscriptionVersionsRelationships","response":"LinkagesResponse"},
+    {"operation":"subscriptions_winBackOffers_getToManyRelated","name":"GetSubscriptionWinBackOffers","params":["subscriptionID"],"options":"WinBackOffersOption","query":"buildWinBackOffersQuery","nextContext":"winBackOffers"},
+    {"operation":"subscriptions_winBackOffers_getToManyRelationship","name":"GetSubscriptionWinBackOffersRelationships","params":["subscriptionID"],"options":"LinkagesOption","query":"buildLinkagesQuery","nextContext":"winBackOffers relationships","response":"LinkagesResponse"}
+  ],
+  "queries": [
+    {"operation":"subscriptions_images_getToManyRelated","name":"SubscriptionImages","deviations":[{"problem":"query parameters [fields[subscriptionImages] fields[subscriptions] include] have no option","reason":"The option type has options only for the parameters commands send today; an option for another parameter is added with the command that needs it."}]},
+    {"operation":"subscriptions_introductoryOffers_getToManyRelated","name":"SubscriptionIntroductoryOffers","params":[{"name":"filter[territory]","field":"territories","normalize":"upper"},{"name":"fields[subscriptionIntroductoryOffers]"},{"name":"fields[subscriptions]","arg":"fields"},{"name":"fields[subscriptionPricePoints]","field":"pricePointFields","arg":"fields"},{"name":"include"}],"deviations":[{"problem":"query parameters [fields[territories]] have no option","reason":"The option type has options only for the parameters commands send today; an option for another parameter is added with the command that needs it."}]},
+    {"operation":"subscriptions_offerCodes_getToManyRelated","name":"SubscriptionOfferCodes","params":[{"name":"fields[subscriptions]","arg":"fields"},{"name":"include"}],"deviations":[{"problem":"query parameters [fields[subscriptionOfferCodeCustomCodes] fields[subscriptionOfferCodeOneTimeUseCodes] fields[subscriptionOfferCodePrices] fields[subscriptionOfferCodes] filter[territory] limit[customCodes] limit[oneTimeUseCodes] limit[prices]] have no option","reason":"The option type has options only for the parameters commands send today; an option for another parameter is added with the command that needs it."}]},
+    {"operation":"subscriptions_promotionalOffers_getToManyRelated","name":"SubscriptionPromotionalOffers","params":[{"name":"fields[subscriptions]","arg":"fields"},{"name":"include"}],"deviations":[{"problem":"query parameters [fields[subscriptionPromotionalOfferPrices] fields[subscriptionPromotionalOffers] filter[territory] limit[prices]] have no option","reason":"The option type has options only for the parameters commands send today; an option for another parameter is added with the command that needs it."}]},
+    {"operation":"subscriptions_subscriptionLocalizations_getToManyRelated","name":"SubscriptionLocalizations","deviations":[{"problem":"query parameters [fields[subscriptionLocalizations] fields[subscriptions] include] have no option","reason":"The option type has options only for the parameters commands send today; an option for another parameter is added with the command that needs it."}]},
+    {"operation":"subscriptions_winBackOffers_getToManyRelated","name":"WinBackOffers","params":[{"name":"fields[winBackOffers]"},{"name":"fields[winBackOfferPrices]","field":"priceFields","arg":"fields"},{"name":"include"},{"name":"limit[prices]","field":"pricesLimit","arg":"limit","type":"int"}]}
+  ]
+}

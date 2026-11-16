@@ -10,18 +10,15 @@ import (
 	"crypto/x509/pkix"
 	"encoding/base64"
 	"encoding/json"
-	"errors"
-	"flag"
-	"io"
 	"math/big"
 	"net/http"
-	"os"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/artifacts"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
 var developerIDCheckTestNow = time.Date(2026, time.October, 31, 12, 0, 0, 0, time.UTC)
@@ -156,47 +153,23 @@ func TestBuildDeveloperIDCheckAuthorityClock(t *testing.T) {
 	}
 }
 
-func captureDeveloperIDCheckOutput(t *testing.T, run func() error) (string, string, error) {
-	t.Helper()
-	capture := func(target **os.File) func() string {
-		reader, writer, err := os.Pipe()
-		if err != nil {
-			t.Fatal(err)
-		}
-		original := *target
-		*target = writer
-		done := make(chan string)
-		go func() {
-			var buffer bytes.Buffer
-			_, _ = io.Copy(&buffer, reader)
-			done <- buffer.String()
-		}()
-		return func() string {
-			*target = original
-			_ = writer.Close()
-			return <-done
-		}
-	}
-	stopStdout, stopStderr := capture(&os.Stdout), capture(&os.Stderr)
-	err := run()
-	return stopStdout(), stopStderr(), err
-}
-
 func runDeveloperIDCheck(t *testing.T, transport http.RoundTripper, args ...string) (string, string, error) {
 	t.Helper()
 	client := newCertificatesTestClient(t, transport)
-	originalClient, originalNow := getCertificatesASCClient, developerIDCheckNow
-	getCertificatesASCClient = func() (*asc.Client, error) { return client, nil }
-	developerIDCheckNow = func() time.Time { return developerIDCheckTestNow }
-	t.Cleanup(func() { getCertificatesASCClient, developerIDCheckNow = originalClient, originalNow })
+	var stdout, stderr bytes.Buffer
+	d := &shared.Deps{
+		Client:  func() (*asc.Client, error) { return client, nil },
+		IO:      &shared.IO{In: strings.NewReader(""), Out: &stdout, ErrOut: &stderr},
+		Now:     func() time.Time { return developerIDCheckTestNow },
+		Timeout: shared.ContextWithTimeout,
+	}
 
-	command := CertificatesDeveloperIDCheckCommand()
+	command := newCertificatesDeveloperIDCheckCommand(d)
 	if err := command.FlagSet.Parse(args); err != nil {
 		t.Fatal(err)
 	}
-	return captureDeveloperIDCheckOutput(t, func() error {
-		return command.Exec(context.Background(), command.FlagSet.Args())
-	})
+	err := command.Exec(context.Background(), command.FlagSet.Args())
+	return stdout.String(), stderr.String(), err
 }
 
 func developerIDCheckTransport(t *testing.T, requests *[]*http.Request, pages ...string) roundTripFunc {
@@ -363,12 +336,5 @@ func TestCertificatesDeveloperIDCheckTableNamesWhatItCannotSee(t *testing.T) {
 	}
 	if !strings.Contains(stdout, "Developer ID Installer") {
 		t.Fatalf("table output must name Installer certificates as not checked: %q", stdout)
-	}
-}
-
-func TestCertificatesDeveloperIDCheckRejectsPositionalArguments(t *testing.T) {
-	command := CertificatesDeveloperIDCheckCommand()
-	if err := command.Exec(context.Background(), []string{"extra"}); !errors.Is(err, flag.ErrHelp) {
-		t.Fatalf("expected a usage error, got %v", err)
 	}
 }

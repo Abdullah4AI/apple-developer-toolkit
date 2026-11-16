@@ -5,7 +5,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -18,8 +17,8 @@ import (
 
 const backgroundAssetVersionStateComplete = "COMPLETE"
 
-func BackgroundAssetsSubmitCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("submit", flag.ExitOnError)
+func newBackgroundAssetsSubmitCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("submit", flag.ExitOnError)
 
 	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID)")
 	platform := fs.String("platform", "IOS", "Platform: IOS, MAC_OS, TV_OS, VISION_OS")
@@ -31,7 +30,7 @@ func BackgroundAssetsSubmitCommand() *ffcli.Command {
 	confirm := fs.Bool("confirm", false, "Confirm submission (required unless --dry-run)")
 	dryRun := fs.Bool("dry-run", false, "Preview the submission flow without mutating")
 	noSubmit := fs.Bool("no-submit", false, "Create the submission and attach items but do not submit; useful when chaining additional items")
-	output := shared.BindOutputFlags(fs)
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "submit",
@@ -57,16 +56,16 @@ Examples:
   asc background-assets submit --app "APP_ID" --version-id "VERSION_ID" --review-submission-id "SUBMISSION_ID" --confirm
   asc background-assets submit --app "APP_ID" --all --dry-run`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
-			resolvedAppID := shared.ResolveAppID(*appID)
+			resolvedAppID := d.ResolveAppID(*appID)
 			if resolvedAppID == "" {
-				fmt.Fprintln(os.Stderr, "Error: --app is required (or set ASC_APP_ID)")
+				fmt.Fprintln(d.IO.ErrOut, "Error: --app is required (or set ASC_APP_ID)")
 				return shared.MissingRequiredUsageError("--app")
 			}
 			normalizedPlatform, err := shared.NormalizeAppStoreVersionPlatform(*platform)
 			if err != nil {
-				return shared.UsageError(err.Error())
+				return d.UsageError(err.Error())
 			}
 
 			packIDs := shared.SplitCSV(*assetPackIdentifiers)
@@ -87,30 +86,29 @@ Examples:
 				selectionCount++
 			}
 			if selectionCount == 0 {
-				return shared.UsageError("one of --all, --asset-pack-identifier, --background-asset-id, or --version-id is required")
+				return d.UsageError("one of --all, --asset-pack-identifier, --background-asset-id, or --version-id is required")
 			}
 			if selectionCount > 1 {
-				return shared.UsageError("--all, --asset-pack-identifier, --background-asset-id, and --version-id are mutually exclusive")
+				return d.UsageError("--all, --asset-pack-identifier, --background-asset-id, and --version-id are mutually exclusive")
 			}
-			if !*confirm && !*dryRun {
-				fmt.Fprintln(os.Stderr, "Error: --confirm is required unless --dry-run is set")
-				return shared.MissingRequiredUsageError("--confirm")
+			if err := d.RequireConfirmUnlessDryRun(*dryRun, *confirm); err != nil {
+				return err
 			}
 			if *noSubmit && *dryRun {
-				return shared.UsageError("--no-submit and --dry-run are mutually exclusive")
+				return d.UsageError("--no-submit and --dry-run are mutually exclusive")
 			}
 
 			needsClientForResolve := len(explicitVersionIDs) == 0
 			var client backgroundAssetSubmitClient
 			if needsClientForResolve || !*dryRun {
-				realClient, err := shared.GetASCClient()
+				realClient, err := d.Client()
 				if err != nil {
 					return fmt.Errorf("background-assets submit: %w", err)
 				}
 				client = realClient
 			}
 
-			items, err := resolveBackgroundAssetSubmitItems(ctx, backgroundAssetSubmitResolver{client: client}, backgroundAssetSubmitSelection{
+			items, err := resolveBackgroundAssetSubmitItems(ctx, backgroundAssetSubmitResolver{d: d, client: client}, backgroundAssetSubmitSelection{
 				appID:                resolvedAppID,
 				platform:             normalizedPlatform,
 				all:                  *all,
@@ -122,7 +120,7 @@ Examples:
 				return fmt.Errorf("background-assets submit: %w", err)
 			}
 			if len(items) == 0 {
-				return shared.UsageError("no matching background asset versions found to submit")
+				return d.UsageError("no matching background asset versions found to submit")
 			}
 
 			result := backgroundAssetsSubmitResult{
@@ -135,13 +133,13 @@ Examples:
 
 			if *dryRun {
 				result.Messages = append(result.Messages, fmt.Sprintf("dry-run: would submit %d background asset version(s) for review", len(items)))
-				return printBackgroundAssetsSubmitResult(result, *output.Output, *output.Pretty)
+				return printBackgroundAssetsSubmitResult(d, result, *output.Output, *output.Pretty)
 			}
 
 			currentSubmissionID := strings.TrimSpace(*submissionID)
 			createdHere := false
 			if currentSubmissionID == "" {
-				createCtx, createCancel := backgroundAssetSubmitRequestContext(ctx)
+				createCtx, createCancel := backgroundAssetSubmitRequestContext(ctx, d)
 				createResp, err := client.CreateReviewSubmission(createCtx, resolvedAppID, asc.Platform(normalizedPlatform))
 				createCancel()
 				if err != nil {
@@ -150,7 +148,7 @@ Examples:
 						partialErr.Response.Data.Type == asc.ResourceTypeReviewSubmissions {
 						createdSubmissionID := strings.TrimSpace(partialErr.Response.Data.ID)
 						if createdSubmissionID != "" {
-							return rollbackBackgroundAssetReviewSubmission(ctx, client, createdSubmissionID, "create review submission", err)
+							return rollbackBackgroundAssetReviewSubmission(ctx, d, client, createdSubmissionID, "create review submission", err)
 						}
 					}
 					return fmt.Errorf("background-assets submit: create review submission: %w", err)
@@ -161,7 +159,7 @@ Examples:
 				}
 				if err := validateBackgroundAssetReviewSubmissionCreateReceipt(createResp, resolvedAppID, normalizedPlatform); err != nil {
 					if createdSubmissionID != "" {
-						return rollbackBackgroundAssetReviewSubmission(ctx, client, createdSubmissionID, "validate create receipt", err)
+						return rollbackBackgroundAssetReviewSubmission(ctx, d, client, createdSubmissionID, "validate create receipt", err)
 					}
 					return fmt.Errorf("background-assets submit: create review submission receipt: %w", err)
 				}
@@ -170,16 +168,16 @@ Examples:
 			}
 			result.SubmissionID = currentSubmissionID
 
-			if err := validateBackgroundAssetReviewSubmissionBeforeAdd(ctx, client, currentSubmissionID, resolvedAppID, normalizedPlatform); err != nil {
+			if err := validateBackgroundAssetReviewSubmissionBeforeAdd(ctx, d, client, currentSubmissionID, resolvedAppID, normalizedPlatform); err != nil {
 				if createdHere {
-					return rollbackBackgroundAssetReviewSubmission(ctx, client, currentSubmissionID, "validate before adding items", err)
+					return rollbackBackgroundAssetReviewSubmission(ctx, d, client, currentSubmissionID, "validate before adding items", err)
 				}
 				return fmt.Errorf("background-assets submit: validate review submission %q before adding items: %w", currentSubmissionID, err)
 			}
-			alreadyAttached, err := fetchAlreadyAttachedBackgroundAssetVersions(ctx, client, currentSubmissionID)
+			alreadyAttached, err := fetchAlreadyAttachedBackgroundAssetVersions(ctx, d, client, currentSubmissionID)
 			if err != nil {
 				if createdHere {
-					return rollbackBackgroundAssetReviewSubmission(ctx, client, currentSubmissionID, "inspect existing items", err)
+					return rollbackBackgroundAssetReviewSubmission(ctx, d, client, currentSubmissionID, "inspect existing items", err)
 				}
 				return fmt.Errorf("background-assets submit: inspect existing items on submission %q: %w", currentSubmissionID, err)
 			}
@@ -189,12 +187,12 @@ Examples:
 					result.SkippedAlreadyAttached = append(result.SkippedAlreadyAttached, item)
 					continue
 				}
-				attachCtx, attachCancel := backgroundAssetSubmitRequestContext(ctx)
+				attachCtx, attachCancel := backgroundAssetSubmitRequestContext(ctx, d)
 				_, err := client.CreateReviewSubmissionItem(attachCtx, currentSubmissionID, asc.ReviewSubmissionItemTypeBackgroundAssetVersion, item.BackgroundAssetVersionID)
 				attachCancel()
 				if err != nil {
 					if createdHere {
-						cancelErr := cancelBackgroundAssetReviewSubmission(ctx, client, currentSubmissionID)
+						cancelErr := cancelBackgroundAssetReviewSubmission(ctx, d, client, currentSubmissionID)
 						if cancelErr == nil {
 							return fmt.Errorf("background-assets submit: attach version %q (index %d, %d already attached) to submission %q failed; rolled back the submission: %w", item.BackgroundAssetVersionID, i, result.AttachedItems, currentSubmissionID, err)
 						} else {
@@ -208,10 +206,10 @@ Examples:
 
 			if *noSubmit {
 				result.Messages = append(result.Messages, fmt.Sprintf("--no-submit set; submission %s left open with %d item(s) attached", currentSubmissionID, result.AttachedItems))
-				return printBackgroundAssetsSubmitResult(result, *output.Output, *output.Pretty)
+				return printBackgroundAssetsSubmitResult(d, result, *output.Output, *output.Pretty)
 			}
 
-			submitCtx, submitCancel := backgroundAssetSubmitRequestContext(ctx)
+			submitCtx, submitCancel := backgroundAssetSubmitRequestContext(ctx, d)
 			submitResp, err := client.SubmitReviewSubmission(submitCtx, currentSubmissionID)
 			submitCancel()
 			if err != nil {
@@ -224,27 +222,27 @@ Examples:
 				}
 			}
 
-			return printBackgroundAssetsSubmitResult(result, *output.Output, *output.Pretty)
+			return printBackgroundAssetsSubmitResult(d, result, *output.Output, *output.Pretty)
 		},
 	}
 }
 
 // backgroundAssetSubmitRequestContext gives each ASC request an independent
 // timeout while retaining the caller's cancellation and any earlier deadline.
-func backgroundAssetSubmitRequestContext(ctx context.Context) (context.Context, context.CancelFunc) {
-	return shared.ContextWithTimeout(ctx)
+func backgroundAssetSubmitRequestContext(ctx context.Context, d *shared.Deps) (context.Context, context.CancelFunc) {
+	return d.Timeout(ctx)
 }
 
-func cancelBackgroundAssetReviewSubmission(ctx context.Context, client backgroundAssetSubmitClient, submissionID string) error {
+func cancelBackgroundAssetReviewSubmission(ctx context.Context, d *shared.Deps, client backgroundAssetSubmitClient, submissionID string) error {
 	rollbackParent := context.WithoutCancel(shared.ContextWithoutTimeout(ctx))
-	rollbackCtx, cancel := shared.ContextWithTimeout(rollbackParent)
+	rollbackCtx, cancel := d.Timeout(rollbackParent)
 	defer cancel()
 	_, err := client.CancelReviewSubmission(rollbackCtx, submissionID)
 	return err
 }
 
-func rollbackBackgroundAssetReviewSubmission(ctx context.Context, client backgroundAssetSubmitClient, submissionID, stage string, cause error) error {
-	if cancelErr := cancelBackgroundAssetReviewSubmission(ctx, client, submissionID); cancelErr == nil {
+func rollbackBackgroundAssetReviewSubmission(ctx context.Context, d *shared.Deps, client backgroundAssetSubmitClient, submissionID, stage string, cause error) error {
+	if cancelErr := cancelBackgroundAssetReviewSubmission(ctx, d, client, submissionID); cancelErr == nil {
 		return fmt.Errorf("background-assets submit: %s on newly created submission %q failed; rolled back the submission: %w", stage, submissionID, cause)
 	} else {
 		return fmt.Errorf("background-assets submit: %s on newly created submission %q failed; rollback also failed (submission %q is leaked): %w", stage, submissionID, submissionID, errors.Join(cause, cancelErr))
@@ -265,7 +263,7 @@ type backgroundAssetsSubmitResult struct {
 	Messages               []string                           `json:"messages,omitempty"`
 }
 
-func printBackgroundAssetsSubmitResult(result backgroundAssetsSubmitResult, format string, pretty bool) error {
+func printBackgroundAssetsSubmitResult(d *shared.Deps, result backgroundAssetsSubmitResult, format string, pretty bool) error {
 	headers := []string{"App ID", "Platform", "Submission ID", "State", "Items", "Attached", "Dry Run"}
 	rows := [][]string{{
 		result.AppID,
@@ -276,7 +274,7 @@ func printBackgroundAssetsSubmitResult(result backgroundAssetsSubmitResult, form
 		strconv.Itoa(result.AttachedItems),
 		strconv.FormatBool(result.DryRun),
 	}}
-	return shared.PrintOutputRows(result, format, pretty, headers, rows)
+	return d.PrintOutputRows(result, format, pretty, headers, rows)
 }
 
 type backgroundAssetsSubmitResultItem struct {
@@ -341,11 +339,11 @@ func validateBackgroundAssetReviewSubmissionCreateReceipt(response *asc.ReviewSu
 	return nil
 }
 
-func validateBackgroundAssetReviewSubmissionBeforeAdd(ctx context.Context, client backgroundAssetSubmitClient, submissionID, appID, platform string) error {
+func validateBackgroundAssetReviewSubmissionBeforeAdd(ctx context.Context, d *shared.Deps, client backgroundAssetSubmitClient, submissionID, appID, platform string) error {
 	submissionID = strings.TrimSpace(submissionID)
 	appID = strings.TrimSpace(appID)
 	platform = strings.TrimSpace(platform)
-	requestCtx, cancel := backgroundAssetSubmitRequestContext(ctx)
+	requestCtx, cancel := backgroundAssetSubmitRequestContext(ctx, d)
 	defer cancel()
 	response, err := client.GetReviewSubmissionStrict(requestCtx, submissionID, asc.WithReviewSubmissionInclude([]string{"app"}))
 	if err != nil {
@@ -389,6 +387,7 @@ func validateBackgroundAssetReviewSubmissionBeforeAdd(ctx context.Context, clien
 }
 
 type backgroundAssetSubmitResolver struct {
+	d      *shared.Deps
 	client backgroundAssetSubmitClient
 }
 
@@ -448,10 +447,10 @@ func (r backgroundAssetSubmitResolver) listAssets(ctx context.Context, sel backg
 			filter[strings.TrimSpace(id)] = struct{}{}
 		}
 		opts := []asc.BackgroundAssetsOption{
-			asc.WithBackgroundAssetsLimit(backgroundAssetsMaxLimit),
+			asc.Limit[asc.BackgroundAssetsOption](backgroundAssetsMaxLimit),
 			asc.WithBackgroundAssetsFilterArchived([]string{"false"}),
 		}
-		all, err := fetchAllBackgroundAssets(ctx, r.client, sel.appID, opts...)
+		all, err := fetchAllBackgroundAssets(ctx, r.d, r.client, sel.appID, opts...)
 		if err != nil {
 			return nil, err
 		}
@@ -478,13 +477,13 @@ func (r backgroundAssetSubmitResolver) listAssets(ctx context.Context, sel backg
 	}
 
 	opts := []asc.BackgroundAssetsOption{
-		asc.WithBackgroundAssetsLimit(backgroundAssetsMaxLimit),
+		asc.Limit[asc.BackgroundAssetsOption](backgroundAssetsMaxLimit),
 		asc.WithBackgroundAssetsFilterArchived([]string{"false"}),
 	}
 	if len(sel.assetPackIdentifiers) > 0 {
 		opts = append(opts, asc.WithBackgroundAssetsFilterAssetPackIdentifier(sel.assetPackIdentifiers))
 	}
-	assets, err := fetchAllBackgroundAssets(ctx, r.client, sel.appID, opts...)
+	assets, err := fetchAllBackgroundAssets(ctx, r.d, r.client, sel.appID, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -512,7 +511,7 @@ func (r backgroundAssetSubmitResolver) listAssets(ctx context.Context, sel backg
 }
 
 func (r backgroundAssetSubmitResolver) latestCompleteVersion(ctx context.Context, backgroundAssetID, platform string) (*ascBackgroundAssetVersionItem, error) {
-	versions, err := fetchAllBackgroundAssetVersions(ctx, r.client, backgroundAssetID)
+	versions, err := fetchAllBackgroundAssetVersions(ctx, r.d, r.client, backgroundAssetID)
 	if err != nil {
 		return nil, err
 	}
@@ -556,17 +555,17 @@ type (
 	ascBackgroundAssetVersionItem = asc.Resource[asc.BackgroundAssetVersionAttributes]
 )
 
-func fetchAllBackgroundAssets(ctx context.Context, client backgroundAssetSubmitClient, appID string, opts ...asc.BackgroundAssetsOption) ([]ascBackgroundAssetItem, error) {
-	firstCtx, firstCancel := backgroundAssetSubmitRequestContext(ctx)
+func fetchAllBackgroundAssets(ctx context.Context, d *shared.Deps, client backgroundAssetSubmitClient, appID string, opts ...asc.BackgroundAssetsOption) ([]ascBackgroundAssetItem, error) {
+	firstCtx, firstCancel := backgroundAssetSubmitRequestContext(ctx, d)
 	first, err := client.GetBackgroundAssets(firstCtx, appID, opts...)
 	firstCancel()
 	if err != nil {
 		return nil, fmt.Errorf("list background assets: %w", err)
 	}
 	resp, err := asc.PaginateAll(ctx, first, func(_ context.Context, nextURL string) (asc.PaginatedResponse, error) {
-		pageCtx, pageCancel := backgroundAssetSubmitRequestContext(ctx)
+		pageCtx, pageCancel := backgroundAssetSubmitRequestContext(ctx, d)
 		defer pageCancel()
-		return client.GetBackgroundAssets(pageCtx, appID, asc.WithBackgroundAssetsNextURL(nextURL))
+		return client.GetBackgroundAssets(pageCtx, appID, asc.NextURL[asc.BackgroundAssetsOption](nextURL))
 	})
 	if err != nil {
 		return nil, fmt.Errorf("paginate background assets: %w", err)
@@ -577,13 +576,13 @@ func fetchAllBackgroundAssets(ctx context.Context, client backgroundAssetSubmitC
 	return first.Data, nil
 }
 
-func fetchAlreadyAttachedBackgroundAssetVersions(ctx context.Context, client backgroundAssetSubmitClient, submissionID string) (map[string]struct{}, error) {
+func fetchAlreadyAttachedBackgroundAssetVersions(ctx context.Context, d *shared.Deps, client backgroundAssetSubmitClient, submissionID string) (map[string]struct{}, error) {
 	attached := map[string]struct{}{}
 	opts := []asc.ReviewSubmissionItemsOption{
-		asc.WithReviewSubmissionItemsLimit(backgroundAssetsMaxLimit),
+		asc.Limit[asc.ReviewSubmissionItemsOption](backgroundAssetsMaxLimit),
 		asc.WithReviewSubmissionItemsInclude([]string{"backgroundAssetVersion"}),
 	}
-	firstCtx, firstCancel := backgroundAssetSubmitRequestContext(ctx)
+	firstCtx, firstCancel := backgroundAssetSubmitRequestContext(ctx, d)
 	first, err := client.GetReviewSubmissionItemsStrict(firstCtx, submissionID, opts...)
 	firstCancel()
 	if err != nil {
@@ -621,8 +620,8 @@ func fetchAlreadyAttachedBackgroundAssetVersions(ctx context.Context, client bac
 			return nil, fmt.Errorf("paginate submission items: page %d: %w", pageNumber+1, asc.ErrRepeatedPaginationURL)
 		}
 		seenNext[nextURL] = struct{}{}
-		pageCtx, pageCancel := backgroundAssetSubmitRequestContext(ctx)
-		page, err = client.GetReviewSubmissionItemsStrict(pageCtx, submissionID, asc.WithReviewSubmissionItemsNextURL(nextURL), asc.WithReviewSubmissionItemsInclude([]string{"backgroundAssetVersion"}))
+		pageCtx, pageCancel := backgroundAssetSubmitRequestContext(ctx, d)
+		page, err = client.GetReviewSubmissionItemsStrict(pageCtx, submissionID, asc.NextURL[asc.ReviewSubmissionItemsOption](nextURL), asc.WithReviewSubmissionItemsInclude([]string{"backgroundAssetVersion"}))
 		pageCancel()
 		if err != nil {
 			return nil, fmt.Errorf("paginate submission items: page %d: %w", pageNumber+1, err)
@@ -631,18 +630,18 @@ func fetchAlreadyAttachedBackgroundAssetVersions(ctx context.Context, client bac
 	return attached, nil
 }
 
-func fetchAllBackgroundAssetVersions(ctx context.Context, client backgroundAssetSubmitClient, backgroundAssetID string) ([]ascBackgroundAssetVersionItem, error) {
-	opts := []asc.BackgroundAssetVersionsOption{asc.WithBackgroundAssetVersionsLimit(backgroundAssetsMaxLimit)}
-	firstCtx, firstCancel := backgroundAssetSubmitRequestContext(ctx)
+func fetchAllBackgroundAssetVersions(ctx context.Context, d *shared.Deps, client backgroundAssetSubmitClient, backgroundAssetID string) ([]ascBackgroundAssetVersionItem, error) {
+	opts := []asc.BackgroundAssetVersionsOption{asc.Limit[asc.BackgroundAssetVersionsOption](backgroundAssetsMaxLimit)}
+	firstCtx, firstCancel := backgroundAssetSubmitRequestContext(ctx, d)
 	first, err := client.GetBackgroundAssetVersions(firstCtx, backgroundAssetID, opts...)
 	firstCancel()
 	if err != nil {
 		return nil, fmt.Errorf("list versions: %w", err)
 	}
 	resp, err := asc.PaginateAll(ctx, first, func(_ context.Context, nextURL string) (asc.PaginatedResponse, error) {
-		pageCtx, pageCancel := backgroundAssetSubmitRequestContext(ctx)
+		pageCtx, pageCancel := backgroundAssetSubmitRequestContext(ctx, d)
 		defer pageCancel()
-		return client.GetBackgroundAssetVersions(pageCtx, backgroundAssetID, asc.WithBackgroundAssetVersionsNextURL(nextURL))
+		return client.GetBackgroundAssetVersions(pageCtx, backgroundAssetID, asc.NextURL[asc.BackgroundAssetVersionsOption](nextURL))
 	})
 	if err != nil {
 		return nil, fmt.Errorf("paginate versions: %w", err)

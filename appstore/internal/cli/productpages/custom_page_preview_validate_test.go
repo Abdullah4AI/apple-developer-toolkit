@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
 func TestCustomPagePreviewSyncValidatesFilesBeforeContactingApple(t *testing.T) {
@@ -17,14 +18,12 @@ func TestCustomPagePreviewSyncValidatesFilesBeforeContactingApple(t *testing.T) 
 	}
 
 	called := false
-	original := customPageMediaClientFactory
-	customPageMediaClientFactory = func() (*asc.Client, error) {
+	d := &shared.Deps{Client: func() (*asc.Client, error) {
 		called = true
 		return nil, context.Canceled
-	}
-	t.Cleanup(func() { customPageMediaClientFactory = original })
+	}}
 
-	_, err := executeCustomPagePreviewUpload(context.Background(), "loc-1", dir, "IPHONE_65", true)
+	_, err := executeCustomPagePreviewUpload(context.Background(), d, "loc-1", dir, "IPHONE_65", true, true)
 	if err == nil || !strings.Contains(strings.ToLower(err.Error()), "ds_store") {
 		t.Fatalf("error = %v, want a .DS_Store validation failure", err)
 	}

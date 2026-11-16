@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"os"
 
 	"github.com/peterbourgon/ff/v3/ffcli"
 
@@ -12,7 +11,8 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/telemetry"
 )
 
-func TelemetryCommand() *ffcli.Command {
+// NewTelemetryCommand returns the telemetry command group built on d.
+func NewTelemetryCommand(d *shared.Deps) *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "telemetry",
 		ShortUsage: "asc telemetry <subcommand>",
@@ -30,115 +30,106 @@ Examples:
   asc telemetry disable
   asc telemetry enable
   asc telemetry reset-id`,
-		FlagSet:   flag.NewFlagSet("telemetry", flag.ExitOnError),
-		UsageFunc: shared.DefaultUsageFunc,
+		FlagSet:   d.NewFlagSet("telemetry", flag.ExitOnError),
+		UsageFunc: d.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
-			statusCommand(),
-			enableCommand(),
-			disableCommand(),
-			resetIDCommand(),
+			statusCommand(d),
+			enableCommand(d),
+			disableCommand(d),
+			resetIDCommand(d),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			if len(args) > 0 {
-				fmt.Fprintf(os.Stderr, "Unknown subcommand: %s\n\n", args[0])
+				fmt.Fprintf(d.IO.ErrOut, "Unknown subcommand: %s\n\n", args[0])
 			}
 			return flag.ErrHelp
 		},
 	}
 }
 
-func statusCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("telemetry status", flag.ExitOnError)
-	output := shared.BindOutputFlagsWithAllowed(fs, "output", defaultStatusOutputFormat(), "Output format: table, json", "table", "json")
+func statusCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("telemetry status", flag.ExitOnError)
+	output := shared.BindOutputFlagsWithAllowed(fs, "output", defaultStatusOutputFormat(d), "Output format: table, json", "table", "json")
 	return &ffcli.Command{
 		Name:       "status",
 		ShortUsage: "asc telemetry status [flags]",
 		ShortHelp:  "Show telemetry status.",
 		FlagSet:    fs,
-		UsageFunc:  shared.DefaultUsageFunc,
+		UsageFunc:  d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
-			if len(args) > 0 {
-				return flag.ErrHelp
-			}
 			normalizedOutput, err := shared.ValidateOutputFormatAllowed(*output.Output, *output.Pretty, "table", "json")
 			if err != nil {
-				return shared.UsageError(err.Error())
+				return d.UsageError(err.Error())
 			}
 			status, err := telemetry.ReadStatus()
 			if err != nil {
 				return err
 			}
 			if normalizedOutput == "json" {
-				return shared.PrintOutput(status, "json", *output.Pretty)
+				return d.PrintOutput(status, "json", *output.Pretty)
 			}
-			printStatus(status)
+			printStatus(d, status)
 			return nil
 		},
 	}
 }
 
-func defaultStatusOutputFormat() string {
-	if shared.DefaultOutputFormat() == "json" {
+func defaultStatusOutputFormat(d *shared.Deps) string {
+	if d.DefaultOutputFormat() == "json" {
 		return "json"
 	}
 	return "table"
 }
 
-func enableCommand() *ffcli.Command {
-	return stateCommand("enable", "Enable telemetry.", true)
+func enableCommand(d *shared.Deps) *ffcli.Command {
+	return stateCommand(d, "enable", "Enable telemetry.", true)
 }
 
-func disableCommand() *ffcli.Command {
-	return stateCommand("disable", "Disable telemetry.", false)
+func disableCommand(d *shared.Deps) *ffcli.Command {
+	return stateCommand(d, "disable", "Disable telemetry.", false)
 }
 
-func stateCommand(name, help string, enabled bool) *ffcli.Command {
-	fs := flag.NewFlagSet("telemetry "+name, flag.ExitOnError)
+func stateCommand(d *shared.Deps, name, help string, enabled bool) *ffcli.Command {
+	fs := d.NewFlagSet("telemetry "+name, flag.ExitOnError)
 	return &ffcli.Command{
 		Name:       name,
 		ShortUsage: "asc telemetry " + name,
 		ShortHelp:  help,
 		FlagSet:    fs,
-		UsageFunc:  shared.DefaultUsageFunc,
+		UsageFunc:  d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
-			if len(args) > 0 {
-				return flag.ErrHelp
-			}
 			if err := telemetry.SetEnabled(enabled); err != nil {
 				return err
 			}
 			if enabled {
-				fmt.Fprintln(os.Stdout, "Telemetry enabled")
+				fmt.Fprintln(d.IO.Out, "Telemetry enabled")
 			} else {
-				fmt.Fprintln(os.Stdout, "Telemetry disabled")
+				fmt.Fprintln(d.IO.Out, "Telemetry disabled")
 			}
 			return nil
 		},
 	}
 }
 
-func resetIDCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("telemetry reset-id", flag.ExitOnError)
+func resetIDCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("telemetry reset-id", flag.ExitOnError)
 	return &ffcli.Command{
 		Name:       "reset-id",
 		ShortUsage: "asc telemetry reset-id",
 		ShortHelp:  "Reset the random local install ID.",
 		FlagSet:    fs,
-		UsageFunc:  shared.DefaultUsageFunc,
+		UsageFunc:  d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
-			if len(args) > 0 {
-				return flag.ErrHelp
-			}
 			if _, err := telemetry.ResetInstallID(); err != nil {
 				return err
 			}
-			fmt.Fprintln(os.Stdout, "Telemetry install ID reset")
+			fmt.Fprintln(d.IO.Out, "Telemetry install ID reset")
 			return nil
 		},
 	}
 }
 
-func printStatus(status telemetry.Status) {
+func printStatus(d *shared.Deps, status telemetry.Status) {
 	enabled := "false"
 	if status.Enabled {
 		enabled = "true"
@@ -150,5 +141,5 @@ func printStatus(status telemetry.Status) {
 		{"Endpoint", shared.OrNA(status.Endpoint)},
 		{"Path", status.Path},
 	}
-	shared.RenderSection("Telemetry", []string{"Field", "Value"}, rows, false)
+	d.RenderSection("Telemetry", []string{"Field", "Value"}, rows, false)
 }

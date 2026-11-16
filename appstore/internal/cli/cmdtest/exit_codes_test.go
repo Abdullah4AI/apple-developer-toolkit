@@ -1,7 +1,6 @@
 package cmdtest
 
 import (
-	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -10,6 +9,7 @@ import (
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/cmd"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asctest"
 )
 
 func TestRun_IntroductoryOffersImportInvalidStartDateReturnsExitUsage(t *testing.T) {
@@ -45,47 +45,18 @@ func TestRun_IntroductoryOffersImportPartialFailureReturnsExitError(t *testing.T
 	setupAuth(t)
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() {
-		http.DefaultTransport = originalTransport
-	})
-
-	getCount := 0
-	postCount := 0
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		if req.Method == http.MethodGet && req.URL.Path == "/v1/subscriptions/8000000003/introductoryOffers" {
-			getCount++
-			return &http.Response{
-				StatusCode: http.StatusOK,
-				Body:       io.NopCloser(strings.NewReader(`{"data":[]}`)),
-				Header:     http.Header{"Content-Type": []string{"application/json"}},
-			}, nil
-		}
-		if req.Method != http.MethodPost || req.URL.Path != "/v1/subscriptionIntroductoryOffers" {
-			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.Path)
-		}
-		postCount++
-
-		switch postCount {
-		case 1:
-			body := `{"data":{"type":"subscriptionIntroductoryOffers","id":"offer-1"}}`
-			return &http.Response{
-				StatusCode: http.StatusCreated,
-				Body:       io.NopCloser(strings.NewReader(body)),
-				Header:     http.Header{"Content-Type": []string{"application/json"}},
-			}, nil
-		case 2:
-			body := `{"errors":[{"status":"422","title":"Unprocessable Entity","detail":"invalid intro offer"}]}`
-			return &http.Response{
-				StatusCode: http.StatusUnprocessableEntity,
-				Body:       io.NopCloser(strings.NewReader(body)),
-				Header:     http.Header{"Content-Type": []string{"application/json"}},
-			}, nil
-		default:
-			t.Fatalf("unexpected POST count %d", postCount)
-			return nil, nil
-		}
-	})
+	reg := asctest.NewRegistry(t)
+	reg.Install()
+	offersRead := asctest.GET("/v1/subscriptions/8000000003/introductoryOffers",
+		"fields[subscriptionIntroductoryOffers]=startDate,endDate,duration,offerMode,numberOfPeriods,targetSubscriptionPlanType,territory,subscriptionPricePoint",
+		"include=territory,subscriptionPricePoint", "limit=200")
+	offerCreate := func(territory string) asctest.Matcher {
+		return asctest.POST("/v1/subscriptionIntroductoryOffers").JSONBody(`{"data":{"type":"subscriptionIntroductoryOffers","attributes":{"duration":"ONE_WEEK","offerMode":"FREE_TRIAL","numberOfPeriods":1,"targetSubscriptionPlanType":"UPFRONT"},"relationships":{"subscription":{"data":{"type":"subscriptions","id":"8000000003"}},"territory":{"data":{"type":"territories","id":"` + territory + `"}}}}}`)
+	}
+	reg.Register(offersRead, asctest.JSON(http.StatusOK, `{"data":[]}`))
+	reg.Register(offerCreate("USA"), asctest.JSON(http.StatusCreated, `{"data":{"type":"subscriptionIntroductoryOffers","id":"offer-1"}}`))
+	reg.Register(offerCreate("AFG"), asctest.JSON(http.StatusUnprocessableEntity, `{"errors":[{"status":"422","title":"Unprocessable Entity","detail":"invalid intro offer"}]}`))
+	reg.Register(offersRead, asctest.JSON(http.StatusOK, `{"data":[]}`))
 
 	csvPath := filepath.Join(t.TempDir(), "offers.csv")
 	if err := os.WriteFile(csvPath, []byte("territory\nUSA\nAFG\n"), 0o600); err != nil {
@@ -112,6 +83,15 @@ func TestRun_IntroductoryOffersImportPartialFailureReturnsExitError(t *testing.T
 	}
 	if !strings.Contains(stdout, `"failed":1`) {
 		t.Fatalf("expected failure summary in stdout, got %q", stdout)
+	}
+	getCount, postCount := 0, 0
+	for _, req := range reg.Requests() {
+		switch req.Method {
+		case http.MethodGet:
+			getCount++
+		case http.MethodPost:
+			postCount++
+		}
 	}
 	if getCount != 2 || postCount != 2 {
 		t.Fatalf("expected initial GET, two POSTs, and one readback GET; got GET=%d POST=%d", getCount, postCount)
@@ -174,6 +154,7 @@ func TestRun_UsageValidationErrorsReturnExitUsage(t *testing.T) {
 		name    string
 		args    []string
 		wantErr string
+		deps    bool // the command is built on shared.Deps: run it through RunWithDeps
 	}{
 		{
 			name:    "report file without report",
@@ -218,81 +199,97 @@ func TestRun_UsageValidationErrorsReturnExitUsage(t *testing.T) {
 			name:    "apps info view conflicting version flags",
 			args:    []string{"apps", "info", "view", "--app", "APP_ID", "--version", "1.0.0", "--version-id", "VERSION_ID"},
 			wantErr: "--version and --version-id are mutually exclusive",
+			deps:    true,
 		},
 		{
 			name:    "performance download mutually exclusive selectors",
 			args:    []string{"performance", "download", "--app", "APP_ID", "--build-id", "BUILD_ID"},
 			wantErr: "mutually exclusive",
+			deps:    true,
 		},
 		{
 			name:    "xcode-cloud run mutually exclusive workflow flags",
 			args:    []string{"xcode-cloud", "run", "--workflow", "CI", "--workflow-id", "WF_ID", "--branch", "main"},
 			wantErr: "--workflow and --workflow-id are mutually exclusive",
+			deps:    true,
 		},
 		{
 			name:    "xcode-cloud run source-run conflicts with workflow flags",
 			args:    []string{"xcode-cloud", "run", "--source-run-id", "RUN_123", "--workflow-id", "WF_ID"},
 			wantErr: "--source-run-id is mutually exclusive with --workflow and --workflow-id",
+			deps:    true,
 		},
 		{
 			name:    "xcode-cloud issues list conflicting selectors",
 			args:    []string{"xcode-cloud", "issues", "list", "--action-id", "ACT_123", "--run-id", "RUN_123"},
 			wantErr: "--action-id and --run-id are mutually exclusive",
+			deps:    true,
 		},
 		{
 			name:    "xcode-cloud issues list next with run-id",
 			args:    []string{"xcode-cloud", "issues", "list", "--run-id", "RUN_123", "--next", "https://api.appstoreconnect.apple.com/v1/ciBuildActions/ACT_123/issues?cursor=abc"},
 			wantErr: "--next is not supported with --run-id",
+			deps:    true,
 		},
 		{
 			name:    "xcode-cloud build-runs invalid sort",
 			args:    []string{"xcode-cloud", "build-runs", "--workflow-id", "WF_ID", "--sort", "nope"},
 			wantErr: "--sort must be one of",
+			deps:    true,
 		},
 		{
 			name:    "xcode-cloud build-runs invalid limit",
 			args:    []string{"xcode-cloud", "build-runs", "--workflow-id", "WF_ID", "--limit", "201"},
 			wantErr: "--limit must be between 1 and 200",
+			deps:    true,
 		},
 		{
 			name:    "xcode-cloud build-runs invalid next",
 			args:    []string{"xcode-cloud", "build-runs", "--next", "http://example.com/not-asc"},
 			wantErr: "--next must be an App Store Connect URL",
+			deps:    true,
 		},
 		{
 			name:    "publish appstore invalid timeout",
 			args:    []string{"publish", "appstore", "--app", "APP_123", "--ipa", "app.ipa", "--version", "1.0.0", "--timeout", "-1s"},
 			wantErr: "--timeout must be greater than 0",
+			deps:    true,
 		},
 		{
 			name:    "builds list invalid processing-state",
 			args:    []string{"builds", "list", "--app", "APP_123", "--processing-state", "WRONG"},
 			wantErr: "--processing-state must be one of",
+			deps:    true,
 		},
 		{
 			name:    "builds list invalid platform",
 			args:    []string{"builds", "list", "--app", "APP_123", "--platform", "ANDROID"},
 			wantErr: "--platform must be one of",
+			deps:    true,
 		},
 		{
 			name:    "builds upload invalid verify-timeout",
 			args:    []string{"builds", "upload", "--app", "APP_123", "--ipa", "app.ipa", "--version", "1.0.0", "--build-number", "42", "--verify-timeout", "-1s"},
 			wantErr: "--verify-timeout must be zero or greater",
+			deps:    true,
 		},
 		{
 			name:    "builds upload dry-run rejects verify-timeout",
 			args:    []string{"builds", "upload", "--app", "APP_123", "--ipa", "app.ipa", "--version", "1.0.0", "--build-number", "42", "--dry-run", "--verify-timeout", "5s"},
 			wantErr: "--verify-timeout is not supported with --dry-run",
+			deps:    true,
 		},
 		{
 			name:    "builds wait missing selector",
 			args:    []string{"builds", "wait"},
 			wantErr: "--app is required when --build-id is not provided",
+			deps:    true,
 		},
 		{
 			name:    "builds info missing build-number",
 			args:    []string{"builds", "info", "--app", "APP_123"},
 			wantErr: "--build-id, --latest, or --build-number is required",
+			deps:    true,
 		},
 		{
 			name: "apps wall submit parent wall flags",
@@ -310,62 +307,81 @@ func TestRun_UsageValidationErrorsReturnExitUsage(t *testing.T) {
 			name:    "apps public view missing app",
 			args:    []string{"apps", "public", "view"},
 			wantErr: "--app is required",
+			deps:    true,
 		},
 		{
 			name:    "apps public search invalid limit",
 			args:    []string{"apps", "public", "search", "--term", "focus", "--limit", "0"},
 			wantErr: "--limit must be between 1 and 200",
+			deps:    true,
 		},
 		{
 			name:    "apps public rank invalid platform",
 			args:    []string{"apps", "public", "rank", "--app", "123", "--term", "focus", "--platform", "MAC_OS"},
 			wantErr: "--platform must be one of: IOS, TV_OS",
+			deps:    true,
 		},
 		{
 			name:    "reviews ratings rejects positional args",
 			args:    []string{"reviews", "ratings", "--app", "123", "extra"},
+			deps:    true,
 			wantErr: `unexpected argument "extra"`,
 		},
 		{
 			name:    "reviews ratings unsupported country",
 			args:    []string{"reviews", "ratings", "--app", "123", "--country", "zz"},
+			deps:    true,
 			wantErr: "unsupported country code",
 		},
 		{
 			name:    "apps public view unsupported country",
 			args:    []string{"apps", "public", "view", "--app", "123", "--country", "zz"},
 			wantErr: "unsupported country code",
+			deps:    true,
 		},
 		{
 			name:    "apps public view signed app id",
 			args:    []string{"apps", "public", "view", "--app", "-123"},
 			wantErr: "--app must be a numeric App Store app ID",
+			deps:    true,
 		},
 		{
 			name:    "subscriptions offer-codes create non-free-trial without prices",
 			args:    []string{"subscriptions", "offers", "offer-codes", "create", "--subscription-id", "SUB_ID", "--name", "Spring", "--offer-eligibility", "STACK_WITH_INTRO_OFFERS", "--customer-eligibilities", "NEW", "--offer-duration", "ONE_MONTH", "--offer-mode", "PAY_AS_YOU_GO", "--number-of-periods", "1"},
 			wantErr: "--prices is required",
+			deps:    true,
 		},
 		{
 			name:    "subscriptions offer-codes create free-trial without prices",
 			args:    []string{"subscriptions", "offers", "offer-codes", "create", "--subscription-id", "SUB_ID", "--name", "Spring", "--offer-eligibility", "STACK_WITH_INTRO_OFFERS", "--customer-eligibilities", "NEW", "--offer-duration", "ONE_MONTH", "--offer-mode", "FREE_TRIAL", "--number-of-periods", "1"},
 			wantErr: "--prices is required",
+			deps:    true,
 		},
 		{
 			name:    "subscriptions offer-codes create free-trial with price point rejected",
 			args:    []string{"subscriptions", "offers", "offer-codes", "create", "--subscription-id", "SUB_ID", "--name", "Spring", "--offer-eligibility", "STACK_WITH_INTRO_OFFERS", "--customer-eligibilities", "NEW", "--offer-duration", "ONE_MONTH", "--offer-mode", "FREE_TRIAL", "--number-of-periods", "1", "--prices", "USA:PRICE_ID"},
 			wantErr: "--prices for FREE_TRIAL must use TERRITORY entries without price point IDs",
+			deps:    true,
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			_, stderr := captureOutput(t, func() {
-				code := cmd.Run(test.args, "1.0.0")
+			var stderr string
+			if test.deps {
+				var code int
+				_, stderr, code = runWithDeps(t, nil, test.args...)
 				if code != cmd.ExitUsage {
 					t.Fatalf("expected exit code %d, got %d", cmd.ExitUsage, code)
 				}
-			})
+			} else {
+				_, stderr = captureOutput(t, func() {
+					code := cmd.Run(test.args, "1.0.0")
+					if code != cmd.ExitUsage {
+						t.Fatalf("expected exit code %d, got %d", cmd.ExitUsage, code)
+					}
+				})
+			}
 			if !strings.Contains(stderr, test.wantErr) {
 				t.Fatalf("expected stderr to contain %q, got %q", test.wantErr, stderr)
 			}

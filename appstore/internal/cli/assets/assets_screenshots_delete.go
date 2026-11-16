@@ -2,10 +2,6 @@ package assets
 
 import (
 	"context"
-	"flag"
-	"fmt"
-	"os"
-	"strings"
 
 	"github.com/peterbourgon/ff/v3/ffcli"
 
@@ -13,15 +9,10 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
-// AssetsScreenshotsDeleteCommand returns the screenshot delete subcommand.
-func AssetsScreenshotsDeleteCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("delete", flag.ExitOnError)
-
-	id := shared.BindResourceIDFlag(fs, "id", "appScreenshots", "Screenshot ID")
-	confirm := fs.Bool("confirm", false, "Confirm deletion")
-	output := shared.BindOutputFlags(fs)
-
-	return &ffcli.Command{
+// NewAssetsScreenshotsDeleteCommand returns the screenshot delete subcommand.
+func NewAssetsScreenshotsDeleteCommand(d *shared.Deps) *ffcli.Command {
+	return shared.BuildConfirmDeleteCommand(shared.ConfirmDeleteCommandConfig{
+		Deps:       d,
 		Name:       "delete",
 		ShortUsage: "asc screenshots delete --id \"SCREENSHOT_ID\" --confirm",
 		ShortHelp:  "Delete a screenshot by ID.",
@@ -29,37 +20,16 @@ func AssetsScreenshotsDeleteCommand() *ffcli.Command {
 
 Examples:
   asc screenshots delete --id "SCREENSHOT_ID" --confirm`,
-		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
-		Exec: func(ctx context.Context, args []string) error {
-			assetID := strings.TrimSpace(*id)
-			if assetID == "" {
-				fmt.Fprintln(os.Stderr, "Error: --id is required")
-				return shared.MissingRequiredUsageError("--id")
-			}
-			if !*confirm {
-				fmt.Fprintln(os.Stderr, "Error: --confirm is required to delete")
-				return shared.MissingRequiredUsageError("--confirm")
-			}
-
-			client, err := shared.GetASCClient()
-			if err != nil {
-				return fmt.Errorf("screenshots delete: %w", err)
-			}
-
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
-			defer cancel()
-
-			if err := client.DeleteAppScreenshot(requestCtx, assetID); err != nil {
-				return fmt.Errorf("screenshots delete: %w", err)
-			}
-
-			result := asc.AssetDeleteResult{
-				ID:      assetID,
-				Deleted: true,
-			}
-
-			return shared.PrintOutput(&result, *output.Output, *output.Pretty)
+		IDFlag:             "id",
+		IDUsage:            "Screenshot ID",
+		IDType:             "appScreenshots",
+		RequiredDiagnostic: true,
+		DeleteErrorPrefix:  "screenshots delete",
+		Delete: func(ctx context.Context, client *asc.Client, id string) error {
+			return client.DeleteAppScreenshot(ctx, id)
 		},
-	}
+		Result: func(id string) any {
+			return &asc.AssetDeleteResult{ID: id, Deleted: true}
+		},
+	})
 }

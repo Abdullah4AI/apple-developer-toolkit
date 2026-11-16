@@ -1,17 +1,12 @@
 package cmdtest
 
 import (
-	"context"
-	"errors"
-	"flag"
-	"io"
 	"net/http"
 	"strings"
 	"testing"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/cmd"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
-	reviewcli "github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/reviews"
 )
 
 func TestReviewSubmissionsCreateReportsPartialCreateID(t *testing.T) {
@@ -23,19 +18,9 @@ func TestReviewSubmissionsCreateReportsPartialCreateID(t *testing.T) {
 		}
 		return jsonResponse(http.StatusCreated, `{"data":{"type":"reviewSubmissions","id":"sub-partial"},"errors":[]}`)
 	}))
-	restore := reviewcli.SetReviewSubmissionsClientFactory(func() (*asc.Client, error) {
+	stdout, stderr, runErr := runRootWithDeps(t, func() (*asc.Client, error) {
 		return client, nil
-	})
-	defer restore()
-
-	root := RootCommand("1.2.3")
-	var runErr error
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"review", "submissions-create", "--app", "app-1"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		runErr = root.Run(context.Background())
-	})
+	}, "review", "submissions-create", "--app", "app-1")
 
 	if runErr == nil || !strings.Contains(runErr.Error(), "sub-partial") ||
 		!strings.Contains(runErr.Error(), "asc submit cancel --id sub-partial --confirm") {
@@ -58,20 +43,12 @@ func TestReviewSubmissionsCreateCleanResponseStillSucceeds(t *testing.T) {
 		}
 		return jsonResponse(http.StatusCreated, `{"data":{"type":"reviewSubmissions","id":"sub-clean"}}`)
 	}))
-	restore := reviewcli.SetReviewSubmissionsClientFactory(func() (*asc.Client, error) {
+	stdout, stderr, runErr := runRootWithDeps(t, func() (*asc.Client, error) {
 		return client, nil
-	})
-	defer restore()
-
-	root := RootCommand("1.2.3")
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"review", "submissions-create", "--app", "app-1"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatalf("run error: %v", err)
-		}
-	})
+	}, "review", "submissions-create", "--app", "app-1")
+	if runErr != nil {
+		t.Fatalf("run error: %v", runErr)
+	}
 
 	if requests != 1 || !strings.Contains(stdout, `"id":"sub-clean"`) || stderr != "" {
 		t.Fatalf("requests = %d, stdout = %q, stderr = %q, want successful create output", requests, stdout, stderr)
@@ -89,7 +66,12 @@ func TestReviewCommandSubmissionsValidationErrors(t *testing.T) {
 		{
 			name:    "review submissions-list missing app or global",
 			args:    []string{"review", "submissions-list"},
-			wantErr: "--app or --global is required",
+			wantErr: "Error: --app or --global is required",
+		},
+		{
+			name:    "review submissions-list global missing app",
+			args:    []string{"review", "submissions-list", "--global"},
+			wantErr: "Error: --app is required with --global",
 		},
 		{
 			name:    "review submissions-get missing id",
@@ -114,7 +96,7 @@ func TestReviewCommandSubmissionsValidationErrors(t *testing.T) {
 		{
 			name:    "review submissions-submit missing confirm",
 			args:    []string{"review", "submissions-submit", "--id", "SUBMISSION_123"},
-			wantErr: "--confirm is required to submit",
+			wantErr: "--confirm is required\n",
 		},
 		{
 			name:    "review submissions-update missing id",
@@ -139,31 +121,13 @@ func TestReviewCommandSubmissionsValidationErrors(t *testing.T) {
 		{
 			name:    "review history rejects positional arguments",
 			args:    []string{"review", "history", "unexpected", "--app", "app-1"},
-			wantErr: "unexpected positional arguments",
+			wantErr: `unexpected argument "unexpected"`,
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			root := RootCommand("1.2.3")
-			root.FlagSet.SetOutput(io.Discard)
-
-			stdout, stderr := captureOutput(t, func() {
-				if err := root.Parse(test.args); err != nil {
-					t.Fatalf("parse error: %v", err)
-				}
-				err := root.Run(context.Background())
-				if !errors.Is(err, flag.ErrHelp) {
-					t.Fatalf("expected ErrHelp, got %v", err)
-				}
-			})
-
-			if stdout != "" {
-				t.Fatalf("expected empty stdout, got %q", stdout)
-			}
-			if !strings.Contains(stderr, test.wantErr) {
-				t.Fatalf("expected error %q, got %q", test.wantErr, stderr)
-			}
+			assertUsageExitWithDeps(t, nil, test.args, test.wantErr)
 		})
 	}
 }
@@ -202,7 +166,7 @@ func TestReviewCommandItemsValidationErrors(t *testing.T) {
 		{
 			name:    "review items-update missing update",
 			args:    []string{"review", "items-update", "--id", "ITEM_ID"},
-			wantErr: "at least one of --resolved, --removed, --clear-resolved, or --clear-removed is required",
+			wantErr: "at least one update flag is required (--resolved, --removed, --clear-resolved, --clear-removed)",
 		},
 		{
 			name:    "review items-remove missing id",
@@ -212,7 +176,7 @@ func TestReviewCommandItemsValidationErrors(t *testing.T) {
 		{
 			name:    "review items-remove missing confirm",
 			args:    []string{"review", "items-remove", "--id", "ITEM_ID"},
-			wantErr: "--confirm is required to remove",
+			wantErr: "--confirm is required\n",
 		},
 		{
 			name:    "nested review items list missing submission",
@@ -227,36 +191,18 @@ func TestReviewCommandItemsValidationErrors(t *testing.T) {
 		{
 			name:    "nested review items update missing update",
 			args:    []string{"review", "items", "update", "--id", "ITEM_ID"},
-			wantErr: "at least one of --resolved, --removed, --clear-resolved, or --clear-removed is required",
+			wantErr: "at least one update flag is required (--resolved, --removed, --clear-resolved, --clear-removed)",
 		},
 		{
 			name:    "nested review items remove missing confirm",
 			args:    []string{"review", "items", "remove", "--id", "ITEM_ID"},
-			wantErr: "--confirm is required to remove",
+			wantErr: "--confirm is required\n",
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			root := RootCommand("1.2.3")
-			root.FlagSet.SetOutput(io.Discard)
-
-			stdout, stderr := captureOutput(t, func() {
-				if err := root.Parse(test.args); err != nil {
-					t.Fatalf("parse error: %v", err)
-				}
-				err := root.Run(context.Background())
-				if !errors.Is(err, flag.ErrHelp) {
-					t.Fatalf("expected ErrHelp, got %v", err)
-				}
-			})
-
-			if stdout != "" {
-				t.Fatalf("expected empty stdout, got %q", stdout)
-			}
-			if !strings.Contains(stderr, test.wantErr) {
-				t.Fatalf("expected error %q, got %q", test.wantErr, stderr)
-			}
+			assertUsageExitWithDeps(t, nil, test.args, test.wantErr)
 		})
 	}
 }
@@ -264,17 +210,15 @@ func TestReviewCommandItemsValidationErrors(t *testing.T) {
 func TestReviewCommandItemsInvalidItemType(t *testing.T) {
 	t.Setenv("ASC_BYPASS_KEYCHAIN", "1")
 
-	stdout, stderr := captureOutput(t, func() {
-		code := cmd.Run([]string{
-			"review", "items-add",
-			"--submission", "SUBMISSION_ID",
-			"--item-type", "nope",
-			"--item-id", "ITEM_ID",
-		}, "1.2.3")
-		if code != cmd.ExitUsage {
-			t.Fatalf("expected exit code %d, got %d", cmd.ExitUsage, code)
-		}
-	})
+	stdout, stderr, code := runWithDeps(t, nil,
+		"review", "items-add",
+		"--submission", "SUBMISSION_ID",
+		"--item-type", "nope",
+		"--item-id", "ITEM_ID",
+	)
+	if code != cmd.ExitUsage {
+		t.Fatalf("expected exit code %d, got %d", cmd.ExitUsage, code)
+	}
 
 	if stdout != "" {
 		t.Fatalf("expected empty stdout, got %q", stdout)

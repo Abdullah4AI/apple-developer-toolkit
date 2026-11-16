@@ -10,9 +10,9 @@ import (
 
 const productPagesMaxLimit = 200
 
-// ProductPagesCommand returns the product pages command group.
-func ProductPagesCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("product-pages", flag.ExitOnError)
+// NewProductPagesCommand returns the product pages command group built on d.
+func NewProductPagesCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("product-pages", flag.ExitOnError)
 
 	return &ffcli.Command{
 		Name:       "product-pages",
@@ -26,10 +26,10 @@ Examples:
   asc product-pages experiments list --version-id "VERSION_ID"
   asc product-pages experiments create --version-id "VERSION_ID" --name "Icon Test" --traffic-proportion 25`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
-			CustomPagesCommand(),
-			ExperimentsCommand(),
+			newCustomPagesCommand(d),
+			newExperimentsCommand(d),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp

@@ -3,17 +3,15 @@ package apps
 import (
 	"context"
 	"flag"
-	"fmt"
-	"os"
-	"strings"
 
 	"github.com/peterbourgon/ff/v3/ffcli"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
-// AppsCIProductCommand returns the ci-product command group.
-func AppsCIProductCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("ci-product", flag.ExitOnError)
+// newAppsCIProductCommand returns the ci-product command group.
+func newAppsCIProductCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("ci-product", flag.ExitOnError)
 
 	return &ffcli.Command{
 		Name:       "ci-product",
@@ -24,9 +22,9 @@ func AppsCIProductCommand() *ffcli.Command {
 Examples:
   asc apps ci-product view --id "APP_ID"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
-			AppsCIProductGetCommand(),
+			newAppsCIProductGetCommand(d),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp
@@ -34,14 +32,10 @@ Examples:
 	}
 }
 
-// AppsCIProductGetCommand returns the ci-product get subcommand.
-func AppsCIProductGetCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("view", flag.ExitOnError)
-
-	id := shared.BindResourceIDFlag(fs, "id", "apps", "App Store Connect app ID")
-	output := shared.BindOutputFlags(fs)
-
-	return &ffcli.Command{
+// newAppsCIProductGetCommand returns the ci-product get subcommand.
+func newAppsCIProductGetCommand(d *shared.Deps) *ffcli.Command {
+	return shared.BuildIDGetCommand(shared.IDGetCommandConfig{
+		Deps:       d,
 		Name:       "view",
 		ShortUsage: "asc apps ci-product view --id \"APP_ID\"",
 		ShortHelp:  "View the CI product for an app.",
@@ -49,29 +43,11 @@ func AppsCIProductGetCommand() *ffcli.Command {
 
 Examples:
   asc apps ci-product view --id "APP_ID"`,
-		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
-		Exec: func(ctx context.Context, args []string) error {
-			idValue := strings.TrimSpace(*id)
-			if idValue == "" {
-				fmt.Fprintln(os.Stderr, "Error: --id is required")
-				return shared.MissingRequiredUsageError("--id")
-			}
-
-			client, err := shared.GetASCClient()
-			if err != nil {
-				return fmt.Errorf("apps ci-product view: %w", err)
-			}
-
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
-			defer cancel()
-
-			resp, err := client.GetAppCiProduct(requestCtx, idValue)
-			if err != nil {
-				return fmt.Errorf("apps ci-product view: failed to fetch: %w", err)
-			}
-
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+		IDUsage:            "App Store Connect app ID",
+		IDType:             "apps",
+		RequiredDiagnostic: true,
+		Fetch: func(ctx context.Context, client *asc.Client, id string) (any, error) {
+			return client.GetAppCiProduct(ctx, id)
 		},
-	}
+	})
 }

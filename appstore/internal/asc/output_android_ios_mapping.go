@@ -1,15 +1,8 @@
 package asc
 
 import (
-	"fmt"
 	"strings"
 )
-
-// AndroidToIosAppMappingDeleteResult represents CLI output for deletions.
-type AndroidToIosAppMappingDeleteResult struct {
-	ID      string `json:"id"`
-	Deleted bool   `json:"deleted"`
-}
 
 func androidToIosAppMappingDetailsRows(resp *AndroidToIosAppMappingDetailsResponse) ([]string, [][]string) {
 	headers := []string{"ID", "Package Name", "Fingerprints"}
@@ -18,15 +11,9 @@ func androidToIosAppMappingDetailsRows(resp *AndroidToIosAppMappingDetailsRespon
 		rows = append(rows, []string{
 			item.ID,
 			item.Attributes.PackageName,
-			formatAndroidToIosFingerprints(item.Attributes.AppSigningKeyPublicCertificateSha256Fingerprints),
+			formatAndroidToIosFingerprints(item.Attributes.AppSigningKeyPublicCertificateSHA256Fingerprints),
 		})
 	}
-	return headers, rows
-}
-
-func androidToIosAppMappingDeleteResultRows(result *AndroidToIosAppMappingDeleteResult) ([]string, [][]string) {
-	headers := []string{"ID", "Deleted"}
-	rows := [][]string{{result.ID, fmt.Sprintf("%t", result.Deleted)}}
 	return headers, rows
 }
 

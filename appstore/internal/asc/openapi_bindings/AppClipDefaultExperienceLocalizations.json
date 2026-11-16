@@ -1,0 +1,24 @@
+{
+  "tag": "AppClipDefaultExperienceLocalizations",
+  "file": "app_clip_default_experience_localizations_gen.go",
+  "types": [
+    "AppClipDefaultExperienceLocalizationAttributes",
+    "AppClipDefaultExperienceLocalizationCreateAttributes",
+    "AppClipDefaultExperienceLocalizationCreateData",
+    "AppClipDefaultExperienceLocalizationCreateRequest",
+    "AppClipDefaultExperienceLocalizationUpdateAttributes",
+    "AppClipDefaultExperienceLocalizationUpdateData",
+    "AppClipDefaultExperienceLocalizationUpdateRequest"
+  ],
+  "relationships": [
+    {"data":"AppClipDefaultExperienceLocalizationCreateData","type":"*AppClipDefaultExperienceLocalizationRelationships"}
+  ],
+  "operations": [
+    {"operation":"appClipDefaultExperienceLocalizations_appClipHeaderImage_getToOneRelated","name":"GetAppClipDefaultExperienceLocalizationHeaderImage","params":["localizationID"],"check":"require"},
+    {"operation":"appClipDefaultExperienceLocalizations_appClipHeaderImage_getToOneRelationship","name":"GetAppClipDefaultExperienceLocalizationHeaderImageRelationship","params":["localizationID"],"check":"trim"},
+    {"operation":"appClipDefaultExperienceLocalizations_createInstance","name":"CreateAppClipDefaultExperienceLocalization","params":["experienceID"],"check":"require","links":["appClipDefaultExperience"]},
+    {"operation":"appClipDefaultExperienceLocalizations_deleteInstance","name":"DeleteAppClipDefaultExperienceLocalization","params":["localizationID"],"check":"require"},
+    {"operation":"appClipDefaultExperienceLocalizations_getInstance","name":"GetAppClipDefaultExperienceLocalization","params":["localizationID"],"check":"require"},
+    {"operation":"appClipDefaultExperienceLocalizations_updateInstance","name":"UpdateAppClipDefaultExperienceLocalization","params":["localizationID"],"check":"require","attrs":"pointer"}
+  ]
+}

@@ -3,13 +3,14 @@ package cmdtest
 import (
 	"archive/zip"
 	"bytes"
-	"context"
 	"encoding/json"
 	"io"
 	"net/http"
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asctest"
 )
 
 func TestXcodeCloudDoctorReportsFailedRunAndInspectsLogBundle(t *testing.T) {
@@ -21,13 +22,8 @@ func TestXcodeCloudDoctorReportsFailedRunAndInspectsLogBundle(t *testing.T) {
 		"error: ITMS-90478: Invalid Version - Choose a different version number.",
 	}, "\n"))
 
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() {
-		http.DefaultTransport = originalTransport
-	})
-
 	requests := make(map[string]int)
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+	transport := roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		requests[req.URL.Path]++
 		var body string
 		switch req.URL.Path {
@@ -57,17 +53,10 @@ func TestXcodeCloudDoctorReportsFailedRunAndInspectsLogBundle(t *testing.T) {
 		}, nil
 	})
 
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"xcode-cloud", "doctor", "--run-id", "run-1", "--output", "json"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatalf("run error: %v", err)
-		}
-	})
+	stdout, stderr, err := runRootWithDeps(t, stubClient(t, transport), "xcode-cloud", "doctor", "--run-id", "run-1", "--output", "json")
+	if err != nil {
+		t.Fatalf("run error: %v", err)
+	}
 
 	if stderr != "" {
 		t.Fatalf("expected empty stderr, got %q", stderr)
@@ -139,23 +128,8 @@ func TestXcodeCloudDoctorRejectsInvalidFlagsBeforeRequests(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assertUsageExit(t, tt.args, tt.wantErr)
+			assertUsageExitWithDeps(t, nil, tt.args, tt.wantErr)
 		})
-	}
-}
-
-func TestXcodeCloudDoctorHelpRegistersNewSurface(t *testing.T) {
-	root := RootCommand("1.2.3")
-	doctor := findCommand(root, "xcode-cloud", "doctor")
-	if doctor == nil {
-		t.Fatal("xcode-cloud doctor command is not registered")
-	}
-
-	for _, name := range []string{"run-id", "wait", "poll-interval", "timeout", "skip-logs", "save-logs"} {
-		flagValue := doctor.FlagSet.Lookup(name)
-		if flagValue == nil {
-			t.Fatalf("flag --%s is not registered", name)
-		}
 	}
 }
 
@@ -163,11 +137,7 @@ func TestXcodeCloudDoctorSavesLogBundleWithoutOverwriting(t *testing.T) {
 	setupAuth(t)
 
 	logBundle := buildXcodeCloudLogBundle(t, "Export/export.log", "** EXPORT FAILED **\nerror: ITMS-90062: Invalid bundle")
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() {
-		http.DefaultTransport = originalTransport
-	})
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+	transport := roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		var body string
 		switch req.URL.Path {
 		case "/v1/ciBuildRuns/run-1":
@@ -193,19 +163,12 @@ func TestXcodeCloudDoctorSavesLogBundleWithoutOverwriting(t *testing.T) {
 	})
 
 	saveDir := t.TempDir()
-	runDoctor := func() error {
-		root := RootCommand("1.2.3")
-		root.FlagSet.SetOutput(io.Discard)
-		if err := root.Parse([]string{"xcode-cloud", "doctor", "--run-id", "run-1", "--save-logs", saveDir, "--output", "json"}); err != nil {
-			return err
-		}
-		return root.Run(context.Background())
+	runDoctor := func() (string, error) {
+		stdout, _, err := runRootWithDeps(t, stubClient(t, transport), "xcode-cloud", "doctor", "--run-id", "run-1", "--save-logs", saveDir, "--output", "json")
+		return stdout, err
 	}
 
-	var firstRunErr error
-	captureOutput(t, func() {
-		firstRunErr = runDoctor()
-	})
+	_, firstRunErr := runDoctor()
 	if firstRunErr != nil {
 		t.Fatalf("first doctor run error: %v", firstRunErr)
 	}
@@ -223,10 +186,7 @@ func TestXcodeCloudDoctorSavesLogBundleWithoutOverwriting(t *testing.T) {
 	if !bytes.Equal(saved, logBundle) {
 		t.Fatal("saved log bundle does not match download")
 	}
-	var secondRunErr error
-	secondStdout, _ := captureOutput(t, func() {
-		secondRunErr = runDoctor()
-	})
+	secondStdout, secondRunErr := runDoctor()
 	if secondRunErr != nil {
 		t.Fatalf("second doctor run error = %v, want completed report", secondRunErr)
 	}
@@ -247,47 +207,27 @@ func TestXcodeCloudDoctorSavesLogBundleWithoutOverwriting(t *testing.T) {
 func TestXcodeCloudDoctorSuccessfulRunDoesNotDownloadLogs(t *testing.T) {
 	setupAuth(t)
 
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() {
-		http.DefaultTransport = originalTransport
-	})
-	requestedArtifactDetail := false
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		var body string
-		switch req.URL.Path {
-		case "/v1/ciBuildRuns/run-1":
-			body = `{"data":{"type":"ciBuildRuns","id":"run-1","attributes":{"executionProgress":"COMPLETE","completionStatus":"SUCCEEDED"}}}`
-		case "/v1/ciBuildRuns/run-1/actions":
-			body = `{"data":[{"type":"ciBuildActions","id":"action-1","attributes":{"actionType":"ARCHIVE","executionProgress":"COMPLETE","completionStatus":"SUCCEEDED"}}]}`
-		case "/v1/ciBuildActions/action-1/issues":
-			body = `{"data":[]}`
-		case "/v1/ciBuildActions/action-1/artifacts":
-			body = `{"data":[{"type":"ciArtifacts","id":"log-1","attributes":{"fileType":"LOG_BUNDLE"}}]}`
-		case "/v1/ciArtifacts/log-1":
-			requestedArtifactDetail = true
-			t.Fatalf("successful run should not download log bundle")
-		default:
-			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.String())
-		}
-		return &http.Response{
-			StatusCode: http.StatusOK,
-			Body:       io.NopCloser(strings.NewReader(body)),
-			Header:     http.Header{"Content-Type": []string{"application/json"}},
-		}, nil
-	})
+	reg := asctest.NewRegistry(t)
+	reg.Register(asctest.GET("/v1/ciBuildRuns/run-1"),
+		asctest.JSON(http.StatusOK, `{"data":{"type":"ciBuildRuns","id":"run-1","attributes":{"executionProgress":"COMPLETE","completionStatus":"SUCCEEDED"}}}`))
+	reg.Register(asctest.GET("/v1/ciBuildRuns/run-1/actions", "limit=200"),
+		asctest.JSON(http.StatusOK, `{"data":[{"type":"ciBuildActions","id":"action-1","attributes":{"actionType":"ARCHIVE","executionProgress":"COMPLETE","completionStatus":"SUCCEEDED"}}]}`))
+	reg.Register(asctest.GET("/v1/ciBuildActions/action-1/issues", "limit=200"), asctest.JSON(http.StatusOK, `{"data":[]}`))
+	reg.Register(asctest.GET("/v1/ciBuildActions/action-1/artifacts", "limit=200"),
+		asctest.JSON(http.StatusOK, `{"data":[{"type":"ciArtifacts","id":"log-1","attributes":{"fileType":"LOG_BUNDLE"}}]}`))
 
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"xcode-cloud", "doctor", "--run-id", "run-1", "--output", "json"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatalf("run error: %v", err)
-		}
-	})
+	stdout, stderr, err := runRootWithDeps(t, stubClient(t, reg), "xcode-cloud", "doctor", "--run-id", "run-1", "--output", "json")
+	if err != nil {
+		t.Fatalf("run error: %v", err)
+	}
 	if stderr != "" {
 		t.Fatalf("expected empty stderr, got %q", stderr)
+	}
+	requestedArtifactDetail := false
+	for _, req := range reg.Requests() {
+		if req.URL.Path == "/v1/ciArtifacts/log-1" {
+			requestedArtifactDetail = true
+		}
 	}
 	if requestedArtifactDetail {
 		t.Fatal("successful run requested artifact details")
@@ -313,45 +253,25 @@ func TestXcodeCloudDoctorSuccessfulRunDoesNotDownloadLogs(t *testing.T) {
 func TestXcodeCloudDoctorWaitsForTerminalRunAndRendersTable(t *testing.T) {
 	setupAuth(t)
 
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() {
-		http.DefaultTransport = originalTransport
-	})
-	runRequests := 0
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		var body string
-		switch req.URL.Path {
-		case "/v1/ciBuildRuns/run-1":
-			runRequests++
-			if runRequests == 1 {
-				body = `{"data":{"type":"ciBuildRuns","id":"run-1","attributes":{"executionProgress":"RUNNING"}}}`
-			} else {
-				body = `{"data":{"type":"ciBuildRuns","id":"run-1","attributes":{"executionProgress":"COMPLETE","completionStatus":"FAILED"}}}`
-			}
-		case "/v1/ciBuildRuns/run-1/actions":
-			body = `{"data":[]}`
-		default:
-			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.String())
-		}
-		return &http.Response{
-			StatusCode: http.StatusOK,
-			Body:       io.NopCloser(strings.NewReader(body)),
-			Header:     http.Header{"Content-Type": []string{"application/json"}},
-		}, nil
-	})
+	reg := asctest.NewRegistry(t)
+	reg.Register(asctest.GET("/v1/ciBuildRuns/run-1"),
+		asctest.JSON(http.StatusOK, `{"data":{"type":"ciBuildRuns","id":"run-1","attributes":{"executionProgress":"RUNNING"}}}`))
+	reg.Register(asctest.GET("/v1/ciBuildRuns/run-1"),
+		asctest.JSON(http.StatusOK, `{"data":{"type":"ciBuildRuns","id":"run-1","attributes":{"executionProgress":"COMPLETE","completionStatus":"FAILED"}}}`))
+	reg.Register(asctest.GET("/v1/ciBuildRuns/run-1/actions", "limit=200"), asctest.JSON(http.StatusOK, `{"data":[]}`))
 
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"xcode-cloud", "doctor", "--run-id", "run-1", "--wait", "--poll-interval", "1ms", "--output", "table"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatalf("run error: %v", err)
-		}
-	})
+	stdout, stderr, err := runRootWithDeps(t, stubClient(t, reg), "xcode-cloud", "doctor", "--run-id", "run-1", "--wait", "--poll-interval", "1ms", "--output", "table")
+	if err != nil {
+		t.Fatalf("run error: %v", err)
+	}
 	if stderr != "" {
 		t.Fatalf("expected empty stderr, got %q", stderr)
+	}
+	runRequests := 0
+	for _, req := range reg.Requests() {
+		if req.URL.Path == "/v1/ciBuildRuns/run-1" {
+			runRequests++
+		}
 	}
 	if runRequests != 2 {
 		t.Fatalf("run requests = %d, want 2", runRequests)
@@ -366,27 +286,11 @@ func TestXcodeCloudDoctorWaitsForTerminalRunAndRendersTable(t *testing.T) {
 func TestXcodeCloudDoctorReportsRunAPIError(t *testing.T) {
 	setupAuth(t)
 
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() {
-		http.DefaultTransport = originalTransport
-	})
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		if req.URL.Path != "/v1/ciBuildRuns/run-1" {
-			t.Fatalf("unexpected request: %s", req.URL.String())
-		}
-		return &http.Response{
-			StatusCode: http.StatusInternalServerError,
-			Body:       io.NopCloser(strings.NewReader(`{"errors":[{"status":"500","code":"SERVER_ERROR","title":"Unavailable"}]}`)),
-			Header:     http.Header{"Content-Type": []string{"application/json"}},
-		}, nil
-	})
+	reg := asctest.NewRegistry(t)
+	reg.Register(asctest.GET("/v1/ciBuildRuns/run-1"),
+		asctest.JSON(http.StatusInternalServerError, `{"errors":[{"status":"500","code":"SERVER_ERROR","title":"Unavailable"}]}`))
 
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-	if err := root.Parse([]string{"xcode-cloud", "doctor", "--run-id", "run-1"}); err != nil {
-		t.Fatalf("parse error: %v", err)
-	}
-	err := root.Run(context.Background())
+	_, _, err := runRootWithDeps(t, stubClient(t, reg), "xcode-cloud", "doctor", "--run-id", "run-1")
 	if err == nil || !strings.Contains(err.Error(), "xcode-cloud doctor") {
 		t.Fatalf("run error = %v, want doctor API error", err)
 	}

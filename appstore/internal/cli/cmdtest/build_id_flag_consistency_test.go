@@ -1,30 +1,11 @@
 package cmdtest
 
 import (
-	"context"
 	"errors"
 	"flag"
-	"io"
 	"strings"
 	"testing"
 )
-
-func runBuildIDFlagCommand(t *testing.T, args []string) (string, string, error) {
-	t.Helper()
-
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	var runErr error
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse(args); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		runErr = root.Run(context.Background())
-	})
-
-	return stdout, stderr, runErr
-}
 
 func TestBuildIDRequiredErrorsNameCanonicalFlag(t *testing.T) {
 	t.Setenv("ASC_APP_ID", "")
@@ -42,7 +23,7 @@ func TestBuildIDRequiredErrorsNameCanonicalFlag(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			stdout, stderr, runErr := runBuildIDFlagCommand(t, test.args)
+			stdout, stderr, runErr := runRootWithDeps(t, nil, test.args...)
 			if !errors.Is(runErr, flag.ErrHelp) {
 				t.Fatalf("expected ErrHelp, got %v", runErr)
 			}

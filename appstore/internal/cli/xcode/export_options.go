@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"os"
 	"sort"
 	"strings"
 
@@ -16,13 +15,12 @@ import (
 )
 
 const (
-	defaultXcodeExportOptionsPath          = ".asc/export-options-app-store.plist"
-	defaultReleaseTestingExportOptionsPath = ".asc/export-options-release-testing.plist"
+	defaultXcodeExportOptionsPath = ".asc/export-options-app-store.plist"
 )
 
-// XcodeExportOptionsGroupCommand returns the export-options command group.
-func XcodeExportOptionsGroupCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("xcode export-options", flag.ExitOnError)
+// newXcodeExportOptionsGroupCommand returns the export-options command group.
+func newXcodeExportOptionsGroupCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("xcode export-options", flag.ExitOnError)
 
 	return &ffcli.Command{
 		Name:       "export-options",
@@ -30,8 +28,8 @@ func XcodeExportOptionsGroupCommand() *ffcli.Command {
 		ShortHelp:  "Generate Xcode ExportOptions.plist files.",
 		LongHelp: `Generate Xcode ExportOptions.plist files.
 
-Use generate to create App Store Connect or release-testing export options from
-an existing .xcarchive. Automatic signing lets Xcode resolve signing for the
+Use generate to create app-store-connect, release-testing, debugging, or
+enterprise export options from an existing .xcarchive. Automatic signing lets Xcode resolve signing for the
 app and any embedded targets; provide --signing-style manual to resolve local
 profiles.
 
@@ -44,9 +42,9 @@ Examples:
   asc xcode export-options generate --archive-path .asc/artifacts/App.xcarchive --method release-testing
   asc xcode export-options generate --archive-path .asc/artifacts/App.xcarchive --destination upload --output-path .asc/UploadExportOptions.plist`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
-			XcodeExportOptionsCommand(),
+			newXcodeExportOptionsCommand(d),
 		},
 		Exec: func(context.Context, []string) error {
 			return flag.ErrHelp
@@ -54,21 +52,21 @@ Examples:
 	}
 }
 
-// XcodeExportOptionsCommand returns the export-options generate command.
+// newXcodeExportOptionsCommand returns the export-options generate command.
 //
 // It intentionally returns the leaf command so callers can exercise generate
 // directly without building the parent command tree.
-func XcodeExportOptionsCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("xcode export-options generate", flag.ExitOnError)
+func newXcodeExportOptionsCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("xcode export-options generate", flag.ExitOnError)
 
 	archivePath := fs.String("archive-path", "", "Path to the .xcarchive input (required)")
 	outputPath := fs.String("output-path", "", "Destination path for the generated ExportOptions.plist (defaults to a method-specific .asc path)")
-	method := fs.String("method", "app-store-connect", "Xcode export method: app-store-connect or release-testing")
+	method := fs.String("method", "app-store-connect", "Xcode export method: app-store-connect, release-testing, debugging, or enterprise")
 	destination := fs.String("destination", "export", "Xcode export destination: export or upload")
 	signingStyle := fs.String("signing-style", "automatic", "Signing style: automatic or manual")
 	teamID := fs.String("team-id", "", "Apple Developer team ID (overrides archive metadata)")
 	overwrite := fs.Bool("overwrite", false, "Replace an existing file at --output-path")
-	output := shared.BindOutputFlags(fs)
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "generate",
@@ -77,9 +75,11 @@ func XcodeExportOptionsCommand() *ffcli.Command {
 		LongHelp: `Generate an ExportOptions.plist from an Xcode archive.
 
 The generated plist uses app-store-connect by default. Use
---method release-testing to create a local IPA for registered devices. Xcode's
-older ad-hoc method name is deprecated and is not accepted. Release-testing
-requires destination=export.
+--method release-testing to create a local IPA for registered devices,
+debugging for a development-signed IPA, or enterprise for in-house
+distribution. Xcode's deprecated ad-hoc and development names are not
+accepted. Methods other than app-store-connect require destination=export, and
+debugging and enterprise support automatic signing only.
 
 Examples:
   asc xcode export-options generate --archive-path .asc/artifacts/App.xcarchive
@@ -87,33 +87,30 @@ Examples:
   asc xcode export-options generate --archive-path .asc/artifacts/App.xcarchive --destination upload --output-path .asc/UploadExportOptions.plist
   asc xcode export-options generate --archive-path .asc/artifacts/App.xcarchive --signing-style manual --team-id TEAM_ID --overwrite --output json`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
-			if len(args) > 0 {
-				fmt.Fprintln(os.Stderr, "Error: xcode export-options generate does not accept positional arguments")
-				return flag.ErrHelp
-			}
-
 			trimmedDestination := strings.TrimSpace(*destination)
 			if trimmedDestination != "export" && trimmedDestination != "upload" {
-				return shared.UsageError("--destination must be one of: export, upload")
+				return d.UsageError("--destination must be one of: export, upload")
 			}
 			trimmedSigningStyle, err := localxcode.NormalizeExportOptionsSigningStyle(*signingStyle)
 			if err != nil {
-				return shared.UsageError(err.Error())
+				return d.UsageError(err.Error())
 			}
 			trimmedMethod, err := localxcode.NormalizeExportOptionsMethod(*method)
 			if err != nil {
-				return shared.UsageError(err.Error())
+				return d.UsageError(err.Error())
 			}
-			if trimmedMethod == "release-testing" && trimmedDestination != "export" {
-				return shared.UsageError("release-testing requires destination=export")
+			if trimmedMethod != "app-store-connect" && trimmedDestination != "export" {
+				return d.UsageErrorf("%s requires destination=export", trimmedMethod)
+			}
+			if err := localxcode.ValidateExportOptionsMethodSigningStyle(trimmedMethod, trimmedSigningStyle); err != nil {
+				return d.UsageError(err.Error())
 			}
 
-			trimmedArchivePath := strings.TrimSpace(*archivePath)
+			trimmedArchivePath := osPath(d, strings.TrimSpace(*archivePath))
 			if trimmedArchivePath == "" {
-				fmt.Fprintln(os.Stderr, "Error: --archive-path is required")
-				return shared.MissingRequiredUsageError("--archive-path")
+				return d.RequiredFlag("--archive-path")
 			}
 			outputPathSet := false
 			fs.Visit(func(f *flag.Flag) {
@@ -124,18 +121,20 @@ Examples:
 			trimmedOutputPath := strings.TrimSpace(*outputPath)
 			if !outputPathSet {
 				trimmedOutputPath = defaultXcodeExportOptionsPath
-				if trimmedMethod == "release-testing" {
-					trimmedOutputPath = defaultReleaseTestingExportOptionsPath
+				if trimmedMethod != "app-store-connect" {
+					trimmedOutputPath = ".asc/export-options-" + trimmedMethod + ".plist"
 				}
 			}
 			if trimmedOutputPath == "" {
-				fmt.Fprintln(os.Stderr, "Error: --output-path is required")
-				return shared.MissingRequiredUsageError("--output-path")
+				return d.RequiredFlag("--output-path")
+			}
+			if err := localxcode.ValidateExportOptionsArchivePath(trimmedArchivePath); err != nil {
+				return d.UsageErrorf("xcode export-options generate: %v", err)
 			}
 
 			result, err := runGenerateExportOptions(ctx, localxcode.ExportOptionsGenerateOptions{
 				ArchivePath:  trimmedArchivePath,
-				OutputPath:   trimmedOutputPath,
+				OutputPath:   osPath(d, trimmedOutputPath),
 				Method:       trimmedMethod,
 				Destination:  trimmedDestination,
 				SigningStyle: trimmedSigningStyle,
@@ -146,16 +145,16 @@ Examples:
 				return fmt.Errorf("xcode export-options generate: %w", err)
 			}
 
-			return shared.PrintOutputWithRenderers(
+			return d.PrintOutputWithRenderers(
 				result,
 				*output.Output,
 				*output.Pretty,
 				func() error {
-					asc.RenderTable([]string{"field", "value"}, exportOptionsResultRows(result))
+					asc.RenderTableTo(d.IO.Out, []string{"field", "value"}, exportOptionsResultRows(result))
 					return nil
 				},
 				func() error {
-					asc.RenderMarkdown([]string{"field", "value"}, exportOptionsResultRows(result))
+					asc.RenderMarkdownTo(d.IO.Out, []string{"field", "value"}, exportOptionsResultRows(result))
 					return nil
 				},
 			)

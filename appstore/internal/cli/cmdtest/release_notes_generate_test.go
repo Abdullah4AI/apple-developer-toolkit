@@ -20,19 +20,11 @@ func TestReleaseNotesGenerate_JSON(t *testing.T) {
 
 	repo := initTempGitRepo(t)
 
-	oldwd, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("Getwd error: %v", err)
-	}
-	t.Cleanup(func() { _ = os.Chdir(oldwd) })
-	if err := os.Chdir(repo); err != nil {
-		t.Fatalf("Chdir repo error: %v", err)
-	}
+	d, stdoutBuffer, stderrBuffer := newTestDeps(t, nil)
+	d.Getwd = func() (string, error) { return repo, nil }
 
-	var code int
-	stdout, stderr := captureOutput(t, func() {
-		code = cmd.Run([]string{"release-notes", "generate", "--since-tag", "v1.0.0", "--output", "json"}, "1.0.0")
-	})
+	code := cmd.RunWithDeps([]string{"release-notes", "generate", "--since-tag", "v1.0.0", "--output", "json"}, "1.0.0", d)
+	stdout, stderr := stdoutBuffer.String(), stderrBuffer.String()
 	if code != cmd.ExitSuccess {
 		t.Fatalf("exit code = %d, want %d; stderr=%q", code, cmd.ExitSuccess, stderr)
 	}
@@ -82,14 +74,153 @@ func TestReleaseNotesGenerate_MissingSinceIsUsage(t *testing.T) {
 	resetDefaultOutput(t)
 	t.Setenv("ASC_DEFAULT_OUTPUT", "json")
 
-	_, stderr := captureOutput(t, func() {
-		code := cmd.Run([]string{"release-notes", "generate"}, "1.0.0")
-		if code != cmd.ExitUsage {
-			t.Fatalf("exit code = %d, want %d", code, cmd.ExitUsage)
-		}
-	})
-	if !strings.Contains(stderr, "one of --since-tag or --since-ref is required") {
+	d, _, stderrBuffer := newTestDeps(t, nil)
+	if code := cmd.RunWithDeps([]string{"release-notes", "generate"}, "1.0.0", d); code != cmd.ExitUsage {
+		t.Fatalf("exit code = %d, want %d", code, cmd.ExitUsage)
+	}
+	stderr := stderrBuffer.String()
+	if !strings.Contains(stderr, "one of --since-tag, --since-ref, --since-tag-pattern, or --max-commits is required") {
 		t.Fatalf("expected stderr to contain missing since error, got %q", stderr)
+	}
+	if !strings.HasPrefix(stderr, "Error: one of --since-tag, --since-ref, --since-tag-pattern, or --max-commits is required\n") {
+		t.Fatalf("expected stderr to start with the missing since error, got %q", stderr)
+	}
+}
+
+func TestReleaseNotesGenerate_RangeStartSelectors(t *testing.T) {
+	unsetGitHookEnv(t)
+
+	resetDefaultOutput(t)
+	t.Setenv("ASC_DEFAULT_OUTPUT", "json")
+
+	repo := initTempGitRepo(t)
+	runGit(t, repo, "tag", "build-7", "HEAD~1")
+
+	oldwd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Getwd error: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(oldwd) })
+	if err := os.Chdir(repo); err != nil {
+		t.Fatalf("Chdir repo error: %v", err)
+	}
+
+	const conflict = "--since-tag, --since-ref, --since-tag-pattern, and --max-commits are mutually exclusive"
+
+	tests := []struct {
+		name         string
+		args         []string
+		wantCode     int
+		wantSince    string
+		wantSubjects []string
+		wantStderr   string
+	}{
+		{
+			name:         "pattern picks newest matching tag and skips newer non-matching tag",
+			args:         []string{"--since-tag-pattern", "v*"},
+			wantCode:     cmd.ExitSuccess,
+			wantSince:    "v1.0.0",
+			wantSubjects: []string{"feat: add thing", "fix: bug"},
+		},
+		{
+			name:       "pattern with no matching tag is an error",
+			args:       []string{"--since-tag-pattern", "ios/*"},
+			wantCode:   cmd.ExitError,
+			wantStderr: `no tag matching "ios/*" is reachable from HEAD`,
+		},
+		{
+			name:       "pattern with option-like until ref is an error",
+			args:       []string{"--since-tag-pattern", "nomatch*", "--until-ref=--always"},
+			wantCode:   cmd.ExitError,
+			wantStderr: `no tag matching "nomatch*"`,
+		},
+		{
+			name:       "max commits with option-like until ref is an error",
+			args:       []string{"--max-commits", "5", "--until-ref=--all"},
+			wantCode:   cmd.ExitError,
+			wantStderr: "release-notes generate:",
+		},
+		{
+			name:       "since ref with option-like value is an error",
+			args:       []string{"--since-ref=--grep=feat"},
+			wantCode:   cmd.ExitError,
+			wantStderr: "release-notes generate:",
+		},
+		{
+			name:         "max commits returns the last n commits",
+			args:         []string{"--max-commits", "2"},
+			wantCode:     cmd.ExitSuccess,
+			wantSubjects: []string{"feat: add thing", "fix: bug"},
+		},
+		{
+			name:         "max commits larger than history returns all commits",
+			args:         []string{"--max-commits", "50"},
+			wantCode:     cmd.ExitSuccess,
+			wantSubjects: []string{"chore: initial", "feat: add thing", "fix: bug"},
+		},
+		{
+			name:       "max commits zero is usage",
+			args:       []string{"--max-commits", "0"},
+			wantCode:   cmd.ExitUsage,
+			wantStderr: "--max-commits must be greater than 0",
+		},
+		{
+			name:       "pattern with since-tag is usage",
+			args:       []string{"--since-tag-pattern", "v*", "--since-tag", "v1.0.0"},
+			wantCode:   cmd.ExitUsage,
+			wantStderr: conflict,
+		},
+		{
+			name:       "max commits with since-ref is usage",
+			args:       []string{"--max-commits", "2", "--since-ref", "HEAD~1"},
+			wantCode:   cmd.ExitUsage,
+			wantStderr: conflict,
+		},
+		{
+			name:       "pattern with max commits is usage",
+			args:       []string{"--since-tag-pattern", "v*", "--max-commits", "2"},
+			wantCode:   cmd.ExitUsage,
+			wantStderr: conflict,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var code int
+			stdout, stderr := captureOutput(t, func() {
+				args := append([]string{"release-notes", "generate", "--output", "json"}, tt.args...)
+				code = cmd.Run(args, "1.0.0")
+			})
+			if code != tt.wantCode {
+				t.Fatalf("exit code = %d, want %d; stderr=%q", code, tt.wantCode, stderr)
+			}
+			if tt.wantStderr != "" {
+				if !strings.Contains(stderr, tt.wantStderr) {
+					t.Fatalf("stderr = %q, want it to contain %q", stderr, tt.wantStderr)
+				}
+				return
+			}
+
+			var got struct {
+				Since   string `json:"since"`
+				Commits []struct {
+					Subject string `json:"subject"`
+				} `json:"commits"`
+			}
+			if err := json.Unmarshal([]byte(stdout), &got); err != nil {
+				t.Fatalf("failed to unmarshal stdout JSON: %v\nstdout=%q", err, stdout)
+			}
+			if got.Since != tt.wantSince {
+				t.Fatalf("since = %q, want %q", got.Since, tt.wantSince)
+			}
+			subjects := make([]string, 0, len(got.Commits))
+			for _, c := range got.Commits {
+				subjects = append(subjects, c.Subject)
+			}
+			if strings.Join(subjects, "|") != strings.Join(tt.wantSubjects, "|") {
+				t.Fatalf("subjects = %q, want %q", subjects, tt.wantSubjects)
+			}
+		})
 	}
 }
 
@@ -101,21 +232,12 @@ func TestReleaseNotesGenerate_NotGitRepoReturnsError(t *testing.T) {
 
 	dir := t.TempDir()
 
-	oldwd, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("Getwd error: %v", err)
+	d, _, stderrBuffer := newTestDeps(t, nil)
+	d.Getwd = func() (string, error) { return dir, nil }
+	if code := cmd.RunWithDeps([]string{"release-notes", "generate", "--since-ref", "HEAD~1"}, "1.0.0", d); code != cmd.ExitError {
+		t.Fatalf("exit code = %d, want %d", code, cmd.ExitError)
 	}
-	t.Cleanup(func() { _ = os.Chdir(oldwd) })
-	if err := os.Chdir(dir); err != nil {
-		t.Fatalf("Chdir error: %v", err)
-	}
-
-	_, stderr := captureOutput(t, func() {
-		code := cmd.Run([]string{"release-notes", "generate", "--since-ref", "HEAD~1"}, "1.0.0")
-		if code != cmd.ExitError {
-			t.Fatalf("exit code = %d, want %d", code, cmd.ExitError)
-		}
-	})
+	stderr := stderrBuffer.String()
 	if !strings.Contains(strings.ToLower(stderr), "not a git repository") {
 		t.Fatalf("expected stderr to mention non-git repo, got %q", stderr)
 	}
@@ -129,24 +251,16 @@ func TestReleaseNotesGenerate_TruncatesToMaxChars(t *testing.T) {
 
 	repo := initTempGitRepo(t)
 
-	oldwd, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("Getwd error: %v", err)
-	}
-	t.Cleanup(func() { _ = os.Chdir(oldwd) })
-	if err := os.Chdir(repo); err != nil {
-		t.Fatalf("Chdir repo error: %v", err)
-	}
+	d, stdoutBuffer, stderrBuffer := newTestDeps(t, nil)
+	d.Getwd = func() (string, error) { return repo, nil }
 
-	var code int
-	stdout, stderr := captureOutput(t, func() {
-		code = cmd.Run([]string{
-			"release-notes", "generate",
-			"--since-tag", "v1.0.0",
-			"--max-chars", "10",
-			"--output", "json",
-		}, "1.0.0")
-	})
+	code := cmd.RunWithDeps([]string{
+		"release-notes", "generate",
+		"--since-tag", "v1.0.0",
+		"--max-chars", "10",
+		"--output", "json",
+	}, "1.0.0", d)
+	stdout, stderr := stdoutBuffer.String(), stderrBuffer.String()
 	if code != cmd.ExitSuccess {
 		t.Fatalf("exit code = %d, want %d; stderr=%q", code, cmd.ExitSuccess, stderr)
 	}

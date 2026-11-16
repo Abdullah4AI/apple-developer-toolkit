@@ -5,7 +5,6 @@ import (
 	"flag"
 	"fmt"
 	"net/url"
-	"os"
 	"strings"
 
 	"github.com/peterbourgon/ff/v3/ffcli"
@@ -14,9 +13,9 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
-// AgreementsCommand returns the agreements command group.
-func AgreementsCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("agreements", flag.ExitOnError)
+// NewAgreementsCommand returns the agreements command group built on d.
+func NewAgreementsCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("agreements", flag.ExitOnError)
 
 	return &ffcli.Command{
 		Name:       "agreements",
@@ -27,9 +26,9 @@ func AgreementsCommand() *ffcli.Command {
 Examples:
   asc agreements territories list --id "EULA_ID"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
-			AgreementsTerritoriesCommand(),
+			newAgreementsTerritoriesCommand(d),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp
@@ -37,9 +36,10 @@ Examples:
 	}
 }
 
-// AgreementsTerritoriesCommand returns the agreements territories command group.
-func AgreementsTerritoriesCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("territories", flag.ExitOnError)
+// newAgreementsTerritoriesCommand returns the agreements territories command
+// group built on d.
+func newAgreementsTerritoriesCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("territories", flag.ExitOnError)
 
 	return &ffcli.Command{
 		Name:       "territories",
@@ -50,9 +50,9 @@ func AgreementsTerritoriesCommand() *ffcli.Command {
 Examples:
   asc agreements territories list --id "EULA_ID"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
-			AgreementsTerritoriesListCommand(),
+			newAgreementsTerritoriesListCommand(d),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp
@@ -60,17 +60,10 @@ Examples:
 	}
 }
 
-// AgreementsTerritoriesListCommand returns the agreements territories list subcommand.
-func AgreementsTerritoriesListCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("list", flag.ExitOnError)
-
-	id := shared.BindResourceIDFlag(fs, "id", "endUserLicenseAgreements", "EULA ID")
-	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
-	next := fs.String("next", "", "Fetch next page using a links.next URL")
-	paginate := fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")
-	output := shared.BindOutputFlags(fs)
-
-	return &ffcli.Command{
+// newAgreementsTerritoriesListCommand returns the agreements territories list
+// subcommand built on d.
+func newAgreementsTerritoriesListCommand(d *shared.Deps) *ffcli.Command {
+	return shared.BuildPaginatedListCommand(shared.PaginatedListCommandConfig{
 		Name:       "list",
 		ShortUsage: "asc agreements territories list --id \"EULA_ID\" [flags]",
 		ShortHelp:  "List territories for an EULA.",
@@ -79,70 +72,32 @@ func AgreementsTerritoriesListCommand() *ffcli.Command {
 Examples:
   asc agreements territories list --id "EULA_ID"
   asc agreements territories list --id "EULA_ID" --paginate`,
-		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
-		Exec: func(ctx context.Context, args []string) error {
-			idValue := strings.TrimSpace(*id)
-			if idValue == "" && strings.TrimSpace(*next) == "" {
-				fmt.Fprintln(os.Stderr, "Error: --id is required")
-				return shared.MissingRequiredUsageError("--id")
-			}
-			if *limit != 0 && (*limit < 1 || *limit > 200) {
-				return shared.UsageError("agreements territories list: --limit must be between 1 and 200")
-			}
-			if err := shared.ValidateNextURL(*next); err != nil {
-				return shared.UsageErrorf("agreements territories list: %v", err)
-			}
-			if idValue == "" && strings.TrimSpace(*next) != "" {
-				derivedID, err := extractEULATerritoryIDFromNextURL(*next)
-				if err != nil {
-					return shared.UsageErrorf("agreements territories list: %v", err)
+		ParentFlag:           "id",
+		ParentUsage:          "EULA ID",
+		ParentType:           "endUserLicenseAgreements",
+		RequiredDiagnostic:   true,
+		PaginateIgnoresLimit: true,
+		NoSpinner:            true,
+		Deps:                 d,
+		Flags: func(fs *flag.FlagSet) func() error {
+			id, next := fs.Lookup("id").Value, fs.Lookup("next").Value
+			return func() error {
+				if strings.TrimSpace(id.String()) != "" || strings.TrimSpace(next.String()) == "" {
+					return nil
 				}
-				idValue = derivedID
-			}
-
-			client, err := shared.GetASCClient()
-			if err != nil {
-				return fmt.Errorf("agreements territories list: %w", err)
-			}
-
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
-			defer cancel()
-
-			opts := []asc.EndUserLicenseAgreementTerritoriesOption{
-				asc.WithEndUserLicenseAgreementTerritoriesLimit(*limit),
-				asc.WithEndUserLicenseAgreementTerritoriesNextURL(*next),
-			}
-
-			if *paginate {
-				if idValue == "" {
-					fmt.Fprintln(os.Stderr, "Error: --id is required")
-					return shared.MissingRequiredUsageError("--id")
+				if _, err := extractEULATerritoryIDFromNextURL(next.String()); err != nil {
+					return d.UsageErrorf("agreements territories list: %v", err)
 				}
-				paginateOpts := append(opts, asc.WithEndUserLicenseAgreementTerritoriesLimit(200))
-				firstPage, err := client.GetEndUserLicenseAgreementTerritories(requestCtx, idValue, paginateOpts...)
-				if err != nil {
-					return fmt.Errorf("agreements territories list: failed to fetch: %w", err)
-				}
-
-				paginated, err := asc.PaginateAll(requestCtx, firstPage, func(ctx context.Context, nextURL string) (asc.PaginatedResponse, error) {
-					return client.GetEndUserLicenseAgreementTerritories(ctx, idValue, asc.WithEndUserLicenseAgreementTerritoriesNextURL(nextURL))
-				})
-				if err != nil {
-					return fmt.Errorf("agreements territories list: %w", err)
-				}
-
-				return shared.PrintOutput(paginated, *output.Output, *output.Pretty)
+				return nil
 			}
-
-			resp, err := client.GetEndUserLicenseAgreementTerritories(requestCtx, idValue, opts...)
-			if err != nil {
-				return fmt.Errorf("agreements territories list: failed to fetch: %w", err)
-			}
-
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
 		},
-	}
+		FetchPage: func(ctx context.Context, client *asc.Client, id string, limit int, next string) (asc.PaginatedResponse, error) {
+			return client.GetEndUserLicenseAgreementTerritories(ctx, id,
+				asc.Limit[asc.EndUserLicenseAgreementTerritoriesOption](limit),
+				asc.NextURL[asc.EndUserLicenseAgreementTerritoriesOption](next),
+			)
+		},
+	})
 }
 
 func extractEULATerritoryIDFromNextURL(nextURL string) (string, error) {

@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/cmd"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asctest"
 )
 
 func TestTestFlightGroupReadsSendRequest(t *testing.T) {
@@ -62,27 +63,25 @@ func TestTestFlightGroupReadsSendRequest(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			setupAuth(t)
 			t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 
 			body := test.body
 			if body == "" {
 				body = `{"data":[],"links":{}}`
 			}
-			var captured *http.Request
-			installDefaultTransport(t, roundTripFunc(func(req *http.Request) (*http.Response, error) {
-				captured = req
-				return okJSONResponse(body), nil
-			}))
+			reg := asctest.NewRegistry(t)
+			reg.Register(asctest.GET(test.wantPath, strings.Split(test.wantQuery.Encode(), "&")...),
+				asctest.JSON(http.StatusOK, body))
 
-			stdout, stderr := captureOutput(t, func() {
-				if code := cmd.Run(append(test.args, "--output", "json"), "1.2.3"); code != cmd.ExitSuccess {
-					t.Fatalf("expected exit code %d, got %d", cmd.ExitSuccess, code)
-				}
-			})
-			if captured == nil {
+			stdout, stderr, code := runWithDeps(t, stubClient(t, reg), append(test.args, "--output", "json")...)
+			if code != cmd.ExitSuccess {
+				t.Fatalf("expected exit code %d, got %d", cmd.ExitSuccess, code)
+			}
+			requests := reg.Requests()
+			if len(requests) == 0 {
 				t.Fatalf("expected an outbound request, stderr %q", stderr)
 			}
+			captured := requests[len(requests)-1]
 			if captured.Method != http.MethodGet || captured.URL.Path != test.wantPath {
 				t.Fatalf("request = %s %s, want GET %s", captured.Method, captured.URL.Path, test.wantPath)
 			}
@@ -128,18 +127,13 @@ func TestTestFlightGroupReadsRejectUsage(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			setupAuth(t)
 			t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
-			installDefaultTransport(t, roundTripFunc(func(req *http.Request) (*http.Response, error) {
-				t.Fatalf("unexpected request: %s %s", req.Method, req.URL.String())
-				return nil, nil
-			}))
+			reg := asctest.NewRegistry(t)
 
-			stdout, stderr := captureOutput(t, func() {
-				if code := cmd.Run(test.args, "1.2.3"); code != cmd.ExitUsage {
-					t.Fatalf("expected exit code %d, got %d", cmd.ExitUsage, code)
-				}
-			})
+			stdout, stderr, code := runWithDeps(t, stubClient(t, reg), test.args...)
+			if code != cmd.ExitUsage {
+				t.Fatalf("expected exit code %d, got %d", cmd.ExitUsage, code)
+			}
 			if stdout != "" {
 				t.Fatalf("expected empty stdout, got %q", stdout)
 			}

@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"os"
 	"sort"
 	"strings"
 
@@ -15,8 +14,8 @@ import (
 )
 
 // LocalizationsUpdateCommand returns the update localizations subcommand.
-func LocalizationsUpdateCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("update", flag.ExitOnError)
+func newLocalizationsUpdateCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("update", flag.ExitOnError)
 
 	localizationID := fs.String("id", "", "Localization resource ID (skips parent and locale lookup)")
 	versionID := shared.BindResourceIDFlag(fs, "version", "appStoreVersions", "App Store version ID, or a version string with --app (for version localizations)")
@@ -45,7 +44,7 @@ func LocalizationsUpdateCommand() *ffcli.Command {
 	marketingURL := fs.String("marketing-url", "", "Marketing URL (version)")
 	confirm := fs.Bool("confirm", false, "Confirm clearing nullable localization fields")
 
-	output := shared.BindOutputFlags(fs)
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "update",
@@ -94,53 +93,53 @@ valid update with --confirm. An empty or omitted set flag never clears a field.
 
 At least one field flag must be provided.`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			localizationIDValue := strings.TrimSpace(*localizationID)
 			if localizationIDValue != "" && (strings.TrimSpace(*versionID) != "" || strings.TrimSpace(*appID) != "" || strings.TrimSpace(*appInfoID) != "" || strings.TrimSpace(*locale) != "" || flagProvided(fs, "platform")) {
-				fmt.Fprintln(os.Stderr, "Error: --id cannot be combined with --version, --app, --app-info, --locale, or --platform")
+				fmt.Fprintln(d.IO.ErrOut, "Error: --id cannot be combined with --version, --app, --app-info, --locale, or --platform")
 				return flag.ErrHelp
 			}
 			normalizedType, err := shared.NormalizeLocalizationType(*locType)
 			if err != nil {
-				return fmt.Errorf("localizations update: %w", err)
+				return d.UsageErrorf("localizations update: %v", err)
 			}
 			if flagProvided(fs, "platform") && strings.TrimSpace(*platform) == "" {
-				return shared.UsageError("--platform must not be empty")
+				return d.UsageError("--platform must not be empty")
 			}
 
 			if normalizedType == shared.LocalizationTypeAppInfo && flagProvided(fs, "platform") {
-				return shared.UsageError("--platform requires --type version")
+				return d.UsageError("--platform requires --type version")
 			}
 			if normalizedType == shared.LocalizationTypeAppInfo && flagProvided(fs, "version") {
-				return shared.UsageError("--version requires --type version")
+				return d.UsageError("--version requires --type version")
 			}
 			if normalizedType == shared.LocalizationTypeVersion && flagProvided(fs, "app-info") {
-				return shared.UsageError("--app-info requires --type app-info")
+				return d.UsageError("--app-info requires --type app-info")
 			}
-			if err := validateClearFlags(fs, normalizedType); err != nil {
+			if err := validateClearFlags(d, fs, normalizedType); err != nil {
 				return err
 			}
 			if (*clearSubtitle || *clearPrivacyPolicyURL || *clearPromotionalText) && !*confirm {
-				return shared.UsageError("--confirm is required to clear localization fields")
+				return d.UsageError("--confirm is required to clear localization fields")
 			}
 
 			localeValue := ""
 			if localizationIDValue == "" {
 				localeValue = strings.TrimSpace(*locale)
 				if localeValue == "" {
-					fmt.Fprintln(os.Stderr, "Error: --locale is required when --id is not provided")
+					fmt.Fprintln(d.IO.ErrOut, "Error: --locale is required when --id is not provided")
 					return shared.MissingRequiredUsageError("--locale")
 				}
 				localeValue, err = shared.CanonicalizeAppStoreLocalizationLocale(localeValue)
 				if err != nil {
-					return shared.UsageError(err.Error())
+					return d.UsageError(err.Error())
 				}
 			}
 
 			switch normalizedType {
 			case shared.LocalizationTypeAppInfo:
-				return updateAppInfoLocalization(ctx, updateAppInfoParams{
+				params := updateAppInfoParams{
 					localizationID:        localizationIDValue,
 					appID:                 *appID,
 					appInfoID:             *appInfoID,
@@ -153,9 +152,13 @@ At least one field flag must be provided.`,
 					clearSubtitle:         *clearSubtitle,
 					clearPrivacyPolicyURL: *clearPrivacyPolicyURL,
 					output:                output,
-				})
+				}
+				if !hasAnyAppInfoField(params) {
+					return d.UpdateFlagRequired(fs, name, subtitle, clearSubtitle, privacyPolicyURL, clearPrivacyPolicyURL, privacyChoicesURL, privacyPolicyText)
+				}
+				return updateAppInfoLocalization(ctx, d, params)
 			case shared.LocalizationTypeVersion:
-				return updateVersionLocalization(ctx, updateVersionParams{
+				params := updateVersionParams{
 					localizationID:       localizationIDValue,
 					versionID:            *versionID,
 					appID:                *appID,
@@ -169,7 +172,11 @@ At least one field flag must be provided.`,
 					marketingURL:         *marketingURL,
 					clearPromotionalText: *clearPromotionalText,
 					output:               output,
-				})
+				}
+				if !hasAnyVersionField(params) {
+					return d.UpdateFlagRequired(fs, description, keywords, whatsNew, promotionalText, clearPromotionalText, supportURL, marketingURL)
+				}
+				return updateVersionLocalization(ctx, d, params)
 			default:
 				return fmt.Errorf("localizations update: unsupported type %q", normalizedType)
 			}
@@ -190,20 +197,20 @@ var clearFlagRules = []struct {
 	{clearFlag: "clear-promotional-text", setFlag: "promotional-text", supportedLocType: shared.LocalizationTypeVersion, supportedTypeLabel: "version"},
 }
 
-func validateClearFlags(fs *flag.FlagSet, normalizedType string) error {
+func validateClearFlags(d *shared.Deps, fs *flag.FlagSet, normalizedType string) error {
 	for _, rule := range clearFlagRules {
 		if !flagProvided(fs, rule.clearFlag) || fs.Lookup(rule.clearFlag).Value.String() != "true" {
 			continue
 		}
 		if normalizedType != rule.supportedLocType {
-			return shared.UsageErrorf(
+			return d.UsageErrorf(
 				"localizations update: --%s requires --type %s",
 				rule.clearFlag,
 				rule.supportedTypeLabel,
 			)
 		}
 		if flagProvided(fs, rule.setFlag) {
-			return shared.UsageErrorf(
+			return d.UsageErrorf(
 				"localizations update: --%s and --%s are mutually exclusive",
 				rule.setFlag,
 				rule.clearFlag,
@@ -234,38 +241,33 @@ type updateAppInfoParams struct {
 	output                                                                 shared.OutputFlags
 }
 
-func updateAppInfoLocalization(ctx context.Context, p updateAppInfoParams) error {
-	if !hasAnyAppInfoField(p) {
-		fmt.Fprintln(os.Stderr, "Error: at least one app-info field is required (--name, --subtitle, --privacy-policy-url, --privacy-choices-url, --privacy-policy-text, --clear-subtitle, --clear-privacy-policy-url)")
-		return shared.MissingRequiredUsageError("")
-	}
-
+func updateAppInfoLocalization(ctx context.Context, d *shared.Deps, p updateAppInfoParams) error {
 	localizationID := strings.TrimSpace(p.localizationID)
 	resolvedAppID := ""
 	if localizationID == "" {
-		resolvedAppID = shared.ResolveAppID(p.appID)
+		resolvedAppID = d.ResolveAppID(p.appID)
 		if resolvedAppID == "" {
-			fmt.Fprintln(os.Stderr, "Error: --app is required for app-info localizations (or set ASC_APP_ID)")
+			fmt.Fprintln(d.IO.ErrOut, "Error: --app is required for app-info localizations (or set ASC_APP_ID)")
 			return shared.MissingRequiredUsageError("--app")
 		}
 	}
 
-	client, err := shared.GetASCClient()
+	client, err := d.Client()
 	if err != nil {
 		return fmt.Errorf("localizations update: %w", err)
 	}
 
-	requestCtx, cancel := shared.ContextWithTimeout(ctx)
+	requestCtx, cancel := d.Timeout(ctx)
 	defer cancel()
 
 	if localizationID == "" {
-		appInfo, err := shared.ResolveOwnedAppInfoID(requestCtx, client, resolvedAppID, strings.TrimSpace(p.appInfoID))
+		appInfo, err := d.ResolveOwnedAppInfoID(requestCtx, client, resolvedAppID, strings.TrimSpace(p.appInfoID))
 		if err != nil {
 			return fmt.Errorf("localizations update: %w", err)
 		}
 
 		// Find existing localization ID for the locale
-		existing, err := client.GetAppInfoLocalizations(requestCtx, appInfo, asc.WithAppInfoLocalizationsLimit(200))
+		existing, err := client.GetAppInfoLocalizations(requestCtx, appInfo, asc.Limit[asc.AppInfoLocalizationsOption](200))
 		if err != nil {
 			return fmt.Errorf("localizations update: failed to fetch localizations: %w", err)
 		}
@@ -296,7 +298,7 @@ func updateAppInfoLocalization(ctx context.Context, p updateAppInfoParams) error
 		)
 	}
 
-	return shared.PrintOutput(resp, *p.output.Output, *p.output.Pretty)
+	return d.PrintOutput(resp, *p.output.Output, *p.output.Pretty)
 }
 
 // patchAppInfoLocalization sends nullable attributes when the caller clears a
@@ -355,19 +357,14 @@ type updateVersionParams struct {
 	output                                                                     shared.OutputFlags
 }
 
-func updateVersionLocalization(ctx context.Context, p updateVersionParams) error {
-	if !hasAnyVersionField(p) {
-		fmt.Fprintln(os.Stderr, "Error: at least one version field is required (--description, --keywords, --whats-new, --promotional-text, --support-url, --marketing-url, --clear-promotional-text)")
-		return shared.MissingRequiredUsageError("")
-	}
-
+func updateVersionLocalization(ctx context.Context, d *shared.Deps, p updateVersionParams) error {
 	localizationID := strings.TrimSpace(p.localizationID)
 	vid := strings.TrimSpace(p.versionID)
 	if localizationID == "" && vid == "" {
-		fmt.Fprintln(os.Stderr, "Error: --version is required for version localizations")
+		fmt.Fprintln(d.IO.ErrOut, "Error: --version is required for version localizations")
 		return shared.MissingRequiredUsageError("--version")
 	}
-	versionIsString, normalizedPlatform, err := normalizeLocalizationVersionSelector(vid, p.appID, p.platform)
+	versionIsString, normalizedPlatform, err := normalizeLocalizationVersionSelector(d, vid, p.appID, p.platform)
 	if localizationID == "" && err != nil {
 		return err
 	}
@@ -381,26 +378,26 @@ func updateVersionLocalization(ctx context.Context, p updateVersionParams) error
 		MarketingURL:    p.marketingURL,
 	}
 	if err := shared.ValidateVersionLocalizationAttributes(attrs); err != nil {
-		return shared.UsageError(err.Error())
+		return d.UsageError(err.Error())
 	}
 
-	client, err := shared.GetASCClient()
+	client, err := d.Client()
 	if err != nil {
 		return fmt.Errorf("localizations update: %w", err)
 	}
 
-	requestCtx, cancel := shared.ContextWithTimeout(ctx)
+	requestCtx, cancel := d.Timeout(ctx)
 	defer cancel()
 
 	if localizationID == "" {
 		if versionIsString {
-			vid, err = resolveLocalizationsVersionString(requestCtx, client, shared.ResolveAppID(p.appID), vid, normalizedPlatform)
+			vid, err = resolveLocalizationsVersionString(requestCtx, d, client, d.ResolveAppID(p.appID), vid, normalizedPlatform)
 			if err != nil {
 				return fmt.Errorf("localizations update: %w", err)
 			}
 		}
 		// Find existing localization ID for the locale
-		existing, err := client.GetAppStoreVersionLocalizations(requestCtx, vid, asc.WithAppStoreVersionLocalizationsLimit(200))
+		existing, err := client.GetAppStoreVersionLocalizations(requestCtx, vid, asc.Limit[asc.AppStoreVersionLocalizationsOption](200))
 		if err != nil {
 			return fmt.Errorf("localizations update: failed to fetch localizations: %w", err)
 		}
@@ -431,7 +428,7 @@ func updateVersionLocalization(ctx context.Context, p updateVersionParams) error
 		)
 	}
 
-	return shared.PrintOutput(resp, *p.output.Output, *p.output.Pretty)
+	return d.PrintOutput(resp, *p.output.Output, *p.output.Pretty)
 }
 
 // patchVersionLocalization sends nullable attributes when the caller clears a

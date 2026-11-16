@@ -1,13 +1,13 @@
 package cmdtest
 
 import (
-	"context"
-	"io"
 	"net/http"
 	"net/url"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asctest"
 )
 
 func TestXcodeCloudProductsTableHydratesBundleIDFromIncludedApp(t *testing.T) {
@@ -50,38 +50,16 @@ func TestXcodeCloudProductsTableHydratesBundleIDFromIncludedApp(t *testing.T) {
 			t.Setenv("ASC_APP_ID", "")
 			t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 
-			originalTransport := http.DefaultTransport
-			t.Cleanup(func() {
-				http.DefaultTransport = originalTransport
-			})
-
-			var requested []url.Values
-			http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-				if req.Method != http.MethodGet || req.URL.Path != "/v1/ciProducts" {
-					t.Fatalf("unexpected request: %s %s", req.Method, req.URL.String())
-				}
-				requested = append(requested, req.URL.Query())
-				body := `{"data":[{"type":"ciProducts","id":"prod-1","attributes":{"name":"FoundationLab","createdDate":"2025-06-25T08:55:49.429Z","productType":"APP"},"relationships":{"app":{"data":{"type":"apps","id":"app-1"}}}}],` +
-					`"included":[{"type":"apps","id":"app-1","attributes":{"bundleId":"com.rudrankriyam.foundationlab"}}]}`
-				return &http.Response{
-					StatusCode: http.StatusOK,
-					Body:       io.NopCloser(strings.NewReader(body)),
-					Header:     http.Header{"Content-Type": []string{"application/json"}},
-				}, nil
-			})
-
-			root := RootCommand("1.2.3")
-			root.FlagSet.SetOutput(io.Discard)
+			reg := asctest.NewRegistry(t)
+			reg.Register(asctest.GET("/v1/ciProducts", test.wantQuery.Encode()),
+				asctest.JSON(http.StatusOK, `{"data":[{"type":"ciProducts","id":"prod-1","attributes":{"name":"FoundationLab","createdDate":"2025-06-25T08:55:49.429Z","productType":"APP"},"relationships":{"app":{"data":{"type":"apps","id":"app-1"}}}}],`+
+					`"included":[{"type":"apps","id":"app-1","attributes":{"bundleId":"com.rudrankriyam.foundationlab"}}]}`))
 
 			args := append([]string{"xcode-cloud", "products", "list", "--output", "table"}, test.args...)
-			stdout, stderr := captureOutput(t, func() {
-				if err := root.Parse(args); err != nil {
-					t.Fatalf("parse error: %v", err)
-				}
-				if err := root.Run(context.Background()); err != nil {
-					t.Fatalf("run error: %v", err)
-				}
-			})
+			stdout, stderr, err := runRootWithDeps(t, stubClient(t, reg), args...)
+			if err != nil {
+				t.Fatalf("run error: %v", err)
+			}
 
 			if stderr != "" {
 				t.Fatalf("expected empty stderr, got %q", stderr)
@@ -91,6 +69,10 @@ func TestXcodeCloudProductsTableHydratesBundleIDFromIncludedApp(t *testing.T) {
 			}
 			if !strings.Contains(stdout, "com.rudrankriyam.foundationlab") {
 				t.Fatalf("expected bundle ID value in output, got %q", stdout)
+			}
+			var requested []url.Values
+			for _, req := range reg.Requests() {
+				requested = append(requested, req.URL.Query())
 			}
 			if len(requested) != 1 {
 				t.Fatalf("expected exactly 1 request, got %d", len(requested))
@@ -102,197 +84,86 @@ func TestXcodeCloudProductsTableHydratesBundleIDFromIncludedApp(t *testing.T) {
 	}
 }
 
-func TestXcodeCloudProductsTableFallsBackToRelatedAppForContinuationPages(t *testing.T) {
-	setupAuth(t)
-	t.Setenv("ASC_APP_ID", "")
-	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
+func TestXcodeCloudProductsTableHydratesBundleIDsAcrossPages(t *testing.T) {
+	type step struct {
+		path     string
+		rawQuery string
+		body     string
+	}
+	const firstPage = `{"data":[{"type":"ciProducts","id":"prod-1","attributes":{"name":"First","productType":"APP"},"relationships":{"app":{"data":{"type":"apps","id":"app-1"}}}}],` +
+		`"included":[{"type":"apps","id":"app-1","attributes":{"bundleId":"com.example.first"}}],`
+	tests := []struct {
+		name          string
+		args          []string
+		steps         []step
+		wantBundleIDs []string
+	}{
+		{
+			name: "continuation page falls back to related app",
+			args: []string{"--next", "https://api.appstoreconnect.apple.com/v1/ciProducts?cursor=PAGE2"},
+			steps: []step{
+				{"/v1/ciProducts", "cursor=PAGE2", `{"data":[{"type":"ciProducts","id":"prod-1","attributes":{"name":"FoundationLab","productType":"APP"}}]}`},
+				{"/v1/ciProducts/prod-1/app", "", `{"data":{"type":"apps","id":"app-1","attributes":{"bundleId":"com.rudrankriyam.foundationlab"}}}`},
+			},
+			wantBundleIDs: []string{"com.rudrankriyam.foundationlab"},
+		},
+		{
+			name: "paginated pages hydrate from included apps",
+			args: []string{"--paginate"},
+			steps: []step{
+				{"/v1/ciProducts", "fields%5Bapps%5D=bundleId&include=app&limit=200", firstPage + `"links":{"next":"https://api.appstoreconnect.apple.com/v1/ciProducts?cursor=PAGE2&include=app&fields%5Bapps%5D=bundleId"}}`},
+				{"/v1/ciProducts", "cursor=PAGE2&include=app&fields%5Bapps%5D=bundleId", `{"data":[{"type":"ciProducts","id":"prod-2","attributes":{"name":"Second","productType":"APP"},"relationships":{"app":{"data":{"type":"apps","id":"app-2"}}}}],` +
+					`"included":[{"type":"apps","id":"app-2","attributes":{"bundleId":"com.example.second"}}],"links":{"next":""}}`},
+			},
+			wantBundleIDs: []string{"com.example.first", "com.example.second"},
+		},
+		{
+			name: "paginated continuation without include falls back to related app",
+			args: []string{"--paginate"},
+			steps: []step{
+				{"/v1/ciProducts", "fields%5Bapps%5D=bundleId&include=app&limit=200", firstPage + `"links":{"next":"https://api.appstoreconnect.apple.com/v1/ciProducts?cursor=PAGE2"}}`},
+				{"/v1/ciProducts", "cursor=PAGE2", `{"data":[{"type":"ciProducts","id":"prod-2","attributes":{"name":"Second","productType":"APP"},"relationships":{"app":{"data":{"type":"apps","id":"app-2"}}}}],"links":{"next":""}}`},
+				{"/v1/ciProducts/prod-2/app", "", `{"data":{"type":"apps","id":"app-2","attributes":{"bundleId":"com.example.second"}}}`},
+			},
+			wantBundleIDs: []string{"com.example.first", "com.example.second"},
+		},
+	}
 
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() {
-		http.DefaultTransport = originalTransport
-	})
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			setupAuth(t)
+			t.Setenv("ASC_APP_ID", "")
+			t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 
-	var requestedPaths []string
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		requestedPaths = append(requestedPaths, req.URL.Path)
-
-		var body string
-		switch req.URL.Path {
-		case "/v1/ciProducts":
-			if req.URL.RawQuery != "cursor=PAGE2" {
-				t.Fatalf("continuation query = %q, want %q", req.URL.RawQuery, "cursor=PAGE2")
+			reg := asctest.NewRegistry(t)
+			for _, step := range test.steps {
+				reg.Register(asctest.GET(step.path, step.rawQuery), asctest.JSON(http.StatusOK, step.body))
 			}
-			body = `{"data":[{"type":"ciProducts","id":"prod-1","attributes":{"name":"FoundationLab","productType":"APP"}}]}`
-		case "/v1/ciProducts/prod-1/app":
-			body = `{"data":{"type":"apps","id":"app-1","attributes":{"bundleId":"com.rudrankriyam.foundationlab"}}}`
-		default:
-			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.String())
-		}
 
-		return &http.Response{
-			StatusCode: http.StatusOK,
-			Body:       io.NopCloser(strings.NewReader(body)),
-			Header:     http.Header{"Content-Type": []string{"application/json"}},
-		}, nil
-	})
-
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{
-			"xcode-cloud", "products", "list",
-			"--next", "https://api.appstoreconnect.apple.com/v1/ciProducts?cursor=PAGE2",
-			"--output", "table",
-		}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatalf("run error: %v", err)
-		}
-	})
-
-	if stderr != "" {
-		t.Fatalf("expected empty stderr, got %q", stderr)
-	}
-	if !strings.Contains(stdout, "com.rudrankriyam.foundationlab") {
-		t.Fatalf("expected bundle ID value in output, got %q", stdout)
-	}
-	want := []string{"/v1/ciProducts", "/v1/ciProducts/prod-1/app"}
-	if strings.Join(requestedPaths, ",") != strings.Join(want, ",") {
-		t.Fatalf("requests = %v, want %v", requestedPaths, want)
-	}
-}
-
-func TestXcodeCloudProductsPaginatedTableHydratesBundleIDsFromIncludedApps(t *testing.T) {
-	setupAuth(t)
-	t.Setenv("ASC_APP_ID", "")
-	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
-
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() {
-		http.DefaultTransport = originalTransport
-	})
-
-	const nextURL = "https://api.appstoreconnect.apple.com/v1/ciProducts?cursor=PAGE2&include=app&fields%5Bapps%5D=bundleId"
-	var requested []url.Values
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		if req.Method != http.MethodGet || req.URL.Path != "/v1/ciProducts" {
-			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.String())
-		}
-		requested = append(requested, req.URL.Query())
-
-		var body string
-		switch len(requested) {
-		case 1:
-			body = `{"data":[{"type":"ciProducts","id":"prod-1","attributes":{"name":"First","productType":"APP"},"relationships":{"app":{"data":{"type":"apps","id":"app-1"}}}}],` +
-				`"included":[{"type":"apps","id":"app-1","attributes":{"bundleId":"com.example.first"}}],` +
-				`"links":{"next":"` + nextURL + `"}}`
-		case 2:
-			body = `{"data":[{"type":"ciProducts","id":"prod-2","attributes":{"name":"Second","productType":"APP"},"relationships":{"app":{"data":{"type":"apps","id":"app-2"}}}}],` +
-				`"included":[{"type":"apps","id":"app-2","attributes":{"bundleId":"com.example.second"}}],` +
-				`"links":{"next":""}}`
-		default:
-			t.Fatalf("unexpected request count %d", len(requested))
-		}
-
-		return &http.Response{
-			StatusCode: http.StatusOK,
-			Body:       io.NopCloser(strings.NewReader(body)),
-			Header:     http.Header{"Content-Type": []string{"application/json"}},
-		}, nil
-	})
-
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"xcode-cloud", "products", "list", "--paginate", "--output", "table"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatalf("run error: %v", err)
-		}
-	})
-
-	if len(requested) != 2 {
-		t.Fatalf("expected exactly 2 requests, got %d (stderr=%q)", len(requested), stderr)
-	}
-	if got := requested[0].Get("include"); got != "app" {
-		t.Fatalf("include = %q, want %q", got, "app")
-	}
-	for _, want := range []string{"com.example.first", "com.example.second"} {
-		if !strings.Contains(stdout, want) {
-			t.Fatalf("expected %q in output, got %q", want, stdout)
-		}
-	}
-}
-
-func TestXcodeCloudProductsPaginatedTableFallsBackWhenContinuationOmitsInclude(t *testing.T) {
-	setupAuth(t)
-	t.Setenv("ASC_APP_ID", "")
-	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
-
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() {
-		http.DefaultTransport = originalTransport
-	})
-
-	const nextURL = "https://api.appstoreconnect.apple.com/v1/ciProducts?cursor=PAGE2"
-	var requested []string
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		requested = append(requested, req.URL.Path+"?"+req.URL.RawQuery)
-
-		var body string
-		switch req.URL.Path {
-		case "/v1/ciProducts":
-			if req.URL.Query().Get("cursor") == "" {
-				body = `{"data":[{"type":"ciProducts","id":"prod-1","attributes":{"name":"First","productType":"APP"},"relationships":{"app":{"data":{"type":"apps","id":"app-1"}}}}],` +
-					`"included":[{"type":"apps","id":"app-1","attributes":{"bundleId":"com.example.first"}}],` +
-					`"links":{"next":"` + nextURL + `"}}`
-			} else {
-				body = `{"data":[{"type":"ciProducts","id":"prod-2","attributes":{"name":"Second","productType":"APP"},"relationships":{"app":{"data":{"type":"apps","id":"app-2"}}}}],"links":{"next":""}}`
+			args := append([]string{"xcode-cloud", "products", "list"}, test.args...)
+			args = append(args, "--output", "table")
+			stdout, stderr, err := runRootWithDeps(t, stubClient(t, reg), args...)
+			if err != nil {
+				t.Fatalf("run error: %v", err)
 			}
-		case "/v1/ciProducts/prod-2/app":
-			body = `{"data":{"type":"apps","id":"app-2","attributes":{"bundleId":"com.example.second"}}}`
-		default:
-			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.String())
-		}
 
-		return &http.Response{
-			StatusCode: http.StatusOK,
-			Body:       io.NopCloser(strings.NewReader(body)),
-			Header:     http.Header{"Content-Type": []string{"application/json"}},
-		}, nil
-	})
-
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"xcode-cloud", "products", "list", "--paginate", "--output", "table"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatalf("run error: %v", err)
-		}
-	})
-
-	if len(requested) != 3 {
-		t.Fatalf("requests = %v, want the list, the continuation page, and a fallback for prod-2 (stderr=%q)", requested, stderr)
-	}
-	if !strings.HasPrefix(requested[0], "/v1/ciProducts?") || strings.Contains(requested[0], "cursor=") {
-		t.Fatalf("first request = %q, want the list query", requested[0])
-	}
-	if !strings.Contains(requested[1], "/v1/ciProducts?cursor=PAGE2") {
-		t.Fatalf("continuation request = %q, want cursor=PAGE2", requested[1])
-	}
-	if !strings.HasPrefix(requested[2], "/v1/ciProducts/prod-2/app?") {
-		t.Fatalf("fallback request = %q, want prod-2 related app", requested[2])
-	}
-	for _, bundleID := range []string{"com.example.first", "com.example.second"} {
-		if !strings.Contains(stdout, bundleID) {
-			t.Fatalf("expected %q in output, got %q", bundleID, stdout)
-		}
+			if stderr != "" {
+				t.Fatalf("expected empty stderr, got %q", stderr)
+			}
+			requests := reg.Requests()
+			if callCount := len(requests); callCount != len(test.steps) {
+				t.Fatalf("requests = %d, want %d", callCount, len(test.steps))
+			}
+			for i, req := range requests {
+				if want := test.steps[i]; req.URL.Path != want.path || req.URL.RawQuery != want.rawQuery {
+					t.Fatalf("request %d = %s %s?%s, want GET %s?%s", i+1, req.Method, req.URL.Path, req.URL.RawQuery, want.path, want.rawQuery)
+				}
+			}
+			for _, bundleID := range test.wantBundleIDs {
+				if !strings.Contains(stdout, bundleID) {
+					t.Fatalf("expected %q in output, got %q", bundleID, stdout)
+				}
+			}
+		})
 	}
 }

@@ -9,9 +9,9 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
-// MetadataCommand returns the metadata command group.
-func MetadataCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("metadata", flag.ExitOnError)
+// NewMetadataCommand returns the metadata command group.
+func NewMetadataCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("metadata", flag.ExitOnError)
 
 	return &ffcli.Command{
 		Name:       "metadata",
@@ -50,17 +50,17 @@ Examples:
   asc metadata apply --app "APP_ID" --version "1.2.3" --dir "./metadata" --review-dir ".asc/metadata/review" --confirm
   asc metadata keywords import --dir "./metadata" --version "1.2.3" --locale "en-US" --input "./keywords.csv"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
-			MetadataInitCommand(),
-			MetadataPullCommand(),
-			MetadataPlanCommand(),
-			MetadataApproveCommand(),
-			MetadataApplyCommand(),
-			MetadataStatusCommand(),
-			MetadataKeywordsCommand(),
-			MetadataPushCommand(),
-			MetadataValidateCommand(),
+			newMetadataInitCommand(d),
+			newMetadataPullCommand(d),
+			newMetadataPlanCommand(d),
+			newMetadataApproveCommand(d),
+			newMetadataApplyCommand(d),
+			newMetadataStatusCommand(d),
+			newMetadataKeywordsCommand(d),
+			newMetadataPushCommand(d),
+			newMetadataValidateCommand(d),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp

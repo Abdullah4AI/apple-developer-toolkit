@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strings"
 
@@ -18,9 +19,9 @@ import (
 	wf "github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/workflow"
 )
 
-// WorkflowCommand returns the top-level workflow command group.
-func WorkflowCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("workflow", flag.ExitOnError)
+// NewWorkflowCommand returns the top-level workflow command group.
+func NewWorkflowCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("workflow", flag.ExitOnError)
 
 	return &ffcli.Command{
 		Name:       "workflow",
@@ -139,11 +140,11 @@ Examples:
   asc workflow run --dry-run beta
   asc workflow run beta --resume beta-20260312T120000Z-deadbeef`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
-			workflowRunCommand(),
-			workflowValidateCommand(),
-			workflowListCommand(),
+			workflowRunCommand(d),
+			workflowValidateCommand(d),
+			workflowListCommand(d),
 		},
 		Exec: func(_ context.Context, _ []string) error {
 			return flag.ErrHelp
@@ -151,12 +152,14 @@ Examples:
 	}
 }
 
-func workflowRunCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("workflow run", flag.ExitOnError)
+func workflowRunCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("workflow run", flag.ExitOnError)
 	filePath := fs.String("file", wf.DefaultPath, "Path to workflow.json")
 	dryRun := fs.Bool("dry-run", false, "Preview steps without executing")
 	pretty := fs.Bool("pretty", false, "Pretty-print JSON output")
 	resume := fs.String("resume", "", "Resume a prior workflow run by run ID")
+	var envFiles shared.MultiStringFlag
+	fs.Var(&envFiles, "env-file", "Load KEY=VALUE environment variables from a file (repeatable)")
 
 	return &ffcli.Command{
 		Name:       "run",
@@ -187,6 +190,19 @@ explicit repeat-safety opt-in.
 Workflow-call steps and before_all/after_all/error hooks do not accept retry or timeout.
 Omit retry or timeout to disable it; explicit null values are invalid.
 
+Environment files:
+  --env-file loads variables from a file; repeat it to load several, and a later
+  file overrides an earlier one. No file is loaded unless named with --env-file.
+  A file value acts like a variable exported before the run: a variable already
+  set in the process environment is never overridden by a file, and workflow env,
+  step env, and KEY:VALUE params override file values.
+  Format: one KEY=VALUE per line, with an optional leading "export ". Blank lines
+  and lines starting with # are ignored. Matching single or double quotes around
+  a value are removed. There is no interpolation, no escape sequences, and no
+  multi-line values. A line that does not fit is a usage error naming the file
+  and line number; values are never printed.
+  Env files are not saved in run state; pass them again with --resume.
+
 Security note:
   Workflows intentionally execute arbitrary shell commands.
   Only run workflow files you trust (especially when using --file).
@@ -198,22 +214,23 @@ Tip: See "asc workflow --help" for a complete workflow.json example and file for
 Examples:
   asc workflow run beta
   asc workflow run beta BUILD_ID:123456789 GROUP_ID:abcdef
+  asc workflow run --env-file ./release.env beta
   asc workflow run --dry-run beta
   asc workflow run beta --resume beta-20260312T120000Z-deadbeef`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			if len(args) == 0 {
-				return shared.UsageError("workflow name is required")
+				return d.UsageError("workflow name is required")
 			}
 
 			workflowName := args[0]
-			paramArgs, err := parseRunTailArgs(args[1:], fs)
+			paramArgs, err := parseRunTailArgs(d, args[1:], fs)
 			if err != nil {
 				return err
 			}
 
-			absPath, err := filepath.Abs(strings.TrimSpace(*filePath))
+			absPath, err := d.Abs(strings.TrimSpace(*filePath))
 			if err != nil {
 				return fmt.Errorf("workflow run: resolve path: %w", err)
 			}
@@ -225,13 +242,22 @@ Examples:
 
 			params, err := wf.ParseParams(paramArgs)
 			if err != nil {
-				return shared.UsageErrorf("%s", err)
+				return d.UsageErrorf("%s", err)
 			}
 			if *dryRun && strings.TrimSpace(*resume) != "" {
-				return shared.UsageError("--resume cannot be used with --dry-run")
+				return d.UsageError("--resume cannot be used with --dry-run")
 			}
 			if strings.TrimSpace(*resume) != "" && len(paramArgs) > 0 {
-				return shared.UsageError("resume runs do not accept additional KEY:VALUE parameters")
+				return d.UsageError("resume runs do not accept additional KEY:VALUE parameters")
+			}
+
+			envFilePaths := make([]string, len(envFiles))
+			for i, path := range envFiles {
+				envFilePaths[i] = d.OSPath(path)
+			}
+			fileEnv, err := wf.LoadEnvFiles(envFilePaths)
+			if err != nil {
+				return d.UsageErrorf("--env-file: %s", err)
 			}
 
 			stateDir := filepath.Join(filepath.Dir(absPath), "runs")
@@ -239,29 +265,41 @@ Examples:
 			result, err := wf.Run(ctx, def, wf.RunOptions{
 				WorkflowName: workflowName,
 				Params:       params,
+				FileEnv:      fileEnv,
 				DryRun:       *dryRun,
 				WorkflowFile: absPath,
 				StateDir:     stateDir,
 				ResumeRunID:  strings.TrimSpace(*resume),
 				// Keep stdout machine-parseable JSON; stream step output to stderr.
-				Stdout: os.Stderr,
-				Stderr: os.Stderr,
+				Stdout: stepOutput(d),
+				Stderr: stepOutput(d),
 			})
 			if err != nil {
 				if result != nil {
-					_ = printJSON(os.Stdout, result, *pretty)
+					_ = printJSON(d.IO.Out, result, *pretty)
 					return shared.NewReportedError(classifyWorkflowRunError(err))
 				}
 				return classifyWorkflowRunError(fmt.Errorf("workflow run: %w", err))
 			}
 
-			return printJSON(os.Stdout, result, *pretty)
+			return printJSON(d.IO.Out, result, *pretty)
 		},
 	}
 }
 
-func workflowValidateCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("workflow validate", flag.ExitOnError)
+// stepOutput returns the stream workflow steps and hooks write to. Steps are
+// child processes: when d writes to the process stderr they get that file, so
+// a terminal stays a terminal for the commands they run; an injected stderr
+// receives their output through a pipe.
+func stepOutput(d *shared.Deps) io.Writer {
+	if reflect.TypeOf(d.IO.ErrOut) == reflect.TypeOf(shared.DefaultDeps().IO.ErrOut) {
+		return os.Stderr
+	}
+	return d.IO.ErrOut
+}
+
+func workflowValidateCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("workflow validate", flag.ExitOnError)
 	filePath := fs.String("file", wf.DefaultPath, "Path to workflow.json")
 	output := shared.BindOutputFlagsWithAllowed(fs, "output", "json", "Output format: json", "json")
 
@@ -277,13 +315,9 @@ Examples:
   asc workflow validate --output json
   asc workflow validate --file ./.asc/workflow.json --output json --pretty`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(_ context.Context, args []string) error {
-			if len(args) > 0 {
-				return shared.UsageErrorf("unexpected argument(s): %s", strings.Join(args, " "))
-			}
-
-			absPath, err := filepath.Abs(strings.TrimSpace(*filePath))
+			absPath, err := d.Abs(strings.TrimSpace(*filePath))
 			if err != nil {
 				return fmt.Errorf("workflow validate: resolve path: %w", err)
 			}
@@ -304,7 +338,7 @@ Examples:
 				Errors: errs,
 			}
 
-			if printErr := shared.PrintOutput(result, *output.Output, *output.Pretty); printErr != nil {
+			if printErr := d.PrintOutput(result, *output.Output, *output.Pretty); printErr != nil {
 				return printErr
 			}
 
@@ -318,8 +352,8 @@ Examples:
 	}
 }
 
-func workflowListCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("workflow list", flag.ExitOnError)
+func workflowListCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("workflow list", flag.ExitOnError)
 	filePath := fs.String("file", wf.DefaultPath, "Path to workflow.json")
 	pretty := fs.Bool("pretty", false, "Pretty-print JSON output")
 	all := fs.Bool("all", false, "Include private workflows in listing")
@@ -335,13 +369,9 @@ Examples:
   asc workflow list
   asc workflow list --all`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(_ context.Context, args []string) error {
-			if len(args) > 0 {
-				return shared.UsageErrorf("unexpected argument(s): %s", strings.Join(args, " "))
-			}
-
-			absPath, err := filepath.Abs(strings.TrimSpace(*filePath))
+			absPath, err := d.Abs(strings.TrimSpace(*filePath))
 			if err != nil {
 				return fmt.Errorf("workflow list: resolve path: %w", err)
 			}
@@ -375,12 +405,12 @@ Examples:
 				return workflows[i].Name < workflows[j].Name
 			})
 
-			return printJSON(os.Stdout, workflows, *pretty)
+			return printJSON(d.IO.Out, workflows, *pretty)
 		},
 	}
 }
 
-func parseRunTailArgs(args []string, fs *flag.FlagSet) ([]string, error) {
+func parseRunTailArgs(d *shared.Deps, args []string, fs *flag.FlagSet) ([]string, error) {
 	params := make([]string, 0, len(args))
 	for i := 0; i < len(args); i++ {
 		token := args[i]
@@ -399,34 +429,34 @@ func parseRunTailArgs(args []string, fs *flag.FlagSet) ([]string, error) {
 					value = "true"
 				}
 				if err := fs.Set(name, value); err != nil {
-					return nil, shared.UsageErrorf("invalid value for --%s: %v", name, err)
+					return nil, d.UsageErrorf("invalid value for --%s: %v", name, err)
 				}
 				continue
-			case "file", "resume":
+			case "file", "resume", "env-file":
 				if !hasValue {
 					if i+1 >= len(args) {
-						return nil, shared.UsageErrorf("--%s requires a value", name)
+						return nil, d.UsageErrorf("--%s requires a value", name)
 					}
 					if isRunTailFlagToken(args[i+1]) || strings.HasPrefix(args[i+1], "--") {
-						return nil, shared.UsageErrorf("--%s requires a value", name)
+						return nil, d.UsageErrorf("--%s requires a value", name)
 					}
 					i++
 					value = args[i]
 				}
 				if strings.TrimSpace(value) == "" {
-					return nil, shared.UsageErrorf("--%s requires a value", name)
+					return nil, d.UsageErrorf("--%s requires a value", name)
 				}
 				if err := fs.Set(name, value); err != nil {
-					return nil, shared.UsageErrorf("invalid value for --%s: %v", name, err)
+					return nil, d.UsageErrorf("invalid value for --%s: %v", name, err)
 				}
 				continue
 			default:
-				return nil, shared.UsageErrorf("unknown flag %q", token)
+				return nil, d.UsageErrorf("unknown flag %q", token)
 			}
 		}
 
 		if strings.HasPrefix(token, "-") {
-			return nil, shared.UsageErrorf("unknown flag %q", token)
+			return nil, d.UsageErrorf("unknown flag %q", token)
 		}
 
 		params = append(params, token)
@@ -441,7 +471,7 @@ func isRunTailFlagToken(token string) bool {
 	nameValue := strings.TrimPrefix(token, "--")
 	name, _, _ := strings.Cut(nameValue, "=")
 	switch name {
-	case "dry-run", "pretty", "file", "resume":
+	case "dry-run", "pretty", "file", "resume", "env-file":
 		return true
 	default:
 		return false

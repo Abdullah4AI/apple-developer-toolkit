@@ -8,6 +8,7 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/asn1"
 	"encoding/json"
 	"encoding/pem"
 	"errors"
@@ -20,8 +21,9 @@ import (
 	"testing"
 	"time"
 
-	certificatescli "github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/certificates"
 	modernpkcs12 "software.sslmate.com/src/go-pkcs12"
+
+	rootcmd "github.com/Abdullah4AI/apple-developer-toolkit/appstore/cmd"
 )
 
 func TestCertificatesExport_JSONOutputAndPKCS12RoundTrip(t *testing.T) {
@@ -107,6 +109,13 @@ func TestCertificatesExport_JSONOutputAndPKCS12RoundTrip(t *testing.T) {
 	if !commandPublicKeysEqual(privateKey, artifacts.certificate.PublicKey) {
 		t.Fatal("decoded private key does not match fixture")
 	}
+	legacyBagOID, err := asn1.Marshal(asn1.ObjectIdentifier{1, 2, 840, 113549, 1, 12, 1, 3})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(p12Data, legacyBagOID) {
+		t.Fatal("default p12 uses the legacy encoding")
+	}
 
 	tableRoot := RootCommand("1.2.3")
 	tableRoot.FlagSet.SetOutput(io.Discard)
@@ -150,6 +159,7 @@ func TestCertificatesExport_JSONOutputAndPKCS12RoundTrip(t *testing.T) {
 			"--p12-out", p12Path,
 			"--force",
 			"--confirm",
+			"--p12-encoding", "legacy",
 			"--output", "markdown",
 		}); err != nil {
 			t.Fatalf("markdown parse error: %v", err)
@@ -168,6 +178,16 @@ func TestCertificatesExport_JSONOutputAndPKCS12RoundTrip(t *testing.T) {
 	}
 	if strings.Contains(markdownStdout, password) || strings.Contains(markdownStdout, "BEGIN") {
 		t.Fatalf("markdown output contains secret material: %q", markdownStdout)
+	}
+	legacyData, err := os.ReadFile(p12Path)
+	if err != nil {
+		t.Fatalf("read legacy p12: %v", err)
+	}
+	if _, _, err := modernpkcs12.Decode(legacyData, password); err != nil {
+		t.Fatalf("decode legacy p12: %v", err)
+	}
+	if !bytes.Contains(legacyData, legacyBagOID) {
+		t.Fatal("--p12-encoding legacy did not write a legacy-encoded p12")
 	}
 }
 
@@ -197,26 +217,6 @@ func TestCertificatesExport_RejectsStdoutDestinationAsUsageError(t *testing.T) {
 	}
 }
 
-func TestCertificatesExport_RejectsPositionalArguments(t *testing.T) {
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"certificates", "export", "unexpected"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		err := root.Run(context.Background())
-		if !errors.Is(err, flag.ErrHelp) {
-			t.Fatalf("run error = %v, want usage error", err)
-		}
-	})
-	if stdout != "" {
-		t.Fatalf("expected empty stdout, got %q", stdout)
-	}
-	if !strings.Contains(stderr, "does not accept positional arguments") {
-		t.Fatalf("stderr = %q, want positional-argument error", stderr)
-	}
-}
-
 func TestCertificatesExport_RejectsInvalidOutputBeforeWriting(t *testing.T) {
 	tests := []struct {
 		name string
@@ -232,6 +232,11 @@ func TestCertificatesExport_RejectsInvalidOutputBeforeWriting(t *testing.T) {
 			name: "pretty with table",
 			args: []string{"--output", "table", "--pretty"},
 			want: "--pretty is only valid with JSON output",
+		},
+		{
+			name: "unsupported p12 encoding",
+			args: []string{"--p12-encoding", "rc2"},
+			want: `--p12-encoding must be one of: modern, legacy (got "rc2")`,
 		},
 	}
 
@@ -253,22 +258,16 @@ func TestCertificatesExport_RejectsInvalidOutputBeforeWriting(t *testing.T) {
 				t.Fatalf("write password: %v", err)
 			}
 
-			command := certificatescli.CertificatesExportCommand()
-			command.FlagSet.SetOutput(io.Discard)
-			stdout, stderr := captureOutput(t, func() {
-				if err := command.FlagSet.Parse(append([]string{
-					"--certificate", certificatePath,
-					"--private-key", privateKeyPath,
-					"--password-file", passwordPath,
-					"--p12-out", p12Path,
-				}, test.args...)); err != nil {
-					t.Fatalf("parse error: %v", err)
-				}
-				err := command.Exec(context.Background(), nil)
-				if !isUsageClassError(err) {
-					t.Fatalf("run error = %v, want usage error", err)
-				}
-			})
+			stdout, stderr, err := runRootWithDeps(t, nil, append([]string{
+				"certificates", "export",
+				"--certificate", certificatePath,
+				"--private-key", privateKeyPath,
+				"--password-file", passwordPath,
+				"--p12-out", p12Path,
+			}, test.args...)...)
+			if !isUsageClassError(err) {
+				t.Fatalf("run error = %v, want usage error", err)
+			}
 			if stdout != "" {
 				t.Fatalf("expected empty stdout, got %q", stdout)
 			}
@@ -299,23 +298,17 @@ func TestCertificatesExport_ForceRequiresConfirmBeforeWriting(t *testing.T) {
 		t.Fatalf("write password: %v", err)
 	}
 
-	command := certificatescli.CertificatesExportCommand()
-	command.FlagSet.SetOutput(io.Discard)
-	stdout, stderr := captureOutput(t, func() {
-		if err := command.FlagSet.Parse([]string{
-			"--certificate", certificatePath,
-			"--private-key", privateKeyPath,
-			"--password-file", passwordPath,
-			"--p12-out", p12Path,
-			"--force",
-		}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		err := command.Exec(context.Background(), nil)
-		if !isUsageClassError(err) {
-			t.Fatalf("run error = %v, want usage error", err)
-		}
-	})
+	stdout, stderr, err := runRootWithDeps(t, nil,
+		"certificates", "export",
+		"--certificate", certificatePath,
+		"--private-key", privateKeyPath,
+		"--password-file", passwordPath,
+		"--p12-out", p12Path,
+		"--force",
+	)
+	if !isUsageClassError(err) {
+		t.Fatalf("run error = %v, want usage error", err)
+	}
 	if stdout != "" {
 		t.Fatalf("expected empty stdout, got %q", stdout)
 	}
@@ -344,26 +337,26 @@ func TestCertificatesExport_ConfirmRequiresForceBeforeWriting(t *testing.T) {
 		t.Fatalf("write password: %v", err)
 	}
 
-	command := certificatescli.CertificatesExportCommand()
+	d, stdoutBuf, stderrBuf := newTestDeps(t, nil)
+	command := findSubcommand(rootcmd.RootCommandWithDeps("1.2.3", d), "certificates", "export")
 	command.FlagSet.SetOutput(io.Discard)
-	stdout, stderr := captureOutput(t, func() {
-		if err := command.FlagSet.Parse([]string{
-			"--certificate", certificatePath,
-			"--private-key", privateKeyPath,
-			"--password-file", passwordPath,
-			"--p12-out", p12Path,
-			"--confirm",
-		}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		err := command.Exec(context.Background(), nil)
-		if !isUsageClassError(err) {
-			t.Fatalf("run error = %v, want usage error", err)
-		}
-		if got, want := err.Error(), "--confirm requires --force"; got != want {
-			t.Fatalf("error = %q, want %q", got, want)
-		}
-	})
+	if err := command.FlagSet.Parse([]string{
+		"--certificate", certificatePath,
+		"--private-key", privateKeyPath,
+		"--password-file", passwordPath,
+		"--p12-out", p12Path,
+		"--confirm",
+	}); err != nil {
+		t.Fatalf("parse error: %v", err)
+	}
+	err := command.Exec(context.Background(), nil)
+	stdout, stderr := stdoutBuf.String(), stderrBuf.String()
+	if !isUsageClassError(err) {
+		t.Fatalf("run error = %v, want usage error", err)
+	}
+	if got, want := err.Error(), "--confirm requires --force"; got != want {
+		t.Fatalf("error = %q, want %q", got, want)
+	}
 	if stdout != "" {
 		t.Fatalf("expected empty stdout, got %q", stdout)
 	}

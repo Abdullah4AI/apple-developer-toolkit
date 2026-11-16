@@ -142,6 +142,47 @@ func TestRun_ConditionalFalsy(t *testing.T) {
 	}
 }
 
+func TestRun_IfComparison(t *testing.T) {
+	tests := []struct {
+		expr string
+		env  map[string]string
+		want string
+		warn bool
+	}{
+		{expr: "$DO_IT", env: map[string]string{"DO_IT": "true"}, want: "ok"},
+		{expr: "DEPLOY == yes", env: map[string]string{"DEPLOY": "yes"}, want: "ok"},
+		{expr: "$DEPLOY == 'yes'", env: map[string]string{"DEPLOY": "no"}, want: "skipped"},
+		{expr: "CHANNEL != beta", env: map[string]string{"CHANNEL": "prod"}, want: "ok"},
+		{expr: `$CHANNEL != "beta"`, env: map[string]string{"CHANNEL": "beta"}, want: "skipped"},
+		{expr: `MISSING_VAR == ""`, want: "ok"},
+		{expr: "DEPLOY && SUBMIT", env: map[string]string{"DEPLOY": "true"}, want: "skipped", warn: true},
+		{expr: "A == yes && B == no", env: map[string]string{"A": "yes"}, want: "skipped", warn: true},
+		{expr: `A == "yes" && B == "yes"`, env: map[string]string{"A": "yes", "B": "yes"}, want: "skipped", warn: true},
+		{expr: "test($AUTO_SUBMIT)", env: map[string]string{"AUTO_SUBMIT": "true"}, want: "skipped", warn: true},
+		{expr: "deploy-flag", env: map[string]string{"deploy-flag": "true"}, want: "ok"},
+	}
+	for _, test := range tests {
+		t.Run(test.expr, func(t *testing.T) {
+			def := &Definition{Workflows: map[string]Workflow{
+				"test": {Env: test.env, Steps: []Step{{Run: "echo gated", If: test.expr}}},
+			}}
+			opts := runOpts("test")
+			result, err := Run(context.Background(), def, opts)
+			if err != nil {
+				t.Fatalf("Run: %v", err)
+			}
+			if result.Steps[0].Status != test.want {
+				t.Fatalf("expected %s, got %q", test.want, result.Steps[0].Status)
+			}
+			stderr := opts.Stderr.(*bytes.Buffer).String()
+			warned := strings.Contains(stderr, `workflow "test" step 1`) && strings.Contains(stderr, "NAME != VALUE")
+			if warned != test.warn {
+				t.Fatalf("expected warning=%v, got stderr %q", test.warn, stderr)
+			}
+		})
+	}
+}
+
 func TestRun_SkippedWorkflowStepIncludesWorkflowName(t *testing.T) {
 	def := &Definition{
 		Workflows: map[string]Workflow{
@@ -261,6 +302,70 @@ func TestRun_EnvMerging(t *testing.T) {
 	}
 	if result.Steps[0].Status != "ok" {
 		t.Fatalf("expected ok, got %q", result.Steps[0].Status)
+	}
+}
+
+func TestRun_StepEnvAppliesToThatStepOnly(t *testing.T) {
+	def := &Definition{
+		Workflows: map[string]Workflow{
+			"test": {
+				Env: map[string]string{"VAR": "workflow"},
+				Steps: []Step{
+					{Run: "echo own=$VAR", If: "VAR == step", Env: map[string]string{"VAR": "step"}},
+					{Workflow: "helper", Env: map[string]string{"VAR": "call"}},
+					{Run: "echo next=$VAR"},
+				},
+			},
+			"helper": {Steps: []Step{{Run: "echo helper=$VAR"}}},
+		},
+	}
+	opts := runOpts("test")
+
+	if _, err := Run(context.Background(), def, opts); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	stdout := opts.Stdout.(*bytes.Buffer).String()
+	if stdout != "own=step\nhelper=call\nnext=workflow\n" {
+		t.Fatalf("expected step env on its own step only, got %q", stdout)
+	}
+}
+
+func TestRun_ContinueOnError(t *testing.T) {
+	for _, continueOnError := range []bool{true, false} {
+		t.Run(fmt.Sprint(continueOnError), func(t *testing.T) {
+			def := &Definition{
+				Error: "echo error-hook",
+				Workflows: map[string]Workflow{
+					"test": {Steps: []Step{
+						{Name: "notify", Run: "exit 3", ContinueOnError: continueOnError},
+						{Run: "echo after"},
+					}},
+				},
+			}
+			opts := runOpts("test")
+
+			result, err := Run(context.Background(), def, opts)
+			stdout := opts.Stdout.(*bytes.Buffer).String()
+			failed := result.Steps[0]
+			if failed.Status != "error" || failed.Error == "" || failed.ContinuedOnError != continueOnError {
+				t.Fatalf("expected the failure recorded with continued_on_error=%v, got %+v", continueOnError, failed)
+			}
+			if !continueOnError {
+				if err == nil || result.Status != "error" || result.FailedStep != "notify" || len(result.Steps) != 1 || !strings.Contains(stdout, "error-hook") {
+					t.Fatalf("expected the workflow to stop and run the error hook, got err=%v result=%+v stdout=%q", err, result, stdout)
+				}
+				return
+			}
+			if err != nil || result.Status != "ok" || result.FailedStep != "" || len(result.Steps) != 2 || result.Steps[1].Status != "ok" {
+				t.Fatalf("expected the workflow to continue and succeed, got err=%v result=%+v", err, result)
+			}
+			if stdout != "after\n" {
+				t.Fatalf("expected the next step to run without the error hook, got %q", stdout)
+			}
+			if stderr := opts.Stderr.(*bytes.Buffer).String(); !strings.Contains(stderr, "continue_on_error") {
+				t.Fatalf("expected a stderr note about the tolerated failure, got %q", stderr)
+			}
+		})
 	}
 }
 
@@ -1020,25 +1125,36 @@ func TestRun_MaxCallDepthExceeded(t *testing.T) {
 	// Create a chain that exceeds MaxCallDepth
 	// We can't actually create a cycle (validation would catch it),
 	// so we create a long chain
-	workflows := make(map[string]Workflow)
-	for i := 0; i <= MaxCallDepth+1; i++ {
-		name := "w" + strings.Repeat("x", i)
-		nextName := "w" + strings.Repeat("x", i+1)
-		if i > MaxCallDepth {
-			workflows[name] = Workflow{Steps: []Step{{Run: "echo done"}}}
-		} else {
-			workflows[name] = Workflow{Steps: []Step{{Workflow: nextName}}}
-		}
-	}
-	def := &Definition{Workflows: workflows}
-	opts := runOpts("w")
+	for _, continueOnError := range []bool{false, true} {
+		t.Run(fmt.Sprint(continueOnError), func(t *testing.T) {
+			workflows := make(map[string]Workflow)
+			for i := 0; i <= MaxCallDepth+1; i++ {
+				name := "w" + strings.Repeat("x", i)
+				nextName := "w" + strings.Repeat("x", i+1)
+				if i > MaxCallDepth {
+					workflows[name] = Workflow{Steps: []Step{{Run: "echo done"}}}
+				} else {
+					workflows[name] = Workflow{Steps: []Step{{Workflow: nextName, ContinueOnError: continueOnError && i == MaxCallDepth}}}
+				}
+			}
+			def := &Definition{Workflows: workflows}
+			opts := runOpts("w")
 
-	_, err := Run(context.Background(), def, opts)
-	if err == nil {
-		t.Fatal("expected error for max call depth")
-	}
-	if !strings.Contains(err.Error(), "max call depth") {
-		t.Fatalf("expected max call depth error, got %v", err)
+			result, err := Run(context.Background(), def, opts)
+			if continueOnError {
+				last := result.Steps[len(result.Steps)-1]
+				if err != nil || result.Status != "ok" || !last.ContinuedOnError || !strings.Contains(last.Error, "max call depth") {
+					t.Fatalf("expected the depth failure to be tolerated, got err=%v result=%+v", err, result)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatal("expected error for max call depth")
+			}
+			if !strings.Contains(err.Error(), "max call depth") {
+				t.Fatalf("expected max call depth error, got %v", err)
+			}
+		})
 	}
 }
 
@@ -1191,6 +1307,85 @@ func TestRun_ErrorHook(t *testing.T) {
 	}
 	if result.Status != "error" {
 		t.Fatalf("expected error status, got %q", result.Status)
+	}
+}
+
+func TestRun_ErrorHookReceivesFailureContext(t *testing.T) {
+	const record = `printf %s "$ASC_WORKFLOW_NAME" > "$OUT/name"; printf %s "$ASC_WORKFLOW_FAILED_STEP" > "$OUT/step"; printf %s "$ASC_WORKFLOW_ERROR" > "$OUT/error"`
+	const ordinary = `printf %s "${ASC_WORKFLOW_NAME-unset} ${ASC_WORKFLOW_FAILED_STEP-unset} ${ASC_WORKFLOW_ERROR-unset}" > "$OUT/ordinary"`
+	hostile := "it's \"quoted\"\nline two $(exit 9) `exit 9`"
+
+	tests := []struct {
+		name           string
+		workflow       string
+		beforeAll      string
+		env            map[string]string
+		steps          []Step
+		wantFailedStep string
+	}{
+		{
+			name:           "failing named step",
+			workflow:       "release",
+			steps:          []Step{{Run: ordinary}, {Name: "upload", Run: "exit 3"}},
+			wantFailedStep: "upload",
+		},
+		{
+			name:           "failing before_all replaces a stale user value",
+			workflow:       "release",
+			beforeAll:      "exit 1",
+			env:            map[string]string{"ASC_WORKFLOW_FAILED_STEP": "stale"},
+			steps:          []Step{{Run: "echo should-not-run"}},
+			wantFailedStep: "before_all",
+		},
+		{
+			name:           "workflow name and error with quotes and a newline",
+			workflow:       hostile,
+			steps:          []Step{{Run: "exit 1"}},
+			wantFailedStep: hostile + "[1]",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			out := t.TempDir()
+			def := &Definition{
+				Env:       mergeEnv(map[string]string{"OUT": out}, tt.env),
+				BeforeAll: tt.beforeAll,
+				Error:     record,
+				Workflows: map[string]Workflow{tt.workflow: {Steps: tt.steps}},
+			}
+
+			result, err := Run(context.Background(), def, runOpts(tt.workflow))
+			if err == nil {
+				t.Fatal("expected run to fail")
+			}
+			if result.Hooks == nil || result.Hooks.Error == nil || result.Hooks.Error.Status != "ok" {
+				t.Fatalf("expected error hook status=ok, got %+v", result.Hooks)
+			}
+
+			read := func(name string) string {
+				t.Helper()
+				data, err := os.ReadFile(filepath.Join(out, name))
+				if err != nil {
+					t.Fatalf("read %s: %v", name, err)
+				}
+				return string(data)
+			}
+			if got := read("name"); got != tt.workflow {
+				t.Fatalf("ASC_WORKFLOW_NAME = %q, want %q", got, tt.workflow)
+			}
+			if got := read("step"); got != tt.wantFailedStep || got != result.FailedStep {
+				t.Fatalf("ASC_WORKFLOW_FAILED_STEP = %q, want %q (result failed_step %q)", got, tt.wantFailedStep, result.FailedStep)
+			}
+			if got := read("error"); got != err.Error() || got != result.Error {
+				t.Fatalf("ASC_WORKFLOW_ERROR = %q, want %q (result error %q)", got, err.Error(), result.Error)
+			}
+			if tt.steps[0].Run == ordinary {
+				if got := read("ordinary"); got != "unset unset unset" {
+					t.Fatalf("ordinary step saw failure context %q", got)
+				}
+			}
+		})
 	}
 }
 
@@ -1656,5 +1851,29 @@ func TestRun_DurationMS_IncludesAfterAll(t *testing.T) {
 	// The after_all hook sleeps 100ms, so total duration must be >= 100ms.
 	if result.DurationMS < 100 {
 		t.Fatalf("expected DurationMS >= 100 (must include after_all time), got %d", result.DurationMS)
+	}
+}
+
+func TestRun_RefusesSymlinkedStateDirectory(t *testing.T) {
+	workflowDir := t.TempDir()
+	outside := t.TempDir()
+	stateDir := filepath.Join(workflowDir, "runs")
+	if err := os.Symlink(outside, stateDir); err != nil {
+		t.Fatalf("Symlink() error = %v", err)
+	}
+
+	opts := runOpts("main")
+	opts.WorkflowFile = filepath.Join(workflowDir, "workflow.json")
+	opts.StateDir = stateDir
+
+	if _, err := Run(context.Background(), newTestDefinition(), opts); err == nil {
+		t.Fatal("expected Run to refuse a symlinked state directory")
+	}
+	entries, err := os.ReadDir(outside)
+	if err != nil {
+		t.Fatalf("ReadDir() error = %v", err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("expected nothing written outside the workflow directory, found %d entries", len(entries))
 	}
 }

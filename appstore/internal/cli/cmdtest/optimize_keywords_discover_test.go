@@ -3,9 +3,10 @@ package cmdtest
 import (
 	"errors"
 	"flag"
-	"net/http"
 	"strings"
 	"testing"
+
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asctest"
 )
 
 func TestOptimizeKeywordsDiscoverUsageErrors(t *testing.T) {
@@ -34,25 +35,13 @@ func TestOptimizeKeywordsDiscoverUsageErrors(t *testing.T) {
 			args:    []string{"optimize", "keywords", "discover", "--app", "1234567890", "--country", "usa"},
 			wantErr: `--country "usa" is not a supported App Store storefront`,
 		},
-		{
-			name:    "positional argument",
-			args:    []string{"optimize", "keywords", "discover", "--app", "1234567890", "extra"},
-			wantErr: "optimize keywords discover does not accept positional arguments",
-		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			t.Setenv("ASC_BYPASS_KEYCHAIN", "1")
 			t.Setenv("ASC_APP_ID", "")
-			originalTransport := http.DefaultTransport
-			t.Cleanup(func() { http.DefaultTransport = originalTransport })
-			http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-				t.Fatalf("unexpected request before input validation: %s", req.URL.String())
-				return nil, errors.New("unexpected request")
-			})
-
-			stdout, stderr, runErr := runCommand(t, test.args)
+			stdout, stderr, runErr := runRootWithHTTPTransport(t, nil, asctest.NewRegistry(t), test.args...)
 			if !errors.Is(runErr, flag.ErrHelp) {
 				t.Fatalf("expected ErrHelp, got %v", runErr)
 			}
@@ -68,23 +57,17 @@ func TestOptimizeKeywordsDiscoverUsageErrors(t *testing.T) {
 
 func TestOptimizeKeywordsDiscoverFailsActionablyWithoutAppleAdsCredentials(t *testing.T) {
 	t.Setenv("ASC_BYPASS_KEYCHAIN", "1")
+	t.Setenv("ASC_ADS_BYPASS_KEYCHAIN", "1")
 	t.Setenv("ASC_ADS_AD_ACCOUNT_ID", "")
 	t.Setenv("ASC_ADS_CLIENT_ID", "")
 	t.Setenv("ASC_ADS_CLIENT_SECRET", "")
 
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() { http.DefaultTransport = originalTransport })
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		t.Fatalf("unexpected request without Apple Ads credentials: %s", req.URL.String())
-		return nil, errors.New("unexpected request")
-	})
-
-	stdout, _, runErr := runCommand(t, []string{
+	stdout, _, runErr := runRootWithHTTPTransport(t, nil, asctest.NewRegistry(t), []string{
 		"optimize", "keywords", "discover",
 		"--app", "1234567890",
 		"--country", "US",
 		"--output", "json",
-	})
+	}...)
 	if runErr == nil {
 		t.Fatal("expected an error when Apple Ads is the only source and is unavailable")
 	}

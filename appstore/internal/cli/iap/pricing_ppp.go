@@ -4,8 +4,6 @@ import (
 	"context"
 	"errors"
 	"flag"
-	"fmt"
-	"os"
 	"strings"
 	"time"
 
@@ -15,9 +13,10 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
-// IAPPricingPPPCommand returns the iap pricing ppp subcommand.
-func IAPPricingPPPCommand() *ffcli.Command {
+// newIAPPricingPPPCommand returns the iap pricing ppp subcommand.
+func newIAPPricingPPPCommand(d *shared.Deps) *ffcli.Command {
 	return shared.NewPriceSchedulePPPCommand(shared.PriceSchedulePPPCommandConfig{
+		Deps:         d,
 		FlagSetName:  "iap pricing ppp",
 		ShortUsage:   "asc iap pricing ppp --iap-id IAP_ID --base-price PRICE [flags]",
 		ResourceNoun: "in-app purchase",
@@ -32,32 +31,31 @@ func IAPPricingPPPCommand() *ffcli.Command {
 			return shared.PriceSchedulePPPResource{
 				Validate: func() error {
 					if strings.TrimSpace(*iapID) == "" {
-						fmt.Fprintln(os.Stderr, "Error: --iap-id is required")
-						return shared.MissingRequiredUsageError("--iap-id")
+						return d.RequiredFlag("--iap-id")
 					}
-					return shared.RequireAppForStableSelector(shared.ResolveAppID(*appID), strings.TrimSpace(*iapID), "--iap-id")
+					return d.RequireAppForStableSelector(d.ResolveAppID(*appID), strings.TrimSpace(*iapID), "--iap-id")
 				},
 				Resolve: func(ctx context.Context, client *asc.Client) (shared.PriceSchedulePPPSurface, error) {
-					id, err := resolveIAPLookupIDWithTimeout(ctx, client, *appID, strings.TrimSpace(*iapID))
+					id, err := resolveIAPLookupIDWithTimeout(ctx, d, client, *appID, strings.TrimSpace(*iapID))
 					if err != nil {
 						return shared.PriceSchedulePPPSurface{}, err
 					}
-					return iapPPPSurface(client, id), nil
+					return iapPPPSurface(d, client, id), nil
 				},
 			}
 		},
 	})
 }
 
-func iapPPPSurface(client *asc.Client, iapID string) shared.PriceSchedulePPPSurface {
+func iapPPPSurface(d *shared.Deps, client *asc.Client, iapID string) shared.PriceSchedulePPPSurface {
 	return shared.PriceSchedulePPPSurface{
 		IAPID:           iapID,
 		LadderBatchSize: 10,
 		ReadSchedule: func(ctx context.Context) (shared.PPPScheduleSnapshot, error) {
-			return readIAPPPPSchedule(ctx, client, iapID)
+			return readIAPPPPSchedule(ctx, d, client, iapID)
 		},
 		CurrentPrices: func(ctx context.Context, at time.Time) ([]shared.ResolvedPriceRow, error) {
-			schedule, err := shared.RetryReadWithFreshTimeout(ctx, func(requestCtx context.Context) (*asc.InAppPurchasePriceScheduleResponse, error) {
+			schedule, err := shared.RetryReadWithFreshTimeoutWith(ctx, d, func(requestCtx context.Context) (*asc.InAppPurchasePriceScheduleResponse, error) {
 				return client.GetInAppPurchasePriceSchedule(requestCtx, iapID)
 			})
 			if errors.Is(err, asc.ErrNotFound) {
@@ -66,7 +64,7 @@ func iapPPPSurface(client *asc.Client, iapID string) shared.PriceSchedulePPPSurf
 			if err != nil {
 				return nil, err
 			}
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
+			requestCtx, cancel := d.Timeout(ctx)
 			defer cancel()
 			resolved, err := fetchResolvedIAPSchedulePrices(requestCtx, client, schedule.Data.ID, "manual", 200, "", at, true)
 			if err != nil {
@@ -75,9 +73,9 @@ func iapPPPSurface(client *asc.Client, iapID string) shared.PriceSchedulePPPSurf
 			return resolved.Prices, nil
 		},
 		LadderBatch: func(ctx context.Context, territories []string) (map[string][]shared.PriceLadderCandidate, error) {
-			return shared.CollectPricePointsByTerritory(ctx, territories, func(requestCtx context.Context, next string) (*asc.InAppPurchasePricePointsResponse, error) {
+			return shared.CollectPricePointsByTerritoryWith(ctx, d, territories, func(requestCtx context.Context, next string) (*asc.InAppPurchasePricePointsResponse, error) {
 				if next != "" {
-					return client.GetInAppPurchasePricePoints(requestCtx, iapID, asc.WithIAPPricePointsNextURL(next))
+					return client.GetInAppPurchasePricePoints(requestCtx, iapID, asc.NextURL[asc.IAPPricePointsOption](next))
 				}
 				return client.GetInAppPurchasePricePoints(
 					requestCtx,
@@ -85,21 +83,21 @@ func iapPPPSurface(client *asc.Client, iapID string) shared.PriceSchedulePPPSurf
 					asc.WithIAPPricePointsTerritory(strings.Join(territories, ",")),
 					asc.WithIAPPricePointsFields([]string{"customerPrice", "territory"}),
 					asc.WithIAPPricePointsInclude([]string{"territory"}),
-					asc.WithIAPPricePointsLimit(8000),
+					asc.Limit[asc.IAPPricePointsOption](8000),
 				)
 			}, iapCustomerPrice)
 		},
 		Equalizations: func(ctx context.Context, pricePointID string) (map[string][]shared.PriceLadderCandidate, error) {
-			return shared.CollectPricePointsByTerritory(ctx, nil, func(requestCtx context.Context, next string) (*asc.InAppPurchasePricePointsResponse, error) {
+			return shared.CollectPricePointsByTerritoryWith(ctx, d, nil, func(requestCtx context.Context, next string) (*asc.InAppPurchasePricePointsResponse, error) {
 				if next != "" {
-					return client.GetInAppPurchasePricePointEqualizations(requestCtx, pricePointID, asc.WithIAPPricePointsNextURL(next))
+					return client.GetInAppPurchasePricePointEqualizations(requestCtx, pricePointID, asc.NextURL[asc.IAPPricePointsOption](next))
 				}
 				return client.GetInAppPurchasePricePointEqualizations(
 					requestCtx,
 					pricePointID,
 					asc.WithIAPPricePointsFields([]string{"customerPrice", "territory"}),
 					asc.WithIAPPricePointsInclude([]string{"territory"}),
-					asc.WithIAPPricePointsLimit(8000),
+					asc.Limit[asc.IAPPricePointsOption](8000),
 				)
 			}, iapCustomerPrice)
 		},
@@ -108,7 +106,7 @@ func iapPPPSurface(client *asc.Client, iapID string) shared.PriceSchedulePPPSurf
 			for _, price := range prices {
 				attrs.Prices = append(attrs.Prices, asc.InAppPurchasePriceSchedulePrice(price))
 			}
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
+			requestCtx, cancel := d.Timeout(ctx)
 			defer cancel()
 			_, err := client.CreateInAppPurchasePriceSchedule(requestCtx, iapID, attrs)
 			return err

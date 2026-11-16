@@ -19,6 +19,7 @@ import (
 	"testing"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
 func TestBetaTesterGroupConflictAlreadySatisfied(t *testing.T) {
@@ -113,6 +114,7 @@ func TestBetaTesterGroupConflictAlreadySatisfied(t *testing.T) {
 
 			got, err := betaTesterGroupConflictAlreadySatisfied(
 				context.Background(),
+				&shared.Deps{Timeout: shared.ContextWithTimeout},
 				client,
 				"tester-1",
 				test.requested,

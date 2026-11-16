@@ -1,13 +1,13 @@
 package cmdtest
 
 import (
-	"context"
 	"errors"
-	"io"
 	"net/http"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asctest"
 )
 
 func TestBetaGroupsListGlobalRequestWiring(t *testing.T) {
@@ -25,27 +25,18 @@ func TestBetaGroupsListGlobalRequestWiring(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			setupAuth(t)
 			t.Setenv("ASC_APP_ID", test.appEnv)
 			t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 
-			installDefaultTransport(t, roundTripFunc(func(req *http.Request) (*http.Response, error) {
-				if req.Method != http.MethodGet || req.URL.Path != "/v1/betaGroups" {
-					t.Fatalf("unexpected request: %s %s", req.Method, req.URL.String())
-				}
-				query := req.URL.Query()
-				if got := query.Get("filter[app]"); got != "" {
-					t.Fatalf("filter[app] = %q, want none for --global", got)
-				}
-				for key, want := range test.wantQuery {
-					if got := query.Get(key); got != want {
-						t.Fatalf("%s = %q, want %q", key, got, want)
-					}
-				}
-				return betaGroupsJSONResponse(`{"data":[{"type":"betaGroups","id":"bg-1","attributes":{"name":"Global Beta"}}]}`), nil
-			}))
+			var query []string
+			for key, value := range test.wantQuery {
+				query = append(query, key+"="+value)
+			}
+			reg := asctest.NewRegistry(t)
+			reg.Register(asctest.GET("/v1/betaGroups", query...),
+				asctest.JSON(http.StatusOK, `{"data":[{"type":"betaGroups","id":"bg-1","attributes":{"name":"Global Beta"}}]}`))
 
-			stdout, stderr := runBetaGroupsList(t, test.args...)
+			stdout, stderr := runBetaGroupsList(t, reg, test.args...)
 
 			if stderr != "" {
 				t.Fatalf("expected empty stderr, got %q", stderr)
@@ -58,27 +49,14 @@ func TestBetaGroupsListGlobalRequestWiring(t *testing.T) {
 }
 
 func TestTestFlightGroupsErrorKeepsTransportVerbAndURL(t *testing.T) {
-	setupAuth(t)
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() {
-		http.DefaultTransport = originalTransport
-	})
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+	reg := asctest.NewRegistry(t)
+	reg.Register(asctest.GET("/v1/betaGroups"), func(*http.Request) (*http.Response, error) {
 		return nil, errors.New("boom")
 	})
 
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	var runErr error
-	captureOutput(t, func() {
-		if err := root.Parse([]string{"testflight", "groups", "list", "--global"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		runErr = root.Run(context.Background())
-	})
+	_, _, runErr := runRootWithDeps(t, stubClient(t, reg), "testflight", "groups", "list", "--global")
 
 	if runErr == nil {
 		t.Fatal("expected run error")

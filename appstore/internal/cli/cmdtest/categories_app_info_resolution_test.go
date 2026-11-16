@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asctest"
 )
 
 func TestCategoriesSetFailsWhenAppInfoIsAmbiguous(t *testing.T) {
@@ -15,37 +17,16 @@ func TestCategoriesSetFailsWhenAppInfoIsAmbiguous(t *testing.T) {
 	t.Setenv("ASC_BYPASS_KEYCHAIN", "1")
 	t.Setenv("ASC_PROFILE", "")
 
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() {
-		http.DefaultTransport = originalTransport
-	})
-
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/apps/app-1/appInfos" {
-			t.Fatalf("unexpected request path %s", req.URL.Path)
-		}
-		return jsonResponse(http.StatusOK, `{
+	reg := asctest.NewRegistry(t)
+	reg.Install()
+	reg.Register(asctest.GET("/v1/apps/app-1/appInfos"), asctest.JSON(http.StatusOK, `{
 			"data":[
 				{"type":"appInfos","id":"info-live","attributes":{"state":"READY_FOR_DISTRIBUTION"}},
 				{"type":"appInfos","id":"info-rejected","attributes":{"state":"REJECTED"}}
 			]
-		}`)
-	})
+		}`))
 
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	var runErr error
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"categories", "set", "--app", "app-1", "--primary", "GAMES", "--output", "json"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		runErr = root.Run(context.Background())
-	})
-
+	stdout, stderr, runErr := runCommand(t, []string{"categories", "set", "--app", "app-1", "--primary", "GAMES", "--output", "json"})
 	if runErr == nil {
 		t.Fatal("expected run error, got nil")
 	}
@@ -76,7 +57,7 @@ func TestCategoriesAndAppSetupInfoSetResolveConfiguredAppID(t *testing.T) {
 	}{
 		{name: "categories set uses config app_id", args: []string{"categories", "set"}, withConfig: true, wantStderr: "Error: categories set: --primary is required"},
 		{name: "app-setup categories set uses config app_id", args: []string{"app-setup", "categories", "set"}, withConfig: true, wantStderr: "Error: app-setup categories set: --primary is required"},
-		{name: "app-setup info set uses config app_id", args: []string{"app-setup", "info", "set"}, withConfig: true, wantStderr: "Error: provide at least one update flag"},
+		{name: "app-setup info set uses config app_id", args: []string{"app-setup", "info", "set"}, withConfig: true, wantStderr: "Error: at least one update flag is required (--bundle-id, --primary-locale, --name, --subtitle, --privacy-policy-url, --privacy-choices-url, --privacy-policy-text, --content-rights)"},
 		{name: "categories set without app is a usage error", args: []string{"categories", "set", "--primary", "GAMES"}, wantStderr: "Error: categories set: --app is required (or set ASC_APP_ID)"},
 	}
 	for _, test := range tests {

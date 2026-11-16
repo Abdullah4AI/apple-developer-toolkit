@@ -17,6 +17,7 @@ type assetLibraryImageUploadResponse struct {
 			State            string            `json:"state"`
 			SpecID           string            `json:"specId"`
 			UploadOperations []UploadOperation `json:"uploadOperations"`
+			StateDetails     []ErrorDetail     `json:"stateDetails"`
 			ImageAsset       *struct {
 				Width  int `json:"width"`
 				Height int `json:"height"`
@@ -28,13 +29,6 @@ type assetLibraryImageUploadResponse struct {
 func (r assetLibraryImageUploadResponse) ready() bool {
 	attrs := r.Data.Attributes
 	return attrs.State == "PREPARE_FOR_SUBMISSION" && attrs.ImageAsset != nil && attrs.ImageAsset.Width > 0 && attrs.ImageAsset.Height > 0
-}
-
-// UploadAssetLibraryImage reserves, uploads, commits, and waits for an image.
-// A partial result retains the reserved ID when a later operation fails.
-// The caller validates the image and owns the overall upload timeout.
-func (c *Client) UploadAssetLibraryImage(ctx context.Context, libraryID, fileName string, file *os.File, fileSize int64, requestContext RequestContextFunc) (AssetLibraryImageUploadResult, error) {
-	return c.UploadAssetLibraryImageWithCategory(ctx, libraryID, fileName, file, fileSize, "CREATIVE_ASSETS", "", requestContext)
 }
 
 // UploadAssetLibraryImageWithCategory uploads an independently managed image.
@@ -175,6 +169,15 @@ func (c *Client) UploadAssetLibraryImageWithCategory(ctx context.Context, librar
 		attrs := current.Data.Attributes
 		result.State, result.SpecID = attrs.State, attrs.SpecID
 		if attrs.State == "FAILED" {
+			var codes []string
+			for _, detail := range attrs.StateDetails {
+				if code := strings.TrimSpace(detail.Code); code != "" {
+					codes = append(codes, code)
+				}
+			}
+			if len(codes) > 0 {
+				return struct{}{}, false, fmt.Errorf("%w: %s", errImageProcessingFailed, strings.Join(codes, ", "))
+			}
 			return struct{}{}, false, errImageProcessingFailed
 		}
 		if attrs.ImageAsset != nil {

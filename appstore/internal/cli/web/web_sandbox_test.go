@@ -1,6 +1,7 @@
 package web
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -50,11 +51,12 @@ func TestWebSandboxCreateValidationErrors(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			cmd := WebSandboxCreateCommand()
+			d, depsStdout, depsStderr := newWebTestDeps()
+			cmd := newWebSandboxCreateCommand(d)
 			if err := cmd.FlagSet.Parse(tc.args); err != nil {
 				t.Fatalf("parse error: %v", err)
 			}
-			stdout, stderr := captureWebCommandOutput(t, func() {
+			stdout, stderr := runWithWebTestDeps(depsStdout, depsStderr, func() {
 				err := cmd.Exec(context.Background(), nil)
 				if !errors.Is(err, flag.ErrHelp) {
 					t.Fatalf("expected flag.ErrHelp, got %v", err)
@@ -93,7 +95,8 @@ func TestWebSandboxCreateResolvesSessionBeforeTimeoutContext(t *testing.T) {
 		return nil, "", resolveErr
 	}
 
-	cmd := WebSandboxCreateCommand()
+	d, _, _ := newWebTestDeps()
+	cmd := newWebSandboxCreateCommand(d)
 	if err := cmd.FlagSet.Parse([]string{
 		"--first-name", "Jane",
 		"--last-name", "Tester",
@@ -137,7 +140,8 @@ func TestWebSandboxCreateSubmitsNormalizedRequest(t *testing.T) {
 		return nil
 	}
 
-	cmd := WebSandboxCreateCommand()
+	d, depsStdout, depsStderr := newWebTestDeps()
+	cmd := newWebSandboxCreateCommand(d)
 	if err := cmd.FlagSet.Parse([]string{
 		"--first-name", " Jane ",
 		"--last-name", " Tester ",
@@ -149,7 +153,7 @@ func TestWebSandboxCreateSubmitsNormalizedRequest(t *testing.T) {
 		t.Fatalf("parse error: %v", err)
 	}
 
-	stdout, stderr := captureWebCommandOutput(t, func() {
+	stdout, stderr := runWithWebTestDeps(depsStdout, depsStderr, func() {
 		if err := cmd.Exec(context.Background(), nil); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -210,7 +214,8 @@ func TestWebSandboxCreateWrapsAuthErrors(t *testing.T) {
 		return &webcore.APIError{Status: 401}
 	}
 
-	cmd := WebSandboxCreateCommand()
+	d, _, _ := newWebTestDeps()
+	cmd := newWebSandboxCreateCommand(d)
 	if err := cmd.FlagSet.Parse([]string{
 		"--first-name", "Jane",
 		"--last-name", "Tester",
@@ -240,11 +245,12 @@ func TestWebSandboxDeleteRequiresConfirmBeforeResolvingSession(t *testing.T) {
 		return &webcore.AuthSession{}, "cache", nil
 	}
 
-	cmd := WebSandboxDeleteCommand()
+	d, depsStdout, depsStderr := newWebTestDeps()
+	cmd := newWebSandboxDeleteCommand(d)
 	if err := cmd.FlagSet.Parse([]string{"--id", "tester-resource-id"}); err != nil {
 		t.Fatalf("parse error: %v", err)
 	}
-	stdout, stderr := captureWebCommandOutput(t, func() {
+	stdout, stderr := runWithWebTestDeps(depsStdout, depsStderr, func() {
 		err := cmd.Exec(context.Background(), nil)
 		if err == nil || !errors.Is(err, flag.ErrHelp) {
 			t.Fatalf("expected missing confirm error, got %v", err)
@@ -292,7 +298,8 @@ func TestWebSandboxDeleteRefusesFamilyMemberBeforeMutation(t *testing.T) {
 		return nil
 	}
 
-	cmd := WebSandboxDeleteCommand()
+	d, _, _ := newWebTestDeps()
+	cmd := newWebSandboxDeleteCommand(d)
 	if err := cmd.FlagSet.Parse([]string{"--id", "family-id", "--confirm"}); err != nil {
 		t.Fatalf("parse error: %v", err)
 	}
@@ -350,11 +357,12 @@ func TestWebSandboxDeletePreflightsDeletesAndVerifies(t *testing.T) {
 		return nil
 	}
 
-	cmd := WebSandboxDeleteCommand()
+	d, depsStdout, depsStderr := newWebTestDeps()
+	cmd := newWebSandboxDeleteCommand(d)
 	if err := cmd.FlagSet.Parse([]string{"--id", "tester-one,tester-two,tester-one", "--confirm", "--output", "json"}); err != nil {
 		t.Fatalf("parse error: %v", err)
 	}
-	stdout, stderr := captureWebCommandOutput(t, func() {
+	stdout, stderr := runWithWebTestDeps(depsStdout, depsStderr, func() {
 		if err := cmd.Exec(context.Background(), nil); err != nil {
 			t.Fatalf("Exec() error: %v", err)
 		}
@@ -406,7 +414,8 @@ func TestWebSandboxDeleteRefusesIncompleteListBeforeMutation(t *testing.T) {
 		return nil
 	}
 
-	cmd := WebSandboxDeleteCommand()
+	d, _, _ := newWebTestDeps()
+	cmd := newWebSandboxDeleteCommand(d)
 	if err := cmd.FlagSet.Parse([]string{"--id", "tester-one", "--confirm"}); err != nil {
 		t.Fatalf("parse error: %v", err)
 	}
@@ -448,7 +457,8 @@ func TestWebSandboxDeleteReportsUnknownTransportOutcome(t *testing.T) {
 		return errors.New("request failed: context deadline exceeded")
 	}
 
-	cmd := WebSandboxDeleteCommand()
+	d, _, _ := newWebTestDeps()
+	cmd := newWebSandboxDeleteCommand(d)
 	if err := cmd.FlagSet.Parse([]string{"--id", "tester-one", "--confirm"}); err != nil {
 		t.Fatalf("parse error: %v", err)
 	}
@@ -492,7 +502,8 @@ func TestWebSandboxDeleteTreatsServerErrorAsUnknownOutcome(t *testing.T) {
 		return &webcore.APIError{Status: 500}
 	}
 
-	cmd := WebSandboxDeleteCommand()
+	d, _, _ := newWebTestDeps()
+	cmd := newWebSandboxDeleteCommand(d)
 	if err := cmd.FlagSet.Parse([]string{"--id", "tester-one", "--confirm"}); err != nil {
 		t.Fatalf("parse error: %v", err)
 	}
@@ -539,7 +550,8 @@ func TestWebSandboxDeleteTreatsRequestTimeoutAsUnknownOutcome(t *testing.T) {
 		return &webcore.APIError{Status: http.StatusRequestTimeout}
 	}
 
-	cmd := WebSandboxDeleteCommand()
+	d, _, _ := newWebTestDeps()
+	cmd := newWebSandboxDeleteCommand(d)
 	if err := cmd.FlagSet.Parse([]string{"--id", "tester-one", "--confirm"}); err != nil {
 		t.Fatalf("parse error: %v", err)
 	}
@@ -586,7 +598,8 @@ func TestWebSandboxDeleteTreatsVisibleAccountAfterDeleteAsUnknownOutcome(t *test
 		return nil
 	}
 
-	cmd := WebSandboxDeleteCommand()
+	d, _, _ := newWebTestDeps()
+	cmd := newWebSandboxDeleteCommand(d)
 	if err := cmd.FlagSet.Parse([]string{"--id", "tester-one", "--confirm"}); err != nil {
 		t.Fatalf("parse error: %v", err)
 	}
@@ -639,11 +652,11 @@ func TestWebSandboxDeleteReportsVerifiedStatusWhenOutputFails(t *testing.T) {
 		return nil
 	}
 
-	cmd := WebSandboxDeleteCommand()
+	d, _, _ := newWebTestDeps()
+	cmd := newWebSandboxDeleteCommand(d)
 	if err := cmd.FlagSet.Parse([]string{"--id", "tester-one", "--confirm", "--output", "json"}); err != nil {
 		t.Fatalf("parse error: %v", err)
 	}
-	oldStdout := os.Stdout
 	rOut, wOut, err := os.Pipe()
 	if err != nil {
 		t.Fatalf("stdout pipe: %v", err)
@@ -651,9 +664,8 @@ func TestWebSandboxDeleteReportsVerifiedStatusWhenOutputFails(t *testing.T) {
 	if err := wOut.Close(); err != nil {
 		t.Fatalf("close stdout pipe: %v", err)
 	}
-	os.Stdout = wOut
+	d.IO.Out = wOut
 	gotErr := cmd.Exec(context.Background(), nil)
-	os.Stdout = oldStdout
 	_ = rOut.Close()
 
 	if gotErr == nil || !strings.Contains(gotErr.Error(), "completed and verified") {
@@ -667,5 +679,49 @@ func TestWebSandboxDeleteReportsVerifiedStatusWhenOutputFails(t *testing.T) {
 	}
 	if listCalls != 2 {
 		t.Fatalf("list calls = %d, want 2 for postcondition verification", listCalls)
+	}
+}
+
+func TestWebSandboxCreateTableOutputWritesToDepsStdout(t *testing.T) {
+	origResolveSession := resolveSessionFn
+	origNewWebClient := newWebClientFn
+	origCreate := createWebSandboxTesterFn
+	t.Cleanup(func() {
+		resolveSessionFn = origResolveSession
+		newWebClientFn = origNewWebClient
+		createWebSandboxTesterFn = origCreate
+	})
+
+	resolveSessionFn = func(ctx context.Context, appleID, password, twoFactorCode string) (*webcore.AuthSession, string, error) {
+		return &webcore.AuthSession{}, "cache", nil
+	}
+	newWebClientFn = func(session *webcore.AuthSession) *webcore.Client { return &webcore.Client{} }
+	createWebSandboxTesterFn = func(ctx context.Context, client *webcore.Client, attrs webcore.SandboxAccountCreateAttributes) error {
+		return nil
+	}
+
+	d, stdout, stderr := newWebTestDeps()
+	cmd := newWebSandboxCreateCommand(d)
+	if err := cmd.FlagSet.Parse([]string{
+		"--first-name", "Jane",
+		"--last-name", "Tester",
+		"--email", "jane@example.com",
+		"--password", "Passwordtest1",
+		"--territory", "USA",
+		"--output", "table",
+	}); err != nil {
+		t.Fatalf("parse error: %v", err)
+	}
+	if err := cmd.Exec(context.Background(), nil); err != nil {
+		t.Fatalf("Exec() error: %v", err)
+	}
+
+	var want bytes.Buffer
+	asc.RenderTableTo(&want, []string{"First Name", "Last Name", "Email", "Territory", "Submitted"}, [][]string{{"Jane", "Tester", "jane@example.com", "USA", "true"}})
+	if stdout.String() != want.String() {
+		t.Fatalf("stdout = %q, want %q", stdout.String(), want.String())
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("stderr = %q, want empty", stderr.String())
 	}
 }

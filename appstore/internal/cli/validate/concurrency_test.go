@@ -2,6 +2,7 @@ package validate
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -10,6 +11,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
@@ -191,11 +193,9 @@ func TestBuildReadinessReport_OverlapsSixIndependentReadGroups(t *testing.T) {
 		return server.Client().Transport.RoundTrip(fixtureReq)
 	})
 	client := newBuildsTestClient(t, transport)
-	restoreClient := SetClientFactory(func() (*asc.Client, error) { return client, nil })
-	t.Cleanup(restoreClient)
 
 	started := time.Now()
-	if _, err := BuildReadinessReport(context.Background(), ReadinessOptions{AppID: "app-1", VersionID: "ver-1"}); err != nil {
+	if _, err := BuildReadinessReportWith(context.Background(), readinessTestDeps(client), ReadinessOptions{AppID: "app-1", VersionID: "ver-1"}); err != nil {
 		t.Fatalf("BuildReadinessReport() error = %v", err)
 	}
 	elapsed := time.Since(started)
@@ -239,10 +239,8 @@ func TestBuildReadinessReport_CancelsSiblingCompoundReadOnHardError(t *testing.T
 			return buildsJSONResponse(http.StatusNotFound, `{"errors":[{"status":"404"}]}`)
 		}
 	}))
-	restoreClient := SetClientFactory(func() (*asc.Client, error) { return client, nil })
-	t.Cleanup(restoreClient)
 
-	_, err := BuildReadinessReport(context.Background(), ReadinessOptions{AppID: "app-1", VersionID: "ver-1"})
+	_, err := BuildReadinessReportWith(context.Background(), readinessTestDeps(client), ReadinessOptions{AppID: "app-1", VersionID: "ver-1"})
 	if err == nil || !strings.Contains(err.Error(), "failed to fetch app store version") {
 		t.Fatalf("BuildReadinessReport() error = %v", err)
 	}
@@ -344,10 +342,8 @@ func TestBuildReadinessReport_SharedGateCapsNestedSubscriptionRequests(t *testin
 					return buildsJSONResponse(http.StatusInternalServerError, `{"errors":[{"status":"500","code":"UNEXPECTED_REQUEST"}]}`)
 				}
 			}))
-			restoreClient := SetClientFactory(func() (*asc.Client, error) { return client, nil })
-			t.Cleanup(restoreClient)
 
-			if _, err := BuildReadinessReport(context.Background(), ReadinessOptions{AppID: "app-1", VersionID: "ver-1", Deep: test.deep}); err != nil {
+			if _, err := BuildReadinessReportWith(context.Background(), readinessTestDeps(client), ReadinessOptions{AppID: "app-1", VersionID: "ver-1", Deep: test.deep}); err != nil {
 				t.Fatalf("BuildReadinessReport() error = %v", err)
 			}
 			if got := tracker.max.Load(); got != readinessConcurrencyLimit {
@@ -355,4 +351,63 @@ func TestBuildReadinessReport_SharedGateCapsNestedSubscriptionRequests(t *testin
 			}
 		})
 	}
+}
+
+func TestRunReadinessTasks_ReturnsParentCancellationWhenQueuedTasksAreSkipped(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		release := make(chan struct{})
+		var ran atomic.Int32
+		tasks := make([]readinessTask, readinessConcurrencyLimit+1)
+		for i := range tasks {
+			tasks[i] = func(context.Context) error {
+				ran.Add(1)
+				<-release
+				return nil
+			}
+		}
+
+		done := make(chan error, 1)
+		go func() { done <- runReadinessTasks(ctx, tasks...) }()
+
+		// Every slot is held and the extra task is queued on the semaphore.
+		synctest.Wait()
+		cancel()
+		// The queued task observes cancellation before any slot frees up.
+		synctest.Wait()
+		close(release)
+
+		if err := <-done; !errors.Is(err, context.Canceled) {
+			t.Fatalf("runReadinessTasks() error = %v, want context.Canceled", err)
+		}
+		if got := ran.Load(); got != readinessConcurrencyLimit {
+			t.Fatalf("tasks run = %d, want %d", got, readinessConcurrencyLimit)
+		}
+	})
+}
+
+func TestRunReadinessTasks_ReturnsParentCancellationWhenRunningTaskSwallowsIt(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		// Like the readiness checks, the task turns its cancelled fetch into a
+		// "could not verify" result and returns nil.
+		task := func(taskCtx context.Context) error {
+			<-taskCtx.Done()
+			return nil
+		}
+
+		done := make(chan error, 1)
+		go func() { done <- runReadinessTasks(ctx, task) }()
+
+		synctest.Wait()
+		cancel()
+
+		if err := <-done; !errors.Is(err, context.Canceled) {
+			t.Fatalf("runReadinessTasks() error = %v, want context.Canceled", err)
+		}
+	})
 }

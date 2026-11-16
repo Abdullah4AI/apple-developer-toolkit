@@ -16,6 +16,9 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asctest"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared/errfmt"
 )
 
 func creativeUploadFile(t *testing.T) (string, []byte) {
@@ -51,10 +54,11 @@ func TestAssetLibraryImageUpload(t *testing.T) {
 				category = "APP_SCREENSHOTS_AND_PREVIEWS"
 			}
 			path, content := creativeUploadFile(t)
-			original := http.DefaultTransport
-			t.Cleanup(func() { http.DefaultTransport = original })
 			calls, reads, uploaded := 0, 0, 0
 			var mu sync.Mutex
+			original := http.DefaultTransport
+			t.Cleanup(func() { http.DefaultTransport = original })
+			// Upload operations take their transport from http.DefaultTransport.
 			http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
 				mu.Lock()
 				defer mu.Unlock()
@@ -130,7 +134,7 @@ func TestAssetLibraryImageUpload(t *testing.T) {
 				case req.Method == "GET" && req.URL.Path == "/v1/appAssetLibraryImages/image":
 					reads++
 					if mode == "processing-failed" {
-						return jsonResponse(200, `{"data":{"type":"appAssetLibraryImages","id":"image","attributes":{"state":"FAILED","imageAsset":null}}}`)
+						return jsonResponse(200, `{"data":{"type":"appAssetLibraryImages","id":"image","attributes":{"state":"FAILED","imageAsset":null,"stateDetails":[{"code":"INVALID_ASSET_FILE_FORMAT","description":"INVALID_ASSET_FILE_FORMAT"}]}}}`)
 					}
 					if mode == "transient-processing" && reads == 1 {
 						return nil, context.DeadlineExceeded
@@ -158,7 +162,7 @@ func TestAssetLibraryImageUpload(t *testing.T) {
 			if mode == "progress" {
 				args = append(args, "--progress")
 			}
-			stdout, stderr, err := runAssetLibrary(t, args...)
+			stdout, stderr, err := runAssetLibrary(t, stubClient(t, http.DefaultTransport), args...)
 			if mode == "progress" {
 				lines := strings.Split(strings.TrimSpace(stderr), "\n")
 				if len(lines) != 9 {
@@ -228,8 +232,16 @@ func TestAssetLibraryImageUpload(t *testing.T) {
 			if mode == "processing-timeout" && (!receipt.Uploaded || receipt.State != "FUTURE_PROCESSING" || !errors.Is(err, context.DeadlineExceeded)) {
 				t.Fatalf("unknown state did not remain pending: receipt=%+v err=%v", receipt, err)
 			}
+			if mode == "processing-timeout" {
+				if hint := errfmt.Classify(err).Hint; hint != "Increase the upload timeout (e.g. set `ASC_UPLOAD_TIMEOUT=45m`)." {
+					t.Fatalf("processing deadline hint = %q", hint)
+				}
+				if !strings.Contains(err.Error(), "may still finish processing") || !strings.Contains(err.Error(), "asc asset-library images view --id image") {
+					t.Fatalf("processing deadline does not explain how to check the upload: %v", err)
+				}
+			}
 			if mode == "processing-failed" {
-				if !receipt.Uploaded || receipt.State != "FAILED" || errors.Is(err, context.DeadlineExceeded) || !strings.Contains(stringError(err), "FAILED") || reads != 1 || uploaded != 2 || calls != 5 {
+				if !receipt.Uploaded || receipt.State != "FAILED" || errors.Is(err, context.DeadlineExceeded) || !strings.Contains(stringError(err), "FAILED: INVALID_ASSET_FILE_FORMAT") || reads != 1 || uploaded != 2 || calls != 5 {
 					t.Fatalf("processing failure did not stop with partial receipt: receipt=%+v err=%v reads=%d calls=%d stderr=%q", receipt, err, reads, calls, stderr)
 				}
 			}
@@ -255,7 +267,7 @@ func stringError(err error) string {
 
 func TestAssetLibraryImageUploadValidation(t *testing.T) {
 	for _, args := range [][]string{{}, {"--library-id", "lib"}, {"--file", "missing.png"}, {"--library-id", "lib", "--file", "missing.png"}, {"--library-id", "../apps", "--file", "missing.png"}} {
-		_, stderr, err := runAssetLibrary(t, append([]string{"asset-library", "images", "upload"}, args...)...)
+		_, stderr, err := runAssetLibrary(t, nil, append([]string{"asset-library", "images", "upload"}, args...)...)
 		if err == nil || stderr == "" {
 			t.Fatalf("missing reported validation: %v %q", err, stderr)
 		}
@@ -280,10 +292,8 @@ func TestAssetLibraryImageUploadRejectsInvalidImageBeforeHTTP(t *testing.T) {
 			if err := os.WriteFile(path, tc.content, 0o600); err != nil {
 				t.Fatal(err)
 			}
-			original := http.DefaultTransport
-			t.Cleanup(func() { http.DefaultTransport = original })
-			http.DefaultTransport = roundTripFunc(func(*http.Request) (*http.Response, error) { t.Fatal("invalid image caused HTTP"); return nil, nil })
-			stdout, stderr, err := runAssetLibrary(t, "asset-library", "images", "upload", "--library-id", "lib", "--file", path)
+			reg := asctest.NewRegistry(t)
+			stdout, stderr, err := runAssetLibrary(t, stubClient(t, reg), "asset-library", "images", "upload", "--library-id", "lib", "--file", path)
 			if !isUsageClassError(err) || stdout != "" || stderr == "" {
 				t.Fatalf("err=%v stdout=%q stderr=%q", err, stdout, stderr)
 			}
@@ -298,15 +308,10 @@ func TestAssetLibraryUploadRejectsBlankReferenceNameBeforeHTTP(t *testing.T) {
 	if err := os.WriteFile(videoPath, []byte("video"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	original := http.DefaultTransport
-	t.Cleanup(func() { http.DefaultTransport = original })
-	http.DefaultTransport = roundTripFunc(func(*http.Request) (*http.Response, error) {
-		t.Fatal("blank reference name caused HTTP")
-		return nil, nil
-	})
+	reg := asctest.NewRegistry(t)
 	for _, tc := range []struct{ kind, file string }{{"images", imagePath}, {"videos", videoPath}} {
 		t.Run(tc.kind, func(t *testing.T) {
-			stdout, stderr, err := runAssetLibrary(t, "asset-library", tc.kind, "upload", "--library-id", "lib", "--file", tc.file, "--reference-name", "  ")
+			stdout, stderr, err := runAssetLibrary(t, stubClient(t, reg), "asset-library", tc.kind, "upload", "--library-id", "lib", "--file", tc.file, "--reference-name", "  ")
 			want := "asset-library " + tc.kind + " upload: --reference-name must not be blank"
 			if !isUsageClassError(err) || stdout != "" || !strings.Contains(stderr, want) {
 				t.Fatalf("err=%v stdout=%q stderr=%q", err, stdout, stderr)

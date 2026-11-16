@@ -1,37 +1,27 @@
 package cmdtest
 
 import (
-	"context"
 	"errors"
 	"flag"
 	"fmt"
 	"image"
 	"image/png"
-	"io"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
-	"sync/atomic"
 	"testing"
+
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asctest"
 )
 
 func TestAssetsScreenshotsSizesRejectsAllWithDisplayType(t *testing.T) {
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	var runErr error
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{
-			"screenshots", "sizes",
-			"--all",
-			"--display-type", "APP_IPHONE_65",
-			"--output", "json",
-		}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		runErr = root.Run(context.Background())
-	})
+	stdout, stderr, runErr := runRootWithDeps(t, nil, []string{
+		"screenshots", "sizes",
+		"--all",
+		"--display-type", "APP_IPHONE_65",
+		"--output", "json",
+	}...)
 
 	if stdout != "" {
 		t.Fatalf("expected empty stdout, got %q", stdout)
@@ -45,10 +35,10 @@ func TestAssetsScreenshotsSizesRejectsAllWithDisplayType(t *testing.T) {
 }
 
 func TestAssetsScreenshotsSizesRejectsInvalidDisplayTypeAsUsageError(t *testing.T) {
-	stdout, stderr, runErr := runRootCommand(t, []string{
+	stdout, stderr, runErr := runRootWithDeps(t, nil, []string{
 		"screenshots", "sizes",
 		"--display-type", "not-a-device",
-	})
+	}...)
 
 	if stdout != "" {
 		t.Fatalf("expected empty stdout, got %q", stdout)
@@ -69,31 +59,14 @@ func TestAssetsScreenshotsUploadRejectsInvalidDimensionsBeforeNetwork(t *testing
 	path := filepath.Join(dir, "invalid.png")
 	writePNG(t, path, 100, 100)
 
-	var calls int32
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() {
-		http.DefaultTransport = originalTransport
-	})
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		atomic.AddInt32(&calls, 1)
-		return nil, fmt.Errorf("unexpected network request: %s %s", req.Method, req.URL.Path)
-	})
+	reg := asctest.NewRegistry(t)
 
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	var runErr error
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{
-			"screenshots", "upload",
-			"--version-localization", "LOC_ID",
-			"--path", path,
-			"--device-type", "IPHONE_35",
-		}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		runErr = root.Run(context.Background())
-	})
+	stdout, stderr, runErr := runRootWithDeps(t, stubClient(t, reg), []string{
+		"screenshots", "upload",
+		"--version-localization", "LOC_ID",
+		"--path", path,
+		"--device-type", "IPHONE_35",
+	}...)
 
 	if stdout != "" {
 		t.Fatalf("expected empty stdout, got %q", stdout)
@@ -114,28 +87,20 @@ func TestAssetsScreenshotsUploadRejectsInvalidDimensionsBeforeNetwork(t *testing
 	if !strings.Contains(message, "asc screenshots sizes") {
 		t.Fatalf("expected hint in error, got %q", message)
 	}
-	if atomic.LoadInt32(&calls) != 0 {
+	if calls := len(reg.Requests()); calls != 0 {
 		t.Fatalf("expected no network calls, got %d", calls)
 	}
 }
 
 func TestAssetsScreenshotsUploadRejectsInvalidDeviceTypeAsUsageError(t *testing.T) {
 	dir := t.TempDir()
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
 
-	var runErr error
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{
-			"screenshots", "upload",
-			"--version-localization", "LOC_ID",
-			"--path", dir,
-			"--device-type", "not-a-device",
-		}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		runErr = root.Run(context.Background())
-	})
+	stdout, stderr, runErr := runRootWithDeps(t, nil, []string{
+		"screenshots", "upload",
+		"--version-localization", "LOC_ID",
+		"--path", dir,
+		"--device-type", "not-a-device",
+	}...)
 
 	if stdout != "" {
 		t.Fatalf("expected empty stdout, got %q", stdout)
@@ -156,31 +121,14 @@ func TestAssetsScreenshotsUploadSuggestsMatchingDisplayTypeBeforeNetwork(t *test
 	path := filepath.Join(dir, "known-size-wrong-type.png")
 	writePNG(t, path, 1206, 2622)
 
-	var calls int32
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() {
-		http.DefaultTransport = originalTransport
-	})
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		atomic.AddInt32(&calls, 1)
-		return nil, fmt.Errorf("unexpected network request: %s %s", req.Method, req.URL.Path)
-	})
+	reg := asctest.NewRegistry(t)
 
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	var runErr error
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{
-			"screenshots", "upload",
-			"--version-localization", "LOC_ID",
-			"--path", path,
-			"--device-type", "IPHONE_67",
-		}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		runErr = root.Run(context.Background())
-	})
+	stdout, stderr, runErr := runRootWithDeps(t, stubClient(t, reg), []string{
+		"screenshots", "upload",
+		"--version-localization", "LOC_ID",
+		"--path", path,
+		"--device-type", "IPHONE_67",
+	}...)
 
 	if stdout != "" {
 		t.Fatalf("expected empty stdout, got %q", stdout)
@@ -194,7 +142,7 @@ func TestAssetsScreenshotsUploadSuggestsMatchingDisplayTypeBeforeNetwork(t *test
 	if !strings.Contains(runErr.Error(), "This size matches: APP_IPHONE_61") {
 		t.Fatalf("expected display type suggestion in error, got %q", runErr.Error())
 	}
-	if atomic.LoadInt32(&calls) != 0 {
+	if calls := len(reg.Requests()); calls != 0 {
 		t.Fatalf("expected no network calls, got %d", calls)
 	}
 }
@@ -207,31 +155,17 @@ func TestAssetsScreenshotsUploadAcceptsIPhone69AliasAndLatestDimensions(t *testi
 	path := filepath.Join(dir, "valid-iphone69.png")
 	writePNG(t, path, 1320, 2868)
 
-	var calls int32
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() {
-		http.DefaultTransport = originalTransport
-	})
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		atomic.AddInt32(&calls, 1)
+	reg := asctest.NewRegistry(t)
+	reg.Register(asctest.GET("/v1/appStoreVersionLocalizations/LOC_ID/appScreenshotSets"), func(*http.Request) (*http.Response, error) {
 		return nil, fmt.Errorf("forced network failure after local validation")
 	})
 
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	var runErr error
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{
-			"screenshots", "upload",
-			"--version-localization", "LOC_ID",
-			"--path", path,
-			"--device-type", "IPHONE_69",
-		}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		runErr = root.Run(context.Background())
-	})
+	stdout, stderr, runErr := runRootWithDeps(t, stubClient(t, reg), []string{
+		"screenshots", "upload",
+		"--version-localization", "LOC_ID",
+		"--path", path,
+		"--device-type", "IPHONE_69",
+	}...)
 
 	if stdout != "" {
 		t.Fatalf("expected empty stdout, got %q", stdout)
@@ -245,7 +179,7 @@ func TestAssetsScreenshotsUploadAcceptsIPhone69AliasAndLatestDimensions(t *testi
 	if !strings.Contains(runErr.Error(), "forced network failure after local validation") {
 		t.Fatalf("expected network failure error, got %q", runErr.Error())
 	}
-	if atomic.LoadInt32(&calls) == 0 {
+	if len(reg.Requests()) == 0 {
 		t.Fatal("expected at least one network call after successful local validation")
 	}
 }

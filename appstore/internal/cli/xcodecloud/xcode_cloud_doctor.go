@@ -5,7 +5,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
@@ -22,9 +21,9 @@ type xcodeCloudDoctorOptions struct {
 	SaveLogs     string
 }
 
-// XcodeCloudDoctorCommand returns the xcode-cloud doctor subcommand.
-func XcodeCloudDoctorCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("doctor", flag.ExitOnError)
+// newXcodeCloudDoctorCommand returns the xcode-cloud doctor subcommand.
+func newXcodeCloudDoctorCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("doctor", flag.ExitOnError)
 
 	runID := shared.BindResourceIDFlag(fs, "run-id", "ciBuildRuns", "Build run ID to diagnose")
 	wait := fs.Bool("wait", false, "Wait for the build run to complete before diagnosing it")
@@ -32,7 +31,7 @@ func XcodeCloudDoctorCommand() *ffcli.Command {
 	timeout := fs.Duration("timeout", 0, "Timeout for Xcode Cloud requests (0 = use ASC_TIMEOUT or 30m default)")
 	skipLogs := fs.Bool("skip-logs", false, "Skip automatic inspection of failed-action log bundles")
 	saveLogs := fs.String("save-logs", "", "Directory in which to retain inspected log bundles")
-	output := shared.BindOutputFlags(fs)
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "doctor",
@@ -52,41 +51,37 @@ Examples:
   asc xcode-cloud doctor --run-id "BUILD_RUN_ID" --wait --save-logs ./xcode-cloud-logs
   asc xcode-cloud doctor --run-id "BUILD_RUN_ID" --skip-logs --output json`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
-			if len(args) > 0 {
-				return shared.WithDiagnostic(shared.UsageError("xcode-cloud doctor does not accept positional arguments"), shared.DiagnosticInvalidInput, "")
-			}
 			runIDValue := strings.TrimSpace(*runID)
 			if runIDValue == "" {
-				fmt.Fprintln(os.Stderr, "Error: --run-id is required")
-				return shared.MissingRequiredUsageError("--run-id")
+				return d.RequiredFlag("--run-id")
 			}
 			if *timeout < 0 {
-				return shared.UsageError("--timeout must be greater than or equal to 0")
+				return d.UsageError("--timeout must be greater than or equal to 0")
 			}
 			if *wait && *pollInterval <= 0 {
-				return shared.UsageError("--poll-interval must be greater than 0")
+				return d.UsageError("--poll-interval must be greater than 0")
 			}
 			if !*wait && flagProvided(fs, "poll-interval") {
-				return shared.UsageError("--poll-interval requires --wait")
+				return d.UsageError("--poll-interval requires --wait")
 			}
 			if *skipLogs && strings.TrimSpace(*saveLogs) != "" {
-				return shared.UsageError("--save-logs and --skip-logs are mutually exclusive")
+				return d.UsageError("--save-logs and --skip-logs are mutually exclusive")
 			}
 			if flagProvided(fs, "save-logs") && strings.TrimSpace(*saveLogs) == "" {
-				return shared.UsageError("--save-logs must not be empty")
+				return d.UsageError("--save-logs must not be empty")
 			}
 			if _, err := shared.ValidateOutputFormat(*output.Output, *output.Pretty); err != nil {
 				return err
 			}
 
-			client, err := shared.GetASCClient()
+			client, err := d.Client()
 			if err != nil {
 				return fmt.Errorf("xcode-cloud doctor: %w", err)
 			}
 
-			requestCtx, cancel := contextWithXcodeCloudTimeout(ctx, *timeout)
+			requestCtx, cancel := contextWithXcodeCloudTimeout(d, ctx, *timeout)
 			defer cancel()
 
 			result, err := diagnoseXcodeCloudRun(requestCtx, client, runIDValue, xcodeCloudDoctorOptions{
@@ -99,7 +94,7 @@ Examples:
 				return fmt.Errorf("xcode-cloud doctor: %w", err)
 			}
 
-			return shared.PrintOutput(result, *output.Output, *output.Pretty)
+			return d.PrintOutput(result, *output.Output, *output.Pretty)
 		},
 	}
 }
@@ -222,7 +217,7 @@ func diagnoseXcodeCloudAction(ctx context.Context, client *asc.Client, action as
 }
 
 func listAllXcodeCloudActionIssues(ctx context.Context, client *asc.Client, actionID string) ([]asc.CiIssueResource, error) {
-	resp, err := client.GetCiBuildActionIssues(ctx, actionID, asc.WithCiIssuesLimit(200))
+	resp, err := client.GetCiBuildActionIssues(ctx, actionID, asc.Limit[asc.CiIssuesOption](200))
 	if err != nil {
 		return nil, err
 	}
@@ -230,7 +225,7 @@ func listAllXcodeCloudActionIssues(ctx context.Context, client *asc.Client, acti
 		return resp.Data, nil
 	}
 	allPages, err := asc.PaginateAll(ctx, resp, func(ctx context.Context, nextURL string) (asc.PaginatedResponse, error) {
-		return client.GetCiBuildActionIssues(ctx, actionID, asc.WithCiIssuesNextURL(nextURL))
+		return client.GetCiBuildActionIssues(ctx, actionID, asc.NextURL[asc.CiIssuesOption](nextURL))
 	})
 	if err != nil {
 		return nil, err
@@ -243,7 +238,7 @@ func listAllXcodeCloudActionIssues(ctx context.Context, client *asc.Client, acti
 }
 
 func listAllXcodeCloudActionArtifacts(ctx context.Context, client *asc.Client, actionID string) ([]asc.CiArtifactResource, error) {
-	resp, err := client.GetCiBuildActionArtifacts(ctx, actionID, asc.WithCiArtifactsLimit(200))
+	resp, err := client.GetCiBuildActionArtifacts(ctx, actionID, asc.Limit[asc.CiArtifactsOption](200))
 	if err != nil {
 		return nil, err
 	}
@@ -251,7 +246,7 @@ func listAllXcodeCloudActionArtifacts(ctx context.Context, client *asc.Client, a
 		return resp.Data, nil
 	}
 	allPages, err := asc.PaginateAll(ctx, resp, func(ctx context.Context, nextURL string) (asc.PaginatedResponse, error) {
-		return client.GetCiBuildActionArtifacts(ctx, actionID, asc.WithCiArtifactsNextURL(nextURL))
+		return client.GetCiBuildActionArtifacts(ctx, actionID, asc.NextURL[asc.CiArtifactsOption](nextURL))
 	})
 	if err != nil {
 		return nil, err

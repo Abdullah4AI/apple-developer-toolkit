@@ -1,17 +1,26 @@
 package agerating
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"flag"
+	"os"
 	"strings"
 	"testing"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
+func newTestDeps() (*shared.Deps, *bytes.Buffer, *bytes.Buffer) {
+	var stdout, stderr bytes.Buffer
+	return &shared.Deps{IO: &shared.IO{Out: &stdout, ErrOut: &stderr}, LookupEnv: os.LookupEnv}, &stdout, &stderr
+}
+
 func TestAgeRatingCommandShape(t *testing.T) {
-	cmd := AgeRatingCommand()
+	d, _, _ := newTestDeps()
+	cmd := NewAgeRatingCommand(d)
 	if cmd == nil {
 		t.Fatal("expected age-rating command")
 		return
@@ -22,7 +31,7 @@ func TestAgeRatingCommandShape(t *testing.T) {
 	if len(cmd.Subcommands) != 3 {
 		t.Fatalf("expected 3 subcommands, got %d", len(cmd.Subcommands))
 	}
-	if got := AgeRatingCommand(); got == nil {
+	if got := NewAgeRatingCommand(d); got == nil {
 		t.Fatal("expected Command wrapper to return command")
 	}
 	usage := cmd.UsageFunc(cmd)
@@ -46,32 +55,53 @@ func TestAgeRatingValidationErrors(t *testing.T) {
 	t.Setenv("ASC_APP_ID", "")
 
 	t.Run("view missing app or ids", func(t *testing.T) {
-		cmd := AgeRatingViewCommand()
+		d, stdout, stderr := newTestDeps()
+		cmd := newAgeRatingViewCommand(d)
 		if err := cmd.FlagSet.Parse([]string{}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
 		if err := cmd.Exec(context.Background(), nil); !errors.Is(err, flag.ErrHelp) {
 			t.Fatalf("expected ErrHelp, got %v", err)
 		}
+		if got, want := stderr.String(), "Error: --app is required (or set ASC_APP_ID)\n"; got != want {
+			t.Fatalf("stderr = %q, want %q", got, want)
+		}
+		if stdout.Len() != 0 {
+			t.Fatalf("stdout = %q, want empty", stdout.String())
+		}
 	})
 
 	t.Run("view conflicting app-info and version", func(t *testing.T) {
-		cmd := AgeRatingViewCommand()
+		d, stdout, stderr := newTestDeps()
+		cmd := newAgeRatingViewCommand(d)
 		if err := cmd.FlagSet.Parse([]string{"--app-info-id", "A", "--version-id", "V"}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
 		if err := cmd.Exec(context.Background(), nil); !errors.Is(err, flag.ErrHelp) {
 			t.Fatalf("expected ErrHelp, got %v", err)
 		}
+		if got, want := stderr.String(), "Error: only one of --app-info-id or --version-id is allowed\n"; got != want {
+			t.Fatalf("stderr = %q, want %q", got, want)
+		}
+		if stdout.Len() != 0 {
+			t.Fatalf("stdout = %q, want empty", stdout.String())
+		}
 	})
 
 	t.Run("edit missing id and app", func(t *testing.T) {
-		cmd := AgeRatingEditCommand()
+		d, stdout, stderr := newTestDeps()
+		cmd := newAgeRatingEditCommand(d)
 		if err := cmd.FlagSet.Parse([]string{}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
 		if err := cmd.Exec(context.Background(), nil); !errors.Is(err, flag.ErrHelp) {
 			t.Fatalf("expected ErrHelp, got %v", err)
+		}
+		if got, want := stderr.String(), "Error: --id or --app is required (or set ASC_APP_ID)\n"; got != want {
+			t.Fatalf("stderr = %q, want %q", got, want)
+		}
+		if stdout.Len() != 0 {
+			t.Fatalf("stdout = %q, want empty", stdout.String())
 		}
 	})
 }
@@ -175,13 +205,17 @@ func TestValidateAgeRatingDependenciesRejectsTransitiveUGCContradiction(t *testi
 	trueValue := true
 	falseValue := false
 
-	err := validateAgeRatingDependencies(asc.AgeRatingDeclarationAttributes{
+	d, _, stderr := newTestDeps()
+	err := validateAgeRatingDependencies(d, asc.AgeRatingDeclarationAttributes{
 		AgeAssurance:             &trueValue,
 		SocialMediaAgeRestricted: &asc.NullableBool{Value: &trueValue},
 		UserGeneratedContent:     &falseValue,
 	})
 	if err == nil || !strings.Contains(err.Error(), "--social-media-age-restricted true cannot be combined with --user-generated-content false") {
 		t.Fatalf("expected transitive user-generated-content dependency error, got %v", err)
+	}
+	if got, want := stderr.String(), "Error: --social-media-age-restricted true cannot be combined with --user-generated-content false\n"; got != want {
+		t.Fatalf("stderr = %q, want %q", got, want)
 	}
 }
 
@@ -224,8 +258,12 @@ func TestValidateAgeRatingDependenciesAllowsPartialUpdates(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			if err := validateAgeRatingDependencies(test.attrs); err != nil {
+			d, _, stderr := newTestDeps()
+			if err := validateAgeRatingDependencies(d, test.attrs); err != nil {
 				t.Fatalf("unexpected dependency error: %v", err)
+			}
+			if stderr.Len() != 0 {
+				t.Fatalf("stderr = %q, want empty", stderr.String())
 			}
 		})
 	}

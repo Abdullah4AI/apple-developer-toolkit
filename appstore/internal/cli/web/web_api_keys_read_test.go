@@ -18,13 +18,14 @@ func TestWebAPIKeysListPrintsMetadataWithoutKeyMaterial(t *testing.T) {
 	restore := installWebAPIKeyReadFakes(t)
 	t.Cleanup(restore)
 
-	cmd := WebAPIKeysListCommand()
+	d, depsStdout, depsStderr := newWebTestDeps()
+	cmd := newWebAPIKeysListCommand(d)
 	if err := cmd.FlagSet.Parse([]string{"--output", "json"}); err != nil {
 		t.Fatalf("parse error: %v", err)
 	}
 
 	var execErr error
-	stdout, stderr := captureOutput(t, func() {
+	stdout, stderr := runWithWebTestDeps(depsStdout, depsStderr, func() {
 		execErr = cmd.Exec(context.Background(), nil)
 	})
 	if execErr != nil {
@@ -53,34 +54,6 @@ func TestWebAPIKeysListPrintsMetadataWithoutKeyMaterial(t *testing.T) {
 	assertNoKeyMaterial(t, apiKeyTestP8(t), stdout, stderr)
 }
 
-func TestWebAPIKeysListRejectsPositionalArgumentsBeforeSession(t *testing.T) {
-	resolveCalled := false
-	restoreSession := SetResolveWebSession(func(ctx context.Context, appleID, password, twoFactorCode string) (*webcore.AuthSession, string, error) {
-		resolveCalled = true
-		return &webcore.AuthSession{}, "cache", nil
-	})
-	t.Cleanup(restoreSession)
-
-	cmd := WebAPIKeysListCommand()
-	if err := cmd.FlagSet.Parse([]string{"extra"}); err != nil {
-		t.Fatalf("parse error: %v", err)
-	}
-
-	var execErr error
-	_, stderr := captureOutput(t, func() {
-		execErr = cmd.Exec(context.Background(), cmd.FlagSet.Args())
-	})
-	if !errors.Is(execErr, flag.ErrHelp) {
-		t.Fatalf("expected usage error, got %v", execErr)
-	}
-	if !strings.Contains(stderr, "web api-keys list does not accept positional arguments") {
-		t.Fatalf("expected positional-args stderr, got %q", stderr)
-	}
-	if resolveCalled {
-		t.Fatal("did not expect session resolution for positional arguments")
-	}
-}
-
 func TestWebAPIKeysListRejectsInvalidOutputBeforeSession(t *testing.T) {
 	resolveCalled := false
 	restoreSession := SetResolveWebSession(func(ctx context.Context, appleID, password, twoFactorCode string) (*webcore.AuthSession, string, error) {
@@ -89,13 +62,14 @@ func TestWebAPIKeysListRejectsInvalidOutputBeforeSession(t *testing.T) {
 	})
 	t.Cleanup(restoreSession)
 
-	cmd := WebAPIKeysListCommand()
+	d, depsStdout, depsStderr := newWebTestDeps()
+	cmd := newWebAPIKeysListCommand(d)
 	if err := cmd.FlagSet.Parse([]string{"--output", "xml"}); err != nil {
 		t.Fatalf("parse error: %v", err)
 	}
 
 	var execErr error
-	_, stderr := captureOutput(t, func() {
+	_, stderr := runWithWebTestDeps(depsStdout, depsStderr, func() {
 		execErr = cmd.Exec(context.Background(), nil)
 	})
 	if !errors.Is(execErr, flag.ErrHelp) {
@@ -117,13 +91,14 @@ func TestWebAPIKeysViewRequiresKeyIDBeforeSession(t *testing.T) {
 	})
 	t.Cleanup(restoreSession)
 
-	cmd := WebAPIKeysViewCommand()
+	d, depsStdout, depsStderr := newWebTestDeps()
+	cmd := newWebAPIKeysViewCommand(d)
 	if err := cmd.FlagSet.Parse([]string{}); err != nil {
 		t.Fatalf("parse error: %v", err)
 	}
 
 	var execErr error
-	_, stderr := captureOutput(t, func() {
+	_, stderr := runWithWebTestDeps(depsStdout, depsStderr, func() {
 		execErr = cmd.Exec(context.Background(), nil)
 	})
 	if !errors.Is(execErr, flag.ErrHelp) {
@@ -145,13 +120,14 @@ func TestWebAPIKeysViewRejectsBlankKeyIDBeforeSession(t *testing.T) {
 	})
 	t.Cleanup(restoreSession)
 
-	cmd := WebAPIKeysViewCommand()
+	d, depsStdout, depsStderr := newWebTestDeps()
+	cmd := newWebAPIKeysViewCommand(d)
 	if err := cmd.FlagSet.Parse([]string{"--key-id", "   "}); err != nil {
 		t.Fatalf("parse error: %v", err)
 	}
 
 	var execErr error
-	_, stderr := captureOutput(t, func() {
+	_, stderr := runWithWebTestDeps(depsStdout, depsStderr, func() {
 		execErr = cmd.Exec(context.Background(), nil)
 	})
 	if !errors.Is(execErr, flag.ErrHelp) {
@@ -169,13 +145,14 @@ func TestWebAPIKeysViewPrintsMetadataWithoutKeyMaterial(t *testing.T) {
 	restore := installWebAPIKeyReadFakes(t)
 	t.Cleanup(restore)
 
-	cmd := WebAPIKeysViewCommand()
+	d, depsStdout, depsStderr := newWebTestDeps()
+	cmd := newWebAPIKeysViewCommand(d)
 	if err := cmd.FlagSet.Parse([]string{"--key-id", "ABC123XYZ", "--output", "json"}); err != nil {
 		t.Fatalf("parse error: %v", err)
 	}
 
 	var execErr error
-	stdout, stderr := captureOutput(t, func() {
+	stdout, stderr := runWithWebTestDeps(depsStdout, depsStderr, func() {
 		execErr = cmd.Exec(context.Background(), nil)
 	})
 	if execErr != nil {
@@ -222,13 +199,14 @@ func TestWebAPIKeysListHTTPFixtureNeverPrintsPrivateKey(t *testing.T) {
 		}))
 	}
 
-	cmd := WebAPIKeysListCommand()
+	d, depsStdout, depsStderr := newWebTestDeps()
+	cmd := newWebAPIKeysListCommand(d)
 	if err := cmd.FlagSet.Parse([]string{"--output", "json"}); err != nil {
 		t.Fatalf("parse error: %v", err)
 	}
 
 	var execErr error
-	stdout, stderr := captureOutput(t, func() {
+	stdout, stderr := runWithWebTestDeps(depsStdout, depsStderr, func() {
 		execErr = cmd.Exec(context.Background(), nil)
 	})
 	if execErr != nil {
@@ -258,13 +236,14 @@ func TestWebAPIKeysViewHTTPFixtureNeverPrintsPrivateKey(t *testing.T) {
 		}))
 	}
 
-	cmd := WebAPIKeysViewCommand()
+	d, depsStdout, depsStderr := newWebTestDeps()
+	cmd := newWebAPIKeysViewCommand(d)
 	if err := cmd.FlagSet.Parse([]string{"--key-id", "ABC123XYZ", "--output", "json"}); err != nil {
 		t.Fatalf("parse error: %v", err)
 	}
 
 	var execErr error
-	stdout, stderr := captureOutput(t, func() {
+	stdout, stderr := runWithWebTestDeps(depsStdout, depsStderr, func() {
 		execErr = cmd.Exec(context.Background(), nil)
 	})
 	if execErr != nil {

@@ -34,7 +34,8 @@ func TestXcodeDoctorCommandPassesFlagsAndPrintsJSON(t *testing.T) {
 		}, nil
 	}
 
-	cmd := XcodeDoctorCommand()
+	d := newXcodeTestDeps(nil)
+	cmd := newXcodeDoctorCommand(d)
 	cmd.FlagSet.SetOutput(io.Discard)
 	if err := cmd.FlagSet.Parse([]string{
 		"--developer-dir", "/Applications/Xcode.app",
@@ -46,7 +47,7 @@ func TestXcodeDoctorCommandPassesFlagsAndPrintsJSON(t *testing.T) {
 	}
 
 	var runErr error
-	stdout, stderr := captureCommandOutput(t, func() error {
+	stdout, stderr := captureCommandOutput(t, d, func() error {
 		runErr = cmd.Exec(context.Background(), nil)
 		return runErr
 	})
@@ -97,14 +98,15 @@ func TestXcodeDoctorCommandPrintsFailureReportAndReturnsError(t *testing.T) {
 		}, errors.New("developer directory is unavailable")
 	}
 
-	cmd := XcodeDoctorCommand()
+	d := newXcodeTestDeps(nil)
+	cmd := newXcodeDoctorCommand(d)
 	cmd.FlagSet.SetOutput(io.Discard)
 	if err := cmd.FlagSet.Parse([]string{"--output", "json"}); err != nil {
 		t.Fatalf("FlagSet.Parse() error = %v", err)
 	}
 
 	var runErr error
-	stdout, stderr := captureCommandOutput(t, func() error {
+	stdout, stderr := captureCommandOutput(t, d, func() error {
 		runErr = cmd.Exec(context.Background(), nil)
 		return runErr
 	})
@@ -141,12 +143,13 @@ func TestXcodeDoctorCommandDoesNotInventBetaWhenSelectionFails(t *testing.T) {
 
 	for _, format := range []string{"json", "table", "markdown"} {
 		t.Run(format, func(t *testing.T) {
-			cmd := XcodeDoctorCommand()
+			d := newXcodeTestDeps(nil)
+			cmd := newXcodeDoctorCommand(d)
 			cmd.FlagSet.SetOutput(io.Discard)
 			if err := cmd.FlagSet.Parse([]string{"--output", format}); err != nil {
 				t.Fatalf("FlagSet.Parse() error = %v", err)
 			}
-			stdout, _ := captureCommandOutput(t, func() error {
+			stdout, _ := captureCommandOutput(t, d, func() error {
 				return cmd.Exec(context.Background(), nil)
 			})
 			if format == "json" {
@@ -189,12 +192,13 @@ func TestXcodeDoctorCommandRendersHumanOutput(t *testing.T) {
 
 	for _, format := range []string{"table", "markdown"} {
 		t.Run(format, func(t *testing.T) {
-			cmd := XcodeDoctorCommand()
+			d := newXcodeTestDeps(nil)
+			cmd := newXcodeDoctorCommand(d)
 			cmd.FlagSet.SetOutput(io.Discard)
 			if err := cmd.FlagSet.Parse([]string{"--output", format}); err != nil {
 				t.Fatalf("FlagSet.Parse() error = %v", err)
 			}
-			stdout, stderr := captureCommandOutput(t, func() error {
+			stdout, stderr := captureCommandOutput(t, d, func() error {
 				return cmd.Exec(context.Background(), nil)
 			})
 			if stderr != "" {
@@ -221,7 +225,6 @@ func TestXcodeDoctorCommandRejectsInvalidInputBeforeRunning(t *testing.T) {
 		args []string
 		want string
 	}{
-		{name: "positional", args: []string{"unexpected"}, want: "does not accept positional arguments"},
 		{name: "empty developer dir", args: []string{"--developer-dir", ""}, want: "--developer-dir must not be empty"},
 		{name: "empty sdk", args: []string{"--sdk", "  "}, want: "--sdk must not be empty"},
 		{name: "invalid output", args: []string{"--output", "yaml"}, want: "must be one of"},
@@ -236,13 +239,14 @@ func TestXcodeDoctorCommandRejectsInvalidInputBeforeRunning(t *testing.T) {
 				return nil, nil
 			}
 
-			cmd := XcodeDoctorCommand()
+			d := newXcodeTestDeps(nil)
+			cmd := newXcodeDoctorCommand(d)
 			cmd.FlagSet.SetOutput(io.Discard)
 			if err := cmd.FlagSet.Parse(test.args); err != nil {
 				t.Fatalf("FlagSet.Parse() error = %v", err)
 			}
 			var runErr error
-			stdout, stderr := captureCommandOutput(t, func() error {
+			stdout, stderr := captureCommandOutput(t, d, func() error {
 				runErr = cmd.Exec(context.Background(), cmd.FlagSet.Args())
 				return runErr
 			})

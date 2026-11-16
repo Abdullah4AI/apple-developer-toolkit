@@ -1,10 +1,10 @@
 package cmdtest
 
 import (
-	"errors"
-	"net/http"
 	"strings"
 	"testing"
+
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asctest"
 )
 
 // TestRemovedFlagAliasesAreUnknownFlags locks the 5.0.0 removal of the
@@ -19,15 +19,16 @@ func TestRemovedFlagAliasesAreUnknownFlags(t *testing.T) {
 		alias     string
 		canonical string
 		args      []string
+		deps      bool // the command is built on shared.Deps: run it on test deps
 	}{
-		{path: []string{"versions", "update"}, alias: "id", canonical: "version-id", args: []string{"--id", "version-1", "--copyright", "2026 Example"}},
-		{path: []string{"versions", "attach-build"}, alias: "build", canonical: "build-id", args: []string{"--version-id", "version-1", "--build", "build-1"}},
+		{path: []string{"versions", "update"}, alias: "id", canonical: "version-id", args: []string{"--id", "version-1", "--copyright", "2026 Example"}, deps: true},
+		{path: []string{"versions", "attach-build"}, alias: "build", canonical: "build-id", args: []string{"--version-id", "version-1", "--build", "build-1"}, deps: true},
 		{path: []string{"apps", "app-encryption-declarations", "list"}, alias: "build", canonical: "build-id", args: []string{"--id", "app-1", "--build", "build-1"}},
-		{path: []string{"encryption", "declarations", "list"}, alias: "build", canonical: "build-id", args: []string{"--app", "app-1", "--build", "build-1"}},
-		{path: []string{"encryption", "declarations", "assign-builds"}, alias: "build", canonical: "build-id", args: []string{"--id", "decl-1", "--build", "build-1"}},
+		{path: []string{"encryption", "declarations", "list"}, alias: "build", canonical: "build-id", args: []string{"--app", "app-1", "--build", "build-1"}, deps: true},
+		{path: []string{"encryption", "declarations", "assign-builds"}, alias: "build", canonical: "build-id", args: []string{"--id", "decl-1", "--build", "build-1"}, deps: true},
 		{path: []string{"bundle-ids", "capabilities", "list"}, alias: "bundle-id", canonical: "bundle", args: []string{"--bundle-id", "bundle-1"}},
-		{path: []string{"localizations", "update"}, alias: "version-id", canonical: "version", args: []string{"--version-id", "version-1", "--locale", "en-US", "--description", "Updated"}},
-		{path: []string{"screenshots", "list"}, alias: "localization-id", canonical: "version-localization", args: []string{"--localization-id", "loc-1"}},
+		{path: []string{"localizations", "update"}, alias: "version-id", canonical: "version", args: []string{"--version-id", "version-1", "--locale", "en-US", "--description", "Updated"}, deps: true},
+		{path: []string{"screenshots", "list"}, alias: "localization-id", canonical: "version-localization", args: []string{"--localization-id", "loc-1"}, deps: true},
 		{path: []string{"apps", "info", "view"}, alias: "app-info", canonical: "info-id", args: []string{"--app-info", "info-1"}},
 		{path: []string{"apps", "info", "relationships", "primary-category"}, alias: "id", canonical: "info-id", args: []string{"--id", "info-1"}},
 		{path: []string{"apps", "info", "relationships", "primary-subcategory-one"}, alias: "id", canonical: "info-id", args: []string{"--id", "info-1"}},
@@ -38,10 +39,7 @@ func TestRemovedFlagAliasesAreUnknownFlags(t *testing.T) {
 		{path: []string{"apps", "info", "territory-age-ratings", "list"}, alias: "id", canonical: "info-id", args: []string{"--id", "info-1"}},
 	}
 
-	installDefaultTransport(t, roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		t.Fatalf("removed aliases must fail before HTTP: %s %s", req.Method, req.URL.String())
-		return nil, errors.New("unexpected request")
-	}))
+	asctest.NewRegistry(t).Install()
 
 	root := RootCommand("1.2.3")
 	for _, test := range tests {
@@ -56,7 +54,12 @@ func TestRemovedFlagAliasesAreUnknownFlags(t *testing.T) {
 			}
 
 			args := append(append([]string{}, test.path...), test.args...)
-			assertUsageExit(t, args, "Error: `--"+test.alias+"` was removed in 5.0.0; use `--"+test.canonical+"`")
+			wantErr := "Error: `--" + test.alias + "` was removed in 5.0.0; use `--" + test.canonical + "`"
+			if test.deps {
+				assertUsageExitWithDeps(t, nil, args, wantErr)
+				return
+			}
+			assertUsageExit(t, args, wantErr)
 		})
 	}
 }

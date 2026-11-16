@@ -8,11 +8,6 @@ import (
 	"strings"
 )
 
-// BetaLicenseAgreementAttributes describes a beta license agreement.
-type BetaLicenseAgreementAttributes struct {
-	AgreementText string `json:"agreementText,omitempty"`
-}
-
 // BetaLicenseAgreementRelationships describes beta license agreement relationships.
 type BetaLicenseAgreementRelationships struct {
 	App *Relationship `json:"app,omitempty"`
@@ -41,95 +36,6 @@ type BetaLicenseAgreementResponse struct {
 	Included json.RawMessage              `json:"included,omitempty"`
 }
 
-// BetaLicenseAgreementUpdateAttributes describes fields for updating a beta license agreement.
-type BetaLicenseAgreementUpdateAttributes struct {
-	AgreementText *string `json:"agreementText,omitempty"`
-}
-
-// BetaLicenseAgreementUpdateData is the data portion of a beta license agreement update request.
-type BetaLicenseAgreementUpdateData struct {
-	Type       ResourceType                          `json:"type"`
-	ID         string                                `json:"id"`
-	Attributes *BetaLicenseAgreementUpdateAttributes `json:"attributes,omitempty"`
-}
-
-// BetaLicenseAgreementUpdateRequest is a request to update a beta license agreement.
-type BetaLicenseAgreementUpdateRequest struct {
-	Data BetaLicenseAgreementUpdateData `json:"data"`
-}
-
-// AppBetaLicenseAgreementLinkageResponse is the response for app beta license agreement relationship.
-type AppBetaLicenseAgreementLinkageResponse struct {
-	Data  ResourceData `json:"data"`
-	Links Links        `json:"links"`
-}
-
-// BetaLicenseAgreementAppLinkageResponse is the response for beta license agreement app relationship.
-type BetaLicenseAgreementAppLinkageResponse struct {
-	Data  ResourceData `json:"data"`
-	Links Links        `json:"links"`
-}
-
-// GetBetaLicenseAgreements retrieves beta license agreements with optional filters.
-func (c *Client) GetBetaLicenseAgreements(ctx context.Context, opts ...BetaLicenseAgreementsOption) (*BetaLicenseAgreementsResponse, error) {
-	query := &betaLicenseAgreementsQuery{}
-	for _, opt := range opts {
-		opt(query)
-	}
-
-	path := "/v1/betaLicenseAgreements"
-	if query.nextURL != "" {
-		if err := validateNextURL(query.nextURL); err != nil {
-			return nil, fmt.Errorf("betaLicenseAgreements: %w", err)
-		}
-		path = query.nextURL
-	} else if queryString := buildBetaLicenseAgreementsQuery(query); queryString != "" {
-		path += "?" + queryString
-	}
-
-	data, err := c.do(ctx, "GET", path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var response BetaLicenseAgreementsResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
-// GetBetaLicenseAgreement retrieves a beta license agreement by ID.
-func (c *Client) GetBetaLicenseAgreement(ctx context.Context, agreementID string, opts ...BetaLicenseAgreementOption) (*BetaLicenseAgreementResponse, error) {
-	agreementID = strings.TrimSpace(agreementID)
-	if agreementID == "" {
-		return nil, fmt.Errorf("agreementID is required")
-	}
-
-	query := &betaLicenseAgreementQuery{}
-	for _, opt := range opts {
-		opt(query)
-	}
-
-	path := fmt.Sprintf("/v1/betaLicenseAgreements/%s", agreementID)
-	if queryString := buildBetaLicenseAgreementQuery(query); queryString != "" {
-		path += "?" + queryString
-	}
-
-	data, err := c.do(ctx, "GET", path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var response BetaLicenseAgreementResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
 // GetBetaLicenseAgreementForApp retrieves a beta license agreement for an app.
 func (c *Client) GetBetaLicenseAgreementForApp(ctx context.Context, appID string, fields []string) (*BetaLicenseAgreementResponse, error) {
 	appID = strings.TrimSpace(appID)
@@ -139,93 +45,10 @@ func (c *Client) GetBetaLicenseAgreementForApp(ctx context.Context, appID string
 
 	values := url.Values{}
 	addCSV(values, "fields[betaLicenseAgreements]", normalizeList(fields))
-
-	path := fmt.Sprintf("/v1/apps/%s/betaLicenseAgreement", appID)
-	if encoded := values.Encode(); encoded != "" {
-		path += "?" + encoded
-	}
-
-	data, err := c.do(ctx, "GET", path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var response BetaLicenseAgreementResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
-// GetAppBetaLicenseAgreementRelationship retrieves the beta license agreement linkage for an app.
-func (c *Client) GetAppBetaLicenseAgreementRelationship(ctx context.Context, appID string) (*AppBetaLicenseAgreementLinkageResponse, error) {
-	appID = strings.TrimSpace(appID)
-	if appID == "" {
-		return nil, fmt.Errorf("appID is required")
-	}
-
-	path := fmt.Sprintf("/v1/apps/%s/relationships/betaLicenseAgreement", appID)
-	data, err := c.do(ctx, "GET", path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var response AppBetaLicenseAgreementLinkageResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
-// GetBetaLicenseAgreementApp retrieves the app for a beta license agreement.
-func (c *Client) GetBetaLicenseAgreementApp(ctx context.Context, agreementID string, fields []string) (*AppResponse, error) {
-	agreementID = strings.TrimSpace(agreementID)
-	if agreementID == "" {
-		return nil, fmt.Errorf("agreementID is required")
-	}
-
-	values := url.Values{}
-	addCSV(values, "fields[apps]", normalizeList(fields))
-
-	path := fmt.Sprintf("/v1/betaLicenseAgreements/%s/app", agreementID)
-	if encoded := values.Encode(); encoded != "" {
-		path += "?" + encoded
-	}
-
-	data, err := c.do(ctx, "GET", path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var response AppResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
-// GetBetaLicenseAgreementAppRelationship retrieves the app linkage for a beta license agreement.
-func (c *Client) GetBetaLicenseAgreementAppRelationship(ctx context.Context, agreementID string) (*BetaLicenseAgreementAppLinkageResponse, error) {
-	agreementID = strings.TrimSpace(agreementID)
-	if agreementID == "" {
-		return nil, fmt.Errorf("agreementID is required")
-	}
-
-	path := fmt.Sprintf("/v1/betaLicenseAgreements/%s/relationships/app", agreementID)
-	data, err := c.do(ctx, "GET", path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var response BetaLicenseAgreementAppLinkageResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
+	return getJSON[BetaLicenseAgreementResponse](ctx, c, readRequest{
+		Path:  fmt.Sprintf("/v1/apps/%s/betaLicenseAgreement", appID),
+		Query: values.Encode(),
+	})
 }
 
 // UpdateBetaLicenseAgreement updates a beta license agreement by ID.
@@ -252,23 +75,7 @@ func (c *Client) UpdateBetaLicenseAgreement(ctx context.Context, agreementID str
 		},
 	}
 
-	body, err := BuildRequestBody(payload)
-	if err != nil {
-		return nil, err
-	}
-
-	path := fmt.Sprintf("/v1/betaLicenseAgreements/%s", agreementID)
-	data, err := c.do(ctx, "PATCH", path, body)
-	if err != nil {
-		return nil, err
-	}
-
-	var response BetaLicenseAgreementResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
+	return sendJSON[BetaLicenseAgreementResponse](ctx, c, writeRequest{Method: "PATCH", Path: fmt.Sprintf("/v1/betaLicenseAgreements/%s", agreementID), Payload: payload})
 }
 
 // GetLinks returns the pagination links for beta license agreements.

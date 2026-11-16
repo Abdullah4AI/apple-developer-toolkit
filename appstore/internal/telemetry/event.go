@@ -3,7 +3,6 @@ package telemetry
 import (
 	"encoding/json"
 	"runtime"
-	"strconv"
 	"strings"
 	"time"
 
@@ -117,12 +116,6 @@ type EventContext struct {
 // processSessionID groups events from one CLI process without linking separate
 // invocations of the executable.
 var processSessionID = uuid.NewString()
-
-func BuildEvent(commandName, version string, duration time.Duration, exitCode int) (Event, bool) {
-	return BuildEventWithContext(commandName, version, duration, exitCode, EventContext{
-		InvocationShape: InvocationShapeLeaf,
-	})
-}
 
 func BuildEventWithContext(
 	commandName, version string,
@@ -798,20 +791,5 @@ func durationBucket(d time.Duration) string {
 		return "5s_30s"
 	default:
 		return "gte_30s"
-	}
-}
-
-func RedactedSummary(ev Event) map[string]string {
-	installID := ""
-	if ev.InstallID != nil {
-		installID = *ev.InstallID
-	}
-	return map[string]string{
-		"command_path":      ev.CommandPath,
-		"command_family":    ev.CommandFamily,
-		"runtime_context":   string(ev.RuntimeContext),
-		"invocation_source": string(ev.InvocationSource),
-		"duration_ms":       strconv.FormatUint(uint64(ev.DurationMS), 10),
-		"install_id":        installID,
 	}
 }

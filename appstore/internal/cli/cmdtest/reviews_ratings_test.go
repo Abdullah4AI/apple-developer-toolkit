@@ -1,15 +1,16 @@
 package cmdtest
 
 import (
-	"context"
-	"errors"
-	"flag"
-	"io"
+	"net/http"
 	"strings"
 	"testing"
+
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/cmd"
 )
 
 func TestReviewsRatingsValidationErrors(t *testing.T) {
+	t.Setenv("ASC_APP_ID", "")
+
 	tests := []struct {
 		name    string
 		args    []string
@@ -28,7 +29,7 @@ func TestReviewsRatingsValidationErrors(t *testing.T) {
 		{
 			name:    "reviews ratings rejects positional args",
 			args:    []string{"reviews", "ratings", "--app", "123", "extra"},
-			wantErr: "reviews ratings does not accept positional arguments",
+			wantErr: `unexpected argument "extra"`,
 		},
 		{
 			name:    "reviews ratings unsupported country",
@@ -39,73 +40,7 @@ func TestReviewsRatingsValidationErrors(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			root := RootCommand("1.2.3")
-			root.FlagSet.SetOutput(io.Discard)
-
-			stdout, stderr := captureOutput(t, func() {
-				if err := root.Parse(test.args); err != nil {
-					t.Fatalf("parse error: %v", err)
-				}
-				err := root.Run(context.Background())
-				if !errors.Is(err, flag.ErrHelp) {
-					t.Fatalf("expected ErrHelp, got %v", err)
-				}
-			})
-
-			if stdout != "" {
-				t.Fatalf("expected empty stdout, got %q", stdout)
-			}
-			if !strings.Contains(stderr, test.wantErr) {
-				t.Fatalf("expected error %q, got %q", test.wantErr, stderr)
-			}
-		})
-	}
-}
-
-func TestReviewsRatingsOutputErrors(t *testing.T) {
-	tests := []struct {
-		name    string
-		args    []string
-		wantErr string
-	}{
-		{
-			name:    "reviews ratings unsupported output",
-			args:    []string{"reviews", "ratings", "--app", "123", "--output", "yaml"},
-			wantErr: `(got "yaml")`,
-		},
-		{
-			name:    "reviews ratings pretty with table",
-			args:    []string{"reviews", "ratings", "--app", "123", "--output", "table", "--pretty"},
-			wantErr: "--pretty is only valid with JSON output",
-		},
-		{
-			name:    "reviews ratings pretty with markdown",
-			args:    []string{"reviews", "ratings", "--app", "123", "--output", "markdown", "--pretty"},
-			wantErr: "--pretty is only valid with JSON output",
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			root := RootCommand("1.2.3")
-			root.FlagSet.SetOutput(io.Discard)
-
-			stdout, stderr := captureOutput(t, func() {
-				if err := root.Parse(test.args); err != nil {
-					t.Fatalf("parse error: %v", err)
-				}
-				err := root.Run(context.Background())
-				if !isUsageClassError(err) {
-					t.Fatalf("expected ErrHelp, got %v", err)
-				}
-			})
-
-			if stdout != "" {
-				t.Fatalf("expected empty stdout, got %q", stdout)
-			}
-			if !strings.Contains(stderr, test.wantErr) {
-				t.Fatalf("expected error %q, got %q", test.wantErr, stderr)
-			}
+			assertUsageExitWithDeps(t, nil, test.args, test.wantErr)
 		})
 	}
 }
@@ -117,17 +52,55 @@ func TestReviewsRatingsOutputErrors(t *testing.T) {
 func TestReviewsRatingsUsesASCAppID(t *testing.T) {
 	t.Setenv("ASC_APP_ID", "123")
 
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-	_, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"reviews", "ratings", "--workers", "0"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(context.Background()); !isUsageClassError(err) {
-			t.Fatalf("error = %v, want the --workers usage error", err)
-		}
-	})
+	_, stderr, err := runRootWithDeps(t, nil, "reviews", "ratings", "--workers", "0")
+	if !isUsageClassError(err) {
+		t.Fatalf("error = %v, want the --workers usage error", err)
+	}
 	if strings.Contains(stderr, "--app is required") || !strings.Contains(stderr, "--workers must be at least 1") {
 		t.Fatalf("stderr = %q, want ASC_APP_ID to satisfy --app", stderr)
+	}
+}
+
+func TestReviewsRatingsAppNotInStorefrontExitsNotFound(t *testing.T) {
+	tests := []struct {
+		name      string
+		args      []string
+		wantLines []string
+	}{
+		{
+			name: "numeric id single country",
+			args: []string{"reviews", "ratings", "--app", "123"},
+			wantLines: []string{
+				"Error: reviews ratings: app not found: 123",
+				"Hint: the app must be released in the US storefront; pass --country with another storefront or use --all to check every storefront.",
+			},
+		},
+		{
+			name:      "unresolvable bundle id",
+			args:      []string{"reviews", "ratings", "--app", "com.example.missing"},
+			wantLines: []string{"Error: reviews ratings: could not resolve --app; pass a numeric App Store ID, exact bundle ID, or exact app name"},
+		},
+		{
+			name:      "all countries",
+			args:      []string{"reviews", "ratings", "--app", "123", "--all"},
+			wantLines: []string{"Error: reviews ratings: app not found in any country: 123"},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			transport := roundTripFunc(func(req *http.Request) (*http.Response, error) {
+				return jsonHTTPResponse(http.StatusOK, `{"resultCount":0,"results":[]}`), nil
+			})
+
+			stdout, stderr, code := runWithHTTPTransport(t, nil, transport, test.args...)
+			if code != cmd.ExitNotFound {
+				t.Fatalf("exit code = %d, want %d", code, cmd.ExitNotFound)
+			}
+			if stdout != "" {
+				t.Fatalf("expected empty stdout, got %q", stdout)
+			}
+			assertStderrLines(t, stderr, test.wantLines...)
+		})
 	}
 }

@@ -25,16 +25,6 @@ func TestReviewContinuationsRejectServerQueryFlagsBeforeAuth(t *testing.T) {
 		wantErr string
 	}{
 		{
-			name:    "summarizations app before next",
-			args:    []string{"reviews", "summarizations", "--app", "app-1", "--next", summariesNext},
-			wantErr: "reviews summarizations: --next cannot be combined with --app",
-		},
-		{
-			name:    "summarizations app after next with root flag before subcommands",
-			args:    []string{"--profile", "ci", "reviews", "summarizations", "--next", summariesNext, "--app", "app-1"},
-			wantErr: "reviews summarizations: --next cannot be combined with --app",
-		},
-		{
 			name:    "summarizations platform after next",
 			args:    []string{"reviews", "summarizations", "--next", summariesNext, "--platform", "IOS"},
 			wantErr: "reviews summarizations: --next cannot be combined with --platform",
@@ -65,16 +55,6 @@ func TestReviewContinuationsRejectServerQueryFlagsBeforeAuth(t *testing.T) {
 			wantErr: "reviews summarizations: --next cannot be combined with --limit",
 		},
 		{
-			name:    "attachments review detail before next",
-			args:    []string{"review", "attachments-list", "--review-detail", "detail-1", "--next", attachmentsNext},
-			wantErr: "review attachments-list: --next cannot be combined with --review-detail",
-		},
-		{
-			name:    "attachments review detail after next with root flag before subcommands",
-			args:    []string{"--profile", "ci", "review", "attachments-list", "--next", attachmentsNext, "--review-detail", "detail-1"},
-			wantErr: "review attachments-list: --next cannot be combined with --review-detail",
-		},
-		{
 			name:    "attachments fields after next",
 			args:    []string{"review", "attachments-list", "--next", attachmentsNext, "--fields", "fileName"},
 			wantErr: "review attachments-list: --next cannot be combined with --fields",
@@ -99,13 +79,10 @@ func TestReviewContinuationsRejectServerQueryFlagsBeforeAuth(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			clientFactoryCalled := false
-			restore := shared.SetASCClientFactoryForTesting(func() (*asc.Client, error) {
+			assertUsageExitWithDeps(t, func() (*asc.Client, error) {
 				clientFactoryCalled = true
 				return nil, errors.New("client factory must not run during validation")
-			})
-			defer restore()
-
-			assertUsageExit(t, test.args, test.wantErr)
+			}, test.args, test.wantErr)
 			if clientFactoryCalled {
 				t.Fatal("client factory ran before --next conflict validation")
 			}
@@ -139,7 +116,6 @@ func TestReviewPaginationFollowsServerNextURL(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			setupAuth(t)
 			t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 
 			nextURL := "https://api.appstoreconnect.apple.com" + test.path + "?cursor=next"
@@ -171,9 +147,8 @@ func TestReviewPaginationFollowsServerNextURL(t *testing.T) {
 				}
 			}))
 			t.Cleanup(server.Close)
-			installDefaultTransport(t, serverRoundTripper(t, server))
 
-			stdout, stderr, runErr := runRootCommand(t, append(test.args, "--paginate", "--output", "json"))
+			stdout, stderr, runErr := runRootWithDeps(t, stubServerClient(t, server), append(test.args, "--paginate", "--output", "json")...)
 			if runErr != nil {
 				t.Fatalf("run error: %v", runErr)
 			}

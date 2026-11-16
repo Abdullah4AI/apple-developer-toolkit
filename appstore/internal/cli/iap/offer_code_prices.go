@@ -2,11 +2,7 @@ package iap
 
 import (
 	"context"
-	"flag"
-	"fmt"
 	"net/url"
-	"os"
-	"strings"
 
 	"github.com/peterbourgon/ff/v3/ffcli"
 
@@ -14,90 +10,38 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
-// IAPOfferCodesPricesCommand returns the offer code prices subcommand.
-func IAPOfferCodesPricesCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("offer-codes prices", flag.ExitOnError)
-
-	offerCodeID := shared.BindResourceIDFlag(fs, "offer-code-id", "inAppPurchaseOfferCodes", "Offer code ID")
-	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
-	next := fs.String("next", "", "Fetch next page using a links.next URL")
-	paginate := fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")
-	output := shared.BindOutputFlags(fs)
-
-	return &ffcli.Command{
-		Name:       "prices",
-		ShortUsage: "asc iap offer-codes prices --offer-code-id \"OFFER_CODE_ID\" [flags]",
-		ShortHelp:  "List prices for an offer code.",
+// newIAPOfferCodesPricesCommand returns the offer code prices subcommand.
+func newIAPOfferCodesPricesCommand(d *shared.Deps) *ffcli.Command {
+	return shared.BuildPaginatedListCommand(shared.PaginatedListCommandConfig{
+		Deps:        d,
+		FlagSetName: "offer-codes prices",
+		Name:        "prices",
+		ShortUsage:  "asc iap offer-codes prices --offer-code-id \"OFFER_CODE_ID\" [flags]",
+		ShortHelp:   "List prices for an offer code.",
 		LongHelp: `List prices for an offer code.
 
 Examples:
   asc iap offer-codes prices --offer-code-id "OFFER_CODE_ID"
   asc iap offer-codes prices --offer-code-id "OFFER_CODE_ID" --paginate`,
-		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
-		Exec: func(ctx context.Context, args []string) error {
-			if *limit != 0 && (*limit < 1 || *limit > 200) {
-				return shared.UsageError("iap offer-codes prices: --limit must be between 1 and 200")
-			}
-			if err := shared.ValidateNextURL(*next); err != nil {
-				return shared.UsageErrorf("iap offer-codes prices: %v", err)
-			}
-
-			id := strings.TrimSpace(*offerCodeID)
-			if id == "" && strings.TrimSpace(*next) == "" {
-				fmt.Fprintln(os.Stderr, "Error: --offer-code-id is required")
-				return shared.MissingRequiredUsageError("--offer-code-id")
-			}
-
-			client, err := shared.GetASCClient()
+		ParentFlag:           "offer-code-id",
+		ParentUsage:          "Offer code ID",
+		ParentType:           "inAppPurchaseOfferCodes",
+		RequiredDiagnostic:   true,
+		PaginateIgnoresLimit: true,
+		NoSpinner:            true,
+		FetchPage: func(ctx context.Context, client *asc.Client, id string, limit int, next string) (asc.PaginatedResponse, error) {
+			nextURL, err := shared.MergeNextURLQuery(next, offerCodePricesRelationshipQuery())
 			if err != nil {
-				return fmt.Errorf("iap offer-codes prices: %w", err)
+				return nil, err
 			}
-
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
-			defer cancel()
-
-			nextURL, err := shared.MergeNextURLQuery(*next, offerCodePricesRelationshipQuery())
-			if err != nil {
-				return fmt.Errorf("iap offer-codes prices: invalid --next URL: %w", err)
-			}
-
-			opts := []asc.IAPOfferCodePricesOption{
-				asc.WithIAPOfferCodePricesLimit(*limit),
-				asc.WithIAPOfferCodePricesNextURL(nextURL),
+			return client.GetInAppPurchaseOfferCodePrices(ctx, id,
+				asc.Limit[asc.IAPOfferCodePricesOption](limit),
+				asc.NextURL[asc.IAPOfferCodePricesOption](nextURL),
 				asc.WithIAPOfferCodePricesFields([]string{"territory", "pricePoint"}),
 				asc.WithIAPOfferCodePricesInclude([]string{"territory", "pricePoint"}),
-			}
-
-			if *paginate {
-				paginateOpts := append(opts, asc.WithIAPOfferCodePricesLimit(200))
-				firstPage, err := client.GetInAppPurchaseOfferCodePrices(requestCtx, id, paginateOpts...)
-				if err != nil {
-					return fmt.Errorf("iap offer-codes prices: failed to fetch: %w", err)
-				}
-
-				resp, err := asc.PaginateAll(requestCtx, firstPage, func(ctx context.Context, nextURL string) (asc.PaginatedResponse, error) {
-					nextURL, err := shared.MergeNextURLQuery(nextURL, offerCodePricesRelationshipQuery())
-					if err != nil {
-						return nil, err
-					}
-					return client.GetInAppPurchaseOfferCodePrices(ctx, id, asc.WithIAPOfferCodePricesNextURL(nextURL))
-				})
-				if err != nil {
-					return fmt.Errorf("iap offer-codes prices: %w", err)
-				}
-
-				return shared.PrintOutput(resp, *output.Output, *output.Pretty)
-			}
-
-			resp, err := client.GetInAppPurchaseOfferCodePrices(requestCtx, id, opts...)
-			if err != nil {
-				return fmt.Errorf("iap offer-codes prices: failed to fetch: %w", err)
-			}
-
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+			)
 		},
-	}
+	})
 }
 
 func offerCodePricesRelationshipQuery() url.Values {

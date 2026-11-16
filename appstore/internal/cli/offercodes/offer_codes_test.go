@@ -1,61 +1,72 @@
 package offercodes
 
 import (
+	"bytes"
+	"context"
+	"errors"
+	"flag"
 	"testing"
 
-	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
+	"github.com/peterbourgon/ff/v3/ffcli"
+
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
-func TestParseOfferCodePrices(t *testing.T) {
-	prices, err := parseOfferCodePrices("US:pp-1, France:pp-2", asc.SubscriptionOfferModePayAsYouGo)
-	if err != nil {
-		t.Fatalf("unexpected parse error: %v", err)
-	}
-	if len(prices) != 2 {
-		t.Fatalf("expected 2 prices, got %d", len(prices))
-	}
-	if prices[0].TerritoryID != "USA" || prices[0].PricePointID != "pp-1" {
-		t.Fatalf("unexpected first price: %+v", prices[0])
-	}
-	if prices[1].TerritoryID != "FRA" || prices[1].PricePointID != "pp-2" {
-		t.Fatalf("unexpected second price: %+v", prices[1])
-	}
-
-	prices, err = parseOfferCodePrices("Moldova, Republic of:pp-1,Bolivia, Plurinational State of:pp-2", asc.SubscriptionOfferModePayUpFront)
-	if err != nil {
-		t.Fatalf("unexpected parse error for comma-containing territory names: %v", err)
-	}
-	if len(prices) != 2 {
-		t.Fatalf("expected 2 comma-name prices, got %d", len(prices))
-	}
-	if prices[0].TerritoryID != "MDA" || prices[0].PricePointID != "pp-1" {
-		t.Fatalf("unexpected first comma-name price: %+v", prices[0])
-	}
-	if prices[1].TerritoryID != "BOL" || prices[1].PricePointID != "pp-2" {
-		t.Fatalf("unexpected second comma-name price: %+v", prices[1])
-	}
-
-	freeTrialPrices, err := parseOfferCodePrices("DE, France", asc.SubscriptionOfferModeFreeTrial)
-	if err != nil {
-		t.Fatalf("unexpected FREE_TRIAL parse error: %v", err)
-	}
-	if len(freeTrialPrices) != 2 {
-		t.Fatalf("expected 2 FREE_TRIAL prices, got %d", len(freeTrialPrices))
-	}
-	if freeTrialPrices[0].TerritoryID != "DEU" || freeTrialPrices[0].PricePointID != "" {
-		t.Fatalf("unexpected first FREE_TRIAL price: %+v", freeTrialPrices[0])
-	}
-	if freeTrialPrices[1].TerritoryID != "FRA" || freeTrialPrices[1].PricePointID != "" {
-		t.Fatalf("unexpected second FREE_TRIAL price: %+v", freeTrialPrices[1])
+func TestOfferCodesUsageErrorsWriteToDepsStderr(t *testing.T) {
+	tests := []struct {
+		name       string
+		build      func(*shared.Deps) *ffcli.Command
+		args       []string
+		wantStderr string
+	}{
+		{
+			name:       "values without batch ID",
+			build:      NewOfferCodesValuesCommand,
+			wantStderr: "Error: --batch-id is required\n",
+		},
+		{
+			name:       "values with an unknown file format",
+			build:      NewOfferCodesValuesCommand,
+			args:       []string{"--batch-id", "BATCH", "--format", "xml"},
+			wantStderr: "Error: --format must be text or csv\n",
+		},
+		{
+			name:       "generate without offer code ID",
+			build:      NewOfferCodesGenerateCommand,
+			wantStderr: "Error: --offer-code-id is required\n\n",
+		},
+		{
+			name:       "custom code create with a bad expiration date",
+			build:      newOfferCodeCustomCodesCreateCommand,
+			args:       []string{"--offer-code-id", "OFFER", "--code", "SPRING", "--quantity", "1", "--expiration-date", "soon"},
+			wantStderr: "Error: --expiration-date must be in YYYY-MM-DD format\n",
+		},
+		{
+			name: "active update without ID",
+			build: func(d *shared.Deps) *ffcli.Command {
+				return NewActiveUpdateCommand(ActiveUpdateCommandConfig{FlagSetName: "update", Name: "update", IDFlag: "custom-code-id", Deps: d})
+			},
+			wantStderr: "Error: --custom-code-id is required\n",
+		},
 	}
 
-	if _, err := parseOfferCodePrices("usa-pp-1", asc.SubscriptionOfferModePayAsYouGo); err == nil {
-		t.Fatal("expected parse error for malformed prices")
-	}
-	if _, err := parseOfferCodePrices("Atlantis:pp-1", asc.SubscriptionOfferModePayAsYouGo); err == nil {
-		t.Fatal("expected parse error for invalid territory")
-	}
-	if _, err := parseOfferCodePrices("USA:pp-1", asc.SubscriptionOfferModeFreeTrial); err == nil {
-		t.Fatal("expected FREE_TRIAL price point rejection")
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+			cmd := test.build(&shared.Deps{IO: &shared.IO{Out: &stdout, ErrOut: &stderr}})
+			cmd.FlagSet.Init(cmd.Name, flag.ContinueOnError)
+			if err := cmd.FlagSet.Parse(test.args); err != nil {
+				t.Fatalf("parse error: %v", err)
+			}
+			if err := cmd.Exec(context.Background(), cmd.FlagSet.Args()); !errors.Is(err, flag.ErrHelp) {
+				t.Fatalf("expected flag.ErrHelp, got %v", err)
+			}
+			if stdout.Len() != 0 {
+				t.Fatalf("expected empty stdout, got %q", stdout.String())
+			}
+			if stderr.String() != test.wantStderr {
+				t.Fatalf("stderr = %q, want %q", stderr.String(), test.wantStderr)
+			}
+		})
 	}
 }

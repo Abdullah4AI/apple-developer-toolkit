@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"os"
 	"slices"
 	"strings"
 
@@ -140,13 +142,23 @@ func SelectorNeedsLookup(value string) bool {
 
 // RequireAppForStableSelector returns a usage error when a non-numeric selector needs app context.
 func RequireAppForStableSelector(appID, selector, flagName string) error {
+	return requireAppForStableSelectorTo(os.Stderr, appID, selector, flagName)
+}
+
+// RequireAppForStableSelector is RequireAppForStableSelector with the
+// "Error:" line written to d's stderr.
+func (d *Deps) RequireAppForStableSelector(appID, selector, flagName string) error {
+	return requireAppForStableSelectorTo(d.IO.ErrOut, appID, selector, flagName)
+}
+
+func requireAppForStableSelectorTo(stderr io.Writer, appID, selector, flagName string) error {
 	if !SelectorNeedsLookup(selector) {
 		return nil
 	}
 	if strings.TrimSpace(appID) != "" {
 		return nil
 	}
-	return UsageErrorf("--app is required (or set ASC_APP_ID) when %s is a product ID or name", strings.TrimSpace(flagName))
+	return usageErrorfTo(stderr, "--app is required (or set ASC_APP_ID) when %s is a product ID or name", strings.TrimSpace(flagName))
 }
 
 // ResolveExactSelectorCandidate resolves a unique candidate by exact product ID first, then exact current name.
@@ -279,7 +291,7 @@ func resolveSubscriptionCandidate(ctx context.Context, client subscriptionSelect
 }
 
 func listIAPCandidates(ctx context.Context, client iapSelectorClient, appID string, opts ...asc.IAPOption) ([]ExactSelectorCandidate, error) {
-	opts = append([]asc.IAPOption{asc.WithIAPLimit(200)}, opts...)
+	opts = append([]asc.IAPOption{asc.Limit[asc.IAPOption](200)}, opts...)
 	firstPage, err := client.GetInAppPurchasesV2(ctx, appID, opts...)
 	if err != nil {
 		return nil, err
@@ -293,7 +305,7 @@ func listIAPCandidates(ctx context.Context, client iapSelectorClient, appID stri
 		ctx,
 		firstPage,
 		func(ctx context.Context, nextURL string) (asc.PaginatedResponse, error) {
-			return client.GetInAppPurchasesV2(ctx, appID, asc.WithIAPNextURL(nextURL))
+			return client.GetInAppPurchasesV2(ctx, appID, asc.NextURL[asc.IAPOption](nextURL))
 		},
 		func(page asc.PaginatedResponse) error {
 			resp, ok := page.(*asc.InAppPurchasesV2Response)
@@ -329,7 +341,7 @@ func listSubscriptionCandidates(ctx context.Context, client subscriptionSelector
 }
 
 func listSubscriptionGroupIDs(ctx context.Context, client subscriptionSelectorClient, appID string) ([]string, error) {
-	firstPage, err := client.GetSubscriptionGroups(ctx, appID, asc.WithSubscriptionGroupsLimit(200))
+	firstPage, err := client.GetSubscriptionGroups(ctx, appID, asc.Limit[asc.SubscriptionGroupsOption](200))
 	if err != nil {
 		return nil, err
 	}
@@ -342,7 +354,7 @@ func listSubscriptionGroupIDs(ctx context.Context, client subscriptionSelectorCl
 		ctx,
 		firstPage,
 		func(ctx context.Context, nextURL string) (asc.PaginatedResponse, error) {
-			return client.GetSubscriptionGroups(ctx, appID, asc.WithSubscriptionGroupsNextURL(nextURL))
+			return client.GetSubscriptionGroups(ctx, appID, asc.NextURL[asc.SubscriptionGroupsOption](nextURL))
 		},
 		func(page asc.PaginatedResponse) error {
 			resp, ok := page.(*asc.SubscriptionGroupsResponse)
@@ -366,7 +378,7 @@ func listSubscriptionGroupIDs(ctx context.Context, client subscriptionSelectorCl
 }
 
 func listSubscriptionsForGroup(ctx context.Context, client subscriptionSelectorClient, groupID string, opts ...asc.SubscriptionsOption) ([]ExactSelectorCandidate, error) {
-	opts = append([]asc.SubscriptionsOption{asc.WithSubscriptionsLimit(200)}, opts...)
+	opts = append([]asc.SubscriptionsOption{asc.Limit[asc.SubscriptionsOption](200)}, opts...)
 	firstPage, err := client.GetSubscriptions(ctx, groupID, opts...)
 	if err != nil {
 		return nil, err
@@ -380,7 +392,7 @@ func listSubscriptionsForGroup(ctx context.Context, client subscriptionSelectorC
 		ctx,
 		firstPage,
 		func(ctx context.Context, nextURL string) (asc.PaginatedResponse, error) {
-			return client.GetSubscriptions(ctx, groupID, asc.WithSubscriptionsNextURL(nextURL))
+			return client.GetSubscriptions(ctx, groupID, asc.NextURL[asc.SubscriptionsOption](nextURL))
 		},
 		func(page asc.PaginatedResponse) error {
 			resp, ok := page.(*asc.SubscriptionsResponse)

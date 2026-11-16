@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"time"
@@ -16,11 +18,12 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/signing"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/rootfs"
 )
 
-// ProfilesCommand returns the profiles command with subcommands.
-func ProfilesCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("profiles", flag.ExitOnError)
+// NewProfilesCommand returns the profiles command group built on d.
+func NewProfilesCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("profiles", flag.ExitOnError)
 
 	return &ffcli.Command{
 		Name:       "profiles",
@@ -41,16 +44,16 @@ Examples:
   asc profiles links certificates --id "PROFILE_ID"
   asc profiles links devices --id "PROFILE_ID"`,
 		FlagSet:   fs,
-		UsageFunc: shared.VisibleUsageFunc,
+		UsageFunc: d.VisibleUsageFunc,
 		Subcommands: []*ffcli.Command{
-			ProfilesListCommand(),
-			ProfilesGetCommand(),
-			ProfilesRelationshipsCommand(),
-			ProfilesCreateCommand(),
-			ProfilesDeleteCommand(),
-			ProfilesDownloadCommand(),
-			ProfilesInspectCommand(),
-			ProfilesLocalCommand(),
+			newProfilesListCommand(d),
+			newProfilesGetCommand(d),
+			newProfilesRelationshipsCommand(d),
+			newProfilesCreateCommand(d),
+			newProfilesDeleteCommand(d),
+			newProfilesDownloadCommand(d),
+			newProfilesInspectCommand(d),
+			newProfilesLocalCommand(d),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp
@@ -58,9 +61,9 @@ Examples:
 	}
 }
 
-// ProfilesListCommand returns the profiles list subcommand.
-func ProfilesListCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("list", flag.ExitOnError)
+// newProfilesListCommand returns the profiles list subcommand.
+func newProfilesListCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("list", flag.ExitOnError)
 
 	name := fs.String("name", "", "Filter by profile name(s), comma-separated")
 	ids := fs.String("id", "", "Filter by profile ID(s), comma-separated")
@@ -76,10 +79,10 @@ func ProfilesListCommand() *ffcli.Command {
 	include := fs.String("include", "", "Include related resources: "+strings.Join(profileIncludeList(), ", "))
 	devicesLimit := fs.Int("limit-devices", 0, "Maximum included devices (1-50)")
 	certificatesLimit := fs.Int("limit-certificates", 0, "Maximum included certificates (1-50)")
-	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
-	next := fs.String("next", "", "Fetch next page using a links.next URL")
-	paginate := fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")
-	output := shared.BindOutputFlags(fs)
+	limit := fs.Int("limit", 0, shared.LimitFlagUsage(200))
+	next := fs.String("next", "", shared.NextFlagUsage)
+	paginate := fs.Bool("paginate", false, shared.PaginateFlagUsage)
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "list",
@@ -106,23 +109,15 @@ profiles reference. It cannot be combined with --next. With --fields, both
 --stale-only and --include-stale need profileState and expirationDate.
 --include-stale adds a Stale column to table and markdown output only.`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
-			if err := shared.ValidateNextURL(*next); err != nil {
-				return shared.UsageErrorf("profiles list: %v", err)
-			}
-			if err := shared.RejectNextFlagConflicts(
-				fs,
-				*next,
-				"profiles list",
-				"name", "id", "profile-type", "profile-state", "sort", "fields", "bundle-id-fields", "device-fields", "certificate-fields", "include", "limit-devices", "limit-certificates", "limit", "stale-only",
-			); err != nil {
+			if err := d.ValidatePaginationFlags(ctx, fs, "profiles list", 200, "name", "id", "profile-type", "profile-state", "sort", "fields", "bundle-id-fields", "device-fields", "certificate-fields", "include", "limit-devices", "limit-certificates", "limit", "stale-only"); err != nil {
 				return err
 			}
 			if *includeStale {
 				if normalized := shared.NormalizeOutputFormat(*output.Output); normalized != "table" && normalized != "markdown" {
 					const message = "--include-stale requires --output table or markdown"
-					fmt.Fprintln(os.Stderr, "Error: "+message)
+					fmt.Fprintln(d.IO.ErrOut, "Error: "+message)
 					return shared.NewReportedUsageError(shared.UsageErrorInvalidValue, message)
 				}
 			}
@@ -146,92 +141,89 @@ profiles reference. It cannot be combined with --next. With --fields, both
 				{name: "include", value: *include},
 			} {
 				if provided[selector.name] && len(shared.SplitCSV(selector.value)) == 0 {
-					return shared.UsageErrorf("profiles list: --%s must not be empty", selector.name)
+					return d.UsageErrorf("profiles list: --%s must not be empty", selector.name)
 				}
 			}
-			if *limit != 0 && (*limit < 1 || *limit > 200) {
-				return shared.UsageError("profiles list: --limit must be between 1 and 200")
-			}
 			if profilesListFlagWasProvided(fs, "limit-devices") && (*devicesLimit < 1 || *devicesLimit > 50) {
-				return shared.UsageError("profiles list: --limit-devices must be between 1 and 50")
+				return d.UsageError("profiles list: --limit-devices must be between 1 and 50")
 			}
 			if profilesListFlagWasProvided(fs, "limit-certificates") && (*certificatesLimit < 1 || *certificatesLimit > 50) {
-				return shared.UsageError("profiles list: --limit-certificates must be between 1 and 50")
+				return d.UsageError("profiles list: --limit-certificates must be between 1 and 50")
 			}
 
 			profileSort, err := normalizeProfileSort(*sort)
 			if err != nil {
-				return shared.UsageError(fmt.Sprintf("profiles list: %v", err))
+				return d.UsageError(fmt.Sprintf("profiles list: %v", err))
 			}
 			profileFields, err := shared.NormalizeSelection(*fields, profileFieldsList(), "--fields")
 			if err != nil {
-				return shared.UsageError(fmt.Sprintf("profiles list: %v", err))
+				return d.UsageError(fmt.Sprintf("profiles list: %v", err))
 			}
 			if (*staleOnly || *includeStale) && len(profileFields) > 0 &&
 				(!slices.Contains(profileFields, "profileState") || !slices.Contains(profileFields, "expirationDate")) {
 				const message = "--stale-only and --include-stale require --fields to include profileState and expirationDate"
-				fmt.Fprintln(os.Stderr, "Error: "+message)
+				fmt.Fprintln(d.IO.ErrOut, "Error: "+message)
 				return shared.NewReportedUsageError(shared.UsageErrorInvalidValue, message)
 			}
 			bundleIDFieldsValue, err := shared.NormalizeSelection(*bundleIDFields, profileBundleIDFieldsList(), "--bundle-id-fields")
 			if err != nil {
-				return shared.UsageError(fmt.Sprintf("profiles list: %v", err))
+				return d.UsageError(fmt.Sprintf("profiles list: %v", err))
 			}
 			deviceFieldsValue, err := shared.NormalizeSelection(*deviceFields, profileDeviceFieldsList(), "--device-fields")
 			if err != nil {
-				return shared.UsageError(fmt.Sprintf("profiles list: %v", err))
+				return d.UsageError(fmt.Sprintf("profiles list: %v", err))
 			}
 			certificateFieldsValue, err := shared.NormalizeSelection(*certificateFields, profileCertificateFieldsList(), "--certificate-fields")
 			if err != nil {
-				return shared.UsageError(fmt.Sprintf("profiles list: %v", err))
+				return d.UsageError(fmt.Sprintf("profiles list: %v", err))
 			}
 			includeValues, err := normalizeProfileInclude(*include)
 			if err != nil {
-				return shared.UsageError(fmt.Sprintf("profiles list: %v", err))
+				return d.UsageError(fmt.Sprintf("profiles list: %v", err))
 			}
 			if len(bundleIDFieldsValue) > 0 && !shared.HasInclude(includeValues, "bundleId") {
 				const message = "--bundle-id-fields requires --include bundleId"
-				fmt.Fprintln(os.Stderr, "Error: "+message)
+				fmt.Fprintln(d.IO.ErrOut, "Error: "+message)
 				return shared.NewReportedUsageError(shared.UsageErrorInvalidValue, message)
 			}
 			if len(deviceFieldsValue) > 0 && !shared.HasInclude(includeValues, "devices") {
 				const message = "--device-fields requires --include devices"
-				fmt.Fprintln(os.Stderr, "Error: "+message)
+				fmt.Fprintln(d.IO.ErrOut, "Error: "+message)
 				return shared.NewReportedUsageError(shared.UsageErrorInvalidValue, message)
 			}
 			if len(certificateFieldsValue) > 0 && !shared.HasInclude(includeValues, "certificates") {
 				const message = "--certificate-fields requires --include certificates"
-				fmt.Fprintln(os.Stderr, "Error: "+message)
+				fmt.Fprintln(d.IO.ErrOut, "Error: "+message)
 				return shared.NewReportedUsageError(shared.UsageErrorInvalidValue, message)
 			}
 			if *devicesLimit != 0 && !shared.HasInclude(includeValues, "devices") {
 				const message = "--limit-devices requires --include devices"
-				fmt.Fprintln(os.Stderr, "Error: "+message)
+				fmt.Fprintln(d.IO.ErrOut, "Error: "+message)
 				return shared.NewReportedUsageError(shared.UsageErrorInvalidValue, message)
 			}
 			if *certificatesLimit != 0 && !shared.HasInclude(includeValues, "certificates") {
 				const message = "--limit-certificates requires --include certificates"
-				fmt.Fprintln(os.Stderr, "Error: "+message)
+				fmt.Fprintln(d.IO.ErrOut, "Error: "+message)
 				return shared.NewReportedUsageError(shared.UsageErrorInvalidValue, message)
 			}
 
 			profileTypes := shared.SplitCSVUpper(*profileType)
 			profileStates, err := normalizeProfileStates(*profileState)
 			if err != nil {
-				return shared.UsageError(err.Error())
+				return d.UsageError(err.Error())
 			}
 
-			client, err := shared.GetASCClient()
+			client, err := d.Client()
 			if err != nil {
 				return fmt.Errorf("profiles list: %w", err)
 			}
 
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
+			requestCtx, cancel := d.Timeout(ctx)
 			defer cancel()
 
 			opts := []asc.ProfilesOption{
-				asc.WithProfilesLimit(*limit),
-				asc.WithProfilesNextURL(*next),
+				asc.Limit[asc.ProfilesOption](*limit),
+				asc.NextURL[asc.ProfilesOption](*next),
 				asc.WithProfilesStates(profileStates),
 			}
 			if strings.TrimSpace(*name) != "" {
@@ -269,21 +261,21 @@ profiles reference. It cannot be combined with --next. With --fields, both
 			}
 
 			if *paginate || *staleOnly {
-				paginateOpts := append(opts, asc.WithProfilesLimit(200))
-				paginated, err := shared.PaginateWithSpinner(
+				paginateOpts := append(opts, asc.Limit[asc.ProfilesOption](200))
+				paginated, err := d.PaginateWithSpinner(
 					requestCtx,
 					func(ctx context.Context) (asc.PaginatedResponse, error) {
 						return client.GetProfiles(ctx, paginateOpts...)
 					},
 					func(ctx context.Context, nextURL string) (asc.PaginatedResponse, error) {
-						return client.GetProfiles(ctx, asc.WithProfilesNextURL(nextURL))
+						return client.GetProfiles(ctx, asc.NextURL[asc.ProfilesOption](nextURL))
 					},
 				)
 				if err != nil {
 					return fmt.Errorf("profiles list: %w", err)
 				}
 
-				return printProfilesList(paginated, *output.Output, *output.Pretty, *includeStale, *staleOnly)
+				return printProfilesList(d, paginated, *output.Output, *output.Pretty, *includeStale, *staleOnly)
 			}
 
 			resp, err := client.GetProfiles(requestCtx, opts...)
@@ -291,26 +283,26 @@ profiles reference. It cannot be combined with --next. With --fields, both
 				return fmt.Errorf("profiles list: failed to fetch: %w", err)
 			}
 
-			return printProfilesList(resp, *output.Output, *output.Pretty, *includeStale, *staleOnly)
+			return printProfilesList(d, resp, *output.Output, *output.Pretty, *includeStale, *staleOnly)
 		},
 	}
 }
 
-func printProfilesList(resp asc.PaginatedResponse, format string, pretty, includeStale, staleOnly bool) error {
+func printProfilesList(d *shared.Deps, resp asc.PaginatedResponse, format string, pretty, includeStale, staleOnly bool) error {
 	profiles, ok := resp.(*asc.ProfilesResponse)
 	if ok && profiles != nil && staleOnly {
-		profiles = staleProfilesView(profiles, time.Now())
+		profiles = staleProfilesView(profiles, d.Now())
 		resp = profiles
 	}
 	normalized := shared.NormalizeOutputFormat(format)
 	if includeStale && (normalized == "table" || normalized == "markdown") && profiles != nil {
-		return shared.PrintOutputWithRenderers(profiles, format, pretty, func() error {
-			return printProfilesStaleTable(profiles)
+		return d.PrintOutputWithRenderers(profiles, format, pretty, func() error {
+			return printProfilesStaleTable(d, profiles)
 		}, func() error {
-			return printProfilesStaleMarkdown(profiles)
+			return printProfilesStaleMarkdown(d, profiles)
 		})
 	}
-	return shared.PrintOutput(resp, format, pretty)
+	return d.PrintOutput(resp, format, pretty)
 }
 
 // staleProfilesView is the computed --stale-only view: the complete profile
@@ -386,13 +378,13 @@ func includedReferencedBy(profiles []asc.Resource[asc.ProfileAttributes], includ
 	return data
 }
 
-func printProfilesStaleTable(resp *asc.ProfilesResponse) error {
-	shared.RenderSection("Profiles", profileStaleHeaders(), profileStaleRows(resp), false)
+func printProfilesStaleTable(d *shared.Deps, resp *asc.ProfilesResponse) error {
+	d.RenderSection("Profiles", profileStaleHeaders(), profileStaleRows(d, resp), false)
 	return nil
 }
 
-func printProfilesStaleMarkdown(resp *asc.ProfilesResponse) error {
-	shared.RenderSection("Profiles", profileStaleHeaders(), profileStaleRows(resp), true)
+func printProfilesStaleMarkdown(d *shared.Deps, resp *asc.ProfilesResponse) error {
+	d.RenderSection("Profiles", profileStaleHeaders(), profileStaleRows(d, resp), true)
 	return nil
 }
 
@@ -400,9 +392,9 @@ func profileStaleHeaders() []string {
 	return []string{"ID", "Name", "Type", "State", "Expiration", "Stale"}
 }
 
-func profileStaleRows(resp *asc.ProfilesResponse) [][]string {
+func profileStaleRows(d *shared.Deps, resp *asc.ProfilesResponse) [][]string {
 	rows := make([][]string, 0, len(resp.Data))
-	now := time.Now()
+	now := d.Now()
 	for _, item := range resp.Data {
 		rows = append(rows, []string{
 			item.ID,
@@ -426,16 +418,14 @@ func profilesListFlagWasProvided(fs *flag.FlagSet, name string) bool {
 	return provided
 }
 
-// ProfilesGetCommand returns the profiles view subcommand.
-func ProfilesGetCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("view", flag.ExitOnError)
+// newProfilesGetCommand returns the profiles view subcommand.
+func newProfilesGetCommand(d *shared.Deps) *ffcli.Command {
+	var (
+		includeValues []string
+		included      asc.IncludedFields
+	)
 
-	id := shared.BindResourceIDFlag(fs, "id", "profiles", "Profile ID")
-	include := fs.String("include", "", "Include related resources: bundleId, certificates, devices")
-	includedFields := shared.BindIncludedFieldFlags(fs, map[string]string{"bundleId": "bundleIds", "certificates": "certificates", "devices": "devices"})
-	output := shared.BindOutputFlags(fs)
-
-	return &ffcli.Command{
+	return shared.BuildIDGetCommand(shared.IDGetCommandConfig{
 		Name:       "view",
 		ShortUsage: "asc profiles view --id \"PROFILE_ID\"",
 		ShortHelp:  "View a profile by ID.",
@@ -444,57 +434,41 @@ func ProfilesGetCommand() *ffcli.Command {
 Examples:
   asc profiles view --id "PROFILE_ID"
   asc profiles view --id "PROFILE_ID" --include bundleId,certificates,devices`,
-		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
-		Exec: func(ctx context.Context, args []string) error {
-			idValue := strings.TrimSpace(*id)
-			if idValue == "" {
-				fmt.Fprintln(os.Stderr, "Error: --id is required")
-				return shared.MissingRequiredUsageError("--id")
-			}
-
-			includeValues, err := normalizeProfileInclude(*include)
-			if err != nil {
-				return fmt.Errorf("profiles view: %w", err)
-			}
-			included, err := includedFields.Resolve("profiles view", "", includeValues)
-			if err != nil {
+		IDUsage:            "Profile ID",
+		IDType:             "profiles",
+		RequiredDiagnostic: true,
+		Deps:               d,
+		Flags: func(fs *flag.FlagSet) func() error {
+			include := fs.String("include", "", "Include related resources: bundleId, certificates, devices")
+			includedFields := shared.BindIncludedFieldFlags(fs, map[string]string{"bundleId": "bundleIds", "certificates": "certificates", "devices": "devices"})
+			return func() (err error) {
+				if includeValues, err = normalizeProfileInclude(*include); err != nil {
+					return d.UsageErrorf("profiles view: %v", err)
+				}
+				included, err = includedFields.ResolveWith(d, "profiles view", "", includeValues)
 				return err
 			}
-
-			client, err := shared.GetASCClient()
-			if err != nil {
-				return fmt.Errorf("profiles view: %w", err)
-			}
-
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
-			defer cancel()
-
+		},
+		Fetch: func(ctx context.Context, client *asc.Client, id string) (any, error) {
 			opts := []asc.ProfilesOption{asc.WithIncludedFields[asc.ProfilesOption](included)}
 			if len(includeValues) > 0 {
 				opts = append(opts, asc.WithProfilesInclude(includeValues))
 			}
-
-			resp, err := client.GetProfile(requestCtx, idValue, opts...)
-			if err != nil {
-				return fmt.Errorf("profiles view: failed to fetch: %w", err)
-			}
-
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+			return client.GetProfile(ctx, id, opts...)
 		},
-	}
+	})
 }
 
-// ProfilesCreateCommand returns the profiles create subcommand.
-func ProfilesCreateCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("create", flag.ExitOnError)
+// newProfilesCreateCommand returns the profiles create subcommand.
+func newProfilesCreateCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("create", flag.ExitOnError)
 
 	name := fs.String("name", "", "Profile name")
 	profileType := fs.String("profile-type", "", "Profile type (e.g., IOS_APP_DEVELOPMENT)")
 	bundleID := shared.BindResourceIDFlag(fs, "bundle", "bundleIds", "Bundle ID")
 	certificates := shared.BindOnceCSVFlag(fs, "certificate", "Certificate ID(s), comma-separated")
 	devices := shared.BindOnceCSVFlag(fs, "device", "Device ID(s), comma-separated (optional)")
-	output := shared.BindOutputFlags(fs)
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "create",
@@ -506,40 +480,35 @@ Examples:
   asc profiles create --name "Profile" --profile-type IOS_APP_DEVELOPMENT --bundle "BUNDLE_ID" --certificate "CERT_ID"
   asc profiles create --name "Profile" --profile-type IOS_APP_DEVELOPMENT --bundle "BUNDLE_ID" --certificate "CERT_ID" --device "DEVICE_ID"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			nameValue := strings.TrimSpace(*name)
 			if nameValue == "" {
-				fmt.Fprintln(os.Stderr, "Error: --name is required")
-				return shared.MissingRequiredUsageError("--name")
+				return d.RequiredFlag("--name")
 			}
 			if err := signing.ValidateProfileNameLength(nameValue); err != nil {
-				fmt.Fprintf(os.Stderr, "Error: %s\n", err.Error())
-				return shared.UsageError(err.Error())
+				return d.UsageError(err.Error())
 			}
 			profileTypeValue := strings.ToUpper(strings.TrimSpace(*profileType))
 			if profileTypeValue == "" {
-				fmt.Fprintln(os.Stderr, "Error: --profile-type is required")
-				return shared.MissingRequiredUsageError("--profile-type")
+				return d.RequiredFlag("--profile-type")
 			}
 			bundleValue := strings.TrimSpace(*bundleID)
 			if bundleValue == "" {
-				fmt.Fprintln(os.Stderr, "Error: --bundle is required")
-				return shared.MissingRequiredUsageError("--bundle")
+				return d.RequiredFlag("--bundle")
 			}
 			certificateIDs := shared.SplitCSV(certificates.String())
 			if len(certificateIDs) == 0 {
-				fmt.Fprintln(os.Stderr, "Error: --certificate is required")
-				return shared.MissingRequiredUsageError("--certificate")
+				return d.RequiredFlag("--certificate")
 			}
 			deviceIDs := shared.SplitCSV(devices.String())
 
-			client, err := shared.GetASCClient()
+			client, err := d.Client()
 			if err != nil {
 				return fmt.Errorf("profiles create: %w", err)
 			}
 
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
+			requestCtx, cancel := d.Timeout(ctx)
 			defer cancel()
 
 			attrs := asc.ProfileCreateAttributes{
@@ -551,20 +520,14 @@ Examples:
 				return fmt.Errorf("profiles create: failed to create: %w", err)
 			}
 
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+			return d.PrintOutput(resp, *output.Output, *output.Pretty)
 		},
 	}
 }
 
-// ProfilesDeleteCommand returns the profiles delete subcommand.
-func ProfilesDeleteCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("delete", flag.ExitOnError)
-
-	id := shared.BindResourceIDFlag(fs, "id", "profiles", "Profile ID")
-	confirm := fs.Bool("confirm", false, "Confirm deletion")
-	output := shared.BindOutputFlags(fs)
-
-	return &ffcli.Command{
+// newProfilesDeleteCommand returns the profiles delete subcommand.
+func newProfilesDeleteCommand(d *shared.Deps) *ffcli.Command {
+	return shared.BuildConfirmDeleteCommand(shared.ConfirmDeleteCommandConfig{
 		Name:       "delete",
 		ShortUsage: "asc profiles delete --id \"PROFILE_ID\" --confirm",
 		ShortHelp:  "Delete a provisioning profile.",
@@ -572,78 +535,103 @@ func ProfilesDeleteCommand() *ffcli.Command {
 
 Examples:
   asc profiles delete --id "PROFILE_ID" --confirm`,
-		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
-		Exec: func(ctx context.Context, args []string) error {
-			idValue := strings.TrimSpace(*id)
-			if idValue == "" {
-				fmt.Fprintln(os.Stderr, "Error: --id is required")
-				return shared.MissingRequiredUsageError("--id")
-			}
-			if !*confirm {
-				fmt.Fprintln(os.Stderr, "Error: --confirm is required")
-				return shared.MissingRequiredUsageError("--confirm")
-			}
-
-			client, err := shared.GetASCClient()
-			if err != nil {
-				return fmt.Errorf("profiles delete: %w", err)
-			}
-
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
-			defer cancel()
-
-			if err := client.DeleteProfile(requestCtx, idValue); err != nil {
-				return fmt.Errorf("profiles delete: failed to delete: %w", err)
-			}
-
-			result := &asc.ProfileDeleteResult{
-				ID:      idValue,
-				Deleted: true,
-			}
-
-			return shared.PrintOutput(result, *output.Output, *output.Pretty)
+		IDFlag:             "id",
+		IDUsage:            "Profile ID",
+		IDType:             "profiles",
+		RequiredDiagnostic: true,
+		Deps:               d,
+		Delete: func(ctx context.Context, client *asc.Client, id string) error {
+			return client.DeleteProfile(ctx, id)
 		},
-	}
+		Result: func(id string) any {
+			return &asc.DeleteResult{ID: id, Deleted: true}
+		},
+	})
 }
 
-// ProfilesDownloadCommand returns the profiles download subcommand.
-func ProfilesDownloadCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("download", flag.ExitOnError)
+// newProfilesDownloadCommand returns the profiles download subcommand.
+func newProfilesDownloadCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("download", flag.ExitOnError)
 
 	id := shared.BindResourceIDFlag(fs, "id", "profiles", "Profile ID")
 	outputPath := fs.String("output", "", "Output .mobileprovision or .provisionprofile file path")
+	overwrite := fs.Bool("overwrite", false, "Replace an existing file at --output, or existing files in --output-dir")
+	all := fs.Bool("all", false, "Download every matching profile into --output-dir")
+	outputDir := fs.String("output-dir", "", "Directory for --all; each profile is written as <UUID>.mobileprovision or <UUID>.provisionprofile")
+	profileType := fs.String("profile-type", "", "With --all: filter by profile type(s), comma-separated")
+	profileState := fs.String("profile-state", "", "With --all: filter by profile state(s): ACTIVE, INVALID (default: ACTIVE)")
+	name := fs.String("name", "", "With --all: filter by profile name(s), comma-separated")
 	output := shared.BindMetadataOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "download",
-		ShortUsage: "asc profiles download --id \"PROFILE_ID\" --output ./profile.mobileprovision",
+		ShortUsage: "asc profiles download (--id \"PROFILE_ID\" --output ./profile.mobileprovision | --all --output-dir DIR)",
 		ShortHelp:  "Download a provisioning profile.",
 		LongHelp: `Download a provisioning profile.
 
 Examples:
   asc profiles download --id "PROFILE_ID" --output "./profile.mobileprovision"
-  asc profiles download --id "PROFILE_ID" --output "./profile.provisionprofile"`,
+  asc profiles download --id "PROFILE_ID" --output "./profile.provisionprofile"
+  asc profiles download --id "PROFILE_ID" --output "./profile.mobileprovision" --overwrite
+  asc profiles download --all --output-dir "./profiles" --profile-type IOS_APP_STORE
+
+--all reads every page of profiles and writes each one to --output-dir as
+<UUID>.mobileprovision or <UUID>.provisionprofile. It downloads only ACTIVE
+profiles unless --profile-state says otherwise. Existing files stop the run
+before anything is written unless --overwrite is passed.`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
+			if err := d.RejectOutputFormatAsPath(*outputPath, "--output-format"); err != nil {
+				return err
+			}
+			for _, selector := range []string{"profile-type", "profile-state", "name"} {
+				if value := fs.Lookup(selector).Value.String(); profilesListFlagWasProvided(fs, selector) && len(shared.SplitCSV(value)) == 0 {
+					return shared.UsageErrorf("profiles download: --%s must not be empty", selector)
+				}
+			}
+			if *all {
+				if profilesListFlagWasProvided(fs, "id") || profilesListFlagWasProvided(fs, "output") {
+					return shared.UsageError("profiles download: --all cannot be combined with --id or --output")
+				}
+				dirValue := strings.TrimSpace(*outputDir)
+				if dirValue == "" {
+					return shared.RequiredFlag("--output-dir")
+				}
+				states := []string{string(asc.ProfileStateActive)}
+				if strings.TrimSpace(*profileState) != "" {
+					var err error
+					if states, err = normalizeProfileStates(*profileState); err != nil {
+						return shared.UsageError(err.Error())
+					}
+				}
+				opts := []asc.ProfilesOption{asc.Limit[asc.ProfilesOption](200), asc.WithProfilesStates(states), asc.WithProfilesFilterName(*name)}
+				if types := shared.SplitCSVUpper(*profileType); len(types) > 0 {
+					opts = append(opts, asc.WithProfilesTypes(types))
+				}
+				return downloadAllProfiles(ctx, d, dirValue, opts, *overwrite, *output.OutputFormat, *output.Pretty)
+			}
+			if slices.ContainsFunc([]string{"output-dir", "profile-type", "profile-state", "name"}, func(name string) bool { return profilesListFlagWasProvided(fs, name) }) {
+				return shared.UsageError("profiles download: --output-dir, --profile-type, --profile-state, and --name require --all")
+			}
 			idValue := strings.TrimSpace(*id)
 			if idValue == "" {
-				fmt.Fprintln(os.Stderr, "Error: --id is required")
-				return shared.MissingRequiredUsageError("--id")
+				return d.RequiredFlag("--id")
 			}
 			pathValue := strings.TrimSpace(*outputPath)
 			if pathValue == "" {
-				fmt.Fprintln(os.Stderr, "Error: --output is required")
-				return shared.MissingRequiredUsageError("--output")
+				return d.RequiredFlag("--output")
+			}
+			if err := checkProfileDownloadOutput(pathValue, *overwrite); err != nil {
+				return fmt.Errorf("profiles download: %w", err)
 			}
 
-			client, err := shared.GetASCClient()
+			client, err := d.Client()
 			if err != nil {
 				return fmt.Errorf("profiles download: %w", err)
 			}
 
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
+			requestCtx, cancel := d.Timeout(ctx)
 			defer cancel()
 
 			resp, err := client.GetProfile(requestCtx, idValue)
@@ -653,7 +641,7 @@ Examples:
 
 			content := strings.TrimSpace(resp.Data.Attributes.ProfileContent)
 			if content == "" {
-				return fmt.Errorf("profiles download: profile content is empty")
+				return shared.WithDiagnostic(shared.NewValidationError(fmt.Errorf("profiles download: profile %q has no downloadable content; check its state with asc profiles view --id %q", idValue, idValue)), shared.DiagnosticStateNotReady, "")
 			}
 
 			decoded, err := decodeProfileContent(content)
@@ -661,7 +649,7 @@ Examples:
 				return fmt.Errorf("profiles download: %w", err)
 			}
 
-			if err := shared.WriteProfileFile(pathValue, decoded); err != nil {
+			if err := writeDownloadedProfile(pathValue, decoded, *overwrite); err != nil {
 				return fmt.Errorf("profiles download: %w", err)
 			}
 
@@ -671,9 +659,117 @@ Examples:
 				OutputPath: pathValue,
 			}
 
-			return shared.PrintOutput(result, *output.OutputFormat, *output.Pretty)
+			return d.PrintOutput(result, *output.OutputFormat, *output.Pretty)
 		},
 	}
+}
+
+func downloadAllProfiles(ctx context.Context, d *shared.Deps, dir string, opts []asc.ProfilesOption, overwrite bool, format string, pretty bool) error {
+	client, err := d.Client()
+	if err != nil {
+		return fmt.Errorf("profiles download: %w", err)
+	}
+	requestCtx, cancel := d.Timeout(ctx)
+	defer cancel()
+	paginated, err := d.PaginateWithSpinner(requestCtx,
+		func(ctx context.Context) (asc.PaginatedResponse, error) { return client.GetProfiles(ctx, opts...) },
+		func(ctx context.Context, nextURL string) (asc.PaginatedResponse, error) {
+			return client.GetProfiles(ctx, asc.NextURL[asc.ProfilesOption](nextURL))
+		},
+	)
+	if err != nil {
+		return fmt.Errorf("profiles download: %w", err)
+	}
+	profiles, _ := paginated.(*asc.ProfilesResponse)
+	if profiles == nil {
+		return fmt.Errorf("profiles download: unexpected profiles response %T", paginated)
+	}
+
+	root, err := rootfs.New(dir)
+	if err != nil {
+		return fmt.Errorf("profiles download: %w", err)
+	}
+	defer root.Close()
+	result := &asc.ProfilesDownloadAllResult{OutputDir: dir, Profiles: make([]asc.ProfileDownloadAllItemResult, 0, len(profiles.Data))}
+	contents := make([][]byte, 0, len(profiles.Data))
+	for _, item := range profiles.Data {
+		attrs := item.Attributes
+		if strings.TrimSpace(attrs.UUID) == "" || strings.ContainsAny(attrs.UUID, `/\`) || strings.TrimSpace(attrs.ProfileContent) == "" {
+			return shared.NewValidationError(fmt.Errorf("profiles download: profile %q has no usable UUID or downloadable content; nothing was written", item.ID))
+		}
+		decoded, err := decodeProfileContent(attrs.ProfileContent)
+		if err != nil {
+			return fmt.Errorf("profiles download: profile %q: %w", item.ID, err)
+		}
+		fileName := attrs.UUID + shared.ProvisioningProfileExtension(string(attrs.Platform), attrs.ProfileType)
+		path := filepath.Join(dir, fileName)
+		check := root.CheckCreateNewFile
+		if overwrite {
+			check = root.CheckWriteFilePreservingMode
+		}
+		if err := check(fileName); errors.Is(err, os.ErrExist) {
+			return shared.WithDiagnostic(shared.NewValidationError(fmt.Errorf("profiles download: output file %q already exists; pass --overwrite to replace it; nothing was written", path)), shared.DiagnosticResourceConflict, "--output-dir")
+		} else if err != nil {
+			return fmt.Errorf("profiles download: %w", err)
+		}
+		contents = append(contents, decoded)
+		result.Profiles = append(result.Profiles, asc.ProfileDownloadAllItemResult{ID: item.ID, Name: attrs.Name, UUID: attrs.UUID, ProfileType: attrs.ProfileType, OutputPath: path})
+	}
+
+	for i, item := range result.Profiles {
+		fileName := filepath.Base(item.OutputPath)
+		write := root.CreateNewFile
+		if overwrite {
+			write = root.WriteFilePreservingMode
+		}
+		if err := write(fileName, contents[i], 0o644); err != nil {
+			return fmt.Errorf("profiles download: %w", err)
+		}
+	}
+	return d.PrintOutput(result, format, pretty)
+}
+
+func checkProfileDownloadOutput(path string, overwrite bool) error {
+	info, err := os.Lstat(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if !overwrite {
+		return profileOutputExistsError(path)
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return shared.NewValidationError(fmt.Errorf("refusing to overwrite symlink %q", path))
+	}
+	if !info.Mode().IsRegular() {
+		return shared.NewValidationError(fmt.Errorf("output path %q is not a regular file", path))
+	}
+	return nil
+}
+
+func profileOutputExistsError(path string) error {
+	return shared.WithDiagnostic(shared.NewValidationError(fmt.Errorf("output file %q already exists; pass --overwrite to replace it", path)), shared.DiagnosticResourceConflict, "--output")
+}
+
+func writeDownloadedProfile(path string, content []byte, overwrite bool) error {
+	if !overwrite {
+		err := shared.WriteProfileFile(path, content)
+		if errors.Is(err, os.ErrExist) {
+			return profileOutputExistsError(path)
+		}
+		return err
+	}
+	perm := os.FileMode(0o644)
+	if info, err := os.Lstat(path); err == nil {
+		perm &= info.Mode().Perm()
+	}
+	_, err := shared.SafeWriteFileNoSymlink(path, perm, true, ".asc-profile-*", ".asc-profile-backup-*", func(file *os.File) (int64, error) {
+		n, err := file.Write(content)
+		return int64(n), err
+	})
+	return err
 }
 
 func decodeProfileContent(content string) ([]byte, error) {

@@ -1,9 +1,6 @@
 package cmdtest
 
 import (
-	"context"
-	"errors"
-	"flag"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -12,53 +9,26 @@ import (
 	"testing"
 )
 
-func TestReviewsSummarizationsValidationErrors(t *testing.T) {
+func TestReviewsSummarizationsUsageErrors(t *testing.T) {
 	t.Setenv("ASC_APP_ID", "")
 
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	stdout, _ := captureOutput(t, func() {
-		if err := root.Parse([]string{"reviews", "summarizations"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		err := root.Run(context.Background())
-		if !errors.Is(err, flag.ErrHelp) {
-			t.Fatalf("expected ErrHelp, got %v", err)
-		}
+	runUsageExitCases(t, []usageExitCase{
+		{
+			name:    "requires app",
+			deps:    true,
+			args:    []string{"reviews", "summarizations"},
+			wantErr: "Error: --app is required (or set ASC_APP_ID)",
+		},
+		{
+			name:    "requires platform without next",
+			deps:    true,
+			args:    []string{"reviews", "summarizations", "--app", "app-1"},
+			wantErr: "Error: --platform is required",
+		},
 	})
-
-	if stdout != "" {
-		t.Fatalf("expected empty stdout, got %q", stdout)
-	}
-}
-
-func TestReviewsSummarizationsRequiresPlatformWithoutNext(t *testing.T) {
-	t.Setenv("ASC_APP_ID", "")
-
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"reviews", "summarizations", "--app", "app-1"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		err := root.Run(context.Background())
-		if !errors.Is(err, flag.ErrHelp) {
-			t.Fatalf("expected ErrHelp, got %v", err)
-		}
-	})
-
-	if stdout != "" {
-		t.Fatalf("expected empty stdout, got %q", stdout)
-	}
-	if !strings.Contains(stderr, "Error: --platform is required") {
-		t.Fatalf("expected platform-required error on stderr, got %q", stderr)
-	}
 }
 
 func TestReviewsSummarizationsNextDoesNotRequirePlatform(t *testing.T) {
-	setupAuth(t)
 	t.Setenv("ASC_APP_ID", "ambient-app-must-not-affect-continuation")
 
 	const nextURL = "https://api.appstoreconnect.apple.com/v1/apps/app-1/customerReviewSummarizations?cursor=abc"
@@ -78,7 +48,7 @@ func TestReviewsSummarizationsNextDoesNotRequirePlatform(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parse server URL: %v", err)
 	}
-	installDefaultTransport(t, roundTripFunc(func(req *http.Request) (*http.Response, error) {
+	client := stubClient(t, roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		cloned := req.Clone(req.Context())
 		cloned.URL.Scheme = serverURL.Scheme
 		cloned.URL.Host = serverURL.Host
@@ -86,17 +56,10 @@ func TestReviewsSummarizationsNextDoesNotRequirePlatform(t *testing.T) {
 		return server.Client().Transport.RoundTrip(cloned)
 	}))
 
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-	if err := root.Parse([]string{"reviews", "summarizations", "--next", nextURL, "--output", "json"}); err != nil {
-		t.Fatalf("parse error: %v", err)
+	stdout, stderr, runErr := runRootWithDeps(t, client, "reviews", "summarizations", "--next", nextURL, "--output", "json")
+	if runErr != nil {
+		t.Fatalf("run error: %v", runErr)
 	}
-
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatalf("run error: %v", err)
-		}
-	})
 	if !strings.Contains(stdout, `"data":[]`) {
 		t.Fatalf("expected JSON response on stdout, got %q", stdout)
 	}

@@ -110,19 +110,29 @@ func TestCommandsThatTakeOperandsKeepAcceptingThem(t *testing.T) {
 	tests := []struct {
 		name string
 		args []string
+		deps bool // the command is built on shared.Deps: run it on test deps
 	}{
-		{name: "search", args: []string{"search", "external testers"}},
-		{name: "schema", args: []string{"schema", "apps.list"}},
+		{name: "search", args: []string{"search", "external testers"}, deps: true},
+		{name: "schema", args: []string{"schema", "apps.list"}, deps: true},
 		{name: "docs show", args: []string{"docs", "show", "api-notes"}},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			_, stderr := captureOutput(t, func() {
-				if code := rootcmd.Run(test.args, "1.2.3"); code != 0 {
+			var stderr string
+			if test.deps {
+				var code int
+				_, stderr, code = runWithDeps(t, nil, test.args...)
+				if code != 0 {
 					t.Fatalf("exit code = %d, want 0 (stderr follows)", code)
 				}
-			})
+			} else {
+				_, stderr = captureOutput(t, func() {
+					if code := rootcmd.Run(test.args, "1.2.3"); code != 0 {
+						t.Fatalf("exit code = %d, want 0 (stderr follows)", code)
+					}
+				})
+			}
 			if strings.Contains(stderr, "unexpected argument") {
 				t.Fatalf("stderr = %q, want no stray-operand diagnostic", stderr)
 			}
@@ -137,8 +147,9 @@ func TestOperandCommandsFailForTheirOwnReasons(t *testing.T) {
 	tests := []struct {
 		name string
 		args []string
+		deps bool // the command is built on shared.Deps: run it on test deps
 	}{
-		{name: "workflow run", args: []string{"workflow", "run", "release", "--file", "missing-workflow.json"}},
+		{name: "workflow run", args: []string{"workflow", "run", "release", "--file", "missing-workflow.json"}, deps: true},
 		{
 			name: "signing run passthrough",
 			args: []string{"signing", "run", "--identity", "missing.p12", "--profile", "missing.mobileprovision", "true"},
@@ -147,9 +158,14 @@ func TestOperandCommandsFailForTheirOwnReasons(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			_, stderr := captureOutput(t, func() {
-				_ = rootcmd.Run(test.args, "1.2.3")
-			})
+			var stderr string
+			if test.deps {
+				_, stderr, _ = runWithDeps(t, nil, test.args...)
+			} else {
+				_, stderr = captureOutput(t, func() {
+					_ = rootcmd.Run(test.args, "1.2.3")
+				})
+			}
 			if strings.Contains(stderr, "unexpected argument") {
 				t.Fatalf("stderr = %q, want no stray-operand diagnostic", stderr)
 			}

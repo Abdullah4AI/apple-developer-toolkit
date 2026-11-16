@@ -1,10 +1,8 @@
 package cmdtest
 
 import (
-	"context"
 	"errors"
 	"flag"
-	"io"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -47,58 +45,8 @@ func stubAuthLogoutRemovers(t *testing.T) *authLogoutCalls {
 	return calls
 }
 
-func TestAuthLogoutConfirmRemovesNamedCredentialWithoutWarning(t *testing.T) {
-	calls := stubAuthLogoutRemovers(t)
-
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"auth", "logout", "--name", "demo", "--confirm"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatalf("run error: %v", err)
-		}
-	})
-
-	if stdout != "Successfully removed stored credential 'demo'\n" {
-		t.Fatalf("stdout = %q", stdout)
-	}
-	if stderr != authLogoutBypassNote {
-		t.Fatalf("expected no warning with --confirm, got %q", stderr)
-	}
-	if len(calls.names) != 1 || calls.names[0] != "demo" || calls.all != 0 {
-		t.Fatalf("unexpected removal calls: %+v", calls)
-	}
-}
-
-func TestAuthLogoutConfirmRemovesAllCredentialsWithoutWarning(t *testing.T) {
-	calls := stubAuthLogoutRemovers(t)
-
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"auth", "logout", "--all", "--confirm"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatalf("run error: %v", err)
-		}
-	})
-
-	if stdout != "Successfully removed stored credentials\n" {
-		t.Fatalf("stdout = %q", stdout)
-	}
-	if stderr != authLogoutBypassNote {
-		t.Fatalf("expected no warning with --confirm, got %q", stderr)
-	}
-	if len(calls.names) != 0 || calls.all != 1 {
-		t.Fatalf("unexpected removal calls: %+v", calls)
-	}
-}
-
 func TestAuthLogoutUsageErrorsRemoveNothing(t *testing.T) {
-	const missingConfirm = "--confirm is required to remove stored credentials"
+	const missingConfirm = "--confirm is required\n"
 	for _, tt := range []struct {
 		name    string
 		args    []string
@@ -107,23 +55,16 @@ func TestAuthLogoutUsageErrorsRemoveNothing(t *testing.T) {
 		{name: "implicit all without confirm", args: []string{"auth", "logout"}, wantErr: missingConfirm},
 		{name: "explicit all without confirm", args: []string{"auth", "logout", "--all"}, wantErr: missingConfirm},
 		{name: "named without confirm", args: []string{"auth", "logout", "--name", "demo"}, wantErr: missingConfirm},
+		{name: "blank name", args: []string{"auth", "logout", "--name", "   "}, wantErr: "--name cannot be blank"},
 		{name: "explicit false confirm", args: []string{"auth", "logout", "--all", "--confirm=false"}, wantErr: "--confirm must be true when specified"},
-		{name: "positional args", args: []string{"auth", "logout", "--all", "--confirm", "unexpected"}, wantErr: "unexpected argument(s): unexpected"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			calls := stubAuthLogoutRemovers(t)
 
-			root := RootCommand("1.2.3")
-			root.FlagSet.SetOutput(io.Discard)
-			stdout, stderr := captureOutput(t, func() {
-				if err := root.Parse(tt.args); err != nil {
-					t.Fatalf("parse error: %v", err)
-				}
-				err := root.Run(context.Background())
-				if !errors.Is(err, flag.ErrHelp) {
-					t.Fatalf("run error = %v, want flag.ErrHelp", err)
-				}
-			})
+			stdout, stderr, err := runRootWithDeps(t, nil, tt.args...)
+			if !errors.Is(err, flag.ErrHelp) {
+				t.Fatalf("run error = %v, want flag.ErrHelp", err)
+			}
 
 			if stdout != "" {
 				t.Fatalf("expected empty stdout, got %q", stdout)

@@ -1,37 +1,19 @@
 package cmdtest
 
 import (
-	"context"
-	"io"
 	"net/http"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	rootcmd "github.com/Abdullah4AI/apple-developer-toolkit/appstore/cmd"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asctest"
 )
 
 func TestBundleIDCapabilitiesSettingsValidationStopsBeforeHTTP(t *testing.T) {
-	setupAuth(t)
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() {
-		http.DefaultTransport = originalTransport
-	})
-	requestCount := 0
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		requestCount++
-		status := http.StatusOK
-		if req.Method == http.MethodPost {
-			status = http.StatusCreated
-		}
-		return &http.Response{
-			StatusCode: status,
-			Body:       io.NopCloser(strings.NewReader(`{"data":{"type":"bundleIdCapabilities","id":"cap1","attributes":{"capabilityType":"ICLOUD"}}}`)),
-			Header:     http.Header{"Content-Type": []string{"application/json"}},
-		}, nil
-	})
+	reg := asctest.NewRegistry(t)
 
 	tests := []struct {
 		name        string
@@ -47,12 +29,12 @@ func TestBundleIDCapabilitiesSettingsValidationStopsBeforeHTTP(t *testing.T) {
 		{
 			name:    "update requires an update field",
 			args:    []string{"bundle-ids", "capabilities", "update", "--id", "cap1"},
-			wantErr: "at least one update field is required",
+			wantErr: "at least one update flag is required (--capability, --settings)",
 		},
 		{
 			name:    "update rejects empty settings array",
 			args:    []string{"bundle-ids", "capabilities", "update", "--id", "cap1", "--settings", "[]"},
-			wantErr: "at least one update field is required",
+			wantErr: "at least one update flag is required (--capability, --settings)",
 		},
 		{
 			name:    "update rejects invalid settings JSON",
@@ -104,17 +86,8 @@ func TestBundleIDCapabilitiesSettingsValidationStopsBeforeHTTP(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			requestCount = 0
-			root := RootCommand("1.2.3")
-			root.FlagSet.SetOutput(io.Discard)
-
-			var runErr error
-			stdout, stderr := captureOutput(t, func() {
-				if err := root.Parse(tc.args); err != nil {
-					t.Fatalf("parse error: %v", err)
-				}
-				runErr = root.Run(context.Background())
-			})
+			requestsBefore := len(reg.Requests())
+			stdout, stderr, runErr := runRootWithDeps(t, stubClient(t, reg), tc.args...)
 
 			if stdout != "" {
 				t.Fatalf("expected empty stdout, got %q", stdout)
@@ -128,7 +101,7 @@ func TestBundleIDCapabilitiesSettingsValidationStopsBeforeHTTP(t *testing.T) {
 			if got := rootcmd.ExitCodeFromError(runErr); got != rootcmd.ExitUsage {
 				t.Fatalf("exit code = %d, want %d (err=%v)", got, rootcmd.ExitUsage, runErr)
 			}
-			if requestCount != 0 {
+			if requestCount := len(reg.Requests()) - requestsBefore; requestCount != 0 {
 				t.Fatalf("HTTP request count = %d, want 0", requestCount)
 			}
 		})
@@ -136,49 +109,25 @@ func TestBundleIDCapabilitiesSettingsValidationStopsBeforeHTTP(t *testing.T) {
 }
 
 func TestBundleIDCapabilitiesAddWithSettings(t *testing.T) {
-	setupAuth(t)
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() {
-		http.DefaultTransport = originalTransport
-	})
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		if req.Method != http.MethodPost || req.URL.Path != "/v1/bundleIdCapabilities" {
-			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.Path)
-		}
-		payload, err := io.ReadAll(req.Body)
-		if err != nil {
-			t.Fatalf("read body: %v", err)
-		}
-		wantPayload := `{"data":{"type":"bundleIdCapabilities","attributes":{"capabilityType":"MARZIPAN","settings":[{"key":"ENABLED_FOR_MAC_APP_SETUP","options":[{"key":"USE_IOS_APPID","enabled":true}]}]},"relationships":{"bundleId":{"data":{"type":"bundleIds","id":"bundle1"}}}}}` + "\n"
-		if string(payload) != wantPayload {
-			t.Fatalf("request body = %q, want %q", payload, wantPayload)
-		}
-		return &http.Response{
-			StatusCode: http.StatusCreated,
-			Body: io.NopCloser(strings.NewReader(
-				`{"data":{"type":"bundleIdCapabilities","id":"cap1","attributes":{"capabilityType":"MARZIPAN","settings":[{"key":"ENABLED_FOR_MAC_APP_SETUP","options":[{"key":"USE_IOS_APPID","enabled":true}]}]}}}`,
-			)),
-			Header: http.Header{"Content-Type": []string{"application/json"}},
-		}, nil
-	})
+	wantPayload := `{"data":{"type":"bundleIdCapabilities","attributes":{"capabilityType":"MARZIPAN","settings":[{"key":"ENABLED_FOR_MAC_APP_SETUP","options":[{"key":"USE_IOS_APPID","enabled":true}]}]},"relationships":{"bundleId":{"data":{"type":"bundleIds","id":"bundle1"}}}}}` + "\n"
+	reg := asctest.NewRegistry(t)
+	reg.Register(asctest.POST("/v1/bundleIdCapabilities").JSONBody(wantPayload),
+		asctest.JSON(http.StatusCreated, `{"data":{"type":"bundleIdCapabilities","id":"cap1","attributes":{"capabilityType":"MARZIPAN","settings":[{"key":"ENABLED_FOR_MAC_APP_SETUP","options":[{"key":"USE_IOS_APPID","enabled":true}]}]}}}`))
 
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{
-			"bundle-ids", "capabilities", "add",
-			"--bundle", "bundle1", "--capability", "MARZIPAN",
-			"--settings", `[{"key":"ENABLED_FOR_MAC_APP_SETUP","options":[{"key":"USE_IOS_APPID","enabled":true}]}]`,
-			"--output", "json",
-		}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatalf("run error: %v", err)
-		}
-	})
+	stdout, stderr, err := runRootWithDeps(t, stubClient(t, reg),
+		"bundle-ids", "capabilities", "add",
+		"--bundle", "bundle1", "--capability", "MARZIPAN",
+		"--settings", `[{"key":"ENABLED_FOR_MAC_APP_SETUP","options":[{"key":"USE_IOS_APPID","enabled":true}]}]`,
+		"--output", "json",
+	)
+	if err != nil {
+		t.Fatalf("run error: %v", err)
+	}
+	if payload := reg.Requests()[0].Body; string(payload) != wantPayload {
+		t.Fatalf("request body = %q, want %q", payload, wantPayload)
+	}
 	if stderr != "" {
 		t.Fatalf("expected empty stderr, got %q", stderr)
 	}
@@ -193,49 +142,20 @@ func TestBundleIDCapabilitiesAddWithSettings(t *testing.T) {
 }
 
 func TestBundleIDCapabilitiesUpdateSuccessOutput(t *testing.T) {
-	setupAuth(t)
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() {
-		http.DefaultTransport = originalTransport
-	})
+	wantPayload := `{"data":{"type":"bundleIdCapabilities","id":"cap1","attributes":{"settings":[{"key":"APP_GROUP_IDENTIFIERS","allowedInstances":"FUTURE_INSTANCE_MODE","options":[{"key":"group.com.example.shared","enabled":true}]}]}}}` + "\n"
+	reg := asctest.NewRegistry(t)
+	reg.Register(asctest.PATCH("/v1/bundleIdCapabilities/cap1").JSONBody(wantPayload),
+		asctest.JSON(http.StatusOK, `{"data":{"type":"bundleIdCapabilities","id":"cap1","attributes":{"capabilityType":"APP_GROUPS","settings":[{"key":"APP_GROUP_IDENTIFIERS","allowedInstances":"FUTURE_INSTANCE_MODE","options":[{"key":"group.com.example.shared","enabled":true}]}]}}}`))
 
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		if req.Method != http.MethodPatch {
-			t.Fatalf("expected PATCH, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/bundleIdCapabilities/cap1" {
-			t.Fatalf("expected path /v1/bundleIdCapabilities/cap1, got %s", req.URL.Path)
-		}
-		payload, err := io.ReadAll(req.Body)
-		if err != nil {
-			t.Fatalf("read body error: %v", err)
-		}
-		wantPayload := `{"data":{"type":"bundleIdCapabilities","id":"cap1","attributes":{"settings":[{"key":"APP_GROUP_IDENTIFIERS","allowedInstances":"FUTURE_INSTANCE_MODE","options":[{"key":"group.com.example.shared","enabled":true}]}]}}}` + "\n"
-		if string(payload) != wantPayload {
-			t.Fatalf("request body = %q, want %q", payload, wantPayload)
-		}
-
-		respBody := `{"data":{"type":"bundleIdCapabilities","id":"cap1","attributes":{"capabilityType":"APP_GROUPS","settings":[{"key":"APP_GROUP_IDENTIFIERS","allowedInstances":"FUTURE_INSTANCE_MODE","options":[{"key":"group.com.example.shared","enabled":true}]}]}}}`
-		return &http.Response{
-			StatusCode: http.StatusOK,
-			Body:       io.NopCloser(strings.NewReader(respBody)),
-			Header:     http.Header{"Content-Type": []string{"application/json"}},
-		}, nil
-	})
-
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"bundle-ids", "capabilities", "update", "--id", "cap1", "--settings", `[{"key":"APP_GROUP_IDENTIFIERS","allowedInstances":"FUTURE_INSTANCE_MODE","options":[{"key":"group.com.example.shared","enabled":true}]}]`}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatalf("run error: %v", err)
-		}
-	})
+	stdout, stderr, err := runRootWithDeps(t, stubClient(t, reg), "bundle-ids", "capabilities", "update", "--id", "cap1", "--settings", `[{"key":"APP_GROUP_IDENTIFIERS","allowedInstances":"FUTURE_INSTANCE_MODE","options":[{"key":"group.com.example.shared","enabled":true}]}]`)
+	if err != nil {
+		t.Fatalf("run error: %v", err)
+	}
+	if payload := reg.Requests()[0].Body; string(payload) != wantPayload {
+		t.Fatalf("request body = %q, want %q", payload, wantPayload)
+	}
 
 	if stderr != "" {
 		t.Fatalf("expected empty stderr, got %q", stderr)
@@ -254,45 +174,16 @@ func TestBundleIDCapabilitiesUpdateSuccessOutput(t *testing.T) {
 }
 
 func TestBundleIDCapabilitiesUpdateWithCapabilityType(t *testing.T) {
-	setupAuth(t)
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() {
-		http.DefaultTransport = originalTransport
-	})
+	reg := asctest.NewRegistry(t)
+	reg.Register(asctest.PATCH("/v1/bundleIdCapabilities/cap1").JSONBody(`{"data":{"type":"bundleIdCapabilities","id":"cap1","attributes":{"capabilityType":"PUSH_NOTIFICATIONS"}}}`),
+		asctest.JSON(http.StatusOK, `{"data":{"type":"bundleIdCapabilities","id":"cap1","attributes":{"capabilityType":"PUSH_NOTIFICATIONS"}}}`))
 
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		if req.Method != http.MethodPatch {
-			t.Fatalf("expected PATCH, got %s", req.Method)
-		}
-		payload, err := io.ReadAll(req.Body)
-		if err != nil {
-			t.Fatalf("read body error: %v", err)
-		}
-		if !strings.Contains(string(payload), `"capabilityType":"PUSH_NOTIFICATIONS"`) {
-			t.Fatalf("expected capabilityType in body, got %s", string(payload))
-		}
-
-		respBody := `{"data":{"type":"bundleIdCapabilities","id":"cap1","attributes":{"capabilityType":"PUSH_NOTIFICATIONS"}}}`
-		return &http.Response{
-			StatusCode: http.StatusOK,
-			Body:       io.NopCloser(strings.NewReader(respBody)),
-			Header:     http.Header{"Content-Type": []string{"application/json"}},
-		}, nil
-	})
-
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"bundle-ids", "capabilities", "update", "--id", "cap1", "--capability", "PUSH_NOTIFICATIONS"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatalf("run error: %v", err)
-		}
-	})
+	stdout, stderr, err := runRootWithDeps(t, stubClient(t, reg), "bundle-ids", "capabilities", "update", "--id", "cap1", "--capability", "PUSH_NOTIFICATIONS")
+	if err != nil {
+		t.Fatalf("run error: %v", err)
+	}
 
 	if stderr != "" {
 		t.Fatalf("expected empty stderr, got %q", stderr)

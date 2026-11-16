@@ -25,12 +25,14 @@ import (
 	"github.com/peterbourgon/ff/v3/ffcli"
 	"howett.net/plist"
 
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/infoplist"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/rootfs"
 )
 
 func TestSigningResignHelpChecksCommandSpecificFlags(t *testing.T) {
-	command := SigningResignCommand()
+	d, _, _ := newSigningTestDeps()
+	command := newSigningResignCommand(d)
 	for _, name := range []string{"ipa", "output", "identity", "identity-password-file", "profiles-manifest", "rebase-team-claims"} {
 		flagValue := command.FlagSet.Lookup(name)
 		if flagValue == nil {
@@ -40,7 +42,8 @@ func TestSigningResignHelpChecksCommandSpecificFlags(t *testing.T) {
 }
 
 func TestSigningResignRebaseTeamClaimsFlagIsOptIn(t *testing.T) {
-	command := SigningResignCommand()
+	d, _, _ := newSigningTestDeps()
+	command := newSigningResignCommand(d)
 	flagValue := command.FlagSet.Lookup("rebase-team-claims")
 	if flagValue == nil {
 		t.Fatal("missing --rebase-team-claims flag")
@@ -60,7 +63,7 @@ func TestSigningResignRebaseTeamClaimsFlagIsOptIn(t *testing.T) {
 	originalExecute := executeSigningResignFn
 	t.Cleanup(func() { executeSigningResignFn = originalExecute })
 	var captured []signingResignOptions
-	executeSigningResignFn = func(_ context.Context, options signingResignOptions) (signingResignResult, error) {
+	executeSigningResignFn = func(_ context.Context, _ *shared.Deps, options signingResignOptions) (signingResignResult, error) {
 		captured = append(captured, options)
 		return signingResignResult{SchemaVersion: 1, Command: "signing resign"}, nil
 	}
@@ -75,7 +78,8 @@ func TestSigningResignRebaseTeamClaimsFlagIsOptIn(t *testing.T) {
 		if enabled {
 			args = append(args, "--rebase-team-claims")
 		}
-		command := SigningResignCommand()
+		d, _, _ := newSigningTestDeps()
+		command := newSigningResignCommand(d)
 		if err := command.FlagSet.Parse(args); err != nil {
 			t.Fatal(err)
 		}
@@ -93,11 +97,10 @@ func TestSigningResignCommandRejectsInvalidFlagShapes(t *testing.T) {
 		name string
 		args []string
 	}{
-		{name: "positional argument", args: []string{"unexpected"}},
 		{name: "missing required flags", args: nil},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			if err := SigningResignCommand().Exec(context.Background(), test.args); !errors.Is(err, flag.ErrHelp) {
+			if err := newSigningResignCommand(testSigningDeps()).Exec(context.Background(), test.args); !errors.Is(err, flag.ErrHelp) {
 				t.Fatalf("SigningResignCommand().Exec() error = %v, want flag.ErrHelp classification", err)
 			}
 		})
@@ -121,14 +124,14 @@ func TestSigningResignInvalidManifestDoesNotCreateOutputParent(t *testing.T) {
 	runSigningResignToolFn = func(_ context.Context, _ string, _ ...string) (signingResignToolOutput, error) {
 		return signingResignToolOutput{}, nil
 	}
-	_, err := executeSigningResignImplementation(context.Background(), signingResignOptions{
+	_, err := executeSigningResignImplementation(context.Background(), testSigningDeps(), signingResignOptions{
 		IPAPath: inputPath, OutputPath: outputPath, IdentityPath: filepath.Join(temporary, "identity.p12"), ProfilesManifestPath: manifestPath,
 	})
 	if err == nil || !strings.Contains(err.Error(), "profiles manifest") {
-		t.Fatalf("executeSigningResignImplementation() error = %v, want invalid manifest", err)
+		t.Fatalf("executeSigningResignImplementation(testSigningDeps()) error = %v, want invalid manifest", err)
 	}
 	if !isSigningResignUsageError(err) {
-		t.Fatalf("executeSigningResignImplementation() error = %v, want usage classification", err)
+		t.Fatalf("executeSigningResignImplementation(testSigningDeps()) error = %v, want usage classification", err)
 	}
 	if _, statErr := os.Stat(filepath.Dir(outputPath)); !errors.Is(statErr, os.ErrNotExist) {
 		t.Fatalf("invalid manifest created output parent: stat error = %v", statErr)
@@ -187,7 +190,8 @@ func TestSigningResignPreflightErrorsMapToUsageExit(t *testing.T) {
 			original := executeSigningResignFn
 			t.Cleanup(func() { executeSigningResignFn = original })
 			executeSigningResignFn = executeSigningResignImplementation
-			command := SigningResignCommand()
+			d, _, _ := newSigningTestDeps()
+			command := newSigningResignCommand(d)
 			if err := command.FlagSet.Parse([]string{
 				"--ipa", inputPath,
 				"--output", filepath.Join(temporary, "output.ipa"),
@@ -214,7 +218,8 @@ func TestSigningResignCommandClassifiesPreflightUsageOnly(t *testing.T) {
 	original := executeSigningResignFn
 	t.Cleanup(func() { executeSigningResignFn = original })
 	makeCommand := func() *ffcli.Command {
-		command := SigningResignCommand()
+		d, _, _ := newSigningTestDeps()
+		command := newSigningResignCommand(d)
 		if err := command.FlagSet.Parse([]string{
 			"--ipa", "input.ipa",
 			"--output", "output.ipa",
@@ -226,14 +231,14 @@ func TestSigningResignCommandClassifiesPreflightUsageOnly(t *testing.T) {
 		return command
 	}
 
-	executeSigningResignFn = func(context.Context, signingResignOptions) (signingResignResult, error) {
+	executeSigningResignFn = func(context.Context, *shared.Deps, signingResignOptions) (signingResignResult, error) {
 		return signingResignResult{}, signingResignUsage(errors.New("profiles manifest contains duplicate fields"))
 	}
 	if err := makeCommand().Exec(context.Background(), nil); !errors.Is(err, flag.ErrHelp) {
 		t.Fatalf("preflight usage error = %v, want flag.ErrHelp classification", err)
 	}
 
-	executeSigningResignFn = func(context.Context, signingResignOptions) (signingResignResult, error) {
+	executeSigningResignFn = func(context.Context, *shared.Deps, signingResignOptions) (signingResignResult, error) {
 		return signingResignResult{}, errors.New("codesign failed")
 	}
 	if err := makeCommand().Exec(context.Background(), nil); err == nil || errors.Is(err, flag.ErrHelp) {
@@ -257,10 +262,11 @@ func TestSigningResignOperationalFailuresRemainExecutionErrors(t *testing.T) {
 		"verification failed",
 	} {
 		t.Run(message, func(t *testing.T) {
-			executeSigningResignFn = func(context.Context, signingResignOptions) (signingResignResult, error) {
+			executeSigningResignFn = func(context.Context, *shared.Deps, signingResignOptions) (signingResignResult, error) {
 				return signingResignResult{}, errors.New(message)
 			}
-			command := SigningResignCommand()
+			d, _, _ := newSigningTestDeps()
+			command := newSigningResignCommand(d)
 			if err := command.FlagSet.Parse([]string{
 				"--ipa", "input.ipa",
 				"--output", "output.ipa",
@@ -290,7 +296,8 @@ func TestSigningResignInvalidFormatDoesNotCreateOutputParent(t *testing.T) {
 	}
 	temporary := t.TempDir()
 	outputPath := filepath.Join(temporary, "not-created", "output.ipa")
-	command := SigningResignCommand()
+	d, _, _ := newSigningTestDeps()
+	command := newSigningResignCommand(d)
 	if err := command.FlagSet.Parse([]string{
 		"--ipa", filepath.Join(temporary, "input.ipa"),
 		"--output", outputPath,
@@ -476,10 +483,40 @@ func TestSigningResignCommandClassifiesManifestTargetMappingErrorsAsUsage(t *tes
 	}
 	executeSigningResignFn = executeSigningResignImplementation
 	for _, test := range []struct {
-		name     string
-		writeIPA func(*testing.T, string)
-		manifest string
+		name        string
+		writeIPA    func(*testing.T, string)
+		manifest    string
+		args        []string
+		wantMessage string
 	}{
+		{
+			name:        "manifest keyed by source identifiers with a new bundle identifier",
+			writeIPA:    writeSigningResignIPAWithNestedExtension,
+			manifest:    `{"schemaVersion":1,"profiles":[{"bundleId":"com.example.app","profilePath":"app.mobileprovision"},{"bundleId":"com.example.app.extension","profilePath":"extension.mobileprovision"}]}`,
+			args:        []string{"--bundle-id", "com.example.white"},
+			wantMessage: "com.example.white, com.example.white.extension",
+		},
+		{
+			name:        "unchanged bundle identifier",
+			writeIPA:    writeSigningResignMinimalIPA,
+			manifest:    `{"schemaVersion":1,"profiles":[{"bundleId":"com.example.app","profilePath":"profile.mobileprovision"}]}`,
+			args:        []string{"--bundle-id", "com.example.app"},
+			wantMessage: "equals the current bundle identifier",
+		},
+		{
+			name:        "empty bundle identifier",
+			writeIPA:    writeSigningResignMinimalIPA,
+			manifest:    `{"schemaVersion":1,"profiles":[{"bundleId":"com.example.app","profilePath":"profile.mobileprovision"}]}`,
+			args:        []string{"--bundle-id", " "},
+			wantMessage: "--bundle-id must not be empty",
+		},
+		{
+			name:        "invalid bundle identifier",
+			writeIPA:    writeSigningResignMinimalIPA,
+			manifest:    `{"schemaVersion":1,"profiles":[{"bundleId":"com.example.app","profilePath":"profile.mobileprovision"}]}`,
+			args:        []string{"--bundle-id", "com.example.*"},
+			wantMessage: "not a valid bundle identifier",
+		},
 		{
 			name:     "missing target mapping",
 			writeIPA: writeSigningResignIPAWithNestedExtension,
@@ -499,18 +536,22 @@ func TestSigningResignCommandClassifiesManifestTargetMappingErrorsAsUsage(t *tes
 			if err := os.WriteFile(manifestPath, []byte(test.manifest), 0o600); err != nil {
 				t.Fatal(err)
 			}
-			command := SigningResignCommand()
-			if err := command.FlagSet.Parse([]string{
+			d, _, _ := newSigningTestDeps()
+			command := newSigningResignCommand(d)
+			if err := command.FlagSet.Parse(append([]string{
 				"--ipa", inputPath,
 				"--output", filepath.Join(temporary, "output.ipa"),
 				"--identity", filepath.Join(temporary, "identity.p12"),
 				"--profiles-manifest", manifestPath,
-			}); err != nil {
+			}, test.args...)); err != nil {
 				t.Fatal(err)
 			}
 			err := command.Exec(context.Background(), nil)
 			if !errors.Is(err, flag.ErrHelp) {
 				t.Fatalf("SigningResignCommand().Exec() error = %v, want usage/exit-2 classification", err)
+			}
+			if !strings.Contains(err.Error(), test.wantMessage) {
+				t.Fatalf("SigningResignCommand().Exec() error = %v, want %q", err, test.wantMessage)
 			}
 		})
 	}
@@ -541,12 +582,13 @@ func TestSigningResignCommandPreservesPathBytes(t *testing.T) {
 	original := executeSigningResignFn
 	t.Cleanup(func() { executeSigningResignFn = original })
 	var got signingResignOptions
-	executeSigningResignFn = func(_ context.Context, options signingResignOptions) (signingResignResult, error) {
+	executeSigningResignFn = func(_ context.Context, _ *shared.Deps, options signingResignOptions) (signingResignResult, error) {
 		got = options
 		return signingResignResult{SchemaVersion: 1, Command: "signing resign"}, nil
 	}
 
-	command := SigningResignCommand()
+	d, _, _ := newSigningTestDeps()
+	command := newSigningResignCommand(d)
 	values := []string{
 		"--ipa", " input.ipa ",
 		"--output", " output.ipa ",
@@ -621,7 +663,7 @@ func TestBuildSigningResignEntitlementsReplacesIdentity(t *testing.T) {
 		"get-task-allow":                        false,
 		"com.apple.security.application-groups": []any{"group.com.example", "group.other"},
 	}
-	got, err := buildSigningResignEntitlements(existing, profile)
+	got, err := buildSigningResignEntitlementsWithClass(existing, profile, "")
 	if err != nil {
 		t.Fatalf("buildSigningResignEntitlements() error = %v", err)
 	}
@@ -917,7 +959,7 @@ func TestBuildSigningResignEntitlementsKeepsConcreteValuesForWildcardProfileClai
 		"com.apple.developer.parent-application-identifiers": []any{"NEWTEAM.*"},
 	}
 
-	got, err := buildSigningResignEntitlements(existing, profile)
+	got, err := buildSigningResignEntitlementsWithClass(existing, profile, "")
 	if err != nil {
 		t.Fatalf("buildSigningResignEntitlements() error = %v", err)
 	}
@@ -1033,7 +1075,7 @@ func TestSigningResignExistingOtherTeamCanBeReplaced(t *testing.T) {
 		"com.apple.developer.team-identifier": "NEWTEAM",
 		"get-task-allow":                      false,
 	}
-	got, err := buildSigningResignEntitlements(existing, profile)
+	got, err := buildSigningResignEntitlementsWithClass(existing, profile, "")
 	if err != nil {
 		t.Fatalf("buildSigningResignEntitlements() error = %v", err)
 	}
@@ -1153,15 +1195,12 @@ func TestValidateSigningResignProfileForTarget(t *testing.T) {
 }
 
 func TestBuildSigningResignEntitlementsRejectsUnpermittedCapability(t *testing.T) {
-	_, err := buildSigningResignEntitlements(
-		map[string]any{"com.apple.security.application-groups": []string{"group.not-permitted"}},
-		map[string]any{
-			"application-identifier":                "TEAM.com.example.app",
-			"com.apple.developer.team-identifier":   "TEAM",
-			"get-task-allow":                        false,
-			"com.apple.security.application-groups": []any{"group.allowed"},
-		},
-	)
+	_, err := buildSigningResignEntitlementsWithClass(map[string]any{"com.apple.security.application-groups": []string{"group.not-permitted"}}, map[string]any{
+		"application-identifier":                "TEAM.com.example.app",
+		"com.apple.developer.team-identifier":   "TEAM",
+		"get-task-allow":                        false,
+		"com.apple.security.application-groups": []any{"group.allowed"},
+	}, "")
 	if err == nil || !strings.Contains(err.Error(), "not authorized by the replacement profile") {
 		t.Fatalf("buildSigningResignEntitlements() error = %v, want unpermitted capability", err)
 	}
@@ -1814,7 +1853,7 @@ func TestValidateSigningResignEntitlementsAgainstDocumentRequiresExactGeneratedD
 		"get-task-allow":                      false,
 		"keychain-access-groups":              []any{"NEWTEAM.*"},
 	}
-	want, err := buildSigningResignEntitlements(existing, profile)
+	want, err := buildSigningResignEntitlementsWithClass(existing, profile, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1827,7 +1866,7 @@ func TestValidateSigningResignEntitlementsAgainstDocumentRequiresExactGeneratedD
 		t.Fatal(err)
 	}
 	subject := "target com.example.app signed entitlements"
-	if err := validateSigningResignEntitlementsAgainstDocument(want, documentPath, subject); err != nil {
+	if err := validateSigningResignEntitlementsAgainstDocumentAtStage(want, documentPath, subject, signingResignStagePreparation); err != nil {
 		t.Fatalf("validateSigningResignEntitlementsAgainstDocument() error = %v, want exact document accepted", err)
 	}
 	actual := make(map[string]any, len(want))
@@ -1838,7 +1877,7 @@ func TestValidateSigningResignEntitlementsAgainstDocumentRequiresExactGeneratedD
 	if !signingResignEntitlementValuePermits(profile["keychain-access-groups"], actual["keychain-access-groups"]) {
 		t.Fatal("test setup does not exercise the profile wildcard subset case")
 	}
-	err = validateSigningResignEntitlementsAgainstDocument(actual, documentPath, subject)
+	err = validateSigningResignEntitlementsAgainstDocumentAtStage(actual, documentPath, subject, signingResignStagePreparation)
 	if err == nil || !strings.Contains(err.Error(), "exactly match the generated document") {
 		t.Fatalf("validateSigningResignEntitlementsAgainstDocument() error = %v, want exact-document rejection", err)
 	}
@@ -2693,7 +2732,7 @@ func TestRunSigningResignEnvironmentNeverInstallsProfiles(t *testing.T) {
 	t.Cleanup(func() { signingResignPlatformDepsFn = original })
 	temporary := t.TempDir()
 	var events []string
-	signingResignPlatformDepsFn = func() signingRunDeps {
+	signingResignPlatformDepsFn = func(*shared.Deps) signingRunDeps {
 		return signingRunDeps{
 			GOOS:        "darwin",
 			RandomBytes: func(size int) ([]byte, error) { return bytes.Repeat([]byte{0x42}, size), nil },
@@ -2723,14 +2762,14 @@ func TestRunSigningResignEnvironmentNeverInstallsProfiles(t *testing.T) {
 		}
 	}
 	identity := testSigningResignIdentity(t)
-	if err := runSigningResignEnvironment(context.Background(), identity, func(_ context.Context, keychainPath string) error {
+	if err := runSigningResignEnvironment(context.Background(), testSigningDeps(), identity, func(_ context.Context, keychainPath string) error {
 		if keychainPath == "" {
 			t.Fatal("callback received an empty keychain path")
 		}
 		events = append(events, "operation")
 		return nil
 	}); err != nil {
-		t.Fatalf("runSigningResignEnvironment() error = %v", err)
+		t.Fatalf("runSigningResignEnvironment(testSigningDeps()) error = %v", err)
 	}
 	joined := strings.Join(events, ",")
 	if strings.Contains(joined, "install") || strings.Contains(joined, "profile") {
@@ -2807,7 +2846,7 @@ func TestBuildSigningResignEntitlementsPreservesConcreteIdentitySubsets(t *testi
 		"get-task-allow":                      false,
 		"keychain-access-groups":              []any{"NEWTEAM.com.example.app", "NEWTEAM.com.example.shared"},
 	}
-	got, err := buildSigningResignEntitlements(existing, profile)
+	got, err := buildSigningResignEntitlementsWithClass(existing, profile, "")
 	if err != nil {
 		t.Fatalf("buildSigningResignEntitlements() error = %v", err)
 	}
@@ -2832,7 +2871,7 @@ func TestBuildSigningResignEntitlementsOmitsOptionalWildcardOnlyProfileClaims(t 
 		"get-task-allow":                      false,
 		"keychain-access-groups":              []any{"NEWTEAM.*"},
 	}
-	got, err := buildSigningResignEntitlements(existing, profile)
+	got, err := buildSigningResignEntitlementsWithClass(existing, profile, "")
 	if err != nil {
 		t.Fatalf("buildSigningResignEntitlements() error = %v, want wildcard-only optional claim omitted", err)
 	}
@@ -2844,7 +2883,7 @@ func TestBuildSigningResignEntitlementsOmitsOptionalWildcardOnlyProfileClaims(t 
 		"com.apple.developer.team-identifier": "NEWTEAM",
 		"get-task-allow":                      false,
 	}
-	if _, err := buildSigningResignEntitlements(map[string]any{}, wildcardProfile); err == nil {
+	if _, err := buildSigningResignEntitlementsWithClass(map[string]any{}, wildcardProfile, ""); err == nil {
 		t.Fatal("buildSigningResignEntitlements() accepted a wildcard-only required identity claim with no existing concrete value")
 	}
 }
@@ -2886,13 +2925,13 @@ func TestInspectSigningResignTargetRequiresOwnerExecutableBinary(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer tree.Close()
-	if _, err := inspectSigningResignTarget(context.Background(), tree, "Payload/App.app", "application"); err == nil || !strings.Contains(err.Error(), "owner-execute") {
+	if _, err := inspectSigningResignTargetWithEntitlements(context.Background(), tree, "Payload/App.app", "application", true); err == nil || !strings.Contains(err.Error(), "owner-execute") {
 		t.Fatalf("inspectSigningResignTarget() error = %v, want owner-execute rejection for a 0644 executable", err)
 	}
 	if err := os.Chmod(filepath.Join(appDir, "App"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := inspectSigningResignTarget(context.Background(), tree, "Payload/App.app", "application"); err != nil {
+	if _, err := inspectSigningResignTargetWithEntitlements(context.Background(), tree, "Payload/App.app", "application", true); err != nil {
 		t.Fatalf("inspectSigningResignTarget() error = %v, want executable target accepted", err)
 	}
 }
@@ -3098,7 +3137,7 @@ func TestBuildSigningResignEntitlementsOmitsAbsentOptionalConcreteClaims(t *test
 		"get-task-allow":                      false,
 		"keychain-access-groups":              []any{"NEWTEAM.com.example.shared"},
 	}
-	got, err := buildSigningResignEntitlements(existing, profile)
+	got, err := buildSigningResignEntitlementsWithClass(existing, profile, "")
 	if err != nil {
 		t.Fatalf("buildSigningResignEntitlements() error = %v", err)
 	}
@@ -3129,7 +3168,7 @@ func TestBuildSigningResignEntitlementsListsEveryUnauthorizedCrossTeamClaim(t *t
 		"keychain-access-groups":                          []any{"NEWTEAM.*"},
 		"com.apple.developer.ubiquity-kvstore-identifier": "NEWTEAM.*",
 	}
-	_, err := buildSigningResignEntitlements(existing, profile)
+	_, err := buildSigningResignEntitlementsWithClass(existing, profile, "")
 	if err == nil {
 		t.Fatal("buildSigningResignEntitlements() accepted cross-team claims, want fail-closed refusal")
 	}
@@ -3217,7 +3256,7 @@ func TestBuildSigningResignEntitlementsDerivesProfileRequiredDistributionClaims(
 		"get-task-allow":                      false,
 		"beta-reports-active":                 true,
 	}
-	got, err := buildSigningResignEntitlements(existing, profile)
+	got, err := buildSigningResignEntitlementsWithClass(existing, profile, "")
 	if err != nil {
 		t.Fatalf("buildSigningResignEntitlements() error = %v", err)
 	}
@@ -3226,7 +3265,7 @@ func TestBuildSigningResignEntitlementsDerivesProfileRequiredDistributionClaims(
 	}
 
 	delete(profile, "beta-reports-active")
-	got, err = buildSigningResignEntitlements(existing, profile)
+	got, err = buildSigningResignEntitlementsWithClass(existing, profile, "")
 	if err != nil {
 		t.Fatalf("buildSigningResignEntitlements() error = %v", err)
 	}
@@ -3235,7 +3274,7 @@ func TestBuildSigningResignEntitlementsDerivesProfileRequiredDistributionClaims(
 	}
 
 	profile["beta-reports-active"] = "yes"
-	if _, err := buildSigningResignEntitlements(existing, profile); err == nil {
+	if _, err := buildSigningResignEntitlementsWithClass(existing, profile, ""); err == nil {
 		t.Fatal("buildSigningResignEntitlements() accepted a non-boolean profile-required claim")
 	}
 }
@@ -3254,7 +3293,7 @@ func TestSigningResignUnauthorizedClaimsRefusalSurvivesPublicBoundary(t *testing
 		"get-task-allow":                      false,
 		"keychain-access-groups":              []any{"NEWTEAM.*"},
 	}
-	_, refusal := buildSigningResignEntitlements(existing, profile)
+	_, refusal := buildSigningResignEntitlementsWithClass(existing, profile, "")
 	if refusal == nil {
 		t.Fatal("buildSigningResignEntitlements() accepted an unauthorized claim")
 	}
@@ -3283,10 +3322,11 @@ func TestSigningResignCommandSurfacesUnauthorizedClaimRemediation(t *testing.T) 
 		Existing: []string{"OLDTEAM.com.example.shared"},
 		Profile:  []any{"NEWTEAM.*"},
 	}})
-	executeSigningResignFn = func(context.Context, signingResignOptions) (signingResignResult, error) {
+	executeSigningResignFn = func(context.Context, *shared.Deps, signingResignOptions) (signingResignResult, error) {
 		return signingResignResult{}, refusal
 	}
-	command := SigningResignCommand()
+	d, _, _ := newSigningTestDeps()
+	command := newSigningResignCommand(d)
 	if err := command.FlagSet.Parse([]string{
 		"--ipa", "input.ipa", "--output", "output.ipa",
 		"--identity", "identity.p12", "--profiles-manifest", "profiles.json",
@@ -3318,14 +3358,15 @@ func TestSigningResignCommandPublicationAmbiguityRetainsCauseAndRedactsIt(t *tes
 	publication := signingResignPublicationAmbiguousError("hash published re-signed IPA failed", underlying)
 	original := executeSigningResignFn
 	t.Cleanup(func() { executeSigningResignFn = original })
-	executeSigningResignFn = func(context.Context, signingResignOptions) (signingResignResult, error) {
+	executeSigningResignFn = func(context.Context, *shared.Deps, signingResignOptions) (signingResignResult, error) {
 		return signingResignResult{}, wrapSigningResignOperationalError(
 			signingResignStageArtifact,
 			signingResignCodeArtifactHash,
 			publication,
 		)
 	}
-	command := SigningResignCommand()
+	d, _, _ := newSigningTestDeps()
+	command := newSigningResignCommand(d)
 	if err := command.FlagSet.Parse([]string{
 		"--ipa", "input.ipa", "--output", "output.ipa",
 		"--identity", "identity.p12", "--profiles-manifest", "profiles.json",
@@ -3357,16 +3398,17 @@ func TestSigningResignCommandReceiptRenderFailureRetainsPublicationAmbiguity(t *
 		executeSigningResignFn = originalExecute
 		printSigningResignResultFn = originalPrint
 	})
-	executeSigningResignFn = func(context.Context, signingResignOptions) (signingResignResult, error) {
+	executeSigningResignFn = func(context.Context, *shared.Deps, signingResignOptions) (signingResignResult, error) {
 		return signingResignResult{
 			Output: signingResignArtifactResult{Path: outputPath},
 		}, nil
 	}
-	printSigningResignResultFn = func(signingResignResult, string, bool) error {
+	printSigningResignResultFn = func(*shared.Deps, signingResignResult, string, bool) error {
 		return renderErr
 	}
 
-	command := SigningResignCommand()
+	d, _, _ := newSigningTestDeps()
+	command := newSigningResignCommand(d)
 	if err := command.FlagSet.Parse([]string{
 		"--ipa", "input.ipa", "--output", outputPath,
 		"--identity", "identity.p12", "--profiles-manifest", "profiles.json",

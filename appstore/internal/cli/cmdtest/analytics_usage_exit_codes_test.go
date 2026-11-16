@@ -1,12 +1,14 @@
 package cmdtest
 
 import (
+	"errors"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
 
 	rootcmd "github.com/Abdullah4AI/apple-developer-toolkit/appstore/cmd"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
 )
 
 const analyticsUsageExitRequestID = "11111111-1111-1111-1111-111111111111"
@@ -157,6 +159,66 @@ func TestAnalyticsInputValidationReturnsUsageExitCode(t *testing.T) {
 			args:    []string{"analytics", "segments", "view", "--segment-id", "bad/segment"},
 			wantErr: analyticsReservedSegmentUsageError("analytics segments view", "--segment-id", "bad/segment"),
 		},
+		{
+			name:    "reports get missing report id",
+			args:    []string{"analytics", "reports", "view"},
+			wantErr: "--report-id is required",
+		},
+		{
+			name:    "reports relationships missing report id",
+			args:    []string{"analytics", "reports", "links"},
+			wantErr: "--report-id is required",
+		},
+		{
+			name:    "instances get missing instance id",
+			args:    []string{"analytics", "instances", "view"},
+			wantErr: "--instance-id is required",
+		},
+		{
+			name:    "instances relationships missing instance id",
+			args:    []string{"analytics", "instances", "links"},
+			wantErr: "--instance-id is required",
+		},
+		{
+			name:    "segments get missing segment id",
+			args:    []string{"analytics", "segments", "view"},
+			wantErr: "--segment-id is required",
+		},
+		{
+			name:    "requests delete missing request id",
+			args:    []string{"analytics", "requests", "delete", "--confirm"},
+			wantErr: "--request-id is required",
+		},
+		{
+			name:    "requests delete missing confirm",
+			args:    []string{"analytics", "requests", "delete", "--request-id", "11111111-1111-1111-1111-111111111111"},
+			wantErr: "--confirm is required",
+		},
+		{
+			name:    "request reuse existing missing app",
+			args:    []string{"analytics", "request", "--access-type", "ONGOING", "--reuse-existing"},
+			wantErr: "--app is required (or set ASC_APP_ID)",
+		},
+		{
+			name:    "request reuse existing missing access type",
+			args:    []string{"analytics", "request", "--app", "APP_ID", "--reuse-existing"},
+			wantErr: "--access-type is required",
+		},
+		{
+			name:    "sales output given a format",
+			args:    []string{"analytics", "sales", "--output", "json"},
+			wantErr: "--output takes a path in this command, not an output format; use --output-format json to choose the format, or --output ./json to write to a path named json",
+		},
+		{
+			name:    "download output given a format",
+			args:    []string{"analytics", "download", "--output", "table"},
+			wantErr: "--output takes a path in this command, not an output format; use --output-format table to choose the format, or --output ./table to write to a path named table",
+		},
+		{
+			name:    "finance reports output given a format",
+			args:    []string{"finance", "reports", "--output", "markdown"},
+			wantErr: "--output takes a path in this command, not an output format; use --output-format markdown to choose the format, or --output ./markdown to write to a path named markdown",
+		},
 	}
 
 	for _, test := range tests {
@@ -164,7 +226,12 @@ func TestAnalyticsInputValidationReturnsUsageExitCode(t *testing.T) {
 			if test.appEnv != "" {
 				t.Setenv("ASC_APP_ID", test.appEnv)
 			}
-			stdout, stderr, runErr := runCommand(t, test.args)
+			clientFactoryCalls := 0
+			client := func() (*asc.Client, error) {
+				clientFactoryCalls++
+				return nil, errors.New("client construction should not be attempted")
+			}
+			stdout, stderr, runErr := runRootWithDeps(t, client, test.args...)
 
 			if runErr == nil {
 				t.Fatal("expected error, got nil")
@@ -176,6 +243,9 @@ func TestAnalyticsInputValidationReturnsUsageExitCode(t *testing.T) {
 				t.Fatalf("expected empty stdout, got %q", stdout)
 			}
 			assertUsageErrorStderr(t, stderr, test.wantErr)
+			if clientFactoryCalls != 0 {
+				t.Fatalf("client factory calls = %d, want 0", clientFactoryCalls)
+			}
 		})
 	}
 }

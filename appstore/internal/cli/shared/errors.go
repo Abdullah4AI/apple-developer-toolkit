@@ -4,6 +4,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
@@ -290,6 +291,17 @@ func NewErrorWithCause(err, cause error) error {
 	return errorWithCause{err: err, cause: cause}
 }
 
+// HintedError carries a next step that the root error renderer prints on its
+// own line after the message.
+type HintedError struct {
+	Err  error
+	Hint string
+}
+
+func (e *HintedError) Error() string { return e.Err.Error() }
+
+func (e *HintedError) Unwrap() error { return e.Err }
+
 // KeepReadOnlyRefusal returns kept, or err when kept is nil and err is a
 // read-only refusal. Batch commands that summarize per-item failures pass the
 // result to NewErrorWithCause so the summary keeps the read-only exit code.
@@ -308,9 +320,13 @@ func IsValidationError(err error) bool {
 // UsageError prints a CLI validation error and returns flag.ErrHelp so callers
 // map the failure to usage exit code semantics.
 func UsageError(message string) error {
+	return usageErrorTo(os.Stderr, message)
+}
+
+func usageErrorTo(stderr io.Writer, message string) error {
 	trimmed := strings.TrimSpace(SanitizeTerminal(message))
 	if trimmed != "" {
-		fmt.Fprintf(os.Stderr, "Error: %s\n", trimmed)
+		fmt.Fprintf(stderr, "Error: %s\n", trimmed)
 	}
 	return classifiedUsageError{kind: classifyUsageMessage(trimmed), message: trimmed}
 }
@@ -318,6 +334,10 @@ func UsageError(message string) error {
 // UsageErrorf formats and returns a usage-class validation error.
 func UsageErrorf(format string, args ...any) error {
 	return UsageError(fmt.Sprintf(format, args...))
+}
+
+func usageErrorfTo(stderr io.Writer, format string, args ...any) error {
+	return usageErrorTo(stderr, fmt.Sprintf(format, args...))
 }
 
 // MissingRequiredUsageError classifies a required-input failure after the
@@ -332,6 +352,18 @@ func MissingRequiredUsageError(parameters ...string) error {
 		DiagnosticRequiredInputMissing,
 		parameter,
 	)
+}
+
+// RequiredFlag reports a missing required flag: it prints
+// "Error: <name> is required" to stderr and returns
+// MissingRequiredUsageError(name).
+func RequiredFlag(name string) error {
+	return requiredFlagTo(os.Stderr, name)
+}
+
+func requiredFlagTo(stderr io.Writer, name string) error {
+	fmt.Fprintln(stderr, "Error: "+name+" is required")
+	return MissingRequiredUsageError(name)
 }
 
 // InvalidValueUsageError classifies an invalid or conflicting input after the

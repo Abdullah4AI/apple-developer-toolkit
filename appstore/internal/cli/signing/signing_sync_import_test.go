@@ -141,15 +141,16 @@ func newOpenSSLImportFixture(t *testing.T, profileCount int) openSSLImportFixtur
 
 func runSigningSyncImport(t *testing.T, args ...string) (string, string, error) {
 	t.Helper()
-	cmd := syncImportCommand()
+	d, depsStdout, depsStderr := newSigningTestDeps()
+	cmd := syncImportCommand(d)
 	cmd.FlagSet.SetOutput(io.Discard)
 	var runErr error
-	stdout, stderr := captureOutput(t, func() {
-		if err := cmd.Parse(args); err != nil {
-			t.Fatalf("parse: %v", err)
-		}
-		runErr = cmd.Run(context.Background())
-	})
+	if err := cmd.Parse(args); err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	runErr = cmd.Run(context.Background())
+	stdout := depsStdout.String()
+	stderr := depsStderr.String()
 	if strings.Contains(stdout+stderr, importSourcePassword) {
 		t.Fatalf("source password leaked to output:\nstdout=%s\nstderr=%s", stdout, stderr)
 	}
@@ -194,11 +195,11 @@ func TestSigningSyncImportWritesPullableStore(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	decrypted, err := decryptAndValidateSigningFiles(store, encryptedFiles, importDestinationPassword)
+	decrypted, err := decryptAndValidateSigningFiles(testSigningDeps(), store, encryptedFiles, importDestinationPassword)
 	if err != nil {
 		t.Fatalf("validate imported store: %v", err)
 	}
-	selected, _, err := selectSigningPullFiles(decrypted, []string{"com.example.app"}, "IOS_APP_STORE")
+	selected, _, err := selectSigningPullFiles(testSigningDeps(), decrypted, []string{"com.example.app"}, "IOS_APP_STORE")
 	if err != nil {
 		t.Fatalf("select imported files: %v", err)
 	}
@@ -284,6 +285,28 @@ func TestSigningSyncImportDryRunListsWithoutDestination(t *testing.T) {
 	}
 }
 
+func TestSigningSyncImportSkipsInstallerCertificateFolder(t *testing.T) {
+	fixture := newOpenSSLImportFixture(t, 1)
+	if err := os.Rename(filepath.Join(fixture.dir, "certs", "development"), filepath.Join(fixture.dir, "certs", "mac_installer_distribution")); err != nil {
+		t.Fatal(err)
+	}
+	stdout, stderr, err := runSigningSyncImport(t, "--source", fixture.dir, "--source-password", importSourcePassword,
+		"--repo", "file:///nonexistent/signing.git", "--dry-run", "--output", "json")
+	if err != nil {
+		t.Fatalf("dry run: %v\nstderr=%s", err, stderr)
+	}
+	if !strings.Contains(stderr, "Warning: skipping installer certificate folder certs/mac_installer_distribution") {
+		t.Fatalf("stderr = %q, want installer folder warning", stderr)
+	}
+	var result asc.SigningSyncImportResult
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Certificates) != 1 || result.Certificates[0].SHA256 != fixture.distributionSHA {
+		t.Fatalf("certificates = %+v, want only the distribution certificate", result.Certificates)
+	}
+}
+
 func TestSigningSyncImportDryRunRejectsExpandedArtifactLimit(t *testing.T) {
 	fixture := newOpenSSLImportFixture(t, 127)
 	stdout, _, err := runSigningSyncImport(t, "--source", fixture.dir, "--source-password", importSourcePassword,
@@ -304,12 +327,12 @@ func TestSigningSyncImportPlanCountsExistingPaths(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer root.Close()
-	certificates, profiles, err := loadOpenSSLImportSource(root, importSourcePassword)
+	certificates, profiles, _, err := loadOpenSSLImportSource(testSigningDeps(), root, importSourcePassword)
 	if err != nil {
 		t.Fatal(err)
 	}
 	now := certificates[0].cert.NotBefore.Add(time.Hour)
-	writes, err := planOpenSSLImportWrites(certificates, profiles, nil, now)
+	writes, err := planOpenSSLImportWrites(testSigningDeps(), certificates, profiles, nil, now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -318,7 +341,7 @@ func TestSigningSyncImportPlanCountsExistingPaths(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	stored, _, err := loadAndValidateSigningFiles(store, paths, importDestinationPassword)
+	stored, _, err := loadAndValidateSigningFiles(testSigningDeps(), store, paths, importDestinationPassword)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -340,7 +363,7 @@ func TestSigningSyncImportPlanCountsExistingPaths(t *testing.T) {
 			if test.reimport {
 				existing = append(existing, stored...)
 			}
-			planned, err := planOpenSSLImportWrites(certificates, profiles, existing, now)
+			planned, err := planOpenSSLImportWrites(testSigningDeps(), certificates, profiles, existing, now)
 			if test.wantErr != "" {
 				if err == nil || err.Error() != test.wantErr {
 					t.Fatalf("error = %v, want %q", err, test.wantErr)
@@ -424,16 +447,6 @@ func TestSigningSyncImportFailuresWriteNothing(t *testing.T) {
 			wantErr:              "unsupported certificate directory certs/developmnt",
 		},
 		{
-			name:                 "developer ID installer cannot be pulled",
-			certificateDirectory: "developer_id_installer",
-			wantErr:              "unsupported certificate directory certs/developer_id_installer",
-		},
-		{
-			name:                 "Mac installer distribution cannot be pulled",
-			certificateDirectory: "mac_installer_distribution",
-			wantErr:              "unsupported certificate directory certs/mac_installer_distribution",
-		},
-		{
 			name: "symlink escaping the source",
 			mutate: func(t *testing.T, fixture openSSLImportFixture) {
 				outside := filepath.Join(t.TempDir(), "outside.cer")
@@ -487,7 +500,7 @@ func TestSigningSyncImportFlagValidation(t *testing.T) {
 	}{
 		{args: []string{"--source-password", "x", "--dry-run"}, wantErr: "--source is required"},
 		{args: []string{"--source", ".", "--dry-run"}, wantErr: "--source-password is required"},
-		{args: []string{"--source", ".", "--source-password", "x", "--repo", "r"}, wantErr: "--confirm is required to write the destination store (or pass --dry-run to preview)"},
+		{args: []string{"--source", ".", "--source-password", "x", "--repo", "r"}, wantErr: "--confirm is required unless --dry-run is set"},
 		{args: []string{"--source", ".", "--source-password", "x", "--repo", "r", "--confirm", "--dry-run"}, wantErr: "--confirm and --dry-run are mutually exclusive"},
 		{args: []string{"--source", ".", "--source-password", "x", "--repo", "r", "--source-branch", "master", "--dry-run"}, wantErr: "--source-branch is only supported with a Git URL source"},
 	}
@@ -508,7 +521,7 @@ func TestSigningSyncImportSourceCloneDeadlineAndCleanup(t *testing.T) {
 	defer cancel()
 	var bounded bool
 	var temporaryRoot string
-	_, _, _, err := openOpenSSLImportSource(ctx, "https://example.invalid/signing.git", "master", func(store *signingpkg.GitStore, cloneCtx context.Context, _ bool) error {
+	_, _, _, err := openOpenSSLImportSource(ctx, testSigningDeps(), "https://example.invalid/signing.git", "master", func(store *signingpkg.GitStore, cloneCtx context.Context, _ bool) error {
 		_, bounded = cloneCtx.Deadline()
 		temporaryRoot = filepath.Dir(store.LocalDir)
 		cancel()

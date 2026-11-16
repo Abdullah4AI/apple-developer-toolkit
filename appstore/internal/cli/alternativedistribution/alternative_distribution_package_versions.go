@@ -3,9 +3,6 @@ package alternativedistribution
 import (
 	"context"
 	"flag"
-	"fmt"
-	"os"
-	"strings"
 
 	"github.com/peterbourgon/ff/v3/ffcli"
 
@@ -13,9 +10,9 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
-// AlternativeDistributionPackageVersionsCommand returns the package versions command group.
-func AlternativeDistributionPackageVersionsCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("versions", flag.ExitOnError)
+// newAlternativeDistributionPackageVersionsCommand returns the package versions command group.
+func newAlternativeDistributionPackageVersionsCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("versions", flag.ExitOnError)
 
 	return &ffcli.Command{
 		Name:       "versions",
@@ -29,12 +26,12 @@ Examples:
   asc alternative-distribution packages versions deltas --version-id "VERSION_ID"
   asc alternative-distribution packages versions variants --version-id "VERSION_ID"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
-			AlternativeDistributionPackageVersionsListCommand(),
-			AlternativeDistributionPackageVersionsGetCommand(),
-			AlternativeDistributionPackageVersionsDeltasCommand(),
-			AlternativeDistributionPackageVersionsVariantsCommand(),
+			newAlternativeDistributionPackageVersionsListCommand(d),
+			newAlternativeDistributionPackageVersionsGetCommand(d),
+			newAlternativeDistributionPackageVersionsDeltasCommand(d),
+			newAlternativeDistributionPackageVersionsVariantsCommand(d),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp
@@ -42,17 +39,9 @@ Examples:
 	}
 }
 
-// AlternativeDistributionPackageVersionsListCommand returns the package versions list subcommand.
-func AlternativeDistributionPackageVersionsListCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("list", flag.ExitOnError)
-
-	packageID := shared.BindResourceIDFlag(fs, "package-id", "alternativeDistributionPackages", "Alternative distribution package ID")
-	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
-	next := fs.String("next", "", "Fetch next page using a links.next URL")
-	paginate := fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")
-	output := shared.BindOutputFlags(fs)
-
-	return &ffcli.Command{
+// newAlternativeDistributionPackageVersionsListCommand returns the package versions list subcommand.
+func newAlternativeDistributionPackageVersionsListCommand(d *shared.Deps) *ffcli.Command {
+	return shared.BuildPaginatedListCommand(shared.PaginatedListCommandConfig{
 		Name:       "list",
 		ShortUsage: "asc alternative-distribution packages versions list --package-id \"PACKAGE_ID\" [flags]",
 		ShortHelp:  "List alternative distribution package versions.",
@@ -61,69 +50,27 @@ func AlternativeDistributionPackageVersionsListCommand() *ffcli.Command {
 Examples:
   asc alternative-distribution packages versions list --package-id "PACKAGE_ID"
   asc alternative-distribution packages versions list --package-id "PACKAGE_ID" --paginate`,
-		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
-		Exec: func(ctx context.Context, args []string) error {
-			trimmedID := strings.TrimSpace(*packageID)
-			if trimmedID == "" {
-				fmt.Fprintln(os.Stderr, "Error: --package-id is required")
-				return shared.MissingRequiredUsageError("--package-id")
-			}
-			if *limit != 0 && (*limit < 1 || *limit > alternativeDistributionMaxLimit) {
-				return shared.UsageErrorf("alternative-distribution packages versions list: --limit must be between 1 and %d", alternativeDistributionMaxLimit)
-			}
-			if err := shared.ValidateNextURL(*next); err != nil {
-				return shared.UsageErrorf("alternative-distribution packages versions list: %v", err)
-			}
-
-			client, err := shared.GetASCClient()
-			if err != nil {
-				return fmt.Errorf("alternative-distribution packages versions list: %w", err)
-			}
-
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
-			defer cancel()
-
-			opts := []asc.AlternativeDistributionPackageVersionsOption{
-				asc.WithAlternativeDistributionPackageVersionsLimit(*limit),
-				asc.WithAlternativeDistributionPackageVersionsNextURL(*next),
-			}
-
-			if *paginate {
-				paginateOpts := append(opts, asc.WithAlternativeDistributionPackageVersionsLimit(alternativeDistributionMaxLimit))
-				firstPage, err := client.GetAlternativeDistributionPackageVersions(requestCtx, trimmedID, paginateOpts...)
-				if err != nil {
-					return fmt.Errorf("alternative-distribution packages versions list: failed to fetch: %w", err)
-				}
-
-				resp, err := asc.PaginateAll(requestCtx, firstPage, func(ctx context.Context, nextURL string) (asc.PaginatedResponse, error) {
-					return client.GetAlternativeDistributionPackageVersions(ctx, trimmedID, asc.WithAlternativeDistributionPackageVersionsNextURL(nextURL))
-				})
-				if err != nil {
-					return fmt.Errorf("alternative-distribution packages versions list: %w", err)
-				}
-
-				return shared.PrintOutput(resp, *output.Output, *output.Pretty)
-			}
-
-			resp, err := client.GetAlternativeDistributionPackageVersions(requestCtx, trimmedID, opts...)
-			if err != nil {
-				return fmt.Errorf("alternative-distribution packages versions list: failed to fetch: %w", err)
-			}
-
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+		ParentFlag:           "package-id",
+		ParentUsage:          "Alternative distribution package ID",
+		ParentType:           "alternativeDistributionPackages",
+		RequiredDiagnostic:   true,
+		LimitMax:             alternativeDistributionMaxLimit,
+		PaginateIgnoresLimit: true,
+		NoSpinner:            true,
+		Deps:                 d,
+		FetchPage: func(ctx context.Context, client *asc.Client, id string, limit int, next string) (asc.PaginatedResponse, error) {
+			return client.GetAlternativeDistributionPackageVersions(ctx, id,
+				asc.Limit[asc.AlternativeDistributionPackageVersionsOption](limit),
+				asc.NextURL[asc.AlternativeDistributionPackageVersionsOption](next),
+			)
 		},
-	}
+	})
 }
 
-// AlternativeDistributionPackageVersionsGetCommand returns the package versions get subcommand.
-func AlternativeDistributionPackageVersionsGetCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("view", flag.ExitOnError)
-
-	versionID := shared.BindResourceIDFlag(fs, "version-id", "alternativeDistributionPackageVersions", "Alternative distribution package version ID")
-	output := shared.BindOutputFlags(fs)
-
-	return &ffcli.Command{
+// newAlternativeDistributionPackageVersionsGetCommand returns the package versions get subcommand.
+func newAlternativeDistributionPackageVersionsGetCommand(d *shared.Deps) *ffcli.Command {
+	return shared.BuildIDGetCommand(shared.IDGetCommandConfig{
+		Deps:       d,
 		Name:       "view",
 		ShortUsage: "asc alternative-distribution packages versions view --version-id \"VERSION_ID\"",
 		ShortHelp:  "View an alternative distribution package version.",
@@ -131,44 +78,19 @@ func AlternativeDistributionPackageVersionsGetCommand() *ffcli.Command {
 
 Examples:
   asc alternative-distribution packages versions view --version-id "VERSION_ID"`,
-		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
-		Exec: func(ctx context.Context, args []string) error {
-			trimmedID := strings.TrimSpace(*versionID)
-			if trimmedID == "" {
-				fmt.Fprintln(os.Stderr, "Error: --version-id is required")
-				return shared.MissingRequiredUsageError("--version-id")
-			}
-
-			client, err := shared.GetASCClient()
-			if err != nil {
-				return fmt.Errorf("alternative-distribution packages versions view: %w", err)
-			}
-
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
-			defer cancel()
-
-			resp, err := client.GetAlternativeDistributionPackageVersion(requestCtx, trimmedID)
-			if err != nil {
-				return fmt.Errorf("alternative-distribution packages versions view: failed to fetch: %w", err)
-			}
-
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+		IDFlag:             "version-id",
+		IDUsage:            "Alternative distribution package version ID",
+		IDType:             "alternativeDistributionPackageVersions",
+		RequiredDiagnostic: true,
+		Fetch: func(ctx context.Context, client *asc.Client, id string) (any, error) {
+			return client.GetAlternativeDistributionPackageVersion(ctx, id)
 		},
-	}
+	})
 }
 
-// AlternativeDistributionPackageVersionsDeltasCommand returns the package version deltas subcommand.
-func AlternativeDistributionPackageVersionsDeltasCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("deltas", flag.ExitOnError)
-
-	versionID := shared.BindResourceIDFlag(fs, "version-id", "alternativeDistributionPackageVersions", "Alternative distribution package version ID")
-	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
-	next := fs.String("next", "", "Fetch next page using a links.next URL")
-	paginate := fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")
-	output := shared.BindOutputFlags(fs)
-
-	return &ffcli.Command{
+// newAlternativeDistributionPackageVersionsDeltasCommand returns the package version deltas subcommand.
+func newAlternativeDistributionPackageVersionsDeltasCommand(d *shared.Deps) *ffcli.Command {
+	return shared.BuildPaginatedListCommand(shared.PaginatedListCommandConfig{
 		Name:       "deltas",
 		ShortUsage: "asc alternative-distribution packages versions deltas --version-id \"VERSION_ID\" [flags]",
 		ShortHelp:  "List alternative distribution package deltas.",
@@ -177,72 +99,26 @@ func AlternativeDistributionPackageVersionsDeltasCommand() *ffcli.Command {
 Examples:
   asc alternative-distribution packages versions deltas --version-id "VERSION_ID"
   asc alternative-distribution packages versions deltas --version-id "VERSION_ID" --paginate`,
-		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
-		Exec: func(ctx context.Context, args []string) error {
-			trimmedID := strings.TrimSpace(*versionID)
-			if trimmedID == "" {
-				fmt.Fprintln(os.Stderr, "Error: --version-id is required")
-				return shared.MissingRequiredUsageError("--version-id")
-			}
-			if *limit != 0 && (*limit < 1 || *limit > alternativeDistributionMaxLimit) {
-				return shared.UsageErrorf("alternative-distribution packages versions deltas: --limit must be between 1 and %d", alternativeDistributionMaxLimit)
-			}
-			if err := shared.ValidateNextURL(*next); err != nil {
-				return shared.UsageErrorf("alternative-distribution packages versions deltas: %v", err)
-			}
-
-			client, err := shared.GetASCClient()
-			if err != nil {
-				return fmt.Errorf("alternative-distribution packages versions deltas: %w", err)
-			}
-
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
-			defer cancel()
-
-			opts := []asc.AlternativeDistributionPackageDeltasOption{
-				asc.WithAlternativeDistributionPackageDeltasLimit(*limit),
-				asc.WithAlternativeDistributionPackageDeltasNextURL(*next),
-			}
-
-			if *paginate {
-				paginateOpts := append(opts, asc.WithAlternativeDistributionPackageDeltasLimit(alternativeDistributionMaxLimit))
-				firstPage, err := client.GetAlternativeDistributionPackageVersionDeltas(requestCtx, trimmedID, paginateOpts...)
-				if err != nil {
-					return fmt.Errorf("alternative-distribution packages versions deltas: failed to fetch: %w", err)
-				}
-
-				resp, err := asc.PaginateAll(requestCtx, firstPage, func(ctx context.Context, nextURL string) (asc.PaginatedResponse, error) {
-					return client.GetAlternativeDistributionPackageVersionDeltas(ctx, trimmedID, asc.WithAlternativeDistributionPackageDeltasNextURL(nextURL))
-				})
-				if err != nil {
-					return fmt.Errorf("alternative-distribution packages versions deltas: %w", err)
-				}
-
-				return shared.PrintOutput(resp, *output.Output, *output.Pretty)
-			}
-
-			resp, err := client.GetAlternativeDistributionPackageVersionDeltas(requestCtx, trimmedID, opts...)
-			if err != nil {
-				return fmt.Errorf("alternative-distribution packages versions deltas: failed to fetch: %w", err)
-			}
-
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+		ParentFlag:           "version-id",
+		ParentUsage:          "Alternative distribution package version ID",
+		ParentType:           "alternativeDistributionPackageVersions",
+		RequiredDiagnostic:   true,
+		LimitMax:             alternativeDistributionMaxLimit,
+		PaginateIgnoresLimit: true,
+		NoSpinner:            true,
+		Deps:                 d,
+		FetchPage: func(ctx context.Context, client *asc.Client, id string, limit int, next string) (asc.PaginatedResponse, error) {
+			return client.GetAlternativeDistributionPackageVersionDeltas(ctx, id,
+				asc.Limit[asc.AlternativeDistributionPackageDeltasOption](limit),
+				asc.NextURL[asc.AlternativeDistributionPackageDeltasOption](next),
+			)
 		},
-	}
+	})
 }
 
-// AlternativeDistributionPackageVersionsVariantsCommand returns the package version variants subcommand.
-func AlternativeDistributionPackageVersionsVariantsCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("variants", flag.ExitOnError)
-
-	versionID := shared.BindResourceIDFlag(fs, "version-id", "alternativeDistributionPackageVersions", "Alternative distribution package version ID")
-	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
-	next := fs.String("next", "", "Fetch next page using a links.next URL")
-	paginate := fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")
-	output := shared.BindOutputFlags(fs)
-
-	return &ffcli.Command{
+// newAlternativeDistributionPackageVersionsVariantsCommand returns the package version variants subcommand.
+func newAlternativeDistributionPackageVersionsVariantsCommand(d *shared.Deps) *ffcli.Command {
+	return shared.BuildPaginatedListCommand(shared.PaginatedListCommandConfig{
 		Name:       "variants",
 		ShortUsage: "asc alternative-distribution packages versions variants --version-id \"VERSION_ID\" [flags]",
 		ShortHelp:  "List alternative distribution package variants.",
@@ -251,57 +127,19 @@ func AlternativeDistributionPackageVersionsVariantsCommand() *ffcli.Command {
 Examples:
   asc alternative-distribution packages versions variants --version-id "VERSION_ID"
   asc alternative-distribution packages versions variants --version-id "VERSION_ID" --paginate`,
-		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
-		Exec: func(ctx context.Context, args []string) error {
-			trimmedID := strings.TrimSpace(*versionID)
-			if trimmedID == "" {
-				fmt.Fprintln(os.Stderr, "Error: --version-id is required")
-				return shared.MissingRequiredUsageError("--version-id")
-			}
-			if *limit != 0 && (*limit < 1 || *limit > alternativeDistributionMaxLimit) {
-				return shared.UsageErrorf("alternative-distribution packages versions variants: --limit must be between 1 and %d", alternativeDistributionMaxLimit)
-			}
-			if err := shared.ValidateNextURL(*next); err != nil {
-				return shared.UsageErrorf("alternative-distribution packages versions variants: %v", err)
-			}
-
-			client, err := shared.GetASCClient()
-			if err != nil {
-				return fmt.Errorf("alternative-distribution packages versions variants: %w", err)
-			}
-
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
-			defer cancel()
-
-			opts := []asc.AlternativeDistributionPackageVariantsOption{
-				asc.WithAlternativeDistributionPackageVariantsLimit(*limit),
-				asc.WithAlternativeDistributionPackageVariantsNextURL(*next),
-			}
-
-			if *paginate {
-				paginateOpts := append(opts, asc.WithAlternativeDistributionPackageVariantsLimit(alternativeDistributionMaxLimit))
-				firstPage, err := client.GetAlternativeDistributionPackageVersionVariants(requestCtx, trimmedID, paginateOpts...)
-				if err != nil {
-					return fmt.Errorf("alternative-distribution packages versions variants: failed to fetch: %w", err)
-				}
-
-				resp, err := asc.PaginateAll(requestCtx, firstPage, func(ctx context.Context, nextURL string) (asc.PaginatedResponse, error) {
-					return client.GetAlternativeDistributionPackageVersionVariants(ctx, trimmedID, asc.WithAlternativeDistributionPackageVariantsNextURL(nextURL))
-				})
-				if err != nil {
-					return fmt.Errorf("alternative-distribution packages versions variants: %w", err)
-				}
-
-				return shared.PrintOutput(resp, *output.Output, *output.Pretty)
-			}
-
-			resp, err := client.GetAlternativeDistributionPackageVersionVariants(requestCtx, trimmedID, opts...)
-			if err != nil {
-				return fmt.Errorf("alternative-distribution packages versions variants: failed to fetch: %w", err)
-			}
-
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+		ParentFlag:           "version-id",
+		ParentUsage:          "Alternative distribution package version ID",
+		ParentType:           "alternativeDistributionPackageVersions",
+		RequiredDiagnostic:   true,
+		LimitMax:             alternativeDistributionMaxLimit,
+		PaginateIgnoresLimit: true,
+		NoSpinner:            true,
+		Deps:                 d,
+		FetchPage: func(ctx context.Context, client *asc.Client, id string, limit int, next string) (asc.PaginatedResponse, error) {
+			return client.GetAlternativeDistributionPackageVersionVariants(ctx, id,
+				asc.Limit[asc.AlternativeDistributionPackageVariantsOption](limit),
+				asc.NextURL[asc.AlternativeDistributionPackageVariantsOption](next),
+			)
 		},
-	}
+	})
 }

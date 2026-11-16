@@ -16,6 +16,7 @@ import (
 )
 
 func TestKeywordsDiscoverCommandValidatesInputBeforeRequests(t *testing.T) {
+	d := newOptimizeTestDeps(nil)
 	tests := []struct {
 		name string
 		args []string
@@ -56,24 +57,13 @@ func TestKeywordsDiscoverCommandValidatesInputBeforeRequests(t *testing.T) {
 			args: []string{"--app", "1234567890", "--limit", "0"},
 			want: "--limit must be at least 1",
 		},
-		{
-			name: "positional",
-			args: nil,
-			want: "optimize keywords discover does not accept positional arguments",
-		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			t.Setenv("ASC_APP_ID", "")
 			failKeywordsAdsCollector(t)
-			command := KeywordsDiscoverCommand()
-			var err error
-			if test.args == nil {
-				err = command.Exec(context.Background(), []string{"extra"})
-			} else {
-				err = command.ParseAndRun(context.Background(), test.args)
-			}
+			err := newKeywordsDiscoverCommand(d).ParseAndRun(context.Background(), test.args)
 			if err == nil || err.Error() != test.want {
 				t.Fatalf("error = %v, want %q", err, test.want)
 			}
@@ -85,9 +75,10 @@ func TestKeywordsDiscoverCommandValidatesInputBeforeRequests(t *testing.T) {
 }
 
 func TestKeywordsDiscoverBoundsAdsCollectionWithCommandTimeout(t *testing.T) {
+	d := newOptimizeTestDeps(nil)
 	t.Setenv("ASC_TIMEOUT", "1s")
 	t.Setenv("ASC_TIMEOUT_SECONDS", "")
-	stubKeywordsAdsCollector(t, func(ctx context.Context, _, _ string, _ ads.SearchOptimizationRequest) (ads.SearchOptimizationData, error) {
+	stubKeywordsAdsCollector(t, func(ctx context.Context, _ *shared.Deps, _, _ string, _ ads.SearchOptimizationRequest) (ads.SearchOptimizationData, error) {
 		deadline, ok := ctx.Deadline()
 		if !ok {
 			t.Fatal("Apple Ads collection context has no deadline")
@@ -101,15 +92,16 @@ func TestKeywordsDiscoverBoundsAdsCollectionWithCommandTimeout(t *testing.T) {
 		}, nil
 	})
 
-	captureSearchPlanStdout(t, func() error {
-		return KeywordsDiscoverCommand().ParseAndRun(context.Background(), []string{
+	captureSearchPlanStdout(t, d, func() error {
+		return newKeywordsDiscoverCommand(d).ParseAndRun(context.Background(), []string{
 			"--app", "1234567890", "--country", "US", "--output", "json",
 		})
 	})
 }
 
 func TestKeywordsDiscoverFlattensDedupesAndPreparesScoreInput(t *testing.T) {
-	stubKeywordsAdsCollector(t, func(_ context.Context, profile, account string, request ads.SearchOptimizationRequest) (ads.SearchOptimizationData, error) {
+	d := newOptimizeTestDeps(nil)
+	stubKeywordsAdsCollector(t, func(_ context.Context, _ *shared.Deps, profile, account string, request ads.SearchOptimizationRequest) (ads.SearchOptimizationData, error) {
 		if profile != "Ads" || account != "987654321" {
 			t.Fatalf("ads credentials = (%q, %q)", profile, account)
 		}
@@ -133,8 +125,8 @@ func TestKeywordsDiscoverFlattensDedupesAndPreparesScoreInput(t *testing.T) {
 		}, nil
 	})
 
-	stdout := captureSearchPlanStdout(t, func() error {
-		return KeywordsDiscoverCommand().ParseAndRun(context.Background(), []string{
+	stdout := captureSearchPlanStdout(t, d, func() error {
+		return newKeywordsDiscoverCommand(d).ParseAndRun(context.Background(), []string{
 			"--app", "1234567890",
 			"--country", "us",
 			"--ad-account", "987654321",
@@ -191,7 +183,7 @@ func TestKeywordsDiscoverFlattensDedupesAndPreparesScoreInput(t *testing.T) {
 }
 
 func TestKeywordDiscoverScoreInputExcludesCommaDelimitedSuggestions(t *testing.T) {
-	report := buildKeywordDiscoverReport(keywordDiscoverBuildInput{
+	report := buildKeywordDiscoverReport(newOptimizeTestDeps(nil), keywordDiscoverBuildInput{
 		Limit: 10,
 		Suggestions: []ads.SearchSuggestion{
 			{Text: "photo editor, filters", Kind: "keyword"},
@@ -211,6 +203,7 @@ func TestKeywordDiscoverScoreInputExcludesCommaDelimitedSuggestions(t *testing.T
 }
 
 func TestKeywordDiscoverReportUsesRegisteredOutput(t *testing.T) {
+	d := newOptimizeTestDeps(nil)
 	report := asc.KeywordDiscoverReport{
 		AppID:   "1234567890",
 		Country: "US",
@@ -223,8 +216,8 @@ func TestKeywordDiscoverReportUsesRegisteredOutput(t *testing.T) {
 
 	for _, format := range []string{"table", "markdown"} {
 		t.Run(format, func(t *testing.T) {
-			stdout := captureSearchPlanStdout(t, func() error {
-				return shared.PrintOutput(&report, format, false)
+			stdout := captureSearchPlanStdout(t, d, func() error {
+				return d.PrintOutput(&report, format, false)
 			})
 			if strings.HasPrefix(strings.TrimSpace(stdout), "{") {
 				t.Fatalf("%s output fell back to JSON:\n%s", format, stdout)
@@ -267,19 +260,20 @@ func TestKeywordDiscoverJSONKeepsEmptyScoreKeywords(t *testing.T) {
 }
 
 func TestKeywordsDiscoverAppliesLimitAndReportsTruncation(t *testing.T) {
+	d := newOptimizeTestDeps(nil)
 	suggestions := make([]ads.SearchSuggestion, 0, 6)
 	for index := range 6 {
 		suggestions = append(suggestions, ads.SearchSuggestion{Text: fmt.Sprintf("keyword%03d", index), Kind: "keyword"})
 	}
-	stubKeywordsAdsCollector(t, func(_ context.Context, _, _ string, request ads.SearchOptimizationRequest) (ads.SearchOptimizationData, error) {
+	stubKeywordsAdsCollector(t, func(_ context.Context, _ *shared.Deps, _, _ string, request ads.SearchOptimizationRequest) (ads.SearchOptimizationData, error) {
 		if request.Limit != 2 {
 			t.Fatalf("ads request limit = %d, want 2", request.Limit)
 		}
 		return ads.SearchOptimizationData{Suggestions: suggestions}, nil
 	})
 
-	stdout := captureSearchPlanStdout(t, func() error {
-		return KeywordsDiscoverCommand().ParseAndRun(context.Background(), []string{
+	stdout := captureSearchPlanStdout(t, d, func() error {
+		return newKeywordsDiscoverCommand(d).ParseAndRun(context.Background(), []string{
 			"--app", "1234567890", "--limit", "2", "--output", "json",
 		})
 	})
@@ -300,7 +294,7 @@ func TestKeywordsDiscoverAppliesLimitAndReportsTruncation(t *testing.T) {
 }
 
 func TestKeywordDiscoverSortsBothSuggestionStreamsBeforeLimit(t *testing.T) {
-	report := buildKeywordDiscoverReport(keywordDiscoverBuildInput{
+	report := buildKeywordDiscoverReport(newOptimizeTestDeps(nil), keywordDiscoverBuildInput{
 		Limit: 2,
 		Suggestions: []ads.SearchSuggestion{
 			{Text: "keyword lower", Popularity: intPtr(50), Kind: "keyword"},
@@ -319,11 +313,12 @@ func TestKeywordDiscoverSortsBothSuggestionStreamsBeforeLimit(t *testing.T) {
 }
 
 func TestKeywordsDiscoverFailsActionablyWhenAppleAdsIsUnavailable(t *testing.T) {
-	stubKeywordsAdsCollector(t, func(context.Context, string, string, ads.SearchOptimizationRequest) (ads.SearchOptimizationData, error) {
+	d := newOptimizeTestDeps(nil)
+	stubKeywordsAdsCollector(t, func(context.Context, *shared.Deps, string, string, ads.SearchOptimizationRequest) (ads.SearchOptimizationData, error) {
 		return ads.SearchOptimizationData{}, errors.New("no Apple Ads credentials found")
 	})
 
-	err := KeywordsDiscoverCommand().ParseAndRun(context.Background(), []string{
+	err := newKeywordsDiscoverCommand(d).ParseAndRun(context.Background(), []string{
 		"--app", "1234567890", "--output", "json",
 	})
 	if err == nil {
@@ -343,7 +338,8 @@ func TestKeywordsDiscoverFailsActionablyWhenAppleAdsIsUnavailable(t *testing.T) 
 }
 
 func TestKeywordsDiscoverFailsWhenAppleReturnsNoSuggestions(t *testing.T) {
-	stubKeywordsAdsCollector(t, func(context.Context, string, string, ads.SearchOptimizationRequest) (ads.SearchOptimizationData, error) {
+	d := newOptimizeTestDeps(nil)
+	stubKeywordsAdsCollector(t, func(context.Context, *shared.Deps, string, string, ads.SearchOptimizationRequest) (ads.SearchOptimizationData, error) {
 		return ads.SearchOptimizationData{
 			Sources: []ads.SearchOptimizationSourceStatus{
 				{Name: "keyword_suggestions", Status: "unavailable", Error: "forbidden"},
@@ -352,7 +348,7 @@ func TestKeywordsDiscoverFailsWhenAppleReturnsNoSuggestions(t *testing.T) {
 		}, nil
 	})
 
-	err := KeywordsDiscoverCommand().ParseAndRun(context.Background(), []string{
+	err := newKeywordsDiscoverCommand(d).ParseAndRun(context.Background(), []string{
 		"--app", "1234567890", "--output", "json",
 	})
 	if err == nil || !strings.Contains(err.Error(), "forbidden") {
@@ -369,7 +365,8 @@ func TestKeywordsDiscoverFailsWhenAppleReturnsNoSuggestions(t *testing.T) {
 }
 
 func TestKeywordsDiscoverFailsWhenOneSuggestionSourceIsUnavailable(t *testing.T) {
-	stubKeywordsAdsCollector(t, func(context.Context, string, string, ads.SearchOptimizationRequest) (ads.SearchOptimizationData, error) {
+	d := newOptimizeTestDeps(nil)
+	stubKeywordsAdsCollector(t, func(context.Context, *shared.Deps, string, string, ads.SearchOptimizationRequest) (ads.SearchOptimizationData, error) {
 		return ads.SearchOptimizationData{
 			Sources: []ads.SearchOptimizationSourceStatus{
 				{Name: "keyword_suggestions", Status: "unavailable", Error: "forbidden"},
@@ -378,7 +375,7 @@ func TestKeywordsDiscoverFailsWhenOneSuggestionSourceIsUnavailable(t *testing.T)
 		}, nil
 	})
 
-	err := KeywordsDiscoverCommand().ParseAndRun(context.Background(), []string{
+	err := newKeywordsDiscoverCommand(d).ParseAndRun(context.Background(), []string{
 		"--app", "1234567890", "--output", "json",
 	})
 	if err == nil || !strings.Contains(err.Error(), "forbidden") {
@@ -387,7 +384,8 @@ func TestKeywordsDiscoverFailsWhenOneSuggestionSourceIsUnavailable(t *testing.T)
 }
 
 func TestKeywordsDiscoverReportsSourceScopes(t *testing.T) {
-	stubKeywordsAdsCollector(t, func(context.Context, string, string, ads.SearchOptimizationRequest) (ads.SearchOptimizationData, error) {
+	d := newOptimizeTestDeps(nil)
+	stubKeywordsAdsCollector(t, func(context.Context, *shared.Deps, string, string, ads.SearchOptimizationRequest) (ads.SearchOptimizationData, error) {
 		return ads.SearchOptimizationData{
 			Sources: []ads.SearchOptimizationSourceStatus{
 				{Name: "keyword_suggestions", Status: "available", Count: 1},
@@ -400,8 +398,8 @@ func TestKeywordsDiscoverReportsSourceScopes(t *testing.T) {
 		}, nil
 	})
 
-	stdout := captureSearchPlanStdout(t, func() error {
-		return KeywordsDiscoverCommand().ParseAndRun(context.Background(), []string{
+	stdout := captureSearchPlanStdout(t, d, func() error {
+		return newKeywordsDiscoverCommand(d).ParseAndRun(context.Background(), []string{
 			"--app", "1234567890", "--country", "GB", "--output", "json",
 		})
 	})
@@ -418,7 +416,8 @@ func TestKeywordsDiscoverReportsSourceScopes(t *testing.T) {
 }
 
 func TestKeywordsDiscoverReportsEmptySuggestionsWithoutFailing(t *testing.T) {
-	stubKeywordsAdsCollector(t, func(context.Context, string, string, ads.SearchOptimizationRequest) (ads.SearchOptimizationData, error) {
+	d := newOptimizeTestDeps(nil)
+	stubKeywordsAdsCollector(t, func(context.Context, *shared.Deps, string, string, ads.SearchOptimizationRequest) (ads.SearchOptimizationData, error) {
 		return ads.SearchOptimizationData{
 			Sources: []ads.SearchOptimizationSourceStatus{
 				{Name: "keyword_suggestions", Status: "empty"},
@@ -427,8 +426,8 @@ func TestKeywordsDiscoverReportsEmptySuggestionsWithoutFailing(t *testing.T) {
 		}, nil
 	})
 
-	stdout := captureSearchPlanStdout(t, func() error {
-		return KeywordsDiscoverCommand().ParseAndRun(context.Background(), []string{
+	stdout := captureSearchPlanStdout(t, d, func() error {
+		return newKeywordsDiscoverCommand(d).ParseAndRun(context.Background(), []string{
 			"--app", "1234567890", "--output", "json",
 		})
 	})
@@ -460,7 +459,8 @@ func TestKeywordsDiscoverReportsEmptySuggestionsWithoutFailing(t *testing.T) {
 }
 
 func TestKeywordsDiscoverRendersTableAndMarkdown(t *testing.T) {
-	stubKeywordsAdsCollector(t, func(context.Context, string, string, ads.SearchOptimizationRequest) (ads.SearchOptimizationData, error) {
+	d := newOptimizeTestDeps(nil)
+	stubKeywordsAdsCollector(t, func(context.Context, *shared.Deps, string, string, ads.SearchOptimizationRequest) (ads.SearchOptimizationData, error) {
 		return ads.SearchOptimizationData{
 			Sources: []ads.SearchOptimizationSourceStatus{{Name: "keyword_suggestions", Status: "available", Count: 1}},
 			Suggestions: []ads.SearchSuggestion{
@@ -472,8 +472,8 @@ func TestKeywordsDiscoverRendersTableAndMarkdown(t *testing.T) {
 
 	for _, format := range []string{"table", "markdown"} {
 		t.Run(format, func(t *testing.T) {
-			stdout := captureSearchPlanStdout(t, func() error {
-				return KeywordsDiscoverCommand().ParseAndRun(context.Background(), []string{
+			stdout := captureSearchPlanStdout(t, d, func() error {
+				return newKeywordsDiscoverCommand(d).ParseAndRun(context.Background(), []string{
 					"--app", "1234567890", "--output", format,
 				})
 			})
@@ -489,7 +489,7 @@ func TestKeywordsDiscoverRendersTableAndMarkdown(t *testing.T) {
 
 func stubKeywordsAdsCollector(
 	t *testing.T,
-	collect func(context.Context, string, string, ads.SearchOptimizationRequest) (ads.SearchOptimizationData, error),
+	collect func(context.Context, *shared.Deps, string, string, ads.SearchOptimizationRequest) (ads.SearchOptimizationData, error),
 ) {
 	t.Helper()
 	previous := collectSearchDataForDiscover

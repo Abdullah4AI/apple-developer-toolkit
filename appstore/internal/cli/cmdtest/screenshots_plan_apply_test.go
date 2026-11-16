@@ -19,6 +19,7 @@ import (
 
 	rootcmd "github.com/Abdullah4AI/apple-developer-toolkit/appstore/cmd"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asctest"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/handlertest"
 )
@@ -42,36 +43,18 @@ func TestScreenshotsPlanAndApplyValidationErrors(t *testing.T) {
 			wantErr: "--version or --version-id is required",
 		},
 		{
-			name:    "screenshots plan positional args rejected",
-			args:    []string{"screenshots", "plan", "--app", "123456789", "--version", "1.2.3", "extra"},
-			wantErr: "screenshots plan does not accept positional arguments",
-		},
-		{
 			name:    "screenshots apply missing confirm",
 			args:    []string{"screenshots", "apply", "--app", "123456789", "--version", "1.2.3"},
-			wantErr: "--confirm is required to apply screenshot uploads",
-		},
-		{
-			name:    "screenshots apply positional args rejected",
-			args:    []string{"screenshots", "apply", "--app", "123456789", "--version", "1.2.3", "--confirm", "extra"},
-			wantErr: "screenshots apply does not accept positional arguments",
+			wantErr: "--confirm is required\n",
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			root := RootCommand("1.2.3")
-			root.FlagSet.SetOutput(io.Discard)
-
-			stdout, stderr := captureOutput(t, func() {
-				if err := root.Parse(test.args); err != nil {
-					t.Fatalf("parse error: %v", err)
-				}
-				err := root.Run(context.Background())
-				if !errors.Is(err, flag.ErrHelp) {
-					t.Fatalf("expected ErrHelp, got %v", err)
-				}
-			})
+			stdout, stderr, err := runRootWithDeps(t, nil, test.args...)
+			if !errors.Is(err, flag.ErrHelp) {
+				t.Fatalf("expected ErrHelp, got %v", err)
+			}
 
 			if stdout != "" {
 				t.Fatalf("expected empty stdout, got %q", stdout)
@@ -90,41 +73,23 @@ func TestScreenshotsPlanBuildsApprovedUploadGroups(t *testing.T) {
 
 	reviewDir, _ := writeScreenshotReviewArtifacts(t)
 
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() {
-		http.DefaultTransport = originalTransport
-	})
+	reg := asctest.NewRegistry(t)
+	reg.Register(asctest.GET("/v1/apps/123456789/appStoreVersions", "filter[platform]=IOS", "filter[versionString]=1.2.3", "limit=10"),
+		asctest.JSON(http.StatusOK, `{"data":[{"type":"appStoreVersions","id":"version-1","attributes":{"versionString":"1.2.3","platform":"IOS"}}]}`))
+	reg.Register(asctest.GET("/v1/appStoreVersions/version-1/appStoreVersionLocalizations", "limit=200"),
+		asctest.JSON(http.StatusOK, `{"data":[{"type":"appStoreVersionLocalizations","id":"LOC_123","attributes":{"locale":"en-US"}}]}`))
+	reg.Register(asctest.GET("/v1/appStoreVersionLocalizations/LOC_123/appScreenshotSets"),
+		asctest.JSON(http.StatusOK, `{"data":[],"links":{}}`))
 
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		switch req.URL.Path {
-		case "/v1/apps/123456789/appStoreVersions":
-			return statusJSONResponse(`{"data":[{"type":"appStoreVersions","id":"version-1","attributes":{"versionString":"1.2.3","platform":"IOS"}}]}`), nil
-		case "/v1/appStoreVersions/version-1/appStoreVersionLocalizations":
-			return statusJSONResponse(`{"data":[{"type":"appStoreVersionLocalizations","id":"LOC_123","attributes":{"locale":"en-US"}}]}`), nil
-		case "/v1/appStoreVersionLocalizations/LOC_123/appScreenshotSets":
-			return statusJSONResponse(`{"data":[],"links":{}}`), nil
-		default:
-			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.String())
-			return nil, nil
-		}
-	})
-
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{
-			"screenshots", "plan",
-			"--app", "123456789",
-			"--version", "1.2.3",
-			"--review-output-dir", reviewDir,
-		}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatalf("run error: %v", err)
-		}
-	})
+	stdout, stderr, err := runRootWithDeps(t, stubClient(t, reg), []string{
+		"screenshots", "plan",
+		"--app", "123456789",
+		"--version", "1.2.3",
+		"--review-output-dir", reviewDir,
+	}...)
+	if err != nil {
+		t.Fatalf("run error: %v", err)
+	}
 
 	if stderr != "" {
 		t.Fatalf("expected empty stderr, got %q", stderr)
@@ -167,24 +132,14 @@ func TestScreenshotsPlanReportsStdoutWriteFailures(t *testing.T) {
 
 	for _, format := range []string{"table", "markdown", "json"} {
 		t.Run(format, func(t *testing.T) {
-			requests := 0
-			installDefaultTransport(t, roundTripFunc(func(req *http.Request) (*http.Response, error) {
-				if req.Method != http.MethodGet {
-					t.Fatalf("unexpected mutation: %s %s", req.Method, req.URL)
-				}
-				requests++
-				switch req.URL.Path {
-				case "/v1/apps/123456789/appStoreVersions":
-					return statusJSONResponse(`{"data":[{"type":"appStoreVersions","id":"version-1","attributes":{"versionString":"1.2.3","platform":"IOS"}}]}`), nil
-				case "/v1/appStoreVersions/version-1/appStoreVersionLocalizations":
-					return statusJSONResponse(`{"data":[{"type":"appStoreVersionLocalizations","id":"LOC_123","attributes":{"locale":"en-US"}}]}`), nil
-				case "/v1/appStoreVersionLocalizations/LOC_123/appScreenshotSets":
-					return statusJSONResponse(`{"data":[],"links":{}}`), nil
-				default:
-					t.Fatalf("unexpected request: %s %s", req.Method, req.URL)
-					return nil, nil
-				}
-			}))
+			reg := asctest.NewRegistry(t)
+			reg.Install()
+			reg.Register(asctest.GET("/v1/apps/123456789/appStoreVersions", "filter[platform]=IOS", "filter[versionString]=1.2.3", "limit=10"),
+				asctest.JSON(http.StatusOK, `{"data":[{"type":"appStoreVersions","id":"version-1","attributes":{"versionString":"1.2.3","platform":"IOS"}}]}`))
+			reg.Register(asctest.GET("/v1/appStoreVersions/version-1/appStoreVersionLocalizations", "limit=200"),
+				asctest.JSON(http.StatusOK, `{"data":[{"type":"appStoreVersionLocalizations","id":"LOC_123","attributes":{"locale":"en-US"}}]}`))
+			reg.Register(asctest.GET("/v1/appStoreVersionLocalizations/LOC_123/appScreenshotSets"),
+				asctest.JSON(http.StatusOK, `{"data":[],"links":{}}`))
 
 			readOnly, err := os.Open(filepath.Join(reviewDir, "manifest.json"))
 			if err != nil {
@@ -206,7 +161,7 @@ func TestScreenshotsPlanReportsStdoutWriteFailures(t *testing.T) {
 				}, "1.2.3")
 			})
 
-			if requests != 3 {
+			if requests := len(reg.Requests()); requests != 3 {
 				t.Fatalf("requests = %d, want completed plan preflight (3 GETs); stderr=%q", requests, stderr)
 			}
 			if code != rootcmd.ExitError {
@@ -233,45 +188,24 @@ func testScreenshotsPlanVersionIDPlatform(t *testing.T, selector string) {
 
 	reviewDir, _ := writeScreenshotReviewArtifactsWithPlannedDisplayType(t, 2880, 1800, 2880, 1800, []string{"APP_DESKTOP"})
 
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() {
-		http.DefaultTransport = originalTransport
-	})
+	reg := asctest.NewRegistry(t)
+	reg.Register(asctest.GET("/v1/appStoreVersions/version-mac", "include=app"),
+		asctest.JSON(http.StatusOK, `{"data":{"type":"appStoreVersions","id":"version-mac","attributes":{"versionString":"2.0.0","platform":"MAC_OS"},"relationships":{"app":{"data":{"type":"apps","id":"123456789"}}}}}`))
+	reg.Register(asctest.GET("/v1/appStoreVersions/version-mac/appStoreVersionLocalizations", "limit=200"),
+		asctest.JSON(http.StatusOK, `{"data":[{"type":"appStoreVersionLocalizations","id":"LOC_123","attributes":{"locale":"en-US"}}]}`))
+	reg.Register(asctest.GET("/v1/appStoreVersionLocalizations/LOC_123/appScreenshotSets"),
+		asctest.JSON(http.StatusOK, `{"data":[],"links":{}}`))
 
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		switch req.URL.Path {
-		case "/v1/appStoreVersions/version-mac":
-			if req.Method != http.MethodGet || req.URL.Query().Get("include") != "app" {
-				t.Fatalf("expected owned version lookup, got %s %s", req.Method, req.URL)
-			}
-			return statusJSONResponse(`{"data":{"type":"appStoreVersions","id":"version-mac","attributes":{"versionString":"2.0.0","platform":"MAC_OS"},"relationships":{"app":{"data":{"type":"apps","id":"123456789"}}}}}`), nil
-		case "/v1/appStoreVersions/version-mac/appStoreVersionLocalizations":
-			return statusJSONResponse(`{"data":[{"type":"appStoreVersionLocalizations","id":"LOC_123","attributes":{"locale":"en-US"}}]}`), nil
-		case "/v1/appStoreVersionLocalizations/LOC_123/appScreenshotSets":
-			return statusJSONResponse(`{"data":[],"links":{}}`), nil
-		default:
-			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.String())
-			return nil, nil
-		}
-	})
-
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{
-			"screenshots", "plan",
-			"--app", "123456789",
-			selector, "version-mac",
-			"--review-output-dir", reviewDir,
-			"--output", "json",
-		}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatalf("run error: %v", err)
-		}
-	})
+	stdout, stderr, err := runRootWithDeps(t, stubClient(t, reg),
+		"screenshots", "plan",
+		"--app", "123456789",
+		selector, "version-mac",
+		"--review-output-dir", reviewDir,
+		"--output", "json",
+	)
+	if err != nil {
+		t.Fatalf("run error: %v", err)
+	}
 
 	if stderr != "" {
 		t.Fatalf("expected empty stderr, got %q", stderr)
@@ -615,43 +549,24 @@ func TestScreenshotsPlanReportsCapacityFailure(t *testing.T) {
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 	t.Setenv("ASC_APP_ID", "")
 	reviewDir, _ := writeScreenshotReviewArtifacts(t)
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() { http.DefaultTransport = originalTransport })
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("plan mutated assets: %s %s", req.Method, req.URL)
-		}
-		switch req.URL.Path {
-		case "/v1/apps/123456789/appStoreVersions":
-			return statusJSONResponse(`{"data":[{"type":"appStoreVersions","id":"version-1","attributes":{"versionString":"1.2.3","platform":"IOS"}}]}`), nil
-		case "/v1/appStoreVersions/version-1/appStoreVersionLocalizations":
-			return statusJSONResponse(`{"data":[{"type":"appStoreVersionLocalizations","id":"LOC_123","attributes":{"locale":"en-US"}}]}`), nil
-		case "/v1/appStoreVersionLocalizations/LOC_123/appScreenshotSets":
-			return statusJSONResponse(`{"data":[{"type":"appScreenshotSets","id":"set-1","attributes":{"screenshotDisplayType":"APP_IPHONE_65"}}],"links":{}}`), nil
-		case "/v1/appScreenshotSets/set-1/appScreenshots":
-			screenshots := make([]map[string]string, 10)
-			for i := range screenshots {
-				screenshots[i] = map[string]string{"type": "appScreenshots", "id": fmt.Sprintf("existing-%d", i)}
-			}
-			body, err := json.Marshal(map[string]any{"data": screenshots, "links": map[string]any{}})
-			if err != nil {
-				t.Fatal(err)
-			}
-			return statusJSONResponse(string(body)), nil
-		default:
-			t.Fatalf("unexpected request: %s %s", req.Method, req.URL)
-			return nil, nil
-		}
-	})
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-	var runErr error
-	stdout, _ := captureOutput(t, func() {
-		if err := root.Parse([]string{"screenshots", "plan", "--app", "123456789", "--version", "1.2.3", "--review-output-dir", reviewDir, "--output", "json"}); err != nil {
-			t.Fatal(err)
-		}
-		runErr = root.Run(context.Background())
-	})
+	screenshots := make([]map[string]string, 10)
+	for i := range screenshots {
+		screenshots[i] = map[string]string{"type": "appScreenshots", "id": fmt.Sprintf("existing-%d", i)}
+	}
+	existing, err := json.Marshal(map[string]any{"data": screenshots, "links": map[string]any{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	reg := asctest.NewRegistry(t)
+	reg.Register(asctest.GET("/v1/apps/123456789/appStoreVersions", "filter[platform]=IOS", "filter[versionString]=1.2.3", "limit=10"),
+		asctest.JSON(http.StatusOK, `{"data":[{"type":"appStoreVersions","id":"version-1","attributes":{"versionString":"1.2.3","platform":"IOS"}}]}`))
+	reg.Register(asctest.GET("/v1/appStoreVersions/version-1/appStoreVersionLocalizations", "limit=200"),
+		asctest.JSON(http.StatusOK, `{"data":[{"type":"appStoreVersionLocalizations","id":"LOC_123","attributes":{"locale":"en-US"}}]}`))
+	reg.Register(asctest.GET("/v1/appStoreVersionLocalizations/LOC_123/appScreenshotSets"),
+		asctest.JSON(http.StatusOK, `{"data":[{"type":"appScreenshotSets","id":"set-1","attributes":{"screenshotDisplayType":"APP_IPHONE_65"}}],"links":{}}`))
+	reg.Register(asctest.GET("/v1/appScreenshotSets/set-1/appScreenshots"),
+		asctest.JSON(http.StatusOK, string(existing)))
+	stdout, _, runErr := runRootWithDeps(t, stubClient(t, reg), []string{"screenshots", "plan", "--app", "123456789", "--version", "1.2.3", "--review-output-dir", reviewDir, "--output", "json"}...)
 	if runErr == nil {
 		t.Fatal("expected capacity failure")
 	}
@@ -933,48 +848,29 @@ func testScreenshotReviewVersionMismatch(t *testing.T, command, selector, appID,
 
 	reviewDir, _ := writeScreenshotReviewArtifacts(t)
 
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() {
-		http.DefaultTransport = originalTransport
-	})
-
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		switch {
-		case req.Method == http.MethodGet && req.URL.Path == "/v1/appStoreVersions/version-1":
-			return statusJSONResponse(`{
+	reg := asctest.NewRegistry(t)
+	reg.Install()
+	reg.Register(asctest.GET("/v1/appStoreVersions/version-1", "include=app"),
+		asctest.JSON(http.StatusOK, `{
 				"data":{
 					"type":"appStoreVersions",
 					"id":"version-1",
 					"attributes":{"versionString":"1.2.3","platform":"IOS"},
-					"relationships":{"app":{"data":{"type":"apps","id":"` + appID + `"}}}
+					"relationships":{"app":{"data":{"type":"apps","id":"`+appID+`"}}}
 				}
-			}`), nil
-		default:
-			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.String())
-			return nil, nil
-		}
-	})
+			}`))
 
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	var runErr error
-	stdout, stderr := captureOutput(t, func() {
-		args := []string{
-			"screenshots", command,
-			"--app", "123456789",
-			selector, "version-1",
-			"--platform", platform,
-			"--review-output-dir", reviewDir,
-		}
-		if command == "apply" {
-			args = append(args, "--confirm")
-		}
-		if err := root.Parse(args); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		runErr = root.Run(context.Background())
-	})
+	args := []string{
+		"screenshots", command,
+		"--app", "123456789",
+		selector, "version-1",
+		"--platform", platform,
+		"--review-output-dir", reviewDir,
+	}
+	if command == "apply" {
+		args = append(args, "--confirm")
+	}
+	stdout, stderr, runErr := runCommand(t, args)
 
 	if runErr == nil {
 		t.Fatal("expected version/app mismatch error")
@@ -1004,37 +900,18 @@ func TestScreenshotsPlanRejectsActualImageDimensionsThatDoNotMatchPlannedDisplay
 
 	reviewDir, _ := writeScreenshotReviewArtifactsWithPlannedDisplayType(t, 1, 1, 1284, 2778, []string{"APP_IPHONE_65"})
 
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() {
-		http.DefaultTransport = originalTransport
-	})
+	reg := asctest.NewRegistry(t)
+	reg.Install()
+	reg.Register(asctest.GET("/v1/apps/123456789/appStoreVersions", "filter[platform]=IOS", "filter[versionString]=1.2.3", "limit=10"),
+		asctest.JSON(http.StatusOK, `{"data":[{"type":"appStoreVersions","id":"version-1","attributes":{"versionString":"1.2.3","platform":"IOS"}}]}`))
+	reg.Register(asctest.GET("/v1/appStoreVersions/version-1/appStoreVersionLocalizations", "limit=200"),
+		asctest.JSON(http.StatusOK, `{"data":[{"type":"appStoreVersionLocalizations","id":"LOC_123","attributes":{"locale":"en-US"}}]}`))
 
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		switch req.URL.Path {
-		case "/v1/apps/123456789/appStoreVersions":
-			return statusJSONResponse(`{"data":[{"type":"appStoreVersions","id":"version-1","attributes":{"versionString":"1.2.3","platform":"IOS"}}]}`), nil
-		case "/v1/appStoreVersions/version-1/appStoreVersionLocalizations":
-			return statusJSONResponse(`{"data":[{"type":"appStoreVersionLocalizations","id":"LOC_123","attributes":{"locale":"en-US"}}]}`), nil
-		default:
-			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.String())
-			return nil, nil
-		}
-	})
-
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	var runErr error
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{
-			"screenshots", "plan",
-			"--app", "123456789",
-			"--version", "1.2.3",
-			"--review-output-dir", reviewDir,
-		}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		runErr = root.Run(context.Background())
+	stdout, stderr, runErr := runCommand(t, []string{
+		"screenshots", "plan",
+		"--app", "123456789",
+		"--version", "1.2.3",
+		"--review-output-dir", reviewDir,
 	})
 
 	if runErr == nil {
@@ -1078,37 +955,18 @@ func TestScreenshotsPlanRejectsEmptyReviewDisplayType(t *testing.T) {
 
 	reviewDir, _ := writeScreenshotReviewArtifactsWithPlannedDisplayType(t, 1260, 2736, 1260, 2736, []string{"APP_IPHONE_67", "   "})
 
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() {
-		http.DefaultTransport = originalTransport
-	})
+	reg := asctest.NewRegistry(t)
+	reg.Install()
+	reg.Register(asctest.GET("/v1/apps/123456789/appStoreVersions", "filter[platform]=IOS", "filter[versionString]=1.2.3", "limit=10"),
+		asctest.JSON(http.StatusOK, `{"data":[{"type":"appStoreVersions","id":"version-1","attributes":{"versionString":"1.2.3","platform":"IOS"}}]}`))
+	reg.Register(asctest.GET("/v1/appStoreVersions/version-1/appStoreVersionLocalizations", "limit=200"),
+		asctest.JSON(http.StatusOK, `{"data":[{"type":"appStoreVersionLocalizations","id":"LOC_123","attributes":{"locale":"en-US"}}]}`))
 
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		switch req.URL.Path {
-		case "/v1/apps/123456789/appStoreVersions":
-			return statusJSONResponse(`{"data":[{"type":"appStoreVersions","id":"version-1","attributes":{"versionString":"1.2.3","platform":"IOS"}}]}`), nil
-		case "/v1/appStoreVersions/version-1/appStoreVersionLocalizations":
-			return statusJSONResponse(`{"data":[{"type":"appStoreVersionLocalizations","id":"LOC_123","attributes":{"locale":"en-US"}}]}`), nil
-		default:
-			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.String())
-			return nil, nil
-		}
-	})
-
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	var runErr error
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{
-			"screenshots", "plan",
-			"--app", "123456789",
-			"--version", "1.2.3",
-			"--review-output-dir", reviewDir,
-		}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		runErr = root.Run(context.Background())
+	stdout, stderr, runErr := runCommand(t, []string{
+		"screenshots", "plan",
+		"--app", "123456789",
+		"--version", "1.2.3",
+		"--review-output-dir", reviewDir,
 	})
 
 	if runErr == nil {

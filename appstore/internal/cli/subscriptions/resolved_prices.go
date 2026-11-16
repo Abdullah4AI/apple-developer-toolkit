@@ -23,6 +23,7 @@ type resolvedSubscriptionPriceCandidate struct {
 // start date.
 func fetchResolvedSubscriptionPrices(
 	ctx context.Context,
+	d *shared.Deps,
 	client *asc.Client,
 	subscriptionID string,
 	limit int,
@@ -36,8 +37,8 @@ func fetchResolvedSubscriptionPrices(
 	}
 
 	opts := []asc.SubscriptionPricesOption{
-		asc.WithSubscriptionPricesLimit(limit),
-		asc.WithSubscriptionPricesNextURL(nextURL),
+		asc.Limit[asc.SubscriptionPricesOption](limit),
+		asc.NextURL[asc.SubscriptionPricesOption](nextURL),
 		asc.WithSubscriptionPricesFields([]string{"startDate", "preserved", "planType", "territory", "subscriptionPricePoint"}),
 		asc.WithSubscriptionPricesInclude([]string{"subscriptionPricePoint", "territory"}),
 		asc.WithSubscriptionPricesPricePointFields([]string{"customerPrice", "proceeds", "proceedsYear2"}),
@@ -50,7 +51,7 @@ func fetchResolvedSubscriptionPrices(
 		opts = append(opts, asc.WithSubscriptionPricesTerritory(territory))
 	}
 
-	firstPage, err := shared.RetryReadWithFreshTimeout(ctx, func(requestCtx context.Context) (*asc.SubscriptionPricesResponse, error) {
+	firstPage, err := shared.RetryReadWithFreshTimeoutWith(ctx, d, func(requestCtx context.Context) (*asc.SubscriptionPricesResponse, error) {
 		return client.GetSubscriptionPrices(requestCtx, subscriptionID, opts...)
 	})
 	if err != nil {
@@ -63,11 +64,11 @@ func fetchResolvedSubscriptionPrices(
 		if err != nil {
 			return nil, err
 		}
-		return shared.RetryReadWithFreshTimeout(ctx, func(requestCtx context.Context) (*asc.SubscriptionPricesResponse, error) {
+		return shared.RetryReadWithFreshTimeoutWith(ctx, d, func(requestCtx context.Context) (*asc.SubscriptionPricesResponse, error) {
 			return client.GetSubscriptionPrices(
 				requestCtx,
 				subscriptionID,
-				asc.WithSubscriptionPricesNextURL(nextURL),
+				asc.NextURL[asc.SubscriptionPricesOption](nextURL),
 				asc.WithSubscriptionPricesFields([]string{"startDate", "preserved", "planType", "territory", "subscriptionPricePoint"}),
 				asc.WithSubscriptionPricesInclude([]string{"subscriptionPricePoint", "territory"}),
 				asc.WithSubscriptionPricesPricePointFields([]string{"customerPrice", "proceeds", "proceedsYear2"}),

@@ -182,7 +182,7 @@ func (c *Client) newNotaryRequest(ctx context.Context, method, path string, body
 	if err := validateAPIPath(path); err != nil {
 		return nil, err
 	}
-	if c.bearerToken != "" {
+	if c.bearer != nil {
 		// A notary token has its own scope; only the private key can sign one.
 		return nil, ErrNotaryNeedsPrivateKey
 	}
@@ -399,49 +399,6 @@ func (c *Client) ListNotarizations(ctx context.Context) (*NotarySubmissionsListR
 	}
 
 	return &response, nil
-}
-
-// ComputeFileSHA256 computes the SHA-256 hex digest of an opened file and
-// rewinds it so the same descriptor can be uploaded.
-func ComputeFileSHA256(ctx context.Context, file io.ReadSeeker) (string, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	if err := ctx.Err(); err != nil {
-		return "", err
-	}
-
-	h := sha256.New()
-	buffer := make([]byte, 64*1024)
-	for {
-		if err := ctx.Err(); err != nil {
-			return "", err
-		}
-
-		n, err := file.Read(buffer)
-		if n > 0 {
-			if ctxErr := ctx.Err(); ctxErr != nil {
-				return "", ctxErr
-			}
-			if _, writeErr := h.Write(buffer[:n]); writeErr != nil {
-				return "", fmt.Errorf("hash file: %w", writeErr)
-			}
-		}
-		if errors.Is(err, io.EOF) {
-			break
-		}
-		if err != nil {
-			return "", fmt.Errorf("read file: %w", err)
-		}
-	}
-	if err := ctx.Err(); err != nil {
-		return "", err
-	}
-	if _, err := file.Seek(0, io.SeekStart); err != nil {
-		return "", fmt.Errorf("rewind file: %w", err)
-	}
-
-	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
 // UploadToS3 uploads file data to the S3 bucket using AWS Signature V4 authentication.

@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -38,6 +39,7 @@ const (
 type TestOptions struct {
 	WorkspacePath    string
 	ProjectPath      string
+	PackagePath      string
 	Scheme           string
 	Action           string
 	Configuration    string
@@ -50,14 +52,24 @@ type TestOptions struct {
 	ResultBundlePath string
 	Clean            bool
 	NoCodeSigning    bool
+	CodeCoverage     bool
 	XcodebuildArgs   []string
 	LogWriter        io.Writer
+
+	RetryTestsOnFailure        bool
+	TestIterations             int
+	ParallelTesting            *bool
+	ParallelTestingWorkers     int
+	AddressSanitizer           bool
+	ThreadSanitizer            bool
+	UndefinedBehaviorSanitizer bool
 }
 
 // TestResult is the stable structured result for a local Xcode test operation.
 type TestResult struct {
 	WorkspacePath    string       `json:"workspace,omitempty"`
 	ProjectPath      string       `json:"project,omitempty"`
+	PackagePath      string       `json:"package_path,omitempty"`
 	Scheme           string       `json:"scheme,omitempty"`
 	Action           string       `json:"action"`
 	Configuration    string       `json:"configuration,omitempty"`
@@ -67,6 +79,7 @@ type TestResult struct {
 	DerivedDataPath  string       `json:"derived_data_path,omitempty"`
 	ResultBundlePath string       `json:"result_bundle_path,omitempty"`
 	Tests            *TestSummary `json:"tests,omitempty"`
+	Coverage         *Coverage    `json:"coverage,omitempty"`
 	Clean            bool         `json:"clean"`
 	NoCodeSigning    bool         `json:"no_code_signing"`
 	Success          bool         `json:"success"`
@@ -90,6 +103,16 @@ type TestSummary struct {
 	expectedFailuresSet bool
 }
 
+// Coverage is the line coverage of a whole run or, inside Targets, of one
+// target, as the xccov targets-only JSON report gives it.
+type Coverage struct {
+	Name            string     `json:"name,omitempty"`
+	LineCoverage    float64    `json:"lineCoverage"`
+	CoveredLines    int        `json:"coveredLines"`
+	ExecutableLines int        `json:"executableLines"`
+	Targets         []Coverage `json:"targets,omitempty"`
+}
+
 // TestCase is a bounded structured representation of one test case.
 type TestCase struct {
 	Identifier string `json:"identifier"`
@@ -107,8 +130,9 @@ type TestFailure struct {
 }
 
 var (
-	runXcodeTestCommand     = runXcodebuildForBuild
+	runXcodeTestCommand     = runXcodebuildForTest
 	readTestResultSummaryFn = readTestResultSummary
+	readTestCoverageFn      = readTestCoverage
 	testNowFn               = time.Now
 )
 
@@ -121,8 +145,8 @@ func ValidateTestOptions(opts TestOptions) error {
 	}
 	switch TestAction(opts.Action) {
 	case TestActionTest, TestActionBuildForTesting:
-		if err := validateWorkspaceProjectPair(opts.WorkspacePath, opts.ProjectPath); err != nil {
-			return err
+		if countNonEmpty(opts.WorkspacePath, opts.ProjectPath, opts.PackagePath) != 1 {
+			return fmt.Errorf("exactly one of --workspace, --project, or --package-path is required")
 		}
 		if opts.Scheme == "" {
 			return fmt.Errorf("--scheme is required")
@@ -139,6 +163,9 @@ func ValidateTestOptions(opts TestOptions) error {
 	case TestActionTestWithoutBuilding:
 		if opts.ProjectPath != "" || opts.WorkspacePath != "" {
 			return fmt.Errorf("--project and --workspace cannot be used with --action test-without-building")
+		}
+		if opts.PackagePath != "" {
+			return fmt.Errorf("--package-path cannot be used with --action test-without-building")
 		}
 		if opts.Scheme != "" {
 			return fmt.Errorf("--scheme cannot be used with --action test-without-building")
@@ -196,6 +223,64 @@ func ValidateTestOptions(opts TestOptions) error {
 	if reserved := reservedTestPassthroughArgument(opts.XcodebuildArgs); reserved != "" {
 		return fmt.Errorf("--xcodebuild-flag cannot override asc-managed argument %q", reserved)
 	}
+	if opts.TestIterations < 0 {
+		return fmt.Errorf("--test-iterations must be at least 1")
+	}
+	if opts.ParallelTestingWorkers < 0 {
+		return fmt.Errorf("--parallel-testing-workers must be at least 1")
+	}
+	if TestAction(opts.Action) == TestActionBuildForTesting {
+		if opts.RetryTestsOnFailure {
+			return fmt.Errorf("--retry-tests-on-failure cannot be used with --action build-for-testing")
+		}
+		if opts.TestIterations > 0 {
+			return fmt.Errorf("--test-iterations cannot be used with --action build-for-testing")
+		}
+		if opts.ParallelTestingWorkers > 0 {
+			return fmt.Errorf("--parallel-testing-workers cannot be used with --action build-for-testing")
+		}
+	}
+	if TestAction(opts.Action) == TestActionTestWithoutBuilding {
+		for _, sanitizer := range []struct {
+			set  bool
+			flag string
+		}{
+			{opts.AddressSanitizer, "--address-sanitizer"},
+			{opts.ThreadSanitizer, "--thread-sanitizer"},
+			{opts.UndefinedBehaviorSanitizer, "--undefined-behavior-sanitizer"},
+		} {
+			if sanitizer.set {
+				return fmt.Errorf("%s cannot be used with --action test-without-building", sanitizer.flag)
+			}
+		}
+	}
+	if opts.ParallelTestingWorkers > 0 && opts.ParallelTesting != nil && !*opts.ParallelTesting {
+		return fmt.Errorf("--parallel-testing-workers cannot be combined with --parallel-testing=false")
+	}
+	if opts.AddressSanitizer && opts.ThreadSanitizer {
+		return fmt.Errorf("--address-sanitizer and --thread-sanitizer cannot be used together")
+	}
+	for _, typed := range []struct {
+		set  bool
+		flag string
+		arg  string
+	}{
+		{set: opts.CodeCoverage, flag: "--code-coverage", arg: "-enablecodecoverage"},
+		{set: opts.RetryTestsOnFailure, flag: "--retry-tests-on-failure", arg: "-retry-tests-on-failure"},
+		{set: opts.TestIterations > 0, flag: "--test-iterations", arg: "-test-iterations"},
+		{set: opts.ParallelTesting != nil, flag: "--parallel-testing", arg: "-parallel-testing-enabled"},
+		{set: opts.ParallelTestingWorkers > 0, flag: "--parallel-testing-workers", arg: "-parallel-testing-worker-count"},
+		{set: opts.AddressSanitizer, flag: "--address-sanitizer", arg: "-enableaddresssanitizer"},
+		{set: opts.ThreadSanitizer, flag: "--thread-sanitizer", arg: "-enablethreadsanitizer"},
+		{set: opts.UndefinedBehaviorSanitizer, flag: "--undefined-behavior-sanitizer", arg: "-enableundefinedbehaviorsanitizer"},
+	} {
+		if !typed.set {
+			continue
+		}
+		if raw := firstReservedPassthroughArgument(opts.XcodebuildArgs, []string{typed.arg}, nil, nil); raw != "" {
+			return fmt.Errorf("%s conflicts with --xcodebuild-flag %q; use one", typed.flag, raw)
+		}
+	}
 	if opts.ResultBundlePath != "" && !strings.EqualFold(filepath.Ext(opts.ResultBundlePath), ".xcresult") {
 		return fmt.Errorf("--result-bundle-path must end with .xcresult")
 	}
@@ -214,6 +299,7 @@ func Test(ctx context.Context, opts TestOptions) (*TestResult, error) {
 	result := &TestResult{
 		WorkspacePath: opts.WorkspacePath,
 		ProjectPath:   opts.ProjectPath,
+		PackagePath:   opts.PackagePath,
 		Scheme:        opts.Scheme,
 		Action:        opts.Action,
 		Configuration: opts.Configuration,
@@ -274,7 +360,10 @@ func Test(ctx context.Context, opts TestOptions) (*TestResult, error) {
 	}
 
 	command := buildTestCommand(opts)
-	processErr := runXcodeTestCommand(ctx, command, opts.LogWriter)
+	processErr := runXcodeTestCommand(ctx, opts.PackagePath, command, opts.LogWriter)
+	if opts.CodeCoverage && opts.Action != string(TestActionBuildForTesting) {
+		result.Coverage = readTestCoverageOrWarn(ctx, opts)
+	}
 	if processErr != nil {
 		setTestExitStatus(result, processErr)
 		if opts.Action != string(TestActionBuildForTesting) && validateTestResultBundlePathComponents(opts.ResultBundlePath) == nil && existingDirectory(opts.ResultBundlePath) {
@@ -345,9 +434,68 @@ func readPartialTestResultSummary(ctx context.Context, resultBundlePath string) 
 	return readTestResultSummaryFn(postProcessContext, resultBundlePath)
 }
 
+// readTestCoverageOrWarn never changes the test outcome: a missing or
+// unreadable coverage report is one warning line and an omitted coverage field.
+func readTestCoverageOrWarn(ctx context.Context, opts TestOptions) *Coverage {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	postProcessContext, cancel := context.WithTimeout(context.WithoutCancel(ctx), testResultPostProcessingTimeout)
+	defer cancel()
+	err := validateTestResultBundlePathComponents(opts.ResultBundlePath)
+	var coverage *Coverage
+	if err == nil {
+		coverage, err = readTestCoverageFn(postProcessContext, opts.ResultBundlePath)
+	}
+	if err != nil {
+		logWriter := opts.LogWriter
+		if logWriter == nil {
+			logWriter = os.Stderr
+		}
+		fmt.Fprintf(logWriter, "Warning: code coverage unavailable: %s\n", strings.ReplaceAll(err.Error(), "\n", " "))
+		return nil
+	}
+	return coverage
+}
+
+func readTestCoverage(ctx context.Context, resultBundlePath string) (*Coverage, error) {
+	cmd, err := trustedXcodeCommand(ctx, "xcrun", []string{"xccov", "view", "--report", "--only-targets", "--json", resultBundlePath}, nil)
+	if err != nil {
+		return nil, err
+	}
+	output := boundedXcresulttoolOutput{limit: maxXcresulttoolOutputBytes}
+	diagnostics := boundedXcresulttoolOutput{limit: maxXcresulttoolDiagnosticBytes}
+	cmd.Stdout = &output
+	cmd.Stderr = &diagnostics
+	if err := runXcodeCommand(cmd); err != nil {
+		if diagnostic := strings.TrimSpace(string(diagnostics.Bytes())); diagnostic != "" {
+			return nil, fmt.Errorf("xccov: %w: %s", err, diagnostic)
+		}
+		return nil, fmt.Errorf("xccov: %w", err)
+	}
+	if output.exceeded {
+		return nil, fmt.Errorf("xccov report exceeds %d bytes", maxXcresulttoolOutputBytes)
+	}
+	var coverage Coverage
+	if err := json.Unmarshal(output.Bytes(), &coverage.Targets); err != nil {
+		return nil, fmt.Errorf("decode xccov report: %w", err)
+	}
+	for _, target := range coverage.Targets {
+		coverage.CoveredLines += target.CoveredLines
+		coverage.ExecutableLines += target.ExecutableLines
+	}
+	if coverage.ExecutableLines <= 0 {
+		return nil, fmt.Errorf("result bundle has no code coverage data")
+	}
+	coverage.LineCoverage = float64(coverage.CoveredLines) / float64(coverage.ExecutableLines)
+	slices.SortFunc(coverage.Targets, func(a, b Coverage) int { return strings.Compare(a.Name, b.Name) })
+	return &coverage, nil
+}
+
 func normalizeTestOptions(opts TestOptions) TestOptions {
 	opts.WorkspacePath = normalizeDirectoryPath(opts.WorkspacePath)
 	opts.ProjectPath = normalizeDirectoryPath(opts.ProjectPath)
+	opts.PackagePath = normalizeDirectoryPath(opts.PackagePath)
 	opts.Scheme = strings.TrimSpace(opts.Scheme)
 	opts.Action = strings.TrimSpace(opts.Action)
 	opts.Configuration = strings.TrimSpace(opts.Configuration)
@@ -387,10 +535,40 @@ func validateTestInputPaths(opts TestOptions) error {
 	if opts.Action == string(TestActionTestWithoutBuilding) {
 		return validateExistingFile(opts.XctestrunPath, "--xctestrun")
 	}
+	if opts.PackagePath != "" {
+		return ValidateTestPackagePath(opts.PackagePath)
+	}
 	if opts.WorkspacePath != "" {
 		return validateExistingPath(opts.WorkspacePath, ".xcworkspace", "--workspace")
 	}
 	return validateExistingPath(opts.ProjectPath, ".xcodeproj", "--project")
+}
+
+// ValidateTestPackagePath checks that pathValue is a directory that contains a
+// Package.swift manifest.
+func ValidateTestPackagePath(pathValue string) error {
+	info, err := statInputPath(pathValue, "--package-path")
+	if err != nil {
+		return err
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("--package-path must point to a directory")
+	}
+	manifest, err := os.Stat(filepath.Join(pathValue, "Package.swift"))
+	if err != nil || !manifest.Mode().IsRegular() {
+		return fmt.Errorf("--package-path must contain a Package.swift file: %s", pathValue)
+	}
+	return nil
+}
+
+func countNonEmpty(values ...string) int {
+	count := 0
+	for _, value := range values {
+		if value != "" {
+			count++
+		}
+	}
+	return count
 }
 
 func resolveTestDerivedDataPath(opts TestOptions) (string, error) {
@@ -404,6 +582,9 @@ func resolveTestDerivedDataPath(opts TestOptions) (string, error) {
 	selector := opts.ProjectPath
 	if selector == "" {
 		selector = opts.WorkspacePath
+	}
+	if selector == "" {
+		selector = opts.PackagePath
 	}
 	absoluteSelector, err := filepath.Abs(selector)
 	if err != nil {
@@ -448,6 +629,9 @@ func resolveTestResultBundlePath(opts TestOptions) (string, error) {
 	selector := opts.ProjectPath
 	if selector == "" {
 		selector = opts.WorkspacePath
+	}
+	if selector == "" {
+		selector = opts.PackagePath
 	}
 	if selector == "" {
 		selector = opts.XctestrunPath
@@ -577,6 +761,34 @@ func buildTestCommand(opts TestOptions) []string {
 	}
 	for _, identifier := range opts.SkipTesting {
 		args = append(args, "-skip-testing:"+identifier)
+	}
+	if opts.CodeCoverage {
+		args = append(args, "-enableCodeCoverage", "YES")
+	}
+	if opts.RetryTestsOnFailure {
+		args = append(args, "-retry-tests-on-failure")
+	}
+	if opts.TestIterations > 0 {
+		args = append(args, "-test-iterations", strconv.Itoa(opts.TestIterations))
+	}
+	if opts.ParallelTesting != nil {
+		enabled := "NO"
+		if *opts.ParallelTesting {
+			enabled = "YES"
+		}
+		args = append(args, "-parallel-testing-enabled", enabled)
+	}
+	if opts.ParallelTestingWorkers > 0 {
+		args = append(args, "-parallel-testing-worker-count", strconv.Itoa(opts.ParallelTestingWorkers))
+	}
+	if opts.AddressSanitizer {
+		args = append(args, "-enableAddressSanitizer", "YES")
+	}
+	if opts.ThreadSanitizer {
+		args = append(args, "-enableThreadSanitizer", "YES")
+	}
+	if opts.UndefinedBehaviorSanitizer {
+		args = append(args, "-enableUndefinedBehaviorSanitizer", "YES")
 	}
 	args = append(args, cloneTestValues(opts.XcodebuildArgs)...)
 	if opts.NoCodeSigning {
@@ -1171,12 +1383,16 @@ func parseRawTestNode(node rawTestNode) (TestCase, error) {
 			return TestCase{}, fmt.Errorf("decode test case duration: %w", err)
 		}
 	}
-	message := node.Message
-	if strings.TrimSpace(message) == "" {
-		message = node.FailureMessage
-	}
-	if strings.TrimSpace(message) == "" {
-		message = testNodeFailureMessage(node.Children)
+	message, attributed := testNodeFailureMessage(node.Children)
+	if !attributed {
+		childMessage := message
+		message = node.Message
+		if strings.TrimSpace(message) == "" {
+			message = node.FailureMessage
+		}
+		if strings.TrimSpace(message) == "" {
+			message = childMessage
+		}
 	}
 	return TestCase{
 		Identifier: identifier,
@@ -1188,8 +1404,33 @@ func parseRawTestNode(node rawTestNode) (TestCase, error) {
 	}, nil
 }
 
-func testNodeFailureMessage(children []rawTestNode) string {
+// testNodeFailureMessage returns the first failure message under a test case.
+// When the case has device, argument, or repetition variants, it instead lists
+// every failure message in tree order, one line each, prefixed by its variant,
+// and reports that the text is attributed.
+func testNodeFailureMessage(children []rawTestNode) (string, bool) {
+	var lines []string
+	attributed := false
+	appendTestNodeFailureMessages(&lines, &attributed, children, "")
+	if len(lines) == 0 {
+		return "", false
+	}
+	if !attributed {
+		return lines[0], false
+	}
+	return boundTestMessage(strings.Join(lines, "\n")), true
+}
+
+func appendTestNodeFailureMessages(lines *[]string, attributed *bool, children []rawTestNode, variant string) {
 	for _, child := range children {
+		childVariant := variant
+		if label := testNodeVariantLabel(child); label != "" {
+			*attributed = true
+			if childVariant != "" {
+				childVariant += ", "
+			}
+			childVariant += label
+		}
 		if strings.EqualFold(strings.TrimSpace(child.NodeType), "failure message") {
 			message := child.Name
 			if strings.TrimSpace(message) == "" {
@@ -1199,12 +1440,27 @@ func testNodeFailureMessage(children []rawTestNode) string {
 				message = child.FailureMessage
 			}
 			if strings.TrimSpace(message) != "" {
-				return boundTestMessage(message)
+				message = boundTestMessage(message)
+				if variant != "" {
+					message = variant + ": " + message
+				}
+				*lines = append(*lines, message)
 			}
 		}
-		if message := testNodeFailureMessage(child.Children); message != "" {
-			return message
-		}
+		appendTestNodeFailureMessages(lines, attributed, child.Children, childVariant)
+	}
+}
+
+func testNodeVariantLabel(node rawTestNode) string {
+	name := strings.TrimSpace(node.Name)
+	if name == "" {
+		return ""
+	}
+	switch strings.ToLower(strings.TrimSpace(node.NodeType)) {
+	case "device", "repetition":
+		return name
+	case "arguments":
+		return "argument '" + name + "'"
 	}
 	return ""
 }

@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
-	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/handlertest"
 )
 
@@ -50,7 +49,7 @@ func TestPPPTerritorySchedulePreservation(t *testing.T) {
 			t.Run(surface.priceType+"/"+test.name, func(t *testing.T) {
 				setupAuth(t)
 				t.Setenv("ASC_APP_ID", "")
-				restore := shared.SetPricingNowForTesting(func() time.Time { return time.Date(2026, 10, 29, 2, 0, 0, 0, time.UTC) })
+				restore := setRootNow(func() time.Time { return time.Date(2026, 10, 29, 2, 0, 0, 0, time.UTC) })
 				defer restore()
 				fixture := handlertest.New(t)
 				posts, reads := []string{}, 0

@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/peterbourgon/ff/v3/ffcli"
@@ -13,8 +12,8 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
-// AppEncryptionDeclarationsCommand returns the app-encryption-declarations command group.
-func AppEncryptionDeclarationsCommand() *ffcli.Command {
+// newAppEncryptionDeclarationsCommand returns the app-encryption-declarations command group.
+func newAppEncryptionDeclarationsCommand(d *shared.Deps) *ffcli.Command {
 	return &ffcli.Command{
 		Name:       "app-encryption-declarations",
 		ShortUsage: "asc apps app-encryption-declarations <subcommand> [flags]",
@@ -24,9 +23,9 @@ func AppEncryptionDeclarationsCommand() *ffcli.Command {
 Examples:
   asc apps app-encryption-declarations list --id "APP_ID"
   asc apps app-encryption-declarations list --id "APP_ID" --include appEncryptionDeclarationDocument`,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
-			AppEncryptionDeclarationsListCommand(),
+			newAppEncryptionDeclarationsListCommand(d),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp
@@ -34,115 +33,78 @@ Examples:
 	}
 }
 
-// AppEncryptionDeclarationsListCommand returns the list subcommand.
-func AppEncryptionDeclarationsListCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("apps app-encryption-declarations list", flag.ExitOnError)
+// newAppEncryptionDeclarationsListCommand returns the list subcommand.
+func newAppEncryptionDeclarationsListCommand(d *shared.Deps) *ffcli.Command {
+	var (
+		builds                                         *string
+		buildLimit                                     *int
+		fieldsValue, documentFieldsValue, includeValue []string
+		included                                       asc.IncludedFields
+	)
 
-	appID := shared.BindResourceIDFlag(fs, "id", "apps", "App Store Connect app ID (or ASC_APP_ID)")
-	builds := fs.String("build-id", "", "Filter by build IDs (comma-separated)")
-	fields := fs.String("fields", "", "Fields to include: "+strings.Join(appEncryptionDeclarationFieldsList(), ", "))
-	documentFields := fs.String("document-fields", "", "Document fields to include: "+strings.Join(appEncryptionDeclarationDocumentFieldsList(), ", "))
-	include := fs.String("include", "", "Include relationships: "+strings.Join(appEncryptionDeclarationIncludeList(), ", "))
-	includedFields := shared.BindIncludedFieldFlags(fs, map[string]string{"app": "apps", "builds": "builds"})
-	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
-	buildLimit := fs.Int("build-limit", 0, "Maximum included builds per declaration (1-50)")
-	next := fs.String("next", "", "Fetch next page using a links.next URL")
-	paginate := fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")
-	output := shared.BindOutputFlags(fs)
-
-	return &ffcli.Command{
-		Name:       "list",
-		ShortUsage: "asc apps app-encryption-declarations list --id \"APP_ID\" [flags]",
-		ShortHelp:  "List encryption declarations for an app.",
+	return shared.BuildPaginatedListCommand(shared.PaginatedListCommandConfig{
+		Deps:        d,
+		FlagSetName: "apps app-encryption-declarations list",
+		Name:        "list",
+		ShortUsage:  "asc apps app-encryption-declarations list --id \"APP_ID\" [flags]",
+		ShortHelp:   "List encryption declarations for an app.",
 		LongHelp: `List encryption declarations for an app.
 
 Examples:
   asc apps app-encryption-declarations list --id "APP_ID"
   asc apps app-encryption-declarations list --id "APP_ID" --include appEncryptionDeclarationDocument --document-fields "fileName,fileSize"
   asc apps app-encryption-declarations list --id "APP_ID" --paginate`,
-		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
-		Exec: func(ctx context.Context, args []string) error {
-			if *limit != 0 && (*limit < 1 || *limit > 200) {
-				return shared.UsageError("apps app-encryption-declarations list: --limit must be between 1 and 200")
-			}
-			if *buildLimit != 0 && (*buildLimit < 1 || *buildLimit > 50) {
-				return shared.UsageError("apps app-encryption-declarations list: --build-limit must be between 1 and 50")
-			}
-			if err := shared.ValidateNextURL(*next); err != nil {
-				return shared.UsageErrorf("apps app-encryption-declarations list: %v", err)
-			}
-			if err := shared.RejectNextFlagConflicts(fs, *next, "apps app-encryption-declarations list", "build-id", "fields", "document-fields", "include", "build-limit"); err != nil {
+		ParentFlag:           "id",
+		ParentUsage:          "App Store Connect app ID (or ASC_APP_ID)",
+		ParentType:           "apps",
+		ResolveApp:           true,
+		RequiredDiagnostic:   true,
+		PaginateIgnoresLimit: true,
+		NoSpinner:            true,
+		NextConflicts:        []string{"build-id", "fields", "document-fields", "include", "build-limit"},
+		Flags: func(fs *flag.FlagSet) func() error {
+			next := fs.Lookup("next").Value
+			builds = fs.String("build-id", "", "Filter by build IDs (comma-separated)")
+			fields := fs.String("fields", "", "Fields to include: "+strings.Join(appEncryptionDeclarationFieldsList(), ", "))
+			documentFields := fs.String("document-fields", "", "Document fields to include: "+strings.Join(appEncryptionDeclarationDocumentFieldsList(), ", "))
+			include := fs.String("include", "", "Include relationships: "+strings.Join(appEncryptionDeclarationIncludeList(), ", "))
+			includedFields := shared.BindIncludedFieldFlags(fs, map[string]string{"app": "apps", "builds": "builds"})
+			buildLimit = fs.Int("build-limit", 0, "Maximum included builds per declaration (1-50)")
+			return func() error {
+				if *buildLimit != 0 && (*buildLimit < 1 || *buildLimit > 50) {
+					return d.UsageError("apps app-encryption-declarations list: --build-limit must be between 1 and 50")
+				}
+
+				var err error
+				fieldsValue, err = normalizeAppEncryptionDeclarationFields(*fields)
+				if err != nil {
+					return d.UsageErrorf("apps app-encryption-declarations list: %v", err)
+				}
+				documentFieldsValue, err = normalizeAppEncryptionDeclarationDocumentFields(*documentFields)
+				if err != nil {
+					return d.UsageErrorf("apps app-encryption-declarations list: %v", err)
+				}
+				includeValue, err = normalizeAppEncryptionDeclarationInclude(*include)
+				if err != nil {
+					return d.UsageErrorf("apps app-encryption-declarations list: %v", err)
+				}
+				included, err = includedFields.ResolveWith(d, "apps app-encryption-declarations list", next.String(), includeValue)
 				return err
 			}
-
-			fieldsValue, err := normalizeAppEncryptionDeclarationFields(*fields)
-			if err != nil {
-				return fmt.Errorf("apps app-encryption-declarations list: %w", err)
-			}
-			documentFieldsValue, err := normalizeAppEncryptionDeclarationDocumentFields(*documentFields)
-			if err != nil {
-				return fmt.Errorf("apps app-encryption-declarations list: %w", err)
-			}
-			includeValue, err := normalizeAppEncryptionDeclarationInclude(*include)
-			if err != nil {
-				return fmt.Errorf("apps app-encryption-declarations list: %w", err)
-			}
-			included, err := includedFields.Resolve("apps app-encryption-declarations list", *next, includeValue)
-			if err != nil {
-				return err
-			}
-
-			resolvedAppID := shared.ResolveAppID(*appID)
-			if resolvedAppID == "" && strings.TrimSpace(*next) == "" {
-				fmt.Fprintln(os.Stderr, "Error: --id is required (or set ASC_APP_ID)")
-				return shared.MissingRequiredUsageError("--id")
-			}
-
-			buildIDs := shared.SplitCSV(*builds)
-
-			client, err := shared.GetASCClient()
-			if err != nil {
-				return fmt.Errorf("apps app-encryption-declarations list: %w", err)
-			}
-
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
-			defer cancel()
-
-			opts := []asc.AppEncryptionDeclarationsOption{
-				asc.WithAppEncryptionDeclarationsBuildIDs(buildIDs),
+		},
+		FetchPage: func(ctx context.Context, client *asc.Client, appID string, limit int, next string) (asc.PaginatedResponse, error) {
+			return client.GetAppEncryptionDeclarations(ctx, appID,
+				asc.WithAppEncryptionDeclarationsBuildIDs(shared.SplitCSV(*builds)),
 				asc.WithAppEncryptionDeclarationsFields(fieldsValue),
 				asc.WithAppEncryptionDeclarationsDocumentFields(documentFieldsValue),
 				asc.WithAppEncryptionDeclarationsInclude(includeValue),
 				asc.WithIncludedFields[asc.AppEncryptionDeclarationsOption](included),
-				asc.WithAppEncryptionDeclarationsLimit(*limit),
+				asc.Limit[asc.AppEncryptionDeclarationsOption](limit),
 				asc.WithAppEncryptionDeclarationsBuildLimit(*buildLimit),
-				asc.WithAppEncryptionDeclarationsNextURL(*next),
-			}
-
-			if *paginate {
-				paginateOpts := append(opts, asc.WithAppEncryptionDeclarationsLimit(200))
-				firstPage, err := client.GetAppEncryptionDeclarations(requestCtx, resolvedAppID, paginateOpts...)
-				if err != nil {
-					return fmt.Errorf("apps app-encryption-declarations list: failed to fetch: %w", err)
-				}
-				pages, err := asc.PaginateAll(requestCtx, firstPage, func(ctx context.Context, nextURL string) (asc.PaginatedResponse, error) {
-					return client.GetAppEncryptionDeclarations(ctx, resolvedAppID, asc.WithAppEncryptionDeclarationsNextURL(nextURL))
-				})
-				if err != nil {
-					return fmt.Errorf("apps app-encryption-declarations list: %w", err)
-				}
-				return shared.PrintOutput(pages, *output.Output, *output.Pretty)
-			}
-
-			resp, err := client.GetAppEncryptionDeclarations(requestCtx, resolvedAppID, opts...)
-			if err != nil {
-				return fmt.Errorf("apps app-encryption-declarations list: failed to fetch: %w", err)
-			}
-
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+				asc.NextURL[asc.AppEncryptionDeclarationsOption](next),
+			)
 		},
-	}
+	})
 }
 
 func normalizeAppEncryptionDeclarationFields(value string) ([]string, error) {

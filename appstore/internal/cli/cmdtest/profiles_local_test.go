@@ -1,7 +1,6 @@
 package cmdtest
 
 import (
-	"context"
 	"crypto"
 	"crypto/rand"
 	"crypto/rsa"
@@ -11,7 +10,6 @@ import (
 	"encoding/json"
 	"errors"
 	"flag"
-	"io"
 	"math/big"
 	"net/http"
 	"os"
@@ -24,6 +22,7 @@ import (
 	"go.mozilla.org/pkcs7"
 	"howett.net/plist"
 
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asctest"
 	localxcode "github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/xcode"
 )
 
@@ -37,23 +36,16 @@ func TestProfilesLocalInstall_ForceActionIsInstalledWhenNoExisting(t *testing.T)
 		t.Fatalf("WriteFile(sourcePath) error: %v", err)
 	}
 
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{
-			"profiles", "local", "install",
-			"--path", sourcePath,
-			"--install-dir", installDir,
-			"--force",
-			"--output", "json",
-		}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatalf("run error: %v", err)
-		}
-	})
+	stdout, stderr, runErr := runRootWithDeps(t, nil,
+		"profiles", "local", "install",
+		"--path", sourcePath,
+		"--install-dir", installDir,
+		"--force",
+		"--output", "json",
+	)
+	if runErr != nil {
+		t.Fatalf("run error: %v", runErr)
+	}
 
 	if stderr != "" {
 		t.Fatalf("expected empty stderr, got %q", stderr)
@@ -86,21 +78,14 @@ func TestProfilesInspect_JSONIncludesEntitlements(t *testing.T) {
 		t.Fatalf("WriteFile(sourcePath) error: %v", err)
 	}
 
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{
-			"profiles", "inspect",
-			"--path", sourcePath,
-			"--output", "json",
-		}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatalf("run error: %v", err)
-		}
-	})
+	stdout, stderr, runErr := runRootWithDeps(t, nil,
+		"profiles", "inspect",
+		"--path", sourcePath,
+		"--output", "json",
+	)
+	if runErr != nil {
+		t.Fatalf("run error: %v", runErr)
+	}
 	if stderr != "" {
 		t.Fatalf("expected empty stderr, got %q", stderr)
 	}
@@ -151,22 +136,15 @@ func TestProfilesInspect_EntitlementsFlagRendersEntitlementRows(t *testing.T) {
 		t.Fatalf("WriteFile(sourcePath) error: %v", err)
 	}
 
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{
-			"profiles", "inspect",
-			"--path", sourcePath,
-			"--entitlements",
-			"--output", "table",
-		}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatalf("run error: %v", err)
-		}
-	})
+	stdout, stderr, runErr := runRootWithDeps(t, nil,
+		"profiles", "inspect",
+		"--path", sourcePath,
+		"--entitlements",
+		"--output", "table",
+	)
+	if runErr != nil {
+		t.Fatalf("run error: %v", runErr)
+	}
 	if stderr != "" {
 		t.Fatalf("expected empty stderr, got %q", stderr)
 	}
@@ -179,16 +157,7 @@ func TestProfilesInspect_EntitlementsFlagRendersEntitlementRows(t *testing.T) {
 }
 
 func TestProfilesInspect_MissingPath(t *testing.T) {
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	var runErr error
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"profiles", "inspect"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		runErr = root.Run(context.Background())
-	})
+	stdout, stderr, runErr := runRootWithDeps(t, nil, "profiles", "inspect")
 
 	if stdout != "" {
 		t.Fatalf("expected empty stdout, got %q", stdout)
@@ -217,23 +186,16 @@ func TestProfilesLocalInstall_ForceActionIsReplacedWhenExisting(t *testing.T) {
 		t.Fatalf("WriteFile(destPath) error: %v", err)
 	}
 
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{
-			"profiles", "local", "install",
-			"--path", sourcePath,
-			"--install-dir", installDir,
-			"--force",
-			"--output", "json",
-		}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatalf("run error: %v", err)
-		}
-	})
+	stdout, stderr, runErr := runRootWithDeps(t, nil,
+		"profiles", "local", "install",
+		"--path", sourcePath,
+		"--install-dir", installDir,
+		"--force",
+		"--output", "json",
+	)
+	if runErr != nil {
+		t.Fatalf("run error: %v", runErr)
+	}
 	if stderr != "" {
 		t.Fatalf("expected empty stderr, got %q", stderr)
 	}
@@ -250,16 +212,7 @@ func TestProfilesLocalInstall_ForceActionIsReplacedWhenExisting(t *testing.T) {
 }
 
 func TestProfilesLocalClean_ConfirmRequiresMode(t *testing.T) {
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	var runErr error
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"profiles", "local", "clean", "--confirm", "--install-dir", t.TempDir(), "--output", "json"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		runErr = root.Run(context.Background())
-	})
+	stdout, stderr, runErr := runRootWithDeps(t, nil, "profiles", "local", "clean", "--confirm", "--install-dir", t.TempDir(), "--output", "json")
 
 	if stdout != "" {
 		t.Fatalf("expected empty stdout, got %q", stdout)
@@ -344,15 +297,7 @@ func TestProfilesLocalDefaultFollowsActiveXcodeWithoutCombiningStores(t *testing
 	}
 
 	run := func(args []string) (string, string, error) {
-		root := RootCommand("1.2.3")
-		root.FlagSet.SetOutput(io.Discard)
-		var runErr error
-		stdout, stderr := captureOutput(t, func() {
-			if err := root.Parse(args); err != nil {
-				t.Fatalf("parse error: %v", err)
-			}
-			runErr = root.Run(context.Background())
-		})
+		stdout, stderr, runErr := runRootWithDeps(t, nil, args...)
 		return stdout, stderr, runErr
 	}
 
@@ -421,15 +366,7 @@ func TestProfilesLocalDefaultFallsBackToLegacyDirectoryWithoutFullXcode(t *testi
 		t.Fatalf("write legacy profile: %v", err)
 	}
 
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-	var runErr error
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"profiles", "local", "list", "--output", "json"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		runErr = root.Run(context.Background())
-	})
+	stdout, stderr, runErr := runRootWithDeps(t, nil, "profiles", "local", "list", "--output", "json")
 
 	if runErr != nil {
 		t.Fatalf("profiles local list error = %v, stderr = %q", runErr, stderr)
@@ -458,16 +395,7 @@ func TestProfilesLocalDefaultFallsBackToLegacyDirectoryWithoutFullXcode(t *testi
 
 func TestProfilesLocal_InstallListCleanExpired(t *testing.T) {
 	run := func(args []string) (string, string, error) {
-		root := RootCommand("1.2.3")
-		root.FlagSet.SetOutput(io.Discard)
-
-		var runErr error
-		stdout, stderr := captureOutput(t, func() {
-			if err := root.Parse(args); err != nil {
-				t.Fatalf("parse error: %v", err)
-			}
-			runErr = root.Run(context.Background())
-		})
+		stdout, stderr, runErr := runRootWithDeps(t, nil, args...)
 		return stdout, stderr, runErr
 	}
 
@@ -568,16 +496,7 @@ func TestProfilesLocal_InstallListCleanExpired(t *testing.T) {
 
 func TestProfilesLocalList_SkipsUnreadableProfilesAndReports(t *testing.T) {
 	run := func(args []string) (string, string, error) {
-		root := RootCommand("1.2.3")
-		root.FlagSet.SetOutput(io.Discard)
-
-		var runErr error
-		stdout, stderr := captureOutput(t, func() {
-			if err := root.Parse(args); err != nil {
-				t.Fatalf("parse error: %v", err)
-			}
-			runErr = root.Run(context.Background())
-		})
+		stdout, stderr, runErr := runRootWithDeps(t, nil, args...)
 		return stdout, stderr, runErr
 	}
 
@@ -634,49 +553,20 @@ func TestProfilesLocalList_SkipsUnreadableProfilesAndReports(t *testing.T) {
 }
 
 func TestProfilesLocalInstall_ByID_DownloadsAndInstalls(t *testing.T) {
-	setupAuth(t)
-
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() {
-		http.DefaultTransport = originalTransport
-	})
-
 	uuid := "00000000-0000-0000-0000-0000000000AA"
 	content := buildMobileprovision(t, uuid, "Downloaded Profile", time.Now().Add(24*time.Hour))
 	b64 := base64.StdEncoding.EncodeToString(content)
 
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		if req.URL.Host != "api.appstoreconnect.apple.com" {
-			t.Fatalf("unexpected host: %s", req.URL.Host)
-		}
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/profiles/p1" {
-			t.Fatalf("unexpected path: %s", req.URL.Path)
-		}
-
-		body := `{"data":{"type":"profiles","id":"p1","attributes":{"profileContent":"` + b64 + `"}}}`
-		return &http.Response{
-			StatusCode: http.StatusOK,
-			Body:       io.NopCloser(strings.NewReader(body)),
-			Header:     http.Header{"Content-Type": []string{"application/json"}},
-		}, nil
-	})
+	reg := asctest.NewRegistry(t)
+	reg.Register(asctest.GET("/v1/profiles/p1"),
+		asctest.JSON(http.StatusOK, `{"data":{"type":"profiles","id":"p1","attributes":{"profileContent":"`+b64+`"}}}`))
 
 	installDir := t.TempDir()
 
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	_, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"profiles", "local", "install", "--id", "p1", "--install-dir", installDir, "--output", "json"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatalf("run error: %v", err)
-		}
-	})
+	_, stderr, runErr := runRootWithDeps(t, stubClient(t, reg), "profiles", "local", "install", "--id", "p1", "--install-dir", installDir, "--output", "json")
+	if runErr != nil {
+		t.Fatalf("run error: %v", runErr)
+	}
 	if stderr != "" {
 		t.Fatalf("expected empty stderr, got %q", stderr)
 	}

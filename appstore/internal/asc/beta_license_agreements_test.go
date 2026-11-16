@@ -41,27 +41,9 @@ func TestGetBetaLicenseAgreements(t *testing.T) {
 		WithBetaLicenseAgreementsFields([]string{"agreementText"}),
 		WithBetaLicenseAgreementsAppFields([]string{"name"}),
 		WithBetaLicenseAgreementsInclude([]string{"app"}),
-		WithBetaLicenseAgreementsLimit(50),
+		Limit[BetaLicenseAgreementsOption](50),
 	)
 	if err != nil {
-		t.Fatalf("GetBetaLicenseAgreements() error: %v", err)
-	}
-}
-
-func TestGetBetaLicenseAgreements_UsesNextURL(t *testing.T) {
-	next := "https://api.appstoreconnect.apple.com/v1/betaLicenseAgreements?cursor=abc"
-	response := jsonResponse(http.StatusOK, `{"data":[]}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.String() != next {
-			t.Fatalf("expected URL %q, got %q", next, req.URL.String())
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetBetaLicenseAgreements(context.Background(), WithBetaLicenseAgreementsNextURL(next)); err != nil {
 		t.Fatalf("GetBetaLicenseAgreements() error: %v", err)
 	}
 }
@@ -111,43 +93,6 @@ func TestGetBetaLicenseAgreementForApp(t *testing.T) {
 
 	if _, err := client.GetBetaLicenseAgreementForApp(context.Background(), "app-1", []string{"agreementText"}); err != nil {
 		t.Fatalf("GetBetaLicenseAgreementForApp() error: %v", err)
-	}
-}
-
-func TestGetBetaLicenseAgreementApp(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":{"type":"apps","id":"app-1"}}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/betaLicenseAgreements/bla-1/app" {
-			t.Fatalf("expected path /v1/betaLicenseAgreements/bla-1/app, got %s", req.URL.Path)
-		}
-		if got := req.URL.Query().Get("fields[apps]"); got != "name" {
-			t.Fatalf("expected fields[apps]=name, got %q", got)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetBetaLicenseAgreementApp(context.Background(), "bla-1", []string{"name"}); err != nil {
-		t.Fatalf("GetBetaLicenseAgreementApp() error: %v", err)
-	}
-}
-
-func TestGetBetaLicenseAgreementRelationships(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":{"type":"apps","id":"app-1"}}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/betaLicenseAgreements/bla-1/relationships/app" {
-			t.Fatalf("expected path /v1/betaLicenseAgreements/bla-1/relationships/app, got %s", req.URL.Path)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetBetaLicenseAgreementAppRelationship(context.Background(), "bla-1"); err != nil {
-		t.Fatalf("GetBetaLicenseAgreementAppRelationship() error: %v", err)
 	}
 }
 

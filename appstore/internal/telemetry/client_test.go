@@ -25,6 +25,19 @@ func TestDefaultEndpointUsesExistingRorkAPIRoute(t *testing.T) {
 	}
 }
 
+func TestDebugEnabledTreatsFalsyValuesAsDisabled(t *testing.T) {
+	for _, value := range []string{"", "0", "f", "false", "no", "n", "off", "OFF"} {
+		t.Setenv("ASC_DEBUG", value)
+		if debugEnabled() {
+			t.Fatalf("debugEnabled() = true for ASC_DEBUG=%q", value)
+		}
+	}
+	t.Setenv("ASC_DEBUG", "1")
+	if !debugEnabled() {
+		t.Fatal("debugEnabled() = false for ASC_DEBUG=1")
+	}
+}
+
 func TestEmitQueuesEventAndSwallowsWorkerStartErrors(t *testing.T) {
 	clearContextEnv(t)
 	setTelemetryTestHome(t)
@@ -37,7 +50,7 @@ func TestEmitQueuesEventAndSwallowsWorkerStartErrors(t *testing.T) {
 		return errors.New("process unavailable")
 	})
 
-	Emit("asc builds list", "1.2.3", time.Millisecond, 0)
+	EmitWithContext("asc builds list", "1.2.3", time.Millisecond, 0, EventContext{InvocationShape: InvocationShapeLeaf})
 	if !workerStarted {
 		t.Fatal("expected maintenance worker start")
 	}
@@ -73,7 +86,7 @@ func TestEmitQueuesEventWithoutForegroundHTTPDelivery(t *testing.T) {
 		return nil
 	})
 
-	Emit("asc builds list", "1.2.3", time.Millisecond, 0)
+	EmitWithContext("asc builds list", "1.2.3", time.Millisecond, 0, EventContext{InvocationShape: InvocationShapeLeaf})
 
 	if transportCalls != 0 {
 		t.Fatalf("foreground HTTP transport calls = %d, want 0", transportCalls)
@@ -100,7 +113,7 @@ func TestEmitHonorsDisabledEnv(t *testing.T) {
 		return nil
 	})
 
-	Emit("asc builds list", "1.2.3", time.Millisecond, 0)
+	EmitWithContext("asc builds list", "1.2.3", time.Millisecond, 0, EventContext{InvocationShape: InvocationShapeLeaf})
 	if records := readDefaultSpool(t); len(records) != 0 {
 		t.Fatalf("spool records = %d, want 0 when disabled", len(records))
 	}
@@ -118,7 +131,7 @@ func TestEmitMarksEphemeralRuntimeWithoutDisabling(t *testing.T) {
 		return nil
 	})
 
-	Emit("asc builds list", "1.2.3", time.Millisecond, 0)
+	EmitWithContext("asc builds list", "1.2.3", time.Millisecond, 0, EventContext{InvocationShape: InvocationShapeLeaf})
 	records := readDefaultSpool(t)
 	if len(records) != 1 {
 		t.Fatalf("spool records = %d, want 1", len(records))
@@ -143,7 +156,7 @@ func TestEmitCapturesEndpointOverrideInSpool(t *testing.T) {
 	t.Setenv(endpointEnvVar, "https://override.example.test/events")
 	stubMaintenanceWorkerStart(t, func() error { return nil })
 
-	Emit("asc builds list", "1.2.3", time.Millisecond, 0)
+	EmitWithContext("asc builds list", "1.2.3", time.Millisecond, 0, EventContext{InvocationShape: InvocationShapeLeaf})
 	records := readDefaultSpool(t)
 	if len(records) != 1 {
 		t.Fatalf("spool records = %d, want 1", len(records))
@@ -173,7 +186,7 @@ func TestEmitSkipsDefaultEndpointForUnstampedBuild(t *testing.T) {
 			t.Setenv(endpointEnvVar, test.endpoint)
 			stubMaintenanceWorkerStart(t, func() error { return nil })
 
-			Emit("asc workflow run", unstampedVersion, time.Millisecond, 0)
+			EmitWithContext("asc workflow run", unstampedVersion, time.Millisecond, 0, EventContext{InvocationShape: InvocationShapeLeaf})
 			if records := readDefaultSpool(t); len(records) != test.wantRecords {
 				t.Fatalf("spool records = %d, want %d", len(records), test.wantRecords)
 			}
@@ -192,7 +205,7 @@ func TestEmitDoesNotSpoolCredentialBearingEndpoint(t *testing.T) {
 		return nil
 	})
 
-	Emit("asc builds list", "1.2.3", time.Millisecond, 0)
+	EmitWithContext("asc builds list", "1.2.3", time.Millisecond, 0, EventContext{InvocationShape: InvocationShapeLeaf})
 	if records := readDefaultSpool(t); len(records) != 0 {
 		t.Fatalf("spool records = %d, want 0 for invalid endpoint", len(records))
 	}
@@ -287,21 +300,28 @@ func testSendHTTPEventHonorsConfiguredTimeoutBelowCap(t *testing.T) {
 }
 
 func TestSendHTTPEventAllowsSlowCollectorResponse(t *testing.T) {
-	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		time.Sleep(350 * time.Millisecond)
-		w.WriteHeader(http.StatusAccepted)
-	}))
-	t.Cleanup(server.Close)
-
 	originalClient := http.DefaultClient
-	http.DefaultClient = server.Client()
+	http.DefaultClient = &http.Client{
+		Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+			select {
+			case <-request.Context().Done():
+				return nil, request.Context().Err()
+			case <-time.After(350 * time.Millisecond):
+				return &http.Response{StatusCode: http.StatusAccepted, Body: http.NoBody, Request: request}, nil
+			}
+		}),
+	}
 	t.Cleanup(func() { http.DefaultClient = originalClient })
 
 	t.Setenv("ASC_TIMEOUT", "")
 	t.Setenv("ASC_TIMEOUT_SECONDS", "")
 	setTelemetryTestHome(t)
 
-	if err := sendHTTPEventToEndpoint(Event{}, server.URL); err != nil {
+	var err error
+	synctest.Test(t, func(*testing.T) {
+		err = sendHTTPEventToEndpoint(Event{}, "https://telemetry.example.test/events")
+	})
+	if err != nil {
 		t.Fatalf("sendHTTPEvent() error = %v, want slow collector response accepted", err)
 	}
 }

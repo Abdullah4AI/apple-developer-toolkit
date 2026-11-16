@@ -9,9 +9,9 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
-// DiffCommand returns the root diff command group.
-func DiffCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("diff", flag.ExitOnError)
+// NewDiffCommand returns the root diff command group built on d.
+func NewDiffCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("diff", flag.ExitOnError)
 
 	return &ffcli.Command{
 		Name:       "diff",
@@ -23,9 +23,9 @@ Examples:
   asc diff localizations --app "APP_ID" --path "./metadata/localizations" --version "VERSION_ID"
   asc diff localizations --app "APP_ID" --from-version "VERSION_ID_A" --to-version "VERSION_ID_B"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
-			DiffLocalizationsCommand(),
+			newDiffLocalizationsCommand(d),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp

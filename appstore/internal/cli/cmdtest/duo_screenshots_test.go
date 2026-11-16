@@ -8,10 +8,11 @@ import (
 	"testing"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asctest"
 )
 
 func TestScreenshotsSizesIPhoneDuo(t *testing.T) {
-	stdout, stderr, err := runRootCommand(t, []string{"screenshots", "sizes", "--display-type", "IPHONE_DUO", "--output", "json"})
+	stdout, stderr, err := runRootWithDeps(t, nil, []string{"screenshots", "sizes", "--display-type", "IPHONE_DUO", "--output", "json"}...)
 	if err != nil {
 		t.Fatalf("sizes: %v; stderr: %s", err, stderr)
 	}
@@ -38,23 +39,12 @@ func TestScreenshotsUploadIPhoneDuoDryRun(t *testing.T) {
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 	path := filepath.Join(t.TempDir(), "duo.png")
 	writePNG(t, path, 2007, 2853)
-	previous := http.DefaultTransport
-	t.Cleanup(func() { http.DefaultTransport = previous })
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("dry-run wrote %s %s", req.Method, req.URL.Path)
-		}
-		switch req.URL.Path {
-		case "/v1/appStoreVersionLocalizations/LOC_DUO/appScreenshotSets":
-			return screenshotsUploadJSONResponse(http.StatusOK, `{"data":[{"type":"appScreenshotSets","id":"set-duo","attributes":{"screenshotDisplayType":"APP_IPHONE_DUO"}}],"links":{}}`)
-		case "/v1/appScreenshotSets/set-duo/appScreenshots":
-			return screenshotsUploadJSONResponse(http.StatusOK, `{"data":[],"links":{}}`)
-		default:
-			t.Fatalf("unexpected request %s", req.URL.Path)
-			return nil, nil
-		}
-	})
-	stdout, stderr, err := runRootCommand(t, []string{"screenshots", "upload", "--version-localization", "LOC_DUO", "--path", path, "--device-type", "IPHONE_DUO", "--dry-run", "--output", "json"})
+	reg := asctest.NewRegistry(t)
+	reg.Register(asctest.GET("/v1/appStoreVersionLocalizations/LOC_DUO/appScreenshotSets"),
+		asctest.JSON(http.StatusOK, `{"data":[{"type":"appScreenshotSets","id":"set-duo","attributes":{"screenshotDisplayType":"APP_IPHONE_DUO"}}],"links":{}}`))
+	reg.Register(asctest.GET("/v1/appScreenshotSets/set-duo/appScreenshots"),
+		asctest.JSON(http.StatusOK, `{"data":[],"links":{}}`))
+	stdout, stderr, err := runRootWithDeps(t, stubClient(t, reg), []string{"screenshots", "upload", "--version-localization", "LOC_DUO", "--path", path, "--device-type", "IPHONE_DUO", "--dry-run", "--output", "json"}...)
 	if err != nil {
 		t.Fatalf("upload: %v; stderr: %s", err, stderr)
 	}

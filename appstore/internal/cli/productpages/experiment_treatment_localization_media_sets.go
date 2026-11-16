@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/kballard/go-shellquote"
@@ -15,11 +14,11 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
-var experimentTreatmentLocalizationMediaClientFactory = shared.GetASCClient
+const treatmentScreenshotSetsListCommand = "asc product-pages experiments treatments localizations screenshot-sets list --localization-id \"LOCALIZATION_ID\" --include-screenshots --paginate"
 
-// ExperimentTreatmentLocalizationPreviewSetsCommand returns the preview sets command group.
-func ExperimentTreatmentLocalizationPreviewSetsCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("preview-sets", flag.ExitOnError)
+// newExperimentTreatmentLocalizationPreviewSetsCommand returns the preview sets command group.
+func newExperimentTreatmentLocalizationPreviewSetsCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("preview-sets", flag.ExitOnError)
 
 	return &ffcli.Command{
 		Name:       "preview-sets",
@@ -31,10 +30,10 @@ Examples:
   asc product-pages experiments treatments localizations preview-sets list --localization-id "LOCALIZATION_ID"
   asc product-pages experiments treatments localizations preview-sets upload --localization-id "LOCALIZATION_ID" --path "./previews" --device-type "IPHONE_65"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
-			ExperimentTreatmentLocalizationPreviewSetsListCommand(),
-			ExperimentTreatmentLocalizationPreviewSetsUploadCommand(),
+			newExperimentTreatmentLocalizationPreviewSetsListCommand(d),
+			newExperimentTreatmentLocalizationPreviewSetsUploadCommand(d),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp
@@ -42,89 +41,44 @@ Examples:
 	}
 }
 
-// ExperimentTreatmentLocalizationPreviewSetsListCommand returns the preview sets list subcommand.
-func ExperimentTreatmentLocalizationPreviewSetsListCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("treatment-localizations preview-sets list", flag.ExitOnError)
-
-	localizationID := shared.BindResourceIDFlag(fs, "localization-id", "appStoreVersionExperimentTreatmentLocalizations", "Treatment localization ID")
-	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
-	next := fs.String("next", "", "Fetch next page using a links.next URL")
-	paginate := fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")
-	output := shared.BindOutputFlags(fs)
-
-	return &ffcli.Command{
-		Name:       "list",
-		ShortUsage: "asc product-pages experiments treatments localizations preview-sets list --localization-id \"LOCALIZATION_ID\"",
-		ShortHelp:  "List preview sets for a treatment localization.",
+// newExperimentTreatmentLocalizationPreviewSetsListCommand returns the preview sets list subcommand.
+func newExperimentTreatmentLocalizationPreviewSetsListCommand(d *shared.Deps) *ffcli.Command {
+	return shared.BuildPaginatedListCommand(shared.PaginatedListCommandConfig{
+		FlagSetName: "treatment-localizations preview-sets list",
+		Name:        "list",
+		ShortUsage:  "asc product-pages experiments treatments localizations preview-sets list --localization-id \"LOCALIZATION_ID\"",
+		ShortHelp:   "List preview sets for a treatment localization.",
 		LongHelp: `List preview sets for a treatment localization.
 
 Examples:
   asc product-pages experiments treatments localizations preview-sets list --localization-id "LOCALIZATION_ID"`,
-		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
-		Exec: func(ctx context.Context, args []string) error {
-			trimmedID := strings.TrimSpace(*localizationID)
-			trimmedNext := strings.TrimSpace(*next)
-			if trimmedID == "" && trimmedNext == "" {
-				fmt.Fprintln(os.Stderr, "Error: --localization-id is required")
-				return shared.MissingRequiredUsageError("--localization-id")
-			}
-			if *limit != 0 && (*limit < 1 || *limit > productPagesMaxLimit) {
-				return shared.UsageErrorf("experiments treatments localizations preview-sets list: --limit must be between 1 and %d", productPagesMaxLimit)
-			}
-			if err := shared.ValidateNextURL(*next); err != nil {
-				return shared.UsageErrorf("experiments treatments localizations preview-sets list: %v", err)
-			}
-
-			client, err := shared.GetASCClient()
-			if err != nil {
-				return fmt.Errorf("experiments treatments localizations preview-sets list: %w", err)
-			}
-
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
-			defer cancel()
-
-			opts := []asc.AppStoreVersionExperimentTreatmentLocalizationPreviewSetsOption{
-				asc.WithAppStoreVersionExperimentTreatmentLocalizationPreviewSetsLimit(*limit),
-				asc.WithAppStoreVersionExperimentTreatmentLocalizationPreviewSetsNextURL(*next),
-			}
-
-			if *paginate {
-				paginateOpts := append(opts, asc.WithAppStoreVersionExperimentTreatmentLocalizationPreviewSetsLimit(productPagesMaxLimit))
-				firstPage, err := client.GetAppStoreVersionExperimentTreatmentLocalizationPreviewSets(requestCtx, trimmedID, paginateOpts...)
-				if err != nil {
-					return fmt.Errorf("experiments treatments localizations preview-sets list: failed to fetch: %w", err)
-				}
-
-				resp, err := asc.PaginateAll(requestCtx, firstPage, func(ctx context.Context, nextURL string) (asc.PaginatedResponse, error) {
-					return client.GetAppStoreVersionExperimentTreatmentLocalizationPreviewSets(ctx, trimmedID, asc.WithAppStoreVersionExperimentTreatmentLocalizationPreviewSetsNextURL(nextURL))
-				})
-				if err != nil {
-					return fmt.Errorf("experiments treatments localizations preview-sets list: %w", err)
-				}
-
-				return shared.PrintOutput(resp, *output.Output, *output.Pretty)
-			}
-
-			resp, err := client.GetAppStoreVersionExperimentTreatmentLocalizationPreviewSets(requestCtx, trimmedID, opts...)
-			if err != nil {
-				return fmt.Errorf("experiments treatments localizations preview-sets list: failed to fetch: %w", err)
-			}
-
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+		ParentFlag:           "localization-id",
+		ParentUsage:          "Treatment localization ID",
+		ParentType:           "appStoreVersionExperimentTreatmentLocalizations",
+		RequiredDiagnostic:   true,
+		LimitMax:             productPagesMaxLimit,
+		PaginateIgnoresLimit: true,
+		NoSpinner:            true,
+		ErrorPrefix:          "experiments treatments localizations preview-sets list",
+		Deps:                 d,
+		FetchPage: func(ctx context.Context, client *asc.Client, id string, limit int, next string) (asc.PaginatedResponse, error) {
+			return client.GetAppStoreVersionExperimentTreatmentLocalizationPreviewSets(ctx, id,
+				asc.Limit[asc.AppStoreVersionExperimentTreatmentLocalizationPreviewSetsOption](limit),
+				asc.NextURL[asc.AppStoreVersionExperimentTreatmentLocalizationPreviewSetsOption](next),
+			)
 		},
-	}
+	})
 }
 
-// ExperimentTreatmentLocalizationPreviewSetsUploadCommand returns the preview sets upload subcommand.
-func ExperimentTreatmentLocalizationPreviewSetsUploadCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("treatment-localizations preview-sets upload", flag.ExitOnError)
+// newExperimentTreatmentLocalizationPreviewSetsUploadCommand returns the preview sets upload subcommand.
+func newExperimentTreatmentLocalizationPreviewSetsUploadCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("treatment-localizations preview-sets upload", flag.ExitOnError)
 
 	localizationID := shared.BindResourceIDFlag(fs, "localization-id", "appStoreVersionExperimentTreatmentLocalizations", "Treatment localization ID")
 	path := fs.String("path", "", "Path to preview file or directory")
 	deviceType := fs.String("device-type", "", "Device type (e.g., IPHONE_65)")
 	pollInterval := shared.BindMediaPollIntervalFlag(fs)
-	output := shared.BindOutputFlags(fs)
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "upload",
@@ -136,15 +90,15 @@ Examples:
   asc product-pages experiments treatments localizations preview-sets upload --localization-id "LOCALIZATION_ID" --path "./previews" --device-type "IPHONE_65"
   asc product-pages experiments treatments localizations preview-sets upload --localization-id "LOCALIZATION_ID" --path "./previews/en-US.mov" --device-type "IPHONE_65"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			ctx, pollErr := pollInterval.Apply(ctx)
 			if pollErr != nil {
 				return pollErr
 			}
-			result, err := executeExperimentTreatmentLocalizationPreviewUpload(ctx, *localizationID, *path, *deviceType)
+			result, err := executeExperimentTreatmentLocalizationPreviewUpload(ctx, d, *localizationID, *path, *deviceType)
 			if result != nil {
-				if printErr := shared.PrintOutput(result, *output.Output, *output.Pretty); printErr != nil {
+				if printErr := d.PrintOutput(result, *output.Output, *output.Pretty); printErr != nil {
 					return printErr
 				}
 			}
@@ -156,9 +110,9 @@ Examples:
 	}
 }
 
-// ExperimentTreatmentLocalizationScreenshotSetsCommand returns the screenshot sets command group.
-func ExperimentTreatmentLocalizationScreenshotSetsCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("screenshot-sets", flag.ExitOnError)
+// newExperimentTreatmentLocalizationScreenshotSetsCommand returns the screenshot sets command group.
+func newExperimentTreatmentLocalizationScreenshotSetsCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("screenshot-sets", flag.ExitOnError)
 
 	return &ffcli.Command{
 		Name:       "screenshot-sets",
@@ -171,11 +125,11 @@ Examples:
   asc product-pages experiments treatments localizations screenshot-sets upload --localization-id "LOCALIZATION_ID" --path "./screenshots" --device-type "IPHONE_65"
   asc product-pages experiments treatments localizations screenshot-sets sync --localization-id "LOCALIZATION_ID" --path "./screenshots" --device-type "IPHONE_65" --confirm`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
-			ExperimentTreatmentLocalizationScreenshotSetsListCommand(),
-			ExperimentTreatmentLocalizationScreenshotSetsUploadCommand(),
-			ExperimentTreatmentLocalizationScreenshotSetsSyncCommand(),
+			newExperimentTreatmentLocalizationScreenshotSetsListCommand(d),
+			newExperimentTreatmentLocalizationScreenshotSetsUploadCommand(d),
+			newExperimentTreatmentLocalizationScreenshotSetsSyncCommand(d),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp
@@ -183,16 +137,16 @@ Examples:
 	}
 }
 
-// ExperimentTreatmentLocalizationScreenshotSetsListCommand returns the screenshot sets list subcommand.
-func ExperimentTreatmentLocalizationScreenshotSetsListCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("treatment-localizations screenshot-sets list", flag.ExitOnError)
+// newExperimentTreatmentLocalizationScreenshotSetsListCommand returns the screenshot sets list subcommand.
+func newExperimentTreatmentLocalizationScreenshotSetsListCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("treatment-localizations screenshot-sets list", flag.ExitOnError)
 
 	localizationID := shared.BindResourceIDFlag(fs, "localization-id", "appStoreVersionExperimentTreatmentLocalizations", "Treatment localization ID")
-	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
-	next := fs.String("next", "", "Fetch next page using a links.next URL")
-	paginate := fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")
+	limit := fs.Int("limit", 0, shared.LimitFlagUsage(200))
+	next := fs.String("next", "", shared.NextFlagUsage)
+	paginate := fs.Bool("paginate", false, shared.PaginateFlagUsage)
 	includeScreenshots := fs.Bool("include-screenshots", false, "Include screenshot IDs and metadata for each set (requires --localization-id and --paginate)")
-	output := shared.BindOutputFlags(fs)
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "list",
@@ -204,41 +158,36 @@ Examples:
   asc product-pages experiments treatments localizations screenshot-sets list --localization-id "LOCALIZATION_ID"
   asc product-pages experiments treatments localizations screenshot-sets list --localization-id "LOCALIZATION_ID" --include-screenshots --paginate`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
+			if err := d.ValidatePaginationFlags(ctx, fs, "product-pages experiments treatments localizations screenshot-sets list", productPagesMaxLimit); err != nil {
+				return err
+			}
 			trimmedID := strings.TrimSpace(*localizationID)
 			trimmedNext := strings.TrimSpace(*next)
 			if *includeScreenshots {
 				if trimmedID == "" {
-					fmt.Fprintln(os.Stderr, "Error: --localization-id is required")
-					return shared.MissingRequiredUsageError("--localization-id")
+					return d.RequiredFlag("--localization-id")
 				}
 				if trimmedNext != "" {
-					return shared.UsageError("experiments treatments localizations screenshot-sets list: --include-screenshots cannot be combined with --next")
+					return d.UsageError("product-pages experiments treatments localizations screenshot-sets list: --next cannot be combined with --include-screenshots")
 				}
 				if !*paginate {
-					return shared.UsageError("experiments treatments localizations screenshot-sets list: --include-screenshots requires --paginate")
+					return d.UsageError("experiments treatments localizations screenshot-sets list: --include-screenshots requires --paginate")
 				}
 			}
 			if trimmedID == "" && trimmedNext == "" {
-				fmt.Fprintln(os.Stderr, "Error: --localization-id is required")
-				return shared.MissingRequiredUsageError("--localization-id")
-			}
-			if *limit != 0 && (*limit < 1 || *limit > productPagesMaxLimit) {
-				return shared.UsageErrorf("experiments treatments localizations screenshot-sets list: --limit must be between 1 and %d", productPagesMaxLimit)
-			}
-			if err := shared.ValidateNextURL(*next); err != nil {
-				return shared.UsageErrorf("experiments treatments localizations screenshot-sets list: %v", err)
+				return d.RequiredFlag("--localization-id")
 			}
 
-			client, err := shared.GetASCClient()
+			client, err := d.Client()
 			if err != nil {
 				return fmt.Errorf("experiments treatments localizations screenshot-sets list: %w", err)
 			}
 
 			opts := []asc.AppStoreVersionExperimentTreatmentLocalizationScreenshotSetsOption{
-				asc.WithAppStoreVersionExperimentTreatmentLocalizationScreenshotSetsLimit(*limit),
-				asc.WithAppStoreVersionExperimentTreatmentLocalizationScreenshotSetsNextURL(*next),
+				asc.Limit[asc.AppStoreVersionExperimentTreatmentLocalizationScreenshotSetsOption](*limit),
+				asc.NextURL[asc.AppStoreVersionExperimentTreatmentLocalizationScreenshotSetsOption](*next),
 			}
 			if *includeScreenshots {
 				opts = append(opts, asc.WithAppStoreVersionExperimentTreatmentLocalizationScreenshotSetsIncludeScreenshots())
@@ -249,8 +198,8 @@ Examples:
 				paginateOpts = append(paginateOpts, opts...)
 				paginateOpts = append(
 					paginateOpts,
-					asc.WithAppStoreVersionExperimentTreatmentLocalizationScreenshotSetsLimit(productPagesMaxLimit),
-					asc.WithAppStoreVersionExperimentTreatmentLocalizationScreenshotSetsRequestContext(shared.ContextWithTimeout),
+					asc.Limit[asc.AppStoreVersionExperimentTreatmentLocalizationScreenshotSetsOption](productPagesMaxLimit),
+					asc.WithAppStoreVersionExperimentTreatmentLocalizationScreenshotSetsRequestContext(d.Timeout),
 				)
 				resp, err := client.GetAllAppStoreVersionExperimentTreatmentLocalizationScreenshotSets(ctx, trimmedID, paginateOpts...)
 				if err != nil {
@@ -258,44 +207,45 @@ Examples:
 				}
 
 				if *includeScreenshots {
-					result, err := screenshotSetListResult(ctx, client, trimmedID, resp)
+					result, err := screenshotSetListResult(ctx, d, client, trimmedID, resp)
 					if err != nil {
 						return fmt.Errorf("experiments treatments localizations screenshot-sets list: %w", err)
 					}
-					return shared.PrintOutput(result, *output.Output, *output.Pretty)
+					return d.PrintOutput(result, *output.Output, *output.Pretty)
 				}
 
-				return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+				return d.PrintOutput(resp, *output.Output, *output.Pretty)
 			}
 
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
+			requestCtx, cancel := d.Timeout(ctx)
 			defer cancel()
 			resp, err := client.GetAppStoreVersionExperimentTreatmentLocalizationScreenshotSets(requestCtx, trimmedID, opts...)
 			if err != nil {
 				return fmt.Errorf("experiments treatments localizations screenshot-sets list: failed to fetch: %w", err)
 			}
 			if *includeScreenshots {
-				result, err := screenshotSetListResult(ctx, client, trimmedID, resp)
+				result, err := screenshotSetListResult(ctx, d, client, trimmedID, resp)
 				if err != nil {
 					return fmt.Errorf("experiments treatments localizations screenshot-sets list: %w", err)
 				}
-				return shared.PrintOutput(result, *output.Output, *output.Pretty)
+				return d.PrintOutput(result, *output.Output, *output.Pretty)
 			}
 
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+			return d.PrintOutput(resp, *output.Output, *output.Pretty)
 		},
 	}
 }
 
-// ExperimentTreatmentLocalizationScreenshotSetsUploadCommand returns the screenshot sets upload subcommand.
-func ExperimentTreatmentLocalizationScreenshotSetsUploadCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("treatment-localizations screenshot-sets upload", flag.ExitOnError)
+// newExperimentTreatmentLocalizationScreenshotSetsUploadCommand returns the screenshot sets upload subcommand.
+func newExperimentTreatmentLocalizationScreenshotSetsUploadCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("treatment-localizations screenshot-sets upload", flag.ExitOnError)
 
 	localizationID := shared.BindResourceIDFlag(fs, "localization-id", "appStoreVersionExperimentTreatmentLocalizations", "Treatment localization ID")
 	path := fs.String("path", "", "Path to screenshot file or directory")
 	deviceType := fs.String("device-type", "", "Device type (e.g., IPHONE_65)")
 	pollInterval := shared.BindMediaPollIntervalFlag(fs)
-	output := shared.BindOutputFlags(fs)
+	uploadFlags := assets.BindScreenshotSetUploadFlags(fs, treatmentScreenshotSetsListCommand)
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "upload",
@@ -307,31 +257,36 @@ Examples:
   asc product-pages experiments treatments localizations screenshot-sets upload --localization-id "LOCALIZATION_ID" --path "./screenshots" --device-type "IPHONE_65"
   asc product-pages experiments treatments localizations screenshot-sets upload --localization-id "LOCALIZATION_ID" --path "./screenshots/en-US.png" --device-type "IPHONE_65"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			ctx, pollErr := pollInterval.Apply(ctx)
 			if pollErr != nil {
 				return pollErr
 			}
-			result, err := executeExperimentTreatmentLocalizationScreenshotUpload(ctx, *localizationID, *path, *deviceType, false)
+			ctx, err := uploadFlags.Apply(ctx, "experiments treatments localizations screenshot-sets upload")
+			if err != nil {
+				return err
+			}
+			result, err := executeExperimentTreatmentLocalizationScreenshotUpload(ctx, d, *localizationID, *path, *deviceType, false, false)
 			if err != nil {
 				return fmt.Errorf("experiments treatments localizations screenshot-sets upload: %w", err)
 			}
-			return shared.PrintOutput(result, *output.Output, *output.Pretty)
+			return d.PrintOutput(result, *output.Output, *output.Pretty)
 		},
 	}
 }
 
-// ExperimentTreatmentLocalizationScreenshotSetsSyncCommand returns the screenshot sets sync subcommand.
-func ExperimentTreatmentLocalizationScreenshotSetsSyncCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("treatment-localizations screenshot-sets sync", flag.ExitOnError)
+// newExperimentTreatmentLocalizationScreenshotSetsSyncCommand returns the screenshot sets sync subcommand.
+func newExperimentTreatmentLocalizationScreenshotSetsSyncCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("treatment-localizations screenshot-sets sync", flag.ExitOnError)
 
 	localizationID := shared.BindResourceIDFlag(fs, "localization-id", "appStoreVersionExperimentTreatmentLocalizations", "Treatment localization ID")
 	path := fs.String("path", "", "Path to screenshot file or directory")
 	deviceType := fs.String("device-type", "", "Device type (e.g., IPHONE_65)")
 	confirm := fs.Bool("confirm", false, "Confirm sync (deletes existing media in the matching set before upload)")
 	pollInterval := shared.BindMediaPollIntervalFlag(fs)
-	output := shared.BindOutputFlags(fs)
+	uploadFlags := assets.BindScreenshotSetUploadFlags(fs, treatmentScreenshotSetsListCommand)
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "sync",
@@ -344,36 +299,36 @@ This replaces existing screenshots in the matching display-type set with files f
 Examples:
   asc product-pages experiments treatments localizations screenshot-sets sync --localization-id "LOCALIZATION_ID" --path "./screenshots" --device-type "IPHONE_65" --confirm`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			ctx, pollErr := pollInterval.Apply(ctx)
 			if pollErr != nil {
 				return pollErr
 			}
-			if !*confirm {
-				fmt.Fprintln(os.Stderr, "Error: --confirm is required to sync")
-				return shared.MissingRequiredUsageError("--confirm")
+			ctx, err := uploadFlags.Apply(ctx, "experiments treatments localizations screenshot-sets sync")
+			if err != nil {
+				return err
 			}
 
-			result, err := executeExperimentTreatmentLocalizationScreenshotUpload(ctx, *localizationID, *path, *deviceType, true)
+			result, err := executeExperimentTreatmentLocalizationScreenshotUpload(ctx, d, *localizationID, *path, *deviceType, true, *confirm)
 			if err != nil {
 				return fmt.Errorf("experiments treatments localizations screenshot-sets sync: %w", err)
 			}
-			return shared.PrintOutput(result, *output.Output, *output.Pretty)
+			return d.PrintOutput(result, *output.Output, *output.Pretty)
 		},
 	}
 }
 
 func executeExperimentTreatmentLocalizationPreviewUpload(
 	ctx context.Context,
+	d *shared.Deps,
 	localizationID, path, deviceType string,
 ) (*asc.ExperimentTreatmentLocalizationPreviewUploadResult, error) {
-	upload, err := uploadLocalizationPreviews(ctx, localizationPreviewUploadOptions{
+	upload, err := uploadLocalizationPreviews(ctx, d, localizationPreviewUploadOptions{
 		localizationID:           localizationID,
 		path:                     path,
 		deviceType:               deviceType,
 		invalidDeviceTypeIsUsage: true,
-		clientFactory:            experimentTreatmentLocalizationMediaClientFactory,
 		access: localizationPreviewSetAccess{
 			list: func(ctx context.Context, client *asc.Client, localizationID string) (*asc.AppPreviewSetsResponse, error) {
 				return client.GetAppStoreVersionExperimentTreatmentLocalizationPreviewSets(ctx, localizationID)
@@ -397,8 +352,9 @@ func executeExperimentTreatmentLocalizationPreviewUpload(
 
 func executeExperimentTreatmentLocalizationScreenshotUpload(
 	ctx context.Context,
+	d *shared.Deps,
 	localizationID, path, deviceType string,
-	sync bool,
+	sync, confirm bool,
 ) (*asc.ExperimentTreatmentLocalizationScreenshotUploadResult, error) {
 	trimmedLocalizationID := strings.TrimSpace(localizationID)
 	trimmedPath := strings.TrimSpace(path)
@@ -408,11 +364,12 @@ func executeExperimentTreatmentLocalizationScreenshotUpload(
 		Path:                     path,
 		DeviceType:               deviceType,
 		Replace:                  sync,
+		RequireConfirm:           func() error { return d.RequireConfirm(confirm) },
 		InspectCommand:           fmt.Sprintf("asc product-pages experiments treatments localizations screenshot-sets list --localization-id %q --include-screenshots --paginate --output json", trimmedLocalizationID),
 		ReplaceCommand:           shellquote.Join("asc", "product-pages", "experiments", "treatments", "localizations", "screenshot-sets", "sync", "--localization-id", trimmedLocalizationID, "--path", trimmedPath, "--device-type", trimmedDeviceType, "--confirm"),
 		InvalidDeviceTypeIsUsage: true,
-		ClientFactory:            experimentTreatmentLocalizationMediaClientFactory,
-		RequestContext:           shared.ContextWithTimeout,
+		ClientFactory:            d.Client,
+		RequestContext:           d.Timeout,
 		UploadContext:            assets.ContextWithAssetUploadTimeout,
 		Access: assets.ScreenshotSetAccess{
 			List: func(ctx context.Context, client *asc.Client, localizationID string, requestContext asc.RequestContextFunc) (*asc.AppScreenshotSetsResponse, error) {

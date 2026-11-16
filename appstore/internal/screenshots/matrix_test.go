@@ -20,6 +20,7 @@ import (
 	"sync"
 	"syscall"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/rootfs"
@@ -71,7 +72,7 @@ func TestLoadMatrixPlanAndExpand_UsesStableAxisOrder(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadPlan() error = %v", err)
 	}
-	cells, err := ExpandMatrix(matrix, base)
+	cells, err := expandMatrix(matrix, base, "")
 	if err != nil {
 		t.Fatalf("ExpandMatrix() error = %v", err)
 	}
@@ -293,7 +294,7 @@ func TestExpandMatrixPreservesLiteralOutputDirectorySpelling(t *testing.T) {
 		ContentVariants: []MatrixContentVariant{{ID: "default"}},
 		Output:          MatrixOutput{RawDir: "raw screenshots ", FramedDir: "framed screenshots ", ReviewDir: "review screenshots "},
 	}
-	cells, err := ExpandMatrix(plan, base)
+	cells, err := expandMatrix(plan, base, "")
 	if err != nil {
 		t.Fatalf("ExpandMatrix() error = %v", err)
 	}
@@ -650,7 +651,7 @@ func TestValidateMatrixPlan_RejectsUnsafeAndConflictingValues(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := ValidateMatrixPlan(&tc.plan, base)
+			err := validateMatrixPlan(&tc.plan, base, "")
 			if err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Fatalf("ValidateMatrixPlan() error = %v, want substring %q", err, tc.want)
 			}
@@ -661,13 +662,13 @@ func TestValidateMatrixPlan_RejectsUnsafeAndConflictingValues(t *testing.T) {
 		{Action: ActionScreenshot, Name: stringPtr("Home")},
 		{Action: ActionScreenshot, Name: stringPtr("home")},
 	}
-	if err := ValidateMatrixPlan(&MatrixPlan{
+	if err := validateMatrixPlan(&MatrixPlan{
 		Version:         1,
 		Devices:         []MatrixDevice{{ID: "phone", UDID: "u"}},
 		Locales:         []string{"en-US"},
 		Appearances:     []string{"light"},
 		ContentVariants: []MatrixContentVariant{{ID: "default"}},
-	}, &caseInsensitiveScreenshots); err == nil || !strings.Contains(err.Error(), "unique") {
+	}, &caseInsensitiveScreenshots, ""); err == nil || !strings.Contains(err.Error(), "unique") {
 		t.Fatalf("ValidateMatrixPlan() error = %v, want case-insensitive screenshot-name collision", err)
 	}
 }
@@ -781,7 +782,7 @@ func TestValidateMatrixPlanFrameMappings(t *testing.T) {
 				ContentVariants: []MatrixContentVariant{{ID: "default"}},
 				Output:          MatrixOutput{Frame: tc.frame},
 			}
-			err := ValidateMatrixPlan(plan, base)
+			err := validateMatrixPlan(plan, base, "")
 			if tc.wantErr == "" {
 				if err != nil {
 					t.Fatalf("ValidateMatrixPlan() error = %v, want syntax-only frame validation", err)
@@ -2528,6 +2529,111 @@ cp "$AXE_TEMPLATE_PNG" "$out"
 	}
 }
 
+func TestRunMatrixAppliesAndClearsStatusBarOncePerCell(t *testing.T) {
+	tests := []struct {
+		name         string
+		axeFail      string
+		failFirst    bool
+		wantCalls    []string
+		wantStatuses []string
+		wantCodes    []string
+	}{
+		{
+			name:         "retried attempt stays inside one apply and clear",
+			failFirst:    true,
+			wantCalls:    []string{"status-bar preset", "launch", "capture", "launch", "capture", "status-bar clear", "status-bar preset", "launch", "capture", "status-bar clear"},
+			wantStatuses: []string{MatrixCellSuccess, MatrixCellSuccess},
+			wantCodes:    []string{"", ""},
+		},
+		{
+			name:         "failed clear keeps screenshots and blocks the simulator",
+			axeFail:      "clear",
+			wantCalls:    []string{"status-bar preset", "launch", "capture", "status-bar clear"},
+			wantStatuses: []string{MatrixCellCleanupFailed, MatrixCellFailed},
+			wantCodes:    []string{"status_bar_clear_failed", "simulator_blocked_after_cleanup_failure"},
+		},
+		{
+			name:         "failed apply runs no steps",
+			axeFail:      "preset",
+			wantCalls:    []string{"status-bar preset", "status-bar clear", "status-bar preset", "status-bar clear"},
+			wantStatuses: []string{MatrixCellFailed, MatrixCellFailed},
+			wantCodes:    []string{"status_bar_apply_failed", "status_bar_apply_failed"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			binDir := t.TempDir()
+			basePath := filepath.Join(dir, "base.json")
+			matrixPath := filepath.Join(dir, "matrix.json")
+			callLog := filepath.Join(dir, "calls.log")
+			axeTemplate := filepath.Join(dir, "template.png")
+			writeMinimalPNG(t, axeTemplate, 10, 10)
+			writeMatrixTestFile(t, basePath, `{"version":1,"app":{"bundle_id":"com.example.app"},"defaults":{"status_bar":"screenshot"},"steps":[{"action":"launch"},{"action":"screenshot","name":"home"}]}`)
+			writeMatrixTestFile(t, matrixPath, `{"version":1,"base_plan":"base.json","devices":[{"id":"phone","udid":"SIM-UDID"}],"locales":["en-US"],"appearances":["light"],"content_variants":[{"id":"first"},{"id":"second"}],"execution":{"max_attempts":2,"retry_backoff_ms":0},"output":{"raw_dir":"raw","review_dir":"review"}}`)
+			writeExecutable(t, filepath.Join(binDir, "xcrun"), `#!/bin/sh
+printf 'launch\n' >> "$CALL_LOG"
+`)
+			writeExecutable(t, filepath.Join(binDir, "axe"), `#!/bin/sh
+set -eu
+if [ "$2" = "status-bar" ]; then
+  printf 'status-bar %s\n' "$3" >> "$CALL_LOG"
+  if [ "$3" = "$AXE_FAIL" ]; then exit 1; fi
+  exit 0
+fi
+printf 'capture\n' >> "$CALL_LOG"
+if [ -n "$FAIL_FIRST" ] && [ ! -f "$CALL_LOG.failed" ]; then touch "$CALL_LOG.failed"; exit 1; fi
+out=""
+while [ "$#" -gt 0 ]; do
+  if [ "$1" = "--output" ]; then out="$2"; break; fi
+  shift
+done
+cp "$AXE_TEMPLATE_PNG" "$out"
+`)
+			failFirst := ""
+			if tt.failFirst {
+				failFirst = "1"
+			}
+			t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+			t.Setenv("CALL_LOG", callLog)
+			t.Setenv("AXE_FAIL", tt.axeFail)
+			t.Setenv("FAIL_FIRST", failFirst)
+			t.Setenv("AXE_TEMPLATE_PNG", axeTemplate)
+
+			matrixPlan, err := LoadMatrixPlan(matrixPath)
+			if err != nil {
+				t.Fatalf("LoadMatrixPlan() error = %v", err)
+			}
+			result, _ := RunMatrixWithDependencies(context.Background(), matrixPath, matrixPlan, MatrixOptions{}, MatrixDependencies{Appearance: &matrixTestAppearance{}})
+			data, err := os.ReadFile(callLog)
+			if err != nil {
+				t.Fatalf("ReadFile(%q) error = %v", callLog, err)
+			}
+			if calls := strings.Split(strings.TrimSpace(string(data)), "\n"); !reflect.DeepEqual(calls, tt.wantCalls) {
+				t.Fatalf("calls = %q, want %q", calls, tt.wantCalls)
+			}
+			for i, cell := range result.Cells {
+				if cell.Status != tt.wantStatuses[i] || cell.FailureCode != tt.wantCodes[i] {
+					t.Fatalf("cell %d = %s %q, want %s %q", i, cell.Status, cell.FailureCode, tt.wantStatuses[i], tt.wantCodes[i])
+				}
+			}
+			switch tt.axeFail {
+			case "clear":
+				if shot := result.Cells[0].Screenshots[0]; shot.Status != MatrixCellSuccess || shot.RawPath == "" {
+					t.Fatalf("first cell screenshot = %+v, want it kept as produced", shot)
+				}
+				if blocked := result.Cells[1]; blocked.FailureStage != "cleanup" || blocked.Error.Message != "simulator blocked after status bar cleanup failure" {
+					t.Fatalf("blocked cell = %s %q, want cleanup stage blocked by the status bar", blocked.FailureStage, blocked.Error.Message)
+				}
+			case "preset":
+				if result.Cells[0].Attempts != 0 {
+					t.Fatalf("attempts = %d, want none after a failed apply", result.Cells[0].Attempts)
+				}
+			}
+		})
+	}
+}
+
 func TestRunMatrixLateCancellationAfterCompletedCellsStillSucceeds(t *testing.T) {
 	dir := t.TempDir()
 	basePath := filepath.Join(dir, "base.json")
@@ -2848,7 +2954,7 @@ func TestRunMatrix_CleanupFailureBlocksLaterCellsOnSameSimulator(t *testing.T) {
 	if runErr == nil {
 		t.Fatal("expected cleanup failure")
 	}
-	if result.Cells[0].Status != MatrixCellCleanupFailed || result.Cells[1].FailureCode != "simulator_blocked_after_cleanup_failure" {
+	if result.Cells[0].Status != MatrixCellCleanupFailed || result.Cells[1].FailureStage != "appearance" || result.Cells[1].FailureCode != "simulator_blocked_after_cleanup_failure" || result.Cells[1].Error.Message != "simulator blocked after appearance cleanup failure" {
 		t.Fatalf("unexpected cleanup result: %+v", result.Cells)
 	}
 	if appearance.restoreCount != 1 {
@@ -3125,7 +3231,7 @@ func TestValidateMatrixPlanExecutionSettings(t *testing.T) {
 			if err != nil {
 				t.Fatalf("LoadMatrixPlan() error = %v", err)
 			}
-			err = ValidateMatrixPlan(plan, base)
+			err = validateMatrixPlan(plan, base, "")
 			if tt.wantErr == "" {
 				if err != nil {
 					t.Fatalf("ValidateMatrixPlan() error = %v, want accepted", err)
@@ -3545,7 +3651,7 @@ func TestValidateMatrixPlanBoundsRetryBackoffMillisecondsToDuration(t *testing.T
 				ContentVariants: []MatrixContentVariant{{ID: "default"}},
 				Execution:       MatrixExecution{RetryBackoffMS: int(test.value)},
 			}
-			err := ValidateMatrixPlan(plan, base)
+			err := validateMatrixPlan(plan, base, "")
 			if test.wantErr {
 				if err == nil || !strings.Contains(err.Error(), "execution.retry_backoff_ms exceeds maximum duration") {
 					t.Fatalf("ValidateMatrixPlan() error = %v, want retry-backoff overflow rejection", err)
@@ -4558,7 +4664,7 @@ ln -s "$MATRIX_OUTSIDE" "$scratch"
 	name := "home"
 	plan := &Plan{
 		Version: 1,
-		App:     PlanApp{BundleID: "com.example.app", OutputDir: destinationPath},
+		App:     PlanApp{BundleID: "com.example.app", UDID: "SIM-UDID", OutputDir: destinationPath},
 		Steps:   []PlanStep{{Action: ActionScreenshot, Name: &name}},
 	}
 	result, err := runPlanWithRoot(context.Background(), plan, root)
@@ -6030,7 +6136,10 @@ func TestRevalidateMatrixFramedPathsUsesPerArtifactBudget(t *testing.T) {
 		deadlines = append(deadlines, deadline)
 	}
 	t.Cleanup(func() { matrixFramedVerificationContextForTest = previousContextHook })
-	if err := revalidateMatrixFramedPathsWithRoot(context.Background(), result, 20*time.Millisecond, nil); err != nil {
+	synctest.Test(t, func(*testing.T) {
+		err = revalidateMatrixFramedPathsWithRoot(context.Background(), result, 20*time.Millisecond, nil)
+	})
+	if err != nil {
 		t.Fatalf("revalidateMatrixFramedPathsWithRoot() error = %v, want each artifact to receive its own budget", err)
 	}
 	if got := result.Cells[0].FramedPaths; !reflect.DeepEqual(got, paths) {
@@ -6182,7 +6291,10 @@ func TestRevalidateMatrixFramedPathsChildTimeoutKeepsPartialReviewTruth(t *testi
 		}
 	}
 	t.Cleanup(func() { matrixFramedVerificationContextForTest = previousHook })
-	if err := revalidateMatrixFramedPathsWithRoot(context.Background(), result, 20*time.Millisecond, nil); err == nil {
+	synctest.Test(t, func(*testing.T) {
+		err = revalidateMatrixFramedPathsWithRoot(context.Background(), result, 20*time.Millisecond, nil)
+	})
+	if err == nil {
 		t.Fatal("revalidateMatrixFramedPathsWithRoot() error = nil, want child timeout")
 	} else if errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("revalidateMatrixFramedPathsWithRoot() error = %v, want bounded non-context failure", err)
@@ -6581,7 +6693,10 @@ func TestRevalidateMatrixRawPathsUsesPerArtifactBudget(t *testing.T) {
 	}
 	t.Cleanup(func() { matrixRawVerificationContextForTest = previousContextHook })
 
-	if err := revalidateMatrixRawPathsWithRoot(context.Background(), result, 20*time.Millisecond, nil); err != nil {
+	synctest.Test(t, func(*testing.T) {
+		err = revalidateMatrixRawPathsWithRoot(context.Background(), result, 20*time.Millisecond, nil)
+	})
+	if err != nil {
 		t.Fatalf("revalidateMatrixRawPathsWithRoot() error = %v, want each artifact to receive its own budget", err)
 	}
 	if got := result.Cells[0].RawPaths; !reflect.DeepEqual(got, paths) {

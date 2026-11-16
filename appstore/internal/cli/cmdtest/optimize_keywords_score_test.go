@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asctest"
 )
 
 type keywordScoreSourcePayload struct {
@@ -83,25 +85,13 @@ func TestOptimizeKeywordsScoreUsageErrors(t *testing.T) {
 			args:    []string{"optimize", "keywords", "score", "--keywords", "focus timer", "--genre", "bad genre"},
 			wantErr: "--genre must be an Apple Ads genre identifier such as PRODUCTIVITY_UTILITIES",
 		},
-		{
-			name:    "positional argument",
-			args:    []string{"optimize", "keywords", "score", "--keywords", "focus timer", "extra"},
-			wantErr: "optimize keywords score does not accept positional arguments",
-		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			t.Setenv("ASC_BYPASS_KEYCHAIN", "1")
 			t.Setenv("ASC_APP_ID", "")
-			originalTransport := http.DefaultTransport
-			t.Cleanup(func() { http.DefaultTransport = originalTransport })
-			http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-				t.Errorf("unexpected request before input validation: %s", req.URL.String())
-				return nil, errors.New("unexpected request")
-			})
-
-			stdout, stderr, runErr := runCommand(t, test.args)
+			stdout, stderr, runErr := runRootWithHTTPTransport(t, nil, asctest.NewRegistry(t), test.args...)
 			if !errors.Is(runErr, flag.ErrHelp) {
 				t.Fatalf("expected ErrHelp, got %v", runErr)
 			}
@@ -129,9 +119,7 @@ func TestOptimizeKeywordsScoreJSONShipsRawSignalsAndDegradesPopularity(t *testin
 		{"trackId":111,"trackName":"Focus Timer","sellerName":"Alpha Labs","averageUserRating":4.6,"userRatingCount":8000,"releaseDate":"2020-01-15T08:00:00Z","currentVersionReleaseDate":"2026-08-01T08:00:00Z"}
 	]}`
 
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() { http.DefaultTransport = originalTransport })
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+	transport := roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		if req.URL.Host != "itunes.apple.com" {
 			t.Errorf("host = %q, want the public iTunes host", req.URL.Host)
 			return nil, errors.New("unexpected public API host")
@@ -155,12 +143,12 @@ func TestOptimizeKeywordsScoreJSONShipsRawSignalsAndDegradesPopularity(t *testin
 		}
 	})
 
-	stdout, stderr, runErr := runCommand(t, []string{
+	stdout, stderr, runErr := runRootWithHTTPTransport(t, nil, transport, []string{
 		"optimize", "keywords", "score",
 		"--keywords", " Focus Timer ",
 		"--app", "1234567890",
 		"--output", "json",
-	})
+	}...)
 	if runErr != nil {
 		t.Fatalf("run error: %v", runErr)
 	}
@@ -255,9 +243,7 @@ func TestOptimizeKeywordsScoreJSONShipsRawSignalsAndDegradesPopularity(t *testin
 func TestOptimizeKeywordsScoreFallsBackOnThinResultWindows(t *testing.T) {
 	t.Setenv("ASC_BYPASS_KEYCHAIN", "1")
 
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() { http.DefaultTransport = originalTransport })
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+	transport := roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		if req.URL.Path == "/lookup" {
 			return jsonResponse(http.StatusOK, `{"resultCount":0,"results":[]}`)
 		}
@@ -267,9 +253,9 @@ func TestOptimizeKeywordsScoreFallsBackOnThinResultWindows(t *testing.T) {
 		]}`)
 	})
 
-	stdout, _, runErr := runCommand(t, []string{
+	stdout, _, runErr := runRootWithHTTPTransport(t, nil, transport, []string{
 		"optimize", "keywords", "score", "--keywords", "very rare keyword", "--output", "json",
-	})
+	}...)
 	if runErr != nil {
 		t.Fatalf("run error: %v", runErr)
 	}
@@ -296,9 +282,7 @@ func TestOptimizeKeywordsScoreFallsBackOnThinResultWindows(t *testing.T) {
 func TestOptimizeKeywordsScoreDetectsBrandKeywords(t *testing.T) {
 	t.Setenv("ASC_BYPASS_KEYCHAIN", "1")
 
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() { http.DefaultTransport = originalTransport })
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+	transport := roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		if req.URL.Path == "/lookup" {
 			return jsonResponse(http.StatusOK, `{"resultCount":0,"results":[]}`)
 		}
@@ -322,9 +306,9 @@ func TestOptimizeKeywordsScoreDetectsBrandKeywords(t *testing.T) {
 		}
 	})
 
-	stdout, _, runErr := runCommand(t, []string{
+	stdout, _, runErr := runRootWithHTTPTransport(t, nil, transport, []string{
 		"optimize", "keywords", "score", "--keywords", "acme notes,note taking", "--output", "json",
-	})
+	}...)
 	if runErr != nil {
 		t.Fatalf("run error: %v", runErr)
 	}

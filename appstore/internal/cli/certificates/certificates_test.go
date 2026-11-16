@@ -19,12 +19,25 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
+func certificatesTestDeps(client func() (*asc.Client, error)) *shared.Deps {
+	return &shared.Deps{
+		Client:  client,
+		IO:      &shared.IO{In: strings.NewReader(""), Out: io.Discard, ErrOut: io.Discard},
+		Now:     time.Now,
+		Timeout: shared.ContextWithTimeout,
+		Getwd:   os.Getwd,
+	}
+}
+
 func TestCertificatesCreateCommand_MissingType(t *testing.T) {
-	cmd := CertificatesCreateCommand()
+	d := certificatesTestDeps(nil)
+	cmd := newCertificatesCreateCommand(d)
 
 	if err := cmd.FlagSet.Parse([]string{"--csr", "./cert.csr"}); err != nil {
 		t.Fatalf("failed to parse flags: %v", err)
@@ -36,7 +49,8 @@ func TestCertificatesCreateCommand_MissingType(t *testing.T) {
 }
 
 func TestCertificatesCreateCommand_MissingCSR(t *testing.T) {
-	cmd := CertificatesCreateCommand()
+	d := certificatesTestDeps(nil)
+	cmd := newCertificatesCreateCommand(d)
 
 	if err := cmd.FlagSet.Parse([]string{"--certificate-type", "IOS_DISTRIBUTION"}); err != nil {
 		t.Fatalf("failed to parse flags: %v", err)
@@ -48,7 +62,8 @@ func TestCertificatesCreateCommand_MissingCSR(t *testing.T) {
 }
 
 func TestCertificatesCreateCommand_CSRAndGenerateCSRAreMutuallyExclusive(t *testing.T) {
-	cmd := CertificatesCreateCommand()
+	d := certificatesTestDeps(nil)
+	cmd := newCertificatesCreateCommand(d)
 
 	if err := cmd.FlagSet.Parse([]string{
 		"--certificate-type", "IOS_DISTRIBUTION",
@@ -71,14 +86,12 @@ func TestCertificatesCreateCommand_PassTypeCertificateRequiresPassTypeIDBeforeCS
 	keyOut := filepath.Join(dir, "pass.key")
 	csrOut := filepath.Join(dir, "pass.csr")
 
-	originalGetClient := getCertificatesASCClient
-	getCertificatesASCClient = func() (*asc.Client, error) {
+	d := certificatesTestDeps(func() (*asc.Client, error) {
 		t.Fatal("ASC client should not be resolved when --pass-type-id is missing")
 		return nil, nil
-	}
-	t.Cleanup(func() { getCertificatesASCClient = originalGetClient })
+	})
 
-	cmd := CertificatesCreateCommand()
+	cmd := newCertificatesCreateCommand(d)
 	if err := cmd.FlagSet.Parse([]string{
 		"--certificate-type", "PASS_TYPE_ID",
 		"--generate-csr",
@@ -105,14 +118,12 @@ func TestCertificatesCreateCommand_PassTypeIDRejectsIncompatibleTypeBeforeCSRGen
 	keyOut := filepath.Join(dir, "distribution.key")
 	csrOut := filepath.Join(dir, "distribution.csr")
 
-	originalGetClient := getCertificatesASCClient
-	getCertificatesASCClient = func() (*asc.Client, error) {
+	d := certificatesTestDeps(func() (*asc.Client, error) {
 		t.Fatal("ASC client should not be resolved for an incompatible --pass-type-id")
 		return nil, nil
-	}
-	t.Cleanup(func() { getCertificatesASCClient = originalGetClient })
+	})
 
-	cmd := CertificatesCreateCommand()
+	cmd := newCertificatesCreateCommand(d)
 	if err := cmd.FlagSet.Parse([]string{
 		"--certificate-type", "IOS_DISTRIBUTION",
 		"--pass-type-id", "pass-123",
@@ -173,11 +184,9 @@ func TestCertificatesCreateCommand_PassTypeIDRelationship(t *testing.T) {
 	}
 	client := newCertificatesTestClient(t, transport)
 
-	originalGetClient := getCertificatesASCClient
-	getCertificatesASCClient = func() (*asc.Client, error) { return client, nil }
-	t.Cleanup(func() { getCertificatesASCClient = originalGetClient })
+	d := certificatesTestDeps(func() (*asc.Client, error) { return client, nil })
 
-	cmd := CertificatesCreateCommand()
+	cmd := newCertificatesCreateCommand(d)
 	if err := cmd.FlagSet.Parse([]string{
 		"--certificate-type", "pass_type_id",
 		"--pass-type-id", "  pass-123  ",
@@ -224,11 +233,9 @@ func TestCertificatesCreateCommand_GenerateCSRCreatesFilesAndPostsCSR(t *testing
 		return jsonHTTPResponse(http.StatusCreated, `{"data":{"type":"certificates","id":"cert-1","attributes":{"name":"Cert","certificateType":"IOS_DISTRIBUTION"}}}`), nil
 	}))
 
-	originalGetClient := getCertificatesASCClient
-	getCertificatesASCClient = func() (*asc.Client, error) { return client, nil }
-	t.Cleanup(func() { getCertificatesASCClient = originalGetClient })
+	d := certificatesTestDeps(func() (*asc.Client, error) { return client, nil })
 
-	cmd := CertificatesCreateCommand()
+	cmd := newCertificatesCreateCommand(d)
 	if err := cmd.FlagSet.Parse([]string{
 		"--certificate-type", "IOS_DISTRIBUTION",
 		"--generate-csr",
@@ -291,9 +298,7 @@ func TestCertificatesCreateCommand_GenerateCSRPreservesUnicodeSubject(t *testing
 		return jsonHTTPResponse(http.StatusCreated, `{"data":{"type":"certificates","id":"cert-1","attributes":{"name":"Cert","certificateType":"IOS_DISTRIBUTION"}}}`), nil
 	}))
 
-	originalGetClient := getCertificatesASCClient
-	getCertificatesASCClient = func() (*asc.Client, error) { return client, nil }
-	t.Cleanup(func() { getCertificatesASCClient = originalGetClient })
+	d := certificatesTestDeps(func() (*asc.Client, error) { return client, nil })
 
 	const (
 		commonName         = "Jos\u00e9 \u0141ukasz"
@@ -301,7 +306,7 @@ func TestCertificatesCreateCommand_GenerateCSRPreservesUnicodeSubject(t *testing
 		organizationalUnit = "Cr\u00e9dentials"
 	)
 
-	cmd := CertificatesCreateCommand()
+	cmd := newCertificatesCreateCommand(d)
 	if err := cmd.FlagSet.Parse([]string{
 		"--certificate-type", "IOS_DISTRIBUTION",
 		"--generate-csr",
@@ -380,11 +385,9 @@ func TestCertificatesCreateCommand_GenerateCSRWriteFailures(t *testing.T) {
 				t.Fatalf("ASC request should not be sent when CSR artifacts cannot be written")
 				return nil, nil
 			}))
-			originalGetClient := getCertificatesASCClient
-			getCertificatesASCClient = func() (*asc.Client, error) { return client, nil }
-			t.Cleanup(func() { getCertificatesASCClient = originalGetClient })
+			d := certificatesTestDeps(func() (*asc.Client, error) { return client, nil })
 
-			cmd := CertificatesCreateCommand()
+			cmd := newCertificatesCreateCommand(d)
 			if err := cmd.FlagSet.Parse([]string{
 				"--certificate-type", "IOS_DISTRIBUTION",
 				"--generate-csr",
@@ -428,7 +431,7 @@ func TestValidateCSRPairOutputPathsCleansAbsolutePaths(t *testing.T) {
 	keyOut := filepath.Join(dir, "output")
 	csrOut := filepath.Join(dir, "discard") + string(filepath.Separator) + ".." + string(filepath.Separator) + "output" + string(filepath.Separator) + "request.csr"
 
-	err := validateCSRPairOutputPaths(keyOut, csrOut)
+	err := validateCSRPairOutputPaths(certificatesTestDeps(nil), keyOut, csrOut)
 	if !errors.Is(err, flag.ErrHelp) {
 		t.Fatalf("validateCSRPairOutputPaths() error = %v, want flag.ErrHelp", err)
 	}
@@ -438,7 +441,8 @@ func TestValidateCSRPairOutputPathsCleansAbsolutePaths(t *testing.T) {
 }
 
 func TestCertificatesRevokeCommand_MissingID(t *testing.T) {
-	cmd := CertificatesRevokeCommand()
+	d := certificatesTestDeps(nil)
+	cmd := newCertificatesRevokeCommand(d)
 
 	if err := cmd.FlagSet.Parse([]string{"--confirm"}); err != nil {
 		t.Fatalf("failed to parse flags: %v", err)
@@ -488,7 +492,8 @@ func jsonHTTPResponse(status int, body string) *http.Response {
 }
 
 func TestCertificatesRevokeCommand_MissingConfirm(t *testing.T) {
-	cmd := CertificatesRevokeCommand()
+	d := certificatesTestDeps(nil)
+	cmd := newCertificatesRevokeCommand(d)
 
 	if err := cmd.FlagSet.Parse([]string{"--id", "CERT_ID"}); err != nil {
 		t.Fatalf("failed to parse flags: %v", err)
@@ -500,7 +505,8 @@ func TestCertificatesRevokeCommand_MissingConfirm(t *testing.T) {
 }
 
 func TestCertificatesGetCommand_MissingID(t *testing.T) {
-	cmd := CertificatesGetCommand()
+	d := certificatesTestDeps(nil)
+	cmd := newCertificatesGetCommand(d)
 
 	if err := cmd.FlagSet.Parse([]string{}); err != nil {
 		t.Fatalf("failed to parse flags: %v", err)
@@ -528,11 +534,9 @@ func TestCertificatesCreateCommand_PostsCanonicalCertificateType(t *testing.T) {
 		return jsonHTTPResponse(http.StatusCreated, `{"data":{"type":"certificates","id":"cert-1","attributes":{"name":"Cert","certificateType":"IOS_DISTRIBUTION"}}}`), nil
 	}))
 
-	originalGetClient := getCertificatesASCClient
-	getCertificatesASCClient = func() (*asc.Client, error) { return client, nil }
-	t.Cleanup(func() { getCertificatesASCClient = originalGetClient })
+	d := certificatesTestDeps(func() (*asc.Client, error) { return client, nil })
 
-	cmd := CertificatesCreateCommand()
+	cmd := newCertificatesCreateCommand(d)
 	if err := cmd.FlagSet.Parse([]string{
 		"--certificate-type", "ios-distribution",
 		"--generate-csr",
@@ -558,7 +562,8 @@ func TestCertificatesCreateCommand_PassTypeRequirementSurvivesNonCanonicalSpelli
 	keyOut := filepath.Join(dir, "pass.key")
 	csrOut := filepath.Join(dir, "pass.csr")
 
-	cmd := CertificatesCreateCommand()
+	d := certificatesTestDeps(nil)
+	cmd := newCertificatesCreateCommand(d)
 	if err := cmd.FlagSet.Parse([]string{
 		"--certificate-type", "pass-type-id",
 		"--generate-csr",
@@ -581,7 +586,8 @@ func TestCertificatesCreateCommand_PassTypeRequirementSurvivesNonCanonicalSpelli
 }
 
 func TestCertificatesCreateCommand_HelpListsEveryCreatableType(t *testing.T) {
-	cmd := CertificatesCreateCommand()
+	d := certificatesTestDeps(nil)
+	cmd := newCertificatesCreateCommand(d)
 	usage := cmd.FlagSet.Lookup("certificate-type").Usage
 	for _, value := range []string{"APPLE_PAY_MERCHANT_IDENTITY", "MAC_INSTALLER_DISTRIBUTION"} {
 		if !strings.Contains(usage, value) {
@@ -598,7 +604,7 @@ func TestCertificatesCreateCommand_HelpListsEveryCreatableType(t *testing.T) {
 }
 
 func TestMerchantIDCertificatesCreateCommand_OmitsPassTypeFlag(t *testing.T) {
-	cmd := MerchantIDCertificatesCreateCommand()
+	cmd := NewMerchantIDCertificatesCreateCommand(certificatesTestDeps(nil))
 	if cmd.FlagSet.Lookup("pass-type-id") != nil {
 		t.Fatal("merchant ID certificate create must not offer --pass-type-id")
 	}

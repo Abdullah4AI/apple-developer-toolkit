@@ -8,8 +8,8 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
-func readAppPPPSchedule(ctx context.Context, client *asc.Client, appID string) (shared.PPPScheduleSnapshot, error) {
-	requestCtx, cancel := shared.ContextWithTimeout(ctx)
+func readAppPPPSchedule(ctx context.Context, d *shared.Deps, client *asc.Client, appID string) (shared.PPPScheduleSnapshot, error) {
+	requestCtx, cancel := d.Timeout(ctx)
 	defer cancel()
 	schedule, err := client.GetAppPriceSchedule(requestCtx, appID)
 	if err != nil {
@@ -22,7 +22,7 @@ func readAppPPPSchedule(ctx context.Context, client *asc.Client, appID string) (
 	snapshot := shared.PPPScheduleSnapshot{BaseTerritory: base.Data.ID}
 	for index, fetch := range []appSchedulePriceFetcher{client.GetAppPriceScheduleManualPrices, client.GetAppPriceScheduleAutomaticPrices} {
 		first, err := fetch(requestCtx, schedule.Data.ID,
-			asc.WithAppPriceSchedulePricesLimit(200),
+			asc.Limit[asc.AppPriceSchedulePricesOption](200),
 			asc.WithAppPriceSchedulePricesInclude([]string{"appPricePoint", "territory"}),
 			asc.WithAppPriceSchedulePricesFields([]string{"manual", "startDate", "endDate", "appPricePoint", "territory"}),
 			asc.WithAppPriceSchedulePricesPricePointFields([]string{"customerPrice", "proceeds", "territory"}),
@@ -35,7 +35,7 @@ func readAppPPPSchedule(ctx context.Context, client *asc.Client, appID string) (
 			if err != nil {
 				return nil, err
 			}
-			return fetch(ctx, schedule.Data.ID, asc.WithAppPriceSchedulePricesNextURL(next))
+			return fetch(ctx, schedule.Data.ID, asc.NextURL[asc.AppPriceSchedulePricesOption](next))
 		}, func(page asc.PaginatedResponse) error {
 			typed, ok := page.(*asc.AppPricesResponse)
 			if !ok {
@@ -61,5 +61,5 @@ func readAppPPPSchedule(ctx context.Context, client *asc.Client, appID string) (
 			return snapshot, err
 		}
 	}
-	return snapshot, shared.ValidatePPPScheduleSnapshot(snapshot)
+	return snapshot, shared.ValidatePPPScheduleSnapshot(snapshot, d.Now)
 }

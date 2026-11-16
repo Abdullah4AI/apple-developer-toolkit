@@ -2,12 +2,12 @@ package cmdtest
 
 import (
 	"fmt"
-	"net/http"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	rootcmd "github.com/Abdullah4AI/apple-developer-toolkit/appstore/cmd"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asctest"
 )
 
 // Resource ID flags accept the API self-link that JSON output and webhook
@@ -23,10 +23,7 @@ func TestSelfLinkWrongTypeIsUsageErrorBeforeAuthOrRequest(t *testing.T) {
 	setCmdtestHome(t)
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 	t.Setenv("ASC_APP_ID", "")
-	stubTransport(t, func(req *http.Request) (*http.Response, error) {
-		t.Fatalf("unexpected request %s %s", req.Method, req.URL.Path)
-		return nil, nil
-	})
+	asctest.NewRegistry(t).Install()
 
 	tests := []struct {
 		name    string
@@ -34,6 +31,7 @@ func TestSelfLinkWrongTypeIsUsageErrorBeforeAuthOrRequest(t *testing.T) {
 		flag    string
 		value   string
 		wantErr string
+		deps    bool // the command is built on shared.Deps: run it on test deps
 	}{
 		{
 			name:    "builds info rejects apps link",
@@ -41,6 +39,7 @@ func TestSelfLinkWrongTypeIsUsageErrorBeforeAuthOrRequest(t *testing.T) {
 			flag:    "build-id",
 			value:   selfLinkTestBase + "/v1/apps/123",
 			wantErr: "expected a self-link of type builds, got apps",
+			deps:    true,
 		},
 		{
 			name:    "builds info rejects encoded query delimiter",
@@ -48,6 +47,7 @@ func TestSelfLinkWrongTypeIsUsageErrorBeforeAuthOrRequest(t *testing.T) {
 			flag:    "build-id",
 			value:   selfLinkTestBase + "/v1/builds/build-1%3Finclude=app",
 			wantErr: "self-link resource ID must not contain URL delimiters",
+			deps:    true,
 		},
 		{
 			name:    "builds info rejects encoded fragment delimiter",
@@ -55,6 +55,7 @@ func TestSelfLinkWrongTypeIsUsageErrorBeforeAuthOrRequest(t *testing.T) {
 			flag:    "build-id",
 			value:   selfLinkTestBase + "/v1/builds/build-1%23suffix",
 			wantErr: "self-link resource ID must not contain URL delimiters",
+			deps:    true,
 		},
 		{
 			name:    "versions view rejects relationship path",
@@ -62,6 +63,7 @@ func TestSelfLinkWrongTypeIsUsageErrorBeforeAuthOrRequest(t *testing.T) {
 			flag:    "version-id",
 			value:   selfLinkTestBase + "/v1/appStoreVersions/version-1/relationships/build",
 			wantErr: "/v1/<type>/<id>",
+			deps:    true,
 		},
 		{
 			name:    "iap view rejects subscriptions link",
@@ -87,6 +89,7 @@ func TestSelfLinkWrongTypeIsUsageErrorBeforeAuthOrRequest(t *testing.T) {
 		{
 			name:    "testflight groups view rejects other host",
 			args:    []string{"testflight", "groups", "view"},
+			deps:    true,
 			flag:    "id",
 			value:   "https://appstoreconnect.apple.com/v1/betaGroups/group-1",
 			wantErr: "api.appstoreconnect.apple.com",
@@ -96,17 +99,26 @@ func TestSelfLinkWrongTypeIsUsageErrorBeforeAuthOrRequest(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			args := append(append([]string(nil), test.args...), "--"+test.flag, test.value)
-			stdout, stderr := captureOutput(t, func() {
-				code := rootcmd.Run(args, "1.2.3")
+			var stdout, stderr string
+			if test.deps {
+				var code int
+				stdout, stderr, code = runWithDeps(t, nil, args...)
 				if code != rootcmd.ExitUsage {
 					t.Fatalf("exit code = %d, want %d", code, rootcmd.ExitUsage)
 				}
-			})
+			} else {
+				stdout, stderr = captureOutput(t, func() {
+					code := rootcmd.Run(args, "1.2.3")
+					if code != rootcmd.ExitUsage {
+						t.Fatalf("exit code = %d, want %d", code, rootcmd.ExitUsage)
+					}
+				})
+			}
 			if stdout != "" {
 				t.Fatalf("expected empty stdout, got %q", stdout)
 			}
 			firstLine, _, _ := strings.Cut(stderr, "\n")
-			wantPrefix := fmt.Sprintf("Error: invalid value %q for flag -%s: ", test.value, test.flag)
+			wantPrefix := fmt.Sprintf("Error: invalid value %q for flag --%s: ", test.value, test.flag)
 			if !strings.HasPrefix(firstLine, wantPrefix) || !strings.Contains(firstLine, test.wantErr) {
 				t.Fatalf("first stderr line = %q, want prefix %q containing %q", firstLine, wantPrefix, test.wantErr)
 			}

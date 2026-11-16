@@ -269,34 +269,41 @@ func TestVersionBuildSelectorValidation(t *testing.T) {
 		name    string
 		args    []string
 		wantErr string
+		deps    bool
 	}{
 		{
 			name:    "attach-build build id and latest",
 			args:    []string{"versions", "attach-build", "--version-id", "version-1", "--build-id", "build-1", "--latest"},
 			wantErr: "Error: --build-id, --build-number, and --latest are mutually exclusive",
+			deps:    true,
 		},
 		{
 			name:    "attach-build version and version id",
 			args:    []string{"versions", "attach-build", "--app", "123456789", "--version", "1.2.0", "--version-id", "version-1", "--build-id", "build-1"},
 			wantErr: "Error: --version and --version-id are mutually exclusive",
+			deps:    true,
 		},
 		{
 			name:    "attach-build latest without app",
 			args:    []string{"versions", "attach-build", "--version-id", "version-1", "--latest"},
 			wantErr: "Error: --app is required with --version, --platform, --build-number, or --latest (or set ASC_APP_ID)",
+			deps:    true,
 		},
 		{
 			name:    "attach-build version without app",
 			args:    []string{"versions", "attach-build", "--version", "1.2.0", "--build-id", "build-1"},
 			wantErr: "Error: --app is required with --version, --platform, --build-number, or --latest (or set ASC_APP_ID)",
+			deps:    true,
 		},
 		{
 			name:    "attach-build timeout without wait",
 			args:    []string{"versions", "attach-build", "--version-id", "version-1", "--build-id", "build-1", "--timeout", "1m"},
 			wantErr: "Error: --timeout and --poll-interval require --wait",
+			deps:    true,
 		},
 		{
 			name:    "review submit build id and latest",
+			deps:    true,
 			args:    []string{"review", "submit", "--app", "123456789", "--version", "1.2.0", "--build-id", "build-1", "--latest", "--confirm"},
 			wantErr: "Error: --build-id, --build-number, and --latest are mutually exclusive",
 		},
@@ -305,15 +312,21 @@ func TestVersionBuildSelectorValidation(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			setupUsageExitCodeEnv(t)
-			installDefaultTransport(t, roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			failOnRequest := roundTripFunc(func(req *http.Request) (*http.Response, error) {
 				t.Fatalf("validation must fail before HTTP: %s %s", req.Method, req.URL.String())
 				return nil, errors.New("unexpected request")
-			}))
+			})
 
 			var code int
-			stdout, stderr := captureOutput(t, func() {
-				code = rootcmd.Run(test.args, "1.2.3")
-			})
+			var stdout, stderr string
+			if test.deps {
+				stdout, stderr, code = runWithDeps(t, stubClient(t, failOnRequest), test.args...)
+			} else {
+				installDefaultTransport(t, failOnRequest)
+				stdout, stderr = captureOutput(t, func() {
+					code = rootcmd.Run(test.args, "1.2.3")
+				})
+			}
 			if code != rootcmd.ExitUsage {
 				t.Fatalf("exit code = %d, want %d; stderr=%q", code, rootcmd.ExitUsage, stderr)
 			}
@@ -340,6 +353,8 @@ func TestReviewSubmitBuildNumberSelectsBuildFromVersionTrain(t *testing.T) {
 			return jsonResponse(http.StatusOK, `{"data":[{"type":"appStoreVersionLocalizations","id":"loc-1","attributes":{"locale":"en-US","description":"Description","keywords":"keyword","supportUrl":"https://example.com/support"}}]}`)
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/apps/123456789/appStoreVersions" && isReleasedVersionStateQuery(req.URL.Query()):
 			return jsonResponse(http.StatusOK, `{"data":[]}`)
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/apps/123456789/appInfos":
+			return jsonResponse(http.StatusOK, submitPreflightAppInfosJSON("123456789", completeAgeRatingAttributes))
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/apps/123456789/subscriptionGroups":
 			return jsonResponse(http.StatusOK, `{"data":[]}`)
 		case req.Method == http.MethodGet && (req.URL.Path == "/v1/appStoreVersions/version-1/build" || req.URL.Path == "/v1/appStoreVersions/version-1/appStoreVersionSubmission"):
@@ -348,7 +363,7 @@ func TestReviewSubmitBuildNumberSelectsBuildFromVersionTrain(t *testing.T) {
 		return transport.RoundTrip(req)
 	})
 
-	code, stdout, stderr := runVersionBuildSelector(t, reviewFlow,
+	stdout, stderr, code := runWithDeps(t, stubClient(t, reviewFlow),
 		"review", "submit", "--app", "123456789", "--version-id", "version-1", "--build-number", "45", "--dry-run", "--output", "json")
 
 	if code != rootcmd.ExitSuccess {

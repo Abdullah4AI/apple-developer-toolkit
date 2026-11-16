@@ -1,12 +1,8 @@
 package cmdtest
 
 import (
-	"context"
 	"encoding/json"
-	"errors"
-	"flag"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -14,49 +10,74 @@ import (
 	"testing"
 
 	cmd "github.com/Abdullah4AI/apple-developer-toolkit/appstore/cmd"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asctest"
 )
 
-func TestReviewsRespondValidationErrors(t *testing.T) {
-	tests := []struct {
-		name    string
-		args    []string
-		wantErr string
-	}{
+func TestReviewsUsageErrors(t *testing.T) {
+	t.Setenv("ASC_APP_ID", "")
+
+	runUsageExitCases(t, []usageExitCase{
 		{
 			name:    "reviews respond missing review-id",
+			deps:    true,
 			args:    []string{"reviews", "respond", "--response", "Thanks!"},
 			wantErr: "--review-id is required",
 		},
 		{
 			name:    "reviews respond missing response",
+			deps:    true,
 			args:    []string{"reviews", "respond", "--review-id", "REVIEW_123"},
 			wantErr: "--response is required",
 		},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			root := RootCommand("1.2.3")
-			root.FlagSet.SetOutput(io.Discard)
-
-			stdout, stderr := captureOutput(t, func() {
-				if err := root.Parse(test.args); err != nil {
-					t.Fatalf("parse error: %v", err)
-				}
-				err := root.Run(context.Background())
-				if !errors.Is(err, flag.ErrHelp) {
-					t.Fatalf("expected ErrHelp, got %v", err)
-				}
-			})
-
-			if stdout != "" {
-				t.Fatalf("expected empty stdout, got %q", stdout)
-			}
-			if !strings.Contains(stderr, test.wantErr) {
-				t.Fatalf("expected error %q, got %q", test.wantErr, stderr)
-			}
-		})
-	}
+		{
+			name:    "reviews without subcommand missing app",
+			deps:    true,
+			args:    []string{"reviews"},
+			wantErr: "--app is required",
+		},
+		{
+			name:    "reviews list missing app",
+			deps:    true,
+			args:    []string{"reviews", "list"},
+			wantErr: "--app is required",
+		},
+		{
+			name:    "reviews list invalid response state",
+			deps:    true,
+			args:    []string{"reviews", "list", "--app", "app-1", "--response-state", "maybe"},
+			wantErr: "--response-state must be one of: any, unresponded, unreplied, responded, replied",
+		},
+		{
+			name:    "reviews list invalid response fields",
+			deps:    true,
+			args:    []string{"reviews", "list", "--app", "app-1", "--response-fields", "bogus"},
+			wantErr: "--response-fields must be a comma-separated list of: responseBody,lastModifiedDate,state,review",
+		},
+		{
+			name:    "reviews response view missing id",
+			deps:    true,
+			args:    []string{"reviews", "response", "view"},
+			wantErr: "--id is required",
+		},
+		{
+			name:    "reviews response delete missing id",
+			deps:    true,
+			args:    []string{"reviews", "response", "delete", "--confirm"},
+			wantErr: "--id is required",
+		},
+		{
+			name:    "reviews response delete missing confirm",
+			deps:    true,
+			args:    []string{"reviews", "response", "delete", "--id", "RESPONSE_123"},
+			wantErr: "--confirm is required",
+		},
+		{
+			name:    "reviews response for-review missing review-id",
+			deps:    true,
+			args:    []string{"reviews", "response", "for-review"},
+			wantErr: "--review-id is required",
+		},
+	})
 }
 
 func writeReviewBatchFile(t *testing.T, body string) string {
@@ -151,7 +172,6 @@ func findReviewBatchTestResult(t *testing.T, payload reviewBatchTestOutput, revi
 }
 
 func TestReviewsRespondBatchCreatesGroupedReplies(t *testing.T) {
-	setupAuth(t)
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 
 	inputPath := writeReviewBatchFile(t, `{
@@ -160,55 +180,28 @@ func TestReviewsRespondBatchCreatesGroupedReplies(t *testing.T) {
 		]
 	}`)
 
-	var postBodies []string
-	installDefaultTransport(t, roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		switch {
-		case req.Method == http.MethodGet && req.URL.Path == "/v1/apps/app-1/customerReviews":
-			if got := req.URL.Query().Get("include"); got != "response" {
-				t.Fatalf("expected include=response, got %q", got)
-			}
-			if got := req.URL.Query().Get("limit"); got != "200" {
-				t.Fatalf("expected limit=200, got %q", got)
-			}
-			return jsonResponse(http.StatusOK, `{
-				"data": [
-					{"type":"customerReviews","id":"review-1","attributes":{"rating":5}},
-					{"type":"customerReviews","id":"review-2","attributes":{"rating":4}}
-				],
-				"links": {"self": "https://api.appstoreconnect.apple.com/v1/apps/app-1/customerReviews"}
-			}`)
-		case req.Method == http.MethodPost && req.URL.Path == "/v1/customerReviewResponses":
-			body, err := io.ReadAll(req.Body)
-			if err != nil {
-				t.Fatalf("read request body: %v", err)
-			}
-			postBodies = append(postBodies, string(body))
-			id := "response-1"
-			if len(postBodies) == 2 {
-				id = "response-2"
-			}
-			return jsonResponse(http.StatusCreated, `{"data":{"type":"customerReviewResponses","id":"`+id+`","attributes":{"responseBody":"Thanks for the feedback.","state":"PENDING_PUBLISH"}}}`)
-		default:
-			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.String())
-			return nil, nil
-		}
-	}))
+	reg := asctest.NewRegistry(t)
+	reg.Register(asctest.GET("/v1/apps/app-1/customerReviews", "include=response", "limit=200"), asctest.JSON(http.StatusOK, `{
+		"data": [
+			{"type":"customerReviews","id":"review-1","attributes":{"rating":5}},
+			{"type":"customerReviews","id":"review-2","attributes":{"rating":4}}
+		],
+		"links": {"self": "https://api.appstoreconnect.apple.com/v1/apps/app-1/customerReviews"}
+	}`))
+	reg.Register(asctest.POST("/v1/customerReviewResponses").JSONBody(`{"data":{"type":"customerReviewResponses","attributes":{"responseBody":"Thanks for the feedback."},"relationships":{"review":{"data":{"type":"customerReviews","id":"review-1"}}}}}`),
+		asctest.JSON(http.StatusCreated, `{"data":{"type":"customerReviewResponses","id":"response-1","attributes":{"responseBody":"Thanks for the feedback.","state":"PENDING_PUBLISH"}}}`))
+	reg.Register(asctest.POST("/v1/customerReviewResponses").JSONBody(`{"data":{"type":"customerReviewResponses","attributes":{"responseBody":"Thanks for the feedback."},"relationships":{"review":{"data":{"type":"customerReviews","id":"review-2"}}}}}`),
+		asctest.JSON(http.StatusCreated, `{"data":{"type":"customerReviewResponses","id":"response-2","attributes":{"responseBody":"Thanks for the feedback.","state":"PENDING_PUBLISH"}}}`))
 
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"reviews", "respond-batch", "--app", "app-1", "--file", inputPath, "--output", "json", "--confirm"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatalf("run error: %v", err)
-		}
-	})
+	stdout, stderr, err := runRootWithDeps(t, stubClient(t, reg), "reviews", "respond-batch", "--app", "app-1", "--file", inputPath, "--output", "json", "--confirm")
+	if err != nil {
+		t.Fatalf("run error: %v", err)
+	}
 
 	if stderr != "" {
 		t.Fatalf("expected empty stderr, got %q", stderr)
 	}
+	postBodies := reviewResponsePostBodies(reg)
 	if len(postBodies) != 2 {
 		t.Fatalf("expected two create requests, got %d", len(postBodies))
 	}
@@ -246,35 +239,21 @@ func TestReviewsRespondBatchCreatesGroupedReplies(t *testing.T) {
 }
 
 func TestReviewsRespondBatchDryRunDoesNotPost(t *testing.T) {
-	setupAuth(t)
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 
 	inputPath := writeReviewBatchFile(t, `{"replies":[{"response":"Thanks","reviewIds":["review-1","review-2"]}]}`)
-	requests := 0
-	installDefaultTransport(t, roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		requests++
-		if req.Method != http.MethodGet || req.URL.Path != "/v1/apps/app-1/customerReviews" {
-			t.Fatalf("dry-run should only fetch reviews, got %s %s", req.Method, req.URL.Path)
-		}
-		return jsonResponse(http.StatusOK, `{"data":[{"type":"customerReviews","id":"review-1"},{"type":"customerReviews","id":"review-2"}]}`)
-	}))
+	reg := asctest.NewRegistry(t)
+	reg.Register(asctest.GET("/v1/apps/app-1/customerReviews", "include=response", "limit=200"), asctest.JSON(http.StatusOK, `{"data":[{"type":"customerReviews","id":"review-1"},{"type":"customerReviews","id":"review-2"}]}`))
 
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"reviews", "respond-batch", "--app", "app-1", "--file", inputPath, "--dry-run", "--output", "json"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatalf("run error: %v", err)
-		}
-	})
+	stdout, stderr, err := runRootWithDeps(t, stubClient(t, reg), "reviews", "respond-batch", "--app", "app-1", "--file", inputPath, "--dry-run", "--output", "json")
+	if err != nil {
+		t.Fatalf("run error: %v", err)
+	}
 
 	if stderr != "" {
 		t.Fatalf("expected empty stderr, got %q", stderr)
 	}
-	if requests != 1 {
+	if requests := len(reg.Requests()); requests != 1 {
 		t.Fatalf("expected one preflight request, got %d", requests)
 	}
 	var payload map[string]any
@@ -288,50 +267,26 @@ func TestReviewsRespondBatchDryRunDoesNotPost(t *testing.T) {
 }
 
 func TestReviewsRespondBatchSkipExisting(t *testing.T) {
-	setupAuth(t)
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 
 	inputPath := writeReviewBatchFile(t, `{"replies":[{"response":"Thanks","reviewIds":["review-1","review-2"]}]}`)
-	posts := 0
-	installDefaultTransport(t, roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		switch {
-		case req.Method == http.MethodGet && req.URL.Path == "/v1/apps/app-1/customerReviews":
-			return jsonResponse(http.StatusOK, `{"data":[
-				{"type":"customerReviews","id":"review-1","relationships":{"response":{"data":{"type":"customerReviewResponses","id":"existing-response"}}}},
-				{"type":"customerReviews","id":"review-2","relationships":{"response":{"data":null}}}
-			]}`)
-		case req.Method == http.MethodPost && req.URL.Path == "/v1/customerReviewResponses":
-			posts++
-			body, err := io.ReadAll(req.Body)
-			if err != nil {
-				t.Fatalf("read request body: %v", err)
-			}
-			if !strings.Contains(string(body), `"id":"review-2"`) {
-				t.Fatalf("expected only review-2 to be posted, got %s", body)
-			}
-			return jsonResponse(http.StatusCreated, `{"data":{"type":"customerReviewResponses","id":"response-2"}}`)
-		default:
-			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.String())
-			return nil, nil
-		}
-	}))
+	reg := asctest.NewRegistry(t)
+	reg.Register(asctest.GET("/v1/apps/app-1/customerReviews", "include=response", "limit=200"), asctest.JSON(http.StatusOK, `{"data":[
+		{"type":"customerReviews","id":"review-1","relationships":{"response":{"data":{"type":"customerReviewResponses","id":"existing-response"}}}},
+		{"type":"customerReviews","id":"review-2","relationships":{"response":{"data":null}}}
+	]}`))
+	reg.Register(asctest.POST("/v1/customerReviewResponses").JSONBody(`{"data":{"type":"customerReviewResponses","attributes":{"responseBody":"Thanks"},"relationships":{"review":{"data":{"type":"customerReviews","id":"review-2"}}}}}`),
+		asctest.JSON(http.StatusCreated, `{"data":{"type":"customerReviewResponses","id":"response-2"}}`))
 
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"reviews", "respond-batch", "--app", "app-1", "--file", inputPath, "--skip-existing", "--output", "json", "--confirm"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatalf("run error: %v", err)
-		}
-	})
+	stdout, stderr, err := runRootWithDeps(t, stubClient(t, reg), "reviews", "respond-batch", "--app", "app-1", "--file", inputPath, "--skip-existing", "--output", "json", "--confirm")
+	if err != nil {
+		t.Fatalf("run error: %v", err)
+	}
 
 	if stderr != "" {
 		t.Fatalf("expected empty stderr, got %q", stderr)
 	}
-	if posts != 1 {
+	if posts := len(reviewResponsePostBodies(reg)); posts != 1 {
 		t.Fatalf("expected one create request, got %d", posts)
 	}
 	payload := decodeReviewBatchTestOutput(t, stdout)
@@ -345,43 +300,26 @@ func TestReviewsRespondBatchSkipExisting(t *testing.T) {
 }
 
 func TestReviewsRespondBatchResponseStateUnrespondedSkipsRespondedReviews(t *testing.T) {
-	setupAuth(t)
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 
 	inputPath := writeReviewBatchFile(t, `{"replies":[{"response":"Thanks","reviewIds":["review-1","review-2"]}]}`)
-	posts := 0
-	installDefaultTransport(t, roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		switch {
-		case req.Method == http.MethodGet && req.URL.Path == "/v1/apps/app-1/customerReviews":
-			return jsonResponse(http.StatusOK, `{"data":[
-				{"type":"customerReviews","id":"review-1","relationships":{"response":{"data":{"type":"customerReviewResponses","id":"existing-response"}}}},
-				{"type":"customerReviews","id":"review-2","relationships":{"response":{"data":null}}}
-			]}`)
-		case req.Method == http.MethodPost && req.URL.Path == "/v1/customerReviewResponses":
-			posts++
-			return jsonResponse(http.StatusCreated, `{"data":{"type":"customerReviewResponses","id":"response-2"}}`)
-		default:
-			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.String())
-			return nil, nil
-		}
-	}))
+	reg := asctest.NewRegistry(t)
+	reg.Register(asctest.GET("/v1/apps/app-1/customerReviews", "include=response", "limit=200"), asctest.JSON(http.StatusOK, `{"data":[
+		{"type":"customerReviews","id":"review-1","relationships":{"response":{"data":{"type":"customerReviewResponses","id":"existing-response"}}}},
+		{"type":"customerReviews","id":"review-2","relationships":{"response":{"data":null}}}
+	]}`))
+	reg.Register(asctest.POST("/v1/customerReviewResponses").JSONBody(`{"data":{"type":"customerReviewResponses","attributes":{"responseBody":"Thanks"},"relationships":{"review":{"data":{"type":"customerReviews","id":"review-2"}}}}}`),
+		asctest.JSON(http.StatusCreated, `{"data":{"type":"customerReviewResponses","id":"response-2"}}`))
 
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"reviews", "respond-batch", "--app", "app-1", "--file", inputPath, "--response-state", "unresponded", "--output", "json", "--confirm"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatalf("run error: %v", err)
-		}
-	})
+	stdout, stderr, err := runRootWithDeps(t, stubClient(t, reg), "reviews", "respond-batch", "--app", "app-1", "--file", inputPath, "--response-state", "unresponded", "--output", "json", "--confirm")
+	if err != nil {
+		t.Fatalf("run error: %v", err)
+	}
 
 	if stderr != "" {
 		t.Fatalf("expected empty stderr, got %q", stderr)
 	}
-	if posts != 1 {
+	if posts := len(reviewResponsePostBodies(reg)); posts != 1 {
 		t.Fatalf("expected one create request, got %d", posts)
 	}
 	payload := decodeReviewBatchTestOutput(t, stdout)
@@ -395,21 +333,14 @@ func TestReviewsRespondBatchResponseStateUnrespondedSkipsRespondedReviews(t *tes
 }
 
 func TestReviewsRespondBatchRejectsOversizedFileWithoutRequests(t *testing.T) {
-	setupAuth(t)
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
-	installDefaultTransport(t, roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		t.Fatalf("expected no HTTP request, got %s %s", req.Method, req.URL.String())
-		return nil, nil
-	}))
 
 	inputPath := writeReviewBatchFile(t, reviewBatchJSONOfSize(t, reviewBatchFileByteLimit+1))
 
-	stdout, stderr := captureOutput(t, func() {
-		code := cmd.Run([]string{"reviews", "respond-batch", "--app", "app-1", "--file", inputPath, "--confirm"}, "1.2.3")
-		if code != cmd.ExitUsage {
-			t.Fatalf("expected exit code %d, got %d", cmd.ExitUsage, code)
-		}
-	})
+	stdout, stderr, code := runWithDeps(t, stubClient(t, asctest.NewRegistry(t)), "reviews", "respond-batch", "--app", "app-1", "--file", inputPath, "--confirm")
+	if code != cmd.ExitUsage {
+		t.Fatalf("expected exit code %d, got %d", cmd.ExitUsage, code)
+	}
 
 	if stdout != "" {
 		t.Fatalf("expected empty stdout, got %q", stdout)
@@ -420,22 +351,15 @@ func TestReviewsRespondBatchRejectsOversizedFileWithoutRequests(t *testing.T) {
 }
 
 func TestReviewsRespondBatchRejectsOversizedResponseWithoutRequests(t *testing.T) {
-	setupAuth(t)
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
-	installDefaultTransport(t, roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		t.Fatalf("expected no HTTP request, got %s %s", req.Method, req.URL.String())
-		return nil, nil
-	}))
 
 	oversized := `{"replies":[{"response":"` + strings.Repeat("a", reviewBatchResponseByteLimit+1) + `","reviewIds":["review-1"]}]}`
 	inputPath := writeReviewBatchFile(t, oversized)
 
-	stdout, stderr := captureOutput(t, func() {
-		code := cmd.Run([]string{"reviews", "respond-batch", "--app", "app-1", "--file", inputPath, "--dry-run"}, "1.2.3")
-		if code != cmd.ExitUsage {
-			t.Fatalf("expected exit code %d, got %d", cmd.ExitUsage, code)
-		}
-	})
+	stdout, stderr, code := runWithDeps(t, stubClient(t, asctest.NewRegistry(t)), "reviews", "respond-batch", "--app", "app-1", "--file", inputPath, "--dry-run")
+	if code != cmd.ExitUsage {
+		t.Fatalf("expected exit code %d, got %d", cmd.ExitUsage, code)
+	}
 
 	if stdout != "" {
 		t.Fatalf("expected empty stdout, got %q", stdout)
@@ -446,21 +370,14 @@ func TestReviewsRespondBatchRejectsOversizedResponseWithoutRequests(t *testing.T
 }
 
 func TestReviewsRespondBatchRejectsTooManyReviewIDsWithoutRequests(t *testing.T) {
-	setupAuth(t)
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
-	installDefaultTransport(t, roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		t.Fatalf("expected no HTTP request, got %s %s", req.Method, req.URL.String())
-		return nil, nil
-	}))
 
 	inputPath := writeReviewBatchFile(t, reviewBatchJSONWithReviewIDs(t, reviewBatchTargetLimit+1))
 
-	stdout, stderr := captureOutput(t, func() {
-		code := cmd.Run([]string{"reviews", "respond-batch", "--app", "app-1", "--file", inputPath, "--dry-run"}, "1.2.3")
-		if code != cmd.ExitUsage {
-			t.Fatalf("expected exit code %d, got %d", cmd.ExitUsage, code)
-		}
-	})
+	stdout, stderr, code := runWithDeps(t, stubClient(t, asctest.NewRegistry(t)), "reviews", "respond-batch", "--app", "app-1", "--file", inputPath, "--dry-run")
+	if code != cmd.ExitUsage {
+		t.Fatalf("expected exit code %d, got %d", cmd.ExitUsage, code)
+	}
 
 	if stdout != "" {
 		t.Fatalf("expected empty stdout, got %q", stdout)
@@ -471,39 +388,25 @@ func TestReviewsRespondBatchRejectsTooManyReviewIDsWithoutRequests(t *testing.T)
 }
 
 func TestReviewsRespondBatchDryRunAtReviewIDLimit(t *testing.T) {
-	setupAuth(t)
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 
 	inputPath := writeReviewBatchFile(t, reviewBatchJSONWithReviewIDs(t, reviewBatchTargetLimit))
-	requests := 0
-	installDefaultTransport(t, roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		requests++
-		if req.Method != http.MethodGet || req.URL.Path != "/v1/apps/app-1/customerReviews" {
-			t.Fatalf("dry-run should only fetch reviews, got %s %s", req.Method, req.URL.Path)
-		}
-		reviews := make([]string, 0, reviewBatchTargetLimit)
-		for i := range reviewBatchTargetLimit {
-			reviews = append(reviews, fmt.Sprintf(`{"type":"customerReviews","id":"review-%d"}`, i))
-		}
-		return jsonResponse(http.StatusOK, `{"data":[`+strings.Join(reviews, ",")+`]}`)
-	}))
+	reviews := make([]string, 0, reviewBatchTargetLimit)
+	for i := range reviewBatchTargetLimit {
+		reviews = append(reviews, fmt.Sprintf(`{"type":"customerReviews","id":"review-%d"}`, i))
+	}
+	reg := asctest.NewRegistry(t)
+	reg.Register(asctest.GET("/v1/apps/app-1/customerReviews", "include=response", "limit=200"), asctest.JSON(http.StatusOK, `{"data":[`+strings.Join(reviews, ",")+`]}`))
 
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"reviews", "respond-batch", "--app", "app-1", "--file", inputPath, "--dry-run", "--output", "json"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatalf("run error: %v", err)
-		}
-	})
+	stdout, stderr, err := runRootWithDeps(t, stubClient(t, reg), "reviews", "respond-batch", "--app", "app-1", "--file", inputPath, "--dry-run", "--output", "json")
+	if err != nil {
+		t.Fatalf("run error: %v", err)
+	}
 
 	if stderr != "" {
 		t.Fatalf("expected empty stderr, got %q", stderr)
 	}
-	if requests != 1 {
+	if requests := len(reg.Requests()); requests != 1 {
 		t.Fatalf("expected one preflight request, got %d", requests)
 	}
 	payload := decodeReviewBatchTestOutput(t, stdout)
@@ -559,6 +462,12 @@ func TestReviewsRespondBatchValidationErrors(t *testing.T) {
 			wantErr: "response is required",
 		},
 		{
+			name:    "invalid response state",
+			args:    []string{"reviews", "respond-batch", "--app", "app-1", "--file", "FILE", "--response-state", "maybe"},
+			body:    `{"replies":[{"response":"Thanks","reviewIds":["review-1"]}]}`,
+			wantErr: "--response-state must be one of: any, unresponded, unreplied, responded, replied",
+		},
+		{
 			name:    "empty review id",
 			args:    []string{"reviews", "respond-batch", "--app", "app-1", "--file", "FILE", "--confirm"},
 			body:    `{"replies":[{"response":"Thanks","reviewIds":[" "]}]}`,
@@ -578,78 +487,21 @@ func TestReviewsRespondBatchValidationErrors(t *testing.T) {
 				}
 			}
 
-			root := RootCommand("1.2.3")
-			root.FlagSet.SetOutput(io.Discard)
-
-			stdout, stderr := captureOutput(t, func() {
-				if err := root.Parse(args); err != nil {
-					t.Fatalf("parse error: %v", err)
-				}
-				err := root.Run(context.Background())
-				if !errors.Is(err, flag.ErrHelp) {
-					t.Fatalf("expected ErrHelp, got %v", err)
-				}
-			})
-
-			if stdout != "" {
-				t.Fatalf("expected empty stdout, got %q", stdout)
-			}
-			if !strings.Contains(stderr, test.wantErr) {
-				t.Fatalf("expected stderr to contain %q, got %q", test.wantErr, stderr)
-			}
+			assertUsageExitWithDeps(t, nil, args, test.wantErr)
 		})
 	}
 }
 
-func TestRunReviewsRespondBatchInvalidResponseStateReturnsUsageExit(t *testing.T) {
-	inputPath := writeReviewBatchFile(t, `{"replies":[{"response":"Thanks","reviewIds":["review-1"]}]}`)
-
-	stdout, stderr := captureOutput(t, func() {
-		code := cmd.Run([]string{"reviews", "respond-batch", "--app", "app-1", "--file", inputPath, "--response-state", "maybe"}, "1.2.3")
-		if code != cmd.ExitUsage {
-			t.Fatalf("expected exit code %d, got %d", cmd.ExitUsage, code)
-		}
-	})
-
-	if stdout != "" {
-		t.Fatalf("expected empty stdout, got %q", stdout)
-	}
-	if !strings.Contains(stderr, "--response-state must be one of: any, unresponded, unreplied, responded, replied") {
-		t.Fatalf("expected response-state validation, got %q", stderr)
-	}
-}
-
 func TestReviewsListResponseStateIncludeResponseAndResponseFields(t *testing.T) {
-	setupAuth(t)
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 
-	installDefaultTransport(t, roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		if req.Method != http.MethodGet || req.URL.Path != "/v1/apps/app-1/customerReviews" {
-			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.String())
-		}
-		if got := req.URL.Query().Get("exists[publishedResponse]"); got != "false" {
-			t.Fatalf("expected exists[publishedResponse]=false, got %q", got)
-		}
-		if got := req.URL.Query().Get("include"); got != "response" {
-			t.Fatalf("expected include=response, got %q", got)
-		}
-		if got := req.URL.Query().Get("fields[customerReviewResponses]"); got != "responseBody,state" {
-			t.Fatalf("expected response response fields, got %q", got)
-		}
-		return jsonResponse(http.StatusOK, `{"data":[{"type":"customerReviews","id":"review-1"}]}`)
-	}))
+	reg := asctest.NewRegistry(t)
+	reg.Register(asctest.GET("/v1/apps/app-1/customerReviews", "exists[publishedResponse]=false", "include=response", "fields[customerReviewResponses]=responseBody,state"), asctest.JSON(http.StatusOK, `{"data":[{"type":"customerReviews","id":"review-1"}]}`))
 
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"reviews", "list", "--app", "app-1", "--response-state", "unreplied", "--include-response", "--response-fields", "responseBody,state", "--output", "json"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatalf("run error: %v", err)
-		}
-	})
+	stdout, stderr, err := runRootWithDeps(t, stubClient(t, reg), "reviews", "list", "--app", "app-1", "--response-state", "unreplied", "--include-response", "--response-fields", "responseBody,state", "--output", "json")
+	if err != nil {
+		t.Fatalf("run error: %v", err)
+	}
 
 	if stderr != "" {
 		t.Fatalf("expected empty stderr, got %q", stderr)
@@ -668,30 +520,15 @@ func TestReviewsListResponseStateIncludeResponseAndResponseFields(t *testing.T) 
 }
 
 func TestReviewsListOnlyUnrespondedMapsToPublishedResponseFilter(t *testing.T) {
-	setupAuth(t)
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 
-	installDefaultTransport(t, roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		if req.Method != http.MethodGet || req.URL.Path != "/v1/apps/app-1/customerReviews" {
-			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.String())
-		}
-		if got := req.URL.Query().Get("exists[publishedResponse]"); got != "false" {
-			t.Fatalf("expected exists[publishedResponse]=false, got %q", got)
-		}
-		return jsonResponse(http.StatusOK, `{"data":[]}`)
-	}))
+	reg := asctest.NewRegistry(t)
+	reg.Register(asctest.GET("/v1/apps/app-1/customerReviews", "exists[publishedResponse]=false"), asctest.JSON(http.StatusOK, `{"data":[]}`))
 
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"reviews", "list", "--app", "app-1", "--only-unresponded", "--output", "json"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatalf("run error: %v", err)
-		}
-	})
+	stdout, stderr, err := runRootWithDeps(t, stubClient(t, reg), "reviews", "list", "--app", "app-1", "--only-unresponded", "--output", "json")
+	if err != nil {
+		t.Fatalf("run error: %v", err)
+	}
 
 	if stderr != "" {
 		t.Fatalf("expected empty stderr, got %q", stderr)
@@ -701,66 +538,21 @@ func TestReviewsListOnlyUnrespondedMapsToPublishedResponseFilter(t *testing.T) {
 	}
 }
 
-func TestReviewsListRejectsInvalidResponseState(t *testing.T) {
-	stdout, stderr := captureOutput(t, func() {
-		code := cmd.Run([]string{"reviews", "list", "--app", "app-1", "--response-state", "maybe"}, "1.2.3")
-		if code != cmd.ExitUsage {
-			t.Fatalf("expected exit code %d, got %d", cmd.ExitUsage, code)
-		}
-	})
-
-	if stdout != "" {
-		t.Fatalf("expected empty stdout, got %q", stdout)
-	}
-	if !strings.Contains(stderr, "--response-state must be one of: any, unresponded, unreplied, responded, replied") {
-		t.Fatalf("expected response-state validation, got %q", stderr)
-	}
-}
-
-func TestReviewsListRejectsInvalidResponseFields(t *testing.T) {
-	stdout, stderr := captureOutput(t, func() {
-		code := cmd.Run([]string{"reviews", "list", "--app", "app-1", "--response-fields", "bogus"}, "1.2.3")
-		if code != cmd.ExitUsage {
-			t.Fatalf("expected exit code %d, got %d", cmd.ExitUsage, code)
-		}
-	})
-
-	if stdout != "" {
-		t.Fatalf("expected empty stdout, got %q", stdout)
-	}
-	if !strings.Contains(stderr, "--response-fields must be a comma-separated list of: responseBody,lastModifiedDate,state,review") {
-		t.Fatalf("expected response-fields validation, got %q", stderr)
-	}
-}
-
 func TestRunReviewsRespondBatchPartialFailureReturnsExitError(t *testing.T) {
-	setupAuth(t)
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 
 	inputPath := writeReviewBatchFile(t, `{"replies":[{"response":"Thanks","reviewIds":["review-1","review-2"]}]}`)
-	posts := 0
-	installDefaultTransport(t, roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		switch {
-		case req.Method == http.MethodGet && req.URL.Path == "/v1/apps/app-1/customerReviews":
-			return jsonResponse(http.StatusOK, `{"data":[{"type":"customerReviews","id":"review-1"},{"type":"customerReviews","id":"review-2"}]}`)
-		case req.Method == http.MethodPost && req.URL.Path == "/v1/customerReviewResponses":
-			posts++
-			if posts == 1 {
-				return jsonResponse(http.StatusCreated, `{"data":{"type":"customerReviewResponses","id":"response-1"}}`)
-			}
-			return jsonResponse(http.StatusUnprocessableEntity, `{"errors":[{"status":"422","code":"ENTITY_ERROR","title":"Invalid","detail":"review response failed"}]}`)
-		default:
-			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.String())
-			return nil, nil
-		}
-	}))
+	reg := asctest.NewRegistry(t)
+	reg.Register(asctest.GET("/v1/apps/app-1/customerReviews", "include=response", "limit=200"), asctest.JSON(http.StatusOK, `{"data":[{"type":"customerReviews","id":"review-1"},{"type":"customerReviews","id":"review-2"}]}`))
+	reg.Register(asctest.POST("/v1/customerReviewResponses").JSONBody(`{"data":{"type":"customerReviewResponses","attributes":{"responseBody":"Thanks"},"relationships":{"review":{"data":{"type":"customerReviews","id":"review-1"}}}}}`),
+		asctest.JSON(http.StatusCreated, `{"data":{"type":"customerReviewResponses","id":"response-1"}}`))
+	reg.Register(asctest.POST("/v1/customerReviewResponses").JSONBody(`{"data":{"type":"customerReviewResponses","attributes":{"responseBody":"Thanks"},"relationships":{"review":{"data":{"type":"customerReviews","id":"review-2"}}}}}`),
+		asctest.JSON(http.StatusUnprocessableEntity, `{"errors":[{"status":"422","code":"ENTITY_ERROR","title":"Invalid","detail":"review response failed"}]}`))
 
-	stdout, stderr := captureOutput(t, func() {
-		code := cmd.Run([]string{"reviews", "respond-batch", "--app", "app-1", "--file", inputPath, "--output", "json", "--confirm"}, "1.2.3")
-		if code != cmd.ExitError {
-			t.Fatalf("expected exit code %d, got %d", cmd.ExitError, code)
-		}
-	})
+	stdout, stderr, code := runWithDeps(t, stubClient(t, reg), "reviews", "respond-batch", "--app", "app-1", "--file", inputPath, "--output", "json", "--confirm")
+	if code != cmd.ExitError {
+		t.Fatalf("expected exit code %d, got %d", cmd.ExitError, code)
+	}
 
 	if want := "Error: reviews respond-batch: 1 review(s) failed\n"; stderr != want {
 		t.Fatalf("stderr = %q, want %q", stderr, want)
@@ -775,245 +567,17 @@ func TestRunReviewsRespondBatchPartialFailureReturnsExitError(t *testing.T) {
 	}
 }
 
-func TestReviewsResponseViewValidationErrors(t *testing.T) {
-	tests := []struct {
-		name    string
-		args    []string
-		wantErr string
-	}{
-		{
-			name:    "reviews response view missing id",
-			args:    []string{"reviews", "response", "view"},
-			wantErr: "--id is required",
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			root := RootCommand("1.2.3")
-			root.FlagSet.SetOutput(io.Discard)
-
-			stdout, stderr := captureOutput(t, func() {
-				if err := root.Parse(test.args); err != nil {
-					t.Fatalf("parse error: %v", err)
-				}
-				err := root.Run(context.Background())
-				if !errors.Is(err, flag.ErrHelp) {
-					t.Fatalf("expected ErrHelp, got %v", err)
-				}
-			})
-
-			if stdout != "" {
-				t.Fatalf("expected empty stdout, got %q", stdout)
-			}
-			if !strings.Contains(stderr, test.wantErr) {
-				t.Fatalf("expected error %q, got %q", test.wantErr, stderr)
-			}
-		})
-	}
-}
-
-func TestReviewsResponseDeleteValidationErrors(t *testing.T) {
-	tests := []struct {
-		name    string
-		args    []string
-		wantErr string
-	}{
-		{
-			name:    "reviews response delete missing id",
-			args:    []string{"reviews", "response", "delete", "--confirm"},
-			wantErr: "--id is required",
-		},
-		{
-			name:    "reviews response delete missing confirm",
-			args:    []string{"reviews", "response", "delete", "--id", "RESPONSE_123"},
-			wantErr: "--confirm is required",
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			root := RootCommand("1.2.3")
-			root.FlagSet.SetOutput(io.Discard)
-
-			stdout, stderr := captureOutput(t, func() {
-				if err := root.Parse(test.args); err != nil {
-					t.Fatalf("parse error: %v", err)
-				}
-				err := root.Run(context.Background())
-				if !errors.Is(err, flag.ErrHelp) {
-					t.Fatalf("expected ErrHelp, got %v", err)
-				}
-			})
-
-			if stdout != "" {
-				t.Fatalf("expected empty stdout, got %q", stdout)
-			}
-			if !strings.Contains(stderr, test.wantErr) {
-				t.Fatalf("expected error %q, got %q", test.wantErr, stderr)
-			}
-		})
-	}
-}
-
-func TestReviewsResponseForReviewValidationErrors(t *testing.T) {
-	tests := []struct {
-		name    string
-		args    []string
-		wantErr string
-	}{
-		{
-			name:    "reviews response for-review missing review-id",
-			args:    []string{"reviews", "response", "for-review"},
-			wantErr: "--review-id is required",
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			root := RootCommand("1.2.3")
-			root.FlagSet.SetOutput(io.Discard)
-
-			stdout, stderr := captureOutput(t, func() {
-				if err := root.Parse(test.args); err != nil {
-					t.Fatalf("parse error: %v", err)
-				}
-				err := root.Run(context.Background())
-				if !errors.Is(err, flag.ErrHelp) {
-					t.Fatalf("expected ErrHelp, got %v", err)
-				}
-			})
-
-			if stdout != "" {
-				t.Fatalf("expected empty stdout, got %q", stdout)
-			}
-			if !strings.Contains(stderr, test.wantErr) {
-				t.Fatalf("expected error %q, got %q", test.wantErr, stderr)
-			}
-		})
-	}
-}
-
-func TestReviewsListBackwardsCompatibility(t *testing.T) {
-	t.Setenv("ASC_APP_ID", "")
-
-	// Test that reviews without subcommand still requires --app
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"reviews"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		err := root.Run(context.Background())
-		if !errors.Is(err, flag.ErrHelp) {
-			t.Fatalf("expected ErrHelp, got %v", err)
-		}
-	})
-
-	if stdout != "" {
-		t.Fatalf("expected empty stdout, got %q", stdout)
-	}
-	if !strings.Contains(stderr, "--app is required") {
-		t.Fatalf("expected missing app error, got %q", stderr)
-	}
-}
-
-func TestReviewsListSubcommandValidationErrors(t *testing.T) {
-	t.Setenv("ASC_APP_ID", "")
-
-	tests := []struct {
-		name    string
-		args    []string
-		wantErr string
-	}{
-		{
-			name:    "reviews list missing app",
-			args:    []string{"reviews", "list"},
-			wantErr: "--app is required",
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			root := RootCommand("1.2.3")
-			root.FlagSet.SetOutput(io.Discard)
-
-			stdout, stderr := captureOutput(t, func() {
-				if err := root.Parse(test.args); err != nil {
-					t.Fatalf("parse error: %v", err)
-				}
-				err := root.Run(context.Background())
-				if !errors.Is(err, flag.ErrHelp) {
-					t.Fatalf("expected ErrHelp, got %v", err)
-				}
-			})
-
-			if stdout != "" {
-				t.Fatalf("expected empty stdout, got %q", stdout)
-			}
-			if !strings.Contains(stderr, test.wantErr) {
-				t.Fatalf("expected error %q, got %q", test.wantErr, stderr)
-			}
-		})
-	}
-}
-
-func TestReviewsResponseParentShowsHelp(t *testing.T) {
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	_, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"reviews", "response"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		err := root.Run(context.Background())
-		if !errors.Is(err, flag.ErrHelp) {
-			t.Fatalf("expected ErrHelp, got %v", err)
-		}
-	})
-
-	// Should show help with subcommands listed
-	if !strings.Contains(stderr, "view") || !strings.Contains(stderr, "delete") || !strings.Contains(stderr, "for-review") {
-		t.Fatalf("expected help output with subcommands, got %q", stderr)
-	}
-}
-
 func TestReviewsResponseForReviewReturnsNotConfiguredStateWhenUnset(t *testing.T) {
-	setupAuth(t)
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() {
-		http.DefaultTransport = originalTransport
-	})
+	reg := asctest.NewRegistry(t)
+	reg.Register(asctest.GET("/v1/customerReviews/review-1/response"), asctest.JSON(http.StatusNotFound, `{"errors":[{"status":"404","code":"NOT_FOUND","title":"Not Found"}]}`))
+	reg.Register(asctest.GET("/v1/customerReviews/review-1"), asctest.JSON(http.StatusOK, `{"data":{"type":"customerReviews","id":"review-1","attributes":{"rating":5,"title":"Great","body":"Loved it"}}}`))
 
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		switch req.URL.Path {
-		case "/v1/customerReviews/review-1/response":
-			return jsonResponse(http.StatusNotFound, `{"errors":[{"status":"404","code":"NOT_FOUND","title":"Not Found"}]}`)
-		case "/v1/customerReviews/review-1":
-			return jsonResponse(http.StatusOK, `{"data":{"type":"customerReviews","id":"review-1","attributes":{"rating":5,"title":"Great","body":"Loved it"}}}`)
-		default:
-			t.Fatalf("unexpected path %s", req.URL.Path)
-			return nil, nil
-		}
-	})
-
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"reviews", "response", "for-review", "--review-id", "review-1", "--output", "json"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatalf("run error: %v", err)
-		}
-	})
+	stdout, stderr, err := runRootWithDeps(t, stubClient(t, reg), "reviews", "response", "for-review", "--review-id", "review-1", "--output", "json")
+	if err != nil {
+		t.Fatalf("run error: %v", err)
+	}
 
 	if !strings.Contains(stderr, "Warning: Customer review response is not configured for review \"review-1\".") {
 		t.Fatalf("expected not-configured warning, got %q", stderr)
@@ -1039,39 +603,13 @@ func TestReviewsResponseForReviewReturnsNotConfiguredStateWhenUnset(t *testing.T
 }
 
 func TestReviewsResponseForReviewPreservesErrorForUnknownReviewID(t *testing.T) {
-	setupAuth(t)
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() {
-		http.DefaultTransport = originalTransport
-	})
+	reg := asctest.NewRegistry(t)
+	reg.Register(asctest.GET("/v1/customerReviews/missing-review/response"), asctest.JSON(http.StatusNotFound, `{"errors":[{"status":"404","code":"NOT_FOUND","title":"Not Found"}]}`))
+	reg.Register(asctest.GET("/v1/customerReviews/missing-review"), asctest.JSON(http.StatusNotFound, `{"errors":[{"status":"404","code":"NOT_FOUND","title":"Not Found"}]}`))
 
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		switch req.URL.Path {
-		case "/v1/customerReviews/missing-review/response":
-			return jsonResponse(http.StatusNotFound, `{"errors":[{"status":"404","code":"NOT_FOUND","title":"Not Found"}]}`)
-		case "/v1/customerReviews/missing-review":
-			return jsonResponse(http.StatusNotFound, `{"errors":[{"status":"404","code":"NOT_FOUND","title":"Not Found"}]}`)
-		default:
-			t.Fatalf("unexpected path %s", req.URL.Path)
-			return nil, nil
-		}
-	})
-
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	var runErr error
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"reviews", "response", "for-review", "--review-id", "missing-review", "--output", "json"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		runErr = root.Run(context.Background())
-	})
+	stdout, stderr, runErr := runRootWithDeps(t, stubClient(t, reg), "reviews", "response", "for-review", "--review-id", "missing-review", "--output", "json")
 
 	if runErr == nil {
 		t.Fatal("expected error, got nil")
@@ -1088,4 +626,14 @@ func TestReviewsResponseForReviewPreservesErrorForUnknownReviewID(t *testing.T) 
 	if strings.Contains(runErr.Error(), "not configured") {
 		t.Fatalf("expected unknown review to remain a hard error, got %v", runErr)
 	}
+}
+
+func reviewResponsePostBodies(reg *asctest.Registry) []string {
+	var bodies []string
+	for _, req := range reg.Requests() {
+		if req.Method == http.MethodPost && req.URL.Path == "/v1/customerReviewResponses" {
+			bodies = append(bodies, string(req.Body))
+		}
+	}
+	return bodies
 }

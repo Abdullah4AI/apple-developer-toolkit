@@ -1,12 +1,11 @@
 package cmdtest
 
 import (
-	"errors"
-	"net/http"
 	"strings"
 	"testing"
 
 	rootcmd "github.com/Abdullah4AI/apple-developer-toolkit/appstore/cmd"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asctest"
 )
 
 // TestUnknownFlagSuggestsTheIntendedFlag covers the unknown flag spellings
@@ -15,15 +14,13 @@ import (
 // invocation still fails as a usage error before any HTTP request.
 func TestUnknownFlagSuggestsTheIntendedFlag(t *testing.T) {
 	setupUsageExitCodeEnv(t)
-	installDefaultTransport(t, roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		t.Fatalf("unknown flags must fail before HTTP: %s %s", req.Method, req.URL.String())
-		return nil, errors.New("unexpected request")
-	}))
+	asctest.NewRegistry(t).Install()
 
 	tests := []struct {
 		name string
 		args []string
 		want string
+		deps bool
 	}{
 		{
 			name: "submit status --app",
@@ -38,6 +35,7 @@ func TestUnknownFlagSuggestsTheIntendedFlag(t *testing.T) {
 			want: "Error: unknown flag `--group` for `asc subscriptions list`\n" +
 				"Try:\n  --group-id\n" +
 				"For help:\n  asc subscriptions list --help\n",
+			deps: true,
 		},
 		{
 			name: "builds groups list --app",
@@ -45,6 +43,7 @@ func TestUnknownFlagSuggestsTheIntendedFlag(t *testing.T) {
 			want: "Error: unknown flag `--app` for `asc builds groups list`\n" +
 				"Try:\n  --build-id\n" +
 				"For help:\n  asc builds groups list --help\n",
+			deps: true,
 		},
 		{
 			name: "bundle-ids capabilities list --id",
@@ -59,10 +58,12 @@ func TestUnknownFlagSuggestsTheIntendedFlag(t *testing.T) {
 			want: "Error: unknown flag `--file` for `asc builds upload`\n" +
 				"Try:\n  --ipa\n  --pkg\n" +
 				"For help:\n  asc builds upload --help\n",
+			deps: true,
 		},
 		{
 			name: "review details-get --version-id",
 			args: []string{"review", "details-get", "--version-id", "PRIVATE_VALUE"},
+			deps: true,
 			want: "Error: unknown flag `--version-id` for `asc review details-get`\n" +
 				"Try:\n  --id\n" +
 				"For help:\n  asc review details-get --help\n",
@@ -73,6 +74,7 @@ func TestUnknownFlagSuggestsTheIntendedFlag(t *testing.T) {
 			want: "Error: unknown flag `--version-id` for `asc subscriptions versions view`\n" +
 				"Try:\n  --id\n" +
 				"For help:\n  asc subscriptions versions view --help\n",
+			deps: true,
 		},
 		{
 			name: "profiles list --bundle-id",
@@ -94,10 +96,12 @@ func TestUnknownFlagSuggestsTheIntendedFlag(t *testing.T) {
 			want: "Error: unknown flag `--group` for `asc subscriptions list`\n" +
 				"Try:\n  --group-id\n" +
 				"For help:\n  asc subscriptions list --help\n",
+			deps: true,
 		},
 		{
 			name: "a path-valued --output answers --path",
 			args: []string{"testflight", "testers", "export", "--app", "app-1", "--path", "PRIVATE_VALUE"},
+			deps: true,
 			want: "Error: unknown flag `--path` for `asc testflight testers export`\n" +
 				"Try:\n  --output\n" +
 				"For help:\n  asc testflight testers export --help\n",
@@ -108,6 +112,7 @@ func TestUnknownFlagSuggestsTheIntendedFlag(t *testing.T) {
 			want: "Error: unknown flag `--path` for `asc signing resign`\n" +
 				"Try:\n  --ipa\n  --output\n" +
 				"For help:\n  asc signing resign --help\n",
+			deps: true,
 		},
 		{
 			name: "ipa-info --ipa",
@@ -128,6 +133,7 @@ func TestUnknownFlagSuggestsTheIntendedFlag(t *testing.T) {
 			args: []string{"apps", "list", "--path", "PRIVATE_VALUE"},
 			want: "Error: unknown flag `--path` for `asc apps list`\n" +
 				"For help:\n  asc apps list --help\n",
+			deps: true,
 		},
 		{
 			name: "no comparable flag leaves the Try block out",
@@ -140,9 +146,14 @@ func TestUnknownFlagSuggestsTheIntendedFlag(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			var code int
-			stdout, stderr := captureOutput(t, func() {
-				code = rootcmd.Run(test.args, "5.6.0")
-			})
+			var stdout, stderr string
+			if test.deps {
+				stdout, stderr, code = runWithDeps(t, nil, test.args...)
+			} else {
+				stdout, stderr = captureOutput(t, func() {
+					code = rootcmd.Run(test.args, "5.6.0")
+				})
+			}
 			if code != rootcmd.ExitUsage {
 				t.Fatalf("exit code = %d, want %d; stderr=%q", code, rootcmd.ExitUsage, stderr)
 			}

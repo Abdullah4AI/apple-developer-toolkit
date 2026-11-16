@@ -7,7 +7,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -27,16 +26,16 @@ type deviceBatchRecord struct {
 	Platform string
 }
 
-// DevicesRegisterBatchCommand returns the devices register-batch subcommand.
-func DevicesRegisterBatchCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("register-batch", flag.ExitOnError)
+// newDevicesRegisterBatchCommand returns the devices register-batch subcommand.
+func newDevicesRegisterBatchCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("register-batch", flag.ExitOnError)
 
 	filePath := fs.String("file", "", "Tab-separated device file (UDID, name, optional platform)")
 	platform := fs.String("platform", "", "Default platform when a row omits it: "+strings.Join(devicePlatformList(), ", "))
 	dryRun := fs.Bool("dry-run", false, "Validate and show the registration plan without creating devices")
 	confirm := fs.Bool("confirm", false, "Confirm device registration mutations")
 	continueOnError := fs.Bool("continue-on-error", true, "Continue registering after an API failure")
-	output := shared.BindOutputFlags(fs)
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "register-batch",
@@ -58,37 +57,32 @@ Examples:
   asc devices register-batch --file "./devices.txt" --dry-run
   asc devices register-batch --file "./devices.txt" --continue-on-error=false --confirm`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
-			if len(args) > 0 {
-				return shared.UsageError("devices register-batch does not accept positional arguments")
-			}
-
 			fileValue := strings.TrimSpace(*filePath)
 			if fileValue == "" {
-				fmt.Fprintln(os.Stderr, "Error: --file is required")
-				return shared.MissingRequiredUsageError("--file")
+				return d.RequiredFlag("--file")
 			}
 
 			defaultPlatform, err := normalizeDevicePlatform(*platform)
 			if err != nil {
-				return fmt.Errorf("devices register-batch: %w", shared.UsageError(err.Error()))
+				return fmt.Errorf("devices register-batch: %w", d.UsageError(err.Error()))
 			}
-			if err := shared.RequireConfirmUnlessDryRun(*dryRun, *confirm); err != nil {
+			if err := d.RequireConfirmUnlessDryRun(*dryRun, *confirm); err != nil {
 				return err
 			}
 
-			records, err := readDeviceBatchTSV(fileValue, defaultPlatform)
+			records, err := readDeviceBatchTSV(d, fileValue, defaultPlatform)
 			if err != nil {
 				return fmt.Errorf("devices register-batch: %w", err)
 			}
 
-			client, err := shared.GetASCClient()
+			client, err := d.Client()
 			if err != nil {
 				return fmt.Errorf("devices register-batch: %w", err)
 			}
 
-			existing, err := fetchDevicesByNormalizedUDID(ctx, client)
+			existing, err := fetchDevicesByNormalizedUDID(ctx, d, client)
 			if err != nil {
 				return fmt.Errorf("devices register-batch: failed to check existing devices: %w", err)
 			}
@@ -138,7 +132,7 @@ Examples:
 					continue
 				}
 
-				requestCtx, cancel := shared.ContextWithTimeout(ctx)
+				requestCtx, cancel := d.Timeout(ctx)
 				created, createErr := client.CreateDevice(requestCtx, asc.DeviceCreateAttributes{
 					Name:     record.Name,
 					UDID:     record.UDID,
@@ -167,7 +161,7 @@ Examples:
 				existing[normalizedUDID] = created.Data
 			}
 
-			if err := shared.PrintOutput(summary, *output.Output, *output.Pretty); err != nil {
+			if err := d.PrintOutput(summary, *output.Output, *output.Pretty); err != nil {
 				return err
 			}
 			if summary.Failed > 0 {
@@ -178,10 +172,10 @@ Examples:
 	}
 }
 
-func readDeviceBatchTSV(path, defaultPlatform string) ([]deviceBatchRecord, error) {
+func readDeviceBatchTSV(d *shared.Deps, path, defaultPlatform string) ([]deviceBatchRecord, error) {
 	defaultPlatform, err := normalizeDevicePlatform(defaultPlatform)
 	if err != nil {
-		return nil, shared.UsageError(err.Error())
+		return nil, d.UsageError(err.Error())
 	}
 
 	file, err := rootfs.OpenFile(path)
@@ -197,10 +191,10 @@ func readDeviceBatchTSV(path, defaultPlatform string) ([]deviceBatchRecord, erro
 	if info.Size() > maxDeviceBatchFileSize {
 		return nil, fmt.Errorf("device file exceeds %d-byte limit", maxDeviceBatchFileSize)
 	}
-	return readDeviceBatchTSVFromReader(file, defaultPlatform)
+	return readDeviceBatchTSVFromReader(d, file, defaultPlatform)
 }
 
-func readDeviceBatchTSVFromReader(input io.Reader, defaultPlatform string) ([]deviceBatchRecord, error) {
+func readDeviceBatchTSVFromReader(d *shared.Deps, input io.Reader, defaultPlatform string) ([]deviceBatchRecord, error) {
 	limited := &io.LimitedReader{R: input, N: maxDeviceBatchFileSize + 1}
 	reader := csv.NewReader(limited)
 	reader.Comma = '\t'
@@ -236,7 +230,7 @@ func readDeviceBatchTSVFromReader(input io.Reader, defaultPlatform string) ([]de
 			}
 		}
 
-		record, err := parseDeviceBatchRow(row, line, defaultPlatform)
+		record, err := parseDeviceBatchRow(d, row, line, defaultPlatform)
 		if err != nil {
 			return nil, err
 		}
@@ -295,7 +289,7 @@ func normalizeDeviceBatchHeader(value string) string {
 	return replacer.Replace(value)
 }
 
-func parseDeviceBatchRow(row []string, line int, defaultPlatform string) (deviceBatchRecord, error) {
+func parseDeviceBatchRow(d *shared.Deps, row []string, line int, defaultPlatform string) (deviceBatchRecord, error) {
 	if len(row) < 2 || len(row) > 3 {
 		return deviceBatchRecord{}, fmt.Errorf("line %d: expected 2 or 3 tab-separated columns", line)
 	}
@@ -311,24 +305,27 @@ func parseDeviceBatchRow(row []string, line int, defaultPlatform string) (device
 	platform := defaultPlatform
 	if len(row) == 3 && strings.TrimSpace(row[2]) != "" {
 		platform = strings.TrimSpace(row[2])
+		if strings.EqualFold(platform, "mac") {
+			platform = string(asc.DevicePlatformMacOS)
+		}
 	}
 	if platform == "" {
 		return deviceBatchRecord{}, fmt.Errorf("line %d: device platform is required (provide a third column or --platform)", line)
 	}
 	platform, err := normalizeDevicePlatform(platform)
 	if err != nil {
-		return deviceBatchRecord{}, fmt.Errorf("line %d: %w", line, shared.UsageError(err.Error()))
+		return deviceBatchRecord{}, fmt.Errorf("line %d: %w", line, d.UsageError(err.Error()))
 	}
 
 	return deviceBatchRecord{Row: line, UDID: udid, Name: name, Platform: platform}, nil
 }
 
-func fetchDevicesByNormalizedUDID(ctx context.Context, client *asc.Client) (map[string]asc.Resource[asc.DeviceAttributes], error) {
-	requestCtx, cancel := shared.ContextWithTimeout(ctx)
+func fetchDevicesByNormalizedUDID(ctx context.Context, d *shared.Deps, client *asc.Client) (map[string]asc.Resource[asc.DeviceAttributes], error) {
+	requestCtx, cancel := d.Timeout(ctx)
 	firstPage, err := client.GetDevices(
 		requestCtx,
 		asc.WithDevicesFields([]string{"name", "udid", "platform", "status"}),
-		asc.WithDevicesLimit(200),
+		asc.Limit[asc.DevicesOption](200),
 	)
 	cancel()
 	if err != nil {
@@ -336,9 +333,9 @@ func fetchDevicesByNormalizedUDID(ctx context.Context, client *asc.Client) (map[
 	}
 
 	all, err := asc.PaginateAll(ctx, firstPage, func(ctx context.Context, nextURL string) (asc.PaginatedResponse, error) {
-		requestCtx, cancel := shared.ContextWithTimeout(ctx)
+		requestCtx, cancel := d.Timeout(ctx)
 		defer cancel()
-		return client.GetDevices(requestCtx, asc.WithDevicesNextURL(nextURL))
+		return client.GetDevices(requestCtx, asc.NextURL[asc.DevicesOption](nextURL))
 	})
 	if err != nil {
 		return nil, err

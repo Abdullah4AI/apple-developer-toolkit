@@ -2,7 +2,6 @@ package asc
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"strings"
@@ -112,41 +111,6 @@ func (c *Client) fetchPerfPowerMetrics(ctx context.Context, path string) (*PerfP
 	}
 
 	return &PerfPowerMetricsResponse{Data: data}, nil
-}
-
-// GetDiagnosticSignaturesForBuild retrieves diagnostic signatures for a build.
-func (c *Client) GetDiagnosticSignaturesForBuild(ctx context.Context, buildID string, opts ...DiagnosticSignaturesOption) (*DiagnosticSignaturesResponse, error) {
-	buildID = strings.TrimSpace(buildID)
-	if buildID == "" {
-		return nil, fmt.Errorf("build ID is required")
-	}
-
-	query := &diagnosticSignaturesQuery{}
-	for _, opt := range opts {
-		opt(query)
-	}
-
-	path := fmt.Sprintf("/v1/builds/%s/diagnosticSignatures", buildID)
-	if query.nextURL != "" {
-		if err := validateNextURL(query.nextURL); err != nil {
-			return nil, fmt.Errorf("diagnosticSignatures: %w", err)
-		}
-		path = query.nextURL
-	} else if queryString := buildDiagnosticSignaturesQuery(query); queryString != "" {
-		path += "?" + queryString
-	}
-
-	data, err := c.do(ctx, "GET", path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var response DiagnosticSignaturesResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse diagnostic signatures response: %w", err)
-	}
-
-	return &response, nil
 }
 
 // GetDiagnosticSignatureLogs retrieves diagnostic logs for a signature.

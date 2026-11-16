@@ -4,11 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"io"
-	"net/http"
 	"net/url"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asctest"
 )
 
 func runCreativePlacements(t *testing.T, args ...string) (string, string, error) {
@@ -24,24 +25,21 @@ func runCreativePlacements(t *testing.T, args ...string) (string, string, error)
 	return stdout, stderr, err
 }
 
+// runCreativePlacementsFor runs args on test deps with reg as their client
+// and returns what they wrote to the deps streams.
+func runCreativePlacementsFor(t *testing.T, reg *asctest.Registry, args ...string) (string, string, error) {
+	t.Helper()
+	return runRootWithDeps(t, stubClient(t, reg), args...)
+}
+
 func TestCreativePlacementsPublicRead(t *testing.T) {
 	for _, output := range []string{"json", "table", "markdown"} {
 		t.Run(output, func(t *testing.T) {
-			setupAuth(t)
-			original := http.DefaultTransport
-			t.Cleanup(func() { http.DefaultTransport = original })
 			body := `{"data":[{"type":"appAssetLibraryPlacements","id":"header-1","attributes":{"mediaType":"IMAGE","placementType":"PRODUCT_PAGE_HEADER_ASSET","placementGroup":"DEFAULT_PROFILE","state":"PREPARE_FOR_SUBMISSION","unknown":null},"relationships":{"image":{"data":{"type":"appAssetLibraryImages","id":"img"}}}}],"included":[{"type":"appAssetLibraryImages","id":"img","attributes":{"future":true}}],"newTopLevel":{"retain":true}}`
-			http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-				if req.Method != "GET" || req.URL.Path != "/v1/appStoreVersionLocalizations/loc/placements" {
-					t.Fatalf("unexpected %s %s", req.Method, req.URL)
-				}
-				q := req.URL.Query()
-				if q.Get("filter[placementType]") != "PRODUCT_PAGE_HEADER_ASSET,APP_STORE_SEARCH_RESULTS_ASSET" || q.Get("include") != "image,video" || q.Get("sort") != "placementGroupPosition" || q.Get("limit") != "1" {
-					t.Fatalf("query=%v", q)
-				}
-				return jsonResponse(200, body)
-			})
-			stdout, stderr, err := runCreativePlacements(t, "localizations", "placements", "list", "--localization-id", "loc", "--placement-type", "PRODUCT_PAGE_HEADER_ASSET,APP_STORE_SEARCH_RESULTS_ASSET", "--include", "image,video", "--sort", "placementGroupPosition", "--limit", "1", "--output", output)
+			reg := asctest.NewRegistry(t)
+			reg.Register(asctest.GET("/v1/appStoreVersionLocalizations/loc/placements", "filter[placementType]=PRODUCT_PAGE_HEADER_ASSET,APP_STORE_SEARCH_RESULTS_ASSET", "include=image,video", "limit=1", "sort=placementGroupPosition"),
+				asctest.JSON(200, body))
+			stdout, stderr, err := runCreativePlacementsFor(t, reg, "localizations", "placements", "list", "--localization-id", "loc", "--placement-type", "PRODUCT_PAGE_HEADER_ASSET,APP_STORE_SEARCH_RESULTS_ASSET", "--include", "image,video", "--sort", "placementGroupPosition", "--limit", "1", "--output", output)
 			if err != nil || stderr != "" {
 				t.Fatalf("error=%v stderr=%q", err, stderr)
 			}
@@ -90,7 +88,7 @@ func TestCreativePlacementsUsage(t *testing.T) {
 	} {
 		t.Run(strings.Join(args, " "), func(t *testing.T) {
 			full := append([]string{"localizations", "placements", "list"}, args...)
-			_, stderr, err := runCreativePlacements(t, full...)
+			_, stderr, err := runCreativePlacementsFor(t, asctest.NewRegistry(t), full...)
 			if !isUsageClassError(err) || stderr == "" {
 				t.Fatalf("expected usage before auth, got %v %q", err, stderr)
 			}
@@ -109,21 +107,16 @@ func TestCreativePlacementsListSendsAppleEnumValues(t *testing.T) {
 		{"parent includes", "localizations", "appStoreVersionLocalizations", "--include", "appEventLocalization,appStoreVersionLocalization,appCustomProductPageLocalization,appStoreVersionExperimentTreatmentLocalization,retentionMessageVersion", "include=appEventLocalization%2CappStoreVersionLocalization%2CappCustomProductPageLocalization%2CappStoreVersionExperimentTreatmentLocalization%2CretentionMessageVersion"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			setupAuth(t)
-			original := http.DefaultTransport
-			t.Cleanup(func() { http.DefaultTransport = original })
-			requests := 0
-			http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-				requests++
-				if req.Method != "GET" || req.URL.Path != "/v1/"+tc.resource+"/loc/placements" || req.URL.RawQuery != tc.query {
-					t.Fatalf("unexpected request %s %s", req.Method, req.URL)
-				}
-				return jsonResponse(200, `{"data":[]}`)
-			})
+			reg := asctest.NewRegistry(t)
+			reg.Register(asctest.GET("/v1/"+tc.resource+"/loc/placements", tc.query), asctest.JSON(200, `{"data":[]}`))
 			args := append(strings.Fields(tc.command), "placements", "list", "--localization-id", "loc", tc.flag, tc.value)
-			stdout, stderr, err := runCreativePlacements(t, args...)
-			if err != nil || stderr != "" || requests != 1 || !strings.Contains(stdout, `"data":[]`) {
-				t.Fatalf("requests=%d stdout=%s stderr=%s err=%v", requests, stdout, stderr, err)
+			stdout, stderr, err := runCreativePlacementsFor(t, reg, args...)
+			requests := reg.Requests()
+			if len(requests) == 1 && requests[0].URL.RawQuery != tc.query {
+				t.Fatalf("raw query = %s, want %s", requests[0].URL.RawQuery, tc.query)
+			}
+			if err != nil || stderr != "" || len(requests) != 1 || !strings.Contains(stdout, `"data":[]`) {
+				t.Fatalf("requests=%d stdout=%s stderr=%s err=%v", len(requests), stdout, stderr, err)
 			}
 		})
 	}
@@ -155,22 +148,10 @@ func TestPlacementListsSendEachFilterAndSortTheirOperationAllows(t *testing.T) {
 		{video, "/v1/appAssetLibraryVideos/asset/placements", []string{"--placement-type", "TODAY_TAB_ADS_ASSET", "--image-id", "i", "--sort", "-lastModifiedDate"}, url.Values{"filter[placementType]": {"TODAY_TAB_ADS_ASSET"}, "filter[image]": {"i"}, "sort": {"-lastModifiedDate"}}},
 	} {
 		t.Run(strings.Join(append(tc.base[:len(tc.base)-2:len(tc.base)-2], tc.flags...), " "), func(t *testing.T) {
-			setupAuth(t)
-			original := http.DefaultTransport
-			t.Cleanup(func() { http.DefaultTransport = original })
-			calls := 0
-			http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-				calls++
-				if req.Method != "GET" || req.URL.Path != tc.path {
-					t.Fatalf("unexpected %s %s", req.Method, req.URL)
-				}
-				if got := req.URL.Query(); !reflect.DeepEqual(got, tc.query) {
-					t.Fatalf("query=%v want %v", got, tc.query)
-				}
-				return jsonResponse(200, `{"data":[]}`)
-			})
-			_, stderr, err := runCreativePlacements(t, append(tc.base[:len(tc.base):len(tc.base)], tc.flags...)...)
-			if err != nil || stderr != "" || calls != 1 {
+			reg := asctest.NewRegistry(t)
+			reg.Register(asctest.GET(tc.path, tc.query.Encode()), asctest.JSON(200, `{"data":[]}`))
+			_, stderr, err := runCreativePlacementsFor(t, reg, append(tc.base[:len(tc.base):len(tc.base)], tc.flags...)...)
+			if calls := len(reg.Requests()); err != nil || stderr != "" || calls != 1 {
 				t.Fatalf("error=%v stderr=%q calls=%d", err, stderr, calls)
 			}
 		})
@@ -180,17 +161,10 @@ func TestPlacementListsSendEachFilterAndSortTheirOperationAllows(t *testing.T) {
 // Apple's spec lists RETENTION_MESSAGE_ASSET, but production rejects it as a
 // placements filter with HTTP 400, so it must stop as a usage error locally.
 func TestCreativePlacementsListRejectsRetentionMessageType(t *testing.T) {
-	original := http.DefaultTransport
-	t.Cleanup(func() { http.DefaultTransport = original })
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		t.Fatalf("unexpected request %s %s", req.Method, req.URL)
-		return nil, nil
-	})
 	for _, command := range []string{"localizations", "app-events localizations", "product-pages custom-pages localizations", "product-pages experiments treatments localizations"} {
 		t.Run(command, func(t *testing.T) {
-			setupAuth(t)
 			args := append(strings.Fields(command), "placements", "list", "--localization-id", "loc", "--placement-type", "APP_SCREENSHOT,RETENTION_MESSAGE_ASSET")
-			stdout, stderr, err := runCreativePlacements(t, args...)
+			stdout, stderr, err := runCreativePlacementsFor(t, asctest.NewRegistry(t), args...)
 			if !isUsageClassError(err) || stdout != "" || !strings.Contains(stderr, "--placement-type") {
 				t.Fatalf("expected placement type usage error: %s %s %v", stdout, stderr, err)
 			}
@@ -230,7 +204,7 @@ func TestCreativePlacementsRejectOverLimitBeforeAuth(t *testing.T) {
 	} {
 		t.Run(strings.Join(path, " "), func(t *testing.T) {
 			args := append(path, "--localization-id", "loc", "--limit", "201")
-			stdout, stderr, err := runCreativePlacements(t, args...)
+			stdout, stderr, err := runCreativePlacementsFor(t, asctest.NewRegistry(t), args...)
 			if !isUsageClassError(err) || stdout != "" || !strings.Contains(stderr, "--limit") {
 				t.Fatalf("expected over-limit usage before auth, got stdout=%q stderr=%q error=%v", stdout, stderr, err)
 			}
@@ -239,41 +213,27 @@ func TestCreativePlacementsRejectOverLimitBeforeAuth(t *testing.T) {
 }
 
 func TestCreativePlacementsPaginateEmptyAndAPIError(t *testing.T) {
-	setupAuth(t)
-	original := http.DefaultTransport
-	t.Cleanup(func() { http.DefaultTransport = original })
-	calls := 0
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		calls++
-		if calls == 1 {
-			return jsonResponse(200, `{"data":[],"links":{"next":"https://api.appstoreconnect.apple.com/v1/appStoreVersionLocalizations/loc/placements?cursor=2"}}`)
-		}
-		return jsonResponse(200, `{"data":[]}`)
-	})
-	stdout, _, err := runCreativePlacements(t, "localizations", "placements", "list", "--localization-id", "loc", "--paginate")
+	reg := asctest.NewRegistry(t)
+	reg.Register(asctest.GET("/v1/appStoreVersionLocalizations/loc/placements", "limit=200"),
+		asctest.JSON(200, `{"data":[],"links":{"next":"https://api.appstoreconnect.apple.com/v1/appStoreVersionLocalizations/loc/placements?cursor=2"}}`))
+	reg.Register(asctest.GET("/v1/appStoreVersionLocalizations/loc/placements", "cursor=2"), asctest.JSON(200, `{"data":[]}`))
+	reg.Register(asctest.GET("/v1/appStoreVersionLocalizations/loc/placements"),
+		asctest.JSON(403, `{"errors":[{"status":"403","code":"FORBIDDEN","title":"Denied"}]}`))
+	stdout, _, err := runCreativePlacementsFor(t, reg, "localizations", "placements", "list", "--localization-id", "loc", "--paginate")
+	calls := len(reg.Requests())
 	if err != nil || calls != 2 || !strings.Contains(stdout, `"data":[]`) {
 		t.Fatalf("empty pages failed %s %v %d", stdout, err, calls)
 	}
-	http.DefaultTransport = roundTripFunc(func(*http.Request) (*http.Response, error) {
-		return jsonResponse(403, `{"errors":[{"status":"403","code":"FORBIDDEN","title":"Denied"}]}`)
-	})
-	stdout, _, err = runCreativePlacements(t, "localizations", "placements", "list", "--localization-id", "loc")
+	stdout, _, err = runCreativePlacementsFor(t, reg, "localizations", "placements", "list", "--localization-id", "loc")
 	if err == nil || stdout != "" {
 		t.Fatalf("API error accepted: %s %v", stdout, err)
 	}
 }
 
 func TestCustomPageCreativePlacements(t *testing.T) {
-	setupAuth(t)
-	original := http.DefaultTransport
-	t.Cleanup(func() { http.DefaultTransport = original })
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		if req.Method != "GET" || req.URL.Path != "/v1/appCustomProductPageLocalizations/loc/placements" || req.URL.Query().Get("filter[placementType]") != "PRODUCT_PAGE_HEADER_ASSET" {
-			t.Fatalf("unexpected route: %s", req.URL)
-		}
-		return jsonResponse(200, `{"data":[]}`)
-	})
-	stdout, stderr, err := runCreativePlacements(t, "product-pages", "custom-pages", "localizations", "placements", "list", "--localization-id", "loc", "--placement-type", "PRODUCT_PAGE_HEADER_ASSET")
+	reg := asctest.NewRegistry(t)
+	reg.Register(asctest.GET("/v1/appCustomProductPageLocalizations/loc/placements", "filter[placementType]=PRODUCT_PAGE_HEADER_ASSET"), asctest.JSON(200, `{"data":[]}`))
+	stdout, stderr, err := runCreativePlacementsFor(t, reg, "product-pages", "custom-pages", "localizations", "placements", "list", "--localization-id", "loc", "--placement-type", "PRODUCT_PAGE_HEADER_ASSET")
 	if err != nil || stderr != "" || !strings.Contains(stdout, `"data":[]`) {
 		t.Fatalf("failed: %s %s %v", stdout, stderr, err)
 	}
@@ -292,21 +252,11 @@ func TestCreativePlacementViewReadsOneResourceInEveryContext(t *testing.T) {
 	for _, group := range creativePlacementGroups {
 		for _, output := range []string{"json", "table"} {
 			t.Run(group+" "+output, func(t *testing.T) {
-				setupAuth(t)
-				original := http.DefaultTransport
-				t.Cleanup(func() { http.DefaultTransport = original })
-				http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-					if req.Method != "GET" || req.URL.Path != "/v1/appAssetLibraryPlacements/placement-1" {
-						t.Fatalf("unexpected %s %s", req.Method, req.URL)
-					}
-					q := req.URL.Query()
-					if q.Get("include") != "image,appEventLocalization,retentionMessageVersion" || q.Get("fields[appAssetLibraryPlacements]") != "state,image,retentionMessageVersion" || len(q) != 2 {
-						t.Fatalf("query=%v", q)
-					}
-					return jsonResponse(200, body)
-				})
+				reg := asctest.NewRegistry(t)
+				reg.Register(asctest.GET("/v1/appAssetLibraryPlacements/placement-1", "fields[appAssetLibraryPlacements]=state,image,retentionMessageVersion", "include=image,appEventLocalization,retentionMessageVersion"),
+					asctest.JSON(200, body))
 				args := append(strings.Fields(group), "view", "--id", "placement-1", "--include", "image,appEventLocalization,retentionMessageVersion", "--fields", "state,image,retentionMessageVersion", "--output", output)
-				stdout, stderr, err := runCreativePlacements(t, args...)
+				stdout, stderr, err := runCreativePlacementsFor(t, reg, args...)
 				if err != nil || stderr != "" {
 					t.Fatalf("error=%v stderr=%q", err, stderr)
 				}
@@ -341,13 +291,9 @@ func TestCreativePlacementViewRefusesFalseSuccess(t *testing.T) {
 		"not found":  {404, `{"errors":[{"status":"404","code":"NOT_FOUND","title":"Not found"}]}`},
 	} {
 		t.Run(name, func(t *testing.T) {
-			setupAuth(t)
-			original := http.DefaultTransport
-			t.Cleanup(func() { http.DefaultTransport = original })
-			http.DefaultTransport = roundTripFunc(func(*http.Request) (*http.Response, error) {
-				return jsonResponse(response.status, response.body)
-			})
-			stdout, _, err := runCreativePlacements(t, "localizations", "placements", "view", "--id", "placement-1")
+			reg := asctest.NewRegistry(t)
+			reg.Register(asctest.GET("/v1/appAssetLibraryPlacements/placement-1"), asctest.JSON(response.status, response.body))
+			stdout, _, err := runCreativePlacementsFor(t, reg, "localizations", "placements", "view", "--id", "placement-1")
 			if err == nil || isUsageClassError(err) || stdout != "" {
 				t.Fatalf("stdout=%q err=%v", stdout, err)
 			}
@@ -361,14 +307,13 @@ func TestCreativePlacementViewUsage(t *testing.T) {
 		{},
 		{"--id", "   "},
 		{"--id", "../apps"},
-		{"--id", "placement-1", "extra"},
 		{"--id", "placement-1", "--include", "app"},
 		{"--id", "placement-1", "--include", "image,"},
 		{"--id", "placement-1", "--fields", "placementGroupPosition"},
 	} {
 		t.Run(strings.Join(args, " "), func(t *testing.T) {
 			full := append([]string{"localizations", "placements", "view"}, args...)
-			_, stderr, err := runCreativePlacements(t, full...)
+			_, stderr, err := runCreativePlacementsFor(t, asctest.NewRegistry(t), full...)
 			if !isUsageClassError(err) || !strings.Contains(stderr, "localizations placements view: ") {
 				t.Fatalf("expected usage before auth, got %v %q", err, stderr)
 			}

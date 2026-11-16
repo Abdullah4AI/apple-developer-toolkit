@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asctest"
 )
 
 func TestUploadReplaceRequiresConfirm(t *testing.T) {
@@ -25,18 +27,14 @@ func TestUploadReplaceRequiresConfirm(t *testing.T) {
 			setupAuth(t)
 			t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 
-			installDefaultTransport(t, roundTripFunc(func(req *http.Request) (*http.Response, error) {
-				t.Fatalf("expected no requests before --confirm is validated, got %s %s", req.Method, req.URL.String())
-				return nil, nil
-			}))
-
-			stdout, stderr, runErr := runRootCommand(t, []string{
+			args := []string{
 				test.command, "upload",
 				"--version-localization", "LOC_123",
 				"--path", filepath.Join(t.TempDir(), "media"),
 				"--device-type", "IPHONE_65",
 				"--replace",
-			})
+			}
+			stdout, stderr, runErr := runRootWithDeps(t, stubClient(t, asctest.NewRegistry(t)), args...)
 
 			if stdout != "" {
 				t.Fatalf("expected empty stdout, got %q", stdout)
@@ -59,21 +57,12 @@ func TestScreenshotsUploadReplaceDryRunDoesNotRequireConfirm(t *testing.T) {
 	pathDir := t.TempDir()
 	writePNG(t, filepath.Join(pathDir, "01-home.png"), 1284, 2778)
 
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() {
-		http.DefaultTransport = originalTransport
-	})
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		switch {
-		case req.Method == http.MethodGet && req.URL.Path == "/v1/appStoreVersionLocalizations/LOC_123/appScreenshotSets":
-			return statusJSONResponse(`{"data":[{"type":"appScreenshotSets","id":"set-1","attributes":{"screenshotDisplayType":"APP_IPHONE_65"}}],"links":{}}`), nil
-		case req.Method == http.MethodGet && req.URL.Path == "/v1/appScreenshotSets/set-1/appScreenshots":
-			return statusJSONResponse(`{"data":[{"type":"appScreenshots","id":"old-1","attributes":{"fileName":"old.png"}}],"links":{}}`), nil
-		default:
-			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.String())
-			return nil, nil
-		}
-	})
+	reg := asctest.NewRegistry(t)
+	reg.Install()
+	reg.Register(asctest.GET("/v1/appStoreVersionLocalizations/LOC_123/appScreenshotSets"),
+		asctest.JSON(http.StatusOK, `{"data":[{"type":"appScreenshotSets","id":"set-1","attributes":{"screenshotDisplayType":"APP_IPHONE_65"}}],"links":{}}`))
+	reg.Register(asctest.GET("/v1/appScreenshotSets/set-1/appScreenshots"),
+		asctest.JSON(http.StatusOK, `{"data":[{"type":"appScreenshots","id":"old-1","attributes":{"fileName":"old.png"}}],"links":{}}`))
 
 	stdout, stderr, runErr := runRootCommand(t, []string{
 		"screenshots", "upload",

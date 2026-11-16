@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	rootcmd "github.com/Abdullah4AI/apple-developer-toolkit/appstore/cmd"
@@ -696,16 +697,10 @@ func TestIAPSetupRefreshesContextsAcrossPricingAndVerification(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("ASC_TIMEOUT", "80ms")
 	t.Setenv("ASC_TIMEOUT_SECONDS", "")
-
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() {
-		http.DefaultTransport = originalTransport
-	})
-
 	var priceScheduleDeadlineRemaining time.Duration
 	var verifyDeadlineRemaining time.Duration
 	requestCount := 0
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+	transport := roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		requestCount++
 		switch requestCount {
 		case 1:
@@ -809,29 +804,31 @@ func TestIAPSetupRefreshesContextsAcrossPricingAndVerification(t *testing.T) {
 		}
 	})
 
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
+	d, stdoutBuf, stderrBuf := newTestDeps(t, stubClient(t, transport))
+	d.Now = func() time.Time { return time.Date(2026, 3, 2, 0, 0, 0, 0, time.UTC) }
+	root := rootcmd.RootCommandWithDeps("1.2.3", d)
 
 	var result iapSetupOutput
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{
-			"iap", "setup",
-			"--app", "app-1",
-			"--type", "NON_CONSUMABLE",
-			"--reference-name", "Budget Lifetime",
-			"--product-id", "budget.lifetime",
-			"--price", "3.99",
-			"--base-territory", "USA",
-			"--start-date", "2026-03-01",
-			"--refresh",
-			"--output", "json",
-		}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatalf("run error: %v", err)
-		}
-	})
+	if err := root.Parse([]string{
+		"iap", "setup",
+		"--app", "app-1",
+		"--type", "NON_CONSUMABLE",
+		"--reference-name", "Budget Lifetime",
+		"--product-id", "budget.lifetime",
+		"--price", "3.99",
+		"--base-territory", "USA",
+		"--start-date", "2026-03-01",
+		"--refresh",
+		"--output", "json",
+	}); err != nil {
+		t.Fatalf("parse error: %v", err)
+	}
+	var runErr error
+	synctest.Test(t, func(*testing.T) { runErr = root.Run(context.Background()) })
+	if runErr != nil {
+		t.Fatalf("run error: %v", runErr)
+	}
+	stdout, stderr := stdoutBuf.String(), stderrBuf.String()
 
 	if stderr != "" {
 		t.Fatalf("expected empty stderr, got %q", stderr)
@@ -953,8 +950,10 @@ func TestIAPSetupRefreshesContextsAcrossLocalizationCreationAndVerification(t *t
 		}); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatalf("run error: %v", err)
+		var runErr error
+		synctest.Test(t, func(*testing.T) { runErr = root.Run(context.Background()) })
+		if runErr != nil {
+			t.Fatalf("run error: %v", runErr)
 		}
 	})
 

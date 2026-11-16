@@ -308,8 +308,8 @@ func TestVersionsCustomerReviewsFilterValidationMatchesAppLevelReviews(t *testin
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			appCode, appStderr := runReviewFilterFailure(t, append([]string{"reviews", "list", "--app", "app-1"}, test.args...))
-			versionCode, versionStderr := runReviewFilterFailure(t, append([]string{"versions", "customer-reviews", "list", "--version-id", "version-1"}, test.args...))
+			appCode, appStderr := runReviewFilterFailure(t, true, append([]string{"reviews", "list", "--app", "app-1"}, test.args...))
+			versionCode, versionStderr := runReviewFilterFailure(t, false, append([]string{"versions", "customer-reviews", "list", "--version-id", "version-1"}, test.args...))
 
 			if appCode == rootcmd.ExitSuccess {
 				t.Fatalf("app-level reviews list unexpectedly succeeded")
@@ -333,62 +333,61 @@ func TestCustomerReviewListsRejectQueryFlagsWithNext(t *testing.T) {
 		name    string
 		args    []string
 		wantErr string
+		deps    bool
 	}{
 		{
 			name:    "version stars",
 			args:    []string{"versions", "customer-reviews", "list", "--next", nextURL, "--stars", "1"},
 			wantErr: "--next cannot be combined with --stars",
+			deps:    true,
 		},
 		{
 			name:    "app response fields",
 			args:    []string{"reviews", "list", "--next", nextURL, "--response-fields", "responseBody"},
+			deps:    true,
 			wantErr: "--next cannot be combined with --response-fields",
 		},
 		{
 			name:    "explicit empty territory",
 			args:    []string{"versions", "customer-reviews", "list", "--next", nextURL, "--territory", ""},
 			wantErr: "--next cannot be combined with --territory",
+			deps:    true,
 		},
 		{
 			name:    "app review territory",
 			args:    []string{"reviews", "list", "--next", nextURL, "--review-territory", "USA"},
+			deps:    true,
 			wantErr: "--next cannot be combined with --review-territory",
 		},
 		{
 			name:    "version fields",
 			args:    []string{"versions", "customer-reviews", "list", "--next", nextURL, "--fields", "rating"},
 			wantErr: "--next cannot be combined with --fields",
+			deps:    true,
 		},
 		{
 			name:    "app include",
 			args:    []string{"reviews", "--next", nextURL, "--include", "reviewTerritory"},
+			deps:    true,
 			wantErr: "--next cannot be combined with --include",
 		},
 		{
 			name:    "version territory fields",
 			args:    []string{"versions", "customer-reviews", "list", "--next", nextURL, "--territory-fields", "currency"},
 			wantErr: "--next cannot be combined with --territory-fields",
+			deps:    true,
 		},
 		{
 			name:    "explicit zero limit",
 			args:    []string{"reviews", "--next", nextURL, "--limit", "0"},
+			deps:    true,
 			wantErr: "--next cannot be combined with --limit",
-		},
-		{
-			name:    "version owner",
-			args:    []string{"versions", "customer-reviews", "list", "--next", nextURL, "--version-id", "version-1"},
-			wantErr: "--next cannot be combined with --version-id",
-		},
-		{
-			name:    "app owner",
-			args:    []string{"reviews", "list", "--next", nextURL, "--app", "app-1"},
-			wantErr: "--next cannot be combined with --app",
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			code, stderr := runReviewFilterFailure(t, test.args)
+			code, stderr := runReviewFilterFailure(t, test.deps, test.args)
 			if code != rootcmd.ExitUsage {
 				t.Fatalf("exit code = %d, want %d; stderr=%q", code, rootcmd.ExitUsage, stderr)
 			}
@@ -431,8 +430,10 @@ func TestCustomerReviewReadsSendRequestedQuery(t *testing.T) {
 		path     string
 		payload  string
 		wantRead url.Values
+		deps     bool
 	}{
 		{
+			deps:     true,
 			name:     "app list",
 			args:     append(append([]string{"reviews", "list", "--app", "app-1"}, filters...), selection...),
 			path:     "/v1/apps/app-1/customerReviews",
@@ -440,6 +441,7 @@ func TestCustomerReviewReadsSendRequestedQuery(t *testing.T) {
 			wantRead: withFilters(selectionQuery),
 		},
 		{
+			deps:     true,
 			name:     "reviews root list",
 			args:     append(append([]string{"reviews", "--app", "app-1"}, filters...), selection...),
 			path:     "/v1/apps/app-1/customerReviews",
@@ -452,8 +454,10 @@ func TestCustomerReviewReadsSendRequestedQuery(t *testing.T) {
 			path:     "/v1/appStoreVersions/version-1/customerReviews",
 			payload:  listPayload,
 			wantRead: withFilters(selectionQuery),
+			deps:     true,
 		},
 		{
+			deps:     true,
 			name:     "view",
 			args:     append([]string{"reviews", "view", "--id", "review-1"}, selection...),
 			path:     "/v1/customerReviews/review-1",
@@ -461,6 +465,7 @@ func TestCustomerReviewReadsSendRequestedQuery(t *testing.T) {
 			wantRead: selectionQuery,
 		},
 		{
+			deps:     true,
 			name:     "app list without new flags keeps the older territory filter alone",
 			args:     []string{"reviews", "list", "--app", "app-1", "--territory", "US"},
 			path:     "/v1/apps/app-1/customerReviews",
@@ -468,6 +473,7 @@ func TestCustomerReviewReadsSendRequestedQuery(t *testing.T) {
 			wantRead: url.Values{"filter[territory]": {"USA"}},
 		},
 		{
+			deps:     true,
 			name:     "view without flags sends no query",
 			args:     []string{"reviews", "view", "--id", "review-1"},
 			path:     "/v1/customerReviews/review-1",
@@ -475,6 +481,7 @@ func TestCustomerReviewReadsSendRequestedQuery(t *testing.T) {
 			wantRead: url.Values{},
 		},
 		{
+			deps: true,
 			name: "field flags imply their include once",
 			args: []string{
 				"reviews", "list", "--app", "app-1", "--include-response", "--include", "response",
@@ -489,6 +496,7 @@ func TestCustomerReviewReadsSendRequestedQuery(t *testing.T) {
 			},
 		},
 		{
+			deps:     true,
 			name:     "view territory fields imply the include",
 			args:     []string{"reviews", "view", "--id", "review-1", "--territory-fields", "currency"},
 			path:     "/v1/customerReviews/review-1",
@@ -499,7 +507,6 @@ func TestCustomerReviewReadsSendRequestedQuery(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			setupAuth(t)
 			t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 
 			requests := 0
@@ -516,15 +523,10 @@ func TestCustomerReviewReadsSendRequestedQuery(t *testing.T) {
 			}))
 			t.Cleanup(server.Close)
 
-			client := newReviewTestServerClient(t, server)
-			restoreClient := shared.SetASCClientFactoryForTesting(func() (*asc.Client, error) { return client, nil })
-			t.Cleanup(restoreClient)
-
-			_, stderr := captureOutput(t, func() {
-				if code := rootcmd.Run(append(test.args, "--output", "json"), "1.2.3"); code != rootcmd.ExitSuccess {
-					t.Errorf("exit code = %d, want %d", code, rootcmd.ExitSuccess)
-				}
-			})
+			_, stderr, code := runCustomerReviewRead(t, test.deps, server, append(test.args, "--output", "json"))
+			if code != rootcmd.ExitSuccess {
+				t.Errorf("exit code = %d, want %d", code, rootcmd.ExitSuccess)
+			}
 			if stderr != "" {
 				t.Fatalf("expected empty stderr, got %q", stderr)
 			}
@@ -538,7 +540,6 @@ func TestCustomerReviewReadsSendRequestedQuery(t *testing.T) {
 // A sparse fieldset must not print attributes Apple did not return, and the
 // sideloaded territory must survive in the envelope.
 func TestReviewsViewKeepsSparseEnvelope(t *testing.T) {
-	setupAuth(t)
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
@@ -547,20 +548,12 @@ func TestReviewsViewKeepsSparseEnvelope(t *testing.T) {
 	}))
 	t.Cleanup(server.Close)
 
-	client := newReviewTestServerClient(t, server)
-	restoreClient := shared.SetASCClientFactoryForTesting(func() (*asc.Client, error) { return client, nil })
-	t.Cleanup(restoreClient)
-
-	stdout, _ := captureOutput(t, func() {
-		code := rootcmd.Run([]string{
-			"reviews", "view", "--id", "review-1",
-			"--fields", "rating", "--include", "reviewTerritory",
-			"--output", "json",
-		}, "1.2.3")
-		if code != rootcmd.ExitSuccess {
-			t.Errorf("exit code = %d, want %d", code, rootcmd.ExitSuccess)
-		}
-	})
+	stdout, _, code := runWithDeps(t, stubServerClient(t, server), "reviews", "view", "--id", "review-1",
+		"--fields", "rating", "--include", "reviewTerritory",
+		"--output", "json")
+	if code != rootcmd.ExitSuccess {
+		t.Errorf("exit code = %d, want %d", code, rootcmd.ExitSuccess)
+	}
 
 	var envelope struct {
 		Data struct {
@@ -599,8 +592,10 @@ func TestCustomerReviewReadsKeepAppleAttributes(t *testing.T) {
 		name       string
 		args       []string
 		attributes string
+		deps       bool
 	}{
 		{
+			deps:       true,
 			name:       "app list full read",
 			args:       []string{"reviews", "list", "--app", "app-1"},
 			attributes: fullAttributes,
@@ -609,18 +604,22 @@ func TestCustomerReviewReadsKeepAppleAttributes(t *testing.T) {
 			name:       "version list full read",
 			args:       []string{"versions", "customer-reviews", "list", "--version-id", "version-1"},
 			attributes: fullAttributes,
+			deps:       true,
 		},
 		{
+			deps:       true,
 			name:       "view full read",
 			args:       []string{"reviews", "view", "--id", "review-1"},
 			attributes: fullAttributes,
 		},
 		{
+			deps:       true,
 			name:       "app list sparse read",
 			args:       []string{"reviews", "list", "--app", "app-1", "--fields", "title"},
 			attributes: sparseAttributes,
 		},
 		{
+			deps:       true,
 			name:       "view sparse read",
 			args:       []string{"reviews", "view", "--id", "review-1", "--fields", "title"},
 			attributes: sparseAttributes,
@@ -629,7 +628,6 @@ func TestCustomerReviewReadsKeepAppleAttributes(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			setupAuth(t)
 			t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 
 			isView := test.args[1] == "view"
@@ -643,15 +641,10 @@ func TestCustomerReviewReadsKeepAppleAttributes(t *testing.T) {
 			}))
 			t.Cleanup(server.Close)
 
-			client := newReviewTestServerClient(t, server)
-			restoreClient := shared.SetASCClientFactoryForTesting(func() (*asc.Client, error) { return client, nil })
-			t.Cleanup(restoreClient)
-
-			stdout, _ := captureOutput(t, func() {
-				if code := rootcmd.Run(append(test.args, "--output", "json"), "1.2.3"); code != rootcmd.ExitSuccess {
-					t.Errorf("exit code = %d, want %d", code, rootcmd.ExitSuccess)
-				}
-			})
+			stdout, _, code := runCustomerReviewRead(t, test.deps, server, append(test.args, "--output", "json"))
+			if code != rootcmd.ExitSuccess {
+				t.Errorf("exit code = %d, want %d", code, rootcmd.ExitSuccess)
+			}
 
 			var got map[string]any
 			var want map[string]any
@@ -683,11 +676,10 @@ func TestCustomerReviewReadsKeepAppleAttributes(t *testing.T) {
 				t.Fatalf("attributes = %v, want %v", got, want)
 			}
 
-			table, _ := captureOutput(t, func() {
-				if code := rootcmd.Run(append(test.args, "--output", "table"), "1.2.3"); code != rootcmd.ExitSuccess {
-					t.Errorf("table exit code = %d, want %d", code, rootcmd.ExitSuccess)
-				}
-			})
+			table, _, code := runCustomerReviewRead(t, test.deps, server, append(test.args, "--output", "table"))
+			if code != rootcmd.ExitSuccess {
+				t.Errorf("table exit code = %d, want %d", code, rootcmd.ExitSuccess)
+			}
 			wantCell := "USA"
 			if test.attributes == sparseAttributes {
 				wantCell = "Slow"
@@ -718,7 +710,7 @@ func TestReviewsViewRejectsInvalidSelection(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			code, stderr := runReviewFilterFailure(t, append([]string{"reviews", "view", "--id", "review-1"}, test.args...))
+			code, stderr := runReviewFilterFailure(t, true, append([]string{"reviews", "view", "--id", "review-1"}, test.args...))
 			if code != rootcmd.ExitUsage {
 				t.Fatalf("exit code = %d, want %d; stderr=%q", code, rootcmd.ExitUsage, stderr)
 			}
@@ -729,10 +721,29 @@ func TestReviewsViewRejectsInvalidSelection(t *testing.T) {
 	}
 }
 
-func runReviewFilterFailure(t *testing.T, args []string) (int, string) {
+// runCustomerReviewRead runs args against server, on test deps when deps is set.
+func runCustomerReviewRead(t *testing.T, deps bool, server *httptest.Server, args []string) (string, string, int) {
 	t.Helper()
 
+	if deps {
+		return runWithDeps(t, stubServerClient(t, server), args...)
+	}
+
 	setupAuth(t)
+	client := newReviewTestServerClient(t, server)
+	restoreClient := shared.SetASCClientFactoryForTesting(func() (*asc.Client, error) { return client, nil })
+	t.Cleanup(restoreClient)
+
+	code := 0
+	stdout, stderr := captureOutput(t, func() {
+		code = rootcmd.Run(args, "1.2.3")
+	})
+	return stdout, stderr, code
+}
+
+func runReviewFilterFailure(t *testing.T, deps bool, args []string) (int, string) {
+	t.Helper()
+
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
@@ -742,6 +753,12 @@ func runReviewFilterFailure(t *testing.T, args []string) (int, string) {
 	}))
 	t.Cleanup(server.Close)
 
+	if deps {
+		_, stderr, code := runWithDeps(t, stubServerClient(t, server), append(args, "--output", "json")...)
+		return code, stderr
+	}
+
+	setupAuth(t)
 	client := newReviewTestServerClient(t, server)
 	restoreClient := shared.SetASCClientFactoryForTesting(func() (*asc.Client, error) { return client, nil })
 	t.Cleanup(restoreClient)

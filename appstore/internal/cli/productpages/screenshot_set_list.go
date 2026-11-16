@@ -7,8 +7,8 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
-func screenshotSetListResult(ctx context.Context, client *asc.Client, localizationID string, response *asc.AppScreenshotSetsResponse) (*asc.AppScreenshotSetListResult, error) {
-	sets, err := client.AppScreenshotSetsWithScreenshots(ctx, response, shared.ContextWithTimeout)
+func screenshotSetListResult(ctx context.Context, d *shared.Deps, client *asc.Client, localizationID string, response *asc.AppScreenshotSetsResponse) (*asc.AppScreenshotSetListResult, error) {
+	sets, err := client.AppScreenshotSetsWithScreenshots(ctx, response, d.Timeout)
 	if err != nil {
 		return nil, err
 	}

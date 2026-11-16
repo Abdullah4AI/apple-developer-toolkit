@@ -9,29 +9,21 @@ import (
 	"testing"
 
 	rootcmd "github.com/Abdullah4AI/apple-developer-toolkit/appstore/cmd"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asctest"
 )
 
 func TestEncryptionAssignBuildsRepeatedBuildIDRejectedBeforeRequest(t *testing.T) {
 	setupAuth(t)
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 
-	requestCount := 0
-	installDefaultTransport(t, roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		requestCount++
-		return jsonHTTPResponse(http.StatusNoContent, ""), nil
-	}))
+	reg := asctest.NewRegistry(t)
 
-	stdout, stderr := captureOutput(t, func() {
-		code := rootcmd.Run([]string{
-			"encryption", "declarations", "assign-builds",
-			"--id", "DECL_ID",
-			"--build-id", "BUILD_A",
-			"--build-id", "BUILD_B",
-		}, "1.2.3")
-		if code != rootcmd.ExitUsage {
-			t.Fatalf("exit code = %d, want %d", code, rootcmd.ExitUsage)
-		}
-	})
+	stdout, stderr, code := runWithDeps(t, stubClient(t, reg),
+		"encryption", "declarations", "assign-builds", "--id", "DECL_ID", "--build-id", "BUILD_A", "--build-id", "BUILD_B",
+	)
+	if code != rootcmd.ExitUsage {
+		t.Fatalf("exit code = %d, want %d", code, rootcmd.ExitUsage)
+	}
 
 	if stdout != "" {
 		t.Fatalf("expected empty stdout, got %q", stdout)
@@ -40,7 +32,7 @@ func TestEncryptionAssignBuildsRepeatedBuildIDRejectedBeforeRequest(t *testing.T
 	if !strings.Contains(stderr, wantMessage) {
 		t.Fatalf("stderr = %q, want it to contain %q", stderr, wantMessage)
 	}
-	if requestCount != 0 {
+	if requestCount := len(reg.Requests()); requestCount != 0 {
 		t.Fatalf("repeated --build-id made %d HTTP requests, want 0", requestCount)
 	}
 }
@@ -49,45 +41,36 @@ func TestEncryptionAssignBuildsCSVPreservesDuplicatesAndSkipsEmptyFields(t *test
 	setupAuth(t)
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 
-	var requestIDs []string
-	requestCount := 0
-	installDefaultTransport(t, roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		requestCount++
-		if req.Method != http.MethodPost || req.URL.Path != "/v1/appEncryptionDeclarations/DECL_ID/relationships/builds" {
-			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.Path)
-		}
-		var payload struct {
-			Data []struct {
-				Type string `json:"type"`
-				ID   string `json:"id"`
-			} `json:"data"`
-		}
-		if err := json.NewDecoder(req.Body).Decode(&payload); err != nil {
-			t.Fatalf("decode request body: %v", err)
-		}
-		for _, item := range payload.Data {
-			if item.Type != "builds" {
-				t.Fatalf("request relationship type = %q, want builds", item.Type)
-			}
-			requestIDs = append(requestIDs, item.ID)
-		}
-		return jsonHTTPResponse(http.StatusNoContent, ""), nil
-	}))
+	reg := asctest.NewRegistry(t)
+	reg.Register(asctest.POST("/v1/appEncryptionDeclarations/DECL_ID/relationships/builds").JSONBody(`{"data":[{"type":"builds","id":"BUILD_A"},{"type":"builds","id":"BUILD_A"}]}`),
+		asctest.JSON(http.StatusNoContent, ""))
 
-	stdout, stderr := captureOutput(t, func() {
-		code := rootcmd.Run([]string{
-			"encryption", "declarations", "assign-builds",
-			"--id", "DECL_ID",
-			"--build-id", "BUILD_A,, BUILD_A, ",
-			"--output", "json",
-		}, "1.2.3")
-		if code != rootcmd.ExitSuccess {
-			t.Fatalf("exit code = %d, want %d", code, rootcmd.ExitSuccess)
-		}
-	})
+	stdout, stderr, code := runWithDeps(t, stubClient(t, reg),
+		"encryption", "declarations", "assign-builds", "--id", "DECL_ID", "--build-id", "BUILD_A,, BUILD_A, ", "--output", "json",
+	)
+	if code != rootcmd.ExitSuccess {
+		t.Fatalf("exit code = %d, want %d", code, rootcmd.ExitSuccess)
+	}
 
-	if requestCount != 1 {
+	requests := reg.Requests()
+	if requestCount := len(requests); requestCount != 1 {
 		t.Fatalf("HTTP request count = %d, want 1", requestCount)
+	}
+	var payload struct {
+		Data []struct {
+			Type string `json:"type"`
+			ID   string `json:"id"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(requests[0].Body, &payload); err != nil {
+		t.Fatalf("decode request body: %v", err)
+	}
+	var requestIDs []string
+	for _, item := range payload.Data {
+		if item.Type != "builds" {
+			t.Fatalf("request relationship type = %q, want builds", item.Type)
+		}
+		requestIDs = append(requestIDs, item.ID)
 	}
 	if want := []string{"BUILD_A", "BUILD_A"}; !reflect.DeepEqual(requestIDs, want) {
 		t.Fatalf("request build IDs = %#v, want %#v", requestIDs, want)
@@ -101,22 +84,14 @@ func TestEncryptionAssignBuildsCSVPreservesDuplicatesAndSkipsEmptyFields(t *test
 }
 
 func TestEncryptionAssignBuildsExplicitEmptyValueKeepsRequiredValidation(t *testing.T) {
-	requestCount := 0
-	installDefaultTransport(t, roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		requestCount++
-		return jsonHTTPResponse(http.StatusNoContent, ""), nil
-	}))
+	reg := asctest.NewRegistry(t)
 
-	stdout, stderr := captureOutput(t, func() {
-		code := rootcmd.Run([]string{
-			"encryption", "declarations", "assign-builds",
-			"--id", "DECL_ID",
-			"--build-id", "",
-		}, "1.2.3")
-		if code != rootcmd.ExitUsage {
-			t.Fatalf("exit code = %d, want %d", code, rootcmd.ExitUsage)
-		}
-	})
+	stdout, stderr, code := runWithDeps(t, stubClient(t, reg),
+		"encryption", "declarations", "assign-builds", "--id", "DECL_ID", "--build-id", "",
+	)
+	if code != rootcmd.ExitUsage {
+		t.Fatalf("exit code = %d, want %d", code, rootcmd.ExitUsage)
+	}
 
 	if stdout != "" {
 		t.Fatalf("expected empty stdout, got %q", stdout)
@@ -124,7 +99,7 @@ func TestEncryptionAssignBuildsExplicitEmptyValueKeepsRequiredValidation(t *test
 	if !strings.Contains(stderr, "Error: --build-id is required") {
 		t.Fatalf("stderr = %q, want required build-id error", stderr)
 	}
-	if requestCount != 0 {
+	if requestCount := len(reg.Requests()); requestCount != 0 {
 		t.Fatalf("empty --build-id made %d HTTP requests, want 0", requestCount)
 	}
 }
@@ -133,22 +108,14 @@ func TestEncryptionAssignBuildsLegacyBuildFlagIsUnknownBeforeRequest(t *testing.
 	setupAuth(t)
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 
-	requestCount := 0
-	installDefaultTransport(t, roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		requestCount++
-		return jsonHTTPResponse(http.StatusNoContent, ""), nil
-	}))
+	reg := asctest.NewRegistry(t)
 
-	stdout, stderr := captureOutput(t, func() {
-		code := rootcmd.Run([]string{
-			"encryption", "declarations", "assign-builds",
-			"--id", "DECL_ID",
-			"--build", "BUILD_B",
-		}, "1.2.3")
-		if code != rootcmd.ExitUsage {
-			t.Fatalf("exit code = %d, want %d", code, rootcmd.ExitUsage)
-		}
-	})
+	stdout, stderr, code := runWithDeps(t, stubClient(t, reg),
+		"encryption", "declarations", "assign-builds", "--id", "DECL_ID", "--build", "BUILD_B",
+	)
+	if code != rootcmd.ExitUsage {
+		t.Fatalf("exit code = %d, want %d", code, rootcmd.ExitUsage)
+	}
 
 	if stdout != "" {
 		t.Fatalf("expected empty stdout, got %q", stdout)
@@ -159,7 +126,7 @@ func TestEncryptionAssignBuildsLegacyBuildFlagIsUnknownBeforeRequest(t *testing.
 	if strings.Contains(stderr, "deprecated") {
 		t.Fatalf("stderr = %q, want no deprecation guidance for the removed alias", stderr)
 	}
-	if requestCount != 0 {
+	if requestCount := len(reg.Requests()); requestCount != 0 {
 		t.Fatalf("removed --build alias made %d HTTP requests, want 0", requestCount)
 	}
 }

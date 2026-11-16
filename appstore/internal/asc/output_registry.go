@@ -2,6 +2,7 @@ package asc
 
 import (
 	"fmt"
+	"io"
 	"reflect"
 	"sync"
 )
@@ -9,9 +10,10 @@ import (
 // rowsFunc extracts headers and rows from a typed response value.
 type rowsFunc func(data any) ([]string, [][]string, error)
 
-// directRenderFunc renders the value using the provided render callback.
-// Used for multi-table types that need to call render more than once.
-type directRenderFunc func(data any, render func([]string, [][]string)) error
+// directRenderFunc renders the value using the provided render callback, and
+// writes any text between tables to w. Used for multi-table types that need to
+// call render more than once.
+type directRenderFunc func(w io.Writer, data any, render func([]string, [][]string)) error
 
 // outputRegistry maps concrete pointer types to their rows-extraction function.
 var outputRegistry = map[reflect.Type]rowsFunc{}
@@ -181,20 +183,6 @@ func registerIDStateRows[T any](extract func(*T) (string, string), rows func(str
 	})
 }
 
-func registerIDBoolRows[T any](extract func(*T) (string, bool), rows func(string, bool) ([]string, [][]string)) {
-	t := typeForPtr[T]()
-	if extract == nil {
-		panicNilHelperFunction("id/bool extractor", t)
-	}
-	if rows == nil {
-		panicNilHelperFunction("id/bool rows function", t)
-	}
-	registerRows(func(v *T) ([]string, [][]string) {
-		id, deleted := extract(ptrOrZero(v))
-		return rows(id, deleted)
-	})
-}
-
 // registerSingleResourceRowsAdapter registers rows rendering for list renderers
 // by adapting SingleResponse[T] into Response[T] with one item in Data.
 func registerSingleResourceRowsAdapter[T any](rows func(*Response[T]) ([]string, [][]string)) {
@@ -333,27 +321,36 @@ func registerRowsWithSingleToListAdapter[T any, U any](rows func(*U) ([]string, 
 // registerDirect registers a type that needs direct render control (multi-table output).
 // Typed-nil pointers are normalized to zero-value pointers before invocation.
 func registerDirect[T any](fn func(*T, func([]string, [][]string)) error) {
+	var direct func(io.Writer, *T, func([]string, [][]string)) error
+	if fn != nil {
+		direct = func(_ io.Writer, v *T, render func([]string, [][]string)) error {
+			return fn(v, render)
+		}
+	}
+	registerDirectTo(direct)
+}
+
+// registerDirectTo is registerDirect for a renderer that also writes text
+// between its tables, to the writer the output goes to.
+func registerDirectTo[T any](fn func(io.Writer, *T, func([]string, [][]string)) error) {
 	t := typeForPtr[T]()
 	if fn == nil {
 		panicNilHelperFunction("direct render function", t)
 	}
 	ensureRegistryTypeAvailable(t)
-	directRenderRegistry[t] = func(data any, render func([]string, [][]string)) error {
-		return fn(dataAsPtrOrZero[T](data), render)
+	directRenderRegistry[t] = func(w io.Writer, data any, render func([]string, [][]string)) error {
+		return fn(w, dataAsPtrOrZero[T](data), render)
 	}
 }
 
-// renderByRegistry looks up the rows function for the given value and renders
-// using the provided render function (RenderTable or RenderMarkdown).
-// Falls back to JSON output for unregistered types.
-func renderByRegistry(data any, render func([]string, [][]string)) error {
+func renderByRegistryTo(w io.Writer, data any, render func([]string, [][]string)) error {
 	ensureOutputRegistryPopulated()
 
 	t := reflect.TypeOf(data)
 
 	// Check direct render registry first (multi-table types).
 	if fn, ok := directRenderRegistry[t]; ok {
-		return fn(data, render)
+		return fn(w, data, render)
 	}
 
 	// Standard single-table types.
@@ -366,5 +363,5 @@ func renderByRegistry(data any, render func([]string, [][]string)) error {
 		return nil
 	}
 
-	return PrintJSON(data)
+	return PrintJSONTo(w, data)
 }

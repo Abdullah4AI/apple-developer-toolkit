@@ -6,13 +6,13 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"reflect"
 	"runtime"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/creack/pty"
@@ -80,75 +80,6 @@ func TestReadPasswordFromInput(t *testing.T) {
 		}
 		if password != "prompted-password" {
 			t.Fatalf("expected prompted password %q, got %q", "prompted-password", password)
-		}
-	})
-}
-
-func TestReadPasswordFromTerminalFD(t *testing.T) {
-	origReadPassword := termReadPasswordFn
-	t.Cleanup(func() {
-		termReadPasswordFn = origReadPassword
-	})
-
-	t.Run("preserves interactive password bytes and writes prompt", func(t *testing.T) {
-		termReadPasswordFn = func(fd int) ([]byte, error) {
-			return []byte("  secret-pass  "), nil
-		}
-		var prompt bytes.Buffer
-
-		password, err := readPasswordFromTerminalFD(context.Background(), &prompt)
-		if err != nil {
-			t.Fatalf("readPasswordFromTerminalFD returned error: %v", err)
-		}
-		if password != "  secret-pass  " {
-			t.Fatalf("expected password %q, got %q", "  secret-pass  ", password)
-		}
-		if !strings.Contains(prompt.String(), "Apple Account password:") {
-			t.Fatalf("expected password prompt text, got %q", prompt.String())
-		}
-	})
-
-	t.Run("rejects whitespace-only password", func(t *testing.T) {
-		termReadPasswordFn = func(fd int) ([]byte, error) {
-			return []byte("   "), nil
-		}
-
-		_, err := readPasswordFromTerminalFD(context.Background(), &bytes.Buffer{})
-		if err == nil {
-			t.Fatal("expected error for whitespace-only password")
-		}
-		if !strings.Contains(err.Error(), "password is required") {
-			t.Fatalf("unexpected error: %v", err)
-		}
-	})
-
-	t.Run("propagates terminal read failure", func(t *testing.T) {
-		termReadPasswordFn = func(fd int) ([]byte, error) {
-			return nil, errors.New("terminal read failed")
-		}
-
-		_, err := readPasswordFromTerminalFD(context.Background(), &bytes.Buffer{})
-		if err == nil {
-			t.Fatal("expected read failure")
-		}
-		if !strings.Contains(err.Error(), "failed to read password") {
-			t.Fatalf("unexpected error: %v", err)
-		}
-	})
-
-	t.Run("preserves prompt cancellation", func(t *testing.T) {
-		ctx, cancel := context.WithCancel(context.Background())
-		cancel()
-		termReadPasswordFn = func(fd int) ([]byte, error) {
-			return nil, errors.New("read aborted")
-		}
-
-		_, err := readPasswordFromTerminalFD(ctx, &bytes.Buffer{})
-		if err == nil {
-			t.Fatal("expected cancellation error")
-		}
-		if !errors.Is(err, context.Canceled) {
-			t.Fatalf("expected context cancellation, got %v", err)
 		}
 	})
 }
@@ -371,37 +302,6 @@ func TestReadPasswordFromTerminalReturnsPromptInterruptAfterContextCancel(t *tes
 	}
 }
 
-func TestReadTwoFactorCodeFrom(t *testing.T) {
-	t.Run("trims input", func(t *testing.T) {
-		input := strings.NewReader(" 123456 \n")
-		var prompt bytes.Buffer
-
-		code, err := readTwoFactorCodeFrom(input, &prompt)
-		if err != nil {
-			t.Fatalf("readTwoFactorCodeFrom returned error: %v", err)
-		}
-		if code != "123456" {
-			t.Fatalf("expected code %q, got %q", "123456", code)
-		}
-		if !strings.Contains(prompt.String(), "Enter 2FA code") {
-			t.Fatalf("expected prompt text, got %q", prompt.String())
-		}
-	})
-
-	t.Run("rejects empty", func(t *testing.T) {
-		input := strings.NewReader("\n")
-		var prompt bytes.Buffer
-
-		_, err := readTwoFactorCodeFrom(input, &prompt)
-		if err == nil {
-			t.Fatal("expected error for empty input")
-		}
-		if !strings.Contains(err.Error(), "empty 2fa code") {
-			t.Fatalf("unexpected error: %v", err)
-		}
-	})
-}
-
 func TestReadTwoFactorCodeFromTerminalFD(t *testing.T) {
 	origReadPassword := termReadPasswordFn
 	t.Cleanup(func() {
@@ -530,30 +430,6 @@ func TestPromptTwoFactorCodeInteractiveUsesControllingTTYWhenStdinIsNotTerminal(
 	}
 }
 
-func TestTwoFactorCodeCommandShellArgs(t *testing.T) {
-	args := twoFactorCodeCommandShellArgs("printf '123456\\n'")
-
-	if runtime.GOOS == "windows" {
-		want := []string{"/d", "/s", "/c", "printf '123456\\n'"}
-		if len(args) != len(want) {
-			t.Fatalf("expected %d args, got %d (%v)", len(want), len(args), args)
-		}
-		for i, part := range want {
-			if args[i] != part {
-				t.Fatalf("expected arg %d to be %q, got %q", i, part, args[i])
-			}
-		}
-		return
-	}
-
-	if len(args) != 2 {
-		t.Fatalf("expected 2 args, got %d (%v)", len(args), args)
-	}
-	if args[0] != "-c" {
-		t.Fatalf("expected non-login shell flag %q, got %q", "-c", args[0])
-	}
-}
-
 func TestReadTwoFactorCodeFromCommand(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("shell command coverage uses POSIX shell commands")
@@ -630,6 +506,7 @@ func TestReadTwoFactorCodeFromCommand(t *testing.T) {
 }
 
 func TestLoginWithOptionalTwoFactorPromptsWhenCodeMissing(t *testing.T) {
+	d, _, _ := newWebTestDeps()
 	origPrompt := promptTwoFactorCodeFn
 	origReadCommand := readTwoFactorCodeFromCommandFn
 	origLogin := webLoginFn
@@ -676,7 +553,7 @@ func TestLoginWithOptionalTwoFactorPromptsWhenCodeMissing(t *testing.T) {
 		return nil
 	}
 
-	session, err := loginWithOptionalTwoFactor(context.Background(), "user@example.com", "secret", "", nil, nil)
+	session, err := loginWithOptionalTwoFactor(context.Background(), d, "user@example.com", "secret", "", nil, nil)
 	if err != nil {
 		t.Fatalf("loginWithOptionalTwoFactor returned error: %v", err)
 	}
@@ -695,6 +572,7 @@ func TestLoginWithOptionalTwoFactorPromptsWhenCodeMissing(t *testing.T) {
 }
 
 func TestLoginWithOptionalTwoFactorUsesProvidedCodeWhenPresent(t *testing.T) {
+	d, _, _ := newWebTestDeps()
 	origLogin := webLoginFn
 	origPrepare := prepareTwoFactorChallengeFn
 	origSubmit := submitTwoFactorCodeFn
@@ -717,7 +595,7 @@ func TestLoginWithOptionalTwoFactorUsesProvidedCodeWhenPresent(t *testing.T) {
 		return nil
 	}
 
-	session, err := loginWithOptionalTwoFactor(context.Background(), "user@example.com", "secret", "654321", nil, nil)
+	session, err := loginWithOptionalTwoFactor(context.Background(), d, "user@example.com", "secret", "654321", nil, nil)
 	if err != nil {
 		t.Fatalf("loginWithOptionalTwoFactor returned error: %v", err)
 	}
@@ -730,6 +608,7 @@ func TestLoginWithOptionalTwoFactorUsesProvidedCodeWhenPresent(t *testing.T) {
 }
 
 func TestLoginWithOptionalTwoFactorReturnsPromptError(t *testing.T) {
+	d, _, _ := newWebTestDeps()
 	origPrompt := promptTwoFactorCodeFn
 	origLogin := webLoginFn
 	origPrepare := prepareTwoFactorChallengeFn
@@ -767,7 +646,7 @@ func TestLoginWithOptionalTwoFactorReturnsPromptError(t *testing.T) {
 		return nil
 	}
 
-	_, err := loginWithOptionalTwoFactor(context.Background(), "user@example.com", "secret", "", nil, nil, "")
+	_, err := loginWithOptionalTwoFactor(context.Background(), d, "user@example.com", "secret", "", nil, nil, "")
 	if err == nil {
 		t.Fatal("expected error when prompt fails")
 	}
@@ -780,6 +659,7 @@ func TestLoginWithOptionalTwoFactorReturnsPromptError(t *testing.T) {
 }
 
 func TestLoginWithOptionalTwoFactorUsesCommandWhenConfigured(t *testing.T) {
+	d, _, _ := newWebTestDeps()
 	origLogin := webLoginFn
 	origPrepare := prepareTwoFactorChallengeFn
 	origEnsure := ensureTwoFactorCodeRequestedFn
@@ -815,7 +695,7 @@ func TestLoginWithOptionalTwoFactorUsesCommandWhenConfigured(t *testing.T) {
 		return nil
 	}
 
-	session, err := loginWithOptionalTwoFactor(context.Background(), "user@example.com", "secret", "", nil, nil, "osascript ./get-2fa.scpt")
+	session, err := loginWithOptionalTwoFactor(context.Background(), d, "user@example.com", "secret", "", nil, nil, "osascript ./get-2fa.scpt")
 	if err != nil {
 		t.Fatalf("loginWithOptionalTwoFactor returned error: %v", err)
 	}
@@ -831,6 +711,7 @@ func TestLoginWithOptionalTwoFactorUsesCommandWhenConfigured(t *testing.T) {
 }
 
 func TestLoginWithOptionalTwoFactorReappliesTimeoutAfterDelayedCommand(t *testing.T) {
+	d, _, _ := newWebTestDeps()
 	t.Setenv("ASC_TIMEOUT", "30ms")
 	origLogin := webLoginFn
 	origPrepare := prepareTwoFactorChallengeFn
@@ -844,9 +725,6 @@ func TestLoginWithOptionalTwoFactorReappliesTimeoutAfterDelayedCommand(t *testin
 		readTwoFactorCodeFromCommandFn = origReadCommand
 		submitTwoFactorCodeFn = origSubmit
 	})
-
-	requestCtx, cancel := shared.ContextWithTimeoutDuration(context.Background(), 30*time.Millisecond)
-	t.Cleanup(cancel)
 
 	webLoginFn = func(ctx context.Context, creds webcore.LoginCredentials) (*webcore.AuthSession, error) {
 		return &webcore.AuthSession{}, &webcore.TwoFactorRequiredError{}
@@ -875,38 +753,44 @@ func TestLoginWithOptionalTwoFactorReappliesTimeoutAfterDelayedCommand(t *testin
 		if ctx.Err() != nil {
 			t.Fatalf("expected fresh verification context, got %v", ctx.Err())
 		}
-		if deadline, ok := ctx.Deadline(); !ok || time.Until(deadline) <= 0 {
-			t.Fatalf("expected verification context to have a future deadline, got ok=%v deadline=%v", ok, deadline)
+		if deadline, ok := ctx.Deadline(); !ok || time.Until(deadline) != 30*time.Millisecond {
+			t.Fatalf("expected verification context to have a fresh 30ms deadline, got ok=%v deadline=%v", ok, deadline)
 		}
 		return nil
 	}
 
-	session, err := loginWithOptionalTwoFactor(requestCtx, "user@example.com", "secret", "", nil, nil, "osascript ./get-2fa.scpt")
+	var session *webcore.AuthSession
+	var err, requestErr error
+	synctest.Test(t, func(*testing.T) {
+		requestCtx, cancel := shared.ContextWithTimeoutDuration(context.Background(), 30*time.Millisecond)
+		defer cancel()
+		session, err = loginWithOptionalTwoFactor(requestCtx, d, "user@example.com", "secret", "", nil, nil, "osascript ./get-2fa.scpt")
+		requestErr = requestCtx.Err()
+	})
 	if err != nil {
 		t.Fatalf("loginWithOptionalTwoFactor returned error: %v", err)
 	}
 	if session == nil {
 		t.Fatal("expected non-nil session")
 	}
-	if !errors.Is(requestCtx.Err(), context.DeadlineExceeded) {
-		t.Fatalf("expected original request context to time out, got %v", requestCtx.Err())
+	if !errors.Is(requestErr, context.DeadlineExceeded) {
+		t.Fatalf("expected original request context to time out, got %v", requestErr)
 	}
 }
 
 func TestLoginWithOptionalTwoFactorRequestsPhoneCodeBeforePrompt(t *testing.T) {
+	d, _, _ := newWebTestDeps()
 	origPrompt := promptTwoFactorCodeFn
 	origLogin := webLoginFn
 	origPrepare := prepareTwoFactorChallengeFn
 	origEnsure := ensureTwoFactorCodeRequestedFn
 	origSubmit := submitTwoFactorCodeFn
-	origStatusWriter := twoFactorStatusWriter
 	t.Cleanup(func() {
 		promptTwoFactorCodeFn = origPrompt
 		webLoginFn = origLogin
 		prepareTwoFactorChallengeFn = origPrepare
 		ensureTwoFactorCodeRequestedFn = origEnsure
 		submitTwoFactorCodeFn = origSubmit
-		twoFactorStatusWriter = origStatusWriter
 	})
 
 	var (
@@ -943,9 +827,9 @@ func TestLoginWithOptionalTwoFactorRequestsPhoneCodeBeforePrompt(t *testing.T) {
 		}
 		return nil
 	}
-	twoFactorStatusWriter = &statusOutput
+	d.IO.ErrOut = &statusOutput
 
-	if _, err := loginWithOptionalTwoFactor(context.Background(), "user@example.com", "secret", "", nil, nil); err != nil {
+	if _, err := loginWithOptionalTwoFactor(context.Background(), d, "user@example.com", "secret", "", nil, nil); err != nil {
 		t.Fatalf("loginWithOptionalTwoFactor returned error: %v", err)
 	}
 
@@ -958,19 +842,18 @@ func TestLoginWithOptionalTwoFactorRequestsPhoneCodeBeforePrompt(t *testing.T) {
 }
 
 func TestLoginWithOptionalTwoFactorSkipsPhoneRequestWhenCodeProvided(t *testing.T) {
+	d, _, _ := newWebTestDeps()
 	origPrompt := promptTwoFactorCodeFn
 	origLogin := webLoginFn
 	origPrepare := prepareTwoFactorChallengeFn
 	origEnsure := ensureTwoFactorCodeRequestedFn
 	origSubmit := submitTwoFactorCodeFn
-	origStatusWriter := twoFactorStatusWriter
 	t.Cleanup(func() {
 		promptTwoFactorCodeFn = origPrompt
 		webLoginFn = origLogin
 		prepareTwoFactorChallengeFn = origPrepare
 		ensureTwoFactorCodeRequestedFn = origEnsure
 		submitTwoFactorCodeFn = origSubmit
-		twoFactorStatusWriter = origStatusWriter
 	})
 
 	var statusOutput bytes.Buffer
@@ -995,9 +878,9 @@ func TestLoginWithOptionalTwoFactorSkipsPhoneRequestWhenCodeProvided(t *testing.
 		}
 		return nil
 	}
-	twoFactorStatusWriter = &statusOutput
+	d.IO.ErrOut = &statusOutput
 
-	if _, err := loginWithOptionalTwoFactor(context.Background(), "user@example.com", "secret", "123456", nil, nil); err != nil {
+	if _, err := loginWithOptionalTwoFactor(context.Background(), d, "user@example.com", "secret", "123456", nil, nil); err != nil {
 		t.Fatalf("loginWithOptionalTwoFactor returned error: %v", err)
 	}
 
@@ -1007,19 +890,18 @@ func TestLoginWithOptionalTwoFactorSkipsPhoneRequestWhenCodeProvided(t *testing.
 }
 
 func TestLoginWithOptionalTwoFactorRepromptsAfterFallbackPhoneRequest(t *testing.T) {
+	d, _, _ := newWebTestDeps()
 	origPrompt := promptTwoFactorCodeFn
 	origLogin := webLoginFn
 	origPrepare := prepareTwoFactorChallengeFn
 	origEnsure := ensureTwoFactorCodeRequestedFn
 	origSubmit := submitTwoFactorCodeFn
-	origStatusWriter := twoFactorStatusWriter
 	t.Cleanup(func() {
 		promptTwoFactorCodeFn = origPrompt
 		webLoginFn = origLogin
 		prepareTwoFactorChallengeFn = origPrepare
 		ensureTwoFactorCodeRequestedFn = origEnsure
 		submitTwoFactorCodeFn = origSubmit
-		twoFactorStatusWriter = origStatusWriter
 	})
 
 	var (
@@ -1067,9 +949,9 @@ func TestLoginWithOptionalTwoFactorRepromptsAfterFallbackPhoneRequest(t *testing
 		}
 		return nil
 	}
-	twoFactorStatusWriter = &statusOutput
+	d.IO.ErrOut = &statusOutput
 
-	session, err := loginWithOptionalTwoFactor(context.Background(), "user@example.com", "secret", "", nil, nil)
+	session, err := loginWithOptionalTwoFactor(context.Background(), d, "user@example.com", "secret", "", nil, nil)
 	if err != nil {
 		t.Fatalf("loginWithOptionalTwoFactor returned error: %v", err)
 	}
@@ -1103,19 +985,18 @@ func TestLoginWithOptionalTwoFactorRepromptsAfterFallbackPhoneRequest(t *testing
 }
 
 func TestLoginWithOptionalTwoFactorRerunsCommandAfterFallbackPhoneRequest(t *testing.T) {
+	d, _, _ := newWebTestDeps()
 	origLogin := webLoginFn
 	origPrepare := prepareTwoFactorChallengeFn
 	origEnsure := ensureTwoFactorCodeRequestedFn
 	origReadCommand := readTwoFactorCodeFromCommandFn
 	origSubmit := submitTwoFactorCodeFn
-	origStatusWriter := twoFactorStatusWriter
 	t.Cleanup(func() {
 		webLoginFn = origLogin
 		prepareTwoFactorChallengeFn = origPrepare
 		ensureTwoFactorCodeRequestedFn = origEnsure
 		readTwoFactorCodeFromCommandFn = origReadCommand
 		submitTwoFactorCodeFn = origSubmit
-		twoFactorStatusWriter = origStatusWriter
 	})
 
 	var (
@@ -1163,9 +1044,9 @@ func TestLoginWithOptionalTwoFactorRerunsCommandAfterFallbackPhoneRequest(t *tes
 		}
 		return nil
 	}
-	twoFactorStatusWriter = &statusOutput
+	d.IO.ErrOut = &statusOutput
 
-	session, err := loginWithOptionalTwoFactor(context.Background(), "user@example.com", "secret", "", nil, nil, "osascript ./get-2fa.scpt")
+	session, err := loginWithOptionalTwoFactor(context.Background(), d, "user@example.com", "secret", "", nil, nil, "osascript ./get-2fa.scpt")
 	if err != nil {
 		t.Fatalf("loginWithOptionalTwoFactor returned error: %v", err)
 	}
@@ -1190,6 +1071,7 @@ func TestLoginWithOptionalTwoFactorRerunsCommandAfterFallbackPhoneRequest(t *tes
 }
 
 func TestLoginWithOptionalTwoFactorWrapsFallbackPhoneVerificationError(t *testing.T) {
+	d, _, _ := newWebTestDeps()
 	origPrompt := promptTwoFactorCodeFn
 	origLogin := webLoginFn
 	origPrepare := prepareTwoFactorChallengeFn
@@ -1234,7 +1116,7 @@ func TestLoginWithOptionalTwoFactorWrapsFallbackPhoneVerificationError(t *testin
 		return errors.New("apple rejected code")
 	}
 
-	_, err := loginWithOptionalTwoFactor(context.Background(), "user@example.com", "secret", "", nil, nil)
+	_, err := loginWithOptionalTwoFactor(context.Background(), d, "user@example.com", "secret", "", nil, nil)
 	if err == nil {
 		t.Fatal("expected fallback verification error")
 	}
@@ -1244,6 +1126,7 @@ func TestLoginWithOptionalTwoFactorWrapsFallbackPhoneVerificationError(t *testin
 }
 
 func TestResolveSessionUsesLastCachedSessionWhenAppleIDMissing(t *testing.T) {
+	d, _, _ := newWebTestDeps()
 	origTryResume := tryResumeSessionFn
 	origTryResumeLast := tryResumeLastFn
 	origPromptPassword := promptPasswordFn
@@ -1266,7 +1149,7 @@ func TestResolveSessionUsesLastCachedSessionWhenAppleIDMissing(t *testing.T) {
 		return "", nil
 	}
 
-	session, source, err := resolveSession(context.Background(), "", "", "")
+	session, source, err := resolveSession(context.Background(), d, "", "", "")
 	if err != nil {
 		t.Fatalf("resolveSession returned error: %v", err)
 	}
@@ -1279,6 +1162,7 @@ func TestResolveSessionUsesLastCachedSessionWhenAppleIDMissing(t *testing.T) {
 }
 
 func TestResolveSessionPrintsExpiredNoticeBeforePrompt(t *testing.T) {
+	d, _, _ := newWebTestDeps()
 	origTryResume := tryResumeSessionFn
 	origTryResumeLast := tryResumeLastFn
 	origLoadCachedSession := loadCachedSessionFn
@@ -1287,7 +1171,6 @@ func TestResolveSessionPrintsExpiredNoticeBeforePrompt(t *testing.T) {
 	origWebLogin := webLoginFn
 	origPersistWebSession := persistWebSessionFn
 	origWebLoginWithClient := webLoginWithClientFn
-	origExpiredWriter := sessionExpiredWriter
 	t.Cleanup(func() {
 		tryResumeSessionFn = origTryResume
 		tryResumeLastFn = origTryResumeLast
@@ -1297,7 +1180,6 @@ func TestResolveSessionPrintsExpiredNoticeBeforePrompt(t *testing.T) {
 		webLoginFn = origWebLogin
 		persistWebSessionFn = origPersistWebSession
 		webLoginWithClientFn = origWebLoginWithClient
-		sessionExpiredWriter = origExpiredWriter
 	})
 
 	t.Setenv("ASC_WEB_SESSION_CACHE", "0")
@@ -1305,7 +1187,7 @@ func TestResolveSessionPrintsExpiredNoticeBeforePrompt(t *testing.T) {
 
 	expected := &webcore.AuthSession{UserEmail: "user@example.com"}
 	var notice bytes.Buffer
-	sessionExpiredWriter = &notice
+	d.IO.ErrOut = &notice
 
 	tryResumeSessionFn = func(ctx context.Context, username string) (*webcore.AuthSession, bool, error) {
 		if username != "user@example.com" {
@@ -1350,7 +1232,7 @@ func TestResolveSessionPrintsExpiredNoticeBeforePrompt(t *testing.T) {
 		return expected, nil
 	}
 
-	session, source, err := resolveSession(context.Background(), "user@example.com", "", "")
+	session, source, err := resolveSession(context.Background(), d, "user@example.com", "", "")
 	if err != nil {
 		t.Fatalf("resolveSession returned error: %v", err)
 	}
@@ -1366,21 +1248,20 @@ func TestResolveSessionPrintsExpiredNoticeBeforePrompt(t *testing.T) {
 }
 
 func TestResolveSessionFallsBackToFreshLoginWhenCacheLookupFailsBeforePrompt(t *testing.T) {
+	d, _, _ := newWebTestDeps()
 	origTryResume := tryResumeSessionFn
 	origTryResumeLast := tryResumeLastFn
 	origPromptPassword := promptPasswordFn
 	origWebLogin := webLoginFn
-	origCacheWarningWriter := sessionCacheWarningWriter
 	t.Cleanup(func() {
 		tryResumeSessionFn = origTryResume
 		tryResumeLastFn = origTryResumeLast
 		promptPasswordFn = origPromptPassword
 		webLoginFn = origWebLogin
-		sessionCacheWarningWriter = origCacheWarningWriter
 	})
 
 	var warning bytes.Buffer
-	sessionCacheWarningWriter = &warning
+	d.IO.ErrOut = &warning
 
 	cacheErr := errors.New("cache permission denied")
 	tryResumeSessionFn = func(ctx context.Context, username string) (*webcore.AuthSession, bool, error) {
@@ -1407,7 +1288,7 @@ func TestResolveSessionFallsBackToFreshLoginWhenCacheLookupFailsBeforePrompt(t *
 		return &webcore.AuthSession{UserEmail: creds.Username}, nil
 	}
 
-	session, source, err := resolveSession(context.Background(), "user@example.com", "secret", "")
+	session, source, err := resolveSession(context.Background(), d, "user@example.com", "secret", "")
 	if err != nil {
 		t.Fatalf("expected fresh login fallback, got %v", err)
 	}
@@ -1423,19 +1304,18 @@ func TestResolveSessionFallsBackToFreshLoginWhenCacheLookupFailsBeforePrompt(t *
 }
 
 func TestResolveWebSessionFallsBackToFreshLoginAfterPromptedAppleIDCacheError(t *testing.T) {
+	d, _, _ := newWebTestDeps()
 	origTryResume := tryResumeSessionFn
 	origTryResumeLast := tryResumeLastFn
 	origWebLogin := webLoginFn
-	origCacheWarningWriter := sessionCacheWarningWriter
 	t.Cleanup(func() {
 		tryResumeSessionFn = origTryResume
 		tryResumeLastFn = origTryResumeLast
 		webLoginFn = origWebLogin
-		sessionCacheWarningWriter = origCacheWarningWriter
 	})
 
 	var warning bytes.Buffer
-	sessionCacheWarningWriter = &warning
+	d.IO.ErrOut = &warning
 
 	cacheErr := errors.New("cache metadata unreadable")
 	tryResumeLastFn = func(ctx context.Context) (*webcore.AuthSession, bool, error) {
@@ -1461,7 +1341,7 @@ func TestResolveWebSessionFallsBackToFreshLoginAfterPromptedAppleIDCacheError(t 
 		return &webcore.AuthSession{UserEmail: creds.Username}, nil
 	}
 
-	session, source, err := resolveWebSession(context.Background(), "", "", "", webSessionResolveOptions{
+	session, source, err := resolveWebSessionWith(context.Background(), d, "", "", "", webSessionResolveOptions{
 		promptAppleID: func(appleID *string) error {
 			*appleID = "user@example.com"
 			return nil
@@ -1493,23 +1373,22 @@ func TestResolveWebSessionFallsBackToFreshLoginAfterPromptedAppleIDCacheError(t 
 }
 
 func TestResolveWebSessionPrintsExpiredNoticeOnlyOnceAcrossPromptedLookup(t *testing.T) {
+	d, _, _ := newWebTestDeps()
 	origTryResume := tryResumeSessionFn
 	origTryResumeLast := tryResumeLastFn
 	origLoadCachedSession := loadCachedSessionFn
 	origLoadLastCachedSession := loadLastCachedSessionFn
-	origExpiredWriter := sessionExpiredWriter
 	origWebLogin := webLoginFn
 	t.Cleanup(func() {
 		tryResumeSessionFn = origTryResume
 		tryResumeLastFn = origTryResumeLast
 		loadCachedSessionFn = origLoadCachedSession
 		loadLastCachedSessionFn = origLoadLastCachedSession
-		sessionExpiredWriter = origExpiredWriter
 		webLoginFn = origWebLogin
 	})
 
 	var notice bytes.Buffer
-	sessionExpiredWriter = &notice
+	d.IO.ErrOut = &notice
 
 	tryResumeLastFn = func(ctx context.Context) (*webcore.AuthSession, bool, error) {
 		return nil, false, webcore.ErrCachedSessionExpired
@@ -1533,7 +1412,7 @@ func TestResolveWebSessionPrintsExpiredNoticeOnlyOnceAcrossPromptedLookup(t *tes
 		return &webcore.AuthSession{UserEmail: creds.Username}, nil
 	}
 
-	session, source, err := resolveWebSession(context.Background(), "", "secret", "", webSessionResolveOptions{
+	session, source, err := resolveWebSessionWith(context.Background(), d, "", "secret", "", webSessionResolveOptions{
 		promptAppleID: func(appleID *string) error {
 			*appleID = "user@example.com"
 			return nil
@@ -1557,6 +1436,7 @@ func TestResolveWebSessionPrintsExpiredNoticeOnlyOnceAcrossPromptedLookup(t *tes
 }
 
 func TestResolveSessionWhitespaceOnlyPasswordFallsBackToEnv(t *testing.T) {
+	d, _, _ := newWebTestDeps()
 	origTryResume := tryResumeSessionFn
 	origTryResumeLast := tryResumeLastFn
 	origWebLogin := webLoginFn
@@ -1582,7 +1462,7 @@ func TestResolveSessionWhitespaceOnlyPasswordFallsBackToEnv(t *testing.T) {
 		return &webcore.AuthSession{UserEmail: creds.Username}, nil
 	}
 
-	session, source, err := resolveSession(context.Background(), "user@example.com", "   ", "")
+	session, source, err := resolveSession(context.Background(), d, "user@example.com", "   ", "")
 	if err != nil {
 		t.Fatalf("resolveSession returned error: %v", err)
 	}
@@ -1598,6 +1478,7 @@ func TestResolveSessionWhitespaceOnlyPasswordFallsBackToEnv(t *testing.T) {
 }
 
 func TestResolveSessionUsesTwoFactorCodeCommandEnvWhen2FARequired(t *testing.T) {
+	d, _, _ := newWebTestDeps()
 	origTryResume := tryResumeSessionFn
 	origTryResumeLast := tryResumeLastFn
 	origPromptPassword := promptPasswordFn
@@ -1652,7 +1533,7 @@ func TestResolveSessionUsesTwoFactorCodeCommandEnvWhen2FARequired(t *testing.T) 
 		return nil
 	}
 
-	session, source, err := resolveSession(context.Background(), "user@example.com", "", "", "")
+	session, source, err := resolveSession(context.Background(), d, "user@example.com", "", "", "")
 	if err != nil {
 		t.Fatalf("resolveSession returned error: %v", err)
 	}
@@ -1671,6 +1552,7 @@ func TestResolveSessionUsesTwoFactorCodeCommandEnvWhen2FARequired(t *testing.T) 
 }
 
 func TestResolveSessionPromptsForTwoFactorCodeWhen2FARequiredWithoutCommand(t *testing.T) {
+	d, _, _ := newWebTestDeps()
 	origTryResume := tryResumeSessionFn
 	origTryResumeLast := tryResumeLastFn
 	origPromptPassword := promptPasswordFn
@@ -1731,7 +1613,7 @@ func TestResolveSessionPromptsForTwoFactorCodeWhen2FARequiredWithoutCommand(t *t
 		return nil
 	}
 
-	session, source, err := resolveSession(context.Background(), "user@example.com", "", "", "")
+	session, source, err := resolveSession(context.Background(), d, "user@example.com", "", "", "")
 	if err != nil {
 		t.Fatalf("resolveSession returned error: %v", err)
 	}
@@ -1750,6 +1632,7 @@ func TestResolveSessionPromptsForTwoFactorCodeWhen2FARequiredWithoutCommand(t *t
 }
 
 func TestResolveSessionAutoReauthsExpiredCachedSessionUsingEnvPassword(t *testing.T) {
+	d, _, _ := newWebTestDeps()
 	origTryResume := tryResumeSessionFn
 	origTryResumeLast := tryResumeLastFn
 	origLoadCachedSession := loadCachedSessionFn
@@ -1758,7 +1641,6 @@ func TestResolveSessionAutoReauthsExpiredCachedSessionUsingEnvPassword(t *testin
 	origWebLogin := webLoginFn
 	origPersistWebSession := persistWebSessionFn
 	origWebLoginWithClient := webLoginWithClientFn
-	origExpiredWriter := sessionExpiredWriter
 	t.Cleanup(func() {
 		tryResumeSessionFn = origTryResume
 		tryResumeLastFn = origTryResumeLast
@@ -1768,13 +1650,12 @@ func TestResolveSessionAutoReauthsExpiredCachedSessionUsingEnvPassword(t *testin
 		webLoginFn = origWebLogin
 		persistWebSessionFn = origPersistWebSession
 		webLoginWithClientFn = origWebLoginWithClient
-		sessionExpiredWriter = origExpiredWriter
 	})
 
 	t.Setenv(webPasswordEnv, "env-secret")
 
 	var notice bytes.Buffer
-	sessionExpiredWriter = &notice
+	d.IO.ErrOut = &notice
 
 	cachedClient := &http.Client{}
 	expected := &webcore.AuthSession{Client: cachedClient, UserEmail: "user@example.com", ProviderID: 7}
@@ -1826,7 +1707,7 @@ func TestResolveSessionAutoReauthsExpiredCachedSessionUsingEnvPassword(t *testin
 		return expected, nil
 	}
 
-	session, source, err := resolveSession(context.Background(), "user@example.com", "", "")
+	session, source, err := resolveSession(context.Background(), d, "user@example.com", "", "")
 	if err != nil {
 		t.Fatalf("resolveSession returned error: %v", err)
 	}
@@ -1845,6 +1726,7 @@ func TestResolveSessionAutoReauthsExpiredCachedSessionUsingEnvPassword(t *testin
 // without any 2FA code source must still try it, and stop only once Apple asks
 // for a code, before the challenge is requested.
 func TestResolveSessionWithoutTwoFactorSourceStillTriesCachedJar(t *testing.T) {
+	d, _, _ := newWebTestDeps()
 	for _, needsTwoFactor := range []bool{false, true} {
 		t.Run(fmt.Sprintf("two-factor challenge %t", needsTwoFactor), func(t *testing.T) {
 			origTryResume := tryResumeSessionFn
@@ -1854,7 +1736,6 @@ func TestResolveSessionWithoutTwoFactorSourceStillTriesCachedJar(t *testing.T) {
 			origPersistWebSession := persistWebSessionFn
 			origPrepare := prepareTwoFactorChallengeFn
 			origPromptAvailable := twoFactorPromptAvailableFn
-			origExpiredWriter := sessionExpiredWriter
 			t.Cleanup(func() {
 				tryResumeSessionFn = origTryResume
 				loadCachedSessionFn = origLoadCachedSession
@@ -1863,12 +1744,10 @@ func TestResolveSessionWithoutTwoFactorSourceStillTriesCachedJar(t *testing.T) {
 				persistWebSessionFn = origPersistWebSession
 				prepareTwoFactorChallengeFn = origPrepare
 				twoFactorPromptAvailableFn = origPromptAvailable
-				sessionExpiredWriter = origExpiredWriter
 			})
 
 			t.Setenv(webPasswordEnv, "env-secret")
 			t.Setenv(webTwoFactorCodeCommandEnv, "")
-			sessionExpiredWriter = io.Discard
 			twoFactorPromptAvailableFn = func() bool { return false }
 
 			cachedClient := &http.Client{}
@@ -1895,7 +1774,7 @@ func TestResolveSessionWithoutTwoFactorSourceStillTriesCachedJar(t *testing.T) {
 				return nil, nil
 			}
 
-			session, _, err := resolveSession(context.Background(), "user@example.com", "", "")
+			session, _, err := resolveSession(context.Background(), d, "user@example.com", "", "")
 			if !needsTwoFactor {
 				if err != nil || session != trusted {
 					t.Fatalf("resolveSession() = %v, %v; want the trusted cached-jar session", session, err)
@@ -1913,6 +1792,7 @@ func TestResolveSessionWithoutTwoFactorSourceStillTriesCachedJar(t *testing.T) {
 }
 
 func TestResolveSessionAutoReauthsExpiredLastCachedSessionUsingStoredEmail(t *testing.T) {
+	d, _, _ := newWebTestDeps()
 	origTryResume := tryResumeSessionFn
 	origTryResumeLast := tryResumeLastFn
 	origLoadCachedSession := loadCachedSessionFn
@@ -1921,7 +1801,6 @@ func TestResolveSessionAutoReauthsExpiredLastCachedSessionUsingStoredEmail(t *te
 	origWebLogin := webLoginFn
 	origPersistWebSession := persistWebSessionFn
 	origWebLoginWithClient := webLoginWithClientFn
-	origExpiredWriter := sessionExpiredWriter
 	t.Cleanup(func() {
 		tryResumeSessionFn = origTryResume
 		tryResumeLastFn = origTryResumeLast
@@ -1931,13 +1810,12 @@ func TestResolveSessionAutoReauthsExpiredLastCachedSessionUsingStoredEmail(t *te
 		webLoginFn = origWebLogin
 		persistWebSessionFn = origPersistWebSession
 		webLoginWithClientFn = origWebLoginWithClient
-		sessionExpiredWriter = origExpiredWriter
 	})
 
 	t.Setenv(webPasswordEnv, "env-secret")
 
 	var notice bytes.Buffer
-	sessionExpiredWriter = &notice
+	d.IO.ErrOut = &notice
 
 	cachedClient := &http.Client{}
 	expected := &webcore.AuthSession{Client: cachedClient, UserEmail: "cached@example.com", ProviderID: 42}
@@ -1983,7 +1861,7 @@ func TestResolveSessionAutoReauthsExpiredLastCachedSessionUsingStoredEmail(t *te
 		return expected, nil
 	}
 
-	session, source, err := resolveSession(context.Background(), "", "", "")
+	session, source, err := resolveSession(context.Background(), d, "", "", "")
 	if err != nil {
 		t.Fatalf("resolveSession returned error: %v", err)
 	}
@@ -1999,6 +1877,7 @@ func TestResolveSessionAutoReauthsExpiredLastCachedSessionUsingStoredEmail(t *te
 }
 
 func TestResolveSessionAutoReauthFallsBackToFreshLoginWhenCachedClientFails(t *testing.T) {
+	d, _, _ := newWebTestDeps()
 	origTryResume := tryResumeSessionFn
 	origTryResumeLast := tryResumeLastFn
 	origLoadCachedSession := loadCachedSessionFn
@@ -2007,7 +1886,6 @@ func TestResolveSessionAutoReauthFallsBackToFreshLoginWhenCachedClientFails(t *t
 	origWebLogin := webLoginFn
 	origPersistWebSession := persistWebSessionFn
 	origWebLoginWithClient := webLoginWithClientFn
-	origExpiredWriter := sessionExpiredWriter
 	t.Cleanup(func() {
 		tryResumeSessionFn = origTryResume
 		tryResumeLastFn = origTryResumeLast
@@ -2017,13 +1895,12 @@ func TestResolveSessionAutoReauthFallsBackToFreshLoginWhenCachedClientFails(t *t
 		webLoginFn = origWebLogin
 		persistWebSessionFn = origPersistWebSession
 		webLoginWithClientFn = origWebLoginWithClient
-		sessionExpiredWriter = origExpiredWriter
 	})
 
 	t.Setenv(webPasswordEnv, "env-secret")
 
 	var notice bytes.Buffer
-	sessionExpiredWriter = &notice
+	d.IO.ErrOut = &notice
 
 	cachedClient := &http.Client{}
 	freshSession := &webcore.AuthSession{UserEmail: "user@example.com", ProviderID: 99}
@@ -2066,7 +1943,7 @@ func TestResolveSessionAutoReauthFallsBackToFreshLoginWhenCachedClientFails(t *t
 		return nil
 	}
 
-	session, source, err := resolveSession(context.Background(), "user@example.com", "", "")
+	session, source, err := resolveSession(context.Background(), d, "user@example.com", "", "")
 	if err != nil {
 		t.Fatalf("resolveSession returned error: %v", err)
 	}
@@ -2088,6 +1965,7 @@ func TestResolveSessionAutoReauthFallsBackToFreshLoginWhenCachedClientFails(t *t
 }
 
 func TestResolveSessionAutoReauthDoesNotRetryFreshLoginOnInvalidCredentials(t *testing.T) {
+	d, _, _ := newWebTestDeps()
 	origTryResume := tryResumeSessionFn
 	origTryResumeLast := tryResumeLastFn
 	origLoadCachedSession := loadCachedSessionFn
@@ -2096,7 +1974,6 @@ func TestResolveSessionAutoReauthDoesNotRetryFreshLoginOnInvalidCredentials(t *t
 	origWebLogin := webLoginFn
 	origPersistWebSession := persistWebSessionFn
 	origWebLoginWithClient := webLoginWithClientFn
-	origExpiredWriter := sessionExpiredWriter
 	t.Cleanup(func() {
 		tryResumeSessionFn = origTryResume
 		tryResumeLastFn = origTryResumeLast
@@ -2106,13 +1983,12 @@ func TestResolveSessionAutoReauthDoesNotRetryFreshLoginOnInvalidCredentials(t *t
 		webLoginFn = origWebLogin
 		persistWebSessionFn = origPersistWebSession
 		webLoginWithClientFn = origWebLoginWithClient
-		sessionExpiredWriter = origExpiredWriter
 	})
 
 	t.Setenv(webPasswordEnv, "wrong-secret")
 
 	var notice bytes.Buffer
-	sessionExpiredWriter = &notice
+	d.IO.ErrOut = &notice
 
 	cachedClient := &http.Client{}
 	freshTried := false
@@ -2150,7 +2026,7 @@ func TestResolveSessionAutoReauthDoesNotRetryFreshLoginOnInvalidCredentials(t *t
 		return nil
 	}
 
-	_, _, err := resolveSession(context.Background(), "user@example.com", "", "")
+	_, _, err := resolveSession(context.Background(), d, "user@example.com", "", "")
 	if err == nil {
 		t.Fatal("expected auto-reauth credential error")
 	}
@@ -2166,6 +2042,7 @@ func TestResolveSessionAutoReauthDoesNotRetryFreshLoginOnInvalidCredentials(t *t
 }
 
 func TestResolveSessionAutoReauthWarnsOnPersistFailure(t *testing.T) {
+	d, _, _ := newWebTestDeps()
 	origTryResume := tryResumeSessionFn
 	origTryResumeLast := tryResumeLastFn
 	origLoadCachedSession := loadCachedSessionFn
@@ -2174,8 +2051,6 @@ func TestResolveSessionAutoReauthWarnsOnPersistFailure(t *testing.T) {
 	origWebLogin := webLoginFn
 	origPersistWebSession := persistWebSessionFn
 	origWebLoginWithClient := webLoginWithClientFn
-	origExpiredWriter := sessionExpiredWriter
-	origCacheWarningWriter := sessionCacheWarningWriter
 	t.Cleanup(func() {
 		tryResumeSessionFn = origTryResume
 		tryResumeLastFn = origTryResumeLast
@@ -2185,16 +2060,14 @@ func TestResolveSessionAutoReauthWarnsOnPersistFailure(t *testing.T) {
 		webLoginFn = origWebLogin
 		persistWebSessionFn = origPersistWebSession
 		webLoginWithClientFn = origWebLoginWithClient
-		sessionExpiredWriter = origExpiredWriter
-		sessionCacheWarningWriter = origCacheWarningWriter
 	})
 
 	t.Setenv(webPasswordEnv, "env-secret")
 
 	var notice bytes.Buffer
-	sessionExpiredWriter = &notice
+	d.IO.ErrOut = &notice
 	var cacheWarning bytes.Buffer
-	sessionCacheWarningWriter = &cacheWarning
+	d.IO.ErrOut = &cacheWarning
 
 	cachedClient := &http.Client{}
 	expected := &webcore.AuthSession{Client: cachedClient, UserEmail: "user@example.com"}
@@ -2228,7 +2101,7 @@ func TestResolveSessionAutoReauthWarnsOnPersistFailure(t *testing.T) {
 		return errors.New("keychain offline")
 	}
 
-	session, source, err := resolveSession(context.Background(), "user@example.com", "", "")
+	session, source, err := resolveSession(context.Background(), d, "user@example.com", "", "")
 	if err != nil {
 		t.Fatalf("resolveSession returned error: %v", err)
 	}
@@ -2247,13 +2120,13 @@ func TestResolveSessionAutoReauthWarnsOnPersistFailure(t *testing.T) {
 }
 
 func TestResolveSessionAutoReauthRestoresCachedProvider(t *testing.T) {
+	d, _, _ := newWebTestDeps()
 	origTryResume := tryResumeSessionFn
 	origLoadCachedSession := loadCachedSessionFn
 	origWebLogin := webLoginFn
 	origPersistWebSession := persistWebSessionFn
 	origWebLoginWithClient := webLoginWithClientFn
 	origSelectProvider := selectWebProviderFn
-	origExpiredWriter := sessionExpiredWriter
 	t.Cleanup(func() {
 		tryResumeSessionFn = origTryResume
 		loadCachedSessionFn = origLoadCachedSession
@@ -2261,10 +2134,8 @@ func TestResolveSessionAutoReauthRestoresCachedProvider(t *testing.T) {
 		persistWebSessionFn = origPersistWebSession
 		webLoginWithClientFn = origWebLoginWithClient
 		selectWebProviderFn = origSelectProvider
-		sessionExpiredWriter = origExpiredWriter
 	})
 	t.Setenv(webPasswordEnv, "env-secret")
-	sessionExpiredWriter = io.Discard
 
 	cachedClient := &http.Client{}
 	tryResumeSessionFn = func(ctx context.Context, username string) (*webcore.AuthSession, bool, error) {
@@ -2296,7 +2167,7 @@ func TestResolveSessionAutoReauthRestoresCachedProvider(t *testing.T) {
 			session.DeveloperTeamID = ""
 			return nil
 		}
-		session, _, err := resolveSession(context.Background(), "user@example.com", "", "")
+		session, _, err := resolveSession(context.Background(), d, "user@example.com", "", "")
 		if err != nil {
 			t.Fatalf("resolveSession returned error: %v", err)
 		}
@@ -2313,7 +2184,7 @@ func TestResolveSessionAutoReauthRestoresCachedProvider(t *testing.T) {
 		selectWebProviderFn = func(ctx context.Context, session *webcore.AuthSession, selection webcore.ProviderSelection) error {
 			return errors.New("provider not available")
 		}
-		_, _, err := resolveSession(context.Background(), "user@example.com", "", "")
+		_, _, err := resolveSession(context.Background(), d, "user@example.com", "", "")
 		if err == nil || !strings.Contains(err.Error(), "provider 42") || !strings.Contains(err.Error(), "--provider-id") {
 			t.Fatalf("expected provider restore error naming provider 42 and --provider-id, got %v", err)
 		}
@@ -2341,7 +2212,7 @@ func TestResolveSessionAutoReauthRestoresCachedProvider(t *testing.T) {
 			session.DeveloperTeamID = ""
 			return nil
 		}
-		session, source, err := resolveSession(context.Background(), "user@example.com", "", "")
+		session, source, err := resolveSession(context.Background(), d, "user@example.com", "", "")
 		if err != nil {
 			t.Fatalf("resolveSession returned error: %v", err)
 		}
@@ -2358,13 +2229,14 @@ func TestResolveSessionAutoReauthRestoresCachedProvider(t *testing.T) {
 			t.Fatal("did not expect the cached provider to be restored")
 			return nil
 		}
-		if _, _, err := resolveSessionWithoutPersist(context.Background(), "user@example.com", "", ""); err != nil {
+		if _, _, err := resolveSessionWithoutPersist(context.Background(), d, "user@example.com", "", ""); err != nil {
 			t.Fatalf("resolveSessionWithoutPersist returned error: %v", err)
 		}
 	})
 }
 
 func TestResolveSessionRequiresAppleIDToRefreshLegacyLastCachedSession(t *testing.T) {
+	d, _, _ := newWebTestDeps()
 	origTryResume := tryResumeSessionFn
 	origTryResumeLast := tryResumeLastFn
 	origLoadCachedSession := loadCachedSessionFn
@@ -2373,7 +2245,6 @@ func TestResolveSessionRequiresAppleIDToRefreshLegacyLastCachedSession(t *testin
 	origWebLogin := webLoginFn
 	origPersistWebSession := persistWebSessionFn
 	origWebLoginWithClient := webLoginWithClientFn
-	origExpiredWriter := sessionExpiredWriter
 	t.Cleanup(func() {
 		tryResumeSessionFn = origTryResume
 		tryResumeLastFn = origTryResumeLast
@@ -2383,7 +2254,6 @@ func TestResolveSessionRequiresAppleIDToRefreshLegacyLastCachedSession(t *testin
 		webLoginFn = origWebLogin
 		persistWebSessionFn = origPersistWebSession
 		webLoginWithClientFn = origWebLoginWithClient
-		sessionExpiredWriter = origExpiredWriter
 	})
 
 	t.Setenv(webPasswordEnv, "env-secret")
@@ -2420,24 +2290,9 @@ func TestResolveSessionRequiresAppleIDToRefreshLegacyLastCachedSession(t *testin
 	}
 
 	var stderr bytes.Buffer
-	origStderr := os.Stderr
-	r, w, err := os.Pipe()
-	if err != nil {
-		t.Fatalf("os.Pipe error: %v", err)
-	}
-	os.Stderr = w
-	done := make(chan struct{})
-	go func() {
-		_, _ = io.Copy(&stderr, r)
-		close(done)
-	}()
+	d.IO.ErrOut = &stderr
 
-	_, _, runErr := resolveSession(context.Background(), "", "", "")
-
-	_ = w.Close()
-	os.Stderr = origStderr
-	<-done
-	_ = r.Close()
+	_, _, runErr := resolveSession(context.Background(), d, "", "", "")
 
 	if !errors.Is(runErr, flag.ErrHelp) {
 		t.Fatalf("expected ErrHelp, got %v", runErr)
@@ -2448,15 +2303,14 @@ func TestResolveSessionRequiresAppleIDToRefreshLegacyLastCachedSession(t *testin
 }
 
 func TestResolveSessionReturnsPromptCancellationWithoutUsageFallback(t *testing.T) {
+	d, _, _ := newWebTestDeps()
 	origTryResume := tryResumeSessionFn
 	origTryResumeLast := tryResumeLastFn
 	origPromptPassword := promptPasswordFn
-	origReadPassword := termReadPasswordFn
 	t.Cleanup(func() {
 		tryResumeSessionFn = origTryResume
 		tryResumeLastFn = origTryResumeLast
 		promptPasswordFn = origPromptPassword
-		termReadPasswordFn = origReadPassword
 	})
 
 	t.Setenv(webPasswordEnv, "")
@@ -2468,17 +2322,14 @@ func TestResolveSessionReturnsPromptCancellationWithoutUsageFallback(t *testing.
 		t.Fatal("did not expect last-session cache lookup when apple-id is provided")
 		return nil, false, nil
 	}
-	termReadPasswordFn = func(fd int) ([]byte, error) {
-		return nil, errors.New("tty closed")
-	}
 	promptPasswordFn = func(ctx context.Context) (string, error) {
-		return readPasswordFromTerminalFD(ctx, &bytes.Buffer{})
+		return "", fmt.Errorf("password prompt interrupted: %w", ctx.Err())
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	_, _, err := resolveSession(ctx, "user@example.com", "", "")
+	_, _, err := resolveSession(ctx, d, "user@example.com", "", "")
 	if err == nil {
 		t.Fatal("expected prompt cancellation error")
 	}
@@ -2525,7 +2376,8 @@ func TestWebAuthLoginReportsInvalidCredentialMessage(t *testing.T) {
 		return nil, errors.New("srp login failed: signin complete failed: incorrect Apple Account email or password")
 	}
 
-	cmd := WebAuthLoginCommand()
+	d, _, _ := newWebTestDeps()
+	cmd := newWebAuthLoginCommand(d)
 	if err := cmd.FlagSet.Parse([]string{"--apple-id", "user@example.com"}); err != nil {
 		t.Fatalf("parse error: %v", err)
 	}
@@ -2544,6 +2396,7 @@ func TestWebAuthLoginReportsInvalidCredentialMessage(t *testing.T) {
 // the CLI aborted with a misleading "2fa verification failed" message instead of
 // discarding the stale jar and retrying a fresh login once.
 func TestResolveSessionRetriesFreshLoginAfterStaleSessionBootstrap401(t *testing.T) {
+	d, _, _ := newWebTestDeps()
 	origTryResume := tryResumeSessionFn
 	origTryResumeLast := tryResumeLastFn
 	origLoadCachedSession := loadCachedSessionFn
@@ -2558,8 +2411,6 @@ func TestResolveSessionRetriesFreshLoginAfterStaleSessionBootstrap401(t *testing
 	origPersistWebSession := persistWebSessionFn
 	origDeleteWebSession := deleteWebSessionFn
 	origDeleteStaleWebSession := deleteStaleWebSessionFn
-	origExpiredWriter := sessionExpiredWriter
-	origStatusWriter := twoFactorStatusWriter
 	t.Cleanup(func() {
 		tryResumeSessionFn = origTryResume
 		tryResumeLastFn = origTryResumeLast
@@ -2575,16 +2426,13 @@ func TestResolveSessionRetriesFreshLoginAfterStaleSessionBootstrap401(t *testing
 		persistWebSessionFn = origPersistWebSession
 		deleteWebSessionFn = origDeleteWebSession
 		deleteStaleWebSessionFn = origDeleteStaleWebSession
-		sessionExpiredWriter = origExpiredWriter
-		twoFactorStatusWriter = origStatusWriter
 	})
 
 	t.Setenv(webPasswordEnv, "env-secret")
 	t.Setenv(webTwoFactorCodeCommandEnv, "")
 
 	var notice bytes.Buffer
-	sessionExpiredWriter = &notice
-	twoFactorStatusWriter = io.Discard
+	d.IO.ErrOut = &notice
 
 	cachedClient := &http.Client{}
 	staleSession := &webcore.AuthSession{}
@@ -2655,7 +2503,7 @@ func TestResolveSessionRetriesFreshLoginAfterStaleSessionBootstrap401(t *testing
 		return nil
 	}
 
-	session, source, err := resolveSession(context.Background(), "user@example.com", "", "")
+	session, source, err := resolveSession(context.Background(), d, "user@example.com", "", "")
 	if err != nil {
 		t.Fatalf("resolveSession returned error: %v", err)
 	}
@@ -2683,6 +2531,7 @@ func TestResolveSessionRetriesFreshLoginAfterStaleSessionBootstrap401(t *testing
 }
 
 func TestResolveSessionDoesNotRetryFreshLoginOnRejectedTwoFactorCode(t *testing.T) {
+	d, _, _ := newWebTestDeps()
 	origTryResume := tryResumeSessionFn
 	origTryResumeLast := tryResumeLastFn
 	origLoadCachedSession := loadCachedSessionFn
@@ -2694,8 +2543,6 @@ func TestResolveSessionDoesNotRetryFreshLoginOnRejectedTwoFactorCode(t *testing.
 	origSubmit := submitTwoFactorCodeFn
 	origWebLogin := webLoginFn
 	origWebLoginWithClient := webLoginWithClientFn
-	origExpiredWriter := sessionExpiredWriter
-	origStatusWriter := twoFactorStatusWriter
 	t.Cleanup(func() {
 		tryResumeSessionFn = origTryResume
 		tryResumeLastFn = origTryResumeLast
@@ -2708,14 +2555,10 @@ func TestResolveSessionDoesNotRetryFreshLoginOnRejectedTwoFactorCode(t *testing.
 		submitTwoFactorCodeFn = origSubmit
 		webLoginFn = origWebLogin
 		webLoginWithClientFn = origWebLoginWithClient
-		sessionExpiredWriter = origExpiredWriter
-		twoFactorStatusWriter = origStatusWriter
 	})
 
 	t.Setenv(webPasswordEnv, "env-secret")
 	t.Setenv(webTwoFactorCodeCommandEnv, "")
-	sessionExpiredWriter = io.Discard
-	twoFactorStatusWriter = io.Discard
 
 	cachedClient := &http.Client{}
 
@@ -2758,7 +2601,7 @@ func TestResolveSessionDoesNotRetryFreshLoginOnRejectedTwoFactorCode(t *testing.
 		return nil, nil
 	}
 
-	_, _, err := resolveSession(context.Background(), "user@example.com", "", "")
+	_, _, err := resolveSession(context.Background(), d, "user@example.com", "", "")
 	if err == nil {
 		t.Fatal("expected auto-reauth to fail on a rejected 2fa code")
 	}
@@ -2771,6 +2614,7 @@ func TestResolveSessionDoesNotRetryFreshLoginOnRejectedTwoFactorCode(t *testing.
 // Store Connect access) fails the same way on a fresh jar, so retrying would
 // only burn a second code.
 func TestResolveSessionDoesNotRetryFreshLoginAfterTwoFactorFinalizationFailure(t *testing.T) {
+	d, _, _ := newWebTestDeps()
 	for _, prompted := range []bool{false, true} {
 		t.Run(fmt.Sprintf("prompted=%t", prompted), func(t *testing.T) {
 			restoreStaleSessionRetryHooks(t)
@@ -2794,7 +2638,7 @@ func TestResolveSessionDoesNotRetryFreshLoginAfterTwoFactorFinalizationFailure(t
 				return nil, nil
 			}
 
-			_, _, err := resolveSession(context.Background(), "user@example.com", "", "")
+			_, _, err := resolveSession(context.Background(), d, "user@example.com", "", "")
 			if err == nil || !strings.Contains(err.Error(), "2fa finalization failed") {
 				t.Fatalf("expected the finalization failure, got %v", err)
 			}
@@ -2869,9 +2713,6 @@ func restoreStaleSessionRetryHooks(t *testing.T) {
 	origDeleteStaleWebSession := deleteStaleWebSessionFn
 	origOpenTTY := openTTYFn
 	origIsTerminal := termIsTerminalFn
-	origExpiredWriter := sessionExpiredWriter
-	origStatusWriter := twoFactorStatusWriter
-	origCacheWarningWriter := sessionCacheWarningWriter
 	t.Cleanup(func() {
 		tryResumeSessionFn = origTryResume
 		tryResumeLastFn = origTryResumeLast
@@ -2889,18 +2730,11 @@ func restoreStaleSessionRetryHooks(t *testing.T) {
 		deleteStaleWebSessionFn = origDeleteStaleWebSession
 		openTTYFn = origOpenTTY
 		termIsTerminalFn = origIsTerminal
-		sessionExpiredWriter = origExpiredWriter
-		twoFactorStatusWriter = origStatusWriter
-		sessionCacheWarningWriter = origCacheWarningWriter
 	})
 
 	t.Setenv(webPasswordEnv, "env-secret")
 	t.Setenv(webTwoFactorCodeCommandEnv, "")
 	t.Setenv(webDontStorePasswordEnv, "1")
-
-	sessionExpiredWriter = io.Discard
-	twoFactorStatusWriter = io.Discard
-	sessionCacheWarningWriter = io.Discard
 	promptPasswordFn = func(ctx context.Context) (string, error) {
 		t.Fatal("did not expect a password prompt when the env password is set")
 		return "", nil
@@ -2934,6 +2768,7 @@ func restoreStaleSessionRetryHooks(t *testing.T) {
 // session bootstrap, so the fresh retry must obtain a new code from the
 // configured command instead of resubmitting the literal --two-factor-code.
 func TestResolveSessionObtainsNewTwoFactorCodeForFreshRetryAfterStaleBootstrap(t *testing.T) {
+	d, _, _ := newWebTestDeps()
 	restoreStaleSessionRetryHooks(t)
 	t.Setenv(webTwoFactorCodeCommandEnv, "print-code")
 
@@ -2974,7 +2809,7 @@ func TestResolveSessionObtainsNewTwoFactorCodeForFreshRetryAfterStaleBootstrap(t
 		return freshSession, &webcore.TwoFactorRequiredError{}
 	}
 
-	session, source, err := resolveSession(context.Background(), "user@example.com", "", "111111")
+	session, source, err := resolveSession(context.Background(), d, "user@example.com", "", "111111")
 	if err != nil {
 		t.Fatalf("resolveSession returned error: %v", err)
 	}
@@ -3022,6 +2857,7 @@ func shortenTwoFactorCodeRotationWait(t *testing.T) {
 // already consumed that value on the cached-jar attempt. The retry must poll
 // the command until it returns a different code.
 func TestResolveSessionWaitsForRotatedCommandCodeAfterStaleBootstrap(t *testing.T) {
+	d, _, _ := newWebTestDeps()
 	restoreStaleSessionRetryHooks(t)
 	shortenTwoFactorCodeRotationWait(t)
 	t.Setenv(webTwoFactorCodeCommandEnv, "print-code")
@@ -3066,7 +2902,7 @@ func TestResolveSessionWaitsForRotatedCommandCodeAfterStaleBootstrap(t *testing.
 		return freshSession, &webcore.TwoFactorRequiredError{}
 	}
 
-	session, source, err := resolveSession(context.Background(), "user@example.com", "", "")
+	session, source, err := resolveSession(context.Background(), d, "user@example.com", "", "")
 	if err != nil {
 		t.Fatalf("resolveSession returned error: %v", err)
 	}
@@ -3094,6 +2930,7 @@ func TestResolveSessionWaitsForRotatedCommandCodeAfterStaleBootstrap(t *testing.
 // usable code left, so the retry must fail with the consumed-code guidance
 // rather than resubmit the value Apple already burned.
 func TestResolveSessionFailsWhenCommandCodeNeverRotatesAfterStaleBootstrap(t *testing.T) {
+	d, _, _ := newWebTestDeps()
 	restoreStaleSessionRetryHooks(t)
 	shortenTwoFactorCodeRotationWait(t)
 	t.Setenv(webTwoFactorCodeCommandEnv, "print-code")
@@ -3134,7 +2971,7 @@ func TestResolveSessionFailsWhenCommandCodeNeverRotatesAfterStaleBootstrap(t *te
 		return nil
 	}
 
-	_, _, err := resolveSession(context.Background(), "user@example.com", "", "")
+	_, _, err := resolveSession(context.Background(), d, "user@example.com", "", "")
 	if err == nil {
 		t.Fatal("expected resolveSession to fail when the 2fa code command never rotates")
 	}
@@ -3159,6 +2996,7 @@ func TestResolveSessionFailsWhenCommandCodeNeverRotatesAfterStaleBootstrap(t *te
 // code the cached attempt burned lets the just-rejected value through and
 // resubmits it.
 func TestResolveSessionWaitsForANewCodeOnPhoneFallbackAfterStaleBootstrap(t *testing.T) {
+	d, _, _ := newWebTestDeps()
 	restoreStaleSessionRetryHooks(t)
 	shortenTwoFactorCodeRotationWait(t)
 	t.Setenv(webTwoFactorCodeCommandEnv, "print-code")
@@ -3210,7 +3048,7 @@ func TestResolveSessionWaitsForANewCodeOnPhoneFallbackAfterStaleBootstrap(t *tes
 		return freshSession, &webcore.TwoFactorRequiredError{}
 	}
 
-	session, source, err := resolveSession(context.Background(), "user@example.com", "", "")
+	session, source, err := resolveSession(context.Background(), d, "user@example.com", "", "")
 	if err != nil {
 		t.Fatalf("resolveSession returned error: %v", err)
 	}
@@ -3232,10 +3070,11 @@ func TestResolveSessionWaitsForANewCodeOnPhoneFallbackAfterStaleBootstrap(t *tes
 // valid session another process persisted during 2FA survives. A preserved
 // entry is not a failure either, so it must not surface a warning.
 func TestResolveSessionScopesTheStaleDiscardToTheLoadedSession(t *testing.T) {
+	d, _, _ := newWebTestDeps()
 	restoreStaleSessionRetryHooks(t)
 
 	var warnings bytes.Buffer
-	sessionCacheWarningWriter = &warnings
+	d.IO.ErrOut = &warnings
 
 	cachedClient := &http.Client{}
 	cachedSession := &webcore.AuthSession{Client: cachedClient, UserEmail: "user@example.com"}
@@ -3267,7 +3106,7 @@ func TestResolveSessionScopesTheStaleDiscardToTheLoadedSession(t *testing.T) {
 		return freshSession, &webcore.TwoFactorRequiredError{}
 	}
 
-	if _, _, err := resolveSession(context.Background(), "user@example.com", "", ""); err != nil {
+	if _, _, err := resolveSession(context.Background(), d, "user@example.com", "", ""); err != nil {
 		t.Fatalf("resolveSession returned error: %v", err)
 	}
 	if discardCalls != 1 {
@@ -3276,7 +3115,9 @@ func TestResolveSessionScopesTheStaleDiscardToTheLoadedSession(t *testing.T) {
 	if discardedFor[0] != cachedSession {
 		t.Fatal("expected the discard to be scoped to the cached session this resolution loaded")
 	}
-	if got := warnings.String(); got != "" {
+	// The expired-session and consumed-code notices share d's stderr with the
+	// cache warnings; only the warning must be absent.
+	if got, want := warnings.String(), "Session expired.\nThe previous verification code was consumed by the expired session. Enter the new code Apple just sent, not the previous one.\n"; got != want {
 		t.Fatalf("did not expect a warning when a newer cached session was preserved, got %q", got)
 	}
 }
@@ -3342,15 +3183,18 @@ func TestReadRotatedTwoFactorCodeReportsGenuineCallerCancellation(t *testing.T) 
 		return "111111", nil
 	}
 
-	parent, cancelParent := context.WithCancel(context.Background())
-	loginCtx, cancel := shared.ContextWithTimeoutDuration(parent, 5*time.Second)
-	defer cancel()
-	go func() {
-		time.Sleep(20 * time.Millisecond)
-		cancelParent()
-	}()
+	var err error
+	synctest.Test(t, func(*testing.T) {
+		parent, cancelParent := context.WithCancel(context.Background())
+		loginCtx, cancel := shared.ContextWithTimeoutDuration(parent, 5*time.Second)
+		defer cancel()
+		go func() {
+			time.Sleep(20 * time.Millisecond)
+			cancelParent()
+		}()
 
-	_, err := readRotatedTwoFactorCodeFromCommand(loginCtx, "print-code", "111111")
+		_, err = readRotatedTwoFactorCodeFromCommand(loginCtx, "print-code", "111111")
+	})
 	if err == nil {
 		t.Fatal("expected the cancelled caller to fail")
 	}
@@ -3366,10 +3210,11 @@ func TestReadRotatedTwoFactorCodeReportsGenuineCallerCancellation(t *testing.T) 
 // are still on screen from the first prompt, and retyping them only earns an
 // opaque rejection.
 func TestResolveSessionExplainsConsumedCodeBeforeThePromptedRetry(t *testing.T) {
+	d, _, _ := newWebTestDeps()
 	restoreStaleSessionRetryHooks(t)
 
 	var status bytes.Buffer
-	twoFactorStatusWriter = &status
+	d.IO.ErrOut = &status
 
 	cachedClient := &http.Client{}
 	staleSession := &webcore.AuthSession{}
@@ -3406,7 +3251,7 @@ func TestResolveSessionExplainsConsumedCodeBeforeThePromptedRetry(t *testing.T) 
 		return freshSession, &webcore.TwoFactorRequiredError{}
 	}
 
-	session, source, err := resolveSession(context.Background(), "user@example.com", "", "")
+	session, source, err := resolveSession(context.Background(), d, "user@example.com", "", "")
 	if err != nil {
 		t.Fatalf("resolveSession returned error: %v", err)
 	}
@@ -3430,10 +3275,11 @@ func TestResolveSessionExplainsConsumedCodeBeforeThePromptedRetry(t *testing.T) 
 
 // Apple has sent nothing new until the fresh sign-in raises its own challenge.
 func TestResolveSessionWithholdsConsumedCodeNoticeUntilTheFreshChallengeExists(t *testing.T) {
+	d, _, _ := newWebTestDeps()
 	restoreStaleSessionRetryHooks(t)
 
 	var status bytes.Buffer
-	twoFactorStatusWriter = &status
+	d.IO.ErrOut = &status
 	staleSession := &webcore.AuthSession{}
 	freshSession := &webcore.AuthSession{UserEmail: "user@example.com"}
 
@@ -3458,7 +3304,7 @@ func TestResolveSessionWithholdsConsumedCodeNoticeUntilTheFreshChallengeExists(t
 		return &webcore.TwoFactorChallenge{Method: "trusted-device"}, nil
 	}
 
-	if _, _, err := resolveSession(context.Background(), "user@example.com", "", ""); err == nil {
+	if _, _, err := resolveSession(context.Background(), d, "user@example.com", "", ""); err == nil {
 		t.Fatal("expected the fresh challenge setup failure")
 	}
 	if notice := status.String(); strings.Contains(notice, "new code") {
@@ -3469,11 +3315,12 @@ func TestResolveSessionWithholdsConsumedCodeNoticeUntilTheFreshChallengeExists(t
 // The notice is for the operator at the prompt. A configured code command
 // fetches the replacement itself, so it must not be told to type anything.
 func TestResolveSessionOmitsConsumedCodeNoticeWhenCommandSuppliesTheReplacement(t *testing.T) {
+	d, _, _ := newWebTestDeps()
 	restoreStaleSessionRetryHooks(t)
 	t.Setenv(webTwoFactorCodeCommandEnv, "print-code")
 
 	var status bytes.Buffer
-	twoFactorStatusWriter = &status
+	d.IO.ErrOut = &status
 
 	cachedClient := &http.Client{}
 	staleSession := &webcore.AuthSession{}
@@ -3508,7 +3355,7 @@ func TestResolveSessionOmitsConsumedCodeNoticeWhenCommandSuppliesTheReplacement(
 		return freshSession, &webcore.TwoFactorRequiredError{}
 	}
 
-	if _, _, err := resolveSession(context.Background(), "user@example.com", "", ""); err != nil {
+	if _, _, err := resolveSession(context.Background(), d, "user@example.com", "", ""); err != nil {
 		t.Fatalf("resolveSession returned error: %v", err)
 	}
 	if notice := status.String(); strings.Contains(notice, "consumed") {
@@ -3521,6 +3368,7 @@ func TestResolveSessionOmitsConsumedCodeNoticeWhenCommandSuppliesTheReplacement(
 // override), so a slow or blocking one would otherwise stretch the retry far
 // past the advertised wait before the deadline is ever consulted.
 func TestResolveSessionBoundsBlockingCommandByRotationDeadlineAfterStaleBootstrap(t *testing.T) {
+	d, _, _ := newWebTestDeps()
 	restoreStaleSessionRetryHooks(t)
 	shortenTwoFactorCodeRotationWait(t)
 	t.Setenv(webTwoFactorCodeCommandEnv, "print-code")
@@ -3571,7 +3419,7 @@ func TestResolveSessionBoundsBlockingCommandByRotationDeadlineAfterStaleBootstra
 	}
 
 	started := time.Now()
-	_, _, err := resolveSession(context.Background(), "user@example.com", "", "")
+	_, _, err := resolveSession(context.Background(), d, "user@example.com", "", "")
 	elapsed := time.Since(started)
 	if err == nil {
 		t.Fatal("expected resolveSession to fail when the 2fa code command blocks past the rotation deadline")
@@ -3600,6 +3448,7 @@ func TestResolveSessionBoundsBlockingCommandByRotationDeadlineAfterStaleBootstra
 // the next invocation reload the same jar and consume another 2FA code against
 // it before reaching the identical bootstrap 401.
 func TestResolveSessionDiscardsStaleSessionWhenFreshRetryFails(t *testing.T) {
+	d, _, _ := newWebTestDeps()
 	restoreStaleSessionRetryHooks(t)
 
 	cachedClient := &http.Client{}
@@ -3638,7 +3487,7 @@ func TestResolveSessionDiscardsStaleSessionWhenFreshRetryFails(t *testing.T) {
 		return nil
 	}
 
-	if _, _, err := resolveSession(context.Background(), "user@example.com", "", ""); err == nil {
+	if _, _, err := resolveSession(context.Background(), d, "user@example.com", "", ""); err == nil {
 		t.Fatal("expected the failed fresh retry to return an error")
 	}
 	if freshAttempts != 1 {
@@ -3653,6 +3502,7 @@ func TestResolveSessionDiscardsStaleSessionWhenFreshRetryFails(t *testing.T) {
 // literal code, so the retry must not resubmit it; it must explain that a new
 // code is required.
 func TestResolveSessionFailsWhenConsumedTwoFactorCodeCannotBeReplaced(t *testing.T) {
+	d, _, _ := newWebTestDeps()
 	for _, tt := range []struct {
 		name         string
 		ttyAvailable bool
@@ -3706,7 +3556,7 @@ func TestResolveSessionFailsWhenConsumedTwoFactorCodeCannotBeReplaced(t *testing
 				return nil, nil
 			}
 
-			_, _, err := resolveSession(context.Background(), "user@example.com", "", "111111")
+			_, _, err := resolveSession(context.Background(), d, "user@example.com", "", "111111")
 			if err == nil {
 				t.Fatal("expected resolveSession to fail when the consumed code cannot be replaced")
 			}
@@ -3734,6 +3584,7 @@ func TestResolveSessionFailsWhenConsumedTwoFactorCodeCannotBeReplaced(t *testing
 // so the fresh retry must run under a new bounded context instead of the
 // already-expired one.
 func TestResolveSessionRetriesFreshLoginAfterRequestDeadlineExpired(t *testing.T) {
+	d, _, _ := newWebTestDeps()
 	restoreStaleSessionRetryHooks(t)
 
 	cachedClient := &http.Client{}
@@ -3779,7 +3630,7 @@ func TestResolveSessionRetriesFreshLoginAfterRequestDeadlineExpired(t *testing.T
 	defer cancel()
 	<-expiredCtx.Done()
 
-	session, source, err := resolveSession(expiredCtx, "user@example.com", "", "")
+	session, source, err := resolveSession(expiredCtx, d, "user@example.com", "", "")
 	if err != nil {
 		t.Fatalf("resolveSession returned error: %v", err)
 	}
@@ -3795,6 +3646,7 @@ func TestResolveSessionRetriesFreshLoginAfterRequestDeadlineExpired(t *testing.T
 }
 
 func TestProviderSelectionRenewsExpiredRequestBudget(t *testing.T) {
+	d, _, _ := newWebTestDeps()
 	originalSelect, originalPersist := selectWebProviderFn, persistWebSessionFn
 	t.Cleanup(func() { selectWebProviderFn, persistWebSessionFn = originalSelect, originalPersist })
 	t.Setenv("ASC_TIMEOUT", "1s")
@@ -3806,7 +3658,7 @@ func TestProviderSelectionRenewsExpiredRequestBudget(t *testing.T) {
 		return ctx.Err()
 	}
 	persistWebSessionFn = func(session *webcore.AuthSession) error { persisted = true; return nil }
-	if err := selectResolvedWebSessionProvider(ctx, &webcore.AuthSession{}, webcore.ProviderSelection{ProviderID: 7}); err != nil {
+	if err := selectResolvedWebSessionProviderWith(ctx, d, &webcore.AuthSession{}, webcore.ProviderSelection{ProviderID: 7}); err != nil {
 		t.Fatal(err)
 	}
 	if !persisted {
@@ -3815,6 +3667,7 @@ func TestProviderSelectionRenewsExpiredRequestBudget(t *testing.T) {
 }
 
 func TestProviderSelectionPreservesCallerCancellation(t *testing.T) {
+	d, _, _ := newWebTestDeps()
 	originalSelect, originalPersist := selectWebProviderFn, persistWebSessionFn
 	t.Cleanup(func() { selectWebProviderFn, persistWebSessionFn = originalSelect, originalPersist })
 	parent, stop := context.WithCancel(context.Background())
@@ -3828,18 +3681,19 @@ func TestProviderSelectionPreservesCallerCancellation(t *testing.T) {
 		t.Fatal("must not persist after canceled selection")
 		return nil
 	}
-	if err := selectResolvedWebSessionProvider(ctx, &webcore.AuthSession{}, webcore.ProviderSelection{ProviderID: 7}); !errors.Is(err, context.Canceled) {
+	if err := selectResolvedWebSessionProviderWith(ctx, d, &webcore.AuthSession{}, webcore.ProviderSelection{ProviderID: 7}); !errors.Is(err, context.Canceled) {
 		t.Fatalf("expected cancellation, got %v", err)
 	}
 }
 
 func TestLoginRenewsBudgetAfterCredentialPrompt(t *testing.T) {
+	d, _, _ := newWebTestDeps()
 	t.Setenv("ASC_TIMEOUT", "1s")
 	ctx, cancel := shared.ContextWithResolvedTimeout(context.Background(), time.Nanosecond)
 	defer cancel()
 	<-ctx.Done()
 	expected := &webcore.AuthSession{}
-	result, err := loginWithOptionalTwoFactorUsing(ctx, "test", "user@example.com", "test-only", "", func(ctx context.Context, creds webcore.LoginCredentials) (*webcore.AuthSession, error) {
+	result, err := loginWithOptionalTwoFactorUsing(ctx, d, "test", "user@example.com", "test-only", "", func(ctx context.Context, creds webcore.LoginCredentials) (*webcore.AuthSession, error) {
 		return expected, ctx.Err()
 	}, nil, nil)
 	if err != nil || result != expected {

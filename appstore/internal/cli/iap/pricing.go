@@ -9,9 +9,9 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
-// IAPPricingCommand returns the canonical pricing command tree for IAPs.
-func IAPPricingCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("pricing", flag.ExitOnError)
+// newIAPPricingCommand returns the canonical pricing command tree for IAPs.
+func newIAPPricingCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("pricing", flag.ExitOnError)
 
 	return &ffcli.Command{
 		Name:       "pricing",
@@ -28,14 +28,14 @@ Examples:
   asc iap pricing availability view --iap-id "IAP_ID"
   asc iap pricing availabilities view --id "AVAILABILITY_ID"`,
 		FlagSet:   fs,
-		UsageFunc: shared.VisibleUsageFunc,
+		UsageFunc: d.VisibleUsageFunc,
 		Subcommands: []*ffcli.Command{
-			IAPPricesCommand(),
-			IAPPricePointsCommand(),
-			IAPPriceSchedulesCommand(),
-			IAPPricingPPPCommand(),
-			IAPAvailabilityCommand(),
-			IAPAvailabilitiesCommand(),
+			newIAPPricesCommand(d),
+			newIAPPricePointsCommand(d),
+			newIAPPriceSchedulesCommand(d),
+			newIAPPricingPPPCommand(d),
+			newIAPAvailabilityCommand(d),
+			newIAPAvailabilitiesCommand(d),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp

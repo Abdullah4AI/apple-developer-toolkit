@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	rootcmd "github.com/Abdullah4AI/apple-developer-toolkit/appstore/cmd"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asctest"
 )
 
 // Catches a malformed time code reaching Apple, or leaving a half-created clip
@@ -32,16 +33,7 @@ func TestAppEventVideoClipsTimeCodeUsageErrorsBeforeHTTP(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			setupAuth(t)
-			installDefaultTransport(t, roundTripFunc(func(req *http.Request) (*http.Response, error) {
-				t.Fatalf("unexpected request: %s %s", req.Method, req.URL.String())
-				return nil, nil
-			}))
-
-			exitCode := rootcmd.ExitSuccess
-			_, stderr := captureOutput(t, func() {
-				exitCode = rootcmd.Run(test.args, "1.2.3")
-			})
+			_, stderr, exitCode := runWithDeps(t, stubClient(t, asctest.NewRegistry(t)), test.args...)
 
 			if exitCode != rootcmd.ExitUsage {
 				t.Fatalf("exit code = %d, want %d; stderr=%q", exitCode, rootcmd.ExitUsage, stderr)
@@ -133,36 +125,22 @@ func TestAppEventVideoClipsCreateTimeCodeRequestWiring(t *testing.T) {
 // Catches set-poster-frame patching the wrong clip, or sending `uploaded` and
 // re-committing an upload the user only wanted to retime.
 func TestAppEventVideoClipsSetPosterFramePatchesOnlyTheTimeCode(t *testing.T) {
-	setupAuth(t)
+	const wantBody = `{"data":{"type":"appEventVideoClips","id":"clip-1","attributes":{"previewFrameTimeCode":"00:00:05:00"}}}`
+	reg := asctest.NewRegistry(t)
+	reg.Register(asctest.PATCH("/v1/appEventVideoClips/clip-1").JSONBody(wantBody),
+		asctest.JSON(http.StatusOK, `{"data":{"type":"appEventVideoClips","id":"clip-1"}}`))
 
-	var gotBody string
-	installDefaultTransport(t, roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		if req.Method != http.MethodPatch || req.URL.Path != "/v1/appEventVideoClips/clip-1" {
-			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.String())
-		}
-		body, err := io.ReadAll(req.Body)
-		if err != nil {
-			t.Fatalf("read body: %v", err)
-		}
-		gotBody = strings.TrimSpace(string(body))
-		return statusJSONResponse(`{"data":{"type":"appEventVideoClips","id":"clip-1"}}`), nil
-	}))
-
-	exitCode := rootcmd.ExitError
-	_, stderr := captureOutput(t, func() {
-		exitCode = rootcmd.Run([]string{
-			"app-events", "video-clips", "set-poster-frame",
-			"--clip-id", "clip-1",
-			"--time-code", "00:00:05:00",
-			"--output", "json",
-		}, "1.2.3")
-	})
+	_, stderr, exitCode := runWithDeps(t, stubClient(t, reg),
+		"app-events", "video-clips", "set-poster-frame",
+		"--clip-id", "clip-1",
+		"--time-code", "00:00:05:00",
+		"--output", "json",
+	)
 
 	if exitCode != rootcmd.ExitSuccess {
 		t.Fatalf("exit code = %d, stderr=%q", exitCode, stderr)
 	}
-	const wantBody = `{"data":{"type":"appEventVideoClips","id":"clip-1","attributes":{"previewFrameTimeCode":"00:00:05:00"}}}`
-	if gotBody != wantBody {
+	if gotBody := strings.TrimSpace(string(reg.Requests()[0].Body)); gotBody != wantBody {
 		t.Fatalf("body = %s, want %s", gotBody, wantBody)
 	}
 }

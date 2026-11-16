@@ -2,13 +2,13 @@ package cmdtest
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
-	"io"
 	"net/http"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asctest"
 )
 
 const (
@@ -28,49 +28,27 @@ const (
 }`
 )
 
-func stubAppTesterUsages(t *testing.T, body string) {
+func stubAppTesterUsages(t *testing.T, body string) *asctest.Registry {
 	t.Helper()
-	setupAuth(t)
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() {
-		http.DefaultTransport = originalTransport
-	})
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/apps/app-123/metrics/betaTesterUsages" {
-			t.Fatalf("expected metrics path, got %s", req.URL.Path)
-		}
-		return &http.Response{
-			StatusCode: http.StatusOK,
-			Body:       io.NopCloser(strings.NewReader(body)),
-			Header:     http.Header{"Content-Type": []string{"application/json"}},
-		}, nil
-	})
+	reg := asctest.NewRegistry(t)
+	reg.Register(asctest.GET("/v1/apps/app-123/metrics/betaTesterUsages", "groupBy=betaTesters"),
+		asctest.JSON(http.StatusOK, body))
+	return reg
 }
 
-func runAppTesters(t *testing.T, args ...string) (stdout, stderr string, err error) {
+func runAppTesters(t *testing.T, reg *asctest.Registry, args ...string) (stdout, stderr string, err error) {
 	t.Helper()
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-	stdout, stderr = captureOutput(t, func() {
-		if parseErr := root.Parse(args); parseErr != nil {
-			t.Fatalf("parse error: %v", parseErr)
-		}
-		err = root.Run(context.Background())
-	})
-	return stdout, stderr, err
+	return runRootWithDeps(t, stubClient(t, reg), args...)
 }
 
 func TestTestFlightMetricsAppTestersTableRendersRowsForBothDimensionShapes(t *testing.T) {
 	for name, body := range map[string]string{"object form": appTesterMetricsObjectFormBody, "string form": appTesterMetricsStringFormBody} {
 		t.Run(name, func(t *testing.T) {
-			stubAppTesterUsages(t, body)
+			reg := stubAppTesterUsages(t, body)
 
-			stdout, stderr, err := runAppTesters(t, "testflight", "metrics", "app-testers", "--app", "app-123", "--output", "table")
+			stdout, stderr, err := runAppTesters(t, reg, "testflight", "metrics", "app-testers", "--app", "app-123", "--output", "table")
 			if err != nil {
 				t.Fatalf("run error: %v", err)
 			}
@@ -96,9 +74,9 @@ func TestTestFlightMetricsAppTestersJSONMatchesStubForBothDimensionShapes(t *tes
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			stubAppTesterUsages(t, test.body)
+			reg := stubAppTesterUsages(t, test.body)
 
-			stdout, stderr, err := runAppTesters(t, "testflight", "metrics", "app-testers", "--app", "app-123", "--output", "json")
+			stdout, stderr, err := runAppTesters(t, reg, "testflight", "metrics", "app-testers", "--app", "app-123", "--output", "json")
 			if err != nil {
 				t.Fatalf("run error: %v", err)
 			}
@@ -114,9 +92,9 @@ func TestTestFlightMetricsAppTestersJSONMatchesStubForBothDimensionShapes(t *tes
 }
 
 func TestTestFlightMetricsAppTestersObjectFormResolveTesters(t *testing.T) {
-	stubAppTesterUsages(t, appTesterMetricsObjectFormResolveBody)
+	reg := stubAppTesterUsages(t, appTesterMetricsObjectFormResolveBody)
 
-	stdout, stderr, err := runAppTesters(t, "testflight", "metrics", "app-testers", "--app", "app-123", "--resolve-testers")
+	stdout, stderr, err := runAppTesters(t, reg, "testflight", "metrics", "app-testers", "--app", "app-123", "--resolve-testers")
 	if err != nil {
 		t.Fatalf("run error: %v", err)
 	}
@@ -151,38 +129,16 @@ func TestTestFlightMetricsAppTestersObjectFormResolveTesters(t *testing.T) {
 }
 
 func TestTestFlightTestersMetricsTableDoesNotUseAppTestersRenderer(t *testing.T) {
-	setupAuth(t)
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() {
-		http.DefaultTransport = originalTransport
-	})
-	body := `{"data":[{"type":"betaTesterUsages","dataPoints":[{"start":"2026-08-01T00:00:00Z","end":"2026-08-02T00:00:00Z","values":{"sessionCount":9}}],"dimensions":{"apps":{"data":{"type":"apps","id":"app-1"}}}}],"links":{}}`
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/betaTesters/tester-1/metrics/betaTesterUsages" {
-			t.Fatalf("expected per-tester metrics path, got %s", req.URL.Path)
-		}
-		return &http.Response{
-			StatusCode: http.StatusOK,
-			Body:       io.NopCloser(strings.NewReader(body)),
-			Header:     http.Header{"Content-Type": []string{"application/json"}},
-		}, nil
-	})
+	reg := asctest.NewRegistry(t)
+	reg.Register(asctest.GET("/v1/betaTesters/tester-1/metrics/betaTesterUsages", "filter[apps]=app-123"),
+		asctest.JSON(http.StatusOK, `{"data":[{"type":"betaTesterUsages","dataPoints":[{"start":"2026-08-01T00:00:00Z","end":"2026-08-02T00:00:00Z","values":{"sessionCount":9}}],"dimensions":{"apps":{"data":{"type":"apps","id":"app-1"}}}}],"links":{}}`))
 
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"testflight", "testers", "metrics", "--tester-id", "tester-1", "--app", "app-123", "--output", "table"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatalf("run error: %v", err)
-		}
-	})
+	stdout, stderr, err := runRootWithDeps(t, stubClient(t, reg), "testflight", "testers", "metrics", "--tester-id", "tester-1", "--app", "app-123", "--output", "table")
+	if err != nil {
+		t.Fatalf("run error: %v", err)
+	}
 	if stderr != "" {
 		t.Fatalf("expected empty stderr, got %q", stderr)
 	}

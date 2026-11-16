@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/rootfs"
@@ -41,7 +40,7 @@ func normalizeSigningPullProfileType(raw string) (string, error) {
 	}
 }
 
-func selectSigningPullFiles(files []decryptedSigningFile, bundleIDs []string, profileType string) ([]decryptedSigningFile, []SyncTargetResult, error) {
+func selectSigningPullFiles(d *shared.Deps, files []decryptedSigningFile, bundleIDs []string, profileType string) ([]decryptedSigningFile, []SyncTargetResult, error) {
 	requested := uniqueSortedSigningSyncStrings(bundleIDs)
 	if len(requested) == 0 {
 		return nil, nil, fmt.Errorf("signing pull selection contains no bundle IDs")
@@ -99,7 +98,7 @@ func selectSigningPullFiles(files []decryptedSigningFile, bundleIDs []string, pr
 			if err := validateSigningProfileSelectionScope(file, profile, bundleID); err != nil {
 				return nil, nil, err
 			}
-			if !profile.ExpirationDate.After(time.Now()) || !identityProfileTypeMatches(profile, profileType) || !signingPullProfilePlatformMatches(profile, profileType) ||
+			if !profile.ExpirationDate.After(d.Now()) || !identityProfileTypeMatches(profile, profileType) || !signingPullProfilePlatformMatches(profile, profileType) ||
 				!signingPullProfileHasExactTypeProvenance(profileTypesByPath[path], profileType) {
 				continue
 			}

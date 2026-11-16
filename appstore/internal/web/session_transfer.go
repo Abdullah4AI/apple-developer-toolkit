@@ -229,9 +229,9 @@ func ExportSessionBundle(username string) (*SessionBundle, bool, error) {
 		err  error
 	)
 	if username == "" {
-		sess, ok, err = readLastSessionBySelection(selection)
+		sess, _, _, ok, err = readLastSessionBySelection(selection)
 	} else {
-		sess, ok, err = readSessionBySelection(selection, webSessionCacheKey(username))
+		sess, _, ok, err = readSessionBySelection(selection, webSessionCacheKey(username))
 	}
 	if err != nil || !ok {
 		return nil, false, err
@@ -544,7 +544,7 @@ func OpenValidatedSessionBundle(ctx context.Context, bundle *SessionBundle) (*Au
 		return nil, fmt.Errorf("%w: %w", ErrSessionBundleValidationFailed, err)
 	}
 
-	client, info, ok, err := validatePersistedSessionReadOnly(ctx, sess)
+	client, info, ok, err := validatePersistedSessionReadOnly(ctx, sess, http.DefaultTransport)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrSessionBundleValidationFailed, err)
 	}
@@ -563,14 +563,6 @@ func OpenValidatedSessionBundle(ctx context.Context, bundle *SessionBundle) (*Au
 	session := &AuthSession{Client: client}
 	applySessionInfo(session, info)
 	return session, nil
-}
-
-// ImportSessionBundle stores a bundle in the same cache `asc web auth login`
-// writes, so later `asc web` commands resume it. Import performs local bundle
-// validation only; use `asc web auth status` when live Apple validation is
-// needed. The imported session also becomes the last cached session.
-func ImportSessionBundle(bundle *SessionBundle) (SessionImportSummary, error) {
-	return ImportSessionBundleWithOptions(bundle, false)
 }
 
 // ImportSessionBundleWithOptions imports a bundle and optionally permits

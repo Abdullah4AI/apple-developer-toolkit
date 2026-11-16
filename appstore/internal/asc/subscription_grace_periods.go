@@ -17,33 +17,9 @@ const (
 	SubscriptionGracePeriodRenewalTypePaidToPaidOnly SubscriptionGracePeriodRenewalType = "PAID_TO_PAID_ONLY"
 )
 
-// SubscriptionGracePeriodAttributes describes a subscription grace period resource.
-type SubscriptionGracePeriodAttributes struct {
-	OptIn        bool   `json:"optIn,omitempty"`
-	SandboxOptIn bool   `json:"sandboxOptIn,omitempty"`
-	Duration     string `json:"duration,omitempty"`
-	RenewalType  string `json:"renewalType,omitempty"`
-}
-
-// SubscriptionGracePeriodUpdateAttributes describes a subscription grace period update payload.
-type SubscriptionGracePeriodUpdateAttributes struct {
-	OptIn        *bool   `json:"optIn,omitempty"`
-	SandboxOptIn *bool   `json:"sandboxOptIn,omitempty"`
-	Duration     *string `json:"duration,omitempty"`
-	RenewalType  *string `json:"renewalType,omitempty"`
-}
-
 // SubscriptionGracePeriodUpdateData is the data portion of an update request.
 type SubscriptionGracePeriodUpdateData struct {
 	Type       ResourceType                            `json:"type"`
 	ID         string                                  `json:"id"`
 	Attributes SubscriptionGracePeriodUpdateAttributes `json:"attributes"`
 }
-
-// SubscriptionGracePeriodUpdateRequest is a request to update a grace period.
-type SubscriptionGracePeriodUpdateRequest struct {
-	Data SubscriptionGracePeriodUpdateData `json:"data"`
-}
-
-// SubscriptionGracePeriodResponse is the response for subscription grace period endpoints.
-type SubscriptionGracePeriodResponse = SingleResponse[SubscriptionGracePeriodAttributes]

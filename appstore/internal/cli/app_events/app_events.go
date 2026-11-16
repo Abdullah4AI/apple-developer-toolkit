@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/peterbourgon/ff/v3/ffcli"
@@ -13,11 +12,9 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
-var appEventsClientFactory = shared.GetASCClient
-
-// AppEventsCommand returns the app events command group.
-func AppEventsCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("app-events", flag.ExitOnError)
+// NewAppEventsCommand returns the app events command group.
+func NewAppEventsCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("app-events", flag.ExitOnError)
 
 	return &ffcli.Command{
 		Name:       "app-events",
@@ -33,18 +30,18 @@ Examples:
   asc app-events delete --event-id "EVENT_ID" --confirm
   asc app-events links --event-id "EVENT_ID"`,
 		FlagSet:   fs,
-		UsageFunc: shared.VisibleUsageFunc,
+		UsageFunc: d.VisibleUsageFunc,
 		Subcommands: []*ffcli.Command{
-			AppEventsListCommand(),
-			AppEventsGetCommand(),
-			AppEventsCreateCommand(),
-			AppEventsUpdateCommand(),
-			AppEventsDeleteCommand(),
-			AppEventLocalizationsCommand(),
-			AppEventsRelationshipsCommand(),
-			AppEventScreenshotsCommand(),
-			AppEventVideoClipsCommand(),
-			AppEventsSubmitCommand(),
+			newAppEventsListCommand(d),
+			newAppEventsGetCommand(d),
+			newAppEventsCreateCommand(d),
+			newAppEventsUpdateCommand(d),
+			newAppEventsDeleteCommand(d),
+			newAppEventLocalizationsCommand(d),
+			newAppEventsRelationshipsCommand(d),
+			newAppEventScreenshotsCommand(d),
+			newAppEventVideoClipsCommand(d),
+			newAppEventsSubmitCommand(d),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp
@@ -52,23 +49,15 @@ Examples:
 	}
 }
 
-// AppEventsListCommand returns the app events list subcommand.
-func AppEventsListCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("list", flag.ExitOnError)
+// newAppEventsListCommand returns the app events list subcommand.
+func newAppEventsListCommand(d *shared.Deps) *ffcli.Command {
+	var (
+		ids                                                              *string
+		localizationsLimit                                               *int
+		stateValues, fieldValues, localizationFieldValues, includeValues []string
+	)
 
-	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
-	eventState := fs.String("event-state", "", "Filter by lifecycle state(s), comma-separated: "+strings.Join(appEventStateList(), ", "))
-	ids := fs.String("id", "", "Filter by app event ID(s), comma-separated")
-	fields := fs.String("fields", "", "Fields to include: "+strings.Join(appEventFieldsList(), ", "))
-	localizationFields := fs.String("localization-fields", "", "Fields to include for localizations: "+strings.Join(appEventLocalizationFieldsList(), ", "))
-	include := fs.String("include", "", "Include related resources: "+strings.Join(appEventIncludeList(), ", "))
-	localizationsLimit := fs.Int("localizations-limit", 0, "Maximum included localizations (1-50)")
-	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
-	next := fs.String("next", "", "Fetch next page using a links.next URL")
-	paginate := fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")
-	output := shared.BindOutputFlags(fs)
-
-	return &ffcli.Command{
+	return shared.BuildPaginatedListCommand(shared.PaginatedListCommandConfig{
 		Name:       "list",
 		ShortUsage: "asc app-events list [flags]",
 		ShortHelp:  "List in-app events for an app.",
@@ -78,132 +67,88 @@ Examples:
   asc app-events list --app "APP_ID"
   asc app-events list --app "APP_ID" --event-state PUBLISHED --include localizations --localizations-limit 10
   asc app-events list --app "APP_ID" --paginate`,
-		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
-		Exec: func(ctx context.Context, args []string) error {
-			if err := shared.ValidateNextURL(*next); err != nil {
-				return shared.UsageErrorf("app-events list: %v", err)
-			}
-			if err := shared.RejectNextFlagConflicts(
-				fs,
-				*next,
-				"app-events list",
-				"event-state",
-				"id",
-				"fields",
-				"localization-fields",
-				"include",
-				"localizations-limit",
-			); err != nil {
-				return err
-			}
-			for _, selection := range []struct {
-				name  string
-				value string
-			}{
-				{name: "event-state", value: *eventState},
-				{name: "id", value: *ids},
-				{name: "fields", value: *fields},
-				{name: "localization-fields", value: *localizationFields},
-				{name: "include", value: *include},
-			} {
-				if !appEventFlagWasProvided(fs, selection.name) {
-					continue
+		ParentFlag:           "app",
+		ParentUsage:          "App Store Connect app ID (or ASC_APP_ID env)",
+		ResolveApp:           true,
+		RequiredDiagnostic:   true,
+		PaginateIgnoresLimit: true,
+		NoSpinner:            true,
+		NextConflicts:        []string{"event-state", "id", "fields", "localization-fields", "include", "localizations-limit"},
+		Deps:                 d,
+		Flags: func(fs *flag.FlagSet) func() error {
+			eventState := fs.String("event-state", "", "Filter by lifecycle state(s), comma-separated: "+strings.Join(appEventStateList(), ", "))
+			ids = fs.String("id", "", "Filter by app event ID(s), comma-separated")
+			fields := fs.String("fields", "", "Fields to include: "+strings.Join(appEventFieldsList(), ", "))
+			localizationFields := fs.String("localization-fields", "", "Fields to include for localizations: "+strings.Join(appEventLocalizationFieldsList(), ", "))
+			include := fs.String("include", "", "Include related resources: "+strings.Join(appEventIncludeList(), ", "))
+			localizationsLimit = fs.Int("localizations-limit", 0, "Maximum included localizations (1-50)")
+			return func() error {
+				for _, selection := range []struct {
+					name  string
+					value string
+				}{
+					{name: "event-state", value: *eventState},
+					{name: "id", value: *ids},
+					{name: "fields", value: *fields},
+					{name: "localization-fields", value: *localizationFields},
+					{name: "include", value: *include},
+				} {
+					if !appEventFlagWasProvided(fs, selection.name) {
+						continue
+					}
+					if err := validateAppEventCSV(selection.value, "--"+selection.name); err != nil {
+						return d.UsageErrorf("app-events list: %v", err)
+					}
 				}
-				if err := validateAppEventCSV(selection.value, "--"+selection.name); err != nil {
-					return shared.UsageErrorf("app-events list: %v", err)
+				localizationsLimitProvided := appEventFlagWasProvided(fs, "localizations-limit")
+				if localizationsLimitProvided && (*localizationsLimit < 1 || *localizationsLimit > 50) {
+					return d.UsageErrorf("app-events list: --localizations-limit must be between 1 and 50")
 				}
-			}
-			localizationsLimitProvided := appEventFlagWasProvided(fs, "localizations-limit")
-			if *limit != 0 && (*limit < 1 || *limit > 200) {
-				return shared.UsageErrorf("app-events list: --limit must be between 1 and 200")
-			}
-			if localizationsLimitProvided && (*localizationsLimit < 1 || *localizationsLimit > 50) {
-				return shared.UsageErrorf("app-events list: --localizations-limit must be between 1 and 50")
-			}
 
-			stateValues, err := normalizeAppEventStates(*eventState)
-			if err != nil {
-				return shared.UsageErrorf("app-events list: %v", err)
+				var err error
+				stateValues, err = normalizeAppEventStates(*eventState)
+				if err != nil {
+					return d.UsageErrorf("app-events list: %v", err)
+				}
+				fieldValues, err = shared.NormalizeSelection(*fields, appEventFieldsList(), "--fields")
+				if err != nil {
+					return d.UsageErrorf("app-events list: %v", err)
+				}
+				localizationFieldValues, err = shared.NormalizeSelection(*localizationFields, appEventLocalizationFieldsList(), "--localization-fields")
+				if err != nil {
+					return d.UsageErrorf("app-events list: %v", err)
+				}
+				includeValues, err = shared.NormalizeSelection(*include, appEventIncludeList(), "--include")
+				if err != nil {
+					return d.UsageErrorf("app-events list: %v", err)
+				}
+				if len(localizationFieldValues) > 0 && !shared.HasInclude(includeValues, "localizations") {
+					return d.UsageError("app-events list: --localization-fields requires --include localizations")
+				}
+				if *localizationsLimit > 0 && !shared.HasInclude(includeValues, "localizations") {
+					return d.UsageError("app-events list: --localizations-limit requires --include localizations")
+				}
+				return nil
 			}
-			fieldValues, err := shared.NormalizeSelection(*fields, appEventFieldsList(), "--fields")
-			if err != nil {
-				return shared.UsageErrorf("app-events list: %v", err)
-			}
-			localizationFieldValues, err := shared.NormalizeSelection(*localizationFields, appEventLocalizationFieldsList(), "--localization-fields")
-			if err != nil {
-				return shared.UsageErrorf("app-events list: %v", err)
-			}
-			includeValues, err := shared.NormalizeSelection(*include, appEventIncludeList(), "--include")
-			if err != nil {
-				return shared.UsageErrorf("app-events list: %v", err)
-			}
-			if len(localizationFieldValues) > 0 && !shared.HasInclude(includeValues, "localizations") {
-				return shared.UsageError("app-events list: --localization-fields requires --include localizations")
-			}
-			if *localizationsLimit > 0 && !shared.HasInclude(includeValues, "localizations") {
-				return shared.UsageError("app-events list: --localizations-limit requires --include localizations")
-			}
-
-			resolvedAppID := shared.ResolveAppID(*appID)
-			if resolvedAppID == "" && strings.TrimSpace(*next) == "" {
-				fmt.Fprintln(os.Stderr, "Error: --app is required (or set ASC_APP_ID)")
-				return shared.MissingRequiredUsageError("--app")
-			}
-
-			client, err := appEventsClientFactory()
-			if err != nil {
-				return fmt.Errorf("app-events list: %w", err)
-			}
-
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
-			defer cancel()
-
-			opts := []asc.AppEventsOption{
+		},
+		FetchPage: func(ctx context.Context, client *asc.Client, appID string, limit int, next string) (asc.PaginatedResponse, error) {
+			return client.GetAppEvents(ctx, appID,
 				asc.WithAppEventsStates(stateValues),
 				asc.WithAppEventsIDs(shared.SplitCSV(*ids)),
 				asc.WithAppEventsFields(fieldValues),
 				asc.WithAppEventsLocalizationFields(localizationFieldValues),
 				asc.WithAppEventsInclude(includeValues),
 				asc.WithAppEventsLocalizationsLimit(*localizationsLimit),
-				asc.WithAppEventsLimit(*limit),
-				asc.WithAppEventsNextURL(*next),
-			}
-
-			if *paginate {
-				paginateOpts := append(opts, asc.WithAppEventsLimit(200))
-				firstPage, err := client.GetAppEvents(requestCtx, resolvedAppID, paginateOpts...)
-				if err != nil {
-					return fmt.Errorf("app-events list: failed to fetch: %w", err)
-				}
-
-				resp, err := asc.PaginateAll(requestCtx, firstPage, func(ctx context.Context, nextURL string) (asc.PaginatedResponse, error) {
-					return client.GetAppEvents(ctx, resolvedAppID, asc.WithAppEventsNextURL(nextURL))
-				})
-				if err != nil {
-					return fmt.Errorf("app-events list: %w", err)
-				}
-				return shared.PrintOutput(resp, *output.Output, *output.Pretty)
-			}
-
-			resp, err := client.GetAppEvents(requestCtx, resolvedAppID, opts...)
-			if err != nil {
-				return fmt.Errorf("app-events list: failed to fetch: %w", err)
-			}
-
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+				asc.Limit[asc.AppEventsOption](limit),
+				asc.NextURL[asc.AppEventsOption](next),
+			)
 		},
-	}
+	})
 }
 
-// AppEventsGetCommand returns the app events get subcommand.
-func AppEventsGetCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("view", flag.ExitOnError)
-
-	eventID := shared.BindResourceIDFlag(fs, "event-id", "appEvents", "App event ID")
-	output := shared.BindOutputFlags(fs)
-
-	return &ffcli.Command{
+// newAppEventsGetCommand returns the app events get subcommand.
+func newAppEventsGetCommand(d *shared.Deps) *ffcli.Command {
+	return shared.BuildIDGetCommand(shared.IDGetCommandConfig{
 		Name:       "view",
 		ShortUsage: "asc app-events view --event-id \"EVENT_ID\"",
 		ShortHelp:  "View an in-app event by ID.",
@@ -211,36 +156,20 @@ func AppEventsGetCommand() *ffcli.Command {
 
 Examples:
   asc app-events view --event-id "EVENT_ID"`,
-		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
-		Exec: func(ctx context.Context, args []string) error {
-			id := strings.TrimSpace(*eventID)
-			if id == "" {
-				fmt.Fprintln(os.Stderr, "Error: --event-id is required")
-				return shared.MissingRequiredUsageError("--event-id")
-			}
-
-			client, err := appEventsClientFactory()
-			if err != nil {
-				return fmt.Errorf("app-events view: %w", err)
-			}
-
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
-			defer cancel()
-
-			resp, err := client.GetAppEvent(requestCtx, id)
-			if err != nil {
-				return fmt.Errorf("app-events view: failed to fetch: %w", err)
-			}
-
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+		IDFlag:             "event-id",
+		IDUsage:            "App event ID",
+		IDType:             "appEvents",
+		RequiredDiagnostic: true,
+		Deps:               d,
+		Fetch: func(ctx context.Context, client *asc.Client, id string) (any, error) {
+			return client.GetAppEvent(ctx, id)
 		},
-	}
+	})
 }
 
-// AppEventsCreateCommand returns the app events create subcommand.
-func AppEventsCreateCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("create", flag.ExitOnError)
+// newAppEventsCreateCommand returns the app events create subcommand.
+func newAppEventsCreateCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("create", flag.ExitOnError)
 
 	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
 	name := fs.String("name", "", "Reference name")
@@ -254,7 +183,7 @@ func AppEventsCreateCommand() *ffcli.Command {
 	primaryLocale := fs.String("primary-locale", "", "Primary locale (e.g., en-US)")
 	priority := fs.String("priority", "", "Priority: "+strings.Join(asc.ValidAppEventPriorities, ", "))
 	purpose := fs.String("purpose", "", "Purpose: "+strings.Join(asc.ValidAppEventPurposes, ", "))
-	output := shared.BindOutputFlags(fs)
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "create",
@@ -268,51 +197,50 @@ Examples:
   asc app-events create --app "APP_ID" --name "Launch Party" --event-type PREMIERE --priority HIGH --purpose ATTRACT_NEW_USERS
   asc app-events create --app "APP_ID" --name "Retro Challenge" --event-type LIVE_EVENT --priority HIGH --purpose APPROPRIATE_FOR_ALL_USERS`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
-			resolvedAppID := shared.ResolveAppID(*appID)
+			resolvedAppID := d.ResolveAppID(*appID)
 			if resolvedAppID == "" {
-				fmt.Fprintln(os.Stderr, "Error: --app is required (or set ASC_APP_ID)")
+				fmt.Fprintln(d.IO.ErrOut, "Error: --app is required (or set ASC_APP_ID)")
 				return shared.MissingRequiredUsageError("--app")
 			}
 
 			nameValue := strings.TrimSpace(*name)
 			if nameValue == "" {
-				fmt.Fprintln(os.Stderr, "Error: --name is required")
-				return shared.MissingRequiredUsageError("--name")
+				return d.RequiredFlag("--name")
 			}
 
 			normalizedBadge, err := normalizeAppEventBadge(*eventType)
 			if err != nil {
-				fmt.Fprintln(os.Stderr, "Error:", err.Error())
+				fmt.Fprintln(d.IO.ErrOut, "Error:", err.Error())
 				return flag.ErrHelp
 			}
 
 			normalizedPriority, err := normalizeAppEventPriority(*priority)
 			if err != nil {
-				fmt.Fprintln(os.Stderr, "Error:", err.Error())
+				fmt.Fprintln(d.IO.ErrOut, "Error:", err.Error())
 				return flag.ErrHelp
 			}
 
 			normalizedPurpose, err := normalizeAppEventPurpose(*purpose)
 			if err != nil {
-				fmt.Fprintln(os.Stderr, "Error:", err.Error())
+				fmt.Fprintln(d.IO.ErrOut, "Error:", err.Error())
 				return flag.ErrHelp
 			}
 
 			normalizedPurchaseRequirement, err := normalizeAppEventPurchaseRequirement(*purchaseRequirement)
 			if err != nil {
-				fmt.Fprintln(os.Stderr, "Error:", err.Error())
+				fmt.Fprintln(d.IO.ErrOut, "Error:", err.Error())
 				return flag.ErrHelp
 			}
 			if err := validateAppEventPurchaseRequirement(normalizedPurchaseRequirement); err != nil {
-				fmt.Fprintln(os.Stderr, "Error:", err.Error())
+				fmt.Fprintln(d.IO.ErrOut, "Error:", err.Error())
 				return flag.ErrHelp
 			}
 
 			schedule, scheduleProvided, err := normalizeAppEventTerritorySchedule(*start, *end, *publishStart, territories.String())
 			if err != nil {
-				fmt.Fprintln(os.Stderr, "Error:", err.Error())
+				fmt.Fprintln(d.IO.ErrOut, "Error:", err.Error())
 				return flag.ErrHelp
 			}
 
@@ -326,12 +254,12 @@ Examples:
 				Purpose:             normalizedPurpose,
 			}
 
-			client, err := appEventsClientFactory()
+			client, err := d.Client()
 			if err != nil {
 				return fmt.Errorf("app-events create: %w", err)
 			}
 
-			createCtx, cancelCreate := shared.ContextWithTimeout(ctx)
+			createCtx, cancelCreate := d.Timeout(ctx)
 			defer cancelCreate()
 
 			resp, err := client.CreateAppEvent(createCtx, resolvedAppID, attrs)
@@ -344,14 +272,14 @@ Examples:
 					return fmt.Errorf("app-events create: event was created but the response did not include an id; unable to apply schedule")
 				}
 
-				updateCtx, cancelUpdate := shared.ContextWithTimeout(ctx)
+				updateCtx, cancelUpdate := d.Timeout(ctx)
 				defer cancelUpdate()
 
 				resp, err = client.UpdateAppEvent(updateCtx, createdID, asc.AppEventUpdateAttributes{
 					TerritorySchedules: []asc.AppEventTerritorySchedule{schedule},
 				})
 				if err != nil {
-					verifyCtx, cancelVerify := shared.ContextWithTimeout(ctx)
+					verifyCtx, cancelVerify := d.Timeout(ctx)
 					defer cancelVerify()
 
 					verifiedResp, verifyErr := client.GetAppEvent(verifyCtx, createdID)
@@ -359,7 +287,7 @@ Examples:
 						if appEventHasTerritorySchedule(verifiedResp, schedule) {
 							resp = verifiedResp
 						} else {
-							cleanupCtx, cancelCleanup := shared.ContextWithTimeout(ctx)
+							cleanupCtx, cancelCleanup := d.Timeout(ctx)
 							defer cancelCleanup()
 
 							cleanupErr := client.DeleteAppEvent(cleanupCtx, createdID)
@@ -375,14 +303,14 @@ Examples:
 				}
 			}
 
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+			return d.PrintOutput(resp, *output.Output, *output.Pretty)
 		},
 	}
 }
 
-// AppEventsUpdateCommand returns the app events update subcommand.
-func AppEventsUpdateCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("update", flag.ExitOnError)
+// newAppEventsUpdateCommand returns the app events update subcommand.
+func newAppEventsUpdateCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("update", flag.ExitOnError)
 
 	eventID := shared.BindResourceIDFlag(fs, "event-id", "appEvents", "App event ID")
 	name := fs.String("name", "", "Reference name")
@@ -396,7 +324,7 @@ func AppEventsUpdateCommand() *ffcli.Command {
 	primaryLocale := fs.String("primary-locale", "", "Primary locale (e.g., en-US)")
 	priority := fs.String("priority", "", "Priority: "+strings.Join(asc.ValidAppEventPriorities, ", "))
 	purpose := fs.String("purpose", "", "Purpose: "+strings.Join(asc.ValidAppEventPurposes, ", "))
-	output := shared.BindOutputFlags(fs)
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "update",
@@ -409,12 +337,11 @@ Examples:
   asc app-events update --event-id "EVENT_ID" --name "New Name" --event-type SPECIAL_EVENT
   asc app-events update --event-id "EVENT_ID" --purchase-requirement NO_COST_ASSOCIATED --primary-locale en-US`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			id := strings.TrimSpace(*eventID)
 			if id == "" {
-				fmt.Fprintln(os.Stderr, "Error: --event-id is required")
-				return shared.MissingRequiredUsageError("--event-id")
+				return d.RequiredFlag("--event-id")
 			}
 
 			var (
@@ -431,7 +358,7 @@ Examples:
 			if strings.TrimSpace(*eventType) != "" {
 				normalized, err := normalizeAppEventBadge(*eventType)
 				if err != nil {
-					fmt.Fprintln(os.Stderr, "Error:", err.Error())
+					fmt.Fprintln(d.IO.ErrOut, "Error:", err.Error())
 					return flag.ErrHelp
 				}
 				if normalized != "" {
@@ -448,11 +375,11 @@ Examples:
 
 			normalizedPurchaseRequirement, err := normalizeAppEventPurchaseRequirement(*purchaseRequirement)
 			if err != nil {
-				fmt.Fprintln(os.Stderr, "Error:", err.Error())
+				fmt.Fprintln(d.IO.ErrOut, "Error:", err.Error())
 				return flag.ErrHelp
 			}
 			if err := validateAppEventPurchaseRequirement(normalizedPurchaseRequirement); err != nil {
-				fmt.Fprintln(os.Stderr, "Error:", err.Error())
+				fmt.Fprintln(d.IO.ErrOut, "Error:", err.Error())
 				return flag.ErrHelp
 			}
 			if normalizedPurchaseRequirement != "" {
@@ -470,7 +397,7 @@ Examples:
 			if strings.TrimSpace(*priority) != "" {
 				normalized, err := normalizeAppEventPriority(*priority)
 				if err != nil {
-					fmt.Fprintln(os.Stderr, "Error:", err.Error())
+					fmt.Fprintln(d.IO.ErrOut, "Error:", err.Error())
 					return flag.ErrHelp
 				}
 				if normalized != "" {
@@ -482,7 +409,7 @@ Examples:
 			if strings.TrimSpace(*purpose) != "" {
 				normalized, err := normalizeAppEventPurpose(*purpose)
 				if err != nil {
-					fmt.Fprintln(os.Stderr, "Error:", err.Error())
+					fmt.Fprintln(d.IO.ErrOut, "Error:", err.Error())
 					return flag.ErrHelp
 				}
 				if normalized != "" {
@@ -493,7 +420,7 @@ Examples:
 
 			schedule, scheduleProvided, err := normalizeAppEventTerritorySchedule(*start, *end, *publishStart, territories.String())
 			if err != nil {
-				fmt.Fprintln(os.Stderr, "Error:", err.Error())
+				fmt.Fprintln(d.IO.ErrOut, "Error:", err.Error())
 				return flag.ErrHelp
 			}
 			if scheduleProvided {
@@ -502,16 +429,15 @@ Examples:
 			}
 
 			if !hasUpdate {
-				fmt.Fprintln(os.Stderr, "Error: at least one update flag is required")
-				return shared.MissingRequiredUsageError("")
+				return d.UpdateFlagRequired(fs, name, eventType, start, end, publishStart, territories, deepLink, purchaseRequirement, primaryLocale, priority, purpose)
 			}
 
-			client, err := appEventsClientFactory()
+			client, err := d.Client()
 			if err != nil {
 				return fmt.Errorf("app-events update: %w", err)
 			}
 
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
+			requestCtx, cancel := d.Timeout(ctx)
 			defer cancel()
 
 			resp, err := client.UpdateAppEvent(requestCtx, id, attrs)
@@ -519,20 +445,14 @@ Examples:
 				return fmt.Errorf("app-events update: failed to update: %w", err)
 			}
 
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+			return d.PrintOutput(resp, *output.Output, *output.Pretty)
 		},
 	}
 }
 
-// AppEventsDeleteCommand returns the app events delete subcommand.
-func AppEventsDeleteCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("delete", flag.ExitOnError)
-
-	eventID := shared.BindResourceIDFlag(fs, "event-id", "appEvents", "App event ID")
-	confirm := fs.Bool("confirm", false, "Confirm deletion")
-	output := shared.BindOutputFlags(fs)
-
-	return &ffcli.Command{
+// newAppEventsDeleteCommand returns the app events delete subcommand.
+func newAppEventsDeleteCommand(d *shared.Deps) *ffcli.Command {
+	return shared.BuildConfirmDeleteCommand(shared.ConfirmDeleteCommandConfig{
 		Name:       "delete",
 		ShortUsage: "asc app-events delete --event-id \"EVENT_ID\" --confirm",
 		ShortHelp:  "Delete an in-app event.",
@@ -540,37 +460,16 @@ func AppEventsDeleteCommand() *ffcli.Command {
 
 Examples:
   asc app-events delete --event-id "EVENT_ID" --confirm`,
-		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
-		Exec: func(ctx context.Context, args []string) error {
-			id := strings.TrimSpace(*eventID)
-			if id == "" {
-				fmt.Fprintln(os.Stderr, "Error: --event-id is required")
-				return shared.MissingRequiredUsageError("--event-id")
-			}
-			if !*confirm {
-				fmt.Fprintln(os.Stderr, "Error: --confirm is required")
-				return shared.MissingRequiredUsageError("--confirm")
-			}
-
-			client, err := appEventsClientFactory()
-			if err != nil {
-				return fmt.Errorf("app-events delete: %w", err)
-			}
-
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
-			defer cancel()
-
-			if err := client.DeleteAppEvent(requestCtx, id); err != nil {
-				return fmt.Errorf("app-events delete: failed to delete: %w", err)
-			}
-
-			result := &asc.AppEventDeleteResult{
-				ID:      id,
-				Deleted: true,
-			}
-
-			return shared.PrintOutput(result, *output.Output, *output.Pretty)
+		IDFlag:             "event-id",
+		IDUsage:            "App event ID",
+		IDType:             "appEvents",
+		RequiredDiagnostic: true,
+		Deps:               d,
+		Delete: func(ctx context.Context, client *asc.Client, id string) error {
+			return client.DeleteAppEvent(ctx, id)
 		},
-	}
+		Result: func(id string) any {
+			return &asc.DeleteResult{ID: id, Deleted: true}
+		},
+	})
 }

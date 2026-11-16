@@ -27,29 +27,6 @@ type SubscriptionVersionAttributes struct {
 	State   SubscriptionVersionState `json:"state,omitempty"`
 }
 
-// SubscriptionVersionRelationships describes relationships used to create a version.
-type SubscriptionVersionRelationships struct {
-	Subscription *Relationship `json:"subscription"`
-}
-
-// SubscriptionVersionCreateData is the data portion of a version create request.
-type SubscriptionVersionCreateData struct {
-	Type          ResourceType                      `json:"type"`
-	Relationships *SubscriptionVersionRelationships `json:"relationships"`
-}
-
-// SubscriptionVersionCreateRequest creates a version for a subscription.
-type SubscriptionVersionCreateRequest struct {
-	Data SubscriptionVersionCreateData `json:"data"`
-}
-
-// SubscriptionLocalizationV2Attributes describes version-scoped localization metadata.
-type SubscriptionLocalizationV2Attributes struct {
-	Name        string `json:"name,omitempty"`
-	Locale      string `json:"locale,omitempty"`
-	Description string `json:"description,omitempty"`
-}
-
 // SubscriptionLocalizationV2CreateAttributes describes localization create attributes.
 type SubscriptionLocalizationV2CreateAttributes struct {
 	Name        string          `json:"name"`
@@ -63,33 +40,11 @@ type SubscriptionLocalizationV2UpdateAttributes struct {
 	Description *NullableString `json:"description,omitempty"`
 }
 
-// SubscriptionVersionRelationship identifies the owning version.
-type SubscriptionVersionRelationship struct {
-	Version *Relationship `json:"version"`
-}
-
-// SubscriptionLocalizationV2CreateData is the data portion of a localization create request.
-type SubscriptionLocalizationV2CreateData struct {
-	Type          ResourceType                               `json:"type"`
-	Attributes    SubscriptionLocalizationV2CreateAttributes `json:"attributes"`
-	Relationships *SubscriptionVersionRelationship           `json:"relationships"`
-}
-
-// SubscriptionLocalizationV2CreateRequest creates a version-scoped localization.
-type SubscriptionLocalizationV2CreateRequest struct {
-	Data SubscriptionLocalizationV2CreateData `json:"data"`
-}
-
 // SubscriptionLocalizationV2UpdateData is the data portion of a localization update request.
 type SubscriptionLocalizationV2UpdateData struct {
 	Type       ResourceType                               `json:"type"`
 	ID         string                                     `json:"id"`
 	Attributes SubscriptionLocalizationV2UpdateAttributes `json:"attributes,omitempty"`
-}
-
-// SubscriptionLocalizationV2UpdateRequest updates a version-scoped localization.
-type SubscriptionLocalizationV2UpdateRequest struct {
-	Data SubscriptionLocalizationV2UpdateData `json:"data"`
 }
 
 // SubscriptionImageV2Attributes describes a version-scoped subscription image.
@@ -113,28 +68,11 @@ type SubscriptionImageV2UpdateAttributes struct {
 	Uploaded *NullableBool `json:"uploaded,omitempty"`
 }
 
-// SubscriptionImageV2CreateData is the data portion of an image create request.
-type SubscriptionImageV2CreateData struct {
-	Type          ResourceType                        `json:"type"`
-	Attributes    SubscriptionImageV2CreateAttributes `json:"attributes"`
-	Relationships *SubscriptionVersionRelationship    `json:"relationships"`
-}
-
-// SubscriptionImageV2CreateRequest reserves a version-scoped image upload.
-type SubscriptionImageV2CreateRequest struct {
-	Data SubscriptionImageV2CreateData `json:"data"`
-}
-
 // SubscriptionImageV2UpdateData is the data portion of an image update request.
 type SubscriptionImageV2UpdateData struct {
 	Type       ResourceType                        `json:"type"`
 	ID         string                              `json:"id"`
 	Attributes SubscriptionImageV2UpdateAttributes `json:"attributes,omitempty"`
-}
-
-// SubscriptionImageV2UpdateRequest commits a version-scoped image upload.
-type SubscriptionImageV2UpdateRequest struct {
-	Data SubscriptionImageV2UpdateData `json:"data"`
 }
 
 type (
@@ -155,34 +93,15 @@ type SubscriptionVersionImageLinkageResponse struct {
 // SubscriptionVersionsOption configures a subscription's version list.
 type SubscriptionVersionsOption func(*subscriptionVersionsQuery)
 
-// SubscriptionVersionOption configures a subscription version detail request.
-type SubscriptionVersionOption func(*subscriptionVersionQuery)
-
 // SubscriptionVersionLocalizationsOption configures version localization reads.
 type SubscriptionVersionLocalizationsOption func(*subscriptionVersionLocalizationsQuery)
 
 // SubscriptionVersionImagesOption configures version image reads.
 type SubscriptionVersionImagesOption func(*subscriptionVersionImagesQuery)
 
-// SubscriptionLocalizationV2Option configures a v2 localization detail request.
-type SubscriptionLocalizationV2Option func(*subscriptionLocalizationV2Query)
-
-// SubscriptionImageV2Option configures a v2 image detail request.
-type SubscriptionImageV2Option func(*subscriptionImageV2Query)
-
 type subscriptionVersionsQuery struct {
 	listQuery
 	states             []SubscriptionVersionState
-	fields             []string
-	subscriptionFields []string
-	imageFields        []string
-	localizationFields []string
-	include            []string
-	imageLimit         int
-	localizationLimit  int
-}
-
-type subscriptionVersionQuery struct {
 	fields             []string
 	subscriptionFields []string
 	imageFields        []string
@@ -202,24 +121,6 @@ type subscriptionVersionLocalizationsQuery struct {
 type subscriptionVersionImagesQuery struct {
 	listQuery
 	fields []string
-}
-
-type subscriptionLocalizationV2Query struct {
-	fields        []string
-	versionFields []string
-	include       []string
-}
-
-type subscriptionImageV2Query struct {
-	fields []string
-}
-
-func WithSubscriptionVersionsLimit(limit int) SubscriptionVersionsOption {
-	return func(q *subscriptionVersionsQuery) {
-		if limit > 0 {
-			q.limit = limit
-		}
-	}
 }
 
 func WithSubscriptionVersionsNextURL(next string) SubscriptionVersionsOption {
@@ -266,50 +167,6 @@ func WithSubscriptionVersionsLocalizationLimit(limit int) SubscriptionVersionsOp
 	}
 }
 
-func WithSubscriptionVersionFields(fields []string) SubscriptionVersionOption {
-	return func(q *subscriptionVersionQuery) { q.fields = normalizeList(fields) }
-}
-
-func WithSubscriptionVersionSubscriptionFields(fields []string) SubscriptionVersionOption {
-	return func(q *subscriptionVersionQuery) { q.subscriptionFields = normalizeList(fields) }
-}
-
-func WithSubscriptionVersionImageFields(fields []string) SubscriptionVersionOption {
-	return func(q *subscriptionVersionQuery) { q.imageFields = normalizeList(fields) }
-}
-
-func WithSubscriptionVersionLocalizationFields(fields []string) SubscriptionVersionOption {
-	return func(q *subscriptionVersionQuery) { q.localizationFields = normalizeList(fields) }
-}
-
-func WithSubscriptionVersionInclude(include []string) SubscriptionVersionOption {
-	return func(q *subscriptionVersionQuery) { q.include = normalizeList(include) }
-}
-
-func WithSubscriptionVersionImageLimit(limit int) SubscriptionVersionOption {
-	return func(q *subscriptionVersionQuery) {
-		if limit > 0 {
-			q.imageLimit = limit
-		}
-	}
-}
-
-func WithSubscriptionVersionLocalizationLimit(limit int) SubscriptionVersionOption {
-	return func(q *subscriptionVersionQuery) {
-		if limit > 0 {
-			q.localizationLimit = limit
-		}
-	}
-}
-
-func WithSubscriptionVersionLocalizationsLimit(limit int) SubscriptionVersionLocalizationsOption {
-	return func(q *subscriptionVersionLocalizationsQuery) {
-		if limit > 0 {
-			q.limit = limit
-		}
-	}
-}
-
 func WithSubscriptionVersionLocalizationsNextURL(next string) SubscriptionVersionLocalizationsOption {
 	return func(q *subscriptionVersionLocalizationsQuery) { q.nextURL = strings.TrimSpace(next) }
 }
@@ -326,36 +183,12 @@ func WithSubscriptionVersionLocalizationsInclude(include []string) SubscriptionV
 	return func(q *subscriptionVersionLocalizationsQuery) { q.include = normalizeList(include) }
 }
 
-func WithSubscriptionVersionImagesLimit(limit int) SubscriptionVersionImagesOption {
-	return func(q *subscriptionVersionImagesQuery) {
-		if limit > 0 {
-			q.limit = limit
-		}
-	}
-}
-
 func WithSubscriptionVersionImagesNextURL(next string) SubscriptionVersionImagesOption {
 	return func(q *subscriptionVersionImagesQuery) { q.nextURL = strings.TrimSpace(next) }
 }
 
 func WithSubscriptionVersionImagesFields(fields []string) SubscriptionVersionImagesOption {
 	return func(q *subscriptionVersionImagesQuery) { q.fields = normalizeList(fields) }
-}
-
-func WithSubscriptionLocalizationV2Fields(fields []string) SubscriptionLocalizationV2Option {
-	return func(q *subscriptionLocalizationV2Query) { q.fields = normalizeList(fields) }
-}
-
-func WithSubscriptionLocalizationV2VersionFields(fields []string) SubscriptionLocalizationV2Option {
-	return func(q *subscriptionLocalizationV2Query) { q.versionFields = normalizeList(fields) }
-}
-
-func WithSubscriptionLocalizationV2Include(include []string) SubscriptionLocalizationV2Option {
-	return func(q *subscriptionLocalizationV2Query) { q.include = normalizeList(include) }
-}
-
-func WithSubscriptionImageV2Fields(fields []string) SubscriptionImageV2Option {
-	return func(q *subscriptionImageV2Query) { q.fields = normalizeList(fields) }
 }
 
 func buildSubscriptionVersionsQuery(q *subscriptionVersionsQuery) string {
@@ -371,20 +204,12 @@ func buildSubscriptionVersionsQuery(q *subscriptionVersionsQuery) string {
 	addCSV(values, "fields[subscriptionImages]", q.imageFields)
 	addCSV(values, "fields[subscriptionLocalizations]", q.localizationFields)
 	addCSV(values, "include", q.include)
-	addNamedLimit(values, "limit[images]", q.imageLimit)
-	addNamedLimit(values, "limit[localizations]", q.localizationLimit)
-	return values.Encode()
-}
-
-func buildSubscriptionVersionQuery(q *subscriptionVersionQuery) string {
-	values := url.Values{}
-	addCSV(values, "fields[subscriptionVersions]", q.fields)
-	addCSV(values, "fields[subscriptions]", q.subscriptionFields)
-	addCSV(values, "fields[subscriptionImages]", q.imageFields)
-	addCSV(values, "fields[subscriptionLocalizations]", q.localizationFields)
-	addCSV(values, "include", q.include)
-	addNamedLimit(values, "limit[images]", q.imageLimit)
-	addNamedLimit(values, "limit[localizations]", q.localizationLimit)
+	if q.imageLimit > 0 {
+		values.Set("limit[images]", strconv.Itoa(q.imageLimit))
+	}
+	if q.localizationLimit > 0 {
+		values.Set("limit[localizations]", strconv.Itoa(q.localizationLimit))
+	}
 	return values.Encode()
 }
 
@@ -402,24 +227,4 @@ func buildSubscriptionVersionImagesQuery(q *subscriptionVersionImagesQuery) stri
 	addLimit(values, q.limit)
 	addCSV(values, "fields[subscriptionImages]", q.fields)
 	return values.Encode()
-}
-
-func buildSubscriptionLocalizationV2Query(q *subscriptionLocalizationV2Query) string {
-	values := url.Values{}
-	addCSV(values, "fields[subscriptionLocalizations]", q.fields)
-	addCSV(values, "fields[subscriptionVersions]", q.versionFields)
-	addCSV(values, "include", q.include)
-	return values.Encode()
-}
-
-func buildSubscriptionImageV2Query(q *subscriptionImageV2Query) string {
-	values := url.Values{}
-	addCSV(values, "fields[subscriptionImages]", q.fields)
-	return values.Encode()
-}
-
-func addNamedLimit(values url.Values, key string, limit int) {
-	if limit > 0 {
-		values.Set(key, strconv.Itoa(limit))
-	}
 }

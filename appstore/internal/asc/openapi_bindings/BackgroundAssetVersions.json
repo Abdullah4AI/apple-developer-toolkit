@@ -1,0 +1,21 @@
+{
+  "tag": "BackgroundAssetVersions",
+  "file": "background_asset_versions_gen.go",
+  "types": [
+    "BackgroundAssetVersionCreateData",
+    "BackgroundAssetVersionCreateRelationships",
+    "BackgroundAssetVersionCreateRequest",
+    "BackgroundAssetVersionResponse"
+  ],
+  "relationships": [
+    {"data":"BackgroundAssetVersionCreateData","type":"BackgroundAssetVersionCreateRelationships"}
+  ],
+  "operations": [
+    {"operation":"backgroundAssetVersions_backgroundAssetUploadFiles_getToManyRelated","name":"GetBackgroundAssetUploadFiles","params":["versionID"],"options":"BackgroundAssetUploadFilesOption","query":"buildBackgroundAssetUploadFilesQuery","nextContext":"backgroundAssetUploadFiles"},
+    {"operation":"backgroundAssetVersions_createInstance","name":"CreateBackgroundAssetVersion","params":["backgroundAssetID"],"check":"require","messages":["background asset ID is required"],"links":["backgroundAsset"]},
+    {"operation":"backgroundAssetVersions_getInstance","name":"GetBackgroundAssetVersion","params":["versionID"],"check":"require","messages":["background asset version ID is required"]}
+  ],
+  "queries": [
+    {"operation":"backgroundAssetVersions_backgroundAssetUploadFiles_getToManyRelated","name":"BackgroundAssetUploadFiles","deviations":[{"problem":"query parameters [fields[backgroundAssetUploadFiles]] have no option","reason":"The option type has options only for the parameters commands send today; an option for another parameter is added with the command that needs it."}]}
+  ]
+}

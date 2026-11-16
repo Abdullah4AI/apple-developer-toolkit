@@ -7,8 +7,8 @@ import (
 	"strings"
 )
 
-// CustomerReviewResponseAttributes describes a customer review response.
-type CustomerReviewResponseAttributes struct {
+// CustomerReviewResponseV1Attributes describes a customer review response.
+type CustomerReviewResponseV1Attributes struct {
 	ResponseBody string `json:"responseBody"`
 	LastModified string `json:"lastModifiedDate,omitempty"`
 	State        string `json:"state,omitempty"`
@@ -16,9 +16,9 @@ type CustomerReviewResponseAttributes struct {
 
 // CustomerReviewResponseResource is a customer review response resource.
 type CustomerReviewResponseResource struct {
-	Type       ResourceType                     `json:"type"`
-	ID         string                           `json:"id"`
-	Attributes CustomerReviewResponseAttributes `json:"attributes"`
+	Type       ResourceType                       `json:"type"`
+	ID         string                             `json:"id"`
+	Attributes CustomerReviewResponseV1Attributes `json:"attributes"`
 }
 
 // CustomerReviewResponsesResponse is the response from customer review responses endpoints (list).
@@ -31,12 +31,6 @@ type CustomerReviewResponsesResponse struct {
 type CustomerReviewResponseResponse struct {
 	Data  CustomerReviewResponseResource `json:"data"`
 	Links Links                          `json:"links"`
-}
-
-// CustomerReviewResponseLinkageResponse is the response for customer review response relationship.
-type CustomerReviewResponseLinkageResponse struct {
-	Data  ResourceData `json:"data"`
-	Links Links        `json:"links"`
 }
 
 // CustomerReviewResponseCreateAttributes describes attributes for creating a review response.
@@ -61,12 +55,6 @@ type CustomerReviewResponseCreateRequest struct {
 	Data CustomerReviewResponseCreateData `json:"data"`
 }
 
-// CustomerReviewResponseDeleteResult represents CLI output for review response deletions.
-type CustomerReviewResponseDeleteResult struct {
-	ID      string `json:"id"`
-	Deleted bool   `json:"deleted"`
-}
-
 // ResourceTypeCustomerReviewResponses is the resource type for customer review responses.
 const ResourceTypeCustomerReviewResponses ResourceType = "customerReviewResponses"
 
@@ -74,7 +62,7 @@ const ResourceTypeCustomerReviewResponses ResourceType = "customerReviewResponse
 const ResourceTypeCustomerReviews ResourceType = "customerReviews"
 
 // CustomerReviewPublishedResponseID extracts the response relationship from a customer review resource.
-func CustomerReviewPublishedResponseID(review Resource[ReviewAttributes]) (string, bool) {
+func CustomerReviewPublishedResponseID(review Resource[CustomerReviewAttributes]) (string, bool) {
 	if len(review.Relationships) == 0 {
 		return "", false
 	}
@@ -125,95 +113,5 @@ func (c *Client) CreateCustomerReviewResponse(ctx context.Context, reviewID, res
 		},
 	}
 
-	body, err := BuildRequestBody(payload)
-	if err != nil {
-		return nil, err
-	}
-
-	data, err := c.do(ctx, "POST", "/v1/customerReviewResponses", body)
-	if err != nil {
-		return nil, err
-	}
-
-	var response CustomerReviewResponseResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
-// GetCustomerReviewResponse retrieves a customer review response by ID.
-func (c *Client) GetCustomerReviewResponse(ctx context.Context, responseID string) (*CustomerReviewResponseResponse, error) {
-	responseID = strings.TrimSpace(responseID)
-	if responseID == "" {
-		return nil, fmt.Errorf("responseID is required")
-	}
-
-	path := fmt.Sprintf("/v1/customerReviewResponses/%s", responseID)
-	data, err := c.do(ctx, "GET", path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var response CustomerReviewResponseResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
-// DeleteCustomerReviewResponse deletes a customer review response by ID.
-func (c *Client) DeleteCustomerReviewResponse(ctx context.Context, responseID string) error {
-	responseID = strings.TrimSpace(responseID)
-	if responseID == "" {
-		return fmt.Errorf("responseID is required")
-	}
-
-	path := fmt.Sprintf("/v1/customerReviewResponses/%s", responseID)
-	_, err := c.do(ctx, "DELETE", path, nil)
-	return err
-}
-
-// GetCustomerReviewResponseForReview retrieves the response for a specific review.
-func (c *Client) GetCustomerReviewResponseForReview(ctx context.Context, reviewID string) (*CustomerReviewResponseResponse, error) {
-	reviewID = strings.TrimSpace(reviewID)
-	if reviewID == "" {
-		return nil, fmt.Errorf("reviewID is required")
-	}
-
-	path := fmt.Sprintf("/v1/customerReviews/%s/response", reviewID)
-	data, err := c.do(ctx, "GET", path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var response CustomerReviewResponseResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
-// GetCustomerReviewResponseRelationshipForReview retrieves the response linkage for a specific review.
-func (c *Client) GetCustomerReviewResponseRelationshipForReview(ctx context.Context, reviewID string) (*CustomerReviewResponseLinkageResponse, error) {
-	reviewID = strings.TrimSpace(reviewID)
-	if reviewID == "" {
-		return nil, fmt.Errorf("reviewID is required")
-	}
-
-	path := fmt.Sprintf("/v1/customerReviews/%s/relationships/response", reviewID)
-	data, err := c.do(ctx, "GET", path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var response CustomerReviewResponseLinkageResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
+	return sendJSON[CustomerReviewResponseResponse](ctx, c, writeRequest{Method: "POST", Path: "/v1/customerReviewResponses", Payload: payload})
 }

@@ -1,12 +1,13 @@
 package cmdtest
 
 import (
-	"context"
 	"encoding/json"
-	"io"
 	"net/http"
 	"path/filepath"
+	"strings"
 	"testing"
+
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asctest"
 )
 
 func TestReadCommandsPrintAppleNullAndEmptyAttributes(t *testing.T) {
@@ -15,10 +16,12 @@ func TestReadCommandsPrintAppleNullAndEmptyAttributes(t *testing.T) {
 		args      []string
 		responses map[string]string
 		attrs     map[string]string
+		deps      bool
 	}{
 		{
 			name: "review details-get",
 			args: []string{"review", "details-get", "--id", "detail-1"},
+			deps: true,
 			responses: map[string]string{
 				"/v1/appStoreReviewDetails/detail-1": `{"data":{"type":"appStoreReviewDetails","id":"detail-1","attributes":{"contactFirstName":"Dev","demoAccountRequired":false,"demoAccountName":null,"demoAccountPassword":null,"notes":""}}}`,
 			},
@@ -32,6 +35,7 @@ func TestReadCommandsPrintAppleNullAndEmptyAttributes(t *testing.T) {
 		{
 			name: "review details-for-version with include-sensitive",
 			args: []string{"review", "details-for-version", "--version-id", "version-1", "--include-sensitive"},
+			deps: true,
 			responses: map[string]string{
 				"/v1/appStoreVersions/version-1/appStoreReviewDetail": `{"data":{"type":"appStoreReviewDetails","id":"detail-1","attributes":{"demoAccountRequired":false,"demoAccountName":null,"demoAccountPassword":null}}}`,
 			},
@@ -52,6 +56,7 @@ func TestReadCommandsPrintAppleNullAndEmptyAttributes(t *testing.T) {
 				"marketingUrl": "null",
 				"whatsNew":     "null",
 			},
+			deps: true,
 		},
 		{
 			name: "localizations list app-info",
@@ -63,6 +68,7 @@ func TestReadCommandsPrintAppleNullAndEmptyAttributes(t *testing.T) {
 				"privacyChoicesUrl": "null",
 				"privacyPolicyText": "null",
 			},
+			deps: true,
 		},
 		{
 			name: "age-rating view",
@@ -81,12 +87,13 @@ func TestReadCommandsPrintAppleNullAndEmptyAttributes(t *testing.T) {
 			name: "builds test-notes list",
 			args: []string{"builds", "test-notes", "list", "--build-id", "build-1"},
 			responses: map[string]string{
-				"/v1/builds/build-1":         `{"data":{"type":"builds","id":"build-1","attributes":{}}}`,
-				"/v1/betaBuildLocalizations": `{"data":[{"type":"betaBuildLocalizations","id":"note-1","attributes":{"locale":"en-US","whatsNew":null}}],"links":{}}`,
+				"/v1/builds/build-1": `{"data":{"type":"builds","id":"build-1","attributes":{}}}`,
+				"/v1/betaBuildLocalizations?filter[build]=build-1": `{"data":[{"type":"betaBuildLocalizations","id":"note-1","attributes":{"locale":"en-US","whatsNew":null}}],"links":{}}`,
 			},
 			attrs: map[string]string{
 				"whatsNew": "null",
 			},
+			deps: true,
 		},
 		{
 			name: "builds test-notes view",
@@ -97,10 +104,12 @@ func TestReadCommandsPrintAppleNullAndEmptyAttributes(t *testing.T) {
 			attrs: map[string]string{
 				"whatsNew": "null",
 			},
+			deps: true,
 		},
 		{
 			name: "iap review-screenshots view",
 			args: []string{"iap", "review-screenshots", "view", "--screenshot-id", "shot-1"},
+			deps: true,
 			responses: map[string]string{
 				"/v1/inAppPurchaseAppStoreReviewScreenshots/shot-1": `{"data":{"type":"inAppPurchaseAppStoreReviewScreenshots","id":"shot-1","attributes":{"fileName":"shot.png","uploadOperations":[],"sourceFileChecksum":null}}}`,
 			},
@@ -113,26 +122,25 @@ func TestReadCommandsPrintAppleNullAndEmptyAttributes(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			setupAuth(t)
 			t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
-			stubTransport(t, func(req *http.Request) (*http.Response, error) {
-				body, ok := test.responses[req.URL.Path]
-				if req.Method != http.MethodGet || !ok {
-					t.Fatalf("unexpected request: %s %s", req.Method, req.URL.Path)
-				}
-				return jsonResponse(http.StatusOK, body)
-			})
+			reg := asctest.NewRegistry(t)
+			for request, body := range test.responses {
+				path, query, _ := strings.Cut(request, "?")
+				reg.Register(asctest.GET(path, query), asctest.JSON(http.StatusOK, body))
+			}
 
-			root := RootCommand("1.2.3")
-			root.FlagSet.SetOutput(io.Discard)
-			stdout, _ := captureOutput(t, func() {
-				if err := root.Parse(append(test.args, "--output", "json")); err != nil {
-					t.Fatalf("parse error: %v", err)
-				}
-				if err := root.Run(context.Background()); err != nil {
-					t.Fatalf("run error: %v", err)
-				}
-			})
+			var stdout string
+			var err error
+			if test.deps {
+				stdout, _, err = runRootWithDeps(t, stubClient(t, reg), append(test.args, "--output", "json")...)
+			} else {
+				setupAuth(t)
+				reg.Install()
+				stdout, _, err = runCommand(t, append(test.args, "--output", "json"))
+			}
+			if err != nil {
+				t.Fatalf("run error: %v", err)
+			}
 
 			var envelope struct {
 				Data json.RawMessage `json:"data"`

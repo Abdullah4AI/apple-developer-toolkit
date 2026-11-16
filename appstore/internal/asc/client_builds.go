@@ -118,12 +118,6 @@ type BuildIconAttributes struct {
 	Name      string        `json:"name,omitempty"`
 }
 
-// BuildsResponse is the response from builds endpoint.
-type BuildsResponse = Response[BuildAttributes]
-
-// BuildResponse is the response from build detail/updates.
-type BuildResponse = SingleResponse[BuildAttributes]
-
 // BuildIconsResponse is the response from build icons endpoint.
 type BuildIconsResponse = Response[BuildIconAttributes]
 
@@ -150,11 +144,6 @@ type BuildUploadCreateData struct {
 	Relationships *BuildUploadRelationships `json:"relationships,omitempty"`
 }
 
-// BuildUploadCreateRequest is a request to create a build upload.
-type BuildUploadCreateRequest struct {
-	Data BuildUploadCreateData `json:"data"`
-}
-
 // BuildUploadsResponse is the response from build uploads list endpoint.
 type BuildUploadsResponse = Response[BuildUploadAttributes]
 
@@ -174,11 +163,6 @@ type BuildUploadFileAttributes struct {
 	Uploaded            *bool               `json:"uploaded,omitempty"`
 }
 
-// BuildUploadFileRelationships describes the relationships for a build upload file.
-type BuildUploadFileRelationships struct {
-	BuildUpload *Relationship `json:"buildUpload"`
-}
-
 // BuildUploadFileCreateData is the data portion of a build upload file create request.
 type BuildUploadFileCreateData struct {
 	Type          ResourceType                  `json:"type"`
@@ -186,34 +170,11 @@ type BuildUploadFileCreateData struct {
 	Relationships *BuildUploadFileRelationships `json:"relationships"`
 }
 
-// BuildUploadFileCreateRequest is a request to create a build upload file.
-type BuildUploadFileCreateRequest struct {
-	Data BuildUploadFileCreateData `json:"data"`
-}
-
 // BuildUploadFilesResponse is the response from build upload files list endpoint.
 type BuildUploadFilesResponse = Response[BuildUploadFileAttributes]
 
 // BuildUploadFileResponse is the response from build upload file endpoint.
 type BuildUploadFileResponse = SingleResourceResponse[BuildUploadFileAttributes]
-
-// BuildUploadFileUpdateAttributes describes the attributes to update on a build upload file.
-type BuildUploadFileUpdateAttributes struct {
-	SourceFileChecksums *Checksums `json:"sourceFileChecksums,omitempty"`
-	Uploaded            *bool      `json:"uploaded,omitempty"`
-}
-
-// BuildUploadFileUpdateData is the data portion of a build upload file update request.
-type BuildUploadFileUpdateData struct {
-	Type       ResourceType                     `json:"type"`
-	ID         string                           `json:"id"`
-	Attributes *BuildUploadFileUpdateAttributes `json:"attributes,omitempty"`
-}
-
-// BuildUploadFileUpdateRequest is a request to update a build upload file.
-type BuildUploadFileUpdateRequest struct {
-	Data BuildUploadFileUpdateData `json:"data"`
-}
 
 // UploadOperation represents a file upload operation with presigned URL.
 type UploadOperation struct {
@@ -312,10 +273,10 @@ func (c *Client) GetBuilds(ctx context.Context, appID string, opts ...BuildsOpti
 	} else {
 		values := url.Values{}
 		// Use /v1/builds endpoint when sorting, limiting, or filtering by
-		// version/preReleaseVersion.version/processingState/preReleaseVersion/platform/
+		// version/processingState/preReleaseVersion/platform/
 		// betaAppReviewSubmission.betaReviewState/expired,
 		// since /v1/apps/{id}/builds doesn't support these
-		if query.sort != "" || query.limit > 0 || query.version != "" || query.preReleaseVersion != "" || len(query.processingStates) > 0 || len(query.preReleasePlatforms) > 0 || len(query.preReleaseVersionIDs) > 0 || len(query.betaReviewStates) > 0 || query.expired != nil || query.buildAudienceType != "" || len(query.include) > 0 {
+		if query.sort != "" || query.limit > 0 || query.version != "" || len(query.processingStates) > 0 || len(query.preReleasePlatforms) > 0 || len(query.preReleaseVersionIDs) > 0 || len(query.betaReviewStates) > 0 || query.expired != nil || query.buildAudienceType != "" || len(query.include) > 0 {
 			path = "/v1/builds"
 			values.Set("filter[app]", appID)
 			if query.sort != "" {
@@ -326,9 +287,6 @@ func (c *Client) GetBuilds(ctx context.Context, appID string, opts ...BuildsOpti
 			}
 			if query.version != "" {
 				values.Set("filter[version]", query.version)
-			}
-			if query.preReleaseVersion != "" {
-				values.Set("filter[preReleaseVersion.version]", query.preReleaseVersion)
 			}
 			if query.buildAudienceType != "" {
 				values.Set("filter[buildAudienceType]", string(query.buildAudienceType))
@@ -373,10 +331,7 @@ func (c *Client) GetBuilds(ctx context.Context, appID string, opts ...BuildsOpti
 
 // GetBuild retrieves a single build by ID.
 func (c *Client) GetBuild(ctx context.Context, buildID string, opts ...BuildOption) (*BuildResponse, error) {
-	query := &buildQuery{}
-	for _, opt := range opts {
-		opt(query)
-	}
+	query := applyOptions(opts)
 	path := fmt.Sprintf("/v1/builds/%s", buildID)
 	if len(query.include) > 0 {
 		values := url.Values{}
@@ -384,54 +339,7 @@ func (c *Client) GetBuild(ctx context.Context, buildID string, opts ...BuildOpti
 		query.includedFields.AddTo(values)
 		path += "?" + values.Encode()
 	}
-	data, err := c.do(ctx, "GET", path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var response BuildResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
-// GetBuildAppStoreVersion retrieves the app store version for a build.
-func (c *Client) GetBuildAppStoreVersion(ctx context.Context, buildID string) (*AppStoreVersionResponse, error) {
-	path := fmt.Sprintf("/v1/builds/%s/appStoreVersion", buildID)
-	data, err := c.do(ctx, "GET", path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var response AppStoreVersionResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
-// GetBuildAppEncryptionDeclaration retrieves the encryption declaration for a build.
-func (c *Client) GetBuildAppEncryptionDeclaration(ctx context.Context, buildID string) (*AppEncryptionDeclarationResponse, error) {
-	buildID = strings.TrimSpace(buildID)
-	if buildID == "" {
-		return nil, fmt.Errorf("buildID is required")
-	}
-
-	path := fmt.Sprintf("/v1/builds/%s/appEncryptionDeclaration", buildID)
-	data, err := c.do(ctx, "GET", path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var response AppEncryptionDeclarationResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
+	return getJSON[BuildResponse](ctx, c, readRequest{Path: path})
 }
 
 // BuildUpdateAttributes describes mutable attributes on a build resource.
@@ -527,12 +435,6 @@ func buildUpdateMatchesCurrent(resp *BuildResponse, attrs BuildUpdateAttributes)
 func (c *Client) ExpireBuild(ctx context.Context, buildID string) (*BuildResponse, error) {
 	expired := true
 	return c.UpdateBuild(ctx, buildID, BuildUpdateAttributes{Expired: &expired})
-}
-
-// AddBetaGroupsToBuild adds beta groups to a build for TestFlight distribution.
-func (c *Client) AddBetaGroupsToBuild(ctx context.Context, buildID string, groupIDs []string) error {
-	_, err := c.AddBetaGroupsToBuildWithNotify(ctx, buildID, groupIDs, false)
-	return err
 }
 
 // BuildBetaGroupsNotificationAction describes how notify=true was satisfied.
@@ -638,140 +540,6 @@ func isAutoNotifyAlreadyEnabledNotificationError(err error) bool {
 	return strings.Contains(strings.ToLower(strings.TrimSpace(apiErr.Detail)), "auto-notify already enabled")
 }
 
-// RemoveBetaGroupsFromBuild removes beta groups from a build.
-func (c *Client) RemoveBetaGroupsFromBuild(ctx context.Context, buildID string, groupIDs []string) error {
-	buildID = strings.TrimSpace(buildID)
-	groupIDs = normalizeList(groupIDs)
-	if buildID == "" {
-		return fmt.Errorf("buildID is required")
-	}
-	if len(groupIDs) == 0 {
-		return fmt.Errorf("groupIDs are required")
-	}
-
-	payload := RelationshipRequest{
-		Data: make([]RelationshipData, len(groupIDs)),
-	}
-	for i, id := range groupIDs {
-		payload.Data[i] = RelationshipData{
-			Type: ResourceTypeBetaGroups,
-			ID:   id,
-		}
-	}
-
-	body, err := BuildRequestBody(payload)
-	if err != nil {
-		return err
-	}
-
-	path := fmt.Sprintf("/v1/builds/%s/relationships/betaGroups", buildID)
-	if _, err := c.do(ctx, "DELETE", path, body); err != nil {
-		return err
-	}
-	return nil
-}
-
-// GetBuildIndividualTesters retrieves individual testers assigned to a build.
-func (c *Client) GetBuildIndividualTesters(ctx context.Context, buildID string, opts ...BuildIndividualTestersOption) (*BetaTestersResponse, error) {
-	query := &buildIndividualTestersQuery{}
-	for _, opt := range opts {
-		opt(query)
-	}
-
-	buildID = strings.TrimSpace(buildID)
-	if query.nextURL == "" && buildID == "" {
-		return nil, fmt.Errorf("buildID is required")
-	}
-
-	path := fmt.Sprintf("/v1/builds/%s/individualTesters", buildID)
-	if query.nextURL != "" {
-		if err := validateNextURL(query.nextURL); err != nil {
-			return nil, fmt.Errorf("buildIndividualTesters: %w", err)
-		}
-		path = query.nextURL
-	} else if queryString := buildBuildIndividualTestersQuery(query); queryString != "" {
-		path += "?" + queryString
-	}
-
-	data, err := c.do(ctx, "GET", path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var response BetaTestersResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
-// AddIndividualTestersToBuild adds individual testers to a build.
-func (c *Client) AddIndividualTestersToBuild(ctx context.Context, buildID string, testerIDs []string) error {
-	buildID = strings.TrimSpace(buildID)
-	testerIDs = normalizeList(testerIDs)
-	if buildID == "" {
-		return fmt.Errorf("buildID is required")
-	}
-	if len(testerIDs) == 0 {
-		return fmt.Errorf("testerIDs are required")
-	}
-
-	payload := RelationshipRequest{
-		Data: make([]RelationshipData, len(testerIDs)),
-	}
-	for i, id := range testerIDs {
-		payload.Data[i] = RelationshipData{
-			Type: ResourceTypeBetaTesters,
-			ID:   id,
-		}
-	}
-
-	body, err := BuildRequestBody(payload)
-	if err != nil {
-		return err
-	}
-
-	path := fmt.Sprintf("/v1/builds/%s/relationships/individualTesters", buildID)
-	if _, err := c.do(ctx, "POST", path, body); err != nil {
-		return err
-	}
-	return nil
-}
-
-// RemoveIndividualTestersFromBuild removes individual testers from a build.
-func (c *Client) RemoveIndividualTestersFromBuild(ctx context.Context, buildID string, testerIDs []string) error {
-	buildID = strings.TrimSpace(buildID)
-	testerIDs = normalizeList(testerIDs)
-	if buildID == "" {
-		return fmt.Errorf("buildID is required")
-	}
-	if len(testerIDs) == 0 {
-		return fmt.Errorf("testerIDs are required")
-	}
-
-	payload := RelationshipRequest{
-		Data: make([]RelationshipData, len(testerIDs)),
-	}
-	for i, id := range testerIDs {
-		payload.Data[i] = RelationshipData{
-			Type: ResourceTypeBetaTesters,
-			ID:   id,
-		}
-	}
-
-	body, err := BuildRequestBody(payload)
-	if err != nil {
-		return err
-	}
-
-	path := fmt.Sprintf("/v1/builds/%s/relationships/individualTesters", buildID)
-	if _, err := c.do(ctx, "DELETE", path, body); err != nil {
-		return err
-	}
-	return nil
-}
-
 // GetBuildUploads retrieves build uploads for an app.
 func (c *Client) GetBuildUploads(ctx context.Context, appID string, opts ...BuildUploadsOption) (*BuildUploadsResponse, error) {
 	query := &buildUploadsQuery{}
@@ -794,7 +562,7 @@ func (c *Client) GetBuildUploads(ctx context.Context, appID string, opts ...Buil
 		path += "?" + queryString
 	}
 
-	data, err := c.doAppBuildUploadsRead(ctx, appID, path)
+	data, err := c.doAppBuildUploadsRead(ctx, path)
 	if err != nil {
 		return nil, err
 	}
@@ -809,171 +577,12 @@ func (c *Client) GetBuildUploads(ctx context.Context, appID string, opts ...Buil
 
 // CreateBuildUpload creates a new build upload record.
 func (c *Client) CreateBuildUpload(ctx context.Context, req BuildUploadCreateRequest) (*BuildUploadResponse, error) {
-	body, err := BuildRequestBody(req)
-	if err != nil {
-		return nil, err
-	}
-
-	data, err := c.do(ctx, "POST", "/v1/buildUploads", body)
-	if err != nil {
-		return nil, err
-	}
-
-	var response BuildUploadResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
-// DeleteBuildUpload deletes a build upload by ID.
-func (c *Client) DeleteBuildUpload(ctx context.Context, id string) error {
-	id = strings.TrimSpace(id)
-	if id == "" {
-		return fmt.Errorf("id is required")
-	}
-	_, err := c.do(ctx, "DELETE", fmt.Sprintf("/v1/buildUploads/%s", id), nil)
-	return err
-}
-
-// GetBuildUpload retrieves a build upload by ID.
-func (c *Client) GetBuildUpload(ctx context.Context, id string, opts ...BuildUploadOption) (*BuildUploadResponse, error) {
-	id = strings.TrimSpace(id)
-	if id == "" {
-		return nil, fmt.Errorf("id is required")
-	}
-
-	query := &buildUploadQuery{}
-	for _, opt := range opts {
-		opt(query)
-	}
-	path := fmt.Sprintf("/v1/buildUploads/%s", id)
-	if queryString := buildBuildUploadQuery(query); queryString != "" {
-		path += "?" + queryString
-	}
-
-	data, err := c.do(ctx, "GET", path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var response BuildUploadResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
-// GetBuildUploadFiles retrieves upload files for a build upload.
-func (c *Client) GetBuildUploadFiles(ctx context.Context, uploadID string, opts ...BuildUploadFilesOption) (*BuildUploadFilesResponse, error) {
-	query := &buildUploadFilesQuery{}
-	for _, opt := range opts {
-		opt(query)
-	}
-
-	uploadID = strings.TrimSpace(uploadID)
-	if query.nextURL == "" && uploadID == "" {
-		return nil, fmt.Errorf("uploadID is required")
-	}
-
-	path := fmt.Sprintf("/v1/buildUploads/%s/buildUploadFiles", uploadID)
-	if query.nextURL != "" {
-		if err := validateNextURL(query.nextURL); err != nil {
-			return nil, fmt.Errorf("buildUploadFiles: %w", err)
-		}
-		path = query.nextURL
-	} else if queryString := buildBuildUploadFilesQuery(query); queryString != "" {
-		path += "?" + queryString
-	}
-
-	data, err := c.do(ctx, "GET", path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var response BuildUploadFilesResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
-// GetBuildUploadBuildUploadFilesRelationships retrieves build upload file linkages for a build upload.
-func (c *Client) GetBuildUploadBuildUploadFilesRelationships(ctx context.Context, uploadID string, opts ...LinkagesOption) (*LinkagesResponse, error) {
-	query := &linkagesQuery{}
-	for _, opt := range opts {
-		opt(query)
-	}
-
-	uploadID = strings.TrimSpace(uploadID)
-	if query.nextURL == "" && uploadID == "" {
-		return nil, fmt.Errorf("uploadID is required")
-	}
-
-	path := fmt.Sprintf("/v1/buildUploads/%s/relationships/buildUploadFiles", uploadID)
-	if query.nextURL != "" {
-		if err := validateNextURL(query.nextURL); err != nil {
-			return nil, fmt.Errorf("buildUploadFilesRelationships: %w", err)
-		}
-		path = query.nextURL
-	} else if queryString := buildLinkagesQuery(query); queryString != "" {
-		path += "?" + queryString
-	}
-
-	data, err := c.do(ctx, "GET", path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var response LinkagesResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
-// GetBuildUploadFile retrieves a build upload file by ID.
-func (c *Client) GetBuildUploadFile(ctx context.Context, id string) (*BuildUploadFileResponse, error) {
-	id = strings.TrimSpace(id)
-	if id == "" {
-		return nil, fmt.Errorf("id is required")
-	}
-
-	data, err := c.do(ctx, "GET", fmt.Sprintf("/v1/buildUploadFiles/%s", id), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var response BuildUploadFileResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
+	return sendJSON[BuildUploadResponse](ctx, c, writeRequest{Method: "POST", Path: "/v1/buildUploads", Payload: req})
 }
 
 // CreateBuildUploadFile creates a new build upload file reservation.
 func (c *Client) CreateBuildUploadFile(ctx context.Context, req BuildUploadFileCreateRequest) (*BuildUploadFileResponse, error) {
-	body, err := BuildRequestBody(req)
-	if err != nil {
-		return nil, err
-	}
-
-	data, err := c.do(ctx, "POST", "/v1/buildUploadFiles", body)
-	if err != nil {
-		return nil, err
-	}
-
-	var response BuildUploadFileResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
+	return sendJSON[BuildUploadFileResponse](ctx, c, writeRequest{Method: "POST", Path: "/v1/buildUploadFiles", Payload: req})
 }
 
 // UpdateBuildUploadFile updates a build upload file (used to commit upload).

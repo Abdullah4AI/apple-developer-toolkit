@@ -1,12 +1,15 @@
 package testflight
 
 import (
+	"os"
 	"strings"
 	"testing"
+
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
 func TestFlightDistributionEditDoesNotRegisterExternalTesting(t *testing.T) {
-	distribution := TestFlightDistributionCommand()
+	distribution := newTestFlightDistributionCommand(&shared.Deps{IO: &shared.IO{}, LookupEnv: os.LookupEnv})
 	var editCommandFound bool
 	for _, subcommand := range distribution.Subcommands {
 		if subcommand.Name != "edit" {

@@ -2,8 +2,6 @@ package iap
 
 import (
 	"context"
-	"io"
-	"os"
 	"strings"
 	"testing"
 
@@ -16,7 +14,8 @@ import (
 // no longer registered, so the CLI reports them as unknown commands instead of
 // warning and continuing. The version-scoped commands are the replacements.
 func TestIAPProductScoped441SurfacesAreRemoved(t *testing.T) {
-	cmd := IAPCommand()
+	d, _, _ := newTestDeps(nil)
+	cmd := NewIAPCommand(d)
 	removed := map[string]bool{"images": true, "localizations": true, "submit": true}
 	for _, sub := range cmd.Subcommands {
 		if sub != nil && removed[sub.Name] {
@@ -37,37 +36,12 @@ func TestIAPProductScoped441SurfacesAreRemoved(t *testing.T) {
 	}
 }
 
-func captureIAPLegacy441Stderr(t *testing.T, run func()) string {
-	t.Helper()
-
-	reader, writer, err := os.Pipe()
-	if err != nil {
-		t.Fatalf("os.Pipe: %v", err)
-	}
-	oldStderr := os.Stderr
-	os.Stderr = writer
-	t.Cleanup(func() { os.Stderr = oldStderr })
-
-	run()
-	if err := writer.Close(); err != nil {
-		t.Fatalf("close stderr writer: %v", err)
-	}
-	os.Stderr = oldStderr
-	data, err := io.ReadAll(reader)
-	if err != nil {
-		t.Fatalf("read stderr: %v", err)
-	}
-	if err := reader.Close(); err != nil {
-		t.Fatalf("close stderr reader: %v", err)
-	}
-	return string(data)
-}
-
 func TestIAPVersionScoped441CommandsAreNotDeprecated(t *testing.T) {
+	d, _, _ := newTestDeps(nil)
 	commands := []*ffcli.Command{
-		IAPVersionImagesListCommand(),
-		IAPVersionLocalizationsListCommand(),
-		IAPVersionSubmitCommand(),
+		newIAPVersionImagesListCommand(d),
+		newIAPVersionLocalizationsListCommand(d),
+		newIAPVersionSubmitCommand(d),
 	}
 	for _, cmd := range commands {
 		if strings.Contains(cmd.ShortHelp, "DEPRECATED:") || strings.Contains(cmd.LongHelp, "DEPRECATED:") {
@@ -80,14 +54,15 @@ func TestIAPVersionScoped441CommandsAreNotDeprecated(t *testing.T) {
 }
 
 func TestIAP441ParentHelpPromotesVersionScopedResources(t *testing.T) {
-	parent := IAPCommand()
+	d, _, _ := newTestDeps(nil)
+	parent := NewIAPCommand(d)
 	for _, replacement := range []string{"asc iap versions localizations list", "asc iap versions images create"} {
 		if !strings.Contains(parent.LongHelp, replacement) {
 			t.Fatalf("LongHelp = %q, want replacement %q", parent.LongHelp, replacement)
 		}
 	}
 
-	setup := IAPSetupCommand()
+	setup := newIAPSetupCommand(d)
 	if strings.Contains(setup.LongHelp, " --locale ") {
 		t.Fatalf("setup LongHelp still teaches deprecated localization flags: %q", setup.LongHelp)
 	}
@@ -108,15 +83,18 @@ func TestIAPSetupWarnsOnlyForLegacyLocalization(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cmd := IAPSetupCommand()
+			d, stdout, stderrBuf := newTestDeps(nil)
+			cmd := newIAPSetupCommand(d)
 			args := []string{"--app", "123", "--type", "NON_CONSUMABLE", "--reference-name", "Pro", "--product-id", "com.example.pro", "--tier", "-1"}
 			args = append(args, tt.localizationArgs...)
 			if err := cmd.FlagSet.Parse(args); err != nil {
 				t.Fatalf("parse: %v", err)
 			}
-			stderr := captureIAPLegacy441Stderr(t, func() {
-				_ = cmd.Exec(context.Background(), cmd.FlagSet.Args())
-			})
+			_ = cmd.Exec(context.Background(), cmd.FlagSet.Args())
+			stderr := stderrBuf.String()
+			if stdout.Len() != 0 {
+				t.Fatalf("stdout = %q, want empty", stdout.String())
+			}
 			gotWarning := strings.Contains(stderr, "Warning:")
 			if gotWarning != tt.wantWarning {
 				t.Fatalf("stderr = %q, warning = %v, want %v", stderr, gotWarning, tt.wantWarning)

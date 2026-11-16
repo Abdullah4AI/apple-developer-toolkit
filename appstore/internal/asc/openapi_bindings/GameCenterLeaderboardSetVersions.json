@@ -1,0 +1,17 @@
+{
+  "tag": "GameCenterLeaderboardSetVersions",
+  "file": "game_center_leaderboard_set_versions_gen.go",
+  "types": [
+    "GameCenterLeaderboardSetVersionV2Attributes"
+  ],
+  "operations": [
+    {"operation":"gameCenterLeaderboardSetVersionsV2_getInstance","name":"GetGameCenterLeaderboardSetVersion","params":["versionID"],"response":"GameCenterLeaderboardSetVersionResponse"},
+    {"operation":"gameCenterLeaderboardSetVersionsV2_localizations_getToManyRelated","name":"GetGameCenterLeaderboardSetVersionLocalizations","params":["versionID"],"options":"GCLeaderboardSetLocalizationsOption","query":"buildGCLeaderboardSetLocalizationsQuery","nextContext":"game-center-leaderboard-set-version-localizations","response":"GameCenterLeaderboardSetLocalizationsResponse"}
+  ],
+  "queries": [
+    {"operation":"gameCenterLeaderboardSetVersionsV2_localizations_getToManyRelated","also":["gameCenterLeaderboardSets_localizations_getToManyRelated"],"name":"GCLeaderboardSetLocalizations","deviations":[{"problem":"query parameters [fields[gameCenterLeaderboardSetImages] fields[gameCenterLeaderboardSetLocalizations] fields[gameCenterLeaderboardSetVersions] include] have no option","reason":"The option type has options only for the parameters commands send today; an option for another parameter is added with the command that needs it."},{"operation":"gameCenterLeaderboardSets_localizations_getToManyRelated","problem":"query parameters [fields[gameCenterLeaderboardSetImages] fields[gameCenterLeaderboardSetLocalizations] fields[gameCenterLeaderboardSets] include] have no option","reason":"The option type has options only for the parameters commands send today; an option for another parameter is added with the command that needs it."}]}
+  ],
+  "goTypes": [
+    {"schema":"GameCenterLeaderboardSetLocalizationV2Attributes","type":"GameCenterLeaderboardSetLocalizationAttributes"}
+  ]
+}

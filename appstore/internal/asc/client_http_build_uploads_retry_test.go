@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 )
 
@@ -22,7 +23,13 @@ const buildUploadsFlakyNotFoundBody = `{"errors":[{"id":"e1","status":"404","cod
 func newBuildUploadsNotFoundServer(t *testing.T, failures int, attempts *atomic.Int32) *httptest.Server {
 	t.Helper()
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+	server := httptest.NewServer(newBuildUploadsNotFoundHandler(failures, attempts))
+	t.Cleanup(server.Close)
+	return server
+}
+
+func newBuildUploadsNotFoundHandler(failures int, attempts *atomic.Int32) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		attempt := int(attempts.Add(1))
 		w.Header().Set("Content-Type", "application/json")
 		if attempt <= failures {
@@ -31,9 +38,7 @@ func newBuildUploadsNotFoundServer(t *testing.T, failures int, attempts *atomic.
 			return
 		}
 		_, _ = io.WriteString(w, `{"data":[{"type":"buildUploads","id":"bu-1"}]}`)
-	}))
-	t.Cleanup(server.Close)
-	return server
+	})
 }
 
 func TestClientDo_RetriesIntermittentNotFoundOnBuildUploads(t *testing.T) {
@@ -233,35 +238,6 @@ func TestGetBuildUploadsMaxRetriesZeroSkipsAppVerification(t *testing.T) {
 	}
 }
 
-func TestGetAppBuildUploadsRelationshipsRetriesWhenAppExists(t *testing.T) {
-	setFastRetryEnv(t, "3")
-
-	var paths []string
-	client := newTestClient(
-		t, func(req *http.Request) {
-			paths = append(paths, req.URL.Path)
-		},
-		jsonResponse(http.StatusNotFound, buildUploadsFlakyNotFoundBody),
-		jsonResponse(http.StatusOK, `{"data":{"type":"apps","id":"6759231657"}}`),
-		jsonResponse(http.StatusOK, `{"data":[{"type":"buildUploads","id":"bu-1"}]}`),
-	)
-
-	response, err := client.GetAppBuildUploadsRelationships(context.Background(), "6759231657")
-	if err != nil {
-		t.Fatalf("GetAppBuildUploadsRelationships() error: %v", err)
-	}
-	if len(response.Data) != 1 || response.Data[0].ID != "bu-1" {
-		t.Fatalf("response data = %#v, want bu-1", response.Data)
-	}
-	if want := []string{
-		"/v1/apps/6759231657/relationships/buildUploads",
-		"/v1/apps/6759231657",
-		"/v1/apps/6759231657/relationships/buildUploads",
-	}; !slices.Equal(paths, want) {
-		t.Fatalf("paths = %v, want %v", paths, want)
-	}
-}
-
 func TestGetBuildUploadsNextURLOnlyRetriesWhenAppExists(t *testing.T) {
 	setFastRetryEnv(t, "3")
 
@@ -278,7 +254,7 @@ func TestGetBuildUploadsNextURLOnlyRetriesWhenAppExists(t *testing.T) {
 	response, err := client.GetBuildUploads(
 		context.Background(),
 		"",
-		WithBuildUploadsNextURL("https://api.appstoreconnect.apple.com/v1/apps/6759231657/buildUploads?cursor=page-2"),
+		NextURL[BuildUploadsOption]("https://api.appstoreconnect.apple.com/v1/apps/6759231657/buildUploads?cursor=page-2"),
 	)
 	if err != nil {
 		t.Fatalf("GetBuildUploads() error: %v", err)
@@ -306,7 +282,7 @@ func TestGetBuildUploadsTopLevelNextURLDoesNotVerifyCallerApp(t *testing.T) {
 	_, err := client.GetBuildUploads(
 		context.Background(),
 		"6759231657",
-		WithBuildUploadsNextURL("https://api.appstoreconnect.apple.com/v1/buildUploads/bu-missing"),
+		NextURL[BuildUploadsOption]("https://api.appstoreconnect.apple.com/v1/buildUploads/bu-missing"),
 	)
 	if err == nil {
 		t.Fatal("expected missing-upload error")
@@ -367,22 +343,31 @@ func TestClientDo_BuildUploadsNotFoundRetryHonorsContextCancellation(t *testing.
 	resetConfigCacheForTest()
 
 	var attempts atomic.Int32
-	server := newBuildUploadsNotFoundServer(t, 4, &attempts)
-	client := newMutationRetryTestClient(t, server.Client())
+	handler := newBuildUploadsNotFoundHandler(4, &attempts)
+	client := newMutationRetryTestClient(t, &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, req)
+		return response.Result(), nil
+	})})
 
-	ctx, cancel := context.WithCancel(context.Background())
-	go func() {
-		time.Sleep(50 * time.Millisecond)
-		cancel()
-	}()
+	var err error
+	var elapsed time.Duration
+	synctest.Test(t, func(*testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		go func() {
+			time.Sleep(50 * time.Millisecond)
+			cancel()
+		}()
 
-	start := time.Now()
-	_, err := client.do(ctx, http.MethodGet, server.URL+"/v1/buildUploads/bu-1", nil)
+		start := time.Now()
+		_, err = client.do(ctx, http.MethodGet, "https://api.appstoreconnect.apple.com/v1/buildUploads/bu-1", nil)
+		elapsed = time.Since(start)
+	})
 	if err == nil {
 		t.Fatal("expected error after cancellation")
 	}
-	if elapsed := time.Since(start); elapsed > 2*time.Second {
-		t.Fatalf("expected cancellation to interrupt the backoff, waited %s", elapsed)
+	if elapsed != 50*time.Millisecond {
+		t.Fatalf("expected cancellation at 50ms to interrupt the backoff, waited %s", elapsed)
 	}
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("expected context.Canceled in chain, got %v", err)

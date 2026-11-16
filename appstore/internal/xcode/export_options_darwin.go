@@ -39,8 +39,9 @@ var ansiEscapePattern = regexp.MustCompile(`\x1b\[[0-9;]*m`)
 // buildPlatformExportOptionsPayload uses Bitrise's current typed v2 model on
 // macOS, where xcodebuild and local signing asset resolution are available.
 func buildPlatformExportOptionsPayload(opts ExportOptionsGenerateOptions, teamID string, manual manualExportOptions) map[string]any {
-	if opts.Method == exportOptionsMethodReleaseTesting {
-		model := exportoptions.NewNonAppStoreOptions(exportoptions.MethodReleaseTesting)
+	switch opts.Method {
+	case exportOptionsMethodReleaseTesting, exportOptionsMethodDebugging, exportOptionsMethodEnterprise:
+		model := exportoptions.NewNonAppStoreOptions(exportoptions.Method(opts.Method))
 		model.TeamID = teamID
 		model.Destination = exportoptions.Destination(opts.Destination)
 		model.SigningStyle = exportoptions.SigningStyle(opts.SigningStyle)
@@ -159,14 +160,6 @@ func manualExportOptionsResolutionError(bundleIDs []string, method, teamID, reso
 }
 
 func readArchiveExportInfo(archivePath string) (exportoptionsgenerator.ArchiveInfo, error) {
-	platform, err := InferArchivePlatform(archivePath)
-	if err == nil && platform == "MAC_OS" {
-		macArchive, macErr := readMacArchiveExportInfo(context.Background(), archivePath)
-		if macErr != nil {
-			return exportoptionsgenerator.ArchiveInfo{}, macErr
-		}
-		return macArchive.ArchiveInfo, nil
-	}
 	archive, err := xcarchive.NewIosArchive(archivePath)
 	if err != nil {
 		return exportoptionsgenerator.ArchiveInfo{}, fmt.Errorf("read iOS archive: %w", err)

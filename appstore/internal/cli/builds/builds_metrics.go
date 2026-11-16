@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/peterbourgon/ff/v3/ffcli"
@@ -13,9 +12,9 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
-// BuildsMetricsCommand returns the builds metrics command group.
-func BuildsMetricsCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("metrics", flag.ExitOnError)
+// newBuildsMetricsCommand returns the builds metrics command group.
+func newBuildsMetricsCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("metrics", flag.ExitOnError)
 
 	return &ffcli.Command{
 		Name:       "metrics",
@@ -27,9 +26,9 @@ Examples:
   asc builds metrics beta-usages --build-id "BUILD_ID"
   asc builds metrics beta-usages --app "123456789" --latest`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
-			BuildsMetricsBetaUsagesCommand(),
+			newBuildsMetricsBetaUsagesCommand(d),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp
@@ -37,14 +36,14 @@ Examples:
 	}
 }
 
-// BuildsMetricsBetaUsagesCommand returns the beta usages metrics subcommand.
-func BuildsMetricsBetaUsagesCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("metrics beta-usages", flag.ExitOnError)
+// newBuildsMetricsBetaUsagesCommand returns the beta usages metrics subcommand.
+func newBuildsMetricsBetaUsagesCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("metrics beta-usages", flag.ExitOnError)
 
-	selectors := bindBuildSelectorFlags(fs, buildSelectorFlagOptions{})
-	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
-	next := fs.String("next", "", "Fetch next page using a links.next URL")
-	output := shared.BindOutputFlags(fs)
+	selectors := bindBuildSelectorFlags(d, fs, buildSelectorFlagOptions{})
+	limit := fs.Int("limit", 0, shared.LimitFlagUsage(200))
+	next := fs.String("next", "", shared.NextFlagUsage)
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "beta-usages",
@@ -57,14 +56,10 @@ Examples:
   asc builds metrics beta-usages --app "123456789" --latest
   asc builds metrics beta-usages --app "123456789" --latest --limit 50`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
-			if *limit != 0 && (*limit < 1 || *limit > 200) {
-				fmt.Fprintln(os.Stderr, "Error: --limit must be between 1 and 200")
-				return flag.ErrHelp
-			}
-			if err := shared.ValidateNextURL(*next); err != nil {
-				return shared.UsageErrorf("builds metrics beta-usages: %v", err)
+			if err := d.ValidatePaginationFlags(ctx, fs, "builds metrics beta-usages", 200); err != nil {
+				return err
 			}
 
 			nextValue := strings.TrimSpace(*next)
@@ -76,12 +71,12 @@ Examples:
 				return fmt.Errorf("builds metrics beta-usages: %w", err)
 			}
 
-			client, err := shared.GetASCClient()
+			client, err := d.Client()
 			if err != nil {
 				return fmt.Errorf("builds metrics beta-usages: %w", err)
 			}
 
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
+			requestCtx, cancel := d.Timeout(ctx)
 			defer cancel()
 
 			buildID := ""
@@ -93,8 +88,8 @@ Examples:
 			}
 
 			opts := []asc.BetaBuildUsagesOption{
-				asc.WithBetaBuildUsagesLimit(*limit),
-				asc.WithBetaBuildUsagesNextURL(*next),
+				asc.Limit[asc.BetaBuildUsagesOption](*limit),
+				asc.NextURL[asc.BetaBuildUsagesOption](*next),
 			}
 
 			resp, err := client.GetBuildBetaUsagesMetrics(requestCtx, buildID, opts...)
@@ -102,7 +97,7 @@ Examples:
 				return fmt.Errorf("builds metrics beta-usages: failed to fetch: %w", err)
 			}
 
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+			return d.PrintOutput(resp, *output.Output, *output.Pretty)
 		},
 	}
 }

@@ -1,12 +1,12 @@
 package cmdtest
 
 import (
-	"context"
 	"encoding/json"
-	"io"
 	"net/http"
 	"reflect"
 	"testing"
+
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asctest"
 )
 
 func TestUsersProvisioningAllowedRequestBody(t *testing.T) {
@@ -115,8 +115,6 @@ func TestUsersProvisioningAllowedRequestBody(t *testing.T) {
 	for _, command := range commands {
 		for _, value := range values {
 			t.Run(command.name+" "+value.name, func(t *testing.T) {
-				setupAuth(t)
-
 				wantAttrs := map[string]any{}
 				for key, attr := range command.wantAttrs {
 					wantAttrs[key] = attr
@@ -128,38 +126,42 @@ func TestUsersProvisioningAllowedRequestBody(t *testing.T) {
 					wantAttrs["provisioningAllowed"] = command.omitted
 				}
 
-				var gotAttrs map[string]any
-				gotGet := false
-				installDefaultTransport(t, roundTripFunc(func(req *http.Request) (*http.Response, error) {
-					if wantGet && req.Method == http.MethodGet && req.URL.Path == command.path {
-						gotGet = true
-						return jsonResponse(http.StatusOK, `{"data":{"type":"users","id":"user-1","attributes":{"roles":["APP_MANAGER"],"provisioningAllowed":`+command.current+`}}}`)
-					}
-					if req.Method != command.method || req.URL.Path != command.path {
-						t.Fatalf("unexpected request: %s %s", req.Method, req.URL.String())
-					}
-					var payload struct {
-						Data struct {
-							Attributes map[string]any `json:"attributes"`
-						} `json:"data"`
-					}
-					if err := json.NewDecoder(req.Body).Decode(&payload); err != nil {
-						t.Fatalf("decode request: %v", err)
-					}
-					gotAttrs = payload.Data.Attributes
-					return jsonResponse(command.status, command.response)
-				}))
-
-				root := RootCommand("1.2.3")
-				root.FlagSet.SetOutput(io.Discard)
-				if err := root.Parse(append(append([]string{}, command.args...), value.args...)); err != nil {
-					t.Fatalf("parse error: %v", err)
+				reg := asctest.NewRegistry(t)
+				if wantGet {
+					reg.Register(asctest.GET(command.path),
+						asctest.JSON(http.StatusOK, `{"data":{"type":"users","id":"user-1","attributes":{"roles":["APP_MANAGER"],"provisioningAllowed":`+command.current+`}}}`))
 				}
-				captureOutput(t, func() {
-					if err := root.Run(context.Background()); err != nil {
-						t.Fatalf("run error: %v", err)
+				data := map[string]any{"type": "userInvitations", "attributes": wantAttrs}
+				write := asctest.POST
+				if command.method == http.MethodPatch {
+					data = map[string]any{"type": "users", "id": "user-1", "attributes": wantAttrs}
+					write = asctest.PATCH
+				}
+				wantBody, err := json.Marshal(map[string]any{"data": data})
+				if err != nil {
+					t.Fatal(err)
+				}
+				reg.Register(write(command.path).JSONBody(string(wantBody)), asctest.JSON(command.status, command.response))
+
+				if _, _, err := runRootWithDeps(t, stubClient(t, reg), append(append([]string{}, command.args...), value.args...)...); err != nil {
+					t.Fatalf("run error: %v", err)
+				}
+				requests := reg.Requests()
+				gotGet := false
+				for _, req := range requests {
+					if req.Method == http.MethodGet {
+						gotGet = true
 					}
-				})
+				}
+				var payload struct {
+					Data struct {
+						Attributes map[string]any `json:"attributes"`
+					} `json:"data"`
+				}
+				if err := json.Unmarshal(requests[len(requests)-1].Body, &payload); err != nil {
+					t.Fatalf("decode request: %v", err)
+				}
+				gotAttrs := payload.Data.Attributes
 				if gotGet != wantGet {
 					t.Fatalf("read current user = %v, want %v", gotGet, wantGet)
 				}

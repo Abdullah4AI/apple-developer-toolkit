@@ -1,49 +1,28 @@
 package cmdtest
 
 import (
-	"context"
 	"encoding/json"
-	"errors"
-	"io"
 	"net/http"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	rootcmd "github.com/Abdullah4AI/apple-developer-toolkit/appstore/cmd"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asctest"
 )
 
 func TestXcodeCloudStatusRunIDReturnsJSONWithoutWarning(t *testing.T) {
 	setupAuth(t)
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() { http.DefaultTransport = originalTransport })
+	reg := asctest.NewRegistry(t)
+	reg.Register(asctest.GET("/v1/ciBuildRuns/run-1"),
+		asctest.JSON(http.StatusOK, `{"data":{"type":"ciBuildRuns","id":"run-1","attributes":{"number":42,"executionProgress":"COMPLETE","completionStatus":"SUCCEEDED"}}}`))
 
-	requestCount := 0
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		requestCount++
-		if req.Method != http.MethodGet || req.URL.Path != "/v1/ciBuildRuns/run-1" {
-			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.String())
-		}
-		body := `{"data":{"type":"ciBuildRuns","id":"run-1","attributes":{"number":42,"executionProgress":"COMPLETE","completionStatus":"SUCCEEDED"}}}`
-		return &http.Response{
-			StatusCode: http.StatusOK,
-			Body:       io.NopCloser(strings.NewReader(body)),
-			Header:     http.Header{"Content-Type": []string{"application/json"}},
-		}, nil
-	})
-
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"xcode-cloud", "status", "--run-id", "run-1", "--output", "json"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatalf("run error: %v", err)
-		}
-	})
+	stdout, stderr, err := runRootWithDeps(t, stubClient(t, reg), "xcode-cloud", "status", "--run-id", "run-1", "--output", "json")
+	if err != nil {
+		t.Fatalf("run error: %v", err)
+	}
 
 	var result struct {
 		BuildRunID string `json:"buildRunId"`
@@ -57,18 +36,13 @@ func TestXcodeCloudStatusRunIDReturnsJSONWithoutWarning(t *testing.T) {
 	if stderr != "" {
 		t.Fatalf("stderr = %q, want empty", stderr)
 	}
-	if requestCount != 1 {
+	if requestCount := len(reg.Requests()); requestCount != 1 {
 		t.Fatalf("request count = %d, want 1", requestCount)
 	}
 }
 
 func TestXcodeCloudStatusRejectsRemovedIDAliasAsUnknownFlagBeforeNetwork(t *testing.T) {
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() { http.DefaultTransport = originalTransport })
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		t.Fatalf("unexpected network request: %s %s", req.Method, req.URL.String())
-		return nil, errors.New("unexpected network request")
-	})
+	reg := asctest.NewRegistry(t)
 
 	root := RootCommand("1.2.3")
 	if root.FlagSet.Lookup("id") != nil {
@@ -86,10 +60,7 @@ func TestXcodeCloudStatusRejectsRemovedIDAliasAsUnknownFlagBeforeNetwork(t *test
 		t.Fatal("expected --run-id on xcode-cloud status")
 	}
 
-	var code int
-	stdout, stderr := captureOutput(t, func() {
-		code = rootcmd.Run([]string{"xcode-cloud", "status", "--id", "run-1"}, "1.2.3")
-	})
+	stdout, stderr, code := runWithDeps(t, stubClient(t, reg), "xcode-cloud", "status", "--id", "run-1")
 	if code != rootcmd.ExitUsage {
 		t.Fatalf("exit code = %d, want %d; stderr=%q", code, rootcmd.ExitUsage, stderr)
 	}
@@ -117,10 +88,7 @@ func TestXcodeCloudScmRepositoriesRelationshipsIsUnknownCommand(t *testing.T) {
 		{name: "pull-requests", args: []string{"xcode-cloud", "scm", "repositories", "relationships", "pull-requests", "--repo-id", "REPO_ID"}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			var code int
-			stdout, stderr := captureOutput(t, func() {
-				code = rootcmd.Run(tt.args, "1.2.3")
-			})
+			stdout, stderr, code := runWithDeps(t, nil, tt.args...)
 			if code != rootcmd.ExitUsage {
 				t.Fatalf("exit code = %d, want %d; stderr=%q", code, rootcmd.ExitUsage, stderr)
 			}

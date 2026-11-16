@@ -13,6 +13,7 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/auth"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/config"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/readonly"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/urlsanitize"
 )
@@ -26,10 +27,12 @@ const (
 	requestTimeoutHint = "Increase the request timeout (e.g. set `ASC_TIMEOUT=90s`)."
 	uploadTimeoutHint  = "Increase the upload timeout (e.g. set `ASC_UPLOAD_TIMEOUT=45m`)."
 	systemStatusHint   = "Check Apple's service health with `asc system-status --service \"App Store Connect\"`."
-	bearerTokenHint    = "Set ASC_BEARER_TOKEN to a new token from the service that holds your private key, or unset it to use your configured credentials."
+	bearerTokenHint    = "Set ASC_BEARER_TOKEN to a new token from the service that holds your private key, set ASC_BEARER_TOKEN_COMMAND to a command that prints one, or unset both to use your configured credentials."
 	missingAuthHint    = "Run `asc auth status` to see configured credentials. To add an API key, create one at " + auth.APIKeysURL +
 		" and run `" + auth.LoginCommandExample + "` (or set ASC_KEY_ID/ASC_ISSUER_ID/ASC_PRIVATE_KEY_PATH)."
-	networkHint = "Check your network connection and proxy settings (HTTPS_PROXY), then retry."
+	downloadTimeoutHint = "Increase the download timeout, which `ASC_UPLOAD_TIMEOUT` sets (e.g. `ASC_UPLOAD_TIMEOUT=45m`)."
+	networkHint         = "Check your network connection and proxy settings (HTTPS_PROXY), then retry."
+	symlinkedConfigHint = "Replace the symlink with the real file, or set ASC_CONFIG_PATH to the absolute path of a config file whose path contains no symlinks."
 )
 
 func Classify(err error) ClassifiedError {
@@ -51,10 +54,18 @@ func Classify(err error) ClassifiedError {
 		return ClassifiedError{Message: err.Error(), Hint: missing.Hint}
 	}
 
+	if hinted, ok := errors.AsType[*shared.HintedError](err); ok {
+		return ClassifiedError{Message: err.Error(), Hint: hinted.Hint}
+	}
+
 	// The stored-key hint below does not help a caller whose token was signed
 	// elsewhere; only the service that holds the key can mint a new one.
-	if errors.Is(err, asc.ErrBearerTokenExpired) || errors.Is(err, asc.ErrInvalidBearerToken) {
+	if errors.Is(err, asc.ErrBearerTokenExpired) || errors.Is(err, asc.ErrInvalidBearerToken) || errors.Is(err, asc.ErrBearerTokenRenewal) {
 		return ClassifiedError{Message: err.Error(), Hint: bearerTokenHint}
+	}
+
+	if errors.Is(err, config.ErrSymlinkedConfig) {
+		return ClassifiedError{Message: err.Error(), Hint: symlinkedConfigHint}
 	}
 
 	if errors.Is(err, shared.ErrMissingAuth) {
@@ -71,8 +82,10 @@ func Classify(err error) ClassifiedError {
 			return ClassifiedError{Message: err.Error()}
 		}
 		hint := requestTimeoutHint
-		if isUploadTimeoutError(err) {
+		if errors.Is(err, shared.ErrUploadDeadline) || isUploadTimeoutError(err) {
 			hint = uploadTimeoutHint
+		} else if strings.Contains(err.Error(), "failed to write report") {
+			hint = downloadTimeoutHint
 		}
 		return ClassifiedError{
 			Message: err.Error(),
@@ -183,8 +196,35 @@ func containsPrivacyError(err error) bool {
 	return strings.Contains(msg, "appdatausages") || strings.Contains(msg, "appdatausagespublications")
 }
 
+const submissionStateRead = "`asc review submissions-get --id SUBMISSION_ID --include items`"
+
+// conflictNextSteps names, per command path, the read command that shows the
+// state an App Store Connect 409 conflicted with, so a caller inspects that
+// state instead of repeating the same request.
+var conflictNextSteps = map[string]string{
+	"asc review items add":          "Check the submission's state and items with " + submissionStateRead + ". If the item is already on it, `--if-exists skip` accepts it.",
+	"asc review items-add":          "Check the submission's state and items with " + submissionStateRead + ". If the item is already on it, `--if-exists skip` accepts it.",
+	"asc review submissions-submit": "Check the submission's state and items with " + submissionStateRead + ", and what blocks review with `asc review doctor --app APP_ID`.",
+	"asc review submit":             "Check the app's review state and blockers with `asc review status --app APP_ID` and `asc review doctor --app APP_ID`.",
+	"asc localizations update":      "Check the version's state with `asc versions view --version-id VERSION_ID`, or for app-info localizations `asc localizations list --app APP_ID --type app-info --app-info-fields state`.",
+	"asc testflight testers add":    "Check the tester's current state with `asc testflight testers list --app APP_ID --email EMAIL`.",
+	"asc testflight testers invite": "Check the tester's current state with `asc testflight testers list --app APP_ID --email EMAIL`.",
+
+	"asc video-previews set-poster-frame": "Apple accepts a poster frame only after the preview's video finishes processing. Check its `videoDeliveryState` with `asc video-previews list --version-localization VERSION_LOCALIZATION_ID` and retry once it is COMPLETE.",
+}
+
 func FormatStderr(err error) string {
+	return FormatCommandStderr("", err)
+}
+
+// FormatCommandStderr is FormatStderr for an error returned by the command at
+// path, such as "asc review items add". An HTTP 409 that gets no other hint
+// gets that command's conflictNextSteps entry.
+func FormatCommandStderr(path string, err error) string {
 	ce := Classify(err)
+	if ce.Hint == "" && errors.Is(err, asc.ErrConflict) {
+		ce.Hint = conflictNextSteps[path]
+	}
 	if ce.Message == "" {
 		return ""
 	}

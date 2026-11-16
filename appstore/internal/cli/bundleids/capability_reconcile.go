@@ -5,7 +5,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"os"
 	"sort"
 	"strings"
 
@@ -22,8 +21,8 @@ type desiredEntitlement struct {
 	value any
 }
 
-func BundleIDsCapabilitiesReconcileCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("reconcile", flag.ExitOnError)
+func newBundleIDsCapabilitiesReconcileCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("reconcile", flag.ExitOnError)
 	return &ffcli.Command{
 		Name:       "reconcile",
 		ShortUsage: "asc bundle-ids capabilities reconcile <plan|apply> [flags]",
@@ -38,17 +37,17 @@ Examples:
   asc bundle-ids capabilities reconcile plan --bundle "BUNDLE_ID" --entitlements ./App/App.entitlements
   asc bundle-ids capabilities reconcile apply --bundle "BUNDLE_ID" --entitlements ./App/App.entitlements --confirm`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
-			capabilityReconcileCommand("plan", false),
-			capabilityReconcileCommand("apply", true),
+			capabilityReconcileCommand(d, "plan", false),
+			capabilityReconcileCommand(d, "apply", true),
 		},
 		Exec: func(context.Context, []string) error { return flag.ErrHelp },
 	}
 }
 
-func capabilityReconcileCommand(name string, apply bool) *ffcli.Command {
-	fs := flag.NewFlagSet(name, flag.ExitOnError)
+func capabilityReconcileCommand(d *shared.Deps, name string, apply bool) *ffcli.Command {
+	fs := d.NewFlagSet(name, flag.ExitOnError)
 	bundleID := shared.BindResourceIDFlag(fs, "bundle", "bundleIds", "Bundle ID resource ID or identifier")
 	entitlements := fs.String("entitlements", "", "Path to an entitlements plist")
 	ignoreUnknown := fs.Bool("ignore-unknown", false, "Ignore entitlement keys this mapping does not know")
@@ -57,43 +56,39 @@ func capabilityReconcileCommand(name string, apply bool) *ffcli.Command {
 	if apply {
 		fs.BoolVar(&confirm, "confirm", false, "Apply capability changes")
 	}
-	output := shared.BindOutputFlags(fs)
+	output := d.BindOutputFlags(fs)
 	return &ffcli.Command{
 		Name:       name,
 		ShortUsage: "asc bundle-ids capabilities reconcile " + name + " --bundle BUNDLE_ID --entitlements PATH",
 		ShortHelp:  "Reconcile capabilities from entitlements.",
 		FlagSet:    fs,
-		UsageFunc:  shared.DefaultUsageFunc,
+		UsageFunc:  d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
-			if err := shared.RejectPositionalArgs(args); err != nil {
-				return err
-			}
 			if _, err := shared.ValidateOutputFormat(*output.Output, *output.Pretty); err != nil {
-				return shared.UsageError(err.Error())
-			}
-			if apply && !confirm {
-				fmt.Fprintln(os.Stderr, "Error: --confirm is required")
-				return shared.MissingRequiredUsageError("--confirm")
+				return d.UsageError(err.Error())
 			}
 			bundleValue := strings.TrimSpace(*bundleID)
 			if bundleValue == "" {
-				fmt.Fprintln(os.Stderr, "Error: --bundle is required")
-				return shared.MissingRequiredUsageError("--bundle")
+				return d.RequiredFlag("--bundle")
 			}
 			path := strings.TrimSpace(*entitlements)
 			if path == "" {
-				fmt.Fprintln(os.Stderr, "Error: --entitlements is required")
-				return shared.MissingRequiredUsageError("--entitlements")
+				return d.RequiredFlag("--entitlements")
 			}
-			desired, err := readDesiredEntitlements(path, *ignoreUnknown)
+			if apply {
+				if err := d.RequireConfirm(confirm); err != nil {
+					return err
+				}
+			}
+			desired, err := readDesiredEntitlements(d, path, *ignoreUnknown)
 			if err != nil {
 				return err
 			}
-			client, err := shared.GetASCClient()
+			client, err := d.Client()
 			if err != nil {
 				return fmt.Errorf("bundle-ids capabilities reconcile: %w", err)
 			}
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
+			requestCtx, cancel := d.Timeout(ctx)
 			defer cancel()
 			resolved, err := resolveCapabilityBundleID(requestCtx, client, bundleValue)
 			if err != nil {
@@ -106,18 +101,18 @@ func capabilityReconcileCommand(name string, apply bool) *ffcli.Command {
 			plan := buildCapabilityReconcilePlan(resolved, desired, existing, *allowRemove)
 			if apply {
 				if err := applyCapabilityReconcilePlan(requestCtx, client, resolved, plan); err != nil {
-					if outputErr := shared.PrintOutput(plan, *output.Output, *output.Pretty); outputErr != nil {
+					if outputErr := d.PrintOutput(plan, *output.Output, *output.Pretty); outputErr != nil {
 						return fmt.Errorf("bundle-ids capabilities reconcile: %w (partial receipt output: %w)", err, outputErr)
 					}
 					return shared.NewReportedError(fmt.Errorf("bundle-ids capabilities reconcile: %w", err))
 				}
 			}
-			return shared.PrintOutput(plan, *output.Output, *output.Pretty)
+			return d.PrintOutput(plan, *output.Output, *output.Pretty)
 		},
 	}
 }
 
-func readDesiredEntitlements(path string, ignoreUnknown bool) ([]desiredEntitlement, error) {
+func readDesiredEntitlements(d *shared.Deps, path string, ignoreUnknown bool) ([]desiredEntitlement, error) {
 	file, err := rootfs.OpenFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("bundle-ids capabilities reconcile: %w", err)
@@ -129,7 +124,7 @@ func readDesiredEntitlements(path string, ignoreUnknown bool) ([]desiredEntitlem
 	}
 	var raw map[string]any
 	if _, err := plist.Unmarshal(data, &raw); err != nil {
-		return nil, shared.UsageErrorf("entitlements file is not a plist: %v", err)
+		return nil, d.UsageErrorf("entitlements file is not a plist: %v", err)
 	}
 	catalog := map[string]entitlementCapability{}
 	for _, item := range entitlementCapabilityCatalog() {
@@ -146,12 +141,12 @@ func readDesiredEntitlements(path string, ignoreUnknown bool) ([]desiredEntitlem
 		item, ok := catalog[key]
 		if !ok {
 			if !ignoreUnknown {
-				return nil, shared.UsageErrorf("unknown entitlement key %q; pass --ignore-unknown to skip it", key)
+				return nil, d.UsageErrorf("unknown entitlement key %q; pass --ignore-unknown to skip it", key)
 			}
 			selected = append(selected, desiredEntitlement{spec: entitlementCapability{Key: key}, value: raw[key]})
 			continue
 		}
-		requested, err := entitlementValueRequested(key, raw[key], item.ValueKind)
+		requested, err := entitlementValueRequested(d, key, raw[key], item.ValueKind)
 		if err != nil {
 			return nil, err
 		}
@@ -159,18 +154,18 @@ func readDesiredEntitlements(path string, ignoreUnknown bool) ([]desiredEntitlem
 			continue
 		}
 		if item.UnsupportedCapability != "" {
-			return nil, shared.UsageErrorf("entitlement %q requires unsupported capability %s; no supported asc API or web command can enable it", key, item.UnsupportedCapability)
+			return nil, d.UsageErrorf("entitlement %q requires unsupported capability %s; no supported asc API or web command can enable it", key, item.UnsupportedCapability)
 		}
 		if key == "com.apple.developer.default-data-protection" {
 			value, ok := raw[key].(string)
 			if !ok {
-				return nil, shared.UsageError("data protection entitlement must be a string")
+				return nil, d.UsageError("data protection entitlement must be a string")
 			}
 			if value == "NSFileProtectionNone" {
 				continue
 			}
 			if _, ok := dataProtectionOptions[value]; !ok {
-				return nil, shared.UsageErrorf("unsupported data protection entitlement value %q", value)
+				return nil, d.UsageErrorf("unsupported data protection entitlement value %q", value)
 			}
 		}
 		if item.Capability != "" {
@@ -189,24 +184,24 @@ func readDesiredEntitlements(path string, ignoreUnknown bool) ([]desiredEntitlem
 	return selected, nil
 }
 
-func entitlementValueRequested(key string, value any, kind entitlementValueKind) (bool, error) {
+func entitlementValueRequested(d *shared.Deps, key string, value any, kind entitlementValueKind) (bool, error) {
 	switch kind {
 	case entitlementValueBoolean:
 		enabled, ok := value.(bool)
 		if !ok {
-			return false, shared.UsageErrorf("entitlement %q must be a boolean", key)
+			return false, d.UsageErrorf("entitlement %q must be a boolean", key)
 		}
 		return enabled, nil
 	case entitlementValueString:
 		text, ok := value.(string)
 		if !ok || strings.TrimSpace(text) == "" {
-			return false, shared.UsageErrorf("entitlement %q must be a non-empty string", key)
+			return false, d.UsageErrorf("entitlement %q must be a non-empty string", key)
 		}
 		return true, nil
 	case entitlementValueStringArray:
 		values, ok := entitlementStringArray(value)
 		if !ok {
-			return false, shared.UsageErrorf("entitlement %q must be an array of strings", key)
+			return false, d.UsageErrorf("entitlement %q must be an array of strings", key)
 		}
 		return len(values) > 0, nil
 	default:
@@ -302,7 +297,7 @@ func listBundleCapabilities(ctx context.Context, client *asc.Client, bundleID st
 		return nil, err
 	}
 	paginated, err := asc.PaginateAll(ctx, first, func(ctx context.Context, nextURL string) (asc.PaginatedResponse, error) {
-		return client.GetBundleIDCapabilities(ctx, bundleID, asc.WithBundleIDCapabilitiesNextURL(nextURL))
+		return client.GetBundleIDCapabilities(ctx, bundleID, asc.NextURL[asc.BundleIDCapabilitiesOption](nextURL))
 	})
 	if err != nil {
 		return nil, err

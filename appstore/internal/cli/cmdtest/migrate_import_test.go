@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asctest"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/migrate"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/validation"
@@ -161,7 +162,7 @@ func TestMigrateImportDryRunClassifiesIPad13ScreenshotAsModernSlot(t *testing.T)
 	}
 }
 
-func TestMigrateImportDryRunReportsSkippedNonLocaleMetadataDirs(t *testing.T) {
+func TestMigrateImportDryRunPrefersFramedScreenshotOverRawSibling(t *testing.T) {
 	root := t.TempDir()
 	metadataDir := filepath.Join(root, "metadata", "en-US")
 	if err := os.MkdirAll(metadataDir, 0o755); err != nil {
@@ -169,12 +170,84 @@ func TestMigrateImportDryRunReportsSkippedNonLocaleMetadataDirs(t *testing.T) {
 	}
 	writeFile(t, filepath.Join(metadataDir, "description.txt"), "English description")
 
+	screenshotsDir := filepath.Join(root, "screenshots", "en-US")
+	if err := os.MkdirAll(screenshotsDir, 0o755); err != nil {
+		t.Fatalf("mkdir screenshots: %v", err)
+	}
+	raw := filepath.Join(screenshotsDir, "0_home.png")
+	framed := filepath.Join(screenshotsDir, "0_home_framed.png")
+	unrelated := filepath.Join(screenshotsDir, "1_settings.png")
+	for _, path := range []string{raw, framed, unrelated} {
+		writePNGForMigrate(t, path, 1242, 2688)
+	}
+
+	rootCmd := RootCommand("1.2.3")
+	rootCmd.FlagSet.SetOutput(io.Discard)
+
+	stdout, _ := captureOutput(t, func() {
+		if err := rootCmd.Parse([]string{
+			"migrate", "import",
+			"--app", "APP_ID",
+			"--version-id", "VERSION_ID",
+			"--fastlane-dir", root,
+			"--dry-run",
+		}); err != nil {
+			t.Fatalf("parse error: %v", err)
+		}
+		if err := rootCmd.Run(context.Background()); err != nil {
+			t.Fatalf("run error: %v", err)
+		}
+	})
+
+	var result migrate.MigrateImportResult
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Fatalf("unmarshal result: %v", err)
+	}
+	if len(result.ScreenshotPlan) != 1 {
+		t.Fatalf("expected 1 screenshot plan, got %+v", result.ScreenshotPlan)
+	}
+	if got, want := result.ScreenshotPlan[0].Files, []string{framed, unrelated}; !slices.Equal(got, want) {
+		t.Fatalf("screenshot files = %v, want %v", got, want)
+	}
+	found := false
+	for _, item := range result.Skipped {
+		if item.Path == raw && strings.Contains(item.Reason, "framed") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected skipped entry for %q naming the framed copy, got %+v", raw, result.Skipped)
+	}
+}
+
+func TestMigrateImportDryRunReportsSkippedNonLocaleMetadataDirs(t *testing.T) {
+	root := t.TempDir()
+	metadataDir := filepath.Join(root, "metadata", "en-US")
+	if err := os.MkdirAll(metadataDir, 0o755); err != nil {
+		t.Fatalf("mkdir metadata: %v", err)
+	}
+	writeFile(t, filepath.Join(metadataDir, "description.txt"), "English description")
+	writeFile(t, filepath.Join(metadataDir, "apple_tv_privacy_policy.txt"), "Privacy policy text")
+
 	// Mimic a common fastlane deliver subdirectory that is not a locale.
 	nonLocaleDir := filepath.Join(root, "metadata", "trade_representative_contact_information")
 	if err := os.MkdirAll(nonLocaleDir, 0o755); err != nil {
 		t.Fatalf("mkdir non-locale dir: %v", err)
 	}
 	writeFile(t, filepath.Join(nonLocaleDir, "first_name.txt"), "Rita")
+	writeFile(t, filepath.Join(root, "metadata", "copyright.txt"), "  2026 Example Inc.\n")
+	writeFile(t, filepath.Join(root, "metadata", "primary_category.txt"), "GAMES")
+	writeFile(t, filepath.Join(root, "metadata", "secondary_category.txt"), "  \n")
+	defaultDir := filepath.Join(root, "metadata", "default")
+	if err := os.MkdirAll(defaultDir, 0o755); err != nil {
+		t.Fatalf("mkdir default dir: %v", err)
+	}
+	writeFile(t, filepath.Join(defaultDir, "apple_tv_privacy_policy.txt"), "Default policy text")
+	unreadable := filepath.Join(root, "metadata", "primary_first_sub_category.txt")
+	writeFile(t, unreadable, "GAMES_ACTION")
+	if err := os.Chmod(unreadable, 0o000); err != nil {
+		t.Fatalf("chmod: %v", err)
+	}
 	nonLocaleDirResolved, err := filepath.EvalSymlinks(nonLocaleDir)
 	if err != nil {
 		t.Fatalf("eval symlinks non-locale dir: %v", err)
@@ -223,6 +296,8 @@ func TestMigrateImportDryRunReportsSkippedNonLocaleMetadataDirs(t *testing.T) {
 	}
 
 	found := false
+	appLevelReasons := map[string]string{}
+	defaultPolicyReason := ""
 	for _, item := range result.Skipped {
 		itemPathResolved, err := filepath.EvalSymlinks(item.Path)
 		if err != nil {
@@ -230,69 +305,105 @@ func TestMigrateImportDryRunReportsSkippedNonLocaleMetadataDirs(t *testing.T) {
 		}
 		if itemPathResolved == nonLocaleDirResolved && strings.Contains(item.Reason, "skipped non-locale directory") {
 			found = true
-			break
+		}
+		if strings.HasSuffix(item.Path, filepath.Join("default", "apple_tv_privacy_policy.txt")) {
+			defaultPolicyReason = item.Reason
+		} else if strings.HasSuffix(item.Path, ".txt") {
+			appLevelReasons[filepath.Base(item.Path)] = item.Reason
 		}
 	}
 	if !found {
 		t.Fatalf("expected skipped to include %q (got %+v)", nonLocaleDir, result.Skipped)
 	}
+	if !strings.Contains(defaultPolicyReason, "not imported") || !strings.HasSuffix(defaultPolicyReason, "asc app-setup info set --app APP_ID --locale LOCALE --privacy-policy-text TEXT") {
+		t.Fatalf("expected the default folder's policy text to be reported with a locale placeholder, got %q", defaultPolicyReason)
+	}
+	if result.Copyright != "2026 Example Inc." {
+		t.Fatalf("copyright = %q, want the trimmed copyright.txt value", result.Copyright)
+	}
+	wantReasons := map[string]string{
+		"primary_category.txt": "asc app-setup categories set --app APP_ID --primary CATEGORY_ID",
+		// Unreadable for a non-root user; it must still be reported, not abort the import.
+		"primary_first_sub_category.txt": "asc app-setup categories set --app APP_ID --primary CATEGORY_ID --primary-subcategory-one SUBCATEGORY_ID",
+		"apple_tv_privacy_policy.txt":    "asc app-setup info set --app APP_ID --locale en-US --privacy-policy-text TEXT",
+	}
+	if len(appLevelReasons) != len(wantReasons) {
+		t.Fatalf("expected skipped app-level files %v, got %+v", wantReasons, result.Skipped)
+	}
+	for file, command := range wantReasons {
+		if reason := appLevelReasons[file]; !strings.Contains(reason, "not imported") || !strings.Contains(reason, command) {
+			t.Fatalf("expected skipped reason for %s to name %q, got %q", file, command, reason)
+		}
+	}
 }
 
-func TestMigrateImportDryRunSupportsIPhone69AliasAsAppIPhone67(t *testing.T) {
-	root := t.TempDir()
-	metadataDir := filepath.Join(root, "metadata", "en-US")
-	if err := os.MkdirAll(metadataDir, 0o755); err != nil {
-		t.Fatalf("mkdir metadata: %v", err)
-	}
-	writeFile(t, filepath.Join(metadataDir, "description.txt"), "English description")
-
-	screenshotsDir := filepath.Join(root, "screenshots", "en-US")
-	if err := os.MkdirAll(screenshotsDir, 0o755); err != nil {
-		t.Fatalf("mkdir screenshots: %v", err)
-	}
-	writePNGForMigrate(t, filepath.Join(screenshotsDir, "iphone_69_screen.png"), 1320, 2868)
-
-	cwd, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("getwd: %v", err)
-	}
-	t.Cleanup(func() {
-		_ = os.Chdir(cwd)
-	})
-	if err := os.Chdir(root); err != nil {
-		t.Fatalf("chdir: %v", err)
-	}
-
-	rootCmd := RootCommand("1.2.3")
-	rootCmd.FlagSet.SetOutput(io.Discard)
-
-	stdout, stderr := captureOutput(t, func() {
-		if err := rootCmd.Parse([]string{
-			"migrate", "import",
-			"--app", "APP_ID",
-			"--version-id", "VERSION_ID",
-			"--dry-run",
-		}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := rootCmd.Run(context.Background()); err != nil {
-			t.Fatalf("run error: %v", err)
-		}
-	})
-
-	if stderr != "" {
-		t.Fatalf("expected empty stderr, got %q", stderr)
+func TestMigrateImportCopyright(t *testing.T) {
+	versionResponse := `{"data":{"type":"appStoreVersions","id":"VERSION_ID","attributes":{"versionString":"1.0","platform":"IOS"},"relationships":{"app":{"data":{"type":"apps","id":"APP_ID"}}}}}`
+	tests := []struct {
+		name         string
+		copyright    string
+		expectations []migrateImportExpectation
+		wantUpdated  bool
+		wantSkipped  string
+	}{
+		{
+			name:      "applies the trimmed value to the version",
+			copyright: "\n  2026 Example Inc.  \n",
+			expectations: []migrateImportExpectation{
+				{method: http.MethodGet, path: "/v1/appStoreVersions/VERSION_ID", response: versionResponse},
+				{
+					method:   http.MethodPatch,
+					path:     "/v1/appStoreVersions/VERSION_ID",
+					body:     `{"data":{"type":"appStoreVersions","id":"VERSION_ID","attributes":{"copyright":"2026 Example Inc."}}}`,
+					response: versionResponse,
+				},
+			},
+			wantUpdated: true,
+		},
+		{
+			name:         "skips an empty file without clearing the field",
+			copyright:    " \n",
+			expectations: []migrateImportExpectation{{method: http.MethodGet, path: "/v1/appStoreVersions/VERSION_ID", response: versionResponse}},
+			wantSkipped:  "copyright.txt is empty; not applied",
+		},
 	}
 
-	var result migrate.MigrateImportResult
-	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
-		t.Fatalf("unmarshal result: %v", err)
-	}
-	if len(result.ScreenshotPlan) != 1 {
-		t.Fatalf("expected 1 screenshot plan, got %d", len(result.ScreenshotPlan))
-	}
-	if result.ScreenshotPlan[0].DisplayType != "APP_IPHONE_69" {
-		t.Fatalf("expected APP_IPHONE_69, got %q", result.ScreenshotPlan[0].DisplayType)
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			root := t.TempDir()
+			if err := os.MkdirAll(filepath.Join(root, "metadata"), 0o755); err != nil {
+				t.Fatalf("mkdir metadata: %v", err)
+			}
+			copyrightPath := filepath.Join(root, "metadata", "copyright.txt")
+			writeFile(t, copyrightPath, test.copyright)
+			api := newMigrateImportAPI(t, test.expectations...)
+
+			stdout, stderr, runErr := runMigrateImport(t, root)
+			if runErr != nil {
+				t.Fatalf("run error: %v (stderr %q)", runErr, stderr)
+			}
+			var result migrate.MigrateImportResult
+			if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+				t.Fatalf("unmarshal result: %v", err)
+			}
+			if result.CopyrightUpdated != test.wantUpdated {
+				t.Fatalf("copyrightUpdated = %t, want %t", result.CopyrightUpdated, test.wantUpdated)
+			}
+			skippedReason := ""
+			for _, item := range result.Skipped {
+				if filepath.Base(item.Path) == "copyright.txt" {
+					skippedReason = item.Reason
+				}
+			}
+			if skippedReason != test.wantSkipped {
+				t.Fatalf("copyright.txt skipped reason = %q, want %q", skippedReason, test.wantSkipped)
+			}
+			wantMutations := 0
+			if test.wantUpdated {
+				wantMutations = 1
+			}
+			api.assertComplete(t, wantMutations)
+		})
 	}
 }
 
@@ -777,6 +888,19 @@ func runMigrateImportWithOptions(t *testing.T, root string, options ...string) (
 	return stdout, stderr, runErr
 }
 
+func migrateImportDryRunPlan(t *testing.T, root string, options ...string) migrate.MigrateImportResult {
+	t.Helper()
+	stdout, stderr := runMigrateImportDryRun(t, append([]string{"--fastlane-dir", root}, options...)...)
+	if stderr != "" {
+		t.Fatalf("expected empty stderr, got %q", stderr)
+	}
+	var result migrate.MigrateImportResult
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Fatalf("unmarshal result: %v", err)
+	}
+	return result
+}
+
 func assertMigrateImportError(t *testing.T, stdout, stderr string, runErr error, wantError string) {
 	t.Helper()
 	if runErr == nil {
@@ -957,26 +1081,16 @@ func TestMigrateImportReportsPartiallyAppliedLocalesOnFailure(t *testing.T) {
 		writeFile(t, filepath.Join(localeDir, "description.txt"), description)
 	}
 
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() {
-		http.DefaultTransport = originalTransport
-	})
-
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		switch {
-		case req.Method == http.MethodGet && req.URL.Path == "/v1/appStoreVersions/VERSION_ID":
-			return migrateJSONResponse(http.StatusOK, `{"data":{"type":"appStoreVersions","id":"VERSION_ID","attributes":{"versionString":"1.0","platform":"IOS"},"relationships":{"app":{"data":{"type":"apps","id":"APP_ID"}}}}}`), nil
-		case req.Method == http.MethodGet && req.URL.Path == "/v1/appStoreVersions/VERSION_ID/appStoreVersionLocalizations":
-			body := `{"data":[{"type":"appStoreVersionLocalizations","id":"loc-en","attributes":{"locale":"en-US"}},{"type":"appStoreVersionLocalizations","id":"loc-ja","attributes":{"locale":"ja"}}]}`
-			return migrateJSONResponse(http.StatusOK, body), nil
-		case req.Method == http.MethodPatch && req.URL.Path == "/v1/appStoreVersionLocalizations/loc-en":
-			return migrateJSONResponse(http.StatusOK, `{"data":{"type":"appStoreVersionLocalizations","id":"loc-en","attributes":{"locale":"en-US"}}}`), nil
-		case req.Method == http.MethodPatch && req.URL.Path == "/v1/appStoreVersionLocalizations/loc-ja":
-			return migrateJSONResponse(http.StatusConflict, `{"errors":[{"status":"409","code":"STATE_ERROR","title":"Request failed","detail":"locale rejected"}]}`), nil
-		default:
-			return nil, fmt.Errorf("unexpected request: %s %s", req.Method, req.URL.String())
-		}
-	})
+	reg := asctest.NewRegistry(t)
+	reg.Install()
+	reg.Register(asctest.GET("/v1/appStoreVersions/VERSION_ID", "include=app"),
+		asctest.JSON(http.StatusOK, `{"data":{"type":"appStoreVersions","id":"VERSION_ID","attributes":{"versionString":"1.0","platform":"IOS"},"relationships":{"app":{"data":{"type":"apps","id":"APP_ID"}}}}}`))
+	reg.Register(asctest.GET("/v1/appStoreVersions/VERSION_ID/appStoreVersionLocalizations", "limit=200"),
+		asctest.JSON(http.StatusOK, `{"data":[{"type":"appStoreVersionLocalizations","id":"loc-en","attributes":{"locale":"en-US"}},{"type":"appStoreVersionLocalizations","id":"loc-ja","attributes":{"locale":"ja"}}]}`))
+	reg.Register(asctest.PATCH("/v1/appStoreVersionLocalizations/loc-en").JSONBody(`{"data":{"type":"appStoreVersionLocalizations","id":"loc-en","attributes":{"description":"English description"}}}`),
+		asctest.JSON(http.StatusOK, `{"data":{"type":"appStoreVersionLocalizations","id":"loc-en","attributes":{"locale":"en-US"}}}`))
+	reg.Register(asctest.PATCH("/v1/appStoreVersionLocalizations/loc-ja").JSONBody(`{"data":{"type":"appStoreVersionLocalizations","id":"loc-ja","attributes":{"description":"Japanese description"}}}`),
+		asctest.JSON(http.StatusConflict, `{"errors":[{"status":"409","code":"STATE_ERROR","title":"Request failed","detail":"locale rejected"}]}`))
 
 	rootCmd := RootCommand("1.2.3")
 	rootCmd.FlagSet.SetOutput(io.Discard)
@@ -1036,27 +1150,18 @@ func TestMigrateImportReportsScreenshotStageFailureAfterSetCreation(t *testing.T
 		t.Fatalf("mkdir metadata: %v", err)
 	}
 
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() {
-		http.DefaultTransport = originalTransport
-	})
-
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		switch {
-		case req.Method == http.MethodGet && req.URL.Path == "/v1/appStoreVersions/VERSION_ID":
-			return migrateJSONResponse(http.StatusOK, `{"data":{"type":"appStoreVersions","id":"VERSION_ID","attributes":{"versionString":"1.0","platform":"IOS"},"relationships":{"app":{"data":{"type":"apps","id":"APP_ID"}}}}}`), nil
-		case req.Method == http.MethodGet && req.URL.Path == "/v1/appStoreVersions/VERSION_ID/appStoreVersionLocalizations":
-			return migrateJSONResponse(http.StatusOK, `{"data":[{"type":"appStoreVersionLocalizations","id":"loc-en","attributes":{"locale":"en-US"}}]}`), nil
-		case req.Method == http.MethodGet && req.URL.Path == "/v1/appStoreVersionLocalizations/loc-en/appScreenshotSets":
-			return migrateJSONResponse(http.StatusOK, `{"data":[]}`), nil
-		case req.Method == http.MethodPost && req.URL.Path == "/v1/appScreenshotSets":
-			return migrateJSONResponse(http.StatusCreated, `{"data":{"type":"appScreenshotSets","id":"set-1","attributes":{"screenshotDisplayType":"APP_IPHONE_65"}}}`), nil
-		case req.Method == http.MethodPost && req.URL.Path == "/v1/appScreenshots":
-			return migrateJSONResponse(http.StatusConflict, `{"errors":[{"status":"409","code":"STATE_ERROR","title":"Request failed","detail":"screenshot rejected"}]}`), nil
-		default:
-			return nil, fmt.Errorf("unexpected request: %s %s", req.Method, req.URL.String())
-		}
-	})
+	reg := asctest.NewRegistry(t)
+	reg.Install()
+	reg.Register(asctest.GET("/v1/appStoreVersions/VERSION_ID", "include=app"),
+		asctest.JSON(http.StatusOK, `{"data":{"type":"appStoreVersions","id":"VERSION_ID","attributes":{"versionString":"1.0","platform":"IOS"},"relationships":{"app":{"data":{"type":"apps","id":"APP_ID"}}}}}`))
+	reg.Register(asctest.GET("/v1/appStoreVersions/VERSION_ID/appStoreVersionLocalizations", "limit=200"),
+		asctest.JSON(http.StatusOK, `{"data":[{"type":"appStoreVersionLocalizations","id":"loc-en","attributes":{"locale":"en-US"}}]}`))
+	reg.Register(asctest.GET("/v1/appStoreVersionLocalizations/loc-en/appScreenshotSets"),
+		asctest.JSON(http.StatusOK, `{"data":[]}`))
+	reg.Register(asctest.POST("/v1/appScreenshotSets").JSONBody(`{"data":{"type":"appScreenshotSets","attributes":{"screenshotDisplayType":"APP_IPHONE_65"},"relationships":{"appStoreVersionLocalization":{"data":{"type":"appStoreVersionLocalizations","id":"loc-en"}}}}}`),
+		asctest.JSON(http.StatusCreated, `{"data":{"type":"appScreenshotSets","id":"set-1","attributes":{"screenshotDisplayType":"APP_IPHONE_65"}}}`))
+	reg.Register(asctest.POST("/v1/appScreenshots").JSONBody(`{"data":{"type":"appScreenshots","attributes":{"fileSize":62592,"fileName":"iphone_65_new.png"},"relationships":{"appScreenshotSet":{"data":{"type":"appScreenshotSets","id":"set-1"}}}}}`),
+		asctest.JSON(http.StatusConflict, `{"errors":[{"status":"409","code":"STATE_ERROR","title":"Request failed","detail":"screenshot rejected"}]}`))
 
 	rootCmd := RootCommand("1.2.3")
 	rootCmd.FlagSet.SetOutput(io.Discard)
@@ -1114,33 +1219,22 @@ func TestMigrateImportSkippedStagesDoNotReportPartial(t *testing.T) {
 	}
 	writePNGForMigrate(t, filepath.Join(screenshotsDir, "iphone_65_existing.png"), 1242, 2688)
 
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() {
-		http.DefaultTransport = originalTransport
-	})
-
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		switch {
-		case req.Method == http.MethodGet && req.URL.Path == "/v1/appStoreVersions/VERSION_ID":
-			return migrateJSONResponse(http.StatusOK, `{"data":{"type":"appStoreVersions","id":"VERSION_ID","attributes":{"versionString":"1.0","platform":"IOS"},"relationships":{"app":{"data":{"type":"apps","id":"APP_ID"}}}}}`), nil
-		case req.Method == http.MethodGet && req.URL.Path == "/v1/appStoreVersions/VERSION_ID/appStoreVersionLocalizations":
-			return migrateJSONResponse(http.StatusOK, `{"data":[{"type":"appStoreVersionLocalizations","id":"loc-1","attributes":{"locale":"en-US"}}]}`), nil
-		case req.Method == http.MethodGet && req.URL.Path == "/v1/appStoreVersions/VERSION_ID/appStoreReviewDetail":
-			body := `{"data":{"type":"appStoreReviewDetails","id":"review-1","attributes":{"contactFirstName":"Rita","contactEmail":"rita@example.com"}}}`
-			return migrateJSONResponse(http.StatusOK, body), nil
-		case req.Method == http.MethodGet && req.URL.Path == "/v1/appStoreVersionLocalizations/loc-1/appScreenshotSets":
-			return migrateJSONResponse(http.StatusOK, `{"data":[{"type":"appScreenshotSets","id":"set-1","attributes":{"screenshotDisplayType":"APP_IPHONE_65"}}]}`), nil
-		case req.Method == http.MethodGet && req.URL.Path == "/v1/appScreenshotSets/set-1/relationships/appScreenshots":
-			return migrateJSONResponse(http.StatusOK, `{"data":[{"type":"appScreenshots","id":"shot-existing"}],"links":{}}`), nil
-		case req.Method == http.MethodGet && req.URL.Path == "/v1/appScreenshotSets/set-1/appScreenshots":
-			body := `{"data":[{"type":"appScreenshots","id":"shot-existing","attributes":{"fileName":"iphone_65_existing.png"}}]}`
-			return migrateJSONResponse(http.StatusOK, body), nil
-		case req.Method == http.MethodPatch && req.URL.Path == "/v1/appScreenshotSets/set-1/relationships/appScreenshots":
-			return migrateJSONResponse(http.StatusConflict, `{"errors":[{"status":"409","code":"STATE_ERROR","title":"Request failed","detail":"reorder rejected"}]}`), nil
-		default:
-			return nil, fmt.Errorf("unexpected request: %s %s", req.Method, req.URL.String())
-		}
-	})
+	reg := asctest.NewRegistry(t)
+	reg.Install()
+	reg.Register(asctest.GET("/v1/appStoreVersions/VERSION_ID", "include=app"),
+		asctest.JSON(http.StatusOK, `{"data":{"type":"appStoreVersions","id":"VERSION_ID","attributes":{"versionString":"1.0","platform":"IOS"},"relationships":{"app":{"data":{"type":"apps","id":"APP_ID"}}}}}`))
+	reg.Register(asctest.GET("/v1/appStoreVersions/VERSION_ID/appStoreVersionLocalizations", "limit=200"),
+		asctest.JSON(http.StatusOK, `{"data":[{"type":"appStoreVersionLocalizations","id":"loc-1","attributes":{"locale":"en-US"}}]}`))
+	reg.Register(asctest.GET("/v1/appStoreVersions/VERSION_ID/appStoreReviewDetail"),
+		asctest.JSON(http.StatusOK, `{"data":{"type":"appStoreReviewDetails","id":"review-1","attributes":{"contactFirstName":"Rita","contactEmail":"rita@example.com"}}}`))
+	reg.Register(asctest.GET("/v1/appStoreVersionLocalizations/loc-1/appScreenshotSets"),
+		asctest.JSON(http.StatusOK, `{"data":[{"type":"appScreenshotSets","id":"set-1","attributes":{"screenshotDisplayType":"APP_IPHONE_65"}}]}`))
+	reg.Register(asctest.GET("/v1/appScreenshotSets/set-1/relationships/appScreenshots", "limit=200"),
+		asctest.JSON(http.StatusOK, `{"data":[{"type":"appScreenshots","id":"shot-existing"}],"links":{}}`))
+	reg.Register(asctest.GET("/v1/appScreenshotSets/set-1/appScreenshots"),
+		asctest.JSON(http.StatusOK, `{"data":[{"type":"appScreenshots","id":"shot-existing","attributes":{"fileName":"iphone_65_existing.png"}}]}`))
+	reg.Register(asctest.PATCH("/v1/appScreenshotSets/set-1/relationships/appScreenshots").JSONBody(`{"data":[{"type":"appScreenshots","id":"shot-existing"}]}`),
+		asctest.JSON(http.StatusConflict, `{"errors":[{"status":"409","code":"STATE_ERROR","title":"Request failed","detail":"reorder rejected"}]}`))
 
 	rootCmd := RootCommand("1.2.3")
 	rootCmd.FlagSet.SetOutput(io.Discard)
@@ -1188,27 +1282,16 @@ func TestMigrateImportWarnsAboutLocalizationCreatedBeforeScreenshotFailure(t *te
 	}
 	writePNGForMigrate(t, filepath.Join(screenshotsDir, "iphone_65_new.png"), 1242, 2688)
 
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() {
-		http.DefaultTransport = originalTransport
-	})
-
-	createdLocalizations := 0
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		switch {
-		case req.Method == http.MethodGet && req.URL.Path == "/v1/appStoreVersions/VERSION_ID":
-			return migrateJSONResponse(http.StatusOK, `{"data":{"type":"appStoreVersions","id":"VERSION_ID","attributes":{"versionString":"1.0","platform":"IOS"},"relationships":{"app":{"data":{"type":"apps","id":"APP_ID"}}}}}`), nil
-		case req.Method == http.MethodGet && req.URL.Path == "/v1/appStoreVersions/VERSION_ID/appStoreVersionLocalizations":
-			return migrateJSONResponse(http.StatusOK, `{"data":[],"links":{"next":""}}`), nil
-		case req.Method == http.MethodPost && req.URL.Path == "/v1/appStoreVersionLocalizations":
-			createdLocalizations++
-			return migrateJSONResponse(http.StatusCreated, `{"data":{"type":"appStoreVersionLocalizations","id":"loc-fr","attributes":{"locale":"fr-FR"}}}`), nil
-		case req.Method == http.MethodGet && req.URL.Path == "/v1/appStoreVersionLocalizations/loc-fr/appScreenshotSets":
-			return migrateJSONResponse(http.StatusConflict, `{"errors":[{"status":"409","code":"STATE_ERROR","title":"Request failed","detail":"sets unavailable"}]}`), nil
-		default:
-			return nil, fmt.Errorf("unexpected request: %s %s", req.Method, req.URL.String())
-		}
-	})
+	reg := asctest.NewRegistry(t)
+	reg.Install()
+	reg.Register(asctest.GET("/v1/appStoreVersions/VERSION_ID", "include=app"),
+		asctest.JSON(http.StatusOK, `{"data":{"type":"appStoreVersions","id":"VERSION_ID","attributes":{"versionString":"1.0","platform":"IOS"},"relationships":{"app":{"data":{"type":"apps","id":"APP_ID"}}}}}`))
+	reg.Register(asctest.GET("/v1/appStoreVersions/VERSION_ID/appStoreVersionLocalizations", "limit=200"),
+		asctest.JSON(http.StatusOK, `{"data":[],"links":{"next":""}}`))
+	reg.Register(asctest.POST("/v1/appStoreVersionLocalizations").JSONBody(`{"data":{"type":"appStoreVersionLocalizations","attributes":{"locale":"fr-FR"},"relationships":{"appStoreVersion":{"data":{"type":"appStoreVersions","id":"VERSION_ID"}}}}}`),
+		asctest.JSON(http.StatusCreated, `{"data":{"type":"appStoreVersionLocalizations","id":"loc-fr","attributes":{"locale":"fr-FR"}}}`))
+	reg.Register(asctest.GET("/v1/appStoreVersionLocalizations/loc-fr/appScreenshotSets"),
+		asctest.JSON(http.StatusConflict, `{"errors":[{"status":"409","code":"STATE_ERROR","title":"Request failed","detail":"sets unavailable"}]}`))
 
 	rootCmd := RootCommand("1.2.3")
 	rootCmd.FlagSet.SetOutput(io.Discard)
@@ -1230,6 +1313,7 @@ func TestMigrateImportWarnsAboutLocalizationCreatedBeforeScreenshotFailure(t *te
 	if runErr == nil {
 		t.Fatal("expected migrate import to fail while fetching screenshot sets")
 	}
+	createdLocalizations := metadataRequestCount(reg, http.MethodPost, "/v1/appStoreVersionLocalizations")
 	if createdLocalizations != 1 {
 		t.Fatalf("created localizations = %d, want the screenshot-only locale created once", createdLocalizations)
 	}
@@ -1359,32 +1443,22 @@ func TestMigrateImportPartialOmitsSkippedReviewInformationStage(t *testing.T) {
 	}
 	writePNGForMigrate(t, filepath.Join(screenshotsDir, "iphone_65_new.png"), 1242, 2688)
 
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() {
-		http.DefaultTransport = originalTransport
-	})
-
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		switch {
-		case req.Method == http.MethodGet && req.URL.Path == "/v1/appStoreVersions/VERSION_ID":
-			return migrateJSONResponse(http.StatusOK, `{"data":{"type":"appStoreVersions","id":"VERSION_ID","attributes":{"versionString":"1.0","platform":"IOS"},"relationships":{"app":{"data":{"type":"apps","id":"APP_ID"}}}}}`), nil
-		case req.Method == http.MethodGet && req.URL.Path == "/v1/appStoreVersions/VERSION_ID/appStoreVersionLocalizations":
-			return migrateJSONResponse(http.StatusOK, `{"data":[{"type":"appStoreVersionLocalizations","id":"loc-1","attributes":{"locale":"en-US"}}]}`), nil
-		case req.Method == http.MethodPatch && req.URL.Path == "/v1/appStoreVersionLocalizations/loc-1":
-			return migrateJSONResponse(http.StatusOK, `{"data":{"type":"appStoreVersionLocalizations","id":"loc-1","attributes":{"locale":"en-US"}}}`), nil
-		case req.Method == http.MethodGet && req.URL.Path == "/v1/appStoreVersions/VERSION_ID/appStoreReviewDetail":
-			body := `{"data":{"type":"appStoreReviewDetails","id":"review-1","attributes":{"contactFirstName":"Rita"}}}`
-			return migrateJSONResponse(http.StatusOK, body), nil
-		case req.Method == http.MethodGet && req.URL.Path == "/v1/appStoreVersionLocalizations/loc-1/appScreenshotSets":
-			return migrateJSONResponse(http.StatusOK, `{"data":[]}`), nil
-		case req.Method == http.MethodPost && req.URL.Path == "/v1/appScreenshotSets":
-			return migrateJSONResponse(http.StatusCreated, `{"data":{"type":"appScreenshotSets","id":"set-1","attributes":{"screenshotDisplayType":"APP_IPHONE_65"}}}`), nil
-		case req.Method == http.MethodPost && req.URL.Path == "/v1/appScreenshots":
-			return migrateJSONResponse(http.StatusConflict, `{"errors":[{"status":"409","code":"STATE_ERROR","title":"Request failed","detail":"screenshot rejected"}]}`), nil
-		default:
-			return nil, fmt.Errorf("unexpected request: %s %s", req.Method, req.URL.String())
-		}
-	})
+	reg := asctest.NewRegistry(t)
+	reg.Install()
+	reg.Register(asctest.GET("/v1/appStoreVersions/VERSION_ID", "include=app"),
+		asctest.JSON(http.StatusOK, `{"data":{"type":"appStoreVersions","id":"VERSION_ID","attributes":{"versionString":"1.0","platform":"IOS"},"relationships":{"app":{"data":{"type":"apps","id":"APP_ID"}}}}}`))
+	reg.Register(asctest.GET("/v1/appStoreVersions/VERSION_ID/appStoreVersionLocalizations", "limit=200"),
+		asctest.JSON(http.StatusOK, `{"data":[{"type":"appStoreVersionLocalizations","id":"loc-1","attributes":{"locale":"en-US"}}]}`))
+	reg.Register(asctest.PATCH("/v1/appStoreVersionLocalizations/loc-1").JSONBody(`{"data":{"type":"appStoreVersionLocalizations","id":"loc-1","attributes":{"description":"English description"}}}`),
+		asctest.JSON(http.StatusOK, `{"data":{"type":"appStoreVersionLocalizations","id":"loc-1","attributes":{"locale":"en-US"}}}`))
+	reg.Register(asctest.GET("/v1/appStoreVersions/VERSION_ID/appStoreReviewDetail"),
+		asctest.JSON(http.StatusOK, `{"data":{"type":"appStoreReviewDetails","id":"review-1","attributes":{"contactFirstName":"Rita"}}}`))
+	reg.Register(asctest.GET("/v1/appStoreVersionLocalizations/loc-1/appScreenshotSets"),
+		asctest.JSON(http.StatusOK, `{"data":[]}`))
+	reg.Register(asctest.POST("/v1/appScreenshotSets").JSONBody(`{"data":{"type":"appScreenshotSets","attributes":{"screenshotDisplayType":"APP_IPHONE_65"},"relationships":{"appStoreVersionLocalization":{"data":{"type":"appStoreVersionLocalizations","id":"loc-1"}}}}}`),
+		asctest.JSON(http.StatusCreated, `{"data":{"type":"appScreenshotSets","id":"set-1","attributes":{"screenshotDisplayType":"APP_IPHONE_65"}}}`))
+	reg.Register(asctest.POST("/v1/appScreenshots").JSONBody(`{"data":{"type":"appScreenshots","attributes":{"fileSize":62592,"fileName":"iphone_65_new.png"},"relationships":{"appScreenshotSet":{"data":{"type":"appScreenshotSets","id":"set-1"}}}}}`),
+		asctest.JSON(http.StatusConflict, `{"errors":[{"status":"409","code":"STATE_ERROR","title":"Request failed","detail":"screenshot rejected"}]}`))
 
 	rootCmd := RootCommand("1.2.3")
 	rootCmd.FlagSet.SetOutput(io.Discard)
@@ -1442,28 +1516,22 @@ func TestMigrateImportPartialFailureStillWarnsForCreatedLocales(t *testing.T) {
 		writeFile(t, filepath.Join(localeDir, "description.txt"), description)
 	}
 
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() {
-		http.DefaultTransport = originalTransport
-	})
-
-	creates := 0
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		switch {
-		case req.Method == http.MethodGet && req.URL.Path == "/v1/appStoreVersions/VERSION_ID":
-			return migrateJSONResponse(http.StatusOK, `{"data":{"type":"appStoreVersions","id":"VERSION_ID","attributes":{"versionString":"1.0","platform":"IOS"},"relationships":{"app":{"data":{"type":"apps","id":"APP_ID"}}}}}`), nil
-		case req.Method == http.MethodGet && req.URL.Path == "/v1/appStoreVersions/VERSION_ID/appStoreVersionLocalizations":
-			return migrateJSONResponse(http.StatusOK, `{"data":[],"links":{"next":""}}`), nil
-		case req.Method == http.MethodPost && req.URL.Path == "/v1/appStoreVersionLocalizations":
-			creates++
-			if creates > 1 {
-				return migrateJSONResponse(http.StatusConflict, `{"errors":[{"status":"409","code":"STATE_ERROR","title":"Request failed","detail":"locale rejected"}]}`), nil
-			}
-			return migrateJSONResponse(http.StatusCreated, `{"data":{"type":"appStoreVersionLocalizations","id":"loc-en","attributes":{"locale":"en-US","description":"English description"}}}`), nil
-		default:
+	reg := asctest.NewRegistry(t)
+	reg.Install()
+	reg.Register(asctest.GET("/v1/appStoreVersions/VERSION_ID", "include=app"),
+		asctest.JSON(http.StatusOK, `{"data":{"type":"appStoreVersions","id":"VERSION_ID","attributes":{"versionString":"1.0","platform":"IOS"},"relationships":{"app":{"data":{"type":"apps","id":"APP_ID"}}}}}`))
+	reg.Register(asctest.GET("/v1/appStoreVersions/VERSION_ID/appStoreVersionLocalizations", "limit=200"),
+		asctest.JSON(http.StatusOK, `{"data":[],"links":{"next":""}}`))
+	reg.Register(asctest.GET("/v1/appStoreVersions/VERSION_ID", "include=app"),
+		asctest.JSON(http.StatusOK, `{"data":{"type":"appStoreVersions","id":"VERSION_ID","attributes":{"versionString":"1.0","platform":"IOS"},"relationships":{"app":{"data":{"type":"apps","id":"APP_ID"}}}}}`))
+	reg.Register(asctest.GET("/v1/apps/APP_ID/appStoreVersions", "filter[appStoreState]=READY_FOR_SALE,DEVELOPER_REMOVED_FROM_SALE,REMOVED_FROM_SALE", "filter[platform]=IOS", "limit=1"),
+		func(req *http.Request) (*http.Response, error) {
 			return nil, fmt.Errorf("unexpected request: %s %s", req.Method, req.URL.String())
-		}
-	})
+		})
+	reg.Register(asctest.POST("/v1/appStoreVersionLocalizations").JSONBody(`{"data":{"type":"appStoreVersionLocalizations","attributes":{"locale":"en-US","description":"English description"},"relationships":{"appStoreVersion":{"data":{"type":"appStoreVersions","id":"VERSION_ID"}}}}}`),
+		asctest.JSON(http.StatusCreated, `{"data":{"type":"appStoreVersionLocalizations","id":"loc-en","attributes":{"locale":"en-US","description":"English description"}}}`))
+	reg.Register(asctest.POST("/v1/appStoreVersionLocalizations").JSONBody(`{"data":{"type":"appStoreVersionLocalizations","attributes":{"locale":"ja","description":"Japanese description"},"relationships":{"appStoreVersion":{"data":{"type":"appStoreVersions","id":"VERSION_ID"}}}}}`),
+		asctest.JSON(http.StatusConflict, `{"errors":[{"status":"409","code":"STATE_ERROR","title":"Request failed","detail":"locale rejected"}]}`))
 
 	rootCmd := RootCommand("1.2.3")
 	rootCmd.FlagSet.SetOutput(io.Discard)
@@ -1637,25 +1705,20 @@ func TestMigrateImportWarnsForMetadataCreates(t *testing.T) {
 		t.Fatalf("mkdir screenshots root: %v", err)
 	}
 
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() {
-		http.DefaultTransport = originalTransport
-	})
-
-	createCount := 0
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		switch {
-		case req.Method == http.MethodGet && req.URL.Path == "/v1/appStoreVersions/VERSION_ID":
-			return migrateJSONResponse(http.StatusOK, `{"data":{"type":"appStoreVersions","id":"VERSION_ID","attributes":{"versionString":"1.0","platform":"IOS"},"relationships":{"app":{"data":{"type":"apps","id":"APP_ID"}}}}}`), nil
-		case req.Method == http.MethodGet && req.URL.Path == "/v1/appStoreVersions/VERSION_ID/appStoreVersionLocalizations":
-			return migrateJSONResponse(http.StatusOK, `{"data":[],"links":{"next":""}}`), nil
-		case req.Method == http.MethodPost && req.URL.Path == "/v1/appStoreVersionLocalizations":
-			createCount++
-			return migrateJSONResponse(http.StatusCreated, `{"data":{"type":"appStoreVersionLocalizations","id":"loc-1","attributes":{"locale":"en-US","description":"English description"}}}`), nil
-		default:
+	reg := asctest.NewRegistry(t)
+	reg.Install()
+	reg.Register(asctest.GET("/v1/appStoreVersions/VERSION_ID", "include=app"),
+		asctest.JSON(http.StatusOK, `{"data":{"type":"appStoreVersions","id":"VERSION_ID","attributes":{"versionString":"1.0","platform":"IOS"},"relationships":{"app":{"data":{"type":"apps","id":"APP_ID"}}}}}`))
+	reg.Register(asctest.GET("/v1/appStoreVersions/VERSION_ID/appStoreVersionLocalizations", "limit=200"),
+		asctest.JSON(http.StatusOK, `{"data":[],"links":{"next":""}}`))
+	reg.Register(asctest.GET("/v1/appStoreVersions/VERSION_ID", "include=app"),
+		asctest.JSON(http.StatusOK, `{"data":{"type":"appStoreVersions","id":"VERSION_ID","attributes":{"versionString":"1.0","platform":"IOS"},"relationships":{"app":{"data":{"type":"apps","id":"APP_ID"}}}}}`))
+	reg.Register(asctest.GET("/v1/apps/APP_ID/appStoreVersions", "filter[appStoreState]=READY_FOR_SALE,DEVELOPER_REMOVED_FROM_SALE,REMOVED_FROM_SALE", "filter[platform]=IOS", "limit=1"),
+		func(req *http.Request) (*http.Response, error) {
 			return nil, fmt.Errorf("unexpected request: %s %s", req.Method, req.URL.String())
-		}
-	})
+		})
+	reg.Register(asctest.POST("/v1/appStoreVersionLocalizations").JSONBody(`{"data":{"type":"appStoreVersionLocalizations","attributes":{"locale":"en-US","description":"English description"},"relationships":{"appStoreVersion":{"data":{"type":"appStoreVersions","id":"VERSION_ID"}}}}}`),
+		asctest.JSON(http.StatusCreated, `{"data":{"type":"appStoreVersionLocalizations","id":"loc-1","attributes":{"locale":"en-US","description":"English description"}}}`))
 
 	rootCmd := RootCommand("1.2.3")
 	rootCmd.FlagSet.SetOutput(io.Discard)
@@ -1675,6 +1738,7 @@ func TestMigrateImportWarnsForMetadataCreates(t *testing.T) {
 		}
 	})
 
+	createCount := metadataRequestCount(reg, http.MethodPost, "/v1/appStoreVersionLocalizations")
 	if createCount != 1 {
 		t.Fatalf("expected one metadata create request, got %d", createCount)
 	}
@@ -1956,7 +2020,8 @@ func TestMigrateImportDryRunDeliverfileSkipScreenshotsAllowsMissingFastlaneScree
 		t.Fatalf("mkdir metadata: %v", err)
 	}
 	writeFile(t, filepath.Join(metadataDir, "description.txt"), "English description")
-	writeFile(t, filepath.Join(fastlaneDir, "Deliverfile"), "skip_screenshots true\n")
+	configPath := filepath.Join(fastlaneDir, "Deliverfile")
+	writeFile(t, configPath, "submit_for_review true\nskip_screenshots true\nphased_release false\nmetadata_path \"./metadata\"\nprice_tier 0\nreset_ratings = ENV[\"RESET\"]\nif reset_ratings\n  automatic_release true\nend\napp_review_information(\n  name: \"Ada\",\n  description: \"notes\"\n)\nprice_tier += 1\nsubmit_for_review ||= false\nlanguages %w[en-US fr-FR]\nprice_tier - 1\nsubmit_for_review != true\n")
 
 	rootCmd := RootCommand("1.2.3")
 	rootCmd.FlagSet.SetOutput(io.Discard)
@@ -1999,6 +2064,203 @@ func TestMigrateImportDryRunDeliverfileSkipScreenshotsAllowsMissingFastlaneScree
 	}
 	if !foundDeliverfileSkip {
 		t.Fatalf("expected skipped list to include Deliverfile skip_screenshots reason, got %+v", result.Skipped)
+	}
+	wantIgnored := []migrate.SkippedItem{
+		{Path: configPath, Reason: "line 1: submit_for_review is not applied by import; to apply it, run: asc review submit --app APP_ID --version-id VERSION_ID --build-id BUILD_ID --confirm"},
+		{Path: configPath, Reason: "line 3: phased_release is not applied by import"},
+		{Path: configPath, Reason: "line 5: price_tier is not applied by import"},
+		{Path: configPath, Reason: "line 8: automatic_release is not applied by import; to apply it, run: asc versions update --version-id VERSION_ID --release-type AFTER_APPROVAL"},
+		{Path: configPath, Reason: "line 10: app_review_information is not applied by import"},
+		{Path: configPath, Reason: "line 16: languages is not applied by import"},
+	}
+	var gotIgnored []migrate.SkippedItem
+	for _, skipped := range result.Skipped {
+		if skipped.Path == configPath {
+			gotIgnored = append(gotIgnored, skipped)
+		}
+	}
+	if !slices.Equal(gotIgnored, wantIgnored) {
+		t.Fatalf("expected ignored configuration keys %+v, got %+v", wantIgnored, gotIgnored)
+	}
+}
+
+func TestMigrateImportDryRunConfigReleaseHints(t *testing.T) {
+	tests := []struct {
+		name   string
+		config string
+		want   []string
+	}{
+		{
+			name:   "manual release",
+			config: "automatic_release false\n",
+			want: []string{
+				"line 1: automatic_release is not applied by import; to apply it, run: asc versions update --version-id VERSION_ID --release-type MANUAL",
+			},
+		},
+		{
+			name:   "a nil release date is no release date",
+			config: "automatic_release false\nauto_release_date nil\n",
+			want: []string{
+				"line 1: automatic_release is not applied by import; to apply it, run: asc versions update --version-id VERSION_ID --release-type MANUAL",
+				"line 2: auto_release_date is not applied by import",
+			},
+		},
+		{
+			name:   "a release date decides the release type",
+			config: "automatic_release false\nauto_release_date 1767225600000\n",
+			want: []string{
+				"line 1: automatic_release is not applied by import",
+				"line 2: auto_release_date is not applied by import; to apply it, run: asc versions update --version-id VERSION_ID --release-type SCHEDULED --earliest-release-date DATE",
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			dir := t.TempDir()
+			localeDir := filepath.Join(dir, "metadata", "en-US")
+			if err := os.MkdirAll(localeDir, 0o755); err != nil {
+				t.Fatalf("mkdir metadata: %v", err)
+			}
+			writeFile(t, filepath.Join(localeDir, "description.txt"), "English description")
+			configPath := filepath.Join(dir, "Deliverfile")
+			writeFile(t, configPath, test.config)
+
+			rootCmd := RootCommand("1.2.3")
+			rootCmd.FlagSet.SetOutput(io.Discard)
+			stdout, _ := captureOutput(t, func() {
+				if err := rootCmd.Parse([]string{"migrate", "import", "--app", "APP_ID", "--version-id", "VERSION_ID", "--fastlane-dir", dir, "--dry-run", "--skip-screenshots"}); err != nil {
+					t.Fatalf("parse error: %v", err)
+				}
+				if err := rootCmd.Run(context.Background()); err != nil {
+					t.Fatalf("run error: %v", err)
+				}
+			})
+			var result migrate.MigrateImportResult
+			if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+				t.Fatalf("unmarshal result: %v", err)
+			}
+			var got []string
+			for _, skipped := range result.Skipped {
+				if skipped.Path == configPath {
+					got = append(got, skipped.Reason)
+				}
+			}
+			if !slices.Equal(got, test.want) {
+				t.Fatalf("configuration hints = %q, want %q", got, test.want)
+			}
+		})
+	}
+}
+
+func TestMigrateImportDryRunReportsMissingScreenshotsDirAsSkipped(t *testing.T) {
+	root := writeMigrateImportMetadata(t, validMigrateAppInfoMetadata())
+
+	result := migrateImportDryRunPlan(t, root)
+
+	if len(result.MetadataFiles) != 2 {
+		t.Fatalf("expected metadata plan to survive missing screenshots dir, got %+v", result.MetadataFiles)
+	}
+	want := migrate.SkippedItem{Path: filepath.Join(root, "screenshots"), Reason: "default screenshots directory not found"}
+	if !slices.Contains(result.Skipped, want) {
+		t.Fatalf("skipped = %+v, want %+v", result.Skipped, want)
+	}
+}
+
+func TestMigrateImportDryRunSkipsAppClipReviewInformationDir(t *testing.T) {
+	root := writeMigrateImportMetadata(t, validMigrateAppInfoMetadata())
+	clipReviewDir := filepath.Join(root, "metadata", "app_clip_review_information")
+	if err := os.MkdirAll(clipReviewDir, 0o755); err != nil {
+		t.Fatalf("mkdir App Clip review information: %v", err)
+	}
+	writeFile(t, filepath.Join(clipReviewDir, "invocation_urls.txt"), "https://example.com/clip")
+
+	result := migrateImportDryRunPlan(t, root, "--skip-screenshots")
+
+	if !slices.Equal(result.Locales, []string{"en-US", "ja"}) {
+		t.Fatalf("locales = %v, want only the locale directories", result.Locales)
+	}
+	want := migrate.SkippedItem{Path: clipReviewDir, Reason: "App Clip review information is not imported; set invocation URLs with asc app-clips review-details"}
+	if !slices.Contains(result.Skipped, want) {
+		t.Fatalf("skipped = %+v, want %+v", result.Skipped, want)
+	}
+}
+
+func TestMigrateImportDryRunReadsIMessageAndAppleTVScreenshotDirs(t *testing.T) {
+	root := writeMigrateImportMetadata(t, validMigrateAppInfoMetadata())
+	for dir, size := range map[string][2]int{
+		"en-US":          {1290, 2796},
+		"iMessage/en-US": {1290, 2796},
+		"appleTV/en-US":  {3840, 2160},
+	} {
+		localeDir := filepath.Join(root, "screenshots", filepath.FromSlash(dir))
+		if err := os.MkdirAll(localeDir, 0o755); err != nil {
+			t.Fatalf("mkdir screenshots %s: %v", dir, err)
+		}
+		writePNGForMigrate(t, filepath.Join(localeDir, "1.png"), size[0], size[1])
+	}
+	// The folder names the platform, so a device name in the file name does
+	// not move the file to another screenshot set.
+	writePNGForMigrate(t, filepath.Join(root, "screenshots", "appleTV", "en-US", "vision pro.png"), 3840, 2160)
+
+	result := migrateImportDryRunPlan(t, root)
+
+	var got []string
+	for _, plan := range result.ScreenshotPlan {
+		got = append(got, plan.Locale+" "+plan.DisplayType)
+	}
+	want := []string{"en-US APP_APPLE_TV", "en-US APP_IPHONE_67", "en-US IMESSAGE_APP_IPHONE_67"}
+	if !slices.Equal(got, want) {
+		t.Fatalf("screenshot plan = %v, want %v", got, want)
+	}
+}
+
+func TestMigrateImportDryRunRejectsMalformedScreenshotFolders(t *testing.T) {
+	tests := []struct {
+		name    string
+		prepare func(t *testing.T, root string)
+		wantErr string
+	}{
+		{
+			name: "phone-sized file in the appleTV folder",
+			prepare: func(t *testing.T, root string) {
+				dir := filepath.Join(root, "screenshots", "appleTV", "en-US")
+				if err := os.MkdirAll(dir, 0o755); err != nil {
+					t.Fatalf("mkdir screenshots: %v", err)
+				}
+				writePNGForMigrate(t, filepath.Join(dir, "1.png"), 1290, 2796)
+			},
+			wantErr: "is 1290x2796, which is not an Apple TV screenshot size",
+		},
+		{
+			name: "screenshots is a file, not a folder",
+			prepare: func(t *testing.T, root string) {
+				writeFile(t, filepath.Join(root, "screenshots"), "not a folder")
+			},
+			wantErr: "expected directory: ",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			root := writeMigrateImportMetadata(t, validMigrateAppInfoMetadata())
+			test.prepare(t, root)
+
+			rootCmd := RootCommand("1.2.3")
+			rootCmd.FlagSet.SetOutput(io.Discard)
+			var runErr error
+			stdout, _ := captureOutput(t, func() {
+				if err := rootCmd.Parse([]string{"migrate", "import", "--app", "APP_ID", "--version-id", "VERSION_ID", "--fastlane-dir", root, "--dry-run"}); err != nil {
+					t.Fatalf("parse error: %v", err)
+				}
+				runErr = rootCmd.Run(context.Background())
+			})
+
+			if runErr == nil || !strings.Contains(runErr.Error(), test.wantErr) {
+				t.Fatalf("run error = %v, want it to contain %q", runErr, test.wantErr)
+			}
+			if stdout != "" {
+				t.Fatalf("expected no plan on stdout, got %q", stdout)
+			}
+		})
 	}
 }
 

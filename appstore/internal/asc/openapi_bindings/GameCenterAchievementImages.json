@@ -1,0 +1,34 @@
+{
+  "tag": "GameCenterAchievementImages",
+  "file": "game_center_achievement_images_gen.go",
+  "types": [
+    "GameCenterAchievementImageCreateData",
+    "GameCenterAchievementImageCreateRequest",
+    "GameCenterAchievementImageRelationships",
+    "GameCenterAchievementImageResponse",
+    "GameCenterAchievementImageUpdateAttributes",
+    "GameCenterAchievementImageUpdateData",
+    "GameCenterAchievementImageUpdateRequest",
+    "GameCenterAchievementImageV2CreateRequest",
+    "GameCenterAchievementImageV2Relationships"
+  ],
+  "relationships": [
+    {"data":"GameCenterAchievementImageCreateData","type":"*GameCenterAchievementImageRelationships"},
+    {"data":"GameCenterAchievementImageV2CreateData","type":"*GameCenterAchievementImageV2Relationships"}
+  ],
+  "operations": [
+    {"operation":"gameCenterAchievementImagesV2_deleteInstance","name":"DeleteGameCenterAchievementImageV2","params":["imageID"]},
+    {"operation":"gameCenterAchievementImagesV2_getInstance","name":"GetGameCenterAchievementImageV2","params":["imageID"],"response":"GameCenterAchievementImageResponse"},
+    {"operation":"gameCenterAchievementImagesV2_updateInstance","name":"UpdateGameCenterAchievementImageV2","params":["imageID"],"response":"GameCenterAchievementImageResponse","args":[{"name":"uploaded"}]},
+    {"operation":"gameCenterAchievementImages_createInstance","name":"CreateGameCenterAchievementImage","params":["localizationID"],"links":["gameCenterAchievementLocalization"],"args":[{"name":"fileName"},{"name":"fileSize","type":"int64"}]},
+    {"operation":"gameCenterAchievementImages_deleteInstance","name":"DeleteGameCenterAchievementImage","params":["imageID"]},
+    {"operation":"gameCenterAchievementImages_getInstance","name":"GetGameCenterAchievementImage","params":["imageID"]},
+    {"operation":"gameCenterAchievementImages_updateInstance","name":"UpdateGameCenterAchievementImage","params":["imageID"],"args":[{"name":"uploaded"}]}
+  ],
+  "goTypes": [
+    {"schema":"GameCenterAchievementImageV2Attributes","type":"GameCenterAchievementImageAttributes"},
+    {"schema":"GameCenterAchievementImageV2UpdateAttributes","type":"GameCenterAchievementImageUpdateAttributes"},
+    {"schema":"GameCenterAchievementImageV2UpdateData","type":"GameCenterAchievementImageUpdateData"},
+    {"schema":"GameCenterAchievementImageV2UpdateRequest","type":"GameCenterAchievementImageUpdateRequest"}
+  ]
+}

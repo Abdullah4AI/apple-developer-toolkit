@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	rootcmd "github.com/Abdullah4AI/apple-developer-toolkit/appstore/cmd"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asctest"
 )
 
 func TestSubscriptionsAvailabilityAvailableTerritoriesResolvesSubscriptionSelector(t *testing.T) {
@@ -139,12 +140,8 @@ func TestSubscriptionsAvailabilityAvailableTerritoriesRequiresAppBeforeAuth(t *t
 	t.Setenv("ASC_STRICT_AUTH", "")
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() { http.DefaultTransport = originalTransport })
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		t.Fatalf("unexpected request: %s %s", req.Method, req.URL.String())
-		return nil, nil
-	})
+	reg := asctest.NewRegistry(t)
+	reg.Install()
 
 	for _, selector := range []string{"com.example.monthly", "Monthly"} {
 		_, _, runErr := runRootCommand(t, []string{

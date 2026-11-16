@@ -20,20 +20,14 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/urlsanitize"
 )
 
-// dsymHTTPClient is the HTTP client used for dSYM downloads.
-// No client-level timeout — the request context (from ContextWithDownloadTimeout /
-// ASC_UPLOAD_TIMEOUT) controls cancellation so the CLI timeout contract is honored.
-// Tests can replace this via SetDSYMHTTPClient.
-var dsymHTTPClient = &http.Client{}
-
 type dsymBundleInfo struct {
 	BundleID string
 	DSYMURL  *string
 }
 
-// BuildsDsymsCommand returns the builds dsyms subcommand.
-func BuildsDsymsCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("dsyms", flag.ExitOnError)
+// newBuildsDsymsCommand returns the builds dsyms subcommand.
+func newBuildsDsymsCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("dsyms", flag.ExitOnError)
 
 	buildID := shared.BindResourceIDFlag(fs, "build-id", "builds", "Build ID")
 	appID := fs.String("app", "", "App ID, bundle ID, or app name (or ASC_APP_ID)")
@@ -50,7 +44,7 @@ func BuildsDsymsCommand() *ffcli.Command {
 	timeout := fs.Duration("timeout", dsymDefaultWaitTimeout, "Maximum time to wait for dSYM URLs")
 	pollInterval := fs.Duration("poll-interval", dsymDefaultPollInterval, "Polling interval for --wait")
 	outputDir := fs.String("output-dir", ".", "Output directory for dSYM files")
-	output := shared.BindOutputFlags(fs)
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "dsyms",
@@ -91,7 +85,7 @@ Examples:
   asc builds dsyms --app "com.example.app" --build-number "42" --platform IOS
   asc builds dsyms --app "com.example.app" --build-number "42" --platform IOS --version "1.2.3" --output-dir "./dsyms"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			timeoutSet := false
 			pollSet := false
@@ -103,7 +97,7 @@ Examples:
 					pollSet = true
 				}
 			})
-			selection, err := parseDSYMSelection(dsymFlagInput{
+			selection, err := parseDSYMSelection(d, dsymFlagInput{
 				BuildID:        *buildID,
 				AppID:          *appID,
 				Version:        *version,
@@ -129,12 +123,12 @@ Examples:
 				dirValue = "."
 			}
 
-			client, err := shared.GetASCClient()
+			client, err := d.Client()
 			if err != nil {
 				return fmt.Errorf("builds dsyms: %w", err)
 			}
 
-			return downloadDSYMSelection(ctx, client, selection, dirValue, *output.Output, *output.Pretty)
+			return downloadDSYMSelection(ctx, d, client, selection, dirValue, *output.Output, *output.Pretty)
 		},
 	}
 }
@@ -150,7 +144,7 @@ func (e *dsymNotReadyError) Error() string {
 	return fmt.Sprintf("builds dsyms: dsym_not_ready: timed out waiting for a dSYM URL for build %s", e.BuildID)
 }
 
-func downloadDSYMSelection(ctx context.Context, client *asc.Client, selection dsymSelection, dirValue, outputFormat string, pretty bool) error {
+func downloadDSYMSelection(ctx context.Context, d *shared.Deps, client *asc.Client, selection dsymSelection, dirValue, outputFormat string, pretty bool) error {
 	runCtx := ctx
 	if selection.Wait {
 		var cancel context.CancelFunc
@@ -159,7 +153,7 @@ func downloadDSYMSelection(ctx context.Context, client *asc.Client, selection ds
 	}
 
 	// resolveDSYMTargets already names the command in every error it returns.
-	targets, err := resolveDSYMTargets(runCtx, client, selection)
+	targets, err := resolveDSYMTargets(runCtx, d, client, selection)
 	if err != nil {
 		return err
 	}
@@ -168,13 +162,13 @@ func downloadDSYMSelection(ctx context.Context, client *asc.Client, selection ds
 	var downloadErr error
 	status := ""
 	for _, target := range targets {
-		fmt.Fprintf(os.Stderr, "Resolved build %s", target.ID)
+		fmt.Fprintf(d.IO.ErrOut, "Resolved build %s", target.ID)
 		if target.BuildNumber != "" {
-			fmt.Fprintf(os.Stderr, " (build %s)", target.BuildNumber)
+			fmt.Fprintf(d.IO.ErrOut, " (build %s)", target.BuildNumber)
 		}
-		fmt.Fprintln(os.Stderr)
+		fmt.Fprintln(d.IO.ErrOut)
 
-		bundles, err := fetchDSYMBundles(runCtx, client, target.ID, selection)
+		bundles, err := fetchDSYMBundles(runCtx, d, client, target.ID, selection)
 		if err != nil {
 			downloadErr = err
 			if errors.As(err, new(*dsymNotReadyError)) || strings.Contains(err.Error(), dsymNotReadyStatus) {
@@ -185,16 +179,16 @@ func downloadDSYMSelection(ctx context.Context, client *asc.Client, selection ds
 		downloadable := filterBundlesWithDSYM(bundles)
 		if len(downloadable) == 0 {
 			if len(targets) == 1 {
-				fmt.Fprintln(os.Stderr, "No dSYM files available for this build")
+				fmt.Fprintln(d.IO.ErrOut, "No dSYM files available for this build")
 			} else {
-				fmt.Fprintf(os.Stderr, "No dSYM files available for build %s\n", target.ID)
+				fmt.Fprintf(d.IO.ErrOut, "No dSYM files available for build %s\n", target.ID)
 			}
 			continue
 		}
-		if err := os.MkdirAll(dirValue, 0o755); err != nil {
+		if err := os.MkdirAll(d.OSPath(dirValue), 0o755); err != nil {
 			return fmt.Errorf("builds dsyms: failed to create output directory: %w", err)
 		}
-		saved, err := saveDSYMBundles(ctx, downloadable, target, dirValue, selection.Multi)
+		saved, err := saveDSYMBundles(ctx, d, downloadable, target, dirValue, selection.Multi)
 		files = append(files, saved...)
 		if err != nil {
 			downloadErr = err
@@ -203,12 +197,12 @@ func downloadDSYMSelection(ctx context.Context, client *asc.Client, selection ds
 	}
 
 	result := dsymResult(targets, files, dirValue, status)
-	printErr := shared.PrintOutputWithRenderers(
+	printErr := d.PrintOutputWithRenderers(
 		result,
 		outputFormat,
 		pretty,
-		func() error { return printDSYMResultTable(result) },
-		func() error { return printDSYMResultMarkdown(result) },
+		func() error { return printDSYMResultTable(d, result) },
+		func() error { return printDSYMResultMarkdown(d, result) },
 	)
 	if downloadErr != nil {
 		if printErr != nil {
@@ -236,9 +230,9 @@ func dsymResult(targets []dsymTarget, files []asc.DSYMDownloadFile, dirValue, st
 	return result
 }
 
-func fetchDSYMBundles(ctx context.Context, client *asc.Client, buildID string, selection dsymSelection) ([]dsymBundleInfo, error) {
+func fetchDSYMBundles(ctx context.Context, d *shared.Deps, client *asc.Client, buildID string, selection dsymSelection) ([]dsymBundleInfo, error) {
 	load := func(ctx context.Context) ([]dsymBundleInfo, bool, error) {
-		requestCtx, cancel := shared.ContextWithTimeout(ctx)
+		requestCtx, cancel := d.Timeout(ctx)
 		defer cancel()
 		bundles, err := loadDSYMBundles(requestCtx, client, buildID)
 		if err != nil {
@@ -256,7 +250,7 @@ func fetchDSYMBundles(ctx context.Context, client *asc.Client, buildID string, s
 		}
 		return bundles, nil
 	}
-	fmt.Fprintf(os.Stderr, "Waiting for dSYM files for build %s\n", buildID)
+	fmt.Fprintf(d.IO.ErrOut, "Waiting for dSYM files for build %s\n", buildID)
 	bundles, err := asc.PollUntil(ctx, selection.Poll, load)
 	if err != nil {
 		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
@@ -288,7 +282,7 @@ func loadDSYMBundles(ctx context.Context, client *asc.Client, buildID string) ([
 	return bundles, nil
 }
 
-func saveDSYMBundles(ctx context.Context, bundles []dsymBundleInfo, target dsymTarget, dirValue string, multi bool) ([]asc.DSYMDownloadFile, error) {
+func saveDSYMBundles(ctx context.Context, d *shared.Deps, bundles []dsymBundleInfo, target dsymTarget, dirValue string, multi bool) ([]asc.DSYMDownloadFile, error) {
 	downloadable := filterBundlesWithDSYM(bundles)
 	files := make([]asc.DSYMDownloadFile, 0, len(downloadable))
 	used := map[string]struct{}{}
@@ -302,15 +296,15 @@ func saveDSYMBundles(ctx context.Context, bundles []dsymBundleInfo, target dsymT
 		}
 		fileName = uniqueDSYMFileName(fileName, target.ID, used)
 		filePath := filepath.Join(dirValue, fileName)
-		size, sum, skipped, err := saveOneDSYM(ctx, *bundle.DSYMURL, filePath)
+		size, sum, skipped, err := saveOneDSYM(ctx, d, *bundle.DSYMURL, filePath)
 		if err != nil {
 			return files, fmt.Errorf("builds dsyms: failed to download %s: %w", fileName, err)
 		}
 		if skipped {
-			fmt.Fprintf(os.Stderr, "Skipping existing %s (%d bytes)\n", filePath, size)
+			fmt.Fprintf(d.IO.ErrOut, "Skipping existing %s (%d bytes)\n", filePath, size)
 		} else {
-			fmt.Fprintf(os.Stderr, "Downloading dSYM for %s...\n", displayBundleID(bundle.BundleID, i))
-			fmt.Fprintf(os.Stderr, "  Saved %s (%d bytes)\n", filePath, size)
+			fmt.Fprintf(d.IO.ErrOut, "Downloading dSYM for %s...\n", displayBundleID(bundle.BundleID, i))
+			fmt.Fprintf(d.IO.ErrOut, "  Saved %s (%d bytes)\n", filePath, size)
 		}
 		files = append(files, asc.DSYMDownloadFile{
 			BuildID:     target.ID,
@@ -347,15 +341,15 @@ func uniqueDSYMFileName(name, buildID string, used map[string]struct{}) string {
 	}
 }
 
-func saveOneDSYM(ctx context.Context, rawURL, destPath string) (int64, string, bool, error) {
-	size, sum, exists, err := hashRegularFile(destPath)
+func saveOneDSYM(ctx context.Context, d *shared.Deps, rawURL, destPath string) (int64, string, bool, error) {
+	size, sum, exists, err := hashRegularFile(d.OSPath(destPath))
 	if err != nil {
 		return 0, "", false, err
 	}
-	downloadCtx, cancel := shared.ContextWithDownloadTimeout(ctx)
+	downloadCtx, cancel := d.DownloadTimeout(ctx)
 	defer cancel()
 	if exists {
-		length, remoteSum, err := hashRemoteDSYM(downloadCtx, rawURL)
+		length, remoteSum, err := hashRemoteDSYM(downloadCtx, d.HTTPTransport(), rawURL)
 		if err != nil {
 			return 0, "", false, err
 		}
@@ -364,29 +358,23 @@ func saveOneDSYM(ctx context.Context, rawURL, destPath string) (int64, string, b
 		}
 		return 0, "", false, fmt.Errorf("output file already exists with different content")
 	}
-	written, err := downloadDSYM(downloadCtx, rawURL, destPath)
+	written, err := downloadDSYM(downloadCtx, d, rawURL, destPath)
 	if err != nil {
 		return 0, "", false, err
 	}
-	_, sum, _, err = hashRegularFile(destPath)
+	_, sum, _, err = hashRegularFile(d.OSPath(destPath))
 	if err != nil {
 		return written, "", false, err
 	}
 	return written, sum, false, nil
 }
 
-func hashRemoteDSYM(ctx context.Context, rawURL string) (int64, string, error) {
+func hashRemoteDSYM(ctx context.Context, transport http.RoundTripper, rawURL string) (int64, string, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
 		return 0, "", urlsanitize.NewTransportError("create dSYM content request", urlsanitize.RedactURLHostForError(rawURL), err)
 	}
-	client := dsymHTTPClient
-	if client == nil {
-		client = &http.Client{}
-	}
-	safeClient := *client
-	safeClient.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
-	resp, err := safeClient.Do(req)
+	resp, err := dsymHTTPClient(transport).Do(req)
 	if err != nil {
 		return 0, "", urlsanitize.NewTransportError("dSYM content request", urlsanitize.RedactURLHostForError(rawURL), err)
 	}
@@ -437,7 +425,7 @@ func displayBundleID(bundleID string, index int) string {
 	return fmt.Sprintf("bundle %d", index)
 }
 
-func downloadDSYM(ctx context.Context, rawURL, destPath string) (int64, error) {
+func downloadDSYM(ctx context.Context, d *shared.Deps, rawURL, destPath string) (int64, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
 		return 0, urlsanitize.NewTransportError(
@@ -447,15 +435,7 @@ func downloadDSYM(ctx context.Context, rawURL, destPath string) (int64, error) {
 		)
 	}
 
-	client := dsymHTTPClient
-	if client == nil {
-		client = &http.Client{}
-	}
-	safeClient := *client
-	safeClient.CheckRedirect = func(*http.Request, []*http.Request) error {
-		return http.ErrUseLastResponse
-	}
-	resp, err := safeClient.Do(req)
+	resp, err := dsymHTTPClient(d.HTTPTransport()).Do(req)
 	if err != nil {
 		return 0, urlsanitize.NewTransportError(
 			"dSYM download request",
@@ -469,55 +449,60 @@ func downloadDSYM(ctx context.Context, rawURL, destPath string) (int64, error) {
 		return 0, fmt.Errorf("download returned HTTP %d", resp.StatusCode)
 	}
 
-	return shared.WriteStreamToFile(destPath, resp.Body)
+	return d.WriteStreamToFile(destPath, resp.Body)
 }
 
-// SetDSYMHTTPClient replaces the HTTP client for tests.
-func SetDSYMHTTPClient(c *http.Client) func() {
-	prev := dsymHTTPClient
-	dsymHTTPClient = c
-	return func() { dsymHTTPClient = prev }
+// dsymHTTPClient returns the client for dSYM downloads. It has no timeout of
+// its own: the download context (ContextWithDownloadTimeout, ASC_UPLOAD_TIMEOUT)
+// bounds each request. It does not follow redirects.
+func dsymHTTPClient(transport http.RoundTripper) *http.Client {
+	return &http.Client{
+		Transport: transport,
+		CheckRedirect: func(*http.Request, []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
 }
 
-func printDSYMResultTable(result asc.DSYMDownloadResult) error {
-	fmt.Printf("Build ID: %s\n", result.BuildID)
+func printDSYMResultTable(d *shared.Deps, result asc.DSYMDownloadResult) error {
+	fmt.Fprintf(d.IO.Out, "Build ID: %s\n", result.BuildID)
 	if result.Version != "" {
-		fmt.Printf("Version: %s (%s)\n", result.Version, result.BuildNumber)
+		fmt.Fprintf(d.IO.Out, "Version: %s (%s)\n", result.Version, result.BuildNumber)
 	}
-	fmt.Printf("Dir: %s\n", result.Dir)
+	fmt.Fprintf(d.IO.Out, "Dir: %s\n", result.Dir)
 	if result.Status != "" {
-		fmt.Printf("Status: %s\n", result.Status)
+		fmt.Fprintf(d.IO.Out, "Status: %s\n", result.Status)
 	}
-	fmt.Printf("Files: %d\n\n", len(result.Files))
+	fmt.Fprintf(d.IO.Out, "Files: %d\n\n", len(result.Files))
 
 	if len(result.Files) == 0 {
-		asc.RenderTable([]string{"status"}, [][]string{{dsymTableStatus(result)}})
+		asc.RenderTableTo(d.IO.Out, []string{"status"}, [][]string{{dsymTableStatus(result)}})
 		return nil
 	}
 
 	headers, rows := dsymFileRows(result)
-	asc.RenderTable(headers, rows)
+	asc.RenderTableTo(d.IO.Out, headers, rows)
 	return nil
 }
 
-func printDSYMResultMarkdown(result asc.DSYMDownloadResult) error {
-	fmt.Printf("**Build ID:** %s\n\n", result.BuildID)
+func printDSYMResultMarkdown(d *shared.Deps, result asc.DSYMDownloadResult) error {
+	fmt.Fprintf(d.IO.Out, "**Build ID:** %s\n\n", result.BuildID)
 	if result.Version != "" {
-		fmt.Printf("**Version:** %s (%s)\n\n", result.Version, result.BuildNumber)
+		fmt.Fprintf(d.IO.Out, "**Version:** %s (%s)\n\n", result.Version, result.BuildNumber)
 	}
-	fmt.Printf("**Dir:** %s\n\n", result.Dir)
+	fmt.Fprintf(d.IO.Out, "**Dir:** %s\n\n", result.Dir)
 	if result.Status != "" {
-		fmt.Printf("**Status:** %s\n\n", result.Status)
+		fmt.Fprintf(d.IO.Out, "**Status:** %s\n\n", result.Status)
 	}
-	fmt.Printf("**Files:** %d\n\n", len(result.Files))
+	fmt.Fprintf(d.IO.Out, "**Files:** %d\n\n", len(result.Files))
 
 	if len(result.Files) == 0 {
-		asc.RenderMarkdown([]string{"status"}, [][]string{{dsymTableStatus(result)}})
+		asc.RenderMarkdownTo(d.IO.Out, []string{"status"}, [][]string{{dsymTableStatus(result)}})
 		return nil
 	}
 
 	headers, rows := dsymFileRows(result)
-	asc.RenderMarkdown(headers, rows)
+	asc.RenderMarkdownTo(d.IO.Out, headers, rows)
 	return nil
 }
 

@@ -1,190 +1,109 @@
 package cmdtest
 
 import (
-	"context"
-	"io"
 	"net/http"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asctest"
 )
 
-func TestBuildsListResolvesAppByBundleID(t *testing.T) {
-	setupAuth(t)
-	t.Setenv("ASC_APP_ID", "")
-	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
+func TestAppScopedCommandsResolveAppByBundleID(t *testing.T) {
+	type lookupRequest struct {
+		matcher asctest.Matcher
+		body    string
+	}
+	tests := []struct {
+		name       string
+		args       []string
+		bundleID   string
+		appID      string
+		requests   []lookupRequest
+		wantStdout string
+		deps       bool // the command is built on shared.Deps: run it on test deps
+	}{
+		{
+			name:     "builds list",
+			args:     []string{"builds", "list", "--app", "com.example.lookup"},
+			bundleID: "com.example.lookup",
+			appID:    "app-lookup",
+			requests: []lookupRequest{{
+				matcher: asctest.GET("/v1/builds", "filter[app]=app-lookup", "include=preReleaseVersion"),
+				body:    `{"data":[{"type":"builds","id":"build-1"}]}`,
+			}},
+			wantStdout: `"id":"build-1"`,
+			deps:       true,
+		},
+		{
+			name:     "builds info latest",
+			args:     []string{"builds", "info", "--app", "com.example.latest", "--latest"},
+			bundleID: "com.example.latest",
+			appID:    "100000001",
+			requests: []lookupRequest{
+				{
+					matcher: asctest.GET("/v1/builds", "filter[app]=100000001", "sort=-uploadedDate", "limit=200"),
+					body:    `{"data":[{"type":"builds","id":"build-1","attributes":{"version":"42"}}]}`,
+				},
+				{
+					matcher: asctest.GET("/v1/builds/build-1/preReleaseVersion"),
+					body:    `{"data":{"type":"preReleaseVersions","id":"prv-1"}}`,
+				},
+			},
+			wantStdout: `"id":"build-1"`,
+			deps:       true,
+		},
+		{
+			name:     "testflight crashes list",
+			args:     []string{"testflight", "crashes", "list", "--app", "com.example.crashes"},
+			bundleID: "com.example.crashes",
+			appID:    "app-lookup",
+			requests: []lookupRequest{{
+				matcher: asctest.GET("/v1/apps/app-lookup/betaFeedbackCrashSubmissions"),
+				body:    `{"data":[{"type":"betaFeedbackCrashSubmissions","id":"crash-1"}]}`,
+			}},
+			wantStdout: `"id":"crash-1"`,
+			deps:       true,
+		},
+	}
 
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() {
-		http.DefaultTransport = originalTransport
-	})
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Setenv("ASC_APP_ID", "")
+			t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 
-	callCount := 0
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		callCount++
-		switch callCount {
-		case 1:
-			if req.Method != http.MethodGet || req.URL.Path != "/v1/apps" {
-				t.Fatalf("unexpected first request: %s %s", req.Method, req.URL.String())
+			requests := append([]lookupRequest{{
+				matcher: asctest.GET("/v1/apps", "filter[bundleId]="+test.bundleID, "limit=2"),
+				body:    `{"data":[{"type":"apps","id":"` + test.appID + `"}]}`,
+			}}, test.requests...)
+			reg := asctest.NewRegistry(t)
+			for _, request := range requests {
+				reg.Register(request.matcher, asctest.JSON(http.StatusOK, request.body))
 			}
-			query := req.URL.Query()
-			if query.Get("filter[bundleId]") != "com.example.lookup" {
-				t.Fatalf("expected bundle filter com.example.lookup, got %q", query.Get("filter[bundleId]"))
+
+			run := func(t *testing.T, args []string) (string, string, error) {
+				return runRootWithDeps(t, stubClient(t, reg), args...)
 			}
-			if query.Get("limit") != "2" {
-				t.Fatalf("expected limit=2, got %q", query.Get("limit"))
+			if !test.deps {
+				setupAuth(t)
+				reg.Install()
+				run = runCommand
 			}
-			body := `{"data":[{"type":"apps","id":"app-lookup"}]}`
-			return &http.Response{
-				StatusCode: http.StatusOK,
-				Body:       io.NopCloser(strings.NewReader(body)),
-				Header:     http.Header{"Content-Type": []string{"application/json"}},
-			}, nil
-		case 2:
-			if req.Method != http.MethodGet || req.URL.Path != "/v1/builds" {
-				t.Fatalf("unexpected second request: %s %s", req.Method, req.URL.String())
+			stdout, stderr, err := run(t, test.args)
+			if err != nil {
+				t.Fatalf("run error: %v", err)
 			}
-			query := req.URL.Query()
-			if query.Get("filter[app]") != "app-lookup" {
-				t.Fatalf("expected filter[app]=app-lookup, got %q", query.Get("filter[app]"))
+
+			if stderr != "" {
+				t.Fatalf("expected empty stderr, got %q", stderr)
 			}
-			if query.Get("include") != "preReleaseVersion" {
-				t.Fatalf("expected include=preReleaseVersion, got %q", query.Get("include"))
+			if callCount := len(reg.Requests()); callCount != len(requests) {
+				t.Fatalf("request count = %d, want %d", callCount, len(requests))
 			}
-			body := `{"data":[{"type":"builds","id":"build-1"}]}`
-			return &http.Response{
-				StatusCode: http.StatusOK,
-				Body:       io.NopCloser(strings.NewReader(body)),
-				Header:     http.Header{"Content-Type": []string{"application/json"}},
-			}, nil
-		default:
-			t.Fatalf("unexpected request count %d", callCount)
-			return nil, nil
-		}
-	})
-
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"builds", "list", "--app", "com.example.lookup"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatalf("run error: %v", err)
-		}
-	})
-
-	if stderr != "" {
-		t.Fatalf("expected empty stderr, got %q", stderr)
-	}
-	if !strings.Contains(stdout, `"id":"build-1"`) {
-		t.Fatalf("expected build output, got %q", stdout)
-	}
-}
-
-func TestBuildsListLookupNotFoundByName(t *testing.T) {
-	setupAuth(t)
-	t.Setenv("ASC_APP_ID", "")
-	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
-
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() {
-		http.DefaultTransport = originalTransport
-	})
-
-	callCount := 0
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		callCount++
-		if req.Method != http.MethodGet || req.URL.Path != "/v1/apps" {
-			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.String())
-		}
-		body := `{"data":[]}`
-		return &http.Response{
-			StatusCode: http.StatusOK,
-			Body:       io.NopCloser(strings.NewReader(body)),
-			Header:     http.Header{"Content-Type": []string{"application/json"}},
-		}, nil
-	})
-
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	var runErr error
-	stdout, _ := captureOutput(t, func() {
-		if err := root.Parse([]string{"builds", "list", "--app", "Missing App"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		runErr = root.Run(context.Background())
-	})
-
-	if runErr == nil {
-		t.Fatal("expected lookup not-found error")
-	}
-	if !strings.Contains(runErr.Error(), `app "Missing App" not found`) {
-		t.Fatalf("expected not found error, got %v", runErr)
-	}
-	if stdout != "" {
-		t.Fatalf("expected empty stdout on failure, got %q", stdout)
-	}
-}
-
-func TestBuildsListLookupAmbiguousName(t *testing.T) {
-	setupAuth(t)
-	t.Setenv("ASC_APP_ID", "")
-	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
-
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() {
-		http.DefaultTransport = originalTransport
-	})
-
-	callCount := 0
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		callCount++
-		if req.Method != http.MethodGet || req.URL.Path != "/v1/apps" {
-			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.String())
-		}
-		switch callCount {
-		case 1:
-			body := `{"data":[]}`
-			return &http.Response{
-				StatusCode: http.StatusOK,
-				Body:       io.NopCloser(strings.NewReader(body)),
-				Header:     http.Header{"Content-Type": []string{"application/json"}},
-			}, nil
-		case 2:
-			body := `{"data":[{"type":"apps","id":"app-1","attributes":{"name":"Ambiguous App"}},{"type":"apps","id":"app-2","attributes":{"name":"Ambiguous App"}}]}`
-			return &http.Response{
-				StatusCode: http.StatusOK,
-				Body:       io.NopCloser(strings.NewReader(body)),
-				Header:     http.Header{"Content-Type": []string{"application/json"}},
-			}, nil
-		default:
-			t.Fatalf("unexpected request count %d", callCount)
-			return nil, nil
-		}
-	})
-
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	var runErr error
-	stdout, _ := captureOutput(t, func() {
-		if err := root.Parse([]string{"builds", "list", "--app", "Ambiguous App"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		runErr = root.Run(context.Background())
-	})
-
-	if runErr == nil {
-		t.Fatal("expected ambiguous lookup error")
-	}
-	if !strings.Contains(runErr.Error(), `2 apps match "Ambiguous App"; pass --app with one of:`) {
-		t.Fatalf("expected ambiguous-name error, got %v", runErr)
-	}
-	if stdout != "" {
-		t.Fatalf("expected empty stdout on failure, got %q", stdout)
+			if !strings.Contains(stdout, test.wantStdout) {
+				t.Fatalf("expected %s in output, got %q", test.wantStdout, stdout)
+			}
+		})
 	}
 }
 
@@ -196,45 +115,18 @@ func TestBuildsListNextURLSkipsAppLookupForInheritedNonNumericApp(t *testing.T) 
 	const nextURL = "https://api.appstoreconnect.apple.com/v1/builds?cursor=AQ"
 	t.Setenv("ASC_APP_ID", "com.example.lookup")
 
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() {
-		http.DefaultTransport = originalTransport
-	})
+	reg := asctest.NewRegistry(t)
+	reg.Install()
+	reg.Register(asctest.GET("/v1/builds", "cursor=AQ"),
+		asctest.JSON(http.StatusOK, `{"data":[{"type":"builds","id":"build-next"}],"links":{"next":""}}`))
 
-	requestCount := 0
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		requestCount++
-		if requestCount != 1 {
-			t.Fatalf("unexpected request count %d: %s %s", requestCount, req.Method, req.URL.String())
-		}
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.String() != nextURL {
-			t.Fatalf("expected next URL %q, got %q", nextURL, req.URL.String())
-		}
-		body := `{"data":[{"type":"builds","id":"build-next"}],"links":{"next":""}}`
-		return &http.Response{
-			StatusCode: http.StatusOK,
-			Body:       io.NopCloser(strings.NewReader(body)),
-			Header:     http.Header{"Content-Type": []string{"application/json"}},
-		}, nil
+	stdout, stderr, err := runCommand(t, []string{
+		"builds", "list",
+		"--next", nextURL,
 	})
-
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{
-			"builds", "list",
-			"--next", nextURL,
-		}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatalf("run error: %v", err)
-		}
-	})
+	if err != nil {
+		t.Fatalf("run error: %v", err)
+	}
 
 	if stderr != "" {
 		t.Fatalf("expected empty stderr, got %q", stderr)

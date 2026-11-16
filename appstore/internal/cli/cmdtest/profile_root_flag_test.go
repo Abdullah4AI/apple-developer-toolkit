@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	rootcmd "github.com/Abdullah4AI/apple-developer-toolkit/appstore/cmd"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asctest"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/config"
 )
@@ -56,31 +57,11 @@ func writeProfileFixtureConfig(t *testing.T) {
 func TestAppsListProfilePlacementUsesSameCredential(t *testing.T) {
 	writeProfileFixtureConfig(t)
 
-	var keyIDs []string
-	installDefaultTransport(t, roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		if req.Method != http.MethodGet || req.URL.Path != "/v1/apps" {
-			t.Fatalf("request = %s %s, want GET /v1/apps", req.Method, req.URL.Path)
-		}
-
-		token := strings.TrimPrefix(req.Header.Get("Authorization"), "Bearer ")
-		parts := strings.Split(token, ".")
-		if len(parts) != 3 {
-			t.Fatalf("Authorization token has %d parts, want 3", len(parts))
-		}
-		headerJSON, err := base64.RawURLEncoding.DecodeString(parts[0])
-		if err != nil {
-			t.Fatalf("decode JWT header: %v", err)
-		}
-		var header struct {
-			KeyID string `json:"kid"`
-		}
-		if err := json.Unmarshal(headerJSON, &header); err != nil {
-			t.Fatalf("decode JWT header JSON: %v", err)
-		}
-		keyIDs = append(keyIDs, header.KeyID)
-
-		return jsonResponse(http.StatusOK, `{"data":[{"type":"apps","id":"app-1","attributes":{"name":"Demo"}}]}`)
-	}))
+	reg := asctest.NewRegistry(t)
+	reg.Install()
+	for range 2 {
+		reg.Register(asctest.GET("/v1/apps"), asctest.JSON(http.StatusOK, `{"data":[{"type":"apps","id":"app-1","attributes":{"name":"Demo"}}]}`))
+	}
 
 	invocations := [][]string{
 		{"--profile", "client", "apps", "list", "--output", "json"},
@@ -110,6 +91,25 @@ func TestAppsListProfilePlacementUsesSameCredential(t *testing.T) {
 		outputs = append(outputs, stdout)
 	}
 
+	var keyIDs []string
+	for _, req := range reg.Requests() {
+		token := strings.TrimPrefix(req.Header.Get("Authorization"), "Bearer ")
+		parts := strings.Split(token, ".")
+		if len(parts) != 3 {
+			t.Fatalf("Authorization token has %d parts, want 3", len(parts))
+		}
+		headerJSON, err := base64.RawURLEncoding.DecodeString(parts[0])
+		if err != nil {
+			t.Fatalf("decode JWT header: %v", err)
+		}
+		var header struct {
+			KeyID string `json:"kid"`
+		}
+		if err := json.Unmarshal(headerJSON, &header); err != nil {
+			t.Fatalf("decode JWT header JSON: %v", err)
+		}
+		keyIDs = append(keyIDs, header.KeyID)
+	}
 	if len(keyIDs) != 2 || keyIDs[0] != "KEYCLIENT" || keyIDs[1] != "KEYCLIENT" {
 		t.Fatalf("JWT key IDs = %q, want KEYCLIENT for both placements", keyIDs)
 	}
@@ -287,10 +287,7 @@ func TestProfileFlagAfterPositionalIsUsageError(t *testing.T) {
 		{"search", "upload a build", "--profile=staging"},
 	} {
 		t.Run(strings.Join(args, " "), func(t *testing.T) {
-			var code int
-			stdout, stderr := captureOutput(t, func() {
-				code = rootcmd.Run(args, "1.2.3")
-			})
+			stdout, stderr, code := runWithDeps(t, nil, args...)
 
 			if code != rootcmd.ExitUsage {
 				t.Fatalf("exit code = %d, want %d (stdout %q, stderr %q)", code, rootcmd.ExitUsage, stdout, stderr)
@@ -313,10 +310,7 @@ func TestEscapedProfileSearchTermRemainsPositional(t *testing.T) {
 	} {
 		t.Run(strings.Join(query, " "), func(t *testing.T) {
 			args := append([]string{"search", "--output", "json", "--"}, query...)
-			var code int
-			stdout, stderr := captureOutput(t, func() {
-				code = rootcmd.Run(args, "1.2.3")
-			})
+			stdout, stderr, code := runWithDeps(t, nil, args...)
 
 			if code != rootcmd.ExitSuccess {
 				t.Fatalf("exit code = %d, want %d (stdout %q, stderr %q)", code, rootcmd.ExitSuccess, stdout, stderr)

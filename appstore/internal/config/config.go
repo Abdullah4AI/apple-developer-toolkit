@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/rootfs"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/testguard"
 )
 
 const (
@@ -253,6 +254,10 @@ var ErrNotFound = fmt.Errorf("configuration not found")
 // ErrParse is returned when the config file is not valid JSON.
 var ErrParse = errors.New("failed to parse config")
 
+// ErrSymlinkedConfig is returned when the config file or a directory on its
+// path is a symlink.
+var ErrSymlinkedConfig = errors.New("symlinked config files and directories are not followed")
+
 // ErrInvalidPath is returned when the config path is invalid.
 var ErrInvalidPath = errors.New("invalid config path")
 
@@ -419,25 +424,22 @@ func Save(cfg *Config) error {
 	return SaveAt(path, cfg)
 }
 
-// Remove removes the config file
-func Remove() error {
-	path, err := Path()
-	if err != nil {
-		return err
-	}
-	return RemoveAt(path)
-}
-
 // LoadAt loads the configuration from the provided path.
 func LoadAt(path string) (*Config, error) {
 	if strings.TrimSpace(path) == "" {
 		return nil, fmt.Errorf("failed to read config: empty path")
+	}
+	if testguard.Hides(path) {
+		return nil, ErrNotFound
 	}
 
 	file, err := rootfs.OpenFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, ErrNotFound
+		}
+		if errors.Is(err, rootfs.ErrSymlink) {
+			return nil, fmt.Errorf("config %s is a symlink or is inside a symlinked directory; %w", path, ErrSymlinkedConfig)
 		}
 		return nil, fmt.Errorf("failed to read config: %w", err)
 	}
@@ -548,6 +550,9 @@ func SaveAt(path string, cfg *Config) error {
 	if strings.TrimSpace(path) == "" {
 		return fmt.Errorf("failed to write config: empty path")
 	}
+	if testguard.Hides(path) {
+		return fmt.Errorf("failed to write config: %s belongs to the developer running the tests; set %s or HOME in the test", path, configPathEnvVar)
+	}
 
 	data, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {
@@ -556,22 +561,6 @@ func SaveAt(path string, cfg *Config) error {
 
 	if err := writeConfigFile(path, data); err != nil {
 		return fmt.Errorf("failed to write config: %w", err)
-	}
-
-	return nil
-}
-
-// RemoveAt removes the config file at the provided path.
-func RemoveAt(path string) error {
-	if strings.TrimSpace(path) == "" {
-		return fmt.Errorf("failed to remove config: empty path")
-	}
-
-	if err := os.Remove(path); err != nil {
-		if os.IsNotExist(err) {
-			return nil
-		}
-		return fmt.Errorf("failed to remove config: %w", err)
 	}
 
 	return nil

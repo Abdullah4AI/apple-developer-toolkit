@@ -11,6 +11,7 @@ import (
 
 	rootcmd "github.com/Abdullah4AI/apple-developer-toolkit/appstore/cmd"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asctest"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
@@ -27,6 +28,7 @@ func TestLocalizationReadsRequestPlacementsAndPrintIncluded(t *testing.T) {
 		path       string
 		flags      []string
 		query      string
+		deps       bool // the command is built on shared.Deps: stub its client and read its deps streams
 	}{
 		{
 			name:       "version localizations list",
@@ -35,6 +37,7 @@ func TestLocalizationReadsRequestPlacementsAndPrintIncluded(t *testing.T) {
 			path:       "/v1/appStoreVersions/version-1/appStoreVersionLocalizations",
 			flags:      []string{"--include", "placements", "--placements-limit", "50"},
 			query:      "include=placements&limit%5Bplacements%5D=50",
+			deps:       true,
 		},
 		{
 			name:    "version localization view",
@@ -42,6 +45,7 @@ func TestLocalizationReadsRequestPlacementsAndPrintIncluded(t *testing.T) {
 			path:    "/v1/appStoreVersionLocalizations/loc-1",
 			flags:   []string{"--include", "appScreenshotSets,placements", "--placements-limit", "1"},
 			query:   "include=appScreenshotSets%2Cplacements&limit%5Bplacements%5D=1",
+			deps:    true,
 		},
 		{
 			name:       "app event localizations list",
@@ -50,6 +54,7 @@ func TestLocalizationReadsRequestPlacementsAndPrintIncluded(t *testing.T) {
 			path:       "/v1/appEvents/event-1/localizations",
 			flags:      []string{"--include", "placements", "--placements-limit", "10"},
 			query:      "include=placements&limit%5Bplacements%5D=10",
+			deps:       true,
 		},
 		{
 			name:    "app event localization view",
@@ -57,6 +62,7 @@ func TestLocalizationReadsRequestPlacementsAndPrintIncluded(t *testing.T) {
 			path:    "/v1/appEventLocalizations/loc-1",
 			flags:   []string{"--include", "placements", "--placements-limit", "10"},
 			query:   "include=placements&limit%5Bplacements%5D=10",
+			deps:    true,
 		},
 		{
 			name:       "app events list localization fields",
@@ -65,6 +71,7 @@ func TestLocalizationReadsRequestPlacementsAndPrintIncluded(t *testing.T) {
 			path:       "/v1/apps/app-1/appEvents",
 			flags:      []string{"--include", "localizations", "--localization-fields", "placements"},
 			query:      "fields%5BappEventLocalizations%5D=placements&include=localizations",
+			deps:       true,
 		},
 		{
 			name:       "custom page localizations list",
@@ -73,6 +80,7 @@ func TestLocalizationReadsRequestPlacementsAndPrintIncluded(t *testing.T) {
 			path:       "/v1/appCustomProductPageVersions/version-1/appCustomProductPageLocalizations",
 			flags:      []string{"--include", "placements", "--placements-limit", "10"},
 			query:      "include=placements&limit%5Bplacements%5D=10",
+			deps:       true,
 		},
 		{
 			name:    "custom page localization view",
@@ -80,6 +88,7 @@ func TestLocalizationReadsRequestPlacementsAndPrintIncluded(t *testing.T) {
 			path:    "/v1/appCustomProductPageLocalizations/loc-1",
 			flags:   []string{"--include", "placements", "--placements-limit", "10"},
 			query:   "include=placements&limit%5Bplacements%5D=10",
+			deps:    true,
 		},
 		{
 			name:       "treatment localizations list",
@@ -88,6 +97,7 @@ func TestLocalizationReadsRequestPlacementsAndPrintIncluded(t *testing.T) {
 			path:       "/v1/appStoreVersionExperimentTreatments/treatment-1/appStoreVersionExperimentTreatmentLocalizations",
 			flags:      []string{"--include", "placements", "--placements-limit", "10"},
 			query:      "include=placements&limit%5Bplacements%5D=10",
+			deps:       true,
 		},
 		{
 			name:    "treatment localization view",
@@ -95,6 +105,7 @@ func TestLocalizationReadsRequestPlacementsAndPrintIncluded(t *testing.T) {
 			path:    "/v1/appStoreVersionExperimentTreatmentLocalizations/loc-1",
 			flags:   []string{"--include", "placements", "--placements-limit", "10"},
 			query:   "include=placements&limit%5Bplacements%5D=10",
+			deps:    true,
 		},
 	}
 
@@ -112,52 +123,45 @@ func TestLocalizationReadsRequestPlacementsAndPrintIncluded(t *testing.T) {
 				setupAuth(t)
 				t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 
-				originalTransport := http.DefaultTransport
-				t.Cleanup(func() {
-					http.DefaultTransport = originalTransport
-				})
-
-				requestCount := 0
-				http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-					requestCount++
-					if req.URL.Path != test.path {
-						t.Fatalf("path = %q, want %q", req.URL.Path, test.path)
-					}
-					if req.URL.RawQuery != variant.query {
-						t.Fatalf("query = %q, want %q", req.URL.RawQuery, variant.query)
-					}
-					resource := `{"type":"appEventLocalizations","id":"loc-1","attributes":{}}`
-					if test.collection {
-						resource = "[" + resource + "]"
-					}
-					body := `{"data":` + resource + `,"links":{"self":"https://api.appstoreconnect.apple.com` + test.path + `"}`
-					if variant.wantIncluded {
-						body += "," + placementsIncludedJSON
-					}
-					body += "}"
-					return &http.Response{
-						StatusCode: http.StatusOK,
-						Body:       io.NopCloser(strings.NewReader(body)),
-						Header:     http.Header{"Content-Type": []string{"application/json"}},
-					}, nil
-				})
-
-				root := RootCommand("1.2.3")
-				root.FlagSet.SetOutput(io.Discard)
+				resource := `{"type":"appEventLocalizations","id":"loc-1","attributes":{}}`
+				if test.collection {
+					resource = "[" + resource + "]"
+				}
+				body := `{"data":` + resource + `,"links":{"self":"https://api.appstoreconnect.apple.com` + test.path + `"}`
+				if variant.wantIncluded {
+					body += "," + placementsIncludedJSON
+				}
+				body += "}"
+				reg := asctest.NewRegistry(t)
+				reg.Register(asctest.GET(test.path, strings.Split(variant.query, "&")...), asctest.JSON(http.StatusOK, body))
 
 				args := append(append([]string{}, test.command...), "--output", "json")
 				args = append(args, variant.flags...)
-				stdout, stderr := captureOutput(t, func() {
-					if err := root.Parse(args); err != nil {
-						t.Fatalf("parse error: %v", err)
-					}
-					if err := root.Run(context.Background()); err != nil {
-						t.Fatalf("run error: %v", err)
-					}
-				})
+				var stdout, stderr string
+				var err error
+				if test.deps {
+					stdout, stderr, err = runRootWithDeps(t, stubClient(t, reg), args...)
+				} else {
+					reg.Install()
+					root := RootCommand("1.2.3")
+					root.FlagSet.SetOutput(io.Discard)
+					stdout, stderr = captureOutput(t, func() {
+						if parseErr := root.Parse(args); parseErr != nil {
+							t.Fatalf("parse error: %v", parseErr)
+						}
+						err = root.Run(context.Background())
+					})
+				}
+				if err != nil {
+					t.Fatalf("run error: %v", err)
+				}
 
-				if requestCount != 1 {
+				requests := reg.Requests()
+				if requestCount := len(requests); requestCount != 1 {
 					t.Fatalf("requests = %d, want 1", requestCount)
+				}
+				if got := requests[0].URL.RawQuery; got != variant.query {
+					t.Fatalf("query = %q, want %q", got, variant.query)
 				}
 				if stderr != "" {
 					t.Fatalf("stderr = %q, want empty", stderr)

@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"strings"
 
 	"github.com/peterbourgon/ff/v3/ffcli"
 
@@ -12,9 +11,9 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
-// CategoriesCommand returns the categories command with subcommands.
-func CategoriesCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("categories", flag.ExitOnError)
+// NewCategoriesCommand returns the categories command with subcommands.
+func NewCategoriesCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("categories", flag.ExitOnError)
 
 	return &ffcli.Command{
 		Name:       "categories",
@@ -29,13 +28,13 @@ Examples:
   asc categories subcategories --category-id "GAMES"
   asc categories set --app APP_ID --primary GAMES`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
-			CategoriesListCommand(),
-			CategoriesGetCommand(),
-			CategoriesParentCommand(),
-			CategoriesSubcategoriesCommand(),
-			CategoriesSetCommand(),
+			newCategoriesListCommand(d),
+			newCategoriesGetCommand(d),
+			newCategoriesParentCommand(d),
+			newCategoriesSubcategoriesCommand(d),
+			newCategoriesSetCommand(d),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp
@@ -43,14 +42,14 @@ Examples:
 	}
 }
 
-// CategoriesListCommand returns the categories list subcommand.
-func CategoriesListCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("categories list", flag.ExitOnError)
+// newCategoriesListCommand returns the categories list subcommand.
+func newCategoriesListCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("categories list", flag.ExitOnError)
 
-	limit := fs.Int("limit", 200, "Maximum results per page (1-200)")
-	next := fs.String("next", "", "Fetch next page using a links.next URL")
-	paginate := fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")
-	output := shared.BindOutputFlags(fs)
+	limit := fs.Int("limit", 200, shared.LimitFlagUsage(200))
+	next := fs.String("next", "", shared.NextFlagUsage)
+	paginate := fs.Bool("paginate", false, shared.PaginateFlagUsage)
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "list",
@@ -68,29 +67,26 @@ Examples:
   asc categories list --next "<links.next>"
   asc categories list --paginate --next "<links.next>"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
-			if err := shared.ValidateNextURL(*next); err != nil {
-				return shared.UsageErrorf("categories list: %v", err)
+			if *limit < 1 || *limit > 200 {
+				return d.UsageErrorf("categories list: --limit must be between 1 and 200")
 			}
-			if err := rejectCategoriesListNextFlagConflicts(fs, *next); err != nil {
+			if err := d.ValidatePaginationFlags(ctx, fs, "categories list", 200, "limit"); err != nil {
 				return err
 			}
-			if *limit < 1 || *limit > 200 {
-				return shared.UsageErrorf("categories list: --limit must be between 1 and 200")
-			}
 
-			client, err := shared.GetASCClient()
+			client, err := d.Client()
 			if err != nil {
 				return fmt.Errorf("categories list: %w", err)
 			}
 
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
+			requestCtx, cancel := d.Timeout(ctx)
 			defer cancel()
 
 			opts := []asc.AppCategoriesOption{
 				asc.WithAppCategoriesLimit(*limit),
-				asc.WithAppCategoriesNextURL(*next),
+				asc.NextURL[asc.AppCategoriesOption](*next),
 			}
 
 			if *paginate {
@@ -99,12 +95,12 @@ Examples:
 					return fmt.Errorf("categories list: %w", err)
 				}
 				categories, err := asc.PaginateAll(requestCtx, firstPage, func(ctx context.Context, nextURL string) (asc.PaginatedResponse, error) {
-					return client.GetAppCategories(ctx, asc.WithAppCategoriesNextURL(nextURL))
+					return client.GetAppCategories(ctx, asc.NextURL[asc.AppCategoriesOption](nextURL))
 				})
 				if err != nil {
 					return fmt.Errorf("categories list: %w", err)
 				}
-				return shared.PrintOutput(categories, *output.Output, *output.Pretty)
+				return d.PrintOutput(categories, *output.Output, *output.Pretty)
 			}
 
 			categories, err := client.GetAppCategories(requestCtx, opts...)
@@ -112,33 +108,15 @@ Examples:
 				return fmt.Errorf("categories list: %w", err)
 			}
 
-			return shared.PrintOutput(categories, *output.Output, *output.Pretty)
+			return d.PrintOutput(categories, *output.Output, *output.Pretty)
 		},
 	}
 }
 
-// rejectCategoriesListNextFlagConflicts rejects --limit when a --next cursor
-// URL is supplied, because the cursor already encodes the page size and the
-// CLI must never accept and silently ignore a flag.
-func rejectCategoriesListNextFlagConflicts(fs *flag.FlagSet, next string) error {
-	if strings.TrimSpace(next) == "" {
-		return nil
-	}
-	conflict := false
-	fs.Visit(func(f *flag.Flag) {
-		if f.Name == "limit" {
-			conflict = true
-		}
-	})
-	if conflict {
-		return shared.UsageError("categories list: --next cannot be combined with --limit")
-	}
-	return nil
-}
-
-// CategoriesSetCommand returns the categories set subcommand.
-func CategoriesSetCommand() *ffcli.Command {
+// newCategoriesSetCommand returns the categories set subcommand.
+func newCategoriesSetCommand(d *shared.Deps) *ffcli.Command {
 	return shared.NewCategoriesSetCommand(shared.CategoriesSetCommandConfig{
+		Deps:        d,
 		FlagSetName: "categories set",
 		ShortUsage:  "asc categories set --app APP_ID --primary CATEGORY_ID [--secondary CATEGORY_ID] [flags]",
 		ShortHelp:   "Set primary and secondary categories for an app.",

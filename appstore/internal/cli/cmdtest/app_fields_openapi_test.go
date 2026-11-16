@@ -1,7 +1,6 @@
 package cmdtest
 
 import (
-	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -104,7 +103,6 @@ func TestAppFieldsAcceptEveryOpenAPIValue(t *testing.T) {
 
 func runAppFieldsCommand(t *testing.T, commandArgs []string, appFields, requestPath string) (string, int32, error) {
 	t.Helper()
-	setupAuth(t)
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 
 	var requests atomic.Int32
@@ -120,18 +118,9 @@ func runAppFieldsCommand(t *testing.T, commandArgs []string, appFields, requestP
 		_, _ = io.WriteString(w, `{"data":[],"links":{"next":""}}`)
 	}))
 	t.Cleanup(server.Close)
-	installDefaultTransportForServer(t, server)
 
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
 	args := append(append([]string{}, commandArgs...), "--app-fields", appFields, "--output", "json")
-	var runErr error
-	_, stderr := captureOutput(t, func() {
-		if err := root.Parse(args); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		runErr = root.Run(context.Background())
-	})
+	_, stderr, runErr := runRootWithDeps(t, stubServerClient(t, server), args...)
 	return stderr, requests.Load(), runErr
 }
 

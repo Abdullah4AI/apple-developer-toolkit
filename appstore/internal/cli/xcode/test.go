@@ -5,7 +5,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"os"
 	"os/exec"
 	"strings"
 	"time"
@@ -36,12 +35,13 @@ func (f *exactTestStringFlag) Set(value string) error {
 	return nil
 }
 
-// XcodeTestCommand returns the local Xcode test command.
-func XcodeTestCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("xcode test", flag.ExitOnError)
+// newXcodeTestCommand returns the local Xcode test command.
+func newXcodeTestCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("xcode test", flag.ExitOnError)
 
 	workspacePath := fs.String("workspace", "", "Path to .xcworkspace directory")
 	projectPath := fs.String("project", "", "Path to .xcodeproj directory")
+	packagePath := fs.String("package-path", "", "Path to a Swift package directory that contains Package.swift")
 	scheme := fs.String("scheme", "", "Xcode scheme name (required except for test-without-building)")
 	action := fs.String("action", string(localxcode.TestActionTest), "Xcode test action: test, build-for-testing, or test-without-building")
 	configuration := fs.String("configuration", "", "Build configuration (for example Debug or Release)")
@@ -57,9 +57,18 @@ func XcodeTestCommand() *ffcli.Command {
 	resultBundlePath := fs.String("result-bundle-path", "", "Destination for a new Xcode result bundle")
 	clean := fs.Bool("clean", false, "Run clean before the selected Xcode action")
 	noCodeSigning := fs.Bool("no-code-signing", false, "Set CODE_SIGNING_ALLOWED=NO explicitly")
+	codeCoverage := fs.Bool("code-coverage", false, "Enable code coverage and report line coverage from the result bundle")
+	retryTestsOnFailure := fs.Bool("retry-tests-on-failure", false, "Retry failed tests (up to --test-iterations, or 3 times)")
+	testIterations := fs.Int("test-iterations", 0, "Run tests this many times, or retry up to this many times with --retry-tests-on-failure (at least 1)")
+	var parallelTesting shared.OptionalBool
+	fs.Var(&parallelTesting, "parallel-testing", "Turn parallel testing on or off, overriding the scheme: true or false")
+	parallelTestingWorkers := fs.Int("parallel-testing-workers", 0, "Exact number of parallel test runners (at least 1)")
+	addressSanitizer := fs.Bool("address-sanitizer", false, "Enable the address sanitizer (cannot be combined with --thread-sanitizer)")
+	threadSanitizer := fs.Bool("thread-sanitizer", false, "Enable the thread sanitizer")
+	undefinedBehaviorSanitizer := fs.Bool("undefined-behavior-sanitizer", false, "Enable the undefined behavior sanitizer")
 	var xcodebuildFlags exactTestStringFlag
 	fs.Var(&xcodebuildFlags, "xcodebuild-flag", "Pass a raw argument through to xcodebuild (repeatable)")
-	output := shared.BindOutputFlags(fs)
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "test",
@@ -67,14 +76,27 @@ func XcodeTestCommand() *ffcli.Command {
 		ShortHelp:  "Run local Xcode tests and report structured results.",
 		LongHelp: `Run a local Xcode test action and report structured results.
 
-For test and build-for-testing, provide exactly one of --workspace or --project,
-plus --scheme and at least one --destination. The default action is test. Use
---action build-for-testing to produce test products, or use
+For test and build-for-testing, provide exactly one of --workspace, --project,
+or --package-path, plus --scheme and at least one --destination. When all three
+are omitted, asc uses the only .xcworkspace, or else the only .xcodeproj, in
+the current directory; a Package.swift is not detected. With --package-path,
+xcodebuild runs from that directory. The default action is
+test. Use --action build-for-testing to produce test products, or use
 --action test-without-building with an existing --xctestrun file. Test actions
 write a new .xcresult bundle automatically when --result-bundle-path is omitted.
 The test-without-building action rejects project/build controls, including
 --configuration and --derived-data-path. Convert an existing result bundle
 with asc xcode test junit.
+
+--code-coverage passes -enableCodeCoverage YES to xcodebuild. After test and
+test-without-building, the result adds overall and per-target line coverage
+read with xccov; if coverage cannot be read, a warning is printed on stderr and
+the test outcome is unchanged.
+
+--retry-tests-on-failure, --test-iterations, --parallel-testing,
+--parallel-testing-workers, and the --address-sanitizer, --thread-sanitizer,
+and --undefined-behavior-sanitizer flags pass the matching xcodebuild test
+options. Each conflicts with a --xcodebuild-flag for the same option.
 
 Xcode diagnostics are written to stderr and the selected structured result
 format is written to stdout. This command never calls App Store Connect or
@@ -83,63 +105,114 @@ changes project files.
 Examples:
   asc xcode test --project App.xcodeproj --scheme App --destination 'platform=iOS Simulator,name=iPhone 17 Pro' --output json
   asc xcode test --workspace App.xcworkspace --scheme App --destination 'platform=iOS Simulator,name=iPhone 17 Pro' --destination 'platform=iOS Simulator,name=iPad Pro (13-inch)'
+  asc xcode test --package-path ./MyPackage --scheme MyPackage --destination 'platform=macOS' --output json
   asc xcode test --project App.xcodeproj --scheme App --action build-for-testing --destination 'platform=iOS Simulator,name=iPhone 17 Pro'
-  asc xcode test --action test-without-building --xctestrun App_iphonesimulator.xctestrun --destination 'platform=iOS Simulator,name=iPhone 17 Pro'`,
+  asc xcode test --action test-without-building --xctestrun App_iphonesimulator.xctestrun --destination 'platform=iOS Simulator,name=iPhone 17 Pro'
+  asc xcode test --project App.xcodeproj --scheme App --destination 'platform=iOS Simulator,name=iPhone 17 Pro' --retry-tests-on-failure --test-iterations 3`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
-			XcodeTestJUnitCommand(),
+			newXcodeTestJUnitCommand(d),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			if len(args) > 0 {
-				fmt.Fprintln(os.Stderr, "Error: xcode test does not accept positional arguments")
+				fmt.Fprintln(d.IO.ErrOut, "Error: xcode test does not accept positional arguments")
 				return flag.ErrHelp
 			}
-			if emptyFlag := firstExplicitlyEmptyFlag(fs, "workspace", "project", "scheme", "action", "configuration", "test-plan", "xctestrun", "derived-data-path", "result-bundle-path"); emptyFlag != "" {
-				return shared.UsageErrorf("--%s must not be empty", emptyFlag)
+			if emptyFlag := firstExplicitlyEmptyFlag(fs, "workspace", "project", "package-path", "scheme", "action", "configuration", "test-plan", "xctestrun", "derived-data-path", "result-bundle-path"); emptyFlag != "" {
+				return d.UsageErrorf("--%s must not be empty", emptyFlag)
+			}
+			var nonPositiveFlag string
+			fs.Visit(func(f *flag.Flag) {
+				if nonPositiveFlag == "" && ((f.Name == "test-iterations" && *testIterations < 1) || (f.Name == "parallel-testing-workers" && *parallelTestingWorkers < 1)) {
+					nonPositiveFlag = f.Name
+				}
+			})
+			if nonPositiveFlag != "" {
+				return d.UsageErrorf("--%s must be at least 1", nonPositiveFlag)
+			}
+
+			containerNotice := ""
+			switch localxcode.TestAction(strings.TrimSpace(*action)) {
+			case localxcode.TestActionTest, localxcode.TestActionBuildForTesting:
+				if *packagePath == "" && *workspacePath == "" && *projectPath == "" {
+					if strings.TrimSpace(*scheme) == "" {
+						return d.RequiredFlag("--scheme")
+					}
+					if len(destinations) == 0 {
+						return d.RequiredFlag("--destination")
+					}
+					notice, err := detectXcodeContainer(d, fs, workspacePath, projectPath, "exactly one of --workspace, --project, or --package-path is required")
+					if err != nil {
+						return err
+					}
+					containerNotice = notice
+				}
 			}
 			opts := localxcode.TestOptions{
-				WorkspacePath:    strings.TrimSpace(*workspacePath),
-				ProjectPath:      strings.TrimSpace(*projectPath),
+				WorkspacePath:    osPath(d, strings.TrimSpace(*workspacePath)),
+				ProjectPath:      osPath(d, strings.TrimSpace(*projectPath)),
+				PackagePath:      osPath(d, strings.TrimSpace(*packagePath)),
 				Scheme:           strings.TrimSpace(*scheme),
 				Action:           strings.TrimSpace(*action),
 				Configuration:    strings.TrimSpace(*configuration),
 				Destinations:     []string(destinations),
 				TestPlan:         strings.TrimSpace(*testPlan),
-				XctestrunPath:    strings.TrimSpace(*xctestrunPath),
+				XctestrunPath:    osPath(d, strings.TrimSpace(*xctestrunPath)),
 				OnlyTesting:      []string(onlyTesting),
 				SkipTesting:      []string(skipTesting),
-				DerivedDataPath:  strings.TrimSpace(*derivedDataPath),
-				ResultBundlePath: strings.TrimSpace(*resultBundlePath),
+				DerivedDataPath:  osPath(d, strings.TrimSpace(*derivedDataPath)),
+				ResultBundlePath: osPath(d, strings.TrimSpace(*resultBundlePath)),
 				Clean:            *clean,
 				NoCodeSigning:    *noCodeSigning,
+				CodeCoverage:     *codeCoverage,
 				XcodebuildArgs:   []string(xcodebuildFlags),
-				LogWriter:        os.Stderr,
+				LogWriter:        d.IO.ErrOut,
+
+				RetryTestsOnFailure:        *retryTestsOnFailure,
+				TestIterations:             *testIterations,
+				ParallelTestingWorkers:     *parallelTestingWorkers,
+				AddressSanitizer:           *addressSanitizer,
+				ThreadSanitizer:            *threadSanitizer,
+				UndefinedBehaviorSanitizer: *undefinedBehaviorSanitizer,
+			}
+			if parallelTesting.IsSet() {
+				enabled := parallelTesting.Value()
+				opts.ParallelTesting = &enabled
 			}
 			if err := localxcode.ValidateTestOptions(opts); err != nil {
-				return shared.UsageError(err.Error())
+				return d.UsageError(err.Error())
+			}
+			if opts.PackagePath != "" {
+				if err := localxcode.ValidateTestPackagePath(opts.PackagePath); err != nil {
+					return d.UsageError(err.Error())
+				}
 			}
 			if _, err := shared.ValidateOutputFormat(*output.Output, *output.Pretty); err != nil {
-				return shared.UsageError(err.Error())
+				return d.UsageError(err.Error())
+			}
+
+			if containerNotice != "" {
+				fmt.Fprintln(d.IO.ErrOut, containerNotice)
 			}
 
 			result, testErr := runTest(ctx, opts)
 			if result != nil {
-				if outputErr := shared.PrintOutput(toXcodeTestResult(result), *output.Output, *output.Pretty); outputErr != nil {
+				if outputErr := d.PrintOutput(toXcodeTestResult(result), *output.Output, *output.Pretty); outputErr != nil {
 					if testErr != nil {
 						return shared.NewErrorWithCause(outputErr, testErr)
 					}
 					return outputErr
 				}
 				if shared.ReportFormat() == shared.ReportFormatJUnit && shared.ReportFile() != "" {
-					shared.SetJUnitReport(testResultJUnitReport(result, testErr))
+					shared.SetJUnitReport(testResultJUnitReport(d, result, testErr))
 				}
 			}
 			if testErr != nil {
 				if result == nil {
 					return xcodeCommandError("xcode test", testErr)
 				}
-				reportXcodeFailure("xcode test", result.ExitStatus, testErr)
+				reportXcodeFailure(d, "xcode test", result.ExitStatus, testErr)
 				return shared.NewStderrReportedError(classifyXcodeLocalFailure(fmt.Errorf("xcode test: %w", testErr)))
 			}
 			if result == nil {
@@ -154,6 +227,7 @@ func toXcodeTestResult(result *localxcode.TestResult) *asc.XcodeTestResult {
 	output := &asc.XcodeTestResult{
 		Workspace:        result.WorkspacePath,
 		Project:          result.ProjectPath,
+		PackagePath:      result.PackagePath,
 		Scheme:           result.Scheme,
 		Action:           result.Action,
 		Configuration:    result.Configuration,
@@ -167,6 +241,9 @@ func toXcodeTestResult(result *localxcode.TestResult) *asc.XcodeTestResult {
 		Success:          result.Success,
 		DurationMs:       result.DurationMS,
 		ExitStatus:       result.ExitStatus,
+	}
+	if result.Coverage != nil {
+		output.Coverage = toXcodeCoverage(*result.Coverage)
 	}
 	if result.Tests == nil {
 		return output
@@ -204,10 +281,23 @@ func toXcodeTestResult(result *localxcode.TestResult) *asc.XcodeTestResult {
 	return output
 }
 
+func toXcodeCoverage(coverage localxcode.Coverage) *asc.XcodeCoverage {
+	output := &asc.XcodeCoverage{
+		Name:            coverage.Name,
+		LineCoverage:    coverage.LineCoverage,
+		CoveredLines:    coverage.CoveredLines,
+		ExecutableLines: coverage.ExecutableLines,
+	}
+	for _, target := range coverage.Targets {
+		output.Targets = append(output.Targets, *toXcodeCoverage(target))
+	}
+	return output
+}
+
 const maxJUnitFailureMessage = 4096
 
-func testResultJUnitReport(result *localxcode.TestResult, commandErr error) *shared.JUnitReport {
-	report := &shared.JUnitReport{Timestamp: time.Now(), Name: "asc xcode test"}
+func testResultJUnitReport(d *shared.Deps, result *localxcode.TestResult, commandErr error) *shared.JUnitReport {
+	report := &shared.JUnitReport{Timestamp: d.Now(), Name: "asc xcode test"}
 	summary := result.Tests
 	tests := make([]shared.JUnitTestCase, 0)
 	if summary != nil {

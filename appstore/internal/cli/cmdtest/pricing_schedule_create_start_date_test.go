@@ -12,7 +12,7 @@ import (
 	"time"
 
 	rootcmd "github.com/Abdullah4AI/apple-developer-toolkit/appstore/cmd"
-	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asctest"
 )
 
 // scheduleCreateStartDateCapture records the manual price start date sent to
@@ -92,7 +92,7 @@ func stubAppPriceScheduleCreate(t *testing.T) *scheduleCreateStartDateCapture {
 // fixPricingClock pins the clock pricing commands use to default --start-date.
 func fixPricingClock(t *testing.T, now time.Time) {
 	t.Helper()
-	t.Cleanup(shared.SetPricingNowForTesting(func() time.Time { return now }))
+	t.Cleanup(setRootNow(func() time.Time { return now }))
 }
 
 func mustParseRFC3339(t *testing.T, value string) time.Time {
@@ -208,17 +208,8 @@ func TestPricingScheduleCreateExplicitStartDateStaysAuthoritative(t *testing.T) 
 func TestPricingScheduleCreateMalformedStartDateIsUsageError(t *testing.T) {
 	setupAuth(t)
 
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() {
-		http.DefaultTransport = originalTransport
-	})
-
-	var requests int
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		requests++
-		t.Fatalf("unexpected request: %s %s", req.Method, req.URL.Path)
-		return nil, nil
-	})
+	reg := asctest.NewRegistry(t)
+	reg.Install()
 
 	root := RootCommand("1.2.3")
 	root.FlagSet.SetOutput(io.Discard)
@@ -242,7 +233,7 @@ func TestPricingScheduleCreateMalformedStartDateIsUsageError(t *testing.T) {
 		}
 	})
 
-	if requests != 0 {
+	if requests := len(reg.Requests()); requests != 0 {
 		t.Fatalf("expected no HTTP requests, got %d", requests)
 	}
 	if stdout != "" {

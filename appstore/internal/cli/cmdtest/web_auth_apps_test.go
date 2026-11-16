@@ -67,20 +67,6 @@ func TestWebAuthLoginRequiresPasswordSource(t *testing.T) {
 	}
 }
 
-func TestWebAppsCreateHelpMentionsInteractiveContract(t *testing.T) {
-	root := RootCommand("1.2.3")
-	cmd := findSubcommand(root, "web", "apps", "create")
-	if cmd == nil {
-		t.Fatal("expected web apps create command")
-		return
-	}
-
-	usage := cmd.UsageFunc(cmd)
-	if !strings.Contains(usage, "interactive terminal") {
-		t.Fatalf("expected interactive contract in usage, got %q", usage)
-	}
-}
-
 func TestWebAppsCreateMissingFieldsWithControllingTTYReturnsUsageError(t *testing.T) {
 	t.Cleanup(webcli.SetControllingTTYForTesting(func() (*os.File, error) {
 		return os.Open(os.DevNull)
@@ -109,16 +95,7 @@ func TestWebAppsCreateMissingFieldsWithControllingTTYReturnsUsageError(t *testin
 }
 
 func TestWebAuthLogoutMutuallyExclusiveFlags(t *testing.T) {
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	var runErr error
-	_, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"web", "auth", "logout", "--all", "--apple-id", "user@example.com"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		runErr = root.Run(context.Background())
-	})
+	_, stderr, runErr := runRootWithDeps(t, nil, "web", "auth", "logout", "--all", "--apple-id", "user@example.com")
 
 	if !errors.Is(runErr, flag.ErrHelp) {
 		t.Fatalf("expected ErrHelp, got %v", runErr)

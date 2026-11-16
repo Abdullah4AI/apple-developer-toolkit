@@ -9,9 +9,10 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
-// TestFlightCommand returns the testflight command with subcommands.
-func TestFlightCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("testflight", flag.ExitOnError)
+// NewTestFlightCommand returns the testflight command with subcommands built
+// on d.
+func NewTestFlightCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("testflight", flag.ExitOnError)
 
 	return &ffcli.Command{
 		Name:       "testflight",
@@ -35,21 +36,21 @@ Examples:
   asc testflight app-localizations list --app "APP_ID"
   asc testflight pre-release list --app "APP_ID"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
-			TestFlightGroupsCommand(),
-			TestFlightTestersCommand(),
-			TestFlightFeedbackCommand(),
-			TestFlightCrashesCommand(),
-			TestFlightAgreementsCommand(),
-			TestFlightNotificationsCommand(),
-			TestFlightReviewSurfaceCommand(),
-			TestFlightDistributionCommand(),
-			TestFlightRecruitmentCommand(),
-			TestFlightMetricsSurfaceCommand(),
-			TestFlightConfigCommand(),
-			TestFlightAppLocalizationsCommand(),
-			TestFlightPreReleaseCommand(),
+			newTestFlightGroupsCommand(d),
+			newTestFlightTestersCommand(d),
+			newTestFlightFeedbackCommand(d),
+			newTestFlightCrashesCommand(d),
+			newTestFlightAgreementsCommand(d),
+			newTestFlightNotificationsCommand(d),
+			newTestFlightReviewSurfaceCommand(d),
+			newTestFlightDistributionCommand(d),
+			newTestFlightRecruitmentCommand(d),
+			newTestFlightMetricsSurfaceCommand(d),
+			newTestFlightConfigCommand(d),
+			newTestFlightAppLocalizationsCommand(d),
+			newTestFlightPreReleaseCommand(d),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp

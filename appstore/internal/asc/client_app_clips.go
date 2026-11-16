@@ -89,22 +89,6 @@ const (
 	AppClipAdvancedExperienceLanguageZH AppClipAdvancedExperienceLanguage = "ZH"
 )
 
-// AppClipAttributes describes an App Clip resource.
-type AppClipAttributes struct {
-	BundleID string `json:"bundleId,omitempty"`
-}
-
-// AppClipDefaultExperienceAttributes describes App Clip default experience attributes.
-type AppClipDefaultExperienceAttributes struct {
-	Action AppClipAction `json:"action,omitempty"`
-}
-
-// AppClipDefaultExperienceLocalizationAttributes describes default experience localization attributes.
-type AppClipDefaultExperienceLocalizationAttributes struct {
-	Locale   string `json:"locale,omitempty"`
-	Subtitle string `json:"subtitle,omitempty"`
-}
-
 // AppClipAdvancedExperienceAttributes describes advanced experience attributes.
 type AppClipAdvancedExperienceAttributes struct {
 	Link string `json:"link,omitempty"`
@@ -137,32 +121,6 @@ type AppClipHeaderImageAttributes struct {
 	ImageAsset         *ImageAsset         `json:"imageAsset,omitempty"`
 	UploadOperations   []UploadOperation   `json:"uploadOperations,omitempty"`
 	AssetDeliveryState *AssetDeliveryState `json:"assetDeliveryState,omitempty"`
-}
-
-// AppClipAppStoreReviewDetailAttributes describes review detail attributes.
-type AppClipAppStoreReviewDetailAttributes struct {
-	InvocationURLs []string `json:"invocationUrls,omitempty"`
-}
-
-// AppClipDefaultExperienceCreateAttributes describes default experience create attributes.
-type AppClipDefaultExperienceCreateAttributes struct {
-	Action *AppClipAction `json:"action,omitempty"`
-}
-
-// AppClipDefaultExperienceUpdateAttributes describes default experience update attributes.
-type AppClipDefaultExperienceUpdateAttributes struct {
-	Action *AppClipAction `json:"action,omitempty"`
-}
-
-// AppClipDefaultExperienceLocalizationCreateAttributes describes localization create attributes.
-type AppClipDefaultExperienceLocalizationCreateAttributes struct {
-	Locale   string  `json:"locale"`
-	Subtitle *string `json:"subtitle,omitempty"`
-}
-
-// AppClipDefaultExperienceLocalizationUpdateAttributes describes localization update attributes.
-type AppClipDefaultExperienceLocalizationUpdateAttributes struct {
-	Subtitle *string `json:"subtitle,omitempty"`
 }
 
 // AppClipAdvancedExperienceCreateAttributes describes advanced experience create attributes.
@@ -198,39 +156,10 @@ type AppClipAdvancedExperienceLocalizationCreateAttributes struct {
 	Subtitle string                            `json:"subtitle,omitempty"`
 }
 
-// AppClipAdvancedExperienceImageUpdateAttributes describes image update attributes.
-type AppClipAdvancedExperienceImageUpdateAttributes struct {
-	SourceFileChecksum *string `json:"sourceFileChecksum,omitempty"`
-	Uploaded           *bool   `json:"uploaded,omitempty"`
-}
-
 // AppClipHeaderImageCreateAttributes describes header image create attributes.
 type AppClipHeaderImageCreateAttributes struct {
 	FileSize int64  `json:"fileSize"`
 	FileName string `json:"fileName"`
-}
-
-// AppClipHeaderImageUpdateAttributes describes header image update attributes.
-type AppClipHeaderImageUpdateAttributes struct {
-	SourceFileChecksum *string `json:"sourceFileChecksum,omitempty"`
-	Uploaded           *bool   `json:"uploaded,omitempty"`
-}
-
-// AppClipAppStoreReviewDetailCreateAttributes describes review detail create attributes.
-type AppClipAppStoreReviewDetailCreateAttributes struct {
-	InvocationURLs []string `json:"invocationUrls,omitempty"`
-}
-
-// AppClipAppStoreReviewDetailUpdateAttributes describes review detail update attributes.
-type AppClipAppStoreReviewDetailUpdateAttributes struct {
-	InvocationURLs []string `json:"invocationUrls,omitempty"`
-}
-
-// AppClipDefaultExperienceCreateRelationships describes relationships for default experience create.
-type AppClipDefaultExperienceCreateRelationships struct {
-	AppClip                          *Relationship `json:"appClip"`
-	ReleaseWithAppStoreVersion       *Relationship `json:"releaseWithAppStoreVersion,omitempty"`
-	AppClipDefaultExperienceTemplate *Relationship `json:"appClipDefaultExperienceTemplate,omitempty"`
 }
 
 // AppClipDefaultExperienceUpdateRelationships describes relationships for default experience update.
@@ -251,13 +180,6 @@ type AppClipAdvancedExperienceRelationships struct {
 	Localizations *RelationshipList `json:"localizations,omitempty"`
 }
 
-// AppClipAdvancedExperienceCreateRelationships describes required create relationships.
-type AppClipAdvancedExperienceCreateRelationships struct {
-	AppClip       Relationship     `json:"appClip"`
-	HeaderImage   Relationship     `json:"headerImage"`
-	Localizations RelationshipList `json:"localizations"`
-}
-
 // AppClipHeaderImageRelationships describes header image relationships.
 type AppClipHeaderImageRelationships struct {
 	AppClipDefaultExperienceLocalization *Relationship `json:"appClipDefaultExperienceLocalization,omitempty"`
@@ -268,60 +190,12 @@ type AppClipAppStoreReviewDetailRelationships struct {
 	AppClipDefaultExperience *Relationship `json:"appClipDefaultExperience,omitempty"`
 }
 
-// AppClipDefaultExperienceCreateData is the payload for creating a default experience.
-type AppClipDefaultExperienceCreateData struct {
-	Type          ResourceType                                 `json:"type"`
-	Attributes    *AppClipDefaultExperienceCreateAttributes    `json:"attributes,omitempty"`
-	Relationships *AppClipDefaultExperienceCreateRelationships `json:"relationships"`
-}
-
-// AppClipDefaultExperienceCreateRequest is the create request payload.
-type AppClipDefaultExperienceCreateRequest struct {
-	Data AppClipDefaultExperienceCreateData `json:"data"`
-}
-
 // AppClipDefaultExperienceUpdateData is the payload for updating a default experience.
 type AppClipDefaultExperienceUpdateData struct {
 	Type          ResourceType                                 `json:"type"`
 	ID            string                                       `json:"id"`
 	Attributes    *AppClipDefaultExperienceUpdateAttributes    `json:"attributes,omitempty"`
 	Relationships *AppClipDefaultExperienceUpdateRelationships `json:"relationships,omitempty"`
-}
-
-// AppClipDefaultExperienceUpdateRequest is the update request payload.
-type AppClipDefaultExperienceUpdateRequest struct {
-	Data AppClipDefaultExperienceUpdateData `json:"data"`
-}
-
-// AppClipDefaultExperienceLocalizationCreateData is the payload for creating a localization.
-type AppClipDefaultExperienceLocalizationCreateData struct {
-	Type          ResourceType                                         `json:"type"`
-	Attributes    AppClipDefaultExperienceLocalizationCreateAttributes `json:"attributes"`
-	Relationships *AppClipDefaultExperienceLocalizationRelationships   `json:"relationships"`
-}
-
-// AppClipDefaultExperienceLocalizationCreateRequest is the create request payload.
-type AppClipDefaultExperienceLocalizationCreateRequest struct {
-	Data AppClipDefaultExperienceLocalizationCreateData `json:"data"`
-}
-
-// AppClipDefaultExperienceLocalizationUpdateData is the payload for updating a localization.
-type AppClipDefaultExperienceLocalizationUpdateData struct {
-	Type       ResourceType                                          `json:"type"`
-	ID         string                                                `json:"id"`
-	Attributes *AppClipDefaultExperienceLocalizationUpdateAttributes `json:"attributes,omitempty"`
-}
-
-// AppClipDefaultExperienceLocalizationUpdateRequest is the update request payload.
-type AppClipDefaultExperienceLocalizationUpdateRequest struct {
-	Data AppClipDefaultExperienceLocalizationUpdateData `json:"data"`
-}
-
-// AppClipAdvancedExperienceCreateData is the payload for creating an advanced experience.
-type AppClipAdvancedExperienceCreateData struct {
-	Type          ResourceType                                 `json:"type"`
-	Attributes    AppClipAdvancedExperienceCreateAttributes    `json:"attributes"`
-	Relationships AppClipAdvancedExperienceCreateRelationships `json:"relationships"`
 }
 
 // AppClipAdvancedExperienceCreateRequest is the create request payload.
@@ -345,115 +219,12 @@ type AppClipAdvancedExperienceUpdateData struct {
 	Relationships *AppClipAdvancedExperienceRelationships    `json:"relationships,omitempty"`
 }
 
-// AppClipAdvancedExperienceUpdateRequest is the update request payload.
-type AppClipAdvancedExperienceUpdateRequest struct {
-	Data AppClipAdvancedExperienceUpdateData `json:"data"`
-}
-
-// AppClipAdvancedExperienceImageCreateData is the payload for creating an image reservation.
-type AppClipAdvancedExperienceImageCreateData struct {
-	Type       ResourceType                                   `json:"type"`
-	Attributes AppClipAdvancedExperienceImageCreateAttributes `json:"attributes"`
-}
-
-// AppClipAdvancedExperienceImageCreateRequest is the create request payload.
-type AppClipAdvancedExperienceImageCreateRequest struct {
-	Data AppClipAdvancedExperienceImageCreateData `json:"data"`
-}
-
-// AppClipAdvancedExperienceImageUpdateData is the payload for updating an image.
-type AppClipAdvancedExperienceImageUpdateData struct {
-	Type       ResourceType                                    `json:"type"`
-	ID         string                                          `json:"id"`
-	Attributes *AppClipAdvancedExperienceImageUpdateAttributes `json:"attributes,omitempty"`
-}
-
-// AppClipAdvancedExperienceImageUpdateRequest is the update request payload.
-type AppClipAdvancedExperienceImageUpdateRequest struct {
-	Data AppClipAdvancedExperienceImageUpdateData `json:"data"`
-}
-
-// AppClipHeaderImageCreateData is the payload for creating a header image.
-type AppClipHeaderImageCreateData struct {
-	Type          ResourceType                       `json:"type"`
-	Attributes    AppClipHeaderImageCreateAttributes `json:"attributes"`
-	Relationships *AppClipHeaderImageRelationships   `json:"relationships"`
-}
-
-// AppClipHeaderImageCreateRequest is the create request payload.
-type AppClipHeaderImageCreateRequest struct {
-	Data AppClipHeaderImageCreateData `json:"data"`
-}
-
-// AppClipHeaderImageUpdateData is the payload for updating a header image.
-type AppClipHeaderImageUpdateData struct {
-	Type       ResourceType                        `json:"type"`
-	ID         string                              `json:"id"`
-	Attributes *AppClipHeaderImageUpdateAttributes `json:"attributes,omitempty"`
-}
-
-// AppClipHeaderImageUpdateRequest is the update request payload.
-type AppClipHeaderImageUpdateRequest struct {
-	Data AppClipHeaderImageUpdateData `json:"data"`
-}
-
-// AppClipAppStoreReviewDetailCreateData is the payload for creating review details.
-type AppClipAppStoreReviewDetailCreateData struct {
-	Type          ResourceType                                 `json:"type"`
-	Attributes    *AppClipAppStoreReviewDetailCreateAttributes `json:"attributes,omitempty"`
-	Relationships *AppClipAppStoreReviewDetailRelationships    `json:"relationships"`
-}
-
-// AppClipAppStoreReviewDetailCreateRequest is the create request payload.
-type AppClipAppStoreReviewDetailCreateRequest struct {
-	Data AppClipAppStoreReviewDetailCreateData `json:"data"`
-}
-
-// AppClipAppStoreReviewDetailUpdateData is the payload for updating review details.
-type AppClipAppStoreReviewDetailUpdateData struct {
-	Type       ResourceType                                 `json:"type"`
-	ID         string                                       `json:"id"`
-	Attributes *AppClipAppStoreReviewDetailUpdateAttributes `json:"attributes,omitempty"`
-}
-
-// AppClipAppStoreReviewDetailUpdateRequest is the update request payload.
-type AppClipAppStoreReviewDetailUpdateRequest struct {
-	Data AppClipAppStoreReviewDetailUpdateData `json:"data"`
-}
-
-// BetaAppClipInvocationCreateAttributes describes invocation create attributes.
-type BetaAppClipInvocationCreateAttributes struct {
-	URL string `json:"url"`
-}
-
-// BetaAppClipInvocationUpdateAttributes describes invocation update attributes.
-type BetaAppClipInvocationUpdateAttributes struct {
-	URL *string `json:"url,omitempty"`
-}
-
-// BetaAppClipInvocationLocalizationAttributes describes localization attributes.
-type BetaAppClipInvocationLocalizationAttributes struct {
-	Title  string `json:"title,omitempty"`
-	Locale string `json:"locale,omitempty"`
-}
-
-// BetaAppClipInvocationLocalizationCreateAttributes describes localization create attributes.
-type BetaAppClipInvocationLocalizationCreateAttributes struct {
-	Title  string `json:"title"`
-	Locale string `json:"locale"`
-}
-
 // BetaAppClipInvocationLocalizationInlineCreate describes an inline localization create payload.
 type BetaAppClipInvocationLocalizationInlineCreate struct {
 	Type          ResourceType                                      `json:"type"`
 	ID            string                                            `json:"id,omitempty"`
 	Attributes    BetaAppClipInvocationLocalizationCreateAttributes `json:"attributes"`
 	Relationships *BetaAppClipInvocationLocalizationRelationships   `json:"relationships,omitempty"`
-}
-
-// BetaAppClipInvocationLocalizationUpdateAttributes describes localization update attributes.
-type BetaAppClipInvocationLocalizationUpdateAttributes struct {
-	Title *string `json:"title,omitempty"`
 }
 
 // BetaAppClipInvocationRelationships describes invocation relationships.
@@ -467,53 +238,10 @@ type BetaAppClipInvocationLocalizationRelationships struct {
 	BetaAppClipInvocation *Relationship `json:"betaAppClipInvocation,omitempty"`
 }
 
-// BetaAppClipInvocationCreateData is the payload for creating an invocation.
-type BetaAppClipInvocationCreateData struct {
-	Type          ResourceType                          `json:"type"`
-	Attributes    BetaAppClipInvocationCreateAttributes `json:"attributes"`
-	Relationships *BetaAppClipInvocationRelationships   `json:"relationships,omitempty"`
-}
-
 // BetaAppClipInvocationCreateRequest is the create request payload.
 type BetaAppClipInvocationCreateRequest struct {
 	Data     BetaAppClipInvocationCreateData                 `json:"data"`
 	Included []BetaAppClipInvocationLocalizationInlineCreate `json:"included,omitempty"`
-}
-
-// BetaAppClipInvocationUpdateData is the payload for updating an invocation.
-type BetaAppClipInvocationUpdateData struct {
-	Type       ResourceType                           `json:"type"`
-	ID         string                                 `json:"id"`
-	Attributes *BetaAppClipInvocationUpdateAttributes `json:"attributes,omitempty"`
-}
-
-// BetaAppClipInvocationUpdateRequest is the update request payload.
-type BetaAppClipInvocationUpdateRequest struct {
-	Data BetaAppClipInvocationUpdateData `json:"data"`
-}
-
-// BetaAppClipInvocationLocalizationCreateData is the payload for creating a localization.
-type BetaAppClipInvocationLocalizationCreateData struct {
-	Type          ResourceType                                      `json:"type"`
-	Attributes    BetaAppClipInvocationLocalizationCreateAttributes `json:"attributes"`
-	Relationships *BetaAppClipInvocationLocalizationRelationships   `json:"relationships"`
-}
-
-// BetaAppClipInvocationLocalizationCreateRequest is the create request payload.
-type BetaAppClipInvocationLocalizationCreateRequest struct {
-	Data BetaAppClipInvocationLocalizationCreateData `json:"data"`
-}
-
-// BetaAppClipInvocationLocalizationUpdateData is the payload for updating a localization.
-type BetaAppClipInvocationLocalizationUpdateData struct {
-	Type       ResourceType                                       `json:"type"`
-	ID         string                                             `json:"id"`
-	Attributes *BetaAppClipInvocationLocalizationUpdateAttributes `json:"attributes,omitempty"`
-}
-
-// BetaAppClipInvocationLocalizationUpdateRequest is the update request payload.
-type BetaAppClipInvocationLocalizationUpdateRequest struct {
-	Data BetaAppClipInvocationLocalizationUpdateData `json:"data"`
 }
 
 // Response aliases.
@@ -536,8 +264,8 @@ type (
 	BetaAppClipInvocationLocalizationResponse     = SingleResponse[BetaAppClipInvocationLocalizationAttributes]
 )
 
-// AppClipDefaultExperienceReviewDetailLinkageResponse is the response for review detail relationships.
-type AppClipDefaultExperienceReviewDetailLinkageResponse struct {
+// AppClipDefaultExperienceAppClipAppStoreReviewDetailLinkageResponse is the response for review detail relationships.
+type AppClipDefaultExperienceAppClipAppStoreReviewDetailLinkageResponse struct {
 	Data  ResourceData `json:"data"`
 	Links Links        `json:"links"`
 }
@@ -548,14 +276,8 @@ type AppClipDefaultExperienceReleaseWithAppStoreVersionLinkageResponse struct {
 	Links Links        `json:"links"`
 }
 
-// AppClipDefaultExperienceReleaseWithAppStoreVersionRelationshipUpdateRequest is a request to update the
-// releaseWithAppStoreVersion relationship on a default experience.
-type AppClipDefaultExperienceReleaseWithAppStoreVersionRelationshipUpdateRequest struct {
-	Data ResourceData `json:"data"`
-}
-
-// AppClipDefaultExperienceLocalizationHeaderImageLinkageResponse is the response for header image relationships.
-type AppClipDefaultExperienceLocalizationHeaderImageLinkageResponse struct {
+// AppClipDefaultExperienceLocalizationAppClipHeaderImageLinkageResponse is the response for header image relationships.
+type AppClipDefaultExperienceLocalizationAppClipHeaderImageLinkageResponse struct {
 	Data  ResourceData `json:"data"`
 	Links Links        `json:"links"`
 }
@@ -580,325 +302,10 @@ type AppClipHeaderImageUploadResult struct {
 	Uploaded           bool   `json:"uploaded"`
 }
 
-// AppClipDefaultExperienceDeleteResult represents default experience deletion.
-type AppClipDefaultExperienceDeleteResult struct {
-	ID      string `json:"id"`
-	Deleted bool   `json:"deleted"`
-}
-
-// AppClipDefaultExperienceLocalizationDeleteResult represents localization deletion.
-type AppClipDefaultExperienceLocalizationDeleteResult struct {
-	ID      string `json:"id"`
-	Deleted bool   `json:"deleted"`
-}
-
 // AppClipAdvancedExperienceRemoveResult represents advanced experience removal.
 type AppClipAdvancedExperienceRemoveResult struct {
 	ID      string `json:"id"`
 	Removed bool   `json:"removed"`
-}
-
-// AppClipHeaderImageDeleteResult represents header image deletion.
-type AppClipHeaderImageDeleteResult struct {
-	ID      string `json:"id"`
-	Deleted bool   `json:"deleted"`
-}
-
-// BetaAppClipInvocationDeleteResult represents invocation deletion.
-type BetaAppClipInvocationDeleteResult struct {
-	ID      string `json:"id"`
-	Deleted bool   `json:"deleted"`
-}
-
-// BetaAppClipInvocationLocalizationDeleteResult represents localization deletion.
-type BetaAppClipInvocationLocalizationDeleteResult struct {
-	ID      string `json:"id"`
-	Deleted bool   `json:"deleted"`
-}
-
-// GetAppClips retrieves App Clips for an app.
-func (c *Client) GetAppClips(ctx context.Context, appID string, opts ...AppClipsOption) (*AppClipsResponse, error) {
-	query := &appClipsQuery{}
-	for _, opt := range opts {
-		opt(query)
-	}
-
-	appID = strings.TrimSpace(appID)
-	if appID == "" {
-		return nil, fmt.Errorf("appID is required")
-	}
-
-	path := fmt.Sprintf("/v1/apps/%s/appClips", appID)
-	if query.nextURL != "" {
-		if err := validateNextURL(query.nextURL); err != nil {
-			return nil, fmt.Errorf("appClips: %w", err)
-		}
-		path = query.nextURL
-	} else if queryString := buildAppClipsQuery(query); queryString != "" {
-		path += "?" + queryString
-	}
-
-	data, err := c.do(ctx, http.MethodGet, path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var response AppClipsResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
-// GetAppClip retrieves an App Clip by ID.
-func (c *Client) GetAppClip(ctx context.Context, appClipID string) (*AppClipResponse, error) {
-	appClipID = strings.TrimSpace(appClipID)
-	if appClipID == "" {
-		return nil, fmt.Errorf("appClipID is required")
-	}
-
-	path := fmt.Sprintf("/v1/appClips/%s", appClipID)
-	data, err := c.do(ctx, http.MethodGet, path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var response AppClipResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
-// GetAppClipDefaultExperiences retrieves default experiences for an App Clip.
-func (c *Client) GetAppClipDefaultExperiences(ctx context.Context, appClipID string, opts ...AppClipDefaultExperiencesOption) (*AppClipDefaultExperiencesResponse, error) {
-	query := &appClipDefaultExperiencesQuery{}
-	for _, opt := range opts {
-		opt(query)
-	}
-
-	appClipID = strings.TrimSpace(appClipID)
-	if appClipID == "" {
-		return nil, fmt.Errorf("appClipID is required")
-	}
-
-	path := fmt.Sprintf("/v1/appClips/%s/appClipDefaultExperiences", appClipID)
-	if query.nextURL != "" {
-		if err := validateNextURL(query.nextURL); err != nil {
-			return nil, fmt.Errorf("appClipDefaultExperiences: %w", err)
-		}
-		path = query.nextURL
-	} else if queryString := buildAppClipDefaultExperiencesQuery(query); queryString != "" {
-		path += "?" + queryString
-	}
-
-	data, err := c.do(ctx, http.MethodGet, path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var response AppClipDefaultExperiencesResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
-// GetAppClipDefaultExperiencesRelationships retrieves default experience linkages for an App Clip.
-func (c *Client) GetAppClipDefaultExperiencesRelationships(ctx context.Context, appClipID string, opts ...LinkagesOption) (*AppClipDefaultExperiencesLinkagesResponse, error) {
-	query := &linkagesQuery{}
-	for _, opt := range opts {
-		opt(query)
-	}
-
-	appClipID = strings.TrimSpace(appClipID)
-	path := fmt.Sprintf("/v1/appClips/%s/relationships/appClipDefaultExperiences", appClipID)
-	if query.nextURL != "" {
-		if err := validateNextURL(query.nextURL); err != nil {
-			return nil, fmt.Errorf("appClipDefaultExperiencesRelationships: %w", err)
-		}
-		path = query.nextURL
-	} else if queryString := buildLinkagesQuery(query); queryString != "" {
-		path += "?" + queryString
-	}
-
-	data, err := c.do(ctx, http.MethodGet, path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var response AppClipDefaultExperiencesLinkagesResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
-// GetAppClipAdvancedExperiencesRelationships retrieves advanced experience linkages for an App Clip.
-func (c *Client) GetAppClipAdvancedExperiencesRelationships(ctx context.Context, appClipID string, opts ...LinkagesOption) (*AppClipAdvancedExperiencesLinkagesResponse, error) {
-	query := &linkagesQuery{}
-	for _, opt := range opts {
-		opt(query)
-	}
-
-	appClipID = strings.TrimSpace(appClipID)
-	path := fmt.Sprintf("/v1/appClips/%s/relationships/appClipAdvancedExperiences", appClipID)
-	if query.nextURL != "" {
-		if err := validateNextURL(query.nextURL); err != nil {
-			return nil, fmt.Errorf("appClipAdvancedExperiencesRelationships: %w", err)
-		}
-		path = query.nextURL
-	} else if queryString := buildLinkagesQuery(query); queryString != "" {
-		path += "?" + queryString
-	}
-
-	data, err := c.do(ctx, http.MethodGet, path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var response AppClipAdvancedExperiencesLinkagesResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
-// GetAppClipDefaultExperience retrieves a default experience by ID.
-func (c *Client) GetAppClipDefaultExperience(ctx context.Context, experienceID string, opts ...AppClipDefaultExperienceOption) (*AppClipDefaultExperienceResponse, error) {
-	query := &appClipDefaultExperienceQuery{}
-	for _, opt := range opts {
-		opt(query)
-	}
-
-	experienceID = strings.TrimSpace(experienceID)
-	if experienceID == "" {
-		return nil, fmt.Errorf("experienceID is required")
-	}
-
-	path := fmt.Sprintf("/v1/appClipDefaultExperiences/%s", experienceID)
-	if queryString := buildAppClipDefaultExperienceQuery(query); queryString != "" {
-		path += "?" + queryString
-	}
-	data, err := c.do(ctx, http.MethodGet, path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var response AppClipDefaultExperienceResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
-// GetAppClipDefaultExperienceReviewDetail retrieves review detail for a default experience.
-func (c *Client) GetAppClipDefaultExperienceReviewDetail(ctx context.Context, experienceID string) (*AppClipAppStoreReviewDetailResponse, error) {
-	experienceID = strings.TrimSpace(experienceID)
-	if experienceID == "" {
-		return nil, fmt.Errorf("experienceID is required")
-	}
-
-	path := fmt.Sprintf("/v1/appClipDefaultExperiences/%s/appClipAppStoreReviewDetail", experienceID)
-	data, err := c.do(ctx, http.MethodGet, path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var response AppClipAppStoreReviewDetailResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
-// GetAppClipDefaultExperienceReleaseWithAppStoreVersion retrieves the release version for a default experience.
-func (c *Client) GetAppClipDefaultExperienceReleaseWithAppStoreVersion(ctx context.Context, experienceID string) (*AppStoreVersionResponse, error) {
-	experienceID = strings.TrimSpace(experienceID)
-	if experienceID == "" {
-		return nil, fmt.Errorf("experienceID is required")
-	}
-
-	path := fmt.Sprintf("/v1/appClipDefaultExperiences/%s/releaseWithAppStoreVersion", experienceID)
-	data, err := c.do(ctx, http.MethodGet, path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var response AppStoreVersionResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
-// GetAppClipDefaultExperienceReviewDetailRelationship retrieves the review detail linkage for a default experience.
-func (c *Client) GetAppClipDefaultExperienceReviewDetailRelationship(ctx context.Context, experienceID string) (*AppClipDefaultExperienceReviewDetailLinkageResponse, error) {
-	experienceID = strings.TrimSpace(experienceID)
-	path := fmt.Sprintf("/v1/appClipDefaultExperiences/%s/relationships/appClipAppStoreReviewDetail", experienceID)
-	data, err := c.do(ctx, http.MethodGet, path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var response AppClipDefaultExperienceReviewDetailLinkageResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
-// GetAppClipDefaultExperienceReleaseWithAppStoreVersionRelationship retrieves releaseWithAppStoreVersion linkage.
-func (c *Client) GetAppClipDefaultExperienceReleaseWithAppStoreVersionRelationship(ctx context.Context, experienceID string) (*AppClipDefaultExperienceReleaseWithAppStoreVersionLinkageResponse, error) {
-	experienceID = strings.TrimSpace(experienceID)
-	path := fmt.Sprintf("/v1/appClipDefaultExperiences/%s/relationships/releaseWithAppStoreVersion", experienceID)
-	data, err := c.do(ctx, http.MethodGet, path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var response AppClipDefaultExperienceReleaseWithAppStoreVersionLinkageResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
-// UpdateAppClipDefaultExperienceReleaseWithAppStoreVersionRelationship updates the releaseWithAppStoreVersion relationship.
-func (c *Client) UpdateAppClipDefaultExperienceReleaseWithAppStoreVersionRelationship(ctx context.Context, experienceID, versionID string) error {
-	experienceID = strings.TrimSpace(experienceID)
-	versionID = strings.TrimSpace(versionID)
-	if experienceID == "" {
-		return fmt.Errorf("experienceID is required")
-	}
-	if versionID == "" {
-		return fmt.Errorf("versionID is required")
-	}
-
-	request := AppClipDefaultExperienceReleaseWithAppStoreVersionRelationshipUpdateRequest{
-		Data: ResourceData{
-			Type: ResourceTypeAppStoreVersions,
-			ID:   versionID,
-		},
-	}
-	body, err := BuildRequestBody(request)
-	if err != nil {
-		return err
-	}
-
-	path := fmt.Sprintf("/v1/appClipDefaultExperiences/%s/relationships/releaseWithAppStoreVersion", experienceID)
-	_, err = c.do(ctx, http.MethodPatch, path, body)
-	return err
 }
 
 // CreateAppClipDefaultExperience creates a default experience for an App Clip.
@@ -943,22 +350,7 @@ func (c *Client) CreateAppClipDefaultExperience(ctx context.Context, appClipID s
 		},
 	}
 
-	body, err := BuildRequestBody(payload)
-	if err != nil {
-		return nil, err
-	}
-
-	data, err := c.do(ctx, http.MethodPost, "/v1/appClipDefaultExperiences", body)
-	if err != nil {
-		return nil, err
-	}
-
-	var response AppClipDefaultExperienceResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
+	return sendJSON[AppClipDefaultExperienceResponse](ctx, c, writeRequest{Method: http.MethodPost, Path: "/v1/appClipDefaultExperiences", Payload: payload})
 }
 
 // UpdateAppClipDefaultExperience updates a default experience.
@@ -990,304 +382,7 @@ func (c *Client) UpdateAppClipDefaultExperience(ctx context.Context, experienceI
 		},
 	}
 
-	body, err := BuildRequestBody(payload)
-	if err != nil {
-		return nil, err
-	}
-
-	path := fmt.Sprintf("/v1/appClipDefaultExperiences/%s", experienceID)
-	data, err := c.do(ctx, http.MethodPatch, path, body)
-	if err != nil {
-		return nil, err
-	}
-
-	var response AppClipDefaultExperienceResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
-// DeleteAppClipDefaultExperience deletes a default experience by ID.
-func (c *Client) DeleteAppClipDefaultExperience(ctx context.Context, experienceID string) error {
-	experienceID = strings.TrimSpace(experienceID)
-	if experienceID == "" {
-		return fmt.Errorf("experienceID is required")
-	}
-	path := fmt.Sprintf("/v1/appClipDefaultExperiences/%s", experienceID)
-	_, err := c.do(ctx, http.MethodDelete, path, nil)
-	return err
-}
-
-// GetAppClipDefaultExperienceLocalizations retrieves localizations for a default experience.
-func (c *Client) GetAppClipDefaultExperienceLocalizations(ctx context.Context, experienceID string, opts ...AppClipDefaultExperienceLocalizationsOption) (*AppClipDefaultExperienceLocalizationsResponse, error) {
-	query := &appClipDefaultExperienceLocalizationsQuery{}
-	for _, opt := range opts {
-		opt(query)
-	}
-
-	experienceID = strings.TrimSpace(experienceID)
-	if experienceID == "" {
-		return nil, fmt.Errorf("experienceID is required")
-	}
-
-	path := fmt.Sprintf("/v1/appClipDefaultExperiences/%s/appClipDefaultExperienceLocalizations", experienceID)
-	if query.nextURL != "" {
-		if err := validateNextURL(query.nextURL); err != nil {
-			return nil, fmt.Errorf("appClipDefaultExperienceLocalizations: %w", err)
-		}
-		path = query.nextURL
-	} else if queryString := buildAppClipDefaultExperienceLocalizationsQuery(query); queryString != "" {
-		path += "?" + queryString
-	}
-
-	data, err := c.do(ctx, http.MethodGet, path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var response AppClipDefaultExperienceLocalizationsResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
-// GetAppClipDefaultExperienceLocalizationsRelationships retrieves localization linkages for a default experience.
-func (c *Client) GetAppClipDefaultExperienceLocalizationsRelationships(ctx context.Context, experienceID string, opts ...LinkagesOption) (*LinkagesResponse, error) {
-	query := &linkagesQuery{}
-	for _, opt := range opts {
-		opt(query)
-	}
-
-	experienceID = strings.TrimSpace(experienceID)
-	if query.nextURL == "" && experienceID == "" {
-		return nil, fmt.Errorf("experienceID is required")
-	}
-
-	path := fmt.Sprintf("/v1/appClipDefaultExperiences/%s/relationships/appClipDefaultExperienceLocalizations", experienceID)
-	if query.nextURL != "" {
-		if err := validateNextURL(query.nextURL); err != nil {
-			return nil, fmt.Errorf("appClipDefaultExperienceLocalizationsRelationships: %w", err)
-		}
-		path = query.nextURL
-	} else if queryString := buildLinkagesQuery(query); queryString != "" {
-		path += "?" + queryString
-	}
-
-	data, err := c.do(ctx, http.MethodGet, path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var response LinkagesResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
-// GetAppClipDefaultExperienceLocalization retrieves a localization by ID.
-func (c *Client) GetAppClipDefaultExperienceLocalization(ctx context.Context, localizationID string) (*AppClipDefaultExperienceLocalizationResponse, error) {
-	localizationID = strings.TrimSpace(localizationID)
-	if localizationID == "" {
-		return nil, fmt.Errorf("localizationID is required")
-	}
-
-	path := fmt.Sprintf("/v1/appClipDefaultExperienceLocalizations/%s", localizationID)
-	data, err := c.do(ctx, http.MethodGet, path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var response AppClipDefaultExperienceLocalizationResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
-// GetAppClipDefaultExperienceLocalizationHeaderImage retrieves the header image for a localization.
-func (c *Client) GetAppClipDefaultExperienceLocalizationHeaderImage(ctx context.Context, localizationID string) (*AppClipHeaderImageResponse, error) {
-	localizationID = strings.TrimSpace(localizationID)
-	if localizationID == "" {
-		return nil, fmt.Errorf("localizationID is required")
-	}
-
-	path := fmt.Sprintf("/v1/appClipDefaultExperienceLocalizations/%s/appClipHeaderImage", localizationID)
-	data, err := c.do(ctx, http.MethodGet, path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var response AppClipHeaderImageResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
-// GetAppClipDefaultExperienceLocalizationHeaderImageRelationship retrieves header image linkage for a localization.
-func (c *Client) GetAppClipDefaultExperienceLocalizationHeaderImageRelationship(ctx context.Context, localizationID string) (*AppClipDefaultExperienceLocalizationHeaderImageLinkageResponse, error) {
-	localizationID = strings.TrimSpace(localizationID)
-	path := fmt.Sprintf("/v1/appClipDefaultExperienceLocalizations/%s/relationships/appClipHeaderImage", localizationID)
-	data, err := c.do(ctx, http.MethodGet, path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var response AppClipDefaultExperienceLocalizationHeaderImageLinkageResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
-// CreateAppClipDefaultExperienceLocalization creates a localization.
-func (c *Client) CreateAppClipDefaultExperienceLocalization(ctx context.Context, experienceID string, attrs AppClipDefaultExperienceLocalizationCreateAttributes) (*AppClipDefaultExperienceLocalizationResponse, error) {
-	experienceID = strings.TrimSpace(experienceID)
-	if experienceID == "" {
-		return nil, fmt.Errorf("experienceID is required")
-	}
-
-	payload := AppClipDefaultExperienceLocalizationCreateRequest{
-		Data: AppClipDefaultExperienceLocalizationCreateData{
-			Type:       ResourceTypeAppClipDefaultExperienceLocalizations,
-			Attributes: attrs,
-			Relationships: &AppClipDefaultExperienceLocalizationRelationships{
-				AppClipDefaultExperience: &Relationship{
-					Data: ResourceData{
-						Type: ResourceTypeAppClipDefaultExperiences,
-						ID:   experienceID,
-					},
-				},
-			},
-		},
-	}
-
-	body, err := BuildRequestBody(payload)
-	if err != nil {
-		return nil, err
-	}
-
-	data, err := c.do(ctx, http.MethodPost, "/v1/appClipDefaultExperienceLocalizations", body)
-	if err != nil {
-		return nil, err
-	}
-
-	var response AppClipDefaultExperienceLocalizationResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
-// UpdateAppClipDefaultExperienceLocalization updates a localization.
-func (c *Client) UpdateAppClipDefaultExperienceLocalization(ctx context.Context, localizationID string, attrs *AppClipDefaultExperienceLocalizationUpdateAttributes) (*AppClipDefaultExperienceLocalizationResponse, error) {
-	localizationID = strings.TrimSpace(localizationID)
-	if localizationID == "" {
-		return nil, fmt.Errorf("localizationID is required")
-	}
-
-	payload := AppClipDefaultExperienceLocalizationUpdateRequest{
-		Data: AppClipDefaultExperienceLocalizationUpdateData{
-			Type:       ResourceTypeAppClipDefaultExperienceLocalizations,
-			ID:         localizationID,
-			Attributes: attrs,
-		},
-	}
-
-	body, err := BuildRequestBody(payload)
-	if err != nil {
-		return nil, err
-	}
-
-	path := fmt.Sprintf("/v1/appClipDefaultExperienceLocalizations/%s", localizationID)
-	data, err := c.do(ctx, http.MethodPatch, path, body)
-	if err != nil {
-		return nil, err
-	}
-
-	var response AppClipDefaultExperienceLocalizationResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
-// DeleteAppClipDefaultExperienceLocalization deletes a localization by ID.
-func (c *Client) DeleteAppClipDefaultExperienceLocalization(ctx context.Context, localizationID string) error {
-	localizationID = strings.TrimSpace(localizationID)
-	if localizationID == "" {
-		return fmt.Errorf("localizationID is required")
-	}
-	path := fmt.Sprintf("/v1/appClipDefaultExperienceLocalizations/%s", localizationID)
-	_, err := c.do(ctx, http.MethodDelete, path, nil)
-	return err
-}
-
-// GetAppClipAdvancedExperiences retrieves advanced experiences for an App Clip.
-func (c *Client) GetAppClipAdvancedExperiences(ctx context.Context, appClipID string, opts ...AppClipAdvancedExperiencesOption) (*AppClipAdvancedExperiencesResponse, error) {
-	query := &appClipAdvancedExperiencesQuery{}
-	for _, opt := range opts {
-		opt(query)
-	}
-
-	appClipID = strings.TrimSpace(appClipID)
-	if appClipID == "" {
-		return nil, fmt.Errorf("appClipID is required")
-	}
-
-	path := fmt.Sprintf("/v1/appClips/%s/appClipAdvancedExperiences", appClipID)
-	if query.nextURL != "" {
-		if err := validateNextURL(query.nextURL); err != nil {
-			return nil, fmt.Errorf("appClipAdvancedExperiences: %w", err)
-		}
-		path = query.nextURL
-	} else if queryString := buildAppClipAdvancedExperiencesQuery(query); queryString != "" {
-		path += "?" + queryString
-	}
-
-	data, err := c.do(ctx, http.MethodGet, path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var response AppClipAdvancedExperiencesResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
-// GetAppClipAdvancedExperience retrieves an advanced experience by ID.
-func (c *Client) GetAppClipAdvancedExperience(ctx context.Context, experienceID string) (*AppClipAdvancedExperienceResponse, error) {
-	experienceID = strings.TrimSpace(experienceID)
-	if experienceID == "" {
-		return nil, fmt.Errorf("experienceID is required")
-	}
-
-	path := fmt.Sprintf("/v1/appClipAdvancedExperiences/%s", experienceID)
-	data, err := c.do(ctx, http.MethodGet, path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var response AppClipAdvancedExperienceResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
+	return sendJSON[AppClipDefaultExperienceResponse](ctx, c, writeRequest{Method: http.MethodPatch, Path: fmt.Sprintf("/v1/appClipDefaultExperiences/%s", experienceID), Payload: payload})
 }
 
 // CreateAppClipAdvancedExperience creates an advanced experience.
@@ -1363,22 +458,7 @@ func (c *Client) CreateAppClipAdvancedExperience(ctx context.Context, appClipID 
 		Included: included,
 	}
 
-	body, err := BuildRequestBody(payload)
-	if err != nil {
-		return nil, err
-	}
-
-	data, err := c.do(ctx, http.MethodPost, "/v1/appClipAdvancedExperiences", body)
-	if err != nil {
-		return nil, err
-	}
-
-	var response AppClipAdvancedExperienceResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
+	return sendJSON[AppClipAdvancedExperienceResponse](ctx, c, writeRequest{Method: http.MethodPost, Path: "/v1/appClipAdvancedExperiences", Payload: payload})
 }
 
 // UpdateAppClipAdvancedExperience updates an advanced experience.
@@ -1442,23 +522,7 @@ func (c *Client) UpdateAppClipAdvancedExperience(ctx context.Context, experience
 		},
 	}
 
-	body, err := BuildRequestBody(payload)
-	if err != nil {
-		return nil, err
-	}
-
-	path := fmt.Sprintf("/v1/appClipAdvancedExperiences/%s", experienceID)
-	data, err := c.do(ctx, http.MethodPatch, path, body)
-	if err != nil {
-		return nil, err
-	}
-
-	var response AppClipAdvancedExperienceResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
+	return sendJSON[AppClipAdvancedExperienceResponse](ctx, c, writeRequest{Method: http.MethodPatch, Path: fmt.Sprintf("/v1/appClipAdvancedExperiences/%s", experienceID), Payload: payload})
 }
 
 // DeleteAppClipAdvancedExperience removes an advanced experience by ID.
@@ -1472,91 +536,6 @@ func (c *Client) DeleteAppClipAdvancedExperience(ctx context.Context, experience
 		Removed: &removed,
 	}, "", "", nil)
 	return err
-}
-
-// GetAppClipAdvancedExperienceImage retrieves an advanced experience image by ID.
-func (c *Client) GetAppClipAdvancedExperienceImage(ctx context.Context, imageID string) (*AppClipAdvancedExperienceImageResponse, error) {
-	imageID = strings.TrimSpace(imageID)
-	if imageID == "" {
-		return nil, fmt.Errorf("imageID is required")
-	}
-
-	path := fmt.Sprintf("/v1/appClipAdvancedExperienceImages/%s", imageID)
-	data, err := c.do(ctx, http.MethodGet, path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var response AppClipAdvancedExperienceImageResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
-// CreateAppClipAdvancedExperienceImage reserves an upload slot.
-func (c *Client) CreateAppClipAdvancedExperienceImage(ctx context.Context, fileName string, fileSize int64) (*AppClipAdvancedExperienceImageResponse, error) {
-	payload := AppClipAdvancedExperienceImageCreateRequest{
-		Data: AppClipAdvancedExperienceImageCreateData{
-			Type:       ResourceTypeAppClipAdvancedExperienceImages,
-			Attributes: AppClipAdvancedExperienceImageCreateAttributes{FileName: fileName, FileSize: fileSize},
-		},
-	}
-
-	body, err := BuildRequestBody(payload)
-	if err != nil {
-		return nil, err
-	}
-
-	data, err := c.do(ctx, http.MethodPost, "/v1/appClipAdvancedExperienceImages", body)
-	if err != nil {
-		return nil, err
-	}
-
-	var response AppClipAdvancedExperienceImageResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
-// UpdateAppClipAdvancedExperienceImage commits an upload.
-func (c *Client) UpdateAppClipAdvancedExperienceImage(ctx context.Context, imageID string, uploaded bool, checksumHash string) (*AppClipAdvancedExperienceImageResponse, error) {
-	imageID = strings.TrimSpace(imageID)
-	if imageID == "" {
-		return nil, fmt.Errorf("imageID is required")
-	}
-
-	payload := AppClipAdvancedExperienceImageUpdateRequest{
-		Data: AppClipAdvancedExperienceImageUpdateData{
-			Type: ResourceTypeAppClipAdvancedExperienceImages,
-			ID:   imageID,
-			Attributes: &AppClipAdvancedExperienceImageUpdateAttributes{
-				SourceFileChecksum: &checksumHash,
-				Uploaded:           &uploaded,
-			},
-		},
-	}
-
-	body, err := BuildRequestBody(payload)
-	if err != nil {
-		return nil, err
-	}
-
-	path := fmt.Sprintf("/v1/appClipAdvancedExperienceImages/%s", imageID)
-	data, err := c.do(ctx, http.MethodPatch, path, body)
-	if err != nil {
-		return nil, err
-	}
-
-	var response AppClipAdvancedExperienceImageResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
 }
 
 // UploadAppClipAdvancedExperienceImage performs the full upload flow for an image.
@@ -1611,115 +590,6 @@ func (c *Client) UploadAppClipAdvancedExperienceImage(ctx context.Context, fileP
 	}, nil
 }
 
-// GetAppClipHeaderImage retrieves a header image by ID.
-func (c *Client) GetAppClipHeaderImage(ctx context.Context, imageID string) (*AppClipHeaderImageResponse, error) {
-	imageID = strings.TrimSpace(imageID)
-	if imageID == "" {
-		return nil, fmt.Errorf("imageID is required")
-	}
-
-	path := fmt.Sprintf("/v1/appClipHeaderImages/%s", imageID)
-	data, err := c.do(ctx, http.MethodGet, path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var response AppClipHeaderImageResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
-// CreateAppClipHeaderImage reserves a header image upload.
-func (c *Client) CreateAppClipHeaderImage(ctx context.Context, localizationID string, fileName string, fileSize int64) (*AppClipHeaderImageResponse, error) {
-	localizationID = strings.TrimSpace(localizationID)
-	if localizationID == "" {
-		return nil, fmt.Errorf("localizationID is required")
-	}
-
-	payload := AppClipHeaderImageCreateRequest{
-		Data: AppClipHeaderImageCreateData{
-			Type:       ResourceTypeAppClipHeaderImages,
-			Attributes: AppClipHeaderImageCreateAttributes{FileName: fileName, FileSize: fileSize},
-			Relationships: &AppClipHeaderImageRelationships{
-				AppClipDefaultExperienceLocalization: &Relationship{
-					Data: ResourceData{
-						Type: ResourceTypeAppClipDefaultExperienceLocalizations,
-						ID:   localizationID,
-					},
-				},
-			},
-		},
-	}
-
-	body, err := BuildRequestBody(payload)
-	if err != nil {
-		return nil, err
-	}
-
-	data, err := c.do(ctx, http.MethodPost, "/v1/appClipHeaderImages", body)
-	if err != nil {
-		return nil, err
-	}
-
-	var response AppClipHeaderImageResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
-// UpdateAppClipHeaderImage commits a header image upload.
-func (c *Client) UpdateAppClipHeaderImage(ctx context.Context, imageID string, uploaded bool, checksumHash string) (*AppClipHeaderImageResponse, error) {
-	imageID = strings.TrimSpace(imageID)
-	if imageID == "" {
-		return nil, fmt.Errorf("imageID is required")
-	}
-
-	payload := AppClipHeaderImageUpdateRequest{
-		Data: AppClipHeaderImageUpdateData{
-			Type: ResourceTypeAppClipHeaderImages,
-			ID:   imageID,
-			Attributes: &AppClipHeaderImageUpdateAttributes{
-				SourceFileChecksum: &checksumHash,
-				Uploaded:           &uploaded,
-			},
-		},
-	}
-
-	body, err := BuildRequestBody(payload)
-	if err != nil {
-		return nil, err
-	}
-
-	path := fmt.Sprintf("/v1/appClipHeaderImages/%s", imageID)
-	data, err := c.do(ctx, http.MethodPatch, path, body)
-	if err != nil {
-		return nil, err
-	}
-
-	var response AppClipHeaderImageResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
-// DeleteAppClipHeaderImage deletes a header image by ID.
-func (c *Client) DeleteAppClipHeaderImage(ctx context.Context, imageID string) error {
-	imageID = strings.TrimSpace(imageID)
-	if imageID == "" {
-		return fmt.Errorf("imageID is required")
-	}
-	path := fmt.Sprintf("/v1/appClipHeaderImages/%s", imageID)
-	_, err := c.do(ctx, http.MethodDelete, path, nil)
-	return err
-}
-
 // UploadAppClipHeaderImage performs the full upload flow for a header image.
 func (c *Client) UploadAppClipHeaderImage(ctx context.Context, localizationID string, filePath string) (*AppClipHeaderImageUploadResult, error) {
 	if err := ValidateImageFile(filePath); err != nil {
@@ -1771,131 +641,6 @@ func (c *Client) UploadAppClipHeaderImage(ctx context.Context, localizationID st
 		AssetDeliveryState: state,
 		Uploaded:           true,
 	}, nil
-}
-
-// GetAppClipAppStoreReviewDetail retrieves review detail by ID.
-func (c *Client) GetAppClipAppStoreReviewDetail(ctx context.Context, detailID string) (*AppClipAppStoreReviewDetailResponse, error) {
-	detailID = strings.TrimSpace(detailID)
-	if detailID == "" {
-		return nil, fmt.Errorf("detailID is required")
-	}
-
-	path := fmt.Sprintf("/v1/appClipAppStoreReviewDetails/%s", detailID)
-	data, err := c.do(ctx, http.MethodGet, path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var response AppClipAppStoreReviewDetailResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
-// CreateAppClipAppStoreReviewDetail creates review detail for a default experience.
-func (c *Client) CreateAppClipAppStoreReviewDetail(ctx context.Context, experienceID string, attrs *AppClipAppStoreReviewDetailCreateAttributes) (*AppClipAppStoreReviewDetailResponse, error) {
-	experienceID = strings.TrimSpace(experienceID)
-	if experienceID == "" {
-		return nil, fmt.Errorf("experienceID is required")
-	}
-
-	payload := AppClipAppStoreReviewDetailCreateRequest{
-		Data: AppClipAppStoreReviewDetailCreateData{
-			Type:       ResourceTypeAppClipAppStoreReviewDetails,
-			Attributes: attrs,
-			Relationships: &AppClipAppStoreReviewDetailRelationships{
-				AppClipDefaultExperience: &Relationship{
-					Data: ResourceData{
-						Type: ResourceTypeAppClipDefaultExperiences,
-						ID:   experienceID,
-					},
-				},
-			},
-		},
-	}
-
-	body, err := BuildRequestBody(payload)
-	if err != nil {
-		return nil, err
-	}
-
-	data, err := c.do(ctx, http.MethodPost, "/v1/appClipAppStoreReviewDetails", body)
-	if err != nil {
-		return nil, err
-	}
-
-	var response AppClipAppStoreReviewDetailResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
-// UpdateAppClipAppStoreReviewDetail updates review detail by ID.
-func (c *Client) UpdateAppClipAppStoreReviewDetail(ctx context.Context, detailID string, attrs *AppClipAppStoreReviewDetailUpdateAttributes) (*AppClipAppStoreReviewDetailResponse, error) {
-	detailID = strings.TrimSpace(detailID)
-	if detailID == "" {
-		return nil, fmt.Errorf("detailID is required")
-	}
-
-	payload := AppClipAppStoreReviewDetailUpdateRequest{
-		Data: AppClipAppStoreReviewDetailUpdateData{
-			Type:       ResourceTypeAppClipAppStoreReviewDetails,
-			ID:         detailID,
-			Attributes: attrs,
-		},
-	}
-
-	body, err := BuildRequestBody(payload)
-	if err != nil {
-		return nil, err
-	}
-
-	path := fmt.Sprintf("/v1/appClipAppStoreReviewDetails/%s", detailID)
-	data, err := c.do(ctx, http.MethodPatch, path, body)
-	if err != nil {
-		return nil, err
-	}
-
-	var response AppClipAppStoreReviewDetailResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
-// GetBetaAppClipInvocation retrieves a beta App Clip invocation by ID.
-func (c *Client) GetBetaAppClipInvocation(ctx context.Context, invocationID string, opts ...BetaAppClipInvocationOption) (*BetaAppClipInvocationResponse, error) {
-	query := &betaAppClipInvocationQuery{}
-	for _, opt := range opts {
-		opt(query)
-	}
-
-	invocationID = strings.TrimSpace(invocationID)
-	if invocationID == "" {
-		return nil, fmt.Errorf("invocationID is required")
-	}
-
-	path := fmt.Sprintf("/v1/betaAppClipInvocations/%s", invocationID)
-	if queryString := buildBetaAppClipInvocationQuery(query); queryString != "" {
-		path += "?" + queryString
-	}
-
-	data, err := c.do(ctx, http.MethodGet, path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var response BetaAppClipInvocationResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
 }
 
 // CreateBetaAppClipInvocation creates a beta App Clip invocation.
@@ -1968,67 +713,7 @@ func (c *Client) CreateBetaAppClipInvocation(ctx context.Context, buildBundleID 
 		payload.Included = included
 	}
 
-	body, err := BuildRequestBody(payload)
-	if err != nil {
-		return nil, err
-	}
-
-	data, err := c.do(ctx, http.MethodPost, "/v1/betaAppClipInvocations", body)
-	if err != nil {
-		return nil, err
-	}
-
-	var response BetaAppClipInvocationResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
-// UpdateBetaAppClipInvocation updates a beta App Clip invocation.
-func (c *Client) UpdateBetaAppClipInvocation(ctx context.Context, invocationID string, attrs *BetaAppClipInvocationUpdateAttributes) (*BetaAppClipInvocationResponse, error) {
-	invocationID = strings.TrimSpace(invocationID)
-	if invocationID == "" {
-		return nil, fmt.Errorf("invocationID is required")
-	}
-
-	payload := BetaAppClipInvocationUpdateRequest{
-		Data: BetaAppClipInvocationUpdateData{
-			Type:       ResourceTypeBetaAppClipInvocations,
-			ID:         invocationID,
-			Attributes: attrs,
-		},
-	}
-
-	body, err := BuildRequestBody(payload)
-	if err != nil {
-		return nil, err
-	}
-
-	path := fmt.Sprintf("/v1/betaAppClipInvocations/%s", invocationID)
-	data, err := c.do(ctx, http.MethodPatch, path, body)
-	if err != nil {
-		return nil, err
-	}
-
-	var response BetaAppClipInvocationResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
-// DeleteBetaAppClipInvocation deletes a beta App Clip invocation.
-func (c *Client) DeleteBetaAppClipInvocation(ctx context.Context, invocationID string) error {
-	invocationID = strings.TrimSpace(invocationID)
-	if invocationID == "" {
-		return fmt.Errorf("invocationID is required")
-	}
-	path := fmt.Sprintf("/v1/betaAppClipInvocations/%s", invocationID)
-	_, err := c.do(ctx, http.MethodDelete, path, nil)
-	return err
+	return sendJSON[BetaAppClipInvocationResponse](ctx, c, writeRequest{Method: http.MethodPost, Path: "/v1/betaAppClipInvocations", Payload: payload})
 }
 
 // GetBetaAppClipInvocationLocalizations retrieves localizations via the invocation include.
@@ -2060,89 +745,4 @@ func (c *Client) GetBetaAppClipInvocationLocalizations(ctx context.Context, invo
 	resp.Data = included
 
 	return resp, nil
-}
-
-// CreateBetaAppClipInvocationLocalization creates a localization.
-func (c *Client) CreateBetaAppClipInvocationLocalization(ctx context.Context, invocationID string, attrs BetaAppClipInvocationLocalizationCreateAttributes) (*BetaAppClipInvocationLocalizationResponse, error) {
-	invocationID = strings.TrimSpace(invocationID)
-	if invocationID == "" {
-		return nil, fmt.Errorf("invocationID is required")
-	}
-
-	payload := BetaAppClipInvocationLocalizationCreateRequest{
-		Data: BetaAppClipInvocationLocalizationCreateData{
-			Type:       ResourceTypeBetaAppClipInvocationLocalizations,
-			Attributes: attrs,
-			Relationships: &BetaAppClipInvocationLocalizationRelationships{
-				BetaAppClipInvocation: &Relationship{
-					Data: ResourceData{
-						Type: ResourceTypeBetaAppClipInvocations,
-						ID:   invocationID,
-					},
-				},
-			},
-		},
-	}
-
-	body, err := BuildRequestBody(payload)
-	if err != nil {
-		return nil, err
-	}
-
-	data, err := c.do(ctx, http.MethodPost, "/v1/betaAppClipInvocationLocalizations", body)
-	if err != nil {
-		return nil, err
-	}
-
-	var response BetaAppClipInvocationLocalizationResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
-// UpdateBetaAppClipInvocationLocalization updates a localization.
-func (c *Client) UpdateBetaAppClipInvocationLocalization(ctx context.Context, localizationID string, attrs *BetaAppClipInvocationLocalizationUpdateAttributes) (*BetaAppClipInvocationLocalizationResponse, error) {
-	localizationID = strings.TrimSpace(localizationID)
-	if localizationID == "" {
-		return nil, fmt.Errorf("localizationID is required")
-	}
-
-	payload := BetaAppClipInvocationLocalizationUpdateRequest{
-		Data: BetaAppClipInvocationLocalizationUpdateData{
-			Type:       ResourceTypeBetaAppClipInvocationLocalizations,
-			ID:         localizationID,
-			Attributes: attrs,
-		},
-	}
-
-	body, err := BuildRequestBody(payload)
-	if err != nil {
-		return nil, err
-	}
-
-	path := fmt.Sprintf("/v1/betaAppClipInvocationLocalizations/%s", localizationID)
-	data, err := c.do(ctx, http.MethodPatch, path, body)
-	if err != nil {
-		return nil, err
-	}
-
-	var response BetaAppClipInvocationLocalizationResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
-// DeleteBetaAppClipInvocationLocalization deletes a localization.
-func (c *Client) DeleteBetaAppClipInvocationLocalization(ctx context.Context, localizationID string) error {
-	localizationID = strings.TrimSpace(localizationID)
-	if localizationID == "" {
-		return fmt.Errorf("localizationID is required")
-	}
-	path := fmt.Sprintf("/v1/betaAppClipInvocationLocalizations/%s", localizationID)
-	_, err := c.do(ctx, http.MethodDelete, path, nil)
-	return err
 }

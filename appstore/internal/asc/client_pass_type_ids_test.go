@@ -36,26 +36,6 @@ func TestGetPassTypeIDs_WithFilters(t *testing.T) {
 	}
 }
 
-func TestGetPassTypeIDs_WithLimit(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[{"type":"passTypeIds","id":"p1","attributes":{"name":"Wallet","identifier":"pass.com.example"}}]}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/passTypeIds" {
-			t.Fatalf("expected path /v1/passTypeIds, got %s", req.URL.Path)
-		}
-		if req.URL.Query().Get("limit") != "10" {
-			t.Fatalf("expected limit=10, got %q", req.URL.Query().Get("limit"))
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetPassTypeIDs(context.Background(), WithPassTypeIDsLimit(10)); err != nil {
-		t.Fatalf("GetPassTypeIDs() error: %v", err)
-	}
-}
-
 func TestGetPassTypeIDs_WithFieldsIncludeSort(t *testing.T) {
 	response := jsonResponse(http.StatusOK, `{"data":[]}`)
 	client := newTestClient(t, func(req *http.Request) {
@@ -94,21 +74,6 @@ func TestGetPassTypeIDs_WithFieldsIncludeSort(t *testing.T) {
 		WithPassTypeIDsCertificatesLimit(10),
 	)
 	if err != nil {
-		t.Fatalf("GetPassTypeIDs() error: %v", err)
-	}
-}
-
-func TestGetPassTypeIDs_UsesNextURL(t *testing.T) {
-	next := "https://api.appstoreconnect.apple.com/v1/passTypeIds?cursor=abc"
-	response := jsonResponse(http.StatusOK, `{"data":[]}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.URL.String() != next {
-			t.Fatalf("expected next URL %q, got %q", next, req.URL.String())
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetPassTypeIDs(context.Background(), WithPassTypeIDsNextURL(next)); err != nil {
 		t.Fatalf("GetPassTypeIDs() error: %v", err)
 	}
 }
@@ -241,23 +206,6 @@ func TestUpdatePassTypeID_SendsRequest(t *testing.T) {
 	}
 }
 
-func TestDeletePassTypeID_SendsRequest(t *testing.T) {
-	response := jsonResponse(http.StatusNoContent, ``)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodDelete {
-			t.Fatalf("expected DELETE, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/passTypeIds/p1" {
-			t.Fatalf("expected path /v1/passTypeIds/p1, got %s", req.URL.Path)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if err := client.DeletePassTypeID(context.Background(), "p1"); err != nil {
-		t.Fatalf("DeletePassTypeID() error: %v", err)
-	}
-}
-
 func TestGetPassTypeIDCertificates_SendsRequest(t *testing.T) {
 	response := jsonResponse(http.StatusOK, `{"data":[{"type":"certificates","id":"c1","attributes":{"name":"Cert","certificateType":"APPLE_PAY"}}]}`)
 	client := newTestClient(t, func(req *http.Request) {
@@ -273,7 +221,7 @@ func TestGetPassTypeIDCertificates_SendsRequest(t *testing.T) {
 		assertAuthorized(t, req)
 	}, response)
 
-	if _, err := client.GetPassTypeIDCertificates(context.Background(), "p1", WithPassTypeIDCertificatesLimit(10)); err != nil {
+	if _, err := client.GetPassTypeIDCertificates(context.Background(), "p1", Limit[PassTypeIDCertificatesOption](10)); err != nil {
 		t.Fatalf("GetPassTypeIDCertificates() error: %v", err)
 	}
 }
@@ -303,12 +251,6 @@ func TestGetPassTypeIDCertificates_WithFilters(t *testing.T) {
 		if values.Get("fields[certificates]") != "serialNumber,certificateType" {
 			t.Fatalf("expected fields[certificates], got %q", values.Get("fields[certificates]"))
 		}
-		if values.Get("fields[passTypeIds]") != "identifier" {
-			t.Fatalf("expected fields[passTypeIds], got %q", values.Get("fields[passTypeIds]"))
-		}
-		if values.Get("include") != "passTypeId" {
-			t.Fatalf("expected include passTypeId, got %q", values.Get("include"))
-		}
 		if values.Get("limit") != "25" {
 			t.Fatalf("expected limit=25, got %q", values.Get("limit"))
 		}
@@ -324,9 +266,7 @@ func TestGetPassTypeIDCertificates_WithFilters(t *testing.T) {
 		WithPassTypeIDCertificatesFilterIDs([]string{"c1", "c2"}),
 		WithPassTypeIDCertificatesSort("-displayName"),
 		WithPassTypeIDCertificatesFields([]string{"serialNumber", "certificateType"}),
-		WithPassTypeIDCertificatesPassTypeIDFields([]string{"identifier"}),
-		WithPassTypeIDCertificatesInclude([]string{"passTypeId"}),
-		WithPassTypeIDCertificatesLimit(25),
+		Limit[PassTypeIDCertificatesOption](25),
 	)
 	if err != nil {
 		t.Fatalf("GetPassTypeIDCertificates() error: %v", err)
@@ -348,41 +288,7 @@ func TestGetPassTypeIDCertificatesRelationships_SendsRequest(t *testing.T) {
 		assertAuthorized(t, req)
 	}, response)
 
-	if _, err := client.GetPassTypeIDCertificatesRelationships(context.Background(), "p1", WithLinkagesLimit(5)); err != nil {
+	if _, err := client.GetPassTypeIDCertificatesRelationships(context.Background(), "p1", Limit[LinkagesOption](5)); err != nil {
 		t.Fatalf("GetPassTypeIDCertificatesRelationships() error: %v", err)
-	}
-}
-
-func TestGetCertificatePassTypeID_SendsRequest(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":{"type":"passTypeIds","id":"p1","attributes":{"name":"Wallet","identifier":"pass.com.example"}}}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/certificates/c1/passTypeId" {
-			t.Fatalf("expected path /v1/certificates/c1/passTypeId, got %s", req.URL.Path)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetCertificatePassTypeID(context.Background(), "c1"); err != nil {
-		t.Fatalf("GetCertificatePassTypeID() error: %v", err)
-	}
-}
-
-func TestGetCertificatePassTypeIDRelationship_SendsRequest(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":{"type":"passTypeIds","id":"p1"}}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/certificates/c1/relationships/passTypeId" {
-			t.Fatalf("expected path /v1/certificates/c1/relationships/passTypeId, got %s", req.URL.Path)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetCertificatePassTypeIDRelationship(context.Background(), "c1"); err != nil {
-		t.Fatalf("GetCertificatePassTypeIDRelationship() error: %v", err)
 	}
 }

@@ -6,7 +6,6 @@ import (
 	"flag"
 	"fmt"
 	"net/url"
-	"os"
 	"strconv"
 	"strings"
 
@@ -26,9 +25,9 @@ type betaGroupReadConfig struct {
 	decode func([]byte) (any, error)
 }
 
-// BetaGroupsBuildsCommand returns the beta-groups builds command group.
-func BetaGroupsBuildsCommand() *ffcli.Command {
-	return betaGroupReadGroupCommand(betaGroupReadConfig{
+// newBetaGroupsBuildsCommand returns the beta-groups builds command group built on d.
+func newBetaGroupsBuildsCommand(d *shared.Deps) *ffcli.Command {
+	return betaGroupReadGroupCommand(d, betaGroupReadConfig{
 		resource:    "builds",
 		apiResource: "builds",
 		fieldsUsage: "Fields to include for builds, comma-separated",
@@ -37,9 +36,9 @@ func BetaGroupsBuildsCommand() *ffcli.Command {
 	})
 }
 
-// BetaGroupsTestersCommand returns the beta-groups testers command group.
-func BetaGroupsTestersCommand() *ffcli.Command {
-	return betaGroupReadGroupCommand(betaGroupReadConfig{
+// newBetaGroupsTestersCommand returns the beta-groups testers command group built on d.
+func newBetaGroupsTestersCommand(d *shared.Deps) *ffcli.Command {
+	return betaGroupReadGroupCommand(d, betaGroupReadConfig{
 		resource:    "testers",
 		apiResource: "betaTesters",
 		fieldsUsage: "Fields to include for testers, comma-separated",
@@ -56,8 +55,8 @@ func decodeBetaGroupRead[T any](raw []byte) (any, error) {
 	return &response, nil
 }
 
-func betaGroupReadGroupCommand(config betaGroupReadConfig) *ffcli.Command {
-	fs := flag.NewFlagSet(config.resource, flag.ExitOnError)
+func betaGroupReadGroupCommand(d *shared.Deps, config betaGroupReadConfig) *ffcli.Command {
+	fs := d.NewFlagSet(config.resource, flag.ExitOnError)
 
 	return &ffcli.Command{
 		Name:       config.resource,
@@ -68,9 +67,9 @@ func betaGroupReadGroupCommand(config betaGroupReadConfig) *ffcli.Command {
 Examples:
   asc testflight beta-groups ` + config.resource + ` list --group-id "GROUP_ID"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
-			betaGroupReadListCommand(config),
+			betaGroupReadListCommand(d, config),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp
@@ -78,15 +77,15 @@ Examples:
 	}
 }
 
-func betaGroupReadListCommand(config betaGroupReadConfig) *ffcli.Command {
-	fs := flag.NewFlagSet(config.resource+" list", flag.ExitOnError)
+func betaGroupReadListCommand(d *shared.Deps, config betaGroupReadConfig) *ffcli.Command {
+	fs := d.NewFlagSet(config.resource+" list", flag.ExitOnError)
 
 	groupID := shared.BindResourceIDFlag(fs, "group-id", "betaGroups", "Beta group ID")
 	fields := fs.String("fields", "", config.fieldsUsage+": "+strings.Join(config.fieldValues, ", "))
-	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
-	next := fs.String("next", "", "Fetch next page using a links.next URL")
-	paginate := fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")
-	output := shared.BindOutputFlags(fs)
+	limit := fs.Int("limit", 0, shared.LimitFlagUsage(200))
+	next := fs.String("next", "", shared.NextFlagUsage)
+	paginate := fs.Bool("paginate", false, shared.PaginateFlagUsage)
+	output := d.BindOutputFlags(fs)
 
 	command := "beta-groups " + config.resource + " list"
 	// RejectNextFlagConflicts has no context to carry the tree's path
@@ -98,7 +97,7 @@ func betaGroupReadListCommand(config betaGroupReadConfig) *ffcli.Command {
 		ShortHelp:  "List " + config.resource + " in a beta group.",
 		LongHelp: `List ` + config.resource + ` in a beta group by group ID; no --app is needed.
 
---group-id, --fields, and --limit cannot be combined with --next: a links.next
+--fields and --limit cannot be combined with --next: a links.next
 URL already carries the query it was produced from. With --paginate, --limit
 sets the page size (default 200).
 
@@ -107,34 +106,23 @@ Examples:
   asc testflight ` + command + ` --group-id "GROUP_ID" --fields "` + strings.Join(config.fieldValues[:2], ",") + `"
   asc testflight ` + command + ` --group-id "GROUP_ID" --paginate`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
-			if *limit != 0 && (*limit < 1 || *limit > 200) {
-				return shared.WithDiagnostic(
-					shared.UsageErrorCtx(ctx, errPrefix+": --limit must be between 1 and 200"),
-					shared.DiagnosticInvalidInput,
-					"--limit",
-				)
-			}
-			if err := shared.ValidateNextURL(*next); err != nil {
-				return shared.UsageErrorfCtx(ctx, "%s: %v", errPrefix, err)
-			}
-			if err := shared.RejectNextFlagConflicts(fs, *next, errPrefix, "group-id", "fields", "limit"); err != nil {
+			if err := d.ValidatePaginationFlags(ctx, fs, errPrefix, 200, "fields", "limit"); err != nil {
 				return err
-			}
-			fieldValues, err := shared.NormalizeSelection(*fields, config.fieldValues, "--fields")
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error: %s\n", err.Error())
-				return shared.InvalidValueUsageError("--fields")
 			}
 			groupValue := strings.TrimSpace(*groupID)
 			nextValue := strings.TrimSpace(*next)
 			if groupValue == "" && nextValue == "" {
-				fmt.Fprintln(os.Stderr, "Error: --group-id is required")
-				return shared.MissingRequiredUsageError("--group-id")
+				return d.RequiredFlag("--group-id")
+			}
+			fieldValues, err := shared.NormalizeSelection(*fields, config.fieldValues, "--fields")
+			if err != nil {
+				fmt.Fprintf(d.IO.ErrOut, "Error: %s\n", err.Error())
+				return shared.InvalidValueUsageError("--fields")
 			}
 
-			client, err := shared.GetASCClient()
+			client, err := d.Client()
 			if err != nil {
 				return fmt.Errorf("%s: %w", errPrefix, err)
 			}
@@ -160,9 +148,9 @@ Examples:
 
 			var raw []byte
 			if *paginate {
-				raw, err = client.RawPaginatedGET(ctx, target, shared.ContextWithTimeout)
+				raw, err = client.RawPaginatedGET(ctx, target, d.Timeout)
 			} else {
-				requestCtx, cancel := shared.ContextWithTimeout(ctx)
+				requestCtx, cancel := d.Timeout(ctx)
 				raw, err = client.RawRequest(requestCtx, "GET", target, nil)
 				cancel()
 			}
@@ -171,13 +159,13 @@ Examples:
 			}
 
 			if shared.NormalizeOutputFormat(*output.Output) == "json" {
-				return shared.PrintOutput(json.RawMessage(raw), *output.Output, *output.Pretty)
+				return d.PrintOutput(json.RawMessage(raw), *output.Output, *output.Pretty)
 			}
 			resp, err := config.decode(raw)
 			if err != nil {
 				return fmt.Errorf("%s: %w", errPrefix, err)
 			}
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+			return d.PrintOutput(resp, *output.Output, *output.Pretty)
 		},
 	}
 }

@@ -19,6 +19,7 @@ const (
 type XcodeTestResult struct {
 	Workspace        string            `json:"workspace,omitempty"`
 	Project          string            `json:"project,omitempty"`
+	PackagePath      string            `json:"packagePath,omitempty"`
 	Scheme           string            `json:"scheme,omitempty"`
 	Action           string            `json:"action"`
 	Configuration    string            `json:"configuration,omitempty"`
@@ -28,6 +29,7 @@ type XcodeTestResult struct {
 	DerivedDataPath  string            `json:"derivedDataPath,omitempty"`
 	ResultBundlePath string            `json:"resultBundlePath,omitempty"`
 	Tests            *XcodeTestSummary `json:"tests,omitempty"`
+	Coverage         *XcodeCoverage    `json:"coverage,omitempty"`
 	Clean            bool              `json:"clean"`
 	NoCodeSigning    bool              `json:"noCodeSigning"`
 	Success          bool              `json:"success"`
@@ -73,6 +75,16 @@ type XcodeTestSummary struct {
 	Failures         []XcodeTestFailure `json:"failures,omitempty"`
 }
 
+// XcodeCoverage is line coverage for a whole test run or, inside Targets,
+// for one target.
+type XcodeCoverage struct {
+	Name            string          `json:"name,omitempty"`
+	LineCoverage    float64         `json:"lineCoverage"`
+	CoveredLines    int             `json:"coveredLines"`
+	ExecutableLines int             `json:"executableLines"`
+	Targets         []XcodeCoverage `json:"targets,omitempty"`
+}
+
 // XcodeTestCase is one parsed Xcode test case.
 type XcodeTestCase struct {
 	Identifier string `json:"identifier"`
@@ -99,6 +111,9 @@ func xcodeTestResultRows(result *XcodeTestResult) ([]string, [][]string) {
 	}
 	if result.Project != "" {
 		rows = append(rows, []string{"project", result.Project})
+	}
+	if result.PackagePath != "" {
+		rows = append(rows, []string{"package_path", result.PackagePath})
 	}
 	if result.Scheme != "" {
 		rows = append(rows, []string{"scheme", result.Scheme})
@@ -149,6 +164,9 @@ func xcodeTestResultRows(result *XcodeTestResult) ([]string, [][]string) {
 			}
 			rows = append(rows, []string{"test_failure", formatXcodeTestFailure(failure)})
 		}
+	}
+	if result.Coverage != nil {
+		rows = append(rows, []string{"line_coverage", fmt.Sprintf("%.2f%% (%d/%d lines)", result.Coverage.LineCoverage*100, result.Coverage.CoveredLines, result.Coverage.ExecutableLines)})
 	}
 	rows = append(
 		rows,

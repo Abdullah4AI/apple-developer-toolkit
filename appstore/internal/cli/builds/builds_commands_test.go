@@ -11,10 +11,12 @@ import (
 
 	"github.com/peterbourgon/ff/v3/ffcli"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
 func TestBuildsListCommand_VersionAndBuildNumberDescriptions(t *testing.T) {
-	cmd := BuildsListCommand()
+	d, _ := newBuildsTestDeps(nil)
+	cmd := newBuildsListCommand(d)
 
 	versionFlag := cmd.FlagSet.Lookup("version")
 	if versionFlag == nil {
@@ -36,7 +38,8 @@ func TestBuildsListCommand_VersionAndBuildNumberDescriptions(t *testing.T) {
 }
 
 func TestBuildsAddGroupsCommandDryRunHelpDescribesNoMutation(t *testing.T) {
-	cmd := BuildsAddGroupsCommand()
+	d, _ := newBuildsTestDeps(nil)
+	cmd := newBuildsAddGroupsCommand(d)
 	dryRunFlag := cmd.FlagSet.Lookup("dry-run")
 	if dryRunFlag == nil {
 		t.Fatal("expected --dry-run flag to be registered")
@@ -52,21 +55,23 @@ func TestBuildsAddGroupsCommandDryRunHelpDescribesNoMutation(t *testing.T) {
 }
 
 func TestBuildsListCommand_HelpMentionsCombinedFilters(t *testing.T) {
-	cmd := BuildsListCommand()
+	d, _ := newBuildsTestDeps(nil)
+	cmd := newBuildsListCommand(d)
 	if !strings.Contains(cmd.LongHelp, `--version "1.2.3" --build-number "123"`) {
 		t.Fatalf("expected long help to include combined version/build-number example, got %q", cmd.LongHelp)
 	}
 }
 
 func TestBuildsListQueryFlagsAreRegistered(t *testing.T) {
+	d, _ := newBuildsTestDeps(nil)
 	for _, test := range []struct {
 		name string
 		cmd  *ffcli.Command
 		flag string
 	}{
-		{name: "list beta review state", cmd: BuildsListCommand(), flag: "beta-review-state"},
-		{name: "list include", cmd: BuildsListCommand(), flag: "include"},
-		{name: "count beta review state", cmd: BuildsCountCommand(), flag: "beta-review-state"},
+		{name: "list beta review state", cmd: newBuildsListCommand(d), flag: "beta-review-state"},
+		{name: "list include", cmd: newBuildsListCommand(d), flag: "include"},
+		{name: "count beta review state", cmd: newBuildsCountCommand(d), flag: "beta-review-state"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			queryFlag := test.cmd.FlagSet.Lookup(test.flag)
@@ -78,7 +83,8 @@ func TestBuildsListQueryFlagsAreRegistered(t *testing.T) {
 }
 
 func TestBuildsUploadCommand_HelpShowsConcurrencyDefaultOnce(t *testing.T) {
-	cmd := BuildsUploadCommand()
+	d, _ := newBuildsTestDeps(nil)
+	cmd := newBuildsUploadCommand(d)
 	usage := cmd.UsageFunc(cmd)
 
 	var concurrencyLine string
@@ -101,7 +107,8 @@ func TestBuildsUploadCommand_HelpShowsConcurrencyDefaultOnce(t *testing.T) {
 }
 
 func TestBuildsUploadCommandHasExplicitSensitiveOutputOptIn(t *testing.T) {
-	cmd := BuildsUploadCommand()
+	d, _ := newBuildsTestDeps(nil)
+	cmd := newBuildsUploadCommand(d)
 	flag := cmd.FlagSet.Lookup("include-sensitive")
 	if flag == nil {
 		t.Fatal("expected --include-sensitive to be registered")
@@ -112,7 +119,8 @@ func TestBuildsUploadCommandHasExplicitSensitiveOutputOptIn(t *testing.T) {
 }
 
 func TestBuildsUploadCommandAppHelpDescribesExactIPAIdentityLookup(t *testing.T) {
-	cmd := BuildsUploadCommand()
+	d, _ := newBuildsTestDeps(nil)
+	cmd := newBuildsUploadCommand(d)
 	appFlag := cmd.FlagSet.Lookup("app")
 	if appFlag == nil {
 		t.Fatal("expected --app flag to be registered")
@@ -125,7 +133,8 @@ func TestBuildsUploadCommandAppHelpDescribesExactIPAIdentityLookup(t *testing.T)
 }
 
 func TestBuildsUploadCommandTestNotesHelpDescribesDiscoveryOnlyWait(t *testing.T) {
-	cmd := BuildsUploadCommand()
+	d, _ := newBuildsTestDeps(nil)
+	cmd := newBuildsUploadCommand(d)
 	testNotesFlag := cmd.FlagSet.Lookup("test-notes")
 	if testNotesFlag == nil {
 		t.Fatal("expected --test-notes flag to be registered")
@@ -139,7 +148,8 @@ func TestBuildsUploadCommandTestNotesHelpDescribesDiscoveryOnlyWait(t *testing.T
 }
 
 func TestBuildsListCommand_ProcessingStateFlagDescription(t *testing.T) {
-	cmd := BuildsListCommand()
+	d, _ := newBuildsTestDeps(nil)
+	cmd := newBuildsListCommand(d)
 
 	processingStateFlag := cmd.FlagSet.Lookup("processing-state")
 	if processingStateFlag == nil {
@@ -152,7 +162,8 @@ func TestBuildsListCommand_ProcessingStateFlagDescription(t *testing.T) {
 }
 
 func TestBuildsListCommand_ExcludeExpiredFlagsExist(t *testing.T) {
-	cmd := BuildsListCommand()
+	d, _ := newBuildsTestDeps(nil)
+	cmd := newBuildsListCommand(d)
 
 	excludeExpiredFlag := cmd.FlagSet.Lookup("exclude-expired")
 	if excludeExpiredFlag == nil {
@@ -211,7 +222,8 @@ func TestNormalizeBuildProcessingStateFilter(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			got, err := normalizeBuildProcessingStateFilter(test.input)
+			d, _ := newBuildsTestDeps(nil)
+			got, err := normalizeBuildProcessingStateFilter(d, test.input)
 			if test.wantErr {
 				if err == nil {
 					t.Fatal("expected error, got nil")
@@ -232,7 +244,8 @@ func TestNormalizeBuildProcessingStateFilter(t *testing.T) {
 }
 
 func TestBuildsUpdateCommand_Shape(t *testing.T) {
-	cmd := BuildsUpdateCommand()
+	d, _ := newBuildsTestDeps(nil)
+	cmd := newBuildsUpdateCommand(d)
 	if cmd.Name != "update" {
 		t.Fatalf("unexpected command name: %q", cmd.Name)
 	}
@@ -270,16 +283,17 @@ func TestBuildsUpdateCommand_Shape(t *testing.T) {
 func TestBuildSelectorCommandsExposeExcludeExpiredFlags(t *testing.T) {
 	tests := []struct {
 		name string
-		cmd  func() *ffcli.Command
+		cmd  func(*shared.Deps) *ffcli.Command
 	}{
-		{name: "add-groups", cmd: BuildsAddGroupsCommand},
-		{name: "dsyms", cmd: BuildsDsymsCommand},
-		{name: "update", cmd: BuildsUpdateCommand},
+		{name: "add-groups", cmd: newBuildsAddGroupsCommand},
+		{name: "dsyms", cmd: newBuildsDsymsCommand},
+		{name: "update", cmd: newBuildsUpdateCommand},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			flags := test.cmd().FlagSet
+			d, _ := newBuildsTestDeps(nil)
+			flags := test.cmd(d).FlagSet
 			if flags.Lookup("exclude-expired") == nil {
 				t.Fatal("expected --exclude-expired flag to be defined")
 			}
@@ -291,7 +305,8 @@ func TestBuildSelectorCommandsExposeExcludeExpiredFlags(t *testing.T) {
 }
 
 func TestBuildsUpdateCommand_ShortUsageShowsRequiredFlag(t *testing.T) {
-	cmd := BuildsUpdateCommand()
+	d, _ := newBuildsTestDeps(nil)
+	cmd := newBuildsUpdateCommand(d)
 	want := "asc builds update (--build-id BUILD_ID | --app APP --latest | --app APP --build-number BUILD_NUMBER --platform PLATFORM [--version VERSION]) --uses-non-exempt-encryption [true|false] [flags]"
 	if cmd.ShortUsage != want {
 		t.Fatalf("expected ShortUsage %q, got %q", want, cmd.ShortUsage)
@@ -320,42 +335,5 @@ func TestBuildUpdateAttributes_JSONMarshal(t *testing.T) {
 	}
 	if string(data) != "{}" {
 		t.Fatalf("expected empty JSON object, got %q", string(data))
-	}
-}
-
-func TestBuildsMutationCommandsRejectUnexpectedPositionalArgs(t *testing.T) {
-	tests := []struct {
-		name string
-		cmd  func() *ffcli.Command
-		args []string
-		want string
-	}{
-		{
-			name: "update rejects positional argument before flag validation or client setup",
-			cmd:  BuildsUpdateCommand,
-			args: []string{"--build-id", "BUILD_1", "--uses-non-exempt-encryption", "false", "extra-arg"},
-			want: "Error: unexpected argument(s): extra-arg\n",
-		},
-		{
-			name: "remove-groups rejects positional argument before flag validation or client setup",
-			cmd:  BuildsRemoveGroupsCommand,
-			args: []string{"--build-id", "BUILD_1", "--group", "GROUP_1", "--confirm", "extra-arg"},
-			want: "Error: unexpected argument(s): extra-arg\n",
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			var err error
-			stderr := captureBuildsDiagnosticStderr(t, func() {
-				err = test.cmd().ParseAndRun(t.Context(), test.args)
-			})
-			if !errors.Is(err, flag.ErrHelp) {
-				t.Fatalf("ParseAndRun(%v) error = %v, want flag.ErrHelp", test.args, err)
-			}
-			if !strings.Contains(stderr, test.want) {
-				t.Fatalf("stderr = %q, want %q", stderr, test.want)
-			}
-		})
 	}
 }

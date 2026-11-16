@@ -3,11 +3,17 @@ package asc
 import (
 	"errors"
 	"fmt"
+	"io"
+	"os"
 	"reflect"
 	"slices"
 	"strings"
 	"testing"
 )
+
+func renderByRegistry(data any, render func([]string, [][]string)) error {
+	return renderByRegistryTo(os.Stdout, data, render)
+}
 
 func TestOutputRegistry(t *testing.T) {
 	t.Run("render by registry scenarios", runOutputRegistryRenderByRegistryScenarios)
@@ -105,7 +111,7 @@ func TestCommandOutputTypesHaveTableRenderers(t *testing.T) {
 		typeKey[GameCenterLeaderboardSetImageResponse](),
 		typeKey[GameCenterLeaderboardSetMemberLocalizationsResponse](),
 		typeKey[GameCenterLeaderboardSetMemberLocalizationResponse](),
-		typeKey[GameCenterLeaderboardSetMemberLocalizationDeleteResult](),
+		typeKey[DeleteResult](),
 		typeKey[GameCenterLeaderboardSetMembersUpdateResult](),
 		typeKey[RetentionMessagesResponse](),
 		typeKey[RetentionMessageVersionResponse](),
@@ -318,7 +324,7 @@ func runOutputRegistryRenderByRegistryScenarios(t *testing.T) {
 		cleanupRegistryTypes(t, key)
 
 		wantErr := errors.New("direct failed")
-		rowsHandlerCalled := seedRowsAndDirectHandlersForTest(key, func(any, func([]string, [][]string)) error {
+		rowsHandlerCalled := seedRowsAndDirectHandlersForTest(key, func(io.Writer, any, func([]string, [][]string)) error {
 			return wantErr
 		})
 
@@ -377,12 +383,12 @@ func runOutputRegistryHelperRegistrations(t *testing.T) {
 
 	t.Run("built-in helper registrations", func(t *testing.T) {
 		t.Run("single linkage", func(t *testing.T) {
-			handler := requireOutputHandlerFor[AppStoreVersionSubmissionLinkageResponse](
+			handler := requireOutputHandlerFor[AppStoreVersionAppStoreVersionSubmissionLinkageResponse](
 				t,
 				"AppStoreVersionSubmissionLinkageResponse",
 			)
 
-			headers, rows, err := handler(&AppStoreVersionSubmissionLinkageResponse{
+			headers, rows, err := handler(&AppStoreVersionAppStoreVersionSubmissionLinkageResponse{
 				Data: ResourceData{
 					Type: ResourceType("appStoreVersionSubmissions"),
 					ID:   "submission-123",
@@ -410,22 +416,6 @@ func runOutputRegistryHelperRegistrations(t *testing.T) {
 				t.Fatalf("handler returned error: %v", err)
 			}
 			assertRowContains(t, headers, rows, "release-1", "READY_FOR_SALE")
-		})
-
-		t.Run("id/bool", func(t *testing.T) {
-			handler := requireOutputHandlerFor[AlternativeDistributionDomainDeleteResult](
-				t,
-				"AlternativeDistributionDomainDeleteResult",
-			)
-
-			headers, rows, err := handler(&AlternativeDistributionDomainDeleteResult{
-				ID:      "domain-1",
-				Deleted: true,
-			})
-			if err != nil {
-				t.Fatalf("handler returned error: %v", err)
-			}
-			assertRowContains(t, headers, rows, "domain-1", "true")
 		})
 	})
 
@@ -717,32 +707,6 @@ func runOutputRegistryPanicScenarios(t *testing.T) {
 			assertRegistryTypeAbsent(t, key)
 		})
 
-		t.Run("id/bool nil rows", func(t *testing.T) {
-			type idBool struct{}
-			key := typeKey[idBool]()
-			cleanupRegistryTypes(t, key)
-
-			expectNilRegistryPanic(t, "id/bool rows function", func() {
-				registerIDBoolRows[idBool](func(*idBool) (string, bool) {
-					return "id", true
-				}, nil)
-			})
-			assertRegistryTypeAbsent(t, key)
-		})
-
-		t.Run("id/bool nil extractor", func(t *testing.T) {
-			type idBool struct{}
-			key := typeKey[idBool]()
-			cleanupRegistryTypes(t, key)
-
-			expectNilRegistryPanic(t, "id/bool extractor", func() {
-				registerIDBoolRows[idBool](nil, func(id string, deleted bool) ([]string, [][]string) {
-					return []string{"id", "deleted"}, [][]string{{id, fmt.Sprintf("%t", deleted)}}
-				})
-			})
-			assertRegistryTypeAbsent(t, key)
-		})
-
 		t.Run("single-resource nil rows", func(t *testing.T) {
 			type helperAttrs struct {
 				Name string `json:"name"`
@@ -1008,7 +972,7 @@ func expectNilDirectRenderFunctionPanic(t *testing.T, fn func()) {
 }
 
 func renderWithRows(headers []string, rows [][]string) directRenderFunc {
-	return func(_ any, render func([]string, [][]string)) error {
+	return func(_ io.Writer, _ any, render func([]string, [][]string)) error {
 		render(headers, rows)
 		return nil
 	}

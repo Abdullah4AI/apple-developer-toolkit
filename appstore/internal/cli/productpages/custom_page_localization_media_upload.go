@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/kballard/go-shellquote"
@@ -15,17 +14,18 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
-var customPageMediaClientFactory = shared.GetASCClient
+const customPageScreenshotSetsListCommand = "asc product-pages custom-pages localizations screenshot-sets list --localization-id \"LOCALIZATION_ID\" --include-screenshots --paginate"
 
-// CustomPageLocalizationsScreenshotSetsUploadCommand returns the screenshot sets upload subcommand.
-func CustomPageLocalizationsScreenshotSetsUploadCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("custom-page-localizations screenshot-sets upload", flag.ExitOnError)
+// newCustomPageLocalizationsScreenshotSetsUploadCommand returns the screenshot sets upload subcommand.
+func newCustomPageLocalizationsScreenshotSetsUploadCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("custom-page-localizations screenshot-sets upload", flag.ExitOnError)
 
 	localizationID := shared.BindResourceIDFlag(fs, "localization-id", "appCustomProductPageLocalizations", "Custom product page localization ID")
 	path := fs.String("path", "", "Path to screenshot file or directory")
 	deviceType := fs.String("device-type", "", "Device type (e.g., IPHONE_65)")
 	pollInterval := shared.BindMediaPollIntervalFlag(fs)
-	output := shared.BindOutputFlags(fs)
+	uploadFlags := assets.BindScreenshotSetUploadFlags(fs, customPageScreenshotSetsListCommand)
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "upload",
@@ -37,31 +37,36 @@ Examples:
   asc product-pages custom-pages localizations screenshot-sets upload --localization-id "LOCALIZATION_ID" --path "./screenshots" --device-type "IPHONE_65"
   asc product-pages custom-pages localizations screenshot-sets upload --localization-id "LOCALIZATION_ID" --path "./screenshots/en-US.png" --device-type "IPHONE_65"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			ctx, pollErr := pollInterval.Apply(ctx)
 			if pollErr != nil {
 				return pollErr
 			}
-			result, err := executeCustomPageScreenshotUpload(ctx, *localizationID, *path, *deviceType, false)
+			ctx, err := uploadFlags.Apply(ctx, "custom-pages localizations screenshot-sets upload")
+			if err != nil {
+				return err
+			}
+			result, err := executeCustomPageScreenshotUpload(ctx, d, *localizationID, *path, *deviceType, false, false)
 			if err != nil {
 				return fmt.Errorf("custom-pages localizations screenshot-sets upload: %w", err)
 			}
-			return shared.PrintOutput(result, *output.Output, *output.Pretty)
+			return d.PrintOutput(result, *output.Output, *output.Pretty)
 		},
 	}
 }
 
-// CustomPageLocalizationsScreenshotSetsSyncCommand returns the screenshot sets sync subcommand.
-func CustomPageLocalizationsScreenshotSetsSyncCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("custom-page-localizations screenshot-sets sync", flag.ExitOnError)
+// newCustomPageLocalizationsScreenshotSetsSyncCommand returns the screenshot sets sync subcommand.
+func newCustomPageLocalizationsScreenshotSetsSyncCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("custom-page-localizations screenshot-sets sync", flag.ExitOnError)
 
 	localizationID := shared.BindResourceIDFlag(fs, "localization-id", "appCustomProductPageLocalizations", "Custom product page localization ID")
 	path := fs.String("path", "", "Path to screenshot file or directory")
 	deviceType := fs.String("device-type", "", "Device type (e.g., IPHONE_65)")
 	confirm := fs.Bool("confirm", false, "Confirm sync (deletes existing media in the matching set before upload)")
 	pollInterval := shared.BindMediaPollIntervalFlag(fs)
-	output := shared.BindOutputFlags(fs)
+	uploadFlags := assets.BindScreenshotSetUploadFlags(fs, customPageScreenshotSetsListCommand)
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "sync",
@@ -74,35 +79,35 @@ This replaces existing screenshots in the matching display-type set with files f
 Examples:
   asc product-pages custom-pages localizations screenshot-sets sync --localization-id "LOCALIZATION_ID" --path "./screenshots" --device-type "IPHONE_65" --confirm`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			ctx, pollErr := pollInterval.Apply(ctx)
 			if pollErr != nil {
 				return pollErr
 			}
-			if !*confirm {
-				fmt.Fprintln(os.Stderr, "Error: --confirm is required to sync")
-				return shared.MissingRequiredUsageError("--confirm")
+			ctx, err := uploadFlags.Apply(ctx, "custom-pages localizations screenshot-sets sync")
+			if err != nil {
+				return err
 			}
 
-			result, err := executeCustomPageScreenshotUpload(ctx, *localizationID, *path, *deviceType, true)
+			result, err := executeCustomPageScreenshotUpload(ctx, d, *localizationID, *path, *deviceType, true, *confirm)
 			if err != nil {
 				return fmt.Errorf("custom-pages localizations screenshot-sets sync: %w", err)
 			}
-			return shared.PrintOutput(result, *output.Output, *output.Pretty)
+			return d.PrintOutput(result, *output.Output, *output.Pretty)
 		},
 	}
 }
 
-// CustomPageLocalizationsPreviewSetsUploadCommand returns the preview sets upload subcommand.
-func CustomPageLocalizationsPreviewSetsUploadCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("custom-page-localizations preview-sets upload", flag.ExitOnError)
+// newCustomPageLocalizationsPreviewSetsUploadCommand returns the preview sets upload subcommand.
+func newCustomPageLocalizationsPreviewSetsUploadCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("custom-page-localizations preview-sets upload", flag.ExitOnError)
 
 	localizationID := shared.BindResourceIDFlag(fs, "localization-id", "appCustomProductPageLocalizations", "Custom product page localization ID")
 	path := fs.String("path", "", "Path to preview file or directory")
 	deviceType := fs.String("device-type", "", "Device type (e.g., IPHONE_65)")
 	pollInterval := shared.BindMediaPollIntervalFlag(fs)
-	output := shared.BindOutputFlags(fs)
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "upload",
@@ -114,15 +119,15 @@ Examples:
   asc product-pages custom-pages localizations preview-sets upload --localization-id "LOCALIZATION_ID" --path "./previews" --device-type "IPHONE_65"
   asc product-pages custom-pages localizations preview-sets upload --localization-id "LOCALIZATION_ID" --path "./previews/en-US.mov" --device-type "IPHONE_65"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			ctx, pollErr := pollInterval.Apply(ctx)
 			if pollErr != nil {
 				return pollErr
 			}
-			result, err := executeCustomPagePreviewUpload(ctx, *localizationID, *path, *deviceType, false)
+			result, err := executeCustomPagePreviewUpload(ctx, d, *localizationID, *path, *deviceType, false, false)
 			if result != nil {
-				if printErr := shared.PrintOutput(result, *output.Output, *output.Pretty); printErr != nil {
+				if printErr := d.PrintOutput(result, *output.Output, *output.Pretty); printErr != nil {
 					return printErr
 				}
 			}
@@ -134,16 +139,16 @@ Examples:
 	}
 }
 
-// CustomPageLocalizationsPreviewSetsSyncCommand returns the preview sets sync subcommand.
-func CustomPageLocalizationsPreviewSetsSyncCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("custom-page-localizations preview-sets sync", flag.ExitOnError)
+// newCustomPageLocalizationsPreviewSetsSyncCommand returns the preview sets sync subcommand.
+func newCustomPageLocalizationsPreviewSetsSyncCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("custom-page-localizations preview-sets sync", flag.ExitOnError)
 
 	localizationID := shared.BindResourceIDFlag(fs, "localization-id", "appCustomProductPageLocalizations", "Custom product page localization ID")
 	path := fs.String("path", "", "Path to preview file or directory")
 	deviceType := fs.String("device-type", "", "Device type (e.g., IPHONE_65)")
 	confirm := fs.Bool("confirm", false, "Confirm sync (deletes existing media in the matching set before upload)")
 	pollInterval := shared.BindMediaPollIntervalFlag(fs)
-	output := shared.BindOutputFlags(fs)
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "sync",
@@ -156,20 +161,15 @@ This replaces existing previews in the matching preview-type set with files from
 Examples:
   asc product-pages custom-pages localizations preview-sets sync --localization-id "LOCALIZATION_ID" --path "./previews" --device-type "IPHONE_65" --confirm`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			ctx, pollErr := pollInterval.Apply(ctx)
 			if pollErr != nil {
 				return pollErr
 			}
-			if !*confirm {
-				fmt.Fprintln(os.Stderr, "Error: --confirm is required to sync")
-				return shared.MissingRequiredUsageError("--confirm")
-			}
-
-			result, err := executeCustomPagePreviewUpload(ctx, *localizationID, *path, *deviceType, true)
+			result, err := executeCustomPagePreviewUpload(ctx, d, *localizationID, *path, *deviceType, true, *confirm)
 			if result != nil {
-				if printErr := shared.PrintOutput(result, *output.Output, *output.Pretty); printErr != nil {
+				if printErr := d.PrintOutput(result, *output.Output, *output.Pretty); printErr != nil {
 					return printErr
 				}
 			}
@@ -183,8 +183,9 @@ Examples:
 
 func executeCustomPageScreenshotUpload(
 	ctx context.Context,
+	d *shared.Deps,
 	localizationID, path, deviceType string,
-	sync bool,
+	sync, confirm bool,
 ) (*asc.CustomProductPageScreenshotUploadResult, error) {
 	trimmedLocalizationID := strings.TrimSpace(localizationID)
 	trimmedPath := strings.TrimSpace(path)
@@ -194,9 +195,10 @@ func executeCustomPageScreenshotUpload(
 		Path:           path,
 		DeviceType:     deviceType,
 		Replace:        sync,
+		RequireConfirm: func() error { return d.RequireConfirm(confirm) },
 		InspectCommand: fmt.Sprintf("asc product-pages custom-pages localizations screenshot-sets list --localization-id %q --include-screenshots --paginate --output json", trimmedLocalizationID),
 		ReplaceCommand: shellquote.Join("asc", "product-pages", "custom-pages", "localizations", "screenshot-sets", "sync", "--localization-id", trimmedLocalizationID, "--path", trimmedPath, "--device-type", trimmedDeviceType, "--confirm"),
-		ClientFactory:  customPageMediaClientFactory,
+		ClientFactory:  d.Client,
 		RequestContext: contextWithCustomPageMediaUploadTimeout,
 		UploadContext:  contextWithCustomPageMediaUploadTimeout,
 		Access: assets.ScreenshotSetAccess{
@@ -220,15 +222,16 @@ func executeCustomPageScreenshotUpload(
 
 func executeCustomPagePreviewUpload(
 	ctx context.Context,
+	d *shared.Deps,
 	localizationID, path, deviceType string,
-	sync bool,
+	sync, confirm bool,
 ) (*asc.CustomProductPagePreviewUploadResult, error) {
-	upload, err := uploadLocalizationPreviews(ctx, localizationPreviewUploadOptions{
+	upload, err := uploadLocalizationPreviews(ctx, d, localizationPreviewUploadOptions{
 		localizationID: localizationID,
 		path:           path,
 		deviceType:     deviceType,
 		sync:           sync,
-		clientFactory:  customPageMediaClientFactory,
+		confirm:        confirm,
 		access: localizationPreviewSetAccess{
 			list: func(ctx context.Context, client *asc.Client, localizationID string) (*asc.AppPreviewSetsResponse, error) {
 				return client.GetAppCustomProductPageLocalizationPreviewSets(ctx, localizationID)
@@ -260,8 +263,8 @@ type localizationPreviewUploadOptions struct {
 	path                     string
 	deviceType               string
 	sync                     bool
+	confirm                  bool
 	invalidDeviceTypeIsUsage bool
-	clientFactory            func() (*asc.Client, error)
 	access                   localizationPreviewSetAccess
 }
 
@@ -272,27 +275,29 @@ type localizationPreviewUpload struct {
 	failures       []asc.AssetUploadFailureItem
 }
 
-func uploadLocalizationPreviews(ctx context.Context, opts localizationPreviewUploadOptions) (*localizationPreviewUpload, error) {
+func uploadLocalizationPreviews(ctx context.Context, d *shared.Deps, opts localizationPreviewUploadOptions) (*localizationPreviewUpload, error) {
 	trimmedLocalizationID := strings.TrimSpace(opts.localizationID)
 	if trimmedLocalizationID == "" {
-		fmt.Fprintln(os.Stderr, "Error: --localization-id is required")
-		return nil, shared.MissingRequiredUsageError("--localization-id")
+		return nil, d.RequiredFlag("--localization-id")
 	}
 	trimmedPath := strings.TrimSpace(opts.path)
 	if trimmedPath == "" {
-		fmt.Fprintln(os.Stderr, "Error: --path is required")
-		return nil, shared.MissingRequiredUsageError("--path")
+		return nil, d.RequiredFlag("--path")
 	}
 	trimmedDeviceType := strings.TrimSpace(opts.deviceType)
 	if trimmedDeviceType == "" {
-		fmt.Fprintln(os.Stderr, "Error: --device-type is required")
-		return nil, shared.MissingRequiredUsageError("--device-type")
+		return nil, d.RequiredFlag("--device-type")
+	}
+	if opts.sync {
+		if err := d.RequireConfirm(opts.confirm); err != nil {
+			return nil, err
+		}
 	}
 
 	previewType, err := assets.NormalizePreviewType(trimmedDeviceType)
 	if err != nil {
 		if opts.invalidDeviceTypeIsUsage {
-			return nil, shared.UsageError(err.Error())
+			return nil, d.UsageError(err.Error())
 		}
 		return nil, assets.InvalidDeviceTypeError(err)
 	}
@@ -304,7 +309,7 @@ func uploadLocalizationPreviews(ctx context.Context, opts localizationPreviewUpl
 		return nil, assets.ClassifyMediaInputError(err, "--path")
 	}
 
-	client, err := opts.clientFactory()
+	client, err := d.Client()
 	if err != nil {
 		return nil, err
 	}

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"unicode/utf8"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
@@ -15,18 +16,6 @@ import (
 	webcore "github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/web"
 	webref "github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/web/reference"
 )
-
-func TestWebAuthCapabilitiesRejectsPositionalArgs(t *testing.T) {
-	cmd := WebAuthCapabilitiesCommand()
-	if err := cmd.FlagSet.Parse([]string{"extra"}); err != nil {
-		t.Fatalf("parse error: %v", err)
-	}
-
-	err := cmd.Exec(context.Background(), []string{"extra"})
-	if !errors.Is(err, flag.ErrHelp) {
-		t.Fatalf("expected usage error, got %v", err)
-	}
-}
 
 func TestWrapWebAuthCapabilitiesErrorFormatsLookupFailures(t *testing.T) {
 	err := wrapWebAuthCapabilitiesError("missing", webcore.ErrAPIKeyNotFound)
@@ -108,15 +97,22 @@ func TestWebAuthCapabilitiesMissingSessionPreservesUsageDiagnostic(t *testing.T)
 		)
 	}
 
-	cmd := WebAuthCapabilitiesCommand()
+	d, depsStdout, depsStderr := newWebTestDeps()
+	cmd := newWebAuthCapabilitiesCommand(d)
 	if err := cmd.FlagSet.Parse([]string{"--key-id", "KEY", "--output", "json"}); err != nil {
 		t.Fatalf("parse error: %v", err)
 	}
 
 	var execErr error
-	stdout, stderr := captureOutput(t, func() {
-		execErr = cmd.Exec(context.Background(), nil)
+	var processStdout, processStderr string
+	stdout, stderr := runWithWebTestDeps(depsStdout, depsStderr, func() {
+		// The session resolver still writes its diagnostics to the process
+		// stderr; the command writes to d.
+		processStdout, processStderr = captureWebCommandOutput(t, func() {
+			execErr = cmd.Exec(context.Background(), nil)
+		})
 	})
+	stdout, stderr = processStdout+stdout, processStderr+stderr
 	if !errors.Is(execErr, flag.ErrHelp) {
 		t.Fatalf("expected usage error, got %v", execErr)
 	}
@@ -140,7 +136,8 @@ func TestWebAuthCapabilitiesExpiredSessionGetsCommandDiagnostic(t *testing.T) {
 		return nil, "", webcore.ErrCachedSessionExpired
 	}
 
-	cmd := WebAuthCapabilitiesCommand()
+	d, _, _ := newWebTestDeps()
+	cmd := newWebAuthCapabilitiesCommand(d)
 	if err := cmd.FlagSet.Parse([]string{"--key-id", "KEY", "--output", "json"}); err != nil {
 		t.Fatalf("parse error: %v", err)
 	}
@@ -298,8 +295,6 @@ func TestWebAuthCapabilitiesEmptyCapabilitySetOutputsEmptyArray(t *testing.T) {
 }
 
 func TestWebAuthCapabilitiesKeyIDOutputsJSON(t *testing.T) {
-	labels := stubWebProgressLabels(t)
-
 	origResolveAuth := resolveWebAuthCredentialsFn
 	origResolveSession := resolveSessionFn
 	origNewClient := newWebAuthClientFn
@@ -324,6 +319,7 @@ func TestWebAuthCapabilitiesKeyIDOutputsJSON(t *testing.T) {
 		return &webcore.Client{}
 	}
 	lookupWebAuthKeyFn = func(ctx context.Context, client *webcore.Client, keyID string) (*webcore.APIKeyRoleLookup, error) {
+		synctest.Wait()
 		return &webcore.APIKeyRoleLookup{
 			KeyID:      keyID,
 			Name:       "asc_cli",
@@ -393,12 +389,13 @@ func TestWebAuthCapabilitiesKeyIDOutputsJSON(t *testing.T) {
 		}, nil
 	}
 
-	cmd := WebAuthCapabilitiesCommand()
+	d, depsStdout, depsStderr := newWebSpinnerTestDeps(t)
+	cmd := newWebAuthCapabilitiesCommand(d)
 	if err := cmd.FlagSet.Parse([]string{"--key-id", "39MX87M9Y4", "--output", "json"}); err != nil {
 		t.Fatalf("parse error: %v", err)
 	}
 
-	stdout, stderr := captureOutput(t, func() {
+	stdout, stderr := runWithWebSpinnerTestDeps(t, depsStdout, depsStderr, func(t *testing.T) {
 		if err := cmd.Exec(context.Background(), nil); err != nil {
 			t.Fatalf("Exec() error: %v", err)
 		}
@@ -444,14 +441,12 @@ func TestWebAuthCapabilitiesKeyIDOutputsJSON(t *testing.T) {
 	if got.GeneratedBy == nil || got.GeneratedBy.Name != "Jane Admin" {
 		t.Fatalf("unexpected generatedBy: %#v", got.GeneratedBy)
 	}
-	if len(*labels) != 1 || (*labels)[0] != "Loading exact API key roles" {
-		t.Fatalf("unexpected progress labels: %#v", *labels)
+	if labels := spinnerLabels(depsStderr.String()); len(labels) != 1 || labels[0] != "Loading exact API key roles" {
+		t.Fatalf("unexpected progress labels: %#v", labels)
 	}
 }
 
 func TestWebAuthCapabilitiesAuthResolutionOutputsJSON(t *testing.T) {
-	labels := stubWebProgressLabels(t)
-
 	origResolveAuth := resolveWebAuthCredentialsFn
 	origResolveSession := resolveSessionFn
 	origNewClient := newWebAuthClientFn
@@ -478,6 +473,7 @@ func TestWebAuthCapabilitiesAuthResolutionOutputsJSON(t *testing.T) {
 		return &webcore.Client{}
 	}
 	lookupWebAuthKeyFn = func(ctx context.Context, client *webcore.Client, keyID string) (*webcore.APIKeyRoleLookup, error) {
+		synctest.Wait()
 		return &webcore.APIKeyRoleLookup{
 			KeyID:      keyID,
 			Kind:       "team",
@@ -506,12 +502,13 @@ func TestWebAuthCapabilitiesAuthResolutionOutputsJSON(t *testing.T) {
 		}, nil
 	}
 
-	cmd := WebAuthCapabilitiesCommand()
+	d, depsStdout, depsStderr := newWebSpinnerTestDeps(t)
+	cmd := newWebAuthCapabilitiesCommand(d)
 	if err := cmd.FlagSet.Parse([]string{"--output", "json"}); err != nil {
 		t.Fatalf("parse error: %v", err)
 	}
 
-	stdout, stderr := captureOutput(t, func() {
+	stdout, stderr := runWithWebSpinnerTestDeps(t, depsStdout, depsStderr, func(t *testing.T) {
 		if err := cmd.Exec(context.Background(), nil); err != nil {
 			t.Fatalf("Exec() error: %v", err)
 		}
@@ -539,14 +536,12 @@ func TestWebAuthCapabilitiesAuthResolutionOutputsJSON(t *testing.T) {
 	if got.KeyNotes == nil || got.KeyNotes.Kind != "individual" || got.KeyNotes.OneActiveKeyPerUser == nil || !*got.KeyNotes.OneActiveKeyPerUser {
 		t.Fatalf("unexpected keyNotes: %#v", got.KeyNotes)
 	}
-	if len(*labels) != 1 || (*labels)[0] != "Loading exact API key roles" {
-		t.Fatalf("unexpected progress labels: %#v", *labels)
+	if labels := spinnerLabels(depsStderr.String()); len(labels) != 1 || labels[0] != "Loading exact API key roles" {
+		t.Fatalf("unexpected progress labels: %#v", labels)
 	}
 }
 
 func TestWebAuthCapabilitiesUnauthorizedLookupGetsExpiredSessionDiagnostic(t *testing.T) {
-	labels := stubWebProgressLabels(t)
-
 	origResolveSession := resolveSessionFn
 	origNewClient := newWebAuthClientFn
 	origLookup := lookupWebAuthKeyFn
@@ -565,6 +560,7 @@ func TestWebAuthCapabilitiesUnauthorizedLookupGetsExpiredSessionDiagnostic(t *te
 		return &webcore.Client{}
 	}
 	lookupWebAuthKeyFn = func(ctx context.Context, client *webcore.Client, keyID string) (*webcore.APIKeyRoleLookup, error) {
+		synctest.Wait()
 		return nil, &webcore.APIError{Status: 401}
 	}
 	resolveWebAuthRefFn = func(kind string, codes []string) (*webref.View, error) {
@@ -572,12 +568,14 @@ func TestWebAuthCapabilitiesUnauthorizedLookupGetsExpiredSessionDiagnostic(t *te
 		return nil, nil
 	}
 
-	cmd := WebAuthCapabilitiesCommand()
+	d, _, depsStderr := newWebSpinnerTestDeps(t)
+	cmd := newWebAuthCapabilitiesCommand(d)
 	if err := cmd.FlagSet.Parse([]string{"--key-id", "39MX87M9Y4", "--output", "json"}); err != nil {
 		t.Fatalf("parse error: %v", err)
 	}
 
-	err := cmd.Exec(context.Background(), nil)
+	var err error
+	synctest.Test(t, func(t *testing.T) { err = cmd.Exec(context.Background(), nil) })
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -587,14 +585,12 @@ func TestWebAuthCapabilitiesUnauthorizedLookupGetsExpiredSessionDiagnostic(t *te
 	if !strings.Contains(err.Error(), "asc web auth login") {
 		t.Fatalf("expected login guidance, got %v", err)
 	}
-	if len(*labels) != 1 || (*labels)[0] != "Loading exact API key roles" {
-		t.Fatalf("unexpected progress labels: %#v", *labels)
+	if labels := spinnerLabels(depsStderr.String()); len(labels) != 1 || labels[0] != "Loading exact API key roles" {
+		t.Fatalf("unexpected progress labels: %#v", labels)
 	}
 }
 
 func TestWebAuthCapabilitiesNonAuthAPIFailureRetainsRequestDetails(t *testing.T) {
-	labels := stubWebProgressLabels(t)
-
 	origResolveSession := resolveSessionFn
 	origNewClient := newWebAuthClientFn
 	origLookup := lookupWebAuthKeyFn
@@ -618,6 +614,7 @@ func TestWebAuthCapabilitiesNonAuthAPIFailureRetainsRequestDetails(t *testing.T)
 		CorrelationKey: "correlation-command-500",
 	}
 	lookupWebAuthKeyFn = func(ctx context.Context, client *webcore.Client, keyID string) (*webcore.APIKeyRoleLookup, error) {
+		synctest.Wait()
 		return nil, cause
 	}
 	resolveWebAuthRefFn = func(kind string, codes []string) (*webref.View, error) {
@@ -625,13 +622,14 @@ func TestWebAuthCapabilitiesNonAuthAPIFailureRetainsRequestDetails(t *testing.T)
 		return nil, nil
 	}
 
-	cmd := WebAuthCapabilitiesCommand()
+	d, depsStdout, depsStderr := newWebSpinnerTestDeps(t)
+	cmd := newWebAuthCapabilitiesCommand(d)
 	if err := cmd.FlagSet.Parse([]string{"--key-id", "39MX87M9Y4", "--output", "json"}); err != nil {
 		t.Fatalf("parse error: %v", err)
 	}
 
 	var execErr error
-	stdout, stderr := captureOutput(t, func() {
+	stdout, stderr := runWithWebSpinnerTestDeps(t, depsStdout, depsStderr, func(t *testing.T) {
 		execErr = cmd.Exec(context.Background(), nil)
 	})
 	if execErr == nil {
@@ -654,8 +652,8 @@ func TestWebAuthCapabilitiesNonAuthAPIFailureRetainsRequestDetails(t *testing.T)
 	if !errors.As(execErr, &preserved) || preserved != cause {
 		t.Fatalf("expected API cause to remain available for classification, got %v", execErr)
 	}
-	if len(*labels) != 1 || (*labels)[0] != "Loading exact API key roles" {
-		t.Fatalf("unexpected progress labels: %#v", *labels)
+	if labels := spinnerLabels(depsStderr.String()); len(labels) != 1 || labels[0] != "Loading exact API key roles" {
+		t.Fatalf("unexpected progress labels: %#v", labels)
 	}
 }
 
@@ -669,12 +667,13 @@ func TestWebAuthCapabilitiesAuthResolutionFailureIsUsageError(t *testing.T) {
 		return shared.ResolvedAuthCredentials{}, fmt.Errorf("mixed authentication sources detected")
 	}
 
-	cmd := WebAuthCapabilitiesCommand()
+	d, depsStdout, depsStderr := newWebTestDeps()
+	cmd := newWebAuthCapabilitiesCommand(d)
 	if err := cmd.FlagSet.Parse([]string{"--output", "json"}); err != nil {
 		t.Fatalf("parse error: %v", err)
 	}
 
-	stdout, stderr := captureOutput(t, func() {
+	stdout, stderr := runWithWebTestDeps(depsStdout, depsStderr, func() {
 		err := cmd.Exec(context.Background(), nil)
 		if !errors.Is(err, flag.ErrHelp) {
 			t.Fatalf("expected usage error, got %v", err)
@@ -692,7 +691,8 @@ func TestWebAuthCapabilitiesAuthResolutionFailureIsUsageError(t *testing.T) {
 }
 
 func TestWebAuthCapabilitiesHelpContrastsPublicCapabilities(t *testing.T) {
-	cmd := WebAuthCapabilitiesCommand()
+	d, _, _ := newWebTestDeps()
+	cmd := newWebAuthCapabilitiesCommand(d)
 	usage := cmd.UsageFunc(cmd)
 
 	if !strings.Contains(usage, `Unlike "asc auth capabilities", which probes effective public-API access`) {

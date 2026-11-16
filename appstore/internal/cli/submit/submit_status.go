@@ -6,7 +6,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"os"
 	"sort"
 	"strings"
 	"time"
@@ -17,12 +16,12 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
-func SubmitStatusCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("submit status", flag.ExitOnError)
+func newSubmitStatusCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("submit status", flag.ExitOnError)
 
 	submissionID := shared.BindResourceIDFlag(fs, "id", "reviewSubmissions", "Submission ID")
 	versionID := shared.BindResourceIDFlag(fs, "version-id", "appStoreVersions", "App Store version ID")
-	output := shared.BindOutputFlags(fs)
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "status",
@@ -34,22 +33,22 @@ Examples:
   asc submit status --id "SUBMISSION_ID"
   asc submit status --version-id "VERSION_ID"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			if strings.TrimSpace(*submissionID) == "" && strings.TrimSpace(*versionID) == "" {
-				fmt.Fprintln(os.Stderr, "Error: --id or --version-id is required")
+				fmt.Fprintln(d.IO.ErrOut, "Error: --id or --version-id is required")
 				return shared.MissingRequiredUsageError("")
 			}
 			if strings.TrimSpace(*submissionID) != "" && strings.TrimSpace(*versionID) != "" {
-				return shared.UsageError("--id and --version-id are mutually exclusive")
+				return d.UsageError("--id and --version-id are mutually exclusive")
 			}
 
-			client, err := shared.GetASCClient()
+			client, err := d.Client()
 			if err != nil {
 				return fmt.Errorf("submit status: %w", err)
 			}
 
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
+			requestCtx, cancel := d.Timeout(ctx)
 			defer func() {
 				if cancel != nil {
 					cancel()
@@ -96,7 +95,7 @@ Examples:
 						}
 					} else if reviewSubmission != nil {
 						applyReviewSubmissionStatus(result, reviewSubmission)
-						return shared.PrintOutput(result, *output.Output, *output.Pretty)
+						return d.PrintOutput(result, *output.Output, *output.Pretty)
 					}
 				}
 
@@ -107,7 +106,7 @@ Examples:
 					return fmt.Errorf("submit status: %w", legacyErr)
 				}
 
-				return shared.PrintOutput(result, *output.Output, *output.Pretty)
+				return d.PrintOutput(result, *output.Output, *output.Pretty)
 			}
 
 			if resolvedVersionID != "" {
@@ -118,7 +117,7 @@ Examples:
 				applyVersionStatus(result, versionResp)
 			}
 
-			return shared.PrintOutput(result, *output.Output, *output.Pretty)
+			return d.PrintOutput(result, *output.Output, *output.Pretty)
 		},
 	}
 }
@@ -208,7 +207,7 @@ func resolveReviewSubmissionVersionIDFromItems(ctx context.Context, client *asc.
 	opts := []asc.ReviewSubmissionItemsOption{
 		asc.WithReviewSubmissionItemsInclude([]string{"appStoreVersion"}),
 		asc.WithReviewSubmissionItemsFields([]string{"appStoreVersion"}),
-		asc.WithReviewSubmissionItemsLimit(200),
+		asc.Limit[asc.ReviewSubmissionItemsOption](200),
 	}
 	resp, err := client.GetReviewSubmissionItems(ctx, submissionID, opts...)
 	if err != nil {
@@ -223,7 +222,7 @@ func resolveReviewSubmissionVersionIDFromItems(ctx context.Context, client *asc.
 		if nextURL == "" {
 			return "", nil
 		}
-		resp, err = client.GetReviewSubmissionItems(ctx, submissionID, asc.WithReviewSubmissionItemsNextURL(nextURL))
+		resp, err = client.GetReviewSubmissionItems(ctx, submissionID, asc.NextURL[asc.ReviewSubmissionItemsOption](nextURL))
 		if err != nil {
 			return "", err
 		}
@@ -253,7 +252,7 @@ func findReviewSubmissionForVersion(ctx context.Context, client *asc.Client, app
 		ctx,
 		appID,
 		asc.WithReviewSubmissionsInclude([]string{"appStoreVersionForReview"}),
-		asc.WithReviewSubmissionsLimit(200),
+		asc.Limit[asc.ReviewSubmissionsOption](200),
 	)
 	if err != nil {
 		return nil, err
@@ -279,7 +278,7 @@ func findReviewSubmissionForVersion(ctx context.Context, client *asc.Client, app
 		if nextURL == "" {
 			break
 		}
-		resp, err = client.GetReviewSubmissions(ctx, appID, asc.WithReviewSubmissionsNextURL(nextURL))
+		resp, err = client.GetReviewSubmissions(ctx, appID, asc.NextURL[asc.ReviewSubmissionsOption](nextURL))
 		if err != nil {
 			return nil, err
 		}

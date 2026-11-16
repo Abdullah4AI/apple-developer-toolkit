@@ -121,93 +121,73 @@ func BindReviewSelectionFlags(fs *flag.FlagSet) *ReviewSelectionFlags {
 	return selection
 }
 
-// ValidateReviewNextFlagConflicts rejects query flags that a links.next URL
-// already encodes. Inspecting the FlagSet preserves explicit empty and zero
-// values, which must not be silently ignored either.
-func ValidateReviewNextFlagConflicts(next string, fs *flag.FlagSet, ownerFlag string) error {
-	if strings.TrimSpace(next) == "" || fs == nil {
-		return nil
-	}
-
-	setFlags := make(map[string]struct{})
-	fs.Visit(func(f *flag.Flag) {
-		setFlags[f.Name] = struct{}{}
-	})
-	for _, name := range []string{
-		ownerFlag,
-		"stars",
-		"territory",
-		"review-territory",
-		"sort",
-		"response-state",
-		"only-unresponded",
-		"include-response",
-		"fields",
-		"include",
-		"response-fields",
-		"territory-fields",
-		"limit",
-	} {
-		if _, ok := setFlags[name]; ok {
-			return shared.WithDiagnostic(
-				shared.UsageErrorf("--next cannot be combined with --%s", name),
-				shared.DiagnosticConflictingInput,
-				"",
-			)
-		}
-	}
-	return nil
+// ReviewNextConflicts names the query flags that a links.next URL already
+// encodes, so the customer review lists reject them with --next.
+var ReviewNextConflicts = []string{
+	"stars",
+	"territory",
+	"review-territory",
+	"sort",
+	"response-state",
+	"only-unresponded",
+	"include-response",
+	"fields",
+	"include",
+	"response-fields",
+	"territory-fields",
+	"limit",
 }
 
-// ReviewOptions validates the bound flags and returns the matching query
-// options. Invalid input is reported as a usage failure carrying the offending
-// parameter so both review listings fail the same way.
-func (f *ReviewFilterFlags) ReviewOptions() ([]asc.ReviewOption, error) {
+// ReviewOptionsWith validates the bound flags and returns the matching query
+// options. Invalid input is reported as a usage failure, written to d's
+// stderr, carrying the offending parameter so both review listings fail the
+// same way.
+func (f *ReviewFilterFlags) ReviewOptionsWith(d *shared.Deps) ([]asc.ReviewOption, error) {
 	if f.starsSet && strings.TrimSpace(f.Stars) == "" {
-		return nil, shared.WithDiagnostic(shared.UsageError(errInvalidReviewStars().Error()), shared.DiagnosticInvalidInput, "--stars")
+		return nil, shared.WithDiagnostic(d.UsageError(errInvalidReviewStars().Error()), shared.DiagnosticInvalidInput, "--stars")
 	}
 	if f.territorySet && strings.TrimSpace(f.Territory) == "" {
-		return nil, shared.WithDiagnostic(shared.UsageError("--territory must be a valid App Store territory code"), shared.DiagnosticInvalidInput, "--territory")
+		return nil, shared.WithDiagnostic(d.UsageError("--territory must be a valid App Store territory code"), shared.DiagnosticInvalidInput, "--territory")
 	}
 	if f.reviewTerritorySet && strings.TrimSpace(f.ReviewTerritory) == "" {
-		return nil, shared.WithDiagnostic(shared.UsageError("--review-territory must be a valid App Store territory code"), shared.DiagnosticInvalidInput, "--review-territory")
+		return nil, shared.WithDiagnostic(d.UsageError("--review-territory must be a valid App Store territory code"), shared.DiagnosticInvalidInput, "--review-territory")
 	}
 	if f.sortSet && strings.TrimSpace(f.Sort) == "" {
-		return nil, shared.WithDiagnostic(shared.UsageError("--sort must be one of: "+strings.Join(reviewSorts, ", ")), shared.DiagnosticInvalidInput, "--sort")
+		return nil, shared.WithDiagnostic(d.UsageError("--sort must be one of: "+strings.Join(reviewSorts, ", ")), shared.DiagnosticInvalidInput, "--sort")
 	}
 	if f.responseStateSet && strings.TrimSpace(f.ResponseState) == "" {
-		return nil, shared.WithDiagnostic(shared.UsageError("--response-state must be one of: any, unresponded, unreplied, responded, replied"), shared.DiagnosticInvalidInput, "--response-state")
+		return nil, shared.WithDiagnostic(d.UsageError("--response-state must be one of: any, unresponded, unreplied, responded, replied"), shared.DiagnosticInvalidInput, "--response-state")
 	}
 	ratings, err := normalizeReviewStars(f.Stars)
 	if err != nil {
-		return nil, shared.WithDiagnostic(shared.UsageError(err.Error()), shared.DiagnosticInvalidInput, "--stars")
+		return nil, shared.WithDiagnostic(d.UsageError(err.Error()), shared.DiagnosticInvalidInput, "--stars")
 	}
 	territory, err := normalizeReviewTerritories(f.Territory, "--territory")
 	if err != nil {
 		return nil, shared.WithDiagnostic(
-			shared.UsageError(err.Error()),
+			d.UsageError(err.Error()),
 			shared.DiagnosticInvalidInput,
 			"--territory",
 		)
 	}
 	reviewTerritory, err := normalizeReviewTerritories(f.ReviewTerritory, "--review-territory")
 	if err != nil {
-		return nil, shared.WithDiagnostic(shared.UsageError(err.Error()), shared.DiagnosticInvalidInput, "--review-territory")
+		return nil, shared.WithDiagnostic(d.UsageError(err.Error()), shared.DiagnosticInvalidInput, "--review-territory")
 	}
 	if err := shared.ValidateSort(f.Sort, reviewSorts...); err != nil {
-		return nil, shared.WithDiagnostic(shared.NewValidationError(err), shared.DiagnosticInvalidInput, "--sort")
+		return nil, shared.WithDiagnostic(d.UsageError(err.Error()), shared.DiagnosticInvalidInput, "--sort")
 	}
 	responseState, err := normalizeReviewResponseState(f.ResponseState)
 	if err != nil {
-		return nil, shared.WithDiagnostic(shared.UsageError(err.Error()), shared.DiagnosticInvalidInput, "--response-state")
+		return nil, shared.WithDiagnostic(d.UsageError(err.Error()), shared.DiagnosticInvalidInput, "--response-state")
 	}
 	if f.OnlyUnresponded {
 		if responseState == reviewResponseStateResponded {
-			return nil, shared.WithDiagnostic(shared.UsageError("--only-unresponded cannot be combined with --response-state responded"), shared.DiagnosticConflictingInput, "")
+			return nil, shared.WithDiagnostic(d.UsageError("--only-unresponded cannot be combined with --response-state responded"), shared.DiagnosticConflictingInput, "")
 		}
 		responseState = reviewResponseStateUnresponded
 	}
-	selectionOpts, err := f.ReviewSelectionFlags.ReviewOptions()
+	selectionOpts, err := f.ReviewSelectionFlags.ReviewOptionsWith(d)
 	if err != nil {
 		return nil, err
 	}
@@ -229,22 +209,22 @@ func (f *ReviewFilterFlags) ReviewOptions() ([]asc.ReviewOption, error) {
 	return append(opts, selectionOpts...), nil
 }
 
-// ReviewOptions validates the include and fields flags. Fields of a relationship
+// ReviewOptionsWith validates the include and fields flags. Fields of a relationship
 // also include that relationship, matching --response-fields.
-func (f *ReviewSelectionFlags) ReviewOptions() ([]asc.ReviewOption, error) {
-	fields, err := normalizeReviewList(f.Fields, f.fieldsSet, "--fields", reviewFields)
+func (f *ReviewSelectionFlags) ReviewOptionsWith(d *shared.Deps) ([]asc.ReviewOption, error) {
+	fields, err := normalizeReviewList(d, f.Fields, f.fieldsSet, "--fields", reviewFields)
 	if err != nil {
 		return nil, err
 	}
-	include, err := normalizeReviewList(f.Include, f.includeSet, "--include", reviewIncludes)
+	include, err := normalizeReviewList(d, f.Include, f.includeSet, "--include", reviewIncludes)
 	if err != nil {
 		return nil, err
 	}
-	responseFields, err := normalizeReviewList(f.ResponseFields, f.responseFieldsSet, "--response-fields", reviewResponseFields)
+	responseFields, err := normalizeReviewList(d, f.ResponseFields, f.responseFieldsSet, "--response-fields", reviewResponseFields)
 	if err != nil {
 		return nil, err
 	}
-	territoryFields, err := normalizeReviewList(f.TerritoryFields, f.territoryFieldsSet, "--territory-fields", reviewTerritoryFields)
+	territoryFields, err := normalizeReviewList(d, f.TerritoryFields, f.territoryFieldsSet, "--territory-fields", reviewTerritoryFields)
 	if err != nil {
 		return nil, err
 	}
@@ -329,7 +309,7 @@ func errInvalidReviewStars() error {
 // unset flag means "no selection"; anything else must be a list where every
 // element is allowed. Empty elements (`responseBody,,state`, `,`) are rejected
 // rather than skipped, so malformed input never silently changes the selection.
-func normalizeReviewList(value string, set bool, flagName string, allowed []string) ([]string, error) {
+func normalizeReviewList(d *shared.Deps, value string, set bool, flagName string, allowed []string) ([]string, error) {
 	if !set {
 		return nil, nil
 	}
@@ -340,7 +320,7 @@ func normalizeReviewList(value string, set bool, flagName string, allowed []stri
 		element = strings.TrimSpace(element)
 		if !slices.Contains(allowed, element) {
 			return nil, shared.WithDiagnostic(
-				shared.UsageErrorf("%s must be a comma-separated list of: %s", flagName, strings.Join(allowed, ",")),
+				d.UsageErrorf("%s must be a comma-separated list of: %s", flagName, strings.Join(allowed, ",")),
 				shared.DiagnosticInvalidInput,
 				flagName,
 			)

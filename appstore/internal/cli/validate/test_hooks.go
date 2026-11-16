@@ -2,9 +2,9 @@ package validate
 
 import (
 	"context"
+	"net/http"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
-	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/validation"
 	webcore "github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/web"
 )
@@ -17,20 +17,6 @@ type DeepValidationWebClient interface {
 	GetAgreementsStatus(context.Context) (*asc.WebAgreementsStatusResult, error)
 }
 
-// SetClientFactory replaces the ASC client factory for tests.
-// It returns a restore function to reset the previous handler.
-func SetClientFactory(fn func() (*asc.Client, error)) func() {
-	previous := clientFactory
-	if fn == nil {
-		clientFactory = shared.GetASCClient
-	} else {
-		clientFactory = fn
-	}
-	return func() {
-		clientFactory = previous
-	}
-}
-
 // SetDeepValidationTestHooks replaces cached-session loading and the web client
 // for command-level tests. It returns a restore function.
 func SetDeepValidationTestHooks(
@@ -40,7 +26,9 @@ func SetDeepValidationTestHooks(
 	previousLoader := loadDeepSessionFn
 	previousFactory := deepWebClientFactory
 	if loader != nil {
-		loadDeepSessionFn = loader
+		loadDeepSessionFn = func(ctx context.Context, _ http.RoundTripper, appleID string) (*webcore.AuthSession, bool, error) {
+			return loader(ctx, appleID)
+		}
 	}
 	if client != nil {
 		deepWebClientFactory = func(*webcore.AuthSession) deepWebClient { return client }

@@ -3,16 +3,15 @@ package apps
 import (
 	"context"
 	"flag"
-	"fmt"
-	"os"
 
 	"github.com/peterbourgon/ff/v3/ffcli"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
-// AppsSubscriptionGracePeriodCommand returns the subscription grace period command group.
-func AppsSubscriptionGracePeriodCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("subscription-grace-period", flag.ExitOnError)
+// newAppsSubscriptionGracePeriodCommand returns the subscription grace period command group.
+func newAppsSubscriptionGracePeriodCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("subscription-grace-period", flag.ExitOnError)
 
 	return &ffcli.Command{
 		Name:       "subscription-grace-period",
@@ -23,9 +22,9 @@ func AppsSubscriptionGracePeriodCommand() *ffcli.Command {
 Examples:
   asc apps subscription-grace-period view --app "APP_ID"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
-			AppsSubscriptionGracePeriodGetCommand(),
+			newAppsSubscriptionGracePeriodGetCommand(d),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp
@@ -33,44 +32,24 @@ Examples:
 	}
 }
 
-// AppsSubscriptionGracePeriodGetCommand returns the subscription grace period get subcommand.
-func AppsSubscriptionGracePeriodGetCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("subscription-grace-period view", flag.ExitOnError)
-
-	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
-	output := shared.BindOutputFlags(fs)
-
-	return &ffcli.Command{
-		Name:       "view",
-		ShortUsage: "asc apps subscription-grace-period view --app \"APP_ID\"",
-		ShortHelp:  "View an app's subscription grace period.",
+// newAppsSubscriptionGracePeriodGetCommand returns the subscription grace period get subcommand.
+func newAppsSubscriptionGracePeriodGetCommand(d *shared.Deps) *ffcli.Command {
+	return shared.BuildIDGetCommand(shared.IDGetCommandConfig{
+		Deps:        d,
+		FlagSetName: "subscription-grace-period view",
+		Name:        "view",
+		ShortUsage:  "asc apps subscription-grace-period view --app \"APP_ID\"",
+		ShortHelp:   "View an app's subscription grace period.",
 		LongHelp: `View an app's subscription grace period.
 
 Examples:
   asc apps subscription-grace-period view --app "APP_ID"`,
-		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
-		Exec: func(ctx context.Context, args []string) error {
-			resolvedAppID := shared.ResolveAppID(*appID)
-			if resolvedAppID == "" {
-				fmt.Fprintln(os.Stderr, "Error: --app is required (or set ASC_APP_ID)")
-				return shared.MissingRequiredUsageError("--app")
-			}
-
-			client, err := shared.GetASCClient()
-			if err != nil {
-				return fmt.Errorf("apps subscription-grace-period view: %w", err)
-			}
-
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
-			defer cancel()
-
-			resp, err := client.GetAppSubscriptionGracePeriod(requestCtx, resolvedAppID)
-			if err != nil {
-				return fmt.Errorf("apps subscription-grace-period view: failed to fetch: %w", err)
-			}
-
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+		IDFlag:             "app",
+		IDUsage:            "App Store Connect app ID (or ASC_APP_ID env)",
+		ResolveApp:         true,
+		RequiredDiagnostic: true,
+		Fetch: func(ctx context.Context, client *asc.Client, appID string) (any, error) {
+			return client.GetAppSubscriptionGracePeriod(ctx, appID)
 		},
-	}
+	})
 }

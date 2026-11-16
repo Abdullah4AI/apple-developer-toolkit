@@ -1,10 +1,13 @@
 package metadata
 
 import (
-	"io"
-	"os"
+	"bytes"
+	"net/http"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
 func TestBuildPlanRowsNoChangesPlaceholder(t *testing.T) {
@@ -84,14 +87,14 @@ func TestRenderHelpersProduceOutput(t *testing.T) {
 		Files:     []string{"/tmp/meta/app-info/en-US.json"},
 	}
 
-	tableOut := captureStdout(t, func() {
-		if err := printPullResultTable(pullResult); err != nil {
+	tableOut := captureStdout(t, func(d *shared.Deps) {
+		if err := printPullResultTable(d, pullResult); err != nil {
 			t.Fatalf("printPullResultTable() error: %v", err)
 		}
-		if err := printPushPlanTable(pushResult); err != nil {
+		if err := printPushPlanTable(d, pushResult); err != nil {
 			t.Fatalf("printPushPlanTable() error: %v", err)
 		}
-		if err := printValidateResultTable(validateResult); err != nil {
+		if err := printValidateResultTable(d, validateResult); err != nil {
 			t.Fatalf("printValidateResultTable() error: %v", err)
 		}
 	})
@@ -99,14 +102,14 @@ func TestRenderHelpersProduceOutput(t *testing.T) {
 		t.Fatalf("expected key table render text, got %q", tableOut)
 	}
 
-	markdownOut := captureStdout(t, func() {
-		if err := printPullResultMarkdown(pullResult); err != nil {
+	markdownOut := captureStdout(t, func(d *shared.Deps) {
+		if err := printPullResultMarkdown(d, pullResult); err != nil {
 			t.Fatalf("printPullResultMarkdown() error: %v", err)
 		}
-		if err := printPushPlanMarkdown(pushResult); err != nil {
+		if err := printPushPlanMarkdown(d, pushResult); err != nil {
 			t.Fatalf("printPushPlanMarkdown() error: %v", err)
 		}
-		if err := printValidateResultMarkdown(validateResult); err != nil {
+		if err := printValidateResultMarkdown(d, validateResult); err != nil {
 			t.Fatalf("printValidateResultMarkdown() error: %v", err)
 		}
 	})
@@ -129,8 +132,8 @@ func TestPushPlanPartialRenderersExposeRecoveryDetails(t *testing.T) {
 			{Scope: versionDirName, Locale: "fr-FR", Action: "update", Status: "failed", LocalizationID: "loc-fr", Error: "rejected"},
 		},
 	}
-	tableOut := captureStdout(t, func() {
-		if err := printPushPlanTable(result); err != nil {
+	tableOut := captureStdout(t, func(d *shared.Deps) {
+		if err := printPushPlanTable(d, result); err != nil {
 			t.Fatalf("printPushPlanTable() error: %v", err)
 		}
 	})
@@ -142,8 +145,8 @@ func TestPushPlanPartialRenderersExposeRecoveryDetails(t *testing.T) {
 
 	result.FailureArtifactPath = ""
 	result.FailureArtifactError = "mkdir .asc/reports: not a directory"
-	markdownOut := captureStdout(t, func() {
-		if err := printPushPlanMarkdown(result); err != nil {
+	markdownOut := captureStdout(t, func(d *shared.Deps) {
+		if err := printPushPlanMarkdown(d, result); err != nil {
 			t.Fatalf("printPushPlanMarkdown() error: %v", err)
 		}
 	})
@@ -152,26 +155,21 @@ func TestPushPlanPartialRenderersExposeRecoveryDetails(t *testing.T) {
 	}
 }
 
-func captureStdout(t *testing.T, fn func()) string {
+func captureStdout(t *testing.T, fn func(d *shared.Deps)) string {
 	t.Helper()
 
-	oldStdout := os.Stdout
-	readPipe, writePipe, err := os.Pipe()
-	if err != nil {
-		t.Fatalf("os.Pipe() error: %v", err)
-	}
-	os.Stdout = writePipe
+	d := metadataTestDeps()
+	fn(d)
+	return d.IO.Out.(*bytes.Buffer).String()
+}
 
-	fn()
+func metadataTestDeps() *shared.Deps {
+	return &shared.Deps{
+		IO:      &shared.IO{In: strings.NewReader(""), Out: &bytes.Buffer{}, ErrOut: &bytes.Buffer{}},
+		Now:     time.Now,
+		Timeout: shared.ContextWithTimeout,
+		After:   time.After,
 
-	if err := writePipe.Close(); err != nil {
-		t.Fatalf("close write pipe: %v", err)
+		HTTPTransport: func() http.RoundTripper { return http.DefaultTransport },
 	}
-	os.Stdout = oldStdout
-
-	data, err := io.ReadAll(readPipe)
-	if err != nil {
-		t.Fatalf("read stdout pipe: %v", err)
-	}
-	return string(data)
 }

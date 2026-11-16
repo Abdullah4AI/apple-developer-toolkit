@@ -7,10 +7,12 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/secureopen"
 )
 
@@ -35,23 +37,19 @@ type ScreenshotUploadResult struct {
 
 const maxMigrateScreenshotFileSize = int64(1024 * 1024 * 1024)
 
-func discoverScreenshotPlan(screenshotsDir string) ([]ScreenshotPlan, []SkippedItem, error) {
-	return discoverScreenshotPlanWithOpenFiles(screenshotsDir, false)
-}
-
 // discoverScreenshotPlanForUpload pins discovery to one rooted directory
 // handle and records each file's identity. Upload reopens one file at a time
 // through that root, preventing path redirection without retaining an
 // unbounded number of descriptors.
-func discoverScreenshotPlanForUpload(screenshotsDir string) ([]ScreenshotPlan, []SkippedItem, error) {
-	return discoverScreenshotPlanWithOpenFiles(screenshotsDir, true)
+func discoverScreenshotPlanForUpload(d *shared.Deps, screenshotsDir string) ([]ScreenshotPlan, []SkippedItem, error) {
+	return discoverScreenshotPlanWithOpenFiles(d, screenshotsDir, true)
 }
 
-func discoverScreenshotPlanWithOpenFiles(screenshotsDir string, retainOpenFiles bool) ([]ScreenshotPlan, []SkippedItem, error) {
+func discoverScreenshotPlanWithOpenFiles(d *shared.Deps, screenshotsDir string, retainOpenFiles bool) ([]ScreenshotPlan, []SkippedItem, error) {
 	// A screenshots directory inside the working directory ships with the
 	// checkout, so refuse symlinked components before traversing it; an
 	// operator-selected external directory remains its own trusted root.
-	root, prefix, err := newMigrateContentRoot(screenshotsDir)
+	root, prefix, err := newMigrateContentRoot(d, screenshotsDir)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -90,13 +88,37 @@ func discoverScreenshotPlanWithOpenFiles(screenshotsDir string, retainOpenFiles 
 	plans := make(map[planKey]*planFiles)
 	var skipped []SkippedItem
 
+	// iMessage and appleTV hold their own locale directories one level down.
+	type localeFolder struct {
+		fs.DirEntry
+		relative string
+		iMessage bool
+		appleTV  bool
+	}
+	var folders []localeFolder
 	for _, entry := range entries {
+		iMessage := strings.EqualFold(entry.Name(), "iMessage")
+		appleTV := strings.EqualFold(entry.Name(), "appleTV")
+		if !entry.IsDir() || !iMessage && !appleTV {
+			folders = append(folders, localeFolder{DirEntry: entry, relative: entry.Name()})
+			continue
+		}
+		nested, err := fs.ReadDir(contentRoot.FS(), entry.Name())
+		if err != nil {
+			return nil, nil, err
+		}
+		for _, child := range nested {
+			folders = append(folders, localeFolder{DirEntry: child, relative: filepath.Join(entry.Name(), child.Name()), iMessage: iMessage, appleTV: appleTV})
+		}
+	}
+
+	for _, entry := range folders {
 		if entry.Type()&os.ModeSymlink != 0 {
 			// A symlinked locale directory would read screenshots from outside
 			// the screenshots root, so report it instead of silently ignoring
 			// it, matching the metadata scan.
 			skipped = append(skipped, SkippedItem{
-				Path:   filepath.Join(screenshotsDir, entry.Name()),
+				Path:   filepath.Join(screenshotsDir, entry.relative),
 				Reason: fmt.Sprintf("skipped symlinked screenshots entry %q", entry.Name()),
 			})
 			continue
@@ -112,8 +134,8 @@ func discoverScreenshotPlanWithOpenFiles(screenshotsDir string, retainOpenFiles 
 		if err != nil {
 			return nil, nil, fmt.Errorf("invalid locale directory %q: %w", localeName, err)
 		}
-		localeDir := filepath.Join(screenshotsDir, entry.Name())
-		files, localeSkipped, err := collectScreenshotFiles(contentRoot, entry.Name(), localeDir)
+		localeDir := filepath.Join(screenshotsDir, entry.relative)
+		files, localeSkipped, err := collectScreenshotFiles(contentRoot, entry.relative, localeDir)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -133,6 +155,21 @@ func discoverScreenshotPlanWithOpenFiles(screenshotsDir string, retainOpenFiles 
 				return nil, nil, fmt.Errorf("invalid screenshot file %q: %w", candidate.path, err)
 			}
 			displayType, err := inferScreenshotDisplayTypeFromDimensions(candidate.path, dimensions.Width, dimensions.Height)
+			if entry.appleTV {
+				// The folder names the platform: its files are judged by size
+				// alone and must be an Apple TV size.
+				if inferDisplayTypeFromDimensions(dimensions.Width, dimensions.Height) == "APP_APPLE_TV" || slices.Contains(ambiguousDisplayTypesForDimensions(dimensions.Width, dimensions.Height), "APP_APPLE_TV") {
+					displayType, err = "APP_APPLE_TV", nil
+				} else {
+					err = fmt.Errorf("screenshot %q is %dx%d, which is not an Apple TV screenshot size", candidate.path, dimensions.Width, dimensions.Height)
+				}
+			}
+			if err == nil && entry.iMessage {
+				displayType = "IMESSAGE_" + displayType
+				if !asc.IsValidScreenshotDisplayType(displayType) {
+					err = fmt.Errorf("unsupported screenshot display type %q for %s", displayType, candidate.path)
+				}
+			}
 			if err != nil {
 				_ = file.Close()
 				return nil, nil, err
@@ -342,15 +379,24 @@ func collectScreenshotFiles(rooted *os.Root, localeRelative, localeDir string) (
 	sort.Slice(files, func(i, j int) bool {
 		return files[i].path < files[j].path
 	})
-	return files, skipped, nil
-}
-
-func inferScreenshotDisplayType(path string) (string, error) {
-	width, height, err := readImageDimensions(path)
-	if err != nil {
-		return "", fmt.Errorf("unable to read screenshot dimensions for %q: %w", path, err)
+	present := make(map[string]bool, len(files))
+	for _, file := range files {
+		present[file.path] = true
 	}
-	return inferScreenshotDisplayTypeFromDimensions(path, width, height)
+	kept := files[:0]
+	for _, file := range files {
+		ext := filepath.Ext(file.path)
+		framed := strings.TrimSuffix(file.path, ext) + "_framed" + ext
+		if present[framed] {
+			skipped = append(skipped, SkippedItem{
+				Path:   file.path,
+				Reason: fmt.Sprintf("framed copy %q is imported instead", filepath.Base(framed)),
+			})
+			continue
+		}
+		kept = append(kept, file)
+	}
+	return kept, skipped, nil
 }
 
 func inferScreenshotDisplayTypeFromDimensions(path string, width, height int) (string, error) {
@@ -388,14 +434,6 @@ func ambiguousDisplayTypesForDimensions(width, height int) []string {
 		return []string{"APP_APPLE_TV", "APP_APPLE_VISION_PRO"}
 	}
 	return nil
-}
-
-func readImageDimensions(path string) (int, int, error) {
-	dimensions, err := asc.ReadImageDimensions(path)
-	if err != nil {
-		return 0, 0, err
-	}
-	return dimensions.Width, dimensions.Height, nil
 }
 
 func inferDisplayTypeFromFilename(path string) string {

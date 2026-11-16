@@ -14,20 +14,14 @@ import (
 	"testing/synctest"
 	"time"
 
-	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asctest"
 )
 
 func TestSubscriptionsPricesImport_InvalidBooleanReturnsUsageError(t *testing.T) {
 	setupAuth(t)
 
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() {
-		http.DefaultTransport = originalTransport
-	})
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		t.Fatalf("unexpected HTTP request: %s %s", req.Method, req.URL.Path)
-		return nil, nil
-	})
+	reg := asctest.NewRegistry(t)
+	reg.Install()
 
 	csvPath := filepath.Join(t.TempDir(), "input.csv")
 	csvBody := "" +
@@ -380,7 +374,7 @@ func TestSubscriptionsPricesImport_ReconcilesAmbiguousCreateWithoutReplay(t *tes
 func TestSubscriptionsPricesImport_SkipsImmediatePriceWithConcreteEffectiveDate(t *testing.T) {
 	setupAuth(t)
 	// 17:30 PDT on 2026-09-30: an immediate price carries the Pacific date.
-	t.Cleanup(shared.SetPricingNowForTesting(func() time.Time {
+	t.Cleanup(setRootNow(func() time.Time {
 		return time.Date(2026, time.October, 1, 0, 30, 0, 0, time.UTC)
 	}))
 
@@ -594,19 +588,14 @@ func TestSubscriptionsPricesImport_PrintsFailuresWhenArtifactWriteFails(t *testi
 		t.Fatalf("WriteFile() error: %v", err)
 	}
 
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() { http.DefaultTransport = originalTransport })
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		switch {
-		case req.Method == http.MethodGet && req.URL.Path == "/v1/subscriptions/8000000001/prices":
-			return jsonHTTPResponse(http.StatusOK, `{"data":[],"links":{}}`), nil
-		case req.Method == http.MethodPost && req.URL.Path == "/v1/subscriptionPrices":
-			return jsonHTTPResponse(http.StatusUnprocessableEntity, `{"errors":[{"status":"422","detail":"invalid price"}]}`), nil
-		default:
-			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.String())
-			return nil, nil
-		}
-	})
+	reg := asctest.NewRegistry(t)
+	reg.Install()
+	reg.Register(asctest.GET("/v1/subscriptions/8000000001/prices", "fields[subscriptionPrices]=startDate,preserved,planType,territory,subscriptionPricePoint", "filter[planType]=UPFRONT", "include=territory,subscriptionPricePoint", "limit=200"),
+		asctest.JSON(http.StatusOK, `{"data":[],"links":{}}`))
+	reg.Register(asctest.POST("/v1/subscriptionPrices").JSONBody(`{"data":{"type":"subscriptionPrices","attributes":{"planType":"UPFRONT"},"relationships":{"subscription":{"data":{"type":"subscriptions","id":"8000000001"}},"subscriptionPricePoint":{"data":{"type":"subscriptionPricePoints","id":"pp-usa"}},"territory":{"data":{"type":"territories","id":"USA"}}}}}`),
+		asctest.JSON(http.StatusUnprocessableEntity, `{"errors":[{"status":"422","detail":"invalid price"}]}`))
+	reg.Register(asctest.GET("/v1/subscriptions/8000000001/prices", "fields[subscriptionPrices]=startDate,preserved,planType,territory,subscriptionPricePoint", "filter[planType]=UPFRONT", "include=territory,subscriptionPricePoint", "limit=200"),
+		asctest.JSON(http.StatusOK, `{"data":[],"links":{}}`))
 
 	csvPath := filepath.Join(t.TempDir(), "input.csv")
 	if err := os.WriteFile(csvPath, []byte("territory,price,price_point_id\nUSA,19.99,pp-usa\n"), 0o600); err != nil {
@@ -675,19 +664,14 @@ func TestSubscriptionsPricesImport_WritesVersionedFailureArtifact(t *testing.T) 
 	t.Setenv("ASC_MAX_RETRIES", "0")
 	t.Chdir(t.TempDir())
 
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() { http.DefaultTransport = originalTransport })
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		switch {
-		case req.Method == http.MethodGet && req.URL.Path == "/v1/subscriptions/8000000001/prices":
-			return jsonHTTPResponse(http.StatusOK, `{"data":[],"links":{}}`), nil
-		case req.Method == http.MethodPost && req.URL.Path == "/v1/subscriptionPrices":
-			return jsonHTTPResponse(http.StatusInternalServerError, `{"errors":[{"status":"500","code":"UNEXPECTED_ERROR","detail":"still unavailable"}]}`), nil
-		default:
-			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.String())
-			return nil, nil
-		}
-	})
+	reg := asctest.NewRegistry(t)
+	reg.Install()
+	reg.Register(asctest.GET("/v1/subscriptions/8000000001/prices", "fields[subscriptionPrices]=startDate,preserved,planType,territory,subscriptionPricePoint", "filter[planType]=UPFRONT", "include=territory,subscriptionPricePoint", "limit=200"),
+		asctest.JSON(http.StatusOK, `{"data":[],"links":{}}`))
+	reg.Register(asctest.POST("/v1/subscriptionPrices").JSONBody(`{"data":{"type":"subscriptionPrices","attributes":{"planType":"UPFRONT"},"relationships":{"subscription":{"data":{"type":"subscriptions","id":"8000000001"}},"subscriptionPricePoint":{"data":{"type":"subscriptionPricePoints","id":"pp-usa"}},"territory":{"data":{"type":"territories","id":"USA"}}}}}`),
+		asctest.JSON(http.StatusInternalServerError, `{"errors":[{"status":"500","code":"UNEXPECTED_ERROR","detail":"still unavailable"}]}`))
+	reg.Register(asctest.GET("/v1/subscriptions/8000000001/prices", "fields[subscriptionPrices]=startDate,preserved,planType,territory,subscriptionPricePoint", "filter[planType]=UPFRONT", "include=territory,subscriptionPricePoint", "limit=200"),
+		asctest.JSON(http.StatusOK, `{"data":[],"links":{}}`))
 
 	csvPath := filepath.Join(t.TempDir(), "input.csv")
 	csvBody := "territory,price,price_point_id\nUSA,19.99,pp-usa\n"

@@ -1,96 +1,41 @@
 package cmdtest
 
 import (
-	"context"
-	"encoding/json"
-	"io"
 	"net/http"
 	"strings"
 	"testing"
 
 	rootcmd "github.com/Abdullah4AI/apple-developer-toolkit/appstore/cmd"
-	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asctest"
 )
 
 func TestUsersListNormalizesRoles(t *testing.T) {
-	setupAuth(t)
-	installDefaultTransport(t, roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		if req.Method != http.MethodGet || req.URL.Path != "/v1/users" {
-			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.String())
-		}
-		if got := req.URL.Query().Get("filter[roles]"); got != "DEVELOPER,APP_MANAGER" {
-			t.Fatalf("filter[roles] = %q, want DEVELOPER,APP_MANAGER", got)
-		}
-		return jsonResponse(http.StatusOK, `{"data":[]}`)
-	}))
+	reg := asctest.NewRegistry(t)
+	reg.Register(asctest.GET("/v1/users", "filter[roles]=DEVELOPER,APP_MANAGER"), asctest.JSON(http.StatusOK, `{"data":[]}`))
 
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-	if err := root.Parse([]string{"users", "list", "--role", " developer, app_manager ", "--output", "json"}); err != nil {
-		t.Fatalf("parse error: %v", err)
-	}
-	if err := root.Run(context.Background()); err != nil {
+	if _, _, err := runRootWithDeps(t, stubClient(t, reg), "users", "list", "--role", " developer, app_manager ", "--output", "json"); err != nil {
 		t.Fatalf("run error: %v", err)
 	}
 }
 
 func TestUsersUpdateNormalizesRoles(t *testing.T) {
-	setupAuth(t)
-	installDefaultTransport(t, roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		if req.Method == http.MethodGet && req.URL.Path == "/v1/users/user-1" {
-			return jsonResponse(http.StatusOK, `{"data":{"type":"users","id":"user-1","attributes":{"roles":["DEVELOPER"],"provisioningAllowed":true}}}`)
-		}
-		if req.Method != http.MethodPatch || req.URL.Path != "/v1/users/user-1" {
-			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.String())
-		}
-		var payload asc.UserUpdateRequest
-		if err := json.NewDecoder(req.Body).Decode(&payload); err != nil {
-			t.Fatalf("decode request: %v", err)
-		}
-		if got := payload.Data.Attributes.Roles; len(got) != 2 || got[0] != "DEVELOPER" || got[1] != "APP_MANAGER" {
-			t.Fatalf("roles = %#v, want [DEVELOPER APP_MANAGER]", got)
-		}
-		if payload.Data.Attributes.AllAppsVisible != nil {
-			t.Fatalf("allAppsVisible = %v, want omitted", payload.Data.Attributes.AllAppsVisible)
-		}
-		if payload.Data.Relationships != nil {
-			t.Fatalf("relationships = %+v, want omitted", payload.Data.Relationships)
-		}
-		return jsonResponse(http.StatusOK, `{"data":{"type":"users","id":"user-1","attributes":{"roles":["DEVELOPER","APP_MANAGER"]}}}`)
-	}))
+	reg := asctest.NewRegistry(t)
+	reg.Register(asctest.GET("/v1/users/user-1"),
+		asctest.JSON(http.StatusOK, `{"data":{"type":"users","id":"user-1","attributes":{"roles":["DEVELOPER"],"provisioningAllowed":true}}}`))
+	reg.Register(asctest.PATCH("/v1/users/user-1").JSONBody(`{"data":{"type":"users","id":"user-1","attributes":{"roles":["DEVELOPER","APP_MANAGER"],"provisioningAllowed":true}}}`),
+		asctest.JSON(http.StatusOK, `{"data":{"type":"users","id":"user-1","attributes":{"roles":["DEVELOPER","APP_MANAGER"]}}}`))
 
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-	if err := root.Parse([]string{"users", "update", "--id", "user-1", "--roles", "developer,app_manager", "--output", "json"}); err != nil {
-		t.Fatalf("parse error: %v", err)
-	}
-	if err := root.Run(context.Background()); err != nil {
+	if _, _, err := runRootWithDeps(t, stubClient(t, reg), "users", "update", "--id", "user-1", "--roles", "developer,app_manager", "--output", "json"); err != nil {
 		t.Fatalf("run error: %v", err)
 	}
 }
 
 func TestUsersInviteNormalizesRoles(t *testing.T) {
-	setupAuth(t)
-	installDefaultTransport(t, roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		if req.Method != http.MethodPost || req.URL.Path != "/v1/userInvitations" {
-			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.String())
-		}
-		var payload asc.UserInvitationCreateRequest
-		if err := json.NewDecoder(req.Body).Decode(&payload); err != nil {
-			t.Fatalf("decode request: %v", err)
-		}
-		if got := payload.Data.Attributes.Roles; len(got) != 1 || got[0] != "DEVELOPER" {
-			t.Fatalf("roles = %#v, want [DEVELOPER]", got)
-		}
-		return jsonResponse(http.StatusCreated, `{"data":{"type":"userInvitations","id":"invite-1","attributes":{"roles":["DEVELOPER"]}}}`)
-	}))
+	reg := asctest.NewRegistry(t)
+	reg.Register(asctest.POST("/v1/userInvitations").JSONBody(`{"data":{"type":"userInvitations","attributes":{"email":"user@example.com","firstName":"Jane","lastName":"Doe","roles":["DEVELOPER"],"allAppsVisible":true}}}`),
+		asctest.JSON(http.StatusCreated, `{"data":{"type":"userInvitations","id":"invite-1","attributes":{"roles":["DEVELOPER"]}}}`))
 
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-	if err := root.Parse([]string{"users", "invite", "--email", "user@example.com", "--first-name", "Jane", "--last-name", "Doe", "--roles", "developer", "--all-apps", "--output", "json"}); err != nil {
-		t.Fatalf("parse error: %v", err)
-	}
-	if err := root.Run(context.Background()); err != nil {
+	if _, _, err := runRootWithDeps(t, stubClient(t, reg), "users", "invite", "--email", "user@example.com", "--first-name", "Jane", "--last-name", "Doe", "--roles", "developer", "--all-apps", "--output", "json"); err != nil {
 		t.Fatalf("run error: %v", err)
 	}
 }
@@ -111,11 +56,10 @@ func TestUsersCommandsRejectInvalidRolesWithUsageExit(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			stdout, stderr := captureOutput(t, func() {
-				if code := rootcmd.Run(test.args, "1.2.3"); code != rootcmd.ExitUsage {
-					t.Fatalf("exit code = %d, want %d", code, rootcmd.ExitUsage)
-				}
-			})
+			stdout, stderr, code := runWithDeps(t, stubClient(t, asctest.NewRegistry(t)), test.args...)
+			if code != rootcmd.ExitUsage {
+				t.Fatalf("exit code = %d, want %d", code, rootcmd.ExitUsage)
+			}
 			if stdout != "" {
 				t.Fatalf("expected empty stdout, got %q", stdout)
 			}

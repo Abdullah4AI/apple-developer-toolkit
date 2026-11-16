@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"math/big"
-	"os"
 	"slices"
 	"sort"
 	"strings"
@@ -87,12 +87,15 @@ type PriceSchedulePPPCommandConfig struct {
 	Examples     string
 	ErrorPrefix  string
 	BindResource func(fs *flag.FlagSet) PriceSchedulePPPResource
+	// Deps supplies the streams. It defaults to DefaultDeps().
+	Deps *Deps
 }
 
 // NewPriceSchedulePPPCommand builds a purchasing-power-parity command for
 // resources priced with price schedules.
 func NewPriceSchedulePPPCommand(config PriceSchedulePPPCommandConfig) *ffcli.Command {
-	fs := flag.NewFlagSet(config.FlagSetName, flag.ExitOnError)
+	d := builderDeps(config.Deps)
+	fs := d.NewFlagSet(config.FlagSetName, flag.ExitOnError)
 
 	resource := config.BindResource(fs)
 	baseTerritory := fs.String("base-territory", "USA", "Base territory (accepts alpha-2, alpha-3, or exact English country name)")
@@ -103,7 +106,7 @@ func NewPriceSchedulePPPCommand(config PriceSchedulePPPCommandConfig) *ffcli.Com
 	dryRun := fs.Bool("dry-run", false, "Show the purchasing-power plan without applying it")
 	confirm := fs.Bool("confirm", false, "Confirm replacing the price schedule (required unless --dry-run)")
 	workers := fs.Int("workers", 4, "Number of concurrent price-point ladder reads")
-	output := BindOutputFlags(fs)
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "ppp",
@@ -148,64 +151,60 @@ Examples:
 		FlagSet:   fs,
 		UsageFunc: DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
-			if len(args) > 0 {
-				return UsageError(config.ErrorPrefix + " does not accept positional arguments")
-			}
 			if err := resource.Validate(); err != nil {
 				return err
 			}
 			price := strings.TrimSpace(*basePrice)
 			if price == "" {
-				fmt.Fprintln(os.Stderr, "Error: --base-price is required")
-				return MissingRequiredUsageError("--base-price")
+				return d.RequiredFlag("--base-price")
 			}
 			basePriceValue, ok := new(big.Rat).SetString(price)
 			if !IsPriceDecimal(price) || !ok || basePriceValue.Sign() <= 0 {
-				return UsageError("--base-price must be a positive decimal")
+				return d.UsageError("--base-price must be a positive decimal")
 			}
 			territory, err := ascterritory.Normalize(*baseTerritory)
 			if err != nil {
-				return UsageError(fmt.Sprintf("invalid --base-territory: %v", err))
+				return d.UsageError(fmt.Sprintf("invalid --base-territory: %v", err))
 			}
 			baseLevel, indexed := pppindex.PriceLevel(territory)
 			if !indexed {
-				return UsageError(fmt.Sprintf("invalid --base-territory: no purchasing-power price level for %s", territory))
+				return d.UsageError(fmt.Sprintf("invalid --base-territory: no purchasing-power price level for %s", territory))
 			}
-			roundMode, err := ParsePriceRounding(*rounding)
+			roundMode, err := d.ParsePriceRounding(*rounding)
 			if err != nil {
 				return err
 			}
 			if *workers < 1 || *workers > 32 {
-				return UsageError("--workers must be between 1 and 32")
+				return d.UsageError("--workers must be between 1 and 32")
 			}
 			if *dryRun && *confirm {
-				return UsageError("--dry-run cannot be combined with --confirm")
+				return d.UsageError("--dry-run cannot be combined with --confirm")
 			}
-			if !*dryRun && !*confirm {
-				return UsageError("--confirm is required unless --dry-run is set")
+			if err := d.RequireConfirmUnlessDryRun(*dryRun, *confirm); err != nil {
+				return err
 			}
-			effectiveAt := PricingNow()
+			effectiveAt := d.Now()
 			start := strings.TrimSpace(*startDate)
 			if start != "" {
 				start, err = NormalizeDate(start, "--start-date")
 				if err != nil {
-					return UsageError(err.Error())
+					return d.UsageError(err.Error())
 				}
 				parsed, err := time.Parse("2006-01-02", start)
 				if err != nil {
-					return UsageError(err.Error())
+					return d.UsageError(err.Error())
 				}
 				if !parsed.After(PricingDate(effectiveAt)) {
-					return UsageError("--start-date must be a future date")
+					return d.UsageError("--start-date must be a future date")
 				}
 				effectiveAt = time.Date(parsed.Year(), parsed.Month(), parsed.Day(), 12, 0, 0, 0, pricingLocation())
 			}
 
-			selected, err := PPPTerritorySelection(selection)
+			selected, err := d.PPPTerritorySelection(selection)
 			if err != nil {
 				return err
 			}
-			client, err := GetASCClient()
+			client, err := d.Client()
 			if err != nil {
 				return fmt.Errorf("%s: %w", config.ErrorPrefix, err)
 			}
@@ -213,7 +212,7 @@ Examples:
 			if err != nil {
 				return err
 			}
-			result, err := runPriceSchedulePPP(ctx, surface, priceSchedulePPPRun{
+			result, err := runPriceSchedulePPP(ctx, d.IO.ErrOut, surface, priceSchedulePPPRun{
 				selected:      selected,
 				baseTerritory: territory,
 				baseLevel:     baseLevel,
@@ -223,11 +222,12 @@ Examples:
 				effectiveAt:   effectiveAt,
 				dryRun:        *dryRun,
 				workers:       *workers,
+				now:           d.Now,
 			})
 			if err != nil {
 				return fmt.Errorf("%s: %w", config.ErrorPrefix, err)
 			}
-			if err := PrintOutput(result.output, *output.Output, *output.Pretty); err != nil {
+			if err := d.PrintOutput(result.output, *output.Output, *output.Pretty); err != nil {
 				return err
 			}
 			if result.err != nil {
@@ -248,6 +248,7 @@ type priceSchedulePPPRun struct {
 	effectiveAt   time.Time
 	dryRun        bool
 	workers       int
+	now           func() time.Time
 }
 
 type priceSchedulePPPOutcome struct {
@@ -256,23 +257,23 @@ type priceSchedulePPPOutcome struct {
 	err error
 }
 
-func runPriceSchedulePPP(ctx context.Context, surface PriceSchedulePPPSurface, run priceSchedulePPPRun) (priceSchedulePPPOutcome, error) {
+func runPriceSchedulePPP(ctx context.Context, stderr io.Writer, surface PriceSchedulePPPSurface, run priceSchedulePPPRun) (priceSchedulePPPOutcome, error) {
 	key := surface.PricePointKey
 	if key == nil {
 		key = strings.TrimSpace
 	}
 
-	fmt.Fprintln(os.Stderr, "Fetching current prices...")
+	fmt.Fprintln(stderr, "Fetching current prices...")
 	var snapshot PPPScheduleSnapshot
 	var current []ResolvedPriceRow
 	var err error
 	if len(run.selected) > 0 {
 		snapshot, err = surface.ReadSchedule(ctx)
 		if err == nil {
-			current, err = SelectPPPCurrentPrices(snapshot.Prices, run.selected, PricingNow())
+			current, err = SelectPPPCurrentPrices(snapshot.Prices, run.selected, run.now())
 		}
 	} else {
-		current, err = surface.CurrentPrices(ctx, PricingNow())
+		current, err = surface.CurrentPrices(ctx, run.now())
 	}
 	if err != nil {
 		return priceSchedulePPPOutcome{}, fmt.Errorf("fetch current prices: %w", err)
@@ -310,7 +311,7 @@ func runPriceSchedulePPP(ctx context.Context, surface PriceSchedulePPPSurface, r
 		sort.Strings(territories)
 	}
 
-	fmt.Fprintf(os.Stderr, "Fetching price points for %d territories...\n", len(territories))
+	fmt.Fprintf(stderr, "Fetching price points for %d territories...\n", len(territories))
 	ladders, err := fetchPriceLadders(ctx, surface, territories, run.workers)
 	if err != nil {
 		return priceSchedulePPPOutcome{}, fmt.Errorf("fetch price points: %w", err)
@@ -320,7 +321,7 @@ func runPriceSchedulePPP(ctx context.Context, surface PriceSchedulePPPSurface, r
 		return priceSchedulePPPOutcome{}, fmt.Errorf("--base-price %s in %s: %w", FormatExactPriceDecimal(run.basePrice), run.baseTerritory, err)
 	}
 
-	fmt.Fprintln(os.Stderr, "Fetching equalized prices for all territories...")
+	fmt.Fprintln(stderr, "Fetching equalized prices for all territories...")
 	equalized, err := surface.Equalizations(ctx, baseResolution.PricePointID)
 	if err != nil {
 		return priceSchedulePPPOutcome{}, fmt.Errorf("fetch equalizations: %w", err)
@@ -401,11 +402,11 @@ func runPriceSchedulePPP(ctx context.Context, surface PriceSchedulePPPSurface, r
 		if err != nil {
 			return priceSchedulePPPOutcome{}, fmt.Errorf("pre-write schedule read: %w", err)
 		}
-		if !samePPPSnapshot(snapshot, fresh, key) {
+		if !samePPPSnapshot(snapshot, fresh, key, run.now) {
 			return priceSchedulePPPOutcome{}, fmt.Errorf("price schedule changed during planning; no changes were applied")
 		}
 	}
-	fmt.Fprintf(os.Stderr, "Replacing the price schedule with %d manual prices...\n", len(prices))
+	fmt.Fprintf(stderr, "Replacing the price schedule with %d manual prices...\n", len(prices))
 	if err := surface.ReplaceSchedule(ctx, base, prices); err != nil {
 		for index := range result.Rows {
 			if result.Rows[index].Status == "planned" {
@@ -424,10 +425,10 @@ func runPriceSchedulePPP(ctx context.Context, surface PriceSchedulePPPSurface, r
 	}
 	applied := SummarizePriceLadderRows(result.Rows).Applied
 
-	fmt.Fprintln(os.Stderr, "Verifying prices...")
+	fmt.Fprintln(stderr, "Verifying prices...")
 	verifyErr := verifyPriceSchedulePPP(ctx, surface, key, run.effectiveAt, result)
 	if len(run.selected) > 0 {
-		if err := verifyScopedPPPSchedule(ctx, surface, snapshot, rows, prices, ladders, run.startDate, key); err != nil {
+		if err := verifyScopedPPPSchedule(ctx, surface, snapshot, rows, prices, ladders, run.startDate, key, run.now); err != nil {
 			result.Verification.Status = "failed"
 			verifyErr = err
 		}
@@ -591,12 +592,35 @@ func CollectPricePointsByTerritory[A any](
 	fetch func(ctx context.Context, next string) (*asc.Response[A], error),
 	customerPrice func(A) string,
 ) (map[string][]PriceLadderCandidate, error) {
+	return collectPricePointsByTerritory(ctx, ContextWithTimeout, time.After, territories, fetch, customerPrice)
+}
+
+// CollectPricePointsByTerritoryWith is CollectPricePointsByTerritory with each
+// page read's deadline from d.Timeout and the waits between attempts on d.After.
+func CollectPricePointsByTerritoryWith[A any](
+	ctx context.Context,
+	d *Deps,
+	territories []string,
+	fetch func(ctx context.Context, next string) (*asc.Response[A], error),
+	customerPrice func(A) string,
+) (map[string][]PriceLadderCandidate, error) {
+	return collectPricePointsByTerritory(ctx, d.Timeout, d.After, territories, fetch, customerPrice)
+}
+
+func collectPricePointsByTerritory[A any](
+	ctx context.Context,
+	timeout func(context.Context) (context.Context, context.CancelFunc),
+	after func(time.Duration) <-chan time.Time,
+	territories []string,
+	fetch func(ctx context.Context, next string) (*asc.Response[A], error),
+	customerPrice func(A) string,
+) (map[string][]PriceLadderCandidate, error) {
 	wanted := make(map[string]bool, len(territories))
 	for _, territory := range territories {
 		wanted[territory] = true
 	}
 	read := func(next string) (*asc.Response[A], error) {
-		return RetryReadWithFreshTimeout(ctx, func(requestCtx context.Context) (*asc.Response[A], error) {
+		return retryReadWithFreshTimeout(ctx, timeout, after, func(requestCtx context.Context) (*asc.Response[A], error) {
 			return fetch(requestCtx, next)
 		})
 	}

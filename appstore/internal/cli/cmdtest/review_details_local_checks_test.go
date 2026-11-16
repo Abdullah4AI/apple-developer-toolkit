@@ -1,13 +1,14 @@
 package cmdtest
 
 import (
-	"io"
 	"net/http"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	rootcmd "github.com/Abdullah4AI/apple-developer-toolkit/appstore/cmd"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asctest"
 )
 
 var reviewDetailCompleteContactArgs = []string{
@@ -25,62 +26,48 @@ func reviewDetailCreateArgs(extra ...string) []string {
 
 // failOnReviewDetailHTTP proves a local check rejected the input before any
 // App Store Connect request.
-func failOnReviewDetailHTTP(t *testing.T) {
+func failOnReviewDetailHTTP(t *testing.T) func() (*asc.Client, error) {
 	t.Helper()
-	setupAuth(t)
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() {
-		http.DefaultTransport = originalTransport
-	})
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		t.Fatalf("unexpected HTTP request: %s %s", req.Method, req.URL.Path)
-		return nil, nil
-	})
+	return stubClient(t, asctest.NewRegistry(t))
 }
 
-// captureReviewDetailWrite answers one review detail write and records its body.
-func captureReviewDetailWrite(t *testing.T, method, path string) *string {
+// captureReviewDetailWrite answers one review detail write and returns its body once sent.
+func captureReviewDetailWrite(t *testing.T, method, path string) (func() (*asc.Client, error), func() string) {
 	t.Helper()
-	setupAuth(t)
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() {
-		http.DefaultTransport = originalTransport
-	})
-	body := new(string)
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		if req.Method != method || req.URL.Path != path {
-			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.Path)
+	matcher := asctest.PATCH(path)
+	if method == http.MethodPost {
+		matcher = asctest.POST(path)
+	}
+	reg := asctest.NewRegistry(t)
+	reg.Register(matcher, asctest.JSON(http.StatusOK, `{"data":{"type":"appStoreReviewDetails","id":"detail-1","attributes":{}}}`))
+	return stubClient(t, reg), func() string {
+		requests := reg.Requests()
+		if len(requests) == 0 {
+			return ""
 		}
-		payload, err := io.ReadAll(req.Body)
-		if err != nil {
-			t.Fatalf("read body error: %v", err)
-		}
-		*body = string(payload)
-		return jsonResponse(http.StatusOK, `{"data":{"type":"appStoreReviewDetails","id":"detail-1","attributes":{}}}`)
-	})
-	return body
+		return string(requests[0].Body)
+	}
 }
 
-func runReviewDetailCommand(t *testing.T, args []string) (string, string) {
+func runReviewDetailCommand(t *testing.T, client func() (*asc.Client, error), args []string) (string, string) {
 	t.Helper()
-	return captureOutput(t, func() {
-		if code := rootcmd.Run(args, "1.2.3"); code != rootcmd.ExitSuccess {
-			t.Fatalf("exit code = %d, want %d", code, rootcmd.ExitSuccess)
-		}
-	})
+	stdout, stderr, code := runWithDeps(t, client, args...)
+	if code != rootcmd.ExitSuccess {
+		t.Fatalf("exit code = %d, want %d", code, rootcmd.ExitSuccess)
+	}
+	return stdout, stderr
 }
 
-func assertReviewDetailUsageExit(t *testing.T, args []string, wantErr string) {
+func assertReviewDetailUsageExit(t *testing.T, client func() (*asc.Client, error), args []string, wantErr string) {
 	t.Helper()
-	stdout, stderr := captureOutput(t, func() {
-		if code := rootcmd.Run(args, "1.2.3"); code != rootcmd.ExitUsage {
-			t.Fatalf("exit code = %d, want %d", code, rootcmd.ExitUsage)
-		}
-	})
+	stdout, stderr, code := runWithDeps(t, client, args...)
+	if code != rootcmd.ExitUsage {
+		t.Fatalf("exit code = %d, want %d", code, rootcmd.ExitUsage)
+	}
 	if stdout != "" {
 		t.Fatalf("expected empty stdout, got %q", stdout)
 	}
@@ -104,16 +91,16 @@ func TestReviewDetailsRejectOverlongNotesBeforeRequest(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			failOnReviewDetailHTTP(t)
-			assertReviewDetailUsageExit(t, test.args, "Error: --notes is 4,163 characters; App Store review notes allow at most 4,000. Remove at least 163 characters.")
+			client := failOnReviewDetailHTTP(t)
+			assertReviewDetailUsageExit(t, client, test.args, "Error: --notes is 4,163 characters; App Store review notes allow at most 4,000. Remove at least 163 characters.")
 		})
 	}
 }
 
 func TestReviewDetailsRejectNotesOneCharacterOverLimit(t *testing.T) {
-	failOnReviewDetailHTTP(t)
+	client := failOnReviewDetailHTTP(t)
 	assertReviewDetailUsageExit(
-		t,
+		t, client,
 		[]string{"review", "details-update", "--id", "detail-1", "--notes", strings.Repeat("a", 4001)},
 		"Error: --notes is 4,001 characters; App Store review notes allow at most 4,000. Remove at least 1 character.",
 	)
@@ -133,10 +120,10 @@ func TestReviewDetailsSendNotesAtLimit(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			body := captureReviewDetailWrite(t, test.method, test.path)
-			runReviewDetailCommand(t, test.args)
-			if !strings.Contains(*body, `"notes":"`+notes+`"`) {
-				t.Fatalf("expected notes in request body, got %d bytes", len(*body))
+			client, body := captureReviewDetailWrite(t, test.method, test.path)
+			runReviewDetailCommand(t, client, test.args)
+			if !strings.Contains(body(), `"notes":"`+notes+`"`) {
+				t.Fatalf("expected notes in request body, got %d bytes", len(body()))
 			}
 		})
 	}
@@ -147,10 +134,10 @@ func TestReviewDetailsTrimNotesBeforeCountingAndCountCRLFOnce(t *testing.T) {
 	// counts once, so neither may push otherwise valid notes over the limit.
 	// Counting CRLF as two characters would make these notes 5,998 long.
 	notes := "  \n" + strings.Repeat("a\r\n", 2000) + "\n  "
-	body := captureReviewDetailWrite(t, http.MethodPatch, "/v1/appStoreReviewDetails/detail-1")
-	runReviewDetailCommand(t, []string{"review", "details-update", "--id", "detail-1", "--notes", notes})
-	if !strings.Contains(*body, `"notes":"a\r\na\r\n`) {
-		t.Fatalf("expected trimmed notes in request body, got %q", (*body)[:min(len(*body), 120)])
+	client, body := captureReviewDetailWrite(t, http.MethodPatch, "/v1/appStoreReviewDetails/detail-1")
+	runReviewDetailCommand(t, client, []string{"review", "details-update", "--id", "detail-1", "--notes", notes})
+	if !strings.Contains(body(), `"notes":"a\r\na\r\n`) {
+		t.Fatalf("expected trimmed notes in request body, got %q", body()[:min(len(body()), 120)])
 	}
 }
 
@@ -178,8 +165,8 @@ func TestReviewDetailsRejectNorthAmericanPhoneWithWrongDigitCount(t *testing.T) 
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			failOnReviewDetailHTTP(t)
-			assertReviewDetailUsageExit(t, test.args, test.wantErr)
+			client := failOnReviewDetailHTTP(t)
+			assertReviewDetailUsageExit(t, client, test.args, test.wantErr)
 		})
 	}
 }
@@ -189,10 +176,10 @@ func TestReviewDetailsLeaveOtherPhoneFormatsToAppStoreConnect(t *testing.T) {
 	// the CLI has no per-country numbering data, so only +1 numbers are checked.
 	for _, phone := range []string{"+1 (408) 555-0100", "+44 844 209 0611", "4085550100", "+1 408 555 0100 ext 12"} {
 		t.Run(phone, func(t *testing.T) {
-			body := captureReviewDetailWrite(t, http.MethodPatch, "/v1/appStoreReviewDetails/detail-1")
-			runReviewDetailCommand(t, []string{"review", "details-update", "--id", "detail-1", "--contact-phone", phone})
-			if !strings.Contains(*body, `"contactPhone":"`+phone+`"`) {
-				t.Fatalf("expected contactPhone %q in body, got %s", phone, *body)
+			client, body := captureReviewDetailWrite(t, http.MethodPatch, "/v1/appStoreReviewDetails/detail-1")
+			runReviewDetailCommand(t, client, []string{"review", "details-update", "--id", "detail-1", "--contact-phone", phone})
+			if !strings.Contains(body(), `"contactPhone":"`+phone+`"`) {
+				t.Fatalf("expected contactPhone %q in body, got %s", phone, body())
 			}
 		})
 	}
@@ -227,32 +214,32 @@ func TestReviewDetailsCreateRequiresContactFields(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			failOnReviewDetailHTTP(t)
-			assertReviewDetailUsageExit(t, test.args, test.wantErr)
+			client := failOnReviewDetailHTTP(t)
+			assertReviewDetailUsageExit(t, client, test.args, test.wantErr)
 		})
 	}
 }
 
 func TestReviewDetailsCreateMissingContactsPointsToUpdate(t *testing.T) {
-	failOnReviewDetailHTTP(t)
+	client := failOnReviewDetailHTTP(t)
 	assertReviewDetailUsageExit(
-		t,
+		t, client,
 		[]string{"review", "details-create", "--version-id", "version-1", "--notes", "Guest flow"},
 		"To change a version that already has review details, use asc review details-update or --if-exists update.",
 	)
 }
 
 func TestReviewDetailsCreateSendsCompleteContacts(t *testing.T) {
-	body := captureReviewDetailWrite(t, http.MethodPost, "/v1/appStoreReviewDetails")
-	runReviewDetailCommand(t, reviewDetailCreateArgs("--notes", "Guest flow"))
+	client, body := captureReviewDetailWrite(t, http.MethodPost, "/v1/appStoreReviewDetails")
+	runReviewDetailCommand(t, client, reviewDetailCreateArgs("--notes", "Guest flow"))
 	for _, want := range []string{
 		`"contactFirstName":"Dev"`,
 		`"contactLastName":"Support"`,
 		`"contactEmail":"dev@example.com"`,
 		`"contactPhone":"+1 408 555 0100"`,
 	} {
-		if !strings.Contains(*body, want) {
-			t.Fatalf("expected %s in body, got %s", want, *body)
+		if !strings.Contains(body(), want) {
+			t.Fatalf("expected %s in body, got %s", want, body())
 		}
 	}
 }
@@ -260,28 +247,28 @@ func TestReviewDetailsCreateSendsCompleteContacts(t *testing.T) {
 func TestReviewDetailsCreateLeavesLastNameAndEmailToAppStoreConnect(t *testing.T) {
 	// Only first name and phone were observed as required on create, so a
 	// create without last name or email is sent and App Store Connect decides.
-	body := captureReviewDetailWrite(t, http.MethodPost, "/v1/appStoreReviewDetails")
-	runReviewDetailCommand(t, []string{
+	client, body := captureReviewDetailWrite(t, http.MethodPost, "/v1/appStoreReviewDetails")
+	runReviewDetailCommand(t, client, []string{
 		"review", "details-create", "--version-id", "version-1",
 		"--contact-first-name", "Dev", "--contact-phone", "+1 408 555 0100",
 		"--notes", "Guest flow",
 	})
 	for _, want := range []string{`"contactFirstName":"Dev"`, `"contactPhone":"+1 408 555 0100"`} {
-		if !strings.Contains(*body, want) {
-			t.Fatalf("expected %s in body, got %s", want, *body)
+		if !strings.Contains(body(), want) {
+			t.Fatalf("expected %s in body, got %s", want, body())
 		}
 	}
 	for _, unwanted := range []string{"contactLastName", "contactEmail"} {
-		if strings.Contains(*body, unwanted) {
-			t.Fatalf("expected no %s in body, got %s", unwanted, *body)
+		if strings.Contains(body(), unwanted) {
+			t.Fatalf("expected no %s in body, got %s", unwanted, body())
 		}
 	}
 }
 
 func TestReviewDetailsUpdateDoesNotRequireContactFields(t *testing.T) {
-	body := captureReviewDetailWrite(t, http.MethodPatch, "/v1/appStoreReviewDetails/detail-1")
-	runReviewDetailCommand(t, []string{"review", "details-update", "--id", "detail-1", "--notes", "Guest flow"})
-	if !strings.Contains(*body, `"notes":"Guest flow"`) {
-		t.Fatalf("expected notes in body, got %s", *body)
+	client, body := captureReviewDetailWrite(t, http.MethodPatch, "/v1/appStoreReviewDetails/detail-1")
+	runReviewDetailCommand(t, client, []string{"review", "details-update", "--id", "detail-1", "--notes", "Guest flow"})
+	if !strings.Contains(body(), `"notes":"Guest flow"`) {
+		t.Fatalf("expected notes in body, got %s", body())
 	}
 }

@@ -1,0 +1,22 @@
+{
+  "tag": "BetaAppClipInvocations",
+  "file": "beta_app_clip_invocations_gen.go",
+  "types": [
+    "BetaAppClipInvocationCreateAttributes",
+    "BetaAppClipInvocationCreateData",
+    "BetaAppClipInvocationUpdateAttributes",
+    "BetaAppClipInvocationUpdateData",
+    "BetaAppClipInvocationUpdateRequest"
+  ],
+  "relationships": [
+    {"data":"BetaAppClipInvocationCreateData","type":"*BetaAppClipInvocationRelationships","omitempty":true}
+  ],
+  "operations": [
+    {"operation":"betaAppClipInvocations_deleteInstance","name":"DeleteBetaAppClipInvocation","params":["invocationID"],"check":"require"},
+    {"operation":"betaAppClipInvocations_getInstance","name":"GetBetaAppClipInvocation","params":["invocationID"],"check":"require","options":"BetaAppClipInvocationOption","query":"buildBetaAppClipInvocationQuery","single":true},
+    {"operation":"betaAppClipInvocations_updateInstance","name":"UpdateBetaAppClipInvocation","params":["invocationID"],"check":"require","attrs":"pointer"}
+  ],
+  "queries": [
+    {"operation":"betaAppClipInvocations_getInstance","name":"BetaAppClipInvocation","params":[{"name":"include"},{"name":"limit[betaAppClipInvocationLocalizations]","field":"localizationsLimit","arg":"limit","type":"int"}],"deviations":[{"problem":"query parameters [fields[betaAppClipInvocationLocalizations] fields[betaAppClipInvocations]] have no option","reason":"The option type has options only for the parameters commands send today; an option for another parameter is added with the command that needs it."}]}
+  ]
+}

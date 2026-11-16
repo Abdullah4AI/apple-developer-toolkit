@@ -9,9 +9,9 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
-// SubscriptionsVersionLocalizationsImportCommand creates or updates
+// newSubscriptionsVersionLocalizationsImportCommand creates or updates
 // subscription version localizations from a JSON file.
-func SubscriptionsVersionLocalizationsImportCommand() *ffcli.Command {
+func newSubscriptionsVersionLocalizationsImportCommand(d *shared.Deps) *ffcli.Command {
 	return shared.NewVersionLocalizationImportCommand(shared.VersionLocalizationImportConfig{
 		CommandPath:         "subscriptions versions localizations import",
 		VersionResourceType: "subscriptionVersions",
@@ -19,14 +19,15 @@ func SubscriptionsVersionLocalizationsImportCommand() *ffcli.Command {
 		ResourceType:        "subscriptionLocalizations",
 		OptionalField:       "description",
 		ExampleValues:       `{"en-US": {"name": "Premium", "description": "All features"}, "de-DE": {"name": "Premium"}}`,
-		NewClient:           shared.GetASCClient,
+		NewClient:           d.Client,
+		Deps:                d,
 		Ops:                 subscriptionVersionLocalizationImportOps,
 	})
 }
 
-// SubscriptionsGroupsVersionLocalizationsImportCommand creates or updates
+// newSubscriptionsGroupsVersionLocalizationsImportCommand creates or updates
 // subscription group version localizations from a JSON file.
-func SubscriptionsGroupsVersionLocalizationsImportCommand() *ffcli.Command {
+func newSubscriptionsGroupsVersionLocalizationsImportCommand(d *shared.Deps) *ffcli.Command {
 	return shared.NewVersionLocalizationImportCommand(shared.VersionLocalizationImportConfig{
 		CommandPath:         "subscriptions groups versions localizations import",
 		VersionResourceType: "subscriptionGroupVersions",
@@ -34,7 +35,8 @@ func SubscriptionsGroupsVersionLocalizationsImportCommand() *ffcli.Command {
 		ResourceType:        "subscriptionGroupLocalizations",
 		OptionalField:       "customAppName",
 		ExampleValues:       `{"en-US": {"name": "Premium", "customAppName": "Premium App"}, "de-DE": {"name": "Premium"}}`,
-		NewClient:           func() (*asc.Client, error) { return subscriptionGroupVersionClientFactory() },
+		NewClient:           d.Client,
+		Deps:                d,
 		Ops:                 subscriptionGroupVersionLocalizationImportOps,
 	})
 }
@@ -42,7 +44,7 @@ func SubscriptionsGroupsVersionLocalizationsImportCommand() *ffcli.Command {
 func subscriptionVersionLocalizationImportOps(client *asc.Client) shared.VersionLocalizationImportOps {
 	return shared.VersionLocalizationImportOps{
 		List: func(ctx context.Context, versionID string) ([]shared.VersionLocalization, error) {
-			first, err := client.GetSubscriptionVersionLocalizations(ctx, versionID, asc.WithSubscriptionVersionLocalizationsLimit(200))
+			first, err := client.GetSubscriptionVersionLocalizations(ctx, versionID, asc.Limit[asc.SubscriptionVersionLocalizationsOption](200))
 			if err != nil {
 				return nil, err
 			}
@@ -87,7 +89,7 @@ func subscriptionVersionLocalizationImportOps(client *asc.Client) shared.Version
 func subscriptionGroupVersionLocalizationImportOps(client *asc.Client) shared.VersionLocalizationImportOps {
 	return shared.VersionLocalizationImportOps{
 		List: func(ctx context.Context, versionID string) ([]shared.VersionLocalization, error) {
-			first, err := client.GetSubscriptionGroupVersionLocalizations(ctx, versionID, asc.WithSubscriptionGroupVersionLocalizationsLimit(200))
+			first, err := client.GetSubscriptionGroupVersionLocalizations(ctx, versionID, asc.Limit[asc.SubscriptionGroupVersionLocalizationsOption](200))
 			if err != nil {
 				return nil, err
 			}

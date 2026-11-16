@@ -47,25 +47,30 @@ func TestLinksTypeUsageErrorsEnumerateValidValues(t *testing.T) {
 		name   string
 		base   []string
 		values []string
+		deps   bool // the command is built on shared.Deps: run it on test deps
 	}{
 		{
 			name:   "builds links view",
 			base:   []string{"builds", "links", "view", "--build-id", "build-1"},
 			values: buildRelationshipTypeValues,
+			deps:   true,
 		},
 		{
 			name:   "testflight groups links view",
 			base:   []string{"testflight", "groups", "links", "view", "--group-id", "group-1"},
 			values: betaGroupRelationshipTypeValues,
+			deps:   true,
 		},
 		{
 			name:   "testflight testers links view",
 			base:   []string{"testflight", "testers", "links", "view", "--tester-id", "tester-1"},
 			values: betaTesterRelationshipTypeValues,
+			deps:   true,
 		},
 		{
 			name:   "testflight pre-release links view",
 			base:   []string{"testflight", "pre-release", "links", "view", "--id", "pr-1"},
+			deps:   true,
 			values: preReleaseRelationshipTypeValues,
 		},
 	}
@@ -91,16 +96,20 @@ func TestLinksTypeUsageErrorsEnumerateValidValues(t *testing.T) {
 
 			for _, testCase := range cases {
 				t.Run(testCase.name, func(t *testing.T) {
-					root := RootCommand("1.2.3")
-					root.FlagSet.SetOutput(io.Discard)
-
+					var stdout, stderr string
 					var runErr error
-					stdout, stderr := captureOutput(t, func() {
-						if err := root.Parse(testCase.args); err != nil {
-							t.Fatalf("parse error: %v", err)
-						}
-						runErr = root.Run(context.Background())
-					})
+					if test.deps {
+						stdout, stderr, runErr = runRootWithDeps(t, nil, testCase.args...)
+					} else {
+						root := RootCommand("1.2.3")
+						root.FlagSet.SetOutput(io.Discard)
+						stdout, stderr = captureOutput(t, func() {
+							if err := root.Parse(testCase.args); err != nil {
+								t.Fatalf("parse error: %v", err)
+							}
+							runErr = root.Run(context.Background())
+						})
+					}
 
 					if got := cmd.ExitCodeFromError(runErr); got != cmd.ExitUsage {
 						t.Fatalf("exit code = %d, want %d (%v)", got, cmd.ExitUsage, runErr)
@@ -124,41 +133,30 @@ func TestLinksValidTypesReachTheirEndpoints(t *testing.T) {
 		path         string
 		resourceType string
 		many         bool
+		deps         bool // the command is built on shared.Deps: run it on test deps
 	}{
-		{name: "build app", args: []string{"builds", "links", "view", "--build-id", "build-1", "--type", "app", "--output", "json"}, path: "/v1/builds/build-1/relationships/app", resourceType: "apps"},
-		{name: "build app store version", args: []string{"builds", "links", "view", "--build-id", "build-1", "--type", "appStoreVersion", "--output", "json"}, path: "/v1/builds/build-1/relationships/appStoreVersion", resourceType: "appStoreVersions"},
-		{name: "build beta localizations", args: []string{"builds", "links", "view", "--build-id", "build-1", "--type", "betaBuildLocalizations", "--output", "json"}, path: "/v1/builds/build-1/relationships/betaBuildLocalizations", resourceType: "betaBuildLocalizations", many: true},
-		{name: "build beta detail", args: []string{"builds", "links", "view", "--build-id", "build-1", "--type", "buildBetaDetail", "--output", "json"}, path: "/v1/builds/build-1/relationships/buildBetaDetail", resourceType: "buildBetaDetails"},
-		{name: "build diagnostic signatures", args: []string{"builds", "links", "view", "--build-id", "build-1", "--type", "diagnosticSignatures", "--output", "json"}, path: "/v1/builds/build-1/relationships/diagnosticSignatures", resourceType: "diagnosticSignatures", many: true},
-		{name: "build icons", args: []string{"builds", "links", "view", "--build-id", "build-1", "--type", "icons", "--output", "json"}, path: "/v1/builds/build-1/relationships/icons", resourceType: "buildIcons", many: true},
-		{name: "build individual testers", args: []string{"builds", "links", "view", "--build-id", "build-1", "--type", "individualTesters", "--output", "json"}, path: "/v1/builds/build-1/relationships/individualTesters", resourceType: "betaTesters", many: true},
-		{name: "build pre-release version", args: []string{"builds", "links", "view", "--build-id", "build-1", "--type", "preReleaseVersion", "--output", "json"}, path: "/v1/builds/build-1/relationships/preReleaseVersion", resourceType: "preReleaseVersions"},
-		{name: "group beta testers", args: []string{"testflight", "groups", "links", "view", "--group-id", "group-1", "--type", "betaTesters", "--output", "json"}, path: "/v1/betaGroups/group-1/relationships/betaTesters", resourceType: "betaTesters", many: true},
-		{name: "group builds", args: []string{"testflight", "groups", "links", "view", "--group-id", "group-1", "--type", "builds", "--output", "json"}, path: "/v1/betaGroups/group-1/relationships/builds", resourceType: "builds", many: true},
-		{name: "tester apps", args: []string{"testflight", "testers", "links", "view", "--tester-id", "tester-1", "--type", "apps", "--output", "json"}, path: "/v1/betaTesters/tester-1/relationships/apps", resourceType: "apps", many: true},
-		{name: "tester beta groups", args: []string{"testflight", "testers", "links", "view", "--tester-id", "tester-1", "--type", "betaGroups", "--output", "json"}, path: "/v1/betaTesters/tester-1/relationships/betaGroups", resourceType: "betaGroups", many: true},
-		{name: "tester builds", args: []string{"testflight", "testers", "links", "view", "--tester-id", "tester-1", "--type", "builds", "--output", "json"}, path: "/v1/betaTesters/tester-1/relationships/builds", resourceType: "builds", many: true},
-		{name: "pre-release app", args: []string{"testflight", "pre-release", "links", "view", "--id", "pr-1", "--type", "app", "--output", "json"}, path: "/v1/preReleaseVersions/pr-1/relationships/app", resourceType: "apps"},
-		{name: "pre-release builds", args: []string{"testflight", "pre-release", "links", "view", "--id", "pr-1", "--type", "builds", "--output", "json"}, path: "/v1/preReleaseVersions/pr-1/relationships/builds", resourceType: "builds", many: true},
+		{name: "build app", args: []string{"builds", "links", "view", "--build-id", "build-1", "--type", "app", "--output", "json"}, path: "/v1/builds/build-1/relationships/app", resourceType: "apps", deps: true},
+		{name: "build app store version", args: []string{"builds", "links", "view", "--build-id", "build-1", "--type", "appStoreVersion", "--output", "json"}, path: "/v1/builds/build-1/relationships/appStoreVersion", resourceType: "appStoreVersions", deps: true},
+		{name: "build beta localizations", args: []string{"builds", "links", "view", "--build-id", "build-1", "--type", "betaBuildLocalizations", "--output", "json"}, path: "/v1/builds/build-1/relationships/betaBuildLocalizations", resourceType: "betaBuildLocalizations", many: true, deps: true},
+		{name: "build beta detail", args: []string{"builds", "links", "view", "--build-id", "build-1", "--type", "buildBetaDetail", "--output", "json"}, path: "/v1/builds/build-1/relationships/buildBetaDetail", resourceType: "buildBetaDetails", deps: true},
+		{name: "build diagnostic signatures", args: []string{"builds", "links", "view", "--build-id", "build-1", "--type", "diagnosticSignatures", "--output", "json"}, path: "/v1/builds/build-1/relationships/diagnosticSignatures", resourceType: "diagnosticSignatures", many: true, deps: true},
+		{name: "build icons", args: []string{"builds", "links", "view", "--build-id", "build-1", "--type", "icons", "--output", "json"}, path: "/v1/builds/build-1/relationships/icons", resourceType: "buildIcons", many: true, deps: true},
+		{name: "build individual testers", args: []string{"builds", "links", "view", "--build-id", "build-1", "--type", "individualTesters", "--output", "json"}, path: "/v1/builds/build-1/relationships/individualTesters", resourceType: "betaTesters", many: true, deps: true},
+		{name: "build pre-release version", args: []string{"builds", "links", "view", "--build-id", "build-1", "--type", "preReleaseVersion", "--output", "json"}, path: "/v1/builds/build-1/relationships/preReleaseVersion", resourceType: "preReleaseVersions", deps: true},
+		{name: "group beta testers", args: []string{"testflight", "groups", "links", "view", "--group-id", "group-1", "--type", "betaTesters", "--output", "json"}, path: "/v1/betaGroups/group-1/relationships/betaTesters", resourceType: "betaTesters", many: true, deps: true},
+		{name: "group builds", args: []string{"testflight", "groups", "links", "view", "--group-id", "group-1", "--type", "builds", "--output", "json"}, path: "/v1/betaGroups/group-1/relationships/builds", resourceType: "builds", many: true, deps: true},
+		{name: "tester apps", args: []string{"testflight", "testers", "links", "view", "--tester-id", "tester-1", "--type", "apps", "--output", "json"}, path: "/v1/betaTesters/tester-1/relationships/apps", resourceType: "apps", many: true, deps: true},
+		{name: "tester beta groups", args: []string{"testflight", "testers", "links", "view", "--tester-id", "tester-1", "--type", "betaGroups", "--output", "json"}, path: "/v1/betaTesters/tester-1/relationships/betaGroups", resourceType: "betaGroups", many: true, deps: true},
+		{name: "tester builds", args: []string{"testflight", "testers", "links", "view", "--tester-id", "tester-1", "--type", "builds", "--output", "json"}, path: "/v1/betaTesters/tester-1/relationships/builds", resourceType: "builds", many: true, deps: true},
+		{name: "pre-release app", args: []string{"testflight", "pre-release", "links", "view", "--id", "pr-1", "--type", "app", "--output", "json"}, path: "/v1/preReleaseVersions/pr-1/relationships/app", resourceType: "apps", deps: true},
+		{name: "pre-release builds", args: []string{"testflight", "pre-release", "links", "view", "--id", "pr-1", "--type", "builds", "--output", "json"}, path: "/v1/preReleaseVersions/pr-1/relationships/builds", resourceType: "builds", many: true, deps: true},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			setupAuth(t)
 			t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 			server := newValidLinksServer(t, test.path, test.resourceType, test.many)
-			useLinksServerClient(t, server)
-
-			root := RootCommand("1.2.3")
-			root.FlagSet.SetOutput(io.Discard)
-
-			var runErr error
-			stdout, stderr := captureOutput(t, func() {
-				if err := root.Parse(test.args); err != nil {
-					t.Fatalf("parse error: %v", err)
-				}
-				runErr = root.Run(context.Background())
-			})
+			stdout, stderr, runErr := runLinksCommand(t, test.deps, server, test.args)
 
 			if runErr != nil {
 				t.Fatalf("run error: %v", runErr)
@@ -181,6 +179,7 @@ func TestLinksNotFoundNamesMissingResource(t *testing.T) {
 		body       string
 		wantErr    string
 		wantPrefix string
+		deps       bool // the command is built on shared.Deps: run it on test deps
 	}{
 		{
 			name:    "builds links unknown build",
@@ -188,6 +187,7 @@ func TestLinksNotFoundNamesMissingResource(t *testing.T) {
 			path:    "/v1/builds/999999999999/relationships/app",
 			body:    notFoundBody("builds", "999999999999"),
 			wantErr: `builds links view: build "999999999999" was not found; --build-id expects a build ID (list them with: asc builds list --app "APP_ID")`,
+			deps:    true,
 		},
 		{
 			name:       "builds links missing relationship",
@@ -195,6 +195,7 @@ func TestLinksNotFoundNamesMissingResource(t *testing.T) {
 			path:       "/v1/builds/build-1/relationships/buildBetaDetail",
 			body:       notFoundBody("buildBetaDetails", "build-1"),
 			wantPrefix: `builds links view: buildBetaDetail relationship was not found for build "build-1"`,
+			deps:       true,
 		},
 		{
 			name:       "builds links missing icons relationship",
@@ -202,6 +203,7 @@ func TestLinksNotFoundNamesMissingResource(t *testing.T) {
 			path:       "/v1/builds/build-1/relationships/icons",
 			body:       notFoundBody("buildIcons", "build-1"),
 			wantPrefix: `builds links view: icons relationship was not found for build "build-1"`,
+			deps:       true,
 		},
 		{
 			name:       "builds links missing individual testers relationship",
@@ -209,6 +211,7 @@ func TestLinksNotFoundNamesMissingResource(t *testing.T) {
 			path:       "/v1/builds/build-1/relationships/individualTesters",
 			body:       notFoundBody("betaTesters", "build-1"),
 			wantPrefix: `builds links view: individualTesters relationship was not found for build "build-1"`,
+			deps:       true,
 		},
 		{
 			name:    "builds links next url",
@@ -216,6 +219,7 @@ func TestLinksNotFoundNamesMissingResource(t *testing.T) {
 			path:    "/v1/builds/other-build/relationships/individualTesters",
 			body:    notFoundBody("builds", "other-build"),
 			wantErr: "builds links view: the build referenced by the requested page URL was not found",
+			deps:    true,
 		},
 		{
 			name:    "builds links unrelated not found keeps api message",
@@ -223,10 +227,12 @@ func TestLinksNotFoundNamesMissingResource(t *testing.T) {
 			path:    "/v1/builds/build-1/relationships/app",
 			body:    notFoundBody("appStoreVersions", "version-1"),
 			wantErr: "builds links view: The specified resource does not exist: There is no resource of type 'appStoreVersions' with id 'version-1'",
+			deps:    true,
 		},
 		{
 			name:    "testflight groups links unknown group",
 			args:    []string{"testflight", "groups", "links", "view", "--group-id", "group-404", "--type", "betaTesters", "--output", "json"},
+			deps:    true,
 			path:    "/v1/betaGroups/group-404/relationships/betaTesters",
 			body:    notFoundBody("betaGroups", "group-404"),
 			wantErr: `testflight groups links view: group "group-404" was not found; --group-id expects a group ID (list them with: asc testflight groups list --app "APP_ID")`,
@@ -234,6 +240,7 @@ func TestLinksNotFoundNamesMissingResource(t *testing.T) {
 		{
 			name:       "testflight groups links missing relationship",
 			args:       []string{"testflight", "groups", "links", "view", "--group-id", "group-1", "--type", "betaTesters", "--output", "json"},
+			deps:       true,
 			path:       "/v1/betaGroups/group-1/relationships/betaTesters",
 			body:       notFoundBody("betaTesters", "group-1"),
 			wantPrefix: `testflight groups links view: betaTesters relationship was not found for group "group-1"`,
@@ -241,6 +248,7 @@ func TestLinksNotFoundNamesMissingResource(t *testing.T) {
 		{
 			name:    "testflight testers links unknown tester",
 			args:    []string{"testflight", "testers", "links", "view", "--tester-id", "tester-404", "--type", "apps", "--output", "json"},
+			deps:    true,
 			path:    "/v1/betaTesters/tester-404/relationships/apps",
 			body:    notFoundBody("betaTesters", "tester-404"),
 			wantErr: `testflight testers links view: tester "tester-404" was not found; --tester-id expects a tester ID (list them with: asc testflight testers list --app "APP_ID")`,
@@ -248,6 +256,7 @@ func TestLinksNotFoundNamesMissingResource(t *testing.T) {
 		{
 			name:       "testflight testers links missing relationship",
 			args:       []string{"testflight", "testers", "links", "view", "--tester-id", "tester-1", "--type", "betaGroups", "--output", "json"},
+			deps:       true,
 			path:       "/v1/betaTesters/tester-1/relationships/betaGroups",
 			body:       notFoundBody("betaGroups", "tester-1"),
 			wantPrefix: `testflight testers links view: betaGroups relationship was not found for tester "tester-1"`,
@@ -255,6 +264,7 @@ func TestLinksNotFoundNamesMissingResource(t *testing.T) {
 		{
 			name:    "testflight pre-release links unknown version",
 			args:    []string{"testflight", "pre-release", "links", "view", "--id", "pr-404", "--type", "app", "--output", "json"},
+			deps:    true,
 			path:    "/v1/preReleaseVersions/pr-404/relationships/app",
 			body:    notFoundBody("preReleaseVersions", "pr-404"),
 			wantErr: `testflight pre-release links view: pre-release version "pr-404" was not found; --id expects a pre-release version ID (list them with: asc testflight pre-release list --app "APP_ID")`,
@@ -262,6 +272,7 @@ func TestLinksNotFoundNamesMissingResource(t *testing.T) {
 		{
 			name:       "testflight pre-release links missing relationship",
 			args:       []string{"testflight", "pre-release", "links", "view", "--id", "pr-1", "--type", "builds", "--output", "json"},
+			deps:       true,
 			path:       "/v1/preReleaseVersions/pr-1/relationships/builds",
 			body:       notFoundBody("builds", "pr-1"),
 			wantPrefix: `testflight pre-release links view: builds relationship was not found for pre-release version "pr-1"`,
@@ -270,21 +281,9 @@ func TestLinksNotFoundNamesMissingResource(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			setupAuth(t)
 			t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 			server := newNotFoundServer(t, test.path, test.body)
-			useLinksServerClient(t, server)
-
-			root := RootCommand("1.2.3")
-			root.FlagSet.SetOutput(io.Discard)
-
-			var runErr error
-			stdout, _ := captureOutput(t, func() {
-				if err := root.Parse(test.args); err != nil {
-					t.Fatalf("parse error: %v", err)
-				}
-				runErr = root.Run(context.Background())
-			})
+			stdout, _, runErr := runLinksCommand(t, test.deps, server, test.args)
 
 			if runErr == nil {
 				t.Fatal("expected not-found error")
@@ -312,6 +311,7 @@ func TestLinksPaginateLaterPageNotFoundBlamesPageURL(t *testing.T) {
 		path string
 		body string
 		want string
+		deps bool // the command is built on shared.Deps: run it on test deps
 	}{
 		{
 			name: "builds links paginate",
@@ -319,10 +319,12 @@ func TestLinksPaginateLaterPageNotFoundBlamesPageURL(t *testing.T) {
 			path: "/v1/builds/build-1/relationships/individualTesters",
 			body: notFoundBody("builds", "build-1"),
 			want: "builds links view: page 2: the build referenced by the requested page URL was not found",
+			deps: true,
 		},
 		{
 			name: "testflight groups links paginate",
 			args: []string{"testflight", "groups", "links", "view", "--group-id", "group-1", "--type", "betaTesters", "--paginate", "--output", "json"},
+			deps: true,
 			path: "/v1/betaGroups/group-1/relationships/betaTesters",
 			body: notFoundBody("betaGroups", "group-1"),
 			want: "testflight groups links view: page 2: the group referenced by the requested page URL was not found",
@@ -330,6 +332,7 @@ func TestLinksPaginateLaterPageNotFoundBlamesPageURL(t *testing.T) {
 		{
 			name: "testflight testers links paginate",
 			args: []string{"testflight", "testers", "links", "view", "--tester-id", "tester-1", "--type", "apps", "--paginate", "--output", "json"},
+			deps: true,
 			path: "/v1/betaTesters/tester-1/relationships/apps",
 			body: notFoundBody("betaTesters", "tester-1"),
 			want: "testflight testers links view: page 2: the tester referenced by the requested page URL was not found",
@@ -337,6 +340,7 @@ func TestLinksPaginateLaterPageNotFoundBlamesPageURL(t *testing.T) {
 		{
 			name: "testflight pre-release links paginate",
 			args: []string{"testflight", "pre-release", "links", "view", "--id", "pr-1", "--type", "builds", "--paginate", "--output", "json"},
+			deps: true,
 			path: "/v1/preReleaseVersions/pr-1/relationships/builds",
 			body: notFoundBody("preReleaseVersions", "pr-1"),
 			want: "testflight pre-release links view: page 2: the pre-release version referenced by the requested page URL was not found",
@@ -345,21 +349,9 @@ func TestLinksPaginateLaterPageNotFoundBlamesPageURL(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			setupAuth(t)
 			t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 			server := newPaginatedNotFoundServer(t, test.path, test.body)
-			useLinksServerClient(t, server)
-
-			root := RootCommand("1.2.3")
-			root.FlagSet.SetOutput(io.Discard)
-
-			var runErr error
-			stdout, _ := captureOutput(t, func() {
-				if err := root.Parse(test.args); err != nil {
-					t.Fatalf("parse error: %v", err)
-				}
-				runErr = root.Run(context.Background())
-			})
+			stdout, _, runErr := runLinksCommand(t, test.deps, server, test.args)
 
 			if runErr == nil {
 				t.Fatal("expected not-found error")
@@ -421,6 +413,30 @@ func newValidLinksServer(t *testing.T, path, resourceType string, many bool) *ht
 	}))
 	t.Cleanup(server.Close)
 	return server
+}
+
+// runLinksCommand runs args against server: on test deps when deps is set,
+// through the shared client factory otherwise.
+func runLinksCommand(t *testing.T, deps bool, server *httptest.Server, args []string) (string, string, error) {
+	t.Helper()
+
+	if deps {
+		return runRootWithDeps(t, stubServerClient(t, server), args...)
+	}
+	setupAuth(t)
+	useLinksServerClient(t, server)
+
+	root := RootCommand("1.2.3")
+	root.FlagSet.SetOutput(io.Discard)
+
+	var runErr error
+	stdout, stderr := captureOutput(t, func() {
+		if err := root.Parse(args); err != nil {
+			t.Fatalf("parse error: %v", err)
+		}
+		runErr = root.Run(context.Background())
+	})
+	return stdout, stderr, runErr
 }
 
 // useLinksServerClient points the shared command client factory at the test

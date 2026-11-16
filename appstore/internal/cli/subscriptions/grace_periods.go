@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/peterbourgon/ff/v3/ffcli"
@@ -13,9 +12,9 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
-// SubscriptionsGracePeriodsCommand returns the grace periods command group.
-func SubscriptionsGracePeriodsCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("grace-periods", flag.ExitOnError)
+// newSubscriptionsGracePeriodsCommand returns the grace periods command group.
+func newSubscriptionsGracePeriodsCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("grace-periods", flag.ExitOnError)
 
 	return &ffcli.Command{
 		Name:       "grace-periods",
@@ -27,10 +26,10 @@ Examples:
   asc subscriptions grace-periods view --id "GRACE_PERIOD_ID"
   asc subscriptions grace-periods update --id "GRACE_PERIOD_ID" --duration SIXTEEN_DAYS --opt-in true`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
-			SubscriptionsGracePeriodsGetCommand(),
-			SubscriptionsGracePeriodsUpdateCommand(),
+			newSubscriptionsGracePeriodsGetCommand(d),
+			newSubscriptionsGracePeriodsUpdateCommand(d),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp
@@ -38,51 +37,30 @@ Examples:
 	}
 }
 
-// SubscriptionsGracePeriodsGetCommand returns the grace period get subcommand.
-func SubscriptionsGracePeriodsGetCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("grace-periods view", flag.ExitOnError)
-
-	gracePeriodID := shared.BindResourceIDFlag(fs, "id", "subscriptionGracePeriods", "Subscription grace period ID")
-	output := shared.BindOutputFlags(fs)
-
-	return &ffcli.Command{
-		Name:       "view",
-		ShortUsage: "asc subscriptions grace-periods view --id \"GRACE_PERIOD_ID\"",
-		ShortHelp:  "View a subscription grace period by ID.",
+// newSubscriptionsGracePeriodsGetCommand returns the grace period get subcommand.
+func newSubscriptionsGracePeriodsGetCommand(d *shared.Deps) *ffcli.Command {
+	return shared.BuildIDGetCommand(shared.IDGetCommandConfig{
+		Deps:        d,
+		FlagSetName: "grace-periods view",
+		Name:        "view",
+		ShortUsage:  "asc subscriptions grace-periods view --id \"GRACE_PERIOD_ID\"",
+		ShortHelp:   "View a subscription grace period by ID.",
 		LongHelp: `View a subscription grace period by ID.
 
 Examples:
   asc subscriptions grace-periods view --id "GRACE_PERIOD_ID"`,
-		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
-		Exec: func(ctx context.Context, args []string) error {
-			id := strings.TrimSpace(*gracePeriodID)
-			if id == "" {
-				fmt.Fprintln(os.Stderr, "Error: --id is required")
-				return shared.MissingRequiredUsageError("--id")
-			}
-
-			client, err := shared.GetASCClient()
-			if err != nil {
-				return fmt.Errorf("subscriptions grace-periods view: %w", err)
-			}
-
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
-			defer cancel()
-
-			resp, err := client.GetSubscriptionGracePeriod(requestCtx, id)
-			if err != nil {
-				return fmt.Errorf("subscriptions grace-periods view: failed to fetch: %w", err)
-			}
-
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+		IDUsage:            "Subscription grace period ID",
+		IDType:             "subscriptionGracePeriods",
+		RequiredDiagnostic: true,
+		Fetch: func(ctx context.Context, client *asc.Client, id string) (any, error) {
+			return client.GetSubscriptionGracePeriod(ctx, id)
 		},
-	}
+	})
 }
 
-// SubscriptionsGracePeriodsUpdateCommand returns the grace period update subcommand.
-func SubscriptionsGracePeriodsUpdateCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("grace-periods update", flag.ExitOnError)
+// newSubscriptionsGracePeriodsUpdateCommand returns the grace period update subcommand.
+func newSubscriptionsGracePeriodsUpdateCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("grace-periods update", flag.ExitOnError)
 
 	gracePeriodID := shared.BindResourceIDFlag(fs, "id", "subscriptionGracePeriods", "Subscription grace period ID")
 	var optIn shared.OptionalBool
@@ -91,7 +69,7 @@ func SubscriptionsGracePeriodsUpdateCommand() *ffcli.Command {
 	fs.Var(&sandboxOptIn, "sandbox-opt-in", "Enable grace period sandbox opt-in: true or false")
 	duration := fs.String("duration", "", "Grace period duration: "+strings.Join(subscriptionGracePeriodDurationValues, ", "))
 	renewalType := fs.String("renewal-type", "", "Grace period renewal type: "+strings.Join(subscriptionGracePeriodRenewalTypeValues, ", "))
-	output := shared.BindOutputFlags(fs)
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "update",
@@ -102,35 +80,33 @@ func SubscriptionsGracePeriodsUpdateCommand() *ffcli.Command {
 Examples:
   asc subscriptions grace-periods update --id "GRACE_PERIOD_ID" --duration SIXTEEN_DAYS --opt-in true`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			id := strings.TrimSpace(*gracePeriodID)
 			if id == "" {
-				fmt.Fprintln(os.Stderr, "Error: --id is required")
-				return shared.MissingRequiredUsageError("--id")
+				return d.RequiredFlag("--id")
 			}
 
 			durationValue, err := normalizeSubscriptionGracePeriodDuration(*duration, false)
 			if err != nil {
-				fmt.Fprintln(os.Stderr, "Error:", err.Error())
+				fmt.Fprintln(d.IO.ErrOut, "Error:", err.Error())
 				return flag.ErrHelp
 			}
 			renewalTypeValue, err := normalizeSubscriptionGracePeriodRenewalType(*renewalType, false)
 			if err != nil {
-				fmt.Fprintln(os.Stderr, "Error:", err.Error())
+				fmt.Fprintln(d.IO.ErrOut, "Error:", err.Error())
 				return flag.ErrHelp
 			}
 			if !optIn.IsSet() && !sandboxOptIn.IsSet() && durationValue == "" && renewalTypeValue == "" {
-				fmt.Fprintln(os.Stderr, "Error: at least one update flag is required")
-				return shared.MissingRequiredUsageError("")
+				return d.UpdateFlagRequired(fs, &optIn, &sandboxOptIn, duration, renewalType)
 			}
 
-			client, err := shared.GetASCClient()
+			client, err := d.Client()
 			if err != nil {
 				return fmt.Errorf("subscriptions grace-periods update: %w", err)
 			}
 
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
+			requestCtx, cancel := d.Timeout(ctx)
 			defer cancel()
 
 			attrs := asc.SubscriptionGracePeriodUpdateAttributes{}
@@ -156,7 +132,7 @@ Examples:
 				return fmt.Errorf("subscriptions grace-periods update: failed to update: %w", err)
 			}
 
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+			return d.PrintOutput(resp, *output.Output, *output.Pretty)
 		},
 	}
 }

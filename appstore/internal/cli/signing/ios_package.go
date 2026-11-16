@@ -11,9 +11,9 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"time"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/infoplist"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/iosbuild"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/rootfs"
@@ -31,12 +31,12 @@ type IOSPackageOptions struct {
 // It does not claim complete Apple signature verification or Apple acceptance.
 var removeIOSPackageStage = os.RemoveAll
 
-func PackageIOSApp(ctx context.Context, opts IOSPackageOptions) (result *asc.IOSArtifactResult, resultErr error) {
+func PackageIOSApp(ctx context.Context, d *shared.Deps, opts IOSPackageOptions) (result *asc.IOSArtifactResult, resultErr error) {
 	ctx, stop := iosbuild.ContextWithSignals(ctx)
 	defer stop()
-	started := time.Now()
+	started := d.Now()
 	result = &asc.IOSArtifactResult{Operation: "package", Backend: "rcodesign", Platform: "device", SigningType: "adHoc", AppleAcceptance: "notVerified"}
-	defer func() { result.DurationMs = time.Since(started).Milliseconds() }()
+	defer func() { result.DurationMs = d.Now().Sub(started).Milliseconds() }()
 	if !opts.AdHoc && runtime.GOOS == "windows" {
 		return result, fmt.Errorf("signing with an identity requires Linux or macOS")
 	}
@@ -106,7 +106,7 @@ func PackageIOSApp(ctx context.Context, opts IOSPackageOptions) (result *asc.IOS
 			return result, fmt.Errorf("read provisioning profile failed")
 		}
 		defer clear(profileData)
-		profile, err := inspectSigningResignProfile(profileData, signingResignNowFn())
+		profile, err := inspectSigningResignProfile(profileData, d.Now())
 		if err != nil {
 			return result, err
 		}
@@ -127,7 +127,7 @@ func PackageIOSApp(ctx context.Context, opts IOSPackageOptions) (result *asc.IOS
 			defer clear(password)
 		}
 		password = bytes.TrimSuffix(bytes.TrimSuffix(password, []byte("\n")), []byte("\r"))
-		identity, err := inspectSigningRunIdentity(identityData, password, signingRunNowFn())
+		identity, err := inspectSigningRunIdentity(identityData, password, d.Now())
 		if err != nil {
 			return result, fmt.Errorf("inspect signing identity failed")
 		}

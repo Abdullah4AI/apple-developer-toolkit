@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/peterbourgon/ff/v3/ffcli"
@@ -12,9 +11,9 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
-// WebCommand returns the web command group.
-func WebCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("web", flag.ExitOnError)
+// NewWebCommand returns the web command group built on d.
+func NewWebCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("web", flag.ExitOnError)
 
 	return &ffcli.Command{
 		Name:       "web",
@@ -28,6 +27,7 @@ Use ` + "`asc web apps create`" + ` as the canonical app-creation command in thi
 Examples:
   asc web auth status
   asc web agreements status
+  asc web teams list
   asc web api-keys list --output json
   asc web api-keys view --key-id KEY_ID
   asc web api-keys create --name "Release automation"
@@ -42,35 +42,36 @@ Examples:
   asc web subscriptions availability remove-from-sale --subscription-id "SUB_ID" --confirm
   asc web analytics overview --app "123456789" --start 2025-12-24 --end 2026-03-23`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
-			WebAuthCommand(),
+			newWebAuthCommand(d),
 			WebAgreementsCommand(),
 			WebBusinessCommand(),
 			WebFinanceCommand(),
-			WebIAPCommand(),
-			WebAPIKeysCommand(),
-			WebSandboxCommand(),
-			WebAppsCommand(),
-			WebRemovedAppsCommand(),
-			WebAppBundlesCommand(),
-			WebBundleIDsCommand(),
-			WebServiceIDsCommand(),
+			newWebIAPCommand(d),
+			newWebAPIKeysCommand(d),
+			newWebSandboxCommand(d),
+			newWebAppsCommand(d),
+			newWebRemovedAppsCommand(d),
+			newWebAppBundlesCommand(d),
+			WebTeamsCommand(),
+			newWebBundleIDsCommand(d),
+			newWebServiceIDsCommand(d),
 			WebSignInKeysCommand(),
-			WebWebsitePushIDsCommand(),
+			newWebWebsitePushIDsCommand(d),
 			WebICloudContainersCommand(),
-			WebAppGroupsCommand(),
-			WebPrivacyCommand(),
-			WebReviewCommand(),
-			WebSubscriptionsCommand(),
-			WebAnalyticsCommand(),
-			WebXcodeCloudCommand(),
+			newWebAppGroupsCommand(d),
+			newWebPrivacyCommand(d),
+			newWebReviewCommand(d),
+			newWebSubscriptionsCommand(d),
+			newWebAnalyticsCommand(d),
+			newWebXcodeCloudCommand(d),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			if len(args) == 0 {
 				return flag.ErrHelp
 			}
-			fmt.Fprintf(os.Stderr, "Unknown subcommand: %s\n\n", strings.TrimSpace(args[0]))
+			fmt.Fprintf(d.IO.ErrOut, "Unknown subcommand: %s\n\n", strings.TrimSpace(args[0]))
 			return flag.ErrHelp
 		},
 	}

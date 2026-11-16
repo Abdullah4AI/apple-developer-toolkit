@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/peterbourgon/ff/v3/ffcli"
@@ -13,16 +12,16 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
-// ReviewsCommand returns the reviews command with subcommands.
-func ReviewsCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("reviews", flag.ExitOnError)
+// NewReviewsCommand returns the reviews command with subcommands.
+func NewReviewsCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("reviews", flag.ExitOnError)
 
 	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
-	output := shared.BindOutputFlags(fs)
+	output := d.BindOutputFlags(fs)
 	filters := BindReviewFilterFlags(fs)
-	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
-	next := fs.String("next", "", "Fetch next page using a links.next URL")
-	paginate := fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")
+	limit := fs.Int("limit", 0, shared.LimitFlagUsage(200))
+	next := fs.String("next", "", shared.NextFlagUsage)
+	paginate := fs.Bool("paginate", false, shared.PaginateFlagUsage)
 
 	return &ffcli.Command{
 		Name:       "reviews",
@@ -55,49 +54,45 @@ Examples:
   asc reviews response delete --id "RESPONSE_ID" --confirm
   asc reviews response for-review --review-id "REVIEW_ID"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
-			ReviewsListCommand(),
-			ReviewsGetCommand(),
-			ReviewsRatingsCommand(),
-			ReviewsSummarizationsCommand(),
-			ReviewsDigestCommand(),
-			ReviewsRespondCommand(),
-			ReviewsRespondBatchCommand(),
-			ReviewsResponseCommand(),
+			newReviewsListCommand(d),
+			newReviewsGetCommand(d),
+			newReviewsRatingsCommand(d),
+			newReviewsSummarizationsCommand(d),
+			newReviewsDigestCommand(d),
+			newReviewsRespondCommand(d),
+			newReviewsRespondBatchCommand(d),
+			newReviewsResponseCommand(d),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			if len(args) > 0 {
-				return shared.WithDiagnostic(shared.UsageErrorf("unexpected argument(s): %s", strings.Join(args, " ")), shared.DiagnosticInvalidInput, "")
+				return shared.WithDiagnostic(d.UsageErrorf("unexpected argument(s): %s", strings.Join(args, " ")), shared.DiagnosticInvalidInput, "")
 			}
-			if err := shared.ValidateNextURL(*next); err != nil {
-				return shared.WithDiagnostic(shared.NewValidationError(shared.UsageErrorf("reviews: %v", err)), shared.DiagnosticInvalidInput, "--next")
-			}
-			if err := ValidateReviewNextFlagConflicts(*next, fs, "app"); err != nil {
+			if err := d.ValidatePaginationFlags(ctx, fs, "reviews", 200, ReviewNextConflicts...); err != nil {
 				return err
 			}
 
-			resolvedAppID := shared.ResolveAppID(*appID)
+			resolvedAppID := d.ResolveAppID(*appID)
 			if resolvedAppID == "" && strings.TrimSpace(*next) == "" {
-				return shared.WithDiagnostic(shared.UsageError("--app is required (or set ASC_APP_ID)"), shared.DiagnosticRequiredInputMissing, "--app")
+				return shared.WithDiagnostic(d.UsageError("--app is required (or set ASC_APP_ID)"), shared.DiagnosticRequiredInputMissing, "--app")
 			}
 
 			// Execute the list functionality directly
-			return executeReviewsList(ctx, resolvedAppID, *output.Output, *output.Pretty, filters, *limit, *next, *paginate)
+			return executeReviewsList(ctx, d, resolvedAppID, *output.Output, *output.Pretty, filters, *limit, *next, *paginate)
 		},
 	}
 }
 
-// ReviewsListCommand returns the reviews list subcommand.
-func ReviewsListCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("list", flag.ExitOnError)
+func newReviewsListCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("list", flag.ExitOnError)
 
 	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
-	output := shared.BindOutputFlags(fs)
+	output := d.BindOutputFlags(fs)
 	filters := BindReviewFilterFlags(fs)
-	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
-	next := fs.String("next", "", "Fetch next page using a links.next URL")
-	paginate := fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")
+	limit := fs.Int("limit", 0, shared.LimitFlagUsage(200))
+	next := fs.String("next", "", shared.NextFlagUsage)
+	paginate := fs.Bool("paginate", false, shared.PaginateFlagUsage)
 
 	return &ffcli.Command{
 		Name:       "list",
@@ -117,65 +112,56 @@ Examples:
   asc reviews list --next "<links.next>"
   asc reviews list --app "123456789" --paginate`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
-			if err := shared.ValidateNextURL(*next); err != nil {
-				return shared.WithDiagnostic(shared.NewValidationError(shared.UsageErrorf("reviews: %v", err)), shared.DiagnosticInvalidInput, "--next")
-			}
-			if err := ValidateReviewNextFlagConflicts(*next, fs, "app"); err != nil {
+			if err := d.ValidatePaginationFlags(ctx, fs, "reviews list", 200, ReviewNextConflicts...); err != nil {
 				return err
 			}
-			resolvedAppID := shared.ResolveAppID(*appID)
+			resolvedAppID := d.ResolveAppID(*appID)
 			if resolvedAppID == "" && strings.TrimSpace(*next) == "" {
-				fmt.Fprintf(os.Stderr, "Error: --app is required (or set ASC_APP_ID)\n\n")
+				fmt.Fprintf(d.IO.ErrOut, "Error: --app is required (or set ASC_APP_ID)\n\n")
 				return shared.MissingRequiredUsageError("--app")
 			}
 
-			return executeReviewsList(ctx, resolvedAppID, *output.Output, *output.Pretty, filters, *limit, *next, *paginate)
+			return executeReviewsList(ctx, d, resolvedAppID, *output.Output, *output.Pretty, filters, *limit, *next, *paginate)
 		},
 	}
 }
 
-func executeReviewsList(ctx context.Context, appID, output string, pretty bool, filters *ReviewFilterFlags, limit int, next string, paginate bool) error {
-	if limit != 0 && (limit < 1 || limit > 200) {
-		return shared.WithDiagnostic(shared.NewValidationError(shared.UsageError("reviews: --limit must be between 1 and 200")), shared.DiagnosticInvalidInput, "--limit")
-	}
-	filterOpts, err := filters.ReviewOptions()
+func executeReviewsList(ctx context.Context, d *shared.Deps, appID, output string, pretty bool, filters *ReviewFilterFlags, limit int, next string, paginate bool) error {
+	filterOpts, err := filters.ReviewOptionsWith(d)
 	if err != nil {
 		return err
 	}
-	if err := shared.ValidateNextURL(next); err != nil {
-		return shared.WithDiagnostic(shared.NewValidationError(shared.UsageErrorf("reviews: %v", err)), shared.DiagnosticInvalidInput, "--next")
-	}
 
-	client, err := shared.GetASCClient()
+	client, err := d.Client()
 	if err != nil {
 		return fmt.Errorf("reviews: %w", err)
 	}
 
-	requestCtx, cancel := shared.ContextWithTimeout(ctx)
+	requestCtx, cancel := d.Timeout(ctx)
 	defer cancel()
 
 	opts := make([]asc.ReviewOption, 0, len(filterOpts)+2)
 	opts = append(opts, filterOpts...)
-	opts = append(opts, asc.WithLimit(limit), asc.WithNextURL(next))
+	opts = append(opts, asc.Limit[asc.ReviewOption](limit), asc.NextURL[asc.ReviewOption](next))
 
 	if paginate {
-		paginateOpts := append(opts, asc.WithLimit(200))
-		reviews, err := shared.PaginateWithSpinner(
+		paginateOpts := append(opts, asc.Limit[asc.ReviewOption](200))
+		reviews, err := d.PaginateWithSpinner(
 			requestCtx,
 			func(ctx context.Context) (asc.PaginatedResponse, error) {
 				return client.GetReviews(ctx, appID, paginateOpts...)
 			},
 			func(ctx context.Context, nextURL string) (asc.PaginatedResponse, error) {
-				return client.GetReviews(ctx, appID, asc.WithNextURL(nextURL))
+				return client.GetReviews(ctx, appID, asc.NextURL[asc.ReviewOption](nextURL))
 			},
 		)
 		if err != nil {
 			return fmt.Errorf("reviews: %w", err)
 		}
 
-		return shared.PrintOutput(reviews, output, pretty)
+		return d.PrintOutput(reviews, output, pretty)
 	}
 
 	reviews, err := client.GetReviews(requestCtx, appID, opts...)
@@ -183,5 +169,5 @@ func executeReviewsList(ctx context.Context, appID, output string, pretty bool, 
 		return fmt.Errorf("reviews: failed to fetch: %w", err)
 	}
 
-	return shared.PrintOutput(reviews, output, pretty)
+	return d.PrintOutput(reviews, output, pretty)
 }

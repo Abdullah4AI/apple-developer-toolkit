@@ -114,6 +114,81 @@ func TestSubscriptionsInputValidationReturnsUsageExitCode(t *testing.T) {
 			wantErr: "subscriptions offers offer-codes one-time-codes list: --next must be an App Store Connect URL",
 		},
 		{
+			name:    "offers win-back list subscription-id s limit 201",
+			args:    []string{"subscriptions", "offers", "win-back", "list", "--subscription-id", "s", "--limit", "201"},
+			wantErr: "subscriptions offers win-back list: --limit must be between 1 and 200",
+		},
+		{
+			name:    "offers win-back list subscription-id s prices-limit 51",
+			args:    []string{"subscriptions", "offers", "win-back", "list", "--subscription-id", "s", "--prices-limit", "51"},
+			wantErr: "subscriptions offers win-back list: --prices-limit must be between 1 and 50",
+		},
+		{
+			name:    "offers win-back prices id o limit 201",
+			args:    []string{"subscriptions", "offers", "win-back", "prices", "--id", "o", "--limit", "201"},
+			wantErr: "subscriptions offers win-back prices: --limit must be between 1 and 200",
+		},
+		{
+			name:    "offers win-back prices id o next non apple url",
+			args:    []string{"subscriptions", "offers", "win-back", "prices", "--id", "o", "--next", "http://example.com/x"},
+			wantErr: "subscriptions offers win-back prices: --next must be an App Store Connect URL",
+		},
+		{
+			name:    "offers win-back list subscription-id s invalid fields",
+			args:    []string{"subscriptions", "offers", "win-back", "list", "--subscription-id", "s", "--fields", "bad"},
+			wantErr: "subscriptions offers win-back list: --fields must be one of: referenceName, offerId, duration, offerMode, periodCount, customerEligibilityPaidSubscriptionDurationInMonths, customerEligibilityTimeSinceLastSubscribedInMonths, customerEligibilityWaitBetweenOffersInMonths, startDate, endDate, priority, promotionIntent, targetSubscriptionPlanType, prices",
+		},
+		{
+			name:    "offers win-back list subscription-id s invalid price-fields",
+			args:    []string{"subscriptions", "offers", "win-back", "list", "--subscription-id", "s", "--price-fields", "bad"},
+			wantErr: "subscriptions offers win-back list: --price-fields must be one of: territory, subscriptionPricePoint",
+		},
+		{
+			name:    "offers win-back list subscription-id s invalid include",
+			args:    []string{"subscriptions", "offers", "win-back", "list", "--subscription-id", "s", "--include", "bad"},
+			wantErr: "subscriptions offers win-back list: --include must be one of: prices",
+		},
+		{
+			name:    "offers win-back prices id o invalid fields",
+			args:    []string{"subscriptions", "offers", "win-back", "prices", "--id", "o", "--fields", "bad"},
+			wantErr: "subscriptions offers win-back prices: --fields must be one of: territory, subscriptionPricePoint",
+		},
+		{
+			name:    "offers win-back prices id o invalid territory-fields",
+			args:    []string{"subscriptions", "offers", "win-back", "prices", "--id", "o", "--territory-fields", "bad"},
+			wantErr: "subscriptions offers win-back prices: --territory-fields must be one of: currency",
+		},
+		{
+			name:    "offers win-back prices id o invalid price-point-fields",
+			args:    []string{"subscriptions", "offers", "win-back", "prices", "--id", "o", "--price-point-fields", "bad"},
+			wantErr: "subscriptions offers win-back prices: --price-point-fields must be one of: customerPrice, proceeds, proceedsYear2, territory, equalizations, adjustedEqualizations",
+		},
+		{
+			name:    "offers win-back prices id o invalid include",
+			args:    []string{"subscriptions", "offers", "win-back", "prices", "--id", "o", "--include", "bad"},
+			wantErr: "subscriptions offers win-back prices: --include must be one of: territory, subscriptionPricePoint",
+		},
+		{
+			name:    "offers win-back links subscription-id s limit 201",
+			args:    []string{"subscriptions", "offers", "win-back", "links", "--subscription-id", "s", "--limit", "201"},
+			wantErr: "subscriptions offers win-back links: --limit must be between 1 and 200",
+		},
+		{
+			name:    "offers win-back links subscription-id s next non apple url",
+			args:    []string{"subscriptions", "offers", "win-back", "links", "--subscription-id", "s", "--next", "http://example.com/x"},
+			wantErr: "subscriptions offers win-back links: --next must be an App Store Connect URL",
+		},
+		{
+			name:    "offers win-back create invalid duration",
+			args:    []string{"subscriptions", "offers", "win-back", "create", "--subscription-id", "s", "--reference-name", "r", "--offer-id", "o", "--duration", "bad"},
+			wantErr: "subscriptions offers win-back create: --duration must be one of: THREE_DAYS, ONE_WEEK, TWO_WEEKS, ONE_MONTH, TWO_MONTHS, THREE_MONTHS, SIX_MONTHS, ONE_YEAR",
+		},
+		{
+			name:    "offers win-back update negative eligibility-paid-months",
+			args:    []string{"subscriptions", "offers", "win-back", "update", "--id", "o", "--eligibility-paid-months", "-1"},
+			wantErr: "subscriptions offers win-back update: --eligibility-paid-months must be 0 or greater",
+		},
+		{
 			name:    "offers offer-codes one-time-codes update missing batch id",
 			args:    []string{"subscriptions", "offers", "offer-codes", "one-time-codes", "update", "--active", "false"},
 			wantErr: "--batch-id is required",
@@ -157,6 +232,16 @@ func TestSubscriptionsInputValidationReturnsUsageExitCode(t *testing.T) {
 			name:    "versions images view without id",
 			args:    []string{"subscriptions", "versions", "images", "view"},
 			wantErr: "--id is required",
+		},
+		{
+			name:    "offers offer-codes generate output given a format",
+			args:    []string{"subscriptions", "offers", "offer-codes", "generate", "--output", "json"},
+			wantErr: "--output takes a path in this command, not an output format; use --output-format json to choose the format, or --output ./json to write to a path named json",
+		},
+		{
+			name:    "offers offer-codes values output given a format",
+			args:    []string{"subscriptions", "offers", "offer-codes", "values", "--output", "json"},
+			wantErr: "--output takes a path in this command, not an output format, and no flag here chooses json, table or markdown output; use --output ./json to write to a path named json",
 		},
 	}
 

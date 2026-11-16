@@ -10,12 +10,11 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
-// PerformanceOverviewCommand returns the app performance overview command.
-func PerformanceOverviewCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("overview", flag.ExitOnError)
+func newPerformanceOverviewCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("overview", flag.ExitOnError)
 	appID := shared.BindResourceIDFlag(fs, "app", "apps", "App Store Connect app ID (or ASC_APP_ID)")
 	deviceType := fs.String("device-type", "", "Device types (comma-separated)")
-	output := shared.BindOutputFlags(fs)
+	output := d.BindOutputFlags(fs)
 	return &ffcli.Command{
 		Name: "overview", ShortUsage: "asc performance overview --app APP_ID [flags]", ShortHelp: "Read an app's Xcode performance overview.",
 		LongHelp: `Read aggregated performance data, regressions, and trends for an app.
@@ -27,32 +26,29 @@ This endpoint has no pagination.
 Examples:
   asc performance overview --app "APP_ID" --output json
   asc performance overview --app "APP_ID" --device-type "iPhone15,2"`,
-		FlagSet: fs, UsageFunc: shared.DefaultUsageFunc,
+		FlagSet: fs, UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
-			if len(args) > 0 {
-				return shared.UsageErrorf("performance overview: unexpected argument %q", args[0])
-			}
-			resolved := strings.TrimSpace(shared.ResolveAppID(*appID))
+			resolved := strings.TrimSpace(d.ResolveAppID(*appID))
 			if resolved == "" {
-				return shared.UsageError("performance overview: --app is required (or set ASC_APP_ID)")
+				return d.UsageError("performance overview: --app is required (or set ASC_APP_ID)")
 			}
 			devices := shared.SplitCSV(*deviceType)
 			supplied := false
 			fs.Visit(func(f *flag.Flag) { supplied = supplied || f.Name == "device-type" })
 			if supplied && len(devices) == 0 {
-				return shared.UsageError("performance overview: --device-type must not be empty")
+				return d.UsageError("performance overview: --device-type must not be empty")
 			}
-			client, err := shared.GetASCClient()
+			client, err := d.Client()
 			if err != nil {
 				return fmt.Errorf("performance overview: %w", err)
 			}
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
+			requestCtx, cancel := d.Timeout(ctx)
 			defer cancel()
 			resp, err := client.GetPerformanceOverviewForApp(requestCtx, resolved, devices)
 			if err != nil {
 				return fmt.Errorf("performance overview: %w", err)
 			}
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+			return d.PrintOutput(resp, *output.Output, *output.Pretty)
 		},
 	}
 }

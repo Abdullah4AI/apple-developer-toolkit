@@ -3,17 +3,15 @@ package appclips
 import (
 	"context"
 	"flag"
-	"fmt"
-	"os"
-	"strings"
 
 	"github.com/peterbourgon/ff/v3/ffcli"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
-// AppClipDefaultExperienceHeaderImageCommand returns the default experience header image command group.
-func AppClipDefaultExperienceHeaderImageCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("header-image", flag.ExitOnError)
+// newAppClipDefaultExperienceHeaderImageCommand returns the default experience header image command group.
+func newAppClipDefaultExperienceHeaderImageCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("header-image", flag.ExitOnError)
 
 	return &ffcli.Command{
 		Name:       "header-image",
@@ -24,9 +22,9 @@ func AppClipDefaultExperienceHeaderImageCommand() *ffcli.Command {
 Examples:
   asc app-clips default-experiences header-image view --localization-id "LOCALIZATION_ID"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
-			AppClipDefaultExperienceHeaderImageGetCommand(),
+			newAppClipDefaultExperienceHeaderImageGetCommand(d),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp
@@ -34,44 +32,24 @@ Examples:
 	}
 }
 
-// AppClipDefaultExperienceHeaderImageGetCommand retrieves the header image for a localization.
-func AppClipDefaultExperienceHeaderImageGetCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("header-image view", flag.ExitOnError)
-
-	localizationID := shared.BindResourceIDFlag(fs, "localization-id", "appClipDefaultExperienceLocalizations", "Default experience localization ID")
-	output := shared.BindOutputFlags(fs)
-
-	return &ffcli.Command{
-		Name:       "view",
-		ShortUsage: "asc app-clips default-experiences header-image view --localization-id \"LOCALIZATION_ID\"",
-		ShortHelp:  "View the header image for a localization.",
+// newAppClipDefaultExperienceHeaderImageGetCommand retrieves the header image for a localization.
+func newAppClipDefaultExperienceHeaderImageGetCommand(d *shared.Deps) *ffcli.Command {
+	return shared.BuildIDGetCommand(shared.IDGetCommandConfig{
+		FlagSetName: "header-image view",
+		Name:        "view",
+		ShortUsage:  "asc app-clips default-experiences header-image view --localization-id \"LOCALIZATION_ID\"",
+		ShortHelp:   "View the header image for a localization.",
 		LongHelp: `View the header image for a localization.
 
 Examples:
   asc app-clips default-experiences header-image view --localization-id "LOCALIZATION_ID"`,
-		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
-		Exec: func(ctx context.Context, args []string) error {
-			locValue := strings.TrimSpace(*localizationID)
-			if locValue == "" {
-				fmt.Fprintln(os.Stderr, "Error: --localization-id is required")
-				return shared.MissingRequiredUsageError("--localization-id")
-			}
-
-			client, err := shared.GetASCClient()
-			if err != nil {
-				return fmt.Errorf("app-clips default-experiences header-image view: %w", err)
-			}
-
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
-			defer cancel()
-
-			resp, err := client.GetAppClipDefaultExperienceLocalizationHeaderImage(requestCtx, locValue)
-			if err != nil {
-				return fmt.Errorf("app-clips default-experiences header-image view: failed to fetch: %w", err)
-			}
-
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+		IDFlag:             "localization-id",
+		IDUsage:            "Default experience localization ID",
+		IDType:             "appClipDefaultExperienceLocalizations",
+		RequiredDiagnostic: true,
+		Deps:               d,
+		Fetch: func(ctx context.Context, client *asc.Client, id string) (any, error) {
+			return client.GetAppClipDefaultExperienceLocalizationHeaderImage(ctx, id)
 		},
-	}
+	})
 }

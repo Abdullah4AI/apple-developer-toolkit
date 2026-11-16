@@ -3,17 +3,14 @@ package backgroundassets
 import (
 	"context"
 	"flag"
-	"fmt"
-	"os"
-	"strings"
 
 	"github.com/peterbourgon/ff/v3/ffcli"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
-// BackgroundAssetsAppStoreReleasesCommand returns the App Store releases command group.
-func BackgroundAssetsAppStoreReleasesCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("app-store-releases", flag.ExitOnError)
+func newBackgroundAssetsAppStoreReleasesCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("app-store-releases", flag.ExitOnError)
 
 	return &ffcli.Command{
 		Name:       "app-store-releases",
@@ -24,9 +21,9 @@ func BackgroundAssetsAppStoreReleasesCommand() *ffcli.Command {
 Examples:
   asc background-assets app-store-releases view --id "RELEASE_ID"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
-			BackgroundAssetsAppStoreReleasesGetCommand(),
+			newBackgroundAssetsAppStoreReleasesGetCommand(d),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp
@@ -34,14 +31,9 @@ Examples:
 	}
 }
 
-// BackgroundAssetsAppStoreReleasesGetCommand returns the App Store releases get subcommand.
-func BackgroundAssetsAppStoreReleasesGetCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("view", flag.ExitOnError)
-
-	id := shared.BindResourceIDFlag(fs, "id", "backgroundAssetVersionAppStoreReleases", "Release ID")
-	output := shared.BindOutputFlags(fs)
-
-	return &ffcli.Command{
+func newBackgroundAssetsAppStoreReleasesGetCommand(d *shared.Deps) *ffcli.Command {
+	return shared.BuildIDGetCommand(shared.IDGetCommandConfig{
+		Deps:       d,
 		Name:       "view",
 		ShortUsage: "asc background-assets app-store-releases view --id \"RELEASE_ID\"",
 		ShortHelp:  "View a background asset App Store release.",
@@ -49,36 +41,17 @@ func BackgroundAssetsAppStoreReleasesGetCommand() *ffcli.Command {
 
 Examples:
   asc background-assets app-store-releases view --id "RELEASE_ID"`,
-		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
-		Exec: func(ctx context.Context, args []string) error {
-			idValue := strings.TrimSpace(*id)
-			if idValue == "" {
-				fmt.Fprintln(os.Stderr, "Error: --id is required")
-				return shared.MissingRequiredUsageError("--id")
-			}
-
-			client, err := shared.GetASCClient()
-			if err != nil {
-				return fmt.Errorf("background-assets app-store-releases view: %w", err)
-			}
-
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
-			defer cancel()
-
-			resp, err := client.GetBackgroundAssetVersionAppStoreRelease(requestCtx, idValue)
-			if err != nil {
-				return fmt.Errorf("background-assets app-store-releases view: failed to fetch: %w", err)
-			}
-
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+		IDUsage:            "Release ID",
+		IDType:             "backgroundAssetVersionAppStoreReleases",
+		RequiredDiagnostic: true,
+		Fetch: func(ctx context.Context, client *asc.Client, id string) (any, error) {
+			return client.GetBackgroundAssetVersionAppStoreRelease(ctx, id)
 		},
-	}
+	})
 }
 
-// BackgroundAssetsExternalBetaReleasesCommand returns the external beta releases command group.
-func BackgroundAssetsExternalBetaReleasesCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("external-beta-releases", flag.ExitOnError)
+func newBackgroundAssetsExternalBetaReleasesCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("external-beta-releases", flag.ExitOnError)
 
 	return &ffcli.Command{
 		Name:       "external-beta-releases",
@@ -89,9 +62,9 @@ func BackgroundAssetsExternalBetaReleasesCommand() *ffcli.Command {
 Examples:
   asc background-assets external-beta-releases view --id "RELEASE_ID"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
-			BackgroundAssetsExternalBetaReleasesGetCommand(),
+			newBackgroundAssetsExternalBetaReleasesGetCommand(d),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp
@@ -99,14 +72,9 @@ Examples:
 	}
 }
 
-// BackgroundAssetsExternalBetaReleasesGetCommand returns the external beta releases get subcommand.
-func BackgroundAssetsExternalBetaReleasesGetCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("view", flag.ExitOnError)
-
-	id := shared.BindResourceIDFlag(fs, "id", "backgroundAssetVersionExternalBetaReleases", "Release ID")
-	output := shared.BindOutputFlags(fs)
-
-	return &ffcli.Command{
+func newBackgroundAssetsExternalBetaReleasesGetCommand(d *shared.Deps) *ffcli.Command {
+	return shared.BuildIDGetCommand(shared.IDGetCommandConfig{
+		Deps:       d,
 		Name:       "view",
 		ShortUsage: "asc background-assets external-beta-releases view --id \"RELEASE_ID\"",
 		ShortHelp:  "View a background asset external beta release.",
@@ -114,36 +82,17 @@ func BackgroundAssetsExternalBetaReleasesGetCommand() *ffcli.Command {
 
 Examples:
   asc background-assets external-beta-releases view --id "RELEASE_ID"`,
-		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
-		Exec: func(ctx context.Context, args []string) error {
-			idValue := strings.TrimSpace(*id)
-			if idValue == "" {
-				fmt.Fprintln(os.Stderr, "Error: --id is required")
-				return shared.MissingRequiredUsageError("--id")
-			}
-
-			client, err := shared.GetASCClient()
-			if err != nil {
-				return fmt.Errorf("background-assets external-beta-releases view: %w", err)
-			}
-
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
-			defer cancel()
-
-			resp, err := client.GetBackgroundAssetVersionExternalBetaRelease(requestCtx, idValue)
-			if err != nil {
-				return fmt.Errorf("background-assets external-beta-releases view: failed to fetch: %w", err)
-			}
-
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+		IDUsage:            "Release ID",
+		IDType:             "backgroundAssetVersionExternalBetaReleases",
+		RequiredDiagnostic: true,
+		Fetch: func(ctx context.Context, client *asc.Client, id string) (any, error) {
+			return client.GetBackgroundAssetVersionExternalBetaRelease(ctx, id)
 		},
-	}
+	})
 }
 
-// BackgroundAssetsInternalBetaReleasesCommand returns the internal beta releases command group.
-func BackgroundAssetsInternalBetaReleasesCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("internal-beta-releases", flag.ExitOnError)
+func newBackgroundAssetsInternalBetaReleasesCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("internal-beta-releases", flag.ExitOnError)
 
 	return &ffcli.Command{
 		Name:       "internal-beta-releases",
@@ -154,9 +103,9 @@ func BackgroundAssetsInternalBetaReleasesCommand() *ffcli.Command {
 Examples:
   asc background-assets internal-beta-releases view --id "RELEASE_ID"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
-			BackgroundAssetsInternalBetaReleasesGetCommand(),
+			newBackgroundAssetsInternalBetaReleasesGetCommand(d),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp
@@ -164,14 +113,9 @@ Examples:
 	}
 }
 
-// BackgroundAssetsInternalBetaReleasesGetCommand returns the internal beta releases get subcommand.
-func BackgroundAssetsInternalBetaReleasesGetCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("view", flag.ExitOnError)
-
-	id := shared.BindResourceIDFlag(fs, "id", "backgroundAssetVersionInternalBetaReleases", "Release ID")
-	output := shared.BindOutputFlags(fs)
-
-	return &ffcli.Command{
+func newBackgroundAssetsInternalBetaReleasesGetCommand(d *shared.Deps) *ffcli.Command {
+	return shared.BuildIDGetCommand(shared.IDGetCommandConfig{
+		Deps:       d,
 		Name:       "view",
 		ShortUsage: "asc background-assets internal-beta-releases view --id \"RELEASE_ID\"",
 		ShortHelp:  "View a background asset internal beta release.",
@@ -179,29 +123,11 @@ func BackgroundAssetsInternalBetaReleasesGetCommand() *ffcli.Command {
 
 Examples:
   asc background-assets internal-beta-releases view --id "RELEASE_ID"`,
-		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
-		Exec: func(ctx context.Context, args []string) error {
-			idValue := strings.TrimSpace(*id)
-			if idValue == "" {
-				fmt.Fprintln(os.Stderr, "Error: --id is required")
-				return shared.MissingRequiredUsageError("--id")
-			}
-
-			client, err := shared.GetASCClient()
-			if err != nil {
-				return fmt.Errorf("background-assets internal-beta-releases view: %w", err)
-			}
-
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
-			defer cancel()
-
-			resp, err := client.GetBackgroundAssetVersionInternalBetaRelease(requestCtx, idValue)
-			if err != nil {
-				return fmt.Errorf("background-assets internal-beta-releases view: failed to fetch: %w", err)
-			}
-
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+		IDUsage:            "Release ID",
+		IDType:             "backgroundAssetVersionInternalBetaReleases",
+		RequiredDiagnostic: true,
+		Fetch: func(ctx context.Context, client *asc.Client, id string) (any, error) {
+			return client.GetBackgroundAssetVersionInternalBetaRelease(ctx, id)
 		},
-	}
+	})
 }

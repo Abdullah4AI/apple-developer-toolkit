@@ -26,11 +26,6 @@ type SubscriptionPlanAvailabilityAttributes struct {
 	PlanType                  SubscriptionPlanType `json:"planType,omitempty"`
 }
 
-// SubscriptionPlanAvailabilityUpdateAttributes describes mutable plan availability attributes.
-type SubscriptionPlanAvailabilityUpdateAttributes struct {
-	AvailableInNewTerritories *bool `json:"availableInNewTerritories,omitempty"`
-}
-
 // SubscriptionPlanAvailabilityRelationships describes relationships for plan availability.
 type SubscriptionPlanAvailabilityRelationships struct {
 	Subscription         *Relationship     `json:"subscription,omitempty"`
@@ -44,11 +39,6 @@ type SubscriptionPlanAvailabilityCreateData struct {
 	Relationships *SubscriptionPlanAvailabilityRelationships `json:"relationships"`
 }
 
-// SubscriptionPlanAvailabilityCreateRequest is a request to create plan availability.
-type SubscriptionPlanAvailabilityCreateRequest struct {
-	Data SubscriptionPlanAvailabilityCreateData `json:"data"`
-}
-
 // SubscriptionPlanAvailabilityUpdateData is the data portion of plan availability update requests.
 type SubscriptionPlanAvailabilityUpdateData struct {
 	Type          ResourceType                                  `json:"type"`
@@ -56,14 +46,6 @@ type SubscriptionPlanAvailabilityUpdateData struct {
 	Attributes    *SubscriptionPlanAvailabilityUpdateAttributes `json:"attributes,omitempty"`
 	Relationships *SubscriptionPlanAvailabilityRelationships    `json:"relationships,omitempty"`
 }
-
-// SubscriptionPlanAvailabilityUpdateRequest is a request to update plan availability.
-type SubscriptionPlanAvailabilityUpdateRequest struct {
-	Data SubscriptionPlanAvailabilityUpdateData `json:"data"`
-}
-
-// SubscriptionPlanAvailabilityResponse is the response from plan availability endpoints.
-type SubscriptionPlanAvailabilityResponse = SingleResponse[SubscriptionPlanAvailabilityAttributes]
 
 // SubscriptionPlanAvailabilitiesResponse is the response from plan availability list endpoints.
 type SubscriptionPlanAvailabilitiesResponse = Response[SubscriptionPlanAvailabilityAttributes]
@@ -80,24 +62,6 @@ type subscriptionPlanAvailabilitiesQuery struct {
 // SubscriptionPlanAvailabilityIncludedTerritoriesLimit is Apple's maximum for
 // limit[availableTerritories] on subscription plan availability reads.
 const SubscriptionPlanAvailabilityIncludedTerritoriesLimit = 50
-
-// WithSubscriptionPlanAvailabilitiesLimit sets the maximum number of plan availabilities to return.
-func WithSubscriptionPlanAvailabilitiesLimit(limit int) SubscriptionPlanAvailabilitiesOption {
-	return func(q *subscriptionPlanAvailabilitiesQuery) {
-		if limit > 0 {
-			q.limit = limit
-		}
-	}
-}
-
-// WithSubscriptionPlanAvailabilitiesNextURL uses a next page URL directly.
-func WithSubscriptionPlanAvailabilitiesNextURL(next string) SubscriptionPlanAvailabilitiesOption {
-	return func(q *subscriptionPlanAvailabilitiesQuery) {
-		if strings.TrimSpace(next) != "" {
-			q.nextURL = strings.TrimSpace(next)
-		}
-	}
-}
 
 // WithSubscriptionPlanAvailabilitiesPlanTypes filters returned plan availabilities by plan type.
 // The App Store Connect API does not expose filter[planType] on planAvailabilities, so filtering
@@ -154,21 +118,7 @@ func (c *Client) CreateSubscriptionPlanAvailability(ctx context.Context, subID s
 		},
 	}
 
-	body, err := BuildRequestBody(payload)
-	if err != nil {
-		return nil, err
-	}
-	data, err := c.do(ctx, http.MethodPost, "/v1/subscriptionPlanAvailabilities", body)
-	if err != nil {
-		return nil, err
-	}
-
-	var response SubscriptionPlanAvailabilityResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
+	return sendJSON[SubscriptionPlanAvailabilityResponse](ctx, c, writeRequest{Method: http.MethodPost, Path: "/v1/subscriptionPlanAvailabilities", Payload: payload})
 }
 
 // UpdateSubscriptionPlanAvailability updates subscription plan availability in territories.
@@ -195,43 +145,7 @@ func (c *Client) UpdateSubscriptionPlanAvailability(ctx context.Context, planAva
 		},
 	}
 
-	body, err := BuildRequestBody(payload)
-	if err != nil {
-		return nil, err
-	}
-	path := fmt.Sprintf("/v1/subscriptionPlanAvailabilities/%s", planAvailabilityID)
-	data, err := c.do(ctx, http.MethodPatch, path, body)
-	if err != nil {
-		return nil, err
-	}
-
-	var response SubscriptionPlanAvailabilityResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
-// GetSubscriptionPlanAvailability retrieves a subscription plan availability by ID.
-func (c *Client) GetSubscriptionPlanAvailability(ctx context.Context, planAvailabilityID string) (*SubscriptionPlanAvailabilityResponse, error) {
-	planAvailabilityID = strings.TrimSpace(planAvailabilityID)
-	if planAvailabilityID == "" {
-		return nil, fmt.Errorf("plan availability ID is required")
-	}
-
-	path := fmt.Sprintf("/v1/subscriptionPlanAvailabilities/%s", planAvailabilityID)
-	data, err := c.do(ctx, http.MethodGet, path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var response SubscriptionPlanAvailabilityResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
+	return sendJSON[SubscriptionPlanAvailabilityResponse](ctx, c, writeRequest{Method: http.MethodPatch, Path: fmt.Sprintf("/v1/subscriptionPlanAvailabilities/%s", planAvailabilityID), Payload: payload})
 }
 
 // GetSubscriptionPlanAvailabilitiesForSubscription retrieves plan availabilities for a subscription.
@@ -281,59 +195,6 @@ func (c *Client) GetSubscriptionPlanAvailabilitiesForSubscription(ctx context.Co
 	}
 
 	return filterSubscriptionPlanAvailabilities(&response, query.planTypes), nil
-}
-
-// GetSubscriptionPlanAvailabilityAvailableTerritoriesRelationships retrieves
-// available territory linkages for a subscription plan availability.
-func (c *Client) GetSubscriptionPlanAvailabilityAvailableTerritoriesRelationships(
-	ctx context.Context,
-	planAvailabilityID string,
-	opts ...LinkagesOption,
-) (*LinkagesResponse, error) {
-	return c.getResourceLinkages(
-		ctx,
-		planAvailabilityID,
-		"availableTerritories",
-		"planAvailabilityID",
-		"/v1/subscriptionPlanAvailabilities/%s/relationships/%s",
-		"subscriptionPlanAvailabilityAvailableTerritoriesRelationships",
-		opts...,
-	)
-}
-
-// GetSubscriptionPlanAvailabilityAvailableTerritories lists available territories for a plan availability.
-func (c *Client) GetSubscriptionPlanAvailabilityAvailableTerritories(ctx context.Context, planAvailabilityID string, opts ...SubscriptionAvailabilityTerritoriesOption) (*TerritoriesResponse, error) {
-	query := &subscriptionAvailabilityTerritoriesQuery{}
-	for _, opt := range opts {
-		opt(query)
-	}
-
-	planAvailabilityID = strings.TrimSpace(planAvailabilityID)
-	if query.nextURL == "" && planAvailabilityID == "" {
-		return nil, fmt.Errorf("plan availability ID is required")
-	}
-
-	path := fmt.Sprintf("/v1/subscriptionPlanAvailabilities/%s/availableTerritories", planAvailabilityID)
-	if query.nextURL != "" {
-		if err := validateNextURL(query.nextURL); err != nil {
-			return nil, fmt.Errorf("subscriptionPlanAvailabilityAvailableTerritories: %w", err)
-		}
-		path = query.nextURL
-	} else if queryString := buildSubscriptionAvailabilityTerritoriesQuery(query); queryString != "" {
-		path += "?" + queryString
-	}
-
-	data, err := c.do(ctx, http.MethodGet, path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var response TerritoriesResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
 }
 
 func filterSubscriptionPlanAvailabilities(resp *SubscriptionPlanAvailabilitiesResponse, planTypes []SubscriptionPlanType) *SubscriptionPlanAvailabilitiesResponse {

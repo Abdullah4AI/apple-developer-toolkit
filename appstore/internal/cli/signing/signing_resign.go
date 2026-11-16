@@ -23,22 +23,23 @@ type signingResignOptions struct {
 	IdentityPasswordPath string
 	ProfilesManifestPath string
 	RebaseTeamClaims     bool
+	BundleID             string
 }
 
-// SigningResignCommand returns the local IPA re-signing command.
-func SigningResignCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("resign", flag.ExitOnError)
+func newSigningResignCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("resign", flag.ExitOnError)
 	ipaPath := fs.String("ipa", "", "Path to the existing IPA input (required)")
 	outputPath := fs.String("output", "", "Path for the newly re-signed IPA (required)")
 	identityPath := fs.String("identity", "", "Path to a PKCS#12 signing identity (required)")
 	identityPasswordPath := fs.String("identity-password-file", "", "Path to a file containing the PKCS#12 password")
 	profilesManifestPath := fs.String("profiles-manifest", "", "Path to the strict bundle-to-profile manifest (required)")
 	rebaseTeamClaims := fs.Bool("rebase-team-claims", false, "Rebase allowlisted team-prefix claims; changing KVS selects a different data namespace")
-	format := shared.BindOutputFlagsWith(fs, "format", shared.DefaultOutputFormat(), "Output format: json, table, markdown")
+	bundleID := fs.String("bundle-id", "", "New main app bundle identifier; nested identifiers move from OLD. to NEW.")
+	format := shared.BindOutputFlagsWith(fs, "format", d.DefaultOutputFormat(), "Output format: json, table, markdown")
 
 	return &ffcli.Command{
 		Name:       "resign",
-		ShortUsage: "asc signing resign --ipa PATH --output PATH --identity PATH --profiles-manifest PATH [--rebase-team-claims] [flags]",
+		ShortUsage: "asc signing resign --ipa PATH --output PATH --identity PATH --profiles-manifest PATH [--rebase-team-claims] [--bundle-id ID] [flags]",
 		ShortHelp:  "Re-sign an existing iOS IPA with complete nested-target profile mappings.",
 		LongHelp: `Re-sign an existing iOS IPA into a new destination.
 
@@ -56,19 +57,26 @@ all transformed values remain subject to replacement-profile authorization.
 Changing a KVS claim selects a different namespace and can make existing KVS
 data inaccessible.
 
+Use --bundle-id to ship the build under a new main app bundle identifier.
+Every nested identifier must start with the old main identifier plus a dot;
+that prefix is replaced and the manifest must be keyed by the new identifiers.
+App Clip targets, nested identifiers outside that prefix, and watch keys that
+do not name the old identifier they belong to are refused. Other Info.plist
+values that contain the old identifier, such as URL schemes, are unchanged.
+
 Example:
   asc signing resign --ipa ./App.ipa --output ./artifacts/App-resigned.ipa --identity ./signing/distribution.p12 --identity-password-file ./secrets/p12-password --profiles-manifest ./signing/profiles.json --format json`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
+			if err := d.RejectOutputFormatAsPath(*outputPath, "--format"); err != nil {
+				return err
+			}
 			if err := ctx.Err(); err != nil {
 				return err
 			}
-			if len(args) != 0 {
-				return shared.UsageError("signing resign does not accept positional arguments")
-			}
 			if runtime.GOOS != "darwin" {
-				return shared.UsageError("signing resign is supported only on macOS")
+				return d.UsageError("signing resign is supported only on macOS")
 			}
 			required := []struct {
 				name  string
@@ -81,23 +89,29 @@ Example:
 			}
 			for _, item := range required {
 				if strings.TrimSpace(item.value) == "" {
-					return shared.UsageError(item.name + " is required")
+					return d.UsageError(item.name + " is required")
 				}
 			}
-			if _, err := shared.ValidateOutputFormat(*format.Output, *format.Pretty); err != nil {
-				return shared.UsageError(err.Error())
+			bundleIDSet := false
+			fs.Visit(func(item *flag.Flag) { bundleIDSet = bundleIDSet || item.Name == "bundle-id" })
+			if bundleIDSet && strings.TrimSpace(*bundleID) == "" {
+				return d.UsageError("--bundle-id must not be empty")
 			}
-			result, err := executeSigningResignFn(ctx, signingResignOptions{
+			if _, err := shared.ValidateOutputFormat(*format.Output, *format.Pretty); err != nil {
+				return d.UsageError(err.Error())
+			}
+			result, err := executeSigningResignFn(ctx, d, signingResignOptions{
 				IPAPath:              *ipaPath,
 				OutputPath:           *outputPath,
 				IdentityPath:         *identityPath,
 				IdentityPasswordPath: signingResignPathOrEmpty(*identityPasswordPath),
 				ProfilesManifestPath: *profilesManifestPath,
 				RebaseTeamClaims:     *rebaseTeamClaims,
+				BundleID:             *bundleID,
 			})
 			if err != nil {
 				if isSigningResignUsageError(err) {
-					return shared.UsageError(err.Error())
+					return d.UsageError(err.Error())
 				}
 				// The implementation normally classifies path-bearing failures
 				// before returning. Keep the public command boundary defensive for
@@ -111,7 +125,7 @@ Example:
 				)
 				return fmt.Errorf("signing resign: %w", err)
 			}
-			if err := printSigningResignResultFn(result, *format.Output, *format.Pretty); err != nil {
+			if err := printSigningResignResultFn(d, result, *format.Output, *format.Pretty); err != nil {
 				if result.Output.Path == "" {
 					return err
 				}
@@ -167,8 +181,8 @@ type (
 	signingResignOutputEntitlementRewrite = asc.SigningResignEntitlementRewrite
 )
 
-func printSigningResignResult(result signingResignResult, format string, pretty bool) error {
-	return shared.PrintOutput(&result, format, pretty)
+func printSigningResignResult(d *shared.Deps, result signingResignResult, format string, pretty bool) error {
+	return d.PrintOutput(&result, format, pretty)
 }
 
 var (

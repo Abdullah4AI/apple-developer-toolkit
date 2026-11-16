@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/peterbourgon/ff/v3/ffcli"
@@ -32,10 +31,10 @@ type listCommandFlags struct {
 	paginate           *bool
 }
 
-func bindListCommandFlags(fs *flag.FlagSet) listCommandFlags {
+func bindListCommandFlags(d *shared.Deps, fs *flag.FlagSet) listCommandFlags {
 	return listCommandFlags{
 		appID:              shared.BindResourceIDFlag(fs, "app", "apps", "App Store Connect app ID (or ASC_APP_ID env)"),
-		output:             shared.BindOutputFlags(fs),
+		output:             d.BindOutputFlags(fs),
 		includeScreenshots: fs.Bool("include-screenshots", false, "Include screenshot URLs in feedback output"),
 		deviceModel:        fs.String("device-model", "", "Filter by device model(s), comma-separated"),
 		osVersion:          fs.String("os-version", "", "Filter by OS version(s), comma-separated"),
@@ -47,25 +46,26 @@ func bindListCommandFlags(fs *flag.FlagSet) listCommandFlags {
 		include:            fs.String("include", "", "Include related resources, comma-separated (build, tester)"),
 		includedFields:     shared.BindIncludedFieldFlagsExcept(fs, map[string]string{"build": "builds", "tester": "betaTesters"}, map[string][]string{"betaTesters": {"appDevices"}}), // Apple rejects spec value appDevices here: 400 "is not a valid field name".
 		sort:               fs.String("sort", "", "Sort by createdDate or -createdDate"),
-		limit:              fs.Int("limit", 0, "Maximum results per page (1-200)"),
-		next:               fs.String("next", "", "Fetch next page using a links.next URL"),
-		paginate:           fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)"),
+		limit:              fs.Int("limit", 0, shared.LimitFlagUsage(200)),
+		next:               fs.String("next", "", shared.NextFlagUsage),
+		paginate:           fs.Bool("paginate", false, shared.PaginateFlagUsage),
 	}
 }
 
-// NewListCommand builds a feedback list command with configurable help and warnings.
-func NewListCommand(config shared.ListCommandConfig) *ffcli.Command {
+// NewListCommand builds a feedback list command with configurable help and
+// warnings on d.
+func NewListCommand(d *shared.Deps, config shared.ListCommandConfig) *ffcli.Command {
 	name := strings.TrimSpace(config.Name)
 	if name == "" {
 		name = "feedback"
 	}
 	usageFunc := config.UsageFunc
 	if usageFunc == nil {
-		usageFunc = shared.DefaultUsageFunc
+		usageFunc = d.DefaultUsageFunc
 	}
 
-	fs := flag.NewFlagSet(name, flag.ExitOnError)
-	flags := bindListCommandFlags(fs)
+	fs := d.NewFlagSet(name, flag.ExitOnError)
+	flags := bindListCommandFlags(d, fs)
 
 	return &ffcli.Command{
 		Name:       name,
@@ -75,50 +75,45 @@ func NewListCommand(config shared.ListCommandConfig) *ffcli.Command {
 		FlagSet:    fs,
 		UsageFunc:  usageFunc,
 		Exec: func(ctx context.Context, args []string) error {
-			return runListCommand(ctx, config, fs, flags)
+			return runListCommand(ctx, d, config, fs, flags)
 		},
 	}
 }
 
-func runListCommand(ctx context.Context, config shared.ListCommandConfig, fs *flag.FlagSet, flags listCommandFlags) error {
+func runListCommand(ctx context.Context, d *shared.Deps, config shared.ListCommandConfig, fs *flag.FlagSet, flags listCommandFlags) error {
 	prefix := strings.TrimSpace(config.ErrorPrefix)
 	if prefix == "" {
 		prefix = "feedback"
 	}
 
-	if *flags.limit != 0 && (*flags.limit < 1 || *flags.limit > 200) {
-		return shared.UsageErrorf("%s: --limit must be between 1 and 200", prefix)
-	}
-	if err := shared.ValidateNextURL(*flags.next); err != nil {
-		return shared.UsageErrorf("%s: %v", prefix, err)
-	}
-	if err := shared.RejectNextFlagConflicts(fs, *flags.next, prefix, "include-screenshots", "device-model", "os-version", "app-platform", "device-platform", "build-id", "build-pre-release-version", "tester", "include", "sort"); err != nil {
+	if err := d.ValidatePaginationFlags(ctx, fs, prefix, 200, "include-screenshots", "device-model", "os-version", "app-platform", "device-platform", "build-id", "build-pre-release-version", "tester", "include", "sort"); err != nil {
 		return err
 	}
+
+	resolvedAppID := d.ResolveAppID(*flags.appID)
+	if resolvedAppID == "" && strings.TrimSpace(*flags.next) == "" {
+		fmt.Fprintf(d.IO.ErrOut, "Error: --app is required (or set ASC_APP_ID)\n\n")
+		return shared.MissingRequiredUsageError("--app")
+	}
+
 	if err := shared.ValidateSort(*flags.sort, "createdDate", "-createdDate"); err != nil {
-		return shared.UsageErrorf("%s: %v", prefix, err)
+		return d.UsageErrorf("%s: %v", prefix, err)
 	}
 	if err := shared.ValidateInclude(*flags.include, "build", "tester"); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %s\n\n", err)
+		fmt.Fprintf(d.IO.ErrOut, "Error: %s\n\n", err)
 		return flag.ErrHelp
 	}
-	included, err := flags.includedFields.Resolve(prefix, *flags.next, shared.SplitCSV(*flags.include))
+	included, err := flags.includedFields.ResolveWith(d, prefix, *flags.next, shared.SplitCSV(*flags.include))
 	if err != nil {
 		return err
 	}
 
-	resolvedAppID := shared.ResolveAppID(*flags.appID)
-	if resolvedAppID == "" && strings.TrimSpace(*flags.next) == "" {
-		fmt.Fprintf(os.Stderr, "Error: --app is required (or set ASC_APP_ID)\n\n")
-		return shared.MissingRequiredUsageError("--app")
-	}
-
-	client, err := shared.GetASCClient()
+	client, err := d.Client()
 	if err != nil {
 		return fmt.Errorf("%s: %w", prefix, err)
 	}
 
-	requestCtx, cancel := shared.ContextWithTimeout(ctx)
+	requestCtx, cancel := d.Timeout(ctx)
 	defer cancel()
 
 	opts := []asc.FeedbackOption{
@@ -131,8 +126,8 @@ func runListCommand(ctx context.Context, config shared.ListCommandConfig, fs *fl
 		asc.WithFeedbackTesterIDs(shared.SplitCSV(*flags.tester)),
 		asc.WithFeedbackInclude(shared.SplitCSV(*flags.include)),
 		asc.WithIncludedFields[asc.FeedbackOption](included),
-		asc.WithFeedbackLimit(*flags.limit),
-		asc.WithFeedbackNextURL(*flags.next),
+		asc.Limit[asc.FeedbackOption](*flags.limit),
+		asc.NextURL[asc.FeedbackOption](*flags.next),
 	}
 	if strings.TrimSpace(*flags.sort) != "" {
 		opts = append(opts, asc.WithFeedbackSort(*flags.sort))
@@ -142,20 +137,20 @@ func runListCommand(ctx context.Context, config shared.ListCommandConfig, fs *fl
 	}
 
 	if *flags.paginate {
-		paginateOpts := append(opts, asc.WithFeedbackLimit(200))
+		paginateOpts := append(opts, asc.Limit[asc.FeedbackOption](200))
 		firstPage, err := client.GetFeedback(requestCtx, resolvedAppID, paginateOpts...)
 		if err != nil {
 			return fmt.Errorf("%s: failed to fetch: %w", prefix, err)
 		}
 
 		feedback, err := asc.PaginateAll(requestCtx, firstPage, func(ctx context.Context, nextURL string) (asc.PaginatedResponse, error) {
-			return client.GetFeedback(ctx, resolvedAppID, asc.WithFeedbackNextURL(nextURL))
+			return client.GetFeedback(ctx, resolvedAppID, asc.NextURL[asc.FeedbackOption](nextURL))
 		})
 		if err != nil {
 			return fmt.Errorf("%s: %w", prefix, err)
 		}
 
-		return shared.PrintOutput(feedback, *flags.output.Output, *flags.output.Pretty)
+		return d.PrintOutput(feedback, *flags.output.Output, *flags.output.Pretty)
 	}
 
 	feedback, err := client.GetFeedback(requestCtx, resolvedAppID, opts...)
@@ -163,5 +158,5 @@ func runListCommand(ctx context.Context, config shared.ListCommandConfig, fs *fl
 		return fmt.Errorf("%s: failed to fetch: %w", prefix, err)
 	}
 
-	return shared.PrintOutput(feedback, *flags.output.Output, *flags.output.Pretty)
+	return d.PrintOutput(feedback, *flags.output.Output, *flags.output.Pretty)
 }

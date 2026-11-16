@@ -38,7 +38,7 @@ var ageRatingFields = []metadataSettingField{
 	{name: "violenceCartoonOrFantasy", values: ageRatingContentLevels},
 	{name: "violenceRealistic", values: ageRatingContentLevels},
 	{name: "violenceRealisticProlongedGraphicOrSadistic", values: ageRatingContentLevels},
-	{name: "kidsAgeBand", values: []string{"FIVE_AND_UNDER", "SIX_TO_EIGHT", "NINE_TO_ELEVEN"}},
+	{name: "kidsAgeBand", values: []string{"FIVE_AND_UNDER", "SIX_TO_EIGHT", "NINE_TO_ELEVEN"}, nullUnset: true},
 	{name: "ageRatingOverride", values: []string{"NONE", "NINE_PLUS", "THIRTEEN_PLUS", "SIXTEEN_PLUS", "SEVENTEEN_PLUS", "UNRATED"}},
 	{name: "ageRatingOverrideV2", values: []string{"NONE", "NINE_PLUS", "THIRTEEN_PLUS", "SIXTEEN_PLUS", "EIGHTEEN_PLUS", "UNRATED"}},
 	{name: "koreaAgeRatingOverride", values: []string{"NONE", "ALL", "TWELVE_PLUS", "FIFTEEN_PLUS", "NINETEEN_PLUS"}},
@@ -79,14 +79,14 @@ func validateAgeRatingSetting(values map[string]string, complete bool) error {
 	return missingDependency
 }
 
-func fetchAgeRatingDeclaration(ctx context.Context, client *asc.Client, appInfoID string) (*asc.AgeRatingDeclarationResponse, error) {
-	return shared.RetryReadWithFreshTimeout(ctx, func(requestCtx context.Context) (*asc.AgeRatingDeclarationResponse, error) {
+func fetchAgeRatingDeclaration(ctx context.Context, d *shared.Deps, client *asc.Client, appInfoID string) (*asc.AgeRatingDeclarationResponse, error) {
+	return shared.RetryReadWithFreshTimeoutWith(ctx, d, func(requestCtx context.Context) (*asc.AgeRatingDeclarationResponse, error) {
 		return client.GetAgeRatingDeclarationForAppInfo(requestCtx, appInfoID)
 	})
 }
 
-func fetchAgeRatingSetting(ctx context.Context, client *asc.Client, target metadataSettingTarget) (map[string]string, error) {
-	resp, err := fetchAgeRatingDeclaration(ctx, client, target.appInfoID)
+func fetchAgeRatingSetting(ctx context.Context, d *shared.Deps, client *asc.Client, target metadataSettingTarget) (map[string]string, error) {
+	resp, err := fetchAgeRatingDeclaration(ctx, d, client, target.appInfoID)
 	if err != nil {
 		return nil, err
 	}
@@ -123,8 +123,8 @@ func fetchAgeRatingSetting(ctx context.Context, client *asc.Client, target metad
 	return values, nil
 }
 
-func updateAgeRatingSetting(ctx context.Context, client *asc.Client, target metadataSettingTarget, changed map[string]string) (string, error) {
-	resp, err := fetchAgeRatingDeclaration(ctx, client, target.appInfoID)
+func updateAgeRatingSetting(ctx context.Context, d *shared.Deps, client *asc.Client, target metadataSettingTarget, changed map[string]string) (string, error) {
+	resp, err := fetchAgeRatingDeclaration(ctx, d, client, target.appInfoID)
 	if err != nil {
 		return "", err
 	}

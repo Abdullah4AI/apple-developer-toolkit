@@ -23,7 +23,6 @@ import (
 	"testing"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
-	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/secureopen"
 )
 
@@ -34,7 +33,7 @@ func (fn notaryRoundTripper) RoundTrip(req *http.Request) (*http.Response, error
 }
 
 func TestNotarizationSubmitValidation(t *testing.T) {
-	cmd := submitCommand()
+	cmd := submitCommand(newNotarizationTestDeps(nil))
 	if err := cmd.FlagSet.Parse([]string{}); err != nil {
 		t.Fatalf("parse error: %v", err)
 	}
@@ -155,9 +154,6 @@ func TestNotarizationSubmitUploadsOpenedArchiveAfterPathReplacement(t *testing.T
 			t.Cleanup(server.Close)
 
 			client := newNotarizationTestClient(t, server)
-			t.Cleanup(shared.SetASCClientFactoryForTesting(func() (*asc.Client, error) {
-				return client, nil
-			}))
 
 			var uploadedContents []byte
 			var uploadedHash string
@@ -182,7 +178,9 @@ func TestNotarizationSubmitUploadsOpenedArchiveAfterPathReplacement(t *testing.T
 				http.DefaultClient.Transport = originalTransport
 			})
 
-			cmd := submitCommand()
+			cmd := submitCommand(newNotarizationTestDeps(func() (*asc.Client, error) {
+				return client, nil
+			}))
 			if err := cmd.FlagSet.Parse([]string{"--file", archivePath, "--output", "json"}); err != nil {
 				t.Fatalf("parse command: %v", err)
 			}
@@ -238,6 +236,12 @@ func TestNotarizationSubmitDetectsReplacementBetweenLstatAndOpen(t *testing.T) {
 func newNotarizationTestClient(t *testing.T, server *httptest.Server) *asc.Client {
 	t.Helper()
 
+	return newNotarizationTestClientWithHTTPClient(t, server.Client(), server.URL)
+}
+
+func newNotarizationTestClientWithHTTPClient(t *testing.T, httpClient *http.Client, notaryBaseURL string) *asc.Client {
+	t.Helper()
+
 	privateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
 		t.Fatalf("generate private key: %v", err)
@@ -252,10 +256,10 @@ func newNotarizationTestClient(t *testing.T, server *httptest.Server) *asc.Clien
 		t.Fatalf("write private key: %v", err)
 	}
 
-	client, err := asc.NewClientWithHTTPClient("TEST_KEY", "TEST_ISSUER", keyPath, server.Client())
+	client, err := asc.NewClientWithHTTPClient("TEST_KEY", "TEST_ISSUER", keyPath, httpClient)
 	if err != nil {
 		t.Fatalf("create test client: %v", err)
 	}
-	client.SetNotaryBaseURL(server.URL)
+	client.SetNotaryBaseURL(notaryBaseURL)
 	return client
 }

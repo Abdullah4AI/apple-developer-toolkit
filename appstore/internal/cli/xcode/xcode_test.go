@@ -1,7 +1,6 @@
 package xcode
 
 import (
-	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
@@ -16,6 +15,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -32,7 +32,8 @@ func TestXcodeExportWaitRequiresDirectUpload(t *testing.T) {
 
 	isDirectUploadExportOptionsFn = func(string) bool { return false }
 
-	cmd := XcodeExportCommand()
+	d := newXcodeTestDeps(nil)
+	cmd := newXcodeExportCommand(d)
 	cmd.FlagSet.SetOutput(io.Discard)
 	if err := cmd.FlagSet.Parse([]string{
 		"--archive-path", "Demo.xcarchive",
@@ -44,7 +45,7 @@ func TestXcodeExportWaitRequiresDirectUpload(t *testing.T) {
 	}
 
 	var runErr error
-	_, stderr := captureCommandOutput(t, func() error {
+	_, stderr := captureCommandOutput(t, d, func() error {
 		runErr = cmd.Exec(context.Background(), nil)
 		return runErr
 	})
@@ -72,7 +73,8 @@ func TestXcodeExportAcceptsPKGPath(t *testing.T) {
 		}, nil
 	}
 
-	cmd := XcodeExportCommand()
+	d := newXcodeTestDeps(nil)
+	cmd := newXcodeExportCommand(d)
 	cmd.FlagSet.SetOutput(io.Discard)
 	if err := cmd.FlagSet.Parse([]string{
 		"--archive-path", "Demo.xcarchive",
@@ -84,7 +86,7 @@ func TestXcodeExportAcceptsPKGPath(t *testing.T) {
 	}
 
 	var runErr error
-	stdout, stderr := captureCommandOutput(t, func() error {
+	stdout, stderr := captureCommandOutput(t, d, func() error {
 		runErr = cmd.Exec(context.Background(), nil)
 		return runErr
 	})
@@ -113,7 +115,8 @@ func TestXcodeExportRejectsMultipleArtifactPaths(t *testing.T) {
 	restore := overrideXcodeCommandTestHooks(t)
 	defer restore()
 
-	cmd := XcodeExportCommand()
+	d := newXcodeTestDeps(nil)
+	cmd := newXcodeExportCommand(d)
 	cmd.FlagSet.SetOutput(io.Discard)
 	if err := cmd.FlagSet.Parse([]string{
 		"--archive-path", "Demo.xcarchive",
@@ -125,7 +128,7 @@ func TestXcodeExportRejectsMultipleArtifactPaths(t *testing.T) {
 	}
 
 	var runErr error
-	_, stderr := captureCommandOutput(t, func() error {
+	_, stderr := captureCommandOutput(t, d, func() error {
 		runErr = cmd.Exec(context.Background(), nil)
 		return runErr
 	})
@@ -152,7 +155,8 @@ func TestXcodeExportGeneratesManualPKGOptions(t *testing.T) {
 		return &localxcode.ExportResult{ArchivePath: opts.ArchivePath, PKGPath: opts.PKGPath}, nil
 	}
 
-	cmd := XcodeExportCommand()
+	d := newXcodeTestDeps(nil)
+	cmd := newXcodeExportCommand(d)
 	cmd.FlagSet.SetOutput(io.Discard)
 	pkgPath := filepath.Join(t.TempDir(), "Demo.pkg")
 	if err := cmd.FlagSet.Parse([]string{
@@ -164,7 +168,7 @@ func TestXcodeExportGeneratesManualPKGOptions(t *testing.T) {
 		t.Fatalf("failed to parse flags: %v", err)
 	}
 
-	stdout, stderr := captureCommandOutput(t, func() error {
+	stdout, stderr := captureCommandOutput(t, d, func() error {
 		return cmd.Exec(context.Background(), nil)
 	})
 	if strings.TrimSpace(stderr) != "" {
@@ -198,7 +202,8 @@ func TestXcodeExportDirectUploadDoesNotRequireArtifactPath(t *testing.T) {
 		}, nil
 	}
 
-	cmd := XcodeExportCommand()
+	d := newXcodeTestDeps(nil)
+	cmd := newXcodeExportCommand(d)
 	cmd.FlagSet.SetOutput(io.Discard)
 	if err := cmd.FlagSet.Parse([]string{
 		"--archive-path", "Demo.xcarchive",
@@ -209,7 +214,7 @@ func TestXcodeExportDirectUploadDoesNotRequireArtifactPath(t *testing.T) {
 	}
 
 	var runErr error
-	stdout, stderr := captureCommandOutput(t, func() error {
+	stdout, stderr := captureCommandOutput(t, d, func() error {
 		runErr = cmd.Exec(context.Background(), nil)
 		return runErr
 	})
@@ -221,6 +226,105 @@ func TestXcodeExportDirectUploadDoesNotRequireArtifactPath(t *testing.T) {
 	}
 	if strings.TrimSpace(stderr) != "" {
 		t.Fatalf("stderr = %q, want empty", stderr)
+	}
+}
+
+func TestXcodeExportExportDir(t *testing.T) {
+	tests := []struct {
+		name           string
+		directUpload   bool
+		populated      bool
+		sameAsIPA      bool
+		parentReadOnly bool
+		wantStderr     string
+		wantErr        string
+	}{
+		{name: "keeps outputs"},
+		{name: "non-empty directory", populated: true, wantStderr: "Error: --export-dir is not empty: "},
+		{name: "direct upload", directUpload: true, wantStderr: "Error: --export-dir cannot be used when ExportOptions.plist uses destination=upload"},
+		{name: "same path as IPA", sameAsIPA: true, wantStderr: "Error: --export-dir must not be the same path as --ipa-path"},
+		{name: "read-only parent", parentReadOnly: true, wantErr: "create export dir: "},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			restore := overrideXcodeCommandTestHooks(t)
+			defer restore()
+
+			ipaPath := filepath.Join(t.TempDir(), "Demo.ipa")
+			exportDir := filepath.Join(t.TempDir(), "outputs")
+			if test.sameAsIPA {
+				exportDir = filepath.Join(filepath.Dir(ipaPath), ".", "Demo.ipa")
+			}
+			if test.parentReadOnly {
+				parent := filepath.Dir(exportDir)
+				if err := os.Chmod(parent, 0o555); err != nil {
+					t.Fatal(err)
+				}
+				t.Cleanup(func() { _ = os.Chmod(parent, 0o755) })
+			}
+			if test.populated {
+				if err := os.MkdirAll(exportDir, 0o755); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(filepath.Join(exportDir, "old.plist"), nil, 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			isDirectUploadExportOptionsFn = func(string) bool { return test.directUpload }
+			runExport = func(_ context.Context, opts localxcode.ExportOptions) (*localxcode.ExportResult, error) {
+				if test.wantStderr != "" || test.wantErr != "" {
+					t.Fatal("export must not run after a rejected --export-dir")
+				}
+				return &localxcode.ExportResult{ArchivePath: opts.ArchivePath, IPAPath: opts.IPAPath, ExportDir: opts.ExportDir, ExportFiles: []string{"manifest.plist"}}, nil
+			}
+
+			runGenerateExportOptions = func(context.Context, localxcode.ExportOptionsGenerateOptions) (*localxcode.ExportOptionsGenerateResult, error) {
+				t.Fatal("export options must not be generated after a rejected --export-dir")
+				return nil, nil
+			}
+
+			args := []string{"--archive-path", "Demo.xcarchive", "--ipa-path", ipaPath, "--export-dir", exportDir, "--output", "json"}
+			if !test.parentReadOnly {
+				args = append(args, "--export-options", "ExportOptions.plist")
+			}
+			d := newXcodeTestDeps(nil)
+			cmd := newXcodeExportCommand(d)
+			cmd.FlagSet.SetOutput(io.Discard)
+			if err := cmd.FlagSet.Parse(args); err != nil {
+				t.Fatalf("failed to parse flags: %v", err)
+			}
+
+			var runErr error
+			stdout, stderr := captureCommandOutput(t, d, func() error {
+				runErr = cmd.Exec(context.Background(), nil)
+				return runErr
+			})
+			if test.wantStderr != "" {
+				if !errors.Is(runErr, flag.ErrHelp) || !strings.Contains(stderr, test.wantStderr) {
+					t.Fatalf("Exec() error = %v stderr = %q, want usage error %q", runErr, stderr, test.wantStderr)
+				}
+				return
+			}
+			if test.wantErr != "" {
+				if runErr == nil || errors.Is(runErr, flag.ErrHelp) || !strings.Contains(runErr.Error(), test.wantErr) {
+					t.Fatalf("Exec() error = %v, want %q", runErr, test.wantErr)
+				}
+				return
+			}
+			if runErr != nil {
+				t.Fatalf("Exec() error: %v", runErr)
+			}
+			var payload struct {
+				ExportDir   string   `json:"exportDir"`
+				ExportFiles []string `json:"exportFiles"`
+			}
+			if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
+				t.Fatalf("json.Unmarshal() error: %v\nstdout=%s", err, stdout)
+			}
+			if payload.ExportDir != exportDir || !reflect.DeepEqual(payload.ExportFiles, []string{"manifest.plist"}) {
+				t.Fatalf("payload = %+v, want exportDir %q with manifest.plist", payload, exportDir)
+			}
+		})
 	}
 }
 
@@ -877,11 +981,12 @@ func TestXcodeInjectRejectsExistingOutputWithoutOverwrite(t *testing.T) {
 }
 
 func TestXcodeInjectCommandRequiresManifest(t *testing.T) {
-	cmd := XcodeInjectCommand()
+	d := newXcodeTestDeps(nil)
+	cmd := newXcodeInjectCommand(d)
 	cmd.FlagSet.SetOutput(io.Discard)
 
 	var runErr error
-	_, stderr := captureCommandOutput(t, func() error {
+	_, stderr := captureCommandOutput(t, d, func() error {
 		runErr = cmd.Exec(context.Background(), nil)
 		return runErr
 	})
@@ -907,7 +1012,8 @@ func TestXcodeValidatePassesIPAAndAuthFlags(t *testing.T) {
 		}, nil
 	}
 
-	cmd := XcodeValidateCommand()
+	d := newXcodeTestDeps(nil)
+	cmd := newXcodeValidateCommand(d)
 	cmd.FlagSet.SetOutput(io.Discard)
 	if err := cmd.FlagSet.Parse([]string{
 		"--ipa", "Demo.ipa",
@@ -919,7 +1025,7 @@ func TestXcodeValidatePassesIPAAndAuthFlags(t *testing.T) {
 	}
 
 	var runErr error
-	stdout, stderr := captureCommandOutput(t, func() error {
+	stdout, stderr := captureCommandOutput(t, d, func() error {
 		runErr = cmd.Exec(context.Background(), nil)
 		return runErr
 	})
@@ -968,14 +1074,15 @@ func TestXcodeValidatePassesPKGAndRendersPKGPath(t *testing.T) {
 		}, nil
 	}
 
-	cmd := XcodeValidateCommand()
+	d := newXcodeTestDeps(nil)
+	cmd := newXcodeValidateCommand(d)
 	cmd.FlagSet.SetOutput(io.Discard)
 	if err := cmd.FlagSet.Parse([]string{"--pkg", "Demo.pkg", "--output", "json"}); err != nil {
 		t.Fatalf("failed to parse flags: %v", err)
 	}
 
 	var runErr error
-	stdout, stderr := captureCommandOutput(t, func() error {
+	stdout, stderr := captureCommandOutput(t, d, func() error {
 		runErr = cmd.Exec(context.Background(), nil)
 		return runErr
 	})
@@ -1017,13 +1124,14 @@ func TestXcodeValidateDefaultsToResolvedCredentials(t *testing.T) {
 		return &localxcode.ValidateResult{IPAPath: opts.IPAPath, Validated: true}, nil
 	}
 
-	cmd := XcodeValidateCommand()
+	d := newXcodeTestDeps(nil)
+	cmd := newXcodeValidateCommand(d)
 	cmd.FlagSet.SetOutput(io.Discard)
 	if err := cmd.FlagSet.Parse([]string{"--ipa", "Demo.ipa", "--output", "json"}); err != nil {
 		t.Fatalf("failed to parse flags: %v", err)
 	}
 	var runErr error
-	captureCommandOutput(t, func() error {
+	captureCommandOutput(t, d, func() error {
 		runErr = cmd.Exec(context.Background(), nil)
 		return runErr
 	})
@@ -1045,13 +1153,14 @@ func TestXcodeValidateWithoutCredentialsReturnsAuthError(t *testing.T) {
 		return nil, nil
 	}
 
-	cmd := XcodeValidateCommand()
+	d := newXcodeTestDeps(nil)
+	cmd := newXcodeValidateCommand(d)
 	cmd.FlagSet.SetOutput(io.Discard)
 	if err := cmd.FlagSet.Parse([]string{"--ipa", "Demo.ipa"}); err != nil {
 		t.Fatalf("failed to parse flags: %v", err)
 	}
 	var runErr error
-	captureCommandOutput(t, func() error {
+	captureCommandOutput(t, d, func() error {
 		runErr = cmd.Exec(context.Background(), nil)
 		return runErr
 	})
@@ -1100,13 +1209,14 @@ func TestXcodeArchiveRejectsExistingArchivePathBeforeRunning(t *testing.T) {
 		t.Fatalf("MkdirAll() error: %v", err)
 	}
 
-	cmd := XcodeArchiveCommand()
+	d := newXcodeTestDeps(nil)
+	cmd := newXcodeArchiveCommand(d)
 	cmd.FlagSet.SetOutput(io.Discard)
 	if err := cmd.FlagSet.Parse([]string{"--project", "Demo.xcodeproj", "--scheme", "Demo", "--archive-path", archivePath}); err != nil {
 		t.Fatalf("failed to parse flags: %v", err)
 	}
 	var runErr error
-	_, stderr := captureCommandOutput(t, func() error {
+	_, stderr := captureCommandOutput(t, d, func() error {
 		runErr = cmd.Exec(context.Background(), nil)
 		return runErr
 	})
@@ -1126,13 +1236,14 @@ func TestXcodeArchiveClassifiesMissingInputPathAsFileNotFound(t *testing.T) {
 		return nil, &localxcode.InputPathNotFoundError{Flag: "--project", Err: os.ErrNotExist}
 	}
 
-	cmd := XcodeArchiveCommand()
+	d := newXcodeTestDeps(nil)
+	cmd := newXcodeArchiveCommand(d)
 	cmd.FlagSet.SetOutput(io.Discard)
 	if err := cmd.FlagSet.Parse([]string{"--project", "Missing.xcodeproj", "--scheme", "Demo", "--archive-path", filepath.Join(t.TempDir(), "Demo.xcarchive")}); err != nil {
 		t.Fatalf("failed to parse flags: %v", err)
 	}
 	var runErr error
-	captureCommandOutput(t, func() error {
+	captureCommandOutput(t, d, func() error {
 		runErr = cmd.Exec(context.Background(), nil)
 		return runErr
 	})
@@ -1149,14 +1260,15 @@ func TestXcodeValidateRejectsMultipleArtifactPaths(t *testing.T) {
 	restore := overrideXcodeCommandTestHooks(t)
 	defer restore()
 
-	cmd := XcodeValidateCommand()
+	d := newXcodeTestDeps(nil)
+	cmd := newXcodeValidateCommand(d)
 	cmd.FlagSet.SetOutput(io.Discard)
 	if err := cmd.FlagSet.Parse([]string{"--ipa", "Demo.ipa", "--pkg", "Demo.pkg"}); err != nil {
 		t.Fatalf("failed to parse flags: %v", err)
 	}
 
 	var runErr error
-	_, stderr := captureCommandOutput(t, func() error {
+	_, stderr := captureCommandOutput(t, d, func() error {
 		runErr = cmd.Exec(context.Background(), nil)
 		return runErr
 	})
@@ -1181,14 +1293,15 @@ func TestXcodeValidateRejectsExplicitlyEmptyArtifactPath(t *testing.T) {
 		{name: "empty pkg with ipa", args: []string{"--ipa", "Demo.ipa", "--pkg="}, wantErr: "--pkg must not be empty"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			cmd := XcodeValidateCommand()
+			d := newXcodeTestDeps(nil)
+			cmd := newXcodeValidateCommand(d)
 			cmd.FlagSet.SetOutput(io.Discard)
 			if err := cmd.FlagSet.Parse(tc.args); err != nil {
 				t.Fatalf("failed to parse flags: %v", err)
 			}
 
 			var runErr error
-			_, stderr := captureCommandOutput(t, func() error {
+			_, stderr := captureCommandOutput(t, d, func() error {
 				runErr = cmd.Exec(context.Background(), nil)
 				return runErr
 			})
@@ -1211,7 +1324,8 @@ func TestXcodeArchiveRejectsExplicitlyEmptyConfiguration(t *testing.T) {
 		return nil, nil
 	}
 
-	cmd := XcodeArchiveCommand()
+	d := newXcodeTestDeps(nil)
+	cmd := newXcodeArchiveCommand(d)
 	cmd.FlagSet.SetOutput(io.Discard)
 	if err := cmd.FlagSet.Parse([]string{
 		"--project", "Demo.xcodeproj",
@@ -1223,7 +1337,7 @@ func TestXcodeArchiveRejectsExplicitlyEmptyConfiguration(t *testing.T) {
 	}
 
 	var runErr error
-	stdout, stderr := captureCommandOutput(t, func() error {
+	stdout, stderr := captureCommandOutput(t, d, func() error {
 		runErr = cmd.Exec(context.Background(), nil)
 		return runErr
 	})
@@ -1241,18 +1355,116 @@ func TestXcodeArchiveRejectsExplicitlyEmptyConfiguration(t *testing.T) {
 	}
 }
 
+func TestXcodeArchivePassesTypedBuildFlags(t *testing.T) {
+	restore := overrideXcodeCommandTestHooks(t)
+	defer restore()
+
+	var gotOpts localxcode.ArchiveOptions
+	runArchive = func(_ context.Context, opts localxcode.ArchiveOptions) (*localxcode.ArchiveResult, error) {
+		gotOpts = opts
+		return &localxcode.ArchiveResult{ArchivePath: opts.ArchivePath}, nil
+	}
+
+	d := newXcodeTestDeps(nil)
+	cmd := newXcodeArchiveCommand(d)
+	cmd.FlagSet.SetOutput(io.Discard)
+	if err := cmd.FlagSet.Parse([]string{
+		"--project", "Demo.xcodeproj",
+		"--scheme", "Demo",
+		"--archive-path", filepath.Join(t.TempDir(), "Demo.xcarchive"),
+		"--destination", "generic/platform=iOS",
+		"--derived-data-path", "/tmp/Derived Data",
+		"--result-bundle-path", "/tmp/Results/Demo.xcresult",
+		"--no-code-signing",
+		"--output", "json",
+	}); err != nil {
+		t.Fatalf("FlagSet.Parse() error = %v", err)
+	}
+
+	var runErr error
+	captureCommandOutput(t, d, func() error {
+		runErr = cmd.Exec(context.Background(), nil)
+		return runErr
+	})
+	if runErr != nil {
+		t.Fatalf("Exec() error = %v", runErr)
+	}
+	if gotOpts.Destination != "generic/platform=iOS" || gotOpts.DerivedDataPath != "/tmp/Derived Data" ||
+		gotOpts.ResultBundlePath != "/tmp/Results/Demo.xcresult" || !gotOpts.NoCodeSigning {
+		t.Fatalf("unexpected archive options: %+v", gotOpts)
+	}
+}
+
+func TestXcodeArchivePassthroughOfTypedBuildFlags(t *testing.T) {
+	tests := []struct {
+		name    string
+		args    []string
+		wantErr string
+	}{
+		{name: "raw destination alone", args: []string{"--xcodebuild-flag=-destination", "--xcodebuild-flag=generic/platform=iOS"}},
+		{name: "destination conflict", args: []string{"--destination", "generic/platform=iOS", "--xcodebuild-flag=-destination", "--xcodebuild-flag=generic/platform=macOS"}, wantErr: `--destination conflicts with --xcodebuild-flag "-destination"; use one`},
+		{name: "derived data path conflict", args: []string{"--derived-data-path", "/tmp/dd", "--xcodebuild-flag=-derivedDataPath=/tmp/elsewhere"}, wantErr: `--derived-data-path conflicts with --xcodebuild-flag "-derivedDataPath"; use one`},
+		{name: "result bundle path conflict", args: []string{"--result-bundle-path", "/tmp/a.xcresult", "--xcodebuild-flag=-resultBundlePath", "--xcodebuild-flag=/tmp/b.xcresult"}, wantErr: `--result-bundle-path conflicts with --xcodebuild-flag "-resultBundlePath"; use one`},
+		{name: "code signing conflict", args: []string{"--no-code-signing", "--xcodebuild-flag=CODE_SIGNING_ALLOWED=YES"}, wantErr: `--no-code-signing conflicts with --xcodebuild-flag "CODE_SIGNING_ALLOWED"; use one`},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			restore := overrideXcodeCommandTestHooks(t)
+			defer restore()
+			var gotOpts *localxcode.ArchiveOptions
+			runArchive = func(_ context.Context, opts localxcode.ArchiveOptions) (*localxcode.ArchiveResult, error) {
+				gotOpts = &opts
+				return &localxcode.ArchiveResult{ArchivePath: opts.ArchivePath}, nil
+			}
+
+			d := newXcodeTestDeps(nil)
+			cmd := newXcodeArchiveCommand(d)
+			cmd.FlagSet.SetOutput(io.Discard)
+			args := append([]string{"--project", "Demo.xcodeproj", "--scheme", "Demo", "--archive-path", filepath.Join(t.TempDir(), "Demo.xcarchive"), "--output", "json"}, test.args...)
+			if err := cmd.FlagSet.Parse(args); err != nil {
+				t.Fatalf("FlagSet.Parse() error = %v", err)
+			}
+			var runErr error
+			_, stderr := captureCommandOutput(t, d, func() error {
+				runErr = cmd.Exec(context.Background(), nil)
+				return runErr
+			})
+			if test.wantErr == "" {
+				if runErr != nil {
+					t.Fatalf("Exec() error = %v, stderr = %q", runErr, stderr)
+				}
+				if gotOpts == nil || gotOpts.Destination != "" || !reflect.DeepEqual(gotOpts.XcodebuildArgs, []string{"-destination", "generic/platform=iOS"}) {
+					t.Fatalf("raw passthrough changed: %+v", gotOpts)
+				}
+				return
+			}
+			if gotOpts != nil {
+				t.Fatal("runArchive must not be called for a conflicting passthrough argument")
+			}
+			if !errors.Is(runErr, flag.ErrHelp) {
+				t.Fatalf("Exec() error = %v, want usage error", runErr)
+			}
+			if !strings.Contains(stderr, test.wantErr) {
+				t.Fatalf("stderr = %q, want %q", stderr, test.wantErr)
+			}
+		})
+	}
+}
+
 func TestXcodeValidateRejectsNonIPAPath(t *testing.T) {
 	restore := overrideXcodeCommandTestHooks(t)
 	defer restore()
 
-	cmd := XcodeValidateCommand()
+	d := newXcodeTestDeps(nil)
+	cmd := newXcodeValidateCommand(d)
 	cmd.FlagSet.SetOutput(io.Discard)
 	if err := cmd.FlagSet.Parse([]string{"--ipa", "Demo.txt"}); err != nil {
 		t.Fatalf("failed to parse flags: %v", err)
 	}
 
 	var runErr error
-	_, stderr := captureCommandOutput(t, func() error {
+	_, stderr := captureCommandOutput(t, d, func() error {
 		runErr = cmd.Exec(context.Background(), nil)
 		return runErr
 	})
@@ -1268,14 +1480,15 @@ func TestXcodeValidateRejectsNonPKGPath(t *testing.T) {
 	restore := overrideXcodeCommandTestHooks(t)
 	defer restore()
 
-	cmd := XcodeValidateCommand()
+	d := newXcodeTestDeps(nil)
+	cmd := newXcodeValidateCommand(d)
 	cmd.FlagSet.SetOutput(io.Discard)
 	if err := cmd.FlagSet.Parse([]string{"--pkg", "Demo.txt"}); err != nil {
 		t.Fatalf("failed to parse flags: %v", err)
 	}
 
 	var runErr error
-	_, stderr := captureCommandOutput(t, func() error {
+	_, stderr := captureCommandOutput(t, d, func() error {
 		runErr = cmd.Exec(context.Background(), nil)
 		return runErr
 	})
@@ -1307,14 +1520,15 @@ func TestXcodeValidateRequiresAPIKeyAndIssuerTogether(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			cmd := XcodeValidateCommand()
+			d := newXcodeTestDeps(nil)
+			cmd := newXcodeValidateCommand(d)
 			cmd.FlagSet.SetOutput(io.Discard)
 			if err := cmd.FlagSet.Parse(tc.args); err != nil {
 				t.Fatalf("failed to parse flags: %v", err)
 			}
 
 			var runErr error
-			_, stderr := captureCommandOutput(t, func() error {
+			_, stderr := captureCommandOutput(t, d, func() error {
 				runErr = cmd.Exec(context.Background(), nil)
 				return runErr
 			})
@@ -1334,7 +1548,8 @@ func TestXcodeExportWaitRequiresPositivePollInterval(t *testing.T) {
 
 	isDirectUploadExportOptionsFn = func(string) bool { return true }
 
-	cmd := XcodeExportCommand()
+	d := newXcodeTestDeps(nil)
+	cmd := newXcodeExportCommand(d)
 	cmd.FlagSet.SetOutput(io.Discard)
 	if err := cmd.FlagSet.Parse([]string{
 		"--archive-path", "Demo.xcarchive",
@@ -1347,7 +1562,7 @@ func TestXcodeExportWaitRequiresPositivePollInterval(t *testing.T) {
 	}
 
 	var runErr error
-	_, stderr := captureCommandOutput(t, func() error {
+	_, stderr := captureCommandOutput(t, d, func() error {
 		runErr = cmd.Exec(context.Background(), nil)
 		return runErr
 	})
@@ -1373,7 +1588,8 @@ func TestXcodeExportAllowsPollIntervalWithoutWait(t *testing.T) {
 		}, nil
 	}
 
-	cmd := XcodeExportCommand()
+	d := newXcodeTestDeps(nil)
+	cmd := newXcodeExportCommand(d)
 	cmd.FlagSet.SetOutput(io.Discard)
 	if err := cmd.FlagSet.Parse([]string{
 		"--archive-path", "Demo.xcarchive",
@@ -1386,7 +1602,7 @@ func TestXcodeExportAllowsPollIntervalWithoutWait(t *testing.T) {
 	}
 
 	var runErr error
-	stdout, stderr := captureCommandOutput(t, func() error {
+	stdout, stderr := captureCommandOutput(t, d, func() error {
 		runErr = cmd.Exec(context.Background(), nil)
 		return runErr
 	})
@@ -1405,7 +1621,8 @@ func TestXcodeExportRejectsNegativeTimeout(t *testing.T) {
 	restore := overrideXcodeCommandTestHooks(t)
 	defer restore()
 
-	cmd := XcodeExportCommand()
+	d := newXcodeTestDeps(nil)
+	cmd := newXcodeExportCommand(d)
 	cmd.FlagSet.SetOutput(io.Discard)
 	if err := cmd.FlagSet.Parse([]string{
 		"--archive-path", "Demo.xcarchive",
@@ -1417,7 +1634,7 @@ func TestXcodeExportRejectsNegativeTimeout(t *testing.T) {
 	}
 
 	var runErr error
-	_, stderr := captureCommandOutput(t, func() error {
+	_, stderr := captureCommandOutput(t, d, func() error {
 		runErr = cmd.Exec(context.Background(), nil)
 		return runErr
 	})
@@ -1450,7 +1667,8 @@ func TestXcodeExportPassesTimeoutContextToLocalExport(t *testing.T) {
 		}, nil
 	}
 
-	cmd := XcodeExportCommand()
+	d := newXcodeTestDeps(nil)
+	cmd := newXcodeExportCommand(d)
 	cmd.FlagSet.SetOutput(io.Discard)
 	if err := cmd.FlagSet.Parse([]string{
 		"--archive-path", "Demo.xcarchive",
@@ -1463,7 +1681,7 @@ func TestXcodeExportPassesTimeoutContextToLocalExport(t *testing.T) {
 	}
 
 	var runErr error
-	stdout, stderr := captureCommandOutput(t, func() error {
+	stdout, stderr := captureCommandOutput(t, d, func() error {
 		runErr = cmd.Exec(context.Background(), nil)
 		return runErr
 	})
@@ -1487,7 +1705,8 @@ func TestXcodeExportReportsTimeout(t *testing.T) {
 		return nil, ctx.Err()
 	}
 
-	cmd := XcodeExportCommand()
+	d := newXcodeTestDeps(nil)
+	cmd := newXcodeExportCommand(d)
 	cmd.FlagSet.SetOutput(io.Discard)
 	if err := cmd.FlagSet.Parse([]string{
 		"--archive-path", "Demo.xcarchive",
@@ -1499,7 +1718,7 @@ func TestXcodeExportReportsTimeout(t *testing.T) {
 	}
 
 	var runErr error
-	_, _ = captureCommandOutput(t, func() error {
+	_, _ = captureCommandOutput(t, d, func() error {
 		runErr = cmd.Exec(context.Background(), nil)
 		return runErr
 	})
@@ -1517,7 +1736,6 @@ func TestXcodeExportWaitRequiresCredentialsBeforeDirectUpload(t *testing.T) {
 
 	isDirectUploadExportOptionsFn = func(string) bool { return true }
 	wantErr := errors.New("polling credentials unavailable")
-	getASCClientFn = func() (*asc.Client, error) { return nil, wantErr }
 	uploadStarted := false
 	runExport = func(context.Context, localxcode.ExportOptions) (*localxcode.ExportResult, error) {
 		uploadStarted = true
@@ -1528,7 +1746,8 @@ func TestXcodeExportWaitRequiresCredentialsBeforeDirectUpload(t *testing.T) {
 		}, nil
 	}
 
-	cmd := XcodeExportCommand()
+	d := newXcodeTestDeps(func() (*asc.Client, error) { return nil, wantErr })
+	cmd := newXcodeExportCommand(d)
 	cmd.FlagSet.SetOutput(io.Discard)
 	if err := cmd.FlagSet.Parse([]string{
 		"--archive-path", "Demo.xcarchive",
@@ -1560,7 +1779,6 @@ func TestXcodeExportWaitPollsForUploadedBuild(t *testing.T) {
 		}, nil
 	}
 	inferArchivePlatformFn = func(string) (string, error) { return "IOS", nil }
-	getASCClientFn = func() (*asc.Client, error) { return &asc.Client{}, nil }
 	resolveAppIDWithExactLookupFn = func(_ context.Context, _ *asc.Client, app string) (string, error) {
 		if app != "com.example.demo" {
 			t.Fatalf("expected bundle ID app lookup, got %q", app)
@@ -1588,7 +1806,7 @@ func TestXcodeExportWaitPollsForUploadedBuild(t *testing.T) {
 		}
 		return "upload-123", nil
 	}
-	waitForBuildByNumberOrUploadFailureFn = func(_ context.Context, _ *asc.Client, appID, uploadID, version, buildNumber, platform string, pollInterval time.Duration) (*asc.BuildResponse, error) {
+	waitForBuildByNumberOrUploadFailureFn = func(_ *shared.Deps, _ context.Context, _ *asc.Client, appID, uploadID, version, buildNumber, platform string, pollInterval time.Duration) (*asc.BuildResponse, error) {
 		if appID != "123456789" {
 			t.Fatalf("expected resolved app ID, got %q", appID)
 		}
@@ -1629,7 +1847,8 @@ func TestXcodeExportWaitPollsForUploadedBuild(t *testing.T) {
 		}, nil
 	}
 
-	cmd := XcodeExportCommand()
+	d := newXcodeTestDeps(func() (*asc.Client, error) { return &asc.Client{}, nil })
+	cmd := newXcodeExportCommand(d)
 	cmd.FlagSet.SetOutput(io.Discard)
 	if err := cmd.FlagSet.Parse([]string{
 		"--archive-path", "Demo.xcarchive",
@@ -1643,7 +1862,7 @@ func TestXcodeExportWaitPollsForUploadedBuild(t *testing.T) {
 	}
 
 	var runErr error
-	stdout, stderr := captureCommandOutput(t, func() error {
+	stdout, stderr := captureCommandOutput(t, d, func() error {
 		runErr = cmd.Exec(context.Background(), nil)
 		return runErr
 	})
@@ -1694,14 +1913,13 @@ func TestXcodeExportWaitRejectsNilProcessedBuildResponse(t *testing.T) {
 		}, nil
 	}
 	inferArchivePlatformFn = func(string) (string, error) { return "IOS", nil }
-	getASCClientFn = func() (*asc.Client, error) { return &asc.Client{}, nil }
 	resolveAppIDWithExactLookupFn = func(context.Context, *asc.Client, string) (string, error) {
 		return "123456789", nil
 	}
 	resolveBuildUploadIDFn = func(context.Context, *asc.Client, string, string, string, string, time.Time, time.Time, time.Duration) (string, error) {
 		return "upload-123", nil
 	}
-	waitForBuildByNumberOrUploadFailureFn = func(context.Context, *asc.Client, string, string, string, string, string, time.Duration) (*asc.BuildResponse, error) {
+	waitForBuildByNumberOrUploadFailureFn = func(*shared.Deps, context.Context, *asc.Client, string, string, string, string, string, time.Duration) (*asc.BuildResponse, error) {
 		return &asc.BuildResponse{
 			Data: asc.Resource[asc.BuildAttributes]{
 				ID: "build-123",
@@ -1712,7 +1930,8 @@ func TestXcodeExportWaitRejectsNilProcessedBuildResponse(t *testing.T) {
 		return nil, nil
 	}
 
-	cmd := XcodeExportCommand()
+	d := newXcodeTestDeps(func() (*asc.Client, error) { return &asc.Client{}, nil })
+	cmd := newXcodeExportCommand(d)
 	cmd.FlagSet.SetOutput(io.Discard)
 	if err := cmd.FlagSet.Parse([]string{
 		"--archive-path", "Demo.xcarchive",
@@ -1724,7 +1943,7 @@ func TestXcodeExportWaitRejectsNilProcessedBuildResponse(t *testing.T) {
 	}
 
 	var runErr error
-	_, _ = captureCommandOutput(t, func() error {
+	_, _ = captureCommandOutput(t, d, func() error {
 		runErr = cmd.Exec(context.Background(), nil)
 		return runErr
 	})
@@ -1750,7 +1969,6 @@ func TestXcodeExportWaitRejectsMissingBuildUploadID(t *testing.T) {
 		}, nil
 	}
 	inferArchivePlatformFn = func(string) (string, error) { return "IOS", nil }
-	getASCClientFn = func() (*asc.Client, error) { return &asc.Client{}, nil }
 	resolveAppIDWithExactLookupFn = func(context.Context, *asc.Client, string) (string, error) {
 		return "123456789", nil
 	}
@@ -1758,7 +1976,8 @@ func TestXcodeExportWaitRejectsMissingBuildUploadID(t *testing.T) {
 		return "", nil
 	}
 
-	cmd := XcodeExportCommand()
+	d := newXcodeTestDeps(func() (*asc.Client, error) { return &asc.Client{}, nil })
+	cmd := newXcodeExportCommand(d)
 	cmd.FlagSet.SetOutput(io.Discard)
 	if err := cmd.FlagSet.Parse([]string{
 		"--archive-path", "Demo.xcarchive",
@@ -1770,7 +1989,7 @@ func TestXcodeExportWaitRejectsMissingBuildUploadID(t *testing.T) {
 	}
 
 	var runErr error
-	_, _ = captureCommandOutput(t, func() error {
+	_, _ = captureCommandOutput(t, d, func() error {
 		runErr = cmd.Exec(context.Background(), nil)
 		return runErr
 	})
@@ -2177,12 +2396,10 @@ func overrideXcodeCommandTestHooks(t *testing.T) func() {
 	originalRunXcodeExportPreflight := runXcodeExportPreflight
 	originalIsDirectUpload := isDirectUploadExportOptionsFn
 	originalInferArchivePlatform := inferArchivePlatformFn
-	originalGetASCClient := getASCClientFn
 	originalResolveAppID := resolveAppIDWithExactLookupFn
 	originalResolveBuildUploadID := resolveBuildUploadIDFn
 	originalWaitForDiscovery := waitForBuildByNumberOrUploadFailureFn
 	originalWaitForProcessing := waitForBuildProcessingFn
-	originalWaitTimeout := resolveXcodeExportWaitTimeoutFn
 	runXcodeExportPreflight = func(context.Context) error { return nil }
 
 	return func() {
@@ -2193,69 +2410,18 @@ func overrideXcodeCommandTestHooks(t *testing.T) func() {
 		runXcodeExportPreflight = originalRunXcodeExportPreflight
 		isDirectUploadExportOptionsFn = originalIsDirectUpload
 		inferArchivePlatformFn = originalInferArchivePlatform
-		getASCClientFn = originalGetASCClient
 		resolveAppIDWithExactLookupFn = originalResolveAppID
 		resolveBuildUploadIDFn = originalResolveBuildUploadID
 		waitForBuildByNumberOrUploadFailureFn = originalWaitForDiscovery
 		waitForBuildProcessingFn = originalWaitForProcessing
-		resolveXcodeExportWaitTimeoutFn = originalWaitTimeout
 	}
 }
 
-func captureCommandOutput(t *testing.T, fn func() error) (string, string) {
+func captureCommandOutput(t *testing.T, d *shared.Deps, fn func() error) (string, string) {
 	t.Helper()
 
-	oldStdout := os.Stdout
-	oldStderr := os.Stderr
-
-	rOut, wOut, err := os.Pipe()
-	if err != nil {
-		t.Fatalf("failed to create stdout pipe: %v", err)
-	}
-	rErr, wErr, err := os.Pipe()
-	if err != nil {
-		t.Fatalf("failed to create stderr pipe: %v", err)
-	}
-
-	os.Stdout = wOut
-	os.Stderr = wErr
-
-	outC := make(chan string)
-	errC := make(chan string)
-
-	go func() {
-		var buf bytes.Buffer
-		_, _ = io.Copy(&buf, rOut)
-		_ = rOut.Close()
-		outC <- buf.String()
-	}()
-
-	go func() {
-		var buf bytes.Buffer
-		_, _ = io.Copy(&buf, rErr)
-		_ = rErr.Close()
-		errC <- buf.String()
-	}()
-
-	defer func() {
-		os.Stdout = oldStdout
-		os.Stderr = oldStderr
-		_ = wOut.Close()
-		_ = wErr.Close()
-	}()
-
 	_ = fn()
-
-	_ = wOut.Close()
-	_ = wErr.Close()
-
-	stdout := <-outC
-	stderr := <-errC
-
-	os.Stdout = oldStdout
-	os.Stderr = oldStderr
-
-	return stdout, stderr
+	return depsOutput(d)
 }
 
 type xcodeCommandRoundTripFunc func(*http.Request) (*http.Response, error)

@@ -16,26 +16,26 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
-// Command returns the Asset Library command group.
-func Command() *ffcli.Command {
-	return group("asset-library", "Inspect Asset Library media and specifications, and upload images and videos.",
-		readCommand("view", "Read an app's Asset Library.", "app", "/v1/apps/%s/assetLibrary", false),
-		group("images", "Inspect and upload Asset Library images.",
-			imagesUploadCommand(),
-			readCommand("list", "List images in an Asset Library.", "library-id", "/v1/appAssetLibraries/%s/images", true),
-			readCommand("view", "Read an Asset Library image.", "id", "/v1/appAssetLibraryImages/%s", false),
-			readCommand("placements", "List where an Asset Library image is used.", "id", "/v1/appAssetLibraryImages/%s/placements", true),
-			lifecycleCommand("rename", "appAssetLibraryImages"), lifecycleCommand("archive", "appAssetLibraryImages"), lifecycleCommand("unarchive", "appAssetLibraryImages"), lifecycleCommand("delete", "appAssetLibraryImages")),
-		group("videos", "Inspect and upload Asset Library videos.",
-			videosUploadCommand(),
-			readCommand("list", "List videos in an Asset Library.", "library-id", "/v1/appAssetLibraries/%s/videos", true),
-			readCommand("view", "Read an Asset Library video.", "id", "/v1/appAssetLibraryVideos/%s", false),
-			readCommand("placements", "List where an Asset Library video is used.", "id", "/v1/appAssetLibraryVideos/%s/placements", true),
-			lifecycleCommand("rename", "appAssetLibraryVideos"), lifecycleCommand("archive", "appAssetLibraryVideos"), lifecycleCommand("unarchive", "appAssetLibraryVideos"), lifecycleCommand("delete", "appAssetLibraryVideos"), lifecycleCommand("set-poster-frame", "appAssetLibraryVideos")),
-		readCommand("specs", "Read Apple's current asset dimensions and placement policies.", "", "/v1/appAssetLibraryRefData", false))
+// NewCommand returns the Asset Library command group, built on d.
+func NewCommand(d *shared.Deps) *ffcli.Command {
+	return group(d, "asset-library", "Inspect Asset Library media and specifications, and upload images and videos.",
+		readCommand(d, "asset-library", "view", "Read an app's Asset Library.", "app", "/v1/apps/%s/assetLibrary", false),
+		group(d, "images", "Inspect and upload Asset Library images.",
+			imagesUploadCommand(d),
+			readCommand(d, "asset-library images", "list", "List images in an Asset Library.", "library-id", "/v1/appAssetLibraries/%s/images", true),
+			readCommand(d, "asset-library images", "view", "Read an Asset Library image.", "id", "/v1/appAssetLibraryImages/%s", false),
+			readCommand(d, "asset-library images", "placements", "List where an Asset Library image is used.", "id", "/v1/appAssetLibraryImages/%s/placements", true),
+			lifecycleCommand(d, "rename", "appAssetLibraryImages"), lifecycleCommand(d, "archive", "appAssetLibraryImages"), lifecycleCommand(d, "unarchive", "appAssetLibraryImages"), lifecycleCommand(d, "delete", "appAssetLibraryImages")),
+		group(d, "videos", "Inspect and upload Asset Library videos.",
+			videosUploadCommand(d),
+			readCommand(d, "asset-library videos", "list", "List videos in an Asset Library.", "library-id", "/v1/appAssetLibraries/%s/videos", true),
+			readCommand(d, "asset-library videos", "view", "Read an Asset Library video.", "id", "/v1/appAssetLibraryVideos/%s", false),
+			readCommand(d, "asset-library videos", "placements", "List where an Asset Library video is used.", "id", "/v1/appAssetLibraryVideos/%s/placements", true),
+			lifecycleCommand(d, "rename", "appAssetLibraryVideos"), lifecycleCommand(d, "archive", "appAssetLibraryVideos"), lifecycleCommand(d, "unarchive", "appAssetLibraryVideos"), lifecycleCommand(d, "delete", "appAssetLibraryVideos"), lifecycleCommand(d, "set-poster-frame", "appAssetLibraryVideos")),
+		readCommand(d, "asset-library", "specs", "Read Apple's current asset dimensions and placement policies.", "", "/v1/appAssetLibraryRefData", false))
 }
 
-func group(name, help string, children ...*ffcli.Command) *ffcli.Command {
+func group(d *shared.Deps, name, help string, children ...*ffcli.Command) *ffcli.Command {
 	return &ffcli.Command{
 		Name: name, ShortHelp: help,
 		LongHelp: help + ` The public image and video list filters are documented in Apple's OpenAPI 4.5.1. Image and video upload is supported.
@@ -55,15 +55,15 @@ Examples:
   asc asset-library videos list --library-id LIBRARY_ID
   asc asset-library specs
   asc asset-library specs --placement-type APP_SCREENSHOT --feature APP_STORE_VERSIONS`,
-		FlagSet: flag.NewFlagSet(name, flag.ExitOnError), UsageFunc: shared.DefaultUsageFunc,
+		FlagSet: d.NewFlagSet(name, flag.ExitOnError), UsageFunc: d.DefaultUsageFunc,
 		Subcommands: children, Exec: func(context.Context, []string) error { return flag.ErrHelp },
 	}
 }
 
 var resourceIDPattern = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
 
-func readCommand(name, help, selector, path string, collection bool) *ffcli.Command {
-	fs := flag.NewFlagSet(name, flag.ExitOnError)
+func readCommand(d *shared.Deps, parent, name, help, selector, path string, collection bool) *ffcli.Command {
+	fs := d.NewFlagSet(name, flag.ExitOnError)
 	id := new(string)
 	resourceType := "appAssetLibraries"
 	if selector != "" {
@@ -83,8 +83,8 @@ func readCommand(name, help, selector, path string, collection bool) *ffcli.Comm
 	var paginate bool
 	if collection {
 		fs.IntVar(&limit, "limit", 0, "Maximum results per page (1-200; 0 uses server default)")
-		fs.StringVar(&next, "next", "", "Fetch a links.next URL instead of selecting a resource")
-		fs.BoolVar(&paginate, "paginate", false, "Fetch all pages and aggregate the collection")
+		fs.StringVar(&next, "next", "", shared.NextFlagUsage)
+		fs.BoolVar(&paginate, "paginate", false, shared.PaginateFlagUsage)
 	}
 	var filters *libraryListFilters
 	if name == "list" && selector == "library-id" {
@@ -108,62 +108,53 @@ func readCommand(name, help, selector, path string, collection bool) *ffcli.Comm
 	if filters != nil {
 		longHelp = help + "\n\nFilter category, state, specification IDs, asset IDs and reference names using comma-separated tokens. State values are validated by Apple. Sort by referenceName, createdDate or lastModifiedDate; prefix a field with - for descending order. Filter and sort flags cannot be combined with --next."
 	}
-	output := shared.BindOutputFlags(fs)
+	output := d.BindOutputFlags(fs)
 	return &ffcli.Command{
-		Name: name, ShortHelp: help, FlagSet: fs, UsageFunc: shared.DefaultUsageFunc,
+		Name: name, ShortHelp: help, FlagSet: fs, UsageFunc: d.DefaultUsageFunc,
 		LongHelp: longHelp,
 		Exec: func(ctx context.Context, args []string) error {
-			if len(args) != 0 {
-				return shared.UsageErrorf("asset-library %s: unexpected argument %q", name, args[0])
-			}
 			if err := shared.ValidateBoundOutputFlags(fs); err != nil {
-				return shared.UsageErrorf("asset-library %s: %v", name, err)
+				return d.UsageErrorf("asset-library %s: %v", name, err)
 			}
-			if limit < 0 || limit > 200 {
-				return shared.UsageError("asset-library: --limit must be between 1 and 200 (or 0 for server default)")
-			}
-			if next != "" {
-				if err := shared.ValidateNextURL(next); err != nil {
-					return shared.UsageErrorf("asset-library: %v", err)
-				}
-				conflicts := []string{selector, "limit"}
+			if collection {
+				conflicts := []string{"limit"}
 				if filters != nil {
 					conflicts = append(conflicts, libraryListFilterFlags...)
 				}
 				if placementFilters != nil {
 					conflicts = append(conflicts, placementFilters.Names()...)
 				}
-				if err := shared.RejectNextFlagConflicts(fs, next, "asset-library", conflicts...); err != nil {
+				if err := d.ValidatePaginationFlags(ctx, fs, parent+" "+name, 200, conflicts...); err != nil {
 					return err
 				}
+			}
+			resourceID := strings.TrimSpace(*id)
+			if selector == "app" {
+				resourceID = d.ResolveAppID(resourceID)
+			}
+			if selector != "" && next == "" && resourceID == "" {
+				return d.UsageErrorf("asset-library: --%s is required", selector)
 			}
 			query := url.Values{}
 			var err error
 			switch {
 			case filters != nil:
-				query, err = filters.query(fs)
+				query, err = filters.query(d, fs)
 			case specs != nil:
-				query, err = specs.query(fs)
+				query, err = specs.query(d, fs)
 			}
 			if err != nil {
 				return err
 			}
 			if placementFilters != nil {
 				if err := placementFilters.Apply(query); err != nil {
-					return shared.UsageErrorf("asset-library: %v", err)
+					return d.UsageErrorf("asset-library: %v", err)
 				}
-			}
-			resourceID := strings.TrimSpace(*id)
-			if selector == "app" {
-				resourceID = shared.ResolveAppID(resourceID)
 			}
 			target := path
 			if selector != "" && next == "" {
-				if resourceID == "" {
-					return shared.UsageErrorf("asset-library: --%s is required", selector)
-				}
 				if !resourceIDPattern.MatchString(resourceID) {
-					return shared.UsageErrorf("asset-library: --%s must be a resource ID", selector)
+					return d.UsageErrorf("asset-library: --%s must be a resource ID", selector)
 				}
 				target = fmt.Sprintf(path, url.PathEscape(resourceID))
 			}
@@ -181,15 +172,15 @@ func readCommand(name, help, selector, path string, collection bool) *ffcli.Comm
 					target += "?" + query.Encode()
 				}
 			}
-			client, err := shared.GetASCClient()
+			client, err := d.Client()
 			if err != nil {
 				return fmt.Errorf("asset-library: %w", err)
 			}
 			var response []byte
 			if paginate {
-				response, err = client.RawPaginatedGET(ctx, target, shared.ContextWithTimeout)
+				response, err = client.RawPaginatedGET(ctx, target, d.Timeout)
 			} else {
-				requestCtx, cancel := shared.ContextWithTimeout(ctx)
+				requestCtx, cancel := d.Timeout(ctx)
 				defer cancel()
 				response, err = client.RawRequest(requestCtx, "GET", target, nil)
 			}
@@ -205,11 +196,11 @@ func readCommand(name, help, selector, path string, collection bool) *ffcli.Comm
 					return err
 				}
 				if markdown {
-					return asc.WriteMarkdown(headers, rows)
+					return asc.WriteMarkdownTo(d.IO.Out, headers, rows)
 				}
-				return asc.WriteTable(headers, rows)
+				return asc.WriteTableTo(d.IO.Out, headers, rows)
 			}
-			return shared.PrintOutputWithRenderers(json.RawMessage(response), *output.Output, *output.Pretty, func() error { return render(false) }, func() error { return render(true) })
+			return d.PrintOutputWithRenderers(json.RawMessage(response), *output.Output, *output.Pretty, func() error { return render(false) }, func() error { return render(true) })
 		},
 	}
 }

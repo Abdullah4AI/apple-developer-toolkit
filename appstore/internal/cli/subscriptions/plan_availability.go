@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -15,9 +14,9 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
-// SubscriptionsPricingPlanAvailabilityCommand returns the plan availability command group.
-func SubscriptionsPricingPlanAvailabilityCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("pricing plan-availability", flag.ExitOnError)
+// newSubscriptionsPricingPlanAvailabilityCommand returns the plan availability command group.
+func newSubscriptionsPricingPlanAvailabilityCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("pricing plan-availability", flag.ExitOnError)
 
 	return &ffcli.Command{
 		Name:       "plan-availability",
@@ -34,11 +33,11 @@ Examples:
   asc subscriptions pricing plan-availability available-territories --plan-availability-id "PLAN_AVAILABILITY_ID" --paginate
   asc subscriptions pricing plan-availability set --subscription-id "SUB_ID" --plan-type UPFRONT --territories "United States,Canada" --confirm`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
-			SubscriptionsPricingPlanAvailabilityShowCommand(),
-			SubscriptionsPricingPlanAvailabilityAvailableTerritoriesCommand(),
-			SubscriptionsPricingPlanAvailabilitySetCommand(),
+			newSubscriptionsPricingPlanAvailabilityShowCommand(d),
+			newSubscriptionsPricingPlanAvailabilityAvailableTerritoriesCommand(d),
+			newSubscriptionsPricingPlanAvailabilitySetCommand(d),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp
@@ -46,13 +45,13 @@ Examples:
 	}
 }
 
-// SubscriptionsPricingPlanAvailabilityShowCommand reads plan availability for a subscription.
-func SubscriptionsPricingPlanAvailabilityShowCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("pricing plan-availability show", flag.ExitOnError)
+// newSubscriptionsPricingPlanAvailabilityShowCommand reads plan availability for a subscription.
+func newSubscriptionsPricingPlanAvailabilityShowCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("pricing plan-availability show", flag.ExitOnError)
 
 	subscriptionID := shared.BindResourceIDFlag(fs, "subscription-id", "subscriptions", "Subscription ID, product ID, or exact current name")
 	appID := addSubscriptionLookupAppFlag(fs)
-	output := shared.BindOutputFlags(fs)
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "show",
@@ -72,26 +71,23 @@ Examples:
   asc subscriptions pricing plan-availability show --subscription-id "SUB_ID"
   asc subscriptions pricing plan-availability show --app "APP_ID" --subscription-id "com.example.pro.yearly"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
-			if len(args) > 0 {
-				return shared.UsageError("subscriptions pricing plan-availability show does not accept positional arguments")
-			}
 			id := strings.TrimSpace(*subscriptionID)
 			if id == "" {
-				return shared.UsageError("--subscription-id is required")
+				return d.UsageError("--subscription-id is required")
 			}
 
-			client, err := shared.GetASCClient()
+			client, err := d.Client()
 			if err != nil {
 				return fmt.Errorf("subscriptions pricing plan-availability show: %w", err)
 			}
-			id, err = resolveSubscriptionLookupIDWithTimeout(ctx, client, *appID, id)
+			id, err = resolveSubscriptionLookupIDWithTimeout(ctx, d, client, *appID, id)
 			if err != nil {
 				return err
 			}
 
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
+			requestCtx, cancel := d.Timeout(ctx)
 			defer cancel()
 
 			resp, err := client.GetSubscriptionPlanAvailabilitiesForSubscription(
@@ -102,33 +98,27 @@ Examples:
 			if err != nil {
 				return fmt.Errorf("subscriptions pricing plan-availability show: failed to fetch: %w", err)
 			}
-			warnTruncatedPlanAvailabilityTerritories(resp)
+			warnTruncatedPlanAvailabilityTerritories(d, resp)
 
-			return shared.PrintOutputWithRenderers(
+			return d.PrintOutputWithRenderers(
 				resp,
 				*output.Output,
 				*output.Pretty,
-				func() error { return asc.PrintSubscriptionPlanAvailabilityShowTable(resp) },
-				func() error { return asc.PrintSubscriptionPlanAvailabilityShowMarkdown(resp) },
+				func() error { return asc.PrintSubscriptionPlanAvailabilityShowTableTo(d.IO.Out, resp) },
+				func() error { return asc.PrintSubscriptionPlanAvailabilityShowMarkdownTo(d.IO.Out, resp) },
 			)
 		},
 	}
 }
 
-// SubscriptionsPricingPlanAvailabilityAvailableTerritoriesCommand lists every available territory for a plan.
-func SubscriptionsPricingPlanAvailabilityAvailableTerritoriesCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("pricing plan-availability available-territories", flag.ExitOnError)
-
-	planAvailabilityID := shared.BindResourceIDFlag(fs, "plan-availability-id", "subscriptionPlanAvailabilities", "Subscription plan availability ID")
-	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
-	next := fs.String("next", "", "Fetch next page using a links.next URL")
-	paginate := fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")
-	output := shared.BindOutputFlags(fs)
-
-	return &ffcli.Command{
-		Name:       "available-territories",
-		ShortUsage: "asc subscriptions pricing plan-availability available-territories --plan-availability-id \"PLAN_AVAILABILITY_ID\" [flags]",
-		ShortHelp:  "List available territories for a plan availability.",
+// newSubscriptionsPricingPlanAvailabilityAvailableTerritoriesCommand lists every available territory for a plan.
+func newSubscriptionsPricingPlanAvailabilityAvailableTerritoriesCommand(d *shared.Deps) *ffcli.Command {
+	return shared.BuildPaginatedListCommand(shared.PaginatedListCommandConfig{
+		Deps:        d,
+		FlagSetName: "pricing plan-availability available-territories",
+		Name:        "available-territories",
+		ShortUsage:  "asc subscriptions pricing plan-availability available-territories --plan-availability-id \"PLAN_AVAILABILITY_ID\" [flags]",
+		ShortHelp:   "List available territories for a plan availability.",
 		LongHelp: `List the available territories of one subscription plan availability.
 
 This reads the relationship directly, so it has no 50-territory include cap. Use
@@ -138,69 +128,24 @@ This reads the relationship directly, so it has no 50-territory include cap. Use
 Examples:
   asc subscriptions pricing plan-availability available-territories --plan-availability-id "PLAN_AVAILABILITY_ID"
   asc subscriptions pricing plan-availability available-territories --plan-availability-id "PLAN_AVAILABILITY_ID" --paginate`,
-		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
-		Exec: func(ctx context.Context, args []string) error {
-			if len(args) > 0 {
-				return shared.UsageError("subscriptions pricing plan-availability available-territories does not accept positional arguments")
-			}
-			if *limit != 0 && (*limit < 1 || *limit > 200) {
-				return shared.UsageErrorf("subscriptions pricing plan-availability available-territories: --limit must be between 1 and 200")
-			}
-			if err := shared.ValidateNextURL(*next); err != nil {
-				return shared.UsageErrorf("subscriptions pricing plan-availability available-territories: %v", err)
-			}
-			if err := validateNextExclusiveFlags(fs, *next, "plan-availability-id", "limit"); err != nil {
-				return err
-			}
-			id := strings.TrimSpace(*planAvailabilityID)
-			if id == "" && strings.TrimSpace(*next) == "" {
-				return shared.UsageError("--plan-availability-id is required")
-			}
-
-			client, err := shared.GetASCClient()
-			if err != nil {
-				return fmt.Errorf("subscriptions pricing plan-availability available-territories: %w", err)
-			}
-
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
-			defer cancel()
-
-			opts := []asc.SubscriptionAvailabilityTerritoriesOption{
-				asc.WithSubscriptionAvailabilityTerritoriesLimit(*limit),
-				asc.WithSubscriptionAvailabilityTerritoriesNextURL(*next),
-			}
-
-			if *paginate {
-				paginateOpts := append(opts, asc.WithSubscriptionAvailabilityTerritoriesLimit(200))
-				firstPage, err := client.GetSubscriptionPlanAvailabilityAvailableTerritories(requestCtx, id, paginateOpts...)
-				if err != nil {
-					return fmt.Errorf("subscriptions pricing plan-availability available-territories: failed to fetch: %w", err)
-				}
-
-				resp, err := asc.PaginateAll(requestCtx, firstPage, func(ctx context.Context, nextURL string) (asc.PaginatedResponse, error) {
-					return client.GetSubscriptionPlanAvailabilityAvailableTerritories(ctx, id, asc.WithSubscriptionAvailabilityTerritoriesNextURL(nextURL))
-				})
-				if err != nil {
-					return fmt.Errorf("subscriptions pricing plan-availability available-territories: %w", err)
-				}
-
-				return shared.PrintOutput(resp, *output.Output, *output.Pretty)
-			}
-
-			resp, err := client.GetSubscriptionPlanAvailabilityAvailableTerritories(requestCtx, id, opts...)
-			if err != nil {
-				return fmt.Errorf("subscriptions pricing plan-availability available-territories: failed to fetch: %w", err)
-			}
-
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+		ParentFlag:           "plan-availability-id",
+		ParentUsage:          "Subscription plan availability ID",
+		ParentType:           "subscriptionPlanAvailabilities",
+		PaginateIgnoresLimit: true,
+		NoSpinner:            true,
+		NextConflicts:        []string{"limit"},
+		FetchPage: func(ctx context.Context, client *asc.Client, id string, limit int, next string) (asc.PaginatedResponse, error) {
+			return client.GetSubscriptionPlanAvailabilityAvailableTerritories(ctx, id,
+				asc.Limit[asc.SubscriptionAvailabilityTerritoriesOption](limit),
+				asc.NextURL[asc.SubscriptionAvailabilityTerritoriesOption](next),
+			)
 		},
-	}
+	})
 }
 
-// SubscriptionsPricingPlanAvailabilitySetCommand sets the complete territory set for a plan.
-func SubscriptionsPricingPlanAvailabilitySetCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("pricing plan-availability set", flag.ExitOnError)
+// newSubscriptionsPricingPlanAvailabilitySetCommand sets the complete territory set for a plan.
+func newSubscriptionsPricingPlanAvailabilitySetCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("pricing plan-availability set", flag.ExitOnError)
 
 	subscriptionID := shared.BindResourceIDFlag(fs, "subscription-id", "subscriptions", "Subscription ID, product ID, or exact current name")
 	appID := addSubscriptionLookupAppFlag(fs)
@@ -211,7 +156,7 @@ func SubscriptionsPricingPlanAvailabilitySetCommand() *ffcli.Command {
 	confirmFlag := bindVisitedBoolFlag(fs, lastBool, "confirm", "Confirm replacing the plan's territory availability")
 	availableInNew := &availableInNewFlag.value
 	confirm := &confirmFlag.value
-	output := shared.BindOutputFlags(fs)
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "set",
@@ -236,64 +181,64 @@ Examples:
   asc subscriptions pricing plan-availability set --subscription-id "SUB_ID" --plan-type UPFRONT --territories "USA,CAN" --available-in-new-territories --confirm
   asc subscriptions pricing plan-availability set --subscription-id "SUB_ID" --plan-type MONTHLY --territories "Norway,Germany" --confirm`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
-			if err := rejectAmbiguousTrailingConfirm(args, lastBool.name); err != nil {
+			if err := rejectAmbiguousTrailingConfirm(d, args, lastBool.name); err != nil {
 				return err
 			}
-			if err := shared.RecoverBoolFlagTailArgs(fs, args, availableInNew); err != nil {
+			if err := d.RecoverBoolFlagTailArgs(fs, args, availableInNew); err != nil {
 				return err
 			}
 
 			id := strings.TrimSpace(*subscriptionID)
 			if id == "" {
-				return shared.UsageError("--subscription-id is required")
+				return d.UsageError("--subscription-id is required")
 			}
 			if strings.TrimSpace(*planType) == "" {
-				return shared.UsageError("--plan-type is required")
+				return d.UsageError("--plan-type is required")
 			}
 			normalizedPlanType, err := normalizeSubscriptionPlanType(*planType)
 			if err != nil {
-				return shared.UsageError(err.Error())
+				return d.UsageError(err.Error())
 			}
 			if !territories.Provided() {
-				return shared.UsageError("--territories is required")
+				return d.UsageError("--territories is required")
 			}
 			territoryIDs, err := shared.NormalizeASCTerritoryCSV(territories.String())
 			if err != nil {
-				return shared.UsageError(err.Error())
+				return d.UsageError(err.Error())
 			}
 			if len(territoryIDs) == 0 {
-				return shared.UsageError(
+				return d.UsageError(
 					"--territories must list at least one territory; use \"asc web subscriptions availability remove-from-sale\" to remove a subscription from sale",
 				)
 			}
 			availableInNewProvided := flagWasProvided(fs, "available-in-new-territories")
 			if normalizedPlanType == asc.SubscriptionPlanTypeMonthly && availableInNewProvided {
-				return shared.UsageError("--available-in-new-territories is not supported for MONTHLY plan availability")
+				return d.UsageError("--available-in-new-territories is not supported for MONTHLY plan availability")
 			}
 			var excludedTerritoryIDs []string
 			if normalizedPlanType == asc.SubscriptionPlanTypeMonthly {
 				territoryIDs, excludedTerritoryIDs = filterMonthlyCommitmentTerritories(territoryIDs)
 				if len(territoryIDs) == 0 {
-					return shared.UsageError("no eligible monthly-commitment territories remain after excluding USA")
+					return d.UsageError("no eligible monthly-commitment territories remain after excluding USA")
 				}
 			}
-			if !*confirm {
-				return shared.UsageError("--confirm is required")
+			if err := d.RequireConfirm(*confirm); err != nil {
+				return err
 			}
-			printMonthlyCommitmentTerritoryWarning(excludedTerritoryIDs)
+			printMonthlyCommitmentTerritoryWarning(d, excludedTerritoryIDs)
 
-			client, err := shared.GetASCClient()
+			client, err := d.Client()
 			if err != nil {
 				return fmt.Errorf("subscriptions pricing plan-availability set: %w", err)
 			}
-			id, err = resolveSubscriptionLookupIDWithTimeout(ctx, client, *appID, id)
+			id, err = resolveSubscriptionLookupIDWithTimeout(ctx, d, client, *appID, id)
 			if err != nil {
 				return err
 			}
 
-			listCtx, listCancel := shared.ContextWithTimeout(ctx)
+			listCtx, listCancel := d.Timeout(ctx)
 			existing, err := client.GetSubscriptionPlanAvailabilitiesForSubscription(listCtx, id)
 			listCancel()
 			if err != nil {
@@ -305,7 +250,7 @@ Examples:
 
 			var currentTerritoryIDs []string
 			if planFound {
-				currentTerritoryIDs, err = subscriptionPlanAvailabilityTerritories(ctx, client, plan.ID)
+				currentTerritoryIDs, err = subscriptionPlanAvailabilityTerritories(ctx, d, client, plan.ID)
 				if err != nil {
 					return fmt.Errorf("subscriptions pricing plan-availability set: failed to fetch available territories: %w", err)
 				}
@@ -330,7 +275,7 @@ Examples:
 					ExcludedTerritories:       excludedTerritoryIDs,
 					AvailableTerritories:      currentTerritoryIDs,
 				}
-				return shared.PrintOutput(result, *output.Output, *output.Pretty)
+				return d.PrintOutput(result, *output.Output, *output.Pretty)
 			}
 
 			var updateAttrs *asc.SubscriptionPlanAvailabilityUpdateAttributes
@@ -340,7 +285,7 @@ Examples:
 
 			var resp *asc.SubscriptionPlanAvailabilityResponse
 			if planFound {
-				updateCtx, updateCancel := shared.ContextWithTimeout(ctx)
+				updateCtx, updateCancel := d.Timeout(ctx)
 				resp, err = client.UpdateSubscriptionPlanAvailability(updateCtx, plan.ID, desiredTerritoryIDs, updateAttrs)
 				updateCancel()
 				if err != nil {
@@ -351,7 +296,7 @@ Examples:
 				if availableInNewProvided {
 					createAttrs.AvailableInNewTerritories = availableInNew
 				}
-				createCtx, createCancel := shared.ContextWithTimeout(ctx)
+				createCtx, createCancel := d.Timeout(ctx)
 				resp, err = client.CreateSubscriptionPlanAvailability(createCtx, id, desiredTerritoryIDs, createAttrs)
 				createCancel()
 				if err != nil {
@@ -363,7 +308,7 @@ Examples:
 			}
 			planAvailabilityID := strings.TrimSpace(resp.Data.ID)
 
-			verifiedTerritoryIDs, err := subscriptionPlanAvailabilityTerritories(ctx, client, planAvailabilityID)
+			verifiedTerritoryIDs, err := subscriptionPlanAvailabilityTerritories(ctx, d, client, planAvailabilityID)
 			if err != nil {
 				return fmt.Errorf("subscriptions pricing plan-availability set: failed to verify available territories: %w", err)
 			}
@@ -378,7 +323,7 @@ Examples:
 				)
 			}
 
-			readCtx, readCancel := shared.ContextWithTimeout(ctx)
+			readCtx, readCancel := d.Timeout(ctx)
 			verified, err := client.GetSubscriptionPlanAvailability(readCtx, planAvailabilityID)
 			readCancel()
 			if err != nil {
@@ -410,7 +355,7 @@ Examples:
 				ExcludedTerritories:       excludedTerritoryIDs,
 				AvailableTerritories:      verifiedTerritoryIDs,
 			}
-			return shared.PrintOutput(result, *output.Output, *output.Pretty)
+			return d.PrintOutput(result, *output.Output, *output.Pretty)
 		},
 	}
 }
@@ -525,7 +470,7 @@ func bindVisitedBoolFlag(fs *flag.FlagSet, last *lastVisitedBoolFlag, name, usag
 	return value
 }
 
-func rejectAmbiguousTrailingConfirm(args []string, lastBoolName string) error {
+func rejectAmbiguousTrailingConfirm(d *shared.Deps, args []string, lastBoolName string) error {
 	if len(args) == 0 || lastBoolName != "confirm" {
 		return nil
 	}
@@ -533,10 +478,10 @@ func rejectAmbiguousTrailingConfirm(args []string, lastBoolName string) error {
 	if _, err := strconv.ParseBool(token); err != nil {
 		return nil
 	}
-	return shared.UsageErrorf("--confirm %s is ambiguous after another boolean flag; use --confirm=%s", token, token)
+	return d.UsageErrorf("--confirm %s is ambiguous after another boolean flag; use --confirm=%s", token, token)
 }
 
-func warnTruncatedPlanAvailabilityTerritories(resp *asc.SubscriptionPlanAvailabilitiesResponse) {
+func warnTruncatedPlanAvailabilityTerritories(d *shared.Deps, resp *asc.SubscriptionPlanAvailabilitiesResponse) {
 	if resp == nil {
 		return
 	}
@@ -552,7 +497,7 @@ func warnTruncatedPlanAvailabilityTerritories(resp *asc.SubscriptionPlanAvailabi
 			continue
 		}
 		fmt.Fprintf(
-			os.Stderr,
+			d.IO.ErrOut,
 			"Warning: plan availability %q %s; Apple caps include=availableTerritories at %d. Do not pass this list to set --territories; read the complete list with: asc subscriptions pricing plan-availability available-territories --plan-availability-id %q --paginate\n",
 			item.ID,
 			included,

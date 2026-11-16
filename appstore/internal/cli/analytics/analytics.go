@@ -8,9 +8,9 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
-// AnalyticsCommand returns the analytics command with subcommands.
-func AnalyticsCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("analytics", flag.ExitOnError)
+// NewAnalyticsCommand returns the analytics command with subcommands.
+func NewAnalyticsCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("analytics", flag.ExitOnError)
 
 	return &ffcli.Command{
 		Name:       "analytics",
@@ -28,17 +28,17 @@ Examples:
   asc analytics instances links --instance-id "INSTANCE_ID"
   asc analytics download --request-id "REQUEST_ID" --instance-id "INSTANCE_ID"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
-			AnalyticsSalesCommand(),
-			AnalyticsRequestCommand(),
-			AnalyticsRequestsCommand(),
-			AnalyticsViewCommand(),
-			AnalyticsReportsCommand(),
-			AnalyticsInstancesCommand(),
-			AnalyticsSegmentsCommand(),
-			AnalyticsDownloadCommand(),
-			AnalyticsCompareCommand(),
+			newAnalyticsSalesCommand(d),
+			newAnalyticsRequestCommand(d),
+			newAnalyticsRequestsCommand(d),
+			newAnalyticsViewCommand(d),
+			newAnalyticsReportsCommand(d),
+			newAnalyticsInstancesCommand(d),
+			newAnalyticsSegmentsCommand(d),
+			newAnalyticsDownloadCommand(d),
+			newAnalyticsCompareCommand(d),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp

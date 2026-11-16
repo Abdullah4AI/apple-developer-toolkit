@@ -8,14 +8,14 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
-func normalizeSelectionFlag(fs *flag.FlagSet, value, flagName string, allowed []string) ([]string, error) {
+func normalizeSelectionFlag(d *shared.Deps, fs *flag.FlagSet, value, flagName string, allowed []string) ([]string, error) {
 	provided := flagWasProvided(fs, strings.TrimPrefix(flagName, "--"))
 	values, err := shared.NormalizeSelection(value, allowed, flagName)
 	if err != nil {
-		return nil, shared.UsageError(err.Error())
+		return nil, d.UsageError(err.Error())
 	}
 	if provided && len(values) == 0 {
-		return nil, shared.UsageErrorf("%s must not be empty", flagName)
+		return nil, d.UsageErrorf("%s must not be empty", flagName)
 	}
 	return values, nil
 }
@@ -155,10 +155,10 @@ func subscriptionRelatedFieldFlagNames() []string {
 	return names
 }
 
-func subscriptionRelatedFieldValues(fs *flag.FlagSet, raw map[string]*string) (asc.SubscriptionRelatedFields, error) {
+func subscriptionRelatedFieldValues(d *shared.Deps, fs *flag.FlagSet, raw map[string]*string) (asc.SubscriptionRelatedFields, error) {
 	var selected asc.SubscriptionRelatedFields
 	for _, field := range subscriptionRelatedFieldFlags {
-		values, err := normalizeSelectionFlag(fs, *raw[field.name], "--"+field.name, field.allowed)
+		values, err := normalizeSelectionFlag(d, fs, *raw[field.name], "--"+field.name, field.allowed)
 		if err != nil {
 			return selected, err
 		}

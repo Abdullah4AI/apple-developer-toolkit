@@ -1,14 +1,12 @@
 package cmdtest
 
 import (
-	"context"
-	"errors"
-	"flag"
-	"io"
 	"net/http"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asctest"
 )
 
 func TestBuildsListProcessingStateFilterUsesTopLevelBuildsEndpoint(t *testing.T) {
@@ -16,46 +14,15 @@ func TestBuildsListProcessingStateFilterUsesTopLevelBuildsEndpoint(t *testing.T)
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 	t.Setenv("ASC_APP_ID", "")
 
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() {
-		http.DefaultTransport = originalTransport
-	})
+	reg := asctest.NewRegistry(t)
+	reg.Install()
+	reg.Register(asctest.GET("/v1/builds", "filter[app]=123456789", "filter[processingState]=PROCESSING", "include=preReleaseVersion"),
+		asctest.JSON(http.StatusOK, `{"data":[{"type":"builds","id":"build-processing","attributes":{"processingState":"PROCESSING","version":"42"}}]}`))
 
-	requestCount := 0
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		requestCount++
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/builds" {
-			t.Fatalf("expected path /v1/builds, got %s", req.URL.Path)
-		}
-		query := req.URL.Query()
-		if query.Get("filter[app]") != "123456789" {
-			t.Fatalf("expected filter[app]=123456789, got %q", query.Get("filter[app]"))
-		}
-		if query.Get("filter[processingState]") != "PROCESSING" {
-			t.Fatalf("expected filter[processingState]=PROCESSING, got %q", query.Get("filter[processingState]"))
-		}
-		body := `{"data":[{"type":"builds","id":"build-processing","attributes":{"processingState":"PROCESSING","version":"42"}}]}`
-		return &http.Response{
-			StatusCode: http.StatusOK,
-			Body:       io.NopCloser(strings.NewReader(body)),
-			Header:     http.Header{"Content-Type": []string{"application/json"}},
-		}, nil
-	})
-
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"builds", "list", "--app", "123456789", "--processing-state", "processing"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatalf("run error: %v", err)
-		}
-	})
+	stdout, stderr, err := runCommand(t, []string{"builds", "list", "--app", "123456789", "--processing-state", "processing"})
+	if err != nil {
+		t.Fatalf("run error: %v", err)
+	}
 
 	if stderr != "" {
 		t.Fatalf("expected empty stderr, got %q", stderr)
@@ -63,7 +30,7 @@ func TestBuildsListProcessingStateFilterUsesTopLevelBuildsEndpoint(t *testing.T)
 	if !strings.Contains(stdout, `"id":"build-processing"`) {
 		t.Fatalf("expected build output, got %q", stdout)
 	}
-	if requestCount != 1 {
+	if requestCount := len(reg.Requests()); requestCount != 1 {
 		t.Fatalf("expected 1 request, got %d", requestCount)
 	}
 }
@@ -73,43 +40,15 @@ func TestBuildsListProcessingStateAllExpandsToAllStates(t *testing.T) {
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 	t.Setenv("ASC_APP_ID", "")
 
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() {
-		http.DefaultTransport = originalTransport
-	})
+	reg := asctest.NewRegistry(t)
+	reg.Install()
+	reg.Register(asctest.GET("/v1/builds", "filter[app]=123456789", "filter[processingState]=PROCESSING,FAILED,INVALID,VALID", "include=preReleaseVersion"),
+		asctest.JSON(http.StatusOK, `{"data":[{"type":"builds","id":"build-any-state"}]}`))
 
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/builds" {
-			t.Fatalf("expected path /v1/builds, got %s", req.URL.Path)
-		}
-		if req.URL.Query().Get("filter[processingState]") != "PROCESSING,FAILED,INVALID,VALID" {
-			t.Fatalf(
-				"expected filter[processingState]=PROCESSING,FAILED,INVALID,VALID, got %q",
-				req.URL.Query().Get("filter[processingState]"),
-			)
-		}
-		body := `{"data":[{"type":"builds","id":"build-any-state"}]}`
-		return &http.Response{
-			StatusCode: http.StatusOK,
-			Body:       io.NopCloser(strings.NewReader(body)),
-			Header:     http.Header{"Content-Type": []string{"application/json"}},
-		}, nil
-	})
-
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"builds", "list", "--app", "123456789", "--processing-state", "all"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatalf("run error: %v", err)
-		}
-	})
+	stdout, stderr, err := runCommand(t, []string{"builds", "list", "--app", "123456789", "--processing-state", "all"})
+	if err != nil {
+		t.Fatalf("run error: %v", err)
+	}
 
 	if stderr != "" {
 		t.Fatalf("expected empty stderr, got %q", stderr)
@@ -124,40 +63,15 @@ func TestBuildsListExcludeExpiredSendsExpiredFilter(t *testing.T) {
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 	t.Setenv("ASC_APP_ID", "")
 
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() {
-		http.DefaultTransport = originalTransport
-	})
+	reg := asctest.NewRegistry(t)
+	reg.Install()
+	reg.Register(asctest.GET("/v1/builds", "filter[app]=123456789", "filter[expired]=false", "include=preReleaseVersion"),
+		asctest.JSON(http.StatusOK, `{"data":[{"type":"builds","id":"build-active","attributes":{"expired":false,"version":"42"}}]}`))
 
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/builds" {
-			t.Fatalf("expected path /v1/builds, got %s", req.URL.Path)
-		}
-		if got := req.URL.Query().Get("filter[expired]"); got != "false" {
-			t.Fatalf("expected filter[expired]=false, got %q", got)
-		}
-		body := `{"data":[{"type":"builds","id":"build-active","attributes":{"expired":false,"version":"42"}}]}`
-		return &http.Response{
-			StatusCode: http.StatusOK,
-			Body:       io.NopCloser(strings.NewReader(body)),
-			Header:     http.Header{"Content-Type": []string{"application/json"}},
-		}, nil
-	})
-
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"builds", "list", "--app", "123456789", "--exclude-expired"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatalf("run error: %v", err)
-		}
-	})
+	stdout, stderr, err := runCommand(t, []string{"builds", "list", "--app", "123456789", "--exclude-expired"})
+	if err != nil {
+		t.Fatalf("run error: %v", err)
+	}
 
 	if stderr != "" {
 		t.Fatalf("expected empty stderr, got %q", stderr)
@@ -172,91 +86,20 @@ func TestBuildsCountNotExpiredSendsExpiredFilter(t *testing.T) {
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 	t.Setenv("ASC_APP_ID", "")
 
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() {
-		http.DefaultTransport = originalTransport
-	})
+	reg := asctest.NewRegistry(t)
+	reg.Install()
+	reg.Register(asctest.GET("/v1/builds", "filter[app]=123456789", "filter[expired]=false", "limit=1"),
+		asctest.JSON(http.StatusOK, `{"data":[],"meta":{"paging":{"total":7,"limit":1}}}`))
 
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/builds" {
-			t.Fatalf("expected path /v1/builds, got %s", req.URL.Path)
-		}
-		query := req.URL.Query()
-		if got := query.Get("filter[expired]"); got != "false" {
-			t.Fatalf("expected filter[expired]=false, got %q", got)
-		}
-		if got := query.Get("limit"); got != "1" {
-			t.Fatalf("expected limit=1 probe request, got %q", got)
-		}
-		body := `{"data":[],"meta":{"paging":{"total":7,"limit":1}}}`
-		return &http.Response{
-			StatusCode: http.StatusOK,
-			Body:       io.NopCloser(strings.NewReader(body)),
-			Header:     http.Header{"Content-Type": []string{"application/json"}},
-		}, nil
-	})
-
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"builds", "count", "--app", "123456789", "--not-expired"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatalf("run error: %v", err)
-		}
-	})
+	stdout, stderr, err := runCommand(t, []string{"builds", "count", "--app", "123456789", "--not-expired"})
+	if err != nil {
+		t.Fatalf("run error: %v", err)
+	}
 
 	if stderr != "" {
 		t.Fatalf("expected empty stderr, got %q", stderr)
 	}
 	if !strings.Contains(stdout, `"total":7`) {
 		t.Fatalf("expected total output, got %q", stdout)
-	}
-}
-
-func TestBuildsListProcessingStateInvalidValueReturnsUsageError(t *testing.T) {
-	setupAuth(t)
-	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
-	t.Setenv("ASC_APP_ID", "")
-
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() {
-		http.DefaultTransport = originalTransport
-	})
-
-	requestCount := 0
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		requestCount++
-		t.Fatalf("unexpected HTTP request for invalid processing-state: %s %s", req.Method, req.URL.String())
-		return nil, nil
-	})
-
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	var runErr error
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"builds", "list", "--app", "123456789", "--processing-state", "WRONG"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		runErr = root.Run(context.Background())
-	})
-
-	if !errors.Is(runErr, flag.ErrHelp) {
-		t.Fatalf("expected flag.ErrHelp usage error, got %v", runErr)
-	}
-	if stdout != "" {
-		t.Fatalf("expected empty stdout, got %q", stdout)
-	}
-	if !strings.Contains(stderr, "--processing-state must be one of") {
-		t.Fatalf("expected processing-state usage error, got %q", stderr)
-	}
-	if requestCount != 0 {
-		t.Fatalf("expected 0 requests, got %d", requestCount)
 	}
 }

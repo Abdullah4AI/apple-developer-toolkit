@@ -7,6 +7,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/peterbourgon/ff/v3/ffcli"
 
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/artifacts"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/rootfs"
@@ -26,12 +28,15 @@ type signingKeychainInstallOptions struct {
 	KeychainPasswordPath      string
 	ExpectedCertificateSHA256 string
 	AddToSearchList           bool
+	AddAppleIntermediates     bool
+	LockOnSleep               bool
 }
 
 type signingKeychainInstallDeps struct {
 	GOOS                      string
 	SecurityAvailable         bool
 	Now                       func() time.Time
+	Stderr                    io.Writer
 	AcquireLock               func(context.Context) (func() error, error)
 	CreateKeychain            func(context.Context, string, []byte) (bool, error)
 	ImportIdentity            func(context.Context, string, []byte, []byte, []byte, string) error
@@ -39,6 +44,8 @@ type signingKeychainInstallDeps struct {
 	SetKeychainSearchList     func(context.Context, []string) error
 	RemoveKeychainSearchEntry func(context.Context, string) error
 	DeleteKeychain            func(context.Context, string) error
+	AppleIntermediates        func() ([]artifacts.AppleIntermediateCertificate, error)
+	ImportCertificate         func(context.Context, string, []byte) error
 }
 
 var (
@@ -46,24 +53,23 @@ var (
 	signingKeychainInstallContext = platformSigningRunContext
 )
 
-// SigningKeychainCommand returns the signing keychain command group.
-func SigningKeychainCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("keychain", flag.ExitOnError)
+func newSigningKeychainCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("keychain", flag.ExitOnError)
 	return &ffcli.Command{
 		Name:       "keychain",
 		ShortUsage: "asc signing keychain <subcommand> [flags]",
 		ShortHelp:  "Manage dedicated local signing keychains.",
 		LongHelp:   "Manage dedicated local signing keychains without changing the default keychain.",
 		FlagSet:    fs,
-		UsageFunc:  shared.DefaultUsageFunc,
+		UsageFunc:  d.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
-			SigningKeychainListCommand(),
-			SigningKeychainInstallCommand(),
-			SigningKeychainUnlockCommand(),
-			SigningKeychainLockCommand(),
-			SigningKeychainSetTimeoutCommand(),
-			SigningKeychainSetPartitionListCommand(),
-			SigningKeychainDeleteCommand(),
+			newSigningKeychainListCommand(d),
+			newSigningKeychainInstallCommand(d),
+			newSigningKeychainUnlockCommand(d),
+			newSigningKeychainLockCommand(d),
+			newSigningKeychainSetTimeoutCommand(d),
+			newSigningKeychainSetPartitionListCommand(d),
+			newSigningKeychainDeleteCommand(d),
 		},
 		Exec: func(context.Context, []string) error {
 			return flag.ErrHelp
@@ -71,17 +77,18 @@ func SigningKeychainCommand() *ffcli.Command {
 	}
 }
 
-// SigningKeychainInstallCommand returns the persistent keychain installer.
-func SigningKeychainInstallCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("install", flag.ExitOnError)
+func newSigningKeychainInstallCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("install", flag.ExitOnError)
 	identityPath := fs.String("identity", "", "Path to one PKCS#12 code-signing identity (required)")
 	identityPasswordPath := fs.String("identity-password-file", "", "Protected file containing the PKCS#12 password (required)")
 	keychainPath := fs.String("keychain", "", "New dedicated keychain path (required)")
 	keychainPasswordPath := fs.String("keychain-password-file", "", "Protected file containing the new keychain password (required)")
 	expectedCertificateSHA256 := fs.String("expected-certificate-sha256", "", "Expected identity certificate SHA-256")
 	addToSearchList := fs.Bool("add-to-search-list", false, "Append the new keychain to the user search list")
+	addAppleIntermediates := fs.Bool("add-apple-intermediates", false, "Import the embedded Apple intermediate certificate that issued the identity into the new keychain")
+	lockOnSleep := fs.Bool("lock-on-sleep", true, "Lock the new keychain when the machine sleeps")
 	confirm := fs.Bool("confirm", false, "Confirm persistent keychain creation")
-	output := shared.BindOutputFlags(fs)
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "install",
@@ -94,55 +101,60 @@ protected files and are never placed in command arguments. The command rolls
 back the new keychain if import, verification, or search-list activation fails.
 Provisioning profiles remain a separate operation under profiles local install.
 
+--add-apple-intermediates imports the Apple Worldwide Developer Relations or
+Developer ID intermediate certificate that issued the identity into the new
+keychain before the identity import and codesign check. The certificates are
+embedded in asc and pinned by SHA-256; nothing is downloaded, and the login and
+System keychains are not changed. Expired embedded certificates are skipped.
+
 Examples:
   asc signing keychain install --identity .asc/signing/App.p12 --identity-password-file .asc/secrets/p12-password --keychain .asc/keychains/release.keychain-db --keychain-password-file .asc/secrets/keychain-password --confirm
   asc signing keychain install --identity .asc/signing/App.p12 --identity-password-file .asc/secrets/p12-password --keychain .asc/keychains/release.keychain-db --keychain-password-file .asc/secrets/keychain-password --expected-certificate-sha256 CERTIFICATE_SHA256 --add-to-search-list --confirm --output json`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
-			if len(args) > 0 {
-				return shared.UsageErrorf("unexpected argument(s): %s", strings.Join(args, " "))
-			}
 			if _, err := shared.ValidateOutputFormat(*output.Output, *output.Pretty); err != nil {
-				return shared.UsageError(err.Error())
+				return d.UsageError(err.Error())
 			}
 			identity := strings.TrimSpace(*identityPath)
 			if identity == "" {
-				return shared.UsageError("--identity is required")
+				return d.UsageError("--identity is required")
 			}
 			identityPassword := strings.TrimSpace(*identityPasswordPath)
 			if identityPassword == "" {
-				return shared.UsageError("--identity-password-file is required")
+				return d.UsageError("--identity-password-file is required")
 			}
 			keychain := strings.TrimSpace(*keychainPath)
 			if keychain == "" {
-				return shared.UsageError("--keychain is required")
+				return d.UsageError("--keychain is required")
 			}
 			keychainPassword := strings.TrimSpace(*keychainPasswordPath)
 			if keychainPassword == "" {
-				return shared.UsageError("--keychain-password-file is required")
+				return d.UsageError("--keychain-password-file is required")
 			}
 			expectedDigest, err := normalizeOptionalSigningKeychainSHA256(*expectedCertificateSHA256)
 			if err != nil {
-				return shared.UsageError(err.Error())
+				return d.UsageError(err.Error())
 			}
-			if !*confirm {
-				return shared.UsageError("--confirm is required to create a persistent signing keychain")
+			if err := d.RequireConfirm(*confirm); err != nil {
+				return err
 			}
 			installCtx, stopSignals := signingKeychainInstallContext(ctx)
 			defer stopSignals()
-			result, err := installSigningKeychainFn(installCtx, signingKeychainInstallOptions{
+			result, err := installSigningKeychainFn(installCtx, d, signingKeychainInstallOptions{
 				IdentityPath:              identity,
 				IdentityPasswordPath:      identityPassword,
 				KeychainPath:              keychain,
 				KeychainPasswordPath:      keychainPassword,
 				ExpectedCertificateSHA256: expectedDigest,
 				AddToSearchList:           *addToSearchList,
+				AddAppleIntermediates:     *addAppleIntermediates,
+				LockOnSleep:               *lockOnSleep,
 			})
 			if err != nil {
 				return classifySigningInputError(err)
 			}
-			return shared.PrintOutput(result, *output.Output, *output.Pretty)
+			return d.PrintOutput(result, *output.Output, *output.Pretty)
 		},
 	}
 }
@@ -155,8 +167,8 @@ func normalizeOptionalSigningKeychainSHA256(value string) (string, error) {
 	return normalizeSigningRunExpectedSHA256(value, "expected certificate SHA-256")
 }
 
-func executeSigningKeychainInstall(ctx context.Context, options signingKeychainInstallOptions) (*asc.SigningKeychainInstallResult, error) {
-	return executeSigningKeychainInstallWith(ctx, options, platformSigningKeychainInstallDeps())
+func executeSigningKeychainInstall(ctx context.Context, d *shared.Deps, options signingKeychainInstallOptions) (*asc.SigningKeychainInstallResult, error) {
+	return executeSigningKeychainInstallWith(ctx, options, platformSigningKeychainInstallDeps(d, options.LockOnSleep))
 }
 
 func executeSigningKeychainInstallWith(ctx context.Context, options signingKeychainInstallOptions, deps signingKeychainInstallDeps) (result *asc.SigningKeychainInstallResult, resultErr error) {
@@ -170,7 +182,7 @@ func executeSigningKeychainInstallWith(ctx context.Context, options signingKeych
 	if err != nil {
 		return nil, fmt.Errorf("signing keychain install: preflight destination: %w", err)
 	}
-	if err := requireSigningKeychainInstallDeps(deps, options.AddToSearchList); err != nil {
+	if err := requireSigningKeychainInstallDeps(deps, options); err != nil {
 		return nil, err
 	}
 	identityData, err := readBoundedSigningRunFile(options.IdentityPath, signingRunInputLimit, true)
@@ -201,10 +213,7 @@ func executeSigningKeychainInstallWith(ctx context.Context, options signingKeych
 		return nil, shared.NewValidationError(fmt.Errorf("signing keychain install: keychain password must not contain line breaks or NUL bytes"))
 	}
 
-	now := time.Now
-	if deps.Now != nil {
-		now = deps.Now
-	}
+	now := deps.Now
 	identity, err := inspectSigningRunIdentity(identityData, identityPassword, now())
 	if err != nil {
 		return nil, fmt.Errorf("signing keychain install: inspect identity: %w", err)
@@ -218,6 +227,15 @@ func executeSigningKeychainInstallWith(ctx context.Context, options signingKeych
 	teamID, err := signingRunCertificateTeamID(identity.Certificate)
 	if err != nil {
 		return nil, fmt.Errorf("signing keychain install: inspect identity: %w", err)
+	}
+	var intermediates []asc.SigningKeychainIntermediate
+	var pendingIntermediates []artifacts.AppleIntermediateCertificate
+	if options.AddAppleIntermediates {
+		embedded, err := deps.AppleIntermediates()
+		if err != nil {
+			return nil, fmt.Errorf("signing keychain install: load Apple intermediate certificates: %w", err)
+		}
+		intermediates, pendingIntermediates = selectSigningKeychainIntermediates(deps.Stderr, identity.Certificate, embedded, now())
 	}
 	unlock, err := deps.AcquireLock(ctx)
 	if err != nil {
@@ -288,6 +306,11 @@ func executeSigningKeychainInstallWith(ctx context.Context, options signingKeych
 			return nil, rollback(fmt.Errorf("signing keychain install: stage keychain search list: %w", err))
 		}
 	}
+	for _, intermediate := range pendingIntermediates {
+		if err := deps.ImportCertificate(ctx, resolvedKeychainPath, intermediate.Certificate.Raw); err != nil {
+			return nil, rollback(fmt.Errorf("signing keychain install: import Apple intermediate certificate %s: %w", intermediate.Name, err))
+		}
+	}
 	if err := deps.ImportIdentity(ctx, resolvedKeychainPath, keychainPassword, identityData, identityPassword, identity.CertificateSHA1); err != nil {
 		return nil, rollback(fmt.Errorf("signing keychain install: import identity: %w", err))
 	}
@@ -309,18 +332,22 @@ func executeSigningKeychainInstallWith(ctx context.Context, options signingKeych
 		CertificateSHA1:   identity.CertificateSHA1,
 		TeamID:            teamID,
 		SearchListUpdated: searchListUpdated,
+		Intermediates:     intermediates,
 	}, nil
 }
 
-func requireSigningKeychainInstallDeps(deps signingKeychainInstallDeps, addToSearchList bool) error {
+func requireSigningKeychainInstallDeps(deps signingKeychainInstallDeps, options signingKeychainInstallOptions) error {
 	if deps.AcquireLock == nil || deps.CreateKeychain == nil || deps.ImportIdentity == nil || deps.DeleteKeychain == nil {
 		return fmt.Errorf("signing keychain install: platform keychain operations are unavailable")
 	}
 	if deps.KeychainSearchList == nil || deps.SetKeychainSearchList == nil {
 		return fmt.Errorf("signing keychain install: platform search-list operations are unavailable")
 	}
-	if !addToSearchList && deps.RemoveKeychainSearchEntry == nil {
+	if !options.AddToSearchList && deps.RemoveKeychainSearchEntry == nil {
 		return fmt.Errorf("signing keychain install: platform search-list isolation is unavailable")
+	}
+	if options.AddAppleIntermediates && (deps.AppleIntermediates == nil || deps.ImportCertificate == nil) {
+		return fmt.Errorf("signing keychain install: platform certificate import is unavailable")
 	}
 	return nil
 }

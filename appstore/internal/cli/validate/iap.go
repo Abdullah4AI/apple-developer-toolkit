@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"os"
 
 	"github.com/peterbourgon/ff/v3/ffcli"
 
@@ -20,13 +19,12 @@ type validateIAPOptions struct {
 	Pretty bool
 }
 
-// ValidateIAPCommand returns the asc validate iap subcommand.
-func ValidateIAPCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("iap", flag.ExitOnError)
+func newValidateIAPCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("iap", flag.ExitOnError)
 
 	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID)")
 	strict := fs.Bool("strict", false, "Treat warnings as errors (exit non-zero)")
-	output := shared.BindOutputFlags(fs)
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "iap",
@@ -42,15 +40,15 @@ Examples:
   asc validate iap --app "APP_ID" --output table
   asc validate iap --app "APP_ID" --strict`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
-			resolvedAppID := shared.ResolveAppID(*appID)
+			resolvedAppID := d.ResolveAppID(*appID)
 			if resolvedAppID == "" {
-				fmt.Fprintln(os.Stderr, "Error: --app is required (or set ASC_APP_ID)")
+				fmt.Fprintln(d.IO.ErrOut, "Error: --app is required (or set ASC_APP_ID)")
 				return shared.MissingRequiredUsageError("--app")
 			}
 
-			return runValidateIAP(ctx, validateIAPOptions{
+			return runValidateIAP(ctx, d, validateIAPOptions{
 				AppID:  resolvedAppID,
 				Strict: *strict,
 				Output: *output.Output,
@@ -60,24 +58,24 @@ Examples:
 	}
 }
 
-func runValidateIAP(ctx context.Context, opts validateIAPOptions) error {
-	client, err := clientFactory()
+func runValidateIAP(ctx context.Context, d *shared.Deps, opts validateIAPOptions) error {
+	client, err := d.Client()
 	if err != nil {
 		return fmt.Errorf("validate iap: %w", err)
 	}
 
-	firstCtx, firstCancel := shared.ContextWithTimeout(ctx)
+	firstCtx, firstCancel := d.Timeout(ctx)
 	defer firstCancel()
 
-	firstPage, err := client.GetInAppPurchasesV2(firstCtx, opts.AppID, asc.WithIAPLimit(200))
+	firstPage, err := client.GetInAppPurchasesV2(firstCtx, opts.AppID, asc.Limit[asc.IAPOption](200))
 	if err != nil {
 		return fmt.Errorf("validate iap: failed to fetch in-app purchases: %w", err)
 	}
 
 	paginated, err := asc.PaginateAll(ctx, firstPage, func(_ context.Context, nextURL string) (asc.PaginatedResponse, error) {
-		pageCtx, pageCancel := shared.ContextWithTimeout(ctx)
+		pageCtx, pageCancel := d.Timeout(ctx)
 		defer pageCancel()
-		return client.GetInAppPurchasesV2(pageCtx, opts.AppID, asc.WithIAPNextURL(nextURL))
+		return client.GetInAppPurchasesV2(pageCtx, opts.AppID, asc.NextURL[asc.IAPOption](nextURL))
 	})
 	if err != nil {
 		return fmt.Errorf("validate iap: paginate in-app purchases: %w", err)
@@ -105,7 +103,7 @@ func runValidateIAP(ctx context.Context, opts validateIAPOptions) error {
 		IAPs:  iaps,
 	}, opts.Strict)
 
-	if err := shared.PrintOutput(&report, opts.Output, opts.Pretty); err != nil {
+	if err := d.PrintOutput(&report, opts.Output, opts.Pretty); err != nil {
 		return err
 	}
 

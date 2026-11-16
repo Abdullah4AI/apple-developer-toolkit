@@ -150,17 +150,6 @@ type ReviewSubmissionItemCreateRelationships struct {
 	RetentionMessageVersion         *Relationship `json:"retentionMessageVersion,omitempty"`
 }
 
-// ReviewSubmissionItemCreateData is the data portion of a review submission item create request.
-type ReviewSubmissionItemCreateData struct {
-	Type          ResourceType                            `json:"type"`
-	Relationships ReviewSubmissionItemCreateRelationships `json:"relationships"`
-}
-
-// ReviewSubmissionItemCreateRequest is a request to create a review submission item.
-type ReviewSubmissionItemCreateRequest struct {
-	Data ReviewSubmissionItemCreateData `json:"data"`
-}
-
 type reviewSubmissionItemTypeSpec struct {
 	canonical         ReviewSubmissionItemType
 	applyRelationship func(*ReviewSubmissionItemCreateRelationships, string)
@@ -324,17 +313,6 @@ type ReviewSubmissionItemUpdateData struct {
 	Type       ResourceType                         `json:"type"`
 	ID         string                               `json:"id"`
 	Attributes ReviewSubmissionItemUpdateAttributes `json:"attributes"`
-}
-
-// ReviewSubmissionItemUpdateRequest is a request to update a review submission item.
-type ReviewSubmissionItemUpdateRequest struct {
-	Data ReviewSubmissionItemUpdateData `json:"data"`
-}
-
-// ReviewSubmissionItemDeleteResult represents CLI output for review submission item deletions.
-type ReviewSubmissionItemDeleteResult struct {
-	ID      string `json:"id"`
-	Deleted bool   `json:"deleted"`
 }
 
 // ReviewSubmissionItemsCursorSubmissionID extracts the owner of a review item continuation.
@@ -502,18 +480,6 @@ func (c *Client) UpdateReviewSubmissionItem(ctx context.Context, itemID string, 
 	}
 
 	return &response, nil
-}
-
-// DeleteReviewSubmissionItem deletes a review submission item by ID.
-func (c *Client) DeleteReviewSubmissionItem(ctx context.Context, itemID string) error {
-	itemID = strings.TrimSpace(itemID)
-	if itemID == "" {
-		return fmt.Errorf("itemID is required")
-	}
-
-	path := fmt.Sprintf("/v1/reviewSubmissionItems/%s", itemID)
-	_, err := c.do(ctx, "DELETE", path, nil)
-	return err
 }
 
 // AddReviewSubmissionItem adds an app store version to a review submission.

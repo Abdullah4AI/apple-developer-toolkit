@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
-	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/validate"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/telemetry"
 )
 
@@ -80,7 +80,8 @@ func TestRunValidateSelectorFailuresAreClassified(t *testing.T) {
 			defer server.Close()
 
 			client := newHTTPStatusTestClient(t, server.URL)
-			t.Cleanup(validate.SetClientFactory(func() (*asc.Client, error) { return client, nil }))
+			d := shared.DefaultDeps()
+			d.Client = func() (*asc.Client, error) { return client, nil }
 
 			originalEmitTelemetry := emitTelemetry
 			t.Cleanup(func() { emitTelemetry = originalEmitTelemetry })
@@ -91,7 +92,7 @@ func TestRunValidateSelectorFailuresAreClassified(t *testing.T) {
 
 			_, stderr := captureCommandOutput(t, func() {
 				args := append([]string{"validate", "--app", "app-1"}, test.args...)
-				if code := Run(args, "4.0.0"); code != test.wantCode {
+				if code := RunWithDeps(args, "4.0.0", d); code != test.wantCode {
 					t.Errorf("Run() exit code = %d, want %d", code, test.wantCode)
 				}
 			})

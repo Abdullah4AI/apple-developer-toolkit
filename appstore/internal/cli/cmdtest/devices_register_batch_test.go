@@ -5,12 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"flag"
-	"io"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asctest"
 )
 
 func TestDevicesRegisterBatchPaginatesAndSkipsNormalizedDuplicates(t *testing.T) {
@@ -30,52 +31,29 @@ func TestDevicesRegisterBatchPaginatesAndSkipsNormalizedDuplicates(t *testing.T)
 		t.Fatalf("write input: %v", err)
 	}
 
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() { http.DefaultTransport = originalTransport })
+	reg := asctest.NewRegistry(t)
+	reg.Register(devicesListRequest(), asctest.JSON(http.StatusOK, `{"data":[],"links":{"next":"https://api.appstoreconnect.apple.com/v1/devices?cursor=page-2"}}`))
+	reg.Register(asctest.GET("/v1/devices", "cursor=page-2"),
+		asctest.JSON(http.StatusOK, `{"data":[{"type":"devices","id":"device-existing","attributes":{"name":"Existing Phone","udid":"EXISTING1","platform":"IOS","status":"ENABLED"}}]}`))
+	reg.Register(deviceCreateRequest("Phone One", "AA-BB-CC", "IOS"),
+		asctest.JSON(http.StatusCreated, `{"data":{"type":"devices","id":"device-AABBCC","attributes":{"name":"Phone One","udid":"AA-BB-CC","platform":"IOS"}}}`))
+	reg.Register(deviceCreateRequest("Build Mac", "DD:EE:FF", "MAC_OS"),
+		asctest.JSON(http.StatusCreated, `{"data":{"type":"devices","id":"device-DDEEFF","attributes":{"name":"Build Mac","udid":"DD:EE:FF","platform":"MAC_OS"}}}`))
 
-	created := make([]map[string]any, 0, 2)
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		switch {
-		case req.Method == http.MethodGet && req.URL.Path == "/v1/devices" && req.URL.Query().Get("cursor") == "page-2":
-			return jsonResponse(http.StatusOK, `{"data":[{"type":"devices","id":"device-existing","attributes":{"name":"Existing Phone","udid":"EXISTING1","platform":"IOS","status":"ENABLED"}}]}`)
-		case req.Method == http.MethodGet && req.URL.Path == "/v1/devices":
-			if req.URL.Query().Get("limit") != "200" {
-				t.Fatalf("expected 200-device page size, got %s", req.URL.RawQuery)
-			}
-			return jsonResponse(http.StatusOK, `{"data":[],"links":{"next":"https://api.appstoreconnect.apple.com/v1/devices?cursor=page-2"}}`)
-		case req.Method == http.MethodPost && req.URL.Path == "/v1/devices":
-			var payload map[string]any
-			if err := json.NewDecoder(req.Body).Decode(&payload); err != nil {
-				t.Fatalf("decode create request: %v", err)
-			}
-			attrs := payload["data"].(map[string]any)["attributes"].(map[string]any)
-			created = append(created, attrs)
-			id := "device-" + strings.ReplaceAll(strings.ReplaceAll(attrs["udid"].(string), "-", ""), ":", "")
-			response, err := json.Marshal(map[string]any{
-				"data": map[string]any{"type": "devices", "id": id, "attributes": attrs},
-			})
-			if err != nil {
-				t.Fatalf("marshal create response: %v", err)
-			}
-			return jsonResponse(http.StatusCreated, string(response))
-		default:
-			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.String())
-			return nil, nil
-		}
-	})
-
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-	if err := root.Parse([]string{"devices", "register-batch", "--file", inputPath, "--output", "json", "--confirm"}); err != nil {
-		t.Fatalf("parse error: %v", err)
-	}
-
-	var runErr error
-	stdout, _ := captureOutput(t, func() {
-		runErr = root.Run(context.Background())
-	})
+	stdout, _, runErr := runRootWithDeps(t, stubClient(t, reg), "devices", "register-batch", "--file", inputPath, "--output", "json", "--confirm")
 	if runErr != nil {
 		t.Fatalf("run error: %v", runErr)
+	}
+	var created []map[string]any
+	for _, req := range reg.Requests() {
+		if req.Method != http.MethodPost {
+			continue
+		}
+		var payload map[string]any
+		if err := json.Unmarshal(req.Body, &payload); err != nil {
+			t.Fatalf("decode create request: %v", err)
+		}
+		created = append(created, payload["data"].(map[string]any)["attributes"].(map[string]any))
 	}
 	if len(created) != 2 {
 		t.Fatalf("expected 2 registrations, got %d: %+v", len(created), created)
@@ -121,19 +99,7 @@ func TestDevicesRegisterBatchValidatesEveryRowBeforeNetwork(t *testing.T) {
 		t.Fatalf("write input: %v", err)
 	}
 
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() { http.DefaultTransport = originalTransport })
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		t.Fatalf("unexpected request before full input validation: %s %s", req.Method, req.URL.String())
-		return nil, nil
-	})
-
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-	if err := root.Parse([]string{"devices", "register-batch", "--file", inputPath, "--confirm"}); err != nil {
-		t.Fatalf("parse error: %v", err)
-	}
-	err := root.Run(context.Background())
+	_, _, err := runRootWithDeps(t, stubClient(t, asctest.NewRegistry(t)), "devices", "register-batch", "--file", inputPath, "--confirm")
 	if err == nil || !strings.Contains(err.Error(), "line 2") || !strings.Contains(err.Error(), "--platform") {
 		t.Fatalf("expected line-specific validation error, got %v", err)
 	}
@@ -148,25 +114,13 @@ func TestDevicesRegisterBatchDryRunPlansWithoutCreating(t *testing.T) {
 		t.Fatalf("write input: %v", err)
 	}
 
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() { http.DefaultTransport = originalTransport })
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		if req.Method != http.MethodGet || req.URL.Path != "/v1/devices" {
-			t.Fatalf("unexpected dry-run request: %s %s", req.Method, req.URL.String())
-		}
-		return jsonResponse(http.StatusOK, `{"data":[]}`)
-	})
+	reg := asctest.NewRegistry(t)
+	reg.Register(devicesListRequest(), asctest.JSON(http.StatusOK, `{"data":[]}`))
 
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-	if err := root.Parse([]string{"devices", "register-batch", "--file", inputPath, "--platform", "ios", "--dry-run"}); err != nil {
-		t.Fatalf("parse error: %v", err)
+	stdout, _, err := runRootWithDeps(t, stubClient(t, reg), "devices", "register-batch", "--file", inputPath, "--platform", "ios", "--dry-run")
+	if err != nil {
+		t.Fatalf("run error: %v", err)
 	}
-	stdout, _ := captureOutput(t, func() {
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatalf("run error: %v", err)
-		}
-	})
 	if !strings.Contains(stdout, `"planned":1`) || !strings.Contains(stdout, `"status":"planned"`) {
 		t.Fatalf("expected planned dry-run output, got %q", stdout)
 	}
@@ -197,36 +151,17 @@ func TestDevicesRegisterBatchContinuesAfterIsolatedFailure(t *testing.T) {
 				t.Fatalf("write input: %v", err)
 			}
 
-			createCount := 0
-			installDefaultTransport(t, roundTripFunc(func(req *http.Request) (*http.Response, error) {
-				switch {
-				case req.Method == http.MethodGet && req.URL.Path == "/v1/devices":
-					return jsonResponse(http.StatusOK, `{"data":[]}`)
-				case req.Method == http.MethodPost && req.URL.Path == "/v1/devices":
-					createCount++
-					if createCount == 1 {
-						return test.failFirst()
-					}
-					return jsonResponse(http.StatusCreated, `{"data":{"type":"devices","id":"device-2","attributes":{"name":"Device Two","udid":"UDID-2","platform":"IOS"}}}`)
-				default:
-					t.Fatalf("unexpected request: %s %s", req.Method, req.URL.String())
-					return nil, nil
-				}
-			}))
+			reg := asctest.NewRegistry(t)
+			reg.Register(devicesListRequest(), asctest.JSON(http.StatusOK, `{"data":[]}`))
+			reg.Register(deviceCreateRequest("Device One", "UDID-1", "IOS"), func(*http.Request) (*http.Response, error) { return test.failFirst() })
+			reg.Register(deviceCreateRequest("Device Two", "UDID-2", "IOS"),
+				asctest.JSON(http.StatusCreated, `{"data":{"type":"devices","id":"device-2","attributes":{"name":"Device Two","udid":"UDID-2","platform":"IOS"}}}`))
 
-			root := RootCommand("1.2.3")
-			root.FlagSet.SetOutput(io.Discard)
-			if err := root.Parse([]string{"devices", "register-batch", "--file", inputPath, "--confirm"}); err != nil {
-				t.Fatalf("parse error: %v", err)
-			}
-			var runErr error
-			stdout, _ := captureOutput(t, func() {
-				runErr = root.Run(context.Background())
-			})
+			stdout, _, runErr := runRootWithDeps(t, stubClient(t, reg), "devices", "register-batch", "--file", inputPath, "--confirm")
 			if runErr == nil {
 				t.Fatal("expected reported partial failure")
 			}
-			if createCount != 2 {
+			if createCount := countDeviceCreates(reg); createCount != 2 {
 				t.Fatalf("expected processing to continue after one failure, got %d creates", createCount)
 			}
 			if !strings.Contains(stdout, `"registered":1`) || !strings.Contains(stdout, `"failed":1`) || !strings.Contains(stdout, `"status":"failed"`) {
@@ -245,35 +180,16 @@ func TestDevicesRegisterBatchStopsAfterAPIFailureWhenRequested(t *testing.T) {
 		t.Fatalf("write input: %v", err)
 	}
 
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() { http.DefaultTransport = originalTransport })
-	createCount := 0
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		switch {
-		case req.Method == http.MethodGet && req.URL.Path == "/v1/devices":
-			return jsonResponse(http.StatusOK, `{"data":[]}`)
-		case req.Method == http.MethodPost && req.URL.Path == "/v1/devices":
-			createCount++
-			return jsonResponse(http.StatusUnprocessableEntity, `{"errors":[{"status":"422","code":"ENTITY_ERROR","detail":"invalid device"}]}`)
-		default:
-			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.String())
-			return nil, nil
-		}
-	})
+	reg := asctest.NewRegistry(t)
+	reg.Register(devicesListRequest(), asctest.JSON(http.StatusOK, `{"data":[]}`))
+	reg.Register(deviceCreateRequest("Device One", "UDID-1", "IOS"),
+		asctest.JSON(http.StatusUnprocessableEntity, `{"errors":[{"status":"422","code":"ENTITY_ERROR","detail":"invalid device"}]}`))
 
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-	if err := root.Parse([]string{"devices", "register-batch", "--file", inputPath, "--continue-on-error=false", "--confirm"}); err != nil {
-		t.Fatalf("parse error: %v", err)
-	}
-	var runErr error
-	stdout, _ := captureOutput(t, func() {
-		runErr = root.Run(context.Background())
-	})
+	stdout, _, runErr := runRootWithDeps(t, stubClient(t, reg), "devices", "register-batch", "--file", inputPath, "--continue-on-error=false", "--confirm")
 	if runErr == nil {
 		t.Fatal("expected reported registration failure")
 	}
-	if createCount != 1 {
+	if createCount := countDeviceCreates(reg); createCount != 1 {
 		t.Fatalf("create requests = %d, want 1", createCount)
 	}
 	var summary struct {
@@ -293,22 +209,7 @@ func TestDevicesRegisterBatchRequiresConfirmBeforeReadingFileOrNetwork(t *testin
 	setupAuth(t)
 	missingPath := filepath.Join(t.TempDir(), "missing.txt")
 
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() { http.DefaultTransport = originalTransport })
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		t.Fatalf("unexpected request before confirmation: %s %s", req.Method, req.URL.String())
-		return nil, nil
-	})
-
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-	if err := root.Parse([]string{"devices", "register-batch", "--file", missingPath}); err != nil {
-		t.Fatalf("parse error: %v", err)
-	}
-	var runErr error
-	stdout, stderr := captureOutput(t, func() {
-		runErr = root.Run(context.Background())
-	})
+	stdout, stderr, runErr := runRootWithDeps(t, stubClient(t, asctest.NewRegistry(t)), "devices", "register-batch", "--file", missingPath)
 	if !errors.Is(runErr, flag.ErrHelp) || runErr.Error() != "--confirm is required unless --dry-run is set" {
 		t.Fatalf("run error = %v, want exact confirmation usage error", runErr)
 	}
@@ -318,4 +219,22 @@ func TestDevicesRegisterBatchRequiresConfirmBeforeReadingFileOrNetwork(t *testin
 	if !strings.Contains(stderr, "--confirm is required unless --dry-run is set") {
 		t.Fatalf("stderr = %q, want confirmation error", stderr)
 	}
+}
+
+func devicesListRequest() asctest.Matcher {
+	return asctest.GET("/v1/devices", "fields[devices]=name,udid,platform,status", "limit=200")
+}
+
+func deviceCreateRequest(name, udid, platform string) asctest.Matcher {
+	return asctest.POST("/v1/devices").JSONBody(`{"data":{"type":"devices","attributes":{"name":"` + name + `","udid":"` + udid + `","platform":"` + platform + `"}}}`)
+}
+
+func countDeviceCreates(reg *asctest.Registry) int {
+	count := 0
+	for _, req := range reg.Requests() {
+		if req.Method == http.MethodPost {
+			count++
+		}
+	}
+	return count
 }

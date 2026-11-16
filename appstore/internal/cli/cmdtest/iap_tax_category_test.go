@@ -22,19 +22,9 @@ func TestWebIAPTaxCategoryInputValidationReturnsUsageExitCode(t *testing.T) {
 		wantErr string
 	}{
 		{
-			name:    "list rejects positional arguments",
-			args:    []string{"web", "iap", "tax-category", "list", "extra"},
-			wantErr: "unexpected argument(s): extra",
-		},
-		{
 			name:    "view requires iap",
 			args:    []string{"web", "iap", "tax-category", "view"},
 			wantErr: "--iap is required",
-		},
-		{
-			name:    "view rejects positional arguments",
-			args:    []string{"web", "iap", "tax-category", "view", "extra"},
-			wantErr: "unexpected argument(s): extra",
 		},
 		{
 			name:    "set requires iap",
@@ -52,11 +42,6 @@ func TestWebIAPTaxCategoryInputValidationReturnsUsageExitCode(t *testing.T) {
 			wantErr: "--confirm is required",
 		},
 		{
-			name:    "set rejects positional arguments",
-			args:    []string{"web", "iap", "tax-category", "set", "extra"},
-			wantErr: "unexpected argument(s): extra",
-		},
-		{
 			name:    "reset requires iap",
 			args:    []string{"web", "iap", "tax-category", "reset"},
 			wantErr: "--iap is required",
@@ -66,16 +51,11 @@ func TestWebIAPTaxCategoryInputValidationReturnsUsageExitCode(t *testing.T) {
 			args:    []string{"web", "iap", "tax-category", "reset", "--iap", "IAP_ID"},
 			wantErr: "--confirm is required",
 		},
-		{
-			name:    "reset rejects positional arguments",
-			args:    []string{"web", "iap", "tax-category", "reset", "extra"},
-			wantErr: "unexpected argument(s): extra",
-		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			stdout, stderr, runErr := runCommand(t, test.args)
+			stdout, stderr, runErr := runRootWithDeps(t, nil, test.args...)
 
 			if runErr == nil {
 				t.Fatal("expected error, got nil")

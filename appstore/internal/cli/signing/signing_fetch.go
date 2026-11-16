@@ -37,26 +37,24 @@ const profileNameHashSuffixLen = 6
 // maxProfileNameRotations bounds the default names tried for one profile.
 const maxProfileNameRotations = 20
 
-var signingFetchNowFn = time.Now
-
 // rejectDeviceWithoutCreateMissing fails before any App Store Connect call when
 // device IDs were supplied but could never be applied.
-func rejectDeviceWithoutCreateMissing(deviceIDs string, createMissing bool) error {
+func rejectDeviceWithoutCreateMissing(d *shared.Deps, deviceIDs string, createMissing bool) error {
 	if !createMissing && strings.TrimSpace(deviceIDs) != "" {
-		return shared.UsageError(deviceWithoutCreateMissingError)
+		return d.UsageError(deviceWithoutCreateMissingError)
 	}
 	return nil
 }
 
-// SigningFetchCommand returns the signing fetch subcommand.
-func SigningFetchCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("fetch", flag.ExitOnError)
+func newSigningFetchCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("fetch", flag.ExitOnError)
 
 	appID := shared.BindResourceIDFlag(fs, "app", "apps", "App Store Connect app ID (optional); when set, --bundle-id must be this app's bundle ID")
 	bundleID := fs.String("bundle-id", "", "Bundle identifier (e.g., com.example.app) - required")
 	profileType := fs.String("profile-type", "", "Profile type: IOS_APP_STORE, IOS_APP_DEVELOPMENT, MAC_APP_STORE, etc. (required)")
-	deviceIDs := fs.String("device", "", "Device ID(s), comma-separated (requires --create-missing; required for development profiles)")
-	certType := fs.String("certificate-type", "", "Certificate type filter (optional)")
+	deviceIDs := fs.String("device", "", "Device ID(s), comma-separated (requires --create-missing; development and ad hoc profiles need --device or --all-devices)")
+	allDevices := fs.Bool("all-devices", false, "With --create-missing, include every enabled device the profile type accepts (development and ad hoc profiles)")
+	certType := fs.String("certificate-type", "", "Certificate types to match, comma-separated; --create-missing-certificate creates the first (default: inferred from --profile-type, such as DISTRIBUTION,IOS_DISTRIBUTION)")
 	outputPath := fs.String("output", "./signing", "Output directory for signing files")
 	createMissing := fs.Bool("create-missing", false, "Create missing profiles")
 	matchExtensions := fs.Bool("match-extensions", false, "Also fetch profiles for registered bundle IDs that extend this identifier, such as <id>.widget")
@@ -69,8 +67,9 @@ func SigningFetchCommand() *ffcli.Command {
 	keyOut := fs.String("key-out", "", "Private key output path (default: <output>/<type>.key)")
 	csrOut := fs.String("csr-out", "", "CSR output path (default: <output>/<type>.csr)")
 	p12Out := fs.String("p12-out", "", "PKCS#12 output path (default: <output>/<type>.p12)")
+	p12Encoding := fs.String("p12-encoding", string(shared.PKCS12EncodingModern), shared.PKCS12EncodingFlagUsage+" (requires --create-missing-certificate)")
 	force := fs.Bool("force", false, "Replace existing key, CSR, and p12 output files")
-	output := shared.BindOutputFlagsWith(fs, "format", shared.DefaultOutputFormat(), "Output format for metadata: json, table, markdown")
+	output := shared.BindOutputFlagsWith(fs, "format", d.DefaultOutputFormat(), "Output format for metadata: json, table, markdown")
 
 	return &ffcli.Command{
 		Name:       "fetch",
@@ -87,9 +86,17 @@ profiles continue to use .mobileprovision files.
 With --create-missing, it will create a new profile if none exist for the
 specified configuration. Devices are only applied to profiles this command
 creates, so --device without --create-missing is rejected with a usage error.
+Development and ad hoc profiles need either --device or --all-devices.
+--all-devices lists enabled devices only when a profile has to be created and
+uses every one the profile type accepts; it fails before creating anything
+when none match.
 --create-missing-certificate also creates a key, CSR, certificate, and
 password-protected .p12 when no active certificate exists. It requires
---create-missing and --identity-password-file.
+--create-missing and --identity-password-file. The .p12 uses the modern
+encoding (PBES2 with AES-256-CBC and an HMAC-SHA-256 MAC) by default. Some
+importers reject it with an error that looks like a wrong password;
+--p12-encoding legacy writes 3DES with a SHA-1 MAC instead. The legacy
+algorithms are weak; use them only when an importer requires it.
 
 --match-extensions also fetches a profile for every registered bundle ID that
 extends --bundle-id with a dotted suffix (com.example.app.widget,
@@ -114,32 +121,33 @@ before any deletion, and each result carries its own staleProfiles receipt.
 Examples:
   asc signing fetch --bundle-id com.example.app --profile-type IOS_APP_STORE --output ./signing
   asc signing fetch --bundle-id com.example.app --profile-type IOS_APP_DEVELOPMENT --create-missing --device "DEVICE1,DEVICE2"
+  asc signing fetch --bundle-id com.example.app --profile-type IOS_APP_ADHOC --create-missing --all-devices
   asc signing fetch --bundle-id com.example.app --profile-type IOS_APP_STORE --create-missing --create-missing-certificate --identity-password-file ./secrets/p12-password
   asc signing fetch --bundle-id com.example.app --profile-type IOS_APP_STORE --match-extensions --output ./signing
   asc signing fetch --bundle-id com.example.app --profile-type IOS_APP_STORE --delete-stale-profiles --dry-run
   asc signing fetch --bundle-id com.example.app --profile-type IOS_APP_STORE --delete-stale-profiles --confirm --create-missing`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) (runErr error) {
+			if err := d.RejectOutputFormatAsPath(*outputPath, "--format"); err != nil {
+				return err
+			}
 			bundle := strings.TrimSpace(*bundleID)
 			if bundle == "" {
-				fmt.Fprintln(os.Stderr, "Error: --bundle-id is required")
-				return shared.MissingRequiredUsageError("--bundle-id")
+				return d.RequiredFlag("--bundle-id")
 			}
 
 			profType := strings.TrimSpace(*profileType)
 			if profType == "" {
-				fmt.Fprintln(os.Stderr, "Error: --profile-type is required")
-				return shared.MissingRequiredUsageError("--profile-type")
+				return d.RequiredFlag("--profile-type")
 			}
 			profType = strings.ToUpper(profType)
 			if *matchExtensions && *strictMatch {
-				return shared.UsageError("--match-extensions and --strict-match-identifier are mutually exclusive")
+				return d.UsageError("--match-extensions and --strict-match-identifier are mutually exclusive")
 			}
 			if *matchExtensions && *createMissingCertificate {
 				const message = "--match-extensions cannot be combined with --create-missing-certificate; create the certificate with a single-bundle fetch first"
-				fmt.Fprintln(os.Stderr, "Error: "+message)
-				return shared.UsageError(message)
+				return d.UsageError(message)
 			}
 			if !*deleteStale {
 				for _, dependent := range []struct {
@@ -148,13 +156,13 @@ Examples:
 				}{{"--confirm", *confirm}, {"--dry-run", *dryRun}} {
 					if dependent.set {
 						message := dependent.name + " requires --delete-stale-profiles"
-						fmt.Fprintln(os.Stderr, "Error: "+message)
+						fmt.Fprintln(d.IO.ErrOut, "Error: "+message)
 						return shared.NewReportedUsageError(shared.UsageErrorInvalidValue, message)
 					}
 				}
 			}
 			if *deleteStale && !*confirm && !*dryRun {
-				fmt.Fprintln(os.Stderr, "Error: --confirm is required with --delete-stale-profiles")
+				fmt.Fprintln(d.IO.ErrOut, "Error: --confirm is required with --delete-stale-profiles")
 				return shared.MissingRequiredUsageError("--confirm")
 			}
 			if *deleteStale {
@@ -162,23 +170,45 @@ Examples:
 				// later fetch fail deterministically is rejected before them.
 				if _, err := resolveSigningCertificateTypes(profType, *certType); err != nil {
 					message := fmt.Sprintf("--delete-stale-profiles: %v", err)
-					fmt.Fprintln(os.Stderr, "Error: "+message)
+					fmt.Fprintln(d.IO.ErrOut, "Error: "+message)
 					return shared.NewReportedUsageError(shared.UsageErrorInvalidValue, message)
 				}
 			}
-			if err := rejectDeviceWithoutCreateMissing(*deviceIDs, *createMissing); err != nil {
+			if err := rejectDeviceWithoutCreateMissing(d, *deviceIDs, *createMissing); err != nil {
 				return err
 			}
+			if *allDevices {
+				if !*createMissing {
+					return d.UsageError("--all-devices requires --create-missing because devices are only applied to profiles this command creates")
+				}
+				if !isDeviceProfileType(profType) {
+					return d.UsageErrorf("--all-devices requires a development or ad hoc profile type; %s profiles have no device list", profType)
+				}
+				if strings.TrimSpace(*deviceIDs) != "" {
+					return d.UsageError("--all-devices and --device are mutually exclusive")
+				}
+			}
 			if *createMissingCertificate && !*createMissing {
-				fmt.Fprintln(os.Stderr, "Error: --create-missing-certificate requires --create-missing")
-				return shared.UsageError("--create-missing-certificate requires --create-missing")
+				return d.UsageError("--create-missing-certificate requires --create-missing")
+			}
+			p12EncodingSet := false
+			fs.Visit(func(f *flag.Flag) {
+				if f.Name == "p12-encoding" {
+					p12EncodingSet = true
+				}
+			})
+			if p12EncodingSet && !*createMissingCertificate {
+				return d.UsageError("--p12-encoding requires --create-missing-certificate")
+			}
+			encoding, err := shared.ParsePKCS12Encoding(*p12Encoding)
+			if err != nil {
+				return d.UsageError(err.Error())
 			}
 			if *createMissingCertificate && strings.TrimSpace(*identityPasswordFile) == "" {
-				fmt.Fprintln(os.Stderr, "Error: --identity-password-file is required")
-				return shared.MissingRequiredUsageError("--identity-password-file")
+				return d.RequiredFlag("--identity-password-file")
 			}
-			if *createMissing && isDevelopmentProfile(profType) && strings.TrimSpace(*deviceIDs) == "" {
-				fmt.Fprintln(os.Stderr, "Error: --device is required for development profiles")
+			if *createMissing && isDevelopmentProfile(profType) && strings.TrimSpace(*deviceIDs) == "" && !*allDevices {
+				fmt.Fprintln(d.IO.ErrOut, "Error: --device or --all-devices is required for development and ad hoc profiles")
 				return shared.MissingRequiredUsageError("--device")
 			}
 
@@ -204,7 +234,7 @@ Examples:
 			var password []byte
 			if *createMissingCertificate {
 				var err error
-				password, err = readNonEmptyIdentityPasswordFile(*identityPasswordFile)
+				password, err = readNonEmptyIdentityPasswordFile(d, *identityPasswordFile)
 				if err != nil {
 					return fmt.Errorf("signing fetch: %w", err)
 				}
@@ -224,7 +254,7 @@ Examples:
 			emitted := false
 			emit := func() error {
 				emitted = true
-				return shared.PrintOutput(result, *output.Output, *output.Pretty)
+				return d.PrintOutput(result, *output.Output, *output.Pretty)
 			}
 			// Stale-profile deletions are irreversible, so their receipt is
 			// printed even when a later step of the fetch fails.
@@ -235,12 +265,12 @@ Examples:
 				_ = emit()
 			}()
 
-			client, err := shared.GetASCClient()
+			client, err := d.Client()
 			if err != nil {
 				return fmt.Errorf("signing fetch: %w", err)
 			}
 
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
+			requestCtx, cancel := d.Timeout(ctx)
 			defer cancel()
 
 			// Only an explicit --app is cross-checked. The ASC_APP_ID or config
@@ -262,20 +292,21 @@ Examples:
 				return fmt.Errorf("signing fetch: %w", err)
 			}
 			if len(bundleIDs) > 1 {
-				batch, batchErr := fetchMatchedSigningBundles(ctx, client, bundleIDs, matchedSigningFetchOptions{
+				batch, batchErr := fetchMatchedSigningBundles(ctx, d, client, bundleIDs, matchedSigningFetchOptions{
 					ProfileType:     profType,
 					OutputDir:       outputDir,
 					CertificateType: *certType,
 					DeviceIDs:       shared.SplitCSV(*deviceIDs),
+					AllDevices:      *allDevices,
 					CreateMissing:   *createMissing,
 					DeleteStale:     *deleteStale,
 					DryRun:          *dryRun,
 					PrepareOutput:   prepareOutputDir,
 				})
 				if *dryRun {
-					fmt.Fprintf(os.Stderr, "Dry run: would delete %d stale profile(s) across %d bundle ID(s); nothing was deleted, created, or written\n", batchStalePlanned(batch), len(bundleIDs))
+					fmt.Fprintf(d.IO.ErrOut, "Dry run: would delete %d stale profile(s) across %d bundle ID(s); nothing was deleted, created, or written\n", batchStalePlanned(batch), len(bundleIDs))
 				}
-				if err := shared.PrintOutput(batch, *output.Output, *output.Pretty); err != nil {
+				if err := d.PrintOutput(batch, *output.Output, *output.Pretty); err != nil {
 					return err
 				}
 				return batchErr
@@ -284,7 +315,7 @@ Examples:
 			result.BundleIDResource = bundleIDResp.Data.ID
 
 			if *deleteStale {
-				planned, err := findStaleSigningProfiles(requestCtx, client, bundleIDResp.Data.ID, profType)
+				planned, err := findStaleSigningProfiles(requestCtx, client, bundleIDResp.Data.ID, profType, d.Now)
 				if err != nil {
 					return fmt.Errorf("signing fetch: list stale profiles: %w", err)
 				}
@@ -294,7 +325,7 @@ Examples:
 					Deleted: []asc.SigningStaleProfile{},
 				}
 				if *dryRun {
-					fmt.Fprintf(os.Stderr, "Dry run: would delete %d stale profile(s); nothing was deleted, created, or written\n", len(planned))
+					fmt.Fprintf(d.IO.ErrOut, "Dry run: would delete %d stale profile(s); nothing was deleted, created, or written\n", len(planned))
 					return emit()
 				}
 				// The output directory is the one deterministic local check that
@@ -325,20 +356,23 @@ Examples:
 				requestCtx,
 				client,
 				signingAssetsOptions{
+					Now:                      d.Now,
 					BundleIDResourceID:       bundleIDResp.Data.ID,
 					BundleIdentifier:         bundle,
 					ProfileType:              profType,
 					CertificateType:          *certType,
 					DeviceIDs:                shared.SplitCSV(*deviceIDs),
+					AllDevices:               *allDevices,
 					CreateMissing:            *createMissing,
 					CreateMissingCertificate: *createMissingCertificate,
 					CertificateCreate: signingCertificateCreateRequest{
-						Outputs:  certificateOutputs,
-						KeyPath:  keyPath,
-						CSRPath:  csrPath,
-						P12Path:  p12Path,
-						Password: password,
-						Force:    *force,
+						Outputs:     certificateOutputs,
+						KeyPath:     keyPath,
+						CSRPath:     csrPath,
+						P12Path:     p12Path,
+						P12Encoding: encoding,
+						Password:    password,
+						Force:       *force,
 					},
 					CreatedIdentity: &createdIdentity,
 					Progress:        progress,
@@ -476,6 +510,7 @@ type matchedSigningFetchOptions struct {
 	OutputDir       string
 	CertificateType string
 	DeviceIDs       []string
+	AllDevices      bool
 	CreateMissing   bool
 	DeleteStale     bool
 	DryRun          bool
@@ -496,6 +531,7 @@ type writtenSigningFile struct {
 // certificate an earlier target already wrote.
 func fetchMatchedSigningBundles(
 	ctx context.Context,
+	d *shared.Deps,
 	client *asc.Client,
 	bundleIDs []asc.Resource[asc.BundleIDAttributes],
 	opts matchedSigningFetchOptions,
@@ -512,7 +548,7 @@ func fetchMatchedSigningBundles(
 
 	stale := make([]*asc.SigningFetchStaleProfiles, len(bundleIDs))
 	if opts.DeleteStale {
-		done, err := deleteMatchedStaleProfiles(ctx, client, bundleIDs, identifiers, opts, stale, batch)
+		done, err := deleteMatchedStaleProfiles(ctx, d, client, bundleIDs, identifiers, opts, stale, batch)
 		if done || err != nil {
 			return batch, err
 		}
@@ -520,7 +556,7 @@ func fetchMatchedSigningBundles(
 
 	writtenCertificates := make(map[string]string)
 	for i, item := range bundleIDs {
-		result, err := fetchMatchedSigningBundle(ctx, client, item, identifiers[i], opts, writtenCertificates)
+		result, err := fetchMatchedSigningBundle(ctx, d, client, item, identifiers[i], opts, writtenCertificates)
 		if err != nil {
 			failure := asc.SigningFetchBatchFailure{BundleID: identifiers[i], Error: err.Error(), StaleProfiles: stale[i]}
 			if result != nil {
@@ -546,6 +582,7 @@ func fetchMatchedSigningBundles(
 // done reports that the batch is complete and must not continue to fetch.
 func deleteMatchedStaleProfiles(
 	ctx context.Context,
+	d *shared.Deps,
 	client *asc.Client,
 	bundleIDs []asc.Resource[asc.BundleIDAttributes],
 	identifiers []string,
@@ -554,8 +591,8 @@ func deleteMatchedStaleProfiles(
 	batch *asc.SigningFetchBatchResult,
 ) (bool, error) {
 	for i, item := range bundleIDs {
-		planCtx, cancel := shared.ContextWithTimeout(ctx)
-		planned, err := findStaleSigningProfiles(planCtx, client, item.ID, opts.ProfileType)
+		planCtx, cancel := d.Timeout(ctx)
+		planned, err := findStaleSigningProfiles(planCtx, client, item.ID, opts.ProfileType, d.Now)
 		cancel()
 		if err != nil {
 			batch.Failures = append(batch.Failures, asc.SigningFetchBatchFailure{BundleID: identifiers[i], Error: fmt.Sprintf("list stale profiles: %v", err)})
@@ -588,7 +625,7 @@ func deleteMatchedStaleProfiles(
 	}
 	failed, planned := 0, 0
 	for i := range bundleIDs {
-		deleteCtx, cancel := shared.ContextWithTimeout(ctx)
+		deleteCtx, cancel := d.Timeout(ctx)
 		deleteStaleSigningProfiles(deleteCtx, client, stale[i])
 		cancel()
 		failed += len(stale[i].Failed)
@@ -619,13 +656,14 @@ func batchStalePlanned(batch *asc.SigningFetchBatchResult) int {
 
 func fetchMatchedSigningBundle(
 	ctx context.Context,
+	d *shared.Deps,
 	client *asc.Client,
 	item asc.Resource[asc.BundleIDAttributes],
 	identifier string,
 	opts matchedSigningFetchOptions,
 	writtenCertificates map[string]string,
 ) (*asc.SigningFetchResult, error) {
-	requestCtx, cancel := shared.ContextWithTimeout(ctx)
+	requestCtx, cancel := d.Timeout(ctx)
 	defer cancel()
 
 	// Certificates written for an earlier target are reused, so only the
@@ -645,11 +683,13 @@ func fetchMatchedSigningBundle(
 
 	progress := &signingAssetsProgress{}
 	profile, certs, created, err := resolveSigningAssets(requestCtx, client, signingAssetsOptions{
+		Now:                d.Now,
 		BundleIDResourceID: item.ID,
 		BundleIdentifier:   identifier,
 		ProfileType:        opts.ProfileType,
 		CertificateType:    opts.CertificateType,
 		DeviceIDs:          opts.DeviceIDs,
+		AllDevices:         opts.AllDevices,
 		CreateMissing:      opts.CreateMissing,
 		Progress:           progress,
 		BeforeCreate: func(plan profileCreatePlan) error {
@@ -828,9 +868,9 @@ func listSigningBundleIDs(ctx context.Context, client *asc.Client, identifier st
 	next := ""
 	page := 1
 	for {
-		opts := []asc.BundleIDsOption{asc.WithBundleIDsFilterIdentifier(identifier), asc.WithBundleIDsLimit(200)}
+		opts := []asc.BundleIDsOption{asc.WithBundleIDsFilterIdentifier(identifier), asc.Limit[asc.BundleIDsOption](200)}
 		if next != "" {
-			opts = []asc.BundleIDsOption{asc.WithBundleIDsNextURL(next)}
+			opts = []asc.BundleIDsOption{asc.NextURL[asc.BundleIDsOption](next)}
 		}
 		resp, err := client.GetBundleIDs(ctx, opts...)
 		if err != nil {
@@ -891,8 +931,8 @@ func findCertificates(ctx context.Context, client *asc.Client, profileType, cert
 		resp, err := client.GetCertificates(
 			ctx,
 			asc.WithCertificatesFilterType(certType),
-			asc.WithCertificatesLimit(200),
-			asc.WithCertificatesNextURL(next),
+			asc.Limit[asc.CertificatesOption](200),
+			asc.NextURL[asc.CertificatesOption](next),
 		)
 		if err != nil {
 			return nil, err
@@ -933,6 +973,7 @@ type signingAssetsOptions struct {
 	BeforeCreate             func(profileCreatePlan) error
 	CreateContext            func() (context.Context, context.CancelFunc)
 	CertificateFilter        func(asc.Resource[asc.CertificateAttributes]) bool
+	Now                      func() time.Time
 	// RenewExpired replaces the most recently expired profile of ProfileType
 	// with a same-name profile when no active profile resolves.
 	RenewExpired bool
@@ -943,6 +984,9 @@ type signingAssetsOptions struct {
 	// IncludeMacDevices adds enabled Apple silicon Macs to the enabled device
 	// set used by ForceForNewDevices for iOS profiles.
 	IncludeMacDevices bool
+	// AllDevices uses every enabled device ProfileType accepts when a profile
+	// is created and DeviceIDs is empty.
+	AllDevices bool
 }
 
 // profileCreatePlan describes the profile that is about to be created so callers
@@ -973,10 +1017,10 @@ func resolveSigningAssets(ctx context.Context, client *asc.Client, options signi
 	}
 	certificateType = signingCertificateTypesForClient(client, options.CertificateType, certificateType)
 
-	now := signingFetchNowFn()
+	now := options.Now()
 	profileName := profileCreateNameForTarget(options.ProfileType, options.BundleIdentifier, now)
 
-	profiles, err := findActiveProfiles(ctx, client, options.BundleIDResourceID, options.ProfileType)
+	profiles, err := findActiveProfiles(ctx, client, options.BundleIDResourceID, options.ProfileType, options.Now)
 	if err != nil {
 		return nil, nil, false, err
 	}
@@ -1004,7 +1048,7 @@ func resolveSigningAssets(ctx context.Context, client *asc.Client, options signi
 	var certificateMatchErr error
 	for _, profileResource := range profiles {
 		profile := &asc.ProfileResponse{Data: profileResource}
-		certificates, err := findProfileCertificates(ctx, client, profile.Data.ID, certificateType)
+		certificates, err := findProfileCertificates(ctx, client, profile.Data.ID, certificateType, options.Now)
 		if err == nil {
 			certificates.Data = filterSigningCertificates(certificates.Data, options.CertificateFilter)
 			if len(certificates.Data) == 0 {
@@ -1030,7 +1074,7 @@ func resolveSigningAssets(ctx context.Context, client *asc.Client, options signi
 	// exists. An active profile whose certificates do not match keeps its
 	// mismatch error instead of gaining an unrelated renewed sibling.
 	if options.RenewExpired && len(profiles) == 0 {
-		expired, err := findLatestExpiredProfile(ctx, client, options.BundleIDResourceID, options.ProfileType)
+		expired, err := findLatestExpiredProfile(ctx, client, options.BundleIDResourceID, options.ProfileType, options.Now)
 		if err != nil {
 			return nil, nil, false, fmt.Errorf("find expired profiles: %w", err)
 		}
@@ -1062,8 +1106,8 @@ func resolveSigningAssets(ctx context.Context, client *asc.Client, options signi
 	}
 
 	deviceIDs := options.DeviceIDs
-	if isDeviceProfileType(options.ProfileType) && (options.ForceForNewDevices || replacement != nil) {
-		if options.ForceForNewDevices {
+	if isDeviceProfileType(options.ProfileType) && (options.ForceForNewDevices || options.AllDevices || replacement != nil) {
+		if options.ForceForNewDevices || options.AllDevices {
 			desired, err := resolveDesiredDevices()
 			if err != nil {
 				return nil, nil, false, err
@@ -1112,7 +1156,7 @@ func resolveSigningAssets(ctx context.Context, client *asc.Client, options signi
 	if options.CertificateFilter != nil && fetchedCertificateCount > 0 && len(certificates.Data) == 0 {
 		return nil, nil, false, errors.New("no App Store Connect certificate matches the local signing identity or requested --identity-sha256")
 	}
-	certificates.Data = certificatesForProfileCreation(certificates.Data, options.ProfileType, time.Now())
+	certificates.Data = certificatesForProfileCreation(certificates.Data, options.ProfileType, options.Now())
 	if len(certificates.Data) == 0 {
 		if !options.CreateMissingCertificate {
 			return nil, nil, false, fmt.Errorf(
@@ -1132,7 +1176,7 @@ func resolveSigningAssets(ctx context.Context, client *asc.Client, options signi
 		}
 		request := options.CertificateCreate
 		request.CertificateType = primaryType
-		created, identity, createErr := createMissingSigningCertificate(ctx, client, request)
+		created, identity, createErr := createMissingSigningCertificate(ctx, client, request, options.Now)
 		if options.Progress != nil && created.ID != "" {
 			options.Progress.Certificates = []asc.Resource[asc.CertificateAttributes]{created}
 		}
@@ -1203,7 +1247,7 @@ func refreshSigningProfileDevices(
 	lifecycle.DevicesRemoved = removed
 	profileName := profile.Data.Attributes.Name
 	if strings.TrimSpace(profileName) == "" {
-		profileName = profileCreateNameForTarget(options.ProfileType, options.BundleIdentifier, signingFetchNowFn())
+		profileName = profileCreateNameForTarget(options.ProfileType, options.BundleIdentifier, options.Now())
 	}
 	replacement := &profileReplacement{Profile: profile.Data, Lifecycle: lifecycle}
 	created, err := createSigningProfile(ctx, client, options, profileName, certificates.Data, desired, replacement)
@@ -1405,14 +1449,14 @@ func profileIsStale(profile asc.Resource[asc.ProfileAttributes], profileType str
 // findStaleSigningProfiles collects every expired or INVALID profile of the
 // given type for a bundle ID. It reads all pages before anything is deleted so
 // deletions cannot shift pages and hide profiles from the plan.
-func findStaleSigningProfiles(ctx context.Context, client *asc.Client, bundleIDResourceID, profileType string) ([]asc.SigningStaleProfile, error) {
+func findStaleSigningProfiles(ctx context.Context, client *asc.Client, bundleIDResourceID, profileType string, clock func() time.Time) ([]asc.SigningStaleProfile, error) {
 	stale := []asc.SigningStaleProfile{}
 	next := ""
 	page := 1
 	seenNext := make(map[string]struct{})
-	now := signingFetchNowFn()
+	now := clock()
 	for {
-		profiles, err := client.GetBundleIDProfiles(ctx, bundleIDResourceID, asc.WithBundleIDProfilesLimit(200), asc.WithBundleIDProfilesNextURL(next))
+		profiles, err := client.GetBundleIDProfiles(ctx, bundleIDResourceID, asc.Limit[asc.BundleIDProfilesOption](200), asc.NextURL[asc.BundleIDProfilesOption](next))
 		if err != nil {
 			return nil, err
 		}
@@ -1458,7 +1502,7 @@ func deleteStaleSigningProfiles(ctx context.Context, client *asc.Client, report 
 // findActiveProfiles returns the bundle ID's usable profiles of the given type,
 // latest expiration first and by ID for equal dates, so a renewed profile wins
 // over the predecessor it overlaps. A profile with no readable date comes last.
-func findActiveProfiles(ctx context.Context, client *asc.Client, bundleIDResourceID, profileType string) ([]asc.Resource[asc.ProfileAttributes], error) {
+func findActiveProfiles(ctx context.Context, client *asc.Client, bundleIDResourceID, profileType string, clock func() time.Time) ([]asc.Resource[asc.ProfileAttributes], error) {
 	var matches []asc.Resource[asc.ProfileAttributes]
 	next := ""
 	page := 1
@@ -1467,8 +1511,8 @@ func findActiveProfiles(ctx context.Context, client *asc.Client, bundleIDResourc
 		profiles, err := client.GetBundleIDProfiles(
 			ctx,
 			bundleIDResourceID,
-			asc.WithBundleIDProfilesLimit(200),
-			asc.WithBundleIDProfilesNextURL(next),
+			asc.Limit[asc.BundleIDProfilesOption](200),
+			asc.NextURL[asc.BundleIDProfilesOption](next),
 		)
 		if err != nil {
 			return nil, err
@@ -1478,7 +1522,7 @@ func findActiveProfiles(ctx context.Context, client *asc.Client, bundleIDResourc
 			if profile.Attributes.ProfileState != asc.ProfileStateActive {
 				continue
 			}
-			if asc.ProfileExpirationPassed(profile.Attributes.ExpirationDate, signingFetchNowFn()) {
+			if asc.ProfileExpirationPassed(profile.Attributes.ExpirationDate, clock()) {
 				continue
 			}
 			if strings.EqualFold(strings.TrimSpace(profile.Attributes.ProfileType), profileType) {
@@ -1506,7 +1550,7 @@ func findActiveProfiles(ctx context.Context, client *asc.Client, bundleIDResourc
 	}
 }
 
-func findProfileCertificates(ctx context.Context, client *asc.Client, profileID, certificateType string) (*asc.CertificatesResponse, error) {
+func findProfileCertificates(ctx context.Context, client *asc.Client, profileID, certificateType string, clock func() time.Time) (*asc.CertificatesResponse, error) {
 	var (
 		all   []asc.Resource[asc.CertificateAttributes]
 		links asc.Links
@@ -1518,8 +1562,8 @@ func findProfileCertificates(ctx context.Context, client *asc.Client, profileID,
 		response, err := client.GetProfileCertificates(
 			ctx,
 			profileID,
-			asc.WithProfileCertificatesLimit(200),
-			asc.WithProfileCertificatesNextURL(next),
+			asc.Limit[asc.ProfileCertificatesOption](200),
+			asc.NextURL[asc.ProfileCertificatesOption](next),
 		)
 		if err != nil {
 			return nil, err
@@ -1559,7 +1603,7 @@ func findProfileCertificates(ctx context.Context, client *asc.Client, profileID,
 		return nil, fmt.Errorf("profile %s has no associated certificates: %w", profileID, errNoMatchingProfileCertificates)
 	}
 
-	usable := usableProfileCertificates(all, time.Now())
+	usable := usableProfileCertificates(all, clock())
 	if len(usable) == 0 {
 		return nil, fmt.Errorf("profile %s has no active, unexpired associated certificates: %w", profileID, errNoMatchingProfileCertificates)
 	}
@@ -1667,16 +1711,18 @@ func inferCertificateType(profileType string) (string, error) {
 
 	switch {
 	case strings.Contains(normalized, "IOS_APP_DEVELOPMENT"):
-		return "IOS_DEVELOPMENT,DEVELOPMENT", nil
+		return "DEVELOPMENT,IOS_DEVELOPMENT", nil
 	case strings.Contains(normalized, "IOS_APP_STORE"),
-		strings.Contains(normalized, "IOS_APP_ADHOC"),
-		strings.Contains(normalized, "IOS_APP_INHOUSE"):
+		strings.Contains(normalized, "IOS_APP_ADHOC"):
+		return "DISTRIBUTION,IOS_DISTRIBUTION", nil
+	case strings.Contains(normalized, "IOS_APP_INHOUSE"):
 		return "IOS_DISTRIBUTION,DISTRIBUTION", nil
 	case strings.Contains(normalized, "TVOS_APP_DEVELOPMENT"):
-		return "IOS_DEVELOPMENT,DEVELOPMENT", nil
+		return "DEVELOPMENT,IOS_DEVELOPMENT", nil
 	case strings.Contains(normalized, "TVOS_APP_STORE"),
-		strings.Contains(normalized, "TVOS_APP_ADHOC"),
-		strings.Contains(normalized, "TVOS_APP_INHOUSE"):
+		strings.Contains(normalized, "TVOS_APP_ADHOC"):
+		return "DISTRIBUTION,IOS_DISTRIBUTION", nil
+	case strings.Contains(normalized, "TVOS_APP_INHOUSE"):
 		return "IOS_DISTRIBUTION,DISTRIBUTION", nil
 	case strings.Contains(normalized, "MAC_CATALYST_APP_DEVELOPMENT"):
 		return "MAC_APP_DEVELOPMENT,DEVELOPMENT", nil

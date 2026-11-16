@@ -84,8 +84,8 @@ func consumeResolvedAppSchedulePrices(
 	requireComplete bool,
 ) error {
 	opts := []asc.AppPriceSchedulePricesOption{
-		asc.WithAppPriceSchedulePricesLimit(limit),
-		asc.WithAppPriceSchedulePricesNextURL(nextURL),
+		asc.Limit[asc.AppPriceSchedulePricesOption](limit),
+		asc.NextURL[asc.AppPriceSchedulePricesOption](nextURL),
 		asc.WithAppPriceSchedulePricesInclude([]string{"appPricePoint", "territory"}),
 		asc.WithAppPriceSchedulePricesFields([]string{"manual", "startDate", "endDate", "appPricePoint", "territory"}),
 		asc.WithAppPriceSchedulePricesPricePointFields([]string{"customerPrice", "proceeds", "territory"}),
@@ -102,7 +102,7 @@ func consumeResolvedAppSchedulePrices(
 		if err != nil {
 			return nil, err
 		}
-		return fetch(ctx, scheduleID, asc.WithAppPriceSchedulePricesNextURL(nextURL))
+		return fetch(ctx, scheduleID, asc.NextURL[asc.AppPriceSchedulePricesOption](nextURL))
 	}, func(page asc.PaginatedResponse) error {
 		resp, ok := page.(*asc.AppPricesResponse)
 		if !ok {
@@ -206,7 +206,7 @@ func parseResolvedAppPricePageIncluded(raw json.RawMessage) (map[string]asc.AppP
 }
 
 func resolvedAppPriceCandidateFromResource(
-	item asc.Resource[asc.AppPriceAttributes],
+	item asc.Resource[asc.AppPriceV2Attributes],
 	values map[string]asc.AppPricePointV3Attributes,
 	currencies map[string]string,
 ) (appPriceEntry, shared.ResolvedPriceRow, bool) {

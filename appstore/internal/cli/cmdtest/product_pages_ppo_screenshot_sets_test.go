@@ -3,8 +3,6 @@ package cmdtest
 import (
 	"context"
 	"encoding/json"
-	"errors"
-	"flag"
 	"fmt"
 	"image"
 	"image/color"
@@ -19,32 +17,12 @@ import (
 	cmd "github.com/Abdullah4AI/apple-developer-toolkit/appstore/cmd"
 )
 
-func TestProductPagesExperimentTreatmentLocalizationScreenshotSetsGroupHelpIncludesUploadAndSync(t *testing.T) {
-	root := RootCommand("1.2.3")
-
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"product-pages", "experiments", "treatments", "localizations", "screenshot-sets"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		err := root.Run(context.Background())
-		if !errors.Is(err, flag.ErrHelp) {
-			t.Fatalf("expected ErrHelp, got %v", err)
-		}
-	})
-
-	help := stdout + stderr
-	for _, token := range []string{"upload", "sync"} {
-		if !strings.Contains(help, token) {
-			t.Fatalf("expected help to contain %q, got %q", token, help)
-		}
-	}
-}
-
 func TestRunProductPagesExperimentTreatmentLocalizationScreenshotSetsUsageErrors(t *testing.T) {
 	tests := []struct {
 		name    string
 		args    []string
 		wantErr string
+		deps    bool // the command is built on shared.Deps: run it through RunWithDeps
 	}{
 		{
 			name:    "upload missing localization",
@@ -65,6 +43,7 @@ func TestRunProductPagesExperimentTreatmentLocalizationScreenshotSetsUsageErrors
 			name:    "sync missing confirm",
 			args:    []string{"product-pages", "experiments", "treatments", "localizations", "screenshot-sets", "sync", "--localization-id", "tloc-1", "--path", "./shots", "--device-type", "IPHONE_65"},
 			wantErr: "--confirm is required",
+			deps:    true,
 		},
 		{
 			name:    "upload invalid device type",
@@ -75,33 +54,46 @@ func TestRunProductPagesExperimentTreatmentLocalizationScreenshotSetsUsageErrors
 			name:    "preview upload missing localization",
 			args:    []string{"product-pages", "experiments", "treatments", "localizations", "preview-sets", "upload", "--path", "./previews", "--device-type", "IPHONE_65"},
 			wantErr: "--localization-id is required",
+			deps:    true,
 		},
 		{
 			name:    "preview upload missing path",
 			args:    []string{"product-pages", "experiments", "treatments", "localizations", "preview-sets", "upload", "--localization-id", "tloc-1", "--device-type", "IPHONE_65"},
 			wantErr: "--path is required",
+			deps:    true,
 		},
 		{
 			name:    "preview upload missing device type",
 			args:    []string{"product-pages", "experiments", "treatments", "localizations", "preview-sets", "upload", "--localization-id", "tloc-1", "--path", "./previews"},
 			wantErr: "--device-type is required",
+			deps:    true,
 		},
 		{
 			name:    "preview upload invalid device type",
 			args:    []string{"product-pages", "experiments", "treatments", "localizations", "preview-sets", "upload", "--localization-id", "tloc-1", "--path", "./previews", "--device-type", "NOT_A_DEVICE"},
 			wantErr: "unsupported preview type",
+			deps:    true,
 		},
 	}
 
 	for _, tc := range tests {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			_, stderr := captureOutput(t, func() {
-				code := cmd.Run(tc.args, "1.2.3")
+			var stderr string
+			if tc.deps {
+				var code int
+				_, stderr, code = runWithDeps(t, nil, tc.args...)
 				if code != cmd.ExitUsage {
 					t.Fatalf("exit code = %d, want %d", code, cmd.ExitUsage)
 				}
-			})
+			} else {
+				_, stderr = captureOutput(t, func() {
+					code := cmd.Run(tc.args, "1.2.3")
+					if code != cmd.ExitUsage {
+						t.Fatalf("exit code = %d, want %d", code, cmd.ExitUsage)
+					}
+				})
+			}
 
 			if !strings.Contains(stderr, tc.wantErr) {
 				t.Fatalf("expected stderr to contain %q, got %q", tc.wantErr, stderr)

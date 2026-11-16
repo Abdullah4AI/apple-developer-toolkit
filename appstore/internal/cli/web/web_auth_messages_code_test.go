@@ -254,10 +254,11 @@ func messagesCodeTestHooks(t *testing.T, goos string, query func(ctx context.Con
 
 func runMessagesCodeCommand(t *testing.T, args ...string) (string, string, error) {
 	t.Helper()
-	cmd := WebAuthMessagesCodeCommand()
+	d, depsStdout, depsStderr := newWebTestDeps()
+	cmd := newWebAuthMessagesCodeCommand(d)
 	cmd.FlagSet.SetOutput(os.Stderr)
 	var runErr error
-	stdout, stderr := captureOutput(t, func() {
+	stdout, stderr := runWithWebTestDeps(depsStdout, depsStderr, func() {
 		if err := cmd.FlagSet.Parse(args); err != nil {
 			runErr = err
 			return
@@ -473,7 +474,6 @@ func TestWebAuthMessagesCodeFlagValidation(t *testing.T) {
 		{name: "since too long", args: []string{"--since", "24h"}, wantErr: "--since must be at most 10m0s"},
 		{name: "negative timeout", args: []string{"--timeout", "-1s"}, wantErr: "--timeout must be a positive duration"},
 		{name: "blank db", args: []string{"--db", "  "}, wantErr: "--db must not be empty"},
-		{name: "unexpected argument", args: []string{"extra"}, wantErr: "unexpected argument"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

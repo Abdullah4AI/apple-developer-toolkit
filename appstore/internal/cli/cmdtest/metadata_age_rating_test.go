@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asctest"
 )
 
 // metadataAgeRatingHTTP serves version and app-info resolution plus the age
@@ -154,10 +156,7 @@ func TestMetadataAgeRatingRejectsInvalidValuesBeforeRequests(t *testing.T) {
 	for _, test := range tests {
 		for _, command := range []string{"plan", "apply"} {
 			t.Run(test.name+"/"+command, func(t *testing.T) {
-				withMetadataReviewHTTP(t, func(req *http.Request) (*http.Response, error) {
-					t.Fatalf("unexpected request: %s %s", req.Method, req.URL.Path)
-					return nil, nil
-				})
+				asctest.NewRegistry(t).Install()
 				dir := t.TempDir()
 				versionDir := filepath.Join(dir, "version", "1.2.3")
 				if err := os.MkdirAll(versionDir, 0o755); err != nil {
@@ -193,6 +192,7 @@ func TestMetadataAgeRatingValidatesResultingStateBeforeMutation(t *testing.T) {
 		local   string
 		remote  map[string]any
 		wantErr string
+		patch   string
 	}{
 		{name: "remote user content false", local: `{"socialMedia":true}`, remote: map[string]any{"userGeneratedContent": false}, wantErr: "socialMedia true cannot be combined with userGeneratedContent false"},
 		{name: "remote social media false", local: `{"socialMediaAgeRestricted":true}`, remote: map[string]any{"socialMedia": false}, wantErr: "socialMediaAgeRestricted true cannot be combined with socialMedia false"},
@@ -200,6 +200,7 @@ func TestMetadataAgeRatingValidatesResultingStateBeforeMutation(t *testing.T) {
 		{name: "local prerequisite overrides remote", local: `{"socialMedia":true,"userGeneratedContent":true,"developerAgeRatingInfoUrl":"urn:example:age-rating"}`, remote: map[string]any{"userGeneratedContent": false}},
 		{name: "remote prerequisite unknown", local: `{"socialMedia":true}`, remote: map[string]any{"userGeneratedContent": nil}, wantErr: "socialMedia true requires userGeneratedContent true"},
 		{name: "remote prerequisite already true", local: `{"socialMedia":true}`, remote: map[string]any{"userGeneratedContent": true}},
+		{name: "null kids age band is omitted", local: `{"socialMedia":true,"kidsAgeBand":null}`, remote: map[string]any{"userGeneratedContent": true}, patch: `{"socialMedia":true}`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			var patches []map[string]any
@@ -242,8 +243,12 @@ func TestMetadataAgeRatingValidatesResultingStateBeforeMutation(t *testing.T) {
 			if runErr != nil || stderr != "" || mutations != 2 || len(patches) != 1 {
 				t.Fatalf("err=%v stdout=%q stderr=%q mutations=%d patches=%v", runErr, stdout, stderr, mutations, patches)
 			}
+			patch := test.local
+			if test.patch != "" {
+				patch = test.patch
+			}
 			var wantPatch map[string]any
-			if err := json.Unmarshal([]byte(test.local), &wantPatch); err != nil {
+			if err := json.Unmarshal([]byte(patch), &wantPatch); err != nil {
 				t.Fatal(err)
 			}
 			if len(patches[0]) != len(wantPatch) {

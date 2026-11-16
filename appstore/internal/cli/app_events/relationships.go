@@ -2,10 +2,6 @@ package app_events
 
 import (
 	"context"
-	"flag"
-	"fmt"
-	"os"
-	"strings"
 
 	"github.com/peterbourgon/ff/v3/ffcli"
 
@@ -13,17 +9,10 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
-// AppEventsRelationshipsCommand returns the app event links command.
-func AppEventsRelationshipsCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("links", flag.ExitOnError)
-
-	eventID := shared.BindResourceIDFlag(fs, "event-id", "appEvents", "App event ID")
-	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
-	next := fs.String("next", "", "Fetch next page using a links.next URL")
-	paginate := fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")
-	output := shared.BindOutputFlags(fs)
-
-	return &ffcli.Command{
+// newAppEventsRelationshipsCommand returns the app event links command.
+func newAppEventsRelationshipsCommand(d *shared.Deps) *ffcli.Command {
+	return shared.BuildPaginatedListCommand(shared.PaginatedListCommandConfig{
+		Deps:       d,
 		Name:       "links",
 		ShortUsage: "asc app-events links --event-id \"EVENT_ID\" [flags]",
 		ShortHelp:  "List localization relationships for an in-app event.",
@@ -32,58 +21,14 @@ func AppEventsRelationshipsCommand() *ffcli.Command {
 Examples:
   asc app-events links --event-id "EVENT_ID"
   asc app-events links --event-id "EVENT_ID" --paginate`,
-		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
-		Exec: func(ctx context.Context, args []string) error {
-			if *limit != 0 && (*limit < 1 || *limit > 200) {
-				return shared.UsageError("app-events links: --limit must be between 1 and 200")
-			}
-			if err := shared.ValidateNextURL(*next); err != nil {
-				return shared.UsageErrorf("app-events links: %v", err)
-			}
-
-			id := strings.TrimSpace(*eventID)
-			if id == "" && strings.TrimSpace(*next) == "" {
-				fmt.Fprintln(os.Stderr, "Error: --event-id is required")
-				return shared.MissingRequiredUsageError("--event-id")
-			}
-
-			client, err := shared.GetASCClient()
-			if err != nil {
-				return fmt.Errorf("app-events links: %w", err)
-			}
-
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
-			defer cancel()
-
-			opts := []asc.LinkagesOption{
-				asc.WithLinkagesLimit(*limit),
-				asc.WithLinkagesNextURL(*next),
-			}
-
-			if *paginate {
-				paginateOpts := append(opts, asc.WithLinkagesLimit(200))
-				firstPage, err := client.GetAppEventLocalizationsRelationships(requestCtx, id, paginateOpts...)
-				if err != nil {
-					return fmt.Errorf("app-events links: failed to fetch: %w", err)
-				}
-
-				resp, err := asc.PaginateAll(requestCtx, firstPage, func(ctx context.Context, nextURL string) (asc.PaginatedResponse, error) {
-					return client.GetAppEventLocalizationsRelationships(ctx, id, asc.WithLinkagesNextURL(nextURL))
-				})
-				if err != nil {
-					return fmt.Errorf("app-events links: %w", err)
-				}
-
-				return shared.PrintOutput(resp, *output.Output, *output.Pretty)
-			}
-
-			resp, err := client.GetAppEventLocalizationsRelationships(requestCtx, id, opts...)
-			if err != nil {
-				return fmt.Errorf("app-events links: failed to fetch: %w", err)
-			}
-
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+		ParentFlag:           "event-id",
+		ParentUsage:          "App event ID",
+		ParentType:           "appEvents",
+		RequiredDiagnostic:   true,
+		PaginateIgnoresLimit: true,
+		NoSpinner:            true,
+		FetchPage: func(ctx context.Context, client *asc.Client, id string, limit int, next string) (asc.PaginatedResponse, error) {
+			return client.GetAppEventLocalizationsRelationships(ctx, id, asc.Limit[asc.LinkagesOption](limit), asc.NextURL[asc.LinkagesOption](next))
 		},
-	}
+	})
 }

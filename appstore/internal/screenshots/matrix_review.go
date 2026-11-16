@@ -42,12 +42,10 @@ var matrixReviewManifestLoadedForTest func()
 // These narrow seams make filesystem replacement and cancellation races
 // deterministic in package tests. They are unset in production.
 var (
-	matrixReviewAssetRootBeforeOpenForTest func(kind, path string)
-	matrixReviewAssetRootOpenedForTest     func(kind, path string)
-	matrixReviewAssetBeforeHashForTest     func(path string)
-	matrixReviewAssetRootBeforePinForTest  func(kind, path string)
-	matrixReviewAssetRootsCapturedForTest  func(kind, path string)
-	matrixReviewAssetValidatedForTest      func(path string)
+	matrixReviewAssetBeforeHashForTest    func(path string)
+	matrixReviewAssetRootBeforePinForTest func(kind, path string)
+	matrixReviewAssetRootsCapturedForTest func(kind, path string)
+	matrixReviewAssetValidatedForTest     func(path string)
 )
 
 // GenerateMatrixReview writes an offline HTML report and its JSON manifest.
@@ -714,9 +712,6 @@ func matrixReviewBrowserAssetsWithExpectedRoots(ctx context.Context, htmlPath st
 				}
 				opened, ok := openedRoots[kind]
 				if !ok {
-					if matrixReviewAssetRootBeforeOpenForTest != nil {
-						matrixReviewAssetRootBeforeOpenForTest(kind, rootPath)
-					}
 					if expected, ok := expectedRoots[kind]; ok {
 						opened = openedAssetRoot{root: expected}
 					} else {
@@ -738,9 +733,6 @@ func matrixReviewBrowserAssetsWithExpectedRoots(ctx context.Context, htmlPath st
 							return nil, errMatrixReviewPairMismatch
 						}
 						openedInfo, openedErr := openedRoot.Stat(".")
-						if matrixReviewAssetRootOpenedForTest != nil {
-							matrixReviewAssetRootOpenedForTest(kind, rootPath)
-						}
 						currentInfo, currentErr := os.Lstat(rootPath)
 						_ = openedRoot.Close()
 						if openedErr != nil || currentErr != nil || currentInfo.Mode()&os.ModeSymlink != 0 || !currentInfo.IsDir() || !os.SameFile(rootInfo, openedInfo) || !os.SameFile(openedInfo, currentInfo) {
@@ -976,7 +968,7 @@ func sanitizeMatrixReviewError(value *MatrixCellError) *MatrixCellError {
 	}
 	message := strings.TrimSpace(value.Message)
 	switch message {
-	case "cell canceled", "screenshot plan execution failed", "screenshot framing failed", "raw screenshot could not be promoted", "framed screenshot could not be promoted", "framed screenshot became unavailable", "simulator appearance could not be restored", "simulator blocked after appearance cleanup failure", "appearance state could not be read", "requested appearance could not be applied", "cell execution failed", "target simulator is not ready", "configured frame does not match simulator family", "simulator family could not be identified", "configured frame mapping is invalid", "screenshot plan did not produce every requested image", "screenshot plan produced an invalid image", "screenshot framing produced an invalid image":
+	case "cell canceled", "screenshot plan execution failed", "screenshot framing failed", "raw screenshot could not be promoted", "framed screenshot could not be promoted", "framed screenshot became unavailable", "simulator appearance could not be restored", "simulator blocked after appearance cleanup failure", "simulator blocked after status bar cleanup failure", "requested status bar could not be applied", "simulator status bar could not be cleared", "appearance state could not be read", "requested appearance could not be applied", "cell execution failed", "target simulator is not ready", "configured frame does not match simulator family", "simulator family could not be identified", "configured frame mapping is invalid", "screenshot plan did not produce every requested image", "screenshot plan produced an invalid image", "screenshot framing produced an invalid image":
 	default:
 		message = "matrix execution failed"
 	}

@@ -9,8 +9,10 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"net/url"
 	"os"
+	"os/signal"
 	"reflect"
 	"slices"
 	"strconv"
@@ -43,6 +45,7 @@ const (
 	strictAuthEnvVar       = "ASC_STRICT_AUTH"
 	defaultOutputEnvVar    = "ASC_DEFAULT_OUTPUT"
 	bearerTokenEnvVar      = "ASC_BEARER_TOKEN"
+	bearerTokenCommandEnv  = "ASC_BEARER_TOKEN_COMMAND"
 )
 
 const (
@@ -195,10 +198,19 @@ func RootFlagsForReinvocation() (args []string, ok bool) {
 // ProgressEnabled reports whether it's safe/appropriate to emit progress messages.
 // Progress must be stderr-only and must not appear when stderr is non-interactive.
 func ProgressEnabled() bool {
+	return progressEnabledFor(isTerminal(int(os.Stderr.Fd())))
+}
+
+// ProgressEnabled is ProgressEnabled decided from d's stderr.
+func (d *Deps) ProgressEnabled() bool {
+	return progressEnabledFor(d.IO.StderrTTY)
+}
+
+func progressEnabledFor(stderrTTY bool) bool {
 	if noProgress {
 		return false
 	}
-	return isTerminal(int(os.Stderr.Fd()))
+	return stderrTTY
 }
 
 // SetNoProgress sets progress suppression (tests only).
@@ -216,11 +228,17 @@ func SetSelectedProfile(value string) {
 func ResetDefaultOutputFormat() {
 	defaultOutputOnce = sync.Once{}
 	defaultOutputValue = ""
+	defaultOutputEnvOnce = sync.Once{}
+	defaultOutputEnvValue = ""
 }
 
 // Bold returns the string wrapped in ANSI bold codes
 func Bold(s string) string {
-	if !supportsANSI() {
+	return boldFor(isTerminal(int(os.Stderr.Fd())), s)
+}
+
+func boldFor(stderrTTY bool, s string) string {
+	if !supportsANSIFor(stderrTTY) {
 		return s
 	}
 	return bold + s + reset
@@ -237,30 +255,42 @@ func OrNA(value string) string {
 
 // RenderSection renders a titled section as markdown or table output.
 func RenderSection(title string, headers []string, rows [][]string, markdown bool) {
+	renderSectionTo(os.Stdout, isTerminal(int(os.Stderr.Fd())), title, headers, rows, markdown)
+}
+
+// renderSectionTo writes the section to w; the table title is bold when
+// stderrTTY allows ANSI codes.
+func renderSectionTo(w io.Writer, stderrTTY bool, title string, headers []string, rows [][]string, markdown bool) {
 	if markdown {
-		fmt.Fprintf(os.Stdout, "### %s\n\n", title)
-		asc.RenderMarkdown(headers, rows)
-		fmt.Fprintln(os.Stdout)
+		fmt.Fprintf(w, "### %s\n\n", title)
+		asc.RenderMarkdownTo(w, headers, rows)
+		fmt.Fprintln(w)
 		return
 	}
 
-	fmt.Fprintf(os.Stdout, "%s\n", Bold(strings.ToUpper(title)))
-	asc.RenderTable(headers, rows)
-	fmt.Fprintln(os.Stdout)
+	fmt.Fprintf(w, "%s\n", boldFor(stderrTTY, strings.ToUpper(title)))
+	asc.RenderTableTo(w, headers, rows)
+	fmt.Fprintln(w)
 }
 
-func supportsANSI() bool {
+func supportsANSIFor(stderrTTY bool) bool {
 	if _, ok := os.LookupEnv("NO_COLOR"); ok {
 		return false
 	}
 	if strings.EqualFold(os.Getenv("TERM"), "dumb") {
 		return false
 	}
-	return isTerminal(int(os.Stderr.Fd()))
+	return stderrTTY
 }
 
 // DefaultUsageFunc returns a usage string with bold section headers
 func DefaultUsageFunc(c *ffcli.Command) string {
+	return defaultUsage(isTerminal(int(os.Stderr.Fd())), c)
+}
+
+// defaultUsage renders c's help, with bold headings when stderrTTY allows
+// ANSI codes.
+func defaultUsage(stderrTTY bool, c *ffcli.Command) string {
 	var b strings.Builder
 
 	shortHelp := strings.TrimSpace(c.ShortHelp)
@@ -272,7 +302,7 @@ func DefaultUsageFunc(c *ffcli.Command) string {
 
 	// DESCRIPTION
 	if shortHelp != "" {
-		b.WriteString(Bold("DESCRIPTION"))
+		b.WriteString(boldFor(stderrTTY, "DESCRIPTION"))
 		b.WriteString("\n")
 		b.WriteString("  ")
 		b.WriteString(shortHelp)
@@ -285,7 +315,7 @@ func DefaultUsageFunc(c *ffcli.Command) string {
 		usage = strings.TrimSpace(c.Name)
 	}
 	if usage != "" {
-		b.WriteString(Bold("USAGE"))
+		b.WriteString(boldFor(stderrTTY, "USAGE"))
 		b.WriteString("\n")
 		b.WriteString("  ")
 		b.WriteString(usage)
@@ -305,7 +335,7 @@ func DefaultUsageFunc(c *ffcli.Command) string {
 
 	// SUBCOMMANDS
 	if len(c.Subcommands) > 0 {
-		b.WriteString(Bold("SUBCOMMANDS"))
+		b.WriteString(boldFor(stderrTTY, "SUBCOMMANDS"))
 		b.WriteString("\n")
 		tw := tabwriter.NewWriter(&b, 0, 2, 2, ' ', 0)
 		for _, sub := range c.Subcommands {
@@ -319,7 +349,7 @@ func DefaultUsageFunc(c *ffcli.Command) string {
 	if c.FlagSet != nil {
 		visibleFlags := VisibleHelpFlags(c.FlagSet)
 		if len(visibleFlags) > 0 {
-			b.WriteString(Bold("FLAGS"))
+			b.WriteString(boldFor(stderrTTY, "FLAGS"))
 			b.WriteString("\n")
 			tw := tabwriter.NewWriter(&b, 0, 2, 2, ' ', 0)
 			for _, f := range visibleFlags {
@@ -928,24 +958,44 @@ func allowsEnvFallbackForStoredError(err error) bool {
 }
 
 // bearerTokenClient returns a client for ASC_BEARER_TOKEN, a token signed by
-// a service that keeps the private key (for example `rork apple asc`). It
-// takes precedence over every stored or environment key; ok is false when the
-// variable is unset.
+// a service that keeps the private key, renewed through
+// ASC_BEARER_TOKEN_COMMAND when that is set. Either variable takes precedence
+// over every stored or environment key; ok is false when both are unset.
 func bearerTokenClient(timeout time.Duration) (client *asc.Client, ok bool, err error) {
 	token := strings.TrimSpace(os.Getenv(bearerTokenEnvVar))
-	if token == "" {
+	command := strings.TrimSpace(os.Getenv(bearerTokenCommandEnv))
+	if token == "" && command == "" {
 		return nil, false, nil
+	}
+	source := bearerTokenEnvVar
+	if command != "" {
+		source = bearerTokenCommandEnv
 	}
 	// The token already names its key and team, so a selection that would
 	// pick other credentials or another API host cannot be honored.
 	if profile := resolveProfileName(); profile != "" {
-		return nil, true, fmt.Errorf("%s cannot be combined with profile %q from --profile or %s; unset one of them", bearerTokenEnvVar, profile, profileEnvVar)
+		return nil, true, fmt.Errorf("%s cannot be combined with profile %q from --profile or %s; unset one of them", source, profile, profileEnvVar)
 	}
 	if config.IsEnterpriseCredentialKeyType(config.NormalizeCredentialKeyType(os.Getenv(keyTypeEnvVar))) {
-		return nil, true, fmt.Errorf("%s does not support %s=enterprise; unset %s or use the enterprise private key", bearerTokenEnvVar, keyTypeEnvVar, keyTypeEnvVar)
+		return nil, true, fmt.Errorf("%s does not support %s=enterprise; unset %s or use the enterprise private key", source, keyTypeEnvVar, keyTypeEnvVar)
 	}
 	ApplyRootLoggingOverrides()
-	client, err = asc.NewClientFromBearerToken(token, timeout)
+	var renew asc.BearerTokenRenewer
+	if command != "" {
+		renew = func(ctx context.Context) (string, error) { return readBearerTokenFromCommand(ctx, command) }
+	}
+	// Client creation has no command context, so Ctrl-C must stop a stalled
+	// first token fetch here.
+	ctx, stopInterrupt := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer stopInterrupt()
+	client, err = asc.NewClientFromBearerToken(ctx, token, renew, timeout)
+	if errors.Is(err, context.Canceled) {
+		return nil, true, err
+	}
+	if errors.Is(err, asc.ErrBearerTokenRenewal) {
+		// readBearerTokenFromCommand already names the variable.
+		return nil, true, missingAuthError{msg: err.Error(), cause: err}
+	}
 	if err != nil {
 		return nil, true, missingAuthError{msg: fmt.Sprintf("%s: %v", bearerTokenEnvVar, err), cause: err}
 	}
@@ -1282,35 +1332,39 @@ func resetInvalidStrictAuthWarnings() {
 }
 
 func printOutput(data any, format string, pretty bool) error {
+	return printOutputTo(os.Stdout, os.Stderr, data, format, pretty)
+}
+
+func printOutputTo(out, errOut io.Writer, data any, format string, pretty bool) error {
 	format, err := validateOutputFormat(format, pretty)
 	if err != nil {
 		return err
 	}
 	switch format {
 	case "json":
-		err = printJSONOutput(data, pretty)
+		err = printJSONOutput(out, data, pretty)
 	case "markdown":
-		err = asc.PrintMarkdown(data)
+		err = asc.PrintMarkdownTo(out, data)
 	case "table":
-		err = asc.PrintTable(data)
+		err = asc.PrintTableTo(out, data)
 	default:
 		return outputFormatEnumError("output", format, nil)
 	}
 	if err != nil {
 		return err
 	}
-	warnMorePages(data)
+	warnMorePages(errOut, data)
 	return nil
 }
 
-func printOutputWithRenderers(data any, format string, pretty bool, tableRenderer, markdownRenderer func() error) error {
+func printOutputWithRenderersTo(out, errOut io.Writer, data any, format string, pretty bool, tableRenderer, markdownRenderer func() error) error {
 	format, err := validateOutputFormat(format, pretty)
 	if err != nil {
 		return err
 	}
 	switch format {
 	case "json":
-		err = printJSONOutput(data, pretty)
+		err = printJSONOutput(out, data, pretty)
 	case "table":
 		if tableRenderer == nil {
 			return fmt.Errorf("table renderer is required")
@@ -1327,14 +1381,26 @@ func printOutputWithRenderers(data any, format string, pretty bool, tableRendere
 	if err != nil {
 		return err
 	}
-	warnMorePages(data)
+	warnMorePages(errOut, data)
 	return nil
+}
+
+func printOutputRowsTo(out, errOut io.Writer, data any, format string, pretty bool, headers []string, rows [][]string) error {
+	return printOutputWithRenderersTo(
+		out,
+		errOut,
+		data,
+		format,
+		pretty,
+		func() error { return asc.WriteTableTo(out, headers, rows) },
+		func() error { return asc.WriteMarkdownTo(out, headers, rows) },
+	)
 }
 
 // warnMorePages emits a stderr notice when rendered output is a single page of
 // a larger collection. PaginateAll clears links.next on aggregated results, so
 // a non-empty next link at print time means the output is one unpaginated page.
-func warnMorePages(data any) {
+func warnMorePages(w io.Writer, data any) {
 	page, ok := data.(asc.PaginatedResponse)
 	if !ok {
 		return
@@ -1354,21 +1420,21 @@ func warnMorePages(data any) {
 	if countOK {
 		if withMeta, hasMeta := page.(interface{ GetMeta() json.RawMessage }); hasMeta {
 			if total, totalOK := asc.ParsePagingTotalOK(withMeta.GetMeta()); totalOK {
-				fmt.Fprintf(os.Stderr, "Warning: showing %d of %d results; more pages exist (use --paginate or --next where supported)\n", count, total)
+				fmt.Fprintf(w, "Warning: showing %d of %d results; more pages exist (use --paginate or --next where supported)\n", count, total)
 				return
 			}
 		}
-		fmt.Fprintf(os.Stderr, "Warning: showing %d results; more pages exist (use --paginate or --next where supported)\n", count)
+		fmt.Fprintf(w, "Warning: showing %d results; more pages exist (use --paginate or --next where supported)\n", count)
 		return
 	}
-	fmt.Fprintln(os.Stderr, "Warning: more pages exist (use --paginate or --next where supported)")
+	fmt.Fprintln(w, "Warning: more pages exist (use --paginate or --next where supported)")
 }
 
-func printJSONOutput(data any, pretty bool) error {
+func printJSONOutput(w io.Writer, data any, pretty bool) error {
 	if pretty {
-		return asc.PrintPrettyJSON(data)
+		return asc.PrintPrettyJSONTo(w, data)
 	}
-	return asc.PrintJSON(data)
+	return asc.PrintJSONTo(w, data)
 }
 
 // NormalizeOutputFormat lowercases format and canonicalizes aliases.
@@ -1379,6 +1445,33 @@ func NormalizeOutputFormat(format string) string {
 	default:
 		return strings.ToLower(strings.TrimSpace(format))
 	}
+}
+
+// RejectOutputFormatAsPath reports a usage error when a command whose --output
+// flag takes a path is given an output format name there. formatFlag is the
+// command's flag that chooses json, table or markdown, or "" when it has none.
+func RejectOutputFormatAsPath(path, formatFlag string) error {
+	return rejectOutputFormatAsPathTo(os.Stderr, path, formatFlag)
+}
+
+// RejectOutputFormatAsPath is RejectOutputFormatAsPath with the "Error:" line
+// written to d's stderr.
+func (d *Deps) RejectOutputFormatAsPath(path, formatFlag string) error {
+	return rejectOutputFormatAsPathTo(d.IO.ErrOut, path, formatFlag)
+}
+
+func rejectOutputFormatAsPathTo(stderr io.Writer, path, formatFlag string) error {
+	value := strings.TrimSpace(path)
+	format := NormalizeOutputFormat(value)
+	if format != "json" && format != "table" && format != "markdown" {
+		return nil
+	}
+	if formatFlag == "" {
+		fmt.Fprintf(stderr, "Error: --output takes a path in this command, not an output format, and no flag here chooses json, table or markdown output; use --output ./%s to write to a path named %s\n", value, value)
+	} else {
+		fmt.Fprintf(stderr, "Error: --output takes a path in this command, not an output format; use %s %s to choose the format, or --output ./%s to write to a path named %s\n", formatFlag, format, value, value)
+	}
+	return InvalidValueUsageError("--output")
 }
 
 // outputFormatEnumError reports an unsupported output format the way every
@@ -1447,10 +1540,6 @@ func validateOutputFormatAllowed(flagName, format string, pretty bool, allowed .
 	return normalized, nil
 }
 
-func printStreamPage(data any) error {
-	return asc.PrintJSON(data)
-}
-
 func normalizeDate(value, flagName string) (string, error) {
 	trimmed := strings.TrimSpace(value)
 	if trimmed == "" {
@@ -1496,8 +1585,10 @@ func isAppAvailabilityMissing(err error) bool {
 }
 
 var (
-	defaultOutputOnce  sync.Once
-	defaultOutputValue string
+	defaultOutputOnce     sync.Once
+	defaultOutputValue    string
+	defaultOutputEnvOnce  sync.Once
+	defaultOutputEnvValue string
 )
 
 // DefaultOutputFormat returns the default output format for CLI commands.
@@ -1506,28 +1597,42 @@ var (
 // Valid ASC_DEFAULT_OUTPUT values are "json", "table", "markdown", and "md".
 func DefaultOutputFormat() string {
 	defaultOutputOnce.Do(func() {
-		defaultOutputValue = resolveDefaultOutput()
+		defaultOutputValue = defaultOutputFormatFor(isTerminal(int(os.Stdout.Fd())), os.Stderr)
 	})
 	return defaultOutputValue
 }
 
-func resolveDefaultOutput() string {
+func defaultOutputFormatFor(stdoutTTY bool, errOut io.Writer) string {
+	if format := defaultOutputFromEnv(errOut); format != "" {
+		return format
+	}
+	if isCIEnvironment() || !stdoutTTY {
+		return "json"
+	}
+	return "table"
+}
+
+// defaultOutputFromEnv reads ASC_DEFAULT_OUTPUT once, so an invalid value is
+// reported once per process, to the first caller's errOut, however many
+// commands bind --output.
+func defaultOutputFromEnv(errOut io.Writer) string {
+	defaultOutputEnvOnce.Do(func() {
+		defaultOutputEnvValue = resolveDefaultOutputEnv(errOut)
+	})
+	return defaultOutputEnvValue
+}
+
+func resolveDefaultOutputEnv(errOut io.Writer) string {
 	env := strings.TrimSpace(os.Getenv(defaultOutputEnvVar))
 	if env == "" {
-		if isCIEnvironment() {
-			return "json"
-		}
-		if isTerminal(int(os.Stdout.Fd())) {
-			return "table"
-		}
-		return "json"
+		return ""
 	}
 	normalized := strings.ToLower(env)
 	switch normalized {
 	case "json", "table", "markdown", "md":
 		return normalized
 	default:
-		fmt.Fprintf(os.Stderr, "Warning: invalid %s value %q (expected json, table, markdown, or md); using json\n", defaultOutputEnvVar, env)
+		fmt.Fprintf(errOut, "Warning: invalid %s value %q (expected json, table, markdown, or md); using json\n", defaultOutputEnvVar, env)
 		return "json"
 	}
 }
@@ -1647,18 +1752,19 @@ func validateCommandOutputPath(commands []*ffcli.Command) error {
 
 // WrapCommandOutputValidation ensures shared output flags are validated before
 // command execution so invalid format combinations fail before side effects.
-func WrapCommandOutputValidation(cmd *ffcli.Command) {
-	wrapCommandOutputValidation(cmd, nil)
+// The diagnostic goes to d's stderr.
+func WrapCommandOutputValidation(cmd *ffcli.Command, d *Deps) {
+	wrapCommandOutputValidation(cmd, d, nil)
 }
 
-func wrapCommandOutputValidation(cmd *ffcli.Command, parents []*ffcli.Command) {
+func wrapCommandOutputValidation(cmd *ffcli.Command, d *Deps, parents []*ffcli.Command) {
 	if cmd == nil {
 		return
 	}
 
 	path := append(append([]*ffcli.Command(nil), parents...), cmd)
 	for _, sub := range cmd.Subcommands {
-		wrapCommandOutputValidation(sub, path)
+		wrapCommandOutputValidation(sub, d, path)
 	}
 
 	if cmd.Exec == nil {
@@ -1671,7 +1777,7 @@ func wrapCommandOutputValidation(cmd *ffcli.Command, parents []*ffcli.Command) {
 			// Output-flag diagnostics already name the flag, its valid set,
 			// and the rejected value, so report them without dragging the
 			// command's full help page along.
-			fmt.Fprintf(os.Stderr, "Error: %s\n", err)
+			fmt.Fprintf(d.IO.ErrOut, "Error: %s\n", err)
 			return NewReportedUsageError(UsageErrorInvalidValue, err.Error())
 		}
 		return originalExec(ctx, args)
@@ -1679,14 +1785,36 @@ func wrapCommandOutputValidation(cmd *ffcli.Command, parents []*ffcli.Command) {
 }
 
 func resolveAppID(appID string) string {
-	return appSelfLinkID(resolveRawAppID(appID))
+	return resolveAppIDWith(os.LookupEnv, appID)
 }
 
-func resolveRawAppID(appID string) string {
+// ResolveAppID is ResolveAppID with ASC_APP_ID read through d.LookupEnv.
+func (d *Deps) ResolveAppID(appID string) string {
+	return resolveAppIDWith(d.lookupEnv, appID)
+}
+
+// Getenv is os.Getenv through d.LookupEnv.
+func (d *Deps) Getenv(name string) string {
+	value, _ := d.lookupEnv(name)
+	return value
+}
+
+func (d *Deps) lookupEnv(name string) (string, bool) {
+	if d.LookupEnv == nil {
+		return "", false
+	}
+	return d.LookupEnv(name)
+}
+
+func resolveAppIDWith(lookupEnv func(string) (string, bool), appID string) string {
+	return appSelfLinkID(resolveRawAppID(lookupEnv, appID))
+}
+
+func resolveRawAppID(lookupEnv func(string) (string, bool), appID string) string {
 	if appID != "" {
 		return appID
 	}
-	if env, ok := os.LookupEnv("ASC_APP_ID"); ok {
+	if env, ok := lookupEnv("ASC_APP_ID"); ok {
 		return strings.TrimSpace(env)
 	}
 	cfg, err := config.Load()
@@ -1999,18 +2127,12 @@ func PrintOutput(data any, format string, pretty bool) error {
 }
 
 func PrintOutputWithRenderers(data any, format string, pretty bool, tableRenderer, markdownRenderer func() error) error {
-	return printOutputWithRenderers(data, format, pretty, tableRenderer, markdownRenderer)
+	return printOutputWithRenderersTo(os.Stdout, os.Stderr, data, format, pretty, tableRenderer, markdownRenderer)
 }
 
 // PrintOutputRows prints data as JSON, or as one table of headers and rows.
 func PrintOutputRows(data any, format string, pretty bool, headers []string, rows [][]string) error {
-	return printOutputWithRenderers(
-		data,
-		format,
-		pretty,
-		func() error { return asc.WriteTable(headers, rows) },
-		func() error { return asc.WriteMarkdown(headers, rows) },
-	)
+	return printOutputRowsTo(os.Stdout, os.Stderr, data, format, pretty, headers, rows)
 }
 
 func ValidateOutputFormat(format string, pretty bool) (string, error) {
@@ -2084,5 +2206,5 @@ func ValidateSort(value string, allowed ...string) error {
 // Used with --stream --paginate to emit results page-by-page as NDJSON
 // instead of buffering all pages in memory.
 func PrintStreamPage(data any) error {
-	return printStreamPage(data)
+	return asc.PrintJSONTo(os.Stdout, data)
 }

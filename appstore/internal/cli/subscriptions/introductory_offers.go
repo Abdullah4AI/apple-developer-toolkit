@@ -7,7 +7,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
@@ -27,9 +26,9 @@ For help:
   asc subscriptions offers introductory create --help
 `
 
-// SubscriptionsIntroductoryOffersCommand returns the introductory offers command group.
-func SubscriptionsIntroductoryOffersCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("introductory-offers", flag.ExitOnError)
+// newSubscriptionsIntroductoryOffersCommand returns the introductory offers command group.
+func newSubscriptionsIntroductoryOffersCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("introductory-offers", flag.ExitOnError)
 
 	return &ffcli.Command{
 		Name:       "introductory-offers",
@@ -42,14 +41,14 @@ Examples:
   asc subscriptions offers introductory create --subscription-id "SUB_ID" --territory "USA" --offer-duration ONE_MONTH --offer-mode FREE_TRIAL --number-of-periods 1
   asc subscriptions offers introductory import --subscription-id "SUB_ID" --input "./offers.csv" --offer-duration ONE_WEEK --offer-mode FREE_TRIAL --number-of-periods 1 --confirm`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
-			SubscriptionsIntroductoryOffersListCommand(),
-			SubscriptionsIntroductoryOffersGetCommand(),
-			SubscriptionsIntroductoryOffersCreateCommand(),
-			SubscriptionsIntroductoryOffersImportCommand(),
-			SubscriptionsIntroductoryOffersUpdateCommand(),
-			SubscriptionsIntroductoryOffersDeleteCommand(),
+			newSubscriptionsIntroductoryOffersListCommand(d),
+			newSubscriptionsIntroductoryOffersGetCommand(d),
+			newSubscriptionsIntroductoryOffersCreateCommand(d),
+			newSubscriptionsIntroductoryOffersImportCommand(d),
+			newSubscriptionsIntroductoryOffersUpdateCommand(d),
+			newSubscriptionsIntroductoryOffersDeleteCommand(d),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp
@@ -57,20 +56,20 @@ Examples:
 	}
 }
 
-// SubscriptionsIntroductoryOffersListCommand returns the introductory offers list subcommand.
-func SubscriptionsIntroductoryOffersListCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("introductory-offers list", flag.ExitOnError)
+// newSubscriptionsIntroductoryOffersListCommand returns the introductory offers list subcommand.
+func newSubscriptionsIntroductoryOffersListCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("introductory-offers list", flag.ExitOnError)
 
 	subscriptionID := shared.BindResourceIDFlag(fs, "subscription-id", "subscriptions", "Subscription ID, product ID, or exact current name")
 	appID := addSubscriptionLookupAppFlag(fs)
-	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
-	next := fs.String("next", "", "Fetch next page using a links.next URL")
-	paginate := fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")
+	limit := fs.Int("limit", 0, shared.LimitFlagUsage(200))
+	next := fs.String("next", "", shared.NextFlagUsage)
+	paginate := fs.Bool("paginate", false, shared.PaginateFlagUsage)
 	territory := fs.String("territory", "", "Filter by territories (comma-separated; alpha-2, alpha-3, or English name, e.g. USA,GB)")
 	include := fs.String("include", "", "Relationships to include (comma-separated): "+strings.Join(subscriptionIntroductoryOfferIncludeList(), ", "))
 	subscriptionFields := fs.String("subscription-fields", "", "Included subscription fields (comma-separated)")
 	pricePointFields := fs.String("price-point-fields", "", "Included subscription price point fields (comma-separated)")
-	output := shared.BindOutputFlags(fs)
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "list",
@@ -83,60 +82,54 @@ Examples:
   asc subscriptions introductory-offers list --subscription-id "SUB_ID" --territory USA,GBR --include territory
   asc subscriptions introductory-offers list --subscription-id "SUB_ID" --paginate`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
-			if *limit != 0 && (*limit < 1 || *limit > 200) {
-				return shared.UsageErrorCtx(ctx, "subscriptions introductory-offers list: --limit must be between 1 and 200")
-			}
-			if err := shared.ValidateNextURL(*next); err != nil {
-				return shared.UsageErrorfCtx(ctx, "subscriptions introductory-offers list: %v", err)
-			}
-			if err := validateNextExclusiveFlags(fs, *next, "subscription-id", "app", "limit", "territory", "include", "subscription-fields", "price-point-fields"); err != nil {
+			if err := d.ValidatePaginationFlags(ctx, fs, "subscriptions introductory-offers list", 200, "limit", "territory", "include", "subscription-fields", "price-point-fields"); err != nil {
 				return err
 			}
+
+			id := strings.TrimSpace(*subscriptionID)
+			if id == "" && strings.TrimSpace(*next) == "" {
+				return d.RequiredFlag("--subscription-id")
+			}
+
 			selectedTerritories, err := normalizeOptionalTerritoryFilter(fs, "territory", *territory)
 			if err != nil {
-				return shared.UsageError(err.Error())
+				return d.UsageError(err.Error())
 			}
 			selectedIncludes, err := normalizeOptionalSelection(fs, "include", *include, subscriptionIntroductoryOfferIncludeList())
 			if err != nil {
-				return shared.UsageError(err.Error())
+				return d.UsageError(err.Error())
 			}
-			selectedSubscriptionFields, err := normalizeSparseFieldsFlag(fs, *next, "subscription-fields", *subscriptionFields, subscriptionFieldsList())
+			selectedSubscriptionFields, err := normalizeSparseFieldsFlag(d, fs, *next, "subscription-fields", *subscriptionFields, subscriptionFieldsList())
 			if err != nil {
 				return err
 			}
-			selectedPricePointFields, err := normalizeSparseFieldsFlag(fs, *next, "price-point-fields", *pricePointFields, subscriptionPricePointFieldsList())
+			selectedPricePointFields, err := normalizeSparseFieldsFlag(d, fs, *next, "price-point-fields", *pricePointFields, subscriptionPricePointFieldsList())
 			if err != nil {
 				return err
 			}
 			selectedIncludes = appendIncludeForFields(selectedIncludes, selectedSubscriptionFields, "subscription")
 			selectedIncludes = appendIncludeForFields(selectedIncludes, selectedPricePointFields, "subscriptionPricePoint")
 
-			id := strings.TrimSpace(*subscriptionID)
-			if id == "" && strings.TrimSpace(*next) == "" {
-				fmt.Fprintln(os.Stderr, "Error: --subscription-id is required")
-				return shared.MissingRequiredUsageError("--subscription-id")
-			}
-
-			client, err := shared.GetASCClient()
+			client, err := d.Client()
 			if err != nil {
 				return fmt.Errorf("subscriptions introductory-offers list: %w", err)
 			}
 
 			if strings.TrimSpace(*next) == "" {
-				id, err = resolveSubscriptionLookupIDWithTimeout(ctx, client, *appID, id)
+				id, err = resolveSubscriptionLookupIDWithTimeout(ctx, d, client, *appID, id)
 				if err != nil {
 					return err
 				}
 			}
 
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
+			requestCtx, cancel := d.Timeout(ctx)
 			defer cancel()
 
 			opts := []asc.SubscriptionIntroductoryOffersOption{
-				asc.WithSubscriptionIntroductoryOffersLimit(*limit),
-				asc.WithSubscriptionIntroductoryOffersNextURL(*next),
+				asc.Limit[asc.SubscriptionIntroductoryOffersOption](*limit),
+				asc.NextURL[asc.SubscriptionIntroductoryOffersOption](*next),
 				asc.WithSubscriptionIntroductoryOffersTerritories(selectedTerritories),
 				asc.WithSubscriptionIntroductoryOffersSubscriptionFields(selectedSubscriptionFields),
 				asc.WithSubscriptionIntroductoryOffersPricePointFields(selectedPricePointFields),
@@ -146,7 +139,7 @@ Examples:
 			if *paginate {
 				paginateOpts := opts
 				if strings.TrimSpace(*next) == "" {
-					paginateOpts = append(paginateOpts, asc.WithSubscriptionIntroductoryOffersLimit(200))
+					paginateOpts = append(paginateOpts, asc.Limit[asc.SubscriptionIntroductoryOffersOption](200))
 				}
 				firstPage, err := client.GetSubscriptionIntroductoryOffers(requestCtx, id, paginateOpts...)
 				if err != nil {
@@ -154,13 +147,13 @@ Examples:
 				}
 
 				resp, err := asc.PaginateAll(requestCtx, firstPage, func(ctx context.Context, nextURL string) (asc.PaginatedResponse, error) {
-					return client.GetSubscriptionIntroductoryOffers(ctx, id, asc.WithSubscriptionIntroductoryOffersNextURL(nextURL))
+					return client.GetSubscriptionIntroductoryOffers(ctx, id, asc.NextURL[asc.SubscriptionIntroductoryOffersOption](nextURL))
 				})
 				if err != nil {
 					return fmt.Errorf("subscriptions introductory-offers list: %w", err)
 				}
 
-				return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+				return d.PrintOutput(resp, *output.Output, *output.Pretty)
 			}
 
 			resp, err := client.GetSubscriptionIntroductoryOffers(requestCtx, id, opts...)
@@ -168,19 +161,19 @@ Examples:
 				return fmt.Errorf("subscriptions introductory-offers list: failed to fetch: %w", err)
 			}
 
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+			return d.PrintOutput(resp, *output.Output, *output.Pretty)
 		},
 	}
 }
 
-// SubscriptionsIntroductoryOffersGetCommand returns the introductory offers get subcommand.
-func SubscriptionsIntroductoryOffersGetCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("introductory-offers view", flag.ExitOnError)
+// newSubscriptionsIntroductoryOffersGetCommand returns the introductory offers get subcommand.
+func newSubscriptionsIntroductoryOffersGetCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("introductory-offers view", flag.ExitOnError)
 
 	subscriptionID := shared.BindResourceIDFlag(fs, "subscription-id", "subscriptions", "Subscription ID, product ID, or exact current name")
 	appID := addSubscriptionLookupAppFlag(fs)
 	offerID := shared.BindResourceIDFlag(fs, "id", "subscriptionIntroductoryOffers", "Introductory offer ID")
-	output := shared.BindOutputFlags(fs)
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "view",
@@ -195,31 +188,29 @@ Examples:
   asc subscriptions introductory-offers view --subscription-id "SUB_ID" --id "OFFER_ID"
   asc subscriptions introductory-offers view --app "APP_ID" --subscription-id "com.example.monthly" --id "OFFER_ID"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			subID := strings.TrimSpace(*subscriptionID)
 			if subID == "" {
-				fmt.Fprintln(os.Stderr, "Error: --subscription-id is required")
-				return shared.MissingRequiredUsageError("--subscription-id")
+				return d.RequiredFlag("--subscription-id")
 			}
 
 			id := strings.TrimSpace(*offerID)
 			if id == "" {
-				fmt.Fprintln(os.Stderr, "Error: --id is required")
-				return shared.MissingRequiredUsageError("--id")
+				return d.RequiredFlag("--id")
 			}
 
-			client, err := shared.GetASCClient()
+			client, err := d.Client()
 			if err != nil {
 				return fmt.Errorf("subscriptions introductory-offers view: %w", err)
 			}
 
-			subID, err = resolveSubscriptionLookupIDWithTimeout(ctx, client, *appID, subID)
+			subID, err = resolveSubscriptionLookupIDWithTimeout(ctx, d, client, *appID, subID)
 			if err != nil {
 				return err
 			}
 
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
+			requestCtx, cancel := d.Timeout(ctx)
 			defer cancel()
 
 			resp, err := findSubscriptionIntroductoryOffer(requestCtx, client, subID, id)
@@ -227,13 +218,13 @@ Examples:
 				return fmt.Errorf("subscriptions introductory-offers view: failed to fetch: %w", err)
 			}
 
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+			return d.PrintOutput(resp, *output.Output, *output.Pretty)
 		},
 	}
 }
 
 func findSubscriptionIntroductoryOffer(ctx context.Context, client *asc.Client, subscriptionID, offerID string) (*asc.SubscriptionIntroductoryOfferResponse, error) {
-	firstPage, err := client.GetSubscriptionIntroductoryOffers(ctx, subscriptionID, asc.WithSubscriptionIntroductoryOffersLimit(200))
+	firstPage, err := client.GetSubscriptionIntroductoryOffers(ctx, subscriptionID, asc.Limit[asc.SubscriptionIntroductoryOffersOption](200))
 	if err != nil {
 		return nil, err
 	}
@@ -241,7 +232,7 @@ func findSubscriptionIntroductoryOffer(ctx context.Context, client *asc.Client, 
 	errOfferFound := errors.New("introductory offer found")
 	var found *asc.SubscriptionIntroductoryOfferResponse
 	err = asc.PaginateEach(ctx, firstPage, func(ctx context.Context, nextURL string) (asc.PaginatedResponse, error) {
-		return client.GetSubscriptionIntroductoryOffers(ctx, subscriptionID, asc.WithSubscriptionIntroductoryOffersNextURL(nextURL))
+		return client.GetSubscriptionIntroductoryOffers(ctx, subscriptionID, asc.NextURL[asc.SubscriptionIntroductoryOffersOption](nextURL))
 	}, func(page asc.PaginatedResponse) error {
 		resp, ok := page.(*asc.SubscriptionIntroductoryOffersResponse)
 		if !ok {
@@ -265,9 +256,9 @@ func findSubscriptionIntroductoryOffer(ctx context.Context, client *asc.Client, 
 	return nil, fmt.Errorf("introductory offer %q not found for subscription %q: %w", offerID, subscriptionID, asc.ErrNotFound)
 }
 
-// SubscriptionsIntroductoryOffersCreateCommand returns the introductory offers create subcommand.
-func SubscriptionsIntroductoryOffersCreateCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("introductory-offers create", flag.ExitOnError)
+// newSubscriptionsIntroductoryOffersCreateCommand returns the introductory offers create subcommand.
+func newSubscriptionsIntroductoryOffersCreateCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("introductory-offers create", flag.ExitOnError)
 
 	subscriptionID := shared.BindResourceIDFlag(fs, "subscription-id", "subscriptions", "Subscription ID, product ID, or exact current name")
 	appID := addSubscriptionLookupAppFlag(fs)
@@ -279,10 +270,10 @@ func SubscriptionsIntroductoryOffersCreateCommand() *ffcli.Command {
 	territory := fs.String("territory", "", "Territory for the offer (accepts alpha-2, alpha-3, or exact English country name; required unless --all-territories)")
 	allTerritories := fs.Bool("all-territories", false, "Create introductory offers for all current subscription availability territories")
 	pricePoint := shared.BindResourceIDFlag(fs, "price-point", "subscriptionPricePoints", "Subscription price point ID")
-	targetPlanType := shared.BindTargetSubscriptionPlanTypeFlag(fs)
+	targetPlanType := d.BindTargetSubscriptionPlanTypeFlag(fs)
 	dryRun := fs.Bool("dry-run", false, "Print a summary without creating offers; single-territory mode makes no network requests")
 	continueOnError := fs.Bool("continue-on-error", true, "Continue creating offers after a territory fails")
-	output := shared.BindOutputFlags(fs)
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "create",
@@ -303,28 +294,27 @@ for the other plan type does not count as already existing.
 Timeouts:
   An explicit ASC_TIMEOUT caps the full create operation. Without an override, the operation uses a 5m fallback while individual requests retain the standard request timeout.`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			id := strings.TrimSpace(*subscriptionID)
 			if id == "" {
-				fmt.Fprintln(os.Stderr, "Error: --subscription-id is required")
-				return shared.MissingRequiredUsageError("--subscription-id")
+				return d.RequiredFlag("--subscription-id")
 			}
 
 			duration, err := normalizeSubscriptionOfferDuration(*offerDuration)
 			if err != nil {
-				fmt.Fprintln(os.Stderr, "Error:", err.Error())
+				fmt.Fprintln(d.IO.ErrOut, "Error:", err.Error())
 				return flag.ErrHelp
 			}
 
 			mode, err := normalizeSubscriptionOfferMode(*offerMode)
 			if err != nil {
-				fmt.Fprintln(os.Stderr, "Error:", err.Error())
+				fmt.Fprintln(d.IO.ErrOut, "Error:", err.Error())
 				return flag.ErrHelp
 			}
 
 			if *numberOfPeriods <= 0 {
-				fmt.Fprintln(os.Stderr, "Error: --number-of-periods is required")
+				fmt.Fprintln(d.IO.ErrOut, "Error: --number-of-periods is required")
 				return requiredPositiveIntegerUsageError(fs, "number-of-periods")
 			}
 
@@ -337,7 +327,7 @@ Timeouts:
 			if strings.TrimSpace(*startDate) != "" {
 				normalizedStartDate, err = shared.NormalizeDate(*startDate, "--start-date")
 				if err != nil {
-					fmt.Fprintln(os.Stderr, "Error:", err.Error())
+					fmt.Fprintln(d.IO.ErrOut, "Error:", err.Error())
 					return flag.ErrHelp
 				}
 			}
@@ -346,7 +336,7 @@ Timeouts:
 			if strings.TrimSpace(*endDate) != "" {
 				normalizedEndDate, err = shared.NormalizeDate(*endDate, "--end-date")
 				if err != nil {
-					fmt.Fprintln(os.Stderr, "Error:", err.Error())
+					fmt.Fprintln(d.IO.ErrOut, "Error:", err.Error())
 					return flag.ErrHelp
 				}
 			}
@@ -359,7 +349,7 @@ Timeouts:
 			})
 			territoryID := strings.TrimSpace(*territory)
 			if territoryProvided && territoryID == "" {
-				return subscriptionIntroductoryOfferSelectorUsageError(
+				return subscriptionIntroductoryOfferSelectorUsageError(d,
 					shared.UsageErrorInvalidValue,
 					"invalid value for --territory: cannot be empty",
 				)
@@ -369,7 +359,7 @@ Timeouts:
 				if territoryProvided {
 					kind = shared.UsageErrorInvalidValue
 				}
-				return subscriptionIntroductoryOfferSelectorUsageError(
+				return subscriptionIntroductoryOfferSelectorUsageError(d,
 					kind,
 					"exactly one of --territory or --all-territories is required",
 				)
@@ -377,17 +367,17 @@ Timeouts:
 
 			useAllTerritories := *allTerritories
 			if useAllTerritories && strings.TrimSpace(*pricePoint) != "" {
-				fmt.Fprintln(os.Stderr, "Error: --price-point cannot be used with --all-territories")
+				fmt.Fprintln(d.IO.ErrOut, "Error: --price-point cannot be used with --all-territories")
 				return flag.ErrHelp
 			}
 			if territoryProvided {
 				territoryID, err = ascterritory.Normalize(territoryID)
 				if err != nil {
-					return subscriptionIntroductoryOfferSelectorUsageError(shared.UsageErrorInvalidValue, err.Error())
+					return subscriptionIntroductoryOfferSelectorUsageError(d, shared.UsageErrorInvalidValue, err.Error())
 				}
 			}
 
-			if err := shared.RequireAppForStableSelector(shared.ResolveAppID(*appID), id, "--subscription-id"); err != nil {
+			if err := d.RequireAppForStableSelector(d.ResolveAppID(*appID), id, "--subscription-id"); err != nil {
 				return err
 			}
 
@@ -395,7 +385,7 @@ Timeouts:
 				if err := ctx.Err(); err != nil {
 					return err
 				}
-				return summarizeSubscriptionIntroductoryOfferCreateDryRun(
+				return summarizeSubscriptionIntroductoryOfferCreateDryRun(d,
 					id,
 					territoryID,
 					*continueOnError,
@@ -404,15 +394,15 @@ Timeouts:
 				)
 			}
 
-			client, err := shared.GetASCClient()
+			client, err := d.Client()
 			if err != nil {
 				return fmt.Errorf("subscriptions introductory-offers create: %w", err)
 			}
 
-			operationCtx, operationCancel := contextWithSubscriptionIntroductoryOfferCreateTimeout(ctx)
+			operationCtx, operationCancel := contextWithSubscriptionIntroductoryOfferCreateTimeout(ctx, d)
 			defer operationCancel()
 
-			id, err = resolveSubscriptionLookupIDWithTimeout(operationCtx, client, *appID, id)
+			id, err = resolveSubscriptionLookupIDWithTimeout(operationCtx, d, client, *appID, id)
 			if err != nil {
 				return err
 			}
@@ -433,6 +423,7 @@ Timeouts:
 			if useAllTerritories {
 				return createSubscriptionIntroductoryOffersForAllTerritories(
 					operationCtx,
+					d,
 					client,
 					id,
 					attrs,
@@ -443,7 +434,7 @@ Timeouts:
 				)
 			}
 
-			requestCtx, cancel := shared.ContextWithTimeout(operationCtx)
+			requestCtx, cancel := d.Timeout(operationCtx)
 			defer cancel()
 
 			resp, err := client.CreateSubscriptionIntroductoryOffer(
@@ -457,13 +448,13 @@ Timeouts:
 				return fmt.Errorf("subscriptions introductory-offers create: failed to create: %w", err)
 			}
 
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+			return d.PrintOutput(resp, *output.Output, *output.Pretty)
 		},
 	}
 }
 
-func subscriptionIntroductoryOfferSelectorUsageError(kind shared.UsageErrorKind, message string) error {
-	fmt.Fprintf(os.Stderr, "Error: %s\n%s", strings.TrimSpace(message), subscriptionIntroductoryOfferCreateSelectorGuidance)
+func subscriptionIntroductoryOfferSelectorUsageError(d *shared.Deps, kind shared.UsageErrorKind, message string) error {
+	fmt.Fprintf(d.IO.ErrOut, "Error: %s\n%s", strings.TrimSpace(message), subscriptionIntroductoryOfferCreateSelectorGuidance)
 	return shared.NewReportedUsageError(kind, message)
 }
 
@@ -472,7 +463,7 @@ func subscriptionIntroductoryOfferSelectorUsageError(kind shared.UsageErrorKind,
 // dry runs read alike. It performs no requests: the territory is already resolved
 // locally, and the availability lookup the bulk path needs to enumerate territories
 // would be wasted work here.
-func summarizeSubscriptionIntroductoryOfferCreateDryRun(
+func summarizeSubscriptionIntroductoryOfferCreateDryRun(d *shared.Deps,
 	subscriptionID string,
 	territoryID string,
 	continueOnError bool,
@@ -489,11 +480,12 @@ func summarizeSubscriptionIntroductoryOfferCreateDryRun(
 		Created:         1,
 	}
 
-	return shared.PrintOutput(summary, output, pretty)
+	return d.PrintOutput(summary, output, pretty)
 }
 
 func createSubscriptionIntroductoryOffersForAllTerritories(
 	ctx context.Context,
+	d *shared.Deps,
 	client *asc.Client,
 	subscriptionID string,
 	attrs asc.SubscriptionIntroductoryOfferCreateAttributes,
@@ -502,12 +494,12 @@ func createSubscriptionIntroductoryOffersForAllTerritories(
 	output string,
 	pretty bool,
 ) error {
-	availabilityID, territories, err := fetchIntroductoryOfferAvailabilityTerritories(ctx, client, subscriptionID)
+	availabilityID, territories, err := fetchIntroductoryOfferAvailabilityTerritories(ctx, d, client, subscriptionID)
 	if err != nil {
 		return fmt.Errorf("subscriptions introductory-offers create: %w", err)
 	}
 
-	existing, err := fetchIntroductoryOfferTerritories(ctx, client, subscriptionID, attrs.TargetSubscriptionPlanType)
+	existing, err := fetchIntroductoryOfferTerritories(ctx, d, client, subscriptionID, attrs.TargetSubscriptionPlanType)
 	if err != nil {
 		return fmt.Errorf("subscriptions introductory-offers create: %w", err)
 	}
@@ -539,7 +531,7 @@ func createSubscriptionIntroductoryOffersForAllTerritories(
 			continue
 		}
 
-		createCtx, createCancel := shared.ContextWithTimeout(ctx)
+		createCtx, createCancel := d.Timeout(ctx)
 		_, err := client.CreateSubscriptionIntroductoryOffer(createCtx, subscriptionID, attrs, territoryID, "")
 		createCancel()
 		if err != nil {
@@ -558,7 +550,7 @@ func createSubscriptionIntroductoryOffersForAllTerritories(
 		summary.Created++
 	}
 
-	if err := shared.PrintOutput(summary, output, pretty); err != nil {
+	if err := d.PrintOutput(summary, output, pretty); err != nil {
 		return err
 	}
 	if operationErr != nil {
@@ -570,12 +562,12 @@ func createSubscriptionIntroductoryOffersForAllTerritories(
 	return nil
 }
 
-func contextWithSubscriptionIntroductoryOfferCreateTimeout(ctx context.Context) (context.Context, context.CancelFunc) {
-	return shared.ContextWithResolvedTimeout(ctx, subscriptionIntroductoryOfferCreateTimeout)
+func contextWithSubscriptionIntroductoryOfferCreateTimeout(ctx context.Context, d *shared.Deps) (context.Context, context.CancelFunc) {
+	return d.ResolvedTimeout(ctx, subscriptionIntroductoryOfferCreateTimeout)
 }
 
-func fetchIntroductoryOfferAvailabilityTerritories(ctx context.Context, client *asc.Client, subscriptionID string) (string, []string, error) {
-	availabilityCtx, availabilityCancel := shared.ContextWithTimeout(ctx)
+func fetchIntroductoryOfferAvailabilityTerritories(ctx context.Context, d *shared.Deps, client *asc.Client, subscriptionID string) (string, []string, error) {
+	availabilityCtx, availabilityCancel := d.Timeout(ctx)
 	availability, err := client.GetSubscriptionAvailabilityForSubscription(availabilityCtx, subscriptionID)
 	availabilityCancel()
 	if err != nil {
@@ -587,17 +579,17 @@ func fetchIntroductoryOfferAvailabilityTerritories(ctx context.Context, client *
 		return "", nil, fmt.Errorf("subscription availability readback returned empty id")
 	}
 
-	territoriesCtx, territoriesCancel := shared.ContextWithTimeout(ctx)
-	firstPage, err := client.GetSubscriptionAvailabilityAvailableTerritories(territoriesCtx, availabilityID, asc.WithSubscriptionAvailabilityTerritoriesLimit(200))
+	territoriesCtx, territoriesCancel := d.Timeout(ctx)
+	firstPage, err := client.GetSubscriptionAvailabilityAvailableTerritories(territoriesCtx, availabilityID, asc.Limit[asc.SubscriptionAvailabilityTerritoriesOption](200))
 	territoriesCancel()
 	if err != nil {
 		return "", nil, fmt.Errorf("failed to fetch subscription availability territories: %w", err)
 	}
 
 	allPages, err := asc.PaginateAll(ctx, firstPage, func(_ context.Context, nextURL string) (asc.PaginatedResponse, error) {
-		pageCtx, pageCancel := shared.ContextWithTimeout(ctx)
+		pageCtx, pageCancel := d.Timeout(ctx)
 		defer pageCancel()
-		return client.GetSubscriptionAvailabilityAvailableTerritories(pageCtx, availabilityID, asc.WithSubscriptionAvailabilityTerritoriesNextURL(nextURL))
+		return client.GetSubscriptionAvailabilityAvailableTerritories(pageCtx, availabilityID, asc.NextURL[asc.SubscriptionAvailabilityTerritoriesOption](nextURL))
 	})
 	if err != nil {
 		return "", nil, fmt.Errorf("paginate subscription availability territories: %w", err)
@@ -626,18 +618,18 @@ func fetchIntroductoryOfferAvailabilityTerritories(ctx context.Context, client *
 
 // fetchIntroductoryOfferTerritories returns the territories that already have an
 // offer. With a target plan type, offers known to target the other plan don't count.
-func fetchIntroductoryOfferTerritories(ctx context.Context, client *asc.Client, subscriptionID string, targetPlanType asc.SubscriptionPlanType) (map[string]struct{}, error) {
-	offersCtx, offersCancel := shared.ContextWithTimeout(ctx)
-	firstPage, err := client.GetSubscriptionIntroductoryOffers(offersCtx, subscriptionID, asc.WithSubscriptionIntroductoryOffersLimit(200))
+func fetchIntroductoryOfferTerritories(ctx context.Context, d *shared.Deps, client *asc.Client, subscriptionID string, targetPlanType asc.SubscriptionPlanType) (map[string]struct{}, error) {
+	offersCtx, offersCancel := d.Timeout(ctx)
+	firstPage, err := client.GetSubscriptionIntroductoryOffers(offersCtx, subscriptionID, asc.Limit[asc.SubscriptionIntroductoryOffersOption](200))
 	offersCancel()
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch existing introductory offers: %w", err)
 	}
 
 	allPages, err := asc.PaginateAll(ctx, firstPage, func(_ context.Context, nextURL string) (asc.PaginatedResponse, error) {
-		pageCtx, pageCancel := shared.ContextWithTimeout(ctx)
+		pageCtx, pageCancel := d.Timeout(ctx)
 		defer pageCancel()
-		return client.GetSubscriptionIntroductoryOffers(pageCtx, subscriptionID, asc.WithSubscriptionIntroductoryOffersNextURL(nextURL))
+		return client.GetSubscriptionIntroductoryOffers(pageCtx, subscriptionID, asc.NextURL[asc.SubscriptionIntroductoryOffersOption](nextURL))
 	})
 	if err != nil {
 		return nil, fmt.Errorf("paginate existing introductory offers: %w", err)
@@ -740,13 +732,13 @@ func pluralizeIntroductoryOfferCreateTerritories(n int) string {
 	return "ies"
 }
 
-// SubscriptionsIntroductoryOffersUpdateCommand returns the introductory offers update subcommand.
-func SubscriptionsIntroductoryOffersUpdateCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("introductory-offers update", flag.ExitOnError)
+// newSubscriptionsIntroductoryOffersUpdateCommand returns the introductory offers update subcommand.
+func newSubscriptionsIntroductoryOffersUpdateCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("introductory-offers update", flag.ExitOnError)
 
 	offerID := shared.BindResourceIDFlag(fs, "id", "subscriptionIntroductoryOffers", "Introductory offer ID")
 	endDate := fs.String("end-date", "", "End date (YYYY-MM-DD)")
-	output := shared.BindOutputFlags(fs)
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "update",
@@ -757,30 +749,28 @@ func SubscriptionsIntroductoryOffersUpdateCommand() *ffcli.Command {
 Examples:
   asc subscriptions introductory-offers update --id "OFFER_ID" --end-date "2026-02-01"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			id := strings.TrimSpace(*offerID)
 			if id == "" {
-				fmt.Fprintln(os.Stderr, "Error: --id is required")
-				return shared.MissingRequiredUsageError("--id")
+				return d.RequiredFlag("--id")
 			}
 			if strings.TrimSpace(*endDate) == "" {
-				fmt.Fprintln(os.Stderr, "Error: at least one update flag is required")
-				return shared.MissingRequiredUsageError("--end-date")
+				return d.UpdateFlagRequired(fs, endDate)
 			}
 
 			normalizedEndDate, err := shared.NormalizeDate(*endDate, "--end-date")
 			if err != nil {
-				fmt.Fprintln(os.Stderr, "Error:", err.Error())
+				fmt.Fprintln(d.IO.ErrOut, "Error:", err.Error())
 				return flag.ErrHelp
 			}
 
-			client, err := shared.GetASCClient()
+			client, err := d.Client()
 			if err != nil {
 				return fmt.Errorf("subscriptions introductory-offers update: %w", err)
 			}
 
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
+			requestCtx, cancel := d.Timeout(ctx)
 			defer cancel()
 
 			attrs := asc.SubscriptionIntroductoryOfferUpdateAttributes{
@@ -792,54 +782,32 @@ Examples:
 				return fmt.Errorf("subscriptions introductory-offers update: failed to update: %w", err)
 			}
 
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+			return d.PrintOutput(resp, *output.Output, *output.Pretty)
 		},
 	}
 }
 
-// SubscriptionsIntroductoryOffersDeleteCommand returns the introductory offers delete subcommand.
-func SubscriptionsIntroductoryOffersDeleteCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("introductory-offers delete", flag.ExitOnError)
-
-	offerID := shared.BindResourceIDFlag(fs, "id", "subscriptionIntroductoryOffers", "Introductory offer ID")
-	confirm := fs.Bool("confirm", false, "Confirm deletion")
-	output := shared.BindOutputFlags(fs)
-
-	return &ffcli.Command{
-		Name:       "delete",
-		ShortUsage: "asc subscriptions introductory-offers delete --id \"OFFER_ID\" --confirm",
-		ShortHelp:  "Delete an introductory offer.",
+// newSubscriptionsIntroductoryOffersDeleteCommand returns the introductory offers delete subcommand.
+func newSubscriptionsIntroductoryOffersDeleteCommand(d *shared.Deps) *ffcli.Command {
+	return shared.BuildConfirmDeleteCommand(shared.ConfirmDeleteCommandConfig{
+		Deps:        d,
+		FlagSetName: "introductory-offers delete",
+		Name:        "delete",
+		ShortUsage:  "asc subscriptions introductory-offers delete --id \"OFFER_ID\" --confirm",
+		ShortHelp:   "Delete an introductory offer.",
 		LongHelp: `Delete an introductory offer.
 
 Examples:
   asc subscriptions introductory-offers delete --id "OFFER_ID" --confirm`,
-		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
-		Exec: func(ctx context.Context, args []string) error {
-			id := strings.TrimSpace(*offerID)
-			if id == "" {
-				fmt.Fprintln(os.Stderr, "Error: --id is required")
-				return shared.MissingRequiredUsageError("--id")
-			}
-			if !*confirm {
-				fmt.Fprintln(os.Stderr, "Error: --confirm is required")
-				return shared.MissingRequiredUsageError("--confirm")
-			}
-
-			client, err := shared.GetASCClient()
-			if err != nil {
-				return fmt.Errorf("subscriptions introductory-offers delete: %w", err)
-			}
-
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
-			defer cancel()
-
-			if err := client.DeleteSubscriptionIntroductoryOffer(requestCtx, id); err != nil {
-				return fmt.Errorf("subscriptions introductory-offers delete: failed to delete: %w", err)
-			}
-
-			result := &asc.AssetDeleteResult{ID: id, Deleted: true}
-			return shared.PrintOutput(result, *output.Output, *output.Pretty)
+		IDFlag:             "id",
+		IDUsage:            "Introductory offer ID",
+		IDType:             "subscriptionIntroductoryOffers",
+		RequiredDiagnostic: true,
+		Delete: func(ctx context.Context, client *asc.Client, id string) error {
+			return client.DeleteSubscriptionIntroductoryOffer(ctx, id)
 		},
-	}
+		Result: func(id string) any {
+			return &asc.AssetDeleteResult{ID: id, Deleted: true}
+		},
+	})
 }

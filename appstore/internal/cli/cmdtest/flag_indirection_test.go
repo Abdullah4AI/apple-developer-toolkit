@@ -2,8 +2,6 @@ package cmdtest
 
 import (
 	"encoding/json"
-	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -11,6 +9,7 @@ import (
 	"testing"
 
 	cmd "github.com/Abdullah4AI/apple-developer-toolkit/appstore/cmd"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asctest"
 )
 
 func TestFlagIndirectionPreservesRootFlagsAndSearchTerminator(t *testing.T) {
@@ -20,14 +19,11 @@ func TestFlagIndirectionPreservesRootFlagsAndSearchTerminator(t *testing.T) {
 	t.Setenv("ASC_TEST_LIMIT", "1")
 	t.Setenv("ASC_TEST_MISSING_PROFILE", "")
 	t.Setenv("ASC_TEST_MISSING_QUERY", "")
-	var code int
-	stdout, stderr := captureOutput(t, func() {
-		code = cmd.Run([]string{
-			"--read-only", "search", "--profile", "@env:ASC_TEST_MISSING_PROFILE",
-			"--limit", "@env:ASC_TEST_LIMIT", "--output", "json",
-			"--", "--limit", "@env:ASC_TEST_MISSING_QUERY",
-		}, "1.2.3")
-	})
+	stdout, stderr, code := runWithDeps(t, nil,
+		"--read-only", "search", "--profile", "@env:ASC_TEST_MISSING_PROFILE",
+		"--limit", "@env:ASC_TEST_LIMIT", "--output", "json",
+		"--", "--limit", "@env:ASC_TEST_MISSING_QUERY",
+	)
 	if code != cmd.ExitSuccess || stderr != "" {
 		t.Fatalf("code=%d stderr=%q stdout=%q", code, stderr, stdout)
 	}
@@ -40,21 +36,19 @@ func TestFlagIndirectionPreservesRootFlagsAndSearchTerminator(t *testing.T) {
 	}
 }
 
-func installIndirectionTransport(t *testing.T, method, path, response string) *[]string {
+func installIndirectionTransport(t *testing.T) *asctest.Registry {
 	t.Helper()
 	setupLocUpdateAuth(t)
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() { http.DefaultTransport = originalTransport })
+	reg := asctest.NewRegistry(t)
+	reg.Install()
+	return reg
+}
 
-	bodies := &[]string{}
-	http.DefaultTransport = locUpdateRoundTripFunc(func(req *http.Request) (*http.Response, error) {
-		if req.Method != method || req.URL.Path != path {
-			return nil, fmt.Errorf("unexpected request: %s %s", req.Method, req.URL.Path)
-		}
-		body, _ := io.ReadAll(req.Body)
-		*bodies = append(*bodies, string(body))
-		return locUpdateJSONResponse(response)
-	})
+func requestBodies(reg *asctest.Registry) []string {
+	var bodies []string
+	for _, req := range reg.Requests() {
+		bodies = append(bodies, string(req.Body))
+	}
 	return bodies
 }
 
@@ -63,8 +57,9 @@ func TestFlagIndirectionFileValueReachesRequestBody(t *testing.T) {
 	if err := os.WriteFile(notesPath, []byte("Line one\nLine two\n"), 0o600); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
-	bodies := installIndirectionTransport(t, http.MethodPatch, "/v1/appStoreVersionLocalizations/loc-1",
-		`{"data":{"type":"appStoreVersionLocalizations","id":"loc-1","attributes":{"locale":"en-US"}}}`)
+	reg := installIndirectionTransport(t)
+	reg.Register(asctest.PATCH("/v1/appStoreVersionLocalizations/loc-1").JSONBody(`{"data":{"type":"appStoreVersionLocalizations","id":"loc-1","attributes":{"whatsNew":"Line one\nLine two"}}}`),
+		asctest.JSON(http.StatusOK, `{"data":{"type":"appStoreVersionLocalizations","id":"loc-1","attributes":{"locale":"en-US"}}}`))
 
 	stdout, stderr := captureOutput(t, func() {
 		code := cmd.Run([]string{"localizations", "update", "--id", "loc-1", "--whats-new", "@file:" + notesPath}, "1.2.3")
@@ -72,17 +67,18 @@ func TestFlagIndirectionFileValueReachesRequestBody(t *testing.T) {
 			t.Fatalf("exit code = %d, want %d", code, cmd.ExitSuccess)
 		}
 	})
+	bodies := requestBodies(reg)
 	if stderr != "" {
 		t.Fatalf("stderr = %q, want empty", stderr)
 	}
-	if len(*bodies) != 1 {
-		t.Fatalf("request count = %d, want 1", len(*bodies))
+	if len(bodies) != 1 {
+		t.Fatalf("request count = %d, want 1", len(bodies))
 	}
-	if !strings.Contains((*bodies)[0], `"whatsNew":"Line one\nLine two"`) {
-		t.Fatalf("patch body = %s, want file contents with one trailing newline trimmed", (*bodies)[0])
+	if !strings.Contains(bodies[0], `"whatsNew":"Line one\nLine two"`) {
+		t.Fatalf("patch body = %s, want file contents with one trailing newline trimmed", bodies[0])
 	}
-	if strings.Contains((*bodies)[0], "@file:") {
-		t.Fatalf("patch body still carries the indirection token: %s", (*bodies)[0])
+	if strings.Contains(bodies[0], "@file:") {
+		t.Fatalf("patch body still carries the indirection token: %s", bodies[0])
 	}
 	if !strings.Contains(stdout, `"id":"loc-1"`) {
 		t.Fatalf("stdout = %q, want updated localization", stdout)
@@ -91,31 +87,31 @@ func TestFlagIndirectionFileValueReachesRequestBody(t *testing.T) {
 
 func TestFlagIndirectionEnvValueReachesRequestBody(t *testing.T) {
 	t.Setenv("ASC_TEST_WEBHOOK_SECRET", "hunter2-from-env")
-	bodies := installIndirectionTransport(t, http.MethodPost, "/v1/webhooks",
-		`{"data":{"type":"webhooks","id":"wh-1","attributes":{"name":"Build Updates","url":"https://example.com/webhook","enabled":true,"eventTypes":["BUILD_UPLOAD_STATE_UPDATED"]}}}`)
+	reg := asctest.NewRegistry(t)
+	reg.Register(asctest.POST("/v1/webhooks").JSONBody(`{"data":{"type":"webhooks","attributes":{"enabled":true,"eventTypes":["BUILD_UPLOAD_STATE_UPDATED"],"name":"Build Updates","secret":"hunter2-from-env","url":"https://example.com/webhook"},"relationships":{"app":{"data":{"type":"apps","id":"APP_ID"}}}}}`),
+		asctest.JSON(http.StatusOK, `{"data":{"type":"webhooks","id":"wh-1","attributes":{"name":"Build Updates","url":"https://example.com/webhook","enabled":true,"eventTypes":["BUILD_UPLOAD_STATE_UPDATED"]}}}`))
 
-	stdout, stderr := captureOutput(t, func() {
-		code := cmd.Run([]string{
-			"webhooks", "create",
-			"--app", "APP_ID",
-			"--name", "Build Updates",
-			"--url", "https://example.com/webhook",
-			"--secret", "@env:ASC_TEST_WEBHOOK_SECRET",
-			"--events", "BUILD_UPLOAD_STATE_UPDATED",
-			"--enabled", "true",
-		}, "1.2.3")
-		if code != cmd.ExitSuccess {
-			t.Fatalf("exit code = %d, want %d", code, cmd.ExitSuccess)
-		}
-	})
+	stdout, stderr, code := runWithDeps(t, stubClient(t, reg),
+		"webhooks", "create",
+		"--app", "APP_ID",
+		"--name", "Build Updates",
+		"--url", "https://example.com/webhook",
+		"--secret", "@env:ASC_TEST_WEBHOOK_SECRET",
+		"--events", "BUILD_UPLOAD_STATE_UPDATED",
+		"--enabled", "true",
+	)
+	if code != cmd.ExitSuccess {
+		t.Fatalf("exit code = %d, want %d", code, cmd.ExitSuccess)
+	}
+	bodies := requestBodies(reg)
 	if stderr != "" {
 		t.Fatalf("stderr = %q, want empty", stderr)
 	}
-	if len(*bodies) != 1 {
-		t.Fatalf("request count = %d, want 1", len(*bodies))
+	if len(bodies) != 1 {
+		t.Fatalf("request count = %d, want 1", len(bodies))
 	}
-	if !strings.Contains((*bodies)[0], `"secret":"hunter2-from-env"`) {
-		t.Fatalf("post body = %s, want resolved secret", (*bodies)[0])
+	if !strings.Contains(bodies[0], `"secret":"hunter2-from-env"`) {
+		t.Fatalf("post body = %s, want resolved secret", bodies[0])
 	}
 	if !strings.Contains(stdout, `"id":"wh-1"`) {
 		t.Fatalf("stdout = %q, want created webhook", stdout)
@@ -123,8 +119,9 @@ func TestFlagIndirectionEnvValueReachesRequestBody(t *testing.T) {
 }
 
 func TestFlagIndirectionDoubleAtEscapesLiteralValue(t *testing.T) {
-	bodies := installIndirectionTransport(t, http.MethodPatch, "/v1/appStoreVersionLocalizations/loc-1",
-		`{"data":{"type":"appStoreVersionLocalizations","id":"loc-1","attributes":{"locale":"en-US"}}}`)
+	reg := installIndirectionTransport(t)
+	reg.Register(asctest.PATCH("/v1/appStoreVersionLocalizations/loc-1").JSONBody(`{"data":{"type":"appStoreVersionLocalizations","id":"loc-1","attributes":{"whatsNew":"@env:NOT_A_VARIABLE"}}}`),
+		asctest.JSON(http.StatusOK, `{"data":{"type":"appStoreVersionLocalizations","id":"loc-1","attributes":{"locale":"en-US"}}}`))
 
 	_, stderr := captureOutput(t, func() {
 		code := cmd.Run([]string{"localizations", "update", "--id", "loc-1", "--whats-new", "@@env:NOT_A_VARIABLE"}, "1.2.3")
@@ -132,11 +129,12 @@ func TestFlagIndirectionDoubleAtEscapesLiteralValue(t *testing.T) {
 			t.Fatalf("exit code = %d, want %d", code, cmd.ExitSuccess)
 		}
 	})
+	bodies := requestBodies(reg)
 	if stderr != "" {
 		t.Fatalf("stderr = %q, want empty", stderr)
 	}
-	if len(*bodies) != 1 || !strings.Contains((*bodies)[0], `"whatsNew":"@env:NOT_A_VARIABLE"`) {
-		t.Fatalf("bodies = %q, want literal @env:NOT_A_VARIABLE", *bodies)
+	if len(bodies) != 1 || !strings.Contains(bodies[0], `"whatsNew":"@env:NOT_A_VARIABLE"`) {
+		t.Fatalf("bodies = %q, want literal @env:NOT_A_VARIABLE", bodies)
 	}
 }
 
@@ -149,16 +147,19 @@ func TestFlagIndirectionErrorsAreUsageErrorsBeforeAnyRequest(t *testing.T) {
 		name string
 		args []string
 		want string
+		deps bool // the command is built on shared.Deps: run it through RunWithDeps
 	}{
 		{
 			name: "unset environment variable",
 			args: []string{"webhooks", "create", "--app", "APP_ID", "--name", "n", "--url", "https://example.com", "--secret", "@env:ASC_TEST_INDIRECT_UNSET", "--events", "BUILD_UPLOAD_STATE_UPDATED", "--enabled", "true"},
 			want: "Error: --secret: environment variable ASC_TEST_INDIRECT_UNSET is not set\n",
+			deps: true,
 		},
 		{
 			name: "empty environment variable",
 			args: []string{"webhooks", "create", "--app", "APP_ID", "--secret=@env:ASC_TEST_INDIRECT_EMPTY"},
 			want: "Error: --secret: environment variable ASC_TEST_INDIRECT_EMPTY is empty\n",
+			deps: true,
 		},
 		{
 			name: "missing file",
@@ -168,11 +169,18 @@ func TestFlagIndirectionErrorsAreUsageErrorsBeforeAnyRequest(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			bodies := installIndirectionTransport(t, "", "", "{}")
+			var stdout, stderr string
 			var code int
-			stdout, stderr := captureOutput(t, func() {
-				code = cmd.Run(test.args, "1.2.3")
-			})
+			var reg *asctest.Registry
+			if test.deps {
+				reg = asctest.NewRegistry(t)
+				stdout, stderr, code = runWithDeps(t, stubClient(t, reg), test.args...)
+			} else {
+				reg = installIndirectionTransport(t)
+				stdout, stderr = captureOutput(t, func() {
+					code = cmd.Run(test.args, "1.2.3")
+				})
+			}
 			if code != cmd.ExitUsage {
 				t.Fatalf("exit code = %d, want %d; stderr=%q", code, cmd.ExitUsage, stderr)
 			}
@@ -182,8 +190,8 @@ func TestFlagIndirectionErrorsAreUsageErrorsBeforeAnyRequest(t *testing.T) {
 			if stderr != test.want {
 				t.Fatalf("stderr = %q, want %q", stderr, test.want)
 			}
-			if len(*bodies) != 0 {
-				t.Fatalf("requests = %q, want none", *bodies)
+			if bodies := requestBodies(reg); len(bodies) != 0 {
+				t.Fatalf("requests = %q, want none", bodies)
 			}
 		})
 	}

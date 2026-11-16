@@ -6,28 +6,10 @@ import (
 	"strings"
 )
 
-// BundleIDDeleteResult represents CLI output for bundle ID deletions.
-type BundleIDDeleteResult struct {
-	ID      string `json:"id"`
-	Deleted bool   `json:"deleted"`
-}
-
-// BundleIDCapabilityDeleteResult represents CLI output for capability deletions.
-type BundleIDCapabilityDeleteResult struct {
-	ID      string `json:"id"`
-	Deleted bool   `json:"deleted"`
-}
-
 // CertificateRevokeResult represents CLI output for certificate revocations.
 type CertificateRevokeResult struct {
 	ID      string `json:"id"`
 	Revoked bool   `json:"revoked"`
-}
-
-// ProfileDeleteResult represents CLI output for profile deletions.
-type ProfileDeleteResult struct {
-	ID      string `json:"id"`
-	Deleted bool   `json:"deleted"`
 }
 
 // ProfileDownloadResult represents CLI output for profile downloads.
@@ -35,6 +17,21 @@ type ProfileDownloadResult struct {
 	ID         string `json:"id"`
 	Name       string `json:"name,omitempty"`
 	OutputPath string `json:"outputPath"`
+}
+
+// ProfilesDownloadAllResult represents CLI output for bulk profile downloads.
+type ProfilesDownloadAllResult struct {
+	OutputDir string                         `json:"outputDir"`
+	Profiles  []ProfileDownloadAllItemResult `json:"profiles"`
+}
+
+// ProfileDownloadAllItemResult describes one profile written by a bulk download.
+type ProfileDownloadAllItemResult struct {
+	ID          string `json:"id"`
+	Name        string `json:"name,omitempty"`
+	UUID        string `json:"uuid"`
+	ProfileType string `json:"profileType,omitempty"`
+	OutputPath  string `json:"outputPath"`
 }
 
 func bundleIDsRows(resp *BundleIDsResponse) ([]string, [][]string) {
@@ -77,18 +74,6 @@ func bundleIDCapabilitiesRows(resp *BundleIDCapabilitiesResponse) ([]string, [][
 	return headers, rows
 }
 
-func bundleIDDeleteResultRows(result *BundleIDDeleteResult) ([]string, [][]string) {
-	headers := []string{"ID", "Deleted"}
-	rows := [][]string{{result.ID, fmt.Sprintf("%t", result.Deleted)}}
-	return headers, rows
-}
-
-func bundleIDCapabilityDeleteResultRows(result *BundleIDCapabilityDeleteResult) ([]string, [][]string) {
-	headers := []string{"ID", "Deleted"}
-	rows := [][]string{{result.ID, fmt.Sprintf("%t", result.Deleted)}}
-	return headers, rows
-}
-
 func certificatesRows(resp *CertificatesResponse) ([]string, [][]string) {
 	headers := []string{"ID", "Name", "Type", "Expiration", "Serial"}
 	rows := make([][]string, 0, len(resp.Data))
@@ -125,12 +110,6 @@ func profilesRows(resp *ProfilesResponse) ([]string, [][]string) {
 	return headers, rows
 }
 
-func profileDeleteResultRows(result *ProfileDeleteResult) ([]string, [][]string) {
-	headers := []string{"ID", "Deleted"}
-	rows := [][]string{{result.ID, fmt.Sprintf("%t", result.Deleted)}}
-	return headers, rows
-}
-
 func profileDownloadResultRows(result *ProfileDownloadResult) ([]string, [][]string) {
 	headers := []string{"ID", "Name", "Output Path"}
 	rows := [][]string{{
@@ -138,6 +117,15 @@ func profileDownloadResultRows(result *ProfileDownloadResult) ([]string, [][]str
 		compactWhitespace(result.Name),
 		result.OutputPath,
 	}}
+	return headers, rows
+}
+
+func profilesDownloadAllResultRows(result *ProfilesDownloadAllResult) ([]string, [][]string) {
+	headers := []string{"ID", "Name", "UUID", "Profile Type", "Output Path"}
+	rows := make([][]string, 0, len(result.Profiles))
+	for _, item := range result.Profiles {
+		rows = append(rows, []string{item.ID, compactWhitespace(item.Name), item.UUID, item.ProfileType, item.OutputPath})
+	}
 	return headers, rows
 }
 

@@ -24,11 +24,7 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/secureopen"
 )
 
-// The skills check still uses the exact package version in offline mode. The
-// install command deliberately does not execute this package (or any npm
-// dependency); it checks out and installs the reviewed source directly.
 const (
-	skillsInstallerPackage    = "skills@1.5.20"
 	skillsSourceRepositoryURL = "https://github.com/rorkai/app-store-connect-cli-skills.git"
 	skillsSourceCommit        = "f52c4f04323bb2dfb21ca8be82e6494e9cd0b4d8"
 	expectedSkillsCount       = 25
@@ -98,7 +94,6 @@ var (
 	checkoutSkillsSource  = checkoutPinnedSkills
 	userHomeDirectory     = os.UserHomeDir
 	renameWithinRoot      = func(root *os.Root, oldName, newName string) error { return root.Rename(oldName, newName) }
-	currentTime           = time.Now
 	errGitNotFound        = errors.New("git not found")
 	errIncompleteSkillSet = errors.New("pinned checkout does not contain the complete asc skill pack")
 )
@@ -108,9 +103,9 @@ const (
 	skillLockName   = ".skill-lock.json"
 )
 
-// InstallSkillsCommand returns the top-level `install-skills` command.
-func InstallSkillsCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("install-skills", flag.ExitOnError)
+// NewInstallSkillsCommand returns the top-level `install-skills` command.
+func NewInstallSkillsCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("install-skills", flag.ExitOnError)
 
 	return &ffcli.Command{
 		Name:       "install-skills",
@@ -131,12 +126,9 @@ Requires git.
 Examples:
   asc install-skills`, skillsSourceCommit, expectedSkillsCount),
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
-			if len(args) != 0 {
-				return fmt.Errorf("install skills: unexpected arguments: %s", strings.Join(args, " "))
-			}
-			if err := installSkills(ctx); err != nil {
+			if err := installSkills(ctx, d); err != nil {
 				return fmt.Errorf("install skills: %w", err)
 			}
 			return nil
@@ -144,8 +136,8 @@ Examples:
 	}
 }
 
-func installSkills(ctx context.Context) (resultErr error) {
-	ctx, cancel := shared.ContextWithTimeout(ctx)
+func installSkills(ctx context.Context, d *shared.Deps) (resultErr error) {
+	ctx, cancel := d.Timeout(ctx)
 	defer cancel()
 
 	gitPath, err := lookupExecutable("git")
@@ -164,7 +156,7 @@ func installSkills(ctx context.Context) (resultErr error) {
 	if strings.TrimSpace(homeDir) == "" {
 		return errors.New("resolve the user home directory: path is empty")
 	}
-	homeDir, err = filepath.Abs(homeDir)
+	homeDir, err = d.Abs(homeDir)
 	if err != nil {
 		return fmt.Errorf("resolve the absolute user home directory: %w", err)
 	}
@@ -256,12 +248,12 @@ func installSkills(ctx context.Context) (resultErr error) {
 	}
 	defer skillsRoot.Close()
 
-	lockState, err := preparePinnedSkillLock(homeDir)
+	lockState, err := preparePinnedSkillLock(d, homeDir)
 	if err != nil {
 		return err
 	}
 	defer lockState.close()
-	if err := lockState.bind(names); err != nil {
+	if err := lockState.bind(names, d.Now); err != nil {
 		return err
 	}
 
@@ -278,7 +270,7 @@ func installSkills(ctx context.Context) (resultErr error) {
 		}
 		return err
 	}
-	fmt.Fprintf(os.Stdout, "Installed %d asc skills from reviewed commit %s.\n", len(names), skillsSourceCommit)
+	fmt.Fprintf(d.IO.Out, "Installed %d asc skills from reviewed commit %s.\n", len(names), skillsSourceCommit)
 	return nil
 }
 
@@ -325,10 +317,10 @@ type pinnedSkillLock struct {
 	bound        bool
 }
 
-func preparePinnedSkillLock(homeDir string) (*pinnedSkillLock, error) {
+func preparePinnedSkillLock(d *shared.Deps, homeDir string) (*pinnedSkillLock, error) {
 	lockDir := filepath.Join(homeDir, ".agents")
 	if stateHome := strings.TrimSpace(os.Getenv("XDG_STATE_HOME")); stateHome != "" {
-		absoluteStateHome, err := filepath.Abs(stateHome)
+		absoluteStateHome, err := d.Abs(stateHome)
 		if err != nil {
 			return nil, fmt.Errorf("resolve XDG_STATE_HOME: %w", err)
 		}
@@ -374,8 +366,8 @@ func (state *pinnedSkillLock) close() {
 	}
 }
 
-func (state *pinnedSkillLock) bind(names []string) error {
-	data, err := buildPinnedSkillLock(state.original, names, currentTime().UTC())
+func (state *pinnedSkillLock) bind(names []string, now func() time.Time) error {
+	data, err := buildPinnedSkillLock(state.original, names, now().UTC())
 	if err != nil {
 		return fmt.Errorf("prepare pinned skills lock %s: %w", state.path, err)
 	}

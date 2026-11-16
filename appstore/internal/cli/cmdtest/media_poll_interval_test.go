@@ -1,12 +1,12 @@
 package cmdtest
 
 import (
-	"net/http"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	rootcmd "github.com/Abdullah4AI/apple-developer-toolkit/appstore/cmd"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asctest"
 )
 
 // A --poll-interval below 1s would poll App Store Connect faster than the
@@ -40,12 +40,7 @@ func TestMediaUploadPollIntervalRejectsSubSecondValues(t *testing.T) {
 				name += " " + part
 			}
 			t.Run(name+" "+value, func(t *testing.T) {
-				originalTransport := http.DefaultTransport
-				t.Cleanup(func() { http.DefaultTransport = originalTransport })
-				http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-					t.Fatalf("usage error must not send requests, got %s %s", req.Method, req.URL.String())
-					return nil, nil
-				})
+				asctest.NewRegistry(t).Install()
 				_, stderr, runErr := runRootCommand(t, args)
 				if got := rootcmd.ExitCodeFromError(runErr); got != rootcmd.ExitUsage {
 					t.Fatalf("exit code = %d, want %d (err=%v)", got, rootcmd.ExitUsage, runErr)

@@ -21,18 +21,18 @@ import (
 	"howett.net/plist"
 )
 
-func executeSigningReconcilePlan(ctx context.Context, options signingReconcilePlanOptions) (signingReconcilePlanArtifact, error) {
+func executeSigningReconcilePlan(ctx context.Context, d *shared.Deps, options signingReconcilePlanOptions) (signingReconcilePlanArtifact, error) {
 	paths := reconcilePaths(options)
-	if err := validateSigningReconcileInputPaths(paths); err != nil {
+	if err := validateSigningReconcileInputPaths(d, paths); err != nil {
 		return signingReconcilePlanArtifact{}, err
 	}
 	deviceBytes, err := readProtectedFile(paths.DevicesFile)
 	if err != nil {
-		return signingReconcilePlanArtifact{}, protectedDevicesFileUsageError(err)
+		return signingReconcilePlanArtifact{}, protectedDevicesFileUsageError(d, err)
 	}
 	devicesFile, err := decodeSigningDevicesFile(deviceBytes)
 	if err != nil {
-		return signingReconcilePlanArtifact{}, invalidDevicesFileUsageError(err)
+		return signingReconcilePlanArtifact{}, invalidDevicesFileUsageError(d, err)
 	}
 	archive, err := readSigningArchiveRequirements(paths.ArchivePath)
 	if err != nil {
@@ -42,16 +42,16 @@ func executeSigningReconcilePlan(ctx context.Context, options signingReconcilePl
 		return signingReconcilePlanArtifact{}, newReconcilePlanInvalid(fmt.Errorf("archive contains no signing targets"))
 	}
 
-	client, err := sharedASCClient()
+	client, err := d.Client()
 	if err != nil {
 		return signingReconcilePlanArtifact{}, err
 	}
-	requestCtx, cancel := signingRequestContext(ctx)
+	requestCtx, cancel := signingRequestContext(ctx, d)
 	defer cancel()
 
 	plan := signingReconcilePlanArtifact{
 		SchemaVersion:       signingReconcileSchemaV1,
-		GeneratedAt:         nowRFC3339(),
+		GeneratedAt:         nowRFC3339(d.Now),
 		Command:             "signing reconcile plan",
 		Ready:               true,
 		TeamID:              archive.TeamID,
@@ -75,7 +75,7 @@ func executeSigningReconcilePlan(ctx context.Context, options signingReconcilePl
 	if err != nil {
 		return signingReconcilePlanArtifact{}, fmt.Errorf("list certificates: %w", err)
 	}
-	selectedCertificate, certBlockers := selectReconcileCertificateWithFingerprint(certificates, options.CertificateID, options.CertificateSHA256, time.Now(), options.MinimumValidityDays)
+	selectedCertificate, certBlockers := selectReconcileCertificateWithFingerprint(certificates, options.CertificateID, options.CertificateSHA256, d.Now(), options.MinimumValidityDays)
 	plan.Certificate = selectedCertificate
 	plan.Blockers = append(plan.Blockers, certBlockers...)
 	if selectedCertificate != nil && selectedCertificate.TeamID != archive.TeamID {
@@ -83,7 +83,7 @@ func executeSigningReconcilePlan(ctx context.Context, options signingReconcilePl
 	}
 
 	for _, target := range plan.Targets {
-		observed, actions, blockers, err := planSigningTarget(requestCtx, client, target, plan.Devices, selectedCertificate, options.MinimumValidityDays)
+		observed, actions, blockers, err := planSigningTarget(requestCtx, d.Now, client, target, plan.Devices, selectedCertificate, options.MinimumValidityDays)
 		if err != nil {
 			return signingReconcilePlanArtifact{}, fmt.Errorf("bundle %s: %w", target.BundleID, err)
 		}
@@ -116,34 +116,29 @@ func executeSigningReconcilePlan(ctx context.Context, options signingReconcilePl
 	return plan, nil
 }
 
-func validateSigningReconcileInputPaths(paths signingReconcilePaths) error {
+func validateSigningReconcileInputPaths(d *shared.Deps, paths signingReconcilePaths) error {
 	devicesPath, err := filepath.Abs(paths.DevicesFile)
 	if err != nil {
-		return shared.UsageErrorf("invalid --devices-file path")
+		return d.UsageErrorf("invalid --devices-file path")
 	}
 	planPath, err := filepath.Abs(paths.PlanPath)
 	if err != nil {
-		return shared.UsageErrorf("invalid --state-dir path")
+		return d.UsageErrorf("invalid --state-dir path")
 	}
 	if devicesPath == planPath {
-		return shared.UsageErrorf("--devices-file must be distinct from the generated plan path")
+		return d.UsageErrorf("--devices-file must be distinct from the generated plan path")
 	}
 	devicesInfo, devicesErr := os.Stat(devicesPath)
 	planInfo, planErr := os.Stat(planPath)
 	if devicesErr == nil && planErr == nil && os.SameFile(devicesInfo, planInfo) {
-		return shared.UsageErrorf("--devices-file must be distinct from the generated plan path")
+		return d.UsageErrorf("--devices-file must be distinct from the generated plan path")
 	}
 	return nil
 }
 
-// These indirections make the planning core independently testable while the
-// public command continues to use the shared auth and timeout contracts.
-var (
-	sharedASCClient       = func() (*asc.Client, error) { return shared.GetASCClient() }
-	signingRequestContext = func(ctx context.Context) (context.Context, context.CancelFunc) {
-		return shared.ContextWithResolvedTimeout(ctx, reconcileWorkflowTimeout)
-	}
-)
+func signingRequestContext(ctx context.Context, d *shared.Deps) (context.Context, context.CancelFunc) {
+	return d.ResolvedTimeout(ctx, reconcileWorkflowTimeout)
+}
 
 func getAllReconcileDevices(ctx context.Context, client *asc.Client) ([]asc.Resource[asc.DeviceAttributes], error) {
 	var result []asc.Resource[asc.DeviceAttributes]
@@ -153,8 +148,8 @@ func getAllReconcileDevices(ctx context.Context, client *asc.Client) ([]asc.Reso
 			ctx,
 			asc.WithDevicesPlatforms([]string{string(asc.DevicePlatformIOS)}),
 			asc.WithDevicesFields([]string{"name", "udid", "platform", "status"}),
-			asc.WithDevicesLimit(200),
-			asc.WithDevicesNextURL(next),
+			asc.Limit[asc.DevicesOption](200),
+			asc.NextURL[asc.DevicesOption](next),
 		)
 		if err != nil {
 			return nil, err
@@ -175,8 +170,8 @@ func getAllReconcileCertificates(ctx context.Context, client *asc.Client) ([]asc
 		page, err := client.GetCertificates(
 			ctx,
 			asc.WithCertificatesFilterType(reconcileCertificateType),
-			asc.WithCertificatesLimit(200),
-			asc.WithCertificatesNextURL(next),
+			asc.Limit[asc.CertificatesOption](200),
+			asc.NextURL[asc.CertificatesOption](next),
 		)
 		if err != nil {
 			return nil, err
@@ -235,10 +230,6 @@ func planDesiredDevices(desired []signingDeviceInput, remote []asc.Resource[asc.
 	return result, actions, blockers
 }
 
-func selectReconcileCertificate(certificates []asc.Resource[asc.CertificateAttributes], explicitID string, now time.Time, minimumValidityDays int) (*signingCertificateRef, []string) {
-	return selectReconcileCertificateWithFingerprint(certificates, explicitID, "", now, minimumValidityDays)
-}
-
 func selectReconcileCertificateWithFingerprint(certificates []asc.Resource[asc.CertificateAttributes], explicitID, explicitSHA256 string, now time.Time, minimumValidityDays int) (*signingCertificateRef, []string) {
 	minimumExpiration := now.Add(time.Duration(minimumValidityDays) * 24 * time.Hour)
 	var eligible []asc.Resource[asc.CertificateAttributes]
@@ -269,7 +260,7 @@ func selectReconcileCertificateWithFingerprint(certificates []asc.Resource[asc.C
 		}
 		var matches []*signingCertificateRef
 		for _, certificate := range eligible {
-			candidate, err := certificatePlanRef(certificate)
+			candidate, err := certificatePlanRef(certificate, now)
 			if err != nil {
 				continue
 			}
@@ -296,7 +287,7 @@ func selectReconcileCertificateWithFingerprint(certificates []asc.Resource[asc.C
 	if explicitID != "" {
 		for _, certificate := range eligible {
 			if certificate.ID == explicitID {
-				selected, err := certificatePlanRef(certificate)
+				selected, err := certificatePlanRef(certificate, now)
 				if err != nil {
 					return nil, []string{fmt.Sprintf("certificate %s content is missing or invalid: %v", explicitID, err)}
 				}
@@ -316,14 +307,14 @@ func selectReconcileCertificateWithFingerprint(certificates []asc.Resource[asc.C
 			Candidates:  signingCertificateCandidates(eligible),
 		}).Error()}
 	}
-	selected, err := certificatePlanRef(eligible[0])
+	selected, err := certificatePlanRef(eligible[0], now)
 	if err != nil {
 		return nil, []string{fmt.Sprintf("certificate %s content is missing or invalid: %v", eligible[0].ID, err)}
 	}
 	return selected, nil
 }
 
-func certificatePlanRef(certificate asc.Resource[asc.CertificateAttributes]) (*signingCertificateRef, error) {
+func certificatePlanRef(certificate asc.Resource[asc.CertificateAttributes], now time.Time) (*signingCertificateRef, error) {
 	der, err := base64.StdEncoding.DecodeString(strings.TrimSpace(certificate.Attributes.CertificateContent))
 	if err != nil || len(der) == 0 {
 		return nil, fmt.Errorf("decode certificateContent")
@@ -333,7 +324,7 @@ func certificatePlanRef(certificate asc.Resource[asc.CertificateAttributes]) (*s
 		return nil, fmt.Errorf("parse certificateContent DER: %w", err)
 	}
 	apiExpiration, err := time.Parse(time.RFC3339, strings.TrimSpace(certificate.Attributes.ExpirationDate))
-	if err != nil || !parsed.NotAfter.After(time.Now()) || parsed.NotAfter.UTC().Truncate(time.Second) != apiExpiration.UTC().Truncate(time.Second) {
+	if err != nil || !parsed.NotAfter.After(now) || parsed.NotAfter.UTC().Truncate(time.Second) != apiExpiration.UTC().Truncate(time.Second) {
 		return nil, fmt.Errorf("certificateContent validity differs from API expiration")
 	}
 	digest := sha256.Sum256(parsed.Raw)
@@ -349,7 +340,7 @@ func certificatePlanRef(certificate asc.Resource[asc.CertificateAttributes]) (*s
 	}, nil
 }
 
-func planSigningTarget(ctx context.Context, client *asc.Client, target signingTarget, devices []signingDesiredDevice, certificate *signingCertificateRef, minimumValidityDays int) (signingObservedBundle, []signingAction, []string, error) {
+func planSigningTarget(ctx context.Context, clock func() time.Time, client *asc.Client, target signingTarget, devices []signingDesiredDevice, certificate *signingCertificateRef, minimumValidityDays int) (signingObservedBundle, []signingAction, []string, error) {
 	observed := signingObservedBundle{BundleID: target.BundleID}
 	bundle, err := findExactReconcileBundleID(ctx, client, target.BundleID)
 	if err != nil {
@@ -405,7 +396,7 @@ func planSigningTarget(ctx context.Context, client *asc.Client, target signingTa
 	}
 	var selected *profileCandidate
 	if bundle != nil {
-		candidates, err := getProfileCandidates(ctx, client, *bundle, target, devices, *certificate, minimumValidityDays)
+		candidates, err := getProfileCandidates(ctx, clock, client, *bundle, target, devices, *certificate, minimumValidityDays)
 		if err != nil {
 			return observed, nil, nil, err
 		}
@@ -474,7 +465,7 @@ func getAllBundleIDCapabilities(ctx context.Context, client *asc.Client, bundleI
 	var result []asc.Resource[asc.BundleIDCapabilityAttributes]
 	next := ""
 	for {
-		page, err := client.GetBundleIDCapabilities(ctx, bundleID, asc.WithBundleIDCapabilitiesNextURL(next))
+		page, err := client.GetBundleIDCapabilities(ctx, bundleID, asc.NextURL[asc.BundleIDCapabilitiesOption](next))
 		if err != nil {
 			return nil, err
 		}
@@ -490,7 +481,7 @@ func findExactReconcileBundleID(ctx context.Context, client *asc.Client, identif
 	next := ""
 	var exact []asc.Resource[asc.BundleIDAttributes]
 	for {
-		page, err := client.GetBundleIDs(ctx, asc.WithBundleIDsFilterIdentifier(identifier), asc.WithBundleIDsLimit(200), asc.WithBundleIDsNextURL(next))
+		page, err := client.GetBundleIDs(ctx, asc.WithBundleIDsFilterIdentifier(identifier), asc.Limit[asc.BundleIDsOption](200), asc.NextURL[asc.BundleIDsOption](next))
 		if err != nil {
 			return nil, err
 		}
@@ -521,13 +512,13 @@ type profileCandidate struct {
 	Suitable       bool
 }
 
-func getProfileCandidates(ctx context.Context, client *asc.Client, bundle asc.Resource[asc.BundleIDAttributes], target signingTarget, desired []signingDesiredDevice, certificate signingCertificateRef, minimumValidityDays int) ([]profileCandidate, error) {
+func getProfileCandidates(ctx context.Context, clock func() time.Time, client *asc.Client, bundle asc.Resource[asc.BundleIDAttributes], target signingTarget, desired []signingDesiredDevice, certificate signingCertificateRef, minimumValidityDays int) ([]profileCandidate, error) {
 	profiles, err := getAllBundleProfiles(ctx, client, bundle.ID)
 	if err != nil {
 		return nil, err
 	}
 	desiredIDs := resolvedDeviceIDs(desired)
-	minimumExpiration := time.Now().Add(time.Duration(minimumValidityDays) * 24 * time.Hour)
+	minimumExpiration := clock().Add(time.Duration(minimumValidityDays) * 24 * time.Hour)
 	var candidates []profileCandidate
 	for _, profile := range profiles {
 		if profile.Attributes.ProfileType != reconcileProfileType || profile.Attributes.ProfileState != asc.ProfileStateActive {
@@ -579,7 +570,7 @@ func getAllBundleProfiles(ctx context.Context, client *asc.Client, bundleID stri
 	var result []asc.Resource[asc.ProfileAttributes]
 	next := ""
 	for {
-		page, err := client.GetBundleIDProfiles(ctx, bundleID, asc.WithBundleIDProfilesLimit(200), asc.WithBundleIDProfilesNextURL(next))
+		page, err := client.GetBundleIDProfiles(ctx, bundleID, asc.Limit[asc.BundleIDProfilesOption](200), asc.NextURL[asc.BundleIDProfilesOption](next))
 		if err != nil {
 			return nil, err
 		}
@@ -596,7 +587,7 @@ func getAllProfileCertificateIDs(ctx context.Context, client *asc.Client, profil
 	var result []string
 	next := ""
 	for {
-		page, err := client.GetProfileCertificates(ctx, profileID, asc.WithProfileCertificatesLimit(200), asc.WithProfileCertificatesNextURL(next))
+		page, err := client.GetProfileCertificates(ctx, profileID, asc.Limit[asc.ProfileCertificatesOption](200), asc.NextURL[asc.ProfileCertificatesOption](next))
 		if err != nil {
 			return nil, err
 		}
@@ -616,7 +607,7 @@ func getAllProfileDeviceIDs(ctx context.Context, client *asc.Client, profileID s
 	var result []string
 	next := ""
 	for {
-		page, err := client.GetProfileDevices(ctx, profileID, asc.WithProfileDevicesLimit(200), asc.WithProfileDevicesNextURL(next))
+		page, err := client.GetProfileDevices(ctx, profileID, asc.Limit[asc.ProfileDevicesOption](200), asc.NextURL[asc.ProfileDevicesOption](next))
 		if err != nil {
 			return nil, err
 		}

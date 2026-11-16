@@ -1,11 +1,15 @@
 package cmdtest
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
+
+	rootcmd "github.com/Abdullah4AI/apple-developer-toolkit/appstore/cmd"
 )
 
 const pricingCurrentScheduleBody = `{"data":{"type":"appPriceSchedules","id":"schedule-1","attributes":{}}}`
@@ -57,7 +61,9 @@ func TestPricingCurrentNoBaseTerritoryPriceIsExpectedNegative(t *testing.T) {
 	tests := []struct {
 		name       string
 		prices     []string
+		output     string
 		wantStdout string
+		wantTable  []string
 		wantStderr string
 	}{
 		{
@@ -77,19 +83,34 @@ func TestPricingCurrentNoBaseTerritoryPriceIsExpectedNegative(t *testing.T) {
 			wantStdout: `{"appId":"app-1","configured":false,"baseTerritory":"USA","reason":"no_current_base_price","nextStartDate":"2026-03-05"}`,
 			wantStderr: `App app-1 has no current price for base territory USA (the next base price starts 2026-03-05); set one with: asc pricing schedule create --app app-1 --free --base-territory "USA"`,
 		},
+		{
+			name:       "only a future base price table",
+			prices:     []string{appPriceResource("price-1", "pp-paid", "2026-03-05", "")},
+			output:     "table",
+			wantTable:  []string{"Base Territory", "Reason", "Next Start Date", "USA", "no_current_base_price", "2026-03-05", "false"},
+			wantStderr: `App app-1 has no current price for base territory USA (the next base price starts 2026-03-05); set one with: asc pricing schedule create --app app-1 --free --base-territory "USA"`,
+		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			setupAuth(t)
 			t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
-			fixPricingClock(t, mustParseRFC3339(t, "2026-03-01T20:00:00Z"))
-			useServerTransport(t, newPricingCurrentScheduleServer(t, appPricesBody(test.prices...)))
+			server := newPricingCurrentScheduleServer(t, appPricesBody(test.prices...))
 
-			stdout, stderr, runErr := runRootCommand(t, []string{"pricing", "current", "--app", "app-1", "--output", "json"})
+			output := test.output
+			if output == "" {
+				output = "json"
+			}
+			stdout, stderr, runErr := runPricingCurrentAt(t, server, mustParseRFC3339(t, "2026-03-01T20:00:00Z"), "pricing", "current", "--app", "app-1", "--output", output)
 
 			assertNotConfiguredExpectedNegative(t, runErr)
-			if want := test.wantStdout + "\n"; stdout != want {
+			for _, want := range test.wantTable {
+				if !strings.Contains(stdout, want) {
+					t.Fatalf("expected table to contain %q, got %q", want, stdout)
+				}
+			}
+			if want := test.wantStdout + "\n"; test.wantTable == nil && stdout != want {
 				t.Fatalf("stdout = %q, want %q", stdout, want)
 			}
 			if want := test.wantStderr + "\n"; stderr != want {
@@ -102,32 +123,16 @@ func TestPricingCurrentNoBaseTerritoryPriceIsExpectedNegative(t *testing.T) {
 	}
 }
 
-func TestPricingCurrentNoBaseTerritoryPriceTableOutput(t *testing.T) {
-	setupAuth(t)
-	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
-	fixPricingClock(t, mustParseRFC3339(t, "2026-03-01T20:00:00Z"))
-	useServerTransport(t, newPricingCurrentScheduleServer(t, appPricesBody(appPriceResource("price-1", "pp-paid", "2026-03-05", ""))))
-
-	stdout, _, runErr := runRootCommand(t, []string{"pricing", "current", "--app", "app-1", "--output", "table"})
-
-	assertNotConfiguredExpectedNegative(t, runErr)
-	for _, want := range []string{"Base Territory", "Reason", "Next Start Date", "USA", "no_current_base_price", "2026-03-05", "false"} {
-		if !strings.Contains(stdout, want) {
-			t.Fatalf("expected table to contain %q, got %q", want, stdout)
-		}
-	}
-}
-
 // App Store Connect's day is the US Pacific date, so at 00:30 UTC on
 // 2026-03-01 (16:30 PST on 2026-02-28) a price starting 2026-03-01 has not
 // started yet and the price ending 2026-03-01 still applies.
 func TestPricingCurrentUsesUSPacificDayAtUTCMidnight(t *testing.T) {
 	setupAuth(t)
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
-	useServerTransport(t, newPricingCurrentScheduleServer(t, appPricesBody(
+	server := newPricingCurrentScheduleServer(t, appPricesBody(
 		appPriceResource("price-1", "pp-free", "", "2026-03-01"),
 		appPriceResource("price-2", "pp-paid", "2026-03-01", ""),
-	)))
+	))
 
 	tests := []struct {
 		now  string
@@ -138,9 +143,7 @@ func TestPricingCurrentUsesUSPacificDayAtUTCMidnight(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.now, func(t *testing.T) {
-			fixPricingClock(t, mustParseRFC3339(t, test.now))
-
-			stdout, stderr, runErr := runRootCommand(t, []string{"pricing", "current", "--app", "app-1", "--output", "json"})
+			stdout, stderr, runErr := runPricingCurrentAt(t, server, mustParseRFC3339(t, test.now), "pricing", "current", "--app", "app-1", "--output", "json")
 			if runErr != nil {
 				t.Fatalf("run error: %v (stderr %q)", runErr, stderr)
 			}
@@ -149,4 +152,18 @@ func TestPricingCurrentUsesUSPacificDayAtUTCMidnight(t *testing.T) {
 			}
 		})
 	}
+}
+
+// runPricingCurrentAt runs args on test deps whose client sends every request
+// to server and whose clock reads now.
+func runPricingCurrentAt(t *testing.T, server *httptest.Server, now time.Time, args ...string) (string, string, error) {
+	t.Helper()
+	d, stdout, stderr := newTestDeps(t, stubServerClient(t, server))
+	d.Now = func() time.Time { return now }
+	root := rootcmd.RootCommandWithDeps("1.2.3", d)
+	if err := root.Parse(args); err != nil {
+		t.Fatalf("parse error: %v", err)
+	}
+	err := root.Run(context.Background())
+	return stdout.String(), stderr.String(), err
 }

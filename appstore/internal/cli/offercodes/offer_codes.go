@@ -6,6 +6,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -18,9 +19,9 @@ import (
 
 const offerCodesMaxLimit = 200
 
-// OfferCodesGenerateCommand returns the offer codes generate subcommand.
-func OfferCodesGenerateCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("generate", flag.ExitOnError)
+// NewOfferCodesGenerateCommand returns the offer codes generate subcommand built on d.
+func NewOfferCodesGenerateCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("generate", flag.ExitOnError)
 
 	offerCodeID := shared.BindResourceIDFlag(fs, "offer-code-id", "subscriptionOfferCodes", "Subscription offer code ID (required)")
 	quantity := fs.Int("quantity", 0, "Number of one-time use codes to generate (required)")
@@ -40,34 +41,36 @@ Examples:
   asc offer-codes generate --offer-code-id "OFFER_CODE_ID" --quantity 10 --expiration-date "2026-02-01" --output "./offer-codes.txt"
   asc offer-codes generate --offer-code-id "OFFER_CODE_ID" --quantity 10 --expiration-date "2026-02-01" --environment SANDBOX`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
+			if err := d.RejectOutputFormatAsPath(*outputPath, "--output-format"); err != nil {
+				return err
+			}
 			trimmedOfferCodeID := strings.TrimSpace(*offerCodeID)
 			if trimmedOfferCodeID == "" {
-				fmt.Fprintf(os.Stderr, "Error: --offer-code-id is required\n\n")
+				fmt.Fprintf(d.IO.ErrOut, "Error: --offer-code-id is required\n\n")
 				return shared.MissingRequiredUsageError("--offer-code-id")
 			}
 			if *quantity <= 0 {
-				fmt.Fprintln(os.Stderr, "Error: --quantity is required")
-				return shared.MissingRequiredUsageError("--quantity")
+				return d.RequiredFlag("--quantity")
 			}
 			normalizedExpirationDate, err := normalizeOfferCodeExpirationDate(*expirationDate)
 			if err != nil {
-				fmt.Fprintln(os.Stderr, "Error:", err)
+				fmt.Fprintln(d.IO.ErrOut, "Error:", err)
 				return flag.ErrHelp
 			}
 			normalizedEnvironment, err := shared.NormalizeOfferCodeEnvironment(*environment)
 			if err != nil {
-				fmt.Fprintln(os.Stderr, "Error:", err)
+				fmt.Fprintln(d.IO.ErrOut, "Error:", err)
 				return flag.ErrHelp
 			}
 
-			client, err := shared.GetASCClient()
+			client, err := d.Client()
 			if err != nil {
 				return fmt.Errorf("offer-codes generate: %w", err)
 			}
 
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
+			requestCtx, cancel := d.Timeout(ctx)
 			defer cancel()
 
 			req := asc.SubscriptionOfferCodeOneTimeUseCodeCreateRequest{
@@ -111,7 +114,7 @@ Examples:
 				}
 			}
 
-			if err := shared.PrintOutput(resp, *output.OutputFormat, *output.Pretty); err != nil {
+			if err := d.PrintOutput(resp, *output.OutputFormat, *output.Pretty); err != nil {
 				return err
 			}
 			if writeErr != nil {
@@ -122,9 +125,9 @@ Examples:
 	}
 }
 
-// OfferCodesValuesCommand returns the offer codes values subcommand.
-func OfferCodesValuesCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("values", flag.ExitOnError)
+// NewOfferCodesValuesCommand returns the offer codes values subcommand built on d.
+func NewOfferCodesValuesCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("values", flag.ExitOnError)
 
 	id := shared.BindResourceIDFlag(fs, "batch-id", "subscriptionOfferCodeOneTimeUseCodes", "One-time use offer code batch ID (required)")
 	outputPath := fs.String("output", "", "Output file path for offer codes")
@@ -141,24 +144,26 @@ Examples:
   asc offer-codes values --batch-id "ONE_TIME_USE_CODE_ID" --output "./offer-codes.txt"
   asc offer-codes values --batch-id "ONE_TIME_USE_CODE_ID" --output "./offer-codes.csv" --format csv`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
+			if err := d.RejectOutputFormatAsPath(*outputPath, ""); err != nil {
+				return err
+			}
 			trimmedID := strings.TrimSpace(*id)
 			if trimmedID == "" {
-				fmt.Fprintln(os.Stderr, "Error: --batch-id is required")
-				return shared.MissingRequiredUsageError("--batch-id")
+				return d.RequiredFlag("--batch-id")
 			}
-			format, err := normalizeOfferCodeValuesFormat(*outputFormat)
+			format, err := normalizeOfferCodeValuesFormat(d, *outputFormat)
 			if err != nil {
 				return err
 			}
 
-			client, err := shared.GetASCClient()
+			client, err := d.Client()
 			if err != nil {
 				return fmt.Errorf("offer-codes values: %w", err)
 			}
 
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
+			requestCtx, cancel := d.Timeout(ctx)
 			defer cancel()
 
 			codes, err := client.GetSubscriptionOfferCodeOneTimeUseCodeValues(requestCtx, trimmedID)
@@ -176,7 +181,7 @@ Examples:
 				return nil
 			}
 
-			return writeOfferCodes(os.Stdout, codes, format)
+			return writeOfferCodes(d.IO.Out, codes, format)
 		},
 	}
 }
@@ -185,7 +190,7 @@ func normalizeOfferCodeExpirationDate(value string) (string, error) {
 	return shared.NormalizeDate(value, "--expiration-date")
 }
 
-func normalizeOfferCodeValuesFormat(value string) (string, error) {
+func normalizeOfferCodeValuesFormat(d *shared.Deps, value string) (string, error) {
 	format := strings.ToLower(strings.TrimSpace(value))
 	if format == "" {
 		return "text", nil
@@ -194,7 +199,7 @@ func normalizeOfferCodeValuesFormat(value string) (string, error) {
 	case "text", "csv":
 		return format, nil
 	default:
-		return "", shared.UsageError("--format must be text or csv")
+		return "", d.UsageError("--format must be text or csv")
 	}
 }
 
@@ -221,9 +226,9 @@ func writeOfferCodesFile(path string, codes []string, format string) error {
 	return file.Sync()
 }
 
-func writeOfferCodes(file *os.File, codes []string, format string) error {
+func writeOfferCodes(w io.Writer, codes []string, format string) error {
 	if format == "csv" {
-		writer := csv.NewWriter(file)
+		writer := csv.NewWriter(w)
 		if err := writer.Write([]string{"code"}); err != nil {
 			return err
 		}
@@ -245,7 +250,7 @@ func writeOfferCodes(file *os.File, codes []string, format string) error {
 		if trimmed == "" {
 			continue
 		}
-		if _, err := fmt.Fprintln(file, trimmed); err != nil {
+		if _, err := fmt.Fprintln(w, trimmed); err != nil {
 			return err
 		}
 	}

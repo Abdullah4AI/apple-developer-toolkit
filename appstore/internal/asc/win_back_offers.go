@@ -6,14 +6,6 @@ type IntegerRange struct {
 	Maximum *int `json:"maximum,omitempty"`
 }
 
-// NewIntegerRange builds an IntegerRange with both bounds set.
-func NewIntegerRange(minimum, maximum int) IntegerRange {
-	return IntegerRange{
-		Minimum: &minimum,
-		Maximum: &maximum,
-	}
-}
-
 // SubscriptionOfferDuration represents subscription offer durations.
 type SubscriptionOfferDuration string
 
@@ -115,19 +107,6 @@ type WinBackOfferUpdateAttributes struct {
 	PromotionIntent                                     *WinBackOfferPromotionIntent `json:"promotionIntent,omitempty"`
 }
 
-// WinBackOfferCreateRelationships describes relationships for win-back offers.
-type WinBackOfferCreateRelationships struct {
-	Subscription Relationship     `json:"subscription"`
-	Prices       RelationshipList `json:"prices"`
-}
-
-// WinBackOfferCreateData is the data portion of a create request.
-type WinBackOfferCreateData struct {
-	Type          ResourceType                    `json:"type"`
-	Attributes    WinBackOfferCreateAttributes    `json:"attributes"`
-	Relationships WinBackOfferCreateRelationships `json:"relationships"`
-}
-
 // WinBackOfferCreateRequest is a request to create a win-back offer.
 type WinBackOfferCreateRequest struct {
 	Data     WinBackOfferCreateData          `json:"data"`
@@ -139,11 +118,6 @@ type WinBackOfferUpdateData struct {
 	Type       ResourceType                 `json:"type"`
 	ID         string                       `json:"id"`
 	Attributes WinBackOfferUpdateAttributes `json:"attributes"`
-}
-
-// WinBackOfferUpdateRequest is a request to update a win-back offer.
-type WinBackOfferUpdateRequest struct {
-	Data WinBackOfferUpdateData `json:"data"`
 }
 
 // WinBackOfferPriceAttributes describes a win-back offer price (attributes are empty).
@@ -173,9 +147,6 @@ type WinBackOfferPriceInlineCreate struct {
 
 // WinBackOffersResponse is the response from list endpoints.
 type WinBackOffersResponse = Response[WinBackOfferAttributes]
-
-// WinBackOfferResponse is the response from detail endpoints.
-type WinBackOfferResponse = SingleResponse[WinBackOfferAttributes]
 
 // WinBackOfferPricesResponse is the response from prices endpoints.
 type WinBackOfferPricesResponse = Response[WinBackOfferPriceAttributes]

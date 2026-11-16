@@ -170,6 +170,18 @@ func WithHTTPClient(httpClient *http.Client) ClientOption {
 	}
 }
 
+// WithTransport sends the client's requests through transport, keeping the
+// request timeout of its HTTP client.
+func WithTransport(transport http.RoundTripper) ClientOption {
+	return func(client *Client) {
+		timeout := asc.ResolveTimeout()
+		if client.httpClient != nil {
+			timeout = client.httpClient.Timeout
+		}
+		client.httpClient = &http.Client{Timeout: timeout, Transport: transport}
+	}
+}
+
 // WithPlatformBaseURL configures the Apple Ads Platform API v1 base URL.
 func WithPlatformBaseURL(baseURL string) ClientOption {
 	return func(client *Client) {
@@ -366,13 +378,6 @@ func headerValue(headers http.Header, name string) string {
 		}
 	}
 	return ""
-}
-
-// LastRateLimit returns the rate-limit metadata from the most recent Platform API response.
-func (c *Client) LastRateLimit() RateLimit {
-	c.rateLimitMu.RLock()
-	defer c.rateLimitMu.RUnlock()
-	return c.lastRateLimit
 }
 
 func isRetryableAdsStatus(statusCode int) bool {

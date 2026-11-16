@@ -2,25 +2,27 @@ package subscriptions
 
 import (
 	"context"
-	"io"
-	"os"
+	"errors"
 	"strings"
 	"testing"
 
 	"github.com/peterbourgon/ff/v3/ffcli"
+
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
 )
 
 // The App Store Connect API 4.4.1 product-scoped command families were removed
 // in 5.0.0. Their parents must no longer register them anywhere in the tree.
 func TestSubscriptionsLegacy441CommandsAreNotRegistered(t *testing.T) {
+	testDeps, _ := newSubscriptionsTestDeps()
 	tests := []struct {
 		name    string
 		parent  *ffcli.Command
 		removed []string
 	}{
-		{"subscriptions", SubscriptionsCommand(), []string{"localizations", "images", "submit"}},
-		{"groups", SubscriptionsGroupsCommand(), []string{"localizations", "submit"}},
-		{"review", SubscriptionsReviewCommand(), []string{"submit", "submit-group"}},
+		{"subscriptions", NewSubscriptionsCommand(testDeps), []string{"localizations", "images", "submit"}},
+		{"groups", newSubscriptionsGroupsCommand(testDeps), []string{"localizations", "submit"}},
+		{"review", newSubscriptionsReviewCommand(testDeps), []string{"submit", "submit-group"}},
 	}
 
 	for _, tt := range tests {
@@ -39,38 +41,13 @@ func TestSubscriptionsLegacy441CommandsAreNotRegistered(t *testing.T) {
 	}
 }
 
-func captureSubscriptionsLegacy441Stderr(t *testing.T, run func()) string {
-	t.Helper()
-
-	reader, writer, err := os.Pipe()
-	if err != nil {
-		t.Fatalf("os.Pipe: %v", err)
-	}
-	oldStderr := os.Stderr
-	os.Stderr = writer
-	t.Cleanup(func() { os.Stderr = oldStderr })
-
-	run()
-	if err := writer.Close(); err != nil {
-		t.Fatalf("close stderr writer: %v", err)
-	}
-	os.Stderr = oldStderr
-	data, err := io.ReadAll(reader)
-	if err != nil {
-		t.Fatalf("read stderr: %v", err)
-	}
-	if err := reader.Close(); err != nil {
-		t.Fatalf("close stderr reader: %v", err)
-	}
-	return string(data)
-}
-
 func TestSubscriptionVersionScoped441CommandsAreNotDeprecated(t *testing.T) {
+	testDeps, _ := newSubscriptionsTestDeps()
 	commands := []*ffcli.Command{
-		SubscriptionsVersionImagesListCommand(),
-		SubscriptionsVersionLocalizationsListCommand(),
-		SubscriptionsGroupsVersionLocalizationsCommand(),
-		SubscriptionsGroupsVersionLocalizationsListCommand(),
+		newSubscriptionsVersionImagesListCommand(testDeps),
+		newSubscriptionsVersionLocalizationsListCommand(testDeps),
+		newSubscriptionsGroupsVersionLocalizationsCommand(testDeps),
+		newSubscriptionsGroupsVersionLocalizationsListCommand(testDeps),
 	}
 	for _, cmd := range commands {
 		if strings.Contains(cmd.ShortHelp, "DEPRECATED:") || strings.Contains(cmd.LongHelp, "DEPRECATED:") {
@@ -83,14 +60,15 @@ func TestSubscriptionVersionScoped441CommandsAreNotDeprecated(t *testing.T) {
 }
 
 func TestSubscriptions441ParentHelpPromotesVersionScopedResources(t *testing.T) {
+	testDeps, _ := newSubscriptionsTestDeps()
 	tests := []struct {
 		name        string
 		command     *ffcli.Command
 		legacy      string
 		replacement string
 	}{
-		{"subscriptions", SubscriptionsCommand(), "asc subscriptions review submit", "asc review items add"},
-		{"review", SubscriptionsReviewCommand(), "asc subscriptions review submit", "asc review items add"},
+		{"subscriptions", NewSubscriptionsCommand(testDeps), "asc subscriptions review submit", "asc review items add"},
+		{"review", newSubscriptionsReviewCommand(testDeps), "asc subscriptions review submit", "asc review items add"},
 	}
 
 	for _, tt := range tests {
@@ -104,7 +82,7 @@ func TestSubscriptions441ParentHelpPromotesVersionScopedResources(t *testing.T) 
 		})
 	}
 
-	setup := SubscriptionsSetupCommand()
+	setup := newSubscriptionsSetupCommand(testDeps)
 	if strings.Contains(setup.LongHelp, " --locale ") || strings.Contains(setup.LongHelp, " --group-locale ") {
 		t.Fatalf("setup LongHelp still teaches deprecated localization flags: %q", setup.LongHelp)
 	}
@@ -127,15 +105,16 @@ func TestSubscriptionsSetupWarnsOnceOnlyForLegacyLocalizations(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cmd := SubscriptionsSetupCommand()
+			d, depsStderr := newSubscriptionsTestDeps()
+			d.Client = func() (*asc.Client, error) { return nil, errors.New("no client in this test") }
+			cmd := newSubscriptionsSetupCommand(d)
 			args := []string{"--group-id", "group-1", "--reference-name", "Pro", "--product-id", "com.example.pro", "--subscription-period", "ONE_MONTH", "--tier", "-1"}
 			args = append(args, tt.localizationArgs...)
 			if err := cmd.FlagSet.Parse(args); err != nil {
 				t.Fatalf("parse: %v", err)
 			}
-			stderr := captureSubscriptionsLegacy441Stderr(t, func() {
-				_ = cmd.Exec(context.Background(), cmd.FlagSet.Args())
-			})
+			_ = cmd.Exec(context.Background(), cmd.FlagSet.Args())
+			stderr := depsStderr.String()
 			gotWarning := strings.Contains(stderr, "Warning:")
 			if gotWarning != tt.wantWarning {
 				t.Fatalf("stderr = %q, warning = %v, want %v", stderr, gotWarning, tt.wantWarning)

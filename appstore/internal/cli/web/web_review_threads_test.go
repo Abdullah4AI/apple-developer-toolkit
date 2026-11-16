@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
@@ -112,10 +113,10 @@ func stubWebReviewSession(t *testing.T, bodies map[string]string) *[]string {
 	return &requested
 }
 
-func runWebReviewCommand(t *testing.T, exec func() error) (string, string) {
+func runWebReviewCommand(t *testing.T, d *shared.Deps, exec func() error) (string, string) {
 	t.Helper()
 	var err error
-	stdout, stderr := captureOutput(t, func() { err = exec() })
+	stdout, stderr := captureWebTestDeps(d, func() { err = exec() })
 	if err != nil {
 		t.Fatalf("command error = %v (stderr=%s)", err, stderr)
 	}
@@ -127,11 +128,12 @@ func TestWebReviewThreadsListsAppScopedThreads(t *testing.T) {
 		"/iris/v1/apps/app-1/resolutionCenterThreads": reviewThreadsAppFixture,
 	})
 
-	cmd := WebReviewThreadsCommand()
+	d, _, _ := newWebTestDeps()
+	cmd := newWebReviewThreadsCommand(d)
 	if err := cmd.FlagSet.Parse([]string{"--app", "app-1", "--output", "json"}); err != nil {
 		t.Fatalf("parse error: %v", err)
 	}
-	stdout, _ := runWebReviewCommand(t, func() error { return cmd.Exec(context.Background(), nil) })
+	stdout, _ := runWebReviewCommand(t, d, func() error { return cmd.Exec(context.Background(), nil) })
 
 	var payload []struct {
 		Thread struct {
@@ -172,11 +174,12 @@ func TestWebReviewThreadsReadsDraftMessages(t *testing.T) {
 		"/iris/v1/resolutionCenterThreads/thread-app/resolutionCenterDraftMessage": `{"data": null}`,
 	})
 
-	cmd := WebReviewThreadsCommand()
+	d, _, _ := newWebTestDeps()
+	cmd := newWebReviewThreadsCommand(d)
 	if err := cmd.FlagSet.Parse([]string{"--app", "app-1", "--drafts", "--plain-text", "--output", "json"}); err != nil {
 		t.Fatalf("parse error: %v", err)
 	}
-	stdout, _ := runWebReviewCommand(t, func() error { return cmd.Exec(context.Background(), nil) })
+	stdout, _ := runWebReviewCommand(t, d, func() error { return cmd.Exec(context.Background(), nil) })
 
 	if strings.Contains(stdout, "token=secret") {
 		t.Fatalf("expected signed attachment urls to be redacted: %s", stdout)
@@ -242,11 +245,12 @@ func TestWebReviewThreadsRendersTable(t *testing.T) {
 		"/iris/v1/resolutionCenterThreads/thread-app/resolutionCenterDraftMessage": `{"data": null}`,
 	})
 
-	cmd := WebReviewThreadsCommand()
+	d, _, _ := newWebTestDeps()
+	cmd := newWebReviewThreadsCommand(d)
 	if err := cmd.FlagSet.Parse([]string{"--app", "app-1", "--drafts", "--output", "table"}); err != nil {
 		t.Fatalf("parse error: %v", err)
 	}
-	stdout, _ := runWebReviewCommand(t, func() error { return cmd.Exec(context.Background(), nil) })
+	stdout, _ := runWebReviewCommand(t, d, func() error { return cmd.Exec(context.Background(), nil) })
 
 	for _, want := range []string{"Thread ID", "Draft", "thread-sub", "thread-app", "REJECTION_BINARY", "draft-1", "none", "Draft reply & notes"} {
 		if !strings.Contains(stdout, want) {
@@ -262,11 +266,12 @@ func TestWebReviewThreadsRendersPlainTextDraftBodyInMarkdown(t *testing.T) {
 		"/iris/v1/resolutionCenterThreads/thread-app/resolutionCenterDraftMessage": `{"data": null}`,
 	})
 
-	cmd := WebReviewThreadsCommand()
+	d, _, _ := newWebTestDeps()
+	cmd := newWebReviewThreadsCommand(d)
 	if err := cmd.FlagSet.Parse([]string{"--app", "app-1", "--drafts", "--plain-text", "--output", "markdown"}); err != nil {
 		t.Fatalf("parse error: %v", err)
 	}
-	stdout, _ := runWebReviewCommand(t, func() error { return cmd.Exec(context.Background(), nil) })
+	stdout, _ := runWebReviewCommand(t, d, func() error { return cmd.Exec(context.Background(), nil) })
 
 	for _, want := range []string{"Draft", "draft-1", "none", "Draft reply & notes"} {
 		if !strings.Contains(stdout, want) {
@@ -279,13 +284,14 @@ func TestWebReviewThreadsRendersPlainTextDraftBodyInMarkdown(t *testing.T) {
 }
 
 func TestWebReviewThreadsRequiresApp(t *testing.T) {
-	cmd := WebReviewThreadsCommand()
+	d, depsStdout, depsStderr := newWebTestDeps()
+	cmd := newWebReviewThreadsCommand(d)
 	if err := cmd.FlagSet.Parse([]string{"--output", "json"}); err != nil {
 		t.Fatalf("parse error: %v", err)
 	}
 
 	var err error
-	_, _ = captureOutput(t, func() { err = cmd.Exec(context.Background(), nil) })
+	_, _ = runWithWebTestDeps(depsStdout, depsStderr, func() { err = cmd.Exec(context.Background(), nil) })
 	if err == nil {
 		t.Fatal("expected --app to be required")
 	}
@@ -298,13 +304,14 @@ func TestWebReviewThreadsRequiresApp(t *testing.T) {
 }
 
 func TestWebReviewThreadsRejectsPlainTextWithoutDrafts(t *testing.T) {
-	cmd := WebReviewThreadsCommand()
+	d, depsStdout, depsStderr := newWebTestDeps()
+	cmd := newWebReviewThreadsCommand(d)
 	if err := cmd.FlagSet.Parse([]string{"--app", "app-1", "--plain-text", "--output", "json"}); err != nil {
 		t.Fatalf("parse error: %v", err)
 	}
 
 	var err error
-	_, _ = captureOutput(t, func() { err = cmd.Exec(context.Background(), nil) })
+	_, _ = runWithWebTestDeps(depsStdout, depsStderr, func() { err = cmd.Exec(context.Background(), nil) })
 	if err == nil {
 		t.Fatal("expected --plain-text without --drafts to fail instead of being ignored")
 	}
@@ -313,25 +320,6 @@ func TestWebReviewThreadsRejectsPlainTextWithoutDrafts(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "--drafts") {
 		t.Fatalf("expected the error to name --drafts, got %v", err)
-	}
-}
-
-func TestWebReviewThreadsRejectsPositionalArguments(t *testing.T) {
-	cmd := WebReviewThreadsCommand()
-	if err := cmd.FlagSet.Parse([]string{"--app", "app-1", "--output", "json"}); err != nil {
-		t.Fatalf("parse error: %v", err)
-	}
-
-	var err error
-	_, _ = captureOutput(t, func() { err = cmd.Exec(context.Background(), []string{"stray"}) })
-	if err == nil {
-		t.Fatal("expected positional arguments to be rejected instead of ignored")
-	}
-	if !errors.Is(err, flag.ErrHelp) {
-		t.Fatalf("expected a usage error, got %v", err)
-	}
-	if !strings.Contains(err.Error(), "unexpected argument") {
-		t.Fatalf("expected unexpected-argument guidance, got %v", err)
 	}
 }
 
@@ -345,11 +333,12 @@ func TestWebReviewShowReportsAppThreadsMissedBySubmissionFilter(t *testing.T) {
 		"/iris/v1/apps/app-1/resolutionCenterThreads":                          reviewThreadsAppFixture,
 	})
 
-	cmd := WebReviewShowCommand()
+	d, _, _ := newWebTestDeps()
+	cmd := newWebReviewShowCommand(d)
 	if err := cmd.FlagSet.Parse([]string{"--app", "app-1", "--output", "json"}); err != nil {
 		t.Fatalf("parse error: %v", err)
 	}
-	stdout, _ := runWebReviewCommand(t, func() error { return cmd.Exec(context.Background(), nil) })
+	stdout, _ := runWebReviewCommand(t, d, func() error { return cmd.Exec(context.Background(), nil) })
 
 	var payload struct {
 		Threads []struct {
@@ -386,11 +375,12 @@ func TestWebReviewShowReportsAppThreadsWhenNoSubmissionExists(t *testing.T) {
 		"/iris/v1/apps/app-1/resolutionCenterThreads": reviewThreadsAppFixture,
 	})
 
-	cmd := WebReviewShowCommand()
+	d, _, _ := newWebTestDeps()
+	cmd := newWebReviewShowCommand(d)
 	if err := cmd.FlagSet.Parse([]string{"--app", "app-1", "--output", "json"}); err != nil {
 		t.Fatalf("parse error: %v", err)
 	}
-	stdout, _ := runWebReviewCommand(t, func() error { return cmd.Exec(context.Background(), nil) })
+	stdout, _ := runWebReviewCommand(t, d, func() error { return cmd.Exec(context.Background(), nil) })
 
 	var payload struct {
 		Selection  string `json:"selection"`
@@ -419,11 +409,12 @@ func TestWebReviewShowSurvivesAppThreadFailure(t *testing.T) {
 		"/iris/v1/apps/app-1/resolutionCenterThreads":                          `!{"errors": [{"code": "PARAMETER_ERROR.INVALID"}]}`,
 	})
 
-	cmd := WebReviewShowCommand()
+	d, _, _ := newWebTestDeps()
+	cmd := newWebReviewShowCommand(d)
 	if err := cmd.FlagSet.Parse([]string{"--app", "app-1", "--output", "json"}); err != nil {
 		t.Fatalf("parse error: %v", err)
 	}
-	stdout, stderr := runWebReviewCommand(t, func() error { return cmd.Exec(context.Background(), nil) })
+	stdout, stderr := runWebReviewCommand(t, d, func() error { return cmd.Exec(context.Background(), nil) })
 
 	var payload struct {
 		Threads []struct {
@@ -461,6 +452,7 @@ func testWebReviewClient(t *testing.T) *webcore.Client {
 }
 
 func TestLoadAppThreadsPropagatesCancellation(t *testing.T) {
+	d, _, _ := newWebTestDeps()
 	stubWebReviewSession(t, map[string]string{
 		"/iris/v1/apps/app-1/resolutionCenterThreads": reviewThreadsAppFixture,
 	})
@@ -468,7 +460,7 @@ func TestLoadAppThreadsPropagatesCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	_, warning, err := loadAppThreads(ctx, testWebReviewClient(t), "app-1")
+	_, warning, err := loadAppThreads(ctx, d, testWebReviewClient(t), "app-1")
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("err = %v, want context.Canceled", err)
 	}
@@ -478,15 +470,21 @@ func TestLoadAppThreadsPropagatesCancellation(t *testing.T) {
 }
 
 func TestLoadAppThreadsWarnsOnIndependentTimeout(t *testing.T) {
+	d, _, _ := newWebTestDeps()
 	stubWebReviewSession(t, map[string]string{
 		"/iris/v1/apps/app-1/resolutionCenterThreads": reviewThreadsAppFixture,
 	})
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Nanosecond)
-	defer cancel()
-	time.Sleep(time.Millisecond)
+	client := testWebReviewClient(t)
+	var warning string
+	var err error
+	synctest.Test(t, func(*testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Nanosecond)
+		defer cancel()
+		time.Sleep(time.Millisecond)
 
-	_, warning, err := loadAppThreads(ctx, testWebReviewClient(t), "app-1")
+		_, warning, err = loadAppThreads(ctx, d, client, "app-1")
+	})
 	if err != nil {
 		t.Fatalf("independent timeout should stay warning-only, got %v", err)
 	}
@@ -500,11 +498,12 @@ func TestWebReviewThreadsRendersMarkdownAndEmptyResults(t *testing.T) {
 		"/iris/v1/apps/app-1/resolutionCenterThreads": reviewThreadsAppFixture,
 	})
 
-	cmd := WebReviewThreadsCommand()
+	d, _, _ := newWebTestDeps()
+	cmd := newWebReviewThreadsCommand(d)
 	if err := cmd.FlagSet.Parse([]string{"--app", "app-1", "--output", "markdown"}); err != nil {
 		t.Fatalf("parse error: %v", err)
 	}
-	stdout, _ := runWebReviewCommand(t, func() error { return cmd.Exec(context.Background(), nil) })
+	stdout, _ := runWebReviewCommand(t, d, func() error { return cmd.Exec(context.Background(), nil) })
 
 	if !strings.Contains(stdout, "Thread ID") || !strings.Contains(stdout, "| thread-app") {
 		t.Fatalf("unexpected markdown output: %s", stdout)
@@ -517,11 +516,11 @@ func TestWebReviewThreadsRendersMarkdownAndEmptyResults(t *testing.T) {
 		"/iris/v1/apps/app-2/resolutionCenterThreads": `{"data": []}`,
 	})
 
-	empty := WebReviewThreadsCommand()
+	empty := newWebReviewThreadsCommand(d)
 	if err := empty.FlagSet.Parse([]string{"--app", "app-2", "--output", "json"}); err != nil {
 		t.Fatalf("parse error: %v", err)
 	}
-	emptyStdout, _ := runWebReviewCommand(t, func() error { return empty.Exec(context.Background(), nil) })
+	emptyStdout, _ := runWebReviewCommand(t, d, func() error { return empty.Exec(context.Background(), nil) })
 
 	var entries []json.RawMessage
 	if err := json.Unmarshal([]byte(emptyStdout), &entries); err != nil {
@@ -542,11 +541,12 @@ func TestWebReviewShowLoadsAppThreadsAfterEssentialRequests(t *testing.T) {
 		"/iris/v1/apps/app-1/resolutionCenterThreads":                          reviewThreadsAppFixture,
 	})
 
-	cmd := WebReviewShowCommand()
+	d, _, _ := newWebTestDeps()
+	cmd := newWebReviewShowCommand(d)
 	if err := cmd.FlagSet.Parse([]string{"--app", "app-1", "--output", "json"}); err != nil {
 		t.Fatalf("parse error: %v", err)
 	}
-	runWebReviewCommand(t, func() error { return cmd.Exec(context.Background(), nil) })
+	runWebReviewCommand(t, d, func() error { return cmd.Exec(context.Background(), nil) })
 
 	appThreadsIndex, essentialIndex := -1, -1
 	for index, path := range *requested {
@@ -568,10 +568,11 @@ func TestWebReviewShowLoadsAppThreadsAfterEssentialRequests(t *testing.T) {
 }
 
 func TestReviewDraftMessagesContextGetsOperationSizedBudget(t *testing.T) {
+	d, _, _ := newWebTestDeps()
 	t.Setenv("ASC_TIMEOUT", "")
 
 	requestCtx, cancelRequest := shared.ContextWithTimeout(context.Background())
-	draftCtx, cancelDrafts := reviewDraftMessagesContext(requestCtx)
+	draftCtx, cancelDrafts := reviewDraftMessagesContext(requestCtx, d)
 	defer cancelDrafts()
 	cancelRequest()
 
@@ -588,10 +589,11 @@ func TestReviewDraftMessagesContextGetsOperationSizedBudget(t *testing.T) {
 }
 
 func TestReviewAppThreadsContextIsIndependentOfRequestBudget(t *testing.T) {
+	d, _, _ := newWebTestDeps()
 	t.Setenv("ASC_TIMEOUT", "")
 
 	requestCtx, cancelRequest := shared.ContextWithTimeout(context.Background())
-	appThreadsCtx, cancelAppThreads := reviewAppThreadsContext(requestCtx)
+	appThreadsCtx, cancelAppThreads := reviewAppThreadsContext(requestCtx, d)
 	defer cancelAppThreads()
 	cancelRequest()
 

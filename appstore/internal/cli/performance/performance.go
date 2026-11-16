@@ -8,9 +8,9 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
-// PerformanceCommand returns the performance command group.
-func PerformanceCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("performance", flag.ExitOnError)
+// NewPerformanceCommand returns the performance command group.
+func NewPerformanceCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("performance", flag.ExitOnError)
 
 	return &ffcli.Command{
 		Name:       "performance",
@@ -25,12 +25,12 @@ Examples:
   asc performance diagnostics view --id "SIGNATURE_ID"
   asc performance download --build-id "BUILD_ID" --output ./metrics.json`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
-			PerformanceMetricsCommand(),
-			PerformanceOverviewCommand(),
-			PerformanceDiagnosticsCommand(),
-			PerformanceDownloadCommand(),
+			newPerformanceMetricsCommand(d),
+			newPerformanceOverviewCommand(d),
+			newPerformanceDiagnosticsCommand(d),
+			newPerformanceDownloadCommand(d),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp

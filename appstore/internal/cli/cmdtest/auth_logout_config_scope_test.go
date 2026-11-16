@@ -122,8 +122,11 @@ func TestAuthLogoutNamedWithConfigPathOverrideSkipsWarningWhenGlobalLacksProfile
 	overridePath, globalPath := isolateScopedLogout(t)
 	globalBefore := seedLogoutConfigs(t, overridePath, globalPath)
 
-	_, stderr := runAuthConfigCommand(t, "auth", "logout", "--name", "override-only", "--confirm")
+	stdout, stderr := runAuthConfigCommand(t, "auth", "logout", "--name", "override-only", "--confirm")
 
+	if stdout != "Successfully removed stored credential 'override-only'\n" {
+		t.Fatalf("stdout = %q", stdout)
+	}
 	if stderr != authLogoutBypassNote {
 		t.Fatalf("expected no warning when the global config lacks the profile, got %q", stderr)
 	}
@@ -138,10 +141,7 @@ func TestAuthLogoutNamedGlobalOnlyProfileWithMissingOverrideFileFails(t *testing
 		t.Fatalf("Remove(override) error: %v", err)
 	}
 
-	var code int
-	stdout, stderr := captureOutput(t, func() {
-		code = cmd.Run([]string{"auth", "logout", "--name", "global-only", "--confirm"}, "1.0.0")
-	})
+	stdout, stderr, code := runWithDeps(t, nil, "auth", "logout", "--name", "global-only", "--confirm")
 
 	if code != cmd.ExitError {
 		t.Fatalf("exit code = %d, want %d; stderr=%q", code, cmd.ExitError, stderr)
@@ -184,8 +184,11 @@ func TestAuthLogoutWithoutConfigPathOverrideClearsGlobalConfig(t *testing.T) {
 		t.Fatalf("SaveAt(global) error: %v", err)
 	}
 
-	_, stderr := runAuthConfigCommand(t, "auth", "logout", "--all", "--confirm")
+	stdout, stderr := runAuthConfigCommand(t, "auth", "logout", "--all", "--confirm")
 
+	if stdout != "Successfully removed stored credentials\n" {
+		t.Fatalf("stdout = %q", stdout)
+	}
 	if stderr != authLogoutBypassNote {
 		t.Fatalf("expected no warning without ASC_CONFIG_PATH, got %q", stderr)
 	}

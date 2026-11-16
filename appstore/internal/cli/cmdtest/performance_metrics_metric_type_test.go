@@ -1,35 +1,22 @@
 package cmdtest
 
 import (
-	"context"
 	"io"
 	"net/http"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asctest"
 )
 
 func runPerformanceMetricsListWithMetricType(t *testing.T, metricType string) (string, string, error) {
 	t.Helper()
 
-	setupAuth(t)
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() {
-		http.DefaultTransport = originalTransport
-	})
-
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/apps/app-1/perfPowerMetrics" {
-			t.Fatalf("expected perfPowerMetrics path, got %s", req.URL.Path)
-		}
-		if got := req.URL.Query().Get("filter[metricType]"); got != metricType {
-			t.Fatalf("expected filter[metricType]=%q, got %q", metricType, got)
-		}
+	reg := asctest.NewRegistry(t)
+	reg.Register(asctest.GET("/v1/apps/app-1/perfPowerMetrics", "filter[metricType]="+metricType), func(*http.Request) (*http.Response, error) {
 		return &http.Response{
 			StatusCode: http.StatusOK,
 			Body:       io.NopCloser(strings.NewReader(`{"productData":[],"version":"1.0"}`)),
@@ -37,17 +24,7 @@ func runPerformanceMetricsListWithMetricType(t *testing.T, metricType string) (s
 		}, nil
 	})
 
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	var runErr error
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"performance", "metrics", "list", "--app", "app-1", "--metric-type", metricType}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		runErr = root.Run(context.Background())
-	})
-	return stdout, stderr, runErr
+	return runRootWithDeps(t, stubClient(t, reg), "performance", "metrics", "list", "--app", "app-1", "--metric-type", metricType)
 }
 
 func TestPerformanceMetricsListAcceptsStorageMetricType(t *testing.T) {
@@ -64,16 +41,7 @@ func TestPerformanceMetricsListAcceptsStorageMetricType(t *testing.T) {
 }
 
 func TestPerformanceMetricsListRejectsInvalidMetricType(t *testing.T) {
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	var runErr error
-	stdout, _ := captureOutput(t, func() {
-		if err := root.Parse([]string{"performance", "metrics", "list", "--app", "app-1", "--metric-type", "BOGUS"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		runErr = root.Run(context.Background())
-	})
+	stdout, _, runErr := runRootWithDeps(t, nil, "performance", "metrics", "list", "--app", "app-1", "--metric-type", "BOGUS")
 
 	if runErr == nil {
 		t.Fatal("expected error, got nil")
@@ -88,16 +56,7 @@ func TestPerformanceMetricsListRejectsInvalidMetricType(t *testing.T) {
 }
 
 func TestPerformanceMetricsViewRejectsInvalidMetricType(t *testing.T) {
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	var runErr error
-	stdout, _ := captureOutput(t, func() {
-		if err := root.Parse([]string{"performance", "metrics", "view", "--build-id", "build-1", "--metric-type", "BOGUS"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		runErr = root.Run(context.Background())
-	})
+	stdout, _, runErr := runRootWithDeps(t, nil, "performance", "metrics", "view", "--build-id", "build-1", "--metric-type", "BOGUS")
 
 	if runErr == nil {
 		t.Fatal("expected error, got nil")

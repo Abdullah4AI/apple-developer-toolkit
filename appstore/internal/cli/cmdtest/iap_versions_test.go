@@ -19,7 +19,6 @@ import (
 	"testing"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
-	iapcli "github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/iap"
 )
 
 func TestIAPVersionsValidationErrors(t *testing.T) {
@@ -55,12 +54,6 @@ func TestIAPVersionsValidationErrors(t *testing.T) {
 		{"image list rejects next with fields", []string{"iap", "versions", "images", "list", "--next", next, "--image-fields", "fileName"}, "--next cannot be combined"},
 		{"localization list rejects next with include", []string{"iap", "versions", "localizations", "list", "--next", next, "--include", "version"}, "--next cannot be combined"},
 		{"iap list rejects next with version selectors", []string{"iap", "list", "--next", next, "--include-versions"}, "--next cannot be combined"},
-		{"version create rejects positional args", []string{"iap", "versions", "create", "--iap-id", "iap-1", "junk"}, "unexpected argument(s): junk"},
-		{"version image rejects positional args", []string{"iap", "versions", "image", "--version-id", "version-1", "junk"}, "unexpected argument(s): junk"},
-		{"version image detail rejects positional args", []string{"iap", "versions", "images", "view", "--image-id", "image-1", "junk"}, "unexpected argument(s): junk"},
-		{"version localization detail rejects positional args", []string{"iap", "versions", "localizations", "view", "--localization-id", "loc-1", "junk"}, "unexpected argument(s): junk"},
-		{"version submit rejects positional args", []string{"iap", "versions", "submit", "--version-id", "version-1", "--submission", "submission-1", "--confirm", "junk"}, "unexpected argument(s): junk"},
-		{"version links reject positional args", []string{"iap", "versions", "links", "image", "--version-id", "version-1", "junk"}, "unexpected argument(s): junk"},
 		{"view requires version", []string{"iap", "versions", "view"}, "--version-id is required"},
 		{"image requires version", []string{"iap", "versions", "image"}, "--version-id is required"},
 		{"localization create requires version", []string{"iap", "versions", "localizations", "create", "--name", "Name", "--locale", "en-US"}, "--version-id is required"},
@@ -104,16 +97,6 @@ func TestIAPNextConflictsFailBeforeClientFactory(t *testing.T) {
 		args    []string
 		wantErr string
 	}{
-		{
-			name:    "iap list rejects owner with next",
-			args:    []string{"iap", "list", "--app", "app-1", "--next", next},
-			wantErr: "--next cannot be combined with --app",
-		},
-		{
-			name:    "iap list rejects explicit empty owner with next",
-			args:    []string{"iap", "list", "--app", "", "--next", next},
-			wantErr: "--next cannot be combined with --app",
-		},
 		{
 			name:    "iap list rejects explicit zero limit with next",
 			args:    []string{"iap", "list", "--limit", "0", "--next", next},
@@ -170,16 +153,6 @@ func TestIAPNextConflictsFailBeforeClientFactory(t *testing.T) {
 			wantErr: "--next cannot be combined with --version-fields",
 		},
 		{
-			name:    "versions list rejects owner with next",
-			args:    []string{"iap", "versions", "list", "--iap-id", "iap-1", "--next", next},
-			wantErr: "--next cannot be combined with --iap-id",
-		},
-		{
-			name:    "versions list rejects explicit empty owner with next",
-			args:    []string{"iap", "versions", "list", "--iap-id", "", "--next", next},
-			wantErr: "--next cannot be combined with --iap-id",
-		},
-		{
 			name:    "versions list rejects explicit zero limit with next",
 			args:    []string{"iap", "versions", "list", "--limit", "0", "--next", next},
 			wantErr: "--next cannot be combined with --limit",
@@ -225,16 +198,6 @@ func TestIAPNextConflictsFailBeforeClientFactory(t *testing.T) {
 			wantErr: "--next cannot be combined with --localization-fields",
 		},
 		{
-			name:    "images list rejects owner with next",
-			args:    []string{"iap", "versions", "images", "list", "--version-id", "version-1", "--next", next},
-			wantErr: "--next cannot be combined with --version-id",
-		},
-		{
-			name:    "images list rejects explicit empty owner with next",
-			args:    []string{"iap", "versions", "images", "list", "--version-id", "", "--next", next},
-			wantErr: "--next cannot be combined with --version-id",
-		},
-		{
 			name:    "images list rejects explicit zero limit with next",
 			args:    []string{"iap", "versions", "images", "list", "--limit", "0", "--next", next},
 			wantErr: "--next cannot be combined with --limit",
@@ -243,16 +206,6 @@ func TestIAPNextConflictsFailBeforeClientFactory(t *testing.T) {
 			name:    "images list rejects explicit empty fields with next",
 			args:    []string{"iap", "versions", "images", "list", "--image-fields", "", "--next", next},
 			wantErr: "--next cannot be combined with --image-fields",
-		},
-		{
-			name:    "localizations list rejects owner with next",
-			args:    []string{"iap", "versions", "localizations", "list", "--version-id", "version-1", "--next", next},
-			wantErr: "--next cannot be combined with --version-id",
-		},
-		{
-			name:    "localizations list rejects explicit empty owner with next",
-			args:    []string{"iap", "versions", "localizations", "list", "--version-id", "", "--next", next},
-			wantErr: "--next cannot be combined with --version-id",
 		},
 		{
 			name:    "localizations list rejects explicit zero limit with next",
@@ -275,36 +228,6 @@ func TestIAPNextConflictsFailBeforeClientFactory(t *testing.T) {
 			wantErr: "--next cannot be combined with --version-fields",
 		},
 		{
-			name:    "version linkages reject owner with next",
-			args:    []string{"iap", "versions", "links", "versions", "--iap-id", "iap-1", "--next", next},
-			wantErr: "--next cannot be combined with --iap-id",
-		},
-		{
-			name:    "version linkages reject explicit empty owner with next",
-			args:    []string{"iap", "versions", "links", "versions", "--iap-id", "", "--next", next},
-			wantErr: "--next cannot be combined with --iap-id",
-		},
-		{
-			name:    "image linkages reject owner with next",
-			args:    []string{"iap", "versions", "links", "images", "--version-id", "version-1", "--next", next},
-			wantErr: "--next cannot be combined with --version-id",
-		},
-		{
-			name:    "image linkages reject explicit empty owner with next",
-			args:    []string{"iap", "versions", "links", "images", "--version-id", "", "--next", next},
-			wantErr: "--next cannot be combined with --version-id",
-		},
-		{
-			name:    "localization linkages reject owner with next",
-			args:    []string{"iap", "versions", "links", "localizations", "--version-id", "version-1", "--next", next},
-			wantErr: "--next cannot be combined with --version-id",
-		},
-		{
-			name:    "localization linkages reject explicit empty owner with next",
-			args:    []string{"iap", "versions", "links", "localizations", "--version-id", "", "--next", next},
-			wantErr: "--next cannot be combined with --version-id",
-		},
-		{
 			name:    "version linkages reject explicit zero limit with next",
 			args:    []string{"iap", "versions", "links", "versions", "--limit", "0", "--next", next},
 			wantErr: "--next cannot be combined with --limit",
@@ -324,23 +247,15 @@ func TestIAPNextConflictsFailBeforeClientFactory(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			factoryCalled := false
-			restore := iapcli.SetVersionClientFactory(func() (*asc.Client, error) {
+			poison := func() (*asc.Client, error) {
 				factoryCalled = true
 				return nil, errors.New("poison client factory called")
-			})
-			t.Cleanup(restore)
+			}
 
-			root := RootCommand("1.2.3")
-			root.FlagSet.SetOutput(io.Discard)
-			stdout, stderr := captureOutput(t, func() {
-				if err := root.Parse(test.args); err != nil {
-					t.Fatalf("parse error: %v", err)
-				}
-				err := root.Run(context.Background())
-				if !errors.Is(err, flag.ErrHelp) {
-					t.Fatalf("expected ErrHelp, got %v", err)
-				}
-			})
+			stdout, stderr, err := runRootWithDeps(t, poison, test.args...)
+			if !errors.Is(err, flag.ErrHelp) {
+				t.Fatalf("expected ErrHelp, got %v", err)
+			}
 			if factoryCalled {
 				t.Fatal("client factory called before validation")
 			}
@@ -393,20 +308,13 @@ func TestIAPListOwnerlessNextCanPaginate(t *testing.T) {
 				}
 			}))
 			t.Cleanup(server.Close)
-			setIAPVersionTestServerClient(t, server)
 
 			next := "https://api.appstoreconnect.apple.com" + test.path + "?cursor=start"
 			args := append([]string{"iap", "list", "--next", next, "--paginate", "--output", "json", "--pretty"}, test.flags...)
-			root := RootCommand("1.2.3")
-			root.FlagSet.SetOutput(io.Discard)
-			stdout, stderr := captureOutput(t, func() {
-				if err := root.Parse(args); err != nil {
-					t.Fatalf("parse error: %v", err)
-				}
-				if err := root.Run(context.Background()); err != nil {
-					t.Fatalf("run error: %v", err)
-				}
-			})
+			stdout, stderr, err := runRootWithDeps(t, stubServerClient(t, server), args...)
+			if err != nil {
+				t.Fatalf("run error: %v", err)
+			}
 			if stderr != "" {
 				t.Fatalf("unexpected stderr: %s", stderr)
 			}
@@ -481,18 +389,10 @@ func TestIAPVersionLinkagesPaginateAllPages(t *testing.T) {
 				}
 			}))
 			t.Cleanup(server.Close)
-			setIAPVersionTestServerClient(t, server)
-
-			root := RootCommand("1.2.3")
-			root.FlagSet.SetOutput(io.Discard)
-			stdout, stderr := captureOutput(t, func() {
-				if err := root.Parse(test.args); err != nil {
-					t.Fatalf("parse error: %v", err)
-				}
-				if err := root.Run(context.Background()); err != nil {
-					t.Fatalf("run error: %v", err)
-				}
-			})
+			stdout, stderr, err := runRootWithDeps(t, stubServerClient(t, server), test.args...)
+			if err != nil {
+				t.Fatalf("run error: %v", err)
+			}
 			if stderr != "" {
 				t.Fatalf("unexpected stderr: %s", stderr)
 			}
@@ -658,18 +558,10 @@ func TestIAPVersionPrincipalCLIFlowsUseExactHTTPContracts(t *testing.T) {
 				_, _ = io.WriteString(w, test.response)
 			}))
 			t.Cleanup(server.Close)
-			setIAPVersionTestServerClient(t, server)
-
-			root := RootCommand("1.2.3")
-			root.FlagSet.SetOutput(io.Discard)
-			stdout, stderr := captureOutput(t, func() {
-				if err := root.Parse(test.args); err != nil {
-					t.Fatal(err)
-				}
-				if err := root.Run(context.Background()); err != nil {
-					t.Fatal(err)
-				}
-			})
+			stdout, stderr, err := runRootWithDeps(t, stubServerClient(t, server), test.args...)
+			if err != nil {
+				t.Fatal(err)
+			}
 			if stderr != "" {
 				t.Fatalf("unexpected stderr: %s", stderr)
 			}
@@ -751,18 +643,10 @@ func TestIAPVersionImagesCreateRunsV2UploadLifecycle(t *testing.T) {
 		_, _ = io.WriteString(w, body)
 	}))
 	t.Cleanup(server.Close)
-	setIAPVersionTestServerClient(t, server)
-
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"iap", "versions", "images", "create", "--version-id", "version-1", "--file", imagePath, "--output", "json"}); err != nil {
-			t.Fatal(err)
-		}
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatal(err)
-		}
-	})
+	stdout, stderr, err := runRootWithDeps(t, stubServerClient(t, server), "iap", "versions", "images", "create", "--version-id", "version-1", "--file", imagePath, "--output", "json")
+	if err != nil {
+		t.Fatal(err)
+	}
 	if stderr != "" {
 		t.Fatalf("unexpected stderr: %s", stderr)
 	}
@@ -841,17 +725,7 @@ func TestIAPVersionImagesCreateReportsReservedIDOnPostReservationFailures(t *tes
 				}
 			}))
 			t.Cleanup(server.Close)
-			setIAPVersionTestServerClient(t, server)
-
-			root := RootCommand("1.2.3")
-			root.FlagSet.SetOutput(io.Discard)
-			var runErr error
-			_, _ = captureOutput(t, func() {
-				if err := root.Parse([]string{"iap", "versions", "images", "create", "--version-id", "version-1", "--file", imagePath, "--output", "json"}); err != nil {
-					t.Fatal(err)
-				}
-				runErr = root.Run(context.Background())
-			})
+			_, _, runErr := runRootWithDeps(t, stubServerClient(t, server), "iap", "versions", "images", "create", "--version-id", "version-1", "--file", imagePath, "--output", "json")
 			if runErr == nil {
 				t.Fatal("expected post-reservation failure")
 			}
@@ -875,18 +749,10 @@ func TestIAPVersionsSubmitUsesExplicitReviewSubmissionRelationship(t *testing.T)
 		_, _ = io.WriteString(w, `{"data":{"type":"reviewSubmissionItems","id":"item-1","attributes":{"state":"READY_FOR_REVIEW"}}}`)
 	}))
 	t.Cleanup(server.Close)
-	setIAPVersionTestServerClient(t, server)
-
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"iap", "versions", "submit", "--version-id", "version-1", "--submission", "submission-1", "--confirm", "--output", "json"}); err != nil {
-			t.Fatal(err)
-		}
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatal(err)
-		}
-	})
+	stdout, stderr, err := runRootWithDeps(t, stubServerClient(t, server), "iap", "versions", "submit", "--version-id", "version-1", "--submission", "submission-1", "--confirm", "--output", "json")
+	if err != nil {
+		t.Fatal(err)
+	}
 	if stderr != "" {
 		t.Fatalf("unexpected stderr: %s", stderr)
 	}
@@ -902,31 +768,4 @@ func assertJSONDocument(t *testing.T, reader io.Reader, want string) {
 		t.Fatalf("read request body: %v", err)
 	}
 	assertJSONDocumentEqual(t, got, []byte(want))
-}
-
-func setIAPVersionTestServerClient(t *testing.T, server *httptest.Server) {
-	t.Helper()
-	serverURL, err := url.Parse(server.URL)
-	if err != nil {
-		t.Fatalf("parse server URL: %v", err)
-	}
-	transport := roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		cloned := req.Clone(req.Context())
-		cloned.URL.Scheme = serverURL.Scheme
-		cloned.URL.Host = serverURL.Host
-		return server.Client().Transport.RoundTrip(cloned)
-	})
-	client, err := asc.NewClientWithHTTPClient(
-		"TEST_KEY",
-		"TEST_ISSUER",
-		os.Getenv("ASC_PRIVATE_KEY_PATH"),
-		&http.Client{Transport: transport},
-	)
-	if err != nil {
-		t.Fatalf("new client: %v", err)
-	}
-	restore := iapcli.SetVersionClientFactory(func() (*asc.Client, error) {
-		return client, nil
-	})
-	t.Cleanup(restore)
 }

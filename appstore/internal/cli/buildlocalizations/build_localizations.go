@@ -4,7 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"os"
+	"net/url"
 	"strings"
 
 	"github.com/peterbourgon/ff/v3/ffcli"
@@ -13,9 +13,10 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
-// BuildLocalizationsCommand returns the build-localizations command group.
-func BuildLocalizationsCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("build-localizations", flag.ExitOnError)
+// NewBuildLocalizationsCommand returns the build-localizations command group
+// built on d.
+func NewBuildLocalizationsCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("build-localizations", flag.ExitOnError)
 
 	return &ffcli.Command{
 		Name:       "build-localizations",
@@ -35,13 +36,13 @@ Examples:
   asc build-localizations update --id "LOCALIZATION_ID" --whats-new "New features"
   asc build-localizations delete --id "LOCALIZATION_ID" --confirm`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
-			BuildLocalizationsListCommand(),
-			BuildLocalizationsGetCommand(),
-			BuildLocalizationsCreateCommand(),
-			BuildLocalizationsUpdateCommand(),
-			BuildLocalizationsDeleteCommand(),
+			newBuildLocalizationsListCommand(d),
+			newBuildLocalizationsGetCommand(d),
+			newBuildLocalizationsCreateCommand(d),
+			newBuildLocalizationsUpdateCommand(d),
+			newBuildLocalizationsDeleteCommand(d),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp
@@ -49,16 +50,16 @@ Examples:
 	}
 }
 
-// BuildLocalizationsListCommand returns the list subcommand.
-func BuildLocalizationsListCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("list", flag.ExitOnError)
+// newBuildLocalizationsListCommand returns the list subcommand built on d.
+func newBuildLocalizationsListCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("list", flag.ExitOnError)
 
 	buildID := shared.BindResourceIDFlag(fs, "build-id", "builds", "Build ID")
 	locale := fs.String("locale", "", "Filter by locale(s), comma-separated")
-	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
-	next := fs.String("next", "", "Fetch next page using a links.next URL")
-	paginate := fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")
-	output := shared.BindOutputFlags(fs)
+	limit := fs.Int("limit", 0, shared.LimitFlagUsage(200))
+	next := fs.String("next", "", shared.NextFlagUsage)
+	paginate := fs.Bool("paginate", false, shared.PaginateFlagUsage)
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "list",
@@ -72,85 +73,86 @@ is attached to. For TestFlight What to Test notes use asc builds test-notes list
 Examples:
   asc build-localizations list --build-id "BUILD_ID"
   asc build-localizations list --build-id "BUILD_ID" --locale "en-US,ja"
-  asc build-localizations list --build-id "BUILD_ID" --paginate`,
+  asc build-localizations list --build-id "BUILD_ID" --paginate
+  asc build-localizations list --next "NEXT_URL"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
-			if *limit != 0 && (*limit < 1 || *limit > 200) {
-				return shared.UsageError("build-localizations list: --limit must be between 1 and 200")
-			}
-			if err := shared.ValidateNextURL(*next); err != nil {
-				return shared.UsageErrorf("build-localizations list: %v", err)
+			if err := d.ValidatePaginationFlags(ctx, fs, "build-localizations list", 200); err != nil {
+				return err
 			}
 
 			build := strings.TrimSpace(*buildID)
-			if build == "" {
-				fmt.Fprintln(os.Stderr, "Error: --build-id is required")
-				return shared.MissingRequiredUsageError("--build-id")
+			nextURL := strings.TrimSpace(*next)
+			if build == "" && nextURL == "" {
+				return d.RequiredFlag("--build-id")
 			}
 
 			locales := shared.SplitCSV(*locale)
 			if err := shared.ValidateBuildLocalizationLocales(locales); err != nil {
-				return fmt.Errorf("build-localizations list: %w", err)
+				return d.UsageErrorf("build-localizations list: %v", err)
 			}
 
-			client, err := shared.GetASCClient()
+			client, err := d.Client()
 			if err != nil {
 				return fmt.Errorf("build-localizations list: %w", err)
 			}
 
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
+			requestCtx, cancel := d.Timeout(ctx)
 			defer cancel()
 
-			versionID, err := resolveBuildAppStoreVersion(requestCtx, client, "list", build)
-			if err != nil {
-				if shared.IsReportedUsageError(err) {
-					return err
+			// A links.next URL already names its version, so --build-id is
+			// only resolved when given, to reject a page of another version.
+			versionID := ""
+			if build != "" {
+				versionID, err = resolveBuildAppStoreVersion(requestCtx, d, client, "list", build)
+				if err != nil {
+					if shared.IsReportedUsageError(err) {
+						return err
+					}
+					return fmt.Errorf("build-localizations list: %w", err)
 				}
-				return fmt.Errorf("build-localizations list: %w", err)
+				if nextURL != "" && !isVersionLocalizationsPage(nextURL, versionID) {
+					return d.UsageErrorf("build-localizations list: --next is not a page of the App Store version attached to --build-id %q", build)
+				}
 			}
 
 			opts := []asc.AppStoreVersionLocalizationsOption{
-				asc.WithAppStoreVersionLocalizationsLimit(*limit),
-				asc.WithAppStoreVersionLocalizationsNextURL(*next),
+				asc.Limit[asc.AppStoreVersionLocalizationsOption](*limit),
+				asc.NextURL[asc.AppStoreVersionLocalizationsOption](*next),
 			}
 			if len(locales) > 0 {
 				opts = append(opts, asc.WithAppStoreVersionLocalizationLocales(locales))
 			}
 
 			if *paginate {
-				paginateOpts := append(opts, asc.WithAppStoreVersionLocalizationsLimit(200))
+				paginateOpts := append(opts, asc.Limit[asc.AppStoreVersionLocalizationsOption](200))
 				firstPage, err := client.GetAppStoreVersionLocalizations(requestCtx, versionID, paginateOpts...)
 				if err != nil {
 					return fmt.Errorf("build-localizations list: failed to fetch: %w", err)
 				}
 
 				resp, err := asc.PaginateAll(requestCtx, firstPage, func(ctx context.Context, nextURL string) (asc.PaginatedResponse, error) {
-					return client.GetAppStoreVersionLocalizations(ctx, versionID, asc.WithAppStoreVersionLocalizationsNextURL(nextURL))
+					return client.GetAppStoreVersionLocalizations(ctx, versionID, asc.NextURL[asc.AppStoreVersionLocalizationsOption](nextURL))
 				})
 				if err != nil {
 					return fmt.Errorf("build-localizations list: %w", err)
 				}
-				return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+				return d.PrintOutput(resp, *output.Output, *output.Pretty)
 			}
 
 			resp, err := client.GetAppStoreVersionLocalizations(requestCtx, versionID, opts...)
 			if err != nil {
 				return fmt.Errorf("build-localizations list: failed to fetch: %w", err)
 			}
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+			return d.PrintOutput(resp, *output.Output, *output.Pretty)
 		},
 	}
 }
 
-// BuildLocalizationsGetCommand returns the get subcommand.
-func BuildLocalizationsGetCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("view", flag.ExitOnError)
-
-	localizationID := shared.BindResourceIDFlag(fs, "id", "appStoreVersionLocalizations", "Localization ID")
-	output := shared.BindOutputFlags(fs)
-
-	return &ffcli.Command{
+// newBuildLocalizationsGetCommand returns the get subcommand built on d.
+func newBuildLocalizationsGetCommand(d *shared.Deps) *ffcli.Command {
+	return shared.BuildIDGetCommand(shared.IDGetCommandConfig{
 		Name:       "view",
 		ShortUsage: "asc build-localizations view [flags]",
 		ShortHelp:  "View a localization by ID.",
@@ -158,41 +160,26 @@ func BuildLocalizationsGetCommand() *ffcli.Command {
 
 Examples:
   asc build-localizations view --id "LOCALIZATION_ID"`,
-		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
-		Exec: func(ctx context.Context, args []string) error {
-			id := strings.TrimSpace(*localizationID)
-			if id == "" {
-				fmt.Fprintln(os.Stderr, "Error: --id is required")
-				return shared.MissingRequiredUsageError("--id")
-			}
-
-			client, err := shared.GetASCClient()
-			if err != nil {
-				return fmt.Errorf("build-localizations view: %w", err)
-			}
-
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
-			defer cancel()
-
-			resp, err := client.GetAppStoreVersionLocalization(requestCtx, id)
-			if err != nil {
-				return fmt.Errorf("build-localizations view: %w", err)
-			}
-
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+		IDFlag:             "id",
+		IDUsage:            "Localization ID",
+		IDType:             "appStoreVersionLocalizations",
+		RequiredDiagnostic: true,
+		FetchErrorPrefix:   "build-localizations view",
+		Deps:               d,
+		Fetch: func(ctx context.Context, client *asc.Client, id string) (any, error) {
+			return client.GetAppStoreVersionLocalization(ctx, id)
 		},
-	}
+	})
 }
 
-// BuildLocalizationsCreateCommand returns the create subcommand.
-func BuildLocalizationsCreateCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("create", flag.ExitOnError)
+// newBuildLocalizationsCreateCommand returns the create subcommand built on d.
+func newBuildLocalizationsCreateCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("create", flag.ExitOnError)
 
 	buildID := shared.BindResourceIDFlag(fs, "build-id", "builds", "Build ID")
 	locale := fs.String("locale", "", "Locale (e.g., en-US)")
 	whatsNew := fs.String("whats-new", "", "Release notes (whats new), up to 4000 characters")
-	output := shared.BindOutputFlags(fs)
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "create",
@@ -210,21 +197,19 @@ Examples:
   asc build-localizations create --build-id "BUILD_ID" --locale "en-US"
   asc build-localizations create --build-id "BUILD_ID" --locale "en-US" --whats-new "Bug fixes"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			build := strings.TrimSpace(*buildID)
 			if build == "" {
-				fmt.Fprintln(os.Stderr, "Error: --build-id is required")
-				return shared.MissingRequiredUsageError("--build-id")
+				return d.RequiredFlag("--build-id")
 			}
 
 			localeValue := strings.TrimSpace(*locale)
 			if localeValue == "" {
-				fmt.Fprintln(os.Stderr, "Error: --locale is required")
-				return shared.MissingRequiredUsageError("--locale")
+				return d.RequiredFlag("--locale")
 			}
 			if err := shared.ValidateBuildLocalizationLocale(localeValue); err != nil {
-				return fmt.Errorf("build-localizations create: %w", err)
+				return d.UsageErrorf("build-localizations create: %v", err)
 			}
 
 			whatsNewValue := strings.TrimSpace(*whatsNew)
@@ -236,18 +221,18 @@ Examples:
 				attrs.WhatsNew = whatsNewValue
 			}
 			if err := shared.ValidateVersionLocalizationAttributes(attrs); err != nil {
-				return shared.UsageError(err.Error())
+				return d.UsageError(err.Error())
 			}
 
-			client, err := shared.GetASCClient()
+			client, err := d.Client()
 			if err != nil {
 				return fmt.Errorf("build-localizations create: %w", err)
 			}
 
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
+			requestCtx, cancel := d.Timeout(ctx)
 			defer cancel()
 
-			versionID, err := resolveBuildAppStoreVersion(requestCtx, client, "create", build)
+			versionID, err := resolveBuildAppStoreVersion(requestCtx, d, client, "create", build)
 			if err != nil {
 				if shared.IsReportedUsageError(err) {
 					return err
@@ -269,21 +254,21 @@ Examples:
 				warnings = append(warnings, warning)
 			}
 
-			if err := shared.PrintOutput(resp, *output.Output, *output.Pretty); err != nil {
+			if err := d.PrintOutput(resp, *output.Output, *output.Pretty); err != nil {
 				return err
 			}
-			return shared.PrintSubmitReadinessCreateWarnings(os.Stderr, warnings)
+			return shared.PrintSubmitReadinessCreateWarnings(d.IO.ErrOut, warnings)
 		},
 	}
 }
 
-// BuildLocalizationsUpdateCommand returns the update subcommand.
-func BuildLocalizationsUpdateCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("update", flag.ExitOnError)
+// newBuildLocalizationsUpdateCommand returns the update subcommand built on d.
+func newBuildLocalizationsUpdateCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("update", flag.ExitOnError)
 
 	localizationID := shared.BindResourceIDFlag(fs, "id", "appStoreVersionLocalizations", "Localization ID")
 	whatsNew := fs.String("whats-new", "", "Release notes (whats new), up to 4000 characters")
-	output := shared.BindOutputFlags(fs)
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "update",
@@ -297,33 +282,31 @@ request is sent.
 Examples:
   asc build-localizations update --id "LOCALIZATION_ID" --whats-new "New features"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			id := strings.TrimSpace(*localizationID)
 			if id == "" {
-				fmt.Fprintln(os.Stderr, "Error: --id is required")
-				return shared.MissingRequiredUsageError("--id")
+				return d.RequiredFlag("--id")
 			}
 
 			whatsNewValue := strings.TrimSpace(*whatsNew)
 			if whatsNewValue == "" {
-				fmt.Fprintln(os.Stderr, "Error: at least one update flag is required")
-				return shared.MissingRequiredUsageError("--whats-new")
+				return d.UpdateFlagRequired(fs, whatsNew)
 			}
 
 			attrs := asc.AppStoreVersionLocalizationAttributes{
 				WhatsNew: whatsNewValue,
 			}
 			if err := shared.ValidateVersionLocalizationAttributes(attrs); err != nil {
-				return shared.UsageError(err.Error())
+				return d.UsageError(err.Error())
 			}
 
-			client, err := shared.GetASCClient()
+			client, err := d.Client()
 			if err != nil {
 				return fmt.Errorf("build-localizations update: %w", err)
 			}
 
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
+			requestCtx, cancel := d.Timeout(ctx)
 			defer cancel()
 
 			resp, err := client.UpdateAppStoreVersionLocalization(requestCtx, id, attrs)
@@ -331,20 +314,15 @@ Examples:
 				return fmt.Errorf("build-localizations update: %w", err)
 			}
 
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+			return d.PrintOutput(resp, *output.Output, *output.Pretty)
 		},
 	}
 }
 
-// BuildLocalizationsDeleteCommand returns the delete subcommand.
-func BuildLocalizationsDeleteCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("delete", flag.ExitOnError)
-
-	localizationID := shared.BindResourceIDFlag(fs, "id", "appStoreVersionLocalizations", "Localization ID")
-	confirm := fs.Bool("confirm", false, "Confirm deletion")
-	output := shared.BindOutputFlags(fs)
-
-	return &ffcli.Command{
+// newBuildLocalizationsDeleteCommand returns the delete subcommand built on d.
+func newBuildLocalizationsDeleteCommand(d *shared.Deps) *ffcli.Command {
+	return shared.BuildConfirmDeleteCommand(shared.ConfirmDeleteCommandConfig{
+		Deps:       d,
 		Name:       "delete",
 		ShortUsage: "asc build-localizations delete [flags]",
 		ShortHelp:  "Delete a localization by ID.",
@@ -352,39 +330,18 @@ func BuildLocalizationsDeleteCommand() *ffcli.Command {
 
 Examples:
   asc build-localizations delete --id "LOCALIZATION_ID" --confirm`,
-		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
-		Exec: func(ctx context.Context, args []string) error {
-			id := strings.TrimSpace(*localizationID)
-			if id == "" {
-				fmt.Fprintln(os.Stderr, "Error: --id is required")
-				return shared.MissingRequiredUsageError("--id")
-			}
-			if !*confirm {
-				fmt.Fprintln(os.Stderr, "Error: --confirm is required")
-				return shared.MissingRequiredUsageError("--confirm")
-			}
-
-			client, err := shared.GetASCClient()
-			if err != nil {
-				return fmt.Errorf("build-localizations delete: %w", err)
-			}
-
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
-			defer cancel()
-
-			if err := client.DeleteAppStoreVersionLocalization(requestCtx, id); err != nil {
-				return fmt.Errorf("build-localizations delete: %w", err)
-			}
-
-			result := &asc.AppStoreVersionLocalizationDeleteResult{
-				ID:      id,
-				Deleted: true,
-			}
-
-			return shared.PrintOutput(result, *output.Output, *output.Pretty)
+		IDFlag:             "id",
+		IDUsage:            "Localization ID",
+		IDType:             "appStoreVersionLocalizations",
+		RequiredDiagnostic: true,
+		DeleteErrorPrefix:  "build-localizations delete",
+		Delete: func(ctx context.Context, client *asc.Client, id string) error {
+			return client.DeleteAppStoreVersionLocalization(ctx, id)
 		},
-	}
+		Result: func(id string) any {
+			return &asc.DeleteResult{ID: id, Deleted: true}
+		},
+	})
 }
 
 // resolveBuildAppStoreVersion returns the App Store version a build is attached
@@ -393,7 +350,15 @@ Examples:
 // a TestFlight-only build, so that case is reported as a usage error with
 // guidance instead of a generic failure. API errors, including an unknown build
 // ID, are returned unchanged so the service detail and classification survive.
-func resolveBuildAppStoreVersion(ctx context.Context, client *asc.Client, subcommand, buildID string) (string, error) {
+func isVersionLocalizationsPage(nextURL, versionID string) bool {
+	parsed, err := url.Parse(nextURL)
+	if err != nil {
+		return false
+	}
+	return parsed.Path == "/v1/appStoreVersions/"+url.PathEscape(versionID)+"/appStoreVersionLocalizations"
+}
+
+func resolveBuildAppStoreVersion(ctx context.Context, d *shared.Deps, client *asc.Client, subcommand, buildID string) (string, error) {
 	resp, err := client.GetBuildAppStoreVersion(ctx, buildID)
 	if err != nil {
 		return "", err
@@ -407,7 +372,7 @@ func resolveBuildAppStoreVersion(ctx context.Context, client *asc.Client, subcom
 			"build-localizations %s: the selected build is not attached to an App Store version. build-localizations manages the App Store version's What's New text; for TestFlight What to Test notes use `%s`.",
 			subcommand, testNotesCommand,
 		)
-		fmt.Fprintf(os.Stderr, "Error: %s\n", message)
+		fmt.Fprintf(d.IO.ErrOut, "Error: %s\n", message)
 		return "", shared.NewReportedUsageError(shared.UsageErrorInvalidValue, message)
 	}
 	return resp.Data.ID, nil

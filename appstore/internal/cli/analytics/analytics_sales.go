@@ -6,7 +6,6 @@ import (
 	"flag"
 	"fmt"
 	"net/http"
-	"os"
 	"strings"
 
 	"github.com/peterbourgon/ff/v3/ffcli"
@@ -15,9 +14,9 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
-// AnalyticsSalesCommand downloads sales and trends reports.
-func AnalyticsSalesCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("sales", flag.ExitOnError)
+// newAnalyticsSalesCommand downloads sales and trends reports.
+func newAnalyticsSalesCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("sales", flag.ExitOnError)
 
 	vendor := fs.String("vendor", "", "Vendor number (or ASC_VENDOR_NUMBER/ASC_ANALYTICS_VENDOR_NUMBER env)")
 	reportType := fs.String("type", "", "Report type: SALES, PRE_ORDER, NEWSSTAND, SUBSCRIPTION, SUBSCRIPTION_EVENT, SUBSCRIBER, SUBSCRIPTION_OFFER_CODE_REDEMPTION, INSTALLS (deprecated), FIRST_ANNUAL, WIN_BACK_ELIGIBILITY")
@@ -45,47 +44,47 @@ Examples:
   asc analytics sales --vendor "12345678" --type SALES --subtype SUMMARY --frequency DAILY --date "2024-01-20" --decompress
   asc analytics sales --vendor "12345678" --type SALES --subtype SUMMARY --frequency DAILY --date "2024-01-20" --output "reports/daily_sales.tsv.gz"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
+			if err := d.RejectOutputFormatAsPath(*output, "--output-format"); err != nil {
+				return err
+			}
 			vendorNumber := shared.ResolveVendorNumber(*vendor)
 			if vendorNumber == "" {
-				fmt.Fprintln(os.Stderr, "Error: --vendor is required (or set ASC_VENDOR_NUMBER/ASC_ANALYTICS_VENDOR_NUMBER)")
+				fmt.Fprintln(d.IO.ErrOut, "Error: --vendor is required (or set ASC_VENDOR_NUMBER/ASC_ANALYTICS_VENDOR_NUMBER); find it in App Store Connect under Sales and Trends > Reports")
 				return shared.MissingRequiredUsageError("--vendor")
 			}
 			if strings.TrimSpace(*reportType) == "" {
-				fmt.Fprintln(os.Stderr, "Error: --type is required")
-				return shared.MissingRequiredUsageError("--type")
+				return d.RequiredFlag("--type")
 			}
 			if strings.TrimSpace(*reportSubType) == "" {
-				fmt.Fprintln(os.Stderr, "Error: --subtype is required")
-				return shared.MissingRequiredUsageError("--subtype")
+				return d.RequiredFlag("--subtype")
 			}
 			if strings.TrimSpace(*frequency) == "" {
-				fmt.Fprintln(os.Stderr, "Error: --frequency is required")
-				return shared.MissingRequiredUsageError("--frequency")
+				return d.RequiredFlag("--frequency")
 			}
 			salesType, err := normalizeSalesReportType(*reportType)
 			if err != nil {
-				return shared.UsageError(fmt.Sprintf("analytics sales: %v", err))
+				return d.UsageError(fmt.Sprintf("analytics sales: %v", err))
 			}
 			subType, err := normalizeSalesReportSubType(*reportSubType)
 			if err != nil {
-				return shared.UsageError(fmt.Sprintf("analytics sales: %v", err))
+				return d.UsageError(fmt.Sprintf("analytics sales: %v", err))
 			}
 			freq, err := normalizeSalesReportFrequency(*frequency)
 			if err != nil {
-				return shared.UsageError(fmt.Sprintf("analytics sales: %v", err))
+				return d.UsageError(fmt.Sprintf("analytics sales: %v", err))
 			}
 			reportDate, err := normalizeReportDate(*date, freq)
 			if err != nil {
-				return shared.UsageError(fmt.Sprintf("analytics sales: %v", err))
+				return d.UsageError(fmt.Sprintf("analytics sales: %v", err))
 			}
 			reportVersion, err := normalizeSalesReportVersion(*version, salesType, subType, freq)
 			if err != nil {
-				return shared.UsageError(fmt.Sprintf("analytics sales: %v", err))
+				return d.UsageError(fmt.Sprintf("analytics sales: %v", err))
 			}
 			if salesType == asc.SalesReportTypeInstalls {
-				fmt.Fprintln(os.Stderr, "Warning: the INSTALLS report type is deprecated. Apple stopped generating new INSTALLS reports on November 4, 2026; reports generated before then can still be downloaded.")
+				fmt.Fprintln(d.IO.ErrOut, "Warning: the INSTALLS report type is deprecated. Apple stopped generating new INSTALLS reports on November 4, 2026; reports generated before then can still be downloaded.")
 			}
 
 			outputDate := reportDate
@@ -95,12 +94,12 @@ Examples:
 			defaultOutput := fmt.Sprintf("sales_report_%s_%s.tsv.gz", outputDate, string(salesType))
 			compressedPath, decompressedPath := shared.ResolveReportOutputPaths(*output, defaultOutput, ".tsv", *decompress)
 
-			client, err := shared.GetASCClient()
+			client, err := d.Client()
 			if err != nil {
 				return fmt.Errorf("analytics sales: %w", err)
 			}
 
-			requestCtx, cancel := shared.ContextWithDownloadTimeout(ctx)
+			requestCtx, cancel := d.DownloadTimeout(ctx)
 			defer cancel()
 
 			download, err := client.GetSalesReport(requestCtx, asc.SalesReportParams{
@@ -114,7 +113,7 @@ Examples:
 			if err != nil {
 				if *allowMissing && isMissingSalesReportError(err) {
 					available := false
-					return shared.PrintOutput(&asc.SalesReportResult{
+					return d.PrintOutput(&asc.SalesReportResult{
 						VendorNumber:  vendorNumber,
 						ReportType:    string(salesType),
 						ReportSubType: string(subType),
@@ -124,18 +123,22 @@ Examples:
 						Available:     &available,
 					}, *outputFlags.OutputFormat, *outputFlags.Pretty)
 				}
-				return fmt.Errorf("analytics sales: failed to download report: %w", err)
+				err = fmt.Errorf("analytics sales: failed to download report: %w", err)
+				if isMissingSalesReportError(err) {
+					return &shared.HintedError{Err: err, Hint: missingSalesReportHint}
+				}
+				return err
 			}
 			defer download.Body.Close()
 
-			compressedSize, err := shared.WriteStreamToFile(compressedPath, download.Body)
+			compressedSize, err := d.WriteStreamToFile(compressedPath, download.Body)
 			if err != nil {
 				return fmt.Errorf("analytics sales: failed to write report: %w", err)
 			}
 
 			var decompressedSize int64
 			if *decompress {
-				decompressedSize, err = shared.DecompressGzipFile(compressedPath, decompressedPath)
+				decompressedSize, err = d.DecompressGzipFile(compressedPath, decompressedPath)
 				if err != nil {
 					return fmt.Errorf("analytics sales: %w", err)
 				}
@@ -155,10 +158,12 @@ Examples:
 				DecompressedSize: decompressedSize,
 			}
 
-			return shared.PrintOutput(result, *outputFlags.OutputFormat, *outputFlags.Pretty)
+			return d.PrintOutput(result, *outputFlags.OutputFormat, *outputFlags.Pretty)
 		},
 	}
 }
+
+const missingSalesReportHint = "Re-running the same request will not help until Apple has a report for it; try an earlier --date, or pass --allow-missing to get available=false instead of an error."
 
 func isMissingSalesReportError(err error) bool {
 	if !errors.Is(err, asc.ErrNotFound) {

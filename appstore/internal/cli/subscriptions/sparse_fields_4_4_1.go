@@ -8,23 +8,11 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
-func normalizeSparseFieldsFlag(fs *flag.FlagSet, next, name, value string, allowed []string) ([]string, error) {
+func normalizeSparseFieldsFlag(d *shared.Deps, fs *flag.FlagSet, next, name, value string, allowed []string) ([]string, error) {
 	if strings.TrimSpace(next) != "" && flagWasProvided(fs, name) {
-		return nil, shared.UsageErrorf("--next cannot be combined with --%s", name)
+		return nil, d.UsageErrorf("--next cannot be combined with --%s", name)
 	}
-	return normalizeSelectionFlag(fs, value, "--"+name, allowed)
-}
-
-func validateNextExclusiveFlags(fs *flag.FlagSet, next string, names ...string) error {
-	if strings.TrimSpace(next) == "" {
-		return nil
-	}
-	for _, name := range names {
-		if flagWasProvided(fs, name) {
-			return shared.UsageErrorf("--next cannot be combined with --%s", name)
-		}
-	}
-	return nil
+	return normalizeSelectionFlag(d, fs, value, "--"+name, allowed)
 }
 
 func includeRelationshipForFields(fields []string, relationship string) []string {

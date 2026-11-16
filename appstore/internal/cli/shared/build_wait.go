@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"regexp"
@@ -36,6 +37,16 @@ func ContextWithTimeoutDuration(ctx context.Context, timeout time.Duration) (con
 // failure states. This prevents long hangs when App Store Connect rejects the
 // uploaded artifact before a build record is created.
 func WaitForBuildByNumberOrUploadFailure(ctx context.Context, client *asc.Client, appID, uploadID, version, buildNumber, platform string, pollInterval time.Duration) (*asc.BuildResponse, error) {
+	return waitForBuildByNumberOrUploadFailureTo(ctx, os.Stderr, client, appID, uploadID, version, buildNumber, platform, pollInterval)
+}
+
+// WaitForBuildByNumberOrUploadFailure is WaitForBuildByNumberOrUploadFailure
+// with the equivalent-version note written to d's stderr.
+func (d *Deps) WaitForBuildByNumberOrUploadFailure(ctx context.Context, client *asc.Client, appID, uploadID, version, buildNumber, platform string, pollInterval time.Duration) (*asc.BuildResponse, error) {
+	return waitForBuildByNumberOrUploadFailureTo(ctx, d.IO.ErrOut, client, appID, uploadID, version, buildNumber, platform, pollInterval)
+}
+
+func waitForBuildByNumberOrUploadFailureTo(ctx context.Context, stderr io.Writer, client *asc.Client, appID, uploadID, version, buildNumber, platform string, pollInterval time.Duration) (*asc.BuildResponse, error) {
 	if pollInterval <= 0 {
 		pollInterval = PublishDefaultPollInterval
 	}
@@ -76,7 +87,7 @@ func WaitForBuildByNumberOrUploadFailure(ctx context.Context, client *asc.Client
 			}
 		}
 		if preReleaseID == "" {
-			id, err := findPreReleaseVersionIDForBuildWait(ctx, client, appID, version, platform)
+			id, err := findPreReleaseVersionIDForBuildWait(ctx, stderr, client, appID, version, platform)
 			if err != nil {
 				return nil, false, err
 			}
@@ -93,7 +104,7 @@ func WaitForBuildByNumberOrUploadFailure(ctx context.Context, client *asc.Client
 			return build, true, nil
 		}
 		return nil, false, nil
-	}, asc.PollOptions{Tolerate: isTransientBuildWaitError})
+	}, asc.PollOptions{Tolerate: isTransientBuildWaitError, Stderr: stderr})
 }
 
 // getBuildUploadWithLinkedBuild reads a build upload including its build
@@ -133,7 +144,7 @@ func LatestBuildUploadForWait(ctx context.Context, client *asc.Client, selector 
 
 	opts := []asc.BuildUploadsOption{
 		asc.WithBuildUploadsSort("-uploadedDate"),
-		asc.WithBuildUploadsLimit(buildUploadWaitLookupLimit),
+		asc.Limit[asc.BuildUploadsOption](buildUploadWaitLookupLimit),
 	}
 	if buildNumber := strings.TrimSpace(selector.BuildNumber); buildNumber != "" {
 		opts = append(opts, asc.WithBuildUploadsCFBundleVersions([]string{buildNumber}))
@@ -288,7 +299,7 @@ func findBuildIDForUpload(ctx context.Context, client *asc.Client, appID, upload
 		ctx, appID,
 		asc.WithBuildsVersion(buildNumber),
 		asc.WithBuildsInclude([]string{"buildUpload"}),
-		asc.WithBuildsLimit(200),
+		asc.Limit[asc.BuildsOption](200),
 	)
 	if err != nil {
 		return "", err
@@ -309,7 +320,7 @@ func findBuildByNumber(ctx context.Context, client *asc.Client, appID, preReleas
 	buildOpts := []asc.BuildsOption{
 		asc.WithBuildsPreReleaseVersion(preReleaseID),
 		asc.WithBuildsSort("-uploadedDate"),
-		asc.WithBuildsLimit(200),
+		asc.Limit[asc.BuildsOption](200),
 	}
 	if uploadID != "" {
 		buildOpts = append(buildOpts, asc.WithBuildsInclude([]string{"buildUpload"}))
@@ -341,7 +352,7 @@ func findBuildByNumber(ctx context.Context, client *asc.Client, appID, preReleas
 // same version but only makes the first-uploaded format queryable, so the
 // requested format is tried first and the equivalent format only when it
 // matches nothing. An empty ID means no matching train exists yet.
-func findPreReleaseVersionIDForBuildWait(ctx context.Context, client *asc.Client, appID, version, platform string) (string, error) {
+func findPreReleaseVersionIDForBuildWait(ctx context.Context, stderr io.Writer, client *asc.Client, appID, version, platform string) (string, error) {
 	requestedVersion := strings.TrimSpace(version)
 
 	variants := versionQueryVariants(requestedVersion)
@@ -369,7 +380,7 @@ func findPreReleaseVersionIDForBuildWait(ctx context.Context, client *asc.Client
 				Hint:        "Pass --build-id to wait for a specific build.",
 			}
 		}
-		noteEquivalentVersionMatch(requestedVersion, variant)
+		noteEquivalentVersionMatch(stderr, requestedVersion, variant)
 		return ids[0], nil
 	}
 
@@ -569,7 +580,17 @@ type BuildProcessingFailureContext struct {
 // INVALID. appID may be empty; it is then resolved from the build. The state
 // error is returned unchanged when no details can be resolved.
 func WaitForBuildProcessingWithDetails(ctx context.Context, client *asc.Client, appID, buildID string, pollInterval time.Duration) (*asc.BuildResponse, error) {
-	build, err := client.WaitForBuildProcessing(ctx, buildID, pollInterval)
+	return waitForBuildProcessingWithDetailsTo(ctx, nil, client, appID, buildID, pollInterval)
+}
+
+// WaitForBuildProcessingWithDetails is WaitForBuildProcessingWithDetails with
+// its transient-error notices written to d's stderr.
+func (d *Deps) WaitForBuildProcessingWithDetails(ctx context.Context, client *asc.Client, appID, buildID string, pollInterval time.Duration) (*asc.BuildResponse, error) {
+	return waitForBuildProcessingWithDetailsTo(ctx, d.IO.ErrOut, client, appID, buildID, pollInterval)
+}
+
+func waitForBuildProcessingWithDetailsTo(ctx context.Context, stderr io.Writer, client *asc.Client, appID, buildID string, pollInterval time.Duration) (*asc.BuildResponse, error) {
+	build, err := client.WaitForBuildProcessingTo(ctx, stderr, buildID, pollInterval)
 	if err == nil || !asc.IsBuildProcessingFailure(err) {
 		return build, err
 	}
@@ -678,7 +699,7 @@ func linkedBuildUploadID(ctx context.Context, client *asc.Client, appID, buildID
 		ctx, appID,
 		asc.WithBuildsVersion(bundleVersion),
 		asc.WithBuildsInclude([]string{"buildUpload"}),
-		asc.WithBuildsLimit(buildProcessingFailureLookupLimit),
+		asc.Limit[asc.BuildsOption](buildProcessingFailureLookupLimit),
 	)
 	if err != nil {
 		return ""
@@ -712,7 +733,7 @@ func findBuildUploadByVersion(ctx context.Context, client *asc.Client, appID, bu
 		asc.WithBuildUploadsCFBundleShortVersionStrings([]string{shortVersion}),
 		asc.WithBuildUploadsPlatforms([]string{platform}),
 		asc.WithBuildUploadsSort("-uploadedDate"),
-		asc.WithBuildUploadsLimit(buildProcessingFailureLookupLimit),
+		asc.Limit[asc.BuildUploadsOption](buildProcessingFailureLookupLimit),
 	)
 	if err != nil {
 		return nil, err

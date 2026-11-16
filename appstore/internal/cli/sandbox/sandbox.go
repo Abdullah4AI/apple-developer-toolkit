@@ -8,9 +8,10 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
-// SandboxCommand returns the sandbox testers command with subcommands.
-func SandboxCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("sandbox", flag.ExitOnError)
+// NewSandboxCommand returns the sandbox testers command with subcommands,
+// built on d.
+func NewSandboxCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("sandbox", flag.ExitOnError)
 
 	return &ffcli.Command{
 		Name:       "sandbox",
@@ -26,12 +27,12 @@ Examples:
   asc sandbox clear-history --id "SANDBOX_TESTER_ID" --confirm
 `,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
-			SandboxListCommand(),
-			SandboxGetCommand(),
-			SandboxUpdateCommand(),
-			SandboxClearHistoryCommand(),
+			newSandboxListCommand(d),
+			newSandboxGetCommand(d),
+			newSandboxUpdateCommand(d),
+			newSandboxClearHistoryCommand(d),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp

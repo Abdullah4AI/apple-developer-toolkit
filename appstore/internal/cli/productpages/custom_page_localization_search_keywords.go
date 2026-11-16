@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/peterbourgon/ff/v3/ffcli"
@@ -12,9 +11,9 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
-// CustomPageLocalizationsSearchKeywordsCommand returns the search keywords command group.
-func CustomPageLocalizationsSearchKeywordsCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("search-keywords", flag.ExitOnError)
+// newCustomPageLocalizationsSearchKeywordsCommand returns the search keywords command group.
+func newCustomPageLocalizationsSearchKeywordsCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("search-keywords", flag.ExitOnError)
 
 	return &ffcli.Command{
 		Name:       "search-keywords",
@@ -27,11 +26,11 @@ Examples:
   asc product-pages custom-pages localizations search-keywords add --localization-id "LOCALIZATION_ID" --keywords "kw1,kw2"
   asc product-pages custom-pages localizations search-keywords delete --localization-id "LOCALIZATION_ID" --keywords "kw1,kw2" --confirm`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
-			CustomPageLocalizationsSearchKeywordsListCommand(),
-			CustomPageLocalizationsSearchKeywordsAddCommand(),
-			CustomPageLocalizationsSearchKeywordsDeleteCommand(),
+			newCustomPageLocalizationsSearchKeywordsListCommand(d),
+			newCustomPageLocalizationsSearchKeywordsAddCommand(d),
+			newCustomPageLocalizationsSearchKeywordsDeleteCommand(d),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp
@@ -39,12 +38,12 @@ Examples:
 	}
 }
 
-// CustomPageLocalizationsSearchKeywordsListCommand returns the search keywords list subcommand.
-func CustomPageLocalizationsSearchKeywordsListCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("custom-page-localizations search-keywords list", flag.ExitOnError)
+// newCustomPageLocalizationsSearchKeywordsListCommand returns the search keywords list subcommand.
+func newCustomPageLocalizationsSearchKeywordsListCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("custom-page-localizations search-keywords list", flag.ExitOnError)
 
 	localizationID := shared.BindResourceIDFlag(fs, "localization-id", "appCustomProductPageLocalizations", "Custom product page localization ID")
-	output := shared.BindOutputFlags(fs)
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "list",
@@ -55,20 +54,19 @@ func CustomPageLocalizationsSearchKeywordsListCommand() *ffcli.Command {
 Examples:
   asc product-pages custom-pages localizations search-keywords list --localization-id "LOCALIZATION_ID"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			trimmedID := strings.TrimSpace(*localizationID)
 			if trimmedID == "" {
-				fmt.Fprintln(os.Stderr, "Error: --localization-id is required")
-				return shared.MissingRequiredUsageError("--localization-id")
+				return d.RequiredFlag("--localization-id")
 			}
 
-			client, err := shared.GetASCClient()
+			client, err := d.Client()
 			if err != nil {
 				return fmt.Errorf("custom-pages localizations search-keywords list: %w", err)
 			}
 
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
+			requestCtx, cancel := d.Timeout(ctx)
 			defer cancel()
 
 			resp, err := client.GetAppCustomProductPageLocalizationSearchKeywords(requestCtx, trimmedID)
@@ -76,18 +74,18 @@ Examples:
 				return fmt.Errorf("custom-pages localizations search-keywords list: failed to fetch: %w", err)
 			}
 
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+			return d.PrintOutput(resp, *output.Output, *output.Pretty)
 		},
 	}
 }
 
-// CustomPageLocalizationsSearchKeywordsAddCommand returns the search keywords add subcommand.
-func CustomPageLocalizationsSearchKeywordsAddCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("custom-page-localizations search-keywords add", flag.ExitOnError)
+// newCustomPageLocalizationsSearchKeywordsAddCommand returns the search keywords add subcommand.
+func newCustomPageLocalizationsSearchKeywordsAddCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("custom-page-localizations search-keywords add", flag.ExitOnError)
 
 	localizationID := shared.BindResourceIDFlag(fs, "localization-id", "appCustomProductPageLocalizations", "Custom product page localization ID")
 	keywords := fs.String("keywords", "", "Keywords (comma-separated)")
-	output := shared.BindOutputFlags(fs)
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "add",
@@ -98,45 +96,43 @@ func CustomPageLocalizationsSearchKeywordsAddCommand() *ffcli.Command {
 Examples:
   asc product-pages custom-pages localizations search-keywords add --localization-id "LOCALIZATION_ID" --keywords "kw1,kw2"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			trimmedID := strings.TrimSpace(*localizationID)
 			if trimmedID == "" {
-				fmt.Fprintln(os.Stderr, "Error: --localization-id is required")
-				return shared.MissingRequiredUsageError("--localization-id")
+				return d.RequiredFlag("--localization-id")
 			}
 
 			keywordValues := shared.SplitCSV(*keywords)
 			if len(keywordValues) == 0 {
-				fmt.Fprintln(os.Stderr, "Error: --keywords is required")
-				return shared.MissingRequiredUsageError("--keywords")
+				return d.RequiredFlag("--keywords")
 			}
 
-			client, err := shared.GetASCClient()
+			client, err := d.Client()
 			if err != nil {
 				return fmt.Errorf("custom-pages localizations search-keywords add: %w", err)
 			}
 
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
+			requestCtx, cancel := d.Timeout(ctx)
 			defer cancel()
 
 			if err := client.AddAppCustomProductPageLocalizationSearchKeywords(requestCtx, trimmedID, keywordValues); err != nil {
 				return fmt.Errorf("custom-pages localizations search-keywords add: failed to add: %w", err)
 			}
 
-			return shared.PrintOutput(shared.BuildAppKeywordsResponse(keywordValues), *output.Output, *output.Pretty)
+			return d.PrintOutput(shared.BuildAppKeywordsResponse(keywordValues), *output.Output, *output.Pretty)
 		},
 	}
 }
 
-// CustomPageLocalizationsSearchKeywordsDeleteCommand returns the search keywords delete subcommand.
-func CustomPageLocalizationsSearchKeywordsDeleteCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("custom-page-localizations search-keywords delete", flag.ExitOnError)
+// newCustomPageLocalizationsSearchKeywordsDeleteCommand returns the search keywords delete subcommand.
+func newCustomPageLocalizationsSearchKeywordsDeleteCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("custom-page-localizations search-keywords delete", flag.ExitOnError)
 
 	localizationID := shared.BindResourceIDFlag(fs, "localization-id", "appCustomProductPageLocalizations", "Custom product page localization ID")
 	keywords := fs.String("keywords", "", "Keywords (comma-separated)")
 	confirm := fs.Bool("confirm", false, "Confirm deletion")
-	output := shared.BindOutputFlags(fs)
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "delete",
@@ -147,37 +143,34 @@ func CustomPageLocalizationsSearchKeywordsDeleteCommand() *ffcli.Command {
 Examples:
   asc product-pages custom-pages localizations search-keywords delete --localization-id "LOCALIZATION_ID" --keywords "kw1,kw2" --confirm`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			trimmedID := strings.TrimSpace(*localizationID)
 			if trimmedID == "" {
-				fmt.Fprintln(os.Stderr, "Error: --localization-id is required")
-				return shared.MissingRequiredUsageError("--localization-id")
-			}
-			if !*confirm {
-				fmt.Fprintln(os.Stderr, "Error: --confirm is required")
-				return shared.MissingRequiredUsageError("--confirm")
+				return d.RequiredFlag("--localization-id")
 			}
 
 			keywordValues := shared.SplitCSV(*keywords)
 			if len(keywordValues) == 0 {
-				fmt.Fprintln(os.Stderr, "Error: --keywords is required")
-				return shared.MissingRequiredUsageError("--keywords")
+				return d.RequiredFlag("--keywords")
+			}
+			if err := d.RequireConfirm(*confirm); err != nil {
+				return err
 			}
 
-			client, err := shared.GetASCClient()
+			client, err := d.Client()
 			if err != nil {
 				return fmt.Errorf("custom-pages localizations search-keywords delete: %w", err)
 			}
 
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
+			requestCtx, cancel := d.Timeout(ctx)
 			defer cancel()
 
 			if err := client.DeleteAppCustomProductPageLocalizationSearchKeywords(requestCtx, trimmedID, keywordValues); err != nil {
 				return fmt.Errorf("custom-pages localizations search-keywords delete: failed to delete: %w", err)
 			}
 
-			return shared.PrintOutput(shared.BuildAppKeywordsResponse(keywordValues), *output.Output, *output.Pretty)
+			return d.PrintOutput(shared.BuildAppKeywordsResponse(keywordValues), *output.Output, *output.Pretty)
 		},
 	}
 }

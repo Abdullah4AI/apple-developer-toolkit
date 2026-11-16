@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/peterbourgon/ff/v3/ffcli"
@@ -13,9 +12,9 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
-// BetaTestersAppsCommand returns the beta-testers apps command group.
-func BetaTestersAppsCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("apps", flag.ExitOnError)
+// newBetaTestersAppsCommand returns the beta-testers apps command group built on d.
+func newBetaTestersAppsCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("apps", flag.ExitOnError)
 
 	return &ffcli.Command{
 		Name:       "apps",
@@ -26,9 +25,9 @@ func BetaTestersAppsCommand() *ffcli.Command {
 Examples:
   asc testflight beta-testers apps list --tester-id "TESTER_ID"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
-			BetaTestersAppsListCommand(),
+			newBetaTestersAppsListCommand(d),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp
@@ -36,16 +35,16 @@ Examples:
 	}
 }
 
-// BetaTestersAppsListCommand returns the beta-testers apps list subcommand.
-func BetaTestersAppsListCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("apps list", flag.ExitOnError)
+// newBetaTestersAppsListCommand returns the beta-testers apps list subcommand built on d.
+func newBetaTestersAppsListCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("apps list", flag.ExitOnError)
 
 	testerID := shared.BindResourceIDFlag(fs, "tester-id", "betaTesters", "Beta tester ID")
 	aliasID := shared.BindResourceIDFlag(fs, "id", "betaTesters", "Beta tester ID (alias of --tester-id)")
-	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
-	next := fs.String("next", "", "Fetch next page using a links.next URL")
-	paginate := fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")
-	output := shared.BindOutputFlags(fs)
+	limit := fs.Int("limit", 0, shared.LimitFlagUsage(200))
+	next := fs.String("next", "", shared.NextFlagUsage)
+	paginate := fs.Bool("paginate", false, shared.PaginateFlagUsage)
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "list",
@@ -57,17 +56,10 @@ Examples:
   asc testflight beta-testers apps list --tester-id "TESTER_ID"
   asc testflight beta-testers apps list --tester-id "TESTER_ID" --paginate`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
-			if *limit != 0 && (*limit < 1 || *limit > 200) {
-				return shared.WithDiagnostic(
-					shared.UsageErrorCtx(ctx, "testflight beta-testers apps list: --limit must be between 1 and 200"),
-					shared.DiagnosticInvalidInput,
-					"--limit",
-				)
-			}
-			if err := shared.ValidateNextURL(*next); err != nil {
-				return shared.UsageErrorfCtx(ctx, "testflight beta-testers apps list: %v", err)
+			if err := d.ValidatePaginationFlags(ctx, fs, "testflight beta-testers apps list", 200); err != nil {
+				return err
 			}
 
 			testerValue := strings.TrimSpace(*testerID)
@@ -76,48 +68,46 @@ Examples:
 				testerValue = aliasValue
 			} else if aliasValue != "" && aliasValue != testerValue {
 				return shared.WithDiagnostic(
-					shared.NewValidationError(fmt.Errorf("testflight beta-testers apps list: --tester-id and --id must match")),
+					d.UsageErrorCtx(ctx, "testflight beta-testers apps list: --tester-id and --id must match"),
 					shared.DiagnosticConflictingInput,
 					"",
 				)
 			}
 			if testerValue == "" && strings.TrimSpace(*next) == "" {
-				fmt.Fprintln(os.Stderr, "Error: --tester-id is required")
-				return shared.MissingRequiredUsageError("--tester-id")
+				return d.RequiredFlag("--tester-id")
 			}
 
-			client, err := shared.GetASCClient()
+			client, err := d.Client()
 			if err != nil {
 				return fmt.Errorf("testflight beta-testers apps list: %w", err)
 			}
 
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
+			requestCtx, cancel := d.Timeout(ctx)
 			defer cancel()
 
 			opts := []asc.BetaTesterAppsOption{
-				asc.WithBetaTesterAppsLimit(*limit),
-				asc.WithBetaTesterAppsNextURL(*next),
+				asc.Limit[asc.BetaTesterAppsOption](*limit),
+				asc.NextURL[asc.BetaTesterAppsOption](*next),
 			}
 
 			if *paginate {
 				if testerValue == "" {
-					fmt.Fprintln(os.Stderr, "Error: --tester-id is required")
-					return shared.MissingRequiredUsageError("--tester-id")
+					return d.RequiredFlag("--tester-id")
 				}
-				paginateOpts := append(opts, asc.WithBetaTesterAppsLimit(200))
-				resp, err := shared.PaginateWithSpinner(
+				paginateOpts := append(opts, asc.Limit[asc.BetaTesterAppsOption](200))
+				resp, err := d.PaginateWithSpinner(
 					requestCtx,
 					func(ctx context.Context) (asc.PaginatedResponse, error) {
 						return client.GetBetaTesterApps(ctx, testerValue, paginateOpts...)
 					},
 					func(ctx context.Context, nextURL string) (asc.PaginatedResponse, error) {
-						return client.GetBetaTesterApps(ctx, testerValue, asc.WithBetaTesterAppsNextURL(nextURL))
+						return client.GetBetaTesterApps(ctx, testerValue, asc.NextURL[asc.BetaTesterAppsOption](nextURL))
 					},
 				)
 				if err != nil {
 					return fmt.Errorf("testflight beta-testers apps list: %w", err)
 				}
-				return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+				return d.PrintOutput(resp, *output.Output, *output.Pretty)
 			}
 
 			resp, err := client.GetBetaTesterApps(requestCtx, testerValue, opts...)
@@ -125,14 +115,14 @@ Examples:
 				return fmt.Errorf("testflight beta-testers apps list: failed to fetch: %w", err)
 			}
 
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+			return d.PrintOutput(resp, *output.Output, *output.Pretty)
 		},
 	}
 }
 
-// BetaTestersBetaGroupsCommand returns the beta-testers beta-groups command group.
-func BetaTestersBetaGroupsCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("beta-groups", flag.ExitOnError)
+// newBetaTestersBetaGroupsCommand returns the beta-testers beta-groups command group built on d.
+func newBetaTestersBetaGroupsCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("beta-groups", flag.ExitOnError)
 
 	return &ffcli.Command{
 		Name:       "beta-groups",
@@ -143,9 +133,9 @@ func BetaTestersBetaGroupsCommand() *ffcli.Command {
 Examples:
   asc testflight beta-testers beta-groups list --tester-id "TESTER_ID"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
-			BetaTestersBetaGroupsListCommand(),
+			newBetaTestersBetaGroupsListCommand(d),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp
@@ -153,16 +143,16 @@ Examples:
 	}
 }
 
-// BetaTestersBetaGroupsListCommand returns the beta-testers beta-groups list subcommand.
-func BetaTestersBetaGroupsListCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("beta-groups list", flag.ExitOnError)
+// newBetaTestersBetaGroupsListCommand returns the beta-testers beta-groups list subcommand built on d.
+func newBetaTestersBetaGroupsListCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("beta-groups list", flag.ExitOnError)
 
 	testerID := shared.BindResourceIDFlag(fs, "tester-id", "betaTesters", "Beta tester ID")
 	aliasID := shared.BindResourceIDFlag(fs, "id", "betaTesters", "Beta tester ID (alias of --tester-id)")
-	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
-	next := fs.String("next", "", "Fetch next page using a links.next URL")
-	paginate := fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")
-	output := shared.BindOutputFlags(fs)
+	limit := fs.Int("limit", 0, shared.LimitFlagUsage(200))
+	next := fs.String("next", "", shared.NextFlagUsage)
+	paginate := fs.Bool("paginate", false, shared.PaginateFlagUsage)
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "list",
@@ -174,17 +164,10 @@ Examples:
   asc testflight beta-testers beta-groups list --tester-id "TESTER_ID"
   asc testflight beta-testers beta-groups list --tester-id "TESTER_ID" --paginate`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
-			if *limit != 0 && (*limit < 1 || *limit > 200) {
-				return shared.WithDiagnostic(
-					shared.UsageErrorCtx(ctx, "testflight beta-testers beta-groups list: --limit must be between 1 and 200"),
-					shared.DiagnosticInvalidInput,
-					"--limit",
-				)
-			}
-			if err := shared.ValidateNextURL(*next); err != nil {
-				return shared.UsageErrorfCtx(ctx, "testflight beta-testers beta-groups list: %v", err)
+			if err := d.ValidatePaginationFlags(ctx, fs, "testflight beta-testers beta-groups list", 200); err != nil {
+				return err
 			}
 
 			testerValue := strings.TrimSpace(*testerID)
@@ -193,48 +176,46 @@ Examples:
 				testerValue = aliasValue
 			} else if aliasValue != "" && aliasValue != testerValue {
 				return shared.WithDiagnostic(
-					shared.NewValidationError(fmt.Errorf("testflight beta-testers beta-groups list: --tester-id and --id must match")),
+					d.UsageErrorCtx(ctx, "testflight beta-testers beta-groups list: --tester-id and --id must match"),
 					shared.DiagnosticConflictingInput,
 					"",
 				)
 			}
 			if testerValue == "" && strings.TrimSpace(*next) == "" {
-				fmt.Fprintln(os.Stderr, "Error: --tester-id is required")
-				return shared.MissingRequiredUsageError("--tester-id")
+				return d.RequiredFlag("--tester-id")
 			}
 
-			client, err := shared.GetASCClient()
+			client, err := d.Client()
 			if err != nil {
 				return fmt.Errorf("testflight beta-testers beta-groups list: %w", err)
 			}
 
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
+			requestCtx, cancel := d.Timeout(ctx)
 			defer cancel()
 
 			opts := []asc.BetaTesterBetaGroupsOption{
-				asc.WithBetaTesterBetaGroupsLimit(*limit),
-				asc.WithBetaTesterBetaGroupsNextURL(*next),
+				asc.Limit[asc.BetaTesterBetaGroupsOption](*limit),
+				asc.NextURL[asc.BetaTesterBetaGroupsOption](*next),
 			}
 
 			if *paginate {
 				if testerValue == "" {
-					fmt.Fprintln(os.Stderr, "Error: --tester-id is required")
-					return shared.MissingRequiredUsageError("--tester-id")
+					return d.RequiredFlag("--tester-id")
 				}
-				paginateOpts := append(opts, asc.WithBetaTesterBetaGroupsLimit(200))
-				resp, err := shared.PaginateWithSpinner(
+				paginateOpts := append(opts, asc.Limit[asc.BetaTesterBetaGroupsOption](200))
+				resp, err := d.PaginateWithSpinner(
 					requestCtx,
 					func(ctx context.Context) (asc.PaginatedResponse, error) {
 						return client.GetBetaTesterBetaGroups(ctx, testerValue, paginateOpts...)
 					},
 					func(ctx context.Context, nextURL string) (asc.PaginatedResponse, error) {
-						return client.GetBetaTesterBetaGroups(ctx, testerValue, asc.WithBetaTesterBetaGroupsNextURL(nextURL))
+						return client.GetBetaTesterBetaGroups(ctx, testerValue, asc.NextURL[asc.BetaTesterBetaGroupsOption](nextURL))
 					},
 				)
 				if err != nil {
 					return fmt.Errorf("testflight beta-testers beta-groups list: %w", err)
 				}
-				return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+				return d.PrintOutput(resp, *output.Output, *output.Pretty)
 			}
 
 			resp, err := client.GetBetaTesterBetaGroups(requestCtx, testerValue, opts...)
@@ -242,14 +223,14 @@ Examples:
 				return fmt.Errorf("testflight beta-testers beta-groups list: failed to fetch: %w", err)
 			}
 
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+			return d.PrintOutput(resp, *output.Output, *output.Pretty)
 		},
 	}
 }
 
-// BetaTestersBuildsCommand returns the beta-testers builds command group.
-func BetaTestersBuildsCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("builds", flag.ExitOnError)
+// newBetaTestersBuildsCommand returns the beta-testers builds command group built on d.
+func newBetaTestersBuildsCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("builds", flag.ExitOnError)
 
 	return &ffcli.Command{
 		Name:       "builds",
@@ -260,9 +241,9 @@ func BetaTestersBuildsCommand() *ffcli.Command {
 Examples:
   asc testflight beta-testers builds list --tester-id "TESTER_ID"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
-			BetaTestersBuildsListCommand(),
+			newBetaTestersBuildsListCommand(d),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp
@@ -270,16 +251,16 @@ Examples:
 	}
 }
 
-// BetaTestersBuildsListCommand returns the beta-testers builds list subcommand.
-func BetaTestersBuildsListCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("builds list", flag.ExitOnError)
+// newBetaTestersBuildsListCommand returns the beta-testers builds list subcommand built on d.
+func newBetaTestersBuildsListCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("builds list", flag.ExitOnError)
 
 	testerID := shared.BindResourceIDFlag(fs, "tester-id", "betaTesters", "Beta tester ID")
 	aliasID := shared.BindResourceIDFlag(fs, "id", "betaTesters", "Beta tester ID (alias of --tester-id)")
-	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
-	next := fs.String("next", "", "Fetch next page using a links.next URL")
-	paginate := fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")
-	output := shared.BindOutputFlags(fs)
+	limit := fs.Int("limit", 0, shared.LimitFlagUsage(200))
+	next := fs.String("next", "", shared.NextFlagUsage)
+	paginate := fs.Bool("paginate", false, shared.PaginateFlagUsage)
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "list",
@@ -291,17 +272,10 @@ Examples:
   asc testflight beta-testers builds list --tester-id "TESTER_ID"
   asc testflight beta-testers builds list --tester-id "TESTER_ID" --paginate`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
-			if *limit != 0 && (*limit < 1 || *limit > 200) {
-				return shared.WithDiagnostic(
-					shared.UsageErrorCtx(ctx, "testflight beta-testers builds list: --limit must be between 1 and 200"),
-					shared.DiagnosticInvalidInput,
-					"--limit",
-				)
-			}
-			if err := shared.ValidateNextURL(*next); err != nil {
-				return shared.UsageErrorfCtx(ctx, "testflight beta-testers builds list: %v", err)
+			if err := d.ValidatePaginationFlags(ctx, fs, "testflight beta-testers builds list", 200); err != nil {
+				return err
 			}
 
 			testerValue := strings.TrimSpace(*testerID)
@@ -310,48 +284,46 @@ Examples:
 				testerValue = aliasValue
 			} else if aliasValue != "" && aliasValue != testerValue {
 				return shared.WithDiagnostic(
-					shared.NewValidationError(fmt.Errorf("testflight beta-testers builds list: --tester-id and --id must match")),
+					d.UsageErrorCtx(ctx, "testflight beta-testers builds list: --tester-id and --id must match"),
 					shared.DiagnosticConflictingInput,
 					"",
 				)
 			}
 			if testerValue == "" && strings.TrimSpace(*next) == "" {
-				fmt.Fprintln(os.Stderr, "Error: --tester-id is required")
-				return shared.MissingRequiredUsageError("--tester-id")
+				return d.RequiredFlag("--tester-id")
 			}
 
-			client, err := shared.GetASCClient()
+			client, err := d.Client()
 			if err != nil {
 				return fmt.Errorf("testflight beta-testers builds list: %w", err)
 			}
 
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
+			requestCtx, cancel := d.Timeout(ctx)
 			defer cancel()
 
 			opts := []asc.BetaTesterBuildsOption{
-				asc.WithBetaTesterBuildsLimit(*limit),
-				asc.WithBetaTesterBuildsNextURL(*next),
+				asc.Limit[asc.BetaTesterBuildsOption](*limit),
+				asc.NextURL[asc.BetaTesterBuildsOption](*next),
 			}
 
 			if *paginate {
 				if testerValue == "" {
-					fmt.Fprintln(os.Stderr, "Error: --tester-id is required")
-					return shared.MissingRequiredUsageError("--tester-id")
+					return d.RequiredFlag("--tester-id")
 				}
-				paginateOpts := append(opts, asc.WithBetaTesterBuildsLimit(200))
-				resp, err := shared.PaginateWithSpinner(
+				paginateOpts := append(opts, asc.Limit[asc.BetaTesterBuildsOption](200))
+				resp, err := d.PaginateWithSpinner(
 					requestCtx,
 					func(ctx context.Context) (asc.PaginatedResponse, error) {
 						return client.GetBetaTesterBuilds(ctx, testerValue, paginateOpts...)
 					},
 					func(ctx context.Context, nextURL string) (asc.PaginatedResponse, error) {
-						return client.GetBetaTesterBuilds(ctx, testerValue, asc.WithBetaTesterBuildsNextURL(nextURL))
+						return client.GetBetaTesterBuilds(ctx, testerValue, asc.NextURL[asc.BetaTesterBuildsOption](nextURL))
 					},
 				)
 				if err != nil {
 					return fmt.Errorf("testflight beta-testers builds list: %w", err)
 				}
-				return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+				return d.PrintOutput(resp, *output.Output, *output.Pretty)
 			}
 
 			resp, err := client.GetBetaTesterBuilds(requestCtx, testerValue, opts...)
@@ -359,7 +331,7 @@ Examples:
 				return fmt.Errorf("testflight beta-testers builds list: failed to fetch: %w", err)
 			}
 
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+			return d.PrintOutput(resp, *output.Output, *output.Pretty)
 		},
 	}
 }

@@ -1,352 +1,146 @@
 package cmdtest
 
 import (
-	"context"
-	"io"
 	"net/http"
-	"path/filepath"
+	"net/url"
 	"strings"
 	"testing"
+
+	rootcmd "github.com/Abdullah4AI/apple-developer-toolkit/appstore/cmd"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asctest"
 )
 
-func TestLocalizationsListPaginateFromNext(t *testing.T) {
-	setupAuth(t)
-	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
+func TestLocalizationsListsRejectsInvalidNextURL(t *testing.T) {
+	runInvalidNextURLCases(t, []invalidNextURLCase{
+		{args: []string{"localizations", "preview-sets", "list"}, wantErr: "localizations preview-sets list: --next", deps: true},
+		{args: []string{"localizations", "preview-sets", "links"}, wantErr: "localizations preview-sets links: --next", deps: true},
+		{args: []string{"localizations", "screenshot-sets", "list"}, wantErr: "localizations screenshot-sets list: --next", deps: true},
+		{args: []string{"localizations", "screenshot-sets", "links"}, wantErr: "localizations screenshot-sets links: --next", deps: true},
+		{args: []string{"testflight", "app-localizations", "list"}, wantErr: "testflight app-localizations list: --next", deps: true},
+	})
+}
 
+func TestLocalizationsListsPaginateFromNext(t *testing.T) {
+	runPaginateFromNextCases(t, []paginateFromNextCase{
+		{
+			args:     []string{"localizations", "list", "--version", "version-1"},
+			firstURL: "https://api.appstoreconnect.apple.com/v1/appStoreVersions/version-1/appStoreVersionLocalizations?cursor=AQ&limit=200",
+			dataType: "appStoreVersionLocalizations",
+			deps:     true,
+		},
+		{
+			args:     []string{"build-localizations", "list"},
+			firstURL: "https://api.appstoreconnect.apple.com/v1/appStoreVersions/version-1/appStoreVersionLocalizations?cursor=AQ&limit=200",
+			dataType: "appStoreVersionLocalizations",
+			deps:     true,
+		},
+		{
+			args:     []string{"localizations", "preview-sets", "list"},
+			firstURL: "https://api.appstoreconnect.apple.com/v1/appStoreVersionLocalizations/localization-1/appPreviewSets?cursor=AQ&limit=200",
+			dataType: "appPreviewSets",
+			deps:     true,
+		},
+		{
+			args:     []string{"localizations", "preview-sets", "links"},
+			firstURL: "https://api.appstoreconnect.apple.com/v1/appStoreVersionLocalizations/localization-1/relationships/appPreviewSets?cursor=AQ&limit=200",
+			dataType: "appPreviewSets",
+			deps:     true,
+		},
+		{
+			args:     []string{"localizations", "screenshot-sets", "list"},
+			firstURL: "https://api.appstoreconnect.apple.com/v1/appStoreVersionLocalizations/localization-1/appScreenshotSets?cursor=AQ&limit=200",
+			dataType: "appScreenshotSets",
+			deps:     true,
+		},
+		{
+			args:     []string{"localizations", "screenshot-sets", "links"},
+			firstURL: "https://api.appstoreconnect.apple.com/v1/appStoreVersionLocalizations/localization-1/relationships/appScreenshotSets?cursor=AQ&limit=200",
+			dataType: "appScreenshotSets",
+			deps:     true,
+		},
+		{
+			args:     []string{"testflight", "app-localizations", "list"},
+			deps:     true,
+			firstURL: "https://api.appstoreconnect.apple.com/v1/betaAppLocalizations?cursor=AQ&limit=200",
+			dataType: "betaAppLocalizations",
+		},
+	})
+}
+
+func TestBuildLocalizationsListNextWithBuildID(t *testing.T) {
 	const firstURL = "https://api.appstoreconnect.apple.com/v1/appStoreVersions/version-1/appStoreVersionLocalizations?cursor=AQ&limit=200"
 	const secondURL = "https://api.appstoreconnect.apple.com/v1/appStoreVersions/version-1/appStoreVersionLocalizations?cursor=BQ&limit=200"
 
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() {
-		http.DefaultTransport = originalTransport
-	})
-
-	requestCount := 0
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		requestCount++
-		switch requestCount {
-		case 1:
-			if req.Method != http.MethodGet || req.URL.String() != firstURL {
-				t.Fatalf("unexpected first request: %s %s", req.Method, req.URL.String())
-			}
-			body := `{"data":[{"type":"appStoreVersionLocalizations","id":"loc-next-1"}],"links":{"next":"` + secondURL + `"}}`
-			return &http.Response{
-				StatusCode: http.StatusOK,
-				Body:       io.NopCloser(strings.NewReader(body)),
-				Header:     http.Header{"Content-Type": []string{"application/json"}},
-			}, nil
-		case 2:
-			if req.Method != http.MethodGet || req.URL.String() != secondURL {
-				t.Fatalf("unexpected second request: %s %s", req.Method, req.URL.String())
-			}
-			body := `{"data":[{"type":"appStoreVersionLocalizations","id":"loc-next-2"}],"links":{"next":""}}`
-			return &http.Response{
-				StatusCode: http.StatusOK,
-				Body:       io.NopCloser(strings.NewReader(body)),
-				Header:     http.Header{"Content-Type": []string{"application/json"}},
-			}, nil
-		default:
-			t.Fatalf("unexpected extra request: %s %s", req.Method, req.URL.String())
-			return nil, nil
-		}
-	})
-
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"localizations", "list", "--version", "version-1", "--paginate", "--next", firstURL}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatalf("run error: %v", err)
-		}
-	})
-
-	if stderr != "" {
-		t.Fatalf("expected empty stderr, got %q", stderr)
+	tests := []struct {
+		name      string
+		next      string
+		wantPages []string
+		wantErr   string
+	}{
+		{name: "matching version", next: firstURL, wantPages: []string{firstURL, secondURL}},
+		{
+			name:    "other version",
+			next:    "https://api.appstoreconnect.apple.com/v1/appStoreVersions/version-2/appStoreVersionLocalizations?cursor=AQ",
+			wantErr: `build-localizations list: --next is not a page of the App Store version attached to --build-id "build-1"`,
+		},
+		{
+			name:    "other collection",
+			next:    "https://api.appstoreconnect.apple.com/v1/appStoreVersions/version-1/appStoreVersionPhasedRelease?cursor=AQ",
+			wantErr: `build-localizations list: --next is not a page of the App Store version attached to --build-id "build-1"`,
+		},
 	}
-	if !strings.Contains(stdout, `"id":"loc-next-1"`) || !strings.Contains(stdout, `"id":"loc-next-2"`) {
-		t.Fatalf("expected paginated localizations in output, got %q", stdout)
-	}
-}
 
-func TestLocalizationsPreviewSetsListRejectsInvalidNextURL(t *testing.T) {
-	runInvalidNextURLUsageErrorCases(
-		t,
-		[]string{"localizations", "preview-sets", "list"},
-		"localizations preview-sets list: --next",
-	)
-}
-
-func TestLocalizationsPreviewSetsListPaginateFromNextWithoutLocalizationID(t *testing.T) {
-	setupAuth(t)
-	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
-
-	const firstURL = "https://api.appstoreconnect.apple.com/v1/appStoreVersionLocalizations/localization-1/appPreviewSets?cursor=AQ&limit=200"
-	const secondURL = "https://api.appstoreconnect.apple.com/v1/appStoreVersionLocalizations/localization-1/appPreviewSets?cursor=BQ&limit=200"
-
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() {
-		http.DefaultTransport = originalTransport
-	})
-
-	requestCount := 0
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		requestCount++
-		switch requestCount {
-		case 1:
-			if req.Method != http.MethodGet || req.URL.String() != firstURL {
-				t.Fatalf("unexpected first request: %s %s", req.Method, req.URL.String())
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			wantRequests := append([]string{"https://api.appstoreconnect.apple.com/v1/builds/build-1/appStoreVersion"}, tc.wantPages...)
+			reg := asctest.NewRegistry(t)
+			for _, want := range wantRequests {
+				body := `{"data":{"type":"appStoreVersions","id":"version-1"}}`
+				switch want {
+				case firstURL:
+					body = `{"data":[{"type":"appStoreVersionLocalizations","id":"page-1"}],"links":{"next":"` + secondURL + `"}}`
+				case secondURL:
+					body = `{"data":[{"type":"appStoreVersionLocalizations","id":"page-2"}],"links":{"next":""}}`
+				}
+				wantURL, err := url.Parse(want)
+				if err != nil {
+					t.Fatalf("parse %s: %v", want, err)
+				}
+				reg.Register(asctest.GET(wantURL.EscapedPath(), strings.Split(wantURL.RawQuery, "&")...), asctest.JSON(http.StatusOK, body))
 			}
-			body := `{"data":[{"type":"appPreviewSets","id":"preview-next-1"}],"links":{"next":"` + secondURL + `"}}`
-			return &http.Response{
-				StatusCode: http.StatusOK,
-				Body:       io.NopCloser(strings.NewReader(body)),
-				Header:     http.Header{"Content-Type": []string{"application/json"}},
-			}, nil
-		case 2:
-			if req.Method != http.MethodGet || req.URL.String() != secondURL {
-				t.Fatalf("unexpected second request: %s %s", req.Method, req.URL.String())
+
+			stdout, stderr, runErr := runRootWithDeps(t, stubClient(t, reg), "build-localizations", "list", "--build-id", "build-1", "--paginate", "--next", tc.next)
+
+			if tc.wantErr != "" {
+				if got := rootcmd.ExitCodeFromError(runErr); got != rootcmd.ExitUsage {
+					t.Fatalf("exit code = %d, want %d (err %v)", got, rootcmd.ExitUsage, runErr)
+				}
+				if stdout != "" {
+					t.Fatalf("expected empty stdout, got %q", stdout)
+				}
+				assertUsageDiagnosticFirstLine(t, stderr, tc.wantErr)
+				return
 			}
-			body := `{"data":[{"type":"appPreviewSets","id":"preview-next-2"}],"links":{"next":""}}`
-			return &http.Response{
-				StatusCode: http.StatusOK,
-				Body:       io.NopCloser(strings.NewReader(body)),
-				Header:     http.Header{"Content-Type": []string{"application/json"}},
-			}, nil
-		default:
-			t.Fatalf("unexpected extra request: %s %s", req.Method, req.URL.String())
-			return nil, nil
-		}
-	})
-
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"localizations", "preview-sets", "list", "--paginate", "--next", firstURL}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatalf("run error: %v", err)
-		}
-	})
-
-	if stderr != "" {
-		t.Fatalf("expected empty stderr, got %q", stderr)
-	}
-	if !strings.Contains(stdout, `"id":"preview-next-1"`) || !strings.Contains(stdout, `"id":"preview-next-2"`) {
-		t.Fatalf("expected paginated preview sets in output, got %q", stdout)
-	}
-}
-
-func TestLocalizationsPreviewSetsRelationshipsRejectsInvalidNextURL(t *testing.T) {
-	runInvalidNextURLUsageErrorCases(
-		t,
-		[]string{"localizations", "preview-sets", "links"},
-		"localizations preview-sets links: --next",
-	)
-}
-
-func TestLocalizationsPreviewSetsRelationshipsPaginateFromNextWithoutLocalizationID(t *testing.T) {
-	setupAuth(t)
-	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
-
-	const firstURL = "https://api.appstoreconnect.apple.com/v1/appStoreVersionLocalizations/localization-1/relationships/appPreviewSets?cursor=AQ&limit=200"
-	const secondURL = "https://api.appstoreconnect.apple.com/v1/appStoreVersionLocalizations/localization-1/relationships/appPreviewSets?cursor=BQ&limit=200"
-
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() {
-		http.DefaultTransport = originalTransport
-	})
-
-	requestCount := 0
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		requestCount++
-		switch requestCount {
-		case 1:
-			if req.Method != http.MethodGet || req.URL.String() != firstURL {
-				t.Fatalf("unexpected first request: %s %s", req.Method, req.URL.String())
+			if runErr != nil {
+				t.Fatalf("run error: %v", runErr)
 			}
-			body := `{"data":[{"type":"appPreviewSets","id":"preview-rel-next-1"}],"links":{"next":"` + secondURL + `"}}`
-			return &http.Response{
-				StatusCode: http.StatusOK,
-				Body:       io.NopCloser(strings.NewReader(body)),
-				Header:     http.Header{"Content-Type": []string{"application/json"}},
-			}, nil
-		case 2:
-			if req.Method != http.MethodGet || req.URL.String() != secondURL {
-				t.Fatalf("unexpected second request: %s %s", req.Method, req.URL.String())
+			if stderr != "" {
+				t.Fatalf("expected empty stderr, got %q", stderr)
 			}
-			body := `{"data":[{"type":"appPreviewSets","id":"preview-rel-next-2"}],"links":{"next":""}}`
-			return &http.Response{
-				StatusCode: http.StatusOK,
-				Body:       io.NopCloser(strings.NewReader(body)),
-				Header:     http.Header{"Content-Type": []string{"application/json"}},
-			}, nil
-		default:
-			t.Fatalf("unexpected extra request: %s %s", req.Method, req.URL.String())
-			return nil, nil
-		}
-	})
-
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"localizations", "preview-sets", "links", "--paginate", "--next", firstURL}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatalf("run error: %v", err)
-		}
-	})
-
-	if stderr != "" {
-		t.Fatalf("expected empty stderr, got %q", stderr)
-	}
-	if !strings.Contains(stdout, `"id":"preview-rel-next-1"`) || !strings.Contains(stdout, `"id":"preview-rel-next-2"`) {
-		t.Fatalf("expected paginated preview relationships in output, got %q", stdout)
-	}
-}
-
-func TestLocalizationsScreenshotSetsListRejectsInvalidNextURL(t *testing.T) {
-	runInvalidNextURLUsageErrorCases(
-		t,
-		[]string{"localizations", "screenshot-sets", "list"},
-		"localizations screenshot-sets list: --next",
-	)
-}
-
-func TestLocalizationsScreenshotSetsListPaginateFromNextWithoutLocalizationID(t *testing.T) {
-	setupAuth(t)
-	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
-
-	const firstURL = "https://api.appstoreconnect.apple.com/v1/appStoreVersionLocalizations/localization-1/appScreenshotSets?cursor=AQ&limit=200"
-	const secondURL = "https://api.appstoreconnect.apple.com/v1/appStoreVersionLocalizations/localization-1/appScreenshotSets?cursor=BQ&limit=200"
-
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() {
-		http.DefaultTransport = originalTransport
-	})
-
-	requestCount := 0
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		requestCount++
-		switch requestCount {
-		case 1:
-			if req.Method != http.MethodGet || req.URL.String() != firstURL {
-				t.Fatalf("unexpected first request: %s %s", req.Method, req.URL.String())
+			requests := reg.Requests()
+			if requestCount := len(requests); requestCount != len(wantRequests) {
+				t.Fatalf("requests = %d, want %d", requestCount, len(wantRequests))
 			}
-			body := `{"data":[{"type":"appScreenshotSets","id":"screenshot-next-1"}],"links":{"next":"` + secondURL + `"}}`
-			return &http.Response{
-				StatusCode: http.StatusOK,
-				Body:       io.NopCloser(strings.NewReader(body)),
-				Header:     http.Header{"Content-Type": []string{"application/json"}},
-			}, nil
-		case 2:
-			if req.Method != http.MethodGet || req.URL.String() != secondURL {
-				t.Fatalf("unexpected second request: %s %s", req.Method, req.URL.String())
+			for index, req := range requests {
+				if req.Method != http.MethodGet || req.URL.String() != wantRequests[index] {
+					t.Fatalf("request %d = %s %s, want GET %s", index+1, req.Method, req.URL.String(), wantRequests[index])
+				}
 			}
-			body := `{"data":[{"type":"appScreenshotSets","id":"screenshot-next-2"}],"links":{"next":""}}`
-			return &http.Response{
-				StatusCode: http.StatusOK,
-				Body:       io.NopCloser(strings.NewReader(body)),
-				Header:     http.Header{"Content-Type": []string{"application/json"}},
-			}, nil
-		default:
-			t.Fatalf("unexpected extra request: %s %s", req.Method, req.URL.String())
-			return nil, nil
-		}
-	})
-
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"localizations", "screenshot-sets", "list", "--paginate", "--next", firstURL}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatalf("run error: %v", err)
-		}
-	})
-
-	if stderr != "" {
-		t.Fatalf("expected empty stderr, got %q", stderr)
-	}
-	if !strings.Contains(stdout, `"id":"screenshot-next-1"`) || !strings.Contains(stdout, `"id":"screenshot-next-2"`) {
-		t.Fatalf("expected paginated screenshot sets in output, got %q", stdout)
-	}
-}
-
-func TestLocalizationsScreenshotSetsRelationshipsRejectsInvalidNextURL(t *testing.T) {
-	runInvalidNextURLUsageErrorCases(
-		t,
-		[]string{"localizations", "screenshot-sets", "links"},
-		"localizations screenshot-sets links: --next",
-	)
-}
-
-func TestLocalizationsScreenshotSetsRelationshipsPaginateFromNextWithoutLocalizationID(t *testing.T) {
-	setupAuth(t)
-	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
-
-	const firstURL = "https://api.appstoreconnect.apple.com/v1/appStoreVersionLocalizations/localization-1/relationships/appScreenshotSets?cursor=AQ&limit=200"
-	const secondURL = "https://api.appstoreconnect.apple.com/v1/appStoreVersionLocalizations/localization-1/relationships/appScreenshotSets?cursor=BQ&limit=200"
-
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() {
-		http.DefaultTransport = originalTransport
-	})
-
-	requestCount := 0
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		requestCount++
-		switch requestCount {
-		case 1:
-			if req.Method != http.MethodGet || req.URL.String() != firstURL {
-				t.Fatalf("unexpected first request: %s %s", req.Method, req.URL.String())
+			for _, needle := range []string{`"id":"page-1"`, `"id":"page-2"`} {
+				if !strings.Contains(stdout, needle) {
+					t.Fatalf("expected output to contain %q, got %q", needle, stdout)
+				}
 			}
-			body := `{"data":[{"type":"appScreenshotSets","id":"screenshot-rel-next-1"}],"links":{"next":"` + secondURL + `"}}`
-			return &http.Response{
-				StatusCode: http.StatusOK,
-				Body:       io.NopCloser(strings.NewReader(body)),
-				Header:     http.Header{"Content-Type": []string{"application/json"}},
-			}, nil
-		case 2:
-			if req.Method != http.MethodGet || req.URL.String() != secondURL {
-				t.Fatalf("unexpected second request: %s %s", req.Method, req.URL.String())
-			}
-			body := `{"data":[{"type":"appScreenshotSets","id":"screenshot-rel-next-2"}],"links":{"next":""}}`
-			return &http.Response{
-				StatusCode: http.StatusOK,
-				Body:       io.NopCloser(strings.NewReader(body)),
-				Header:     http.Header{"Content-Type": []string{"application/json"}},
-			}, nil
-		default:
-			t.Fatalf("unexpected extra request: %s %s", req.Method, req.URL.String())
-			return nil, nil
-		}
-	})
-
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"localizations", "screenshot-sets", "links", "--paginate", "--next", firstURL}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatalf("run error: %v", err)
-		}
-	})
-
-	if stderr != "" {
-		t.Fatalf("expected empty stderr, got %q", stderr)
-	}
-	if !strings.Contains(stdout, `"id":"screenshot-rel-next-1"`) || !strings.Contains(stdout, `"id":"screenshot-rel-next-2"`) {
-		t.Fatalf("expected paginated screenshot relationships in output, got %q", stdout)
+		})
 	}
 }

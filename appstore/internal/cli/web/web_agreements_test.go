@@ -11,6 +11,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
@@ -356,74 +357,17 @@ func TestWebAgreementsAcceptVerificationGetsFreshTimeout(t *testing.T) {
 		t.Fatalf("parse error: %v", err)
 	}
 	captureWebCommandOutput(t, func() {
-		if err := cmd.Exec(context.Background(), nil); err != nil {
-			t.Fatalf("Exec() error: %v", err)
+		var execErr error
+		synctest.Test(t, func(*testing.T) { execErr = cmd.Exec(context.Background(), nil) })
+		if execErr != nil {
+			t.Fatalf("Exec() error: %v", execErr)
 		}
 	})
 	if acceptDeadline.IsZero() || verifyDeadline.IsZero() {
 		t.Fatalf("deadlines accept=%v verify=%v, want both requests bounded by a timeout", acceptDeadline, verifyDeadline)
 	}
-	if verifyDeadline.Sub(acceptDeadline) < 20*time.Millisecond {
+	if verifyDeadline.Sub(acceptDeadline) != 30*time.Millisecond {
 		t.Fatalf("verification deadline %v is not fresh relative to accept deadline %v; the post-mutation read must get its own timeout", verifyDeadline, acceptDeadline)
-	}
-}
-
-func TestWebAgreementsRejectPositionalArgs(t *testing.T) {
-	tests := []struct {
-		name    string
-		cmd     func(t *testing.T) (exec func(context.Context, []string) error)
-		wantErr string
-	}{
-		{
-			name: "status",
-			cmd: func(t *testing.T) func(context.Context, []string) error {
-				t.Helper()
-				return WebAgreementsStatusCommand().Exec
-			},
-			wantErr: "web agreements status does not accept positional arguments",
-		},
-		{
-			name: "accept",
-			cmd: func(t *testing.T) func(context.Context, []string) error {
-				t.Helper()
-				cmd := WebAgreementsAcceptCommand()
-				if err := cmd.FlagSet.Parse([]string{"--agreement-id", "XG8DNV4HYY", "--confirm"}); err != nil {
-					t.Fatalf("parse error: %v", err)
-				}
-				return cmd.Exec
-			},
-			wantErr: "web agreements accept does not accept positional arguments",
-		},
-		{
-			name: "download",
-			cmd: func(t *testing.T) func(context.Context, []string) error {
-				t.Helper()
-				cmd := WebAgreementsDownloadCommand()
-				if err := cmd.FlagSet.Parse([]string{"--agreement-id", "XG8DNV4HYY", "--out", filepath.Join(t.TempDir(), "agreement.pdf")}); err != nil {
-					t.Fatalf("parse error: %v", err)
-				}
-				return cmd.Exec
-			},
-			wantErr: "web agreements download does not accept positional arguments",
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			exec := tc.cmd(t)
-			stdout, stderr := captureWebCommandOutput(t, func() {
-				err := exec(context.Background(), []string{"unexpected"})
-				if !errors.Is(err, flag.ErrHelp) {
-					t.Fatalf("expected flag.ErrHelp, got %v", err)
-				}
-			})
-			if stdout != "" {
-				t.Fatalf("expected empty stdout, got %q", stdout)
-			}
-			if !strings.Contains(stderr, tc.wantErr) {
-				t.Fatalf("expected stderr to contain %q, got %q", tc.wantErr, stderr)
-			}
-		})
 	}
 }
 

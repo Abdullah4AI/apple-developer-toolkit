@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
@@ -578,7 +579,7 @@ func TestEnsureBuildAttachedUsesFreshDeadlineForMutation(t *testing.T) {
 			return submitJSONResponse(http.StatusNotFound, `{"errors":[{"status":"404","code":"NOT_FOUND"}]}`)
 		case req.Method == http.MethodPatch && req.URL.Path == "/v1/appStoreVersions/version-1/relationships/build":
 			deadline, ok := req.Context().Deadline()
-			if !ok || time.Until(deadline) < 70*time.Millisecond {
+			if !ok || time.Until(deadline) != 100*time.Millisecond {
 				t.Fatalf("expected fresh attach deadline, remaining=%s", time.Until(deadline))
 			}
 			return submitJSONResponse(http.StatusNoContent, "")
@@ -587,7 +588,11 @@ func TestEnsureBuildAttachedUsesFreshDeadlineForMutation(t *testing.T) {
 		}
 	}))
 
-	result, err := EnsureBuildAttached(context.Background(), client, "version-1", "build-new", false)
+	var result BuildAttachmentResult
+	var err error
+	synctest.Test(t, func(*testing.T) {
+		result, err = EnsureBuildAttached(context.Background(), client, "version-1", "build-new", false)
+	})
 	if err != nil || !result.Attached {
 		t.Fatalf("unexpected attach result: result=%+v err=%v", result, err)
 	}
@@ -606,7 +611,7 @@ func TestEnsureBuildAttachedReconcilesAmbiguousMutation(t *testing.T) {
 				return submitJSONResponse(http.StatusNotFound, `{"errors":[{"status":"404","code":"NOT_FOUND"}]}`)
 			}
 			deadline, ok := req.Context().Deadline()
-			if !ok || time.Until(deadline) < 70*time.Millisecond {
+			if !ok || time.Until(deadline) != 100*time.Millisecond {
 				t.Fatalf("expected fresh readback deadline, remaining=%s", time.Until(deadline))
 			}
 			return submitJSONResponse(http.StatusOK, `{"data":{"type":"builds","id":"build-new"}}`)
@@ -619,7 +624,11 @@ func TestEnsureBuildAttachedReconcilesAmbiguousMutation(t *testing.T) {
 		}
 	}))
 
-	result, err := EnsureBuildAttached(context.Background(), client, "version-1", "build-new", false)
+	var result BuildAttachmentResult
+	var err error
+	synctest.Test(t, func(*testing.T) {
+		result, err = EnsureBuildAttached(context.Background(), client, "version-1", "build-new", false)
+	})
 	if err != nil || !result.Attached || reads != 2 || patches != 1 {
 		t.Fatalf("unexpected reconcile result: result=%+v reads=%d patches=%d err=%v", result, reads, patches, err)
 	}
@@ -844,7 +853,7 @@ func TestReviewSubmissionValidationFailuresAreClassified(t *testing.T) {
 			state: "WAITING_FOR_REVIEW",
 			items: targetItem,
 			run: func(client *asc.Client) error {
-				_, err := addVersionToSubmissionOrRecover(context.Background(), client, "sub-0", "version-1", "app-1", "IOS", func(string) {})
+				_, err := addVersionToSubmissionOrRecover(context.Background(), io.Discard, client, "sub-0", "version-1", "app-1", "IOS", func(string) {})
 				return err
 			},
 			want: shared.DiagnosticResourceConflict,

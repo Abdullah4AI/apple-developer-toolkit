@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	rootcmd "github.com/Abdullah4AI/apple-developer-toolkit/appstore/cmd"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
 )
 
 const includedFieldsNextURL = "https://api.appstoreconnect.apple.com/v1/next?cursor=abc"
@@ -40,6 +41,7 @@ type includedFieldsCase struct {
 	// removed lists field flags the command must not define because Apple
 	// rejected every value live.
 	removed []string
+	deps    bool
 }
 
 // liveRejectedFields lists fields[type] values the spec allows but Apple
@@ -164,28 +166,33 @@ func includedFieldsCases() []includedFieldsCase {
 			command: []string{"builds", "list"}, selector: []string{"--app", "123456789"},
 			include: buildIncludes, path: "/v1/builds", query: map[string]string{"filter[app]": "123456789"},
 			flags: buildIncludedFieldFlags, alwaysIncluded: []string{"pre-release-version-fields"},
+			deps: true,
 		},
 		{
 			name: "builds info", operation: "builds_getInstance", resource: true, noNext: true,
 			command: []string{"builds", "info"}, selector: []string{"--build-id", "build-1"},
 			include: buildIncludes, path: "/v1/builds/build-1",
 			flags: buildIncludedFieldFlags,
+			deps:  true,
 		},
 		{
 			name: "versions list", operation: "apps_appStoreVersions_getToManyRelated",
 			command: []string{"versions", "list"}, selector: []string{"--app", "app-1"},
 			include: versionIncludes, path: "/v1/apps/app-1/appStoreVersions",
 			flags: versionIncludedFieldFlags,
+			deps:  true,
 		},
 		{
 			name: "versions view", operation: "appStoreVersions_getInstance", resource: true, noNext: true,
 			command: []string{"versions", "view"}, selector: []string{"--version-id", "version-1"},
 			include: versionIncludes, path: "/v1/appStoreVersions/version-1",
 			flags: versionIncludedFieldFlags,
+			deps:  true,
 		},
 		{
 			name: "certificates view", operation: "certificates_getInstance", resource: true, noNext: true,
 			command: []string{"certificates", "view"}, selector: []string{"--id", "certificate-1"},
+			deps:    true,
 			include: "passTypeId", path: "/v1/certificates/certificate-1",
 			flags: map[string]string{"pass-type-id-fields": "passTypeIds"},
 		},
@@ -220,24 +227,28 @@ func includedFieldsCases() []includedFieldsCase {
 		{
 			name: "iap price points list", operation: "inAppPurchasesV2_pricePoints_getToManyRelated",
 			command: []string{"iap", "pricing", "price-points", "list"}, selector: []string{"--iap-id", "123456789"},
+			deps:    true,
 			include: "territory", path: "/v2/inAppPurchases/123456789/pricePoints",
 			flags: map[string]string{"territory-fields": "territories"},
 		},
 		{
 			name: "iap price point equalizations", operation: "inAppPurchasePricePoints_equalizations_getToManyRelated",
 			command: []string{"iap", "pricing", "price-points", "equalizations"}, selector: []string{"--id", "point-1"},
+			deps:    true,
 			include: "territory", path: "/v1/inAppPurchasePricePoints/point-1/equalizations",
 			flags: map[string]string{"territory-fields": "territories"},
 		},
 		{
 			name: "app price points", operation: "apps_appPricePoints_getToManyRelated",
 			command: []string{"pricing", "price-points"}, selector: []string{"--app", "app-1"},
+			deps:    true,
 			include: "territory", path: "/v1/apps/app-1/appPricePoints",
 			flags: map[string]string{"territory-fields": "territories"},
 		},
 		{
 			name: "app price point equalizations", operation: "appPricePointsV3_equalizations_getToManyRelated",
 			command: []string{"pricing", "price-points", "equalizations"}, selector: []string{"--price-point", "point-1"},
+			deps:    true,
 			include: "territory", path: "/v3/appPricePoints/point-1/equalizations",
 			flags: map[string]string{"territory-fields": "territories"},
 		},
@@ -256,6 +267,7 @@ func includedFieldsCases() []includedFieldsCase {
 		{
 			name: "testflight testers list", operation: "betaTesters_getCollection",
 			command: []string{"testflight", "testers", "list"}, selector: []string{"--app", "app-1"},
+			deps:    true,
 			include: "apps,betaGroups,builds", path: "/v1/betaTesters", query: map[string]string{"filter[apps]": "app-1"},
 			flags: map[string]string{"app-fields": "apps", "beta-group-fields": "betaGroups", "build-fields": "builds"},
 		},
@@ -276,28 +288,33 @@ func includedFieldsCases() []includedFieldsCase {
 			command: []string{"apps", "app-encryption-declarations", "list"}, selector: []string{"--id", "app-1"},
 			include: "app,builds", path: "/v1/appEncryptionDeclarations", query: map[string]string{"filter[app]": "app-1"},
 			flags: encryptionIncludedFieldFlags,
+			deps:  true,
 		},
 		{
 			name: "apps info view", operation: "appInfos_getInstance", resource: true,
 			command: []string{"apps", "info", "view"}, selector: []string{"--info-id", "info-1"}, nextSelector: []string{"--info-id", "info-1"},
 			include: "app,appInfoLocalizations,primaryCategory", path: "/v1/appInfos/info-1",
 			flags: map[string]string{"app-fields": "apps", "app-info-localization-fields": "appInfoLocalizations", "category-fields": "appCategories"},
+			deps:  true,
 		},
 		{
 			name: "review submissions list", operation: "apps_reviewSubmissions_getToManyRelated",
 			command: []string{"review", "submissions-list"}, selector: []string{"--app", "app-1"},
+			deps:    true,
 			include: "app,appStoreVersionForReview,submittedByActor", path: "/v1/apps/app-1/reviewSubmissions",
 			flags: reviewSubmissionIncludedFieldFlags,
 		},
 		{
 			name: "review submissions get", operation: "reviewSubmissions_getInstance", resource: true, noNext: true,
 			command: []string{"review", "submissions-get"}, selector: []string{"--id", "submission-1"},
+			deps:    true,
 			include: "app,appStoreVersionForReview,lastUpdatedByActor", path: "/v1/reviewSubmissions/submission-1",
 			flags: reviewSubmissionIncludedFieldFlags,
 		},
 		{
 			name: "review items list", operation: "reviewSubmissions_items_getToManyRelated",
 			command: []string{"review", "items", "list"}, selector: []string{"--submission", "submission-1"},
+			deps:    true,
 			include: "appStoreVersion,appCustomProductPageVersion,appStoreVersionExperiment,appEvent,appAssetLibraryImage,appAssetLibraryVideo,backgroundAssetVersion,gameCenterAchievementVersion,gameCenterActivityVersion,gameCenterChallengeVersion,gameCenterLeaderboardSetVersion,gameCenterLeaderboardVersion",
 			path:    "/v1/reviewSubmissions/submission-1/items",
 			flags: map[string]string{
@@ -318,6 +335,7 @@ func includedFieldsCases() []includedFieldsCase {
 		{
 			name: "testflight crashes list", operation: "apps_betaFeedbackCrashSubmissions_getToManyRelated",
 			command: []string{"testflight", "crashes", "list"}, selector: []string{"--app", "123456789"},
+			deps:    true,
 			include: "build,tester", path: "/v1/apps/123456789/betaFeedbackCrashSubmissions", query: map[string]string{"fields[builds]": "version,preReleaseVersion"},
 			flags:    map[string]string{"build-fields": "builds", "tester-fields": "betaTesters"},
 			rejected: map[string][]string{"betaTesters": {"appDevices"}},
@@ -325,6 +343,7 @@ func includedFieldsCases() []includedFieldsCase {
 		{
 			name: "testflight feedback list", operation: "apps_betaFeedbackScreenshotSubmissions_getToManyRelated",
 			command: []string{"testflight", "feedback", "list"}, selector: []string{"--app", "123456789"},
+			deps:    true,
 			include: "build,tester", path: "/v1/apps/123456789/betaFeedbackScreenshotSubmissions", query: map[string]string{"fields[builds]": "version,preReleaseVersion"},
 			flags:    map[string]string{"build-fields": "builds", "tester-fields": "betaTesters"},
 			rejected: map[string][]string{"betaTesters": {"appDevices"}},
@@ -334,16 +353,19 @@ func includedFieldsCases() []includedFieldsCase {
 			command: []string{"localizations", "placements", "list"}, selector: []string{"--localization-id", "localization-1"},
 			include: "image,video,retentionMessageVersion", path: "/v1/appStoreVersionLocalizations/localization-1/placements",
 			flags: map[string]string{"asset-image-fields": "appAssetLibraryImages", "asset-video-fields": "appAssetLibraryVideos", "retention-message-version-fields": "retentionMessageVersions"},
+			deps:  true,
 		},
 		{
 			name: "iap list", operation: "apps_inAppPurchasesV2_getToManyRelated",
 			command: []string{"iap", "list"}, selector: []string{"--app", "app-1"},
+			deps:    true,
 			include: iapListIncludes, path: "/v1/apps/app-1/inAppPurchasesV2",
 			flags: iapListIncludedFieldFlags,
 		},
 		{
 			name: "iap view", operation: "inAppPurchasesV2_getInstance", resource: true, noNext: true,
 			command: []string{"iap", "view"}, selector: []string{"--id", "iap-1"},
+			deps:    true,
 			include: iapListIncludes + ",pricePoints", path: "/v2/inAppPurchases/iap-1",
 			flags: withFlag(iapListIncludedFieldFlags, "iap-price-point-fields", "inAppPurchasePricePoints"),
 		},
@@ -352,12 +374,14 @@ func includedFieldsCases() []includedFieldsCase {
 			command: []string{"localizations", "list"}, selector: []string{"--version", "version-1"},
 			include: "appStoreVersion,appScreenshotSets,appPreviewSets", path: "/v1/appStoreVersions/version-1/appStoreVersionLocalizations",
 			flags: map[string]string{"app-store-version-fields": "appStoreVersions", "screenshot-set-fields": "appScreenshotSets", "preview-set-fields": "appPreviewSets"},
+			deps:  true,
 		},
 		{
 			name: "localization screenshot sets list", operation: "appStoreVersionLocalizations_appScreenshotSets_getToManyRelated",
 			command: []string{"localizations", "screenshot-sets", "list"}, selector: []string{"--localization-id", "localization-1"},
 			include: "appScreenshots", path: "/v1/appStoreVersionLocalizations/localization-1/appScreenshotSets", query: map[string]string{"limit[appScreenshots]": "50"},
 			flags: map[string]string{"screenshot-fields": "appScreenshots"},
+			deps:  true,
 		},
 	}
 }
@@ -369,6 +393,7 @@ func TestIncludedResourceFieldFlags(t *testing.T) {
 
 	var requests []*url.URL
 	var resource bool
+	var depsClient func() (*asc.Client, error)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		requests = append(requests, req.URL)
 		w.Header().Set("Content-Type", "application/json")
@@ -381,10 +406,17 @@ func TestIncludedResourceFieldFlags(t *testing.T) {
 	t.Cleanup(server.Close)
 	installDefaultTransportForServer(t, server)
 
+	runRoot := func(t *testing.T, args []string) (string, string, error) {
+		t.Helper()
+		if depsClient != nil {
+			return runRootWithDeps(t, depsClient, args...)
+		}
+		return runRootCommand(t, args)
+	}
 	run := func(t *testing.T, args []string) (*url.URL, error) {
 		t.Helper()
 		requests = nil
-		_, stderr, err := runRootCommand(t, append(args, "--output", "json"))
+		_, stderr, err := runRoot(t, append(args, "--output", "json"))
 		if err != nil {
 			return nil, err
 		}
@@ -396,7 +428,7 @@ func TestIncludedResourceFieldFlags(t *testing.T) {
 	assertUsageError := func(t *testing.T, args []string, want string) {
 		t.Helper()
 		requests = nil
-		_, _, err := runRootCommand(t, append(args, "--output", "json"))
+		_, _, err := runRoot(t, append(args, "--output", "json"))
 		if err == nil || !strings.Contains(err.Error(), want) {
 			t.Fatalf("error = %v, want it to mention %q", err, want)
 		}
@@ -411,6 +443,10 @@ func TestIncludedResourceFieldFlags(t *testing.T) {
 	for _, tc := range includedFieldsCases() {
 		t.Run(tc.name, func(t *testing.T) {
 			resource = tc.resource
+			depsClient = nil
+			if tc.deps {
+				depsClient = stubServerClient(t, server)
+			}
 			allowed := openAPIFieldValues(t, tc.operation)
 			selected := slices.Concat(tc.command, tc.selector)
 
@@ -474,9 +510,15 @@ func TestIncludedResourceFieldFlags(t *testing.T) {
 			for _, flagName := range tc.removed {
 				requests = nil
 				var code int
-				_, stderr := captureOutput(t, func() {
-					code = rootcmd.Run(slices.Concat(selected, []string{"--include", tc.include, "--" + flagName, "name"}), "1.2.3")
-				})
+				var stderr string
+				removedArgs := slices.Concat(selected, []string{"--include", tc.include, "--" + flagName, "name"})
+				if tc.deps {
+					_, stderr, code = runWithDeps(t, depsClient, removedArgs...)
+				} else {
+					_, stderr = captureOutput(t, func() {
+						code = rootcmd.Run(removedArgs, "1.2.3")
+					})
+				}
 				if code != rootcmd.ExitUsage || !strings.Contains(stderr, "unknown flag `--"+flagName+"`") || len(requests) != 0 {
 					t.Fatalf("--%s: exit %d, stderr %q, requests %v; want an unknown-flag usage error before any request", flagName, code, stderr, requests)
 				}

@@ -11,6 +11,12 @@ const readinessConcurrencyLimit = 4
 
 type readinessRequestGateKey struct{}
 
+// readinessRequestTimeoutKey carries the function that bounds each readiness
+// request: the command's request timeout, or a caller's per-request budget.
+type readinessRequestTimeoutKey struct{}
+
+type readinessRequestTimeout = func(context.Context) (context.Context, context.CancelFunc)
+
 type readinessRequestGate struct {
 	sem chan struct{}
 }
@@ -38,9 +44,23 @@ func doReadinessRequest[T any](ctx context.Context, request func(context.Context
 		}
 	}
 
-	requestCtx, cancel := shared.ContextWithTimeout(ctx)
+	requestCtx, cancel := readinessRequestContext(ctx)
 	defer cancel()
 	return request(requestCtx)
+}
+
+func withReadinessRequestTimeout(ctx context.Context, timeout readinessRequestTimeout) context.Context {
+	return context.WithValue(ctx, readinessRequestTimeoutKey{}, timeout)
+}
+
+// readinessRequestContext bounds ctx with the budget attached by
+// withReadinessRequestTimeout, or with the process request timeout when a
+// fetcher runs without one.
+func readinessRequestContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	if timeout, ok := ctx.Value(readinessRequestTimeoutKey{}).(readinessRequestTimeout); ok {
+		return timeout(ctx)
+	}
+	return shared.ContextWithTimeout(ctx)
 }
 
 func runReadinessTasks(ctx context.Context, tasks ...readinessTask) error {
@@ -81,6 +101,11 @@ func runReadinessTasks(ctx context.Context, tasks ...readinessTask) error {
 	}
 
 	wg.Wait()
+	if firstErr == nil {
+		// Running tasks report a cancelled fetch as "could not verify", so any
+		// parent cancellation leaves the report incomplete.
+		return ctx.Err()
+	}
 	return firstErr
 }
 

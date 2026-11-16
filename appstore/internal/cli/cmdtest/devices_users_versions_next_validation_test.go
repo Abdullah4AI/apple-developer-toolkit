@@ -4,7 +4,7 @@ import "testing"
 
 func TestDevicesUsersVersionsRejectsInvalidNextURL(t *testing.T) {
 	runInvalidNextURLCases(t, []invalidNextURLCase{
-		{args: []string{"devices", "list"}, wantErr: "devices list: --next"},
+		{args: []string{"devices", "list"}, wantErr: "devices list: --next", deps: true},
 	})
 }
 
@@ -14,16 +14,19 @@ func TestDevicesUsersVersionsPaginateFromNext(t *testing.T) {
 			args:     []string{"devices", "list"},
 			firstURL: "https://api.appstoreconnect.apple.com/v1/devices?cursor=AQ&limit=200",
 			dataType: "devices",
+			deps:     true,
 		},
 		{
 			args:     []string{"users", "list"},
 			firstURL: "https://api.appstoreconnect.apple.com/v1/users?cursor=AQ&limit=200",
 			dataType: "users",
+			deps:     true,
 		},
 		{
 			args:     []string{"versions", "list"},
 			firstURL: "https://api.appstoreconnect.apple.com/v1/apps/app-1/appStoreVersions?cursor=AQ&limit=200",
 			dataType: "appStoreVersions",
+			deps:     true,
 		},
 	})
 }

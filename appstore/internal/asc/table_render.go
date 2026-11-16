@@ -35,17 +35,27 @@ func (w *renderErrorWriter) Write(data []byte) (int, error) {
 // Headers preserve their original casing and are center-aligned.
 // Data rows are left-aligned for readability.
 func RenderTable(headers []string, rows [][]string) {
-	_ = renderTable(headers, rows)
+	RenderTableTo(os.Stdout, headers, rows)
+}
+
+// RenderTableTo is RenderTable writing to w.
+func RenderTableTo(w io.Writer, headers []string, rows [][]string) {
+	_ = renderTable(w, headers, rows)
 }
 
 // WriteTable is RenderTable that reports stdout write failures.
 func WriteTable(headers []string, rows [][]string) error {
-	return renderTable(headers, rows)
+	return WriteTableTo(os.Stdout, headers, rows)
 }
 
-func renderTable(headers []string, rows [][]string) error {
+// WriteTableTo is WriteTable writing to w.
+func WriteTableTo(w io.Writer, headers []string, rows [][]string) error {
+	return renderTable(w, headers, rows)
+}
+
+func renderTable(w io.Writer, headers []string, rows [][]string) error {
 	safeHeaders, safeRows := sanitizeHumanTableData(headers, rows)
-	output := &renderErrorWriter{writer: os.Stdout}
+	output := &renderErrorWriter{writer: w}
 	table := tablewriter.NewTable(
 		output,
 		tablewriter.WithConfig(tablewriter.Config{
@@ -74,17 +84,27 @@ func renderTable(headers []string, rows [][]string) error {
 // Headers preserve their original casing. Data rows are left-aligned.
 // Pipe characters in cell values are escaped automatically by the renderer.
 func RenderMarkdown(headers []string, rows [][]string) {
-	_ = renderMarkdown(headers, rows)
+	RenderMarkdownTo(os.Stdout, headers, rows)
+}
+
+// RenderMarkdownTo is RenderMarkdown writing to w.
+func RenderMarkdownTo(w io.Writer, headers []string, rows [][]string) {
+	_ = renderMarkdown(w, headers, rows)
 }
 
 // WriteMarkdown is RenderMarkdown that reports stdout write failures.
 func WriteMarkdown(headers []string, rows [][]string) error {
-	return renderMarkdown(headers, rows)
+	return WriteMarkdownTo(os.Stdout, headers, rows)
 }
 
-func renderMarkdown(headers []string, rows [][]string) error {
+// WriteMarkdownTo is WriteMarkdown writing to w.
+func WriteMarkdownTo(w io.Writer, headers []string, rows [][]string) error {
+	return renderMarkdown(w, headers, rows)
+}
+
+func renderMarkdown(w io.Writer, headers []string, rows [][]string) error {
 	safeHeaders, safeRows := sanitizeHumanTableData(headers, rows)
-	output := &renderErrorWriter{writer: os.Stdout}
+	output := &renderErrorWriter{writer: w}
 	table := tablewriter.NewTable(
 		output,
 		tablewriter.WithRenderer(renderer.NewMarkdown()),

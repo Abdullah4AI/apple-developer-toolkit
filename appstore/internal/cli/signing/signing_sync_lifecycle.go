@@ -78,9 +78,9 @@ func listEnabledProfileDeviceIDs(ctx context.Context, client *asc.Client, profil
 	page := 1
 	seenNext := make(map[string]struct{})
 	for {
-		options := []asc.DevicesOption{asc.WithDevicesNextURL(next)}
+		options := []asc.DevicesOption{asc.NextURL[asc.DevicesOption](next)}
 		if next == "" {
-			options = append(options, asc.WithDevicesFilterStatuses([]string{string(asc.DeviceStatusEnabled)}), asc.WithDevicesLimit(200))
+			options = append(options, asc.WithDevicesFilterStatuses([]string{string(asc.DeviceStatusEnabled)}), asc.Limit[asc.DevicesOption](200))
 		}
 		response, err := client.GetDevices(ctx, options...)
 		if err != nil {
@@ -118,9 +118,9 @@ func listProfileDevices(ctx context.Context, client *asc.Client, profileID strin
 	page := 1
 	seenNext := make(map[string]struct{})
 	for {
-		options := []asc.ProfileDevicesOption{asc.WithProfileDevicesNextURL(next)}
+		options := []asc.ProfileDevicesOption{asc.NextURL[asc.ProfileDevicesOption](next)}
 		if next == "" {
-			options = append(options, asc.WithProfileDevicesLimit(200))
+			options = append(options, asc.Limit[asc.ProfileDevicesOption](200))
 		}
 		response, err := client.GetProfileDevices(ctx, profileID, options...)
 		if err != nil {
@@ -179,15 +179,15 @@ func diffDeviceIDs(current, desired []string) (added, removed []string) {
 
 // findLatestExpiredProfile returns the profile of the given type whose
 // expiration date passed most recently, or nil when none has expired.
-func findLatestExpiredProfile(ctx context.Context, client *asc.Client, bundleIDResourceID, profileType string) (*asc.Resource[asc.ProfileAttributes], error) {
-	now := signingFetchNowFn()
+func findLatestExpiredProfile(ctx context.Context, client *asc.Client, bundleIDResourceID, profileType string, clock func() time.Time) (*asc.Resource[asc.ProfileAttributes], error) {
+	now := clock()
 	var selected *asc.Resource[asc.ProfileAttributes]
 	var selectedExpiry string
 	next := ""
 	page := 1
 	seenNext := make(map[string]struct{})
 	for {
-		profiles, err := client.GetBundleIDProfiles(ctx, bundleIDResourceID, asc.WithBundleIDProfilesLimit(200), asc.WithBundleIDProfilesNextURL(next))
+		profiles, err := client.GetBundleIDProfiles(ctx, bundleIDResourceID, asc.Limit[asc.BundleIDProfilesOption](200), asc.NextURL[asc.BundleIDProfilesOption](next))
 		if err != nil {
 			return nil, err
 		}
@@ -347,35 +347,35 @@ func parseProfileExpiry(value string) (time.Time, bool) {
 
 // validateSigningSyncLifecycleFlags rejects lifecycle flag combinations
 // before any secret read, client creation, or network request.
-func validateSigningSyncLifecycleFlags(profileType, storageKind, deviceIDs string, renewExpired, forceForNewDevices, includeMac bool) error {
+func validateSigningSyncLifecycleFlags(d *shared.Deps, profileType, storageKind, deviceIDs string, renewExpired, forceForNewDevices, includeMac bool) error {
 	if forceForNewDevices && !isDeviceProfileType(profileType) {
-		return shared.UsageErrorf("--force-for-new-devices requires a development or ad hoc profile type; %s profiles have no device list", profileType)
+		return d.UsageErrorf("--force-for-new-devices requires a development or ad hoc profile type; %s profiles have no device list", profileType)
 	}
 	if includeMac && !forceForNewDevices {
-		return shared.UsageError("--include-mac-in-profiles requires --force-for-new-devices")
+		return d.UsageError("--include-mac-in-profiles requires --force-for-new-devices")
 	}
 	if includeMac && !supportsMacDeviceInclusion(profileType) {
-		return shared.UsageError("--include-mac-in-profiles supports only IOS_APP_DEVELOPMENT and IOS_APP_ADHOC profiles")
+		return d.UsageError("--include-mac-in-profiles supports only IOS_APP_DEVELOPMENT and IOS_APP_ADHOC profiles")
 	}
 	if includeMac && strings.TrimSpace(deviceIDs) != "" {
-		return shared.UsageError("--include-mac-in-profiles cannot be combined with --device; list Mac device IDs in --device instead")
+		return d.UsageError("--include-mac-in-profiles cannot be combined with --device; list Mac device IDs in --device instead")
 	}
 	if (renewExpired || forceForNewDevices) && storageKind != signingSyncStorageGit {
-		return shared.UsageErrorf("--renew-expired and --force-for-new-devices require --storage %s so replaced profiles can be removed from the store", signingSyncStorageGit)
+		return d.UsageErrorf("--renew-expired and --force-for-new-devices require --storage %s so replaced profiles can be removed from the store", signingSyncStorageGit)
 	}
 	return nil
 }
 
 // reportSigningProfileLifecycle prints a one-line diagnostic for a profile
 // that push kept or replaced because of a lifecycle flag.
-func reportSigningProfileLifecycle(bundleID string, lifecycle *asc.SigningSyncProfileLifecycle) {
+func reportSigningProfileLifecycle(d *shared.Deps, bundleID string, lifecycle *asc.SigningSyncProfileLifecycle) {
 	if lifecycle == nil {
 		return
 	}
 	switch lifecycle.Action {
 	case asc.SigningSyncLifecycleRenewed:
-		fmt.Fprintf(os.Stderr, "Renewed expired profile %s for %s as %s\n", lifecycle.ReplacedProfileID, bundleID, lifecycle.ProfileID)
+		fmt.Fprintf(d.IO.ErrOut, "Renewed expired profile %s for %s as %s\n", lifecycle.ReplacedProfileID, bundleID, lifecycle.ProfileID)
 	case asc.SigningSyncLifecycleDevicesRefreshed:
-		fmt.Fprintf(os.Stderr, "Recreated profile %s for %s as %s (%d device(s) added, %d removed)\n", lifecycle.ReplacedProfileID, bundleID, lifecycle.ProfileID, len(lifecycle.DevicesAdded), len(lifecycle.DevicesRemoved))
+		fmt.Fprintf(d.IO.ErrOut, "Recreated profile %s for %s as %s (%d device(s) added, %d removed)\n", lifecycle.ReplacedProfileID, bundleID, lifecycle.ProfileID, len(lifecycle.DevicesAdded), len(lifecycle.DevicesRemoved))
 	}
 }

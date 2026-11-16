@@ -1,23 +1,12 @@
 package asc
 
-// TerritoryAttributes describes a territory resource.
-type TerritoryAttributes struct {
-	Currency string `json:"currency,omitempty"`
-}
-
-// AppPricePointV3Attributes describes app price point metadata.
-type AppPricePointV3Attributes struct {
-	CustomerPrice string `json:"customerPrice,omitempty"`
-	Proceeds      string `json:"proceeds,omitempty"`
-}
-
 // AppPriceScheduleAttributes describes an app price schedule resource.
 type AppPriceScheduleAttributes struct {
 	// Usually empty - data is in relationships.
 }
 
-// AppPriceAttributes describes a price schedule entry.
-type AppPriceAttributes struct {
+// AppPriceV2Attributes describes a price schedule entry.
+type AppPriceV2Attributes struct {
 	StartDate string `json:"startDate,omitempty"`
 	EndDate   string `json:"endDate,omitempty"`
 	Manual    bool   `json:"manual,omitempty"`
@@ -43,7 +32,7 @@ type (
 	TerritoryResponse               = SingleResponse[TerritoryAttributes]
 	AppPricePointsV3Response        = Response[AppPricePointV3Attributes]
 	AppPriceScheduleResponse        = SingleResponse[AppPriceScheduleAttributes]
-	AppPricesResponse               = Response[AppPriceAttributes]
+	AppPricesResponse               = Response[AppPriceV2Attributes]
 	AppAvailabilityV2Response       = SingleResponse[AppAvailabilityV2Attributes]
 	TerritoryAvailabilitiesResponse = Response[TerritoryAvailabilityAttributes]
 	TerritoryAvailabilityResponse   = SingleResponse[TerritoryAvailabilityAttributes]
@@ -72,24 +61,11 @@ type AppPriceScheduleCreateRequest struct {
 	Included []AppPriceCreateResource   `json:"included,omitempty"`
 }
 
-// AppPriceScheduleCreateData is the data portion of a schedule create request.
-type AppPriceScheduleCreateData struct {
-	Type          ResourceType                        `json:"type"`
-	Relationships AppPriceScheduleCreateRelationships `json:"relationships"`
-}
-
-// AppPriceScheduleCreateRelationships describes schedule relationships.
-type AppPriceScheduleCreateRelationships struct {
-	App           Relationship     `json:"app"`
-	BaseTerritory Relationship     `json:"baseTerritory"`
-	ManualPrices  RelationshipList `json:"manualPrices"`
-}
-
 // AppPriceCreateResource represents an app price resource for schedule creation.
 type AppPriceCreateResource struct {
 	Type          ResourceType          `json:"type"`
 	ID            string                `json:"id,omitempty"`
-	Attributes    AppPriceAttributes    `json:"attributes"`
+	Attributes    AppPriceV2Attributes  `json:"attributes"`
 	Relationships AppPriceRelationships `json:"relationships"`
 }
 
@@ -161,36 +137,5 @@ type TerritoryAvailabilityUpdateAttributes struct {
 	ClearReleaseDate bool    `json:"-"`
 }
 
-// TerritoryAvailabilityUpdateData is the data portion of an availability update request.
-type TerritoryAvailabilityUpdateData struct {
-	Type       ResourceType                           `json:"type"`
-	ID         string                                 `json:"id"`
-	Attributes *TerritoryAvailabilityUpdateAttributes `json:"attributes,omitempty"`
-}
-
-// TerritoryAvailabilityUpdateRequest is a request to update a territory availability.
-type TerritoryAvailabilityUpdateRequest struct {
-	Data TerritoryAvailabilityUpdateData `json:"data"`
-}
-
 // EndAppAvailabilityPreOrderAttributes describes the end pre-order response attributes.
 type EndAppAvailabilityPreOrderAttributes struct{}
-
-// EndAppAvailabilityPreOrderResponse is the response from end pre-order requests.
-type EndAppAvailabilityPreOrderResponse = SingleResponse[EndAppAvailabilityPreOrderAttributes]
-
-// EndAppAvailabilityPreOrderCreateRequest is a request to end app availability pre-orders.
-type EndAppAvailabilityPreOrderCreateRequest struct {
-	Data EndAppAvailabilityPreOrderCreateData `json:"data"`
-}
-
-// EndAppAvailabilityPreOrderCreateData is the data portion of a pre-order end request.
-type EndAppAvailabilityPreOrderCreateData struct {
-	Type          ResourceType                            `json:"type"`
-	Relationships EndAppAvailabilityPreOrderRelationships `json:"relationships"`
-}
-
-// EndAppAvailabilityPreOrderRelationships describes pre-order end relationships.
-type EndAppAvailabilityPreOrderRelationships struct {
-	TerritoryAvailabilities RelationshipList `json:"territoryAvailabilities"`
-}

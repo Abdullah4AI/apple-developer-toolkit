@@ -21,9 +21,9 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
-// AppsInfoCommand returns the apps info command with subcommands.
-func AppsInfoCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("apps info", flag.ExitOnError)
+// newAppsInfoCommand returns the apps info command with subcommands.
+func newAppsInfoCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("apps info", flag.ExitOnError)
 
 	return &ffcli.Command{
 		Name:       "info",
@@ -37,13 +37,13 @@ Examples:
   asc apps info view --app "APP_ID" --version "1.2.3" --platform IOS
   asc apps info edit --app "APP_ID" --locale "en-US" --whats-new "Bug fixes"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
-			AppsInfoListCommand(),
-			AppsInfoViewCommand(),
-			AppsInfoEditCommand(),
-			AppsInfoRelationshipsCommand(),
-			AppsInfoTerritoryAgeRatingsCommand(),
+			newAppsInfoListCommand(d),
+			newAppsInfoViewCommand(d),
+			newAppsInfoEditCommand(d),
+			newAppsInfoRelationshipsCommand(d),
+			newAppsInfoTerritoryAgeRatingsCommand(d),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp
@@ -51,9 +51,9 @@ Examples:
 	}
 }
 
-// AppsInfoViewCommand returns the view subcommand.
-func AppsInfoViewCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("apps info view", flag.ExitOnError)
+// newAppsInfoViewCommand returns the view subcommand.
+func newAppsInfoViewCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("apps info view", flag.ExitOnError)
 
 	appID := shared.BindResourceIDFlag(fs, "app", "apps", "App Store Connect app ID (or ASC_APP_ID env)")
 	infoID := shared.BindResourceIDFlag(fs, "info-id", "appInfos", "App Info ID (optional override)")
@@ -62,9 +62,9 @@ func AppsInfoViewCommand() *ffcli.Command {
 	platform := fs.String("platform", "", "Platform: IOS, MAC_OS, TV_OS, VISION_OS (required with --version)")
 	state := fs.String("state", "", "Filter by app store state(s), comma-separated")
 	locale := fs.String("locale", "", "Filter by locale(s), comma-separated")
-	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
-	next := fs.String("next", "", "Fetch next page using a links.next URL")
-	paginate := fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")
+	limit := fs.Int("limit", 0, shared.LimitFlagUsage(200))
+	next := fs.String("next", "", shared.NextFlagUsage)
+	paginate := fs.Bool("paginate", false, shared.PaginateFlagUsage)
 	include := fs.String("include", "", "Include related resources: "+strings.Join(appInfoIncludeList(), ", "))
 	includedFields := shared.BindIncludedFieldFlags(fs, map[string]string{
 		"app":                     "apps",
@@ -78,7 +78,7 @@ func AppsInfoViewCommand() *ffcli.Command {
 	})
 	fields := fs.String("fields", "", "Sparse app info fields: "+strings.Join(shared.AppInfoSparseFields, ", ")+" (deprecated; removed from API 4.5; prefer asc age-rating view)")
 	ageRatingFields := fs.String("age-rating-fields", "", "Sparse fields for included age rating declaration: "+strings.Join(shared.AgeRatingDeclarationSparseFields, ", "))
-	output := shared.BindOutputFlags(fs)
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "view",
@@ -99,68 +99,60 @@ Examples:
   asc apps info view --app "APP_ID" --include "appInfoLocalizations,primaryCategory"
   asc apps info view --app "APP_ID" --locale "en-US" --output table`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
+			if err := d.ValidatePaginationFlags(ctx, fs, "apps info view", 200, "fields", "age-rating-fields"); err != nil {
+				return err
+			}
 			infoIDValue := strings.TrimSpace(*infoID)
-			if *limit != 0 && (*limit < 1 || *limit > 200) {
-				return shared.UsageError("--limit must be between 1 and 200")
-			}
-			if err := shared.ValidateNextURL(*next); err != nil {
-				return shared.UsageError(err.Error())
-			}
-			if strings.TrimSpace(*next) != "" {
-				if flagName, ok := appFlagWasProvided(fs, "fields", "age-rating-fields"); ok {
-					return shared.UsageErrorf("--next cannot be combined with %s", flagName)
-				}
-			}
 			if strings.TrimSpace(*version) != "" && strings.TrimSpace(*versionID) != "" {
-				return shared.UsageError("--version and --version-id are mutually exclusive")
+				return d.UsageError("--version and --version-id are mutually exclusive")
 			}
 
-			resolvedAppID := shared.ResolveAppID(*appID)
-			if strings.TrimSpace(*versionID) == "" && resolvedAppID == "" && infoIDValue == "" {
-				fmt.Fprintln(os.Stderr, "Error: --app or --info-id is required (or set ASC_APP_ID)")
+			resolvedAppID := d.ResolveAppID(*appID)
+			if strings.TrimSpace(*versionID) == "" && resolvedAppID == "" && infoIDValue == "" && strings.TrimSpace(*next) == "" {
+				fmt.Fprintln(d.IO.ErrOut, "Error: --app or --info-id is required (or set ASC_APP_ID)")
 				return shared.MissingRequiredUsageError("")
 			}
 
 			includeValues, err := normalizeAppInfoInclude(*include)
 			if err != nil {
-				return shared.UsageError(err.Error())
+				return d.UsageError(err.Error())
 			}
-			included, err := includedFields.Resolve("apps info view", *next, includeValues)
+			included, err := includedFields.ResolveWith(d, "apps info view", *next, includeValues)
 			if err != nil {
 				return err
 			}
 			fieldValues, err := normalizeSparseField(fs, *fields, shared.AppInfoSparseFields, "--fields")
 			if err != nil {
-				return shared.UsageError(err.Error())
+				return d.UsageError(err.Error())
 			}
 			ageRatingFieldValues, err := normalizeSparseField(fs, *ageRatingFields, shared.AgeRatingDeclarationSparseFields, "--age-rating-fields")
 			if err != nil {
-				return shared.UsageError(err.Error())
+				return d.UsageError(err.Error())
 			}
 			if len(ageRatingFieldValues) > 0 {
 				includeValues = addInclude(includeValues, "ageRatingDeclaration")
 			}
 			appInfoMode := len(includeValues) > 0 || len(fieldValues) > 0
 			if infoIDValue != "" && !appInfoMode {
-				fmt.Fprintln(os.Stderr, "Error: --info-id requires --include, --fields, or --age-rating-fields")
+				fmt.Fprintln(d.IO.ErrOut, "Error: --info-id requires --include, --fields, or --age-rating-fields")
 				return flag.ErrHelp
 			}
 
 			platforms, err := shared.NormalizeAppStoreVersionPlatforms(shared.SplitCSVUpper(*platform))
 			if err != nil {
-				return shared.UsageError(err.Error())
+				return d.UsageError(err.Error())
 			}
 			states, err := shared.NormalizeAppStoreVersionStates(shared.SplitCSVUpper(*state))
 			if err != nil {
-				return shared.UsageError(err.Error())
+				return d.UsageError(err.Error())
 			}
 			if err := shared.ValidateAppStoreVersionStateFilterCombination(states); err != nil {
-				return shared.UsageError(err.Error())
+				return d.UsageError(err.Error())
 			}
 			if strings.TrimSpace(*version) != "" && len(platforms) != 1 {
-				fmt.Fprintln(os.Stderr, "Error: --platform is required with --version")
+				fmt.Fprintln(d.IO.ErrOut, "Error: --platform is required with --version")
 				return shared.MissingRequiredUsageError("--platform")
 			}
 
@@ -179,23 +171,23 @@ Examples:
 					} else if len(ageRatingFieldValues) > 0 {
 						flagName = "--age-rating-fields"
 					}
-					fmt.Fprintf(os.Stderr, "Error: %s cannot be used with version localization flags\n", flagName)
+					fmt.Fprintf(d.IO.ErrOut, "Error: %s cannot be used with version localization flags\n", flagName)
 					return flag.ErrHelp
 				}
 			}
 
-			shared.WarnDeprecatedAppInfoFields(fieldValues, "")
+			d.WarnDeprecatedAppInfoFields(fieldValues, "")
 
-			client, err := shared.GetASCClient()
+			client, err := d.Client()
 			if err != nil {
 				return fmt.Errorf("apps info view: %w", err)
 			}
 
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
+			requestCtx, cancel := d.Timeout(ctx)
 			defer cancel()
 
 			if appInfoMode {
-				appInfoIDValue, err := shared.ResolveAppInfoIDWithFlag(requestCtx, client, resolvedAppID, infoIDValue, "--info-id")
+				appInfoIDValue, err := d.ResolveAppInfoIDWithFlag(requestCtx, client, resolvedAppID, infoIDValue, "--info-id")
 				if err != nil {
 					return fmt.Errorf("apps info view: %w", err)
 				}
@@ -211,25 +203,29 @@ Examples:
 					return fmt.Errorf("apps info view: %w", err)
 				}
 
-				return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+				return d.PrintOutput(resp, *output.Output, *output.Pretty)
 			}
 
-			versionResource, err := resolveAppStoreVersionForAppInfo(
-				requestCtx,
-				client,
-				resolvedAppID,
-				strings.TrimSpace(*versionID),
-				strings.TrimSpace(*version),
-				platforms,
-				states,
-			)
-			if err != nil {
-				return fmt.Errorf("apps info view: %w", err)
+			versionResourceID := ""
+			if resolvedAppID != "" || strings.TrimSpace(*versionID) != "" {
+				versionResource, err := resolveAppStoreVersionForAppInfo(
+					requestCtx,
+					client,
+					resolvedAppID,
+					strings.TrimSpace(*versionID),
+					strings.TrimSpace(*version),
+					platforms,
+					states,
+				)
+				if err != nil {
+					return fmt.Errorf("apps info view: %w", err)
+				}
+				versionResourceID = versionResource.ID
 			}
 
 			opts := []asc.AppStoreVersionLocalizationsOption{
-				asc.WithAppStoreVersionLocalizationsLimit(*limit),
-				asc.WithAppStoreVersionLocalizationsNextURL(*next),
+				asc.Limit[asc.AppStoreVersionLocalizationsOption](*limit),
+				asc.NextURL[asc.AppStoreVersionLocalizationsOption](*next),
 			}
 			locales := shared.SplitCSV(*locale)
 			if len(locales) > 0 {
@@ -237,34 +233,34 @@ Examples:
 			}
 
 			if *paginate {
-				paginateOpts := append(opts, asc.WithAppStoreVersionLocalizationsLimit(200))
-				firstPage, err := client.GetAppStoreVersionLocalizations(requestCtx, versionResource.ID, paginateOpts...)
+				paginateOpts := append(opts, asc.Limit[asc.AppStoreVersionLocalizationsOption](200))
+				firstPage, err := client.GetAppStoreVersionLocalizations(requestCtx, versionResourceID, paginateOpts...)
 				if err != nil {
 					return fmt.Errorf("apps info view: failed to fetch: %w", err)
 				}
 
 				resp, err := asc.PaginateAll(requestCtx, firstPage, func(ctx context.Context, nextURL string) (asc.PaginatedResponse, error) {
-					return client.GetAppStoreVersionLocalizations(ctx, versionResource.ID, asc.WithAppStoreVersionLocalizationsNextURL(nextURL))
+					return client.GetAppStoreVersionLocalizations(ctx, versionResourceID, asc.NextURL[asc.AppStoreVersionLocalizationsOption](nextURL))
 				})
 				if err != nil {
 					return fmt.Errorf("apps info view: %w", err)
 				}
-				return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+				return d.PrintOutput(resp, *output.Output, *output.Pretty)
 			}
 
-			resp, err := client.GetAppStoreVersionLocalizations(requestCtx, versionResource.ID, opts...)
+			resp, err := client.GetAppStoreVersionLocalizations(requestCtx, versionResourceID, opts...)
 			if err != nil {
 				return fmt.Errorf("apps info view: failed to fetch: %w", err)
 			}
 
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+			return d.PrintOutput(resp, *output.Output, *output.Pretty)
 		},
 	}
 }
 
-// AppsInfoEditCommand returns the edit subcommand.
-func AppsInfoEditCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("apps info edit", flag.ExitOnError)
+// newAppsInfoEditCommand returns the edit subcommand.
+func newAppsInfoEditCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("apps info edit", flag.ExitOnError)
 
 	appID := shared.BindResourceIDFlag(fs, "app", "apps", "App Store Connect app ID (or ASC_APP_ID env)")
 	versionID := shared.BindResourceIDFlag(fs, "version-id", "appStoreVersions", "App Store version ID (optional override)")
@@ -282,7 +278,7 @@ func AppsInfoEditCommand() *ffcli.Command {
 	marketingURL := fs.String("marketing-url", "", "Marketing URL")
 	promotionalText := fs.String("promotional-text", "", "Promotional text")
 	whatsNew := fs.String("whats-new", "", "What's New text")
-	output := shared.BindOutputFlags(fs)
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "edit",
@@ -298,31 +294,31 @@ Examples:
   asc apps info edit --app "APP_ID" --version "1.2.3" --platform IOS --from-dir "./metadata/version/1.2.3"
   asc apps info edit --app "APP_ID" --locales "en-US,de-DE" --whats-new "Bug fixes" --dry-run`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			if strings.TrimSpace(*version) != "" && strings.TrimSpace(*versionID) != "" {
-				return shared.UsageError("--version and --version-id are mutually exclusive")
+				return d.UsageError("--version and --version-id are mutually exclusive")
 			}
 
-			resolvedAppID := shared.ResolveAppID(*appID)
+			resolvedAppID := d.ResolveAppID(*appID)
 			if strings.TrimSpace(*versionID) == "" && resolvedAppID == "" {
-				fmt.Fprintln(os.Stderr, "Error: --app is required (or set ASC_APP_ID)")
+				fmt.Fprintln(d.IO.ErrOut, "Error: --app is required (or set ASC_APP_ID)")
 				return shared.MissingRequiredUsageError("")
 			}
 
 			platforms, err := shared.NormalizeAppStoreVersionPlatforms(shared.SplitCSVUpper(*platform))
 			if err != nil {
-				return shared.UsageError(err.Error())
+				return d.UsageError(err.Error())
 			}
 			states, err := shared.NormalizeAppStoreVersionStates(shared.SplitCSVUpper(*state))
 			if err != nil {
-				return shared.UsageError(err.Error())
+				return d.UsageError(err.Error())
 			}
 			if err := shared.ValidateAppStoreVersionStateFilterCombination(states); err != nil {
-				return shared.UsageError(err.Error())
+				return d.UsageError(err.Error())
 			}
 			if strings.TrimSpace(*version) != "" && len(platforms) != 1 {
-				fmt.Fprintln(os.Stderr, "Error: --platform is required with --version")
+				fmt.Fprintln(d.IO.ErrOut, "Error: --platform is required with --version")
 				return shared.MissingRequiredUsageError("--platform")
 			}
 
@@ -330,37 +326,36 @@ Examples:
 			localesValue := shared.SplitUniqueCSV(*locales)
 			fromDirValue := strings.TrimSpace(*fromDir)
 			if localeValue != "" && len(localesValue) > 0 {
-				return shared.UsageError("--locale and --locales are mutually exclusive")
+				return d.UsageError("--locale and --locales are mutually exclusive")
 			}
 			if fromDirValue != "" {
 				if localeValue != "" || len(localesValue) > 0 {
-					return shared.UsageError("--from-dir cannot be used with --locale or --locales")
+					return d.UsageError("--from-dir cannot be used with --locale or --locales")
 				}
 			}
 			if fromDirValue == "" && localeValue == "" && len(localesValue) == 0 {
-				fmt.Fprintln(os.Stderr, "Error: --locale is required")
-				return shared.MissingRequiredUsageError("--locale")
+				return d.RequiredFlag("--locale")
 			}
 			if localeValue != "" {
 				if err := shared.ValidateBuildLocalizationLocale(localeValue); err != nil {
-					return shared.UsageError(err.Error())
+					return d.UsageError(err.Error())
 				}
 			}
 			for _, localeItem := range localesValue {
 				if err := shared.ValidateBuildLocalizationLocale(localeItem); err != nil {
-					return shared.UsageError(err.Error())
+					return d.UsageError(err.Error())
 				}
 			}
 			copyFromLocaleValue := strings.TrimSpace(*copyFromLocale)
 			if copyFromLocaleValue != "" {
 				if err := shared.ValidateBuildLocalizationLocale(copyFromLocaleValue); err != nil {
-					return shared.UsageError(err.Error())
+					return d.UsageError(err.Error())
 				}
 				if localeValue == "" || len(localesValue) > 0 || fromDirValue != "" || *dryRun {
-					return shared.UsageError("--copy-from-locale can only be used with --locale in single-locale mode")
+					return d.UsageError("--copy-from-locale can only be used with --locale in single-locale mode")
 				}
 				if strings.EqualFold(copyFromLocaleValue, localeValue) {
-					return shared.UsageError("--copy-from-locale must be different from --locale")
+					return d.UsageError("--copy-from-locale must be different from --locale")
 				}
 			}
 
@@ -374,33 +369,32 @@ Examples:
 			}
 			hasInlineUpdates := appInfoSetHasAnyUpdates(inlineAttrs)
 			if fromDirValue != "" && hasInlineUpdates {
-				return shared.UsageError("--from-dir cannot be used with inline update flags")
+				return d.UsageError("--from-dir cannot be used with inline update flags")
 			}
 			if fromDirValue == "" && !hasInlineUpdates && copyFromLocaleValue == "" {
-				fmt.Fprintln(os.Stderr, "Error: at least one update flag is required")
-				return shared.MissingRequiredUsageError("")
+				return d.UpdateFlagRequired(fs, copyFromLocale, fromDir, description, keywords, supportURL, marketingURL, promotionalText, whatsNew)
 			}
 			if err := shared.ValidateVersionLocalizationAttributes(inlineAttrs); err != nil {
-				return shared.UsageError(err.Error())
+				return d.UsageError(err.Error())
 			}
 
 			var valuesByLocale map[string]asc.AppStoreVersionLocalizationAttributes
 			if fromDirValue != "" {
 				valuesByLocale, err = readAppInfoSetLocalesFromDir(fromDirValue)
 				if err != nil {
-					return shared.UsageError(err.Error())
+					return d.UsageError(err.Error())
 				}
 				if err := shared.ValidateVersionLocalizationAttributesByLocale(valuesByLocale); err != nil {
-					return shared.UsageError(err.Error())
+					return d.UsageError(err.Error())
 				}
 			}
 
-			client, err := shared.GetASCClient()
+			client, err := d.Client()
 			if err != nil {
 				return fmt.Errorf("apps info edit: %w", err)
 			}
 
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
+			requestCtx, cancel := d.Timeout(ctx)
 			defer cancel()
 
 			versionResource, err := resolveAppStoreVersionForAppInfo(
@@ -428,7 +422,7 @@ Examples:
 						string(versionResource.Attributes.Platform),
 					)
 				}
-				return runAppInfoSetSingleLocale(
+				return runAppInfoSetSingleLocale(d,
 					requestCtx,
 					client,
 					versionResource.ID,
@@ -473,15 +467,15 @@ Examples:
 			if batchErr != nil && batchResult == nil {
 				return fmt.Errorf("apps info edit: %w", batchErr)
 			}
-			if err := shared.PrintOutput(batchResult, *output.Output, *output.Pretty); err != nil {
+			if err := d.PrintOutput(batchResult, *output.Output, *output.Pretty); err != nil {
 				return err
 			}
-			if err := shared.PrintSubmitReadinessCreateWarnings(os.Stderr, warnings); err != nil {
+			if err := shared.PrintSubmitReadinessCreateWarnings(d.IO.ErrOut, warnings); err != nil {
 				return err
 			}
 			if batchResult.Failed > 0 {
 				summaryErr := fmt.Errorf("apps info edit: %d locale(s) failed", batchResult.Failed)
-				fmt.Fprintf(os.Stderr, "Error: %s\n", summaryErr.Error())
+				fmt.Fprintf(d.IO.ErrOut, "Error: %s\n", summaryErr.Error())
 				return shared.NewStderrReportedError(shared.NewErrorWithCause(summaryErr, batchErr))
 			}
 			return nil
@@ -490,6 +484,7 @@ Examples:
 }
 
 func runAppInfoSetSingleLocale(
+	d *shared.Deps,
 	ctx context.Context,
 	client *asc.Client,
 	versionID string,
@@ -500,7 +495,7 @@ func runAppInfoSetSingleLocale(
 	output shared.OutputFlags,
 ) error {
 	localizationOpts := []asc.AppStoreVersionLocalizationsOption{
-		asc.WithAppStoreVersionLocalizationsLimit(200),
+		asc.Limit[asc.AppStoreVersionLocalizationsOption](200),
 		asc.WithAppStoreVersionLocalizationLocales(appInfoSetRequestedLocales(locale, copyFromLocale)),
 	}
 	localizations, err := client.GetAppStoreVersionLocalizations(ctx, versionID, localizationOpts...)
@@ -616,11 +611,11 @@ func runAppInfoSetSingleLocale(
 				whatsNewValue,
 			)
 		} else {
-			if err := shared.PrintOutput(resp, *output.Output, *output.Pretty); err != nil {
+			if err := d.PrintOutput(resp, *output.Output, *output.Pretty); err != nil {
 				return err
 			}
 			if warning, ok := shared.SubmitReadinessCreateWarningForLocaleWithOptions(locale, effectiveAttrs, shared.SubmitReadinessCreateModeApplied, submitOpts); ok {
-				return shared.PrintSubmitReadinessCreateWarnings(os.Stderr, []shared.SubmitReadinessCreateWarning{warning})
+				return shared.PrintSubmitReadinessCreateWarnings(d.IO.ErrOut, []shared.SubmitReadinessCreateWarning{warning})
 			}
 			return nil
 		}
@@ -634,16 +629,16 @@ func runAppInfoSetSingleLocale(
 	if updateErr != nil {
 		return fmt.Errorf("apps info edit: %w", updateErr)
 	}
-	if err := shared.PrintOutput(resp, *output.Output, *output.Pretty); err != nil {
+	if err := d.PrintOutput(resp, *output.Output, *output.Pretty); err != nil {
 		return err
 	}
 	if !targetExists {
 		if warning, ok := shared.SubmitReadinessCreateWarningForLocaleWithOptions(locale, effectiveAttrs, shared.SubmitReadinessCreateModeApplied, submitOpts); ok {
-			return shared.PrintSubmitReadinessCreateWarnings(os.Stderr, []shared.SubmitReadinessCreateWarning{warning})
+			return shared.PrintSubmitReadinessCreateWarnings(d.IO.ErrOut, []shared.SubmitReadinessCreateWarning{warning})
 		}
 		return nil
 	}
-	warnAppInfoSetSubmitIncompleteLocale(locale, effectiveAttrs)
+	warnAppInfoSetSubmitIncompleteLocale(d, locale, effectiveAttrs, submitOpts)
 	return nil
 }
 
@@ -663,7 +658,7 @@ func runAppInfoSetBatch(
 	localizations, err := client.GetAppStoreVersionLocalizations(
 		ctx,
 		versionID,
-		asc.WithAppStoreVersionLocalizationsLimit(200),
+		asc.Limit[asc.AppStoreVersionLocalizationsOption](200),
 	)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to fetch localizations: %w", err)
@@ -826,7 +821,7 @@ func fetchAppInfoSetLocalizationByLocale(ctx context.Context, client *asc.Client
 	localizations, err := client.GetAppStoreVersionLocalizations(
 		ctx,
 		versionID,
-		asc.WithAppStoreVersionLocalizationsLimit(200),
+		asc.Limit[asc.AppStoreVersionLocalizationsOption](200),
 		asc.WithAppStoreVersionLocalizationLocales([]string{locale}),
 	)
 	if err != nil {
@@ -1055,13 +1050,13 @@ func shouldBackfillAppInfoSetField(explicitValue string, targetExists bool, targ
 	return strings.TrimSpace(targetValue) == ""
 }
 
-func warnAppInfoSetSubmitIncompleteLocale(locale string, attrs asc.AppStoreVersionLocalizationAttributes) {
-	warning := shared.SubmitIncompleteLocaleWarning(locale, attrs)
+func warnAppInfoSetSubmitIncompleteLocale(d *shared.Deps, locale string, attrs asc.AppStoreVersionLocalizationAttributes, submitOpts shared.SubmitReadinessOptions) {
+	warning := shared.SubmitIncompleteLocaleWarningWithOptions(locale, attrs, submitOpts)
 	if warning == "" {
 		return
 	}
 
-	fmt.Fprint(os.Stderr, warning)
+	fmt.Fprint(d.IO.ErrOut, warning)
 }
 
 func resolveAppStoreVersionForAppInfo(
@@ -1101,7 +1096,7 @@ func resolveAppStoreVersionForAppInfo(
 	}
 
 	opts := []asc.AppStoreVersionsOption{
-		asc.WithAppStoreVersionsLimit(200),
+		asc.Limit[asc.AppStoreVersionsOption](200),
 		asc.WithAppStoreVersionsPlatforms(platforms),
 		asc.WithAppStoreVersionsStates(states),
 	}
@@ -1110,7 +1105,7 @@ func resolveAppStoreVersionForAppInfo(
 		return asc.Resource[asc.AppStoreVersionAttributes]{}, err
 	}
 	allPages, err := asc.PaginateAll(ctx, resp, func(pageCtx context.Context, nextURL string) (asc.PaginatedResponse, error) {
-		return client.GetAppStoreVersions(pageCtx, appID, asc.WithAppStoreVersionsNextURL(nextURL))
+		return client.GetAppStoreVersions(pageCtx, appID, asc.NextURL[asc.AppStoreVersionsOption](nextURL))
 	})
 	if err != nil {
 		return asc.Resource[asc.AppStoreVersionAttributes]{}, err

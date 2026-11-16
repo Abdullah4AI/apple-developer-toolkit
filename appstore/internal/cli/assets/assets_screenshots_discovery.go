@@ -156,7 +156,7 @@ func uploadScreenshotsFanout(ctx context.Context, cfg screenshotUploadFanoutConf
 		return zero, fmt.Errorf("client is required")
 	}
 	if cfg.RequestContext == nil {
-		cfg.RequestContext = shared.ContextWithTimeout
+		cfg.RequestContext = cfg.Deps.Timeout
 	}
 	cfg.ExecuteUpload = resolveScreenshotUploadExecutor(cfg.ExecuteUpload, cfg.UploadScreenshot)
 
@@ -177,7 +177,7 @@ func uploadScreenshotsFanout(ctx context.Context, cfg screenshotUploadFanoutConf
 	}
 
 	requestCtx, cancel := cfg.RequestContext(ctx)
-	localizationsResp, err := cfg.Client.GetAppStoreVersionLocalizations(requestCtx, cfg.VersionID, asc.WithAppStoreVersionLocalizationsLimit(200))
+	localizationsResp, err := cfg.Client.GetAppStoreVersionLocalizations(requestCtx, cfg.VersionID, asc.Limit[asc.AppStoreVersionLocalizationsOption](200))
 	cancel()
 	if err != nil {
 		return zero, fmt.Errorf("fetch version localizations: %w", err)
@@ -199,11 +199,11 @@ func uploadScreenshotsFanout(ctx context.Context, cfg screenshotUploadFanoutConf
 		}
 	}
 	if cfg.SingleLocale && len(missingLocales) == 1 {
-		return zero, screenshotVersionLocalizationLocaleError(cfg.VersionID, missingLocales[0], localizationsResp.Data)
+		return zero, shared.WithDiagnostic(shared.NewValidationError(screenshotVersionLocalizationLocaleError(cfg.VersionID, missingLocales[0], localizationsResp.Data)), shared.DiagnosticResourceNotFound, "--locale")
 	}
 	if len(missingLocales) > 0 {
 		sort.Strings(missingLocales)
-		return zero, fmt.Errorf("no matching App Store version localizations found for locales: %s", strings.Join(missingLocales, ", "))
+		return zero, shared.WithDiagnostic(shared.NewValidationError(fmt.Errorf("no matching App Store version localizations found for locales: %s", strings.Join(missingLocales, ", "))), shared.DiagnosticResourceNotFound, "--path")
 	}
 
 	result := asc.AppScreenshotFanoutUploadResult{
@@ -219,6 +219,7 @@ func uploadScreenshotsFanout(ctx context.Context, cfg screenshotUploadFanoutConf
 	for _, item := range localeAssets {
 		localizationID := localizationIDsByLocale[normalizeFanoutLocaleKey(item.Locale)]
 		uploadResult, err := cfg.ExecuteUpload(ctx, screenshotUploadConfig[asc.AppScreenshotUploadResult]{
+			Deps:           cfg.Deps,
 			Client:         cfg.Client,
 			LocalizationID: localizationID,
 			DisplayType:    cfg.DisplayType,
@@ -229,7 +230,7 @@ func uploadScreenshotsFanout(ctx context.Context, cfg screenshotUploadFanoutConf
 			DryRun:         cfg.DryRun,
 			MaxScreenshots: cfg.MaxScreenshots,
 			RequestContext: cfg.RequestContext,
-			UploadContext:  contextWithAssetUploadTimeout,
+			UploadContext:  assetUploadContext(cfg.Deps),
 			Access:         appStoreVersionScreenshotSetAccess,
 		}, "")
 		if err != nil {

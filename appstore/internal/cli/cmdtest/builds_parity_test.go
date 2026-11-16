@@ -1,10 +1,8 @@
 package cmdtest
 
 import (
-	"context"
 	"errors"
 	"flag"
-	"io"
 	"strings"
 	"testing"
 )
@@ -19,25 +17,7 @@ func runValidationTests(t *testing.T, tests []struct {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			root := RootCommand("1.2.3")
-			root.FlagSet.SetOutput(io.Discard)
-
-			stdout, stderr := captureOutput(t, func() {
-				if err := root.Parse(test.args); err != nil {
-					t.Fatalf("parse error: %v", err)
-				}
-				err := root.Run(context.Background())
-				if !errors.Is(err, flag.ErrHelp) {
-					t.Fatalf("expected ErrHelp, got %v", err)
-				}
-			})
-
-			if stdout != "" {
-				t.Fatalf("expected empty stdout, got %q", stdout)
-			}
-			if !strings.Contains(stderr, test.wantErr) {
-				t.Fatalf("expected error %q, got %q", test.wantErr, stderr)
-			}
+			assertUsageExit(t, test.args, test.wantErr)
 		})
 	}
 }
@@ -152,7 +132,11 @@ func TestBuildsParityValidationErrors(t *testing.T) {
 		},
 	}
 
-	runValidationTests(t, tests)
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			assertUsageExitWithDeps(t, nil, test.args, test.wantErr)
+		})
+	}
 }
 
 func TestBetaLocalizationsValidationErrors(t *testing.T) {
@@ -200,7 +184,11 @@ func TestBetaLocalizationsValidationErrors(t *testing.T) {
 		},
 	}
 
-	runValidationTests(t, tests)
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			assertUsageExitWithDeps(t, nil, test.args, test.wantErr)
+		})
+	}
 }
 
 func TestTestFlightRelationshipsValidationErrors(t *testing.T) {
@@ -258,22 +246,18 @@ func TestTestFlightRelationshipsValidationErrors(t *testing.T) {
 		},
 	}
 
-	runValidationTests(t, tests)
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			assertUsageExitWithDeps(t, nil, test.args, test.wantErr)
+		})
+	}
 }
 
 func TestTestFlightMetricsInvalidPeriodReturnsValidationError(t *testing.T) {
 	t.Setenv("ASC_APP_ID", "")
 
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
 	args := []string{"testflight", "testers", "metrics", "--tester-id", "TESTER_ID", "--app", "APP_ID", "--period", "P1D"}
-	var runErr error
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse(args); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		runErr = root.Run(context.Background())
-	})
+	stdout, stderr, runErr := runRootWithDeps(t, nil, args...)
 
 	const wantMessage = "--period must be one of: P7D, P30D, P90D, P365D"
 
@@ -326,7 +310,11 @@ func TestPreReleaseRelationshipsValidationErrors(t *testing.T) {
 		},
 	}
 
-	runValidationTests(t, tests)
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			assertUsageExitWithDeps(t, nil, test.args, test.wantErr)
+		})
+	}
 }
 
 func TestParityRelatedCommandsValidationErrors(t *testing.T) {
@@ -336,88 +324,113 @@ func TestParityRelatedCommandsValidationErrors(t *testing.T) {
 		name    string
 		args    []string
 		wantErr string
+		deps    bool // the command is built on shared.Deps: run it on test deps
 	}{
 		{
 			name:    "builds app view missing build id",
 			args:    []string{"builds", "app", "view"},
 			wantErr: "--build-id or --app is required",
+			deps:    true,
 		},
 		{
 			name:    "builds pre-release-version view missing build id",
 			args:    []string{"builds", "pre-release-version", "view"},
 			wantErr: "--build-id or --app is required",
+			deps:    true,
 		},
 		{
 			name:    "builds icons list missing build id",
 			args:    []string{"builds", "icons", "list"},
 			wantErr: "--build-id or --app is required",
+			deps:    true,
 		},
 		{
 			name:    "builds beta-app-review-submission view missing build id",
 			args:    []string{"builds", "beta-app-review-submission", "view"},
 			wantErr: "--build-id or --app is required",
+			deps:    true,
 		},
 		{
 			name:    "builds build-beta-detail view missing build id",
 			args:    []string{"builds", "build-beta-detail", "view"},
 			wantErr: "--build-id or --app is required",
+			deps:    true,
 		},
 		{
 			name:    "groups app view missing group-id",
 			args:    []string{"testflight", "groups", "app", "view"},
+			deps:    true,
 			wantErr: "--group-id is required",
 		},
 		{
 			name:    "groups recruitment view missing group-id",
 			args:    []string{"testflight", "groups", "recruitment", "view"},
+			deps:    true,
 			wantErr: "--group-id is required",
 		},
 		{
 			name:    "groups compatibility view missing group-id",
 			args:    []string{"testflight", "groups", "compatibility", "view"},
+			deps:    true,
 			wantErr: "--group-id is required",
 		},
 		{
 			name:    "testers apps list missing tester-id",
 			args:    []string{"testflight", "testers", "apps", "list"},
+			deps:    true,
 			wantErr: "--tester-id is required",
 		},
 		{
 			name:    "testers groups list missing tester-id",
 			args:    []string{"testflight", "testers", "groups", "list"},
+			deps:    true,
 			wantErr: "--tester-id is required",
 		},
 		{
 			name:    "testers builds list missing tester-id",
 			args:    []string{"testflight", "testers", "builds", "list"},
+			deps:    true,
 			wantErr: "--tester-id is required",
 		},
 		{
 			name:    "feedback crashes view missing id",
 			args:    []string{"testflight", "crashes", "view"},
+			deps:    true,
 			wantErr: "--submission-id is required",
 		},
 		{
 			name:    "feedback log view missing id",
-			args:    []string{"testflight", "crashes", "log", "view"},
+			args:    []string{"testflight", "crashes", "log"},
+			deps:    true,
 			wantErr: "exactly one of --submission-id or --crash-log-id is required",
 		},
 		{
 			name:    "app-localizations app view missing id",
 			args:    []string{"testflight", "app-localizations", "app", "view"},
+			deps:    true,
 			wantErr: "--id is required",
 		},
 		{
 			name:    "pre-release app view missing id",
 			args:    []string{"testflight", "pre-release", "app", "view"},
+			deps:    true,
 			wantErr: "--id is required",
 		},
 		{
 			name:    "pre-release builds list missing id",
 			args:    []string{"testflight", "pre-release", "builds", "list"},
+			deps:    true,
 			wantErr: "--id is required",
 		},
 	}
 
-	runValidationTests(t, tests)
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if test.deps {
+				assertUsageExitWithDeps(t, nil, test.args, test.wantErr)
+				return
+			}
+			assertUsageExit(t, test.args, test.wantErr)
+		})
+	}
 }

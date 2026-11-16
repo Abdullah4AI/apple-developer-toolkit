@@ -3,7 +3,6 @@ package xcodecloud
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
@@ -12,6 +11,7 @@ import (
 
 func runXcodeCloudPaginatedList(
 	ctx context.Context,
+	d *shared.Deps,
 	limit int,
 	next string,
 	paginate bool,
@@ -21,25 +21,18 @@ func runXcodeCloudPaginatedList(
 	fetchPage func(context.Context, *asc.Client, int, string) (asc.PaginatedResponse, error),
 	fetchNextPage func(context.Context, *asc.Client, string) (asc.PaginatedResponse, error),
 ) error {
-	if limit != 0 && (limit < 1 || limit > 200) {
-		return shared.UsageError(fmt.Sprintf("%s: --limit must be between 1 and 200", errorPrefix))
-	}
-
 	nextURL := strings.TrimSpace(next)
-	if err := shared.ValidateNextURL(nextURL); err != nil {
-		return shared.UsageError(fmt.Sprintf("%s: %s", errorPrefix, err.Error()))
-	}
 
-	client, err := shared.GetASCClient()
+	client, err := d.Client()
 	if err != nil {
 		return fmt.Errorf("%s: %w", errorPrefix, err)
 	}
 
-	requestCtx, cancel := contextWithXcodeCloudTimeout(ctx, 0)
+	requestCtx, cancel := contextWithXcodeCloudTimeout(d, ctx, 0)
 	defer cancel()
 
 	if paginate {
-		resp, err := shared.PaginateWithSpinner(
+		resp, err := d.PaginateWithSpinner(
 			requestCtx,
 			func(ctx context.Context) (asc.PaginatedResponse, error) {
 				return fetchPage(ctx, client, 200, nextURL)
@@ -51,7 +44,7 @@ func runXcodeCloudPaginatedList(
 		if err != nil {
 			return fmt.Errorf("%s: %w", errorPrefix, err)
 		}
-		return shared.PrintOutput(resp, output, pretty)
+		return d.PrintOutput(resp, output, pretty)
 	}
 
 	resp, err := fetchPage(requestCtx, client, limit, nextURL)
@@ -59,14 +52,29 @@ func runXcodeCloudPaginatedList(
 		return fmt.Errorf("%s: %w", errorPrefix, err)
 	}
 
-	return shared.PrintOutput(resp, output, pretty)
+	return d.PrintOutput(resp, output, pretty)
+}
+
+// requireXcodeCloudParent reports a missing parent flag unless --next is
+// given. parentHint, when non-empty, is appended to the error so callers learn
+// how to discover the parent ID.
+func requireXcodeCloudParent(d *shared.Deps, parentID, parentFlag, parentHint, next string) error {
+	if strings.TrimSpace(parentID) != "" || strings.TrimSpace(next) != "" {
+		return nil
+	}
+	if hint := strings.TrimSpace(parentHint); hint != "" {
+		fmt.Fprintf(d.IO.ErrOut, "Error: --%s is required. %s\n", parentFlag, hint)
+	} else {
+		fmt.Fprintf(d.IO.ErrOut, "Error: --%s is required\n", parentFlag)
+	}
+	return shared.MissingRequiredUsageError("--" + parentFlag)
 }
 
 // runXcodeCloudPaginatedParentList lists a paginated child collection scoped to
-// a parent resource. parentHint, when non-empty, is appended to the missing-flag
-// error so callers learn how to discover the parent ID.
+// a parent resource; see requireXcodeCloudParent for parentHint.
 func runXcodeCloudPaginatedParentList(
 	ctx context.Context,
+	d *shared.Deps,
 	parentID string,
 	parentFlag string,
 	parentHint string,
@@ -79,18 +87,14 @@ func runXcodeCloudPaginatedParentList(
 	fetchPage func(context.Context, *asc.Client, string, int, string) (asc.PaginatedResponse, error),
 	fetchNextPage func(context.Context, *asc.Client, string, string) (asc.PaginatedResponse, error),
 ) error {
-	resolvedParentID := strings.TrimSpace(parentID)
-	if resolvedParentID == "" && strings.TrimSpace(next) == "" {
-		if hint := strings.TrimSpace(parentHint); hint != "" {
-			fmt.Fprintf(os.Stderr, "Error: --%s is required. %s\n", parentFlag, hint)
-		} else {
-			fmt.Fprintf(os.Stderr, "Error: --%s is required\n", parentFlag)
-		}
-		return shared.MissingRequiredUsageError("--" + parentFlag)
+	if err := requireXcodeCloudParent(d, parentID, parentFlag, parentHint, next); err != nil {
+		return err
 	}
+	resolvedParentID := strings.TrimSpace(parentID)
 
 	return runXcodeCloudPaginatedList(
 		ctx,
+		d,
 		limit,
 		next,
 		paginate,

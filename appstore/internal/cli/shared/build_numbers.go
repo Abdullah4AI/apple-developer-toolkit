@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"math"
 	"os"
 	"strconv"
@@ -44,7 +45,17 @@ type NextBuildNumberOptions struct {
 // app/version/platform filters. When allowEmpty is true, nil is returned when
 // no matching build exists.
 func ResolveLatestBuild(ctx context.Context, client *asc.Client, opts LatestBuildSelectionOptions, allowEmpty bool) (*asc.BuildResponse, error) {
-	selection, err := resolveLatestBuildSelection(ctx, client, opts, allowEmpty)
+	return resolveLatestBuildTo(ctx, os.Stderr, ResolveAppID, client, opts, allowEmpty)
+}
+
+// ResolveLatestBuild is ResolveLatestBuild with its notes and "Error:" lines
+// written to d's stderr.
+func (d *Deps) ResolveLatestBuild(ctx context.Context, client *asc.Client, opts LatestBuildSelectionOptions, allowEmpty bool) (*asc.BuildResponse, error) {
+	return resolveLatestBuildTo(ctx, d.IO.ErrOut, d.ResolveAppID, client, opts, allowEmpty)
+}
+
+func resolveLatestBuildTo(ctx context.Context, stderr io.Writer, resolveApp func(string) string, client *asc.Client, opts LatestBuildSelectionOptions, allowEmpty bool) (*asc.BuildResponse, error) {
+	selection, err := resolveLatestBuildSelection(ctx, stderr, resolveApp, client, opts, allowEmpty)
 	if err != nil {
 		return nil, err
 	}
@@ -54,11 +65,21 @@ func ResolveLatestBuild(ctx context.Context, client *asc.Client, opts LatestBuil
 // NormalizeLatestBuildSelectionOptions validates and normalizes the common
 // version/platform filters shared by latest-build selection workflows.
 func NormalizeLatestBuildSelectionOptions(appID, version, platform, processingState string, excludeExpired bool) (LatestBuildSelectionOptions, error) {
-	if ResolveAppID(strings.TrimSpace(appID)) == "" {
-		return LatestBuildSelectionOptions{}, UsageError("--app is required (or set ASC_APP_ID)")
+	return normalizeLatestBuildSelectionOptionsTo(os.Stderr, ResolveAppID, appID, version, platform, processingState, excludeExpired)
+}
+
+// NormalizeLatestBuildSelectionOptions is NormalizeLatestBuildSelectionOptions
+// with the "Error:" line written to d's stderr.
+func (d *Deps) NormalizeLatestBuildSelectionOptions(appID, version, platform, processingState string, excludeExpired bool) (LatestBuildSelectionOptions, error) {
+	return normalizeLatestBuildSelectionOptionsTo(d.IO.ErrOut, d.ResolveAppID, appID, version, platform, processingState, excludeExpired)
+}
+
+func normalizeLatestBuildSelectionOptionsTo(stderr io.Writer, resolveApp func(string) string, appID, version, platform, processingState string, excludeExpired bool) (LatestBuildSelectionOptions, error) {
+	if resolveApp(strings.TrimSpace(appID)) == "" {
+		return LatestBuildSelectionOptions{}, usageErrorTo(stderr, "--app is required (or set ASC_APP_ID)")
 	}
 
-	processingStateValues, err := NormalizeBuildProcessingStateFilter(processingState, BuildProcessingStateFilterOptions{})
+	processingStateValues, err := normalizeBuildProcessingStateFilterTo(stderr, processingState, BuildProcessingStateFilterOptions{})
 	if err != nil {
 		return LatestBuildSelectionOptions{}, err
 	}
@@ -67,7 +88,7 @@ func NormalizeLatestBuildSelectionOptions(appID, version, platform, processingSt
 	if normalizedPlatform != "" {
 		normalizedPlatform, err = NormalizeAppStoreVersionPlatform(normalizedPlatform)
 		if err != nil {
-			return LatestBuildSelectionOptions{}, UsageError(err.Error())
+			return LatestBuildSelectionOptions{}, usageErrorTo(stderr, err.Error())
 		}
 	}
 
@@ -83,8 +104,18 @@ func NormalizeLatestBuildSelectionOptions(appID, version, platform, processingSt
 // ResolveNextBuildNumber compares the highest observed processed build and
 // in-flight build upload numbers, then returns the next safe build number.
 func ResolveNextBuildNumber(ctx context.Context, client *asc.Client, opts NextBuildNumberOptions) (*asc.BuildsNextBuildNumberResult, error) {
+	return resolveNextBuildNumberTo(ctx, os.Stderr, ResolveAppID, client, opts)
+}
+
+// ResolveNextBuildNumber is ResolveNextBuildNumber with its notes, warnings
+// and "Error:" lines written to d's stderr.
+func (d *Deps) ResolveNextBuildNumber(ctx context.Context, client *asc.Client, opts NextBuildNumberOptions) (*asc.BuildsNextBuildNumberResult, error) {
+	return resolveNextBuildNumberTo(ctx, d.IO.ErrOut, d.ResolveAppID, client, opts)
+}
+
+func resolveNextBuildNumberTo(ctx context.Context, stderr io.Writer, resolveApp func(string) string, client *asc.Client, opts NextBuildNumberOptions) (*asc.BuildsNextBuildNumberResult, error) {
 	if opts.InitialBuildNumber < 1 {
-		return nil, UsageError("--initial-build-number must be >= 1")
+		return nil, usageErrorTo(stderr, "--initial-build-number must be >= 1")
 	}
 
 	// Resolving the next build number walks the full processed build history
@@ -93,7 +124,7 @@ func ResolveNextBuildNumber(ctx context.Context, client *asc.Client, opts NextBu
 	// request deadline and give every outbound request its own fresh one.
 	scanCtx := contextWithoutCurrentTimeout(ctx)
 
-	selection, err := resolveLatestBuildSelection(scanCtx, client, opts.LatestBuildSelectionOptions, true)
+	selection, err := resolveLatestBuildSelection(scanCtx, stderr, resolveApp, client, opts.LatestBuildSelectionOptions, true)
 	if err != nil {
 		return nil, err
 	}
@@ -103,7 +134,7 @@ func ResolveNextBuildNumber(ctx context.Context, client *asc.Client, opts NextBu
 	var latestObservedNumber *string
 	sourcesConsidered := make([]string, 0, 2)
 
-	skipped := &skippedBuildNumberReporter{}
+	skipped := &skippedBuildNumberReporter{stderr: stderr}
 
 	var latestProcessedValue buildNumber
 	hasLatestProcessed := false
@@ -189,14 +220,14 @@ func ResolveNextBuildNumber(ctx context.Context, client *asc.Client, opts NextBu
 	}, nil
 }
 
-func resolveLatestBuildSelection(ctx context.Context, client *asc.Client, opts LatestBuildSelectionOptions, allowEmpty bool) (*latestBuildSelectionResult, error) {
+func resolveLatestBuildSelection(ctx context.Context, stderr io.Writer, resolveApp func(string) string, client *asc.Client, opts LatestBuildSelectionOptions, allowEmpty bool) (*latestBuildSelectionResult, error) {
 	if client == nil {
 		return nil, fmt.Errorf("build client is required")
 	}
 
-	resolvedAppID := ResolveAppID(opts.AppID)
+	resolvedAppID := resolveApp(opts.AppID)
 	if resolvedAppID == "" {
-		return nil, UsageError("--app is required (or set ASC_APP_ID)")
+		return nil, usageErrorTo(stderr, "--app is required (or set ASC_APP_ID)")
 	}
 
 	lookupCtx, lookupCancel := contextWithTimeout(ctx)
@@ -211,12 +242,12 @@ func resolveLatestBuildSelection(ctx context.Context, client *asc.Client, opts L
 
 	var preReleaseVersionIDs []string
 	if hasPreReleaseFilters {
-		preReleaseVersionIDs, err = FindPreReleaseVersionIDs(ctx, client, resolvedAppID, opts.Version, opts.Platform)
+		preReleaseVersionIDs, err = findPreReleaseVersionIDs(ctx, stderr, client, resolvedAppID, opts.Version, opts.Platform, 0)
 		if err != nil {
 			return nil, err
 		}
 		if len(preReleaseVersionIDs) == 0 && !allowEmpty {
-			return nil, noPreReleaseVersionFound(opts.Version, opts.Platform)
+			return nil, noPreReleaseVersionFound(resolvedAppID, opts.Version, opts.Platform)
 		}
 	}
 
@@ -224,7 +255,7 @@ func resolveLatestBuildSelection(ctx context.Context, client *asc.Client, opts L
 	if !hasPreReleaseFilters {
 		buildOpts := []asc.BuildsOption{
 			asc.WithBuildsSort("-uploadedDate"),
-			asc.WithBuildsLimit(200),
+			asc.Limit[asc.BuildsOption](200),
 		}
 		if len(opts.ProcessingStateValues) > 0 {
 			buildOpts = append(buildOpts, asc.WithBuildsProcessingStates(opts.ProcessingStateValues))
@@ -246,7 +277,7 @@ func resolveLatestBuildSelection(ctx context.Context, client *asc.Client, opts L
 	} else if len(preReleaseVersionIDs) == 1 {
 		buildOpts := []asc.BuildsOption{
 			asc.WithBuildsSort("-uploadedDate"),
-			asc.WithBuildsLimit(1),
+			asc.Limit[asc.BuildsOption](1),
 			asc.WithBuildsPreReleaseVersion(preReleaseVersionIDs[0]),
 		}
 		if len(opts.ProcessingStateValues) > 0 {
@@ -280,7 +311,7 @@ func resolveLatestBuildSelection(ctx context.Context, client *asc.Client, opts L
 		for _, prvID := range preReleaseVersionIDs {
 			buildOpts := []asc.BuildsOption{
 				asc.WithBuildsSort("-uploadedDate"),
-				asc.WithBuildsLimit(1),
+				asc.Limit[asc.BuildsOption](1),
 				asc.WithBuildsPreReleaseVersion(prvID),
 			}
 			if len(opts.ProcessingStateValues) > 0 {
@@ -331,17 +362,18 @@ func resolveLatestBuildSelection(ctx context.Context, client *asc.Client, opts L
 // noPreReleaseVersionFound reports that no pre-release version matched the
 // caller's version/platform filters. The error carries asc.ErrNotFound so the
 // CLI exits with the not-found code instead of a generic failure.
-func noPreReleaseVersionFound(version, platform string) error {
+func noPreReleaseVersionFound(appID, version, platform string) error {
 	version = strings.TrimSpace(version)
 	platform = strings.TrimSpace(platform)
+	waitHint := BuildsWaitHint(appID, version, "", platform)
 	var message string
 	switch {
 	case version != "" && platform != "":
-		message = fmt.Sprintf("no pre-release version found for version %q on platform %s; check --version and --platform", version, platform)
+		message = fmt.Sprintf("no pre-release version found for version %q on platform %s; check --version and --platform; %s", version, platform, waitHint)
 	case version != "":
-		message = fmt.Sprintf("no pre-release version found for version %q; check --version", version)
+		message = fmt.Sprintf("no pre-release version found for version %q; check --version; %s", version, waitHint)
 	default:
-		message = fmt.Sprintf("no pre-release version found for platform %s; check --platform", platform)
+		message = fmt.Sprintf("no pre-release version found for platform %s; check --platform; %s", platform, waitHint)
 	}
 	return NewErrorWithCause(errors.New(message), asc.ErrNotFound)
 }
@@ -350,21 +382,63 @@ func noPreReleaseVersionFound(version, platform string) error {
 // filters. The error carries asc.ErrNotFound so the CLI exits with the
 // not-found code instead of a generic failure.
 func noLatestBuildFound(appID string, opts LatestBuildSelectionOptions) error {
+	waitHint := BuildsWaitHint(appID, opts.Version, "", opts.Platform)
 	filters := describeLatestBuildSelectionFilters(opts)
 	if len(filters) == 0 {
 		return NewErrorWithCause(
-			fmt.Errorf("no builds found for app %s; a new upload may still be processing, or check --app", appID),
+			fmt.Errorf("no builds found for app %s; check --app; %s", appID, waitHint),
 			asc.ErrNotFound,
 		)
 	}
 	return NewErrorWithCause(
 		fmt.Errorf(
-			"no builds found for app %s matching %s; adjust the filters, or use --build-id",
+			"no builds found for app %s matching %s; adjust the filters, or use --build-id; %s",
 			appID,
 			strings.Join(filters, " and "),
+			waitHint,
 		),
 		asc.ErrNotFound,
 	)
+}
+
+// BuildsWaitHint names the builds wait command with the caller's
+// selectors, for a build that was just uploaded and is not visible yet. An
+// empty buildNumber selects the latest build.
+func BuildsWaitHint(appID, version, buildNumber, platform string) string {
+	waitArgs := []string{"builds", "wait", "--app", appID}
+	if buildNumber = strings.TrimSpace(buildNumber); buildNumber != "" {
+		waitArgs = append(waitArgs, "--build-number", buildNumber)
+	} else {
+		waitArgs = append(waitArgs, "--latest")
+	}
+	if version = strings.TrimSpace(version); version != "" {
+		waitArgs = append(waitArgs, "--version", version)
+	}
+	if platform = strings.TrimSpace(platform); platform != "" {
+		waitArgs = append(waitArgs, "--platform", platform)
+	}
+
+	waitCommand, ok := renderASCCommand(waitArgs)
+	if !ok {
+		return "a just-uploaded build may still be processing; wait for it with `asc builds wait`"
+	}
+	return fmt.Sprintf("a just-uploaded build may still be processing; wait for it with `%s`", waitCommand)
+}
+
+func renderASCCommand(args []string) (string, bool) {
+	parts, ok := RootFlagsForReinvocation()
+	if !ok {
+		return "", false
+	}
+	parts = append([]string{"asc"}, parts...)
+	for _, arg := range args {
+		quoted, quotable := ShellQuote(arg)
+		if !quotable {
+			return "", false
+		}
+		parts = append(parts, quoted)
+	}
+	return strings.Join(parts, " "), true
 }
 
 func describeLatestBuildSelectionFilters(opts LatestBuildSelectionOptions) []string {
@@ -397,7 +471,7 @@ func findHighestProcessedBuildNumber(
 
 	buildOpts := []asc.BuildsOption{
 		asc.WithBuildsSort("-uploadedDate"),
-		asc.WithBuildsLimit(200),
+		asc.Limit[asc.BuildsOption](200),
 	}
 	if len(selection.PreReleaseVersionIDs) > 0 {
 		buildOpts = append(buildOpts, asc.WithBuildsPreReleaseVersions(selection.PreReleaseVersionIDs))
@@ -441,7 +515,7 @@ func findHighestProcessedBuildNumber(
 	err = asc.PaginateEach(ctx, builds, func(ctx context.Context, nextURL string) (asc.PaginatedResponse, error) {
 		requestCtx, cancel := contextWithTimeout(ctx)
 		defer cancel()
-		return client.GetBuilds(requestCtx, selection.ResolvedAppID, asc.WithBuildsNextURL(nextURL))
+		return client.GetBuilds(requestCtx, selection.ResolvedAppID, asc.NextURL[asc.BuildsOption](nextURL))
 	}, func(page asc.PaginatedResponse) error {
 		resp, ok := page.(*asc.BuildsResponse)
 		if !ok {
@@ -462,7 +536,13 @@ func findHighestProcessedBuildNumber(
 // "1.2" and "1.2.0" as the same version, so when the requested format matches
 // nothing the equivalent format is tried before reporting no match.
 func FindPreReleaseVersionIDs(ctx context.Context, client *asc.Client, appID, version, platform string) ([]string, error) {
-	return findPreReleaseVersionIDs(ctx, client, appID, version, platform, 0)
+	return findPreReleaseVersionIDs(ctx, os.Stderr, client, appID, version, platform, 0)
+}
+
+// FindPreReleaseVersionIDs is FindPreReleaseVersionIDs with the
+// equivalent-version note written to d's stderr.
+func (d *Deps) FindPreReleaseVersionIDs(ctx context.Context, client *asc.Client, appID, version, platform string) ([]string, error) {
+	return findPreReleaseVersionIDs(ctx, d.IO.ErrOut, client, appID, version, platform, 0)
 }
 
 // FindPreReleaseVersionIDsWithMaxPages is the bounded variant used by
@@ -470,13 +550,23 @@ func FindPreReleaseVersionIDs(ctx context.Context, client *asc.Client, appID, ve
 // budget. The unbounded FindPreReleaseVersionIDs function remains available
 // for callers whose existing pagination semantics must not change.
 func FindPreReleaseVersionIDsWithMaxPages(ctx context.Context, client *asc.Client, appID, version, platform string, maxPages int) ([]string, error) {
+	return findPreReleaseVersionIDsWithMaxPagesTo(ctx, os.Stderr, client, appID, version, platform, maxPages)
+}
+
+// FindPreReleaseVersionIDsWithMaxPages is FindPreReleaseVersionIDsWithMaxPages
+// with the equivalent-version note written to d's stderr.
+func (d *Deps) FindPreReleaseVersionIDsWithMaxPages(ctx context.Context, client *asc.Client, appID, version, platform string, maxPages int) ([]string, error) {
+	return findPreReleaseVersionIDsWithMaxPagesTo(ctx, d.IO.ErrOut, client, appID, version, platform, maxPages)
+}
+
+func findPreReleaseVersionIDsWithMaxPagesTo(ctx context.Context, stderr io.Writer, client *asc.Client, appID, version, platform string, maxPages int) ([]string, error) {
 	if maxPages <= 0 {
 		return nil, fmt.Errorf("max pages must be greater than zero")
 	}
-	return findPreReleaseVersionIDs(ctx, client, appID, version, platform, maxPages)
+	return findPreReleaseVersionIDs(ctx, stderr, client, appID, version, platform, maxPages)
 }
 
-func findPreReleaseVersionIDs(ctx context.Context, client *asc.Client, appID, version, platform string, maxPages int) ([]string, error) {
+func findPreReleaseVersionIDs(ctx context.Context, stderr io.Writer, client *asc.Client, appID, version, platform string, maxPages int) ([]string, error) {
 	requestedVersion := strings.TrimSpace(version)
 
 	variants := versionQueryVariants(requestedVersion)
@@ -499,7 +589,7 @@ func findPreReleaseVersionIDs(ctx context.Context, client *asc.Client, appID, ve
 					continue
 				}
 				if _, ok := matchedVersions[variant]; ok {
-					noteEquivalentVersionMatch(requestedVersion, variant)
+					noteEquivalentVersionMatch(stderr, requestedVersion, variant)
 					break
 				}
 			}
@@ -518,7 +608,7 @@ func findPreReleaseVersionIDs(ctx context.Context, client *asc.Client, appID, ve
 		if len(ids) == 0 {
 			continue
 		}
-		noteEquivalentVersionMatch(requestedVersion, variant)
+		noteEquivalentVersionMatch(stderr, requestedVersion, variant)
 		return ids, nil
 	}
 
@@ -537,9 +627,9 @@ func findPreReleaseVersionIDsForVersions(ctx context.Context, client *asc.Client
 
 	if versionFilter != "" {
 		opts = append(opts, asc.WithPreReleaseVersionsVersion(versionFilter))
-		opts = append(opts, asc.WithPreReleaseVersionsLimit(200))
+		opts = append(opts, asc.Limit[asc.PreReleaseVersionsOption](200))
 	} else {
-		opts = append(opts, asc.WithPreReleaseVersionsLimit(200))
+		opts = append(opts, asc.Limit[asc.PreReleaseVersionsOption](200))
 	}
 
 	if platform != "" {
@@ -591,7 +681,7 @@ func findPreReleaseVersionIDsForVersions(ctx context.Context, client *asc.Client
 	fetchNext := func(ctx context.Context, nextURL string) (asc.PaginatedResponse, error) {
 		requestCtx, cancel := contextWithTimeout(ctx)
 		defer cancel()
-		return client.GetPreReleaseVersions(requestCtx, appID, asc.WithPreReleaseVersionsNextURL(nextURL))
+		return client.GetPreReleaseVersions(requestCtx, appID, asc.NextURL[asc.PreReleaseVersionsOption](nextURL))
 	}
 	consumePage := func(page asc.PaginatedResponse) error {
 		resp, ok := page.(*asc.PreReleaseVersionsResponse)
@@ -618,9 +708,9 @@ func findPreReleaseVersionIDsForVersions(ctx context.Context, client *asc.Client
 // "1.2" and "1.2.0" as the same version but only exposes the format that was
 // uploaded first through filter[version], so a lookup that finds nothing under
 // the requested format has to retry the equivalent one before concluding the
-// version does not exist. Only the trailing ".0" equivalence is inferred;
-// other spellings, including leading-zero variants, are preserved. Versions
-// that are not purely numeric are returned unchanged.
+// version does not exist. A zero-padded request is also tried without leading
+// zeros, because padded uploads have been observed to be queryable only in the
+// unpadded form. Versions that are not purely numeric are returned unchanged.
 func versionQueryVariants(version string) []string {
 	trimmed := strings.TrimSpace(version)
 	if trimmed == "" {
@@ -641,7 +731,8 @@ func versionQueryVariants(version string) []string {
 	}
 
 	segments := strings.Split(trimmed, ".")
-	for _, segment := range segments {
+	stripped := make([]string, len(segments))
+	for i, segment := range segments {
 		if segment == "" {
 			return variants
 		}
@@ -650,14 +741,24 @@ func versionQueryVariants(version string) []string {
 				return variants
 			}
 		}
+		stripped[i] = strings.TrimLeft(segment, "0")
+		if stripped[i] == "" {
+			stripped[i] = "0"
+		}
 	}
 
-	switch {
-	case len(segments) == 2:
-		appendVariant(trimmed + ".0")
-	case len(segments) == 3 && segments[2] == "0":
-		appendVariant(strings.Join(segments[:2], "."))
+	appendTrailingZeroVariant := func(segments []string) {
+		switch {
+		case len(segments) == 2:
+			appendVariant(strings.Join(segments, ".") + ".0")
+		case len(segments) == 3 && segments[2] == "0":
+			appendVariant(strings.Join(segments[:2], "."))
+		}
 	}
+
+	appendTrailingZeroVariant(segments)
+	appendVariant(strings.Join(stripped, "."))
+	appendTrailingZeroVariant(stripped)
 
 	return variants
 }
@@ -671,7 +772,7 @@ var (
 // equivalent version format instead of the exact string the caller asked for.
 // Build waits repeat these lookups on every poll, so each requested/matched
 // pair is reported only once.
-func noteEquivalentVersionMatch(requested, matched string) {
+func noteEquivalentVersionMatch(stderr io.Writer, requested, matched string) {
 	if requested == "" || matched == "" || requested == matched {
 		return
 	}
@@ -687,7 +788,7 @@ func noteEquivalentVersionMatch(requested, matched string) {
 		return
 	}
 
-	fmt.Fprintf(os.Stderr, "note: matched version %q for requested %q\n", matched, requested)
+	fmt.Fprintf(stderr, "note: matched version %q for requested %q\n", matched, requested)
 }
 
 func findMostRecentlyUploadedBuild(ctx context.Context, client *asc.Client, appID string, opts ...asc.BuildsOption) (*asc.BuildResponse, error) {
@@ -735,7 +836,7 @@ func findMostRecentlyUploadedBuild(ctx context.Context, client *asc.Client, appI
 		seenProbeURLs[nextURL] = struct{}{}
 
 		nextPageCtx, nextPageCancel := contextWithTimeout(ctx)
-		nextPage, err := client.GetBuilds(nextPageCtx, appID, asc.WithBuildsNextURL(nextURL))
+		nextPage, err := client.GetBuilds(nextPageCtx, appID, asc.NextURL[asc.BuildsOption](nextURL))
 		nextPageCancel()
 		if err != nil {
 			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
@@ -840,7 +941,7 @@ func ParseBuildTimestamp(value string) (time.Time, error) {
 func findLatestBuildUploadNumber(ctx context.Context, client *asc.Client, appID string, versions []string, platform string) (buildNumber, *string, bool, error) {
 	opts := []asc.BuildUploadsOption{
 		asc.WithBuildUploadsStates([]string{"AWAITING_UPLOAD", "PROCESSING", "COMPLETE"}),
-		asc.WithBuildUploadsLimit(200),
+		asc.Limit[asc.BuildUploadsOption](200),
 	}
 	if len(versions) > 0 {
 		opts = append(opts, asc.WithBuildUploadsCFBundleShortVersionStrings(versions))
@@ -882,7 +983,7 @@ func findLatestBuildUploadNumber(ctx context.Context, client *asc.Client, appID 
 	err = asc.PaginateEach(ctx, uploads, func(ctx context.Context, nextURL string) (asc.PaginatedResponse, error) {
 		requestCtx, cancel := contextWithTimeout(ctx)
 		defer cancel()
-		return client.GetBuildUploads(requestCtx, appID, asc.WithBuildUploadsNextURL(nextURL))
+		return client.GetBuildUploads(requestCtx, appID, asc.NextURL[asc.BuildUploadsOption](nextURL))
 	}, func(page asc.PaginatedResponse) error {
 		resp, ok := page.(*asc.BuildUploadsResponse)
 		if !ok {
@@ -915,6 +1016,7 @@ func buildUploadHistoryError(appID, operation string, err error) error {
 // CFBundleVersion anywhere in an app's history never aborts build number
 // resolution.
 type skippedBuildNumberReporter struct {
+	stderr io.Writer
 	warned map[string]struct{}
 }
 
@@ -930,7 +1032,7 @@ func (r *skippedBuildNumberReporter) warn(buildID, rawBuildNumber string) {
 	}
 	r.warned[buildID] = struct{}{}
 	fmt.Fprintf(
-		os.Stderr,
+		r.stderr,
 		"Warning: skipping processed build %s: build number %q is not a positive integer\n",
 		buildID,
 		rawBuildNumber,

@@ -28,7 +28,18 @@ func RunReconciledMutation[T any](
 	mutate func(context.Context) (T, error),
 	readback func(context.Context) (T, bool, error),
 ) (T, ReconciledMutationStatus, error) {
-	return runReconciledMutation(ctx, mutate, readback, true)
+	return runReconciledMutation(ctx, ContextWithTimeout, time.After, mutate, readback, true)
+}
+
+// RunReconciledMutationWith is RunReconciledMutation with each mutation's
+// deadline from d.Timeout and the backoff on d.After.
+func RunReconciledMutationWith[T any](
+	ctx context.Context,
+	d *Deps,
+	mutate func(context.Context) (T, error),
+	readback func(context.Context) (T, bool, error),
+) (T, ReconciledMutationStatus, error) {
+	return runReconciledMutation(ctx, d.Timeout, d.After, mutate, readback, true)
 }
 
 // RunReconciledMutationNoReplay executes an ambiguous mutation once and uses
@@ -41,11 +52,24 @@ func RunReconciledMutationNoReplay[T any](
 	mutate func(context.Context) (T, error),
 	readback func(context.Context) (T, bool, error),
 ) (T, ReconciledMutationStatus, error) {
-	return runReconciledMutation(ctx, mutate, readback, false)
+	return runReconciledMutation(ctx, ContextWithTimeout, time.After, mutate, readback, false)
+}
+
+// RunReconciledMutationNoReplayWith is RunReconciledMutationNoReplay with the
+// mutation's deadline from d.Timeout and the backoff on d.After.
+func RunReconciledMutationNoReplayWith[T any](
+	ctx context.Context,
+	d *Deps,
+	mutate func(context.Context) (T, error),
+	readback func(context.Context) (T, bool, error),
+) (T, ReconciledMutationStatus, error) {
+	return runReconciledMutation(ctx, d.Timeout, d.After, mutate, readback, false)
 }
 
 func runReconciledMutation[T any](
 	ctx context.Context,
+	timeout func(context.Context) (context.Context, context.CancelFunc),
+	after func(time.Duration) <-chan time.Time,
 	mutate func(context.Context) (T, error),
 	readback func(context.Context) (T, bool, error),
 	replay bool,
@@ -57,7 +81,7 @@ func runReconciledMutation[T any](
 
 	retryOpts := asc.ResolveRetryOptions()
 	for retry := 0; ; retry++ {
-		value, mutationErr := runMutationWithFreshTimeout(ctx, mutate)
+		value, mutationErr := runMutationWithFreshTimeout(ctx, timeout, mutate)
 		if mutationErr == nil {
 			return value, ReconciledMutationApplied, nil
 		}
@@ -79,7 +103,7 @@ func runReconciledMutation[T any](
 			if retry >= retryOpts.MaxRetries {
 				return zero, "", mutationErr
 			}
-			if err := sleepForMutationRetry(ctx, mutationReadbackDelay(retryOpts, retry, mutationErr)); err != nil {
+			if err := sleepForMutationRetry(ctx, after, mutationReadbackDelay(retryOpts, retry, mutationErr)); err != nil {
 				return zero, "", err
 			}
 
@@ -96,7 +120,7 @@ func runReconciledMutation[T any](
 			return zero, "", mutationErr
 		}
 
-		if err := sleepForMutationRetry(ctx, mutationRetryDelay(retryOpts, retry, mutationErr)); err != nil {
+		if err := sleepForMutationRetry(ctx, after, mutationRetryDelay(retryOpts, retry, mutationErr)); err != nil {
 			return zero, "", err
 		}
 
@@ -122,8 +146,8 @@ func isRateLimitRejection(err error) bool {
 	return errors.As(err, &statusErr) && statusErr.HTTPStatusCode() == http.StatusTooManyRequests
 }
 
-func runMutationWithFreshTimeout[T any](ctx context.Context, mutate func(context.Context) (T, error)) (T, error) {
-	requestCtx, cancel := ContextWithTimeout(ctx)
+func runMutationWithFreshTimeout[T any](ctx context.Context, timeout func(context.Context) (context.Context, context.CancelFunc), mutate func(context.Context) (T, error)) (T, error) {
+	requestCtx, cancel := timeout(ctx)
 	defer cancel()
 	return mutate(requestCtx)
 }
@@ -169,16 +193,14 @@ func mutationReadbackDelay(opts asc.RetryOptions, retry int, err error) time.Dur
 	return delay
 }
 
-func sleepForMutationRetry(ctx context.Context, delay time.Duration) error {
+func sleepForMutationRetry(ctx context.Context, after func(time.Duration) <-chan time.Time, delay time.Duration) error {
 	if delay <= 0 {
 		return nil
 	}
-	timer := time.NewTimer(delay)
-	defer timer.Stop()
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
-	case <-timer.C:
+	case <-after(delay):
 		return nil
 	}
 }

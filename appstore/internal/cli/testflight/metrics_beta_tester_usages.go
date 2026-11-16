@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"os"
 	"slices"
 	"strings"
 
@@ -24,9 +23,9 @@ const (
 	betaTesterResolveMaxIDs = 500
 )
 
-func TestFlightMetricsAppTestersCommand() *ffcli.Command {
+func newTestFlightMetricsAppTestersCommand(d *shared.Deps) *ffcli.Command {
 	cmd := rewriteCommandTree(
-		TestFlightMetricsBetaTesterUsagesCommand(),
+		newTestFlightMetricsBetaTesterUsagesCommand(d),
 		"asc testflight metrics beta-tester-usages",
 		"asc testflight metrics app-testers",
 		map[string]string{
@@ -51,13 +50,13 @@ Examples:
 		groupByFlag.Usage = "Group results by dimension (testers)"
 		groupByFlag.DefValue = "testers"
 	}
-	cmd.UsageFunc = shared.DefaultUsageFunc
+	cmd.UsageFunc = d.DefaultUsageFunc
 	return cmd
 }
 
-func TestFlightMetricsGroupTestersCommand() *ffcli.Command {
+func newTestFlightMetricsGroupTestersCommand(d *shared.Deps) *ffcli.Command {
 	cmd := rewriteCommandTree(
-		TestFlightMetricsTestersCommand(),
+		newTestFlightMetricsTestersCommand(d),
 		"asc testflight metrics testers",
 		"asc testflight metrics group-testers",
 		map[string]string{
@@ -69,23 +68,23 @@ func TestFlightMetricsGroupTestersCommand() *ffcli.Command {
 			{old: "metrics testers", new: "metrics group-testers"},
 		},
 	)
-	cmd.UsageFunc = shared.DefaultUsageFunc
+	cmd.UsageFunc = d.DefaultUsageFunc
 	return cmd
 }
 
-// TestFlightMetricsBetaTesterUsagesCommand fetches app-level beta tester usage metrics.
-func TestFlightMetricsBetaTesterUsagesCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("metrics beta-tester-usages", flag.ExitOnError)
+// newTestFlightMetricsBetaTesterUsagesCommand fetches app-level beta tester usage metrics.
+func newTestFlightMetricsBetaTesterUsagesCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("metrics beta-tester-usages", flag.ExitOnError)
 
 	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
 	period := fs.String("period", "", "Reporting period: "+strings.Join(betaTesterUsagePeriodList(), ", "))
 	groupBy := fs.String("group-by", "testers", "Group results by dimension (testers)")
 	filterTester := shared.BindResourceIDFlag(fs, "filter-tester", "betaTesters", "Filter by beta tester ID")
 	resolveTesters := fs.Bool("resolve-testers", false, "Resolve tester IDs to email and name (extra API calls)")
-	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
-	next := fs.String("next", "", "Fetch next page using a links.next URL")
-	paginate := fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")
-	output := shared.BindOutputFlags(fs)
+	limit := fs.Int("limit", 0, shared.LimitFlagUsage(200))
+	next := fs.String("next", "", shared.NextFlagUsage)
+	paginate := fs.Bool("paginate", false, shared.PaginateFlagUsage)
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "beta-tester-usages",
@@ -101,50 +100,43 @@ Examples:
   asc testflight metrics beta-tester-usages --app "APP_ID" --filter-tester "TESTER_ID"
   asc testflight metrics beta-tester-usages --app "APP_ID" --resolve-testers`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
-			if *limit != 0 && (*limit < 1 || *limit > 200) {
-				fmt.Fprintln(os.Stderr, "Error: --limit must be between 1 and 200")
-				return shared.WithDiagnostic(flag.ErrHelp, shared.DiagnosticInvalidInput, "--limit")
-			}
-			if err := shared.ValidateNextURL(*next); err != nil {
-				return shared.UsageErrorfCtx(ctx, "testflight metrics beta-tester-usages: %v", err)
-			}
-			if err := shared.RejectNextFlagConflicts(fs, *next, "testflight metrics app-testers", "period", "group-by", "filter-tester"); err != nil {
+			if err := d.ValidatePaginationFlags(ctx, fs, "testflight metrics app-testers", 200, "period", "group-by", "filter-tester"); err != nil {
 				return err
+			}
+
+			resolvedAppID := d.ResolveAppID(*appID)
+			nextValue := strings.TrimSpace(*next)
+			if nextValue == "" && resolvedAppID == "" {
+				fmt.Fprintf(d.IO.ErrOut, "Error: --app is required (or set ASC_APP_ID)\n\n")
+				return shared.MissingRequiredUsageError("--app")
 			}
 
 			periodValue, err := normalizeBetaTesterUsagePeriod(*period)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error: %s\n", err.Error())
+				fmt.Fprintf(d.IO.ErrOut, "Error: %s\n", err.Error())
 				return shared.WithDiagnostic(flag.ErrHelp, shared.DiagnosticInvalidInput, "--period")
 			}
 
-			resolvedAppID := shared.ResolveAppID(*appID)
-			nextValue := strings.TrimSpace(*next)
-			if nextValue == "" && resolvedAppID == "" {
-				fmt.Fprintf(os.Stderr, "Error: --app is required (or set ASC_APP_ID)\n\n")
-				return shared.MissingRequiredUsageError("--app")
-			}
-
-			client, err := shared.GetASCClient()
+			client, err := d.Client()
 			if err != nil {
 				return fmt.Errorf("testflight metrics beta-tester-usages: %w", err)
 			}
 
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
+			requestCtx, cancel := d.Timeout(ctx)
 			defer cancel()
 
 			opts := []asc.BetaTesterUsagesOption{
-				asc.WithBetaTesterUsagesLimit(*limit),
-				asc.WithBetaTesterUsagesNextURL(*next),
+				asc.Limit[asc.BetaTesterUsagesOption](*limit),
+				asc.NextURL[asc.BetaTesterUsagesOption](*next),
 				asc.WithBetaTesterUsagesPeriod(periodValue),
 				asc.WithBetaTesterUsagesGroupBy(normalizeBetaTesterUsageGroupBy(*groupBy)),
 				asc.WithBetaTesterUsagesFilterBetaTesters(*filterTester),
 			}
 
 			if *paginate {
-				paginateOpts := append(opts, asc.WithBetaTesterUsagesLimit(200))
+				paginateOpts := append(opts, asc.Limit[asc.BetaTesterUsagesOption](200))
 				firstPage, err := client.GetAppBetaTesterUsagesMetrics(requestCtx, resolvedAppID, paginateOpts...)
 				if err != nil {
 					return fmt.Errorf("testflight metrics beta-tester-usages: failed to fetch: %w", err)
@@ -156,12 +148,12 @@ Examples:
 				}
 
 				if *resolveTesters {
-					if err := resolveBetaTesterUsageTesters(ctx, client, combined); err != nil {
+					if err := resolveBetaTesterUsageTesters(ctx, d, client, combined); err != nil {
 						return fmt.Errorf("testflight metrics beta-tester-usages: %w", err)
 					}
 				}
 
-				return shared.PrintOutput(combined, *output.Output, *output.Pretty)
+				return d.PrintOutput(combined, *output.Output, *output.Pretty)
 			}
 
 			resp, err := client.GetAppBetaTesterUsagesMetrics(requestCtx, resolvedAppID, opts...)
@@ -174,13 +166,13 @@ Examples:
 				if err != nil {
 					return fmt.Errorf("testflight metrics beta-tester-usages: %w", err)
 				}
-				if err := resolveBetaTesterUsageTesters(ctx, client, page); err != nil {
+				if err := resolveBetaTesterUsageTesters(ctx, d, client, page); err != nil {
 					return fmt.Errorf("testflight metrics beta-tester-usages: %w", err)
 				}
-				return shared.PrintOutput(page, *output.Output, *output.Pretty)
+				return d.PrintOutput(page, *output.Output, *output.Pretty)
 			}
 
-			return printAppTesterUsages(resp, *output.Output, *output.Pretty)
+			return printAppTesterUsages(d, resp, *output.Output, *output.Pretty)
 		},
 	}
 }
@@ -233,7 +225,7 @@ func paginateBetaTesterUsages(ctx context.Context, client *asc.Client, appID str
 		seenNext[next] = struct{}{}
 		pageNumber++
 
-		nextPage, err := client.GetAppBetaTesterUsagesMetrics(ctx, appID, asc.WithBetaTesterUsagesNextURL(next))
+		nextPage, err := client.GetAppBetaTesterUsagesMetrics(ctx, appID, asc.NextURL[asc.BetaTesterUsagesOption](next))
 		if err != nil {
 			return combined, fmt.Errorf("page %d: %w", pageNumber, err)
 		}
@@ -251,7 +243,7 @@ func paginateBetaTesterUsages(ctx context.Context, client *asc.Client, appID str
 	return combined, nil
 }
 
-func printAppTesterUsages(resp *asc.BetaTesterUsagesResponse, format string, pretty bool) error {
+func printAppTesterUsages(d *shared.Deps, resp *asc.BetaTesterUsagesResponse, format string, pretty bool) error {
 	resolved, err := shared.ValidateOutputFormat(format, pretty)
 	if err != nil {
 		return err
@@ -264,9 +256,9 @@ func printAppTesterUsages(resp *asc.BetaTesterUsagesResponse, format string, pre
 				return err
 			}
 		}
-		return shared.PrintOutput(page, resolved, pretty)
+		return d.PrintOutput(page, resolved, pretty)
 	}
-	return shared.PrintOutput(resp, format, pretty)
+	return d.PrintOutput(resp, format, pretty)
 }
 
 func parseBetaTesterUsagesPage(data json.RawMessage) (*asc.BetaTesterUsagesPage, error) {
@@ -287,7 +279,7 @@ func parseBetaTesterUsagesPage(data json.RawMessage) (*asc.BetaTesterUsagesPage,
 // as-is; the remainder are batch-fetched from GET /v1/betaTesters via
 // filter[id]. Resolution is capped at betaTesterResolveMaxIDs unique IDs; IDs
 // beyond the cap are skipped with a stderr warning.
-func resolveBetaTesterUsageTesters(ctx context.Context, client *asc.Client, page *asc.BetaTesterUsagesPage) error {
+func resolveBetaTesterUsageTesters(ctx context.Context, d *shared.Deps, client *asc.Client, page *asc.BetaTesterUsagesPage) error {
 	if page == nil {
 		return nil
 	}
@@ -297,11 +289,11 @@ func resolveBetaTesterUsageTesters(ctx context.Context, client *asc.Client, page
 		return err
 	}
 	if len(ids) == 0 {
-		fmt.Fprintln(os.Stderr, "Warning: --resolve-testers found no tester IDs in the metrics response; nothing to resolve")
+		fmt.Fprintln(d.IO.ErrOut, "Warning: --resolve-testers found no tester IDs in the metrics response; nothing to resolve")
 		return nil
 	}
 	if len(ids) > betaTesterResolveMaxIDs {
-		fmt.Fprintf(os.Stderr, "Warning: --resolve-testers resolves at most %d unique testers; skipping resolution for %d of %d\n", betaTesterResolveMaxIDs, len(ids)-betaTesterResolveMaxIDs, len(ids))
+		fmt.Fprintf(d.IO.ErrOut, "Warning: --resolve-testers resolves at most %d unique testers; skipping resolution for %d of %d\n", betaTesterResolveMaxIDs, len(ids)-betaTesterResolveMaxIDs, len(ids))
 		ids = ids[:betaTesterResolveMaxIDs]
 	}
 
@@ -350,7 +342,7 @@ func resolveBetaTesterUsageTesters(ctx context.Context, client *asc.Client, page
 	}
 
 	for chunk := range slices.Chunk(missing, betaTesterResolveChunkSize) {
-		fetched, err := fetchBetaTestersByIDs(ctx, client, chunk)
+		fetched, err := fetchBetaTestersByIDs(ctx, d, client, chunk)
 		if err != nil {
 			return fmt.Errorf("resolve testers: %w", err)
 		}
@@ -366,7 +358,7 @@ func resolveBetaTesterUsageTesters(ctx context.Context, client *asc.Client, page
 		}
 	}
 	if unresolved > 0 {
-		fmt.Fprintf(os.Stderr, "Warning: --resolve-testers could not resolve %d of %d tester ID(s)\n", unresolved, len(ids))
+		fmt.Fprintf(d.IO.ErrOut, "Warning: --resolve-testers could not resolve %d of %d tester ID(s)\n", unresolved, len(ids))
 	}
 
 	page.Testers = testers
@@ -408,20 +400,20 @@ func betaTesterUsageTesterIDs(rows []json.RawMessage) ([]string, error) {
 // fetchBetaTestersByIDs fetches beta testers matching the given IDs from
 // GET /v1/betaTesters using filter[id], following pagination and applying the
 // shared request timeout to every request.
-func fetchBetaTestersByIDs(ctx context.Context, client *asc.Client, ids []string) ([]asc.Resource[asc.BetaTesterAttributes], error) {
+func fetchBetaTestersByIDs(ctx context.Context, d *shared.Deps, client *asc.Client, ids []string) ([]asc.Resource[asc.BetaTesterAttributes], error) {
 	firstPage, err := func() (*asc.BetaTestersResponse, error) {
-		requestCtx, cancel := shared.ContextWithTimeout(ctx)
+		requestCtx, cancel := d.Timeout(ctx)
 		defer cancel()
-		return client.GetBetaTesters(requestCtx, "", asc.WithBetaTestersIDs(ids), asc.WithBetaTestersLimit(200))
+		return client.GetBetaTesters(requestCtx, "", asc.WithBetaTestersIDs(ids), asc.Limit[asc.BetaTestersOption](200))
 	}()
 	if err != nil {
 		return nil, err
 	}
 
 	all, err := asc.PaginateAll(ctx, firstPage, func(ctx context.Context, nextURL string) (asc.PaginatedResponse, error) {
-		requestCtx, cancel := shared.ContextWithTimeout(ctx)
+		requestCtx, cancel := d.Timeout(ctx)
 		defer cancel()
-		return client.GetBetaTesters(requestCtx, "", asc.WithBetaTestersNextURL(nextURL))
+		return client.GetBetaTesters(requestCtx, "", asc.NextURL[asc.BetaTestersOption](nextURL))
 	})
 	if err != nil {
 		return nil, err

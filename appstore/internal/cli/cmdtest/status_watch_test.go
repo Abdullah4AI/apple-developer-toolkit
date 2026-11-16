@@ -3,12 +3,15 @@ package cmdtest
 import (
 	"context"
 	"encoding/json"
-	"io"
 	"net/http"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	rootcmd "github.com/Abdullah4AI/apple-developer-toolkit/appstore/cmd"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asctest"
 )
 
 func TestStatusWatchJSONEmitsChangedSnapshots(t *testing.T) {
@@ -16,82 +19,61 @@ func TestStatusWatchJSONEmitsChangedSnapshots(t *testing.T) {
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 	t.Setenv("ASC_APP_ID", "")
 
-	var appStoreCalls lockedCounter
-	var reviewCalls lockedCounter
-	installDefaultTransport(t, roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		switch req.URL.Path {
-		case "/v1/apps/123456789/appStoreVersions":
-			if appStoreCalls.Inc() == 1 {
-				return statusJSONResponse(`{
-					"data":[
-						{
-							"type":"appStoreVersions",
-							"id":"ver-1",
-							"attributes":{
-								"platform":"IOS",
-								"versionString":"1.2.3",
-								"appVersionState":"WAITING_FOR_REVIEW",
-								"createdDate":"2026-03-15T00:00:00Z"
-							}
-						}
-					],
-					"links":{"next":""}
-				}`), nil
+	reg := asctest.NewRegistry(t)
+	reg.Register(asctest.GET("/v1/apps/123456789/appStoreVersions", "limit=200"), asctest.JSON(http.StatusOK, `{
+		"data":[
+			{
+				"type":"appStoreVersions",
+				"id":"ver-1",
+				"attributes":{
+					"platform":"IOS",
+					"versionString":"1.2.3",
+					"appVersionState":"WAITING_FOR_REVIEW",
+					"createdDate":"2026-03-15T00:00:00Z"
+				}
 			}
-			return statusJSONResponse(`{
-				"data":[
-					{
-						"type":"appStoreVersions",
-						"id":"ver-1",
-						"attributes":{
-							"platform":"IOS",
-							"versionString":"1.2.3",
-							"appVersionState":"READY_FOR_SALE",
-							"createdDate":"2026-03-15T00:00:00Z"
-						}
-					}
-				],
-				"links":{"next":""}
-			}`), nil
-		case "/v1/apps/123456789/reviewSubmissions":
-			if reviewCalls.Inc() == 1 {
-				return statusJSONResponse(`{
-					"data":[
-						{
-							"type":"reviewSubmissions",
-							"id":"review-sub-1",
-							"attributes":{"state":"WAITING_FOR_REVIEW","platform":"IOS","submittedDate":"2026-03-15T01:00:00Z"}
-						}
-					],
-					"links":{"next":""}
-				}`), nil
+		],
+		"links":{"next":""}
+	}`))
+	reg.Register(asctest.GET("/v1/apps/123456789/appStoreVersions", "limit=200"), asctest.JSON(http.StatusOK, `{
+		"data":[
+			{
+				"type":"appStoreVersions",
+				"id":"ver-1",
+				"attributes":{
+					"platform":"IOS",
+					"versionString":"1.2.3",
+					"appVersionState":"READY_FOR_SALE",
+					"createdDate":"2026-03-15T00:00:00Z"
+				}
 			}
-			return statusJSONResponse(`{"data":[],"links":{"next":""}}`), nil
-		default:
-			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.String())
-			return nil, nil
-		}
-	}))
+		],
+		"links":{"next":""}
+	}`))
+	reg.Register(asctest.GET("/v1/apps/123456789/reviewSubmissions", "limit=200"), asctest.JSON(http.StatusOK, `{
+		"data":[
+			{
+				"type":"reviewSubmissions",
+				"id":"review-sub-1",
+				"attributes":{"state":"WAITING_FOR_REVIEW","platform":"IOS","submittedDate":"2026-03-15T01:00:00Z"}
+			}
+		],
+		"links":{"next":""}
+	}`))
+	reg.Register(asctest.GET("/v1/apps/123456789/reviewSubmissions", "limit=200"), asctest.JSON(http.StatusOK, `{"data":[],"links":{"next":""}}`))
 
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{
-			"status",
-			"--app", "123456789",
-			"--include", "appstore,submission,review",
-			"--watch",
-			"--poll-interval", "1ms",
-			"--max-polls", "2",
-			"--output", "json",
-		}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatalf("run error: %v", err)
-		}
-	})
+	stdout, stderr, err := runRootWithDeps(t, stubClient(t, reg),
+		"status",
+		"--app", "123456789",
+		"--include", "appstore,submission,review",
+		"--watch",
+		"--poll-interval", "1ms",
+		"--max-polls", "2",
+		"--output", "json",
+	)
+	if err != nil {
+		t.Fatalf("run error: %v", err)
+	}
 
 	if stderr != "" {
 		t.Fatalf("expected empty stderr, got %q", stderr)
@@ -133,63 +115,36 @@ func TestStatusWatchSubmissionAndReviewUseBoundedRecentPage(t *testing.T) {
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 	t.Setenv("ASC_APP_ID", "")
 
-	var reviewCalls lockedCounter
-	installDefaultTransport(t, roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		switch req.URL.Path {
-		case "/v1/apps/123456789/reviewSubmissions":
-			if got := req.URL.Query().Get("filter[state]"); got != "" {
-				t.Fatalf("expected bounded recent-page watch query without state filter, got %q", got)
+	reg := asctest.NewRegistry(t)
+	reg.Register(asctest.GET("/v1/apps/123456789/reviewSubmissions", "limit=200"), asctest.JSON(http.StatusOK, `{
+		"data":[
+			{
+				"type":"reviewSubmissions",
+				"id":"review-sub-complete",
+				"attributes":{"state":"COMPLETE","platform":"IOS","submittedDate":"2026-03-20T00:00:00Z"}
 			}
-			if got := req.URL.Query().Get("limit"); got != "200" {
-				t.Fatalf("expected review submissions limit=200, got %q", got)
-			}
-			if got := req.URL.Query().Get("cursor"); got != "" {
-				t.Fatalf("expected watch query to stay on the first review submissions page, got cursor %q", got)
-			}
-			if reviewCalls.Inc() != 1 {
-				t.Fatalf("expected exactly one review submissions request, got %d", reviewCalls.Load())
-			}
-			return statusJSONResponse(`{
-				"data":[
-					{
-						"type":"reviewSubmissions",
-						"id":"review-sub-complete",
-						"attributes":{"state":"COMPLETE","platform":"IOS","submittedDate":"2026-03-20T00:00:00Z"}
-					}
-				],
-				"links":{"next":"https://api.appstoreconnect.apple.com/v1/apps/123456789/reviewSubmissions?cursor=page-2"}
-			}`), nil
-		default:
-			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.String())
-			return nil, nil
-		}
-	}))
+		],
+		"links":{"next":"https://api.appstoreconnect.apple.com/v1/apps/123456789/reviewSubmissions?cursor=page-2"}
+	}`))
 
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{
-			"status",
-			"--app", "123456789",
-			"--include", "submission,review",
-			"--watch",
-			"--poll-interval", "1ms",
-			"--max-polls", "1",
-			"--output", "json",
-		}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatalf("run error: %v", err)
-		}
-	})
+	stdout, stderr, err := runRootWithDeps(t, stubClient(t, reg),
+		"status",
+		"--app", "123456789",
+		"--include", "submission,review",
+		"--watch",
+		"--poll-interval", "1ms",
+		"--max-polls", "1",
+		"--output", "json",
+	)
+	if err != nil {
+		t.Fatalf("run error: %v", err)
+	}
 
 	if stderr != "" {
 		t.Fatalf("expected empty stderr, got %q", stderr)
 	}
-	if reviewCalls.Load() != 1 {
-		t.Fatalf("expected 1 review submissions request, got %d", reviewCalls.Load())
+	if reviewCalls := countStatusRequests(reg, "/v1/apps/123456789/reviewSubmissions"); reviewCalls != 1 {
+		t.Fatalf("expected 1 review submissions request, got %d", reviewCalls)
 	}
 
 	var payload map[string]any
@@ -217,89 +172,58 @@ func TestStatusWatchSubmissionAndReviewUseBoundedRecentPage(t *testing.T) {
 	}
 }
 
-func TestStatusWatchCancellationDuringSnapshotFetchExitsCleanly(t *testing.T) {
-	setupAuth(t)
-	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
-	t.Setenv("ASC_APP_ID", "")
-
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() {
-		http.DefaultTransport = originalTransport
-	})
-
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		return nil, req.Context().Err()
-	})
-
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{
-			"status",
-			"--app", "123456789",
-			"--watch",
-			"--poll-interval", "1ms",
-			"--output", "json",
-		}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(ctx); err != nil {
-			t.Fatalf("expected clean exit on cancellation, got %v", err)
-		}
-	})
-
-	if stdout != "" {
-		t.Fatalf("expected empty stdout, got %q", stdout)
+func TestStatusWatchContextEndDuringSnapshotFetchExitsCleanly(t *testing.T) {
+	tests := []struct {
+		name string
+		ctx  func() (context.Context, context.CancelFunc)
+	}{
+		{
+			name: "cancellation",
+			ctx: func() (context.Context, context.CancelFunc) {
+				ctx, cancel := context.WithCancel(context.Background())
+				cancel()
+				return ctx, cancel
+			},
+		},
+		{
+			name: "deadline",
+			ctx: func() (context.Context, context.CancelFunc) {
+				return context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+			},
+		},
 	}
-	if stderr != "" {
-		t.Fatalf("expected empty stderr, got %q", stderr)
-	}
-}
 
-func TestStatusWatchDeadlineDuringSnapshotFetchExitsCleanly(t *testing.T) {
-	setupAuth(t)
-	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
-	t.Setenv("ASC_APP_ID", "")
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			setupAuth(t)
+			t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
+			t.Setenv("ASC_APP_ID", "")
 
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() {
-		http.DefaultTransport = originalTransport
-	})
+			client := stubClient(t, roundTripFunc(func(req *http.Request) (*http.Response, error) {
+				return nil, req.Context().Err()
+			}))
 
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		return nil, req.Context().Err()
-	})
+			ctx, cancel := test.ctx()
+			defer cancel()
 
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
+			stdout, stderr, err := runStatusWithContext(t, ctx, client,
+				"status",
+				"--app", "123456789",
+				"--watch",
+				"--poll-interval", "1ms",
+				"--output", "json",
+			)
+			if err != nil {
+				t.Fatalf("expected clean exit on %s, got %v", test.name, err)
+			}
 
-	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
-	defer cancel()
-
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{
-			"status",
-			"--app", "123456789",
-			"--watch",
-			"--poll-interval", "1ms",
-			"--output", "json",
-		}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(ctx); err != nil {
-			t.Fatalf("expected clean exit on deadline, got %v", err)
-		}
-	})
-
-	if stdout != "" {
-		t.Fatalf("expected empty stdout, got %q", stdout)
-	}
-	if stderr != "" {
-		t.Fatalf("expected empty stderr, got %q", stderr)
+			if stdout != "" {
+				t.Fatalf("expected empty stdout, got %q", stdout)
+			}
+			if stderr != "" {
+				t.Fatalf("expected empty stderr, got %q", stderr)
+			}
+		})
 	}
 }
 
@@ -308,27 +232,20 @@ func TestStatusWatchDeadlineWhileWaitingForNextPollExitsCleanly(t *testing.T) {
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 	t.Setenv("ASC_APP_ID", "")
 
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
 	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
 	defer cancel()
 
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{
-			"status",
-			"--app", "123456789",
-			"--include", "links",
-			"--watch",
-			"--poll-interval", "1h",
-			"--output", "json",
-		}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(ctx); err != nil {
-			t.Fatalf("expected clean exit on deadline, got %v", err)
-		}
-	})
+	stdout, stderr, err := runStatusWithContext(t, ctx, stubClient(t, asctest.NewRegistry(t)),
+		"status",
+		"--app", "123456789",
+		"--include", "links",
+		"--watch",
+		"--poll-interval", "1h",
+		"--output", "json",
+	)
+	if err != nil {
+		t.Fatalf("expected clean exit on deadline, got %v", err)
+	}
 
 	if !strings.Contains(stdout, `"links"`) {
 		t.Fatalf("expected first snapshot before deadline exit, got %q", stdout)
@@ -344,33 +261,19 @@ func TestStatusWatchRequestTimeoutDuringSnapshotFetchReturnsError(t *testing.T) 
 	t.Setenv("ASC_APP_ID", "")
 	t.Setenv("ASC_TIMEOUT", "1ms")
 
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() {
-		http.DefaultTransport = originalTransport
-	})
-
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+	client := stubClient(t, roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		<-req.Context().Done()
 		return nil, req.Context().Err()
-	})
+	}))
 
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	var runErr error
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{
-			"status",
-			"--app", "123456789",
-			"--include", "app",
-			"--watch",
-			"--poll-interval", "1ms",
-			"--output", "json",
-		}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		runErr = root.Run(context.Background())
-	})
+	stdout, stderr, runErr := runStatusWithContext(t, context.Background(), client,
+		"status",
+		"--app", "123456789",
+		"--include", "app",
+		"--watch",
+		"--poll-interval", "1ms",
+		"--output", "json",
+	)
 
 	if runErr == nil {
 		t.Fatal("expected request timeout error, got nil")
@@ -384,4 +287,18 @@ func TestStatusWatchRequestTimeoutDuringSnapshotFetchReturnsError(t *testing.T) 
 	if stderr != "" {
 		t.Fatalf("expected empty stderr, got %q", stderr)
 	}
+}
+
+// runStatusWithContext runs args on test deps with client under ctx and
+// returns what was written to the deps' stdout and stderr.
+func runStatusWithContext(t *testing.T, ctx context.Context, client func() (*asc.Client, error), args ...string) (string, string, error) {
+	t.Helper()
+
+	d, stdout, stderr := newTestDeps(t, client)
+	root := rootcmd.RootCommandWithDeps("1.2.3", d)
+	if err := root.Parse(args); err != nil {
+		t.Fatalf("parse error: %v", err)
+	}
+	err := root.Run(ctx)
+	return stdout.String(), stderr.String(), err
 }

@@ -12,7 +12,6 @@ import (
 	"testing"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
-	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/rootfs"
 )
 
@@ -52,13 +51,15 @@ func TestSigningSyncPushPreservesTargetsFilePathWhitespace(t *testing.T) {
 	t.Chdir(dir)
 
 	clientCalls := 0
-	t.Cleanup(shared.SetASCClientFactoryForTesting(func() (*asc.Client, error) {
+	clientFactory := func() (*asc.Client, error) {
 		clientCalls++
 		return nil, errors.New("client reached after manifest")
-	}))
+	}
 
 	t.Setenv(signingSyncPasswordEnvVar, "repository-password")
-	cmd := syncPushCommand()
+	d, _, _ := newSigningTestDeps()
+	d.Client = clientFactory
+	cmd := syncPushCommand(d)
 	cmd.FlagSet.SetOutput(io.Discard)
 	if err := cmd.Parse([]string{
 		"--targets-file", filename,

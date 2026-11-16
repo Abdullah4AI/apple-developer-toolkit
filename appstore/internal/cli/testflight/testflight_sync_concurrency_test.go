@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
 type concurrentSyncStub struct {
@@ -339,7 +340,7 @@ func TestFetchTesterGroupMembershipsUsesBoundedPool(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	membership, err := fetchTesterGroupMemberships(ctx, client, resolver)
+	membership, err := fetchTesterGroupMemberships(ctx, &shared.Deps{Timeout: shared.ContextWithTimeout}, client, resolver)
 	if err != nil {
 		t.Fatal(err)
 	}

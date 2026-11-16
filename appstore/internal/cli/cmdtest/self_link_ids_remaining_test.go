@@ -14,6 +14,7 @@ import (
 
 	rootcmd "github.com/Abdullah4AI/apple-developer-toolkit/appstore/cmd"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asctest"
 )
 
 // The remaining single-value resource ID flags accept an API self-link too, so
@@ -49,6 +50,7 @@ func TestSelfLinkRemainingFlagsSendExtractedID(t *testing.T) {
 		wantPath string
 		wantID   string
 		bodies   map[string]string
+		deps     bool // the command is built on shared.Deps: stub its client and read its deps streams
 	}{
 		{
 			name:     "webhooks view",
@@ -58,6 +60,7 @@ func TestSelfLinkRemainingFlagsSendExtractedID(t *testing.T) {
 			bodies: map[string]string{
 				"/v1/webhooks/webhook-1": `{"data":{"type":"webhooks","id":"webhook-1","attributes":{"name":"Build updates","url":"https://example.com/hook","enabled":true}}}`,
 			},
+			deps: true,
 		},
 		{
 			name:     "app-events view",
@@ -67,10 +70,12 @@ func TestSelfLinkRemainingFlagsSendExtractedID(t *testing.T) {
 			bodies: map[string]string{
 				"/v1/appEvents/event-1": `{"data":{"type":"appEvents","id":"event-1","attributes":{"referenceName":"Launch","eventState":"DRAFT"}}}`,
 			},
+			deps: true,
 		},
 		{
 			name:     "categories view",
 			args:     []string{"categories", "view", "--category-id", selfLinkTestBase + "/v1/appCategories/GAMES"},
+			deps:     true,
 			wantPath: "GET /v1/appCategories/GAMES",
 			wantID:   "GAMES",
 			bodies: map[string]string{
@@ -85,6 +90,7 @@ func TestSelfLinkRemainingFlagsSendExtractedID(t *testing.T) {
 			bodies: map[string]string{
 				"/v1/appCustomProductPages/page-1": `{"data":{"type":"appCustomProductPages","id":"page-1","attributes":{"name":"Winter","visible":true}}}`,
 			},
+			deps: true,
 		},
 		{
 			name:     "android-ios-mapping view",
@@ -94,6 +100,7 @@ func TestSelfLinkRemainingFlagsSendExtractedID(t *testing.T) {
 			bodies: map[string]string{
 				"/v1/androidToIosAppMappingDetails/mapping-1": `{"data":{"type":"androidToIosAppMappingDetails","id":"mapping-1","attributes":{"androidPackageName":"com.example.android"}}}`,
 			},
+			deps: true,
 		},
 		{
 			name:     "alternative-distribution domains view",
@@ -103,10 +110,12 @@ func TestSelfLinkRemainingFlagsSendExtractedID(t *testing.T) {
 			bodies: map[string]string{
 				"/v1/alternativeDistributionDomains/domain-1": `{"data":{"type":"alternativeDistributionDomains","id":"domain-1","attributes":{"domain":"example.com"}}}`,
 			},
+			deps: true,
 		},
 		{
 			name:     "merchant-ids view",
 			args:     []string{"merchant-ids", "view", "--merchant-id", selfLinkTestBase + "/v1/merchantIds/merchant-1"},
+			deps:     true,
 			wantPath: "GET /v1/merchantIds/merchant-1",
 			wantID:   "merchant-1",
 			bodies: map[string]string{
@@ -121,6 +130,7 @@ func TestSelfLinkRemainingFlagsSendExtractedID(t *testing.T) {
 			bodies: map[string]string{
 				"/v1/analyticsReports/report-1": `{"data":{"type":"analyticsReports","id":"report-1","attributes":{"name":"App Store Installs","category":"APP_USAGE"}}}`,
 			},
+			deps: true,
 		},
 		{
 			name:     "game-center achievements localizations list",
@@ -130,6 +140,7 @@ func TestSelfLinkRemainingFlagsSendExtractedID(t *testing.T) {
 			bodies: map[string]string{
 				"/v1/gameCenterAchievements/achievement-1/localizations": `{"data":[{"type":"gameCenterAchievementLocalizations","id":"localization-1","attributes":{"locale":"en-US","name":"First Win"}}]}`,
 			},
+			deps: true,
 		},
 		{
 			name:     "builds test-notes view",
@@ -139,10 +150,12 @@ func TestSelfLinkRemainingFlagsSendExtractedID(t *testing.T) {
 			bodies: map[string]string{
 				"/v1/betaBuildLocalizations/localization-1": `{"data":{"type":"betaBuildLocalizations","id":"localization-1","attributes":{"locale":"en-US","whatsNew":"Fixes"}}}`,
 			},
+			deps: true,
 		},
 		{
 			name:     "testflight testers apps list",
 			args:     []string{"testflight", "testers", "apps", "list", "--tester-id", selfLinkTestBase + "/v1/betaTesters/tester-1"},
+			deps:     true,
 			wantPath: "GET /v1/betaTesters/tester-1/apps",
 			wantID:   "app-1",
 			bodies: map[string]string{
@@ -157,6 +170,7 @@ func TestSelfLinkRemainingFlagsSendExtractedID(t *testing.T) {
 			bodies: map[string]string{
 				"/v1/appClipDefaultExperiences/experience-1/appClipDefaultExperienceLocalizations": `{"data":[{"type":"appClipDefaultExperienceLocalizations","id":"clip-localization-1","attributes":{"locale":"en-US","subtitle":"Order"}}]}`,
 			},
+			deps: true,
 		},
 	}
 
@@ -179,19 +193,26 @@ func TestSelfLinkRemainingFlagsSendExtractedID(t *testing.T) {
 				_, _ = io.WriteString(w, body)
 			}))
 			t.Cleanup(server.Close)
-			installDefaultTransportForServer(t, server)
 
-			root := RootCommand("1.2.3")
-			root.FlagSet.SetOutput(io.Discard)
 			args := append(append([]string(nil), test.args...), "--output", "json")
-			stdout, stderr := captureOutput(t, func() {
-				if err := root.Parse(args); err != nil {
-					t.Fatalf("parse error: %v", err)
-				}
-				if err := root.Run(context.Background()); err != nil {
-					t.Fatalf("run error: %v (requests %q)", err, recorder.requested())
-				}
-			})
+			var stdout, stderr string
+			var err error
+			if test.deps {
+				stdout, stderr, err = runRootWithDeps(t, stubServerClient(t, server), args...)
+			} else {
+				installDefaultTransportForServer(t, server)
+				root := RootCommand("1.2.3")
+				root.FlagSet.SetOutput(io.Discard)
+				stdout, stderr = captureOutput(t, func() {
+					if parseErr := root.Parse(args); parseErr != nil {
+						t.Fatalf("parse error: %v", parseErr)
+					}
+					err = root.Run(context.Background())
+				})
+			}
+			if err != nil {
+				t.Fatalf("run error: %v (requests %q)", err, recorder.requested())
+			}
 			if stderr != "" {
 				t.Fatalf("expected empty stderr, got %q", stderr)
 			}
@@ -221,10 +242,7 @@ func TestSelfLinkRemainingFlagsRejectWrongType(t *testing.T) {
 	setCmdtestHome(t)
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 	t.Setenv("ASC_APP_ID", "")
-	stubTransport(t, func(req *http.Request) (*http.Response, error) {
-		t.Fatalf("unexpected request %s %s", req.Method, req.URL.Path)
-		return nil, nil
-	})
+	asctest.NewRegistry(t).Install()
 
 	tests := []struct {
 		name    string
@@ -232,6 +250,7 @@ func TestSelfLinkRemainingFlagsRejectWrongType(t *testing.T) {
 		flag    string
 		value   string
 		wantErr string
+		deps    bool // the command is built on shared.Deps: run it through RunWithDeps
 	}{
 		{
 			name:    "webhooks view rejects apps link",
@@ -239,6 +258,7 @@ func TestSelfLinkRemainingFlagsRejectWrongType(t *testing.T) {
 			flag:    "webhook-id",
 			value:   selfLinkTestBase + "/v1/apps/123",
 			wantErr: "expected a self-link of type webhooks, got apps",
+			deps:    true,
 		},
 		{
 			name:    "webhooks view rejects relationship path",
@@ -246,6 +266,7 @@ func TestSelfLinkRemainingFlagsRejectWrongType(t *testing.T) {
 			flag:    "webhook-id",
 			value:   selfLinkTestBase + "/v1/webhooks/webhook-1/relationships/app",
 			wantErr: "/v1/<type>/<id>",
+			deps:    true,
 		},
 		{
 			name:    "marketplace webhooks view rejects webhooks link",
@@ -253,10 +274,12 @@ func TestSelfLinkRemainingFlagsRejectWrongType(t *testing.T) {
 			flag:    "webhook-id",
 			value:   selfLinkTestBase + "/v1/webhooks/webhook-1",
 			wantErr: "expected a self-link of type marketplaceWebhooks, got webhooks",
+			deps:    true,
 		},
 		{
 			name:    "certificates create rejects apps link for merchant",
 			args:    []string{"certificates", "create"},
+			deps:    true,
 			flag:    "merchant-id",
 			value:   selfLinkTestBase + "/v1/apps/123",
 			wantErr: "expected a self-link of type merchantIds, got apps",
@@ -264,6 +287,7 @@ func TestSelfLinkRemainingFlagsRejectWrongType(t *testing.T) {
 		{
 			name:    "merchant-ids certificates create rejects apps link",
 			args:    []string{"merchant-ids", "certificates", "create"},
+			deps:    true,
 			flag:    "merchant-id",
 			value:   selfLinkTestBase + "/v1/apps/123",
 			wantErr: "expected a self-link of type merchantIds, got apps",
@@ -271,6 +295,7 @@ func TestSelfLinkRemainingFlagsRejectWrongType(t *testing.T) {
 		{
 			name:    "merchant-ids view rejects apps link",
 			args:    []string{"merchant-ids", "view"},
+			deps:    true,
 			flag:    "merchant-id",
 			value:   selfLinkTestBase + "/v1/apps/123",
 			wantErr: "expected a self-link of type merchantIds, got apps",
@@ -281,10 +306,12 @@ func TestSelfLinkRemainingFlagsRejectWrongType(t *testing.T) {
 			flag:    "pass-type-id",
 			value:   selfLinkTestBase + "/v1/certificates/certificate-1",
 			wantErr: "expected a self-link of type passTypeIds, got certificates",
+			deps:    true,
 		},
 		{
 			name:    "reviews respond rejects apps link",
 			args:    []string{"reviews", "respond"},
+			deps:    true,
 			flag:    "review-id",
 			value:   selfLinkTestBase + "/v1/apps/123",
 			wantErr: "expected a self-link of type customerReviews, got apps",
@@ -292,6 +319,7 @@ func TestSelfLinkRemainingFlagsRejectWrongType(t *testing.T) {
 		{
 			name:    "categories view rejects apps link",
 			args:    []string{"categories", "view"},
+			deps:    true,
 			flag:    "category-id",
 			value:   selfLinkTestBase + "/v1/apps/123",
 			wantErr: "expected a self-link of type appCategories, got apps",
@@ -299,6 +327,7 @@ func TestSelfLinkRemainingFlagsRejectWrongType(t *testing.T) {
 		{
 			name:    "analytics reports view rejects request link",
 			args:    []string{"analytics", "reports", "view"},
+			deps:    true,
 			flag:    "report-id",
 			value:   selfLinkTestBase + "/v1/analyticsReportRequests/request-1",
 			wantErr: "expected a self-link of type analyticsReports, got analyticsReportRequests",
@@ -309,6 +338,7 @@ func TestSelfLinkRemainingFlagsRejectWrongType(t *testing.T) {
 			flag:    "run-id",
 			value:   selfLinkTestBase + "/v1/ciWorkflows/workflow-1",
 			wantErr: "expected a self-link of type ciBuildRuns, got ciWorkflows",
+			deps:    true,
 		},
 		{
 			name:    "alternative-distribution domains view rejects other host",
@@ -316,6 +346,7 @@ func TestSelfLinkRemainingFlagsRejectWrongType(t *testing.T) {
 			flag:    "domain-id",
 			value:   "https://appstoreconnect.apple.com/v1/alternativeDistributionDomains/domain-1",
 			wantErr: "api.appstoreconnect.apple.com",
+			deps:    true,
 		},
 		{
 			name:    "background-assets versions list rejects version link",
@@ -323,6 +354,7 @@ func TestSelfLinkRemainingFlagsRejectWrongType(t *testing.T) {
 			flag:    "background-asset-id",
 			value:   selfLinkTestBase + "/v1/backgroundAssetVersions/version-1",
 			wantErr: "expected a self-link of type backgroundAssets, got backgroundAssetVersions",
+			deps:    true,
 		},
 		{
 			name:    "game-center achievements localizations list rejects leaderboard link",
@@ -330,6 +362,7 @@ func TestSelfLinkRemainingFlagsRejectWrongType(t *testing.T) {
 			flag:    "achievement-id",
 			value:   selfLinkTestBase + "/v1/gameCenterLeaderboards/leaderboard-1",
 			wantErr: "expected a self-link of type gameCenterAchievements, got gameCenterLeaderboards",
+			deps:    true,
 		},
 		{
 			name:    "game-center achievements v2 list rejects details link",
@@ -337,6 +370,7 @@ func TestSelfLinkRemainingFlagsRejectWrongType(t *testing.T) {
 			flag:    "group-id",
 			value:   selfLinkTestBase + "/v1/gameCenterDetails/detail-1",
 			wantErr: "expected a self-link of type gameCenterGroups, got gameCenterDetails",
+			deps:    true,
 		},
 		{
 			name:    "game-center matchmaking queues update rejects queue link",
@@ -344,6 +378,7 @@ func TestSelfLinkRemainingFlagsRejectWrongType(t *testing.T) {
 			flag:    "rule-set-id",
 			value:   selfLinkTestBase + "/v1/gameCenterMatchmakingQueues/queue-1",
 			wantErr: "expected a self-link of type gameCenterMatchmakingRuleSets, got gameCenterMatchmakingQueues",
+			deps:    true,
 		},
 		{
 			name:    "app-clips default-experiences localizations list rejects app-clips link",
@@ -351,6 +386,7 @@ func TestSelfLinkRemainingFlagsRejectWrongType(t *testing.T) {
 			flag:    "experience-id",
 			value:   selfLinkTestBase + "/v1/appClips/clip-1",
 			wantErr: "expected a self-link of type appClipDefaultExperiences, got appClips",
+			deps:    true,
 		},
 		{
 			name:    "product-pages custom-pages view rejects version link",
@@ -358,6 +394,7 @@ func TestSelfLinkRemainingFlagsRejectWrongType(t *testing.T) {
 			flag:    "custom-page-id",
 			value:   selfLinkTestBase + "/v1/appCustomProductPageVersions/version-1",
 			wantErr: "expected a self-link of type appCustomProductPages, got appCustomProductPageVersions",
+			deps:    true,
 		},
 		{
 			name:    "product-pages experiments view rejects version link",
@@ -365,6 +402,7 @@ func TestSelfLinkRemainingFlagsRejectWrongType(t *testing.T) {
 			flag:    "experiment-id",
 			value:   selfLinkTestBase + "/v1/appStoreVersions/version-1",
 			wantErr: "expected a self-link of type appStoreVersionExperiments, got appStoreVersions",
+			deps:    true,
 		},
 		{
 			name:    "app-events view rejects localization link",
@@ -372,6 +410,7 @@ func TestSelfLinkRemainingFlagsRejectWrongType(t *testing.T) {
 			flag:    "event-id",
 			value:   selfLinkTestBase + "/v1/appEventLocalizations/localization-1",
 			wantErr: "expected a self-link of type appEvents, got appEventLocalizations",
+			deps:    true,
 		},
 		{
 			name:    "subscriptions offers offer-codes view rejects iap offer code link",
@@ -379,9 +418,11 @@ func TestSelfLinkRemainingFlagsRejectWrongType(t *testing.T) {
 			flag:    "offer-code-id",
 			value:   selfLinkTestBase + "/v1/inAppPurchaseOfferCodes/offer-1",
 			wantErr: "expected a self-link of type subscriptionOfferCodes, got inAppPurchaseOfferCodes",
+			deps:    true,
 		},
 		{
 			name:    "iap offer-codes custom-codes list rejects subscription offer code link",
+			deps:    true,
 			args:    []string{"iap", "offer-codes", "custom-codes", "list"},
 			flag:    "offer-code-id",
 			value:   selfLinkTestBase + "/v1/subscriptionOfferCodes/offer-1",
@@ -390,6 +431,7 @@ func TestSelfLinkRemainingFlagsRejectWrongType(t *testing.T) {
 		{
 			name:    "testflight testers apps list rejects apps link",
 			args:    []string{"testflight", "testers", "apps", "list"},
+			deps:    true,
 			flag:    "tester-id",
 			value:   selfLinkTestBase + "/v1/apps/123",
 			wantErr: "expected a self-link of type betaTesters, got apps",
@@ -397,6 +439,7 @@ func TestSelfLinkRemainingFlagsRejectWrongType(t *testing.T) {
 		{
 			name:    "testflight testers apps list rejects apps link on the --id alias",
 			args:    []string{"testflight", "testers", "apps", "list"},
+			deps:    true,
 			flag:    "id",
 			value:   selfLinkTestBase + "/v1/apps/123",
 			wantErr: "expected a self-link of type betaTesters, got apps",
@@ -407,6 +450,7 @@ func TestSelfLinkRemainingFlagsRejectWrongType(t *testing.T) {
 			flag:    "localization-id",
 			value:   selfLinkTestBase + "/v1/builds/build-1",
 			wantErr: "expected a self-link of type betaBuildLocalizations, got builds",
+			deps:    true,
 		},
 		{
 			name:    "android-ios-mapping view rejects apps link",
@@ -414,23 +458,33 @@ func TestSelfLinkRemainingFlagsRejectWrongType(t *testing.T) {
 			flag:    "mapping-id",
 			value:   selfLinkTestBase + "/v1/apps/123",
 			wantErr: "expected a self-link of type androidToIosAppMappingDetails, got apps",
+			deps:    true,
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			args := append(append([]string(nil), test.args...), "--"+test.flag, test.value)
-			stdout, stderr := captureOutput(t, func() {
-				code := rootcmd.Run(args, "1.2.3")
+			var stdout, stderr string
+			if test.deps {
+				var code int
+				stdout, stderr, code = runWithDeps(t, nil, args...)
 				if code != rootcmd.ExitUsage {
 					t.Fatalf("exit code = %d, want %d", code, rootcmd.ExitUsage)
 				}
-			})
+			} else {
+				stdout, stderr = captureOutput(t, func() {
+					code := rootcmd.Run(args, "1.2.3")
+					if code != rootcmd.ExitUsage {
+						t.Fatalf("exit code = %d, want %d", code, rootcmd.ExitUsage)
+					}
+				})
+			}
 			if stdout != "" {
 				t.Fatalf("expected empty stdout, got %q", stdout)
 			}
 			firstLine, _, _ := strings.Cut(stderr, "\n")
-			wantPrefix := fmt.Sprintf("Error: invalid value %q for flag -%s: ", test.value, test.flag)
+			wantPrefix := fmt.Sprintf("Error: invalid value %q for flag --%s: ", test.value, test.flag)
 			if !strings.HasPrefix(firstLine, wantPrefix) || !strings.Contains(firstLine, test.wantErr) {
 				t.Fatalf("first stderr line = %q, want prefix %q containing %q", firstLine, wantPrefix, test.wantErr)
 			}
@@ -447,16 +501,15 @@ func TestSelfLinkCertificateCreateSendsMerchantIDRelationship(t *testing.T) {
 			setupAuth(t)
 			t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 			var payload asc.CertificateCreateRequest
-			captureCertificateCreateRequest(t, &payload)
+			client := captureCertificateCreateRequest(t, &payload)
 			args := append(append([]string(nil), command...),
 				"--certificate-type", "APPLE_PAY_MERCHANT_IDENTITY",
 				"--merchant-id", selfLinkTestBase+"/v1/merchantIds/merchant-1",
 				"--csr", writeApplePayCSR(t), "--output", "json")
-			_, stderr := captureOutput(t, func() {
-				if code := rootcmd.Run(args, "1.2.3"); code != rootcmd.ExitSuccess {
-					t.Fatalf("exit code = %d, want %d", code, rootcmd.ExitSuccess)
-				}
-			})
+			_, stderr, code := runWithDeps(t, client, args...)
+			if code != rootcmd.ExitSuccess {
+				t.Fatalf("exit code = %d, want %d", code, rootcmd.ExitSuccess)
+			}
 			if stderr != "" {
 				t.Fatalf("expected empty stderr, got %q", stderr)
 			}

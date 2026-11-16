@@ -3,17 +3,15 @@ package versions
 import (
 	"context"
 	"flag"
-	"fmt"
-	"os"
-	"strings"
 
 	"github.com/peterbourgon/ff/v3/ffcli"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
-// VersionsAppClipDefaultExperienceCommand returns the app clip default experience command group.
-func VersionsAppClipDefaultExperienceCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("app-clip-default-experience", flag.ExitOnError)
+// newVersionsAppClipDefaultExperienceCommand returns the app clip default experience command group.
+func newVersionsAppClipDefaultExperienceCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("app-clip-default-experience", flag.ExitOnError)
 
 	return &ffcli.Command{
 		Name:       "app-clip-default-experience",
@@ -24,9 +22,9 @@ func VersionsAppClipDefaultExperienceCommand() *ffcli.Command {
 Examples:
   asc versions app-clip-default-experience view --version-id "VERSION_ID"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
-			VersionsAppClipDefaultExperienceGetCommand(),
+			newVersionsAppClipDefaultExperienceGetCommand(d),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp
@@ -34,44 +32,24 @@ Examples:
 	}
 }
 
-// VersionsAppClipDefaultExperienceGetCommand gets the App Clip default experience for a version.
-func VersionsAppClipDefaultExperienceGetCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("app-clip-default-experience view", flag.ExitOnError)
-
-	versionID := shared.BindResourceIDFlag(fs, "version-id", "appStoreVersions", "App Store version ID")
-	output := shared.BindOutputFlags(fs)
-
-	return &ffcli.Command{
-		Name:       "view",
-		ShortUsage: "asc versions app-clip-default-experience view --version-id \"VERSION_ID\"",
-		ShortHelp:  "View App Clip default experience for an app store version.",
+// newVersionsAppClipDefaultExperienceGetCommand gets the App Clip default experience for a version.
+func newVersionsAppClipDefaultExperienceGetCommand(d *shared.Deps) *ffcli.Command {
+	return shared.BuildIDGetCommand(shared.IDGetCommandConfig{
+		Deps:        d,
+		FlagSetName: "app-clip-default-experience view",
+		Name:        "view",
+		ShortUsage:  "asc versions app-clip-default-experience view --version-id \"VERSION_ID\"",
+		ShortHelp:   "View App Clip default experience for an app store version.",
 		LongHelp: `View App Clip default experience for an app store version.
 
 Examples:
   asc versions app-clip-default-experience view --version-id "VERSION_ID"`,
-		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
-		Exec: func(ctx context.Context, args []string) error {
-			versionValue := strings.TrimSpace(*versionID)
-			if versionValue == "" {
-				fmt.Fprintln(os.Stderr, "Error: --version-id is required")
-				return shared.MissingRequiredUsageError("--version-id")
-			}
-
-			client, err := shared.GetASCClient()
-			if err != nil {
-				return fmt.Errorf("versions app-clip-default-experience view: %w", err)
-			}
-
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
-			defer cancel()
-
-			resp, err := client.GetAppStoreVersionAppClipDefaultExperience(requestCtx, versionValue)
-			if err != nil {
-				return fmt.Errorf("versions app-clip-default-experience view: failed to fetch: %w", err)
-			}
-
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+		IDFlag:             "version-id",
+		IDUsage:            "App Store version ID",
+		IDType:             "appStoreVersions",
+		RequiredDiagnostic: true,
+		Fetch: func(ctx context.Context, client *asc.Client, id string) (any, error) {
+			return client.GetAppStoreVersionAppClipDefaultExperience(ctx, id)
 		},
-	}
+	})
 }

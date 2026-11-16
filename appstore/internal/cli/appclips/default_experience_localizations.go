@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/peterbourgon/ff/v3/ffcli"
@@ -13,9 +12,9 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
-// AppClipDefaultExperienceLocalizationsCommand returns the localizations command group.
-func AppClipDefaultExperienceLocalizationsCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("localizations", flag.ExitOnError)
+// newAppClipDefaultExperienceLocalizationsCommand returns the localizations command group.
+func newAppClipDefaultExperienceLocalizationsCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("localizations", flag.ExitOnError)
 
 	return &ffcli.Command{
 		Name:       "localizations",
@@ -27,14 +26,14 @@ Examples:
   asc app-clips default-experiences localizations list --experience-id "EXP_ID"
   asc app-clips default-experiences localizations create --experience-id "EXP_ID" --locale "en-US" --subtitle "Try it"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
-			AppClipDefaultExperienceLocalizationsListCommand(),
-			AppClipDefaultExperienceLocalizationsGetCommand(),
-			AppClipDefaultExperienceLocalizationsCreateCommand(),
-			AppClipDefaultExperienceLocalizationsUpdateCommand(),
-			AppClipDefaultExperienceLocalizationsDeleteCommand(),
-			AppClipDefaultExperienceLocalizationHeaderImageRelationshipCommand(),
+			newAppClipDefaultExperienceLocalizationsListCommand(d),
+			newAppClipDefaultExperienceLocalizationsGetCommand(d),
+			newAppClipDefaultExperienceLocalizationsCreateCommand(d),
+			newAppClipDefaultExperienceLocalizationsUpdateCommand(d),
+			newAppClipDefaultExperienceLocalizationsDeleteCommand(d),
+			newAppClipDefaultExperienceLocalizationHeaderImageRelationshipCommand(d),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp
@@ -42,16 +41,16 @@ Examples:
 	}
 }
 
-// AppClipDefaultExperienceLocalizationsListCommand lists localizations.
-func AppClipDefaultExperienceLocalizationsListCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("list", flag.ExitOnError)
+// newAppClipDefaultExperienceLocalizationsListCommand lists localizations.
+func newAppClipDefaultExperienceLocalizationsListCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("list", flag.ExitOnError)
 
 	experienceID := shared.BindResourceIDFlag(fs, "experience-id", "appClipDefaultExperiences", "Default experience ID")
 	locale := fs.String("locale", "", "Filter by locale(s), comma-separated")
-	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
-	next := fs.String("next", "", "Fetch next page using a links.next URL")
-	paginate := fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")
-	output := shared.BindOutputFlags(fs)
+	limit := fs.Int("limit", 0, shared.LimitFlagUsage(200))
+	next := fs.String("next", "", shared.NextFlagUsage)
+	paginate := fs.Bool("paginate", false, shared.PaginateFlagUsage)
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "list",
@@ -63,81 +62,69 @@ Examples:
   asc app-clips default-experiences localizations list --experience-id "EXP_ID"
   asc app-clips default-experiences localizations list --experience-id "EXP_ID" --locale "en-US"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
-			if *limit != 0 && (*limit < 1 || *limit > 200) {
-				return shared.UsageError("app-clips default-experiences localizations list: --limit must be between 1 and 200")
-			}
-			if err := shared.ValidateNextURL(*next); err != nil {
-				return shared.UsageErrorf("app-clips default-experiences localizations list: %v", err)
-			}
-			if err := shared.RejectNextFlagConflicts(fs, *next, "app-clips default-experiences localizations list", "locale"); err != nil {
+			if err := d.ValidatePaginationFlags(ctx, fs, "app-clips default-experiences localizations list", 200, "locale"); err != nil {
 				return err
 			}
 
 			experienceValue := strings.TrimSpace(*experienceID)
-			if experienceValue == "" {
-				fmt.Fprintln(os.Stderr, "Error: --experience-id is required")
-				return shared.MissingRequiredUsageError("--experience-id")
+			if experienceValue == "" && strings.TrimSpace(*next) == "" {
+				return d.RequiredFlag("--experience-id")
 			}
 
-			client, err := shared.GetASCClient()
+			client, err := d.Client()
 			if err != nil {
 				return fmt.Errorf("app-clips default-experiences localizations list: %w", err)
 			}
 
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
+			requestCtx, cancel := d.Timeout(ctx)
 			defer cancel()
 
 			opts := []asc.AppClipDefaultExperienceLocalizationsOption{
-				asc.WithAppClipDefaultExperienceLocalizationsLimit(*limit),
-				asc.WithAppClipDefaultExperienceLocalizationsNextURL(*next),
+				asc.Limit[asc.AppClipDefaultExperienceLocalizationsOption](*limit),
+				asc.NextURL[asc.AppClipDefaultExperienceLocalizationsOption](*next),
 				asc.WithAppClipDefaultExperienceLocalizationsLocales(shared.SplitCSV(*locale)),
 			}
 
 			if *paginate {
-				paginateOpts := append(opts, asc.WithAppClipDefaultExperienceLocalizationsLimit(200))
+				paginateOpts := append(opts, asc.Limit[asc.AppClipDefaultExperienceLocalizationsOption](200))
 				firstPage, err := client.GetAppClipDefaultExperienceLocalizations(requestCtx, experienceValue, paginateOpts...)
 				if err != nil {
 					if asc.IsNotFound(err) {
 						empty := &asc.AppClipDefaultExperienceLocalizationsResponse{Data: []asc.Resource[asc.AppClipDefaultExperienceLocalizationAttributes]{}}
-						return shared.PrintOutput(empty, *output.Output, *output.Pretty)
+						return d.PrintOutput(empty, *output.Output, *output.Pretty)
 					}
 					return fmt.Errorf("app-clips default-experiences localizations list: failed to fetch: %w", err)
 				}
 
 				resp, err := asc.PaginateAll(requestCtx, firstPage, func(ctx context.Context, nextURL string) (asc.PaginatedResponse, error) {
-					return client.GetAppClipDefaultExperienceLocalizations(ctx, experienceValue, asc.WithAppClipDefaultExperienceLocalizationsNextURL(nextURL))
+					return client.GetAppClipDefaultExperienceLocalizations(ctx, experienceValue, asc.NextURL[asc.AppClipDefaultExperienceLocalizationsOption](nextURL))
 				})
 				if err != nil {
 					return fmt.Errorf("app-clips default-experiences localizations list: %w", err)
 				}
 
-				return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+				return d.PrintOutput(resp, *output.Output, *output.Pretty)
 			}
 
 			resp, err := client.GetAppClipDefaultExperienceLocalizations(requestCtx, experienceValue, opts...)
 			if err != nil {
 				if asc.IsNotFound(err) {
 					empty := &asc.AppClipDefaultExperienceLocalizationsResponse{Data: []asc.Resource[asc.AppClipDefaultExperienceLocalizationAttributes]{}}
-					return shared.PrintOutput(empty, *output.Output, *output.Pretty)
+					return d.PrintOutput(empty, *output.Output, *output.Pretty)
 				}
 				return fmt.Errorf("app-clips default-experiences localizations list: failed to fetch: %w", err)
 			}
 
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+			return d.PrintOutput(resp, *output.Output, *output.Pretty)
 		},
 	}
 }
 
-// AppClipDefaultExperienceLocalizationsGetCommand gets a localization by ID.
-func AppClipDefaultExperienceLocalizationsGetCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("view", flag.ExitOnError)
-
-	localizationID := shared.BindResourceIDFlag(fs, "localization-id", "appClipDefaultExperienceLocalizations", "Localization ID")
-	output := shared.BindOutputFlags(fs)
-
-	return &ffcli.Command{
+// newAppClipDefaultExperienceLocalizationsGetCommand gets a localization by ID.
+func newAppClipDefaultExperienceLocalizationsGetCommand(d *shared.Deps) *ffcli.Command {
+	return shared.BuildIDGetCommand(shared.IDGetCommandConfig{
 		Name:       "view",
 		ShortUsage: "asc app-clips default-experiences localizations view --localization-id \"LOC_ID\"",
 		ShortHelp:  "View a localization by ID.",
@@ -145,43 +132,21 @@ func AppClipDefaultExperienceLocalizationsGetCommand() *ffcli.Command {
 
 Examples:
   asc app-clips default-experiences localizations view --localization-id "LOC_ID"`,
-		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
-		Exec: func(ctx context.Context, args []string) error {
-			locValue := strings.TrimSpace(*localizationID)
-			if locValue == "" {
-				fmt.Fprintln(os.Stderr, "Error: --localization-id is required")
-				return shared.MissingRequiredUsageError("--localization-id")
-			}
-
-			client, err := shared.GetASCClient()
-			if err != nil {
-				return fmt.Errorf("app-clips default-experiences localizations view: %w", err)
-			}
-
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
-			defer cancel()
-
-			resp, err := client.GetAppClipDefaultExperienceLocalization(requestCtx, locValue)
-			if err != nil {
-				return fmt.Errorf("app-clips default-experiences localizations view: failed to fetch: %w", err)
-			}
-
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+		IDFlag:             "localization-id",
+		IDUsage:            "Localization ID",
+		IDType:             "appClipDefaultExperienceLocalizations",
+		RequiredDiagnostic: true,
+		Deps:               d,
+		Fetch: func(ctx context.Context, client *asc.Client, id string) (any, error) {
+			return client.GetAppClipDefaultExperienceLocalization(ctx, id)
 		},
-	}
+	})
 }
 
-// AppClipDefaultExperienceLocalizationsCreateCommand creates a localization.
-func AppClipDefaultExperienceLocalizationsCreateCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("create", flag.ExitOnError)
-
-	experienceID := shared.BindResourceIDFlag(fs, "experience-id", "appClipDefaultExperiences", "Default experience ID")
-	locale := fs.String("locale", "", "Locale (e.g., en-US)")
-	subtitle := fs.String("subtitle", "", "Subtitle")
-	output := shared.BindOutputFlags(fs)
-
-	return &ffcli.Command{
+// newAppClipDefaultExperienceLocalizationsCreateCommand creates a localization.
+func newAppClipDefaultExperienceLocalizationsCreateCommand(d *shared.Deps) *ffcli.Command {
+	var attrs asc.AppClipDefaultExperienceLocalizationCreateAttributes
+	return shared.BuildCreateCommand(shared.WriteCommandConfig{
 		Name:       "create",
 		ShortUsage: "asc app-clips default-experiences localizations create --experience-id \"EXP_ID\" --locale \"en-US\" [flags]",
 		ShortHelp:  "Create a localization for a default experience.",
@@ -189,59 +154,24 @@ func AppClipDefaultExperienceLocalizationsCreateCommand() *ffcli.Command {
 
 Examples:
   asc app-clips default-experiences localizations create --experience-id "EXP_ID" --locale "en-US" --subtitle "Try it"`,
-		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
-		Exec: func(ctx context.Context, args []string) error {
-			experienceValue := strings.TrimSpace(*experienceID)
-			if experienceValue == "" {
-				fmt.Fprintln(os.Stderr, "Error: --experience-id is required")
-				return shared.MissingRequiredUsageError("--experience-id")
-			}
-
-			localeValue := strings.TrimSpace(*locale)
-			if localeValue == "" {
-				fmt.Fprintln(os.Stderr, "Error: --locale is required")
-				return shared.MissingRequiredUsageError("--locale")
-			}
-
-			var subtitleValue *string
-			if strings.TrimSpace(*subtitle) != "" {
-				value := strings.TrimSpace(*subtitle)
-				subtitleValue = &value
-			}
-
-			client, err := shared.GetASCClient()
-			if err != nil {
-				return fmt.Errorf("app-clips default-experiences localizations create: %w", err)
-			}
-
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
-			defer cancel()
-
-			attrs := asc.AppClipDefaultExperienceLocalizationCreateAttributes{
-				Locale:   localeValue,
-				Subtitle: subtitleValue,
-			}
-
-			resp, err := client.CreateAppClipDefaultExperienceLocalization(requestCtx, experienceValue, attrs)
-			if err != nil {
-				return fmt.Errorf("app-clips default-experiences localizations create: failed to create: %w", err)
-			}
-
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+		IDFlag:  "experience-id",
+		IDUsage: "Default experience ID",
+		IDType:  "appClipDefaultExperiences",
+		Fields: []shared.AttributeFlag{
+			shared.RequiredStringFlag(&attrs.Locale, "locale", "Locale (e.g., en-US)"),
+			shared.OptionalStringFlag(&attrs.Subtitle, "subtitle", "Subtitle"),
 		},
-	}
+		Deps: d,
+		Send: func(ctx context.Context, client *asc.Client, id string) (any, error) {
+			return client.CreateAppClipDefaultExperienceLocalization(ctx, id, attrs)
+		},
+	})
 }
 
-// AppClipDefaultExperienceLocalizationsUpdateCommand updates a localization.
-func AppClipDefaultExperienceLocalizationsUpdateCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("update", flag.ExitOnError)
-
-	localizationID := shared.BindResourceIDFlag(fs, "localization-id", "appClipDefaultExperienceLocalizations", "Localization ID")
-	subtitle := fs.String("subtitle", "", "Subtitle")
-	output := shared.BindOutputFlags(fs)
-
-	return &ffcli.Command{
+// newAppClipDefaultExperienceLocalizationsUpdateCommand updates a localization.
+func newAppClipDefaultExperienceLocalizationsUpdateCommand(d *shared.Deps) *ffcli.Command {
+	var subtitle *string
+	return shared.BuildUpdateCommand(shared.WriteCommandConfig{
 		Name:       "update",
 		ShortUsage: "asc app-clips default-experiences localizations update --localization-id \"LOC_ID\" [flags]",
 		ShortHelp:  "Update a localization.",
@@ -249,60 +179,22 @@ func AppClipDefaultExperienceLocalizationsUpdateCommand() *ffcli.Command {
 
 Examples:
   asc app-clips default-experiences localizations update --localization-id "LOC_ID" --subtitle "Try it"`,
-		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
-		Exec: func(ctx context.Context, args []string) error {
-			locValue := strings.TrimSpace(*localizationID)
-			if locValue == "" {
-				fmt.Fprintln(os.Stderr, "Error: --localization-id is required")
-				return shared.MissingRequiredUsageError("--localization-id")
-			}
-
-			visited := map[string]bool{}
-			fs.Visit(func(f *flag.Flag) {
-				visited[f.Name] = true
-			})
-
-			if !visited["subtitle"] {
-				fmt.Fprintln(os.Stderr, "Error: at least one update flag is required")
-				return shared.MissingRequiredUsageError("")
-			}
-
-			var attrs *asc.AppClipDefaultExperienceLocalizationUpdateAttributes
-			if visited["subtitle"] {
-				value := strings.TrimSpace(*subtitle)
-				attrs = &asc.AppClipDefaultExperienceLocalizationUpdateAttributes{
-					Subtitle: &value,
-				}
-			}
-
-			client, err := shared.GetASCClient()
-			if err != nil {
-				return fmt.Errorf("app-clips default-experiences localizations update: %w", err)
-			}
-
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
-			defer cancel()
-
-			resp, err := client.UpdateAppClipDefaultExperienceLocalization(requestCtx, locValue, attrs)
-			if err != nil {
-				return fmt.Errorf("app-clips default-experiences localizations update: failed to update: %w", err)
-			}
-
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+		IDFlag:  "localization-id",
+		IDUsage: "Localization ID",
+		IDType:  "appClipDefaultExperienceLocalizations",
+		Fields: []shared.AttributeFlag{
+			shared.ExplicitStringFlag(&subtitle, "subtitle", "Subtitle"),
 		},
-	}
+		Deps: d,
+		Send: func(ctx context.Context, client *asc.Client, id string) (any, error) {
+			return client.UpdateAppClipDefaultExperienceLocalization(ctx, id, &asc.AppClipDefaultExperienceLocalizationUpdateAttributes{Subtitle: subtitle})
+		},
+	})
 }
 
-// AppClipDefaultExperienceLocalizationsDeleteCommand deletes a localization.
-func AppClipDefaultExperienceLocalizationsDeleteCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("delete", flag.ExitOnError)
-
-	localizationID := shared.BindResourceIDFlag(fs, "localization-id", "appClipDefaultExperienceLocalizations", "Localization ID")
-	confirm := fs.Bool("confirm", false, "Confirm deletion")
-	output := shared.BindOutputFlags(fs)
-
-	return &ffcli.Command{
+// newAppClipDefaultExperienceLocalizationsDeleteCommand deletes a localization.
+func newAppClipDefaultExperienceLocalizationsDeleteCommand(d *shared.Deps) *ffcli.Command {
+	return shared.BuildConfirmDeleteCommand(shared.ConfirmDeleteCommandConfig{
 		Name:       "delete",
 		ShortUsage: "asc app-clips default-experiences localizations delete --localization-id \"LOC_ID\" --confirm",
 		ShortHelp:  "Delete a localization.",
@@ -310,47 +202,26 @@ func AppClipDefaultExperienceLocalizationsDeleteCommand() *ffcli.Command {
 
 Examples:
   asc app-clips default-experiences localizations delete --localization-id "LOC_ID" --confirm`,
-		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
-		Exec: func(ctx context.Context, args []string) error {
-			locValue := strings.TrimSpace(*localizationID)
-			if locValue == "" {
-				fmt.Fprintln(os.Stderr, "Error: --localization-id is required")
-				return shared.MissingRequiredUsageError("--localization-id")
-			}
-			if !*confirm {
-				fmt.Fprintln(os.Stderr, "Error: --confirm is required to delete")
-				return shared.MissingRequiredUsageError("--confirm")
-			}
-
-			client, err := shared.GetASCClient()
-			if err != nil {
-				return fmt.Errorf("app-clips default-experiences localizations delete: %w", err)
-			}
-
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
-			defer cancel()
-
-			if err := client.DeleteAppClipDefaultExperienceLocalization(requestCtx, locValue); err != nil {
-				return fmt.Errorf("app-clips default-experiences localizations delete: failed to delete: %w", err)
-			}
-
-			result := &asc.AppClipDefaultExperienceLocalizationDeleteResult{
-				ID:      locValue,
-				Deleted: true,
-			}
-
-			return shared.PrintOutput(result, *output.Output, *output.Pretty)
+		IDFlag:             "localization-id",
+		IDUsage:            "Localization ID",
+		IDType:             "appClipDefaultExperienceLocalizations",
+		RequiredDiagnostic: true,
+		Deps:               d,
+		Delete: func(ctx context.Context, client *asc.Client, id string) error {
+			return client.DeleteAppClipDefaultExperienceLocalization(ctx, id)
 		},
-	}
+		Result: func(id string) any {
+			return &asc.DeleteResult{ID: id, Deleted: true}
+		},
+	})
 }
 
-// AppClipDefaultExperienceLocalizationHeaderImageRelationshipCommand returns the header image relationship command.
-func AppClipDefaultExperienceLocalizationHeaderImageRelationshipCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("header-image-relationship", flag.ExitOnError)
+// newAppClipDefaultExperienceLocalizationHeaderImageRelationshipCommand returns the header image relationship command.
+func newAppClipDefaultExperienceLocalizationHeaderImageRelationshipCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("header-image-relationship", flag.ExitOnError)
 
 	localizationID := shared.BindResourceIDFlag(fs, "localization-id", "appClipDefaultExperienceLocalizations", "Localization ID")
-	output := shared.BindOutputFlags(fs)
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "header-image-relationship",
@@ -361,20 +232,19 @@ func AppClipDefaultExperienceLocalizationHeaderImageRelationshipCommand() *ffcli
 Examples:
   asc app-clips default-experiences localizations header-image-relationship --localization-id "LOC_ID"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			locValue := strings.TrimSpace(*localizationID)
 			if locValue == "" {
-				fmt.Fprintln(os.Stderr, "Error: --localization-id is required")
-				return shared.MissingRequiredUsageError("--localization-id")
+				return d.RequiredFlag("--localization-id")
 			}
 
-			client, err := shared.GetASCClient()
+			client, err := d.Client()
 			if err != nil {
 				return fmt.Errorf("app-clips default-experiences localizations header-image-relationship: %w", err)
 			}
 
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
+			requestCtx, cancel := d.Timeout(ctx)
 			defer cancel()
 
 			resp, err := client.GetAppClipDefaultExperienceLocalizationHeaderImageRelationship(requestCtx, locValue)
@@ -382,7 +252,7 @@ Examples:
 				return fmt.Errorf("app-clips default-experiences localizations header-image-relationship: failed to fetch: %w", err)
 			}
 
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+			return d.PrintOutput(resp, *output.Output, *output.Pretty)
 		},
 	}
 }

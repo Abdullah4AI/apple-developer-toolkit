@@ -1,0 +1,1027 @@
+{
+  "openapi": "3.0.1",
+  "paths": {
+    "/v1/widgets": {
+      "get": {
+        "tags": ["Widgets"],
+        "operationId": "widgets_getCollection",
+        "parameters": [
+          {"name": "filter[name]", "in": "query", "schema": {"type": "array", "items": {"type": "string"}}, "style": "form", "explode": false},
+          {"name": "fields[widgets]", "in": "query", "schema": {"type": "array", "items": {"type": "string"}}, "style": "form", "explode": false},
+          {"name": "fields[gadgets]", "in": "query", "schema": {"type": "array", "items": {"type": "string"}}, "style": "form", "explode": false},
+          {"name": "include", "in": "query", "schema": {"type": "array", "items": {"type": "string"}}, "style": "form", "explode": false},
+          {"name": "sort", "in": "query", "schema": {"type": "array", "items": {"type": "string"}}, "style": "form", "explode": false},
+          {"name": "filter[color]", "in": "query", "schema": {"type": "array", "items": {"type": "string"}}, "style": "form", "explode": true},
+          {"name": "filter[shape]", "in": "query", "schema": {"type": "array", "items": {"type": "string"}}, "style": "form"},
+          {"name": "limit", "in": "query", "schema": {"type": "integer", "maximum": 200}, "style": "form"}
+        ],
+        "responses": {
+          "200": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/WidgetsResponse"}}}},
+          "400": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}}
+        }
+      },
+      "post": {
+        "tags": ["Widgets"],
+        "operationId": "widgets_createInstance",
+        "requestBody": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/WidgetCreateRequest"}}}},
+        "responses": {
+          "201": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/WidgetResponse"}}}}
+        }
+      }
+    },
+    "/v1/widgetNotes": {
+      "post": {
+        "tags": ["Widgets"],
+        "operationId": "widgetNotes_createInstance",
+        "requestBody": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/WidgetNoteCreateRequest"}}}},
+        "responses": {
+          "201": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/WidgetResponse"}}}}
+        }
+      }
+    },
+    "/v1/widgetReleases": {
+      "post": {
+        "tags": ["Widgets"],
+        "operationId": "widgetReleases_createInstance",
+        "requestBody": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/WidgetReleaseCreateRequest"}}}},
+        "responses": {
+          "201": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/WidgetResponse"}}}}
+        }
+      }
+    },
+    "/v1/widgets/{id}": {
+      "get": {
+        "tags": ["Widgets"],
+        "operationId": "widgets_getInstance",
+        "responses": {
+          "200": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/WidgetResponse"}}}}
+        }
+      },
+      "patch": {
+        "tags": ["Widgets"],
+        "operationId": "widgets_updateInstance",
+        "requestBody": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/WidgetUpdateRequest"}}}},
+        "responses": {
+          "200": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/WidgetResponse"}}}}
+        }
+      },
+      "delete": {
+        "tags": ["Widgets"],
+        "operationId": "widgets_deleteInstance",
+        "responses": {"204": {"description": "Success (no content)"}}
+      }
+    },
+    "/v1/widgets/{id}/gadgets": {
+      "get": {
+        "tags": ["Widgets"],
+        "operationId": "widgets_gadgets_getToManyRelated",
+        "responses": {
+          "200": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/GadgetsResponse"}}}}
+        }
+      }
+    },
+    "/v1/widgets/{id}/owner": {
+      "get": {
+        "tags": ["Widgets"],
+        "operationId": "widgets_owner_getToOneRelated",
+        "parameters": [
+          {"name": "fields[widgets]", "in": "query", "schema": {"type": "array", "items": {"type": "string"}}, "style": "form", "explode": false},
+          {"name": "exists[name]", "in": "query", "schema": {"type": "boolean"}, "style": "form"}
+        ],
+        "responses": {
+          "200": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/WidgetResponse"}}}}
+        }
+      }
+    },
+    "/v1/zippers/{id}/sprockets": {
+      "get": {
+        "tags": ["Widgets"],
+        "operationId": "zippers_sprockets_getToManyRelated",
+        "parameters": [
+          {"name": "filter[label]", "in": "query", "schema": {"type": "array", "items": {"type": "string"}}, "style": "form", "explode": false},
+          {"name": "filter[color]", "in": "query", "schema": {"type": "array", "items": {"type": "string"}}, "style": "form", "explode": true},
+          {"name": "granularity", "in": "query", "schema": {"type": "string", "enum": ["P1D", "PT1H"]}, "style": "form", "explode": false},
+          {"name": "fields[widgets]", "in": "query", "schema": {"type": "array", "items": {"type": "string"}}, "style": "form", "explode": false},
+          {"name": "limit[teeth]", "in": "query", "schema": {"type": "integer", "maximum": 50}, "style": "form"},
+          {"name": "exists[owner]", "in": "query", "schema": {"type": "boolean"}, "style": "form", "explode": false},
+          {"name": "limit", "in": "query", "schema": {"type": "integer", "maximum": 200}, "style": "form"}
+        ],
+        "responses": {
+          "200": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/WidgetsResponse"}}}}
+        }
+      }
+    },
+    "/v1/widgets/{id}/parts": {
+      "get": {
+        "tags": ["Widgets"],
+        "operationId": "widgets_parts_getToManyRelated",
+        "responses": {
+          "200": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/GadgetsResponse"}}}}
+        }
+      }
+    },
+    "/v1/widgets/{id}/relationships/gadgets": {
+      "patch": {
+        "tags": ["Widgets"],
+        "operationId": "widgets_gadgets_replaceToManyRelationship",
+        "requestBody": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/WidgetGadgetsLinkagesRequest"}}}},
+        "responses": {"204": {"description": "Success (no content)"}}
+      }
+    },
+    "/v1/widgets/{id}/relationships/visibleParts": {
+      "post": {
+        "tags": ["Widgets"],
+        "operationId": "widgets_visibleParts_createToManyRelationship",
+        "requestBody": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/WidgetVisiblePartsLinkagesRequest"}}}},
+        "responses": {"204": {"description": "Success (no content)"}}
+      },
+      "delete": {
+        "tags": ["Widgets"],
+        "operationId": "widgets_visibleParts_deleteToManyRelationship",
+        "requestBody": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/WidgetVisiblePartsLinkagesRequest"}}}},
+        "responses": {"204": {"description": "Success (no content)"}}
+      },
+      "patch": {
+        "tags": ["Widgets"],
+        "operationId": "widgets_visibleParts_replaceToManyRelationship",
+        "requestBody": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/WidgetVisiblePartsLinkagesRequest"}}}},
+        "responses": {"204": {"description": "Success (no content)"}}
+      }
+    },
+    "/v1/widgets/{id}/relationships/wheels": {
+      "post": {
+        "tags": ["Widgets"],
+        "operationId": "widgets_wheels_createToManyRelationship",
+        "requestBody": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/WidgetWheelsLinkagesRequest"}}}},
+        "responses": {"204": {"description": "Success (no content)"}}
+      },
+      "delete": {
+        "tags": ["Widgets"],
+        "operationId": "widgets_wheels_deleteToManyRelationship",
+        "requestBody": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/WidgetWheelsLinkagesRequest"}}}},
+        "responses": {"204": {"description": "Success (no content)"}}
+      },
+      "patch": {
+        "tags": ["Widgets"],
+        "operationId": "widgets_wheels_replaceToManyRelationship",
+        "requestBody": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/WidgetWheelsLinkagesRequest"}}}},
+        "responses": {"204": {"description": "Success (no content)"}}
+      }
+    },
+    "/v1/widgets/{id}/wheel": {
+      "get": {
+        "tags": ["Widgets"],
+        "operationId": "widgets_wheel_getToOneRelated",
+        "responses": {
+          "200": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/WidgetResponse"}}}}
+        }
+      }
+    },
+    "/v1/widgets/{id}/wrapper": {
+      "get": {
+        "tags": ["Widgets"],
+        "operationId": "widgets_wrapper_getToOneRelated",
+        "responses": {
+          "200": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/WidgetResponse"}}}}
+        }
+      }
+    },
+    "/v1/wizards/{id}": {
+      "patch": {
+        "tags": ["Widgets"],
+        "operationId": "wizards_updateInstance",
+        "requestBody": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/WizardUpdateRequest"}}}},
+        "responses": {
+          "200": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/WidgetResponse"}}}}
+        }
+      }
+    },
+    "/v2/wizards/{id}": {
+      "patch": {
+        "tags": ["Widgets"],
+        "operationId": "wizardsV2_updateInstance",
+        "requestBody": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/WizardUpdateRequest"}}}},
+        "responses": {
+          "200": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/WidgetResponse"}}}}
+        }
+      }
+    },
+    "/v3/wizards/{id}": {
+      "patch": {
+        "tags": ["Widgets"],
+        "operationId": "wizardsV3_updateInstance",
+        "requestBody": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/WizardUpdateRequest"}}}},
+        "responses": {
+          "200": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/WidgetResponse"}}}}
+        }
+      }
+    },
+    "/v1/wrenches": {
+      "post": {
+        "tags": ["Widgets"],
+        "operationId": "wrenches_createInstance",
+        "requestBody": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/WrenchCreateRequest"}}}},
+        "responses": {
+          "201": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/WrenchResponse"}}}}
+        }
+      }
+    },
+    "/v1/wrenches/{id}": {
+      "patch": {
+        "tags": ["Widgets"],
+        "operationId": "wrenches_updateInstance",
+        "requestBody": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/WrenchUpdateRequest"}}}},
+        "responses": {
+          "200": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/WrenchResponse"}}}}
+        }
+      }
+    },
+    "/v1/widgets/{id}/zippers": {
+      "get": {
+        "tags": ["Widgets"],
+        "operationId": "widgets_zippers_getToManyRelated",
+        "parameters": [
+          {"name": "fields[widgets]", "in": "query", "schema": {"type": "array", "items": {"type": "string"}}, "style": "form", "explode": false},
+          {"name": "filter[color]", "in": "query", "schema": {"type": "array", "items": {"type": "string"}}, "style": "form", "explode": true},
+          {"name": "limit", "in": "query", "schema": {"type": "integer", "maximum": 200}, "style": "form"}
+        ],
+        "responses": {
+          "200": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/WidgetsResponse"}}}}
+        }
+      }
+    },
+    "/v1/yoyos": {
+      "post": {
+        "tags": ["Yoyos"],
+        "operationId": "yoyos_createInstance",
+        "requestBody": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/YoyoCreateRequest"}}}},
+        "responses": {
+          "201": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/YoyoResponse"}}}}
+        }
+      }
+    },
+    "/v1/yoyos/{id}": {
+      "get": {
+        "tags": ["Yoyos"],
+        "operationId": "yoyos_getInstance",
+        "responses": {
+          "200": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/YoyoResponse"}}}}
+        }
+      },
+      "patch": {
+        "tags": ["Yoyos"],
+        "operationId": "yoyos_updateInstance",
+        "requestBody": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/YoyoUpdateRequest"}}}},
+        "responses": {
+          "200": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/YoyoResponse"}}}}
+        }
+      }
+    },
+    "/v1/yoyos/{id}/zippers": {
+      "get": {
+        "tags": ["Yoyos"],
+        "operationId": "yoyos_zippers_getToManyRelated",
+        "parameters": [
+          {"name": "filter[kind]", "in": "query", "schema": {"type": "array", "items": {"type": "string"}}, "style": "form", "explode": false},
+          {"name": "fields[widgets]", "in": "query", "schema": {"type": "array", "items": {"type": "string"}}, "style": "form", "explode": false},
+          {"name": "limit", "in": "query", "schema": {"type": "integer", "maximum": 200}, "style": "form"}
+        ],
+        "responses": {
+          "200": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/WidgetsResponse"}}}}
+        }
+      }
+    },
+    "/v1/zippers": {
+      "get": {
+        "tags": ["Widgets"],
+        "operationId": "zippers_getCollection",
+        "parameters": [
+          {"name": "filter[kind]", "in": "query", "schema": {"type": "array", "items": {"type": "string"}}, "style": "form", "explode": false},
+          {"name": "filter[maker]", "in": "query", "schema": {"type": "array", "items": {"type": "string"}}, "style": "form", "explode": false},
+          {"name": "fields[widgets]", "in": "query", "schema": {"type": "array", "items": {"type": "string"}}, "style": "form", "explode": false},
+          {"name": "limit", "in": "query", "schema": {"type": "integer", "maximum": 200}, "style": "form"}
+        ],
+        "responses": {
+          "200": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/WidgetsResponse"}}}}
+        }
+      }
+    },
+    "/v1/zippers/{id}/teeth": {
+      "get": {
+        "tags": ["Widgets"],
+        "operationId": "zippers_teeth_getToManyRelated",
+        "parameters": [
+          {"name": "filter[pitch]", "in": "query", "schema": {"type": "array", "items": {"type": "string"}}, "style": "form", "explode": false},
+          {"name": "fields[widgets]", "in": "query", "schema": {"type": "array", "items": {"type": "string"}}, "style": "form", "explode": false},
+          {"name": "sort", "in": "query", "schema": {"type": "array", "items": {"type": "string"}}, "style": "form", "explode": false},
+          {"name": "limit[gears]", "in": "query", "schema": {"type": "integer", "maximum": 50}, "style": "form"},
+          {"name": "limit", "in": "query", "schema": {"type": "integer", "maximum": 200}, "style": "form"}
+        ],
+        "responses": {
+          "200": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/WidgetsResponse"}}}}
+        }
+      }
+    },
+    "/v1/zippers/{id}/toggles": {
+      "get": {
+        "tags": ["Widgets"],
+        "operationId": "zippers_toggles_getToManyRelated",
+        "parameters": [
+          {"name": "filter[name]", "in": "query", "schema": {"type": "array", "items": {"type": "string"}}, "style": "form", "explode": false},
+          {"name": "filter[code]", "in": "query", "schema": {"type": "array", "items": {"type": "string"}}, "style": "form", "explode": false},
+          {"name": "filter[id]", "in": "query", "schema": {"type": "array", "items": {"type": "string"}}, "style": "form", "explode": false},
+          {"name": "filter[kind]", "in": "query", "schema": {"type": "array", "items": {"type": "string"}}, "style": "form", "explode": false},
+          {"name": "limit", "in": "query", "schema": {"type": "integer", "maximum": 200}, "style": "form"}
+        ],
+        "responses": {
+          "200": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/WidgetsResponse"}}}}
+        }
+      }
+    },
+    "/v1/teeth/{id}": {
+      "get": {
+        "tags": ["Widgets"],
+        "operationId": "teeth_getInstance",
+        "parameters": [
+          {"name": "fields[widgets]", "in": "query", "schema": {"type": "array", "items": {"type": "string"}}, "style": "form", "explode": false},
+          {"name": "limit[gears]", "in": "query", "schema": {"type": "integer", "maximum": 50}, "style": "form"}
+        ],
+        "responses": {
+          "200": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/WidgetResponse"}}}}
+        }
+      }
+    },
+    "/v1/zoneIds": {
+      "get": {
+        "tags": ["ZoneIds"],
+        "operationId": "zoneIds_getCollection",
+        "parameters": [
+          {"name": "limit", "in": "query", "schema": {"type": "integer", "maximum": 200}, "style": "form"}
+        ],
+        "responses": {
+          "200": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/ZoneIdsResponse"}}}}
+        }
+      },
+      "post": {
+        "tags": ["ZoneIds"],
+        "operationId": "zoneIds_createInstance",
+        "requestBody": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/ZoneIdCreateRequest"}}}},
+        "responses": {
+          "201": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/ZoneIdResponse"}}}}
+        }
+      }
+    },
+    "/v1/zoneIds/{id}": {
+      "get": {
+        "tags": ["ZoneIds"],
+        "operationId": "zoneIds_getInstance",
+        "responses": {
+          "200": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/ZoneIdResponse"}}}}
+        }
+      },
+      "patch": {
+        "tags": ["ZoneIds"],
+        "operationId": "zoneIds_updateInstance",
+        "requestBody": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/ZoneIdUpdateRequest"}}}},
+        "responses": {
+          "200": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/ZoneIdResponse"}}}}
+        }
+      }
+    },
+    "/v1/wristbands": {
+      "post": {
+        "tags": ["Widgets"],
+        "operationId": "wristbands_createInstance",
+        "requestBody": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/WristbandCreateRequest"}}}},
+        "responses": {
+          "201": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/WristbandResponse"}}}}
+        }
+      }
+    },
+    "/v1/zebras": {
+      "post": {
+        "tags": ["Zebras"],
+        "operationId": "zebras_createInstance",
+        "requestBody": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/ZebraCreateRequest"}}}},
+        "responses": {
+          "201": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/ZebraResponse"}}}}
+        }
+      }
+    },
+    "/v1/zebras/{id}": {
+      "patch": {
+        "tags": ["Zebras"],
+        "operationId": "zebras_updateInstance",
+        "requestBody": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/ZebraUpdateRequest"}}}},
+        "responses": {
+          "200": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/ZebraResponse"}}}}
+        }
+      }
+    },
+    "/v2/zebras": {
+      "post": {
+        "tags": ["Zebras"],
+        "operationId": "zebrasV2_createInstance",
+        "requestBody": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/ZebraV2CreateRequest"}}}},
+        "responses": {
+          "201": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/ZebraV2Response"}}}}
+        }
+      }
+    },
+    "/v2/zebras/{id}": {
+      "patch": {
+        "tags": ["Zebras"],
+        "operationId": "zebrasV2_updateInstance",
+        "requestBody": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/ZebraV2UpdateRequest"}}}},
+        "responses": {
+          "200": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/ZebraV2Response"}}}}
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ErrorResponse": {"type": "object"},
+      "Widget": {
+        "type": "object",
+        "properties": {
+          "type": {"type": "string", "enum": ["widgets"]},
+          "id": {"type": "string"},
+          "attributes": {
+            "type": "object",
+            "properties": {
+              "name": {"type": "string"},
+              "count": {"type": "integer"},
+              "enabled": {"type": "boolean"},
+              "apiKeyId": {"type": "string"},
+              "tags": {"type": "array", "items": {"type": "string"}}
+            }
+          }
+        },
+        "required": ["id", "type"]
+      },
+      "WidgetResponse": {
+        "type": "object",
+        "properties": {"data": {"$ref": "#/components/schemas/Widget"}},
+        "required": ["data"]
+      },
+      "WidgetsResponse": {
+        "type": "object",
+        "properties": {"data": {"type": "array", "items": {"$ref": "#/components/schemas/Widget"}}},
+        "required": ["data"]
+      },
+      "GadgetsResponse": {"type": "object"},
+      "WidgetCreateRequest": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "type": {"type": "string", "enum": ["widgets"]},
+              "attributes": {
+                "type": "object",
+                "properties": {
+                  "name": {"type": "string"},
+                  "count": {"type": "integer", "nullable": true}
+                },
+                "required": ["name"]
+              }
+            },
+            "required": ["attributes", "type"]
+          }
+        },
+        "required": ["data"]
+      },
+      "WidgetUpdateRequest": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "type": {"type": "string", "enum": ["widgets"]},
+              "id": {"type": "string"},
+              "attributes": {
+                "type": "object",
+                "properties": {
+                  "name": {"type": "string", "nullable": true},
+                  "enabled": {"type": "boolean", "nullable": true}
+                }
+              }
+            },
+            "required": ["id", "type"]
+          }
+        },
+        "required": ["data"]
+      },
+      "WidgetNoteCreateRequest": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "type": {"type": "string", "enum": ["widgetNotes"]},
+              "attributes": {
+                "type": "object",
+                "properties": {"text": {"type": "string"}},
+                "required": ["text"]
+              },
+              "relationships": {
+                "type": "object",
+                "properties": {
+                  "widget": {"type": "object", "properties": {"data": {"type": "object", "properties": {"type": {"type": "string", "enum": ["widgets"]}, "id": {"type": "string"}}, "required": ["id", "type"]}}, "required": ["data"]},
+                  "gadgets": {"type": "object", "properties": {"data": {"type": "array", "items": {"type": "object", "properties": {"type": {"type": "string", "enum": ["gadgets"]}, "id": {"type": "string"}}, "required": ["id", "type"]}}}}
+                },
+                "required": ["widget"]
+              }
+            },
+            "required": ["attributes", "relationships", "type"]
+          }
+        },
+        "required": ["data"]
+      },
+      "WidgetReleaseCreateRequest": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "type": {"type": "string", "enum": ["widgetReleases"]},
+              "relationships": {
+                "type": "object",
+                "properties": {
+                  "widget": {"type": "object", "properties": {"data": {"type": "object", "properties": {"type": {"type": "string", "enum": ["widgets"]}, "id": {"type": "string"}}, "required": ["id", "type"]}}, "required": ["data"]},
+                  "gadget": {"type": "object", "properties": {"data": {"type": "object", "properties": {"type": {"type": "string", "enum": ["gadgets"]}, "id": {"type": "string"}}, "required": ["id", "type"]}}, "required": ["data"]},
+                  "owner": {"type": "object", "properties": {"data": {"type": "object", "properties": {"type": {"type": "string", "enum": ["widgets"]}, "id": {"type": "string"}}, "required": ["id", "type"]}}}
+                },
+                "required": ["widget", "gadget"]
+              }
+            },
+            "required": ["relationships", "type"]
+          }
+        },
+        "required": ["data"]
+      },
+      "WidgetGadgetsLinkagesRequest": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "type": {"type": "string", "enum": ["gadgets"]},
+                "id": {"type": "string"}
+              },
+              "required": ["id", "type"]
+            }
+          }
+        },
+        "required": ["data"]
+      },
+      "WidgetVisiblePartsLinkagesRequest": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "type": {"type": "string", "enum": ["parts"]},
+                "id": {"type": "string"}
+              },
+              "required": ["id", "type"]
+            }
+          }
+        },
+        "required": ["data"]
+      },
+      "WidgetWheelsLinkagesRequest": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "type": {"type": "string", "enum": ["wheels"]},
+                "id": {"type": "string"}
+              },
+              "required": ["id", "type"]
+            }
+          }
+        },
+        "required": ["data"]
+      },
+      "WizardUpdateRequest": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "type": {"type": "string", "enum": ["wizards"]},
+              "id": {"type": "string"},
+              "attributes": {
+                "type": "object",
+                "properties": {
+                  "title": {"type": "string", "nullable": true},
+                  "visible": {"type": "boolean", "nullable": true}
+                }
+              }
+            },
+            "required": ["id", "type"]
+          }
+        },
+        "required": ["data"]
+      },
+      "WrenchResponse": {"type": "object"},
+      "WrenchCreateRequest": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "type": {"type": "string", "enum": ["wrenches"]},
+              "attributes": {
+                "type": "object",
+                "properties": {
+                  "fileSize": {"type": "integer"},
+                  "fileName": {"type": "string"}
+                },
+                "required": ["fileName", "fileSize"]
+              }
+            },
+            "required": ["attributes", "type"]
+          }
+        },
+        "required": ["data"]
+      },
+      "WrenchUpdateRequest": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "type": {"type": "string", "enum": ["wrenches"]},
+              "id": {"type": "string"},
+              "attributes": {
+                "type": "object",
+                "properties": {
+                  "sourceFileChecksum": {"type": "string"},
+                  "uploaded": {"type": "boolean"}
+                }
+              }
+            },
+            "required": ["id", "type"]
+          }
+        },
+        "required": ["data"]
+      },
+      "YoyoColor": {"type": "string", "enum": ["RED", "BLUE"]},
+      "YoyoState": {"type": "string", "enum": ["NEW", "USED"]},
+      "YoyoKind": {"type": "string", "enum": ["CLASSIC", "LOOPING"]},
+      "YoyoNote": {"type": "string"},
+      "YoyoImage": {"type": "object", "properties": {"templateUrl": {"type": "string"}, "width": {"type": "integer"}}},
+      "YoyoPart": {"type": "object", "properties": {"name": {"type": "string"}}},
+      "YoyoSize": {"type": "object", "properties": {"diameter": {"type": "number"}}},
+      "YoyoLabels": {"type": "object", "additionalProperties": {"type": "string"}},
+      "Yoyo": {
+        "type": "object",
+        "properties": {
+          "type": {"type": "string", "enum": ["yoyos"]},
+          "id": {"type": "string"},
+          "attributes": {
+            "type": "object",
+            "properties": {
+              "name": {"type": "string"},
+              "color": {"$ref": "#/components/schemas/YoyoColor"},
+              "state": {"$ref": "#/components/schemas/YoyoState"},
+              "kind": {"$ref": "#/components/schemas/YoyoKind"},
+              "image": {"$ref": "#/components/schemas/YoyoImage"},
+              "parts": {"type": "array", "items": {"$ref": "#/components/schemas/YoyoPart"}},
+              "colors": {"type": "array", "items": {"$ref": "#/components/schemas/YoyoColor"}},
+              "size": {"$ref": "#/components/schemas/YoyoSize"}
+            }
+          }
+        },
+        "required": ["id", "type"]
+      },
+      "YoyoResponse": {
+        "type": "object",
+        "properties": {"data": {"$ref": "#/components/schemas/Yoyo"}},
+        "required": ["data"]
+      },
+      "YoyoCreateRequest": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "type": {"type": "string", "enum": ["yoyos"]},
+              "attributes": {
+                "type": "object",
+                "properties": {
+                  "color": {"$ref": "#/components/schemas/YoyoColor"},
+                  "size": {"$ref": "#/components/schemas/YoyoSize"},
+                  "parts": {"type": "array", "items": {"$ref": "#/components/schemas/YoyoPart"}},
+                  "state": {"$ref": "#/components/schemas/YoyoState"},
+                  "image": {"$ref": "#/components/schemas/YoyoImage"}
+                },
+                "required": ["color", "parts", "size"]
+              }
+            },
+            "required": ["attributes", "type"]
+          }
+        },
+        "required": ["data"]
+      },
+      "YoyoUpdateRequest": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "type": {"type": "string", "enum": ["yoyos"]},
+              "id": {"type": "string"},
+              "attributes": {
+                "type": "object",
+                "properties": {
+                  "color": {"$ref": "#/components/schemas/YoyoColor"},
+                  "size": {"$ref": "#/components/schemas/YoyoSize"},
+                  "kind": {"$ref": "#/components/schemas/YoyoKind"},
+                  "colors": {"type": "array", "items": {"$ref": "#/components/schemas/YoyoColor"}}
+                }
+              }
+            },
+            "required": ["id", "type"]
+          }
+        },
+        "required": ["data"]
+      },
+      "YoyoOdd": {
+        "type": "object",
+        "properties": {
+          "type": {"type": "string", "enum": ["yoyoOdds"]},
+          "id": {"type": "string"},
+          "attributes": {
+            "type": "object",
+            "properties": {
+              "labels": {"$ref": "#/components/schemas/YoyoLabels"}
+            }
+          }
+        }
+      },
+      "YoyoPlain": {
+        "type": "object",
+        "properties": {
+          "type": {"type": "string", "enum": ["yoyoPlains"]},
+          "id": {"type": "string"},
+          "attributes": {
+            "type": "object",
+            "properties": {
+              "note": {"$ref": "#/components/schemas/YoyoNote"}
+            }
+          }
+        }
+      },
+      "ZoneIdKind": {"type": "string", "enum": ["PRIMARY", "SPARE"]},
+      "ZoneId": {
+        "type": "object",
+        "properties": {
+          "type": {"type": "string", "enum": ["zoneIds"]},
+          "id": {"type": "string"},
+          "attributes": {
+            "type": "object",
+            "properties": {
+              "identifier": {"type": "string"},
+              "kind": {"$ref": "#/components/schemas/ZoneIdKind"}
+            }
+          }
+        },
+        "required": ["id", "type"]
+      },
+      "ZoneIdResponse": {
+        "type": "object",
+        "properties": {"data": {"$ref": "#/components/schemas/ZoneId"}},
+        "required": ["data"]
+      },
+      "ZoneIdsResponse": {
+        "type": "object",
+        "properties": {"data": {"type": "array", "items": {"$ref": "#/components/schemas/ZoneId"}}},
+        "required": ["data"]
+      },
+      "ZoneIdCreateRequest": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "type": {"type": "string", "enum": ["zoneIds"]},
+              "attributes": {
+                "type": "object",
+                "properties": {
+                  "identifier": {"type": "string"},
+                  "kind": {"$ref": "#/components/schemas/ZoneIdKind"}
+                },
+                "required": ["identifier"]
+              },
+              "relationships": {
+                "type": "object",
+                "properties": {
+                  "widget": {"type": "object", "properties": {"data": {"type": "object", "properties": {"type": {"type": "string", "enum": ["widgets"]}, "id": {"type": "string"}}, "required": ["id", "type"]}}, "required": ["data"]}
+                },
+                "required": ["widget"]
+              }
+            },
+            "required": ["attributes", "relationships", "type"]
+          }
+        },
+        "required": ["data"]
+      },
+      "ZoneIdUpdateRequest": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "type": {"type": "string", "enum": ["zoneIds"]},
+              "id": {"type": "string"},
+              "attributes": {
+                "type": "object",
+                "properties": {
+                  "kind": {"$ref": "#/components/schemas/ZoneIdKind"}
+                }
+              }
+            },
+            "required": ["id", "type"]
+          }
+        },
+        "required": ["data"]
+      },
+      "WristbandResponse": {"type": "object"},
+      "WristbandCreateRequest": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "type": {"type": "string", "enum": ["wristbands"]},
+              "attributes": {
+                "type": "object",
+                "properties": {
+                  "label": {"type": "string"},
+                  "color": {"type": "string", "enum": ["RED", "BLUE"]},
+                  "size": {"type": "integer"}
+                },
+                "required": ["label", "color", "size"]
+              },
+              "relationships": {
+                "type": "object",
+                "properties": {
+                  "widget": {
+                    "type": "object",
+                    "properties": {
+                      "data": {
+                        "type": "object",
+                        "properties": {
+                          "type": {"type": "string", "enum": ["widgets"]},
+                          "id": {"type": "string"}
+                        },
+                        "required": ["id", "type"]
+                      }
+                    },
+                    "required": ["data"]
+                  }
+                },
+                "required": ["widget"]
+              }
+            },
+            "required": ["relationships", "attributes", "type"]
+          }
+        },
+        "required": ["data"]
+      },
+      "Zebra": {
+        "type": "object",
+        "properties": {
+          "type": {"type": "string", "enum": ["zebras"]},
+          "id": {"type": "string"},
+          "attributes": {
+            "type": "object",
+            "properties": {
+              "name": {"type": "string"},
+              "stripes": {"type": "integer"}
+            }
+          }
+        },
+        "required": ["id", "type"]
+      },
+      "ZebraResponse": {
+        "type": "object",
+        "properties": {"data": {"$ref": "#/components/schemas/Zebra"}},
+        "required": ["data"]
+      },
+      "ZebraCreateRequest": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "type": {"type": "string", "enum": ["zebras"]},
+              "attributes": {
+                "type": "object",
+                "properties": {
+                  "name": {"type": "string"},
+                  "stripes": {"type": "integer"}
+                },
+                "required": ["name"]
+              }
+            },
+            "required": ["attributes", "type"]
+          }
+        },
+        "required": ["data"]
+      },
+      "ZebraUpdateRequest": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "type": {"type": "string", "enum": ["zebras"]},
+              "id": {"type": "string"},
+              "attributes": {
+                "type": "object",
+                "properties": {
+                  "name": {"type": "string"}
+                }
+              }
+            },
+            "required": ["id", "type"]
+          }
+        },
+        "required": ["data"]
+      },
+      "ZebraV2": {
+        "type": "object",
+        "properties": {
+          "type": {"type": "string", "enum": ["zebras"]},
+          "id": {"type": "string"},
+          "attributes": {
+            "type": "object",
+            "properties": {
+              "name": {"type": "string"},
+              "stripes": {"type": "integer"}
+            }
+          }
+        },
+        "required": ["id", "type"]
+      },
+      "ZebraV2Response": {
+        "type": "object",
+        "properties": {"data": {"$ref": "#/components/schemas/ZebraV2"}},
+        "required": ["data"]
+      },
+      "ZebraV2CreateRequest": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "type": {"type": "string", "enum": ["zebras"]},
+              "attributes": {
+                "type": "object",
+                "properties": {
+                  "name": {"type": "string"},
+                  "stripes": {"type": "integer"}
+                },
+                "required": ["name"]
+              }
+            },
+            "required": ["attributes", "type"]
+          }
+        },
+        "required": ["data"]
+      },
+      "ZebraV2UpdateRequest": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "type": {"type": "string", "enum": ["zebras"]},
+              "id": {"type": "string"},
+              "attributes": {
+                "type": "object",
+                "properties": {
+                  "name": {"type": "string"}
+                }
+              }
+            },
+            "required": ["id", "type"]
+          }
+        },
+        "required": ["data"]
+      }
+    }
+  }
+}

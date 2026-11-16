@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/peterbourgon/ff/v3/ffcli"
@@ -13,13 +12,12 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
-// ReviewsRespondCommand returns the reviews respond subcommand.
-func ReviewsRespondCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("respond", flag.ExitOnError)
+func newReviewsRespondCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("respond", flag.ExitOnError)
 
 	reviewID := shared.BindResourceIDFlag(fs, "review-id", "customerReviews", "Customer review ID (required)")
 	response := fs.String("response", "", "Response body text (required)")
-	output := shared.BindOutputFlags(fs)
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "respond",
@@ -34,23 +32,21 @@ Examples:
   asc reviews respond --review-id "REVIEW_ID" --response "Thanks for your feedback!"
   asc reviews respond --review-id "REVIEW_ID" --response "We appreciate your review." --output table`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			if strings.TrimSpace(*reviewID) == "" {
-				fmt.Fprintln(os.Stderr, "Error: --review-id is required")
-				return shared.MissingRequiredUsageError("--review-id")
+				return d.RequiredFlag("--review-id")
 			}
 			if strings.TrimSpace(*response) == "" {
-				fmt.Fprintln(os.Stderr, "Error: --response is required")
-				return shared.MissingRequiredUsageError("--response")
+				return d.RequiredFlag("--response")
 			}
 
-			client, err := shared.GetASCClient()
+			client, err := d.Client()
 			if err != nil {
 				return fmt.Errorf("reviews respond: %w", err)
 			}
 
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
+			requestCtx, cancel := d.Timeout(ctx)
 			defer cancel()
 
 			resp, err := client.CreateCustomerReviewResponse(requestCtx, strings.TrimSpace(*reviewID), strings.TrimSpace(*response))
@@ -58,14 +54,13 @@ Examples:
 				return fmt.Errorf("reviews respond: failed to create response: %w", err)
 			}
 
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+			return d.PrintOutput(resp, *output.Output, *output.Pretty)
 		},
 	}
 }
 
-// ReviewsResponseCommand returns the reviews response parent command.
-func ReviewsResponseCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("response", flag.ExitOnError)
+func newReviewsResponseCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("response", flag.ExitOnError)
 
 	return &ffcli.Command{
 		Name:       "response",
@@ -78,11 +73,11 @@ Examples:
   asc reviews response delete --id "RESPONSE_ID" --confirm
   asc reviews response for-review --review-id "REVIEW_ID"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
-			ReviewsResponseGetCommand(),
-			ReviewsResponseDeleteCommand(),
-			ReviewsResponseForReviewCommand(),
+			newReviewsResponseGetCommand(d),
+			newReviewsResponseDeleteCommand(d),
+			newReviewsResponseForReviewCommand(d),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp
@@ -90,14 +85,9 @@ Examples:
 	}
 }
 
-// ReviewsResponseGetCommand returns the reviews response view subcommand.
-func ReviewsResponseGetCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("view", flag.ExitOnError)
-
-	responseID := shared.BindResourceIDFlag(fs, "id", "customerReviewResponses", "Customer review response ID (required)")
-	output := shared.BindOutputFlags(fs)
-
-	return &ffcli.Command{
+func newReviewsResponseGetCommand(d *shared.Deps) *ffcli.Command {
+	return shared.BuildIDGetCommand(shared.IDGetCommandConfig{
+		Deps:       d,
 		Name:       "view",
 		ShortUsage: "asc reviews response view [flags]",
 		ShortHelp:  "View a customer review response by ID.",
@@ -106,41 +96,18 @@ func ReviewsResponseGetCommand() *ffcli.Command {
 Examples:
   asc reviews response view --id "RESPONSE_ID"
   asc reviews response view --id "RESPONSE_ID" --output table`,
-		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
-		Exec: func(ctx context.Context, args []string) error {
-			if strings.TrimSpace(*responseID) == "" {
-				fmt.Fprintln(os.Stderr, "Error: --id is required")
-				return shared.MissingRequiredUsageError("--id")
-			}
-
-			client, err := shared.GetASCClient()
-			if err != nil {
-				return fmt.Errorf("reviews response view: %w", err)
-			}
-
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
-			defer cancel()
-
-			resp, err := client.GetCustomerReviewResponse(requestCtx, strings.TrimSpace(*responseID))
-			if err != nil {
-				return fmt.Errorf("reviews response view: failed to fetch: %w", err)
-			}
-
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+		IDUsage:            "Customer review response ID (required)",
+		IDType:             "customerReviewResponses",
+		RequiredDiagnostic: true,
+		Fetch: func(ctx context.Context, client *asc.Client, id string) (any, error) {
+			return client.GetCustomerReviewResponse(ctx, id)
 		},
-	}
+	})
 }
 
-// ReviewsResponseDeleteCommand returns the reviews response delete subcommand.
-func ReviewsResponseDeleteCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("delete", flag.ExitOnError)
-
-	responseID := shared.BindResourceIDFlag(fs, "id", "customerReviewResponses", "Customer review response ID (required)")
-	confirm := fs.Bool("confirm", false, "Confirm deletion")
-	output := shared.BindOutputFlags(fs)
-
-	return &ffcli.Command{
+func newReviewsResponseDeleteCommand(d *shared.Deps) *ffcli.Command {
+	return shared.BuildConfirmDeleteCommand(shared.ConfirmDeleteCommandConfig{
+		Deps:       d,
 		Name:       "delete",
 		ShortUsage: "asc reviews response delete [flags]",
 		ShortHelp:  "Delete a customer review response.",
@@ -150,46 +117,24 @@ This action removes your response from the review and cannot be undone.
 
 Examples:
   asc reviews response delete --id "RESPONSE_ID" --confirm`,
-		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
-		Exec: func(ctx context.Context, args []string) error {
-			if strings.TrimSpace(*responseID) == "" {
-				fmt.Fprintln(os.Stderr, "Error: --id is required")
-				return shared.MissingRequiredUsageError("--id")
-			}
-			if !*confirm {
-				fmt.Fprintln(os.Stderr, "Error: --confirm is required")
-				return shared.MissingRequiredUsageError("--confirm")
-			}
-
-			client, err := shared.GetASCClient()
-			if err != nil {
-				return fmt.Errorf("reviews response delete: %w", err)
-			}
-
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
-			defer cancel()
-
-			if err := client.DeleteCustomerReviewResponse(requestCtx, strings.TrimSpace(*responseID)); err != nil {
-				return fmt.Errorf("reviews response delete: failed to delete: %w", err)
-			}
-
-			result := &asc.CustomerReviewResponseDeleteResult{
-				ID:      strings.TrimSpace(*responseID),
-				Deleted: true,
-			}
-
-			return shared.PrintOutput(result, *output.Output, *output.Pretty)
+		IDFlag:             "id",
+		IDUsage:            "Customer review response ID (required)",
+		IDType:             "customerReviewResponses",
+		RequiredDiagnostic: true,
+		Delete: func(ctx context.Context, client *asc.Client, id string) error {
+			return client.DeleteCustomerReviewResponse(ctx, id)
 		},
-	}
+		Result: func(id string) any {
+			return &asc.DeleteResult{ID: id, Deleted: true}
+		},
+	})
 }
 
-// ReviewsResponseForReviewCommand returns the reviews response for-review subcommand.
-func ReviewsResponseForReviewCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("for-review", flag.ExitOnError)
+func newReviewsResponseForReviewCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("for-review", flag.ExitOnError)
 
 	reviewID := shared.BindResourceIDFlag(fs, "review-id", "customerReviews", "Customer review ID (required)")
-	output := shared.BindOutputFlags(fs)
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "for-review",
@@ -203,19 +148,18 @@ Examples:
   asc reviews response for-review --review-id "REVIEW_ID"
   asc reviews response for-review --review-id "REVIEW_ID" --output table`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			if strings.TrimSpace(*reviewID) == "" {
-				fmt.Fprintln(os.Stderr, "Error: --review-id is required")
-				return shared.MissingRequiredUsageError("--review-id")
+				return d.RequiredFlag("--review-id")
 			}
 
-			client, err := shared.GetASCClient()
+			client, err := d.Client()
 			if err != nil {
 				return fmt.Errorf("reviews response for-review: %w", err)
 			}
 
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
+			requestCtx, cancel := d.Timeout(ctx)
 			defer cancel()
 
 			reviewIDValue := strings.TrimSpace(*reviewID)
@@ -226,22 +170,22 @@ Examples:
 						return fmt.Errorf("reviews response for-review: failed to fetch: %w", reviewErr)
 					}
 					message := reviewResponseNotConfiguredMessage(reviewIDValue)
-					warnNotConfigured(message)
+					warnNotConfigured(d, message)
 					result := reviewResponseNotConfiguredResult{
 						ReviewID:   reviewIDValue,
 						Configured: false,
 						Message:    message,
 					}
-					return shared.PrintOutputWithRenderers(
+					return d.PrintOutputWithRenderers(
 						result,
 						*output.Output,
 						*output.Pretty,
 						func() error {
-							renderNotConfiguredState("Review Response", "reviewId", reviewIDValue, message, false)
+							renderNotConfiguredState(d, "Review Response", "reviewId", reviewIDValue, message, false)
 							return nil
 						},
 						func() error {
-							renderNotConfiguredState("Review Response", "reviewId", reviewIDValue, message, true)
+							renderNotConfiguredState(d, "Review Response", "reviewId", reviewIDValue, message, true)
 							return nil
 						},
 					)
@@ -249,7 +193,7 @@ Examples:
 				return fmt.Errorf("reviews response for-review: failed to fetch: %w", err)
 			}
 
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+			return d.PrintOutput(resp, *output.Output, *output.Pretty)
 		},
 	}
 }

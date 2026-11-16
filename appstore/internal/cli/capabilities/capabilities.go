@@ -4,7 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"os"
+	"io"
 	"sort"
 	"strings"
 	"text/tabwriter"
@@ -62,12 +62,12 @@ type capabilityFilter struct {
 	areas    map[string]struct{}
 }
 
-// Command returns the capabilities command.
-func Command() *ffcli.Command {
-	fs := flag.NewFlagSet("capabilities", flag.ExitOnError)
+// NewCommand returns the capabilities command built on d.
+func NewCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("capabilities", flag.ExitOnError)
 	status := fs.String("status", "", "Filter by status: cli-supported, partial, client-only, web-session, not-public-api")
 	area := fs.String("area", "", "Filter by area (comma-separated, e.g. release,monetization)")
-	output := shared.BindOutputFlags(fs)
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "capabilities",
@@ -85,13 +85,9 @@ Examples:
   asc capabilities --area release,monetization --output markdown
   asc capabilities --output json --pretty`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
-			if len(args) > 0 {
-				return shared.UsageErrorf("unexpected arguments: %s", strings.Join(args, " "))
-			}
-
-			filter, err := parseCapabilityFilter(*status, *area)
+			filter, err := parseCapabilityFilter(d, *status, *area)
 			if err != nil {
 				return err
 			}
@@ -101,23 +97,23 @@ Examples:
 				return fmt.Errorf("capabilities: %w", err)
 			}
 
-			return shared.PrintOutputWithRenderers(
+			return d.PrintOutputWithRenderers(
 				report,
 				*output.Output,
 				*output.Pretty,
-				func() error { return renderTable(report) },
-				func() error { return renderMarkdown(report) },
+				func() error { return renderTable(d.IO.Out, report) },
+				func() error { return renderMarkdown(d.IO.Out, report) },
 			)
 		},
 	}
 }
 
-func parseCapabilityFilter(statusCSV, areaCSV string) (capabilityFilter, error) {
+func parseCapabilityFilter(d *shared.Deps, statusCSV, areaCSV string) (capabilityFilter, error) {
 	filter := capabilityFilter{}
 
 	statuses, err := parseCSVSet(statusCSV)
 	if err != nil {
-		return filter, shared.UsageErrorf("invalid --status: %s", err)
+		return filter, d.UsageErrorf("invalid --status: %s", err)
 	}
 	if len(statuses) > 0 {
 		allowed := make(map[string]struct{}, len(allowedCapabilityStatuses))
@@ -126,7 +122,7 @@ func parseCapabilityFilter(statusCSV, areaCSV string) (capabilityFilter, error) 
 		}
 		for status := range statuses {
 			if _, ok := allowed[status]; !ok {
-				return filter, shared.UsageErrorf("invalid --status %q (allowed: %s)", status, strings.Join(allowedCapabilityStatuses, ", "))
+				return filter, d.UsageErrorf("invalid --status %q (allowed: %s)", status, strings.Join(allowedCapabilityStatuses, ", "))
 			}
 		}
 		filter.statuses = statuses
@@ -134,14 +130,14 @@ func parseCapabilityFilter(statusCSV, areaCSV string) (capabilityFilter, error) 
 
 	areas, err := parseCSVSet(areaCSV)
 	if err != nil {
-		return filter, shared.UsageErrorf("invalid --area: %s", err)
+		return filter, d.UsageErrorf("invalid --area: %s", err)
 	}
 	if len(areas) > 0 {
 		allowed := knownAreas()
 		allowedList := sortedKeys(allowed)
 		for area := range areas {
 			if _, ok := allowed[area]; !ok {
-				return filter, shared.UsageErrorf("invalid --area %q (allowed: %s)", area, strings.Join(allowedList, ", "))
+				return filter, d.UsageErrorf("invalid --area %q (allowed: %s)", area, strings.Join(allowedList, ", "))
 			}
 		}
 		filter.areas = areas
@@ -696,6 +692,14 @@ func capabilityRows() []Capability {
 		},
 		{
 			Area:       "access",
+			Capability: "Developer Portal teams",
+			Status:     statusWebSession,
+			Commands:   []string{"asc web teams list"},
+			Notes:      []string{"Lists every Developer Portal team on the web session's Apple Account with its ID, name, and status. Membership expiry is not reported."},
+			NextAction: "Use asc web teams list to find a --developer-team value for other asc web commands.",
+		},
+		{
+			Area:       "access",
 			Capability: "App Store Connect Business agreements",
 			Status:     statusWebSession,
 			Commands:   []string{"asc web business agreements"},
@@ -761,9 +765,9 @@ func capabilityRows() []Capability {
 	}
 }
 
-func renderTable(report Report) error {
-	fmt.Fprintf(os.Stdout, "Total: %d  Schema endpoints: %d\n\n", report.Summary.Total, report.Summary.SchemaEndpointCount)
-	tw := tabwriter.NewWriter(os.Stdout, 0, 2, 2, ' ', 0)
+func renderTable(w io.Writer, report Report) error {
+	fmt.Fprintf(w, "Total: %d  Schema endpoints: %d\n\n", report.Summary.Total, report.Summary.SchemaEndpointCount)
+	tw := tabwriter.NewWriter(w, 0, 2, 2, ' ', 0)
 	_, _ = fmt.Fprintln(tw, "AREA\tCAPABILITY\tSTATUS\tCOMMANDS\tNOTES")
 	for _, entry := range report.Capabilities {
 		_, _ = fmt.Fprintf(
@@ -779,13 +783,13 @@ func renderTable(report Report) error {
 	return tw.Flush()
 }
 
-func renderMarkdown(report Report) error {
-	fmt.Fprintf(os.Stdout, "Total: %d  \nSchema endpoints: %d\n\n", report.Summary.Total, report.Summary.SchemaEndpointCount)
-	fmt.Fprintln(os.Stdout, "| Area | Capability | Status | Commands | Notes |")
-	fmt.Fprintln(os.Stdout, "| --- | --- | --- | --- | --- |")
+func renderMarkdown(w io.Writer, report Report) error {
+	fmt.Fprintf(w, "Total: %d  \nSchema endpoints: %d\n\n", report.Summary.Total, report.Summary.SchemaEndpointCount)
+	fmt.Fprintln(w, "| Area | Capability | Status | Commands | Notes |")
+	fmt.Fprintln(w, "| --- | --- | --- | --- | --- |")
 	for _, entry := range report.Capabilities {
 		fmt.Fprintf(
-			os.Stdout,
+			w,
 			"| %s | %s | %s | %s | %s |\n",
 			escapeMarkdownTable(entry.Area),
 			escapeMarkdownTable(entry.Capability),

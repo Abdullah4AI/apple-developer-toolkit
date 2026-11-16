@@ -1,0 +1,87 @@
+package cmdtest
+
+import (
+	"encoding/base64"
+	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/cmd"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asctest"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
+)
+
+func TestProfilesDownloadExistingOutput(t *testing.T) {
+	newContent := []byte("new profile")
+	tests := []struct {
+		name      string
+		overwrite bool
+		symlink   bool
+		wantCalls int
+		wantErr   string
+		wantData  string
+	}{
+		{name: "refused before request without overwrite", wantErr: "pass --overwrite to replace it", wantData: "old profile"},
+		{name: "replaced with overwrite", overwrite: true, wantCalls: 1, wantData: string(newContent)},
+		{name: "symlink refused with overwrite", overwrite: true, symlink: true, wantErr: "refusing to overwrite symlink", wantData: "old profile"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			target := filepath.Join(dir, "target.mobileprovision")
+			if err := os.WriteFile(target, []byte("old profile"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			outputPath := target
+			if tt.symlink {
+				outputPath = filepath.Join(dir, "link.mobileprovision")
+				if err := os.Symlink(target, outputPath); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			reg := asctest.NewRegistry(t)
+			if tt.wantCalls > 0 {
+				reg.Register(asctest.GET("/v1/profiles/PROFILE_ID"),
+					asctest.JSON(http.StatusOK, `{"data":{"type":"profiles","id":"PROFILE_ID","attributes":{"name":"Dev","profileContent":"`+base64.StdEncoding.EncodeToString(newContent)+`"}}}`))
+			}
+
+			args := []string{"profiles", "download", "--id", "PROFILE_ID", "--output", outputPath, "--output-format", "json"}
+			if tt.overwrite {
+				args = append(args, "--overwrite")
+			}
+			_, _, runErr := runRootWithDeps(t, stubClient(t, reg), args...)
+
+			if calls := len(reg.Requests()); calls != tt.wantCalls {
+				t.Fatalf("requests = %d, want %d", calls, tt.wantCalls)
+			}
+			if tt.wantErr == "" {
+				if runErr != nil {
+					t.Fatalf("unexpected error: %v", runErr)
+				}
+			} else {
+				if runErr == nil || !strings.Contains(runErr.Error(), tt.wantErr) || !strings.Contains(runErr.Error(), outputPath) {
+					t.Fatalf("error = %v, want %q naming %q", runErr, tt.wantErr, outputPath)
+				}
+				if !shared.IsValidationError(runErr) || cmd.ExitCodeFromError(runErr) != cmd.ExitError {
+					t.Fatalf("error not classified as validation: %v (exit %d)", runErr, cmd.ExitCodeFromError(runErr))
+				}
+				if diag, ok := shared.DiagnosticFromError(runErr); !tt.symlink && (!ok || diag.Code != shared.DiagnosticResourceConflict || diag.Parameter != "--output") {
+					t.Fatalf("diagnostic = %+v, %v", diag, ok)
+				}
+			}
+			data, err := os.ReadFile(target)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(data) != tt.wantData {
+				t.Fatalf("target content = %q, want %q", data, tt.wantData)
+			}
+			if info, err := os.Lstat(target); err != nil || info.Mode().Perm() != 0o600 {
+				t.Fatalf("target mode = %v, %v; want 0600", info.Mode().Perm(), err)
+			}
+		})
+	}
+}

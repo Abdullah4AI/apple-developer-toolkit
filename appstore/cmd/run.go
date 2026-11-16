@@ -9,13 +9,13 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/peterbourgon/ff/v3/ffcli"
 
-	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/install"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared/errfmt"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/readonly"
@@ -24,14 +24,32 @@ import (
 
 const unknownFlagErrorPrefix = "flag provided but not defined:"
 
-var (
-	maybeScheduleSkillsUpdateCheck = install.MaybeScheduleSkillsUpdateCheck
-	emitTelemetry                  = telemetry.EmitWithContext
-)
+// goFlagParseFlagName matches the standard flag package's messages about a
+// defined flag up to the single dash it writes before the flag name. The value
+// is quoted with %q, so text inside a value never matches.
+var goFlagParseFlagName = regexp.MustCompile(`^(?:invalid value "(?:[^"\\]|\\.)*" for flag |invalid boolean value "(?:[^"\\]|\\.)*" for |flag needs an argument: )-`)
+
+// withDoubleDashFlagName names the flag in a flag-parse message as --name,
+// the way every other CLI message does.
+func withDoubleDashFlagName(message string) string {
+	loc := goFlagParseFlagName.FindStringIndex(message)
+	if loc == nil {
+		return message
+	}
+	return message[:loc[1]] + "-" + message[loc[1]:]
+}
+
+var emitTelemetry = telemetry.EmitWithContext
 
 // Run executes the CLI using the provided args (not including argv[0]) and version string.
 // It returns the intended process exit code.
 func Run(args []string, versionInfo string) int {
+	return RunWithDeps(args, versionInfo, shared.DefaultDeps())
+}
+
+// RunWithDeps is Run with the commands that take dependencies built on d, and
+// the root's own output written to d's streams.
+func RunWithDeps(args []string, versionInfo string, d *shared.Deps) int {
 	defer shared.CleanupTempPrivateKeys()
 	// --read-only is per invocation: clear it on return so an embedded or
 	// test caller's next Run starts from the environment alone.
@@ -43,11 +61,11 @@ func Run(args []string, versionInfo string) int {
 	// Fast path for the most common version check invocation. This avoids
 	// building/parsing the entire command tree just to print the version.
 	if isVersionOnlyInvocation(args) {
-		fmt.Fprintln(os.Stdout, versionInfo)
+		fmt.Fprintln(d.IO.Out, versionInfo)
 		return ExitSuccess
 	}
 
-	root := rootCommandForArgs(versionInfo, args)
+	root := rootCommandForArgs(versionInfo, d, args)
 	// The credential profile is a root-owned selector, so relocate a misplaced
 	// `--profile` before anything else reads the argv. Running it first also
 	// keeps spaced boolean recovery working for the flags that follow it.
@@ -77,10 +95,10 @@ func Run(args []string, versionInfo string) int {
 		resolvedArgs, err := resolveFlagValueIndirection(root, args)
 		if err != nil {
 			recoverCIReportFlags(root, args)
-			fmt.Fprint(os.Stderr, errfmt.FormatStderr(err))
+			fmt.Fprint(d.IO.ErrOut, errfmt.FormatStderr(err))
 			commandName := getCommandName(root, args)
 			if reportErr := writeUsageJUnitReport(commandName, err); reportErr != nil {
-				printUsageJUnitReportFailure(commandName, versionInfo, analysis, reportErr)
+				printUsageJUnitReportFailure(d.IO.ErrOut, commandName, versionInfo, analysis, reportErr)
 				return ExitError
 			}
 			emitImmediateTelemetry(args, root, versionInfo, validationFailureContext(analysis, err))
@@ -101,15 +119,15 @@ func Run(args []string, versionInfo string) int {
 			// with a success exit code. Help raised by any other parse path is
 			// a usage failure and stays on stderr.
 			if helpRequested {
-				fmt.Fprint(os.Stdout, parseOutput.String())
+				fmt.Fprint(d.IO.Out, parseOutput.String())
 				return ExitSuccess
 			}
-			fmt.Fprint(os.Stderr, parseOutput.String())
+			fmt.Fprint(d.IO.ErrOut, parseOutput.String())
 			return ExitUsage
 		}
 		recoverCIReportFlags(root, args)
 		if err := shared.ValidateReportFlags(); err != nil {
-			fmt.Fprint(os.Stderr, errfmt.FormatStderr(err))
+			fmt.Fprint(d.IO.ErrOut, errfmt.FormatStderr(err))
 			emitImmediateTelemetry(args, root, versionInfo, validationFailureContext(analysis, err))
 			return ExitUsage
 		}
@@ -118,18 +136,18 @@ func Run(args []string, versionInfo string) int {
 			badFlagSyntax = firstLine
 		}
 		if analysis.unknownFlag && isUnknownFlagParseFailure(parseErr, parseOutput.String()) {
-			printConciseUnknownFlag(root, analysis, getCommandName(root, args), args)
+			printConciseUnknownFlag(d.IO.ErrOut, root, analysis, getCommandName(root, args), args)
 		} else if strings.HasPrefix(badFlagSyntax, "bad flag syntax:") {
-			fmt.Fprintf(os.Stderr, "Error: %s\nFor help:\n  asc --help\n", shared.SanitizeTerminal(badFlagSyntax))
+			fmt.Fprintf(d.IO.ErrOut, "Error: %s\nFor help:\n  asc --help\n", shared.SanitizeTerminal(badFlagSyntax))
 		} else {
-			printParseFailure(parseErr, parseOutput.String(), analysis, parseFailureHelpCommand(root, args, parseOutput.owner))
+			printParseFailure(d.IO.ErrOut, parseErr, parseOutput.String(), analysis, parseFailureHelpCommand(root, args, parseOutput.owner))
 		}
 		// Every non-help error returned by command-tree parsing is invalid usage,
 		// including NoExecError cases that do not write flag output.
 		if analysis.unknownFlag && isUnknownFlagParseFailure(parseErr, parseOutput.String()) {
 			commandName := getCommandName(root, args)
 			if err := writeUsageJUnitReport(commandName, unknownFlagError(analysis, commandName)); err != nil {
-				printUsageJUnitReportFailure(commandName, versionInfo, analysis, err)
+				printUsageJUnitReportFailure(d.IO.ErrOut, commandName, versionInfo, analysis, err)
 				return ExitError
 			}
 		}
@@ -139,7 +157,7 @@ func Run(args []string, versionInfo string) int {
 
 	// Validate CI report flags after parsing
 	if err := shared.ValidateReportFlags(); err != nil {
-		fmt.Fprint(os.Stderr, errfmt.FormatStderr(err))
+		fmt.Fprint(d.IO.ErrOut, errfmt.FormatStderr(err))
 		emitImmediateTelemetry(args, root, versionInfo, validationFailureContext(analysis, err))
 		return ExitUsage
 	}
@@ -148,31 +166,31 @@ func Run(args []string, versionInfo string) int {
 		// A root informational flag must never dispatch a trailing subcommand.
 		// Printing directly also keeps `asc --version true ...` as harmless as
 		// the conventional `asc --version` form.
-		fmt.Fprintln(os.Stdout, versionInfo)
+		fmt.Fprintln(d.IO.Out, versionInfo)
 		return ExitSuccess
 	}
 
 	// Match gh-style root invocation: plain `asc` (or only root flags)
 	// prints root help and exits successfully.
 	if !hasPositionalArgs(root.FlagSet, args) {
-		fmt.Fprint(os.Stdout, root.UsageFunc(root))
+		fmt.Fprint(d.IO.Out, root.UsageFunc(root))
 		return ExitSuccess
 	}
 
 	commandName := getCommandName(root, args)
 	if invalid, suggested, ok := commonCommandPathRecovery(root, analysis, args); ok {
-		fmt.Fprintf(os.Stderr, "Error: unknown command `%s`\nTry:\n  %s\nFor help:\n  %s --help\n", invalid, suggested, commandName)
+		fmt.Fprintf(d.IO.ErrOut, "Error: unknown command `%s`\nTry:\n  %s\nFor help:\n  %s --help\n", invalid, suggested, commandName)
 		if err := writeUsageJUnitReport(commandName, commonCommandPathRecoveryError(invalid)); err != nil {
-			printUsageJUnitReportFailure(commandName, versionInfo, analysis, err)
+			printUsageJUnitReportFailure(d.IO.ErrOut, commandName, versionInfo, analysis, err)
 			return ExitError
 		}
 		emitImmediateTelemetry(args, root, versionInfo, validationFailureContext(analysis, flag.ErrHelp))
 		return ExitUsage
 	}
 	if shouldRenderConciseUnknownChild(root, analysis, commandName) {
-		printConciseUnknownCommand(analysis, commandName)
+		printConciseUnknownCommand(d.IO.ErrOut, analysis, commandName)
 		if err := writeUsageJUnitReport(commandName, unknownCommandError(analysis, commandName)); err != nil {
-			printUsageJUnitReportFailure(commandName, versionInfo, analysis, err)
+			printUsageJUnitReportFailure(d.IO.ErrOut, commandName, versionInfo, analysis, err)
 			return ExitError
 		}
 		emitImmediateTelemetry(args, root, versionInfo, validationFailureContext(analysis, flag.ErrHelp))
@@ -183,9 +201,9 @@ func Run(args []string, versionInfo string) int {
 	// flag it belongs to instead of dropping it silently or reporting only the
 	// missing flag.
 	if operands := strayPositionalOperands(analysis, commandName); len(operands) > 0 {
-		printStrayPositionalOperands(commandName, operands, analysis.command.FlagSet)
+		printStrayPositionalOperands(d.IO.ErrOut, commandName, operands, analysis.command.FlagSet)
 		if err := writeUsageJUnitReport(commandName, strayPositionalError(operands)); err != nil {
-			printUsageJUnitReportFailure(commandName, versionInfo, analysis, err)
+			printUsageJUnitReportFailure(d.IO.ErrOut, commandName, versionInfo, analysis, err)
 			return ExitError
 		}
 		emitImmediateTelemetry(args, root, versionInfo, validationFailureContext(analysis, flag.ErrHelp))
@@ -193,9 +211,9 @@ func Run(args []string, versionInfo string) int {
 	}
 
 	if err := groupFlagsBeforeSubcommandError(root); err != nil {
-		fmt.Fprint(os.Stderr, errfmt.FormatStderr(err))
+		fmt.Fprint(d.IO.ErrOut, errfmt.FormatStderr(err))
 		if reportErr := writeUsageJUnitReport(commandName, err); reportErr != nil {
-			printUsageJUnitReportFailure(commandName, versionInfo, analysis, reportErr)
+			printUsageJUnitReportFailure(d.IO.ErrOut, commandName, versionInfo, analysis, reportErr)
 			return ExitError
 		}
 		emitImmediateTelemetry(args, root, versionInfo, validationFailureContext(analysis, err))
@@ -204,9 +222,9 @@ func Run(args []string, versionInfo string) int {
 
 	runUsageOutput := &bytes.Buffer{}
 	restoreRunUsageOutput := redirectCommandFlagOutput(analysis.command, runUsageOutput)
-	start := time.Now()
+	start := d.Now()
 	runErr := root.Run(runCtx)
-	elapsed := time.Since(start)
+	elapsed := d.Now().Sub(start)
 	restoreRunUsageOutput()
 
 	if shouldCancelRunContextAfterError(runErr) {
@@ -214,13 +232,9 @@ func Run(args []string, versionInfo string) int {
 	}
 	renderGroupHelp := shouldRenderGroupHelp(analysis, runErr)
 	if renderGroupHelp {
-		fmt.Fprint(os.Stdout, runUsageOutput.String())
+		fmt.Fprint(d.IO.Out, runUsageOutput.String())
 	} else if runUsageOutput.Len() > 0 {
-		fmt.Fprint(os.Stderr, runUsageOutput.String())
-	}
-
-	if !renderGroupHelp && shouldRunSkillsUpdateCheck(commandName, runCtx, runErr) {
-		maybeScheduleSkillsUpdateCheck()
+		fmt.Fprint(d.IO.ErrOut, runUsageOutput.String())
 	}
 
 	// Write JUnit report if requested
@@ -238,7 +252,7 @@ func Run(args []string, versionInfo string) int {
 		}
 		if reportErr != nil {
 			// Report write failure is a hard error - CI depends on it
-			fmt.Fprintf(os.Stderr, "Error: failed to write JUnit report: %v\n", reportErr)
+			fmt.Fprintf(d.IO.ErrOut, "Error: failed to write JUnit report: %v\n", reportErr)
 			if reportRunErr == nil {
 				emitTelemetry(commandName, versionInfo, elapsed, ExitError, telemetry.EventContext{
 					InvocationShape: analysis.shape,
@@ -257,19 +271,19 @@ func Run(args []string, versionInfo string) int {
 	if runErr != nil {
 		if _, ok := errors.AsType[shared.ReportedError](runErr); ok {
 			if !shared.IsPrintedToStderr(runErr) {
-				fmt.Fprint(os.Stderr, errfmt.FormatStderr(runErr))
+				fmt.Fprint(d.IO.ErrOut, errfmt.FormatCommandStderr(commandName, runErr))
 			}
 			exitCode := ExitCodeFromError(runErr)
 			emitTelemetry(commandName, versionInfo, elapsed, exitCode, runtimeFailureContext(analysis, runErr, exitCode))
 			return exitCode
 		}
 		if errors.Is(runErr, flag.ErrHelp) {
-			printUnknownSubcommandSuggestion(analysis, commandName)
+			printUnknownSubcommandSuggestion(d.IO.ErrOut, analysis, commandName)
 			emitTelemetry(commandName, versionInfo, elapsed, ExitUsage, validationFailureContext(analysis, runErr))
 			return ExitUsage
 		}
-		printUnknownSubcommandSuggestion(analysis, commandName)
-		fmt.Fprint(os.Stderr, errfmt.FormatStderr(runErr))
+		printUnknownSubcommandSuggestion(d.IO.ErrOut, analysis, commandName)
+		fmt.Fprint(d.IO.ErrOut, errfmt.FormatCommandStderr(commandName, runErr))
 		exitCode := ExitCodeFromError(runErr)
 		emitTelemetry(commandName, versionInfo, elapsed, exitCode, runtimeFailureContext(analysis, runErr, exitCode))
 		return exitCode
@@ -532,33 +546,33 @@ func markLeadingSearchFlagTerminator(root *ffcli.Command, args []string) []strin
 	return args
 }
 
-func printParseFailure(parseErr error, parseOutput string, analysis invocationAnalysis, commandName string) {
+func printParseFailure(stderr io.Writer, parseErr error, parseOutput string, analysis invocationAnalysis, commandName string) {
 	if !analysis.unknownFlag || !isUnknownFlagParseFailure(parseErr, parseOutput) {
 		if parseOutput != "" {
 			firstLine, _, _ := strings.Cut(strings.TrimSpace(parseOutput), "\n")
 			if firstLine != "" {
 				fmt.Fprintf(
-					os.Stderr,
+					stderr,
 					"Error: %s\nFor help:\n  %s --help\n",
-					shared.SanitizeTerminal(firstLine),
+					shared.SanitizeTerminal(withDoubleDashFlagName(firstLine)),
 					commandName,
 				)
 			}
 			return
 		}
-		fmt.Fprint(os.Stderr, errfmt.FormatStderr(parseErr))
+		fmt.Fprint(stderr, errfmt.FormatStderr(parseErr))
 		return
 	}
 
 	flagName := strings.SplitN(analysis.unknownToken, "=", 2)[0]
-	fmt.Fprintf(os.Stderr, "Unknown flag: %s\n", shared.SanitizeTerminal(flagName))
+	fmt.Fprintf(stderr, "Unknown flag: %s\n", shared.SanitizeTerminal(flagName))
 	firstLine, usage, found := strings.Cut(parseOutput, "\n")
 	if found && strings.HasPrefix(firstLine, unknownFlagErrorPrefix) {
-		fmt.Fprint(os.Stderr, usage)
+		fmt.Fprint(stderr, usage)
 		return
 	}
 	if parseOutput != "" {
-		fmt.Fprint(os.Stderr, parseOutput)
+		fmt.Fprint(stderr, parseOutput)
 	}
 }
 
@@ -665,14 +679,6 @@ func prepareFlagParsing(command *ffcli.Command, args []string, output *parseOutp
 
 func shouldCancelRunContextAfterError(err error) bool {
 	return errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)
-}
-
-func shouldRunSkillsUpdateCheck(commandName string, runCtx context.Context, runErr error) bool {
-	// The external `skills check` command is not read-only: current releases
-	// route it through the updater and can rewrite globally installed skills.
-	// Keep automatic execution disabled until a reviewed, read-only protocol
-	// exists. Explicit `asc install-skills` remains available.
-	return false
 }
 
 func isVersionOnlyInvocation(args []string) bool {
@@ -808,8 +814,8 @@ func writeUsageJUnitReport(commandName string, usageErr error) error {
 	return writeJUnitReport(commandName, usageErr, 0)
 }
 
-func printUsageJUnitReportFailure(commandName, versionInfo string, analysis invocationAnalysis, err error) {
-	fmt.Fprintf(os.Stderr, "Error: failed to write JUnit report: %v\n", err)
+func printUsageJUnitReportFailure(stderr io.Writer, commandName, versionInfo string, analysis invocationAnalysis, err error) {
+	fmt.Fprintf(stderr, "Error: failed to write JUnit report: %v\n", err)
 	emitTelemetry(commandName, versionInfo, 0, ExitError, telemetry.EventContext{
 		InvocationShape: analysis.shape,
 		ErrorKind:       telemetry.ErrorKindOther,

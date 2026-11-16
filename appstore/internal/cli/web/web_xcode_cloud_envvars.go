@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/peterbourgon/ff/v3/ffcli"
@@ -16,8 +15,8 @@ import (
 	webcore "github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/web"
 )
 
-func webXcodeCloudEnvVarsCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("web xcode-cloud env-vars", flag.ExitOnError)
+func webXcodeCloudEnvVarsCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("web xcode-cloud env-vars", flag.ExitOnError)
 
 	return &ffcli.Command{
 		Name:       "env-vars",
@@ -41,12 +40,12 @@ Examples:
   asc web xcode-cloud env-vars shared list --product-id "UUID" --apple-id "user@example.com"
   asc web xcode-cloud env-vars shared set --product-id "UUID" --name MY_VAR --value hello --apple-id "user@example.com"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
-			webXcodeCloudEnvVarsListCommand(),
-			webXcodeCloudEnvVarsSetCommand(),
-			webXcodeCloudEnvVarsDeleteCommand(),
-			webXcodeCloudEnvVarsSharedCommand(),
+			webXcodeCloudEnvVarsListCommand(d),
+			webXcodeCloudEnvVarsSetCommand(d),
+			webXcodeCloudEnvVarsDeleteCommand(d),
+			webXcodeCloudEnvVarsSharedCommand(d),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp
@@ -76,10 +75,10 @@ type CIEnvVarsDeleteResult struct {
 	Name         string `json:"name"`
 }
 
-func webXcodeCloudEnvVarsListCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("web xcode-cloud env-vars list", flag.ExitOnError)
+func webXcodeCloudEnvVarsListCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("web xcode-cloud env-vars list", flag.ExitOnError)
 	sessionFlags := bindWebSessionFlags(fs)
-	output := shared.BindOutputFlags(fs)
+	output := d.BindOutputFlags(fs)
 
 	productID := fs.String("product-id", "", "Xcode Cloud product ID (required)")
 	workflowID := fs.String("workflow-id", "", "Xcode Cloud workflow ID (required)")
@@ -99,20 +98,18 @@ Examples:
   asc web xcode-cloud env-vars list --product-id "UUID" --workflow-id "WF-UUID" --apple-id "user@example.com"
   asc web xcode-cloud env-vars list --product-id "UUID" --workflow-id "WF-UUID" --apple-id "user@example.com" --output table`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			pid := strings.TrimSpace(*productID)
 			if pid == "" {
-				fmt.Fprintln(os.Stderr, "Error: --product-id is required")
-				return shared.MissingRequiredUsageError("--product-id")
+				return d.RequiredFlag("--product-id")
 			}
 			wfID := strings.TrimSpace(*workflowID)
 			if wfID == "" {
-				fmt.Fprintln(os.Stderr, "Error: --workflow-id is required")
-				return shared.MissingRequiredUsageError("--workflow-id")
+				return d.RequiredFlag("--workflow-id")
 			}
 
-			session, requestCtx, cancel, err := resolveWebSessionForCommand(ctx, sessionFlags)
+			session, requestCtx, cancel, err := resolveWebSessionForCommandWith(ctx, d, sessionFlags)
 			defer cancel()
 			if err != nil {
 				return err
@@ -124,7 +121,7 @@ Examples:
 
 			client := newCIClientFn(session)
 			result := &CIEnvVarsListResult{}
-			err = withWebSpinner("Loading Xcode Cloud workflow environment variables", func() error {
+			err = withWebSpinnerWith(d, "Loading Xcode Cloud workflow environment variables", func() error {
 				workflow, err := client.GetCIWorkflow(requestCtx, teamID, pid, wfID)
 				if err != nil {
 					return err
@@ -143,21 +140,21 @@ Examples:
 			if err != nil {
 				return withWebAuthHint(err, "xcode-cloud env-vars list")
 			}
-			return shared.PrintOutputWithRenderers(
+			return d.PrintOutputWithRenderers(
 				result,
 				*output.Output,
 				*output.Pretty,
-				func() error { return renderEnvVarsTable(result) },
-				func() error { return renderEnvVarsMarkdown(result) },
+				func() error { return renderEnvVarsTable(d, result) },
+				func() error { return renderEnvVarsMarkdown(d, result) },
 			)
 		},
 	}
 }
 
-func webXcodeCloudEnvVarsSetCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("web xcode-cloud env-vars set", flag.ExitOnError)
+func webXcodeCloudEnvVarsSetCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("web xcode-cloud env-vars set", flag.ExitOnError)
 	sessionFlags := bindWebSessionFlags(fs)
-	output := shared.BindOutputFlags(fs)
+	output := d.BindOutputFlags(fs)
 
 	productID := fs.String("product-id", "", "Xcode Cloud product ID (required)")
 	workflowID := fs.String("workflow-id", "", "Xcode Cloud workflow ID (required)")
@@ -181,30 +178,26 @@ Examples:
   asc web xcode-cloud env-vars set --product-id "UUID" --workflow-id "WF-UUID" --name MY_VAR --value hello --apple-id "user@example.com"
   asc web xcode-cloud env-vars set --product-id "UUID" --workflow-id "WF-UUID" --name MY_SECRET --value s3cret --secret --apple-id "user@example.com"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			pid := strings.TrimSpace(*productID)
 			if pid == "" {
-				fmt.Fprintln(os.Stderr, "Error: --product-id is required")
-				return shared.MissingRequiredUsageError("--product-id")
+				return d.RequiredFlag("--product-id")
 			}
 			wfID := strings.TrimSpace(*workflowID)
 			if wfID == "" {
-				fmt.Fprintln(os.Stderr, "Error: --workflow-id is required")
-				return shared.MissingRequiredUsageError("--workflow-id")
+				return d.RequiredFlag("--workflow-id")
 			}
 			varName := strings.TrimSpace(*name)
 			if varName == "" {
-				fmt.Fprintln(os.Stderr, "Error: --name is required")
-				return shared.MissingRequiredUsageError("--name")
+				return d.RequiredFlag("--name")
 			}
 			varValue := *value
 			if varValue == "" {
-				fmt.Fprintln(os.Stderr, "Error: --value is required")
-				return shared.MissingRequiredUsageError("--value")
+				return d.RequiredFlag("--value")
 			}
 
-			session, requestCtx, cancel, err := resolveWebSessionForCommand(ctx, sessionFlags)
+			session, requestCtx, cancel, err := resolveWebSessionForCommandWith(ctx, d, sessionFlags)
 			defer cancel()
 			if err != nil {
 				return err
@@ -216,7 +209,7 @@ Examples:
 
 			client := newCIClientFn(session)
 			result := &CIEnvVarsSetResult{}
-			err = withWebSpinner("Updating Xcode Cloud workflow environment variables", func() error {
+			err = withWebSpinnerWith(d, "Updating Xcode Cloud workflow environment variables", func() error {
 				workflow, err := client.GetCIWorkflow(requestCtx, teamID, pid, wfID)
 				if err != nil {
 					return err
@@ -286,21 +279,21 @@ Examples:
 			if err != nil {
 				return withWebAuthHint(err, "xcode-cloud env-vars set")
 			}
-			return shared.PrintOutputWithRenderers(
+			return d.PrintOutputWithRenderers(
 				result,
 				*output.Output,
 				*output.Pretty,
-				func() error { return renderEnvVarsSetTable(result) },
-				func() error { return renderEnvVarsSetMarkdown(result) },
+				func() error { return renderEnvVarsSetTable(d, result) },
+				func() error { return renderEnvVarsSetMarkdown(d, result) },
 			)
 		},
 	}
 }
 
-func webXcodeCloudEnvVarsDeleteCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("web xcode-cloud env-vars delete", flag.ExitOnError)
+func webXcodeCloudEnvVarsDeleteCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("web xcode-cloud env-vars delete", flag.ExitOnError)
 	sessionFlags := bindWebSessionFlags(fs)
-	output := shared.BindOutputFlags(fs)
+	output := d.BindOutputFlags(fs)
 
 	productID := fs.String("product-id", "", "Xcode Cloud product ID (required)")
 	workflowID := fs.String("workflow-id", "", "Xcode Cloud workflow ID (required)")
@@ -320,29 +313,25 @@ Delete an environment variable from an Xcode Cloud workflow by name.
 Examples:
   asc web xcode-cloud env-vars delete --product-id "UUID" --workflow-id "WF-UUID" --name MY_VAR --confirm --apple-id "user@example.com"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			pid := strings.TrimSpace(*productID)
 			if pid == "" {
-				fmt.Fprintln(os.Stderr, "Error: --product-id is required")
-				return shared.MissingRequiredUsageError("--product-id")
+				return d.RequiredFlag("--product-id")
 			}
 			wfID := strings.TrimSpace(*workflowID)
 			if wfID == "" {
-				fmt.Fprintln(os.Stderr, "Error: --workflow-id is required")
-				return shared.MissingRequiredUsageError("--workflow-id")
+				return d.RequiredFlag("--workflow-id")
 			}
 			varName := strings.TrimSpace(*name)
 			if varName == "" {
-				fmt.Fprintln(os.Stderr, "Error: --name is required")
-				return shared.MissingRequiredUsageError("--name")
+				return d.RequiredFlag("--name")
 			}
-			if !*confirm {
-				fmt.Fprintln(os.Stderr, "Error: --confirm is required")
-				return shared.MissingRequiredUsageError("--confirm")
+			if err := d.RequireConfirm(*confirm); err != nil {
+				return err
 			}
 
-			session, requestCtx, cancel, err := resolveWebSessionForCommand(ctx, sessionFlags)
+			session, requestCtx, cancel, err := resolveWebSessionForCommandWith(ctx, d, sessionFlags)
 			defer cancel()
 			if err != nil {
 				return err
@@ -357,7 +346,7 @@ Examples:
 				workflow *webcore.CIWorkflowFull
 				vars     []webcore.CIEnvironmentVariable
 			)
-			err = withWebSpinner("Loading Xcode Cloud workflow environment variables", func() error {
+			err = withWebSpinnerWith(d, "Loading Xcode Cloud workflow environment variables", func() error {
 				var err error
 				workflow, err = client.GetCIWorkflow(requestCtx, teamID, pid, wfID)
 				if err != nil {
@@ -387,7 +376,7 @@ Examples:
 			}
 
 			result := &CIEnvVarsDeleteResult{}
-			err = withWebSpinner("Deleting Xcode Cloud workflow environment variable", func() error {
+			err = withWebSpinnerWith(d, "Deleting Xcode Cloud workflow environment variable", func() error {
 				newContent, err := webcore.SetEnvVars(workflow.Content, filtered)
 				if err != nil {
 					return fmt.Errorf("xcode-cloud env-vars delete failed: %w", err)
@@ -407,67 +396,73 @@ Examples:
 			if err != nil {
 				return withWebAuthHint(err, "xcode-cloud env-vars delete")
 			}
-			return shared.PrintOutputWithRenderers(
+			return d.PrintOutputWithRenderers(
 				result,
 				*output.Output,
 				*output.Pretty,
-				func() error { return renderEnvVarsDeleteTable(result) },
-				func() error { return renderEnvVarsDeleteMarkdown(result) },
+				func() error { return renderEnvVarsDeleteTable(d, result) },
+				func() error { return renderEnvVarsDeleteMarkdown(d, result) },
 			)
 		},
 	}
 }
 
-func renderEnvVarsTable(result *CIEnvVarsListResult) error {
+func renderEnvVarsTable(d *shared.Deps, result *CIEnvVarsListResult) error {
 	if result == nil || len(result.Variables) == 0 {
-		fmt.Println("No environment variables found.")
+		fmt.Fprintln(d.IO.Out, "No environment variables found.")
 		return nil
 	}
-	asc.RenderTable(
+	asc.RenderTableTo(
+		d.IO.Out,
 		[]string{"Name", "Type", "Value"},
 		buildEnvVarRows(result.Variables),
 	)
 	return nil
 }
 
-func renderEnvVarsMarkdown(result *CIEnvVarsListResult) error {
+func renderEnvVarsMarkdown(d *shared.Deps, result *CIEnvVarsListResult) error {
 	if result == nil || len(result.Variables) == 0 {
-		fmt.Println("No environment variables found.")
+		fmt.Fprintln(d.IO.Out, "No environment variables found.")
 		return nil
 	}
-	asc.RenderMarkdown(
+	asc.RenderMarkdownTo(
+		d.IO.Out,
 		[]string{"Name", "Type", "Value"},
 		buildEnvVarRows(result.Variables),
 	)
 	return nil
 }
 
-func renderEnvVarsSetTable(result *CIEnvVarsSetResult) error {
-	asc.RenderTable(
+func renderEnvVarsSetTable(d *shared.Deps, result *CIEnvVarsSetResult) error {
+	asc.RenderTableTo(
+		d.IO.Out,
 		[]string{"Action", "Name", "Type", "Workflow", "Workflow ID"},
 		[][]string{{result.Action, result.Name, result.Type, result.WorkflowName, result.WorkflowID}},
 	)
 	return nil
 }
 
-func renderEnvVarsSetMarkdown(result *CIEnvVarsSetResult) error {
-	asc.RenderMarkdown(
+func renderEnvVarsSetMarkdown(d *shared.Deps, result *CIEnvVarsSetResult) error {
+	asc.RenderMarkdownTo(
+		d.IO.Out,
 		[]string{"Action", "Name", "Type", "Workflow", "Workflow ID"},
 		[][]string{{result.Action, result.Name, result.Type, result.WorkflowName, result.WorkflowID}},
 	)
 	return nil
 }
 
-func renderEnvVarsDeleteTable(result *CIEnvVarsDeleteResult) error {
-	asc.RenderTable(
+func renderEnvVarsDeleteTable(d *shared.Deps, result *CIEnvVarsDeleteResult) error {
+	asc.RenderTableTo(
+		d.IO.Out,
 		[]string{"Action", "Name", "Workflow", "Workflow ID"},
 		[][]string{{"deleted", result.Name, result.WorkflowName, result.WorkflowID}},
 	)
 	return nil
 }
 
-func renderEnvVarsDeleteMarkdown(result *CIEnvVarsDeleteResult) error {
-	asc.RenderMarkdown(
+func renderEnvVarsDeleteMarkdown(d *shared.Deps, result *CIEnvVarsDeleteResult) error {
+	asc.RenderMarkdownTo(
+		d.IO.Out,
 		[]string{"Action", "Name", "Workflow", "Workflow ID"},
 		[][]string{{"deleted", result.Name, result.WorkflowName, result.WorkflowID}},
 	)

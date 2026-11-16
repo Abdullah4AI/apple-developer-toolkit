@@ -7,21 +7,40 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
-	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	rootcmd "github.com/Abdullah4AI/apple-developer-toolkit/appstore/cmd"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
-	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asctest"
 )
 
 func backgroundReviewSubmissionDetailJSON(resourceType, resourceID, state, platform, appID string) string {
 	return fmt.Sprintf(`{"data":{"type":%q,"id":%q,"attributes":{"state":%q,"platform":%q},"relationships":{"app":{"data":{"type":"apps","id":%q}}}}}`, resourceType, resourceID, state, platform, appID)
+}
+
+const backgroundReviewSubmissionCreateBody = `{"data":{"type":"reviewSubmissions","attributes":{"platform":"IOS"},"relationships":{"app":{"data":{"type":"apps","id":"123456789"}}}}}`
+
+func backgroundReviewSubmissionItemBody(submissionID, versionID string) string {
+	return fmt.Sprintf(`{"data":{"type":"reviewSubmissionItems","relationships":{"reviewSubmission":{"data":{"type":"reviewSubmissions","id":%q}},"backgroundAssetVersion":{"data":{"type":"backgroundAssetVersions","id":%q}}}}}`, submissionID, versionID)
+}
+
+func backgroundReviewSubmissionPatchBody(submissionID, attribute string) string {
+	return fmt.Sprintf(`{"data":{"type":"reviewSubmissions","id":%q,"attributes":{%q:true}}}`, submissionID, attribute)
+}
+
+func countBackgroundSubmitRequests(reg *asctest.Registry, method, path string) int32 {
+	var count int32
+	for _, req := range reg.Requests() {
+		if req.Method == method && req.URL.Path == path {
+			count++
+		}
+	}
+	return count
 }
 
 func TestBackgroundAssetsSubmitPreflightRejectsAdversarialResponses(t *testing.T) {
@@ -47,6 +66,7 @@ func TestBackgroundAssetsSubmitPreflightRejectsAdversarialResponses(t *testing.T
 		cancelBody         string
 		wantErr            string
 		wantDetailRequests int32
+		wantItemsRequest   bool
 		wantCancelRequests int32
 	}{
 		{
@@ -56,6 +76,7 @@ func TestBackgroundAssetsSubmitPreflightRejectsAdversarialResponses(t *testing.T
 			itemsBody:          `{"data":[{"type":"reviewSubmissionItems","id":"item-1"}],"links":{"next":""}}`,
 			wantErr:            "review submission items response links self is required",
 			wantDetailRequests: 1,
+			wantItemsRequest:   true,
 		},
 		{
 			name:               "mixed item collection errors",
@@ -64,6 +85,7 @@ func TestBackgroundAssetsSubmitPreflightRejectsAdversarialResponses(t *testing.T
 			itemsBody:          `{"data":[],"errors":[{"status":"500","detail":"partial response"}],"links":{"self":"https://api.appstoreconnect.apple.com/v1/reviewSubmissions/sub-existing/items"}}`,
 			wantErr:            "review submission items response must not contain top-level errors",
 			wantDetailRequests: 1,
+			wantItemsRequest:   true,
 		},
 		{
 			name:               "wrong item resource type",
@@ -72,6 +94,7 @@ func TestBackgroundAssetsSubmitPreflightRejectsAdversarialResponses(t *testing.T
 			itemsBody:          fmt.Sprintf(`{"data":[{"type":"appStoreVersions","id":%q}],"links":{"self":"https://api.appstoreconnect.apple.com/v1/reviewSubmissions/sub-existing/items","next":""}}`, validItemID),
 			wantErr:            "review submission items response data[0] type must be \"reviewSubmissionItems\"",
 			wantDetailRequests: 1,
+			wantItemsRequest:   true,
 		},
 		{
 			name:               "empty item resource ID",
@@ -80,6 +103,7 @@ func TestBackgroundAssetsSubmitPreflightRejectsAdversarialResponses(t *testing.T
 			itemsBody:          `{"data":[{"type":"reviewSubmissionItems","id":""}],"links":{"self":"https://api.appstoreconnect.apple.com/v1/reviewSubmissions/sub-existing/items","next":""}}`,
 			wantErr:            "review submission items response data[0] id must not be empty",
 			wantDetailRequests: 1,
+			wantItemsRequest:   true,
 		},
 		{
 			name:               "background asset relationship missing linkage",
@@ -88,6 +112,7 @@ func TestBackgroundAssetsSubmitPreflightRejectsAdversarialResponses(t *testing.T
 			itemsBody:          `{"data":[{"type":"reviewSubmissionItems","id":"item-1","relationships":{"backgroundAssetVersion":{"links":{"related":"/v1/reviewSubmissionItems/item-1/backgroundAssetVersion"}}}}],"links":{"self":"https://api.appstoreconnect.apple.com/v1/reviewSubmissions/sub-existing/items","next":""}}`,
 			wantErr:            "background asset version relationship type \"\", not \"backgroundAssetVersions\"",
 			wantDetailRequests: 1,
+			wantItemsRequest:   true,
 		},
 		{
 			name:               "existing submission wrong state",
@@ -223,6 +248,7 @@ func TestBackgroundAssetsSubmitPreflightRejectsAdversarialResponses(t *testing.T
 			itemsBody:          `{"data":[],"links":{}}`,
 			wantErr:            "review submission items response links self is required",
 			wantDetailRequests: 1,
+			wantItemsRequest:   true,
 			wantCancelRequests: 1,
 		},
 	}
@@ -232,80 +258,59 @@ func TestBackgroundAssetsSubmitPreflightRejectsAdversarialResponses(t *testing.T
 			setupAuth(t)
 			t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 
-			originalTransport := http.DefaultTransport
-			t.Cleanup(func() { http.DefaultTransport = originalTransport })
-
-			var detailRequests, cancelRequests, itemPosts int32
-			http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-				path := req.URL.Path
-				switch {
-				case req.Method == http.MethodPost && path == "/v1/reviewSubmissions":
-					if test.createBody == "" {
-						t.Fatalf("unexpected review submission create")
-					}
-					return jsonResponse(http.StatusCreated, test.createBody)
-				case req.Method == http.MethodGet && strings.HasPrefix(path, "/v1/reviewSubmissions/") && !strings.HasSuffix(path, "/items"):
-					atomic.AddInt32(&detailRequests, 1)
-					body := test.detailBody
-					if body == "" {
-						body = backgroundReviewSubmissionDetailJSON(validType, "sub-created", validState, platform, appID)
-					}
-					return jsonResponse(http.StatusOK, body)
-				case req.Method == http.MethodGet && strings.HasSuffix(path, "/items"):
-					body := test.itemsBody
-					if body == "" {
-						body = validItems
-					}
-					return jsonResponse(http.StatusOK, body)
-				case req.Method == http.MethodPost && path == "/v1/reviewSubmissionItems":
-					atomic.AddInt32(&itemPosts, 1)
-					return jsonResponse(http.StatusCreated, `{"data":{"type":"reviewSubmissionItems","id":"item-created"}}`)
-				case req.Method == http.MethodPatch:
-					atomic.AddInt32(&cancelRequests, 1)
-					status := test.cancelStatus
-					if status == 0 {
-						status = http.StatusOK
-					}
-					body := test.cancelBody
-					if body == "" {
-						body = `{"data":{"type":"reviewSubmissions","id":"sub-created","attributes":{"state":"CANCELING"}}}`
-					}
-					return jsonResponse(status, body)
-				default:
-					t.Fatalf("unexpected request: %s %s", req.Method, req.URL.String())
-					return nil, nil
-				}
-			})
-
 			args := []string{"background-assets", "submit", "--app", appID, "--version-id", "version-1", "--confirm", "--output", "json"}
+			submissionID := test.reuseID
 			if test.reuseID != "" {
 				args = append(args, "--review-submission-id", test.reuseID)
 			} else if test.createBody == "" {
 				t.Fatalf("test case must specify reuseID or createBody")
+			} else {
+				submissionID = "sub-created"
 			}
 
-			root := RootCommand("1.2.3")
-			root.FlagSet.SetOutput(io.Discard)
-			var runErr error
-			_, _ = captureOutput(t, func() {
-				if err := root.Parse(args); err != nil {
-					t.Fatalf("parse error: %v", err)
-				}
-				runErr = root.Run(context.Background())
-			})
+			reg := asctest.NewRegistry(t)
+			if test.createBody != "" {
+				reg.Register(asctest.POST("/v1/reviewSubmissions").JSONBody(backgroundReviewSubmissionCreateBody),
+					asctest.JSON(http.StatusCreated, test.createBody))
+			}
+			detailBody := test.detailBody
+			if detailBody == "" {
+				detailBody = backgroundReviewSubmissionDetailJSON(validType, "sub-created", validState, platform, appID)
+			}
+			for range test.wantDetailRequests {
+				reg.Register(asctest.GET("/v1/reviewSubmissions/"+submissionID, "include=app"), asctest.JSON(http.StatusOK, detailBody))
+			}
+			if test.wantItemsRequest {
+				reg.Register(asctest.GET("/v1/reviewSubmissions/"+submissionID+"/items", "include=backgroundAssetVersion", "limit=200"),
+					asctest.JSON(http.StatusOK, test.itemsBody))
+			}
+			cancelStatus := test.cancelStatus
+			if cancelStatus == 0 {
+				cancelStatus = http.StatusOK
+			}
+			cancelBody := test.cancelBody
+			if cancelBody == "" {
+				cancelBody = `{"data":{"type":"reviewSubmissions","id":"sub-created","attributes":{"state":"CANCELING"}}}`
+			}
+			for range test.wantCancelRequests {
+				reg.Register(asctest.PATCH("/v1/reviewSubmissions/"+submissionID).JSONBody(backgroundReviewSubmissionPatchBody(submissionID, "canceled")),
+					asctest.JSON(cancelStatus, cancelBody))
+			}
+
+			_, _, runErr := runRootWithDeps(t, stubClient(t, reg), args...)
 			if runErr == nil {
 				t.Fatalf("expected preflight error containing %q", test.wantErr)
 			}
 			if !strings.Contains(runErr.Error(), test.wantErr) {
 				t.Fatalf("error = %q, want substring %q", runErr, test.wantErr)
 			}
-			if got := atomic.LoadInt32(&itemPosts); got != 0 {
+			if got := countBackgroundSubmitRequests(reg, http.MethodPost, "/v1/reviewSubmissionItems"); got != 0 {
 				t.Fatalf("expected zero review-submission item POSTs, got %d", got)
 			}
-			if got := atomic.LoadInt32(&detailRequests); got != test.wantDetailRequests {
+			if got := countBackgroundSubmitRequests(reg, http.MethodGet, "/v1/reviewSubmissions/"+submissionID); got != test.wantDetailRequests {
 				t.Fatalf("detail requests = %d, want %d", got, test.wantDetailRequests)
 			}
-			if got := atomic.LoadInt32(&cancelRequests); got != test.wantCancelRequests {
+			if got := countBackgroundSubmitRequests(reg, http.MethodPatch, "/v1/reviewSubmissions/"+submissionID); got != test.wantCancelRequests {
 				t.Fatalf("cancel requests = %d, want %d", got, test.wantCancelRequests)
 			}
 		})
@@ -320,30 +325,20 @@ func TestBackgroundAssetsSubmitStopsBeforeFetchingItemPageBeyondLimit(t *testing
 	setupAuth(t)
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() { http.DefaultTransport = originalTransport })
-
-	var itemGets, itemPosts int32
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		switch {
-		case req.Method == http.MethodGet && req.URL.Path == "/v1/reviewSubmissions/"+submissionID:
-			return jsonResponse(http.StatusOK, backgroundReviewSubmissionDetailJSON("reviewSubmissions", submissionID, "READY_FOR_REVIEW", "IOS", appID))
-		case req.Method == http.MethodGet && req.URL.Path == "/v1/reviewSubmissions/"+submissionID+"/items":
-			page := atomic.AddInt32(&itemGets, 1)
-			next := fmt.Sprintf("https://api.appstoreconnect.apple.com/v1/reviewSubmissions/%s/items?page=%d", submissionID, page+1)
-			body := fmt.Sprintf(`{"data":[],"links":{"self":%q,"next":%q}}`, req.URL.String(), next)
-			return jsonResponse(http.StatusOK, body)
-		case req.Method == http.MethodPost:
-			atomic.AddInt32(&itemPosts, 1)
-			return jsonResponse(http.StatusInternalServerError, `{"errors":[{"detail":"unexpected mutation"}]}`)
-		default:
-			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.String())
-			return nil, nil
+	reg := asctest.NewRegistry(t)
+	reg.Register(asctest.GET("/v1/reviewSubmissions/"+submissionID, "include=app"),
+		asctest.JSON(http.StatusOK, backgroundReviewSubmissionDetailJSON("reviewSubmissions", submissionID, "READY_FOR_REVIEW", "IOS", appID)))
+	itemsPath := "/v1/reviewSubmissions/" + submissionID + "/items"
+	for page := 1; page <= 1000; page++ {
+		query := []string{"include=backgroundAssetVersion", "limit=200"}
+		if page > 1 {
+			query = []string{fmt.Sprintf("page=%d", page)}
 		}
-	})
+		self := "https://api.appstoreconnect.apple.com" + itemsPath + "?" + strings.Join(query, "&")
+		next := fmt.Sprintf("https://api.appstoreconnect.apple.com%s?page=%d", itemsPath, page+1)
+		reg.Register(asctest.GET(itemsPath, query...), asctest.JSON(http.StatusOK, fmt.Sprintf(`{"data":[],"links":{"self":%q,"next":%q}}`, self, next)))
+	}
 
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
 	args := []string{
 		"background-assets", "submit",
 		"--app", appID,
@@ -352,20 +347,15 @@ func TestBackgroundAssetsSubmitStopsBeforeFetchingItemPageBeyondLimit(t *testing
 		"--confirm",
 		"--output", "json",
 	}
-	if err := root.Parse(args); err != nil {
-		t.Fatalf("parse error: %v", err)
+	_, _, err := runRootWithDeps(t, stubClient(t, reg), args...)
+	if err == nil || !strings.Contains(err.Error(), "page 1001 exceeds the maximum of 1000 pages") {
+		t.Fatalf("error = %v, want pagination limit failure", err)
 	}
-	_, _ = captureOutput(t, func() {
-		err := root.Run(context.Background())
-		if err == nil || !strings.Contains(err.Error(), "page 1001 exceeds the maximum of 1000 pages") {
-			t.Fatalf("error = %v, want pagination limit failure", err)
-		}
-	})
 
-	if got := atomic.LoadInt32(&itemGets); got != 1000 {
+	if got := countBackgroundSubmitRequests(reg, http.MethodGet, itemsPath); got != 1000 {
 		t.Fatalf("item GET requests = %d, want 1000", got)
 	}
-	if got := atomic.LoadInt32(&itemPosts); got != 0 {
+	if got := countBackgroundSubmitRequests(reg, http.MethodPost, "/v1/reviewSubmissionItems"); got != 0 {
 		t.Fatalf("mutation POST requests = %d, want 0", got)
 	}
 }
@@ -417,11 +407,10 @@ func TestBackgroundAssetsSubmitValidationErrors(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			stdout, stderr := captureOutput(t, func() {
-				if code := rootcmd.Run(test.args, "1.2.3"); code != rootcmd.ExitUsage {
-					t.Fatalf("expected exit code %d, got %d", rootcmd.ExitUsage, code)
-				}
-			})
+			stdout, stderr, code := runWithDeps(t, nil, test.args...)
+			if code != rootcmd.ExitUsage {
+				t.Fatalf("expected exit code %d, got %d", rootcmd.ExitUsage, code)
+			}
 
 			if stdout != "" {
 				t.Fatalf("expected empty stdout, got %q", stdout)
@@ -436,20 +425,7 @@ func TestBackgroundAssetsSubmitValidationErrors(t *testing.T) {
 func TestBackgroundAssetsSubmitDryRunWithExplicitVersionIDsDoesNotCallNetwork(t *testing.T) {
 	t.Setenv("ASC_APP_ID", "")
 
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() {
-		http.DefaultTransport = originalTransport
-	})
-
-	var calls int32
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		atomic.AddInt32(&calls, 1)
-		t.Fatalf("unexpected network call during dry-run: %s %s", req.Method, req.URL.String())
-		return nil, nil
-	})
-
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
+	reg := asctest.NewRegistry(t)
 
 	args := []string{
 		"background-assets", "submit",
@@ -459,16 +435,12 @@ func TestBackgroundAssetsSubmitDryRunWithExplicitVersionIDsDoesNotCallNetwork(t 
 		"--output", "json",
 	}
 
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse(args); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatalf("run error: %v", err)
-		}
-	})
+	stdout, stderr, runErr := runRootWithDeps(t, stubClient(t, reg), args...)
+	if runErr != nil {
+		t.Fatalf("run error: %v", runErr)
+	}
 
-	if atomic.LoadInt32(&calls) != 0 {
+	if calls := len(reg.Requests()); calls != 0 {
 		t.Fatalf("expected zero network calls, got %d", calls)
 	}
 	if stderr != "" {
@@ -504,63 +476,30 @@ func TestBackgroundAssetsSubmitAllHappyPath(t *testing.T) {
 	setupAuth(t)
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() {
-		http.DefaultTransport = originalTransport
-	})
-
-	type counters struct {
-		listAssets       int32
-		listVersionsByID map[string]*int32
-		createSubmission int32
-		createItem       int32
-		patchSubmit      int32
-	}
-	c := &counters{listVersionsByID: map[string]*int32{
-		"asset-1": new(int32),
-		"asset-2": new(int32),
-	}}
-
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		path := req.URL.Path
-		switch {
-		case req.Method == http.MethodGet && path == "/v1/apps/123456789/backgroundAssets":
-			atomic.AddInt32(&c.listAssets, 1)
-			return jsonResponse(http.StatusOK, `{"data":[
+	reg := asctest.NewRegistry(t)
+	reg.Register(asctest.GET("/v1/apps/123456789/backgroundAssets", "filter[archived]=false", "limit=200"),
+		asctest.JSON(http.StatusOK, `{"data":[
 				{"type":"backgroundAssets","id":"asset-1","attributes":{"assetPackIdentifier":"pack.one"}},
 				{"type":"backgroundAssets","id":"asset-2","attributes":{"assetPackIdentifier":"pack.two"}}
-			],"links":{"next":""}}`)
-		case req.Method == http.MethodGet && strings.HasPrefix(path, "/v1/backgroundAssets/") && strings.HasSuffix(path, "/versions"):
-			assetID := strings.TrimSuffix(strings.TrimPrefix(path, "/v1/backgroundAssets/"), "/versions")
-			counter, ok := c.listVersionsByID[assetID]
-			if !ok {
-				t.Fatalf("unexpected versions list for asset %q", assetID)
-			}
-			atomic.AddInt32(counter, 1)
-			return jsonResponse(http.StatusOK, `{"data":[
+			],"links":{"next":""}}`))
+	for _, assetID := range []string{"asset-1", "asset-2"} {
+		reg.Register(asctest.GET("/v1/backgroundAssets/"+assetID+"/versions", "limit=200"),
+			asctest.JSON(http.StatusOK, `{"data":[
 				{"type":"backgroundAssetVersions","id":"`+assetID+`-v1","attributes":{"state":"COMPLETE","version":"1","platforms":["IOS"],"createdDate":"2026-05-01T00:00:00Z"}}
-			],"links":{"next":""}}`)
-		case req.Method == http.MethodPost && path == "/v1/reviewSubmissions":
-			atomic.AddInt32(&c.createSubmission, 1)
-			return jsonResponse(http.StatusCreated, `{"data":{"type":"reviewSubmissions","id":"sub-xyz","attributes":{"platform":"IOS","state":"READY_FOR_REVIEW"}}}`)
-		case req.Method == http.MethodGet && path == "/v1/reviewSubmissions/sub-xyz":
-			return jsonResponse(http.StatusOK, backgroundReviewSubmissionDetailJSON("reviewSubmissions", "sub-xyz", "READY_FOR_REVIEW", "IOS", "123456789"))
-		case req.Method == http.MethodGet && path == "/v1/reviewSubmissions/sub-xyz/items":
-			return jsonResponse(http.StatusOK, `{"data":[],"links":{"self":"https://api.appstoreconnect.apple.com/v1/reviewSubmissions/sub-xyz/items"}}`)
-		case req.Method == http.MethodPost && path == "/v1/reviewSubmissionItems":
-			atomic.AddInt32(&c.createItem, 1)
-			return jsonResponse(http.StatusCreated, `{"data":{"type":"reviewSubmissionItems","id":"item-`+req.URL.Path+`"}}`)
-		case req.Method == http.MethodPatch && path == "/v1/reviewSubmissions/sub-xyz":
-			atomic.AddInt32(&c.patchSubmit, 1)
-			return jsonResponse(http.StatusOK, `{"data":{"type":"reviewSubmissions","id":"sub-xyz","attributes":{"platform":"IOS","state":"WAITING_FOR_REVIEW","submittedDate":"2026-05-14T18:33:37Z"}}}`)
-		default:
-			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.String())
-			return nil, nil
-		}
-	})
-
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
+			],"links":{"next":""}}`))
+	}
+	reg.Register(asctest.POST("/v1/reviewSubmissions").JSONBody(backgroundReviewSubmissionCreateBody),
+		asctest.JSON(http.StatusCreated, `{"data":{"type":"reviewSubmissions","id":"sub-xyz","attributes":{"platform":"IOS","state":"READY_FOR_REVIEW"}}}`))
+	reg.Register(asctest.GET("/v1/reviewSubmissions/sub-xyz", "include=app"),
+		asctest.JSON(http.StatusOK, backgroundReviewSubmissionDetailJSON("reviewSubmissions", "sub-xyz", "READY_FOR_REVIEW", "IOS", "123456789")))
+	reg.Register(asctest.GET("/v1/reviewSubmissions/sub-xyz/items", "include=backgroundAssetVersion", "limit=200"),
+		asctest.JSON(http.StatusOK, `{"data":[],"links":{"self":"https://api.appstoreconnect.apple.com/v1/reviewSubmissions/sub-xyz/items"}}`))
+	for _, versionID := range []string{"asset-1-v1", "asset-2-v1"} {
+		reg.Register(asctest.POST("/v1/reviewSubmissionItems").JSONBody(backgroundReviewSubmissionItemBody("sub-xyz", versionID)),
+			asctest.JSON(http.StatusCreated, `{"data":{"type":"reviewSubmissionItems","id":"item-/v1/reviewSubmissionItems"}}`))
+	}
+	reg.Register(asctest.PATCH("/v1/reviewSubmissions/sub-xyz").JSONBody(backgroundReviewSubmissionPatchBody("sub-xyz", "submitted")),
+		asctest.JSON(http.StatusOK, `{"data":{"type":"reviewSubmissions","id":"sub-xyz","attributes":{"platform":"IOS","state":"WAITING_FOR_REVIEW","submittedDate":"2026-05-14T18:33:37Z"}}}`))
 
 	args := []string{
 		"background-assets", "submit",
@@ -570,34 +509,30 @@ func TestBackgroundAssetsSubmitAllHappyPath(t *testing.T) {
 		"--output", "json",
 	}
 
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse(args); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatalf("run error: %v", err)
-		}
-	})
+	stdout, stderr, runErr := runRootWithDeps(t, stubClient(t, reg), args...)
+	if runErr != nil {
+		t.Fatalf("run error: %v", runErr)
+	}
 
 	if stderr != "" {
 		t.Fatalf("expected empty stderr, got %q", stderr)
 	}
-	if got := atomic.LoadInt32(&c.listAssets); got != 1 {
+	if got := countBackgroundSubmitRequests(reg, http.MethodGet, "/v1/apps/123456789/backgroundAssets"); got != 1 {
 		t.Errorf("expected 1 listAssets call, got %d", got)
 	}
-	if got := atomic.LoadInt32(c.listVersionsByID["asset-1"]); got != 1 {
+	if got := countBackgroundSubmitRequests(reg, http.MethodGet, "/v1/backgroundAssets/asset-1/versions"); got != 1 {
 		t.Errorf("expected 1 listVersions call for asset-1, got %d", got)
 	}
-	if got := atomic.LoadInt32(c.listVersionsByID["asset-2"]); got != 1 {
+	if got := countBackgroundSubmitRequests(reg, http.MethodGet, "/v1/backgroundAssets/asset-2/versions"); got != 1 {
 		t.Errorf("expected 1 listVersions call for asset-2, got %d", got)
 	}
-	if got := atomic.LoadInt32(&c.createSubmission); got != 1 {
+	if got := countBackgroundSubmitRequests(reg, http.MethodPost, "/v1/reviewSubmissions"); got != 1 {
 		t.Errorf("expected 1 createSubmission call, got %d", got)
 	}
-	if got := atomic.LoadInt32(&c.createItem); got != 2 {
+	if got := countBackgroundSubmitRequests(reg, http.MethodPost, "/v1/reviewSubmissionItems"); got != 2 {
 		t.Errorf("expected 2 createItem calls, got %d", got)
 	}
-	if got := atomic.LoadInt32(&c.patchSubmit); got != 1 {
+	if got := countBackgroundSubmitRequests(reg, http.MethodPatch, "/v1/reviewSubmissions/sub-xyz"); got != 1 {
 		t.Errorf("expected 1 patchSubmit call, got %d", got)
 	}
 
@@ -624,59 +559,28 @@ func TestBackgroundAssetsSubmitReuseExistingSkipsAttached(t *testing.T) {
 	setupAuth(t)
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() {
-		http.DefaultTransport = originalTransport
-	})
-
-	var (
-		createSubmission int32
-		createItem       int32
-		patchSubmit      int32
-		listItems        int32
-	)
-
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		path := req.URL.Path
-		switch {
-		case req.Method == http.MethodGet && path == "/v1/apps/123456789/backgroundAssets":
-			return jsonResponse(http.StatusOK, `{"data":[
+	reg := asctest.NewRegistry(t)
+	reg.Register(asctest.GET("/v1/apps/123456789/backgroundAssets", "filter[archived]=false", "limit=200"),
+		asctest.JSON(http.StatusOK, `{"data":[
 				{"type":"backgroundAssets","id":"asset-1","attributes":{"assetPackIdentifier":"pack.one"}},
 				{"type":"backgroundAssets","id":"asset-2","attributes":{"assetPackIdentifier":"pack.two"}}
-			],"links":{"next":""}}`)
-		case req.Method == http.MethodGet && strings.HasPrefix(path, "/v1/backgroundAssets/") && strings.HasSuffix(path, "/versions"):
-			assetID := strings.TrimSuffix(strings.TrimPrefix(path, "/v1/backgroundAssets/"), "/versions")
-			return jsonResponse(http.StatusOK, `{"data":[
+			],"links":{"next":""}}`))
+	for _, assetID := range []string{"asset-1", "asset-2"} {
+		reg.Register(asctest.GET("/v1/backgroundAssets/"+assetID+"/versions", "limit=200"),
+			asctest.JSON(http.StatusOK, `{"data":[
 				{"type":"backgroundAssetVersions","id":"`+assetID+`-v1","attributes":{"state":"COMPLETE","version":"1","platforms":["IOS"]}}
-			],"links":{"next":""}}`)
-		case req.Method == http.MethodGet && path == "/v1/reviewSubmissions/sub-existing":
-			return jsonResponse(http.StatusOK, backgroundReviewSubmissionDetailJSON("reviewSubmissions", "sub-existing", "READY_FOR_REVIEW", "IOS", "123456789"))
-		case req.Method == http.MethodGet && path == "/v1/reviewSubmissions/sub-existing/items":
-			atomic.AddInt32(&listItems, 1)
-			if include := req.URL.Query().Get("include"); !strings.Contains(include, "backgroundAssetVersion") {
-				t.Errorf("expected include=backgroundAssetVersion on items list, got %q", include)
-			}
-			return jsonResponse(http.StatusOK, `{"data":[
+			],"links":{"next":""}}`))
+	}
+	reg.Register(asctest.GET("/v1/reviewSubmissions/sub-existing", "include=app"),
+		asctest.JSON(http.StatusOK, backgroundReviewSubmissionDetailJSON("reviewSubmissions", "sub-existing", "READY_FOR_REVIEW", "IOS", "123456789")))
+	reg.Register(asctest.GET("/v1/reviewSubmissions/sub-existing/items", "include=backgroundAssetVersion", "limit=200"),
+		asctest.JSON(http.StatusOK, `{"data":[
 				{"type":"reviewSubmissionItems","id":"existing-item-1","attributes":{"state":"READY_FOR_REVIEW"},"relationships":{"backgroundAssetVersion":{"data":{"type":"backgroundAssetVersions","id":"asset-1-v1"}}}}
-			],"links":{"self":"https://api.appstoreconnect.apple.com/v1/reviewSubmissions/sub-existing/items","next":""}}`)
-		case req.Method == http.MethodPost && path == "/v1/reviewSubmissions":
-			atomic.AddInt32(&createSubmission, 1)
-			t.Errorf("CreateReviewSubmission should not be called when reusing")
-			return jsonResponse(http.StatusCreated, `{"data":{"type":"reviewSubmissions","id":"unexpected"}}`)
-		case req.Method == http.MethodPost && path == "/v1/reviewSubmissionItems":
-			atomic.AddInt32(&createItem, 1)
-			return jsonResponse(http.StatusCreated, `{"data":{"type":"reviewSubmissionItems","id":"item-new"}}`)
-		case req.Method == http.MethodPatch && path == "/v1/reviewSubmissions/sub-existing":
-			atomic.AddInt32(&patchSubmit, 1)
-			return jsonResponse(http.StatusOK, `{"data":{"type":"reviewSubmissions","id":"sub-existing","attributes":{"state":"WAITING_FOR_REVIEW","submittedDate":"2026-05-14T18:33:37Z"}}}`)
-		default:
-			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.String())
-			return nil, nil
-		}
-	})
-
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
+			],"links":{"self":"https://api.appstoreconnect.apple.com/v1/reviewSubmissions/sub-existing/items","next":""}}`))
+	reg.Register(asctest.POST("/v1/reviewSubmissionItems").JSONBody(backgroundReviewSubmissionItemBody("sub-existing", "asset-2-v1")),
+		asctest.JSON(http.StatusCreated, `{"data":{"type":"reviewSubmissionItems","id":"item-new"}}`))
+	reg.Register(asctest.PATCH("/v1/reviewSubmissions/sub-existing").JSONBody(backgroundReviewSubmissionPatchBody("sub-existing", "submitted")),
+		asctest.JSON(http.StatusOK, `{"data":{"type":"reviewSubmissions","id":"sub-existing","attributes":{"state":"WAITING_FOR_REVIEW","submittedDate":"2026-05-14T18:33:37Z"}}}`))
 
 	args := []string{
 		"background-assets", "submit",
@@ -687,28 +591,24 @@ func TestBackgroundAssetsSubmitReuseExistingSkipsAttached(t *testing.T) {
 		"--output", "json",
 	}
 
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse(args); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatalf("run error: %v", err)
-		}
-	})
+	stdout, stderr, runErr := runRootWithDeps(t, stubClient(t, reg), args...)
+	if runErr != nil {
+		t.Fatalf("run error: %v", runErr)
+	}
 
 	if stderr != "" {
 		t.Fatalf("expected empty stderr, got %q", stderr)
 	}
-	if got := atomic.LoadInt32(&listItems); got != 1 {
+	if got := countBackgroundSubmitRequests(reg, http.MethodGet, "/v1/reviewSubmissions/sub-existing/items"); got != 1 {
 		t.Errorf("expected 1 listItems call, got %d", got)
 	}
-	if got := atomic.LoadInt32(&createSubmission); got != 0 {
+	if got := countBackgroundSubmitRequests(reg, http.MethodPost, "/v1/reviewSubmissions"); got != 0 {
 		t.Errorf("expected 0 createSubmission calls when reusing, got %d", got)
 	}
-	if got := atomic.LoadInt32(&createItem); got != 1 {
+	if got := countBackgroundSubmitRequests(reg, http.MethodPost, "/v1/reviewSubmissionItems"); got != 1 {
 		t.Errorf("expected 1 createItem call (asset-1 already attached, asset-2 new), got %d", got)
 	}
-	if got := atomic.LoadInt32(&patchSubmit); got != 1 {
+	if got := countBackgroundSubmitRequests(reg, http.MethodPatch, "/v1/reviewSubmissions/sub-existing"); got != 1 {
 		t.Errorf("expected 1 patchSubmit call, got %d", got)
 	}
 
@@ -733,47 +633,25 @@ func TestBackgroundAssetsSubmitRollsBackEmptySubmissionOnFirstAttachFailure(t *t
 	setupAuth(t)
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() {
-		http.DefaultTransport = originalTransport
-	})
-
-	var (
-		createSubmission int32
-		patchCancel      int32
-	)
-
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		path := req.URL.Path
-		switch {
-		case req.Method == http.MethodGet && path == "/v1/apps/123456789/backgroundAssets":
-			return jsonResponse(http.StatusOK, `{"data":[
+	reg := asctest.NewRegistry(t)
+	reg.Register(asctest.GET("/v1/apps/123456789/backgroundAssets", "filter[archived]=false", "limit=200"),
+		asctest.JSON(http.StatusOK, `{"data":[
 				{"type":"backgroundAssets","id":"asset-1","attributes":{"assetPackIdentifier":"pack.one"}}
-			],"links":{"next":""}}`)
-		case req.Method == http.MethodGet && strings.HasPrefix(path, "/v1/backgroundAssets/") && strings.HasSuffix(path, "/versions"):
-			return jsonResponse(http.StatusOK, `{"data":[
+			],"links":{"next":""}}`))
+	reg.Register(asctest.GET("/v1/backgroundAssets/asset-1/versions", "limit=200"),
+		asctest.JSON(http.StatusOK, `{"data":[
 				{"type":"backgroundAssetVersions","id":"asset-1-v1","attributes":{"state":"COMPLETE","version":"1","platforms":["IOS"]}}
-			],"links":{"next":""}}`)
-		case req.Method == http.MethodPost && path == "/v1/reviewSubmissions":
-			atomic.AddInt32(&createSubmission, 1)
-			return jsonResponse(http.StatusCreated, `{"data":{"type":"reviewSubmissions","id":"sub-doomed","attributes":{"platform":"IOS","state":"READY_FOR_REVIEW"}}}`)
-		case req.Method == http.MethodGet && path == "/v1/reviewSubmissions/sub-doomed":
-			return jsonResponse(http.StatusOK, backgroundReviewSubmissionDetailJSON("reviewSubmissions", "sub-doomed", "READY_FOR_REVIEW", "IOS", "123456789"))
-		case req.Method == http.MethodGet && path == "/v1/reviewSubmissions/sub-doomed/items":
-			return jsonResponse(http.StatusOK, `{"data":[],"links":{"self":"https://api.appstoreconnect.apple.com/v1/reviewSubmissions/sub-doomed/items"}}`)
-		case req.Method == http.MethodPost && path == "/v1/reviewSubmissionItems":
-			return jsonResponse(http.StatusConflict, `{"errors":[{"status":"409","code":"ENTITY_ERROR.STATE_NOT_ALLOWED","detail":"already attached to another submission"}]}`)
-		case req.Method == http.MethodPatch && path == "/v1/reviewSubmissions/sub-doomed":
-			atomic.AddInt32(&patchCancel, 1)
-			return jsonResponse(http.StatusOK, `{"data":{"type":"reviewSubmissions","id":"sub-doomed","attributes":{"state":"CANCELING"}}}`)
-		default:
-			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.String())
-			return nil, nil
-		}
-	})
-
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
+			],"links":{"next":""}}`))
+	reg.Register(asctest.POST("/v1/reviewSubmissions").JSONBody(backgroundReviewSubmissionCreateBody),
+		asctest.JSON(http.StatusCreated, `{"data":{"type":"reviewSubmissions","id":"sub-doomed","attributes":{"platform":"IOS","state":"READY_FOR_REVIEW"}}}`))
+	reg.Register(asctest.GET("/v1/reviewSubmissions/sub-doomed", "include=app"),
+		asctest.JSON(http.StatusOK, backgroundReviewSubmissionDetailJSON("reviewSubmissions", "sub-doomed", "READY_FOR_REVIEW", "IOS", "123456789")))
+	reg.Register(asctest.GET("/v1/reviewSubmissions/sub-doomed/items", "include=backgroundAssetVersion", "limit=200"),
+		asctest.JSON(http.StatusOK, `{"data":[],"links":{"self":"https://api.appstoreconnect.apple.com/v1/reviewSubmissions/sub-doomed/items"}}`))
+	reg.Register(asctest.POST("/v1/reviewSubmissionItems").JSONBody(backgroundReviewSubmissionItemBody("sub-doomed", "asset-1-v1")),
+		asctest.JSON(http.StatusConflict, `{"errors":[{"status":"409","code":"ENTITY_ERROR.STATE_NOT_ALLOWED","detail":"already attached to another submission"}]}`))
+	reg.Register(asctest.PATCH("/v1/reviewSubmissions/sub-doomed").JSONBody(backgroundReviewSubmissionPatchBody("sub-doomed", "canceled")),
+		asctest.JSON(http.StatusOK, `{"data":{"type":"reviewSubmissions","id":"sub-doomed","attributes":{"state":"CANCELING"}}}`))
 
 	args := []string{
 		"background-assets", "submit",
@@ -783,13 +661,7 @@ func TestBackgroundAssetsSubmitRollsBackEmptySubmissionOnFirstAttachFailure(t *t
 		"--output", "json",
 	}
 
-	var runErr error
-	stdout, _ := captureOutput(t, func() {
-		if err := root.Parse(args); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		runErr = root.Run(context.Background())
-	})
+	stdout, _, runErr := runRootWithDeps(t, stubClient(t, reg), args...)
 
 	if runErr == nil {
 		t.Fatalf("expected error when first attach fails, got nil")
@@ -797,10 +669,10 @@ func TestBackgroundAssetsSubmitRollsBackEmptySubmissionOnFirstAttachFailure(t *t
 	if !strings.Contains(runErr.Error(), "rolled back the submission") {
 		t.Fatalf("expected error to mention rollback, got %v", runErr)
 	}
-	if got := atomic.LoadInt32(&createSubmission); got != 1 {
+	if got := countBackgroundSubmitRequests(reg, http.MethodPost, "/v1/reviewSubmissions"); got != 1 {
 		t.Errorf("expected 1 createSubmission call, got %d", got)
 	}
-	if got := atomic.LoadInt32(&patchCancel); got != 1 {
+	if got := countBackgroundSubmitRequests(reg, http.MethodPatch, "/v1/reviewSubmissions/sub-doomed"); got != 1 {
 		t.Errorf("expected 1 cancel call (rollback), got %d", got)
 	}
 	if stdout != "" {
@@ -811,14 +683,7 @@ func TestBackgroundAssetsSubmitRollsBackEmptySubmissionOnFirstAttachFailure(t *t
 func TestBackgroundAssetsSubmitFlagOrderEdgeCases(t *testing.T) {
 	t.Setenv("ASC_APP_ID", "")
 
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() {
-		http.DefaultTransport = originalTransport
-	})
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		t.Fatalf("dry-run should not call the network: %s %s", req.Method, req.URL.String())
-		return nil, nil
-	})
+	client := stubClient(t, asctest.NewRegistry(t))
 
 	cases := []struct {
 		name string
@@ -870,17 +735,10 @@ func TestBackgroundAssetsSubmitFlagOrderEdgeCases(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			root := RootCommand("1.2.3")
-			root.FlagSet.SetOutput(io.Discard)
-
-			stdout, stderr := captureOutput(t, func() {
-				if err := root.Parse(c.args); err != nil {
-					t.Fatalf("parse error: %v", err)
-				}
-				if err := root.Run(context.Background()); err != nil {
-					t.Fatalf("unexpected run error: %v", err)
-				}
-			})
+			stdout, stderr, err := runRootWithDeps(t, client, c.args...)
+			if err != nil {
+				t.Fatalf("unexpected run error: %v", err)
+			}
 
 			if stderr != "" {
 				t.Fatalf("expected empty stderr, got %q", stderr)
@@ -911,7 +769,7 @@ func TestBackgroundAssetsSubmitRenewsAttachBudgetAndRollsBackFailure(t *testing.
 	t.Setenv("ASC_TIMEOUT_SECONDS", "")
 	t.Setenv("ASC_MAX_RETRIES", "0")
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch {
 		case req.Method == http.MethodPost && req.URL.Path == "/v1/reviewSubmissions":
@@ -946,14 +804,8 @@ func TestBackgroundAssetsSubmitRenewsAttachBudgetAndRollsBackFailure(t *testing.
 			t.Errorf("unexpected request: %s %s", req.Method, req.URL.String())
 			w.WriteHeader(http.StatusNotFound)
 		}
-	}))
-	t.Cleanup(server.Close)
+	})
 
-	serverURL, err := url.Parse(server.URL)
-	if err != nil {
-		t.Fatalf("parse test server URL: %v", err)
-	}
-	serverTransport := server.Client().Transport
 	attachBudget := make(chan time.Duration, 1)
 	rollbackBudget := make(chan time.Duration, 1)
 	transport := roundTripFunc(func(req *http.Request) (*http.Response, error) {
@@ -971,10 +823,9 @@ func TestBackgroundAssetsSubmitRenewsAttachBudgetAndRollsBackFailure(t *testing.
 			rollbackBudget <- 0
 		}
 
-		cloned := req.Clone(req.Context())
-		cloned.URL.Scheme = serverURL.Scheme
-		cloned.URL.Host = serverURL.Host
-		return serverTransport.RoundTrip(cloned)
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, req)
+		return response.Result(), nil
 	})
 	client, err := asc.NewClientWithHTTPClient(
 		os.Getenv("ASC_KEY_ID"),
@@ -985,11 +836,8 @@ func TestBackgroundAssetsSubmitRenewsAttachBudgetAndRollsBackFailure(t *testing.
 	if err != nil {
 		t.Fatalf("create background-assets submit client: %v", err)
 	}
-	restoreClient := shared.SetASCClientFactoryForTesting(func() (*asc.Client, error) { return client, nil })
-	t.Cleanup(restoreClient)
-
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
+	d, _, stderrBuf := newTestDeps(t, func() (*asc.Client, error) { return client, nil })
+	root := rootcmd.RootCommandWithDeps("1.2.3", d)
 	args := []string{
 		"background-assets", "submit",
 		"--app", appID,
@@ -997,24 +845,22 @@ func TestBackgroundAssetsSubmitRenewsAttachBudgetAndRollsBackFailure(t *testing.
 		"--confirm",
 		"--output", "json",
 	}
+	if err := root.Parse(args); err != nil {
+		t.Fatalf("parse error: %v", err)
+	}
 	var runErr error
-	_, stderr := captureOutput(t, func() {
-		if err := root.Parse(args); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		runErr = root.Run(context.Background())
-	})
+	synctest.Test(t, func(*testing.T) { runErr = root.Run(context.Background()) })
 
-	if stderr != "" {
+	if stderr := stderrBuf.String(); stderr != "" {
 		t.Fatalf("expected empty stderr, got %q", stderr)
 	}
 	if runErr == nil || !strings.Contains(runErr.Error(), "attach version") || !strings.Contains(runErr.Error(), "rolled back the submission") {
 		t.Fatalf("run error = %v, want failed attach followed by rollback", runErr)
 	}
-	if got := <-attachBudget; got < 500*time.Millisecond {
-		t.Fatalf("attach request had only %s remaining, want a fresh per-request budget near %s", got, timeout)
+	if got := <-attachBudget; got != timeout {
+		t.Fatalf("attach request had %s remaining, want a fresh per-request budget of %s", got, timeout)
 	}
-	if got := <-rollbackBudget; got < 500*time.Millisecond {
-		t.Fatalf("rollback request had only %s remaining, want an independent fresh budget", got)
+	if got := <-rollbackBudget; got != timeout {
+		t.Fatalf("rollback request had %s remaining, want an independent fresh budget of %s", got, timeout)
 	}
 }

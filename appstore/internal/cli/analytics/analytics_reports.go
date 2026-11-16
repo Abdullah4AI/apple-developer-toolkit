@@ -3,9 +3,6 @@ package analytics
 import (
 	"context"
 	"flag"
-	"fmt"
-	"os"
-	"strings"
 
 	"github.com/peterbourgon/ff/v3/ffcli"
 
@@ -13,9 +10,9 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
-// AnalyticsReportsCommand returns the analytics reports command group.
-func AnalyticsReportsCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("reports", flag.ExitOnError)
+// newAnalyticsReportsCommand returns the analytics reports command group.
+func newAnalyticsReportsCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("reports", flag.ExitOnError)
 
 	return &ffcli.Command{
 		Name:       "reports",
@@ -28,10 +25,10 @@ Examples:
   asc analytics reports links --report-id "REPORT_ID"
   asc analytics reports links --report-id "REPORT_ID" --paginate`,
 		FlagSet:   fs,
-		UsageFunc: shared.VisibleUsageFunc,
+		UsageFunc: d.VisibleUsageFunc,
 		Subcommands: []*ffcli.Command{
-			AnalyticsReportsGetCommand(),
-			AnalyticsReportsRelationshipsCommand(),
+			newAnalyticsReportsGetCommand(d),
+			newAnalyticsReportsRelationshipsCommand(d),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp
@@ -39,14 +36,10 @@ Examples:
 	}
 }
 
-// AnalyticsReportsGetCommand retrieves a specific analytics report.
-func AnalyticsReportsGetCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("view", flag.ExitOnError)
-
-	reportID := shared.BindResourceIDFlag(fs, "report-id", "analyticsReports", "Analytics report ID")
-	output := shared.BindOutputFlags(fs)
-
-	return &ffcli.Command{
+// newAnalyticsReportsGetCommand retrieves a specific analytics report.
+func newAnalyticsReportsGetCommand(d *shared.Deps) *ffcli.Command {
+	return shared.BuildIDGetCommand(shared.IDGetCommandConfig{
+		Deps:       d,
 		Name:       "view",
 		ShortUsage: "asc analytics reports view --report-id \"REPORT_ID\" [flags]",
 		ShortHelp:  "View an analytics report by ID.",
@@ -54,43 +47,20 @@ func AnalyticsReportsGetCommand() *ffcli.Command {
 
 Examples:
   asc analytics reports view --report-id "REPORT_ID"`,
-		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
-		Exec: func(ctx context.Context, args []string) error {
-			if strings.TrimSpace(*reportID) == "" {
-				fmt.Fprintln(os.Stderr, "Error: --report-id is required")
-				return shared.MissingRequiredUsageError("--report-id")
-			}
-
-			client, err := shared.GetASCClient()
-			if err != nil {
-				return fmt.Errorf("analytics reports view: %w", err)
-			}
-
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
-			defer cancel()
-
-			resp, err := client.GetAnalyticsReport(requestCtx, strings.TrimSpace(*reportID))
-			if err != nil {
-				return fmt.Errorf("analytics reports view: failed to fetch: %w", err)
-			}
-
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+		IDFlag:             "report-id",
+		IDUsage:            "Analytics report ID",
+		IDType:             "analyticsReports",
+		RequiredDiagnostic: true,
+		Fetch: func(ctx context.Context, client *asc.Client, id string) (any, error) {
+			return client.GetAnalyticsReport(ctx, id)
 		},
-	}
+	})
 }
 
-// AnalyticsReportsRelationshipsCommand lists instance links for a report.
-func AnalyticsReportsRelationshipsCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("links", flag.ExitOnError)
-
-	reportID := shared.BindResourceIDFlag(fs, "report-id", "analyticsReports", "Analytics report ID")
-	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
-	next := fs.String("next", "", "Fetch next page using a links.next URL")
-	paginate := fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")
-	output := shared.BindOutputFlags(fs)
-
-	return &ffcli.Command{
+// newAnalyticsReportsRelationshipsCommand lists instance links for a report.
+func newAnalyticsReportsRelationshipsCommand(d *shared.Deps) *ffcli.Command {
+	return shared.BuildPaginatedListCommand(shared.PaginatedListCommandConfig{
+		Deps:       d,
 		Name:       "links",
 		ShortUsage: "asc analytics reports links --report-id \"REPORT_ID\" [flags]",
 		ShortHelp:  "List analytics report instance relationships.",
@@ -99,59 +69,14 @@ func AnalyticsReportsRelationshipsCommand() *ffcli.Command {
 Examples:
   asc analytics reports links --report-id "REPORT_ID"
   asc analytics reports links --report-id "REPORT_ID" --paginate`,
-		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
-		Exec: func(ctx context.Context, args []string) error {
-			if *limit != 0 && (*limit < 1 || *limit > analyticsMaxLimit) {
-				return shared.UsageError("analytics reports links: --limit must be between 1 and 200")
-			}
-			if err := shared.ValidateNextURL(*next); err != nil {
-				return shared.UsageErrorf("analytics reports links: %v", err)
-			}
-
-			id := strings.TrimSpace(*reportID)
-			if id == "" && strings.TrimSpace(*next) == "" {
-				fmt.Fprintln(os.Stderr, "Error: --report-id is required")
-				return shared.MissingRequiredUsageError("--report-id")
-			}
-
-			client, err := shared.GetASCClient()
-			if err != nil {
-				return fmt.Errorf("analytics reports links: %w", err)
-			}
-
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
-			defer cancel()
-
-			opts := []asc.LinkagesOption{
-				asc.WithLinkagesLimit(*limit),
-				asc.WithLinkagesNextURL(*next),
-			}
-
-			if *paginate {
-				paginateOpts := append(opts, asc.WithLinkagesLimit(analyticsMaxLimit))
-				resp, err := shared.PaginateWithSpinner(
-					requestCtx,
-					func(ctx context.Context) (asc.PaginatedResponse, error) {
-						return client.GetAnalyticsReportInstancesRelationships(ctx, id, paginateOpts...)
-					},
-					func(ctx context.Context, nextURL string) (asc.PaginatedResponse, error) {
-						return client.GetAnalyticsReportInstancesRelationships(ctx, id, asc.WithLinkagesNextURL(nextURL))
-					},
-				)
-				if err != nil {
-					return fmt.Errorf("analytics reports links: %w", err)
-				}
-
-				return shared.PrintOutput(resp, *output.Output, *output.Pretty)
-			}
-
-			resp, err := client.GetAnalyticsReportInstancesRelationships(requestCtx, id, opts...)
-			if err != nil {
-				return fmt.Errorf("analytics reports links: failed to fetch: %w", err)
-			}
-
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+		ParentFlag:           "report-id",
+		ParentUsage:          "Analytics report ID",
+		ParentType:           "analyticsReports",
+		RequiredDiagnostic:   true,
+		LimitMax:             analyticsMaxLimit,
+		PaginateIgnoresLimit: true,
+		FetchPage: func(ctx context.Context, client *asc.Client, id string, limit int, next string) (asc.PaginatedResponse, error) {
+			return client.GetAnalyticsReportInstancesRelationships(ctx, id, asc.Limit[asc.LinkagesOption](limit), asc.NextURL[asc.LinkagesOption](next))
 		},
-	}
+	})
 }

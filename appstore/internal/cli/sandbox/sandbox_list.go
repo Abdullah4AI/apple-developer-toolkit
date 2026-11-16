@@ -12,16 +12,16 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
-// SandboxListCommand returns the sandbox list subcommand.
-func SandboxListCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("list", flag.ExitOnError)
+// newSandboxListCommand returns the sandbox list subcommand built on d.
+func newSandboxListCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("list", flag.ExitOnError)
 
 	email := fs.String("email", "", "Filter by tester email")
 	territory := fs.String("territory", "", "Filter by territory (accepts alpha-2, alpha-3, or exact English country name)")
-	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
-	next := fs.String("next", "", "Fetch next page using a links.next URL")
-	paginate := fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")
-	output := shared.BindOutputFlags(fs)
+	limit := fs.Int("limit", 0, shared.LimitFlagUsage(200))
+	next := fs.String("next", "", shared.NextFlagUsage)
+	paginate := fs.Bool("paginate", false, shared.PaginateFlagUsage)
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "list",
@@ -36,35 +36,32 @@ Examples:
   asc sandbox list --limit 50
   asc sandbox list --paginate`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
-			if *limit != 0 && (*limit < 1 || *limit > 200) {
-				return shared.UsageError("sandbox list: --limit must be between 1 and 200")
-			}
-			if err := shared.ValidateNextURL(*next); err != nil {
-				return shared.UsageErrorf("sandbox list: %v", err)
+			if err := d.ValidatePaginationFlags(ctx, fs, "sandbox list", 200); err != nil {
+				return err
 			}
 			if strings.TrimSpace(*email) != "" {
 				if err := validateSandboxEmail(*email); err != nil {
-					return fmt.Errorf("sandbox list: %w", err)
+					return d.UsageErrorf("sandbox list: %v", err)
 				}
 			}
 			normalizedTerritory, err := normalizeSandboxTerritoryFilter(*territory)
 			if err != nil {
-				return fmt.Errorf("sandbox list: %w", err)
+				return d.UsageErrorf("sandbox list: %v", err)
 			}
 
-			client, err := shared.GetASCClient()
+			client, err := d.Client()
 			if err != nil {
 				return err
 			}
 
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
+			requestCtx, cancel := d.Timeout(ctx)
 			defer cancel()
 
 			opts := []asc.SandboxTestersOption{
-				asc.WithSandboxTestersLimit(*limit),
-				asc.WithSandboxTestersNextURL(*next),
+				asc.Limit[asc.SandboxTestersOption](*limit),
+				asc.NextURL[asc.SandboxTestersOption](*next),
 			}
 			if strings.TrimSpace(*email) != "" {
 				opts = append(opts, asc.WithSandboxTestersEmail(*email))
@@ -76,7 +73,7 @@ Examples:
 			// Sandbox testers use a different response type - need to handle separately
 			if *paginate {
 				// Fetch first page with limit set for consistent pagination
-				paginateOpts := append(opts, asc.WithSandboxTestersLimit(200))
+				paginateOpts := append(opts, asc.Limit[asc.SandboxTestersOption](200))
 				firstPage, err := client.GetSandboxTesters(requestCtx, paginateOpts...)
 				if err != nil {
 					return fmt.Errorf("sandbox list: failed to fetch: %w", err)
@@ -85,14 +82,14 @@ Examples:
 				// Fetch all remaining pages
 				resp, err := asc.PaginateAll(requestCtx, firstPage, func(ctx context.Context, nextURL string) (asc.PaginatedResponse, error) {
 					continuationOpts := append([]asc.SandboxTestersOption(nil), opts...)
-					continuationOpts = append(continuationOpts, asc.WithSandboxTestersNextURL(nextURL))
+					continuationOpts = append(continuationOpts, asc.NextURL[asc.SandboxTestersOption](nextURL))
 					return client.GetSandboxTesters(ctx, continuationOpts...)
 				})
 				if err != nil {
 					return fmt.Errorf("sandbox list: %w", err)
 				}
 
-				return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+				return d.PrintOutput(resp, *output.Output, *output.Pretty)
 			}
 
 			resp, err := client.GetSandboxTesters(requestCtx, opts...)
@@ -100,7 +97,7 @@ Examples:
 				return fmt.Errorf("sandbox list: %w", err)
 			}
 
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+			return d.PrintOutput(resp, *output.Output, *output.Pretty)
 		},
 	}
 }

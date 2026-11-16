@@ -37,10 +37,6 @@ func NormalizeSandboxTerritoryCode(value string) (string, error) {
 	return normalized, nil
 }
 
-func normalizeSandboxTerritory(value string) (string, error) {
-	return NormalizeSandboxTerritoryCode(value)
-}
-
 func normalizeSandboxTerritoryFilter(value string) (string, error) {
 	if strings.TrimSpace(value) == "" {
 		return "", nil
@@ -88,8 +84,8 @@ func findSandboxTesterByEmail(ctx context.Context, client *asc.Client, email str
 		resp, err := client.GetSandboxTesters(
 			ctx,
 			asc.WithSandboxTestersEmail(email),
-			asc.WithSandboxTestersLimit(200),
-			asc.WithSandboxTestersNextURL(next),
+			asc.Limit[asc.SandboxTestersOption](200),
+			asc.NextURL[asc.SandboxTestersOption](next),
 		)
 		if err != nil {
 			return nil, err

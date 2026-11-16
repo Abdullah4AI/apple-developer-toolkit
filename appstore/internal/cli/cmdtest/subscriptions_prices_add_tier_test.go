@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"flag"
 	"fmt"
 	"io"
 	"net/http"
@@ -14,6 +13,7 @@ import (
 	"time"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asctest"
 )
 
 func subscriptionPriceListFixture(pricePointID, territoryID, attrs string) string {
@@ -38,29 +38,29 @@ func subscriptionPriceListFixture(pricePointID, territoryID, attrs string) strin
 	)
 }
 
-func TestSubscriptionsPricesAdd_TierAndPricePointMutualExclusion(t *testing.T) {
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	_, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{
-			"subscriptions", "pricing", "prices", "set",
-			"--subscription-id", "8000000003",
-			"--price-point", "PP",
-			"--tier", "5",
-			"--territory", "USA",
-		}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		err := root.Run(context.Background())
-		if !errors.Is(err, flag.ErrHelp) {
-			t.Fatalf("expected ErrHelp, got %v", err)
-		}
+func TestSubscriptionsPricesAddUsageErrors(t *testing.T) {
+	runUsageExitCases(t, []usageExitCase{
+		{
+			name:    "TierAndPricePointMutualExclusion",
+			args:    []string{"subscriptions", "pricing", "prices", "set", "--subscription-id", "8000000003", "--price-point", "PP", "--tier", "5", "--territory", "USA"},
+			wantErr: "mutually exclusive",
+		},
+		{
+			name:    "TierRequiresTerritory",
+			args:    []string{"subscriptions", "pricing", "prices", "set", "--subscription-id", "8000000003", "--tier", "5"},
+			wantErr: "--territory is required",
+		},
+		{
+			name:    "InvalidPriceValue",
+			args:    []string{"subscriptions", "pricing", "prices", "set", "--subscription-id", "8000000003", "--price", "abc", "--territory", "USA"},
+			wantErr: "--price must be a number",
+		},
+		{
+			name:    "NegativeTier",
+			args:    []string{"subscriptions", "pricing", "prices", "set", "--subscription-id", "8000000003", "--tier", "-1", "--territory", "USA"},
+			wantErr: "--tier must be a positive integer",
+		},
 	})
-
-	if !strings.Contains(stderr, "mutually exclusive") {
-		t.Fatalf("expected mutually exclusive error, got %q", stderr)
-	}
 }
 
 func TestSubscriptionsPricesAdd_TierUsesSubscriptionPricePoints(t *testing.T) {
@@ -217,29 +217,10 @@ func TestSubscriptionsPricesAdd_NormalizesTerritory(t *testing.T) {
 
 func TestSubscriptionsPricesAdd_ProbeErrorReturnsWithoutWrite(t *testing.T) {
 	setupAuth(t)
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() { http.DefaultTransport = originalTransport })
-
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		switch {
-		case req.Method == http.MethodGet && strings.HasSuffix(req.URL.Path, "/relationships/prices"):
-			body := `{"errors":[{"status":"500","code":"UNEXPECTED_ERROR","title":"An unexpected error occurred.","detail":"An unexpected error occurred on the server side."}]}`
-			return &http.Response{
-				StatusCode: http.StatusInternalServerError,
-				Body:       io.NopCloser(strings.NewReader(body)),
-				Header:     http.Header{"Content-Type": []string{"application/json"}},
-			}, nil
-		case req.Method == http.MethodPatch && strings.Contains(req.URL.Path, "/v1/subscriptions/"):
-			t.Fatalf("unexpected PATCH write request after failed probe: %s", req.URL.Path)
-			return nil, nil
-		case req.Method == http.MethodPost && strings.Contains(req.URL.Path, "/subscriptionPrices"):
-			t.Fatalf("unexpected POST write request after failed probe: %s", req.URL.Path)
-			return nil, nil
-		default:
-			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.Path)
-			return nil, nil
-		}
-	})
+	reg := asctest.NewRegistry(t)
+	reg.Install()
+	reg.Register(asctest.GET("/v1/subscriptions/8000000003/relationships/prices"),
+		asctest.JSON(http.StatusInternalServerError, `{"errors":[{"status":"500","code":"UNEXPECTED_ERROR","title":"An unexpected error occurred.","detail":"An unexpected error occurred on the server side."}]}`))
 
 	t.Setenv("HOME", t.TempDir())
 	root := RootCommand("1.2.3")
@@ -648,78 +629,7 @@ func TestSubscriptionsPricesAdd_ForceRejectsInvalidBoolean(t *testing.T) {
 		"--subscription-id", "8000000003",
 		"--price-point", "PP_ID",
 		"--force=maybe",
-	}, `invalid boolean value "maybe" for -force`)
-}
-
-func TestSubscriptionsPricesAdd_TierRequiresTerritory(t *testing.T) {
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	_, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{
-			"subscriptions", "pricing", "prices", "set",
-			"--subscription-id", "8000000003",
-			"--tier", "5",
-		}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		err := root.Run(context.Background())
-		if !errors.Is(err, flag.ErrHelp) {
-			t.Fatalf("expected ErrHelp, got %v", err)
-		}
-	})
-
-	if !strings.Contains(stderr, "--territory is required") {
-		t.Fatalf("expected --territory required error, got %q", stderr)
-	}
-}
-
-func TestSubscriptionsPricesAdd_InvalidPriceValue(t *testing.T) {
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	_, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{
-			"subscriptions", "pricing", "prices", "set",
-			"--subscription-id", "8000000003",
-			"--price", "abc",
-			"--territory", "USA",
-		}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		err := root.Run(context.Background())
-		if !errors.Is(err, flag.ErrHelp) {
-			t.Fatalf("expected ErrHelp, got %v", err)
-		}
-	})
-
-	if !strings.Contains(stderr, "--price must be a number") {
-		t.Fatalf("expected invalid --price error, got %q", stderr)
-	}
-}
-
-func TestSubscriptionsPricesAdd_NegativeTier(t *testing.T) {
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	_, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{
-			"subscriptions", "pricing", "prices", "set",
-			"--subscription-id", "8000000003",
-			"--tier", "-1",
-			"--territory", "USA",
-		}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		err := root.Run(context.Background())
-		if !errors.Is(err, flag.ErrHelp) {
-			t.Fatalf("expected ErrHelp, got %v", err)
-		}
-	})
-
-	if !strings.Contains(stderr, "--tier must be a positive integer") {
-		t.Fatalf("expected invalid --tier error, got %q", stderr)
-	}
+	}, `invalid boolean value "maybe" for --force`)
 }
 
 func TestSubscriptionsPricesAddRefreshesContextAfterTierResolution(t *testing.T) {

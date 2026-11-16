@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/peterbourgon/ff/v3/ffcli"
@@ -25,9 +24,9 @@ var subscriptionVersionStates = map[string]asc.SubscriptionVersionState{
 	"DEVELOPER_REJECTED":        asc.SubscriptionVersionStateDeveloperRejected,
 }
 
-// SubscriptionsVersionsCommand returns the version-scoped subscription command group.
-func SubscriptionsVersionsCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("versions", flag.ExitOnError)
+// newSubscriptionsVersionsCommand returns the version-scoped subscription command group.
+func newSubscriptionsVersionsCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("versions", flag.ExitOnError)
 	return &ffcli.Command{
 		Name:       "versions",
 		ShortUsage: "asc subscriptions versions <subcommand> [flags]",
@@ -44,25 +43,25 @@ Examples:
   asc subscriptions versions localizations list --version-id "VERSION_ID"
   asc subscriptions versions images upload --version-id "VERSION_ID" --file "./image.png"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
-			SubscriptionsVersionsCreateCommand(),
-			SubscriptionsVersionsListCommand(),
-			SubscriptionsVersionsViewCommand(),
-			SubscriptionsVersionsLinksCommand(),
-			SubscriptionsVersionLocalizationsCommand(),
-			SubscriptionsVersionImagesCommand(),
+			newSubscriptionsVersionsCreateCommand(d),
+			newSubscriptionsVersionsListCommand(d),
+			newSubscriptionsVersionsViewCommand(d),
+			newSubscriptionsVersionsLinksCommand(d),
+			newSubscriptionsVersionLocalizationsCommand(d),
+			newSubscriptionsVersionImagesCommand(d),
 		},
 		Exec: func(context.Context, []string) error { return flag.ErrHelp },
 	}
 }
 
-// SubscriptionsVersionsCreateCommand returns the versions create command.
-func SubscriptionsVersionsCreateCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("versions create", flag.ExitOnError)
+// newSubscriptionsVersionsCreateCommand returns the versions create command.
+func newSubscriptionsVersionsCreateCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("versions create", flag.ExitOnError)
 	subscriptionID := shared.BindResourceIDFlag(fs, "subscription-id", "subscriptions", "Subscription ID, product ID, or exact current name")
 	appID := addSubscriptionLookupAppFlag(fs)
-	output := shared.BindOutputFlags(fs)
+	output := d.BindOutputFlags(fs)
 	return &ffcli.Command{
 		Name:       "create",
 		ShortUsage: "asc subscriptions versions create --subscription-id \"SUBSCRIPTION_ID\"",
@@ -71,38 +70,34 @@ func SubscriptionsVersionsCreateCommand() *ffcli.Command {
 
 Examples:
   asc subscriptions versions create --subscription-id "SUBSCRIPTION_ID"`,
-		FlagSet: fs, UsageFunc: shared.DefaultUsageFunc,
+		FlagSet: fs, UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
-			if err := shared.RejectPositionalArgs(args); err != nil {
-				return err
-			}
 			id := strings.TrimSpace(*subscriptionID)
 			if id == "" {
-				fmt.Fprintln(os.Stderr, "Error: --subscription-id is required")
-				return shared.MissingRequiredUsageError("--subscription-id")
+				return d.RequiredFlag("--subscription-id")
 			}
-			client, err := shared.GetASCClient()
+			client, err := d.Client()
 			if err != nil {
 				return fmt.Errorf("subscriptions versions create: %w", err)
 			}
-			id, err = resolveSubscriptionLookupIDWithTimeout(ctx, client, *appID, id)
+			id, err = resolveSubscriptionLookupIDWithTimeout(ctx, d, client, *appID, id)
 			if err != nil {
 				return err
 			}
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
+			requestCtx, cancel := d.Timeout(ctx)
 			defer cancel()
 			resp, err := client.CreateSubscriptionVersion(requestCtx, id)
 			if err != nil {
 				return fmt.Errorf("subscriptions versions create: failed to create: %w", err)
 			}
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+			return d.PrintOutput(resp, *output.Output, *output.Pretty)
 		},
 	}
 }
 
-// SubscriptionsVersionsListCommand returns the versions list command.
-func SubscriptionsVersionsListCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("versions list", flag.ExitOnError)
+// newSubscriptionsVersionsListCommand returns the versions list command.
+func newSubscriptionsVersionsListCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("versions list", flag.ExitOnError)
 	subscriptionID := shared.BindResourceIDFlag(fs, "subscription-id", "subscriptions", "Subscription ID, product ID, or exact current name")
 	appID := addSubscriptionLookupAppFlag(fs)
 	state := fs.String("state", "", "Filter by version state (comma-separated)")
@@ -113,10 +108,10 @@ func SubscriptionsVersionsListCommand() *ffcli.Command {
 	include := fs.String("include", "", "Include relationships: subscription,image,images,localizations")
 	imagesLimit := fs.Int("images-limit", 0, "Maximum included images (1-50)")
 	localizationsLimit := fs.Int("localizations-limit", 0, "Maximum included localizations (1-50)")
-	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
-	next := fs.String("next", "", "Fetch next page using a links.next URL")
-	paginate := fs.Bool("paginate", false, "Automatically fetch all pages")
-	output := shared.BindOutputFlags(fs)
+	limit := fs.Int("limit", 0, shared.LimitFlagUsage(200))
+	next := fs.String("next", "", shared.NextFlagUsage)
+	paginate := fs.Bool("paginate", false, shared.PaginateFlagUsage)
+	output := d.BindOutputFlags(fs)
 	return &ffcli.Command{
 		Name: "list", ShortUsage: "asc subscriptions versions list [flags]", ShortHelp: "List versions for a subscription.",
 		LongHelp: `List versions for a subscription.
@@ -125,83 +120,63 @@ Examples:
   asc subscriptions versions list --subscription-id "SUBSCRIPTION_ID"
   asc subscriptions versions list --subscription-id "SUBSCRIPTION_ID" --state PREPARE_FOR_SUBMISSION --include localizations --localizations-limit 10
   asc subscriptions versions list --subscription-id "SUBSCRIPTION_ID" --include images --images-limit 10`,
-		FlagSet: fs, UsageFunc: shared.DefaultUsageFunc,
+		FlagSet: fs, UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
-			if err := shared.RejectPositionalArgs(args); err != nil {
+			if err := d.ValidatePaginationFlags(ctx, fs, "subscriptions versions list", 200, "state", "fields", "subscription-fields", "image-fields", "localization-fields", "include", "images-limit", "localizations-limit", "limit"); err != nil {
 				return err
 			}
-			if err := validateNextFlagConflicts(
-				*next,
-				flagConflict{"--subscription-id", flagWasProvided(fs, "subscription-id")},
-				flagConflict{"--app", flagWasProvided(fs, "app")},
-				flagConflict{"--state", flagWasProvided(fs, "state")},
-				flagConflict{"--fields", flagWasProvided(fs, "fields")},
-				flagConflict{"--subscription-fields", flagWasProvided(fs, "subscription-fields")},
-				flagConflict{"--image-fields", flagWasProvided(fs, "image-fields")},
-				flagConflict{"--localization-fields", flagWasProvided(fs, "localization-fields")},
-				flagConflict{"--include", flagWasProvided(fs, "include")},
-				flagConflict{"--images-limit", flagWasProvided(fs, "images-limit")},
-				flagConflict{"--localizations-limit", flagWasProvided(fs, "localizations-limit")},
-				flagConflict{"--limit", flagWasProvided(fs, "limit")},
-			); err != nil {
+			id := strings.TrimSpace(*subscriptionID)
+			if id == "" && strings.TrimSpace(*next) == "" {
+				return d.RequiredFlag("--subscription-id")
+			}
+			if err := validateVersionListLimits(d, *imagesLimit, *localizationsLimit); err != nil {
 				return err
 			}
-			if err := validateVersionListLimits(*limit, *imagesLimit, *localizationsLimit); err != nil {
-				return err
-			}
-			if err := shared.ValidateNextURL(*next); err != nil {
-				return shared.UsageErrorf("subscriptions versions list: %v", err)
-			}
-			versionFieldValues, err := normalizeSelectionFlag(fs, *fields, "--fields", subscriptionVersionFieldsList())
+			versionFieldValues, err := normalizeSelectionFlag(d, fs, *fields, "--fields", subscriptionVersionFieldsList())
 			if err != nil {
 				return err
 			}
-			subscriptionFieldValues, err := normalizeSelectionFlag(fs, *subscriptionFields, "--subscription-fields", subscriptionFieldsList())
+			subscriptionFieldValues, err := normalizeSelectionFlag(d, fs, *subscriptionFields, "--subscription-fields", subscriptionFieldsList())
 			if err != nil {
 				return err
 			}
-			imageFieldValues, err := normalizeSelectionFlag(fs, *imageFields, "--image-fields", subscriptionVersionImageFieldsList())
+			imageFieldValues, err := normalizeSelectionFlag(d, fs, *imageFields, "--image-fields", subscriptionVersionImageFieldsList())
 			if err != nil {
 				return err
 			}
-			localizationFieldValues, err := normalizeSelectionFlag(fs, *localizationFields, "--localization-fields", subscriptionVersionLocalizationFieldsList())
+			localizationFieldValues, err := normalizeSelectionFlag(d, fs, *localizationFields, "--localization-fields", subscriptionVersionLocalizationFieldsList())
 			if err != nil {
 				return err
 			}
-			includeValues, err := normalizeSelectionFlag(fs, *include, "--include", subscriptionVersionIncludeList())
+			includeValues, err := normalizeSelectionFlag(d, fs, *include, "--include", subscriptionVersionIncludeList())
 			if err != nil {
 				return err
 			}
 			if flagWasProvided(fs, "state") && len(csvValues(*state)) == 0 {
-				return shared.UsageError("--state must not be empty")
+				return d.UsageError("--state must not be empty")
 			}
 			states, err := parseSubscriptionVersionStates(*state)
 			if err != nil {
-				return shared.UsageErrorf("subscriptions versions list: %v", err)
+				return d.UsageErrorf("subscriptions versions list: %v", err)
 			}
-			id := strings.TrimSpace(*subscriptionID)
-			if id == "" && strings.TrimSpace(*next) == "" {
-				fmt.Fprintln(os.Stderr, "Error: --subscription-id is required")
-				return shared.MissingRequiredUsageError("--subscription-id")
-			}
-			client, err := shared.GetASCClient()
+			client, err := d.Client()
 			if err != nil {
 				return fmt.Errorf("subscriptions versions list: %w", err)
 			}
 			if strings.TrimSpace(*next) == "" {
-				id, err = resolveSubscriptionLookupIDWithTimeout(ctx, client, *appID, id)
+				id, err = resolveSubscriptionLookupIDWithTimeout(ctx, d, client, *appID, id)
 				if err != nil {
 					return err
 				}
 			}
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
+			requestCtx, cancel := d.Timeout(ctx)
 			defer cancel()
 			firstPageLimit := *limit
 			if *paginate && firstPageLimit == 0 {
 				firstPageLimit = 200
 			}
 			opts := []asc.SubscriptionVersionsOption{
-				asc.WithSubscriptionVersionsLimit(firstPageLimit), asc.WithSubscriptionVersionsNextURL(*next),
+				asc.Limit[asc.SubscriptionVersionsOption](firstPageLimit), asc.WithSubscriptionVersionsNextURL(*next),
 				asc.WithSubscriptionVersionsStates(states), asc.WithSubscriptionVersionsFields(versionFieldValues),
 				asc.WithSubscriptionVersionsSubscriptionFields(subscriptionFieldValues),
 				asc.WithSubscriptionVersionsImageFields(imageFieldValues),
@@ -222,73 +197,61 @@ Examples:
 				}
 				resp = aggregated.(*asc.SubscriptionVersionsResponse)
 			}
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+			return d.PrintOutput(resp, *output.Output, *output.Pretty)
 		},
 	}
 }
 
-// SubscriptionsVersionsViewCommand returns the versions view command.
-func SubscriptionsVersionsViewCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("versions view", flag.ExitOnError)
-	id := shared.BindResourceIDFlag(fs, "id", "subscriptionVersions", "Subscription version ID")
-	fields := fs.String("fields", "", "Sparse fields for subscriptionVersions")
-	subscriptionFields := fs.String("subscription-fields", "", "Sparse fields for included subscriptions")
-	imageFields := fs.String("image-fields", "", "Sparse fields for included subscriptionImages")
-	localizationFields := fs.String("localization-fields", "", "Sparse fields for included subscriptionLocalizations")
-	include := fs.String("include", "", "Include relationships: subscription,image,images,localizations")
-	imagesLimit := fs.Int("images-limit", 0, "Maximum included images (1-50)")
-	localizationsLimit := fs.Int("localizations-limit", 0, "Maximum included localizations (1-50)")
-	output := shared.BindOutputFlags(fs)
-	return &ffcli.Command{
-		Name: "view", ShortUsage: "asc subscriptions versions view --id \"VERSION_ID\"", ShortHelp: "View a subscription version.",
+// newSubscriptionsVersionsViewCommand returns the versions view command.
+func newSubscriptionsVersionsViewCommand(d *shared.Deps) *ffcli.Command {
+	var (
+		imagesLimit, localizationsLimit                                                                       *int
+		versionFieldValues, subscriptionFieldValues, imageFieldValues, localizationFieldValues, includeValues []string
+	)
+	return shared.BuildIDGetCommand(shared.IDGetCommandConfig{
+		Deps:        d,
+		FlagSetName: "versions view",
+		Name:        "view", ShortUsage: "asc subscriptions versions view --id \"VERSION_ID\"", ShortHelp: "View a subscription version.",
 		LongHelp: `View a subscription version by ID.
 
 Examples:
   asc subscriptions versions view --id "VERSION_ID"
-  asc subscriptions versions view --id "VERSION_ID" --include images,localizations --images-limit 10 --localizations-limit 10`, FlagSet: fs, UsageFunc: shared.DefaultUsageFunc,
-		Exec: func(ctx context.Context, args []string) error {
-			if err := shared.RejectPositionalArgs(args); err != nil {
+  asc subscriptions versions view --id "VERSION_ID" --include images,localizations --images-limit 10 --localizations-limit 10`,
+		IDUsage: "Subscription version ID", IDType: "subscriptionVersions", RequiredDiagnostic: true,
+		Flags: func(fs *flag.FlagSet) func() error {
+			fields := fs.String("fields", "", "Sparse fields for subscriptionVersions")
+			subscriptionFields := fs.String("subscription-fields", "", "Sparse fields for included subscriptions")
+			imageFields := fs.String("image-fields", "", "Sparse fields for included subscriptionImages")
+			localizationFields := fs.String("localization-fields", "", "Sparse fields for included subscriptionLocalizations")
+			include := fs.String("include", "", "Include relationships: subscription,image,images,localizations")
+			imagesLimit = fs.Int("images-limit", 0, "Maximum included images (1-50)")
+			localizationsLimit = fs.Int("localizations-limit", 0, "Maximum included localizations (1-50)")
+			return func() (err error) {
+				if err := validateRelationshipLimit(d, "--images-limit", *imagesLimit); err != nil {
+					return err
+				}
+				if err := validateRelationshipLimit(d, "--localizations-limit", *localizationsLimit); err != nil {
+					return err
+				}
+				if versionFieldValues, err = normalizeSelectionFlag(d, fs, *fields, "--fields", subscriptionVersionFieldsList()); err != nil {
+					return err
+				}
+				if subscriptionFieldValues, err = normalizeSelectionFlag(d, fs, *subscriptionFields, "--subscription-fields", subscriptionFieldsList()); err != nil {
+					return err
+				}
+				if imageFieldValues, err = normalizeSelectionFlag(d, fs, *imageFields, "--image-fields", subscriptionVersionImageFieldsList()); err != nil {
+					return err
+				}
+				if localizationFieldValues, err = normalizeSelectionFlag(d, fs, *localizationFields, "--localization-fields", subscriptionVersionLocalizationFieldsList()); err != nil {
+					return err
+				}
+				includeValues, err = normalizeSelectionFlag(d, fs, *include, "--include", subscriptionVersionIncludeList())
 				return err
 			}
-			versionID := strings.TrimSpace(*id)
-			if versionID == "" {
-				fmt.Fprintln(os.Stderr, "Error: --id is required")
-				return shared.MissingRequiredUsageError("--id")
-			}
-			if err := validateRelationshipLimit("--images-limit", *imagesLimit); err != nil {
-				return err
-			}
-			if err := validateRelationshipLimit("--localizations-limit", *localizationsLimit); err != nil {
-				return err
-			}
-			versionFieldValues, err := normalizeSelectionFlag(fs, *fields, "--fields", subscriptionVersionFieldsList())
-			if err != nil {
-				return err
-			}
-			subscriptionFieldValues, err := normalizeSelectionFlag(fs, *subscriptionFields, "--subscription-fields", subscriptionFieldsList())
-			if err != nil {
-				return err
-			}
-			imageFieldValues, err := normalizeSelectionFlag(fs, *imageFields, "--image-fields", subscriptionVersionImageFieldsList())
-			if err != nil {
-				return err
-			}
-			localizationFieldValues, err := normalizeSelectionFlag(fs, *localizationFields, "--localization-fields", subscriptionVersionLocalizationFieldsList())
-			if err != nil {
-				return err
-			}
-			includeValues, err := normalizeSelectionFlag(fs, *include, "--include", subscriptionVersionIncludeList())
-			if err != nil {
-				return err
-			}
-			client, err := shared.GetASCClient()
-			if err != nil {
-				return fmt.Errorf("subscriptions versions view: %w", err)
-			}
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
-			defer cancel()
-			resp, err := client.GetSubscriptionVersion(
-				requestCtx, versionID,
+		},
+		Fetch: func(ctx context.Context, client *asc.Client, id string) (any, error) {
+			return client.GetSubscriptionVersion(
+				ctx, id,
 				asc.WithSubscriptionVersionFields(versionFieldValues),
 				asc.WithSubscriptionVersionSubscriptionFields(subscriptionFieldValues),
 				asc.WithSubscriptionVersionImageFields(imageFieldValues),
@@ -297,79 +260,60 @@ Examples:
 				asc.WithSubscriptionVersionImageLimit(*imagesLimit),
 				asc.WithSubscriptionVersionLocalizationLimit(*localizationsLimit),
 			)
-			if err != nil {
-				return fmt.Errorf("subscriptions versions view: failed to fetch: %w", err)
-			}
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
 		},
-	}
+	})
 }
 
-// SubscriptionsVersionsLinksCommand returns the subscription-to-version linkage command.
-func SubscriptionsVersionsLinksCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("versions links", flag.ExitOnError)
+// newSubscriptionsVersionsLinksCommand returns the subscription-to-version linkage command.
+func newSubscriptionsVersionsLinksCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("versions links", flag.ExitOnError)
 	subscriptionID := shared.BindResourceIDFlag(fs, "subscription-id", "subscriptions", "Subscription ID, product ID, or exact current name")
 	appID := addSubscriptionLookupAppFlag(fs)
-	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
-	next := fs.String("next", "", "Fetch next page using a links.next URL")
-	paginate := fs.Bool("paginate", false, "Automatically fetch all pages")
-	output := shared.BindOutputFlags(fs)
+	limit := fs.Int("limit", 0, shared.LimitFlagUsage(200))
+	next := fs.String("next", "", shared.NextFlagUsage)
+	paginate := fs.Bool("paginate", false, shared.PaginateFlagUsage)
+	output := d.BindOutputFlags(fs)
 	return &ffcli.Command{
 		Name: "links", ShortUsage: "asc subscriptions versions links [flags]", ShortHelp: "List raw subscription version linkages.",
-		LongHelp: "List raw version relationship linkages for a subscription.", FlagSet: fs, UsageFunc: shared.DefaultUsageFunc,
+		LongHelp: "List raw version relationship linkages for a subscription.", FlagSet: fs, UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
-			if err := shared.RejectPositionalArgs(args); err != nil {
+			if err := d.ValidatePaginationFlags(ctx, fs, "subscriptions versions links", 200, "limit"); err != nil {
 				return err
-			}
-			if err := validateNextFlagConflicts(
-				*next,
-				flagConflict{"--subscription-id", flagWasProvided(fs, "subscription-id")},
-				flagConflict{"--app", flagWasProvided(fs, "app")},
-				flagConflict{"--limit", flagWasProvided(fs, "limit")},
-			); err != nil {
-				return err
-			}
-			if err := validatePageLimit(*limit); err != nil {
-				return err
-			}
-			if err := shared.ValidateNextURL(*next); err != nil {
-				return shared.UsageErrorf("subscriptions versions links: %v", err)
 			}
 			id := strings.TrimSpace(*subscriptionID)
 			if id == "" && strings.TrimSpace(*next) == "" {
-				fmt.Fprintln(os.Stderr, "Error: --subscription-id is required")
-				return shared.MissingRequiredUsageError("--subscription-id")
+				return d.RequiredFlag("--subscription-id")
 			}
-			client, err := shared.GetASCClient()
+			client, err := d.Client()
 			if err != nil {
 				return fmt.Errorf("subscriptions versions links: %w", err)
 			}
 			if strings.TrimSpace(*next) == "" {
-				id, err = resolveSubscriptionLookupIDWithTimeout(ctx, client, *appID, id)
+				id, err = resolveSubscriptionLookupIDWithTimeout(ctx, d, client, *appID, id)
 				if err != nil {
 					return err
 				}
 			}
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
+			requestCtx, cancel := d.Timeout(ctx)
 			defer cancel()
 			firstPageLimit := *limit
 			if *paginate && firstPageLimit == 0 {
 				firstPageLimit = 200
 			}
-			resp, err := client.GetSubscriptionVersionsRelationships(requestCtx, id, asc.WithLinkagesLimit(firstPageLimit), asc.WithLinkagesNextURL(*next))
+			resp, err := client.GetSubscriptionVersionsRelationships(requestCtx, id, asc.Limit[asc.LinkagesOption](firstPageLimit), asc.NextURL[asc.LinkagesOption](*next))
 			if err != nil {
 				return fmt.Errorf("subscriptions versions links: failed to fetch: %w", err)
 			}
 			if *paginate {
 				aggregated, err := asc.PaginateAll(requestCtx, resp, func(pageCtx context.Context, nextURL string) (asc.PaginatedResponse, error) {
-					return client.GetSubscriptionVersionsRelationships(pageCtx, id, asc.WithLinkagesNextURL(nextURL))
+					return client.GetSubscriptionVersionsRelationships(pageCtx, id, asc.NextURL[asc.LinkagesOption](nextURL))
 				})
 				if err != nil {
 					return fmt.Errorf("subscriptions versions links: %w", err)
 				}
 				resp = aggregated.(*asc.LinkagesResponse)
 			}
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+			return d.PrintOutput(resp, *output.Output, *output.Pretty)
 		},
 	}
 }
@@ -398,43 +342,16 @@ func parseSubscriptionVersionStates(value string) ([]asc.SubscriptionVersionStat
 	return states, nil
 }
 
-func validatePageLimit(limit int) error {
-	if limit != 0 && (limit < 1 || limit > 200) {
-		return shared.UsageError("--limit must be between 1 and 200")
-	}
-	return nil
-}
-
-func validateRelationshipLimit(name string, limit int) error {
+func validateRelationshipLimit(d *shared.Deps, name string, limit int) error {
 	if limit != 0 && (limit < 1 || limit > 50) {
-		return shared.UsageErrorf("%s must be between 1 and 50", name)
+		return d.UsageErrorf("%s must be between 1 and 50", name)
 	}
 	return nil
 }
 
-func validateVersionListLimits(limit, imagesLimit, localizationsLimit int) error {
-	if err := validatePageLimit(limit); err != nil {
+func validateVersionListLimits(d *shared.Deps, imagesLimit, localizationsLimit int) error {
+	if err := validateRelationshipLimit(d, "--images-limit", imagesLimit); err != nil {
 		return err
 	}
-	if err := validateRelationshipLimit("--images-limit", imagesLimit); err != nil {
-		return err
-	}
-	return validateRelationshipLimit("--localizations-limit", localizationsLimit)
-}
-
-type flagConflict struct {
-	name string
-	set  bool
-}
-
-func validateNextFlagConflicts(next string, flags ...flagConflict) error {
-	if strings.TrimSpace(next) == "" {
-		return nil
-	}
-	for _, candidate := range flags {
-		if candidate.set {
-			return shared.UsageErrorf("--next cannot be combined with %s", candidate.name)
-		}
-	}
-	return nil
+	return validateRelationshipLimit(d, "--localizations-limit", localizationsLimit)
 }

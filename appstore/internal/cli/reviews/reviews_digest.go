@@ -39,16 +39,15 @@ type reviewDigestRelationships struct {
 	} `json:"response"`
 }
 
-// ReviewsDigestCommand returns the reviews digest subcommand.
-func ReviewsDigestCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("digest", flag.ExitOnError)
+func newReviewsDigestCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("digest", flag.ExitOnError)
 
 	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
 	since := fs.String("since", "", "Cursor: include reviews created after this RFC3339 timestamp or YYYY-MM-DD date (UTC); with --state-file, used only when the file does not exist")
 	stateFile := fs.String("state-file", "", "Path to a JSON state file holding the cursor ({\"cursor\":\"<RFC3339>\"})")
 	writeState := fs.Bool("write-state", false, "After the digest prints, write the newest review date to --state-file")
 	lowest := fs.Int("lowest", 5, "Number of lowest-rated reviews to include")
-	output := shared.BindOutputFlags(fs)
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "digest",
@@ -94,42 +93,39 @@ Each attempt starts from the committed cursor, or the explicit initial date:
     mv next-cursor.json reviews-cursor.json
   )`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
-			if len(args) > 0 {
-				return shared.WithDiagnostic(shared.UsageErrorf("unexpected argument(s): %s", strings.Join(args, " ")), shared.DiagnosticInvalidInput, "")
-			}
-			resolvedAppID := shared.ResolveAppID(*appID)
+			resolvedAppID := d.ResolveAppID(*appID)
 			if resolvedAppID == "" {
-				fmt.Fprintf(os.Stderr, "Error: --app is required (or set ASC_APP_ID)\n\n")
+				fmt.Fprintf(d.IO.ErrOut, "Error: --app is required (or set ASC_APP_ID)\n\n")
 				return shared.MissingRequiredUsageError("--app")
 			}
 			if *lowest < 0 {
-				return shared.WithDiagnostic(shared.UsageError("--lowest must be 0 or greater"), shared.DiagnosticInvalidInput, "--lowest")
+				return shared.WithDiagnostic(d.UsageError("--lowest must be 0 or greater"), shared.DiagnosticInvalidInput, "--lowest")
 			}
 			path := strings.TrimSpace(*stateFile)
 			if *writeState && path == "" {
-				return shared.WithDiagnostic(shared.UsageError("--write-state requires --state-file"), shared.DiagnosticRequiredInputMissing, "--state-file")
+				return shared.WithDiagnostic(d.UsageError("--write-state requires --state-file"), shared.DiagnosticRequiredInputMissing, "--state-file")
 			}
 			var sinceTime time.Time
 			if strings.TrimSpace(*since) != "" {
 				parsed, err := parseReviewDigestSince(*since)
 				if err != nil {
-					return shared.WithDiagnostic(shared.UsageError(err.Error()), shared.DiagnosticInvalidInput, "--since")
+					return shared.WithDiagnostic(d.UsageError(err.Error()), shared.DiagnosticInvalidInput, "--since")
 				}
 				sinceTime = parsed
 			}
 
-			cursor, source, err := resolveReviewDigestCursor(path, sinceTime)
+			cursor, source, err := resolveReviewDigestCursor(d, path, sinceTime)
 			if err != nil {
 				return err
 			}
 
-			client, err := shared.GetASCClient()
+			client, err := d.Client()
 			if err != nil {
 				return fmt.Errorf("reviews digest: %w", err)
 			}
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
+			requestCtx, cancel := d.Timeout(ctx)
 			defer cancel()
 
 			result, err := buildReviewDigest(requestCtx, client, resolvedAppID, cursor, *lowest)
@@ -138,11 +134,11 @@ Each attempt starts from the committed cursor, or the explicit initial date:
 			}
 			result.CursorSource = source
 
-			if err := shared.PrintOutput(result, *output.Output, *output.Pretty); err != nil {
+			if err := d.PrintOutput(result, *output.Output, *output.Pretty); err != nil {
 				return err
 			}
 			if *writeState {
-				if err := writeReviewDigestState(path, result.Cursor); err != nil {
+				if err := writeReviewDigestState(d, path, result.Cursor); err != nil {
 					return fmt.Errorf("reviews digest: write --state-file: %w", err)
 				}
 			}
@@ -162,9 +158,9 @@ func parseReviewDigestSince(value string) (time.Time, error) {
 	return time.Time{}, fmt.Errorf("--since must be an RFC3339 timestamp or YYYY-MM-DD date")
 }
 
-func resolveReviewDigestCursor(path string, since time.Time) (time.Time, string, error) {
+func resolveReviewDigestCursor(d *shared.Deps, path string, since time.Time) (time.Time, string, error) {
 	if path != "" {
-		data, exists, err := readReviewDigestState(path)
+		data, exists, err := readReviewDigestState(d, path)
 		if err != nil {
 			return time.Time{}, "", fmt.Errorf("reviews digest: read --state-file: %w", err)
 		}
@@ -180,17 +176,17 @@ func resolveReviewDigestCursor(path string, since time.Time) (time.Time, string,
 			return cursor, "stateFile", nil
 		}
 		if since.IsZero() {
-			return time.Time{}, "", shared.WithDiagnostic(shared.UsageError("--since is required when --state-file does not exist"), shared.DiagnosticRequiredInputMissing, "--since")
+			return time.Time{}, "", shared.WithDiagnostic(d.UsageError("--since is required when --state-file does not exist"), shared.DiagnosticRequiredInputMissing, "--since")
 		}
 	}
 	if since.IsZero() {
-		return time.Time{}, "", shared.WithDiagnostic(shared.UsageError("--since or --state-file is required"), shared.DiagnosticRequiredInputMissing, "--since")
+		return time.Time{}, "", shared.WithDiagnostic(d.UsageError("--since or --state-file is required"), shared.DiagnosticRequiredInputMissing, "--since")
 	}
 	return since, "since", nil
 }
 
-func reviewDigestStateRoot(path string) (rootfs.Root, string, error) {
-	absolute, err := filepath.Abs(path)
+func reviewDigestStateRoot(d *shared.Deps, path string) (rootfs.Root, string, error) {
+	absolute, err := d.Abs(path)
 	if err != nil {
 		return rootfs.Root{}, "", err
 	}
@@ -201,8 +197,8 @@ func reviewDigestStateRoot(path string) (rootfs.Root, string, error) {
 	return root, filepath.Base(absolute), nil
 }
 
-func readReviewDigestState(path string) ([]byte, bool, error) {
-	root, name, err := reviewDigestStateRoot(path)
+func readReviewDigestState(d *shared.Deps, path string) ([]byte, bool, error) {
+	root, name, err := reviewDigestStateRoot(d, path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return nil, false, nil
@@ -220,12 +216,12 @@ func readReviewDigestState(path string) ([]byte, bool, error) {
 	return data, true, nil
 }
 
-func writeReviewDigestState(path, cursor string) error {
+func writeReviewDigestState(d *shared.Deps, path, cursor string) error {
 	data, err := json.Marshal(reviewDigestState{Cursor: cursor})
 	if err != nil {
 		return err
 	}
-	root, name, err := reviewDigestStateRoot(path)
+	root, name, err := reviewDigestStateRoot(d, path)
 	if err != nil {
 		return err
 	}
@@ -237,7 +233,7 @@ func buildReviewDigest(ctx context.Context, client *asc.Client, appID string, cu
 	firstPage, err := client.GetReviews(ctx, appID,
 		asc.WithReviewSort("-createdDate"),
 		asc.WithReviewIncludeResponse(),
-		asc.WithLimit(200),
+		asc.Limit[asc.ReviewOption](200),
 	)
 	if err != nil {
 		return nil, err
@@ -328,7 +324,7 @@ func buildReviewDigest(ctx context.Context, client *asc.Client, appID string, cu
 		return nil
 	}
 	fetchNext := func(ctx context.Context, nextURL string) (asc.PaginatedResponse, error) {
-		return client.GetReviews(ctx, appID, asc.WithNextURL(nextURL))
+		return client.GetReviews(ctx, appID, asc.NextURL[asc.ReviewOption](nextURL))
 	}
 	if err := asc.PaginateEach(ctx, firstPage, fetchNext, consume); err != nil && !errors.Is(err, errReviewDigestReachedCursor) {
 		return nil, err
@@ -372,7 +368,7 @@ func collectReviewDigestVersions(ctx context.Context, client *asc.Client, appID 
 	for _, review := range reviews {
 		byID[review.ID] = review
 	}
-	first, err := client.GetAppStoreVersions(ctx, appID, asc.WithAppStoreVersionsLimit(200))
+	first, err := client.GetAppStoreVersions(ctx, appID, asc.Limit[asc.AppStoreVersionsOption](200))
 	if err != nil {
 		return nil, 0, err
 	}
@@ -382,7 +378,7 @@ func collectReviewDigestVersions(ctx context.Context, client *asc.Client, appID 
 			return fmt.Errorf("unexpected versions response type %T", page)
 		}
 		for _, version := range response.Data {
-			firstReviews, err := client.GetAppStoreVersionCustomerReviews(ctx, version.ID, asc.WithReviewSort("-createdDate"), asc.WithLimit(200))
+			firstReviews, err := client.GetAppStoreVersionCustomerReviews(ctx, version.ID, asc.WithReviewSort("-createdDate"), asc.Limit[asc.ReviewOption](200))
 			if err != nil {
 				return fmt.Errorf("version %q: %w", version.ID, err)
 			}
@@ -416,7 +412,7 @@ func collectReviewDigestVersions(ctx context.Context, client *asc.Client, appID 
 				return nil
 			}
 			fetchReviews := func(ctx context.Context, nextURL string) (asc.PaginatedResponse, error) {
-				return client.GetAppStoreVersionCustomerReviews(ctx, version.ID, asc.WithNextURL(nextURL))
+				return client.GetAppStoreVersionCustomerReviews(ctx, version.ID, asc.NextURL[asc.ReviewOption](nextURL))
 			}
 			pageErr := asc.PaginateEach(ctx, firstReviews, fetchReviews, consumeReviews)
 			if pageErr != nil && !errors.Is(pageErr, errReviewDigestReachedCursor) && !errors.Is(pageErr, errReviewDigestVersionsComplete) {
@@ -433,7 +429,7 @@ func collectReviewDigestVersions(ctx context.Context, client *asc.Client, appID 
 		return nil
 	}
 	fetchVersions := func(ctx context.Context, nextURL string) (asc.PaginatedResponse, error) {
-		return client.GetAppStoreVersions(ctx, appID, asc.WithAppStoreVersionsNextURL(nextURL))
+		return client.GetAppStoreVersions(ctx, appID, asc.NextURL[asc.AppStoreVersionsOption](nextURL))
 	}
 	if err := asc.PaginateEach(ctx, first, fetchVersions, consumeVersions); err != nil && !errors.Is(err, errReviewDigestVersionsComplete) {
 		return nil, 0, err

@@ -7,10 +7,10 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/winbackoffers"
 )
 
-// SubscriptionsWinBackOffersCommand returns the canonical nested win-back offers tree.
-func SubscriptionsWinBackOffersCommand() *ffcli.Command {
+// newSubscriptionsWinBackOffersCommand returns the canonical nested win-back offers tree.
+func newSubscriptionsWinBackOffersCommand(d *shared.Deps) *ffcli.Command {
 	return shared.RewriteCommandTreePath(
-		winbackoffers.WinBackOffersCommand(),
+		winbackoffers.NewWinBackOffersCommand(d),
 		"asc win-back-offers",
 		"asc subscriptions win-back-offers",
 	)

@@ -8,6 +8,7 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/appleads"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/config"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/readonly"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/storekit"
 	webcore "github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/web"
@@ -49,7 +50,7 @@ func ExitCodeFromError(err error) int {
 
 	// Usage errors. A missing Apple web session is rendered without the usage
 	// page but keeps the usage exit code its callers rely on.
-	if errors.Is(err, flag.ErrHelp) || shared.IsReportedUsageError(err) || errors.Is(err, shared.ErrMissingWebSession) {
+	if errors.Is(err, flag.ErrHelp) || shared.IsReportedUsageError(err) || errors.Is(err, shared.ErrMissingWebSession) || errors.Is(err, config.ErrSymlinkedConfig) {
 		return ExitUsage
 	}
 
@@ -68,6 +69,7 @@ func ExitCodeFromError(err error) int {
 		errors.Is(err, asc.ErrUnauthorized) ||
 		errors.Is(err, asc.ErrForbidden) ||
 		errors.Is(err, asc.ErrBearerTokenExpired) ||
+		errors.Is(err, asc.ErrBearerTokenRenewal) ||
 		errors.Is(err, webcore.ErrInvalidAppleAccountCredentials) ||
 		errors.Is(err, webcore.ErrTwoFactorCodeRejected) {
 		return ExitAuth

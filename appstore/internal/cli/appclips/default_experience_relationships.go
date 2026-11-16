@@ -4,16 +4,15 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/peterbourgon/ff/v3/ffcli"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
-// AppClipDefaultExperienceRelationshipsCommand returns the default experience links command group.
-func AppClipDefaultExperienceRelationshipsCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("links", flag.ExitOnError)
+// newAppClipDefaultExperienceRelationshipsCommand returns the default experience links command group.
+func newAppClipDefaultExperienceRelationshipsCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("links", flag.ExitOnError)
 
 	return &ffcli.Command{
 		Name:       "links",
@@ -25,10 +24,10 @@ Examples:
   asc app-clips default-experiences links app-store-review-detail --experience-id "EXP_ID"
   asc app-clips default-experiences links release-with-app-store-version --experience-id "EXP_ID"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
-			AppClipDefaultExperienceReviewDetailRelationshipCommand(),
-			AppClipDefaultExperienceReleaseWithAppStoreVersionRelationshipCommand(),
+			newAppClipDefaultExperienceReviewDetailRelationshipCommand(d),
+			newAppClipDefaultExperienceReleaseWithAppStoreVersionRelationshipCommand(d),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp
@@ -36,12 +35,12 @@ Examples:
 	}
 }
 
-// AppClipDefaultExperienceReviewDetailRelationshipCommand fetches review detail relationship.
-func AppClipDefaultExperienceReviewDetailRelationshipCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("app-store-review-detail", flag.ExitOnError)
+// newAppClipDefaultExperienceReviewDetailRelationshipCommand fetches review detail relationship.
+func newAppClipDefaultExperienceReviewDetailRelationshipCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("app-store-review-detail", flag.ExitOnError)
 
 	experienceID := shared.BindResourceIDFlag(fs, "experience-id", "appClipDefaultExperiences", "Default experience ID")
-	output := shared.BindOutputFlags(fs)
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "app-store-review-detail",
@@ -52,20 +51,19 @@ func AppClipDefaultExperienceReviewDetailRelationshipCommand() *ffcli.Command {
 Examples:
   asc app-clips default-experiences links app-store-review-detail --experience-id "EXP_ID"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			experienceValue := strings.TrimSpace(*experienceID)
 			if experienceValue == "" {
-				fmt.Fprintln(os.Stderr, "Error: --experience-id is required")
-				return shared.MissingRequiredUsageError("--experience-id")
+				return d.RequiredFlag("--experience-id")
 			}
 
-			client, err := shared.GetASCClient()
+			client, err := d.Client()
 			if err != nil {
 				return fmt.Errorf("app-clips default-experiences links app-store-review-detail: %w", err)
 			}
 
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
+			requestCtx, cancel := d.Timeout(ctx)
 			defer cancel()
 
 			resp, err := client.GetAppClipDefaultExperienceReviewDetailRelationship(requestCtx, experienceValue)
@@ -73,17 +71,17 @@ Examples:
 				return fmt.Errorf("app-clips default-experiences links app-store-review-detail: failed to fetch: %w", err)
 			}
 
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+			return d.PrintOutput(resp, *output.Output, *output.Pretty)
 		},
 	}
 }
 
-// AppClipDefaultExperienceReleaseWithAppStoreVersionRelationshipCommand fetches releaseWithAppStoreVersion relationship.
-func AppClipDefaultExperienceReleaseWithAppStoreVersionRelationshipCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("release-with-app-store-version", flag.ExitOnError)
+// newAppClipDefaultExperienceReleaseWithAppStoreVersionRelationshipCommand fetches releaseWithAppStoreVersion relationship.
+func newAppClipDefaultExperienceReleaseWithAppStoreVersionRelationshipCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("release-with-app-store-version", flag.ExitOnError)
 
 	experienceID := shared.BindResourceIDFlag(fs, "experience-id", "appClipDefaultExperiences", "Default experience ID")
-	output := shared.BindOutputFlags(fs)
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "release-with-app-store-version",
@@ -94,20 +92,19 @@ func AppClipDefaultExperienceReleaseWithAppStoreVersionRelationshipCommand() *ff
 Examples:
   asc app-clips default-experiences links release-with-app-store-version --experience-id "EXP_ID"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			experienceValue := strings.TrimSpace(*experienceID)
 			if experienceValue == "" {
-				fmt.Fprintln(os.Stderr, "Error: --experience-id is required")
-				return shared.MissingRequiredUsageError("--experience-id")
+				return d.RequiredFlag("--experience-id")
 			}
 
-			client, err := shared.GetASCClient()
+			client, err := d.Client()
 			if err != nil {
 				return fmt.Errorf("app-clips default-experiences links release-with-app-store-version: %w", err)
 			}
 
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
+			requestCtx, cancel := d.Timeout(ctx)
 			defer cancel()
 
 			resp, err := client.GetAppClipDefaultExperienceReleaseWithAppStoreVersionRelationship(requestCtx, experienceValue)
@@ -115,7 +112,7 @@ Examples:
 				return fmt.Errorf("app-clips default-experiences links release-with-app-store-version: failed to fetch: %w", err)
 			}
 
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+			return d.PrintOutput(resp, *output.Output, *output.Pretty)
 		},
 	}
 }

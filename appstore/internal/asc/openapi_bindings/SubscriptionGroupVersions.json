@@ -1,0 +1,17 @@
+{
+  "tag": "SubscriptionGroupVersions",
+  "file": "subscription_group_versions_gen.go",
+  "types": [
+    "SubscriptionGroupVersionAttributes",
+    "SubscriptionGroupVersionCreateData",
+    "SubscriptionGroupVersionCreateRelationships",
+    "SubscriptionGroupVersionCreateRequest"
+  ],
+  "relationships": [
+    {"data":"SubscriptionGroupVersionCreateData","type":"SubscriptionGroupVersionCreateRelationships"}
+  ],
+  "operations": [
+    {"operation":"subscriptionGroupVersions_createInstance","name":"CreateSubscriptionGroupVersion","params":["groupID"],"check":"require","links":["subscriptionGroup"]},
+    {"operation":"subscriptionGroupVersions_localizations_getToManyRelationship","name":"GetSubscriptionGroupVersionLocalizationsRelationships","params":["versionID"],"check":"require","options":"LinkagesOption","query":"buildLinkagesQuery","nextContext":"subscriptionGroupVersionLocalizationsRelationships","parseErr":"failed to parse localizations relationship response","response":"LinkagesResponse"}
+  ]
+}

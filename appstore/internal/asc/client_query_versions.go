@@ -83,13 +83,6 @@ type appStoreVersionLocalizationsQuery struct {
 	locales []string
 }
 
-type appInfoLocalizationsQuery struct {
-	listQuery
-	locales       []string
-	appInfoFields []string
-	include       []string
-}
-
 type appInfoQuery struct {
 	listQuery
 	includedFieldsQuery
@@ -97,13 +90,6 @@ type appInfoQuery struct {
 	ageRatingDeclarationFields []string
 	include                    []string
 	localizationsLimit         int
-}
-
-type territoryAgeRatingsQuery struct {
-	listQuery
-	fields          []string
-	territoryFields []string
-	include         []string
 }
 
 type appCustomProductPagesQuery struct {
@@ -116,18 +102,10 @@ type appCustomProductPagesQuery struct {
 	versionsLimit int
 }
 
-type appCustomProductPageVersionsQuery struct {
-	listQuery
-}
-
 type appCustomProductPageLocalizationsQuery struct {
 	listQuery
 	localizationRelatedQuery
 	searchKeywordsLimit int
-}
-
-type appCustomProductPageLocalizationPreviewSetsQuery struct {
-	listQuery
 }
 
 type appCustomProductPageLocalizationScreenshotSetsQuery struct {
@@ -144,22 +122,7 @@ type appStoreVersionLocalizationPreviewSetsQuery struct {
 type appStoreVersionLocalizationScreenshotSetsQuery struct {
 	listQuery
 	includedFieldsQuery
-	includeMedia   bool
-	requestContext RequestContextFunc
-}
-
-type appStoreVersionExperimentsQuery struct {
-	listQuery
-	states []string
-}
-
-type appStoreVersionExperimentsV2Query struct {
-	listQuery
-	states []string
-}
-
-type appStoreVersionExperimentTreatmentsQuery struct {
-	listQuery
+	includeMedia bool
 }
 
 type appStoreVersionExperimentTreatmentLocalizationsQuery struct {
@@ -167,30 +130,10 @@ type appStoreVersionExperimentTreatmentLocalizationsQuery struct {
 	localizationRelatedQuery
 }
 
-type appStoreVersionExperimentTreatmentLocalizationPreviewSetsQuery struct {
-	listQuery
-}
-
 type appStoreVersionExperimentTreatmentLocalizationScreenshotSetsQuery struct {
 	listQuery
 	includeMedia   bool
 	requestContext RequestContextFunc
-}
-
-type endUserLicenseAgreementTerritoriesQuery struct {
-	listQuery
-}
-
-type territoriesQuery struct {
-	listQuery
-	fields []string
-}
-
-type appStoreReviewAttachmentsQuery struct {
-	listQuery
-	fieldsAttachments   []string
-	fieldsReviewDetails []string
-	include             []string
 }
 
 func buildReviewQuery(opts []ReviewOption) string {
@@ -203,8 +146,8 @@ func buildReviewQuery(opts []ReviewOption) string {
 	if query.territory != "" {
 		values.Set("filter[territory]", query.territory)
 	}
-	if query.reviewTerritory != "" {
-		values.Set("filter[reviewTerritory]", query.reviewTerritory)
+	if strings.TrimSpace(query.reviewTerritory) != "" {
+		values.Set("filter[reviewTerritory]", strings.TrimSpace(query.reviewTerritory))
 	}
 	if len(query.ratings) > 0 {
 		ratings := make([]string, 0, len(query.ratings))
@@ -213,8 +156,8 @@ func buildReviewQuery(opts []ReviewOption) string {
 		}
 		values.Set("filter[rating]", strings.Join(ratings, ","))
 	}
-	if query.sort != "" {
-		values.Set("sort", query.sort)
+	if strings.TrimSpace(query.sort) != "" {
+		values.Set("sort", strings.TrimSpace(query.sort))
 	}
 	if query.publishedResponseExists != nil {
 		values.Set("exists[publishedResponse]", strconv.FormatBool(*query.publishedResponseExists))
@@ -243,15 +186,6 @@ func addReviewSelection(values url.Values, query *reviewQuery) {
 	addCSV(values, "fields[customerReviews]", query.fields)
 	addCSV(values, "fields[customerReviewResponses]", query.responseFields)
 	addCSV(values, "fields[territories]", query.territoryFields)
-}
-
-func buildAppStoreReviewAttachmentsQuery(query *appStoreReviewAttachmentsQuery) string {
-	values := url.Values{}
-	addCSV(values, "fields[appStoreReviewAttachments]", query.fieldsAttachments)
-	addCSV(values, "fields[appStoreReviewDetails]", query.fieldsReviewDetails)
-	addCSV(values, "include", query.include)
-	addLimit(values, query.limit)
-	return values.Encode()
 }
 
 func buildAppStoreVersionsQuery(query *appStoreVersionsQuery) string {
@@ -317,15 +251,6 @@ func buildAppStoreVersionLocalizationsQuery(query *appStoreVersionLocalizationsQ
 	return values.Encode()
 }
 
-func buildAppInfoLocalizationsQuery(query *appInfoLocalizationsQuery) string {
-	values := url.Values{}
-	addCSV(values, "filter[locale]", query.locales)
-	addCSV(values, "fields[appInfos]", query.appInfoFields)
-	addCSV(values, "include", query.include)
-	addLimit(values, query.limit)
-	return values.Encode()
-}
-
 func buildAppInfoQuery(query *appInfoQuery) string {
 	values := url.Values{}
 	include := normalizeUniqueList(query.include)
@@ -343,15 +268,6 @@ func buildAppInfoQuery(query *appInfoQuery) string {
 		values.Set("limit[appInfoLocalizations]", strconv.Itoa(query.localizationsLimit))
 	}
 	query.includedFields.AddTo(values)
-	return values.Encode()
-}
-
-func buildTerritoryAgeRatingsQuery(query *territoryAgeRatingsQuery) string {
-	values := url.Values{}
-	addCSV(values, "fields[territoryAgeRatings]", query.fields)
-	addCSV(values, "fields[territories]", query.territoryFields)
-	addCSV(values, "include", query.include)
-	addLimit(values, query.limit)
 	return values.Encode()
 }
 
@@ -376,12 +292,6 @@ func buildAppCustomProductPagesQuery(query *appCustomProductPagesQuery) string {
 	return values.Encode()
 }
 
-func buildAppCustomProductPageVersionsQuery(query *appCustomProductPageVersionsQuery) string {
-	values := url.Values{}
-	addLimit(values, query.limit)
-	return values.Encode()
-}
-
 func buildAppCustomProductPageLocalizationsQuery(query *appCustomProductPageLocalizationsQuery) string {
 	values := url.Values{}
 	addLimit(values, query.limit)
@@ -390,12 +300,6 @@ func buildAppCustomProductPageLocalizationsQuery(query *appCustomProductPageLoca
 		addCSV(values, "include", append(slices.Clone(query.include), "searchKeywords"))
 		values.Set("limit[searchKeywords]", strconv.Itoa(query.searchKeywordsLimit))
 	}
-	return values.Encode()
-}
-
-func buildAppCustomProductPageLocalizationPreviewSetsQuery(query *appCustomProductPageLocalizationPreviewSetsQuery) string {
-	values := url.Values{}
-	addLimit(values, query.limit)
 	return values.Encode()
 }
 
@@ -427,36 +331,10 @@ func buildAppStoreVersionLocalizationScreenshotSetsQuery(query *appStoreVersionL
 	return values.Encode()
 }
 
-func buildAppStoreVersionExperimentsQuery(query *appStoreVersionExperimentsQuery) string {
-	values := url.Values{}
-	addCSV(values, "filter[state]", query.states)
-	addLimit(values, query.limit)
-	return values.Encode()
-}
-
-func buildAppStoreVersionExperimentsV2Query(query *appStoreVersionExperimentsV2Query) string {
-	values := url.Values{}
-	addCSV(values, "filter[state]", query.states)
-	addLimit(values, query.limit)
-	return values.Encode()
-}
-
-func buildAppStoreVersionExperimentTreatmentsQuery(query *appStoreVersionExperimentTreatmentsQuery) string {
-	values := url.Values{}
-	addLimit(values, query.limit)
-	return values.Encode()
-}
-
 func buildAppStoreVersionExperimentTreatmentLocalizationsQuery(query *appStoreVersionExperimentTreatmentLocalizationsQuery) string {
 	values := url.Values{}
 	addLimit(values, query.limit)
 	query.addTo(values)
-	return values.Encode()
-}
-
-func buildAppStoreVersionExperimentTreatmentLocalizationPreviewSetsQuery(query *appStoreVersionExperimentTreatmentLocalizationPreviewSetsQuery) string {
-	values := url.Values{}
-	addLimit(values, query.limit)
 	return values.Encode()
 }
 
@@ -466,19 +344,6 @@ func buildAppStoreVersionExperimentTreatmentLocalizationScreenshotSetsQuery(quer
 	if query.includeMedia {
 		addIncludedSetMedia(values, "appScreenshots")
 	}
-	return values.Encode()
-}
-
-func buildEndUserLicenseAgreementTerritoriesQuery(query *endUserLicenseAgreementTerritoriesQuery) string {
-	values := url.Values{}
-	addLimit(values, query.limit)
-	return values.Encode()
-}
-
-func buildTerritoriesQuery(query *territoriesQuery) string {
-	values := url.Values{}
-	addCSV(values, "fields[territories]", query.fields)
-	addLimit(values, query.limit)
 	return values.Encode()
 }
 
@@ -503,17 +368,11 @@ type ReviewSubmissionOption func(*reviewSubmissionQuery)
 // AppStoreVersionLocalizationsOption is a functional option for version localizations.
 type AppStoreVersionLocalizationsOption func(*appStoreVersionLocalizationsQuery)
 
-// AppInfoLocalizationsOption is a functional option for app info localizations.
-type AppInfoLocalizationsOption func(*appInfoLocalizationsQuery)
-
 // AppInfoOption is a functional option for GetAppInfo.
 type AppInfoOption func(*appInfoQuery)
 
 // AppCustomProductPagesOption is a functional option for custom product page list endpoints.
 type AppCustomProductPagesOption func(*appCustomProductPagesQuery)
-
-// AppCustomProductPageVersionsOption is a functional option for custom product page version list endpoints.
-type AppCustomProductPageVersionsOption func(*appCustomProductPageVersionsQuery)
 
 // LocalizationReadOption sets query parameters on a single-localization read.
 type LocalizationReadOption func(*localizationRelatedQuery)
@@ -548,9 +407,6 @@ func localizationReadPath(path string, opts []LocalizationReadOption) string {
 // AppCustomProductPageLocalizationsOption is a functional option for custom product page localization list endpoints.
 type AppCustomProductPageLocalizationsOption func(*appCustomProductPageLocalizationsQuery)
 
-// AppCustomProductPageLocalizationPreviewSetsOption is a functional option for preview set list endpoints.
-type AppCustomProductPageLocalizationPreviewSetsOption func(*appCustomProductPageLocalizationPreviewSetsQuery)
-
 // AppCustomProductPageLocalizationScreenshotSetsOption is a functional option for screenshot set list endpoints.
 type AppCustomProductPageLocalizationScreenshotSetsOption func(*appCustomProductPageLocalizationScreenshotSetsQuery)
 
@@ -560,79 +416,11 @@ type AppStoreVersionLocalizationPreviewSetsOption func(*appStoreVersionLocalizat
 // AppStoreVersionLocalizationScreenshotSetsOption is a functional option for app store version screenshot sets list endpoints.
 type AppStoreVersionLocalizationScreenshotSetsOption func(*appStoreVersionLocalizationScreenshotSetsQuery)
 
-// AppStoreVersionExperimentTreatmentLocalizationPreviewSetsOption is a functional option for treatment localization preview set list endpoints.
-type AppStoreVersionExperimentTreatmentLocalizationPreviewSetsOption func(*appStoreVersionExperimentTreatmentLocalizationPreviewSetsQuery)
-
 // AppStoreVersionExperimentTreatmentLocalizationScreenshotSetsOption is a functional option for treatment localization screenshot set list endpoints.
 type AppStoreVersionExperimentTreatmentLocalizationScreenshotSetsOption func(*appStoreVersionExperimentTreatmentLocalizationScreenshotSetsQuery)
 
-// AppStoreVersionExperimentsOption is a functional option for app store version experiment list endpoints (v1).
-type AppStoreVersionExperimentsOption func(*appStoreVersionExperimentsQuery)
-
-// AppStoreVersionExperimentsV2Option is a functional option for app store version experiment list endpoints (v2).
-type AppStoreVersionExperimentsV2Option func(*appStoreVersionExperimentsV2Query)
-
-// AppStoreVersionExperimentTreatmentsOption is a functional option for experiment treatment list endpoints.
-type AppStoreVersionExperimentTreatmentsOption func(*appStoreVersionExperimentTreatmentsQuery)
-
 // AppStoreVersionExperimentTreatmentLocalizationsOption is a functional option for treatment localization list endpoints.
 type AppStoreVersionExperimentTreatmentLocalizationsOption func(*appStoreVersionExperimentTreatmentLocalizationsQuery)
-
-// TerritoriesOption is a functional option for GetTerritories.
-type TerritoriesOption func(*territoriesQuery)
-
-// EndUserLicenseAgreementTerritoriesOption is a functional option for EULA territory lists.
-type EndUserLicenseAgreementTerritoriesOption func(*endUserLicenseAgreementTerritoriesQuery)
-
-// AppStoreReviewAttachmentsOption is a functional option for review attachments.
-type AppStoreReviewAttachmentsOption func(*appStoreReviewAttachmentsQuery)
-
-// TerritoryAgeRatingsOption is a functional option for territory age ratings.
-type TerritoryAgeRatingsOption func(*territoryAgeRatingsQuery)
-
-// WithAppStoreReviewAttachmentsFields includes specific attachment fields.
-func WithAppStoreReviewAttachmentsFields(fields []string) AppStoreReviewAttachmentsOption {
-	return func(q *appStoreReviewAttachmentsQuery) {
-		q.fieldsAttachments = normalizeList(fields)
-	}
-}
-
-// WithAppStoreReviewAttachmentReviewDetailFields includes fields for review detail when included.
-func WithAppStoreReviewAttachmentReviewDetailFields(fields []string) AppStoreReviewAttachmentsOption {
-	return func(q *appStoreReviewAttachmentsQuery) {
-		q.fieldsReviewDetails = normalizeList(fields)
-	}
-}
-
-// WithAppStoreReviewAttachmentsInclude includes related resources.
-func WithAppStoreReviewAttachmentsInclude(include []string) AppStoreReviewAttachmentsOption {
-	return func(q *appStoreReviewAttachmentsQuery) {
-		q.include = normalizeList(include)
-	}
-}
-
-// WithAppStoreReviewAttachmentsLimit sets the max number of attachments to return.
-func WithAppStoreReviewAttachmentsLimit(limit int) AppStoreReviewAttachmentsOption {
-	return func(q *appStoreReviewAttachmentsQuery) {
-		if limit > 0 {
-			q.limit = limit
-		}
-	}
-}
-
-// WithAppStoreReviewAttachmentsNextURL uses a next page URL directly.
-func WithAppStoreReviewAttachmentsNextURL(next string) AppStoreReviewAttachmentsOption {
-	return func(q *appStoreReviewAttachmentsQuery) {
-		if strings.TrimSpace(next) != "" {
-			q.nextURL = strings.TrimSpace(next)
-		}
-	}
-}
-
-// WithRating filters reviews by a single star rating (1-5).
-func WithRating(rating int) ReviewOption {
-	return WithRatings([]int{rating})
-}
 
 // WithRatings filters reviews by one or more star ratings (1-5). Apple models
 // filter[rating] as a comma-separated array parameter, so several ratings match
@@ -679,8 +467,7 @@ func WithReviewSort(sort string) ReviewOption {
 // WithPublishedResponseExists filters reviews by whether a published response exists.
 func WithPublishedResponseExists(exists bool) ReviewOption {
 	return func(r *reviewQuery) {
-		value := exists
-		r.publishedResponseExists = &value
+		r.publishedResponseExists = &exists
 	}
 }
 
@@ -716,42 +503,6 @@ func WithReviewResponseFields(fields []string) ReviewOption {
 func WithReviewTerritoryFields(fields []string) ReviewOption {
 	return func(r *reviewQuery) {
 		r.territoryFields = normalizeList(fields)
-	}
-}
-
-// WithLimit sets the max number of reviews to return.
-func WithLimit(limit int) ReviewOption {
-	return func(r *reviewQuery) {
-		if limit > 0 {
-			r.limit = limit
-		}
-	}
-}
-
-// WithNextURL uses a next page URL directly.
-func WithNextURL(next string) ReviewOption {
-	return func(r *reviewQuery) {
-		if strings.TrimSpace(next) != "" {
-			r.nextURL = strings.TrimSpace(next)
-		}
-	}
-}
-
-// WithAppStoreVersionsLimit sets the max number of versions to return.
-func WithAppStoreVersionsLimit(limit int) AppStoreVersionsOption {
-	return func(q *appStoreVersionsQuery) {
-		if limit > 0 {
-			q.limit = limit
-		}
-	}
-}
-
-// WithAppStoreVersionsNextURL uses a next page URL directly.
-func WithAppStoreVersionsNextURL(next string) AppStoreVersionsOption {
-	return func(q *appStoreVersionsQuery) {
-		if strings.TrimSpace(next) != "" {
-			q.nextURL = strings.TrimSpace(next)
-		}
 	}
 }
 
@@ -820,24 +571,6 @@ func WithAppStoreVersionLocalizationsIncludeLimit(limit int) AppStoreVersionOpti
 	}
 }
 
-// WithReviewSubmissionsLimit sets the max number of review submissions to return.
-func WithReviewSubmissionsLimit(limit int) ReviewSubmissionsOption {
-	return func(q *reviewSubmissionsQuery) {
-		if limit > 0 {
-			q.limit = limit
-		}
-	}
-}
-
-// WithReviewSubmissionsNextURL uses a next page URL directly.
-func WithReviewSubmissionsNextURL(next string) ReviewSubmissionsOption {
-	return func(q *reviewSubmissionsQuery) {
-		if strings.TrimSpace(next) != "" {
-			q.nextURL = strings.TrimSpace(next)
-		}
-	}
-}
-
 // WithReviewSubmissionsPlatforms filters review submissions by platform.
 func WithReviewSubmissionsPlatforms(platforms []string) ReviewSubmissionsOption {
 	return func(q *reviewSubmissionsQuery) {
@@ -887,15 +620,6 @@ func WithReviewSubmissionInclude(include []string) ReviewSubmissionOption {
 	}
 }
 
-// WithReviewSubmissionItemsLimit sets the max number of review submission items to return.
-func WithReviewSubmissionItemsLimit(limit int) ReviewSubmissionItemsOption {
-	return func(q *reviewSubmissionItemsQuery) {
-		if limit > 0 {
-			q.limit = limit
-		}
-	}
-}
-
 // WithReviewSubmissionItemsFields sets fields[reviewSubmissionItems] for item responses.
 func WithReviewSubmissionItemsFields(fields []string) ReviewSubmissionItemsOption {
 	return func(q *reviewSubmissionItemsQuery) {
@@ -931,33 +655,6 @@ func WithReviewSubmissionItemsInclude(include []string) ReviewSubmissionItemsOpt
 	}
 }
 
-// WithReviewSubmissionItemsNextURL uses a next page URL directly.
-func WithReviewSubmissionItemsNextURL(next string) ReviewSubmissionItemsOption {
-	return func(q *reviewSubmissionItemsQuery) {
-		if strings.TrimSpace(next) != "" {
-			q.nextURL = strings.TrimSpace(next)
-		}
-	}
-}
-
-// WithAppStoreVersionLocalizationsLimit sets the max number of localizations to return.
-func WithAppStoreVersionLocalizationsLimit(limit int) AppStoreVersionLocalizationsOption {
-	return func(q *appStoreVersionLocalizationsQuery) {
-		if limit > 0 {
-			q.limit = limit
-		}
-	}
-}
-
-// WithAppStoreVersionLocalizationsNextURL uses a next page URL directly.
-func WithAppStoreVersionLocalizationsNextURL(next string) AppStoreVersionLocalizationsOption {
-	return func(q *appStoreVersionLocalizationsQuery) {
-		if strings.TrimSpace(next) != "" {
-			q.nextURL = strings.TrimSpace(next)
-		}
-	}
-}
-
 // WithAppStoreVersionLocalizationLocales filters version localizations by locale.
 func WithAppStoreVersionLocalizationLocales(locales []string) AppStoreVersionLocalizationsOption {
 	return func(q *appStoreVersionLocalizationsQuery) {
@@ -981,67 +678,10 @@ func WithAppStoreVersionLocalizationsPlacementsLimit(limit int) AppStoreVersionL
 	}
 }
 
-// WithAppInfoLocalizationsLimit sets the max number of app info localizations to return.
-func WithAppInfoLocalizationsLimit(limit int) AppInfoLocalizationsOption {
-	return func(q *appInfoLocalizationsQuery) {
-		if limit > 0 {
-			q.limit = limit
-		}
-	}
-}
-
-// WithAppInfoLocalizationsNextURL uses a next page URL directly.
-func WithAppInfoLocalizationsNextURL(next string) AppInfoLocalizationsOption {
-	return func(q *appInfoLocalizationsQuery) {
-		if strings.TrimSpace(next) != "" {
-			q.nextURL = strings.TrimSpace(next)
-		}
-	}
-}
-
-// WithAppInfoLocalizationLocales filters app info localizations by locale.
-func WithAppInfoLocalizationLocales(locales []string) AppInfoLocalizationsOption {
-	return func(q *appInfoLocalizationsQuery) {
-		q.locales = normalizeList(locales)
-	}
-}
-
-// WithAppInfoLocalizationsAppInfoFields sets fields[appInfos].
-func WithAppInfoLocalizationsAppInfoFields(fields []string) AppInfoLocalizationsOption {
-	return func(q *appInfoLocalizationsQuery) {
-		q.appInfoFields = normalizeList(fields)
-	}
-}
-
-// WithAppInfoLocalizationsInclude includes related resources.
-func WithAppInfoLocalizationsInclude(include []string) AppInfoLocalizationsOption {
-	return func(q *appInfoLocalizationsQuery) {
-		q.include = normalizeList(include)
-	}
-}
-
 // WithAppInfoFields sets fields[appInfos].
 func WithAppInfoFields(fields []string) AppInfoOption {
 	return func(q *appInfoQuery) {
 		q.fields = normalizeList(fields)
-	}
-}
-
-// WithAppInfosLimit sets the maximum number of app info records to return.
-func WithAppInfosLimit(limit int) AppInfoOption {
-	return func(q *appInfoQuery) {
-		if limit > 0 {
-			q.limit = limit
-		}
-	}
-}
-
-// WithAppInfosNextURL uses an app info continuation URL directly.
-func WithAppInfosNextURL(next string) AppInfoOption {
-	return func(q *appInfoQuery) {
-		if strings.TrimSpace(next) != "" {
-			q.nextURL = strings.TrimSpace(next)
-		}
 	}
 }
 
@@ -1065,97 +705,6 @@ func WithAppInfoLocalizationsIncludeLimit(limit int) AppInfoOption {
 	return func(q *appInfoQuery) {
 		if limit > 0 {
 			q.localizationsLimit = limit
-		}
-	}
-}
-
-// WithTerritoryAgeRatingsFields sets fields[territoryAgeRatings].
-func WithTerritoryAgeRatingsFields(fields []string) TerritoryAgeRatingsOption {
-	return func(q *territoryAgeRatingsQuery) {
-		q.fields = normalizeList(fields)
-	}
-}
-
-// WithTerritoryAgeRatingsTerritoryFields sets fields[territories].
-func WithTerritoryAgeRatingsTerritoryFields(fields []string) TerritoryAgeRatingsOption {
-	return func(q *territoryAgeRatingsQuery) {
-		q.territoryFields = normalizeList(fields)
-	}
-}
-
-// WithTerritoryAgeRatingsInclude sets include values for territory age ratings.
-func WithTerritoryAgeRatingsInclude(include []string) TerritoryAgeRatingsOption {
-	return func(q *territoryAgeRatingsQuery) {
-		q.include = normalizeList(include)
-	}
-}
-
-// WithTerritoryAgeRatingsLimit sets the max number of territory age ratings to return.
-func WithTerritoryAgeRatingsLimit(limit int) TerritoryAgeRatingsOption {
-	return func(q *territoryAgeRatingsQuery) {
-		if limit > 0 {
-			q.limit = limit
-		}
-	}
-}
-
-// WithTerritoryAgeRatingsNextURL uses a next page URL directly.
-func WithTerritoryAgeRatingsNextURL(next string) TerritoryAgeRatingsOption {
-	return func(q *territoryAgeRatingsQuery) {
-		if strings.TrimSpace(next) != "" {
-			q.nextURL = strings.TrimSpace(next)
-		}
-	}
-}
-
-// WithTerritoriesLimit sets the max number of territories to return.
-func WithTerritoriesLimit(limit int) TerritoriesOption {
-	return func(q *territoriesQuery) {
-		if limit > 0 {
-			q.limit = limit
-		}
-	}
-}
-
-// WithTerritoriesNextURL uses a next page URL directly.
-func WithTerritoriesNextURL(next string) TerritoriesOption {
-	return func(q *territoriesQuery) {
-		if strings.TrimSpace(next) != "" {
-			q.nextURL = strings.TrimSpace(next)
-		}
-	}
-}
-
-// WithTerritoriesFields sets fields[territories] for territory responses.
-func WithTerritoriesFields(fields []string) TerritoriesOption {
-	return func(q *territoriesQuery) {
-		q.fields = normalizeList(fields)
-	}
-}
-
-// WithEndUserLicenseAgreementTerritoriesLimit sets the max number of territories to return.
-func WithEndUserLicenseAgreementTerritoriesLimit(limit int) EndUserLicenseAgreementTerritoriesOption {
-	return func(q *endUserLicenseAgreementTerritoriesQuery) {
-		if limit > 0 {
-			q.limit = limit
-		}
-	}
-}
-
-// WithEndUserLicenseAgreementTerritoriesNextURL uses a next page URL directly.
-func WithEndUserLicenseAgreementTerritoriesNextURL(next string) EndUserLicenseAgreementTerritoriesOption {
-	return func(q *endUserLicenseAgreementTerritoriesQuery) {
-		if strings.TrimSpace(next) != "" {
-			q.nextURL = strings.TrimSpace(next)
-		}
-	}
-}
-
-// WithAppCustomProductPagesLimit sets the max number of custom product pages to return.
-func WithAppCustomProductPagesLimit(limit int) AppCustomProductPagesOption {
-	return func(q *appCustomProductPagesQuery) {
-		if limit > 0 {
-			q.limit = limit
 		}
 	}
 }
@@ -1204,42 +753,6 @@ func WithAppCustomProductPagesVersionsLimit(limit int) AppCustomProductPagesOpti
 	}
 }
 
-// WithAppCustomProductPagesNextURL uses a next page URL directly.
-func WithAppCustomProductPagesNextURL(next string) AppCustomProductPagesOption {
-	return func(q *appCustomProductPagesQuery) {
-		if strings.TrimSpace(next) != "" {
-			q.nextURL = strings.TrimSpace(next)
-		}
-	}
-}
-
-// WithAppCustomProductPageVersionsLimit sets the max number of versions to return.
-func WithAppCustomProductPageVersionsLimit(limit int) AppCustomProductPageVersionsOption {
-	return func(q *appCustomProductPageVersionsQuery) {
-		if limit > 0 {
-			q.limit = limit
-		}
-	}
-}
-
-// WithAppCustomProductPageVersionsNextURL uses a next page URL directly.
-func WithAppCustomProductPageVersionsNextURL(next string) AppCustomProductPageVersionsOption {
-	return func(q *appCustomProductPageVersionsQuery) {
-		if strings.TrimSpace(next) != "" {
-			q.nextURL = strings.TrimSpace(next)
-		}
-	}
-}
-
-// WithAppCustomProductPageLocalizationsLimit sets the max number of localizations to return.
-func WithAppCustomProductPageLocalizationsLimit(limit int) AppCustomProductPageLocalizationsOption {
-	return func(q *appCustomProductPageLocalizationsQuery) {
-		if limit > 0 {
-			q.limit = limit
-		}
-	}
-}
-
 // WithAppCustomProductPageLocalizationsSearchKeywords includes up to limit
 // search keywords per localization in each localization's relationships.
 func WithAppCustomProductPageLocalizationsSearchKeywords(limit int) AppCustomProductPageLocalizationsOption {
@@ -1264,64 +777,10 @@ func WithAppCustomProductPageLocalizationsPlacementsLimit(limit int) AppCustomPr
 	}
 }
 
-// WithAppCustomProductPageLocalizationsNextURL uses a next page URL directly.
-func WithAppCustomProductPageLocalizationsNextURL(next string) AppCustomProductPageLocalizationsOption {
-	return func(q *appCustomProductPageLocalizationsQuery) {
-		if strings.TrimSpace(next) != "" {
-			q.nextURL = strings.TrimSpace(next)
-		}
-	}
-}
-
-// WithAppCustomProductPageLocalizationPreviewSetsLimit sets the max number of preview sets to return.
-func WithAppCustomProductPageLocalizationPreviewSetsLimit(limit int) AppCustomProductPageLocalizationPreviewSetsOption {
-	return func(q *appCustomProductPageLocalizationPreviewSetsQuery) {
-		if limit > 0 {
-			q.limit = limit
-		}
-	}
-}
-
-// WithAppCustomProductPageLocalizationPreviewSetsNextURL uses a next page URL directly.
-func WithAppCustomProductPageLocalizationPreviewSetsNextURL(next string) AppCustomProductPageLocalizationPreviewSetsOption {
-	return func(q *appCustomProductPageLocalizationPreviewSetsQuery) {
-		if strings.TrimSpace(next) != "" {
-			q.nextURL = strings.TrimSpace(next)
-		}
-	}
-}
-
-// WithAppCustomProductPageLocalizationScreenshotSetsLimit sets the max number of screenshot sets to return.
-func WithAppCustomProductPageLocalizationScreenshotSetsLimit(limit int) AppCustomProductPageLocalizationScreenshotSetsOption {
-	return func(q *appCustomProductPageLocalizationScreenshotSetsQuery) {
-		if limit > 0 {
-			q.limit = limit
-		}
-	}
-}
-
 // WithAppCustomProductPageLocalizationScreenshotSetsIncludeScreenshots includes each set's screenshots.
 func WithAppCustomProductPageLocalizationScreenshotSetsIncludeScreenshots() AppCustomProductPageLocalizationScreenshotSetsOption {
 	return func(q *appCustomProductPageLocalizationScreenshotSetsQuery) {
 		q.includeMedia = true
-	}
-}
-
-// WithAppCustomProductPageLocalizationScreenshotSetsNextURL uses a next page URL directly.
-func WithAppCustomProductPageLocalizationScreenshotSetsNextURL(next string) AppCustomProductPageLocalizationScreenshotSetsOption {
-	return func(q *appCustomProductPageLocalizationScreenshotSetsQuery) {
-		if strings.TrimSpace(next) != "" {
-			q.nextURL = strings.TrimSpace(next)
-		}
-	}
-}
-
-// WithAppStoreVersionLocalizationPreviewSetsLimit sets the max number of preview sets to return.
-func WithAppStoreVersionLocalizationPreviewSetsLimit(limit int) AppStoreVersionLocalizationPreviewSetsOption {
-	return func(q *appStoreVersionLocalizationPreviewSetsQuery) {
-		if limit > 0 {
-			q.limit = limit
-		}
 	}
 }
 
@@ -1332,24 +791,6 @@ func WithAppStoreVersionLocalizationPreviewSetsIncludePreviews() AppStoreVersion
 	}
 }
 
-// WithAppStoreVersionLocalizationPreviewSetsNextURL uses a next page URL directly.
-func WithAppStoreVersionLocalizationPreviewSetsNextURL(next string) AppStoreVersionLocalizationPreviewSetsOption {
-	return func(q *appStoreVersionLocalizationPreviewSetsQuery) {
-		if strings.TrimSpace(next) != "" {
-			q.nextURL = strings.TrimSpace(next)
-		}
-	}
-}
-
-// WithAppStoreVersionLocalizationScreenshotSetsLimit sets the max number of screenshot sets to return.
-func WithAppStoreVersionLocalizationScreenshotSetsLimit(limit int) AppStoreVersionLocalizationScreenshotSetsOption {
-	return func(q *appStoreVersionLocalizationScreenshotSetsQuery) {
-		if limit > 0 {
-			q.limit = limit
-		}
-	}
-}
-
 // WithAppStoreVersionLocalizationScreenshotSetsIncludeScreenshots includes each set's screenshots.
 func WithAppStoreVersionLocalizationScreenshotSetsIncludeScreenshots() AppStoreVersionLocalizationScreenshotSetsOption {
 	return func(q *appStoreVersionLocalizationScreenshotSetsQuery) {
@@ -1357,132 +798,10 @@ func WithAppStoreVersionLocalizationScreenshotSetsIncludeScreenshots() AppStoreV
 	}
 }
 
-// WithAppStoreVersionLocalizationScreenshotSetsNextURL uses a next page URL directly.
-func WithAppStoreVersionLocalizationScreenshotSetsNextURL(next string) AppStoreVersionLocalizationScreenshotSetsOption {
-	return func(q *appStoreVersionLocalizationScreenshotSetsQuery) {
-		if strings.TrimSpace(next) != "" {
-			q.nextURL = strings.TrimSpace(next)
-		}
-	}
-}
-
-// WithAppStoreVersionExperimentTreatmentLocalizationPreviewSetsLimit sets the max number of preview sets to return.
-func WithAppStoreVersionExperimentTreatmentLocalizationPreviewSetsLimit(limit int) AppStoreVersionExperimentTreatmentLocalizationPreviewSetsOption {
-	return func(q *appStoreVersionExperimentTreatmentLocalizationPreviewSetsQuery) {
-		if limit > 0 {
-			q.limit = limit
-		}
-	}
-}
-
-// WithAppStoreVersionExperimentTreatmentLocalizationPreviewSetsNextURL uses a next page URL directly.
-func WithAppStoreVersionExperimentTreatmentLocalizationPreviewSetsNextURL(next string) AppStoreVersionExperimentTreatmentLocalizationPreviewSetsOption {
-	return func(q *appStoreVersionExperimentTreatmentLocalizationPreviewSetsQuery) {
-		if strings.TrimSpace(next) != "" {
-			q.nextURL = strings.TrimSpace(next)
-		}
-	}
-}
-
-// WithAppStoreVersionExperimentTreatmentLocalizationScreenshotSetsLimit sets the max number of screenshot sets to return.
-func WithAppStoreVersionExperimentTreatmentLocalizationScreenshotSetsLimit(limit int) AppStoreVersionExperimentTreatmentLocalizationScreenshotSetsOption {
-	return func(q *appStoreVersionExperimentTreatmentLocalizationScreenshotSetsQuery) {
-		if limit > 0 {
-			q.limit = limit
-		}
-	}
-}
-
 // WithAppStoreVersionExperimentTreatmentLocalizationScreenshotSetsIncludeScreenshots includes each set's screenshots.
 func WithAppStoreVersionExperimentTreatmentLocalizationScreenshotSetsIncludeScreenshots() AppStoreVersionExperimentTreatmentLocalizationScreenshotSetsOption {
 	return func(q *appStoreVersionExperimentTreatmentLocalizationScreenshotSetsQuery) {
 		q.includeMedia = true
-	}
-}
-
-// WithAppStoreVersionExperimentTreatmentLocalizationScreenshotSetsNextURL uses a next page URL directly.
-func WithAppStoreVersionExperimentTreatmentLocalizationScreenshotSetsNextURL(next string) AppStoreVersionExperimentTreatmentLocalizationScreenshotSetsOption {
-	return func(q *appStoreVersionExperimentTreatmentLocalizationScreenshotSetsQuery) {
-		if strings.TrimSpace(next) != "" {
-			q.nextURL = strings.TrimSpace(next)
-		}
-	}
-}
-
-// WithAppStoreVersionExperimentsLimit sets the max number of experiments to return.
-func WithAppStoreVersionExperimentsLimit(limit int) AppStoreVersionExperimentsOption {
-	return func(q *appStoreVersionExperimentsQuery) {
-		if limit > 0 {
-			q.limit = limit
-		}
-	}
-}
-
-// WithAppStoreVersionExperimentsNextURL uses a next page URL directly.
-func WithAppStoreVersionExperimentsNextURL(next string) AppStoreVersionExperimentsOption {
-	return func(q *appStoreVersionExperimentsQuery) {
-		if strings.TrimSpace(next) != "" {
-			q.nextURL = strings.TrimSpace(next)
-		}
-	}
-}
-
-// WithAppStoreVersionExperimentsState filters experiments by state.
-func WithAppStoreVersionExperimentsState(states []string) AppStoreVersionExperimentsOption {
-	return func(q *appStoreVersionExperimentsQuery) {
-		q.states = normalizeUpperList(states)
-	}
-}
-
-// WithAppStoreVersionExperimentsV2Limit sets the max number of experiments to return (v2).
-func WithAppStoreVersionExperimentsV2Limit(limit int) AppStoreVersionExperimentsV2Option {
-	return func(q *appStoreVersionExperimentsV2Query) {
-		if limit > 0 {
-			q.limit = limit
-		}
-	}
-}
-
-// WithAppStoreVersionExperimentsV2NextURL uses a next page URL directly (v2).
-func WithAppStoreVersionExperimentsV2NextURL(next string) AppStoreVersionExperimentsV2Option {
-	return func(q *appStoreVersionExperimentsV2Query) {
-		if strings.TrimSpace(next) != "" {
-			q.nextURL = strings.TrimSpace(next)
-		}
-	}
-}
-
-// WithAppStoreVersionExperimentsV2State filters experiments by state (v2).
-func WithAppStoreVersionExperimentsV2State(states []string) AppStoreVersionExperimentsV2Option {
-	return func(q *appStoreVersionExperimentsV2Query) {
-		q.states = normalizeUpperList(states)
-	}
-}
-
-// WithAppStoreVersionExperimentTreatmentsLimit sets the max number of treatments to return.
-func WithAppStoreVersionExperimentTreatmentsLimit(limit int) AppStoreVersionExperimentTreatmentsOption {
-	return func(q *appStoreVersionExperimentTreatmentsQuery) {
-		if limit > 0 {
-			q.limit = limit
-		}
-	}
-}
-
-// WithAppStoreVersionExperimentTreatmentsNextURL uses a next page URL directly.
-func WithAppStoreVersionExperimentTreatmentsNextURL(next string) AppStoreVersionExperimentTreatmentsOption {
-	return func(q *appStoreVersionExperimentTreatmentsQuery) {
-		if strings.TrimSpace(next) != "" {
-			q.nextURL = strings.TrimSpace(next)
-		}
-	}
-}
-
-// WithAppStoreVersionExperimentTreatmentLocalizationsLimit sets the max number of treatment localizations to return.
-func WithAppStoreVersionExperimentTreatmentLocalizationsLimit(limit int) AppStoreVersionExperimentTreatmentLocalizationsOption {
-	return func(q *appStoreVersionExperimentTreatmentLocalizationsQuery) {
-		if limit > 0 {
-			q.limit = limit
-		}
 	}
 }
 
@@ -1497,15 +816,6 @@ func WithAppStoreVersionExperimentTreatmentLocalizationsInclude(include []string
 func WithAppStoreVersionExperimentTreatmentLocalizationsPlacementsLimit(limit int) AppStoreVersionExperimentTreatmentLocalizationsOption {
 	return func(q *appStoreVersionExperimentTreatmentLocalizationsQuery) {
 		q.placementsLimit = limit
-	}
-}
-
-// WithAppStoreVersionExperimentTreatmentLocalizationsNextURL uses a next page URL directly.
-func WithAppStoreVersionExperimentTreatmentLocalizationsNextURL(next string) AppStoreVersionExperimentTreatmentLocalizationsOption {
-	return func(q *appStoreVersionExperimentTreatmentLocalizationsQuery) {
-		if strings.TrimSpace(next) != "" {
-			q.nextURL = strings.TrimSpace(next)
-		}
 	}
 }
 

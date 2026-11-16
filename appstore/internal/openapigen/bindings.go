@@ -1,0 +1,332 @@
+package main
+
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
+	"regexp"
+	"sort"
+	"strings"
+)
+
+// Bindings lists what is generated and the Go-side choices the spec cannot
+// supply, one file per family in a bindings directory. `-adopt` writes them
+// from existing code; nobody edits them by hand.
+type Bindings struct {
+	Families []*Family
+}
+
+// Family is one spec tag generated into one file.
+type Family struct {
+	Tag           string       `json:"tag"`
+	File          string       `json:"file"`
+	Types         []string     `json:"types,omitempty"`
+	Relationships []*RelBind   `json:"relationships,omitempty"`
+	Operations    []*OpBind    `json:"operations,omitempty"`
+	Queries       []*QueryBind `json:"queries,omitempty"`
+	RefTypes      []*RefType   `json:"refTypes,omitempty"`
+	GoTypes       []*GoType    `json:"goTypes,omitempty"`
+}
+
+// RefType is the Go type of the attributes that reference an enum or object
+// schema, when it is not the type of the schema's name: another type name, or
+// "string" for an enum without a Go type. One record holds for every type of
+// the family.
+type RefType struct {
+	Schema string `json:"schema"`
+	Type   string `json:"type"`
+}
+
+// GoType is the Go type that stands for a type the generator would name after
+// a schema, such as the v1 type ZebraUpdateRequest for ZebraV2UpdateRequest
+// when one Go type serves both schema versions. Generated code refers to the
+// Go type and the family declares no type of that name.
+type GoType struct {
+	Schema string `json:"schema"`
+	Type   string `json:"type"`
+}
+
+// RelBind is the relationships field of a create's data type, as the
+// hand-written data type declares it. The data type, the relationships type
+// it names and the create method all render from it.
+type RelBind struct {
+	Data      string `json:"data"`                // data type, such as "AppEventCreateData"
+	Type      string `json:"type"`                // Go type of the field; "*R" for a pointer
+	OmitEmpty bool   `json:"omitempty,omitempty"` // the field's tag has omitempty
+}
+
+// Check styles for path parameters.
+const (
+	checkInline  = ""        // strings.TrimSpace inside the path expression
+	checkTrim    = "trim"    // trim the parameter before use
+	checkRequire = "require" // trim, then reject a blank value
+	checkRaw     = "raw"     // use the parameter as given
+)
+
+// Ways an optional attributes object reaches the data of a create or update
+// request. The default takes the argument by value and sends its address.
+const (
+	attrsValue   = "value"   // send the value; the data type holds it by value
+	attrsPointer = "pointer" // take a pointer argument and send it as given
+)
+
+// OpBind binds one spec operation to one client method. Empty fields take the
+// default rule documented next to each field.
+type OpBind struct {
+	Operation string `json:"operation"`
+	Name      string `json:"name"`
+	// Params are the Go names of the path parameters in path order, then of
+	// the IDs a create links.
+	Params []string `json:"params,omitempty"`
+	Check  string   `json:"check,omitempty"` // checkInline, checkTrim, checkRequire or checkRaw
+	// CheckFirst runs the trim and require checks of a read before its
+	// options, so a next URL does not lift the require check of a paged read.
+	CheckFirst bool `json:"checkFirst,omitempty"`
+	// Messages are the errors for blank parameters; default "<param> is required".
+	Messages    []string `json:"messages,omitempty"`
+	Options     string   `json:"options,omitempty"`     // option type of a paged read
+	Query       string   `json:"query,omitempty"`       // query builder of a paged read
+	NextContext string   `json:"nextContext,omitempty"` // prefix of a rejected next URL error
+	ParseErr    string   `json:"parseErr,omitempty"`    // default "failed to parse response"
+	Response    string   `json:"response,omitempty"`    // Go decode type; default the spec schema name
+	IDs         string   `json:"ids,omitempty"`         // ID list parameter of a relationship change
+	// Links are the to-one relationships a create sets, one for each of the
+	// last len(Links) Params.
+	Links  []string `json:"links,omitempty"`
+	IDList *IDList  `json:"idList,omitempty"` // how a relationship change handles its ID list
+	// Single marks a read of one resource that sends a query and follows no
+	// next URL. Its builder takes the options, or a fields []string argument
+	// when there is no option type.
+	Single bool   `json:"single,omitempty"`
+	Attrs  string `json:"attrs,omitempty"` // "", attrsValue or attrsPointer
+	// SkipEmptyAttributes sends the attributes only when one of them is set.
+	SkipEmptyAttributes bool `json:"skipEmptyAttributes,omitempty"`
+	// Args are parameters after the path parameters that a create or update
+	// sets as body attributes, in signature order, which is also the order
+	// the attributes literal lists them in.
+	Args []ArgBind `json:"args,omitempty"`
+	// Deviations are known differences from the schema that the contract test
+	// in internal/asc pins. They change no generated code.
+	Deviations []Deviation `json:"deviations,omitempty"`
+}
+
+// Payload styles of a relationship change.
+const (
+	payloadDefault      = ""             // RelationshipRequest{Data: buildRelationshipData(...)}
+	payloadAppend       = "append"       // append to RelationshipRequest.Data in a loop over Item
+	payloadIndex        = "index"        // assign RelationshipRequest.Data[i] in a loop over i, id
+	payloadResourceList = "resourceList" // RelationshipList of ResourceData, in a loop over Item
+	payloadNonNil       = "nonNil"       // buildRelationshipData, with nil replaced by an empty list
+)
+
+// IDList is how a relationship change prepares its ID list. Without it the
+// list goes to buildRelationshipData as given.
+type IDList struct {
+	Normalize bool   `json:"normalize,omitempty"` // normalizeList after the path parameter trims
+	Message   string `json:"message,omitempty"`   // error for an empty list after normalizing; none allows it
+	Payload   string `json:"payload,omitempty"`   // one of the payload styles
+	Item      string `json:"item,omitempty"`      // loop variable of the append and resourceList styles
+}
+
+// ArgBind is one scalar parameter set as one request attribute.
+type ArgBind struct {
+	Name      string `json:"name"`
+	Attribute string `json:"attribute,omitempty"` // default Name
+	Type      string `json:"type,omitempty"`      // Go type; default the attribute's, "int64" may replace "int"
+	// Param declares a string argument with the Params, after them in their
+	// group of the signature, and checks it with their check style. Param
+	// args come first.
+	Param bool `json:"param,omitempty"`
+}
+
+// Deviation is one problem text of the contract test that the method is known
+// to produce, and why it is kept.
+type Deviation struct {
+	Problem string `json:"problem"`
+	Reason  string `json:"reason"`
+}
+
+// LoadBindings reads every family file in a bindings directory. A missing
+// directory holds no families.
+func LoadBindings(dir string) (*Bindings, error) {
+	entries, err := os.ReadDir(dir)
+	if os.IsNotExist(err) {
+		return &Bindings{}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	b := &Bindings{}
+	for _, entry := range entries {
+		if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" {
+			continue
+		}
+		path := filepath.Join(dir, entry.Name())
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return nil, err
+		}
+		var f Family
+		if err := json.Unmarshal(data, &f); err != nil {
+			return nil, fmt.Errorf("%s: %w", path, err)
+		}
+		if bindingsFile(dir, f.Tag) != path {
+			return nil, fmt.Errorf("%s: holds tag %q, so it must be named %s.json", path, f.Tag, f.Tag)
+		}
+		b.Families = append(b.Families, &f)
+	}
+	return b, nil
+}
+
+// bindingsFile is the file that holds the bindings of a tag.
+func bindingsFile(dir, tag string) string {
+	return filepath.Join(dir, tag+".json")
+}
+
+// Encode returns the family file in a stable order, one operation or type per
+// line so that a diff shows each binding that changed. Methods bound to one
+// operation keep the order they were adopted in.
+func (f *Family) Encode() ([]byte, error) {
+	sort.Strings(f.Types)
+	sort.SliceStable(f.Relationships, func(i, j int) bool { return f.Relationships[i].Data < f.Relationships[j].Data })
+	sort.SliceStable(f.Operations, func(i, j int) bool { return f.Operations[i].Operation < f.Operations[j].Operation })
+	fields := []string{`"tag": ` + jsonString(f.Tag), `"file": ` + jsonString(f.File)}
+	if len(f.Types) > 0 {
+		var types []string
+		for _, t := range f.Types {
+			types = append(types, jsonString(t))
+		}
+		fields = append(fields, "\"types\": [\n    "+strings.Join(types, ",\n    ")+"\n  ]")
+	}
+	rels, err := jsonLines(f.Relationships)
+	if err != nil {
+		return nil, err
+	}
+	ops, err := jsonLines(f.Operations)
+	if err != nil {
+		return nil, err
+	}
+	if len(rels) > 0 {
+		fields = append(fields, "\"relationships\": [\n    "+strings.Join(rels, ",\n    ")+"\n  ]")
+	}
+	if len(ops) > 0 {
+		fields = append(fields, "\"operations\": [\n    "+strings.Join(ops, ",\n    ")+"\n  ]")
+	}
+	sort.SliceStable(f.Queries, func(i, j int) bool { return f.Queries[i].Operation < f.Queries[j].Operation })
+	queries, err := jsonLines(f.Queries)
+	if err != nil {
+		return nil, err
+	}
+	if len(queries) > 0 {
+		fields = append(fields, "\"queries\": [\n    "+strings.Join(queries, ",\n    ")+"\n  ]")
+	}
+	sort.Slice(f.RefTypes, func(i, j int) bool { return f.RefTypes[i].Schema < f.RefTypes[j].Schema })
+	refTypes, err := jsonLines(f.RefTypes)
+	if err != nil {
+		return nil, err
+	}
+	if len(refTypes) > 0 {
+		fields = append(fields, "\"refTypes\": [\n    "+strings.Join(refTypes, ",\n    ")+"\n  ]")
+	}
+	sort.Slice(f.GoTypes, func(i, j int) bool { return f.GoTypes[i].Schema < f.GoTypes[j].Schema })
+	goTypes, err := jsonLines(f.GoTypes)
+	if err != nil {
+		return nil, err
+	}
+	if len(goTypes) > 0 {
+		fields = append(fields, "\"goTypes\": [\n    "+strings.Join(goTypes, ",\n    ")+"\n  ]")
+	}
+	return []byte("{\n  " + strings.Join(fields, ",\n  ") + "\n}\n"), nil
+}
+
+// jsonLines encodes each item as one line of JSON.
+func jsonLines[T any](items []T) ([]string, error) {
+	var lines []string
+	for _, item := range items {
+		var buf bytes.Buffer
+		enc := json.NewEncoder(&buf)
+		enc.SetEscapeHTML(false)
+		if err := enc.Encode(item); err != nil {
+			return nil, err
+		}
+		lines = append(lines, strings.TrimSpace(buf.String()))
+	}
+	return lines, nil
+}
+
+func jsonString(s string) string {
+	data, _ := json.Marshal(s)
+	return string(data)
+}
+
+func (b *Bindings) produces(dir, path string) bool {
+	for _, f := range b.Families {
+		if filepath.Join(dir, f.File) == path {
+			return true
+		}
+	}
+	return false
+}
+
+// relationshipsOf returns the relationships record of a data type. A record
+// must name a type such as "R" or "*R".
+func (f *Family) relationshipsOf(data string) (*RelBind, error) {
+	for _, r := range f.Relationships {
+		if r.Data != data {
+			continue
+		}
+		if !typeName.MatchString(r.Type) {
+			return nil, fmt.Errorf("relationships of %s have type %q, not a type name", data, r.Type)
+		}
+		return r, nil
+	}
+	return nil, fmt.Errorf("no relationships record for %s", data)
+}
+
+var typeName = regexp.MustCompile(`^\*?[A-Z][A-Za-z0-9]*$`)
+
+// relationshipsNamed returns the record whose field has the named Go type,
+// or nil.
+func (f *Family) relationshipsNamed(name string) *RelBind {
+	for _, r := range f.Relationships {
+		if strings.TrimPrefix(r.Type, "*") == name {
+			return r
+		}
+	}
+	return nil
+}
+
+// refType is the Go type of the attributes that reference a schema.
+func (f *Family) refType(schema string) string {
+	for _, r := range f.RefTypes {
+		if r.Schema == schema {
+			return r.Type
+		}
+	}
+	return goTypeName(schema)
+}
+
+// goType is the Go type of a type named after a schema: the one the family
+// records, or the schema's Go name.
+func (f *Family) goType(name string) string {
+	for _, g := range f.GoTypes {
+		if g.Schema == name {
+			return g.Type
+		}
+	}
+	return goTypeName(name)
+}
+
+// Family returns the family for a tag, adding it if missing.
+func (b *Bindings) Family(tag, file string) *Family {
+	for _, f := range b.Families {
+		if f.Tag == tag {
+			return f
+		}
+	}
+	f := &Family{Tag: tag, File: file}
+	b.Families = append(b.Families, f)
+	return f
+}

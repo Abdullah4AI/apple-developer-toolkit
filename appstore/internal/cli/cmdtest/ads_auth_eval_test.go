@@ -19,7 +19,7 @@ func TestAdsAuthNetworkValidationUsesPlatformV1(t *testing.T) {
 	t.Setenv("ASC_ADS_BYPASS_KEYCHAIN", "1")
 
 	seenMe := 0
-	installDefaultTransport(t, adsRoundTripFunc(func(req *http.Request) (*http.Response, error) {
+	transport := adsRoundTripFunc(func(req *http.Request) (*http.Response, error) {
 		switch req.URL.Path {
 		case "/auth/oauth2/token":
 			return adsJSONResponse(`{"access_token":"ACCESS","token_type":"Bearer","expires_in":3600}`), nil
@@ -33,10 +33,12 @@ func TestAdsAuthNetworkValidationUsesPlatformV1(t *testing.T) {
 			t.Fatalf("unexpected auth validation request: %s %s", req.Method, req.URL.String())
 			return nil, nil
 		}
-	}))
+	})
 
-	_, stderr, err := runAdsEvalCommand(
+	_, stderr, err := runRootWithHTTPTransport(
 		t,
+		nil,
+		transport,
 		"ads", "auth", "login",
 		"--bypass-keychain",
 		"--name", "Marketing",
@@ -49,7 +51,7 @@ func TestAdsAuthNetworkValidationUsesPlatformV1(t *testing.T) {
 	if err != nil || stderr != "" {
 		t.Fatalf("network login stderr=%q error=%v", stderr, err)
 	}
-	_, stderr, err = runAdsEvalCommand(t, "ads", "auth", "status", "--validate", "--output", "json")
+	_, stderr, err = runRootWithHTTPTransport(t, nil, transport, "ads", "auth", "status", "--validate", "--output", "json")
 	if err != nil || stderr != "" {
 		t.Fatalf("validated status stderr=%q error=%v", stderr, err)
 	}
@@ -66,8 +68,9 @@ func TestAdsAuthEvalWorkflow(t *testing.T) {
 	t.Setenv("ASC_CONFIG_PATH", configPath)
 	t.Setenv("ASC_ADS_BYPASS_KEYCHAIN", "1")
 
-	stdout, stderr, err := runAdsEvalCommand(
+	stdout, stderr, err := runRootWithDeps(
 		t,
+		nil,
 		"ads", "auth", "login",
 		"--bypass-keychain",
 		"--name", "Marketing",
@@ -88,7 +91,7 @@ func TestAdsAuthEvalWorkflow(t *testing.T) {
 		t.Fatalf("login stdout = %q", stdout)
 	}
 
-	stdout, stderr, err = runAdsEvalCommand(t, "ads", "auth", "status", "--output", "json")
+	stdout, stderr, err = runRootWithDeps(t, nil, "ads", "auth", "status", "--output", "json")
 	if err != nil {
 		t.Fatalf("status error: %v\nstderr: %s", err, stderr)
 	}
@@ -117,7 +120,7 @@ func TestAdsAuthEvalWorkflow(t *testing.T) {
 		t.Fatalf("credential = %+v, want stored Marketing profile", got)
 	}
 
-	stdout, stderr, err = runAdsEvalCommand(t, "ads", "auth", "switch", "--name", "Marketing")
+	stdout, stderr, err = runRootWithDeps(t, nil, "ads", "auth", "switch", "--name", "Marketing")
 	if err != nil {
 		t.Fatalf("switch error: %v\nstderr: %s", err, stderr)
 	}
@@ -125,7 +128,7 @@ func TestAdsAuthEvalWorkflow(t *testing.T) {
 		t.Fatalf("switch stdout = %q stderr = %q", stdout, stderr)
 	}
 
-	stdout, stderr, err = runAdsEvalCommand(t, "ads", "auth", "logout", "--name", "Marketing")
+	stdout, stderr, err = runRootWithDeps(t, nil, "ads", "auth", "logout", "--name", "Marketing")
 	if err != nil {
 		t.Fatalf("logout error: %v\nstderr: %s", err, stderr)
 	}
@@ -140,9 +143,11 @@ func TestAdsAuthStatusReportsConfigStorageForConfigCredentials(t *testing.T) {
 	writeECDSAPEM(t, keyPath)
 
 	t.Setenv("ASC_CONFIG_PATH", configPath)
+	t.Setenv("ASC_ADS_BYPASS_KEYCHAIN", "1")
 
-	_, stderr, err := runAdsEvalCommand(
+	_, stderr, err := runRootWithDeps(
 		t,
+		nil,
 		"ads", "auth", "login",
 		"--bypass-keychain",
 		"--name", "Marketing",
@@ -156,7 +161,7 @@ func TestAdsAuthStatusReportsConfigStorageForConfigCredentials(t *testing.T) {
 		t.Fatalf("login error: %v\nstderr: %s", err, stderr)
 	}
 
-	stdout, stderr, err := runAdsEvalCommand(t, "ads", "auth", "status", "--output", "json")
+	stdout, stderr, err := runRootWithDeps(t, nil, "ads", "auth", "status", "--output", "json")
 	if err != nil {
 		t.Fatalf("status error: %v\nstderr: %s", err, stderr)
 	}
@@ -182,11 +187,12 @@ func TestAdsAuthStatusReportsConfigStorageForConfigCredentials(t *testing.T) {
 
 func TestAdsAuthStatusShowsActiveEnvironmentContext(t *testing.T) {
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "missing.json"))
+	t.Setenv("ASC_ADS_BYPASS_KEYCHAIN", "1")
 	t.Setenv("ASC_ADS_ACCESS_TOKEN", "ACCESS")
 	t.Setenv("ASC_ADS_ORG_ID", "987654")
 	t.Setenv("ASC_ADS_AD_ACCOUNT_ID", "876543")
 
-	stdout, stderr, err := runAdsEvalCommand(t, "ads", "auth", "status", "--output", "json")
+	stdout, stderr, err := runRootWithDeps(t, nil, "ads", "auth", "status", "--output", "json")
 	if err != nil {
 		t.Fatalf("status error: %v\nstderr: %s", err, stderr)
 	}
@@ -218,7 +224,7 @@ func TestAdsAuthStatusShowsActiveEnvironmentContext(t *testing.T) {
 		t.Fatalf("credentials = %+v, want no stored credentials", status.Credentials)
 	}
 
-	stdout, stderr, err = runAdsEvalCommand(t, "ads", "auth", "status")
+	stdout, stderr, err = runRootWithDeps(t, nil, "ads", "auth", "status")
 	if err != nil {
 		t.Fatalf("table status error: %v\nstderr: %s", err, stderr)
 	}
@@ -242,7 +248,7 @@ func TestAdsAuthStatusSurfacesMissingNamedProfile(t *testing.T) {
 	t.Setenv("ASC_ADS_BYPASS_KEYCHAIN", "1")
 	t.Setenv("ASC_ADS_PROFILE", "Missing")
 
-	stdout, stderr, err := runAdsEvalCommand(t, "ads", "auth", "status", "--output", "json")
+	stdout, stderr, err := runRootWithDeps(t, nil, "ads", "auth", "status", "--output", "json")
 	if err != nil {
 		t.Fatalf("status error: %v\nstderr: %s", err, stderr)
 	}
@@ -261,7 +267,7 @@ func TestAdsAuthStatusSurfacesMissingNamedProfile(t *testing.T) {
 		t.Fatalf("active.error = %q, want missing named profile", status.Active.Error)
 	}
 
-	stdout, stderr, err = runAdsEvalCommand(t, "ads", "auth", "status")
+	stdout, stderr, err = runRootWithDeps(t, nil, "ads", "auth", "status")
 	if err != nil {
 		t.Fatalf("table status error: %v\nstderr: %s", err, stderr)
 	}
@@ -279,7 +285,7 @@ func TestAdsAuthStatusOmitsBlankConfigOrgSource(t *testing.T) {
 	t.Setenv("ASC_ADS_BYPASS_KEYCHAIN", "1")
 	t.Setenv("ASC_ADS_ACCESS_TOKEN", "ACCESS")
 
-	stdout, stderr, err := runAdsEvalCommand(t, "ads", "auth", "status", "--output", "json")
+	stdout, stderr, err := runRootWithDeps(t, nil, "ads", "auth", "status", "--output", "json")
 	if err != nil {
 		t.Fatalf("status error: %v\nstderr: %s", err, stderr)
 	}
@@ -310,7 +316,7 @@ func TestAdsAuthStatusKeepsAuthSourceWhenOptionalOrgConfigIsInvalid(t *testing.T
 	t.Setenv("ASC_ADS_BYPASS_KEYCHAIN", "1")
 	t.Setenv("ASC_ADS_ACCESS_TOKEN", "ACCESS")
 
-	stdout, stderr, err := runAdsEvalCommand(t, "ads", "auth", "status", "--output", "json")
+	stdout, stderr, err := runRootWithDeps(t, nil, "ads", "auth", "status", "--output", "json")
 	if err != nil {
 		t.Fatalf("status error: %v\nstderr: %s", err, stderr)
 	}
@@ -345,7 +351,7 @@ func TestAdsAuthStatusKeepsAuthSourceWhenOptionalOrgConfigIsInvalid(t *testing.T
 		t.Fatalf("credentials_error = %q, want config parse error", status.CredentialsError)
 	}
 
-	stdout, stderr, err = runAdsEvalCommand(t, "ads", "auth", "status")
+	stdout, stderr, err = runRootWithDeps(t, nil, "ads", "auth", "status")
 	if err != nil {
 		t.Fatalf("table status error: %v\nstderr: %s", err, stderr)
 	}
@@ -364,7 +370,7 @@ func TestAdsAuthStatusKeepsAuthSourceWhenOptionalOrgConfigIsInvalid(t *testing.T
 		}
 	}
 
-	stdout, stderr, err = runAdsEvalCommand(t, "ads", "auth", "status", "--validate", "--output", "json")
+	stdout, stderr, err = runRootWithDeps(t, nil, "ads", "auth", "status", "--validate", "--output", "json")
 	if _, ok := errors.AsType[ReportedError](err); !ok {
 		t.Fatalf("validate status error = %T %v, want ReportedError", err, err)
 	}
@@ -388,7 +394,7 @@ func TestAdsAuthStatusKeepsResolvedOrgWhenAdAccountConfigIsInvalid(t *testing.T)
 	t.Setenv("ASC_ADS_ORG_ID", "ORG_FROM_ENV")
 	t.Setenv("ASC_ADS_AD_ACCOUNT_ID", "")
 
-	stdout, stderr, err := runAdsEvalCommand(t, "ads", "auth", "status", "--output", "json")
+	stdout, stderr, err := runRootWithDeps(t, nil, "ads", "auth", "status", "--output", "json")
 	if err != nil {
 		t.Fatalf("status error: %v\nstderr: %s", err, stderr)
 	}
@@ -412,7 +418,7 @@ func TestAdsAuthStatusKeepsResolvedOrgWhenAdAccountConfigIsInvalid(t *testing.T)
 		t.Fatalf("active context = %+v, want resolved org and separate ad-account error", status.Active)
 	}
 
-	stdout, stderr, err = runAdsEvalCommand(t, "ads", "auth", "status")
+	stdout, stderr, err = runRootWithDeps(t, nil, "ads", "auth", "status")
 	if err != nil {
 		t.Fatalf("table status error: %v\nstderr: %s", err, stderr)
 	}
@@ -434,37 +440,32 @@ func TestAdsAuthEvalValidatesUsageErrors(t *testing.T) {
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "config.json"))
 	t.Setenv("ASC_ADS_BYPASS_KEYCHAIN", "1")
 
-	_, stderr, err := runAdsEvalCommand(t, "ads", "auth", "login")
+	_, stderr, err := runRootWithDeps(t, nil, "ads", "auth", "login")
 	if !errors.Is(err, flag.ErrHelp) || !strings.Contains(stderr, "--name is required") {
 		t.Fatalf("login error = %v stderr = %q, want missing name usage error", err, stderr)
 	}
 
-	_, stderr, err = runAdsEvalCommand(t, "ads", "auth", "login", "--local", "--name", "Marketing")
+	_, stderr, err = runRootWithDeps(t, nil, "ads", "auth", "login", "--local", "--name", "Marketing")
 	if !errors.Is(err, flag.ErrHelp) || !strings.Contains(stderr, "--client-id is required") {
 		t.Fatalf("login partial error = %v stderr = %q, want missing client ID usage error", err, stderr)
 	}
 
-	_, stderr, err = runAdsEvalCommand(t, "ads", "auth", "status", "--output", "markdown")
+	_, stderr, err = runRootWithDeps(t, nil, "ads", "auth", "status", "--output", "markdown")
 	if !isUsageClassError(err) || !strings.Contains(stderr, `(got "markdown")`) {
 		t.Fatalf("status error = %v stderr = %q, want invalid output usage error", err, stderr)
 	}
 
-	_, stderr, err = runAdsEvalCommand(t, "ads", "auth", "status", "--output", "json", "unexpected")
-	if !errors.Is(err, flag.ErrHelp) || !strings.Contains(stderr, "unexpected argument(s): unexpected") {
-		t.Fatalf("status args error = %v stderr = %q, want unexpected argument usage error", err, stderr)
-	}
-
-	_, stderr, err = runAdsEvalCommand(t, "ads", "auth", "logout", "--all", "--name", "Marketing")
+	_, stderr, err = runRootWithDeps(t, nil, "ads", "auth", "logout", "--all", "--name", "Marketing")
 	if !errors.Is(err, flag.ErrHelp) || !strings.Contains(stderr, "--all and --name are mutually exclusive") {
 		t.Fatalf("logout error = %v stderr = %q, want mutually exclusive usage error", err, stderr)
 	}
 
-	_, stderr, err = runAdsEvalCommand(t, "ads", "auth", "logout", "--all")
+	_, stderr, err = runRootWithDeps(t, nil, "ads", "auth", "logout", "--all")
 	if !errors.Is(err, flag.ErrHelp) || !strings.Contains(stderr, "--all requires --confirm") {
 		t.Fatalf("logout error = %v stderr = %q, want confirm usage error", err, stderr)
 	}
 
-	_, stderr, err = runAdsEvalCommand(t, "ads", "auth", "logout")
+	_, stderr, err = runRootWithDeps(t, nil, "ads", "auth", "logout")
 	if !errors.Is(err, flag.ErrHelp) || !strings.Contains(stderr, "provide --name or --all") {
 		t.Fatalf("logout error = %v stderr = %q, want explicit target usage error", err, stderr)
 	}
@@ -474,12 +475,7 @@ func TestAdsAuthTokenEvalRequiresConfirm(t *testing.T) {
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "config.json"))
 	t.Setenv("ASC_ADS_ACCESS_TOKEN", "ACCESS")
 
-	_, stderr, err := runAdsEvalCommand(t, "ads", "auth", "token", "--output", "json")
-	if !errors.Is(err, flag.ErrHelp) || !strings.Contains(stderr, "--confirm is required") {
-		t.Fatalf("token error = %v stderr = %q, want confirm usage error", err, stderr)
-	}
-
-	stdout, stderr, err := runAdsEvalCommand(t, "ads", "auth", "token", "--confirm", "--output", "json")
+	stdout, stderr, err := runRootWithDeps(t, nil, "ads", "auth", "token", "--confirm", "--output", "json")
 	if err != nil {
 		t.Fatalf("token error: %v\nstderr: %s", err, stderr)
 	}

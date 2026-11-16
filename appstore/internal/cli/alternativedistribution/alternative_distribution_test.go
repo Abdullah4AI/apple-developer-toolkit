@@ -1,14 +1,22 @@
 package alternativedistribution
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"flag"
+	"os"
 	"testing"
+
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
+func newTestDeps() *shared.Deps {
+	return &shared.Deps{IO: &shared.IO{Out: &bytes.Buffer{}, ErrOut: &bytes.Buffer{}}, LookupEnv: os.LookupEnv}
+}
+
 func TestAlternativeDistributionDomainsGetCommand_MissingID(t *testing.T) {
-	cmd := AlternativeDistributionDomainsGetCommand()
+	cmd := newAlternativeDistributionDomainsGetCommand(newTestDeps())
 	if err := cmd.FlagSet.Parse([]string{}); err != nil {
 		t.Fatalf("failed to parse flags: %v", err)
 	}
@@ -19,7 +27,7 @@ func TestAlternativeDistributionDomainsGetCommand_MissingID(t *testing.T) {
 }
 
 func TestAlternativeDistributionDomainsCreateCommand_MissingDomain(t *testing.T) {
-	cmd := AlternativeDistributionDomainsCreateCommand()
+	cmd := newAlternativeDistributionDomainsCreateCommand(newTestDeps())
 	if err := cmd.FlagSet.Parse([]string{"--reference-name", "Example"}); err != nil {
 		t.Fatalf("failed to parse flags: %v", err)
 	}
@@ -30,7 +38,7 @@ func TestAlternativeDistributionDomainsCreateCommand_MissingDomain(t *testing.T)
 }
 
 func TestAlternativeDistributionDomainsCreateCommand_MissingReferenceName(t *testing.T) {
-	cmd := AlternativeDistributionDomainsCreateCommand()
+	cmd := newAlternativeDistributionDomainsCreateCommand(newTestDeps())
 	if err := cmd.FlagSet.Parse([]string{"--domain", "example.com"}); err != nil {
 		t.Fatalf("failed to parse flags: %v", err)
 	}
@@ -41,7 +49,7 @@ func TestAlternativeDistributionDomainsCreateCommand_MissingReferenceName(t *tes
 }
 
 func TestAlternativeDistributionDomainsDeleteCommand_MissingID(t *testing.T) {
-	cmd := AlternativeDistributionDomainsDeleteCommand()
+	cmd := newAlternativeDistributionDomainsDeleteCommand(newTestDeps())
 	if err := cmd.FlagSet.Parse([]string{"--confirm"}); err != nil {
 		t.Fatalf("failed to parse flags: %v", err)
 	}
@@ -52,7 +60,7 @@ func TestAlternativeDistributionDomainsDeleteCommand_MissingID(t *testing.T) {
 }
 
 func TestAlternativeDistributionDomainsDeleteCommand_MissingConfirm(t *testing.T) {
-	cmd := AlternativeDistributionDomainsDeleteCommand()
+	cmd := newAlternativeDistributionDomainsDeleteCommand(newTestDeps())
 	if err := cmd.FlagSet.Parse([]string{"--domain-id", "DOMAIN_ID"}); err != nil {
 		t.Fatalf("failed to parse flags: %v", err)
 	}
@@ -63,7 +71,7 @@ func TestAlternativeDistributionDomainsDeleteCommand_MissingConfirm(t *testing.T
 }
 
 func TestAlternativeDistributionKeysGetCommand_MissingID(t *testing.T) {
-	cmd := AlternativeDistributionKeysGetCommand()
+	cmd := newAlternativeDistributionKeysGetCommand(newTestDeps())
 	if err := cmd.FlagSet.Parse([]string{}); err != nil {
 		t.Fatalf("failed to parse flags: %v", err)
 	}
@@ -76,7 +84,7 @@ func TestAlternativeDistributionKeysGetCommand_MissingID(t *testing.T) {
 func TestAlternativeDistributionKeysCreateCommand_MissingApp(t *testing.T) {
 	t.Setenv("ASC_APP_ID", "")
 
-	cmd := AlternativeDistributionKeysCreateCommand()
+	cmd := newAlternativeDistributionKeysCreateCommand(newTestDeps())
 	if err := cmd.FlagSet.Parse([]string{"--public-key", "KEY"}); err != nil {
 		t.Fatalf("failed to parse flags: %v", err)
 	}
@@ -87,7 +95,7 @@ func TestAlternativeDistributionKeysCreateCommand_MissingApp(t *testing.T) {
 }
 
 func TestAlternativeDistributionKeysCreateCommand_MissingKey(t *testing.T) {
-	cmd := AlternativeDistributionKeysCreateCommand()
+	cmd := newAlternativeDistributionKeysCreateCommand(newTestDeps())
 	if err := cmd.FlagSet.Parse([]string{"--app", "APP_ID"}); err != nil {
 		t.Fatalf("failed to parse flags: %v", err)
 	}
@@ -97,19 +105,8 @@ func TestAlternativeDistributionKeysCreateCommand_MissingKey(t *testing.T) {
 	}
 }
 
-func TestAlternativeDistributionKeysCreateCommand_ConflictingKeyInputs(t *testing.T) {
-	cmd := AlternativeDistributionKeysCreateCommand()
-	if err := cmd.FlagSet.Parse([]string{"--app", "APP_ID", "--public-key", "KEY", "--public-key-path", "./key.pem"}); err != nil {
-		t.Fatalf("failed to parse flags: %v", err)
-	}
-
-	if err := cmd.Exec(context.Background(), []string{}); err == nil || errors.Is(err, flag.ErrHelp) {
-		t.Fatalf("expected validation error for conflicting key inputs, got %v", err)
-	}
-}
-
 func TestAlternativeDistributionKeysDeleteCommand_MissingID(t *testing.T) {
-	cmd := AlternativeDistributionKeysDeleteCommand()
+	cmd := newAlternativeDistributionKeysDeleteCommand(newTestDeps())
 	if err := cmd.FlagSet.Parse([]string{"--confirm"}); err != nil {
 		t.Fatalf("failed to parse flags: %v", err)
 	}
@@ -120,7 +117,7 @@ func TestAlternativeDistributionKeysDeleteCommand_MissingID(t *testing.T) {
 }
 
 func TestAlternativeDistributionKeysDeleteCommand_MissingConfirm(t *testing.T) {
-	cmd := AlternativeDistributionKeysDeleteCommand()
+	cmd := newAlternativeDistributionKeysDeleteCommand(newTestDeps())
 	if err := cmd.FlagSet.Parse([]string{"--key-id", "KEY_ID"}); err != nil {
 		t.Fatalf("failed to parse flags: %v", err)
 	}
@@ -133,7 +130,7 @@ func TestAlternativeDistributionKeysDeleteCommand_MissingConfirm(t *testing.T) {
 func TestAlternativeDistributionKeysAppCommand_MissingApp(t *testing.T) {
 	t.Setenv("ASC_APP_ID", "")
 
-	cmd := AlternativeDistributionKeysAppCommand()
+	cmd := newAlternativeDistributionKeysAppCommand(newTestDeps())
 	if err := cmd.FlagSet.Parse([]string{}); err != nil {
 		t.Fatalf("failed to parse flags: %v", err)
 	}
@@ -144,7 +141,7 @@ func TestAlternativeDistributionKeysAppCommand_MissingApp(t *testing.T) {
 }
 
 func TestAlternativeDistributionPackagesGetCommand_MissingID(t *testing.T) {
-	cmd := AlternativeDistributionPackagesGetCommand()
+	cmd := newAlternativeDistributionPackagesGetCommand(newTestDeps())
 	if err := cmd.FlagSet.Parse([]string{}); err != nil {
 		t.Fatalf("failed to parse flags: %v", err)
 	}
@@ -155,7 +152,7 @@ func TestAlternativeDistributionPackagesGetCommand_MissingID(t *testing.T) {
 }
 
 func TestAlternativeDistributionPackagesCreateCommand_MissingAppStoreVersionID(t *testing.T) {
-	cmd := AlternativeDistributionPackagesCreateCommand()
+	cmd := newAlternativeDistributionPackagesCreateCommand(newTestDeps())
 	if err := cmd.FlagSet.Parse([]string{}); err != nil {
 		t.Fatalf("failed to parse flags: %v", err)
 	}
@@ -166,7 +163,7 @@ func TestAlternativeDistributionPackagesCreateCommand_MissingAppStoreVersionID(t
 }
 
 func TestAlternativeDistributionPackagesAppStoreVersionCommand_MissingID(t *testing.T) {
-	cmd := AlternativeDistributionPackagesAppStoreVersionCommand()
+	cmd := newAlternativeDistributionPackagesAppStoreVersionCommand(newTestDeps())
 	if err := cmd.FlagSet.Parse([]string{}); err != nil {
 		t.Fatalf("failed to parse flags: %v", err)
 	}
@@ -177,7 +174,7 @@ func TestAlternativeDistributionPackagesAppStoreVersionCommand_MissingID(t *test
 }
 
 func TestAlternativeDistributionPackageVariantsCommand_MissingID(t *testing.T) {
-	cmd := AlternativeDistributionPackageVariantsCommand()
+	cmd := newAlternativeDistributionPackageVariantsCommand(newTestDeps())
 	if err := cmd.FlagSet.Parse([]string{}); err != nil {
 		t.Fatalf("failed to parse flags: %v", err)
 	}
@@ -188,7 +185,7 @@ func TestAlternativeDistributionPackageVariantsCommand_MissingID(t *testing.T) {
 }
 
 func TestAlternativeDistributionPackageDeltasCommand_MissingID(t *testing.T) {
-	cmd := AlternativeDistributionPackageDeltasCommand()
+	cmd := newAlternativeDistributionPackageDeltasCommand(newTestDeps())
 	if err := cmd.FlagSet.Parse([]string{}); err != nil {
 		t.Fatalf("failed to parse flags: %v", err)
 	}
@@ -199,7 +196,7 @@ func TestAlternativeDistributionPackageDeltasCommand_MissingID(t *testing.T) {
 }
 
 func TestAlternativeDistributionPackageVersionsGetCommand_MissingID(t *testing.T) {
-	cmd := AlternativeDistributionPackageVersionsGetCommand()
+	cmd := newAlternativeDistributionPackageVersionsGetCommand(newTestDeps())
 	if err := cmd.FlagSet.Parse([]string{}); err != nil {
 		t.Fatalf("failed to parse flags: %v", err)
 	}
@@ -210,7 +207,7 @@ func TestAlternativeDistributionPackageVersionsGetCommand_MissingID(t *testing.T
 }
 
 func TestAlternativeDistributionPackageVersionsListCommand_MissingID(t *testing.T) {
-	cmd := AlternativeDistributionPackageVersionsListCommand()
+	cmd := newAlternativeDistributionPackageVersionsListCommand(newTestDeps())
 	if err := cmd.FlagSet.Parse([]string{}); err != nil {
 		t.Fatalf("failed to parse flags: %v", err)
 	}
@@ -221,7 +218,7 @@ func TestAlternativeDistributionPackageVersionsListCommand_MissingID(t *testing.
 }
 
 func TestAlternativeDistributionPackageVersionsDeltasCommand_MissingID(t *testing.T) {
-	cmd := AlternativeDistributionPackageVersionsDeltasCommand()
+	cmd := newAlternativeDistributionPackageVersionsDeltasCommand(newTestDeps())
 	if err := cmd.FlagSet.Parse([]string{}); err != nil {
 		t.Fatalf("failed to parse flags: %v", err)
 	}
@@ -232,7 +229,7 @@ func TestAlternativeDistributionPackageVersionsDeltasCommand_MissingID(t *testin
 }
 
 func TestAlternativeDistributionPackageVersionsVariantsCommand_MissingID(t *testing.T) {
-	cmd := AlternativeDistributionPackageVersionsVariantsCommand()
+	cmd := newAlternativeDistributionPackageVersionsVariantsCommand(newTestDeps())
 	if err := cmd.FlagSet.Parse([]string{}); err != nil {
 		t.Fatalf("failed to parse flags: %v", err)
 	}

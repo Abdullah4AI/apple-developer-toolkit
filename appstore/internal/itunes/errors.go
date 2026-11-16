@@ -1,6 +1,10 @@
 package itunes
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
+)
 
 type httpStatusError struct {
 	operation  string
@@ -17,4 +21,16 @@ func (e *httpStatusError) HTTPStatusCode() int {
 
 func (e *httpStatusError) PublicStorefrontError() bool {
 	return true
+}
+
+type notFoundError struct {
+	message string
+}
+
+func (e *notFoundError) Error() string {
+	return e.message
+}
+
+func (e *notFoundError) Unwrap() error {
+	return asc.ErrNotFound
 }

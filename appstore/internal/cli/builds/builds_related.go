@@ -25,10 +25,10 @@ func (e buildBetaAppReviewSubmissionNotFoundError) Unwrap() error {
 	return asc.ErrNotFound
 }
 
-// BuildsAppCommand returns the builds app command group.
-func BuildsAppCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("app", flag.ExitOnError)
-	viewCmd := BuildsAppViewCommand()
+// newBuildsAppCommand returns the builds app command group.
+func newBuildsAppCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("app", flag.ExitOnError)
+	viewCmd := newBuildsAppViewCommand(d)
 
 	return &ffcli.Command{
 		Name:       "app",
@@ -40,7 +40,7 @@ Examples:
   asc builds app view --build-id "BUILD_ID"
   asc builds app view --app "123456789" --latest`,
 		FlagSet:   fs,
-		UsageFunc: shared.VisibleUsageFunc,
+		UsageFunc: d.VisibleUsageFunc,
 		Subcommands: []*ffcli.Command{
 			viewCmd,
 		},
@@ -50,12 +50,12 @@ Examples:
 	}
 }
 
-// BuildsAppViewCommand returns the builds app view subcommand.
-func BuildsAppViewCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("app view", flag.ExitOnError)
+// newBuildsAppViewCommand returns the builds app view subcommand.
+func newBuildsAppViewCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("app view", flag.ExitOnError)
 
-	selectors := bindBuildSelectorFlags(fs, buildSelectorFlagOptions{})
-	output := shared.BindOutputFlags(fs)
+	selectors := bindBuildSelectorFlags(d, fs, buildSelectorFlagOptions{})
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "view",
@@ -67,18 +67,18 @@ Examples:
   asc builds app view --build-id "BUILD_ID"
   asc builds app view --app "123456789" --latest`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			if err := selectors.validate(); err != nil {
 				return err
 			}
 
-			client, err := shared.GetASCClient()
+			client, err := d.Client()
 			if err != nil {
 				return fmt.Errorf("builds app view: %w", err)
 			}
 
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
+			requestCtx, cancel := d.Timeout(ctx)
 			defer cancel()
 
 			buildID, err := selectors.resolveBuildID(requestCtx, client)
@@ -91,15 +91,15 @@ Examples:
 				return fmt.Errorf("builds app view: failed to fetch: %w", err)
 			}
 
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+			return d.PrintOutput(resp, *output.Output, *output.Pretty)
 		},
 	}
 }
 
-// BuildsPreReleaseVersionCommand returns the pre-release-version command group.
-func BuildsPreReleaseVersionCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("pre-release-version", flag.ExitOnError)
-	viewCmd := BuildsPreReleaseVersionViewCommand()
+// newBuildsPreReleaseVersionCommand returns the pre-release-version command group.
+func newBuildsPreReleaseVersionCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("pre-release-version", flag.ExitOnError)
+	viewCmd := newBuildsPreReleaseVersionViewCommand(d)
 
 	return &ffcli.Command{
 		Name:       "pre-release-version",
@@ -111,7 +111,7 @@ Examples:
   asc builds pre-release-version view --build-id "BUILD_ID"
   asc builds pre-release-version view --app "123456789" --latest`,
 		FlagSet:   fs,
-		UsageFunc: shared.VisibleUsageFunc,
+		UsageFunc: d.VisibleUsageFunc,
 		Subcommands: []*ffcli.Command{
 			viewCmd,
 		},
@@ -121,12 +121,12 @@ Examples:
 	}
 }
 
-// BuildsPreReleaseVersionViewCommand returns the pre-release-version view subcommand.
-func BuildsPreReleaseVersionViewCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("pre-release-version view", flag.ExitOnError)
+// newBuildsPreReleaseVersionViewCommand returns the pre-release-version view subcommand.
+func newBuildsPreReleaseVersionViewCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("pre-release-version view", flag.ExitOnError)
 
-	selectors := bindBuildSelectorFlags(fs, buildSelectorFlagOptions{})
-	output := shared.BindOutputFlags(fs)
+	selectors := bindBuildSelectorFlags(d, fs, buildSelectorFlagOptions{})
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "view",
@@ -138,18 +138,18 @@ Examples:
   asc builds pre-release-version view --build-id "BUILD_ID"
   asc builds pre-release-version view --app "123456789" --latest`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			if err := selectors.validate(); err != nil {
 				return err
 			}
 
-			client, err := shared.GetASCClient()
+			client, err := d.Client()
 			if err != nil {
 				return fmt.Errorf("builds pre-release-version view: %w", err)
 			}
 
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
+			requestCtx, cancel := d.Timeout(ctx)
 			defer cancel()
 
 			buildID, err := selectors.resolveBuildID(requestCtx, client)
@@ -162,14 +162,14 @@ Examples:
 				return fmt.Errorf("builds pre-release-version view: failed to fetch: %w", err)
 			}
 
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+			return d.PrintOutput(resp, *output.Output, *output.Pretty)
 		},
 	}
 }
 
-// BuildsIconsCommand returns the builds icons command group.
-func BuildsIconsCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("icons", flag.ExitOnError)
+// newBuildsIconsCommand returns the builds icons command group.
+func newBuildsIconsCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("icons", flag.ExitOnError)
 
 	return &ffcli.Command{
 		Name:       "icons",
@@ -181,9 +181,9 @@ Examples:
   asc builds icons list --build-id "BUILD_ID"
   asc builds icons list --app "123456789" --latest`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
-			BuildsIconsListCommand(),
+			newBuildsIconsListCommand(d),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp
@@ -191,97 +191,54 @@ Examples:
 	}
 }
 
-// BuildsIconsListCommand returns the builds icons list subcommand.
-func BuildsIconsListCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("icons list", flag.ExitOnError)
+// newBuildsIconsListCommand returns the builds icons list subcommand.
+func newBuildsIconsListCommand(d *shared.Deps) *ffcli.Command {
+	var selectors buildSelectorFlags
 
-	selectors := bindBuildSelectorFlags(fs, buildSelectorFlagOptions{})
-	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
-	next := fs.String("next", "", "Fetch next page using a links.next URL")
-	paginate := fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")
-	output := shared.BindOutputFlags(fs)
-
-	return &ffcli.Command{
-		Name:       "list",
-		ShortUsage: "asc builds icons list [flags]",
-		ShortHelp:  "List build icons for a build.",
+	return shared.BuildPaginatedListCommand(shared.PaginatedListCommandConfig{
+		Deps:        d,
+		FlagSetName: "icons list",
+		Name:        "list",
+		ShortUsage:  "asc builds icons list [flags]",
+		ShortHelp:   "List build icons for a build.",
 		LongHelp: `List build icons for a build.
 
 Examples:
   asc builds icons list --build-id "BUILD_ID"
   asc builds icons list --app "123456789" --latest
   asc builds icons list --app "123456789" --latest --paginate`,
-		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
-		Exec: func(ctx context.Context, args []string) error {
-			if *limit != 0 && (*limit < 1 || *limit > 200) {
-				return shared.UsageError("builds icons list: --limit must be between 1 and 200")
-			}
-			if err := shared.ValidateNextURL(*next); err != nil {
-				return shared.UsageErrorf("builds icons list: %v", err)
-			}
-
-			nextValue := strings.TrimSpace(*next)
-			if nextValue == "" {
-				if err := selectors.validate(); err != nil {
-					return err
+		TopLevel:             true,
+		PaginateIgnoresLimit: true,
+		Flags: func(fs *flag.FlagSet) func() error {
+			selectors = bindBuildSelectorFlags(d, fs, buildSelectorFlagOptions{})
+			next := fs.Lookup("next").Value
+			return func() error {
+				if strings.TrimSpace(next.String()) == "" {
+					return selectors.validate()
 				}
-			} else if err := selectors.validateNextPageSelectorFlags(); err != nil {
-				return fmt.Errorf("builds icons list: %w", err)
-			}
-
-			client, err := shared.GetASCClient()
-			if err != nil {
-				return fmt.Errorf("builds icons list: %w", err)
-			}
-
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
-			defer cancel()
-
-			buildID := ""
-			if nextValue == "" {
-				buildID, err = selectors.resolveBuildID(requestCtx, client)
-				if err != nil {
+				if err := selectors.validateNextPageSelectorFlags(); err != nil {
 					return fmt.Errorf("builds icons list: %w", err)
 				}
+				return nil
 			}
-
-			opts := []asc.BuildIconsOption{
-				asc.WithBuildIconsLimit(*limit),
-				asc.WithBuildIconsNextURL(*next),
-			}
-
-			if *paginate {
-				paginateOpts := append(opts, asc.WithBuildIconsLimit(200))
-				resp, err := shared.PaginateWithSpinner(
-					requestCtx,
-					func(ctx context.Context) (asc.PaginatedResponse, error) {
-						return client.GetBuildIcons(ctx, buildID, paginateOpts...)
-					},
-					func(ctx context.Context, nextURL string) (asc.PaginatedResponse, error) {
-						return client.GetBuildIcons(ctx, buildID, asc.WithBuildIconsNextURL(nextURL))
-					},
-				)
-				if err != nil {
-					return fmt.Errorf("builds icons list: %w", err)
-				}
-				return shared.PrintOutput(resp, *output.Output, *output.Pretty)
-			}
-
-			resp, err := client.GetBuildIcons(requestCtx, buildID, opts...)
-			if err != nil {
-				return fmt.Errorf("builds icons list: failed to fetch: %w", err)
-			}
-
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
 		},
-	}
+		LookupParent: func(ctx context.Context, client *asc.Client, _ string) (string, error) {
+			buildID, err := selectors.resolveBuildID(ctx, client)
+			if err != nil {
+				return "", fmt.Errorf("builds icons list: %w", err)
+			}
+			return buildID, nil
+		},
+		FetchPage: func(ctx context.Context, client *asc.Client, buildID string, limit int, next string) (asc.PaginatedResponse, error) {
+			return client.GetBuildIcons(ctx, buildID, asc.Limit[asc.BuildIconsOption](limit), asc.NextURL[asc.BuildIconsOption](next))
+		},
+	})
 }
 
-// BuildsBetaAppReviewSubmissionCommand returns the beta-app-review-submission command group.
-func BuildsBetaAppReviewSubmissionCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("beta-app-review-submission", flag.ExitOnError)
-	viewCmd := BuildsBetaAppReviewSubmissionViewCommand()
+// newBuildsBetaAppReviewSubmissionCommand returns the beta-app-review-submission command group.
+func newBuildsBetaAppReviewSubmissionCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("beta-app-review-submission", flag.ExitOnError)
+	viewCmd := newBuildsBetaAppReviewSubmissionViewCommand(d)
 
 	return &ffcli.Command{
 		Name:       "beta-app-review-submission",
@@ -293,7 +250,7 @@ Examples:
   asc builds beta-app-review-submission view --build-id "BUILD_ID"
   asc builds beta-app-review-submission view --app "123456789" --latest`,
 		FlagSet:   fs,
-		UsageFunc: shared.VisibleUsageFunc,
+		UsageFunc: d.VisibleUsageFunc,
 		Subcommands: []*ffcli.Command{
 			viewCmd,
 		},
@@ -303,12 +260,12 @@ Examples:
 	}
 }
 
-// BuildsBetaAppReviewSubmissionViewCommand returns the beta-app-review-submission view subcommand.
-func BuildsBetaAppReviewSubmissionViewCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("beta-app-review-submission view", flag.ExitOnError)
+// newBuildsBetaAppReviewSubmissionViewCommand returns the beta-app-review-submission view subcommand.
+func newBuildsBetaAppReviewSubmissionViewCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("beta-app-review-submission view", flag.ExitOnError)
 
-	selectors := bindBuildSelectorFlags(fs, buildSelectorFlagOptions{})
-	output := shared.BindOutputFlags(fs)
+	selectors := bindBuildSelectorFlags(d, fs, buildSelectorFlagOptions{})
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "view",
@@ -320,18 +277,18 @@ Examples:
   asc builds beta-app-review-submission view --build-id "BUILD_ID"
   asc builds beta-app-review-submission view --app "123456789" --latest`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			if err := selectors.validate(); err != nil {
 				return err
 			}
 
-			client, err := shared.GetASCClient()
+			client, err := d.Client()
 			if err != nil {
 				return fmt.Errorf("builds beta-app-review-submission view: %w", err)
 			}
 
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
+			requestCtx, cancel := d.Timeout(ctx)
 			defer cancel()
 
 			buildID, err := selectors.resolveBuildID(requestCtx, client)
@@ -348,15 +305,15 @@ Examples:
 				return fmt.Errorf("builds beta-app-review-submission view: failed to fetch: %w", err)
 			}
 
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+			return d.PrintOutput(resp, *output.Output, *output.Pretty)
 		},
 	}
 }
 
-// BuildsBuildBetaDetailCommand returns the build-beta-detail command group.
-func BuildsBuildBetaDetailCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("build-beta-detail", flag.ExitOnError)
-	viewCmd := BuildsBuildBetaDetailViewCommand()
+// newBuildsBuildBetaDetailCommand returns the build-beta-detail command group.
+func newBuildsBuildBetaDetailCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("build-beta-detail", flag.ExitOnError)
+	viewCmd := newBuildsBuildBetaDetailViewCommand(d)
 
 	return &ffcli.Command{
 		Name:       "build-beta-detail",
@@ -368,7 +325,7 @@ Examples:
   asc builds build-beta-detail view --build-id "BUILD_ID"
   asc builds build-beta-detail view --app "123456789" --latest`,
 		FlagSet:   fs,
-		UsageFunc: shared.VisibleUsageFunc,
+		UsageFunc: d.VisibleUsageFunc,
 		Subcommands: []*ffcli.Command{
 			viewCmd,
 		},
@@ -378,12 +335,12 @@ Examples:
 	}
 }
 
-// BuildsBuildBetaDetailViewCommand returns the build-beta-detail view subcommand.
-func BuildsBuildBetaDetailViewCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("build-beta-detail view", flag.ExitOnError)
+// newBuildsBuildBetaDetailViewCommand returns the build-beta-detail view subcommand.
+func newBuildsBuildBetaDetailViewCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("build-beta-detail view", flag.ExitOnError)
 
-	selectors := bindBuildSelectorFlags(fs, buildSelectorFlagOptions{})
-	output := shared.BindOutputFlags(fs)
+	selectors := bindBuildSelectorFlags(d, fs, buildSelectorFlagOptions{})
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "view",
@@ -395,18 +352,18 @@ Examples:
   asc builds build-beta-detail view --build-id "BUILD_ID"
   asc builds build-beta-detail view --app "123456789" --latest`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			if err := selectors.validate(); err != nil {
 				return err
 			}
 
-			client, err := shared.GetASCClient()
+			client, err := d.Client()
 			if err != nil {
 				return fmt.Errorf("builds build-beta-detail view: %w", err)
 			}
 
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
+			requestCtx, cancel := d.Timeout(ctx)
 			defer cancel()
 
 			buildID, err := selectors.resolveBuildID(requestCtx, client)
@@ -419,7 +376,7 @@ Examples:
 				return fmt.Errorf("builds build-beta-detail view: failed to fetch: %w", err)
 			}
 
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+			return d.PrintOutput(resp, *output.Output, *output.Pretty)
 		},
 	}
 }

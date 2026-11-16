@@ -2,7 +2,6 @@ package asc
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
@@ -17,96 +16,10 @@ type RoutingAppCoverageAttributes struct {
 	AssetDeliveryState *AppMediaAssetState `json:"assetDeliveryState,omitempty"`
 }
 
-// RoutingAppCoverageResponse is the response for routing app coverage endpoints.
-type RoutingAppCoverageResponse = SingleResponse[RoutingAppCoverageAttributes]
-
 // RoutingAppCoverageCreateAttributes describes create attributes.
 type RoutingAppCoverageCreateAttributes struct {
 	FileSize int64  `json:"fileSize"`
 	FileName string `json:"fileName"`
-}
-
-// RoutingAppCoverageRelationships describes routing app coverage relationships.
-type RoutingAppCoverageRelationships struct {
-	AppStoreVersion *Relationship `json:"appStoreVersion"`
-}
-
-// RoutingAppCoverageCreateData is the data portion of a create request.
-type RoutingAppCoverageCreateData struct {
-	Type          ResourceType                       `json:"type"`
-	Attributes    RoutingAppCoverageCreateAttributes `json:"attributes"`
-	Relationships *RoutingAppCoverageRelationships   `json:"relationships"`
-}
-
-// RoutingAppCoverageCreateRequest is a request to create routing app coverage.
-type RoutingAppCoverageCreateRequest struct {
-	Data RoutingAppCoverageCreateData `json:"data"`
-}
-
-// RoutingAppCoverageUpdateAttributes describes update attributes.
-type RoutingAppCoverageUpdateAttributes struct {
-	SourceFileChecksum *string `json:"sourceFileChecksum,omitempty"`
-	Uploaded           *bool   `json:"uploaded,omitempty"`
-}
-
-// RoutingAppCoverageUpdateData is the data portion of an update request.
-type RoutingAppCoverageUpdateData struct {
-	Type       ResourceType                        `json:"type"`
-	ID         string                              `json:"id"`
-	Attributes *RoutingAppCoverageUpdateAttributes `json:"attributes,omitempty"`
-}
-
-// RoutingAppCoverageUpdateRequest is a request to update routing app coverage.
-type RoutingAppCoverageUpdateRequest struct {
-	Data RoutingAppCoverageUpdateData `json:"data"`
-}
-
-// RoutingAppCoverageDeleteResult represents CLI output for deletions.
-type RoutingAppCoverageDeleteResult struct {
-	ID      string `json:"id"`
-	Deleted bool   `json:"deleted"`
-}
-
-// GetRoutingAppCoverage retrieves routing app coverage by ID.
-func (c *Client) GetRoutingAppCoverage(ctx context.Context, coverageID string) (*RoutingAppCoverageResponse, error) {
-	coverageID = strings.TrimSpace(coverageID)
-	if coverageID == "" {
-		return nil, fmt.Errorf("coverageID is required")
-	}
-
-	path := fmt.Sprintf("/v1/routingAppCoverages/%s", coverageID)
-	data, err := c.do(ctx, http.MethodGet, path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var response RoutingAppCoverageResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
-// GetRoutingAppCoverageForVersion retrieves routing app coverage for an app store version.
-func (c *Client) GetRoutingAppCoverageForVersion(ctx context.Context, versionID string) (*RoutingAppCoverageResponse, error) {
-	versionID = strings.TrimSpace(versionID)
-	if versionID == "" {
-		return nil, fmt.Errorf("versionID is required")
-	}
-
-	path := fmt.Sprintf("/v1/appStoreVersions/%s/routingAppCoverage", versionID)
-	data, err := c.do(ctx, http.MethodGet, path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var response RoutingAppCoverageResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
 }
 
 // CreateRoutingAppCoverage creates a routing app coverage upload reservation.
@@ -141,66 +54,5 @@ func (c *Client) CreateRoutingAppCoverage(ctx context.Context, versionID, fileNa
 		},
 	}
 
-	body, err := BuildRequestBody(payload)
-	if err != nil {
-		return nil, err
-	}
-
-	data, err := c.do(ctx, http.MethodPost, "/v1/routingAppCoverages", body)
-	if err != nil {
-		return nil, err
-	}
-
-	var response RoutingAppCoverageResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
-// UpdateRoutingAppCoverage updates routing app coverage by ID.
-func (c *Client) UpdateRoutingAppCoverage(ctx context.Context, coverageID string, attrs RoutingAppCoverageUpdateAttributes) (*RoutingAppCoverageResponse, error) {
-	coverageID = strings.TrimSpace(coverageID)
-	if coverageID == "" {
-		return nil, fmt.Errorf("coverageID is required")
-	}
-
-	payload := RoutingAppCoverageUpdateRequest{
-		Data: RoutingAppCoverageUpdateData{
-			Type: ResourceTypeRoutingAppCoverages,
-			ID:   coverageID,
-		},
-	}
-	if attrs.SourceFileChecksum != nil || attrs.Uploaded != nil {
-		payload.Data.Attributes = &attrs
-	}
-
-	body, err := BuildRequestBody(payload)
-	if err != nil {
-		return nil, err
-	}
-
-	data, err := c.do(ctx, http.MethodPatch, fmt.Sprintf("/v1/routingAppCoverages/%s", coverageID), body)
-	if err != nil {
-		return nil, err
-	}
-
-	var response RoutingAppCoverageResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
-// DeleteRoutingAppCoverage deletes routing app coverage by ID.
-func (c *Client) DeleteRoutingAppCoverage(ctx context.Context, coverageID string) error {
-	coverageID = strings.TrimSpace(coverageID)
-	if coverageID == "" {
-		return fmt.Errorf("coverageID is required")
-	}
-
-	_, err := c.do(ctx, http.MethodDelete, fmt.Sprintf("/v1/routingAppCoverages/%s", coverageID), nil)
-	return err
+	return sendJSON[RoutingAppCoverageResponse](ctx, c, writeRequest{Method: http.MethodPost, Path: "/v1/routingAppCoverages", Payload: payload})
 }

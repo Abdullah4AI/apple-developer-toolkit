@@ -114,6 +114,9 @@ func rewriteCommandStrings(cmd *ffcli.Command, replacements []textReplacement) {
 	}
 	if cmd.FlagSet != nil {
 		cmd.FlagSet.VisitAll(func(f *flag.Flag) {
+			if f.Usage == shared.NextFlagUsage || f.Usage == shared.PaginateFlagUsage {
+				return
+			}
 			f.Usage = applyTextReplacements(f.Usage, replacements)
 		})
 	}
@@ -214,9 +217,9 @@ func findSubcommand(cmd *ffcli.Command, name string) *ffcli.Command {
 	return nil
 }
 
-func TestFlightGroupsCommand() *ffcli.Command {
+func newTestFlightGroupsCommand(d *shared.Deps) *ffcli.Command {
 	cmd := rewriteCommandTree(
-		BetaGroupsCommand(),
+		newBetaGroupsCommand(d),
 		"asc testflight beta-groups",
 		"asc testflight groups",
 		map[string]string{
@@ -251,7 +254,7 @@ func TestFlightGroupsCommand() *ffcli.Command {
 			{old: "update ", new: "edit "},
 		},
 	)
-	setUsageFuncRecursively(cmd, shared.DefaultUsageFunc)
+	setUsageFuncRecursively(cmd, d.DefaultUsageFunc)
 	if compatibilityCmd := findSubcommand(cmd, "compatibility"); compatibilityCmd != nil {
 		compatibilityCmd.ShortHelp = "Check recruitment compatibility for a group."
 		compatibilityCmd.LongHelp = `Check recruitment compatibility for a group.
@@ -269,9 +272,9 @@ Examples:
 	return cmd
 }
 
-func TestFlightTestersCommand() *ffcli.Command {
+func newTestFlightTestersCommand(d *shared.Deps) *ffcli.Command {
 	cmd := rewriteCommandTree(
-		BetaTestersCommand(),
+		newBetaTestersCommand(d),
 		"asc testflight beta-testers",
 		"asc testflight testers",
 		map[string]string{
@@ -296,13 +299,13 @@ func TestFlightTestersCommand() *ffcli.Command {
 			{old: "get ", new: "view "},
 		},
 	)
-	setUsageFuncRecursively(cmd, shared.DefaultUsageFunc)
+	setUsageFuncRecursively(cmd, d.DefaultUsageFunc)
 	return cmd
 }
 
-func TestFlightAgreementsCommand() *ffcli.Command {
+func newTestFlightAgreementsCommand(d *shared.Deps) *ffcli.Command {
 	cmd := rewriteCommandTree(
-		BetaLicenseAgreementsCommand(),
+		newBetaLicenseAgreementsCommand(d),
 		"asc testflight beta-license-agreements",
 		"asc testflight agreements",
 		map[string]string{
@@ -324,7 +327,7 @@ func TestFlightAgreementsCommand() *ffcli.Command {
 			{old: "update ", new: "edit "},
 		},
 	)
-	cmd.UsageFunc = shared.DefaultUsageFunc
+	cmd.UsageFunc = d.DefaultUsageFunc
 	if listCmd := findSubcommand(cmd, "list"); listCmd != nil {
 		listCmd.ShortHelp = "List agreements."
 	}
@@ -346,9 +349,9 @@ Examples:
 	return cmd
 }
 
-func TestFlightNotificationsCommand() *ffcli.Command {
+func newTestFlightNotificationsCommand(d *shared.Deps) *ffcli.Command {
 	cmd := rewriteCommandTree(
-		BetaNotificationsCommand(),
+		newBetaNotificationsCommand(d),
 		"asc testflight beta-notifications",
 		"asc testflight notifications",
 		map[string]string{
@@ -364,13 +367,13 @@ func TestFlightNotificationsCommand() *ffcli.Command {
 			{old: "create ", new: "send "},
 		},
 	)
-	cmd.UsageFunc = shared.DefaultUsageFunc
+	cmd.UsageFunc = d.DefaultUsageFunc
 	return cmd
 }
 
-func TestFlightConfigCommand() *ffcli.Command {
+func newTestFlightConfigCommand(d *shared.Deps) *ffcli.Command {
 	cmd := rewriteCommandTree(
-		TestFlightSyncCommand(),
+		newTestFlightSyncCommand(d),
 		"asc testflight sync",
 		"asc testflight config",
 		map[string]string{
@@ -386,13 +389,13 @@ func TestFlightConfigCommand() *ffcli.Command {
 			{old: "testflight sync", new: "testflight config"},
 		},
 	)
-	cmd.UsageFunc = shared.DefaultUsageFunc
+	cmd.UsageFunc = d.DefaultUsageFunc
 	return cmd
 }
 
-func TestFlightReviewSurfaceCommand() *ffcli.Command {
+func newTestFlightReviewSurfaceCommand(d *shared.Deps) *ffcli.Command {
 	cmd := rewriteCommandTree(
-		TestFlightReviewCommand(),
+		newTestFlightReviewCommand(d),
 		"asc testflight review",
 		"asc testflight review",
 		map[string]string{
@@ -430,13 +433,13 @@ Examples:
   asc testflight review app view --id "DETAIL_ID"
   asc testflight review submissions list --build-id "BUILD_ID"
   asc testflight review submissions view --id "SUBMISSION_ID"`
-	setUsageFuncRecursively(cmd, shared.DefaultUsageFunc)
+	setUsageFuncRecursively(cmd, d.DefaultUsageFunc)
 	return cmd
 }
 
-func TestFlightDistributionCommand() *ffcli.Command {
+func newTestFlightDistributionCommand(d *shared.Deps) *ffcli.Command {
 	cmd := rewriteCommandTree(
-		TestFlightBetaDetailsCommand(),
+		newTestFlightBetaDetailsCommand(d),
 		"asc testflight beta-details",
 		"asc testflight distribution",
 		map[string]string{
@@ -466,30 +469,30 @@ Examples:
   asc testflight distribution view --build-id "BUILD_ID"
   asc testflight distribution edit --id "DETAIL_ID" --auto-notify
   asc testflight distribution build view --id "DETAIL_ID"`
-	setUsageFuncRecursively(cmd, shared.DefaultUsageFunc)
+	setUsageFuncRecursively(cmd, d.DefaultUsageFunc)
 	return cmd
 }
 
-func TestFlightMetricsSurfaceCommand() *ffcli.Command {
-	cmd := TestFlightMetricsCommand()
+func newTestFlightMetricsSurfaceCommand(d *shared.Deps) *ffcli.Command {
+	cmd := newTestFlightMetricsCommand(d)
 	cmd.LongHelp = `Fetch TestFlight metrics.
 
 Examples:
   asc testflight metrics public-link --group "GROUP_ID"
   asc testflight metrics group-testers --group "GROUP_ID"
   asc testflight metrics app-testers --app "APP_ID"`
-	cmd.UsageFunc = shared.DefaultUsageFunc
+	cmd.UsageFunc = d.DefaultUsageFunc
 	cmd.Subcommands = []*ffcli.Command{
-		TestFlightMetricsPublicLinkCommand(),
-		TestFlightMetricsGroupTestersCommand(),
-		TestFlightMetricsAppTestersCommand(),
+		newTestFlightMetricsPublicLinkCommand(d),
+		newTestFlightMetricsGroupTestersCommand(d),
+		newTestFlightMetricsAppTestersCommand(d),
 	}
 	return cmd
 }
 
-func TestFlightAppLocalizationsCommand() *ffcli.Command {
+func newTestFlightAppLocalizationsCommand(d *shared.Deps) *ffcli.Command {
 	cmd := rewriteCommandTree(
-		betaapplocalizations.BetaAppLocalizationsCommand(),
+		betaapplocalizations.NewBetaAppLocalizationsCommand(d),
 		"asc beta-app-localizations",
 		"asc testflight app-localizations",
 		map[string]string{
@@ -519,13 +522,13 @@ Examples:
   asc testflight app-localizations view --id "LOCALIZATION_ID"
   asc testflight app-localizations app view --id "LOCALIZATION_ID"
   asc testflight app-localizations create --app "APP_ID" --locale "en-US" --description "Welcome testers"`
-	setUsageFuncRecursively(cmd, shared.DefaultUsageFunc)
+	setUsageFuncRecursively(cmd, d.DefaultUsageFunc)
 	return cmd
 }
 
-func TestFlightPreReleaseCommand() *ffcli.Command {
+func newTestFlightPreReleaseCommand(d *shared.Deps) *ffcli.Command {
 	cmd := rewriteCommandTree(
-		prerelease.PreReleaseVersionsCommand(),
+		prerelease.NewPreReleaseVersionsCommand(d),
 		"asc pre-release-versions",
 		"asc testflight pre-release",
 		map[string]string{
@@ -555,6 +558,6 @@ Examples:
   asc testflight pre-release app view --id "PR_ID"
   asc testflight pre-release builds list --id "PR_ID"
   asc testflight pre-release links view --id "PR_ID" --type "app"`
-	setUsageFuncRecursively(cmd, shared.DefaultUsageFunc)
+	setUsageFuncRecursively(cmd, d.DefaultUsageFunc)
 	return cmd
 }

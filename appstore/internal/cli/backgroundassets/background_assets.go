@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"os"
 	"strconv"
 	"strings"
 
@@ -14,9 +13,10 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
-// BackgroundAssetsCommand returns the background assets command group.
-func BackgroundAssetsCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("background-assets", flag.ExitOnError)
+// NewBackgroundAssetsCommand returns the background assets command group,
+// built on d.
+func NewBackgroundAssetsCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("background-assets", flag.ExitOnError)
 
 	return &ffcli.Command{
 		Name:       "background-assets",
@@ -34,18 +34,18 @@ Examples:
   asc background-assets upload-files create --version-id "VERSION_ID" --file "./asset.zip" --asset-type ASSET
   asc background-assets submit --app "APP_ID" --background-asset-id "ASSET_ID" --confirm`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
-			BackgroundAssetsListCommand(),
-			BackgroundAssetsGetCommand(),
-			BackgroundAssetsCreateCommand(),
-			BackgroundAssetsUpdateCommand(),
-			BackgroundAssetsVersionsCommand(),
-			BackgroundAssetsAppStoreReleasesCommand(),
-			BackgroundAssetsExternalBetaReleasesCommand(),
-			BackgroundAssetsInternalBetaReleasesCommand(),
-			BackgroundAssetsUploadFilesCommand(),
-			BackgroundAssetsSubmitCommand(),
+			newBackgroundAssetsListCommand(d),
+			newBackgroundAssetsGetCommand(d),
+			newBackgroundAssetsCreateCommand(d),
+			newBackgroundAssetsUpdateCommand(d),
+			newBackgroundAssetsVersionsCommand(d),
+			newBackgroundAssetsAppStoreReleasesCommand(d),
+			newBackgroundAssetsExternalBetaReleasesCommand(d),
+			newBackgroundAssetsInternalBetaReleasesCommand(d),
+			newBackgroundAssetsUploadFilesCommand(d),
+			newBackgroundAssetsSubmitCommand(d),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp
@@ -53,22 +53,16 @@ Examples:
 	}
 }
 
-// BackgroundAssetsListCommand returns the background assets list subcommand.
-func BackgroundAssetsListCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("list", flag.ExitOnError)
+func newBackgroundAssetsListCommand(d *shared.Deps) *ffcli.Command {
+	var (
+		sortBy               *string
+		versionsPlatforms    []string
+		archivedFilter       []string
+		assetPackIdentifiers []string
+		versionsLocales      []string
+	)
 
-	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID)")
-	archived := fs.String("archived", "", "Filter by archived state (true/false)")
-	assetPackIdentifier := fs.String("asset-pack-identifier", "", "Filter by asset pack identifier(s), comma-separated")
-	versionsLocale := fs.String("versions-locale", "", "Filter by uploaded version locale(s), comma-separated (e.g., en-US,ja)")
-	versionsPlatform := fs.String("versions-platform", "", "Filter by version platform(s), comma-separated: "+strings.Join(shared.PlatformList(), ", "))
-	sortBy := fs.String("sort", "", "Sort by: "+strings.Join(backgroundAssetSortValues, ", "))
-	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
-	next := fs.String("next", "", "Fetch next page using a links.next URL")
-	paginate := fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")
-	output := shared.BindOutputFlags(fs)
-
-	return &ffcli.Command{
+	return shared.BuildPaginatedListCommand(shared.PaginatedListCommandConfig{
 		Name:       "list",
 		ShortUsage: "asc background-assets list --app \"APP_ID\" [flags]",
 		ShortHelp:  "List background assets for an app.",
@@ -80,54 +74,49 @@ Examples:
   asc background-assets list --app "APP_ID" --versions-locale "en-US,ja"
   asc background-assets list --app "APP_ID" --versions-platform "IOS,VISION_OS" --sort "-createdDate"
   asc background-assets list --app "APP_ID" --paginate`,
-		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
-		Exec: func(ctx context.Context, args []string) error {
-			resolvedAppID := shared.ResolveAppID(*appID)
-			if resolvedAppID == "" && strings.TrimSpace(*next) == "" {
-				fmt.Fprintln(os.Stderr, "Error: --app is required (or set ASC_APP_ID)")
-				return shared.MissingRequiredUsageError("--app")
-			}
-			if *limit != 0 && (*limit < 1 || *limit > backgroundAssetsMaxLimit) {
-				return shared.UsageErrorf("background-assets list: --limit must be between 1 and %d", backgroundAssetsMaxLimit)
-			}
-			if err := shared.ValidateNextURL(*next); err != nil {
-				return shared.UsageErrorf("background-assets list: %v", err)
-			}
-			if err := shared.RejectNextFlagConflicts(fs, *next, "background-assets list", "archived", "asset-pack-identifier", "versions-locale", "versions-platform", "sort"); err != nil {
-				return err
-			}
-			versionsPlatforms, err := parseBackgroundAssetEnumCSV("--versions-platform", *versionsPlatform, shared.PlatformList())
-			if err != nil {
-				return shared.UsageErrorf("background-assets list: %v", err)
-			}
-			if err := shared.ValidateSort(*sortBy, backgroundAssetSortValues...); err != nil {
-				return shared.UsageErrorf("background-assets list: %v", err)
-			}
-
-			var archivedFilter []string
-			if strings.TrimSpace(*archived) != "" {
-				value, err := shared.ParseBoolFlag(*archived, "--archived")
+		ParentFlag:           "app",
+		ParentUsage:          "App Store Connect app ID (or ASC_APP_ID)",
+		ResolveApp:           true,
+		RequiredDiagnostic:   true,
+		LimitMax:             backgroundAssetsMaxLimit,
+		PaginateIgnoresLimit: true,
+		NoSpinner:            true,
+		NextConflicts:        []string{"archived", "asset-pack-identifier", "versions-locale", "versions-platform", "sort"},
+		Deps:                 d,
+		Flags: func(fs *flag.FlagSet) func() error {
+			archived := fs.String("archived", "", "Filter by archived state (true/false)")
+			assetPackIdentifier := fs.String("asset-pack-identifier", "", "Filter by asset pack identifier(s), comma-separated")
+			versionsLocale := fs.String("versions-locale", "", "Filter by uploaded version locale(s), comma-separated (e.g., en-US,ja)")
+			versionsPlatform := fs.String("versions-platform", "", "Filter by version platform(s), comma-separated: "+strings.Join(shared.PlatformList(), ", "))
+			sortBy = fs.String("sort", "", "Sort by: "+strings.Join(backgroundAssetSortValues, ", "))
+			return func() error {
+				var err error
+				versionsPlatforms, err = parseBackgroundAssetEnumCSV("--versions-platform", *versionsPlatform, shared.PlatformList())
 				if err != nil {
-					return fmt.Errorf("background-assets list: %w", err)
+					return d.UsageErrorf("background-assets list: %v", err)
 				}
-				archivedFilter = []string{strconv.FormatBool(value)}
+				if err := shared.ValidateSort(*sortBy, backgroundAssetSortValues...); err != nil {
+					return d.UsageErrorf("background-assets list: %v", err)
+				}
+
+				archivedFilter = nil
+				if strings.TrimSpace(*archived) != "" {
+					value, err := shared.ParseBoolFlag(*archived, "--archived")
+					if err != nil {
+						return d.UsageErrorf("background-assets list: %v", err)
+					}
+					archivedFilter = []string{strconv.FormatBool(value)}
+				}
+
+				assetPackIdentifiers = shared.SplitCSV(*assetPackIdentifier)
+				versionsLocales = shared.SplitCSV(*versionsLocale)
+				return nil
 			}
-
-			assetPackIdentifiers := shared.SplitCSV(*assetPackIdentifier)
-			versionsLocales := shared.SplitCSV(*versionsLocale)
-
-			client, err := shared.GetASCClient()
-			if err != nil {
-				return fmt.Errorf("background-assets list: %w", err)
-			}
-
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
-			defer cancel()
-
+		},
+		FetchPage: func(ctx context.Context, client *asc.Client, appID string, limit int, next string) (asc.PaginatedResponse, error) {
 			opts := []asc.BackgroundAssetsOption{
-				asc.WithBackgroundAssetsLimit(*limit),
-				asc.WithBackgroundAssetsNextURL(*next),
+				asc.Limit[asc.BackgroundAssetsOption](limit),
+				asc.NextURL[asc.BackgroundAssetsOption](next),
 				asc.WithBackgroundAssetsFilterVersionsPlatforms(versionsPlatforms),
 				asc.WithBackgroundAssetsSort(*sortBy),
 			}
@@ -140,42 +129,14 @@ Examples:
 			if len(versionsLocales) > 0 {
 				opts = append(opts, asc.WithBackgroundAssetsFilterVersionsLocale(versionsLocales))
 			}
-
-			if *paginate {
-				paginateOpts := append(opts, asc.WithBackgroundAssetsLimit(backgroundAssetsMaxLimit))
-				firstPage, err := client.GetBackgroundAssets(requestCtx, resolvedAppID, paginateOpts...)
-				if err != nil {
-					return fmt.Errorf("background-assets list: failed to fetch: %w", err)
-				}
-
-				resp, err := asc.PaginateAll(requestCtx, firstPage, func(ctx context.Context, nextURL string) (asc.PaginatedResponse, error) {
-					return client.GetBackgroundAssets(ctx, resolvedAppID, asc.WithBackgroundAssetsNextURL(nextURL))
-				})
-				if err != nil {
-					return fmt.Errorf("background-assets list: %w", err)
-				}
-
-				return shared.PrintOutput(resp, *output.Output, *output.Pretty)
-			}
-
-			resp, err := client.GetBackgroundAssets(requestCtx, resolvedAppID, opts...)
-			if err != nil {
-				return fmt.Errorf("background-assets list: failed to fetch: %w", err)
-			}
-
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+			return client.GetBackgroundAssets(ctx, appID, opts...)
 		},
-	}
+	})
 }
 
-// BackgroundAssetsGetCommand returns the background assets get subcommand.
-func BackgroundAssetsGetCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("view", flag.ExitOnError)
-
-	assetID := shared.BindResourceIDFlag(fs, "id", "backgroundAssets", "Background asset ID")
-	output := shared.BindOutputFlags(fs)
-
-	return &ffcli.Command{
+func newBackgroundAssetsGetCommand(d *shared.Deps) *ffcli.Command {
+	return shared.BuildIDGetCommand(shared.IDGetCommandConfig{
+		Deps:       d,
 		Name:       "view",
 		ShortUsage: "asc background-assets view --id \"ASSET_ID\"",
 		ShortHelp:  "View a background asset by ID.",
@@ -183,40 +144,21 @@ func BackgroundAssetsGetCommand() *ffcli.Command {
 
 Examples:
   asc background-assets view --id "ASSET_ID"`,
-		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
-		Exec: func(ctx context.Context, args []string) error {
-			assetIDValue := strings.TrimSpace(*assetID)
-			if assetIDValue == "" {
-				fmt.Fprintln(os.Stderr, "Error: --id is required")
-				return shared.MissingRequiredUsageError("--id")
-			}
-
-			client, err := shared.GetASCClient()
-			if err != nil {
-				return fmt.Errorf("background-assets view: %w", err)
-			}
-
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
-			defer cancel()
-
-			resp, err := client.GetBackgroundAsset(requestCtx, assetIDValue)
-			if err != nil {
-				return fmt.Errorf("background-assets view: failed to fetch: %w", err)
-			}
-
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+		IDUsage:            "Background asset ID",
+		IDType:             "backgroundAssets",
+		RequiredDiagnostic: true,
+		Fetch: func(ctx context.Context, client *asc.Client, id string) (any, error) {
+			return client.GetBackgroundAsset(ctx, id)
 		},
-	}
+	})
 }
 
-// BackgroundAssetsCreateCommand returns the background assets create subcommand.
-func BackgroundAssetsCreateCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("create", flag.ExitOnError)
+func newBackgroundAssetsCreateCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("create", flag.ExitOnError)
 
 	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID)")
 	assetPackIdentifier := fs.String("asset-pack-identifier", "", "Asset pack identifier")
-	output := shared.BindOutputFlags(fs)
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "create",
@@ -227,26 +169,25 @@ func BackgroundAssetsCreateCommand() *ffcli.Command {
 Examples:
   asc background-assets create --app "APP_ID" --asset-pack-identifier "com.example.assetpack"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
-			resolvedAppID := shared.ResolveAppID(*appID)
+			resolvedAppID := d.ResolveAppID(*appID)
 			if resolvedAppID == "" {
-				fmt.Fprintln(os.Stderr, "Error: --app is required (or set ASC_APP_ID)")
+				fmt.Fprintln(d.IO.ErrOut, "Error: --app is required (or set ASC_APP_ID)")
 				return shared.MissingRequiredUsageError("--app")
 			}
 
 			assetPackIdentifierValue := strings.TrimSpace(*assetPackIdentifier)
 			if assetPackIdentifierValue == "" {
-				fmt.Fprintln(os.Stderr, "Error: --asset-pack-identifier is required")
-				return shared.MissingRequiredUsageError("--asset-pack-identifier")
+				return d.RequiredFlag("--asset-pack-identifier")
 			}
 
-			client, err := shared.GetASCClient()
+			client, err := d.Client()
 			if err != nil {
 				return fmt.Errorf("background-assets create: %w", err)
 			}
 
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
+			requestCtx, cancel := d.Timeout(ctx)
 			defer cancel()
 
 			resp, err := client.CreateBackgroundAsset(requestCtx, resolvedAppID, assetPackIdentifierValue)
@@ -254,18 +195,17 @@ Examples:
 				return fmt.Errorf("background-assets create: failed to create: %w", err)
 			}
 
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+			return d.PrintOutput(resp, *output.Output, *output.Pretty)
 		},
 	}
 }
 
-// BackgroundAssetsUpdateCommand returns the background assets update subcommand.
-func BackgroundAssetsUpdateCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("update", flag.ExitOnError)
+func newBackgroundAssetsUpdateCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("update", flag.ExitOnError)
 
 	assetID := shared.BindResourceIDFlag(fs, "id", "backgroundAssets", "Background asset ID")
 	archived := fs.String("archived", "", "Set archived state (true/false)")
-	output := shared.BindOutputFlags(fs)
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "update",
@@ -276,29 +216,27 @@ func BackgroundAssetsUpdateCommand() *ffcli.Command {
 Examples:
   asc background-assets update --id "ASSET_ID" --archived true`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			assetIDValue := strings.TrimSpace(*assetID)
 			if assetIDValue == "" {
-				fmt.Fprintln(os.Stderr, "Error: --id is required")
-				return shared.MissingRequiredUsageError("--id")
+				return d.RequiredFlag("--id")
 			}
 
 			if strings.TrimSpace(*archived) == "" {
-				fmt.Fprintln(os.Stderr, "Error: --archived is required")
-				return shared.MissingRequiredUsageError("--archived")
+				return d.RequiredFlag("--archived")
 			}
 			archivedValue, err := shared.ParseBoolFlag(*archived, "--archived")
 			if err != nil {
-				return fmt.Errorf("background-assets update: %w", err)
+				return d.UsageErrorf("background-assets update: %v", err)
 			}
 
-			client, err := shared.GetASCClient()
+			client, err := d.Client()
 			if err != nil {
 				return fmt.Errorf("background-assets update: %w", err)
 			}
 
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
+			requestCtx, cancel := d.Timeout(ctx)
 			defer cancel()
 
 			attrs := asc.BackgroundAssetUpdateAttributes{Archived: &archivedValue}
@@ -307,7 +245,7 @@ Examples:
 				return fmt.Errorf("background-assets update: failed to update: %w", err)
 			}
 
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+			return d.PrintOutput(resp, *output.Output, *output.Pretty)
 		},
 	}
 }

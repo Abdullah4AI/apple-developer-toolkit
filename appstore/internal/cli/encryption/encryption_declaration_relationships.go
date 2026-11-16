@@ -3,17 +3,14 @@ package encryption
 import (
 	"context"
 	"flag"
-	"fmt"
-	"os"
-	"strings"
 
 	"github.com/peterbourgon/ff/v3/ffcli"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
-// EncryptionDeclarationsAppCommand returns the declarations app subcommand group.
-func EncryptionDeclarationsAppCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("encryption declarations app", flag.ExitOnError)
+func newEncryptionDeclarationsAppCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("encryption declarations app", flag.ExitOnError)
 
 	return &ffcli.Command{
 		Name:       "app",
@@ -24,9 +21,9 @@ func EncryptionDeclarationsAppCommand() *ffcli.Command {
 Examples:
   asc encryption declarations app view --id "DECL_ID"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
-			EncryptionDeclarationsAppGetCommand(),
+			newEncryptionDeclarationsAppGetCommand(d),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp
@@ -34,51 +31,28 @@ Examples:
 	}
 }
 
-// EncryptionDeclarationsAppGetCommand returns the get subcommand for declaration apps.
-func EncryptionDeclarationsAppGetCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("encryption declarations app view", flag.ExitOnError)
-
-	declarationID := shared.BindResourceIDFlag(fs, "id", "appEncryptionDeclarations", "Encryption declaration ID (required)")
-	output := shared.BindOutputFlags(fs)
-
-	return &ffcli.Command{
-		Name:       "view",
-		ShortUsage: "asc encryption declarations app view --id \"DECL_ID\"",
-		ShortHelp:  "View the app for an encryption declaration.",
+func newEncryptionDeclarationsAppGetCommand(d *shared.Deps) *ffcli.Command {
+	return shared.BuildIDGetCommand(shared.IDGetCommandConfig{
+		Deps:        d,
+		FlagSetName: "encryption declarations app view",
+		Name:        "view",
+		ShortUsage:  "asc encryption declarations app view --id \"DECL_ID\"",
+		ShortHelp:   "View the app for an encryption declaration.",
 		LongHelp: `View the app for an encryption declaration.
 
 Examples:
   asc encryption declarations app view --id "DECL_ID"`,
-		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
-		Exec: func(ctx context.Context, args []string) error {
-			idValue := strings.TrimSpace(*declarationID)
-			if idValue == "" {
-				fmt.Fprintln(os.Stderr, "Error: --id is required")
-				return shared.MissingRequiredUsageError("--id")
-			}
-
-			client, err := shared.GetASCClient()
-			if err != nil {
-				return fmt.Errorf("encryption declarations app view: %w", err)
-			}
-
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
-			defer cancel()
-
-			resp, err := client.GetAppEncryptionDeclarationApp(requestCtx, idValue)
-			if err != nil {
-				return fmt.Errorf("encryption declarations app view: failed to fetch: %w", err)
-			}
-
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+		IDUsage:            "Encryption declaration ID (required)",
+		IDType:             "appEncryptionDeclarations",
+		RequiredDiagnostic: true,
+		Fetch: func(ctx context.Context, client *asc.Client, id string) (any, error) {
+			return client.GetAppEncryptionDeclarationApp(ctx, id)
 		},
-	}
+	})
 }
 
-// EncryptionDeclarationsDeclarationDocumentCommand returns the declaration document subcommand group.
-func EncryptionDeclarationsDeclarationDocumentCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("encryption declarations app-encryption-declaration-document", flag.ExitOnError)
+func newEncryptionDeclarationsDeclarationDocumentCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("encryption declarations app-encryption-declaration-document", flag.ExitOnError)
 
 	return &ffcli.Command{
 		Name:       "app-encryption-declaration-document",
@@ -89,9 +63,9 @@ func EncryptionDeclarationsDeclarationDocumentCommand() *ffcli.Command {
 Examples:
   asc encryption declarations app-encryption-declaration-document view --id "DECL_ID"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
-			EncryptionDeclarationsDeclarationDocumentGetCommand(),
+			newEncryptionDeclarationsDeclarationDocumentGetCommand(d),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp
@@ -99,44 +73,22 @@ Examples:
 	}
 }
 
-// EncryptionDeclarationsDeclarationDocumentGetCommand returns the get subcommand for declaration documents.
-func EncryptionDeclarationsDeclarationDocumentGetCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("encryption declarations app-encryption-declaration-document view", flag.ExitOnError)
-
-	declarationID := shared.BindResourceIDFlag(fs, "id", "appEncryptionDeclarations", "Encryption declaration ID (required)")
-	output := shared.BindOutputFlags(fs)
-
-	return &ffcli.Command{
-		Name:       "view",
-		ShortUsage: "asc encryption declarations app-encryption-declaration-document view --id \"DECL_ID\"",
-		ShortHelp:  "View the document for an encryption declaration.",
+func newEncryptionDeclarationsDeclarationDocumentGetCommand(d *shared.Deps) *ffcli.Command {
+	return shared.BuildIDGetCommand(shared.IDGetCommandConfig{
+		Deps:        d,
+		FlagSetName: "encryption declarations app-encryption-declaration-document view",
+		Name:        "view",
+		ShortUsage:  "asc encryption declarations app-encryption-declaration-document view --id \"DECL_ID\"",
+		ShortHelp:   "View the document for an encryption declaration.",
 		LongHelp: `View the document for an encryption declaration.
 
 Examples:
   asc encryption declarations app-encryption-declaration-document view --id "DECL_ID"`,
-		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
-		Exec: func(ctx context.Context, args []string) error {
-			idValue := strings.TrimSpace(*declarationID)
-			if idValue == "" {
-				fmt.Fprintln(os.Stderr, "Error: --id is required")
-				return shared.MissingRequiredUsageError("--id")
-			}
-
-			client, err := shared.GetASCClient()
-			if err != nil {
-				return fmt.Errorf("encryption declarations app-encryption-declaration-document view: %w", err)
-			}
-
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
-			defer cancel()
-
-			resp, err := client.GetAppEncryptionDeclarationDocumentForDeclaration(requestCtx, idValue)
-			if err != nil {
-				return fmt.Errorf("encryption declarations app-encryption-declaration-document view: failed to fetch: %w", err)
-			}
-
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+		IDUsage:            "Encryption declaration ID (required)",
+		IDType:             "appEncryptionDeclarations",
+		RequiredDiagnostic: true,
+		Fetch: func(ctx context.Context, client *asc.Client, id string) (any, error) {
+			return client.GetAppEncryptionDeclarationDocumentForDeclaration(ctx, id)
 		},
-	}
+	})
 }

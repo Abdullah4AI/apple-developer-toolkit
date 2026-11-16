@@ -10,8 +10,8 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
-func readIAPPPPSchedule(ctx context.Context, client *asc.Client, iapID string) (shared.PPPScheduleSnapshot, error) {
-	requestCtx, cancel := shared.ContextWithTimeout(ctx)
+func readIAPPPPSchedule(ctx context.Context, d *shared.Deps, client *asc.Client, iapID string) (shared.PPPScheduleSnapshot, error) {
+	requestCtx, cancel := d.Timeout(ctx)
 	defer cancel()
 	schedule, err := client.GetInAppPurchasePriceSchedule(requestCtx, iapID)
 	if err != nil {
@@ -24,7 +24,7 @@ func readIAPPPPSchedule(ctx context.Context, client *asc.Client, iapID string) (
 	snapshot := shared.PPPScheduleSnapshot{BaseTerritory: base.Data.ID}
 	for index, fetch := range []iapSchedulePriceFetcher{client.GetInAppPurchasePriceScheduleManualPrices, client.GetInAppPurchasePriceScheduleAutomaticPrices} {
 		first, err := fetch(requestCtx, schedule.Data.ID,
-			asc.WithIAPPriceSchedulePricesLimit(200),
+			asc.Limit[asc.IAPPriceSchedulePricesOption](200),
 			asc.WithIAPPriceSchedulePricesInclude([]string{"inAppPurchasePricePoint", "territory"}),
 			asc.WithIAPPriceSchedulePricesFields([]string{"manual", "startDate", "endDate", "inAppPurchasePricePoint", "territory"}),
 			asc.WithIAPPriceSchedulePricesPricePointFields([]string{"customerPrice", "proceeds", "territory"}),
@@ -37,7 +37,7 @@ func readIAPPPPSchedule(ctx context.Context, client *asc.Client, iapID string) (
 			if err != nil {
 				return nil, err
 			}
-			return fetch(ctx, schedule.Data.ID, asc.WithIAPPriceSchedulePricesNextURL(next))
+			return fetch(ctx, schedule.Data.ID, asc.NextURL[asc.IAPPriceSchedulePricesOption](next))
 		}, func(page asc.PaginatedResponse) error {
 			typed, ok := page.(*asc.InAppPurchasePricesResponse)
 			if !ok {
@@ -95,5 +95,5 @@ func readIAPPPPSchedule(ctx context.Context, client *asc.Client, iapID string) (
 			return snapshot, err
 		}
 	}
-	return snapshot, shared.ValidatePPPScheduleSnapshot(snapshot)
+	return snapshot, shared.ValidatePPPScheduleSnapshot(snapshot, d.Now)
 }

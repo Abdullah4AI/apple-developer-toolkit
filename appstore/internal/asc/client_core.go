@@ -196,7 +196,7 @@ func resolveDebugValue(value string) debugSettings {
 	}
 	normalized := strings.ToLower(trimmed)
 	switch normalized {
-	case "0", "false", "no":
+	case "0", "f", "false", "no", "n", "off":
 		return debugSettings{}
 	}
 	return debugSettings{
@@ -205,6 +205,8 @@ func resolveDebugValue(value string) debugSettings {
 	}
 }
 
+// loadConfig caches the first successful load for the process lifetime,
+// including a missing config file. Tests that change config must reset it.
 func loadConfig() *config.Config {
 	loadConfigMu.Lock()
 	defer loadConfigMu.Unlock()
@@ -214,7 +216,7 @@ func loadConfig() *config.Config {
 	}
 
 	cfg, err := loadConfigFn()
-	if err != nil {
+	if err != nil && !errors.Is(err, config.ErrNotFound) {
 		return nil
 	}
 	cachedConfig = cfg
@@ -665,10 +667,9 @@ type Client struct {
 	cachedJWT          string
 	cachedJWTExpiresAt time.Time
 
-	// bearerToken is a token signed elsewhere (ASC_BEARER_TOKEN); when set,
-	// the client has no private key and sends it until it expires.
-	bearerToken          string
-	bearerTokenExpiresAt time.Time
+	// bearer holds a token signed elsewhere (ASC_BEARER_TOKEN); when set,
+	// the client has no private key.
+	bearer *bearerTokenSource
 
 	mutatingRequestLimiterOnce sync.Once
 	mutatingRequestLimiter     chan struct{}
@@ -729,13 +730,9 @@ func newDefaultHTTPClient(timeout time.Duration) *http.Client {
 }
 
 func newClientWithHTTPClient(keyID, issuerID, privateKeyPath string, httpClient *http.Client) (*Client, error) {
-	if err := auth.ValidateKeyFile(privateKeyPath); err != nil {
-		return nil, fmt.Errorf("invalid private key: %w", err)
-	}
-
-	key, err := auth.LoadPrivateKey(privateKeyPath)
+	key, err := auth.LoadValidatedPrivateKey(privateKeyPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to load private key: %w", err)
+		return nil, fmt.Errorf("invalid private key: %w", err)
 	}
 
 	return newClientWithPrivateKey(keyID, issuerID, key, httpClient), nil

@@ -4,8 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/peterbourgon/ff/v3/ffcli"
@@ -13,14 +11,14 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/screenshots"
 )
 
-// ShotsRunCommand returns the screenshots run subcommand.
-func ShotsRunCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("run", flag.ExitOnError)
+// NewShotsRunCommand returns the screenshots run subcommand.
+func NewShotsRunCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("run", flag.ExitOnError)
 	planPath := fs.String("plan", ".asc/screenshots.json", "Path to screenshot run plan JSON")
 	bundleID := fs.String("bundle-id", "", "Override app bundle ID from plan")
 	udid := fs.String("udid", "", "Override simulator UDID from plan")
 	outputDir := fs.String("output-dir", "", "Override output directory from plan")
-	output := shared.BindOutputFlags(fs)
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "run",
@@ -29,17 +27,27 @@ func ShotsRunCommand() *ffcli.Command {
 		LongHelp: `Run a deterministic screenshot automation sequence.
 
 By default it loads .asc/screenshots.json from the current project root.
-Supported actions: launch, tap, type, wait, wait_for (polling), screenshot.`,
+Supported actions: launch, tap, type, key_sequence, wait, wait_for (polling), scroll, swipe, long_press, button, pinch, rotate, double_tap, screenshot.
+scroll takes direction up, down, left, or right, the way the finger moves: up drags the content up to show what is below it.
+long_press takes label, id, or x and y, and duration_ms from 1 to 10000 (default 1000).
+button takes button apple-pay, home, lock, side-button, or siri, and optional duration_ms from 1 to 10000.
+pinch takes scale above 0 and not 1 (above 1 zooms in), and optional x and y (default: the screen centre) and radius.
+rotate takes x, y, radius, and degrees from -360 to 360, not 0 (clockwise).
+double_tap takes x and y; it does not accept label or id.
+scroll and swipe need AXe 2.0 or later.
+Set defaults.status_bar to screenshot, low-battery, no-service, or charging to
+override the simulator status bar during the run (needs AXe 2.0+ and Xcode 27+).
+When the run ends, every status bar override on that simulator is cleared,
+including any that were set before the run.`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			planPathVal := *planPath
 			if strings.TrimSpace(planPathVal) == "" {
-				fmt.Fprintln(os.Stderr, "Error: --plan is required")
-				return shared.MissingRequiredUsageError("--plan")
+				return d.RequiredFlag("--plan")
 			}
 
-			absPlanPath, err := filepath.Abs(planPathVal)
+			absPlanPath, err := d.Abs(planPathVal)
 			if err != nil {
 				return fmt.Errorf("screenshots run: resolve plan path: %w", err)
 			}
@@ -58,13 +66,17 @@ Supported actions: launch, tap, type, wait, wait_for (polling), screenshot.`,
 			if override := *outputDir; strings.TrimSpace(override) != "" {
 				plan.App.OutputDir = override
 			}
+			if strings.TrimSpace(plan.App.OutputDir) == "" {
+				plan.App.OutputDir = screenshots.DefaultPlanOutputDir
+			}
+			plan.App.OutputDir = d.OSPath(plan.App.OutputDir)
 
 			result, err := screenshots.RunPlan(ctx, plan)
 			if err != nil {
 				return fmt.Errorf("screenshots run: %w", err)
 			}
 
-			return shared.PrintOutput(result, *output.Output, *output.Pretty)
+			return d.PrintOutput(result, *output.Output, *output.Pretty)
 		},
 	}
 }

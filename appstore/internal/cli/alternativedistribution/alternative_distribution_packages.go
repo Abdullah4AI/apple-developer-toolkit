@@ -4,16 +4,16 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/peterbourgon/ff/v3/ffcli"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
-// AlternativeDistributionPackagesCommand returns the packages command group.
-func AlternativeDistributionPackagesCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("packages", flag.ExitOnError)
+// newAlternativeDistributionPackagesCommand returns the packages command group.
+func newAlternativeDistributionPackagesCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("packages", flag.ExitOnError)
 
 	return &ffcli.Command{
 		Name:       "packages",
@@ -32,14 +32,14 @@ Examples:
   asc alternative-distribution packages variants --variant-id "VARIANT_ID"
   asc alternative-distribution packages deltas --delta-id "DELTA_ID"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
-			AlternativeDistributionPackagesGetCommand(),
-			AlternativeDistributionPackagesCreateCommand(),
-			AlternativeDistributionPackagesAppStoreVersionCommand(),
-			AlternativeDistributionPackageVersionsCommand(),
-			AlternativeDistributionPackageVariantsCommand(),
-			AlternativeDistributionPackageDeltasCommand(),
+			newAlternativeDistributionPackagesGetCommand(d),
+			newAlternativeDistributionPackagesCreateCommand(d),
+			newAlternativeDistributionPackagesAppStoreVersionCommand(d),
+			newAlternativeDistributionPackageVersionsCommand(d),
+			newAlternativeDistributionPackageVariantsCommand(d),
+			newAlternativeDistributionPackageDeltasCommand(d),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp
@@ -47,14 +47,10 @@ Examples:
 	}
 }
 
-// AlternativeDistributionPackagesGetCommand returns the packages get subcommand.
-func AlternativeDistributionPackagesGetCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("view", flag.ExitOnError)
-
-	packageID := shared.BindResourceIDFlag(fs, "package-id", "alternativeDistributionPackages", "Alternative distribution package ID")
-	output := shared.BindOutputFlags(fs)
-
-	return &ffcli.Command{
+// newAlternativeDistributionPackagesGetCommand returns the packages get subcommand.
+func newAlternativeDistributionPackagesGetCommand(d *shared.Deps) *ffcli.Command {
+	return shared.BuildIDGetCommand(shared.IDGetCommandConfig{
+		Deps:       d,
 		Name:       "view",
 		ShortUsage: "asc alternative-distribution packages view --package-id \"PACKAGE_ID\"",
 		ShortHelp:  "View an alternative distribution package.",
@@ -62,41 +58,19 @@ func AlternativeDistributionPackagesGetCommand() *ffcli.Command {
 
 Examples:
   asc alternative-distribution packages view --package-id "PACKAGE_ID"`,
-		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
-		Exec: func(ctx context.Context, args []string) error {
-			trimmedID := strings.TrimSpace(*packageID)
-			if trimmedID == "" {
-				fmt.Fprintln(os.Stderr, "Error: --package-id is required")
-				return shared.MissingRequiredUsageError("--package-id")
-			}
-
-			client, err := shared.GetASCClient()
-			if err != nil {
-				return fmt.Errorf("alternative-distribution packages view: %w", err)
-			}
-
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
-			defer cancel()
-
-			resp, err := client.GetAlternativeDistributionPackage(requestCtx, trimmedID)
-			if err != nil {
-				return fmt.Errorf("alternative-distribution packages view: failed to fetch: %w", err)
-			}
-
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+		IDFlag:             "package-id",
+		IDUsage:            "Alternative distribution package ID",
+		IDType:             "alternativeDistributionPackages",
+		RequiredDiagnostic: true,
+		Fetch: func(ctx context.Context, client *asc.Client, id string) (any, error) {
+			return client.GetAlternativeDistributionPackage(ctx, id)
 		},
-	}
+	})
 }
 
-// AlternativeDistributionPackagesCreateCommand returns the packages create subcommand.
-func AlternativeDistributionPackagesCreateCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("create", flag.ExitOnError)
-
-	appStoreVersionID := shared.BindResourceIDFlag(fs, "app-store-version-id", "appStoreVersions", "App Store version ID for the package")
-	output := shared.BindOutputFlags(fs)
-
-	return &ffcli.Command{
+// newAlternativeDistributionPackagesCreateCommand returns the packages create subcommand.
+func newAlternativeDistributionPackagesCreateCommand(d *shared.Deps) *ffcli.Command {
+	return shared.BuildCreateCommand(shared.WriteCommandConfig{
 		Name:       "create",
 		ShortUsage: "asc alternative-distribution packages create --app-store-version-id \"APP_STORE_VERSION_ID\"",
 		ShortHelp:  "Create an alternative distribution package.",
@@ -104,39 +78,22 @@ func AlternativeDistributionPackagesCreateCommand() *ffcli.Command {
 
 Examples:
   asc alternative-distribution packages create --app-store-version-id "APP_STORE_VERSION_ID"`,
-		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
-		Exec: func(ctx context.Context, args []string) error {
-			trimmedID := strings.TrimSpace(*appStoreVersionID)
-			if trimmedID == "" {
-				fmt.Fprintln(os.Stderr, "Error: --app-store-version-id is required")
-				return shared.MissingRequiredUsageError("--app-store-version-id")
-			}
-
-			client, err := shared.GetASCClient()
-			if err != nil {
-				return fmt.Errorf("alternative-distribution packages create: %w", err)
-			}
-
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
-			defer cancel()
-
-			resp, err := client.CreateAlternativeDistributionPackage(requestCtx, trimmedID)
-			if err != nil {
-				return fmt.Errorf("alternative-distribution packages create: failed to create: %w", err)
-			}
-
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+		IDFlag:  "app-store-version-id",
+		IDUsage: "App Store version ID for the package",
+		IDType:  "appStoreVersions",
+		Deps:    d,
+		Send: func(ctx context.Context, client *asc.Client, id string) (any, error) {
+			return client.CreateAlternativeDistributionPackage(ctx, id)
 		},
-	}
+	})
 }
 
-// AlternativeDistributionPackagesAppStoreVersionCommand returns the app-store-version package subcommand.
-func AlternativeDistributionPackagesAppStoreVersionCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("app-store-version", flag.ExitOnError)
+// newAlternativeDistributionPackagesAppStoreVersionCommand returns the app-store-version package subcommand.
+func newAlternativeDistributionPackagesAppStoreVersionCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("app-store-version", flag.ExitOnError)
 
 	appStoreVersionID := shared.BindResourceIDFlag(fs, "app-store-version-id", "appStoreVersions", "App Store version ID")
-	output := shared.BindOutputFlags(fs)
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "app-store-version",
@@ -147,20 +104,19 @@ func AlternativeDistributionPackagesAppStoreVersionCommand() *ffcli.Command {
 Examples:
   asc alternative-distribution packages app-store-version --app-store-version-id "APP_STORE_VERSION_ID"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			trimmedID := strings.TrimSpace(*appStoreVersionID)
 			if trimmedID == "" {
-				fmt.Fprintln(os.Stderr, "Error: --app-store-version-id is required")
-				return shared.MissingRequiredUsageError("--app-store-version-id")
+				return d.RequiredFlag("--app-store-version-id")
 			}
 
-			client, err := shared.GetASCClient()
+			client, err := d.Client()
 			if err != nil {
 				return fmt.Errorf("alternative-distribution packages app-store-version: %w", err)
 			}
 
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
+			requestCtx, cancel := d.Timeout(ctx)
 			defer cancel()
 
 			resp, err := client.GetAppStoreVersionAlternativeDistributionPackage(requestCtx, trimmedID)
@@ -168,17 +124,17 @@ Examples:
 				return fmt.Errorf("alternative-distribution packages app-store-version: failed to fetch: %w", err)
 			}
 
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+			return d.PrintOutput(resp, *output.Output, *output.Pretty)
 		},
 	}
 }
 
-// AlternativeDistributionPackageVariantsCommand returns the package variant get subcommand.
-func AlternativeDistributionPackageVariantsCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("variants", flag.ExitOnError)
+// newAlternativeDistributionPackageVariantsCommand returns the package variant get subcommand.
+func newAlternativeDistributionPackageVariantsCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("variants", flag.ExitOnError)
 
 	variantID := shared.BindResourceIDFlag(fs, "variant-id", "alternativeDistributionPackageVariants", "Alternative distribution package variant ID")
-	output := shared.BindOutputFlags(fs)
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "variants",
@@ -189,20 +145,19 @@ func AlternativeDistributionPackageVariantsCommand() *ffcli.Command {
 Examples:
   asc alternative-distribution packages variants --variant-id "VARIANT_ID"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			trimmedID := strings.TrimSpace(*variantID)
 			if trimmedID == "" {
-				fmt.Fprintln(os.Stderr, "Error: --variant-id is required")
-				return shared.MissingRequiredUsageError("--variant-id")
+				return d.RequiredFlag("--variant-id")
 			}
 
-			client, err := shared.GetASCClient()
+			client, err := d.Client()
 			if err != nil {
 				return fmt.Errorf("alternative-distribution packages variants: %w", err)
 			}
 
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
+			requestCtx, cancel := d.Timeout(ctx)
 			defer cancel()
 
 			resp, err := client.GetAlternativeDistributionPackageVariant(requestCtx, trimmedID)
@@ -210,17 +165,17 @@ Examples:
 				return fmt.Errorf("alternative-distribution packages variants: failed to fetch: %w", err)
 			}
 
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+			return d.PrintOutput(resp, *output.Output, *output.Pretty)
 		},
 	}
 }
 
-// AlternativeDistributionPackageDeltasCommand returns the package delta get subcommand.
-func AlternativeDistributionPackageDeltasCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("deltas", flag.ExitOnError)
+// newAlternativeDistributionPackageDeltasCommand returns the package delta get subcommand.
+func newAlternativeDistributionPackageDeltasCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("deltas", flag.ExitOnError)
 
 	deltaID := shared.BindResourceIDFlag(fs, "delta-id", "alternativeDistributionPackageDeltas", "Alternative distribution package delta ID")
-	output := shared.BindOutputFlags(fs)
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "deltas",
@@ -231,20 +186,19 @@ func AlternativeDistributionPackageDeltasCommand() *ffcli.Command {
 Examples:
   asc alternative-distribution packages deltas --delta-id "DELTA_ID"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			trimmedID := strings.TrimSpace(*deltaID)
 			if trimmedID == "" {
-				fmt.Fprintln(os.Stderr, "Error: --delta-id is required")
-				return shared.MissingRequiredUsageError("--delta-id")
+				return d.RequiredFlag("--delta-id")
 			}
 
-			client, err := shared.GetASCClient()
+			client, err := d.Client()
 			if err != nil {
 				return fmt.Errorf("alternative-distribution packages deltas: %w", err)
 			}
 
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
+			requestCtx, cancel := d.Timeout(ctx)
 			defer cancel()
 
 			resp, err := client.GetAlternativeDistributionPackageDelta(requestCtx, trimmedID)
@@ -252,7 +206,7 @@ Examples:
 				return fmt.Errorf("alternative-distribution packages deltas: failed to fetch: %w", err)
 			}
 
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+			return d.PrintOutput(resp, *output.Output, *output.Pretty)
 		},
 	}
 }

@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"os"
 	"sort"
 	"strings"
 
@@ -53,16 +52,16 @@ func paginationConflictParameter(limit int, next string, paginate bool) string {
 	return ""
 }
 
-// VersionsRelationshipsCommand returns the links subcommand.
-func VersionsRelationshipsCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("versions links", flag.ExitOnError)
+// newVersionsRelationshipsCommand returns the links subcommand.
+func newVersionsRelationshipsCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("versions links", flag.ExitOnError)
 
 	versionID := shared.BindResourceIDFlag(fs, "version-id", "appStoreVersions", "App Store version ID (not an app ID; list IDs with \"asc versions list --app APP_ID\")")
 	relType := fs.String("type", "", shared.RelationshipTypeFlagUsage(appStoreVersionRelationshipList()))
-	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
-	next := fs.String("next", "", "Fetch next page using a links.next URL")
-	paginate := fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")
-	output := shared.BindOutputFlags(fs)
+	limit := fs.Int("limit", 0, shared.LimitFlagUsage(200))
+	next := fs.String("next", "", shared.NextFlagUsage)
+	paginate := fs.Bool("paginate", false, shared.PaginateFlagUsage)
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "links",
@@ -74,43 +73,31 @@ Examples:
   asc versions links --version-id "VERSION_ID" --type "appStoreReviewDetail"
   asc versions links --version-id "VERSION_ID" --type "appStoreVersionExperiments" --paginate`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
-			if *limit != 0 && (*limit < 1 || *limit > 200) {
-				return shared.WithDiagnostic(
-					shared.UsageError("versions links: --limit must be between 1 and 200"),
-					shared.DiagnosticInvalidInput,
-					"--limit",
-				)
-			}
-			if err := shared.ValidateNextURL(*next); err != nil {
-				return shared.WithDiagnostic(
-					shared.UsageErrorf("versions links: %v", err),
-					shared.DiagnosticInvalidInput,
-					"--next",
-				)
+			if err := d.ValidatePaginationFlags(ctx, fs, "versions links", 200); err != nil {
+				return err
 			}
 
 			relationshipType := strings.TrimSpace(*relType)
 			if relationshipType == "" {
-				return shared.MissingRelationshipTypeUsageError(appStoreVersionRelationshipList())
+				return d.MissingRelationshipTypeUsageError(appStoreVersionRelationshipList())
 			}
 
 			kind, ok := appStoreVersionRelationshipKinds[relationshipType]
 			if !ok {
-				shared.PrintInvalidRelationshipTypeError(relationshipType, appStoreVersionRelationshipList())
+				d.PrintInvalidRelationshipTypeError(relationshipType, appStoreVersionRelationshipList())
 				return shared.WithDiagnostic(flag.ErrHelp, shared.DiagnosticInvalidInput, "--type")
 			}
 
 			trimmedID := strings.TrimSpace(*versionID)
 			trimmedNext := strings.TrimSpace(*next)
 			if trimmedID == "" && trimmedNext == "" {
-				fmt.Fprintln(os.Stderr, "Error: --version-id is required")
-				return shared.MissingRequiredUsageError("--version-id")
+				return d.RequiredFlag("--version-id")
 			}
 
 			if kind == relationshipSingle && (trimmedNext != "" || *paginate || *limit != 0) {
-				fmt.Fprintln(os.Stderr, "Error: --limit, --next, and --paginate are only valid for to-many relationships")
+				fmt.Fprintln(d.IO.ErrOut, "Error: --limit, --next, and --paginate are only valid for to-many relationships")
 				return shared.WithDiagnostic(
 					flag.ErrHelp,
 					shared.DiagnosticConflictingInput,
@@ -118,12 +105,12 @@ Examples:
 				)
 			}
 
-			client, err := shared.GetASCClient()
+			client, err := d.Client()
 			if err != nil {
 				return fmt.Errorf("versions links: %w", err)
 			}
 
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
+			requestCtx, cancel := d.Timeout(ctx)
 			defer cancel()
 
 			// A next-page URL replaces the version path in the request, so a
@@ -148,21 +135,21 @@ Examples:
 				if err != nil {
 					return fmt.Errorf("versions links: %w", shared.DescribeRelationshipLookupFailure(err, relationshipType, parent))
 				}
-				return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+				return d.PrintOutput(resp, *output.Output, *output.Pretty)
 			case relationshipList:
 				opts := []asc.LinkagesOption{
-					asc.WithLinkagesLimit(*limit),
-					asc.WithLinkagesNextURL(*next),
+					asc.Limit[asc.LinkagesOption](*limit),
+					asc.NextURL[asc.LinkagesOption](*next),
 				}
 
 				if *paginate {
-					paginateOpts := append(opts, asc.WithLinkagesLimit(200))
+					paginateOpts := append(opts, asc.Limit[asc.LinkagesOption](200))
 					firstPage, err := getAppStoreVersionRelationshipList(requestCtx, client, relationshipType, trimmedID, paginateOpts...)
 					if err != nil {
 						return fmt.Errorf("versions links: failed to fetch: %w", shared.DescribeRelationshipLookupFailure(err, relationshipType, parent))
 					}
 					resp, err := asc.PaginateAll(requestCtx, firstPage, func(ctx context.Context, nextURL string) (asc.PaginatedResponse, error) {
-						page, err := getAppStoreVersionRelationshipList(ctx, client, relationshipType, trimmedID, asc.WithLinkagesNextURL(nextURL))
+						page, err := getAppStoreVersionRelationshipList(ctx, client, relationshipType, trimmedID, asc.NextURL[asc.LinkagesOption](nextURL))
 						if err != nil {
 							return nil, shared.DescribeRelationshipLookupFailure(err, relationshipType, pageParent)
 						}
@@ -171,14 +158,14 @@ Examples:
 					if err != nil {
 						return fmt.Errorf("versions links: %w", err)
 					}
-					return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+					return d.PrintOutput(resp, *output.Output, *output.Pretty)
 				}
 
 				resp, err := getAppStoreVersionRelationshipList(requestCtx, client, relationshipType, trimmedID, opts...)
 				if err != nil {
 					return fmt.Errorf("versions links: %w", shared.DescribeRelationshipLookupFailure(err, relationshipType, parent))
 				}
-				return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+				return d.PrintOutput(resp, *output.Output, *output.Pretty)
 			default:
 				return fmt.Errorf("versions links: unsupported relationship type %q", relationshipType)
 			}

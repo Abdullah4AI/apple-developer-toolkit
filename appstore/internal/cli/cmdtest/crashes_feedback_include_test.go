@@ -1,7 +1,6 @@
 package cmdtest
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -15,6 +14,7 @@ import (
 	"testing"
 
 	rootcmd "github.com/Abdullah4AI/apple-developer-toolkit/appstore/cmd"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asctest"
 )
 
 const feedbackScreenshotFields = "createdDate,comment,email,deviceModel,osVersion,locale,timeZone,architecture,connectionType,pairedAppleWatch,appUptimeInMilliseconds,diskBytesAvailable,diskBytesTotal,batteryPercentage,screenWidthInPoints,screenHeightInPoints,appPlatform,devicePlatform,deviceFamily,buildBundleId,screenshots,build,tester"
@@ -57,15 +57,6 @@ func installDefaultTransportForServer(t *testing.T, server *httptest.Server) {
 	}))
 }
 
-// okJSONResponse builds a 200 JSON response for the mock transport.
-func okJSONResponse(body string) *http.Response {
-	return &http.Response{
-		StatusCode: http.StatusOK,
-		Body:       io.NopCloser(strings.NewReader(body)),
-		Header:     http.Header{"Content-Type": []string{"application/json"}},
-	}
-}
-
 func TestBetaFeedbackListIncludeBuildSendsBuildRelationship(t *testing.T) {
 	for _, tc := range []struct {
 		command  string
@@ -75,40 +66,18 @@ func TestBetaFeedbackListIncludeBuildSendsBuildRelationship(t *testing.T) {
 		{command: "feedback", resource: "betaFeedbackScreenshotSubmissions"},
 	} {
 		t.Run(tc.command, func(t *testing.T) {
-			setupAuth(t)
 			t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 
-			originalTransport := http.DefaultTransport
-			t.Cleanup(func() { http.DefaultTransport = originalTransport })
+			reg := asctest.NewRegistry(t)
+			reg.Register(asctest.GET("/v1/apps/123/"+tc.resource, "include=build", "fields[builds]=version,preReleaseVersion"),
+				asctest.JSON(http.StatusOK, `{"data":[{"type":"`+tc.resource+`","id":"submission-1"}],`+
+					`"included":[{"type":"builds","id":"b1","attributes":{"version":"532621"}}]}`))
 
-			var gotQuery url.Values
-			http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-				if req.Method != http.MethodGet || req.URL.Path != "/v1/apps/123/"+tc.resource {
-					t.Fatalf("unexpected request: %s %s", req.Method, req.URL.String())
-				}
-				gotQuery = req.URL.Query()
-				return okJSONResponse(`{"data":[{"type":"` + tc.resource + `","id":"submission-1"}],` +
-					`"included":[{"type":"builds","id":"b1","attributes":{"version":"532621"}}]}`), nil
-			})
-
-			root := RootCommand("1.2.3")
-			root.FlagSet.SetOutput(io.Discard)
-
-			stdout, stderr := captureOutput(t, func() {
-				if err := root.Parse([]string{"testflight", tc.command, "list", "--app", "123", "--include", "build", "--output", "json"}); err != nil {
-					t.Fatalf("parse error: %v", err)
-				}
-				if err := root.Run(context.Background()); err != nil {
-					t.Fatalf("run error: %v", err)
-				}
-			})
-
-			if got := gotQuery.Get("include"); got != "build" {
-				t.Fatalf("include query = %q, want %q", got, "build")
+			stdout, stderr, err := runRootWithDeps(t, stubClient(t, reg), "testflight", tc.command, "list", "--app", "123", "--include", "build", "--output", "json")
+			if err != nil {
+				t.Fatalf("run error: %v", err)
 			}
-			if got := gotQuery.Get("fields[builds]"); got != "version,preReleaseVersion" {
-				t.Fatalf("fields[builds] query = %q, want %q", got, "version,preReleaseVersion")
-			}
+
 			if stderr != "" {
 				t.Fatalf("expected empty stderr, got %q", stderr)
 			}
@@ -126,26 +95,11 @@ func TestBetaFeedbackListIncludeBuildSendsBuildRelationship(t *testing.T) {
 func TestBetaFeedbackListInvalidIncludeReturnsUsageError(t *testing.T) {
 	for _, command := range []string{"crashes", "feedback"} {
 		t.Run(command, func(t *testing.T) {
-			setupAuth(t)
 			t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 
-			originalTransport := http.DefaultTransport
-			t.Cleanup(func() { http.DefaultTransport = originalTransport })
-			http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-				t.Fatalf("unexpected network request: %s %s", req.Method, req.URL.String())
-				return nil, nil
-			})
+			reg := asctest.NewRegistry(t)
 
-			root := RootCommand("1.2.3")
-			root.FlagSet.SetOutput(io.Discard)
-
-			var runErr error
-			stdout, stderr := captureOutput(t, func() {
-				if err := root.Parse([]string{"testflight", command, "list", "--app", "123", "--include", "bogus"}); err != nil {
-					t.Fatalf("parse error: %v", err)
-				}
-				runErr = root.Run(context.Background())
-			})
+			stdout, stderr, runErr := runRootWithDeps(t, stubClient(t, reg), "testflight", command, "list", "--app", "123", "--include", "bogus")
 
 			if rootcmd.ExitCodeFromError(runErr) != rootcmd.ExitUsage {
 				t.Fatalf("exit code = %d, want %d (err=%v)", rootcmd.ExitCodeFromError(runErr), rootcmd.ExitUsage, runErr)
@@ -164,7 +118,6 @@ func TestBetaFeedbackListInvalidIncludeReturnsUsageError(t *testing.T) {
 }
 
 func TestFeedbackListIncludeScreenshotsPreservesAllFeedbackFields(t *testing.T) {
-	setupAuth(t)
 	t.Setenv("ASC_APP_ID", "")
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 
@@ -191,12 +144,8 @@ func TestFeedbackListIncludeScreenshotsPreservesAllFeedbackFields(t *testing.T) 
 		_, _ = io.WriteString(w, `{"data":[{"type":"betaFeedbackScreenshotSubmissions","id":"fb-1","attributes":{"createdDate":"2026-01-20T00:00:00Z","comment":"Nice","email":"tester@example.com","deviceModel":"iPhone17,1","osVersion":"18.0","locale":"en-US","timeZone":"America/Los_Angeles","architecture":"arm64","connectionType":"WIFI","pairedAppleWatch":"Watch7,1","appUptimeInMilliseconds":1234,"diskBytesAvailable":2000,"diskBytesTotal":4000,"batteryPercentage":85,"screenWidthInPoints":430,"screenHeightInPoints":932,"appPlatform":"IOS","devicePlatform":"IOS","deviceFamily":"IPHONE","buildBundleId":"com.example.app","screenshots":[{"url":"https://example.com/shot.png","width":320,"height":640,"expirationDate":"2026-01-21T00:00:00Z"}]},"relationships":{"build":{"data":{"type":"builds","id":"build-1"}},"tester":{"data":{"type":"betaTesters","id":"tester-1"}}}}]}`)
 	}))
 	t.Cleanup(server.Close)
-	installDefaultTransportForServer(t, server)
 
-	var exitCode int
-	stdout, stderr := captureOutput(t, func() {
-		exitCode = rootcmd.Run([]string{"testflight", "feedback", "list", "--app", "123", "--include-screenshots", "--output", "json"}, "1.2.3")
-	})
+	stdout, stderr, exitCode := runWithDeps(t, stubServerClient(t, server), "testflight", "feedback", "list", "--app", "123", "--include-screenshots", "--output", "json")
 
 	if exitCode != rootcmd.ExitSuccess {
 		t.Fatalf("exit code = %d, want %d; stderr: %s", exitCode, rootcmd.ExitSuccess, stderr)
@@ -271,7 +220,6 @@ func TestFeedbackListIncludeScreenshotsPreservesAllFeedbackFields(t *testing.T) 
 }
 
 func TestFeedbackListIncludeScreenshotsWithIncludedRelationships(t *testing.T) {
-	setupAuth(t)
 	t.Setenv("ASC_APP_ID", "")
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 
@@ -298,12 +246,8 @@ func TestFeedbackListIncludeScreenshotsWithIncludedRelationships(t *testing.T) {
 		_, _ = io.WriteString(w, `{"data":[{"type":"betaFeedbackScreenshotSubmissions","id":"fb-1","attributes":{"screenshots":[{"url":"https://example.com/shot.png","width":320,"height":640,"expirationDate":"2026-01-21T00:00:00Z"}]}}],"included":[{"type":"builds","id":"build-1","attributes":{"version":"1.0"}},{"type":"betaTesters","id":"tester-1","attributes":{"email":"tester@example.com"}}]}`)
 	}))
 	t.Cleanup(server.Close)
-	installDefaultTransportForServer(t, server)
 
-	var exitCode int
-	stdout, stderr := captureOutput(t, func() {
-		exitCode = rootcmd.Run([]string{"testflight", "feedback", "list", "--app", "123", "--include-screenshots", "--include", "build,tester", "--output", "json"}, "1.2.3")
-	})
+	stdout, stderr, exitCode := runWithDeps(t, stubServerClient(t, server), "testflight", "feedback", "list", "--app", "123", "--include-screenshots", "--include", "build,tester", "--output", "json")
 
 	if exitCode != rootcmd.ExitSuccess {
 		t.Fatalf("exit code = %d, want %d; stderr: %s", exitCode, rootcmd.ExitSuccess, stderr)

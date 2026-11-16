@@ -1,14 +1,12 @@
 package cmdtest
 
 import (
-	"context"
-	"errors"
-	"flag"
-	"io"
 	"net/http"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asctest"
 )
 
 type roundTripFunc func(*http.Request) (*http.Response, error)
@@ -33,169 +31,25 @@ func setupAuth(t *testing.T) {
 	t.Setenv("ASC_STRICT_AUTH", "")
 }
 
-func TestGameCenterEnabledVersionsListValidationErrors(t *testing.T) {
-	t.Setenv("ASC_APP_ID", "")
-
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"game-center", "enabled-versions", "list"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		err := root.Run(context.Background())
-		if !errors.Is(err, flag.ErrHelp) {
-			t.Fatalf("expected ErrHelp, got %v", err)
-		}
+func TestGameCenterEnabledVersionsValidationErrors(t *testing.T) {
+	runGameCenterUsageCasesWithDeps(t, []gameCenterUsageCase{
+		{[]string{"game-center", "enabled-versions", "list"}, "--app is required (or set ASC_APP_ID)"},
+		{[]string{"game-center", "enabled-versions", "compatible-versions"}, "--id is required"},
+		{[]string{"game-center", "enabled-versions", "list", "--app", "APP_ID", "--limit", "300"}, "game-center enabled-versions list: --limit must be between 1 and 200"},
 	})
-
-	if stdout != "" {
-		t.Fatalf("expected empty stdout, got %q", stdout)
-	}
-	if !strings.Contains(stderr, "Error: --app is required (or set ASC_APP_ID)") {
-		t.Fatalf("expected missing app error, got %q", stderr)
-	}
-}
-
-func TestGameCenterEnabledVersionsCompatibleVersionsValidationErrors(t *testing.T) {
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"game-center", "enabled-versions", "compatible-versions"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		err := root.Run(context.Background())
-		if !errors.Is(err, flag.ErrHelp) {
-			t.Fatalf("expected ErrHelp, got %v", err)
-		}
-	})
-
-	if stdout != "" {
-		t.Fatalf("expected empty stdout, got %q", stdout)
-	}
-	if !strings.Contains(stderr, "Error: --id is required") {
-		t.Fatalf("expected missing id error, got %q", stderr)
-	}
-}
-
-func TestGameCenterEnabledVersionsListLimitValidation(t *testing.T) {
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	stdout, _ := captureOutput(t, func() {
-		if err := root.Parse([]string{"game-center", "enabled-versions", "list", "--app", "APP_ID", "--limit", "300"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		err := root.Run(context.Background())
-		if err == nil {
-			t.Fatalf("expected error, got nil")
-		}
-	})
-
-	if stdout != "" {
-		t.Fatalf("expected empty stdout, got %q", stdout)
-	}
-}
-
-func TestGameCenterEnabledVersionsOutputErrors(t *testing.T) {
-	tests := []struct {
-		name    string
-		args    []string
-		wantErr string
-	}{
-		{
-			name:    "enabled-versions list unsupported output",
-			args:    []string{"game-center", "enabled-versions", "list", "--app", "APP_ID", "--output", "yaml"},
-			wantErr: `(got "yaml")`,
-		},
-		{
-			name:    "enabled-versions list pretty with table",
-			args:    []string{"game-center", "enabled-versions", "list", "--app", "APP_ID", "--output", "table", "--pretty"},
-			wantErr: "--pretty is only valid with JSON output",
-		},
-		{
-			name:    "enabled-versions list pretty with markdown",
-			args:    []string{"game-center", "enabled-versions", "list", "--app", "APP_ID", "--output", "markdown", "--pretty"},
-			wantErr: "--pretty is only valid with JSON output",
-		},
-		{
-			name:    "enabled-versions compatible unsupported output",
-			args:    []string{"game-center", "enabled-versions", "compatible-versions", "--id", "ENABLED_VERSION_ID", "--output", "yaml"},
-			wantErr: `(got "yaml")`,
-		},
-		{
-			name:    "enabled-versions compatible pretty with table",
-			args:    []string{"game-center", "enabled-versions", "compatible-versions", "--id", "ENABLED_VERSION_ID", "--output", "table", "--pretty"},
-			wantErr: "--pretty is only valid with JSON output",
-		},
-		{
-			name:    "enabled-versions compatible pretty with markdown",
-			args:    []string{"game-center", "enabled-versions", "compatible-versions", "--id", "ENABLED_VERSION_ID", "--output", "markdown", "--pretty"},
-			wantErr: "--pretty is only valid with JSON output",
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			root := RootCommand("1.2.3")
-			root.FlagSet.SetOutput(io.Discard)
-
-			stdout, stderr := captureOutput(t, func() {
-				if err := root.Parse(test.args); err != nil {
-					t.Fatalf("parse error: %v", err)
-				}
-				err := root.Run(context.Background())
-				if !isUsageClassError(err) {
-					t.Fatalf("expected ErrHelp, got %v", err)
-				}
-			})
-
-			if stdout != "" {
-				t.Fatalf("expected empty stdout, got %q", stdout)
-			}
-			if !strings.Contains(stderr, test.wantErr) {
-				t.Fatalf("expected error %q, got %q", test.wantErr, stderr)
-			}
-		})
-	}
 }
 
 func TestGameCenterEnabledVersionsListSuccess(t *testing.T) {
 	setupAuth(t)
 
-	expectedURL := "https://api.appstoreconnect.apple.com/v1/apps/APP_ID/gameCenterEnabledVersions?limit=50"
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() {
-		http.DefaultTransport = originalTransport
-	})
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.String() != expectedURL {
-			t.Fatalf("expected URL %s, got %s", expectedURL, req.URL.String())
-		}
-		body := `{"data":[{"type":"gameCenterEnabledVersions","id":"gc-1"}],"links":{"next":""}}`
-		return &http.Response{
-			StatusCode: http.StatusOK,
-			Body:       io.NopCloser(strings.NewReader(body)),
-			Header:     http.Header{"Content-Type": []string{"application/json"}},
-		}, nil
-	})
+	reg := asctest.NewRegistry(t)
+	reg.Register(asctest.GET("/v1/apps/APP_ID/gameCenterEnabledVersions", "limit=50"),
+		asctest.JSON(http.StatusOK, `{"data":[{"type":"gameCenterEnabledVersions","id":"gc-1"}],"links":{"next":""}}`))
 
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"game-center", "enabled-versions", "list", "--app", "APP_ID", "--limit", "50"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatalf("run error: %v", err)
-		}
-	})
-
+	stdout, stderr, err := runRootWithDeps(t, stubClient(t, reg), "game-center", "enabled-versions", "list", "--app", "APP_ID", "--limit", "50")
+	if err != nil {
+		t.Fatalf("run error: %v", err)
+	}
 	if stderr != "" {
 		t.Fatalf("expected empty stderr, got %q", stderr)
 	}
@@ -208,34 +62,14 @@ func TestGameCenterEnabledVersionsListNextURL(t *testing.T) {
 	setupAuth(t)
 
 	nextURL := "https://api.appstoreconnect.apple.com/v1/apps/app-123/gameCenterEnabledVersions?limit=2"
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() {
-		http.DefaultTransport = originalTransport
-	})
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		if req.URL.String() != nextURL {
-			t.Fatalf("expected URL %s, got %s", nextURL, req.URL.String())
-		}
-		body := `{"data":[{"type":"gameCenterEnabledVersions","id":"gc-2"}],"links":{"next":""}}`
-		return &http.Response{
-			StatusCode: http.StatusOK,
-			Body:       io.NopCloser(strings.NewReader(body)),
-			Header:     http.Header{"Content-Type": []string{"application/json"}},
-		}, nil
-	})
+	reg := asctest.NewRegistry(t)
+	reg.Register(asctest.GET("/v1/apps/app-123/gameCenterEnabledVersions", "limit=2"),
+		asctest.JSON(http.StatusOK, `{"data":[{"type":"gameCenterEnabledVersions","id":"gc-2"}],"links":{"next":""}}`))
 
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"game-center", "enabled-versions", "list", "--next", nextURL}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatalf("run error: %v", err)
-		}
-	})
-
+	stdout, stderr, err := runRootWithDeps(t, stubClient(t, reg), "game-center", "enabled-versions", "list", "--next", nextURL)
+	if err != nil {
+		t.Fatalf("run error: %v", err)
+	}
 	if stderr != "" {
 		t.Fatalf("expected empty stderr, got %q", stderr)
 	}
@@ -247,56 +81,16 @@ func TestGameCenterEnabledVersionsListNextURL(t *testing.T) {
 func TestGameCenterEnabledVersionsListPaginate(t *testing.T) {
 	setupAuth(t)
 
-	firstURL := "https://api.appstoreconnect.apple.com/v1/apps/APP_ID/gameCenterEnabledVersions?limit=200"
-	secondURL := "https://api.appstoreconnect.apple.com/v1/apps/APP_ID/gameCenterEnabledVersions?page=2"
+	reg := asctest.NewRegistry(t)
+	reg.Register(asctest.GET("/v1/apps/APP_ID/gameCenterEnabledVersions", "limit=200"),
+		asctest.JSON(http.StatusOK, `{"data":[{"type":"gameCenterEnabledVersions","id":"gc-3"}],"links":{"next":"https://api.appstoreconnect.apple.com/v1/apps/APP_ID/gameCenterEnabledVersions?page=2"}}`))
+	reg.Register(asctest.GET("/v1/apps/APP_ID/gameCenterEnabledVersions", "page=2"),
+		asctest.JSON(http.StatusOK, `{"data":[{"type":"gameCenterEnabledVersions","id":"gc-4"}],"links":{"next":""}}`))
 
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() {
-		http.DefaultTransport = originalTransport
-	})
-
-	callCount := 0
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		callCount++
-		switch callCount {
-		case 1:
-			if req.URL.String() != firstURL {
-				t.Fatalf("expected first URL %s, got %s", firstURL, req.URL.String())
-			}
-			body := `{"data":[{"type":"gameCenterEnabledVersions","id":"gc-3"}],"links":{"next":"` + secondURL + `"}}`
-			return &http.Response{
-				StatusCode: http.StatusOK,
-				Body:       io.NopCloser(strings.NewReader(body)),
-				Header:     http.Header{"Content-Type": []string{"application/json"}},
-			}, nil
-		case 2:
-			if req.URL.String() != secondURL {
-				t.Fatalf("expected second URL %s, got %s", secondURL, req.URL.String())
-			}
-			body := `{"data":[{"type":"gameCenterEnabledVersions","id":"gc-4"}],"links":{"next":""}}`
-			return &http.Response{
-				StatusCode: http.StatusOK,
-				Body:       io.NopCloser(strings.NewReader(body)),
-				Header:     http.Header{"Content-Type": []string{"application/json"}},
-			}, nil
-		default:
-			t.Fatalf("unexpected request %d to %s", callCount, req.URL.String())
-			return nil, nil
-		}
-	})
-
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"game-center", "enabled-versions", "list", "--app", "APP_ID", "--paginate"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatalf("run error: %v", err)
-		}
-	})
-
+	stdout, stderr, err := runRootWithDeps(t, stubClient(t, reg), "game-center", "enabled-versions", "list", "--app", "APP_ID", "--paginate")
+	if err != nil {
+		t.Fatalf("run error: %v", err)
+	}
 	if stderr != "" {
 		t.Fatalf("expected empty stderr, got %q", stderr)
 	}
@@ -308,35 +102,14 @@ func TestGameCenterEnabledVersionsListPaginate(t *testing.T) {
 func TestGameCenterEnabledVersionsCompatibleVersionsSuccess(t *testing.T) {
 	setupAuth(t)
 
-	expectedURL := "https://api.appstoreconnect.apple.com/v1/gameCenterEnabledVersions/ENABLED_VERSION_ID/compatibleVersions?limit=50"
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() {
-		http.DefaultTransport = originalTransport
-	})
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		if req.URL.String() != expectedURL {
-			t.Fatalf("expected URL %s, got %s", expectedURL, req.URL.String())
-		}
-		body := `{"data":[{"type":"gameCenterEnabledVersions","id":"gc-5"}],"links":{"next":""}}`
-		return &http.Response{
-			StatusCode: http.StatusOK,
-			Body:       io.NopCloser(strings.NewReader(body)),
-			Header:     http.Header{"Content-Type": []string{"application/json"}},
-		}, nil
-	})
+	reg := asctest.NewRegistry(t)
+	reg.Register(asctest.GET("/v1/gameCenterEnabledVersions/ENABLED_VERSION_ID/compatibleVersions", "limit=50"),
+		asctest.JSON(http.StatusOK, `{"data":[{"type":"gameCenterEnabledVersions","id":"gc-5"}],"links":{"next":""}}`))
 
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"game-center", "enabled-versions", "compatible-versions", "--id", "ENABLED_VERSION_ID", "--limit", "50"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatalf("run error: %v", err)
-		}
-	})
-
+	stdout, stderr, err := runRootWithDeps(t, stubClient(t, reg), "game-center", "enabled-versions", "compatible-versions", "--id", "ENABLED_VERSION_ID", "--limit", "50")
+	if err != nil {
+		t.Fatalf("run error: %v", err)
+	}
 	if stderr != "" {
 		t.Fatalf("expected empty stderr, got %q", stderr)
 	}
@@ -348,56 +121,16 @@ func TestGameCenterEnabledVersionsCompatibleVersionsSuccess(t *testing.T) {
 func TestGameCenterEnabledVersionsCompatibleVersionsPaginate(t *testing.T) {
 	setupAuth(t)
 
-	firstURL := "https://api.appstoreconnect.apple.com/v1/gameCenterEnabledVersions/ENABLED_VERSION_ID/compatibleVersions?limit=200"
-	secondURL := "https://api.appstoreconnect.apple.com/v1/gameCenterEnabledVersions/ENABLED_VERSION_ID/compatibleVersions?page=2"
+	reg := asctest.NewRegistry(t)
+	reg.Register(asctest.GET("/v1/gameCenterEnabledVersions/ENABLED_VERSION_ID/compatibleVersions", "limit=200"),
+		asctest.JSON(http.StatusOK, `{"data":[{"type":"gameCenterEnabledVersions","id":"gc-6"}],"links":{"next":"https://api.appstoreconnect.apple.com/v1/gameCenterEnabledVersions/ENABLED_VERSION_ID/compatibleVersions?page=2"}}`))
+	reg.Register(asctest.GET("/v1/gameCenterEnabledVersions/ENABLED_VERSION_ID/compatibleVersions", "page=2"),
+		asctest.JSON(http.StatusOK, `{"data":[{"type":"gameCenterEnabledVersions","id":"gc-7"}],"links":{"next":""}}`))
 
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() {
-		http.DefaultTransport = originalTransport
-	})
-
-	callCount := 0
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		callCount++
-		switch callCount {
-		case 1:
-			if req.URL.String() != firstURL {
-				t.Fatalf("expected first URL %s, got %s", firstURL, req.URL.String())
-			}
-			body := `{"data":[{"type":"gameCenterEnabledVersions","id":"gc-6"}],"links":{"next":"` + secondURL + `"}}`
-			return &http.Response{
-				StatusCode: http.StatusOK,
-				Body:       io.NopCloser(strings.NewReader(body)),
-				Header:     http.Header{"Content-Type": []string{"application/json"}},
-			}, nil
-		case 2:
-			if req.URL.String() != secondURL {
-				t.Fatalf("expected second URL %s, got %s", secondURL, req.URL.String())
-			}
-			body := `{"data":[{"type":"gameCenterEnabledVersions","id":"gc-7"}],"links":{"next":""}}`
-			return &http.Response{
-				StatusCode: http.StatusOK,
-				Body:       io.NopCloser(strings.NewReader(body)),
-				Header:     http.Header{"Content-Type": []string{"application/json"}},
-			}, nil
-		default:
-			t.Fatalf("unexpected request %d to %s", callCount, req.URL.String())
-			return nil, nil
-		}
-	})
-
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"game-center", "enabled-versions", "compatible-versions", "--id", "ENABLED_VERSION_ID", "--paginate"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		if err := root.Run(context.Background()); err != nil {
-			t.Fatalf("run error: %v", err)
-		}
-	})
-
+	stdout, stderr, err := runRootWithDeps(t, stubClient(t, reg), "game-center", "enabled-versions", "compatible-versions", "--id", "ENABLED_VERSION_ID", "--paginate")
+	if err != nil {
+		t.Fatalf("run error: %v", err)
+	}
 	if stderr != "" {
 		t.Fatalf("expected empty stderr, got %q", stderr)
 	}

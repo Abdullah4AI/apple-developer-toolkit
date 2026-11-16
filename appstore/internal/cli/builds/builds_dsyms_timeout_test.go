@@ -6,10 +6,10 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
-	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
 func TestBuildsDsymsCommandGivesEachDownloadFreshTimeout(t *testing.T) {
@@ -39,33 +39,27 @@ func TestBuildsDsymsCommandGivesEachDownloadFreshTimeout(t *testing.T) {
 		return nil, fmt.Errorf("unexpected App Store Connect request %d", apiCalls)
 	})
 
-	restoreASCClient := shared.SetASCClientFactoryForTesting(func() (*asc.Client, error) {
-		return client, nil
-	})
-	t.Cleanup(restoreASCClient)
-
 	var downloadDeadlines []time.Time
-	restoreDownloadClient := SetDSYMHTTPClient(&http.Client{
-		Transport: buildsWaitRoundTripFunc(func(req *http.Request) (*http.Response, error) {
-			deadline, ok := req.Context().Deadline()
-			if !ok {
-				return nil, fmt.Errorf("dSYM download has no deadline")
-			}
-			downloadDeadlines = append(downloadDeadlines, deadline)
-			if len(downloadDeadlines) == 1 {
-				time.Sleep(15 * time.Millisecond)
-			}
-			return &http.Response{
-				StatusCode: http.StatusOK,
-				Status:     "200 OK",
-				Body:       io.NopCloser(strings.NewReader("symbols")),
-				Request:    req,
-			}, nil
-		}),
+	downloads := buildsWaitRoundTripFunc(func(req *http.Request) (*http.Response, error) {
+		deadline, ok := req.Context().Deadline()
+		if !ok {
+			return nil, fmt.Errorf("dSYM download has no deadline")
+		}
+		downloadDeadlines = append(downloadDeadlines, deadline)
+		if len(downloadDeadlines) == 1 {
+			time.Sleep(15 * time.Millisecond)
+		}
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Status:     "200 OK",
+			Body:       io.NopCloser(strings.NewReader("symbols")),
+			Request:    req,
+		}, nil
 	})
-	t.Cleanup(restoreDownloadClient)
 
-	cmd := BuildsDsymsCommand()
+	d, _ := newBuildsTestDeps(func() (*asc.Client, error) { return client, nil })
+	d.HTTPTransport = func() http.RoundTripper { return downloads }
+	cmd := newBuildsDsymsCommand(d)
 	if err := cmd.FlagSet.Parse([]string{
 		"--build-id", "build-1",
 		"--output-dir", t.TempDir(),
@@ -73,14 +67,16 @@ func TestBuildsDsymsCommandGivesEachDownloadFreshTimeout(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("parse flags: %v", err)
 	}
-	if err := cmd.Exec(t.Context(), nil); err != nil {
-		t.Fatalf("BuildsDsymsCommand.Exec() error: %v", err)
+	var execErr error
+	synctest.Test(t, func(t *testing.T) { execErr = cmd.Exec(t.Context(), nil) })
+	if execErr != nil {
+		t.Fatalf("BuildsDsymsCommand.Exec() error: %v", execErr)
 	}
 
 	if len(downloadDeadlines) != 2 {
 		t.Fatalf("download requests = %d, want 2", len(downloadDeadlines))
 	}
-	if delta := downloadDeadlines[1].Sub(downloadDeadlines[0]); delta < 10*time.Millisecond {
-		t.Fatalf("second download deadline advanced by %v, want at least 10ms from a fresh timeout", delta)
+	if delta := downloadDeadlines[1].Sub(downloadDeadlines[0]); delta != 15*time.Millisecond {
+		t.Fatalf("second download deadline advanced by %v, want 15ms from a fresh timeout", delta)
 	}
 }

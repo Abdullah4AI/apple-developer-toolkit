@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/peterbourgon/ff/v3/ffcli"
@@ -13,9 +12,9 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
-// AppClipsCommand returns the app-clips command group.
-func AppClipsCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("app-clips", flag.ExitOnError)
+// NewAppClipsCommand returns the app-clips command group.
+func NewAppClipsCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("app-clips", flag.ExitOnError)
 
 	return &ffcli.Command{
 		Name:       "app-clips",
@@ -30,18 +29,18 @@ Examples:
   asc app-clips advanced-experiences create --app "APP_ID" --bundle-id "com.example.clip" --link "https://example.com" --default-language EN --is-powered-by --header-image-id "IMAGE_ID" --localization-id "LOCALIZATION_ID"
   asc app-clips invocations list --build-bundle-id "BUILD_BUNDLE_ID"`,
 		FlagSet:   fs,
-		UsageFunc: shared.VisibleUsageFunc,
+		UsageFunc: d.VisibleUsageFunc,
 		Subcommands: []*ffcli.Command{
-			AppClipsListCommand(),
-			AppClipsGetCommand(),
-			AppClipDefaultExperiencesCommand(),
-			AppClipAdvancedExperiencesCommand(),
-			AppClipDefaultExperiencesRelationshipsCommand(),
-			AppClipAdvancedExperiencesRelationshipsCommand(),
-			AppClipHeaderImagesCommand(),
-			AppClipInvocationsCommand(),
-			AppClipDomainStatusCommand(),
-			AppClipReviewDetailsCommand(),
+			newAppClipsListCommand(d),
+			newAppClipsGetCommand(d),
+			newAppClipDefaultExperiencesCommand(d),
+			newAppClipAdvancedExperiencesCommand(d),
+			newAppClipDefaultExperiencesRelationshipsCommand(d),
+			newAppClipAdvancedExperiencesRelationshipsCommand(d),
+			newAppClipHeaderImagesCommand(d),
+			newAppClipInvocationsCommand(d),
+			newAppClipDomainStatusCommand(d),
+			newAppClipReviewDetailsCommand(d),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp
@@ -49,16 +48,16 @@ Examples:
 	}
 }
 
-// AppClipsListCommand returns the app clips list subcommand.
-func AppClipsListCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("list", flag.ExitOnError)
+// newAppClipsListCommand returns the app clips list subcommand.
+func newAppClipsListCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("list", flag.ExitOnError)
 
 	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
 	bundleID := fs.String("bundle-id", "", "Filter by bundle ID(s), comma-separated")
-	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
-	next := fs.String("next", "", "Fetch next page using a links.next URL")
-	paginate := fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")
-	output := shared.BindOutputFlags(fs)
+	limit := fs.Int("limit", 0, shared.LimitFlagUsage(200))
+	next := fs.String("next", "", shared.NextFlagUsage)
+	paginate := fs.Bool("paginate", false, shared.PaginateFlagUsage)
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "list",
@@ -72,81 +71,69 @@ Examples:
   asc app-clips list --app "APP_ID" --limit 50
   asc app-clips list --app "APP_ID" --paginate`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
-			if *limit != 0 && (*limit < 1 || *limit > 200) {
-				return shared.UsageError("app-clips list: --limit must be between 1 and 200")
-			}
-			if err := shared.ValidateNextURL(*next); err != nil {
-				return shared.UsageErrorf("app-clips list: %v", err)
-			}
-			if err := shared.RejectNextFlagConflicts(fs, *next, "app-clips list", "bundle-id"); err != nil {
+			if err := d.ValidatePaginationFlags(ctx, fs, "app-clips list", 200, "bundle-id"); err != nil {
 				return err
 			}
 
-			appValue := strings.TrimSpace(shared.ResolveAppID(*appID))
-			if appValue == "" {
-				fmt.Fprintln(os.Stderr, "Error: --app is required")
-				return shared.MissingRequiredUsageError("--app")
+			appValue := strings.TrimSpace(d.ResolveAppID(*appID))
+			if appValue == "" && strings.TrimSpace(*next) == "" {
+				return d.RequiredFlag("--app")
 			}
 
-			client, err := shared.GetASCClient()
+			client, err := d.Client()
 			if err != nil {
 				return fmt.Errorf("app-clips list: %w", err)
 			}
 
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
+			requestCtx, cancel := d.Timeout(ctx)
 			defer cancel()
 
 			opts := []asc.AppClipsOption{
-				asc.WithAppClipsLimit(*limit),
-				asc.WithAppClipsNextURL(*next),
+				asc.Limit[asc.AppClipsOption](*limit),
+				asc.NextURL[asc.AppClipsOption](*next),
 				asc.WithAppClipsBundleIDs(shared.SplitCSV(*bundleID)),
 			}
 
 			if *paginate {
-				paginateOpts := append(opts, asc.WithAppClipsLimit(200))
+				paginateOpts := append(opts, asc.Limit[asc.AppClipsOption](200))
 				firstPage, err := client.GetAppClips(requestCtx, appValue, paginateOpts...)
 				if err != nil {
 					if asc.IsNotFound(err) {
 						empty := &asc.AppClipsResponse{Data: []asc.Resource[asc.AppClipAttributes]{}}
-						return shared.PrintOutput(empty, *output.Output, *output.Pretty)
+						return d.PrintOutput(empty, *output.Output, *output.Pretty)
 					}
 					return fmt.Errorf("app-clips list: failed to fetch: %w", err)
 				}
 
 				resp, err := asc.PaginateAll(requestCtx, firstPage, func(ctx context.Context, nextURL string) (asc.PaginatedResponse, error) {
-					return client.GetAppClips(ctx, appValue, asc.WithAppClipsNextURL(nextURL))
+					return client.GetAppClips(ctx, appValue, asc.NextURL[asc.AppClipsOption](nextURL))
 				})
 				if err != nil {
 					return fmt.Errorf("app-clips list: %w", err)
 				}
 
-				return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+				return d.PrintOutput(resp, *output.Output, *output.Pretty)
 			}
 
 			resp, err := client.GetAppClips(requestCtx, appValue, opts...)
 			if err != nil {
 				if asc.IsNotFound(err) {
 					empty := &asc.AppClipsResponse{Data: []asc.Resource[asc.AppClipAttributes]{}}
-					return shared.PrintOutput(empty, *output.Output, *output.Pretty)
+					return d.PrintOutput(empty, *output.Output, *output.Pretty)
 				}
 				return fmt.Errorf("app-clips list: failed to fetch: %w", err)
 			}
 
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+			return d.PrintOutput(resp, *output.Output, *output.Pretty)
 		},
 	}
 }
 
-// AppClipsGetCommand returns the app clips get subcommand.
-func AppClipsGetCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("view", flag.ExitOnError)
-
-	appClipID := shared.BindResourceIDFlag(fs, "id", "appClips", "App Clip ID")
-	output := shared.BindOutputFlags(fs)
-
-	return &ffcli.Command{
+// newAppClipsGetCommand returns the app clips get subcommand.
+func newAppClipsGetCommand(d *shared.Deps) *ffcli.Command {
+	return shared.BuildIDGetCommand(shared.IDGetCommandConfig{
 		Name:       "view",
 		ShortUsage: "asc app-clips view --id \"CLIP_ID\"",
 		ShortHelp:  "View App Clip details by ID.",
@@ -154,29 +141,12 @@ func AppClipsGetCommand() *ffcli.Command {
 
 Examples:
   asc app-clips view --id "CLIP_ID"`,
-		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
-		Exec: func(ctx context.Context, args []string) error {
-			idValue := strings.TrimSpace(*appClipID)
-			if idValue == "" {
-				fmt.Fprintln(os.Stderr, "Error: --id is required")
-				return shared.MissingRequiredUsageError("--id")
-			}
-
-			client, err := shared.GetASCClient()
-			if err != nil {
-				return fmt.Errorf("app-clips view: %w", err)
-			}
-
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
-			defer cancel()
-
-			resp, err := client.GetAppClip(requestCtx, idValue)
-			if err != nil {
-				return fmt.Errorf("app-clips view: failed to fetch: %w", err)
-			}
-
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+		IDUsage:            "App Clip ID",
+		IDType:             "appClips",
+		RequiredDiagnostic: true,
+		Deps:               d,
+		Fetch: func(ctx context.Context, client *asc.Client, id string) (any, error) {
+			return client.GetAppClip(ctx, id)
 		},
-	}
+	})
 }

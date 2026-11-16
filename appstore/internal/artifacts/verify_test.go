@@ -321,12 +321,12 @@ func TestVerifyPKG(t *testing.T) {
 func TestInspectWithoutVerificationLeavesResultUnset(t *testing.T) {
 	chain := artifactstest.NewTrustChain(t, validFrom, validUntil)
 	ipa := verificationIPA(t, artifactstest.SignedMachO(t, sealedOptions(&chain)), zip.Deflate, nil)
-	manifest, err := InspectIPA(bytes.NewReader(ipa), int64(len(ipa)), false, false)
+	manifest, err := InspectIPAWithOptions(bytes.NewReader(ipa), int64(len(ipa)), IPAOptions{IncludeEntitlements: false, IncludeProfile: false})
 	if err != nil || manifest.SignatureVerification != nil || manifest.CodeSignature != SignatureSigned {
 		t.Fatalf("manifest=%+v err=%v", manifest, err)
 	}
 	pkg := artifactstest.SignedXar(t, map[string][]byte{"PackageInfo": []byte(`<pkg-info identifier="com.example.pkg"/>`)}, chain, time.Now())
-	pkgManifest, err := InspectPKG(bytes.NewReader(pkg), int64(len(pkg)))
+	pkgManifest, err := inspectPKG(bytes.NewReader(pkg), int64(len(pkg)), nil)
 	if err != nil || pkgManifest.SignatureVerification != nil || pkgManifest.PackageSignature != SignatureSigned {
 		t.Fatalf("manifest=%+v err=%v", pkgManifest, err)
 	}
@@ -389,6 +389,16 @@ func TestEmbeddedAppleCertificates(t *testing.T) {
 	}
 	if len(policy.intermediates) != 5 || len(policy.rootNames) != 2 {
 		t.Fatalf("policy has %d intermediates and %d roots", len(policy.intermediates), len(policy.rootNames))
+	}
+	intermediates, err := AppleIntermediateCertificates()
+	if err != nil || len(intermediates) != 5 {
+		t.Fatalf("intermediates = %d, err = %v", len(intermediates), err)
+	}
+	for _, intermediate := range intermediates {
+		digest := sha256.Sum256(intermediate.Certificate.Raw)
+		if hex.EncodeToString(digest[:]) != want["intermediate-"+intermediate.Name+".pem"] {
+			t.Fatalf("%s fingerprint = %x", intermediate.Name, digest)
+		}
 	}
 }
 

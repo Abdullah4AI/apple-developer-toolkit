@@ -7,7 +7,6 @@ import (
 	"flag"
 	"fmt"
 	"maps"
-	"os"
 	"sort"
 	"strings"
 	"sync"
@@ -68,14 +67,14 @@ type iapPricePointValue struct {
 	Proceeds      string
 }
 
-// IAPPricesCommand returns the canonical pricing summary command for IAPs.
-func IAPPricesCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("summary", flag.ExitOnError)
+// newIAPPricesCommand returns the canonical pricing summary command for IAPs.
+func newIAPPricesCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("summary", flag.ExitOnError)
 
 	appID := fs.String("app", "", iapLookupAppUsage)
 	iapID := shared.BindResourceIDFlag(fs, "iap-id", "inAppPurchases", "In-app purchase ID, product ID, or exact current name")
 	territory := fs.String("territory", "", "Territory filter (accepts alpha-2, alpha-3, or exact English country name)")
-	output := shared.BindOutputFlags(fs)
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "summary",
@@ -88,24 +87,24 @@ Examples:
   asc iap pricing summary --iap-id "IAP_ID"
   asc iap pricing summary --app "APP_ID" --territory "France" --output table`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			requestedIAPID := strings.TrimSpace(*iapID)
 			requestedAppID := strings.TrimSpace(*appID)
-			resolvedAppID := shared.ResolveAppID(requestedAppID)
+			resolvedAppID := d.ResolveAppID(requestedAppID)
 			if requestedIAPID == "" && resolvedAppID == "" {
-				fmt.Fprintln(os.Stderr, "Error: --app or --iap-id is required")
+				fmt.Fprintln(d.IO.ErrOut, "Error: --app or --iap-id is required")
 				return shared.MissingRequiredUsageError("")
 			}
 
-			client, err := shared.GetASCClient()
+			client, err := d.Client()
 			if err != nil {
 				return fmt.Errorf("iap prices: %w", err)
 			}
 
 			var iaps []asc.Resource[asc.InAppPurchaseV2Attributes]
 			if requestedIAPID != "" {
-				requestedIAPID, err = resolveIAPLookupIDWithTimeout(ctx, client, requestedAppID, requestedIAPID)
+				requestedIAPID, err = resolveIAPLookupIDWithTimeout(ctx, d, client, requestedAppID, requestedIAPID)
 				if err != nil {
 					return err
 				}
@@ -114,11 +113,11 @@ Examples:
 			if territoryFilter != "" {
 				territoryFilter, err = ascterritory.Normalize(territoryFilter)
 				if err != nil {
-					return shared.UsageError(err.Error())
+					return d.UsageError(err.Error())
 				}
 			}
 
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
+			requestCtx, cancel := d.Timeout(ctx)
 			defer cancel()
 
 			if requestedIAPID != "" {
@@ -128,13 +127,13 @@ Examples:
 				}
 				iaps = []asc.Resource[asc.InAppPurchaseV2Attributes]{resp.Data}
 			} else {
-				firstPage, err := client.GetInAppPurchasesV2(requestCtx, resolvedAppID, asc.WithIAPLimit(200))
+				firstPage, err := client.GetInAppPurchasesV2(requestCtx, resolvedAppID, asc.Limit[asc.IAPOption](200))
 				if err != nil {
 					return fmt.Errorf("iap prices: failed to fetch IAP list: %w", err)
 				}
 
 				paginated, err := asc.PaginateAll(requestCtx, firstPage, func(ctx context.Context, nextURL string) (asc.PaginatedResponse, error) {
-					return client.GetInAppPurchasesV2(ctx, resolvedAppID, asc.WithIAPNextURL(nextURL))
+					return client.GetInAppPurchasesV2(ctx, resolvedAppID, asc.NextURL[asc.IAPOption](nextURL))
 				})
 				if err != nil {
 					return fmt.Errorf("iap prices: paginate IAP list: %w", err)
@@ -152,13 +151,13 @@ Examples:
 				client,
 				iaps,
 				territoryFilter,
-				shared.PricingNow(),
+				d.Now(),
 			)
 			if err != nil {
 				return fmt.Errorf("iap prices: %w", err)
 			}
 
-			return printIAPPricesResult(&iapPricesResult{IAPs: summaries}, *output.Output, *output.Pretty)
+			return printIAPPricesResult(d, &iapPricesResult{IAPs: summaries}, *output.Output, *output.Pretty)
 		},
 	}
 }
@@ -343,13 +342,13 @@ func fetchAllSchedulePriceEntries(ctx context.Context, client *asc.Client, sched
 type schedulePriceFetcher func(context.Context, ...asc.IAPPriceSchedulePricesOption) (*asc.InAppPurchasePricesResponse, error)
 
 func fetchSchedulePriceEntries(ctx context.Context, fetch schedulePriceFetcher) ([]iapPriceEntry, error) {
-	firstPage, err := fetch(ctx, asc.WithIAPPriceSchedulePricesLimit(200))
+	firstPage, err := fetch(ctx, asc.Limit[asc.IAPPriceSchedulePricesOption](200))
 	if err != nil {
 		return nil, err
 	}
 
 	paginated, err := asc.PaginateAll(ctx, firstPage, func(ctx context.Context, nextURL string) (asc.PaginatedResponse, error) {
-		return fetch(ctx, asc.WithIAPPriceSchedulePricesNextURL(nextURL))
+		return fetch(ctx, asc.NextURL[asc.IAPPriceSchedulePricesOption](nextURL))
 	})
 	if err != nil {
 		return nil, err
@@ -413,14 +412,14 @@ func fetchIAPPricePointValues(
 		asc.WithIAPPricePointsFields([]string{"customerPrice", "proceeds", "territory"}),
 		asc.WithIAPPricePointsInclude([]string{"territory"}),
 		asc.WithIAPPricePointsTerritoryFields([]string{"currency"}),
-		asc.WithIAPPricePointsLimit(8000),
+		asc.Limit[asc.IAPPricePointsOption](8000),
 	)
 	if err != nil {
 		return nil, "", fmt.Errorf("fetch price points: %w", err)
 	}
 
 	paginated, err := asc.PaginateAll(ctx, firstPage, func(ctx context.Context, nextURL string) (asc.PaginatedResponse, error) {
-		return client.GetInAppPurchasePricePoints(ctx, iapID, asc.WithIAPPricePointsNextURL(nextURL))
+		return client.GetInAppPurchasePricePoints(ctx, iapID, asc.NextURL[asc.IAPPricePointsOption](nextURL))
 	})
 	if err != nil {
 		return nil, "", fmt.Errorf("paginate price points: %w", err)
@@ -466,13 +465,13 @@ func fetchManualSchedulePricePointValues(
 				asc.WithIAPPriceSchedulePricesFields([]string{"manual", "inAppPurchasePricePoint", "territory"}),
 				asc.WithIAPPriceSchedulePricesPricePointFields([]string{"customerPrice", "proceeds", "territory"}),
 				asc.WithIAPPriceSchedulePricesTerritoryFields([]string{"currency"}),
-				asc.WithIAPPriceSchedulePricesLimit(200),
+				asc.Limit[asc.IAPPriceSchedulePricesOption](200),
 			)
 		}
 		return client.GetInAppPurchasePriceScheduleManualPrices(
 			ctx,
 			scheduleID,
-			asc.WithIAPPriceSchedulePricesNextURL(nextURL),
+			asc.NextURL[asc.IAPPriceSchedulePricesOption](nextURL),
 		)
 	}
 
@@ -969,17 +968,17 @@ func dedupePriceEntries(entries []iapPriceEntry) []iapPriceEntry {
 	return unique
 }
 
-func printIAPPricesResult(result *iapPricesResult, format string, pretty bool) error {
-	return shared.PrintOutputWithRenderers(
+func printIAPPricesResult(d *shared.Deps, result *iapPricesResult, format string, pretty bool) error {
+	return d.PrintOutputWithRenderers(
 		result,
 		format,
 		pretty,
-		func() error { return printIAPPricesTable(result) },
-		func() error { return printIAPPricesMarkdown(result) },
+		func() error { return printIAPPricesTable(d, result) },
+		func() error { return printIAPPricesMarkdown(d, result) },
 	)
 }
 
-func printIAPPricesTable(result *iapPricesResult) error {
+func printIAPPricesTable(d *shared.Deps, result *iapPricesResult) error {
 	headers := []string{"ID", "Name", "Product ID", "Type", "Base Territory", "Current Price", "Estimated Proceeds", "Scheduled Changes"}
 	rows := make([][]string, 0, len(result.IAPs))
 	for _, item := range result.IAPs {
@@ -994,11 +993,11 @@ func printIAPPricesTable(result *iapPricesResult) error {
 			formatScheduledChanges(item.ScheduledChanges),
 		})
 	}
-	asc.RenderTable(headers, rows)
+	asc.RenderTableTo(d.IO.Out, headers, rows)
 	return nil
 }
 
-func printIAPPricesMarkdown(result *iapPricesResult) error {
+func printIAPPricesMarkdown(d *shared.Deps, result *iapPricesResult) error {
 	headers := []string{"ID", "Name", "Product ID", "Type", "Base Territory", "Current Price", "Estimated Proceeds", "Scheduled Changes"}
 	rows := make([][]string, 0, len(result.IAPs))
 	for _, item := range result.IAPs {
@@ -1013,7 +1012,7 @@ func printIAPPricesMarkdown(result *iapPricesResult) error {
 			formatScheduledChanges(item.ScheduledChanges),
 		})
 	}
-	asc.RenderMarkdown(headers, rows)
+	asc.RenderMarkdownTo(d.IO.Out, headers, rows)
 	return nil
 }
 

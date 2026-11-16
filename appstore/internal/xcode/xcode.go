@@ -72,15 +72,19 @@ func signingCaseInsensitiveVolumeForRuntime(path string) (bool, bool) {
 const xcodebuildErrorTailLimit = 64 * 1024
 
 type ArchiveOptions struct {
-	WorkspacePath  string
-	ProjectPath    string
-	Scheme         string
-	Configuration  string
-	ArchivePath    string
-	Clean          bool
-	Overwrite      bool
-	XcodebuildArgs []string
-	LogWriter      io.Writer
+	WorkspacePath    string
+	ProjectPath      string
+	Scheme           string
+	Configuration    string
+	Destination      string
+	DerivedDataPath  string
+	ResultBundlePath string
+	ArchivePath      string
+	Clean            bool
+	NoCodeSigning    bool
+	Overwrite        bool
+	XcodebuildArgs   []string
+	LogWriter        io.Writer
 }
 
 type ArchiveResult struct {
@@ -97,6 +101,7 @@ type ExportOptions struct {
 	ExportOptions  string
 	IPAPath        string
 	PKGPath        string
+	ExportDir      string
 	Overwrite      bool
 	XcodebuildArgs []string
 	Environment    []string
@@ -114,6 +119,9 @@ type ExportResult struct {
 	BundleID    string `json:"bundle_id,omitempty"`
 	Version     string `json:"version,omitempty"`
 	BuildNumber string `json:"build_number,omitempty"`
+
+	ExportDir   string   `json:"exportDir,omitempty"`
+	ExportFiles []string `json:"exportFiles,omitempty"`
 }
 
 type ValidateOptions struct {
@@ -245,6 +253,122 @@ func PreflightExportPKGDestination(pkgPath string, overwrite, directUpload bool)
 	return preflightWritableParent(strings.TrimSpace(pkgPath), "pkg output")
 }
 
+// ValidateExportDir checks an --export-dir destination without mutating the
+// filesystem. It must be missing or empty unless overwrite is set.
+func ValidateExportDir(dir, ipaPath, pkgPath string, overwrite, directUpload bool) error {
+	if dir = strings.TrimSpace(dir); dir == "" {
+		return nil
+	}
+	if directUpload {
+		return exportDestinationUsageError{message: "--export-dir cannot be used when ExportOptions.plist uses destination=upload"}
+	}
+	for flagName, artifactPath := range map[string]string{"--ipa-path": ipaPath, "--pkg-path": pkgPath} {
+		if artifactPath = strings.TrimSpace(artifactPath); artifactPath != "" && sameAbsolutePath(dir, artifactPath) {
+			return exportDestinationUsageError{message: "--export-dir must not be the same path as " + flagName}
+		}
+	}
+	info, err := os.Lstat(dir)
+	switch {
+	case errors.Is(err, os.ErrNotExist):
+		return nil
+	case err != nil:
+		return fmt.Errorf("lstat export dir: %w", err)
+	case !info.IsDir():
+		return exportDestinationUsageError{message: fmt.Sprintf("--export-dir must be a directory: %s", dir)}
+	case overwrite:
+		return nil
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return fmt.Errorf("read export dir: %w", err)
+	}
+	if len(entries) > 0 {
+		return exportDestinationUsageError{message: fmt.Sprintf("--export-dir is not empty: %s (use --overwrite to replace matching entries)", dir)}
+	}
+	return nil
+}
+
+func sameAbsolutePath(first, second string) bool {
+	firstAbs, firstErr := filepath.Abs(first)
+	secondAbs, secondErr := filepath.Abs(second)
+	return firstErr == nil && secondErr == nil && firstAbs == secondAbs
+}
+
+// PreflightExportDir creates an --export-dir destination and proves a file can
+// be written inside it before the export runs.
+func PreflightExportDir(dir string) error {
+	if dir = strings.TrimSpace(dir); dir == "" {
+		return nil
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return fmt.Errorf("create export dir: %w", err)
+	}
+	return preflightWritableParent(filepath.Join(dir, "probe"), "export dir")
+}
+
+// keepExportOutputs copies everything xcodebuild wrote except the main
+// artifact into opts.ExportDir and returns the top-level names it kept.
+func keepExportOutputs(opts ExportOptions, tempExportDir, artifactPath string) ([]string, error) {
+	if opts.ExportDir == "" {
+		return nil, nil
+	}
+	root, err := rootfs.New(opts.ExportDir)
+	if err != nil {
+		return nil, fmt.Errorf("open export dir: %w", err)
+	}
+	defer root.Close()
+	if err := root.MkdirAll(".", 0o755); err != nil {
+		return nil, fmt.Errorf("create export dir: %w", err)
+	}
+	kept := []string{}
+	err = filepath.WalkDir(tempExportDir, func(path string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil || path == tempExportDir || path == artifactPath {
+			return walkErr
+		}
+		rel, err := filepath.Rel(tempExportDir, path)
+		if err != nil {
+			return err
+		}
+		switch {
+		case entry.IsDir():
+			err = root.MkdirAll(rel, 0o755)
+		case entry.Type().IsRegular():
+			err = copyExportOutput(root, path, rel, opts.Overwrite)
+		default:
+			if opts.LogWriter != nil {
+				fmt.Fprintf(opts.LogWriter, "Warning: --export-dir skipped %s: not a regular file or directory\n", rel)
+			}
+			return nil
+		}
+		if err != nil {
+			return fmt.Errorf("keep export output %s: %w", rel, err)
+		}
+		if !strings.ContainsRune(rel, filepath.Separator) {
+			kept = append(kept, rel)
+		}
+		return nil
+	})
+	return kept, err
+}
+
+func copyExportOutput(root rootfs.Root, sourcePath, rel string, overwrite bool) error {
+	source, err := os.Open(sourcePath)
+	if err != nil {
+		return err
+	}
+	defer source.Close()
+	info, err := source.Stat()
+	if err != nil {
+		return err
+	}
+	if overwrite {
+		_, err = root.WriteFrom(rel, source, info.Mode().Perm())
+	} else {
+		_, err = root.CreateNewFrom(rel, source, info.Mode().Perm())
+	}
+	return err
+}
+
 func preflightWritableParent(path, description string) error {
 	parent := filepath.Dir(path)
 	if err := os.MkdirAll(parent, 0o755); err != nil {
@@ -266,6 +390,14 @@ func preflightWritableParent(path, description string) error {
 func Archive(ctx context.Context, opts ArchiveOptions) (*ArchiveResult, error) {
 	opts = normalizeArchiveOptions(opts)
 	if err := validateArchiveOptions(opts); err != nil {
+		return nil, err
+	}
+	resultBundlePath, err := resolveBuildResultBundlePath(opts.ResultBundlePath)
+	if err != nil {
+		return nil, err
+	}
+	opts.ResultBundlePath = resultBundlePath
+	if err := validateBuildResultBundleDestination(resultBundlePath); err != nil {
 		return nil, err
 	}
 	if err := ensureXcodeAvailable(ctx); err != nil {
@@ -338,6 +470,14 @@ func Export(ctx context.Context, opts ExportOptions) (*ExportResult, error) {
 	if err := validateExportInputPaths(opts); err != nil {
 		return nil, err
 	}
+	if err := ValidateExportDir(opts.ExportDir, opts.IPAPath, opts.PKGPath, opts.Overwrite, uploadMode); err != nil {
+		return nil, err
+	}
+	if !uploadMode {
+		if err := PreflightExportDir(opts.ExportDir); err != nil {
+			return nil, err
+		}
+	}
 
 	// When the ExportOptions plist has destination=upload, xcodebuild uploads
 	// directly to App Store Connect and does not produce a local artifact.
@@ -397,6 +537,10 @@ func Export(ctx context.Context, opts ExportOptions) (*ExportResult, error) {
 		if err != nil {
 			return nil, fmt.Errorf("read archive bundle info after PKG export: %w", err)
 		}
+		exportFiles, err := keepExportOutputs(opts, tempExportDir, exportedPKGPath)
+		if err != nil {
+			return nil, err
+		}
 		if err := moveExportedArtifact(exportedPKGPath, opts.PKGPath, "PKG", opts.Overwrite); err != nil {
 			return nil, err
 		}
@@ -406,10 +550,16 @@ func Export(ctx context.Context, opts ExportOptions) (*ExportResult, error) {
 			BundleID:    info.BundleID,
 			Version:     info.Version,
 			BuildNumber: info.BuildNumber,
+			ExportDir:   opts.ExportDir,
+			ExportFiles: exportFiles,
 		}, nil
 	}
 
 	exportedIPAPath, err := findExportedIPA(tempExportDir)
+	if err != nil {
+		return nil, err
+	}
+	exportFiles, err := keepExportOutputs(opts, tempExportDir, exportedIPAPath)
 	if err != nil {
 		return nil, err
 	}
@@ -435,6 +585,8 @@ func Export(ctx context.Context, opts ExportOptions) (*ExportResult, error) {
 		BundleID:    info.BundleID,
 		Version:     info.Version,
 		BuildNumber: info.BuildNumber,
+		ExportDir:   opts.ExportDir,
+		ExportFiles: exportFiles,
 	}, nil
 }
 
@@ -629,6 +781,31 @@ func ValidateExportXcodebuildArgs(args []string) error {
 	return nil
 }
 
+// ValidateArchiveXcodebuildArgs rejects a passthrough argument that names the
+// same xcodebuild argument as a typed archive flag that is also set.
+func ValidateArchiveXcodebuildArgs(opts ArchiveOptions) error {
+	opts = normalizeArchiveOptions(opts)
+	for _, typed := range []struct {
+		set      bool
+		flag     string
+		flags    []string
+		settings []string
+	}{
+		{set: opts.Destination != "", flag: "--destination", flags: []string{"-destination"}},
+		{set: opts.DerivedDataPath != "", flag: "--derived-data-path", flags: []string{"-deriveddatapath"}},
+		{set: opts.ResultBundlePath != "", flag: "--result-bundle-path", flags: []string{"-resultbundlepath"}},
+		{set: opts.NoCodeSigning, flag: "--no-code-signing", settings: []string{"code_signing_allowed"}},
+	} {
+		if !typed.set {
+			continue
+		}
+		if raw := firstReservedPassthroughArgument(opts.XcodebuildArgs, typed.flags, nil, typed.settings); raw != "" {
+			return fmt.Errorf("%s conflicts with --xcodebuild-flag %q; use one", typed.flag, raw)
+		}
+	}
+	return nil
+}
+
 func reservedExportPassthroughArgument(args []string) string {
 	if reserved := reservedBuildPassthroughArgument(args); reserved != "" {
 		return reserved
@@ -708,6 +885,9 @@ func normalizeArchiveOptions(opts ArchiveOptions) ArchiveOptions {
 	opts.ProjectPath = normalizeDirectoryPath(opts.ProjectPath)
 	opts.Scheme = strings.TrimSpace(opts.Scheme)
 	opts.Configuration = strings.TrimSpace(opts.Configuration)
+	opts.Destination = strings.TrimSpace(opts.Destination)
+	opts.DerivedDataPath = normalizeDirectoryPath(opts.DerivedDataPath)
+	opts.ResultBundlePath = normalizeDirectoryPath(opts.ResultBundlePath)
 	opts.ArchivePath = normalizeDirectoryPath(opts.ArchivePath)
 	return opts
 }
@@ -717,6 +897,7 @@ func normalizeExportOptions(opts ExportOptions) ExportOptions {
 	opts.ExportOptions = strings.TrimSpace(opts.ExportOptions)
 	opts.IPAPath = strings.TrimSpace(opts.IPAPath)
 	opts.PKGPath = strings.TrimSpace(opts.PKGPath)
+	opts.ExportDir = strings.TrimSpace(opts.ExportDir)
 	opts.Environment = cloneEnvironment(opts.Environment)
 	return opts
 }
@@ -893,7 +1074,19 @@ func buildArchiveCommand(opts ArchiveOptions) []string {
 	if trimmed := strings.TrimSpace(opts.Configuration); trimmed != "" {
 		args = append(args, "-configuration", trimmed)
 	}
+	if opts.Destination != "" {
+		args = append(args, "-destination", opts.Destination)
+	}
+	if opts.DerivedDataPath != "" {
+		args = append(args, "-derivedDataPath", opts.DerivedDataPath)
+	}
+	if opts.ResultBundlePath != "" {
+		args = append(args, "-resultBundlePath", opts.ResultBundlePath)
+	}
 	args = append(args, cloneStrings(opts.XcodebuildArgs)...)
+	if opts.NoCodeSigning {
+		args = append(args, "CODE_SIGNING_ALLOWED=NO")
+	}
 	if opts.Clean {
 		args = append(args, "clean")
 	}
@@ -1016,6 +1209,10 @@ func runXcodebuildWithEnvironment(ctx context.Context, args, environment []strin
 
 func runXcodebuildForBuild(ctx context.Context, args []string, logWriter io.Writer) error {
 	return runCommandWithBoundedOutputMode(ctx, "xcodebuild", args, logWriter, summarizeAction(args), "xcodebuild", true)
+}
+
+func runXcodebuildForTest(ctx context.Context, dir string, args []string, logWriter io.Writer) error {
+	return runCommandWithBoundedOutputEnvironmentMode(ctx, "xcodebuild", args, nil, dir, logWriter, summarizeAction(args), "xcodebuild", true)
 }
 
 func runAltoolValidate(ctx context.Context, args []string, logWriter io.Writer) error {
@@ -1563,18 +1760,18 @@ func parseBuildStatusMetadataField(line string) (string, string, bool) {
 }
 
 func runCommandWithBoundedOutput(ctx context.Context, name string, args []string, logWriter io.Writer, action string, commandLabel string) error {
-	return runCommandWithBoundedOutputEnvironmentMode(ctx, name, args, nil, logWriter, action, commandLabel, false)
+	return runCommandWithBoundedOutputEnvironmentMode(ctx, name, args, nil, "", logWriter, action, commandLabel, false)
 }
 
 func runCommandWithBoundedOutputMode(ctx context.Context, name string, args []string, logWriter io.Writer, action string, commandLabel string, preserveProcessError bool) error {
-	return runCommandWithBoundedOutputEnvironmentMode(ctx, name, args, nil, logWriter, action, commandLabel, preserveProcessError)
+	return runCommandWithBoundedOutputEnvironmentMode(ctx, name, args, nil, "", logWriter, action, commandLabel, preserveProcessError)
 }
 
 func runCommandWithBoundedOutputEnvironment(ctx context.Context, name string, args, environment []string, logWriter io.Writer, action string, commandLabel string, terminateProcessGroup bool) error {
-	return runCommandWithBoundedOutputEnvironmentMode(ctx, name, args, environment, logWriter, action, commandLabel, false, terminateProcessGroup)
+	return runCommandWithBoundedOutputEnvironmentMode(ctx, name, args, environment, "", logWriter, action, commandLabel, false, terminateProcessGroup)
 }
 
-func runCommandWithBoundedOutputEnvironmentMode(ctx context.Context, name string, args, environment []string, logWriter io.Writer, action string, commandLabel string, preserveProcessError bool, terminateProcessGroup ...bool) error {
+func runCommandWithBoundedOutputEnvironmentMode(ctx context.Context, name string, args, environment []string, dir string, logWriter io.Writer, action string, commandLabel string, preserveProcessError bool, terminateProcessGroup ...bool) error {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -1582,6 +1779,7 @@ func runCommandWithBoundedOutputEnvironmentMode(ctx context.Context, name string
 	if err != nil {
 		return err
 	}
+	cmd.Dir = dir
 	outputWindow := newXcodeDiagnosticBuffer(xcodebuildErrorTailLimit, logWriter)
 	cmd.Stdout = outputWindow
 	cmd.Stderr = outputWindow

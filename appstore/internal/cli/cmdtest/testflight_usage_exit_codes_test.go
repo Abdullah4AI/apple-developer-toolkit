@@ -24,14 +24,29 @@ func TestTestFlightInputValidationReturnsUsageExitCode(t *testing.T) {
 		wantErr string
 	}{
 		{
+			name:    "app-localizations list app 123 limit 201",
+			args:    []string{"testflight", "app-localizations", "list", "--app", "123", "--limit", "201"},
+			wantErr: "testflight app-localizations list: --limit must be between 1 and 200",
+		},
+		{
+			name:    "app-localizations list invalid locale",
+			args:    []string{"testflight", "app-localizations", "list", "--app", "123", "--locale", "!!!bad!!!"},
+			wantErr: `testflight app-localizations list: invalid locale "!!!bad!!!": must match pattern like en or en-US`,
+		},
+		{
+			name:    "app-localizations create invalid locale",
+			args:    []string{"testflight", "app-localizations", "create", "--app", "123", "--locale", "!!!bad!!!"},
+			wantErr: `testflight app-localizations create: invalid locale "!!!bad!!!": must match pattern like en or en-US`,
+		},
+		{
 			name:    "groups list limit 201",
 			args:    []string{"testflight", "groups", "list", "--limit", "201"},
-			wantErr: "groups list: --limit must be between 1 and 200",
+			wantErr: "testflight groups list: --limit must be between 1 and 200",
 		},
 		{
 			name:    "groups list next non apple url",
 			args:    []string{"testflight", "groups", "list", "--next", "http://example.com/x"},
-			wantErr: "groups list: --next must be an App Store Connect URL",
+			wantErr: "testflight groups list: --next must be an App Store Connect URL",
 		},
 		{
 			name:    "groups links view group-id g type betaTesters limit 201",
@@ -46,12 +61,12 @@ func TestTestFlightInputValidationReturnsUsageExitCode(t *testing.T) {
 		{
 			name:    "testers list limit 201",
 			args:    []string{"testflight", "testers", "list", "--limit", "201"},
-			wantErr: "testers list: --limit must be between 1 and 200",
+			wantErr: "testflight testers list: --limit must be between 1 and 200",
 		},
 		{
 			name:    "testers list next non apple url",
 			args:    []string{"testflight", "testers", "list", "--next", "http://example.com/x"},
-			wantErr: "testers list: --next must be an App Store Connect URL",
+			wantErr: "testflight testers list: --next must be an App Store Connect URL",
 		},
 		{
 			name:    "testers links view tester-id t type apps limit 201",
@@ -106,12 +121,12 @@ func TestTestFlightInputValidationReturnsUsageExitCode(t *testing.T) {
 		{
 			name:    "agreements list limit 201",
 			args:    []string{"testflight", "agreements", "list", "--limit", "201"},
-			wantErr: "agreements list: --limit must be between 1 and 200",
+			wantErr: "testflight agreements list: --limit must be between 1 and 200",
 		},
 		{
 			name:    "agreements list next non apple url",
 			args:    []string{"testflight", "agreements", "list", "--next", "http://example.com/x"},
-			wantErr: "agreements list: --next must be an App Store Connect URL",
+			wantErr: "testflight agreements list: --next must be an App Store Connect URL",
 		},
 		{
 			name:    "review view app 123 limit 201",
@@ -142,6 +157,26 @@ func TestTestFlightInputValidationReturnsUsageExitCode(t *testing.T) {
 			name:    "distribution view build-id b next non apple url",
 			args:    []string{"testflight", "distribution", "view", "--build-id", "b", "--next", "http://example.com/x"},
 			wantErr: "testflight distribution view: --next must be an App Store Connect URL",
+		},
+		{
+			name:    "pre-release list app 123 limit 201",
+			args:    []string{"testflight", "pre-release", "list", "--app", "123", "--limit", "201"},
+			wantErr: "testflight pre-release list: --limit must be between 1 and 200",
+		},
+		{
+			name:    "pre-release list app 123 platform BAD",
+			args:    []string{"testflight", "pre-release", "list", "--app", "123", "--platform", "BAD"},
+			wantErr: "testflight pre-release list: --platform must be one of: IOS, MAC_OS, TV_OS, VISION_OS",
+		},
+		{
+			name:    "pre-release builds list id p limit 201",
+			args:    []string{"testflight", "pre-release", "builds", "list", "--id", "p", "--limit", "201"},
+			wantErr: "testflight pre-release builds list: --limit must be between 1 and 200",
+		},
+		{
+			name:    "pre-release links view id p type builds limit 201",
+			args:    []string{"testflight", "pre-release", "links", "view", "--id", "p", "--type", "builds", "--limit", "201"},
+			wantErr: "testflight pre-release links view: --limit must be between 1 and 200",
 		},
 		{
 			name:    "recruitment options limit 201",
@@ -193,11 +228,21 @@ func TestTestFlightInputValidationReturnsUsageExitCode(t *testing.T) {
 			args:    []string{"testflight", "distribution", "build", "view"},
 			wantErr: "--id is required",
 		},
+		{
+			name:    "testers export output given a format",
+			args:    []string{"testflight", "testers", "export", "--output", "json"},
+			wantErr: "--output takes a path in this command, not an output format; use --format json to choose the format, or --output ./json to write to a path named json",
+		},
+		{
+			name:    "config export output given a format",
+			args:    []string{"testflight", "config", "export", "--output", "table"},
+			wantErr: "--output takes a path in this command, not an output format, and no flag here chooses json, table or markdown output; use --output ./table to write to a path named table",
+		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			stdout, stderr, runErr := runCommand(t, test.args)
+			stdout, stderr, runErr := runRootWithDeps(t, nil, test.args...)
 
 			if runErr == nil {
 				t.Fatal("expected error, got nil")

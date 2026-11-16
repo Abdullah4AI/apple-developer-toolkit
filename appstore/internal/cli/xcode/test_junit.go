@@ -37,11 +37,12 @@ func SetXCResultSummaryLoaderForTesting(fn func(context.Context, string) (*local
 }
 
 // XcodeTestJUnitCommand converts an existing .xcresult bundle to JUnit XML.
-func XcodeTestJUnitCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("xcode test junit", flag.ExitOnError)
+func newXcodeTestJUnitCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("xcode test junit", flag.ExitOnError)
 	xcresult := fs.String("xcresult", "", "Path to an existing .xcresult bundle")
 	reportFile := fs.String("report-file", "", "Path to write the JUnit XML report")
-	output := shared.BindOutputFlags(fs)
+	allowFailures := fs.Bool("allow-failures", false, "Exit 0 even when the bundle contains failed tests")
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "junit",
@@ -55,32 +56,33 @@ The xcresulttool reads use the configured ASC timeout, defaulting to 30 seconds.
 If aggregate summary loading succeeds but per-case enrichment fails, the command
 fails closed and does not write a partial report.
 
+When the bundle contains failed tests, the command writes the report and prints
+its receipt, then exits 1, the same exit code as a failed asc xcode test run.
+Pass --allow-failures to exit 0 whatever the bundle contains.
+
 Examples:
   asc xcode test junit --xcresult ./Test.xcresult --report-file ./junit.xml --output json`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
-			if len(args) > 0 {
-				return shared.UsageError("xcode test junit does not accept positional arguments")
-			}
-			bundlePath := strings.TrimSpace(*xcresult)
-			reportPath := strings.TrimSpace(*reportFile)
+			bundlePath := osPath(d, strings.TrimSpace(*xcresult))
+			reportPath := osPath(d, strings.TrimSpace(*reportFile))
 			if bundlePath == "" {
-				return shared.UsageError("xcode test junit: --xcresult is required")
+				return d.UsageError("xcode test junit: --xcresult is required")
 			}
 			if reportPath == "" {
-				return shared.UsageError("xcode test junit: --report-file is required")
+				return d.UsageError("xcode test junit: --report-file is required")
 			}
 			if _, err := shared.ValidateOutputFormat(*output.Output, *output.Pretty); err != nil {
-				return shared.UsageError(err.Error())
+				return d.UsageError(err.Error())
 			}
-			readCtx, cancel := shared.ContextWithTimeout(ctx)
+			readCtx, cancel := d.Timeout(ctx)
 			defer cancel()
 			summary, err := loadXCResultSummary(readCtx, bundlePath)
 			if err != nil {
 				return fmt.Errorf("xcode test junit: %w", err)
 			}
-			report := testResultJUnitReport(&localxcode.TestResult{
+			report := testResultJUnitReport(d, &localxcode.TestResult{
 				Tests:            summary,
 				ResultBundlePath: bundlePath,
 				Success:          true,
@@ -91,7 +93,18 @@ Examples:
 				return fmt.Errorf("xcode test junit: %w", err)
 			}
 			receipt := junitReceipt(bundlePath, reportPath, report)
-			return shared.PrintOutput(receipt, *output.Output, *output.Pretty)
+			if err := d.PrintOutput(receipt, *output.Output, *output.Pretty); err != nil {
+				return err
+			}
+			failed := receipt.Failures
+			if summary != nil {
+				failed = max(failed, summary.Failed)
+			}
+			if failed == 0 || *allowFailures {
+				return nil
+			}
+			fmt.Fprintf(d.IO.ErrOut, "Error: xcode test junit: %d failed test(s); report written to %s\n", failed, reportPath)
+			return shared.NewStderrReportedError(fmt.Errorf("xcode test junit: %w", &localxcode.ReportedTestFailuresError{Failed: failed}))
 		},
 	}
 }

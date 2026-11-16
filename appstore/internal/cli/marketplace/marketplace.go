@@ -8,9 +8,10 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
-// MarketplaceCommand returns the marketplace command with subcommands.
-func MarketplaceCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("marketplace", flag.ExitOnError)
+// NewMarketplaceCommand returns the marketplace command with subcommands, built
+// on d.
+func NewMarketplaceCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("marketplace", flag.ExitOnError)
 
 	return &ffcli.Command{
 		Name:       "marketplace",
@@ -22,10 +23,10 @@ Examples:
   asc marketplace search-details view --app "APP_ID"
   asc marketplace webhooks list`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
-			MarketplaceSearchDetailsCommand(),
-			MarketplaceWebhooksCommand(),
+			newMarketplaceSearchDetailsCommand(d),
+			newMarketplaceWebhooksCommand(d),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp

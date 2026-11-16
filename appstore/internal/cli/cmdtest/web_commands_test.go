@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"flag"
-	"io"
 	"strings"
 	"testing"
 
@@ -79,16 +78,7 @@ func TestWebBundleIDCapabilitiesSyncAppClipMissingConfirmFailsBeforeSession(t *t
 	})
 	defer restoreSync()
 
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	var runErr error
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"web", "bundle-ids", "capabilities", "sync-app-clip", "--bundle-id", "clip-1", "--parent-bundle-id", "parent-1", "--capability", "PUSH_NOTIFICATIONS"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		runErr = root.Run(context.Background())
-	})
+	stdout, stderr, runErr := runRootWithDeps(t, nil, "web", "bundle-ids", "capabilities", "sync-app-clip", "--bundle-id", "clip-1", "--parent-bundle-id", "parent-1", "--capability", "PUSH_NOTIFICATIONS")
 
 	if !errors.Is(runErr, flag.ErrHelp) {
 		t.Fatalf("expected ErrHelp, got %v", runErr)
@@ -104,118 +94,51 @@ func TestWebBundleIDCapabilitiesSyncAppClipMissingConfirmFailsBeforeSession(t *t
 	}
 }
 
-func TestWebXcodeCloudWorkflowsListSubcommandIsRegistered(t *testing.T) {
-	root := RootCommand("1.2.3")
-	sub := findSubcommand(root, "web", "xcode-cloud", "workflows", "list")
-	if sub == nil {
-		t.Fatalf("expected web xcode-cloud workflows list to be registered")
-	}
-	if sub.FlagSet.Lookup("product-id") == nil {
-		t.Fatal("expected --product-id flag on web xcode-cloud workflows list")
-	}
-	if sub.FlagSet.Lookup("paginate") != nil {
-		t.Fatal("did not expect --paginate on web xcode-cloud workflows list; the CI client does not page")
-	}
-}
-
-func TestWebXcodeCloudWorkflowsListMissingRequiredFlags(t *testing.T) {
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	var runErr error
-	_, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"web", "xcode-cloud", "workflows", "list"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		runErr = root.Run(context.Background())
+func TestWebCommandsUsageErrors(t *testing.T) {
+	runUsageExitCases(t, []usageExitCase{
+		{
+			name:    "XcodeCloudWorkflowsListMissingRequiredFlags",
+			args:    []string{"web", "xcode-cloud", "workflows", "list"},
+			wantErr: "Error: --product-id is required",
+			deps:    true,
+		},
+		{
+			name:    "XcodeCloudWorkflowsListRejectsPositionalArguments",
+			args:    []string{"web", "xcode-cloud", "workflows", "list", "--product-id", "prod-1", "extra"},
+			wantErr: `unexpected argument "extra"`,
+			deps:    true,
+		},
+		{
+			name:    "XcodeCloudWorkflowsListRejectsPaginate",
+			args:    []string{"web", "xcode-cloud", "workflows", "list", "--product-id", "prod-1", "--paginate"},
+			wantErr: "unknown flag `--paginate`",
+			deps:    true,
+		},
+		{
+			name:    "APIKeysLegacyGetIsNotRegistered",
+			args:    []string{"web", "api-keys", "get", "--key-id", "KEY_ID"},
+			wantErr: "Error: unknown command `asc web api-keys get`",
+			deps:    true,
+		},
+		{
+			name:    "AppsCreateMissingRequiredFlags",
+			args:    []string{"web", "apps", "create", "--name", "My App"},
+			wantErr: "Error: missing required flags: --bundle-id, --sku",
+			deps:    true,
+		},
+		{
+			name:    "SandboxCreateMissingRequiredFlags",
+			args:    []string{"web", "sandbox", "create"},
+			wantErr: "Error: --first-name is required",
+			deps:    true,
+		},
+		{
+			name:    "XcodeCloudWorkflowsCreateMissingRequiredFlags",
+			args:    []string{"web", "xcode-cloud", "workflows", "create"},
+			wantErr: "Error: --product-id is required",
+			deps:    true,
+		},
 	})
-
-	if !errors.Is(runErr, flag.ErrHelp) {
-		t.Fatalf("expected ErrHelp, got %v", runErr)
-	}
-	if !strings.Contains(stderr, "Error: --product-id is required") {
-		t.Fatalf("expected missing --product-id error, got %q", stderr)
-	}
-}
-
-func TestWebXcodeCloudWorkflowsListRejectsPositionalArguments(t *testing.T) {
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	var runErr error
-	_, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"web", "xcode-cloud", "workflows", "list", "--product-id", "prod-1", "extra"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		runErr = root.Run(context.Background())
-	})
-
-	if !errors.Is(runErr, flag.ErrHelp) {
-		t.Fatalf("expected ErrHelp, got %v", runErr)
-	}
-	if !strings.Contains(stderr, "web xcode-cloud workflows list does not accept positional arguments") {
-		t.Fatalf("expected positional-args error, got %q", stderr)
-	}
-}
-
-func TestWebAppsCreateMissingRequiredFlags(t *testing.T) {
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	var runErr error
-	_, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"web", "apps", "create", "--name", "My App"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		runErr = root.Run(context.Background())
-	})
-
-	if !errors.Is(runErr, flag.ErrHelp) {
-		t.Fatalf("expected ErrHelp, got %v", runErr)
-	}
-	if !strings.Contains(stderr, "Error: missing required flags: --bundle-id, --sku") {
-		t.Fatalf("expected aggregated missing-flags error, got %q", stderr)
-	}
-}
-
-func TestWebSandboxCreateMissingRequiredFlags(t *testing.T) {
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	var runErr error
-	_, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"web", "sandbox", "create"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		runErr = root.Run(context.Background())
-	})
-
-	if !errors.Is(runErr, flag.ErrHelp) {
-		t.Fatalf("expected ErrHelp, got %v", runErr)
-	}
-	if !strings.Contains(stderr, "Error: --first-name is required") {
-		t.Fatalf("expected missing --first-name error, got %q", stderr)
-	}
-}
-
-func TestWebXcodeCloudWorkflowsCreateMissingRequiredFlags(t *testing.T) {
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	var runErr error
-	_, stderr := captureOutput(t, func() {
-		if err := root.Parse([]string{"web", "xcode-cloud", "workflows", "create"}); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		runErr = root.Run(context.Background())
-	})
-
-	if !errors.Is(runErr, flag.ErrHelp) {
-		t.Fatalf("expected ErrHelp, got %v", runErr)
-	}
-	if !strings.Contains(stderr, "Error: --product-id is required") {
-		t.Fatalf("expected missing --product-id error, got %q", stderr)
-	}
 }
 
 func TestWebAuthLoginOmitsPlaintextPasswordAndRemovedTwoFactorCodeFlags(t *testing.T) {
@@ -271,10 +194,7 @@ func TestWebCommandsOmitRemovedTwoFactorCodeAlias(t *testing.T) {
 }
 
 func TestWebAuthLoginRejectsRemovedTwoFactorCodeFlagAsUnknown(t *testing.T) {
-	var code int
-	stdout, stderr := captureOutput(t, func() {
-		code = rootcmd.Run([]string{"web", "auth", "login", "--apple-id", "user@example.com", "--two-factor-code", "123456"}, "1.2.3")
-	})
+	stdout, stderr, code := runWithDeps(t, nil, "web", "auth", "login", "--apple-id", "user@example.com", "--two-factor-code", "123456")
 	if code != rootcmd.ExitUsage {
 		t.Fatalf("exit code = %d, want %d; stderr=%q", code, rootcmd.ExitUsage, stderr)
 	}

@@ -1,0 +1,1212 @@
+package asc
+
+import (
+	"cmp"
+	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+	"os"
+	"path/filepath"
+	"reflect"
+	"slices"
+	"sort"
+	"strconv"
+	"strings"
+	"sync"
+	"testing"
+	"unsafe"
+)
+
+// The tests in this file check the generated client code (the *_gen.go files
+// listed in openapi_bindings/) against docs/openapi/latest.json, which they
+// read independently of the generator.
+
+var contractSpecPath = filepath.Join("..", "..", "docs", "openapi", "latest.json")
+
+type contractFamily struct {
+	Tag           string   `json:"tag"`
+	Types         []string `json:"types"`
+	Relationships []struct {
+		Data string `json:"data"`
+		Type string `json:"type"`
+	} `json:"relationships"`
+	Operations []*contractOpBinding `json:"operations"`
+	// GoTypes name the Go type that stands for a type named after a schema,
+	// when one Go type serves two schema versions.
+	GoTypes []struct {
+		Schema string `json:"schema"`
+		Type   string `json:"type"`
+	} `json:"goTypes"`
+}
+
+type contractOpBinding struct {
+	Operation  string   `json:"operation"`
+	Name       string   `json:"name"`
+	Params     []string `json:"params"`
+	Check      string   `json:"check"`
+	CheckFirst bool     `json:"checkFirst"`
+	Single     bool     `json:"single"`
+	Links      []string `json:"links"`
+	// SkipEmptyAttributes is set on an update that sends its attributes only
+	// when one of them is set.
+	SkipEmptyAttributes bool `json:"skipEmptyAttributes"`
+	// ParseErr prefixes the error of a response the method cannot decode.
+	ParseErr string `json:"parseErr"`
+	Args     []struct {
+		Name      string `json:"name"`
+		Attribute string `json:"attribute"`
+	} `json:"args"`
+	Deviations []struct {
+		Problem string `json:"problem"`
+		Reason  string `json:"reason"`
+	} `json:"deviations"`
+	// goTypes are the GoTypes of the operation's family, by schema type name.
+	goTypes map[string]string
+}
+
+type contractSchema struct {
+	Ref        string                     `json:"$ref"`
+	Type       string                     `json:"type"`
+	Enum       []string                   `json:"enum"`
+	Properties map[string]*contractSchema `json:"properties"`
+	Required   []string                   `json:"required"`
+	Items      *contractSchema            `json:"items"`
+}
+
+type contractOperation struct {
+	ID         string `json:"operationId"`
+	Parameters []struct {
+		Name string `json:"name"`
+		In   string `json:"in"`
+	} `json:"parameters"`
+	RequestBody *contractMedia            `json:"requestBody"`
+	Responses   map[string]*contractMedia `json:"responses"`
+	method      string
+	path        string
+}
+
+type contractMedia struct {
+	Content map[string]struct {
+		Schema *contractSchema `json:"schema"`
+	} `json:"content"`
+}
+
+func (m *contractMedia) schema(spec *contractSpec) *contractSchema {
+	if m == nil {
+		return nil
+	}
+	return spec.resolve(m.Content["application/json"].Schema)
+}
+
+const contractResourceID = "resource-1"
+
+// contractResponse is the success response of an operation: a document with
+// one resource of the schema's type that has every attribute the schema
+// defines, or one data item with every property when the data is not a
+// resource.
+type contractResponse struct {
+	status       int
+	body         string
+	resource     *contractSchema // nil for a response without a document
+	resourceName string          // schema name of the resource; empty when defined inline
+	attributes   string          // Go type the bindings name for the resource's attributes, if any
+	schemaName   string          // schema name of the response document
+}
+
+// isResource reports whether the response's data item is a resource with an
+// ID, not a row such as a metrics data point.
+func (r contractResponse) isResource() bool {
+	return r.resource != nil && r.resource.Properties["id"] != nil
+}
+
+func (op *contractOperation) response(spec *contractSpec) (contractResponse, error) {
+	for _, status := range []int{http.StatusOK, http.StatusCreated} {
+		media := op.Responses[strconv.Itoa(status)]
+		schema := media.schema(spec)
+		if schema == nil {
+			continue
+		}
+		data := spec.property(schema, "data")
+		if data == nil {
+			return contractResponse{}, fmt.Errorf("response %d has no data", status)
+		}
+		resource, ref := data, schema.Properties["data"].Ref
+		if data.Type == "array" {
+			resource, ref = spec.resolve(data.Items), data.Items.Ref
+		}
+		response := contractResponse{
+			status:       status,
+			resource:     resource,
+			resourceName: strings.TrimPrefix(ref, "#/components/schemas/"),
+			schemaName:   strings.TrimPrefix(media.Content["application/json"].Schema.Ref, "#/components/schemas/"),
+		}
+		item := spec.sample(resource)
+		if response.isResource() {
+			resourceItem := map[string]any{"id": contractResourceID}
+			if types := spec.property(resource, "type"); types != nil && len(types.Enum) > 0 {
+				resourceItem["type"] = types.Enum[0]
+			}
+			if attrs := spec.property(resource, "attributes"); attrs != nil {
+				resourceItem["attributes"] = spec.sample(attrs)
+			}
+			item = resourceItem
+		}
+		var document any = map[string]any{"data": item}
+		if data.Type == "array" {
+			document = map[string]any{"data": []any{item}}
+		}
+		body, err := json.Marshal(document)
+		response.body = string(body)
+		return response, err
+	}
+	return contractResponse{status: http.StatusNoContent}, nil
+}
+
+// sample is a non-zero JSON value of the schema's type.
+func (s *contractSpec) sample(schema *contractSchema) any {
+	schema = s.resolve(schema)
+	switch {
+	case schema == nil:
+		return nil
+	case len(schema.Enum) > 0:
+		return schema.Enum[0]
+	case schema.Type == "string":
+		return "value"
+	case schema.Type == "integer":
+		return 2
+	case schema.Type == "number":
+		return 2.5
+	case schema.Type == "boolean":
+		return true
+	case schema.Type == "array":
+		return []any{s.sample(schema.Items)}
+	}
+	if len(schema.Properties) == 0 {
+		return map[string]any{"key": "value"}
+	}
+	object := map[string]any{}
+	for name, prop := range schema.Properties {
+		object[name] = s.sample(prop)
+	}
+	return object
+}
+
+type contractSpec struct {
+	operations map[string]*contractOperation
+	schemas    map[string]*contractSchema
+}
+
+var loadContractSpec = sync.OnceValues(func() (*contractSpec, error) {
+	data, err := os.ReadFile(contractSpecPath)
+	if err != nil {
+		return nil, err
+	}
+	var raw struct {
+		Paths      map[string]map[string]json.RawMessage `json:"paths"`
+		Components struct {
+			Schemas map[string]*contractSchema `json:"schemas"`
+		} `json:"components"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return nil, err
+	}
+	spec := &contractSpec{operations: map[string]*contractOperation{}, schemas: raw.Components.Schemas}
+	for path, item := range raw.Paths {
+		var shared contractOperation
+		if rawParams, ok := item["parameters"]; ok {
+			if err := json.Unmarshal(rawParams, &shared.Parameters); err != nil {
+				return nil, fmt.Errorf("%s parameters: %w", path, err)
+			}
+		}
+		for method, rawOp := range item {
+			if method == "parameters" {
+				continue
+			}
+			var op contractOperation
+			if err := json.Unmarshal(rawOp, &op); err != nil {
+				return nil, fmt.Errorf("%s %s: %w", method, path, err)
+			}
+			op.Parameters = append(op.Parameters, shared.Parameters...)
+			op.method = strings.ToUpper(method)
+			op.path = path
+			spec.operations[op.ID] = &op
+		}
+	}
+	return spec, nil
+})
+
+func mustLoadContractSpec(t *testing.T) *contractSpec {
+	t.Helper()
+	spec, err := loadContractSpec()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return spec
+}
+
+func (s *contractSpec) resolve(schema *contractSchema) *contractSchema {
+	for schema != nil && schema.Ref != "" {
+		schema = s.schemas[strings.TrimPrefix(schema.Ref, "#/components/schemas/")]
+	}
+	return schema
+}
+
+func (s *contractSpec) property(schema *contractSchema, name string) *contractSchema {
+	schema = s.resolve(schema)
+	if schema == nil {
+		return nil
+	}
+	return s.resolve(schema.Properties[name])
+}
+
+func loadContractFamilies(t *testing.T) []*contractFamily {
+	t.Helper()
+	paths, err := filepath.Glob(filepath.Join("openapi_bindings", "*.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(paths) == 0 {
+		t.Fatal("no bindings in openapi_bindings")
+	}
+	var families []*contractFamily
+	for _, path := range paths {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var family contractFamily
+		if err := json.Unmarshal(data, &family); err != nil {
+			t.Fatalf("%s: %v", path, err)
+		}
+		families = append(families, &family)
+	}
+	return families
+}
+
+// TestGeneratedClientBindingsExistInSchema fails when the snapshot no longer
+// has an operation or schema the bindings generate code for, so a snapshot
+// update names each generated method and type it breaks.
+func TestGeneratedClientBindingsExistInSchema(t *testing.T) {
+	spec := mustLoadContractSpec(t)
+	for _, family := range loadContractFamilies(t) {
+		for _, b := range family.Operations {
+			if _, ok := spec.operations[b.Operation]; !ok {
+				t.Errorf("%s: %s is bound to operation %s, which %s no longer has", family.Tag, b.Name, b.Operation, contractSpecPath)
+			}
+		}
+		relationshipsOf := map[string]string{}
+		for _, r := range family.Relationships {
+			relationshipsOf[strings.TrimPrefix(r.Type, "*")] = r.Data
+		}
+		for _, g := range family.GoTypes {
+			if !spec.hasTypeSchema(g.Schema) {
+				t.Errorf("%s: %s is recorded as Go type %s and has no schema in %s", family.Tag, g.Schema, g.Type, contractSpecPath)
+			}
+		}
+		for _, name := range family.Types {
+			if data, ok := relationshipsOf[name]; ok {
+				request := strings.TrimSuffix(data, "Data") + "Request"
+				if spec.property(spec.property(spec.schemas[request], "data"), "relationships") == nil {
+					t.Errorf("%s: type %s is the relationships of %s, which has none in %s", family.Tag, name, request, contractSpecPath)
+				}
+				continue
+			}
+			if !spec.hasTypeSchema(name) {
+				t.Errorf("%s: type %s has no schema in %s", family.Tag, name, contractSpecPath)
+			}
+		}
+	}
+}
+
+// hasTypeSchema follows the generator's type names: a response or request type
+// is the schema of that name, <X>Data is the data object of <X>Request, and
+// <X>Attributes is the attributes object of <X>Request or of resource <X>.
+func (s *contractSpec) hasTypeSchema(name string) bool {
+	if strings.HasSuffix(name, "Response") || strings.HasSuffix(name, "Request") {
+		return s.schemas[name] != nil
+	}
+	if base, ok := strings.CutSuffix(name, "Data"); ok {
+		return s.property(s.schemas[base+"Request"], "data") != nil
+	}
+	if base, ok := strings.CutSuffix(name, "Attributes"); ok {
+		if data := s.property(s.schemas[base+"Request"], "data"); data != nil {
+			return s.property(data, "attributes") != nil
+		}
+		return s.property(s.schemas[base], "attributes") != nil
+	}
+	return false
+}
+
+// TestGeneratedClientMatchesSchema calls every generated method with synthetic
+// arguments and checks the request it sends against the operation in the
+// snapshot: HTTP method, path, query parameter names and body shape. A
+// difference recorded in the bindings as a deviation must be exactly one the
+// method still produces, so the records can only shrink on purpose.
+func TestGeneratedClientMatchesSchema(t *testing.T) {
+	spec := mustLoadContractSpec(t)
+	operations, deviations := 0, 0
+	for _, family := range loadContractFamilies(t) {
+		goTypes := map[string]string{}
+		for _, g := range family.GoTypes {
+			goTypes[g.Schema] = g.Type
+		}
+		for _, b := range family.Operations {
+			b.goTypes = goTypes
+			operations++
+			deviations += len(b.Deviations)
+			op, ok := spec.operations[b.Operation]
+			if !ok {
+				t.Errorf("%s (%s): operation not in %s", b.Operation, b.Name, contractSpecPath)
+				continue
+			}
+			for _, problem := range unrecordedContractProblems(family.Tag, b, checkGeneratedOperation(spec, op, b)) {
+				t.Errorf("%s (%s %s), method %s: %s", b.Operation, op.method, op.path, b.Name, problem)
+			}
+		}
+	}
+	if operations == 0 {
+		t.Fatal("no operations in the bindings")
+	}
+	t.Logf("%d generated operations checked, %d recorded deviations", operations, deviations)
+}
+
+// unrecordedContractProblems returns the problems the bindings do not record
+// as deviations, and a problem for each recorded deviation that has no reason
+// or that the method no longer produces.
+func unrecordedContractProblems(tag string, b *contractOpBinding, problems []string) []string {
+	recorded := map[string]bool{}
+	var out []string
+	for _, d := range b.Deviations {
+		switch {
+		case strings.TrimSpace(d.Reason) == "":
+			out = append(out, fmt.Sprintf("recorded deviation %q in openapi_bindings/%s.json has no reason", d.Problem, tag))
+		case recorded[d.Problem]:
+			out = append(out, fmt.Sprintf("deviation %q is recorded twice in openapi_bindings/%s.json", d.Problem, tag))
+		case !slices.Contains(problems, d.Problem):
+			out = append(out, fmt.Sprintf("recorded deviation %q no longer happens; remove it from openapi_bindings/%s.json", d.Problem, tag))
+		}
+		recorded[d.Problem] = true
+	}
+	for _, problem := range problems {
+		if !recorded[problem] {
+			out = append(out, problem)
+		}
+	}
+	return out
+}
+
+const contractLimit = 7
+
+// contractCall is a generated method and synthetic arguments for it.
+type contractCall struct {
+	name     string
+	params   []reflect.Type // after ctx, without the options
+	args     []reflect.Value
+	pathArgs []string
+	ids      []string
+	links    []string     // relationships set from the last len(links) string arguments
+	attrs    []byte       // JSON of the attributes argument, if any
+	attrsArg reflect.Type // type of the attributes argument, if any
+	attrsAt  int          // index of the attributes argument in args
+	query    reflect.Type // the options' func type; nil without options
+}
+
+// newContractCall builds arguments from the method's parameter types: path
+// parameters (string, in path order), an ID list ([]string), attributes (a
+// struct, or a pointer to one, with every field set) and options (one
+// option that sets every field of the query). Parameters the bindings list
+// as args follow the path parameters; each gets its own value, and together
+// they are the attributes the body must send.
+func newContractCall(name string, typ reflect.Type, b *contractOpBinding) (*contractCall, error) {
+	c := &contractCall{name: name, links: b.Links}
+	if typ.NumIn() == 0 || typ.In(0) != reflect.TypeFor[context.Context]() {
+		return nil, fmt.Errorf("first parameter is not a context.Context")
+	}
+	last := typ.NumIn()
+	if typ.IsVariadic() {
+		last--
+		opt := typ.In(last).Elem()
+		if opt.Kind() != reflect.Func || opt.NumIn() != 1 || opt.In(0).Kind() != reflect.Pointer || (!b.Single && !opt.In(0).Implements(reflect.TypeFor[pager]())) {
+			return nil, fmt.Errorf("options %s are not a func of a paged query", opt)
+		}
+		c.query = opt
+	}
+	argAttrs, nArgs := map[string]any{}, 0
+	for i := 1; i < last; i++ {
+		in := typ.In(i)
+		c.params = append(c.params, in)
+		switch {
+		case len(c.pathArgs) == len(b.Params) && nArgs < len(b.Args):
+			arg := b.Args[nArgs]
+			nArgs++
+			value, err := contractArg(in, nArgs)
+			if err != nil {
+				return nil, fmt.Errorf("arg %s: %w", arg.Name, err)
+			}
+			argAttrs[cmp.Or(arg.Attribute, arg.Name)] = value.Interface()
+			c.args = append(c.args, value)
+		case in.Kind() == reflect.String:
+			value := fmt.Sprintf("path-%d", len(c.pathArgs)+1)
+			c.pathArgs = append(c.pathArgs, value)
+			c.args = append(c.args, reflect.ValueOf(value).Convert(in))
+		case in == reflect.TypeFor[[]string]():
+			c.ids = []string{"related-1", "related-2"}
+			c.args = append(c.args, reflect.ValueOf(c.ids))
+		case in.Kind() == reflect.Struct, in.Kind() == reflect.Pointer && in.Elem().Kind() == reflect.Struct:
+			value := reflect.New(in).Elem()
+			if err := fillContractValue(value, in.String()); err != nil {
+				return nil, err
+			}
+			attrs, err := json.Marshal(value.Interface())
+			if err != nil {
+				return nil, err
+			}
+			c.attrs, c.attrsArg, c.attrsAt = attrs, in, len(c.args)
+			c.args = append(c.args, value)
+		default:
+			return nil, fmt.Errorf("parameter %d has type %s", i, in)
+		}
+	}
+	if len(c.pathArgs) != len(b.Params) {
+		return nil, fmt.Errorf("%d string parameters, bindings name %d path parameters", len(c.pathArgs), len(b.Params))
+	}
+	if nArgs != len(b.Args) {
+		return nil, fmt.Errorf("%d args, bindings name %d", nArgs, len(b.Args))
+	}
+	if nArgs > 0 {
+		attrs, err := json.Marshal(argAttrs)
+		if err != nil {
+			return nil, err
+		}
+		c.attrs = attrs
+	}
+	return c, nil
+}
+
+// contractArg is the n-th scalar argument, distinct from the other args.
+func contractArg(typ reflect.Type, n int) (reflect.Value, error) {
+	v := reflect.New(typ).Elem()
+	switch v.Kind() {
+	case reflect.String:
+		v.SetString(fmt.Sprintf("arg-%d", n))
+	case reflect.Bool:
+		v.SetBool(n%2 == 1)
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		v.SetInt(int64(100 + n))
+	case reflect.Float32, reflect.Float64:
+		v.SetFloat(float64(n) + 0.5)
+	default:
+		return v, fmt.Errorf("type %s is not a scalar", typ)
+	}
+	return v, nil
+}
+
+// option returns one option value that runs set on the query.
+func (c *contractCall) option(set func(q reflect.Value)) reflect.Value {
+	return reflect.MakeFunc(c.query, func(in []reflect.Value) []reflect.Value {
+		set(in[0])
+		return nil
+	})
+}
+
+type contractRequest struct {
+	method string
+	url    *url.URL
+	body   []byte
+}
+
+func (r contractRequest) String() string { return r.method + " " + r.url.String() }
+
+// invoke calls the method on a client that records every request and answers
+// each with the given response; args follow ctx and may end with one option.
+// It returns the requests, the method's result other than its error, and the
+// error.
+func (c *contractCall) invoke(args []reflect.Value, response contractResponse) ([]contractRequest, any, error) {
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		return nil, nil, err
+	}
+	var mu sync.Mutex
+	var requests []contractRequest
+	client := &Client{
+		httpClient: &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			var body []byte
+			if req.Body != nil {
+				body, _ = io.ReadAll(req.Body)
+			}
+			mu.Lock()
+			requests = append(requests, contractRequest{method: req.Method, url: req.URL, body: body})
+			mu.Unlock()
+			return jsonResponse(response.status, response.body), nil
+		})},
+		keyID:      "KEY123",
+		issuerID:   "ISS456",
+		privateKey: key,
+	}
+	out := clientMethod(client, c.name).Call(append([]reflect.Value{reflect.ValueOf(context.Background())}, args...))
+	callErr, _ := out[len(out)-1].Interface().(error)
+	var result any
+	if len(out) == 2 {
+		result = out[0].Interface()
+	}
+	return requests, result, callErr
+}
+
+// unexportedClientMethods are the bound methods that reflection cannot reach
+// by name because they are unexported.
+var unexportedClientMethods = map[string]func(*Client) any{
+	"getActorByID": func(c *Client) any { return c.getActorByID },
+}
+
+// clientMethod returns the named method of the client, or an invalid value
+// when it has none or it is unexported and not in unexportedClientMethods.
+func clientMethod(client *Client, name string) reflect.Value {
+	if method, ok := unexportedClientMethods[name]; ok {
+		return reflect.ValueOf(method(client))
+	}
+	return reflect.ValueOf(client).MethodByName(name)
+}
+
+// checkGeneratedOperation returns every difference between what the method
+// sends and what the schema defines for the operation.
+func checkGeneratedOperation(spec *contractSpec, op *contractOperation, b *contractOpBinding) []string {
+	method := clientMethod(&Client{}, b.Name)
+	if !method.IsValid() {
+		return []string{"no such method on *Client; list an unexported one in unexportedClientMethods"}
+	}
+	call, err := newContractCall(b.Name, method.Type(), b)
+	if err != nil {
+		return []string{"cannot be called with synthetic arguments: " + err.Error()}
+	}
+
+	var fillErr error
+	args := call.args
+	if call.query != nil {
+		args = append(slices.Clone(args), call.option(func(q reflect.Value) {
+			fillErr = fillContractValue(q.Elem(), q.Elem().Type().Name())
+			if b.Single {
+				return
+			}
+			page := q.Interface().(pager).page()
+			page.limit = contractLimit
+			page.nextURL = ""
+		}))
+	}
+	response, err := op.response(spec)
+	if err != nil {
+		return []string{err.Error()}
+	}
+	response.attributes = b.goTypes[response.resourceName+"Attributes"]
+	requests, result, callErr := call.invoke(args, response)
+	if fillErr != nil {
+		return []string{"cannot fill the options: " + fillErr.Error()}
+	}
+	if len(requests) != 1 {
+		return []string{fmt.Sprintf("sent %v, want one request (error: %v)", requests, callErr)}
+	}
+	req := requests[0]
+
+	var problems []string
+	if callErr != nil {
+		problems = append(problems, fmt.Sprintf("failed on the schema's %d response %s: %v", response.status, response.body, callErr))
+	} else {
+		problems = append(problems, checkContractResult(spec, result, response)...)
+	}
+	if req.method != op.method {
+		problems = append(problems, fmt.Sprintf("sent %s, the operation is %s", req.method, op.method))
+	}
+	if want := contractPath(op.path, call.pathArgs); req.url.Path != want {
+		problems = append(problems, fmt.Sprintf("sent path %s, want %s", req.url.Path, want))
+	}
+	problems = append(problems, checkContractQuery(op, req.url.Query(), call.query != nil && !b.Single)...)
+	if b.Single && len(req.url.Query()) == 0 {
+		problems = append(problems, "sent no query, the method reads one resource with a query argument")
+	}
+	if call.query != nil && !b.Single {
+		problems = append(problems, checkContractNextURL(call, op.path, response, b.CheckFirst && b.Check == "require")...)
+	}
+	if b.SkipEmptyAttributes {
+		problems = append(problems, checkContractAttributesIfSet(call, response)...)
+	}
+	if method.Type().NumOut() == 2 {
+		problems = append(problems, checkContractParseErr(call, args, response, b.ParseErr)...)
+	}
+	problems = append(problems, checkContractBody(spec, op, req.body, call)...)
+	if call.attrsArg != nil {
+		attrs := spec.property(spec.property(op.RequestBody.schema(spec), "data"), "attributes")
+		problems = append(problems, checkContractAttributeFields(call, response, attrs)...)
+	}
+	return problems
+}
+
+// checkContractParseErr answers with a body that is not JSON and checks that
+// the method wraps the decode failure with the text its binding names.
+func checkContractParseErr(call *contractCall, args []reflect.Value, response contractResponse, parseErr string) []string {
+	response.body = "not json"
+	_, _, err := call.invoke(args, response)
+	want := cmp.Or(parseErr, "failed to parse response") + ": "
+	if err == nil || !strings.HasPrefix(err.Error(), want) {
+		return []string{fmt.Sprintf("a response that is not JSON fails with %v, want an error starting %q", err, want)}
+	}
+	return nil
+}
+
+func contractPath(template string, args []string) string {
+	for _, arg := range args {
+		start, end := strings.Index(template, "{"), strings.Index(template, "}")
+		if start < 0 || end < start {
+			break
+		}
+		template = template[:start] + arg + template[end+1:]
+	}
+	return template
+}
+
+func checkContractQuery(op *contractOperation, query url.Values, paged bool) []string {
+	allowed := map[string]bool{}
+	for _, p := range op.Parameters {
+		if p.In == "query" {
+			allowed[p.Name] = true
+		}
+	}
+	var unknown []string
+	for name := range query {
+		if !allowed[name] && !allowsMapKeyName(allowed, name) {
+			unknown = append(unknown, name)
+		}
+	}
+	sort.Strings(unknown)
+	var problems []string
+	if len(unknown) > 0 {
+		problems = append(problems, fmt.Sprintf("sent query parameters %v that the operation does not define", unknown))
+	}
+	if allowed["limit"] && !paged {
+		problems = append(problems, "the operation pages with limit, the method takes no options")
+	}
+	if paged && allowed["limit"] && query.Get("limit") != strconv.Itoa(contractLimit) {
+		problems = append(problems, fmt.Sprintf("sent limit=%q with a limit option of %d", query.Get("limit"), contractLimit))
+	}
+	return problems
+}
+
+// allowsMapKeyName reports whether a name built from a caller's map key, such
+// as fields[<key>], is a parameter the operation defines for some key.
+func allowsMapKeyName(allowed map[string]bool, name string) bool {
+	prefix, suffix, ok := strings.Cut(name, contractMapKey)
+	if !ok {
+		return false
+	}
+	for param := range allowed {
+		if len(param) > len(prefix)+len(suffix) && strings.HasPrefix(param, prefix) && strings.HasSuffix(param, suffix) {
+			return true
+		}
+	}
+	return false
+}
+
+// checkContractNextURL calls a paged read with a next URL and blank path
+// parameters, as pagination does, and checks that it fetches that URL. A read
+// that requires its path parameters before applying options gets them.
+func checkContractNextURL(call *contractCall, path string, response contractResponse, requiresPathParams bool) []string {
+	next := "https://api.appstoreconnect.apple.com" + contractPath(path, call.pathArgs) + "?cursor=contract"
+	args, with := slices.Clone(call.args), "the path parameters"
+	if !requiresPathParams {
+		args, with = nil, "blank path parameters"
+		for _, typ := range call.params {
+			args = append(args, reflect.Zero(typ))
+		}
+	}
+	args = append(args, call.option(func(q reflect.Value) {
+		q.Interface().(pager).page().nextURL = next
+	}))
+	requests, _, err := call.invoke(args, response)
+	if err != nil || len(requests) != 1 || requests[0].url.String() != next {
+		return []string{fmt.Sprintf("with a next URL and %s sent %v, want one request to %s (error: %v)", with, requests, next, err)}
+	}
+	return nil
+}
+
+// checkContractAttributesIfSet calls an update that sends its attributes
+// only when one is set: with none set it must send no attributes, and with
+// any single field set it must send them.
+func checkContractAttributesIfSet(call *contractCall, response contractResponse) []string {
+	at := slices.IndexFunc(call.params, func(typ reflect.Type) bool { return typ.Kind() == reflect.Struct })
+	if at < 0 {
+		return []string{"sends attributes only when set, but takes no attributes struct"}
+	}
+	typ := call.params[at]
+	var problems []string
+	send := func(label string, attrs reflect.Value, want bool) {
+		args := slices.Clone(call.args)
+		args[at] = attrs
+		requests, _, err := call.invoke(args, response)
+		if len(requests) != 1 {
+			problems = append(problems, fmt.Sprintf("with %s sent %v, want one request (error: %v)", label, requests, err))
+			return
+		}
+		var body struct {
+			Data map[string]json.RawMessage `json:"data"`
+		}
+		_ = json.Unmarshal(requests[0].body, &body)
+		if sent := body.Data["attributes"] != nil; sent != want {
+			problems = append(problems, fmt.Sprintf("with %s sent attributes %t, want %t", label, sent, want))
+		}
+	}
+	send("no attribute set", reflect.New(typ).Elem(), false)
+	for i := range typ.NumField() {
+		attrs := reflect.New(typ).Elem()
+		if err := fillContractValue(attrs.Field(i), typ.Name()+"."+typ.Field(i).Name); err != nil {
+			return append(problems, "cannot fill the attributes: "+err.Error())
+		}
+		send("only "+typ.Field(i).Name+" set", attrs, true)
+	}
+	return problems
+}
+
+// checkContractResult checks that the method returns the resource of the
+// response: its ID, and every attribute the schema defines and no other, so a
+// method that decodes into another resource's type fails. A data item that is
+// not a resource, such as a metrics row, must keep every property instead.
+func checkContractResult(spec *contractSpec, result any, response contractResponse) []string {
+	if response.resource == nil {
+		if result != nil {
+			return []string{fmt.Sprintf("returns %T for an operation without a response document", result)}
+		}
+		return nil
+	}
+	encoded, err := json.Marshal(result)
+	if err != nil {
+		return []string{fmt.Sprintf("cannot encode the result %T: %v", result, err)}
+	}
+	var document struct {
+		Data json.RawMessage `json:"data"`
+	}
+	if err := json.Unmarshal(encoded, &document); err != nil {
+		return []string{fmt.Sprintf("result %T is not a document: %v", result, err)}
+	}
+	var items []map[string]json.RawMessage
+	if err := json.Unmarshal(document.Data, &items); err != nil {
+		var item map[string]json.RawMessage
+		if err := json.Unmarshal(document.Data, &item); err != nil {
+			return []string{fmt.Sprintf("result %T has data %s", result, document.Data)}
+		}
+		items = []map[string]json.RawMessage{item}
+	}
+	if len(items) != 1 {
+		return []string{fmt.Sprintf("result %T does not hold the response's one data item: %s", result, encoded)}
+	}
+	got := items[0]
+	want := response.resource
+	if !response.isResource() {
+		return compareContractNames(fmt.Sprintf("result %T has data item properties", result), "the schema's item has", got, want)
+	}
+	var id string
+	_ = json.Unmarshal(got["id"], &id)
+	if id != contractResourceID {
+		return []string{fmt.Sprintf("result %T does not hold the response resource: %s", result, encoded)}
+	}
+	var attrs map[string]json.RawMessage
+	_ = json.Unmarshal(got["attributes"], &attrs)
+	problems := compareContractNames(fmt.Sprintf("result %T has attributes", result), "the schema's resource has", attrs, spec.property(want, "attributes"))
+	problems = append(problems, checkContractResultType(reflect.TypeOf(result), response)...)
+	if response.attributes != "" {
+		problems = append(problems, checkContractAttributeNames(reflect.TypeOf(result), response.attributes, spec.property(want, "attributes"))...)
+	}
+	return problems
+}
+
+// checkContractAttributeNames checks that the attributes type the bindings
+// name for a resource can carry exactly the schema's attributes, so a Go type
+// that stands for another version's schema has that schema's attribute
+// names even when it would decode and keep any attribute.
+func checkContractAttributeNames(result reflect.Type, name string, schema *contractSchema) []string {
+	data, _ := result.Elem().FieldByName("Data")
+	item := data.Type
+	for item.Kind() == reflect.Slice || item.Kind() == reflect.Pointer {
+		item = item.Elem()
+	}
+	attrs, _ := item.FieldByName("Attributes")
+	if attrs.Type == nil || attrs.Type.Name() != name {
+		return nil
+	}
+	fields := map[string]json.RawMessage{}
+	for _, field := range reflect.VisibleFields(attrs.Type) {
+		tag, _, _ := strings.Cut(field.Tag.Get("json"), ",")
+		if !field.IsExported() || field.Anonymous || tag == "-" {
+			continue
+		}
+		fields[cmp.Or(tag, field.Name)] = nil
+	}
+	return compareContractNames(fmt.Sprintf("%s has fields for attributes", name), "the schema's resource has", fields, schema)
+}
+
+// checkContractResultType checks that the result's data items are the
+// response's resource by name, as the generator names them: the attributes of
+// resource R are type RAttributes, or the Go type the bindings name for them;
+// hand-written types may differ in case.
+// Attribute names alone cannot tell two resources apart when both have the
+// same names, or when a type keeps whatever attributes it decodes. Linkages
+// carry no attributes and all look alike, so a linkage result must be the type
+// named after the response schema, or LinkagesResponse for a list.
+func checkContractResultType(result reflect.Type, response contractResponse) []string {
+	data, ok := result.Elem().FieldByName("Data")
+	if !ok {
+		return []string{fmt.Sprintf("result %s has no Data field", result)}
+	}
+	item := data.Type
+	for item.Kind() == reflect.Slice || item.Kind() == reflect.Pointer {
+		item = item.Elem()
+	}
+	attrs, hasAttrs := item.FieldByName("Attributes")
+	if response.resourceName == "" {
+		if hasAttrs {
+			return []string{fmt.Sprintf("result data %s has attributes, the response holds linkages", item)}
+		}
+		list := data.Type.Kind() == reflect.Slice && result.Elem() == reflect.TypeFor[LinkagesResponse]()
+		if !list && !strings.EqualFold(result.Elem().Name(), response.schemaName) {
+			return []string{fmt.Sprintf("result %s is not the %s linkage response", result.Elem().Name(), response.schemaName)}
+		}
+		return nil
+	}
+	name, holds := item.Name(), item.String()
+	if hasAttrs && attrs.Type.Name() != "" {
+		name, holds = strings.TrimSuffix(attrs.Type.Name(), "Attributes"), attrs.Type.String()
+	}
+	if response.attributes != "" {
+		if !hasAttrs || attrs.Type.Name() != response.attributes {
+			return []string{fmt.Sprintf("result data holds %s, not %s, which the bindings name for the attributes of resource %s", holds, response.attributes, response.resourceName)}
+		}
+		return nil
+	}
+	if !strings.EqualFold(name, response.resourceName) {
+		return []string{fmt.Sprintf("result data holds %s, not the attributes of resource %s", holds, response.resourceName)}
+	}
+	return nil
+}
+
+func compareContractNames(gotLabel, wantLabel string, values map[string]json.RawMessage, schema *contractSchema) []string {
+	var want, got []string
+	if schema != nil {
+		for name := range schema.Properties {
+			want = append(want, name)
+		}
+	}
+	for name := range values {
+		got = append(got, name)
+	}
+	sort.Strings(want)
+	sort.Strings(got)
+	if !slices.Equal(got, want) {
+		return []string{fmt.Sprintf("%s %v, %s %v", gotLabel, got, wantLabel, want)}
+	}
+	return nil
+}
+
+// checkContractBody checks the request body against the request schema: the
+// data type, the attribute and relationship names, the required ones, and for
+// a relationship change the linkages of the IDs passed.
+func checkContractBody(spec *contractSpec, op *contractOperation, body []byte, call *contractCall) []string {
+	schema := op.RequestBody.schema(spec)
+	if schema == nil {
+		if len(body) > 0 {
+			return []string{fmt.Sprintf("sent a body %s, the operation has none", body)}
+		}
+		return nil
+	}
+	if len(body) == 0 {
+		return []string{"sent no body, the operation requires one"}
+	}
+	var payload map[string]json.RawMessage
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return []string{fmt.Sprintf("body is not a JSON object: %v", err)}
+	}
+	problems := checkContractNames("body", payload, schema)
+	dataSchema := spec.property(schema, "data")
+	if dataSchema == nil || payload["data"] == nil {
+		return append(problems, "body or schema has no data")
+	}
+
+	if dataSchema.Type == "array" {
+		item := spec.resolve(dataSchema.Items)
+		var linkages []struct {
+			Type string `json:"type"`
+			ID   string `json:"id"`
+		}
+		if err := json.Unmarshal(payload["data"], &linkages); err != nil {
+			return append(problems, fmt.Sprintf("data is not a list of linkages: %v", err))
+		}
+		var ids []string
+		for _, l := range linkages {
+			ids = append(ids, l.ID)
+			if types := spec.property(item, "type"); types == nil || !slices.Contains(types.Enum, l.Type) {
+				problems = append(problems, fmt.Sprintf("linkage type %q is not one the schema defines", l.Type))
+			}
+		}
+		if !slices.Equal(ids, call.ids) {
+			problems = append(problems, fmt.Sprintf("sent linkage IDs %v, passed %v", ids, call.ids))
+		}
+		return problems
+	}
+
+	var data map[string]json.RawMessage
+	if err := json.Unmarshal(payload["data"], &data); err != nil {
+		return append(problems, fmt.Sprintf("data is not an object: %v", err))
+	}
+	problems = append(problems, checkContractNames("data", data, dataSchema)...)
+	var typ string
+	_ = json.Unmarshal(data["type"], &typ)
+	if types := spec.property(dataSchema, "type"); types == nil || !slices.Contains(types.Enum, typ) {
+		problems = append(problems, fmt.Sprintf("data.type %q is not one of the schema's types", typ))
+	}
+	if spec.property(dataSchema, "id") != nil && len(call.pathArgs) > 0 {
+		var id string
+		_ = json.Unmarshal(data["id"], &id)
+		if id != call.pathArgs[0] {
+			problems = append(problems, fmt.Sprintf("data.id is %q, want the path ID %q", id, call.pathArgs[0]))
+		}
+	}
+	for _, part := range []string{"attributes", "relationships"} {
+		if data[part] == nil {
+			continue
+		}
+		var values map[string]json.RawMessage
+		if err := json.Unmarshal(data[part], &values); err != nil {
+			problems = append(problems, fmt.Sprintf("data.%s is not an object: %v", part, err))
+			continue
+		}
+		problems = append(problems, checkContractNames("data."+part, values, spec.property(dataSchema, part))...)
+	}
+	if call.attrs != nil && !jsonEqual(data["attributes"], call.attrs) {
+		problems = append(problems, fmt.Sprintf("data.attributes is %s, the attributes argument was %s", data["attributes"], call.attrs))
+	}
+	return append(problems, checkContractLinks(spec, spec.property(dataSchema, "relationships"), data["relationships"], call)...)
+}
+
+// checkContractLinks checks that each linked ID argument is sent as the
+// linkage of its relationship, with a type the schema defines.
+func checkContractLinks(spec *contractSpec, schema *contractSchema, sent []byte, call *contractCall) []string {
+	var relationships map[string]struct {
+		Data json.RawMessage `json:"data"`
+	}
+	_ = json.Unmarshal(sent, &relationships)
+	var problems []string
+	for i, name := range call.links {
+		id := call.pathArgs[len(call.pathArgs)-len(call.links)+i]
+		var linkage struct {
+			Type string `json:"type"`
+			ID   string `json:"id"`
+		}
+		_ = json.Unmarshal(relationships[name].Data, &linkage)
+		types := spec.property(spec.property(spec.property(schema, name), "data"), "type")
+		if linkage.ID != id || types == nil || !slices.Contains(types.Enum, linkage.Type) {
+			problems = append(problems, fmt.Sprintf("data.relationships.%s.data is %s, want a linkage of the schema's type with ID %q", name, relationships[name].Data, id))
+		}
+	}
+	return problems
+}
+
+// checkContractAttributeFields calls the method with one field of the
+// attributes argument set at a time and checks that the body then has exactly
+// one more or changed attribute, named like the field, and that together the
+// fields can send every attribute the schema defines. A field that never
+// reaches the body, such as one tagged json:"-", fails here; the comparison of
+// the body with the argument's JSON cannot see it.
+func checkContractAttributeFields(call *contractCall, response contractResponse, schema *contractSchema) []string {
+	typ := call.attrsArg
+	if typ.Kind() == reflect.Pointer {
+		typ = typ.Elem()
+	}
+	encode := func(v reflect.Value) (map[string]json.RawMessage, error) {
+		args := slices.Clone(call.args)
+		if call.attrsArg.Kind() == reflect.Pointer {
+			v = v.Addr()
+		}
+		args[call.attrsAt] = v
+		requests, _, err := call.invoke(args, response)
+		if err != nil || len(requests) != 1 {
+			return nil, fmt.Errorf("sent %v (error: %w)", requests, err)
+		}
+		var body struct {
+			Data struct {
+				Attributes map[string]json.RawMessage `json:"attributes"`
+			} `json:"data"`
+		}
+		if err := json.Unmarshal(requests[0].body, &body); err != nil {
+			return nil, err
+		}
+		return body.Data.Attributes, nil
+	}
+	zero, err := encode(reflect.New(typ).Elem())
+	if err != nil {
+		return []string{fmt.Sprintf("with an empty %s: %v", typ.Name(), err)}
+	}
+	var problems []string
+	sent := map[string]bool{}
+	for i := range typ.NumField() {
+		field := typ.Field(i)
+		value := reflect.New(typ).Elem()
+		if err := fillContractValue(value.Field(i), typ.Name()+"."+field.Name); err != nil {
+			return []string{err.Error()}
+		}
+		values, err := encode(value)
+		if err != nil {
+			return []string{fmt.Sprintf("with only %s.%s set: %v", typ.Name(), field.Name, err)}
+		}
+		var changed []string
+		for name, v := range values {
+			if !jsonEqual(v, zero[name]) {
+				changed = append(changed, name)
+			}
+		}
+		sort.Strings(changed)
+		switch {
+		case len(changed) != 1:
+			problems = append(problems, fmt.Sprintf("setting %s.%s sends attributes %v, want one", typ.Name(), field.Name, changed))
+		case !strings.EqualFold(changed[0], field.Name):
+			problems = append(problems, fmt.Sprintf("setting %s.%s sends attribute %q, not the one named like the field", typ.Name(), field.Name, changed[0]))
+		}
+		for _, name := range changed {
+			sent[name] = true
+		}
+	}
+	var unsent []string
+	if schema != nil {
+		for name := range schema.Properties {
+			if !sent[name] {
+				unsent = append(unsent, name)
+			}
+		}
+	}
+	sort.Strings(unsent)
+	if len(unsent) > 0 {
+		problems = append(problems, fmt.Sprintf("%s has no field that sends %v, which the schema defines", typ.Name(), unsent))
+	}
+	return problems
+}
+
+func jsonEqual(a, b []byte) bool {
+	var x, y any
+	return json.Unmarshal(a, &x) == nil && json.Unmarshal(b, &y) == nil && reflect.DeepEqual(x, y)
+}
+
+// checkContractNames checks that an object sends only names the schema
+// defines and every name it requires.
+func checkContractNames(where string, values map[string]json.RawMessage, schema *contractSchema) []string {
+	if schema == nil {
+		return []string{fmt.Sprintf("sent %s, which the schema does not define", where)}
+	}
+	var problems []string
+	var unknown []string
+	for name := range values {
+		if _, ok := schema.Properties[name]; !ok {
+			unknown = append(unknown, name)
+		}
+	}
+	sort.Strings(unknown)
+	if len(unknown) > 0 {
+		problems = append(problems, fmt.Sprintf("%s has %v, which the schema does not define", where, unknown))
+	}
+	for _, name := range schema.Required {
+		if values[name] == nil {
+			problems = append(problems, fmt.Sprintf("%s lacks %q, which the schema requires", where, name))
+		}
+	}
+	return problems
+}
+
+// contractMapKey is the key of every map fillContractValue fills. A query
+// parameter whose name holds it was named by the caller's map key.
+const contractMapKey = "contract-key"
+
+// fillContractValue sets every field of a struct, exported or not, to a
+// non-zero value, so a request built from it sends everything it can.
+func fillContractValue(v reflect.Value, where string) error {
+	if !v.CanSet() {
+		v = reflect.NewAt(v.Type(), unsafe.Pointer(v.UnsafeAddr())).Elem()
+	}
+	switch v.Kind() {
+	case reflect.String:
+		v.SetString("contract")
+	case reflect.Bool:
+		v.SetBool(true)
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		v.SetInt(1)
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		v.SetUint(1)
+	case reflect.Float32, reflect.Float64:
+		v.SetFloat(1)
+	case reflect.Pointer:
+		v.Set(reflect.New(v.Type().Elem()))
+		return fillContractValue(v.Elem(), where)
+	case reflect.Slice:
+		v.Set(reflect.MakeSlice(v.Type(), 1, 1))
+		return fillContractValue(v.Index(0), where+"[0]")
+	case reflect.Array:
+		for i := range v.Len() {
+			if err := fillContractValue(v.Index(i), fmt.Sprintf("%s[%d]", where, i)); err != nil {
+				return err
+			}
+		}
+	case reflect.Map:
+		key := reflect.New(v.Type().Key()).Elem()
+		if key.Kind() == reflect.String {
+			key.SetString(contractMapKey)
+		} else if err := fillContractValue(key, where+" key"); err != nil {
+			return err
+		}
+		elem := reflect.New(v.Type().Elem()).Elem()
+		if err := fillContractValue(elem, where+"["+fmt.Sprint(key)+"]"); err != nil {
+			return err
+		}
+		v.Set(reflect.MakeMapWithSize(v.Type(), 1))
+		v.SetMapIndex(key, elem)
+	case reflect.Func:
+		fn, err := contractFunc(v.Type(), where)
+		if err != nil {
+			return err
+		}
+		v.Set(fn)
+	case reflect.Struct:
+		for i := range v.NumField() {
+			if err := fillContractValue(v.Field(i), where+"."+v.Type().Field(i).Name); err != nil {
+				return err
+			}
+		}
+	default:
+		return fmt.Errorf("%s has kind %s", where, v.Kind())
+	}
+	return nil
+}
+
+// contractFunc returns a func of the type that returns, for each result, its
+// first argument of that type, or else a filled value; so a request-context
+// func passes the context through and returns a cancel func.
+func contractFunc(typ reflect.Type, where string) (reflect.Value, error) {
+	from := make([]int, typ.NumOut())
+	filled := make([]reflect.Value, typ.NumOut())
+	for i := range typ.NumOut() {
+		from[i] = slices.IndexFunc(slices.Collect(typ.Ins()), func(in reflect.Type) bool { return in.AssignableTo(typ.Out(i)) })
+		if from[i] >= 0 {
+			continue
+		}
+		filled[i] = reflect.New(typ.Out(i)).Elem()
+		if err := fillContractValue(filled[i], fmt.Sprintf("%s result %d", where, i)); err != nil {
+			return reflect.Value{}, err
+		}
+	}
+	return reflect.MakeFunc(typ, func(in []reflect.Value) []reflect.Value {
+		out := slices.Clone(filled)
+		for i, j := range from {
+			if j >= 0 {
+				out[i] = in[j]
+			}
+		}
+		return out
+	}), nil
+}

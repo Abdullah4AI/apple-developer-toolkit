@@ -1,0 +1,1151 @@
+package main
+
+import (
+	"io"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+const handWrittenClient = `package asc
+
+import (
+	"context"
+	"fmt"
+	"net/http"
+	"strings"
+)
+
+// GetWidget fetches one widget.
+func (c *Client) GetWidget(ctx context.Context, widgetID string) (*WidgetResponse, error) {
+	widgetID = strings.TrimSpace(widgetID)
+	if widgetID == "" {
+		return nil, fmt.Errorf("widget ID is required")
+	}
+
+	return getJSON[WidgetResponse](ctx, c, readRequest{Path: fmt.Sprintf("/v1/widgets/%s", widgetID), ParseErr: "failed to parse widget"})
+}
+
+// UpdateWidgetGadgets replaces the gadgets of a widget.
+func (c *Client) UpdateWidgetGadgets(ctx context.Context, widgetID string, gadgetIDs []string) error {
+	payload := RelationshipRequest{Data: buildRelationshipData(ResourceTypeGadgets, gadgetIDs)}
+	return sendNoContent(ctx, c, "PATCH", fmt.Sprintf("/v1/widgets/%s/relationships/gadgets", strings.TrimSpace(widgetID)), payload)
+}
+
+// GetWidgetParts lists the parts of a widget.
+func (c *Client) GetWidgetParts(ctx context.Context, widgetID string, opts ...PartsOption) (*GadgetListResponse, error) {
+	widgetID = strings.TrimSpace(widgetID)
+	if widgetID == "" {
+		return nil, fmt.Errorf("widgetID is required")
+	}
+
+	query := applyOptions(opts)
+	return getJSON[GadgetListResponse](ctx, c, readRequest{Path: fmt.Sprintf("/v1/widgets/%s/parts", widgetID), Query: buildPartsQuery(query), Next: query.nextURL})
+}
+
+// GetWidgetOwner fetches the owner of a widget as given.
+func (c *Client) GetWidgetOwner(ctx context.Context, widgetID string) (*WidgetResponse, error) {
+	return getJSON[WidgetResponse](ctx, c, readRequest{Path: fmt.Sprintf("/v1/widgets/%s/owner", widgetID)})
+}
+
+// CreateWidgetNote adds a note to a widget.
+func (c *Client) CreateWidgetNote(ctx context.Context, widgetID string, attrs WidgetNoteCreateAttributes) (*WidgetResponse, error) {
+	widgetID = strings.TrimSpace(widgetID)
+	if widgetID == "" {
+		return nil, fmt.Errorf("widgetID is required")
+	}
+
+	payload := WidgetNoteCreateRequest{Data: WidgetNoteCreateData{
+		Type:       ResourceTypeWidgetNotes,
+		Attributes: attrs,
+		Relationships: &WidgetNoteRelationships{
+			Widget: &Relationship{Data: ResourceData{Type: ResourceTypeWidgets, ID: widgetID}},
+		},
+	}}
+	return sendJSON[WidgetResponse](ctx, c, writeRequest{Method: http.MethodPost, Path: "/v1/widgetNotes", Payload: payload})
+}
+
+// CreateWidgetRelease sets its relationships in another order than its
+// parameters, so it stays hand-written.
+func (c *Client) CreateWidgetRelease(ctx context.Context, widgetID, gadgetID, ownerID string) (*WidgetResponse, error) {
+	payload := WidgetReleaseCreateRequest{Data: WidgetReleaseCreateData{
+		Type: ResourceTypeWidgetReleases,
+		Relationships: WidgetReleaseCreateRelationships{
+			Gadget: Relationship{Data: ResourceData{Type: ResourceTypeGadgets, ID: gadgetID}},
+			Widget: Relationship{Data: ResourceData{Type: ResourceTypeWidgets, ID: widgetID}},
+			Owner:  &Relationship{Data: ResourceData{Type: ResourceTypeWidgets, ID: ownerID}},
+		},
+	}}
+	return sendJSON[WidgetResponse](ctx, c, writeRequest{Method: http.MethodPost, Path: "/v1/widgetReleases", Payload: payload})
+}
+
+// DeleteWidget logs before it deletes, so it stays hand-written.
+func (c *Client) DeleteWidget(ctx context.Context, widgetID string) error {
+	fmt.Println("deleting", widgetID)
+	return sendNoContent(ctx, c, "DELETE", fmt.Sprintf("/v1/widgets/%s", widgetID), nil)
+}
+
+// UpdateWizard sends the attributes only when one is set.
+func (c *Client) UpdateWizard(ctx context.Context, wizardID string, attrs WizardUpdateAttributes) (*WidgetResponse, error) {
+	wizardID = strings.TrimSpace(wizardID)
+	if wizardID == "" {
+		return nil, fmt.Errorf("wizardID is required")
+	}
+
+	payload := WizardUpdateRequest{
+		Data: WizardUpdateData{
+			Type: ResourceTypeWizards,
+			ID:   wizardID,
+		},
+	}
+	if attrs.Title != nil || attrs.Visible != nil {
+		payload.Data.Attributes = &attrs
+	}
+	return sendJSON[WidgetResponse](ctx, c, writeRequest{Method: "PATCH", Path: fmt.Sprintf("/v1/wizards/%s", wizardID), Payload: payload})
+}
+
+// UpdateWizardIfChanged compares the whole struct, so it stays hand-written.
+func (c *Client) UpdateWizardIfChanged(ctx context.Context, wizardID string, attrs WizardUpdateAttributes) (*WidgetResponse, error) {
+	payload := WizardUpdateRequest{
+		Data: WizardUpdateData{
+			Type: ResourceTypeWizards,
+			ID:   wizardID,
+		},
+	}
+	if attrs != (WizardUpdateAttributes{}) {
+		payload.Data.Attributes = &attrs
+	}
+	return sendJSON[WidgetResponse](ctx, c, writeRequest{Method: "PATCH", Path: fmt.Sprintf("/v1/wizards/%s", wizardID), Payload: payload})
+}
+
+// UpdateWizardV2 sends the attributes by value.
+func (c *Client) UpdateWizardV2(ctx context.Context, wizardID string, attrs WizardUpdateAttributes) (*WidgetResponse, error) {
+	payload := WizardUpdateRequest{
+		Data: WizardUpdateData{
+			Type:       ResourceTypeWizards,
+			ID:         strings.TrimSpace(wizardID),
+			Attributes: attrs,
+		},
+	}
+	return sendJSON[WidgetResponse](ctx, c, writeRequest{Method: "PATCH", Path: fmt.Sprintf("/v2/wizards/%s", strings.TrimSpace(wizardID)), Payload: payload})
+}
+
+// UpdateWizardV3 takes the attributes as a pointer.
+func (c *Client) UpdateWizardV3(ctx context.Context, wizardID string, attrs *WizardUpdateAttributes) (*WidgetResponse, error) {
+	wizardID = strings.TrimSpace(wizardID)
+	if wizardID == "" {
+		return nil, fmt.Errorf("wizardID is required")
+	}
+
+	payload := WizardUpdateRequest{
+		Data: WizardUpdateData{
+			Type:       ResourceTypeWizards,
+			ID:         wizardID,
+			Attributes: attrs,
+		},
+	}
+	return sendJSON[WidgetResponse](ctx, c, writeRequest{Method: "PATCH", Path: fmt.Sprintf("/v3/wizards/%s", wizardID), Payload: payload})
+}
+`
+
+const handWrittenTypes = `package asc
+
+// WidgetAttributes describes a widget.
+type WidgetAttributes struct {
+	Name     string   ` + "`json:\"name,omitempty\"`" + `
+	Count    int      ` + "`json:\"count,omitempty\"`" + `
+	Enabled  bool     ` + "`json:\"enabled,omitempty\"`" + `
+	APIKeyID string   ` + "`json:\"apiKeyId,omitempty\"`" + `
+	Tags     []string ` + "`json:\"tags,omitempty\"`" + `
+}
+
+// WidgetNoteCreateData is the data of a new widget note.
+type WidgetNoteCreateData struct {
+	Type          ResourceType               ` + "`json:\"type\"`" + `
+	Attributes    WidgetNoteCreateAttributes ` + "`json:\"attributes\"`" + `
+	Relationships *WidgetNoteRelationships   ` + "`json:\"relationships\"`" + `
+}
+
+// WidgetNoteRelationships links a note to its widget.
+type WidgetNoteRelationships struct {
+	Widget  *Relationship     ` + "`json:\"widget\"`" + `
+	Gadgets *RelationshipList ` + "`json:\"gadgets,omitempty\"`" + `
+}
+
+// WidgetReleaseCreateData is the data of a new widget release.
+type WidgetReleaseCreateData struct {
+	Type          ResourceType                     ` + "`json:\"type\"`" + `
+	Relationships WidgetReleaseCreateRelationships ` + "`json:\"relationships\"`" + `
+}
+
+// WidgetReleaseCreateRelationships sends the owner even when it is empty, so
+// it stays hand-written.
+type WidgetReleaseCreateRelationships struct {
+	Widget Relationship  ` + "`json:\"widget\"`" + `
+	Gadget Relationship  ` + "`json:\"gadget\"`" + `
+	Owner  *Relationship ` + "`json:\"owner\"`" + `
+}
+
+// WidgetsResponse keeps a pointer on purpose.
+type WidgetsResponse = Response[*WidgetAttributes]
+`
+
+const handWrittenResponse = `package asc
+
+import "fmt"
+
+// WidgetResponse is a single widget.
+type WidgetResponse = SingleResponse[WidgetAttributes]
+`
+
+func writeHandWritten(t *testing.T, files map[string]string) string {
+	t.Helper()
+	dir := t.TempDir()
+	for name, src := range files {
+		path := filepath.Join(dir, name)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(src), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return dir
+}
+
+func runAdopt(dir string, dryRun bool) error {
+	return run(filepath.Join("testdata", "spec.json"), filepath.Join(dir, "bindings"), dir, false, "Widgets", dryRun, io.Discard)
+}
+
+func TestAdoptReplacesOnlyCodeTheGeneratorReproduces(t *testing.T) {
+	otherFamily := `{"tag": "Other", "file": "other_gen.go"}`
+	dir := writeHandWritten(t, map[string]string{"client.go": handWrittenClient, "types.go": handWrittenTypes, "response.go": handWrittenResponse, "bindings/Other.json": otherFamily})
+	if err := runAdopt(dir, false); err != nil {
+		t.Fatal(err)
+	}
+	if got := readFile(t, filepath.Join(dir, "bindings", "Other.json")); got != otherFamily {
+		t.Errorf("adopt rewrote the bindings of a family it did not adopt:\n%s", got)
+	}
+
+	bindings, err := LoadBindings(filepath.Join(dir, "bindings"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	fam := bindings.Families[1]
+	if fam.Tag != "Widgets" || fam.File != "widgets_gen.go" || strings.Join(fam.Types, ",") != "WidgetAttributes,WidgetNoteCreateData,WidgetNoteRelationships,WidgetReleaseCreateData,WidgetResponse" {
+		t.Errorf("family = %s with types %v", fam.File, fam.Types)
+	}
+	adopted := map[string]*OpBind{}
+	for _, op := range fam.Operations {
+		adopted[op.Name] = op
+	}
+	get, parts, owner, note := adopted["GetWidget"], adopted["GetWidgetParts"], adopted["GetWidgetOwner"], adopted["CreateWidgetNote"]
+	if len(adopted) != 8 || get == nil || parts == nil || owner == nil || note == nil || adopted["UpdateWidgetGadgets"] == nil {
+		t.Fatalf("adopted methods = %v", adopted)
+	}
+	if get.Check != checkRequire || get.CheckFirst || get.ParseErr != "failed to parse widget" || strings.Join(get.Messages, ",") != "widget ID is required" {
+		t.Errorf("GetWidget binding = %+v", get)
+	}
+	if parts.Check != checkRequire || !parts.CheckFirst || parts.Messages != nil {
+		t.Errorf("GetWidgetParts binding = %+v", parts)
+	}
+	if owner.Check != checkRaw || owner.CheckFirst {
+		t.Errorf("GetWidgetOwner binding = %+v", owner)
+	}
+	if note.Check != checkRequire || strings.Join(note.Links, ",") != "widget" {
+		t.Errorf("CreateWidgetNote binding = %+v", note)
+	}
+	if len(fam.Relationships) != 2 || *fam.Relationships[0] != (RelBind{Data: "WidgetNoteCreateData", Type: "*WidgetNoteRelationships"}) || *fam.Relationships[1] != (RelBind{Data: "WidgetReleaseCreateData", Type: "WidgetReleaseCreateRelationships"}) {
+		t.Errorf("relationships records = %v", fam.Relationships)
+	}
+	if update := adopted["UpdateWidgetGadgets"]; update.Check != checkInline {
+		t.Errorf("UpdateWidgetGadgets binding = %+v", update)
+	}
+	if wizard := adopted["UpdateWizard"]; wizard == nil || !wizard.SkipEmptyAttributes || wizard.Attrs != "" {
+		t.Errorf("UpdateWizard binding = %+v", wizard)
+	}
+	if v2 := adopted["UpdateWizardV2"]; v2 == nil || v2.Attrs != attrsValue || v2.SkipEmptyAttributes || v2.Check != checkInline {
+		t.Errorf("UpdateWizardV2 binding = %+v", v2)
+	}
+	if v3 := adopted["UpdateWizardV3"]; v3 == nil || v3.Attrs != attrsPointer || v3.SkipEmptyAttributes {
+		t.Errorf("UpdateWizardV3 binding = %+v", v3)
+	}
+
+	generated := readFile(t, filepath.Join(dir, "widgets_gen.go"))
+	if !strings.Contains(generated, "func (c *Client) GetWidget(") || !strings.Contains(generated, "type WidgetAttributes struct") {
+		t.Errorf("widgets_gen.go:\n%s", generated)
+	}
+	client := readFile(t, filepath.Join(dir, "client.go"))
+	if strings.Contains(client, "GetWidget") || strings.Contains(client, "UpdateWidgetGadgets") || strings.Contains(client, "CreateWidgetNote") || !strings.Contains(client, "func (c *Client) DeleteWidget(") || !strings.Contains(client, "func (c *Client) UpdateWizardIfChanged(") || !strings.Contains(client, "func (c *Client) CreateWidgetRelease(") {
+		t.Errorf("client.go after adopt:\n%s", client)
+	}
+	if strings.Contains(client, `"strings"`) || !strings.Contains(client, `"fmt"`) {
+		t.Errorf("client.go imports not pruned:\n%s", client)
+	}
+	types := readFile(t, filepath.Join(dir, "types.go"))
+	if strings.Contains(types, "WidgetAttributes struct") || strings.Contains(types, "WidgetNoteCreateData") || strings.Contains(types, "WidgetReleaseCreateData") || !strings.Contains(types, "WidgetReleaseCreateRelationships struct") || !strings.Contains(types, "WidgetsResponse") {
+		t.Errorf("types.go after adopt:\n%s", types)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "response.go")); !os.IsNotExist(err) {
+		t.Errorf("response.go should be deleted once empty, stat err = %v", err)
+	}
+}
+
+func TestAdoptLeavesNoBlankLineWhereItRemovesAnImport(t *testing.T) {
+	src := `package asc
+
+import (
+	"context"
+	"fmt"
+	"strings"
+)
+
+// GetWidgetOwner fetches the owner of a widget as given.
+func (c *Client) GetWidgetOwner(ctx context.Context, widgetID string) (*WidgetResponse, error) {
+	return getJSON[WidgetResponse](ctx, c, readRequest{Path: fmt.Sprintf("/v1/widgets/%s/owner", widgetID)})
+}
+
+func widgetName(ctx context.Context, name string) string {
+	return strings.TrimSpace(name)
+}
+`
+	want := `package asc
+
+import (
+	"context"
+	"strings"
+)
+
+func widgetName(ctx context.Context, name string) string {
+	return strings.TrimSpace(name)
+}
+`
+	dir := writeHandWritten(t, map[string]string{"owner.go": src})
+	if err := runAdopt(dir, false); err != nil {
+		t.Fatal(err)
+	}
+	if got := readFile(t, filepath.Join(dir, "owner.go")); got != want {
+		t.Errorf("owner.go after adopt:\n%s", got)
+	}
+}
+
+func TestAdoptIntoAnExistingFamilyLeavesItUpToDate(t *testing.T) {
+	deviation := `{"problem":"sent query parameters [filter[x]] that the operation does not define","reason":"kept on purpose"}`
+	existing := `{"tag": "Widgets", "file": "widgets_gen.go", "operations": [{"operation": "widgets_updateInstance", "name": "UpdateWidget", "params": ["widgetID"], "deviations": [` + deviation + `]}]}`
+	dir := writeHandWritten(t, map[string]string{"client.go": handWrittenClient, "bindings/Widgets.json": existing})
+	if err := runAdopt(dir, false); err != nil {
+		t.Fatal(err)
+	}
+	if err := run(filepath.Join("testdata", "spec.json"), filepath.Join(dir, "bindings"), dir, true, "", false, io.Discard); err != nil {
+		t.Fatalf("check right after adopt: %v", err)
+	}
+	if got := readFile(t, filepath.Join(dir, "bindings", "Widgets.json")); !strings.Contains(got, `"name":"UpdateWidget","params":["widgetID"],"deviations":[`+deviation+`]}`) {
+		t.Errorf("adopt dropped the recorded deviation of UpdateWidget:\n%s", got)
+	}
+
+	spec, err := LoadSpec(filepath.Join("testdata", "spec.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	bindings, err := LoadBindings(filepath.Join(dir, "bindings"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, op := range bindings.Families[0].Operations {
+		op.Deviations = nil
+	}
+	without, err := Generate(spec, bindings.Families[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(without) != readFile(t, filepath.Join(dir, "widgets_gen.go")) {
+		t.Error("a recorded deviation changed the generated code")
+	}
+}
+
+func TestAdoptWritesNothingOnDryRunOrFailure(t *testing.T) {
+	brokenBindings := `{"tag": "Other", "file": "other_gen.go", "operations": [{"operation": "widgets_missing", "name": "Missing"}]}`
+	tests := []struct {
+		name     string
+		bindings string
+		dryRun   bool
+	}{
+		{"dry run", "", true},
+		{"an existing binding no longer renders", brokenBindings, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			files := map[string]string{"client.go": handWrittenClient}
+			if tt.bindings != "" {
+				files["bindings/Other.json"] = tt.bindings
+			}
+			dir := writeHandWritten(t, files)
+			err := runAdopt(dir, tt.dryRun)
+			if tt.dryRun != (err == nil) {
+				t.Fatalf("err = %v", err)
+			}
+			if readFile(t, filepath.Join(dir, "client.go")) != handWrittenClient {
+				t.Error("client.go was modified")
+			}
+			entries, _ := os.ReadDir(dir)
+			if len(entries) != len(files) {
+				t.Errorf("files after adopt: %v", entries)
+			}
+		})
+	}
+}
+
+func TestWriteAllCheckFailsOnOutdatedOrStaleFiles(t *testing.T) {
+	spec, bindings := loadTestdata(t)
+	dir := t.TempDir()
+	if err := writeAll(spec, bindings, dir, true); err == nil {
+		t.Fatal("check passed with the generated file missing")
+	}
+	if err := writeAll(spec, bindings, dir, false); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeAll(spec, bindings, dir, true); err != nil {
+		t.Fatalf("check failed right after writing: %v", err)
+	}
+
+	stale := filepath.Join(dir, "gone_gen.go")
+	if err := os.WriteFile(stale, []byte(header+"\n\npackage asc\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeAll(spec, bindings, dir, true); err == nil {
+		t.Fatal("check passed with a stale generated file")
+	}
+	if err := writeAll(spec, bindings, dir, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(stale); !os.IsNotExist(err) {
+		t.Errorf("stale generated file not removed, stat err = %v", err)
+	}
+}
+
+func TestAdoptSingleReadsWithAQuery(t *testing.T) {
+	singleReads := `package asc
+
+import (
+	"context"
+	"fmt"
+	"strings"
+)
+
+// GetWidgetWheel reads the wheel of a widget.
+func (c *Client) GetWidgetWheel(ctx context.Context, widgetID string, opts ...WheelOption) (*WidgetResponse, error) {
+	query := applyOptions(opts)
+	widgetID = strings.TrimSpace(widgetID)
+	if widgetID == "" {
+		return nil, fmt.Errorf("widgetID is required")
+	}
+	return getJSON[WidgetResponse](ctx, c, readRequest{Path: fmt.Sprintf("/v1/widgets/%s/wheel", widgetID), Query: buildWheelQuery(query)})
+}
+
+// GetWidgetWrapper reads the wrapper of a widget.
+func (c *Client) GetWidgetWrapper(ctx context.Context, widgetID string, fields []string) (*WidgetResponse, error) {
+	return getJSON[WidgetResponse](ctx, c, readRequest{Path: fmt.Sprintf("/v1/widgets/%s/wrapper", strings.TrimSpace(widgetID)), Query: buildWrapperFieldsQuery(fields)})
+}
+
+// GetWidget passes its options to the builder, so it stays hand-written.
+func (c *Client) GetWidget(ctx context.Context, widgetID string, opts ...WidgetOption) (*WidgetResponse, error) {
+	return getJSON[WidgetResponse](ctx, c, readRequest{Path: fmt.Sprintf("/v1/widgets/%s", widgetID), Query: buildWidgetQuery(opts)})
+}
+`
+	dir := writeHandWritten(t, map[string]string{"client.go": singleReads})
+	if err := runAdopt(dir, false); err != nil {
+		t.Fatal(err)
+	}
+	bindings, err := LoadBindings(filepath.Join(dir, "bindings"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(bindings.Families) != 1 {
+		t.Fatalf("adopted into %d families, want Widgets", len(bindings.Families))
+	}
+	adopted := map[string]*OpBind{}
+	for _, op := range bindings.Families[0].Operations {
+		adopted[op.Name] = op
+	}
+	wheel, wrapper := adopted["GetWidgetWheel"], adopted["GetWidgetWrapper"]
+	if len(adopted) != 2 || wheel == nil || wrapper == nil {
+		t.Fatalf("adopted methods = %v", adopted)
+	}
+	if !wheel.Single || wheel.CheckFirst || wheel.Check != checkRequire || wheel.Options != "WheelOption" || wheel.Query != "buildWheelQuery" {
+		t.Errorf("GetWidgetWheel binding = %+v", wheel)
+	}
+	if !wrapper.Single || wrapper.Check != checkInline || wrapper.Options != "" || wrapper.IDs != "" || wrapper.Query != "buildWrapperFieldsQuery" {
+		t.Errorf("GetWidgetWrapper binding = %+v", wrapper)
+	}
+	if client := readFile(t, filepath.Join(dir, "client.go")); strings.Contains(client, "GetWidgetW") || !strings.Contains(client, "func (c *Client) GetWidget(") {
+		t.Errorf("client.go after adopt:\n%s", client)
+	}
+}
+
+func readFile(t *testing.T, path string) string {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(data)
+}
+
+const handWrittenIDLists = `package asc
+
+import (
+	"context"
+	"fmt"
+	"strings"
+)
+
+// AddWidgetVisibleParts adds parts to a widget.
+func (c *Client) AddWidgetVisibleParts(ctx context.Context, widgetID string, partIDs []string) error {
+	widgetID = strings.TrimSpace(widgetID)
+	partIDs = normalizeList(partIDs)
+	if widgetID == "" {
+		return fmt.Errorf("widgetID is required")
+	}
+	if len(partIDs) == 0 {
+		return fmt.Errorf("partIDs are required")
+	}
+
+	payload := RelationshipRequest{Data: buildRelationshipData(ResourceTypeParts, partIDs)}
+	return sendNoContent(ctx, c, "POST", fmt.Sprintf("/v1/widgets/%s/relationships/visibleParts", widgetID), payload)
+}
+
+// RemoveWidgetVisibleParts removes parts from a widget.
+func (c *Client) RemoveWidgetVisibleParts(ctx context.Context, widgetID string, partIDs []string) error {
+	widgetID = strings.TrimSpace(widgetID)
+	partIDs = normalizeList(partIDs)
+	if widgetID == "" {
+		return fmt.Errorf("widget ID is required")
+	}
+	if len(partIDs) == 0 {
+		return fmt.Errorf("part IDs are required")
+	}
+
+	payload := RelationshipRequest{
+		Data: make([]RelationshipData, 0, len(partIDs)),
+	}
+	for _, partID := range partIDs {
+		payload.Data = append(payload.Data, RelationshipData{Type: ResourceTypeParts, ID: partID})
+	}
+	return sendNoContent(ctx, c, "DELETE", fmt.Sprintf("/v1/widgets/%s/relationships/visibleParts", widgetID), payload)
+}
+
+// UpdateWidgetVisibleParts replaces the parts of a widget; an empty list clears them.
+func (c *Client) UpdateWidgetVisibleParts(ctx context.Context, widgetID string, partIDs []string) error {
+	widgetID = strings.TrimSpace(widgetID)
+	if widgetID == "" {
+		return fmt.Errorf("widgetID is required")
+	}
+
+	data := buildRelationshipData(ResourceTypeParts, partIDs)
+	if data == nil {
+		data = []RelationshipData{}
+	}
+	payload := RelationshipRequest{Data: data}
+	return sendNoContent(ctx, c, "PATCH", fmt.Sprintf("/v1/widgets/%s/relationships/visibleParts", widgetID), payload)
+}
+
+// AddWidgetWheels adds wheels to a widget.
+func (c *Client) AddWidgetWheels(ctx context.Context, widgetID string, wheelIDs []string) error {
+	widgetID = strings.TrimSpace(widgetID)
+	wheelIDs = normalizeList(wheelIDs)
+	if widgetID == "" {
+		return fmt.Errorf("widgetID is required")
+	}
+	if len(wheelIDs) == 0 {
+		return fmt.Errorf("wheelIDs are required")
+	}
+
+	payload := RelationshipRequest{
+		Data: make([]RelationshipData, len(wheelIDs)),
+	}
+	for i, id := range wheelIDs {
+		payload.Data[i] = RelationshipData{Type: ResourceTypeWheels, ID: id}
+	}
+	return sendNoContent(ctx, c, "POST", fmt.Sprintf("/v1/widgets/%s/relationships/wheels", widgetID), payload)
+}
+
+// RemoveWidgetWheels removes wheels from a widget.
+func (c *Client) RemoveWidgetWheels(ctx context.Context, widgetID string, wheelIDs []string) error {
+	widgetID = strings.TrimSpace(widgetID)
+	wheelIDs = normalizeList(wheelIDs)
+	if widgetID == "" {
+		return fmt.Errorf("widgetID is required")
+	}
+	if len(wheelIDs) == 0 {
+		return fmt.Errorf("wheelIDs are required")
+	}
+
+	relData := make([]ResourceData, 0, len(wheelIDs))
+	for _, wheelID := range wheelIDs {
+		relData = append(relData, ResourceData{Type: ResourceTypeWheels, ID: wheelID})
+	}
+	return sendNoContent(ctx, c, "DELETE", fmt.Sprintf("/v1/widgets/%s/relationships/wheels", widgetID), RelationshipList{Data: relData})
+}
+
+// SetWidgetWheels replaces the wheels of a widget; an empty list clears them.
+func (c *Client) SetWidgetWheels(ctx context.Context, widgetID string, wheelIDs []string) error {
+	wheelIDs = normalizeList(wheelIDs)
+	payload := RelationshipRequest{Data: make([]RelationshipData, 0, len(wheelIDs))}
+	for _, id := range wheelIDs {
+		payload.Data = append(payload.Data, RelationshipData{Type: ResourceTypeWheels, ID: id})
+	}
+	return sendNoContent(ctx, c, "PATCH", fmt.Sprintf("/v1/widgets/%s/relationships/wheels", strings.TrimSpace(widgetID)), payload)
+}
+
+// UpdateWidgetGadgets checks the list after building the payload, so it stays hand-written.
+func (c *Client) UpdateWidgetGadgets(ctx context.Context, widgetID string, gadgetIDs []string) error {
+	payload := RelationshipRequest{Data: buildRelationshipData(ResourceTypeGadgets, gadgetIDs)}
+	gadgetIDs = normalizeList(gadgetIDs)
+	return sendNoContent(ctx, c, "PATCH", fmt.Sprintf("/v1/widgets/%s/relationships/gadgets", strings.TrimSpace(widgetID)), payload)
+}
+`
+
+func TestAdoptReadsIDListHandling(t *testing.T) {
+	dir := writeHandWritten(t, map[string]string{"client.go": handWrittenIDLists})
+	if err := runAdopt(dir, false); err != nil {
+		t.Fatal(err)
+	}
+	bindings, err := LoadBindings(filepath.Join(dir, "bindings"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, golden := loadTestdata(t)
+	want := map[string]*OpBind{}
+	for _, op := range golden.Families[0].Operations {
+		if op.IDList != nil {
+			want[op.Name] = op
+		}
+	}
+	got := map[string]*OpBind{}
+	for _, op := range bindings.Families[0].Operations {
+		got[op.Name] = op
+	}
+	if len(got) != len(want) || len(want) != 6 {
+		t.Fatalf("adopted %d methods, want the %d of testdata/bindings/Widgets.json with an idList", len(got), len(want))
+	}
+	for name, w := range want {
+		g := got[name]
+		if g == nil || g.IDs != w.IDs || g.Check != w.Check || *g.IDList != *w.IDList {
+			t.Errorf("%s binding = %+v %+v, want %+v %+v", name, g, g.IDList, w, w.IDList)
+		}
+	}
+	if client := readFile(t, filepath.Join(dir, "client.go")); !strings.Contains(client, "func (c *Client) UpdateWidgetGadgets(") {
+		t.Errorf("UpdateWidgetGadgets normalizes after building the payload and must stay hand-written:\n%s", client)
+	}
+}
+
+const handWrittenUploads = `package asc
+
+import (
+	"context"
+	"fmt"
+	"net/http"
+	"strings"
+)
+
+// CreateWrench reserves an upload.
+func (c *Client) CreateWrench(ctx context.Context, fileName string, fileSize int64) (*WrenchResponse, error) {
+	payload := WrenchCreateRequest{Data: WrenchCreateData{Type: ResourceTypeWrenches, Attributes: WrenchCreateAttributes{FileName: fileName, FileSize: fileSize}}}
+	return sendJSON[WrenchResponse](ctx, c, writeRequest{Method: http.MethodPost, Path: "/v1/wrenches", Payload: payload})
+}
+
+// UpdateWrench commits an upload.
+func (c *Client) UpdateWrench(ctx context.Context, wrenchID string, uploaded bool, checksum string) (*WrenchResponse, error) {
+	wrenchID = strings.TrimSpace(wrenchID)
+	if wrenchID == "" {
+		return nil, fmt.Errorf("wrenchID is required")
+	}
+
+	payload := WrenchUpdateRequest{
+		Data: WrenchUpdateData{
+			Type:       ResourceTypeWrenches,
+			ID:         wrenchID,
+			Attributes: &WrenchUpdateAttributes{Uploaded: &uploaded, SourceFileChecksum: &checksum},
+		},
+	}
+	return sendJSON[WrenchResponse](ctx, c, writeRequest{Method: http.MethodPatch, Path: fmt.Sprintf("/v1/wrenches/%s", wrenchID), Payload: payload})
+}
+`
+
+func TestAdoptBindsScalarArgumentsToAttributes(t *testing.T) {
+	dir := writeHandWritten(t, map[string]string{"uploads.go": handWrittenUploads})
+	if err := runAdopt(dir, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "uploads.go")); !os.IsNotExist(err) {
+		t.Errorf("uploads.go should be deleted once both methods are adopted, stat err = %v", err)
+	}
+	bindings, err := LoadBindings(filepath.Join(dir, "bindings"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(bindings.Families) != 1 {
+		t.Fatalf("adopt wrote %d bindings files, want 1", len(bindings.Families))
+	}
+	got, err := bindings.Families[0].Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		`{"operation":"wrenches_createInstance","name":"CreateWrench","args":[{"name":"fileName"},{"name":"fileSize","type":"int64"}]}`,
+		`{"operation":"wrenches_updateInstance","name":"UpdateWrench","params":["wrenchID"],"check":"require","args":[{"name":"uploaded"},{"name":"checksum","attribute":"sourceFileChecksum"}]}`,
+	} {
+		if !strings.Contains(string(got), want) {
+			t.Errorf("bindings lack %s:\n%s", want, got)
+		}
+	}
+}
+
+const handWrittenWristbands = `package asc
+
+import (
+	"context"
+	"fmt"
+	"net/http"
+	"strings"
+)
+
+// WristbandCreateData is the data of a wristband create.
+type WristbandCreateData struct {
+	Type          ResourceType                  ` + "`json:\"type\"`" + `
+	Attributes    WristbandCreateAttributes     ` + "`json:\"attributes\"`" + `
+	Relationships *WristbandCreateRelationships ` + "`json:\"relationships\"`" + `
+}
+
+// CreateWristband creates a wristband for a widget.
+func (c *Client) CreateWristband(ctx context.Context, widgetID, label string, color WristbandColor, size int) (*WristbandResponse, error) {
+	widgetID = strings.TrimSpace(widgetID)
+	label = strings.TrimSpace(label)
+	if widgetID == "" {
+		return nil, fmt.Errorf("widget ID is required")
+	}
+	if label == "" {
+		return nil, fmt.Errorf("label is required")
+	}
+
+	payload := WristbandCreateRequest{Data: WristbandCreateData{
+		Type:       ResourceTypeWristbands,
+		Attributes: WristbandCreateAttributes{Label: label, Color: color, Size: size},
+		Relationships: &WristbandCreateRelationships{
+			Widget: &Relationship{Data: ResourceData{Type: ResourceTypeWidgets, ID: widgetID}},
+		},
+	}}
+	return sendJSON[WristbandResponse](ctx, c, writeRequest{Method: http.MethodPost, Path: "/v1/wristbands", Payload: payload})
+}
+`
+
+func TestAdoptBindsStringArgumentsCheckedWithTheIDs(t *testing.T) {
+	tests := []struct {
+		name string
+		edit func(string) string
+		want string
+	}{
+		{
+			name: "arguments declared and checked with the ID",
+			edit: func(s string) string { return s },
+			want: `{"operation":"wristbands_createInstance","name":"CreateWristband","params":["widgetID"],"check":"require","messages":["widget ID is required","label is required"],"links":["widget"],"args":[{"name":"label","param":true},{"name":"color","type":"WristbandColor"},{"name":"size"}]}`,
+		},
+		{
+			name: "an argument trimmed but not required",
+			edit: func(s string) string {
+				return strings.Replace(s, "\tif label == \"\" {\n\t\treturn nil, fmt.Errorf(\"label is required\")\n\t}\n", "", 1)
+			},
+			want: "Widgets\twristbands_createInstance\tCreateWristband\tkept: differs at token",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			src := tt.edit(handWrittenWristbands)
+			if src == handWrittenWristbands && tt.name != tests[0].name {
+				t.Fatal("edit changed nothing")
+			}
+			dir := writeHandWritten(t, map[string]string{"wristbands.go": src})
+			var report strings.Builder
+			if err := run(filepath.Join("testdata", "spec.json"), filepath.Join(dir, "bindings"), dir, false, "Widgets", false, &report); err != nil {
+				t.Fatal(err)
+			}
+			got := report.String()
+			if bindings, err := LoadBindings(filepath.Join(dir, "bindings")); err == nil && len(bindings.Families) == 1 {
+				encoded, err := bindings.Families[0].Encode()
+				if err != nil {
+					t.Fatal(err)
+				}
+				got += string(encoded)
+			}
+			if !strings.Contains(got, tt.want) {
+				t.Errorf("report and bindings lack %s:\n%s", tt.want, got)
+			}
+		})
+	}
+}
+
+func TestAdoptBindsTheDecodeErrorOfAWrite(t *testing.T) {
+	src := strings.Replace(handWrittenWristbands, "Payload: payload})", `Payload: payload, ParseErr: "failed to parse wristband response"})`, 1)
+	dir := writeHandWritten(t, map[string]string{"wristbands.go": src})
+	if err := runAdopt(dir, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "wristbands.go")); !os.IsNotExist(err) {
+		t.Errorf("wristbands.go should be deleted once the create is adopted, stat err = %v", err)
+	}
+	got := readFile(t, filepath.Join(dir, "bindings", "Widgets.json"))
+	want := `{"operation":"wristbands_createInstance","name":"CreateWristband","params":["widgetID"],"check":"require","messages":["widget ID is required","label is required"],"parseErr":"failed to parse wristband response","links":["widget"],`
+	if !strings.Contains(got, want) {
+		t.Errorf("bindings lack %s:\n%s", want, got)
+	}
+}
+
+func TestAdoptDropsAResponseThatIsTheDefault(t *testing.T) {
+	existing := `{"tag": "Widgets", "file": "widgets_gen.go", "operations": [
+    {"operation":"widgets_gadgets_getToManyRelated","name":"GetWidgetGadgets","params":["widgetID"],"options":"GadgetsOption","query":"buildGadgetsQuery","response":"GadgetListResponse"},
+    {"operation":"widgets_getInstance","name":"GetWidget","params":["widgetID"],"response":"WidgetResponse"}
+  ]}`
+	dir := writeHandWritten(t, map[string]string{"bindings/Widgets.json": existing})
+	if err := runAdopt(dir, false); err != nil {
+		t.Fatal(err)
+	}
+	got := readFile(t, filepath.Join(dir, "bindings", "Widgets.json"))
+	for _, want := range []string{
+		`{"operation":"widgets_gadgets_getToManyRelated","name":"GetWidgetGadgets","params":["widgetID"],"options":"GadgetsOption","query":"buildGadgetsQuery","response":"GadgetListResponse"}`,
+		`{"operation":"widgets_getInstance","name":"GetWidget","params":["widgetID"]}`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("bindings lack %s:\n%s", want, got)
+		}
+	}
+}
+
+const handWrittenYoyoAttributes = `
+// YoyoAttributes describes a yoyo.
+type YoyoAttributes struct {
+	Name   string      ` + "`json:\"name,omitempty\"`" + `
+	Color  YoyoColor   ` + "`json:\"color,omitempty\"`" + `
+	State  YoyoStatus  ` + "`json:\"state,omitempty\"`" + `
+	Kind   string      ` + "`json:\"kind,omitempty\"`" + `
+	Image  *YoyoImage  ` + "`json:\"image,omitempty\"`" + `
+	Parts  []YoyoPart  ` + "`json:\"parts,omitempty\"`" + `
+	Colors []YoyoColor ` + "`json:\"colors,omitempty\"`" + `
+	Size   *YoyoSize   ` + "`json:\"size,omitempty\"`" + `
+}
+`
+
+const handWrittenYoyoCreateAttributes = `
+// YoyoCreateAttributes calls the state YoyoState, after its schema.
+type YoyoCreateAttributes struct {
+	Color YoyoColor  ` + "`json:\"color\"`" + `
+	Size  YoyoSize   ` + "`json:\"size\"`" + `
+	Parts []YoyoPart ` + "`json:\"parts\"`" + `
+	State *YoyoState ` + "`json:\"state,omitempty\"`" + `
+	Image *YoyoImage ` + "`json:\"image,omitempty\"`" + `
+}
+`
+
+const handWrittenYoyoUpdateAttributes = `
+// YoyoUpdateAttributes has a string kind.
+type YoyoUpdateAttributes struct {
+	Color  *YoyoColor  ` + "`json:\"color,omitempty\"`" + `
+	Size   *YoyoSize   ` + "`json:\"size,omitempty\"`" + `
+	Kind   *string     ` + "`json:\"kind,omitempty\"`" + `
+	Colors []YoyoColor ` + "`json:\"colors,omitempty\"`" + `
+}
+`
+
+func TestAdoptRecordsTheGoTypesOfReferencedSchemas(t *testing.T) {
+	tests := []struct {
+		name     string
+		types    string
+		existing string
+		adopted  string
+		records  string
+		kept     string
+	}{
+		{
+			name:    "a schema typed one way in one type and another way in the next",
+			types:   handWrittenYoyoAttributes + handWrittenYoyoCreateAttributes + handWrittenYoyoUpdateAttributes,
+			adopted: "YoyoAttributes,YoyoUpdateAttributes",
+			records: `{"schema":"YoyoKind","type":"string"},{"schema":"YoyoState","type":"YoyoStatus"}`,
+			kept:    "Yoyos\ttype YoyoCreateAttributes\tkept: schema YoyoState is YoyoState here and YoyoStatus in a generated type\n",
+		},
+		{
+			name:    "records of a type that stays hand-written",
+			types:   strings.Replace(handWrittenYoyoAttributes, "name,omitempty", "name", 1) + handWrittenYoyoCreateAttributes + handWrittenYoyoUpdateAttributes,
+			adopted: "YoyoCreateAttributes,YoyoUpdateAttributes",
+			records: `{"schema":"YoyoKind","type":"string"}`,
+			kept:    "Yoyos\ttype YoyoAttributes\tkept: differs at token",
+		},
+		{
+			name:     "a schema the family already generates by its name",
+			types:    handWrittenYoyoUpdateAttributes,
+			existing: `{"tag": "Yoyos", "file": "yoyos_gen.go", "types": ["YoyoAttributes"]}`,
+			kept:     "Yoyos\ttype YoyoUpdateAttributes\tkept: schema YoyoKind is string here and YoyoKind in a generated type\n",
+		},
+		{
+			name:  "a Go type a record cannot name",
+			types: strings.Replace(handWrittenYoyoUpdateAttributes, "*YoyoSize ", "*[]float64", 1),
+			kept:  "Yoyos\ttype YoyoUpdateAttributes\tkept: schema YoyoSize is recorded as \"[]float64\", not a type name\n",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			files := map[string]string{"types.go": "package asc\n" + tt.types}
+			if tt.existing != "" {
+				files["bindings/Yoyos.json"] = tt.existing
+			}
+			dir := writeHandWritten(t, files)
+			var report strings.Builder
+			if err := run(filepath.Join("testdata", "spec.json"), filepath.Join(dir, "bindings"), dir, false, "Yoyos", false, &report); err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(report.String(), tt.kept) {
+				t.Errorf("report lacks %q:\n%s", tt.kept, report.String())
+			}
+			bindings, err := LoadBindings(filepath.Join(dir, "bindings"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tt.adopted == "" {
+				switch {
+				case tt.existing == "" && len(bindings.Families) > 0:
+					t.Errorf("adopt wrote bindings for %s", bindings.Families[0].Tag)
+				case tt.existing != "" && readFile(t, filepath.Join(dir, "bindings", "Yoyos.json")) != tt.existing:
+					t.Error("adopt rewrote the bindings")
+				}
+				return
+			}
+			fam := bindings.Families[0]
+			records, err := jsonLines(fam.RefTypes)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if strings.Join(fam.Types, ",") != tt.adopted || strings.Join(records, ",") != tt.records {
+				t.Errorf("adopted types %v with records %v, want %s with %s", fam.Types, records, tt.adopted, tt.records)
+			}
+			if err := run(filepath.Join("testdata", "spec.json"), filepath.Join(dir, "bindings"), dir, true, "", false, io.Discard); err != nil {
+				t.Errorf("check right after adopt: %v", err)
+			}
+		})
+	}
+}
+
+func TestAdoptRecordsTheGoTypesOfSchemasOfAnotherVersion(t *testing.T) {
+	golden := readFile(t, filepath.Join("testdata", "zebras_gen.go.golden"))
+	dir := writeHandWritten(t, map[string]string{"zebras.go": strings.Replace(golden, header+"\n\n", "", 1)})
+	var report strings.Builder
+	if err := run(filepath.Join("testdata", "spec.json"), filepath.Join(dir, "bindings"), dir, false, "Zebras", false, &report); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := readFile(t, filepath.Join(dir, "bindings", "Zebras.json")), readFile(t, filepath.Join("testdata", "bindings", "Zebras.json")); got != want {
+		t.Errorf("bindings after adopt:\n%s\nwant:\n%s\nreport:\n%s", got, want, report.String())
+	}
+	if got := readFile(t, filepath.Join(dir, "zebras_gen.go")); got != golden {
+		t.Errorf("zebras_gen.go after adopt:\n%s", got)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "zebras.go")); !os.IsNotExist(err) {
+		t.Errorf("zebras.go should be deleted once empty, stat err = %v", err)
+	}
+}
+
+func TestAdoptRecordsNoGoTypeOutsideAVersionedSchema(t *testing.T) {
+	src := `package asc
+
+import (
+	"context"
+	"fmt"
+	"net/http"
+	"strings"
+)
+
+// UpdateZebraV2 sends another type than the v1 one, so it stays hand-written.
+func (c *Client) UpdateZebraV2(ctx context.Context, zebraID string, attrs ZebraPatchAttributes) (*ZebraResponse, error) {
+	zebraID = strings.TrimSpace(zebraID)
+	payload := ZebraUpdateRequest{
+		Data: ZebraUpdateData{
+			Type:       ResourceTypeZebras,
+			ID:         zebraID,
+			Attributes: &attrs,
+		},
+	}
+	return sendJSON[ZebraResponse](ctx, c, writeRequest{Method: http.MethodPatch, Path: fmt.Sprintf("/v2/zebras/%s", zebraID), Payload: payload})
+}
+`
+	dir := writeHandWritten(t, map[string]string{"zebras.go": src})
+	var report strings.Builder
+	if err := run(filepath.Join("testdata", "spec.json"), filepath.Join(dir, "bindings"), dir, false, "Zebras", false, &report); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(report.String(), "Zebras\tzebrasV2_updateInstance\tUpdateZebraV2\tkept: ") {
+		t.Errorf("report:\n%s", report.String())
+	}
+	if _, err := os.Stat(filepath.Join(dir, "bindings", "Zebras.json")); !os.IsNotExist(err) {
+		t.Errorf("adopt wrote bindings: %s", readFile(t, filepath.Join(dir, "bindings", "Zebras.json")))
+	}
+}
+
+func TestAdoptRecordsNoGoTypeThatCarriesOtherAttributes(t *testing.T) {
+	golden := readFile(t, filepath.Join("testdata", "zebras_gen.go.golden"))
+	src := strings.Replace(strings.Replace(golden, header+"\n\n", "", 1), "Stripes int    `json:\"stripes,omitempty\"`", "Stripes int    `json:\"stripes,omitempty\"`\n\tSpots   int    `json:\"spots,omitempty\"`", 1)
+	if src == strings.Replace(golden, header+"\n\n", "", 1) {
+		t.Fatal("the golden file no longer declares ZebraAttributes.Stripes")
+	}
+	dir := writeHandWritten(t, map[string]string{"zebras.go": src})
+	var report strings.Builder
+	if err := run(filepath.Join("testdata", "spec.json"), filepath.Join(dir, "bindings"), dir, false, "Zebras", false, &report); err != nil {
+		t.Fatal(err)
+	}
+	bindings, err := LoadBindings(filepath.Join(dir, "bindings"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var schemas []string
+	for _, g := range bindings.Families[0].GoTypes {
+		schemas = append(schemas, g.Schema)
+	}
+	if len(schemas) > 0 {
+		t.Errorf("Go types recorded for %v, want none: ZebraAttributes has a field ZebraV2 does not define", schemas)
+	}
+	for _, want := range []string{
+		"Zebras\tzebrasV2_createInstance\tCreateZebraV2\tkept: result ZebraResponse holds ZebraAttributes, which cannot stand for ZebraV2Attributes\n",
+		"Zebras\tzebrasV2_updateInstance\tUpdateZebraV2\tkept: result ZebraResponse holds ZebraAttributes, which cannot stand for ZebraV2Attributes\n",
+	} {
+		if !strings.Contains(report.String(), want) {
+			t.Errorf("report lacks %q:\n%s", want, report.String())
+		}
+	}
+}
+
+func TestSameShape(t *testing.T) {
+	str := func() *Schema { return &Schema{Type: "string"} }
+	attrs := func(mutate func(*Schema)) *Schema {
+		s := &Schema{Type: "object", Required: []string{"name", "kind"}, Properties: Properties{
+			{Name: "name", Schema: str()},
+			{Name: "kind", Schema: &Schema{Ref: "#/components/schemas/ZebraKind"}},
+			{Name: "tags", Schema: &Schema{Type: "array", Items: str()}},
+			{Name: "state", Schema: &Schema{Type: "string", Enum: []string{"NEW", "OLD"}}},
+		}}
+		if mutate != nil {
+			mutate(s)
+		}
+		return s
+	}
+	tests := []struct {
+		name   string
+		mutate func(*Schema)
+		same   bool
+	}{
+		{"the same schema with required names in another order", func(s *Schema) { s.Required = []string{"kind", "name"} }, true},
+		{"a property of another type", func(s *Schema) { s.Properties[0].Schema = &Schema{Type: "integer"} }, false},
+		{"another required name", func(s *Schema) { s.Required = []string{"name"} }, false},
+		{"a reference to another schema", func(s *Schema) { s.Properties[1].Schema = &Schema{Ref: "#/components/schemas/ZebraSort"} }, false},
+		{"list items of another type", func(s *Schema) { s.Properties[2].Schema = &Schema{Type: "array", Items: &Schema{Type: "integer"}} }, false},
+		{"other enum values", func(s *Schema) { s.Properties[3].Schema = &Schema{Type: "string", Enum: []string{"NEW"}} }, false},
+		{"one more property", func(s *Schema) { s.Properties = append(s.Properties, Property{Name: "spots", Schema: str()}) }, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := sameShape(attrs(nil), attrs(tt.mutate)); got != tt.same {
+				t.Errorf("sameShape = %t, want %t", got, tt.same)
+			}
+		})
+	}
+}
+
+func TestAdoptRecordsNoGoTypeForATypeTheFamilyGenerates(t *testing.T) {
+	golden := readFile(t, filepath.Join("testdata", "zebras_gen.go.golden"))
+	existing := `{"tag": "Zebras", "file": "zebras_gen.go", "types": ["ZebraV2Attributes"]}`
+	dir := writeHandWritten(t, map[string]string{"zebras.go": strings.Replace(golden, header+"\n\n", "", 1), "bindings/Zebras.json": existing})
+	if err := run(filepath.Join("testdata", "spec.json"), filepath.Join(dir, "bindings"), dir, false, "Zebras", false, io.Discard); err != nil {
+		t.Fatal(err)
+	}
+	bindings, err := LoadBindings(filepath.Join(dir, "bindings"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, g := range bindings.Families[0].GoTypes {
+		if g.Schema == "ZebraV2Attributes" {
+			t.Errorf("recorded Go type %s for ZebraV2Attributes, which the family generates", g.Type)
+		}
+	}
+}
+
+func TestAdoptSpellsIdAsIDInTypeNames(t *testing.T) {
+	golden := readFile(t, filepath.Join("testdata", "zone_ids_gen.go.golden"))
+	dir := writeHandWritten(t, map[string]string{"zone_ids.go": strings.Replace(golden, header+"\n\n", "", 1)})
+	var report strings.Builder
+	if err := run(filepath.Join("testdata", "spec.json"), filepath.Join(dir, "bindings"), dir, false, "ZoneIds", false, &report); err != nil {
+		t.Fatal(err)
+	}
+	for _, line := range strings.Split(report.String(), "\n") {
+		if strings.Contains(line, "\tkept: ") && !strings.Contains(line, "\tquery ") {
+			t.Errorf("adopt kept code it should generate: %s", line)
+		}
+	}
+	if got, want := readFile(t, filepath.Join(dir, "bindings", "ZoneIds.json")), readFile(t, filepath.Join("testdata", "bindings", "ZoneIds.json")); got != want {
+		t.Errorf("bindings after adopt:\n%s\nwant:\n%s", got, want)
+	}
+	if got := readFile(t, filepath.Join(dir, "zone_ids_gen.go")); got != golden {
+		t.Errorf("zone_ids_gen.go after adopt:\n%s", got)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "zone_ids.go")); !os.IsNotExist(err) {
+		t.Errorf("zone_ids.go should be deleted once empty, stat err = %v", err)
+	}
+}
+
+func TestAdoptInlinesAMethodThatReturnsAHelperResult(t *testing.T) {
+	src := `package asc
+
+import (
+	"context"
+	"fmt"
+	"strings"
+)
+
+// GetWidgetParts lists the parts of a widget through two helpers.
+func (c *Client) GetWidgetParts(ctx context.Context, widgetID string, opts ...PartsOption) (*GadgetListResponse, error) {
+	return c.getWidgetRelated(ctx, widgetID, "parts", opts...)
+}
+
+func (c *Client) getWidgetRelated(ctx context.Context, widgetID, relationship string, opts ...PartsOption) (*GadgetListResponse, error) {
+	return getWidgetList[GadgetListResponse](c, ctx, widgetID, relationship, "widget ID", opts...)
+}
+
+// GetWidgetGadgets trims its argument in the call, so it stays hand-written
+// and keeps getWidgetList.
+func (c *Client) GetWidgetGadgets(ctx context.Context, widgetID string, opts ...PartsOption) (*GadgetListResponse, error) {
+	return getWidgetList[GadgetListResponse](c, ctx, strings.TrimSpace(widgetID), "gadgets", "widget ID", opts...)
+}
+
+func getWidgetList[T any](c *Client, ctx context.Context, id, relationship, name string, opts ...PartsOption) (*T, error) {
+	query := applyOptions(opts)
+	id = strings.TrimSpace(id)
+	if query.nextURL == "" && id == "" {
+		return nil, fmt.Errorf("%s is required", name)
+	}
+	return getJSON[T](ctx, c, readRequest{Path: fmt.Sprintf("/v1/widgets/%s/%s", id, relationship), Query: buildPartsQuery(query), Next: query.nextURL, ParseErr: fmt.Sprintf("failed to parse %s", relationship)})
+}
+`
+	dir := writeHandWritten(t, map[string]string{"client.go": src})
+	if err := runAdopt(dir, false); err != nil {
+		t.Fatal(err)
+	}
+	bindings, err := LoadBindings(filepath.Join(dir, "bindings"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(bindings.Families) != 1 || len(bindings.Families[0].Operations) != 1 {
+		t.Fatalf("adopted families = %v", bindings.Families)
+	}
+	parts := bindings.Families[0].Operations[0]
+	if parts.Name != "GetWidgetParts" || parts.Check != checkRequire || parts.CheckFirst || strings.Join(parts.Messages, ",") != "widget ID is required" || parts.ParseErr != "failed to parse parts" || parts.Options != "PartsOption" || parts.Query != "buildPartsQuery" {
+		t.Errorf("GetWidgetParts binding = %+v", parts)
+	}
+	client := readFile(t, filepath.Join(dir, "client.go"))
+	if strings.Contains(client, "GetWidgetParts") || strings.Contains(client, "getWidgetRelated") || !strings.Contains(client, "func (c *Client) GetWidgetGadgets(") || !strings.Contains(client, "func getWidgetList[") {
+		t.Errorf("client.go after adopt:\n%s", client)
+	}
+}

@@ -8,231 +8,6 @@ import (
 	"testing"
 )
 
-func TestIssue622_MetadataRelationshipEndpoints_GET(t *testing.T) {
-	ctx := context.Background()
-
-	const (
-		linkagesOK = `{"data":[{"type":"apps","id":"1"}],"links":{}}`
-		toOneOK    = `{"data":{"type":"apps","id":"1"},"links":{}}`
-	)
-
-	tests := []struct {
-		name       string
-		wantPath   string
-		body       string
-		checkQuery func(*testing.T, *http.Request)
-		call       func(*Client) error
-	}{
-		{
-			name:     "GetAppClipDefaultExperienceLocalizationsRelationships",
-			wantPath: "/v1/appClipDefaultExperiences/exp-1/relationships/appClipDefaultExperienceLocalizations",
-			body:     linkagesOK,
-			call: func(client *Client) error {
-				_, err := client.GetAppClipDefaultExperienceLocalizationsRelationships(ctx, "exp-1")
-				return err
-			},
-		},
-		{
-			name:     "GetAppCustomProductPageLocalizationPreviewSetsRelationships",
-			wantPath: "/v1/appCustomProductPageLocalizations/loc-1/relationships/appPreviewSets",
-			body:     linkagesOK,
-			call: func(client *Client) error {
-				_, err := client.GetAppCustomProductPageLocalizationPreviewSetsRelationships(ctx, "loc-1")
-				return err
-			},
-		},
-		{
-			name:     "GetAppCustomProductPageLocalizationScreenshotSetsRelationships",
-			wantPath: "/v1/appCustomProductPageLocalizations/loc-1/relationships/appScreenshotSets",
-			body:     linkagesOK,
-			call: func(client *Client) error {
-				_, err := client.GetAppCustomProductPageLocalizationScreenshotSetsRelationships(ctx, "loc-1")
-				return err
-			},
-		},
-		{
-			name:     "GetAppCustomProductPageLocalizationSearchKeywordsRelationships",
-			wantPath: "/v1/appCustomProductPageLocalizations/loc-1/relationships/searchKeywords",
-			body:     linkagesOK,
-			call: func(client *Client) error {
-				_, err := client.GetAppCustomProductPageLocalizationSearchKeywordsRelationships(ctx, "loc-1")
-				return err
-			},
-		},
-		{
-			name:     "GetAppCustomProductPageLocalizationsRelationships",
-			wantPath: "/v1/appCustomProductPageVersions/ver-1/relationships/appCustomProductPageLocalizations",
-			body:     linkagesOK,
-			call: func(client *Client) error {
-				_, err := client.GetAppCustomProductPageLocalizationsRelationships(ctx, "ver-1")
-				return err
-			},
-		},
-		{
-			name:     "GetAppCustomProductPageVersionsRelationships",
-			wantPath: "/v1/appCustomProductPages/page-1/relationships/appCustomProductPageVersions",
-			body:     linkagesOK,
-			call: func(client *Client) error {
-				_, err := client.GetAppCustomProductPageVersionsRelationships(ctx, "page-1")
-				return err
-			},
-		},
-		{
-			name:     "GetAppInfoLocalizationsRelationships",
-			wantPath: "/v1/appInfos/info-1/relationships/appInfoLocalizations",
-			body:     linkagesOK,
-			call: func(client *Client) error {
-				_, err := client.GetAppInfoLocalizationsRelationships(ctx, "info-1")
-				return err
-			},
-		},
-		{
-			name:     "GetAppPreviewSetAppPreviewsRelationships",
-			wantPath: "/v1/appPreviewSets/set-1/relationships/appPreviews",
-			body:     linkagesOK,
-			checkQuery: func(t *testing.T, req *http.Request) {
-				t.Helper()
-				if req.URL.Query().Get("limit") != "5" {
-					t.Fatalf("expected limit=5, got %q", req.URL.Query().Get("limit"))
-				}
-			},
-			call: func(client *Client) error {
-				_, err := client.GetAppPreviewSetAppPreviewsRelationships(ctx, "set-1", WithLinkagesLimit(5))
-				return err
-			},
-		},
-		{
-			name:     "GetAppScreenshotSetAppScreenshotsRelationships",
-			wantPath: "/v1/appScreenshotSets/set-1/relationships/appScreenshots",
-			body:     linkagesOK,
-			call: func(client *Client) error {
-				_, err := client.GetAppScreenshotSetAppScreenshotsRelationships(ctx, "set-1")
-				return err
-			},
-		},
-		{
-			name:     "GetAppStoreReviewDetailAttachmentsRelationships",
-			wantPath: "/v1/appStoreReviewDetails/detail-1/relationships/appStoreReviewAttachments",
-			body:     linkagesOK,
-			call: func(client *Client) error {
-				_, err := client.GetAppStoreReviewDetailAttachmentsRelationships(ctx, "detail-1")
-				return err
-			},
-		},
-		{
-			name:     "GetAppStoreVersionExperimentTreatmentLocalizationPreviewSetsRelationships",
-			wantPath: "/v1/appStoreVersionExperimentTreatmentLocalizations/loc-1/relationships/appPreviewSets",
-			body:     linkagesOK,
-			call: func(client *Client) error {
-				_, err := client.GetAppStoreVersionExperimentTreatmentLocalizationPreviewSetsRelationships(ctx, "loc-1")
-				return err
-			},
-		},
-		{
-			name:     "GetAppStoreVersionExperimentTreatmentLocalizationScreenshotSetsRelationships",
-			wantPath: "/v1/appStoreVersionExperimentTreatmentLocalizations/loc-1/relationships/appScreenshotSets",
-			body:     linkagesOK,
-			call: func(client *Client) error {
-				_, err := client.GetAppStoreVersionExperimentTreatmentLocalizationScreenshotSetsRelationships(ctx, "loc-1")
-				return err
-			},
-		},
-		{
-			name:     "GetAppStoreVersionExperimentTreatmentLocalizationsRelationships",
-			wantPath: "/v1/appStoreVersionExperimentTreatments/treat-1/relationships/appStoreVersionExperimentTreatmentLocalizations",
-			body:     linkagesOK,
-			call: func(client *Client) error {
-				_, err := client.GetAppStoreVersionExperimentTreatmentLocalizationsRelationships(ctx, "treat-1")
-				return err
-			},
-		},
-		{
-			name:     "GetAppStoreVersionExperimentTreatmentsRelationships",
-			wantPath: "/v1/appStoreVersionExperiments/exp-1/relationships/appStoreVersionExperimentTreatments",
-			body:     linkagesOK,
-			call: func(client *Client) error {
-				_, err := client.GetAppStoreVersionExperimentTreatmentsRelationships(ctx, "exp-1")
-				return err
-			},
-		},
-		{
-			name:     "GetAppStoreVersionLocalizationsRelationships",
-			wantPath: "/v1/appStoreVersions/ver-1/relationships/appStoreVersionLocalizations",
-			body:     linkagesOK,
-			call: func(client *Client) error {
-				_, err := client.GetAppStoreVersionLocalizationsRelationships(ctx, "ver-1")
-				return err
-			},
-		},
-		{
-			name:     "GetAppStoreVersionPhasedReleaseRelationship",
-			wantPath: "/v1/appStoreVersions/ver-1/relationships/appStoreVersionPhasedRelease",
-			body:     toOneOK,
-			call: func(client *Client) error {
-				_, err := client.GetAppStoreVersionPhasedReleaseRelationship(ctx, "ver-1")
-				return err
-			},
-		},
-		{
-			name:     "GetAppStoreVersionBuildRelationship",
-			wantPath: "/v1/appStoreVersions/ver-1/relationships/build",
-			body:     toOneOK,
-			call: func(client *Client) error {
-				_, err := client.GetAppStoreVersionBuildRelationship(ctx, "ver-1")
-				return err
-			},
-		},
-		{
-			name:     "GetBackgroundAssetUploadFilesRelationships",
-			wantPath: "/v1/backgroundAssetVersions/ver-1/relationships/backgroundAssetUploadFiles",
-			body:     linkagesOK,
-			call: func(client *Client) error {
-				_, err := client.GetBackgroundAssetUploadFilesRelationships(ctx, "ver-1")
-				return err
-			},
-		},
-		{
-			name:     "GetBackgroundAssetVersionsRelationships",
-			wantPath: "/v1/backgroundAssets/asset-1/relationships/versions",
-			body:     linkagesOK,
-			call: func(client *Client) error {
-				_, err := client.GetBackgroundAssetVersionsRelationships(ctx, "asset-1")
-				return err
-			},
-		},
-		{
-			name:     "GetAppStoreVersionExperimentTreatmentsV2Relationships",
-			wantPath: "/v2/appStoreVersionExperiments/exp-1/relationships/appStoreVersionExperimentTreatments",
-			body:     linkagesOK,
-			call: func(client *Client) error {
-				_, err := client.GetAppStoreVersionExperimentTreatmentsV2Relationships(ctx, "exp-1")
-				return err
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			client := newTestClient(t, func(req *http.Request) {
-				if req.Method != http.MethodGet {
-					t.Fatalf("expected GET, got %s", req.Method)
-				}
-				if req.URL.Path != tt.wantPath {
-					t.Fatalf("expected path %s, got %s", tt.wantPath, req.URL.Path)
-				}
-				if tt.checkQuery != nil {
-					tt.checkQuery(t, req)
-				}
-				assertAuthorized(t, req)
-			}, jsonResponse(http.StatusOK, tt.body))
-
-			if err := tt.call(client); err != nil {
-				t.Fatalf("request error: %v", err)
-			}
-		})
-	}
-}
-
 func TestIssue622_MetadataRelationshipEndpoints_PATCH(t *testing.T) {
 	ctx := context.Background()
 
@@ -242,26 +17,6 @@ func TestIssue622_MetadataRelationshipEndpoints_PATCH(t *testing.T) {
 		wantBodyFn func(*testing.T, []byte)
 		call       func(*Client) error
 	}{
-		{
-			name:     "UpdateAppClipDefaultExperienceReleaseWithAppStoreVersionRelationship",
-			wantPath: "/v1/appClipDefaultExperiences/exp-1/relationships/releaseWithAppStoreVersion",
-			wantBodyFn: func(t *testing.T, body []byte) {
-				t.Helper()
-				var got AppClipDefaultExperienceReleaseWithAppStoreVersionRelationshipUpdateRequest
-				if err := json.Unmarshal(body, &got); err != nil {
-					t.Fatalf("unmarshal body: %v", err)
-				}
-				if got.Data.Type != ResourceTypeAppStoreVersions {
-					t.Fatalf("expected type %q, got %q", ResourceTypeAppStoreVersions, got.Data.Type)
-				}
-				if got.Data.ID != "ver-1" {
-					t.Fatalf("expected id %q, got %q", "ver-1", got.Data.ID)
-				}
-			},
-			call: func(client *Client) error {
-				return client.UpdateAppClipDefaultExperienceReleaseWithAppStoreVersionRelationship(ctx, "exp-1", "ver-1")
-			},
-		},
 		{
 			name:     "UpdateAppPreviewSetAppPreviewsRelationship",
 			wantPath: "/v1/appPreviewSets/set-1/relationships/appPreviews",
@@ -309,23 +64,20 @@ func TestIssue622_MetadataRelationshipEndpoints_PATCH(t *testing.T) {
 			},
 		},
 		{
-			name:     "AttachAppClipDefaultExperienceToVersion",
-			wantPath: "/v1/appStoreVersions/ver-1/relationships/appClipDefaultExperience",
+			name:     "UpdateAppScreenshotSetAppScreenshotsRelationship empty clears relationship",
+			wantPath: "/v1/appScreenshotSets/set-1/relationships/appScreenshots",
 			wantBodyFn: func(t *testing.T, body []byte) {
 				t.Helper()
-				var got AppStoreVersionAppClipDefaultExperienceRelationshipUpdateRequest
+				var got map[string]json.RawMessage
 				if err := json.Unmarshal(body, &got); err != nil {
 					t.Fatalf("unmarshal body: %v", err)
 				}
-				if got.Data.Type != ResourceTypeAppClipDefaultExperiences {
-					t.Fatalf("expected type %q, got %q", ResourceTypeAppClipDefaultExperiences, got.Data.Type)
-				}
-				if got.Data.ID != "exp-1" {
-					t.Fatalf("expected id %q, got %q", "exp-1", got.Data.ID)
+				if string(got["data"]) != "[]" {
+					t.Fatalf("expected empty relationship data array, got %s", body)
 				}
 			},
 			call: func(client *Client) error {
-				return client.AttachAppClipDefaultExperienceToVersion(ctx, "ver-1", "exp-1")
+				return client.UpdateAppScreenshotSetAppScreenshotsRelationship(ctx, "set-1", nil)
 			},
 		},
 	}

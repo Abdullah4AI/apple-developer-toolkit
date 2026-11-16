@@ -33,22 +33,6 @@ func (r BuildBetaNotificationResponse) MarshalJSON() ([]byte, error) {
 	return json.Marshal(responseAlias(r))
 }
 
-// BuildBetaNotificationRelationships describes relationships for a build beta notification.
-type BuildBetaNotificationRelationships struct {
-	Build Relationship `json:"build"`
-}
-
-// BuildBetaNotificationCreateData is the data portion of a build beta notification create request.
-type BuildBetaNotificationCreateData struct {
-	Type          ResourceType                       `json:"type"`
-	Relationships BuildBetaNotificationRelationships `json:"relationships"`
-}
-
-// BuildBetaNotificationCreateRequest is a request to create a build beta notification.
-type BuildBetaNotificationCreateRequest struct {
-	Data BuildBetaNotificationCreateData `json:"data"`
-}
-
 // CreateBuildBetaNotification creates a build beta notification for a build.
 func (c *Client) CreateBuildBetaNotification(ctx context.Context, buildID string) (*BuildBetaNotificationResponse, error) {
 	buildID = strings.TrimSpace(buildID)

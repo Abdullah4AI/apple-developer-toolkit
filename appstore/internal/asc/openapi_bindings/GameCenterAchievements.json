@@ -1,0 +1,39 @@
+{
+  "tag": "GameCenterAchievements",
+  "file": "game_center_achievements_gen.go",
+  "types": [
+    "GameCenterAchievementCreateData",
+    "GameCenterAchievementCreateRequest",
+    "GameCenterAchievementResponse",
+    "GameCenterAchievementUpdateData",
+    "GameCenterAchievementUpdateRequest",
+    "GameCenterAchievementV2Relationships"
+  ],
+  "relationships": [
+    {"data":"GameCenterAchievementCreateData","type":"*GameCenterAchievementRelationships","omitempty":true},
+    {"data":"GameCenterAchievementV2CreateData","type":"*GameCenterAchievementV2Relationships","omitempty":true}
+  ],
+  "operations": [
+    {"operation":"gameCenterAchievementsV2_deleteInstance","name":"DeleteGameCenterAchievementV2","params":["achievementID"]},
+    {"operation":"gameCenterAchievementsV2_getInstance","name":"GetGameCenterAchievementV2","params":["achievementID"],"response":"GameCenterAchievementResponse"},
+    {"operation":"gameCenterAchievementsV2_updateInstance","name":"UpdateGameCenterAchievementV2","params":["achievementID"],"response":"GameCenterAchievementResponse"},
+    {"operation":"gameCenterAchievementsV2_versions_getToManyRelated","name":"GetGameCenterAchievementVersions","params":["achievementID"],"options":"GCAchievementVersionsOption","query":"buildGCAchievementVersionsQuery","nextContext":"game-center-achievement-versions","response":"GameCenterAchievementVersionsResponse"},
+    {"operation":"gameCenterAchievements_createInstance","name":"CreateGameCenterAchievement","params":["gcDetailID"],"links":["gameCenterDetail"]},
+    {"operation":"gameCenterAchievements_deleteInstance","name":"DeleteGameCenterAchievement","params":["achievementID"]},
+    {"operation":"gameCenterAchievements_getInstance","name":"GetGameCenterAchievement","params":["achievementID"]},
+    {"operation":"gameCenterAchievements_groupAchievement_getToOneRelated","name":"GetGameCenterAchievementGroupAchievement","params":["achievementID"]},
+    {"operation":"gameCenterAchievements_localizations_getToManyRelated","name":"GetGameCenterAchievementLocalizations","params":["achievementID"],"options":"GCAchievementLocalizationsOption","query":"buildGCAchievementLocalizationsQuery","nextContext":"game-center-achievement-localizations"},
+    {"operation":"gameCenterAchievements_releases_getToManyRelated","name":"GetGameCenterAchievementReleases","params":["achievementID"],"options":"GCAchievementReleasesOption","query":"buildGCAchievementReleasesQuery","nextContext":"game-center-achievement-releases"},
+    {"operation":"gameCenterAchievements_updateInstance","name":"UpdateGameCenterAchievement","params":["achievementID"]}
+  ],
+  "queries": [
+    {"operation":"gameCenterAchievementsV2_versions_getToManyRelated","name":"GCAchievementVersions","deviations":[{"problem":"query parameters [fields[gameCenterAchievementLocalizations] fields[gameCenterAchievementVersions] fields[gameCenterAchievements] include limit[localizations]] have no option","reason":"The option type has options only for the parameters commands send today; an option for another parameter is added with the command that needs it."}]},
+    {"operation":"gameCenterAchievements_releases_getToManyRelated","also":["gameCenterDetails_achievementReleases_getToManyRelated"],"name":"GCAchievementReleases","deviations":[{"problem":"query parameters [fields[gameCenterAchievementReleases] fields[gameCenterAchievements] fields[gameCenterDetails] filter[gameCenterDetail] filter[live] include] have no option","reason":"The option type has options only for the parameters commands send today; an option for another parameter is added with the command that needs it."},{"operation":"gameCenterDetails_achievementReleases_getToManyRelated","problem":"query parameters [fields[gameCenterAchievementReleases] fields[gameCenterAchievements] fields[gameCenterDetails] filter[gameCenterAchievement] filter[live] include] have no option","reason":"The option type has options only for the parameters commands send today; an option for another parameter is added with the command that needs it."}]}
+  ],
+  "goTypes": [
+    {"schema":"GameCenterAchievementV2Attributes","type":"GameCenterAchievementAttributes"},
+    {"schema":"GameCenterAchievementV2UpdateAttributes","type":"GameCenterAchievementUpdateAttributes"},
+    {"schema":"GameCenterAchievementV2UpdateData","type":"GameCenterAchievementUpdateData"},
+    {"schema":"GameCenterAchievementV2UpdateRequest","type":"GameCenterAchievementUpdateRequest"}
+  ]
+}

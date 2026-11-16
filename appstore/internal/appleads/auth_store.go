@@ -11,6 +11,7 @@ import (
 	"github.com/99designs/keyring"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/config"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/testguard"
 )
 
 const (
@@ -289,7 +290,7 @@ func keyringConfig() keyring.Config {
 }
 
 var openKeyring = func() (keyring.Keyring, error) {
-	return keyring.Open(keyringConfig())
+	return testguard.OpenKeyring(keyringConfig())
 }
 
 func storeInKeychain(name string, payload credentialPayload) error {

@@ -1,51 +1,36 @@
 package cmdtest
 
 import (
-	"context"
 	"encoding/json"
 	"io"
 	"net/http"
 	"path/filepath"
 	"reflect"
 	"strings"
-	"sync"
 	"testing"
+
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asctest"
 )
 
 const analyticsViewRequestID = "11111111-1111-1111-1111-111111111111"
 
 func TestAnalyticsViewProcessingDateForwardsFilter(t *testing.T) {
-	setupAuth(t)
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() { http.DefaultTransport = originalTransport })
-
-	requestCount := 0
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		requestCount++
-		switch requestCount {
-		case 1:
-			return analyticsViewJSONResponse(`{
-				"data":[{"type":"analyticsReports","id":"report-1","attributes":{"name":"App Sessions","granularity":"DAILY"}}],
-				"links":{}
-			}`), nil
-		case 2:
-			if got := req.URL.Query().Get("filter[processingDate]"); got != "2024-01-20" {
-				t.Fatalf("filter[processingDate] = %q, want %q", got, "2024-01-20")
-			}
-			return analyticsViewJSONResponse(`{
-				"data":[{"type":"analyticsReportInstances","id":"instance-1","attributes":{"processingDate":"2024-01-20","granularity":"DAILY"}}],
-				"links":{}
-			}`), nil
-		default:
-			t.Fatalf("unexpected extra request: %s %s", req.Method, req.URL.String())
-			return nil, nil
-		}
-	})
+	reg := asctest.NewRegistry(t)
+	reg.Register(asctest.GET("/v1/analyticsReportRequests/"+analyticsViewRequestID+"/reports", "limit=200"), asctest.JSON(http.StatusOK, `{
+		"data":[{"type":"analyticsReports","id":"report-1","attributes":{"name":"App Sessions","granularity":"DAILY"}}],
+		"links":{}
+	}`))
+	reg.Register(asctest.GET("/v1/analyticsReports/report-1/instances", "filter[processingDate]=2024-01-20", "limit=200"), asctest.JSON(http.StatusOK, `{
+		"data":[{"type":"analyticsReportInstances","id":"instance-1","attributes":{"processingDate":"2024-01-20","granularity":"DAILY"}}],
+		"links":{}
+	}`))
 
 	_, stderr := runAnalyticsViewForOutput(
 		t,
+		stubClient(t, reg),
 		"--request-id", analyticsViewRequestID,
 		"--processing-date", "2024-01-20",
 		"--output", "json",
@@ -56,38 +41,18 @@ func TestAnalyticsViewProcessingDateForwardsFilter(t *testing.T) {
 }
 
 func TestAnalyticsViewGranularityOnlyPreservesReportMetadata(t *testing.T) {
-	setupAuth(t)
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() { http.DefaultTransport = originalTransport })
-
-	requestCount := 0
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		requestCount++
-		switch requestCount {
-		case 1:
-			return analyticsViewJSONResponse(`{
-				"data":[{"type":"analyticsReports","id":"report-1","attributes":{"name":"Sales","reportType":"STANDARD","category":"COMMERCE","granularity":"MONTHLY"}}],
-				"links":{}
-			}`), nil
-		case 2:
-			query := req.URL.Query()
-			if got := query.Get("filter[granularity]"); got != "MONTHLY" {
-				t.Fatalf("filter[granularity] = %q, want MONTHLY", got)
-			}
-			if query.Has("filter[processingDate]") {
-				t.Fatalf("unexpected processing-date filter: %s", req.URL.String())
-			}
-			return analyticsViewJSONResponse(`{"data":[],"links":{}}`), nil
-		default:
-			t.Fatalf("unexpected extra request: %s %s", req.Method, req.URL.String())
-			return nil, nil
-		}
-	})
+	reg := asctest.NewRegistry(t)
+	reg.Register(asctest.GET("/v1/analyticsReportRequests/"+analyticsViewRequestID+"/reports", "limit=200"), asctest.JSON(http.StatusOK, `{
+		"data":[{"type":"analyticsReports","id":"report-1","attributes":{"name":"Sales","reportType":"STANDARD","category":"COMMERCE","granularity":"MONTHLY"}}],
+		"links":{}
+	}`))
+	reg.Register(asctest.GET("/v1/analyticsReports/report-1/instances", "filter[granularity]=MONTHLY", "limit=200"), asctest.JSON(http.StatusOK, `{"data":[],"links":{}}`))
 
 	stdout, stderr := runAnalyticsViewForOutput(
 		t,
+		stubClient(t, reg),
 		"--request-id", analyticsViewRequestID,
 		"--granularity", "monthly",
 		"--output", "json",
@@ -106,13 +71,12 @@ func TestAnalyticsViewGranularityOnlyPreservesReportMetadata(t *testing.T) {
 		}],
 		"links":{}
 	}`)
-	if requestCount != 2 {
+	if requestCount := len(reg.Requests()); requestCount != 2 {
 		t.Fatalf("expected 2 requests, got %d", requestCount)
 	}
 }
 
 func TestAnalyticsViewFiltersPaginateAndPreserveOutput(t *testing.T) {
-	setupAuth(t)
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 
 	const (
@@ -120,51 +84,29 @@ func TestAnalyticsViewFiltersPaginateAndPreserveOutput(t *testing.T) {
 		instancesNextURL = "https://api.appstoreconnect.apple.com/v1/analyticsReports/report-1/instances?cursor=instances-next"
 	)
 
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() { http.DefaultTransport = originalTransport })
-
-	requestCount := 0
-	var requestMu sync.Mutex
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		requestMu.Lock()
-		requestCount++
-		requestMu.Unlock()
-		switch {
-		case req.URL.Path == "/v1/analyticsReportRequests/"+analyticsViewRequestID+"/reports" && req.URL.Query().Get("cursor") == "":
-			if req.URL.Query().Get("limit") != "200" {
-				t.Fatalf("unexpected first reports request: %s", req.URL.String())
-			}
-			return analyticsViewJSONResponse(`{
-				"data":[{"type":"analyticsReports","id":"report-1","attributes":{"name":"App Sessions","reportType":"STANDARD","category":"APP_USAGE","granularity":"DAILY"}}],
-				"links":{"self":"https://api.appstoreconnect.apple.com/v1/analyticsReportRequests/11111111-1111-1111-1111-111111111111/reports","next":"` + reportsNextURL + `"}
-			}`), nil
-		case req.URL.String() == reportsNextURL:
-			return analyticsViewJSONResponse(`{
-				"data":[{"type":"analyticsReports","id":"report-2","attributes":{"name":"Store Discovery","reportType":"STANDARD","category":"APP_STORE_ENGAGEMENT","granularity":"WEEKLY"}}],
-				"links":{}
-			}`), nil
-		case req.URL.Path == "/v1/analyticsReports/report-1/instances" && req.URL.Query().Get("cursor") == "":
-			assertAnalyticsInstanceFilters(t, req, "/v1/analyticsReports/report-1/instances")
-			return analyticsViewJSONResponse(`{
-				"data":[{"type":"analyticsReportInstances","id":"instance-1","attributes":{"reportDate":"2024-01-19","processingDate":"2024-01-20","granularity":"DAILY","version":"1.0"}}],
-				"links":{"next":"` + instancesNextURL + `"}
-			}`), nil
-		case req.URL.String() == instancesNextURL:
-			return analyticsViewJSONResponse(`{
-				"data":[{"type":"analyticsReportInstances","id":"instance-2","attributes":{"reportDate":"2024-01-19","processingDate":"2024-01-20","granularity":"WEEKLY","version":"1.0"}}],
-				"links":{}
-			}`), nil
-		case req.URL.Path == "/v1/analyticsReports/report-2/instances":
-			assertAnalyticsInstanceFilters(t, req, "/v1/analyticsReports/report-2/instances")
-			return analyticsViewJSONResponse(`{"data":[],"links":{}}`), nil
-		default:
-			t.Fatalf("unexpected extra request: %s %s", req.Method, req.URL.String())
-			return nil, nil
-		}
-	})
+	instanceFilters := []string{"filter[processingDate]=2024-01-20", "filter[granularity]=DAILY,WEEKLY,MONTHLY", "limit=200"}
+	reg := asctest.NewRegistry(t)
+	reg.Register(asctest.GET("/v1/analyticsReportRequests/"+analyticsViewRequestID+"/reports", "limit=200"), asctest.JSON(http.StatusOK, `{
+		"data":[{"type":"analyticsReports","id":"report-1","attributes":{"name":"App Sessions","reportType":"STANDARD","category":"APP_USAGE","granularity":"DAILY"}}],
+		"links":{"self":"https://api.appstoreconnect.apple.com/v1/analyticsReportRequests/11111111-1111-1111-1111-111111111111/reports","next":"`+reportsNextURL+`"}
+	}`))
+	reg.Register(asctest.GET("/v1/analyticsReportRequests/"+analyticsViewRequestID+"/reports", "cursor=reports-next"), asctest.JSON(http.StatusOK, `{
+		"data":[{"type":"analyticsReports","id":"report-2","attributes":{"name":"Store Discovery","reportType":"STANDARD","category":"APP_STORE_ENGAGEMENT","granularity":"WEEKLY"}}],
+		"links":{}
+	}`))
+	reg.Register(asctest.GET("/v1/analyticsReports/report-1/instances", instanceFilters...), asctest.JSON(http.StatusOK, `{
+		"data":[{"type":"analyticsReportInstances","id":"instance-1","attributes":{"reportDate":"2024-01-19","processingDate":"2024-01-20","granularity":"DAILY","version":"1.0"}}],
+		"links":{"next":"`+instancesNextURL+`"}
+	}`))
+	reg.Register(asctest.GET("/v1/analyticsReports/report-1/instances", "cursor=instances-next"), asctest.JSON(http.StatusOK, `{
+		"data":[{"type":"analyticsReportInstances","id":"instance-2","attributes":{"reportDate":"2024-01-19","processingDate":"2024-01-20","granularity":"WEEKLY","version":"1.0"}}],
+		"links":{}
+	}`))
+	reg.Register(asctest.GET("/v1/analyticsReports/report-2/instances", instanceFilters...), asctest.JSON(http.StatusOK, `{"data":[],"links":{}}`))
 
 	stdout, stderr := runAnalyticsViewForOutput(
 		t,
+		stubClient(t, reg),
 		"--request-id", analyticsViewRequestID,
 		"--processing-date", "2024-01-20",
 		"--granularity", "daily, weekly, monthly",
@@ -189,7 +131,7 @@ func TestAnalyticsViewFiltersPaginateAndPreserveOutput(t *testing.T) {
 		}],
 		"links":{"self":"https://api.appstoreconnect.apple.com/v1/analyticsReportRequests/11111111-1111-1111-1111-111111111111/reports"}
 	}`)
-	if requestCount != 5 {
+	if requestCount := len(reg.Requests()); requestCount != 5 {
 		t.Fatalf("expected 5 requests, got %d", requestCount)
 	}
 }
@@ -199,59 +141,26 @@ func TestAnalyticsViewAcceptsPrefixedInstanceAndPreservesSegmentBehavior(t *test
 
 	const instanceID = "r39-example-instance"
 	const reportsNextURL = "https://api.appstoreconnect.apple.com/v1/analyticsReportRequests/" + analyticsViewRequestID + "/reports?cursor=unused-report"
-	originalTransport := http.DefaultTransport
-	t.Cleanup(func() { http.DefaultTransport = originalTransport })
-
-	requestCount := 0
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		requestCount++
-		if req.URL.String() == reportsNextURL {
-			return nil, io.ErrUnexpectedEOF
-		}
-		if req.Header.Get("Authorization") == "" {
-			t.Fatal("expected Authorization header")
-		}
-		switch requestCount {
-		case 1:
-			if req.URL.Path != "/v1/analyticsReportRequests/"+analyticsViewRequestID+"/reports" || req.URL.RawQuery != "limit=200" {
-				t.Fatalf("unexpected reports request: %s", req.URL.String())
-			}
-			return analyticsViewJSONResponse(`{
-				"data":[{"type":"analyticsReports","id":"report-1","attributes":{"name":"App Sessions","granularity":"DAILY"}}],
-				"links":{"next":"` + reportsNextURL + `"}
-			}`), nil
-		case 2:
-			if req.URL.Path != "/v1/analyticsReports/report-1/instances" || req.URL.RawQuery != "limit=200" {
-				t.Fatalf("unexpected unfiltered instances request: %s", req.URL.String())
-			}
-			return analyticsViewJSONResponse(`{
-				"data":[
-					{"type":"analyticsReportInstances","id":"ignored-instance","attributes":{"processingDate":"2024-01-19"}},
-					{"type":"analyticsReportInstances","id":"` + instanceID + `","attributes":{"reportDate":"2024-01-19","processingDate":"2024-01-20","granularity":"DAILY","version":"1.0"}}
-				],
-				"links":{"next":"https://api.appstoreconnect.apple.com/v1/analyticsReports/report-1/instances?cursor=unused"}
-			}`), nil
-		case 3:
-			if req.URL.Query().Get("cursor") == "unused" {
-				resp := analyticsViewJSONResponse(`{"errors":[{"code":"NOT_FOUND"}]}`)
-				resp.StatusCode = http.StatusNotFound
-				return resp, nil
-			}
-			if req.URL.Path != "/v1/analyticsReportInstances/"+instanceID+"/segments" || req.URL.RawQuery != "limit=200" {
-				t.Fatalf("unexpected segments request: %s", req.URL.String())
-			}
-			return analyticsViewJSONResponse(`{
-				"data":[{"type":"analyticsReportSegments","id":"segment-1","attributes":{"url":"https://example.com/report.gz","checksum":"abc123","sizeInBytes":42,"urlExpirationDate":"2024-01-21T00:00:00Z"}}],
-				"links":{}
-			}`), nil
-		default:
-			t.Fatalf("unexpected extra request: %s %s", req.Method, req.URL.String())
-			return nil, nil
-		}
-	})
+	reg := asctest.NewRegistry(t)
+	reg.Register(asctest.GET("/v1/analyticsReportRequests/"+analyticsViewRequestID+"/reports", "limit=200"), asctest.JSON(http.StatusOK, `{
+		"data":[{"type":"analyticsReports","id":"report-1","attributes":{"name":"App Sessions","granularity":"DAILY"}}],
+		"links":{"next":"`+reportsNextURL+`"}
+	}`))
+	reg.Register(asctest.GET("/v1/analyticsReports/report-1/instances", "limit=200"), asctest.JSON(http.StatusOK, `{
+		"data":[
+			{"type":"analyticsReportInstances","id":"ignored-instance","attributes":{"processingDate":"2024-01-19"}},
+			{"type":"analyticsReportInstances","id":"`+instanceID+`","attributes":{"reportDate":"2024-01-19","processingDate":"2024-01-20","granularity":"DAILY","version":"1.0"}}
+		],
+		"links":{"next":"https://api.appstoreconnect.apple.com/v1/analyticsReports/report-1/instances?cursor=unused"}
+	}`))
+	reg.Register(asctest.GET("/v1/analyticsReportInstances/"+instanceID+"/segments", "limit=200"), asctest.JSON(http.StatusOK, `{
+		"data":[{"type":"analyticsReportSegments","id":"segment-1","attributes":{"url":"https://example.com/report.gz","checksum":"abc123","sizeInBytes":42,"urlExpirationDate":"2024-01-21T00:00:00Z"}}],
+		"links":{}
+	}`))
 
 	stdout, stderr := runAnalyticsViewForOutput(
 		t,
+		stubClient(t, reg),
 		"--request-id", analyticsViewRequestID,
 		"--instance-id", instanceID,
 		"--include-segments",
@@ -283,41 +192,22 @@ func TestAnalyticsViewAcceptsPrefixedInstanceAndPreservesSegmentBehavior(t *test
 		}],
 		"links":{}
 	}`)
-	if requestCount != 3 {
+	requests := reg.Requests()
+	if requestCount := len(requests); requestCount != 3 {
 		t.Fatalf("expected 3 requests, got %d", requestCount)
 	}
-}
-
-func assertAnalyticsInstanceFilters(t *testing.T, req *http.Request, wantPath string) {
-	t.Helper()
-	if req.Method != http.MethodGet || req.URL.Path != wantPath {
-		t.Fatalf("unexpected instances request: %s %s", req.Method, req.URL.String())
-	}
-	query := req.URL.Query()
-	if got := query.Get("filter[processingDate]"); got != "2024-01-20" {
-		t.Fatalf("filter[processingDate] = %q, want %q", got, "2024-01-20")
-	}
-	if got := query.Get("filter[granularity]"); got != "DAILY,WEEKLY,MONTHLY" {
-		t.Fatalf("filter[granularity] = %q, want %q", got, "DAILY,WEEKLY,MONTHLY")
-	}
-	if got := query.Get("limit"); got != "200" {
-		t.Fatalf("limit = %q, want %q", got, "200")
+	for _, req := range requests {
+		if req.Header.Get("Authorization") == "" {
+			t.Fatal("expected Authorization header")
+		}
 	}
 }
 
-func runAnalyticsViewForOutput(t *testing.T, args ...string) (string, string) {
+func runAnalyticsViewForOutput(t *testing.T, client func() (*asc.Client, error), args ...string) (string, string) {
 	t.Helper()
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
 
 	fullArgs := append([]string{"analytics", "view"}, args...)
-	var runErr error
-	stdout, stderr := captureOutput(t, func() {
-		if err := root.Parse(fullArgs); err != nil {
-			t.Fatalf("parse error: %v", err)
-		}
-		runErr = root.Run(context.Background())
-	})
+	stdout, stderr, runErr := runRootWithDeps(t, client, fullArgs...)
 	if runErr != nil {
 		t.Fatalf("run error: %v", runErr)
 	}

@@ -1,0 +1,15 @@
+{
+  "tag": "AnalyticsReportRequests",
+  "file": "analytics_report_requests_gen.go",
+  "types": [
+    "AnalyticsReportRequestCreateData",
+    "AnalyticsReportRequestCreateRelationships",
+    "AnalyticsReportRequestCreateRequest"
+  ],
+  "relationships": [
+    {"data":"AnalyticsReportRequestCreateData","type":"AnalyticsReportRequestCreateRelationships"}
+  ],
+  "operations": [
+    {"operation":"analyticsReportRequests_createInstance","name":"CreateAnalyticsReportRequest","params":["appID"],"check":"raw","links":["app"],"args":[{"name":"accessType","type":"AnalyticsAccessType"}]}
+  ]
+}

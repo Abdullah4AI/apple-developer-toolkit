@@ -126,21 +126,11 @@ type ReviewSubmissionCreateAttributes struct {
 	Platform Platform `json:"platform"`
 }
 
-// ReviewSubmissionCreateRelationships describes relationships for create requests.
-type ReviewSubmissionCreateRelationships struct {
-	App *Relationship `json:"app"`
-}
-
 // ReviewSubmissionCreateData is the data portion of a review submission create request.
 type ReviewSubmissionCreateData struct {
 	Type          ResourceType                         `json:"type"`
 	Attributes    ReviewSubmissionCreateAttributes     `json:"attributes"`
 	Relationships *ReviewSubmissionCreateRelationships `json:"relationships"`
-}
-
-// ReviewSubmissionCreateRequest is a request to create a review submission.
-type ReviewSubmissionCreateRequest struct {
-	Data ReviewSubmissionCreateData `json:"data"`
 }
 
 // ReviewSubmissionUpdateAttributes describes attributes for updating a review submission.
@@ -155,11 +145,6 @@ type ReviewSubmissionUpdateData struct {
 	Type       ResourceType                     `json:"type"`
 	ID         string                           `json:"id"`
 	Attributes ReviewSubmissionUpdateAttributes `json:"attributes"`
-}
-
-// ReviewSubmissionUpdateRequest is a request to update a review submission.
-type ReviewSubmissionUpdateRequest struct {
-	Data ReviewSubmissionUpdateData `json:"data"`
 }
 
 // GetReviewSubmissions retrieves review submissions for an app.
@@ -212,36 +197,6 @@ func (c *Client) getReviewSubmissions(ctx context.Context, appID string, strict 
 		}
 	}
 
-	return &response, nil
-}
-
-// ListReviewSubmissions retrieves review submissions using the top-level /v1/reviewSubmissions endpoint.
-// App Store Connect requires filter[app] for this endpoint, so callers should pass WithReviewSubmissionsApps.
-func (c *Client) ListReviewSubmissions(ctx context.Context, opts ...ReviewSubmissionsOption) (*ReviewSubmissionsResponse, error) {
-	query := &reviewSubmissionsQuery{}
-	for _, opt := range opts {
-		opt(query)
-	}
-
-	path := "/v1/reviewSubmissions"
-	if query.nextURL != "" {
-		if err := validateNextURL(query.nextURL); err != nil {
-			return nil, fmt.Errorf("reviewSubmissions: %w", err)
-		}
-		path = query.nextURL
-	} else if queryString := buildReviewSubmissionsQuery(query); queryString != "" {
-		path += "?" + queryString
-	}
-
-	data, err := c.do(ctx, "GET", path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var response ReviewSubmissionsResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse review submissions response: %w", err)
-	}
 	return &response, nil
 }
 

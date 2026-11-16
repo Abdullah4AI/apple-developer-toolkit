@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"os"
+	"io"
 	"strconv"
 	"strings"
 
@@ -22,17 +22,17 @@ var betaTesterUsagePeriods = map[string]struct{}{
 	"P365D": {},
 }
 
-// BetaTestersMetricsCommand returns the beta-testers metrics subcommand.
-func BetaTestersMetricsCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("metrics", flag.ExitOnError)
+// newBetaTestersMetricsCommand returns the beta-testers metrics subcommand built on d.
+func newBetaTestersMetricsCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("metrics", flag.ExitOnError)
 
 	testerID := shared.BindResourceIDFlag(fs, "tester-id", "betaTesters", "Beta tester ID")
 	aliasID := shared.BindResourceIDFlag(fs, "id", "betaTesters", "Beta tester ID (alias of --tester-id)")
 	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
 	period := fs.String("period", "", "Reporting period: "+strings.Join(betaTesterUsagePeriodList(), ", "))
-	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
-	next := fs.String("next", "", "Fetch next page using a links.next URL")
-	output := shared.BindOutputFlags(fs)
+	limit := fs.Int("limit", 0, shared.LimitFlagUsage(200))
+	next := fs.String("next", "", shared.NextFlagUsage)
+	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
 		Name:       "metrics",
@@ -44,16 +44,9 @@ Examples:
   asc testflight beta-testers metrics --tester-id "TESTER_ID" --app "APP_ID"
   asc testflight beta-testers metrics --tester-id "TESTER_ID" --app "APP_ID" --period "P30D"`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
-			if *limit != 0 && (*limit < 1 || *limit > 200) {
-				fmt.Fprintln(os.Stderr, "Error: --limit must be between 1 and 200")
-				return shared.WithDiagnostic(flag.ErrHelp, shared.DiagnosticInvalidInput, "--limit")
-			}
-			if err := shared.ValidateNextURL(*next); err != nil {
-				return shared.UsageErrorfCtx(ctx, "testflight beta-testers metrics: %v", err)
-			}
-			if err := shared.RejectNextFlagConflicts(fs, *next, "testflight testers metrics", "period"); err != nil {
+			if err := d.ValidatePaginationFlags(ctx, fs, "testflight testers metrics", 200, "period"); err != nil {
 				return err
 			}
 
@@ -63,39 +56,38 @@ Examples:
 				testerValue = aliasValue
 			} else if aliasValue != "" && aliasValue != testerValue {
 				return shared.WithDiagnostic(
-					shared.NewValidationError(fmt.Errorf("testflight beta-testers metrics: --tester-id and --id must match")),
+					d.UsageErrorCtx(ctx, "testflight beta-testers metrics: --tester-id and --id must match"),
 					shared.DiagnosticConflictingInput,
 					"",
 				)
 			}
 
-			periodValue, err := normalizeBetaTesterUsagePeriod(*period)
-			if err != nil {
-				return usageErrorFromValidation(ctx, "%v", err)
-			}
-
-			resolvedAppID := shared.ResolveAppID(*appID)
+			resolvedAppID := d.ResolveAppID(*appID)
 			nextValue := strings.TrimSpace(*next)
 			if nextValue == "" && testerValue == "" {
-				fmt.Fprintln(os.Stderr, "Error: --tester-id is required")
-				return shared.MissingRequiredUsageError("--tester-id")
+				return d.RequiredFlag("--tester-id")
 			}
 			if nextValue == "" && resolvedAppID == "" {
-				fmt.Fprintf(os.Stderr, "Error: --app is required (or set ASC_APP_ID)\n\n")
+				fmt.Fprintf(d.IO.ErrOut, "Error: --app is required (or set ASC_APP_ID)\n\n")
 				return shared.MissingRequiredUsageError("--app")
 			}
 
-			client, err := shared.GetASCClient()
+			periodValue, err := normalizeBetaTesterUsagePeriod(*period)
+			if err != nil {
+				return usageErrorFromValidation(ctx, d, "%v", err)
+			}
+
+			client, err := d.Client()
 			if err != nil {
 				return fmt.Errorf("testflight beta-testers metrics: %w", err)
 			}
 
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
+			requestCtx, cancel := d.Timeout(ctx)
 			defer cancel()
 
 			opts := []asc.BetaTesterUsagesOption{
-				asc.WithBetaTesterUsagesLimit(*limit),
-				asc.WithBetaTesterUsagesNextURL(*next),
+				asc.Limit[asc.BetaTesterUsagesOption](*limit),
+				asc.NextURL[asc.BetaTesterUsagesOption](*next),
 				asc.WithBetaTesterUsagesPeriod(periodValue),
 				asc.WithBetaTesterUsagesAppID(resolvedAppID),
 			}
@@ -105,7 +97,7 @@ Examples:
 				return fmt.Errorf("testflight beta-testers metrics: failed to fetch: %w", err)
 			}
 
-			return printBetaTesterMetrics(resp, *output.Output, *output.Pretty)
+			return printBetaTesterMetrics(d, resp, *output.Output, *output.Pretty)
 		},
 	}
 }
@@ -131,8 +123,8 @@ func betaTesterUsagePeriodList() []string {
 
 // printBetaTesterMetrics renders one tester's usage, whose rows are keyed by
 // app rather than tester, so it cannot reuse the app-testers renderer.
-func printBetaTesterMetrics(resp *asc.BetaTesterUsagesResponse, format string, pretty bool) error {
-	render := func(renderRows func([]string, [][]string) error) func() error {
+func printBetaTesterMetrics(d *shared.Deps, resp *asc.BetaTesterUsagesResponse, format string, pretty bool) error {
+	render := func(renderRows func(io.Writer, []string, [][]string) error) func() error {
 		return func() error {
 			var payload struct {
 				Data []struct {
@@ -167,10 +159,10 @@ func printBetaTesterMetrics(resp *asc.BetaTesterUsagesResponse, format string, p
 					rows = append(rows, []string{appID, point.Start, point.End, formatCount(point.Values.SessionCount), formatCount(point.Values.CrashCount), formatCount(point.Values.FeedbackCount)})
 				}
 			}
-			return renderRows([]string{"App ID", "Start", "End", "Sessions", "Crashes", "Feedback"}, rows)
+			return renderRows(d.IO.Out, []string{"App ID", "Start", "End", "Sessions", "Crashes", "Feedback"}, rows)
 		}
 	}
-	return shared.PrintOutputWithRenderers(resp, format, pretty, render(asc.WriteTable), render(asc.WriteMarkdown))
+	return d.PrintOutputWithRenderers(resp, format, pretty, render(asc.WriteTableTo), render(asc.WriteMarkdownTo))
 }
 
 func formatCount(n *int) string {

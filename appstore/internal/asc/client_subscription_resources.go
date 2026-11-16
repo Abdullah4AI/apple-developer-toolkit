@@ -43,47 +43,6 @@ func (c *Client) GetSubscriptionLocalizations(ctx context.Context, subscriptionI
 	return &response, nil
 }
 
-// CreateSubscriptionLocalization creates a subscription localization.
-//
-// Deprecated: Use CreateSubscriptionLocalizationV2 with a subscription version ID.
-func (c *Client) CreateSubscriptionLocalization(ctx context.Context, subscriptionID string, attrs SubscriptionLocalizationCreateAttributes) (*SubscriptionLocalizationResponse, error) {
-	subscriptionID = strings.TrimSpace(subscriptionID)
-	if subscriptionID == "" {
-		return nil, fmt.Errorf("subscription ID is required")
-	}
-
-	payload := SubscriptionLocalizationCreateRequest{
-		Data: SubscriptionLocalizationCreateData{
-			Type:       ResourceTypeSubscriptionLocalizations,
-			Attributes: attrs,
-			Relationships: &SubscriptionLocalizationRelationships{
-				Subscription: &Relationship{
-					Data: ResourceData{
-						Type: ResourceTypeSubscriptions,
-						ID:   subscriptionID,
-					},
-				},
-			},
-		},
-	}
-
-	body, err := BuildRequestBody(payload)
-	if err != nil {
-		return nil, err
-	}
-
-	data, err := c.do(ctx, http.MethodPost, "/v1/subscriptionLocalizations", body)
-	if err != nil {
-		return nil, err
-	}
-
-	var response SubscriptionLocalizationResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-	return &response, nil
-}
-
 // GetSubscriptionImages retrieves subscription images for a subscription.
 //
 // Deprecated: Use GetSubscriptionVersionImages with a subscription version ID.
@@ -190,56 +149,11 @@ func (c *Client) CreateSubscriptionIntroductoryOffer(ctx context.Context, subscr
 		},
 	}
 
-	body, err := BuildRequestBody(payload)
-	if err != nil {
-		return nil, err
-	}
-
-	data, err := c.do(ctx, http.MethodPost, "/v1/subscriptionIntroductoryOffers", body)
-	if err != nil {
-		return nil, err
-	}
-
-	var response SubscriptionIntroductoryOfferResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-	return &response, nil
-}
-
-// UpdateSubscriptionIntroductoryOffer updates an introductory offer.
-func (c *Client) UpdateSubscriptionIntroductoryOffer(ctx context.Context, offerID string, attrs SubscriptionIntroductoryOfferUpdateAttributes) (*SubscriptionIntroductoryOfferResponse, error) {
-	payload := SubscriptionIntroductoryOfferUpdateRequest{
-		Data: SubscriptionIntroductoryOfferUpdateData{
-			Type:       ResourceTypeSubscriptionIntroductoryOffers,
-			ID:         strings.TrimSpace(offerID),
-			Attributes: attrs,
-		},
-	}
-
-	body, err := BuildRequestBody(payload)
-	if err != nil {
-		return nil, err
-	}
-
-	path := fmt.Sprintf("/v1/subscriptionIntroductoryOffers/%s", strings.TrimSpace(offerID))
-	data, err := c.do(ctx, http.MethodPatch, path, body)
-	if err != nil {
-		return nil, err
-	}
-
-	var response SubscriptionIntroductoryOfferResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-	return &response, nil
-}
-
-// DeleteSubscriptionIntroductoryOffer deletes an introductory offer.
-func (c *Client) DeleteSubscriptionIntroductoryOffer(ctx context.Context, offerID string) error {
-	path := fmt.Sprintf("/v1/subscriptionIntroductoryOffers/%s", strings.TrimSpace(offerID))
-	_, err := c.do(ctx, http.MethodDelete, path, nil)
-	return err
+	return sendJSON[SubscriptionIntroductoryOfferResponse](ctx, c, writeRequest{
+		Method:  http.MethodPost,
+		Path:    "/v1/subscriptionIntroductoryOffers",
+		Payload: payload,
+	})
 }
 
 // GetSubscriptionPromotionalOffers retrieves promotional offers for a subscription.
@@ -276,24 +190,11 @@ func (c *Client) GetSubscriptionPromotionalOffers(ctx context.Context, subscript
 
 // GetSubscriptionPromotionalOffer retrieves a promotional offer by ID.
 func (c *Client) GetSubscriptionPromotionalOffer(ctx context.Context, offerID string, opts ...SubscriptionPromotionalOfferOption) (*SubscriptionPromotionalOfferResponse, error) {
-	query := &subscriptionRelatedFieldsQuery{}
-	for _, opt := range opts {
-		opt(query)
-	}
-	path := fmt.Sprintf("/v1/subscriptionPromotionalOffers/%s", strings.TrimSpace(offerID))
-	if queryString := buildSubscriptionRelatedFieldsQuery("subscriptions", query); queryString != "" {
-		path += "?" + queryString
-	}
-	data, err := c.do(ctx, http.MethodGet, path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var response SubscriptionPromotionalOfferResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-	return &response, nil
+	query := applyOptions(opts)
+	return getJSON[SubscriptionPromotionalOfferResponse](ctx, c, readRequest{
+		Path:  fmt.Sprintf("/v1/subscriptionPromotionalOffers/%s", strings.TrimSpace(offerID)),
+		Query: buildSubscriptionRelatedFieldsQuery("subscriptions", query),
+	})
 }
 
 // CreateSubscriptionPromotionalOffer creates a promotional offer.
@@ -380,21 +281,11 @@ func (c *Client) CreateSubscriptionPromotionalOffer(ctx context.Context, subscri
 		Included: included,
 	}
 
-	body, err := BuildRequestBody(payload)
-	if err != nil {
-		return nil, err
-	}
-
-	data, err := c.do(ctx, http.MethodPost, "/v1/subscriptionPromotionalOffers", body)
-	if err != nil {
-		return nil, err
-	}
-
-	var response SubscriptionPromotionalOfferResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-	return &response, nil
+	return sendJSON[SubscriptionPromotionalOfferResponse](ctx, c, writeRequest{
+		Method:  http.MethodPost,
+		Path:    "/v1/subscriptionPromotionalOffers",
+		Payload: payload,
+	})
 }
 
 // UpdateSubscriptionPromotionalOffer updates a promotional offer.
@@ -422,29 +313,11 @@ func (c *Client) UpdateSubscriptionPromotionalOffer(ctx context.Context, offerID
 		},
 	}
 
-	body, err := BuildRequestBody(payload)
-	if err != nil {
-		return nil, err
-	}
-
-	path := fmt.Sprintf("/v1/subscriptionPromotionalOffers/%s", strings.TrimSpace(offerID))
-	data, err := c.do(ctx, http.MethodPatch, path, body)
-	if err != nil {
-		return nil, err
-	}
-
-	var response SubscriptionPromotionalOfferResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-	return &response, nil
-}
-
-// DeleteSubscriptionPromotionalOffer deletes a promotional offer.
-func (c *Client) DeleteSubscriptionPromotionalOffer(ctx context.Context, offerID string) error {
-	path := fmt.Sprintf("/v1/subscriptionPromotionalOffers/%s", strings.TrimSpace(offerID))
-	_, err := c.do(ctx, http.MethodDelete, path, nil)
-	return err
+	return sendJSON[SubscriptionPromotionalOfferResponse](ctx, c, writeRequest{
+		Method:  http.MethodPatch,
+		Path:    fmt.Sprintf("/v1/subscriptionPromotionalOffers/%s", strings.TrimSpace(offerID)),
+		Payload: payload,
+	})
 }
 
 // GetSubscriptionPromotionalOfferPrices retrieves prices for a promotional offer.
@@ -476,41 +349,6 @@ func (c *Client) GetSubscriptionPromotionalOfferPrices(ctx context.Context, offe
 	if err := json.Unmarshal(data, &response); err != nil {
 		return nil, fmt.Errorf("failed to parse response: %w", err)
 	}
-	return &response, nil
-}
-
-// GetSubscriptionPromotionalOfferPricesRelationships retrieves price linkages for a promotional offer.
-func (c *Client) GetSubscriptionPromotionalOfferPricesRelationships(ctx context.Context, offerID string, opts ...LinkagesOption) (*LinkagesResponse, error) {
-	query := &linkagesQuery{}
-	for _, opt := range opts {
-		opt(query)
-	}
-
-	offerID = strings.TrimSpace(offerID)
-	if query.nextURL == "" && offerID == "" {
-		return nil, fmt.Errorf("offerID is required")
-	}
-
-	path := fmt.Sprintf("/v1/subscriptionPromotionalOffers/%s/relationships/prices", offerID)
-	if query.nextURL != "" {
-		if err := validateNextURL(query.nextURL); err != nil {
-			return nil, fmt.Errorf("subscriptionPromotionalOfferPricesRelationships: %w", err)
-		}
-		path = query.nextURL
-	} else if queryString := buildLinkagesQuery(query); queryString != "" {
-		path += "?" + queryString
-	}
-
-	data, err := c.do(ctx, http.MethodGet, path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var response LinkagesResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
 	return &response, nil
 }
 
@@ -548,24 +386,11 @@ func (c *Client) GetSubscriptionOfferCodes(ctx context.Context, subscriptionID s
 
 // GetSubscriptionOfferCode retrieves an offer code by ID.
 func (c *Client) GetSubscriptionOfferCode(ctx context.Context, offerCodeID string, opts ...SubscriptionOfferCodeOption) (*SubscriptionOfferCodeResponse, error) {
-	query := &subscriptionRelatedFieldsQuery{}
-	for _, opt := range opts {
-		opt(query)
-	}
-	path := fmt.Sprintf("/v1/subscriptionOfferCodes/%s", strings.TrimSpace(offerCodeID))
-	if queryString := buildSubscriptionRelatedFieldsQuery("subscriptions", query); queryString != "" {
-		path += "?" + queryString
-	}
-	data, err := c.do(ctx, http.MethodGet, path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var response SubscriptionOfferCodeResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-	return &response, nil
+	query := applyOptions(opts)
+	return getJSON[SubscriptionOfferCodeResponse](ctx, c, readRequest{
+		Path:  fmt.Sprintf("/v1/subscriptionOfferCodes/%s", strings.TrimSpace(offerCodeID)),
+		Query: buildSubscriptionRelatedFieldsQuery("subscriptions", query),
+	})
 }
 
 // CreateSubscriptionOfferCode creates a subscription offer code.
@@ -640,113 +465,11 @@ func (c *Client) CreateSubscriptionOfferCode(ctx context.Context, subscriptionID
 		Included: included,
 	}
 
-	body, err := BuildRequestBody(payload)
-	if err != nil {
-		return nil, err
-	}
-
-	data, err := c.do(ctx, http.MethodPost, "/v1/subscriptionOfferCodes", body)
-	if err != nil {
-		return nil, err
-	}
-
-	var response SubscriptionOfferCodeResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-	return &response, nil
-}
-
-// UpdateSubscriptionOfferCode updates an offer code.
-func (c *Client) UpdateSubscriptionOfferCode(ctx context.Context, offerCodeID string, attrs SubscriptionOfferCodeUpdateAttributes) (*SubscriptionOfferCodeResponse, error) {
-	payload := SubscriptionOfferCodeUpdateRequest{
-		Data: SubscriptionOfferCodeUpdateData{
-			Type:       ResourceTypeSubscriptionOfferCodes,
-			ID:         strings.TrimSpace(offerCodeID),
-			Attributes: attrs,
-		},
-	}
-
-	body, err := BuildRequestBody(payload)
-	if err != nil {
-		return nil, err
-	}
-
-	path := fmt.Sprintf("/v1/subscriptionOfferCodes/%s", strings.TrimSpace(offerCodeID))
-	data, err := c.do(ctx, http.MethodPatch, path, body)
-	if err != nil {
-		return nil, err
-	}
-
-	var response SubscriptionOfferCodeResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-	return &response, nil
-}
-
-// GetSubscriptionOfferCodeCustomCodes retrieves custom codes for an offer code.
-func (c *Client) GetSubscriptionOfferCodeCustomCodes(ctx context.Context, offerCodeID string, opts ...SubscriptionOfferCodeCustomCodesOption) (*SubscriptionOfferCodeCustomCodesResponse, error) {
-	query := &subscriptionOfferCodeCustomCodesQuery{}
-	for _, opt := range opts {
-		opt(query)
-	}
-
-	path := fmt.Sprintf("/v1/subscriptionOfferCodes/%s/customCodes", strings.TrimSpace(offerCodeID))
-	if query.nextURL != "" {
-		if err := validateNextURL(query.nextURL); err != nil {
-			return nil, fmt.Errorf("subscriptionOfferCodeCustomCodes: %w", err)
-		}
-		path = query.nextURL
-	} else if queryString := buildSubscriptionOfferCodeCustomCodesQuery(query); queryString != "" {
-		path += "?" + queryString
-	}
-
-	data, err := c.do(ctx, http.MethodGet, path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var response SubscriptionOfferCodeCustomCodesResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-	return &response, nil
-}
-
-// GetSubscriptionOfferCodeCustomCodesRelationships retrieves custom code linkages for a subscription offer code.
-func (c *Client) GetSubscriptionOfferCodeCustomCodesRelationships(ctx context.Context, offerCodeID string, opts ...LinkagesOption) (*LinkagesResponse, error) {
-	query := &linkagesQuery{}
-	for _, opt := range opts {
-		opt(query)
-	}
-
-	offerCodeID = strings.TrimSpace(offerCodeID)
-	if query.nextURL == "" && offerCodeID == "" {
-		return nil, fmt.Errorf("offerCodeID is required")
-	}
-
-	path := fmt.Sprintf("/v1/subscriptionOfferCodes/%s/relationships/customCodes", offerCodeID)
-	if query.nextURL != "" {
-		if err := validateNextURL(query.nextURL); err != nil {
-			return nil, fmt.Errorf("subscriptionOfferCodeCustomCodesRelationships: %w", err)
-		}
-		path = query.nextURL
-	} else if queryString := buildLinkagesQuery(query); queryString != "" {
-		path += "?" + queryString
-	}
-
-	data, err := c.do(ctx, http.MethodGet, path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var response LinkagesResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
+	return sendJSON[SubscriptionOfferCodeResponse](ctx, c, writeRequest{
+		Method:  http.MethodPost,
+		Path:    "/v1/subscriptionOfferCodes",
+		Payload: payload,
+	})
 }
 
 // GetSubscriptionOfferCodePrices retrieves prices for an offer code.
@@ -775,70 +498,6 @@ func (c *Client) GetSubscriptionOfferCodePrices(ctx context.Context, offerCodeID
 	}
 
 	var response SubscriptionOfferCodePricesResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-	return &response, nil
-}
-
-// GetSubscriptionOfferCodePricesRelationships retrieves price linkages for a subscription offer code.
-func (c *Client) GetSubscriptionOfferCodePricesRelationships(ctx context.Context, offerCodeID string, opts ...LinkagesOption) (*LinkagesResponse, error) {
-	query := &linkagesQuery{}
-	for _, opt := range opts {
-		opt(query)
-	}
-
-	offerCodeID = strings.TrimSpace(offerCodeID)
-	if query.nextURL == "" && offerCodeID == "" {
-		return nil, fmt.Errorf("offerCodeID is required")
-	}
-
-	path := fmt.Sprintf("/v1/subscriptionOfferCodes/%s/relationships/prices", offerCodeID)
-	if query.nextURL != "" {
-		if err := validateNextURL(query.nextURL); err != nil {
-			return nil, fmt.Errorf("subscriptionOfferCodePricesRelationships: %w", err)
-		}
-		path = query.nextURL
-	} else if queryString := buildLinkagesQuery(query); queryString != "" {
-		path += "?" + queryString
-	}
-
-	data, err := c.do(ctx, http.MethodGet, path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var response LinkagesResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
-// GetSubscriptionPrices retrieves prices for a subscription.
-func (c *Client) GetSubscriptionPrices(ctx context.Context, subscriptionID string, opts ...SubscriptionPricesOption) (*SubscriptionPricesResponse, error) {
-	query := &subscriptionPricesQuery{}
-	for _, opt := range opts {
-		opt(query)
-	}
-
-	path := fmt.Sprintf("/v1/subscriptions/%s/prices", strings.TrimSpace(subscriptionID))
-	if query.nextURL != "" {
-		if err := validateNextURL(query.nextURL); err != nil {
-			return nil, fmt.Errorf("subscriptionPrices: %w", err)
-		}
-		path = query.nextURL
-	} else if queryString := buildSubscriptionPricesQuery(query); queryString != "" {
-		path += "?" + queryString
-	}
-
-	data, err := c.do(ctx, http.MethodGet, path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var response SubscriptionPricesResponse
 	if err := json.Unmarshal(data, &response); err != nil {
 		return nil, fmt.Errorf("failed to parse response: %w", err)
 	}
@@ -876,32 +535,6 @@ func (c *Client) GetSubscriptionPricePoints(ctx context.Context, subscriptionID 
 	}
 
 	var response SubscriptionPricePointsResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-	return &response, nil
-}
-
-// GetSubscriptionPricePoint retrieves a subscription price point by ID.
-func (c *Client) GetSubscriptionPricePoint(ctx context.Context, pricePointID string, opts ...SubscriptionPricePointOption) (*SubscriptionPricePointResponse, error) {
-	pricePointID = strings.TrimSpace(pricePointID)
-	if pricePointID == "" {
-		return nil, fmt.Errorf("pricePointID is required")
-	}
-	query := &subscriptionPricePointDetailQuery{}
-	for _, opt := range opts {
-		opt(query)
-	}
-	path := fmt.Sprintf("/v1/subscriptionPricePoints/%s", pricePointID)
-	if queryString := buildSubscriptionPricePointDetailQuery(query); queryString != "" {
-		path += "?" + queryString
-	}
-	data, err := c.do(ctx, http.MethodGet, path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var response SubscriptionPricePointResponse
 	if err := json.Unmarshal(data, &response); err != nil {
 		return nil, fmt.Errorf("failed to parse response: %w", err)
 	}
@@ -982,63 +615,6 @@ func (c *Client) GetSubscriptionPricePointAdjustedEqualizations(ctx context.Cont
 	return &response, nil
 }
 
-// GetSubscriptionPricePointEqualizationsRelationships retrieves equalization linkages for a subscription price point.
-func (c *Client) GetSubscriptionPricePointEqualizationsRelationships(ctx context.Context, pricePointID string, opts ...LinkagesOption) (*LinkagesResponse, error) {
-	query := &linkagesQuery{}
-	for _, opt := range opts {
-		opt(query)
-	}
-
-	pricePointID = strings.TrimSpace(pricePointID)
-	if query.nextURL == "" && pricePointID == "" {
-		return nil, fmt.Errorf("pricePointID is required")
-	}
-
-	path := fmt.Sprintf("/v1/subscriptionPricePoints/%s/relationships/equalizations", pricePointID)
-	if query.nextURL != "" {
-		if err := validateNextURL(query.nextURL); err != nil {
-			return nil, fmt.Errorf("subscriptionPricePointEqualizationsRelationships: %w", err)
-		}
-		path = query.nextURL
-	} else if queryString := buildLinkagesQuery(query); queryString != "" {
-		path += "?" + queryString
-	}
-
-	data, err := c.do(ctx, http.MethodGet, path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var response LinkagesResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	return &response, nil
-}
-
-// GetSubscriptionAppStoreReviewScreenshot retrieves a review screenshot by ID.
-func (c *Client) GetSubscriptionAppStoreReviewScreenshot(ctx context.Context, screenshotID string, opts ...SubscriptionAppStoreReviewScreenshotOption) (*SubscriptionAppStoreReviewScreenshotResponse, error) {
-	query := &subscriptionAppStoreReviewScreenshotQuery{}
-	for _, opt := range opts {
-		opt(query)
-	}
-	path := fmt.Sprintf("/v1/subscriptionAppStoreReviewScreenshots/%s", strings.TrimSpace(screenshotID))
-	if queryString := buildSubscriptionAppStoreReviewScreenshotQuery(query); queryString != "" {
-		path += "?" + queryString
-	}
-	data, err := c.do(ctx, http.MethodGet, path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var response SubscriptionAppStoreReviewScreenshotResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-	return &response, nil
-}
-
 // CreateSubscriptionAppStoreReviewScreenshot creates a review screenshot.
 func (c *Client) CreateSubscriptionAppStoreReviewScreenshot(ctx context.Context, subscriptionID, fileName string, fileSize int64) (*SubscriptionAppStoreReviewScreenshotResponse, error) {
 	subscriptionID = strings.TrimSpace(subscriptionID)
@@ -1068,56 +644,11 @@ func (c *Client) CreateSubscriptionAppStoreReviewScreenshot(ctx context.Context,
 		},
 	}
 
-	body, err := BuildRequestBody(payload)
-	if err != nil {
-		return nil, err
-	}
-
-	data, err := c.do(ctx, http.MethodPost, "/v1/subscriptionAppStoreReviewScreenshots", body)
-	if err != nil {
-		return nil, err
-	}
-
-	var response SubscriptionAppStoreReviewScreenshotResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-	return &response, nil
-}
-
-// UpdateSubscriptionAppStoreReviewScreenshot updates a review screenshot.
-func (c *Client) UpdateSubscriptionAppStoreReviewScreenshot(ctx context.Context, screenshotID string, attrs SubscriptionAppStoreReviewScreenshotUpdateAttributes) (*SubscriptionAppStoreReviewScreenshotResponse, error) {
-	payload := SubscriptionAppStoreReviewScreenshotUpdateRequest{
-		Data: SubscriptionAppStoreReviewScreenshotUpdateData{
-			Type:       ResourceTypeSubscriptionAppStoreReviewScreenshots,
-			ID:         strings.TrimSpace(screenshotID),
-			Attributes: attrs,
-		},
-	}
-
-	body, err := BuildRequestBody(payload)
-	if err != nil {
-		return nil, err
-	}
-
-	path := fmt.Sprintf("/v1/subscriptionAppStoreReviewScreenshots/%s", strings.TrimSpace(screenshotID))
-	data, err := c.do(ctx, http.MethodPatch, path, body)
-	if err != nil {
-		return nil, err
-	}
-
-	var response SubscriptionAppStoreReviewScreenshotResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-	return &response, nil
-}
-
-// DeleteSubscriptionAppStoreReviewScreenshot deletes a review screenshot.
-func (c *Client) DeleteSubscriptionAppStoreReviewScreenshot(ctx context.Context, screenshotID string) error {
-	path := fmt.Sprintf("/v1/subscriptionAppStoreReviewScreenshots/%s", strings.TrimSpace(screenshotID))
-	_, err := c.do(ctx, http.MethodDelete, path, nil)
-	return err
+	return sendJSON[SubscriptionAppStoreReviewScreenshotResponse](ctx, c, writeRequest{
+		Method:  http.MethodPost,
+		Path:    "/v1/subscriptionAppStoreReviewScreenshots",
+		Payload: payload,
+	})
 }
 
 // GetSubscriptionGroupLocalizations retrieves subscription group localizations for a group.
@@ -1148,47 +679,6 @@ func (c *Client) GetSubscriptionGroupLocalizations(ctx context.Context, groupID 
 	}
 
 	var response SubscriptionGroupLocalizationsResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-	return &response, nil
-}
-
-// CreateSubscriptionGroupLocalization creates a subscription group localization.
-//
-// Deprecated: Use CreateSubscriptionGroupLocalizationV2 with a subscription group version ID.
-func (c *Client) CreateSubscriptionGroupLocalization(ctx context.Context, groupID string, attrs SubscriptionGroupLocalizationCreateAttributes) (*SubscriptionGroupLocalizationResponse, error) {
-	groupID = strings.TrimSpace(groupID)
-	if groupID == "" {
-		return nil, fmt.Errorf("group ID is required")
-	}
-
-	payload := SubscriptionGroupLocalizationCreateRequest{
-		Data: SubscriptionGroupLocalizationCreateData{
-			Type:       ResourceTypeSubscriptionGroupLocalizations,
-			Attributes: attrs,
-			Relationships: &SubscriptionGroupLocalizationRelationships{
-				SubscriptionGroup: &Relationship{
-					Data: ResourceData{
-						Type: ResourceTypeSubscriptionGroups,
-						ID:   groupID,
-					},
-				},
-			},
-		},
-	}
-
-	body, err := BuildRequestBody(payload)
-	if err != nil {
-		return nil, err
-	}
-
-	data, err := c.do(ctx, http.MethodPost, "/v1/subscriptionGroupLocalizations", body)
-	if err != nil {
-		return nil, err
-	}
-
-	var response SubscriptionGroupLocalizationResponse
 	if err := json.Unmarshal(data, &response); err != nil {
 		return nil, fmt.Errorf("failed to parse response: %w", err)
 	}

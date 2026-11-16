@@ -1,12 +1,11 @@
 package cmdtest
 
 import (
-	"fmt"
-	"net/http"
 	"strings"
 	"testing"
 
 	rootcmd "github.com/Abdullah4AI/apple-developer-toolkit/appstore/cmd"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asctest"
 )
 
 func TestSigningSyncLifecycleUsageErrorsExitTwoBeforeSideEffects(t *testing.T) {
@@ -22,7 +21,7 @@ func TestSigningSyncLifecycleUsageErrorsExitTwoBeforeSideEffects(t *testing.T) {
 				"--profile-type", "IOS_APP_DEVELOPMENT",
 				"--repo", "git@example.com:team/signing.git",
 			},
-			want: "--confirm is required to delete profiles and revoke certificates (or pass --dry-run to preview)",
+			want: "--confirm is required unless --dry-run is set\n",
 		},
 		{
 			name: "force for new devices with App Store profile",
@@ -51,10 +50,7 @@ func TestSigningSyncLifecycleUsageErrorsExitTwoBeforeSideEffects(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Setenv("ASC_SIGNING_SYNC_PASSWORD", "repository-password")
-			var code int
-			stdout, stderr := captureOutput(t, func() {
-				code = rootcmd.Run(tt.args, "test")
-			})
+			stdout, stderr, code := runWithDeps(t, nil, tt.args...)
 			if code != rootcmd.ExitUsage {
 				t.Fatalf("exit code = %d, want %d; stderr=%q", code, rootcmd.ExitUsage, stderr)
 			}
@@ -75,11 +71,8 @@ func TestSigningSyncNukeRejectsConfirmWithDryRunBeforeRequests(t *testing.T) {
 	setupSubmitCreateAuth(t)
 	t.Setenv("ASC_SIGNING_SYNC_PASSWORD", "repository-password")
 
-	var requests lockedCounter
-	installDefaultTransport(t, roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		requests.Inc()
-		return nil, fmt.Errorf("unexpected request: %s %s", req.Method, req.URL.String())
-	}))
+	reg := asctest.NewRegistry(t)
+	reg.Install()
 
 	var code int
 	stdout, stderr := captureOutput(t, func() {
@@ -101,7 +94,7 @@ func TestSigningSyncNukeRejectsConfirmWithDryRunBeforeRequests(t *testing.T) {
 	if strings.Contains(stderr, "Cloning signing repo") || strings.Contains(stderr, "Listing signing assets") || strings.Contains(stderr, "Dry run:") {
 		t.Fatalf("stderr shows side effects: %q", stderr)
 	}
-	if got := requests.Load(); got != 0 {
+	if got := len(reg.Requests()); got != 0 {
 		t.Fatalf("HTTP requests = %d, want 0", got)
 	}
 }

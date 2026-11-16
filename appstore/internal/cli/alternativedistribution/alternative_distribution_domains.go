@@ -3,9 +3,6 @@ package alternativedistribution
 import (
 	"context"
 	"flag"
-	"fmt"
-	"os"
-	"strings"
 
 	"github.com/peterbourgon/ff/v3/ffcli"
 
@@ -13,9 +10,9 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
-// AlternativeDistributionDomainsCommand returns the domains command group.
-func AlternativeDistributionDomainsCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("domains", flag.ExitOnError)
+// newAlternativeDistributionDomainsCommand returns the domains command group.
+func newAlternativeDistributionDomainsCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("domains", flag.ExitOnError)
 
 	return &ffcli.Command{
 		Name:       "domains",
@@ -29,12 +26,12 @@ Examples:
   asc alternative-distribution domains create --domain "example.com" --reference-name "Example"
   asc alternative-distribution domains delete --domain-id "DOMAIN_ID" --confirm`,
 		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Subcommands: []*ffcli.Command{
-			AlternativeDistributionDomainsListCommand(),
-			AlternativeDistributionDomainsGetCommand(),
-			AlternativeDistributionDomainsCreateCommand(),
-			AlternativeDistributionDomainsDeleteCommand(),
+			newAlternativeDistributionDomainsListCommand(d),
+			newAlternativeDistributionDomainsGetCommand(d),
+			newAlternativeDistributionDomainsCreateCommand(d),
+			newAlternativeDistributionDomainsDeleteCommand(d),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			return flag.ErrHelp
@@ -42,16 +39,10 @@ Examples:
 	}
 }
 
-// AlternativeDistributionDomainsListCommand returns the domains list subcommand.
-func AlternativeDistributionDomainsListCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("list", flag.ExitOnError)
-
-	limit := fs.Int("limit", 0, "Maximum results per page (1-200)")
-	next := fs.String("next", "", "Fetch next page using a links.next URL")
-	paginate := fs.Bool("paginate", false, "Automatically fetch all pages (aggregate results)")
-	output := shared.BindOutputFlags(fs)
-
-	return &ffcli.Command{
+// newAlternativeDistributionDomainsListCommand returns the domains list subcommand.
+func newAlternativeDistributionDomainsListCommand(d *shared.Deps) *ffcli.Command {
+	return shared.BuildPaginatedListCommand(shared.PaginatedListCommandConfig{
+		Deps:       d,
 		Name:       "list",
 		ShortUsage: "asc alternative-distribution domains list [flags]",
 		ShortHelp:  "List alternative distribution domains.",
@@ -61,64 +52,23 @@ Examples:
   asc alternative-distribution domains list
   asc alternative-distribution domains list --limit 50
   asc alternative-distribution domains list --paginate`,
-		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
-		Exec: func(ctx context.Context, args []string) error {
-			if *limit != 0 && (*limit < 1 || *limit > alternativeDistributionMaxLimit) {
-				return shared.UsageErrorf("alternative-distribution domains list: --limit must be between 1 and %d", alternativeDistributionMaxLimit)
-			}
-			if err := shared.ValidateNextURL(*next); err != nil {
-				return shared.UsageErrorf("alternative-distribution domains list: %v", err)
-			}
-
-			client, err := shared.GetASCClient()
-			if err != nil {
-				return fmt.Errorf("alternative-distribution domains list: %w", err)
-			}
-
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
-			defer cancel()
-
-			opts := []asc.AlternativeDistributionDomainsOption{
-				asc.WithAlternativeDistributionDomainsLimit(*limit),
-				asc.WithAlternativeDistributionDomainsNextURL(*next),
-			}
-
-			if *paginate {
-				paginateOpts := append(opts, asc.WithAlternativeDistributionDomainsLimit(alternativeDistributionMaxLimit))
-				firstPage, err := client.GetAlternativeDistributionDomains(requestCtx, paginateOpts...)
-				if err != nil {
-					return fmt.Errorf("alternative-distribution domains list: failed to fetch: %w", err)
-				}
-
-				resp, err := asc.PaginateAll(requestCtx, firstPage, func(ctx context.Context, nextURL string) (asc.PaginatedResponse, error) {
-					return client.GetAlternativeDistributionDomains(ctx, asc.WithAlternativeDistributionDomainsNextURL(nextURL))
-				})
-				if err != nil {
-					return fmt.Errorf("alternative-distribution domains list: %w", err)
-				}
-
-				return shared.PrintOutput(resp, *output.Output, *output.Pretty)
-			}
-
-			resp, err := client.GetAlternativeDistributionDomains(requestCtx, opts...)
-			if err != nil {
-				return fmt.Errorf("alternative-distribution domains list: failed to fetch: %w", err)
-			}
-
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+		TopLevel:             true,
+		LimitMax:             alternativeDistributionMaxLimit,
+		PaginateIgnoresLimit: true,
+		NoSpinner:            true,
+		FetchPage: func(ctx context.Context, client *asc.Client, _ string, limit int, next string) (asc.PaginatedResponse, error) {
+			return client.GetAlternativeDistributionDomains(ctx,
+				asc.Limit[asc.AlternativeDistributionDomainsOption](limit),
+				asc.NextURL[asc.AlternativeDistributionDomainsOption](next),
+			)
 		},
-	}
+	})
 }
 
-// AlternativeDistributionDomainsGetCommand returns the domains get subcommand.
-func AlternativeDistributionDomainsGetCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("view", flag.ExitOnError)
-
-	domainID := shared.BindResourceIDFlag(fs, "domain-id", "alternativeDistributionDomains", "Alternative distribution domain ID")
-	output := shared.BindOutputFlags(fs)
-
-	return &ffcli.Command{
+// newAlternativeDistributionDomainsGetCommand returns the domains get subcommand.
+func newAlternativeDistributionDomainsGetCommand(d *shared.Deps) *ffcli.Command {
+	return shared.BuildIDGetCommand(shared.IDGetCommandConfig{
+		Deps:       d,
 		Name:       "view",
 		ShortUsage: "asc alternative-distribution domains view --domain-id \"DOMAIN_ID\"",
 		ShortHelp:  "View an alternative distribution domain.",
@@ -126,42 +76,20 @@ func AlternativeDistributionDomainsGetCommand() *ffcli.Command {
 
 Examples:
   asc alternative-distribution domains view --domain-id "DOMAIN_ID"`,
-		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
-		Exec: func(ctx context.Context, args []string) error {
-			trimmedID := strings.TrimSpace(*domainID)
-			if trimmedID == "" {
-				fmt.Fprintln(os.Stderr, "Error: --domain-id is required")
-				return shared.MissingRequiredUsageError("--domain-id")
-			}
-
-			client, err := shared.GetASCClient()
-			if err != nil {
-				return fmt.Errorf("alternative-distribution domains view: %w", err)
-			}
-
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
-			defer cancel()
-
-			resp, err := client.GetAlternativeDistributionDomain(requestCtx, trimmedID)
-			if err != nil {
-				return fmt.Errorf("alternative-distribution domains view: failed to fetch: %w", err)
-			}
-
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+		IDFlag:             "domain-id",
+		IDUsage:            "Alternative distribution domain ID",
+		IDType:             "alternativeDistributionDomains",
+		RequiredDiagnostic: true,
+		Fetch: func(ctx context.Context, client *asc.Client, id string) (any, error) {
+			return client.GetAlternativeDistributionDomain(ctx, id)
 		},
-	}
+	})
 }
 
-// AlternativeDistributionDomainsCreateCommand returns the domains create subcommand.
-func AlternativeDistributionDomainsCreateCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("create", flag.ExitOnError)
-
-	domain := fs.String("domain", "", "Domain name")
-	referenceName := fs.String("reference-name", "", "Reference name for the domain")
-	output := shared.BindOutputFlags(fs)
-
-	return &ffcli.Command{
+// newAlternativeDistributionDomainsCreateCommand returns the domains create subcommand.
+func newAlternativeDistributionDomainsCreateCommand(d *shared.Deps) *ffcli.Command {
+	var domain, referenceName string
+	return shared.BuildCreateCommand(shared.WriteCommandConfig{
 		Name:       "create",
 		ShortUsage: "asc alternative-distribution domains create --domain \"example.com\" --reference-name \"Example\"",
 		ShortHelp:  "Create an alternative distribution domain.",
@@ -169,48 +97,22 @@ func AlternativeDistributionDomainsCreateCommand() *ffcli.Command {
 
 Examples:
   asc alternative-distribution domains create --domain "example.com" --reference-name "Example"`,
-		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
-		Exec: func(ctx context.Context, args []string) error {
-			domainValue := strings.TrimSpace(*domain)
-			if domainValue == "" {
-				fmt.Fprintln(os.Stderr, "Error: --domain is required")
-				return shared.MissingRequiredUsageError("--domain")
-			}
-
-			referenceValue := strings.TrimSpace(*referenceName)
-			if referenceValue == "" {
-				fmt.Fprintln(os.Stderr, "Error: --reference-name is required")
-				return shared.MissingRequiredUsageError("--reference-name")
-			}
-
-			client, err := shared.GetASCClient()
-			if err != nil {
-				return fmt.Errorf("alternative-distribution domains create: %w", err)
-			}
-
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
-			defer cancel()
-
-			resp, err := client.CreateAlternativeDistributionDomain(requestCtx, domainValue, referenceValue)
-			if err != nil {
-				return fmt.Errorf("alternative-distribution domains create: failed to create: %w", err)
-			}
-
-			return shared.PrintOutput(resp, *output.Output, *output.Pretty)
+		TopLevel: true,
+		Fields: []shared.AttributeFlag{
+			shared.RequiredStringFlag(&domain, "domain", "Domain name"),
+			shared.RequiredStringFlag(&referenceName, "reference-name", "Reference name for the domain"),
 		},
-	}
+		Deps: d,
+		Send: func(ctx context.Context, client *asc.Client, _ string) (any, error) {
+			return client.CreateAlternativeDistributionDomain(ctx, domain, referenceName)
+		},
+	})
 }
 
-// AlternativeDistributionDomainsDeleteCommand returns the domains delete subcommand.
-func AlternativeDistributionDomainsDeleteCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("delete", flag.ExitOnError)
-
-	domainID := shared.BindResourceIDFlag(fs, "domain-id", "alternativeDistributionDomains", "Alternative distribution domain ID")
-	confirm := fs.Bool("confirm", false, "Confirm deletion")
-	output := shared.BindOutputFlags(fs)
-
-	return &ffcli.Command{
+// newAlternativeDistributionDomainsDeleteCommand returns the domains delete subcommand.
+func newAlternativeDistributionDomainsDeleteCommand(d *shared.Deps) *ffcli.Command {
+	return shared.BuildConfirmDeleteCommand(shared.ConfirmDeleteCommandConfig{
+		Deps:       d,
 		Name:       "delete",
 		ShortUsage: "asc alternative-distribution domains delete --domain-id \"DOMAIN_ID\" --confirm",
 		ShortHelp:  "Delete an alternative distribution domain.",
@@ -218,37 +120,15 @@ func AlternativeDistributionDomainsDeleteCommand() *ffcli.Command {
 
 Examples:
   asc alternative-distribution domains delete --domain-id "DOMAIN_ID" --confirm`,
-		FlagSet:   fs,
-		UsageFunc: shared.DefaultUsageFunc,
-		Exec: func(ctx context.Context, args []string) error {
-			trimmedID := strings.TrimSpace(*domainID)
-			if trimmedID == "" {
-				fmt.Fprintln(os.Stderr, "Error: --domain-id is required")
-				return shared.MissingRequiredUsageError("--domain-id")
-			}
-			if !*confirm {
-				fmt.Fprintln(os.Stderr, "Error: --confirm is required")
-				return shared.MissingRequiredUsageError("--confirm")
-			}
-
-			client, err := shared.GetASCClient()
-			if err != nil {
-				return fmt.Errorf("alternative-distribution domains delete: %w", err)
-			}
-
-			requestCtx, cancel := shared.ContextWithTimeout(ctx)
-			defer cancel()
-
-			if err := client.DeleteAlternativeDistributionDomain(requestCtx, trimmedID); err != nil {
-				return fmt.Errorf("alternative-distribution domains delete: failed to delete: %w", err)
-			}
-
-			result := &asc.AlternativeDistributionDomainDeleteResult{
-				ID:      trimmedID,
-				Deleted: true,
-			}
-
-			return shared.PrintOutput(result, *output.Output, *output.Pretty)
+		IDFlag:             "domain-id",
+		IDUsage:            "Alternative distribution domain ID",
+		IDType:             "alternativeDistributionDomains",
+		RequiredDiagnostic: true,
+		Delete: func(ctx context.Context, client *asc.Client, id string) error {
+			return client.DeleteAlternativeDistributionDomain(ctx, id)
 		},
-	}
+		Result: func(id string) any {
+			return &asc.DeleteResult{ID: id, Deleted: true}
+		},
+	})
 }

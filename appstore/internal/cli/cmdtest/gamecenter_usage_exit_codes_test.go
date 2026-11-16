@@ -334,7 +334,7 @@ func TestGameCenterInputValidationReturnsUsageExitCode(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			assertUsageExitCode(t, test.args, test.wantErr)
+			assertUsageExitCodeWithDeps(t, test.args, test.wantErr)
 		})
 	}
 }
@@ -365,6 +365,20 @@ func assertUsageExitCode(t *testing.T, args []string, wantErr string) {
 	t.Helper()
 
 	stdout, stderr, runErr := runCommand(t, args)
+	assertUsageExitCodeResult(t, stdout, stderr, runErr, wantErr)
+}
+
+// assertUsageExitCodeWithDeps is assertUsageExitCode for a command built on
+// shared.Deps. It gives the command no client, so reaching one fails the test.
+func assertUsageExitCodeWithDeps(t *testing.T, args []string, wantErr string) {
+	t.Helper()
+
+	stdout, stderr, runErr := runRootWithDeps(t, nil, args...)
+	assertUsageExitCodeResult(t, stdout, stderr, runErr, wantErr)
+}
+
+func assertUsageExitCodeResult(t *testing.T, stdout, stderr string, runErr error, wantErr string) {
+	t.Helper()
 
 	if runErr == nil {
 		t.Fatal("expected error, got nil")
@@ -376,4 +390,22 @@ func assertUsageExitCode(t *testing.T, args []string, wantErr string) {
 		t.Fatalf("expected empty stdout, got %q", stdout)
 	}
 	assertUsageErrorStderr(t, stderr, wantErr)
+}
+
+type gameCenterUsageCase struct {
+	args    []string
+	wantErr string
+}
+
+// runGameCenterUsageCasesWithDeps runs each invalid invocation on test deps
+// and asserts the usage contract of assertUsageExitCode.
+func runGameCenterUsageCasesWithDeps(t *testing.T, cases []gameCenterUsageCase) {
+	t.Helper()
+
+	setupUsageExitCodeEnv(t)
+	for _, test := range cases {
+		t.Run(strings.Join(test.args[1:], " "), func(t *testing.T) {
+			assertUsageExitCodeWithDeps(t, test.args, test.wantErr)
+		})
+	}
 }

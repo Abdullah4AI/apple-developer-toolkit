@@ -157,34 +157,10 @@ func TestListEndpoints_UseNextURL(t *testing.T) {
 		call func(*Client, string) error
 	}{
 		{
-			name: "GetApps",
-			next: "https://api.appstoreconnect.apple.com/v1/apps?cursor=abc",
-			call: func(c *Client, next string) error {
-				_, err := c.GetApps(ctx, WithAppsLimit(5), WithAppsSort("name"), WithAppsNextURL(next))
-				return err
-			},
-		},
-		{
 			name: "GetAppInfos",
 			next: "https://api.appstoreconnect.apple.com/v1/apps/app-1/appInfos?cursor=abc",
 			call: func(c *Client, next string) error {
-				_, err := c.GetAppInfos(ctx, "app-1", WithAppInfosNextURL(next))
-				return err
-			},
-		},
-		{
-			name: "GetAppTags",
-			next: "https://api.appstoreconnect.apple.com/v1/apps/123/appTags?cursor=abc",
-			call: func(c *Client, next string) error {
-				_, err := c.GetAppTags(ctx, "123", WithAppTagsLimit(5), WithAppTagsNextURL(next))
-				return err
-			},
-		},
-		{
-			name: "GetAppTagTerritories",
-			next: "https://api.appstoreconnect.apple.com/v1/appTags/tag-1/territories?cursor=abc",
-			call: func(c *Client, next string) error {
-				_, err := c.GetAppTagTerritories(ctx, "tag-1", WithTerritoriesNextURL(next))
+				_, err := c.GetAppInfos(ctx, "app-1", NextURL[AppInfoOption](next))
 				return err
 			},
 		},
@@ -192,15 +168,7 @@ func TestListEndpoints_UseNextURL(t *testing.T) {
 			name: "GetSubscriptionOfferCodeOneTimeUseCodes",
 			next: "https://api.appstoreconnect.apple.com/v1/subscriptionOfferCodes/123/oneTimeUseCodes?cursor=abc",
 			call: func(c *Client, next string) error {
-				_, err := c.GetSubscriptionOfferCodeOneTimeUseCodes(ctx, "123", WithSubscriptionOfferCodeOneTimeUseCodesNextURL(next))
-				return err
-			},
-		},
-		{
-			name: "GetSubscriptionOfferCodeCustomCodes",
-			next: "https://api.appstoreconnect.apple.com/v1/subscriptionOfferCodes/123/customCodes?cursor=abc",
-			call: func(c *Client, next string) error {
-				_, err := c.GetSubscriptionOfferCodeCustomCodes(ctx, "123", WithSubscriptionOfferCodeCustomCodesNextURL(next))
+				_, err := c.GetSubscriptionOfferCodeOneTimeUseCodes(ctx, "123", NextURL[SubscriptionOfferCodeOneTimeUseCodesOption](next))
 				return err
 			},
 		},
@@ -208,7 +176,7 @@ func TestListEndpoints_UseNextURL(t *testing.T) {
 			name: "GetSubscriptionOfferCodePrices",
 			next: "https://api.appstoreconnect.apple.com/v1/subscriptionOfferCodes/123/prices?cursor=abc",
 			call: func(c *Client, next string) error {
-				_, err := c.GetSubscriptionOfferCodePrices(ctx, "123", WithSubscriptionOfferCodePricesNextURL(next))
+				_, err := c.GetSubscriptionOfferCodePrices(ctx, "123", NextURL[SubscriptionOfferCodePricesOption](next))
 				return err
 			},
 		},
@@ -216,7 +184,7 @@ func TestListEndpoints_UseNextURL(t *testing.T) {
 			name: "GetBuilds",
 			next: "https://api.appstoreconnect.apple.com/v1/builds?cursor=abc",
 			call: func(c *Client, next string) error {
-				_, err := c.GetBuilds(ctx, "123", WithBuildsLimit(5), WithBuildsSort("uploadedDate"), WithBuildsNextURL(next))
+				_, err := c.GetBuilds(ctx, "123", Limit[BuildsOption](5), WithBuildsSort("uploadedDate"), NextURL[BuildsOption](next))
 				return err
 			},
 		},
@@ -224,7 +192,7 @@ func TestListEndpoints_UseNextURL(t *testing.T) {
 			name: "GetAppStoreVersions",
 			next: "https://api.appstoreconnect.apple.com/v1/apps/123/appStoreVersions?cursor=abc",
 			call: func(c *Client, next string) error {
-				_, err := c.GetAppStoreVersions(ctx, "123", WithAppStoreVersionsNextURL(next))
+				_, err := c.GetAppStoreVersions(ctx, "123", NextURL[AppStoreVersionsOption](next))
 				return err
 			},
 		},
@@ -232,7 +200,7 @@ func TestListEndpoints_UseNextURL(t *testing.T) {
 			name: "GetPreReleaseVersions",
 			next: "https://api.appstoreconnect.apple.com/v1/preReleaseVersions?cursor=abc",
 			call: func(c *Client, next string) error {
-				_, err := c.GetPreReleaseVersions(ctx, "123", WithPreReleaseVersionsNextURL(next))
+				_, err := c.GetPreReleaseVersions(ctx, "123", NextURL[PreReleaseVersionsOption](next))
 				return err
 			},
 		},
@@ -240,7 +208,7 @@ func TestListEndpoints_UseNextURL(t *testing.T) {
 			name: "GetBetaGroups",
 			next: "https://api.appstoreconnect.apple.com/v1/apps/123/betaGroups?cursor=abc",
 			call: func(c *Client, next string) error {
-				_, err := c.GetBetaGroups(ctx, "123", WithBetaGroupsLimit(5), WithBetaGroupsNextURL(next))
+				_, err := c.GetBetaGroups(ctx, "123", Limit[BetaGroupsOption](5), NextURL[BetaGroupsOption](next))
 				return err
 			},
 		},
@@ -248,7 +216,7 @@ func TestListEndpoints_UseNextURL(t *testing.T) {
 			name: "GetBetaGroupBuilds",
 			next: "https://api.appstoreconnect.apple.com/v1/betaGroups/group-1/builds?cursor=abc",
 			call: func(c *Client, next string) error {
-				_, err := c.GetBetaGroupBuilds(ctx, "group-1", WithBetaGroupBuildsNextURL(next))
+				_, err := c.GetBetaGroupBuilds(ctx, "group-1", NextURL[BetaGroupBuildsOption](next))
 				return err
 			},
 		},
@@ -256,7 +224,7 @@ func TestListEndpoints_UseNextURL(t *testing.T) {
 			name: "GetBetaGroupTesters",
 			next: "https://api.appstoreconnect.apple.com/v1/betaGroups/group-1/betaTesters?cursor=abc",
 			call: func(c *Client, next string) error {
-				_, err := c.GetBetaGroupTesters(ctx, "group-1", WithBetaGroupTestersNextURL(next))
+				_, err := c.GetBetaGroupTesters(ctx, "group-1", NextURL[BetaGroupTestersOption](next))
 				return err
 			},
 		},
@@ -264,7 +232,7 @@ func TestListEndpoints_UseNextURL(t *testing.T) {
 			name: "GetBetaTesters",
 			next: "https://api.appstoreconnect.apple.com/v1/betaTesters?cursor=abc",
 			call: func(c *Client, next string) error {
-				_, err := c.GetBetaTesters(ctx, "123", WithBetaTestersLimit(5), WithBetaTestersNextURL(next))
+				_, err := c.GetBetaTesters(ctx, "123", Limit[BetaTestersOption](5), NextURL[BetaTestersOption](next))
 				return err
 			},
 		},
@@ -272,23 +240,7 @@ func TestListEndpoints_UseNextURL(t *testing.T) {
 			name: "GetCiWorkflows",
 			next: "https://api.appstoreconnect.apple.com/v1/ciProducts/prod-1/workflows?cursor=abc",
 			call: func(c *Client, next string) error {
-				_, err := c.GetCiWorkflows(ctx, "prod-1", WithCiWorkflowsNextURL(next))
-				return err
-			},
-		},
-		{
-			name: "GetScmProviders",
-			next: "https://api.appstoreconnect.apple.com/v1/scmProviders?cursor=abc",
-			call: func(c *Client, next string) error {
-				_, err := c.GetScmProviders(ctx, WithScmProvidersNextURL(next))
-				return err
-			},
-		},
-		{
-			name: "GetScmRepositories",
-			next: "https://api.appstoreconnect.apple.com/v1/scmRepositories?cursor=abc",
-			call: func(c *Client, next string) error {
-				_, err := c.GetScmRepositories(ctx, WithScmRepositoriesNextURL(next))
+				_, err := c.GetCiWorkflows(ctx, "prod-1", NextURL[CiWorkflowsOption](next))
 				return err
 			},
 		},
@@ -296,7 +248,7 @@ func TestListEndpoints_UseNextURL(t *testing.T) {
 			name: "GetBundleIDs",
 			next: "https://api.appstoreconnect.apple.com/v1/bundleIds?cursor=abc",
 			call: func(c *Client, next string) error {
-				_, err := c.GetBundleIDs(ctx, WithBundleIDsNextURL(next))
+				_, err := c.GetBundleIDs(ctx, NextURL[BundleIDsOption](next))
 				return err
 			},
 		},
@@ -304,47 +256,7 @@ func TestListEndpoints_UseNextURL(t *testing.T) {
 			name: "GetInAppPurchasesV2",
 			next: "https://api.appstoreconnect.apple.com/v1/apps/123/inAppPurchasesV2?cursor=abc",
 			call: func(c *Client, next string) error {
-				_, err := c.GetInAppPurchasesV2(ctx, "123", WithIAPNextURL(next))
-				return err
-			},
-		},
-		{
-			name: "GetInAppPurchases",
-			next: "https://api.appstoreconnect.apple.com/v1/apps/123/inAppPurchases?cursor=abc",
-			call: func(c *Client, next string) error {
-				_, err := c.GetInAppPurchases(ctx, "123", WithIAPNextURL(next))
-				return err
-			},
-		},
-		{
-			name: "GetCertificates",
-			next: "https://api.appstoreconnect.apple.com/v1/certificates?cursor=abc",
-			call: func(c *Client, next string) error {
-				_, err := c.GetCertificates(ctx, WithCertificatesNextURL(next))
-				return err
-			},
-		},
-		{
-			name: "GetProfiles",
-			next: "https://api.appstoreconnect.apple.com/v1/profiles?cursor=abc",
-			call: func(c *Client, next string) error {
-				_, err := c.GetProfiles(ctx, WithProfilesNextURL(next))
-				return err
-			},
-		},
-		{
-			name: "GetSubscriptionGroups",
-			next: "https://api.appstoreconnect.apple.com/v1/apps/app-1/subscriptionGroups?cursor=abc",
-			call: func(c *Client, next string) error {
-				_, err := c.GetSubscriptionGroups(ctx, "app-1", WithSubscriptionGroupsNextURL(next))
-				return err
-			},
-		},
-		{
-			name: "GetUsers",
-			next: "https://api.appstoreconnect.apple.com/v1/users?cursor=abc",
-			call: func(c *Client, next string) error {
-				_, err := c.GetUsers(ctx, WithUsersNextURL(next))
+				_, err := c.GetInAppPurchasesV2(ctx, "123", NextURL[IAPOption](next))
 				return err
 			},
 		},
@@ -352,47 +264,7 @@ func TestListEndpoints_UseNextURL(t *testing.T) {
 			name: "GetBetaAppReviewDetails",
 			next: "https://api.appstoreconnect.apple.com/v1/betaAppReviewDetails?cursor=abc",
 			call: func(c *Client, next string) error {
-				_, err := c.GetBetaAppReviewDetails(ctx, "app-1", WithBetaAppReviewDetailsNextURL(next))
-				return err
-			},
-		},
-		{
-			name: "GetDevices",
-			next: "https://api.appstoreconnect.apple.com/v1/devices?cursor=abc",
-			call: func(c *Client, next string) error {
-				_, err := c.GetDevices(ctx, WithDevicesNextURL(next))
-				return err
-			},
-		},
-		{
-			name: "GetSubscriptionWinBackOffers",
-			next: "https://api.appstoreconnect.apple.com/v1/subscriptions/sub-1/winBackOffers?cursor=abc",
-			call: func(c *Client, next string) error {
-				_, err := c.GetSubscriptionWinBackOffers(ctx, "sub-1", WithWinBackOffersNextURL(next))
-				return err
-			},
-		},
-		{
-			name: "ListBetaGroups",
-			next: "https://api.appstoreconnect.apple.com/v1/betaGroups?cursor=abc",
-			call: func(c *Client, next string) error {
-				_, err := c.ListBetaGroups(ctx, WithBetaGroupsNextURL(next))
-				return err
-			},
-		},
-		{
-			name: "ListBetaBuildLocalizations",
-			next: "https://api.appstoreconnect.apple.com/v1/betaBuildLocalizations?cursor=xyz",
-			call: func(c *Client, next string) error {
-				_, err := c.ListBetaBuildLocalizations(ctx, WithBetaBuildLocalizationsNextURL(next))
-				return err
-			},
-		},
-		{
-			name: "ListReviewSubmissions",
-			next: "https://api.appstoreconnect.apple.com/v1/reviewSubmissions?cursor=def",
-			call: func(c *Client, next string) error {
-				_, err := c.ListReviewSubmissions(ctx, WithReviewSubmissionsNextURL(next))
+				_, err := c.GetBetaAppReviewDetails(ctx, "app-1", NextURL[BetaAppReviewDetailsOption](next))
 				return err
 			},
 		},
@@ -401,11 +273,7 @@ func TestListEndpoints_UseNextURL(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			body := `{"data":[]}`
-			if tt.name == "ListReviewSubmissions" {
-				body = `{"data":[],"links":{"self":"https://api.appstoreconnect.apple.com/v1/reviewSubmissions"}}`
-			}
-			response := jsonResponse(http.StatusOK, body)
+			response := jsonResponse(http.StatusOK, `{"data":[]}`)
 			client := newTestClient(t, func(req *http.Request) {
 				if req.URL.String() != tt.next {
 					t.Fatalf("expected next URL %q, got %q", tt.next, req.URL.String())
@@ -418,6 +286,1233 @@ func TestListEndpoints_UseNextURL(t *testing.T) {
 			}
 		})
 	}
+}
+
+type endpointRequestCase struct {
+	name    string
+	path    string
+	query   map[string]string
+	noQuery bool
+	body    string
+	call    func(*Client) error
+}
+
+func runEndpointRequestCases(t *testing.T, method string, status int, tests []endpointRequestCase) {
+	t.Helper()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := newTestClient(t, func(req *http.Request) {
+				if req.Method != method {
+					t.Errorf("expected %s, got %s", method, req.Method)
+				}
+				if req.URL.Path != tt.path {
+					t.Errorf("expected path %s, got %s", tt.path, req.URL.Path)
+				}
+				values := req.URL.Query()
+				for key, want := range tt.query {
+					if got := values.Get(key); got != want {
+						t.Errorf("expected %s=%q, got %q", key, want, got)
+					}
+				}
+				if tt.noQuery && req.URL.RawQuery != "" {
+					t.Errorf("expected empty query string, got %q", req.URL.RawQuery)
+				}
+				assertAuthorized(t, req)
+			}, jsonResponse(status, tt.body))
+
+			if err := tt.call(client); err != nil {
+				t.Fatalf("request error: %v", err)
+			}
+		})
+	}
+}
+
+func discardResult[T any](_ T, err error) error {
+	return err
+}
+
+func TestListEndpoints_SendRequest(t *testing.T) {
+	ctx := context.Background()
+	runEndpointRequestCases(t, http.MethodGet, http.StatusOK, []endpointRequestCase{
+		{
+			name:  "GetApps_WithSortAndLimit",
+			path:  "/v1/apps",
+			query: map[string]string{"sort": "-name", "limit": "10"},
+			body:  `{"data":[{"type":"apps","id":"1","attributes":{"name":"Demo","bundleId":"com.example.demo","sku":"SKU1"}}]}`,
+			call: func(c *Client) error {
+				return discardResult(c.GetApps(ctx, Limit[AppsOption](10), WithAppsSort("-name")))
+			},
+		},
+		{
+			name: "GetApps_WithFilters",
+			path: "/v1/apps",
+			query: map[string]string{
+				"filter[bundleId]": "com.example.demo,com.example.other",
+				"filter[name]":     "Demo App",
+				"filter[sku]":      "SKU1,SKU2",
+			},
+			body: `{"data":[{"type":"apps","id":"1","attributes":{"name":"Demo","bundleId":"com.example.demo","sku":"SKU1"}}]}`,
+			call: func(c *Client) error {
+				return discardResult(c.GetApps(
+					ctx,
+					WithAppsBundleIDs([]string{"com.example.demo", "com.example.other"}),
+					WithAppsNames([]string{"Demo App"}),
+					WithAppsSKUs([]string{"SKU1", "SKU2"}),
+				))
+			},
+		},
+		{
+			name: "GetAppTags_WithFiltersAndSort",
+			path: "/v1/apps/123/appTags",
+			query: map[string]string{
+				"filter[visibleInAppStore]": "true",
+				"sort":                      "name",
+				"limit":                     "5",
+				"fields[appTags]":           "name,visibleInAppStore",
+				"include":                   "territories",
+				"fields[territories]":       "currency",
+				"limit[territories]":        "25",
+			},
+			body: `{"data":[{"type":"appTags","id":"tag-1","attributes":{"name":"Games","visibleInAppStore":true}}]}`,
+			call: func(c *Client) error {
+				return discardResult(c.GetAppTags(
+					ctx,
+					"123",
+					WithAppTagsVisibleInAppStore([]string{"true"}),
+					WithAppTagsSort("name"),
+					Limit[AppTagsOption](5),
+					WithAppTagsFields([]string{"name", "visibleInAppStore"}),
+					WithAppTagsInclude([]string{"territories"}),
+					WithAppTagsTerritoryFields([]string{"currency"}),
+					WithAppTagsTerritoryLimit(25),
+				))
+			},
+		},
+		{
+			name:  "GetAppTagTerritories_WithFieldsAndLimit",
+			path:  "/v1/appTags/tag-1/territories",
+			query: map[string]string{"fields[territories]": "currency", "limit": "5"},
+			body:  `{"data":[{"type":"territories","id":"USA","attributes":{"currency":"USD"}}]}`,
+			call: func(c *Client) error {
+				return discardResult(c.GetAppTagTerritories(
+					ctx,
+					"tag-1",
+					WithTerritoriesFields([]string{"currency"}),
+					Limit[TerritoriesOption](5),
+				))
+			},
+		},
+		{
+			name:  "GetAppTagTerritoriesRelationships_WithLimit",
+			path:  "/v1/appTags/tag-1/relationships/territories",
+			query: map[string]string{"limit": "5"},
+			body:  `{"data":[{"type":"territories","id":"USA"}]}`,
+			call: func(c *Client) error {
+				return discardResult(c.GetAppTagTerritoriesRelationships(ctx, "tag-1", Limit[LinkagesOption](5)))
+			},
+		},
+		{
+			name:  "GetAppTagsRelationshipsForApp_WithLimit",
+			path:  "/v1/apps/app-1/relationships/appTags",
+			query: map[string]string{"limit": "5"},
+			body:  `{"data":[{"type":"appTags","id":"tag-1"}]}`,
+			call: func(c *Client) error {
+				return discardResult(c.GetAppTagsRelationshipsForApp(ctx, "app-1", Limit[LinkagesOption](5)))
+			},
+		},
+		{
+			name:  "GetSubscriptionOfferCodeOneTimeUseCodes_WithLimit",
+			path:  "/v1/subscriptionOfferCodes/123/oneTimeUseCodes",
+			query: map[string]string{"limit": "5"},
+			body:  `{"data":[{"type":"subscriptionOfferCodeOneTimeUseCodes","id":"1","attributes":{"numberOfCodes":5}}]}`,
+			call: func(c *Client) error {
+				return discardResult(c.GetSubscriptionOfferCodeOneTimeUseCodes(ctx, "123", Limit[SubscriptionOfferCodeOneTimeUseCodesOption](5)))
+			},
+		},
+		{
+			name:  "GetBuilds_WithSortAndLimit",
+			path:  "/v1/builds",
+			query: map[string]string{"filter[app]": "123", "sort": "-uploadedDate", "limit": "5"},
+			body:  `{"data":[{"type":"builds","id":"1","attributes":{"version":"1.0","uploadedDate":"2026-01-20T00:00:00Z"}}]}`,
+			call: func(c *Client) error {
+				return discardResult(c.GetBuilds(ctx, "123", Limit[BuildsOption](5), WithBuildsSort("-uploadedDate")))
+			},
+		},
+		{
+			name: "GetAppStoreVersions_WithFilters",
+			path: "/v1/apps/123/appStoreVersions",
+			query: map[string]string{
+				"filter[platform]":        "IOS",
+				"filter[versionString]":   "1.0.0",
+				"filter[appStoreState]":   "READY_FOR_REVIEW",
+				"filter[appVersionState]": "READY_FOR_DISTRIBUTION",
+				"limit":                   "5",
+			},
+			body: `{"data":[{"type":"appStoreVersions","id":"1","attributes":{"versionString":"1.0.0","platform":"IOS"}}]}`,
+			call: func(c *Client) error {
+				return discardResult(c.GetAppStoreVersions(
+					ctx,
+					"123",
+					Limit[AppStoreVersionsOption](5),
+					WithAppStoreVersionsPlatforms([]string{"IOS"}),
+					WithAppStoreVersionsVersionStrings([]string{"1.0.0"}),
+					WithAppStoreVersionsStates([]string{"READY_FOR_REVIEW"}),
+					WithAppStoreVersionsVersionStates([]string{"READY_FOR_DISTRIBUTION"}),
+				))
+			},
+		},
+		{
+			name:  "GetBetaGroups_WithLimit",
+			path:  "/v1/apps/123/betaGroups",
+			query: map[string]string{"limit": "10"},
+			body:  `{"data":[{"type":"betaGroups","id":"1","attributes":{"name":"Beta"}}]}`,
+			call:  func(c *Client) error { return discardResult(c.GetBetaGroups(ctx, "123", Limit[BetaGroupsOption](10))) },
+		},
+		{
+			name:  "GetBetaGroupBuilds_WithLimit",
+			path:  "/v1/betaGroups/group-1/builds",
+			query: map[string]string{"limit": "50"},
+			body:  `{"data":[{"type":"builds","id":"build-1","attributes":{"version":"1.0","uploadedDate":"2026-01-20T00:00:00Z"}}]}`,
+			call: func(c *Client) error {
+				return discardResult(c.GetBetaGroupBuilds(ctx, "group-1", Limit[BetaGroupBuildsOption](50)))
+			},
+		},
+		{
+			name:  "GetBetaGroupTesters_WithLimit",
+			path:  "/v1/betaGroups/group-1/betaTesters",
+			query: map[string]string{"limit": "20"},
+			body:  `{"data":[{"type":"betaTesters","id":"tester-1","attributes":{"email":"tester@example.com"}}]}`,
+			call: func(c *Client) error {
+				return discardResult(c.GetBetaGroupTesters(ctx, "group-1", Limit[BetaGroupTestersOption](20)))
+			},
+		},
+		{
+			name: "GetBetaTesters_WithAppFilter",
+			path: "/v1/betaTesters",
+			query: map[string]string{
+				"filter[apps]":       "123",
+				"filter[email]":      "tester@example.com",
+				"filter[betaGroups]": "",
+				"limit":              "5",
+			},
+			body: `{"data":[{"type":"betaTesters","id":"1","attributes":{"email":"tester@example.com"}}]}`,
+			call: func(c *Client) error {
+				return discardResult(c.GetBetaTesters(
+					ctx,
+					"123",
+					WithBetaTestersEmail("tester@example.com"),
+					Limit[BetaTestersOption](5),
+				))
+			},
+		},
+		{
+			name: "GetBetaTesters_WithNameAndIDFilters",
+			path: "/v1/betaTesters",
+			query: map[string]string{
+				"filter[apps]":      "123",
+				"filter[firstName]": "Ada",
+				"filter[lastName]":  "Lovelace",
+				"filter[id]":        "tester-1,tester-2",
+				"filter[email]":     "",
+			},
+			body: `{"data":[{"type":"betaTesters","id":"1","attributes":{"firstName":"Ada","lastName":"Lovelace"}}]}`,
+			call: func(c *Client) error {
+				return discardResult(c.GetBetaTesters(
+					ctx,
+					"123",
+					WithBetaTestersFirstName(" Ada "),
+					WithBetaTestersLastName(" Lovelace "),
+					WithBetaTestersIDs([]string{"tester-1", "tester-2"}),
+				))
+			},
+		},
+		{
+			name: "GetBetaTesters_WithBuildFilter",
+			path: "/v1/betaTesters",
+			query: map[string]string{
+				"filter[apps]":   "",
+				"filter[builds]": "build-1",
+				"filter[email]":  "tester@example.com",
+			},
+			body: `{"data":[{"type":"betaTesters","id":"1","attributes":{"email":"tester@example.com"}}]}`,
+			call: func(c *Client) error {
+				return discardResult(c.GetBetaTesters(
+					ctx,
+					"123",
+					WithBetaTestersEmail("tester@example.com"),
+					WithBetaTestersBuildID("build-1"),
+				))
+			},
+		},
+		{
+			name:  "GetAppStoreVersionLocalizations_WithFilters",
+			path:  "/v1/appStoreVersions/version-1/appStoreVersionLocalizations",
+			query: map[string]string{"filter[locale]": "en-US", "limit": "10"},
+			body:  `{"data":[{"type":"appStoreVersionLocalizations","id":"loc-1","attributes":{"locale":"en-US"}}]}`,
+			call: func(c *Client) error {
+				return discardResult(c.GetAppStoreVersionLocalizations(
+					ctx,
+					"version-1",
+					WithAppStoreVersionLocalizationLocales([]string{"en-US"}),
+					Limit[AppStoreVersionLocalizationsOption](10),
+				))
+			},
+		},
+		{
+			name:  "GetBetaBuildLocalizations_WithFilters",
+			path:  "/v1/builds/build-1/betaBuildLocalizations",
+			query: map[string]string{"filter[locale]": "en-US", "limit": "5"},
+			body:  `{"data":[{"type":"betaBuildLocalizations","id":"loc-1","attributes":{"locale":"en-US"}}]}`,
+			call: func(c *Client) error {
+				return discardResult(c.GetBetaBuildLocalizations(
+					ctx,
+					"build-1",
+					WithBetaBuildLocalizationLocales([]string{"en-US"}),
+					Limit[BetaBuildLocalizationsOption](5),
+				))
+			},
+		},
+		{
+			name:  "GetBetaAppLocalizations_WithFilters",
+			path:  "/v1/betaAppLocalizations",
+			query: map[string]string{"filter[app]": "app-1", "filter[locale]": "en-US", "limit": "5"},
+			body:  `{"data":[{"type":"betaAppLocalizations","id":"loc-1","attributes":{"locale":"en-US"}}]}`,
+			call: func(c *Client) error {
+				return discardResult(c.GetBetaAppLocalizations(
+					ctx,
+					WithBetaAppLocalizationAppIDs([]string{"app-1"}),
+					WithBetaAppLocalizationLocales([]string{"en-US"}),
+					Limit[BetaAppLocalizationsOption](5),
+				))
+			},
+		},
+		{
+			name:  "GetAppInfoLocalizations_WithFilters",
+			path:  "/v1/appInfos/app-info-1/appInfoLocalizations",
+			query: map[string]string{"filter[locale]": "en-US", "limit": "5"},
+			body:  `{"data":[{"type":"appInfoLocalizations","id":"loc-1","attributes":{"locale":"en-US"}}]}`,
+			call: func(c *Client) error {
+				return discardResult(c.GetAppInfoLocalizations(
+					ctx,
+					"app-info-1",
+					WithAppInfoLocalizationLocales([]string{"en-US"}),
+					Limit[AppInfoLocalizationsOption](5),
+				))
+			},
+		},
+		{
+			name: "GetAppInfos_WithCompoundReadOptions",
+			path: "/v1/apps/app-1/appInfos",
+			query: map[string]string{
+				"include":                     "app,ageRatingDeclaration,appInfoLocalizations,primaryCategory",
+				"limit[appInfoLocalizations]": "50",
+			},
+			body: `{"data":[{"type":"appInfos","id":"info-1"}],"included":[]}`,
+			call: func(c *Client) error {
+				return discardResult(c.GetAppInfos(
+					ctx,
+					"app-1",
+					WithAppInfoInclude([]string{"app", "ageRatingDeclaration", "appInfoLocalizations", "primaryCategory"}),
+					WithAppInfoLocalizationsIncludeLimit(50),
+				))
+			},
+		},
+		{
+			name: "GetBuildUploads_WithFilters",
+			path: "/v1/apps/app-1/buildUploads",
+			query: map[string]string{
+				"filter[cfBundleShortVersionString]": "1.0.0,1.0.1",
+				"filter[cfBundleVersion]":            "100",
+				"filter[platform]":                   "IOS,MAC_OS",
+				"filter[state]":                      "UPLOADED,FAILED",
+				"sort":                               "uploadedDate",
+				"limit":                              "5",
+			},
+			body: `{"data":[{"type":"buildUploads","id":"UPLOAD_123","attributes":{"cfBundleShortVersionString":"1.0.0"}}]}`,
+			call: func(c *Client) error {
+				return discardResult(c.GetBuildUploads(
+					ctx,
+					"app-1",
+					WithBuildUploadsCFBundleShortVersionStrings([]string{"1.0.0", "1.0.1"}),
+					WithBuildUploadsCFBundleVersions([]string{"100"}),
+					WithBuildUploadsPlatforms([]string{"ios", "mac_os"}),
+					WithBuildUploadsStates([]string{"uploaded", "failed"}),
+					WithBuildUploadsSort("uploadedDate"),
+					Limit[BuildUploadsOption](5),
+				))
+			},
+		},
+		{
+			name:  "GetCiProducts_WithAppFilterAndLimit",
+			path:  "/v1/ciProducts",
+			query: map[string]string{"filter[app]": "app-1", "limit": "25"},
+			body:  `{"data":[{"type":"ciProducts","id":"prod-1"}]}`,
+			call: func(c *Client) error {
+				return discardResult(c.GetCiProducts(ctx, WithCiProductsAppID("app-1"), Limit[CiProductsOption](25)))
+			},
+		},
+		{
+			name:  "GetCiProductBuildRuns_WithLimit",
+			path:  "/v1/ciProducts/prod-1/buildRuns",
+			query: map[string]string{"limit": "50"},
+			body:  `{"data":[{"type":"ciBuildRuns","id":"run-1"}]}`,
+			call: func(c *Client) error {
+				return discardResult(c.GetCiProductBuildRuns(ctx, "prod-1", Limit[CiBuildRunsOption](50)))
+			},
+		},
+		{
+			name:  "GetCiProductPrimaryRepositories_WithLimit",
+			path:  "/v1/ciProducts/prod-1/primaryRepositories",
+			query: map[string]string{"limit": "10"},
+			body:  `{"data":[{"type":"scmRepositories","id":"repo-1"}]}`,
+			call: func(c *Client) error {
+				return discardResult(c.GetCiProductPrimaryRepositories(ctx, "prod-1", Limit[CiProductRepositoriesOption](10)))
+			},
+		},
+		{
+			name:  "GetCiProductAdditionalRepositories_WithLimit",
+			path:  "/v1/ciProducts/prod-1/additionalRepositories",
+			query: map[string]string{"limit": "5"},
+			body:  `{"data":[{"type":"scmRepositories","id":"repo-2"}]}`,
+			call: func(c *Client) error {
+				return discardResult(c.GetCiProductAdditionalRepositories(ctx, "prod-1", Limit[CiProductRepositoriesOption](5)))
+			},
+		},
+		{
+			name:  "GetScmRepositoryGitReferencesRelationships_WithLimit",
+			path:  "/v1/scmRepositories/repo-1/relationships/gitReferences",
+			query: map[string]string{"limit": "5"},
+			body:  `{"data":[]}`,
+			call: func(c *Client) error {
+				return discardResult(c.GetScmRepositoryGitReferencesRelationships(ctx, "repo-1", Limit[LinkagesOption](5)))
+			},
+		},
+		{
+			name:  "GetScmRepositoryPullRequestsRelationships_WithLimit",
+			path:  "/v1/scmRepositories/repo-1/relationships/pullRequests",
+			query: map[string]string{"limit": "20"},
+			body:  `{"data":[]}`,
+			call: func(c *Client) error {
+				return discardResult(c.GetScmRepositoryPullRequestsRelationships(ctx, "repo-1", Limit[LinkagesOption](20)))
+			},
+		},
+		{
+			name:  "GetScmGitReferences_WithLimit",
+			path:  "/v1/scmRepositories/repo-1/gitReferences",
+			query: map[string]string{"limit": "100"},
+			body:  `{"data":[{"type":"scmGitReferences","id":"ref-1"}]}`,
+			call: func(c *Client) error {
+				return discardResult(c.GetScmGitReferences(ctx, "  repo-1  ", Limit[ScmGitReferencesOption](100)))
+			},
+		},
+		{
+			name:  "GetCiBuildRuns_WithLimit",
+			path:  "/v1/ciWorkflows/wf-1/buildRuns",
+			query: map[string]string{"limit": "50"},
+			body:  `{"data":[{"type":"ciBuildRuns","id":"run-1","attributes":{"number":1}}]}`,
+			call: func(c *Client) error {
+				return discardResult(c.GetCiBuildRuns(ctx, "wf-1", Limit[CiBuildRunsOption](50)))
+			},
+		},
+		{
+			name:  "GetCiBuildRuns_WithSort",
+			path:  "/v1/ciWorkflows/wf-1/buildRuns",
+			query: map[string]string{"sort": "-number"},
+			body:  `{"data":[{"type":"ciBuildRuns","id":"run-1","attributes":{"number":1}}]}`,
+			call: func(c *Client) error {
+				return discardResult(c.GetCiBuildRuns(ctx, "wf-1", WithCiBuildRunsSort("-number")))
+			},
+		},
+		{
+			name:  "GetCiBuildRunBuilds_WithLimit",
+			path:  "/v1/ciBuildRuns/run-1/builds",
+			query: map[string]string{"limit": "10"},
+			body:  `{"data":[{"type":"builds","id":"build-1"}]}`,
+			call: func(c *Client) error {
+				return discardResult(c.GetCiBuildRunBuilds(ctx, "run-1", Limit[CiBuildRunBuildsOption](10)))
+			},
+		},
+		{
+			name:  "GetCiBuildActionArtifacts_WithLimit",
+			path:  "/v1/ciBuildActions/action-1/artifacts",
+			query: map[string]string{"limit": "20"},
+			body:  `{"data":[{"type":"ciArtifacts","id":"art-1"}]}`,
+			call: func(c *Client) error {
+				return discardResult(c.GetCiBuildActionArtifacts(ctx, "action-1", Limit[CiArtifactsOption](20)))
+			},
+		},
+		{
+			name:  "GetCiBuildActionTestResults_WithLimit",
+			path:  "/v1/ciBuildActions/action-1/testResults",
+			query: map[string]string{"limit": "30"},
+			body:  `{"data":[{"type":"ciTestResults","id":"test-1"}]}`,
+			call: func(c *Client) error {
+				return discardResult(c.GetCiBuildActionTestResults(ctx, "action-1", Limit[CiTestResultsOption](30)))
+			},
+		},
+		{
+			name:  "GetCiBuildActionIssues_WithLimit",
+			path:  "/v1/ciBuildActions/action-1/issues",
+			query: map[string]string{"limit": "40"},
+			body:  `{"data":[{"type":"ciIssues","id":"issue-1"}]}`,
+			call: func(c *Client) error {
+				return discardResult(c.GetCiBuildActionIssues(ctx, "action-1", Limit[CiIssuesOption](40)))
+			},
+		},
+		{
+			name:  "GetCiMacOsVersionXcodeVersions_WithLimit",
+			path:  "/v1/ciMacOsVersions/macos-1/xcodeVersions",
+			query: map[string]string{"limit": "20"},
+			body:  `{"data":[{"type":"ciXcodeVersions","id":"xcode-1"}]}`,
+			call: func(c *Client) error {
+				return discardResult(c.GetCiMacOsVersionXcodeVersions(ctx, "macos-1", Limit[CiXcodeVersionsOption](20)))
+			},
+		},
+		{
+			name:  "GetCiXcodeVersionMacOsVersions_WithLimit",
+			path:  "/v1/ciXcodeVersions/xcode-1/macOsVersions",
+			query: map[string]string{"limit": "15"},
+			body:  `{"data":[{"type":"ciMacOsVersions","id":"macos-1"}]}`,
+			call: func(c *Client) error {
+				return discardResult(c.GetCiXcodeVersionMacOsVersions(ctx, "xcode-1", Limit[CiMacOsVersionsOption](15)))
+			},
+		},
+		{
+			name:  "GetBundleIDs_WithIdentifierFilter",
+			path:  "/v1/bundleIds",
+			query: map[string]string{"filter[identifier]": "com.example.app"},
+			body:  `{"data":[{"type":"bundleIds","id":"bid-1","attributes":{"identifier":"com.example.app"}}]}`,
+			call: func(c *Client) error {
+				return discardResult(c.GetBundleIDs(ctx, WithBundleIDsFilterIdentifier("com.example.app")))
+			},
+		},
+		{
+			name:  "GetInAppPurchasesV2_WithLimit",
+			path:  "/v1/apps/123/inAppPurchasesV2",
+			query: map[string]string{"limit": "10"},
+			body:  `{"data":[{"type":"inAppPurchases","id":"iap-1","attributes":{"name":"Pro","productId":"com.example.pro","inAppPurchaseType":"CONSUMABLE"}}]}`,
+			call:  func(c *Client) error { return discardResult(c.GetInAppPurchasesV2(ctx, "123", Limit[IAPOption](10))) },
+		},
+		{
+			name:  "GetInAppPurchasesV2_WithProductIDAndNameFilters",
+			path:  "/v1/apps/123/inAppPurchasesV2",
+			query: map[string]string{"filter[productId]": "com.example.pro", "filter[name]": "Pro"},
+			body:  `{"data":[{"type":"inAppPurchases","id":"iap-1","attributes":{"name":"Pro","productId":"com.example.pro","inAppPurchaseType":"CONSUMABLE"}}]}`,
+			call: func(c *Client) error {
+				return discardResult(c.GetInAppPurchasesV2(
+					ctx,
+					"123",
+					WithIAPProductIDs([]string{"com.example.pro"}),
+					WithIAPNames([]string{"Pro"}),
+				))
+			},
+		},
+		{
+			name:  "GetInAppPurchasesV2_WithNextURLIgnoresLocalFilters",
+			path:  "/v1/apps/123/inAppPurchasesV2",
+			query: map[string]string{"cursor": "abc", "filter[productId]": "", "filter[name]": ""},
+			body:  `{"data":[]}`,
+			call: func(c *Client) error {
+				return discardResult(c.GetInAppPurchasesV2(
+					ctx,
+					"123",
+					WithIAPProductIDs([]string{"com.example.pro"}),
+					WithIAPNames([]string{"Pro"}),
+					NextURL[IAPOption]("https://api.appstoreconnect.apple.com/v1/apps/123/inAppPurchasesV2?cursor=abc"),
+				))
+			},
+		},
+		{
+			name:  "GetBundleIDs_WithLimit",
+			path:  "/v1/bundleIds",
+			query: map[string]string{"limit": "10"},
+			body:  `{"data":[{"type":"bundleIds","id":"b1","attributes":{"name":"Demo","identifier":"com.example.demo","platform":"IOS"}}]}`,
+			call:  func(c *Client) error { return discardResult(c.GetBundleIDs(ctx, Limit[BundleIDsOption](10))) },
+		},
+		{
+			name: "GetMerchantIDs_WithFilters",
+			path: "/v1/merchantIds",
+			query: map[string]string{
+				"filter[name]":         "Example",
+				"filter[identifier]":   "merchant.com.example",
+				"sort":                 "name",
+				"fields[merchantIds]":  "name,identifier",
+				"fields[certificates]": "certificateType,serialNumber",
+				"include":              "certificates",
+				"limit[certificates]":  "10",
+				"limit":                "5",
+			},
+			body: `{"data":[{"type":"merchantIds","id":"m1","attributes":{"name":"Example","identifier":"merchant.com.example"}}]}`,
+			call: func(c *Client) error {
+				return discardResult(c.GetMerchantIDs(
+					ctx,
+					WithMerchantIDsFilterName("Example"),
+					WithMerchantIDsFilterIdentifier("merchant.com.example"),
+					WithMerchantIDsSort("name"),
+					WithMerchantIDsFields([]string{"name", "identifier"}),
+					WithMerchantIDsCertificateFields([]string{"certificateType", "serialNumber"}),
+					WithMerchantIDsInclude([]string{"certificates"}),
+					WithMerchantIDsCertificatesLimit(10),
+					Limit[MerchantIDsOption](5),
+				))
+			},
+		},
+		{
+			name: "GetMerchantIDCertificates_WithLimit",
+			path: "/v1/merchantIds/m1/certificates",
+			query: map[string]string{
+				"filter[displayName]":     "Cert Name",
+				"filter[certificateType]": "PASS_TYPE_ID",
+				"filter[serialNumber]":    "SN123",
+				"filter[id]":              "c1",
+				"sort":                    "serialNumber",
+				"fields[certificates]":    "serialNumber",
+				"fields[passTypeIds]":     "identifier",
+				"include":                 "passTypeId",
+				"limit":                   "5",
+			},
+			body: `{"data":[{"type":"certificates","id":"c1","attributes":{"name":"Cert","certificateType":"APPLE_PAY"}}]}`,
+			call: func(c *Client) error {
+				return discardResult(c.GetMerchantIDCertificates(
+					ctx,
+					"m1",
+					WithMerchantIDCertificatesFilterDisplayName("Cert Name"),
+					WithMerchantIDCertificatesFilterCertificateTypes("PASS_TYPE_ID"),
+					WithMerchantIDCertificatesFilterSerialNumbers("SN123"),
+					WithMerchantIDCertificatesFilterIDs("c1"),
+					WithMerchantIDCertificatesSort("serialNumber"),
+					WithMerchantIDCertificatesFields([]string{"serialNumber"}),
+					WithMerchantIDCertificatesPassTypeFields([]string{"identifier"}),
+					WithMerchantIDCertificatesInclude([]string{"passTypeId"}),
+					Limit[MerchantIDCertificatesOption](5),
+				))
+			},
+		},
+		{
+			name:  "GetMerchantIDCertificatesRelationships_WithLimit",
+			path:  "/v1/merchantIds/m1/relationships/certificates",
+			query: map[string]string{"limit": "5"},
+			body:  `{"data":[{"type":"certificates","id":"c1"}]}`,
+			call: func(c *Client) error {
+				return discardResult(c.GetMerchantIDCertificatesRelationships(ctx, "m1", Limit[LinkagesOption](5)))
+			},
+		},
+		{
+			name: "GetBundleIDCapabilities_SendsRequest",
+			path: "/v1/bundleIds/b1/bundleIdCapabilities",
+			body: `{"data":[{"type":"bundleIdCapabilities","id":"cap1","attributes":{"capabilityType":"ICLOUD"}}]}`,
+			call: func(c *Client) error { return discardResult(c.GetBundleIDCapabilities(ctx, "b1")) },
+		},
+		{
+			name:  "GetDevices_WithFilter",
+			path:  "/v1/devices",
+			query: map[string]string{"filter[platform]": "IOS,MAC_OS"},
+			body:  `{"data":[{"type":"devices","id":"d1","attributes":{"name":"Device","udid":"UDID","platform":"IOS","status":"ENABLED"}}]}`,
+			call: func(c *Client) error {
+				return discardResult(c.GetDevices(ctx, WithDevicesPlatforms([]string{"IOS", "MAC_OS"})))
+			},
+		},
+		{
+			name: "GetProfiles_WithFilter",
+			path: "/v1/profiles",
+			query: map[string]string{
+				"filter[profileType]":  "IOS_APP_DEVELOPMENT,IOS_APP_STORE",
+				"filter[profileState]": "ACTIVE,INVALID",
+				"limit":                "5",
+			},
+			body: `{"data":[{"type":"profiles","id":"p1","attributes":{"name":"Profile","profileType":"IOS_APP_DEVELOPMENT"}}]}`,
+			call: func(c *Client) error {
+				return discardResult(c.GetProfiles(
+					ctx,
+					WithProfilesTypes([]string{"IOS_APP_DEVELOPMENT", "IOS_APP_STORE"}),
+					WithProfilesStates([]string{"ACTIVE", "INVALID"}),
+					Limit[ProfilesOption](5),
+				))
+			},
+		},
+		{
+			name:  "GetSubscriptions_WithProductIDAndNameFilters",
+			path:  "/v1/subscriptionGroups/group-1/subscriptions",
+			query: map[string]string{"filter[productId]": "com.example.sub.monthly", "filter[name]": "Monthly"},
+			body:  `{"data":[{"type":"subscriptions","id":"sub-1","attributes":{"name":"Monthly","productId":"com.example.sub.monthly"}}]}`,
+			call: func(c *Client) error {
+				return discardResult(c.GetSubscriptions(
+					ctx,
+					"group-1",
+					WithSubscriptionsProductIDs([]string{"com.example.sub.monthly"}),
+					WithSubscriptionsNames([]string{"Monthly"}),
+				))
+			},
+		},
+		{
+			name:  "GetSubscriptions_WithNextURLIgnoresLocalFilters",
+			path:  "/v1/subscriptionGroups/group-1/subscriptions",
+			query: map[string]string{"cursor": "abc", "filter[productId]": "", "filter[name]": ""},
+			body:  `{"data":[]}`,
+			call: func(c *Client) error {
+				return discardResult(c.GetSubscriptions(
+					ctx,
+					"group-1",
+					WithSubscriptionsProductIDs([]string{"com.example.sub.monthly"}),
+					WithSubscriptionsNames([]string{"Monthly"}),
+					NextURL[SubscriptionsOption]("https://api.appstoreconnect.apple.com/v1/subscriptionGroups/group-1/subscriptions?cursor=abc"),
+				))
+			},
+		},
+		{
+			name: "GetUsers_WithFiltersAndLimit",
+			path: "/v1/users",
+			query: map[string]string{
+				"filter[username]": "user@example.com",
+				"filter[roles]":    "DEVELOPER,APP_MANAGER",
+				"limit":            "5",
+			},
+			body: `{"data":[{"type":"users","id":"user-1","attributes":{"username":"user@example.com","firstName":"Jane","lastName":"Doe","roles":["ADMIN"],"allAppsVisible":true,"provisioningAllowed":false}}]}`,
+			call: func(c *Client) error {
+				return discardResult(c.GetUsers(
+					ctx,
+					WithUsersEmail("user@example.com"),
+					WithUsersRoles([]string{"developer", " app_manager "}),
+					Limit[UsersOption](5),
+				))
+			},
+		},
+		{
+			name: "GetUserVisibleApps_SendsRequest",
+			path: "/v1/users/user-1/visibleApps",
+			body: `{"data":[{"type":"apps","id":"app-1","attributes":{"name":"Demo","bundleId":"com.example.demo","sku":"SKU1"}}]}`,
+			call: func(c *Client) error { return discardResult(c.GetUserVisibleApps(ctx, "user-1")) },
+		},
+		{
+			name:  "GetUserVisibleAppsRelationships_SendsRequest",
+			path:  "/v1/users/user-1/relationships/visibleApps",
+			query: map[string]string{"limit": "7"},
+			body:  `{"data":[{"type":"apps","id":"app-1"}]}`,
+			call: func(c *Client) error {
+				return discardResult(c.GetUserVisibleAppsRelationships(ctx, "user-1", Limit[LinkagesOption](7)))
+			},
+		},
+		{
+			name:  "GetBetaAppReviewDetails_WithAppFilter",
+			path:  "/v1/betaAppReviewDetails",
+			query: map[string]string{"filter[app]": "app-1", "limit": "10"},
+			body:  `{"data":[{"type":"betaAppReviewDetails","id":"detail-1","attributes":{"contactEmail":"dev@example.com"}}]}`,
+			call: func(c *Client) error {
+				return discardResult(c.GetBetaAppReviewDetails(ctx, "app-1", Limit[BetaAppReviewDetailsOption](10)))
+			},
+		},
+		{
+			name: "GetDevices_WithFilters",
+			path: "/v1/devices",
+			query: map[string]string{
+				"filter[udid]":     "UDID1,UDID2",
+				"filter[platform]": "IOS",
+				"filter[status]":   "ENABLED",
+			},
+			body: `{"data":[{"type":"devices","id":"device-1","attributes":{"udid":"UDID1","platform":"IOS","status":"ENABLED"}}]}`,
+			call: func(c *Client) error {
+				return discardResult(c.GetDevices(
+					ctx,
+					WithDevicesUDIDs([]string{"UDID1", "UDID2"}),
+					WithDevicesPlatforms([]string{"ios"}),
+					WithDevicesFilterStatuses([]string{"enabled"}),
+				))
+			},
+		},
+		{
+			name: "GetDevices_WithFiltersAndLimit",
+			path: "/v1/devices",
+			query: map[string]string{
+				"filter[name]":     "My iPhone",
+				"filter[platform]": "IOS",
+				"filter[status]":   "ENABLED",
+				"filter[udid]":     "UDID-1,UDID-2",
+				"filter[id]":       "device-1",
+				"sort":             "-name",
+				"fields[devices]":  "name,udid",
+				"limit":            "5",
+			},
+			body: `{"data":[{"type":"devices","id":"device-1","attributes":{"name":"My iPhone","platform":"IOS","udid":"UDID-1","status":"ENABLED"}}]}`,
+			call: func(c *Client) error {
+				return discardResult(c.GetDevices(
+					ctx,
+					WithDevicesNames([]string{"My iPhone"}),
+					WithDevicesPlatforms([]string{"IOS"}),
+					WithDevicesStatus("ENABLED"),
+					WithDevicesUDIDs([]string{"UDID-1", "UDID-2"}),
+					WithDevicesIDs([]string{"device-1"}),
+					WithDevicesSort("-name"),
+					WithDevicesFields([]string{"name", "udid"}),
+					Limit[DevicesOption](5),
+				))
+			},
+		},
+		{
+			name: "GetAccessibilityDeclarations_WithFilters",
+			path: "/v1/apps/app-1/accessibilityDeclarations",
+			query: map[string]string{
+				"filter[deviceFamily]":              "IPHONE,IPAD",
+				"filter[state]":                     "DRAFT",
+				"fields[accessibilityDeclarations]": "deviceFamily,state",
+				"limit":                             "2",
+			},
+			body: `{"data":[{"type":"accessibilityDeclarations","id":"decl-1","attributes":{"deviceFamily":"IPHONE","state":"DRAFT"}}]}`,
+			call: func(c *Client) error {
+				return discardResult(c.GetAccessibilityDeclarations(
+					ctx,
+					"app-1",
+					WithAccessibilityDeclarationsDeviceFamilies([]string{"iphone", "ipad"}),
+					WithAccessibilityDeclarationsStates([]string{"draft"}),
+					WithAccessibilityDeclarationsFields([]string{"deviceFamily", "state"}),
+					Limit[AccessibilityDeclarationsOption](2),
+				))
+			},
+		},
+		{
+			name: "GetAppStoreReviewAttachmentsForReviewDetail_WithFilters",
+			path: "/v1/appStoreReviewDetails/detail-1/appStoreReviewAttachments",
+			query: map[string]string{
+				"fields[appStoreReviewAttachments]": "fileName,fileSize",
+				"fields[appStoreReviewDetails]":     "contactEmail,notes",
+				"include":                           "appStoreReviewDetail",
+				"limit":                             "5",
+			},
+			body: `{"data":[{"type":"appStoreReviewAttachments","id":"att-1","attributes":{"fileName":"review.pdf","fileSize":123}}]}`,
+			call: func(c *Client) error {
+				return discardResult(c.GetAppStoreReviewAttachmentsForReviewDetail(
+					ctx,
+					"detail-1",
+					WithAppStoreReviewAttachmentsFields([]string{"fileName", "fileSize"}),
+					WithAppStoreReviewAttachmentReviewDetailFields([]string{"contactEmail", "notes"}),
+					WithAppStoreReviewAttachmentsInclude([]string{"appStoreReviewDetail"}),
+					Limit[AppStoreReviewAttachmentsOption](5),
+				))
+			},
+		},
+		{
+			name: "GetAppEncryptionDeclarationsForApp",
+			path: "/v1/appEncryptionDeclarations",
+			query: map[string]string{
+				"filter[app]":                               "app-1",
+				"filter[builds]":                            "build-1,build-2",
+				"fields[appEncryptionDeclarations]":         "appDescription,exempt",
+				"fields[appEncryptionDeclarationDocuments]": "fileName,fileSize",
+				"include":       "app,builds",
+				"limit":         "5",
+				"limit[builds]": "10",
+			},
+			body: `{"data":[{"type":"appEncryptionDeclarations","id":"decl-1","attributes":{"appDescription":"Uses TLS"}}]}`,
+			call: func(c *Client) error {
+				return discardResult(c.GetAppEncryptionDeclarations(
+					ctx,
+					"app-1",
+					WithAppEncryptionDeclarationsBuildIDs([]string{"build-1", "build-2"}),
+					WithAppEncryptionDeclarationsFields([]string{"appDescription", "exempt"}),
+					WithAppEncryptionDeclarationsDocumentFields([]string{"fileName", "fileSize"}),
+					WithAppEncryptionDeclarationsInclude([]string{"app", "builds"}),
+					Limit[AppEncryptionDeclarationsOption](5),
+					WithAppEncryptionDeclarationsBuildLimit(10),
+				))
+			},
+		},
+		{
+			name: "GetAppEncryptionDeclarationsForAppResource",
+			path: "/v1/apps/app-1/appEncryptionDeclarations",
+			query: map[string]string{
+				"filter[app]":                               "",
+				"filter[builds]":                            "build-1,build-2",
+				"fields[appEncryptionDeclarations]":         "appDescription,exempt",
+				"fields[appEncryptionDeclarationDocuments]": "fileName,fileSize",
+				"include":       "appEncryptionDeclarationDocument",
+				"limit":         "5",
+				"limit[builds]": "10",
+			},
+			body: `{"data":[{"type":"appEncryptionDeclarations","id":"decl-1","attributes":{"appDescription":"Uses TLS"}}]}`,
+			call: func(c *Client) error {
+				return discardResult(c.GetAppEncryptionDeclarationsForApp(
+					ctx,
+					"app-1",
+					WithAppEncryptionDeclarationsBuildIDs([]string{"build-1", "build-2"}),
+					WithAppEncryptionDeclarationsFields([]string{"appDescription", "exempt"}),
+					WithAppEncryptionDeclarationsDocumentFields([]string{"fileName", "fileSize"}),
+					WithAppEncryptionDeclarationsInclude([]string{"appEncryptionDeclarationDocument"}),
+					Limit[AppEncryptionDeclarationsOption](5),
+					WithAppEncryptionDeclarationsBuildLimit(10),
+				))
+			},
+		},
+		{
+			name: "GetDiagnosticSignaturesForBuild",
+			path: "/v1/builds/build-1/diagnosticSignatures",
+			query: map[string]string{
+				"filter[diagnosticType]":       "HANGS",
+				"fields[diagnosticSignatures]": "diagnosticType,signature",
+				"limit":                        "50",
+			},
+			body: `{"data":[{"type":"diagnosticSignatures","id":"diag-1"}],"links":{"self":"https://example.com"}}`,
+			call: func(c *Client) error {
+				return discardResult(c.GetDiagnosticSignaturesForBuild(
+					ctx,
+					"build-1",
+					WithDiagnosticSignaturesDiagnosticTypes([]string{"HANGS"}),
+					WithDiagnosticSignaturesFields([]string{"diagnosticType", "signature"}),
+					Limit[DiagnosticSignaturesOption](50),
+				))
+			},
+		},
+		{
+			name:  "GetAndroidToIosAppMappingDetails",
+			path:  "/v1/apps/app-1/androidToIosAppMappingDetails",
+			query: map[string]string{"fields[androidToIosAppMappingDetails]": "packageName", "limit": "20"},
+			body:  `{"data":[{"type":"androidToIosAppMappingDetails","id":"map-1"}],"links":{"self":"https://example.com"}}`,
+			call: func(c *Client) error {
+				return discardResult(c.GetAndroidToIosAppMappingDetails(
+					ctx,
+					"app-1",
+					WithAndroidToIosAppMappingDetailsFields([]string{"packageName"}),
+					Limit[AndroidToIosAppMappingDetailsOption](20),
+				))
+			},
+		},
+		{
+			name:    "ListBetaGroupsGlobal_NoOptions",
+			path:    "/v1/betaGroups",
+			noQuery: true,
+			body:    `{"data":[]}`,
+			call:    func(c *Client) error { return discardResult(c.ListBetaGroups(ctx)) },
+		},
+		{
+			name:  "ListBetaBuildLocalizationsGlobal_WithLocaleFilter",
+			path:  "/v1/betaBuildLocalizations",
+			query: map[string]string{"filter[locale]": "en-US,ja"},
+			body:  `{"data":[]}`,
+			call: func(c *Client) error {
+				return discardResult(c.ListBetaBuildLocalizations(ctx, WithBetaBuildLocalizationLocales([]string{"en-US", "ja"})))
+			},
+		},
+		{
+			name:  "ListBetaBuildLocalizationsGlobal_WithBuildFilter",
+			path:  "/v1/betaBuildLocalizations",
+			query: map[string]string{"filter[build]": "build-1,build-2"},
+			body:  `{"data":[]}`,
+			call: func(c *Client) error {
+				return discardResult(c.ListBetaBuildLocalizations(ctx, WithBetaBuildLocalizationBuildIDs([]string{"build-1", "build-2"})))
+			},
+		},
+		{
+			name: "ListReviewSubmissionsGlobal_WithFilters",
+			path: "/v1/reviewSubmissions",
+			query: map[string]string{
+				"filter[app]":      "app-1",
+				"filter[platform]": "IOS",
+				"filter[state]":    "READY_FOR_REVIEW",
+			},
+			body: `{"data":[],"links":{"self":"https://api.appstoreconnect.apple.com/v1/reviewSubmissions"}}`,
+			call: func(c *Client) error {
+				return discardResult(c.ListReviewSubmissions(
+					ctx,
+					WithReviewSubmissionsApps([]string{"app-1"}),
+					WithReviewSubmissionsPlatforms([]string{"IOS"}),
+					WithReviewSubmissionsStates([]string{"READY_FOR_REVIEW"}),
+				))
+			},
+		},
+	})
+}
+
+func TestGetEndpoints_SendRequest(t *testing.T) {
+	ctx := context.Background()
+	runEndpointRequestCases(t, http.MethodGet, http.StatusOK, []endpointRequestCase{
+		{
+			name: "GetApp",
+			path: "/v1/apps/123",
+			body: `{"data":{"type":"apps","id":"123","attributes":{"name":"Demo","bundleId":"com.example.demo","sku":"SKU1"}}}`,
+			call: func(c *Client) error { return discardResult(c.GetApp(ctx, "123")) },
+		},
+		{
+			name: "GetAppStoreVersion_WithCompoundReadOptions",
+			path: "/v1/appStoreVersions/1",
+			query: map[string]string{
+				"include":                             "appStoreVersionLocalizations,build,appStoreReviewDetail",
+				"limit[appStoreVersionLocalizations]": "50",
+			},
+			body: `{"data":{"type":"appStoreVersions","id":"1"},"included":[]}`,
+			call: func(c *Client) error {
+				return discardResult(c.GetAppStoreVersion(
+					ctx,
+					"1",
+					WithAppStoreVersionInclude([]string{"appStoreVersionLocalizations", "build", "appStoreReviewDetail"}),
+					WithAppStoreVersionLocalizationsIncludeLimit(50),
+				))
+			},
+		},
+		{
+			name: "GetAppStoreVersionBuild",
+			path: "/v1/appStoreVersions/1/build",
+			body: `{"data":{"type":"builds","id":"BUILD_123","attributes":{"version":"1.0.0","uploadedDate":"2026-01-20T00:00:00Z"}}}`,
+			call: func(c *Client) error { return discardResult(c.GetAppStoreVersionBuild(ctx, "1")) },
+		},
+		{
+			name: "GetAppStoreVersionSubmissionForVersion",
+			path: "/v1/appStoreVersions/VERSION_123/appStoreVersionSubmission",
+			body: `{"data":{"type":"appStoreVersionSubmissions","id":"SUBMIT_123","relationships":{"appStoreVersion":{"data":{"type":"appStoreVersions","id":"VERSION_123"}}}}}`,
+			call: func(c *Client) error {
+				return discardResult(c.GetAppStoreVersionSubmissionForVersion(ctx, "VERSION_123"))
+			},
+		},
+		{
+			name: "GetBuildAppStoreVersion_ByBuildID",
+			path: "/v1/builds/123/appStoreVersion",
+			body: `{"data":{"type":"appStoreVersions","id":"version-1","attributes":{"versionString":"1.0"}}}`,
+			call: func(c *Client) error { return discardResult(c.GetBuildAppStoreVersion(ctx, "123")) },
+		},
+		{
+			name: "GetAppStoreVersionLocalization_ByID",
+			path: "/v1/appStoreVersionLocalizations/loc-1",
+			body: `{"data":{"type":"appStoreVersionLocalizations","id":"loc-1","attributes":{"locale":"en-US"}}}`,
+			call: func(c *Client) error { return discardResult(c.GetAppStoreVersionLocalization(ctx, "loc-1")) },
+		},
+		{
+			name: "GetBetaBuildLocalization_ByID",
+			path: "/v1/betaBuildLocalizations/loc-1",
+			body: `{"data":{"type":"betaBuildLocalizations","id":"loc-1","attributes":{"locale":"en-US"}}}`,
+			call: func(c *Client) error { return discardResult(c.GetBetaBuildLocalization(ctx, "loc-1")) },
+		},
+		{
+			name: "GetAgeRatingDeclarationForAppInfo",
+			path: "/v1/appInfos/info-1/ageRatingDeclaration",
+			body: `{"data":{"type":"ageRatingDeclarations","id":"age-1","attributes":{"gambling":false}}}`,
+			call: func(c *Client) error { return discardResult(c.GetAgeRatingDeclarationForAppInfo(ctx, "info-1")) },
+		},
+		{
+			name: "GetCustomerReview_SendsRequest",
+			path: "/v1/customerReviews/review-1",
+			body: `{"data":{"type":"customerReviews","id":"review-1","attributes":{"rating":5,"title":"Great","body":"Nice","reviewerNickname":"Tester","createdDate":"2026-01-20T00:00:00Z","territory":"US"}}}`,
+			call: func(c *Client) error { return discardResult(c.GetCustomerReview(ctx, "review-1")) },
+		},
+		{
+			name: "GetCiProductApp",
+			path: "/v1/ciProducts/prod-1/app",
+			body: `{"data":{"type":"apps","id":"app-1"}}`,
+			call: func(c *Client) error { return discardResult(c.GetCiProductApp(ctx, "prod-1")) },
+		},
+		{
+			name: "GetScmRepository",
+			path: "/v1/scmRepositories/repo-1",
+			body: `{"data":{"type":"scmRepositories","id":"repo-1"}}`,
+			call: func(c *Client) error { return discardResult(c.GetScmRepository(ctx, "  repo-1  ")) },
+		},
+		{
+			name:  "GetCiBuildRun_WithIncludeAndFields",
+			path:  "/v1/ciBuildRuns/run-1",
+			query: map[string]string{"include": "workflow,pullRequest", "fields[ciBuildRuns]": "workflow,pullRequest"},
+			body:  `{"data":{"type":"ciBuildRuns","id":"run-1","attributes":{"number":1}}}`,
+			call: func(c *Client) error {
+				return discardResult(c.GetCiBuildRun(
+					ctx,
+					"run-1",
+					WithCiBuildRunInclude("workflow", "pullRequest"),
+					WithCiBuildRunFields("workflow", "pullRequest"),
+				))
+			},
+		},
+		{
+			name: "GetCiBuildActionBuildRun",
+			path: "/v1/ciBuildActions/action-1/buildRun",
+			body: `{"data":{"type":"ciBuildRuns","id":"run-1"}}`,
+			call: func(c *Client) error { return discardResult(c.GetCiBuildActionBuildRun(ctx, "action-1")) },
+		},
+		{
+			name: "GetCiArtifact",
+			path: "/v1/ciArtifacts/art-1",
+			body: `{"data":{"type":"ciArtifacts","id":"art-1"}}`,
+			call: func(c *Client) error { return discardResult(c.GetCiArtifact(ctx, "art-1")) },
+		},
+		{
+			name: "GetCiTestResult",
+			path: "/v1/ciTestResults/test-1",
+			body: `{"data":{"type":"ciTestResults","id":"test-1"}}`,
+			call: func(c *Client) error { return discardResult(c.GetCiTestResult(ctx, "test-1")) },
+		},
+		{
+			name: "GetCiIssue",
+			path: "/v1/ciIssues/issue-1",
+			body: `{"data":{"type":"ciIssues","id":"issue-1"}}`,
+			call: func(c *Client) error { return discardResult(c.GetCiIssue(ctx, "issue-1")) },
+		},
+		{
+			name: "GetCiMacOsVersion",
+			path: "/v1/ciMacOsVersions/macos-1",
+			body: `{"data":{"type":"ciMacOsVersions","id":"macos-1"}}`,
+			call: func(c *Client) error { return discardResult(c.GetCiMacOsVersion(ctx, "macos-1")) },
+		},
+		{
+			name: "GetCiXcodeVersion",
+			path: "/v1/ciXcodeVersions/xcode-1",
+			body: `{"data":{"type":"ciXcodeVersions","id":"xcode-1"}}`,
+			call: func(c *Client) error { return discardResult(c.GetCiXcodeVersion(ctx, "xcode-1")) },
+		},
+		{
+			name: "GetMerchantID_SendsRequest",
+			path: "/v1/merchantIds/m1",
+			query: map[string]string{
+				"fields[merchantIds]":  "name",
+				"fields[certificates]": "certificateType",
+				"include":              "certificates",
+				"limit[certificates]":  "5",
+			},
+			body: `{"data":{"type":"merchantIds","id":"m1","attributes":{"name":"Example","identifier":"merchant.com.example"}}}`,
+			call: func(c *Client) error {
+				return discardResult(c.GetMerchantID(
+					ctx,
+					"m1",
+					WithMerchantIDsFields([]string{"name"}),
+					WithMerchantIDsCertificateFields([]string{"certificateType"}),
+					WithMerchantIDsInclude([]string{"certificates"}),
+					WithMerchantIDsCertificatesLimit(5),
+				))
+			},
+		},
+		{
+			name: "GetInAppPurchaseV2",
+			path: "/v2/inAppPurchases/iap-1",
+			body: `{"data":{"type":"inAppPurchases","id":"iap-1","attributes":{"name":"Pro","productId":"com.example.pro","inAppPurchaseType":"CONSUMABLE"}}}`,
+			call: func(c *Client) error { return discardResult(c.GetInAppPurchaseV2(ctx, "iap-1")) },
+		},
+		{
+			name:  "GetUser_WithInclude",
+			path:  "/v1/users/user-1",
+			query: map[string]string{"include": "visibleApps"},
+			body:  `{"data":{"type":"users","id":"user-1","attributes":{"username":"user@example.com","firstName":"Jane","lastName":"Doe","roles":["ADMIN"],"allAppsVisible":true,"provisioningAllowed":false}}}`,
+			call: func(c *Client) error {
+				return discardResult(c.GetUser(ctx, "user-1", WithUsersInclude([]string{"visibleApps"})))
+			},
+		},
+		{
+			name:  "GetDevice_WithFields",
+			path:  "/v1/devices/device-1",
+			query: map[string]string{"fields[devices]": "name,udid"},
+			body:  `{"data":{"type":"devices","id":"device-1","attributes":{"name":"My iPhone","platform":"IOS","udid":"UDID-1","status":"ENABLED"}}}`,
+			call:  func(c *Client) error { return discardResult(c.GetDevice(ctx, "device-1", []string{"name", "udid"})) },
+		},
+		{
+			name:  "GetAccessibilityDeclaration_WithFields",
+			path:  "/v1/accessibilityDeclarations/decl-1",
+			query: map[string]string{"fields[accessibilityDeclarations]": "deviceFamily,state"},
+			body:  `{"data":{"type":"accessibilityDeclarations","id":"decl-1","attributes":{"deviceFamily":"IPHONE"}}}`,
+			call: func(c *Client) error {
+				return discardResult(c.GetAccessibilityDeclaration(ctx, "decl-1", []string{"deviceFamily", "state"}))
+			},
+		},
+		{
+			name: "GetAppStoreReviewAttachment_WithFields",
+			path: "/v1/appStoreReviewAttachments/att-1",
+			query: map[string]string{
+				"fields[appStoreReviewAttachments]": "fileName,fileSize",
+				"include":                           "appStoreReviewDetail",
+			},
+			body: `{"data":{"type":"appStoreReviewAttachments","id":"att-1","attributes":{"fileName":"review.pdf"}}}`,
+			call: func(c *Client) error {
+				return discardResult(c.GetAppStoreReviewAttachment(
+					ctx,
+					"att-1",
+					WithAppStoreReviewAttachmentsFields([]string{"fileName", "fileSize"}),
+					WithAppStoreReviewAttachmentsInclude([]string{"appStoreReviewDetail"}),
+				))
+			},
+		},
+		{
+			name: "GetAppEncryptionDeclaration",
+			path: "/v1/appEncryptionDeclarations/decl-1",
+			query: map[string]string{
+				"fields[appEncryptionDeclarations]":         "appDescription,exempt",
+				"fields[appEncryptionDeclarationDocuments]": "fileName,fileSize",
+				"include":       "appEncryptionDeclarationDocument",
+				"limit[builds]": "20",
+			},
+			body: `{"data":{"type":"appEncryptionDeclarations","id":"decl-1","attributes":{"appDescription":"Uses TLS"}}}`,
+			call: func(c *Client) error {
+				return discardResult(c.GetAppEncryptionDeclaration(
+					ctx,
+					"decl-1",
+					WithAppEncryptionDeclarationsFields([]string{"appDescription", "exempt"}),
+					WithAppEncryptionDeclarationsDocumentFields([]string{"fileName", "fileSize"}),
+					WithAppEncryptionDeclarationsInclude([]string{"appEncryptionDeclarationDocument"}),
+					WithAppEncryptionDeclarationsBuildLimit(20),
+				))
+			},
+		},
+		{
+			name:  "GetAppEncryptionDeclarationDocument",
+			path:  "/v1/appEncryptionDeclarationDocuments/doc-1",
+			query: map[string]string{"fields[appEncryptionDeclarationDocuments]": "fileName,fileSize"},
+			body:  `{"data":{"type":"appEncryptionDeclarationDocuments","id":"doc-1","attributes":{"fileName":"export.pdf"}}}`,
+			call: func(c *Client) error {
+				return discardResult(c.GetAppEncryptionDeclarationDocument(ctx, "doc-1", []string{"fileName", "fileSize"}))
+			},
+		},
+		{
+			name:  "GetAndroidToIosAppMappingDetail",
+			path:  "/v1/androidToIosAppMappingDetails/map-1",
+			query: map[string]string{"fields[androidToIosAppMappingDetails]": "packageName", "limit": ""},
+			body:  `{"data":{"type":"androidToIosAppMappingDetails","id":"map-1"},"links":{"self":"https://example.com"}}`,
+			call: func(c *Client) error {
+				return discardResult(c.GetAndroidToIosAppMappingDetail(
+					ctx,
+					"map-1",
+					WithAndroidToIosAppMappingDetailsFields([]string{"packageName"}),
+					Limit[AndroidToIosAppMappingDetailsOption](20),
+				))
+			},
+		},
+		{
+			name: "GetPromotedPurchase_SendsRequest",
+			path: "/v1/promotedPurchases/promo-1",
+			body: `{"data":{"type":"promotedPurchases","id":"promo-1","attributes":{"visibleForAllUsers":true,"enabled":false}}}`,
+			call: func(c *Client) error { return discardResult(c.GetPromotedPurchase(ctx, "promo-1")) },
+		},
+	})
+}
+
+func TestDeleteEndpoints_SendRequest(t *testing.T) {
+	ctx := context.Background()
+	runEndpointRequestCases(t, http.MethodDelete, http.StatusNoContent, []endpointRequestCase{
+		{
+			name: "DeleteAppStoreVersionLocalization_SendsRequest",
+			path: "/v1/appStoreVersionLocalizations/loc-1",
+			call: func(c *Client) error { return c.DeleteAppStoreVersionLocalization(ctx, "loc-1") },
+		},
+		{
+			name: "DeleteBetaBuildLocalization_SendsRequest",
+			path: "/v1/betaBuildLocalizations/loc-1",
+			call: func(c *Client) error { return c.DeleteBetaBuildLocalization(ctx, "loc-1") },
+		},
+		{
+			name: "DeleteAppScreenshotSet",
+			path: "/v1/appScreenshotSets/SET_123",
+			call: func(c *Client) error { return c.DeleteAppScreenshotSet(ctx, "SET_123") },
+		},
+		{
+			name: "DeleteAppScreenshot",
+			path: "/v1/appScreenshots/SHOT_123",
+			call: func(c *Client) error { return c.DeleteAppScreenshot(ctx, "SHOT_123") },
+		},
+		{
+			name: "DeleteAppPreviewSet",
+			path: "/v1/appPreviewSets/SET_123",
+			call: func(c *Client) error { return c.DeleteAppPreviewSet(ctx, "SET_123") },
+		},
+		{
+			name: "DeleteAppPreview",
+			path: "/v1/appPreviews/PREVIEW_123",
+			call: func(c *Client) error { return c.DeleteAppPreview(ctx, "PREVIEW_123") },
+		},
+		{
+			name: "DeleteAppStoreVersionSubmission",
+			path: "/v1/appStoreVersionSubmissions/SUBMIT_123",
+			call: func(c *Client) error { return c.DeleteAppStoreVersionSubmission(ctx, "SUBMIT_123") },
+		},
+	})
 }
 
 func TestGetApps_RateLimitedIncludesRetryAfter(t *testing.T) {
@@ -441,6 +1536,37 @@ func TestGetApps_RateLimitedIncludesRetryAfter(t *testing.T) {
 	}
 	if got := GetRetryAfter(err); got != 2*time.Minute {
 		t.Fatalf("expected retry-after 2m, got %s", got)
+	}
+}
+
+func TestGetApps_RateLimitedReportsExhaustedHourlyLimit(t *testing.T) {
+	const hint = "hourly request limit of 3500 is used up; requests free up over the next hour, so wait before retrying"
+	tests := []struct {
+		name      string
+		rateLimit string
+		wantHint  bool
+	}{
+		{name: "no requests remaining", rateLimit: "user-hour-lim:3500;user-hour-rem:0;", wantHint: true},
+		{name: "requests remaining", rateLimit: "user-hour-lim:3500;user-hour-rem:500;"},
+		{name: "header absent"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("ASC_MAX_RETRIES", "0")
+			response := jsonResponse(http.StatusTooManyRequests, `{"errors":[{"status":"429","code":"RATE_LIMIT_EXCEEDED","title":"The request rate limit has been reached."}]}`)
+			if tt.rateLimit != "" {
+				response.Header.Set("X-Rate-Limit", tt.rateLimit)
+			}
+			client := newTestClient(t, nil, response)
+
+			_, err := client.GetApps(context.Background())
+			if err == nil {
+				t.Fatal("expected error, got nil")
+			}
+			if got := strings.Contains(err.Error(), hint); got != tt.wantHint {
+				t.Fatalf("hint present = %v, want %v; error: %v", got, tt.wantHint, err)
+			}
+		})
 	}
 }
 
@@ -687,237 +1813,6 @@ func TestGetApps_DoesNotRetryDeadlineExceeded(t *testing.T) {
 	}
 }
 
-func TestGetApps_WithSortAndLimit(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[{"type":"apps","id":"1","attributes":{"name":"Demo","bundleId":"com.example.demo","sku":"SKU1"}}]}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/apps" {
-			t.Fatalf("expected path /v1/apps, got %s", req.URL.Path)
-		}
-		values := req.URL.Query()
-		if values.Get("sort") != "-name" {
-			t.Fatalf("expected sort=-name, got %q", values.Get("sort"))
-		}
-		if values.Get("limit") != "10" {
-			t.Fatalf("expected limit=10, got %q", values.Get("limit"))
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetApps(context.Background(), WithAppsLimit(10), WithAppsSort("-name")); err != nil {
-		t.Fatalf("GetApps() error: %v", err)
-	}
-}
-
-func TestGetApps_WithFilters(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[{"type":"apps","id":"1","attributes":{"name":"Demo","bundleId":"com.example.demo","sku":"SKU1"}}]}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/apps" {
-			t.Fatalf("expected path /v1/apps, got %s", req.URL.Path)
-		}
-		values := req.URL.Query()
-		if values.Get("filter[bundleId]") != "com.example.demo,com.example.other" {
-			t.Fatalf("expected filter[bundleId] to be set, got %q", values.Get("filter[bundleId]"))
-		}
-		if values.Get("filter[name]") != "Demo App" {
-			t.Fatalf("expected filter[name]=Demo App, got %q", values.Get("filter[name]"))
-		}
-		if values.Get("filter[sku]") != "SKU1,SKU2" {
-			t.Fatalf("expected filter[sku]=SKU1,SKU2, got %q", values.Get("filter[sku]"))
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetApps(
-		context.Background(),
-		WithAppsBundleIDs([]string{"com.example.demo", "com.example.other"}),
-		WithAppsNames([]string{"Demo App"}),
-		WithAppsSKUs([]string{"SKU1", "SKU2"}),
-	); err != nil {
-		t.Fatalf("GetApps() error: %v", err)
-	}
-}
-
-func TestGetApp(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":{"type":"apps","id":"123","attributes":{"name":"Demo","bundleId":"com.example.demo","sku":"SKU1"}}}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/apps/123" {
-			t.Fatalf("expected path /v1/apps/123, got %s", req.URL.Path)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetApp(context.Background(), "123"); err != nil {
-		t.Fatalf("GetApp() error: %v", err)
-	}
-}
-
-func TestGetAppTags_WithFiltersAndSort(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[{"type":"appTags","id":"tag-1","attributes":{"name":"Games","visibleInAppStore":true}}]}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/apps/123/appTags" {
-			t.Fatalf("expected path /v1/apps/123/appTags, got %s", req.URL.Path)
-		}
-		values := req.URL.Query()
-		if values.Get("filter[visibleInAppStore]") != "true" {
-			t.Fatalf("expected filter[visibleInAppStore]=true, got %q", values.Get("filter[visibleInAppStore]"))
-		}
-		if values.Get("sort") != "name" {
-			t.Fatalf("expected sort=name, got %q", values.Get("sort"))
-		}
-		if values.Get("limit") != "5" {
-			t.Fatalf("expected limit=5, got %q", values.Get("limit"))
-		}
-		if values.Get("fields[appTags]") != "name,visibleInAppStore" {
-			t.Fatalf("expected fields[appTags]=name,visibleInAppStore, got %q", values.Get("fields[appTags]"))
-		}
-		if values.Get("include") != "territories" {
-			t.Fatalf("expected include=territories, got %q", values.Get("include"))
-		}
-		if values.Get("fields[territories]") != "currency" {
-			t.Fatalf("expected fields[territories]=currency, got %q", values.Get("fields[territories]"))
-		}
-		if values.Get("limit[territories]") != "25" {
-			t.Fatalf("expected limit[territories]=25, got %q", values.Get("limit[territories]"))
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetAppTags(
-		context.Background(),
-		"123",
-		WithAppTagsVisibleInAppStore([]string{"true"}),
-		WithAppTagsSort("name"),
-		WithAppTagsLimit(5),
-		WithAppTagsFields([]string{"name", "visibleInAppStore"}),
-		WithAppTagsInclude([]string{"territories"}),
-		WithAppTagsTerritoryFields([]string{"currency"}),
-		WithAppTagsTerritoryLimit(25),
-	); err != nil {
-		t.Fatalf("GetAppTags() error: %v", err)
-	}
-}
-
-func TestGetAppTagTerritories_WithFieldsAndLimit(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[{"type":"territories","id":"USA","attributes":{"currency":"USD"}}]}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/appTags/tag-1/territories" {
-			t.Fatalf("expected path /v1/appTags/tag-1/territories, got %s", req.URL.Path)
-		}
-		values := req.URL.Query()
-		if values.Get("fields[territories]") != "currency" {
-			t.Fatalf("expected fields[territories]=currency, got %q", values.Get("fields[territories]"))
-		}
-		if values.Get("limit") != "5" {
-			t.Fatalf("expected limit=5, got %q", values.Get("limit"))
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetAppTagTerritories(
-		context.Background(),
-		"tag-1",
-		WithTerritoriesFields([]string{"currency"}),
-		WithTerritoriesLimit(5),
-	); err != nil {
-		t.Fatalf("GetAppTagTerritories() error: %v", err)
-	}
-}
-
-func TestGetAppTagTerritoriesRelationships_WithLimit(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[{"type":"territories","id":"USA"}]}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/appTags/tag-1/relationships/territories" {
-			t.Fatalf("expected path /v1/appTags/tag-1/relationships/territories, got %s", req.URL.Path)
-		}
-		if req.URL.Query().Get("limit") != "5" {
-			t.Fatalf("expected limit=5, got %q", req.URL.Query().Get("limit"))
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetAppTagTerritoriesRelationships(context.Background(), "tag-1", WithLinkagesLimit(5)); err != nil {
-		t.Fatalf("GetAppTagTerritoriesRelationships() error: %v", err)
-	}
-}
-
-func TestGetAppTagsRelationshipsForApp_WithLimit(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[{"type":"appTags","id":"tag-1"}]}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/apps/app-1/relationships/appTags" {
-			t.Fatalf("expected path /v1/apps/app-1/relationships/appTags, got %s", req.URL.Path)
-		}
-		if req.URL.Query().Get("limit") != "5" {
-			t.Fatalf("expected limit=5, got %q", req.URL.Query().Get("limit"))
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetAppTagsRelationshipsForApp(context.Background(), "app-1", WithLinkagesLimit(5)); err != nil {
-		t.Fatalf("GetAppTagsRelationshipsForApp() error: %v", err)
-	}
-}
-
-func TestGetAppPromotedPurchases_WithLimit(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[{"type":"promotedPurchases","id":"promo-1"}]}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/apps/app-1/promotedPurchases" {
-			t.Fatalf("expected path /v1/apps/app-1/promotedPurchases, got %s", req.URL.Path)
-		}
-		if req.URL.Query().Get("limit") != "5" {
-			t.Fatalf("expected limit=5, got %q", req.URL.Query().Get("limit"))
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetAppPromotedPurchases(context.Background(), "app-1", WithPromotedPurchasesLimit(5)); err != nil {
-		t.Fatalf("GetAppPromotedPurchases() error: %v", err)
-	}
-}
-
-func TestGetAppPromotedPurchasesRelationships_WithLimit(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[{"type":"promotedPurchases","id":"promo-1"}]}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/apps/app-1/relationships/promotedPurchases" {
-			t.Fatalf("expected path /v1/apps/app-1/relationships/promotedPurchases, got %s", req.URL.Path)
-		}
-		if req.URL.Query().Get("limit") != "5" {
-			t.Fatalf("expected limit=5, got %q", req.URL.Query().Get("limit"))
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetAppPromotedPurchasesRelationships(context.Background(), "app-1", WithLinkagesLimit(5)); err != nil {
-		t.Fatalf("GetAppPromotedPurchasesRelationships() error: %v", err)
-	}
-}
-
 func TestSetAppPromotedPurchases_SendsRequest(t *testing.T) {
 	response := jsonResponse(http.StatusNoContent, "")
 	client := newTestClient(t, func(req *http.Request) {
@@ -1051,44 +1946,6 @@ func TestUpdateApp_SendsRequest(t *testing.T) {
 	}
 }
 
-func TestGetSubscriptionOfferCodeOneTimeUseCodes_WithLimit(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[{"type":"subscriptionOfferCodeOneTimeUseCodes","id":"1","attributes":{"numberOfCodes":5}}]}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/subscriptionOfferCodes/123/oneTimeUseCodes" {
-			t.Fatalf("expected path /v1/subscriptionOfferCodes/123/oneTimeUseCodes, got %s", req.URL.Path)
-		}
-		values := req.URL.Query()
-		if values.Get("limit") != "5" {
-			t.Fatalf("expected limit=5, got %q", values.Get("limit"))
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetSubscriptionOfferCodeOneTimeUseCodes(context.Background(), "123", WithSubscriptionOfferCodeOneTimeUseCodesLimit(5)); err != nil {
-		t.Fatalf("GetSubscriptionOfferCodeOneTimeUseCodes() error: %v", err)
-	}
-}
-
-func TestGetSubscriptionOfferCodeOneTimeUseCode(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":{"type":"subscriptionOfferCodeOneTimeUseCodes","id":"code-1","attributes":{"numberOfCodes":5}}}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/subscriptionOfferCodeOneTimeUseCodes/code-1" {
-			t.Fatalf("expected path /v1/subscriptionOfferCodeOneTimeUseCodes/code-1, got %s", req.URL.Path)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetSubscriptionOfferCodeOneTimeUseCode(context.Background(), "code-1"); err != nil {
-		t.Fatalf("GetSubscriptionOfferCodeOneTimeUseCode() error: %v", err)
-	}
-}
-
 func TestCreateSubscriptionOfferCodeOneTimeUseCode_SendsRequest(t *testing.T) {
 	response := jsonResponse(http.StatusCreated, `{"data":{"type":"subscriptionOfferCodeOneTimeUseCodes","id":"code-1","attributes":{"numberOfCodes":5}}}`)
 	client := newTestClient(t, func(req *http.Request) {
@@ -1211,23 +2068,6 @@ func TestGetInAppPurchaseOfferCodeOneTimeUseCodeValues(t *testing.T) {
 	}
 	if len(values) != 2 || values[0] != "IAP123" || values[1] != "IAP456" {
 		t.Fatalf("expected codes to parse, got %v", values)
-	}
-}
-
-func TestGetSubscriptionOfferCodeCustomCode(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":{"type":"subscriptionOfferCodeCustomCodes","id":"custom-1","attributes":{"customCode":"SPRING"}}}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/subscriptionOfferCodeCustomCodes/custom-1" {
-			t.Fatalf("expected path /v1/subscriptionOfferCodeCustomCodes/custom-1, got %s", req.URL.Path)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetSubscriptionOfferCodeCustomCode(context.Background(), "custom-1"); err != nil {
-		t.Fatalf("GetSubscriptionOfferCodeCustomCode() error: %v", err)
 	}
 }
 
@@ -1384,34 +2224,6 @@ func TestUpdateSubscriptionOfferCodeOneTimeUseCode_SendsRequest(t *testing.T) {
 	}
 }
 
-func TestGetBuilds_WithSortAndLimit(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[{"type":"builds","id":"1","attributes":{"version":"1.0","uploadedDate":"2026-01-20T00:00:00Z"}}]}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		// When sorting or limiting, we use /v1/builds?filter[app]=APP_ID
-		if req.URL.Path != "/v1/builds" {
-			t.Fatalf("expected path /v1/builds, got %s", req.URL.Path)
-		}
-		values := req.URL.Query()
-		if values.Get("filter[app]") != "123" {
-			t.Fatalf("expected filter[app]=123, got %q", values.Get("filter[app]"))
-		}
-		if values.Get("sort") != "-uploadedDate" {
-			t.Fatalf("expected sort=-uploadedDate, got %q", values.Get("sort"))
-		}
-		if values.Get("limit") != "5" {
-			t.Fatalf("expected limit=5, got %q", values.Get("limit"))
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetBuilds(context.Background(), "123", WithBuildsLimit(5), WithBuildsSort("-uploadedDate")); err != nil {
-		t.Fatalf("GetBuilds() error: %v", err)
-	}
-}
-
 func TestGetBuilds_WithVersionFilter(t *testing.T) {
 	response := jsonResponse(http.StatusOK, `{"data":[{"type":"builds","id":"build-42","attributes":{"version":"42","uploadedDate":"2026-01-20T00:00:00Z"}}]}`)
 	client := newTestClient(t, func(req *http.Request) {
@@ -1435,7 +2247,7 @@ func TestGetBuilds_WithVersionFilter(t *testing.T) {
 		assertAuthorized(t, req)
 	}, response)
 
-	builds, err := client.GetBuilds(context.Background(), "123", WithBuildsVersion("42"), WithBuildsLimit(1))
+	builds, err := client.GetBuilds(context.Background(), "123", WithBuildsVersion("42"), Limit[BuildsOption](1))
 	if err != nil {
 		t.Fatalf("GetBuilds() error: %v", err)
 	}
@@ -1444,40 +2256,6 @@ func TestGetBuilds_WithVersionFilter(t *testing.T) {
 	}
 	if builds.Data[0].ID != "build-42" {
 		t.Fatalf("expected build ID build-42, got %s", builds.Data[0].ID)
-	}
-}
-
-func TestGetBuilds_WithPreReleaseVersionVersionFilter(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[{"type":"builds","id":"build-24","attributes":{"version":"2","uploadedDate":"2026-03-02T18:01:00Z"}}]}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/builds" {
-			t.Fatalf("expected path /v1/builds, got %s", req.URL.Path)
-		}
-		values := req.URL.Query()
-		if values.Get("filter[app]") != "123" {
-			t.Fatalf("expected filter[app]=123, got %q", values.Get("filter[app]"))
-		}
-		if values.Get("filter[preReleaseVersion.version]") != "2.4.0" {
-			t.Fatalf(
-				"expected filter[preReleaseVersion.version]=2.4.0, got %q",
-				values.Get("filter[preReleaseVersion.version]"),
-			)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	builds, err := client.GetBuilds(context.Background(), "123", WithBuildsPreReleaseVersionVersion("2.4.0"))
-	if err != nil {
-		t.Fatalf("GetBuilds() error: %v", err)
-	}
-	if len(builds.Data) != 1 {
-		t.Fatalf("expected 1 build, got %d", len(builds.Data))
-	}
-	if builds.Data[0].ID != "build-24" {
-		t.Fatalf("expected build ID build-24, got %s", builds.Data[0].ID)
 	}
 }
 
@@ -1569,7 +2347,7 @@ func TestGetBuilds_WithPreReleaseVersion(t *testing.T) {
 
 	builds, err := client.GetBuilds(
 		context.Background(), "123",
-		WithBuildsLimit(1),
+		Limit[BuildsOption](1),
 		WithBuildsSort("-uploadedDate"),
 		WithBuildsPreReleaseVersion("prv-456"),
 	)
@@ -1681,47 +2459,6 @@ func TestGetBuilds_WithExpiredFilter(t *testing.T) {
 	}
 }
 
-func TestGetAppStoreVersions_WithFilters(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[{"type":"appStoreVersions","id":"1","attributes":{"versionString":"1.0.0","platform":"IOS"}}]}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/apps/123/appStoreVersions" {
-			t.Fatalf("expected path /v1/apps/123/appStoreVersions, got %s", req.URL.Path)
-		}
-		values := req.URL.Query()
-		if values.Get("filter[platform]") != "IOS" {
-			t.Fatalf("expected filter[platform]=IOS, got %q", values.Get("filter[platform]"))
-		}
-		if values.Get("filter[versionString]") != "1.0.0" {
-			t.Fatalf("expected filter[versionString]=1.0.0, got %q", values.Get("filter[versionString]"))
-		}
-		if values.Get("filter[appStoreState]") != "READY_FOR_REVIEW" {
-			t.Fatalf("expected filter[appStoreState]=READY_FOR_REVIEW, got %q", values.Get("filter[appStoreState]"))
-		}
-		if values.Get("filter[appVersionState]") != "READY_FOR_DISTRIBUTION" {
-			t.Fatalf("expected filter[appVersionState]=READY_FOR_DISTRIBUTION, got %q", values.Get("filter[appVersionState]"))
-		}
-		if values.Get("limit") != "5" {
-			t.Fatalf("expected limit=5, got %q", values.Get("limit"))
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetAppStoreVersions(
-		context.Background(),
-		"123",
-		WithAppStoreVersionsLimit(5),
-		WithAppStoreVersionsPlatforms([]string{"IOS"}),
-		WithAppStoreVersionsVersionStrings([]string{"1.0.0"}),
-		WithAppStoreVersionsStates([]string{"READY_FOR_REVIEW"}),
-		WithAppStoreVersionsVersionStates([]string{"READY_FOR_DISTRIBUTION"}),
-	); err != nil {
-		t.Fatalf("GetAppStoreVersions() error: %v", err)
-	}
-}
-
 func TestGetAppStoreVersionsDecodesDownloadable(t *testing.T) {
 	response := jsonResponse(http.StatusOK, `{"data":[{"type":"appStoreVersions","id":"version-1","attributes":{"downloadable":false}},{"type":"appStoreVersions","id":"version-2","attributes":{"downloadable":true}},{"type":"appStoreVersions","id":"version-3","attributes":{"downloadable":null}}]}`)
 	client := newTestClient(t, func(req *http.Request) {
@@ -1789,7 +2526,7 @@ func TestGetPreReleaseVersions_WithFilters(t *testing.T) {
 	result, err := client.GetPreReleaseVersions(
 		context.Background(),
 		"123",
-		WithPreReleaseVersionsLimit(5),
+		Limit[PreReleaseVersionsOption](5),
 		WithPreReleaseVersionsPlatform("ios"),
 		WithPreReleaseVersionsVersion("1.0.0"),
 	)
@@ -1842,31 +2579,6 @@ func TestGetPreReleaseVersion(t *testing.T) {
 	}
 }
 
-func TestGetAppStoreVersion_WithCompoundReadOptions(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":{"type":"appStoreVersions","id":"1"},"included":[]}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet || req.URL.Path != "/v1/appStoreVersions/1" {
-			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.Path)
-		}
-		if got := req.URL.Query().Get("include"); got != "appStoreVersionLocalizations,build,appStoreReviewDetail" {
-			t.Fatalf("include = %q", got)
-		}
-		if got := req.URL.Query().Get("limit[appStoreVersionLocalizations]"); got != "50" {
-			t.Fatalf("localization include limit = %q", got)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetAppStoreVersion(
-		context.Background(),
-		"1",
-		WithAppStoreVersionInclude([]string{"appStoreVersionLocalizations", "build", "appStoreReviewDetail"}),
-		WithAppStoreVersionLocalizationsIncludeLimit(50),
-	); err != nil {
-		t.Fatalf("GetAppStoreVersion() error: %v", err)
-	}
-}
-
 func TestCreateAppStoreVersion(t *testing.T) {
 	response := jsonResponse(http.StatusCreated, `{"data":{"type":"appStoreVersions","id":"VERSION_123","attributes":{"versionString":"1.0.0","platform":"IOS"}}}`)
 	client := newTestClient(t, func(req *http.Request) {
@@ -1904,23 +2616,6 @@ func TestCreateAppStoreVersion(t *testing.T) {
 	}
 	if result.Data.ID != "VERSION_123" {
 		t.Fatalf("expected version ID VERSION_123, got %s", result.Data.ID)
-	}
-}
-
-func TestDeleteAppStoreVersion(t *testing.T) {
-	response := jsonResponse(http.StatusNoContent, ``)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodDelete {
-			t.Fatalf("expected DELETE, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/appStoreVersions/VERSION_123" {
-			t.Fatalf("expected path /v1/appStoreVersions/VERSION_123, got %s", req.URL.Path)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if err := client.DeleteAppStoreVersion(context.Background(), "VERSION_123"); err != nil {
-		t.Fatalf("DeleteAppStoreVersion() error: %v", err)
 	}
 }
 
@@ -1973,8 +2668,8 @@ func TestAddBetaGroupsToBuild_SendsRequest(t *testing.T) {
 		assertAuthorized(t, req)
 	}, response)
 
-	if err := client.AddBetaGroupsToBuild(context.Background(), "build-1", []string{"group-1", "group-2"}); err != nil {
-		t.Fatalf("AddBetaGroupsToBuild() error: %v", err)
+	if _, err := client.AddBetaGroupsToBuildWithNotify(context.Background(), "build-1", []string{"group-1", "group-2"}, false); err != nil {
+		t.Fatalf("AddBetaGroupsToBuildWithNotify() error: %v", err)
 	}
 }
 
@@ -2285,228 +2980,6 @@ func TestRemoveBetaGroupsFromBuild_SendsRequest(t *testing.T) {
 	}
 }
 
-func TestGetAppStoreVersionBuild(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":{"type":"builds","id":"BUILD_123","attributes":{"version":"1.0.0","uploadedDate":"2026-01-20T00:00:00Z"}}}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/appStoreVersions/1/build" {
-			t.Fatalf("expected path /v1/appStoreVersions/1/build, got %s", req.URL.Path)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetAppStoreVersionBuild(context.Background(), "1"); err != nil {
-		t.Fatalf("GetAppStoreVersionBuild() error: %v", err)
-	}
-}
-
-func TestGetAppStoreVersionSubmissionResource(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":{"type":"appStoreVersionSubmissions","id":"SUBMIT_123","relationships":{"appStoreVersion":{"data":{"type":"appStoreVersions","id":"VERSION_123"}}}}}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/appStoreVersionSubmissions/SUBMIT_123" {
-			t.Fatalf("expected path /v1/appStoreVersionSubmissions/SUBMIT_123, got %s", req.URL.Path)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetAppStoreVersionSubmissionResource(context.Background(), "SUBMIT_123"); err != nil {
-		t.Fatalf("GetAppStoreVersionSubmissionResource() error: %v", err)
-	}
-}
-
-func TestGetAppStoreVersionSubmissionForVersion(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":{"type":"appStoreVersionSubmissions","id":"SUBMIT_123","relationships":{"appStoreVersion":{"data":{"type":"appStoreVersions","id":"VERSION_123"}}}}}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/appStoreVersions/VERSION_123/appStoreVersionSubmission" {
-			t.Fatalf("expected path /v1/appStoreVersions/VERSION_123/appStoreVersionSubmission, got %s", req.URL.Path)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetAppStoreVersionSubmissionForVersion(context.Background(), "VERSION_123"); err != nil {
-		t.Fatalf("GetAppStoreVersionSubmissionForVersion() error: %v", err)
-	}
-}
-
-func TestGetBetaGroups_WithLimit(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[{"type":"betaGroups","id":"1","attributes":{"name":"Beta"}}]}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/apps/123/betaGroups" {
-			t.Fatalf("expected path /v1/apps/123/betaGroups, got %s", req.URL.Path)
-		}
-		values := req.URL.Query()
-		if values.Get("limit") != "10" {
-			t.Fatalf("expected limit=10, got %q", values.Get("limit"))
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetBetaGroups(context.Background(), "123", WithBetaGroupsLimit(10)); err != nil {
-		t.Fatalf("GetBetaGroups() error: %v", err)
-	}
-}
-
-func TestGetBetaGroupBuilds_WithLimit(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[{"type":"builds","id":"build-1","attributes":{"version":"1.0","uploadedDate":"2026-01-20T00:00:00Z"}}]}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/betaGroups/group-1/builds" {
-			t.Fatalf("expected path /v1/betaGroups/group-1/builds, got %s", req.URL.Path)
-		}
-		values := req.URL.Query()
-		if values.Get("limit") != "50" {
-			t.Fatalf("expected limit=50, got %q", values.Get("limit"))
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetBetaGroupBuilds(context.Background(), "group-1", WithBetaGroupBuildsLimit(50)); err != nil {
-		t.Fatalf("GetBetaGroupBuilds() error: %v", err)
-	}
-}
-
-func TestGetBetaGroupTesters_WithLimit(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[{"type":"betaTesters","id":"tester-1","attributes":{"email":"tester@example.com"}}]}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/betaGroups/group-1/betaTesters" {
-			t.Fatalf("expected path /v1/betaGroups/group-1/betaTesters, got %s", req.URL.Path)
-		}
-		values := req.URL.Query()
-		if values.Get("limit") != "20" {
-			t.Fatalf("expected limit=20, got %q", values.Get("limit"))
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetBetaGroupTesters(context.Background(), "group-1", WithBetaGroupTestersLimit(20)); err != nil {
-		t.Fatalf("GetBetaGroupTesters() error: %v", err)
-	}
-}
-
-func TestGetBetaTesters_WithAppFilter(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[{"type":"betaTesters","id":"1","attributes":{"email":"tester@example.com"}}]}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/betaTesters" {
-			t.Fatalf("expected path /v1/betaTesters, got %s", req.URL.Path)
-		}
-		values := req.URL.Query()
-		if values.Get("filter[apps]") != "123" {
-			t.Fatalf("expected filter[apps]=123, got %q", values.Get("filter[apps]"))
-		}
-		if values.Get("filter[email]") != "tester@example.com" {
-			t.Fatalf("expected filter[email]=tester@example.com, got %q", values.Get("filter[email]"))
-		}
-		if values.Get("filter[betaGroups]") != "" {
-			t.Fatalf("expected no filter[betaGroups], got %q", values.Get("filter[betaGroups]"))
-		}
-		if values.Get("limit") != "5" {
-			t.Fatalf("expected limit=5, got %q", values.Get("limit"))
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetBetaTesters(
-		context.Background(),
-		"123",
-		WithBetaTestersEmail("tester@example.com"),
-		WithBetaTestersLimit(5),
-	); err != nil {
-		t.Fatalf("GetBetaTesters() error: %v", err)
-	}
-}
-
-func TestGetBetaTesters_WithNameAndIDFilters(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[{"type":"betaTesters","id":"1","attributes":{"firstName":"Ada","lastName":"Lovelace"}}]}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/betaTesters" {
-			t.Fatalf("expected path /v1/betaTesters, got %s", req.URL.Path)
-		}
-		values := req.URL.Query()
-		if values.Get("filter[apps]") != "123" {
-			t.Fatalf("expected filter[apps]=123, got %q", values.Get("filter[apps]"))
-		}
-		if values.Get("filter[firstName]") != "Ada" {
-			t.Fatalf("expected filter[firstName]=Ada, got %q", values.Get("filter[firstName]"))
-		}
-		if values.Get("filter[lastName]") != "Lovelace" {
-			t.Fatalf("expected filter[lastName]=Lovelace, got %q", values.Get("filter[lastName]"))
-		}
-		if values.Get("filter[id]") != "tester-1,tester-2" {
-			t.Fatalf("expected filter[id]=tester-1,tester-2, got %q", values.Get("filter[id]"))
-		}
-		if values.Get("filter[email]") != "" {
-			t.Fatalf("expected no filter[email], got %q", values.Get("filter[email]"))
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetBetaTesters(
-		context.Background(),
-		"123",
-		WithBetaTestersFirstName(" Ada "),
-		WithBetaTestersLastName(" Lovelace "),
-		WithBetaTestersIDs([]string{"tester-1", "tester-2"}),
-	); err != nil {
-		t.Fatalf("GetBetaTesters() error: %v", err)
-	}
-}
-
-func TestGetBetaTesters_WithBuildFilter(t *testing.T) {
-	// API only allows one relationship filter; build filter takes precedence over apps.
-	response := jsonResponse(http.StatusOK, `{"data":[{"type":"betaTesters","id":"1","attributes":{"email":"tester@example.com"}}]}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/betaTesters" {
-			t.Fatalf("expected path /v1/betaTesters, got %s", req.URL.Path)
-		}
-		values := req.URL.Query()
-		// When build filter is provided, apps filter should NOT be present
-		if values.Get("filter[apps]") != "" {
-			t.Fatalf("expected no filter[apps] when filter[builds] is set, got %q", values.Get("filter[apps]"))
-		}
-		if values.Get("filter[builds]") != "build-1" {
-			t.Fatalf("expected filter[builds]=build-1, got %q", values.Get("filter[builds]"))
-		}
-		if values.Get("filter[email]") != "tester@example.com" {
-			t.Fatalf("expected filter[email]=tester@example.com, got %q", values.Get("filter[email]"))
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetBetaTesters(
-		context.Background(),
-		"123", // appID provided but should be ignored when build filter is set
-		WithBetaTestersEmail("tester@example.com"),
-		WithBetaTestersBuildID("build-1"),
-	); err != nil {
-		t.Fatalf("GetBetaTesters() error: %v", err)
-	}
-}
-
 func TestGetBetaTesters_RejectsGroupAndBuildConflict(t *testing.T) {
 	// API only allows one relationship filter; group + build must be rejected.
 	response := jsonResponse(http.StatusOK, `{"data":[]}`)
@@ -2600,23 +3073,6 @@ func TestBuildAttributesPreservesExpiredPresence(t *testing.T) {
 				t.Fatalf("ExpiredValue() = (%t, %t), want (%t, %t)", expired, known, tc.value, tc.known)
 			}
 		})
-	}
-}
-
-func TestGetBuildAppStoreVersion_ByBuildID(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":{"type":"appStoreVersions","id":"version-1","attributes":{"versionString":"1.0"}}}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/builds/123/appStoreVersion" {
-			t.Fatalf("expected path /v1/builds/123/appStoreVersion, got %s", req.URL.Path)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetBuildAppStoreVersion(context.Background(), "123"); err != nil {
-		t.Fatalf("GetBuildAppStoreVersion() error: %v", err)
 	}
 }
 
@@ -3079,20 +3535,6 @@ func TestBetaDeletionEndpoints_SendsRequest(t *testing.T) {
 				return c.DeleteBetaTester(ctx, "bt-1")
 			},
 		},
-		{
-			name: "DeleteBetaFeedbackCrashSubmission",
-			path: "/v1/betaFeedbackCrashSubmissions/sub-1",
-			call: func(c *Client) error {
-				return c.DeleteBetaFeedbackCrashSubmission(ctx, "sub-1")
-			},
-		},
-		{
-			name: "DeleteBetaFeedbackScreenshotSubmission",
-			path: "/v1/betaFeedbackScreenshotSubmissions/sub-1",
-			call: func(c *Client) error {
-				return c.DeleteBetaFeedbackScreenshotSubmission(ctx, "sub-1")
-			},
-		},
 	}
 
 	for _, tt := range tests {
@@ -3411,52 +3853,6 @@ func TestCreateBetaTesterInvitation_SendsRequest(t *testing.T) {
 	}
 }
 
-func TestGetAppStoreVersionLocalizations_WithFilters(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[{"type":"appStoreVersionLocalizations","id":"loc-1","attributes":{"locale":"en-US"}}]}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/appStoreVersions/version-1/appStoreVersionLocalizations" {
-			t.Fatalf("expected path /v1/appStoreVersions/version-1/appStoreVersionLocalizations, got %s", req.URL.Path)
-		}
-		values := req.URL.Query()
-		if values.Get("filter[locale]") != "en-US" {
-			t.Fatalf("expected filter[locale]=en-US, got %q", values.Get("filter[locale]"))
-		}
-		if values.Get("limit") != "10" {
-			t.Fatalf("expected limit=10, got %q", values.Get("limit"))
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetAppStoreVersionLocalizations(
-		context.Background(),
-		"version-1",
-		WithAppStoreVersionLocalizationLocales([]string{"en-US"}),
-		WithAppStoreVersionLocalizationsLimit(10),
-	); err != nil {
-		t.Fatalf("GetAppStoreVersionLocalizations() error: %v", err)
-	}
-}
-
-func TestGetAppStoreVersionLocalization_ByID(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":{"type":"appStoreVersionLocalizations","id":"loc-1","attributes":{"locale":"en-US"}}}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/appStoreVersionLocalizations/loc-1" {
-			t.Fatalf("expected path /v1/appStoreVersionLocalizations/loc-1, got %s", req.URL.Path)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetAppStoreVersionLocalization(context.Background(), "loc-1"); err != nil {
-		t.Fatalf("GetAppStoreVersionLocalization() error: %v", err)
-	}
-}
-
 func TestCreateAppStoreVersionLocalization_SendsRequest(t *testing.T) {
 	response := jsonResponse(http.StatusCreated, `{"data":{"type":"appStoreVersionLocalizations","id":"loc-1","attributes":{"locale":"en-US"}}}`)
 	client := newTestClient(t, func(req *http.Request) {
@@ -3599,69 +3995,6 @@ func TestUpdateAppStoreVersionLocalizationFields_PreservesExplicitEmpty(t *testi
 	}
 }
 
-func TestDeleteAppStoreVersionLocalization_SendsRequest(t *testing.T) {
-	response := jsonResponse(http.StatusNoContent, "")
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodDelete {
-			t.Fatalf("expected DELETE, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/appStoreVersionLocalizations/loc-1" {
-			t.Fatalf("expected path /v1/appStoreVersionLocalizations/loc-1, got %s", req.URL.Path)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if err := client.DeleteAppStoreVersionLocalization(context.Background(), "loc-1"); err != nil {
-		t.Fatalf("DeleteAppStoreVersionLocalization() error: %v", err)
-	}
-}
-
-func TestGetBetaBuildLocalizations_WithFilters(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[{"type":"betaBuildLocalizations","id":"loc-1","attributes":{"locale":"en-US"}}]}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/builds/build-1/betaBuildLocalizations" {
-			t.Fatalf("expected path /v1/builds/build-1/betaBuildLocalizations, got %s", req.URL.Path)
-		}
-		values := req.URL.Query()
-		if values.Get("filter[locale]") != "en-US" {
-			t.Fatalf("expected filter[locale]=en-US, got %q", values.Get("filter[locale]"))
-		}
-		if values.Get("limit") != "5" {
-			t.Fatalf("expected limit=5, got %q", values.Get("limit"))
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetBetaBuildLocalizations(
-		context.Background(),
-		"build-1",
-		WithBetaBuildLocalizationLocales([]string{"en-US"}),
-		WithBetaBuildLocalizationsLimit(5),
-	); err != nil {
-		t.Fatalf("GetBetaBuildLocalizations() error: %v", err)
-	}
-}
-
-func TestGetBetaBuildLocalization_ByID(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":{"type":"betaBuildLocalizations","id":"loc-1","attributes":{"locale":"en-US"}}}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/betaBuildLocalizations/loc-1" {
-			t.Fatalf("expected path /v1/betaBuildLocalizations/loc-1, got %s", req.URL.Path)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetBetaBuildLocalization(context.Background(), "loc-1"); err != nil {
-		t.Fatalf("GetBetaBuildLocalization() error: %v", err)
-	}
-}
-
 func TestCreateBetaBuildLocalization_SendsRequest(t *testing.T) {
 	response := jsonResponse(http.StatusCreated, `{"data":{"type":"betaBuildLocalizations","id":"loc-1","attributes":{"locale":"en-US"}}}`)
 	client := newTestClient(t, func(req *http.Request) {
@@ -3737,72 +4070,6 @@ func TestUpdateBetaBuildLocalization_SendsRequest(t *testing.T) {
 	}
 }
 
-func TestDeleteBetaBuildLocalization_SendsRequest(t *testing.T) {
-	response := jsonResponse(http.StatusNoContent, "")
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodDelete {
-			t.Fatalf("expected DELETE, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/betaBuildLocalizations/loc-1" {
-			t.Fatalf("expected path /v1/betaBuildLocalizations/loc-1, got %s", req.URL.Path)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if err := client.DeleteBetaBuildLocalization(context.Background(), "loc-1"); err != nil {
-		t.Fatalf("DeleteBetaBuildLocalization() error: %v", err)
-	}
-}
-
-func TestGetBetaAppLocalizations_WithFilters(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[{"type":"betaAppLocalizations","id":"loc-1","attributes":{"locale":"en-US"}}]}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/betaAppLocalizations" {
-			t.Fatalf("expected path /v1/betaAppLocalizations, got %s", req.URL.Path)
-		}
-		values := req.URL.Query()
-		if values.Get("filter[app]") != "app-1" {
-			t.Fatalf("expected filter[app]=app-1, got %q", values.Get("filter[app]"))
-		}
-		if values.Get("filter[locale]") != "en-US" {
-			t.Fatalf("expected filter[locale]=en-US, got %q", values.Get("filter[locale]"))
-		}
-		if values.Get("limit") != "5" {
-			t.Fatalf("expected limit=5, got %q", values.Get("limit"))
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetBetaAppLocalizations(
-		context.Background(),
-		WithBetaAppLocalizationAppIDs([]string{"app-1"}),
-		WithBetaAppLocalizationLocales([]string{"en-US"}),
-		WithBetaAppLocalizationsLimit(5),
-	); err != nil {
-		t.Fatalf("GetBetaAppLocalizations() error: %v", err)
-	}
-}
-
-func TestGetBetaAppLocalization_ByID(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":{"type":"betaAppLocalizations","id":"loc-1","attributes":{"locale":"en-US"}}}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/betaAppLocalizations/loc-1" {
-			t.Fatalf("expected path /v1/betaAppLocalizations/loc-1, got %s", req.URL.Path)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetBetaAppLocalization(context.Background(), "loc-1"); err != nil {
-		t.Fatalf("GetBetaAppLocalization() error: %v", err)
-	}
-}
-
 func TestCreateBetaAppLocalization_SendsRequest(t *testing.T) {
 	response := jsonResponse(http.StatusCreated, `{"data":{"type":"betaAppLocalizations","id":"loc-1","attributes":{"locale":"en-US"}}}`)
 	client := newTestClient(t, func(req *http.Request) {
@@ -3842,86 +4109,6 @@ func TestCreateBetaAppLocalization_SendsRequest(t *testing.T) {
 	}
 	if _, err := client.CreateBetaAppLocalization(context.Background(), "app-1", attrs); err != nil {
 		t.Fatalf("CreateBetaAppLocalization() error: %v", err)
-	}
-}
-
-func TestUpdateBetaAppLocalization_SendsRequest(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":{"type":"betaAppLocalizations","id":"loc-1","attributes":{"description":"Updated"}}}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodPatch {
-			t.Fatalf("expected PATCH, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/betaAppLocalizations/loc-1" {
-			t.Fatalf("expected path /v1/betaAppLocalizations/loc-1, got %s", req.URL.Path)
-		}
-		body, err := io.ReadAll(req.Body)
-		if err != nil {
-			t.Fatalf("read body error: %v", err)
-		}
-		var payload BetaAppLocalizationUpdateRequest
-		if err := json.Unmarshal(body, &payload); err != nil {
-			t.Fatalf("decode body error: %v", err)
-		}
-		if payload.Data.Type != ResourceTypeBetaAppLocalizations {
-			t.Fatalf("expected type betaAppLocalizations, got %q", payload.Data.Type)
-		}
-		if payload.Data.ID != "loc-1" {
-			t.Fatalf("expected id loc-1, got %q", payload.Data.ID)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	attrs := BetaAppLocalizationUpdateAttributes{
-		Description: func() *string { v := "Updated"; return &v }(),
-	}
-	if _, err := client.UpdateBetaAppLocalization(context.Background(), "loc-1", attrs); err != nil {
-		t.Fatalf("UpdateBetaAppLocalization() error: %v", err)
-	}
-}
-
-func TestDeleteBetaAppLocalization_SendsRequest(t *testing.T) {
-	response := jsonResponse(http.StatusNoContent, "")
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodDelete {
-			t.Fatalf("expected DELETE, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/betaAppLocalizations/loc-1" {
-			t.Fatalf("expected path /v1/betaAppLocalizations/loc-1, got %s", req.URL.Path)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if err := client.DeleteBetaAppLocalization(context.Background(), "loc-1"); err != nil {
-		t.Fatalf("DeleteBetaAppLocalization() error: %v", err)
-	}
-}
-
-func TestGetAppInfoLocalizations_WithFilters(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[{"type":"appInfoLocalizations","id":"loc-1","attributes":{"locale":"en-US"}}]}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/appInfos/app-info-1/appInfoLocalizations" {
-			t.Fatalf("expected path /v1/appInfos/app-info-1/appInfoLocalizations, got %s", req.URL.Path)
-		}
-		values := req.URL.Query()
-		if values.Get("filter[locale]") != "en-US" {
-			t.Fatalf("expected filter[locale]=en-US, got %q", values.Get("filter[locale]"))
-		}
-		if values.Get("limit") != "5" {
-			t.Fatalf("expected limit=5, got %q", values.Get("limit"))
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetAppInfoLocalizations(
-		context.Background(),
-		"app-info-1",
-		WithAppInfoLocalizationLocales([]string{"en-US"}),
-		WithAppInfoLocalizationsLimit(5),
-	); err != nil {
-		t.Fatalf("GetAppInfoLocalizations() error: %v", err)
 	}
 }
 
@@ -4067,48 +4254,6 @@ func TestUpdateAppInfoLocalizationFields_PreservesExplicitEmpty(t *testing.T) {
 	}
 }
 
-func TestGetAppInfos_WithCompoundReadOptions(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[{"type":"appInfos","id":"info-1"}],"included":[]}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet || req.URL.Path != "/v1/apps/app-1/appInfos" {
-			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.Path)
-		}
-		if got := req.URL.Query().Get("include"); got != "app,ageRatingDeclaration,appInfoLocalizations,primaryCategory" {
-			t.Fatalf("include = %q", got)
-		}
-		if got := req.URL.Query().Get("limit[appInfoLocalizations]"); got != "50" {
-			t.Fatalf("localization include limit = %q", got)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetAppInfos(
-		context.Background(),
-		"app-1",
-		WithAppInfoInclude([]string{"app", "ageRatingDeclaration", "appInfoLocalizations", "primaryCategory"}),
-		WithAppInfoLocalizationsIncludeLimit(50),
-	); err != nil {
-		t.Fatalf("GetAppInfos() error: %v", err)
-	}
-}
-
-func TestGetAgeRatingDeclarationForAppInfo(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":{"type":"ageRatingDeclarations","id":"age-1","attributes":{"gambling":false}}}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/appInfos/info-1/ageRatingDeclaration" {
-			t.Fatalf("expected path /v1/appInfos/info-1/ageRatingDeclaration, got %s", req.URL.Path)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetAgeRatingDeclarationForAppInfo(context.Background(), "info-1"); err != nil {
-		t.Fatalf("GetAgeRatingDeclarationForAppInfo() error: %v", err)
-	}
-}
-
 func TestGetAgeRatingDeclarationForAppStoreVersion(t *testing.T) {
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
@@ -4244,7 +4389,7 @@ func TestGetFeedback_BuildsQuery(t *testing.T) {
 		WithFeedbackBuildIDs([]string{"build-1"}),
 		WithFeedbackBuildPreReleaseVersionIDs([]string{"pre-1"}),
 		WithFeedbackTesterIDs([]string{"tester-1"}),
-		WithFeedbackLimit(10),
+		Limit[FeedbackOption](10),
 		WithFeedbackSort("-createdDate"),
 	}
 
@@ -4354,7 +4499,7 @@ func TestGetCrashes_BuildsQuery(t *testing.T) {
 		WithCrashBuildIDs([]string{"build-2"}),
 		WithCrashBuildPreReleaseVersionIDs([]string{"pre-2"}),
 		WithCrashTesterIDs([]string{"tester-2"}),
-		WithCrashLimit(5),
+		Limit[CrashOption](5),
 		WithCrashSort("createdDate"),
 	}
 
@@ -4386,31 +4531,14 @@ func TestGetReviews_BuildsQuery(t *testing.T) {
 	}, response)
 
 	opts := []ReviewOption{
-		WithRating(5),
+		WithRatings([]int{5}),
 		WithTerritory("us"),
 		WithReviewSort("-createdDate"),
-		WithLimit(25),
+		Limit[ReviewOption](25),
 	}
 
 	if _, err := client.GetReviews(context.Background(), "123", opts...); err != nil {
 		t.Fatalf("GetReviews() error: %v", err)
-	}
-}
-
-func TestGetCustomerReview_SendsRequest(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":{"type":"customerReviews","id":"review-1","attributes":{"rating":5,"title":"Great","body":"Nice","reviewerNickname":"Tester","createdDate":"2026-01-20T00:00:00Z","territory":"US"}}}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/customerReviews/review-1" {
-			t.Fatalf("expected path /v1/customerReviews/review-1, got %s", req.URL.Path)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetCustomerReview(context.Background(), "review-1"); err != nil {
-		t.Fatalf("GetCustomerReview() error: %v", err)
 	}
 }
 
@@ -4671,125 +4799,6 @@ func TestUpdateBuildUploadFile(t *testing.T) {
 	}
 }
 
-func TestGetBuildUploads_WithFilters(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[{"type":"buildUploads","id":"UPLOAD_123","attributes":{"cfBundleShortVersionString":"1.0.0"}}]}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/apps/app-1/buildUploads" {
-			t.Fatalf("expected path /v1/apps/app-1/buildUploads, got %s", req.URL.Path)
-		}
-		values := req.URL.Query()
-		if values.Get("filter[cfBundleShortVersionString]") != "1.0.0,1.0.1" {
-			t.Fatalf("expected filter[cfBundleShortVersionString]=1.0.0,1.0.1, got %q", values.Get("filter[cfBundleShortVersionString]"))
-		}
-		if values.Get("filter[cfBundleVersion]") != "100" {
-			t.Fatalf("expected filter[cfBundleVersion]=100, got %q", values.Get("filter[cfBundleVersion]"))
-		}
-		if values.Get("filter[platform]") != "IOS,MAC_OS" {
-			t.Fatalf("expected filter[platform]=IOS,MAC_OS, got %q", values.Get("filter[platform]"))
-		}
-		if values.Get("filter[state]") != "UPLOADED,FAILED" {
-			t.Fatalf("expected filter[state]=UPLOADED,FAILED, got %q", values.Get("filter[state]"))
-		}
-		if values.Get("sort") != "uploadedDate" {
-			t.Fatalf("expected sort=uploadedDate, got %q", values.Get("sort"))
-		}
-		if values.Get("limit") != "5" {
-			t.Fatalf("expected limit=5, got %q", values.Get("limit"))
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	_, err := client.GetBuildUploads(
-		context.Background(), "app-1",
-		WithBuildUploadsCFBundleShortVersionStrings([]string{"1.0.0", "1.0.1"}),
-		WithBuildUploadsCFBundleVersions([]string{"100"}),
-		WithBuildUploadsPlatforms([]string{"ios", "mac_os"}),
-		WithBuildUploadsStates([]string{"uploaded", "failed"}),
-		WithBuildUploadsSort("uploadedDate"),
-		WithBuildUploadsLimit(5),
-	)
-	if err != nil {
-		t.Fatalf("GetBuildUploads() error: %v", err)
-	}
-}
-
-func TestDeleteBuildUpload(t *testing.T) {
-	response := jsonResponse(http.StatusNoContent, "")
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodDelete {
-			t.Fatalf("expected DELETE, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/buildUploads/UPLOAD_123" {
-			t.Fatalf("expected path /v1/buildUploads/UPLOAD_123, got %s", req.URL.Path)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if err := client.DeleteBuildUpload(context.Background(), "UPLOAD_123"); err != nil {
-		t.Fatalf("DeleteBuildUpload() error: %v", err)
-	}
-}
-
-func TestGetBuildUploadFiles_WithLimit(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[{"type":"buildUploadFiles","id":"FILE_123","attributes":{"fileName":"app.ipa","fileSize":1234,"uti":"com.apple.ipa","assetType":"ASSET"}}]}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/buildUploads/UPLOAD_123/buildUploadFiles" {
-			t.Fatalf("expected path /v1/buildUploads/UPLOAD_123/buildUploadFiles, got %s", req.URL.Path)
-		}
-		if req.URL.Query().Get("limit") != "15" {
-			t.Fatalf("expected limit=15, got %q", req.URL.Query().Get("limit"))
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetBuildUploadFiles(context.Background(), "UPLOAD_123", WithBuildUploadFilesLimit(15)); err != nil {
-		t.Fatalf("GetBuildUploadFiles() error: %v", err)
-	}
-}
-
-func TestGetBuildUploadFile(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":{"type":"buildUploadFiles","id":"FILE_123","attributes":{"fileName":"app.ipa","fileSize":1234,"uti":"com.apple.ipa","assetType":"ASSET"}}}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/buildUploadFiles/FILE_123" {
-			t.Fatalf("expected path /v1/buildUploadFiles/FILE_123, got %s", req.URL.Path)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetBuildUploadFile(context.Background(), "FILE_123"); err != nil {
-		t.Fatalf("GetBuildUploadFile() error: %v", err)
-	}
-}
-
-func TestGetBuildIndividualTesters_WithLimit(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[{"type":"betaTesters","id":"TESTER_1","attributes":{"email":"tester@example.com"}}]}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/builds/BUILD_123/individualTesters" {
-			t.Fatalf("expected path /v1/builds/BUILD_123/individualTesters, got %s", req.URL.Path)
-		}
-		if req.URL.Query().Get("limit") != "10" {
-			t.Fatalf("expected limit=10, got %q", req.URL.Query().Get("limit"))
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetBuildIndividualTesters(context.Background(), "BUILD_123", WithBuildIndividualTestersLimit(10)); err != nil {
-		t.Fatalf("GetBuildIndividualTesters() error: %v", err)
-	}
-}
-
 func TestAddIndividualTestersToBuild(t *testing.T) {
 	response := jsonResponse(http.StatusNoContent, "")
 	client := newTestClient(t, func(req *http.Request) {
@@ -4864,7 +4873,7 @@ func TestGetBuildBetaUsagesMetrics_WithLimit(t *testing.T) {
 		assertAuthorized(t, req)
 	}, response)
 
-	resp, err := client.GetBuildBetaUsagesMetrics(context.Background(), "build-1", WithBetaBuildUsagesLimit(7))
+	resp, err := client.GetBuildBetaUsagesMetrics(context.Background(), "build-1", Limit[BetaBuildUsagesOption](7))
 	if err != nil {
 		t.Fatalf("GetBuildBetaUsagesMetrics() error: %v", err)
 	}
@@ -4899,7 +4908,7 @@ func TestGetBetaTesterUsagesMetrics_WithFilters(t *testing.T) {
 		context.Background(), "tester-1",
 		WithBetaTesterUsagesPeriod("P30D"),
 		WithBetaTesterUsagesAppID("app-1"),
-		WithBetaTesterUsagesLimit(20),
+		Limit[BetaTesterUsagesOption](20),
 	)
 	if err != nil {
 		t.Fatalf("GetBetaTesterUsagesMetrics() error: %v", err)
@@ -4934,34 +4943,13 @@ func TestGetAppBetaTesterUsagesMetrics_WithPeriodAndLimit(t *testing.T) {
 	resp, err := client.GetAppBetaTesterUsagesMetrics(
 		context.Background(), "app-1",
 		WithBetaTesterUsagesPeriod("P90D"),
-		WithBetaTesterUsagesLimit(12),
+		Limit[BetaTesterUsagesOption](12),
 	)
 	if err != nil {
 		t.Fatalf("GetAppBetaTesterUsagesMetrics() error: %v", err)
 	}
 	if len(resp.Data) == 0 {
 		t.Fatalf("expected response data")
-	}
-}
-
-func TestGetBetaCrashLog(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":{"type":"betaCrashLogs","id":"log-1","attributes":{"logText":"crash log"}}}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/betaCrashLogs/log-1" {
-			t.Fatalf("expected path /v1/betaCrashLogs/log-1, got %s", req.URL.Path)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	resp, err := client.GetBetaCrashLog(context.Background(), "log-1")
-	if err != nil {
-		t.Fatalf("GetBetaCrashLog() error: %v", err)
-	}
-	if resp.Data.ID != "log-1" {
-		t.Fatalf("expected log ID log-1, got %q", resp.Data.ID)
 	}
 }
 
@@ -5143,23 +5131,6 @@ func TestCreateAppScreenshotSetForExperimentTreatmentLocalization(t *testing.T) 
 	}
 }
 
-func TestDeleteAppScreenshotSet(t *testing.T) {
-	response := jsonResponse(http.StatusNoContent, "")
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodDelete {
-			t.Fatalf("expected DELETE, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/appScreenshotSets/SET_123" {
-			t.Fatalf("expected path /v1/appScreenshotSets/SET_123, got %s", req.URL.Path)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if err := client.DeleteAppScreenshotSet(context.Background(), "SET_123"); err != nil {
-		t.Fatalf("DeleteAppScreenshotSet() error: %v", err)
-	}
-}
-
 func TestGetAppScreenshots(t *testing.T) {
 	response := jsonResponse(http.StatusOK, `{"data":[{"type":"appScreenshots","id":"SHOT_123","attributes":{"fileName":"shot.png","fileSize":1024}}]}`)
 	client := newTestClient(t, func(req *http.Request) {
@@ -5242,23 +5213,6 @@ func TestUpdateAppScreenshot(t *testing.T) {
 	}
 	if result.Data.ID != "SHOT_123" {
 		t.Fatalf("expected screenshot ID SHOT_123, got %s", result.Data.ID)
-	}
-}
-
-func TestDeleteAppScreenshot(t *testing.T) {
-	response := jsonResponse(http.StatusNoContent, "")
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodDelete {
-			t.Fatalf("expected DELETE, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/appScreenshots/SHOT_123" {
-			t.Fatalf("expected path /v1/appScreenshots/SHOT_123, got %s", req.URL.Path)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if err := client.DeleteAppScreenshot(context.Background(), "SHOT_123"); err != nil {
-		t.Fatalf("DeleteAppScreenshot() error: %v", err)
 	}
 }
 
@@ -5378,23 +5332,6 @@ func TestCreateAppPreviewSetForCustomProductPageLocalization(t *testing.T) {
 	}
 	if result.Data.ID != "SET_CPP_123" {
 		t.Fatalf("expected set ID SET_CPP_123, got %s", result.Data.ID)
-	}
-}
-
-func TestDeleteAppPreviewSet(t *testing.T) {
-	response := jsonResponse(http.StatusNoContent, "")
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodDelete {
-			t.Fatalf("expected DELETE, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/appPreviewSets/SET_123" {
-			t.Fatalf("expected path /v1/appPreviewSets/SET_123, got %s", req.URL.Path)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if err := client.DeleteAppPreviewSet(context.Background(), "SET_123"); err != nil {
-		t.Fatalf("DeleteAppPreviewSet() error: %v", err)
 	}
 }
 
@@ -5559,92 +5496,6 @@ func TestSetAppPreviewFrameTimeCode(t *testing.T) {
 	}
 }
 
-func TestDeleteAppPreview(t *testing.T) {
-	response := jsonResponse(http.StatusNoContent, "")
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodDelete {
-			t.Fatalf("expected DELETE, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/appPreviews/PREVIEW_123" {
-			t.Fatalf("expected path /v1/appPreviews/PREVIEW_123, got %s", req.URL.Path)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if err := client.DeleteAppPreview(context.Background(), "PREVIEW_123"); err != nil {
-		t.Fatalf("DeleteAppPreview() error: %v", err)
-	}
-}
-
-func TestCreateAppStoreVersionSubmission(t *testing.T) {
-	response := jsonResponse(http.StatusCreated, `{"data":{"type":"appStoreVersionSubmissions","id":"SUBMIT_123","attributes":{"createdDate":"2026-01-20T00:00:00Z"}}}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodPost {
-			t.Fatalf("expected POST, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/appStoreVersionSubmissions" {
-			t.Fatalf("expected path /v1/appStoreVersionSubmissions, got %s", req.URL.Path)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	result, err := client.CreateAppStoreVersionSubmission(context.Background(), AppStoreVersionSubmissionCreateRequest{
-		Data: AppStoreVersionSubmissionCreateData{
-			Type: ResourceTypeAppStoreVersionSubmissions,
-			Relationships: &AppStoreVersionSubmissionRelationships{
-				AppStoreVersion: &Relationship{
-					Data: ResourceData{Type: ResourceTypeAppStoreVersions, ID: "VERSION_123"},
-				},
-			},
-		},
-	})
-	if err != nil {
-		t.Fatalf("CreateAppStoreVersionSubmission() error: %v", err)
-	}
-	if result.Data.ID != "SUBMIT_123" {
-		t.Fatalf("expected submission ID SUBMIT_123, got %s", result.Data.ID)
-	}
-}
-
-func TestGetAppStoreVersionSubmission(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":{"type":"appStoreVersionSubmissions","id":"SUBMIT_123","attributes":{"createdDate":"2026-01-20T00:00:00Z"}}}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/appStoreVersionSubmissions/SUBMIT_123" {
-			t.Fatalf("expected path /v1/appStoreVersionSubmissions/SUBMIT_123, got %s", req.URL.Path)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	result, err := client.GetAppStoreVersionSubmission(context.Background(), "SUBMIT_123")
-	if err != nil {
-		t.Fatalf("GetAppStoreVersionSubmission() error: %v", err)
-	}
-	if result.Data.ID != "SUBMIT_123" {
-		t.Fatalf("expected submission ID SUBMIT_123, got %s", result.Data.ID)
-	}
-}
-
-func TestDeleteAppStoreVersionSubmission(t *testing.T) {
-	response := jsonResponse(http.StatusNoContent, "")
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodDelete {
-			t.Fatalf("expected DELETE, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/appStoreVersionSubmissions/SUBMIT_123" {
-			t.Fatalf("expected path /v1/appStoreVersionSubmissions/SUBMIT_123, got %s", req.URL.Path)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	err := client.DeleteAppStoreVersionSubmission(context.Background(), "SUBMIT_123")
-	if err != nil {
-		t.Fatalf("DeleteAppStoreVersionSubmission() error: %v", err)
-	}
-}
-
 func TestBuildUploadMethods_ErrorResponse(t *testing.T) {
 	ctx := context.Background()
 	errorBody := `{"errors":[{"code":"BAD_REQUEST","title":"Bad Request","detail":"nope"}]}`
@@ -5720,29 +5571,6 @@ func TestBuildUploadMethods_ErrorResponse(t *testing.T) {
 			},
 		},
 		{
-			name: "CreateAppStoreVersionSubmission",
-			call: func(c *Client) error {
-				_, err := c.CreateAppStoreVersionSubmission(ctx, AppStoreVersionSubmissionCreateRequest{
-					Data: AppStoreVersionSubmissionCreateData{
-						Type: ResourceTypeAppStoreVersionSubmissions,
-						Relationships: &AppStoreVersionSubmissionRelationships{
-							AppStoreVersion: &Relationship{
-								Data: ResourceData{Type: ResourceTypeAppStoreVersions, ID: "VERSION_123"},
-							},
-						},
-					},
-				})
-				return err
-			},
-		},
-		{
-			name: "GetAppStoreVersionSubmission",
-			call: func(c *Client) error {
-				_, err := c.GetAppStoreVersionSubmission(ctx, "SUBMIT_123")
-				return err
-			},
-		},
-		{
 			name: "DeleteAppStoreVersionSubmission",
 			call: func(c *Client) error {
 				return c.DeleteAppStoreVersionSubmission(ctx, "SUBMIT_123")
@@ -5759,30 +5587,6 @@ func TestBuildUploadMethods_ErrorResponse(t *testing.T) {
 				t.Fatalf("expected bad request error, got %v", err)
 			}
 		})
-	}
-}
-
-func TestGetCiProducts_WithAppFilterAndLimit(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[{"type":"ciProducts","id":"prod-1"}]}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/ciProducts" {
-			t.Fatalf("expected path /v1/ciProducts, got %s", req.URL.Path)
-		}
-		values := req.URL.Query()
-		if values.Get("filter[app]") != "app-1" {
-			t.Fatalf("expected filter[app]=app-1, got %q", values.Get("filter[app]"))
-		}
-		if values.Get("limit") != "25" {
-			t.Fatalf("expected limit=25, got %q", values.Get("limit"))
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetCiProducts(context.Background(), WithCiProductsAppID("app-1"), WithCiProductsLimit(25)); err != nil {
-		t.Fatalf("GetCiProducts() error: %v", err)
 	}
 }
 
@@ -5833,103 +5637,6 @@ func TestGetCiProduct(t *testing.T) {
 	}
 	if relationships.BuildRuns == nil || relationships.BuildRuns.Links == nil || relationships.BuildRuns.Links.Related == "" {
 		t.Fatalf("unexpected build runs relationship: %#v", relationships)
-	}
-}
-
-func TestGetCiProductApp(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":{"type":"apps","id":"app-1"}}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/ciProducts/prod-1/app" {
-			t.Fatalf("expected path /v1/ciProducts/prod-1/app, got %s", req.URL.Path)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetCiProductApp(context.Background(), "prod-1"); err != nil {
-		t.Fatalf("GetCiProductApp() error: %v", err)
-	}
-}
-
-func TestGetCiProductBuildRuns_WithLimit(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[{"type":"ciBuildRuns","id":"run-1"}]}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/ciProducts/prod-1/buildRuns" {
-			t.Fatalf("expected path /v1/ciProducts/prod-1/buildRuns, got %s", req.URL.Path)
-		}
-		values := req.URL.Query()
-		if values.Get("limit") != "50" {
-			t.Fatalf("expected limit=50, got %q", values.Get("limit"))
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetCiProductBuildRuns(context.Background(), "prod-1", WithCiBuildRunsLimit(50)); err != nil {
-		t.Fatalf("GetCiProductBuildRuns() error: %v", err)
-	}
-}
-
-func TestGetCiProductPrimaryRepositories_WithLimit(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[{"type":"scmRepositories","id":"repo-1"}]}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/ciProducts/prod-1/primaryRepositories" {
-			t.Fatalf("expected path /v1/ciProducts/prod-1/primaryRepositories, got %s", req.URL.Path)
-		}
-		values := req.URL.Query()
-		if values.Get("limit") != "10" {
-			t.Fatalf("expected limit=10, got %q", values.Get("limit"))
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetCiProductPrimaryRepositories(context.Background(), "prod-1", WithCiProductRepositoriesLimit(10)); err != nil {
-		t.Fatalf("GetCiProductPrimaryRepositories() error: %v", err)
-	}
-}
-
-func TestGetCiProductAdditionalRepositories_WithLimit(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[{"type":"scmRepositories","id":"repo-2"}]}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/ciProducts/prod-1/additionalRepositories" {
-			t.Fatalf("expected path /v1/ciProducts/prod-1/additionalRepositories, got %s", req.URL.Path)
-		}
-		values := req.URL.Query()
-		if values.Get("limit") != "5" {
-			t.Fatalf("expected limit=5, got %q", values.Get("limit"))
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetCiProductAdditionalRepositories(context.Background(), "prod-1", WithCiProductRepositoriesLimit(5)); err != nil {
-		t.Fatalf("GetCiProductAdditionalRepositories() error: %v", err)
-	}
-}
-
-func TestDeleteCiProduct(t *testing.T) {
-	response := jsonResponse(http.StatusNoContent, ``)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodDelete {
-			t.Fatalf("expected DELETE, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/ciProducts/prod-1" {
-			t.Fatalf("expected path /v1/ciProducts/prod-1, got %s", req.URL.Path)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if err := client.DeleteCiProduct(context.Background(), "prod-1"); err != nil {
-		t.Fatalf("DeleteCiProduct() error: %v", err)
 	}
 }
 
@@ -6100,274 +5807,6 @@ func TestUpdateCiWorkflow(t *testing.T) {
 	}
 }
 
-func TestDeleteCiWorkflow(t *testing.T) {
-	response := jsonResponse(http.StatusNoContent, ``)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodDelete {
-			t.Fatalf("expected DELETE, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/ciWorkflows/wf-1" {
-			t.Fatalf("expected path /v1/ciWorkflows/wf-1, got %s", req.URL.Path)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if err := client.DeleteCiWorkflow(context.Background(), "wf-1"); err != nil {
-		t.Fatalf("DeleteCiWorkflow() error: %v", err)
-	}
-}
-
-func TestGetScmProviders_WithLimit(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[{"type":"scmProviders","id":"provider-1"}]}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/scmProviders" {
-			t.Fatalf("expected path /v1/scmProviders, got %s", req.URL.Path)
-		}
-		if got := req.URL.Query().Get("limit"); got != "25" {
-			t.Fatalf("expected limit=25, got %q", got)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetScmProviders(context.Background(), WithScmProvidersLimit(25)); err != nil {
-		t.Fatalf("GetScmProviders() error: %v", err)
-	}
-}
-
-func TestGetScmProvider(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":{"type":"scmProviders","id":"provider-1"}}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/scmProviders/provider-1" {
-			t.Fatalf("expected path /v1/scmProviders/provider-1, got %s", req.URL.Path)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetScmProvider(context.Background(), "provider-1"); err != nil {
-		t.Fatalf("GetScmProvider() error: %v", err)
-	}
-}
-
-func TestGetScmProviderRepositories_WithLimit(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[{"type":"scmRepositories","id":"repo-1"}]}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/scmProviders/provider-1/repositories" {
-			t.Fatalf("expected path /v1/scmProviders/provider-1/repositories, got %s", req.URL.Path)
-		}
-		if got := req.URL.Query().Get("limit"); got != "10" {
-			t.Fatalf("expected limit=10, got %q", got)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetScmProviderRepositories(context.Background(), "provider-1", WithScmRepositoriesLimit(10)); err != nil {
-		t.Fatalf("GetScmProviderRepositories() error: %v", err)
-	}
-}
-
-func TestGetScmRepositories_WithLimit(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[{"type":"scmRepositories","id":"repo-1"}]}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/scmRepositories" {
-			t.Fatalf("expected path /v1/scmRepositories, got %s", req.URL.Path)
-		}
-		if got := req.URL.Query().Get("limit"); got != "10" {
-			t.Fatalf("expected limit=10, got %q", got)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetScmRepositories(context.Background(), WithScmRepositoriesLimit(10)); err != nil {
-		t.Fatalf("GetScmRepositories() error: %v", err)
-	}
-}
-
-func TestGetScmRepository(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":{"type":"scmRepositories","id":"repo-1"}}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/scmRepositories/repo-1" {
-			t.Fatalf("expected path /v1/scmRepositories/repo-1, got %s", req.URL.Path)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetScmRepository(context.Background(), "  repo-1  "); err != nil {
-		t.Fatalf("GetScmRepository() error: %v", err)
-	}
-}
-
-func TestGetScmGitReference(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":{"type":"scmGitReferences","id":"ref-1"}}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/scmGitReferences/ref-1" {
-			t.Fatalf("expected path /v1/scmGitReferences/ref-1, got %s", req.URL.Path)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetScmGitReference(context.Background(), "ref-1"); err != nil {
-		t.Fatalf("GetScmGitReference() error: %v", err)
-	}
-}
-
-func TestGetScmRepositoryGitReferencesRelationships_WithLimit(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[]}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/scmRepositories/repo-1/relationships/gitReferences" {
-			t.Fatalf("expected path /v1/scmRepositories/repo-1/relationships/gitReferences, got %s", req.URL.Path)
-		}
-		if got := req.URL.Query().Get("limit"); got != "5" {
-			t.Fatalf("expected limit=5, got %q", got)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetScmRepositoryGitReferencesRelationships(context.Background(), "repo-1", WithLinkagesLimit(5)); err != nil {
-		t.Fatalf("GetScmRepositoryGitReferencesRelationships() error: %v", err)
-	}
-}
-
-func TestGetScmRepositoryPullRequests_WithLimit(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[{"type":"scmPullRequests","id":"pr-1"}]}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/scmRepositories/repo-1/pullRequests" {
-			t.Fatalf("expected path /v1/scmRepositories/repo-1/pullRequests, got %s", req.URL.Path)
-		}
-		if got := req.URL.Query().Get("limit"); got != "20" {
-			t.Fatalf("expected limit=20, got %q", got)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetScmRepositoryPullRequests(context.Background(), "repo-1", WithScmPullRequestsLimit(20)); err != nil {
-		t.Fatalf("GetScmRepositoryPullRequests() error: %v", err)
-	}
-}
-
-func TestGetScmRepositoryPullRequestsRelationships_WithLimit(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[]}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/scmRepositories/repo-1/relationships/pullRequests" {
-			t.Fatalf("expected path /v1/scmRepositories/repo-1/relationships/pullRequests, got %s", req.URL.Path)
-		}
-		if got := req.URL.Query().Get("limit"); got != "20" {
-			t.Fatalf("expected limit=20, got %q", got)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetScmRepositoryPullRequestsRelationships(context.Background(), "repo-1", WithLinkagesLimit(20)); err != nil {
-		t.Fatalf("GetScmRepositoryPullRequestsRelationships() error: %v", err)
-	}
-}
-
-func TestGetScmPullRequest(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":{"type":"scmPullRequests","id":"pr-1"}}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/scmPullRequests/pr-1" {
-			t.Fatalf("expected path /v1/scmPullRequests/pr-1, got %s", req.URL.Path)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetScmPullRequest(context.Background(), "pr-1"); err != nil {
-		t.Fatalf("GetScmPullRequest() error: %v", err)
-	}
-}
-
-func TestGetScmGitReferences_WithLimit(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[{"type":"scmGitReferences","id":"ref-1"}]}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/scmRepositories/repo-1/gitReferences" {
-			t.Fatalf("expected path /v1/scmRepositories/repo-1/gitReferences, got %s", req.URL.Path)
-		}
-		values := req.URL.Query()
-		if values.Get("limit") != "100" {
-			t.Fatalf("expected limit=100, got %q", values.Get("limit"))
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetScmGitReferences(context.Background(), "  repo-1  ", WithScmGitReferencesLimit(100)); err != nil {
-		t.Fatalf("GetScmGitReferences() error: %v", err)
-	}
-}
-
-func TestGetCiBuildRuns_WithLimit(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[{"type":"ciBuildRuns","id":"run-1","attributes":{"number":1}}]}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/ciWorkflows/wf-1/buildRuns" {
-			t.Fatalf("expected path /v1/ciWorkflows/wf-1/buildRuns, got %s", req.URL.Path)
-		}
-		values := req.URL.Query()
-		if values.Get("limit") != "50" {
-			t.Fatalf("expected limit=50, got %q", values.Get("limit"))
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetCiBuildRuns(context.Background(), "wf-1", WithCiBuildRunsLimit(50)); err != nil {
-		t.Fatalf("GetCiBuildRuns() error: %v", err)
-	}
-}
-
-func TestGetCiBuildRuns_WithSort(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[{"type":"ciBuildRuns","id":"run-1","attributes":{"number":1}}]}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/ciWorkflows/wf-1/buildRuns" {
-			t.Fatalf("expected path /v1/ciWorkflows/wf-1/buildRuns, got %s", req.URL.Path)
-		}
-		values := req.URL.Query()
-		if values.Get("sort") != "-number" {
-			t.Fatalf("expected sort=-number, got %q", values.Get("sort"))
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetCiBuildRuns(context.Background(), "wf-1", WithCiBuildRunsSort("-number")); err != nil {
-		t.Fatalf("GetCiBuildRuns() error: %v", err)
-	}
-}
-
 func TestGetCiBuildRun(t *testing.T) {
 	response := jsonResponse(http.StatusOK, `{
 		"data": {
@@ -6411,56 +5850,6 @@ func TestGetCiBuildRun(t *testing.T) {
 	}
 	if relationships.Actions == nil || relationships.Actions.Links == nil || relationships.Actions.Links.Related == "" || relationships.PullRequest == nil || relationships.PullRequest.Data.ID != "pr-1" {
 		t.Fatalf("unexpected actions/pull request relationships: %#v", relationships)
-	}
-}
-
-func TestGetCiBuildRun_WithIncludeAndFields(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":{"type":"ciBuildRuns","id":"run-1","attributes":{"number":1}}}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/ciBuildRuns/run-1" {
-			t.Fatalf("expected path /v1/ciBuildRuns/run-1, got %s", req.URL.Path)
-		}
-		values := req.URL.Query()
-		if values.Get("include") != "workflow,pullRequest" {
-			t.Fatalf("expected include=workflow,pullRequest, got %q", values.Get("include"))
-		}
-		if values.Get("fields[ciBuildRuns]") != "workflow,pullRequest" {
-			t.Fatalf("expected fields[ciBuildRuns]=workflow,pullRequest, got %q", values.Get("fields[ciBuildRuns]"))
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetCiBuildRun(
-		context.Background(),
-		"run-1",
-		WithCiBuildRunInclude("workflow", "pullRequest"),
-		WithCiBuildRunFields("workflow", "pullRequest"),
-	); err != nil {
-		t.Fatalf("GetCiBuildRun() error: %v", err)
-	}
-}
-
-func TestGetCiBuildRunBuilds_WithLimit(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[{"type":"builds","id":"build-1"}]}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/ciBuildRuns/run-1/builds" {
-			t.Fatalf("expected path /v1/ciBuildRuns/run-1/builds, got %s", req.URL.Path)
-		}
-		values := req.URL.Query()
-		if values.Get("limit") != "10" {
-			t.Fatalf("expected limit=10, got %q", values.Get("limit"))
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetCiBuildRunBuilds(context.Background(), "run-1", WithCiBuildRunBuildsLimit(10)); err != nil {
-		t.Fatalf("GetCiBuildRunBuilds() error: %v", err)
 	}
 }
 
@@ -6678,255 +6067,6 @@ func TestGetCiBuildAction(t *testing.T) {
 	}
 }
 
-func TestGetCiBuildActionBuildRun(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":{"type":"ciBuildRuns","id":"run-1"}}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/ciBuildActions/action-1/buildRun" {
-			t.Fatalf("expected path /v1/ciBuildActions/action-1/buildRun, got %s", req.URL.Path)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetCiBuildActionBuildRun(context.Background(), "action-1"); err != nil {
-		t.Fatalf("GetCiBuildActionBuildRun() error: %v", err)
-	}
-}
-
-func TestGetCiBuildActionArtifacts_WithLimit(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[{"type":"ciArtifacts","id":"art-1"}]}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/ciBuildActions/action-1/artifacts" {
-			t.Fatalf("expected path /v1/ciBuildActions/action-1/artifacts, got %s", req.URL.Path)
-		}
-		values := req.URL.Query()
-		if values.Get("limit") != "20" {
-			t.Fatalf("expected limit=20, got %q", values.Get("limit"))
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetCiBuildActionArtifacts(context.Background(), "action-1", WithCiArtifactsLimit(20)); err != nil {
-		t.Fatalf("GetCiBuildActionArtifacts() error: %v", err)
-	}
-}
-
-func TestGetCiArtifact(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":{"type":"ciArtifacts","id":"art-1"}}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/ciArtifacts/art-1" {
-			t.Fatalf("expected path /v1/ciArtifacts/art-1, got %s", req.URL.Path)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetCiArtifact(context.Background(), "art-1"); err != nil {
-		t.Fatalf("GetCiArtifact() error: %v", err)
-	}
-}
-
-func TestGetCiBuildActionTestResults_WithLimit(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[{"type":"ciTestResults","id":"test-1"}]}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/ciBuildActions/action-1/testResults" {
-			t.Fatalf("expected path /v1/ciBuildActions/action-1/testResults, got %s", req.URL.Path)
-		}
-		values := req.URL.Query()
-		if values.Get("limit") != "30" {
-			t.Fatalf("expected limit=30, got %q", values.Get("limit"))
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetCiBuildActionTestResults(context.Background(), "action-1", WithCiTestResultsLimit(30)); err != nil {
-		t.Fatalf("GetCiBuildActionTestResults() error: %v", err)
-	}
-}
-
-func TestGetCiTestResult(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":{"type":"ciTestResults","id":"test-1"}}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/ciTestResults/test-1" {
-			t.Fatalf("expected path /v1/ciTestResults/test-1, got %s", req.URL.Path)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetCiTestResult(context.Background(), "test-1"); err != nil {
-		t.Fatalf("GetCiTestResult() error: %v", err)
-	}
-}
-
-func TestGetCiBuildActionIssues_WithLimit(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[{"type":"ciIssues","id":"issue-1"}]}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/ciBuildActions/action-1/issues" {
-			t.Fatalf("expected path /v1/ciBuildActions/action-1/issues, got %s", req.URL.Path)
-		}
-		values := req.URL.Query()
-		if values.Get("limit") != "40" {
-			t.Fatalf("expected limit=40, got %q", values.Get("limit"))
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetCiBuildActionIssues(context.Background(), "action-1", WithCiIssuesLimit(40)); err != nil {
-		t.Fatalf("GetCiBuildActionIssues() error: %v", err)
-	}
-}
-
-func TestGetCiIssue(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":{"type":"ciIssues","id":"issue-1"}}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/ciIssues/issue-1" {
-			t.Fatalf("expected path /v1/ciIssues/issue-1, got %s", req.URL.Path)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetCiIssue(context.Background(), "issue-1"); err != nil {
-		t.Fatalf("GetCiIssue() error: %v", err)
-	}
-}
-
-func TestGetCiMacOsVersions_WithLimit(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[{"type":"ciMacOsVersions","id":"macos-1"}]}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/ciMacOsVersions" {
-			t.Fatalf("expected path /v1/ciMacOsVersions, got %s", req.URL.Path)
-		}
-		values := req.URL.Query()
-		if values.Get("limit") != "5" {
-			t.Fatalf("expected limit=5, got %q", values.Get("limit"))
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetCiMacOsVersions(context.Background(), WithCiMacOsVersionsLimit(5)); err != nil {
-		t.Fatalf("GetCiMacOsVersions() error: %v", err)
-	}
-}
-
-func TestGetCiMacOsVersion(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":{"type":"ciMacOsVersions","id":"macos-1"}}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/ciMacOsVersions/macos-1" {
-			t.Fatalf("expected path /v1/ciMacOsVersions/macos-1, got %s", req.URL.Path)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetCiMacOsVersion(context.Background(), "macos-1"); err != nil {
-		t.Fatalf("GetCiMacOsVersion() error: %v", err)
-	}
-}
-
-func TestGetCiMacOsVersionXcodeVersions_WithLimit(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[{"type":"ciXcodeVersions","id":"xcode-1"}]}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/ciMacOsVersions/macos-1/xcodeVersions" {
-			t.Fatalf("expected path /v1/ciMacOsVersions/macos-1/xcodeVersions, got %s", req.URL.Path)
-		}
-		values := req.URL.Query()
-		if values.Get("limit") != "20" {
-			t.Fatalf("expected limit=20, got %q", values.Get("limit"))
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetCiMacOsVersionXcodeVersions(context.Background(), "macos-1", WithCiXcodeVersionsLimit(20)); err != nil {
-		t.Fatalf("GetCiMacOsVersionXcodeVersions() error: %v", err)
-	}
-}
-
-func TestGetCiXcodeVersions_WithLimit(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[{"type":"ciXcodeVersions","id":"xcode-1"}]}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/ciXcodeVersions" {
-			t.Fatalf("expected path /v1/ciXcodeVersions, got %s", req.URL.Path)
-		}
-		values := req.URL.Query()
-		if values.Get("limit") != "10" {
-			t.Fatalf("expected limit=10, got %q", values.Get("limit"))
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetCiXcodeVersions(context.Background(), WithCiXcodeVersionsLimit(10)); err != nil {
-		t.Fatalf("GetCiXcodeVersions() error: %v", err)
-	}
-}
-
-func TestGetCiXcodeVersion(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":{"type":"ciXcodeVersions","id":"xcode-1"}}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/ciXcodeVersions/xcode-1" {
-			t.Fatalf("expected path /v1/ciXcodeVersions/xcode-1, got %s", req.URL.Path)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetCiXcodeVersion(context.Background(), "xcode-1"); err != nil {
-		t.Fatalf("GetCiXcodeVersion() error: %v", err)
-	}
-}
-
-func TestGetCiXcodeVersionMacOsVersions_WithLimit(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[{"type":"ciMacOsVersions","id":"macos-1"}]}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/ciXcodeVersions/xcode-1/macOsVersions" {
-			t.Fatalf("expected path /v1/ciXcodeVersions/xcode-1/macOsVersions, got %s", req.URL.Path)
-		}
-		values := req.URL.Query()
-		if values.Get("limit") != "15" {
-			t.Fatalf("expected limit=15, got %q", values.Get("limit"))
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetCiXcodeVersionMacOsVersions(context.Background(), "xcode-1", WithCiMacOsVersionsLimit(15)); err != nil {
-		t.Fatalf("GetCiXcodeVersionMacOsVersions() error: %v", err)
-	}
-}
-
 func TestDownloadCiArtifact_NoAuthHeader(t *testing.T) {
 	downloadURL := "https://appstoreconnect.apple.com/artifacts/artifact.zip"
 	response := rawResponse("artifact-data")
@@ -7121,27 +6261,6 @@ func TestResolveGitReferenceByName_NoMatch(t *testing.T) {
 
 	if _, err := client.ResolveGitReferenceByName(context.Background(), "repo-1", "main"); err == nil {
 		t.Fatal("expected error")
-	}
-}
-
-func TestGetBundleIDs_WithIdentifierFilter(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[{"type":"bundleIds","id":"bid-1","attributes":{"identifier":"com.example.app"}}]}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/bundleIds" {
-			t.Fatalf("expected path /v1/bundleIds, got %s", req.URL.Path)
-		}
-		values := req.URL.Query()
-		if values.Get("filter[identifier]") != "com.example.app" {
-			t.Fatalf("expected filter[identifier]=com.example.app, got %q", values.Get("filter[identifier]"))
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetBundleIDs(context.Background(), WithBundleIDsFilterIdentifier("com.example.app")); err != nil {
-		t.Fatalf("GetBundleIDs() error: %v", err)
 	}
 }
 
@@ -7550,163 +6669,6 @@ func TestGetBundleIDs_RejectsSplitSortWhenSparseFieldsOmitSortField(t *testing.T
 	}
 }
 
-func TestGetInAppPurchasesV2_WithLimit(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[{"type":"inAppPurchases","id":"iap-1","attributes":{"name":"Pro","productId":"com.example.pro","inAppPurchaseType":"CONSUMABLE"}}]}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/apps/123/inAppPurchasesV2" {
-			t.Fatalf("expected path /v1/apps/123/inAppPurchasesV2, got %s", req.URL.Path)
-		}
-		if req.URL.Query().Get("limit") != "10" {
-			t.Fatalf("expected limit=10, got %q", req.URL.Query().Get("limit"))
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetInAppPurchasesV2(context.Background(), "123", WithIAPLimit(10)); err != nil {
-		t.Fatalf("GetInAppPurchasesV2() error: %v", err)
-	}
-}
-
-func TestGetInAppPurchasesV2_WithProductIDAndNameFilters(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[{"type":"inAppPurchases","id":"iap-1","attributes":{"name":"Pro","productId":"com.example.pro","inAppPurchaseType":"CONSUMABLE"}}]}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/apps/123/inAppPurchasesV2" {
-			t.Fatalf("expected path /v1/apps/123/inAppPurchasesV2, got %s", req.URL.Path)
-		}
-		values := req.URL.Query()
-		if values.Get("filter[productId]") != "com.example.pro" {
-			t.Fatalf("expected filter[productId]=com.example.pro, got %q", values.Get("filter[productId]"))
-		}
-		if values.Get("filter[name]") != "Pro" {
-			t.Fatalf("expected filter[name]=Pro, got %q", values.Get("filter[name]"))
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetInAppPurchasesV2(
-		context.Background(),
-		"123",
-		WithIAPProductIDs([]string{"com.example.pro"}),
-		WithIAPNames([]string{"Pro"}),
-	); err != nil {
-		t.Fatalf("GetInAppPurchasesV2() error: %v", err)
-	}
-}
-
-func TestGetInAppPurchasesV2_WithNextURLIgnoresLocalFilters(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[]}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/apps/123/inAppPurchasesV2" {
-			t.Fatalf("expected path /v1/apps/123/inAppPurchasesV2, got %s", req.URL.Path)
-		}
-		values := req.URL.Query()
-		if values.Get("cursor") != "abc" {
-			t.Fatalf("expected cursor=abc, got %q", values.Get("cursor"))
-		}
-		if values.Get("filter[productId]") != "" {
-			t.Fatalf("expected filter[productId] to be omitted for nextURL, got %q", values.Get("filter[productId]"))
-		}
-		if values.Get("filter[name]") != "" {
-			t.Fatalf("expected filter[name] to be omitted for nextURL, got %q", values.Get("filter[name]"))
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetInAppPurchasesV2(
-		context.Background(),
-		"123",
-		WithIAPProductIDs([]string{"com.example.pro"}),
-		WithIAPNames([]string{"Pro"}),
-		WithIAPNextURL("https://api.appstoreconnect.apple.com/v1/apps/123/inAppPurchasesV2?cursor=abc"),
-	); err != nil {
-		t.Fatalf("GetInAppPurchasesV2() error: %v", err)
-	}
-}
-
-func TestGetBundleIDs_WithLimit(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[{"type":"bundleIds","id":"b1","attributes":{"name":"Demo","identifier":"com.example.demo","platform":"IOS"}}]}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/bundleIds" {
-			t.Fatalf("expected path /v1/bundleIds, got %s", req.URL.Path)
-		}
-		values := req.URL.Query()
-		if values.Get("limit") != "10" {
-			t.Fatalf("expected limit=10, got %q", values.Get("limit"))
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetBundleIDs(context.Background(), WithBundleIDsLimit(10)); err != nil {
-		t.Fatalf("GetBundleIDs() error: %v", err)
-	}
-}
-
-func TestGetInAppPurchases_WithLimit(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[{"type":"inAppPurchases","id":"iap-1","attributes":{"referenceName":"Pro","productId":"com.example.pro","inAppPurchaseType":"CONSUMABLE"}}]}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/apps/123/inAppPurchases" {
-			t.Fatalf("expected path /v1/apps/123/inAppPurchases, got %s", req.URL.Path)
-		}
-		if req.URL.Query().Get("limit") != "10" {
-			t.Fatalf("expected limit=10, got %q", req.URL.Query().Get("limit"))
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetInAppPurchases(context.Background(), "123", WithIAPLimit(10)); err != nil {
-		t.Fatalf("GetInAppPurchases() error: %v", err)
-	}
-}
-
-func TestGetInAppPurchase(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":{"type":"inAppPurchases","id":"iap-1","attributes":{"referenceName":"Pro","productId":"com.example.pro"}}}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/inAppPurchases/iap-1" {
-			t.Fatalf("expected path /v1/inAppPurchases/iap-1, got %s", req.URL.Path)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetInAppPurchase(context.Background(), "iap-1"); err != nil {
-		t.Fatalf("GetInAppPurchase() error: %v", err)
-	}
-}
-
-func TestGetBundleID_SendsRequest(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":{"type":"bundleIds","id":"b1","attributes":{"name":"Demo","identifier":"com.example.demo","platform":"IOS"}}}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/bundleIds/b1" {
-			t.Fatalf("expected path /v1/bundleIds/b1, got %s", req.URL.Path)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetBundleID(context.Background(), "b1"); err != nil {
-		t.Fatalf("GetBundleID() error: %v", err)
-	}
-}
-
 func TestCreateBundleID_SendsRequest(t *testing.T) {
 	response := jsonResponse(http.StatusCreated, `{"data":{"type":"bundleIds","id":"b1","attributes":{"name":"Demo","identifier":"com.example.demo","platform":"UNIVERSAL"}}}`)
 	client := newTestClient(t, func(req *http.Request) {
@@ -7778,112 +6740,6 @@ func TestUpdateBundleID_SendsRequest(t *testing.T) {
 	attrs := BundleIDUpdateAttributes{Name: "Updated"}
 	if _, err := client.UpdateBundleID(context.Background(), "b1", attrs); err != nil {
 		t.Fatalf("UpdateBundleID() error: %v", err)
-	}
-}
-
-func TestDeleteBundleID_SendsRequest(t *testing.T) {
-	response := jsonResponse(http.StatusNoContent, ``)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodDelete {
-			t.Fatalf("expected DELETE, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/bundleIds/b1" {
-			t.Fatalf("expected path /v1/bundleIds/b1, got %s", req.URL.Path)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if err := client.DeleteBundleID(context.Background(), "b1"); err != nil {
-		t.Fatalf("DeleteBundleID() error: %v", err)
-	}
-}
-
-func TestGetMerchantIDs_WithFilters(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[{"type":"merchantIds","id":"m1","attributes":{"name":"Example","identifier":"merchant.com.example"}}]}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/merchantIds" {
-			t.Fatalf("expected path /v1/merchantIds, got %s", req.URL.Path)
-		}
-		values := req.URL.Query()
-		if values.Get("filter[name]") != "Example" {
-			t.Fatalf("expected filter[name]=Example, got %q", values.Get("filter[name]"))
-		}
-		if values.Get("filter[identifier]") != "merchant.com.example" {
-			t.Fatalf("expected filter[identifier]=merchant.com.example, got %q", values.Get("filter[identifier]"))
-		}
-		if values.Get("sort") != "name" {
-			t.Fatalf("expected sort=name, got %q", values.Get("sort"))
-		}
-		if values.Get("fields[merchantIds]") != "name,identifier" {
-			t.Fatalf("expected fields[merchantIds], got %q", values.Get("fields[merchantIds]"))
-		}
-		if values.Get("fields[certificates]") != "certificateType,serialNumber" {
-			t.Fatalf("expected fields[certificates], got %q", values.Get("fields[certificates]"))
-		}
-		if values.Get("include") != "certificates" {
-			t.Fatalf("expected include=certificates, got %q", values.Get("include"))
-		}
-		if values.Get("limit[certificates]") != "10" {
-			t.Fatalf("expected limit[certificates]=10, got %q", values.Get("limit[certificates]"))
-		}
-		if values.Get("limit") != "5" {
-			t.Fatalf("expected limit=5, got %q", values.Get("limit"))
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetMerchantIDs(
-		context.Background(),
-		WithMerchantIDsFilterName("Example"),
-		WithMerchantIDsFilterIdentifier("merchant.com.example"),
-		WithMerchantIDsSort("name"),
-		WithMerchantIDsFields([]string{"name", "identifier"}),
-		WithMerchantIDsCertificateFields([]string{"certificateType", "serialNumber"}),
-		WithMerchantIDsInclude([]string{"certificates"}),
-		WithMerchantIDsCertificatesLimit(10),
-		WithMerchantIDsLimit(5),
-	); err != nil {
-		t.Fatalf("GetMerchantIDs() error: %v", err)
-	}
-}
-
-func TestGetMerchantID_SendsRequest(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":{"type":"merchantIds","id":"m1","attributes":{"name":"Example","identifier":"merchant.com.example"}}}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/merchantIds/m1" {
-			t.Fatalf("expected path /v1/merchantIds/m1, got %s", req.URL.Path)
-		}
-		values := req.URL.Query()
-		if values.Get("fields[merchantIds]") != "name" {
-			t.Fatalf("expected fields[merchantIds]=name, got %q", values.Get("fields[merchantIds]"))
-		}
-		if values.Get("fields[certificates]") != "certificateType" {
-			t.Fatalf("expected fields[certificates]=certificateType, got %q", values.Get("fields[certificates]"))
-		}
-		if values.Get("include") != "certificates" {
-			t.Fatalf("expected include=certificates, got %q", values.Get("include"))
-		}
-		if values.Get("limit[certificates]") != "5" {
-			t.Fatalf("expected limit[certificates]=5, got %q", values.Get("limit[certificates]"))
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetMerchantID(
-		context.Background(),
-		"m1",
-		WithMerchantIDsFields([]string{"name"}),
-		WithMerchantIDsCertificateFields([]string{"certificateType"}),
-		WithMerchantIDsInclude([]string{"certificates"}),
-		WithMerchantIDsCertificatesLimit(5),
-	); err != nil {
-		t.Fatalf("GetMerchantID() error: %v", err)
 	}
 }
 
@@ -7961,117 +6817,6 @@ func TestUpdateMerchantID_SendsRequest(t *testing.T) {
 	}
 }
 
-func TestDeleteMerchantID_SendsRequest(t *testing.T) {
-	response := jsonResponse(http.StatusNoContent, ``)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodDelete {
-			t.Fatalf("expected DELETE, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/merchantIds/m1" {
-			t.Fatalf("expected path /v1/merchantIds/m1, got %s", req.URL.Path)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if err := client.DeleteMerchantID(context.Background(), "m1"); err != nil {
-		t.Fatalf("DeleteMerchantID() error: %v", err)
-	}
-}
-
-func TestGetMerchantIDCertificates_WithLimit(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[{"type":"certificates","id":"c1","attributes":{"name":"Cert","certificateType":"APPLE_PAY"}}]}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/merchantIds/m1/certificates" {
-			t.Fatalf("expected path /v1/merchantIds/m1/certificates, got %s", req.URL.Path)
-		}
-		values := req.URL.Query()
-		if values.Get("filter[displayName]") != "Cert Name" {
-			t.Fatalf("expected filter[displayName], got %q", values.Get("filter[displayName]"))
-		}
-		if values.Get("filter[certificateType]") != "PASS_TYPE_ID" {
-			t.Fatalf("expected filter[certificateType], got %q", values.Get("filter[certificateType]"))
-		}
-		if values.Get("filter[serialNumber]") != "SN123" {
-			t.Fatalf("expected filter[serialNumber], got %q", values.Get("filter[serialNumber]"))
-		}
-		if values.Get("filter[id]") != "c1" {
-			t.Fatalf("expected filter[id]=c1, got %q", values.Get("filter[id]"))
-		}
-		if values.Get("sort") != "serialNumber" {
-			t.Fatalf("expected sort=serialNumber, got %q", values.Get("sort"))
-		}
-		if values.Get("fields[certificates]") != "serialNumber" {
-			t.Fatalf("expected fields[certificates], got %q", values.Get("fields[certificates]"))
-		}
-		if values.Get("fields[passTypeIds]") != "identifier" {
-			t.Fatalf("expected fields[passTypeIds], got %q", values.Get("fields[passTypeIds]"))
-		}
-		if values.Get("include") != "passTypeId" {
-			t.Fatalf("expected include=passTypeId, got %q", values.Get("include"))
-		}
-		if values.Get("limit") != "5" {
-			t.Fatalf("expected limit=5, got %q", values.Get("limit"))
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetMerchantIDCertificates(
-		context.Background(),
-		"m1",
-		WithMerchantIDCertificatesFilterDisplayName("Cert Name"),
-		WithMerchantIDCertificatesFilterCertificateTypes("PASS_TYPE_ID"),
-		WithMerchantIDCertificatesFilterSerialNumbers("SN123"),
-		WithMerchantIDCertificatesFilterIDs("c1"),
-		WithMerchantIDCertificatesSort("serialNumber"),
-		WithMerchantIDCertificatesFields([]string{"serialNumber"}),
-		WithMerchantIDCertificatesPassTypeFields([]string{"identifier"}),
-		WithMerchantIDCertificatesInclude([]string{"passTypeId"}),
-		WithMerchantIDCertificatesLimit(5),
-	); err != nil {
-		t.Fatalf("GetMerchantIDCertificates() error: %v", err)
-	}
-}
-
-func TestGetMerchantIDCertificatesRelationships_WithLimit(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[{"type":"certificates","id":"c1"}]}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/merchantIds/m1/relationships/certificates" {
-			t.Fatalf("expected path /v1/merchantIds/m1/relationships/certificates, got %s", req.URL.Path)
-		}
-		if req.URL.Query().Get("limit") != "5" {
-			t.Fatalf("expected limit=5, got %q", req.URL.Query().Get("limit"))
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetMerchantIDCertificatesRelationships(context.Background(), "m1", WithLinkagesLimit(5)); err != nil {
-		t.Fatalf("GetMerchantIDCertificatesRelationships() error: %v", err)
-	}
-}
-
-func TestGetBundleIDCapabilities_SendsRequest(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[{"type":"bundleIdCapabilities","id":"cap1","attributes":{"capabilityType":"ICLOUD"}}]}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/bundleIds/b1/bundleIdCapabilities" {
-			t.Fatalf("expected path /v1/bundleIds/b1/bundleIdCapabilities, got %s", req.URL.Path)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetBundleIDCapabilities(context.Background(), "b1"); err != nil {
-		t.Fatalf("GetBundleIDCapabilities() error: %v", err)
-	}
-}
-
 func TestCreateBundleIDCapability_SendsRequest(t *testing.T) {
 	response := jsonResponse(http.StatusCreated, `{"data":{"type":"bundleIdCapabilities","id":"cap1","attributes":{"capabilityType":"ICLOUD"}}}`)
 	client := newTestClient(t, func(req *http.Request) {
@@ -8125,23 +6870,6 @@ func TestCreateBundleIDCapability_SendsRequest(t *testing.T) {
 	}
 	if _, err := client.CreateBundleIDCapability(context.Background(), "b1", attrs); err != nil {
 		t.Fatalf("CreateBundleIDCapability() error: %v", err)
-	}
-}
-
-func TestDeleteBundleIDCapability_SendsRequest(t *testing.T) {
-	response := jsonResponse(http.StatusNoContent, ``)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodDelete {
-			t.Fatalf("expected DELETE, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/bundleIdCapabilities/cap1" {
-			t.Fatalf("expected path /v1/bundleIdCapabilities/cap1, got %s", req.URL.Path)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if err := client.DeleteBundleIDCapability(context.Background(), "cap1"); err != nil {
-		t.Fatalf("DeleteBundleIDCapability() error: %v", err)
 	}
 }
 
@@ -8364,115 +7092,6 @@ func TestUpdateCertificate_SendsRequest(t *testing.T) {
 	}
 }
 
-func TestRevokeCertificate_SendsRequest(t *testing.T) {
-	response := jsonResponse(http.StatusNoContent, ``)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodDelete {
-			t.Fatalf("expected DELETE, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/certificates/c1" {
-			t.Fatalf("expected path /v1/certificates/c1, got %s", req.URL.Path)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if err := client.RevokeCertificate(context.Background(), "c1"); err != nil {
-		t.Fatalf("RevokeCertificate() error: %v", err)
-	}
-}
-
-func TestGetDevices_WithFilter(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[{"type":"devices","id":"d1","attributes":{"name":"Device","udid":"UDID","platform":"IOS","status":"ENABLED"}}]}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/devices" {
-			t.Fatalf("expected path /v1/devices, got %s", req.URL.Path)
-		}
-		values := req.URL.Query()
-		if values.Get("filter[platform]") != "IOS,MAC_OS" {
-			t.Fatalf("expected filter[platform] to be set, got %q", values.Get("filter[platform]"))
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetDevices(context.Background(), WithDevicesPlatforms([]string{"IOS", "MAC_OS"})); err != nil {
-		t.Fatalf("GetDevices() error: %v", err)
-	}
-}
-
-func TestRegisterDevice_SendsRequest(t *testing.T) {
-	response := jsonResponse(http.StatusCreated, `{"data":{"type":"devices","id":"d1","attributes":{"name":"Device","udid":"UDID","platform":"UNIVERSAL","status":"ENABLED"}}}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodPost {
-			t.Fatalf("expected POST, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/devices" {
-			t.Fatalf("expected path /v1/devices, got %s", req.URL.Path)
-		}
-		body, err := io.ReadAll(req.Body)
-		if err != nil {
-			t.Fatalf("read body error: %v", err)
-		}
-		var payload DeviceCreateRequest
-		if err := json.Unmarshal(body, &payload); err != nil {
-			t.Fatalf("decode body error: %v", err)
-		}
-		if payload.Data.Type != ResourceTypeDevices {
-			t.Fatalf("expected type devices, got %q", payload.Data.Type)
-		}
-		if payload.Data.Attributes.UDID != "UDID" {
-			t.Fatalf("expected udid UDID, got %q", payload.Data.Attributes.UDID)
-		}
-		if payload.Data.Attributes.Platform != DevicePlatformUniversal {
-			t.Fatalf("expected platform UNIVERSAL, got %q", payload.Data.Attributes.Platform)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	attrs := DeviceCreateAttributes{
-		Name:     "Device",
-		UDID:     "UDID",
-		Platform: DevicePlatformUniversal,
-	}
-	if _, err := client.RegisterDevice(context.Background(), attrs); err != nil {
-		t.Fatalf("RegisterDevice() error: %v", err)
-	}
-}
-
-func TestGetProfiles_WithFilter(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[{"type":"profiles","id":"p1","attributes":{"name":"Profile","profileType":"IOS_APP_DEVELOPMENT"}}]}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/profiles" {
-			t.Fatalf("expected path /v1/profiles, got %s", req.URL.Path)
-		}
-		values := req.URL.Query()
-		if values.Get("filter[profileType]") != "IOS_APP_DEVELOPMENT,IOS_APP_STORE" {
-			t.Fatalf("expected filter[profileType] to be set, got %q", values.Get("filter[profileType]"))
-		}
-		if values.Get("filter[profileState]") != "ACTIVE,INVALID" {
-			t.Fatalf("expected filter[profileState] to be set, got %q", values.Get("filter[profileState]"))
-		}
-		if values.Get("limit") != "5" {
-			t.Fatalf("expected limit=5, got %q", values.Get("limit"))
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetProfiles(
-		context.Background(),
-		WithProfilesTypes([]string{"IOS_APP_DEVELOPMENT", "IOS_APP_STORE"}),
-		WithProfilesStates([]string{"ACTIVE", "INVALID"}),
-		WithProfilesLimit(5),
-	); err != nil {
-		t.Fatalf("GetProfiles() error: %v", err)
-	}
-}
-
 func TestGetProfile_SendsRequestVariants(t *testing.T) {
 	ctx := context.Background()
 	tests := []struct {
@@ -8533,23 +7152,6 @@ func TestGetProfileRelatedResources_SendsRequest(t *testing.T) {
 		call     func(*Client) error
 	}{
 		{
-			name:     "GetProfileBundleID",
-			response: `{"data":{"type":"bundleIds","id":"b1","attributes":{"name":"Bundle","identifier":"com.example"}}}`,
-			check: func(t *testing.T, req *http.Request) {
-				t.Helper()
-				if req.Method != http.MethodGet {
-					t.Fatalf("expected GET, got %s", req.Method)
-				}
-				if req.URL.Path != "/v1/profiles/p1/bundleId" {
-					t.Fatalf("expected path /v1/profiles/p1/bundleId, got %s", req.URL.Path)
-				}
-			},
-			call: func(c *Client) error {
-				_, err := c.GetProfileBundleID(ctx, "p1")
-				return err
-			},
-		},
-		{
 			name:     "GetProfileCertificates",
 			response: `{"data":[{"type":"certificates","id":"c1","attributes":{"name":"Cert","certificateType":"IOS_DISTRIBUTION"}}]}`,
 			check: func(t *testing.T, req *http.Request) {
@@ -8565,7 +7167,7 @@ func TestGetProfileRelatedResources_SendsRequest(t *testing.T) {
 				}
 			},
 			call: func(c *Client) error {
-				_, err := c.GetProfileCertificates(ctx, "p1", WithProfileCertificatesLimit(5))
+				_, err := c.GetProfileCertificates(ctx, "p1", Limit[ProfileCertificatesOption](5))
 				return err
 			},
 		},
@@ -8579,7 +7181,7 @@ func TestGetProfileRelatedResources_SendsRequest(t *testing.T) {
 				}
 			},
 			call: func(c *Client) error {
-				_, err := c.GetProfileCertificates(ctx, "p1", WithProfileCertificatesLimit(5), WithProfileCertificatesNextURL(nextCerts))
+				_, err := c.GetProfileCertificates(ctx, "p1", Limit[ProfileCertificatesOption](5), NextURL[ProfileCertificatesOption](nextCerts))
 				return err
 			},
 		},
@@ -8599,7 +7201,7 @@ func TestGetProfileRelatedResources_SendsRequest(t *testing.T) {
 				}
 			},
 			call: func(c *Client) error {
-				_, err := c.GetProfileDevices(ctx, "p1", WithProfileDevicesLimit(10))
+				_, err := c.GetProfileDevices(ctx, "p1", Limit[ProfileDevicesOption](10))
 				return err
 			},
 		},
@@ -8613,24 +7215,7 @@ func TestGetProfileRelatedResources_SendsRequest(t *testing.T) {
 				}
 			},
 			call: func(c *Client) error {
-				_, err := c.GetProfileDevices(ctx, "p1", WithProfileDevicesLimit(10), WithProfileDevicesNextURL(nextDevices))
-				return err
-			},
-		},
-		{
-			name:     "GetProfileBundleIDRelationship",
-			response: `{"data":{"type":"bundleIds","id":"b1"}}`,
-			check: func(t *testing.T, req *http.Request) {
-				t.Helper()
-				if req.Method != http.MethodGet {
-					t.Fatalf("expected GET, got %s", req.Method)
-				}
-				if req.URL.Path != "/v1/profiles/p1/relationships/bundleId" {
-					t.Fatalf("expected path /v1/profiles/p1/relationships/bundleId, got %s", req.URL.Path)
-				}
-			},
-			call: func(c *Client) error {
-				_, err := c.GetProfileBundleIDRelationship(ctx, "p1")
+				_, err := c.GetProfileDevices(ctx, "p1", Limit[ProfileDevicesOption](10), NextURL[ProfileDevicesOption](nextDevices))
 				return err
 			},
 		},
@@ -8650,7 +7235,7 @@ func TestGetProfileRelatedResources_SendsRequest(t *testing.T) {
 				}
 			},
 			call: func(c *Client) error {
-				_, err := c.GetProfileCertificatesRelationships(ctx, "p1", WithLinkagesLimit(2))
+				_, err := c.GetProfileCertificatesRelationships(ctx, "p1", Limit[LinkagesOption](2))
 				return err
 			},
 		},
@@ -8670,7 +7255,7 @@ func TestGetProfileRelatedResources_SendsRequest(t *testing.T) {
 				}
 			},
 			call: func(c *Client) error {
-				_, err := c.GetProfileDevicesRelationships(ctx, "p1", WithLinkagesLimit(3))
+				_, err := c.GetProfileDevicesRelationships(ctx, "p1", Limit[LinkagesOption](3))
 				return err
 			},
 		},
@@ -8738,40 +7323,6 @@ func TestCreateProfile_SendsRequest(t *testing.T) {
 	}
 }
 
-func TestDeleteProfile_SendsRequest(t *testing.T) {
-	response := jsonResponse(http.StatusNoContent, ``)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodDelete {
-			t.Fatalf("expected DELETE, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/profiles/p1" {
-			t.Fatalf("expected path /v1/profiles/p1, got %s", req.URL.Path)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if err := client.DeleteProfile(context.Background(), "p1"); err != nil {
-		t.Fatalf("DeleteProfile() error: %v", err)
-	}
-}
-
-func TestGetInAppPurchaseV2(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":{"type":"inAppPurchases","id":"iap-1","attributes":{"name":"Pro","productId":"com.example.pro","inAppPurchaseType":"CONSUMABLE"}}}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v2/inAppPurchases/iap-1" {
-			t.Fatalf("expected path /v2/inAppPurchases/iap-1, got %s", req.URL.Path)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetInAppPurchaseV2(context.Background(), "iap-1"); err != nil {
-		t.Fatalf("GetInAppPurchaseV2() error: %v", err)
-	}
-}
-
 func TestCreateInAppPurchaseV2(t *testing.T) {
 	response := jsonResponse(http.StatusCreated, `{"data":{"type":"inAppPurchases","id":"iap-1","attributes":{"name":"Pro","productId":"com.example.pro","inAppPurchaseType":"CONSUMABLE"}}}`)
 	client := newTestClient(t, func(req *http.Request) {
@@ -8807,92 +7358,6 @@ func TestCreateInAppPurchaseV2(t *testing.T) {
 	}
 	if _, err := client.CreateInAppPurchaseV2(context.Background(), "app-1", attrs); err != nil {
 		t.Fatalf("CreateInAppPurchaseV2() error: %v", err)
-	}
-}
-
-func TestUpdateInAppPurchaseV2(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":{"type":"inAppPurchases","id":"iap-1","attributes":{"name":"Pro","productId":"com.example.pro","inAppPurchaseType":"CONSUMABLE"}}}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodPatch {
-			t.Fatalf("expected PATCH, got %s", req.Method)
-		}
-		if req.URL.Path != "/v2/inAppPurchases/iap-1" {
-			t.Fatalf("expected path /v2/inAppPurchases/iap-1, got %s", req.URL.Path)
-		}
-		var payload InAppPurchaseV2UpdateRequest
-		if err := json.NewDecoder(req.Body).Decode(&payload); err != nil {
-			t.Fatalf("failed to decode request: %v", err)
-		}
-		if payload.Data.ID != "iap-1" || payload.Data.Type != ResourceTypeInAppPurchases {
-			t.Fatalf("unexpected payload: %+v", payload.Data)
-		}
-		if payload.Data.Attributes == nil || payload.Data.Attributes.Name == nil || *payload.Data.Attributes.Name != "New Name" {
-			t.Fatalf("expected name update, got %+v", payload.Data.Attributes)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	name := "New Name"
-	attrs := InAppPurchaseV2UpdateAttributes{Name: &name}
-	if _, err := client.UpdateInAppPurchaseV2(context.Background(), "iap-1", attrs); err != nil {
-		t.Fatalf("UpdateInAppPurchaseV2() error: %v", err)
-	}
-}
-
-func TestDeleteInAppPurchaseV2(t *testing.T) {
-	response := jsonResponse(http.StatusNoContent, "")
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodDelete {
-			t.Fatalf("expected DELETE, got %s", req.Method)
-		}
-		if req.URL.Path != "/v2/inAppPurchases/iap-1" {
-			t.Fatalf("expected path /v2/inAppPurchases/iap-1, got %s", req.URL.Path)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if err := client.DeleteInAppPurchaseV2(context.Background(), "iap-1"); err != nil {
-		t.Fatalf("DeleteInAppPurchaseV2() error: %v", err)
-	}
-}
-
-func TestGetInAppPurchaseLocalizations_WithLimit(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[{"type":"inAppPurchaseLocalizations","id":"loc-1","attributes":{"name":"Pro","locale":"en-US"}}]}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v2/inAppPurchases/iap-1/inAppPurchaseLocalizations" {
-			t.Fatalf("expected path /v2/inAppPurchases/iap-1/inAppPurchaseLocalizations, got %s", req.URL.Path)
-		}
-		if req.URL.Query().Get("limit") != "5" {
-			t.Fatalf("expected limit=5, got %q", req.URL.Query().Get("limit"))
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetInAppPurchaseLocalizations(context.Background(), "iap-1", WithIAPLocalizationsLimit(5)); err != nil {
-		t.Fatalf("GetInAppPurchaseLocalizations() error: %v", err)
-	}
-}
-
-func TestGetSubscriptionGroups_WithLimit(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[{"type":"subscriptionGroups","id":"group-1","attributes":{"referenceName":"Premium"}}]}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/apps/app-1/subscriptionGroups" {
-			t.Fatalf("expected path /v1/apps/app-1/subscriptionGroups, got %s", req.URL.Path)
-		}
-		if req.URL.Query().Get("limit") != "20" {
-			t.Fatalf("expected limit=20, got %q", req.URL.Query().Get("limit"))
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetSubscriptionGroups(context.Background(), "app-1", WithSubscriptionGroupsLimit(20)); err != nil {
-		t.Fatalf("GetSubscriptionGroups() error: %v", err)
 	}
 }
 
@@ -8959,105 +7424,6 @@ func TestUpdateSubscriptionGroup(t *testing.T) {
 	}
 }
 
-func TestDeleteSubscriptionGroup(t *testing.T) {
-	response := jsonResponse(http.StatusNoContent, ``)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodDelete {
-			t.Fatalf("expected DELETE, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/subscriptionGroups/group-1" {
-			t.Fatalf("expected path /v1/subscriptionGroups/group-1, got %s", req.URL.Path)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if err := client.DeleteSubscriptionGroup(context.Background(), "group-1"); err != nil {
-		t.Fatalf("DeleteSubscriptionGroup() error: %v", err)
-	}
-}
-
-func TestGetSubscriptions_WithLimit(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[{"type":"subscriptions","id":"sub-1","attributes":{"name":"Monthly","productId":"com.example.sub.monthly"}}]}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/subscriptionGroups/group-1/subscriptions" {
-			t.Fatalf("expected path /v1/subscriptionGroups/group-1/subscriptions, got %s", req.URL.Path)
-		}
-		if req.URL.Query().Get("limit") != "5" {
-			t.Fatalf("expected limit=5, got %q", req.URL.Query().Get("limit"))
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetSubscriptions(context.Background(), "group-1", WithSubscriptionsLimit(5)); err != nil {
-		t.Fatalf("GetSubscriptions() error: %v", err)
-	}
-}
-
-func TestGetSubscriptions_WithProductIDAndNameFilters(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[{"type":"subscriptions","id":"sub-1","attributes":{"name":"Monthly","productId":"com.example.sub.monthly"}}]}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/subscriptionGroups/group-1/subscriptions" {
-			t.Fatalf("expected path /v1/subscriptionGroups/group-1/subscriptions, got %s", req.URL.Path)
-		}
-		values := req.URL.Query()
-		if values.Get("filter[productId]") != "com.example.sub.monthly" {
-			t.Fatalf("expected filter[productId]=com.example.sub.monthly, got %q", values.Get("filter[productId]"))
-		}
-		if values.Get("filter[name]") != "Monthly" {
-			t.Fatalf("expected filter[name]=Monthly, got %q", values.Get("filter[name]"))
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetSubscriptions(
-		context.Background(),
-		"group-1",
-		WithSubscriptionsProductIDs([]string{"com.example.sub.monthly"}),
-		WithSubscriptionsNames([]string{"Monthly"}),
-	); err != nil {
-		t.Fatalf("GetSubscriptions() error: %v", err)
-	}
-}
-
-func TestGetSubscriptions_WithNextURLIgnoresLocalFilters(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[]}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/subscriptionGroups/group-1/subscriptions" {
-			t.Fatalf("expected path /v1/subscriptionGroups/group-1/subscriptions, got %s", req.URL.Path)
-		}
-		values := req.URL.Query()
-		if values.Get("cursor") != "abc" {
-			t.Fatalf("expected cursor=abc, got %q", values.Get("cursor"))
-		}
-		if values.Get("filter[productId]") != "" {
-			t.Fatalf("expected filter[productId] to be omitted for nextURL, got %q", values.Get("filter[productId]"))
-		}
-		if values.Get("filter[name]") != "" {
-			t.Fatalf("expected filter[name] to be omitted for nextURL, got %q", values.Get("filter[name]"))
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetSubscriptions(
-		context.Background(),
-		"group-1",
-		WithSubscriptionsProductIDs([]string{"com.example.sub.monthly"}),
-		WithSubscriptionsNames([]string{"Monthly"}),
-		WithSubscriptionsNextURL("https://api.appstoreconnect.apple.com/v1/subscriptionGroups/group-1/subscriptions?cursor=abc"),
-	); err != nil {
-		t.Fatalf("GetSubscriptions() error: %v", err)
-	}
-}
-
 func TestCreateSubscription(t *testing.T) {
 	response := jsonResponse(http.StatusCreated, `{"data":{"type":"subscriptions","id":"sub-1","attributes":{"name":"Monthly","productId":"com.example.sub.monthly"}}}`)
 	client := newTestClient(t, func(req *http.Request) {
@@ -9092,23 +7458,6 @@ func TestCreateSubscription(t *testing.T) {
 	}
 	if _, err := client.CreateSubscription(context.Background(), "group-1", createSubAttrs); err != nil {
 		t.Fatalf("CreateSubscription() error: %v", err)
-	}
-}
-
-func TestDeleteSubscription(t *testing.T) {
-	response := jsonResponse(http.StatusNoContent, ``)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodDelete {
-			t.Fatalf("expected DELETE, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/subscriptions/sub-1" {
-			t.Fatalf("expected path /v1/subscriptions/sub-1, got %s", req.URL.Path)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if err := client.DeleteSubscription(context.Background(), "sub-1"); err != nil {
-		t.Fatalf("DeleteSubscription() error: %v", err)
 	}
 }
 
@@ -9839,39 +8188,6 @@ func TestClientDeadlineExpiresWhileWaitingForLimiter(t *testing.T) {
 	}
 }
 
-// User management tests
-func TestGetUsers_WithFiltersAndLimit(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[{"type":"users","id":"user-1","attributes":{"username":"user@example.com","firstName":"Jane","lastName":"Doe","roles":["ADMIN"],"allAppsVisible":true,"provisioningAllowed":false}}]}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/users" {
-			t.Fatalf("expected path /v1/users, got %s", req.URL.Path)
-		}
-		values := req.URL.Query()
-		if values.Get("filter[username]") != "user@example.com" {
-			t.Fatalf("expected filter[username]=user@example.com, got %q", values.Get("filter[username]"))
-		}
-		if values.Get("filter[roles]") != "DEVELOPER,APP_MANAGER" {
-			t.Fatalf("expected filter[roles]=DEVELOPER,APP_MANAGER, got %q", values.Get("filter[roles]"))
-		}
-		if values.Get("limit") != "5" {
-			t.Fatalf("expected limit=5, got %q", values.Get("limit"))
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetUsers(
-		context.Background(),
-		WithUsersEmail("user@example.com"),
-		WithUsersRoles([]string{"developer", " app_manager "}),
-		WithUsersLimit(5),
-	); err != nil {
-		t.Fatalf("GetUsers() error: %v", err)
-	}
-}
-
 func TestUpdateUser_SendsRequest(t *testing.T) {
 	response := jsonResponse(http.StatusOK, `{"data":{"type":"users","id":"user-1","attributes":{"username":"user@example.com","roles":["ADMIN"],"allAppsVisible":false,"provisioningAllowed":false}}}`)
 	client := newTestClient(t, func(req *http.Request) {
@@ -9981,23 +8297,6 @@ func TestUpdateUser_OmitsVisibleAppsWhenEmpty(t *testing.T) {
 	}
 }
 
-func TestDeleteUser_SendsRequest(t *testing.T) {
-	response := jsonResponse(http.StatusNoContent, ``)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodDelete {
-			t.Fatalf("expected DELETE, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/users/user-1" {
-			t.Fatalf("expected path /v1/users/user-1, got %s", req.URL.Path)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if err := client.DeleteUser(context.Background(), "user-1"); err != nil {
-		t.Fatalf("DeleteUser() error: %v", err)
-	}
-}
-
 func TestCreateUserInvitation_WithVisibleApps(t *testing.T) {
 	response := jsonResponse(http.StatusOK, `{"data":{"type":"userInvitations","id":"invite-1","attributes":{"email":"user@example.com","roles":["ADMIN"],"allAppsVisible":false,"provisioningAllowed":false}}}`)
 	client := newTestClient(t, func(req *http.Request) {
@@ -10043,63 +8342,6 @@ func TestCreateUserInvitation_WithVisibleApps(t *testing.T) {
 	}
 	if _, err := client.CreateUserInvitation(context.Background(), userAttrs, []string{"app-1", "app-2"}); err != nil {
 		t.Fatalf("CreateUserInvitation() error: %v", err)
-	}
-}
-
-func TestGetUser_WithInclude(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":{"type":"users","id":"user-1","attributes":{"username":"user@example.com","firstName":"Jane","lastName":"Doe","roles":["ADMIN"],"allAppsVisible":true,"provisioningAllowed":false}}}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/users/user-1" {
-			t.Fatalf("expected path /v1/users/user-1, got %s", req.URL.Path)
-		}
-		if req.URL.Query().Get("include") != "visibleApps" {
-			t.Fatalf("expected include=visibleApps, got %q", req.URL.Query().Get("include"))
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetUser(context.Background(), "user-1", WithUsersInclude([]string{"visibleApps"})); err != nil {
-		t.Fatalf("GetUser() error: %v", err)
-	}
-}
-
-func TestGetUserVisibleApps_SendsRequest(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[{"type":"apps","id":"app-1","attributes":{"name":"Demo","bundleId":"com.example.demo","sku":"SKU1"}}]}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/users/user-1/visibleApps" {
-			t.Fatalf("expected path /v1/users/user-1/visibleApps, got %s", req.URL.Path)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetUserVisibleApps(context.Background(), "user-1"); err != nil {
-		t.Fatalf("GetUserVisibleApps() error: %v", err)
-	}
-}
-
-func TestGetUserVisibleAppsRelationships_SendsRequest(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[{"type":"apps","id":"app-1"}]}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/users/user-1/relationships/visibleApps" {
-			t.Fatalf("expected path /v1/users/user-1/relationships/visibleApps, got %s", req.URL.Path)
-		}
-		if req.URL.Query().Get("limit") != "7" {
-			t.Fatalf("expected limit=7, got %q", req.URL.Query().Get("limit"))
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetUserVisibleAppsRelationships(context.Background(), "user-1", WithLinkagesLimit(7)); err != nil {
-		t.Fatalf("GetUserVisibleAppsRelationships() error: %v", err)
 	}
 }
 
@@ -10154,47 +8396,6 @@ func TestRemoveUserVisibleApps_SendsRequest(t *testing.T) {
 
 	if err := client.RemoveUserVisibleApps(context.Background(), "user-1", []string{"app-1"}); err != nil {
 		t.Fatalf("RemoveUserVisibleApps() error: %v", err)
-	}
-}
-
-func TestGetBetaAppReviewDetails_WithAppFilter(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[{"type":"betaAppReviewDetails","id":"detail-1","attributes":{"contactEmail":"dev@example.com"}}]}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/betaAppReviewDetails" {
-			t.Fatalf("expected path /v1/betaAppReviewDetails, got %s", req.URL.Path)
-		}
-		values := req.URL.Query()
-		if values.Get("filter[app]") != "app-1" {
-			t.Fatalf("expected filter[app]=app-1, got %q", values.Get("filter[app]"))
-		}
-		if values.Get("limit") != "10" {
-			t.Fatalf("expected limit=10, got %q", values.Get("limit"))
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetBetaAppReviewDetails(context.Background(), "app-1", WithBetaAppReviewDetailsLimit(10)); err != nil {
-		t.Fatalf("GetBetaAppReviewDetails() error: %v", err)
-	}
-}
-
-func TestGetBetaAppReviewDetail(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":{"type":"betaAppReviewDetails","id":"detail-1","attributes":{"contactEmail":"dev@example.com"}}}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/betaAppReviewDetails/detail-1" {
-			t.Fatalf("expected path /v1/betaAppReviewDetails/detail-1, got %s", req.URL.Path)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetBetaAppReviewDetail(context.Background(), "detail-1"); err != nil {
-		t.Fatalf("GetBetaAppReviewDetail() error: %v", err)
 	}
 }
 
@@ -10317,23 +8518,6 @@ func TestCreateBetaAppReviewSubmission_SendsRequest(t *testing.T) {
 	}
 }
 
-func TestGetBetaAppReviewSubmission(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":{"type":"betaAppReviewSubmissions","id":"submission-1","attributes":{"betaReviewState":"IN_REVIEW"}}}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/betaAppReviewSubmissions/submission-1" {
-			t.Fatalf("expected path /v1/betaAppReviewSubmissions/submission-1, got %s", req.URL.Path)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetBetaAppReviewSubmission(context.Background(), "submission-1"); err != nil {
-		t.Fatalf("GetBetaAppReviewSubmission() error: %v", err)
-	}
-}
-
 func TestGetBuildBetaDetail(t *testing.T) {
 	response := jsonResponse(http.StatusOK, `{"data":{"type":"buildBetaDetails","id":"detail-1","attributes":{"autoNotifyEnabled":true,"internalBuildState":"PROCESSING","externalBuildState":"READY_FOR_TESTING"}}}`)
 	client := newTestClient(t, func(req *http.Request) {
@@ -10355,60 +8539,6 @@ func TestGetBuildBetaDetail(t *testing.T) {
 	}
 	if detail.Data.Attributes.ExternalBuildState != "READY_FOR_TESTING" {
 		t.Fatalf("expected externalBuildState to remain available in responses, got %q", detail.Data.Attributes.ExternalBuildState)
-	}
-}
-
-func TestUpdateBuildBetaDetail_SendsRequest(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":{"type":"buildBetaDetails","id":"detail-1","attributes":{"autoNotifyEnabled":true}}}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodPatch {
-			t.Fatalf("expected PATCH, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/buildBetaDetails/detail-1" {
-			t.Fatalf("expected path /v1/buildBetaDetails/detail-1, got %s", req.URL.Path)
-		}
-		var payload BuildBetaDetailUpdateRequest
-		if err := json.NewDecoder(req.Body).Decode(&payload); err != nil {
-			t.Fatalf("failed to decode request: %v", err)
-		}
-		if payload.Data.Type != ResourceTypeBuildBetaDetails {
-			t.Fatalf("expected type buildBetaDetails, got %q", payload.Data.Type)
-		}
-		if payload.Data.ID != "detail-1" {
-			t.Fatalf("expected id detail-1, got %q", payload.Data.ID)
-		}
-		if payload.Data.Attributes == nil || payload.Data.Attributes.AutoNotifyEnabled == nil {
-			t.Fatalf("expected autoNotifyEnabled attribute")
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	enabled := true
-	if _, err := client.UpdateBuildBetaDetail(context.Background(), "detail-1", BuildBetaDetailUpdateAttributes{
-		AutoNotifyEnabled: &enabled,
-	}); err != nil {
-		t.Fatalf("UpdateBuildBetaDetail() error: %v", err)
-	}
-}
-
-func TestGetBetaRecruitmentCriterionOptions_WithLimit(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[{"type":"betaRecruitmentCriterionOptions","id":"opt-1","attributes":{"identifier":"OPTION_1","name":"Option 1"}}]}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/betaRecruitmentCriterionOptions" {
-			t.Fatalf("expected path /v1/betaRecruitmentCriterionOptions, got %s", req.URL.Path)
-		}
-		values := req.URL.Query()
-		if values.Get("limit") != "5" {
-			t.Fatalf("expected limit=5, got %q", values.Get("limit"))
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetBetaRecruitmentCriterionOptions(context.Background(), WithBetaRecruitmentCriterionOptionsLimit(5)); err != nil {
-		t.Fatalf("GetBetaRecruitmentCriterionOptions() error: %v", err)
 	}
 }
 
@@ -10434,14 +8564,14 @@ func TestCreateBetaRecruitmentCriteria_SendsRequest(t *testing.T) {
 		if payload.Data.Relationships.BetaGroup.Data.ID != "group-1" {
 			t.Fatalf("expected group id group-1, got %q", payload.Data.Relationships.BetaGroup.Data.ID)
 		}
-		if payload.Data.Attributes.DeviceFamilyOsVersionFilters == nil || len(payload.Data.Attributes.DeviceFamilyOsVersionFilters) != 2 {
+		if payload.Data.Attributes.DeviceFamilyOSVersionFilters == nil || len(payload.Data.Attributes.DeviceFamilyOSVersionFilters) != 2 {
 			t.Fatalf("expected 2 device family filters")
 		}
-		if payload.Data.Attributes.DeviceFamilyOsVersionFilters[0].DeviceFamily != DeviceFamilyIPhone {
-			t.Fatalf("expected device family IPHONE, got %q", payload.Data.Attributes.DeviceFamilyOsVersionFilters[0].DeviceFamily)
+		if payload.Data.Attributes.DeviceFamilyOSVersionFilters[0].DeviceFamily != DeviceFamilyIPhone {
+			t.Fatalf("expected device family IPHONE, got %q", payload.Data.Attributes.DeviceFamilyOSVersionFilters[0].DeviceFamily)
 		}
-		if payload.Data.Attributes.DeviceFamilyOsVersionFilters[0].MinimumOsInclusive != "26" {
-			t.Fatalf("expected min os 26, got %q", payload.Data.Attributes.DeviceFamilyOsVersionFilters[0].MinimumOsInclusive)
+		if payload.Data.Attributes.DeviceFamilyOSVersionFilters[0].MinimumOsInclusive != "26" {
+			t.Fatalf("expected min os 26, got %q", payload.Data.Attributes.DeviceFamilyOSVersionFilters[0].MinimumOsInclusive)
 		}
 		assertAuthorized(t, req)
 	}, response)
@@ -10473,11 +8603,11 @@ func TestUpdateBetaRecruitmentCriteria_SendsRequest(t *testing.T) {
 		if payload.Data.ID != "criteria-1" {
 			t.Fatalf("expected id criteria-1, got %q", payload.Data.ID)
 		}
-		if payload.Data.Attributes == nil || len(payload.Data.Attributes.DeviceFamilyOsVersionFilters) != 1 {
+		if payload.Data.Attributes == nil || len(payload.Data.Attributes.DeviceFamilyOSVersionFilters) != 1 {
 			t.Fatalf("expected 1 device family filter")
 		}
-		if payload.Data.Attributes.DeviceFamilyOsVersionFilters[0].DeviceFamily != DeviceFamilyMac {
-			t.Fatalf("expected device family MAC, got %q", payload.Data.Attributes.DeviceFamilyOsVersionFilters[0].DeviceFamily)
+		if payload.Data.Attributes.DeviceFamilyOSVersionFilters[0].DeviceFamily != DeviceFamilyMac {
+			t.Fatalf("expected device family MAC, got %q", payload.Data.Attributes.DeviceFamilyOSVersionFilters[0].DeviceFamily)
 		}
 		assertAuthorized(t, req)
 	}, response)
@@ -10486,23 +8616,6 @@ func TestUpdateBetaRecruitmentCriteria_SendsRequest(t *testing.T) {
 		{DeviceFamily: DeviceFamilyMac, MinimumOsInclusive: "26"},
 	}); err != nil {
 		t.Fatalf("UpdateBetaRecruitmentCriteria() error: %v", err)
-	}
-}
-
-func TestDeleteBetaRecruitmentCriteria_SendsRequest(t *testing.T) {
-	response := jsonResponse(http.StatusNoContent, "")
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodDelete {
-			t.Fatalf("expected DELETE, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/betaRecruitmentCriteria/criteria-1" {
-			t.Fatalf("expected path /v1/betaRecruitmentCriteria/criteria-1, got %s", req.URL.Path)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if err := client.DeleteBetaRecruitmentCriteria(context.Background(), "criteria-1"); err != nil {
-		t.Fatalf("DeleteBetaRecruitmentCriteria() error: %v", err)
 	}
 }
 
@@ -10579,147 +8692,6 @@ func TestBetaGroupTesterUsageDimensionDataAcceptsSchemaString(t *testing.T) {
 	}
 }
 
-func TestGetDevices_WithFilters(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[{"type":"devices","id":"device-1","attributes":{"udid":"UDID1","platform":"IOS","status":"ENABLED"}}]}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/devices" {
-			t.Fatalf("expected path /v1/devices, got %s", req.URL.Path)
-		}
-		values := req.URL.Query()
-		if values.Get("filter[udid]") != "UDID1,UDID2" {
-			t.Fatalf("expected filter[udid]=UDID1,UDID2, got %q", values.Get("filter[udid]"))
-		}
-		if values.Get("filter[platform]") != "IOS" {
-			t.Fatalf("expected filter[platform]=IOS, got %q", values.Get("filter[platform]"))
-		}
-		if values.Get("filter[status]") != "ENABLED" {
-			t.Fatalf("expected filter[status]=ENABLED, got %q", values.Get("filter[status]"))
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetDevices(
-		context.Background(),
-		WithDevicesFilterUDIDs([]string{"UDID1", "UDID2"}),
-		WithDevicesFilterPlatforms([]string{"ios"}),
-		WithDevicesFilterStatuses([]string{"enabled"}),
-	); err != nil {
-		t.Fatalf("GetDevices() error: %v", err)
-	}
-}
-
-func TestGetDevices_WithFiltersAndLimit(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[{"type":"devices","id":"device-1","attributes":{"name":"My iPhone","platform":"IOS","udid":"UDID-1","status":"ENABLED"}}]}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/devices" {
-			t.Fatalf("expected path /v1/devices, got %s", req.URL.Path)
-		}
-		values := req.URL.Query()
-		if values.Get("filter[name]") != "My iPhone" {
-			t.Fatalf("expected filter[name]=My iPhone, got %q", values.Get("filter[name]"))
-		}
-		if values.Get("filter[platform]") != "IOS" {
-			t.Fatalf("expected filter[platform]=IOS, got %q", values.Get("filter[platform]"))
-		}
-		if values.Get("filter[status]") != "ENABLED" {
-			t.Fatalf("expected filter[status]=ENABLED, got %q", values.Get("filter[status]"))
-		}
-		if values.Get("filter[udid]") != "UDID-1,UDID-2" {
-			t.Fatalf("expected filter[udid] CSV, got %q", values.Get("filter[udid]"))
-		}
-		if values.Get("filter[id]") != "device-1" {
-			t.Fatalf("expected filter[id]=device-1, got %q", values.Get("filter[id]"))
-		}
-		if values.Get("sort") != "-name" {
-			t.Fatalf("expected sort=-name, got %q", values.Get("sort"))
-		}
-		if values.Get("fields[devices]") != "name,udid" {
-			t.Fatalf("expected fields[devices]=name,udid, got %q", values.Get("fields[devices]"))
-		}
-		if values.Get("limit") != "5" {
-			t.Fatalf("expected limit=5, got %q", values.Get("limit"))
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetDevices(
-		context.Background(),
-		WithDevicesNames([]string{"My iPhone"}),
-		WithDevicesPlatform("IOS"),
-		WithDevicesStatus("ENABLED"),
-		WithDevicesUDIDs([]string{"UDID-1", "UDID-2"}),
-		WithDevicesIDs([]string{"device-1"}),
-		WithDevicesSort("-name"),
-		WithDevicesFields([]string{"name", "udid"}),
-		WithDevicesLimit(5),
-	); err != nil {
-		t.Fatalf("GetDevices() error: %v", err)
-	}
-}
-
-func TestGetDevice_WithFields(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":{"type":"devices","id":"device-1","attributes":{"name":"My iPhone","platform":"IOS","udid":"UDID-1","status":"ENABLED"}}}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/devices/device-1" {
-			t.Fatalf("expected path /v1/devices/device-1, got %s", req.URL.Path)
-		}
-		if req.URL.Query().Get("fields[devices]") != "name,udid" {
-			t.Fatalf("expected fields[devices]=name,udid, got %q", req.URL.Query().Get("fields[devices]"))
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetDevice(context.Background(), "device-1", []string{"name", "udid"}); err != nil {
-		t.Fatalf("GetDevice() error: %v", err)
-	}
-}
-
-func TestCreateDevice_SendsRequest(t *testing.T) {
-	response := jsonResponse(http.StatusCreated, `{"data":{"type":"devices","id":"device-1","attributes":{"name":"My iPhone","platform":"IOS","udid":"UDID-1","status":"ENABLED"}}}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodPost {
-			t.Fatalf("expected POST, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/devices" {
-			t.Fatalf("expected path /v1/devices, got %s", req.URL.Path)
-		}
-		var payload DeviceCreateRequest
-		if err := json.NewDecoder(req.Body).Decode(&payload); err != nil {
-			t.Fatalf("failed to decode request: %v", err)
-		}
-		if payload.Data.Type != ResourceTypeDevices {
-			t.Fatalf("expected type devices, got %q", payload.Data.Type)
-		}
-		if payload.Data.Attributes.Name != "My iPhone" {
-			t.Fatalf("expected name My iPhone, got %q", payload.Data.Attributes.Name)
-		}
-		if payload.Data.Attributes.UDID != "UDID-1" {
-			t.Fatalf("expected udid UDID-1, got %q", payload.Data.Attributes.UDID)
-		}
-		if payload.Data.Attributes.Platform != DevicePlatformIOS {
-			t.Fatalf("expected platform IOS, got %q", payload.Data.Attributes.Platform)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.CreateDevice(context.Background(), DeviceCreateAttributes{
-		Name:     "My iPhone",
-		UDID:     "UDID-1",
-		Platform: DevicePlatformIOS,
-	}); err != nil {
-		t.Fatalf("CreateDevice() error: %v", err)
-	}
-}
-
 func TestUpdateDevice_SendsRequest(t *testing.T) {
 	response := jsonResponse(http.StatusOK, `{"data":{"type":"devices","id":"device-1","attributes":{"name":"Updated iPhone","status":"DISABLED"}}}`)
 	client := newTestClient(t, func(req *http.Request) {
@@ -10758,63 +8730,6 @@ func TestUpdateDevice_SendsRequest(t *testing.T) {
 		Status: &status,
 	}); err != nil {
 		t.Fatalf("UpdateDevice() error: %v", err)
-	}
-}
-
-func TestGetAccessibilityDeclarations_WithFilters(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[{"type":"accessibilityDeclarations","id":"decl-1","attributes":{"deviceFamily":"IPHONE","state":"DRAFT"}}]}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/apps/app-1/accessibilityDeclarations" {
-			t.Fatalf("expected path /v1/apps/app-1/accessibilityDeclarations, got %s", req.URL.Path)
-		}
-		values := req.URL.Query()
-		if values.Get("filter[deviceFamily]") != "IPHONE,IPAD" {
-			t.Fatalf("expected filter[deviceFamily]=IPHONE,IPAD, got %q", values.Get("filter[deviceFamily]"))
-		}
-		if values.Get("filter[state]") != "DRAFT" {
-			t.Fatalf("expected filter[state]=DRAFT, got %q", values.Get("filter[state]"))
-		}
-		if values.Get("fields[accessibilityDeclarations]") != "deviceFamily,state" {
-			t.Fatalf("expected fields[accessibilityDeclarations]=deviceFamily,state, got %q", values.Get("fields[accessibilityDeclarations]"))
-		}
-		if values.Get("limit") != "2" {
-			t.Fatalf("expected limit=2, got %q", values.Get("limit"))
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetAccessibilityDeclarations(
-		context.Background(),
-		"app-1",
-		WithAccessibilityDeclarationsDeviceFamilies([]string{"iphone", "ipad"}),
-		WithAccessibilityDeclarationsStates([]string{"draft"}),
-		WithAccessibilityDeclarationsFields([]string{"deviceFamily", "state"}),
-		WithAccessibilityDeclarationsLimit(2),
-	); err != nil {
-		t.Fatalf("GetAccessibilityDeclarations() error: %v", err)
-	}
-}
-
-func TestGetAccessibilityDeclaration_WithFields(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":{"type":"accessibilityDeclarations","id":"decl-1","attributes":{"deviceFamily":"IPHONE"}}}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/accessibilityDeclarations/decl-1" {
-			t.Fatalf("expected path /v1/accessibilityDeclarations/decl-1, got %s", req.URL.Path)
-		}
-		if req.URL.Query().Get("fields[accessibilityDeclarations]") != "deviceFamily,state" {
-			t.Fatalf("expected fields[accessibilityDeclarations]=deviceFamily,state, got %q", req.URL.Query().Get("fields[accessibilityDeclarations]"))
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetAccessibilityDeclaration(context.Background(), "decl-1", []string{"deviceFamily", "state"}); err != nil {
-		t.Fatalf("GetAccessibilityDeclaration() error: %v", err)
 	}
 }
 
@@ -10885,88 +8800,6 @@ func TestUpdateAccessibilityDeclaration(t *testing.T) {
 	attrs := AccessibilityDeclarationUpdateAttributes{Publish: &publish}
 	if _, err := client.UpdateAccessibilityDeclaration(context.Background(), "decl-1", attrs); err != nil {
 		t.Fatalf("UpdateAccessibilityDeclaration() error: %v", err)
-	}
-}
-
-func TestDeleteAccessibilityDeclaration(t *testing.T) {
-	response := jsonResponse(http.StatusNoContent, "")
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodDelete {
-			t.Fatalf("expected DELETE, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/accessibilityDeclarations/decl-1" {
-			t.Fatalf("expected path /v1/accessibilityDeclarations/decl-1, got %s", req.URL.Path)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if err := client.DeleteAccessibilityDeclaration(context.Background(), "decl-1"); err != nil {
-		t.Fatalf("DeleteAccessibilityDeclaration() error: %v", err)
-	}
-}
-
-func TestGetAppStoreReviewAttachmentsForReviewDetail_WithFilters(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[{"type":"appStoreReviewAttachments","id":"att-1","attributes":{"fileName":"review.pdf","fileSize":123}}]}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/appStoreReviewDetails/detail-1/appStoreReviewAttachments" {
-			t.Fatalf("expected path /v1/appStoreReviewDetails/detail-1/appStoreReviewAttachments, got %s", req.URL.Path)
-		}
-		values := req.URL.Query()
-		if values.Get("fields[appStoreReviewAttachments]") != "fileName,fileSize" {
-			t.Fatalf("expected fields[appStoreReviewAttachments]=fileName,fileSize, got %q", values.Get("fields[appStoreReviewAttachments]"))
-		}
-		if values.Get("fields[appStoreReviewDetails]") != "contactEmail,notes" {
-			t.Fatalf("expected fields[appStoreReviewDetails]=contactEmail,notes, got %q", values.Get("fields[appStoreReviewDetails]"))
-		}
-		if values.Get("include") != "appStoreReviewDetail" {
-			t.Fatalf("expected include=appStoreReviewDetail, got %q", values.Get("include"))
-		}
-		if values.Get("limit") != "5" {
-			t.Fatalf("expected limit=5, got %q", values.Get("limit"))
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetAppStoreReviewAttachmentsForReviewDetail(
-		context.Background(),
-		"detail-1",
-		WithAppStoreReviewAttachmentsFields([]string{"fileName", "fileSize"}),
-		WithAppStoreReviewAttachmentReviewDetailFields([]string{"contactEmail", "notes"}),
-		WithAppStoreReviewAttachmentsInclude([]string{"appStoreReviewDetail"}),
-		WithAppStoreReviewAttachmentsLimit(5),
-	); err != nil {
-		t.Fatalf("GetAppStoreReviewAttachmentsForReviewDetail() error: %v", err)
-	}
-}
-
-func TestGetAppStoreReviewAttachment_WithFields(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":{"type":"appStoreReviewAttachments","id":"att-1","attributes":{"fileName":"review.pdf"}}}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/appStoreReviewAttachments/att-1" {
-			t.Fatalf("expected path /v1/appStoreReviewAttachments/att-1, got %s", req.URL.Path)
-		}
-		if req.URL.Query().Get("fields[appStoreReviewAttachments]") != "fileName,fileSize" {
-			t.Fatalf("expected fields[appStoreReviewAttachments]=fileName,fileSize, got %q", req.URL.Query().Get("fields[appStoreReviewAttachments]"))
-		}
-		if req.URL.Query().Get("include") != "appStoreReviewDetail" {
-			t.Fatalf("expected include=appStoreReviewDetail, got %q", req.URL.Query().Get("include"))
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetAppStoreReviewAttachment(
-		context.Background(),
-		"att-1",
-		WithAppStoreReviewAttachmentsFields([]string{"fileName", "fileSize"}),
-		WithAppStoreReviewAttachmentsInclude([]string{"appStoreReviewDetail"}),
-	); err != nil {
-		t.Fatalf("GetAppStoreReviewAttachment() error: %v", err)
 	}
 }
 
@@ -11042,57 +8875,6 @@ func TestUpdateAppStoreReviewAttachment(t *testing.T) {
 	}
 }
 
-func TestDeleteAppStoreReviewAttachment(t *testing.T) {
-	response := jsonResponse(http.StatusNoContent, "")
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodDelete {
-			t.Fatalf("expected DELETE, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/appStoreReviewAttachments/att-1" {
-			t.Fatalf("expected path /v1/appStoreReviewAttachments/att-1, got %s", req.URL.Path)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if err := client.DeleteAppStoreReviewAttachment(context.Background(), "att-1"); err != nil {
-		t.Fatalf("DeleteAppStoreReviewAttachment() error: %v", err)
-	}
-}
-
-func TestGetRoutingAppCoverage(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":{"type":"routingAppCoverages","id":"cover-1","attributes":{"fileName":"coverage.geojson"}}}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/routingAppCoverages/cover-1" {
-			t.Fatalf("expected path /v1/routingAppCoverages/cover-1, got %s", req.URL.Path)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetRoutingAppCoverage(context.Background(), "cover-1"); err != nil {
-		t.Fatalf("GetRoutingAppCoverage() error: %v", err)
-	}
-}
-
-func TestGetRoutingAppCoverageForVersion(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":{"type":"routingAppCoverages","id":"cover-1","attributes":{"fileName":"coverage.geojson"}}}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/appStoreVersions/version-1/routingAppCoverage" {
-			t.Fatalf("expected path /v1/appStoreVersions/version-1/routingAppCoverage, got %s", req.URL.Path)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetRoutingAppCoverageForVersion(context.Background(), "version-1"); err != nil {
-		t.Fatalf("GetRoutingAppCoverageForVersion() error: %v", err)
-	}
-}
-
 func TestCreateRoutingAppCoverage(t *testing.T) {
 	response := jsonResponse(http.StatusCreated, `{"data":{"type":"routingAppCoverages","id":"cover-1","attributes":{"fileName":"coverage.geojson","fileSize":123}}}`)
 	client := newTestClient(t, func(req *http.Request) {
@@ -11165,238 +8947,6 @@ func TestUpdateRoutingAppCoverage(t *testing.T) {
 	}
 }
 
-func TestDeleteRoutingAppCoverage(t *testing.T) {
-	response := jsonResponse(http.StatusNoContent, "")
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodDelete {
-			t.Fatalf("expected DELETE, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/routingAppCoverages/cover-1" {
-			t.Fatalf("expected path /v1/routingAppCoverages/cover-1, got %s", req.URL.Path)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if err := client.DeleteRoutingAppCoverage(context.Background(), "cover-1"); err != nil {
-		t.Fatalf("DeleteRoutingAppCoverage() error: %v", err)
-	}
-}
-
-func TestGetAppEncryptionDeclarationsForApp(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[{"type":"appEncryptionDeclarations","id":"decl-1","attributes":{"appDescription":"Uses TLS"}}]}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/appEncryptionDeclarations" {
-			t.Fatalf("expected path /v1/appEncryptionDeclarations, got %s", req.URL.Path)
-		}
-		values := req.URL.Query()
-		if values.Get("filter[app]") != "app-1" {
-			t.Fatalf("expected filter[app]=app-1, got %q", values.Get("filter[app]"))
-		}
-		if values.Get("filter[builds]") != "build-1,build-2" {
-			t.Fatalf("expected filter[builds]=build-1,build-2, got %q", values.Get("filter[builds]"))
-		}
-		if values.Get("fields[appEncryptionDeclarations]") != "appDescription,exempt" {
-			t.Fatalf("expected fields[appEncryptionDeclarations]=appDescription,exempt, got %q", values.Get("fields[appEncryptionDeclarations]"))
-		}
-		if values.Get("fields[appEncryptionDeclarationDocuments]") != "fileName,fileSize" {
-			t.Fatalf("expected fields[appEncryptionDeclarationDocuments]=fileName,fileSize, got %q", values.Get("fields[appEncryptionDeclarationDocuments]"))
-		}
-		if values.Get("include") != "app,builds" {
-			t.Fatalf("expected include=app,builds, got %q", values.Get("include"))
-		}
-		if values.Get("limit") != "5" {
-			t.Fatalf("expected limit=5, got %q", values.Get("limit"))
-		}
-		if values.Get("limit[builds]") != "10" {
-			t.Fatalf("expected limit[builds]=10, got %q", values.Get("limit[builds]"))
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetAppEncryptionDeclarations(
-		context.Background(), "app-1",
-		WithAppEncryptionDeclarationsBuildIDs([]string{"build-1", "build-2"}),
-		WithAppEncryptionDeclarationsFields([]string{"appDescription", "exempt"}),
-		WithAppEncryptionDeclarationsDocumentFields([]string{"fileName", "fileSize"}),
-		WithAppEncryptionDeclarationsInclude([]string{"app", "builds"}),
-		WithAppEncryptionDeclarationsLimit(5),
-		WithAppEncryptionDeclarationsBuildLimit(10),
-	); err != nil {
-		t.Fatalf("GetAppEncryptionDeclarations() error: %v", err)
-	}
-}
-
-func TestGetAppEncryptionDeclaration(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":{"type":"appEncryptionDeclarations","id":"decl-1","attributes":{"appDescription":"Uses TLS"}}}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/appEncryptionDeclarations/decl-1" {
-			t.Fatalf("expected path /v1/appEncryptionDeclarations/decl-1, got %s", req.URL.Path)
-		}
-		values := req.URL.Query()
-		if values.Get("fields[appEncryptionDeclarations]") != "appDescription,exempt" {
-			t.Fatalf("expected fields[appEncryptionDeclarations]=appDescription,exempt, got %q", values.Get("fields[appEncryptionDeclarations]"))
-		}
-		if values.Get("fields[appEncryptionDeclarationDocuments]") != "fileName,fileSize" {
-			t.Fatalf("expected fields[appEncryptionDeclarationDocuments]=fileName,fileSize, got %q", values.Get("fields[appEncryptionDeclarationDocuments]"))
-		}
-		if values.Get("include") != "appEncryptionDeclarationDocument" {
-			t.Fatalf("expected include=appEncryptionDeclarationDocument, got %q", values.Get("include"))
-		}
-		if values.Get("limit[builds]") != "20" {
-			t.Fatalf("expected limit[builds]=20, got %q", values.Get("limit[builds]"))
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetAppEncryptionDeclaration(
-		context.Background(), "decl-1",
-		WithAppEncryptionDeclarationsFields([]string{"appDescription", "exempt"}),
-		WithAppEncryptionDeclarationsDocumentFields([]string{"fileName", "fileSize"}),
-		WithAppEncryptionDeclarationsInclude([]string{"appEncryptionDeclarationDocument"}),
-		WithAppEncryptionDeclarationsBuildLimit(20),
-	); err != nil {
-		t.Fatalf("GetAppEncryptionDeclaration() error: %v", err)
-	}
-}
-
-func TestGetAppEncryptionDeclarationApp(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":{"type":"apps","id":"app-1"}}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/appEncryptionDeclarations/decl-1/app" {
-			t.Fatalf("expected path /v1/appEncryptionDeclarations/decl-1/app, got %s", req.URL.Path)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetAppEncryptionDeclarationApp(context.Background(), "decl-1"); err != nil {
-		t.Fatalf("GetAppEncryptionDeclarationApp() error: %v", err)
-	}
-}
-
-func TestGetAppEncryptionDeclarationAppRelationship(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":{"type":"apps","id":"app-1"}}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/appEncryptionDeclarations/decl-1/relationships/app" {
-			t.Fatalf("expected path /v1/appEncryptionDeclarations/decl-1/relationships/app, got %s", req.URL.Path)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetAppEncryptionDeclarationAppRelationship(context.Background(), "decl-1"); err != nil {
-		t.Fatalf("GetAppEncryptionDeclarationAppRelationship() error: %v", err)
-	}
-}
-
-func TestGetAppEncryptionDeclarationDocumentForDeclaration(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":{"type":"appEncryptionDeclarationDocuments","id":"doc-1","attributes":{"fileName":"export.pdf"}}}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/appEncryptionDeclarations/decl-1/appEncryptionDeclarationDocument" {
-			t.Fatalf("expected path /v1/appEncryptionDeclarations/decl-1/appEncryptionDeclarationDocument, got %s", req.URL.Path)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetAppEncryptionDeclarationDocumentForDeclaration(context.Background(), "decl-1"); err != nil {
-		t.Fatalf("GetAppEncryptionDeclarationDocumentForDeclaration() error: %v", err)
-	}
-}
-
-func TestGetAppEncryptionDeclarationDocumentRelationship(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":{"type":"appEncryptionDeclarationDocuments","id":"doc-1"}}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/appEncryptionDeclarations/decl-1/relationships/appEncryptionDeclarationDocument" {
-			t.Fatalf("expected path /v1/appEncryptionDeclarations/decl-1/relationships/appEncryptionDeclarationDocument, got %s", req.URL.Path)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetAppEncryptionDeclarationDocumentRelationship(context.Background(), "decl-1"); err != nil {
-		t.Fatalf("GetAppEncryptionDeclarationDocumentRelationship() error: %v", err)
-	}
-}
-
-func TestGetAppEncryptionDeclarationsForAppResource(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[{"type":"appEncryptionDeclarations","id":"decl-1","attributes":{"appDescription":"Uses TLS"}}]}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/apps/app-1/appEncryptionDeclarations" {
-			t.Fatalf("expected path /v1/apps/app-1/appEncryptionDeclarations, got %s", req.URL.Path)
-		}
-		values := req.URL.Query()
-		if values.Get("filter[app]") != "" {
-			t.Fatalf("expected filter[app] to be empty, got %q", values.Get("filter[app]"))
-		}
-		if values.Get("filter[builds]") != "build-1,build-2" {
-			t.Fatalf("expected filter[builds]=build-1,build-2, got %q", values.Get("filter[builds]"))
-		}
-		if values.Get("fields[appEncryptionDeclarations]") != "appDescription,exempt" {
-			t.Fatalf("expected fields[appEncryptionDeclarations]=appDescription,exempt, got %q", values.Get("fields[appEncryptionDeclarations]"))
-		}
-		if values.Get("fields[appEncryptionDeclarationDocuments]") != "fileName,fileSize" {
-			t.Fatalf("expected fields[appEncryptionDeclarationDocuments]=fileName,fileSize, got %q", values.Get("fields[appEncryptionDeclarationDocuments]"))
-		}
-		if values.Get("include") != "appEncryptionDeclarationDocument" {
-			t.Fatalf("expected include=appEncryptionDeclarationDocument, got %q", values.Get("include"))
-		}
-		if values.Get("limit") != "5" {
-			t.Fatalf("expected limit=5, got %q", values.Get("limit"))
-		}
-		if values.Get("limit[builds]") != "10" {
-			t.Fatalf("expected limit[builds]=10, got %q", values.Get("limit[builds]"))
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetAppEncryptionDeclarationsForApp(
-		context.Background(), "app-1",
-		WithAppEncryptionDeclarationsBuildIDs([]string{"build-1", "build-2"}),
-		WithAppEncryptionDeclarationsFields([]string{"appDescription", "exempt"}),
-		WithAppEncryptionDeclarationsDocumentFields([]string{"fileName", "fileSize"}),
-		WithAppEncryptionDeclarationsInclude([]string{"appEncryptionDeclarationDocument"}),
-		WithAppEncryptionDeclarationsLimit(5),
-		WithAppEncryptionDeclarationsBuildLimit(10),
-	); err != nil {
-		t.Fatalf("GetAppEncryptionDeclarationsForApp() error: %v", err)
-	}
-}
-
-func TestGetBuildAppEncryptionDeclaration(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":{"type":"appEncryptionDeclarations","id":"decl-1","attributes":{"appDescription":"Uses TLS"}}}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/builds/build-1/appEncryptionDeclaration" {
-			t.Fatalf("expected path /v1/builds/build-1/appEncryptionDeclaration, got %s", req.URL.Path)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetBuildAppEncryptionDeclaration(context.Background(), "build-1"); err != nil {
-		t.Fatalf("GetBuildAppEncryptionDeclaration() error: %v", err)
-	}
-}
-
 func TestCreateAppEncryptionDeclaration(t *testing.T) {
 	response := jsonResponse(http.StatusCreated, `{"data":{"type":"appEncryptionDeclarations","id":"decl-1","attributes":{"appDescription":"Uses TLS"}}}`)
 	client := newTestClient(t, func(req *http.Request) {
@@ -11463,26 +9013,6 @@ func TestAddBuildsToAppEncryptionDeclaration(t *testing.T) {
 
 	if err := client.AddBuildsToAppEncryptionDeclaration(context.Background(), "decl-1", []string{"build-1", "build-2"}); err != nil {
 		t.Fatalf("AddBuildsToAppEncryptionDeclaration() error: %v", err)
-	}
-}
-
-func TestGetAppEncryptionDeclarationDocument(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":{"type":"appEncryptionDeclarationDocuments","id":"doc-1","attributes":{"fileName":"export.pdf"}}}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/appEncryptionDeclarationDocuments/doc-1" {
-			t.Fatalf("expected path /v1/appEncryptionDeclarationDocuments/doc-1, got %s", req.URL.Path)
-		}
-		if req.URL.Query().Get("fields[appEncryptionDeclarationDocuments]") != "fileName,fileSize" {
-			t.Fatalf("expected fields[appEncryptionDeclarationDocuments]=fileName,fileSize, got %q", req.URL.Query().Get("fields[appEncryptionDeclarationDocuments]"))
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetAppEncryptionDeclarationDocument(context.Background(), "doc-1", []string{"fileName", "fileSize"}); err != nil {
-		t.Fatalf("GetAppEncryptionDeclarationDocument() error: %v", err)
 	}
 }
 
@@ -11555,40 +9085,6 @@ func TestUpdateAppEncryptionDeclarationDocument(t *testing.T) {
 	}
 	if _, err := client.UpdateAppEncryptionDeclarationDocument(context.Background(), "doc-1", attrs); err != nil {
 		t.Fatalf("UpdateAppEncryptionDeclarationDocument() error: %v", err)
-	}
-}
-
-func TestGetAppStoreReviewDetail(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":{"type":"appStoreReviewDetails","id":"detail-1","attributes":{"contactEmail":"dev@example.com"}}}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/appStoreReviewDetails/detail-1" {
-			t.Fatalf("expected path /v1/appStoreReviewDetails/detail-1, got %s", req.URL.Path)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetAppStoreReviewDetail(context.Background(), "detail-1"); err != nil {
-		t.Fatalf("GetAppStoreReviewDetail() error: %v", err)
-	}
-}
-
-func TestGetAppStoreReviewDetailForVersion(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":{"type":"appStoreReviewDetails","id":"detail-1","attributes":{"contactEmail":"dev@example.com"}}}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/appStoreVersions/version-1/appStoreReviewDetail" {
-			t.Fatalf("expected path /v1/appStoreVersions/version-1/appStoreReviewDetail, got %s", req.URL.Path)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetAppStoreReviewDetailForVersion(context.Background(), "version-1"); err != nil {
-		t.Fatalf("GetAppStoreReviewDetailForVersion() error: %v", err)
 	}
 }
 
@@ -11695,37 +9191,6 @@ func TestGetPerfPowerMetricsForApp(t *testing.T) {
 	}
 }
 
-func TestGetDiagnosticSignaturesForBuild(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[{"type":"diagnosticSignatures","id":"diag-1"}],"links":{"self":"https://example.com"}}`)
-	client := newTestClient(t, func(req *http.Request) {
-		assertAuthorized(t, req)
-		if req.URL.Path != "/v1/builds/build-1/diagnosticSignatures" {
-			t.Fatalf("expected path /v1/builds/build-1/diagnosticSignatures, got %s", req.URL.Path)
-		}
-		query := req.URL.Query()
-		if query.Get("filter[diagnosticType]") != "HANGS" {
-			t.Fatalf("expected diagnosticType filter HANGS, got %q", query.Get("filter[diagnosticType]"))
-		}
-		if query.Get("fields[diagnosticSignatures]") != "diagnosticType,signature" {
-			t.Fatalf("expected fields filter, got %q", query.Get("fields[diagnosticSignatures]"))
-		}
-		if query.Get("limit") != "50" {
-			t.Fatalf("expected limit 50, got %q", query.Get("limit"))
-		}
-	}, response)
-
-	_, err := client.GetDiagnosticSignaturesForBuild(
-		context.Background(),
-		"build-1",
-		WithDiagnosticSignaturesDiagnosticTypes([]string{"HANGS"}),
-		WithDiagnosticSignaturesFields([]string{"diagnosticType", "signature"}),
-		WithDiagnosticSignaturesLimit(50),
-	)
-	if err != nil {
-		t.Fatalf("GetDiagnosticSignaturesForBuild() error: %v", err)
-	}
-}
-
 func TestGetDiagnosticSignatureLogs(t *testing.T) {
 	response := jsonResponse(http.StatusOK, `{"version":"1","productData":[]}`)
 	client := newTestClient(t, func(req *http.Request) {
@@ -11742,67 +9207,9 @@ func TestGetDiagnosticSignatureLogs(t *testing.T) {
 		}
 	}, response)
 
-	_, err := client.GetDiagnosticSignatureLogs(context.Background(), "diag-1", WithDiagnosticLogsLimit(20))
+	_, err := client.GetDiagnosticSignatureLogs(context.Background(), "diag-1", Limit[DiagnosticLogsOption](20))
 	if err != nil {
 		t.Fatalf("GetDiagnosticSignatureLogs() error: %v", err)
-	}
-}
-
-func TestGetAndroidToIosAppMappingDetails(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[{"type":"androidToIosAppMappingDetails","id":"map-1"}],"links":{"self":"https://example.com"}}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/apps/app-1/androidToIosAppMappingDetails" {
-			t.Fatalf("expected path /v1/apps/app-1/androidToIosAppMappingDetails, got %s", req.URL.Path)
-		}
-		query := req.URL.Query()
-		if query.Get("fields[androidToIosAppMappingDetails]") != "packageName" {
-			t.Fatalf("expected fields filter, got %q", query.Get("fields[androidToIosAppMappingDetails]"))
-		}
-		if query.Get("limit") != "20" {
-			t.Fatalf("expected limit 20, got %q", query.Get("limit"))
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	_, err := client.GetAndroidToIosAppMappingDetails(
-		context.Background(), "app-1",
-		WithAndroidToIosAppMappingDetailsFields([]string{"packageName"}),
-		WithAndroidToIosAppMappingDetailsLimit(20),
-	)
-	if err != nil {
-		t.Fatalf("GetAndroidToIosAppMappingDetails() error: %v", err)
-	}
-}
-
-func TestGetAndroidToIosAppMappingDetail(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":{"type":"androidToIosAppMappingDetails","id":"map-1"},"links":{"self":"https://example.com"}}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/androidToIosAppMappingDetails/map-1" {
-			t.Fatalf("expected path /v1/androidToIosAppMappingDetails/map-1, got %s", req.URL.Path)
-		}
-		query := req.URL.Query()
-		if query.Get("fields[androidToIosAppMappingDetails]") != "packageName" {
-			t.Fatalf("expected fields filter, got %q", query.Get("fields[androidToIosAppMappingDetails]"))
-		}
-		if query.Get("limit") != "" {
-			t.Fatalf("expected no limit param, got %q", query.Get("limit"))
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	_, err := client.GetAndroidToIosAppMappingDetail(
-		context.Background(), "map-1",
-		WithAndroidToIosAppMappingDetailsFields([]string{"packageName"}),
-		WithAndroidToIosAppMappingDetailsLimit(20),
-	)
-	if err != nil {
-		t.Fatalf("GetAndroidToIosAppMappingDetail() error: %v", err)
 	}
 }
 
@@ -11825,10 +9232,10 @@ func TestCreateAndroidToIosAppMappingDetail(t *testing.T) {
 		if payload.Data.Attributes.PackageName != "com.example.android" {
 			t.Fatalf("unexpected packageName: %s", payload.Data.Attributes.PackageName)
 		}
-		if len(payload.Data.Attributes.AppSigningKeyPublicCertificateSha256Fingerprints) != 2 {
-			t.Fatalf("expected 2 fingerprints, got %d", len(payload.Data.Attributes.AppSigningKeyPublicCertificateSha256Fingerprints))
+		if len(payload.Data.Attributes.AppSigningKeyPublicCertificateSHA256Fingerprints) != 2 {
+			t.Fatalf("expected 2 fingerprints, got %d", len(payload.Data.Attributes.AppSigningKeyPublicCertificateSHA256Fingerprints))
 		}
-		if payload.Data.Relationships.App == nil || payload.Data.Relationships.App.Data.ID != "app-1" {
+		if payload.Data.Relationships.App.Data.ID != "app-1" {
 			t.Fatalf("unexpected app relationship: %+v", payload.Data.Relationships.App)
 		}
 		assertAuthorized(t, req)
@@ -11836,7 +9243,7 @@ func TestCreateAndroidToIosAppMappingDetail(t *testing.T) {
 
 	_, err := client.CreateAndroidToIosAppMappingDetail(context.Background(), "app-1", AndroidToIosAppMappingDetailCreateAttributes{
 		PackageName: "com.example.android",
-		AppSigningKeyPublicCertificateSha256Fingerprints: []string{"sha1", "sha2"},
+		AppSigningKeyPublicCertificateSHA256Fingerprints: []string{"sha1", "sha2"},
 	})
 	if err != nil {
 		t.Fatalf("CreateAndroidToIosAppMappingDetail() error: %v", err)
@@ -11874,60 +9281,6 @@ func TestUpdateAndroidToIosAppMappingDetail(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("UpdateAndroidToIosAppMappingDetail() error: %v", err)
-	}
-}
-
-func TestDeleteAndroidToIosAppMappingDetail(t *testing.T) {
-	response := jsonResponse(http.StatusNoContent, "")
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodDelete {
-			t.Fatalf("expected DELETE, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/androidToIosAppMappingDetails/map-1" {
-			t.Fatalf("expected path /v1/androidToIosAppMappingDetails/map-1, got %s", req.URL.Path)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if err := client.DeleteAndroidToIosAppMappingDetail(context.Background(), "map-1"); err != nil {
-		t.Fatalf("DeleteAndroidToIosAppMappingDetail() error: %v", err)
-	}
-}
-
-func TestGetSubscriptionWinBackOffers_WithLimit(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[{"type":"winBackOffers","id":"offer-1"}],"links":{"self":"https://example.com"}}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/subscriptions/sub-1/winBackOffers" {
-			t.Fatalf("expected path /v1/subscriptions/sub-1/winBackOffers, got %s", req.URL.Path)
-		}
-		if req.URL.Query().Get("limit") != "5" {
-			t.Fatalf("expected limit=5, got %q", req.URL.Query().Get("limit"))
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetSubscriptionWinBackOffers(context.Background(), "sub-1", WithWinBackOffersLimit(5)); err != nil {
-		t.Fatalf("GetSubscriptionWinBackOffers() error: %v", err)
-	}
-}
-
-func TestGetWinBackOffer(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":{"type":"winBackOffers","id":"offer-1"}}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/winBackOffers/offer-1" {
-			t.Fatalf("expected path /v1/winBackOffers/offer-1, got %s", req.URL.Path)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetWinBackOffer(context.Background(), "offer-1"); err != nil {
-		t.Fatalf("GetWinBackOffer() error: %v", err)
 	}
 }
 
@@ -11985,6 +9338,7 @@ func TestCreateWinBackOffer_SendsRequest(t *testing.T) {
 	}, response)
 
 	waitBetween := 6
+	sinceMinimum, sinceMaximum := 3, 12
 	req := WinBackOfferCreateRequest{
 		Data: WinBackOfferCreateData{
 			Type: ResourceTypeWinBackOffers,
@@ -11995,7 +9349,7 @@ func TestCreateWinBackOffer_SendsRequest(t *testing.T) {
 				OfferMode:     SubscriptionOfferModePayAsYouGo,
 				PeriodCount:   1,
 				CustomerEligibilityPaidSubscriptionDurationInMonths: 6,
-				CustomerEligibilityTimeSinceLastSubscribedInMonths:  NewIntegerRange(3, 12),
+				CustomerEligibilityTimeSinceLastSubscribedInMonths:  IntegerRange{Minimum: &sinceMinimum, Maximum: &sinceMaximum},
 				CustomerEligibilityWaitBetweenOffersInMonths:        &waitBetween,
 				StartDate: "2026-02-01",
 				Priority:  WinBackOfferPriorityHigh,
@@ -12058,94 +9412,6 @@ func TestUpdateWinBackOffer_SendsRequest(t *testing.T) {
 	}
 	if _, err := client.UpdateWinBackOffer(context.Background(), "offer-1", attrs); err != nil {
 		t.Fatalf("UpdateWinBackOffer() error: %v", err)
-	}
-}
-
-func TestDeleteWinBackOffer_SendsRequest(t *testing.T) {
-	response := jsonResponse(http.StatusNoContent, "")
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodDelete {
-			t.Fatalf("expected DELETE, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/winBackOffers/offer-1" {
-			t.Fatalf("expected path /v1/winBackOffers/offer-1, got %s", req.URL.Path)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if err := client.DeleteWinBackOffer(context.Background(), "offer-1"); err != nil {
-		t.Fatalf("DeleteWinBackOffer() error: %v", err)
-	}
-}
-
-func TestGetWinBackOfferPrices_WithLimit(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[{"type":"winBackOfferPrices","id":"price-1"}],"links":{"self":"https://example.com"}}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/winBackOffers/offer-1/prices" {
-			t.Fatalf("expected path /v1/winBackOffers/offer-1/prices, got %s", req.URL.Path)
-		}
-		if req.URL.Query().Get("limit") != "10" {
-			t.Fatalf("expected limit=10, got %q", req.URL.Query().Get("limit"))
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetWinBackOfferPrices(context.Background(), "offer-1", WithWinBackOfferPricesLimit(10)); err != nil {
-		t.Fatalf("GetWinBackOfferPrices() error: %v", err)
-	}
-}
-
-func TestGetWinBackOfferPricesRelationships(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[{"type":"winBackOfferPrices","id":"price-1"}],"links":{"self":"https://example.com"}}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.URL.Path != "/v1/winBackOffers/offer-1/relationships/prices" {
-			t.Fatalf("expected path /v1/winBackOffers/offer-1/relationships/prices, got %s", req.URL.Path)
-		}
-		if req.URL.Query().Get("limit") != "2" {
-			t.Fatalf("expected limit=2, got %q", req.URL.Query().Get("limit"))
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetWinBackOfferPricesRelationships(context.Background(), "offer-1", WithLinkagesLimit(2)); err != nil {
-		t.Fatalf("GetWinBackOfferPricesRelationships() error: %v", err)
-	}
-}
-
-func TestGetSubscriptionWinBackOffersRelationships(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[{"type":"winBackOffers","id":"offer-1"}],"links":{"self":"https://example.com"}}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.URL.Path != "/v1/subscriptions/sub-1/relationships/winBackOffers" {
-			t.Fatalf("expected path /v1/subscriptions/sub-1/relationships/winBackOffers, got %s", req.URL.Path)
-		}
-		if req.URL.Query().Get("limit") != "3" {
-			t.Fatalf("expected limit=3, got %q", req.URL.Query().Get("limit"))
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetSubscriptionWinBackOffersRelationships(context.Background(), "sub-1", WithLinkagesLimit(3)); err != nil {
-		t.Fatalf("GetSubscriptionWinBackOffersRelationships() error: %v", err)
-	}
-}
-
-func TestGetPromotedPurchase_SendsRequest(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":{"type":"promotedPurchases","id":"promo-1","attributes":{"visibleForAllUsers":true,"enabled":false}}}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/promotedPurchases/promo-1" {
-			t.Fatalf("expected path /v1/promotedPurchases/promo-1, got %s", req.URL.Path)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.GetPromotedPurchase(context.Background(), "promo-1"); err != nil {
-		t.Fatalf("GetPromotedPurchase() error: %v", err)
 	}
 }
 
@@ -12273,191 +9539,6 @@ func TestUpdatePromotedPurchase_SendsRequest(t *testing.T) {
 	attrs := PromotedPurchaseUpdateAttributes{Enabled: &enabled}
 	if _, err := client.UpdatePromotedPurchase(context.Background(), "promo-1", attrs); err != nil {
 		t.Fatalf("UpdatePromotedPurchase() error: %v", err)
-	}
-}
-
-func TestDeletePromotedPurchase_SendsRequest(t *testing.T) {
-	response := jsonResponse(http.StatusNoContent, "")
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodDelete {
-			t.Fatalf("expected DELETE, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/promotedPurchases/promo-1" {
-			t.Fatalf("expected path /v1/promotedPurchases/promo-1, got %s", req.URL.Path)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if err := client.DeletePromotedPurchase(context.Background(), "promo-1"); err != nil {
-		t.Fatalf("DeletePromotedPurchase() error: %v", err)
-	}
-}
-
-// --- Global list endpoint tests ---
-
-func TestListBetaGroupsGlobal_UsesV1BetaGroupsPath(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[{"type":"betaGroups","id":"bg-1","attributes":{"name":"Global Beta"}}]}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/betaGroups" {
-			t.Fatalf("expected path /v1/betaGroups, got %s", req.URL.Path)
-		}
-		values := req.URL.Query()
-		if values.Get("limit") != "50" {
-			t.Fatalf("expected limit=50, got %q", values.Get("limit"))
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	resp, err := client.ListBetaGroups(context.Background(), WithBetaGroupsLimit(50))
-	if err != nil {
-		t.Fatalf("ListBetaGroups() error: %v", err)
-	}
-	if len(resp.Data) != 1 {
-		t.Fatalf("expected 1 beta group, got %d", len(resp.Data))
-	}
-	if resp.Data[0].ID != "bg-1" {
-		t.Fatalf("expected id bg-1, got %s", resp.Data[0].ID)
-	}
-}
-
-func TestListBetaGroupsGlobal_NoOptions(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[]}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.URL.Path != "/v1/betaGroups" {
-			t.Fatalf("expected path /v1/betaGroups, got %s", req.URL.Path)
-		}
-		if req.URL.RawQuery != "" {
-			t.Fatalf("expected empty query string, got %q", req.URL.RawQuery)
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.ListBetaGroups(context.Background()); err != nil {
-		t.Fatalf("ListBetaGroups() error: %v", err)
-	}
-}
-
-func TestListBetaBuildLocalizationsGlobal_UsesV1BetaBuildLocalizationsPath(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[{"type":"betaBuildLocalizations","id":"bbl-1","attributes":{"locale":"en-US","whatsNew":"Test"}}]}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/betaBuildLocalizations" {
-			t.Fatalf("expected path /v1/betaBuildLocalizations, got %s", req.URL.Path)
-		}
-		values := req.URL.Query()
-		if values.Get("limit") != "25" {
-			t.Fatalf("expected limit=25, got %q", values.Get("limit"))
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	resp, err := client.ListBetaBuildLocalizations(context.Background(), WithBetaBuildLocalizationsLimit(25))
-	if err != nil {
-		t.Fatalf("ListBetaBuildLocalizations() error: %v", err)
-	}
-	if len(resp.Data) != 1 {
-		t.Fatalf("expected 1 localization, got %d", len(resp.Data))
-	}
-	if resp.Data[0].ID != "bbl-1" {
-		t.Fatalf("expected id bbl-1, got %s", resp.Data[0].ID)
-	}
-}
-
-func TestListBetaBuildLocalizationsGlobal_WithLocaleFilter(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[]}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.URL.Path != "/v1/betaBuildLocalizations" {
-			t.Fatalf("expected path /v1/betaBuildLocalizations, got %s", req.URL.Path)
-		}
-		values := req.URL.Query()
-		if values.Get("filter[locale]") != "en-US,ja" {
-			t.Fatalf("expected filter[locale]=en-US,ja, got %q", values.Get("filter[locale]"))
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.ListBetaBuildLocalizations(context.Background(), WithBetaBuildLocalizationLocales([]string{"en-US", "ja"})); err != nil {
-		t.Fatalf("ListBetaBuildLocalizations() error: %v", err)
-	}
-}
-
-func TestListBetaBuildLocalizationsGlobal_WithBuildFilter(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[]}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.URL.Path != "/v1/betaBuildLocalizations" {
-			t.Fatalf("expected path /v1/betaBuildLocalizations, got %s", req.URL.Path)
-		}
-		values := req.URL.Query()
-		if values.Get("filter[build]") != "build-1,build-2" {
-			t.Fatalf("expected filter[build]=build-1,build-2, got %q", values.Get("filter[build]"))
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.ListBetaBuildLocalizations(context.Background(), WithBetaBuildLocalizationBuildIDs([]string{"build-1", "build-2"})); err != nil {
-		t.Fatalf("ListBetaBuildLocalizations() error: %v", err)
-	}
-}
-
-func TestListReviewSubmissionsGlobal_UsesV1ReviewSubmissionsPath(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[{"type":"reviewSubmissions","id":"rs-1","attributes":{"platform":"IOS","state":"READY_FOR_REVIEW"}}],"links":{"self":"https://api.appstoreconnect.apple.com/v1/reviewSubmissions"}}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.Method != http.MethodGet {
-			t.Fatalf("expected GET, got %s", req.Method)
-		}
-		if req.URL.Path != "/v1/reviewSubmissions" {
-			t.Fatalf("expected path /v1/reviewSubmissions, got %s", req.URL.Path)
-		}
-		values := req.URL.Query()
-		if values.Get("limit") != "10" {
-			t.Fatalf("expected limit=10, got %q", values.Get("limit"))
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	resp, err := client.ListReviewSubmissions(context.Background(), WithReviewSubmissionsLimit(10))
-	if err != nil {
-		t.Fatalf("ListReviewSubmissions() error: %v", err)
-	}
-	if len(resp.Data) != 1 {
-		t.Fatalf("expected 1 submission, got %d", len(resp.Data))
-	}
-	if resp.Data[0].ID != "rs-1" {
-		t.Fatalf("expected id rs-1, got %s", resp.Data[0].ID)
-	}
-}
-
-func TestListReviewSubmissionsGlobal_WithFilters(t *testing.T) {
-	response := jsonResponse(http.StatusOK, `{"data":[],"links":{"self":"https://api.appstoreconnect.apple.com/v1/reviewSubmissions"}}`)
-	client := newTestClient(t, func(req *http.Request) {
-		if req.URL.Path != "/v1/reviewSubmissions" {
-			t.Fatalf("expected path /v1/reviewSubmissions, got %s", req.URL.Path)
-		}
-		values := req.URL.Query()
-		if values.Get("filter[app]") != "app-1" {
-			t.Fatalf("expected filter[app]=app-1, got %q", values.Get("filter[app]"))
-		}
-		if values.Get("filter[platform]") != "IOS" {
-			t.Fatalf("expected filter[platform]=IOS, got %q", values.Get("filter[platform]"))
-		}
-		if values.Get("filter[state]") != "READY_FOR_REVIEW" {
-			t.Fatalf("expected filter[state]=READY_FOR_REVIEW, got %q", values.Get("filter[state]"))
-		}
-		assertAuthorized(t, req)
-	}, response)
-
-	if _, err := client.ListReviewSubmissions(
-		context.Background(),
-		WithReviewSubmissionsApps([]string{"app-1"}),
-		WithReviewSubmissionsPlatforms([]string{"IOS"}),
-		WithReviewSubmissionsStates([]string{"READY_FOR_REVIEW"}),
-	); err != nil {
-		t.Fatalf("ListReviewSubmissions() error: %v", err)
 	}
 }
 
