@@ -415,6 +415,11 @@
     "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/eb/b9/c4/ebb9c4be-fd15-228d-dd9a-05bfc5fa37ad/AppIcon-0-0-1x_U007epad-0-1-0-sRGB-85-220.png/512x512bb.jpg"
   },
   {
+    "app": "Coach.AI",
+    "link": "https://apps.apple.com/us/app/coach-ai/id6504732473?uo=4",
+    "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/da/37/2f/da372f37-80be-7c89-1d2c-ffd4fd4f441a/AppIcon-0-0-1x_U007ephone-0-1-0-85-220.png/512x512bb.jpg"
+  },
+  {
     "app": "CodexMonitor",
     "link": "https://github.com/Dimillian/CodexMonitor"
   },
@@ -1102,6 +1107,11 @@
     "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/7b/43/73/7b4373fc-26e2-030b-7162-2f0ab0a7681d/AppIcon-0-0-1x_U007ewatch-0-1-P3-85-220.png/512x512bb.jpg"
   },
   {
+    "app": "HSA Monster: Expense Tracker",
+    "link": "https://apps.apple.com/us/app/hsa-monster-expense-tracker/id6757624949?uo=4",
+    "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/05/dd/14/05dd14ed-f25d-dca4-ef9a-7963b069604c/AppIcon-0-0-1x_U007epad-0-1-0-85-220.png/512x512bb.jpg"
+  },
+  {
     "app": "Hungry Wabbit",
     "link": "https://apps.apple.com/us/app/hungry-wabbit/id992325663?uo=4",
     "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/5e/9a/32/5e9a3224-865e-ec24-1b56-87a2823a70ba/HungryWabbit-0-0-1x_U007ephone-0-1-sRGB-85-220.png/512x512bb.jpg"
@@ -1270,6 +1280,11 @@
     "app": "Kosaku - Beautify the content",
     "link": "https://apps.apple.com/us/app/kosaku-beautify-the-content/id1611559010?uo=4",
     "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/f4/63/32/f46332d0-c51c-6a40-2022-a2e92f745e2e/AppIcon-0-0-1x_U007emarketing-0-11-0-85-220.png/512x512bb.jpg"
+  },
+  {
+    "app": "LaunchBuddy: App Planner",
+    "link": "https://apps.apple.com/us/app/launchbuddy-app-planner/id1615169630?uo=4",
+    "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/a5/37/c9/a537c9ef-5897-c826-129a-da35becedb85/LB_Icon-0-0-1x_U007epad-0-1-sRGB-85-220.png/512x512bb.jpg"
   },
   {
     "app": "Layered: AI Outfit Maker",
@@ -2793,6 +2808,11 @@
     "app": "Water Tracker - IdroFlow",
     "link": "https://apps.apple.com/us/app/water-tracker-idroflow/id6763654290?uo=4",
     "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/37/1f/66/371f66c4-8316-f8b2-388e-fb8800b3330d/AppIcon-0-0-1x_U007epad-0-0-0-1-0-sRGB-85-220.png/512x512bb.jpg"
+  },
+  {
+    "app": "WealthTrunk: Net Worth Tracker",
+    "link": "https://apps.apple.com/us/app/wealthtrunk-net-worth-tracker/id6748625363?uo=4",
+    "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/a6/e3/00/a6e300e6-6366-2c99-42d3-9b0470b40625/AppIcon-0-0-1x_U007epad-0-1-0-85-220.png/512x512bb.jpg"
   },
   {
     "app": "Weather mini - Trip Forecasts",

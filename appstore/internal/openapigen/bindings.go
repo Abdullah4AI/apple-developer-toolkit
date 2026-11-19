@@ -63,6 +63,7 @@ const (
 	checkTrim    = "trim"    // trim the parameter before use
 	checkRequire = "require" // trim, then reject a blank value
 	checkRaw     = "raw"     // use the parameter as given
+	checkPath    = "path"    // build the path with resourcePath, which rejects a parameter that is no single path segment
 )
 
 // Ways an optional attributes object reaches the data of a create or update
@@ -80,7 +81,9 @@ type OpBind struct {
 	// Params are the Go names of the path parameters in path order, then of
 	// the IDs a create links.
 	Params []string `json:"params,omitempty"`
-	Check  string   `json:"check,omitempty"` // checkInline, checkTrim, checkRequire or checkRaw
+	Check  string   `json:"check,omitempty"` // checkInline, checkTrim, checkRequire, checkRaw or checkPath
+	// PathErr prefixes the error of a rejected path parameter of checkPath.
+	PathErr string `json:"pathErr,omitempty"`
 	// CheckFirst runs the trim and require checks of a read before its
 	// options, so a next URL does not lift the require check of a paged read.
 	CheckFirst bool `json:"checkFirst,omitempty"`
@@ -107,6 +110,13 @@ type OpBind struct {
 	// sets as body attributes, in signature order, which is also the order
 	// the attributes literal lists them in.
 	Args []ArgBind `json:"args,omitempty"`
+	// Optional are the to-one links a create or update sets only when their
+	// ID argument is not blank, declared after the attributes. The IDs are
+	// trimmed unless the check style is checkRaw.
+	Optional []OptionalLink `json:"optional,omitempty"`
+	// RelationshipsWhenSet leaves the relationships out until an optional
+	// link is set; without it the relationships object is always sent.
+	RelationshipsWhenSet bool `json:"relationshipsWhenSet,omitempty"`
 	// Deviations are known differences from the schema that the contract test
 	// in internal/asc pins. They change no generated code.
 	Deviations []Deviation `json:"deviations,omitempty"`
@@ -130,6 +140,13 @@ type IDList struct {
 	Item      string `json:"item,omitempty"`      // loop variable of the append and resourceList styles
 }
 
+// OptionalLink is a to-one relationship set from a parameter when it is not
+// blank.
+type OptionalLink struct {
+	Param string `json:"param"`
+	Link  string `json:"link"`
+}
+
 // ArgBind is one scalar parameter set as one request attribute.
 type ArgBind struct {
 	Name      string `json:"name"`
@@ -139,6 +156,9 @@ type ArgBind struct {
 	// group of the signature, and checks it with their check style. Param
 	// args come first.
 	Param bool `json:"param,omitempty"`
+	// Positive is the error for an integer argument that is not above zero,
+	// checked after the path parameters.
+	Positive string `json:"positive,omitempty"`
 }
 
 // Deviation is one problem text of the contract test that the method is known

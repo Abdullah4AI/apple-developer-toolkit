@@ -84,6 +84,14 @@ type RetentionMessageLocalizationUpdateAttributes struct {
 	Body   *NullableString `json:"body,omitempty"`
 }
 
+// RetentionMessageVersionCreateRelationships is the data.relationships object
+// of the RetentionMessageVersionCreateRequest schema, with the placement
+// declared first so the body lists its keys in alphabetical order.
+type RetentionMessageVersionCreateRelationships struct {
+	Placement        *Relationship `json:"placement,omitempty"`
+	RetentionMessage *Relationship `json:"retentionMessage"`
+}
+
 // RetentionMessagesOption configures a retention messaging read.
 type RetentionMessagesOption func(*retentionMessagesQuery)
 
@@ -104,17 +112,6 @@ func WithRetentionMessagesQuery(name string, values ...string) RetentionMessages
 	return func(q *retentionMessagesQuery) { addCSV(q.values, name, values) }
 }
 
-type retentionMessageWriteData struct {
-	Type          ResourceType            `json:"type"`
-	ID            string                  `json:"id,omitempty"`
-	Attributes    any                     `json:"attributes,omitempty"`
-	Relationships map[string]Relationship `json:"relationships,omitempty"`
-}
-
-type retentionMessageWriteRequest struct {
-	Data retentionMessageWriteData `json:"data"`
-}
-
 func getRetentionMessageRead[T any](c *Client, ctx context.Context, pathFormat, id string, opts []RetentionMessagesOption) (*T, error) {
 	q := &retentionMessagesQuery{values: url.Values{}}
 	for _, opt := range opts {
@@ -130,10 +127,6 @@ func getRetentionMessageRead[T any](c *Client, ctx context.Context, pathFormat, 
 		Next:        q.nextURL,
 		NextContext: "retention messages",
 	})
-}
-
-func writeRetentionMessageResource[T any](c *Client, ctx context.Context, method, path string, data retentionMessageWriteData) (*T, error) {
-	return sendJSON[T](ctx, c, writeRequest{Method: method, Path: path, Payload: retentionMessageWriteRequest{Data: data}})
 }
 
 func retentionMessageRelationship(resourceType ResourceType, id string) Relationship {
@@ -152,11 +145,6 @@ func (c *Client) GetAppRetentionMessages(ctx context.Context, appID string, opts
 	return getRetentionMessageRead[RetentionMessagesResponse](c, ctx, "/v1/apps/%s/retentionMessages", appID, opts)
 }
 
-// GetAppRetentionMessagesRelationships lists retention message linkages for an app.
-func (c *Client) GetAppRetentionMessagesRelationships(ctx context.Context, appID string, opts ...RetentionMessagesOption) (*LinkagesResponse, error) {
-	return getRetentionMessageRead[LinkagesResponse](c, ctx, "/v1/apps/%s/relationships/retentionMessages", appID, opts)
-}
-
 // GetRetentionMessage retrieves a retention message.
 func (c *Client) GetRetentionMessage(ctx context.Context, messageID string, opts ...RetentionMessagesOption) (*RetentionMessageResponse, error) {
 	return getRetentionMessageRead[RetentionMessageResponse](c, ctx, "/v1/retentionMessages/%s", messageID, opts)
@@ -167,19 +155,9 @@ func (c *Client) GetRetentionMessageVersions(ctx context.Context, messageID stri
 	return getRetentionMessageRead[RetentionMessageVersionsResponse](c, ctx, "/v1/retentionMessages/%s/versions", messageID, opts)
 }
 
-// GetRetentionMessageVersionsRelationships lists version linkages of a retention message.
-func (c *Client) GetRetentionMessageVersionsRelationships(ctx context.Context, messageID string, opts ...RetentionMessagesOption) (*LinkagesResponse, error) {
-	return getRetentionMessageRead[LinkagesResponse](c, ctx, "/v1/retentionMessages/%s/relationships/versions", messageID, opts)
-}
-
 // GetRetentionMessageSubscriptions lists subscriptions assigned to a retention message.
 func (c *Client) GetRetentionMessageSubscriptions(ctx context.Context, messageID string, opts ...RetentionMessagesOption) (*SubscriptionsResponse, error) {
 	return getRetentionMessageRead[SubscriptionsResponse](c, ctx, "/v1/retentionMessages/%s/subscriptions", messageID, opts)
-}
-
-// GetRetentionMessageSubscriptionsRelationships lists subscription linkages of a retention message.
-func (c *Client) GetRetentionMessageSubscriptionsRelationships(ctx context.Context, messageID string, opts ...RetentionMessagesOption) (*LinkagesResponse, error) {
-	return getRetentionMessageRead[LinkagesResponse](c, ctx, "/v1/retentionMessages/%s/relationships/subscriptions", messageID, opts)
 }
 
 // GetRetentionMessageVersion retrieves a retention message version.
@@ -190,11 +168,6 @@ func (c *Client) GetRetentionMessageVersion(ctx context.Context, versionID strin
 // GetRetentionMessageVersionLocalizations lists localizations of a retention message version.
 func (c *Client) GetRetentionMessageVersionLocalizations(ctx context.Context, versionID string, opts ...RetentionMessagesOption) (*RetentionMessageLocalizationsResponse, error) {
 	return getRetentionMessageRead[RetentionMessageLocalizationsResponse](c, ctx, "/v1/retentionMessageVersions/%s/localizations", versionID, opts)
-}
-
-// GetRetentionMessageVersionLocalizationsRelationships lists localization linkages of a version.
-func (c *Client) GetRetentionMessageVersionLocalizationsRelationships(ctx context.Context, versionID string, opts ...RetentionMessagesOption) (*LinkagesResponse, error) {
-	return getRetentionMessageRead[LinkagesResponse](c, ctx, "/v1/retentionMessageVersions/%s/relationships/localizations", versionID, opts)
 }
 
 // GetRetentionMessageVersionPlacement retrieves the raw asset library placement of a version.
@@ -221,75 +194,6 @@ func (c *Client) GetSubscriptionRetentionMessage(ctx context.Context, subscripti
 // GetSubscriptionRetentionMessageRelationship retrieves the retention message linkage of a subscription.
 func (c *Client) GetSubscriptionRetentionMessageRelationship(ctx context.Context, subscriptionID string, opts ...RetentionMessagesOption) (*RetentionMessageLinkageResponse, error) {
 	return getRetentionMessageRead[RetentionMessageLinkageResponse](c, ctx, "/v1/subscriptions/%s/relationships/retentionMessage", subscriptionID, opts)
-}
-
-// CreateRetentionMessage creates a retention message for an app.
-func (c *Client) CreateRetentionMessage(ctx context.Context, appID, referenceName string) (*RetentionMessageResponse, error) {
-	if err := requireRetentionMessageID("appID", appID); err != nil {
-		return nil, err
-	}
-	return writeRetentionMessageResource[RetentionMessageResponse](c, ctx, http.MethodPost, "/v1/retentionMessages", retentionMessageWriteData{
-		Type:          ResourceTypeRetentionMessages,
-		Attributes:    map[string]string{"referenceName": referenceName},
-		Relationships: map[string]Relationship{"app": retentionMessageRelationship(ResourceTypeApps, appID)},
-	})
-}
-
-// DeleteRetentionMessage deletes a retention message.
-func (c *Client) DeleteRetentionMessage(ctx context.Context, messageID string) error {
-	if err := requireRetentionMessageID("messageID", messageID); err != nil {
-		return err
-	}
-	return sendNoContent(ctx, c, http.MethodDelete, "/v1/retentionMessages/"+strings.TrimSpace(messageID), nil)
-}
-
-// CreateRetentionMessageVersion creates a version of a retention message,
-// optionally linking an existing asset library placement.
-func (c *Client) CreateRetentionMessageVersion(ctx context.Context, messageID, placementID string) (*RetentionMessageVersionResponse, error) {
-	if err := requireRetentionMessageID("messageID", messageID); err != nil {
-		return nil, err
-	}
-	relationships := map[string]Relationship{"retentionMessage": retentionMessageRelationship(ResourceTypeRetentionMessages, messageID)}
-	if strings.TrimSpace(placementID) != "" {
-		relationships["placement"] = retentionMessageRelationship(ResourceTypeAppAssetLibraryPlacements, placementID)
-	}
-	return writeRetentionMessageResource[RetentionMessageVersionResponse](c, ctx, http.MethodPost, "/v1/retentionMessageVersions", retentionMessageWriteData{
-		Type:          ResourceTypeRetentionMessageVersions,
-		Relationships: relationships,
-	})
-}
-
-// CreateRetentionMessageLocalization creates a localization for a retention message version.
-func (c *Client) CreateRetentionMessageLocalization(ctx context.Context, versionID string, attrs RetentionMessageLocalizationCreateAttributes) (*RetentionMessageLocalizationResponse, error) {
-	if err := requireRetentionMessageID("versionID", versionID); err != nil {
-		return nil, err
-	}
-	return writeRetentionMessageResource[RetentionMessageLocalizationResponse](c, ctx, http.MethodPost, "/v1/retentionMessageLocalizations", retentionMessageWriteData{
-		Type:          ResourceTypeRetentionMessageLocalizations,
-		Attributes:    attrs,
-		Relationships: map[string]Relationship{"retentionMessageVersion": retentionMessageRelationship(ResourceTypeRetentionMessageVersions, versionID)},
-	})
-}
-
-// UpdateRetentionMessageLocalization updates the header or body of a localization.
-func (c *Client) UpdateRetentionMessageLocalization(ctx context.Context, localizationID string, attrs RetentionMessageLocalizationUpdateAttributes) (*RetentionMessageLocalizationResponse, error) {
-	if err := requireRetentionMessageID("localizationID", localizationID); err != nil {
-		return nil, err
-	}
-	localizationID = strings.TrimSpace(localizationID)
-	return writeRetentionMessageResource[RetentionMessageLocalizationResponse](c, ctx, http.MethodPatch, "/v1/retentionMessageLocalizations/"+localizationID, retentionMessageWriteData{
-		Type:       ResourceTypeRetentionMessageLocalizations,
-		ID:         localizationID,
-		Attributes: attrs,
-	})
-}
-
-// DeleteRetentionMessageLocalization deletes a retention message localization.
-func (c *Client) DeleteRetentionMessageLocalization(ctx context.Context, localizationID string) error {
-	if err := requireRetentionMessageID("localizationID", localizationID); err != nil {
-		return err
-	}
-	return sendNoContent(ctx, c, http.MethodDelete, "/v1/retentionMessageLocalizations/"+strings.TrimSpace(localizationID), nil)
 }
 
 // SetSubscriptionRetentionMessage assigns a retention message to a subscription,

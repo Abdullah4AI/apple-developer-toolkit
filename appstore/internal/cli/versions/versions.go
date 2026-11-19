@@ -52,7 +52,7 @@ Examples:
 			newVersionsAttachBuildCommand(d),
 			newVersionsReleaseCommand(d),
 			newPhasedReleaseCommand(d),
-			webcli.VersionRatingResetCommand(),
+			webcli.NewVersionRatingResetCommand(d),
 			newVersionsPromotionsCommand(d),
 		},
 		Exec: func(ctx context.Context, args []string) error {
@@ -65,6 +65,7 @@ func newVersionsListCommand(d *shared.Deps) *ffcli.Command {
 	fs := d.NewFlagSet("versions list", flag.ExitOnError)
 
 	appID := shared.BindResourceIDFlag(fs, "app", "apps", "App Store Connect app ID (or ASC_APP_ID)")
+	shared.BindFlagAlias(fs, "app-id", "app")
 	version := fs.String("version", "", "Filter by version string (comma-separated)")
 	platform := fs.String("platform", "", "Filter by platform: IOS, MAC_OS, TV_OS, VISION_OS (comma-separated)")
 	state := fs.String("state", "", "Filter by state (comma-separated)")
@@ -345,6 +346,7 @@ func newVersionsViewCommand(d *shared.Deps) *ffcli.Command {
 	fs := d.NewFlagSet("versions view", flag.ExitOnError)
 
 	versionID := shared.BindResourceIDFlag(fs, "version-id", "appStoreVersions", "App Store version ID")
+	shared.BindFlagAlias(fs, "id", "version-id")
 	appID := shared.BindResourceIDFlag(fs, "app", "apps", "App Store Connect app ID (or ASC_APP_ID)")
 	versionString := fs.String("version", "", "Version string used with --app")
 	platform := fs.String("platform", "IOS", "Platform used with --app and --version: IOS, MAC_OS, TV_OS, VISION_OS")
@@ -638,7 +640,7 @@ be combined with skip, which would leave the build unattached.`,
 				attrs.ReviewType = normalizedReviewType
 			}
 
-			resp, err := client.CreateAppStoreVersionWithBuild(requestCtx, resolvedAppID, buildIDValue, attrs)
+			resp, err := client.CreateAppStoreVersionWithBuild(requestCtx, resolvedAppID, attrs, buildIDValue)
 			action := asc.IdempotentWriteActionCreated
 			copyMetadata := copyMetadataFromValue != ""
 			conflictHandled := false
@@ -687,7 +689,7 @@ be combined with skip, which would leave the build unattached.`,
 						updateAttrs.ReviewType = &normalizedReviewType
 					}
 					if updateAttrs.Copyright != nil || updateAttrs.ReleaseType != nil || updateAttrs.EarliestReleaseDate != nil || updateAttrs.ReviewType != nil {
-						updated, updateErr := client.UpdateAppStoreVersionWithBuild(requestCtx, existing.Data.ID, buildIDValue, updateAttrs)
+						updated, updateErr := client.UpdateAppStoreVersionWithBuild(requestCtx, existing.Data.ID, updateAttrs, buildIDValue)
 						if updateErr != nil {
 							if buildIDValue != "" {
 								return fmt.Errorf("versions create: update existing version %s with build %s: %w", existing.Data.ID, buildIDValue, updateErr)
@@ -815,6 +817,7 @@ func newVersionsUpdateCommand(d *shared.Deps) *ffcli.Command {
 	fs := d.NewFlagSet("versions update", flag.ExitOnError)
 
 	versionID := shared.BindResourceIDFlag(fs, "version-id", "appStoreVersions", "App Store version ID (required)")
+	shared.BindFlagAlias(fs, "id", "version-id")
 	copyright := fs.String("copyright", "", "Copyright text (e.g., '2026 My Company')")
 	releaseType := fs.String("release-type", "", "Release type: MANUAL, AFTER_APPROVAL, SCHEDULED")
 	reviewType := fs.String("review-type", "", "Review type: APP_STORE, NOTARIZATION")

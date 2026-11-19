@@ -3,7 +3,6 @@ package asc
 import (
 	"context"
 	"fmt"
-	"strings"
 )
 
 // AppStoreVersionAttributes describes app store version metadata.
@@ -95,73 +94,14 @@ type AppStoreVersionBuildRelationshipUpdateRequest struct {
 	Data ResourceData `json:"data"`
 }
 
-// GetPreReleaseVersions retrieves TestFlight pre-release versions for an app.
-func (c *Client) GetPreReleaseVersions(ctx context.Context, appID string, opts ...PreReleaseVersionsOption) (*PreReleaseVersionsResponse, error) {
-	query := applyOptions(opts)
-	appID = strings.TrimSpace(appID)
-	return getJSON[PreReleaseVersionsResponse](ctx, c, readRequest{
-		Path:        "/v1/preReleaseVersions",
-		Query:       buildPreReleaseVersionsQuery(appID, query),
-		Next:        query.nextURL,
-		NextContext: "preReleaseVersions",
-	})
-}
-
 // CreateAppStoreVersion creates a new app store version for an app.
 func (c *Client) CreateAppStoreVersion(ctx context.Context, appID string, attrs AppStoreVersionCreateAttributes) (*AppStoreVersionResponse, error) {
-	return c.CreateAppStoreVersionWithBuild(ctx, appID, "", attrs)
-}
-
-// CreateAppStoreVersionWithBuild creates a new app store version and, when
-// buildID is set, attaches that build in the same request.
-func (c *Client) CreateAppStoreVersionWithBuild(ctx context.Context, appID, buildID string, attrs AppStoreVersionCreateAttributes) (*AppStoreVersionResponse, error) {
-	relationships := &AppStoreVersionCreateRelationships{
-		App: &Relationship{
-			Data: ResourceData{
-				Type: ResourceTypeApps,
-				ID:   strings.TrimSpace(appID),
-			},
-		},
-	}
-	if buildID = strings.TrimSpace(buildID); buildID != "" {
-		relationships.Build = &Relationship{
-			Data: ResourceData{
-				Type: ResourceTypeBuilds,
-				ID:   buildID,
-			},
-		}
-	}
-	payload := AppStoreVersionCreateRequest{
-		Data: AppStoreVersionCreateData{
-			Type:          ResourceTypeAppStoreVersions,
-			Attributes:    attrs,
-			Relationships: relationships,
-		},
-	}
-	return sendJSON[AppStoreVersionResponse](ctx, c, writeRequest{Method: "POST", Path: "/v1/appStoreVersions", Payload: payload})
+	return c.CreateAppStoreVersionWithBuild(ctx, appID, attrs, "")
 }
 
 // UpdateAppStoreVersion updates an existing app store version.
 func (c *Client) UpdateAppStoreVersion(ctx context.Context, versionID string, attrs AppStoreVersionUpdateAttributes) (*AppStoreVersionResponse, error) {
-	return c.UpdateAppStoreVersionWithBuild(ctx, versionID, "", attrs)
-}
-
-// UpdateAppStoreVersionWithBuild updates version attributes and optionally
-// attaches a build in the same request.
-func (c *Client) UpdateAppStoreVersionWithBuild(ctx context.Context, versionID, buildID string, attrs AppStoreVersionUpdateAttributes) (*AppStoreVersionResponse, error) {
-	payload := AppStoreVersionUpdateRequest{
-		Data: AppStoreVersionUpdateData{
-			Type:       ResourceTypeAppStoreVersions,
-			ID:         strings.TrimSpace(versionID),
-			Attributes: attrs,
-		},
-	}
-	if buildID = strings.TrimSpace(buildID); buildID != "" {
-		payload.Data.Relationships = &AppStoreVersionUpdateRelationships{
-			Build: &Relationship{Data: ResourceData{Type: ResourceTypeBuilds, ID: buildID}},
-		}
-	}
-	return sendJSON[AppStoreVersionResponse](ctx, c, writeRequest{Method: "PATCH", Path: fmt.Sprintf("/v1/appStoreVersions/%s", strings.TrimSpace(versionID)), Payload: payload})
+	return c.UpdateAppStoreVersionWithBuild(ctx, versionID, attrs, "")
 }
 
 // AttachBuildToVersion attaches a build to an app store version.

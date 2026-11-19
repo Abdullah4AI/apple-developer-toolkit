@@ -631,13 +631,9 @@ func missingWebSessionErrorWithHint(appleID, hint, alternative string) error {
 	return err
 }
 
-// passwordRequiredUsageError is the usage error for a sign-in that reached the
+// passwordRequiredUsageErrorWith is the usage error for a sign-in that reached the
 // password step without one: `asc web auth login` without a password source,
 // or an interactive `web apps create` prompt answered with an empty password.
-func passwordRequiredUsageError() error {
-	return passwordRequiredUsageErrorWith(shared.DefaultDeps())
-}
-
 func passwordRequiredUsageErrorWith(d *shared.Deps) error {
 	return d.UsageError(fmt.Sprintf("password is required: run in a terminal for an interactive prompt or set %s", webPasswordEnvDisplay()))
 }
@@ -1085,11 +1081,14 @@ func resolveKnownWebSessionFromSource(ctx context.Context, appleID string, sourc
 	return nil, false, false, fmt.Errorf("checking cached web session failed: %w", err)
 }
 
-func resolveWebSession(ctx context.Context, appleID, password, twoFactorCode string, opts webSessionResolveOptions) (*webcore.AuthSession, string, error) {
-	return resolveWebSessionWith(ctx, shared.DefaultDeps(), appleID, password, twoFactorCode, opts)
-}
-
 func resolveWebSessionWith(ctx context.Context, d *shared.Deps, appleID, password, twoFactorCode string, opts webSessionResolveOptions) (*webcore.AuthSession, string, error) {
+	if broker, ok, err := webBrokerFromEnv(d); ok {
+		if err != nil {
+			return nil, "", err
+		}
+		session, err := resolveBrokeredWebSession(ctx, d, broker, appleID)
+		return session, webSessionSourceBroker, err
+	}
 	shared.ApplyRootLoggingOverrides()
 	if err := webcore.SessionBackendConflict(); err != nil {
 		return nil, "", d.UsageError(err.Error())
@@ -1666,10 +1665,6 @@ func persistAutoReauthResolvedSession(d *shared.Deps, session *webcore.AuthSessi
 	printSessionCacheWriteWarningWith(d, persistWebSessionFn(session))
 }
 
-func printSessionCacheWriteWarning(err error) {
-	printSessionCacheWriteWarningWith(shared.DefaultDeps(), err)
-}
-
 func printSessionCacheWriteWarningWith(d *shared.Deps, err error) {
 	if d.IO.ErrOut == nil || err == nil {
 		return
@@ -1899,6 +1894,9 @@ Examples:
 		FlagSet:   fs,
 		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
+			if err := refuseUnderWebBroker(d, "asc web auth login"); err != nil {
+				return err
+			}
 			preference, err := twoFactorDelivery.resolveWith(d)
 			if err != nil {
 				return err
@@ -1961,6 +1959,23 @@ If --apple-id is not provided, this checks the last cached session.
 			defer cancel()
 
 			trimmedAppleID := strings.TrimSpace(*appleID)
+			if broker, ok, err := webBrokerFromEnv(d); ok {
+				if err != nil {
+					return err
+				}
+				session, err := resolveBrokeredWebSession(requestCtx, d, broker, trimmedAppleID)
+				if err != nil {
+					return fmt.Errorf("web auth status failed: %w", err)
+				}
+				return printWebAuthStatus(d, webAuthStatus{
+					Authenticated:    true,
+					Source:           webSessionSourceBroker,
+					AppleID:          session.UserEmail,
+					TeamID:           session.TeamID,
+					ProviderID:       session.ProviderID,
+					PublicProviderID: session.PublicProviderID,
+				}, *output.Output, *output.Pretty)
+			}
 			var (
 				session *webcore.AuthSession
 				ok      bool
@@ -2022,6 +2037,9 @@ Pass --forget-password --confirm to also remove the native credential-store pass
 		FlagSet:   fs,
 		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
+			if err := refuseUnderWebBroker(d, "asc web auth logout"); err != nil {
+				return err
+			}
 			trimmedAppleID := strings.TrimSpace(*appleID)
 			if *all && trimmedAppleID != "" {
 				return d.UsageError("--all and --apple-id are mutually exclusive")

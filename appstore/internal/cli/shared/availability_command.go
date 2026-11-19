@@ -8,7 +8,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"os"
 	"sort"
 	"strings"
 	"sync"
@@ -38,20 +37,22 @@ type AvailabilitySetCommandConfig struct {
 	LongHelp                         string
 	ErrorPrefix                      string
 	IncludeAvailableInNewTerritories bool
-	// Deps supplies the streams. It defaults to DefaultDeps().
+	// Deps supplies the streams and the request timeout. The client is not
+	// taken from it: the command resolves credentials without the auth spinner
+	// GetASCClient shows.
 	Deps *Deps
 }
 
 // AvailabilityRemoveFromSaleCommandConfig configures the remove-from-sale command.
 type AvailabilityRemoveFromSaleCommandConfig struct {
 	ClientFactory func() (*asc.Client, error)
-	// Deps supplies the streams. It defaults to DefaultDeps().
+	// Deps supplies the streams and timeout.
 	Deps *Deps
 }
 
 // NewAvailabilitySetCommand builds a shared availability set command.
 func NewAvailabilitySetCommand(config AvailabilitySetCommandConfig) *ffcli.Command {
-	d := builderDeps(config.Deps)
+	d := config.Deps
 	fs := d.NewFlagSet(config.FlagSetName, flag.ExitOnError)
 
 	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID)")
@@ -71,7 +72,7 @@ func NewAvailabilitySetCommand(config AvailabilitySetCommandConfig) *ffcli.Comma
 		ShortHelp:  config.ShortHelp,
 		LongHelp:   config.LongHelp,
 		FlagSet:    fs,
-		UsageFunc:  DefaultUsageFunc,
+		UsageFunc:  d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			resolvedAppID := d.ResolveAppID(*appID)
 			if resolvedAppID == "" {
@@ -106,7 +107,7 @@ func NewAvailabilitySetCommand(config AvailabilitySetCommandConfig) *ffcli.Comma
 				return fmt.Errorf("%s: %w", config.ErrorPrefix, err)
 			}
 
-			requestCtx, cancel := ContextWithAvailabilityTimeout(ctx, *allTerritories)
+			requestCtx, cancel := d.AvailabilityTimeout(ctx, *allTerritories)
 			defer cancel()
 
 			var expectedAvailableInNewTerritories *bool
@@ -133,7 +134,7 @@ func NewAvailabilitySetCommand(config AvailabilitySetCommandConfig) *ffcli.Comma
 // NewAvailabilityRemoveFromSaleCommand builds a command that makes every
 // existing territory unavailable while preserving the app's new-territory policy.
 func NewAvailabilityRemoveFromSaleCommand(config AvailabilityRemoveFromSaleCommandConfig) *ffcli.Command {
-	d := builderDeps(config.Deps)
+	d := config.Deps
 	fs := d.NewFlagSet("pricing availability remove-from-sale", flag.ExitOnError)
 	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID)")
 	confirm := fs.Bool("confirm", false, "Confirm removal from sale in all current territories")
@@ -165,7 +166,7 @@ request instead. Preview the blast radius first with
 Examples:
   asc pricing availability remove-from-sale --app "123456789" --confirm`,
 		FlagSet:   fs,
-		UsageFunc: DefaultUsageFunc,
+		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
 			resolvedAppID := d.ResolveAppID(*appID)
 			if resolvedAppID == "" {
@@ -183,7 +184,7 @@ Examples:
 				return fmt.Errorf("pricing availability remove-from-sale: %w", err)
 			}
 
-			requestCtx, cancel := ContextWithAvailabilityTimeout(ctx, true)
+			requestCtx, cancel := d.AvailabilityTimeout(ctx, true)
 			defer cancel()
 
 			liveListings, listingsErr := fetchLiveAvailabilityPlatformListings(requestCtx, client, resolvedAppID)
@@ -572,16 +573,6 @@ func availabilityListingStatus(attributes asc.AppStoreVersionAttributes) (string
 	return state, live, stateKnown
 }
 
-// ContextWithAvailabilityTimeout returns the request context for availability
-// updates: all-territories updates fan out one PATCH per territory, so they get
-// the longer bulk timeout.
-func ContextWithAvailabilityTimeout(ctx context.Context, allTerritories bool) (context.Context, context.CancelFunc) {
-	if allTerritories {
-		return ContextWithResolvedTimeout(ctx, bulkAvailabilityTimeout)
-	}
-	return contextWithTimeout(ctx)
-}
-
 type availabilityEditTarget struct {
 	TerritoryID    string
 	AvailabilityID string
@@ -746,12 +737,7 @@ type TerritoryAvailabilityUpdateRequest struct {
 // territory already matched). It is the same code path
 // "asc pricing availability edit" runs, exported so a create-style command can
 // route --if-exists update to it instead of duplicating the update logic.
-func ApplyTerritoryAvailabilityUpdate(ctx context.Context, client *asc.Client, request TerritoryAvailabilityUpdateRequest) (*asc.AppAvailabilityV2Response, int, error) {
-	return applyTerritoryAvailabilityUpdateTo(ctx, os.Stderr, client, request)
-}
-
-// ApplyTerritoryAvailabilityUpdate is ApplyTerritoryAvailabilityUpdate with
-// its progress lines written to d's stderr.
+// Progress lines go to d's stderr.
 func (d *Deps) ApplyTerritoryAvailabilityUpdate(ctx context.Context, client *asc.Client, request TerritoryAvailabilityUpdateRequest) (*asc.AppAvailabilityV2Response, int, error) {
 	return applyTerritoryAvailabilityUpdateTo(ctx, d.IO.ErrOut, client, request)
 }

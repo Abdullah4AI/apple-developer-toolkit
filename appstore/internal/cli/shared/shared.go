@@ -89,6 +89,13 @@ func (e missingAuthError) Is(target error) bool {
 	return target == ErrMissingAuth
 }
 
+// unusableCredentialsError reports a credential setup the command cannot use
+// the way missing authentication is reported, with the diagnostic that names
+// what is wrong with it.
+func unusableCredentialsError(err error, code DiagnosticCode) error {
+	return WithDiagnostic(missingAuthError{msg: err.Error(), cause: err}, code, "")
+}
+
 var (
 	privateKeyTempMu    sync.Mutex
 	privateKeyTempPath  string
@@ -196,12 +203,8 @@ func RootFlagsForReinvocation() (args []string, ok bool) {
 }
 
 // ProgressEnabled reports whether it's safe/appropriate to emit progress messages.
-// Progress must be stderr-only and must not appear when stderr is non-interactive.
-func ProgressEnabled() bool {
-	return progressEnabledFor(isTerminal(int(os.Stderr.Fd())))
-}
-
-// ProgressEnabled is ProgressEnabled decided from d's stderr.
+// Progress must be stderr-only and must not appear when d's stderr is
+// non-interactive.
 func (d *Deps) ProgressEnabled() bool {
 	return progressEnabledFor(d.IO.StderrTTY)
 }
@@ -223,18 +226,11 @@ func SetSelectedProfile(value string) {
 	selectedProfile = value
 }
 
-// ResetDefaultOutputFormat clears the cached default output format so that
-// DefaultOutputFormat() re-reads ASC_DEFAULT_OUTPUT on its next call. Tests only.
+// ResetDefaultOutputFormat clears the cached ASC_DEFAULT_OUTPUT value so that
+// the next DefaultOutputFormat call re-reads it. Tests only.
 func ResetDefaultOutputFormat() {
-	defaultOutputOnce = sync.Once{}
-	defaultOutputValue = ""
 	defaultOutputEnvOnce = sync.Once{}
 	defaultOutputEnvValue = ""
-}
-
-// Bold returns the string wrapped in ANSI bold codes
-func Bold(s string) string {
-	return boldFor(isTerminal(int(os.Stderr.Fd())), s)
 }
 
 func boldFor(stderrTTY bool, s string) string {
@@ -251,11 +247,6 @@ func OrNA(value string) string {
 		return "n/a"
 	}
 	return trimmed
-}
-
-// RenderSection renders a titled section as markdown or table output.
-func RenderSection(title string, headers []string, rows [][]string, markdown bool) {
-	renderSectionTo(os.Stdout, isTerminal(int(os.Stderr.Fd())), title, headers, rows, markdown)
 }
 
 // renderSectionTo writes the section to w; the table title is bold when
@@ -566,7 +557,7 @@ func resolveCredentialsForProfile(profileOverride string) (resolvedCredentials, 
 		needsPrivateKey := actualKeyPath == "" && actualKeyPEM == ""
 		envCreds, err := resolveEnvCredentialsWithPrivateKey(needsPrivateKey)
 		if err != nil {
-			return resolvedCredentials{}, fmt.Errorf("invalid private key environment: %w", err)
+			return resolvedCredentials{}, unusableCredentialsError(fmt.Errorf("invalid private key environment: %w", err), DiagnosticInvalidInput)
 		}
 		if actualKeyID == "" && envCreds.keyID != "" {
 			actualKeyID = envCreds.keyID
@@ -928,6 +919,10 @@ func storedCredentialsError(profile string, err error) error {
 		return missingAuthError{msg: fmt.Sprintf("keychain access denied; set ASC_BYPASS_KEYCHAIN=1 to bypass: %v", err), cause: err}
 	case errors.Is(err, config.ErrParse):
 		return missingAuthError{msg: err.Error(), cause: err}
+	case errors.Is(err, os.ErrPermission):
+		return unusableCredentialsError(err, DiagnosticFilePermissionDenied)
+	case errors.Is(err, auth.ErrKeychainReadFailed):
+		return unusableCredentialsError(fmt.Errorf("keychain read failed; set ASC_BYPASS_KEYCHAIN=1 to bypass: %w", err), DiagnosticDependencyFailed)
 	case profile != "" && (errors.Is(err, config.ErrNotFound) || errors.Is(err, auth.ErrProfileNotFound)):
 		return missingAuthError{msg: profileNotFoundMessage(profile), cause: err}
 	}
@@ -1118,7 +1113,7 @@ func checkMixedCredentialSourcesForKeyType(sources credentialSource, keyType str
 			keyMaterialSource,
 		)
 		if strictAuthEnabled() {
-			return fmt.Errorf("mixed authentication sources detected:\n  Key ID: %s\n  Private Key: %s", keyIDSource, keyMaterialSource)
+			return unusableCredentialsError(fmt.Errorf("mixed authentication sources detected:\n  Key ID: %s\n  Private Key: %s", keyIDSource, keyMaterialSource), DiagnosticConflictingInput)
 		}
 		fmt.Fprint(os.Stderr, message)
 		return nil
@@ -1135,7 +1130,7 @@ func checkMixedCredentialSourcesForKeyType(sources credentialSource, keyType str
 		keyMaterialSource,
 	)
 	if strictAuthEnabled() {
-		return fmt.Errorf("mixed authentication sources detected:\n  Key ID: %s\n  Issuer ID: %s\n  Private Key: %s", keyIDSource, issuerSource, keyMaterialSource)
+		return unusableCredentialsError(fmt.Errorf("mixed authentication sources detected:\n  Key ID: %s\n  Issuer ID: %s\n  Private Key: %s", keyIDSource, issuerSource, keyMaterialSource), DiagnosticConflictingInput)
 	}
 	fmt.Fprint(os.Stderr, message)
 	return nil
@@ -1161,7 +1156,7 @@ func checkIgnoredEnvCredentialIDs(storedKeyID, storedIssuerID, storedSource stri
 	}
 	names := strings.Join(ignored, " and ")
 	if strictAuthEnabled() {
-		return fmt.Errorf("mixed authentication sources detected: %s ignored because the environment credentials are incomplete; using %s credentials", names, storedSource)
+		return unusableCredentialsError(fmt.Errorf("mixed authentication sources detected: %s ignored because the environment credentials are incomplete; using %s credentials", names, storedSource), DiagnosticConflictingInput)
 	}
 	fmt.Fprintf(os.Stderr, "Warning: %s ignored because the environment credentials are incomplete; using %s credentials\n", names, storedSource)
 	return nil
@@ -1331,10 +1326,6 @@ func resetInvalidStrictAuthWarnings() {
 	strictAuthWarned = map[string]struct{}{}
 }
 
-func printOutput(data any, format string, pretty bool) error {
-	return printOutputTo(os.Stdout, os.Stderr, data, format, pretty)
-}
-
 func printOutputTo(out, errOut io.Writer, data any, format string, pretty bool) error {
 	format, err := validateOutputFormat(format, pretty)
 	if err != nil {
@@ -1447,15 +1438,10 @@ func NormalizeOutputFormat(format string) string {
 	}
 }
 
-// RejectOutputFormatAsPath reports a usage error when a command whose --output
-// flag takes a path is given an output format name there. formatFlag is the
-// command's flag that chooses json, table or markdown, or "" when it has none.
-func RejectOutputFormatAsPath(path, formatFlag string) error {
-	return rejectOutputFormatAsPathTo(os.Stderr, path, formatFlag)
-}
-
-// RejectOutputFormatAsPath is RejectOutputFormatAsPath with the "Error:" line
-// written to d's stderr.
+// RejectOutputFormatAsPath reports a usage error, with its "Error:" line on d's
+// stderr, when a command whose --output flag takes a path is given an output
+// format name there. formatFlag is the command's flag that chooses json, table
+// or markdown, or "" when it has none.
 func (d *Deps) RejectOutputFormatAsPath(path, formatFlag string) error {
 	return rejectOutputFormatAsPathTo(d.IO.ErrOut, path, formatFlag)
 }
@@ -1585,22 +1571,9 @@ func isAppAvailabilityMissing(err error) bool {
 }
 
 var (
-	defaultOutputOnce     sync.Once
-	defaultOutputValue    string
 	defaultOutputEnvOnce  sync.Once
 	defaultOutputEnvValue string
 )
-
-// DefaultOutputFormat returns the default output format for CLI commands.
-// It checks ASC_DEFAULT_OUTPUT first. When unset, local interactive terminals
-// default to table output while CI and non-interactive contexts default to JSON.
-// Valid ASC_DEFAULT_OUTPUT values are "json", "table", "markdown", and "md".
-func DefaultOutputFormat() string {
-	defaultOutputOnce.Do(func() {
-		defaultOutputValue = defaultOutputFormatFor(isTerminal(int(os.Stdout.Fd())), os.Stderr)
-	})
-	return defaultOutputValue
-}
 
 func defaultOutputFormatFor(stdoutTTY bool, errOut io.Writer) string {
 	if format := defaultOutputFromEnv(errOut); format != "" {
@@ -1701,11 +1674,6 @@ func bindPrettyJSONFlagWithValue(fs *flag.FlagSet, value *bool) *bool {
 	return value
 }
 
-// BindOutputFlags registers --output and --pretty flags on the provided flagset.
-func BindOutputFlags(fs *flag.FlagSet) OutputFlags {
-	return BindOutputFlagsWith(fs, "output", DefaultOutputFormat(), "Output format: json, table, markdown")
-}
-
 // BindMetadataOutputFlags registers --output-format and --pretty flags on the provided flagset.
 func BindMetadataOutputFlags(fs *flag.FlagSet) MetadataOutputFlags {
 	output := BindOutputFlagsWithAllowed(fs, "output-format", "json", "Output format for metadata: json (default), table, markdown", "json", "table", "markdown")
@@ -1750,9 +1718,9 @@ func validateCommandOutputPath(commands []*ffcli.Command) error {
 	return nil
 }
 
-// WrapCommandOutputValidation ensures shared output flags are validated before
-// command execution so invalid format combinations fail before side effects.
-// The diagnostic goes to d's stderr.
+// WrapCommandOutputValidation ensures an --app given on the command line is
+// not blank and shared output flags are valid before command execution, so
+// both fail before side effects. The diagnostic goes to d's stderr.
 func WrapCommandOutputValidation(cmd *ffcli.Command, d *Deps) {
 	wrapCommandOutputValidation(cmd, d, nil)
 }
@@ -1773,6 +1741,9 @@ func wrapCommandOutputValidation(cmd *ffcli.Command, d *Deps, parents []*ffcli.C
 
 	originalExec := cmd.Exec
 	cmd.Exec = func(ctx context.Context, args []string) error {
+		if err := rejectGivenEmptyAppFlag(path, d.IO.ErrOut); err != nil {
+			return err
+		}
 		if err := validateCommandOutputPath(path); err != nil {
 			// Output-flag diagnostics already name the flag, its valid set,
 			// and the rejected value, so report them without dragging the
@@ -1782,6 +1753,28 @@ func wrapCommandOutputValidation(cmd *ffcli.Command, d *Deps, parents []*ffcli.C
 		}
 		return originalExec(ctx, args)
 	}
+}
+
+// rejectGivenEmptyAppFlag fails when --app was set on the command line, on
+// the command or on any group above it, to a value that is empty after
+// trimming, so a blank value never falls back to ASC_APP_ID or the config and
+// never reaches the API.
+func rejectGivenEmptyAppFlag(path []*ffcli.Command, stderr io.Writer) error {
+	blank := false
+	for _, command := range path {
+		if command.FlagSet == nil {
+			continue
+		}
+		command.FlagSet.Visit(func(f *flag.Flag) {
+			if f.Name == "app" && strings.TrimSpace(f.Value.String()) == "" {
+				blank = true
+			}
+		})
+	}
+	if !blank {
+		return nil
+	}
+	return WithDiagnostic(usageErrorTo(stderr, "--app must not be empty"), DiagnosticInvalidInput, "--app")
 }
 
 func resolveAppID(appID string) string {
@@ -2122,19 +2115,6 @@ func ResolveProfileName() string {
 	return resolveProfileName()
 }
 
-func PrintOutput(data any, format string, pretty bool) error {
-	return printOutput(data, format, pretty)
-}
-
-func PrintOutputWithRenderers(data any, format string, pretty bool, tableRenderer, markdownRenderer func() error) error {
-	return printOutputWithRenderersTo(os.Stdout, os.Stderr, data, format, pretty, tableRenderer, markdownRenderer)
-}
-
-// PrintOutputRows prints data as JSON, or as one table of headers and rows.
-func PrintOutputRows(data any, format string, pretty bool, headers []string, rows [][]string) error {
-	return printOutputRowsTo(os.Stdout, os.Stderr, data, format, pretty, headers, rows)
-}
-
 func ValidateOutputFormat(format string, pretty bool) (string, error) {
 	return validateOutputFormat(format, pretty)
 }
@@ -2160,13 +2140,6 @@ func ContextWithTimeout(ctx context.Context) (context.Context, context.CancelFun
 }
 
 func ContextWithUploadTimeout(ctx context.Context) (context.Context, context.CancelFunc) {
-	return contextWithUploadTimeout(ctx)
-}
-
-// ContextWithDownloadTimeout bounds a streamed download, including the body
-// copy. Client and request timeouts also cover that copy, so the short request
-// budget aborts a large report mid-transfer. Downloads use the upload budget.
-func ContextWithDownloadTimeout(ctx context.Context) (context.Context, context.CancelFunc) {
 	return contextWithUploadTimeout(ctx)
 }
 
@@ -2200,11 +2173,4 @@ func ValidateNextURL(next string) error {
 
 func ValidateSort(value string, allowed ...string) error {
 	return validateSort(value, allowed...)
-}
-
-// PrintStreamPage writes a single page of data as a JSON line to stdout.
-// Used with --stream --paginate to emit results page-by-page as NDJSON
-// instead of buffering all pages in memory.
-func PrintStreamPage(data any) error {
-	return asc.PrintJSONTo(os.Stdout, data)
 }

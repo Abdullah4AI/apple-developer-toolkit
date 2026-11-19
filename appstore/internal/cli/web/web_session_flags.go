@@ -49,22 +49,21 @@ func newWebRequestContextWith(ctx context.Context, d *shared.Deps) (context.Cont
 	return d.Timeout(shared.ContextWithoutTimeout(ctx))
 }
 
-// resolveWebSessionForCommand resolves the web session for a command and returns
-// the request context that command must use for its own work.
+// resolveWebSessionForCommandWith resolves the web session for a command and
+// returns the request context that command must use for its own work.
 //
 // Session resolution can block on an interactive password prompt, an interactive
 // 2FA prompt, or a configured two-factor code command, none of which belong in a
 // request timeout budget. Callers therefore pass their parent context and receive
 // a request context whose timeout starts only once authentication is done; the
 // returned cancel func is never nil, so it is safe to defer before checking err.
-func resolveWebSessionForCommand(ctx context.Context, flags webSessionFlags) (*webcore.AuthSession, context.Context, context.CancelFunc, error) {
-	return resolveWebSessionForCommandWith(ctx, shared.DefaultDeps(), flags)
-}
-
-// resolveWebSessionForCommandWith is resolveWebSessionForCommand on d. The
-// password and two-factor prompts still read and write the terminal itself.
+// The password and two-factor prompts still read and write the terminal itself.
 func resolveWebSessionForCommandWith(ctx context.Context, d *shared.Deps, flags webSessionFlags) (*webcore.AuthSession, context.Context, context.CancelFunc, error) {
 	if flags.sessionFromEnv != nil && *flags.sessionFromEnv {
+		if err := refuseUnderWebBroker(d, "--session-from-env"); err != nil {
+			requestCtx, cancel := newWebRequestContextWith(ctx, d)
+			return nil, requestCtx, cancel, err
+		}
 		session, err := resolveSessionFromEnv(ctx, d, flags)
 		requestCtx, cancel := newWebRequestContextWith(ctx, d)
 		return session, requestCtx, cancel, err
@@ -123,7 +122,7 @@ func withWebAuthHint(err error, operation string) error {
 		return fmt.Errorf("%s failed: Apple denied the request (403); the account role likely lacks permission for this action, or the web session expired (run 'asc web auth status' to check): %w", operation, err)
 	}
 	if webcore.IsSessionAuthFailure(err) {
-		return fmt.Errorf("%s failed: web session is unauthorized or expired (run 'asc web auth login'): %w", operation, err)
+		return fmt.Errorf("%s failed: web session is unauthorized or expired (%s): %w", operation, webSignInAdvice(), err)
 	}
 	return fmt.Errorf("%s failed: %w", operation, err)
 }

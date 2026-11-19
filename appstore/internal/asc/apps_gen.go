@@ -323,6 +323,17 @@ func (c *Client) GetAppCiProduct(ctx context.Context, appID string) (*CiProductR
 	})
 }
 
+// GetReviews sends GET /v1/apps/{id}/customerReviews (apps_customerReviews_getToManyRelated).
+func (c *Client) GetReviews(ctx context.Context, appID string, opts ...ReviewOption) (*ReviewsResponse, error) {
+	query := applyOptions(opts)
+	return getJSON[ReviewsResponse](ctx, c, readRequest{
+		Path:        fmt.Sprintf("/v1/apps/%s/customerReviews", appID),
+		Query:       buildReviewQuery(query),
+		Next:        query.nextURL,
+		NextContext: "reviews",
+	})
+}
+
 // GetEndUserLicenseAgreementForApp sends GET /v1/apps/{id}/endUserLicenseAgreement (apps_endUserLicenseAgreement_getToOneRelated).
 func (c *Client) GetEndUserLicenseAgreementForApp(ctx context.Context, appID string) (*EndUserLicenseAgreementResponse, error) {
 	appID = strings.TrimSpace(appID)
@@ -441,6 +452,21 @@ func (c *Client) SetAppPromotedPurchases(ctx context.Context, appID string, prom
 	return sendNoContent(ctx, c, http.MethodPatch, fmt.Sprintf("/v1/apps/%s/relationships/promotedPurchases", appID), payload)
 }
 
+// GetAppRetentionMessagesRelationships sends GET /v1/apps/{id}/relationships/retentionMessages (apps_retentionMessages_getToManyRelationship).
+func (c *Client) GetAppRetentionMessagesRelationships(ctx context.Context, appID string, opts ...LinkagesOption) (*LinkagesResponse, error) {
+	query := applyOptions(opts)
+	appID = strings.TrimSpace(appID)
+	if query.nextURL == "" && appID == "" {
+		return nil, fmt.Errorf("resource ID is required")
+	}
+	return getJSON[LinkagesResponse](ctx, c, readRequest{
+		Path:        fmt.Sprintf("/v1/apps/%s/relationships/retentionMessages", appID),
+		Query:       buildLinkagesQuery(query),
+		Next:        query.nextURL,
+		NextContext: "retention messages",
+	})
+}
+
 // GetAppSearchKeywords sends GET /v1/apps/{id}/searchKeywords (apps_searchKeywords_getToManyRelated).
 func (c *Client) GetAppSearchKeywords(ctx context.Context, appID string, opts ...AppSearchKeywordsOption) (*AppKeywordsResponse, error) {
 	query := applyOptions(opts)
@@ -475,6 +501,28 @@ func (c *Client) GetSubscriptionGroups(ctx context.Context, appID string, opts .
 		Query:       buildSubscriptionGroupsQuery(query),
 		Next:        query.nextURL,
 		NextContext: "subscriptionGroups",
+	})
+}
+
+// UpdateApp sends PATCH /v1/apps/{id} (apps_updateInstance).
+func (c *Client) UpdateApp(ctx context.Context, appID string, attrs AppUpdateAttributes) (*AppResponse, error) {
+	appID = strings.TrimSpace(appID)
+	if appID == "" {
+		return nil, fmt.Errorf("app ID is required")
+	}
+	payload := AppUpdateRequest{
+		Data: AppUpdateData{
+			Type: ResourceTypeApps,
+			ID:   appID,
+		},
+	}
+	if attrs.AccessibilityURL != nil || attrs.BundleID != nil || attrs.PrimaryLocale != nil || attrs.SubscriptionStatusURL != nil || attrs.SubscriptionStatusURLVersion != nil || attrs.SubscriptionStatusURLForSandbox != nil || attrs.SubscriptionStatusURLVersionForSandbox != nil || attrs.ContentRightsDeclaration != nil || attrs.StreamlinedPurchasingEnabled != nil {
+		payload.Data.Attributes = &attrs
+	}
+	return sendJSON[AppResponse](ctx, c, writeRequest{
+		Method:  http.MethodPatch,
+		Path:    fmt.Sprintf("/v1/apps/%s", appID),
+		Payload: payload,
 	})
 }
 

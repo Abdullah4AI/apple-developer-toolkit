@@ -381,14 +381,31 @@ func (p *pkg) deriveOp(spec *Spec, fam *Family, op *Operation, d *decl) (*OpBind
 	}
 
 	var messages, links []string
-	var trimmed, next, attrsByValue bool
+	var trimmed, next, attrsByValue, builtPath bool
+	pathErr := ""
 	var trimAt, optionsAt token.Pos
+	positive := map[string]string{}
 	list := &IDList{}
+	var optional []optionalIf
 	ast.Inspect(fn.Body, func(x ast.Node) bool {
+		if o, ok := readOptionalLink(x); ok {
+			optional = append(optional, o)
+			return false
+		}
 		if b.IDs != "" && strings.HasSuffix(op.Request, "LinkagesRequest") && readIDList(x, b.IDs, list) {
 			return false
 		}
 		switch n := x.(type) {
+		case *ast.IfStmt:
+			if cond, ok := n.Cond.(*ast.BinaryExpr); ok && cond.Op == token.LEQ && exprString(cond.Y) == "0" {
+				ast.Inspect(n.Body, func(y ast.Node) bool {
+					if call, ok := y.(*ast.CallExpr); ok && exprString(call.Fun) == "fmt.Errorf" && len(call.Args) == 1 {
+						positive[exprString(cond.X)] = stringLit(call.Args[0])
+					}
+					return true
+				})
+				return false
+			}
 		case *ast.KeyValueExpr:
 			key, _ := n.Key.(*ast.Ident)
 			if key == nil {
@@ -437,14 +454,33 @@ func (p *pkg) deriveOp(spec *Spec, fam *Family, op *Operation, d *decl) (*OpBind
 				messages = append(messages, stringLit(n.Args[0]))
 				b.Check = checkRequire
 			}
+			if exprString(n.Fun) == "resourcePath" {
+				builtPath = true
+			}
+			if exprString(n.Fun) == "fmt.Errorf" && len(n.Args) == 2 && exprString(n.Args[1]) == "err" {
+				pathErr, _ = strings.CutSuffix(stringLit(n.Args[0]), ": %w")
+			}
 		}
 		return true
 	})
+	for _, o := range optional {
+		b.Params = slices.DeleteFunc(b.Params, func(p string) bool { return p == o.param })
+		for _, name := range linkNames(spec, op, []string{o.field}) {
+			b.Optional = append(b.Optional, OptionalLink{Param: o.param, Link: name})
+		}
+		b.RelationshipsWhenSet = b.RelationshipsWhenSet || o.whenSet
+	}
 	if !trimmed && len(b.stringParams()) > 0 {
 		b.Check = checkRaw
 	}
+	if builtPath {
+		b.Check, b.PathErr = checkPath, pathErr
+	}
 	if *list != (IDList{}) {
 		b.IDList = list
+	}
+	for i := range b.Args {
+		b.Args[i].Positive = positive[b.Args[i].Name]
 	}
 	b.CheckFirst = b.Options != "" && trimAt.IsValid() && optionsAt.IsValid() && trimAt < optionsAt
 	b.Links = linkNames(spec, op, links)
@@ -663,7 +699,7 @@ func (p *pkg) recordRelationships(spec *Spec, ops []*Operation, fam *Family) {
 		data, err := requestData(spec, op.Request)
 		name := strings.TrimSuffix(op.Request, "Request") + "Data"
 		recorded := slices.ContainsFunc(fam.Relationships, func(r *RelBind) bool { return r.Data == name })
-		if op.Method != "POST" || err != nil || data.Properties.Get("relationships") == nil || recorded {
+		if (op.Method != "POST" && op.Method != "PATCH") || err != nil || data.Properties.Get("relationships") == nil || recorded {
 			continue
 		}
 		d, ok := p.types[goTypeName(name)]
@@ -766,6 +802,51 @@ func refSchema(s *Schema) string {
 		return ""
 	}
 	return refName(s.Ref)
+}
+
+// optionalIf is an optional link a create or update sets: the parameter, the
+// Go field of the relationships it sets, and whether it allocates the
+// relationships first.
+type optionalIf struct {
+	param, field string
+	whenSet      bool
+}
+
+// readOptionalLink reads `if id := strings.TrimSpace(p); id != "" {...}` or
+// `if p != "" {...}` whose body sets one relationships field to a
+// Relationship, after allocating the relationships when they are nil.
+func readOptionalLink(x ast.Node) (optionalIf, bool) {
+	n, ok := x.(*ast.IfStmt)
+	if !ok || n.Else != nil || len(n.Body.List) == 0 {
+		return optionalIf{}, false
+	}
+	o := optionalIf{}
+	cond := exprString(n.Cond)
+	if init, ok := n.Init.(*ast.AssignStmt); ok && init.Tok == token.DEFINE && len(init.Rhs) == 1 && cond == `id != ""` && exprString(init.Lhs[0]) == "id" {
+		call, ok := init.Rhs[0].(*ast.CallExpr)
+		if !ok || exprString(call.Fun) != "strings.TrimSpace" || len(call.Args) != 1 {
+			return optionalIf{}, false
+		}
+		o.param = exprString(call.Args[0])
+	} else if p, ok := strings.CutSuffix(cond, ` != ""`); ok && n.Init == nil && !strings.ContainsAny(p, " .()") {
+		o.param = p
+	} else {
+		return optionalIf{}, false
+	}
+	stmts := n.Body.List
+	if first, ok := stmts[0].(*ast.IfStmt); ok && exprString(first.Cond) == "relationships == nil" && len(stmts) == 2 {
+		o.whenSet, stmts = true, stmts[1:]
+	}
+	set, ok := stmts[0].(*ast.AssignStmt)
+	if !ok || len(stmts) != 1 || len(set.Lhs) != 1 {
+		return optionalIf{}, false
+	}
+	field, ok := strings.CutPrefix(exprString(set.Lhs[0]), "relationships.")
+	if lit := compositeLit(set.Rhs[0]); !ok || lit == nil || exprString(lit.Type) != "Relationship" {
+		return optionalIf{}, false
+	}
+	o.field = field
+	return o, true
 }
 
 // compositeLit returns the literal of T{...} or &T{...}.

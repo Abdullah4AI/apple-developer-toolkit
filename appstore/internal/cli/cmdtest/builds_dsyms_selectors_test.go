@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"testing/synctest"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asctest"
@@ -275,7 +276,11 @@ func TestBuildsDSYMWaitSucceedsAfterPolling(t *testing.T) {
 		}
 	})
 
-	stdout, stderr := runDSYM(t, transport, outputDir, "builds", "dsyms", "--build-id", "build-1", "--wait", "--poll-interval", "1ms", "--timeout", "2s", "--output", "json")
+	installDefaultTransport(t, transport)
+	stdout, stderr, err := runCommandOnFakeClock(t, []string{"builds", "dsyms", "--build-id", "build-1", "--wait", "--poll-interval", "1ms", "--timeout", "2s", "--output", "json", "--output-dir", outputDir})
+	if err != nil {
+		t.Fatalf("run error: %v\nstderr: %s", err, stderr)
+	}
 	if bundleCalls < 2 {
 		t.Fatalf("bundle calls = %d, want at least 2", bundleCalls)
 	}
@@ -352,7 +357,7 @@ func runDSYMErr(t *testing.T, args ...string) (string, string, error) {
 		if err := root.Parse(args); err != nil {
 			t.Fatalf("parse error: %v", err)
 		}
-		runErr = root.Run(context.Background())
+		synctest.Test(t, func(*testing.T) { runErr = root.Run(context.Background()) })
 	})
 	return stdout, stderr, runErr
 }

@@ -200,7 +200,7 @@ func TestListEndpoints_UseNextURL(t *testing.T) {
 			name: "GetPreReleaseVersions",
 			next: "https://api.appstoreconnect.apple.com/v1/preReleaseVersions?cursor=abc",
 			call: func(c *Client, next string) error {
-				_, err := c.GetPreReleaseVersions(ctx, "123", NextURL[PreReleaseVersionsOption](next))
+				_, err := c.GetPreReleaseVersions(ctx, WithPreReleaseVersionsAppID("123"), NextURL[PreReleaseVersionsOption](next))
 				return err
 			},
 		},
@@ -264,7 +264,7 @@ func TestListEndpoints_UseNextURL(t *testing.T) {
 			name: "GetBetaAppReviewDetails",
 			next: "https://api.appstoreconnect.apple.com/v1/betaAppReviewDetails?cursor=abc",
 			call: func(c *Client, next string) error {
-				_, err := c.GetBetaAppReviewDetails(ctx, "app-1", NextURL[BetaAppReviewDetailsOption](next))
+				_, err := c.GetBetaAppReviewDetails(ctx, WithBetaAppReviewDetailsAppID("app-1"), NextURL[BetaAppReviewDetailsOption](next))
 				return err
 			},
 		},
@@ -998,7 +998,7 @@ func TestListEndpoints_SendRequest(t *testing.T) {
 			query: map[string]string{"filter[app]": "app-1", "limit": "10"},
 			body:  `{"data":[{"type":"betaAppReviewDetails","id":"detail-1","attributes":{"contactEmail":"dev@example.com"}}]}`,
 			call: func(c *Client) error {
-				return discardResult(c.GetBetaAppReviewDetails(ctx, "app-1", Limit[BetaAppReviewDetailsOption](10)))
+				return discardResult(c.GetBetaAppReviewDetails(ctx, WithBetaAppReviewDetailsAppID("app-1"), Limit[BetaAppReviewDetailsOption](10)))
 			},
 		},
 		{
@@ -2525,7 +2525,7 @@ func TestGetPreReleaseVersions_WithFilters(t *testing.T) {
 
 	result, err := client.GetPreReleaseVersions(
 		context.Background(),
-		"123",
+		WithPreReleaseVersionsAppID("123"),
 		Limit[PreReleaseVersionsOption](5),
 		WithPreReleaseVersionsPlatform("ios"),
 		WithPreReleaseVersionsVersion("1.0.0"),
@@ -3889,7 +3889,7 @@ func TestCreateAppStoreVersionLocalization_SendsRequest(t *testing.T) {
 		Locale:      "en-US",
 		Description: "Hello",
 	}
-	if _, err := client.CreateAppStoreVersionLocalization(context.Background(), "version-1", attrs); err != nil {
+	if _, err := client.CreateAppStoreVersionLocalization(context.Background(), "version-1", attrs.CreateAttributes()); err != nil {
 		t.Fatalf("CreateAppStoreVersionLocalization() error: %v", err)
 	}
 }
@@ -3929,7 +3929,7 @@ func TestUpdateAppStoreVersionLocalization_SendsRequest(t *testing.T) {
 		Locale:      "en-US", // should be ignored/omitted on update
 		Description: "Updated",
 	}
-	if _, err := client.UpdateAppStoreVersionLocalization(context.Background(), "loc-1", attrs); err != nil {
+	if _, err := client.UpdateAppStoreVersionLocalization(context.Background(), "loc-1", attrs.UpdateAttributes()); err != nil {
 		t.Fatalf("UpdateAppStoreVersionLocalization() error: %v", err)
 	}
 }
@@ -3951,7 +3951,7 @@ func TestUpdateAppStoreVersionLocalization_OmitsLocale(t *testing.T) {
 		Locale:      "en-US",
 		Description: "Updated",
 	}
-	if _, err := client.UpdateAppStoreVersionLocalization(context.Background(), "loc-1", attrs); err != nil {
+	if _, err := client.UpdateAppStoreVersionLocalization(context.Background(), "loc-1", attrs.UpdateAttributes()); err != nil {
 		t.Fatalf("UpdateAppStoreVersionLocalization() error: %v", err)
 	}
 }
@@ -4027,9 +4027,10 @@ func TestCreateBetaBuildLocalization_SendsRequest(t *testing.T) {
 		assertAuthorized(t, req)
 	}, response)
 
-	attrs := BetaBuildLocalizationAttributes{
+	whatsNew := "Test the new feature"
+	attrs := BetaBuildLocalizationCreateAttributes{
 		Locale:   "en-US",
-		WhatsNew: "Test the new feature",
+		WhatsNew: &whatsNew,
 	}
 	if _, err := client.CreateBetaBuildLocalization(context.Background(), "build-1", attrs); err != nil {
 		t.Fatalf("CreateBetaBuildLocalization() error: %v", err)
@@ -4062,8 +4063,9 @@ func TestUpdateBetaBuildLocalization_SendsRequest(t *testing.T) {
 		assertAuthorized(t, req)
 	}, response)
 
-	attrs := BetaBuildLocalizationAttributes{
-		WhatsNew: "Updated",
+	whatsNew := "Updated"
+	attrs := BetaBuildLocalizationUpdateAttributes{
+		WhatsNew: &whatsNew,
 	}
 	if _, err := client.UpdateBetaBuildLocalization(context.Background(), "loc-1", attrs); err != nil {
 		t.Fatalf("UpdateBetaBuildLocalization() error: %v", err)
@@ -4107,7 +4109,7 @@ func TestCreateBetaAppLocalization_SendsRequest(t *testing.T) {
 		Description:   "Test details",
 		FeedbackEmail: "tester@example.com",
 	}
-	if _, err := client.CreateBetaAppLocalization(context.Background(), "app-1", attrs); err != nil {
+	if _, err := client.CreateBetaAppLocalization(context.Background(), "app-1", attrs.CreateAttributes()); err != nil {
 		t.Fatalf("CreateBetaAppLocalization() error: %v", err)
 	}
 }
@@ -4148,7 +4150,7 @@ func TestCreateAppInfoLocalization_SendsRequest(t *testing.T) {
 		Locale: "en-US",
 		Name:   "Demo App",
 	}
-	if _, err := client.CreateAppInfoLocalization(context.Background(), "app-info-1", attrs); err != nil {
+	if _, err := client.CreateAppInfoLocalization(context.Background(), "app-info-1", attrs.CreateAttributes()); err != nil {
 		t.Fatalf("CreateAppInfoLocalization() error: %v", err)
 	}
 }
@@ -4188,7 +4190,7 @@ func TestUpdateAppInfoLocalization_SendsRequest(t *testing.T) {
 		Locale: "en-US", // should be ignored/omitted on update
 		Name:   "Updated",
 	}
-	if _, err := client.UpdateAppInfoLocalization(context.Background(), "loc-1", attrs); err != nil {
+	if _, err := client.UpdateAppInfoLocalization(context.Background(), "loc-1", attrs.UpdateAttributes()); err != nil {
 		t.Fatalf("UpdateAppInfoLocalization() error: %v", err)
 	}
 }
@@ -4210,7 +4212,7 @@ func TestUpdateAppInfoLocalization_OmitsLocale(t *testing.T) {
 		Locale: "en-US",
 		Name:   "Updated",
 	}
-	if _, err := client.UpdateAppInfoLocalization(context.Background(), "loc-1", attrs); err != nil {
+	if _, err := client.UpdateAppInfoLocalization(context.Background(), "loc-1", attrs.UpdateAttributes()); err != nil {
 		t.Fatalf("UpdateAppInfoLocalization() error: %v", err)
 	}
 }

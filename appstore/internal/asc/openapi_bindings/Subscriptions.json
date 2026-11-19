@@ -8,7 +8,8 @@
     "SubscriptionResponse"
   ],
   "relationships": [
-    {"data":"SubscriptionCreateData","type":"*SubscriptionRelationships","omitempty":true}
+    {"data":"SubscriptionCreateData","type":"*SubscriptionRelationships","omitempty":true},
+    {"data":"SubscriptionUpdateData","type":"*SubscriptionUpdateRelationships","omitempty":true}
   ],
   "operations": [
     {"operation":"subscriptions_appStoreReviewScreenshot_getToOneRelated","name":"GetSubscriptionAppStoreReviewScreenshotForSubscription","params":["subID"],"check":"require","checkFirst":true,"messages":["subscription ID is required"],"options":"SubscriptionAppStoreReviewScreenshotOption","query":"buildSubscriptionAppStoreReviewScreenshotQuery","single":true},
@@ -18,9 +19,12 @@
     {"operation":"subscriptions_prices_getToManyRelated","name":"GetSubscriptionPrices","params":["subscriptionID"],"options":"SubscriptionPricesOption","query":"buildSubscriptionPricesQuery","nextContext":"subscriptionPrices"},
     {"operation":"subscriptions_prices_getToManyRelationship","name":"GetSubscriptionPricesRelationships","params":["subID"],"check":"require","messages":["subscription ID is required"],"options":"LinkagesOption","query":"buildLinkagesQuery","nextContext":"subscriptionPricesRelationships","response":"LinkagesResponse"},
     {"operation":"subscriptions_promotedPurchase_getToOneRelated","name":"GetSubscriptionPromotedPurchase","params":["subID"],"check":"require","checkFirst":true,"messages":["subscription ID is required"],"options":"PromotedPurchaseGetOption","query":"buildPromotedPurchaseGetQuery","single":true},
+    {"operation":"subscriptions_retentionMessageOffers_createToManyRelationship","name":"AddSubscriptionRetentionMessageOffers","params":["subscriptionID"],"ids":"offerIDs"},
+    {"operation":"subscriptions_retentionMessageOffers_deleteToManyRelationship","name":"RemoveSubscriptionRetentionMessageOffers","params":["subscriptionID"],"ids":"offerIDs"},
     {"operation":"subscriptions_retentionMessageOffers_getToManyRelationship","name":"GetSubscriptionRetentionMessageOffersRelationships","params":["subscriptionID"],"check":"require","options":"LinkagesOption","query":"buildLinkagesQuery","nextContext":"retentionMessageOffers relationships","parseErr":"failed to parse retentionMessageOffers relationship response","response":"LinkagesResponse"},
     {"operation":"subscriptions_retentionOffers_getToManyRelationship","name":"GetSubscriptionRetentionOffersRelationships","params":["subscriptionID"],"check":"require","options":"LinkagesOption","query":"buildLinkagesQuery","nextContext":"retentionOffers relationships","parseErr":"failed to parse retentionOffers relationship response","response":"LinkagesResponse"},
     {"operation":"subscriptions_subscriptionAvailability_getToOneRelated","name":"GetSubscriptionAvailabilityForSubscription","params":["subID"],"check":"require","messages":["subscription ID is required"]},
+    {"operation":"subscriptions_updateInstance","name":"UpdateSubscription","params":["subID"],"attrs":"value","deviations":[{"problem":"data.attributes has [availableInAllTerritories], which the schema does not define","reason":"SubscriptionUpdateAttributes.AvailableInAllTerritories is an omitempty pointer no caller sets (asc subscriptions update sets name, review note, period, family sharing, group level, market settings and multi-seat status), so it is never sent; availability belongs to subscription availabilities"}]},
     {"operation":"subscriptions_versions_getToManyRelated","name":"GetSubscriptionVersions","params":["subscriptionID"],"check":"require","messages":["subscription ID is required"],"options":"SubscriptionVersionsOption","query":"buildSubscriptionVersionsQuery","nextContext":"subscriptionVersions"},
     {"operation":"subscriptions_versions_getToManyRelationship","name":"GetSubscriptionVersionsRelationships","params":["subscriptionID"],"check":"require","messages":["owner ID is required"],"options":"LinkagesOption","query":"buildLinkagesQuery","nextContext":"subscriptionVersionsRelationships","response":"LinkagesResponse"},
     {"operation":"subscriptions_winBackOffers_getToManyRelated","name":"GetSubscriptionWinBackOffers","params":["subscriptionID"],"options":"WinBackOffersOption","query":"buildWinBackOffersQuery","nextContext":"winBackOffers"},

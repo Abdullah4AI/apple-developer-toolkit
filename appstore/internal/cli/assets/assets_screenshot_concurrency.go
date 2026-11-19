@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"sync"
@@ -41,11 +42,11 @@ const (
 	maxScreenshotUploadConcurrency     = 10
 )
 
-var uploadOneScreenshot = func(ctx context.Context, client *asc.Client, setID, filePath, sourceRootPath string, openedFiles openedScreenshotFiles) (asc.AssetUploadResultItem, screenshotPendingAsset, error) {
+var uploadOneScreenshot = func(ctx context.Context, stderr io.Writer, client *asc.Client, setID, filePath, sourceRootPath string, openedFiles openedScreenshotFiles) (asc.AssetUploadResultItem, screenshotPendingAsset, error) {
 	if openedFile := openedScreenshotFileForPath(openedFiles, filePath); openedFile != nil {
-		return uploadScreenshotAssetFromFile(ctx, client, setID, filePath, openedFile)
+		return uploadScreenshotAssetFromFile(ctx, stderr, client, setID, filePath, openedFile)
 	}
-	return uploadScreenshotAsset(ctx, client, setID, sourceRootPath, filePath)
+	return uploadScreenshotAsset(ctx, stderr, client, setID, sourceRootPath, filePath)
 }
 
 func withScreenshotUploadConcurrency(ctx context.Context, concurrency int) context.Context {
@@ -179,9 +180,10 @@ func cleanupScreenshotAssets(ctx context.Context, requestContext func(context.Co
 	return remaining, errors.Join(cleanupErrors...)
 }
 
-func uploadScreenshotsConcurrently(ctx context.Context, requestContext func(context.Context) (context.Context, context.CancelFunc), client *asc.Client, setID string, progress screenshotUploadProgress, files []string, sourceRootPath string, openedFiles openedScreenshotFiles, syncIfNoNew, syncAfterUpload bool, concurrency int) (screenshotUploadProgress, error) {
+func uploadScreenshotsConcurrently(ctx context.Context, stderr io.Writer, requestContext func(context.Context) (context.Context, context.CancelFunc), client *asc.Client, setID string, progress screenshotUploadProgress, files []string, sourceRootPath string, openedFiles openedScreenshotFiles, syncIfNoNew, syncAfterUpload bool, concurrency int) (screenshotUploadProgress, error) {
+	stderr = newLockedWriter(stderr)
 	slots, failed, cleanupFailures, cleanupErr := runScreenshotUploadPool(ctx, requestContext, client, files, concurrency, func(ctx context.Context, filePath string) (asc.AssetUploadResultItem, screenshotPendingAsset, error) {
-		return uploadOneScreenshot(ctx, client, setID, filePath, sourceRootPath, openedFiles)
+		return uploadOneScreenshot(ctx, stderr, client, setID, filePath, sourceRootPath, openedFiles)
 	})
 	if failed >= 0 {
 		for idx := 0; idx < failed; idx++ {
@@ -214,6 +216,28 @@ func uploadScreenshotsConcurrently(ctx context.Context, requestContext func(cont
 		return progress, err
 	}
 	return progress, nil
+}
+
+// lockedWriter serializes the writes of concurrent upload workers to a stderr
+// that may not be safe for concurrent use.
+type lockedWriter struct {
+	mu sync.Mutex
+	w  io.Writer
+}
+
+func (l *lockedWriter) Write(p []byte) (int, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.w.Write(p)
+}
+
+// newLockedWriter returns nil for a nil w, which the pollers read as the
+// process stderr.
+func newLockedWriter(w io.Writer) io.Writer {
+	if w == nil {
+		return nil
+	}
+	return &lockedWriter{w: w}
 }
 
 // runScreenshotUploadPool uploads files with up to concurrency workers and
@@ -282,9 +306,11 @@ func runScreenshotUploadPool(ctx context.Context, requestContext func(context.Co
 // uploadContext and reads the handle from open, which it closes; a nil handle
 // uploads from the path. Results keep file order. On failure it returns the
 // results before the first failed file, that file, and the error, and deletes
-// the screenshots uploaded after it.
-func UploadScreenshotAssetsConcurrently(ctx context.Context, client *asc.Client, setID string, files []string, uploadContext func(context.Context) (context.Context, context.CancelFunc), open func(filePath string) (*os.File, error)) ([]asc.AssetUploadResultItem, string, error) {
-	slots, failed, _, cleanupErr := runScreenshotUploadPool(ctx, shared.ContextWithTimeout, client, files, defaultScreenshotUploadConcurrency, func(ctx context.Context, filePath string) (asc.AssetUploadResultItem, screenshotPendingAsset, error) {
+// the screenshots uploaded after it. Cleanup requests take their deadline from
+// d.Timeout.
+func UploadScreenshotAssetsConcurrently(ctx context.Context, d *shared.Deps, client *asc.Client, setID string, files []string, uploadContext func(context.Context) (context.Context, context.CancelFunc), open func(filePath string) (*os.File, error)) ([]asc.AssetUploadResultItem, string, error) {
+	stderr := newLockedWriter(d.IO.ErrOut)
+	slots, failed, _, cleanupErr := runScreenshotUploadPool(ctx, d.Timeout, client, files, defaultScreenshotUploadConcurrency, func(ctx context.Context, filePath string) (asc.AssetUploadResultItem, screenshotPendingAsset, error) {
 		uploadCtx, cancel := uploadContext(ctx)
 		defer cancel()
 		// uploadContext may rebuild from an earlier parent, so carry the turn over.
@@ -296,13 +322,13 @@ func UploadScreenshotAssetsConcurrently(ctx context.Context, client *asc.Client,
 			return asc.AssetUploadResultItem{}, screenshotPendingAsset{}, err
 		}
 		if file == nil {
-			sourceRootPath, err := resolveScreenshotUploadRoot(shared.DefaultDeps(), "", []string{filePath})
+			sourceRootPath, err := resolveScreenshotUploadRoot(d, "", []string{filePath})
 			if err != nil {
 				return asc.AssetUploadResultItem{}, screenshotPendingAsset{}, err
 			}
-			return uploadScreenshotAsset(uploadCtx, client, setID, sourceRootPath, filePath)
+			return uploadScreenshotAsset(uploadCtx, stderr, client, setID, sourceRootPath, filePath)
 		}
-		item, pending, err := uploadScreenshotAssetFromFile(uploadCtx, client, setID, filePath, file)
+		item, pending, err := uploadScreenshotAssetFromFile(uploadCtx, stderr, client, setID, filePath, file)
 		if closeErr := file.Close(); err == nil && closeErr != nil {
 			return asc.AssetUploadResultItem{}, screenshotUploadItemPending(item), closeErr
 		}

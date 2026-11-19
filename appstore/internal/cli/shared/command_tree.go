@@ -87,6 +87,9 @@ func VisibleHelpFlags(fs *flag.FlagSet) []*flag.Flag {
 		if _, hidden := hiddenCommandHelpRegistry.flags[f]; hidden {
 			return
 		}
+		if IsFlagAlias(f) {
+			return
+		}
 		visible = append(visible, f)
 	})
 	return visible

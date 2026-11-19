@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -17,6 +18,7 @@ import (
 	rootcmd "github.com/Abdullah4AI/apple-developer-toolkit/appstore/cmd"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/validate"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/handlertest"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/validation"
 	webcore "github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/web"
 )
@@ -111,6 +113,7 @@ func newValidateTestClient(t *testing.T, fixture validateFixture) *asc.Client {
 }
 
 func validateTestTransport(t *testing.T, fixture validateFixture) roundTripFunc {
+	assert := handlertest.New(t)
 	return roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		if fixture.requestObserver != nil {
 			fixture.requestObserver(req)
@@ -333,6 +336,13 @@ func validateTestTransport(t *testing.T, fixture validateFixture) roundTripFunc 
 			if body, ok := fixture.customPageLocsByVersion[versionID]; ok {
 				return jsonResponse(http.StatusOK, body)
 			}
+		case path == "/v1/builds/build-1/appEncryptionDeclaration",
+			strings.HasPrefix(path, "/v1/subscriptions/") && slices.Contains([]string{
+				"appStoreReviewScreenshot", "subscriptionAvailability", "planAvailabilities",
+				"introductoryOffers", "promotionalOffers", "winBackOffers",
+			}, path[strings.LastIndex(path, "/")+1:]):
+		default:
+			return nil, assert.Errorf("unexpected request: %s %s", req.Method, req.URL)
 		}
 
 		return jsonResponse(http.StatusNotFound, `{"errors":[{"status":404}]}`)

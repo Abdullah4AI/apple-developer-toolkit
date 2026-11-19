@@ -107,7 +107,9 @@ func newSubscriptionsVersionsListCommand(d *shared.Deps) *ffcli.Command {
 	localizationFields := fs.String("localization-fields", "", "Sparse fields for included subscriptionLocalizations")
 	include := fs.String("include", "", "Include relationships: subscription,image,images,localizations")
 	imagesLimit := fs.Int("images-limit", 0, "Maximum included images (1-50)")
+	shared.BindFlagAlias(fs, "image-limit", "images-limit")
 	localizationsLimit := fs.Int("localizations-limit", 0, "Maximum included localizations (1-50)")
+	shared.BindFlagAlias(fs, "localization-limit", "localizations-limit")
 	limit := fs.Int("limit", 0, shared.LimitFlagUsage(200))
 	next := fs.String("next", "", shared.NextFlagUsage)
 	paginate := fs.Bool("paginate", false, shared.PaginateFlagUsage)
@@ -219,13 +221,16 @@ Examples:
   asc subscriptions versions view --id "VERSION_ID" --include images,localizations --images-limit 10 --localizations-limit 10`,
 		IDUsage: "Subscription version ID", IDType: "subscriptionVersions", RequiredDiagnostic: true,
 		Flags: func(fs *flag.FlagSet) func() error {
+			shared.BindFlagAlias(fs, "version-id", "id")
 			fields := fs.String("fields", "", "Sparse fields for subscriptionVersions")
 			subscriptionFields := fs.String("subscription-fields", "", "Sparse fields for included subscriptions")
 			imageFields := fs.String("image-fields", "", "Sparse fields for included subscriptionImages")
 			localizationFields := fs.String("localization-fields", "", "Sparse fields for included subscriptionLocalizations")
 			include := fs.String("include", "", "Include relationships: subscription,image,images,localizations")
 			imagesLimit = fs.Int("images-limit", 0, "Maximum included images (1-50)")
+			shared.BindFlagAlias(fs, "image-limit", "images-limit")
 			localizationsLimit = fs.Int("localizations-limit", 0, "Maximum included localizations (1-50)")
+			shared.BindFlagAlias(fs, "localization-limit", "localizations-limit")
 			return func() (err error) {
 				if err := validateRelationshipLimit(d, "--images-limit", *imagesLimit); err != nil {
 					return err

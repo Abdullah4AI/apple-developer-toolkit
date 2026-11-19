@@ -6,71 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strings"
 )
-
-// CreateGameCenterMatchmakingQueue creates a new matchmaking queue.
-func (c *Client) CreateGameCenterMatchmakingQueue(ctx context.Context, attrs GameCenterMatchmakingQueueCreateAttributes, ruleSetID string, experimentRuleSetID string) (*GameCenterMatchmakingQueueResponse, error) {
-	relationships := &GameCenterMatchmakingQueueRelationships{
-		RuleSet: &Relationship{
-			Data: ResourceData{
-				Type: ResourceTypeGameCenterMatchmakingRuleSets,
-				ID:   strings.TrimSpace(ruleSetID),
-			},
-		},
-	}
-	if strings.TrimSpace(experimentRuleSetID) != "" {
-		relationships.ExperimentRuleSet = &Relationship{
-			Data: ResourceData{
-				Type: ResourceTypeGameCenterMatchmakingRuleSets,
-				ID:   strings.TrimSpace(experimentRuleSetID),
-			},
-		}
-	}
-
-	payload := GameCenterMatchmakingQueueCreateRequest{
-		Data: GameCenterMatchmakingQueueCreateData{
-			Type:          ResourceTypeGameCenterMatchmakingQueues,
-			Attributes:    attrs,
-			Relationships: relationships,
-		},
-	}
-	return sendJSON[GameCenterMatchmakingQueueResponse](ctx, c, writeRequest{Method: http.MethodPost, Path: "/v1/gameCenterMatchmakingQueues", Payload: payload})
-}
-
-// UpdateGameCenterMatchmakingQueue updates a matchmaking queue.
-func (c *Client) UpdateGameCenterMatchmakingQueue(ctx context.Context, queueID string, attrs GameCenterMatchmakingQueueUpdateAttributes, ruleSetID string, experimentRuleSetID string) (*GameCenterMatchmakingQueueResponse, error) {
-	var relationships *GameCenterMatchmakingQueueRelationships
-	if strings.TrimSpace(ruleSetID) != "" || strings.TrimSpace(experimentRuleSetID) != "" {
-		relationships = &GameCenterMatchmakingQueueRelationships{}
-		if strings.TrimSpace(ruleSetID) != "" {
-			relationships.RuleSet = &Relationship{
-				Data: ResourceData{
-					Type: ResourceTypeGameCenterMatchmakingRuleSets,
-					ID:   strings.TrimSpace(ruleSetID),
-				},
-			}
-		}
-		if strings.TrimSpace(experimentRuleSetID) != "" {
-			relationships.ExperimentRuleSet = &Relationship{
-				Data: ResourceData{
-					Type: ResourceTypeGameCenterMatchmakingRuleSets,
-					ID:   strings.TrimSpace(experimentRuleSetID),
-				},
-			}
-		}
-	}
-
-	payload := GameCenterMatchmakingQueueUpdateRequest{
-		Data: GameCenterMatchmakingQueueUpdateData{
-			Type:          ResourceTypeGameCenterMatchmakingQueues,
-			ID:            strings.TrimSpace(queueID),
-			Attributes:    &attrs,
-			Relationships: relationships,
-		},
-	}
-	return sendJSON[GameCenterMatchmakingQueueResponse](ctx, c, writeRequest{Method: http.MethodPatch, Path: fmt.Sprintf("/v1/gameCenterMatchmakingQueues/%s", strings.TrimSpace(queueID)), Payload: payload})
-}
 
 // CreateGameCenterMatchmakingRuleSetTest creates a rule set test from a JSON payload.
 func (c *Client) CreateGameCenterMatchmakingRuleSetTest(ctx context.Context, payload json.RawMessage) (*GameCenterMatchmakingRuleSetTestResponse, error) {

@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"os"
 	"strings"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
@@ -21,20 +20,8 @@ type AppInfoLocalizationUpsertPlan struct {
 }
 
 // PlanAppInfoLocalizationUpsert resolves one locale and validates whether it can
-// be created or updated without performing a mutation.
-func PlanAppInfoLocalizationUpsert(
-	ctx context.Context,
-	client *asc.Client,
-	appID string,
-	appInfoID string,
-	locale string,
-	values map[string]string,
-) (*AppInfoLocalizationUpsertPlan, error) {
-	return planAppInfoLocalizationUpsertTo(ctx, os.Stderr, client, appID, appInfoID, locale, values)
-}
-
-// PlanAppInfoLocalizationUpsert is PlanAppInfoLocalizationUpsert with the
-// app info auto-selection notice written to d's stderr.
+// be created or updated without performing a mutation. The app info
+// auto-selection notice goes to d's stderr.
 func (d *Deps) PlanAppInfoLocalizationUpsert(
 	ctx context.Context,
 	client *asc.Client,
@@ -118,9 +105,9 @@ func ApplyAppInfoLocalizationUpsert(
 		return nil, "", fmt.Errorf("app info localization plan is required")
 	}
 	if plan.Create {
-		resp, err := client.CreateAppInfoLocalization(ctx, plan.AppInfoID, plan.Attributes)
+		resp, err := client.CreateAppInfoLocalization(ctx, plan.AppInfoID, plan.Attributes.CreateAttributes())
 		return resp, "create", err
 	}
-	resp, err := client.UpdateAppInfoLocalization(ctx, plan.LocalizationID, plan.Attributes)
+	resp, err := client.UpdateAppInfoLocalization(ctx, plan.LocalizationID, plan.Attributes.UpdateAttributes())
 	return resp, "update", err
 }

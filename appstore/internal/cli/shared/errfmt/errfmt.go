@@ -16,6 +16,7 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/config"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/readonly"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/urlsanitize"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/web"
 )
 
 type ClassifiedError struct {
@@ -52,6 +53,13 @@ func Classify(err error) ClassifiedError {
 	// sign-in.
 	if missing, ok := errors.AsType[*shared.MissingWebSessionError](err); ok {
 		return ClassifiedError{Message: err.Error(), Hint: missing.Hint}
+	}
+
+	// The broker answered, or was never asked, so this is not a network failure
+	// even though it reaches the caller through the HTTP client as a transport
+	// error; its message already names the next step.
+	if _, ok := errors.AsType[*web.BrokerError](err); ok || errors.Is(err, web.ErrWebBrokerRequest) {
+		return ClassifiedError{Message: err.Error()}
 	}
 
 	if hinted, ok := errors.AsType[*shared.HintedError](err); ok {

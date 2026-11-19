@@ -57,6 +57,7 @@ func newAppsInfoViewCommand(d *shared.Deps) *ffcli.Command {
 
 	appID := shared.BindResourceIDFlag(fs, "app", "apps", "App Store Connect app ID (or ASC_APP_ID env)")
 	infoID := shared.BindResourceIDFlag(fs, "info-id", "appInfos", "App Info ID (optional override)")
+	shared.BindFlagAlias(fs, "app-info", "info-id")
 	versionID := shared.BindResourceIDFlag(fs, "version-id", "appStoreVersions", "App Store version ID (optional override)")
 	version := fs.String("version", "", "App Store version string (optional)")
 	platform := fs.String("platform", "", "Platform: IOS, MAC_OS, TV_OS, VISION_OS (required with --version)")
@@ -560,7 +561,7 @@ func runAppInfoSetSingleLocale(
 			submitOpts = shared.ResolveSubmitReadinessOptionsForVersionBestEffort(ctx, client, versionID, "", "")
 		}
 		updateAttrs.Locale = locale
-		resp, createErr := client.CreateAppStoreVersionLocalization(ctx, versionID, updateAttrs)
+		resp, createErr := client.CreateAppStoreVersionLocalization(ctx, versionID, updateAttrs.CreateAttributes())
 		if createErr != nil {
 			if !appInfoSetIsConflictError(createErr) {
 				return fmt.Errorf("apps info edit: %w", createErr)
@@ -625,7 +626,7 @@ func runAppInfoSetSingleLocale(
 	if localizationID == "" {
 		return fmt.Errorf("apps info edit: localization id is empty")
 	}
-	resp, updateErr := client.UpdateAppStoreVersionLocalization(ctx, localizationID, updateAttrs)
+	resp, updateErr := client.UpdateAppStoreVersionLocalization(ctx, localizationID, updateAttrs.UpdateAttributes())
 	if updateErr != nil {
 		return fmt.Errorf("apps info edit: %w", updateErr)
 	}
@@ -737,7 +738,7 @@ func runAppInfoSetBatch(
 
 			if existingID == "" {
 				attrs.Locale = locale
-				resp, createErr := client.CreateAppStoreVersionLocalization(ctx, versionID, attrs)
+				resp, createErr := client.CreateAppStoreVersionLocalization(ctx, versionID, attrs.CreateAttributes())
 				if createErr != nil {
 					readOnlyRefusals[idx] = shared.KeepReadOnlyRefusal(nil, createErr)
 					if !appInfoSetIsConflictError(createErr) {
@@ -780,7 +781,7 @@ func runAppInfoSetBatch(
 				}
 			}
 
-			resp, updateErr := client.UpdateAppStoreVersionLocalization(ctx, existingID, attrs)
+			resp, updateErr := client.UpdateAppStoreVersionLocalization(ctx, existingID, attrs.UpdateAttributes())
 			if updateErr != nil {
 				readOnlyRefusals[idx] = shared.KeepReadOnlyRefusal(nil, updateErr)
 				localeResult.Status = "failed"

@@ -14,6 +14,7 @@ import (
 
 	rootcmd "github.com/Abdullah4AI/apple-developer-toolkit/appstore/cmd"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asctest"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
 type buildGroupMembershipOutput struct {
@@ -52,6 +53,9 @@ func TestBuildsGroupsListCommandHasNarrowBuildSurface(t *testing.T) {
 		"pretty":   true,
 	}
 	list.FlagSet.VisitAll(func(value *flag.Flag) {
+		if shared.IsFlagAlias(value) {
+			return
+		}
 		if !wantFlags[value.Name] {
 			t.Errorf("unexpected --%s flag on builds groups list", value.Name)
 		}
@@ -293,7 +297,7 @@ func TestTestFlightGroupsListBuildMembershipRejectsExplicitBlankIDs(t *testing.T
 		diagnostic string
 	}{
 		{name: "build ID", args: []string{"--app", "app-1", "--build-id", " "}, diagnostic: "--build-id cannot be empty"},
-		{name: "app assertion", args: []string{"--build-id", "build-1", "--app", " "}, diagnostic: "--app cannot be empty"},
+		{name: "app assertion", args: []string{"--build-id", "build-1", "--app", " "}, diagnostic: "--app must not be empty"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

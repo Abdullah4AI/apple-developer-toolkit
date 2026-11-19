@@ -262,21 +262,21 @@ func hasAppScreenshotFanoutUploadResultOutput(result asc.AppScreenshotFanoutUplo
 }
 
 // ExecuteScreenshotSetUpload validates flags/files and runs the shared
-// screenshot upload/sync flow for a localization-backed screenshot set.
-func ExecuteScreenshotSetUpload[T any](ctx context.Context, opts ScreenshotSetUploadOptions[T]) (T, error) {
+// screenshot upload/sync flow for a localization-backed screenshot set, on d.
+func ExecuteScreenshotSetUpload[T any](ctx context.Context, d *shared.Deps, opts ScreenshotSetUploadOptions[T]) (T, error) {
 	var zero T
 
 	trimmedLocalizationID := strings.TrimSpace(opts.LocalizationID)
 	if trimmedLocalizationID == "" {
-		return zero, shared.RequiredFlag("--localization-id")
+		return zero, d.RequiredFlag("--localization-id")
 	}
 	trimmedPath := strings.TrimSpace(opts.Path)
 	if trimmedPath == "" {
-		return zero, shared.RequiredFlag("--path")
+		return zero, d.RequiredFlag("--path")
 	}
 	trimmedDeviceType := strings.TrimSpace(opts.DeviceType)
 	if trimmedDeviceType == "" {
-		return zero, shared.RequiredFlag("--device-type")
+		return zero, d.RequiredFlag("--device-type")
 	}
 	if opts.Replace {
 		if err := opts.RequireConfirm(); err != nil {
@@ -293,7 +293,7 @@ func ExecuteScreenshotSetUpload[T any](ctx context.Context, opts ScreenshotSetUp
 	displayType, err := normalizeScreenshotDisplayType(trimmedDeviceType)
 	if err != nil {
 		if opts.InvalidDeviceTypeIsUsage {
-			return zero, shared.UsageError(err.Error())
+			return zero, d.UsageError(err.Error())
 		}
 		return zero, invalidDeviceTypeError(err)
 	}
@@ -312,7 +312,7 @@ func ExecuteScreenshotSetUpload[T any](ctx context.Context, opts ScreenshotSetUp
 	}
 
 	return uploadScreenshotsWithConfig(ctx, screenshotUploadConfig[T]{
-		Deps:           shared.DefaultDeps(),
+		Deps:           d,
 		Client:         client,
 		LocalizationID: trimmedLocalizationID,
 		DisplayType:    apiDisplayType,
@@ -334,6 +334,7 @@ func NewAssetsScreenshotsListCommand(d *shared.Deps) *ffcli.Command {
 	fs := d.NewFlagSet("list", flag.ExitOnError)
 
 	localizationID := shared.BindResourceIDFlag(fs, "version-localization", "appStoreVersionLocalizations", "App Store version localization ID")
+	shared.BindFlagAlias(fs, "localization-id", "version-localization")
 	appID := fs.String("app", "", "App Store Connect app ID, bundle ID, or exact app name (or ASC_APP_ID env)")
 	version := fs.String("version", "", "App Store version ID or numeric version string (strings require --app or ASC_APP_ID)")
 	versionID := shared.BindResourceIDFlag(fs, "version-id", "appStoreVersions", "App Store version ID")

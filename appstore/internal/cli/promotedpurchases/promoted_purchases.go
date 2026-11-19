@@ -12,11 +12,6 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
-// PromotedPurchasesCommand returns the promoted purchases command with subcommands.
-func PromotedPurchasesCommand() *ffcli.Command {
-	return NewPromotedPurchasesCommand(shared.DefaultDeps())
-}
-
 // NewPromotedPurchasesCommand returns the promoted purchases command with
 // subcommands built on d.
 func NewPromotedPurchasesCommand(d *shared.Deps) *ffcli.Command {

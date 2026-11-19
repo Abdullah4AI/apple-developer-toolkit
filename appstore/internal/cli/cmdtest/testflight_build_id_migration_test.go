@@ -1,27 +1,15 @@
 package cmdtest
 
 import (
-	"io"
 	"strings"
 	"testing"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/cmd"
 )
 
-// buildIDOnlyCommands lists the TestFlight and build-selector commands whose
-// hidden `--build` alias was removed in 5.0.0. Only `--build-id` remains.
+// buildIDOnlyCommands lists the commands that select a build by --build-id or
+// --build-number.
 var buildIDOnlyCommands = [][]string{
-	{"testflight", "review", "submit"},
-	{"testflight", "review", "submissions", "list"},
-	{"testflight", "distribution", "view"},
-	{"testflight", "notifications", "send"},
-	{"testflight", "testers", "list"},
-	{"testflight", "testers", "export"},
-	{"testflight", "testers", "add-builds"},
-	{"testflight", "testers", "remove-builds"},
-	{"testflight", "config", "export"},
-	{"testflight", "crashes", "list"},
-	{"testflight", "feedback", "list"},
 	{"builds", "info"},
 	{"builds", "wait"},
 	{"builds", "dsyms"},
@@ -46,40 +34,13 @@ var buildIDOnlyCommands = [][]string{
 	{"builds", "test-notes", "update"},
 	{"builds", "test-notes", "delete"},
 	{"publish", "testflight"},
-	{"validate", "testflight"},
-	{"release", "stage"},
-	{"build-localizations", "list"},
-	{"build-localizations", "create"},
-	{"build-bundles", "list"},
-	{"performance", "metrics", "view"},
-	{"performance", "diagnostics", "list"},
-	{"performance", "download"},
 }
 
-func TestTestFlightGroupsViewRejectsRemovedGroupIDAlias(t *testing.T) {
-	root := RootCommand("1.2.3")
-	root.FlagSet.SetOutput(io.Discard)
-
-	command := findSubcommand(root, "testflight", "groups", "view")
-	if command == nil {
-		t.Fatal("testflight groups view not found")
-	}
-	if command.FlagSet.Lookup("id") == nil {
-		t.Fatal("canonical flag --id not registered on testflight groups view")
-	}
-	if command.FlagSet.Lookup("group-id") != nil {
-		t.Fatal("removed alias --group-id must not be registered on testflight groups view")
-	}
-
-	assertRemovedFlagGuidance(t, []string{"testflight", "groups", "view", "--group-id", "group-1"}, "--group-id")
-}
-
-func TestBuildIDOnlyCommandsRejectLegacyBuildAliasAsUnknownFlag(t *testing.T) {
+func TestBuildIDOnlyCommandsRejectNewest(t *testing.T) {
 	for _, path := range buildIDOnlyCommands {
-		t.Run(strings.Join(path, " "), func(t *testing.T) {
-			args := append(append([]string{}, path...), "--build", "BUILD_123")
-			assertRemovedFlagGuidance(t, args, "--build")
-		})
+		if strings.Join(path, " ") == "builds wait" {
+			continue // --newest is a hidden alias of --latest there
+		}
 		t.Run(strings.Join(path, " ")+" newest", func(t *testing.T) {
 			var code int
 			_, stderr := captureOutput(t, func() {

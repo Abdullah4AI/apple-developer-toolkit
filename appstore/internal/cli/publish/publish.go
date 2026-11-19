@@ -83,6 +83,7 @@ func newPublishTestFlightCommand(d *shared.Deps) *ffcli.Command {
 	buildID := shared.BindResourceIDFlag(fs, "build-id", "builds", "Existing build ID to distribute (skip upload)")
 	version := fs.String("version", "", "CFBundleShortVersionString (auto-extracted from IPA if not provided; required with --pkg)")
 	buildNumber := fs.String("build-number", "", "CFBundleVersion (required with --pkg; used for build lookup when no artifact is provided)")
+	shared.BindBuildFlagAlias(fs)
 	platform := fs.String("platform", "IOS", "Platform: IOS, MAC_OS, TV_OS, VISION_OS")
 	groupIDs := fs.String("group", "", "Beta group ID(s) or name(s), comma-separated")
 	uploadOnly := fs.Bool("upload-only", false, "Upload the build without adding it to beta groups or submitting beta review")
@@ -429,7 +430,7 @@ Examples:
 			}
 
 			if *wait || testNotesValue != "" || (*submit && !isPublishBuildProcessed(buildResp)) {
-				processedBuildResp, waitErr := waitForPublishBuildProcessingFn(requestCtx, client, buildResp.Data.ID, *pollInterval)
+				processedBuildResp, waitErr := waitForPublishBuildProcessingFn(d, requestCtx, client, "", buildResp.Data.ID, *pollInterval)
 				if processedBuildResp != nil && strings.TrimSpace(processedBuildResp.Data.ID) == strings.TrimSpace(buildResp.Data.ID) {
 					buildResp = processedBuildResp
 					result.ProcessingState = buildResp.Data.Attributes.ProcessingState
@@ -780,7 +781,7 @@ Examples:
 				cancel()
 				requestCtx, cancel = newPublishRequestCtx()
 				defer cancel()
-				buildResp, err = waitForPublishBuildProcessingFn(requestCtx, client, buildResp.Data.ID, *pollInterval)
+				buildResp, err = waitForPublishBuildProcessingFn(d, requestCtx, client, "", buildResp.Data.ID, *pollInterval)
 				if err != nil {
 					return fmt.Errorf("publish appstore: %w", err)
 				}

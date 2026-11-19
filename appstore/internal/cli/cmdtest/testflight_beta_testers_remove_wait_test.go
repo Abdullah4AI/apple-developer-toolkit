@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"testing/synctest"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asctest"
 )
@@ -79,11 +80,15 @@ func TestBetaTestersRemoveWaitCompletesWhenTesterIsGone(t *testing.T) {
 				return tt.status, tt.body
 			})
 
-			stdout, _, err := runRootWithDeps(t, stubClient(t, transport),
-				"testflight", "testers", "remove",
-				"--app", "app-1", "--email", "tester@example.com", "--confirm",
-				"--wait", "--poll-interval", "10ms", "--timeout", "5s",
-			)
+			var stdout string
+			var err error
+			synctest.Test(t, func(t *testing.T) {
+				stdout, _, err = runRootWithDeps(t, stubClient(t, transport),
+					"testflight", "testers", "remove",
+					"--app", "app-1", "--email", "tester@example.com", "--confirm",
+					"--wait", "--poll-interval", "10ms", "--timeout", "5s",
+				)
+			})
 			if err != nil {
 				t.Fatalf("run error: %v", err)
 			}
@@ -101,11 +106,15 @@ func TestBetaTestersRemoveWaitTimesOutButPrintsReceipt(t *testing.T) {
 		return http.StatusOK, `{"data":{"type":"betaTesters","id":"tester-1","attributes":{"state":"INSTALLED"}}}`
 	})
 
-	stdout, _, runErr := runRootWithDeps(t, stubClient(t, transport),
-		"testflight", "testers", "remove",
-		"--app", "app-1", "--email", "tester@example.com", "--confirm",
-		"--wait", "--poll-interval", "20ms", "--timeout", "150ms",
-	)
+	var stdout string
+	var runErr error
+	synctest.Test(t, func(t *testing.T) {
+		stdout, _, runErr = runRootWithDeps(t, stubClient(t, transport),
+			"testflight", "testers", "remove",
+			"--app", "app-1", "--email", "tester@example.com", "--confirm",
+			"--wait", "--poll-interval", "20ms", "--timeout", "150ms",
+		)
+	})
 
 	if runErr == nil || !strings.Contains(runErr.Error(), "not yet visible") {
 		t.Fatalf("expected visibility timeout error, got %v", runErr)

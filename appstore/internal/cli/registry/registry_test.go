@@ -4,10 +4,12 @@ import (
 	"context"
 	"strings"
 	"testing"
+
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
 func TestVersionCommand(t *testing.T) {
-	cmd := VersionCommand("v1.2.3")
+	cmd := VersionCommand(shared.DefaultDeps(), "v1.2.3")
 	if cmd == nil {
 		t.Fatal("expected non-nil version command")
 		return

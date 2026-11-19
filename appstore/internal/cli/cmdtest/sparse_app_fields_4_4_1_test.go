@@ -29,6 +29,9 @@ func TestSparseAppFieldFlagsValidateBeforeAuth(t *testing.T) {
 		{"app infos list fields", []string{"apps", "info", "list", "--app", "app-1", "--fields", "bogus"}, "--fields must be one of: appStoreState"},
 		{"app info view age rating", []string{"apps", "info", "view", "--info-id", "info-1", "--age-rating-fields", "bogus"}, "--age-rating-fields must be one of: advertising"},
 		{"app info view unsupported include", []string{"apps", "info", "view", "--info-id", "info-1", "--include", "territoryAgeRatings"}, "--include must be one of: app, ageRatingDeclaration, appInfoLocalizations, primaryCategory"},
+		{"app infos list unsupported include", []string{"apps", "info", "list", "--app", "app-1", "--include", "territoryAgeRatings"}, "--include must be one of: app, ageRatingDeclaration, appInfoLocalizations, primaryCategory"},
+		{"apps view unsupported include", []string{"apps", "view", "--id", "app-1", "--include", "appStoreVersionLocalizations"}, "--include must be one of: appStoreIcon, ciProduct, betaGroups"},
+		{"apps view include Apple rejects", []string{"apps", "view", "--id", "app-1", "--include", "appEncryptionDeclarations"}, "--include must be one of: appStoreIcon, ciProduct, betaGroups"},
 		{"app info fields conflict with version", []string{"apps", "info", "view", "--app", "app-1", "--version-id", "version-1", "--fields", "kidsAgeBand"}, "--fields cannot be used with version localization flags"},
 		{"app info age rating fields conflict with next", []string{"apps", "info", "view", "--app", "app-1", "--next", "https://api.appstoreconnect.apple.com/v1/appStoreVersionLocalizations?cursor=next", "--age-rating-fields", "socialMedia"}, "--next cannot be combined with --age-rating-fields"},
 		{"age rating view", []string{"age-rating", "view", "--app-info-id", "info-1", "--fields", "bogus"}, "--fields must be one of: advertising"},
@@ -215,6 +218,8 @@ func TestSparseAppFieldFlagsForwardEveryOpenAPIValue(t *testing.T) {
 		appInfo    = `{"data":{"type":"appInfos","id":"info-1"}}`
 		ageRating  = `{"data":{"type":"ageRatingDeclarations","id":"age-1"}}`
 	)
+	// Values the spec lists that Apple production rejects.
+	appleRejects := map[string][]string{"/v1/apps/{id} --include": {"appEncryptionDeclarations"}}
 	appsList := []string{"apps", "list"}
 	appsView := []string{"apps", "view", "--id", "app-1"}
 	infosList := []string{"apps", "info", "list", "--app", "app-1"}
@@ -236,8 +241,10 @@ func TestSparseAppFieldFlagsForwardEveryOpenAPIValue(t *testing.T) {
 		{appsView, "--iap-fields", iaps, "/v1/apps/{id}", "/v1/apps/app-1", app},
 		{appsView, "--subscription-group-fields", groups, "/v1/apps/{id}", "/v1/apps/app-1", app},
 		{appsView, "--retention-message-fields", retention, "/v1/apps/{id}", "/v1/apps/app-1", app},
+		{appsView, "--include", "include", "/v1/apps/{id}", "/v1/apps/app-1", app},
 		{infosList, "--fields", appInfos, "/v1/apps/{id}/appInfos", "/v1/apps/app-1/appInfos", list},
 		{infosList, "--age-rating-fields", ageRatings, "/v1/apps/{id}/appInfos", "/v1/apps/app-1/appInfos", list},
+		{infosList, "--include", "include", "/v1/apps/{id}/appInfos", "/v1/apps/app-1/appInfos", list},
 		{infoView, "--fields", appInfos, "/v1/appInfos/{id}", "/v1/appInfos/info-1", appInfo},
 		{infoView, "--age-rating-fields", ageRatings, "/v1/appInfos/{id}", "/v1/appInfos/info-1", appInfo},
 		{ageRatingView, "--fields", ageRatings, "/v1/appInfos/{id}/ageRatingDeclaration", "/v1/appInfos/info-1/ageRatingDeclaration", ageRating},
@@ -259,6 +266,7 @@ func TestSparseAppFieldFlagsForwardEveryOpenAPIValue(t *testing.T) {
 			if len(want) == 0 {
 				t.Fatalf("OpenAPI snapshot has no %s on GET %s", test.parameter, test.specPath)
 			}
+			want = slices.DeleteFunc(want, func(value string) bool { return slices.Contains(appleRejects[test.specPath+" "+test.flagName], value) })
 
 			calls := 0
 			installDefaultTransport(t, roundTripFunc(func(req *http.Request) (*http.Response, error) {
