@@ -394,7 +394,8 @@ def assert_optimized_workflow_text(path: Path, workflow: str, test_job: str) -> 
             f"runner: {runner}",
             install,
             "pkg-config --atleast-version=1.14.0 libfido2",
-            "export CGO_ENABLED=1",
+            'CGO_LDFLAGS="-O2 -g $(pkg-config --libs libfido2)"',
+            "export CGO_ENABLED=1 GOMAXPROCS=4 GOFLAGS=-p=4 CGO_LDFLAGS",
             "go build -tags fido2",
             "ASC_BYPASS_KEYCHAIN=1 go test -race -tags fido2 -p=1 -parallel=4 -count=1",
             "./internal/securitykey ./internal/web ./internal/cli/web ./internal/cli/cmdtest",
@@ -445,7 +446,8 @@ def assert_optimized_workflow_rejects_weakened_checks() -> None:
             "CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build",
             "brew install libfido2 pkg-config",
             "pkg-config --atleast-version=1.14.0 libfido2",
-            "export CGO_ENABLED=1",
+            'CGO_LDFLAGS="-O2 -g $(pkg-config --libs libfido2)"',
+            "export CGO_ENABLED=1 GOMAXPROCS=4 GOFLAGS=-p=4 CGO_LDFLAGS",
             "go build -tags fido2",
             "ASC_BYPASS_KEYCHAIN=1 go test -race -tags fido2 -p=1 -parallel=4 -count=1",
             "./internal/securitykey ./internal/web ./internal/cli/web ./internal/cli/cmdtest",
@@ -1016,6 +1018,10 @@ updates:
     directory: \"/\"
     schedule:
       interval: \"weekly\"
+    groups:
+      codeql-action:
+        patterns:
+          - \"github/codeql-action*\"
 
   - package-ecosystem: \"nix\"
     directory: \"/\"
@@ -1026,7 +1032,7 @@ updates:
     directory: \"/website\"
     schedule:
       interval: \"weekly\"
-""", "Dependabot must monitor root Go modules, GitHub Actions, Nix flake inputs, and the docs site's npm packages weekly"
+""", "Dependabot must monitor all four dependency ecosystems weekly and update CodeQL actions together"
 
     assert_security_target_contract()
     assert_nix_cache_contract()
