@@ -22,9 +22,13 @@ const (
 
 // Resolution describes how to resolve an actionable validation finding.
 type Resolution struct {
-	Fixability         Fixability `json:"fixability"`
-	Commands           []string   `json:"commands,omitempty"`
-	AppStoreConnectURL string     `json:"appStoreConnectUrl,omitempty"`
+	Fixability Fixability `json:"fixability"`
+	Commands   []string   `json:"commands,omitempty"`
+	// NeedsUserInput reports that the commands contain UPPERCASE placeholders
+	// for decisions only the developer can make, such as a price, territories,
+	// an age rating answer or listing text; never run them as printed.
+	NeedsUserInput     bool   `json:"needsUserInput,omitempty"`
+	AppStoreConnectURL string `json:"appStoreConnectUrl,omitempty"`
 }
 
 // DeepStatus is the terminal state of one deep validation check.
@@ -100,6 +104,10 @@ type CheckResult struct {
 	ResourceType string      `json:"resourceType,omitempty"`
 	ResourceID   string      `json:"resourceId,omitempty"`
 	Resolution   *Resolution `json:"resolution,omitempty"`
+
+	// displayType is the screenshot display type a screenshot-set finding is
+	// about, so its fix command can name the set's device type.
+	displayType string
 }
 
 // Summary aggregates check counts by severity.
@@ -136,11 +144,15 @@ type Report struct {
 
 // Input collects the validation inputs.
 type Input struct {
-	AppID                       string
-	AppInfoID                   string
-	VersionID                   string
-	VersionString               string
-	VersionState                string
+	AppID         string
+	AppInfoID     string
+	VersionID     string
+	VersionString string
+	VersionState  string
+	// FirstVersion reports whether the version is the app's first App Store
+	// version on its platform, read from the app's version history; nil when
+	// that read was not made or failed.
+	FirstVersion                *bool
 	Platform                    string
 	PrimaryLocale               string
 	VersionLocalizations        []VersionLocalization

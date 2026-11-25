@@ -23,7 +23,7 @@ import (
 func newWebSignInKeysCommand(d *shared.Deps) *ffcli.Command {
 	return &ffcli.Command{
 		Name: "sign-in-keys", ShortUsage: "asc web sign-in-keys <subcommand> [flags]", ShortHelp: "Create and download Sign in with Apple keys through Developer Portal.", FlagSet: d.NewFlagSet("web sign-in-keys", flag.ExitOnError), UsageFunc: d.DefaultUsageFunc,
-		Subcommands: []*ffcli.Command{newWebSignInKeysListCommand(d), newWebSignInKeysViewCommand(d), newWebSignInKeysCreateCommand(d), newWebSignInKeysDownloadCommand(d)}, Exec: func(context.Context, []string) error { return flag.ErrHelp },
+		Subcommands: []*ffcli.Command{newWebSignInKeysListCommand(d), newWebSignInKeysViewCommand(d), newWebSignInKeysCreateCommand(d), newWebSignInKeysDownloadCommand(d), webDeveloperKeyRevokeCommand(d, signInKeyKind)}, Exec: func(context.Context, []string) error { return flag.ErrHelp },
 	}
 }
 
@@ -101,63 +101,162 @@ var downloadDeveloperSignInKeyFn = func(ctx context.Context, client *webcore.Cli
 	return client.DownloadDeveloperSignInKey(ctx, keyID)
 }
 
+var createDeveloperPushKeyFn = func(ctx context.Context, client *webcore.Client, name string) (*webcore.DeveloperSignInKey, error) {
+	return client.CreateDeveloperPushKey(ctx, name)
+}
+
+var downloadDeveloperPushKeyFn = func(ctx context.Context, client *webcore.Client, keyID string) ([]byte, error) {
+	return client.DownloadDeveloperPushKey(ctx, keyID)
+}
+
+var revokeDeveloperSignInKeyFn = func(ctx context.Context, client *webcore.Client, keyID string) error {
+	return client.RevokeDeveloperSignInKey(ctx, keyID)
+}
+
+var revokeDeveloperPushKeyFn = func(ctx context.Context, client *webcore.Client, keyID string) error {
+	return client.RevokeDeveloperPushKey(ctx, keyID)
+}
+
+type developerKeyKind struct {
+	group        string
+	label        string
+	article      string
+	bundleScoped bool
+	create       func(ctx context.Context, client *webcore.Client, name, bundleID string) (*webcore.DeveloperSignInKey, error)
+	download     func(ctx context.Context, client *webcore.Client, keyID string) ([]byte, error)
+	revoke       func(ctx context.Context, client *webcore.Client, keyID string) error
+}
+
+var signInKeyKind = developerKeyKind{
+	group: "sign-in-keys", label: "Sign in with Apple", article: "a", bundleScoped: true,
+	create: func(ctx context.Context, client *webcore.Client, name, bundleID string) (*webcore.DeveloperSignInKey, error) {
+		return createDeveloperSignInKeyFn(ctx, client, name, bundleID)
+	},
+	download: func(ctx context.Context, client *webcore.Client, keyID string) ([]byte, error) {
+		return downloadDeveloperSignInKeyFn(ctx, client, keyID)
+	},
+	revoke: func(ctx context.Context, client *webcore.Client, keyID string) error {
+		return revokeDeveloperSignInKeyFn(ctx, client, keyID)
+	},
+}
+
+var pushKeyKind = developerKeyKind{
+	group: "push-keys", label: "APNs", article: "an",
+	create: func(ctx context.Context, client *webcore.Client, name, _ string) (*webcore.DeveloperSignInKey, error) {
+		return createDeveloperPushKeyFn(ctx, client, name)
+	},
+	download: func(ctx context.Context, client *webcore.Client, keyID string) ([]byte, error) {
+		return downloadDeveloperPushKeyFn(ctx, client, keyID)
+	},
+	revoke: func(ctx context.Context, client *webcore.Client, keyID string) error {
+		return revokeDeveloperPushKeyFn(ctx, client, keyID)
+	},
+}
+
 type signInKeyDownloadRecovery interface {
 	error
 	RecoveryBody() []byte
 }
 
 func newWebSignInKeysCreateCommand(d *shared.Deps) *ffcli.Command {
-	return webSignInKeySaveCommand(d, true)
+	return webDeveloperKeySaveCommand(d, signInKeyKind, true)
 }
 
 func newWebSignInKeysDownloadCommand(d *shared.Deps) *ffcli.Command {
-	return webSignInKeySaveCommand(d, false)
+	return webDeveloperKeySaveCommand(d, signInKeyKind, false)
 }
 
-func webSignInKeySaveCommand(d *shared.Deps, create bool) *ffcli.Command {
+func newWebPushKeysCommand(d *shared.Deps) *ffcli.Command {
+	return &ffcli.Command{
+		Name: "push-keys", ShortUsage: "asc web push-keys <subcommand> [flags]", ShortHelp: "Create and download APNs keys through Developer Portal.", LongHelp: "Creates team-scoped APNs keys for sandbox and production. Inspect existing keys, including APNs keys, with asc web sign-in-keys list.", FlagSet: d.NewFlagSet("web push-keys", flag.ExitOnError), UsageFunc: d.DefaultUsageFunc,
+		Subcommands: []*ffcli.Command{webDeveloperKeySaveCommand(d, pushKeyKind, true), webDeveloperKeySaveCommand(d, pushKeyKind, false), webDeveloperKeyRevokeCommand(d, pushKeyKind)}, Exec: func(context.Context, []string) error { return flag.ErrHelp },
+	}
+}
+
+func webDeveloperKeyRevokeCommand(d *shared.Deps, kind developerKeyKind) *ffcli.Command {
+	fs := d.NewFlagSet("web "+kind.group+" revoke", flag.ExitOnError)
+	authFlags := bindWebSessionFlags(fs)
+	portalFlags := bindDeveloperPortalFlags(fs)
+	output := d.BindOutputFlags(fs)
+	keyID := fs.String("key-id", "", "Developer Portal authentication key ID")
+	confirm := fs.Bool("confirm", false, "Confirm permanently revoking this "+kind.label+" key")
+	return &ffcli.Command{Name: "revoke", ShortUsage: "asc web " + kind.group + " revoke --key-id ID --confirm [flags]", ShortHelp: "Revoke " + kind.article + " " + kind.label + " key.", LongHelp: "Permanently revokes the key; services signing with it stop working. Refuses keys of another service, keys shared with another service, or keys this account cannot revoke, verifies the key is no longer listed, and never retries automatically.", FlagSet: fs, UsageFunc: d.DefaultUsageFunc, Exec: func(ctx context.Context, args []string) error {
+		id := strings.TrimSpace(*keyID)
+		if id == "" {
+			return d.UsageError("--key-id is required")
+		}
+		if !regexp.MustCompile(`^[A-Za-z0-9]{1,32}$`).MatchString(id) {
+			return d.UsageError("invalid --key-id")
+		}
+		if err := d.RequireConfirm(*confirm); err != nil {
+			return err
+		}
+		if err := validateDeveloperPortalFlagsWith(d, portalFlags); err != nil {
+			return err
+		}
+		if _, err := shared.ValidateOutputFormat(*output.Output, *output.Pretty); err != nil {
+			return d.UsageError(err.Error())
+		}
+		session, requestCtx, cancel, err := resolveWebSessionForCommandWith(ctx, d, authFlags)
+		defer cancel()
+		if err != nil {
+			return err
+		}
+		if err := kind.revoke(requestCtx, newDeveloperPortalClient(session, portalFlags), id); err != nil {
+			return withWebAuthHint(err, "web "+kind.group+" revoke")
+		}
+		persistDeveloperPortalSessionWith(d, session)
+		return d.PrintOutput(&asc.WebDeveloperKeyRevokeResult{KeyID: id, Revoked: true}, *output.Output, *output.Pretty)
+	}}
+}
+
+func webDeveloperKeySaveCommand(d *shared.Deps, kind developerKeyKind, create bool) *ffcli.Command {
 	operation := "download"
 	if create {
 		operation = "create"
 	}
-	shortUsage := "asc web sign-in-keys download --key-id ID --output-dir DIR --confirm [flags]"
+	shortUsage := "asc web " + kind.group + " download --key-id ID --output-dir DIR --confirm [flags]"
 	longHelp := "Requires an authenticated Developer Portal session and macOS or Linux for private file publication. Uses the existing --developer-team selection. Saves AuthKey_<KEY_ID>.p8 with mode 0600; private bytes are never printed. An uncertain create or download is never automatically retried. Inspect list before retrying a failed create."
-	fs := d.NewFlagSet("web sign-in-keys "+operation, flag.ExitOnError)
+	fs := d.NewFlagSet("web "+kind.group+" "+operation, flag.ExitOnError)
 	authFlags := bindWebSessionFlags(fs)
 	portalFlags := bindDeveloperPortalFlags(fs)
 	output := d.BindOutputFlags(fs)
 	outputDir := fs.String("output-dir", "", "Directory for the private P8 file (mode 0600; never overwrite)")
 	var name, bundleID, keyID string
 	var confirm bool
-	if create {
+	if create && kind.bundleScoped {
 		fs.StringVar(&name, "name", "", "Key display name")
 		fs.StringVar(&bundleID, "bundle-id", "", "Primary Sign in with Apple Bundle ID resource ID, not reverse-DNS identifier")
-		shortUsage = "asc web sign-in-keys create --name NAME --bundle-id BUNDLE_RESOURCE_ID --output-dir DIR --confirm [flags]"
+		shortUsage = "asc web " + kind.group + " create --name NAME --bundle-id BUNDLE_RESOURCE_ID --output-dir DIR --confirm [flags]"
+	} else if create {
+		fs.StringVar(&name, "name", "", "Key display name")
+		shortUsage = "asc web " + kind.group + " create --name NAME --output-dir DIR --confirm [flags]"
 	} else {
 		fs.StringVar(&keyID, "key-id", "", "Developer Portal authentication key ID")
 	}
-	confirmHelp := "Confirm consuming this one-time Sign in with Apple private key download"
+	confirmHelp := "Confirm consuming this one-time " + kind.label + " private key download"
 	if create {
-		confirmHelp = "Confirm creating this Sign in with Apple private key and consuming its one-time download"
+		confirmHelp = "Confirm creating this " + kind.label + " private key and consuming its one-time download"
 		longHelp += " Creating a new Developer Portal key and consuming its one-time download require --confirm."
 	} else {
 		longHelp += " Consuming this one-time key download requires --confirm."
 	}
 	fs.BoolVar(&confirm, "confirm", false, confirmHelp)
-	return &ffcli.Command{Name: operation, ShortUsage: shortUsage, ShortHelp: strings.ToUpper(operation[:1]) + operation[1:] + " a Sign in with Apple key and save its one-time P8 privately.", LongHelp: longHelp, FlagSet: fs, UsageFunc: d.DefaultUsageFunc, Exec: func(ctx context.Context, args []string) error {
+	return &ffcli.Command{Name: operation, ShortUsage: shortUsage, ShortHelp: strings.ToUpper(operation[:1]) + operation[1:] + " " + kind.article + " " + kind.label + " key and save its one-time P8 privately.", LongHelp: longHelp, FlagSet: fs, UsageFunc: d.DefaultUsageFunc, Exec: func(ctx context.Context, args []string) error {
 		name = strings.TrimSpace(name)
 		bundleID = strings.TrimSpace(bundleID)
 		keyID = strings.TrimSpace(keyID)
 		if create && name == "" {
 			return d.UsageError("--name is required")
 		}
-		if create && bundleID == "" {
+		if create && kind.bundleScoped && bundleID == "" {
 			return d.UsageError("--bundle-id is required")
 		}
 		if !create && keyID == "" {
 			return d.UsageError("--key-id is required")
 		}
 		idPattern := regexp.MustCompile(`^[A-Za-z0-9]{1,32}$`)
-		if create && !idPattern.MatchString(bundleID) {
+		if create && kind.bundleScoped && !idPattern.MatchString(bundleID) {
 			return d.UsageError("--bundle-id must be an opaque Bundle ID resource ID")
 		}
 		if !create && !idPattern.MatchString(keyID) {
@@ -239,9 +338,9 @@ func webSignInKeySaveCommand(d *shared.Deps, create bool) *ffcli.Command {
 		}
 		client := newDeveloperPortalClient(session, portalFlags)
 		if create {
-			key, createErr := createDeveloperSignInKeyFn(requestCtx, client, name, bundleID)
+			key, createErr := kind.create(requestCtx, client, name, bundleID)
 			if createErr != nil {
-				return withWebAuthHint(createErr, "web sign-in-keys create")
+				return withWebAuthHint(createErr, "web "+kind.group+" create")
 			}
 			keyID = key.KeyID
 		}
@@ -249,10 +348,10 @@ func webSignInKeySaveCommand(d *shared.Deps, create bool) *ffcli.Command {
 		fileName := "AuthKey_" + keyID + ".p8"
 		reservation, err := root.CreateNewFileAtomicWithIdentity(fileName, nil, 0o600)
 		if err != nil {
-			return fmt.Errorf("key %s exists, but destination %s could not be reserved; P8 was not downloaded. Recover with sign-in-keys download --key-id %s --output-dir OTHER_DIR --confirm; do not rerun create: %w", keyID, filepath.Join(root.Path(), fileName), keyID, err)
+			return fmt.Errorf("key %s exists, but destination %s could not be reserved; P8 was not downloaded. Recover with %s download --key-id %s --output-dir OTHER_DIR --confirm; do not rerun create: %w", keyID, filepath.Join(root.Path(), fileName), kind.group, keyID, err)
 		}
 		defer func() { _ = root.RemoveFileIfSameIdentity(fileName, reservation) }()
-		p8, err := downloadDeveloperSignInKeyFn(requestCtx, client, keyID)
+		p8, err := kind.download(requestCtx, client, keyID)
 		if err != nil {
 			var recovery signInKeyDownloadRecovery
 			if errors.As(err, &recovery) {

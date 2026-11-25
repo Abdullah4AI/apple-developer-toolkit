@@ -128,8 +128,8 @@ Examples:
 		FlagSet:   fs,
 		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
-			resolvedAppInput := d.ResolveAppID(*appID)
-			if resolvedAppInput == "" {
+			appSelector := d.ResolveAppSelector(*appID)
+			if appSelector.Value == "" {
 				fmt.Fprintf(d.IO.ErrOut, "Error: --app is required (or set ASC_APP_ID)\n\n")
 				return shared.MissingRequiredUsageError("--app")
 			}
@@ -300,7 +300,6 @@ Examples:
 				defer cancel()
 			}
 
-			resolvedPublishAppID := resolvedAppInput
 			preflightCtx := requestCtx
 			if localBuildMode {
 				cancel()
@@ -308,7 +307,7 @@ Examples:
 				preflightCtx, preflightCancel = newPublishRequestCtx()
 				defer preflightCancel()
 			}
-			resolvedPublishAppID, err = resolvePublishAppIDWithLookupFn(preflightCtx, client, resolvedPublishAppID)
+			resolvedPublishAppID, err := resolvePublishScopedAppIDFn(preflightCtx, client, appSelector)
 			if err != nil {
 				return fmt.Errorf("publish testflight: resolve app: %w", err)
 			}
@@ -562,6 +561,11 @@ Workflow:
 5. Attach the build to the version
 6. Optionally submit for review with --submit --confirm
 
+If the version is already in a draft review submission that also holds
+subscription items, --submit sends them to App Review with the version: it
+names each one on stderr before submitting, and the JSON receipt lists every
+submitted item in reviewItems.
+
 Use ` + "`asc release stage`" + ` when you want metadata-driven preparation without
 submission. Use ` + "`asc validate`" + ` to run readiness checks before you add
 ` + "`--submit`" + `. Use ` + "`--dry-run`" + ` to preview the planned mutation
@@ -584,8 +588,8 @@ Examples:
 				return shared.MissingRequiredUsageError("--confirm")
 			}
 
-			resolvedAppInput := d.ResolveAppID(*appID)
-			if resolvedAppInput == "" {
+			appSelector := d.ResolveAppSelector(*appID)
+			if appSelector.Value == "" {
 				fmt.Fprintf(d.IO.ErrOut, "Error: --app is required (or set ASC_APP_ID)\n\n")
 				return shared.MissingRequiredUsageError("--app")
 			}
@@ -698,7 +702,7 @@ Examples:
 			var client *asc.Client
 			var requestCtx context.Context
 			var cancel context.CancelFunc
-			resolvedPublishAppID := resolvedAppInput
+			resolvedPublishAppID := appSelector.Value
 
 			if *dryRun && canPlanAppStorePublishWithoutASC(resolvedPublishAppID, localBuildMode, buildNumberValue) {
 				if localBuildMode {
@@ -725,7 +729,7 @@ Examples:
 					preflightCtx, preflightCancel = newPublishRequestCtx()
 					defer preflightCancel()
 				}
-				resolvedPublishAppID, err = resolvePublishAppIDWithLookupFn(preflightCtx, client, resolvedPublishAppID)
+				resolvedPublishAppID, err = resolvePublishScopedAppIDFn(preflightCtx, client, appSelector)
 				if err != nil {
 					return fmt.Errorf("publish appstore: resolve app: %w", err)
 				}
@@ -923,6 +927,7 @@ Examples:
 				if err != nil {
 					return fmt.Errorf("publish appstore: %w", err)
 				}
+				result.ReviewItems = submitResult.ReviewItems
 				if submitResult.BuildAttachment != nil {
 					result.Attached = submitResult.BuildAttachment.Attached || submitResult.BuildAttachment.AlreadyAttached
 				}

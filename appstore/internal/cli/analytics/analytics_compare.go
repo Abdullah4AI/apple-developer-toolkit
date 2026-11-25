@@ -40,13 +40,26 @@ type comparePeriod struct {
 }
 
 type compareMetric struct {
-	Name         string   `json:"name"`
-	Unit         string   `json:"unit,omitempty"`
+	Name         string                  `json:"name"`
+	Unit         string                  `json:"unit,omitempty"`
+	Currency     string                  `json:"currency,omitempty"`
+	Baseline     *float64                `json:"baseline,omitempty"`
+	Comparison   *float64                `json:"comparison,omitempty"`
+	Delta        *float64                `json:"delta,omitempty"`
+	DeltaPercent *float64                `json:"deltaPercent,omitempty"`
+	Status       string                  `json:"status"`
+	Reason       string                  `json:"reason,omitempty"`
+	ByCurrency   []compareCurrencyAmount `json:"byCurrency,omitempty"`
+}
+
+// compareCurrencyAmount is one currency's share of a monetary compare metric.
+type compareCurrencyAmount struct {
+	Currency     string   `json:"currency,omitempty"`
 	Baseline     *float64 `json:"baseline,omitempty"`
 	Comparison   *float64 `json:"comparison,omitempty"`
 	Delta        *float64 `json:"delta,omitempty"`
 	DeltaPercent *float64 `json:"deltaPercent,omitempty"`
-	Status       string   `json:"status"`
+	Status       string   `json:"status,omitempty"`
 	Reason       string   `json:"reason,omitempty"`
 }
 
@@ -64,6 +77,7 @@ func newAnalyticsCompareCommand(d *shared.Deps) *ffcli.Command {
 	frequency := fs.String("frequency", "", "Report frequency: DAILY, WEEKLY, MONTHLY, YEARLY")
 	reportType := fs.String("type", "SALES", "Report type: SALES, PRE_ORDER, NEWSSTAND, SUBSCRIPTION, SUBSCRIPTION_EVENT")
 	reportSubType := fs.String("subtype", "SUMMARY", "Report subtype: SUMMARY, DETAILED")
+	byCurrency := fs.Bool("by-currency", false, "Compare money by currency using per-unit amounts (SALES SUMMARY only)")
 	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
@@ -78,6 +92,11 @@ delta and percentage-change output scoped to the specified app.
 For WEEKLY frequency, each boundary must be a Monday (week start) or Sunday
 (week end). All requested report dates in both ranges must be available and
 parse successfully before comparison output is produced.
+
+For SALES SUMMARY reports, use --by-currency to multiply per-unit amounts by Units
+and compare each currency separately. JSON lists the comparisons in byCurrency.
+Currency totals are rounded to two decimal places after aggregation. Amounts
+that cannot be derived from the report are marked unavailable.
 
 Examples:
   asc analytics compare --source sales --vendor "12345678" --app "123456789" --from "2026-01-01" --to "2026-02-01" --frequency DAILY
@@ -127,6 +146,9 @@ Examples:
 			if err != nil {
 				return d.UsageError(err.Error())
 			}
+			if *byCurrency && (salesType != asc.SalesReportTypeSales || subType != asc.SalesReportSubTypeSummary) {
+				return d.UsageError("--by-currency requires --type SALES and --subtype SUMMARY")
+			}
 			if err := validateSalesReportTuple(salesType, subType, freq); err != nil {
 				return d.UsageError(err.Error())
 			}
@@ -167,7 +189,7 @@ Examples:
 				return fmt.Errorf("analytics compare: %w", err)
 			}
 
-			periods := fetchAndAggregate(requestCtx, client, resolvedVendor, scope, [][]string{baselineDates, compDates}, salesType, subType, freq)
+			periods := fetchAndAggregate(requestCtx, client, resolvedVendor, scope, [][]string{baselineDates, compDates}, salesType, subType, freq, *byCurrency)
 			baseline, comparison := periods[0], periods[1]
 			if baseline.err != nil || comparison.err != nil {
 				return fmt.Errorf("analytics compare: %s", joinCompareErrors(baseline.err, comparison.err))
@@ -185,7 +207,7 @@ Examples:
 				},
 				Baseline:    comparePeriod{Start: baselineStart, End: baselineEnd, ReportsFound: baseline.found},
 				Comparison:  comparePeriod{Start: compStart, End: compEnd, ReportsFound: comparison.found},
-				Metrics:     buildCompareMetrics(baseline.metrics, comparison.metrics),
+				Metrics:     buildCompareMetrics(baseline.metrics, comparison.metrics, *byCurrency),
 				GeneratedAt: d.Now().UTC().Format(time.RFC3339),
 			}
 
@@ -246,7 +268,7 @@ type salesPeriodResult struct {
 // fetchAndAggregate downloads every period's reports through one bounded pool
 // and reduces each period in date order. A period's error cancels only that
 // period's remaining downloads.
-func fetchAndAggregate(ctx context.Context, client *asc.Client, vendor string, scope insights.SalesScope, periods [][]string, salesType asc.SalesReportType, subType asc.SalesReportSubType, freq asc.SalesReportFrequency) []salesPeriodResult {
+func fetchAndAggregate(ctx context.Context, client *asc.Client, vendor string, scope insights.SalesScope, periods [][]string, salesType asc.SalesReportType, subType asc.SalesReportSubType, freq asc.SalesReportFrequency, byCurrency bool) []salesPeriodResult {
 	type job struct{ period, index int }
 	workCtx, cancel := context.WithCancel(ctx)
 	var workers sync.WaitGroup
@@ -300,7 +322,7 @@ func fetchAndAggregate(ctx context.Context, client *asc.Client, vendor string, s
 					results[job.period][job.index] <- salesReportFetchResult{err: fmt.Errorf("download report %s: %w", date, err)}
 					continue
 				}
-				metrics, parseErr := insights.ParseSalesReportMetrics(download.Body, scope)
+				metrics, parseErr := insights.ParseSalesReportMetrics(download.Body, scope, byCurrency)
 				_ = download.Body.Close()
 				if parseErr != nil {
 					parseErr = fmt.Errorf("parse report %s: %w", date, parseErr)
@@ -397,20 +419,18 @@ func aggregateSalesMetrics(a, b insights.SalesMetrics) insights.SalesMetrics {
 		UnitsTotal:                     a.UnitsTotal + b.UnitsTotal,
 		DownloadUnitsTotal:             a.DownloadUnitsTotal + b.DownloadUnitsTotal,
 		MonetizedUnitsTotal:            a.MonetizedUnitsTotal + b.MonetizedUnitsTotal,
-		DeveloperProceedsTotal:         a.DeveloperProceedsTotal + b.DeveloperProceedsTotal,
-		CustomerPriceTotal:             a.CustomerPriceTotal + b.CustomerPriceTotal,
+		DeveloperProceeds:              a.DeveloperProceeds.Plus(b.DeveloperProceeds),
+		CustomerPrice:                  a.CustomerPrice.Plus(b.CustomerPrice),
 		SubscriptionRows:               a.SubscriptionRows + b.SubscriptionRows,
 		SubscriptionUnitsTotal:         a.SubscriptionUnitsTotal + b.SubscriptionUnitsTotal,
-		SubscriptionDeveloperProceeds:  a.SubscriptionDeveloperProceeds + b.SubscriptionDeveloperProceeds,
-		SubscriptionCustomerPrice:      a.SubscriptionCustomerPrice + b.SubscriptionCustomerPrice,
+		SubscriptionDeveloperProceeds:  a.SubscriptionDeveloperProceeds.Plus(b.SubscriptionDeveloperProceeds),
 		RenewalRows:                    a.RenewalRows + b.RenewalRows,
 		RenewalUnitsTotal:              a.RenewalUnitsTotal + b.RenewalUnitsTotal,
-		RenewalDeveloperProceeds:       a.RenewalDeveloperProceeds + b.RenewalDeveloperProceeds,
-		RenewalCustomerPrice:           a.RenewalCustomerPrice + b.RenewalCustomerPrice,
+		RenewalDeveloperProceeds:       a.RenewalDeveloperProceeds.Plus(b.RenewalDeveloperProceeds),
 	}
 }
 
-func buildCompareMetrics(baseline, comparison insights.SalesMetrics) []compareMetric {
+func buildCompareMetrics(baseline, comparison insights.SalesMetrics, byCurrency bool) []compareMetric {
 	metrics := []compareMetric{
 		compareMetricFromValues("download_units", "count", "download units",
 			baseline.DownloadUnitsTotal, comparison.DownloadUnitsTotal,
@@ -421,12 +441,14 @@ func buildCompareMetrics(baseline, comparison insights.SalesMetrics) []compareMe
 		compareMetricFromValues("units", "count", "units",
 			baseline.UnitsTotal, comparison.UnitsTotal,
 			baseline.UnitsColumnPresent, comparison.UnitsColumnPresent),
-		compareMetricFromValues("developer_proceeds", "currency", "developer proceeds",
-			baseline.DeveloperProceedsTotal, comparison.DeveloperProceedsTotal,
-			baseline.DeveloperProceedsColumnPresent, comparison.DeveloperProceedsColumnPresent),
-		compareMetricFromValues("customer_price", "currency", "customer price",
-			baseline.CustomerPriceTotal, comparison.CustomerPriceTotal,
-			baseline.CustomerPriceColumnPresent, comparison.CustomerPriceColumnPresent),
+		compareMoneyMetric("developer_proceeds", "developer proceeds",
+			baseline.DeveloperProceeds, comparison.DeveloperProceeds,
+			baseline.DeveloperProceedsColumnPresent && (!byCurrency || baseline.UnitsColumnPresent),
+			comparison.DeveloperProceedsColumnPresent && (!byCurrency || comparison.UnitsColumnPresent), byCurrency),
+		compareMoneyMetric("customer_price", "customer price",
+			baseline.CustomerPrice, comparison.CustomerPrice,
+			baseline.CustomerPriceColumnPresent && (!byCurrency || baseline.UnitsColumnPresent),
+			comparison.CustomerPriceColumnPresent && (!byCurrency || comparison.UnitsColumnPresent), byCurrency),
 		compareMetricFromValues("subscription_units", "count", "subscription units",
 			baseline.SubscriptionUnitsTotal, comparison.SubscriptionUnitsTotal,
 			baseline.SubscriptionColumnPresent && baseline.UnitsColumnPresent,
@@ -483,6 +505,48 @@ func compareMetricFromValues(name, unit, metricLabel string, baselineValue, comp
 	return m
 }
 
+func compareMoneyMetric(name, metricLabel string, baseline, comparison insights.SalesMoney, baselineAvailable, comparisonAvailable, byCurrency bool) compareMetric {
+	if !byCurrency || !baselineAvailable || !comparisonAvailable {
+		return compareMetricFromValues(name, "currency", metricLabel, baseline.LegacyTotal, comparison.LegacyTotal, baselineAvailable, comparisonAvailable)
+	}
+	comparisons := insights.CompareCurrencyAmounts(comparison.ByCurrency, baseline.ByCurrency)
+	breakdown := make([]compareCurrencyAmount, 0, len(comparisons))
+	for _, c := range comparisons {
+		amount := compareCurrencyAmount{
+			Currency: c.Currency, Baseline: c.Previous, Comparison: c.Current,
+			Delta: c.Delta, DeltaPercent: c.DeltaPercent,
+		}
+		if c.Reason != "" {
+			amount.Status, amount.Reason = "unavailable", c.Reason
+		} else if *c.Previous == 0 && *c.Current == 0 {
+			amount.DeltaPercent = ptrFloat(0)
+		}
+		breakdown = append(breakdown, amount)
+	}
+
+	switch len(comparisons) {
+	case 0:
+		return compareMetricFromValues(name, "currency", metricLabel, 0, 0, true, true)
+	case 1:
+		amount := breakdown[0]
+		if amount.Status == "unavailable" {
+			return compareMetric{Name: name, Unit: "currency", Status: "unavailable", Reason: amount.Reason, ByCurrency: breakdown}
+		}
+		m := compareMetricFromValues(name, "currency", metricLabel, *amount.Baseline, *amount.Comparison, true, true)
+		m.Currency, m.ByCurrency = amount.Currency, breakdown
+		m.Delta, m.DeltaPercent = amount.Delta, amount.DeltaPercent
+		return m
+	default:
+		return compareMetric{
+			Name:       name,
+			Unit:       "currency",
+			Status:     "unavailable",
+			Reason:     insights.CurrencyTotalsUnavailableReason(metricLabel+" totals", comparisons),
+			ByCurrency: breakdown,
+		}
+	}
+}
+
 func ptrFloat(v float64) *float64 {
 	return &v
 }
@@ -506,9 +570,13 @@ func renderCompareOutput(d *shared.Deps, resp *compareResponse, markdown bool) {
 
 	metricRows := make([][]string, 0, len(resp.Metrics))
 	for _, metric := range resp.Metrics {
+		unit := metric.Unit
+		if metric.Currency != "" {
+			unit = metric.Currency
+		}
 		metricRows = append(metricRows, []string{
 			metric.Name,
-			shared.OrNA(metric.Unit),
+			shared.OrNA(unit),
 			formatOptionalFloat(metric.Baseline),
 			formatOptionalFloat(metric.Comparison),
 			formatOptionalFloat(metric.Delta),
@@ -516,6 +584,25 @@ func renderCompareOutput(d *shared.Deps, resp *compareResponse, markdown bool) {
 			metric.Status,
 			shared.OrNA(metric.Reason),
 		})
+		if metric.Status == "ok" {
+			continue // The metric row already shows its single currency.
+		}
+		for _, amount := range metric.ByCurrency {
+			status := amount.Status
+			if status == "" {
+				status = "ok"
+			}
+			metricRows = append(metricRows, []string{
+				metric.Name,
+				insights.CurrencyLabel(amount.Currency),
+				formatOptionalFloat(amount.Baseline),
+				formatOptionalFloat(amount.Comparison),
+				formatOptionalFloat(amount.Delta),
+				formatOptionalFloat(amount.DeltaPercent),
+				status,
+				shared.OrNA(amount.Reason),
+			})
+		}
 	}
 	d.RenderSection("Metrics", []string{"metric", "unit", "baseline", "comparison", "delta", "deltaPercent", "status", "reason"}, metricRows, markdown)
 }

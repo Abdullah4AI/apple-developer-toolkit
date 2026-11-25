@@ -38,11 +38,6 @@ type commandPathRecoveryRule struct {
 
 var commonCommandPathRecoveryRules = []commandPathRecoveryRule{
 	{
-		invalid:     []string{"builds", "view"},
-		destination: []string{"builds", "info"},
-		validate:    validateBuildsInfoSelectorRecovery,
-	},
-	{
 		invalid:     []string{"versions", "info"},
 		destination: []string{"versions", "view"},
 		validate:    validateVersionsViewRecovery,
@@ -170,7 +165,32 @@ func printConciseUnknownFlag(stderr io.Writer, root *ffcli.Command, analysis inv
 		return
 	}
 	fmt.Fprintf(stderr, "Error: %s\n", unknownFlagError(analysis, commandName))
-	if printMetadataValidateFlagRecovery(stderr, flagName, commandName, analysis, args) {
+	if name, ok := flagLookupName(flagName); ok && commandName == "asc analytics download" && name == "date" {
+		fmt.Fprintln(stderr, "Find the report instance for a date first (read `.data[].instances[].id`):")
+		fmt.Fprintln(stderr, "  asc analytics view --request-id REQUEST_ID --processing-date YYYY-MM-DD --paginate --output json")
+		fmt.Fprintln(stderr, "Then download it with:")
+		fmt.Fprintln(stderr, "  asc analytics download --request-id REQUEST_ID --instance-id INSTANCE_ID")
+		fmt.Fprintln(stderr, "For a multi-segment instance, download the complete report with:")
+		fmt.Fprintln(stderr, "  asc analytics download --request-id REQUEST_ID --instance-id INSTANCE_ID --all-segments --output-dir OUTPUT_DIR")
+		fmt.Fprintln(stderr, "For help:")
+		fmt.Fprintf(stderr, "  %s --help\n", commandName)
+		return
+	}
+	if name, _ := flagLookupName(flagName); commandName == "asc iap versions localizations list" && name == "iap-id" {
+		fmt.Fprintln(stderr, "Find the version ID first:")
+		fmt.Fprintln(stderr, "  asc iap versions list --iap-id IAP_ID --include localizations --paginate")
+		fmt.Fprintln(stderr, "Then list all localizations for that version:")
+		fmt.Fprintln(stderr, "  asc iap versions localizations list --version-id VERSION_ID --paginate")
+		fmt.Fprintln(stderr, "For help:")
+		fmt.Fprintf(stderr, "  %s --help\n", commandName)
+		return
+	}
+	if suggestion, notes, ok := filterSuggestion(analysis, commandName, args); ok {
+		fmt.Fprintf(stderr, "Try:\n  %s\n", suggestion)
+		for _, note := range notes {
+			fmt.Fprintln(stderr, note)
+		}
+		fmt.Fprintf(stderr, "For help:\n  %s --help\n", commandName)
 		return
 	}
 	// A recovery path that later became a real command, such as
@@ -207,49 +227,6 @@ func printConciseUnknownFlag(stderr io.Writer, root *ffcli.Command, analysis inv
 	))
 	fmt.Fprintln(stderr, "For help:")
 	fmt.Fprintf(stderr, "  %s --help\n", commandName)
-}
-
-func printMetadataValidateFlagRecovery(stderr io.Writer, flagName, commandName string, analysis invocationAnalysis, args []string) bool {
-	if commandName != "asc metadata validate" || (flagName != "--app" && flagName != "--version") {
-		return false
-	}
-	if flagName == "--version" && !metadataVersionValueProvided(analysis, args) {
-		return false
-	}
-
-	fmt.Fprintln(stderr, "`asc metadata validate` reads from `--dir`; omit `--app` and `--version`. Run `asc metadata pull` first if needed.")
-	fmt.Fprintln(stderr, "Try:")
-	fmt.Fprintln(stderr, `  asc metadata validate --dir "./metadata"`)
-	fmt.Fprintln(stderr, `  asc metadata pull --app "APP_ID" --version "1.2.3" --dir "./metadata"`)
-	fmt.Fprintln(stderr, "For help:")
-	fmt.Fprintln(stderr, "  asc metadata validate --help")
-	return true
-}
-
-func metadataVersionValueProvided(analysis invocationAnalysis, args []string) bool {
-	if _, value, found := strings.Cut(analysis.unknownToken, "="); found {
-		return isMetadataVersionValue(value)
-	}
-	nextIndex := analysis.unknownIndex + 1
-	if nextIndex < 0 || nextIndex >= len(args) {
-		return false
-	}
-	return isMetadataVersionValue(args[nextIndex])
-}
-
-func isMetadataVersionValue(value string) bool {
-	value = strings.TrimSpace(value)
-	if value == "" || strings.HasPrefix(value, "-") {
-		return false
-	}
-	// flag.ParseBool accepts 1 and 0, but both are also valid app-version
-	// components. Treat numeric spellings as metadata values and reserve the
-	// global-flag recovery for textual booleans.
-	if value == "1" || value == "0" {
-		return true
-	}
-	_, boolErr := strconv.ParseBool(value)
-	return boolErr != nil
 }
 
 func passedFlagNames(args []string) []string {
@@ -446,79 +423,8 @@ func commandSuffixUsesDefinedFlags(command *ffcli.Command, suffix []string) (map
 }
 
 // These validators intentionally mirror only side-effect-free checks performed
-// before authentication by the four mapped destinations. Keep their tests in
+// before authentication by the mapped destinations. Keep their tests in
 // sync when those commands add or change semantic flag constraints.
-func validateBuildsInfoSelectorRecovery(fs *flag.FlagSet, provided map[string]struct{}) bool {
-	processingStateRaw := recoveryFlagValue(fs, "processing-state")
-	processingStateValues := shared.SplitCSVUpper(processingStateRaw)
-	if strings.TrimSpace(processingStateRaw) != "" && len(processingStateValues) == 0 {
-		return false
-	}
-	for _, state := range processingStateValues {
-		if state == "ALL" && len(processingStateValues) > 1 {
-			return false
-		}
-		switch state {
-		case "VALID", "PROCESSING", "FAILED", "INVALID", "ALL":
-		default:
-			return false
-		}
-	}
-
-	buildID := strings.TrimSpace(recoveryFlagValue(fs, "build-id"))
-	if _, ok := provided["build-id"]; ok && buildID == "" {
-		return false
-	}
-	appInput := strings.TrimSpace(recoveryFlagValue(fs, "app"))
-	if _, ok := provided["app"]; ok && appInput == "" {
-		return false
-	}
-	version := strings.TrimSpace(recoveryFlagValue(fs, "version"))
-	buildNumber := strings.TrimSpace(recoveryFlagValue(fs, "build-number"))
-	platform := strings.TrimSpace(recoveryFlagValue(fs, "platform"))
-	latest := recoveryBoolFlagValue(fs, "latest")
-	excludeExpired := recoveryBoolFlagValue(fs, "exclude-expired") || recoveryBoolFlagValue(fs, "not-expired")
-
-	hasExplicitAppSelectors := appInput != "" ||
-		latest ||
-		buildNumber != "" ||
-		version != "" ||
-		platform != "" ||
-		len(processingStateValues) > 0 ||
-		excludeExpired
-	if buildID != "" && hasExplicitAppSelectors {
-		return false
-	}
-	if latest && buildNumber != "" {
-		return false
-	}
-	if buildID != "" {
-		return true
-	}
-
-	if shared.ResolveAppID(appInput) == "" {
-		return false
-	}
-	if len(processingStateValues) > 0 && !latest {
-		return false
-	}
-	if excludeExpired && !latest {
-		return false
-	}
-	if !latest && buildNumber == "" {
-		return false
-	}
-	if buildNumber != "" && platform == "" {
-		return false
-	}
-	if platform != "" {
-		if _, err := shared.NormalizeAppStoreVersionPlatform(platform); err != nil {
-			return false
-		}
-	}
-	return true
-}
-
 func validateVersionsViewRecovery(fs *flag.FlagSet, provided map[string]struct{}) bool {
 	versionID := strings.TrimSpace(recoveryFlagValue(fs, "version-id"))
 	legacyID := strings.TrimSpace(recoveryFlagValue(fs, "id"))

@@ -54,6 +54,13 @@ func (e *allRatingsLookupError) Unwrap() error {
 
 // GetRatings fetches rating statistics for an app in a specific country.
 func (c *Client) GetRatings(ctx context.Context, appID, country string) (*AppRatings, error) {
+	return c.getRatings(ctx, appID, country, false)
+}
+
+// getRatings looks up an app's ratings in one country. With skipUnratedHistogram,
+// it does not request the histogram when the lookup reports no ratings, since
+// GetAllRatings drops those countries from its result.
+func (c *Client) getRatings(ctx context.Context, appID, country string, skipUnratedHistogram bool) (*AppRatings, error) {
 	normalizedCountry := strings.ToLower(strings.TrimSpace(country))
 	if normalizedCountry == "" {
 		normalizedCountry = "us"
@@ -79,6 +86,10 @@ func (c *Client) GetRatings(ctx context.Context, appID, country string) (*AppRat
 		Histogram:            make(map[int]int64),
 	}
 
+	if skipUnratedHistogram && ratings.RatingCount == 0 {
+		return ratings, nil
+	}
+
 	// Histogram scraping is best-effort and must remain non-fatal.
 	if err := c.fetchHistogram(ctx, appID, normalizedCountry, ratings); err != nil {
 		// A best-effort auxiliary request may fail for storefront reasons, but
@@ -90,6 +101,8 @@ func (c *Client) GetRatings(ctx context.Context, appID, country string) (*AppRat
 	}
 	return ratings, nil
 }
+
+const histogramOperation = "histogram"
 
 func (c *Client) fetchHistogram(ctx context.Context, appID, country string, ratings *AppRatings) error {
 	storefront, ok := Storefronts[country]
@@ -107,7 +120,7 @@ func (c *Client) fetchHistogram(ctx context.Context, appID, country string, rati
 	req.Header.Set("X-Apple-Store-Front", storefront+",12")
 	req.Header.Set("Accept", "text/html")
 
-	return c.do(ctx, "histogram", req, func(resp *http.Response) error {
+	return c.do(ctx, histogramOperation, req, func(resp *http.Response) error {
 		body, err := io.ReadAll(resp.Body)
 		if err != nil {
 			return fmt.Errorf("failed to read histogram response: %w", err)
@@ -129,7 +142,7 @@ func (c *Client) fetchHistogram(ctx context.Context, appID, country string, rati
 	})
 }
 
-// GetAllRatings fetches rating statistics for an app across all supported countries.
+// GetAllRatings fetches rating statistics for an app across all public App Store countries.
 func (c *Client) GetAllRatings(
 	ctx context.Context,
 	appID string,
@@ -146,7 +159,7 @@ func (c *Client) GetAllRatings(
 	workCtx, cancelWork := context.WithCancel(ctx)
 	defer cancelWork()
 
-	countries := AllCountries()
+	countries := AllPublicCountries()
 
 	var (
 		mu                 sync.Mutex
@@ -184,7 +197,7 @@ func (c *Client) GetAllRatings(
 			}
 
 			countryCtx, countryCancel := newCountryContext(workCtx)
-			ratings, err := c.GetRatings(countryCtx, appID, country)
+			ratings, err := c.getRatings(countryCtx, appID, country, true)
 			countryErr := countryCtx.Err()
 			countryCancel()
 			if err != nil {

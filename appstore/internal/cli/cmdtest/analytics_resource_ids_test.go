@@ -3,12 +3,17 @@ package cmdtest
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+
+	rootcmd "github.com/Abdullah4AI/apple-developer-toolkit/appstore/cmd"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
 )
 
 func TestAnalyticsInstancesLinksAcceptsPrefixedInstanceID(t *testing.T) {
@@ -63,14 +68,82 @@ func TestAnalyticsInstancesLinksAcceptsPrefixedInstanceID(t *testing.T) {
 }
 
 func TestAnalyticsDownloadAcceptsPrefixedInstanceID(t *testing.T) {
-	runAnalyticsDownloadIDCase(t, "r39-example-instance", "33333333-3333-3333-3333-333333333333", false)
+	runAnalyticsDownloadIDCase(t, "r39-example-instance", "33333333-3333-3333-3333-333333333333")
 }
 
 func TestAnalyticsDownloadAcceptsPrefixedSegmentID(t *testing.T) {
-	runAnalyticsDownloadIDCase(t, "22222222-2222-2222-2222-222222222222", "s39-example-segment", true)
+	runAnalyticsDownloadIDCase(t, "22222222-2222-2222-2222-222222222222", "s39-example-segment")
 }
 
-func runAnalyticsDownloadIDCase(t *testing.T, instanceID, segmentID string, matchOnSecondPage bool) {
+func TestAnalyticsDownloadDefaultPathsSeparateExplicitSegments(t *testing.T) {
+	setupAnalyticsResourceIDAuth(t)
+	t.Chdir(t.TempDir())
+
+	const (
+		instanceID    = "r39-example-instance"
+		firstSegment  = "s39:Segment|A"
+		secondSegment = "s39:segment|a"
+		firstReport   = "first-segment-data"
+		secondReport  = "second-segment-data"
+	)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		switch req.URL.Path {
+		case "/v1/analyticsReportInstances/" + instanceID + "/segments":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = fmt.Fprintf(w, `{"data":[{"type":"analyticsReportSegments","id":%q,"attributes":{"url":"https://mzstatic.com/first.gz"}},{"type":"analyticsReportSegments","id":%q,"attributes":{"url":"https://mzstatic.com/second.gz"}}]}`, firstSegment, secondSegment)
+		case "/first.gz":
+			_, _ = io.WriteString(w, firstReport)
+		case "/second.gz":
+			_, _ = io.WriteString(w, secondReport)
+		default:
+			t.Errorf("unexpected request: %s %s", req.Method, req.URL)
+			http.NotFound(w, req)
+		}
+	}))
+	t.Cleanup(server.Close)
+	client := stubServerClient(t, server)
+	download := func(segmentID string) (string, string, int) {
+		return runWithDeps(t, client, "analytics", "download", "--request-id", analyticsViewRequestID,
+			"--instance-id", instanceID, "--segment-id", segmentID, "--output-format", "json")
+	}
+	readReport := func(segmentID, want string) string {
+		t.Helper()
+		stdout, stderr, code := download(segmentID)
+		if code != rootcmd.ExitSuccess || stderr != "" {
+			t.Fatalf("download %q exited %d: %s", segmentID, code, stderr)
+		}
+		var result asc.AnalyticsReportDownloadResult
+		if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+			t.Fatalf("decode download result: %v", err)
+		}
+		if result.SegmentID != segmentID || !strings.HasSuffix(result.FilePath, ".csv.gz") || strings.ContainsAny(result.FilePath, `/\:*?"<>|`) {
+			t.Fatalf("unexpected download result: %+v", result)
+		}
+		data, err := os.ReadFile(result.FilePath)
+		if err != nil || string(data) != want {
+			t.Fatalf("read %q: got %q, %v; want %q", result.FilePath, data, err, want)
+		}
+		return result.FilePath
+	}
+	firstPath := readReport(firstSegment, firstReport)
+	secondPath := readReport(secondSegment, secondReport)
+	if strings.EqualFold(firstPath, secondPath) {
+		t.Fatalf("segment output paths collide: %q and %q", firstPath, secondPath)
+	}
+	const savedReport = "saved first report"
+	if err := os.WriteFile(firstPath, []byte(savedReport), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	stdout, stderr, code := download(firstSegment)
+	if code != rootcmd.ExitError || stdout != "" || !strings.Contains(stderr, "output file already exists") {
+		t.Fatalf("retry exited %d, stdout %q, stderr %q", code, stdout, stderr)
+	}
+	if data, err := os.ReadFile(firstPath); err != nil || string(data) != savedReport {
+		t.Fatalf("retry changed %q: got %q, %v; want %q", firstPath, data, err, savedReport)
+	}
+}
+
+func runAnalyticsDownloadIDCase(t *testing.T, instanceID, segmentID string) {
 	t.Helper()
 	setupAnalyticsResourceIDAuth(t)
 
@@ -79,27 +152,6 @@ func runAnalyticsDownloadIDCase(t *testing.T, instanceID, segmentID string, matc
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		requestCount++
 		switch req.URL.Path {
-		case "/v1/analyticsReportRequests/" + analyticsViewRequestID + "/reports":
-			assertAnalyticsResourceIDRequest(t, req, "/v1/analyticsReportRequests/"+analyticsViewRequestID+"/reports", "limit=200", true)
-			w.Header().Set("Content-Type", "application/json")
-			_, _ = io.WriteString(w, `{"data":[{"type":"analyticsReports","id":"r39-example-report"}],"links":{}}`)
-		case "/v1/analyticsReports/r39-example-report/instances":
-			w.Header().Set("Content-Type", "application/json")
-			const nextPage = "https://api.appstoreconnect.apple.com/v1/analyticsReports/r39-example-report/instances?cursor="
-			switch req.URL.Query().Get("cursor") {
-			case "unused":
-				http.NotFound(w, req)
-			case "match":
-				assertAnalyticsResourceIDRequest(t, req, "/v1/analyticsReports/r39-example-report/instances", "cursor=match", true)
-				_, _ = io.WriteString(w, `{"data":[{"type":"analyticsReportInstances","id":"`+instanceID+`"}],"links":{"next":"`+nextPage+`unused"}}`)
-			default:
-				assertAnalyticsResourceIDRequest(t, req, "/v1/analyticsReports/r39-example-report/instances", "limit=200", true)
-				if matchOnSecondPage {
-					_, _ = io.WriteString(w, `{"data":[{"type":"analyticsReportInstances","id":"another-instance"}],"links":{"next":"`+nextPage+`match"}}`)
-				} else {
-					_, _ = io.WriteString(w, `{"data":[{"type":"analyticsReportInstances","id":"`+instanceID+`"}],"links":{"next":"`+nextPage+`unused"}}`)
-				}
-			}
 		case "/v1/analyticsReportInstances/" + instanceID + "/segments":
 			assertAnalyticsResourceIDRequest(t, req, "/v1/analyticsReportInstances/"+instanceID+"/segments", "limit=200", true)
 			w.Header().Set("Content-Type", "application/json")
@@ -130,12 +182,8 @@ func runAnalyticsDownloadIDCase(t *testing.T, instanceID, segmentID string, matc
 	if stderr != "" {
 		t.Fatalf("expected empty stderr, got %q", stderr)
 	}
-	wantRequests := 4
-	if matchOnSecondPage {
-		wantRequests++
-	}
-	if requestCount != wantRequests {
-		t.Fatalf("request count = %d, want %d", requestCount, wantRequests)
+	if requestCount != 2 {
+		t.Fatalf("request count = %d, want 2 (segments, then the report file)", requestCount)
 	}
 	data, err := os.ReadFile(outputPath)
 	if err != nil {

@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/peterbourgon/ff/v3/ffcli"
 
@@ -284,14 +285,9 @@ func doctorMigrationSuggestionResolver(d *shared.Deps) authsvc.MigrationSuggesti
 		defer cancel()
 
 		if needsAppLookup {
-			appIdentifier := strings.TrimSpace(input.AppIdentifier)
-			appsResp, err := client.GetApps(
-				requestCtx,
-				asc.WithAppsBundleIDs([]string{appIdentifier}),
-				asc.Limit[asc.AppsOption](1),
-			)
-			if err == nil && len(appsResp.Data) > 0 {
-				appID = strings.TrimSpace(appsResp.Data[0].ID)
+			appID, err = shared.ResolveAppIDByExactBundleID(requestCtx, client, input.AppIdentifier)
+			if err != nil {
+				return result
 			}
 		}
 		if appID == "" {
@@ -382,7 +378,7 @@ func validateStoredCredential(ctx context.Context, cred authsvc.Credential) erro
 		return fmt.Errorf("failed to generate JWT: %w", err)
 	}
 	if err := probeCredential(ctx, client, cred.KeyType); err != nil {
-		if errors.Is(err, asc.ErrForbidden) {
+		if isPermissionOnlyFailure(err) {
 			return &permissionWarning{err: err}
 		}
 		return withNetworkDiagnostic(err, err)
@@ -445,23 +441,57 @@ func withNetworkDiagnostic(rendered, cause error) error {
 	return shared.WithDiagnostic(rendered, code, "")
 }
 
-// printPrivateKeyPermissionRemediation follows an over-permissive key failure
-// with the exact command that repairs the file and the flag that applies it, so
-// a first login recovers without consulting auth doctor. Other private-key
-// failures print nothing.
+// printPrivateKeyPermissionRemediation follows a key file refusal with the
+// exact commands that repair the file, so a first login recovers without
+// consulting auth doctor: chmod for an over-permissive key or one its owner
+// can't read, preceded by chown when another user owns the file and the
+// caller is not root. It offers --fix-permissions only where that flag can
+// apply the fix. Other private-key failures print nothing.
 func printPrivateKeyPermissionRemediation(d *shared.Deps, cause error, keyPath string) {
-	if kind, ok := authsvc.PrivateKeyErrorKindOf(cause); !ok || kind != authsvc.PrivateKeyPermissionsInsecure {
+	kind, ok := authsvc.PrivateKeyErrorKindOf(cause)
+	if !ok || (kind != authsvc.PrivateKeyPermissionsInsecure && kind != authsvc.PrivateKeyPermissionDenied) {
 		return
 	}
-	if command, safe := authsvc.FilePermissionRemediationCommand(keyPath); safe {
-		fmt.Fprintf(
-			d.IO.ErrOut,
-			"To fix, run:\n  %s\nOr re-run with --fix-permissions to let asc change the file to 0600.\n",
-			shared.SanitizeTerminal(command),
-		)
+	fix, err := authsvc.PrivateKeyFileFixFor(keyPath)
+	if err != nil {
+		if kind == authsvc.PrivateKeyPermissionsInsecure {
+			fmt.Fprintln(d.IO.ErrOut, "Re-run with --fix-permissions to let asc change the file to 0600.")
+		}
 		return
 	}
-	fmt.Fprintln(d.IO.ErrOut, "Re-run with --fix-permissions to let asc change the file to 0600.")
+	// An owner who can already read the file was denied for another reason,
+	// such as a directory on its path, which no change to the file repairs.
+	if kind == authsvc.PrivateKeyPermissionDenied && fix.CanChangeMode && fix.Mode&0o400 != 0 {
+		return
+	}
+	offerFlag := kind == authsvc.PrivateKeyPermissionsInsecure && fix.CanChangeMode
+	if len(fix.Commands) == 0 {
+		switch {
+		case offerFlag:
+			fmt.Fprintln(d.IO.ErrOut, "Re-run with --fix-permissions to let asc change the file to 0600.")
+		case !fix.CanChangeMode:
+			fmt.Fprintln(d.IO.ErrOut, "Another user owns this file: make yourself its owner, then change it to mode 0600.")
+		default:
+			fmt.Fprintln(d.IO.ErrOut, "Change the file to mode 0600 so only you can read it.")
+		}
+		return
+	}
+	fmt.Fprintln(d.IO.ErrOut, "To fix, run:")
+	for _, command := range fix.Commands {
+		fmt.Fprintf(d.IO.ErrOut, "  %s\n", shared.SanitizeTerminal(command))
+	}
+	if offerFlag {
+		fmt.Fprintln(d.IO.ErrOut, "Or re-run with --fix-permissions to let asc change the file to 0600.")
+	}
+}
+
+// privateKeyTooPermissiveMessage names the refused key file's mode, so the
+// caller sees which bits let other users read it.
+func privateKeyTooPermissiveMessage(keyPath string) string {
+	if info, err := os.Stat(keyPath); err == nil {
+		return fmt.Sprintf("private key file is too permissive (mode %#o); other users can read this credential", info.Mode().Perm())
+	}
+	return "private key file is too permissive; other users can read this credential"
 }
 
 func validateLoginNetwork(ctx context.Context, keyID, issuerID, keyPath, privateKeyPEM, keyType string) error {
@@ -750,9 +780,9 @@ so commands continue to work even if the original .p8 file is removed.`,
 				if err := authsvc.ValidateKeyFile(*keyPath); err != nil {
 					message := err.Error()
 					if kind, _ := authsvc.PrivateKeyErrorKindOf(err); kind == authsvc.PrivateKeyPermissionsInsecure {
-						message = "private key file is too permissive; other users can read this credential"
+						message = privateKeyTooPermissiveMessage(*keyPath)
 					}
-					rendered := shared.WithPrivateKeyDiagnostic(d.UsageErrorf("auth login: invalid private key: %s", message), err)
+					rendered := shared.WithPrivateKeyDiagnostic(d.InvalidInputErrorf("auth login: invalid private key: %s", message), err)
 					printPrivateKeyPermissionRemediation(d, err, *keyPath)
 					return rendered
 				}
@@ -1163,11 +1193,15 @@ Examples:
 }
 
 // AuthStatus command factory
+// unreadableKeychainHint is the next step when auth status cannot list the
+// system keychain, which agent sandboxes commonly refuse.
+const unreadableKeychainHint = "This process cannot read the system keychain, for example inside an agent sandbox. Run `asc auth status` where the keychain is reachable. ASC_BYPASS_KEYCHAIN=1 lists only config-file and environment credentials: profiles stored in the keychain are not shown then, so an empty list does not mean none are stored."
+
 func newAuthStatusCommand(d *shared.Deps) *ffcli.Command {
 	fs := d.NewFlagSet("auth status", flag.ExitOnError)
 	output := shared.BindOutputFlagsWithAllowed(fs, "output", defaultAuthStatusOutputFormat(d), "Output format: table, json", "table", "json")
 	verbose := fs.Bool("verbose", false, "Show detailed storage information")
-	validate := fs.Bool("validate", false, "Validate stored credentials via network")
+	validate := fs.Bool("validate", false, "Validate stored credentials and the ASC_BEARER_TOKEN via network")
 
 	return &ffcli.Command{
 		Name:       "status",
@@ -1176,7 +1210,11 @@ func newAuthStatusCommand(d *shared.Deps) *ffcli.Command {
 		LongHelp: `Show current authentication status.
 
 Displays information about stored API keys and which one is currently active.
-Add --validate to perform a network validation for each stored credential.
+When ASC_BEARER_TOKEN or ASC_BEARER_TOKEN_COMMAND is set, it also shows the
+key and expiry of the token every command sends instead (never the token);
+ASC_BEARER_TOKEN_COMMAND runs only with --validate.
+Add --validate to perform a network validation for each stored credential
+and for that token.
 
 Examples:
   asc auth status
@@ -1199,6 +1237,20 @@ Examples:
 			var listWarning *authsvc.CredentialsWarning
 			if err != nil {
 				warning, ok := errors.AsType[*authsvc.CredentialsWarning](err)
+				if corrupt, isCorrupt := errors.AsType[*authsvc.InvalidKeychainEntryError](err); !ok && isCorrupt {
+					return &shared.HintedError{
+						Err: fmt.Errorf("auth status: failed to list credentials: %w", err),
+						Hint: shared.SanitizeTerminal(fmt.Sprintf(
+							"The keychain entry for profile %q is not valid. Remove it with `asc auth logout --name %q --confirm` and store the key again with `asc auth login`.",
+							corrupt.Name, corrupt.Name)),
+					}
+				}
+				if !ok && errors.Is(err, authsvc.ErrKeychainReadFailed) {
+					return &shared.HintedError{
+						Err:  shared.UnreadableKeychainError(fmt.Errorf("auth status: cannot read the system keychain: %w", err)),
+						Hint: unreadableKeychainHint,
+					}
+				}
 				if !ok {
 					return fmt.Errorf("auth status: failed to list credentials: %w", err)
 				}
@@ -1277,15 +1329,29 @@ Examples:
 			envComplete := shared.HasCompleteEnvironmentCredentials()
 			environmentNote := authStatusEnvironmentNote(profile, bypassKeychain, envProvided, envComplete, envKeyTypeValid)
 			activeEnvironmentSource := profile == "" && !bypassKeychain && envComplete && envKeyTypeValid
+			bearerToken := authStatusBearerToken(ctx, *validate)
 
 			validationFailures := 0
 			var validationDiagnostic shared.Diagnostic
 			hasValidationDiagnostic := false
 			validationDiagnosticConsistent := true
+			recordValidationFailure := func(err error) {
+				validationFailures++
+				diagnostic, ok := shared.DiagnosticFromError(err)
+				switch {
+				case !ok:
+					validationDiagnosticConsistent = false
+				case !hasValidationDiagnostic:
+					validationDiagnostic = diagnostic
+					hasValidationDiagnostic = true
+				case diagnostic != validationDiagnostic:
+					validationDiagnosticConsistent = false
+				}
+			}
 			credentialOutput := make([]authStatusCredentialOutput, 0, len(credentials))
 			if len(credentials) == 0 {
 				if normalizedOutput == "table" {
-					if activeEnvironmentSource {
+					if activeEnvironmentSource || bearerToken != nil {
 						fmt.Fprintln(d.IO.Out, "No stored credentials found.")
 					} else {
 						fmt.Fprintln(d.IO.Out, "No credentials stored. Run 'asc auth login' to get started.")
@@ -1316,19 +1382,9 @@ Examples:
 									fmt.Fprintf(d.IO.Out, "    %s (Key ID: %s): works (%s)\n", cred.Name, cred.KeyID, credentialEntry.ValidationDetail)
 								}
 							} else {
-								validationFailures++
+								recordValidationFailure(err)
 								credentialEntry.Validation = "failed"
 								credentialEntry.ValidationError = err.Error()
-								if diagnostic, ok := shared.DiagnosticFromError(err); ok {
-									if !hasValidationDiagnostic {
-										validationDiagnostic = diagnostic
-										hasValidationDiagnostic = true
-									} else if diagnostic != validationDiagnostic {
-										validationDiagnosticConsistent = false
-									}
-								} else {
-									validationDiagnosticConsistent = false
-								}
 								if normalizedOutput == "table" {
 									fmt.Fprintf(d.IO.Out, "    %s (Key ID: %s): failed (%v)\n", cred.Name, cred.KeyID, err)
 								}
@@ -1347,6 +1403,14 @@ Examples:
 			if normalizedOutput == "table" && environmentNote != "" {
 				fmt.Fprintln(d.IO.Out, environmentNote)
 			}
+			if bearerToken != nil {
+				if bearerToken.validationErr != nil {
+					recordValidationFailure(bearerToken.validationErr)
+				}
+				if normalizedOutput == "table" {
+					fmt.Fprintln(d.IO.Out, bearerToken.summary())
+				}
+			}
 
 			if normalizedOutput == "json" {
 				payload := authStatusOutput{
@@ -1358,6 +1422,7 @@ Examples:
 					EnvironmentCredentialsProvided: envProvided,
 					EnvironmentCredentialsComplete: envComplete,
 					EnvironmentNote:                environmentNote,
+					BearerToken:                    bearerToken,
 					ValidationFailures:             validationFailures,
 				}
 				if *verbose {
@@ -1415,10 +1480,135 @@ type authStatusOutput struct {
 	EnvironmentCredentialsProvided bool                         `json:"environmentCredentialsProvided"`
 	EnvironmentCredentialsComplete bool                         `json:"environmentCredentialsComplete"`
 	EnvironmentNote                string                       `json:"environmentNote,omitempty"`
+	BearerToken                    *authStatusBearerTokenOutput `json:"bearerToken,omitempty"`
 	ValidationFailures             int                          `json:"validationFailures,omitempty"`
 	KeychainAvailable              *bool                        `json:"keychainAvailable,omitempty"`
 	KeychainError                  string                       `json:"keychainError,omitempty"`
 	ConfigPath                     string                       `json:"configPath,omitempty"`
+}
+
+// authStatusBearerTokenOutput describes the token signed elsewhere that every
+// API command sends instead of signing one with a stored or environment key.
+// It never carries the token itself.
+type authStatusBearerTokenOutput struct {
+	Source           string `json:"source"`
+	RenewedBy        string `json:"renewedBy,omitempty"`
+	KeyID            string `json:"keyId,omitempty"`
+	ExpiresAt        string `json:"expiresAt,omitempty"`
+	Expired          *bool  `json:"expired,omitempty"`
+	Error            string `json:"error,omitempty"`
+	Validation       string `json:"validation,omitempty"`
+	ValidationDetail string `json:"validationDetail,omitempty"`
+	ValidationError  string `json:"validationError,omitempty"`
+
+	validationErr error
+}
+
+// authStatusBearerToken reports ASC_BEARER_TOKEN and ASC_BEARER_TOKEN_COMMAND,
+// or nil when neither is set. With validate it sends the stored-credential
+// probe through the client every command would get, so it fails the way they
+// would: an expired token, Apple rejecting it, or an agreement blocking the team.
+func authStatusBearerToken(ctx context.Context, validate bool) *authStatusBearerTokenOutput {
+	token, command := shared.BearerTokenEnv()
+	if token == "" && command == "" {
+		return nil
+	}
+	status := &authStatusBearerTokenOutput{Source: "ASC_BEARER_TOKEN"}
+	switch {
+	case token == "":
+		status.Source = "ASC_BEARER_TOKEN_COMMAND"
+	case command != "":
+		status.RenewedBy = "ASC_BEARER_TOKEN_COMMAND"
+	}
+	if token != "" {
+		info, err := asc.InspectBearerToken(token)
+		if err != nil {
+			status.Error = err.Error()
+		} else {
+			status.setToken(info)
+		}
+	}
+	// Every command refuses the token under these selections, so say so
+	// even without --validate.
+	if err := shared.BearerTokenSelectionError(); err != nil {
+		status.Error = err.Error()
+	}
+	if !validate {
+		return status
+	}
+	client, _, err := shared.BearerTokenClient(0)
+	if err == nil {
+		if err = probeCredential(ctx, client, ""); err != nil && !isPermissionOnlyFailure(err) {
+			err = withNetworkDiagnostic(err, err)
+		}
+		// The command may have replaced ASC_BEARER_TOKEN; report the token
+		// the probe actually sent.
+		if info, ok := client.BearerTokenInfo(); ok {
+			status.setToken(info)
+		}
+	}
+	switch {
+	case err == nil:
+		status.Validation = "works"
+	case isPermissionOnlyFailure(err):
+		status.Validation = "works"
+		status.ValidationDetail = "insufficient permissions for " + credentialProbeName("")
+	default:
+		status.Validation = "failed"
+		status.ValidationError = err.Error()
+		status.validationErr = err
+	}
+	return status
+}
+
+func (s *authStatusBearerTokenOutput) setToken(info asc.BearerTokenInfo) {
+	s.KeyID = info.KeyID
+	s.ExpiresAt = info.ExpiresAt.UTC().Format(time.RFC3339)
+	s.Expired = boolPointer(!time.Now().Before(info.ExpiresAt))
+}
+
+func (s *authStatusBearerTokenOutput) summary() string {
+	var details []string
+	if s.KeyID != "" {
+		// kid comes from an unverified token header.
+		details = append(details, "key "+shared.SanitizeTerminal(s.KeyID))
+	}
+	if s.Expired != nil {
+		verb := "expires"
+		if *s.Expired {
+			verb = "expired"
+		}
+		details = append(details, verb+" "+s.ExpiresAt)
+	}
+	if s.RenewedBy != "" {
+		details = append(details, "renewed by "+s.RenewedBy)
+	}
+	if s.Error != "" && !strings.Contains(s.ValidationError, s.Error) {
+		details = append(details, shared.SanitizeTerminal(s.Error))
+	}
+	line := "Bearer token: " + s.Source
+	if len(details) > 0 {
+		line += " (" + strings.Join(details, ", ") + ")"
+	}
+	if s.Error == "" {
+		line += ", used ahead of stored and environment credentials"
+	}
+	switch {
+	case s.ValidationDetail != "":
+		line += ": works (" + s.ValidationDetail + ")"
+	case s.ValidationError != "":
+		line += ": failed (" + shared.SanitizeTerminal(s.ValidationError) + ")"
+	case s.Validation != "":
+		line += ": " + s.Validation
+	}
+	return line
+}
+
+// isPermissionOnlyFailure reports a 403 that still proves the credential
+// authenticates. An agreement-blocked 403 does not count: it fails every
+// request for the team until an Account Holder accepts the agreement.
+func isPermissionOnlyFailure(err error) bool {
+	return errors.Is(err, asc.ErrForbidden) && !asc.IsRequiredAgreementError(err)
 }
 
 func buildAuthStatusCredentialRows(credentials []authsvc.Credential) [][]string {

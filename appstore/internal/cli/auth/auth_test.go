@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asctest"
 	authsvc "github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/auth"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared/errfmt"
@@ -972,6 +973,62 @@ func assertAuthDiagnostic(t *testing.T, err error, code shared.DiagnosticCode, p
 	}
 	if diagnostic.Code != code || diagnostic.Parameter != parameter {
 		t.Fatalf("diagnostic = %+v, want code %q parameter %q", diagnostic, code, parameter)
+	}
+}
+
+func TestAuthLoginKeyFileRefusalNamesTheFix(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows does not expose POSIX key permissions")
+	}
+	if os.Getuid() == 0 {
+		t.Skip("root reads a key file whatever its mode")
+	}
+	tests := []struct {
+		name           string
+		mode           os.FileMode
+		wantDiagnostic shared.DiagnosticCode
+		wantError      string
+		wantFixFlag    bool
+	}{
+		{name: "readable by other users", mode: 0o644, wantDiagnostic: shared.DiagnosticFilePermissionsInsecure, wantError: "private key file is too permissive (mode 0644)", wantFixFlag: true},
+		{name: "unreadable by its owner", mode: 0o200, wantDiagnostic: shared.DiagnosticFilePermissionDenied, wantError: "permission denied"},
+	}
+	d := newAuthTestDeps()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			withTempRepo(t, func(string) {
+				keyPath := writeTempECDSAKeyFile(t)
+				if err := os.Chmod(keyPath, tt.mode); err != nil {
+					t.Fatalf("set key permissions: %v", err)
+				}
+				cmd := newAuthLoginCommand(d)
+				if err := cmd.FlagSet.Parse([]string{"--name", "demo", "--key-id", "KEY", "--issuer-id", "ISS", "--private-key", keyPath}); err != nil {
+					t.Fatalf("Parse() error: %v", err)
+				}
+				var execErr error
+				_, stderr := captureAuthOutput(t, d, func() {
+					execErr = cmd.Exec(context.Background(), []string{})
+				})
+				if execErr == nil || !strings.Contains(execErr.Error(), tt.wantError) {
+					t.Fatalf("error = %v, want %q", execErr, tt.wantError)
+				}
+				assertAuthDiagnostic(t, execErr, tt.wantDiagnostic, "--private-key")
+				wantFix := "To fix, run:\n  chmod 600 " + keyPath + "\n"
+				if !strings.Contains(stderr, wantFix) {
+					t.Fatalf("stderr = %q, want %q", stderr, wantFix)
+				}
+				if strings.Contains(stderr, "--fix-permissions") != tt.wantFixFlag {
+					t.Fatalf("stderr = %q, want --fix-permissions offered: %t", stderr, tt.wantFixFlag)
+				}
+				info, err := os.Stat(keyPath)
+				if err != nil {
+					t.Fatalf("Stat() error: %v", err)
+				}
+				if info.Mode().Perm() != tt.mode {
+					t.Fatalf("permissions = %#o, want %#o unchanged", info.Mode().Perm(), tt.mode)
+				}
+			})
+		})
 	}
 }
 
@@ -2288,4 +2345,42 @@ func captureAuthOutput(t *testing.T, d *shared.Deps, fn func()) (string, string)
 	d.IO = &shared.IO{Out: &stdout, ErrOut: &stderr}
 	fn()
 	return stdout.String(), stderr.String()
+}
+
+func TestDoctorMigrationSuggestionRequiresExactBundleID(t *testing.T) {
+	for _, test := range []struct {
+		name      string
+		bundleID  string
+		wantAppID string
+	}{
+		{"prefix alone leaves placeholders", "com.example.app.preview", ""},
+		{"exact bundle enriches selected app", "com.example.app", "123"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			reg := asctest.NewRegistry(t)
+			reg.Register(asctest.GET("/v1/apps", "filter[bundleId]=com.example.app", "limit=200"),
+				asctest.JSON(http.StatusOK, `{"data":[{"type":"apps","id":"123","attributes":{"bundleId":"`+test.bundleID+`"}}]}`))
+			if test.wantAppID != "" {
+				reg.Register(asctest.GET("/v1/apps/123/appStoreVersions", "filter[versionString]=1.2.3", "limit=1"),
+					asctest.JSON(http.StatusOK, `{"data":[{"type":"appStoreVersions","id":"version-1"}]}`))
+			}
+			client, err := asc.NewClientWithHTTPClient("KEY", "ISSUER", writeTempECDSAKeyFile(t), &http.Client{Transport: reg})
+			if err != nil {
+				t.Fatal(err)
+			}
+			d := newAuthTestDeps()
+			d.Client = func() (*asc.Client, error) { return client, nil }
+			d.Timeout = func(ctx context.Context) (context.Context, context.CancelFunc) { return context.WithCancel(ctx) }
+			got := doctorMigrationSuggestionResolver(d)(authsvc.MigrationSuggestionResolverInput{
+				AppIdentifier: "com.example.app", MarketingVersion: "1.2.3", NeedAppID: true, NeedVersionID: true,
+			})
+			wantVersionID := ""
+			if test.wantAppID != "" {
+				wantVersionID = "version-1"
+			}
+			if got != (authsvc.MigrationSuggestionResolverOutput{AppID: test.wantAppID, VersionID: wantVersionID}) {
+				t.Fatalf("migration suggestions enriched unexpected targets: %#v", got)
+			}
+		})
+	}
 }

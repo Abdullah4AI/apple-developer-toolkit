@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -13,25 +14,71 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
-func collectScreenshotUploadFiles(path string, maxScreenshots int) ([]string, error) {
-	files, err := collectAssetPaths(path)
+// collectScreenshotUploadFiles returns the screenshots to upload from path and
+// the names of the directory entries it skipped because they are not
+// screenshot images.
+func collectScreenshotUploadFiles(path string, maxScreenshots int) ([]string, []string, error) {
+	files, skipped, err := collectScreenshotPaths(path)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if len(files) == 0 {
-		return nil, markMediaInput(fmt.Errorf("no files found in %q", path), shared.DiagnosticFileNotFound)
+		return nil, nil, markMediaInput(noScreenshotFilesError(path, skipped), shared.DiagnosticFileNotFound)
 	}
 
 	files, err = limitScreenshotUploadFiles(files, maxScreenshots, path)
 	if err != nil {
-		return nil, markMediaInput(err, shared.DiagnosticInvalidInput)
+		return nil, nil, markMediaInput(err, shared.DiagnosticInvalidInput)
 	}
 	for _, filePath := range files {
 		if err := asc.ValidateImageFile(filePath); err != nil {
-			return nil, markMediaInput(err, shared.DiagnosticFileInvalidFormat)
+			return nil, nil, markMediaInput(err, shared.DiagnosticFileInvalidFormat)
 		}
 	}
-	return files, nil
+	return files, skipped, nil
+}
+
+// collectScreenshotPaths lists the screenshot files at path. A file path is
+// returned as given, so the screenshot checks say what is wrong with it. In a
+// directory, screenshots are the .png, .jpg, and .jpeg files, the rule fan-out
+// uploads already apply to locale directories. Other files, such as the HTML a
+// mockup was rendered from or the .DS_Store Finder leaves, are returned by name
+// in skipped. A hidden image stays in files, so its hidden_file warning and
+// checks still apply.
+func collectScreenshotPaths(path string) (files, skipped []string, err error) {
+	paths, err := collectAssetPaths(path)
+	if err != nil {
+		return nil, nil, err
+	}
+	if info, statErr := os.Lstat(path); statErr != nil || !info.IsDir() {
+		return paths, nil, nil
+	}
+	files = make([]string, 0, len(paths))
+	for _, filePath := range paths {
+		name := filepath.Base(filePath)
+		if isSupportedScreenshotUploadFile(filePath) {
+			files = append(files, filePath)
+			continue
+		}
+		skipped = append(skipped, name)
+	}
+	return files, skipped, nil
+}
+
+func noScreenshotFilesError(path string, skipped []string) error {
+	if len(skipped) == 0 {
+		return fmt.Errorf("no files found in %q", path)
+	}
+	return fmt.Errorf("no .png, .jpg, or .jpeg screenshots found in %q (skipped: %s)", path, strings.Join(skipped, ", "))
+}
+
+// warnSkippedScreenshotFiles tells the caller which directory entries an
+// upload left out, so a missing screenshot is never a silent surprise.
+func warnSkippedScreenshotFiles(w io.Writer, path string, skipped []string) {
+	if len(skipped) == 0 {
+		return
+	}
+	fmt.Fprintf(w, "Warning: screenshots upload: skipped %d file(s) in %q that are not .png, .jpg, or .jpeg screenshots: %s\n", len(skipped), shared.SanitizeTerminal(path), shared.SanitizeTerminal(strings.Join(skipped, ", ")))
 }
 
 func limitScreenshotUploadFiles(files []string, maxScreenshots int, source string) ([]string, error) {
@@ -176,6 +223,7 @@ func uploadScreenshotsFanout(ctx context.Context, cfg screenshotUploadFanoutConf
 		}
 	}
 
+	ctx = asc.WithNoRedirectReads(ctx)
 	requestCtx, cancel := cfg.RequestContext(ctx)
 	localizationsResp, err := cfg.Client.GetAppStoreVersionLocalizations(requestCtx, cfg.VersionID, asc.Limit[asc.AppStoreVersionLocalizationsOption](200))
 	cancel()

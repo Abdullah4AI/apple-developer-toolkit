@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"net/http"
 	"slices"
 	"strings"
 
@@ -274,8 +275,12 @@ func reviewItemsAddCommand(d *shared.Deps, name, errorPrefix, shortUsage, exampl
 		LongHelp: `Add an item to a review submission.
 
 Asset Library images and videos can be reviewed separately after the app has
-an approved version. For the first app version, submit assets with the version.
-App Store Connect validates asset readiness when the submission is submitted.
+an approved version. An asset placed on an App Store version (asc localizations
+placements create) while that version is in, or goes into, a review submission
+is reviewed with the version: adding it as its own item fails with "Asset is
+locked by an embedded review submission". For the first app version, place the
+assets on the version and submit the version. App Store Connect validates asset readiness when the
+submission is submitted.
 
 --if-exists controls what happens when App Store Connect answers 409 because
 the item is already on the submission. fail (default) returns the error. skip
@@ -328,11 +333,11 @@ Examples:
 				existing, handled, resolveErr := shared.ResolveIfExistsConflict(ifExistsMode, err, codes, func() (*asc.ReviewSubmissionItemResponse, bool, error) {
 					return findExistingReviewSubmissionItem(requestCtx, client, submissionValue, normalizedType, itemValue)
 				})
-				if resolveErr != nil {
-					return fmt.Errorf("%s: %w", errorPrefix, resolveErr)
+				if resolveErr == nil && !handled {
+					resolveErr = err
 				}
-				if !handled {
-					return fmt.Errorf("%s: %w", errorPrefix, err)
+				if resolveErr != nil {
+					return withReviewItemsAddConflictHint(requestCtx, client, submissionValue, normalizedType, itemValue, fmt.Errorf("%s: %w", errorPrefix, resolveErr))
 				}
 				resp = existing
 				fmt.Fprintf(d.IO.ErrOut, "%s: %s %s is already on submission %s as item %s; left unchanged (--if-exists %s)\n",
@@ -422,7 +427,7 @@ Examples:
 
 			resp, err := client.UpdateReviewSubmissionItem(requestCtx, trimmedID, attrs)
 			if err != nil {
-				return fmt.Errorf("%s: %w", errorPrefix, err)
+				return withComplianceRequirementHint(withReviewItemResolveHint(fmt.Errorf("%s: %w", errorPrefix, err)))
 			}
 
 			return d.PrintOutput(resp, *output.Output, *output.Pretty)
@@ -719,4 +724,26 @@ func findExistingReviewSubmissionItem(
 		return found, true, nil
 	}
 	return nil, false, err
+}
+
+// reviewItemResolveRejectedText is Apple's 409 detail when --resolved targets
+// an item App Review did not reject.
+const reviewItemResolveRejectedText = "can only be resolved when it is in REJECTED state"
+
+// withReviewItemResolveHint says which items take --resolved and what to do
+// for a submission that has none: App Store Connect lets only REJECTED items be
+// marked resolved, and a submission without one is resubmitted as it is, after
+// editing the version if needed. It does not suggest canceling: App Store
+// Connect refuses to cancel an UNRESOLVED_ISSUES submission.
+func withReviewItemResolveHint(err error) error {
+	apiErr, ok := errors.AsType[*asc.APIError](err)
+	if !ok || apiErr.StatusCode != http.StatusConflict || !slices.ContainsFunc(append([]string{apiErr.Detail}, apiErr.AllDetails...), func(detail string) bool {
+		return strings.Contains(detail, reviewItemResolveRejectedText)
+	}) {
+		return err
+	}
+	return &shared.HintedError{
+		Err:  err,
+		Hint: "Only items App Review rejected (state REJECTED) take --resolved. See each item's state with `asc review items list --submission SUBMISSION_ID`. When none is REJECTED there is nothing to resolve: edit the version if the fix needs it, then resubmit with `asc review submissions-submit --id SUBMISSION_ID --confirm`.",
+	}
 }

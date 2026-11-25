@@ -11,7 +11,63 @@ import (
 )
 
 func TestAccountStatusJSON(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		brokerURL   string
+		brokerToken string
+		want        []string
+		reject      []string
+	}{
+		{
+			name: "own web session",
+			want: []string{"asc web agreements status", "asc web business agreements list"},
+		},
+		{
+			// Whether a broker lends the agreement pages is the broker's
+			// policy, so the check gives the hand-off for a broker that does
+			// not and the commands for one that does, without claiming either.
+			name:        "lent web session",
+			brokerURL:   "https://broker.example.com",
+			brokerToken: "broker-token",
+			want:        []string{"may not lend", "Account Holder", "https://appstoreconnect.apple.com/business", "https://developer.apple.com/account", "Program License Agreement", "`asc web agreements status`", "`asc web business agreements list`"},
+			reject:      []string{"can't read"},
+		},
+		{
+			// A half-set broker config fails every web command, so the check
+			// names both variables instead of a broker policy.
+			name:        "broker token without a URL",
+			brokerToken: "broker-token",
+			want:        []string{"incomplete", "ASC_WEB_BROKER_URL", "ASC_WEB_BROKER_TOKEN"},
+			reject:      []string{"broker-token", "Account Holder", "may not lend"},
+		},
+		{
+			name:      "broker URL without a token",
+			brokerURL: "https://broker.example.com",
+			want:      []string{"incomplete", "ASC_WEB_BROKER_URL", "ASC_WEB_BROKER_TOKEN"},
+			reject:    []string{"Account Holder", "may not lend"},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			agreementsMessage := runAccountStatusAgreementsCheck(t, tc.brokerURL, tc.brokerToken)
+			for _, want := range tc.want {
+				if !strings.Contains(agreementsMessage, want) {
+					t.Fatalf("expected agreements check to name %q, got %q", want, agreementsMessage)
+				}
+			}
+			for _, reject := range tc.reject {
+				if strings.Contains(agreementsMessage, reject) {
+					t.Fatalf("expected agreements check not to name %q, got %q", reject, agreementsMessage)
+				}
+			}
+		})
+	}
+}
+
+func runAccountStatusAgreementsCheck(t *testing.T, brokerURL, brokerToken string) string {
+	t.Helper()
 	setupAuth(t)
+	t.Setenv("ASC_WEB_BROKER_URL", brokerURL)
+	t.Setenv("ASC_WEB_BROKER_TOKEN", brokerToken)
 	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 	t.Setenv("ASC_APP_ID", "")
 
@@ -51,6 +107,7 @@ func TestAccountStatusJSON(t *testing.T) {
 	}
 
 	foundAPICheck := false
+	agreementsMessage := ""
 	for _, item := range checks {
 		check, ok := item.(map[string]any)
 		if !ok {
@@ -59,10 +116,14 @@ func TestAccountStatusJSON(t *testing.T) {
 		if check["name"] == "api_access" {
 			foundAPICheck = true
 		}
+		if check["name"] == "agreements" {
+			agreementsMessage, _ = check["message"].(string)
+		}
 	}
 	if !foundAPICheck {
 		t.Fatalf("expected api_access check in %v", checks)
 	}
+	return agreementsMessage
 }
 
 func TestAccountStatusForbiddenProducesWarning(t *testing.T) {

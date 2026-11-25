@@ -10,12 +10,14 @@ import (
 	"os"
 	"os/signal"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/peterbourgon/ff/v3/ffcli"
 
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/api"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared/errfmt"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/readonly"
@@ -71,6 +73,19 @@ func RunWithDeps(args []string, versionInfo string, d *shared.Deps) int {
 	// keeps spaced boolean recovery working for the flags that follow it.
 	args = hoistRootProfileFlag(root, args)
 	args = normalizeSpacedBooleanFlags(root, args)
+	// A guessed command (`get` for `view`, `app-infos` for `apps info`)
+	// resolves before any analysis, so help, diagnostics and telemetry all
+	// name the command that runs. The root holds only the top-level command
+	// the caller named, so an alias that lands on another one rebuilds it.
+	if aliased := resolveCommandAliases(root, args); !slices.Equal(aliased, args) {
+		if topLevelCommand(root, aliased) != topLevelCommand(root, args) {
+			root = rootCommandForArgs(versionInfo, d, aliased)
+			aliased = resolveCommandAliases(root, normalizeSpacedBooleanFlags(root, aliased))
+		}
+		// The first normalization stopped at the guessed token, so flags after
+		// the resolved command still need theirs.
+		args = normalizeSpacedBooleanFlags(root, aliased)
+	}
 	analysis := analyzeInvocation(root, args)
 	runCtx, stopSignals := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stopSignals()
@@ -142,7 +157,13 @@ func RunWithDeps(args []string, versionInfo string, d *shared.Deps) int {
 			badFlagSyntax = firstLine
 		}
 		if analysis.unknownFlag && isUnknownFlagParseFailure(parseErr, parseOutput.String()) {
-			printConciseUnknownFlag(d.IO.ErrOut, root, analysis, getCommandName(root, args), args)
+			commandName := getCommandName(root, args)
+			flagName, _ := flagLookupName(unknownFlagName(analysis))
+			if commandName == "asc api" && flagName == "fields" {
+				fmt.Fprintln(d.IO.ErrOut, "Error: "+api.SparseFieldsFlagHint)
+			} else {
+				printConciseUnknownFlag(d.IO.ErrOut, root, analysis, commandName, args)
+			}
 		} else if strings.HasPrefix(badFlagSyntax, "bad flag syntax:") {
 			fmt.Fprintf(d.IO.ErrOut, "Error: %s\nFor help:\n  asc --help\n", shared.SanitizeTerminal(badFlagSyntax))
 		} else {

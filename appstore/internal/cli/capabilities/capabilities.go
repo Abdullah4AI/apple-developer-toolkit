@@ -427,6 +427,16 @@ func capabilityRows() []Capability {
 			NextAction: "Use App Store Connect web UI, or asc web apps declarations list.",
 		},
 		{
+			Area:       "app-management",
+			Capability: "App Compliance requirements",
+			Status:     statusWebSession,
+			Commands:   []string{"asc web apps compliance list", "asc web apps compliance set"},
+			Notes: []string{
+				"App Compliance requirements, such as the China mainland Security Assessment and AI Generated or Synthetic Content declarations, are not present in the embedded public OpenAPI snapshot. Listing reports every requirement Apple returns for the app, answered or not. Setting answers one of those two requirements, with its evidence files and filing details for an affirmative answer, and saves nothing when Apple's form asks for a field the command does not know.",
+			},
+			NextAction: "Read with asc web apps compliance list --app APP_ID. Answer with asc web apps compliance set --app APP_ID --requirement SECURITY_ASSESSMENT|AI_GENERATED_CONTENT --declared true|false --confirm, or check an answer first with --dry-run.",
+		},
+		{
 			Area:       "monetization",
 			Capability: "Subscriptions and in-app purchases",
 			Status:     statusCLISupported,
@@ -584,9 +594,17 @@ func capabilityRows() []Capability {
 			Area:       "signing",
 			Capability: "Sign in with Apple private keys",
 			Status:     statusWebSession,
-			Commands:   []string{"asc web sign-in-keys list", "asc web sign-in-keys view", "asc web sign-in-keys create", "asc web sign-in-keys download"},
-			Notes:      []string{"Uses private Developer Portal authentication-key endpoints. Creation verifies the primary Bundle ID association; one-time P8 download saves private files on macOS or Linux. Revoke is not exposed."},
+			Commands:   []string{"asc web sign-in-keys list", "asc web sign-in-keys view", "asc web sign-in-keys create", "asc web sign-in-keys download", "asc web sign-in-keys revoke"},
+			Notes:      []string{"Uses private Developer Portal authentication-key endpoints. Creation verifies the primary Bundle ID association; one-time P8 download saves private files on macOS or Linux. Revoke refuses keys of another service and verifies the key is no longer listed."},
 			NextAction: "Use list and view to inspect existing keys, then create with --name, --bundle-id, --output-dir, and --confirm, or recover a download with --key-id, --output-dir, and --confirm.",
+		},
+		{
+			Area:       "signing",
+			Capability: "APNs private keys",
+			Status:     statusWebSession,
+			Commands:   []string{"asc web push-keys create", "asc web push-keys download", "asc web push-keys revoke"},
+			Notes:      []string{"Uses the same private Developer Portal authentication-key endpoints as Sign in with Apple keys. Creates team-scoped keys for sandbox and production; topic-scoped and single-environment keys are not exposed. Revoke refuses keys of another service and verifies the key is no longer listed."},
+			NextAction: "Use asc web sign-in-keys list to inspect existing keys, then create with --name, --output-dir, and --confirm, or recover a download with --key-id, --output-dir, and --confirm.",
 		},
 		{
 			Area:         "signing",

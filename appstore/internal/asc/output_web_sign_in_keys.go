@@ -1,5 +1,7 @@
 package asc
 
+import "fmt"
+
 // WebSignInKeyReceipt contains only non-secret key metadata and a local P8 path.
 type WebSignInKeyReceipt struct {
 	KeyID    string `json:"keyId"`
@@ -13,5 +15,23 @@ func webSignInKeyReceiptRows(r *WebSignInKeyReceipt) ([]string, [][]string) {
 	if r == nil {
 		return headers, nil
 	}
+	if r.BundleID == "" {
+		// APNs keys have no bundle; JSON omits bundleId, so the table drops it too.
+		return []string{"Key ID", "Name", "P8 Path"}, [][]string{{r.KeyID, r.Name, r.P8Path}}
+	}
 	return headers, [][]string{{r.KeyID, r.Name, r.BundleID, r.P8Path}}
+}
+
+// WebDeveloperKeyRevokeResult confirms a Developer Portal key is no longer listed.
+type WebDeveloperKeyRevokeResult struct {
+	KeyID   string `json:"keyId"`
+	Revoked bool   `json:"revoked"`
+}
+
+func webDeveloperKeyRevokeRows(r *WebDeveloperKeyRevokeResult) ([]string, [][]string) {
+	headers := []string{"Key ID", "Revoked"}
+	if r == nil {
+		return headers, nil
+	}
+	return headers, [][]string{{r.KeyID, fmt.Sprintf("%t", r.Revoked)}}
 }

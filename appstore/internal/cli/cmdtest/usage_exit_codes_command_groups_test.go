@@ -1097,6 +1097,18 @@ func TestCommandGroupInputValidationReturnsUsageExitCode(t *testing.T) {
 			deps:    true,
 		},
 		{
+			name:    "web push-keys create without name",
+			args:    []string{"web", "push-keys", "create", "--output-dir", "keys", "--confirm"},
+			wantErr: "--name is required",
+			deps:    true,
+		},
+		{
+			name:    "web push-keys revoke without key-id",
+			args:    []string{"web", "push-keys", "revoke", "--confirm"},
+			wantErr: "--key-id is required",
+			deps:    true,
+		},
+		{
 			name:    "web subscriptions pricing adjusted-equalizations view without price-point-id",
 			args:    []string{"web", "subscriptions", "pricing", "adjusted-equalizations", "view"},
 			wantErr: "--price-point-id is required",

@@ -14,6 +14,7 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
 	authsvc "github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/auth"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
+	webcore "github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/web"
 )
 
 // NewAccountCommand returns the account command group built on d.
@@ -214,10 +215,34 @@ func apiAccessCheck(ctx context.Context, d *shared.Deps, appID string) (accountC
 }
 
 func agreementsAvailabilityCheck() accountCheck {
+	const notInAPI = "account-level agreement status is not in the public App Store Connect API"
+	const agreementCommands = "`asc web agreements status` for Apple Developer Program agreements and App Store Connect agreement alerts, " +
+		"and `asc web business agreements list` for Business agreements such as the Paid Applications Schedule"
+	_, brokered, brokerErr := webcore.BrokerFromEnv()
+	switch {
+	case brokerErr != nil:
+		// Every web command fails on this config before reaching a broker,
+		// so fixing it comes before any broker policy.
+		return accountCheck{
+			Name:   "agreements",
+			Status: "unavailable",
+			Message: notInAPI + ", and the web session broker configuration is incomplete or invalid (" + brokerErr.Error() + "); " +
+				"fix it, or unset both " + webcore.WebBrokerURLEnv + " and " + webcore.WebBrokerTokenEnv + " to use asc's own web session, then check it with " + agreementCommands,
+		}
+	case brokered:
+		// Which requests a broker lends is the broker's policy, and asking
+		// would take a network call, so give both outcomes.
+		return accountCheck{
+			Name:   "agreements",
+			Status: "unavailable",
+			Message: notInAPI + ", and the web session broker at " + webcore.WebBrokerURLEnv + " may not lend the agreement pages; " +
+				"if it does not, " + webcore.BrokerAgreementsHandOff + "; if it does, check it with " + agreementCommands,
+		}
+	}
 	return accountCheck{
 		Name:    "agreements",
 		Status:  "unavailable",
-		Message: "account-level agreement status is not exposed in the current public App Store Connect API surface",
+		Message: notInAPI + "; check it with a web session: " + agreementCommands,
 	}
 }
 

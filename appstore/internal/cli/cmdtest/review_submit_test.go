@@ -200,6 +200,8 @@ func TestReviewSubmitSubscriptionPreflightUsesReviewSubmitGuidance(t *testing.T)
 	reg.Register(asctest.GET("/v1/apps/app-1/subscriptionGroups", "limit=200"), asctest.JSON(http.StatusOK, `{"data":[{"type":"subscriptionGroups","id":"group-1","attributes":{"referenceName":"Premium"}}],"links":{}}`))
 	registerSubmitPreflightAppInfos(reg, completeAgeRatingAttributes)
 	reg.Register(asctest.GET("/v1/subscriptionGroups/group-1/subscriptions", "limit=200"), asctest.JSON(http.StatusOK, `{"data":[{"type":"subscriptions","id":"sub-1","attributes":{"name":"Monthly","state":"READY_TO_SUBMIT"}}],"links":{}}`))
+	reg.Register(asctest.GET("/v1/apps/app-1/reviewSubmissions", "filter[platform]=IOS", "filter[state]=UNRESOLVED_ISSUES", "include=appStoreVersionForReview", "limit=200"), asctest.JSON(http.StatusOK, `{"data":[],"links":{}}`))
+	reg.Register(asctest.GET("/v1/apps/app-1/reviewSubmissions", "filter[platform]=IOS", "filter[state]=READY_FOR_REVIEW", "include=appStoreVersionForReview", "limit=200"), asctest.JSON(http.StatusOK, `{"data":[],"links":{"self":"/v1/apps/app-1/reviewSubmissions"}}`))
 	reg.Register(asctest.GET("/v1/appStoreVersions/version-1/build"), asctest.JSON(http.StatusNotFound, `{"errors":[{"status":"404","code":"NOT_FOUND","title":"Not Found"}]}`))
 
 	stdout, stderr, err := runRootWithDeps(t, stubClient(t, reg), "review", "submit",
@@ -226,6 +228,11 @@ func TestReviewSubmitSubscriptionPreflightUsesReviewSubmitGuidance(t *testing.T)
 	if strings.Contains(stderr, "asc subscriptions review submit") {
 		t.Fatalf("did not expect deprecated subscription submission guidance, got %q", stderr)
 	}
+	// The web attach flow refuses subscriptions its listing still reports as
+	// MISSING_METADATA, even when the API reports READY_TO_SUBMIT.
+	if strings.Contains(stderr, "asc web review subscriptions attach") {
+		t.Fatalf("did not expect web attach guidance for READY_TO_SUBMIT subscriptions, got %q", stderr)
+	}
 	if strings.Contains(stderr, "submit create") {
 		t.Fatalf("did not expect removed submit create guidance, got %q", stderr)
 	}
@@ -251,6 +258,8 @@ func TestReviewSubmitDryRunPreviewsWithoutMutations(t *testing.T) {
 	reg.Register(asctest.GET("/v1/apps/app-1/appStoreVersions", "filter[appVersionState]=READY_FOR_DISTRIBUTION", "filter[platform]=IOS", "limit=1"), asctest.JSON(http.StatusOK, `{"data":[]}`))
 	reg.Register(asctest.GET("/v1/apps/app-1/subscriptionGroups", "limit=200"), asctest.JSON(http.StatusOK, `{"data":[]}`))
 	registerSubmitPreflightAppInfos(reg, completeAgeRatingAttributes)
+	reg.Register(asctest.GET("/v1/apps/app-1/reviewSubmissions", "filter[platform]=IOS", "filter[state]=UNRESOLVED_ISSUES", "include=appStoreVersionForReview", "limit=200"), asctest.JSON(http.StatusOK, `{"data":[],"links":{}}`))
+	reg.Register(asctest.GET("/v1/apps/app-1/reviewSubmissions", "filter[platform]=IOS", "filter[state]=READY_FOR_REVIEW", "include=appStoreVersionForReview", "limit=200"), asctest.JSON(http.StatusOK, `{"data":[],"links":{"self":"/v1/apps/app-1/reviewSubmissions"}}`))
 	reg.Register(asctest.GET("/v1/appStoreVersions/version-1/build"), asctest.JSON(http.StatusNotFound, `{"errors":[{"status":"404","code":"NOT_FOUND","title":"Not Found"}]}`))
 
 	stdout, stderr, runErr := runRootWithDeps(t, stubClient(t, reg), "review", "submit",
@@ -327,15 +336,16 @@ func TestReviewSubmitUsesModernReviewSubmissionFlow(t *testing.T) {
 	reg.Register(asctest.GET("/v1/apps/app-1/appStoreVersions", "filter[appVersionState]=READY_FOR_DISTRIBUTION", "filter[platform]=IOS", "limit=1"), asctest.JSON(http.StatusOK, `{"data":[]}`))
 	reg.Register(asctest.GET("/v1/apps/app-1/subscriptionGroups", "limit=200"), asctest.JSON(http.StatusOK, `{"data":[]}`))
 	registerSubmitPreflightAppInfos(reg, completeAgeRatingAttributes)
+	reg.Register(asctest.GET("/v1/apps/app-1/reviewSubmissions", "filter[platform]=IOS", "filter[state]=UNRESOLVED_ISSUES", "include=appStoreVersionForReview", "limit=200"), asctest.JSON(http.StatusOK, `{"data":[],"links":{"self":"/v1/apps/app-1/reviewSubmissions"}}`))
 	reg.Register(asctest.GET("/v1/apps/app-1/reviewSubmissions", "filter[platform]=IOS", "filter[state]=READY_FOR_REVIEW", "include=appStoreVersionForReview", "limit=200"), asctest.JSON(http.StatusOK, `{"data":[],"links":{"self":"https://api.appstoreconnect.apple.com/v1/apps/app-1/reviewSubmissions"}}`))
 	reg.Register(asctest.GET("/v1/appStoreVersions/version-1/build"), asctest.JSON(http.StatusNotFound, `{"errors":[{"status":"404","code":"NOT_FOUND","title":"Not Found"}]}`))
 	reg.Register(asctest.PATCH("/v1/appStoreVersions/version-1/relationships/build").JSONBody(`{"data":{"type":"builds","id":"build-1"}}`), asctest.JSON(http.StatusNoContent, ""))
 	reg.Register(asctest.POST("/v1/reviewSubmissions").JSONBody(`{"data":{"type":"reviewSubmissions","attributes":{"platform":"IOS"},"relationships":{"app":{"data":{"type":"apps","id":"app-1"}}}}}`), asctest.JSON(http.StatusCreated, `{"data":{"type":"reviewSubmissions","id":"review-sub-1","attributes":{"state":"READY_FOR_REVIEW","platform":"IOS"}}}`))
 	reg.Register(asctest.GET("/v1/reviewSubmissions/review-sub-1", "include=app"), asctest.JSON(http.StatusOK, `{"data":{"type":"reviewSubmissions","id":"review-sub-1","attributes":{"state":"READY_FOR_REVIEW","platform":"IOS"},"relationships":{"app":{"data":{"type":"apps","id":"app-1"}}}}}`))
-	reg.Register(asctest.GET("/v1/reviewSubmissions/review-sub-1/items", "fields[reviewSubmissionItems]=appStoreVersion", "include=appStoreVersion", "limit=200"), asctest.JSON(http.StatusOK, `{"data":[],"links":{"self":"/v1/reviewSubmissions/review-sub-1/items"}}`))
+	reg.Register(asctest.GET("/v1/reviewSubmissions/review-sub-1/items", "fields[reviewSubmissionItems]=appStoreVersion,subscriptionGroupVersion,subscriptionVersion", "include=appStoreVersion,subscriptionGroupVersion,subscriptionVersion", "limit=200"), asctest.JSON(http.StatusOK, `{"data":[],"links":{"self":"/v1/reviewSubmissions/review-sub-1/items"}}`))
 	reg.Register(asctest.POST("/v1/reviewSubmissionItems").JSONBody(`{"data":{"type":"reviewSubmissionItems","relationships":{"reviewSubmission":{"data":{"type":"reviewSubmissions","id":"review-sub-1"}},"appStoreVersion":{"data":{"type":"appStoreVersions","id":"version-1"}}}}}`), asctest.JSON(http.StatusCreated, `{"data":{"type":"reviewSubmissionItems","id":"item-1"}}`))
 	reg.Register(asctest.GET("/v1/reviewSubmissions/review-sub-1", "include=app"), asctest.JSON(http.StatusOK, `{"data":{"type":"reviewSubmissions","id":"review-sub-1","attributes":{"state":"READY_FOR_REVIEW","platform":"IOS"},"relationships":{"app":{"data":{"type":"apps","id":"app-1"}}}}}`))
-	reg.Register(asctest.GET("/v1/reviewSubmissions/review-sub-1/items", "fields[reviewSubmissionItems]=appStoreVersion", "include=appStoreVersion", "limit=200"), asctest.JSON(http.StatusOK, `{"data":[{"type":"reviewSubmissionItems","id":"item-1","relationships":{"appStoreVersion":{"data":{"type":"appStoreVersions","id":"version-1"}}}}],"links":{"self":"/v1/reviewSubmissions/review-sub-1/items"}}`))
+	reg.Register(asctest.GET("/v1/reviewSubmissions/review-sub-1/items", "fields[reviewSubmissionItems]=appStoreVersion,subscriptionGroupVersion,subscriptionVersion", "include=appStoreVersion,subscriptionGroupVersion,subscriptionVersion", "limit=200"), asctest.JSON(http.StatusOK, `{"data":[{"type":"reviewSubmissionItems","id":"item-1","relationships":{"appStoreVersion":{"data":{"type":"appStoreVersions","id":"version-1"}}}}],"links":{"self":"/v1/reviewSubmissions/review-sub-1/items"}}`))
 	reg.Register(asctest.PATCH("/v1/reviewSubmissions/review-sub-1").JSONBody(`{"data":{"type":"reviewSubmissions","id":"review-sub-1","attributes":{"submitted":true}}}`), asctest.JSON(http.StatusOK, `{"data":{"type":"reviewSubmissions","id":"review-sub-1","attributes":{"state":"WAITING_FOR_REVIEW","submittedDate":"2026-04-08T00:00:00Z"}}}`))
 
 	stdout, stderr, err := runRootWithDeps(t, stubClient(t, reg), "review", "submit",
@@ -491,15 +501,16 @@ func TestReviewSubmitConflictAtFinalSubmitReportsCreatedSubmissionAndHints(t *te
 	reg.Register(asctest.GET("/v1/apps/app-1/appStoreVersions", "filter[appVersionState]=READY_FOR_DISTRIBUTION", "filter[platform]=IOS", "limit=1"), asctest.JSON(http.StatusOK, `{"data":[]}`))
 	reg.Register(asctest.GET("/v1/apps/app-1/subscriptionGroups", "limit=200"), asctest.JSON(http.StatusOK, `{"data":[]}`))
 	registerSubmitPreflightAppInfos(reg, completeAgeRatingAttributes)
+	reg.Register(asctest.GET("/v1/apps/app-1/reviewSubmissions", "filter[platform]=IOS", "filter[state]=UNRESOLVED_ISSUES", "include=appStoreVersionForReview", "limit=200"), asctest.JSON(http.StatusOK, `{"data":[],"links":{"self":"/v1/apps/app-1/reviewSubmissions"}}`))
 	reg.Register(asctest.GET("/v1/apps/app-1/reviewSubmissions", "filter[platform]=IOS", "filter[state]=READY_FOR_REVIEW", "include=appStoreVersionForReview", "limit=200"), asctest.JSON(http.StatusOK, `{"data":[],"links":{"self":"/v1/apps/app-1/reviewSubmissions"}}`))
 	reg.Register(asctest.GET("/v1/appStoreVersions/version-1/build"), asctest.JSON(http.StatusNotFound, `{"errors":[{"status":"404","code":"NOT_FOUND","title":"Not Found"}]}`))
 	reg.Register(asctest.PATCH("/v1/appStoreVersions/version-1/relationships/build").JSONBody(`{"data":{"type":"builds","id":"build-1"}}`), asctest.JSON(http.StatusNoContent, ""))
 	reg.Register(asctest.POST("/v1/reviewSubmissions").JSONBody(`{"data":{"type":"reviewSubmissions","attributes":{"platform":"IOS"},"relationships":{"app":{"data":{"type":"apps","id":"app-1"}}}}}`), asctest.JSON(http.StatusCreated, `{"data":{"type":"reviewSubmissions","id":"review-sub-1","attributes":{"state":"READY_FOR_REVIEW","platform":"IOS"}}}`))
 	reg.Register(asctest.GET("/v1/reviewSubmissions/review-sub-1", "include=app"), asctest.JSON(http.StatusOK, `{"data":{"type":"reviewSubmissions","id":"review-sub-1","attributes":{"state":"READY_FOR_REVIEW","platform":"IOS"},"relationships":{"app":{"data":{"type":"apps","id":"app-1"}}}}}`))
-	reg.Register(asctest.GET("/v1/reviewSubmissions/review-sub-1/items", "fields[reviewSubmissionItems]=appStoreVersion", "include=appStoreVersion", "limit=200"), asctest.JSON(http.StatusOK, `{"data":[],"links":{"self":"/v1/reviewSubmissions/review-sub-1/items"}}`))
+	reg.Register(asctest.GET("/v1/reviewSubmissions/review-sub-1/items", "fields[reviewSubmissionItems]=appStoreVersion,subscriptionGroupVersion,subscriptionVersion", "include=appStoreVersion,subscriptionGroupVersion,subscriptionVersion", "limit=200"), asctest.JSON(http.StatusOK, `{"data":[],"links":{"self":"/v1/reviewSubmissions/review-sub-1/items"}}`))
 	reg.Register(asctest.POST("/v1/reviewSubmissionItems").JSONBody(`{"data":{"type":"reviewSubmissionItems","relationships":{"reviewSubmission":{"data":{"type":"reviewSubmissions","id":"review-sub-1"}},"appStoreVersion":{"data":{"type":"appStoreVersions","id":"version-1"}}}}}`), asctest.JSON(http.StatusCreated, `{"data":{"type":"reviewSubmissionItems","id":"item-1"}}`))
 	reg.Register(asctest.GET("/v1/reviewSubmissions/review-sub-1", "include=app"), asctest.JSON(http.StatusOK, `{"data":{"type":"reviewSubmissions","id":"review-sub-1","attributes":{"state":"READY_FOR_REVIEW","platform":"IOS"},"relationships":{"app":{"data":{"type":"apps","id":"app-1"}}}}}`))
-	reg.Register(asctest.GET("/v1/reviewSubmissions/review-sub-1/items", "fields[reviewSubmissionItems]=appStoreVersion", "include=appStoreVersion", "limit=200"), asctest.JSON(http.StatusOK, `{"data":[{"type":"reviewSubmissionItems","id":"item-1","relationships":{"appStoreVersion":{"data":{"type":"appStoreVersions","id":"version-1"}}}}],"links":{"self":"/v1/reviewSubmissions/review-sub-1/items"}}`))
+	reg.Register(asctest.GET("/v1/reviewSubmissions/review-sub-1/items", "fields[reviewSubmissionItems]=appStoreVersion,subscriptionGroupVersion,subscriptionVersion", "include=appStoreVersion,subscriptionGroupVersion,subscriptionVersion", "limit=200"), asctest.JSON(http.StatusOK, `{"data":[{"type":"reviewSubmissionItems","id":"item-1","relationships":{"appStoreVersion":{"data":{"type":"appStoreVersions","id":"version-1"}}}}],"links":{"self":"/v1/reviewSubmissions/review-sub-1/items"}}`))
 	reg.Register(asctest.PATCH("/v1/reviewSubmissions/review-sub-1").JSONBody(`{"data":{"type":"reviewSubmissions","id":"review-sub-1","attributes":{"submitted":true}}}`), asctest.JSON(http.StatusConflict, `{"errors":[{"status":"409","code":"STATE_ERROR.ENTITY_STATE_INVALID","title":"The request cannot be fulfilled because of the state of another resource.","detail":"Submission is not complete.","meta":{"associatedErrors":{"/v1/ageRatingDeclarations/age-1":[{"code":"ENTITY_ERROR.ATTRIBUTE.REQUIRED","detail":"An attribute value is required."}],"/v1/apps/app-1/contentRightsDeclaration":[{"code":"ENTITY_ERROR.ATTRIBUTE.REQUIRED","detail":"An attribute value is required."}]}}}]}`))
 
 	stdout, stderr, code := runWithDeps(t, stubClient(t, reg), "review", "submit",

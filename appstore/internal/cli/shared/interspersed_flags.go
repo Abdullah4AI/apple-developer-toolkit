@@ -3,6 +3,7 @@ package shared
 import (
 	"flag"
 	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -21,6 +22,8 @@ func ParseInterspersedFlags(fs *flag.FlagSet, args []string) ([]string, error) {
 	if strings.HasPrefix(args[0], "-") {
 		return args, nil
 	}
+
+	setter := NewInterspersedFlagSetter(fs)
 
 	positional := make([]string, 0, len(args))
 	for i := 0; i < len(args); i++ {
@@ -45,12 +48,8 @@ func ParseInterspersedFlags(fs *flag.FlagSet, args []string) ([]string, error) {
 		}
 
 		if isBoolFlagValue(f) && !hasValue {
-			if err := fs.Set(name, "true"); err != nil {
-				return nil, fmt.Errorf("invalid value %q for --%s: %w", "true", name, err)
-			}
-			continue
+			value, hasValue = "true", true
 		}
-
 		if !hasValue {
 			if i+1 >= len(args) {
 				return nil, fmt.Errorf("flag needs an argument: --%s", name)
@@ -59,8 +58,8 @@ func ParseInterspersedFlags(fs *flag.FlagSet, args []string) ([]string, error) {
 			value = args[i]
 		}
 
-		if err := fs.Set(name, value); err != nil {
-			return nil, fmt.Errorf("invalid value %q for --%s: %w", value, name, err)
+		if err := setter.Set(f, name, value); err != nil {
+			return nil, err
 		}
 	}
 
@@ -99,5 +98,111 @@ func isBoolFlagValue(f *flag.Flag) bool {
 		return false
 	}
 	_, ok = getter.Get().(bool)
+	return ok
+}
+
+// InterspersedFlagSetter sets flags that appear after positional arguments,
+// keeping an alias the same flag as its canonical spelling, as
+// resolveFlagAliases makes it before parsing. A second spelling with another
+// value is an error instead of a silent last-one-wins, and so is a value that
+// differs from the one given before the positional arguments. The root
+// rewrites an alias there to its canonical spelling, so `--data A POST PATH
+// --body B` reaches the setter as --body twice. A repeatable flag adds every
+// value under any spelling, so it has no conflict.
+type InterspersedFlagSetter struct {
+	fs    *flag.FlagSet
+	given map[string]givenFlagValue
+}
+
+type givenFlagValue struct {
+	spelling, value  string
+	beforePositional bool
+}
+
+// NewInterspersedFlagSetter records the flags fs parsed before the first
+// positional argument.
+func NewInterspersedFlagSetter(fs *flag.FlagSet) *InterspersedFlagSetter {
+	setter := &InterspersedFlagSetter{fs: fs, given: map[string]givenFlagValue{}}
+	fs.Visit(func(f *flag.Flag) {
+		setter.given[f.Name] = givenFlagValue{spelling: f.Name, value: flagValueString(f), beforePositional: true}
+	})
+	return setter
+}
+
+// Set applies value for f, given as --spelling after a positional argument.
+func (s *InterspersedFlagSetter) Set(f *flag.Flag, spelling, value string) error {
+	canonical := spelling
+	if target, implied, ok := FlagAliasImpliedValue(f); ok {
+		if enabled, err := strconv.ParseBool(value); err == nil && enabled {
+			canonical, value = target, implied
+		}
+	} else if target, ok := FlagAliasTarget(f, value); ok {
+		canonical = target
+	}
+	target := s.fs.Lookup(canonical)
+	if err := s.fs.Set(canonical, value); err != nil {
+		return fmt.Errorf("invalid value %q for --%s: %w", value, spelling, err)
+	}
+	// Compare the values as the flag reads them, so `--limit 5` and
+	// `--limit 05` are one value.
+	value = flagValueString(target)
+	if previous, ok := s.given[canonical]; ok && !IsRepeatableFlag(target) && previous.value != value {
+		if previous.spelling != spelling {
+			return fmt.Errorf("`--%s` and `--%s` are the same flag; pass one value", previous.spelling, spelling)
+		}
+		if previous.beforePositional {
+			return fmt.Errorf("`--%s` is given before and after the positional arguments with different values%s; pass one value", canonical, s.aliasNote(canonical))
+		}
+	}
+	s.given[canonical] = givenFlagValue{spelling: spelling, value: value}
+	return nil
+}
+
+// flagValueString is f's value as the command reads it: an output format in
+// any case is the same format.
+func flagValueString(f *flag.Flag) string {
+	if f == nil {
+		return ""
+	}
+	if output, ok := f.Value.(*validatedOutputValue); ok && output.value != nil {
+		return NormalizeOutputFormat(*output.value)
+	}
+	return f.Value.String()
+}
+
+// aliasNote names the aliases of canonical, which the root has already
+// rewritten to canonical when they came before the positional arguments.
+func (s *InterspersedFlagSetter) aliasNote(canonical string) string {
+	var notes []string
+	s.fs.VisitAll(func(f *flag.Flag) {
+		if !IsFlagAlias(f) {
+			return
+		}
+		if target, implied, ok := FlagAliasImpliedValue(f); ok {
+			if target == canonical {
+				notes = append(notes, fmt.Sprintf("`--%s` means `--%s %s`", f.Name, target, implied))
+			}
+			return
+		}
+		for _, target := range f.Value.(*flagAlias).targets {
+			if target.flag.Name == canonical {
+				notes = append(notes, fmt.Sprintf("`--%s` is the same flag", f.Name))
+				return
+			}
+		}
+	})
+	if len(notes) == 0 {
+		return ""
+	}
+	return " (" + strings.Join(notes, "; ") + ")"
+}
+
+// IsRepeatableFlag reports whether each value given for f adds to the
+// earlier ones instead of replacing them.
+func IsRepeatableFlag(f *flag.Flag) bool {
+	if f == nil {
+		return false
+	}
+	_, ok := f.Value.(*MultiStringFlag)
 	return ok
 }

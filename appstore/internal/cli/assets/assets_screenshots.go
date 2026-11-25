@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"net/url"
 	"sort"
 	"strings"
 
@@ -420,6 +421,7 @@ type screenshotListCommandOptions struct {
 
 func executeScreenshotListCommand(ctx context.Context, opts screenshotListCommandOptions, d *shared.Deps) (*asc.AppScreenshotListResult, error) {
 	locID := strings.TrimSpace(opts.VersionLocalizationID)
+	appSelector := d.ResolveAppSelector(opts.AppID)
 	appValue := strings.TrimSpace(opts.AppID)
 	versionValue := strings.TrimSpace(opts.Version)
 	versionIDValue := strings.TrimSpace(opts.VersionID)
@@ -452,7 +454,7 @@ func executeScreenshotListCommand(ctx context.Context, opts screenshotListComman
 			return nil, shared.MissingRequiredUsageError("")
 		}
 		if versionValue != "" || (versionIDValue != "" && platformValue != "") {
-			appValue = d.ResolveAppID(appValue)
+			appValue = strings.TrimSpace(appSelector.Value)
 		}
 		if versionValue != "" {
 			if appValue == "" {
@@ -494,16 +496,11 @@ func executeScreenshotListCommand(ctx context.Context, opts screenshotListComman
 	if locID == "" {
 		resolvedVersionID := versionIDValue
 		if versionValue != "" || appValue != "" {
+			ctx = asc.WithNoRedirectReads(ctx)
 			requestCtx, cancel := d.Timeout(ctx)
-			resolvedAppID, resolveErr := shared.ResolveAppIDWithLookup(requestCtx, client, appValue)
+			resolvedAppID, resolveErr := shared.ResolveScopedAppID(requestCtx, client, appSelector)
 			if resolveErr == nil {
-				if versionValue != "" {
-					resolvedVersionID, resolveErr = shared.ResolveAppStoreVersionID(requestCtx, client, resolvedAppID, versionValue, normalizedPlatform)
-				} else {
-					versionData, ownedErr := shared.ResolveOwnedAppStoreVersionByID(requestCtx, client, resolvedAppID, versionIDValue, normalizedPlatform)
-					resolveErr = ownedErr
-					resolvedVersionID = strings.TrimSpace(versionData.ID)
-				}
+				resolvedVersionID, _, _, resolveErr = resolveScreenshotPlanVersion(requestCtx, client, resolvedAppID, versionValue, versionIDValue, normalizedPlatform)
 			}
 			cancel()
 			if resolveErr != nil {
@@ -642,7 +639,12 @@ func fetchAllScreenshotVersionLocalizations(
 		return nil, fmt.Errorf("empty version localization response")
 	}
 
+	expectedPath := fmt.Sprintf("/v1/appStoreVersions/%s/appStoreVersionLocalizations", url.PathEscape(versionID))
 	paginated, err := asc.PaginateAll(ctx, firstPage, func(pageCtx context.Context, nextURL string) (asc.PaginatedResponse, error) {
+		nextURL, err := client.ValidateNoRedirectReadContinuation(pageCtx, nextURL, expectedPath)
+		if err != nil {
+			return nil, err
+		}
 		nextCtx, nextCancel := requestContext(pageCtx)
 		nextPage, nextErr := client.GetAppStoreVersionLocalizations(nextCtx, versionID, asc.NextURL[asc.AppStoreVersionLocalizationsOption](nextURL))
 		nextCancel()
@@ -750,7 +752,7 @@ func NewAssetsScreenshotsUploadCommand(d *shared.Deps) *ffcli.Command {
 	platform := fs.String("platform", "", "Platform for app-scoped uploads: IOS, MAC_OS, TV_OS, VISION_OS (defaults to IOS for version strings; IDs use their actual platform)")
 	locale := fs.String("locale", "", "Upload one locale in app-scoped mode (requires --app with --version or --version-id); --path then points at that locale's screenshots")
 	path := fs.String("path", "", "Path to screenshot file or directory")
-	deviceType := fs.String("device-type", "", "Device type (e.g., IPHONE_65 or IPAD_PRO_3GEN_129)")
+	deviceType := fs.String("device-type", "", "Device type (e.g., IPHONE_65, IPAD_PRO_3GEN_129, or IPHONE_DUO)")
 	resume := fs.String("resume", "", "Resume a previous upload from a failure artifact")
 	skipExisting := fs.Bool("skip-existing", false, "Skip files whose MD5 checksum already exists in the target screenshot set")
 	replace := fs.Bool("replace", false, "Delete all existing screenshots from the target set before uploading (requires --confirm)")
@@ -777,7 +779,9 @@ With --locale, --path points directly at that locale's screenshot file or
 directory (scanned like --version-localization uploads, not as a tree of
 locale directories). The version must already have a localization for the
 locale; otherwise the command fails and lists the version's locales. --replace
-only affects that locale's screenshot set for --device-type.
+only affects that locale's screenshot set for --device-type. In a --path
+directory, the .png, .jpg, and .jpeg files are uploaded; other files, such as
+the HTML a mockup was rendered from, are skipped with a warning on stderr.
 
 Without --locale, --app with --version/--version-id fans out one run across
 locale directories under --path. In fan-out mode, the immediate children of
@@ -804,7 +808,16 @@ it exits non-zero, prints the receipt, and writes a failure artifact for --resum
 
 --replace deletes every existing screenshot in each target set before uploading
 and therefore requires --confirm. Use --replace --dry-run to preview the
-deletions without --confirm.
+deletions without --confirm. Like asc screenshots delete, --replace keeps each
+deleted screenshot's Asset Library image, under the same ID as the
+"would-delete" assetId. Delete a leftover image that nothing else places with
+asc asset-library images delete --id ASSET_ID --confirm, or remove the old
+screenshots first with asc screenshots delete --prune-library.
+
+--device-type IPHONE_DUO uploads iPhone Duo screenshots like any other device
+type, in every mode above, including --locale and --replace. App Store Connect
+keeps them in an APP_IPHONE_DUO screenshot set, so --asset-library is not
+needed for Duo.
 
 --asset-library uses Apple's Asset Library instead of the deprecated screenshot
 sets; screenshot sets stay the default. It requires --version-localization.
@@ -829,6 +842,7 @@ it sends any request; ASC_UPLOAD_LOCK=0 skips the wait.
 
 Examples:
   asc screenshots upload --app "123456789" --version "1.2.3" --locale "en-US" --path "./screenshots/en-US" --device-type "IPHONE_65"
+  asc screenshots upload --app "123456789" --version "1.2.3" --locale "en-US" --path "./screenshots/duo" --device-type "IPHONE_DUO" --replace --confirm
   asc screenshots upload --version-localization "VERSION_LOCALIZATION_ID" --path "./screenshots/duo" --device-type "IPHONE_DUO" --asset-library --dry-run
   asc screenshots upload --version-localization "VERSION_LOCALIZATION_ID" --path "./screenshots/duo" --device-type "IPHONE_DUO" --asset-library
   asc screenshots upload --app "123456789" --version "1.2.3" --locale "en-US" --path "./screenshots/en-US" --device-type "IPHONE_65" --replace --confirm
@@ -962,6 +976,7 @@ func executeScreenshotUploadCommand(ctx context.Context, d *shared.Deps, opts sc
 
 	locID := strings.TrimSpace(opts.VersionLocalizationID)
 	appFlagValue := strings.TrimSpace(opts.AppID)
+	appSelector := d.ResolveAppSelector(appFlagValue)
 	versionValue := strings.TrimSpace(opts.Version)
 	versionIDValue := strings.TrimSpace(opts.VersionID)
 	platformValue := strings.TrimSpace(opts.Platform)
@@ -1003,7 +1018,7 @@ func executeScreenshotUploadCommand(ctx context.Context, d *shared.Deps, opts sc
 	}
 
 	if locID == "" {
-		resolvedAppValue := d.ResolveAppID(appFlagValue)
+		resolvedAppValue := strings.TrimSpace(appSelector.Value)
 		if resolvedAppValue == "" {
 			fmt.Fprintln(d.IO.ErrOut, "Error: --app is required (or set ASC_APP_ID)")
 			return nil, shared.MissingRequiredUsageError("--app")
@@ -1016,7 +1031,6 @@ func executeScreenshotUploadCommand(ctx context.Context, d *shared.Deps, opts sc
 			fmt.Fprintln(d.IO.ErrOut, "Error: --version and --version-id are mutually exclusive")
 			return nil, flag.ErrHelp
 		}
-		appFlagValue = resolvedAppValue
 	}
 
 	versionValue, versionIDValue, err := normalizeScreenshotVersionSelector(versionValue, versionIDValue)
@@ -1055,12 +1069,16 @@ func executeScreenshotUploadCommand(ctx context.Context, d *shared.Deps, opts sc
 		return nil, d.UsageError(err.Error())
 	}
 	apiDisplayType := asc.CanonicalScreenshotDisplayTypeForAPI(displayType)
+	if apiDisplayType != displayType && !opts.AssetLibrary {
+		fmt.Fprintf(d.IO.ErrOut, "Note: --device-type %s uploads to the %s screenshot set; App Store Connect has no separate %s set and stores those screenshots there.\n", deviceValue, apiDisplayType, displayType)
+	}
 
 	if locID != "" {
-		files, err := collectScreenshotUploadFiles(d.OSPath(pathValue), opts.MaxScreenshots)
+		files, skipped, err := collectScreenshotUploadFiles(d.OSPath(pathValue), opts.MaxScreenshots)
 		if err != nil {
 			return nil, mediaPathValidationError(err)
 		}
+		warnSkippedScreenshotFiles(d.IO.ErrOut, pathValue, skipped)
 		if !opts.AssetLibrary {
 			if err := validateScreenshotDimensions(files, apiDisplayType); err != nil {
 				return nil, mediaPathValidationError(err)
@@ -1119,10 +1137,11 @@ func executeScreenshotUploadCommand(ctx context.Context, d *shared.Deps, opts sc
 	if localeValue != "" {
 		// With --locale, --path holds that locale's screenshots directly and is
 		// scanned like --version-localization uploads, not as a fan-out tree.
-		files, err := collectScreenshotUploadFiles(d.OSPath(pathValue), opts.MaxScreenshots)
+		files, skipped, err := collectScreenshotUploadFiles(d.OSPath(pathValue), opts.MaxScreenshots)
 		if err != nil {
 			return nil, mediaPathValidationError(err)
 		}
+		warnSkippedScreenshotFiles(d.IO.ErrOut, pathValue, skipped)
 		localeAssets = []screenshotLocaleAssetFiles{{Locale: localeValue, Files: files}}
 	} else {
 		localeAssets, err = collectLocaleAssetFilesWithLimit(d.OSPath(pathValue), apiDisplayType, opts.MaxScreenshots)
@@ -1153,7 +1172,7 @@ func executeScreenshotUploadCommand(ctx context.Context, d *shared.Deps, opts sc
 	requestCtx, cancel := d.Timeout(ctx)
 	defer cancel()
 
-	resolvedAppID, err := shared.ResolveAppIDWithLookup(requestCtx, client, appFlagValue)
+	resolvedAppID, err := shared.ResolveScopedAppID(requestCtx, client, appSelector)
 	if err != nil {
 		return nil, err
 	}

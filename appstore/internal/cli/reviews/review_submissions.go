@@ -332,8 +332,12 @@ Examples:
 					partialErr.Response.Data.Type == asc.ResourceTypeReviewSubmissions {
 					submissionID := strings.TrimSpace(partialErr.Response.Data.ID)
 					if submissionID != "" {
+						// The submission is an empty unsubmitted draft
+						// (READY_FOR_REVIEW), which App Store Connect refuses to
+						// cancel, so name the commands that finish it instead.
 						return fmt.Errorf(
-							"review submissions-create: review submission %q may have been created; inspect it with `asc review submissions-get --id %s` or cancel it with `asc submit cancel --id %s --confirm`: %w",
+							"review submissions-create: review submission %q may have been created; inspect it with `asc review submissions-get --id %s`. App Store Connect does not cancel an unsubmitted draft (READY_FOR_REVIEW): add items with `asc review items add --submission %s` and send it with `asc review submissions-submit --id %s --confirm`: %w",
+							submissionID,
 							submissionID,
 							submissionID,
 							submissionID,
@@ -493,7 +497,7 @@ Examples:
 
 			resp, err := client.SubmitReviewSubmission(requestCtx, strings.TrimSpace(*submissionID))
 			if err != nil {
-				return fmt.Errorf("review submissions-submit: %w", err)
+				return withComplianceRequirementHint(withSubmissionNeedsVersionHint(requestCtx, client, strings.TrimSpace(*submissionID), fmt.Errorf("review submissions-submit: %w", err)))
 			}
 
 			return d.PrintOutput(resp, *output.Output, *output.Pretty)

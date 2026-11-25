@@ -208,3 +208,115 @@ func TestDeveloperSignInKeyDownloadNon2xxHasNoRecoveryBody(t *testing.T) {
 		t.Fatalf("non-2xx response was classified as malformed P8: %v", err)
 	}
 }
+
+func TestDeveloperPushKeyCreateSendsTeamScopedAPNsRequestAndDownloads(t *testing.T) {
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	der, err := x509.MarshalPKCS8PrivateKey(key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p8 := string(pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der}))
+	client := developerPortalTestClient(t, func(r *http.Request) (*http.Response, error) {
+		switch r.URL.Path {
+		case developerPortalTeamsPath:
+			return developerPortalTestResponse(200, developerPortalTeamsFixture(), http.Header{"csrf": {"team"}, "csrf_ts": {"team-ts"}}), nil
+		case developerPortalLegacyPath + "/account/auth/key/list":
+			return developerPortalTestResponse(200, `{"resultCode":0,"keys":[]}`, http.Header{"csrf": {"key"}, "csrf_ts": {"key-ts"}}), nil
+		case developerPortalLegacyPath + "/account/auth/key/v2/create":
+			var payload struct {
+				TeamID   string           `json:"teamId"`
+				Name     string           `json:"name"`
+				Services []map[string]any `json:"serviceConfigurationsRequests"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+				t.Fatal(err)
+			}
+			got, _ := json.Marshal(payload.Services)
+			want := `[{"environment":"all","identifiers":{},"isNew":true,"scope":"team","serviceId":"U27F4V844T"}]`
+			if payload.TeamID != "TEAM123456" || payload.Name != "Push" || string(got) != want {
+				t.Fatalf("wrong create payload team=%s name=%s services=%s", payload.TeamID, payload.Name, got)
+			}
+			return developerPortalTestResponse(200, `{"resultCode":0,"keys":[{"keyId":"KEY123","keyName":"Push","canDownload":true}]}`, nil), nil
+		case developerPortalLegacyPath + "/account/auth/key/get":
+			return developerPortalTestResponse(200, `{"resultCode":0,"keys":[{"keyId":"KEY123","keyName":"Push","canDownload":true,"services":[{"name":"APNs","id":"U27F4V844T","configurations":[]}]}]}`, nil), nil
+		case developerPortalLegacyPath + "/account/auth/key/download":
+			return developerPortalTestResponse(200, p8, nil), nil
+		default:
+			t.Fatalf("unexpected %s", r.URL)
+			return nil, nil
+		}
+	})
+	created, err := client.CreateDeveloperPushKey(context.Background(), "Push")
+	if err != nil {
+		t.Fatal(err)
+	}
+	downloaded, err := client.DownloadDeveloperPushKey(context.Background(), created.KeyID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(downloaded) != p8 {
+		t.Fatal("download mismatch")
+	}
+	if _, err := client.DownloadDeveloperSignInKey(context.Background(), created.KeyID); err == nil || !strings.Contains(err.Error(), "not a Sign in with Apple key") {
+		t.Fatalf("expected APNs key to be rejected by the Sign in with Apple download, got %v", err)
+	}
+}
+
+func TestDeveloperKeyRevoke(t *testing.T) {
+	const apnsKey = `{"resultCode":0,"keys":[{"keyId":"KEY123","canRevoke":true,"services":[{"id":"U27F4V844T","configurations":[]}]}]}`
+	for _, tc := range []struct {
+		name        string
+		detail      string
+		listAfter   string
+		revoke      func(*Client) error
+		wantRevoke  bool
+		wantErrText string
+	}{
+		{name: "APNs key", detail: apnsKey, listAfter: `{"resultCode":0,"keys":[]}`, revoke: func(c *Client) error { return c.RevokeDeveloperPushKey(context.Background(), "KEY123") }, wantRevoke: true},
+		{name: "wrong service", detail: apnsKey, revoke: func(c *Client) error { return c.RevokeDeveloperSignInKey(context.Background(), "KEY123") }, wantErrText: "not a Sign in with Apple key"},
+		{name: "key shared with other services", detail: `{"resultCode":0,"keys":[{"keyId":"KEY123","canRevoke":true,"services":[{"id":"U27F4V844T"},{"id":"APPLE_ID_AUTH_KEY_CONFIGURATION"},{"id":"DEVICE_CHECK"}]}]}`, revoke: func(c *Client) error { return c.RevokeDeveloperPushKey(context.Background(), "KEY123") }, wantErrText: "also serves APPLE_ID_AUTH_KEY_CONFIGURATION, DEVICE_CHECK"},
+		{name: "not revocable", detail: `{"resultCode":0,"keys":[{"keyId":"KEY123","canRevoke":false,"services":[{"id":"U27F4V844T"}]}]}`, revoke: func(c *Client) error { return c.RevokeDeveloperPushKey(context.Background(), "KEY123") }, wantErrText: "cannot be revoked"},
+		{name: "still listed", detail: apnsKey, listAfter: `{"resultCode":0,"keys":[{"keyId":"KEY123"}]}`, revoke: func(c *Client) error { return c.RevokeDeveloperPushKey(context.Background(), "KEY123") }, wantRevoke: true, wantErrText: "still listed"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			revoked := false
+			client := developerPortalTestClient(t, func(r *http.Request) (*http.Response, error) {
+				switch r.URL.Path {
+				case developerPortalTeamsPath:
+					return developerPortalTestResponse(200, developerPortalTeamsFixture(), http.Header{"csrf": {"team"}, "csrf_ts": {"team-ts"}}), nil
+				case developerPortalLegacyPath + "/account/auth/key/list":
+					if revoked {
+						return developerPortalTestResponse(200, tc.listAfter, nil), nil
+					}
+					return developerPortalTestResponse(200, `{"resultCode":0,"keys":[{"keyId":"KEY123"}]}`, http.Header{"csrf": {"key"}, "csrf_ts": {"key-ts"}}), nil
+				case developerPortalLegacyPath + "/account/auth/key/get":
+					return developerPortalTestResponse(200, tc.detail, nil), nil
+				case developerPortalLegacyPath + "/account/auth/key/revoke":
+					body, _ := io.ReadAll(r.Body)
+					form, _ := url.ParseQuery(string(body))
+					if r.Method != http.MethodPost || r.Header.Get("csrf") != "key" || form.Get("teamId") != "TEAM123456" || form.Get("keyId") != "KEY123" {
+						t.Fatalf("wrong revoke request %s %s csrf=%q", r.Method, body, r.Header.Get("csrf"))
+					}
+					revoked = true
+					return developerPortalTestResponse(200, `{"resultCode":0}`, nil), nil
+				default:
+					t.Fatalf("unexpected %s", r.URL)
+					return nil, nil
+				}
+			})
+			err := tc.revoke(client)
+			if revoked != tc.wantRevoke {
+				t.Fatalf("revoke sent = %t, want %t", revoked, tc.wantRevoke)
+			}
+			if tc.wantErrText == "" && err != nil {
+				t.Fatal(err)
+			}
+			if tc.wantErrText != "" && (err == nil || !strings.Contains(err.Error(), tc.wantErrText)) {
+				t.Fatalf("err = %v, want %q", err, tc.wantErrText)
+			}
+		})
+	}
+}

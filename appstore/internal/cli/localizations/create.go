@@ -17,7 +17,7 @@ func newLocalizationsCreateCommand(d *shared.Deps) *ffcli.Command {
 	fs := d.NewFlagSet("create", flag.ExitOnError)
 
 	versionID := shared.BindResourceIDFlag(fs, "version", "appStoreVersions", "App Store version ID, or a version string with --app (required)")
-	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID, for version strings)")
+	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID)")
 	platform := fs.String("platform", "", "Platform for version strings: IOS, MAC_OS, TV_OS, VISION_OS")
 	locale := fs.String("locale", "", "Locale code to create (required; use canonical ASC values like en-US, ja, ar-SA, zh-Hans)")
 	description := fs.String("description", "", "App description")
@@ -37,6 +37,8 @@ func newLocalizationsCreateCommand(d *shared.Deps) *ffcli.Command {
 
 --version accepts a version ID, or a version string such as 1.2.3 with --app
 (or ASC_APP_ID). Use --platform when the string exists on multiple platforms.
+With a version ID, the app selected by --app, ASC_APP_ID, or the CLI config
+must own that version before the locale can be created.
 
 Use canonical App Store Connect locale identifiers when possible. Common accepted
 forms include en-US, es-MX, de-DE, ja, ar-SA, zh-Hans, and zh-Hant.
@@ -75,7 +77,7 @@ supplied there is nothing to apply, so update behaves like skip. Any other
 				return d.RequiredFlag("--version")
 			}
 
-			versionIsString, normalizedPlatform, err := normalizeLocalizationVersionSelector(d, vid, *appID, *platform)
+			normalizedPlatform, err := normalizeLocalizationVersionSelector(d, vid, *appID, *platform)
 			if err != nil {
 				return err
 			}
@@ -116,11 +118,9 @@ supplied there is nothing to apply, so update behaves like skip. Any other
 			requestCtx, cancel := d.Timeout(ctx)
 			defer cancel()
 
-			if versionIsString {
-				vid, err = resolveLocalizationsVersionString(requestCtx, d, client, d.ResolveAppID(*appID), vid, normalizedPlatform)
-				if err != nil {
-					return fmt.Errorf("localizations create: %w", err)
-				}
+			vid, err = ResolveVersionIDForMutation(requestCtx, d, client, vid, *appID, normalizedPlatform)
+			if err != nil {
+				return fmt.Errorf("localizations create: %w", err)
 			}
 
 			resp, err := client.CreateAppStoreVersionLocalization(requestCtx, vid, attrs.CreateAttributes())
@@ -216,11 +216,16 @@ var localizationsCreateExistsCodes = []string{"ENTITY_ERROR.ATTRIBUTE.INVALID.DU
 // referred to, keyed by locale. It reports found=false when the version has no
 // such locale so the caller can surface the original conflict.
 func findExistingVersionLocalization(ctx context.Context, client *asc.Client, versionID, locale string) (*asc.AppStoreVersionLocalizationResponse, bool, error) {
+	ctx = asc.WithNoRedirectReads(ctx)
 	firstPage, err := client.GetAppStoreVersionLocalizations(ctx, versionID, asc.Limit[asc.AppStoreVersionLocalizationsOption](200))
 	if err != nil {
 		return nil, false, err
 	}
+	resourcePath := fmt.Sprintf("/v1/appStoreVersions/%s/appStoreVersionLocalizations", versionID)
 	allPages, err := asc.PaginateAll(ctx, firstPage, func(ctx context.Context, nextURL string) (asc.PaginatedResponse, error) {
+		if err := asc.ValidateVersionLocalizationNextURL(nextURL, resourcePath); err != nil {
+			return nil, err
+		}
 		return client.GetAppStoreVersionLocalizations(ctx, versionID, asc.NextURL[asc.AppStoreVersionLocalizationsOption](nextURL))
 	})
 	if err != nil {

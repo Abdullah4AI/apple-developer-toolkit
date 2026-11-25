@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -42,6 +43,11 @@ func TestInsightsWeeklyValidationErrors(t *testing.T) {
 			name:    "sales missing vendor",
 			args:    []string{"insights", "weekly", "--app", "app-1", "--source", "sales", "--week", "2026-02-16"},
 			wantErr: "--vendor is required for --source sales",
+		},
+		{
+			name:    "currency breakdown requires sales",
+			args:    []string{"insights", "weekly", "--app", "app-1", "--source", "analytics", "--week", "2026-02-16", "--by-currency"},
+			wantErr: "--by-currency requires --source sales",
 		},
 	}
 
@@ -481,6 +487,337 @@ func TestInsightsWeeklyAnalyticsNestedForbiddenReturnsUnavailable(t *testing.T) 
 	reportsMetric := findMetric(t, metrics, "reports_available")
 	if reportsMetric["status"] != "unavailable" {
 		t.Fatalf("expected reports_available unavailable, got %v", reportsMetric["status"])
+	}
+}
+
+const insightsSalesCurrencyHeader = "Provider\tSKU\tApple Identifier\tParent Identifier\tSubscription\tUnits\tDeveloper Proceeds\tCustomer Currency\tCurrency of Proceeds\tCustomer Price"
+
+func TestInsightsWeeklySalesMoneyTotalsUseUnitsAndCurrency(t *testing.T) {
+	tests := []struct {
+		name         string
+		thisWeek     []string
+		lastWeek     []string
+		byCurrency   bool
+		wantProceeds string
+		wantPrice    string
+		wantReason   []string
+	}{
+		{
+			name:       "single currency with multi-unit and refund rows",
+			byCurrency: true,
+			thisWeek: []string{
+				"foo\texample-sku-1\tapp-1\t\t \t10\t0.00\tJPY\tJPY\t0.00",
+				"foo\tcom.example.app.plus\tiap-1\texample-sku-1\t \t4\t3.50\tUSD\tUSD\t5.00",
+				"foo\tcom.example.app.plus\tiap-1\texample-sku-1\t \t-1\t3.50\tUSD\tUSD\t-5.00",
+			},
+			lastWeek: []string{
+				"foo\tcom.example.app.plus\tiap-1\texample-sku-1\t \t2\t3.50\tUSD\tUSD\t5.00",
+			},
+			wantProceeds: `{"name":"developer_proceeds","unit":"currency","currency":"USD","thisWeek":10.5,"lastWeek":7,"delta":3.5,"deltaPercent":50,"status":"ok",
+				"byCurrency":[{"currency":"USD","thisWeek":10.5,"lastWeek":7,"delta":3.5,"deltaPercent":50}]}`,
+			wantPrice: `{"name":"customer_price","unit":"currency","currency":"USD","thisWeek":15,"lastWeek":10,"delta":5,"deltaPercent":50,"status":"ok",
+				"byCurrency":[{"currency":"USD","thisWeek":15,"lastWeek":10,"delta":5,"deltaPercent":50}]}`,
+		},
+		{
+			name:       "multiple currencies are never summed",
+			byCurrency: true,
+			thisWeek: []string{
+				"foo\tcom.example.app.plus\tiap-1\texample-sku-1\t \t2\t3.50\tUSD\tUSD\t5.00",
+				"foo\tcom.example.app.plus\tiap-1\texample-sku-1\t \t1\t500\tJPY\tJPY\t800",
+			},
+			lastWeek: []string{
+				"foo\tcom.example.app.plus\tiap-1\texample-sku-1\t \t1\t3.50\tUSD\tUSD\t5.00",
+				"foo\tcom.example.app.plus\tiap-1\texample-sku-1\t \t2\t500\tJPY\tJPY\t800",
+				"foo\tcom.example.app.plus\tiap-1\texample-sku-1\t \t1\t3.00\tEUR\tEUR\t4.50",
+			},
+			wantProceeds: `{"name":"developer_proceeds","unit":"currency","status":"unavailable","byCurrency":[
+				{"currency":"EUR","thisWeek":0,"lastWeek":3,"delta":-3,"deltaPercent":-100},
+				{"currency":"JPY","thisWeek":500,"lastWeek":1000,"delta":-500,"deltaPercent":-50},
+				{"currency":"USD","thisWeek":7,"lastWeek":3.5,"delta":3.5,"deltaPercent":100}]}`,
+			wantPrice: `{"name":"customer_price","unit":"currency","status":"unavailable","byCurrency":[
+				{"currency":"EUR","thisWeek":0,"lastWeek":4.5,"delta":-4.5,"deltaPercent":-100},
+				{"currency":"JPY","thisWeek":800,"lastWeek":1600,"delta":-800,"deltaPercent":-50},
+				{"currency":"USD","thisWeek":10,"lastWeek":5,"delta":5,"deltaPercent":100}]}`,
+			wantReason: []string{"EUR", "JPY", "USD"},
+		},
+		{
+			name: "default preserves the published scalar comparison",
+			thisWeek: []string{
+				"foo\tcom.example.app.plus\tiap-1\texample-sku-1\t \t2\t3\tUSD\tUSD\t5",
+				"foo\tcom.example.app.plus\tiap-1\texample-sku-1\t \t1\t500\tJPY\tJPY\t800",
+			},
+			lastWeek: []string{
+				"foo\tcom.example.app.plus\tiap-1\texample-sku-1\t \t1\t3\tUSD\tUSD\t5",
+				"foo\tcom.example.app.plus\tiap-1\texample-sku-1\t \t2\t500\tJPY\tJPY\t800",
+			},
+			wantProceeds: `{"name":"developer_proceeds","unit":"currency","thisWeek":503,"lastWeek":503,"delta":0,"deltaPercent":0,"status":"ok"}`,
+			wantPrice:    `{"name":"customer_price","unit":"currency","thisWeek":805,"lastWeek":805,"delta":0,"deltaPercent":0,"status":"ok"}`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			reg := registerInsightsSalesReports(t, "WEEKLY", "2026-02-22", tt.thisWeek, "2026-02-15", tt.lastWeek)
+			args := []string{"insights", "weekly", "--app", "app-1", "--source", "sales", "--vendor", "12345678", "--week", "2026-02-16", "--output", "json"}
+			if tt.byCurrency {
+				args = append(args, "--by-currency")
+			}
+			stdout, stderr, err := runRootWithDeps(t, stubClient(t, reg), args...)
+			if err != nil || stderr != "" {
+				t.Fatalf("run error: %v, stderr=%q", err, stderr)
+			}
+			metrics := decodeInsightsMetrics(t, stdout)
+			assertInsightsCurrencyMetric(t, findMetric(t, metrics, "developer_proceeds"), tt.wantProceeds, tt.wantReason)
+			assertInsightsCurrencyMetric(t, findMetric(t, metrics, "customer_price"), tt.wantPrice, tt.wantReason)
+		})
+	}
+}
+
+func TestInsightsDailySalesProceedsSplitByCurrency(t *testing.T) {
+	reg := registerInsightsSalesReports(t, "DAILY", "2026-02-18", []string{
+		"foo\tcom.example.app.plus\tiap-1\texample-sku-1\tRenewal\t3\t2.50\tUSD\tUSD\t4.00",
+		"foo\tcom.example.app.plus\tiap-1\texample-sku-1\tRenewal\t1\t300\tJPY\tJPY\t450",
+	}, "2026-02-17", []string{
+		"foo\tcom.example.app.plus\tiap-1\texample-sku-1\tRenewal\t1\t2.50\tUSD\tUSD\t4.00",
+	})
+	stdout, stderr, err := runRootWithDeps(t, stubClient(t, reg), "insights", "daily", "--app", "app-1", "--vendor", "12345678", "--date", "2026-02-18", "--by-currency")
+	if err != nil || stderr != "" {
+		t.Fatalf("run error: %v, stderr=%q", err, stderr)
+	}
+	metrics := decodeInsightsMetrics(t, stdout)
+	for _, name := range []string{"renewal_developer_proceeds", "subscription_developer_proceeds"} {
+		assertInsightsCurrencyMetric(t, findMetric(t, metrics, name), `{"name":"`+name+`","unit":"currency","status":"unavailable","byCurrency":[
+			{"currency":"JPY","thisDay":300,"previousDay":0,"delta":300},
+			{"currency":"USD","thisDay":7.5,"previousDay":2.5,"delta":5,"deltaPercent":200}]}`, []string{"JPY", "USD"})
+	}
+}
+
+func TestInsightsWeeklySalesDoesNotCompareIncompleteCurrency(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		row         string
+		wantReason  string
+		eurComplete bool
+	}{
+		{
+			name:        "zero-unit partial refund",
+			row:         "foo\tcom.example.app.plus\tiap-1\texample-sku-1\tRenewal\t0\t1.17\tUSD\tUSD\t-1.67",
+			wantReason:  "a nonzero amount has zero Units and may be a partial refund",
+			eurComplete: true,
+		},
+		{
+			name:       "unknown proceeds currency",
+			row:        "foo\tcom.example.app.plus\tiap-1\texample-sku-1\tRenewal\t1\t1.17\tUSD\t\t1.67",
+			wantReason: "a sales report row is missing a currency code",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			reg := registerInsightsSalesReports(t, "WEEKLY", "2026-02-22", []string{
+				"foo\tcom.example.app.plus\tiap-1\texample-sku-1\tRenewal\t2\t3.50\tUSD\tUSD\t5.00",
+				tc.row,
+				"foo\tcom.example.app.plus\tiap-1\texample-sku-1\tRenewal\t2\t3.00\tEUR\tEUR\t4.50",
+			}, "2026-02-15", []string{
+				"foo\tcom.example.app.plus\tiap-1\texample-sku-1\tRenewal\t1\t3.50\tUSD\tUSD\t5.00",
+				"foo\tcom.example.app.plus\tiap-1\texample-sku-1\tRenewal\t1\t3.00\tEUR\tEUR\t4.50",
+			})
+			stdout, stderr, err := runRootWithDeps(t, stubClient(t, reg), "insights", "weekly", "--app", "app-1", "--source", "sales", "--vendor", "12345678", "--week", "2026-02-16", "--output", "json", "--by-currency")
+			if err != nil || stderr != "" {
+				t.Fatalf("run error: %v, stderr=%q", err, stderr)
+			}
+			metric := findMetric(t, decodeInsightsMetrics(t, stdout), "developer_proceeds")
+			if metric["status"] != "unavailable" || metric["reason"] != tc.wantReason {
+				t.Errorf("expected unavailable proceeds with reason %q, got %v", tc.wantReason, metric)
+			}
+			breakdown, ok := metric["byCurrency"].([]any)
+			if !ok || len(breakdown) != 2 {
+				t.Fatalf("expected EUR and USD comparison, got %v", metric)
+			}
+			for _, item := range breakdown {
+				amount, ok := item.(map[string]any)
+				if !ok {
+					t.Fatalf("expected currency comparison object, got %v", item)
+				}
+				if amount["currency"] == "EUR" && tc.eurComplete {
+					if amount["thisWeek"] != 6.0 || amount["lastWeek"] != 3.0 || amount["delta"] != 3.0 {
+						t.Errorf("expected unaffected EUR comparison of 6 vs 3, got %v", amount)
+					}
+					continue
+				}
+				if amount["status"] != "unavailable" || amount["thisWeek"] != nil || amount["delta"] != nil || amount["deltaPercent"] != nil {
+					t.Errorf("incomplete current period cannot be compared, got %v", amount)
+				}
+			}
+		})
+	}
+}
+
+func TestSalesCurrencyIncompleteReasonInRenderedOutput(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		args      []string
+		metric    string
+		separator string
+	}{
+		{
+			name:      "daily table",
+			args:      []string{"insights", "daily", "--date", "2026-02-18", "--output", "table"},
+			metric:    "renewal_developer_proceeds",
+			separator: "│",
+		},
+		{
+			name:      "compare markdown",
+			args:      []string{"analytics", "compare", "--source", "sales", "--from", "2026-02-17", "--to", "2026-02-18", "--frequency", "DAILY", "--output", "markdown"},
+			metric:    "developer_proceeds",
+			separator: "|",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			reg := registerInsightsSalesReports(t, "DAILY", "2026-02-18", []string{
+				"foo\tcom.example.app.plus\tiap-1\texample-sku-1\tRenewal\t\t2.50\tUSD\tUSD\t4.00",
+				"foo\tcom.example.app.plus\tiap-1\texample-sku-1\tRenewal\t1\t300\tJPY\tJPY\t450",
+			}, "2026-02-17", []string{
+				"foo\tcom.example.app.plus\tiap-1\texample-sku-1\tRenewal\t1\t2.50\tUSD\tUSD\t4.00",
+			})
+			args := append(tc.args, "--app", "app-1", "--vendor", "12345678", "--by-currency")
+			stdout, stderr, err := runRootWithDeps(t, stubClient(t, reg), args...)
+			if err != nil || stderr != "" {
+				t.Fatalf("run error: %v, stderr=%q", err, stderr)
+			}
+			for line := range strings.SplitSeq(stdout, "\n") {
+				cells := strings.Split(strings.Trim(line, tc.separator), tc.separator)
+				if len(cells) != 8 || strings.TrimSpace(cells[0]) != tc.metric || strings.TrimSpace(cells[1]) != "currency" {
+					continue
+				}
+				if strings.TrimSpace(cells[6]) != "unavailable" || strings.TrimSpace(cells[7]) != "a sales report row has no valid Units value" {
+					t.Errorf("expected parent metric to explain missing units, got %q", line)
+				}
+				return
+			}
+			t.Fatalf("missing parent metric %q in %s", tc.metric, stdout)
+		})
+	}
+}
+
+func TestAnalyticsCompareSalesCurrencyOptIn(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		byCurrency bool
+		want       string
+	}{
+		{
+			name: "default leaves amounts as reported",
+			want: `{"name":"developer_proceeds","unit":"currency","baseline":3.5,"comparison":3.5,"delta":0,"deltaPercent":0,"status":"ok"}`,
+		},
+		{
+			name:       "opt in multiplies amounts by units",
+			byCurrency: true,
+			want: `{"name":"developer_proceeds","unit":"currency","currency":"USD","baseline":3.5,"comparison":7,"delta":3.5,"deltaPercent":100,"status":"ok",
+				"byCurrency":[{"currency":"USD","baseline":3.5,"comparison":7,"delta":3.5,"deltaPercent":100}]}`,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			reg := registerInsightsSalesReports(t, "DAILY", "2026-02-18", []string{
+				"foo\tcom.example.app.plus\tiap-1\texample-sku-1\tRenewal\t2\t3.50\tUSD\tUSD\t5.00",
+			}, "2026-02-17", []string{
+				"foo\tcom.example.app.plus\tiap-1\texample-sku-1\tRenewal\t1\t3.50\tUSD\tUSD\t5.00",
+			})
+			args := []string{"analytics", "compare", "--app", "app-1", "--source", "sales", "--vendor", "12345678", "--from", "2026-02-17", "--to", "2026-02-18", "--frequency", "DAILY", "--output", "json"}
+			if tc.byCurrency {
+				args = append(args, "--by-currency")
+			}
+			stdout, stderr, err := runRootWithDeps(t, stubClient(t, reg), args...)
+			if err != nil || stderr != "" {
+				t.Fatalf("run error: %v, stderr=%q", err, stderr)
+			}
+			assertInsightsCurrencyMetric(t, findMetric(t, decodeInsightsMetrics(t, stdout), "developer_proceeds"), tc.want, nil)
+		})
+	}
+}
+
+func TestInsightsWeeklySalesMarkdownListsEachCurrency(t *testing.T) {
+	reg := registerInsightsSalesReports(t, "WEEKLY", "2026-02-22", []string{
+		"foo\tcom.example.app.plus\tiap-1\texample-sku-1\t \t2\t3.50\tUSD\tUSD\t5.00",
+		"foo\tcom.example.app.plus\tiap-1\texample-sku-1\t \t1\t500\tJPY\tUSD\t800",
+	}, "2026-02-15", []string{
+		"foo\tcom.example.app.plus\tiap-1\texample-sku-1\t \t1\t3.50\tUSD\tUSD\t5.00",
+	})
+	stdout, stderr, err := runRootWithDeps(t, stubClient(t, reg), "insights", "weekly", "--app", "app-1", "--source", "sales", "--vendor", "12345678", "--week", "2026-02-16", "--output", "markdown", "--by-currency")
+	if err != nil || stderr != "" {
+		t.Fatalf("run error: %v, stderr=%q", err, stderr)
+	}
+
+	// metric, unit, thisWeek, lastWeek, delta, deltaPercent, status
+	var got [][]string
+	for line := range strings.SplitSeq(stdout, "\n") {
+		cells := strings.Split(strings.Trim(line, "|"), "|")
+		for i := range cells {
+			cells[i] = strings.TrimSpace(cells[i])
+		}
+		if len(cells) == 8 && (cells[0] == "developer_proceeds" || cells[0] == "customer_price") {
+			got = append(got, cells[:7])
+		}
+	}
+	want := [][]string{
+		{"developer_proceeds", "USD", "507.00", "3.50", "503.50", "14385.71", "ok"},
+		{"customer_price", "currency", "n/a", "n/a", "n/a", "n/a", "unavailable"},
+		{"customer_price", "JPY", "800.00", "0.00", "800.00", "n/a", "ok"},
+		{"customer_price", "USD", "10.00", "5.00", "5.00", "100.00", "ok"},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("unexpected money rows\n got: %v\nwant: %v", got, want)
+	}
+}
+
+func registerInsightsSalesReports(t *testing.T, frequency, thisDate string, thisRows []string, previousDate string, previousRows []string) *asctest.Registry {
+	t.Helper()
+	t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
+	t.Setenv("ASC_APP_ID", "")
+
+	reg := asctest.NewRegistry(t)
+	reg.Register(asctest.GET("/v1/apps/app-1"), asctest.JSON(http.StatusOK, `{
+		"data":{"type":"apps","id":"app-1","attributes":{"name":"Example App","bundleId":"com.example.app","sku":"example-sku-1"}}
+	}`))
+	for date, rows := range map[string][]string{thisDate: thisRows, previousDate: previousRows} {
+		report := strings.Join(append([]string{insightsSalesCurrencyHeader}, rows...), "\n") + "\n"
+		reg.Register(asctest.GET("/v1/salesReports", "filter[vendorNumber]=12345678", "filter[reportType]=SALES", "filter[reportSubType]=SUMMARY", "filter[frequency]="+frequency, "filter[reportDate]="+date, "filter[version]=1_0"), insightsGzipResponse(report))
+	}
+	return reg
+}
+
+func decodeInsightsMetrics(t *testing.T, stdout string) []any {
+	t.Helper()
+	var payload struct {
+		Metrics []any `json:"metrics"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
+		t.Fatalf("unmarshal output: %v\nstdout=%s", err, stdout)
+	}
+	return payload.Metrics
+}
+
+// assertInsightsCurrencyMetric compares every field except the reason prose,
+// which only has to name the currencies that could not be summed.
+func assertInsightsCurrencyMetric(t *testing.T, got map[string]any, wantJSON string, wantReason []string) {
+	t.Helper()
+	reason, _ := got["reason"].(string)
+	for _, currency := range wantReason {
+		if !strings.Contains(reason, currency) {
+			t.Errorf("expected reason to name %s, got %q", currency, reason)
+		}
+	}
+	if len(wantReason) == 0 && reason != "" {
+		t.Errorf("expected no reason, got %q", reason)
+	}
+	delete(got, "reason")
+
+	var want map[string]any
+	if err := json.Unmarshal([]byte(wantJSON), &want); err != nil {
+		t.Fatalf("unmarshal want: %v", err)
+	}
+	if !reflect.DeepEqual(got, want) {
+		gotJSON, _ := json.Marshal(got)
+		wantJSON, _ := json.Marshal(want)
+		t.Errorf("metric mismatch\n got: %s\nwant: %s", gotJSON, wantJSON)
 	}
 }
 

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/peterbourgon/ff/v3/ffcli"
@@ -23,7 +24,8 @@ import (
 //
 // A flag given under two spellings with the same value is kept once. When a
 // spelling's value differs from the latest value given under another
-// spelling, the invocation is ambiguous, so it is a usage error.
+// spelling, the invocation is ambiguous, so it is a usage error. A repeatable
+// flag keeps every value under any spelling.
 func resolveFlagAliases(root *ffcli.Command, args []string, resolveIndirect func(name, value string) (string, error)) ([]string, error) {
 	command := root
 	commandPath := make([]string, 0, 4)
@@ -81,16 +83,26 @@ func resolveFlagAliases(root *ffcli.Command, args []string, resolveIndirect func
 
 		canonical := name
 		shape := value
-		if resolveIndirect != nil && shared.FlagAliasDependsOnValue(item) && shared.HasFlagValueIndirection(value) {
-			if resolved, err := resolveIndirect(name, value); err == nil {
-				shape = resolved
+		if target, implied, ok := shared.FlagAliasImpliedValue(item); ok {
+			// A value alias that is not given as true stays as written, so
+			// parsing reports it with the alias's own message.
+			if enabled, err := strconv.ParseBool(value); err == nil && enabled {
+				canonical = target
+				value = implied
+				tokens = []string{dashes + target, implied}
 			}
-		}
-		if target, ok := shared.FlagAliasTarget(item, shape); ok {
-			canonical = target
-			tokens[0] = dashes + canonical
-			if hasInlineValue {
-				tokens[0] += "=" + inlineValue
+		} else {
+			if resolveIndirect != nil && shared.FlagAliasDependsOnValue(item) && shared.HasFlagValueIndirection(value) {
+				if resolved, err := resolveIndirect(name, value); err == nil {
+					shape = resolved
+				}
+			}
+			if target, ok := shared.FlagAliasTarget(item, shape); ok {
+				canonical = target
+				tokens[0] = dashes + canonical
+				if hasInlineValue {
+					tokens[0] += "=" + inlineValue
+				}
 			}
 		}
 
@@ -98,6 +110,10 @@ func resolveFlagAliases(root *ffcli.Command, args []string, resolveIndirect func
 		if spellings == nil {
 			spellings = map[string]string{}
 			given[canonical] = spellings
+		}
+		if shared.IsRepeatableFlag(commandFlag(command, canonical)) {
+			resolved = append(resolved, tokens...)
+			continue
 		}
 		drop := false
 		for _, other := range slices.Sorted(maps.Keys(spellings)) {

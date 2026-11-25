@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
@@ -70,7 +71,7 @@ func TestPrepareReviewSubmissionForCreateTreatsWhitespaceNextAsTerminal(t *testi
 	if err != nil {
 		t.Fatalf("prepareReviewSubmissionForCreate() error: %v", err)
 	}
-	if prepared != (submitCreateReviewSubmissionPreparation{}) {
+	if prepared.reuseSubmissionID != "" || prepared.stagedItems != nil {
 		t.Fatalf("preparation = %#v, want empty", prepared)
 	}
 	if requests != 1 {
@@ -92,7 +93,7 @@ func TestPrepareReviewSubmissionForCreateTreatsWhitespaceNextAsTerminal(t *testi
 // cannot distinguish a request that asks for linkage from one that does not, so it reports a fix as
 // working when the real API would still withhold the linkage.
 func respondLikeAppStoreConnectItems(req *http.Request) (*http.Response, error) {
-	for _, value := range req.URL.Query()["include"] {
+	for _, value := range strings.Split(req.URL.Query().Get("include"), ",") {
 		if value == "appStoreVersion" {
 			return submitJSONResponse(http.StatusOK, `{
 				"data": [{
@@ -138,7 +139,7 @@ func TestSummarizeReviewSubmissionItemsIncludesVersionRelationship(t *testing.T)
 		if req.URL.Path != "/v1/reviewSubmissions/submission-1/items" {
 			t.Fatalf("unexpected path %s", req.URL.Path)
 		}
-		for _, value := range req.URL.Query()["include"] {
+		for _, value := range strings.Split(req.URL.Query().Get("include"), ",") {
 			if value == "appStoreVersion" {
 				sawInclude = true
 			}

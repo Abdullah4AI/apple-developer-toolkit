@@ -8,6 +8,8 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"maps"
+	"math/big"
 	"net/http"
 	"slices"
 	"strconv"
@@ -67,6 +69,7 @@ func newInsightsWeeklyCommand(d *shared.Deps) *ffcli.Command {
 	source := fs.String("source", "", "Insights source: analytics or sales")
 	week := fs.String("week", "", "Week start date (YYYY-MM-DD)")
 	vendor := fs.String("vendor", "", "Vendor number for sales source (or ASC_VENDOR_NUMBER)")
+	byCurrency := fs.Bool("by-currency", false, "Compare money by currency using per-unit amounts (requires --source sales)")
 	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
@@ -79,6 +82,11 @@ The output is deterministic JSON by default and can be rendered as table/markdow
 
 For --source sales, totals are scoped to the selected app and include linked in-app purchases
 and subscriptions by matching Parent Identifier against the app SKU.
+
+Use --by-currency with --source sales to multiply per-unit amounts by Units and
+compare each currency separately. JSON lists the comparisons in byCurrency.
+Currency totals are rounded to two decimal places after aggregation. Amounts
+that cannot be derived from the report are marked unavailable.
 
 Examples:
   asc insights weekly --app "123456789" --source analytics --week "2026-02-16"
@@ -98,6 +106,9 @@ Examples:
 			}
 			if !isAllowedSource(sourceName) {
 				return d.UsageErrorf("--source must be one of: %s, %s", sourceAnalytics, sourceSales)
+			}
+			if *byCurrency && sourceName != sourceSales {
+				return d.UsageError("--by-currency requires --source sales")
 			}
 
 			weekStart, err := normalizeWeekStart(*week)
@@ -121,7 +132,7 @@ Examples:
 			requestCtx, cancel := d.Timeout(ctx)
 			defer cancel()
 
-			resp, err := collectWeeklyInsights(requestCtx, client, d.Now, resolvedAppID, sourceName, resolvedVendor, weekStart)
+			resp, err := collectWeeklyInsights(requestCtx, client, d.Now, resolvedAppID, sourceName, resolvedVendor, weekStart, *byCurrency)
 			if err != nil {
 				return fmt.Errorf("insights weekly: %w", err)
 			}
@@ -143,6 +154,7 @@ func newInsightsDailyCommand(d *shared.Deps) *ffcli.Command {
 	appID := fs.String("app", "", "App Store Connect app ID (required, or ASC_APP_ID env)")
 	vendor := fs.String("vendor", "", "Vendor number for sales source (or ASC_VENDOR_NUMBER)")
 	date := fs.String("date", "", "Report date (YYYY-MM-DD)")
+	byCurrency := fs.Bool("by-currency", false, "Compare proceeds by currency using per-unit amounts")
 	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
@@ -153,6 +165,11 @@ func newInsightsDailyCommand(d *shared.Deps) *ffcli.Command {
 
 This command is sales-only and app-scoped. It compares the selected day to the previous day.
 Renewal metrics are derived from rows where Subscription equals "Renewal" for products linked to the app.
+
+Use --by-currency to multiply per-unit proceeds by Units and compare each
+currency separately. JSON lists the comparisons in byCurrency. Currency totals
+are rounded to two decimal places after aggregation. Incomplete totals are
+marked unavailable.
 
 Examples:
   asc insights daily --app "123456789" --vendor "12345678" --date "2026-02-20"
@@ -183,7 +200,7 @@ Examples:
 			requestCtx, cancel := d.Timeout(ctx)
 			defer cancel()
 
-			resp, err := collectDailyInsights(requestCtx, client, d.Now, resolvedAppID, resolvedVendor, reportDate)
+			resp, err := collectDailyInsights(requestCtx, client, d.Now, resolvedAppID, resolvedVendor, reportDate, *byCurrency)
 			if err != nil {
 				return fmt.Errorf("insights daily: %w", err)
 			}
@@ -221,13 +238,26 @@ type weekRange struct {
 }
 
 type weeklyMetric struct {
-	Name         string   `json:"name"`
-	Unit         string   `json:"unit,omitempty"`
+	Name         string                 `json:"name"`
+	Unit         string                 `json:"unit,omitempty"`
+	Currency     string                 `json:"currency,omitempty"`
+	ThisWeek     *float64               `json:"thisWeek,omitempty"`
+	LastWeek     *float64               `json:"lastWeek,omitempty"`
+	Delta        *float64               `json:"delta,omitempty"`
+	DeltaPercent *float64               `json:"deltaPercent,omitempty"`
+	Status       string                 `json:"status"`
+	Reason       string                 `json:"reason,omitempty"`
+	ByCurrency   []weeklyCurrencyAmount `json:"byCurrency,omitempty"`
+}
+
+// weeklyCurrencyAmount is one currency's share of a monetary weekly metric.
+type weeklyCurrencyAmount struct {
+	Currency     string   `json:"currency,omitempty"`
 	ThisWeek     *float64 `json:"thisWeek,omitempty"`
 	LastWeek     *float64 `json:"lastWeek,omitempty"`
 	Delta        *float64 `json:"delta,omitempty"`
 	DeltaPercent *float64 `json:"deltaPercent,omitempty"`
-	Status       string   `json:"status"`
+	Status       string   `json:"status,omitempty"`
 	Reason       string   `json:"reason,omitempty"`
 }
 
@@ -251,13 +281,26 @@ type dailyInsightsSource struct {
 }
 
 type dailyMetric struct {
-	Name         string   `json:"name"`
-	Unit         string   `json:"unit,omitempty"`
+	Name         string                `json:"name"`
+	Unit         string                `json:"unit,omitempty"`
+	Currency     string                `json:"currency,omitempty"`
+	ThisDay      *float64              `json:"thisDay,omitempty"`
+	PreviousDay  *float64              `json:"previousDay,omitempty"`
+	Delta        *float64              `json:"delta,omitempty"`
+	DeltaPercent *float64              `json:"deltaPercent,omitempty"`
+	Status       string                `json:"status"`
+	Reason       string                `json:"reason,omitempty"`
+	ByCurrency   []dailyCurrencyAmount `json:"byCurrency,omitempty"`
+}
+
+// dailyCurrencyAmount is one currency's share of a monetary daily metric.
+type dailyCurrencyAmount struct {
+	Currency     string   `json:"currency,omitempty"`
 	ThisDay      *float64 `json:"thisDay,omitempty"`
 	PreviousDay  *float64 `json:"previousDay,omitempty"`
 	Delta        *float64 `json:"delta,omitempty"`
 	DeltaPercent *float64 `json:"deltaPercent,omitempty"`
-	Status       string   `json:"status"`
+	Status       string   `json:"status,omitempty"`
 	Reason       string   `json:"reason,omitempty"`
 }
 
@@ -277,16 +320,184 @@ type SalesMetrics struct {
 	UnitsTotal                     float64
 	DownloadUnitsTotal             float64
 	MonetizedUnitsTotal            float64
-	DeveloperProceedsTotal         float64
-	CustomerPriceTotal             float64
+	DeveloperProceeds              SalesMoney
+	CustomerPrice                  SalesMoney
 	SubscriptionRows               int
 	SubscriptionUnitsTotal         float64
-	SubscriptionDeveloperProceeds  float64
-	SubscriptionCustomerPrice      float64
+	SubscriptionDeveloperProceeds  SalesMoney
 	RenewalRows                    int
 	RenewalUnitsTotal              float64
-	RenewalDeveloperProceeds       float64
-	RenewalCustomerPrice           float64
+	RenewalDeveloperProceeds       SalesMoney
+}
+
+type SalesMoney struct {
+	LegacyTotal float64
+	ByCurrency  CurrencyAmounts
+}
+
+func (m SalesMoney) Plus(other SalesMoney) SalesMoney {
+	return SalesMoney{
+		LegacyTotal: m.LegacyTotal + other.LegacyTotal,
+		ByCurrency:  m.ByCurrency.plus(other.ByCurrency),
+	}
+}
+
+type CurrencyAmounts map[string]CurrencyAmount
+
+type CurrencyAmount struct {
+	Total  *big.Rat
+	Reason string
+}
+
+func (c CurrencyAmounts) plus(other CurrencyAmounts) CurrencyAmounts {
+	if len(c) == 0 && len(other) == 0 {
+		return nil
+	}
+	sum := make(CurrencyAmounts, max(len(c), len(other)))
+	maps.Copy(sum, c)
+	for currency, amount := range other {
+		combined := sum[currency]
+		if combined.Total == nil {
+			combined.Total = amount.Total
+		} else if amount.Total != nil {
+			combined.Total = new(big.Rat).Add(combined.Total, amount.Total)
+		}
+		if combined.Reason == "" {
+			combined.Reason = amount.Reason
+		}
+		sum[currency] = combined
+	}
+	return sum
+}
+
+func (c *CurrencyAmounts) add(currency string, units, perUnit *big.Rat) {
+	if perUnit != nil && perUnit.Sign() == 0 {
+		return
+	}
+	currency = normalizeCurrencyCode(currency)
+	if *c == nil {
+		*c = make(CurrencyAmounts)
+	}
+	entry := (*c)[currency]
+	if entry.Reason != "" {
+		return
+	}
+	switch {
+	case currency == "":
+		entry.Reason = "a sales report row is missing a currency code"
+	case perUnit == nil:
+		entry.Reason = "a sales report row has no valid per-unit amount"
+	case units == nil:
+		entry.Reason = "a sales report row has no valid Units value"
+	case units.Sign() == 0:
+		entry.Reason = "a nonzero amount has zero Units and may be a partial refund"
+	default:
+		amount := salesRowAmount(units, perUnit)
+		if entry.Total != nil {
+			amount.Add(amount, entry.Total)
+		}
+		entry.Total = amount
+	}
+	(*c)[currency] = entry
+}
+
+// CurrencyComparison pairs one currency's totals across two compared periods.
+type CurrencyComparison struct {
+	Currency     string
+	Current      *float64
+	Previous     *float64
+	Delta        *float64
+	DeltaPercent *float64
+	Reason       string
+}
+
+// CompareCurrencyAmounts pairs the per-currency totals of two periods, sorted
+// by currency code. A currency absent from a complete period has a zero total.
+func CompareCurrencyAmounts(current, previous CurrencyAmounts) []CurrencyComparison {
+	currencies := make([]string, 0, len(current)+len(previous))
+	for currency := range current {
+		if currency != "" {
+			currencies = append(currencies, currency)
+		}
+	}
+	for currency := range previous {
+		if _, seen := current[currency]; currency != "" && !seen {
+			currencies = append(currencies, currency)
+		}
+	}
+	if len(currencies) == 0 && (current[""].Reason != "" || previous[""].Reason != "") {
+		currencies = append(currencies, "")
+	}
+	slices.Sort(currencies)
+
+	comparisons := make([]CurrencyComparison, 0, len(currencies))
+	for _, currency := range currencies {
+		currentValue, reason := current.value(currency)
+		previousValue, previousReason := previous.value(currency)
+		if reason == "" {
+			reason = previousReason
+		}
+		comparison := CurrencyComparison{
+			Currency: currency,
+			Current:  moneyFloat(currentValue),
+			Previous: moneyFloat(previousValue),
+			Reason:   reason,
+		}
+		if reason == "" {
+			comparison.Delta = moneyFloat(new(big.Rat).Sub(currentValue, previousValue))
+			if *comparison.Previous != 0 {
+				comparison.DeltaPercent = ptrFloat64(*comparison.Delta / *comparison.Previous * 100)
+			}
+		}
+		comparisons = append(comparisons, comparison)
+	}
+	return comparisons
+}
+
+func (c CurrencyAmounts) value(currency string) (*big.Rat, string) {
+	if reason := c[""].Reason; reason != "" {
+		return nil, reason
+	}
+	amount := c[currency]
+	if amount.Reason != "" {
+		return nil, amount.Reason
+	}
+	if currency == "" {
+		return nil, "a sales report row is missing a currency code"
+	}
+	if amount.Total == nil {
+		return new(big.Rat), ""
+	}
+	rounded, _ := new(big.Rat).SetString(amount.Total.FloatString(2))
+	return rounded, ""
+}
+
+func moneyFloat(amount *big.Rat) *float64 {
+	if amount == nil {
+		return nil
+	}
+	value, _ := amount.Float64()
+	return &value
+}
+
+// CurrencyLabel names a currency code for people, including the empty code.
+func CurrencyLabel(currency string) string {
+	if currency == "" {
+		return "unknown"
+	}
+	return currency
+}
+
+// CurrencyTotalsUnavailableReason explains why a monetary metric has no single total.
+func CurrencyTotalsUnavailableReason(metricLabel string, comparisons []CurrencyComparison) string {
+	labels := make([]string, 0, len(comparisons))
+	for _, comparison := range comparisons {
+		if comparison.Reason != "" {
+			return comparison.Reason
+		}
+		labels = append(labels, CurrencyLabel(comparison.Currency))
+	}
+	return fmt.Sprintf("%s are in multiple currencies (%s) and cannot be summed; totals are reported per currency", metricLabel, strings.Join(labels, ", "))
 }
 
 // Unexported alias so all internal references keep compiling with the old name.
@@ -300,7 +511,7 @@ type SalesScope struct {
 
 type salesScope = SalesScope
 
-func collectWeeklyInsights(ctx context.Context, client *asc.Client, now func() time.Time, appID, sourceName, vendor string, weekStart time.Time) (*weeklyInsightsResponse, error) {
+func collectWeeklyInsights(ctx context.Context, client *asc.Client, now func() time.Time, appID, sourceName, vendor string, weekStart time.Time, byCurrency bool) (*weeklyInsightsResponse, error) {
 	thisWeek := weekWindowFromStart(weekStart)
 	previousWeek := weekWindowFromStart(weekStart.AddDate(0, 0, -7))
 
@@ -326,12 +537,12 @@ func collectWeeklyInsights(ctx context.Context, client *asc.Client, now func() t
 		scope, reports, reportErrs, appErr := fetchAppSalesReports(ctx, client, appID, [2]asc.SalesReportParams{
 			salesSummaryReportParams(vendor, asc.SalesReportFrequencyWeekly, thisWeek.end.Format("2006-01-02")),
 			salesSummaryReportParams(vendor, asc.SalesReportFrequencyWeekly, previousWeek.end.Format("2006-01-02")),
-		})
+		}, byCurrency)
 		if appErr != nil {
 			return nil, appErr
 		}
 		resp.Source.AppSKU = scope.AppSKU
-		resp.Metrics = collectSalesMetrics(reports[0], reportErrs[0], reports[1], reportErrs[1])
+		resp.Metrics = collectSalesMetrics(reports[0], reportErrs[0], reports[1], reportErrs[1], byCurrency)
 	case sourceAnalytics:
 		metrics, requestsScanned, err := collectAnalyticsMetrics(ctx, client, appID, thisWeek, previousWeek)
 		if err != nil {
@@ -346,14 +557,14 @@ func collectWeeklyInsights(ctx context.Context, client *asc.Client, now func() t
 	return resp, nil
 }
 
-func collectDailyInsights(ctx context.Context, client *asc.Client, now func() time.Time, appID, vendor string, reportDate time.Time) (*dailyInsightsResponse, error) {
+func collectDailyInsights(ctx context.Context, client *asc.Client, now func() time.Time, appID, vendor string, reportDate time.Time, byCurrency bool) (*dailyInsightsResponse, error) {
 	thisDay := reportDate.Format("2006-01-02")
 	previousDay := reportDate.AddDate(0, 0, -1).Format("2006-01-02")
 
 	scope, reports, reportErrs, err := fetchAppSalesReports(ctx, client, appID, [2]asc.SalesReportParams{
 		salesSummaryReportParams(vendor, asc.SalesReportFrequencyDaily, thisDay),
 		salesSummaryReportParams(vendor, asc.SalesReportFrequencyDaily, previousDay),
-	})
+	}, byCurrency)
 	if err != nil {
 		return nil, err
 	}
@@ -388,18 +599,21 @@ func collectDailyInsights(ctx context.Context, client *asc.Client, now func() ti
 		GeneratedAt:  now().UTC().Format(time.RFC3339),
 	}
 
+	resp.Metrics = dailySalesMetrics(thisData, prevData, availabilityReason, byCurrency)
+	return resp, nil
+}
+
+func dailySalesMetrics(thisData, prevData salesWeekMetrics, availabilityReason string, byCurrency bool) []dailyMetric {
 	metrics := make([]dailyMetric, 0, 8)
-	metrics = append(metrics, dailyMetricFromOptionalTotals(
+	metrics = append(metrics, dailyCountMetricFromOptionalTotals(
 		"renewal_rows",
-		"count",
 		thisData.SubscriptionColumnPresent && prevData.SubscriptionColumnPresent && availabilityReason == "",
 		float64(thisData.RenewalRows),
 		float64(prevData.RenewalRows),
 		resolveSalesReason("subscription column", availabilityReason, thisData.SubscriptionColumnPresent, prevData.SubscriptionColumnPresent),
 	))
-	metrics = append(metrics, dailyMetricFromOptionalTotals(
+	metrics = append(metrics, dailyCountMetricFromOptionalTotals(
 		"renewal_units",
-		"count",
 		thisData.SubscriptionColumnPresent && prevData.SubscriptionColumnPresent &&
 			thisData.UnitsColumnPresent && prevData.UnitsColumnPresent &&
 			availabilityReason == "",
@@ -407,27 +621,26 @@ func collectDailyInsights(ctx context.Context, client *asc.Client, now func() ti
 		prevData.RenewalUnitsTotal,
 		resolveSalesReason("renewal units", availabilityReason, thisData.UnitsColumnPresent && thisData.SubscriptionColumnPresent, prevData.UnitsColumnPresent && prevData.SubscriptionColumnPresent),
 	))
-	metrics = append(metrics, dailyMetricFromOptionalTotals(
+	thisSubscriptionProceedsAvailable := thisData.SubscriptionColumnPresent && developerProceedsAvailable(thisData, byCurrency)
+	prevSubscriptionProceedsAvailable := prevData.SubscriptionColumnPresent && developerProceedsAvailable(prevData, byCurrency)
+	metrics = append(metrics, dailyMoneyMetric(
 		"renewal_developer_proceeds",
-		"currency",
-		thisData.SubscriptionColumnPresent && prevData.SubscriptionColumnPresent &&
-			thisData.DeveloperProceedsColumnPresent && prevData.DeveloperProceedsColumnPresent &&
-			availabilityReason == "",
+		"renewal developer proceeds totals",
+		thisSubscriptionProceedsAvailable && prevSubscriptionProceedsAvailable && availabilityReason == "",
 		thisData.RenewalDeveloperProceeds,
 		prevData.RenewalDeveloperProceeds,
-		resolveSalesReason("renewal developer proceeds", availabilityReason, thisData.DeveloperProceedsColumnPresent && thisData.SubscriptionColumnPresent, prevData.DeveloperProceedsColumnPresent && prevData.SubscriptionColumnPresent),
+		resolveSalesReason("renewal developer proceeds", availabilityReason, thisSubscriptionProceedsAvailable, prevSubscriptionProceedsAvailable),
+		byCurrency,
 	))
-	metrics = append(metrics, dailyMetricFromOptionalTotals(
+	metrics = append(metrics, dailyCountMetricFromOptionalTotals(
 		"subscription_rows",
-		"count",
 		thisData.SubscriptionColumnPresent && prevData.SubscriptionColumnPresent && availabilityReason == "",
 		float64(thisData.SubscriptionRows),
 		float64(prevData.SubscriptionRows),
 		resolveSalesReason("subscription column", availabilityReason, thisData.SubscriptionColumnPresent, prevData.SubscriptionColumnPresent),
 	))
-	metrics = append(metrics, dailyMetricFromOptionalTotals(
+	metrics = append(metrics, dailyCountMetricFromOptionalTotals(
 		"subscription_units",
-		"count",
 		thisData.SubscriptionColumnPresent && prevData.SubscriptionColumnPresent &&
 			thisData.UnitsColumnPresent && prevData.UnitsColumnPresent &&
 			availabilityReason == "",
@@ -435,38 +648,33 @@ func collectDailyInsights(ctx context.Context, client *asc.Client, now func() ti
 		prevData.SubscriptionUnitsTotal,
 		resolveSalesReason("subscription units", availabilityReason, thisData.UnitsColumnPresent && thisData.SubscriptionColumnPresent, prevData.UnitsColumnPresent && prevData.SubscriptionColumnPresent),
 	))
-	metrics = append(metrics, dailyMetricFromOptionalTotals(
+	metrics = append(metrics, dailyMoneyMetric(
 		"subscription_developer_proceeds",
-		"currency",
-		thisData.SubscriptionColumnPresent && prevData.SubscriptionColumnPresent &&
-			thisData.DeveloperProceedsColumnPresent && prevData.DeveloperProceedsColumnPresent &&
-			availabilityReason == "",
+		"subscription developer proceeds totals",
+		thisSubscriptionProceedsAvailable && prevSubscriptionProceedsAvailable && availabilityReason == "",
 		thisData.SubscriptionDeveloperProceeds,
 		prevData.SubscriptionDeveloperProceeds,
-		resolveSalesReason("subscription developer proceeds", availabilityReason, thisData.DeveloperProceedsColumnPresent && thisData.SubscriptionColumnPresent, prevData.DeveloperProceedsColumnPresent && prevData.SubscriptionColumnPresent),
+		resolveSalesReason("subscription developer proceeds", availabilityReason, thisSubscriptionProceedsAvailable, prevSubscriptionProceedsAvailable),
+		byCurrency,
 	))
-	metrics = append(metrics, dailyMetricFromOptionalTotals(
+	metrics = append(metrics, dailyCountMetricFromOptionalTotals(
 		"monetized_units",
-		"count",
 		thisData.UnitsColumnPresent && prevData.UnitsColumnPresent && availabilityReason == "",
 		thisData.MonetizedUnitsTotal,
 		prevData.MonetizedUnitsTotal,
 		resolveSalesReason("monetized units", availabilityReason, thisData.UnitsColumnPresent, prevData.UnitsColumnPresent),
 	))
-	metrics = append(metrics, dailyMetricFromOptionalTotals(
+	metrics = append(metrics, dailyCountMetricFromOptionalTotals(
 		"report_rows",
-		"count",
 		availabilityReason == "",
 		float64(thisData.RowCount),
 		float64(prevData.RowCount),
 		availabilityReason,
 	))
-
-	resp.Metrics = metrics
-	return resp, nil
+	return metrics
 }
 
-func collectSalesMetrics(thisData salesWeekMetrics, thisErr error, prevData salesWeekMetrics, prevErr error) []weeklyMetric {
+func collectSalesMetrics(thisData salesWeekMetrics, thisErr error, prevData salesWeekMetrics, prevErr error, byCurrency bool) []weeklyMetric {
 	availabilityReason := ""
 	if thisErr != nil || prevErr != nil {
 		reasons := make([]string, 0, 2)
@@ -480,50 +688,50 @@ func collectSalesMetrics(thisData salesWeekMetrics, thisErr error, prevData sale
 	}
 
 	metrics := make([]weeklyMetric, 0, 7)
-	metrics = append(metrics, metricFromOptionalTotals(
+	metrics = append(metrics, countMetricFromOptionalTotals(
 		"download_units",
-		"count",
 		thisData.DownloadUnitsAvailable && prevData.DownloadUnitsAvailable && availabilityReason == "",
 		thisData.DownloadUnitsTotal,
 		prevData.DownloadUnitsTotal,
 		resolveSalesReason("download units", availabilityReason, thisData.DownloadUnitsAvailable, prevData.DownloadUnitsAvailable),
 	))
-	metrics = append(metrics, metricFromOptionalTotals(
+	metrics = append(metrics, countMetricFromOptionalTotals(
 		"monetized_units",
-		"count",
 		thisData.UnitsColumnPresent && prevData.UnitsColumnPresent && availabilityReason == "",
 		thisData.MonetizedUnitsTotal,
 		prevData.MonetizedUnitsTotal,
 		resolveSalesReason("monetized units", availabilityReason, thisData.UnitsColumnPresent, prevData.UnitsColumnPresent),
 	))
-	metrics = append(metrics, metricFromOptionalTotals(
+	metrics = append(metrics, countMetricFromOptionalTotals(
 		"units",
-		"count",
 		thisData.UnitsColumnPresent && prevData.UnitsColumnPresent && availabilityReason == "",
 		thisData.UnitsTotal,
 		prevData.UnitsTotal,
 		resolveSalesReason("units", availabilityReason, thisData.UnitsColumnPresent, prevData.UnitsColumnPresent),
 	))
-	metrics = append(metrics, metricFromOptionalTotals(
+	thisProceedsAvailable, prevProceedsAvailable := developerProceedsAvailable(thisData, byCurrency), developerProceedsAvailable(prevData, byCurrency)
+	metrics = append(metrics, weeklyMoneyMetric(
 		"developer_proceeds",
-		"currency",
-		thisData.DeveloperProceedsColumnPresent && prevData.DeveloperProceedsColumnPresent && availabilityReason == "",
-		thisData.DeveloperProceedsTotal,
-		prevData.DeveloperProceedsTotal,
-		resolveSalesReason("developer proceeds", availabilityReason, thisData.DeveloperProceedsColumnPresent, prevData.DeveloperProceedsColumnPresent),
+		"developer proceeds totals",
+		thisProceedsAvailable && prevProceedsAvailable && availabilityReason == "",
+		thisData.DeveloperProceeds,
+		prevData.DeveloperProceeds,
+		resolveSalesReason("developer proceeds", availabilityReason, thisProceedsAvailable, prevProceedsAvailable),
+		byCurrency,
 	))
-	metrics = append(metrics, metricFromOptionalTotals(
+	thisPriceAvailable, prevPriceAvailable := customerPriceAvailable(thisData, byCurrency), customerPriceAvailable(prevData, byCurrency)
+	metrics = append(metrics, weeklyMoneyMetric(
 		"customer_price",
-		"currency",
-		thisData.CustomerPriceColumnPresent && prevData.CustomerPriceColumnPresent && availabilityReason == "",
-		thisData.CustomerPriceTotal,
-		prevData.CustomerPriceTotal,
-		resolveSalesReason("customer price", availabilityReason, thisData.CustomerPriceColumnPresent, prevData.CustomerPriceColumnPresent),
+		"customer price totals",
+		thisPriceAvailable && prevPriceAvailable && availabilityReason == "",
+		thisData.CustomerPrice,
+		prevData.CustomerPrice,
+		resolveSalesReason("customer price", availabilityReason, thisPriceAvailable, prevPriceAvailable),
+		byCurrency,
 	))
 
-	metrics = append(metrics, metricFromOptionalTotals(
+	metrics = append(metrics, countMetricFromOptionalTotals(
 		"report_rows",
-		"count",
 		availabilityReason == "",
 		float64(thisData.RowCount),
 		float64(prevData.RowCount),
@@ -547,7 +755,7 @@ func salesSummaryReportParams(vendor string, frequency asc.SalesReportFrequency,
 
 // fetchAppSalesReports overlaps the app SKU lookup with both report downloads.
 // App lookup errors keep precedence; each report keeps its own error.
-func fetchAppSalesReports(ctx context.Context, client *asc.Client, appID string, reports [2]asc.SalesReportParams) (salesScope, [2]salesWeekMetrics, [2]error, error) {
+func fetchAppSalesReports(ctx context.Context, client *asc.Client, appID string, reports [2]asc.SalesReportParams, byCurrency bool) (salesScope, [2]salesWeekMetrics, [2]error, error) {
 	readCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	var (
@@ -567,7 +775,7 @@ func fetchAppSalesReports(ctx context.Context, client *asc.Client, appID string,
 			defer download.Body.Close()
 			select {
 			case <-scopeReady:
-				metrics[i], errs[i] = ParseSalesReportMetrics(download.Body, scope)
+				metrics[i], errs[i] = ParseSalesReportMetrics(download.Body, scope, byCurrency)
 			case <-readCtx.Done():
 				errs[i] = readCtx.Err()
 			}
@@ -590,7 +798,7 @@ func fetchAppSalesReports(ctx context.Context, client *asc.Client, appID string,
 
 // ParseSalesReportMetrics reads a gzip-compressed sales TSV from reader and
 // returns aggregated metrics scoped to the given app.
-func ParseSalesReportMetrics(reader io.Reader, scope salesScope) (salesWeekMetrics, error) {
+func ParseSalesReportMetrics(reader io.Reader, scope salesScope, byCurrency bool) (salesWeekMetrics, error) {
 	gzipReader, err := gzip.NewReader(reader)
 	if err != nil {
 		return salesWeekMetrics{}, fmt.Errorf("read gzip report: %w", err)
@@ -611,7 +819,7 @@ func ParseSalesReportMetrics(reader io.Reader, scope salesScope) (salesWeekMetri
 		if err != nil {
 			return salesWeekMetrics{}, fmt.Errorf("parse report rows: %w", err)
 		}
-		accumulator, headerErr := newSalesReportAccumulator(headers, scope)
+		accumulator, headerErr := newSalesReportAccumulator(headers, scope, byCurrency)
 		for {
 			row, err := tsvReader.Read()
 			if err == io.EOF {
@@ -641,7 +849,7 @@ func ParseSalesReportMetrics(reader io.Reader, scope salesScope) (salesWeekMetri
 	if len(rows) == 0 {
 		return salesWeekMetrics{}, fmt.Errorf("report is empty")
 	}
-	accumulator, err := newSalesReportAccumulator(rows[0], scope)
+	accumulator, err := newSalesReportAccumulator(rows[0], scope, byCurrency)
 	if err != nil {
 		return salesWeekMetrics{}, err
 	}
@@ -657,6 +865,7 @@ func ParseSalesReportMetrics(reader io.Reader, scope salesScope) (salesWeekMetri
 type salesReportAccumulator struct {
 	scope                    salesScope
 	metrics                  salesWeekMetrics
+	byCurrency               bool
 	appleIdentifierIdx       int
 	parentIdentifierIdx      int
 	skuIdx                   int
@@ -664,11 +873,13 @@ type salesReportAccumulator struct {
 	subscriptionIdx          int
 	unitsIdx                 int
 	developerProceedsIdx     int
+	proceedsCurrencyIdx      int
 	customerPriceIdx         int
+	customerCurrencyIdx      int
 }
 
-func newSalesReportAccumulator(headers []string, scope salesScope) (salesReportAccumulator, error) {
-	a := salesReportAccumulator{scope: scope}
+func newSalesReportAccumulator(headers []string, scope salesScope, byCurrency bool) (salesReportAccumulator, error) {
+	a := salesReportAccumulator{scope: scope, byCurrency: byCurrency}
 	a.appleIdentifierIdx = findColumnIndex(headers, "appleidentifier")
 	a.parentIdentifierIdx = findColumnIndex(headers, "parentidentifier")
 	a.skuIdx = findColumnIndex(headers, "sku")
@@ -676,7 +887,9 @@ func newSalesReportAccumulator(headers []string, scope salesScope) (salesReportA
 	a.subscriptionIdx = findColumnIndex(headers, "subscription")
 	a.unitsIdx = findColumnIndex(headers, "units")
 	a.developerProceedsIdx = findColumnIndex(headers, "developerproceeds")
+	a.proceedsCurrencyIdx = findColumnIndex(headers, "currencyofproceeds")
 	a.customerPriceIdx = findColumnIndex(headers, "customerprice")
+	a.customerCurrencyIdx = findColumnIndex(headers, "customercurrency")
 	if a.appleIdentifierIdx < 0 && a.parentIdentifierIdx < 0 {
 		return a, fmt.Errorf("report is missing Apple Identifier and Parent Identifier columns")
 	}
@@ -715,8 +928,9 @@ func (a *salesReportAccumulator) add(row []string) {
 		metrics.RenewalRows++
 	}
 
+	units := valueAtIndex(row, a.unitsIdx)
 	if a.unitsIdx >= 0 {
-		if value, ok := parseNumericValue(valueAtIndex(row, a.unitsIdx)); ok {
+		if value, ok := parseNumericValue(units); ok {
 			metrics.UnitsTotal += value
 			if isAppRow && isInitialAppDownloadProductType(valueAtIndex(row, a.productTypeIdentifierIdx)) {
 				metrics.DownloadUnitsTotal += value
@@ -732,28 +946,69 @@ func (a *salesReportAccumulator) add(row []string) {
 			}
 		}
 	}
+	var exactUnits *big.Rat
+	if a.byCurrency {
+		exactUnits = salesDecimal(units)
+	}
 	if a.developerProceedsIdx >= 0 {
-		if value, ok := parseNumericValue(valueAtIndex(row, a.developerProceedsIdx)); ok {
-			metrics.DeveloperProceedsTotal += value
-			if isSubscriptionRow {
-				metrics.SubscriptionDeveloperProceeds += value
-			}
-			if isRenewalRow {
-				metrics.RenewalDeveloperProceeds += value
-			}
+		proceeds := []*SalesMoney{&metrics.DeveloperProceeds}
+		if isSubscriptionRow {
+			proceeds = append(proceeds, &metrics.SubscriptionDeveloperProceeds)
 		}
+		if isRenewalRow {
+			proceeds = append(proceeds, &metrics.RenewalDeveloperProceeds)
+		}
+		a.addMoney(valueAtIndex(row, a.proceedsCurrencyIdx), valueAtIndex(row, a.developerProceedsIdx), exactUnits, proceeds...)
 	}
 	if a.customerPriceIdx >= 0 {
-		if value, ok := parseNumericValue(valueAtIndex(row, a.customerPriceIdx)); ok {
-			metrics.CustomerPriceTotal += value
-			if isSubscriptionRow {
-				metrics.SubscriptionCustomerPrice += value
-			}
-			if isRenewalRow {
-				metrics.RenewalCustomerPrice += value
-			}
+		a.addMoney(valueAtIndex(row, a.customerCurrencyIdx), valueAtIndex(row, a.customerPriceIdx), exactUnits, &metrics.CustomerPrice)
+	}
+}
+
+func (a *salesReportAccumulator) addMoney(currency, rawAmount string, units *big.Rat, totals ...*SalesMoney) {
+	if a.byCurrency {
+		amount := salesDecimal(rawAmount)
+		for _, total := range totals {
+			total.ByCurrency.add(currency, units, amount)
+		}
+		return
+	}
+	if amount, ok := parseNumericValue(rawAmount); ok {
+		for _, total := range totals {
+			total.LegacyTotal += amount
 		}
 	}
+}
+
+// salesRowAmount turns a per-unit money column into the row's amount. Apple
+// reports Developer Proceeds and Customer Price per unit, and marks refunds
+// with negative Units: refund rows keep a positive Developer Proceeds but a
+// negative Customer Price. Units therefore carries the sign for both columns.
+// (2026-11-24) https://developer.apple.com/help/app-store-connect/reference/reporting/summary-sales-report/
+func salesRowAmount(units, perUnit *big.Rat) *big.Rat {
+	amount := new(big.Rat).Abs(perUnit)
+	return amount.Mul(units, amount)
+}
+
+func normalizeCurrencyCode(value string) string {
+	code := strings.ToUpper(strings.TrimSpace(value))
+	if len(code) != 3 {
+		return ""
+	}
+	for i := range len(code) {
+		if code[i] < 'A' || code[i] > 'Z' {
+			return ""
+		}
+	}
+	return code
+}
+
+func developerProceedsAvailable(metrics salesWeekMetrics, byCurrency bool) bool {
+	return metrics.DeveloperProceedsColumnPresent && (!byCurrency || metrics.UnitsColumnPresent)
+}
+
+func customerPriceAvailable(metrics salesWeekMetrics, byCurrency bool) bool {
+	return metrics.CustomerPriceColumnPresent && (!byCurrency || metrics.UnitsColumnPresent)
 }
 
 func isInitialAppDownloadProductType(value string) bool {
@@ -1133,18 +1388,100 @@ func resolveSalesReason(metricName, availabilityReason string, thisAvailable, la
 	return ""
 }
 
-func metricFromOptionalTotals(name, unit string, available bool, thisValue, lastValue float64, reason string) weeklyMetric {
+func countMetricFromOptionalTotals(name string, available bool, thisValue, lastValue float64, reason string) weeklyMetric {
 	if !available {
-		return unavailableMetric(name, unit, reason)
+		return unavailableMetric(name, "count", reason)
 	}
-	return comparableMetric(name, unit, thisValue, lastValue)
+	return comparableMetric(name, "count", thisValue, lastValue)
 }
 
-func dailyMetricFromOptionalTotals(name, unit string, available bool, thisValue, previousValue float64, reason string) dailyMetric {
+func dailyCountMetricFromOptionalTotals(name string, available bool, thisValue, previousValue float64, reason string) dailyMetric {
 	if !available {
-		return unavailableDailyMetric(name, unit, reason)
+		return unavailableDailyMetric(name, "count", reason)
 	}
-	return comparableDailyMetric(name, unit, thisValue, previousValue)
+	return comparableDailyMetric(name, "count", thisValue, previousValue)
+}
+
+func weeklyMoneyMetric(name, label string, available bool, thisWeek, lastWeek SalesMoney, reason string, byCurrency bool) weeklyMetric {
+	if !available {
+		return unavailableMetric(name, "currency", reason)
+	}
+	if !byCurrency {
+		return comparableMetric(name, "currency", thisWeek.LegacyTotal, lastWeek.LegacyTotal)
+	}
+	comparisons := CompareCurrencyAmounts(thisWeek.ByCurrency, lastWeek.ByCurrency)
+	breakdown := make([]weeklyCurrencyAmount, 0, len(comparisons))
+	for _, comparison := range comparisons {
+		amount := weeklyCurrencyAmount{
+			Currency: comparison.Currency, ThisWeek: comparison.Current, LastWeek: comparison.Previous,
+			Delta: comparison.Delta, DeltaPercent: comparison.DeltaPercent,
+		}
+		if comparison.Reason != "" {
+			amount.Status, amount.Reason = "unavailable", comparison.Reason
+		}
+		breakdown = append(breakdown, amount)
+	}
+
+	switch len(comparisons) {
+	case 0:
+		return comparableMetric(name, "currency", 0, 0)
+	case 1:
+		amount := breakdown[0]
+		if amount.Status == "unavailable" {
+			metric := unavailableMetric(name, "currency", amount.Reason)
+			metric.ByCurrency = breakdown
+			return metric
+		}
+		return weeklyMetric{
+			Name: name, Unit: "currency", Currency: amount.Currency, ThisWeek: amount.ThisWeek, LastWeek: amount.LastWeek,
+			Delta: amount.Delta, DeltaPercent: amount.DeltaPercent, Status: "ok", ByCurrency: breakdown,
+		}
+	default:
+		metric := unavailableMetric(name, "currency", CurrencyTotalsUnavailableReason(label, comparisons))
+		metric.ByCurrency = breakdown
+		return metric
+	}
+}
+
+func dailyMoneyMetric(name, label string, available bool, thisDay, previousDay SalesMoney, reason string, byCurrency bool) dailyMetric {
+	if !available {
+		return unavailableDailyMetric(name, "currency", reason)
+	}
+	if !byCurrency {
+		return comparableDailyMetric(name, "currency", thisDay.LegacyTotal, previousDay.LegacyTotal)
+	}
+	comparisons := CompareCurrencyAmounts(thisDay.ByCurrency, previousDay.ByCurrency)
+	breakdown := make([]dailyCurrencyAmount, 0, len(comparisons))
+	for _, comparison := range comparisons {
+		amount := dailyCurrencyAmount{
+			Currency: comparison.Currency, ThisDay: comparison.Current, PreviousDay: comparison.Previous,
+			Delta: comparison.Delta, DeltaPercent: comparison.DeltaPercent,
+		}
+		if comparison.Reason != "" {
+			amount.Status, amount.Reason = "unavailable", comparison.Reason
+		}
+		breakdown = append(breakdown, amount)
+	}
+
+	switch len(comparisons) {
+	case 0:
+		return comparableDailyMetric(name, "currency", 0, 0)
+	case 1:
+		amount := breakdown[0]
+		if amount.Status == "unavailable" {
+			metric := unavailableDailyMetric(name, "currency", amount.Reason)
+			metric.ByCurrency = breakdown
+			return metric
+		}
+		return dailyMetric{
+			Name: name, Unit: "currency", Currency: amount.Currency, ThisDay: amount.ThisDay, PreviousDay: amount.PreviousDay,
+			Delta: amount.Delta, DeltaPercent: amount.DeltaPercent, Status: "ok", ByCurrency: breakdown,
+		}
+	default:
+		metric := unavailableDailyMetric(name, "currency", CurrencyTotalsUnavailableReason(label, comparisons))
+		metric.ByCurrency = breakdown
+		return metric
+	}
 }
 
 func comparableMetric(name, unit string, thisValue, lastValue float64) weeklyMetric {
@@ -1201,11 +1538,8 @@ func ptrFloat64(value float64) *float64 {
 	return &value
 }
 
-func parseNumericValue(value string) (float64, bool) {
+func normalizeNumericValue(value string) (string, bool) {
 	normalized := strings.TrimSpace(value)
-	if normalized == "" {
-		return 0, false
-	}
 
 	negative := false
 	if strings.HasPrefix(normalized, "(") && strings.HasSuffix(normalized, ")") {
@@ -1217,7 +1551,11 @@ func parseNumericValue(value string) (float64, bool) {
 	for _, token := range replacements {
 		normalized = strings.ReplaceAll(normalized, token, "")
 	}
+	return normalized, negative
+}
 
+func parseNumericValue(value string) (float64, bool) {
+	normalized, negative := normalizeNumericValue(value)
 	parsed, err := strconv.ParseFloat(normalized, 64)
 	if err != nil {
 		return 0, false
@@ -1226,6 +1564,24 @@ func parseNumericValue(value string) (float64, bool) {
 		parsed = -parsed
 	}
 	return parsed, true
+}
+
+func salesDecimal(value string) *big.Rat {
+	normalized, negative := normalizeNumericValue(value)
+	if len(normalized) > 20 || strings.TrimLeft(normalized, "+-") == "" || strings.Trim(normalized, "+-.0123456789") != "" {
+		return nil
+	}
+	if !strings.Contains(normalized, ".") {
+		normalized += ".0"
+	}
+	amount, ok := new(big.Rat).SetString(normalized)
+	if !ok {
+		return nil
+	}
+	if negative {
+		amount.Neg(amount)
+	}
+	return amount
 }
 
 func findColumnIndex(headers []string, target string) int {
@@ -1341,7 +1697,7 @@ func renderWeeklyInsights(d *shared.Deps, resp *weeklyInsightsResponse, markdown
 	for _, metric := range resp.Metrics {
 		metricRows = append(metricRows, []string{
 			metric.Name,
-			shared.OrNA(metric.Unit),
+			shared.OrNA(metricUnitLabel(metric.Unit, metric.Currency)),
 			formatOptionalNumber(metric.ThisWeek),
 			formatOptionalNumber(metric.LastWeek),
 			formatOptionalNumber(metric.Delta),
@@ -1349,6 +1705,25 @@ func renderWeeklyInsights(d *shared.Deps, resp *weeklyInsightsResponse, markdown
 			metric.Status,
 			shared.OrNA(metric.Reason),
 		})
+		if metric.Status == "ok" {
+			continue // The metric row already shows its single currency.
+		}
+		for _, amount := range metric.ByCurrency {
+			status := amount.Status
+			if status == "" {
+				status = "ok"
+			}
+			metricRows = append(metricRows, []string{
+				metric.Name,
+				CurrencyLabel(amount.Currency),
+				formatOptionalNumber(amount.ThisWeek),
+				formatOptionalNumber(amount.LastWeek),
+				formatOptionalNumber(amount.Delta),
+				formatOptionalNumber(amount.DeltaPercent),
+				status,
+				shared.OrNA(amount.Reason),
+			})
+		}
 	}
 	d.RenderSection("Metrics", []string{"metric", "unit", "thisWeek", "lastWeek", "delta", "deltaPercent", "status", "reason"}, metricRows, markdown)
 }
@@ -1385,7 +1760,7 @@ func renderDailyInsights(d *shared.Deps, resp *dailyInsightsResponse, markdown b
 	for _, metric := range resp.Metrics {
 		metricRows = append(metricRows, []string{
 			metric.Name,
-			shared.OrNA(metric.Unit),
+			shared.OrNA(metricUnitLabel(metric.Unit, metric.Currency)),
 			formatOptionalNumber(metric.ThisDay),
 			formatOptionalNumber(metric.PreviousDay),
 			formatOptionalNumber(metric.Delta),
@@ -1393,8 +1768,36 @@ func renderDailyInsights(d *shared.Deps, resp *dailyInsightsResponse, markdown b
 			metric.Status,
 			shared.OrNA(metric.Reason),
 		})
+		if metric.Status == "ok" {
+			continue // The metric row already shows its single currency.
+		}
+		for _, amount := range metric.ByCurrency {
+			status := amount.Status
+			if status == "" {
+				status = "ok"
+			}
+			metricRows = append(metricRows, []string{
+				metric.Name,
+				CurrencyLabel(amount.Currency),
+				formatOptionalNumber(amount.ThisDay),
+				formatOptionalNumber(amount.PreviousDay),
+				formatOptionalNumber(amount.Delta),
+				formatOptionalNumber(amount.DeltaPercent),
+				status,
+				shared.OrNA(amount.Reason),
+			})
+		}
 	}
 	d.RenderSection("Metrics", []string{"metric", "unit", "thisDay", "previousDay", "delta", "deltaPercent", "status", "reason"}, metricRows, markdown)
+}
+
+// metricUnitLabel shows the currency code as a monetary metric's unit when
+// tables and markdown render a single-currency total.
+func metricUnitLabel(unit, currency string) string {
+	if currency != "" {
+		return currency
+	}
+	return unit
 }
 
 func formatOptionalNumber(value *float64) string {

@@ -47,6 +47,8 @@ const (
 var flagAliases = []flagAliasCase{
 	{"analytics sales", "output-file", "output"},
 	{"analytics sales", "output-path", "output"},
+	{"api", "data", "body"},
+	{"api", "url-params", "query"},
 	{"apps app-encryption-declarations list", "build", "build-id"},
 	{"apps info relationships primary-category", "id", "info-id"},
 	{"apps info relationships primary-subcategory-one", "id", "info-id"},
@@ -54,16 +56,21 @@ var flagAliases = []flagAliasCase{
 	{"apps info relationships secondary-category", "id", "info-id"},
 	{"apps info relationships secondary-subcategory-one", "id", "info-id"},
 	{"apps info relationships secondary-subcategory-two", "id", "info-id"},
+	{"apps info relationships view", "id", "info-id"},
 	{"apps info territory-age-ratings list", "id", "info-id"},
+	{"apps info view", "app-id", "app"},
 	{"apps info view", "app-info", "info-id"},
+	{"apps info view", "id", "info-id"},
 	{"apps public descriptions", "id", "app"},
 	{"apps public prices", "id", "app"},
 	{"apps public view", "id", "app"},
 	{"apps view", "app", "id"},
+	{"apps view", "app-id", "id"},
 	{"build-bundles list", "build", "build-id"},
 	{"build-localizations create", "build", "build-id"},
 	{"build-localizations list", "build", "build-id"},
 	{"builds add-groups", "build", "build-id|build-number"},
+	{"builds add-groups", "group-id", "group"},
 	{"builds app view", "build", "build-id|build-number"},
 	{"builds app view", "id", "build-id"},
 	{"builds app-encryption-declaration view", "build", "build-id|build-number"},
@@ -103,6 +110,7 @@ var flagAliases = []flagAliasCase{
 	{"encryption declarations assign-builds", "build", "build-id"},
 	{"encryption declarations list", "build", "build-id"},
 	{"iap versions localizations update", "id", "localization-id"},
+	{"iap versions view", "id", "version-id"},
 	{"iap view", "iap-id", "id"},
 	{"ipa-info", "ipa", "path"},
 	{"localizations list", "version-id", "version"},
@@ -120,6 +128,8 @@ var flagAliases = []flagAliasCase{
 	{"review submit", "build", "build-id|build-number"},
 	{"screenshots list", "localization-id", "version-localization"},
 	{"subscriptions list", "group", "group-id"},
+	{"subscriptions list", "subscription-group", "group-id"},
+	{"subscriptions list", "subscription-group-id", "group-id"},
 	{"subscriptions list", "version-limit", "versions-limit"},
 	{"subscriptions offers introductory delete", "offer-id", "id"},
 	{"subscriptions review screenshots delete", "id", "screenshot-id"},
@@ -138,6 +148,7 @@ var flagAliases = []flagAliasCase{
 	{"testflight groups testers list", "group", "group-id"},
 	{"testflight groups view", "group-id", "id"},
 	{"testflight notifications send", "build", "build-id"},
+	{"testflight review submissions list", "app-id", "app"},
 	{"testflight review submissions list", "build", "build-id"},
 	{"testflight review submit", "build", "build-id"},
 	{"testflight testers add-builds", "build", "build-id"},
@@ -156,7 +167,8 @@ var flagAliases = []flagAliasCase{
 // the set of aliases bound with shared.BindFlagAlias, then runs each against
 // its canonical flag: the two spellings must print, exit, request and record
 // telemetry identically, the alias must stay out of help, and both spellings
-// with different values must be a usage error naming both.
+// with different values must be a usage error naming both, unless the flag is
+// repeatable.
 func TestFlagAliasesBehaveAsTheirCanonicalFlag(t *testing.T) {
 	var bound []flagAliasCase
 	walkCommandTree(RootCommand("1.0.0"), func(path string, command *ffcli.Command) {
@@ -164,6 +176,9 @@ func TestFlagAliasesBehaveAsTheirCanonicalFlag(t *testing.T) {
 			return
 		}
 		command.FlagSet.VisitAll(func(item *flag.Flag) {
+			if _, _, implied := shared.FlagAliasImpliedValue(item); implied {
+				return
+			}
 			canonical, ok := shared.FlagAliasTarget(item, aliasBuildID)
 			if !ok {
 				return
@@ -219,6 +234,14 @@ func testFlagAliasAgainstCanonical(t *testing.T, path []string, aliasName, canon
 	aliased := invoke("--"+alias.name, value1)
 	if !reflect.DeepEqual(aliased, canonical) {
 		t.Fatalf("--%s ran differently from --%s:\nalias:     %+v\ncanonical: %+v", alias.name, alias.canonical, aliased, canonical)
+	}
+	if shared.IsRepeatableFlag(commandFlagSet(t, RootCommand("1.0.0"), strings.Join(alias.path, " ")).Lookup(alias.canonical)) {
+		// Every value of a repeatable flag counts, under either spelling.
+		mixed := invoke("--"+alias.name, value1, "--"+alias.canonical, value2)
+		if twice := invoke("--"+alias.canonical, value1, "--"+alias.canonical, value2); !reflect.DeepEqual(mixed, twice) {
+			t.Fatalf("--%s and --%s ran differently from --%s twice:\nmixed: %+v\ntwice: %+v", alias.name, alias.canonical, alias.canonical, mixed, twice)
+		}
+		return
 	}
 	if both := invoke("--"+alias.name, value1, "--"+alias.canonical, value1); !reflect.DeepEqual(both, canonical) {
 		t.Fatalf("--%s and --%s with one value ran differently from --%s:\nboth:      %+v\ncanonical: %+v", alias.name, alias.canonical, alias.canonical, both, canonical)

@@ -2,12 +2,14 @@ package validate
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"sync"
 	"testing"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/validation"
 )
 
@@ -149,8 +151,8 @@ func TestBuildReadinessReport_UsesCompoundReadsWithoutFallbacks(t *testing.T) {
 	for _, count := range requests {
 		totalRequests += count
 	}
-	if totalRequests != 11 {
-		t.Fatalf("compound readiness request count = %d, want 11 (version verification, version, app infos, price schedule, base territory, base price, current price, custom product pages, app preview sets, placements, build bundles)", totalRequests)
+	if totalRequests != 12 {
+		t.Fatalf("compound readiness request count = %d, want 12 (version verification, version, app infos, app version history, price schedule, base territory, base price, current price, custom product pages, app preview sets, placements, build bundles)", totalRequests)
 	}
 	if got := requests["/v1/appPriceSchedules/schedule-1/manualPrices"]; got != 2 {
 		t.Fatalf("manual price reads = %d, want 2 (base price presence and deep paid evidence)", got)
@@ -404,5 +406,50 @@ func TestResolveMultipleAppInfoAgeRating_UsesVersionStateSelection(t *testing.T)
 	}
 	if requests != 1 {
 		t.Fatalf("request count = %d, want only the compound app-info request", requests)
+	}
+}
+
+func TestResolveMultipleAppInfoAgeRating_UnreleasedVersionUsesSoleNonLiveAppInfo(t *testing.T) {
+	tests := []struct {
+		name          string
+		versionState  string
+		nextState     string
+		otherState    string
+		wantAmbiguous bool
+	}{
+		{name: "next info waiting for review after another platform was submitted", versionState: "PREPARE_FOR_SUBMISSION", nextState: "WAITING_FOR_REVIEW", otherState: "READY_FOR_DISTRIBUTION"},
+		{name: "next info in review while another platform is in review", versionState: "PREPARE_FOR_SUBMISSION", nextState: "IN_REVIEW", otherState: "READY_FOR_DISTRIBUTION"},
+		{name: "next info rejected after another platform was rejected", versionState: "PREPARE_FOR_SUBMISSION", nextState: "REJECTED", otherState: "READY_FOR_DISTRIBUTION"},
+		{name: "two non-live infos stay ambiguous", versionState: "PREPARE_FOR_SUBMISSION", nextState: "REJECTED", otherState: "IN_REVIEW", wantAmbiguous: true},
+		{name: "live version keeps the state match", versionState: "READY_FOR_SALE", nextState: "WAITING_FOR_REVIEW", otherState: "PREPARE_FOR_SUBMISSION", wantAmbiguous: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := newBuildsTestClient(t, buildsRoundTripFunc(func(req *http.Request) (*http.Response, error) {
+				if req.URL.Path != "/v1/appInfos/info-next/ageRatingDeclaration" {
+					return buildsJSONResponse(http.StatusInternalServerError, `{"errors":[{"status":"500","code":"UNEXPECTED_REQUEST"}]}`)
+				}
+				return buildsJSONResponse(http.StatusOK, `{"data":{"type":"ageRatingDeclarations","id":"age-next","attributes":{"advertising":true}}}`)
+			}))
+			result := appInfoReadinessData{response: &asc.AppInfosResponse{Data: []asc.Resource[asc.AppInfoAttributes]{
+				{Type: "appInfos", ID: "info-other", Attributes: asc.AppInfoAttributes{"state": tt.otherState}},
+				{Type: "appInfos", ID: "info-next", Attributes: asc.AppInfoAttributes{"state": tt.nextState}},
+			}}}
+
+			err := resolveMultipleAppInfoAgeRating(withReadinessRequestGate(context.Background()), client, &result, "app-1", tt.versionState)
+			if tt.wantAmbiguous {
+				var ambiguous *shared.AmbiguousSelectionError
+				if !errors.As(err, &ambiguous) {
+					t.Fatalf("expected an ambiguous app info error, got %v", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("resolveMultipleAppInfoAgeRating() error = %v", err)
+			}
+			if result.ageRatingDeclaration == nil || result.ageRatingDeclaration.Advertising == nil || !*result.ageRatingDeclaration.Advertising {
+				t.Fatalf("expected the non-live app info's age rating, got %+v", result.ageRatingDeclaration)
+			}
+		})
 	}
 }

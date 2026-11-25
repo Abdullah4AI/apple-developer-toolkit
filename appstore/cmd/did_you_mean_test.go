@@ -31,9 +31,9 @@ func TestRun_UnknownChildOffersSynonymSuggestions(t *testing.T) {
 				"  asc versions --help\n",
 		},
 		{
-			name: "apps get no longer dumps the group usage",
-			args: []string{"apps", "get"},
-			wantStderr: "Error: unknown command `asc apps get`\n" +
+			name: "apps show no longer dumps the group usage",
+			args: []string{"apps", "show"},
+			wantStderr: "Error: unknown command `asc apps show`\n" +
 				"Try:\n" +
 				"  asc apps view --id APP_ID\n" +
 				"  asc apps info view --app APP_ID\n" +
@@ -41,9 +41,9 @@ func TestRun_UnknownChildOffersSynonymSuggestions(t *testing.T) {
 				"  asc apps --help\n",
 		},
 		{
-			name: "localizations get points at the single-localization view",
-			args: []string{"localizations", "get"},
-			wantStderr: "Error: unknown command `asc localizations get`\n" +
+			name: "localizations show points at the single-localization view",
+			args: []string{"localizations", "show"},
+			wantStderr: "Error: unknown command `asc localizations show`\n" +
 				"Try:\n" +
 				"  asc localizations view --id LOCALIZATION_ID\n" +
 				"  asc localizations list --version VERSION_ID\n" +
@@ -81,21 +81,12 @@ func TestRun_UnknownChildOffersSynonymSuggestions(t *testing.T) {
 				"  asc auth --help\n",
 		},
 		{
-			name: "builds view maps to builds info like get and show",
-			args: []string{"builds", "view"},
-			wantStderr: "Error: unknown command `asc builds view`\n" +
+			name: "builds show maps to builds info",
+			args: []string{"builds", "show"},
+			wantStderr: "Error: unknown command `asc builds show`\n" +
 				"Try:\n" +
 				"  asc builds info --build-id BUILD_ID\n" +
 				"  asc builds list --app APP_ID\n" +
-				"For help:\n" +
-				"  asc builds --help\n",
-		},
-		{
-			name: "builds view with valid build-id rewrites exact command",
-			args: []string{"builds", "view", "--build-id", "BUILD_ID"},
-			wantStderr: "Error: unknown command `asc builds view`\n" +
-				"Try:\n" +
-				"  asc builds info --build-id BUILD_ID\n" +
 				"For help:\n" +
 				"  asc builds --help\n",
 		},
@@ -230,27 +221,12 @@ func TestRun_UnknownChildMapsLegacyAndAsymmetricPaths(t *testing.T) {
 			want:  []string{"asc build-localizations list --build-id BUILD_ID", "asc builds test-notes list --build-id BUILD_ID"},
 		},
 		{
-			args:  []string{"app-info"},
-			group: "asc",
-			want:  []string{"asc apps info view --app APP_ID", "asc apps info list --app APP_ID"},
-		},
-		{
-			args:  []string{"app-infos"},
-			group: "asc",
-			want:  []string{"asc apps info list --app APP_ID", "asc apps info view --app APP_ID"},
-		},
-		{
 			args:  []string{"app-availability"},
 			group: "asc",
 			want: []string{
 				"asc pricing availability view --app APP_ID",
 				"asc pricing availability edit --app APP_ID --territory TERRITORIES --available true",
 			},
-		},
-		{
-			args:  []string{"submissions"},
-			group: "asc",
-			want:  []string{"asc review submissions list --app APP_ID", "asc review status --app APP_ID"},
 		},
 		{
 			args:  []string{"privacy"},
@@ -263,60 +239,11 @@ func TestRun_UnknownChildMapsLegacyAndAsymmetricPaths(t *testing.T) {
 			want:  []string{"asc testflight groups list --app APP_ID", "asc testflight testers list --app APP_ID"},
 		},
 		{
-			args:  []string{"apps", "availability"},
-			group: "asc apps",
-			want: []string{
-				"asc pricing availability view --app APP_ID",
-				"asc pricing availability edit --app APP_ID --territory TERRITORIES --available true",
-			},
-		},
-		{
-			args:  []string{"subscriptions", "localizations"},
-			group: "asc subscriptions",
-			want: []string{
-				"asc subscriptions versions list --subscription-id SUBSCRIPTION_ID",
-				"asc subscriptions versions localizations list --version-id VERSION_ID",
-			},
-		},
-		{
-			args:  []string{"subscriptions", "localizations", "list", "--subscription-id", "123"},
-			group: "asc subscriptions",
-			want: []string{
-				"asc subscriptions versions list --subscription-id SUBSCRIPTION_ID",
-				"asc subscriptions versions localizations list --version-id VERSION_ID",
-			},
-		},
-		{
-			args:  []string{"subscriptions", "prices"},
-			group: "asc subscriptions",
-			want: []string{
-				"asc subscriptions pricing prices list --subscription-id SUBSCRIPTION_ID",
-				"asc subscriptions pricing prices set --subscription-id SUBSCRIPTION_ID --price PRICE --territory TERRITORY",
-			},
-		},
-		{
-			args:  []string{"subscriptions", "availability"},
-			group: "asc subscriptions",
-			want: []string{
-				"asc subscriptions pricing availability view --subscription-id SUBSCRIPTION_ID",
-				"asc subscriptions pricing availability edit --subscription-id SUBSCRIPTION_ID --territories TERRITORIES",
-			},
-		},
-		{
 			args:  []string{"subscriptions", "review-screenshots"},
 			group: "asc subscriptions",
 			want: []string{
 				"asc subscriptions review screenshots create --subscription-id SUBSCRIPTION_ID --file FILE_PATH",
 				"asc subscriptions review screenshots view --screenshot-id SCREENSHOT_ID",
-			},
-		},
-		{
-			args:  []string{"subscriptions", "introductory-offers"},
-			group: "asc subscriptions",
-			want: []string{
-				"asc subscriptions offers introductory list --subscription-id SUBSCRIPTION_ID",
-				"asc subscriptions offers introductory create --subscription-id SUBSCRIPTION_ID --territory TERRITORY " +
-					"--offer-duration DURATION --offer-mode MODE --number-of-periods PERIODS",
 			},
 		},
 		{
@@ -328,11 +255,11 @@ func TestRun_UnknownChildMapsLegacyAndAsymmetricPaths(t *testing.T) {
 			},
 		},
 		{
-			args:  []string{"versions", "localizations"},
+			args:  []string{"versions", "build"},
 			group: "asc versions",
 			want: []string{
-				"asc localizations list --version VERSION_ID",
-				"asc localizations list --app APP_ID --version VERSION",
+				"asc versions view --version-id VERSION_ID --include-build",
+				"asc builds info --build-id BUILD_ID",
 			},
 		},
 		{
@@ -341,14 +268,6 @@ func TestRun_UnknownChildMapsLegacyAndAsymmetricPaths(t *testing.T) {
 			want: []string{
 				"asc versions view --version-id VERSION_ID --include-build",
 				"asc builds info --build-id BUILD_ID",
-			},
-		},
-		{
-			args:  []string{"testflight", "beta-groups"},
-			group: "asc testflight",
-			want: []string{
-				"asc testflight groups list --app APP_ID",
-				"asc testflight groups create --app APP_ID --name NAME",
 			},
 		},
 		{
@@ -374,9 +293,58 @@ func TestRun_UnknownChildMapsLegacyAndAsymmetricPaths(t *testing.T) {
 			},
 		},
 		{
-			args:  []string{"review", "submissions", "create"},
+			args:  []string{"apps", "localizations"},
+			group: "asc apps",
+			want:  []string{"asc localizations list --app APP_ID --type app-info"},
+		},
+		{
+			args:  []string{"apps", "privacy"},
+			group: "asc apps",
+			want:  []string{"asc web privacy pull --app APP_ID"},
+		},
+		{
+			args:  []string{"apps", "review-detail"},
+			group: "asc apps",
+			want:  []string{"asc review details-get --app APP_ID"},
+		},
+		{
+			args:  []string{"review", "details-show"},
+			group: "asc review",
+			want:  []string{"asc review details-get --app APP_ID"},
+		},
+		{
+			args:  []string{"review", "submissions", "items"},
 			group: "asc review submissions",
-			want:  []string{"asc review submissions-create --app APP_ID --platform IOS"},
+			want:  []string{"asc review items list --submission SUBMISSION_ID"},
+		},
+		{
+			args:  []string{"versions", "relationships"},
+			group: "asc versions",
+			want:  []string{"asc versions links --version-id VERSION_ID --type RELATIONSHIP"},
+		},
+		{
+			args:  []string{"builds", "beta-build-localizations"},
+			group: "asc builds",
+			want:  []string{"asc builds links view --build-id BUILD_ID --type betaBuildLocalizations"},
+		},
+		{
+			args:  []string{"iap", "localizations", "list", "--iap-id", "IAP_ID"},
+			group: "asc iap",
+			want: []string{
+				"asc iap view --id IAP_ID --include inAppPurchaseLocalizations",
+				"asc iap versions list --iap-id IAP_ID",
+				"asc iap versions localizations list --version-id VERSION_ID",
+			},
+		},
+		{
+			args:  []string{"iap", "prices"},
+			group: "asc iap",
+			want:  []string{"asc iap pricing summary --app APP_ID"},
+		},
+		{
+			args:  []string{"iap", "price-points", "list"},
+			group: "asc iap",
+			want:  []string{"asc iap pricing price-points list --iap-id IAP_ID"},
 		},
 	}
 
@@ -471,6 +439,14 @@ func TestUnknownChildSynonymsResolveToRealCommands(t *testing.T) {
 			if findDirectSubcommand(groupCommand, token) != nil {
 				t.Fatalf("%q synonym %q shadows a real subcommand", group, token)
 			}
+			if target := commandAliasTarget(group, groupCommand, token); target != "" {
+				t.Fatalf("%q synonym %q is unreachable: the command alias runs %q", group, token, target)
+			}
+			if parts := strings.Fields(strings.TrimPrefix(group, "asc")); len(parts) > 0 {
+				if target := compoundChild(resolveCommandPath(root, parts[:len(parts)-1]), parts[len(parts)-1], token); target != nil {
+					t.Fatalf("%q synonym %q is unreachable: the command alias runs %q", group, token, target.Name)
+				}
+			}
 			for _, invocation := range invocations {
 				assertHintInvocationResolves(t, root, group+" "+token, invocation)
 			}
@@ -494,9 +470,9 @@ func TestRun_UnknownChildTelemetryNeverCarriesThePositionalToken(t *testing.T) {
 		{name: "former legacy child", args: []string{"auth", "whoami"}, token: "whoami", wantCommand: "asc auth", wantChild: "other"},
 		{name: "near match", args: []string{"builds", "lsit"}, token: "lsit", wantCommand: "asc builds", wantChild: "other"},
 		{name: "no suggestion", args: []string{"builds", "qqqqq"}, token: "qqqqq", wantCommand: "asc builds", wantChild: "other"},
-		{name: "allowlisted child", args: []string{"apps", "get"}, wantCommand: "asc apps", wantChild: "get"},
-		{name: "flag value is skipped", args: []string{"--profile", "list", "apps", "get"}, wantCommand: "asc apps", wantChild: "get"},
-		{name: "inline flag value is skipped", args: []string{"--profile=list", "apps", "get"}, wantCommand: "asc apps", wantChild: "get"},
+		{name: "allowlisted child", args: []string{"apps", "show"}, wantCommand: "asc apps", wantChild: "show"},
+		{name: "flag value is skipped", args: []string{"--profile", "list", "apps", "show"}, wantCommand: "asc apps", wantChild: "show"},
+		{name: "inline flag value is skipped", args: []string{"--profile=list", "apps", "show"}, wantCommand: "asc apps", wantChild: "show"},
 	}
 
 	for _, test := range tests {
@@ -541,9 +517,9 @@ func TestRun_UnknownChildGenericAliasesReachUncuratedGroups(t *testing.T) {
 		wantStderr string
 	}{
 		{
-			name: "get reaches view and list in a group the curated table never mentions",
-			args: []string{"accessibility", "get"},
-			wantStderr: "Error: unknown command `asc accessibility get`\n" +
+			name: "show reaches view and list in a group the curated table never mentions",
+			args: []string{"accessibility", "show"},
+			wantStderr: "Error: unknown command `asc accessibility show`\n" +
 				"Try:\n" +
 				"  asc accessibility view --help\n" +
 				"  asc accessibility list --help\n" +
@@ -669,8 +645,8 @@ func TestUnknownChildCuratedSynonymsOutrankGenericAliases(t *testing.T) {
 		t.Fatal("apps group does not resolve")
 	}
 
-	got := unknownChildSuggestions(apps, "asc apps", "get")
-	want := unknownChildSynonyms["asc apps"]["get"]
+	got := unknownChildSuggestions(apps, "asc apps", "show")
+	want := unknownChildSynonyms["asc apps"]["show"]
 	if !slices.Equal(got, want) {
 		t.Fatalf("unknownChildSuggestions() = %v, want the curated entries %v", got, want)
 	}
@@ -831,5 +807,54 @@ func TestUnknownChildSynonymsMirrorDocumentedExamples(t *testing.T) {
 
 	for invocation := range unusedExceptions {
 		t.Errorf("synonymsVerifiedAgainstValidation lists %q, which the table no longer suggests", invocation)
+	}
+}
+
+// TestRun_UnknownChildAppIDNamesTheAppFlag covers an App Store Connect app ID
+// given where a group expects a subcommand (`asc versions 1234567890`): the
+// error names the command and the `--app` flag that take it. A short number
+// can be a version or build number, so it gets no such line.
+func TestRun_UnknownChildAppIDNamesTheAppFlag(t *testing.T) {
+	root := RootCommand("1.0.0")
+	for group, leaf := range appIDOperandLeaf {
+		command := resolveCommandPath(root, append(strings.Fields(strings.TrimPrefix(group, "asc")), leaf))
+		if command == nil || command.FlagSet == nil || command.FlagSet.Lookup("app") == nil {
+			t.Fatalf("%s %s does not resolve to a command with --app", group, leaf)
+		}
+	}
+
+	tests := []struct {
+		args    []string
+		group   string
+		wantTry string
+	}{
+		{args: []string{"versions", "1234567890", "--platform", "IOS"}, group: "asc versions", wantTry: "asc versions list --app 1234567890"},
+		{args: []string{"apps", "info", "1234567890"}, group: "asc apps info", wantTry: "asc apps info view --app 1234567890"},
+		{args: []string{"versions", "2"}, group: "asc versions"},
+		{args: []string{"versions", "12345678901234567890123"}, group: "asc versions"},
+	}
+	for _, test := range tests {
+		t.Run(strings.Join(test.args, " "), func(t *testing.T) {
+			resetReportFlags(t)
+			stdout, stderr := captureCommandOutput(t, func() {
+				if code := Run(test.args, "1.0.0"); code != ExitUsage {
+					t.Fatalf("Run() exit code = %d, want %d", code, ExitUsage)
+				}
+			})
+			if stdout != "" {
+				t.Fatalf("stdout = %q, want empty", stdout)
+			}
+			prefix := "Error: unknown command `" + test.group + " " + test.args[len(strings.Fields(test.group))-1] + "`\n"
+			if test.wantTry == "" {
+				if !strings.HasPrefix(stderr, prefix) || strings.Contains(stderr, "--app "+test.args[len(test.args)-1]) {
+					t.Fatalf("stderr = %q, want the unknown command without an --app line", stderr)
+				}
+				return
+			}
+			want := prefix + "Try:\n  " + test.wantTry + "\nFor help:\n  " + test.group + " --help\n"
+			if stderr != want {
+				t.Fatalf("stderr = %q, want %q", stderr, want)
+			}
+		})
 	}
 }

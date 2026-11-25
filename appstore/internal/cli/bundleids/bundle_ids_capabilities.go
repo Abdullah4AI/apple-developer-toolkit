@@ -3,9 +3,11 @@ package bundleids
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
+	"net/http"
 	"slices"
 	"strings"
 
@@ -13,6 +15,7 @@ import (
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared/suggest"
 )
 
 // newBundleIDsCapabilitiesCommand returns the bundle IDs capabilities command group.
@@ -187,10 +190,10 @@ the API cannot create, even when that capability is already enabled.`,
 					return findExistingBundleIDCapability(requestCtx, client, bundleValue, capabilityValue)
 				})
 				if resolveErr != nil {
-					return fmt.Errorf("bundle-ids capabilities add: failed to create: %w", resolveErr)
+					return withCapabilitiesAddConflictHint(fmt.Errorf("bundle-ids capabilities add: failed to create: %w", resolveErr), bundleValue, capabilityValue)
 				}
 				if !handled {
-					return fmt.Errorf("bundle-ids capabilities add: failed to create: %w", err)
+					return withCapabilitiesAddConflictHint(fmt.Errorf("bundle-ids capabilities add: failed to create: %w", err), bundleValue, capabilityValue)
 				}
 				resp = existing
 				outcome := "left unchanged"
@@ -450,6 +453,116 @@ func validateCapabilitySettings(settings []asc.CapabilitySetting) error {
 		}
 	}
 	return nil
+}
+
+// signInWithAppleSettings is the --settings value that enables Sign in with
+// Apple as a primary App ID; Apple rejects APPLE_ID_AUTH without a
+// configuration ("Please select at least one configuration for Sign In with
+// Apple.").
+const signInWithAppleSettings = `'[{"key":"APPLE_ID_AUTH_APP_CONSENT","options":[{"key":"PRIMARY_APP_CONSENT","enabled":true}]}]'`
+
+// capabilityTypeAPINames maps entitlement- and portal-style names agents use
+// for a capability to the type App Store Connect's API accepts.
+var capabilityTypeAPINames = map[string]string{
+	"APPLICATION_GROUPS": "APP_GROUPS",
+	"SIGN_IN_WITH_APPLE": "APPLE_ID_AUTH",
+}
+
+// apiCapabilityTypes is the CapabilityType enum in Apple's OpenAPI document
+// (docs/openapi/latest.json): the capabilityType values
+// POST /v1/bundleIdCapabilities accepts.
+var apiCapabilityTypes = []string{
+	"ICLOUD", "IN_APP_PURCHASE", "GAME_CENTER", "PUSH_NOTIFICATIONS", "WALLET",
+	"INTER_APP_AUDIO", "MAPS", "ASSOCIATED_DOMAINS", "PERSONAL_VPN", "APP_GROUPS",
+	"HEALTHKIT", "HOMEKIT", "WIRELESS_ACCESSORY_CONFIGURATION", "APPLE_PAY",
+	"DATA_PROTECTION", "SIRIKIT", "NETWORK_EXTENSIONS", "MULTIPATH", "HOT_SPOT",
+	"NFC_TAG_READING", "CLASSKIT", "AUTOFILL_CREDENTIAL_PROVIDER",
+	"ACCESS_WIFI_INFORMATION", "NETWORK_CUSTOM_PROTOCOL", "COREMEDIA_HLS_LOW_LATENCY",
+	"SYSTEM_EXTENSION_INSTALL", "USER_MANAGEMENT", "APPLE_ID_AUTH",
+}
+
+// withCapabilitiesAddConflictHint names the next step for the 409s Apple
+// returns on POST /v1/bundleIdCapabilities that are not existence conflicts:
+// a capability type outside the API's enum, Sign in with Apple without a
+// configuration, and a --bundle that is a bundle identifier rather than the
+// bundle ID's resource ID. Every entry of Apple's errors[] is consulted, so a
+// cause reported after the first still gets its hint. Every other error is
+// returned unchanged.
+func withCapabilitiesAddConflictHint(err error, bundle, capability string) error {
+	apiErr, ok := errors.AsType[*asc.APIError](err)
+	if !ok || apiErr.StatusCode != http.StatusConflict {
+		return err
+	}
+	entries := apiErr.Entries
+	if len(entries) == 0 {
+		entries = []asc.APIErrorEntry{{Code: apiErr.Code, Detail: apiErr.Detail}}
+	}
+	for _, entry := range entries {
+		if hint := capabilitiesAddConflictEntryHint(entry, bundle, capability); hint != "" {
+			return &shared.HintedError{Err: err, Hint: hint}
+		}
+	}
+	return err
+}
+
+func capabilitiesAddConflictEntryHint(entry asc.APIErrorEntry, bundle, capability string) string {
+	switch {
+	case entry.Code == "ENTITY_ERROR.ATTRIBUTE.TYPE" && strings.Contains(entry.Detail, "for the attribute 'capabilityType'"):
+		return capabilityTypeRejectedHint(bundle, capability)
+	case strings.Contains(entry.Detail, "at least one configuration for Sign In with Apple"):
+		return fmt.Sprintf("Sign in with Apple needs a configuration. To enable it as a primary App ID: asc bundle-ids capabilities add --bundle %q --capability APPLE_ID_AUTH --settings %s", bundle, signInWithAppleSettings)
+	case entry.Code == "ENTITY_ERROR.RELATIONSHIP.INVALID" && strings.Contains(bundle, "."):
+		// Bundle ID resource IDs are alphanumeric; a dot means the caller
+		// passed the reverse-DNS identifier.
+		return fmt.Sprintf("--bundle takes the bundle ID's resource ID (for example ABCDE12345), not its identifier %q. Look the ID up with asc bundle-ids list --identifier %q, then rerun with --bundle set to it.", bundle, bundle)
+	}
+	return ""
+}
+
+func capabilityTypeRejectedHint(bundle, capability string) string {
+	if apiName, ok := capabilityTypeAPINames[capability]; ok {
+		hint := fmt.Sprintf("App Store Connect calls this capability %s: asc bundle-ids capabilities add --bundle %q --capability %s", apiName, bundle, apiName)
+		if apiName == "APPLE_ID_AUTH" {
+			hint += " --settings " + signInWithAppleSettings
+		}
+		return hint
+	}
+	if capability == "PRIVATE_CLOUD_COMPUTE" {
+		return fmt.Sprintf("PRIVATE_CLOUD_COMPUTE is a Developer Portal-only capability. Enable it through a web session with asc web bundle-ids capabilities enable --bundle-id %q --capability PRIVATE_CLOUD_COMPUTE --confirm", bundle)
+	}
+	// A near miss of a type the API accepts is a typo, not a portal-only
+	// capability: name the type it most likely meant.
+	if closest := closestAPICapabilityTypes(capability); len(closest) > 0 {
+		command := fmt.Sprintf("asc bundle-ids capabilities add --bundle %q --capability %s", bundle, closest[0])
+		if len(closest) == 1 {
+			return fmt.Sprintf("%s is not a capability type the App Store Connect API recognizes; the closest one it accepts is %s: %s", capability, closest[0], command)
+		}
+		return fmt.Sprintf("%s is not a capability type the App Store Connect API recognizes; the closest ones it accepts are %s. Rerun with the one you meant, for example: %s", capability, strings.Join(closest, ", "), command)
+	}
+	return fmt.Sprintf("The App Store Connect API does not accept %s (Apple lists the capability types it accepts above), and retrying with other flags or --if-exists does not change that. If %s is a capability the Apple Developer portal offers, enable it on this App ID there (Certificates, Identifiers & Profiles > Identifiers), then regenerate the provisioning profiles that use the App ID.", capability, capability)
+}
+
+// closestAPICapabilityTypes returns up to three API capability types the
+// rejected capability is a likely misspelling of. A name that holds a whole
+// API type and more words, such as HEALTHKIT_RECALIBRATE_ESTIMATES, is a
+// different capability rather than a misspelling of that type. The suggester
+// ranks hyphen-separated names, so underscores are swapped for hyphens going
+// in and back coming out.
+func closestAPICapabilityTypes(capability string) []string {
+	toSuggest := func(value string) string { return strings.ReplaceAll(value, "_", "-") }
+	candidates := make([]string, len(apiCapabilityTypes))
+	for i, capabilityType := range apiCapabilityTypes {
+		candidates[i] = toSuggest(capabilityType)
+	}
+	matches := suggest.Commands(toSuggest(capability), candidates)
+	words := "-" + strings.ToLower(strings.TrimSpace(toSuggest(capability))) + "-"
+	matches = slices.DeleteFunc(matches, func(apiType string) bool {
+		return strings.Contains(words, "-"+apiType+"-")
+	})
+	for i, match := range matches {
+		matches[i] = strings.ToUpper(strings.ReplaceAll(match, "-", "_"))
+	}
+	return matches
 }
 
 // capabilitiesAddExistsCodes lists the Apple 409 codes accepted as "this

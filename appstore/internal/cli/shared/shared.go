@@ -96,6 +96,13 @@ func unusableCredentialsError(err error, code DiagnosticCode) error {
 	return WithDiagnostic(missingAuthError{msg: err.Error(), cause: err}, code, "")
 }
 
+// UnreadableKeychainError reports a system keychain this process cannot read
+// the way credential resolution does: as an authentication failure with the
+// dependency_failed diagnostic. The message is err's text.
+func UnreadableKeychainError(err error) error {
+	return unusableCredentialsError(err, DiagnosticDependencyFailed)
+}
+
 var (
 	privateKeyTempMu    sync.Mutex
 	privateKeyTempPath  string
@@ -957,22 +964,12 @@ func allowsEnvFallbackForStoredError(err error) bool {
 // ASC_BEARER_TOKEN_COMMAND when that is set. Either variable takes precedence
 // over every stored or environment key; ok is false when both are unset.
 func bearerTokenClient(timeout time.Duration) (client *asc.Client, ok bool, err error) {
-	token := strings.TrimSpace(os.Getenv(bearerTokenEnvVar))
-	command := strings.TrimSpace(os.Getenv(bearerTokenCommandEnv))
+	token, command := BearerTokenEnv()
 	if token == "" && command == "" {
 		return nil, false, nil
 	}
-	source := bearerTokenEnvVar
-	if command != "" {
-		source = bearerTokenCommandEnv
-	}
-	// The token already names its key and team, so a selection that would
-	// pick other credentials or another API host cannot be honored.
-	if profile := resolveProfileName(); profile != "" {
-		return nil, true, fmt.Errorf("%s cannot be combined with profile %q from --profile or %s; unset one of them", source, profile, profileEnvVar)
-	}
-	if config.IsEnterpriseCredentialKeyType(config.NormalizeCredentialKeyType(os.Getenv(keyTypeEnvVar))) {
-		return nil, true, fmt.Errorf("%s does not support %s=enterprise; unset %s or use the enterprise private key", source, keyTypeEnvVar, keyTypeEnvVar)
+	if err := BearerTokenSelectionError(); err != nil {
+		return nil, true, err
 	}
 	ApplyRootLoggingOverrides()
 	var renew asc.BearerTokenRenewer
@@ -995,6 +992,42 @@ func bearerTokenClient(timeout time.Duration) (client *asc.Client, ok bool, err 
 		return nil, true, missingAuthError{msg: fmt.Sprintf("%s: %v", bearerTokenEnvVar, err), cause: err}
 	}
 	return client, true, nil
+}
+
+// BearerTokenEnv returns ASC_BEARER_TOKEN and ASC_BEARER_TOKEN_COMMAND, trimmed.
+// When either is set, every App Store Connect API client uses it instead of
+// stored or environment keys.
+func BearerTokenEnv() (token, command string) {
+	return strings.TrimSpace(os.Getenv(bearerTokenEnvVar)), strings.TrimSpace(os.Getenv(bearerTokenCommandEnv))
+}
+
+// BearerTokenSelectionError reports a credential selection that a token from
+// ASC_BEARER_TOKEN or ASC_BEARER_TOKEN_COMMAND cannot honor, so every command
+// refuses the token. It returns nil when neither variable is set.
+func BearerTokenSelectionError() error {
+	token, command := BearerTokenEnv()
+	if token == "" && command == "" {
+		return nil
+	}
+	source := bearerTokenEnvVar
+	if command != "" {
+		source = bearerTokenCommandEnv
+	}
+	// The token already names its key and team, so a selection that would
+	// pick other credentials or another API host cannot be honored.
+	if profile := resolveProfileName(); profile != "" {
+		return fmt.Errorf("%s cannot be combined with profile %q from --profile or %s; unset one of them", source, profile, profileEnvVar)
+	}
+	if config.IsEnterpriseCredentialKeyType(config.NormalizeCredentialKeyType(os.Getenv(keyTypeEnvVar))) {
+		return fmt.Errorf("%s does not support %s=enterprise; unset %s or use the enterprise private key", source, keyTypeEnvVar, keyTypeEnvVar)
+	}
+	return nil
+}
+
+// BearerTokenClient returns the client every command would get from
+// ASC_BEARER_TOKEN or ASC_BEARER_TOKEN_COMMAND; ok is false when both are unset.
+func BearerTokenClient(timeout time.Duration) (client *asc.Client, ok bool, err error) {
+	return bearerTokenClient(timeout)
 }
 
 func getASCClient() (*asc.Client, error) {
@@ -1656,6 +1689,11 @@ func BindOutputFlagsWithAllowed(fs *flag.FlagSet, flagName, defaultValue, usage 
 		pretty:  &prettyValue,
 		allowed: slices.Clone(allowed),
 	}, name, usage)
+	// Callers carry `--json` over from other CLIs; on a format selector that
+	// offers json it is a hidden second spelling of `--output json`.
+	if name == "output" && slices.Contains(allowed, "json") && fs.Lookup("json") == nil {
+		BindFlagValueAlias(fs, "json", name, "json")
+	}
 
 	return OutputFlags{
 		Output: &outputValue,
@@ -1775,6 +1813,25 @@ func rejectGivenEmptyAppFlag(path []*ffcli.Command, stderr io.Writer) error {
 		return nil
 	}
 	return WithDiagnostic(usageErrorTo(stderr, "--app must not be empty"), DiagnosticInvalidInput, "--app")
+}
+
+type AppSelectorSource uint8
+
+const (
+	AppSelectorFromFlag AppSelectorSource = iota
+	AppSelectorFromConfiguration
+)
+
+type AppSelector struct {
+	Value  string
+	Source AppSelectorSource
+}
+
+func (d *Deps) ResolveAppSelector(appID string) AppSelector {
+	if strings.TrimSpace(appID) != "" {
+		return AppSelector{Value: d.ResolveAppID(appID), Source: AppSelectorFromFlag}
+	}
+	return AppSelector{Value: d.ResolveAppID(appID), Source: AppSelectorFromConfiguration}
 }
 
 func resolveAppID(appID string) string {

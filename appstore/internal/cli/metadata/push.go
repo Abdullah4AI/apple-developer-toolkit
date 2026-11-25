@@ -8,6 +8,7 @@ import (
 	"flag"
 	"fmt"
 	"net"
+	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -62,7 +63,8 @@ type PlanAPICall struct {
 }
 
 // Statuses recorded on ApplyAction. metadataActionStatusSkipped is additive:
-// it is only ever recorded when --if-exists skip resolved a create conflict,
+// it is recorded when --if-exists skip resolved a create conflict, or when an
+// update had nothing left to send after App Store Connect refused whatsNew,
 // and it reuses the shared idempotent-write vocabulary from
 // asc.IdempotentWriteActionSkipped.
 const (
@@ -77,16 +79,19 @@ const (
 // on every path that does not hit an existence conflict, so the default
 // receipt is unchanged.
 type ApplyAction struct {
-	Scope               string            `json:"scope"`
-	Locale              string            `json:"locale"`
-	Version             string            `json:"version,omitempty"`
-	Action              string            `json:"action"`
-	Status              string            `json:"status,omitempty"`
-	LocalizationID      string            `json:"localizationId,omitempty"`
-	Error               string            `json:"error,omitempty"`
-	DesiredFields       map[string]string `json:"desiredFields,omitempty"`
-	AlreadyExists       bool              `json:"alreadyExists,omitempty"`
-	IfExists            string            `json:"ifExists,omitempty"`
+	Scope          string            `json:"scope"`
+	Locale         string            `json:"locale"`
+	Version        string            `json:"version,omitempty"`
+	Action         string            `json:"action"`
+	Status         string            `json:"status,omitempty"`
+	LocalizationID string            `json:"localizationId,omitempty"`
+	Error          string            `json:"error,omitempty"`
+	DesiredFields  map[string]string `json:"desiredFields,omitempty"`
+	AlreadyExists  bool              `json:"alreadyExists,omitempty"`
+	IfExists       string            `json:"ifExists,omitempty"`
+	// SkippedFields lists fields App Store Connect refused in this state and
+	// push left out of the write (whatsNew on an app's first version).
+	SkippedFields       []string `json:"skippedFields,omitempty"`
 	reconciledDuplicate bool
 	convertedFromCreate bool
 }
@@ -504,9 +509,6 @@ func resolveMetadataPushAppInfoID(
 	dir string,
 	versionState string,
 ) (string, error) {
-	if appInfoID != "" {
-		return d.ResolveOwnedAppInfoID(ctx, client, appID, appInfoID)
-	}
 	return resolveMetadataAppInfoID(ctx, d, client, appID, appInfoID, version, platform, dir, versionState, func(aid, v, p, d, infoID string) string {
 		return buildMetadataAppInfoExample(commandName, aid, v, p, d, infoID) + " --dry-run"
 	})
@@ -524,8 +526,9 @@ func resolveMetadataAppInfoID(
 	versionState string,
 	buildExample exampleBuilderFunc,
 ) (string, error) {
+	ctx = asc.WithNoRedirectReads(ctx)
 	if appInfoID != "" {
-		return appInfoID, nil
+		return d.ResolveOwnedAppInfoID(ctx, client, appID, appInfoID)
 	}
 
 	resp, err := client.GetAppInfos(ctx, appID)
@@ -744,7 +747,31 @@ func canonicalStringFieldPatchKey(field string, allowed []string) (string, error
 			return key, nil
 		}
 	}
-	return "", fmt.Errorf("json: unknown field %q", field)
+	return "", fmt.Errorf("json: unknown field %q; %s", field, unknownLocalizationFieldHint(field, allowed))
+}
+
+// unknownLocalizationFieldHint says where a field that is not allowed in this
+// localization file belongs, so the file can be fixed in one step.
+func unknownLocalizationFieldHint(field string, allowed []string) string {
+	belongsIn := func(fields []string) bool {
+		return slices.ContainsFunc(fields, func(key string) bool { return strings.EqualFold(field, key) })
+	}
+	scope := "version"
+	if slices.Equal(allowed, appInfoPlanFields) {
+		scope = "app-info"
+		if belongsIn(versionPlanFields) {
+			return "it is a version localization field: move it to version/<version>/<locale>.json"
+		}
+	} else if belongsIn(appInfoPlanFields) {
+		return "it is an app-info localization field: move it to app-info/<locale>.json"
+	}
+	switch strings.ToLower(field) {
+	case "copyright":
+		return "copyright is not a localization field: remove it and set it with `asc versions update --version-id VERSION_ID --copyright \"TEXT\"`"
+	case "locale":
+		return "the file name sets the locale: remove this key"
+	}
+	return fmt.Sprintf("%s localization fields: %s", scope, strings.Join(allowed, ", "))
 }
 
 // clearableMetadataFields lists the localization attributes App Store Connect
@@ -1023,6 +1050,16 @@ func applyMetadataPlan(
 	versionActions, err := applyVersionChanges(ctx, d, client, versionID, version, localVersion, remoteVersionItems, allowDeletes, ifExists)
 	for i := range versionActions {
 		_, versionActions[i].convertedFromCreate = createdLocales[versionActions[i].Locale]
+		if slices.Contains(versionActions[i].SkippedFields, "whatsNew") {
+			rest := "The other fields were pushed."
+			switch versionActions[i].Status {
+			case metadataActionStatusSkipped:
+				rest = "Nothing else changed."
+			case metadataActionStatusFailed:
+				rest = "Pushing the other fields failed; see the action error."
+			}
+			fmt.Fprintf(d.IO.ErrOut, "Warning: whatsNew was not set for locale %s of version %s: App Store Connect does not allow What's New on an app's first version (409 STATE_ERROR). %s\n", versionActions[i].Locale, version, rest)
+		}
 	}
 	actions = append(actions, versionActions...)
 	if err != nil {
@@ -1208,15 +1245,16 @@ func applyAppInfoChanges(
 				result.actions = append(result.actions, successfulMetadataAction(appInfoDirName, locale, "", action, id))
 			}
 		case remoteExists:
+			setFields := changedSetFields(localPatch.setFields, remoteFields)
 			clearFields := changedClearFields(localPatch.clearFields, remoteFields)
-			desired := desiredLocalizationFields(localPatch.setFields, clearFields)
+			desired := desiredLocalizationFields(setFields, clearFields)
 			id, action, err := runMetadataMutation(
 				ctx, d, "update",
 				func(requestCtx context.Context) (string, error) {
 					resp, mutationErr := client.UpdateAppInfoLocalizationNullableFields(
 						requestCtx,
 						remoteState.id,
-						nullableLocalizationPayload(localPatch.setFields, clearFields),
+						nullableLocalizationPayload(setFields, clearFields),
 					)
 					if mutationErr != nil {
 						return "", mutationErr
@@ -1380,16 +1418,44 @@ func applyVersionChanges(
 				result.actions = append(result.actions, successfulMetadataAction(versionDirName, locale, version, action, id))
 			}
 		case remoteExists:
+			setFields := changedSetFields(localPatch.setFields, remoteFields)
 			clearFields := changedClearFields(localPatch.clearFields, remoteFields)
-			desired := desiredLocalizationFields(localPatch.setFields, clearFields)
+			desired := desiredLocalizationFields(setFields, clearFields)
+			var skippedFields []string
 			id, action, err := runMetadataMutation(
 				ctx, d, "update",
 				func(requestCtx context.Context) (string, error) {
 					resp, mutationErr := client.UpdateAppStoreVersionLocalizationNullableFields(
 						requestCtx,
 						remoteState.id,
-						nullableLocalizationPayload(localPatch.setFields, clearFields),
+						nullableLocalizationPayload(setFields, clearFields),
 					)
+					// Apple has no What's New on an app's first version and
+					// refuses the whole PATCH, applying nothing, so the other
+					// fields can be sent again without it.
+					// A later version answers a locked whatsNew with the same
+					// 409, so this applies only to the app's first version.
+					firstVersion := false
+					if mutationErr != nil && skippedFields == nil && setFields["whatsNew"] != "" && isWhatsNewOnlyStateError(mutationErr) && ifExists.firstVersion != nil {
+						var readErr error
+						firstVersion, readErr = ifExists.firstVersion(ctx)
+						if readErr != nil {
+							mutationErr = fmt.Errorf("%w\n(could not confirm that version %s is the app's first version, where App Store Connect refuses whatsNew and push leaves it out: %w; rerun the push)", mutationErr, version, readErr)
+						}
+					}
+					if firstVersion {
+						skippedFields = []string{"whatsNew"}
+						delete(setFields, "whatsNew")
+						delete(desired, "whatsNew")
+						if len(setFields) == 0 && len(clearFields) == 0 {
+							return remoteState.id, nil
+						}
+						resp, mutationErr = client.UpdateAppStoreVersionLocalizationNullableFields(
+							requestCtx,
+							remoteState.id,
+							nullableLocalizationPayload(setFields, clearFields),
+						)
+					}
 					if mutationErr != nil {
 						return "", mutationErr
 					}
@@ -1400,10 +1466,17 @@ func applyVersionChanges(
 				},
 			)
 			if err != nil {
-				result.actions = append(result.actions, failedMetadataAction(versionDirName, locale, version, "update", remoteState.id, desired, err))
+				failed := failedMetadataAction(versionDirName, locale, version, "update", remoteState.id, desired, err)
+				failed.SkippedFields = skippedFields
+				result.actions = append(result.actions, failed)
 				result.errs = append(result.errs, newMetadataMutationActionError(fmt.Errorf("update version localization %s (fields: %s): %w", locale, formatAttemptedFieldMap(versionPlanFields, desired), err)))
 			} else {
-				result.actions = append(result.actions, successfulMetadataAction(versionDirName, locale, version, action, id))
+				succeeded := successfulMetadataAction(versionDirName, locale, version, action, id)
+				succeeded.SkippedFields = skippedFields
+				if len(desired) == 0 {
+					succeeded.Status = metadataActionStatusSkipped
+				}
+				result.actions = append(result.actions, succeeded)
 			}
 		}
 		return result
@@ -1533,6 +1606,10 @@ type metadataIfExistsOptions struct {
 	prefix string
 	// lateAppInfoIDs are locales found by the preflight read after the plan read.
 	lateAppInfoIDs map[string]string
+	// firstVersion reports whether the pushed version is the app's first on
+	// its platform, or the error of the read that would tell; nil means it is
+	// not known to be.
+	firstVersion func(context.Context) (bool, error)
 }
 
 // metadataCreateConflict describes one localization create whose failure may
@@ -1913,6 +1990,80 @@ func countIntentChanges(fields []string, localSet map[string]string, localClears
 		}
 	}
 	return adds, updates
+}
+
+// newFirstVersionCheck reports whether versionID is the app's first version
+// on its platform: no other App Store version exists on that platform. Apple
+// never allows whatsNew on a first version, whatever its state. The answer is
+// read once; a failed read returns its error, counts as not first, and is
+// tried again on the next call. More than one page counts as not first.
+func newFirstVersionCheck(d *shared.Deps, client *asc.Client, appID, versionID, platform string) func(context.Context) (bool, error) {
+	var mu sync.Mutex
+	known, first := false, false
+	return func(ctx context.Context) (bool, error) {
+		if strings.TrimSpace(platform) == "" {
+			return false, nil
+		}
+		mu.Lock()
+		defer mu.Unlock()
+		if known {
+			return first, nil
+		}
+		resp, err := shared.RetryReadWithFreshTimeoutWith(ctx, d, func(requestCtx context.Context) (*asc.AppStoreVersionsResponse, error) {
+			return client.GetAppStoreVersions(requestCtx, appID,
+				asc.WithAppStoreVersionsPlatforms([]string{platform}),
+				asc.Limit[asc.AppStoreVersionsOption](200),
+			)
+		})
+		if err != nil {
+			return false, err
+		}
+		if resp == nil {
+			return false, fmt.Errorf("empty app store versions response")
+		}
+		known = true
+		if strings.TrimSpace(resp.Links.Next) != "" {
+			return false, nil
+		}
+		for _, item := range resp.Data {
+			if item.ID != versionID {
+				return false, nil
+			}
+		}
+		first = true
+		return true, nil
+	}
+}
+
+// isWhatsNewOnlyStateError reports whether App Store Connect refused a write
+// only because it set whatsNew: every error is a 409 STATE_ERROR naming
+// whatsNew, as Apple answers a PATCH that sets it on an app's first version.
+func isWhatsNewOnlyStateError(err error) bool {
+	apiErr, ok := errors.AsType[*asc.APIError](err)
+	if !ok || apiErr.StatusCode != http.StatusConflict || len(apiErr.Entries) == 0 {
+		return false
+	}
+	for _, entry := range apiErr.Entries {
+		if entry.Code != "STATE_ERROR" || !strings.Contains(entry.Detail, "'whatsNew'") {
+			return false
+		}
+	}
+	return true
+}
+
+// changedSetFields keeps a PATCH limited to values that differ from the
+// remote localization. App Store Connect rejects the whole PATCH with 409 when
+// it carries a field the current state locks (whatsNew on an app's first
+// version, everything but promotionalText on a live version), even when the
+// value is unchanged.
+func changedSetFields(localSet map[string]string, remote map[string]string) map[string]string {
+	changed := make(map[string]string, len(localSet))
+	for field, value := range localSet {
+		if remoteValue, exists := remote[field]; !exists || remoteValue != value {
+			changed[field] = value
+		}
+	}
+	return changed
 }
 
 // changedClearFields keeps a PATCH limited to clears present in the plan.

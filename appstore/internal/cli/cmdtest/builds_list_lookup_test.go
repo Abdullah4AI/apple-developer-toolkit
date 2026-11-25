@@ -54,6 +54,18 @@ func TestAppScopedCommandsResolveAppByBundleID(t *testing.T) {
 			deps:       true,
 		},
 		{
+			name:     "apps view",
+			args:     []string{"apps", "view", "--app", "com.example.view"},
+			bundleID: "com.example.view",
+			appID:    "100000002",
+			requests: []lookupRequest{{
+				matcher: asctest.GET("/v1/apps/100000002"),
+				body:    `{"data":{"type":"apps","id":"100000002"}}`,
+			}},
+			wantStdout: `"id":"100000002"`,
+			deps:       true,
+		},
+		{
 			name:     "testflight crashes list",
 			args:     []string{"testflight", "crashes", "list", "--app", "com.example.crashes"},
 			bundleID: "com.example.crashes",
@@ -73,8 +85,8 @@ func TestAppScopedCommandsResolveAppByBundleID(t *testing.T) {
 			t.Setenv("ASC_CONFIG_PATH", filepath.Join(t.TempDir(), "nonexistent.json"))
 
 			requests := append([]lookupRequest{{
-				matcher: asctest.GET("/v1/apps", "filter[bundleId]="+test.bundleID, "limit=2"),
-				body:    `{"data":[{"type":"apps","id":"` + test.appID + `"}]}`,
+				matcher: asctest.GET("/v1/apps", "filter[bundleId]="+test.bundleID, "limit=200"),
+				body:    `{"data":[{"type":"apps","id":"` + test.appID + `","attributes":{"bundleId":"` + test.bundleID + `"}}]}`,
 			}}, test.requests...)
 			reg := asctest.NewRegistry(t)
 			for _, request := range requests {

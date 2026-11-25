@@ -15,6 +15,7 @@ import (
 	"github.com/peterbourgon/ff/v3/ffcli"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared/errfmt"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/handlertest"
 	webcore "github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/web"
 )
@@ -306,9 +307,13 @@ func TestWebReviewSubscriptionsSingleMutationReportsRefreshedState(t *testing.T)
 				premiumGroupBody(t, monthlySubscription("READY_TO_SUBMIT", tt.refreshedAttached)),
 			)
 
-			stdout, _, err := runReviewSubscriptionsCommand(t, tt.command, "--app", "app-1", "--subscription-id", tt.selector, "--confirm", "--output", "json")
+			stdout, stderr, err := runReviewSubscriptionsCommand(t, tt.command, "--app", "app-1", "--subscription-id", tt.selector, "--confirm", "--output", "json")
 			if err != nil {
 				t.Fatalf("exec error: %v", err)
+			}
+			// The web-session flow stays the default and is not deprecated.
+			if strings.Contains(stderr, "deprecated") {
+				t.Fatalf("unexpected deprecation warning for %s: %q", tt.wantOperation, stderr)
 			}
 
 			var payload reviewSubscriptionMutationOutput
@@ -368,10 +373,12 @@ func TestWebReviewSubscriptionsAttachPreflightFailsFast(t *testing.T) {
 			},
 			wantStderr: []string{
 				"is MISSING_METADATA",
-				`asc validate subscriptions --app "app-1"`,
+				"does not say which metadata is missing",
+				"retrying won't help",
+				`asc subscriptions view --id "sub-1"`,
 				`asc subscriptions versions list --subscription-id "sub-1"`,
-				`asc subscriptions versions create --subscription-id "sub-1"`,
-				`asc subscriptions versions images upload --version-id "VERSION_ID" --file "./image.png"`,
+				`asc review items add --submission "SUBMISSION_ID" --item-type subscriptionVersions --item-id "VERSION_ID"`,
+				`asc validate subscriptions --app "app-1"`,
 			},
 			rejectStderr: []string{"asc subscriptions images create"},
 		},
@@ -396,6 +403,23 @@ func TestWebReviewSubscriptionsAttachPreflightFailsFast(t *testing.T) {
 			},
 			wantStderr: []string{"no READY_TO_SUBMIT subscriptions"},
 		},
+		{
+			name:    "AttachGroupNamesTheReviewItemPathForMissingMetadata",
+			command: newWebReviewSubscriptionsAttachGroupCommand,
+			args:    []string{"--group-id", "group-1"},
+			body: func(t *testing.T) string {
+				return premiumGroupBody(t,
+					monthlySubscription("MISSING_METADATA", false),
+					reviewSubscriptionFixture{ID: "sub-2", ProductID: "com.example.annual", Name: "Annual", State: "MISSING_METADATA"},
+				)
+			},
+			wantStderr: []string{
+				"no READY_TO_SUBMIT subscriptions",
+				"retrying won't help",
+				`asc subscriptions list --group-id "group-1"`,
+				`asc review items add --submission "SUBMISSION_ID" --item-type subscriptionVersions --item-id "VERSION_ID"`,
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -408,6 +432,16 @@ func TestWebReviewSubscriptionsAttachPreflightFailsFast(t *testing.T) {
 			var reported shared.ReportedError
 			if !errors.As(err, &reported) {
 				t.Fatalf("expected ReportedError, got %T: %v", err, err)
+			}
+			if !shared.IsPrintedToStderr(err) {
+				t.Fatalf("expected the preflight to be marked as already printed to stderr, got %T: %v", err, err)
+			}
+			if !shared.IsValidationError(err) {
+				t.Fatalf("expected a not-ready subscription to be a validation failure, got %T: %v", err, err)
+			}
+			diagnostic, ok := shared.DiagnosticFromError(err)
+			if !ok || diagnostic.Code != shared.DiagnosticStateNotReady {
+				t.Fatalf("expected %s diagnostic, got %+v (ok=%v)", shared.DiagnosticStateNotReady, diagnostic, ok)
 			}
 			fake.assertRequests(t, reviewSubscriptionsListRequest)
 			for _, want := range tt.wantStderr {
@@ -422,6 +456,119 @@ func TestWebReviewSubscriptionsAttachPreflightFailsFast(t *testing.T) {
 			}
 			fake.assertLabels(t, "Loading review subscriptions")
 		})
+	}
+}
+
+func TestWebReviewSubscriptionsAttachReportsBrokerRefusal(t *testing.T) {
+	policyRefusal := &webcore.BrokerError{Status: http.StatusForbidden, Code: "REQUEST_NOT_LENT", Message: "not lent for this request"}
+	tests := []struct {
+		name         string
+		command      func(*shared.Deps) *ffcli.Command
+		args         []string
+		lent         bool
+		refusal      *webcore.BrokerError
+		wantRequests []string
+		wantLentStop bool
+	}{
+		{name: "AttachLentRefused", command: newWebReviewSubscriptionsAttachCommand, args: []string{"--subscription-id", "sub-1"}, lent: true, refusal: policyRefusal, wantRequests: []string{reviewSubscriptionsListRequest, "POST sub-1"}, wantLentStop: true},
+		{name: "AttachGroupLentRefused", command: newWebReviewSubscriptionsAttachGroupCommand, args: []string{"--group-id", "group-1"}, lent: true, refusal: policyRefusal, wantRequests: []string{reviewSubscriptionsListRequest, "POST sub-1"}, wantLentStop: true},
+		{name: "AttachLentRateLimited", command: newWebReviewSubscriptionsAttachCommand, args: []string{"--subscription-id", "sub-1"}, lent: true, refusal: &webcore.BrokerError{Status: http.StatusTooManyRequests, Code: "RATE_LIMITED"}, wantRequests: []string{reviewSubscriptionsListRequest, "POST sub-1"}},
+		{name: "AttachLentRelayed", command: newWebReviewSubscriptionsAttachCommand, args: []string{"--subscription-id", "sub-1"}, lent: true, wantRequests: []string{reviewSubscriptionsListRequest, "POST sub-1", reviewSubscriptionsListRequest}},
+		{name: "AttachGroupLentRelayed", command: newWebReviewSubscriptionsAttachGroupCommand, args: []string{"--group-id", "group-1"}, lent: true, wantRequests: []string{reviewSubscriptionsListRequest, "POST sub-1", reviewSubscriptionsListRequest}},
+		{name: "AttachDirect", command: newWebReviewSubscriptionsAttachCommand, args: []string{"--subscription-id", "sub-1"}, wantRequests: []string{reviewSubscriptionsListRequest, "POST sub-1", reviewSubscriptionsListRequest}},
+		{name: "AttachGroupDirect", command: newWebReviewSubscriptionsAttachGroupCommand, args: []string{"--group-id", "group-1"}, wantRequests: []string{reviewSubscriptionsListRequest, "POST sub-1", reviewSubscriptionsListRequest}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fake := stubReviewSubscriptions(t,
+				premiumGroupBody(t, monthlySubscription("READY_TO_SUBMIT", false)),
+				premiumGroupBody(t, monthlySubscription("READY_TO_SUBMIT", true)),
+			)
+			fake.postRefusal = tt.refusal
+			if tt.lent {
+				lendReviewSubscriptionsSession(t)
+			}
+
+			_, stderr, err := runReviewSubscriptionsCommand(t, tt.command, append([]string{"--app", "app-1", "--confirm", "--output", "json"}, tt.args...)...)
+			fake.assertRequests(t, tt.wantRequests...)
+			if tt.refusal == nil {
+				if err != nil {
+					t.Fatalf("attach failed: %v", err)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatal("expected the broker's refusal to fail the attach")
+			}
+			if _, ok := errors.AsType[*webcore.BrokerError](err); !ok {
+				t.Fatalf("expected the broker's refusal to stay in the error chain, got %v", err)
+			}
+			// What the caller reads: the command's stderr, then the error as
+			// main prints it.
+			message := stderr + "\n" + errfmt.FormatStderr(err)
+			if !tt.wantLentStop {
+				if strings.Contains(message, "can't submit subscriptions for review") {
+					t.Fatalf("a %d broker refusal must not be reported as the broker's policy, got %q", tt.refusal.Status, message)
+				}
+				return
+			}
+			diagnostic, ok := shared.DiagnosticFromError(err)
+			if !ok || diagnostic.Code != shared.DiagnosticDependencyFailed {
+				t.Fatalf("expected %s diagnostic, got %+v (ok=%v)", shared.DiagnosticDependencyFailed, diagnostic, ok)
+			}
+			for _, want := range []string{
+				"can't submit subscriptions for review",
+				"(REQUEST_NOT_LENT): not lent for this request",
+				"App Store > Subscriptions",
+				`asc review items add --submission "SUBMISSION_ID" --item-type subscriptionVersions --item-id "VERSION_ID"`,
+			} {
+				if !strings.Contains(message, want) {
+					t.Fatalf("expected %q in the refusal, got %q", want, message)
+				}
+			}
+			if strings.Contains(strings.ToLower(message), "permission") {
+				t.Fatalf("the refusal must not blame the account's permissions, got %q", message)
+			}
+		})
+	}
+}
+
+// The subscription IDs in the refusal come from the web listing, so terminal
+// control sequences in them must not reach the caller's terminal.
+func TestReviewSubscriptionBrokerRefusalErrorSanitizesListedIDs(t *testing.T) {
+	refusal := &webcore.BrokerError{Status: http.StatusForbidden, Code: "REQUEST_NOT_LENT", Message: "not lent for this request"}
+	attached := "sub-1\x1b[2K\r"
+	notAttached := "sub-2\x1b]0;title\a"
+	err := reviewSubscriptionBrokerRefusalError("attach-group", refusal, []string{notAttached}, []string{attached})
+	if err == nil {
+		t.Fatal("expected a refusal error")
+	}
+	message := errfmt.FormatStderr(err)
+	for _, control := range []string{"\x1b", "\r", "\a"} {
+		if strings.Contains(message, control) {
+			t.Fatalf("expected no terminal control %q in the refusal, got %q", control, message)
+		}
+	}
+	if !strings.Contains(message, "attached before the refusal") || !strings.Contains(message, "sub-1") || !strings.Contains(message, "sub-2") {
+		t.Fatalf("expected both subscription IDs in the outcome, got %q", message)
+	}
+}
+
+// lendReviewSubscriptionsSession marks the stubbed web session as one a
+// broker lends, keeping its transport.
+func lendReviewSubscriptionsSession(t *testing.T) {
+	t.Helper()
+	original, ok := resolveSessionFn.(func(context.Context, string, string, string) (*webcore.AuthSession, string, error))
+	if !ok {
+		t.Fatalf("expected a stubbed web session resolver, got %T", resolveSessionFn)
+	}
+	t.Cleanup(func() { resolveSessionFn = original })
+	resolveSessionFn = func(ctx context.Context, appleID, password, twoFactorCode string) (*webcore.AuthSession, string, error) {
+		session, source, err := original(ctx, appleID, password, twoFactorCode)
+		if session != nil {
+			session.Brokered = true
+		}
+		return session, source, err
 	}
 }
 
@@ -862,6 +1009,9 @@ func reviewSubscriptionGroupsBody(t *testing.T, groups ...reviewSubscriptionGrou
 type reviewSubscriptionsFake struct {
 	requests []string
 	labels   *[]string
+	// postRefusal, when set, is the broker's refusal of
+	// POST /iris/v1/subscriptionSubmissions.
+	postRefusal *webcore.BrokerError
 }
 
 // stubReviewSubscriptions answers the nth subscription group list with
@@ -897,6 +1047,9 @@ func stubReviewSubscriptions(t *testing.T, listBodies ...string) *reviewSubscrip
 			}
 			id := payload.Data.Relationships.Subscription.Data.ID
 			fake.requests = append(fake.requests, "POST "+id)
+			if fake.postRefusal != nil {
+				return nil, fake.postRefusal
+			}
 			body := `{"data":{"id":"submission-1","type":"subscriptionSubmissions","attributes":{"submitWithNextAppStoreVersion":true},"relationships":{"subscription":{"data":{"type":"subscriptions","id":"` + id + `"}}}}}`
 			return webJSONResponse(req, http.StatusCreated, body), nil
 		case req.Method == http.MethodDelete && strings.HasPrefix(req.URL.Path, "/iris/v1/subscriptionSubmissions/"):

@@ -27,8 +27,8 @@ func respondToPublishAppLookup(t *testing.T, req *http.Request) (*http.Response,
 	if req.URL.Query().Get("filter[bundleId]") != app {
 		t.Fatalf("expected filter[bundleId]=%s, got %q", app, req.URL.Query().Get("filter[bundleId]"))
 	}
-	if limit := req.URL.Query().Get("limit"); limit != "2" {
-		t.Fatalf("expected lookup limit=2, got %q", limit)
+	if limit := req.URL.Query().Get("limit"); limit != "200" {
+		t.Fatalf("expected lookup limit=200, got %q", limit)
 	}
 	resp, err := jsonResponse(http.StatusOK, `{"data":[{"type":"apps","id":"`+app+`","attributes":{"bundleId":"`+app+`","name":"`+app+`"}}]}`)
 	return resp, err, true
@@ -129,8 +129,8 @@ func TestPublishAppStoreSubmitUsesModernReviewSubmissionFlow(t *testing.T) {
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/apps/app-1/subscriptionGroups":
 			return jsonResponse(http.StatusOK, `{"data":[],"links":{}}`)
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/apps/app-1/reviewSubmissions":
-			if req.URL.Query().Get("filter[state]") != "READY_FOR_REVIEW" {
-				t.Fatalf("expected READY_FOR_REVIEW filter, got %q", req.URL.Query().Get("filter[state]"))
+			if state := req.URL.Query().Get("filter[state]"); state != "READY_FOR_REVIEW" && state != "UNRESOLVED_ISSUES" {
+				t.Fatalf("expected READY_FOR_REVIEW or UNRESOLVED_ISSUES filter, got %q", state)
 			}
 			if req.URL.Query().Get("filter[platform]") != "IOS" {
 				t.Fatalf("expected platform filter IOS, got %q", req.URL.Query().Get("filter[platform]"))
@@ -487,7 +487,7 @@ func TestPublishAppStoreSubmitDryRunPrintsPlanWithoutMutations(t *testing.T) {
 
 	reg := asctest.NewRegistry(t)
 	reg.Install()
-	reg.Register(asctest.GET("/v1/apps", "filter[bundleId]=app-1", "limit=2"), asctest.JSON(http.StatusOK, `{"data":[{"type":"apps","id":"app-1","attributes":{"bundleId":"app-1","name":"app-1"}}]}`))
+	reg.Register(asctest.GET("/v1/apps", "filter[bundleId]=app-1", "limit=200"), asctest.JSON(http.StatusOK, `{"data":[{"type":"apps","id":"app-1","attributes":{"bundleId":"app-1","name":"app-1"}}]}`))
 
 	stdout, stderr, runErr := runRootWithDeps(t, stubClient(t, reg), []string{
 		"publish", "appstore",
@@ -717,8 +717,8 @@ func TestPublishAppStoreSubmitUsesFreshTimeoutBudgetsForPreflightAndSubmission(t
 			}
 			return jsonResponse(http.StatusNotFound, `{"errors":[{"status":"404","code":"NOT_FOUND","title":"Not Found"}]}`)
 		case req.Method == http.MethodGet && req.URL.Path == "/v1/apps/app-1/reviewSubmissions":
-			if req.URL.Query().Get("filter[state]") != "READY_FOR_REVIEW" {
-				t.Errorf("expected READY_FOR_REVIEW filter, got %q", req.URL.Query().Get("filter[state]"))
+			if state := req.URL.Query().Get("filter[state]"); state != "READY_FOR_REVIEW" && state != "UNRESOLVED_ISSUES" {
+				t.Errorf("expected READY_FOR_REVIEW or UNRESOLVED_ISSUES filter, got %q", state)
 				return nil, errors.New("test transport assertion failed")
 			}
 			if req.URL.Query().Get("filter[platform]") != "IOS" {

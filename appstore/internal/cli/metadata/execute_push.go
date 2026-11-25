@@ -43,7 +43,8 @@ func ExecutePushWith(ctx context.Context, d *shared.Deps, opts PushExecutionOpti
 // submission warnings for callers that need to emit them after output succeeds.
 func ExecutePushWithWarnings(ctx context.Context, d *shared.Deps, opts PushExecutionOptions) (PushPlanResult, []shared.SubmitReadinessCreateWarning, error) {
 	errorPrefix := metadataMutationErrorPrefix(opts.CommandName)
-	resolvedAppID := d.ResolveAppID(opts.AppID)
+	appSelector := d.ResolveAppSelector(opts.AppID)
+	resolvedAppID := appSelector.Value
 	if resolvedAppID == "" {
 		return PushPlanResult{}, nil, metadataRequiredInputError(d, "--app", "--app is required (or set ASC_APP_ID)")
 	}
@@ -123,13 +124,21 @@ func ExecutePushWithWarnings(ctx context.Context, d *shared.Deps, opts PushExecu
 	}
 	defer client.CloseUploadConnections()
 
+	resolveCtx, resolveCancel := d.Timeout(ctx)
+	resolvedAppID, err = shared.ResolveScopedAppID(resolveCtx, client, appSelector)
+	resolveCancel()
+	if err != nil {
+		return PushPlanResult{}, nil, fmt.Errorf("%s: resolve app: %w", errorPrefix, err)
+	}
+
 	type versionResolution struct {
-		id    string
-		state string
+		id       string
+		state    string
+		platform string
 	}
 	resolvedVersion, err := shared.RetryReadWithFreshTimeoutWith(ctx, d, func(requestCtx context.Context) (versionResolution, error) {
-		id, state, resolveErr := resolveVersionID(requestCtx, d, client, resolvedAppID, versionValue, platformValue)
-		return versionResolution{id: id, state: state}, resolveErr
+		id, state, platform, resolveErr := resolveVersion(requestCtx, d, client, resolvedAppID, versionValue, platformValue)
+		return versionResolution{id: id, state: state, platform: platform}, resolveErr
 	})
 	if err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -361,7 +370,12 @@ func ExecutePushWithWarnings(ctx context.Context, d *shared.Deps, opts PushExecu
 			remoteAppInfoItems,
 			managedVersionItems,
 			opts.AllowDeletes,
-			metadataIfExistsOptions{mode: ifExistsMode, prefix: errorPrefix, lateAppInfoIDs: lateAppInfoIDs},
+			metadataIfExistsOptions{
+				mode:           ifExistsMode,
+				prefix:         errorPrefix,
+				lateAppInfoIDs: lateAppInfoIDs,
+				firstVersion:   newFirstVersionCheck(d, client, resolvedAppID, versionIDValue, resolvedVersion.platform),
+			},
 		)
 		if createdLocales := appInfoCreatedVersionLocales(actions, localVersion, managedVersionItems); len(createdLocales) > 0 {
 			versionCalls.list++
