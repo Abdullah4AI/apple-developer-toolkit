@@ -121,6 +121,7 @@ type BetaTestersImportFailure struct {
 
 // BetaTestersImportSummary represents CLI output for beta tester CSV imports.
 type BetaTestersImportSummary struct {
+	Groups          []BetaTestersImportGroup   `json:"groups,omitempty"`
 	AppID           string                     `json:"appId"`
 	InputFile       string                     `json:"inputFile"`
 	DryRun          bool                       `json:"dryRun"`
@@ -204,6 +205,35 @@ func buildBetaGroupMembershipRows(result *BuildBetaGroupMembershipResult) ([]str
 			"false",
 			compactWhitespace(failure.Error),
 		})
+	}
+	return headers, rows
+}
+
+// BetaTesterDevicesResponse keeps the tester envelope with an opt-in device renderer.
+type BetaTesterDevicesResponse struct {
+	BetaTestersResponse
+}
+
+func betaTesterDevicesRows(resp *BetaTesterDevicesResponse) ([]string, [][]string) {
+	headers := []string{"Tester ID", "Model", "Platform", "OS", "App Build"}
+	rows := make([][]string, 0, len(resp.Data))
+	for _, tester := range resp.Data {
+		if len(tester.Attributes.AppDevices) == 0 {
+			state := "None reported"
+			if tester.Attributes.AppDevices == nil {
+				state = "Not reported"
+			}
+			rows = append(rows, []string{compactWhitespace(tester.ID), state, "", "", ""})
+		}
+		for _, device := range tester.Attributes.AppDevices {
+			rows = append(rows, []string{
+				compactWhitespace(tester.ID),
+				compactWhitespace(device.Model),
+				compactWhitespace(device.Platform),
+				compactWhitespace(device.OSVersion),
+				compactWhitespace(device.AppBuildVersion),
+			})
+		}
 	}
 	return headers, rows
 }
@@ -462,4 +492,20 @@ func betaBuildUsagesRows(resp *BetaBuildUsagesResponse) ([]string, [][]string, e
 		}
 	}
 	return headers, rows, nil
+}
+
+// BetaTestersImportGroup records a group planned or created by tester import.
+type BetaTestersImportGroup struct {
+	Name   string `json:"name"`
+	ID     string `json:"id,omitempty"`
+	Status string `json:"status"`
+	Error  string `json:"error,omitempty"`
+}
+
+func betaTestersImportGroupRows(groups []BetaTestersImportGroup) ([]string, [][]string) {
+	rows := make([][]string, 0, len(groups))
+	for _, group := range groups {
+		rows = append(rows, []string{group.Name, group.ID, group.Status, group.Error})
+	}
+	return []string{"Group", "ID", "Status", "Error"}, rows
 }

@@ -74,7 +74,8 @@ func TestPublishTestFlightLocalBuildJSONIncludesNestedStages(t *testing.T) {
 
 	stdout, stderr, runErr := runPublishCommand(t, newPublishTestFlightCommand, []string{
 		"--app", "friendly-app",
-		"--workspace", "Demo.xcworkspace",
+		"--project", "Demo.xcodeproj",
+		"--source-provenance",
 		"--scheme", "Demo",
 		"--version", "1.2.3",
 		"--group", "External",
@@ -93,6 +94,9 @@ func TestPublishTestFlightLocalBuildJSONIncludesNestedStages(t *testing.T) {
 
 	gotArchiveOpts := stages.archiveOpts
 	gotExportOpts := stages.exportOpts
+	if !gotArchiveOpts.SourceProvenance {
+		t.Fatal("source observation was not forwarded to the local archive")
+	}
 	if gotArchiveOpts.Configuration != "Release" {
 		t.Fatalf("expected Release configuration, got %q", gotArchiveOpts.Configuration)
 	}
@@ -147,6 +151,10 @@ func TestPublishTestFlightLocalBuildJSONIncludesNestedStages(t *testing.T) {
 	if archivePayload["archivePath"] != ".asc/artifacts/Demo-IOS-1.2.3-42.xcarchive" {
 		t.Fatalf("unexpected archivePath: %#v", archivePayload["archivePath"])
 	}
+	checkout, ok := archivePayload["projectCheckout"].(map[string]any)
+	if archivePayload["displayName"] != "Archive Display" || !ok || checkout["revision"] != "fixture-revision" || checkout["dirty"] != true || checkout["observedAt"] != "buildStart" {
+		t.Fatalf("archive identity = %#v", archivePayload)
+	}
 	exportPayload, ok := payload["export"].(map[string]any)
 	if !ok {
 		t.Fatalf("expected export payload, got %#v", payload["export"])
@@ -156,6 +164,9 @@ func TestPublishTestFlightLocalBuildJSONIncludesNestedStages(t *testing.T) {
 	}
 	if exportPayload["directUpload"] != false {
 		t.Fatalf("expected directUpload=false, got %#v", exportPayload["directUpload"])
+	}
+	if exportPayload["displayName"] != "Export Display" || exportPayload["projectCheckout"] != nil {
+		t.Fatalf("export must retain artifact facts only: %#v", exportPayload)
 	}
 	publishPayload, ok := payload["publish"].(map[string]any)
 	if !ok {
@@ -390,6 +401,12 @@ func TestPublishTestFlightUploadReportsStructuredRecoveryResultAfterBetaReviewFa
 	uploadCalls := stubPublishIPAUpload(asc.BuildProcessingStateValid)
 	scriptPublishRequests(t,
 		publishListExternalBetaGroups,
+		publishRequest{http.MethodGet, "/v1/builds/build-123/app", http.StatusOK, `{"data":{"type":"apps","id":"app-123"}}`},
+		publishRequest{http.MethodGet, "/v1/builds/build-123/betaAppReviewSubmission", http.StatusNotFound, publishNotFoundBody},
+		publishRequest{http.MethodGet, "/v1/betaAppLocalizations", http.StatusOK, `{"data":[{"type":"betaAppLocalizations","id":"loc-1","attributes":{"description":"A beta","feedbackEmail":"beta@example.com","locale":"en-US"}}]}`},
+		publishRequest{http.MethodGet, "/v1/betaAppReviewDetails", http.StatusOK, `{"data":[{"type":"betaAppReviewDetails","id":"app-123","attributes":{"contactEmail":"dev@example.com","contactFirstName":"Ada","contactLastName":"Lovelace","contactPhone":"+1 408 555 0100"}}]}`},
+		publishRequest{http.MethodGet, "/v1/builds/build-123/buildBetaDetail", http.StatusOK, `{"data":{"type":"buildBetaDetails","id":"detail-1","attributes":{"externalBuildState":"READY_FOR_BETA_SUBMISSION"}}}`},
+		publishRequest{http.MethodGet, "/v1/betaGroups/group-1/relationships/builds", http.StatusOK, `{"data":[]}`},
 		publishRequest{http.MethodPost, "/v1/builds/build-123/relationships/betaGroups", http.StatusNoContent, ""},
 		publishRequest{http.MethodGet, "/v1/builds/build-123/buildBetaDetail", http.StatusOK, `{"data":{"type":"buildBetaDetails","id":"detail-1","attributes":{"autoNotifyEnabled":false}}}`},
 		publishRequest{http.MethodPost, "/v1/buildBetaNotifications", http.StatusCreated, `{"data":{"type":"buildBetaNotifications","id":"notification-1"}}`},
@@ -405,7 +422,7 @@ func TestPublishTestFlightUploadReportsStructuredRecoveryResultAfterBetaReviewFa
 
 	stdout, _, runErr := runPublishCommand(t, newPublishTestFlightCommand, []string{
 		"--app", "app-123",
-		"--ipa", "Demo.ipa",
+		"--ipa", writePublishIPA(t, "iPhoneOS"),
 		"--version", "1.2.3",
 		"--build-number", "42",
 		"--group", "External",
@@ -456,7 +473,7 @@ func TestPublishTestFlightUploadTestNotesFailurePreservesStructuredRecoveryConte
 
 	stdout, _, runErr := runPublishCommand(t, newPublishTestFlightCommand, []string{
 		"--app", "app-123",
-		"--ipa", "Demo.ipa",
+		"--ipa", writePublishIPA(t, "iPhoneOS"),
 		"--version", "1.2.3",
 		"--build-number", "42",
 		"--group", "External",
@@ -501,10 +518,8 @@ func TestPublishTestFlightUploadTestNotesFailurePreservesStructuredRecoveryConte
 	if !slices.Equal(result.CompletedStages, wantCompleted) {
 		t.Fatalf("completed stages = %v, want %v", result.CompletedStages, wantCompleted)
 	}
-	for _, want := range wantParts {
-		if !strings.Contains(result.Failure, want) {
-			t.Fatalf("expected structured failure to contain %q, got %q", want, result.Failure)
-		}
+	if result.Failure != "Test notes could not be saved." || result.FailureCode != "test_notes_failed" {
+		t.Fatalf("unexpected structured failure: %q (%s)", result.Failure, result.FailureCode)
 	}
 	if result.Recovery == nil {
 		t.Fatalf("expected typed test-notes recovery, got %#v", result)
@@ -533,7 +548,7 @@ func TestPublishTestFlightUploadReportsTerminalProcessingStateAfterWaitFailure(t
 
 	stdout, _, runErr := runPublishCommand(t, newPublishTestFlightCommand, []string{
 		"--app", "app-123",
-		"--ipa", "Demo.ipa",
+		"--ipa", writePublishIPA(t, "iPhoneOS"),
 		"--version", "1.2.3",
 		"--build-number", "42",
 		"--group", "External",
@@ -986,7 +1001,7 @@ func TestPublishIPAUploadResolvesAppIDBeforeUpload(t *testing.T) {
 
 			stdout, stderr, runErr := runPublishCommand(t, test.command, append([]string{
 				"--app", "friendly-app",
-				"--ipa", "Demo.ipa",
+				"--ipa", writePublishIPA(t, "iPhoneOS"),
 				"--version", "1.2.3",
 				"--build-number", "42",
 				"--poll-interval", "5s",
@@ -1115,7 +1130,7 @@ func TestPublishAppStoreMetadataDirAppliesAfterEnsureVersionBeforeAttach(t *test
 
 	stdout, _, runErr := runPublishCommandOnFakeClock(t, newPublishAppStoreCommand, []string{
 		"--app", "app-1",
-		"--ipa", "app.ipa",
+		"--ipa", writePublishIPA(t, "iPhoneOS"),
 		"--version", "1.2.3",
 		"--build-number", "42",
 		"--metadata-dir", metadataDir,
@@ -1186,7 +1201,7 @@ func TestPublishAppStoreMetadataInputFailureUsesUsageExit(t *testing.T) {
 
 	stdout, stderr, runErr := runPublishCommand(t, newPublishAppStoreCommand, []string{
 		"--app", "app-1",
-		"--ipa", "app.ipa",
+		"--ipa", writePublishIPA(t, "iPhoneOS"),
 		"--version", "1.2.3",
 		"--build-number", "42",
 		"--metadata-dir", metadataDir,
@@ -1248,7 +1263,7 @@ func TestPublishAppStoreRefreshesVersionContextAfterProcessingWait(t *testing.T)
 
 	stdout, stderr, _ := runPublishCommandOnFakeClock(t, newPublishAppStoreCommand, []string{
 		"--app", "app-1",
-		"--ipa", "app.ipa",
+		"--ipa", writePublishIPA(t, "iPhoneOS"),
 		"--version", "1.2.3",
 		"--build-number", "42",
 		"--wait",
@@ -1264,10 +1279,7 @@ func TestPublishAppStoreDryRunPlanIncludesMetadataStepWhenMetadataDirProvided(t 
 	restore := overridePublishCommandTestHooks(t)
 	defer restore()
 
-	ipaPath := filepath.Join(t.TempDir(), "app.ipa")
-	if err := os.WriteFile(ipaPath, []byte("payload"), 0o600); err != nil {
-		t.Fatalf("write IPA fixture: %v", err)
-	}
+	ipaPath := writePublishIPA(t, "iPhoneOS")
 	metadataDir := t.TempDir()
 	writePublishVersionMetadataFixture(t, metadataDir, "1.2.3")
 
@@ -1376,14 +1388,19 @@ func stubPublishArchiveAndExport() *publishBuildStages {
 	runPublishArchiveFn = func(_ context.Context, opts localxcode.ArchiveOptions) (*localxcode.ArchiveResult, error) {
 		stages.archiveCalls++
 		stages.archiveOpts = opts
-		return &localxcode.ArchiveResult{
+		result := &localxcode.ArchiveResult{
 			ArchivePath:   ".asc/artifacts/Demo-IOS-1.2.3-42.xcarchive",
 			BundleID:      "com.example.demo",
 			Version:       "1.2.3",
 			BuildNumber:   "42",
 			Scheme:        "Demo",
 			Configuration: "Release",
-		}, nil
+			DisplayName:   "Archive Display",
+		}
+		if opts.SourceProvenance {
+			result.ProjectCheckout = &asc.XcodeProjectCheckout{Revision: "fixture-revision", Dirty: true, ObservedAt: "buildStart"}
+		}
+		return result, nil
 	}
 	runPublishExportFn = func(_ context.Context, opts localxcode.ExportOptions) (*localxcode.ExportResult, error) {
 		stages.exportCalls++
@@ -1394,6 +1411,7 @@ func stubPublishArchiveAndExport() *publishBuildStages {
 			BundleID:    "com.example.demo",
 			Version:     "1.2.3",
 			BuildNumber: "42",
+			DisplayName: "Export Display",
 		}, nil
 	}
 	return stages
@@ -1701,5 +1719,22 @@ func TestPublishBuildProcessingWaitIncludesProcessingDetails(t *testing.T) {
 	}
 	if build == nil || build.Data.Attributes.ProcessingState != asc.BuildProcessingStateFailed {
 		t.Fatalf("build = %#v, want the failed build for partial-failure reporting", build)
+	}
+}
+
+func TestPublishRejectsUnsupportedSourceProvenanceBeforeBuild(t *testing.T) {
+	for _, command := range []func(*shared.Deps) *ffcli.Command{newPublishTestFlightCommand, newPublishAppStoreCommand} {
+		for _, input := range [][]string{{"--workspace", "Demo.xcworkspace", "--scheme", "Demo"}, {"--ipa", "Prebuilt.ipa"}} {
+			stubPublishCommandSeams(t)
+			runPublishArchiveFn = func(context.Context, localxcode.ArchiveOptions) (*localxcode.ArchiveResult, error) {
+				t.Fatal("archive ran for unsupported source provenance")
+				return nil, nil
+			}
+			args := append([]string{"--app", "123", "--version", "1.2.3", "--source-provenance"}, input...)
+			stdout, stderr, err := runPublishCommand(t, command, args)
+			if !errors.Is(err, flag.ErrHelp) || stdout != "" || !strings.Contains(stderr, "--source-provenance requires --project") {
+				t.Fatalf("input %v: stdout=%q stderr=%q error=%v", input, stdout, stderr, err)
+			}
+		}
 	}
 }

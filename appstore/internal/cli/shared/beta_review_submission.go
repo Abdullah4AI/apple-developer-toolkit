@@ -10,6 +10,7 @@ import (
 )
 
 type buildBetaReviewSubmissionClient interface {
+	scopedContinuationClient
 	betaReviewReadinessClient
 	GetBuildBetaAppReviewSubmission(ctx context.Context, buildID string) (*asc.BetaAppReviewSubmissionResponse, error)
 	CreateBetaAppReviewSubmission(ctx context.Context, buildID string) (*asc.BetaAppReviewSubmissionResponse, error)
@@ -18,6 +19,7 @@ type buildBetaReviewSubmissionClient interface {
 // BuildBetaReviewSubmissionResult reports the beta app review submission outcome.
 type BuildBetaReviewSubmissionResult struct {
 	Submitted    bool
+	Created      bool
 	SubmissionID string
 	Message      string
 }
@@ -37,6 +39,9 @@ func SubmitBuildBetaReviewIfNeeded(ctx context.Context, client buildBetaReviewSu
 
 	existingSubmission, err := client.GetBuildBetaAppReviewSubmission(ctx, buildID)
 	if err == nil {
+		if stateErr := checkBetaReviewSubmissionState(buildID, existingSubmission.Data.Attributes.BetaReviewState); stateErr != nil {
+			return nil, stateErr
+		}
 		submissionID := strings.TrimSpace(existingSubmission.Data.ID)
 		result.Submitted = true
 		result.SubmissionID = submissionID
@@ -58,6 +63,7 @@ func SubmitBuildBetaReviewIfNeeded(ctx context.Context, client buildBetaReviewSu
 	}
 
 	submissionID := strings.TrimSpace(submission.Data.ID)
+	result.Created = true
 	result.Submitted = true
 	result.SubmissionID = submissionID
 	if submissionID == "" {
@@ -66,6 +72,14 @@ func SubmitBuildBetaReviewIfNeeded(ctx context.Context, client buildBetaReviewSu
 	}
 	result.Message = fmt.Sprintf("Submitted build %s for beta app review (%s)", buildID, submissionID)
 	return result, nil
+}
+
+func checkBetaReviewSubmissionState(buildID, state string) error {
+	if strings.EqualFold(strings.TrimSpace(state), "REJECTED") {
+		err := fmt.Errorf("beta app review rejected build %q. Resolve the rejection in App Store Connect before trying again", buildID)
+		return WithDiagnostic(NewValidationError(err), DiagnosticStateNotReady, "")
+	}
+	return nil
 }
 
 func hasAddedExternalBuildBetaGroup(groups []ResolvedBetaGroup, addedGroupIDs []string) bool {

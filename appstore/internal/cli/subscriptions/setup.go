@@ -1449,23 +1449,41 @@ func ensureSubscriptionsSetupPriceMatrix(ctx context.Context, d *shared.Deps, cl
 	if preMutationMatched && !repair {
 		return territories, false, nil
 	}
+	if len(state.states) > 0 {
+		if err := requireSingleTierBulkPriceWrite(ctx, d, client, subscriptionID, nil); err != nil {
+			return nil, false, err
+		}
+	}
+
+	matches := func(readCtx context.Context) (bool, error) {
+		readbackState, err := fetchSubscriptionPriceImportStateForPlans(readCtx, d, client, subscriptionID, asc.SubscriptionPlanTypeUpfront)
+		if err != nil {
+			return false, err
+		}
+		return subscriptionSetupPriceMatrixMatches(readbackState, matrix) && (!repair || !preMutationMatched), nil
+	}
 	// The complete matrix PATCH may apply before a transport/5xx response is
 	// observed, so reconcile its exact state without replaying the write.
-	_, _, err = shared.RunReconciledMutationNoReplayWith(
-		ctx,
-		d,
+	_, _, err = shared.RunReconciledMultiRequestMutationWith(
+		ctx, d,
 		func(requestCtx context.Context) (struct{}, error) {
-			_, mutationErr := client.SetSubscriptionPriceMatrix(requestCtx, subscriptionID, matrix)
-			return struct{}{}, mutationErr
+			_, err := writeSubscriptionPrice(requestCtx, d, false, matches,
+				func(checkCtx context.Context) error {
+					if len(state.states) == 0 {
+						return requireUnpricedSubscription(checkCtx, d, client, subscriptionID)
+					}
+					return requireSingleTierBulkPriceWrite(checkCtx, d, client, subscriptionID, nil)
+				},
+				func(writeCtx context.Context) error {
+					_, err := client.SetSubscriptionPriceMatrix(writeCtx, subscriptionID, matrix)
+					return err
+				})
+			return struct{}{}, err
 		},
-		func(readbackCtx context.Context) (struct{}, bool, error) {
-			readbackState, readbackErr := fetchSubscriptionPriceImportStateForPlans(readbackCtx, d, client, subscriptionID, asc.SubscriptionPlanTypeUpfront)
-			if readbackErr != nil {
-				return struct{}{}, false, readbackErr
-			}
-			matches := subscriptionSetupPriceMatrixMatches(readbackState, matrix)
-			return struct{}{}, matches && (!repair || !preMutationMatched), nil
-		},
+		func(readCtx context.Context) (struct{}, bool, error) {
+			matched, err := matches(readCtx)
+			return struct{}{}, matched, err
+		}, false,
 	)
 	if err != nil {
 		return nil, false, err
@@ -1696,11 +1714,12 @@ func findExistingSubscriptionSetupPrice(ctx context.Context, client *asc.Client,
 		return false, false, err
 	}
 	if firstPage == nil {
-		return false, false, nil
+		return false, false, fmt.Errorf("missing price collection")
 	}
 
 	var foundPrice asc.Resource[asc.SubscriptionPriceAttributes]
 	hasExistingPrices := false
+	var count priceCollectionCount
 	if err := asc.PaginateEach(
 		ctx,
 		firstPage,
@@ -1711,6 +1730,9 @@ func findExistingSubscriptionSetupPrice(ctx context.Context, client *asc.Client,
 			resp, ok := page.(*asc.SubscriptionPricesResponse)
 			if !ok {
 				return fmt.Errorf("unexpected subscription prices pagination type %T", page)
+			}
+			if err := checkPriceCollectionPage(&count, resp, "price", asc.ResourceTypeSubscriptionPrices); err != nil {
+				return err
 			}
 			for _, price := range resp.Data {
 				hasExistingPrices = true

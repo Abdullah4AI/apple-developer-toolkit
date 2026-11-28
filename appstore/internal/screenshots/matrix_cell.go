@@ -94,14 +94,23 @@ func executeMatrixCellWithSimulatorLock(ctx context.Context, cell MatrixCell, ba
 			result.Error = newMatrixCellError(result.FailureStage, result.FailureCode, "cell canceled")
 			break
 		}
+		deps.emitProgress(MatrixProgressEvent{Event: "attempt_started", CellID: cell.ID, Attempt: attempt})
 		attemptResult, attemptErr := executeMatrixCellAttempt(ctx, cell, base, matrixPlan, deps, outputRoots)
 		result.Steps = attemptResult.Steps
+		result.Location = attemptResult.Location
+		if attemptResult.FailureEvidence != nil {
+			evidence := *attemptResult.FailureEvidence
+			evidence.Attempt = attempt
+			evidence.StepError = "step execution failed"
+			result.FailureEvidence = append(result.FailureEvidence, evidence)
+		}
 		mergeMatrixAttemptResult(&result, cell, attemptResult)
 		if attemptErr == nil {
 			result.Status = MatrixCellSuccess
 			result.FailureStage = ""
 			result.FailureCode = ""
 			result.Error = nil
+			deps.finishAttemptProgress(result)
 			break
 		}
 		if ctx.Err() != nil && !attemptResult.CleanupFailed {
@@ -113,6 +122,7 @@ func executeMatrixCellWithSimulatorLock(ctx context.Context, cell MatrixCell, ba
 			}
 			result.FailureCode = "canceled"
 			result.Error = newMatrixCellError(result.FailureStage, result.FailureCode, "cell canceled")
+			deps.finishAttemptProgress(result)
 			break
 		}
 		if attemptResult.CleanupFailed {
@@ -121,6 +131,7 @@ func executeMatrixCellWithSimulatorLock(ctx context.Context, cell MatrixCell, ba
 		result.FailureStage = attemptResult.FailureStage
 		result.FailureCode = attemptResult.FailureCode
 		result.Error = newMatrixCellError(attemptResult.FailureStage, attemptResult.FailureCode, attemptResult.Error)
+		deps.finishAttemptProgress(result)
 		if attempt == maxAttempts || attemptResult.CleanupFailed || (attemptResult.FailureStage != "execution" && attemptResult.FailureStage != "framing") {
 			break
 		}
@@ -183,6 +194,8 @@ type matrixAttemptResult struct {
 	CleanupFailed   bool
 	Screenshots     []MatrixScreenshotResult
 	Steps           []RunStepResult
+	Location        *asc.ScreenshotLocationResult
+	FailureEvidence *asc.ScreenshotFailureEvidence
 	FailureStage    string
 	FailureCode     string
 	Error           string
@@ -252,6 +265,9 @@ func executeMatrixCellAttempt(ctx context.Context, cell MatrixCell, base *Plan, 
 	}
 	plan.App.LaunchArguments = append(append([]string(nil), base.App.LaunchArguments...), cell.LaunchArguments...)
 	plan.App.terminateRunningProcess = true
+	if plan.Defaults.FailureScreenshot {
+		plan.failureTarget = &failureScreenshotTarget{root: outputRoots.raw, outputDir: cell.RawDir}
+	}
 	ensureMatrixLaunchStep(plan)
 	var runResult *RunResult
 	if deps.RunPlan != nil {
@@ -262,6 +278,8 @@ func executeMatrixCellAttempt(ctx context.Context, cell MatrixCell, base *Plan, 
 	attempt = matrixAttemptResult{}
 	if runResult != nil {
 		attempt.Steps = sanitizeMatrixSteps(runResult.Steps)
+		attempt.Location = runResult.Location
+		attempt.FailureEvidence = runResult.FailureEvidence
 	}
 	stabilityErr := matrixPrivateAttemptRootIsStable(attemptRoot)
 	if err != nil {

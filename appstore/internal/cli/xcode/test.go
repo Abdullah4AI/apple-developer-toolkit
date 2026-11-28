@@ -167,7 +167,7 @@ Examples:
 				NoCodeSigning:    *noCodeSigning,
 				CodeCoverage:     *codeCoverage,
 				XcodebuildArgs:   []string(xcodebuildFlags),
-				LogWriter:        d.IO.ErrOut,
+				LogWriter:        d.IO.ChildStderr(),
 
 				RetryTestsOnFailure:        *retryTestsOnFailure,
 				TestIterations:             *testIterations,
@@ -316,14 +316,17 @@ func testResultJUnitReport(d *shared.Deps, result *localxcode.TestResult, comman
 			name = "unnamed-test"
 		}
 		failure := ""
-		message := ""
+		message := testCase.Message
+		systemOut := ""
 		skipped := strings.EqualFold(testCase.Status, "skipped")
 		if strings.EqualFold(testCase.Status, "failed") {
 			failure = "FAILURE"
-			message = testCase.Message
 			if strings.TrimSpace(message) == "" {
 				message = testFailureMessage(result.Tests, testCase.Identifier)
 			}
+		}
+		if strings.EqualFold(testCase.Status, "expected-failure") && strings.TrimSpace(message) != "" {
+			systemOut = "Expected failure: " + message
 		}
 		tests = append(tests, shared.JUnitTestCase{
 			Name:      name,
@@ -332,6 +335,7 @@ func testResultJUnitReport(d *shared.Deps, result *localxcode.TestResult, comman
 			Skipped:   skipped,
 			Failure:   failure,
 			Message:   message,
+			SystemOut: systemOut,
 		})
 	}
 

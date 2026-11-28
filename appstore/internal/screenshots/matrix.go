@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"time"
 
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/rootfs"
 )
 
@@ -184,21 +185,24 @@ const (
 
 // MatrixCellResult is the privacy-safe result for one cell.
 type MatrixCellResult struct {
-	ID           string                   `json:"id"`
-	Device       string                   `json:"device"`
-	Locale       string                   `json:"locale"`
-	Appearance   string                   `json:"appearance"`
-	Content      string                   `json:"contentVariant"`
-	Status       string                   `json:"status"`
-	Attempts     int                      `json:"attempts"`
-	DurationMS   int64                    `json:"durationMs"`
-	RawPaths     []string                 `json:"rawPaths,omitempty"`
-	FramedPaths  []string                 `json:"framedPaths,omitempty"`
-	Screenshots  []MatrixScreenshotResult `json:"screenshots,omitempty"`
-	Steps        []RunStepResult          `json:"steps,omitempty"`
-	FailureStage string                   `json:"failureStage,omitempty"`
-	FailureCode  string                   `json:"failureCode,omitempty"`
-	Error        *MatrixCellError         `json:"error,omitempty"`
+	ID           string                        `json:"id"`
+	Device       string                        `json:"device"`
+	Locale       string                        `json:"locale"`
+	Appearance   string                        `json:"appearance"`
+	Content      string                        `json:"contentVariant"`
+	Status       string                        `json:"status"`
+	Attempts     int                           `json:"attempts"`
+	DurationMS   int64                         `json:"durationMs"`
+	RawPaths     []string                      `json:"rawPaths,omitempty"`
+	FramedPaths  []string                      `json:"framedPaths,omitempty"`
+	Screenshots  []MatrixScreenshotResult      `json:"screenshots,omitempty"`
+	Steps        []RunStepResult               `json:"steps,omitempty"`
+	Location     *asc.ScreenshotLocationResult `json:"location,omitempty"`
+	FailureStage string                        `json:"failureStage,omitempty"`
+	FailureCode  string                        `json:"failureCode,omitempty"`
+	Error        *MatrixCellError              `json:"error,omitempty"`
+
+	FailureEvidence []asc.ScreenshotFailureEvidence `json:"failureEvidence,omitempty"`
 
 	framedArtifacts map[string]matrixArtifactInfo
 	rawArtifacts    map[string]matrixArtifactInfo
@@ -246,6 +250,7 @@ type MatrixResult struct {
 
 // MatrixOptions contains command-line overrides. Zero values use plan defaults.
 type MatrixOptions struct {
+	Progress          func(MatrixProgressEvent)
 	MaxConcurrency    int
 	MaxConcurrencySet bool
 	MaxAttempts       int
@@ -264,7 +269,8 @@ type MatrixAppearance interface {
 // MatrixDependencies makes external execution replaceable by tests without
 // changing the normal command behavior.
 type MatrixDependencies struct {
-	RunPlan func(context.Context, *Plan) (*RunResult, error)
+	progress func(MatrixProgressEvent)
+	RunPlan  func(context.Context, *Plan) (*RunResult, error)
 	// RunPlanRooted is the matrix-only provider contract. The destination root
 	// is retained for the whole attempt and must be used for every output write.
 	// It is additive so existing test/integration callbacks keep compiling while

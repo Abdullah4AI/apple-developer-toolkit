@@ -31,6 +31,7 @@ func newXcodeBuildCommand(d *shared.Deps) *ffcli.Command {
 	var xcodebuildFlags shared.MultiStringFlag
 	fs.Var(&xcodebuildFlags, "xcodebuild-flag", "Pass a raw argument through to xcodebuild (repeatable)")
 	output := d.BindOutputFlags(fs)
+	shared.DeclareCommandRuntimeRequirements(fs, shared.CommandRuntimeRequirements{Host: "darwin", Tools: []string{"xcrun", "xcodebuild"}, ToolCoverage: "partial"})
 
 	return &ffcli.Command{
 		Name:       "build",
@@ -77,7 +78,7 @@ Examples:
 				Clean:            *clean,
 				NoCodeSigning:    *noCodeSigning,
 				XcodebuildArgs:   []string(xcodebuildFlags),
-				LogWriter:        d.IO.ErrOut,
+				LogWriter:        d.IO.ChildStderr(),
 			}
 			if err := localxcode.ValidateBuildOptions(opts); err != nil {
 				return d.UsageError(err.Error())

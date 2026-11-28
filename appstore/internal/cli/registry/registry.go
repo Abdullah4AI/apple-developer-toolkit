@@ -30,6 +30,7 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/builds"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/bundleids"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/capabilities"
+	catalogcmd "github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/catalog"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/categories"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/certificates"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/completion"
@@ -299,6 +300,7 @@ func NewCatalogWithDeps(version string, d *shared.Deps) *Catalog {
 		commandFactory("notarization", "Manage macOS notarization submissions.", func() *ffcli.Command {
 			return notarization.NewNotarizationCommand(d)
 		}),
+		commandFactory("catalog", "Plan and reconcile a product catalog from a JSON file.", func() *ffcli.Command { return catalogcmd.NewCommand(d) }),
 		commandFactory("iap", "Manage in-app purchases in App Store Connect.", func() *ffcli.Command {
 			return iap.NewIAPCommand(d)
 		}),
@@ -311,7 +313,7 @@ func NewCatalogWithDeps(version string, d *shared.Deps) *Catalog {
 		commandFactory("subscriptions", "Manage subscription groups and subscriptions.", func() *ffcli.Command {
 			return subscriptions.NewSubscriptionsCommand(d)
 		}),
-		commandFactory("submit", "Submission lifecycle tools; use `publish appstore --submit` to ship.", func() *ffcli.Command {
+		commandFactory("submit", "Submission lifecycle tools; use `review submit` for an existing build.", func() *ffcli.Command {
 			return submit.NewSubmitCommand(d)
 		}),
 		commandFactory("validate", "Canonical App Store submission readiness report.", func() *ffcli.Command { return validate.NewValidateCommand(d) }),
@@ -348,6 +350,9 @@ func NewCatalogWithDeps(version string, d *shared.Deps) *Catalog {
 		}),
 		commandFactory("telemetry", "Manage CLI telemetry settings.", func() *ffcli.Command {
 			return telemetrycmd.NewTelemetryCommand(d)
+		}),
+		commandFactory("commands", "Discover registered command families and their inputs.", func() *ffcli.Command {
+			return catalog.newCommandsCommand(d)
 		}),
 		commandFactory("search", "Search asc commands and examples for agent-oriented command discovery.", func() *ffcli.Command {
 			return searchcmd.NewSearchCommand(d, catalog.All)

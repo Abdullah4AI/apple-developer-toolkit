@@ -430,11 +430,18 @@ func capabilityRows() []Capability {
 			Area:       "app-management",
 			Capability: "App Compliance requirements",
 			Status:     statusWebSession,
-			Commands:   []string{"asc web apps compliance list", "asc web apps compliance set"},
+			Commands:   []string{"asc web apps compliance list", "asc web apps compliance set", "asc web apps compliance vietnam-license view"},
 			Notes: []string{
-				"App Compliance requirements, such as the China mainland Security Assessment and AI Generated or Synthetic Content declarations, are not present in the embedded public OpenAPI snapshot. Listing reports every requirement Apple returns for the app, answered or not. Setting answers one of those two requirements, with its evidence files and filing details for an affirmative answer, and saves nothing when Apple's form asks for a field the command does not know.",
+				"App Compliance requirements, such as the China mainland Security Assessment and AI Generated or Synthetic Content declarations, are not present in the embedded public OpenAPI snapshot. Vietnam game license details can be read through the separate app-scoped Iris endpoint. Listing reports every requirement Apple returns for the app, answered or not. Setting answers one of those two requirements, with its evidence files and filing details for an affirmative answer, and saves nothing when Apple's form asks for a field the command does not know.",
 			},
 			NextAction: "Read with asc web apps compliance list --app APP_ID. Answer with asc web apps compliance set --app APP_ID --requirement SECURITY_ASSESSMENT|AI_GENERATED_CONTENT --declared true|false --confirm, or check an answer first with --dry-run.",
+		},
+		{
+			Area:       "app-management",
+			Capability: "China mainland publication permit",
+			Status:     statusWebSession,
+			Commands:   []string{"asc web apps compliance china-publication-permit view"},
+			NextAction: "Check the app's permit with asc web apps compliance china-publication-permit view --app APP_ID.",
 		},
 		{
 			Area:       "monetization",
@@ -734,6 +741,13 @@ func capabilityRows() []Capability {
 		},
 		{
 			Area:       "access",
+			Capability: "Digital Services Act trader status",
+			Status:     statusWebSession,
+			Commands:   []string{"asc web business dsa status"},
+			NextAction: "Use asc web business dsa status to check the selected account's trader declaration and verification status.",
+		},
+		{
+			Area:       "access",
 			Capability: "App Store Connect API key web-session management",
 			Status:     statusWebSession,
 			Commands:   []string{"asc web api-keys"},
@@ -783,10 +797,11 @@ func capabilityRows() []Capability {
 				"asc web review sandbox-entitlements catalog",
 				"asc web review sandbox-entitlements list",
 				"asc web review sandbox-entitlements set",
+				"asc web review sandbox-entitlements apply",
 				"asc web review sandbox-entitlements delete",
 			},
 			APIResources: []string{"appSandboxEntitlements", "appSandboxEntitlementUsages"},
-			Notes:        []string{"Reads and writes the entitlement usage information of a macOS version's App Review details, which the public API does not expose. set and delete require --confirm, read the current rows first, and verify the result with a fresh read. Reads and writes were live-verified with a built-CLI canary on 2026-10-27."},
+			Notes:        []string{"Reads and writes the entitlement usage information of a macOS version's App Review details, which the public API does not expose. set, apply and delete require --confirm, read the current rows first, and verify the result with a fresh read; apply sets every row a JSON file names. Reads and writes were live-verified with a built-CLI canary on 2026-10-27."},
 		},
 	}
 }

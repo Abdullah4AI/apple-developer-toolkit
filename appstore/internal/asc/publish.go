@@ -13,12 +13,14 @@ const (
 // PublishArchiveStageResult captures local archive stage details for nested
 // publish command output.
 type PublishArchiveStageResult struct {
-	ArchivePath   string `json:"archivePath"`
-	BundleID      string `json:"bundleId,omitempty"`
-	Version       string `json:"version,omitempty"`
-	BuildNumber   string `json:"buildNumber,omitempty"`
-	Scheme        string `json:"scheme,omitempty"`
-	Configuration string `json:"configuration,omitempty"`
+	ArchivePath     string                `json:"archivePath"`
+	BundleID        string                `json:"bundleId,omitempty"`
+	Version         string                `json:"version,omitempty"`
+	BuildNumber     string                `json:"buildNumber,omitempty"`
+	Scheme          string                `json:"scheme,omitempty"`
+	Configuration   string                `json:"configuration,omitempty"`
+	DisplayName     string                `json:"displayName,omitempty"`
+	ProjectCheckout *XcodeProjectCheckout `json:"projectCheckout,omitempty"`
 }
 
 // PublishExportStageResult captures local export stage details for nested
@@ -30,6 +32,7 @@ type PublishExportStageResult struct {
 	BundleID          string `json:"bundleId,omitempty"`
 	Version           string `json:"version,omitempty"`
 	BuildNumber       string `json:"buildNumber,omitempty"`
+	DisplayName       string `json:"displayName,omitempty"`
 	ExportOptionsPath string `json:"exportOptionsPath,omitempty"`
 	DirectUpload      bool   `json:"directUpload"`
 }
@@ -74,9 +77,12 @@ type AppStorePublishStageResult struct {
 type TestFlightPublishResult struct {
 	Status                 string                            `json:"status,omitempty"`
 	FailureStage           string                            `json:"failureStage,omitempty"`
+	FailureCode            string                            `json:"failureCode,omitempty"`
+	HTTPStatus             int                               `json:"httpStatus,omitempty"`
 	Failure                string                            `json:"failure,omitempty"`
 	CompletedStages        []string                          `json:"completedStages,omitempty"`
 	Recovery               *TestNotesRecovery                `json:"recovery,omitempty"`
+	NotificationRecovery   *TestFlightNotificationRecovery   `json:"notificationRecovery,omitempty"`
 	Mode                   PublishMode                       `json:"mode,omitempty"`
 	BuildID                string                            `json:"buildId"`
 	BuildVersion           string                            `json:"buildVersion,omitempty"`

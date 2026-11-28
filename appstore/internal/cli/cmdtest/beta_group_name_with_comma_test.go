@@ -45,9 +45,13 @@ func TestBetaGroupFlagResolvesWholeNameBeforeSplittingOnCommas(t *testing.T) {
 			t.Setenv("ASC_APP_ID", "")
 
 			reg := asctest.NewRegistry(t)
-			if test.args[0] == "builds" {
-				reg.Register(asctest.GET("/v1/builds/build-1/app"),
-					asctest.JSON(http.StatusOK, `{"data":{"type":"apps","id":"123"}}`))
+			reg.Register(asctest.GET("/v1/builds/build-1/app"),
+				asctest.JSON(http.StatusOK, `{"data":{"type":"apps","id":"123"}}`))
+			if test.args[0] == "publish" {
+				for _, id := range test.wantIDs {
+					reg.Register(asctest.GET("/v1/betaGroups/"+id+"/relationships/builds", "limit=200"),
+						asctest.JSON(http.StatusOK, `{"data":[]}`))
+				}
 			}
 			reg.Register(asctest.GET("/v1/apps/123/betaGroups", "limit=200"),
 				asctest.JSON(http.StatusOK, `{"data":[`+
@@ -56,6 +60,10 @@ func TestBetaGroupFlagResolvesWholeNameBeforeSplittingOnCommas(t *testing.T) {
 					`{"type":"betaGroups","id":"group-comma","attributes":{"name":"Staff, Family & Friends","isInternalGroup":true}}]}`))
 			reg.Register(asctest.GET("/v1/builds/build-1"),
 				asctest.JSON(http.StatusOK, `{"data":{"type":"builds","id":"build-1","attributes":{"version":"42","processingState":"VALID","expired":false}}}`))
+			if test.args[0] == "publish" {
+				reg.Register(asctest.GET("/v1/builds/build-1/preReleaseVersion"),
+					asctest.JSON(http.StatusOK, `{"data":{"type":"preReleaseVersions","id":"pr-1","attributes":{"version":"1.2.3","platform":"IOS"}}}`))
+			}
 			reg.Register(asctest.POST("/v1/builds/build-1/relationships/betaGroups"),
 				asctest.JSON(http.StatusNoContent, ""))
 
@@ -70,7 +78,13 @@ func TestBetaGroupFlagResolvesWholeNameBeforeSplittingOnCommas(t *testing.T) {
 				} `json:"data"`
 			}
 			requests := reg.Requests()
-			if err := json.Unmarshal(requests[len(requests)-1].Body, &payload); err != nil {
+			assignment := slices.IndexFunc(requests, func(req asctest.Request) bool {
+				return req.Method == http.MethodPost && req.URL.Path == "/v1/builds/build-1/relationships/betaGroups"
+			})
+			if assignment < 0 {
+				t.Fatal("missing beta group assignment request")
+			}
+			if err := json.Unmarshal(requests[assignment].Body, &payload); err != nil {
 				t.Fatalf("failed to decode group assignment payload: %v", err)
 			}
 			var addedIDs []string

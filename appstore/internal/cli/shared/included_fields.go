@@ -9,6 +9,8 @@ import (
 	"strings"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
+
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/diagnosticoutput"
 )
 
 // includedResource names the sparse-field flag of one resource type and the
@@ -42,7 +44,7 @@ var includedResources = map[string]includedResource{
 	"appStoreVersionPhasedReleases":          {"phased-release-fields", []string{"phasedReleaseState", "startDate", "totalPauseDuration", "currentDayNumber"}},
 	"appStoreVersionSubmissions":             {"version-submission-fields", []string{"appStoreVersion"}},
 	"appStoreVersions":                       {"app-store-version-fields", []string{"platform", "versionString", "appStoreState", "appVersionState", "copyright", "reviewType", "releaseType", "earliestReleaseDate", "usesIdfa", "downloadable", "createdDate", "app", "appStoreVersionLocalizations", "build", "appStoreVersionPhasedRelease", "gameCenterAppVersion", "routingAppCoverage", "appStoreReviewDetail", "appStoreVersionSubmission", "appClipDefaultExperience", "appStoreVersionExperiments", "appStoreVersionExperimentsV2", "customerReviews", "alternativeDistributionPackage"}},
-	"apps":                                   {"app-fields", []string{"accessibilityUrl", "name", "bundleId", "sku", "primaryLocale", "isOrEverWasMadeForKids", "subscriptionStatusUrl", "subscriptionStatusUrlVersion", "subscriptionStatusUrlForSandbox", "subscriptionStatusUrlVersionForSandbox", "contentRightsDeclaration", "streamlinedPurchasingEnabled", "accessibilityDeclarations", "appStoreIcon", "ciProduct", "betaTesters", "betaGroups", "appStoreVersions", "appTags", "preReleaseVersions", "betaAppLocalizations", "builds", "betaLicenseAgreement", "betaAppReviewDetail", "appInfos", "appClips", "appPricePoints", "endUserLicenseAgreement", "appPriceSchedule", "appAvailabilityV2", "inAppPurchases", "subscriptionGroups", "retentionMessages", "gameCenterEnabledVersions", "performanceOverviews", "perfPowerMetrics", "appCustomProductPages", "inAppPurchasesV2", "promotedPurchases", "appEvents", "reviewSubmissions", "subscriptionGracePeriod", "customerReviews", "customerReviewSummarizations", "gameCenterDetail", "appStoreVersionExperimentsV2", "alternativeDistributionKey", "analyticsReportRequests", "marketplaceSearchDetail", "buildUploads", "backgroundAssets", "assetLibrary", "betaFeedbackScreenshotSubmissions", "betaFeedbackCrashSubmissions", "searchKeywords", "webhooks", "androidToIosAppMappingDetails"}}, // Apple rejects spec value appEncryptionDeclarations: 400 "is not a valid field name" or HTTP 500.
+	"apps":                                   {"app-fields", AppFieldsList()},
 	"backgroundAssetVersions":                {"background-asset-version-fields", []string{"createdDate", "platforms", "state", "stateDetails", "version", "locale", "backgroundAsset", "internalBetaRelease", "externalBetaRelease", "appStoreRelease", "assetFile", "manifestFile", "backgroundAssetUploadFiles"}},
 	"betaAppReviewSubmissions":               {"beta-app-review-submission-fields", []string{"betaReviewState", "submittedDate", "build"}},
 	"betaBuildLocalizations":                 {"beta-build-localization-fields", []string{"whatsNew", "locale", "build"}},
@@ -79,6 +81,7 @@ var includedResources = map[string]includedResource{
 	"retentionOfferPrices":                   {"price-fields", []string{"territory", "subscriptionPricePoint"}},
 	"routingAppCoverages":                    {"routing-app-coverage-fields", []string{"fileSize", "fileName", "sourceFileChecksum", "uploadOperations", "assetDeliveryState", "appStoreVersion"}},
 	"subscriptionPricePoints":                {"price-point-fields", []string{"customerPrice", "proceeds", "proceedsYear2", "territory", "equalizations", "adjustedEqualizations"}},
+	"subscriptionPrices":                     {"price-fields", []string{"startDate", "preserved", "planType", "territory", "subscriptionPricePoint", "additionalPriceTiers"}},
 	"subscriptions":                          {"subscription-fields", []string{"name", "productId", "familySharable", "state", "subscriptionPeriod", "reviewNote", "groupLevel", "multiSeatStatus", "marketSettings", "subscriptionLocalizations", "appStoreReviewScreenshot", "group", "introductoryOffers", "promotionalOffers", "offerCodes", "prices", "pricePoints", "promotedPurchase", "subscriptionAvailability", "winBackOffers", "images", "planAvailabilities", "versions", "retentionOffers", "retentionMessage", "retentionMessageOffers"}},
 	"territories":                            {"territory-fields", []string{"currency"}},
 }
@@ -139,7 +142,7 @@ func BindIncludedFieldFlagsExcept(fs *flag.FlagSet, relationships map[string]str
 // Resolve validates the provided flags against --next and the resolved
 // includes, and returns the requested fields per resource type.
 func (f *IncludedFieldFlags) Resolve(command, next string, includes []string) (asc.IncludedFields, error) {
-	return f.resolveTo(os.Stderr, command, next, includes)
+	return f.resolveTo(diagnosticoutput.Writer(os.Stderr), command, next, includes)
 }
 
 // ResolveWith is Resolve with the "Error:" line written to d's stderr.

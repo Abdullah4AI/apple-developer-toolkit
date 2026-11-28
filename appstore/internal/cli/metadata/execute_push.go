@@ -51,7 +51,7 @@ func ExecutePushWithWarnings(ctx context.Context, d *shared.Deps, opts PushExecu
 
 	versionValue := strings.TrimSpace(opts.Version)
 	if versionValue == "" {
-		return PushPlanResult{}, nil, metadataRequiredInputError(d, "--version", "--version is required")
+		return PushPlanResult{}, nil, metadataRequiredInputError(d, "--version", "--version is required. Pass the App Store version string, for example --version 1.2.3. If you have version localizations, match the folder under version/ in --dir.")
 	}
 
 	dirValue := strings.TrimSpace(opts.Dir)
@@ -99,7 +99,7 @@ func ExecutePushWithWarnings(ctx context.Context, d *shared.Deps, opts PushExecu
 	settingScopes := selectedMetadataSettingScopes(includes)
 	localSettings := make([]map[string]string, len(settingScopes))
 	for i, scope := range settingScopes {
-		localSettings[i], err = readMetadataSettingFile(d, dirValue, scope)
+		localSettings[i], err = readMetadataSettingFile(d, dirValue, scope, "--include "+scope.name+" requires")
 		if err != nil {
 			return PushPlanResult{}, nil, fmt.Errorf("%s: %w", errorPrefix, err)
 		}

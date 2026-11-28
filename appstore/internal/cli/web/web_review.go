@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"html"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -265,6 +266,12 @@ func summarizeHTMLBodyForTable(plain, raw string) string {
 	if plain = strings.TrimSpace(plain); plain != "" {
 		return normalizeReviewShowValue(plain)
 	}
+	return normalizeReviewShowValue(htmlBodyText(raw))
+}
+
+// htmlBodyText turns a Resolution Center HTML body into text, with each <br>,
+// paragraph, heading and list item ending a line.
+func htmlBodyText(raw string) string {
 	body := strings.TrimSpace(raw)
 	body = strings.NewReplacer(
 		"<br>", "\n",
@@ -276,8 +283,39 @@ func summarizeHTMLBodyForTable(plain, raw string) string {
 		"&nbsp;", " ",
 	).Replace(body)
 	body = reviewHTMLTagPattern.ReplaceAllString(body, " ")
-	body = html.UnescapeString(body)
-	return normalizeReviewShowValue(body)
+	return html.UnescapeString(body)
+}
+
+// reviewMessageLines is a message's text as lines, each with its spacing
+// collapsed, and at most one empty line between paragraphs.
+func reviewMessageLines(message webcore.ResolutionCenterMessage) []string {
+	text := strings.TrimSpace(message.MessageBodyPlain)
+	if text == "" {
+		text = htmlBodyText(message.MessageBody)
+	}
+	text = strings.ReplaceAll(text, "\r\n", "\n")
+	var lines []string
+	for _, line := range strings.Split(text, "\n") {
+		line = strings.Join(strings.Fields(line), " ")
+		if line == "" && (len(lines) == 0 || lines[len(lines)-1] == "") {
+			continue
+		}
+		lines = append(lines, line)
+	}
+	for len(lines) > 0 && lines[len(lines)-1] == "" {
+		lines = lines[:len(lines)-1]
+	}
+	return lines
+}
+
+// describeMessageForTable names who sent a message and when, for a table that
+// prints the message text elsewhere.
+func describeMessageForTable(message webcore.ResolutionCenterMessage) string {
+	from := "n/a"
+	if message.FromActor != nil {
+		from = normalizeReviewShowValue(message.FromActor.ActorType)
+	}
+	return fmt.Sprintf("from=%s created=%s", from, normalizeReviewShowValue(message.CreatedDate))
 }
 
 func summarizeMessageForTable(message webcore.ResolutionCenterMessage) string {
@@ -341,6 +379,10 @@ func countReviewRejections(threads []reviewThreadDetails) int {
 }
 
 func buildReviewShowTableRows(payload reviewShowOutput) [][]string {
+	return buildReviewShowRows(payload, summarizeMessageForTable)
+}
+
+func buildReviewShowRows(payload reviewShowOutput, messageValue func(webcore.ResolutionCenterMessage) string) [][]string {
 	rows := make([][]string, 0)
 	addRow := func(section, field, value string) {
 		rows = append(rows, []string{
@@ -404,7 +446,7 @@ func buildReviewShowTableRows(payload reviewShowOutput) [][]string {
 			addRow(
 				"Messages",
 				fmt.Sprintf("Message %d", messageIndex),
-				summarizeMessageForTable(message),
+				messageValue(message),
 			)
 		}
 
@@ -482,10 +524,33 @@ func renderReviewShowTable(d *shared.Deps, payload reviewShowOutput) error {
 	return nil
 }
 
+// renderReviewShowMarkdown keeps each message's text out of the table: a
+// Markdown table pads every row to its widest cell and has no line breaks, so
+// one long App Review message made every row as wide as the message.
 func renderReviewShowMarkdown(d *shared.Deps, payload reviewShowOutput) error {
 	headers := []string{"Section", "Field", "Value"}
-	asc.RenderMarkdownTo(d.IO.Out, headers, buildReviewShowTableRows(payload))
-	return nil
+	asc.RenderMarkdownTo(d.IO.Out, headers, buildReviewShowRows(payload, describeMessageForTable))
+
+	var b strings.Builder
+	messageIndex := 0
+	for _, detail := range payload.Threads {
+		for _, message := range detail.Messages {
+			messageIndex++
+			if messageIndex == 1 {
+				b.WriteString("\n## Messages\n")
+			}
+			fmt.Fprintf(&b, "\n### Message %d\n\n%s\n\n", messageIndex, describeMessageForTable(message))
+			for _, line := range reviewMessageLines(message) {
+				if line == "" {
+					b.WriteString(">\n")
+					continue
+				}
+				b.WriteString("> " + asc.SanitizeTerminalText(line) + "\n")
+			}
+		}
+	}
+	_, err := io.WriteString(d.IO.Out, b.String())
+	return err
 }
 
 func parseSubmissionTime(value string) time.Time {
@@ -970,7 +1035,7 @@ func newWebReviewReplyCommand(d *shared.Deps) *ffcli.Command {
 	appID := fs.String("app", "", "App Store Connect app ID; when set, the thread must belong to this app")
 	threadID := fs.String("thread-id", "", "Resolution Center thread ID")
 	message := fs.String("message", "", "Reply message body, at most 4,000 characters")
-	bodyFile := fs.String("body-file", "", "Read the reply message body from a regular file")
+	bodyFile := fs.String("body-file", "", "Read the reply message body from a regular file (outside the working directory is deprecated)")
 	confirm := fs.Bool("confirm", false, "Confirm sending the reply")
 	authFlags := bindWebSessionFlags(fs)
 	output := d.BindOutputFlags(fs)
@@ -987,7 +1052,10 @@ and re-reads the thread to verify the created message. It never retries a send
 automatically because a failed response can follow a successful Apple write.
 
 Exactly one of --message or --body-file is required; the body is sent
-verbatim. With --app, the thread must belong to that app, as with
+verbatim. A --body-file must be a regular file without symlinks. Files outside
+the working directory remain supported with a deprecation warning; copy them
+into the project directory or use --message before a future release refuses
+them. With --app, the thread must belong to that app, as with
 "asc web review drafts".
 
 A thread holds one unsent draft, so the reply fails while the thread already

@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	webcore "github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/web"
 )
@@ -517,6 +518,9 @@ func TestResolveSessionReplacesRejectedStoredPasswordOnlyAfterSuccessfulLogin(t 
 
 func TestResolveSessionReplacesRejectedStoredPasswordWithoutCachedSession(t *testing.T) {
 	d, _, _ := newWebTestDeps()
+	origPromptAvailable := twoFactorPromptAvailableFn
+	t.Cleanup(func() { twoFactorPromptAvailableFn = origPromptAvailable })
+	twoFactorPromptAvailableFn = func() bool { return true }
 	preserveWebPasswordHooks(t)
 	preserveWebLoginHooks(t)
 	t.Setenv(webPasswordEnv, "")
@@ -528,7 +532,7 @@ func TestResolveSessionReplacesRejectedStoredPasswordWithoutCachedSession(t *tes
 		return nil, false, nil
 	}
 	loadStoredWebPasswordFn = func(string) (string, bool, error) { return "old-secret", true, nil }
-	promptPasswordFn = func(context.Context) (string, error) { return "new-secret", nil }
+
 	deleteStoredWebPasswordFn = func(string) error { return nil }
 	persistWebSessionFn = func(*webcore.AuthSession) error { return nil }
 
@@ -553,6 +557,13 @@ func TestResolveSessionReplacesRejectedStoredPasswordWithoutCachedSession(t *tes
 	}
 	var warning bytes.Buffer
 	d.IO.ErrOut = &warning
+	d.IO = d.IO.WithQuietDiagnostics()
+	promptPasswordFn = func(context.Context) (string, error) {
+		if !strings.Contains(warning.String(), "Saved Apple Account password was rejected; removing it.") {
+			t.Fatalf("password prompt lost rejection context: %q", warning.String())
+		}
+		return "new-secret", nil
+	}
 	stored := ""
 	storeStoredWebPasswordFn = func(_ string, password string) error {
 		if loginAttempts != 2 {
@@ -577,7 +588,11 @@ func TestResolveSessionReplacesRejectedStoredPasswordWithoutCachedSession(t *tes
 // A run without a terminal cannot replace a rejected saved password, so it must
 // be removed or every later run sends it to Apple again.
 func TestResolveSessionRemovesRejectedStoredPassword(t *testing.T) {
-	d, _, _ := newWebTestDeps()
+	d, _, stderr := newWebTestDeps()
+	d.IO = d.IO.WithQuietDiagnostics()
+	origPromptAvailable := twoFactorPromptAvailableFn
+	t.Cleanup(func() { twoFactorPromptAvailableFn = origPromptAvailable })
+	twoFactorPromptAvailableFn = func() bool { return false }
 	for _, expiredCache := range []bool{false, true} {
 		t.Run(fmt.Sprintf("expiredCache=%t", expiredCache), func(t *testing.T) {
 			configureFreshPasswordLoginTest(t)
@@ -603,8 +618,11 @@ func TestResolveSessionRemovesRejectedStoredPassword(t *testing.T) {
 				return nil
 			}
 
-			if _, _, err := resolveSession(context.Background(), d, "user@example.com", "", ""); err == nil {
+			if _, _, err := resolveSession(context.Background(), d, "user@example.com", "", "123456"); err == nil {
 				t.Fatal("expected resolveSession to fail without a replacement password")
+			}
+			if stderr.Len() != 0 {
+				t.Fatalf("unattended JSON diagnostics leaked text: %q", stderr.String())
 			}
 			if len(deleted) != 1 || deleted[0] != "user@example.com" {
 				t.Fatalf("deleted saved passwords = %v, want [user@example.com]", deleted)
@@ -655,6 +673,134 @@ func TestWebAuthStatusReportsStoredPasswordForExpiredSession(t *testing.T) {
 	}
 	if !strings.Contains(stdout, `"authenticated":false`) || !strings.Contains(stdout, `"passwordStored":true`) {
 		t.Fatalf("status output = %q, want unauthenticated with stored password", stdout)
+	}
+}
+
+func TestWebAuthStatusReportsWhetherCommandsSignInAutomatically(t *testing.T) {
+	now := time.Date(2026, 11, 26, 3, 0, 0, 0, time.UTC)
+	pausedUntil := now.Add(10 * time.Minute)
+	tests := []struct {
+		name             string
+		noAppleIDFlag    bool
+		missingSession   bool
+		stored           bool
+		envPassword      string
+		noAutoLogin      string
+		twoFactorCommand string
+		noPrompt         bool
+		backoff          *webcore.SigninBackoff
+		wantAuto         string
+		wantPaused       bool
+	}{
+		{name: "stored password", stored: true, wantAuto: `"autoSignIn":true`},
+		{name: "no stored password", wantAuto: `"autoSignIn":false`},
+		{name: "password in environment", envPassword: "secret", wantAuto: `"autoSignIn":true`},
+		{name: "auto sign-in disabled", stored: true, noAutoLogin: "1", wantAuto: `"autoSignIn":false`},
+		{
+			name:       "sign-in cooldown",
+			stored:     true,
+			backoff:    &webcore.SigninBackoff{FailedAt: now.Add(-time.Minute), NotBefore: pausedUntil},
+			wantAuto:   `"autoSignIn":false`,
+			wantPaused: true,
+		},
+		{
+			name:          "expired legacy cache without Apple ID",
+			noAppleIDFlag: true,
+			envPassword:   "secret",
+			wantAuto:      `"autoSignIn":false`,
+		},
+		{
+			name:           "missing session without Apple ID",
+			noAppleIDFlag:  true,
+			missingSession: true,
+			envPassword:    "secret",
+			wantAuto:       `"autoSignIn":false`,
+		},
+		{
+			name:           "missing session without 2FA source",
+			missingSession: true,
+			envPassword:    "secret",
+			noPrompt:       true,
+			wantAuto:       `"autoSignIn":false`,
+		},
+		{
+			name:             "missing session with 2FA command",
+			missingSession:   true,
+			envPassword:      "secret",
+			twoFactorCommand: "echo 123456",
+			noPrompt:         true,
+			wantAuto:         `"autoSignIn":true`,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			preserveWebPasswordHooks(t)
+			preserveWebLoginHooks(t)
+			origLoadBackoff, origNow := loadSigninBackoffFn, signinBackoffNowFn
+			origPrompt, origDefault := twoFactorPromptAvailableFn, defaultCachedAppleIDFn
+			t.Cleanup(func() {
+				loadSigninBackoffFn, signinBackoffNowFn = origLoadBackoff, origNow
+				twoFactorPromptAvailableFn, defaultCachedAppleIDFn = origPrompt, origDefault
+			})
+			t.Setenv(webDontStorePasswordEnv, "")
+			t.Setenv(webNoAutoLoginEnv, test.noAutoLogin)
+			t.Setenv(webPasswordEnv, test.envPassword)
+			t.Setenv(webTwoFactorCodeCommandEnv, test.twoFactorCommand)
+			t.Setenv("ASC_BYPASS_KEYCHAIN", "")
+			twoFactorPromptAvailableFn = func() bool { return !test.noPrompt }
+			defaultCachedAppleIDFn = func() (string, webcore.CachedSessionSource, error) {
+				return "", webcore.CachedSessionSourceUnknown, nil
+			}
+			resumeErr := webcore.ErrCachedSessionExpired
+			if test.missingSession {
+				resumeErr = nil
+			}
+			tryResumeSessionFn = func(context.Context, string) (*webcore.AuthSession, bool, error) {
+				return nil, false, resumeErr
+			}
+			tryResumeLastFn = func(context.Context) (*webcore.AuthSession, bool, error) {
+				return nil, false, resumeErr
+			}
+			loadCachedSessionFn = func(appleID string) (*webcore.AuthSession, bool, error) {
+				return &webcore.AuthSession{Client: &http.Client{}, UserEmail: appleID}, true, nil
+			}
+			loadLastCachedSessionFn = func() (*webcore.AuthSession, bool, error) {
+				// A legacy cache entry stored no Apple ID.
+				return &webcore.AuthSession{Client: &http.Client{}}, true, nil
+			}
+			storedWebPasswordExistsFn = func(string) (bool, error) { return test.stored, nil }
+			signinBackoffNowFn = func() time.Time { return now }
+			loadSigninBackoffFn = func(string) (webcore.SigninBackoff, bool, error) {
+				if test.backoff == nil {
+					return webcore.SigninBackoff{}, false, nil
+				}
+				return *test.backoff, true, nil
+			}
+
+			args := []string{"--output", "json"}
+			if !test.noAppleIDFlag {
+				args = append(args, "--apple-id", "user@example.com")
+			}
+			d, depsStdout, depsStderr := newWebTestDeps()
+			cmd := newWebAuthStatusCommand(d)
+			if err := cmd.FlagSet.Parse(args); err != nil {
+				t.Fatalf("Parse() error = %v", err)
+			}
+			var runErr error
+			stdout, _ := runWithWebTestDeps(depsStdout, depsStderr, func() {
+				runErr = cmd.Exec(context.Background(), nil)
+			})
+			if runErr != nil {
+				t.Fatalf("status Exec() error = %v", runErr)
+			}
+			if !strings.Contains(stdout, test.wantAuto) {
+				t.Fatalf("status output = %q, want %s", stdout, test.wantAuto)
+			}
+			paused := `"autoSignInPausedUntil":"` + pausedUntil.Format(time.RFC3339) + `"`
+			if got := strings.Contains(stdout, paused); got != test.wantPaused {
+				t.Fatalf("status output = %q, want paused-until %s reported: %v", stdout, paused, test.wantPaused)
+			}
+		})
 	}
 }
 
@@ -821,5 +967,52 @@ func TestWebAuthLogoutAllCanForgetPasswordsWithSessions(t *testing.T) {
 	}
 	if !strings.Contains(stdout, "stored passwords") {
 		t.Fatalf("logout output = %q, want stored-password confirmation", stdout)
+	}
+}
+
+func TestWebAuthLoginNoPrompt(t *testing.T) {
+	for _, tc := range []struct {
+		name, password, wantDiagnostic string
+	}{
+		{"missing password", "", "ASC_WEB_PASSWORD"},
+		{"missing verification code source", "fixture-password", "two-factor-code-command"},
+		{"configured inputs", "fixture-password", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			d, stdout, stderr := newWebTestDeps()
+			configureFreshPasswordLoginTest(t)
+			t.Setenv("ASC_BYPASS_KEYCHAIN", "1")
+			t.Setenv(webPasswordEnv, tc.password)
+			t.Setenv(webTwoFactorCodeCommandEnv, "")
+			original := twoFactorPromptAvailableFn
+			t.Cleanup(func() { twoFactorPromptAvailableFn = original })
+			twoFactorPromptAvailableFn = func() bool { return true }
+			promptPasswordFn = func(context.Context) (string, error) {
+				t.Fatal("noninteractive login prompted for a password")
+				return "", nil
+			}
+			webLoginFn = func(_ context.Context, credentials webcore.LoginCredentials) (*webcore.AuthSession, error) {
+				if tc.wantDiagnostic == "" && credentials.Password == tc.password {
+					return &webcore.AuthSession{UserEmail: "user@example.com"}, nil
+				}
+				t.Fatal("attempted a fresh sign-in with incomplete unattended inputs")
+				return nil, nil
+			}
+			cmd := newWebAuthLoginCommand(d)
+			args := []string{"--apple-id", "user@example.com", "--no-prompt", "--output", "json"}
+			if tc.wantDiagnostic == "" {
+				args = append(args, "--two-factor-code-command", "fixture-code-command")
+			}
+			err := cmd.ParseAndRun(context.Background(), args)
+			if tc.wantDiagnostic == "" {
+				if err != nil || !strings.Contains(stdout.String(), `"authenticated":true`) {
+					t.Fatalf("expected authenticated session, got %v and %s", err, stdout.String())
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error()+" "+stderr.String(), tc.wantDiagnostic) {
+				t.Fatalf("expected guidance naming %s, got error %v and stderr %q", tc.wantDiagnostic, err, stderr.String())
+			}
+		})
 	}
 }

@@ -25,6 +25,7 @@ type screenshotUploadFailureArtifact struct {
 	DisplayType           string                       `json:"displayType,omitempty"`
 	SkipExisting          bool                         `json:"skipExisting,omitempty"`
 	Replace               bool                         `json:"replace,omitempty"`
+	Replacement           *screenshotReplacement       `json:"replacement,omitempty"`
 	SetID                 string                       `json:"setId,omitempty"`
 	Files                 []string                     `json:"files,omitempty"`
 	OrderedIDs            []string                     `json:"orderedIds,omitempty"`
@@ -46,11 +47,10 @@ type screenshotPendingAsset struct {
 }
 
 type screenshotUploadPreparedState struct {
-	Set                 asc.Resource[asc.AppScreenshotSetAttributes]
-	ExistingScreenshots []asc.Resource[asc.AppScreenshotAttributes]
-	Files               []string
-	SkippedResults      []asc.AssetUploadResultItem
-	OrderedIDs          []string
+	Set            asc.Resource[asc.AppScreenshotSetAttributes]
+	Files          []string
+	SkippedResults []asc.AssetUploadResultItem
+	OrderedIDs     []string
 }
 
 func buildAppScreenshotUploadResult(localizationID string, set asc.Resource[asc.AppScreenshotSetAttributes], dryRun bool, results []asc.AssetUploadResultItem) asc.AppScreenshotUploadResult {
@@ -77,7 +77,7 @@ func finalizeAppScreenshotUploadResult(result *asc.AppScreenshotUploadResult) {
 		switch {
 		case item.Skipped || state == "skipped":
 			skipped++
-		case state == "would-delete":
+		case state == "would-delete" || state == "deleted":
 			continue
 		case strings.TrimSpace(item.AssetID) != "":
 			uploaded++
@@ -135,9 +135,39 @@ func appendScreenshotUploadFailure(result *asc.AppScreenshotUploadResult, progre
 	})
 }
 
-func screenshotUploadRetryError(d *shared.Deps, result asc.AppScreenshotUploadResult, progress screenshotUploadProgress, cause error) error {
+var errScreenshotReceiptCannotDelete = errors.New("resume receipts do not authorize screenshot deletion")
+
+func screenshotCleanupHint(replace bool) string {
+	if replace {
+		return "inspect the intended app, localization, and device, then run a fresh explicitly targeted screenshots upload --replace --dry-run and a separately confirmed --replace --confirm for that exact target"
+	}
+	return "inspect the intended screenshot set, keep completed screenshots, and remove only reservations you have verified are stuck and no longer in use. Preview the missing files with asc screenshots upload --skip-existing --dry-run, then upload them with --skip-existing"
+}
+
+func screenshotDestructiveRecoveryError(replace bool) error {
+	return fmt.Errorf("%w; %s", errScreenshotReceiptCannotDelete, screenshotCleanupHint(replace))
+}
+
+func (artifact *screenshotUploadFailureArtifact) blockedResume(path, failureName string, err error) (asc.AppScreenshotUploadResult, error) {
+	result := asc.AppScreenshotUploadResult{
+		VersionLocalizationID: artifact.VersionLocalizationID,
+		SetID:                 artifact.SetID,
+		DisplayType:           artifact.DisplayType,
+		Resumed:               true,
+		FailureArtifactPath:   path,
+		Pending:               len(artifact.PendingFiles),
+		Results:               artifact.Results,
+		Failures:              []asc.AssetUploadFailureItem{{FileName: failureName, Error: err.Error()}},
+	}
+	finalizeAppScreenshotUploadResult(&result)
+	return result, err
+}
+
+func screenshotUploadRetryError(d *shared.Deps, result asc.AppScreenshotUploadResult, progress screenshotUploadProgress, replace bool, cause error) error {
 	var summary string
 	switch {
+	case progress.PendingDeletions > 0:
+		summary = fmt.Sprintf("screenshots upload: %d screenshot deletion(s) pending", progress.PendingDeletions)
 	case len(progress.PendingFiles) > 0:
 		summary = fmt.Sprintf("screenshots upload: %d of %d file(s) not uploaded", result.Pending, result.Total)
 	case len(progress.CleanupFailures) > 0:
@@ -147,10 +177,12 @@ func screenshotUploadRetryError(d *shared.Deps, result asc.AppScreenshotUploadRe
 	}
 	err := fmt.Errorf("%s: %w", summary, cause)
 	fmt.Fprint(d.IO.ErrOut, errfmt.FormatStderr(err))
-	if quotedPath, ok := shared.ShellQuote(result.FailureArtifactPath); ok {
-		fmt.Fprintf(d.IO.ErrOut, "Hint: resume with `asc screenshots upload --resume %s`\n", quotedPath)
+	if progress.PendingDeletions > 0 || len(progress.CleanupFailures) > 0 || errors.Is(cause, errScreenshotReceiptCannotDelete) {
+		fmt.Fprintln(d.IO.ErrOut, "Hint:", screenshotCleanupHint(replace))
+	} else if quotedPath, ok := shared.ShellQuote(result.FailureArtifactPath); ok {
+		fmt.Fprintf(d.IO.ErrOut, "Hint: verify the target, then resume with `asc screenshots upload --resume %s --app APP_ID --version-localization VERSION_LOCALIZATION_ID --device-type DEVICE_TYPE`\n", quotedPath)
 	} else {
-		fmt.Fprintln(d.IO.ErrOut, "Hint: use --resume with the failure artifact path from the JSON result.")
+		fmt.Fprintln(d.IO.ErrOut, "Hint: verify the target, then use --resume with the failure artifact path from the JSON result and independently selected --app, --version-localization, and --device-type.")
 	}
 	return shared.NewStderrReportedError(err)
 }
@@ -203,14 +235,14 @@ func prepareAppScreenshotUpload(ctx context.Context, cfg screenshotUploadConfig[
 	}
 
 	existingScreenshots := make([]asc.Resource[asc.AppScreenshotAttributes], 0)
-	if (cfg.SkipExisting || cfg.Replace || (!cfg.Replace && len(cfg.Files) > 0)) && set.ID != "" {
+	if (cfg.SkipExisting || len(cfg.Files) > 0) && set.ID != "" {
 		existingResp, err := cfg.Client.GetAllAppScreenshots(ctx, set.ID, asc.WithAppScreenshotsRequestContext(cfg.RequestContext))
 		if err != nil {
 			return screenshotUploadPreparedState{}, err
 		}
 		existingScreenshots = existingResp.Data
 	}
-	if !cfg.SkipExisting && !cfg.Replace {
+	if !cfg.SkipExisting {
 		warnScreenshotFileNamesAlreadyInSet(cfg.Deps, cfg.Files, existingScreenshots)
 	}
 	if cfg.SkipExisting && len(existingScreenshots) > 0 {
@@ -231,13 +263,13 @@ func prepareAppScreenshotUpload(ctx context.Context, cfg screenshotUploadConfig[
 			return screenshotUploadPreparedState{}, filterErr
 		}
 	}
-	files, err = limitScreenshotUploadFilesForExistingSet(files, cfg.MaxScreenshots, existingScreenshots, cfg.Replace, set.ID, cfg.InspectCommand, cfg.ReplaceCommand)
+	files, err = limitScreenshotUploadFilesForExistingSet(files, cfg.MaxScreenshots, existingScreenshots, false, set.ID, cfg.InspectCommand, cfg.ReplaceCommand)
 	if err != nil {
 		return screenshotUploadPreparedState{}, err
 	}
 
 	orderedIDs := make([]string, 0)
-	if !cfg.DryRun && !cfg.Replace && set.ID != "" && len(files) > 0 {
+	if !cfg.DryRun && set.ID != "" && len(files) > 0 {
 		orderCtx, orderCancel := cfg.UploadContext(ctx)
 		orderedIDs, err = GetOrderedAppScreenshotIDs(orderCtx, cfg.Client, set.ID)
 		orderCancel()
@@ -247,15 +279,17 @@ func prepareAppScreenshotUpload(ctx context.Context, cfg screenshotUploadConfig[
 	}
 
 	return screenshotUploadPreparedState{
-		Set:                 set,
-		ExistingScreenshots: existingScreenshots,
-		Files:               files,
-		SkippedResults:      skippedResults,
-		OrderedIDs:          orderedIDs,
+		Set:            set,
+		Files:          files,
+		SkippedResults: skippedResults,
+		OrderedIDs:     orderedIDs,
 	}, nil
 }
 
 func executeAppScreenshotUpload(ctx context.Context, cfg screenshotUploadConfig[asc.AppScreenshotUploadResult], artifactPath string) (asc.AppScreenshotUploadResult, error) {
+	if cfg.Replace {
+		return executeScreenshotReplacement(ctx, cfg, artifactPath, nil)
+	}
 	if cfg.RequestContext == nil {
 		cfg.RequestContext = cfg.Deps.Timeout
 	}
@@ -275,16 +309,7 @@ func executeAppScreenshotUpload(ctx context.Context, cfg screenshotUploadConfig[
 	}
 
 	if cfg.DryRun {
-		results := make([]asc.AssetUploadResultItem, 0, len(prepared.SkippedResults)+len(prepared.Files)+len(prepared.ExistingScreenshots))
-		if cfg.Replace {
-			for _, screenshot := range prepared.ExistingScreenshots {
-				results = append(results, asc.AssetUploadResultItem{
-					FileName: screenshot.Attributes.FileName,
-					AssetID:  screenshot.ID,
-					State:    "would-delete",
-				})
-			}
-		}
+		results := make([]asc.AssetUploadResultItem, 0, len(prepared.SkippedResults)+len(prepared.Files))
 		for _, filePath := range prepared.Files {
 			results = append(results, asc.AssetUploadResultItem{
 				FileName: filepath.Base(filePath),
@@ -299,23 +324,7 @@ func executeAppScreenshotUpload(ctx context.Context, cfg screenshotUploadConfig[
 	uploadCtx, cancel := cfg.UploadContext(withAssetUploadWork(ctx, prepared.Files))
 	defer cancel()
 
-	var openedFiles openedScreenshotFiles
-	if cfg.Replace && len(prepared.Files) > 0 {
-		openedFiles, err = openAndValidateScreenshotFiles(cfg.RootPath, cfg.DisplayType, prepared.Files)
-		if err != nil {
-			return asc.AppScreenshotUploadResult{}, err
-		}
-		defer closeOpenedScreenshotFiles(openedFiles)
-		if err := deleteExistingScreenshots(uploadCtx, cfg.Client, prepared.ExistingScreenshots); err != nil {
-			return asc.AppScreenshotUploadResult{}, err
-		}
-	} else if cfg.Replace {
-		if err := deleteExistingScreenshots(uploadCtx, cfg.Client, prepared.ExistingScreenshots); err != nil {
-			return asc.AppScreenshotUploadResult{}, err
-		}
-	}
-
-	progress, uploadErr := uploadScreenshotsWithOrderStateWithOpenedFiles(uploadCtx, cfg.Deps.IO.ErrOut, cfg.RequestContext, cfg.Client, prepared.Set.ID, prepared.OrderedIDs, prepared.Files, cfg.RootPath, false, true, openedFiles)
+	progress, uploadErr := uploadScreenshotsWithOrderState(uploadCtx, cfg.Deps.IO.ErrOut, cfg.RequestContext, cfg.Client, prepared.Set.ID, prepared.OrderedIDs, prepared.Files, cfg.RootPath, false, true)
 	if uploadErr == nil && cfg.SkipExisting && len(prepared.SkippedResults) > 0 {
 		desiredIDs, err := syncSkippedScreenshotOrder(uploadCtx, cfg.Client, prepared.Set.ID, cfg.Files, prepared.SkippedResults, progress.Results)
 		if err != nil {
@@ -353,7 +362,6 @@ func executeAppScreenshotUpload(ctx context.Context, cfg screenshotUploadConfig[
 		DeviceType:            strings.TrimPrefix(cfg.DisplayType, "APP_"),
 		DisplayType:           cfg.DisplayType,
 		SkipExisting:          cfg.SkipExisting,
-		Replace:               cfg.Replace,
 		SetID:                 prepared.Set.ID,
 		Files:                 append([]string(nil), cfg.Files...),
 		OrderedIDs:            orderedIDs,
@@ -374,7 +382,7 @@ func executeAppScreenshotUpload(ctx context.Context, cfg screenshotUploadConfig[
 		return result, screenshotUploadArtifactWriteError(uploadErr, artifactErr)
 	}
 	result.FailureArtifactPath = writtenPath
-	return result, screenshotUploadRetryError(cfg.Deps, result, progress, uploadErr)
+	return result, screenshotUploadRetryError(cfg.Deps, result, progress, false, uploadErr)
 }
 
 // screenshotUploadArtifactWriteError reports that the upload failed and that no
@@ -388,7 +396,8 @@ func screenshotUploadArtifactWriteError(uploadErr, artifactErr error) error {
 // resumeAppScreenshotUpload validates the failure artifact and its pending
 // files, then takes the upload lock with acquireUploadLock (nil skips it)
 // before resuming.
-func resumeAppScreenshotUpload(ctx context.Context, d *shared.Deps, client *asc.Client, artifactPath string, acquireUploadLock func(context.Context) (func(), error)) (asc.AppScreenshotUploadResult, error) {
+func resumeAppScreenshotUpload(ctx context.Context, d *shared.Deps, client *asc.Client, artifactPath string, target screenshotResumeTarget, acquireUploadLock func(context.Context) (func(), error)) (asc.AppScreenshotUploadResult, error) {
+	ctx = context.WithValue(ctx, screenshotResumeKey{}, true)
 	artifact, err := loadScreenshotUploadFailureArtifact(d, artifactPath)
 	if err != nil {
 		return asc.AppScreenshotUploadResult{}, fmt.Errorf("load resume artifact: %w", err)
@@ -396,7 +405,7 @@ func resumeAppScreenshotUpload(ctx context.Context, d *shared.Deps, client *asc.
 	if strings.TrimSpace(artifact.SetID) == "" {
 		return asc.AppScreenshotUploadResult{}, fmt.Errorf("resume artifact %q is missing setId", artifactPath)
 	}
-	canRetrySkippedOrdering := artifact.SkipExisting && len(artifact.Files) > 0 && len(artifact.Results) > 0
+	canRetrySkippedOrdering := (artifact.SkipExisting && len(artifact.Results) > 0 || artifact.Replacement != nil) && len(artifact.Files) > 0
 	if len(artifact.PendingFiles) == 0 && len(artifact.OrderedIDs) == 0 && len(artifact.CleanupFailures) == 0 && !canRetrySkippedOrdering {
 		return asc.AppScreenshotUploadResult{}, fmt.Errorf("resume artifact %q has no pending files or ordering work", artifactPath)
 	}
@@ -418,42 +427,31 @@ func resumeAppScreenshotUpload(ctx context.Context, d *shared.Deps, client *asc.
 		}
 		defer release()
 	}
+	if artifact.Replacement != nil && len(artifact.Replacement.Remove) > 0 {
+		return asc.AppScreenshotUploadResult{}, screenshotDestructiveRecoveryError(true)
+	}
+	if !artifact.Replace && artifact.Replacement == nil && len(artifact.CleanupFailures) > 0 {
+		return artifact.blockedResume(artifactPath, "screenshot cleanup", screenshotDestructiveRecoveryError(false))
+	}
+	ctx, err = prepareScreenshotResumeScope(asc.WithNoRedirectReads(ctx), d, client, artifact, target)
+	if err != nil {
+		return asc.AppScreenshotUploadResult{}, err
+	}
+	if artifact.Replace && artifact.Replacement == nil {
+		if err := prepareLegacyScreenshotReplacement(ctx, d, client, &artifact, sourceRootPath); err != nil {
+			return asc.AppScreenshotUploadResult{}, err
+		}
+	}
+	if artifact.Replacement != nil {
+		return executeScreenshotReplacement(ctx, screenshotUploadConfig[asc.AppScreenshotUploadResult]{
+			Deps: d, Client: client, AppID: target.AppID, LocalizationID: target.LocalizationID,
+			DisplayType: target.DisplayType, Files: artifact.Files, RootPath: sourceRootPath,
+			Replace: true, Access: appStoreVersionScreenshotSetAccess,
+		}, artifactPath, &artifact)
+	}
 
 	uploadCtx, cancel := ContextWithAssetUploadTimeoutWith(withAssetUploadWork(ctx, artifact.PendingFiles), d)
 	defer cancel()
-
-	if len(artifact.CleanupFailures) > 0 {
-		remainingCleanup, cleanupErr := cleanupScreenshotAssets(uploadCtx, d.Timeout, client, artifact.CleanupFailures)
-		if cleanupErr != nil {
-			progress := screenshotUploadProgress{
-				OrderedIDs:      append([]string(nil), artifact.OrderedIDs...),
-				CleanupFailures: remainingCleanup,
-			}
-			result := asc.AppScreenshotUploadResult{
-				VersionLocalizationID: artifact.VersionLocalizationID,
-				SetID:                 artifact.SetID,
-				DisplayType:           artifact.DisplayType,
-				Resumed:               true,
-				Results:               append([]asc.AssetUploadResultItem(nil), artifact.Results...),
-			}
-			appendScreenshotUploadFailure(&result, progress, cleanupErr)
-			result.Pending = len(artifact.PendingFiles)
-			result.Total = len(result.Results) + result.Pending
-			finalizeAppScreenshotUploadResult(&result)
-			nextArtifact := artifact
-			nextArtifact.CleanupFailures = append([]screenshotPendingAsset(nil), remainingCleanup...)
-			nextArtifact.Failures = append([]asc.AssetUploadFailureItem(nil), result.Failures...)
-			nextArtifact.Error = cleanupErr.Error()
-			nextArtifact.GeneratedAt = d.Now().UTC().Format(time.RFC3339)
-			writtenPath, artifactErr := persistScreenshotUploadFailureArtifact(d, artifactPath, nextArtifact)
-			if artifactErr != nil {
-				return result, screenshotUploadArtifactWriteError(cleanupErr, artifactErr)
-			}
-			result.FailureArtifactPath = writtenPath
-			return result, screenshotUploadRetryError(d, result, progress, cleanupErr)
-		}
-		artifact.CleanupFailures = nil
-	}
 
 	progress, uploadErr := resumeScreenshotsWithOrderState(uploadCtx, d.IO.ErrOut, d.Timeout, client, artifact.SetID, artifact.OrderedIDs, artifact.PendingFiles, artifact.PendingAssets, sourceRootPath, true, syncAfterUpload)
 
@@ -480,6 +478,16 @@ func resumeAppScreenshotUpload(ctx context.Context, d *shared.Deps, client *asc.
 		}
 	}
 
+	if uploadErr == nil && artifact.Replace {
+		_, order, readErr := replacementInventory(uploadCtx, screenshotUploadConfig[asc.AppScreenshotUploadResult]{
+			Deps: d, Client: client, LocalizationID: artifact.VersionLocalizationID,
+			DisplayType: artifact.DisplayType, Access: appStoreVersionScreenshotSetAccess, RequestContext: d.Timeout,
+		}, artifact.SetID)
+		uploadErr = readErr
+		if uploadErr == nil && !sameAssetIDOrder(order, progress.OrderedIDs) {
+			uploadErr = fmt.Errorf("legacy replacement screenshot order was not confirmed")
+		}
+	}
 	if uploadErr == nil {
 		finalizeAppScreenshotUploadResult(&result)
 		return result, nil
@@ -518,7 +526,7 @@ func resumeAppScreenshotUpload(ctx context.Context, d *shared.Deps, client *asc.
 		return result, screenshotUploadArtifactWriteError(uploadErr, artifactErr)
 	}
 	result.FailureArtifactPath = writtenPath
-	return result, screenshotUploadRetryError(d, result, progress, uploadErr)
+	return result, screenshotUploadRetryError(d, result, progress, artifact.Replace, uploadErr)
 }
 
 func splitSkippedScreenshotResults(results []asc.AssetUploadResultItem) ([]asc.AssetUploadResultItem, []asc.AssetUploadResultItem) {
@@ -673,7 +681,7 @@ func validateResumedScreenshotFileFormat(root rootfs.Root, path string) error {
 }
 
 func screenshotArtifactNeedsSourceFiles(artifact screenshotUploadFailureArtifact) bool {
-	return len(artifact.PendingFiles) > 0 || len(artifact.PendingAssets) > 0
+	return len(artifact.PendingFiles) > 0 || len(artifact.PendingAssets) > 0 || artifact.Replacement != nil
 }
 
 func screenshotArtifactSourcePaths(artifact screenshotUploadFailureArtifact) []string {

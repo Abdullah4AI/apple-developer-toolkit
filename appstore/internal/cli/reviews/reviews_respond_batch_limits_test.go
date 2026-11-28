@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -12,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
 // TestLoadReviewBatchTargetsReadsFileAtSizeLimit proves an at-limit file
@@ -20,7 +22,7 @@ import (
 func TestLoadReviewBatchTargetsReadsFileAtSizeLimit(t *testing.T) {
 	path := writeSizedReviewBatchFile(t, reviewBatchMaxFileBytes)
 
-	_, err := loadReviewBatchTargets(path)
+	_, err := loadReviewBatchTargetsForTest(t, path)
 	if err == nil {
 		t.Fatal("expected the oversized response inside an at-limit file to be rejected")
 	}
@@ -60,7 +62,7 @@ func TestLoadReviewBatchTargetsAcceptsMaximalMultibyteBatch(t *testing.T) {
 	}
 	path := writeReviewBatchTestFile(t, body)
 
-	targets, err := loadReviewBatchTargets(path)
+	targets, err := loadReviewBatchTargetsForTest(t, path)
 	if err != nil {
 		t.Fatalf("loadReviewBatchTargets() error: %v", err)
 	}
@@ -92,7 +94,7 @@ func TestLoadReviewBatchTargetsAcceptsMaximalEscapedMultibyteBatch(t *testing.T)
 	}
 	path := writeReviewBatchTestFile(t, body)
 
-	targets, err := loadReviewBatchTargets(path)
+	targets, err := loadReviewBatchTargetsForTest(t, path)
 	if err != nil {
 		t.Fatalf("loadReviewBatchTargets() error: %v", err)
 	}
@@ -116,7 +118,7 @@ func TestLoadReviewBatchTargetsAcceptsResponseAtByteLimit(t *testing.T) {
 	}
 	path := writeReviewBatchTestFile(t, body)
 
-	targets, err := loadReviewBatchTargets(path)
+	targets, err := loadReviewBatchTargetsForTest(t, path)
 	if err != nil {
 		t.Fatalf("loadReviewBatchTargets() error: %v", err)
 	}
@@ -137,7 +139,7 @@ func TestLoadReviewBatchTargetsRejectsResponseOneByteOverLimit(t *testing.T) {
 	}
 	path := writeReviewBatchTestFile(t, body)
 
-	_, err = loadReviewBatchTargets(path)
+	_, err = loadReviewBatchTargetsForTest(t, path)
 	if err == nil {
 		t.Fatal("expected oversized response rejection, got nil")
 	}
@@ -150,7 +152,7 @@ func TestLoadReviewBatchTargetsRejectsResponseOneByteOverLimit(t *testing.T) {
 func TestLoadReviewBatchTargetsRejectsFileOneByteOverSizeLimit(t *testing.T) {
 	path := writeSizedReviewBatchFile(t, reviewBatchMaxFileBytes+1)
 
-	_, err := loadReviewBatchTargets(path)
+	_, err := loadReviewBatchTargetsForTest(t, path)
 	if err == nil {
 		t.Fatal("expected oversized --file rejection, got nil")
 	}
@@ -163,7 +165,7 @@ func TestLoadReviewBatchTargetsRejectsFileOneByteOverSizeLimit(t *testing.T) {
 func TestLoadReviewBatchTargetsAcceptsMaximumReviewIDs(t *testing.T) {
 	path := writeReviewBatchFileWithReviewIDs(t, reviewBatchMaxTargets)
 
-	targets, err := loadReviewBatchTargets(path)
+	targets, err := loadReviewBatchTargetsForTest(t, path)
 	if err != nil {
 		t.Fatalf("loadReviewBatchTargets() error: %v", err)
 	}
@@ -175,7 +177,7 @@ func TestLoadReviewBatchTargetsAcceptsMaximumReviewIDs(t *testing.T) {
 func TestLoadReviewBatchTargetsRejectsOneReviewIDOverLimit(t *testing.T) {
 	path := writeReviewBatchFileWithReviewIDs(t, reviewBatchMaxTargets+1)
 
-	_, err := loadReviewBatchTargets(path)
+	_, err := loadReviewBatchTargetsForTest(t, path)
 	if err == nil {
 		t.Fatal("expected too-many-review-ids rejection, got nil")
 	}
@@ -211,7 +213,7 @@ func reviewBatchFileWithEmptyIDs(t *testing.T, idCount int) string {
 func TestLoadReviewBatchTargetsRejectsTokenFloodBeforeMaterializing(t *testing.T) {
 	path := reviewBatchFileWithEmptyIDs(t, reviewBatchMaxFileTokens-12+1)
 
-	_, err := loadReviewBatchTargets(path)
+	_, err := loadReviewBatchTargetsForTest(t, path)
 	if err == nil {
 		t.Fatal("expected token flood rejection, got nil")
 	}
@@ -227,7 +229,7 @@ func TestLoadReviewBatchTargetsRejectsTokenFloodBeforeMaterializing(t *testing.T
 func TestLoadReviewBatchTargetsTokenBudgetAdmitsFileAtTokenLimit(t *testing.T) {
 	path := reviewBatchFileWithEmptyIDs(t, reviewBatchMaxFileTokens-12)
 
-	_, err := loadReviewBatchTargets(path)
+	_, err := loadReviewBatchTargetsForTest(t, path)
 	if err == nil {
 		t.Fatal("expected empty review ids to be rejected, got nil")
 	}
@@ -239,7 +241,7 @@ func TestLoadReviewBatchTargetsTokenBudgetAdmitsFileAtTokenLimit(t *testing.T) {
 func TestLoadReviewBatchTargetsRejectsInvalidUTF8(t *testing.T) {
 	path := writeReviewBatchTestFile(t, []byte("{\"replies\":[{\"response\":\"\xff\",\"reviewIds\":[\"review-1\"]}]}"))
 
-	_, err := loadReviewBatchTargets(path)
+	_, err := loadReviewBatchTargetsForTest(t, path)
 	if err == nil {
 		t.Fatal("expected invalid UTF-8 rejection, got nil")
 	}
@@ -251,7 +253,7 @@ func TestLoadReviewBatchTargetsRejectsInvalidUTF8(t *testing.T) {
 func TestLoadReviewBatchTargetsRejectsUnpairedSurrogateEscape(t *testing.T) {
 	path := writeReviewBatchTestFile(t, []byte(`{"replies":[{"response":"\ud835x","reviewIds":["review-1"]}]}`))
 
-	_, err := loadReviewBatchTargets(path)
+	_, err := loadReviewBatchTargetsForTest(t, path)
 	if err == nil {
 		t.Fatal("expected unpaired surrogate rejection, got nil")
 	}
@@ -267,7 +269,7 @@ func TestLoadReviewBatchTargetsRejectsDuplicateObjectKeys(t *testing.T) {
 		`{"replies":[{"response":"first","reviewIds":["review-1"],"reviewIds":["review-2"]}]}`,
 	} {
 		path := writeReviewBatchTestFile(t, []byte(body))
-		_, err := loadReviewBatchTargets(path)
+		_, err := loadReviewBatchTargetsForTest(t, path)
 		if err == nil {
 			t.Fatalf("expected duplicate-key rejection for %s", body)
 		}
@@ -281,7 +283,7 @@ func TestLoadReviewBatchTargetsClonesTrimmedStrings(t *testing.T) {
 	body := `{"replies":[{"response":"  Thanks  ","reviewIds":["  review-1  "]}]}`
 	path := writeReviewBatchTestFile(t, []byte(body))
 
-	targets, err := loadReviewBatchTargets(path)
+	targets, err := loadReviewBatchTargetsForTest(t, path)
 	if err != nil {
 		t.Fatalf("loadReviewBatchTargets() error: %v", err)
 	}
@@ -303,7 +305,7 @@ func TestLoadReviewBatchTargetsPreservesTrailingSpaceInPath(t *testing.T) {
 		t.Fatalf("write trailing-space batch file: %v", err)
 	}
 
-	targets, err := loadReviewBatchTargets(spacedPath)
+	targets, err := loadReviewBatchTargetsForTest(t, spacedPath)
 	if err != nil {
 		t.Fatalf("loadReviewBatchTargets() error: %v", err)
 	}
@@ -319,7 +321,7 @@ func TestLoadReviewBatchTargetsAcceptsAllSpaceFilename(t *testing.T) {
 		t.Fatalf("write all-space batch file: %v", err)
 	}
 
-	targets, err := loadReviewBatchTargets(path)
+	targets, err := loadReviewBatchTargetsForTest(t, path)
 	if err != nil {
 		t.Fatalf("loadReviewBatchTargets() error: %v", err)
 	}
@@ -435,4 +437,15 @@ func writeReviewBatchTestFile(t *testing.T, body []byte) string {
 		t.Fatalf("write batch file: %v", err)
 	}
 	return path
+}
+
+// loadReviewBatchTargetsForTest loads path with the working directory set to
+// the directory that holds it, so each fixture is an allowed --file input.
+func loadReviewBatchTargetsForTest(t *testing.T, path string) ([]reviewBatchTarget, error) {
+	t.Helper()
+	d := &shared.Deps{
+		IO:    &shared.IO{Out: io.Discard, ErrOut: io.Discard},
+		Getwd: func() (string, error) { return filepath.Dir(path), nil },
+	}
+	return loadReviewBatchTargets(d, path)
 }

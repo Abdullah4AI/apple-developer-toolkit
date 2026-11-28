@@ -28,6 +28,7 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/ascterritory"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/auth"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/config"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/diagnosticoutput"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/readonly"
 )
 
@@ -176,6 +177,16 @@ func SelectedProfile() string {
 // rendered as a copyable argument, so callers omit the suggestion entirely
 // rather than print a command that would run with a different value.
 func RootFlagsForReinvocation() (args []string, ok bool) {
+	return rootFlagsForReinvocation(true)
+}
+
+// RootFlagsForNextCommand preserves authentication flags without reusing the
+// report output path from a completed command.
+func RootFlagsForNextCommand() (args []string, ok bool) {
+	return rootFlagsForReinvocation(false)
+}
+
+func rootFlagsForReinvocation(includeReport bool) (args []string, ok bool) {
 	args = make([]string, 0, 8)
 	if profile := strings.TrimSpace(selectedProfile); profile != "" {
 		quoted, quotable := ShellQuote(profile)
@@ -186,6 +197,9 @@ func RootFlagsForReinvocation() (args []string, ok bool) {
 	}
 	if strictAuth {
 		args = append(args, "--strict-auth")
+	}
+	if !includeReport {
+		return args, true
 	}
 	// --debug, --api-debug, and --retry-log are deliberately omitted: they only
 	// add stderr diagnostics and never change what a command does, so repeating
@@ -213,7 +227,7 @@ func RootFlagsForReinvocation() (args []string, ok bool) {
 // Progress must be stderr-only and must not appear when d's stderr is
 // non-interactive.
 func (d *Deps) ProgressEnabled() bool {
-	return progressEnabledFor(d.IO.StderrTTY)
+	return !d.IO.quietDiagnostics && progressEnabledFor(d.IO.StderrTTY)
 }
 
 func progressEnabledFor(stderrTTY bool) bool {
@@ -386,10 +400,14 @@ type OutputFlags struct {
 }
 
 type validatedOutputValue struct {
-	name    string
-	value   *string
-	pretty  *bool
-	allowed []string
+	name          string
+	value         *string
+	pretty        *bool
+	allowed       []string
+	defaultKind   string
+	staticDefault *string
+	constraints   *CommandConstraints
+	requirements  *CommandRuntimeRequirements
 }
 
 func (v *validatedOutputValue) String() string {
@@ -1148,7 +1166,7 @@ func checkMixedCredentialSourcesForKeyType(sources credentialSource, keyType str
 		if strictAuthEnabled() {
 			return unusableCredentialsError(fmt.Errorf("mixed authentication sources detected:\n  Key ID: %s\n  Private Key: %s", keyIDSource, keyMaterialSource), DiagnosticConflictingInput)
 		}
-		fmt.Fprint(os.Stderr, message)
+		fmt.Fprint(diagnosticoutput.Writer(os.Stderr), message)
 		return nil
 	}
 
@@ -1165,7 +1183,7 @@ func checkMixedCredentialSourcesForKeyType(sources credentialSource, keyType str
 	if strictAuthEnabled() {
 		return unusableCredentialsError(fmt.Errorf("mixed authentication sources detected:\n  Key ID: %s\n  Issuer ID: %s\n  Private Key: %s", keyIDSource, issuerSource, keyMaterialSource), DiagnosticConflictingInput)
 	}
-	fmt.Fprint(os.Stderr, message)
+	fmt.Fprint(diagnosticoutput.Writer(os.Stderr), message)
 	return nil
 }
 
@@ -1191,7 +1209,7 @@ func checkIgnoredEnvCredentialIDs(storedKeyID, storedIssuerID, storedSource stri
 	if strictAuthEnabled() {
 		return unusableCredentialsError(fmt.Errorf("mixed authentication sources detected: %s ignored because the environment credentials are incomplete; using %s credentials", names, storedSource), DiagnosticConflictingInput)
 	}
-	fmt.Fprintf(os.Stderr, "Warning: %s ignored because the environment credentials are incomplete; using %s credentials\n", names, storedSource)
+	fmt.Fprintf(diagnosticoutput.Writer(os.Stderr), "Warning: %s ignored because the environment credentials are incomplete; using %s credentials\n", names, storedSource)
 	return nil
 }
 
@@ -1346,7 +1364,7 @@ func warnInvalidStrictAuthValueOnce(value string) {
 	strictAuthWarnMu.Unlock()
 
 	fmt.Fprintf(
-		os.Stderr,
+		diagnosticoutput.Writer(os.Stderr),
 		"Warning: invalid %s value %q (expected true/false, 1/0, yes/no, y/n, or on/off); strict auth disabled\n",
 		strictAuthEnvVar,
 		value,
@@ -1714,7 +1732,10 @@ func bindPrettyJSONFlagWithValue(fs *flag.FlagSet, value *bool) *bool {
 
 // BindMetadataOutputFlags registers --output-format and --pretty flags on the provided flagset.
 func BindMetadataOutputFlags(fs *flag.FlagSet) MetadataOutputFlags {
-	output := BindOutputFlagsWithAllowed(fs, "output-format", "json", "Output format for metadata: json (default), table, markdown", "json", "table", "markdown")
+	defaultValue := "json"
+	output := BindOutputFlagsWithAllowed(fs, "output-format", defaultValue, "Output format for metadata: json (default), table, markdown", "json", "table", "markdown")
+	value := fs.Lookup("output-format").Value.(*validatedOutputValue)
+	value.defaultKind, value.staticDefault = "static", &defaultValue
 	return MetadataOutputFlags{
 		OutputFormat: output.Output,
 		Pretty:       output.Pretty,

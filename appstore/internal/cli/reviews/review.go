@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/peterbourgon/ff/v3/ffcli"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/metadata"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 )
 
@@ -44,6 +45,7 @@ Examples:
 			newReviewStatusCommand(d),
 			newReviewDoctorCommand(d),
 			newReviewSubmitCommand(d),
+			metadata.NewReviewDetailsCommand(d),
 			newReviewDetailsGetCommand(d),
 			newReviewDetailsForVersionCommand(d),
 			newReviewDetailsCreateCommand(d),

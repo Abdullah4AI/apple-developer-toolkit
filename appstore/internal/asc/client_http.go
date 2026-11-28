@@ -187,10 +187,37 @@ func (c *Client) doWithHTTPClient(ctx context.Context, method, path string, body
 		}, retryOpts)
 	}
 	if shouldLimitMutatingMethod(method) {
+		if ctx.Value(guardedMutationAttemptKey{}) != nil {
+			return c.doWithMutatingRequestLimiter(ctx, request)
+		}
 		return c.doMutation(ctx, request, isRateLimitRejection)
 	}
 
 	return request(ctx)
+}
+
+type guardedMutationAttemptKey struct{}
+
+type mutationDispatchObserverKey struct{}
+
+// WithMutationDispatchObserver calls observe synchronously when a mutation is
+// handed to the HTTP client, after request validation and authentication.
+func WithMutationDispatchObserver(ctx context.Context, observe func()) context.Context {
+	return context.WithValue(ctx, mutationDispatchObserverKey{}, observe)
+}
+
+// RetryGuardedMutation reruns a single mutation and its eligibility checks after
+// a rate-limit rejection. Each attempt must issue at most one write.
+func RetryGuardedMutation[T any](ctx context.Context, attempt func(context.Context, bool) (T, error)) (T, error) {
+	ctx = context.WithValue(ctx, guardedMutationAttemptKey{}, true)
+	replay := false
+	return withRetry(ctx, func() (T, error) {
+		value, err := attempt(ctx, replay)
+		replay = true
+		return value, err
+	}, ResolveRetryOptions(), func(err error) bool {
+		return isRateLimitRejection(err) && !IsRetryBudgetExhausted(err) && !IsRetryDelayExceeded(err)
+	})
 }
 
 // doAppBuildUploadsRead retries the app-scoped Build Upload API only after a
@@ -414,6 +441,11 @@ func (c *Client) doOnce(ctx context.Context, method, path string, body io.Reader
 		)
 	}
 
+	if shouldLimitMutatingMethod(method) {
+		if observe, ok := ctx.Value(mutationDispatchObserverKey{}).(func()); ok && observe != nil {
+			observe()
+		}
+	}
 	resp, err := httpClient.Do(req)
 	elapsed := time.Since(start)
 
@@ -922,11 +954,7 @@ func (c *Client) doStreamNoAuth(ctx context.Context, rawURL, accept string) (*ht
 		_ = resp.Body.Close()
 		// Presigned-CDN error bodies are untrusted and can echo the requested
 		// capability. The status code is sufficient diagnostic context here.
-		return nil, &APIError{
-			Code:       apiErrorCodeFromStatus(resp.StatusCode),
-			Title:      fmt.Sprintf("download request failed with status %d", resp.StatusCode),
-			StatusCode: resp.StatusCode,
-		}
+		return nil, DownloadResponseError(resp.StatusCode, resp.Header.Get("Retry-After"))
 	}
 	return resp, nil
 }

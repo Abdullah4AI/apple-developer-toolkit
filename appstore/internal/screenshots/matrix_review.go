@@ -898,10 +898,15 @@ func matrixReviewCellOutput(cell MatrixCellResult) asc.MatrixCellResult {
 		Status:       cell.Status,
 		Attempts:     cell.Attempts,
 		DurationMS:   cell.DurationMS,
+		Location:     cell.Location,
 		RawPaths:     append([]string(nil), cell.RawPaths...),
 		FramedPaths:  append([]string(nil), cell.FramedPaths...),
 		FailureStage: "",
 		FailureCode:  "",
+	}
+	output.FailureEvidence = append([]asc.ScreenshotFailureEvidence(nil), cell.FailureEvidence...)
+	for i := range output.FailureEvidence {
+		output.FailureEvidence[i].StepError = "step execution failed"
 	}
 	output.Screenshots = make([]asc.MatrixScreenshotResult, len(cell.Screenshots))
 	for i, screenshot := range cell.Screenshots {
@@ -968,7 +973,7 @@ func sanitizeMatrixReviewError(value *MatrixCellError) *MatrixCellError {
 	}
 	message := strings.TrimSpace(value.Message)
 	switch message {
-	case "cell canceled", "screenshot plan execution failed", "screenshot framing failed", "raw screenshot could not be promoted", "framed screenshot could not be promoted", "framed screenshot became unavailable", "simulator appearance could not be restored", "simulator blocked after appearance cleanup failure", "simulator blocked after status bar cleanup failure", "requested status bar could not be applied", "simulator status bar could not be cleared", "appearance state could not be read", "requested appearance could not be applied", "cell execution failed", "target simulator is not ready", "configured frame does not match simulator family", "simulator family could not be identified", "configured frame mapping is invalid", "screenshot plan did not produce every requested image", "screenshot plan produced an invalid image", "screenshot framing produced an invalid image":
+	case "cell canceled", "capture tool requirements are not met", "screenshot plan execution failed", "screenshot framing failed", "raw screenshot could not be promoted", "framed screenshot could not be promoted", "framed screenshot became unavailable", "simulator appearance could not be restored", "simulator blocked after appearance cleanup failure", "simulator blocked after status bar cleanup failure", "requested status bar could not be applied", "simulator status bar could not be cleared", "appearance state could not be read", "requested appearance could not be applied", "cell execution failed", "target simulator is not ready", "configured frame does not match simulator family", "simulator family could not be identified", "configured frame mapping is invalid", "screenshot plan did not produce every requested image", "screenshot plan produced an invalid image", "screenshot framing produced an invalid image":
 	default:
 		message = "matrix execution failed"
 	}

@@ -22,6 +22,7 @@ import (
 	"github.com/99designs/keyring"
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/config"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/diagnosticoutput"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/rootfs"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/testguard"
 )
@@ -282,7 +283,7 @@ func warnInvalidBypassKeychainValueOnce(value string) {
 	invalidBypassKeychainWarningsMu.Unlock()
 
 	fmt.Fprintf(
-		os.Stderr,
+		diagnosticoutput.Writer(os.Stderr),
 		"Warning: invalid %s value %q (expected true/false, 1/0, yes/no, or on/off); %s\n",
 		bypassKeychainEnv,
 		value,

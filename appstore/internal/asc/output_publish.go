@@ -15,6 +15,13 @@ type TestNotesRecovery struct {
 	Arguments      []string `json:"arguments"`
 }
 
+// TestFlightNotificationRecovery reports an unresolved notification outcome.
+type TestFlightNotificationRecovery struct {
+	BuildID string `json:"buildId"`
+	State   string `json:"state"`
+	Message string `json:"message"`
+}
+
 func testFlightPublishResultRows(result *TestFlightPublishResult) ([]string, [][]string) {
 	headers := []string{"Build ID", "Version", "Build Number", "Processing", "Groups", "Uploaded", "Notified", "Notification Action", "Beta Review Submitted", "Beta Review Submission ID"}
 	notified := ""
@@ -38,13 +45,22 @@ func testFlightPublishResultRows(result *TestFlightPublishResult) ([]string, [][
 		result.BetaReviewSubmissionID,
 	}
 	rows := [][]string{row}
+	if result.HTTPStatus != 0 {
+		headers = append(headers, "HTTP Status")
+		rows[0] = append(rows[0], fmt.Sprint(result.HTTPStatus))
+	}
+	if result.NotificationRecovery != nil {
+		recovery := result.NotificationRecovery
+		headers = append(headers, "Notification State", "Notification Recovery")
+		rows[0] = append(rows[0], recovery.State, recovery.Message)
+	}
 	if result.UploadOnly {
 		headers = append(headers, "Upload Only")
 		rows[0] = append(rows[0], "true")
 	}
 	if strings.TrimSpace(result.Status) != "" {
-		headers = append(headers, "Status", "Failure Stage", "Completed Stages", "Failure")
-		rows[0] = append(rows[0], result.Status, result.FailureStage, strings.Join(result.CompletedStages, ", "), result.Failure)
+		headers = append(headers, "Status", "Failure Stage", "Failure Code", "Completed Stages", "Failure")
+		rows[0] = append(rows[0], result.Status, result.FailureStage, result.FailureCode, strings.Join(result.CompletedStages, ", "), result.Failure)
 	}
 	return headers, rows
 }
@@ -112,6 +128,12 @@ func publishArchiveStageRows(stage *PublishArchiveStageResult) ([]string, [][]st
 	if strings.TrimSpace(stage.Configuration) != "" {
 		rows = append(rows, []string{"configuration", stage.Configuration})
 	}
+	if stage.DisplayName != "" {
+		rows = append(rows, []string{"display_name", stage.DisplayName})
+	}
+	if stage.ProjectCheckout != nil {
+		rows = append(rows, []string{"project_checkout_revision", stage.ProjectCheckout.Revision}, []string{"project_checkout_dirty", fmt.Sprint(stage.ProjectCheckout.Dirty)}, []string{"project_checkout_observed_at", stage.ProjectCheckout.ObservedAt})
+	}
 	return []string{"Field", "Value"}, rows
 }
 
@@ -121,6 +143,9 @@ func publishExportStageRows(stage *PublishExportStageResult) ([]string, [][]stri
 	}
 	rows := [][]string{
 		{"archive_path", stage.ArchivePath},
+	}
+	if stage.DisplayName != "" {
+		rows = append(rows, []string{"display_name", stage.DisplayName})
 	}
 	if strings.TrimSpace(stage.PKGPath) != "" {
 		rows = append(rows, []string{"pkg_path", stage.PKGPath})

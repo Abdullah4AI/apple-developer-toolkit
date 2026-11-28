@@ -20,6 +20,7 @@ import (
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/api"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/cli/shared/errfmt"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/diagnosticoutput"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/readonly"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/telemetry"
 )
@@ -51,11 +52,16 @@ func Run(args []string, versionInfo string) int {
 
 // RunWithDeps is Run with the commands that take dependencies built on d, and
 // the root's own output written to d's streams.
-func RunWithDeps(args []string, versionInfo string, d *shared.Deps) int {
+// Calls must be serialized because root flags and other invocation state are process-wide.
+func RunWithDeps(args []string, versionInfo string, d *shared.Deps) (exitCode int) {
 	defer shared.CleanupTempPrivateKeys()
 	// --read-only is per invocation: clear it on return so an embedded or
 	// test caller's next Run starts from the environment alone.
 	defer readonly.SetFlagEnabled(false)
+	// --no-telemetry is decided from argv before anything can emit, because
+	// usage failures report before the root flag set is parsed.
+	telemetry.SetProcessOptOut(noTelemetryRequested(args))
+	defer telemetry.SetProcessOptOut(false)
 	// A command may register a structured report for the root runner. Clear
 	// any report left by a direct command test or an interrupted prior run.
 	shared.ConsumeJUnitReport()
@@ -67,10 +73,23 @@ func RunWithDeps(args []string, versionInfo string, d *shared.Deps) int {
 		return ExitSuccess
 	}
 
+	errorFormat := requestedErrorFormat(d, args)
+	var diagnosticErr error
+	var diagnosticHint string
+	var failureType string
+	if errorFormat == "json" {
+		originalStderr := d.IO.ErrOut
+		d = withQuietErrorStream(d)
+		restoreDiagnostics := diagnosticoutput.Suppress()
+		defer func() {
+			restoreDiagnostics()
+			if exitCode != ExitSuccess {
+				writeJSONError(originalStderr, exitCode, failureType, diagnosticErr, diagnosticHint)
+			}
+		}()
+	}
 	root := rootCommandForArgs(versionInfo, d, args)
-	// The credential profile is a root-owned selector, so relocate a misplaced
-	// `--profile` before anything else reads the argv. Running it first also
-	// keeps spaced boolean recovery working for the flags that follow it.
+	// Relocate a misplaced root profile selector before parsing.
 	args = hoistRootProfileFlag(root, args)
 	args = normalizeSpacedBooleanFlags(root, args)
 	// A guessed command (`get` for `view`, `app-infos` for `apps info`)
@@ -106,6 +125,10 @@ func RunWithDeps(args []string, versionInfo string, d *shared.Deps) int {
 	// have resolved, and no resolved value can reach help output or a parse
 	// diagnostic.
 	helpArgs, helpRequested := requestedHelpArgs(root, args)
+	if !helpRequested && errorFormat != "text" && errorFormat != "json" {
+		fmt.Fprintln(d.IO.ErrOut, "Error: --error-format requires text or json. Place it before the subcommand.")
+		return ExitUsage
+	}
 	var parseArgs []string
 	if helpRequested {
 		parseArgs = dropIndirectFlagValues(root, helpArgs)
@@ -115,10 +138,12 @@ func RunWithDeps(args []string, versionInfo string, d *shared.Deps) int {
 			resolvedArgs, err = resolveFlagValueIndirection(d, root, resolvedArgs)
 		}
 		if err != nil {
+			diagnosticErr = err
 			recoverCIReportFlags(root, args)
 			fmt.Fprint(d.IO.ErrOut, errfmt.FormatStderr(err))
 			commandName := getCommandName(root, args)
 			if reportErr := writeUsageJUnitReport(commandName, err); reportErr != nil {
+				diagnosticErr = reportErr
 				printUsageJUnitReportFailure(d.IO.ErrOut, commandName, versionInfo, analysis, reportErr)
 				return ExitError
 			}
@@ -134,6 +159,7 @@ func RunWithDeps(args []string, versionInfo string, d *shared.Deps) int {
 	parseErr := root.Parse(parseArgs)
 	restoreFlagOutputs()
 	if parseErr != nil {
+		diagnosticErr = parseErr
 		if errors.Is(parseErr, flag.ErrHelp) {
 			// Explicitly requested help is the command's result, not a
 			// diagnostic: agents pipe and redirect it, so it belongs on stdout
@@ -148,20 +174,26 @@ func RunWithDeps(args []string, versionInfo string, d *shared.Deps) int {
 		}
 		recoverCIReportFlags(root, args)
 		if err := shared.ValidateReportFlags(); err != nil {
+			diagnosticErr = err
 			fmt.Fprint(d.IO.ErrOut, errfmt.FormatStderr(err))
 			emitImmediateTelemetry(args, root, versionInfo, validationFailureContext(analysis, err))
 			return ExitUsage
 		}
 		badFlagSyntax := parseErr.Error()
+		failureType = "invalid_flag"
 		if firstLine, _, _ := strings.Cut(parseOutput.String(), "\n"); strings.HasPrefix(firstLine, "bad flag syntax:") {
 			badFlagSyntax = firstLine
 		}
 		if analysis.unknownFlag && isUnknownFlagParseFailure(parseErr, parseOutput.String()) {
 			commandName := getCommandName(root, args)
 			flagName, _ := flagLookupName(unknownFlagName(analysis))
-			if commandName == "asc api" && flagName == "fields" {
+			switch {
+			case commandName == "asc api" && flagName == "fields":
 				fmt.Fprintln(d.IO.ErrOut, "Error: "+api.SparseFieldsFlagHint)
-			} else {
+			case commandName == "asc metadata init" && flagName == "app":
+				diagnosticHint = "Omit --app to scaffold local metadata. To fetch metadata for an existing app, run asc metadata pull --app APP_ID --dir DIR."
+				fmt.Fprintf(d.IO.ErrOut, "Error: %s\n%s\nFor help:\n  %s --help\n", unknownFlagError(analysis, commandName), diagnosticHint, commandName)
+			default:
 				printConciseUnknownFlag(d.IO.ErrOut, root, analysis, commandName, args)
 			}
 		} else if strings.HasPrefix(badFlagSyntax, "bad flag syntax:") {
@@ -184,6 +216,7 @@ func RunWithDeps(args []string, versionInfo string, d *shared.Deps) int {
 
 	// Validate CI report flags after parsing
 	if err := shared.ValidateReportFlags(); err != nil {
+		diagnosticErr = err
 		fmt.Fprint(d.IO.ErrOut, errfmt.FormatStderr(err))
 		emitImmediateTelemetry(args, root, versionInfo, validationFailureContext(analysis, err))
 		return ExitUsage
@@ -206,6 +239,7 @@ func RunWithDeps(args []string, versionInfo string, d *shared.Deps) int {
 
 	commandName := getCommandName(root, args)
 	if invalid, suggested, ok := commonCommandPathRecovery(root, analysis, args); ok {
+		failureType = "unknown_command"
 		fmt.Fprintf(d.IO.ErrOut, "Error: unknown command `%s`\nTry:\n  %s\nFor help:\n  %s --help\n", invalid, suggested, commandName)
 		if err := writeUsageJUnitReport(commandName, commonCommandPathRecoveryError(invalid)); err != nil {
 			printUsageJUnitReportFailure(d.IO.ErrOut, commandName, versionInfo, analysis, err)
@@ -215,6 +249,7 @@ func RunWithDeps(args []string, versionInfo string, d *shared.Deps) int {
 		return ExitUsage
 	}
 	if shouldRenderConciseUnknownChild(root, analysis, commandName) {
+		failureType = "unknown_command"
 		printConciseUnknownCommand(d.IO.ErrOut, analysis, commandName)
 		if err := writeUsageJUnitReport(commandName, unknownCommandError(analysis, commandName)); err != nil {
 			printUsageJUnitReportFailure(d.IO.ErrOut, commandName, versionInfo, analysis, err)
@@ -238,8 +273,10 @@ func RunWithDeps(args []string, versionInfo string, d *shared.Deps) int {
 	}
 
 	if err := groupFlagsBeforeSubcommandError(root); err != nil {
+		diagnosticErr = err
 		fmt.Fprint(d.IO.ErrOut, errfmt.FormatStderr(err))
 		if reportErr := writeUsageJUnitReport(commandName, err); reportErr != nil {
+			diagnosticErr = reportErr
 			printUsageJUnitReportFailure(d.IO.ErrOut, commandName, versionInfo, analysis, reportErr)
 			return ExitError
 		}
@@ -282,6 +319,7 @@ func RunWithDeps(args []string, versionInfo string, d *shared.Deps) int {
 			// Report write failure is a hard error - CI depends on it
 			fmt.Fprintf(d.IO.ErrOut, "Error: failed to write JUnit report: %v\n", reportErr)
 			if reportRunErr == nil {
+				diagnosticErr = reportErr
 				emitTelemetry(commandName, versionInfo, elapsed, ExitError, withAPIOperation(telemetry.EventContext{
 					InvocationShape: analysis.shape,
 					ErrorKind:       telemetry.ErrorKindOther,
@@ -297,6 +335,10 @@ func RunWithDeps(args []string, versionInfo string, d *shared.Deps) int {
 	}
 
 	if runErr != nil {
+		diagnosticErr = runErr
+		if analysis.shape == telemetry.InvocationShapeUnknownChild {
+			failureType = "unknown_command"
+		}
 		if _, ok := errors.AsType[shared.ReportedError](runErr); ok {
 			if !shared.IsPrintedToStderr(runErr) {
 				fmt.Fprint(d.IO.ErrOut, errfmt.FormatCommandStderr(commandName, runErr))

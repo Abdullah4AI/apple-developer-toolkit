@@ -16,6 +16,7 @@ import (
 
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/auth"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/config"
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/diagnosticoutput"
 )
 
 const (
@@ -61,7 +62,7 @@ const (
 	BulkMutatingRequestLimit = 16
 )
 
-var retryLogger = slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
+var retryLogger = slog.New(slog.NewTextHandler(diagnosticoutput.Writer(os.Stderr), &slog.HandlerOptions{
 	Level: slog.LevelInfo,
 	ReplaceAttr: func(_ []string, attr slog.Attr) slog.Attr {
 		if attr.Key == slog.TimeKey {
@@ -71,7 +72,7 @@ var retryLogger = slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
 	},
 }))
 
-var debugLogger = slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
+var debugLogger = slog.New(slog.NewTextHandler(diagnosticoutput.Writer(os.Stderr), &slog.HandlerOptions{
 	Level: slog.LevelInfo,
 	ReplaceAttr: func(_ []string, attr slog.Attr) slog.Attr {
 		if attr.Key == slog.TimeKey {
@@ -138,13 +139,13 @@ func ResolveRetryLogEnabled() bool {
 		return *override
 	}
 	if override, ok := envValue("ASC_RETRY_LOG"); ok {
-		return override != ""
+		return loggingValueEnabled(override)
 	}
 	cfg := loadConfig()
 	if cfg == nil {
 		return false
 	}
-	return strings.TrimSpace(cfg.RetryLog) != ""
+	return loggingValueEnabled(cfg.RetryLog)
 }
 
 // ResolveDebugEnabled returns whether debug logging should be enabled.
@@ -189,19 +190,18 @@ func resolveDebugSettings() debugSettings {
 	return settings
 }
 
+func loggingValueEnabled(value string) bool {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "", "0", "f", "false", "no", "n", "off":
+		return false
+	}
+	return true
+}
+
 func resolveDebugValue(value string) debugSettings {
-	trimmed := strings.TrimSpace(value)
-	if trimmed == "" {
-		return debugSettings{}
-	}
-	normalized := strings.ToLower(trimmed)
-	switch normalized {
-	case "0", "f", "false", "no", "n", "off":
-		return debugSettings{}
-	}
 	return debugSettings{
-		enabled:     true,
-		verboseHTTP: strings.Contains(normalized, "api"),
+		enabled:     loggingValueEnabled(value),
+		verboseHTTP: strings.Contains(strings.ToLower(value), "api"),
 	}
 }
 

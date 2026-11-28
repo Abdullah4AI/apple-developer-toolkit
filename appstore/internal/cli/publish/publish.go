@@ -84,10 +84,10 @@ func newPublishTestFlightCommand(d *shared.Deps) *ffcli.Command {
 	version := fs.String("version", "", "CFBundleShortVersionString (auto-extracted from IPA if not provided; required with --pkg)")
 	buildNumber := fs.String("build-number", "", "CFBundleVersion (required with --pkg; used for build lookup when no artifact is provided)")
 	shared.BindBuildFlagAlias(fs)
-	platform := fs.String("platform", "IOS", "Platform: IOS, MAC_OS, TV_OS, VISION_OS")
+	platform := fs.String("platform", "IOS", "Platform: IOS, MAC_OS, TV_OS, VISION_OS (auto-detected from prebuilt artifacts when omitted)")
 	groupIDs := fs.String("group", "", "Beta group ID(s) or name(s), comma-separated")
 	uploadOnly := fs.Bool("upload-only", false, "Upload the build without adding it to beta groups or submitting beta review")
-	notify := fs.Bool("notify", false, "Notify testers after adding to groups")
+	notify := fs.Bool("notify", false, "Request a build-wide tester notification after adding groups")
 	submit := fs.Bool("submit", false, "Submit build for beta app review after adding external groups")
 	confirm := fs.Bool("confirm", false, "Confirm beta app review submission (required with --submit)")
 	wait := fs.Bool("wait", false, "Wait for build processing to complete")
@@ -108,8 +108,19 @@ Steps:
 1. Build locally with Xcode or upload an IPA or macOS PKG (unless --build-id/--build-number is provided)
 2. Wait for processing when needed (--wait, --test-notes, or --submit)
 3. Stop and return the build metadata with --upload-only, or add the build to specified beta groups
-4. Optionally notify testers
+4. Optionally request build-wide notification with --notify
 5. Optionally submit for beta app review with --submit --confirm
+
+With --submit and external groups, readiness is checked before changing notes,
+assigning groups or notifying testers. Existing external group assignments are
+retained with or without --submit. A repeat with only already-assigned external
+groups does not notify again. Delivery remains unknown and no replay command is offered.
+Notification applies to every eligible tester for the build, including groups
+not selected here. Adding a group may also trigger Apple automatic notifications.
+An existing beta review submission is reused. Apple can still reject a submission
+after preflight; the failure receipt records completed steps. Notification
+failures report unknown delivery without a notification replay command.
+Group membership does not establish whether a notification was delivered.
 
 Examples:
   asc publish testflight --app "123" --ipa app.ipa --upload-only --output json
@@ -128,6 +139,7 @@ Examples:
 		FlagSet:   fs,
 		UsageFunc: d.DefaultUsageFunc,
 		Exec: func(ctx context.Context, args []string) error {
+			ctx = asc.WithNoRedirectReads(ctx)
 			appSelector := d.ResolveAppSelector(*appID)
 			if appSelector.Value == "" {
 				fmt.Fprintf(d.IO.ErrOut, "Error: --app is required (or set ASC_APP_ID)\n\n")
@@ -153,7 +165,7 @@ Examples:
 					return d.UsageError("--build-id cannot be used with --upload-only")
 				}
 			}
-			if err := validateLocalBuildFlagUsage(d, localBuildMode, setFlags); err != nil {
+			if err := validateLocalBuildFlagUsage(d, localBuild, setFlags); err != nil {
 				return err
 			}
 			if localBuildMode {
@@ -171,7 +183,7 @@ Examples:
 			uploadMode := ipaValue != "" || pkgValue != ""
 			switch {
 			case localBuildMode:
-				if err := validateLocalBuildSelectors(d, localBuild); err != nil {
+				if err := validateLocalBuildSelectors(d, localBuild, buildNumberValue); err != nil {
 					return err
 				}
 				if ipaValue != "" {
@@ -277,10 +289,9 @@ Examples:
 					uploadFileInfo, err = validatePublishPKGPathFn(d.OSPath(pkgValue))
 					uploadVersionValue, uploadBuildNumberValue = versionValue, buildNumberValue
 				} else {
-					uploadFileInfo, err = validatePublishIPAPathFn(d.OSPath(ipaValue))
-					if err == nil {
-						uploadVersionValue, uploadBuildNumberValue, err = shared.ResolveBundleInfoForIPA(d.OSPath(ipaValue), *version, *buildNumber)
-					}
+					var info shared.IPABundleInfo
+					uploadFileInfo, info, err = resolvePublishIPA(d, ipaValue, *version, *buildNumber, normalizedPlatform, setFlags["platform"])
+					uploadVersionValue, uploadBuildNumberValue, normalizedPlatform = info.Version, info.BuildNumber, string(info.Platform)
 				}
 				if err != nil {
 					return fmt.Errorf("publish testflight: %w", err)
@@ -309,7 +320,11 @@ Examples:
 			}
 			resolvedPublishAppID, err := resolvePublishScopedAppIDFn(preflightCtx, client, appSelector)
 			if err != nil {
-				return fmt.Errorf("publish testflight: resolve app: %w", err)
+				failure := fmt.Errorf("publish testflight: resolve app: %w", err)
+				if localBuildMode || uploadMode {
+					return failure
+				}
+				return writePublishPreflightFailure(d, *output.Output, *output.Pretty, buildIDValue, "app_resolution", "app_resolution_failed", failure)
 			}
 
 			var resolvedGroups []shared.ResolvedBetaGroup
@@ -317,10 +332,12 @@ Examples:
 				groupLookupCtx := preflightCtx
 				resolvedGroups, err = resolvePublishBetaGroups(groupLookupCtx, client, resolvedPublishAppID, *groupIDs)
 				if err != nil {
-					return fmt.Errorf("publish testflight: %w", err)
+					return writePublishPreflightFailure(d, *output.Output, *output.Pretty, buildIDValue, "group_discovery", "group_discovery_failed", fmt.Errorf("publish testflight: %w", err))
 				}
 			}
 
+			hasExternalGroups := shared.PlanBuildBetaGroupAssignment(resolvedGroups, shared.AddBuildBetaGroupsOptions{}).IncludesExternalGroup()
+			buildAppVerified := false
 			platformValue := asc.Platform(normalizedPlatform)
 			timeoutOverride := *timeout > 0
 			uploaded := false
@@ -382,16 +399,31 @@ Examples:
 				resolvedVersionValue = uploadResult.Version
 				resolvedBuildNumberValue = uploadResult.BuildNumber
 			} else if buildIDValue != "" {
+				if err := shared.CheckBuildAppOwnership(requestCtx, client, resolvedPublishAppID, buildIDValue); err != nil {
+					return writePublishPreflightFailure(d, *output.Output, *output.Pretty, buildIDValue, "build_ownership", "build_ownership_failed", fmt.Errorf("publish testflight: %w", err))
+				}
+				buildAppVerified = true
 				buildResp, err = client.GetBuild(requestCtx, buildIDValue)
 				if err != nil {
-					return fmt.Errorf("publish testflight: failed to fetch build: %w", err)
+					return writePublishPreflightFailure(d, *output.Output, *output.Pretty, buildIDValue, "build_lookup", "build_lookup_failed", fmt.Errorf("publish testflight: failed to fetch build: %w", err))
+				}
+				if err := validatePublishBuildIdentity(buildResp, buildIDValue); err != nil {
+					return writePublishPreflightFailure(d, *output.Output, *output.Pretty, buildIDValue, "build_identity", "build_identity_mismatch", fmt.Errorf("publish testflight: %w", err))
 				}
 				resolvedBuildNumberValue = strings.TrimSpace(buildResp.Data.Attributes.Version)
 			} else {
 				buildResp, err = findPublishBuildByNumber(requestCtx, client, resolvedPublishAppID, buildNumberValue, normalizedPlatform)
 				if err != nil {
-					return fmt.Errorf("publish testflight: %w", err)
+					return writePublishPreflightFailure(d, *output.Output, *output.Pretty, "", "build_lookup", "build_lookup_failed", fmt.Errorf("publish testflight: %w", err))
 				}
+				if err := shared.CheckBuildAppOwnership(requestCtx, client, resolvedPublishAppID, buildResp.Data.ID); err != nil {
+					return writePublishPreflightFailure(d, *output.Output, *output.Pretty, buildResp.Data.ID, "build_ownership", "build_ownership_failed", fmt.Errorf("publish testflight: %w", err))
+				}
+				resolvedVersionValue, err = verifyPublishBuildPlatform(requestCtx, client, buildResp.Data.ID, platformValue)
+				if err != nil {
+					return writePublishPreflightFailure(d, *output.Output, *output.Pretty, buildResp.Data.ID, "build_identity", "build_platform_unverified", fmt.Errorf("publish testflight: %w", err))
+				}
+				buildAppVerified = true
 				resolvedBuildNumberValue = strings.TrimSpace(buildResp.Data.Attributes.Version)
 			}
 
@@ -405,7 +437,20 @@ Examples:
 				UploadOnly:      *uploadOnly,
 				ProcessingState: buildResp.Data.Attributes.ProcessingState,
 			}
+			populateBuildVersion := func() {
+				if buildIDValue == "" || requestCtx.Err() != nil {
+					return
+				}
+				// Enrich receipts after required work, bounded by a short timeout
+				// and the remaining publish budget, including caller cancellation.
+				receiptCtx, cancel := shared.ContextWithTimeoutDuration(requestCtx, 5*time.Second)
+				defer cancel()
+				if preRelease, err := readPublishBuildPreRelease(receiptCtx, client, buildIDValue); err == nil {
+					result.BuildVersion = strings.TrimSpace(preRelease.Version)
+				}
+			}
 			completedStages := make([]string, 0, 6)
+			hasProgress := uploaded
 			if uploaded {
 				if localBuildResult != nil {
 					completedStages = append(completedStages, publishCompletedStageArchive, publishCompletedStageExport)
@@ -413,23 +458,29 @@ Examples:
 				completedStages = append(completedStages, publishCompletedStageUpload)
 			}
 			reportPartialFailure := func(stage string, failure error) error {
-				if !uploaded {
-					return failure
+				result.Status = "failed"
+				if hasProgress {
+					result.Status = publishPartialStatus
 				}
-				result.Status = publishPartialStatus
 				result.FailureStage = stage
-				result.Failure = shared.SanitizeTerminal(failure.Error())
+				result.FailureCode = stage + "_failed"
+				if stage == publishFailureStageNotification && result.NotificationRecovery != nil {
+					result.FailureCode = "notification_delivery_unknown"
+				}
 				result.CompletedStages = append([]string(nil), completedStages...)
 				result.ProcessingState = buildResp.Data.Attributes.ProcessingState
+				populateBuildVersion()
 				attachTestFlightLocalPublishResult(result, localBuildResult)
-				if printErr := d.PrintOutput(result, *output.Output, *output.Pretty); printErr != nil {
-					return errors.Join(failure, fmt.Errorf("print partial publish result: %w", printErr))
-				}
-				return failure
+				return writePublishFailure(d, *output.Output, *output.Pretty, result, failure)
 			}
 
 			if *wait || testNotesValue != "" || (*submit && !isPublishBuildProcessed(buildResp)) {
 				processedBuildResp, waitErr := waitForPublishBuildProcessingFn(d, requestCtx, client, "", buildResp.Data.ID, *pollInterval)
+				if !uploaded && processedBuildResp != nil {
+					if err := validatePublishBuildIdentity(processedBuildResp, buildResp.Data.ID); err != nil {
+						return reportPartialFailure(publishFailureStageBuildProcessing, fmt.Errorf("publish testflight: %w", err))
+					}
+				}
 				if processedBuildResp != nil && strings.TrimSpace(processedBuildResp.Data.ID) == strings.TrimSpace(buildResp.Data.ID) {
 					buildResp = processedBuildResp
 					result.ProcessingState = buildResp.Data.Attributes.ProcessingState
@@ -445,8 +496,43 @@ Examples:
 				return d.PrintOutput(result, *output.Output, *output.Pretty)
 			}
 
+			if err := validatePublishBuildDistribution(buildResp, hasExternalGroups); err != nil {
+				return reportPartialFailure(publishFailureStageBetaDistribution, err)
+			}
+			groupsToAssign := resolvedGroups
+			submissionGroupIDs := resolvedPublishBetaGroupIDs(resolvedGroups)
+			externalSubmission := *submit && hasExternalGroups
+			if externalSubmission {
+				if !buildAppVerified {
+					if err := shared.CheckBuildAppOwnership(requestCtx, client, resolvedPublishAppID, buildResp.Data.ID); err != nil {
+						return reportPartialFailure(publishFailureStageBetaReview, fmt.Errorf("publish testflight: %w", err))
+					}
+				}
+				if err := shared.CheckBuildBetaReviewReadiness(requestCtx, client, resolvedPublishAppID, buildResp.Data.ID); err != nil {
+					return reportPartialFailure(publishFailureStageBetaReview, fmt.Errorf("publish testflight: %w", err))
+				}
+			}
+			if externalSubmission || (!uploaded && (hasExternalGroups || !*notify)) {
+				groupsToAssign, err = missingPublishBuildGroups(requestCtx, client, buildResp.Data.ID, resolvedGroups, uploaded)
+				if err != nil {
+					return reportPartialFailure(publishFailureStageBetaDistribution, err)
+				}
+			}
+
+			if *notify && !uploaded && hasExternalGroups && len(groupsToAssign) == 0 {
+				result.NotificationRecovery = publishNotificationRecovery(buildResp.Data.ID)
+			}
+
 			if testNotesValue != "" {
-				upsertOpts := shared.UpsertBetaBuildLocalizationOptions{AppID: resolvedPublishAppID, Diagnostics: d.IO.ErrOut}
+				upsertOpts := shared.UpsertBetaBuildLocalizationOptions{
+					AppID:        resolvedPublishAppID,
+					Diagnostics:  d.IO.ErrOut,
+					NotesWritten: func() { hasProgress = true },
+					AppLocalizationCreated: func() {
+						hasProgress = true
+						completedStages = append(completedStages, "beta_app_localization")
+					},
+				}
 				if _, err := shared.UpsertBetaBuildLocalization(requestCtx, client, buildResp.Data.ID, localeValue, testNotesValue, upsertOpts); err != nil {
 					recoveryErr := shared.NewTestNotesRecoveryError(buildResp.Data.ID, localeValue, testNotesValue, err)
 					result.Recovery = recoveryErr.Recovery()
@@ -459,13 +545,13 @@ Examples:
 				// Apple requires Xcode Cloud builds to be added to internal groups manually,
 				// so only skip redundant internal-group adds for builds uploaded by this command.
 				SkipInternalWithAllBuilds: uploaded,
-				Notify:                    *notify,
+				Notify:                    *notify && result.NotificationRecovery == nil,
 			}
 			var addResult *shared.AddBuildBetaGroupsResult
 			if uploaded {
-				addResult, err = addUploadedBuildBetaGroupsFn(requestCtx, d, client, buildResp.Data.ID, resolvedGroups, addOptions)
+				addResult, err = addUploadedBuildBetaGroupsFn(requestCtx, d, client, buildResp.Data.ID, groupsToAssign, addOptions)
 			} else {
-				addResult, err = shared.AddBuildBetaGroups(requestCtx, client, buildResp.Data.ID, resolvedGroups, addOptions)
+				addResult, err = shared.AddBuildBetaGroups(requestCtx, client, buildResp.Data.ID, groupsToAssign, addOptions)
 			}
 			if err != nil {
 				failureStage := publishFailureStageBetaDistribution
@@ -477,22 +563,25 @@ Examples:
 				}
 				var partialErr *asc.BuildBetaGroupsPartialError
 				if errors.As(err, &partialErr) {
+					hasProgress = true
 					completedStages = append(completedStages, publishCompletedStageBetaDistribution)
 					failureStage = publishFailureStageNotification
+					result.NotificationRecovery = publishNotificationRecovery(buildResp.Data.ID)
 				}
 				return reportPartialFailure(failureStage, wrapPublishTestFlightAddGroupsError(err))
 			}
+			hasProgress = hasProgress || len(addResult.AddedGroupIDs) > 0
 			completedStages = append(completedStages, publishCompletedStageBetaDistribution)
 
 			var notified *bool
-			if *notify {
+			if addOptions.Notify {
 				value := addResult.NotificationAction == asc.BuildBetaGroupsNotificationActionManual
 				notified = &value
 			}
 			result.Notified = notified
 			result.NotificationAction = addResult.NotificationAction
 
-			submissionResult, err := shared.SubmitBuildBetaReviewIfNeeded(requestCtx, client, buildResp.Data.ID, resolvedGroups, addResult.AddedGroupIDs, *submit, "publish testflight")
+			submissionResult, err := shared.SubmitBuildBetaReviewIfNeeded(requestCtx, client, buildResp.Data.ID, resolvedGroups, submissionGroupIDs, *submit, "publish testflight")
 			if err != nil {
 				return reportPartialFailure(publishFailureStageBetaReview, err)
 			}
@@ -509,6 +598,14 @@ Examples:
 			reportSkippedInternalAllBuildsGroups(d, addResult.SkippedInternalAllBuildsGroups)
 			result.BetaReviewSubmitted = betaReviewSubmitted
 			result.BetaReviewSubmissionID = submissionResult.SubmissionID
+			if result.NotificationRecovery != nil {
+				if submissionResult.Created {
+					hasProgress = true
+					completedStages = append(completedStages, "beta_review_submission")
+				}
+				return reportPartialFailure(publishFailureStageNotification, errors.New(result.NotificationRecovery.Message))
+			}
+			populateBuildVersion()
 			attachTestFlightLocalPublishResult(result, localBuildResult)
 
 			return d.PrintOutput(result, *output.Output, *output.Pretty)
@@ -536,7 +633,7 @@ func newPublishAppStoreCommand(d *shared.Deps) *ffcli.Command {
 	pkgPath := fs.String("pkg", "", "Path to prebuilt macOS .pkg file (requires --version and --build-number)")
 	version := fs.String("version", "", "App Store version string (defaults to IPA version; required with --pkg)")
 	buildNumber := fs.String("build-number", "", "CFBundleVersion (auto-extracted from IPA; required with --pkg)")
-	platform := fs.String("platform", "IOS", "Platform: IOS, MAC_OS, TV_OS, VISION_OS")
+	platform := fs.String("platform", "IOS", "Platform: IOS, MAC_OS, TV_OS, VISION_OS (auto-detected from prebuilt artifacts when omitted)")
 	metadataDir := fs.String("metadata-dir", "", "Metadata directory with version/<version>/*.json files to apply after ensuring the App Store version")
 	submit := fs.Bool("submit", false, "Submit for review after attaching build")
 	confirm := fs.Bool("confirm", false, "Confirm submission (required with --submit)")
@@ -601,7 +698,7 @@ Examples:
 			buildNumberValue := strings.TrimSpace(*buildNumber)
 			metadataDirValue := strings.TrimSpace(*metadataDir)
 			localBuildMode := localBuild.localBuildMode()
-			if err := validateLocalBuildFlagUsage(d, localBuildMode, setFlags); err != nil {
+			if err := validateLocalBuildFlagUsage(d, localBuild, setFlags); err != nil {
 				return err
 			}
 			if localBuildMode {
@@ -620,7 +717,7 @@ Examples:
 			}
 			switch {
 			case localBuildMode:
-				if err := validateLocalBuildSelectors(d, localBuild); err != nil {
+				if err := validateLocalBuildSelectors(d, localBuild, buildNumberValue); err != nil {
 					return err
 				}
 				if ipaValue != "" {
@@ -666,10 +763,9 @@ Examples:
 				if pkgValue != "" {
 					fileInfo, err = validatePublishPKGPathFn(d.OSPath(pkgValue))
 				} else {
-					fileInfo, err = validatePublishIPAPathFn(d.OSPath(ipaValue))
-					if err == nil {
-						versionValue, buildNumberValue, err = shared.ResolveBundleInfoForIPA(d.OSPath(ipaValue), *version, *buildNumber)
-					}
+					var info shared.IPABundleInfo
+					fileInfo, info, err = resolvePublishIPA(d, ipaValue, *version, *buildNumber, normalizedPlatform, setFlags["platform"])
+					versionValue, buildNumberValue, normalizedPlatform = info.Version, info.BuildNumber, string(info.Platform)
 				}
 				if err != nil {
 					return fmt.Errorf("publish appstore: %w", err)
@@ -1051,6 +1147,11 @@ func uploadPKGBuildAndWaitForID(ctx context.Context, d *shared.Deps, client *asc
 }
 
 func uploadBuildArtifactAndWaitForID(ctx context.Context, d *shared.Deps, client *asc.Client, appID, artifactPath string, fileInfo os.FileInfo, version, buildNumber string, platform asc.Platform, fileUTI asc.UTI, pollInterval time.Duration, uploadTimeout time.Duration, overrideUploadTimeout bool) (*publishUploadResult, error) {
+	allowUnreadableMetadata := false
+	if uninspected, ok := fileInfo.(publishIPAWithoutMetadata); ok {
+		fileInfo = uninspected.FileInfo
+		allowUnreadableMetadata = true
+	}
 	var (
 		artifactFile *os.File
 		openedInfo   os.FileInfo
@@ -1067,6 +1168,23 @@ func uploadBuildArtifactAndWaitForID(ctx context.Context, d *shared.Deps, client
 	defer artifactFile.Close()
 	if fileInfo != nil && !os.SameFile(fileInfo, openedInfo) {
 		return nil, fmt.Errorf("build artifact changed before upload")
+	}
+	if fileUTI == asc.UTIIPA {
+		info, inspectErr := shared.ExtractBundleInfoFromIPAFile(artifactFile)
+		if inspectErr != nil && !allowUnreadableMetadata {
+			return nil, fmt.Errorf("inspect IPA metadata before upload: %w", inspectErr)
+		}
+		if inspectErr == nil {
+			if info.BundleID == "" {
+				return nil, shared.WithDiagnostic(shared.NewValidationError(errors.New("IPA top-level app Info.plist is missing CFBundleIdentifier")), shared.DiagnosticInvalidInput, "--ipa")
+			}
+			lookupCtx, cancel := d.Timeout(ctx)
+			err := shared.ValidateIPAAppBundleID(lookupCtx, client, appID, info.BundleID)
+			cancel()
+			if err != nil {
+				return nil, err
+			}
+		}
 	}
 
 	uploadResp, fileResp, err := shared.PrepareBuildUpload(ctx, client, appID, openedInfo, version, buildNumber, platform, fileUTI)
@@ -1132,11 +1250,18 @@ func findPublishBuildByNumber(ctx context.Context, client *asc.Client, appID, bu
 	if err != nil {
 		return nil, err
 	}
-	if len(buildsResp.Data) == 0 {
+	if buildsResp == nil || len(buildsResp.Data) == 0 {
 		return nil, fmt.Errorf("no build found for app %q with build number %q", appID, buildNumber)
 	}
 
-	return &asc.BuildResponse{Data: buildsResp.Data[0], Links: buildsResp.Links}, nil
+	build := &asc.BuildResponse{Data: buildsResp.Data[0], Links: buildsResp.Links}
+	if err := validatePublishBuildIdentity(build, build.Data.ID); err != nil {
+		return nil, err
+	}
+	if build.Data.Attributes.Version != buildNumber {
+		return nil, fmt.Errorf("build lookup did not return the requested build number")
+	}
+	return build, nil
 }
 
 func validatePublishPKGMetadata(d *shared.Deps, version, buildNumber string) error {
@@ -1153,8 +1278,34 @@ func validatePublishPKGMetadata(d *shared.Deps, version, buildNumber string) err
 	return nil
 }
 
+type publishIPAWithoutMetadata struct{ os.FileInfo }
+
+func resolvePublishIPA(d *shared.Deps, ipaPath, version, buildNumber, platform string, platformWasSet bool) (os.FileInfo, shared.IPABundleInfo, error) {
+	fileInfo, err := validatePublishIPAPathFn(d.OSPath(ipaPath))
+	if err != nil {
+		return nil, shared.IPABundleInfo{}, err
+	}
+	info, metadataAvailable, err := shared.ResolveBundleInfoForIPA(d.OSPath(ipaPath), version, buildNumber)
+	if err != nil {
+		return nil, shared.IPABundleInfo{}, err
+	}
+	if !metadataAvailable {
+		fileInfo = publishIPAWithoutMetadata{fileInfo}
+	}
+	if info.Platform == "" {
+		info.Platform = asc.Platform(platform)
+	} else if platformWasSet && platform != string(info.Platform) {
+		return nil, shared.IPABundleInfo{}, d.UsageErrorf("--platform %s does not match IPA platform %s", platform, info.Platform)
+	}
+	_, err = validatePublishPrebuiltArtifactPlatform(d, ipaPath, "", string(info.Platform), platformWasSet)
+	return fileInfo, info, err
+}
+
 func validatePublishPrebuiltArtifactPlatform(d *shared.Deps, ipaPath, pkgPath, platform string, platformWasSet bool) (string, error) {
 	if strings.TrimSpace(ipaPath) != "" && platform == string(asc.PlatformMacOS) {
+		if !platformWasSet {
+			return "", d.UsageError("--ipa contains a macOS app; use --pkg with --version and --build-number")
+		}
 		return "", d.UsageError("--ipa is not supported with --platform MAC_OS; use --pkg with --version and --build-number")
 	}
 	if strings.TrimSpace(pkgPath) == "" {

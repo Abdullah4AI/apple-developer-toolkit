@@ -1,0 +1,111 @@
+package cmdtest
+
+import (
+	"encoding/json"
+	"errors"
+	"io"
+	"net/http"
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/asc"
+)
+
+func TestSubscriptionPriceWriteProofReadsStayInScope(t *testing.T) {
+	for _, test := range []struct {
+		name, path, next, body        string
+		tiers, force, allowed, repeat bool
+	}{
+		{name: "price existence redirect", path: "/v1/subscriptions/8000000003/relationships/prices"},
+		{name: "prices redirect", path: "/v1/subscriptions/8000000003/prices"},
+		{name: "prices continuation", path: "/v1/subscriptions/8000000003/prices", next: "/v1/subscriptions/other/prices?cursor=next"},
+		{name: "tier readback redirect", path: "/v1/subscriptionPrices/current/additionalPriceTiers", tiers: true},
+		{name: "tier readback continuation", path: "/v1/subscriptionPrices/current/additionalPriceTiers", next: "/v1/subscriptionPrices/other/additionalPriceTiers?cursor=next", tiers: true},
+		{name: "tier readback missing data", path: "/v1/subscriptionPrices/current/additionalPriceTiers", tiers: true, body: `{}`},
+		{name: "global tier guard redirect", path: "/v1/subscriptionPriceTiers", force: true},
+		{name: "global tier guard continuation", path: "/v1/subscriptionPriceTiers", next: "/v1/subscriptionPriceTiers?filter%5Bsubscription%5D=other", force: true},
+		{name: "global tier guard missing data", path: "/v1/subscriptionPriceTiers", force: true, body: `{}`},
+		{name: "repair equalizations redirect", path: "/v1/subscriptionPricePoints/new-base/equalizations", force: true},
+		{name: "repair equalizations continuation", path: "/v1/subscriptionPricePoints/new-base/equalizations", next: "/v1/subscriptionPricePoints/other/equalizations?cursor=next", force: true},
+		{name: "price membership contradicts total", path: "/v1/subscriptions/8000000003/relationships/prices", body: `{"data":[],"meta":{"paging":{"total":1}}}`},
+		{name: "price comparison contradicts total", path: "/v1/subscriptions/8000000003/prices", body: `{"data":[],"meta":{"paging":{"total":1}}}`},
+		{name: "tier readback contradicts total", path: "/v1/subscriptionPrices/current/additionalPriceTiers", body: `{"data":[],"meta":{"paging":{"total":1}}}`, tiers: true},
+		{name: "global tier guard contradicts total", path: "/v1/subscriptionPriceTiers", body: `{"data":[],"meta":{"paging":{"total":1}}}`, force: true},
+		{name: "repair equalizations contradicts total", path: "/v1/subscriptionPricePoints/new-base/equalizations", body: `{"data":[],"meta":{"paging":{"total":1}}}`, force: true},
+		{name: "whitespace continuation contradicts total", path: "/v1/subscriptions/8000000003/prices", body: `{"data":[],"links":{"next":" "},"meta":{"paging":{"total":1}}}`},
+		{name: "tier without identity", path: "/v1/subscriptionPrices/current/additionalPriceTiers", tiers: true, body: `{"data":[{"type":"subscriptionPriceTiers","attributes":{"minQuantity":2},"relationships":{"subscriptionPricePoint":{"data":{"type":"subscriptionPricePoints","id":"point"}}}}]}`},
+		{name: "duplicate equalization", path: "/v1/subscriptionPricePoints/new-base/equalizations", force: true, body: `{"data":[{"type":"subscriptionPricePoints","id":"repeat","relationships":{"territory":{"data":{"type":"territories","id":"NOR"}}}},{"type":"subscriptionPricePoints","id":"repeat","relationships":{"territory":{"data":{"type":"territories","id":"NOR"}}}}],"meta":{"paging":{"total":2}}}`},
+		{name: "tier quantity absent", path: "/v1/subscriptionPrices/current/additionalPriceTiers", tiers: true, body: `{"data":[{"type":"subscriptionPriceTiers","id":"tier-1","relationships":{"subscriptionPricePoint":{"data":{"type":"subscriptionPricePoints","id":"point"}}}}]}`},
+		{name: "tier point missing", path: "/v1/subscriptionPrices/current/additionalPriceTiers", tiers: true, body: `{"data":[{"type":"subscriptionPriceTiers","id":"tier-1","attributes":{"minQuantity":10},"relationships":{"subscriptionPricePoint":{"data":null}}}]}`},
+		{name: "repeated empty price page", path: "/v1/subscriptions/8000000003/prices", next: "/v1/subscriptions/8000000003/prices?cursor=repeat", repeat: true},
+		{name: "opaque price cursor", path: "/v1/subscriptions/8000000003/prices", next: "/v1/subscriptions/8000000003/prices?cursor=next", allowed: true},
+		{name: "opaque tier cursor", path: "/v1/subscriptionPrices/current/additionalPriceTiers", next: "/v1/subscriptionPrices/current/additionalPriceTiers?cursor=next", tiers: true, allowed: true},
+		{name: "opaque force tier cursor", path: "/v1/subscriptionPriceTiers", next: "/v1/subscriptionPriceTiers?cursor=next", force: true, allowed: true},
+		{name: "opaque repair equalization cursor", path: "/v1/subscriptionPricePoints/new-base/equalizations", next: "/v1/subscriptionPricePoints/new-base/equalizations?cursor=next", force: true, allowed: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			captured := subscriptionPricesListQuerySurfaceStub(t)
+			writes, escaped, pages := 0, 0, 0
+			captured.response = func(w http.ResponseWriter, req *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				if req.Method != http.MethodGet {
+					writes++
+					_, _ = io.WriteString(w, `{"data":{"type":"subscriptions","id":"saved"}}`)
+					return
+				}
+				if req.URL.Path == test.path && (req.URL.Query().Get("cursor") == "" || test.repeat) {
+					pages++
+					if test.repeat && pages > 2 {
+						w.WriteHeader(http.StatusBadRequest)
+						return
+					}
+					switch {
+					case test.body != "":
+						_, _ = io.WriteString(w, test.body)
+					case test.next != "":
+						_ = json.NewEncoder(w).Encode(map[string]any{"data": []any{}, "links": map[string]string{"next": test.next}})
+					default:
+						http.Redirect(w, req, "/fixture/scope-sentinel", http.StatusTemporaryRedirect)
+					}
+					return
+				}
+				var body string
+				switch req.URL.Path {
+				case "/v1/subscriptions/8000000003/relationships/prices":
+					body = `{"data":[{"type":"subscriptionPrices","id":"current"}]}`
+				case "/v1/subscriptions/8000000003/prices":
+					body = `{"data":[{"type":"subscriptionPrices","id":"current","relationships":{"territory":{"data":{"type":"territories","id":"NOR"}},"subscriptionPricePoint":{"data":{"type":"subscriptionPricePoints","id":"new-base"}},"additionalPriceTiers":{"data":[]}}}]} `
+				case "/v1/subscriptionPrices/current/additionalPriceTiers", "/v1/subscriptionPriceTiers", "/v1/subscriptionPricePoints/new-base/equalizations":
+					body = `{"data":[],"links":{}}`
+				default:
+					escaped++
+					body = `{"data":[],"links":{}}`
+				}
+				_, _ = io.WriteString(w, body)
+			}
+			args := []string{"subscriptions", "pricing", "prices", "set", "--subscription-id", "8000000003", "--price-point", "new-base", "--territory", "NOR"}
+			if test.force {
+				args = append(args, "--force")
+			}
+			if test.tiers {
+				path := filepath.Join(t.TempDir(), "tiers.json")
+				if err := os.WriteFile(path, []byte(`[]`), 0o600); err != nil {
+					t.Fatal(err)
+				}
+				args = append(args, "--additional-price-tiers", path)
+			}
+			stdout, stderr, err := runSubscriptionPricesListQuerySurface(t, args...)
+			if test.repeat && (!errors.Is(err, asc.ErrRepeatedPaginationURL) || pages != 2) {
+				t.Fatalf("repeated cursor: pages=%d writes=%d err=%v", pages, writes, err)
+			}
+			wantWrites := 0
+			if test.allowed && test.force {
+				wantWrites = 1
+			}
+			if (err == nil) != test.allowed || escaped != 0 || writes != wantWrites {
+				t.Fatalf("scope refusal: escaped=%d writes=%d stdout=%s stderr=%s err=%v", escaped, writes, stdout, stderr, err)
+			}
+		})
+	}
+}

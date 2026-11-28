@@ -5,6 +5,8 @@ import (
 	"io"
 	"os"
 	"strings"
+
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/diagnosticoutput"
 )
 
 const maxPlacementsLimit = 50
@@ -35,7 +37,7 @@ func (f *LocalizationIncludeFlags) Provided() bool {
 
 // Resolve validates the flags and returns the include list and placements limit.
 func (f *LocalizationIncludeFlags) Resolve() ([]string, int, error) {
-	return f.resolveTo(os.Stderr)
+	return f.resolveTo(diagnosticoutput.Writer(os.Stderr))
 }
 
 // ResolveWith is Resolve with the "Error:" line written to d's stderr.

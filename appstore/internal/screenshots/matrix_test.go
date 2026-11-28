@@ -330,6 +330,7 @@ func TestRunMatrixRejectsOutputAliasesResolvedFromMatrixPlanDirectory(t *testing
 }
 
 func TestRunMatrixWritesReviewAfterOutputRootSetupFailure(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
 	tests := []struct {
 		name      string
 		rawDir    string
@@ -379,6 +380,10 @@ func TestRunMatrixWritesReviewAfterOutputRootSetupFailure(t *testing.T) {
 			}
 			result, runErr := RunMatrixWithDependencies(context.Background(), matrixPath, matrixPlan, MatrixOptions{}, MatrixDependencies{
 				CheckDevice: func(context.Context, MatrixDevice) error { return nil },
+				RunPlan: func(context.Context, *Plan) (*RunResult, error) {
+					t.Error("plan ran despite unusable output root")
+					return nil, errors.New("unexpected plan execution")
+				},
 			})
 			if runErr == nil {
 				t.Fatal("RunMatrixWithDependencies() error = nil, want output-root failure")
@@ -424,7 +429,12 @@ func TestRunMatrixDropsReplacedFramedPathBeforeReview(t *testing.T) {
 			t.Errorf("write replacement framed path: %v", err)
 		}
 	}}
-	result, runErr := RunMatrixWithDependencies(context.Background(), matrixPath, matrixPlan, MatrixOptions{}, MatrixDependencies{
+	var terminal MatrixProgressEvent
+	result, runErr := RunMatrixWithDependencies(context.Background(), matrixPath, matrixPlan, MatrixOptions{Progress: func(event MatrixProgressEvent) {
+		if event.Event == "cell_finished" {
+			terminal = event
+		}
+	}}, MatrixDependencies{
 		RunPlan: func(_ context.Context, plan *Plan) (*RunResult, error) {
 			writeMatrixPNG(t, filepath.Join(plan.App.OutputDir, "home.png"))
 			return &RunResult{}, nil
@@ -442,6 +452,9 @@ func TestRunMatrixDropsReplacedFramedPathBeforeReview(t *testing.T) {
 		t.Fatalf("result = %+v, want one cell", result)
 	}
 	cell := result.Cells[0]
+	if terminal.CellID != cell.ID || terminal.Status != cell.Status || terminal.FailureCode != cell.FailureCode {
+		t.Fatalf("terminal event = %+v, final cell = %+v", terminal, cell)
+	}
 	if len(cell.FramedPaths) != 0 {
 		t.Fatalf("framed paths = %v, want replaced path dropped", cell.FramedPaths)
 	}
@@ -2173,7 +2186,8 @@ func TestRunMatrix_BoundsConcurrencyAndWritesPartialSafeResult(t *testing.T) {
 		}
 		return &RunResult{BundleID: plan.App.BundleID, UDID: plan.App.UDID, OutputDir: plan.App.OutputDir, Steps: []RunStepResult{{Index: 1, Action: "screenshot", Status: "ok"}}}, nil
 	}
-	result, runErr := RunMatrixWithDependencies(context.Background(), matrixPath, matrixPlan, MatrixOptions{MaxConcurrency: 2}, MatrixDependencies{
+	var events []MatrixProgressEvent
+	result, runErr := RunMatrixWithDependencies(context.Background(), matrixPath, matrixPlan, MatrixOptions{MaxConcurrency: 2, Progress: func(event MatrixProgressEvent) { events = append(events, event) }}, MatrixDependencies{
 		RunPlan:     runPlan,
 		Appearance:  appearance,
 		CheckDevice: func(context.Context, MatrixDevice) error { return nil },
@@ -2191,6 +2205,20 @@ func TestRunMatrix_BoundsConcurrencyAndWritesPartialSafeResult(t *testing.T) {
 	}
 	if result.Succeeded != 4 || result.Failed != 0 || len(result.Cells) != 4 {
 		t.Fatalf("unexpected result summary: %+v", result)
+	}
+	if len(events) != 14 || events[0].Event != "run_started" || events[13].Status != result.Status {
+		t.Fatalf("progress = %+v", events)
+	}
+	byCell := map[string][]string{}
+	for _, event := range events {
+		if event.CellID != "" {
+			byCell[event.CellID] = append(byCell[event.CellID], event.Event)
+		}
+	}
+	for _, cell := range result.Cells {
+		if want := []string{"attempt_started", "attempt_finished", "cell_finished"}; !reflect.DeepEqual(byCell[cell.ID], want) {
+			t.Fatalf("cell %q events = %v", cell.ID, byCell[cell.ID])
+		}
 	}
 	if appearance.setCount != 4 || appearance.restoreCount != 4 {
 		t.Fatalf("appearance calls = set %d restore %d", appearance.setCount, appearance.restoreCount)
@@ -2219,7 +2247,8 @@ func TestRunMatrix_OutputLockReleaseFailureMarksResultFailed(t *testing.T) {
 	previous := matrixOutputLockReleaseErrForTest
 	matrixOutputLockReleaseErrForTest = releaseErr
 	t.Cleanup(func() { matrixOutputLockReleaseErrForTest = previous })
-	result, runErr := RunMatrixWithDependencies(context.Background(), matrixPath, matrixPlan, MatrixOptions{}, MatrixDependencies{
+	var terminal MatrixProgressEvent
+	result, runErr := RunMatrixWithDependencies(context.Background(), matrixPath, matrixPlan, MatrixOptions{Progress: func(event MatrixProgressEvent) { terminal = event }}, MatrixDependencies{
 		RunPlan: func(_ context.Context, plan *Plan) (*RunResult, error) {
 			writeMatrixPNG(t, filepath.Join(plan.App.OutputDir, "home.png"))
 			return &RunResult{}, nil
@@ -2242,6 +2271,9 @@ func TestRunMatrix_OutputLockReleaseFailureMarksResultFailed(t *testing.T) {
 	}
 	if manifest.Status != MatrixCellFailed {
 		t.Fatalf("published review status = %q, want failed to match the command result", manifest.Status)
+	}
+	if terminal.Event != "run_finished" || terminal.Status != result.Status || terminal.TotalCells != result.TotalCells {
+		t.Fatalf("terminal progress = %+v, result = %+v", terminal, result)
 	}
 }
 
@@ -2453,7 +2485,8 @@ func TestRunMatrix_RetriesExecutionButNotValidation(t *testing.T) {
 		writeMatrixPNG(t, filepath.Join(plan.App.OutputDir, "home.png"))
 		return &RunResult{Steps: []RunStepResult{{Index: 1, Action: "screenshot", Status: "ok"}}}, nil
 	}
-	result, runErr := RunMatrixWithDependencies(context.Background(), matrixPath, matrixPlan, MatrixOptions{}, MatrixDependencies{RunPlan: runPlan, Appearance: appearance})
+	var events []MatrixProgressEvent
+	result, runErr := RunMatrixWithDependencies(context.Background(), matrixPath, matrixPlan, MatrixOptions{Progress: func(event MatrixProgressEvent) { events = append(events, event) }}, MatrixDependencies{RunPlan: runPlan, Appearance: appearance})
 	if runErr != nil {
 		t.Fatalf("RunMatrixWithDependencies() error = %v", runErr)
 	}
@@ -2462,6 +2495,18 @@ func TestRunMatrix_RetriesExecutionButNotValidation(t *testing.T) {
 	}
 	if result.Cells[0].FailureStage != "" || result.Cells[0].FailureCode != "" || result.Cells[0].Error != nil {
 		t.Fatalf("successful retry retained failure metadata: %+v", result.Cells[0])
+	}
+	if len(events) != 7 {
+		t.Fatalf("progress = %+v", events)
+	}
+	for attempt := 1; attempt <= 2; attempt++ {
+		started, finished := events[2*attempt-1], events[2*attempt]
+		if started.Event != "attempt_started" || finished.Event != "attempt_finished" || started.Attempt != attempt || finished.Attempt != attempt || started.CellID != result.Cells[0].ID || finished.CellID != started.CellID {
+			t.Fatalf("attempt %d progress = %+v %+v", attempt, started, finished)
+		}
+	}
+	if events[2].Status != MatrixCellFailed || events[2].FailureCode == "" || events[4].Status != MatrixCellSuccess || events[4].FailureCode != "" {
+		t.Fatalf("attempt outcomes = %+v", events)
 	}
 }
 
@@ -2472,17 +2517,28 @@ func TestRunMatrixRestartsAppBeforeEveryCellAttempt(t *testing.T) {
 	matrixPath := filepath.Join(dir, "matrix.json")
 	xcrunLog := filepath.Join(dir, "xcrun.log")
 	captureCount := filepath.Join(dir, "capture-count")
+	versionCalls := filepath.Join(dir, "version-calls")
 	axeTemplate := filepath.Join(dir, "template.png")
 	writeMinimalPNG(t, axeTemplate, 10, 10)
-	writeMatrixTestFile(t, basePath, `{"version":1,"app":{"bundle_id":"com.example.app"},"steps":[{"action":"launch"},{"action":"screenshot","name":"home"}]}`)
+	writeMatrixTestFile(t, basePath, `{"version":1,"app":{"bundle_id":"com.example.app"},"steps":[{"action":"launch"},{"action":"long_press","x":1,"y":2},{"action":"screenshot","name":"home"}]}`)
 	writeMatrixTestFile(t, matrixPath, `{"version":1,"base_plan":"base.json","devices":[{"id":"phone","udid":"SIM-UDID"}],"locales":["en-US"],"appearances":["light"],"content_variants":[{"id":"first","launch_arguments":["--fixture","first"]},{"id":"second","launch_arguments":["--fixture","second"]}],"execution":{"max_attempts":2,"retry_backoff_ms":0},"output":{"raw_dir":"raw","review_dir":"review"}}`)
 
 	writeExecutable(t, filepath.Join(binDir, "xcrun"), `#!/bin/sh
 set -eu
+if [ "$2" = "list" ]; then
+  printf '%s\n' '{"devices":{"runtime":[{"udid":"SIM-UDID","state":"Booted","isAvailable":true}]}}'
+  exit 0
+fi
 printf '%s\n' "$*" >> "$XCRUN_LOG"
 `)
 	writeExecutable(t, filepath.Join(binDir, "axe"), `#!/bin/sh
 set -eu
+if [ "$1" = "--version" ]; then
+  printf 'probe\n' >> "$VERSION_CALLS"
+  printf '2.0.0\n'
+  exit 0
+fi
+if [ "$1" = "tap" ]; then exit 0; fi
 count=0
 if [ -f "$CAPTURE_COUNT" ]; then count=$(cat "$CAPTURE_COUNT"); fi
 count=$((count + 1))
@@ -2498,6 +2554,7 @@ cp "$AXE_TEMPLATE_PNG" "$out"
 	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 	t.Setenv("XCRUN_LOG", xcrunLog)
 	t.Setenv("CAPTURE_COUNT", captureCount)
+	t.Setenv("VERSION_CALLS", versionCalls)
 	t.Setenv("AXE_TEMPLATE_PNG", axeTemplate)
 
 	matrixPlan, err := LoadMatrixPlan(matrixPath)
@@ -2526,6 +2583,10 @@ cp "$AXE_TEMPLATE_PNG" "$out"
 	}
 	if !reflect.DeepEqual(launches, wantLaunches) {
 		t.Fatalf("launches = %q, want %q", launches, wantLaunches)
+	}
+	probes, err := os.ReadFile(versionCalls)
+	if err != nil || string(probes) != "probe\n" {
+		t.Fatalf("version probes = %q, error = %v; want one preflight for all cells and attempts", probes, err)
 	}
 }
 
@@ -2572,10 +2633,15 @@ func TestRunMatrixAppliesAndClearsStatusBarOncePerCell(t *testing.T) {
 			writeMatrixTestFile(t, basePath, `{"version":1,"app":{"bundle_id":"com.example.app"},"defaults":{"status_bar":"screenshot"},"steps":[{"action":"launch"},{"action":"screenshot","name":"home"}]}`)
 			writeMatrixTestFile(t, matrixPath, `{"version":1,"base_plan":"base.json","devices":[{"id":"phone","udid":"SIM-UDID"}],"locales":["en-US"],"appearances":["light"],"content_variants":[{"id":"first"},{"id":"second"}],"execution":{"max_attempts":2,"retry_backoff_ms":0},"output":{"raw_dir":"raw","review_dir":"review"}}`)
 			writeExecutable(t, filepath.Join(binDir, "xcrun"), `#!/bin/sh
+if [ "$2" = "list" ]; then
+  printf '%s\n' '{"devices":{"runtime":[{"udid":"SIM-UDID","state":"Booted","isAvailable":true}]}}'
+  exit 0
+fi
 printf 'launch\n' >> "$CALL_LOG"
 `)
 			writeExecutable(t, filepath.Join(binDir, "axe"), `#!/bin/sh
 set -eu
+if [ "$1" = "--version" ]; then printf '2.0.0\n'; exit 0; fi
 if [ "$2" = "status-bar" ]; then
   printf 'status-bar %s\n' "$3" >> "$CALL_LOG"
   if [ "$3" = "$AXE_FAIL" ]; then exit 1; fi
@@ -2801,7 +2867,8 @@ func TestRunMatrix_InventoryCancellationMarksAllCellsCanceled(t *testing.T) {
 			ctx, cancel := tc.newContext()
 			defer cancel()
 
-			result, runErr := RunMatrixWithDependencies(ctx, matrixPath, matrixPlan, MatrixOptions{}, MatrixDependencies{})
+			var events []MatrixProgressEvent
+			result, runErr := RunMatrixWithDependencies(ctx, matrixPath, matrixPlan, MatrixOptions{Progress: func(event MatrixProgressEvent) { events = append(events, event) }}, MatrixDependencies{})
 			if !errors.Is(runErr, tc.wantError) {
 				t.Fatalf("RunMatrixWithDependencies() error = %v, want %v", runErr, tc.wantError)
 			}
@@ -2814,7 +2881,14 @@ func TestRunMatrix_InventoryCancellationMarksAllCellsCanceled(t *testing.T) {
 			if result.Review != nil {
 				t.Fatalf("canceled-before-lock run published a review without output locks: %+v", result.Review)
 			}
-			for _, cell := range result.Cells {
+			if len(events) != len(result.Cells)+2 || events[len(events)-1].Status != result.Status {
+				t.Fatalf("canceled progress = %+v", events)
+			}
+			for i, cell := range result.Cells {
+				if event := events[i+1]; event.Event != "cell_finished" || event.CellID != cell.ID || event.Status != cell.Status || event.FailureCode != cell.FailureCode {
+					t.Fatalf("canceled cell event = %+v, cell = %+v", event, cell)
+				}
+
 				if cell.Status != MatrixCellCanceled {
 					t.Errorf("cell %q status = %q, want canceled", cell.ID, cell.Status)
 				}
@@ -4639,6 +4713,7 @@ func TestRunPlanWithRootUsesPinnedCaptureScratch(t *testing.T) {
 	}
 	writeExecutable(t, filepath.Join(binDir, "xcrun"), `#!/bin/sh
 set -eu
+printf '%s\n' '{"devices":{"runtime":[{"udid":"SIM-UDID","state":"Booted","isAvailable":true}]}}'
 `)
 	writeExecutable(t, filepath.Join(binDir, "axe"), `#!/bin/sh
 set -eu

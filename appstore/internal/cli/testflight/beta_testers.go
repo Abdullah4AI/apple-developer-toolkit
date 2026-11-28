@@ -102,6 +102,7 @@ func newBetaTestersListCommand(d *shared.Deps) *ffcli.Command {
 	include := fs.String("include", "", "Include related resources, comma-separated: "+strings.Join(betaTesterIncludeValues, ", "))
 	includedFields := shared.BindIncludedFieldFlags(fs, map[string]string{"apps": "apps", "betaGroups": "betaGroups", "builds": "builds"})
 	fields := fs.String("fields", "", "Fields to include for beta testers, comma-separated: "+strings.Join(betaGroupTesterFieldsValues, ", "))
+	devices := fs.Bool("devices", false, "Request appDevices and show one row per reported device in table or markdown output")
 	output := d.BindOutputFlags(fs)
 	limit := fs.Int("limit", 0, shared.LimitFlagUsage(200))
 	next := fs.String("next", "", shared.NextFlagUsage)
@@ -124,6 +125,14 @@ asc testflight testers groups list --id "TESTER_ID" --paginate.
 A --next URL retains any include query from its original request; JSON output
 is still required to render those included resources.
 
+--devices requests appDevices (or adds it to --fields) and shows tester ID,
+model, platform, OS, and app build in table or markdown output. Table and markdown
+omit names and emails; JSON keeps Apple's response envelope. Device entries
+have no timestamp or app ID, so this view does not infer a latest installation
+or associate entries with individual apps. Filters select testers, not device
+entries. --paginate pages testers. With --devices, a --next URL must already
+select appDevices in fields[betaTesters]. CSV export is unchanged.
+
 Filter, --fields, --sort, and --include flags cannot be combined with --next: a
 links.next URL already carries the query it was produced from, so those values
 would never reach the request. Invalid values and these incompatible flag
@@ -138,6 +147,7 @@ Examples:
   asc testflight beta-testers list --app "APP_ID" --sort "-lastName"
   asc testflight beta-testers list --app "APP_ID" --include "betaGroups" --paginate --output json
   asc testflight beta-testers list --app "APP_ID" --fields "email,state"
+  asc testflight beta-testers list --app "APP_ID" --devices --paginate --output table
   asc testflight beta-testers list --app "APP_ID" --limit 25
   asc testflight beta-testers list --app "APP_ID" --paginate`,
 		FlagSet:   fs,
@@ -176,6 +186,16 @@ Examples:
 			// these flags would be accepted and silently dropped.
 			if err := rejectBetaTestersNextFlagConflicts(d, fs, *next, command, "build-id", "group", "email", "first-name", "last-name", "invite-type", "sort", "include", "fields"); err != nil {
 				return err
+			}
+			if *devices {
+				if strings.TrimSpace(*next) != "" {
+					nextURL, err := url.Parse(strings.TrimSpace(*next))
+					if err != nil || !slices.Contains(shared.SplitCSV(nextURL.Query().Get("fields[betaTesters]")), "appDevices") {
+						return d.UsageError("--devices requires --next to include appDevices in fields[betaTesters]")
+					}
+				} else if !slices.Contains(fieldValues, "appDevices") {
+					fieldValues = append(fieldValues, "appDevices")
+				}
 			}
 			included, err := includedFields.ResolveWith(d, command, *next, shared.SplitCSV(*include))
 			if err != nil {
@@ -253,6 +273,16 @@ Examples:
 				opts = append(opts, asc.WithBetaTestersGroupIDs([]string{groupID}))
 			}
 
+			printTesters := func(response any) error {
+				if *devices {
+					testers, ok := response.(*asc.BetaTestersResponse)
+					if !ok {
+						return fmt.Errorf("beta-testers list: unexpected response type %T", response)
+					}
+					response = &asc.BetaTesterDevicesResponse{BetaTestersResponse: *testers}
+				}
+				return d.PrintOutput(response, *output.Output, *output.Pretty)
+			}
 			if *paginate {
 				paginateOpts := append(opts, asc.Limit[asc.BetaTestersOption](200))
 				testers, err := d.PaginateWithSpinner(
@@ -268,7 +298,7 @@ Examples:
 					return fmt.Errorf("beta-testers list: %w", err)
 				}
 
-				return d.PrintOutput(testers, *output.Output, *output.Pretty)
+				return printTesters(testers)
 			}
 
 			testers, err := client.GetBetaTesters(requestCtx, resolvedAppID, opts...)
@@ -276,7 +306,7 @@ Examples:
 				return fmt.Errorf("beta-testers list: failed to fetch: %w", err)
 			}
 
-			return d.PrintOutput(testers, *output.Output, *output.Pretty)
+			return printTesters(testers)
 		},
 	}
 }
@@ -351,12 +381,13 @@ See also: asc testflight beta-testers beta-groups list --id "TESTER_ID" for the 
 func newBetaTestersAddCommand(d *shared.Deps) *ffcli.Command {
 	fs := d.NewFlagSet("add", flag.ExitOnError)
 
-	appID := fs.String("app", "", "App Store Connect app ID, used to resolve --group (or ASC_APP_ID env)")
+	appID := fs.String("app", "", "App Store Connect app ID, scopes groups and builds (or ASC_APP_ID env)")
 	email := fs.String("email", "", "Tester email address")
 	firstName := fs.String("first-name", "", "Tester first name")
 	lastName := fs.String("last-name", "", "Tester last name")
 	group := shared.BindOnceCSVFlag(fs, "group", "Comma-separated beta group names or IDs")
 	buildID := shared.BindOnceCSVFlag(fs, "build-id", "Build ID(s) to attach, comma-separated")
+	createMissingGroups := fs.Bool("create-missing-groups", false, "Create unresolved group names as external groups with public links disabled (requires --app and --group)")
 	output := d.BindOutputFlags(fs)
 
 	return &ffcli.Command{
@@ -372,11 +403,17 @@ in one list, reference that group by its ID instead.
 
 --build-id attaches builds in the same create request. At least one of --group
 or --build-id is required, and --app is required only to resolve --group.
+When an app is resolved, every build must belong to it before any mutation.
 
-When the email is already a tester of the app, App Store Connect rejects the
-create with 409. add then reads that tester back, adds it to only the groups
-and builds it is missing, and prints the existing tester; stderr says what
-changed. An email outside your team cannot join an internal group: add the
+Add first looks up the input email within the selected app, adds only
+missing groups and builds, and prints the existing tester when found. Repeating
+the same request sends no writes. First and last names apply only on creation.
+--create-missing-groups creates unresolved group names as external groups with
+public links disabled; --app and --group are required.
+The build-only form resolves each named build's app before looking up the tester.
+Its output retains the tester resource envelope with only ID, type and email;
+other profile fields are omitted. Only named builds are read or assigned.
+An email outside your team cannot join an internal group: add the
 person to an external group instead. Inviting them to the team (asc users
 invite) gives them a team role and is for the Account Holder or an Admin to
 decide.
@@ -407,28 +444,115 @@ Examples:
 				return shared.MissingRequiredUsageError("--group")
 			}
 
+			if *createMissingGroups && (resolvedAppID == "" || !hasGroup) {
+				return d.UsageError("--create-missing-groups requires --app and --group")
+			}
+			if !isValidTesterEmail(strings.TrimSpace(*email)) {
+				return d.UsageError("invalid email format")
+			}
+
+			if _, err := shared.ValidateOutputFormat(*output.Output, *output.Pretty); err != nil {
+				return d.UsageError(err.Error())
+			}
+
+			ctx = asc.WithNoRedirectReads(ctx)
 			client, err := d.Client()
 			if err != nil {
 				return fmt.Errorf("beta-testers add: %w", err)
 			}
 
-			requestCtx, cancel := d.Timeout(ctx)
-			defer cancel()
+			lookupAppIDs := []string{}
+			if resolvedAppID != "" {
+				lookupAppIDs = append(lookupAppIDs, resolvedAppID)
+			}
+			for _, id := range buildIDs {
+				requestCtx, cancel := d.Timeout(ctx)
+				owner, err := client.GetBuildAppRelationship(requestCtx, id)
+				cancel()
+				if err != nil {
+					return fmt.Errorf("beta-testers add: read app for build %q: %w", id, err)
+				}
+				if owner == nil || owner.Data.Type != asc.ResourceTypeApps || strings.TrimSpace(owner.Data.ID) == "" {
+					return fmt.Errorf("beta-testers add: build %q returned no verified owning app", id)
+				}
+				ownerID := strings.TrimSpace(owner.Data.ID)
+				if resolvedAppID != "" && ownerID != resolvedAppID {
+					return d.UsageErrorf("--build-id %q does not belong to --app %q", id, resolvedAppID)
+				}
+				lookupAppIDs = append(lookupAppIDs, ownerID)
+			}
+			lookupAppIDs = uniqueSortedStrings(lookupAppIDs)
+			printTester := func(tester *asc.BetaTesterResponse) error {
+				if !hasGroup {
+					if tester == nil || strings.TrimSpace(tester.Data.ID) == "" {
+						return fmt.Errorf("beta-testers add: tester returned no ID")
+					}
+					tester = &asc.BetaTesterResponse{Data: asc.Resource[asc.BetaTesterAttributes]{
+						Type:       asc.ResourceTypeBetaTesters,
+						ID:         tester.Data.ID,
+						Attributes: asc.BetaTesterAttributes{Email: strings.TrimSpace(*email)},
+					}}
+				}
+				return d.PrintOutput(tester, *output.Output, *output.Pretty)
+			}
 
 			var groupIDs []string
+			var resolver *betaGroupResolver
+			var requested, missing []string
 			if hasGroup {
-				groupIDs, err = resolveBetaGroupIDs(requestCtx, client, resolvedAppID, group.String())
+				resolver, err = newBetaGroupResolver(ctx, d, client, resolvedAppID)
+				if err != nil {
+					return fmt.Errorf("beta-testers add: %w", err)
+				}
+				if *createMissingGroups {
+					requested, missing, err = planBetaTesterAddGroups(resolver, group.String())
+				} else {
+					groupIDs, err = matchBetaGroupIDs(resolver.groups, group.String())
+				}
 				if err != nil {
 					return fmt.Errorf("beta-testers add: %w", err)
 				}
 			}
-
-			tester, err := client.CreateBetaTester(requestCtx, *email, *firstName, *lastName, groupIDs, buildIDs)
+			var fields []string
+			if !hasGroup {
+				fields = []string{"email"}
+			}
+			found, err := fetchExistingTestersByEmail(ctx, d, client, lookupAppIDs, []betaTestersCSVRow{{email: *email}}, fields...)
 			if err != nil {
-				if !isHTTPConflict(err) || resolvedAppID == "" {
+				return fmt.Errorf("beta-testers add: look up tester: %w", err)
+			}
+			existing := found[strings.ToLower(strings.TrimSpace(*email))]
+			for _, name := range missing {
+				id, err := ensureBetaTesterImportGroup(ctx, d, client, resolvedAppID, name)
+				if err != nil {
+					return fmt.Errorf("beta-testers add: create group %q: %w", name, err)
+				}
+				resolver.addImportGroup(name, id)
+				fmt.Fprintf(d.IO.ErrOut, "Created external beta group %q (%s)\n", shared.SanitizeTerminal(name), shared.SanitizeTerminal(id))
+			}
+			if *createMissingGroups {
+				groupIDs, err = resolver.ResolveAll(requested)
+				if err != nil {
+					return fmt.Errorf("beta-testers add: %w", err)
+				}
+			}
+			if existing != nil {
+				outcome, err := reconcileBetaTesterRelationships(ctx, d, client, existing, groupIDs, buildIDs)
+				if err != nil {
+					return fmt.Errorf("beta-testers add: %w", err)
+				}
+				reportBetaTesterAddConflict(d, strings.TrimSpace(*email), outcome)
+				return printTester(outcome.tester)
+			}
+
+			requestCtx, cancel := d.Timeout(ctx)
+			tester, err := client.CreateBetaTester(requestCtx, *email, *firstName, *lastName, groupIDs, buildIDs)
+			cancel()
+			if err != nil {
+				if !isHTTPConflict(err) {
 					return fmt.Errorf("beta-testers add: failed to create: %w", err)
 				}
-				outcome, resolveErr := resolveBetaTesterAddConflict(ctx, d, client, resolvedAppID, strings.TrimSpace(*email), groupIDs, buildIDs)
+				outcome, resolveErr := resolveBetaTesterAddConflict(ctx, d, client, lookupAppIDs, strings.TrimSpace(*email), groupIDs, buildIDs)
 				if resolveErr != nil {
 					return fmt.Errorf("beta-testers add: failed to create: %w (%w)", err, resolveErr)
 				}
@@ -448,7 +572,7 @@ Examples:
 				tester = outcome.tester
 			}
 
-			return d.PrintOutput(tester, *output.Output, *output.Pretty)
+			return printTester(tester)
 		},
 	}
 }

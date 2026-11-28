@@ -25,6 +25,8 @@ asc <subcommand> [flags]
 
 - `--api-debug` - Enable HTTP debug logging to stderr (redacts sensitive values)
 - `--debug` - Enable debug logging to stderr
+- `--error-format` - Error format: text, json (use before the subcommand) (default: text)
+- `--no-telemetry` - Send no telemetry for this invocation (DO_NOT_TRACK=1 has the same effect) (default: false)
 - `--profile` - Use named authentication profile (accepted before or after the command name)
 - `--read-only` - Refuse every mutating request (POST/PATCH/PUT/DELETE) before it is sent; ASC_READ_ONLY=1 has the same effect (default: false)
 - `--report` - Report format for CI output (e.g., junit)
@@ -104,12 +106,13 @@ asc <subcommand> [flags]
 - `release-notes` - Generate and manage App Store release notes.
 - `review` - Manage App Store review details, attachments, and submissions.
 - `reviews` - List and manage App Store customer reviews.
-- `submit` - Submission lifecycle tools; use `publish appstore --submit` to ship.
+- `submit` - Submission lifecycle tools; use `review submit` for an existing build.
 - `validate` - Canonical App Store submission readiness report.
 - `publish` - High-level publish workflows for TestFlight and App Store.
 
 ### Monetization
 
+- `catalog` - Plan and reconcile a product catalog from a JSON file.
 - `iap` - Manage in-app purchases in App Store Connect.
 - `storekit` - Manage StoreKit server APIs with In-App Purchase API keys.
 - `app-events` - Manage App Store in-app events.
@@ -146,6 +149,7 @@ asc <subcommand> [flags]
 - `diff` - Generate deterministic non-mutating diff plans.
 - `capabilities` - Show CLI, API, web-only, and public-API-limited capability coverage.
 - `search` - Search asc commands and examples for agent-oriented command discovery.
+- `commands` - Discover registered command families and their inputs.
 - `snitch` - Report CLI friction as a GitHub issue.
 - `version` - Print version information and exit.
 - `completion` - Print shell completion scripts.
@@ -177,10 +181,16 @@ asc ads campaigns resume --campaign CAMPAIGN_ID --ad-account AD_ACCOUNT_ID --con
 asc web apps compatibility view --app "123456789"
 asc web apps compatibility edit --app "123456789" --ios-app-on-mac=false --ios-app-on-vision-pro=false
 
+# Read the selected account's Digital Services Act trader status
+asc web business dsa status --output json
+
 # Read and edit app age ratings through a web session
 asc web apps age-ratings list --app APP_ID --output json
 asc web apps age-ratings territories --app-info APP_INFO_ID --output table
 asc web apps age-ratings edit --id DECLARATION_ID --input ./age-rating.json --confirm
+
+# Read the China mainland publication permit relationship
+asc web apps compliance china-publication-permit view --app APP_ID --output json
 
 # Upload a build
 asc builds upload --app "123456789" --ipa "/path/to/MyApp.ipa"

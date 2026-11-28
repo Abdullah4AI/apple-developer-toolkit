@@ -66,6 +66,7 @@ type InstallOptions struct {
 	IPAPath     string
 	DeviceID    string
 	Timeout     time.Duration
+	Launch      bool
 	Environment []string
 }
 
@@ -329,6 +330,20 @@ func Install(ctx context.Context, options InstallOptions) (*asc.XcodeInstallResu
 		return result, err
 	}
 	finishInstallResult(result, started, true, true, true)
+	if options.Launch {
+		result.Launch = &asc.XcodeInstallLaunch{}
+		if err := launchInstalledApp(requestContext, runner, devicectlPath, environment, jsonDir, options.Timeout, device, inspection.App.BundleID); err != nil {
+			finishInstallResult(result, started, true, true, false)
+			code := "launch_failed"
+			if contextErr := requestContext.Err(); contextErr != nil {
+				code = installContextFailureCode(contextErr)
+			}
+			setInstallFailure(result, "launch", code)
+			return result, err
+		}
+		result.Launch.Started = true
+		finishInstallResult(result, started, true, true, true)
+	}
 	return result, nil
 }
 
@@ -560,7 +575,7 @@ type installDevice struct {
 	VisibilityClass string
 }
 
-func discoverInstallDevice(ctx context.Context, runner installDeviceRunner, devicectlPath string, environment []string, jsonDir string, timeout time.Duration, requestedID string, provisioned []string) (installDevice, error) {
+func listInstallDevices(ctx context.Context, runner installDeviceRunner, devicectlPath string, environment []string, jsonDir string, timeout time.Duration) ([]installDeviceEntry, error) {
 	seconds := toolTimeoutSeconds(timeout)
 	jsonName := "devices.json"
 	payload, runErr := runInstallJSON(ctx, runner, devicectlPath, environment, jsonDir, jsonName, []string{
@@ -571,30 +586,38 @@ func discoverInstallDevice(ctx context.Context, runner installDeviceRunner, devi
 		"list", "devices",
 	})
 	if contextErr := ctx.Err(); contextErr != nil {
-		return installDevice{}, contextErr
+		return nil, contextErr
 	}
 	if runErr != nil && len(payload) == 0 {
-		return installDevice{}, &installCommandError{Stage: "devicectl device discovery", ExitCode: installExitCode(runErr)}
+		return nil, &installCommandError{Stage: "devicectl device discovery", ExitCode: installExitCode(runErr)}
 	}
 	envelope, err := parseDevicectlEnvelope(payload, "devicectl.list.devices")
 	if err != nil {
-		return installDevice{}, err
+		return nil, err
 	}
 	if envelope.Info.Outcome != "success" {
-		return installDevice{}, structuredInstallCommandError("devicectl device discovery", envelope, runErr)
+		return nil, structuredInstallCommandError("devicectl device discovery", envelope, runErr)
 	}
 	if runErr != nil {
-		return installDevice{}, &installCommandError{Stage: "devicectl device discovery", ExitCode: installExitCode(runErr)}
+		return nil, &installCommandError{Stage: "devicectl device discovery", ExitCode: installExitCode(runErr)}
 	}
 	var listed installDeviceListResult
 	if err := decodeStrictDevicectlResult(envelope.Result, envelope.Info.JSONVersion, &listed); err != nil {
-		return installDevice{}, fmt.Errorf("parse devicectl device discovery result: invalid schema")
+		return nil, fmt.Errorf("parse devicectl device discovery result: invalid schema")
 	}
 	if listed.Devices == nil {
-		return installDevice{}, fmt.Errorf("parse devicectl device discovery result: devices are required")
+		return nil, fmt.Errorf("parse devicectl device discovery result: devices are required")
+	}
+	return listed.Devices, nil
+}
+
+func discoverInstallDevice(ctx context.Context, runner installDeviceRunner, devicectlPath string, environment []string, jsonDir string, timeout time.Duration, requestedID string, provisioned []string) (installDevice, error) {
+	entries, err := listInstallDevices(ctx, runner, devicectlPath, environment, jsonDir, timeout)
+	if err != nil {
+		return installDevice{}, err
 	}
 	var matched *installDevice
-	for _, entry := range listed.Devices {
+	for _, entry := range entries {
 		if err := validateInstallDeviceEntry(entry); err != nil {
 			return installDevice{}, err
 		}
@@ -737,6 +760,36 @@ func verifyInstalledApp(ctx context.Context, runner installDeviceRunner, devicec
 	}
 	if !matched {
 		return &installVerificationError{reason: "expected app was not found on the device"}
+	}
+	return nil
+}
+
+// launchInstalledApp asks CoreDevice to start only the already verified bundle.
+// A successful acknowledgement is not a health check of the running app.
+func launchInstalledApp(ctx context.Context, runner installDeviceRunner, devicectlPath string, environment []string, jsonDir string, timeout time.Duration, device installDevice, bundleID string) error {
+	jsonName := "launch.json"
+	payload, runErr := runInstallJSON(ctx, runner, devicectlPath, environment, jsonDir, jsonName, []string{
+		"--quiet",
+		"--timeout", toolTimeoutSeconds(timeout),
+		"--json-output", filepath.Join(jsonDir, jsonName),
+		"--omit-deprecated-fields-in-json",
+		"device", "process", "launch", "--device", device.Identifier, bundleID,
+	})
+	if contextErr := ctx.Err(); contextErr != nil {
+		return contextErr
+	}
+	if len(payload) == 0 {
+		return &installCommandError{Stage: "devicectl app launch", ExitCode: installExitCode(runErr)}
+	}
+	envelope, err := parseDevicectlEnvelope(payload, "devicectl.device.process.launch")
+	if err != nil {
+		return err
+	}
+	if envelope.Info.Outcome != "success" {
+		return structuredInstallCommandError("devicectl app launch", envelope, runErr)
+	}
+	if runErr != nil {
+		return &installCommandError{Stage: "devicectl app launch", ExitCode: installExitCode(runErr)}
 	}
 	return nil
 }
@@ -964,7 +1017,7 @@ func decodeStrictDevicectlResult(payload []byte, version int, destination any) e
 
 func supportedInstallJSONVersion(version int) bool {
 	switch version {
-	case installLegacyJSONVersion, installJSONVersion:
+	case installLegacyJSONVersion, installJSONVersion, 6:
 		return true
 	default:
 		return false
@@ -1066,8 +1119,8 @@ func normalizeInstallDevice(entry installDeviceEntry) (installDevice, error) {
 	hardware, _ := objectFromObject(properties, "hardware")
 	connection, _ := objectFromObject(properties, "connection")
 	state, _ := objectFromObject(properties, "state")
-	device.Platform = firstInstallObjectString(hardware, "platform")
-	device.Reality = firstInstallObjectString(hardware, "reality")
+	device.Platform = firstInstallObjectString(hardware, "osPlatform", "platform")
+	device.Reality = firstInstallObjectString(hardware, "fidelity", "reality")
 	device.UDID = firstInstallObjectString(hardware, "udid")
 	device.PairingState = firstInstallObjectString(connection, "pairingState")
 	device.ConnectionState = firstInstallObjectString(connection, "state")
@@ -1096,7 +1149,7 @@ func normalizeInstallDevice(entry installDeviceEntry) (installDevice, error) {
 		}
 	}
 	if device.UDID == "" {
-		return installDevice{}, &installDeviceMembershipUnavailableError{}
+		return device, &installDeviceMembershipUnavailableError{}
 	}
 	if err := validateInstallText(device.UDID, "device UDID"); err != nil {
 		return installDevice{}, fmt.Errorf("parse devicectl device discovery result: %w", err)

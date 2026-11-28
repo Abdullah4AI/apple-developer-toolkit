@@ -128,7 +128,7 @@ func newReviewsRespondBatchCommand(d *shared.Deps) *ffcli.Command {
 	fs := d.NewFlagSet("respond-batch", flag.ExitOnError)
 
 	appID := fs.String("app", "", "App Store Connect app ID (or ASC_APP_ID env)")
-	filePath := fs.String("file", "", "Path to grouped JSON replies file (required)")
+	filePath := fs.String("file", "", "Path to grouped JSON replies file (required; outside the working directory or symlinks are deprecated)")
 	dryRun := fs.Bool("dry-run", false, "Preview responses without creating them")
 	confirm := fs.Bool("confirm", false, "Confirm publishing the responses (required unless --dry-run)")
 	skipExisting := fs.Bool("skip-existing", false, "Skip reviews that already have a published response")
@@ -141,8 +141,12 @@ func newReviewsRespondBatchCommand(d *shared.Deps) *ffcli.Command {
 		ShortHelp:  "Create responses for multiple customer reviews.",
 		LongHelp: fmt.Sprintf(`Create responses for multiple customer reviews from a grouped JSON file.
 
-The input file must contain a top-level replies array. Each reply has one
-response body and one or more reviewIds.
+The input must be seekable and contain a top-level replies array. Each reply
+has one response body and one or more reviewIds. Files outside the working
+directory, symlinks and descriptor inputs such as redirected /dev/stdin remain
+supported with a deprecation warning; copy the content into a regular project
+file before a future release refuses the deprecated inputs. Non-seekable pipes
+remain unsupported.
 
 A single run accepts at most %d bytes of input and %d review ids across
 all replies, and each response must not exceed %d bytes. Split larger
@@ -184,7 +188,7 @@ Examples:
 				return err
 			}
 
-			targets, err := loadReviewBatchTargets(*filePath)
+			targets, err := loadReviewBatchTargets(d, *filePath)
 			if err != nil {
 				code := shared.DiagnosticFileInvalidFormat
 				switch {
@@ -228,10 +232,10 @@ Examples:
 	}
 }
 
-func loadReviewBatchTargets(path string) ([]reviewBatchTarget, error) {
-	file, err := os.Open(path)
+func loadReviewBatchTargets(d *shared.Deps, path string) ([]reviewBatchTarget, error) {
+	file, err := d.OpenMessageFile("--file", "copy the file into the project directory", path, true)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read --file: %w", err)
+		return nil, err
 	}
 	defer file.Close()
 	if info, err := file.Stat(); err != nil {

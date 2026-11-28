@@ -23,6 +23,9 @@ type IO struct {
 	StdinTTY  bool
 	StdoutTTY bool
 	StderrTTY bool
+
+	operatorStderr   io.Writer
+	quietDiagnostics bool
 }
 
 // Deps holds what a command takes from the process: its App Store Connect
@@ -113,10 +116,28 @@ func (s *IO) stdinTerminal() bool {
 // terminal for the commands the child runs, and s.ErrOut otherwise, which then
 // receives the child's output through a pipe.
 func (s *IO) ChildStderr() io.Writer {
-	if _, ok := s.ErrOut.(processStderr); ok {
+	stderr := s.OperatorStderr()
+	if _, ok := stderr.(processStderr); ok {
 		return os.Stderr
 	}
+	return stderr
+}
+
+// OperatorStderr preserves instructions that need a person's attention.
+func (s *IO) OperatorStderr() io.Writer {
+	if s.operatorStderr != nil {
+		return s.operatorStderr
+	}
 	return s.ErrOut
+}
+
+// WithQuietDiagnostics discards CLI diagnostics while retaining operator and child output.
+func (s *IO) WithQuietDiagnostics() *IO {
+	streams := *s
+	streams.operatorStderr = s.OperatorStderr()
+	streams.ErrOut = io.Discard
+	streams.quietDiagnostics = true
+	return &streams
 }
 
 // The process streams are resolved on each call, so a command built before
@@ -179,7 +200,9 @@ func (d *Deps) NewFlagSet(name string, errorHandling flag.ErrorHandling) *flag.F
 // or a CI environment decides otherwise, --output defaults to table when d's
 // stdout is a terminal and to json when it is not.
 func (d *Deps) BindOutputFlags(fs *flag.FlagSet) OutputFlags {
-	return BindOutputFlagsWith(fs, "output", d.DefaultOutputFormat(), "Output format: json, table, markdown")
+	output := BindOutputFlagsWith(fs, "output", d.DefaultOutputFormat(), "Output format: json, table, markdown")
+	fs.Lookup("output").Value.(*validatedOutputValue).defaultKind = "dynamic"
+	return output
 }
 
 // DefaultOutputFormat returns the default output format for CLI commands.

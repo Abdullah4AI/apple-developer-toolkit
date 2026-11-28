@@ -38,7 +38,7 @@ func TestPublishTestFlightUploadOnlyIPAWaitsThenStopsBeforeDistribution(t *testi
 	cmd.FlagSet.SetOutput(io.Discard)
 	if err := cmd.FlagSet.Parse([]string{
 		"--app", "friendly-app",
-		"--ipa", "Demo.ipa",
+		"--ipa", writePublishIPA(t, "iPhoneOS"),
 		"--version", "1.2.3",
 		"--build-number", "42",
 		"--upload-only",
@@ -285,7 +285,7 @@ func TestPublishTestFlightUploadOnlyProcessingFailurePrintsPartialBuildAndDoesNo
 	cmd.FlagSet.SetOutput(io.Discard)
 	if err := cmd.FlagSet.Parse([]string{
 		"--app", "friendly-app",
-		"--ipa", "Demo.ipa",
+		"--ipa", writePublishIPA(t, "iPhoneOS"),
 		"--version", "1.2.3",
 		"--build-number", "42",
 		"--upload-only",
@@ -317,7 +317,7 @@ func TestPublishTestFlightUploadOnlyProcessingFailurePrintsPartialBuildAndDoesNo
 	if payload["uploadOnly"] != true || payload["status"] != publishPartialStatus || payload["failureStage"] != publishFailureStageBuildProcessing {
 		t.Fatalf("expected canonical upload-only partial status, got %#v", payload)
 	}
-	if failure, ok := payload["failure"].(string); !ok || !strings.Contains(failure, "processing sentinel") {
+	if payload["failure"] != "Build processing could not be verified." || payload["failureCode"] != "build_processing_failed" {
 		t.Fatalf("expected canonical structured failure, got %#v", payload["failure"])
 	}
 	completedStages, ok := payload["completedStages"].([]any)

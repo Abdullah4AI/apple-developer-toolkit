@@ -7,6 +7,20 @@ import (
 	"testing"
 )
 
+func TestPublishingHelpShowsExistingBuildSubmission(t *testing.T) {
+	for _, path := range [][]string{{"release"}, {"release", "stage"}, {"submit"}} {
+		t.Run(strings.Join(path, " "), func(t *testing.T) {
+			stdout, stderr, code := runWithDeps(t, nil, append(path, "--help")...)
+			if code != 0 || stderr != "" {
+				t.Fatalf("help failed: exit=%d stderr=%q", code, stderr)
+			}
+			if !strings.Contains(stdout, "asc review submit ") {
+				t.Fatalf("help omitted the existing-build submission command: %s", stdout)
+			}
+		})
+	}
+}
+
 func TestPublishHelpShowsCanonicalAppStoreAndTestFlightSurfaces(t *testing.T) {
 	stdout, stderr, runErr := runRootWithDeps(t, nil, "publish")
 

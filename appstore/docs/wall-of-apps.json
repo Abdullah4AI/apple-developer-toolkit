@@ -320,6 +320,11 @@
     "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/45/fd/12/45fd1294-2f62-d4d9-368e-da68e27adc22/AppIcon-0-0-1x_U007epad-0-1-0-85-220.png/512x512bb.jpg"
   },
   {
+    "app": "CallMeUp: AI Wake-Up Calls",
+    "link": "https://apps.apple.com/us/app/callmeup-ai-wake-up-calls/id6809960857?uo=4",
+    "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/7a/6b/8b/7a6b8b70-2b1e-d5c7-c2ed-571818c3c5f3/AppIcon-0-0-1x_U007ephone-0-1-85-220.png/512x512bb.jpg"
+  },
+  {
     "app": "Calorimeter",
     "link": "https://apps.apple.com/us/app/calorimeter/id6502800890?uo=4",
     "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/d3/da/14/d3da14c9-99e0-1a7c-21b7-7f380b078084/AppIcon-0-1x_U007ephone-0-1-P3-85-220-0.png/512x512bb.jpg"
@@ -1070,6 +1075,11 @@
     "app": "Hedwig - Block Text Messages",
     "link": "https://apps.apple.com/us/app/hedwig-block-text-messages/id6736428346?uo=4",
     "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/56/a6/e5/56a6e530-ded3-69de-d871-0d0252bd0610/AppIcon-0-1x_U007epad-0-1-85-220-0.png/512x512bb.jpg"
+  },
+  {
+    "app": "HexVolt: Hex Block Puzzle",
+    "link": "https://apps.apple.com/us/app/hexvolt-hex-block-puzzle/id6806414265?uo=4",
+    "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/ee/e5/26/eee5261b-d6b4-f8fb-27b1-1bee09b576d8/AppIcon-0-0-1x_U007emarketing-0-8-0-85-220.png/512x512bb.jpg"
   },
   {
     "app": "heypster",
@@ -1853,6 +1863,11 @@
     "app": "Planit: Gamified Daily Planner",
     "link": "https://apps.apple.com/us/app/planit-gamified-daily-planner/id6759006335",
     "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/94/b1/94/94b194db-586e-18bf-bc6f-b7a7acaed8bb/testiconPlanit-0-0-1x_U007ephone-0-1-sRGB-85-220.png/512x512bb.jpg"
+  },
+  {
+    "app": "PlayLingo",
+    "link": "https://apps.apple.com/us/app/playlingo-language-reactor/id6743090216?uo=4",
+    "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/29/a6/cb/29a6cbdb-8e4b-51c9-375e-fd93fdb4795e/AppIconCosmic-0-0-1x_U007epad-0-1-85-220.png/512x512bb.jpg"
   },
   {
     "app": "PlayTales: Audiobooks for Kids",

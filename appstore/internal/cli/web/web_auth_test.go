@@ -954,6 +954,7 @@ func TestLoginWithOptionalTwoFactorRepromptsAfterFallbackPhoneRequest(t *testing
 		return nil
 	}
 	d.IO.ErrOut = &statusOutput
+	d.IO = d.IO.WithQuietDiagnostics()
 
 	session, err := loginWithOptionalTwoFactor(context.Background(), d, "user@example.com", "secret", "", nil, nil)
 	if err != nil {
@@ -1167,6 +1168,9 @@ func TestResolveSessionUsesLastCachedSessionWhenAppleIDMissing(t *testing.T) {
 
 func TestResolveSessionPrintsExpiredNoticeBeforePrompt(t *testing.T) {
 	d, _, _ := newWebTestDeps()
+	origPromptAvailable := twoFactorPromptAvailableFn
+	t.Cleanup(func() { twoFactorPromptAvailableFn = origPromptAvailable })
+	twoFactorPromptAvailableFn = func() bool { return true }
 	origTryResume := tryResumeSessionFn
 	origTryResumeLast := tryResumeLastFn
 	origLoadCachedSession := loadCachedSessionFn
@@ -1192,6 +1196,7 @@ func TestResolveSessionPrintsExpiredNoticeBeforePrompt(t *testing.T) {
 	expected := &webcore.AuthSession{UserEmail: "user@example.com"}
 	var notice bytes.Buffer
 	d.IO.ErrOut = &notice
+	d.IO = d.IO.WithQuietDiagnostics()
 
 	tryResumeSessionFn = func(ctx context.Context, username string) (*webcore.AuthSession, bool, error) {
 		if username != "user@example.com" {

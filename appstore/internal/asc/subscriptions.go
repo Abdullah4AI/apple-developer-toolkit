@@ -102,9 +102,10 @@ type SubscriptionPriceInlineCreate struct {
 
 // SubscriptionPriceInlineRelationships describes relationships for an inline price create.
 type SubscriptionPriceInlineRelationships struct {
-	Subscription           Relationship  `json:"subscription"`
-	SubscriptionPricePoint Relationship  `json:"subscriptionPricePoint"`
-	Territory              *Relationship `json:"territory,omitempty"`
+	Subscription           Relationship      `json:"subscription"`
+	SubscriptionPricePoint Relationship      `json:"subscriptionPricePoint"`
+	Territory              *Relationship     `json:"territory,omitempty"`
+	AdditionalPriceTiers   *RelationshipList `json:"additionalPriceTiers,omitempty"`
 }
 
 // SubscriptionPriceAttributes describes a subscription price resource.
@@ -170,16 +171,18 @@ type SubscriptionPriceCreateAttributes struct {
 // SubscriptionInlinePrice describes one price in an atomic subscription price
 // matrix update.
 type SubscriptionInlinePrice struct {
-	PricePointID string
-	TerritoryID  string
-	Attributes   SubscriptionPriceCreateAttributes
+	PricePointID         string
+	TerritoryID          string
+	Attributes           SubscriptionPriceCreateAttributes
+	AdditionalPriceTiers []ProposedSubscriptionPriceTier
 }
 
 // SubscriptionPriceRelationships describes relationships for prices.
 type SubscriptionPriceRelationships struct {
-	Subscription           *Relationship `json:"subscription"`
-	SubscriptionPricePoint *Relationship `json:"subscriptionPricePoint"`
-	Territory              *Relationship `json:"territory,omitempty"`
+	Subscription           *Relationship     `json:"subscription"`
+	SubscriptionPricePoint *Relationship     `json:"subscriptionPricePoint"`
+	Territory              *Relationship     `json:"territory,omitempty"`
+	AdditionalPriceTiers   *RelationshipList `json:"additionalPriceTiers,omitempty"`
 }
 
 // SubscriptionPricePointLinkRelationship describes a price-point relationship
@@ -191,6 +194,8 @@ type SubscriptionPricePointLinkRelationship struct {
 // SubscriptionAvailabilityAttributes describes a subscription availability.
 type SubscriptionAvailabilityAttributes struct {
 	AvailableInNewTerritories bool `json:"availableInNewTerritories"`
+
+	futureTerritoriesKnown bool
 }
 
 // SubscriptionAvailabilityCreateData is the data portion of availability create requests.

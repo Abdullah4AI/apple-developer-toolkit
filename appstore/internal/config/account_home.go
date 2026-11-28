@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/diagnosticoutput"
 	"github.com/Abdullah4AI/apple-developer-toolkit/appstore/internal/testguard"
 )
 
@@ -26,7 +27,7 @@ var accountHomeDir = func() (string, error) {
 var (
 	accountHomeWarningMu      sync.Mutex
 	accountHomeWarningWritten bool
-	accountHomeWarningOutput  io.Writer = os.Stderr
+	accountHomeWarningOutput  io.Writer = diagnosticoutput.Writer(os.Stderr)
 )
 
 // warnIfAccountHomeLocalConfig warns once per process when the upward local

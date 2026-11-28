@@ -332,7 +332,7 @@ func collectCommandDocs(commands []*ffcli.Command) []commandDoc {
 }
 
 func collectCommandDoc(docs *[]commandDoc, cmd *ffcli.Command, parents []string) {
-	if cmd == nil || hiddenCommand(cmd) {
+	if shared.HiddenFromDiscovery(cmd) {
 		return
 	}
 
@@ -597,6 +597,9 @@ func canonicalBoostFor(command string, queryTokens []string) (int, string) {
 }
 
 func scopedCanonicalIntent(queryTokens []string) (string, string, bool) {
+	if target, reason, ok := storeProductCreateIntent(queryTokens); ok {
+		return target, reason, true
+	}
 	if tokenContains(queryTokens, "review") && tokenContains(queryTokens, "attachment") {
 		if tokenContainsAny(queryTokens, []string{"delete", "remove"}) {
 			return "asc review attachments-delete", "canonical:review-attachment-delete", true
@@ -609,6 +612,18 @@ func scopedCanonicalIntent(queryTokens []string) (string, string, bool) {
 		}
 		if tokenContains(queryTokens, "upload") {
 			return "asc review attachments-upload", "canonical:review-attachment-upload", true
+		}
+	}
+	// "App Review Information" is App Store Connect's name for a version's review details.
+	if tokenContains(queryTokens, "review") && tokenContainsAny(queryTokens, []string{"information", "info"}) && !testFlightContext(queryTokens) &&
+		!tokenContainsAny(queryTokens, []string{"clip", "subscription", "iap", "purchase", "screenshot", "cancel", "status", "submit", "submission"}) {
+		switch {
+		case tokenContains(queryTokens, "create"):
+			return "asc review details-create", "canonical:review-details-create", true
+		case tokenContainsAny(queryTokens, []string{"update", "edit", "change"}):
+			return "asc review details-update", "canonical:review-details-update", true
+		default:
+			return "asc review details-get", "canonical:review-details-get", true
 		}
 	}
 	if tokenContains(queryTokens, "cancel") && tokenContainsAny(queryTokens, []string{"submission", "submit"}) {
@@ -739,6 +754,33 @@ func scopedCanonicalIntent(queryTokens []string) (string, string, bool) {
 		if !tokenContains(queryTokens, "build") && !explicitReleaseDashboardIntent(queryTokens) {
 			return "asc testflight review view", "canonical:testflight-review-status", true
 		}
+	}
+	return "", "", false
+}
+
+func storeProductCreateIntent(queryTokens []string) (string, string, bool) {
+	if !exactTokenContains(queryTokens, "create") {
+		return "", "", false
+	}
+	// Only unqualified parent subjects get this boost. Any additional word
+	// keeps child-resource requests on the existing lexical ranking path.
+	subjectWords := 0
+	for _, token := range queryTokens {
+		switch token {
+		case "create", "a", "an", "the", "new":
+		default:
+			subjectWords++
+		}
+	}
+	switch {
+	case subjectWords == 1 && exactTokenContains(queryTokens, "subscription"):
+		return "asc subscriptions create", "canonical:subscription-create", true
+	case subjectWords == 2 && exactTokenContains(queryTokens, "subscription") && exactTokenContains(queryTokens, "group"):
+		return "asc subscriptions groups create", "canonical:subscription-group-create", true
+	case subjectWords == 1 && exactTokenContains(queryTokens, "iap"),
+		subjectWords == 2 && exactTokenContains(queryTokens, "in-app") && exactTokenContains(queryTokens, "purchase"),
+		subjectWords == 3 && exactTokenContains(queryTokens, "in") && exactTokenContains(queryTokens, "app") && exactTokenContains(queryTokens, "purchase"):
+		return "asc iap create", "canonical:iap-create", true
 	}
 	return "", "", false
 }
@@ -1002,13 +1044,6 @@ func extractExamples(longHelp string) []string {
 		}
 	}
 	return examples
-}
-
-func hiddenCommand(cmd *ffcli.Command) bool {
-	shortHelp := strings.TrimSpace(cmd.ShortHelp)
-	return strings.HasPrefix(shortHelp, "DEPRECATED:") ||
-		strings.HasPrefix(shortHelp, "REMOVED:") ||
-		strings.HasPrefix(shortHelp, "Compatibility alias:")
 }
 
 func searchRows(results []SearchResult) [][]string {

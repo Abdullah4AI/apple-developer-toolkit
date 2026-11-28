@@ -8,8 +8,10 @@ import (
 	"fmt"
 	"io"
 	"net/mail"
+	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"unicode"
@@ -21,10 +23,12 @@ import (
 )
 
 type betaTestersCSVRow struct {
-	email     string
-	firstName string
-	lastName  string
-	groups    []string // raw group values (names or IDs), trimmed
+	email      string
+	firstName  string
+	lastName   string
+	groups     []string // raw group values (names or IDs), trimmed
+	wholeGroup string   // possible single name in a legacy comma-delimited cell
+	failure    string   // validation error reported when the import reaches this row
 }
 
 // newBetaTestersExportCommand writes beta testers to a CSV file.
@@ -255,6 +259,7 @@ func newBetaTestersImportCommand(d *shared.Deps) *ffcli.Command {
 	invite := fs.Bool("invite", false, "Invite newly created testers (default false)")
 	group := shared.BindResourceIDFlag(fs, "group", "betaGroups", "Beta group name or ID to apply to all rows (optional)")
 	skipExisting := fs.Bool("skip-existing", false, "If tester already exists, do not modify group membership")
+	createMissingGroups := fs.Bool("create-missing-groups", false, "Create unresolved group names as external groups with public links disabled")
 	continueOnError := fs.Bool("continue-on-error", true, "Continue processing rows after failures (default true)")
 	format := shared.BindOutputFlagsWith(fs, "format", "json", "Summary output format: json (default), table, markdown")
 
@@ -274,12 +279,30 @@ CSV formats accepted:
 
 Installed Version and Install Date columns are accepted and ignored.
 Groups are semicolon-delimited in canonical import/export files.
-For compatibility, comma-delimited groups are also accepted when no semicolon is present.
+Without a semicolon, an existing group name containing commas matches as a whole.
+Otherwise, commas separate group selectors.
 Exports that neutralize spreadsheet formulas include an _asc_formula_escaping
 provenance column. Only rows carrying the supported marker have the export-added
 single quote removed; user-authored CSV apostrophes are preserved.
 
+Invalid emails, duplicate emails, and unresolved groups in a row are reported
+with their data row number. By default, other valid rows are processed. Use
+--continue-on-error=false to stop at the first failure. Invalid file structure,
+an invalid --group selector, or an ambiguous group aborts the import.
+Existing testers are added only to groups they do not already belong to.
+
+--create-missing-groups treats unresolved group selectors as names and creates
+external groups with public links disabled. --dry-run includes those groups in
+the plan without creating them. Names and emails identify existing groups and
+testers; repeating the import sends no writes when membership already matches.
+Testers are matched by input email within the selected app, including defaults.
+A create conflict is recovered only when the tester is found in that same app.
+First and last names apply only to newly created testers. A one-row CSV uses
+the same behavior. Invitations remain opt-in.
+
 Examples:
+  asc testflight beta-testers import --app "APP_ID" --input "./testers.csv" --create-missing-groups --dry-run
+  asc testflight beta-testers import --app "APP_ID" --input "./testers.csv" --create-missing-groups --confirm
   asc testflight beta-testers import --app "APP_ID" --input "./testflight-testers.csv" --dry-run
   asc testflight beta-testers import --app "APP_ID" --input "./testflight-testers.csv" --confirm
   asc testflight beta-testers import --app "APP_ID" --input "./testflight-testers.csv" --invite --confirm
@@ -303,12 +326,20 @@ Examples:
 				return err
 			}
 
-			client, err := d.Client()
+			if _, err := shared.ValidateOutputFormat(*format.Output, *format.Pretty); err != nil {
+				return d.UsageError(err.Error())
+			}
+			parsedRows, err := readBetaTestersCSV(d, inputValue)
 			if err != nil {
 				return fmt.Errorf("beta-testers import: %w", err)
 			}
-
-			parsedRows, err := readBetaTestersCSV(d, inputValue)
+			total := len(parsedRows)
+			if total == 0 {
+				return d.UsageError("CSV must contain at least one tester")
+			}
+			parsedRows = validateBetaTesterImportRows(parsedRows, *continueOnError)
+			ctx = asc.WithNoRedirectReads(ctx)
+			client, err := d.Client()
 			if err != nil {
 				return fmt.Errorf("beta-testers import: %w", err)
 			}
@@ -317,7 +348,7 @@ Examples:
 			needsGroups := appliedGroupValue != ""
 			if !needsGroups {
 				for _, r := range parsedRows {
-					if len(r.groups) > 0 {
+					if r.failure == "" && (len(r.groups) > 0 || r.wholeGroup != "") {
 						needsGroups = true
 						break
 					}
@@ -325,28 +356,25 @@ Examples:
 			}
 
 			var groupResolver *betaGroupResolver
-			appliedGroupID := ""
 			if needsGroups {
 				groupResolver, err = newBetaGroupResolver(ctx, d, client, resolvedAppID)
 				if err != nil {
 					return fmt.Errorf("beta-testers import: %w", err)
 				}
-
-				if appliedGroupValue != "" {
-					id, err := groupResolver.Resolve(appliedGroupValue)
-					if err != nil {
-						return fmt.Errorf("beta-testers import: %w", err)
-					}
-					appliedGroupID = id
+			}
+			var missingGroups []string
+			if needsGroups {
+				parsedRows, missingGroups, err = planBetaTesterImportGroups(groupResolver, parsedRows, appliedGroupValue, *createMissingGroups, *continueOnError)
+				if err != nil {
+					return fmt.Errorf("beta-testers import: %w", err)
 				}
 			}
 
-			existingByEmail, err := fetchExistingTestersByEmail(ctx, d, client, resolvedAppID)
+			existingByEmail, err := fetchExistingTestersByEmail(ctx, d, client, []string{resolvedAppID}, parsedRows)
 			if err != nil {
 				return fmt.Errorf("beta-testers import: %w", err)
 			}
 
-			seenInput := make(map[string]int) // emailLower -> first row index seen
 			summary := &asc.BetaTestersImportSummary{
 				AppID:           resolvedAppID,
 				InputFile:       filepath.Clean(inputValue),
@@ -355,62 +383,61 @@ Examples:
 				SkipExisting:    *skipExisting,
 				ContinueOnError: *continueOnError,
 				AppliedGroup:    appliedGroupValue,
-				Total:           len(parsedRows),
+				Total:           total,
 			}
 
 			var refused error
+			for _, name := range missingGroups {
+				item := asc.BetaTestersImportGroup{Name: name, Status: "planned"}
+				id := "planned:" + name
+				if !*dryRun {
+					id, err = ensureBetaTesterImportGroup(ctx, d, client, resolvedAppID, name)
+					if err != nil {
+						item.Status, item.Error = "failed", err.Error()
+						summary.Groups = append(summary.Groups, item)
+						if *continueOnError {
+							refused = shared.KeepReadOnlyRefusal(refused, err)
+							continue
+						}
+						if printErr := d.PrintOutput(summary, *format.Output, *format.Pretty); printErr != nil {
+							return printErr
+						}
+						return shared.NewReportedError(fmt.Errorf("beta-testers import: create group %q: %w", name, err))
+					}
+					item.ID, item.Status = id, "succeeded"
+				}
+				summary.Groups = append(summary.Groups, item)
+				groupResolver.addImportGroup(name, id)
+			}
+			var appliedGroupID string
+			var appliedGroupErr error
+			if appliedGroupValue != "" {
+				appliedGroupID, appliedGroupErr = groupResolver.Resolve(appliedGroupValue)
+			}
+
 			for idx, row := range parsedRows {
 				rowNumber := idx + 1 // 1-based data row index (excluding header)
+				if row.failure != "" {
+					summary.Failed++
+					summary.Failures = append(summary.Failures, asc.BetaTestersImportFailure{Row: rowNumber, Email: row.email, Error: row.failure})
+					continue
+				}
 
 				emailValue := strings.TrimSpace(row.email)
-				if emailValue == "" {
-					summary.Failed++
-					summary.Failures = append(summary.Failures, asc.BetaTestersImportFailure{
-						Row:   rowNumber,
-						Error: "email is required",
-					})
-					if !*continueOnError {
-						break
-					}
-					continue
-				}
-				if !isValidTesterEmail(emailValue) {
-					summary.Failed++
-					summary.Failures = append(summary.Failures, asc.BetaTestersImportFailure{
-						Row:   rowNumber,
-						Email: emailValue,
-						Error: "invalid email format",
-					})
-					if !*continueOnError {
-						break
-					}
-					continue
-				}
-
 				emailLower := strings.ToLower(emailValue)
-				if firstSeen, exists := seenInput[emailLower]; exists {
-					summary.Failed++
-					summary.Failures = append(summary.Failures, asc.BetaTestersImportFailure{
-						Row:   rowNumber,
-						Email: emailValue,
-						Error: fmt.Sprintf("duplicate email in input (already seen at row %d)", firstSeen),
-					})
-					if !*continueOnError {
-						break
-					}
-					continue
-				}
-				seenInput[emailLower] = rowNumber
 
 				var groupIDs []string
 				if needsGroups {
-					groupIDs, err = groupResolver.ResolveAll(row.groups)
-					if err != nil {
+					groupErr := appliedGroupErr
+					if groupErr == nil {
+						groupIDs, groupErr = groupResolver.ResolveAll(row.groups)
+					}
+					if groupErr != nil {
 						summary.Failed++
 						summary.Failures = append(summary.Failures, asc.BetaTestersImportFailure{
 							Row:   rowNumber,
 							Email: emailValue,
-							Error: err.Error(),
+							Error: groupErr.Error(),
 						})
 						if !*continueOnError {
 							break
@@ -423,10 +450,26 @@ Examples:
 					groupIDs = uniqueSortedStrings(groupIDs)
 				}
 
-				if testerID, ok := existingByEmail[emailLower]; ok {
+				if tester, ok := existingByEmail[emailLower]; ok {
+					testerID := tester.Data.ID
 					summary.Existed++
 
 					if *skipExisting || len(groupIDs) == 0 {
+						continue
+					}
+
+					groupIDs, err = missingBetaTesterLinkages(ctx, d, client, groupIDs, "/v1/betaTesters/"+url.PathEscape(testerID)+"/relationships/betaGroups", func(requestCtx context.Context, opts ...asc.LinkagesOption) (*asc.LinkagesResponse, error) {
+						return client.GetBetaTesterBetaGroupsRelationships(requestCtx, testerID, opts...)
+					})
+					if err != nil {
+						summary.Failed++
+						summary.Failures = append(summary.Failures, asc.BetaTestersImportFailure{Row: rowNumber, Email: emailValue, Error: err.Error()})
+						if !*continueOnError {
+							break
+						}
+						continue
+					}
+					if len(groupIDs) == 0 {
 						continue
 					}
 
@@ -470,6 +513,23 @@ Examples:
 				requestCtx, cancel := d.Timeout(ctx)
 				created, err := client.CreateBetaTester(requestCtx, emailValue, row.firstName, row.lastName, groupIDs, nil)
 				cancel()
+				if isHTTPConflict(err) {
+					recoveryGroupIDs := groupIDs
+					if *skipExisting {
+						recoveryGroupIDs = nil
+					}
+					outcome, recoveryErr := resolveBetaTesterAddConflict(ctx, d, client, []string{resolvedAppID}, emailValue, recoveryGroupIDs, nil)
+					if recoveryErr != nil {
+						err = fmt.Errorf("%w (failed to verify tester in selected app: %w)", err, recoveryErr)
+					} else if outcome != nil && outcome.tester != nil {
+						existingByEmail[emailLower] = outcome.tester
+						summary.Existed++
+						if len(outcome.addedGroupIDs) > 0 {
+							summary.Updated++
+						}
+						continue
+					}
+				}
 				if err != nil {
 					summary.Failed++
 					summary.Failures = append(summary.Failures, asc.BetaTestersImportFailure{
@@ -498,7 +558,7 @@ Examples:
 					continue
 				}
 				summary.Created++
-				existingByEmail[emailLower] = testerID
+				existingByEmail[emailLower] = created
 
 				if *invite {
 					requestCtx, cancel := d.Timeout(ctx)
@@ -535,13 +595,7 @@ Examples:
 
 			// Always print a machine-readable summary. If any rows failed, return an error
 			// that won't be re-printed by the main entrypoint.
-			if err := d.PrintOutputWithRenderers(
-				summary,
-				*format.Output,
-				*format.Pretty,
-				func() error { return renderImportSummaryTables(d, summary, false) },
-				func() error { return renderImportSummaryTables(d, summary, true) },
-			); err != nil {
+			if err := d.PrintOutput(summary, *format.Output, *format.Pretty); err != nil {
 				return err
 			}
 
@@ -553,48 +607,9 @@ Examples:
 	}
 }
 
-func renderImportSummaryTables(d *shared.Deps, summary *asc.BetaTestersImportSummary, markdown bool) error {
-	if summary == nil {
-		return fmt.Errorf("summary is nil")
-	}
-
-	render := asc.RenderTableTo
-	if markdown {
-		render = asc.RenderMarkdownTo
-	}
-
-	render(
-		d.IO.Out,
-		[]string{"App ID", "Input File", "Dry Run", "Total", "Created", "Existed", "Updated", "Invited", "Failed"},
-		[][]string{{
-			summary.AppID,
-			summary.InputFile,
-			fmt.Sprintf("%t", summary.DryRun),
-			fmt.Sprintf("%d", summary.Total),
-			fmt.Sprintf("%d", summary.Created),
-			fmt.Sprintf("%d", summary.Existed),
-			fmt.Sprintf("%d", summary.Updated),
-			fmt.Sprintf("%d", summary.Invited),
-			fmt.Sprintf("%d", summary.Failed),
-		}},
-	)
-
-	if len(summary.Failures) > 0 {
-		rows := make([][]string, 0, len(summary.Failures))
-		for _, f := range summary.Failures {
-			rows = append(rows, []string{
-				fmt.Sprintf("%d", f.Row),
-				f.Email,
-				f.Error,
-			})
-		}
-		render(d.IO.Out, []string{"Row", "Email", "Error"}, rows)
-	}
-
-	return nil
-}
-
 type betaGroupResolver struct {
+	groups         *asc.BetaGroupsResponse
+	internalByID   map[string]bool
 	byID           map[string]string   // id -> name
 	idsByName      map[string][]string // lower(name) -> ids (sorted)
 	uniqueNameByID map[string]bool     // id -> whether its name is unique among groups
@@ -619,7 +634,11 @@ func newBetaGroupResolver(ctx context.Context, d *shared.Deps, client *asc.Clien
 	all, err := asc.PaginateAll(ctx, firstPage, func(ctx context.Context, nextURL string) (asc.PaginatedResponse, error) {
 		requestCtx, cancel := d.Timeout(ctx)
 		defer cancel()
-		return client.GetBetaGroups(requestCtx, appID, asc.NextURL[asc.BetaGroupsOption](nextURL))
+		canonical, err := client.ValidateNoRedirectReadContinuation(ctx, nextURL, "/v1/apps/"+url.PathEscape(appID)+"/betaGroups")
+		if err != nil {
+			return nil, err
+		}
+		return client.GetBetaGroups(requestCtx, appID, asc.NextURL[asc.BetaGroupsOption](canonical))
 	})
 	if err != nil {
 		return nil, err
@@ -630,6 +649,8 @@ func newBetaGroupResolver(ctx context.Context, d *shared.Deps, client *asc.Clien
 	}
 
 	r := &betaGroupResolver{
+		groups:         resp,
+		internalByID:   make(map[string]bool),
 		byID:           make(map[string]string, len(resp.Data)),
 		idsByName:      make(map[string][]string),
 		uniqueNameByID: make(map[string]bool, len(resp.Data)),
@@ -643,6 +664,7 @@ func newBetaGroupResolver(ctx context.Context, d *shared.Deps, client *asc.Clien
 		}
 		name := strings.TrimSpace(g.Attributes.Name)
 		r.byID[id] = name
+		r.internalByID[id] = g.Attributes.IsInternalGroup
 		r.sortedGroupIDs = append(r.sortedGroupIDs, id)
 		r.idsByName[strings.ToLower(name)] = append(r.idsByName[strings.ToLower(name)], id)
 	}
@@ -668,28 +690,7 @@ func (r *betaGroupResolver) Resolve(value string) (string, error) {
 	if trimmed == "" {
 		return "", fmt.Errorf("beta group name is required")
 	}
-	if _, ok := r.byID[trimmed]; ok {
-		return trimmed, nil
-	}
-
-	ids := r.idsByName[strings.ToLower(trimmed)]
-	switch len(ids) {
-	case 0:
-		return "", fmt.Errorf("beta group %q not found", trimmed)
-	case 1:
-		return ids[0], nil
-	default:
-		candidates := make([]shared.AmbiguousCandidate, 0, len(ids))
-		for _, id := range ids {
-			candidates = append(candidates, shared.AmbiguousCandidate{ID: id, Label: r.byID[id]})
-		}
-		return "", &shared.AmbiguousSelectionError{
-			Kind:        "beta group",
-			Description: fmt.Sprintf("%q", trimmed),
-			Candidates:  candidates,
-			Hint:        "Use one of these group IDs in the CSV groups column instead of the name.",
-		}
-	}
+	return matchBetaGroupID(r.groups, trimmed)
 }
 
 func (r *betaGroupResolver) ResolveAll(values []string) ([]string, error) {
@@ -726,37 +727,78 @@ func (r *betaGroupResolver) exportValueForID(groupID string) string {
 	return name
 }
 
-func fetchExistingTestersByEmail(ctx context.Context, d *shared.Deps, client *asc.Client, appID string) (map[string]string, error) {
-	requestCtx, cancel := d.Timeout(ctx)
-	first, err := client.GetBetaTesters(requestCtx, appID, asc.Limit[asc.BetaTestersOption](200))
-	cancel()
-	if err != nil {
-		return nil, err
+func fetchExistingTestersByEmail(ctx context.Context, d *shared.Deps, client *asc.Client, appIDs []string, rows []betaTestersCSVRow, fields ...string) (map[string]*asc.BetaTesterResponse, error) {
+	if len(appIDs) == 0 {
+		return nil, fmt.Errorf("tester lookup requires a resolved app")
 	}
-	all, err := asc.PaginateAll(ctx, first, func(ctx context.Context, nextURL string) (asc.PaginatedResponse, error) {
-		requestCtx, cancel := d.Timeout(ctx)
-		defer cancel()
-		return client.GetBetaTesters(requestCtx, appID, asc.NextURL[asc.BetaTestersOption](nextURL))
-	})
-	if err != nil {
-		return nil, err
-	}
-	resp, ok := all.(*asc.BetaTestersResponse)
-	if !ok || resp == nil {
-		return nil, fmt.Errorf("unexpected beta testers response type")
-	}
-
-	byEmail := make(map[string]string, len(resp.Data))
-	for _, tester := range resp.Data {
-		email := strings.ToLower(strings.TrimSpace(tester.Attributes.Email))
-		if email == "" {
-			continue
+	for _, appID := range appIDs {
+		if strings.TrimSpace(appID) == "" {
+			return nil, fmt.Errorf("tester lookup requires a resolved app")
 		}
-		if _, exists := byEmail[email]; exists {
-			// Shouldn't happen, but keep the first for stable behavior.
-			continue
+	}
+	appIDs = uniqueSortedStrings(appIDs)
+	if len(fields) == 0 {
+		fields = []string{"email", "firstName", "lastName", "inviteType", "state"}
+	}
+	emails := make([]string, 0, len(rows))
+	for _, row := range rows {
+		if row.failure == "" {
+			emails = append(emails, strings.TrimSpace(row.email))
 		}
-		byEmail[email] = strings.TrimSpace(tester.ID)
+	}
+	sort.Strings(emails)
+	byEmail := make(map[string]*asc.BetaTesterResponse, len(rows))
+	for _, appID := range appIDs {
+		for start := 0; start < len(emails); start += 20 {
+			batch := emails[start:min(start+20, len(emails))]
+			emailFilter := strings.Join(batch, ",")
+			requestCtx, cancel := d.Timeout(ctx)
+			first, err := client.GetBetaTesters(requestCtx, appID, asc.WithBetaTestersEmail(emailFilter), asc.WithBetaTestersFields(fields), asc.Limit[asc.BetaTestersOption](200))
+			cancel()
+			if err != nil {
+				return nil, err
+			}
+			all, err := asc.PaginateAll(ctx, first, func(ctx context.Context, next string) (asc.PaginatedResponse, error) {
+				parsed, err := url.Parse(next)
+				if err != nil {
+					return nil, err
+				}
+				fieldset := strings.Join(fields, ",")
+				if returned := parsed.Query().Get("fields[betaTesters]"); returned != "" && slices.Equal(uniqueSortedStrings(strings.Split(returned, ",")), uniqueSortedStrings(fields)) {
+					fieldset = returned
+				}
+				canonical, err := shared.BindCollectionNextURL(ctx, client, next, "/v1/betaTesters", url.Values{
+					"filter[apps]": {appID}, "filter[email]": {emailFilter}, "fields[betaTesters]": {fieldset},
+				})
+				if err != nil {
+					return nil, err
+				}
+				requestCtx, cancel := d.Timeout(ctx)
+				defer cancel()
+				return client.GetBetaTesters(requestCtx, appID, asc.NextURL[asc.BetaTestersOption](canonical))
+			})
+			if err != nil {
+				return nil, err
+			}
+			resp, ok := all.(*asc.BetaTestersResponse)
+			if !ok || resp == nil {
+				return nil, fmt.Errorf("unexpected beta testers response type")
+			}
+			for _, tester := range resp.Data {
+				email := strings.ToLower(strings.TrimSpace(tester.Attributes.Email))
+				if !slices.ContainsFunc(batch, func(requested string) bool { return strings.ToLower(requested) == email }) {
+					continue
+				}
+				id := strings.TrimSpace(tester.ID)
+				if id == "" {
+					return nil, fmt.Errorf("tester %q returned an empty ID", email)
+				}
+				if previous, ok := byEmail[email]; ok && previous.Data.ID != id {
+					return nil, fmt.Errorf("multiple testers have email %q in the selected apps; resolve the ambiguity before continuing", email)
+				}
+				byEmail[email] = &asc.BetaTesterResponse{Data: tester}
+			}
+		}
 	}
 	return byEmail, nil
 }
@@ -778,39 +820,10 @@ func betaTesterGroupConflictAlreadySatisfied(
 		return false, nil
 	}
 
-	requestCtx, cancel := d.Timeout(ctx)
-	first, err := client.GetBetaTesterBetaGroupsRelationships(requestCtx, testerID, asc.Limit[asc.LinkagesOption](200))
-	cancel()
-	if err != nil {
-		return false, err
-	}
-
-	all, err := asc.PaginateAll(ctx, first, func(ctx context.Context, nextURL string) (asc.PaginatedResponse, error) {
-		requestCtx, cancel := d.Timeout(ctx)
-		defer cancel()
-		return client.GetBetaTesterBetaGroupsRelationships(requestCtx, testerID, asc.NextURL[asc.LinkagesOption](nextURL))
+	missing, err := missingBetaTesterLinkages(ctx, d, client, requestedGroupIDs, "/v1/betaTesters/"+url.PathEscape(testerID)+"/relationships/betaGroups", func(requestCtx context.Context, opts ...asc.LinkagesOption) (*asc.LinkagesResponse, error) {
+		return client.GetBetaTesterBetaGroupsRelationships(requestCtx, testerID, opts...)
 	})
-	if err != nil {
-		return false, err
-	}
-	resp, ok := all.(*asc.LinkagesResponse)
-	if !ok || resp == nil {
-		return false, fmt.Errorf("unexpected beta tester group relationships response type")
-	}
-
-	presentGroupIDs := make(map[string]struct{}, len(resp.Data))
-	for _, linkage := range resp.Data {
-		groupID := strings.TrimSpace(linkage.ID)
-		if groupID != "" {
-			presentGroupIDs[groupID] = struct{}{}
-		}
-	}
-	for _, groupID := range requestedGroupIDs {
-		if _, ok := presentGroupIDs[groupID]; !ok {
-			return false, nil
-		}
-	}
-	return true, nil
+	return err == nil && len(missing) == 0, err
 }
 
 func fetchTesterGroupMemberships(ctx context.Context, d *shared.Deps, client *asc.Client, resolver *betaGroupResolver) (map[string][]string, error) {
@@ -1081,16 +1094,9 @@ func parseHeaderMappedBetaTesterCSVRow(record []string, headerIdx map[string]int
 		}
 		return strings.TrimSpace(value)
 	}
-	groups := make([]string, 0)
-	if idx, ok := headerIdx["groups"]; ok && idx >= 0 && idx < len(record) {
-		groups = splitBetaTesterCSVGroups(record[idx], formulaEscaped)
-	}
-	return betaTestersCSVRow{
-		email:     get("email"),
-		firstName: get("first_name"),
-		lastName:  get("last_name"),
-		groups:    groups,
-	}
+	row := betaTestersCSVRow{email: get("email"), firstName: get("first_name"), lastName: get("last_name")}
+	row.setGroupCell(get("groups"))
+	return row
 }
 
 func parseLegacyBetaTesterCSVRow(d *shared.Deps, record []string) (betaTestersCSVRow, error) {
@@ -1107,23 +1113,22 @@ func parseLegacyBetaTesterCSVRow(d *shared.Deps, record []string) (betaTestersCS
 		email:     strings.TrimSpace(record[2]),
 	}
 	if len(record) >= 4 {
-		row.groups = splitBetaTesterCSVGroups(record[3], false)
+		row.setGroupCell(record[3])
 	}
 	return row, nil
 }
 
-func splitBetaTesterCSVGroups(value string, formulaEscaped bool) []string {
-	if formulaEscaped {
-		value = denormalizeSpreadsheetFormula(value)
-	}
+func (row *betaTestersCSVRow) setGroupCell(value string) {
 	trimmed := strings.TrimSpace(value)
 	if trimmed == "" {
-		return nil
+		return
 	}
 	splitOn := ","
 	if strings.Contains(trimmed, ";") {
 		// Prefer semicolon when present to preserve commas inside group names.
 		splitOn = ";"
+	} else if strings.Contains(trimmed, ",") {
+		row.wholeGroup = trimmed
 	}
 	parts := strings.Split(trimmed, splitOn)
 	out := make([]string, 0, len(parts))
@@ -1134,7 +1139,7 @@ func splitBetaTesterCSVGroups(value string, formulaEscaped bool) []string {
 		}
 		out = append(out, item)
 	}
-	return out
+	row.groups = out
 }
 
 func isValidTesterEmail(value string) bool {
